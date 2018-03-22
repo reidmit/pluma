@@ -15,6 +15,7 @@ const patterns = {
   octalNumericLiteral: /^0o[0-7]+/i,
   binaryNumericLiteral: /^0b[01]+/i,
   specialNumericLiteral: /^(NaN|Infinity)/,
+  identifier: /^[a-z$_][0-9a-z$_]*/i,
   digits: /^[0-9]+/
 };
 
@@ -25,7 +26,7 @@ const isWordSeparator = char =>
   char === '\r' ||
   !!symbols[char];
 
-const tokenize = source => {
+const tokenize = ({ source }) => {
   const length = source.length;
   const tokens = [];
   const interpolationStack = [];
@@ -184,7 +185,7 @@ const tokenize = source => {
     for (let w = 0; w < reservedWords.length; w++) {
       if (reservedWordRegexes[w].test(remaining)) {
         pushToken(tokenTypes.KEYWORD, reservedWords[w], reservedWords[w]);
-        advance(reservedWords[w].length - 1);
+        advance(reservedWords[w].length);
         continue outer;
       }
     }
@@ -195,6 +196,12 @@ const tokenize = source => {
         advance(symbols[s].length);
         continue outer;
       }
+    }
+
+    if ((match = remaining.match(patterns.identifier))) {
+      pushToken(tokenTypes.IDENTIFIER, match[0], match[0]);
+      advance(match[0].length);
+      continue;
     }
 
     advance(1);

@@ -1,7 +1,8 @@
 import { tokenTypes } from '../src/constants';
 import { tokenize } from '../src/tokenizer';
 
-const expectTokens = (input, output) => expect(tokenize(input)).toEqual(output);
+const expectTokens = (input, output) =>
+  expect(tokenize({ source: input })).toEqual(output);
 
 describe('tokenizer', () => {
   describe('isolated token types', () => {
@@ -555,6 +556,179 @@ describe('tokenizer', () => {
             lineEnd: 3,
             columnStart: 12,
             columnEnd: 13
+          }
+        ]
+      );
+    });
+
+    test('identifiers', () => {
+      expectTokens(
+        `
+        hello WORLD
+          _someToken$3`,
+        [
+          {
+            type: tokenTypes.IDENTIFIER,
+            value: 'hello',
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 8,
+            columnEnd: 13
+          },
+          {
+            type: tokenTypes.IDENTIFIER,
+            value: 'WORLD',
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 14,
+            columnEnd: 19
+          },
+          {
+            type: tokenTypes.IDENTIFIER,
+            value: '_someToken$3',
+            lineStart: 3,
+            lineEnd: 3,
+            columnStart: 10,
+            columnEnd: 22
+          }
+        ]
+      );
+    });
+
+    test('single values', () => {
+      expectTokens('47', [
+        {
+          type: tokenTypes.NUMBER,
+          value: 47,
+          lineStart: 1,
+          lineEnd: 1,
+          columnStart: 0,
+          columnEnd: 2
+        }
+      ]);
+    });
+  });
+
+  describe('mixed token types', () => {
+    test('let statements', () => {
+      expectTokens(
+        `
+        let x = 47
+        let funky = a => 'hello there,
+          \${a}!'
+        `,
+        [
+          {
+            type: tokenTypes.KEYWORD,
+            value: 'let',
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 8,
+            columnEnd: 11
+          },
+          {
+            type: tokenTypes.IDENTIFIER,
+            value: 'x',
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 12,
+            columnEnd: 13
+          },
+          {
+            type: tokenTypes.SYMBOL,
+            value: '=',
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 14,
+            columnEnd: 15
+          },
+          {
+            type: tokenTypes.NUMBER,
+            value: 47,
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 16,
+            columnEnd: 18
+          },
+          {
+            type: tokenTypes.KEYWORD,
+            value: 'let',
+            lineStart: 3,
+            lineEnd: 3,
+            columnStart: 8,
+            columnEnd: 11
+          },
+          {
+            type: tokenTypes.IDENTIFIER,
+            value: 'funky',
+            lineStart: 3,
+            lineEnd: 3,
+            columnStart: 12,
+            columnEnd: 17
+          },
+          {
+            type: tokenTypes.SYMBOL,
+            value: '=',
+            lineStart: 3,
+            lineEnd: 3,
+            columnStart: 18,
+            columnEnd: 19
+          },
+          {
+            type: tokenTypes.IDENTIFIER,
+            value: 'a',
+            lineStart: 3,
+            lineEnd: 3,
+            columnStart: 20,
+            columnEnd: 21
+          },
+          {
+            type: tokenTypes.SYMBOL,
+            value: '=>',
+            lineStart: 3,
+            lineEnd: 3,
+            columnStart: 22,
+            columnEnd: 24
+          },
+          {
+            type: tokenTypes.STRING,
+            value: 'hello there,\n          ',
+            lineStart: 3,
+            lineEnd: 4,
+            columnStart: 25,
+            columnEnd: 10
+          },
+          {
+            type: tokenTypes.SYMBOL,
+            value: '${',
+            lineStart: 4,
+            lineEnd: 4,
+            columnStart: 10,
+            columnEnd: 12
+          },
+          {
+            type: tokenTypes.IDENTIFIER,
+            value: 'a',
+            lineStart: 4,
+            lineEnd: 4,
+            columnStart: 12,
+            columnEnd: 13
+          },
+          {
+            type: tokenTypes.SYMBOL,
+            value: '}',
+            lineStart: 4,
+            lineEnd: 4,
+            columnStart: 13,
+            columnEnd: 14
+          },
+          {
+            type: tokenTypes.STRING,
+            value: '!',
+            lineStart: 4,
+            lineEnd: 4,
+            columnStart: 14,
+            columnEnd: 16
           }
         ]
       );

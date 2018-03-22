@@ -1,5 +1,6 @@
 export const tokenTypes = {
   BOOLEAN: 'boolean-token',
+  IDENTIFIER: 'identifier-token',
   KEYWORD: 'keyword-token',
   NULL: 'null-token',
   NUMBER: 'number-token',
