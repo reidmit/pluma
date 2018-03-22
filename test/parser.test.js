@@ -14,30 +14,62 @@ describe('parser', () => {
     expectAst('', []);
   });
 
-  test('a single number', () => {
+  test('null literal', () => {
+    expectAst('null', [t.expressionStatement(t.nullLiteral())]);
+  });
+
+  test('number literal', () => {
     expectAst('47', [t.expressionStatement(t.numericLiteral(47))]);
   });
 
-  test('a single boolean', () => {
+  test('boolean literal', () => {
     expectAst('true', [t.expressionStatement(t.booleanLiteral(true))]);
   });
 
-  test('a single identifier', () => {
+  test('identifier', () => {
     expectAst('lol', [t.expressionStatement(t.identifier('lol'))]);
   });
 
-  test('a single string', () => {
+  test('string literal', () => {
     expectAst(`'hello, world!'`, [
       t.expressionStatement(t.stringLiteral('hello, world!'))
     ]);
   });
 
-  test('a single, interpolated string', () => {
+  test('interpolated string literal', () => {
     expectAst(`'hello, \${name}!'`, [
       t.expressionStatement(
         t.templateLiteral(
           [t.templateElement('hello, ', false), t.templateElement('!', true)],
           [t.identifier('name')]
+        )
+      )
+    ]);
+  });
+
+  test('member expression with dots (non-computed)', () => {
+    expectAst('a.b.c', [
+      t.expressionStatement(
+        t.memberExpression(
+          t.memberExpression(t.identifier('a'), t.identifier('b'), false),
+          t.identifier('c'),
+          false
+        )
+      )
+    ]);
+  });
+
+  test('member expression with brackets (computed)', () => {
+    expectAst(`a[b]['hello'][0]`, [
+      t.expressionStatement(
+        t.memberExpression(
+          t.memberExpression(
+            t.memberExpression(t.identifier('a'), t.identifier('b'), true),
+            t.stringLiteral('hello'),
+            true
+          ),
+          t.numericLiteral(0),
+          true
         )
       )
     ]);

@@ -467,6 +467,7 @@ describe('tokenizer', () => {
         ` {} \${ #
       , => =
       ( . ) :
+      ][
       `,
         [
           {
@@ -556,6 +557,22 @@ describe('tokenizer', () => {
             lineEnd: 3,
             columnStart: 12,
             columnEnd: 13
+          },
+          {
+            type: tokenTypes.SYMBOL,
+            value: ']',
+            lineStart: 4,
+            lineEnd: 4,
+            columnStart: 6,
+            columnEnd: 7
+          },
+          {
+            type: tokenTypes.SYMBOL,
+            value: '[',
+            lineStart: 4,
+            lineEnd: 4,
+            columnStart: 7,
+            columnEnd: 8
           }
         ]
       );
@@ -729,6 +746,112 @@ describe('tokenizer', () => {
             lineEnd: 4,
             columnStart: 14,
             columnEnd: 16
+          }
+        ]
+      );
+    });
+
+    test('member expressions', () => {
+      expectTokens(
+        `
+        a.b[c]['test'][47]
+      `,
+        [
+          {
+            type: tokenTypes.IDENTIFIER,
+            value: 'a',
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 8,
+            columnEnd: 9
+          },
+          {
+            type: tokenTypes.SYMBOL,
+            value: '.',
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 9,
+            columnEnd: 10
+          },
+          {
+            type: tokenTypes.IDENTIFIER,
+            value: 'b',
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 10,
+            columnEnd: 11
+          },
+          {
+            type: tokenTypes.SYMBOL,
+            value: '[',
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 11,
+            columnEnd: 12
+          },
+          {
+            type: tokenTypes.IDENTIFIER,
+            value: 'c',
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 12,
+            columnEnd: 13
+          },
+          {
+            type: tokenTypes.SYMBOL,
+            value: ']',
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 13,
+            columnEnd: 14
+          },
+          {
+            type: tokenTypes.SYMBOL,
+            value: '[',
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 14,
+            columnEnd: 15
+          },
+          {
+            type: tokenTypes.STRING,
+            value: 'test',
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 15,
+            columnEnd: 21
+          },
+          {
+            type: tokenTypes.SYMBOL,
+            value: ']',
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 21,
+            columnEnd: 22
+          },
+          {
+            type: tokenTypes.SYMBOL,
+            value: '[',
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 22,
+            columnEnd: 23
+          },
+          {
+            type: tokenTypes.NUMBER,
+            value: 47,
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 23,
+            columnEnd: 25
+          },
+          {
+            type: tokenTypes.SYMBOL,
+            value: ']',
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 25,
+            columnEnd: 26
           }
         ]
       );

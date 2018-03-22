@@ -1,45 +1,67 @@
 import * as t from 'babel-types';
 import { tokenTypes } from './constants';
 
+const isType = type => token => token.type === tokenTypes[type];
+const isSymbol = value => token =>
+  token.type === tokenTypes.SYMBOL && token.value === value;
+const isString = isType('STRING');
+const isNumber = isType('NUMBER');
+const isIdentifier = isType('IDENTIFIER');
+const isDot = isSymbol('.');
+const isLeftBrace = isSymbol('[');
+const isRightBrace = isSymbol(']');
+const isInterpolationStart = isSymbol('${');
+
 const parse = ({ source, tokens }) => {
-  let i = 0;
+  let index = 0;
+  let token = tokens[index];
+
+  const advance = (n = 1) => {
+    token = tokens[++index];
+  };
 
   const fail = message => {
     // TODO: improve with tokens/line numbers/etc
     throw new Error(`Parse error: ${message}`);
   };
 
-  const parseNumber = token => {
-    i++;
-    return t.numericLiteral(token.value);
+  const parseNumber = () => {
+    if (!isNumber(token)) return;
+    const node = t.numericLiteral(token.value);
+    advance();
+    return node;
   };
 
-  const parseBoolean = token => {
-    i++;
-    return t.booleanLiteral(token.value);
+  const parseBoolean = () => {
+    const node = t.booleanLiteral(token.value);
+    advance();
+    return node;
   };
 
-  const parseString = token => {
+  const parseNull = () => {
+    advance();
+    return t.nullLiteral();
+  };
+
+  const parseString = () => {
     const stringParts = [];
     const expressions = [];
 
-    while (
-      token.type === tokenTypes.STRING ||
-      (token.type === tokenTypes.SYMBOL && token.value === '${')
-    ) {
-      if (token.type === tokenTypes.STRING) {
+    while (isString(token) || isInterpolationStart(token)) {
+      if (isString(token)) {
         stringParts.push(t.templateElement(token.value, false));
       } else {
-        token = tokens[++i];
+        advance();
+
         const innerExpression = parseExpression(token);
         if (!innerExpression) {
           fail('Invalid expression in interpolation');
-        } else {
-          expressions.push(innerExpression);
         }
+
+        expressions.push(innerExpression);
       }
 
-      token = tokens[++i];
+      advance();
       if (!token) break;
     }
 
@@ -51,12 +73,40 @@ const parse = ({ source, tokens }) => {
     return t.templateLiteral(stringParts, expressions);
   };
 
-  const parseIdentifier = token => {
-    i++;
-    return t.identifier(token.value);
+  const parseIdentifier = () => {
+    const parts = [];
+
+    while (isIdentifier(token) || isDot(token) || isLeftBrace(token)) {
+      if (isIdentifier(token)) {
+        parts.push({ property: t.identifier(token.value), computed: false });
+      } else if (isLeftBrace(token)) {
+        advance();
+        const innerExpression = parseExpression(token);
+
+        if (!innerExpression) {
+          fail('Invalid expression in brackets');
+        }
+
+        if (!isRightBrace(token)) {
+          fail('Missing closing ]');
+        }
+
+        parts.push({ property: innerExpression, computed: true });
+      }
+
+      advance();
+      if (!token) break;
+    }
+
+    if (parts.length === 1) return parts[0].property;
+
+    return parts.reduce((expression, { property, computed }) => {
+      if (!expression) return property;
+      return t.memberExpression(expression, property, computed);
+    }, null);
   };
 
-  const parseExpression = token => {
+  const parseExpression = () => {
     switch (token.type) {
       case tokenTypes.NUMBER:
         return parseNumber(token);
@@ -64,12 +114,14 @@ const parse = ({ source, tokens }) => {
         return parseBoolean(token);
       case tokenTypes.STRING:
         return parseString(token);
+      case tokenTypes.NULL:
+        return parseNull(token);
       case tokenTypes.IDENTIFIER:
         return parseIdentifier(token);
     }
   };
 
-  const parseStatement = token => {
+  const parseStatement = () => {
     const expression = parseExpression(token);
     if (expression) {
       return t.expressionStatement(expression);
@@ -78,11 +130,9 @@ const parse = ({ source, tokens }) => {
 
   const body = [];
   let TODO = 0;
-  while (i < tokens.length && TODO < 1000) {
-    const node = parseStatement(tokens[i]);
-    if (node) {
-      body.push(node);
-    }
+  while (index < tokens.length && TODO < 1000) {
+    const node = parseStatement(token);
+    if (node) body.push(node);
 
     TODO++; //TODO: remove
   }
