@@ -1,39 +1,30 @@
 export const tokenTypes = {
   BOOLEAN: 'boolean-token',
-  COLON: 'colon-token',
-  COMMA: 'comma-token',
-  DOLLAR: 'dollar-token',
-  DOT: 'dot-token',
-  EQUALS: 'equals-token',
-  HASH: 'hash-token',
   KEYWORD: 'keyword-token',
-  L_BRACE: 'left-brace-token',
-  L_PAREN: 'left-paren-token',
   NULL: 'null-token',
   NUMBER: 'number-token',
-  R_BRACE: 'right-brace-token',
-  R_PAREN: 'right-paren-token',
-  THICK_ARROW: 'thick-arrow-token',
+  STRING: 'string-token',
+  SYMBOL: 'symbol-token',
   UNDEFINED: 'undefined-token'
 };
 
-const toMap = array => array.reduce((map, el) => ({ ...map, [el]: true }), {});
+export const symbols = [
+  '(',
+  ')',
+  '{',
+  '}',
+  '${',
+  ':',
+  '=>',
+  '=',
+  '.',
+  ',',
+  '#'
+];
 
-export const symbols = {
-  '(': tokenTypes.L_PAREN,
-  ')': tokenTypes.R_PAREN,
-  '{': tokenTypes.L_BRACE,
-  '}': tokenTypes.R_BRACE,
-  $: tokenTypes.DOLLAR,
-  ':': tokenTypes.COLON,
-  '=': tokenTypes.EQUALS,
-  '=>': tokenTypes.THICK_ARROW,
-  '.': tokenTypes.DOT,
-  ',': tokenTypes.COMMA,
-  '#': tokenTypes.HASH
-};
+export const symbolRegexes = symbols.map(symbol => new RegExp('^\\' + symbol));
 
-export const reservedWords = toMap([
+export const reservedWords = [
   'abstract',
   'arguments',
   'await',
@@ -98,4 +89,8 @@ export const reservedWords = toMap([
   'while',
   'with',
   'yield'
-]);
+];
+
+export const reservedWordRegexes = reservedWords.map(
+  word => new RegExp('^' + word + '\\b')
+);

@@ -32,15 +32,13 @@ describe('tokenizer', () => {
       );
     });
 
-    test.only('number literals (decimal)', () => {
+    test('number literals (decimal)', () => {
       expectTokens(
         `
       47
       100
       23.3
       0
-      2E-9
-      1e47
       `,
         [
           {
@@ -74,22 +72,6 @@ describe('tokenizer', () => {
             lineEnd: 5,
             columnStart: 6,
             columnEnd: 7
-          },
-          {
-            type: tokenTypes.NUMBER,
-            value: 2e-9,
-            lineStart: 6,
-            lineEnd: 6,
-            columnStart: 6,
-            columnEnd: 10
-          },
-          {
-            type: tokenTypes.NUMBER,
-            value: 1e47,
-            lineStart: 7,
-            lineEnd: 7,
-            columnStart: 6,
-            columnEnd: 10
           }
         ]
       );
@@ -175,7 +157,7 @@ describe('tokenizer', () => {
       0X100
       0xFACADE
       0xeffaced
-    `,
+      `,
         [
           {
             type: tokenTypes.NUMBER,
@@ -243,6 +225,157 @@ describe('tokenizer', () => {
             lineEnd: 3,
             columnStart: 6,
             columnEnd: 14
+          }
+        ]
+      );
+    });
+
+    test('string literals', () => {
+      expectTokens(
+        `
+        'this is a string  '
+        'this is a
+            multiline string'
+      `,
+        [
+          {
+            type: tokenTypes.STRING,
+            value: 'this is a string  ',
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 8,
+            columnEnd: 28
+          },
+          {
+            type: tokenTypes.STRING,
+            value: 'this is a\n            multiline string',
+            lineStart: 3,
+            lineEnd: 4,
+            columnStart: 8,
+            columnEnd: 29
+          }
+        ]
+      );
+    });
+
+    test('string literals (interpolated)', () => {
+      expectTokens(
+        `
+        'this is an \${ 'interpolated' } string'
+        'strings can have \${'interpolations \${'within'} interpolations'}, too!'
+      `,
+        [
+          {
+            type: tokenTypes.STRING,
+            value: 'this is an ',
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 8,
+            columnEnd: 20
+          },
+          {
+            type: tokenTypes.SYMBOL,
+            value: '${',
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 20,
+            columnEnd: 22
+          },
+          {
+            type: tokenTypes.STRING,
+            value: 'interpolated',
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 23,
+            columnEnd: 37
+          },
+          {
+            type: tokenTypes.SYMBOL,
+            value: '}',
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 38,
+            columnEnd: 39
+          },
+          {
+            type: tokenTypes.STRING,
+            value: ' string',
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 39,
+            columnEnd: 47
+          },
+          {
+            type: tokenTypes.STRING,
+            value: 'strings can have ',
+            lineStart: 3,
+            lineEnd: 3,
+            columnStart: 8,
+            columnEnd: 26
+          },
+          {
+            type: tokenTypes.SYMBOL,
+            value: '${',
+            lineStart: 3,
+            lineEnd: 3,
+            columnStart: 26,
+            columnEnd: 28
+          },
+          {
+            type: tokenTypes.STRING,
+            value: 'interpolations ',
+            lineStart: 3,
+            lineEnd: 3,
+            columnStart: 28,
+            columnEnd: 44
+          },
+          {
+            type: tokenTypes.SYMBOL,
+            value: '${',
+            lineStart: 3,
+            lineEnd: 3,
+            columnStart: 44,
+            columnEnd: 46
+          },
+          {
+            type: tokenTypes.STRING,
+            value: 'within',
+            lineStart: 3,
+            lineEnd: 3,
+            columnStart: 46,
+            columnEnd: 54
+          },
+          {
+            type: tokenTypes.SYMBOL,
+            value: '}',
+            lineStart: 3,
+            lineEnd: 3,
+            columnStart: 54,
+            columnEnd: 55
+          },
+          {
+            type: tokenTypes.STRING,
+            value: ' interpolations',
+            lineStart: 3,
+            lineEnd: 3,
+            columnStart: 55,
+            columnEnd: 71
+          },
+          {
+            type: tokenTypes.SYMBOL,
+            value: '}',
+            lineStart: 3,
+            lineEnd: 3,
+            columnStart: 71,
+            columnEnd: 72
+          },
+          {
+            type: tokenTypes.STRING,
+            value: ', too!',
+            lineStart: 3,
+            lineEnd: 3,
+            columnStart: 72,
+            columnEnd: 79
           }
         ]
       );
@@ -330,13 +463,13 @@ describe('tokenizer', () => {
 
     test('symbols', () => {
       expectTokens(
-        ` {} $ #
+        ` {} \${ #
       , => =
       ( . ) :
       `,
         [
           {
-            type: tokenTypes.L_BRACE,
+            type: tokenTypes.SYMBOL,
             value: '{',
             lineStart: 1,
             lineEnd: 1,
@@ -344,7 +477,7 @@ describe('tokenizer', () => {
             columnEnd: 2
           },
           {
-            type: tokenTypes.R_BRACE,
+            type: tokenTypes.SYMBOL,
             value: '}',
             lineStart: 1,
             lineEnd: 1,
@@ -352,23 +485,23 @@ describe('tokenizer', () => {
             columnEnd: 3
           },
           {
-            type: tokenTypes.DOLLAR,
-            value: '$',
+            type: tokenTypes.SYMBOL,
+            value: '${',
             lineStart: 1,
             lineEnd: 1,
             columnStart: 4,
-            columnEnd: 5
+            columnEnd: 6
           },
           {
-            type: tokenTypes.HASH,
+            type: tokenTypes.SYMBOL,
             value: '#',
             lineStart: 1,
             lineEnd: 1,
-            columnStart: 6,
-            columnEnd: 7
+            columnStart: 7,
+            columnEnd: 8
           },
           {
-            type: tokenTypes.COMMA,
+            type: tokenTypes.SYMBOL,
             value: ',',
             lineStart: 2,
             lineEnd: 2,
@@ -376,7 +509,7 @@ describe('tokenizer', () => {
             columnEnd: 7
           },
           {
-            type: tokenTypes.THICK_ARROW,
+            type: tokenTypes.SYMBOL,
             value: '=>',
             lineStart: 2,
             lineEnd: 2,
@@ -384,7 +517,7 @@ describe('tokenizer', () => {
             columnEnd: 10
           },
           {
-            type: tokenTypes.EQUALS,
+            type: tokenTypes.SYMBOL,
             value: '=',
             lineStart: 2,
             lineEnd: 2,
@@ -392,7 +525,7 @@ describe('tokenizer', () => {
             columnEnd: 12
           },
           {
-            type: tokenTypes.L_PAREN,
+            type: tokenTypes.SYMBOL,
             value: '(',
             lineStart: 3,
             lineEnd: 3,
@@ -400,7 +533,7 @@ describe('tokenizer', () => {
             columnEnd: 7
           },
           {
-            type: tokenTypes.DOT,
+            type: tokenTypes.SYMBOL,
             value: '.',
             lineStart: 3,
             lineEnd: 3,
@@ -408,7 +541,7 @@ describe('tokenizer', () => {
             columnEnd: 9
           },
           {
-            type: tokenTypes.R_PAREN,
+            type: tokenTypes.SYMBOL,
             value: ')',
             lineStart: 3,
             lineEnd: 3,
@@ -416,7 +549,7 @@ describe('tokenizer', () => {
             columnEnd: 11
           },
           {
-            type: tokenTypes.COLON,
+            type: tokenTypes.SYMBOL,
             value: ':',
             lineStart: 3,
             lineEnd: 3,

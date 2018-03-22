@@ -1,12 +1,21 @@
-import { tokenTypes, symbols, reservedWords } from './constants';
+import {
+  tokenTypes,
+  symbols,
+  symbolRegexes,
+  reservedWords,
+  reservedWordRegexes
+} from './constants';
 
 const patterns = {
-  booleanLiteral: /^(true|false)$/,
-  hexNumericLiteral: /^0x[\da-f]+$/i,
-  octalNumericLiteral: /^0o[0-7]+$/i,
-  binaryNumericLiteral: /^0b[01]+$/i,
-  specialNumericLiteral: /^(NaN|Infinity)$/,
-  digits: /^[0-9]+$/
+  newline: /^[\n]+/,
+  otherWhitespace: /^[ \t\r]+/,
+  booleanLiteral: /^(true|false)/,
+  decimalNumericLiteral: /^[\d]+\.?[\d]*/,
+  hexNumericLiteral: /^0x[\da-f]+/i,
+  octalNumericLiteral: /^0o[0-7]+/i,
+  binaryNumericLiteral: /^0b[01]+/i,
+  specialNumericLiteral: /^(NaN|Infinity)/,
+  digits: /^[0-9]+/
 };
 
 const isWordSeparator = char =>
@@ -19,9 +28,15 @@ const isWordSeparator = char =>
 const tokenize = source => {
   const length = source.length;
   const tokens = [];
+  const interpolationStack = [];
   let buffer = [];
   let line = 1;
-  let column = -1;
+  let column = 0;
+  let i = 0;
+  let inString = false;
+  let stringStart = null;
+  let match;
+  let remaining;
 
   const pushToken = (type, text, value, columnAdvance = 0) => {
     tokens.push({
@@ -29,68 +44,160 @@ const tokenize = source => {
       value,
       lineStart: line,
       lineEnd: line,
-      columnStart: column + columnAdvance - text.length,
-      columnEnd: column + columnAdvance
+      columnStart: column + columnAdvance,
+      columnEnd: column + columnAdvance + text.length
     });
 
     buffer = [];
   };
 
-  for (let i = 0; i < length; i++) {
-    column++;
-    const char = source[i];
+  const advance = amount => {
+    i += amount;
+    column += amount;
+  };
 
-    if (isWordSeparator(char)) {
-      if (buffer.length) {
-        const text = buffer.join('');
+  outer: while (i < length) {
+    remaining = source.substring(i);
 
-        if (patterns.booleanLiteral.test(text)) {
-          pushToken(tokenTypes.BOOLEAN, text, text === 'true');
-        } else if (patterns.hexNumericLiteral.test(text)) {
-          pushToken(tokenTypes.NUMBER, text, parseInt(text.substring(2), 16));
-        } else if (patterns.octalNumericLiteral.test(text)) {
-          pushToken(tokenTypes.NUMBER, text, parseInt(text.substring(2), 8));
-        } else if (patterns.binaryNumericLiteral.test(text)) {
-          pushToken(tokenTypes.NUMBER, text, parseInt(text.substring(2), 2));
-        } else if (patterns.specialNumericLiteral.test(text)) {
-          pushToken(tokenTypes.NUMBER, text, +text);
-        } else if (!isNaN(parseFloat(text))) {
-          pushToken(tokenTypes.NUMBER, text, parseFloat(text));
-        } else if (text === 'null') {
-          pushToken(tokenTypes.NULL, text, null);
-        } else if (text === 'undefined') {
-          pushToken(tokenTypes.UNDEFINED, text, undefined);
-        } else if (reservedWords[text]) {
-          pushToken(tokenTypes.KEYWORD, text, text);
-        }
-      } else {
-        console.log({ char, buffer });
-        if (char === '.' && patterns.digits.test(buffer.join(''))) {
-          // special case: if we find a '.', but the buffer contains
-          // the first part of a decimal number, continue on to let it
-          // be tokenized as a number
-          console.log('special');
-          buffer.push(char);
-          continue;
-        }
-
-        const nextTwoChars = i < length - 1 ? char + source[i + 1] : '';
-        if (symbols[nextTwoChars]) {
-          pushToken(symbols[nextTwoChars], nextTwoChars, nextTwoChars, 2);
-          column++;
-          i++;
-        } else if (symbols[char]) {
-          pushToken(symbols[char], char, char, 1);
-        }
-      }
-
-      if (char === '\n') {
-        column = -1;
+    if (inString) {
+      if (remaining[0] === '\n') {
+        i++;
+        column = 0;
         line++;
+        continue;
       }
-    } else {
-      buffer.push(char);
+
+      const endQuote = remaining[0] === "'";
+      const startInterpolation = remaining[0] === '$' && remaining[1] === '{';
+      if (endQuote || startInterpolation) {
+        const { charIndex, lineStart, columnStart } = stringStart;
+        stringStart = null;
+
+        tokens.push({
+          type: tokenTypes.STRING,
+          value: source.substring(charIndex, i),
+          lineStart,
+          lineEnd: line,
+          columnStart,
+          columnEnd: endQuote ? column + 1 : column
+        });
+
+        buffer = [];
+        inString = false;
+        if (endQuote) {
+          advance(1);
+        } else {
+          interpolationStack.push(true);
+        }
+
+        continue;
+      } else {
+        advance(1);
+        continue;
+      }
     }
+
+    if (remaining[0] === "'") {
+      inString = true;
+      stringStart = { lineStart: line, columnStart: column, charIndex: i + 1 };
+    } else if (interpolationStack.length && remaining[0] === '}') {
+      inString = true;
+      stringStart = {
+        lineStart: line,
+        columnStart: column + 1,
+        charIndex: i + 1
+      };
+    }
+
+    if ((match = remaining.match(patterns.newline))) {
+      i += match[0].length;
+      column = 0;
+      line++;
+      continue;
+    }
+
+    if ((match = remaining.match(patterns.otherWhitespace))) {
+      advance(match[0].length);
+      continue;
+    }
+
+    if ((match = remaining.match(patterns.booleanLiteral))) {
+      pushToken(tokenTypes.BOOLEAN, match[0], match[0] === 'true');
+      advance(match[0].length);
+      continue;
+    }
+
+    if ((match = remaining.match(patterns.hexNumericLiteral))) {
+      pushToken(
+        tokenTypes.NUMBER,
+        match[0],
+        parseInt(match[0].substring(2), 16)
+      );
+      advance(match[0].length);
+      continue;
+    }
+
+    if ((match = remaining.match(patterns.octalNumericLiteral))) {
+      pushToken(
+        tokenTypes.NUMBER,
+        match[0],
+        parseInt(match[0].substring(2), 8)
+      );
+      advance(match[0].length);
+      continue;
+    }
+
+    if ((match = remaining.match(patterns.binaryNumericLiteral))) {
+      pushToken(
+        tokenTypes.NUMBER,
+        match[0],
+        parseInt(match[0].substring(2), 2)
+      );
+      advance(match[0].length);
+      continue;
+    }
+
+    if ((match = remaining.match(patterns.decimalNumericLiteral))) {
+      pushToken(tokenTypes.NUMBER, match[0], parseFloat(match[0]));
+      advance(match[0].length);
+      continue;
+    }
+
+    if ((match = remaining.match(patterns.specialNumericLiteral))) {
+      pushToken(tokenTypes.NUMBER, match[0], +match[0]);
+      advance(match[0].length);
+      continue;
+    }
+
+    if (remaining.lastIndexOf('null', 0) === 0) {
+      pushToken(tokenTypes.NULL, 'null', null);
+      advance(4);
+      continue;
+    }
+
+    if (remaining.lastIndexOf('undefined', 0) === 0) {
+      pushToken(tokenTypes.UNDEFINED, 'undefined', undefined);
+      advance(9);
+      continue;
+    }
+
+    for (let w = 0; w < reservedWords.length; w++) {
+      if (reservedWordRegexes[w].test(remaining)) {
+        pushToken(tokenTypes.KEYWORD, reservedWords[w], reservedWords[w]);
+        advance(reservedWords[w].length - 1);
+        continue outer;
+      }
+    }
+
+    for (let s = 0; s < symbols.length; s++) {
+      if (symbolRegexes[s].test(remaining)) {
+        pushToken(tokenTypes.SYMBOL, symbols[s], symbols[s]);
+        advance(symbols[s].length);
+        continue outer;
+      }
+    }
+
+    advance(1);
   }
 
   return tokens;
