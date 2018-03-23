@@ -19,18 +19,10 @@ const patterns = {
   digits: /^[0-9]+/
 };
 
-const isWordSeparator = char =>
-  char === ' ' ||
-  char === '\n' ||
-  char === '\t' ||
-  char === '\r' ||
-  !!symbols[char];
-
 const tokenize = ({ source }) => {
   const length = source.length;
   const tokens = [];
   const interpolationStack = [];
-  let buffer = [];
   let line = 1;
   let column = 0;
   let i = 0;
@@ -48,8 +40,6 @@ const tokenize = ({ source }) => {
       columnStart: column + columnAdvance,
       columnEnd: column + columnAdvance + text.length
     });
-
-    buffer = [];
   };
 
   const advance = amount => {
@@ -68,7 +58,7 @@ const tokenize = ({ source }) => {
         continue;
       }
 
-      const endQuote = remaining[0] === "'";
+      const endQuote = remaining[0] === '\'';
       const startInterpolation = remaining[0] === '$' && remaining[1] === '{';
       if (endQuote || startInterpolation) {
         const { charIndex, lineStart, columnStart } = stringStart;
@@ -83,7 +73,6 @@ const tokenize = ({ source }) => {
           columnEnd: endQuote ? column + 1 : column
         });
 
-        buffer = [];
         inString = false;
         if (endQuote) {
           advance(1);
@@ -98,7 +87,7 @@ const tokenize = ({ source }) => {
       }
     }
 
-    if (remaining[0] === "'") {
+    if (remaining[0] === '\'') {
       inString = true;
       stringStart = { lineStart: line, columnStart: column, charIndex: i + 1 };
     } else if (interpolationStack.length && remaining[0] === '}') {

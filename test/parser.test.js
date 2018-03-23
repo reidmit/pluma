@@ -31,13 +31,13 @@ describe('parser', () => {
   });
 
   test('string literal', () => {
-    expectAst(`'hello, world!'`, [
+    expectAst('\'hello, world!\'', [
       t.expressionStatement(t.stringLiteral('hello, world!'))
     ]);
   });
 
   test('interpolated string literal', () => {
-    expectAst(`'hello, \${name}!'`, [
+    expectAst('\'hello, ${name}!\'', [
       t.expressionStatement(
         t.templateLiteral(
           [t.templateElement('hello, ', false), t.templateElement('!', true)],
@@ -60,7 +60,7 @@ describe('parser', () => {
   });
 
   test('member expression with brackets (computed)', () => {
-    expectAst(`a[b]['hello'][0]`, [
+    expectAst('a[b][\'hello\'][0]', [
       t.expressionStatement(
         t.memberExpression(
           t.memberExpression(
@@ -76,7 +76,7 @@ describe('parser', () => {
   });
 
   test('function (one param)', () => {
-    expectAst(`x => 47`, [
+    expectAst('x => 47', [
       t.expressionStatement(
         t.arrowFunctionExpression([t.identifier('x')], t.numericLiteral(47))
       )
@@ -84,7 +84,7 @@ describe('parser', () => {
   });
 
   test('function (async)', () => {
-    expectAst(`async x => 47`, [
+    expectAst('async x => 47', [
       t.expressionStatement(
         t.arrowFunctionExpression(
           [t.identifier('x')],
@@ -96,7 +96,7 @@ describe('parser', () => {
   });
 
   test('function (two params)', () => {
-    expectAst(`x => y => 47`, [
+    expectAst('x => y => 47', [
       t.expressionStatement(
         t.arrowFunctionExpression(
           [t.identifier('x')],

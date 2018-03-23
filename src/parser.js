@@ -112,12 +112,6 @@ const parse = ({ source, tokens }) => {
     }, null);
   };
 
-  const parseSimpleIdentifier = () => {
-    if (!isIdentifier(token)) return;
-    advance();
-    return t.identifier(token.value);
-  };
-
   const parseFunction = (async = false) => {
     if (!isIdentifier(token) || !isArrow(tokens[index + 1])) return;
     const params = [t.identifier(token.value)];
