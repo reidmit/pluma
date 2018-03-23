@@ -129,4 +129,12 @@ describe('parser', () => {
       ]
     );
   });
+
+  test('call expression (single argument)', () => {
+    expectAst('someFunc someArg', [
+      t.expressionStatement(
+        t.callExpression(t.identifier('someFunc'), [t.identifier('someArg')])
+      )
+    ]);
+  });
 });
