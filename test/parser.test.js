@@ -279,5 +279,29 @@ describe('parser', () => {
     );
   });
 
+  test('function definition followed by call', () => {
+    expectAst(
+      `
+      let fn = a => 'hello, world!'
+
+      fn 1
+      `,
+      [
+        t.variableDeclaration('const', [
+          t.variableDeclarator(
+            t.identifier('fn'),
+            t.arrowFunctionExpression(
+              [t.identifier('a')],
+              t.stringLiteral('hello, world!')
+            )
+          )
+        ]),
+        t.expressionStatement(
+          t.callExpression(t.identifier('fn'), [t.numericLiteral(1)])
+        )
+      ]
+    );
+  });
+
   describe('error cases', () => {});
 });

@@ -26,6 +26,7 @@ const isLet = isKeyword('let');
 const parse = ({ source, tokens }) => {
   let index = 0;
   let token = tokens[index];
+  let lastAssignmentColumn = 0;
 
   const advance = (n = 1) => {
     index += n;
@@ -150,7 +151,11 @@ const parse = ({ source, tokens }) => {
     let left = parseFunction() || parseIdentifier();
     if (!left) return;
     let right;
-    while ((right = parseExpression())) {
+    while (
+      token &&
+      token.columnStart > lastAssignmentColumn &&
+      (right = parseExpression())
+    ) {
       left = t.callExpression(left, [right]);
     }
     return left;
@@ -282,6 +287,7 @@ const parse = ({ source, tokens }) => {
       isIdentifier(tokens[index + 1]) &&
       isEquals(tokens[index + 2])
     ) {
+      lastAssignmentColumn = token.columnStart;
       advance();
       const id = t.identifier(token.value);
       advance(2);
