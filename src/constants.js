@@ -20,12 +20,22 @@ export const symbols = [
   ':',
   '=>',
   '=',
+  '...',
   '.',
   ',',
   '#'
 ];
 
-export const symbolRegexes = symbols.map(symbol => new RegExp('^\\' + symbol));
+export const symbolRegexes = symbols.map(
+  symbol =>
+    new RegExp(
+      '^' +
+        symbol
+          .split('')
+          .map(char => '\\' + char)
+          .join('')
+    )
+);
 
 export const reservedWords = [
   'async',

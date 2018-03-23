@@ -154,6 +154,100 @@ describe('parser', () => {
     ]);
   });
 
+  test('nested call expressions with parentheses', () => {
+    expectAst(
+      `
+      someFunc (someOtherFunc 3) 4
+    `,
+      [
+        t.expressionStatement(
+          t.callExpression(
+            t.callExpression(t.identifier('someFunc'), [
+              t.callExpression(t.identifier('someOtherFunc'), [
+                t.numericLiteral(3)
+              ])
+            ]),
+            [t.numericLiteral(4)]
+          )
+        )
+      ]
+    );
+  });
+
+  test('array expressions (empty)', () => {
+    expectAst('[]', [t.expressionStatement(t.arrayExpression([]))]);
+  });
+
+  test('array expressions (basic)', () => {
+    expectAst(
+      `
+        [1, test, true, 'hello']
+      `,
+      [
+        t.expressionStatement(
+          t.arrayExpression([
+            t.numericLiteral(1),
+            t.identifier('test'),
+            t.booleanLiteral(true),
+            t.stringLiteral('hello')
+          ])
+        )
+      ]
+    );
+  });
+
+  test('object expressions (empty)', () => {
+    expectAst('{}', [t.expressionStatement(t.objectExpression([]))]);
+  });
+
+  test('object expressions (basic)', () => {
+    expectAst("{a: 1, b: 'hello', 'c d': true}", [
+      t.expressionStatement(
+        t.objectExpression([
+          t.objectProperty(t.identifier('a'), t.numericLiteral(1)),
+          t.objectProperty(t.identifier('b'), t.stringLiteral('hello')),
+          t.objectProperty(t.stringLiteral('c d'), t.booleanLiteral(true))
+        ])
+      )
+    ]);
+  });
+
+  test('object expressions (computed keys)', () => {
+    expectAst("{ [something]: 1, ['test']: 2 }", [
+      t.expressionStatement(
+        t.objectExpression([
+          t.objectProperty(
+            t.identifier('something'),
+            t.numericLiteral(1),
+            true
+          ),
+          t.objectProperty(t.stringLiteral('test'), t.numericLiteral(2), true)
+        ])
+      )
+    ]);
+  });
+
+  test('object expressions (shorthand keys)', () => {
+    expectAst('{ short, hand }', [
+      t.expressionStatement(
+        t.objectExpression([
+          t.objectProperty(
+            t.identifier('short'),
+            t.identifier('short'),
+            false,
+            true
+          ),
+          t.objectProperty(
+            t.identifier('hand'),
+            t.identifier('hand'),
+            false,
+            true
+          )
+        ])
+      )
+    ]);
+  });
+
   test('multiple complex assignments', () => {
     expectAst(
       `

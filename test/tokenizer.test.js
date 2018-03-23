@@ -468,6 +468,7 @@ describe('tokenizer', () => {
       , => =
       ( . ) :
       ][
+        ...
       `,
         [
           {
@@ -573,6 +574,14 @@ describe('tokenizer', () => {
             lineEnd: 4,
             columnStart: 7,
             columnEnd: 8
+          },
+          {
+            type: tokenTypes.SYMBOL,
+            value: '...',
+            lineStart: 5,
+            lineEnd: 5,
+            columnStart: 8,
+            columnEnd: 11
           }
         ]
       );

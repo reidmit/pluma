@@ -1,8 +1,7 @@
 {
   "name": "functional-language",
   "version": "0.0.0",
-  "description":
-    "A small, dynamically-typed functional language that compiles to JJavaScript",
+  "description": "A small, dynamically-typed functional language that compiles to JJavaScript",
   "main": "index.js",
   "author": "Reid Mitchell",
   "license": "MIT",
@@ -12,6 +11,7 @@
   },
   "dependencies": {
     "babel-core": "^6.26.0",
+    "babel-generator": "^6.26.1",
     "babel-types": "^6.26.0"
   },
   "devDependencies": {

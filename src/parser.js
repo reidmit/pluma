@@ -12,9 +12,15 @@ const isIdentifier = isType('IDENTIFIER');
 const isDot = isSymbol('.');
 const isLeftBrace = isSymbol('[');
 const isRightBrace = isSymbol(']');
+const isLeftParen = isSymbol('(');
+const isRightParen = isSymbol(')');
+const isLeftBracket = isSymbol('{');
+const isRightBracket = isSymbol('}');
 const isInterpolationStart = isSymbol('${');
 const isEquals = isSymbol('=');
 const isArrow = isSymbol('=>');
+const isComma = isSymbol(',');
+const isColon = isSymbol(':');
 const isLet = isKeyword('let');
 
 const parse = ({ source, tokens }) => {
@@ -82,7 +88,7 @@ const parse = ({ source, tokens }) => {
   const parseIdentifier = () => {
     if (!isIdentifier(token)) return;
     const parts = [{ property: t.identifier(token.value), computed: false }];
-    advance(1);
+    advance();
 
     while (isDot(token) || isLeftBrace(token)) {
       if (isDot(token)) {
@@ -131,7 +137,7 @@ const parse = ({ source, tokens }) => {
 
   const parseAsyncFunction = () => {
     if (!isKeyword('async')(token)) return;
-    advance(1);
+    advance();
     const fn = parseFunction(true);
     if (!fn) {
       fail('Expected a function after async keyword');
@@ -150,6 +156,105 @@ const parse = ({ source, tokens }) => {
     return left;
   };
 
+  const parseParenthetical = () => {
+    if (!isLeftParen(token)) return;
+    advance();
+    const expression = parseExpression();
+    if (!expression) {
+      fail('Expected expression after (');
+    }
+    if (!isRightParen(token)) {
+      fail('Missing closing )');
+    }
+    advance();
+    return expression;
+  };
+
+  const parseObjectProperty = () => {
+    if (isIdentifier(token) && isColon(tokens[index + 1])) {
+      const key = t.identifier(token.value);
+      advance(2);
+      const value = parseExpression();
+      if (!value) {
+        fail('Expected a valid expression after :');
+      }
+      return t.objectProperty(key, value);
+    } else if (
+      isIdentifier(token) &&
+      (isComma(tokens[index + 1]) || isRightBracket(tokens[index + 1]))
+    ) {
+      const key = t.identifier(token.value);
+      advance();
+      return t.objectProperty(key, key, false, true);
+    } else if (isString(token) && isColon(tokens[index + 1])) {
+      const key = t.stringLiteral(token.value);
+      advance(2);
+      const value = parseExpression();
+      if (!value) {
+        fail('Expected a valid expression after :');
+      }
+      return t.objectProperty(key, value);
+    } else if (isLeftBrace(token)) {
+      advance();
+      const key = parseExpression();
+      if (!key) {
+        fail('Could not parse computed key');
+      }
+      if (!isRightBrace(token)) {
+        fail('Expected a closing ] after computed key');
+      }
+      advance();
+      if (!isColon(token)) {
+        fail('Expected a : after computed key');
+      }
+      advance();
+      const value = parseExpression();
+      if (!value) {
+        fail('Expected a valid expression after :');
+      }
+      return t.objectProperty(key, value, true);
+    }
+  };
+
+  const parseObject = () => {
+    if (!isLeftBracket(token)) return;
+    advance();
+    const properties = [];
+    while (!isRightBracket(token)) {
+      const property = parseObjectProperty();
+      if (!property) {
+        fail('Failed to parse object property');
+      }
+      properties.push(property);
+      if (isComma(token)) {
+        advance();
+      } else if (!isRightBracket(token)) {
+        fail('Missing right bracket }');
+      }
+    }
+    return t.objectExpression(properties);
+  };
+
+  const parseArray = () => {
+    if (!isLeftBrace(token)) return;
+    advance();
+    const elements = [];
+    while (!isRightBrace(token)) {
+      const expr = parseExpression();
+      if (!expr) {
+        fail('Invalid expression in array');
+      }
+      elements.push(expr);
+      if (isComma(token)) {
+        advance();
+      } else if (!isRightBrace(token)) {
+        fail('Missing right brace ]');
+      }
+    }
+
+    return t.arrayExpression(elements);
+  };
+
   const parseExpression = () => {
     if (!token) return;
 
@@ -166,6 +271,8 @@ const parse = ({ source, tokens }) => {
         return parsePossibleCallExpression();
       case tokenTypes.KEYWORD:
         return parseAsyncFunction();
+      case tokenTypes.SYMBOL:
+        return parseParenthetical() || parseObject() || parseArray();
     }
   };
 
