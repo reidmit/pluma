@@ -31,13 +31,13 @@ describe('parser', () => {
   });
 
   test('string literal', () => {
-    expectAst('\'hello, world!\'', [
+    expectAst("'hello, world!'", [
       t.expressionStatement(t.stringLiteral('hello, world!'))
     ]);
   });
 
   test('interpolated string literal', () => {
-    expectAst('\'hello, ${name}!\'', [
+    expectAst("'hello, ${name}!'", [
       t.expressionStatement(
         t.templateLiteral(
           [t.templateElement('hello, ', false), t.templateElement('!', true)],
@@ -60,7 +60,7 @@ describe('parser', () => {
   });
 
   test('member expression with brackets (computed)', () => {
-    expectAst('a[b][\'hello\'][0]', [
+    expectAst("a[b]['hello'][0]", [
       t.expressionStatement(
         t.memberExpression(
           t.memberExpression(
@@ -137,4 +137,53 @@ describe('parser', () => {
       )
     ]);
   });
+
+  test('call expression (multiple arguments)', () => {
+    expectAst("helloWorld 47 'something here' cool", [
+      t.expressionStatement(
+        t.callExpression(
+          t.callExpression(
+            t.callExpression(t.identifier('helloWorld'), [
+              t.numericLiteral(47)
+            ]),
+            [t.stringLiteral('something here')]
+          ),
+          [t.identifier('cool')]
+        )
+      )
+    ]);
+  });
+
+  test('multiple complex assignments', () => {
+    expectAst(
+      `
+      let func1 = helloWorld 47 'something here' cool
+      let func2 = func1 true
+      `,
+      [
+        t.variableDeclaration('const', [
+          t.variableDeclarator(
+            t.identifier('func1'),
+            t.callExpression(
+              t.callExpression(
+                t.callExpression(t.identifier('helloWorld'), [
+                  t.numericLiteral(47)
+                ]),
+                [t.stringLiteral('something here')]
+              ),
+              [t.identifier('cool')]
+            )
+          )
+        ]),
+        t.variableDeclaration('const', [
+          t.variableDeclarator(
+            t.identifier('func2'),
+            t.callExpression(t.identifier('func1'), [t.booleanLiteral(true)])
+          )
+        ])
+      ]
+    );
+  });
+
+  describe('error cases', () => {});
 });

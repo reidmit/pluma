@@ -80,12 +80,18 @@ const parse = ({ source, tokens }) => {
   };
 
   const parseIdentifier = () => {
-    const parts = [];
+    if (!isIdentifier(token)) return;
+    const parts = [{ property: t.identifier(token.value), computed: false }];
+    advance(1);
 
-    while (isIdentifier(token) || isDot(token) || isLeftBrace(token)) {
-      if (isIdentifier(token)) {
+    while (isDot(token) || isLeftBrace(token)) {
+      if (isDot(token)) {
+        advance();
+        if (!isIdentifier(token)) {
+          fail('Unexpected token after dot');
+        }
         parts.push({ property: t.identifier(token.value), computed: false });
-      } else if (isLeftBrace(token)) {
+      } else {
         advance();
         const innerExpression = parseExpression(token);
 
@@ -134,7 +140,19 @@ const parse = ({ source, tokens }) => {
     return fn;
   };
 
+  const parsePossibleCallExpression = () => {
+    let left = parseFunction() || parseIdentifier();
+    if (!left) return;
+    let right;
+    while ((right = parseExpression())) {
+      left = t.callExpression(left, [right]);
+    }
+    return left;
+  };
+
   const parseExpression = () => {
+    if (!token) return;
+
     switch (token.type) {
       case tokenTypes.NUMBER:
         return parseNumber();
@@ -145,7 +163,7 @@ const parse = ({ source, tokens }) => {
       case tokenTypes.NULL:
         return parseNull();
       case tokenTypes.IDENTIFIER:
-        return parseFunction() || parseIdentifier();
+        return parsePossibleCallExpression();
       case tokenTypes.KEYWORD:
         return parseAsyncFunction();
     }
