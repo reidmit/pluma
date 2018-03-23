@@ -1,7 +1,8 @@
 {
-  "name": "functional-language",
+  "name": "pluma",
   "version": "0.0.0",
-  "description": "A small, dynamically-typed functional language that compiles to JJavaScript",
+  "description":
+    "A small, dynamically-typed functional language that compiles to JavaScript",
   "main": "index.js",
   "author": "Reid Mitchell",
   "license": "MIT",
