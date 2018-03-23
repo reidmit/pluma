@@ -40,7 +40,10 @@ describe('parser', () => {
     expectAst("'hello, ${name}!'", [
       t.expressionStatement(
         t.templateLiteral(
-          [t.templateElement('hello, ', false), t.templateElement('!', true)],
+          [
+            t.templateElement({ raw: 'hello, ', cooked: 'hello, ' }, false),
+            t.templateElement({ raw: '!', cooked: '!' }, true)
+          ],
           [t.identifier('name')]
         )
       )

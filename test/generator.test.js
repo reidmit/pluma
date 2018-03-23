@@ -5,6 +5,8 @@ describe('generate', () => {
     const source = `
 let fn = a => b => c => 'hello, world!'
 
+let greet = name => 'hi \${name}';
+
 fn 1 2 3
 
 let obj = { a: 1, b
@@ -13,6 +15,8 @@ let obj = { a: 1, b
     test('with default options', () => {
       const compiled = generate({ source });
       expect(compiled).toBe(`const fn = a => b => c => "hello, world!";
+
+const greet = name => \`hi \${name}\`;
 
 fn(1)(2)(3);
 const obj = {
@@ -39,6 +43,10 @@ var fn = function fn(a) {
   };
 };
 
+var greet = function greet(name) {
+  return "hi " + name;
+};
+
 fn(1)(2)(3);
 var obj = {
   a: 1,
@@ -48,7 +56,7 @@ var obj = {
 
     test('targeting ES5 & minifying', () => {
       const compiled = generate({
-        source,
+        source: "let fn = a => b => c => 'hello, world!'",
         options: {
           minify: true,
           target: 'ES5'
@@ -56,7 +64,7 @@ var obj = {
       });
 
       expect(compiled).toBe(
-        `"use strict";var fn=function fn(a){return function(b){return function(c){return"hello, world!"}}};fn(1)(2)(3);var obj={a:1,b:b};`
+        `"use strict";var fn=function fn(a){return function(b){return function(c){return"hello, world!"}}};`
       );
     });
   });

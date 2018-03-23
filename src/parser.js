@@ -62,7 +62,9 @@ const parse = ({ source, tokens }) => {
 
     while (isString(token) || isInterpolationStart(token)) {
       if (isString(token)) {
-        stringParts.push(t.templateElement(token.value, false));
+        stringParts.push(
+          t.templateElement({ raw: token.value, cooked: token.value }, false)
+        );
       } else {
         advance();
 
@@ -79,7 +81,7 @@ const parse = ({ source, tokens }) => {
     }
 
     if (stringParts.length === 1 && !expressions.length) {
-      return t.stringLiteral(stringParts[0].value);
+      return t.stringLiteral(stringParts[0].value.raw);
     }
 
     stringParts[stringParts.length - 1].tail = true;
