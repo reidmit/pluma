@@ -421,14 +421,14 @@ describe('tokenizer', () => {
     test('keywords', () => {
       expectTokens(
         `
-      const
+      async
       let
       import export
       `,
         [
           {
             type: tokenTypes.KEYWORD,
-            value: 'const',
+            value: 'async',
             lineStart: 2,
             lineEnd: 2,
             columnStart: 6,

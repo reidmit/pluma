@@ -74,4 +74,59 @@ describe('parser', () => {
       )
     ]);
   });
+
+  test('function (one param)', () => {
+    expectAst(`x => 47`, [
+      t.expressionStatement(
+        t.arrowFunctionExpression([t.identifier('x')], t.numericLiteral(47))
+      )
+    ]);
+  });
+
+  test('function (async)', () => {
+    expectAst(`async x => 47`, [
+      t.expressionStatement(
+        t.arrowFunctionExpression(
+          [t.identifier('x')],
+          t.numericLiteral(47),
+          true
+        )
+      )
+    ]);
+  });
+
+  test('function (two params)', () => {
+    expectAst(`x => y => 47`, [
+      t.expressionStatement(
+        t.arrowFunctionExpression(
+          [t.identifier('x')],
+          t.arrowFunctionExpression(
+            [t.identifier('y')],
+            t.numericLiteral(47),
+            false
+          )
+        )
+      )
+    ]);
+  });
+
+  test('assignment', () => {
+    expectAst(
+      `
+      let hello = 47
+      let someString = 'hello, world!'
+    `,
+      [
+        t.variableDeclaration('const', [
+          t.variableDeclarator(t.identifier('hello'), t.numericLiteral(47))
+        ]),
+        t.variableDeclaration('const', [
+          t.variableDeclarator(
+            t.identifier('someString'),
+            t.stringLiteral('hello, world!')
+          )
+        ])
+      ]
+    );
+  });
 });
