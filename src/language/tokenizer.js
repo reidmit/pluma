@@ -58,7 +58,7 @@ const tokenize = ({ source }) => {
         continue;
       }
 
-      const endQuote = remaining[0] === '\'';
+      const endQuote = remaining[0] === '"';
       const startInterpolation = remaining[0] === '$' && remaining[1] === '{';
       if (endQuote || startInterpolation) {
         const { charIndex, lineStart, columnStart } = stringStart;
@@ -87,7 +87,7 @@ const tokenize = ({ source }) => {
       }
     }
 
-    if (remaining[0] === '\'') {
+    if (remaining[0] === '"') {
       inString = true;
       stringStart = { lineStart: line, columnStart: column, charIndex: i + 1 };
     } else if (interpolationStack.length && remaining[0] === '}') {

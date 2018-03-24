@@ -1,11 +1,11 @@
-import { generate } from '../src/generator';
+import { generate } from '../../src/language/generator';
 
 describe('generate', () => {
   describe('basic examples', () => {
     const source = `
-let fn = a => b => c => 'hello, world!'
+let fn = a => b => c => "hello, world!"
 
-let greet = name => 'hi \${name}';
+let greet = name => "hi \${name}";
 
 fn 1 2 3
 
@@ -56,7 +56,7 @@ var obj = {
 
     test('targeting ES5 & minifying', () => {
       const compiled = generate({
-        source: "let fn = a => b => c => 'hello, world!'",
+        source: 'let fn = a => b => c => "hello, world!"',
         options: {
           minify: true,
           target: 'ES5'

@@ -1,5 +1,5 @@
-import { parse } from '../src/parser';
-import { tokenize } from '../src/tokenizer';
+import { parse } from '../../src/language/parser';
+import { tokenize } from '../../src/language/tokenizer';
 import * as t from 'babel-types';
 
 const expectAst = (source, bodyNodes) => {
@@ -31,13 +31,13 @@ describe('parser', () => {
   });
 
   test('string literal', () => {
-    expectAst("'hello, world!'", [
+    expectAst('"hello, world!"', [
       t.expressionStatement(t.stringLiteral('hello, world!'))
     ]);
   });
 
   test('interpolated string literal', () => {
-    expectAst("'hello, ${name}!'", [
+    expectAst('"hello, ${name}!"', [
       t.expressionStatement(
         t.templateLiteral(
           [
@@ -63,7 +63,7 @@ describe('parser', () => {
   });
 
   test('member expression with brackets (computed)', () => {
-    expectAst("a[b]['hello'][0]", [
+    expectAst('a[b]["hello"][0]', [
       t.expressionStatement(
         t.memberExpression(
           t.memberExpression(
@@ -117,7 +117,7 @@ describe('parser', () => {
     expectAst(
       `
       let hello = 47
-      let someString = 'hello, world!'
+      let someString = "hello, world!"
     `,
       [
         t.variableDeclaration('const', [
@@ -142,7 +142,7 @@ describe('parser', () => {
   });
 
   test('call expression (multiple arguments)', () => {
-    expectAst("helloWorld 47 'something here' cool", [
+    expectAst('helloWorld 47 "something here" cool', [
       t.expressionStatement(
         t.callExpression(
           t.callExpression(
@@ -184,7 +184,7 @@ describe('parser', () => {
   test('array expressions (basic)', () => {
     expectAst(
       `
-        [1, test, true, 'hello']
+        [1, test, true, "hello"]
       `,
       [
         t.expressionStatement(
@@ -204,7 +204,7 @@ describe('parser', () => {
   });
 
   test('object expressions (basic)', () => {
-    expectAst("{a: 1, b: 'hello', 'c d': true}", [
+    expectAst('{a: 1, b: "hello", "c d": true}', [
       t.expressionStatement(
         t.objectExpression([
           t.objectProperty(t.identifier('a'), t.numericLiteral(1)),
@@ -216,7 +216,7 @@ describe('parser', () => {
   });
 
   test('object expressions (computed keys)', () => {
-    expectAst("{ [something]: 1, ['test']: 2 }", [
+    expectAst('{ [something]: 1, ["test"]: 2 }', [
       t.expressionStatement(
         t.objectExpression([
           t.objectProperty(
@@ -254,7 +254,7 @@ describe('parser', () => {
   test('multiple complex assignments', () => {
     expectAst(
       `
-      let func1 = helloWorld 47 'something here' cool
+      let func1 = helloWorld 47 "something here" cool
       let func2 = func1 true
       `,
       [
@@ -285,7 +285,7 @@ describe('parser', () => {
   test('function definition followed by call', () => {
     expectAst(
       `
-      let fn = a => 'hello, world!'
+      let fn = a => "hello, world!"
 
       fn 1
       `,

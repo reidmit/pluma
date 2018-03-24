@@ -1,5 +1,5 @@
-import { tokenTypes } from '../src/constants';
-import { tokenize } from '../src/tokenizer';
+import { tokenTypes } from '../../src/language/constants';
+import { tokenize } from '../../src/language/tokenizer';
 
 const expectTokens = (input, output) =>
   expect(tokenize({ source: input })).toEqual(output);
@@ -234,9 +234,9 @@ describe('tokenizer', () => {
     test('string literals', () => {
       expectTokens(
         `
-        'this is a string  '
-        'this is a
-            multiline string'
+        "this is a string  "
+        "this is a
+            multiline string"
       `,
         [
           {
@@ -262,8 +262,8 @@ describe('tokenizer', () => {
     test('string literals (interpolated)', () => {
       expectTokens(
         `
-        'this is an \${ 'interpolated' } string'
-        'strings can have \${'interpolations \${'within'} interpolations'}, too!'
+        "this is an \${ "interpolated" } string"
+        "strings can have \${"interpolations \${"within"} interpolations"}, too!"
       `,
         [
           {
@@ -640,8 +640,8 @@ describe('tokenizer', () => {
       expectTokens(
         `
         let x = 47
-        let funky = a => 'hello there,
-          \${a}!'
+        let funky = a => "hello there,
+          \${a}!"
         `,
         [
           {
@@ -763,7 +763,7 @@ describe('tokenizer', () => {
     test('member expressions', () => {
       expectTokens(
         `
-        a.b[c]['test'][47]
+        a.b[c]["test"][47]
       `,
         [
           {
