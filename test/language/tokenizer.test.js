@@ -10,6 +10,7 @@ describe('tokenizer', () => {
       expectTokens(
         `
       True
+
       False
       `,
         [
@@ -24,8 +25,8 @@ describe('tokenizer', () => {
           {
             type: tokenTypes.BOOLEAN,
             value: false,
-            lineStart: 3,
-            lineEnd: 3,
+            lineStart: 4,
+            lineEnd: 4,
             columnStart: 6,
             columnEnd: 11
           }
@@ -864,6 +865,28 @@ describe('tokenizer', () => {
           }
         ]
       );
+    });
+  });
+
+  describe('error cases', () => {
+    test('unrecognized tokens', () => {
+      const tokens = tokenize({
+        source: `let a = 100
+let b = 200
+let c = 300
+let d = 400
+let e = 600
+
+let f = 700
+let x = 47
+hello & %
+let fn = z => "hello"
+let y = "test"
+let z = "test"
+`
+      });
+
+      console.log({ tokens });
     });
   });
 });

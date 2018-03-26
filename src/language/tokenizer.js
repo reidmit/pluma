@@ -6,6 +6,8 @@ import {
   reservedWordRegexes
 } from './constants';
 
+import { TokenizerError } from './errors';
+
 const patterns = {
   newline: /^[\n]+/,
   otherWhitespace: /^[ \t\r]+/,
@@ -30,6 +32,10 @@ function tokenize({ source }) {
   let stringStart = null;
   let match;
   let remaining;
+
+  function fail(message) {
+    throw new TokenizerError(message, source, line, column);
+  }
 
   function pushToken(type, text, value) {
     tokens.push({
@@ -90,6 +96,8 @@ function tokenize({ source }) {
     if (remaining[0] === '"') {
       inString = true;
       stringStart = { lineStart: line, columnStart: column, charIndex: i + 1 };
+      advance();
+      continue;
     } else if (interpolationStack.length && remaining[0] === '}') {
       inString = true;
       stringStart = {
@@ -97,12 +105,16 @@ function tokenize({ source }) {
         columnStart: column + 1,
         charIndex: i + 1
       };
+      interpolationStack.pop();
+      pushToken(tokenTypes.SYMBOL, '}', '}');
+      advance();
+      continue;
     }
 
     if ((match = remaining.match(patterns.newline))) {
       i += match[0].length;
       column = 0;
-      line++;
+      line += match[0].length;
       continue;
     }
 
@@ -193,7 +205,7 @@ function tokenize({ source }) {
       continue;
     }
 
-    advance();
+    fail();
   }
 
   return tokens;
