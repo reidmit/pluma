@@ -9,7 +9,7 @@ import {
 const patterns = {
   newline: /^[\n]+/,
   otherWhitespace: /^[ \t\r]+/,
-  booleanLiteral: /^(true|false)/,
+  booleanLiteral: /^(True|False)/,
   decimalNumericLiteral: /^[\d]+\.?[\d]*/,
   hexNumericLiteral: /^0x[\da-f]+/i,
   octalNumericLiteral: /^0o[0-7]+/i,
@@ -112,7 +112,7 @@ const tokenize = ({ source }) => {
     }
 
     if ((match = remaining.match(patterns.booleanLiteral))) {
-      pushToken(tokenTypes.BOOLEAN, match[0], match[0] === 'true');
+      pushToken(tokenTypes.BOOLEAN, match[0], match[0] === 'True');
       advance(match[0].length);
       continue;
     }

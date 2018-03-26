@@ -23,7 +23,7 @@ describe('parser', () => {
   });
 
   test('boolean literal', () => {
-    expectAst('true', [t.expressionStatement(t.booleanLiteral(true))]);
+    expectAst('True', [t.expressionStatement(t.booleanLiteral(true))]);
   });
 
   test('identifier', () => {
@@ -184,7 +184,7 @@ describe('parser', () => {
   test('array expressions (basic)', () => {
     expectAst(
       `
-        [1, test, true, "hello"]
+        [1, test, True, "hello"]
       `,
       [
         t.expressionStatement(
@@ -204,7 +204,7 @@ describe('parser', () => {
   });
 
   test('object expressions (basic)', () => {
-    expectAst('{a: 1, b: "hello", "c d": true}', [
+    expectAst('{a: 1, b: "hello", "c d": True}', [
       t.expressionStatement(
         t.objectExpression([
           t.objectProperty(t.identifier('a'), t.numericLiteral(1)),
@@ -255,7 +255,7 @@ describe('parser', () => {
     expectAst(
       `
       let func1 = helloWorld 47 "something here" cool
-      let func2 = func1 true
+      let func2 = func1 True
       `,
       [
         t.variableDeclaration('const', [

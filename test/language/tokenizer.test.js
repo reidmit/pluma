@@ -9,8 +9,8 @@ describe('tokenizer', () => {
     test('boolean literals', () => {
       expectTokens(
         `
-      true
-      false
+      True
+      False
       `,
         [
           {
