@@ -19,7 +19,7 @@ const patterns = {
   digits: /^[0-9]+/
 };
 
-const tokenize = ({ source }) => {
+function tokenize({ source }) {
   const length = source.length;
   const tokens = [];
   const interpolationStack = [];
@@ -31,7 +31,7 @@ const tokenize = ({ source }) => {
   let match;
   let remaining;
 
-  const pushToken = (type, text, value, columnAdvance = 0) => {
+  function pushToken(type, text, value, columnAdvance = 0) {
     tokens.push({
       type,
       value,
@@ -40,12 +40,12 @@ const tokenize = ({ source }) => {
       columnStart: column + columnAdvance,
       columnEnd: column + columnAdvance + text.length
     });
-  };
+  }
 
-  const advance = amount => {
+  function advance(amount) {
     i += amount;
     column += amount;
-  };
+  }
 
   outer: while (i < length) {
     remaining = source.substring(i);
@@ -197,6 +197,6 @@ const tokenize = ({ source }) => {
   }
 
   return tokens;
-};
+}
 
 export default tokenize;

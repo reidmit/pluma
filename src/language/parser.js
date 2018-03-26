@@ -2,40 +2,40 @@ import * as t from 'babel-types';
 import * as u from './util';
 import { tokenTypes } from './constants';
 
-const parse = ({ source, tokens }) => {
+function parse({ source, tokens }) {
   let index = 0;
   let token = tokens[index];
   let lastAssignmentColumn = 0;
 
-  const advance = (n = 1) => {
+  function advance(n = 1) {
     index += n;
     token = tokens[index];
-  };
+  }
 
-  const fail = message => {
+  function fail(message) {
     // TODO: improve with tokens/line numbers/etc
     throw new Error(`Parse error: ${message}`);
-  };
+  }
 
-  const parseNumber = () => {
+  function parseNumber() {
     if (!u.isNumber(token)) return;
     const node = t.numericLiteral(token.value);
     advance();
     return node;
-  };
+  }
 
-  const parseBoolean = () => {
+  function parseBoolean() {
     const node = t.booleanLiteral(token.value);
     advance();
     return node;
-  };
+  }
 
-  const parseNull = () => {
+  function parseNull() {
     advance();
     return t.nullLiteral();
-  };
+  }
 
-  const parseString = () => {
+  function parseString() {
     const stringParts = [];
     const expressions = [];
 
@@ -65,9 +65,9 @@ const parse = ({ source, tokens }) => {
 
     stringParts[stringParts.length - 1].tail = true;
     return t.templateLiteral(stringParts, expressions);
-  };
+  }
 
-  const parseIdentifier = () => {
+  function parseIdentifier() {
     if (!u.isIdentifier(token)) return;
     const parts = [{ property: t.identifier(token.value), computed: false }];
     advance();
@@ -108,9 +108,9 @@ const parse = ({ source, tokens }) => {
       if (!expression) return property;
       return t.memberExpression(expression, property, computed);
     }, null);
-  };
+  }
 
-  const parseFunction = (isAsync = false) => {
+  function parseFunction(isAsync = false) {
     if (!u.isIdentifier(token) || !u.isArrow(tokens[index + 1])) return;
     const params = [t.identifier(token.value)];
     advance(2);
@@ -119,9 +119,9 @@ const parse = ({ source, tokens }) => {
       fail('Expected a valid expression in function body');
     }
     return t.arrowFunctionExpression(params, body, isAsync);
-  };
+  }
 
-  const parseAsyncFunction = () => {
+  function parseAsyncFunction() {
     if (!u.isKeyword('async')(token)) return;
     advance();
     const fn = parseFunction(true);
@@ -130,9 +130,9 @@ const parse = ({ source, tokens }) => {
     }
 
     return fn;
-  };
+  }
 
-  const parsePossibleCallExpression = () => {
+  function parsePossibleCallExpression() {
     let left = parseFunction() || parseIdentifier();
     if (!left) return;
     let right;
@@ -144,9 +144,9 @@ const parse = ({ source, tokens }) => {
       left = t.callExpression(left, [right]);
     }
     return left;
-  };
+  }
 
-  const parseParenthetical = () => {
+  function parseParenthetical() {
     if (!u.isLeftParen(token)) return;
     advance();
     const expression = parseExpression();
@@ -158,9 +158,9 @@ const parse = ({ source, tokens }) => {
     }
     advance();
     return expression;
-  };
+  }
 
-  const parseObjectProperty = () => {
+  function parseObjectProperty() {
     if (u.isIdentifier(token) && u.isColon(tokens[index + 1])) {
       const key = t.identifier(token.value);
       advance(2);
@@ -204,9 +204,9 @@ const parse = ({ source, tokens }) => {
       }
       return t.objectProperty(key, value, true);
     }
-  };
+  }
 
-  const parseObject = () => {
+  function parseObject() {
     if (!u.isLeftBracket(token)) return;
     advance();
 
@@ -226,9 +226,9 @@ const parse = ({ source, tokens }) => {
 
     advance();
     return t.objectExpression(properties);
-  };
+  }
 
-  const parseArray = () => {
+  function parseArray() {
     if (!u.isLeftBrace(token)) return;
     advance();
 
@@ -248,9 +248,9 @@ const parse = ({ source, tokens }) => {
 
     advance();
     return t.arrayExpression(elements);
-  };
+  }
 
-  const parseExpression = () => {
+  function parseExpression() {
     if (!token) return;
 
     switch (token.type) {
@@ -269,9 +269,9 @@ const parse = ({ source, tokens }) => {
       case tokenTypes.SYMBOL:
         return parseParenthetical() || parseObject() || parseArray();
     }
-  };
+  }
 
-  const parseAssignment = () => {
+  function parseAssignment() {
     if (
       u.isLet(token) &&
       u.isIdentifier(tokens[index + 1]) &&
@@ -290,9 +290,9 @@ const parse = ({ source, tokens }) => {
         t.variableDeclarator(id, valueExpression)
       ]);
     }
-  };
+  }
 
-  const parseStatement = () => {
+  function parseStatement() {
     const expression = parseExpression(token);
     if (expression) {
       return t.expressionStatement(expression);
@@ -300,7 +300,7 @@ const parse = ({ source, tokens }) => {
 
     const assignment = parseAssignment(token);
     if (assignment) return assignment;
-  };
+  }
 
   const body = [];
   while (index < tokens.length) {
@@ -309,6 +309,6 @@ const parse = ({ source, tokens }) => {
   }
 
   return t.file(t.program(body), [], tokens);
-};
+}
 
 export default parse;
