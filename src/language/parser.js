@@ -110,7 +110,7 @@ const parse = ({ source, tokens }) => {
     }, null);
   };
 
-  const parseFunction = (async = false) => {
+  const parseFunction = (isAsync = false) => {
     if (!u.isIdentifier(token) || !u.isArrow(tokens[index + 1])) return;
     const params = [t.identifier(token.value)];
     advance(2);
@@ -118,7 +118,7 @@ const parse = ({ source, tokens }) => {
     if (!body) {
       fail('Expected a valid expression in function body');
     }
-    return t.arrowFunctionExpression(params, body, async);
+    return t.arrowFunctionExpression(params, body, isAsync);
   };
 
   const parseAsyncFunction = () => {
