@@ -31,18 +31,18 @@ function tokenize({ source }) {
   let match;
   let remaining;
 
-  function pushToken(type, text, value, columnAdvance = 0) {
+  function pushToken(type, text, value) {
     tokens.push({
       type,
       value,
       lineStart: line,
       lineEnd: line,
-      columnStart: column + columnAdvance,
-      columnEnd: column + columnAdvance + text.length
+      columnStart: column,
+      columnEnd: column + text.length
     });
   }
 
-  function advance(amount) {
+  function advance(amount = 1) {
     i += amount;
     column += amount;
   }
@@ -75,14 +75,14 @@ function tokenize({ source }) {
 
         inString = false;
         if (endQuote) {
-          advance(1);
+          advance();
         } else {
           interpolationStack.push(true);
         }
 
         continue;
       } else {
-        advance(1);
+        advance();
         continue;
       }
     }
@@ -193,7 +193,7 @@ function tokenize({ source }) {
       continue;
     }
 
-    advance(1);
+    advance();
   }
 
   return tokens;

@@ -25,12 +25,14 @@ function parse({ source, tokens }) {
   }
 
   function parseBoolean() {
+    if (!u.isBoolean(token)) return;
     const node = t.booleanLiteral(token.value);
     advance();
     return node;
   }
 
   function parseNull() {
+    if (!u.isNull(token)) return;
     advance();
     return t.nullLiteral();
   }
@@ -69,6 +71,7 @@ function parse({ source, tokens }) {
 
   function parseIdentifier() {
     if (!u.isIdentifier(token)) return;
+
     const parts = [{ property: t.identifier(token.value), computed: false }];
     advance();
 
@@ -112,19 +115,23 @@ function parse({ source, tokens }) {
 
   function parseFunction(isAsync = false) {
     if (!u.isIdentifier(token) || !u.isArrow(tokens[index + 1])) return;
+
     const params = [t.identifier(token.value)];
     advance(2);
     const body = parseExpression();
     if (!body) {
       fail('Expected a valid expression in function body');
     }
+
     return t.arrowFunctionExpression(params, body, isAsync);
   }
 
   function parseAsyncFunction() {
     if (!u.isKeyword('async')(token)) return;
+
     advance();
     const fn = parseFunction(true);
+
     if (!fn) {
       fail('Expected a function after async keyword');
     }
@@ -148,6 +155,7 @@ function parse({ source, tokens }) {
 
   function parseParenthetical() {
     if (!u.isLeftParen(token)) return;
+
     advance();
     const expression = parseExpression();
     if (!expression) {
@@ -169,14 +177,18 @@ function parse({ source, tokens }) {
         fail('Expected a valid expression after :');
       }
       return t.objectProperty(key, value);
-    } else if (
+    }
+
+    if (
       u.isIdentifier(token) &&
       (u.isComma(tokens[index + 1]) || u.isRightBracket(tokens[index + 1]))
     ) {
       const key = t.identifier(token.value);
       advance();
       return t.objectProperty(key, key, false, true);
-    } else if (u.isString(token) && u.isColon(tokens[index + 1])) {
+    }
+
+    if (u.isString(token) && u.isColon(tokens[index + 1])) {
       const key = t.stringLiteral(token.value);
       advance(2);
       const value = parseExpression();
@@ -184,7 +196,9 @@ function parse({ source, tokens }) {
         fail('Expected a valid expression after :');
       }
       return t.objectProperty(key, value);
-    } else if (u.isLeftBrace(token)) {
+    }
+
+    if (u.isLeftBrace(token)) {
       advance();
       const key = parseExpression();
       if (!key) {
@@ -294,9 +308,7 @@ function parse({ source, tokens }) {
 
   function parseStatement() {
     const expression = parseExpression(token);
-    if (expression) {
-      return t.expressionStatement(expression);
-    }
+    if (expression) return t.expressionStatement(expression);
 
     const assignment = parseAssignment(token);
     if (assignment) return assignment;
