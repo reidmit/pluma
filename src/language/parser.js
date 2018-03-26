@@ -307,4 +307,4 @@ const parse = ({ source, tokens }) => {
   return t.file(t.program(body), [], tokens);
 };
 
-export { parse };
+export default parse;

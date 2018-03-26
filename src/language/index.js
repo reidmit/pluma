@@ -1,6 +1,6 @@
-import { tokenize } from './tokenizer';
-import { parse } from './parser';
-import { generate } from './generator';
+import tokenize from './tokenizer';
+import parse from './parser';
+import generate from './generator';
 
 const compile = (source, options) => {
   const tokens = tokenize({ source, options });
@@ -8,4 +8,4 @@ const compile = (source, options) => {
   return generate({ source, tokens, ast, options });
 };
 
-export { compile };
+export default compile;

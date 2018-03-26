@@ -199,4 +199,4 @@ const tokenize = ({ source }) => {
   return tokens;
 };
 
-export { tokenize };
+export default tokenize;
