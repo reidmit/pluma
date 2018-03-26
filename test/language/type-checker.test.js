@@ -13,9 +13,9 @@ const source = `
 
   let fn = x => 28
 
-  let toStr = s => fn s
+let toStr = s => fn s
 
-
+[1, 2, 3]
 `;
 
 const tokens = tokenize({ source });

@@ -306,5 +306,33 @@ describe('parser', () => {
     );
   });
 
+  test('function definition followed by array', () => {
+    expectAst(
+      `
+      let toStr = s => fn s
+
+      [1, 2, 3]
+      `,
+      [
+        t.variableDeclaration('const', [
+          t.variableDeclarator(
+            t.identifier('toStr'),
+            t.arrowFunctionExpression(
+              [t.identifier('s')],
+              t.callExpression(t.identifier('fn'), [t.identifier('s')])
+            )
+          )
+        ]),
+        t.expressionStatement(
+          t.arrayExpression([
+            t.numericLiteral(1),
+            t.numericLiteral(2),
+            t.numericLiteral(3)
+          ])
+        )
+      ]
+    );
+  });
+
   describe('error cases', () => {});
 });

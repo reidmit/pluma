@@ -72,7 +72,11 @@ const parse = ({ source, tokens }) => {
     const parts = [{ property: t.identifier(token.value), computed: false }];
     advance();
 
-    while (u.isDot(token) || u.isLeftBrace(token)) {
+    while (
+      token &&
+      token.columnStart > lastAssignmentColumn &&
+      (u.isDot(token) || u.isLeftBrace(token))
+    ) {
       if (u.isDot(token)) {
         advance();
         if (!u.isIdentifier(token)) {
