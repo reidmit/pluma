@@ -870,8 +870,11 @@ describe('tokenizer', () => {
 
   describe('error cases', () => {
     test('unrecognized tokens', () => {
-      const tokens = tokenize({
-        source: `let a = 100
+      let errorMessage;
+
+      try {
+        tokenize({
+          source: `let a = 100
 let b = 200
 let c = 300
 let d = 400
@@ -884,9 +887,15 @@ let fn = z => "hello"
 let y = "test"
 let z = "test"
 `
-      });
+        });
+      } catch (err) {
+        errorMessage = err.message;
+      }
 
-      console.log({ tokens });
+      expect(errorMessage).toBeDefined();
+      expect(errorMessage).toMatch(
+        /Unrecognized character '&' at line 9, column 6:/
+      );
     });
   });
 });

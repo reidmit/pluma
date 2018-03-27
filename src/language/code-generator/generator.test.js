@@ -5,7 +5,7 @@ describe('generate', () => {
     const source = `
 let fn = a => b => c => "hello, world!"
 
-let greet = name => "hi \${name}";
+let greet = name => "hi \${name}"
 
 fn 1 2 3
 

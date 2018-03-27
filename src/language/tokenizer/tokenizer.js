@@ -205,7 +205,7 @@ function tokenize({ source }) {
       continue;
     }
 
-    fail();
+    fail(`Unrecognized character '${remaining[0]}'`);
   }
 
   return tokens;

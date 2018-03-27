@@ -1,8 +1,7 @@
 {
   "name": "pluma",
   "version": "0.0.0",
-  "description":
-    "A small, dynamically-typed functional language that compiles to JavaScript",
+  "description": "A small, dynamically-typed functional language that compiles to JavaScript",
   "main": "index.js",
   "author": "Reid Mitchell",
   "license": "MIT",
@@ -13,7 +12,9 @@
   "dependencies": {
     "babel-core": "^6.26.0",
     "babel-preset-env": "^1.6.1",
-    "babel-types": "^6.26.0"
+    "babel-types": "^6.26.0",
+    "chalk": "^2.3.2",
+    "string-length": "^2.0.0"
   },
   "devDependencies": {
     "babel-jest": "^22.4.3",
