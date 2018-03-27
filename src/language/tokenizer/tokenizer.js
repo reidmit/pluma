@@ -4,9 +4,9 @@ import {
   symbolRegexes,
   reservedWords,
   reservedWordRegexes
-} from './constants';
+} from '../constants';
 
-import { TokenizerError } from './errors';
+import { TokenizerError } from '../errors';
 
 const patterns = {
   newline: /^[\n]+/,

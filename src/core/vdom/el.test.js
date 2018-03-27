@@ -1,6 +1,6 @@
-import el from '../../src/vdom/el';
+import el from './el';
 
-describe('el', () => {
+xdescribe('el', () => {
   it('returns an object', () => {
     expect(el('h1', null, 'hello, world!')).toEqual({
       $t: 'h1',

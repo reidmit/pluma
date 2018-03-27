@@ -1,12 +1,8 @@
-import diff from '../../src/vdom/diff';
-import el from '../../src/vdom/el';
-import {
-  REDRAW_PATCH,
-  PROP_CHANGE_PATCH,
-  CHILDREN_PATCH
-} from '../../src/vdom/constants';
+import diff from './diff';
+import el from './el';
+import { REDRAW_PATCH, PROP_CHANGE_PATCH, CHILDREN_PATCH } from './constants';
 
-describe('diff', () => {
+xdescribe('diff', () => {
   test('reference-equal elements', () => {
     const prev = el('h1', null);
     const curr = prev;

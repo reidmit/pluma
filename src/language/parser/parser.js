@@ -1,6 +1,6 @@
 import * as t from 'babel-types';
-import * as u from './util';
-import { tokenTypes } from './constants';
+import * as u from '../util';
+import { tokenTypes } from '../constants';
 
 function parse({ source, tokens }) {
   let index = 0;

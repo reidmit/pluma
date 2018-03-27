@@ -1,5 +1,5 @@
-import parse from '../../src/language/parser';
-import tokenize from '../../src/language/tokenizer';
+import parse from './parser';
+import tokenize from '../tokenizer';
 import * as t from 'babel-types';
 
 const expectAst = (source, bodyNodes) => {

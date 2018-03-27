@@ -1,4 +1,4 @@
-import generate from '../../src/language/generator';
+import generate from './generator';
 
 describe('generate', () => {
   describe('basic examples', () => {
