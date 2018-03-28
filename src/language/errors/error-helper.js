@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import stringLength from 'string-length';
+import { tokenTypes } from '../constants';
 
 /**
  * Given a character and a number, returns a string with that character repeated
@@ -45,11 +46,11 @@ function formatSourceBlock({
   }
 
   for (
-    let i = lineNumber - 1 - surroundingLines;
-    i <= lineNumber - 1 + surroundingLines;
+    let i = Math.max(0, lineNumber - 1 - surroundingLines);
+    i <= Math.max(sourceLines.length, lineNumber - 1 + surroundingLines);
     i++
   ) {
-    if (i > 0 && i < sourceLines.length) {
+    if (i >= 0 && i < sourceLines.length) {
       const lineText = sourceLines[i];
       const isLineWithError = i + 1 === lineNumber;
       const prefix = ` ${isLineWithError ? rightArrow : ''} ${i + 1} | `;
@@ -76,4 +77,21 @@ function formatSourceBlock({
   return formattedLines.join('\n');
 }
 
-export { formatSourceBlock };
+function tokenToString(token) {
+  switch (token.type) {
+    case tokenTypes.IDENTIFIER:
+      return `identifier "${token.value}"`;
+    case tokenTypes.KEYWORD:
+      return `keyword "${token.value}"`;
+    case tokenTypes.SYMBOL:
+      return `symbol "${token.value}"`;
+    case tokenTypes.NUMBER:
+      return `number ${token.value}`;
+    case tokenTypes.STRING:
+      return `string "${token.value}"`;
+    default:
+      return 'token';
+  }
+}
+
+export { formatSourceBlock, tokenToString };

@@ -64,7 +64,7 @@ var obj = {
       });
 
       expect(compiled).toBe(
-        `"use strict";var fn=function fn(a){return function(b){return function(c){return"hello, world!"}}};`
+        '"use strict";var fn=function fn(a){return function(b){return function(c){return"hello, world!"}}};'
       );
     });
   });

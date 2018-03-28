@@ -5,17 +5,11 @@ import parse from '../parser';
 const source = `
   47
 
-  "reid"
+  [x => 36, y => 37, z => 47]
 
-  let lol = 23
+  let q = {a: 47, b: "nice", c: x => 400}
 
-  lol
-
-  let fn = x => 28
-
-  let toStr = s => fn s
-
-  [1, 2, 3]
+  q.a
 `;
 
 const tokens = tokenize({ source });

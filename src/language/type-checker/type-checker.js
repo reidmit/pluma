@@ -21,8 +21,18 @@ function BaseType(name, types) {
   this.types = types;
 }
 BaseType.prototype.toString = function() {
-  if (this.types.length) {
+  if (this.types && this.types.length) {
     return this.types.map(type => type.toString()).join(' -> ');
+  } else if (this.elementType) {
+    return `[${this.elementType.toString()}]`;
+  } else if (this.rowTypes) {
+    return (
+      '{ ' +
+      this.rowTypes
+        .map(rowType => `${rowType.propertyName} :: ${rowType.propertyType}`)
+        .join(', ') +
+      ' }'
+    );
   }
   return this.name;
 };
@@ -37,6 +47,22 @@ NumberType.prototype = new BaseType('Number', []);
 
 const StringType = function() {};
 StringType.prototype = new BaseType('String', []);
+
+const ArrayType = function(elementType) {
+  this.elementType = elementType;
+};
+ArrayType.prototype = new BaseType('Array');
+
+const RowType = function(name, type) {
+  this.propertyName = name;
+  this.propertyType = type;
+};
+RowType.prototype = new BaseType('Row');
+
+const ObjectType = function(rowTypes) {
+  this.rowTypes = rowTypes;
+};
+ObjectType.prototype = new BaseType('Object');
 
 /// END TYPES
 
@@ -60,6 +86,16 @@ const fresh = (type, nonGeneric, mappings = {}) => {
       }
       return mappings[type.id];
     }
+  }
+
+  if (type.propertyName && type.propertyType) {
+    return new RowType(type.propertyName, type.propertyType);
+  }
+
+  if (type.rowTypes) {
+    return new ObjectType(
+      type.rowTypes.map(t => fresh(t, nonGeneric, mappings))
+    );
   }
 
   return new BaseType(
@@ -200,6 +236,37 @@ const analyze = (node, env, nonGeneric = []) => {
     unify(apparentType, actualType);
 
     return returnType;
+  }
+
+  if (node.type === 'ArrayExpression') {
+    let elementType;
+    node.elements.forEach(element => {
+      const currentElementType = analyze(element, env, nonGeneric);
+      if (!elementType) {
+        elementType = currentElementType;
+      } else {
+        unify(currentElementType, elementType);
+      }
+    });
+
+    return new ArrayType(elementType);
+  }
+
+  if (node.type === 'ObjectExpression') {
+    const rowTypes = [];
+    node.properties.forEach(property => {
+      const propertyName = property.key.name;
+      const propertyType = analyze(property.value, env, nonGeneric);
+      rowTypes.push(new RowType(propertyName, propertyType));
+    });
+
+    return new ObjectType(rowTypes);
+  }
+
+  if (node.type === 'MemberExpression') {
+    console.log({ node });
+    const objectType = analyze(node.object, env, nonGeneric);
+    console.log({ objectType });
   }
 
   console.log(node.type);

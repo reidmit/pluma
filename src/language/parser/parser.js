@@ -1,5 +1,7 @@
 import * as t from 'babel-types';
 import * as u from '../util';
+import { ParserError } from '../errors';
+import { tokenToString } from '../errors/error-helper';
 import { tokenTypes } from '../constants';
 
 function parse({ source, tokens }) {
@@ -12,9 +14,12 @@ function parse({ source, tokens }) {
     token = tokens[index];
   }
 
-  function fail(message) {
-    // TODO: improve with tokens/line numbers/etc
-    throw new Error(`Parse error: ${message}`);
+  function fail(message, badToken = token) {
+    message =
+      typeof message === 'function'
+        ? message(tokenToString(badToken))
+        : message;
+    throw new ParserError(message, source, badToken);
   }
 
   function parseNumber() {
@@ -155,14 +160,25 @@ function parse({ source, tokens }) {
 
   function parseParenthetical() {
     if (!u.isLeftParen(token)) return;
+    const leftParen = token;
 
     advance();
     const expression = parseExpression();
+    if (!token) {
+      fail('Unexpectedly reached end of input.', tokens[index - 1]);
+    }
+
     if (!expression) {
       fail('Expected expression after (');
     }
+
     if (!u.isRightParen(token)) {
-      fail('Missing closing )');
+      fail(
+        `Missing closing ")" to match opening "(" at line ${
+          leftParen.lineStart
+        }, column ${leftParen.columnStart}.`,
+        leftParen
+      );
     }
     advance();
     return expression;
@@ -244,6 +260,7 @@ function parse({ source, tokens }) {
 
   function parseArray() {
     if (!u.isLeftBrace(token)) return;
+    const leftBrace = token;
     advance();
 
     const elements = [];
@@ -256,7 +273,12 @@ function parse({ source, tokens }) {
       if (u.isComma(token)) {
         advance();
       } else if (!u.isRightBrace(token)) {
-        fail('Missing right brace ]');
+        fail(
+          `Missing closing "]" to match opening "[" at line ${
+            leftBrace.lineStart
+          }, column ${leftBrace.columnStart}`,
+          leftBrace
+        );
       }
     }
 
@@ -286,11 +308,9 @@ function parse({ source, tokens }) {
   }
 
   function parseAssignment() {
-    if (
-      u.isLet(token) &&
-      u.isIdentifier(tokens[index + 1]) &&
-      u.isEquals(tokens[index + 2])
-    ) {
+    if (!u.isLet(token)) return;
+
+    if (u.isIdentifier(tokens[index + 1]) && u.isEquals(tokens[index + 2])) {
       lastAssignmentColumn = token.columnStart;
       advance();
       const id = t.identifier(token.value);
@@ -304,6 +324,11 @@ function parse({ source, tokens }) {
         t.variableDeclarator(id, valueExpression)
       ]);
     }
+
+    fail(
+      t => `Unexpected ${t} found after "let" keyword. Expected an identifier.`,
+      tokens[index + 1]
+    );
   }
 
   function parseStatement() {
@@ -318,6 +343,7 @@ function parse({ source, tokens }) {
   while (index < tokens.length) {
     const node = parseStatement(token);
     if (node) body.push(node);
+    else advance();
   }
 
   return t.file(t.program(body), [], tokens);
