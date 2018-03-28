@@ -383,6 +383,60 @@ describe('tokenizer', () => {
       );
     });
 
+    test('regex literals', () => {
+      expectTokens(
+        `
+        /a(b)+c.[fg]?/
+        /^e*$/m
+        /(?=ok)/i
+        /esc\\/ape/
+        hello
+        `,
+        [
+          {
+            type: tokenTypes.REGEX,
+            value: /a(b)+c.[fg]?/,
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 8,
+            columnEnd: 22
+          },
+          {
+            type: tokenTypes.REGEX,
+            value: /^e*$/m,
+            lineStart: 3,
+            lineEnd: 3,
+            columnStart: 8,
+            columnEnd: 15
+          },
+          {
+            type: tokenTypes.REGEX,
+            value: /(?=ok)/i,
+            lineStart: 4,
+            lineEnd: 4,
+            columnStart: 8,
+            columnEnd: 17
+          },
+          {
+            type: tokenTypes.REGEX,
+            value: /esc\/ape/,
+            lineStart: 5,
+            lineEnd: 5,
+            columnStart: 8,
+            columnEnd: 18
+          },
+          {
+            type: tokenTypes.IDENTIFIER,
+            value: 'hello',
+            lineStart: 6,
+            lineEnd: 6,
+            columnStart: 8,
+            columnEnd: 13
+          }
+        ]
+      );
+    });
+
     test('null literal', () => {
       expectTokens(
         `
@@ -897,5 +951,45 @@ let z = "test"
         /Unrecognized character '&' at line 9, column 6:/
       );
     });
+  });
+
+  test('invalid regex (unterminated group)', () => {
+    let errorMessage;
+
+    try {
+      tokenize({
+        source: '/bad(/'
+      });
+    } catch (err) {
+      errorMessage = err.message;
+    }
+
+    expect(errorMessage).toBeDefined();
+    expect(errorMessage).toMatch(
+      /Invalid regular expression at line 1, column 0:/
+    );
+    expect(errorMessage).toMatch(
+      /It looks like you may be missing a closing "\)" for a group./
+    );
+  });
+
+  test('invalid regex (missing "(")', () => {
+    let errorMessage;
+
+    try {
+      tokenize({
+        source: '/bad)/'
+      });
+    } catch (err) {
+      errorMessage = err.message;
+    }
+
+    expect(errorMessage).toBeDefined();
+    expect(errorMessage).toMatch(
+      /Invalid regular expression at line 1, column 0:/
+    );
+    expect(errorMessage).toMatch(
+      /It looks like you have a closing "\)" without an opening "\("./
+    );
   });
 });

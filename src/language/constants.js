@@ -4,6 +4,7 @@ export const tokenTypes = {
   KEYWORD: 'keyword-token',
   NULL: 'null-token',
   NUMBER: 'number-token',
+  REGEX: 'regex-token',
   STRING: 'string-token',
   SYMBOL: 'symbol-token',
   UNDEFINED: 'undefined-token'

@@ -53,7 +53,9 @@ function formatSourceBlock({
     if (i >= 0 && i < sourceLines.length) {
       const lineText = sourceLines[i];
       const isLineWithError = i + 1 === lineNumber;
-      const prefix = ` ${isLineWithError ? rightArrow : ''} ${i + 1} | `;
+      const prefix =
+        ` ${isLineWithError ? rightArrow : ''} ` +
+        (useColor ? chalk.gray(`${i + 1} | `) : `${i + 1} | `);
       const prefixLength = stringLength(prefix);
       maxPrefixLength = Math.max(maxPrefixLength, prefixLength);
       prefixes.push(prefix);
@@ -68,8 +70,9 @@ function formatSourceBlock({
 
   for (let i = 0; i < lineTexts.length; i++) {
     let prefix = prefixes[i];
-    if (prefix.length < maxPrefixLength) {
-      prefix = repeatChar(' ', maxPrefixLength - prefix.length) + prefix;
+    const prefixLength = stringLength(prefix);
+    if (prefixLength < maxPrefixLength) {
+      prefix = repeatChar(' ', maxPrefixLength - prefixLength) + prefix;
     }
     formattedLines.push(prefix + lineTexts[i]);
   }

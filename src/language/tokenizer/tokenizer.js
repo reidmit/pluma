@@ -30,11 +30,23 @@ function tokenize({ source }) {
   let i = 0;
   let inString = false;
   let stringStart = null;
+  let inRegex = false;
+  let regexStart = null;
   let match;
   let remaining;
 
-  function fail(message) {
-    throw new TokenizerError(message, source, line, column);
+  function fail(
+    message,
+    { lineNumber = line, columnStart = column, columnEnd = column, hint } = {}
+  ) {
+    throw new TokenizerError(
+      message,
+      source,
+      lineNumber,
+      columnStart,
+      columnEnd,
+      hint
+    );
   }
 
   function pushToken(type, text, value) {
@@ -91,6 +103,14 @@ function tokenize({ source }) {
         advance();
         continue;
       }
+    }
+
+    if (
+      inRegex &&
+      (remaining[0] !== '/' || (remaining[0] === '/' && source[i - 1] === '\\'))
+    ) {
+      advance();
+      continue;
     }
 
     if (remaining[0] === '"') {
@@ -168,6 +188,62 @@ function tokenize({ source }) {
     if ((match = remaining.match(patterns.specialNumericLiteral))) {
       pushToken(tokenTypes.NUMBER, match[0], +match[0]);
       advance(match[0].length);
+      continue;
+    }
+
+    if (remaining[0] === '/') {
+      if (!inRegex) {
+        inRegex = true;
+        regexStart = {
+          lineStart: line,
+          columnStart: column,
+          charIndex: i + 1
+        };
+        advance();
+      } else {
+        advance();
+        inRegex = false;
+        const { lineStart, columnStart, charIndex } = regexStart;
+        regexStart = null;
+
+        const regexString = source.substring(charIndex, i - 1);
+
+        let regexFlags;
+        if ((match = source.substring(i).match(/^[gimuy]+/))) {
+          regexFlags = match[0];
+          advance(match[0].length);
+        }
+
+        let value;
+        try {
+          value = new RegExp(regexString, regexFlags);
+        } catch (err) {
+          let hint;
+          if (err.message.indexOf('Unterminated group') > -1) {
+            hint =
+              'It looks like you may be missing a closing ")" for a group.';
+          } else if (err.message.indexOf('Unmatched ")"')) {
+            hint =
+              'It looks like you have a closing ")" without an opening "(".';
+          }
+
+          fail('Invalid regular expression', {
+            lineStart,
+            columnStart,
+            columnEnd: column,
+            hint
+          });
+        }
+
+        tokens.push({
+          type: tokenTypes.REGEX,
+          value,
+          lineStart,
+          lineEnd: line,
+          columnStart,
+          columnEnd: column
+        });
+      }
       continue;
     }
 
