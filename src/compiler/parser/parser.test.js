@@ -1,12 +1,15 @@
 import parse from './parser';
 import tokenize from '../tokenizer';
-import * as t from 'babel-types';
+import { nodeTypes } from '../constants';
 
-const expectAst = (source, bodyNodes) => {
+const expectParseResult = ({ source, lineStart, lineEnd, body }) => {
   const tokens = tokenize({ source });
-  expect(parse({ source, tokens })).toEqual(
-    t.file(t.program(bodyNodes), [], tokens)
-  );
+  expect(parse({ source, tokens })).toEqual({
+    type: nodeTypes.MODULE,
+    lineStart,
+    lineEnd,
+    body
+  });
 };
 
 const expectParseError = (source, errorMessageRegex) => {
@@ -27,295 +30,854 @@ const expectParseError = (source, errorMessageRegex) => {
 describe('parser', () => {
   describe('valid programs', () => {
     test('empty program', () => {
-      expectAst('', []);
+      expectParseResult({
+        source: '',
+        lineStart: 1,
+        lineEnd: 1,
+        body: []
+      });
     });
 
     test('number literal', () => {
-      expectAst('47', [t.expressionStatement(t.numericLiteral(47))]);
+      expectParseResult({
+        source: '47',
+        lineStart: 1,
+        lineEnd: 1,
+        body: [
+          {
+            type: nodeTypes.NUMBER,
+            value: 47,
+            lineStart: 1,
+            lineEnd: 1
+          }
+        ]
+      });
     });
 
     test('boolean literal', () => {
-      expectAst('True', [t.expressionStatement(t.booleanLiteral(true))]);
+      expectParseResult({
+        source: 'True',
+        lineStart: 1,
+        lineEnd: 1,
+        body: [
+          {
+            type: nodeTypes.BOOLEAN,
+            value: true,
+            lineStart: 1,
+            lineEnd: 1
+          }
+        ]
+      });
     });
 
     test('identifier', () => {
-      expectAst('lol', [t.expressionStatement(t.identifier('lol'))]);
+      expectParseResult({
+        source: 'lol',
+        lineStart: 1,
+        lineEnd: 1,
+        body: [
+          {
+            type: nodeTypes.IDENTIFIER,
+            value: 'lol',
+            lineStart: 1,
+            lineEnd: 1
+          }
+        ]
+      });
     });
 
     test('string literal', () => {
-      expectAst('"hello, world!"', [
-        t.expressionStatement(t.stringLiteral('hello, world!'))
-      ]);
+      expectParseResult({
+        source: '"hello, world!"',
+        lineStart: 1,
+        lineEnd: 1,
+        body: [
+          {
+            type: nodeTypes.STRING,
+            value: 'hello, world!',
+            lineStart: 1,
+            lineEnd: 1
+          }
+        ]
+      });
     });
 
     test('interpolated string literal', () => {
-      expectAst('"hello, ${name}!"', [
-        t.expressionStatement(
-          t.templateLiteral(
-            [
-              t.templateElement({ raw: 'hello, ', cooked: 'hello, ' }, false),
-              t.templateElement({ raw: '!', cooked: '!' }, true)
+      expectParseResult({
+        source: '"hello, ${name}!"',
+        lineStart: 1,
+        lineEnd: 1,
+        body: [
+          {
+            type: nodeTypes.INTERPOLATED_STRING,
+            lineStart: 1,
+            lineEnd: 1,
+            literals: [
+              {
+                type: nodeTypes.STRING,
+                value: 'hello, ',
+                lineStart: 1,
+                lineEnd: 1
+              },
+              {
+                type: nodeTypes.STRING,
+                value: '!',
+                lineStart: 1,
+                lineEnd: 1
+              }
             ],
-            [t.identifier('name')]
-          )
-        )
-      ]);
+            expressions: [
+              {
+                type: nodeTypes.IDENTIFIER,
+                value: 'name',
+                lineStart: 1,
+                lineEnd: 1
+              }
+            ]
+          }
+        ]
+      });
     });
 
     test('member expression with dots (non-computed)', () => {
-      expectAst('a.b.c', [
-        t.expressionStatement(
-          t.memberExpression(
-            t.memberExpression(t.identifier('a'), t.identifier('b'), false),
-            t.identifier('c'),
-            false
-          )
-        )
-      ]);
+      expectParseResult({
+        source: 'a.b.c',
+        lineStart: 1,
+        lineEnd: 1,
+        body: [
+          {
+            type: nodeTypes.MEMBER_EXPRESSION,
+            lineStart: 1,
+            lineEnd: 1,
+            identifiers: [
+              {
+                type: nodeTypes.IDENTIFIER,
+                value: 'a',
+                lineStart: 1,
+                lineEnd: 1
+              },
+              {
+                type: nodeTypes.IDENTIFIER,
+                value: 'b',
+                lineStart: 1,
+                lineEnd: 1
+              },
+              {
+                type: nodeTypes.IDENTIFIER,
+                value: 'c',
+                lineStart: 1,
+                lineEnd: 1
+              }
+            ]
+          }
+        ]
+      });
     });
 
     test('function (one param)', () => {
-      expectAst('x => 47', [
-        t.expressionStatement(
-          t.arrowFunctionExpression([t.identifier('x')], t.numericLiteral(47))
-        )
-      ]);
+      expectParseResult({
+        source: 'x => 47',
+        lineStart: 1,
+        lineEnd: 1,
+        body: [
+          {
+            type: nodeTypes.FUNCTION,
+            lineStart: 1,
+            lineEnd: 1,
+            parameter: {
+              type: nodeTypes.IDENTIFIER,
+              value: 'x',
+              lineStart: 1,
+              lineEnd: 1
+            },
+            body: {
+              type: nodeTypes.NUMBER,
+              value: 47,
+              lineStart: 1,
+              lineEnd: 1
+            }
+          }
+        ]
+      });
     });
 
     test('function (two params)', () => {
-      expectAst('x => y => 47', [
-        t.expressionStatement(
-          t.arrowFunctionExpression(
-            [t.identifier('x')],
-            t.arrowFunctionExpression(
-              [t.identifier('y')],
-              t.numericLiteral(47),
-              false
-            )
-          )
-        )
-      ]);
+      expectParseResult({
+        source: 'x => y => 47',
+        lineStart: 1,
+        lineEnd: 1,
+        body: [
+          {
+            type: nodeTypes.FUNCTION,
+            lineStart: 1,
+            lineEnd: 1,
+            parameter: {
+              type: nodeTypes.IDENTIFIER,
+              value: 'x',
+              lineStart: 1,
+              lineEnd: 1
+            },
+            body: {
+              type: nodeTypes.FUNCTION,
+              lineStart: 1,
+              lineEnd: 1,
+              parameter: {
+                type: nodeTypes.IDENTIFIER,
+                value: 'y',
+                lineStart: 1,
+                lineEnd: 1
+              },
+              body: {
+                type: nodeTypes.NUMBER,
+                value: 47,
+                lineStart: 1,
+                lineEnd: 1
+              }
+            }
+          }
+        ]
+      });
     });
 
     test('assignment', () => {
-      expectAst(
-        `
-      let hello = 47
-      let someString = "hello, world!"
-    `,
-        [
-          t.variableDeclaration('const', [
-            t.variableDeclarator(t.identifier('hello'), t.numericLiteral(47))
-          ]),
-          t.variableDeclaration('const', [
-            t.variableDeclarator(
-              t.identifier('someString'),
-              t.stringLiteral('hello, world!')
-            )
-          ])
+      expectParseResult({
+        source: `
+          let hello = 47
+          let someString = "hello, world!"
+        `,
+        lineStart: 2,
+        lineEnd: 3,
+        body: [
+          {
+            type: nodeTypes.ASSIGNMENT,
+            lineStart: 2,
+            lineEnd: 2,
+            leftSide: {
+              type: nodeTypes.IDENTIFIER,
+              value: 'hello',
+              lineStart: 2,
+              lineEnd: 2
+            },
+            rightSide: {
+              type: nodeTypes.NUMBER,
+              value: 47,
+              lineStart: 2,
+              lineEnd: 2
+            }
+          },
+          {
+            type: nodeTypes.ASSIGNMENT,
+            lineStart: 3,
+            lineEnd: 3,
+            leftSide: {
+              type: nodeTypes.IDENTIFIER,
+              value: 'someString',
+              lineStart: 3,
+              lineEnd: 3
+            },
+            rightSide: {
+              type: nodeTypes.STRING,
+              value: 'hello, world!',
+              lineStart: 3,
+              lineEnd: 3
+            }
+          }
         ]
-      );
+      });
     });
 
+    // TODO
+    // xtest('call expression (getter function)', () => {
+    //   expectAst('.someProp someObj', [
+    //     t.expressionStatement(
+    //       t.callExpression(t.identifier('someProp'), [t.identifier('someArg')])
+    //     )
+    //   ]);
+    // });
+
+    // // TODO
+    // xtest('call expression (setter function)', () => {
+    //   expectAst('.someProp 47 someObj', [
+    //     t.expressionStatement(
+    //       t.callExpression(t.identifier('someProp'), [t.identifier('someArg')])
+    //     )
+    //   ]);
+    // });
+
     test('call expression (single argument)', () => {
-      expectAst('someFunc someArg', [
-        t.expressionStatement(
-          t.callExpression(t.identifier('someFunc'), [t.identifier('someArg')])
-        )
-      ]);
+      expectParseResult({
+        source: 'someFunc someArg',
+        lineStart: 1,
+        lineEnd: 1,
+        body: [
+          {
+            type: nodeTypes.CALL,
+            lineStart: 1,
+            lineEnd: 1,
+            isGetter: false,
+            isSetter: false,
+            callee: {
+              type: nodeTypes.IDENTIFIER,
+              value: 'someFunc',
+              lineStart: 1,
+              lineEnd: 1
+            },
+            arg: {
+              type: nodeTypes.IDENTIFIER,
+              value: 'someArg',
+              lineStart: 1,
+              lineEnd: 1
+            }
+          }
+        ]
+      });
     });
 
     test('call expression (multiple arguments)', () => {
-      expectAst('helloWorld 47 "something here" cool', [
-        t.expressionStatement(
-          t.callExpression(
-            t.callExpression(
-              t.callExpression(t.identifier('helloWorld'), [
-                t.numericLiteral(47)
-              ]),
-              [t.stringLiteral('something here')]
-            ),
-            [t.identifier('cool')]
-          )
-        )
-      ]);
+      expectParseResult({
+        source: 'helloWorld 47 "something here" cool',
+        lineStart: 1,
+        lineEnd: 1,
+        body: [
+          {
+            type: nodeTypes.CALL,
+            lineStart: 1,
+            lineEnd: 1,
+            isGetter: false,
+            isSetter: false,
+            callee: {
+              type: nodeTypes.CALL,
+              lineStart: 1,
+              lineEnd: 1,
+              isGetter: false,
+              isSetter: false,
+              callee: {
+                type: nodeTypes.CALL,
+                lineStart: 1,
+                lineEnd: 1,
+                isGetter: false,
+                isSetter: false,
+                callee: {
+                  type: nodeTypes.IDENTIFIER,
+                  value: 'helloWorld',
+                  lineStart: 1,
+                  lineEnd: 1
+                },
+                arg: {
+                  type: nodeTypes.NUMBER,
+                  value: 47,
+                  lineStart: 1,
+                  lineEnd: 1
+                }
+              },
+              arg: {
+                type: nodeTypes.STRING,
+                value: 'something here',
+                lineStart: 1,
+                lineEnd: 1
+              }
+            },
+            arg: {
+              type: nodeTypes.IDENTIFIER,
+              value: 'cool',
+              lineStart: 1,
+              lineEnd: 1
+            }
+          }
+        ]
+      });
     });
 
     test('nested call expressions with parentheses', () => {
-      expectAst(
-        `
-      someFunc (someOtherFunc 3) 4
-    `,
-        [
-          t.expressionStatement(
-            t.callExpression(
-              t.callExpression(t.identifier('someFunc'), [
-                t.callExpression(t.identifier('someOtherFunc'), [
-                  t.numericLiteral(3)
-                ])
-              ]),
-              [t.numericLiteral(4)]
-            )
-          )
+      expectParseResult({
+        source: `
+          someFunc (someOtherFunc 3) 4
+        `,
+        lineStart: 2,
+        lineEnd: 2,
+        body: [
+          {
+            type: nodeTypes.CALL,
+            lineStart: 2,
+            lineEnd: 2,
+            isGetter: false,
+            isSetter: false,
+            callee: {
+              type: nodeTypes.CALL,
+              lineStart: 2,
+              lineEnd: 2,
+              isGetter: false,
+              isSetter: false,
+              callee: {
+                type: nodeTypes.IDENTIFIER,
+                value: 'someFunc',
+                lineStart: 2,
+                lineEnd: 2
+              },
+              arg: {
+                type: nodeTypes.CALL,
+                lineStart: 2,
+                lineEnd: 2,
+                isGetter: false,
+                isSetter: false,
+                callee: {
+                  type: nodeTypes.IDENTIFIER,
+                  value: 'someOtherFunc',
+                  lineStart: 2,
+                  lineEnd: 2
+                },
+                arg: {
+                  type: nodeTypes.NUMBER,
+                  value: 3,
+                  lineStart: 2,
+                  lineEnd: 2
+                }
+              }
+            },
+            arg: {
+              type: nodeTypes.NUMBER,
+              value: 4,
+              lineStart: 2,
+              lineEnd: 2
+            }
+          }
         ]
-      );
+      });
     });
 
     test('array expressions (empty)', () => {
-      expectAst('[]', [t.expressionStatement(t.arrayExpression([]))]);
+      expectParseResult({
+        source: '[]',
+        lineStart: 1,
+        lineEnd: 1,
+        body: [
+          {
+            type: nodeTypes.ARRAY,
+            lineStart: 1,
+            lineEnd: 1,
+            elements: []
+          }
+        ]
+      });
     });
 
     test('array expressions (basic)', () => {
-      expectAst(
-        `
-        [1, test, True, "hello"]
-      `,
-        [
-          t.expressionStatement(
-            t.arrayExpression([
-              t.numericLiteral(1),
-              t.identifier('test'),
-              t.booleanLiteral(true),
-              t.stringLiteral('hello')
-            ])
-          )
+      expectParseResult({
+        source: `[
+          1, test, True, "hello"
         ]
-      );
+        `,
+        lineStart: 1,
+        lineEnd: 3,
+        body: [
+          {
+            type: nodeTypes.ARRAY,
+            lineStart: 1,
+            lineEnd: 3,
+            elements: [
+              {
+                type: nodeTypes.NUMBER,
+                value: 1,
+                lineStart: 2,
+                lineEnd: 2
+              },
+              {
+                type: nodeTypes.IDENTIFIER,
+                value: 'test',
+                lineStart: 2,
+                lineEnd: 2
+              },
+              {
+                type: nodeTypes.BOOLEAN,
+                value: true,
+                lineStart: 2,
+                lineEnd: 2
+              },
+              {
+                type: nodeTypes.STRING,
+                value: 'hello',
+                lineStart: 2,
+                lineEnd: 2
+              }
+            ]
+          }
+        ]
+      });
     });
 
     test('object expressions (empty)', () => {
-      expectAst('{}', [t.expressionStatement(t.objectExpression([]))]);
+      expectParseResult({
+        source: '{}',
+        lineStart: 1,
+        lineEnd: 1,
+        body: [
+          {
+            type: nodeTypes.OBJECT,
+            lineStart: 1,
+            lineEnd: 1,
+            properties: []
+          }
+        ]
+      });
     });
 
     test('object expressions (basic)', () => {
-      expectAst('{a: 1, b: "hello", "c d": True}', [
-        t.expressionStatement(
-          t.objectExpression([
-            t.objectProperty(t.identifier('a'), t.numericLiteral(1)),
-            t.objectProperty(t.identifier('b'), t.stringLiteral('hello')),
-            t.objectProperty(t.stringLiteral('c d'), t.booleanLiteral(true))
-          ])
-        )
-      ]);
-    });
-
-    test('object expressions (computed keys)', () => {
-      expectAst('{ [something]: 1, ["test"]: 2 }', [
-        t.expressionStatement(
-          t.objectExpression([
-            t.objectProperty(
-              t.identifier('something'),
-              t.numericLiteral(1),
-              true
-            ),
-            t.objectProperty(t.stringLiteral('test'), t.numericLiteral(2), true)
-          ])
-        )
-      ]);
+      expectParseResult({
+        source: '{a: 1, b: "hello", c-d: True}',
+        lineStart: 1,
+        lineEnd: 1,
+        body: [
+          {
+            type: nodeTypes.OBJECT,
+            lineStart: 1,
+            lineEnd: 1,
+            properties: [
+              {
+                type: nodeTypes.OBJECT_PROPERTY,
+                lineStart: 1,
+                lineEnd: 1,
+                key: {
+                  type: nodeTypes.IDENTIFIER,
+                  lineStart: 1,
+                  lineEnd: 1,
+                  value: 'a'
+                },
+                value: {
+                  type: nodeTypes.NUMBER,
+                  lineStart: 1,
+                  lineEnd: 1,
+                  value: 1
+                }
+              },
+              {
+                type: nodeTypes.OBJECT_PROPERTY,
+                lineStart: 1,
+                lineEnd: 1,
+                key: {
+                  type: nodeTypes.IDENTIFIER,
+                  lineStart: 1,
+                  lineEnd: 1,
+                  value: 'b'
+                },
+                value: {
+                  type: nodeTypes.STRING,
+                  lineStart: 1,
+                  lineEnd: 1,
+                  value: 'hello'
+                }
+              },
+              {
+                type: nodeTypes.OBJECT_PROPERTY,
+                lineStart: 1,
+                lineEnd: 1,
+                key: {
+                  type: nodeTypes.IDENTIFIER,
+                  lineStart: 1,
+                  lineEnd: 1,
+                  value: 'c-d'
+                },
+                value: {
+                  type: nodeTypes.BOOLEAN,
+                  lineStart: 1,
+                  lineEnd: 1,
+                  value: true
+                }
+              }
+            ]
+          }
+        ]
+      });
     });
 
     test('object expressions (shorthand keys)', () => {
-      expectAst('{ short, hand }', [
-        t.expressionStatement(
-          t.objectExpression([
-            t.objectProperty(
-              t.identifier('short'),
-              t.identifier('short'),
-              false,
-              true
-            ),
-            t.objectProperty(
-              t.identifier('hand'),
-              t.identifier('hand'),
-              false,
-              true
-            )
-          ])
-        )
-      ]);
+      expectParseResult({
+        source: '{ short, hand }',
+        lineStart: 1,
+        lineEnd: 1,
+        body: [
+          {
+            type: nodeTypes.OBJECT,
+            lineStart: 1,
+            lineEnd: 1,
+            properties: [
+              {
+                type: nodeTypes.OBJECT_PROPERTY,
+                lineStart: 1,
+                lineEnd: 1,
+                key: {
+                  type: nodeTypes.IDENTIFIER,
+                  lineStart: 1,
+                  lineEnd: 1,
+                  value: 'short'
+                },
+                value: {
+                  type: nodeTypes.IDENTIFIER,
+                  lineStart: 1,
+                  lineEnd: 1,
+                  value: 'short'
+                }
+              },
+              {
+                type: nodeTypes.OBJECT_PROPERTY,
+                lineStart: 1,
+                lineEnd: 1,
+                key: {
+                  type: nodeTypes.IDENTIFIER,
+                  lineStart: 1,
+                  lineEnd: 1,
+                  value: 'hand'
+                },
+                value: {
+                  type: nodeTypes.IDENTIFIER,
+                  lineStart: 1,
+                  lineEnd: 1,
+                  value: 'hand'
+                }
+              }
+            ]
+          }
+        ]
+      });
     });
 
     test('multiple complex assignments', () => {
-      expectAst(
-        `
-      let func1 = helloWorld 47 "something here" cool
-      let func2 = func1 True
-      `,
-        [
-          t.variableDeclaration('const', [
-            t.variableDeclarator(
-              t.identifier('func1'),
-              t.callExpression(
-                t.callExpression(
-                  t.callExpression(t.identifier('helloWorld'), [
-                    t.numericLiteral(47)
-                  ]),
-                  [t.stringLiteral('something here')]
-                ),
-                [t.identifier('cool')]
-              )
-            )
-          ]),
-          t.variableDeclaration('const', [
-            t.variableDeclarator(
-              t.identifier('func2'),
-              t.callExpression(t.identifier('func1'), [t.booleanLiteral(true)])
-            )
-          ])
+      expectParseResult({
+        source: `
+          let func1 = helloWorld 47 "something here" cool
+          let func2 = func1 True
+        `,
+        lineStart: 2,
+        lineEnd: 3,
+        body: [
+          {
+            type: nodeTypes.ASSIGNMENT,
+            lineStart: 2,
+            lineEnd: 2,
+            leftSide: {
+              type: nodeTypes.IDENTIFIER,
+              value: 'func1',
+              lineStart: 2,
+              lineEnd: 2
+            },
+            rightSide: {
+              type: nodeTypes.CALL,
+              lineStart: 2,
+              lineEnd: 2,
+              isGetter: false,
+              isSetter: false,
+              callee: {
+                type: nodeTypes.CALL,
+                lineStart: 2,
+                lineEnd: 2,
+                isGetter: false,
+                isSetter: false,
+                callee: {
+                  type: nodeTypes.CALL,
+                  lineStart: 2,
+                  lineEnd: 2,
+                  isGetter: false,
+                  isSetter: false,
+                  callee: {
+                    type: nodeTypes.IDENTIFIER,
+                    value: 'helloWorld',
+                    lineStart: 2,
+                    lineEnd: 2
+                  },
+                  arg: {
+                    type: nodeTypes.NUMBER,
+                    value: 47,
+                    lineStart: 2,
+                    lineEnd: 2
+                  }
+                },
+                arg: {
+                  type: nodeTypes.STRING,
+                  value: 'something here',
+                  lineStart: 2,
+                  lineEnd: 2
+                }
+              },
+              arg: {
+                type: nodeTypes.IDENTIFIER,
+                value: 'cool',
+                lineStart: 2,
+                lineEnd: 2
+              }
+            }
+          },
+          {
+            type: nodeTypes.ASSIGNMENT,
+            lineStart: 3,
+            lineEnd: 3,
+            leftSide: {
+              type: nodeTypes.IDENTIFIER,
+              value: 'func2',
+              lineStart: 3,
+              lineEnd: 3
+            },
+            rightSide: {
+              type: nodeTypes.CALL,
+              lineStart: 3,
+              lineEnd: 3,
+              isGetter: false,
+              isSetter: false,
+              callee: {
+                type: nodeTypes.IDENTIFIER,
+                value: 'func1',
+                lineStart: 3,
+                lineEnd: 3
+              },
+              arg: {
+                type: nodeTypes.BOOLEAN,
+                value: true,
+                lineStart: 3,
+                lineEnd: 3
+              }
+            }
+          }
         ]
-      );
+      });
     });
 
     test('function definition followed by call', () => {
-      expectAst(
-        `
-      let fn = a => "hello, world!"
+      expectParseResult({
+        source: `
+          let fn = a => "hello, world!"
 
-      fn 1
-      `,
-        [
-          t.variableDeclaration('const', [
-            t.variableDeclarator(
-              t.identifier('fn'),
-              t.arrowFunctionExpression(
-                [t.identifier('a')],
-                t.stringLiteral('hello, world!')
-              )
-            )
-          ]),
-          t.expressionStatement(
-            t.callExpression(t.identifier('fn'), [t.numericLiteral(1)])
-          )
+          fn 1
+        `,
+        lineStart: 2,
+        lineEnd: 4,
+        body: [
+          {
+            type: nodeTypes.ASSIGNMENT,
+            lineStart: 2,
+            lineEnd: 2,
+            leftSide: {
+              type: nodeTypes.IDENTIFIER,
+              value: 'fn',
+              lineStart: 2,
+              lineEnd: 2
+            },
+            rightSide: {
+              type: nodeTypes.FUNCTION,
+              lineStart: 2,
+              lineEnd: 2,
+              parameter: {
+                type: nodeTypes.IDENTIFIER,
+                value: 'a',
+                lineStart: 2,
+                lineEnd: 2
+              },
+              body: {
+                type: nodeTypes.STRING,
+                value: 'hello, world!',
+                lineStart: 2,
+                lineEnd: 2
+              }
+            }
+          },
+          {
+            type: nodeTypes.CALL,
+            lineStart: 4,
+            lineEnd: 4,
+            isGetter: false,
+            isSetter: false,
+            callee: {
+              type: nodeTypes.IDENTIFIER,
+              value: 'fn',
+              lineStart: 4,
+              lineEnd: 4
+            },
+            arg: {
+              type: nodeTypes.NUMBER,
+              value: 1,
+              lineStart: 4,
+              lineEnd: 4
+            }
+          }
         ]
-      );
+      });
     });
 
     test('function definition followed by array', () => {
-      expectAst(
-        `
-      let toStr = s => fn s
+      expectParseResult({
+        source: `
+          let toStr = s => fn s
 
-      [1, 2, 3]
-      `,
-        [
-          t.variableDeclaration('const', [
-            t.variableDeclarator(
-              t.identifier('toStr'),
-              t.arrowFunctionExpression(
-                [t.identifier('s')],
-                t.callExpression(t.identifier('fn'), [t.identifier('s')])
-              )
-            )
-          ]),
-          t.expressionStatement(
-            t.arrayExpression([
-              t.numericLiteral(1),
-              t.numericLiteral(2),
-              t.numericLiteral(3)
-            ])
-          )
+          [1, 2, 3]
+        `,
+        lineStart: 2,
+        lineEnd: 4,
+        body: [
+          {
+            type: nodeTypes.ASSIGNMENT,
+            lineStart: 2,
+            lineEnd: 2,
+            leftSide: {
+              type: nodeTypes.IDENTIFIER,
+              value: 'toStr',
+              lineStart: 2,
+              lineEnd: 2
+            },
+            rightSide: {
+              type: nodeTypes.FUNCTION,
+              lineStart: 2,
+              lineEnd: 2,
+              parameter: {
+                type: nodeTypes.IDENTIFIER,
+                value: 's',
+                lineStart: 2,
+                lineEnd: 2
+              },
+              body: {
+                type: nodeTypes.CALL,
+                lineStart: 2,
+                lineEnd: 2,
+                isGetter: false,
+                isSetter: false,
+                callee: {
+                  type: nodeTypes.IDENTIFIER,
+                  value: 'fn',
+                  lineStart: 2,
+                  lineEnd: 2
+                },
+                arg: {
+                  type: nodeTypes.IDENTIFIER,
+                  value: 's',
+                  lineStart: 2,
+                  lineEnd: 2
+                }
+              }
+            }
+          },
+          {
+            type: nodeTypes.ARRAY,
+            lineStart: 4,
+            lineEnd: 4,
+            elements: [
+              {
+                type: nodeTypes.NUMBER,
+                value: 1,
+                lineStart: 4,
+                lineEnd: 4
+              },
+              {
+                type: nodeTypes.NUMBER,
+                value: 2,
+                lineStart: 4,
+                lineEnd: 4
+              },
+              {
+                type: nodeTypes.NUMBER,
+                value: 3,
+                lineStart: 4,
+                lineEnd: 4
+              }
+            ]
+          }
         ]
-      );
+      });
     });
   });
 

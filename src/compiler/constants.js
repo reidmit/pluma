@@ -1,15 +1,29 @@
+export const nodeTypes = {
+  ARRAY: 'array-expression',
+  ASSIGNMENT: 'assignment-node',
+  BOOLEAN: 'boolean-node',
+  CALL: 'call-node',
+  FUNCTION: 'function-node',
+  IDENTIFIER: 'identifier-node',
+  INTERPOLATED_STRING: 'interpolated-string-node',
+  MEMBER_EXPRESSION: 'member-expression-node',
+  MODULE: 'module-node',
+  NUMBER: 'number-node',
+  OBJECT: 'object-node',
+  OBJECT_PROPERTY: 'object-property-node',
+  STRING: 'string-node'
+};
+
 export const tokenTypes = {
   BOOLEAN: 'boolean-token',
   IDENTIFIER: 'identifier-token',
   DOT_IDENTIFIER: 'dot-identifier-token',
   AT_IDENTIFIER: 'at-identifier-token',
-  NULL: 'null-token',
   NUMBER: 'number-token',
   REGEX: 'regex-token',
   SETTER: 'setter-token',
   STRING: 'string-token',
-  SYMBOL: 'symbol-token',
-  UNDEFINED: 'undefined-token'
+  SYMBOL: 'symbol-token'
 };
 
 export const symbols = [

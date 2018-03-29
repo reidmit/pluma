@@ -12,7 +12,6 @@
   "dependencies": {
     "babel-core": "^6.26.0",
     "babel-preset-env": "^1.6.1",
-    "babel-types": "^6.26.0",
     "chalk": "^2.3.2",
     "string-length": "^2.0.0"
   },

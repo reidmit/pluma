@@ -1,4 +1,4 @@
-import * as t from 'babel-types';
+import * as nodes from '../ast-nodes';
 import * as u from '../util';
 import { ParserError } from '../errors';
 import { tokenToString } from '../errors/error-helper';
@@ -24,26 +24,36 @@ function parse({ source, tokens }) {
 
   function parseNumber() {
     if (!u.isNumber(token)) return;
-    const node = t.numericLiteral(token.value);
+    const node = new nodes.NumberNode(
+      token.lineStart,
+      token.lineEnd,
+      token.value
+    );
     advance();
     return node;
   }
 
   function parseBoolean() {
     if (!u.isBoolean(token)) return;
-    const node = t.booleanLiteral(token.value);
+    const node = new nodes.BooleanNode(
+      token.lineStart,
+      token.lineEnd,
+      token.value
+    );
     advance();
     return node;
   }
 
   function parseString() {
-    const stringParts = [];
+    const literals = [];
     const expressions = [];
+    const lineStart = token.lineStart;
+    let lineEnd = token.lineEnd;
 
     while (u.isString(token) || u.isInterpolationStart(token)) {
       if (u.isString(token)) {
-        stringParts.push(
-          t.templateElement({ raw: token.value, cooked: token.value }, false)
+        literals.push(
+          new nodes.StringNode(token.lineStart, token.lineEnd, token.value)
         );
       } else {
         advance();
@@ -56,22 +66,30 @@ function parse({ source, tokens }) {
         expressions.push(innerExpression);
       }
 
+      lineEnd = token.lineEnd;
       advance();
       if (!token) break;
     }
 
-    if (stringParts.length === 1 && !expressions.length) {
-      return t.stringLiteral(stringParts[0].value.raw);
+    if (literals.length === 1 && !expressions.length) {
+      return literals[0];
     }
 
-    stringParts[stringParts.length - 1].tail = true;
-    return t.templateLiteral(stringParts, expressions);
+    return new nodes.InterpolatedStringNode(
+      lineStart,
+      lineEnd,
+      literals,
+      expressions
+    );
   }
 
   function parseIdentifier() {
     if (!u.isIdentifier(token)) return;
 
-    const parts = [t.identifier(token.value)];
+    const parts = [
+      new nodes.IdentifierNode(token.lineStart, token.lineEnd, token.value)
+    ];
+
     advance();
 
     while (
@@ -79,7 +97,9 @@ function parse({ source, tokens }) {
       token.columnStart > lastAssignmentColumn &&
       u.isDotIdentifier(token)
     ) {
-      parts.push(t.identifier(token.value));
+      parts.push(
+        new nodes.IdentifierNode(token.lineStart, token.lineEnd, token.value)
+      );
       advance();
       if (!token) break;
     }
@@ -88,35 +108,43 @@ function parse({ source, tokens }) {
 
     return parts.reduce((expression, property) => {
       if (!expression) return property;
-      return t.memberExpression(expression, property);
+      return new nodes.MemberExpressionNode(
+        parts[0].lineStart,
+        parts[parts.length - 1].lineStart,
+        parts
+      );
     }, null);
   }
 
   function parseFunction() {
     if (!u.isIdentifier(token) || !u.isArrow(tokens[index + 1])) return;
 
-    const params = [t.identifier(token.value)];
+    const param = new nodes.IdentifierNode(
+      token.lineStart,
+      token.lineEnd,
+      token.value
+    );
     advance(2);
     const body = parseExpression();
     if (!body) {
       fail('Expected a valid expression in function body');
     }
 
-    return t.arrowFunctionExpression(params, body);
+    return new nodes.FunctionNode(param.lineStart, body.lineEnd, param, body);
   }
 
   function parsePossibleCallExpression() {
-    let left = parseFunction() || parseIdentifier();
-    if (!left) return;
-    let right;
-    while (
-      token &&
-      token.columnStart > lastAssignmentColumn &&
-      (right = parseExpression())
-    ) {
-      left = t.callExpression(left, [right]);
+    let func = parseFunction() || parseIdentifier();
+    if (!func) return;
+    let arg;
+    while (token && token.columnStart > lastAssignmentColumn) {
+      const lineStart = token.lineStart;
+      const lineEnd = token.lineEnd;
+      arg = parseExpression();
+      if (!arg) break;
+      func = new nodes.CallNode(lineStart, lineEnd, func, arg);
     }
-    return left;
+    return func;
   }
 
   function parseParenthetical() {
@@ -147,58 +175,41 @@ function parse({ source, tokens }) {
 
   function parseObjectProperty() {
     if (u.isIdentifier(token) && u.isColon(tokens[index + 1])) {
-      const key = t.identifier(token.value);
+      const key = new nodes.IdentifierNode(
+        token.lineStart,
+        token.lineEnd,
+        token.value
+      );
       advance(2);
       const value = parseExpression();
       if (!value) {
         fail('Expected a valid expression after :');
       }
-      return t.objectProperty(key, value);
+      return new nodes.ObjectPropertyNode(
+        key.lineStart,
+        value.lineEnd,
+        key,
+        value
+      );
     }
 
     if (
       u.isIdentifier(token) &&
       (u.isComma(tokens[index + 1]) || u.isRightBracket(tokens[index + 1]))
     ) {
-      const key = t.identifier(token.value);
+      const key = new nodes.IdentifierNode(
+        token.lineStart,
+        token.lineEnd,
+        token.value
+      );
       advance();
-      return t.objectProperty(key, key, false, true);
-    }
-
-    if (u.isString(token) && u.isColon(tokens[index + 1])) {
-      const key = t.stringLiteral(token.value);
-      advance(2);
-      const value = parseExpression();
-      if (!value) {
-        fail('Expected a valid expression after :');
-      }
-      return t.objectProperty(key, value);
-    }
-
-    if (u.isLeftBrace(token)) {
-      advance();
-      const key = parseExpression();
-      if (!key) {
-        fail('Could not parse computed key');
-      }
-      if (!u.isRightBrace(token)) {
-        fail('Expected a closing ] after computed key');
-      }
-      advance();
-      if (!u.isColon(token)) {
-        fail('Expected a : after computed key');
-      }
-      advance();
-      const value = parseExpression();
-      if (!value) {
-        fail('Expected a valid expression after :');
-      }
-      return t.objectProperty(key, value, true);
+      return new nodes.ObjectPropertyNode(key.lineStart, key.lineEnd, key, key);
     }
   }
 
   function parseObject() {
     if (!u.isLeftBracket(token)) return;
+    const lineStart = token.lineStart;
     advance();
 
     const properties = [];
@@ -215,12 +226,14 @@ function parse({ source, tokens }) {
       }
     }
 
+    const lineEnd = token.lineEnd;
     advance();
-    return t.objectExpression(properties);
+    return new nodes.ObjectNode(lineStart, lineEnd, properties);
   }
 
   function parseArray() {
     if (!u.isLeftBrace(token)) return;
+    const lineStart = token.lineStart;
     const leftBrace = token;
     advance();
 
@@ -243,8 +256,9 @@ function parse({ source, tokens }) {
       }
     }
 
+    const lineEnd = token.lineEnd;
     advance();
-    return t.arrayExpression(elements);
+    return new nodes.ArrayNode(lineStart, lineEnd, elements);
   }
 
   function parseExpression() {
@@ -266,20 +280,28 @@ function parse({ source, tokens }) {
 
   function parseAssignment() {
     if (!u.isLet(token)) return;
+    const lineStart = token.lineStart;
 
     if (u.isIdentifier(tokens[index + 1]) && u.isEquals(tokens[index + 2])) {
       lastAssignmentColumn = token.columnStart;
       advance();
-      const id = t.identifier(token.value);
+      const id = new nodes.IdentifierNode(
+        token.lineStart,
+        token.lineEnd,
+        token.value
+      );
       advance(2);
       const valueExpression = parseExpression(token);
       if (!valueExpression) {
         fail('Expected a valid expression on right-hand side of assignment');
       }
 
-      return t.variableDeclaration('const', [
-        t.variableDeclarator(id, valueExpression)
-      ]);
+      return new nodes.AssignmentNode(
+        lineStart,
+        valueExpression.lineEnd,
+        id,
+        valueExpression
+      );
     }
 
     fail(
@@ -290,7 +312,7 @@ function parse({ source, tokens }) {
 
   function parseStatement() {
     const expression = parseExpression(token);
-    if (expression) return t.expressionStatement(expression);
+    if (expression) return expression;
 
     const assignment = parseAssignment(token);
     if (assignment) return assignment;
@@ -303,7 +325,9 @@ function parse({ source, tokens }) {
     else advance();
   }
 
-  return t.file(t.program(body), [], tokens);
+  const firstLine = body.length ? body[0].lineStart : 1;
+  const lastLine = body.length ? body[body.length - 1].lineEnd : 1;
+  return new nodes.ModuleNode(firstLine, lastLine, body);
 }
 
 export default parse;
