@@ -41,6 +41,7 @@ describe('tokenizer', () => {
       100
       23.3
       0
+      -8
       `,
         [
           {
@@ -74,6 +75,14 @@ describe('tokenizer', () => {
             lineEnd: 5,
             columnStart: 6,
             columnEnd: 7
+          },
+          {
+            type: tokenTypes.NUMBER,
+            value: -8,
+            lineStart: 6,
+            lineEnd: 6,
+            columnStart: 6,
+            columnEnd: 8
           }
         ]
       );
@@ -85,6 +94,7 @@ describe('tokenizer', () => {
       0b01010
       0B1110
       0b101
+      -0b1
       `,
         [
           {
@@ -110,6 +120,14 @@ describe('tokenizer', () => {
             lineEnd: 4,
             columnStart: 6,
             columnEnd: 11
+          },
+          {
+            type: tokenTypes.NUMBER,
+            value: -1,
+            lineStart: 5,
+            lineEnd: 5,
+            columnStart: 6,
+            columnEnd: 10
           }
         ]
       );
@@ -121,6 +139,7 @@ describe('tokenizer', () => {
       0o1472322651
       0o02
       0O20
+      -0o2
       `,
         [
           {
@@ -146,6 +165,14 @@ describe('tokenizer', () => {
             lineEnd: 4,
             columnStart: 6,
             columnEnd: 10
+          },
+          {
+            type: tokenTypes.NUMBER,
+            value: -0o2,
+            lineStart: 5,
+            lineEnd: 5,
+            columnStart: 6,
+            columnEnd: 10
           }
         ]
       );
@@ -159,6 +186,7 @@ describe('tokenizer', () => {
       0X100
       0xFACADE
       0xeffaced
+      -0xded
       `,
         [
           {
@@ -200,6 +228,14 @@ describe('tokenizer', () => {
             lineEnd: 6,
             columnStart: 6,
             columnEnd: 15
+          },
+          {
+            type: tokenTypes.NUMBER,
+            value: -0xded,
+            lineStart: 7,
+            lineEnd: 7,
+            columnStart: 6,
+            columnEnd: 12
           }
         ]
       );

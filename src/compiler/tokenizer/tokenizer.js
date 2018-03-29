@@ -12,10 +12,10 @@ const patterns = {
   newline: /^[\n]+/,
   otherWhitespace: /^[ \t\r]+/,
   booleanLiteral: /^(True|False)/,
-  decimalNumericLiteral: /^[\d]+\.?[\d]*/,
-  hexNumericLiteral: /^0x[\da-f]+/i,
-  octalNumericLiteral: /^0o[0-7]+/i,
-  binaryNumericLiteral: /^0b[01]+/i,
+  decimalNumericLiteral: /^-?[\d]+\.?[\d]*/,
+  hexNumericLiteral: /^-?0x[\da-f]+/i,
+  octalNumericLiteral: /^-?0o[0-7]+/i,
+  binaryNumericLiteral: /^-?0b[01]+/i,
   specialNumericLiteral: /^(NaN|Infinity)/,
   identifier: /^[a-z$_][0-9a-z$_-]*/i,
   atIdentifier: /^@[a-z$_][0-9a-z$_-]*/i,
@@ -166,33 +166,30 @@ function tokenize({ source }) {
     }
 
     if ((match = remaining.match(patterns.hexNumericLiteral))) {
-      pushToken(
-        tokenTypes.NUMBER,
-        match[0],
-        parseInt(match[0].substring(2), 16)
-      );
+      const isNegative = match[0][0] === '-';
+      const parsed = parseInt(match[0].substring(isNegative ? 3 : 2), 16);
+
+      pushToken(tokenTypes.NUMBER, match[0], parsed * (isNegative ? -1 : 1));
 
       advance(match[0].length);
       continue;
     }
 
     if ((match = remaining.match(patterns.octalNumericLiteral))) {
-      pushToken(
-        tokenTypes.NUMBER,
-        match[0],
-        parseInt(match[0].substring(2), 8)
-      );
+      const isNegative = match[0][0] === '-';
+      const parsed = parseInt(match[0].substring(isNegative ? 3 : 2), 8);
+
+      pushToken(tokenTypes.NUMBER, match[0], parsed * (isNegative ? -1 : 1));
 
       advance(match[0].length);
       continue;
     }
 
     if ((match = remaining.match(patterns.binaryNumericLiteral))) {
-      pushToken(
-        tokenTypes.NUMBER,
-        match[0],
-        parseInt(match[0].substring(2), 2)
-      );
+      const isNegative = match[0][0] === '-';
+      const parsed = parseInt(match[0].substring(isNegative ? 3 : 2), 2);
+
+      pushToken(tokenTypes.NUMBER, match[0], parsed * (isNegative ? -1 : 1));
 
       advance(match[0].length);
       continue;
