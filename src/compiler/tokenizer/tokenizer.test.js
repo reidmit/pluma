@@ -441,7 +441,7 @@ describe('tokenizer', () => {
       expectTokens(
         `
       let
-      if else
+      if then else
       `,
         [
           {
@@ -462,11 +462,19 @@ describe('tokenizer', () => {
           },
           {
             type: tokenTypes.KEYWORD,
-            value: 'else',
+            value: 'then',
             lineStart: 3,
             lineEnd: 3,
             columnStart: 9,
             columnEnd: 13
+          },
+          {
+            type: tokenTypes.KEYWORD,
+            value: 'else',
+            lineStart: 3,
+            lineEnd: 3,
+            columnStart: 14,
+            columnEnd: 18
           }
         ]
       );

@@ -288,6 +288,54 @@ function parse({ source, tokens }) {
     return new nodes.ArrayNode(lineStart, lineEnd, elements);
   }
 
+  function parseConditional() {
+    if (!u.isIf(token)) return;
+
+    const lineStart = token.lineStart;
+    advance();
+
+    const predicate = parseExpression();
+    if (!predicate) {
+      fail('Expected to find a valid expression after "if" keyword.');
+    }
+
+    if (!u.isThen(token)) {
+      fail(
+        'Expected to find a "then" keyword, followed by a then case, in conditional expression.'
+      );
+    }
+    advance();
+
+    const thenCase = parseExpression();
+    if (!thenCase) {
+      fail(
+        'Expected to find a valid expression after "then" keyword in conditional expression.'
+      );
+    }
+
+    if (!u.isElse(token)) {
+      fail(
+        'Expected to find an "else" keyword, followed by an else case, in conditional expression.'
+      );
+    }
+    advance();
+
+    const elseCase = parseExpression();
+    if (!elseCase) {
+      fail(
+        'Expected to find a valid expression after "else" keyword in conditional expression.'
+      );
+    }
+
+    return new nodes.ConditionalNode(
+      lineStart,
+      elseCase.lineEnd,
+      predicate,
+      thenCase,
+      elseCase
+    );
+  }
+
   function parseExpression() {
     if (!token) return;
 
@@ -302,6 +350,8 @@ function parse({ source, tokens }) {
       case tokenTypes.AT_IDENTIFIER:
       case tokenTypes.IDENTIFIER:
         return parsePossibleCallExpression();
+      case tokenTypes.KEYWORD:
+        return parseConditional();
       case tokenTypes.SYMBOL:
         return parseParenthetical() || parseObject() || parseArray();
     }

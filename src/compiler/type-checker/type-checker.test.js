@@ -15,7 +15,7 @@ const source = `
 const tokens = tokenize({ source });
 const ast = parse({ tokens, source });
 
-describe('type checker', () => {
+xdescribe('type checker', () => {
   test('temp', () => {
     checkTypes({ ast });
   });

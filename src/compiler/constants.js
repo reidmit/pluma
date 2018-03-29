@@ -3,6 +3,7 @@ export const nodeTypes = {
   ASSIGNMENT: 'assignment-node',
   BOOLEAN: 'boolean-node',
   CALL: 'call-node',
+  CONDITIONAL: 'conditional-node',
   FUNCTION: 'function-node',
   IDENTIFIER: 'identifier-node',
   INTERPOLATED_STRING: 'interpolated-string-node',
@@ -17,6 +18,7 @@ export const nodeTypes = {
 export const tokenTypes = {
   BOOLEAN: 'boolean-token',
   IDENTIFIER: 'identifier-token',
+  KEYWORD: 'keyword-token',
   DOT_IDENTIFIER: 'dot-identifier-token',
   AT_IDENTIFIER: 'at-identifier-token',
   NUMBER: 'number-token',
@@ -54,7 +56,7 @@ export const symbolRegexes = symbols.map(
     )
 );
 
-export const reservedWords = ['else', 'if', 'let'];
+export const reservedWords = ['let', 'if', 'then', 'else'];
 
 export const reservedWordRegexes = reservedWords.map(
   word => new RegExp('^' + word + '\\b')

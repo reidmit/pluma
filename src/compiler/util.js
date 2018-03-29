@@ -43,3 +43,9 @@ export const isComma = isSymbol(',');
 export const isColon = isSymbol(':');
 
 export const isLet = isKeyword('let');
+
+export const isIf = isKeyword('if');
+
+export const isThen = isKeyword('then');
+
+export const isElse = isKeyword('else');

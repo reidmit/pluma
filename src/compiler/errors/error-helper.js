@@ -47,7 +47,7 @@ function formatSourceBlock({
 
   for (
     let i = Math.max(0, lineNumber - 1 - surroundingLines);
-    i <= Math.max(sourceLines.length, lineNumber - 1 + surroundingLines);
+    i <= Math.min(sourceLines.length, lineNumber - 1 + surroundingLines);
     i++
   ) {
     if (i >= 0 && i < sourceLines.length) {

@@ -677,6 +677,134 @@ describe('parser', () => {
       });
     });
 
+    test('if-then-else expressions', () => {
+      expectParseResult({
+        source: `
+          if True
+            then 47
+            else 100
+
+          if (and True False) then "no" else "yes"
+
+          if False then "okay"
+            else if True then "maybe"
+              else "nah"
+        `,
+        lineStart: 2,
+        lineEnd: 10,
+        body: [
+          {
+            type: nodeTypes.CONDITIONAL,
+            lineStart: 2,
+            lineEnd: 4,
+            predicate: {
+              type: nodeTypes.BOOLEAN,
+              value: true,
+              lineStart: 2,
+              lineEnd: 2
+            },
+            thenCase: {
+              type: nodeTypes.NUMBER,
+              value: 47,
+              lineStart: 3,
+              lineEnd: 3
+            },
+            elseCase: {
+              type: nodeTypes.NUMBER,
+              value: 100,
+              lineStart: 4,
+              lineEnd: 4
+            }
+          },
+          {
+            type: nodeTypes.CONDITIONAL,
+            lineStart: 6,
+            lineEnd: 6,
+            predicate: {
+              type: nodeTypes.CALL,
+              lineStart: 6,
+              lineEnd: 6,
+              callee: {
+                type: nodeTypes.CALL,
+                lineStart: 6,
+                lineEnd: 6,
+                callee: {
+                  type: nodeTypes.IDENTIFIER,
+                  value: 'and',
+                  lineStart: 6,
+                  lineEnd: 6
+                },
+                arg: {
+                  type: nodeTypes.BOOLEAN,
+                  value: true,
+                  lineStart: 6,
+                  lineEnd: 6
+                }
+              },
+              arg: {
+                type: nodeTypes.BOOLEAN,
+                value: false,
+                lineStart: 6,
+                lineEnd: 6
+              }
+            },
+            thenCase: {
+              type: nodeTypes.STRING,
+              value: 'no',
+              lineStart: 6,
+              lineEnd: 6
+            },
+            elseCase: {
+              type: nodeTypes.STRING,
+              value: 'yes',
+              lineStart: 6,
+              lineEnd: 6
+            }
+          },
+          {
+            type: nodeTypes.CONDITIONAL,
+            lineStart: 8,
+            lineEnd: 10,
+            predicate: {
+              type: nodeTypes.BOOLEAN,
+              value: false,
+              lineStart: 8,
+              lineEnd: 8
+            },
+            thenCase: {
+              type: nodeTypes.STRING,
+              value: 'okay',
+              lineStart: 8,
+              lineEnd: 8
+            },
+            elseCase: {
+              type: nodeTypes.CONDITIONAL,
+              lineStart: 9,
+              lineEnd: 10,
+              predicate: {
+                type: nodeTypes.BOOLEAN,
+                value: true,
+                lineStart: 9,
+                lineEnd: 9
+              },
+              thenCase: {
+                type: nodeTypes.STRING,
+                value: 'maybe',
+                lineStart: 9,
+                lineEnd: 9
+              },
+              elseCase: {
+                type: nodeTypes.STRING,
+                value: 'nah',
+                lineStart: 10,
+                lineEnd: 10
+              }
+            }
+          }
+        ]
+      });
+    });
+
     test('multiple complex assignments', () => {
       expectParseResult({
         source: `
