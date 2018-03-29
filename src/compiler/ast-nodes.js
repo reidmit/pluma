@@ -104,15 +104,6 @@ export class NumberNode extends BaseNode {
   }
 }
 
-export class StringNode extends BaseNode {
-  constructor(lineStart, lineEnd, value) {
-    super(lineStart, lineEnd);
-
-    this.type = nodeTypes.STRING;
-    this.value = value;
-  }
-}
-
 export class MemberExpressionNode extends BaseNode {
   constructor(lineStart, lineEnd, identifiers) {
     super(lineStart, lineEnd);
@@ -138,5 +129,23 @@ export class ObjectPropertyNode extends BaseNode {
     this.type = nodeTypes.OBJECT_PROPERTY;
     this.key = key;
     this.value = value;
+  }
+}
+
+export class StringNode extends BaseNode {
+  constructor(lineStart, lineEnd, value) {
+    super(lineStart, lineEnd);
+
+    this.type = nodeTypes.STRING;
+    this.value = value;
+  }
+}
+
+export class TupleNode extends BaseNode {
+  constructor(lineStart, lineEnd, entries) {
+    super(lineStart, lineEnd);
+
+    this.type = nodeTypes.TUPLE;
+    this.entries = entries;
   }
 }

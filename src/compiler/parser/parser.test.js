@@ -677,6 +677,76 @@ describe('parser', () => {
       });
     });
 
+    test('tuples', () => {
+      expectParseResult({
+        source: `
+          (1, True, "hello", nice)
+          (3, 4,
+            5)
+        `,
+        lineStart: 2,
+        lineEnd: 4,
+        body: [
+          {
+            type: nodeTypes.TUPLE,
+            lineStart: 2,
+            lineEnd: 2,
+            entries: [
+              {
+                type: nodeTypes.NUMBER,
+                value: 1,
+                lineStart: 2,
+                lineEnd: 2
+              },
+              {
+                type: nodeTypes.BOOLEAN,
+                value: true,
+                lineStart: 2,
+                lineEnd: 2
+              },
+              {
+                type: nodeTypes.STRING,
+                value: 'hello',
+                lineStart: 2,
+                lineEnd: 2
+              },
+              {
+                type: nodeTypes.IDENTIFIER,
+                value: 'nice',
+                lineStart: 2,
+                lineEnd: 2
+              }
+            ]
+          },
+          {
+            type: nodeTypes.TUPLE,
+            lineStart: 3,
+            lineEnd: 4,
+            entries: [
+              {
+                type: nodeTypes.NUMBER,
+                value: 3,
+                lineStart: 3,
+                lineEnd: 3
+              },
+              {
+                type: nodeTypes.NUMBER,
+                value: 4,
+                lineStart: 3,
+                lineEnd: 3
+              },
+              {
+                type: nodeTypes.NUMBER,
+                value: 5,
+                lineStart: 4,
+                lineEnd: 4
+              }
+            ]
+          }
+        ]
+      });
+    });
+
     test('if-then-else expressions', () => {
       expectParseResult({
         source: `

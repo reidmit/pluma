@@ -12,7 +12,8 @@ export const nodeTypes = {
   NUMBER: 'number-node',
   OBJECT: 'object-node',
   OBJECT_PROPERTY: 'object-property-node',
-  STRING: 'string-node'
+  STRING: 'string-node',
+  TUPLE: 'tuple-node'
 };
 
 export const tokenTypes = {

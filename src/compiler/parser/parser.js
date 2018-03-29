@@ -19,28 +19,35 @@ function parse({ source, tokens }) {
       typeof message === 'function'
         ? message(tokenToString(badToken))
         : message;
+
     throw new ParserError(message, source, badToken);
   }
 
   function parseNumber() {
     if (!u.isNumber(token)) return;
+
     const node = new nodes.NumberNode(
       token.lineStart,
       token.lineEnd,
       token.value
     );
+
     advance();
+
     return node;
   }
 
   function parseBoolean() {
     if (!u.isBoolean(token)) return;
+
     const node = new nodes.BooleanNode(
       token.lineStart,
       token.lineEnd,
       token.value
     );
+
     advance();
+
     return node;
   }
 
@@ -59,6 +66,7 @@ function parse({ source, tokens }) {
         advance();
 
         const innerExpression = parseExpression(token);
+
         if (!innerExpression) {
           fail('Invalid expression in interpolation');
         }
@@ -67,7 +75,9 @@ function parse({ source, tokens }) {
       }
 
       lineEnd = token.lineEnd;
+
       advance();
+
       if (!token) break;
     }
 
@@ -85,6 +95,7 @@ function parse({ source, tokens }) {
 
   function parseGetter() {
     if (!u.isDotIdentifier(token)) return;
+
     const node = new nodes.IdentifierNode(
       token.lineStart,
       token.lineEnd,
@@ -92,12 +103,15 @@ function parse({ source, tokens }) {
       true,
       false
     );
+
     advance();
+
     return node;
   }
 
   function parseSetter() {
     if (!u.isAtIdentifier(token)) return;
+
     const node = new nodes.IdentifierNode(
       token.lineStart,
       token.lineEnd,
@@ -105,7 +119,9 @@ function parse({ source, tokens }) {
       false,
       true
     );
+
     advance();
+
     return node;
   }
 
@@ -126,7 +142,9 @@ function parse({ source, tokens }) {
       parts.push(
         new nodes.IdentifierNode(token.lineStart, token.lineEnd, token.value)
       );
+
       advance();
+
       if (!token) break;
     }
 
@@ -134,6 +152,7 @@ function parse({ source, tokens }) {
 
     return parts.reduce((expression, property) => {
       if (!expression) return property;
+
       return new nodes.MemberExpressionNode(
         parts[0].lineStart,
         parts[parts.length - 1].lineStart,
@@ -150,8 +169,11 @@ function parse({ source, tokens }) {
       token.lineEnd,
       token.value
     );
+
     advance(2);
+
     const body = parseExpression();
+
     if (!body) {
       fail('Expected a valid expression in function body');
     }
@@ -162,30 +184,59 @@ function parse({ source, tokens }) {
   function parsePossibleCallExpression() {
     let func =
       parseFunction() || parseGetter() || parseSetter() || parseIdentifier();
+
     if (!func) return;
+
     let arg;
     while (token && token.columnStart > lastAssignmentColumn) {
       const lineStart = token.lineStart;
       const lineEnd = token.lineEnd;
+
       arg = parseExpression();
+
       if (!arg) break;
+
       func = new nodes.CallNode(lineStart, lineEnd, func, arg);
     }
+
     return func;
   }
 
   function parseParenthetical() {
     if (!u.isLeftParen(token)) return;
+
     const leftParen = token;
+    const lineStart = token.lineStart;
+    const expressions = [];
 
     advance();
+
     const expression = parseExpression();
+
     if (!token) {
       fail('Unexpectedly reached end of input.', tokens[index - 1]);
     }
 
     if (!expression) {
       fail('Expected expression after (');
+    }
+
+    expressions.push(expression);
+
+    while (u.isComma(token)) {
+      advance();
+
+      const tupleElement = parseExpression();
+
+      if (!token) {
+        fail('Unexpectedly reached end of input.', tokens[index - 1]);
+      }
+
+      if (!tupleElement) {
+        fail('Expected a valid expression after "," in tuple.');
+      }
+
+      expressions.push(tupleElement);
     }
 
     if (!u.isRightParen(token)) {
@@ -196,8 +247,16 @@ function parse({ source, tokens }) {
         leftParen
       );
     }
+
     advance();
-    return expression;
+
+    if (expressions.length === 1) return expressions[0];
+
+    return new nodes.TupleNode(
+      lineStart,
+      expressions[expressions.length - 1].lineEnd,
+      expressions
+    );
   }
 
   function parseObjectProperty() {
@@ -207,11 +266,15 @@ function parse({ source, tokens }) {
         token.lineEnd,
         token.value
       );
+
       advance(2);
+
       const value = parseExpression();
+
       if (!value) {
         fail('Expected a valid expression after :');
       }
+
       return new nodes.ObjectPropertyNode(
         key.lineStart,
         value.lineEnd,
@@ -229,23 +292,31 @@ function parse({ source, tokens }) {
         token.lineEnd,
         token.value
       );
+
       advance();
+
       return new nodes.ObjectPropertyNode(key.lineStart, key.lineEnd, key, key);
     }
   }
 
   function parseObject() {
     if (!u.isLeftBracket(token)) return;
+
     const lineStart = token.lineStart;
+
     advance();
 
     const properties = [];
+
     while (!u.isRightBracket(token)) {
       const property = parseObjectProperty();
+
       if (!property) {
         fail('Failed to parse object property');
       }
+
       properties.push(property);
+
       if (u.isComma(token)) {
         advance();
       } else if (!u.isRightBracket(token)) {
@@ -254,23 +325,31 @@ function parse({ source, tokens }) {
     }
 
     const lineEnd = token.lineEnd;
+
     advance();
+
     return new nodes.ObjectNode(lineStart, lineEnd, properties);
   }
 
   function parseArray() {
     if (!u.isLeftBrace(token)) return;
+
     const lineStart = token.lineStart;
     const leftBrace = token;
+
     advance();
 
     const elements = [];
+
     while (!u.isRightBrace(token)) {
       const expr = parseExpression();
+
       if (!expr) {
         fail('Invalid expression in array');
       }
+
       elements.push(expr);
+
       if (u.isComma(token)) {
         advance();
       } else if (!u.isRightBrace(token)) {
@@ -284,7 +363,9 @@ function parse({ source, tokens }) {
     }
 
     const lineEnd = token.lineEnd;
+
     advance();
+
     return new nodes.ArrayNode(lineStart, lineEnd, elements);
   }
 
@@ -292,9 +373,11 @@ function parse({ source, tokens }) {
     if (!u.isIf(token)) return;
 
     const lineStart = token.lineStart;
+
     advance();
 
     const predicate = parseExpression();
+
     if (!predicate) {
       fail('Expected to find a valid expression after "if" keyword.');
     }
@@ -304,9 +387,11 @@ function parse({ source, tokens }) {
         'Expected to find a "then" keyword, followed by a then case, in conditional expression.'
       );
     }
+
     advance();
 
     const thenCase = parseExpression();
+
     if (!thenCase) {
       fail(
         'Expected to find a valid expression after "then" keyword in conditional expression.'
@@ -318,9 +403,11 @@ function parse({ source, tokens }) {
         'Expected to find an "else" keyword, followed by an else case, in conditional expression.'
       );
     }
+
     advance();
 
     const elseCase = parseExpression();
+
     if (!elseCase) {
       fail(
         'Expected to find a valid expression after "else" keyword in conditional expression.'
@@ -342,16 +429,21 @@ function parse({ source, tokens }) {
     switch (token.type) {
       case tokenTypes.NUMBER:
         return parseNumber();
+
       case tokenTypes.BOOLEAN:
         return parseBoolean();
+
       case tokenTypes.STRING:
         return parseString();
+
       case tokenTypes.DOT_IDENTIFIER:
       case tokenTypes.AT_IDENTIFIER:
       case tokenTypes.IDENTIFIER:
         return parsePossibleCallExpression();
+
       case tokenTypes.KEYWORD:
         return parseConditional();
+
       case tokenTypes.SYMBOL:
         return parseParenthetical() || parseObject() || parseArray();
     }
@@ -359,18 +451,24 @@ function parse({ source, tokens }) {
 
   function parseAssignment() {
     if (!u.isLet(token)) return;
+
     const lineStart = token.lineStart;
 
     if (u.isIdentifier(tokens[index + 1]) && u.isEquals(tokens[index + 2])) {
       lastAssignmentColumn = token.columnStart;
+
       advance();
+
       const id = new nodes.IdentifierNode(
         token.lineStart,
         token.lineEnd,
         token.value
       );
+
       advance(2);
+
       const valueExpression = parseExpression(token);
+
       if (!valueExpression) {
         fail('Expected a valid expression on right-hand side of assignment');
       }
