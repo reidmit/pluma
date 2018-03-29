@@ -27,9 +27,10 @@ function tokenize({ source }) {
   const length = source.length;
   const tokens = [];
   const interpolationStack = [];
+
   let line = 1;
   let column = 0;
-  let i = 0;
+  let index = 0;
   let inString = false;
   let stringStart = null;
   let inRegex = false;
@@ -63,16 +64,16 @@ function tokenize({ source }) {
   }
 
   function advance(amount = 1) {
-    i += amount;
+    index += amount;
     column += amount;
   }
 
-  outer: while (i < length) {
-    remaining = source.substring(i);
+  outer: while (index < length) {
+    remaining = source.substring(index);
 
     if (inString) {
       if (remaining[0] === '\n') {
-        i++;
+        index++;
         column = 0;
         line++;
         continue;
@@ -80,20 +81,21 @@ function tokenize({ source }) {
 
       const endQuote = remaining[0] === '"';
       const startInterpolation = remaining[0] === '$' && remaining[1] === '{';
+
       if (endQuote || startInterpolation) {
         const { charIndex, lineStart, columnStart } = stringStart;
         stringStart = null;
+        inString = false;
 
         tokens.push({
           type: tokenTypes.STRING,
-          value: source.substring(charIndex, i),
+          value: source.substring(charIndex, index),
           lineStart,
           lineEnd: line,
           columnStart,
           columnEnd: endQuote ? column + 1 : column
         });
 
-        inString = false;
         if (endQuote) {
           advance();
         } else {
@@ -101,15 +103,16 @@ function tokenize({ source }) {
         }
 
         continue;
-      } else {
-        advance();
-        continue;
       }
+
+      advance();
+      continue;
     }
 
     if (
       inRegex &&
-      (remaining[0] !== '/' || (remaining[0] === '/' && source[i - 1] === '\\'))
+      (remaining[0] !== '/' ||
+        (remaining[0] === '/' && source[index - 1] === '\\'))
     ) {
       advance();
       continue;
@@ -117,26 +120,36 @@ function tokenize({ source }) {
 
     if (remaining[0] === '"') {
       inString = true;
-      stringStart = { lineStart: line, columnStart: column, charIndex: i + 1 };
+      stringStart = {
+        lineStart: line,
+        columnStart: column,
+        charIndex: index + 1
+      };
+
       advance();
       continue;
-    } else if (interpolationStack.length && remaining[0] === '}') {
+    }
+
+    if (interpolationStack.length && remaining[0] === '}') {
       inString = true;
       stringStart = {
         lineStart: line,
         columnStart: column + 1,
-        charIndex: i + 1
+        charIndex: index + 1
       };
+
       interpolationStack.pop();
+
       pushToken(tokenTypes.SYMBOL, '}', '}');
+
       advance();
       continue;
     }
 
     if ((match = remaining.match(patterns.newline))) {
-      i += match[0].length;
-      column = 0;
+      index += match[0].length;
       line += match[0].length;
+      column = 0;
       continue;
     }
 
@@ -147,6 +160,7 @@ function tokenize({ source }) {
 
     if ((match = remaining.match(patterns.booleanLiteral))) {
       pushToken(tokenTypes.BOOLEAN, match[0], match[0] === 'True');
+
       advance(match[0].length);
       continue;
     }
@@ -157,6 +171,7 @@ function tokenize({ source }) {
         match[0],
         parseInt(match[0].substring(2), 16)
       );
+
       advance(match[0].length);
       continue;
     }
@@ -167,6 +182,7 @@ function tokenize({ source }) {
         match[0],
         parseInt(match[0].substring(2), 8)
       );
+
       advance(match[0].length);
       continue;
     }
@@ -177,18 +193,21 @@ function tokenize({ source }) {
         match[0],
         parseInt(match[0].substring(2), 2)
       );
+
       advance(match[0].length);
       continue;
     }
 
     if ((match = remaining.match(patterns.decimalNumericLiteral))) {
       pushToken(tokenTypes.NUMBER, match[0], parseFloat(match[0]));
+
       advance(match[0].length);
       continue;
     }
 
     if ((match = remaining.match(patterns.specialNumericLiteral))) {
       pushToken(tokenTypes.NUMBER, match[0], +match[0]);
+
       advance(match[0].length);
       continue;
     }
@@ -199,20 +218,22 @@ function tokenize({ source }) {
         regexStart = {
           lineStart: line,
           columnStart: column,
-          charIndex: i + 1
+          charIndex: index + 1
         };
+
         advance();
       } else {
         advance();
-        inRegex = false;
         const { lineStart, columnStart, charIndex } = regexStart;
         regexStart = null;
+        inRegex = false;
 
-        const regexString = source.substring(charIndex, i - 1);
+        const regexString = source.substring(charIndex, index - 1);
 
         let regexFlags;
-        if ((match = source.substring(i).match(/^[gimuy]+/))) {
+        if ((match = source.substring(index).match(/^[gimuy]+/))) {
           regexFlags = match[0];
+
           advance(match[0].length);
         }
 
@@ -249,21 +270,10 @@ function tokenize({ source }) {
       continue;
     }
 
-    if (remaining.lastIndexOf('null', 0) === 0) {
-      pushToken(tokenTypes.NULL, 'null', null);
-      advance(4);
-      continue;
-    }
-
-    if (remaining.lastIndexOf('undefined', 0) === 0) {
-      pushToken(tokenTypes.UNDEFINED, 'undefined', undefined);
-      advance(9);
-      continue;
-    }
-
     for (let w = 0; w < reservedWords.length; w++) {
       if (reservedWordRegexes[w].test(remaining)) {
         pushToken(tokenTypes.KEYWORD, reservedWords[w], reservedWords[w]);
+
         advance(reservedWords[w].length);
         continue outer;
       }
@@ -271,12 +281,14 @@ function tokenize({ source }) {
 
     if ((match = remaining.match(patterns.dotIdentifier))) {
       pushToken(tokenTypes.DOT_IDENTIFIER, match[0], match[0].substring(1));
+
       advance(match[0].length);
       continue;
     }
 
     if ((match = remaining.match(patterns.atIdentifier))) {
       pushToken(tokenTypes.AT_IDENTIFIER, match[0], match[0].substring(1));
+
       advance(match[0].length);
       continue;
     }
@@ -284,6 +296,7 @@ function tokenize({ source }) {
     for (let s = 0; s < symbols.length; s++) {
       if (symbolRegexes[s].test(remaining)) {
         pushToken(tokenTypes.SYMBOL, symbols[s], symbols[s]);
+
         advance(symbols[s].length);
         continue outer;
       }
@@ -291,6 +304,7 @@ function tokenize({ source }) {
 
     if ((match = remaining.match(patterns.identifier))) {
       pushToken(tokenTypes.IDENTIFIER, match[0], match[0]);
+
       advance(match[0].length);
       continue;
     }

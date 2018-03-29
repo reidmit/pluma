@@ -9,8 +9,8 @@ function parse({ source, tokens }) {
   let token = tokens[index];
   let lastAssignmentColumn = 0;
 
-  function advance(n = 1) {
-    index += n;
+  function advance(amount = 1) {
+    index += amount;
     token = tokens[index];
   }
 
