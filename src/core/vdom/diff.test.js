@@ -99,7 +99,7 @@ xdescribe('diff', () => {
     ]);
   });
 
-  test.only('temp', () => {
+  test('temp', () => {
     let prev, curr, patches;
 
     prev = el(
