@@ -77,48 +77,32 @@ function parse({ source, tokens }) {
   function parseIdentifier() {
     if (!u.isIdentifier(token)) return;
 
-    const parts = [{ property: t.identifier(token.value), computed: false }];
+    const parts = [t.identifier(token.value)];
     advance();
 
     while (
       token &&
       token.columnStart > lastAssignmentColumn &&
-      (u.isDot(token) || u.isLeftBrace(token))
+      u.isDot(token)
     ) {
-      if (u.isDot(token)) {
-        advance();
-        if (!u.isIdentifier(token)) {
-          fail('Unexpected token after dot');
-        }
-        parts.push({ property: t.identifier(token.value), computed: false });
-      } else {
-        advance();
-        const innerExpression = parseExpression(token);
-
-        if (!innerExpression) {
-          fail('Invalid expression in brackets');
-        }
-
-        if (!u.isRightBrace(token)) {
-          fail('Missing closing ]');
-        }
-
-        parts.push({ property: innerExpression, computed: true });
+      advance();
+      if (!u.isIdentifier(token)) {
+        fail('Unexpected token after dot');
       }
-
+      parts.push(t.identifier(token.value));
       advance();
       if (!token) break;
     }
 
-    if (parts.length === 1) return parts[0].property;
+    if (parts.length === 1) return parts[0];
 
-    return parts.reduce((expression, { property, computed }) => {
+    return parts.reduce((expression, property) => {
       if (!expression) return property;
-      return t.memberExpression(expression, property, computed);
+      return t.memberExpression(expression, property);
     }, null);
   }
 
-  function parseFunction(isAsync = false) {
+  function parseFunction() {
     if (!u.isIdentifier(token) || !u.isArrow(tokens[index + 1])) return;
 
     const params = [t.identifier(token.value)];
@@ -128,20 +112,7 @@ function parse({ source, tokens }) {
       fail('Expected a valid expression in function body');
     }
 
-    return t.arrowFunctionExpression(params, body, isAsync);
-  }
-
-  function parseAsyncFunction() {
-    if (!u.isKeyword('async')(token)) return;
-
-    advance();
-    const fn = parseFunction(true);
-
-    if (!fn) {
-      fail('Expected a function after async keyword');
-    }
-
-    return fn;
+    return t.arrowFunctionExpression(params, body);
   }
 
   function parsePossibleCallExpression() {
@@ -276,7 +247,7 @@ function parse({ source, tokens }) {
         fail(
           `Missing closing "]" to match opening "[" at line ${
             leftBrace.lineStart
-          }, column ${leftBrace.columnStart}`,
+          }, column ${leftBrace.columnStart}.`,
           leftBrace
         );
       }
@@ -300,8 +271,6 @@ function parse({ source, tokens }) {
         return parseNull();
       case tokenTypes.IDENTIFIER:
         return parsePossibleCallExpression();
-      case tokenTypes.KEYWORD:
-        return parseAsyncFunction();
       case tokenTypes.SYMBOL:
         return parseParenthetical() || parseObject() || parseArray();
     }

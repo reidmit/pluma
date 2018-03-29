@@ -20,11 +20,11 @@ export const symbols = [
   '${',
   ':',
   '=>',
+  '->',
   '=',
-  '...',
   '.',
   ',',
-  '#'
+  '|>'
 ];
 
 export const symbolRegexes = symbols.map(
@@ -38,29 +38,7 @@ export const symbolRegexes = symbols.map(
     )
 );
 
-export const reservedWords = [
-  'async',
-  'await',
-  'case',
-  'catch',
-  'class',
-  'debugger',
-  'else',
-  'export',
-  'for',
-  'if',
-  'import',
-  'in',
-  'let',
-  'switch',
-  'this',
-  'throw',
-  'throws',
-  'try',
-  'typeof',
-  'void',
-  'yield'
-];
+export const reservedWords = ['else', 'if', 'let'];
 
 export const reservedWordRegexes = reservedWords.map(
   word => new RegExp('^' + word + '\\b')

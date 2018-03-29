@@ -476,42 +476,33 @@ describe('tokenizer', () => {
     test('keywords', () => {
       expectTokens(
         `
-      async
       let
-      import export
+      if else
       `,
         [
           {
             type: tokenTypes.KEYWORD,
-            value: 'async',
+            value: 'let',
             lineStart: 2,
             lineEnd: 2,
-            columnStart: 6,
-            columnEnd: 11
-          },
-          {
-            type: tokenTypes.KEYWORD,
-            value: 'let',
-            lineStart: 3,
-            lineEnd: 3,
             columnStart: 6,
             columnEnd: 9
           },
           {
             type: tokenTypes.KEYWORD,
-            value: 'import',
-            lineStart: 4,
-            lineEnd: 4,
+            value: 'if',
+            lineStart: 3,
+            lineEnd: 3,
             columnStart: 6,
-            columnEnd: 12
+            columnEnd: 8
           },
           {
             type: tokenTypes.KEYWORD,
-            value: 'export',
-            lineStart: 4,
-            lineEnd: 4,
-            columnStart: 13,
-            columnEnd: 19
+            value: 'else',
+            lineStart: 3,
+            lineEnd: 3,
+            columnStart: 9,
+            columnEnd: 13
           }
         ]
       );
@@ -519,11 +510,11 @@ describe('tokenizer', () => {
 
     test('symbols', () => {
       expectTokens(
-        ` {} \${ #
+        ` {} \${ ->
       , => =
       ( . ) :
       ][
-        ...
+        |>
       `,
         [
           {
@@ -552,11 +543,11 @@ describe('tokenizer', () => {
           },
           {
             type: tokenTypes.SYMBOL,
-            value: '#',
+            value: '->',
             lineStart: 1,
             lineEnd: 1,
             columnStart: 7,
-            columnEnd: 8
+            columnEnd: 9
           },
           {
             type: tokenTypes.SYMBOL,
@@ -632,11 +623,11 @@ describe('tokenizer', () => {
           },
           {
             type: tokenTypes.SYMBOL,
-            value: '...',
+            value: '|>',
             lineStart: 5,
             lineEnd: 5,
             columnStart: 8,
-            columnEnd: 11
+            columnEnd: 10
           }
         ]
       );
@@ -951,45 +942,45 @@ let z = "test"
         /Unrecognized character '&' at line 9, column 6:/
       );
     });
-  });
 
-  test('invalid regex (unterminated group)', () => {
-    let errorMessage;
+    test('invalid regex (unterminated group)', () => {
+      let errorMessage;
 
-    try {
-      tokenize({
-        source: '/bad(/'
-      });
-    } catch (err) {
-      errorMessage = err.message;
-    }
+      try {
+        tokenize({
+          source: '/bad(/'
+        });
+      } catch (err) {
+        errorMessage = err.message;
+      }
 
-    expect(errorMessage).toBeDefined();
-    expect(errorMessage).toMatch(
-      /Invalid regular expression at line 1, column 0:/
-    );
-    expect(errorMessage).toMatch(
-      /It looks like you may be missing a closing "\)" for a group./
-    );
-  });
+      expect(errorMessage).toBeDefined();
+      expect(errorMessage).toMatch(
+        /Invalid regular expression at line 1, column 0:/
+      );
+      expect(errorMessage).toMatch(
+        /It looks like you may be missing a closing "\)" for a group./
+      );
+    });
 
-  test('invalid regex (missing "(")', () => {
-    let errorMessage;
+    test('invalid regex (missing "(")', () => {
+      let errorMessage;
 
-    try {
-      tokenize({
-        source: '/bad)/'
-      });
-    } catch (err) {
-      errorMessage = err.message;
-    }
+      try {
+        tokenize({
+          source: '/bad)/'
+        });
+      } catch (err) {
+        errorMessage = err.message;
+      }
 
-    expect(errorMessage).toBeDefined();
-    expect(errorMessage).toMatch(
-      /Invalid regular expression at line 1, column 0:/
-    );
-    expect(errorMessage).toMatch(
-      /It looks like you have a closing "\)" without an opening "\("./
-    );
+      expect(errorMessage).toBeDefined();
+      expect(errorMessage).toMatch(
+        /Invalid regular expression at line 1, column 0:/
+      );
+      expect(errorMessage).toMatch(
+        /It looks like you have a closing "\)" without an opening "\("./
+      );
+    });
   });
 });

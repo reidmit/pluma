@@ -78,38 +78,10 @@ describe('parser', () => {
       ]);
     });
 
-    test('member expression with brackets (computed)', () => {
-      expectAst('a[b]["hello"][0]', [
-        t.expressionStatement(
-          t.memberExpression(
-            t.memberExpression(
-              t.memberExpression(t.identifier('a'), t.identifier('b'), true),
-              t.stringLiteral('hello'),
-              true
-            ),
-            t.numericLiteral(0),
-            true
-          )
-        )
-      ]);
-    });
-
     test('function (one param)', () => {
       expectAst('x => 47', [
         t.expressionStatement(
           t.arrowFunctionExpression([t.identifier('x')], t.numericLiteral(47))
-        )
-      ]);
-    });
-
-    test('function (async)', () => {
-      expectAst('async x => 47', [
-        t.expressionStatement(
-          t.arrowFunctionExpression(
-            [t.identifier('x')],
-            t.numericLiteral(47),
-            true
-          )
         )
       ]);
     });
