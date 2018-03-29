@@ -53,11 +53,13 @@ export class BooleanNode extends BaseNode {
 }
 
 export class IdentifierNode extends BaseNode {
-  constructor(lineStart, lineEnd, value) {
+  constructor(lineStart, lineEnd, value, isGetter, isSetter) {
     super(lineStart, lineEnd);
 
     this.type = nodeTypes.IDENTIFIER;
     this.value = value;
+    this.isGetter = isGetter;
+    this.isSetter = isSetter;
   }
 }
 
@@ -91,21 +93,12 @@ export class AssignmentNode extends BaseNode {
 }
 
 export class CallNode extends BaseNode {
-  constructor(
-    lineStart,
-    lineEnd,
-    callee,
-    arg,
-    isSetter = false,
-    isGetter = false
-  ) {
+  constructor(lineStart, lineEnd, callee, arg) {
     super(lineStart, lineEnd);
 
     this.type = nodeTypes.CALL;
     this.callee = callee;
     this.arg = arg;
-    this.isSetter = isSetter;
-    this.isGetter = isGetter;
   }
 }
 

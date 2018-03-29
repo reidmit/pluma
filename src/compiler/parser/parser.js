@@ -83,6 +83,32 @@ function parse({ source, tokens }) {
     );
   }
 
+  function parseGetter() {
+    if (!u.isDotIdentifier(token)) return;
+    const node = new nodes.IdentifierNode(
+      token.lineStart,
+      token.lineEnd,
+      token.value,
+      true,
+      false
+    );
+    advance();
+    return node;
+  }
+
+  function parseSetter() {
+    if (!u.isAtIdentifier(token)) return;
+    const node = new nodes.IdentifierNode(
+      token.lineStart,
+      token.lineEnd,
+      token.value,
+      false,
+      true
+    );
+    advance();
+    return node;
+  }
+
   function parseIdentifier() {
     if (!u.isIdentifier(token)) return;
 
@@ -134,7 +160,8 @@ function parse({ source, tokens }) {
   }
 
   function parsePossibleCallExpression() {
-    let func = parseFunction() || parseIdentifier();
+    let func =
+      parseFunction() || parseGetter() || parseSetter() || parseIdentifier();
     if (!func) return;
     let arg;
     while (token && token.columnStart > lastAssignmentColumn) {
@@ -271,6 +298,8 @@ function parse({ source, tokens }) {
         return parseBoolean();
       case tokenTypes.STRING:
         return parseString();
+      case tokenTypes.DOT_IDENTIFIER:
+      case tokenTypes.AT_IDENTIFIER:
       case tokenTypes.IDENTIFIER:
         return parsePossibleCallExpression();
       case tokenTypes.SYMBOL:
@@ -327,6 +356,7 @@ function parse({ source, tokens }) {
 
   const firstLine = body.length ? body[0].lineStart : 1;
   const lastLine = body.length ? body[body.length - 1].lineEnd : 1;
+
   return new nodes.ModuleNode(firstLine, lastLine, body);
 }
 

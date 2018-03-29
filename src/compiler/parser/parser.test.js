@@ -286,23 +286,74 @@ describe('parser', () => {
       });
     });
 
-    // TODO
-    // xtest('call expression (getter function)', () => {
-    //   expectAst('.someProp someObj', [
-    //     t.expressionStatement(
-    //       t.callExpression(t.identifier('someProp'), [t.identifier('someArg')])
-    //     )
-    //   ]);
-    // });
+    test('call expression (getter function)', () => {
+      expectParseResult({
+        source: '.someProp someObject',
+        lineStart: 1,
+        lineEnd: 1,
+        body: [
+          {
+            type: nodeTypes.CALL,
+            lineStart: 1,
+            lineEnd: 1,
+            callee: {
+              type: nodeTypes.IDENTIFIER,
+              value: 'someProp',
+              isGetter: true,
+              isSetter: false,
+              lineStart: 1,
+              lineEnd: 1
+            },
+            arg: {
+              type: nodeTypes.IDENTIFIER,
+              value: 'someObject',
+              lineStart: 1,
+              lineEnd: 1
+            }
+          }
+        ]
+      });
+    });
 
-    // // TODO
-    // xtest('call expression (setter function)', () => {
-    //   expectAst('.someProp 47 someObj', [
-    //     t.expressionStatement(
-    //       t.callExpression(t.identifier('someProp'), [t.identifier('someArg')])
-    //     )
-    //   ]);
-    // });
+    test('call expression (setter function)', () => {
+      expectParseResult({
+        source: '@someProp 47 someObject',
+        lineStart: 1,
+        lineEnd: 1,
+        body: [
+          {
+            type: nodeTypes.CALL,
+            lineStart: 1,
+            lineEnd: 1,
+            callee: {
+              type: nodeTypes.CALL,
+              lineStart: 1,
+              lineEnd: 1,
+              callee: {
+                type: nodeTypes.IDENTIFIER,
+                value: 'someProp',
+                isGetter: false,
+                isSetter: true,
+                lineStart: 1,
+                lineEnd: 1
+              },
+              arg: {
+                type: nodeTypes.NUMBER,
+                value: 47,
+                lineStart: 1,
+                lineEnd: 1
+              }
+            },
+            arg: {
+              type: nodeTypes.IDENTIFIER,
+              value: 'someObject',
+              lineStart: 1,
+              lineEnd: 1
+            }
+          }
+        ]
+      });
+    });
 
     test('call expression (single argument)', () => {
       expectParseResult({
@@ -314,8 +365,6 @@ describe('parser', () => {
             type: nodeTypes.CALL,
             lineStart: 1,
             lineEnd: 1,
-            isGetter: false,
-            isSetter: false,
             callee: {
               type: nodeTypes.IDENTIFIER,
               value: 'someFunc',
@@ -343,20 +392,14 @@ describe('parser', () => {
             type: nodeTypes.CALL,
             lineStart: 1,
             lineEnd: 1,
-            isGetter: false,
-            isSetter: false,
             callee: {
               type: nodeTypes.CALL,
               lineStart: 1,
               lineEnd: 1,
-              isGetter: false,
-              isSetter: false,
               callee: {
                 type: nodeTypes.CALL,
                 lineStart: 1,
                 lineEnd: 1,
-                isGetter: false,
-                isSetter: false,
                 callee: {
                   type: nodeTypes.IDENTIFIER,
                   value: 'helloWorld',
@@ -400,14 +443,10 @@ describe('parser', () => {
             type: nodeTypes.CALL,
             lineStart: 2,
             lineEnd: 2,
-            isGetter: false,
-            isSetter: false,
             callee: {
               type: nodeTypes.CALL,
               lineStart: 2,
               lineEnd: 2,
-              isGetter: false,
-              isSetter: false,
               callee: {
                 type: nodeTypes.IDENTIFIER,
                 value: 'someFunc',
@@ -418,8 +457,6 @@ describe('parser', () => {
                 type: nodeTypes.CALL,
                 lineStart: 2,
                 lineEnd: 2,
-                isGetter: false,
-                isSetter: false,
                 callee: {
                   type: nodeTypes.IDENTIFIER,
                   value: 'someOtherFunc',
@@ -663,20 +700,14 @@ describe('parser', () => {
               type: nodeTypes.CALL,
               lineStart: 2,
               lineEnd: 2,
-              isGetter: false,
-              isSetter: false,
               callee: {
                 type: nodeTypes.CALL,
                 lineStart: 2,
                 lineEnd: 2,
-                isGetter: false,
-                isSetter: false,
                 callee: {
                   type: nodeTypes.CALL,
                   lineStart: 2,
                   lineEnd: 2,
-                  isGetter: false,
-                  isSetter: false,
                   callee: {
                     type: nodeTypes.IDENTIFIER,
                     value: 'helloWorld',
@@ -719,8 +750,6 @@ describe('parser', () => {
               type: nodeTypes.CALL,
               lineStart: 3,
               lineEnd: 3,
-              isGetter: false,
-              isSetter: false,
               callee: {
                 type: nodeTypes.IDENTIFIER,
                 value: 'func1',
@@ -781,8 +810,6 @@ describe('parser', () => {
             type: nodeTypes.CALL,
             lineStart: 4,
             lineEnd: 4,
-            isGetter: false,
-            isSetter: false,
             callee: {
               type: nodeTypes.IDENTIFIER,
               value: 'fn',
@@ -834,8 +861,6 @@ describe('parser', () => {
                 type: nodeTypes.CALL,
                 lineStart: 2,
                 lineEnd: 2,
-                isGetter: false,
-                isSetter: false,
                 callee: {
                   type: nodeTypes.IDENTIFIER,
                   value: 'fn',

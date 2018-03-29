@@ -18,6 +18,8 @@ export const isIdentifier = isType('IDENTIFIER');
 
 export const isDotIdentifier = isType('DOT_IDENTIFIER');
 
+export const isAtIdentifier = isType('AT_IDENTIFIER');
+
 export const isLeftBrace = isSymbol('[');
 
 export const isRightBrace = isSymbol(']');
