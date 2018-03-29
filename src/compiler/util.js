@@ -14,11 +14,9 @@ export const isNumber = isType('NUMBER');
 
 export const isBoolean = isType('BOOLEAN');
 
-export const isNull = isType('NULL');
-
 export const isIdentifier = isType('IDENTIFIER');
 
-export const isDot = isSymbol('.');
+export const isDotIdentifier = isType('DOT_IDENTIFIER');
 
 export const isLeftBrace = isSymbol('[');
 

@@ -30,10 +30,6 @@ describe('parser', () => {
       expectAst('', []);
     });
 
-    test('null literal', () => {
-      expectAst('null', [t.expressionStatement(t.nullLiteral())]);
-    });
-
     test('number literal', () => {
       expectAst('47', [t.expressionStatement(t.numericLiteral(47))]);
     });

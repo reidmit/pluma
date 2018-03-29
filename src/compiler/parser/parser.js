@@ -36,12 +36,6 @@ function parse({ source, tokens }) {
     return node;
   }
 
-  function parseNull() {
-    if (!u.isNull(token)) return;
-    advance();
-    return t.nullLiteral();
-  }
-
   function parseString() {
     const stringParts = [];
     const expressions = [];
@@ -83,12 +77,8 @@ function parse({ source, tokens }) {
     while (
       token &&
       token.columnStart > lastAssignmentColumn &&
-      u.isDot(token)
+      u.isDotIdentifier(token)
     ) {
-      advance();
-      if (!u.isIdentifier(token)) {
-        fail('Unexpected token after dot');
-      }
       parts.push(t.identifier(token.value));
       advance();
       if (!token) break;
@@ -267,8 +257,6 @@ function parse({ source, tokens }) {
         return parseBoolean();
       case tokenTypes.STRING:
         return parseString();
-      case tokenTypes.NULL:
-        return parseNull();
       case tokenTypes.IDENTIFIER:
         return parsePossibleCallExpression();
       case tokenTypes.SYMBOL:

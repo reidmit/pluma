@@ -1,10 +1,12 @@
 export const tokenTypes = {
   BOOLEAN: 'boolean-token',
   IDENTIFIER: 'identifier-token',
-  KEYWORD: 'keyword-token',
+  DOT_IDENTIFIER: 'dot-identifier-token',
+  AT_IDENTIFIER: 'at-identifier-token',
   NULL: 'null-token',
   NUMBER: 'number-token',
   REGEX: 'regex-token',
+  SETTER: 'setter-token',
   STRING: 'string-token',
   SYMBOL: 'symbol-token',
   UNDEFINED: 'undefined-token'

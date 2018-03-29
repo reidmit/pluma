@@ -17,7 +17,9 @@ const patterns = {
   octalNumericLiteral: /^0o[0-7]+/i,
   binaryNumericLiteral: /^0b[01]+/i,
   specialNumericLiteral: /^(NaN|Infinity)/,
-  identifier: /^[a-z$_][0-9a-z$_]*/i,
+  identifier: /^[a-z$_][0-9a-z$_-]*/i,
+  atIdentifier: /^@[a-z$_][0-9a-z$_-]*/i,
+  dotIdentifier: /^\.[a-z$_][0-9a-z$_-]*/i,
   digits: /^[0-9]+/
 };
 
@@ -265,6 +267,18 @@ function tokenize({ source }) {
         advance(reservedWords[w].length);
         continue outer;
       }
+    }
+
+    if ((match = remaining.match(patterns.dotIdentifier))) {
+      pushToken(tokenTypes.DOT_IDENTIFIER, match[0], match[0].substring(1));
+      advance(match[0].length);
+      continue;
+    }
+
+    if ((match = remaining.match(patterns.atIdentifier))) {
+      pushToken(tokenTypes.AT_IDENTIFIER, match[0], match[0].substring(1));
+      advance(match[0].length);
+      continue;
     }
 
     for (let s = 0; s < symbols.length; s++) {

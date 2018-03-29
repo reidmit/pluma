@@ -437,42 +437,6 @@ describe('tokenizer', () => {
       );
     });
 
-    test('null literal', () => {
-      expectTokens(
-        `
-      null
-      `,
-        [
-          {
-            type: tokenTypes.NULL,
-            value: null,
-            lineStart: 2,
-            lineEnd: 2,
-            columnStart: 6,
-            columnEnd: 10
-          }
-        ]
-      );
-    });
-
-    test('undefined literal', () => {
-      expectTokens(
-        `
-      undefined
-      `,
-        [
-          {
-            type: tokenTypes.UNDEFINED,
-            value: undefined,
-            lineStart: 2,
-            lineEnd: 2,
-            columnStart: 6,
-            columnEnd: 15
-          }
-        ]
-      );
-    });
-
     test('keywords', () => {
       expectTokens(
         `
@@ -637,7 +601,9 @@ describe('tokenizer', () => {
       expectTokens(
         `
         hello WORLD
-          _someToken$3`,
+          _someToken$3
+        kebab-case-too
+        `,
         [
           {
             type: tokenTypes.IDENTIFIER,
@@ -662,9 +628,59 @@ describe('tokenizer', () => {
             lineEnd: 3,
             columnStart: 10,
             columnEnd: 22
+          },
+          {
+            type: tokenTypes.IDENTIFIER,
+            value: 'kebab-case-too',
+            lineStart: 4,
+            lineEnd: 4,
+            columnStart: 8,
+            columnEnd: 22
           }
         ]
       );
+    });
+
+    test('dot-identifiers', () => {
+      expectTokens('.getProp .kebab-case', [
+        {
+          type: tokenTypes.DOT_IDENTIFIER,
+          value: 'getProp',
+          lineStart: 1,
+          lineEnd: 1,
+          columnStart: 0,
+          columnEnd: 8
+        },
+        {
+          type: tokenTypes.DOT_IDENTIFIER,
+          value: 'kebab-case',
+          lineStart: 1,
+          lineEnd: 1,
+          columnStart: 9,
+          columnEnd: 20
+        }
+      ]);
+    });
+
+    test('at-identifiers', () => {
+      expectTokens('@getProp @kebab-case', [
+        {
+          type: tokenTypes.AT_IDENTIFIER,
+          value: 'getProp',
+          lineStart: 1,
+          lineEnd: 1,
+          columnStart: 0,
+          columnEnd: 8
+        },
+        {
+          type: tokenTypes.AT_IDENTIFIER,
+          value: 'kebab-case',
+          lineStart: 1,
+          lineEnd: 1,
+          columnStart: 9,
+          columnEnd: 20
+        }
+      ]);
     });
 
     test('single values', () => {
@@ -809,7 +825,7 @@ describe('tokenizer', () => {
     test('member expressions', () => {
       expectTokens(
         `
-        a.b[c]["test"][47]
+        a.b.c.d
       `,
         [
           {
@@ -821,92 +837,28 @@ describe('tokenizer', () => {
             columnEnd: 9
           },
           {
-            type: tokenTypes.SYMBOL,
-            value: '.',
-            lineStart: 2,
-            lineEnd: 2,
-            columnStart: 9,
-            columnEnd: 10
-          },
-          {
-            type: tokenTypes.IDENTIFIER,
+            type: tokenTypes.DOT_IDENTIFIER,
             value: 'b',
             lineStart: 2,
             lineEnd: 2,
-            columnStart: 10,
+            columnStart: 9,
             columnEnd: 11
           },
           {
-            type: tokenTypes.SYMBOL,
-            value: '[',
-            lineStart: 2,
-            lineEnd: 2,
-            columnStart: 11,
-            columnEnd: 12
-          },
-          {
-            type: tokenTypes.IDENTIFIER,
+            type: tokenTypes.DOT_IDENTIFIER,
             value: 'c',
             lineStart: 2,
             lineEnd: 2,
-            columnStart: 12,
+            columnStart: 11,
             columnEnd: 13
           },
           {
-            type: tokenTypes.SYMBOL,
-            value: ']',
+            type: tokenTypes.DOT_IDENTIFIER,
+            value: 'd',
             lineStart: 2,
             lineEnd: 2,
             columnStart: 13,
-            columnEnd: 14
-          },
-          {
-            type: tokenTypes.SYMBOL,
-            value: '[',
-            lineStart: 2,
-            lineEnd: 2,
-            columnStart: 14,
             columnEnd: 15
-          },
-          {
-            type: tokenTypes.STRING,
-            value: 'test',
-            lineStart: 2,
-            lineEnd: 2,
-            columnStart: 15,
-            columnEnd: 21
-          },
-          {
-            type: tokenTypes.SYMBOL,
-            value: ']',
-            lineStart: 2,
-            lineEnd: 2,
-            columnStart: 21,
-            columnEnd: 22
-          },
-          {
-            type: tokenTypes.SYMBOL,
-            value: '[',
-            lineStart: 2,
-            lineEnd: 2,
-            columnStart: 22,
-            columnEnd: 23
-          },
-          {
-            type: tokenTypes.NUMBER,
-            value: 47,
-            lineStart: 2,
-            lineEnd: 2,
-            columnStart: 23,
-            columnEnd: 25
-          },
-          {
-            type: tokenTypes.SYMBOL,
-            value: ']',
-            lineStart: 2,
-            lineEnd: 2,
-            columnStart: 25,
-            columnEnd: 26
           }
         ]
       );
