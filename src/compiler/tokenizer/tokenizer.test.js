@@ -727,6 +727,41 @@ describe('tokenizer', () => {
       ]);
     });
 
+    test('line comments', () => {
+      expectTokens(
+        `
+        # a line comment #47
+        hello # world
+        `,
+        [
+          {
+            type: tokenTypes.LINE_COMMENT,
+            value: ' a line comment #47',
+            lineStart: 2,
+            lineEnd: 2,
+            columnStart: 8,
+            columnEnd: 28
+          },
+          {
+            type: tokenTypes.IDENTIFIER,
+            value: 'hello',
+            lineStart: 3,
+            lineEnd: 3,
+            columnStart: 8,
+            columnEnd: 13
+          },
+          {
+            type: tokenTypes.LINE_COMMENT,
+            value: ' world',
+            lineStart: 3,
+            lineEnd: 3,
+            columnStart: 14,
+            columnEnd: 21
+          }
+        ]
+      );
+    });
+
     test('single values', () => {
       expectTokens('47', [
         {

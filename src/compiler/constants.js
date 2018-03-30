@@ -17,11 +17,12 @@ export const nodeTypes = {
 };
 
 export const tokenTypes = {
+  AT_IDENTIFIER: 'at-identifier-token',
   BOOLEAN: 'boolean-token',
+  DOT_IDENTIFIER: 'dot-identifier-token',
   IDENTIFIER: 'identifier-token',
   KEYWORD: 'keyword-token',
-  DOT_IDENTIFIER: 'dot-identifier-token',
-  AT_IDENTIFIER: 'at-identifier-token',
+  LINE_COMMENT: 'line-comment-token',
   NUMBER: 'number-token',
   REGEX: 'regex-token',
   SETTER: 'setter-token',

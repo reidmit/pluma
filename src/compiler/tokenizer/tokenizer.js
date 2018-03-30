@@ -306,6 +306,16 @@ function tokenize({ source }) {
       continue;
     }
 
+    if (remaining[0] === '#') {
+      let i = 0;
+      let c = remaining[i];
+      while (c !== '\n') c = remaining[++i];
+      const comment = remaining.substring(1, i);
+      pushToken(tokenTypes.LINE_COMMENT, '#' + comment, comment);
+      advance(comment.length + 1);
+      continue;
+    }
+
     fail(`Unrecognized character '${remaining[0]}'`);
   }
 
