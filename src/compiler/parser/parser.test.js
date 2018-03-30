@@ -250,6 +250,7 @@ describe('parser', () => {
         body: [
           {
             type: nodeTypes.ASSIGNMENT,
+            comments: [],
             lineStart: 2,
             lineEnd: 2,
             leftSide: {
@@ -267,6 +268,7 @@ describe('parser', () => {
           },
           {
             type: nodeTypes.ASSIGNMENT,
+            comments: [],
             lineStart: 3,
             lineEnd: 3,
             leftSide: {
@@ -875,6 +877,43 @@ describe('parser', () => {
       });
     });
 
+    test('comments', () => {
+      expectParseResult({
+        source: `
+          # This is a comment that
+          # should be preserved for the below assignment
+          let x = 47 # but not this
+
+          # or this
+        `,
+        lineStart: 2,
+        lineEnd: 4,
+        body: [
+          {
+            type: nodeTypes.ASSIGNMENT,
+            lineStart: 2,
+            lineEnd: 4,
+            comments: [
+              ' This is a comment that',
+              ' should be preserved for the below assignment'
+            ],
+            leftSide: {
+              type: nodeTypes.IDENTIFIER,
+              lineStart: 4,
+              lineEnd: 4,
+              value: 'x'
+            },
+            rightSide: {
+              type: nodeTypes.NUMBER,
+              lineStart: 4,
+              lineEnd: 4,
+              value: 47
+            }
+          }
+        ]
+      });
+    });
+
     test('multiple complex assignments', () => {
       expectParseResult({
         source: `
@@ -886,6 +925,7 @@ describe('parser', () => {
         body: [
           {
             type: nodeTypes.ASSIGNMENT,
+            comments: [],
             lineStart: 2,
             lineEnd: 2,
             leftSide: {
@@ -936,6 +976,7 @@ describe('parser', () => {
           },
           {
             type: nodeTypes.ASSIGNMENT,
+            comments: [],
             lineStart: 3,
             lineEnd: 3,
             leftSide: {
@@ -978,6 +1019,7 @@ describe('parser', () => {
         body: [
           {
             type: nodeTypes.ASSIGNMENT,
+            comments: [],
             lineStart: 2,
             lineEnd: 2,
             leftSide: {
@@ -1037,6 +1079,7 @@ describe('parser', () => {
         body: [
           {
             type: nodeTypes.ASSIGNMENT,
+            comments: [],
             lineStart: 2,
             lineEnd: 2,
             leftSide: {

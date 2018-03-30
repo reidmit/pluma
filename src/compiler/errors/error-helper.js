@@ -84,16 +84,24 @@ function tokenToString(token) {
   switch (token.type) {
     case tokenTypes.IDENTIFIER:
       return `identifier "${token.value}"`;
+    case tokenTypes.AT_IDENTIFIER:
+      return `identifier "@${token.value}"`;
+    case tokenTypes.DOT_IDENTIFIER:
+      return `identifier ".${token.value}"`;
     case tokenTypes.KEYWORD:
       return `keyword "${token.value}"`;
     case tokenTypes.SYMBOL:
       return `symbol "${token.value}"`;
+    case tokenTypes.BOOLEAN:
+      return `boolean ${token.value ? 'True' : 'False'}`;
     case tokenTypes.NUMBER:
       return `number ${token.value}`;
     case tokenTypes.STRING:
       return `string "${token.value}"`;
+    case tokenTypes.LINE_COMMENT:
+      return `comment "#${token.value}"`;
     default:
-      return 'token';
+      return token.type;
   }
 }
 

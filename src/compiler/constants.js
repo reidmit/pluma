@@ -25,7 +25,6 @@ export const tokenTypes = {
   LINE_COMMENT: 'line-comment-token',
   NUMBER: 'number-token',
   REGEX: 'regex-token',
-  SETTER: 'setter-token',
   STRING: 'string-token',
   SYMBOL: 'symbol-token'
 };

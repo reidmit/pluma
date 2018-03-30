@@ -8,6 +8,7 @@ function parse({ source, tokens }) {
   let index = 0;
   let token = tokens[index];
   let lastAssignmentColumn = 0;
+  const fullLineComments = {};
 
   function advance(amount = 1) {
     index += amount;
@@ -21,6 +22,20 @@ function parse({ source, tokens }) {
         : message;
 
     throw new ParserError(message, source, badToken);
+  }
+
+  function collectComments(node) {
+    const { lineStart } = node;
+    const nodeComments = [];
+
+    let lineNumber = lineStart - 1;
+    while (fullLineComments[lineNumber]) {
+      nodeComments.push(fullLineComments[lineNumber]);
+      lineNumber--;
+    }
+
+    node.comments = nodeComments.reverse();
+    node.lineStart = lineNumber + 1;
   }
 
   function parseNumber() {
@@ -423,10 +438,27 @@ function parse({ source, tokens }) {
     );
   }
 
+  function parseComment() {
+    if (!u.isComment(token)) return;
+
+    const { value, lineStart } = token;
+
+    if (index === 0 || tokens[index - 1].lineStart !== lineStart) {
+      fullLineComments[lineStart] = value;
+    }
+
+    advance();
+
+    return true;
+  }
+
   function parseExpression() {
     if (!token) return;
 
     switch (token.type) {
+      case tokenTypes.LINE_COMMENT:
+        return parseComment();
+
       case tokenTypes.NUMBER:
         return parseNumber();
 
@@ -473,12 +505,16 @@ function parse({ source, tokens }) {
         fail('Expected a valid expression on right-hand side of assignment');
       }
 
-      return new nodes.AssignmentNode(
+      const node = new nodes.AssignmentNode(
         lineStart,
         valueExpression.lineEnd,
         id,
         valueExpression
       );
+
+      collectComments(node);
+
+      return node;
     }
 
     fail(
@@ -498,8 +534,8 @@ function parse({ source, tokens }) {
   const body = [];
   while (index < tokens.length) {
     const node = parseStatement(token);
-    if (node) body.push(node);
-    else advance();
+    if (!node) fail(token => `Unexpected ${token} found at top level.`);
+    if (node !== true) body.push(node);
   }
 
   const firstLine = body.length ? body[0].lineStart : 1;
