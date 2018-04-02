@@ -1,6 +1,7 @@
 import { tokenTypes } from './constants';
 
-export const isType = type => token => token && token.type === tokenTypes[type];
+export const isTokenType = type => token =>
+  token && token.type === tokenTypes[type];
 
 export const isSymbol = value => token =>
   token && token.type === tokenTypes.SYMBOL && token.value === value;
@@ -8,19 +9,21 @@ export const isSymbol = value => token =>
 export const isKeyword = value => token =>
   token && token.type === tokenTypes.KEYWORD && token.value === value;
 
-export const isString = isType('STRING');
+export const isString = isTokenType('STRING');
 
-export const isNumber = isType('NUMBER');
+export const isNumber = isTokenType('NUMBER');
 
-export const isBoolean = isType('BOOLEAN');
+export const isBoolean = isTokenType('BOOLEAN');
 
-export const isIdentifier = isType('IDENTIFIER');
+export const isIdentifier = isTokenType('IDENTIFIER');
 
-export const isDotIdentifier = isType('DOT_IDENTIFIER');
+export const isDotIdentifier = isTokenType('DOT_IDENTIFIER');
 
-export const isAtIdentifier = isType('AT_IDENTIFIER');
+export const isAtIdentifier = isTokenType('AT_IDENTIFIER');
 
-export const isComment = isType('LINE_COMMENT');
+export const isComment = isTokenType('LINE_COMMENT');
+
+export const isBar = isSymbol('|');
 
 export const isLeftBrace = isSymbol('[');
 
@@ -51,3 +54,10 @@ export const isIf = isKeyword('if');
 export const isThen = isKeyword('then');
 
 export const isElse = isKeyword('else');
+
+export const isType = isKeyword('type');
+
+export const isAlias = isKeyword('alias');
+
+export const capitalize = string =>
+  string[0].toUpperCase() + string.substring(1);

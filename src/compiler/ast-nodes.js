@@ -149,3 +149,35 @@ export class TupleNode extends BaseNode {
     this.entries = entries;
   }
 }
+
+export class TypeAliasDeclarationNode extends BaseNode {
+  constructor(lineStart, lineEnd, typeName, typeParameters, typeExpression) {
+    super(lineStart, lineEnd);
+
+    this.type = nodeTypes.TYPE_ALIAS_DECLARATION;
+    this.typeName = typeName;
+    this.typeParameters = typeParameters;
+    this.typeExpression = typeExpression;
+  }
+}
+
+export class TypeConstructorNode extends BaseNode {
+  constructor(lineStart, lineEnd, typeName, typeParameters) {
+    super(lineStart, lineEnd);
+
+    this.type = nodeTypes.TYPE_CONSTRUCTOR;
+    this.typeName = typeName;
+    this.typeParameters = typeParameters;
+  }
+}
+
+export class TypeDeclarationNode extends BaseNode {
+  constructor(lineStart, lineEnd, typeName, typeParameters, typeConstructors) {
+    super(lineStart, lineEnd);
+
+    this.type = nodeTypes.TYPE_DECLARATION;
+    this.typeName = typeName;
+    this.typeParameters = typeParameters;
+    this.typeConstructors = typeConstructors;
+  }
+}

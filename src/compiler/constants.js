@@ -13,7 +13,10 @@ export const nodeTypes = {
   OBJECT: 'object-node',
   OBJECT_PROPERTY: 'object-property-node',
   STRING: 'string-node',
-  TUPLE: 'tuple-node'
+  TUPLE: 'tuple-node',
+  TYPE_ALIAS_DECLARATION: 'type-alias-declaration-node',
+  TYPE_CONSTRUCTOR: 'type-constructor-node',
+  TYPE_DECLARATION: 'type-declaration-node'
 };
 
 export const tokenTypes = {
@@ -43,7 +46,8 @@ export const symbols = [
   '=',
   '.',
   ',',
-  '|>'
+  '|>',
+  '|'
 ];
 
 export const symbolRegexes = symbols.map(
@@ -57,7 +61,7 @@ export const symbolRegexes = symbols.map(
     )
 );
 
-export const reservedWords = ['let', 'if', 'then', 'else'];
+export const reservedWords = ['let', 'if', 'then', 'else', 'type', 'alias'];
 
 export const reservedWordRegexes = reservedWords.map(
   word => new RegExp('^' + word + '\\b')

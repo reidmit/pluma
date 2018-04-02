@@ -914,6 +914,202 @@ describe('parser', () => {
       });
     });
 
+    test('type declarations', () => {
+      expectParseResult({
+        source: `
+          type Letter = Alpha | Beta | Gamma
+          type Maybe a =
+              Just a
+            | Nothing
+
+          # Type declarations can have comments
+          type Hello = World
+        `,
+        lineStart: 2,
+        lineEnd: 8,
+        body: [
+          {
+            type: nodeTypes.TYPE_DECLARATION,
+            lineStart: 2,
+            lineEnd: 2,
+            comments: [],
+            typeName: {
+              type: nodeTypes.IDENTIFIER,
+              value: 'Letter',
+              lineStart: 2,
+              lineEnd: 2
+            },
+            typeParameters: [],
+            typeConstructors: [
+              {
+                type: nodeTypes.TYPE_CONSTRUCTOR,
+                lineStart: 2,
+                lineEnd: 2,
+                typeName: {
+                  type: nodeTypes.IDENTIFIER,
+                  value: 'Alpha',
+                  lineStart: 2,
+                  lineEnd: 2
+                },
+                typeParameters: []
+              },
+              {
+                type: nodeTypes.TYPE_CONSTRUCTOR,
+                lineStart: 2,
+                lineEnd: 2,
+                typeName: {
+                  type: nodeTypes.IDENTIFIER,
+                  value: 'Beta',
+                  lineStart: 2,
+                  lineEnd: 2
+                },
+                typeParameters: []
+              },
+              {
+                type: nodeTypes.TYPE_CONSTRUCTOR,
+                lineStart: 2,
+                lineEnd: 2,
+                typeName: {
+                  type: nodeTypes.IDENTIFIER,
+                  value: 'Gamma',
+                  lineStart: 2,
+                  lineEnd: 2
+                },
+                typeParameters: []
+              }
+            ]
+          },
+          {
+            type: nodeTypes.TYPE_DECLARATION,
+            lineStart: 3,
+            lineEnd: 5,
+            comments: [],
+            typeName: {
+              type: nodeTypes.IDENTIFIER,
+              value: 'Maybe',
+              lineStart: 3,
+              lineEnd: 3
+            },
+            typeParameters: [
+              {
+                type: nodeTypes.IDENTIFIER,
+                value: 'a',
+                lineStart: 3,
+                lineEnd: 3
+              }
+            ],
+            typeConstructors: [
+              {
+                type: nodeTypes.TYPE_CONSTRUCTOR,
+                lineStart: 4,
+                lineEnd: 4,
+                typeName: {
+                  type: nodeTypes.IDENTIFIER,
+                  value: 'Just',
+                  lineStart: 4,
+                  lineEnd: 4
+                },
+                typeParameters: [
+                  {
+                    type: nodeTypes.IDENTIFIER,
+                    value: 'a',
+                    lineStart: 4,
+                    lineEnd: 4
+                  }
+                ]
+              },
+              {
+                type: nodeTypes.TYPE_CONSTRUCTOR,
+                lineStart: 5,
+                lineEnd: 5,
+                typeName: {
+                  type: nodeTypes.IDENTIFIER,
+                  value: 'Nothing',
+                  lineStart: 5,
+                  lineEnd: 5
+                },
+                typeParameters: []
+              }
+            ]
+          },
+          {
+            type: nodeTypes.TYPE_DECLARATION,
+            lineStart: 7,
+            lineEnd: 8,
+            comments: [' Type declarations can have comments'],
+            typeName: {
+              type: nodeTypes.IDENTIFIER,
+              value: 'Hello',
+              lineStart: 8,
+              lineEnd: 8
+            },
+            typeParameters: [],
+            typeConstructors: [
+              {
+                type: nodeTypes.TYPE_CONSTRUCTOR,
+                lineStart: 8,
+                lineEnd: 8,
+                typeName: {
+                  type: nodeTypes.IDENTIFIER,
+                  value: 'World',
+                  lineStart: 8,
+                  lineEnd: 8
+                },
+                typeParameters: []
+              }
+            ]
+          }
+        ]
+      });
+    });
+
+    test('type alias declarations (simple)', () => {
+      expectParseResult({
+        source: `
+          type alias Hello = String
+          type alias Test a = Something a
+        `,
+        lineStart: 1,
+        lineEnd: 2,
+        body: []
+      });
+    });
+
+    test('type alias declarations (function types)', () => {
+      expectParseResult({
+        source: `
+          type alias Predicate = String -> String -> Boolean
+          type alias Predicate2 = (String -> String) -> Boolean
+        `,
+        lineStart: 1,
+        lineEnd: 2,
+        body: []
+      });
+    });
+
+    test('type alias declarations (tuple types)', () => {
+      expectParseResult({
+        source: `
+          type alias StringPair = (String, String)
+          type alias FunkyPair = (String, String -> Boolean)
+        `,
+        lineStart: 1,
+        lineEnd: 2,
+        body: []
+      });
+    });
+
+    test('type alias declarations (record types)', () => {
+      expectParseResult({
+        source: `
+          type alias Person = { name :: String, age :: Number }
+        `,
+        lineStart: 1,
+        lineEnd: 2,
+        body: []
+      });
+    });
+
     test('multiple complex assignments', () => {
       expectParseResult({
         source: `

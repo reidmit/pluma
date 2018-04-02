@@ -18,10 +18,14 @@ function parse({ source, tokens }) {
   function fail(message, badToken = token) {
     message =
       typeof message === 'function'
-        ? message(tokenToString(badToken))
+        ? message(badToken ? tokenToString(badToken) : 'end of input')
         : message;
 
-    throw new ParserError(message, source, badToken);
+    throw new ParserError(
+      message,
+      source,
+      badToken || tokens[tokens.length - 1]
+    );
   }
 
   function collectComments(node) {
@@ -438,6 +442,207 @@ function parse({ source, tokens }) {
     );
   }
 
+  function parseTypeAliasDeclaration() {
+    if (!u.isType(token)) return;
+
+    const lineStart = token.lineStart;
+
+    advance();
+
+    if (!u.isAlias(token)) {
+      fail('Expected keyword "alias" in type alias declaration');
+    }
+
+    advance();
+
+    if (!u.isIdentifier(token)) {
+      fail(
+        t =>
+          `Expected to find a type name after "type" keyword, but found ${t} instead.`,
+        token
+      );
+    }
+
+    if (!/^[A-Z]/.test(token.value)) {
+      fail(
+        `Type names must start with an uppercase letter, but "${
+          token.value
+        }" does not. Did you mean "${u.capitalize(token.value)}"?`,
+        token
+      );
+    }
+
+    const typeName = new nodes.IdentifierNode(
+      token.lineStart,
+      token.lineEnd,
+      token.value
+    );
+
+    advance();
+
+    const typeParams = [];
+    while (u.isIdentifier(token)) {
+      typeParams.push(
+        new nodes.IdentifierNode(token.lineStart, token.lineEnd, token.value)
+      );
+
+      advance();
+    }
+
+    if (!u.isEquals(token)) {
+      fail(
+        t => `Expected symbol "=" in type declaration, but found ${t} instead.`,
+        token
+      );
+    }
+
+    advance();
+  }
+
+  function parseTypeDeclaration() {
+    if (!u.isType(token)) return;
+
+    if (u.isAlias(tokens[index + 1])) return parseTypeAliasDeclaration();
+
+    const lineStart = token.lineStart;
+
+    advance();
+
+    if (!u.isIdentifier(token)) {
+      fail(
+        t =>
+          `Expected to find a type name after "type" keyword, but found ${t} instead.`,
+        token
+      );
+    }
+
+    if (!/^[A-Z]/.test(token.value)) {
+      fail(
+        `Type names must start with an uppercase letter, but "${
+          token.value
+        }" does not. Did you mean "${u.capitalize(token.value)}"?`,
+        token
+      );
+    }
+
+    const typeName = new nodes.IdentifierNode(
+      token.lineStart,
+      token.lineEnd,
+      token.value
+    );
+
+    advance();
+
+    const typeParams = [];
+    while (u.isIdentifier(token)) {
+      typeParams.push(
+        new nodes.IdentifierNode(token.lineStart, token.lineEnd, token.value)
+      );
+
+      advance();
+    }
+
+    if (!u.isEquals(token)) {
+      fail(
+        t => `Expected symbol "=" in type declaration, but found ${t} instead.`,
+        token
+      );
+    }
+
+    advance();
+
+    const typeConstructors = [];
+
+    if (!u.isIdentifier(token)) {
+      fail(
+        t =>
+          `Expected to find a type constructor name in type declaration, but found ${t} instead.`,
+        token
+      );
+    }
+
+    const firstConstructorName = new nodes.IdentifierNode(
+      token.lineStart,
+      token.lineEnd,
+      token.value
+    );
+
+    advance();
+
+    const firstConstructorParams = [];
+
+    while (u.isIdentifier(token)) {
+      firstConstructorParams.push(
+        new nodes.IdentifierNode(token.lineStart, token.lineEnd, token.value)
+      );
+
+      advance();
+    }
+
+    typeConstructors.push(
+      new nodes.TypeConstructorNode(
+        firstConstructorName.lineStart,
+        firstConstructorParams.length
+          ? firstConstructorParams[firstConstructorParams.length - 1].lineEnd
+          : firstConstructorName.lineEnd,
+        firstConstructorName,
+        firstConstructorParams
+      )
+    );
+
+    while (token && u.isBar(token)) {
+      advance();
+
+      if (!u.isIdentifier(token)) {
+        fail(
+          t =>
+            `Expected to find a type constructor name after "|" in type declaration, but found ${t} instead.`
+        );
+      }
+
+      const constructorName = new nodes.IdentifierNode(
+        token.lineStart,
+        token.lineEnd,
+        token.value
+      );
+
+      advance();
+
+      const constructorParams = [];
+
+      while (token && u.isIdentifier(token)) {
+        constructorParams.push(
+          new nodes.IdentifierNode(token.lineStart, token.lineEnd, token.value)
+        );
+
+        advance();
+      }
+
+      typeConstructors.push(
+        new nodes.TypeConstructorNode(
+          constructorName.lineStart,
+          constructorParams.length
+            ? constructorParams[constructorParams.length - 1].lineEnd
+            : constructorName.lineEnd,
+          constructorName,
+          constructorParams
+        )
+      );
+    }
+
+    const node = new nodes.TypeDeclarationNode(
+      lineStart,
+      typeConstructors[typeConstructors.length - 1].lineEnd,
+      typeName,
+      typeParams,
+      typeConstructors
+    );
+
+    collectComments(node);
+
+    return node;
+  }
+
   function parseComment() {
     if (!u.isComment(token)) return;
 
@@ -474,7 +679,7 @@ function parse({ source, tokens }) {
         return parsePossibleCallExpression();
 
       case tokenTypes.KEYWORD:
-        return parseConditional();
+        return parseTypeDeclaration() || parseConditional();
 
       case tokenTypes.SYMBOL:
         return parseParenthetical() || parseObject() || parseArray();
@@ -534,7 +739,7 @@ function parse({ source, tokens }) {
   const body = [];
   while (index < tokens.length) {
     const node = parseStatement(token);
-    if (!node) fail(token => `Unexpected ${token} found at top level.`);
+    if (!node) fail(token => `Unexpected ${token} found.`);
     if (node !== true) body.push(node);
   }
 

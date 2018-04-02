@@ -478,6 +478,7 @@ describe('tokenizer', () => {
         `
       let
       if then else
+      type
       `,
         [
           {
@@ -511,6 +512,14 @@ describe('tokenizer', () => {
             lineEnd: 3,
             columnStart: 14,
             columnEnd: 18
+          },
+          {
+            type: tokenTypes.KEYWORD,
+            value: 'type',
+            lineStart: 4,
+            lineEnd: 4,
+            columnStart: 6,
+            columnEnd: 10
           }
         ]
       );
@@ -522,7 +531,7 @@ describe('tokenizer', () => {
       , => =
       ( . ) :
       ][
-        |>
+        |> |
       `,
         [
           {
@@ -636,6 +645,14 @@ describe('tokenizer', () => {
             lineEnd: 5,
             columnStart: 8,
             columnEnd: 10
+          },
+          {
+            type: tokenTypes.SYMBOL,
+            value: '|',
+            lineStart: 5,
+            lineEnd: 5,
+            columnStart: 11,
+            columnEnd: 12
           }
         ]
       );
