@@ -23,7 +23,7 @@ const expectParseError = (source, errorMessageRegex) => {
   }
 
   expect(error).toBeDefined();
-  expect(error.name).toBe('Parser error');
+  expect(error.name).toMatch(/^Syntax error at/);
   expect(error.message).toMatch(errorMessageRegex);
 };
 

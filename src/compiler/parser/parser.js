@@ -442,6 +442,8 @@ function parse({ source, tokens }) {
     );
   }
 
+  function parseTypeExpression() {}
+
   function parseTypeAliasDeclaration() {
     if (!u.isType(token)) return;
 
@@ -491,12 +493,21 @@ function parse({ source, tokens }) {
 
     if (!u.isEquals(token)) {
       fail(
-        t => `Expected symbol "=" in type declaration, but found ${t} instead.`,
+        t =>
+          `Expected symbol "=" in type alias declaration, but found ${t} instead.`,
         token
       );
     }
 
     advance();
+
+    const typeExpression = parseTypeExpression();
+
+    if (!typeExpression) {
+      fail(
+        'Expected a valid type expression after "=" in type alias declaration.'
+      );
+    }
   }
 
   function parseTypeDeclaration() {

@@ -986,9 +986,7 @@ let z = "test"
       }
 
       expect(errorMessage).toBeDefined();
-      expect(errorMessage).toMatch(
-        /Unrecognized character '&' at line 9, column 6:/
-      );
+      expect(errorMessage).toMatch(/Unrecognized character/);
     });
 
     test('invalid regex (unterminated group)', () => {
@@ -1003,9 +1001,7 @@ let z = "test"
       }
 
       expect(errorMessage).toBeDefined();
-      expect(errorMessage).toMatch(
-        /Invalid regular expression at line 1, column 0:/
-      );
+      expect(errorMessage).toMatch(/Invalid regular expression/);
       expect(errorMessage).toMatch(
         /It looks like you may be missing a closing "\)" for a group./
       );
@@ -1023,9 +1019,7 @@ let z = "test"
       }
 
       expect(errorMessage).toBeDefined();
-      expect(errorMessage).toMatch(
-        /Invalid regular expression at line 1, column 0:/
-      );
+      expect(errorMessage).toMatch(/Invalid regular expression/);
       expect(errorMessage).toMatch(
         /It looks like you have a closing "\)" without an opening "\("./
       );

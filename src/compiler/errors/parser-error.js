@@ -5,9 +5,7 @@ class ParserError extends Error {
     const { lineStart, columnStart, columnEnd } = token;
 
     const message =
-      `at line ${lineStart}, ` +
-      `columns ${columnStart}-${columnEnd}` +
-      ':\n\n' +
+      '\n\n' +
       baseMessage +
       '\n\n' +
       formatSourceBlock({
@@ -18,7 +16,7 @@ class ParserError extends Error {
       });
 
     super(message);
-    this.name = 'Parser error';
+    this.name = `Syntax error at line ${lineStart}, columns ${columnStart}-${columnEnd}`;
     this.stack = null;
   }
 }
