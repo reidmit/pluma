@@ -1,183 +1,108 @@
 import { nodeTypes } from './constants';
 
-class BaseNode {
-  constructor(lineStart, lineEnd) {
-    this.lineStart = lineStart;
-    this.lineEnd = lineEnd;
-  }
+function assertParts(nodeType, nodeParts, expectedPartNames) {
+  expectedPartNames.forEach(part => {
+    if (typeof nodeParts[part] === 'undefined') {
+      throw new Error(`Missing part ${part} on node of type ${nodeType}`);
+    }
+  });
 }
 
-export class ArrayNode extends BaseNode {
-  constructor(lineStart, lineEnd, elements) {
-    super(lineStart, lineEnd);
+const nodeTypesToParts = {
+  Array: { type: nodeTypes.ARRAY, parts: ['elements'] },
 
-    this.type = nodeTypes.ARRAY;
-    this.elements = elements;
-  }
-}
+  Assignment: { type: nodeTypes.ASSIGNMENT, parts: ['leftSide', 'rightSide'] },
 
-export class AssignmentNode extends BaseNode {
-  constructor(lineStart, lineEnd, leftSide, rightSide) {
-    super(lineStart, lineEnd);
+  Boolean: { type: nodeTypes.BOOLEAN, parts: ['value'] },
 
-    this.type = nodeTypes.ASSIGNMENT;
-    this.leftSide = leftSide;
-    this.rightSide = rightSide;
-  }
-}
+  Call: { type: nodeTypes.CALL, parts: ['callee', 'arg'] },
 
-export class BooleanNode extends BaseNode {
-  constructor(lineStart, lineEnd, value) {
-    super(lineStart, lineEnd);
+  Conditional: {
+    type: nodeTypes.CONDITIONAL,
+    parts: ['predicate', 'thenCase', 'elseCase']
+  },
 
-    this.type = nodeTypes.BOOLEAN;
-    this.value = value;
-  }
-}
+  Function: { type: nodeTypes.FUNCTION, parts: ['parameter', 'body'] },
 
-export class CallNode extends BaseNode {
-  constructor(lineStart, lineEnd, callee, arg) {
-    super(lineStart, lineEnd);
+  Identifier: {
+    type: nodeTypes.IDENTIFIER,
+    parts: ['value', 'isGetter', 'isSetter']
+  },
 
-    this.type = nodeTypes.CALL;
-    this.callee = callee;
-    this.arg = arg;
-  }
-}
+  InterpolatedString: {
+    type: nodeTypes.INTERPOLATED_STRING,
+    parts: ['literals', 'expressions']
+  },
 
-export class ConditionalNode extends BaseNode {
-  constructor(lineStart, lineEnd, predicate, thenCase, elseCase) {
-    super(lineStart, lineEnd);
+  MemberExpression: {
+    type: nodeTypes.MEMBER_EXPRESSION,
+    parts: ['parts']
+  },
 
-    this.type = nodeTypes.CONDITIONAL;
-    this.predicate = predicate;
-    this.thenCase = thenCase;
-    this.elseCase = elseCase;
-  }
-}
+  Module: { type: nodeTypes.MODULE, parts: ['body'] },
 
-export class FunctionNode extends BaseNode {
-  constructor(lineStart, lineEnd, parameter, body) {
-    super(lineStart, lineEnd);
+  Number: { type: nodeTypes.NUMBER, parts: ['value'] },
 
-    this.type = nodeTypes.FUNCTION;
-    this.parameter = parameter;
-    this.body = body;
-  }
-}
+  Object: { type: nodeTypes.OBJECT, parts: ['properties'] },
 
-export class IdentifierNode extends BaseNode {
-  constructor(lineStart, lineEnd, value, isGetter, isSetter) {
-    super(lineStart, lineEnd);
+  ObjectProperty: { type: nodeTypes.OBJECT_PROPERTY, parts: ['key', 'value'] },
 
-    this.type = nodeTypes.IDENTIFIER;
-    this.value = value;
-    this.isGetter = isGetter;
-    this.isSetter = isSetter;
-  }
-}
+  String: { type: nodeTypes.STRING, parts: ['value'] },
 
-export class InterpolatedStringNode extends BaseNode {
-  constructor(lineStart, lineEnd, literals, expressions) {
-    super(lineStart, lineEnd);
+  Tuple: { type: nodeTypes.TUPLE, parts: ['entries'] },
 
-    this.type = nodeTypes.INTERPOLATED_STRING;
-    this.literals = literals;
-    this.expressions = expressions;
-  }
-}
+  TypeAliasDeclaration: {
+    type: nodeTypes.TYPE_ALIAS_DECLARATION,
+    parts: ['typeName', 'typeParameters', 'typeExpression']
+  },
 
-export class ModuleNode extends BaseNode {
-  constructor(lineStart, lineEnd, body) {
-    super(lineStart, lineEnd);
+  TypeConstructor: {
+    type: nodeTypes.TYPE_CONSTRUCTOR,
+    parts: ['typeName', 'typeParameters']
+  },
 
-    this.type = nodeTypes.MODULE;
-    this.body = body;
-  }
-}
-export class NumberNode extends BaseNode {
-  constructor(lineStart, lineEnd, value) {
-    super(lineStart, lineEnd);
+  TypeDeclaration: {
+    type: nodeTypes.TYPE_DECLARATION,
+    parts: ['typeName', 'typeParameters', 'typeConstructors']
+  },
 
-    this.type = nodeTypes.NUMBER;
-    this.value = value;
-  }
-}
+  TypeFunction: { type: nodeTypes.TYPE_FUNCTION, parts: ['from', 'to'] },
 
-export class MemberExpressionNode extends BaseNode {
-  constructor(lineStart, lineEnd, identifiers) {
-    super(lineStart, lineEnd);
+  TypeTag: {
+    type: nodeTypes.TYPE_TAG,
+    parts: ['typeTagName', 'typeExpression']
+  },
 
-    this.type = nodeTypes.MEMBER_EXPRESSION;
-    this.identifiers = identifiers;
-  }
-}
+  TypeTuple: { type: nodeTypes.TYPE_TUPLE, parts: ['typeEntries'] },
 
-export class ObjectNode extends BaseNode {
-  constructor(lineStart, lineEnd, properties) {
-    super(lineStart, lineEnd);
+  TypeVariable: { type: nodeTypes.TYPE_VARIABLE, parts: ['typeName'] }
+};
 
-    this.type = nodeTypes.OBJECT;
-    this.properties = properties;
-  }
-}
+export const buildNode = Object.keys(nodeTypesToParts).reduce(
+  (builders, type) => {
+    builders[type] = (lineStart, lineEnd) => nodeParts => {
+      const nodeType = nodeTypesToParts[type].type;
+      const expectedParts = nodeTypesToParts[type].parts;
 
-export class ObjectPropertyNode extends BaseNode {
-  constructor(lineStart, lineEnd, key, value) {
-    super(lineStart, lineEnd);
+      if (nodeType === undefined) {
+        throw new Error(`nodeType is undefined for node of type ${type}`);
+      }
 
-    this.type = nodeTypes.OBJECT_PROPERTY;
-    this.key = key;
-    this.value = value;
-  }
-}
+      expectedParts.forEach(part => {
+        if (nodeParts[part] === undefined) {
+          throw new Error(`Part ${part} is not given for node of type ${type}`);
+        }
+      });
 
-export class StringNode extends BaseNode {
-  constructor(lineStart, lineEnd, value) {
-    super(lineStart, lineEnd);
+      return {
+        type: nodeType,
+        lineStart,
+        lineEnd,
+        ...nodeParts
+      };
+    };
 
-    this.type = nodeTypes.STRING;
-    this.value = value;
-  }
-}
-
-export class TupleNode extends BaseNode {
-  constructor(lineStart, lineEnd, entries) {
-    super(lineStart, lineEnd);
-
-    this.type = nodeTypes.TUPLE;
-    this.entries = entries;
-  }
-}
-
-export class TypeAliasDeclarationNode extends BaseNode {
-  constructor(lineStart, lineEnd, typeName, typeParameters, typeExpression) {
-    super(lineStart, lineEnd);
-
-    this.type = nodeTypes.TYPE_ALIAS_DECLARATION;
-    this.typeName = typeName;
-    this.typeParameters = typeParameters;
-    this.typeExpression = typeExpression;
-  }
-}
-
-export class TypeConstructorNode extends BaseNode {
-  constructor(lineStart, lineEnd, typeName, typeParameters) {
-    super(lineStart, lineEnd);
-
-    this.type = nodeTypes.TYPE_CONSTRUCTOR;
-    this.typeName = typeName;
-    this.typeParameters = typeParameters;
-  }
-}
-
-export class TypeDeclarationNode extends BaseNode {
-  constructor(lineStart, lineEnd, typeName, typeParameters, typeConstructors) {
-    super(lineStart, lineEnd);
-
-    this.type = nodeTypes.TYPE_DECLARATION;
-    this.typeName = typeName;
-    this.typeParameters = typeParameters;
-    this.typeConstructors = typeConstructors;
-  }
-}
+    return builders;
+  },
+  {}
+);

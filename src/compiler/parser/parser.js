@@ -1,4 +1,5 @@
 import * as nodes from '../ast-nodes';
+import { buildNode } from '../ast-nodes';
 import * as u from '../util';
 import { ParserError } from '../errors';
 import { tokenToString } from '../errors/error-helper';
@@ -45,11 +46,9 @@ function parse({ source, tokens }) {
   function parseNumber() {
     if (!u.isNumber(token)) return;
 
-    const node = new nodes.NumberNode(
-      token.lineStart,
-      token.lineEnd,
-      token.value
-    );
+    const node = buildNode.Number(token.lineStart, token.lineEnd)({
+      value: token.value
+    });
 
     advance();
 
@@ -59,11 +58,9 @@ function parse({ source, tokens }) {
   function parseBoolean() {
     if (!u.isBoolean(token)) return;
 
-    const node = new nodes.BooleanNode(
-      token.lineStart,
-      token.lineEnd,
-      token.value
-    );
+    const node = buildNode.Boolean(token.lineStart, token.lineEnd)({
+      value: token.value
+    });
 
     advance();
 
@@ -79,7 +76,9 @@ function parse({ source, tokens }) {
     while (u.isString(token) || u.isInterpolationStart(token)) {
       if (u.isString(token)) {
         literals.push(
-          new nodes.StringNode(token.lineStart, token.lineEnd, token.value)
+          buildNode.String(token.lineStart, token.lineEnd)({
+            value: token.value
+          })
         );
       } else {
         advance();
@@ -104,24 +103,20 @@ function parse({ source, tokens }) {
       return literals[0];
     }
 
-    return new nodes.InterpolatedStringNode(
-      lineStart,
-      lineEnd,
+    return buildNode.InterpolatedString(lineStart, lineEnd)({
       literals,
       expressions
-    );
+    });
   }
 
   function parseGetter() {
     if (!u.isDotIdentifier(token)) return;
 
-    const node = new nodes.IdentifierNode(
-      token.lineStart,
-      token.lineEnd,
-      token.value,
-      true,
-      false
-    );
+    const node = buildNode.Identifier(token.lineStart, token.lineEnd)({
+      value: token.value,
+      isGetter: true,
+      isSetter: false
+    });
 
     advance();
 
@@ -131,13 +126,11 @@ function parse({ source, tokens }) {
   function parseSetter() {
     if (!u.isAtIdentifier(token)) return;
 
-    const node = new nodes.IdentifierNode(
-      token.lineStart,
-      token.lineEnd,
-      token.value,
-      false,
-      true
-    );
+    const node = buildNode.Identifier(token.lineStart, token.lineEnd)({
+      value: token.value,
+      isGetter: false,
+      isSetter: true
+    });
 
     advance();
 
@@ -148,7 +141,11 @@ function parse({ source, tokens }) {
     if (!u.isIdentifier(token)) return;
 
     const parts = [
-      new nodes.IdentifierNode(token.lineStart, token.lineEnd, token.value)
+      buildNode.Identifier(token.lineStart, token.lineEnd)({
+        value: token.value,
+        isGetter: false,
+        isSetter: false
+      })
     ];
 
     advance();
@@ -159,7 +156,11 @@ function parse({ source, tokens }) {
       u.isDotIdentifier(token)
     ) {
       parts.push(
-        new nodes.IdentifierNode(token.lineStart, token.lineEnd, token.value)
+        buildNode.Identifier(token.lineStart, token.lineEnd)({
+          value: token.value,
+          isGetter: false,
+          isSetter: false
+        })
       );
 
       advance();
@@ -172,22 +173,23 @@ function parse({ source, tokens }) {
     return parts.reduce((expression, property) => {
       if (!expression) return property;
 
-      return new nodes.MemberExpressionNode(
+      return buildNode.MemberExpression(
         parts[0].lineStart,
-        parts[parts.length - 1].lineStart,
+        parts[parts.length - 1].lineStart
+      )({
         parts
-      );
+      });
     }, null);
   }
 
   function parseFunction() {
     if (!u.isIdentifier(token) || !u.isArrow(tokens[index + 1])) return;
 
-    const param = new nodes.IdentifierNode(
-      token.lineStart,
-      token.lineEnd,
-      token.value
-    );
+    const parameter = buildNode.Identifier(token.lineStart, token.lineEnd)({
+      value: token.value,
+      isGetter: false,
+      isSetter: false
+    });
 
     advance(2);
 
@@ -197,7 +199,10 @@ function parse({ source, tokens }) {
       fail('Expected a valid expression in function body');
     }
 
-    return new nodes.FunctionNode(param.lineStart, body.lineEnd, param, body);
+    return buildNode.Function(parameter.lineStart, body.lineEnd)({
+      parameter,
+      body
+    });
   }
 
   function parsePossibleCallExpression() {
@@ -215,7 +220,7 @@ function parse({ source, tokens }) {
 
       if (!arg) break;
 
-      func = new nodes.CallNode(lineStart, lineEnd, func, arg);
+      func = buildNode.Call(lineStart, lineEnd)({ callee: func, arg });
     }
 
     return func;
@@ -260,10 +265,10 @@ function parse({ source, tokens }) {
 
     if (!u.isRightParen(token)) {
       fail(
-        `Missing closing ")" to match opening "(" at line ${
-          leftParen.lineStart
-        }, column ${leftParen.columnStart}.`,
-        leftParen
+        t =>
+          `Expected closing ")" to match opening "(" at line ${
+            leftParen.lineStart
+          }, column ${leftParen.columnStart}, but found ${t} instead.`
       );
     }
 
@@ -271,20 +276,19 @@ function parse({ source, tokens }) {
 
     if (expressions.length === 1) return expressions[0];
 
-    return new nodes.TupleNode(
+    return buildNode.Tuple(
       lineStart,
-      expressions[expressions.length - 1].lineEnd,
-      expressions
-    );
+      expressions[expressions.length - 1].lineEnd
+    )({ entries: expressions });
   }
 
   function parseObjectProperty() {
     if (u.isIdentifier(token) && u.isColon(tokens[index + 1])) {
-      const key = new nodes.IdentifierNode(
-        token.lineStart,
-        token.lineEnd,
-        token.value
-      );
+      const key = buildNode.Identifier(token.lineStart, token.lineEnd)({
+        value: token.value,
+        isGetter: false,
+        isSetter: false
+      });
 
       advance(2);
 
@@ -294,27 +298,28 @@ function parse({ source, tokens }) {
         fail('Expected a valid expression after :');
       }
 
-      return new nodes.ObjectPropertyNode(
-        key.lineStart,
-        value.lineEnd,
+      return buildNode.ObjectProperty(key.lineStart, value.lineEnd)({
         key,
         value
-      );
+      });
     }
 
     if (
       u.isIdentifier(token) &&
       (u.isComma(tokens[index + 1]) || u.isRightBracket(tokens[index + 1]))
     ) {
-      const key = new nodes.IdentifierNode(
-        token.lineStart,
-        token.lineEnd,
-        token.value
-      );
+      const key = buildNode.Identifier(token.lineStart, token.lineEnd)({
+        value: token.value,
+        isGetter: false,
+        isSetter: false
+      });
 
       advance();
 
-      return new nodes.ObjectPropertyNode(key.lineStart, key.lineEnd, key, key);
+      return buildNode.ObjectProperty(key.lineStart, key.lineEnd)({
+        key,
+        value: key
+      });
     }
   }
 
@@ -347,7 +352,7 @@ function parse({ source, tokens }) {
 
     advance();
 
-    return new nodes.ObjectNode(lineStart, lineEnd, properties);
+    return buildNode.Object(lineStart, lineEnd)({ properties });
   }
 
   function parseArray() {
@@ -373,10 +378,10 @@ function parse({ source, tokens }) {
         advance();
       } else if (!u.isRightBrace(token)) {
         fail(
-          `Missing closing "]" to match opening "[" at line ${
-            leftBrace.lineStart
-          }, column ${leftBrace.columnStart}.`,
-          leftBrace
+          t =>
+            `Expected closing "]" to match opening "[" at line ${
+              leftBrace.lineStart
+            }, column ${leftBrace.columnStart}, but found ${t} instead.`
         );
       }
     }
@@ -385,7 +390,7 @@ function parse({ source, tokens }) {
 
     advance();
 
-    return new nodes.ArrayNode(lineStart, lineEnd, elements);
+    return buildNode.Array(lineStart, lineEnd)({ elements });
   }
 
   function parseConditional() {
@@ -433,16 +438,111 @@ function parse({ source, tokens }) {
       );
     }
 
-    return new nodes.ConditionalNode(
-      lineStart,
-      elseCase.lineEnd,
+    return buildNode.Conditional(lineStart, elseCase.lineEnd)({
       predicate,
       thenCase,
       elseCase
-    );
+    });
   }
 
-  function parseTypeExpression() {}
+  function parseTypeExpression() {
+    if (!token) return;
+
+    let firstNode;
+
+    if (u.isLeftParen(token)) {
+      const leftParen = token;
+
+      advance();
+
+      firstNode = parseTypeExpression();
+
+      if (u.isComma(token)) {
+        const otherTupleEntries = [];
+
+        while (u.isComma(token)) {
+          advance();
+
+          const tupleEntry = parseTypeExpression();
+
+          if (!tupleEntry) {
+            fail(
+              'Expected a valid type expression after "," in tuple type expression.'
+            );
+          }
+
+          otherTupleEntries.push(tupleEntry);
+        }
+
+        firstNode = buildNode.TypeTuple(leftParen.lineStart, leftParen.lineEnd)(
+          { typeEntries: [firstNode, ...otherTupleEntries] }
+        );
+      }
+
+      if (!u.isRightParen(token)) {
+        fail(
+          t =>
+            `Expected closing ")" to match opening "(" at line ${
+              leftParen.lineStart
+            }, column ${leftParen.columnStart}, but found ${t} instead.`
+        );
+      }
+
+      firstNode.lineEnd = token.lineEnd;
+
+      advance();
+    } else if (u.isIdentifier(token) && /^[a-z]/.test(token.value)) {
+      const id = buildNode.Identifier(token.lineStart, token.lineEnd)({
+        value: token.value,
+        isGetter: false,
+        isSetter: false
+      });
+
+      advance();
+
+      firstNode = buildNode.TypeVariable(id.lineStart, id.lineEnd)({
+        typeName: id
+      });
+    } else if (u.isIdentifier(token) && /^[A-Z]/.test(token.value)) {
+      const tagName = buildNode.Identifier(token.lineStart, token.lineEnd)({
+        value: token.value,
+        isGetter: false,
+        isSetter: false
+      });
+
+      advance();
+
+      const typeExpression = parseTypeExpression() || null;
+
+      firstNode = buildNode.TypeTag(
+        tagName.lineStart,
+        (typeExpression || tagName).lineEnd
+      )({
+        typeTagName: tagName,
+        typeExpression
+      });
+    }
+
+    if (firstNode && u.isThinArrow(token)) {
+      advance();
+
+      const rightSide = parseTypeExpression();
+
+      if (!rightSide) {
+        fail(
+          t =>
+            `Expected valid type expression after "->" in type alias declaration, but found ${t} instead.`
+        );
+      }
+
+      return buildNode.TypeFunction(firstNode.lineStart, rightSide.lineEnd)({
+        from: firstNode,
+        to: rightSide
+      });
+    }
+
+    return firstNode;
+  }
 
   function parseTypeAliasDeclaration() {
     if (!u.isType(token)) return;
@@ -474,18 +574,22 @@ function parse({ source, tokens }) {
       );
     }
 
-    const typeName = new nodes.IdentifierNode(
-      token.lineStart,
-      token.lineEnd,
-      token.value
-    );
+    const typeName = buildNode.Identifier(token.lineStart, token.lineEnd)({
+      value: token.value,
+      isGetter: false,
+      isSetter: false
+    });
 
     advance();
 
-    const typeParams = [];
+    const typeParameters = [];
     while (u.isIdentifier(token)) {
-      typeParams.push(
-        new nodes.IdentifierNode(token.lineStart, token.lineEnd, token.value)
+      typeParameters.push(
+        buildNode.Identifier(token.lineStart, token.lineEnd)({
+          value: token.value,
+          isGetter: false,
+          isSetter: false
+        })
       );
 
       advance();
@@ -505,9 +609,16 @@ function parse({ source, tokens }) {
 
     if (!typeExpression) {
       fail(
-        'Expected a valid type expression after "=" in type alias declaration.'
+        t =>
+          `Expected a valid type expression after "=" in type alias declaration, but found ${t} instead.`
       );
     }
+
+    return buildNode.TypeAliasDeclaration(lineStart, typeExpression.lineEnd)({
+      typeName,
+      typeParameters,
+      typeExpression
+    });
   }
 
   function parseTypeDeclaration() {
@@ -536,18 +647,22 @@ function parse({ source, tokens }) {
       );
     }
 
-    const typeName = new nodes.IdentifierNode(
-      token.lineStart,
-      token.lineEnd,
-      token.value
-    );
+    const typeName = buildNode.Identifier(token.lineStart, token.lineEnd)({
+      value: token.value,
+      isGetter: false,
+      isSetter: false
+    });
 
     advance();
 
-    const typeParams = [];
+    const typeParameters = [];
     while (u.isIdentifier(token)) {
-      typeParams.push(
-        new nodes.IdentifierNode(token.lineStart, token.lineEnd, token.value)
+      typeParameters.push(
+        buildNode.Identifier(token.lineStart, token.lineEnd)({
+          value: token.value,
+          isGetter: false,
+          isSetter: false
+        })
       );
 
       advance();
@@ -572,11 +687,14 @@ function parse({ source, tokens }) {
       );
     }
 
-    const firstConstructorName = new nodes.IdentifierNode(
+    const firstConstructorName = buildNode.Identifier(
       token.lineStart,
-      token.lineEnd,
-      token.value
-    );
+      token.lineEnd
+    )({
+      value: token.value,
+      isGetter: false,
+      isSetter: false
+    });
 
     advance();
 
@@ -584,21 +702,26 @@ function parse({ source, tokens }) {
 
     while (u.isIdentifier(token)) {
       firstConstructorParams.push(
-        new nodes.IdentifierNode(token.lineStart, token.lineEnd, token.value)
+        buildNode.Identifier(token.lineStart, token.lineEnd)({
+          value: token.value,
+          isGetter: false,
+          isSetter: false
+        })
       );
 
       advance();
     }
 
     typeConstructors.push(
-      new nodes.TypeConstructorNode(
+      buildNode.TypeConstructor(
         firstConstructorName.lineStart,
         firstConstructorParams.length
           ? firstConstructorParams[firstConstructorParams.length - 1].lineEnd
-          : firstConstructorName.lineEnd,
-        firstConstructorName,
-        firstConstructorParams
-      )
+          : firstConstructorName.lineEnd
+      )({
+        typeName: firstConstructorName,
+        typeParameters: firstConstructorParams
+      })
     );
 
     while (token && u.isBar(token)) {
@@ -611,11 +734,14 @@ function parse({ source, tokens }) {
         );
       }
 
-      const constructorName = new nodes.IdentifierNode(
+      const constructorName = buildNode.Identifier(
         token.lineStart,
-        token.lineEnd,
-        token.value
-      );
+        token.lineEnd
+      )({
+        value: token.value,
+        isGetter: false,
+        isSetter: false
+      });
 
       advance();
 
@@ -623,31 +749,37 @@ function parse({ source, tokens }) {
 
       while (token && u.isIdentifier(token)) {
         constructorParams.push(
-          new nodes.IdentifierNode(token.lineStart, token.lineEnd, token.value)
+          buildNode.Identifier(token.lineStart, token.lineEnd)({
+            value: token.value,
+            isGetter: false,
+            isSetter: false
+          })
         );
 
         advance();
       }
 
       typeConstructors.push(
-        new nodes.TypeConstructorNode(
+        buildNode.TypeConstructor(
           constructorName.lineStart,
           constructorParams.length
             ? constructorParams[constructorParams.length - 1].lineEnd
-            : constructorName.lineEnd,
-          constructorName,
-          constructorParams
-        )
+            : constructorName.lineEnd
+        )({
+          typeName: constructorName,
+          typeParameters: constructorParams
+        })
       );
     }
 
-    const node = new nodes.TypeDeclarationNode(
+    const node = buildNode.TypeDeclaration(
       lineStart,
-      typeConstructors[typeConstructors.length - 1].lineEnd,
+      typeConstructors[typeConstructors.length - 1].lineEnd
+    )({
       typeName,
-      typeParams,
+      typeParameters,
       typeConstructors
-    );
+    });
 
     collectComments(node);
 
@@ -707,11 +839,11 @@ function parse({ source, tokens }) {
 
       advance();
 
-      const id = new nodes.IdentifierNode(
-        token.lineStart,
-        token.lineEnd,
-        token.value
-      );
+      const id = buildNode.Identifier(token.lineStart, token.lineEnd)({
+        value: token.value,
+        isGetter: false,
+        isSetter: false
+      });
 
       advance(2);
 
@@ -721,12 +853,10 @@ function parse({ source, tokens }) {
         fail('Expected a valid expression on right-hand side of assignment');
       }
 
-      const node = new nodes.AssignmentNode(
-        lineStart,
-        valueExpression.lineEnd,
-        id,
-        valueExpression
-      );
+      const node = buildNode.Assignment(lineStart, valueExpression.lineEnd)({
+        leftSide: id,
+        rightSide: valueExpression
+      });
 
       collectComments(node);
 
@@ -757,7 +887,7 @@ function parse({ source, tokens }) {
   const firstLine = body.length ? body[0].lineStart : 1;
   const lastLine = body.length ? body[body.length - 1].lineEnd : 1;
 
-  return new nodes.ModuleNode(firstLine, lastLine, body);
+  return buildNode.Module(firstLine, lastLine)({ body });
 }
 
 export default parse;

@@ -43,6 +43,8 @@ export const isEquals = isSymbol('=');
 
 export const isArrow = isSymbol('=>');
 
+export const isThinArrow = isSymbol('->');
+
 export const isComma = isSymbol(',');
 
 export const isColon = isSymbol(':');

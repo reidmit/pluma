@@ -16,7 +16,11 @@ export const nodeTypes = {
   TUPLE: 'tuple-node',
   TYPE_ALIAS_DECLARATION: 'type-alias-declaration-node',
   TYPE_CONSTRUCTOR: 'type-constructor-node',
-  TYPE_DECLARATION: 'type-declaration-node'
+  TYPE_DECLARATION: 'type-declaration-node',
+  TYPE_FUNCTION: 'type-function-node',
+  TYPE_TAG: 'type-tag-node',
+  TYPE_TUPLE: 'type-tuple-node',
+  TYPE_VARIABLE: 'type-variable-node'
 };
 
 export const tokenTypes = {

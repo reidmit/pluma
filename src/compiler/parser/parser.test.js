@@ -1,6 +1,7 @@
 import parse from './parser';
 import tokenize from '../tokenizer';
 import { nodeTypes } from '../constants';
+import { buildNode } from '../ast-nodes';
 
 const expectParseResult = ({ source, lineStart, lineEnd, body }) => {
   const tokens = tokenize({ source });
@@ -43,14 +44,7 @@ describe('parser', () => {
         source: '47',
         lineStart: 1,
         lineEnd: 1,
-        body: [
-          {
-            type: nodeTypes.NUMBER,
-            value: 47,
-            lineStart: 1,
-            lineEnd: 1
-          }
-        ]
+        body: [buildNode.Number(1, 1)({ value: 47 })]
       });
     });
 
@@ -59,14 +53,7 @@ describe('parser', () => {
         source: 'True',
         lineStart: 1,
         lineEnd: 1,
-        body: [
-          {
-            type: nodeTypes.BOOLEAN,
-            value: true,
-            lineStart: 1,
-            lineEnd: 1
-          }
-        ]
+        body: [buildNode.Boolean(1, 1)({ value: true })]
       });
     });
 
@@ -76,12 +63,11 @@ describe('parser', () => {
         lineStart: 1,
         lineEnd: 1,
         body: [
-          {
-            type: nodeTypes.IDENTIFIER,
+          buildNode.Identifier(1, 1)({
             value: 'lol',
-            lineStart: 1,
-            lineEnd: 1
-          }
+            isGetter: false,
+            isSetter: false
+          })
         ]
       });
     });
@@ -91,14 +77,7 @@ describe('parser', () => {
         source: '"hello, world!"',
         lineStart: 1,
         lineEnd: 1,
-        body: [
-          {
-            type: nodeTypes.STRING,
-            value: 'hello, world!',
-            lineStart: 1,
-            lineEnd: 1
-          }
-        ]
+        body: [buildNode.String(1, 1)({ value: 'hello, world!' })]
       });
     });
 
@@ -108,33 +87,19 @@ describe('parser', () => {
         lineStart: 1,
         lineEnd: 1,
         body: [
-          {
-            type: nodeTypes.INTERPOLATED_STRING,
-            lineStart: 1,
-            lineEnd: 1,
+          buildNode.InterpolatedString(1, 1)({
             literals: [
-              {
-                type: nodeTypes.STRING,
-                value: 'hello, ',
-                lineStart: 1,
-                lineEnd: 1
-              },
-              {
-                type: nodeTypes.STRING,
-                value: '!',
-                lineStart: 1,
-                lineEnd: 1
-              }
+              buildNode.String(1, 1)({ value: 'hello, ' }),
+              buildNode.String(1, 1)({ value: '!' })
             ],
             expressions: [
-              {
-                type: nodeTypes.IDENTIFIER,
+              buildNode.Identifier(1, 1)({
                 value: 'name',
-                lineStart: 1,
-                lineEnd: 1
-              }
+                isGetter: false,
+                isSetter: false
+              })
             ]
-          }
+          })
         ]
       });
     });
@@ -149,25 +114,22 @@ describe('parser', () => {
             type: nodeTypes.MEMBER_EXPRESSION,
             lineStart: 1,
             lineEnd: 1,
-            identifiers: [
-              {
-                type: nodeTypes.IDENTIFIER,
+            parts: [
+              buildNode.Identifier(1, 1)({
                 value: 'a',
-                lineStart: 1,
-                lineEnd: 1
-              },
-              {
-                type: nodeTypes.IDENTIFIER,
+                isGetter: false,
+                isSetter: false
+              }),
+              buildNode.Identifier(1, 1)({
                 value: 'b',
-                lineStart: 1,
-                lineEnd: 1
-              },
-              {
-                type: nodeTypes.IDENTIFIER,
+                isGetter: false,
+                isSetter: false
+              }),
+              buildNode.Identifier(1, 1)({
                 value: 'c',
-                lineStart: 1,
-                lineEnd: 1
-              }
+                isGetter: false,
+                isSetter: false
+              })
             ]
           }
         ]
@@ -184,18 +146,12 @@ describe('parser', () => {
             type: nodeTypes.FUNCTION,
             lineStart: 1,
             lineEnd: 1,
-            parameter: {
-              type: nodeTypes.IDENTIFIER,
+            parameter: buildNode.Identifier(1, 1)({
               value: 'x',
-              lineStart: 1,
-              lineEnd: 1
-            },
-            body: {
-              type: nodeTypes.NUMBER,
-              value: 47,
-              lineStart: 1,
-              lineEnd: 1
-            }
+              isGetter: false,
+              isSetter: false
+            }),
+            body: buildNode.Number(1, 1)({ value: 47 })
           }
         ]
       });
@@ -211,28 +167,21 @@ describe('parser', () => {
             type: nodeTypes.FUNCTION,
             lineStart: 1,
             lineEnd: 1,
-            parameter: {
-              type: nodeTypes.IDENTIFIER,
+            parameter: buildNode.Identifier(1, 1)({
               value: 'x',
-              lineStart: 1,
-              lineEnd: 1
-            },
+              isGetter: false,
+              isSetter: false
+            }),
             body: {
               type: nodeTypes.FUNCTION,
               lineStart: 1,
               lineEnd: 1,
-              parameter: {
-                type: nodeTypes.IDENTIFIER,
+              parameter: buildNode.Identifier(1, 1)({
                 value: 'y',
-                lineStart: 1,
-                lineEnd: 1
-              },
-              body: {
-                type: nodeTypes.NUMBER,
-                value: 47,
-                lineStart: 1,
-                lineEnd: 1
-              }
+                isGetter: false,
+                isSetter: false
+              }),
+              body: buildNode.Number(1, 1)({ value: 47 })
             }
           }
         ]
@@ -253,30 +202,23 @@ describe('parser', () => {
             comments: [],
             lineStart: 2,
             lineEnd: 2,
-            leftSide: {
-              type: nodeTypes.IDENTIFIER,
+            leftSide: buildNode.Identifier(2, 2)({
               value: 'hello',
-              lineStart: 2,
-              lineEnd: 2
-            },
-            rightSide: {
-              type: nodeTypes.NUMBER,
-              value: 47,
-              lineStart: 2,
-              lineEnd: 2
-            }
+              isGetter: false,
+              isSetter: false
+            }),
+            rightSide: buildNode.Number(2, 2)({ value: 47 })
           },
           {
             type: nodeTypes.ASSIGNMENT,
             comments: [],
             lineStart: 3,
             lineEnd: 3,
-            leftSide: {
-              type: nodeTypes.IDENTIFIER,
+            leftSide: buildNode.Identifier(3, 3)({
               value: 'someString',
-              lineStart: 3,
-              lineEnd: 3
-            },
+              isGetter: false,
+              isSetter: false
+            }),
             rightSide: {
               type: nodeTypes.STRING,
               value: 'hello, world!',
@@ -298,20 +240,16 @@ describe('parser', () => {
             type: nodeTypes.CALL,
             lineStart: 1,
             lineEnd: 1,
-            callee: {
-              type: nodeTypes.IDENTIFIER,
+            callee: buildNode.Identifier(1, 1)({
               value: 'someProp',
               isGetter: true,
-              isSetter: false,
-              lineStart: 1,
-              lineEnd: 1
-            },
-            arg: {
-              type: nodeTypes.IDENTIFIER,
+              isSetter: false
+            }),
+            arg: buildNode.Identifier(1, 1)({
               value: 'someObject',
-              lineStart: 1,
-              lineEnd: 1
-            }
+              isGetter: false,
+              isSetter: false
+            })
           }
         ]
       });
@@ -331,27 +269,18 @@ describe('parser', () => {
               type: nodeTypes.CALL,
               lineStart: 1,
               lineEnd: 1,
-              callee: {
-                type: nodeTypes.IDENTIFIER,
+              callee: buildNode.Identifier(1, 1)({
                 value: 'someProp',
                 isGetter: false,
-                isSetter: true,
-                lineStart: 1,
-                lineEnd: 1
-              },
-              arg: {
-                type: nodeTypes.NUMBER,
-                value: 47,
-                lineStart: 1,
-                lineEnd: 1
-              }
+                isSetter: true
+              }),
+              arg: buildNode.Number(1, 1)({ value: 47 })
             },
-            arg: {
-              type: nodeTypes.IDENTIFIER,
+            arg: buildNode.Identifier(1, 1)({
               value: 'someObject',
-              lineStart: 1,
-              lineEnd: 1
-            }
+              isGetter: false,
+              isSetter: false
+            })
           }
         ]
       });
@@ -367,18 +296,16 @@ describe('parser', () => {
             type: nodeTypes.CALL,
             lineStart: 1,
             lineEnd: 1,
-            callee: {
-              type: nodeTypes.IDENTIFIER,
+            callee: buildNode.Identifier(1, 1)({
               value: 'someFunc',
-              lineStart: 1,
-              lineEnd: 1
-            },
-            arg: {
-              type: nodeTypes.IDENTIFIER,
+              isGetter: false,
+              isSetter: false
+            }),
+            arg: buildNode.Identifier(1, 1)({
               value: 'someArg',
-              lineStart: 1,
-              lineEnd: 1
-            }
+              isGetter: false,
+              isSetter: false
+            })
           }
         ]
       });
@@ -402,18 +329,12 @@ describe('parser', () => {
                 type: nodeTypes.CALL,
                 lineStart: 1,
                 lineEnd: 1,
-                callee: {
-                  type: nodeTypes.IDENTIFIER,
+                callee: buildNode.Identifier(1, 1)({
                   value: 'helloWorld',
-                  lineStart: 1,
-                  lineEnd: 1
-                },
-                arg: {
-                  type: nodeTypes.NUMBER,
-                  value: 47,
-                  lineStart: 1,
-                  lineEnd: 1
-                }
+                  isGetter: false,
+                  isSetter: false
+                }),
+                arg: buildNode.Number(1, 1)({ value: 47 })
               },
               arg: {
                 type: nodeTypes.STRING,
@@ -422,12 +343,11 @@ describe('parser', () => {
                 lineEnd: 1
               }
             },
-            arg: {
-              type: nodeTypes.IDENTIFIER,
+            arg: buildNode.Identifier(1, 1)({
               value: 'cool',
-              lineStart: 1,
-              lineEnd: 1
-            }
+              isGetter: false,
+              isSetter: false
+            })
           }
         ]
       });
@@ -449,36 +369,24 @@ describe('parser', () => {
               type: nodeTypes.CALL,
               lineStart: 2,
               lineEnd: 2,
-              callee: {
-                type: nodeTypes.IDENTIFIER,
+              callee: buildNode.Identifier(2, 2)({
                 value: 'someFunc',
-                lineStart: 2,
-                lineEnd: 2
-              },
+                isGetter: false,
+                isSetter: false
+              }),
               arg: {
                 type: nodeTypes.CALL,
                 lineStart: 2,
                 lineEnd: 2,
-                callee: {
-                  type: nodeTypes.IDENTIFIER,
+                callee: buildNode.Identifier(2, 2)({
                   value: 'someOtherFunc',
-                  lineStart: 2,
-                  lineEnd: 2
-                },
-                arg: {
-                  type: nodeTypes.NUMBER,
-                  value: 3,
-                  lineStart: 2,
-                  lineEnd: 2
-                }
+                  isGetter: false,
+                  isSetter: false
+                }),
+                arg: buildNode.Number(2, 2)({ value: 3 })
               }
             },
-            arg: {
-              type: nodeTypes.NUMBER,
-              value: 4,
-              lineStart: 2,
-              lineEnd: 2
-            }
+            arg: buildNode.Number(2, 2)({ value: 4 })
           }
         ]
       });
@@ -514,18 +422,12 @@ describe('parser', () => {
             lineStart: 1,
             lineEnd: 3,
             elements: [
-              {
-                type: nodeTypes.NUMBER,
-                value: 1,
-                lineStart: 2,
-                lineEnd: 2
-              },
-              {
-                type: nodeTypes.IDENTIFIER,
+              buildNode.Number(2, 2)({ value: 1 }),
+              buildNode.Identifier(2, 2)({
                 value: 'test',
-                lineStart: 2,
-                lineEnd: 2
-              },
+                isGetter: false,
+                isSetter: false
+              }),
               {
                 type: nodeTypes.BOOLEAN,
                 value: true,
@@ -575,29 +477,22 @@ describe('parser', () => {
                 type: nodeTypes.OBJECT_PROPERTY,
                 lineStart: 1,
                 lineEnd: 1,
-                key: {
-                  type: nodeTypes.IDENTIFIER,
-                  lineStart: 1,
-                  lineEnd: 1,
-                  value: 'a'
-                },
-                value: {
-                  type: nodeTypes.NUMBER,
-                  lineStart: 1,
-                  lineEnd: 1,
-                  value: 1
-                }
+                key: buildNode.Identifier(1, 1)({
+                  value: 'a',
+                  isGetter: false,
+                  isSetter: false
+                }),
+                value: buildNode.Number(1, 1)({ value: 1 })
               },
               {
                 type: nodeTypes.OBJECT_PROPERTY,
                 lineStart: 1,
                 lineEnd: 1,
-                key: {
-                  type: nodeTypes.IDENTIFIER,
-                  lineStart: 1,
-                  lineEnd: 1,
-                  value: 'b'
-                },
+                key: buildNode.Identifier(1, 1)({
+                  value: 'b',
+                  isGetter: false,
+                  isSetter: false
+                }),
                 value: {
                   type: nodeTypes.STRING,
                   lineStart: 1,
@@ -609,12 +504,11 @@ describe('parser', () => {
                 type: nodeTypes.OBJECT_PROPERTY,
                 lineStart: 1,
                 lineEnd: 1,
-                key: {
-                  type: nodeTypes.IDENTIFIER,
-                  lineStart: 1,
-                  lineEnd: 1,
-                  value: 'c-d'
-                },
+                key: buildNode.Identifier(1, 1)({
+                  value: 'c-d',
+                  isGetter: false,
+                  isSetter: false
+                }),
                 value: {
                   type: nodeTypes.BOOLEAN,
                   lineStart: 1,
@@ -643,35 +537,31 @@ describe('parser', () => {
                 type: nodeTypes.OBJECT_PROPERTY,
                 lineStart: 1,
                 lineEnd: 1,
-                key: {
-                  type: nodeTypes.IDENTIFIER,
-                  lineStart: 1,
-                  lineEnd: 1,
-                  value: 'short'
-                },
-                value: {
-                  type: nodeTypes.IDENTIFIER,
-                  lineStart: 1,
-                  lineEnd: 1,
-                  value: 'short'
-                }
+                key: buildNode.Identifier(1, 1)({
+                  value: 'short',
+                  isGetter: false,
+                  isSetter: false
+                }),
+                value: buildNode.Identifier(1, 1)({
+                  value: 'short',
+                  isGetter: false,
+                  isSetter: false
+                })
               },
               {
                 type: nodeTypes.OBJECT_PROPERTY,
                 lineStart: 1,
                 lineEnd: 1,
-                key: {
-                  type: nodeTypes.IDENTIFIER,
-                  lineStart: 1,
-                  lineEnd: 1,
-                  value: 'hand'
-                },
-                value: {
-                  type: nodeTypes.IDENTIFIER,
-                  lineStart: 1,
-                  lineEnd: 1,
-                  value: 'hand'
-                }
+                key: buildNode.Identifier(1, 1)({
+                  value: 'hand',
+                  isGetter: false,
+                  isSetter: false
+                }),
+                value: buildNode.Identifier(1, 1)({
+                  value: 'hand',
+                  isGetter: false,
+                  isSetter: false
+                })
               }
             ]
           }
@@ -694,12 +584,7 @@ describe('parser', () => {
             lineStart: 2,
             lineEnd: 2,
             entries: [
-              {
-                type: nodeTypes.NUMBER,
-                value: 1,
-                lineStart: 2,
-                lineEnd: 2
-              },
+              buildNode.Number(2, 2)({ value: 1 }),
               {
                 type: nodeTypes.BOOLEAN,
                 value: true,
@@ -712,12 +597,11 @@ describe('parser', () => {
                 lineStart: 2,
                 lineEnd: 2
               },
-              {
-                type: nodeTypes.IDENTIFIER,
+              buildNode.Identifier(2, 2)({
                 value: 'nice',
-                lineStart: 2,
-                lineEnd: 2
-              }
+                isGetter: false,
+                isSetter: false
+              })
             ]
           },
           {
@@ -725,24 +609,9 @@ describe('parser', () => {
             lineStart: 3,
             lineEnd: 4,
             entries: [
-              {
-                type: nodeTypes.NUMBER,
-                value: 3,
-                lineStart: 3,
-                lineEnd: 3
-              },
-              {
-                type: nodeTypes.NUMBER,
-                value: 4,
-                lineStart: 3,
-                lineEnd: 3
-              },
-              {
-                type: nodeTypes.NUMBER,
-                value: 5,
-                lineStart: 4,
-                lineEnd: 4
-              }
+              buildNode.Number(3, 3)({ value: 3 }),
+              buildNode.Number(3, 3)({ value: 4 }),
+              buildNode.Number(4, 4)({ value: 5 })
             ]
           }
         ]
@@ -775,18 +644,8 @@ describe('parser', () => {
               lineStart: 2,
               lineEnd: 2
             },
-            thenCase: {
-              type: nodeTypes.NUMBER,
-              value: 47,
-              lineStart: 3,
-              lineEnd: 3
-            },
-            elseCase: {
-              type: nodeTypes.NUMBER,
-              value: 100,
-              lineStart: 4,
-              lineEnd: 4
-            }
+            thenCase: buildNode.Number(3, 3)({ value: 47 }),
+            elseCase: buildNode.Number(4, 4)({ value: 100 })
           },
           {
             type: nodeTypes.CONDITIONAL,
@@ -800,12 +659,11 @@ describe('parser', () => {
                 type: nodeTypes.CALL,
                 lineStart: 6,
                 lineEnd: 6,
-                callee: {
-                  type: nodeTypes.IDENTIFIER,
+                callee: buildNode.Identifier(6, 6)({
                   value: 'and',
-                  lineStart: 6,
-                  lineEnd: 6
-                },
+                  isGetter: false,
+                  isSetter: false
+                }),
                 arg: {
                   type: nodeTypes.BOOLEAN,
                   value: true,
@@ -897,18 +755,12 @@ describe('parser', () => {
               ' This is a comment that',
               ' should be preserved for the below assignment'
             ],
-            leftSide: {
-              type: nodeTypes.IDENTIFIER,
-              lineStart: 4,
-              lineEnd: 4,
-              value: 'x'
-            },
-            rightSide: {
-              type: nodeTypes.NUMBER,
-              lineStart: 4,
-              lineEnd: 4,
-              value: 47
-            }
+            leftSide: buildNode.Identifier(4, 4)({
+              value: 'x',
+              isGetter: false,
+              isSetter: false
+            }),
+            rightSide: buildNode.Number(4, 4)({ value: 47 })
           }
         ]
       });
@@ -933,48 +785,44 @@ describe('parser', () => {
             lineStart: 2,
             lineEnd: 2,
             comments: [],
-            typeName: {
-              type: nodeTypes.IDENTIFIER,
+            typeName: buildNode.Identifier(2, 2)({
               value: 'Letter',
-              lineStart: 2,
-              lineEnd: 2
-            },
+              isGetter: false,
+              isSetter: false
+            }),
             typeParameters: [],
             typeConstructors: [
               {
                 type: nodeTypes.TYPE_CONSTRUCTOR,
                 lineStart: 2,
                 lineEnd: 2,
-                typeName: {
-                  type: nodeTypes.IDENTIFIER,
+                typeName: buildNode.Identifier(2, 2)({
                   value: 'Alpha',
-                  lineStart: 2,
-                  lineEnd: 2
-                },
+                  isGetter: false,
+                  isSetter: false
+                }),
                 typeParameters: []
               },
               {
                 type: nodeTypes.TYPE_CONSTRUCTOR,
                 lineStart: 2,
                 lineEnd: 2,
-                typeName: {
-                  type: nodeTypes.IDENTIFIER,
+                typeName: buildNode.Identifier(2, 2)({
                   value: 'Beta',
-                  lineStart: 2,
-                  lineEnd: 2
-                },
+                  isGetter: false,
+                  isSetter: false
+                }),
                 typeParameters: []
               },
               {
                 type: nodeTypes.TYPE_CONSTRUCTOR,
                 lineStart: 2,
                 lineEnd: 2,
-                typeName: {
-                  type: nodeTypes.IDENTIFIER,
+                typeName: buildNode.Identifier(2, 2)({
                   value: 'Gamma',
-                  lineStart: 2,
-                  lineEnd: 2
-                },
+                  isGetter: false,
+                  isSetter: false
+                }),
                 typeParameters: []
               }
             ]
@@ -984,50 +832,45 @@ describe('parser', () => {
             lineStart: 3,
             lineEnd: 5,
             comments: [],
-            typeName: {
-              type: nodeTypes.IDENTIFIER,
+            typeName: buildNode.Identifier(3, 3)({
               value: 'Maybe',
-              lineStart: 3,
-              lineEnd: 3
-            },
+              isGetter: false,
+              isSetter: false
+            }),
             typeParameters: [
-              {
-                type: nodeTypes.IDENTIFIER,
+              buildNode.Identifier(3, 3)({
                 value: 'a',
-                lineStart: 3,
-                lineEnd: 3
-              }
+                isGetter: false,
+                isSetter: false
+              })
             ],
             typeConstructors: [
               {
                 type: nodeTypes.TYPE_CONSTRUCTOR,
                 lineStart: 4,
                 lineEnd: 4,
-                typeName: {
-                  type: nodeTypes.IDENTIFIER,
+                typeName: buildNode.Identifier(4, 4)({
                   value: 'Just',
-                  lineStart: 4,
-                  lineEnd: 4
-                },
+                  isGetter: false,
+                  isSetter: false
+                }),
                 typeParameters: [
-                  {
-                    type: nodeTypes.IDENTIFIER,
+                  buildNode.Identifier(4, 4)({
                     value: 'a',
-                    lineStart: 4,
-                    lineEnd: 4
-                  }
+                    isGetter: false,
+                    isSetter: false
+                  })
                 ]
               },
               {
                 type: nodeTypes.TYPE_CONSTRUCTOR,
                 lineStart: 5,
                 lineEnd: 5,
-                typeName: {
-                  type: nodeTypes.IDENTIFIER,
+                typeName: buildNode.Identifier(5, 5)({
                   value: 'Nothing',
-                  lineStart: 5,
-                  lineEnd: 5
-                },
+                  isGetter: false,
+                  isSetter: false
+                }),
                 typeParameters: []
               }
             ]
@@ -1037,24 +880,22 @@ describe('parser', () => {
             lineStart: 7,
             lineEnd: 8,
             comments: [' Type declarations can have comments'],
-            typeName: {
-              type: nodeTypes.IDENTIFIER,
+            typeName: buildNode.Identifier(8, 8)({
               value: 'Hello',
-              lineStart: 8,
-              lineEnd: 8
-            },
+              isGetter: false,
+              isSetter: false
+            }),
             typeParameters: [],
             typeConstructors: [
               {
                 type: nodeTypes.TYPE_CONSTRUCTOR,
                 lineStart: 8,
                 lineEnd: 8,
-                typeName: {
-                  type: nodeTypes.IDENTIFIER,
+                typeName: buildNode.Identifier(8, 8)({
                   value: 'World',
-                  lineStart: 8,
-                  lineEnd: 8
-                },
+                  isGetter: false,
+                  isSetter: false
+                }),
                 typeParameters: []
               }
             ]
@@ -1069,37 +910,245 @@ describe('parser', () => {
           type alias Hello = String
           type alias Test a = Something a
         `,
-        lineStart: 1,
-        lineEnd: 2,
-        body: []
+        lineStart: 2,
+        lineEnd: 3,
+        body: [
+          {
+            type: nodeTypes.TYPE_ALIAS_DECLARATION,
+            lineStart: 2,
+            lineEnd: 2,
+            typeName: buildNode.Identifier(2, 2)({
+              value: 'Hello',
+              isGetter: false,
+              isSetter: false
+            }),
+            typeParameters: [],
+            typeExpression: {
+              type: nodeTypes.TYPE_TAG,
+              lineStart: 2,
+              lineEnd: 2,
+              typeTagName: buildNode.Identifier(2, 2)({
+                value: 'String',
+                isGetter: false,
+                isSetter: false
+              }),
+              typeExpression: null
+            }
+          },
+          {
+            type: nodeTypes.TYPE_ALIAS_DECLARATION,
+            lineStart: 3,
+            lineEnd: 3,
+            typeName: buildNode.Identifier(3, 3)({
+              value: 'Test',
+              isGetter: false,
+              isSetter: false
+            }),
+            typeParameters: [
+              buildNode.Identifier(3, 3)({
+                value: 'a',
+                isGetter: false,
+                isSetter: false
+              })
+            ],
+            typeExpression: {
+              type: nodeTypes.TYPE_TAG,
+              lineStart: 3,
+              lineEnd: 3,
+              typeTagName: buildNode.Identifier(3, 3)({
+                value: 'Something',
+                isGetter: false,
+                isSetter: false
+              }),
+              typeExpression: {
+                type: nodeTypes.TYPE_VARIABLE,
+                lineStart: 3,
+                lineEnd: 3,
+                typeName: buildNode.Identifier(3, 3)({
+                  value: 'a',
+                  isGetter: false,
+                  isSetter: false
+                })
+              }
+            }
+          }
+        ]
       });
     });
 
     test('type alias declarations (function types)', () => {
       expectParseResult({
         source: `
-          type alias Predicate = String -> String -> Boolean
-          type alias Predicate2 = (String -> String) -> Boolean
+          type alias Predicate = Number -> Boolean
+          type alias Predicate2 = Number -> String -> Boolean
+          type alias Predicate3 = (Number -> String) -> Boolean
         `,
-        lineStart: 1,
-        lineEnd: 2,
-        body: []
+        lineStart: 2,
+        lineEnd: 4,
+        body: [
+          {
+            type: nodeTypes.TYPE_ALIAS_DECLARATION,
+            lineStart: 2,
+            lineEnd: 2,
+            typeName: buildNode.Identifier(2, 2)({
+              value: 'Predicate',
+              isGetter: false,
+              isSetter: false
+            }),
+            typeParameters: [],
+            typeExpression: {
+              type: nodeTypes.TYPE_FUNCTION,
+              lineStart: 2,
+              lineEnd: 2,
+              from: {
+                type: nodeTypes.TYPE_TAG,
+                lineStart: 2,
+                lineEnd: 2,
+                typeTagName: buildNode.Identifier(2, 2)({
+                  value: 'Number',
+                  isGetter: false,
+                  isSetter: false
+                }),
+                typeExpression: null
+              },
+              to: {
+                type: nodeTypes.TYPE_TAG,
+                lineStart: 2,
+                lineEnd: 2,
+                typeTagName: buildNode.Identifier(2, 2)({
+                  value: 'Boolean',
+                  isGetter: false,
+                  isSetter: false
+                }),
+                typeExpression: null
+              }
+            }
+          },
+          {
+            type: nodeTypes.TYPE_ALIAS_DECLARATION,
+            lineStart: 3,
+            lineEnd: 3,
+            typeName: buildNode.Identifier(3, 3)({
+              value: 'Predicate2',
+              isGetter: false,
+              isSetter: false
+            }),
+            typeParameters: [],
+            typeExpression: {
+              type: nodeTypes.TYPE_FUNCTION,
+              lineStart: 3,
+              lineEnd: 3,
+              from: {
+                type: nodeTypes.TYPE_TAG,
+                lineStart: 3,
+                lineEnd: 3,
+                typeTagName: buildNode.Identifier(3, 3)({
+                  value: 'Number',
+                  isGetter: false,
+                  isSetter: false
+                }),
+                typeExpression: null
+              },
+              to: {
+                type: nodeTypes.TYPE_FUNCTION,
+                lineStart: 3,
+                lineEnd: 3,
+                from: {
+                  type: nodeTypes.TYPE_TAG,
+                  lineStart: 3,
+                  lineEnd: 3,
+                  typeTagName: buildNode.Identifier(3, 3)({
+                    value: 'String',
+                    isGetter: false,
+                    isSetter: false
+                  }),
+                  typeExpression: null
+                },
+                to: {
+                  type: nodeTypes.TYPE_TAG,
+                  lineStart: 3,
+                  lineEnd: 3,
+                  typeTagName: buildNode.Identifier(3, 3)({
+                    value: 'Boolean',
+                    isGetter: false,
+                    isSetter: false
+                  }),
+                  typeExpression: null
+                }
+              }
+            }
+          },
+          {
+            type: nodeTypes.TYPE_ALIAS_DECLARATION,
+            lineStart: 4,
+            lineEnd: 4,
+            typeName: buildNode.Identifier(4, 4)({
+              value: 'Predicate3',
+              isGetter: false,
+              isSetter: false
+            }),
+            typeParameters: [],
+            typeExpression: {
+              type: nodeTypes.TYPE_FUNCTION,
+              lineStart: 4,
+              lineEnd: 4,
+              from: {
+                type: nodeTypes.TYPE_FUNCTION,
+                lineStart: 4,
+                lineEnd: 4,
+                from: {
+                  type: nodeTypes.TYPE_TAG,
+                  lineStart: 4,
+                  lineEnd: 4,
+                  typeTagName: buildNode.Identifier(4, 4)({
+                    value: 'Number',
+                    isGetter: false,
+                    isSetter: false
+                  }),
+                  typeExpression: null
+                },
+                to: {
+                  type: nodeTypes.TYPE_TAG,
+                  lineStart: 4,
+                  lineEnd: 4,
+                  typeTagName: buildNode.Identifier(4, 4)({
+                    value: 'String',
+                    isGetter: false,
+                    isSetter: false
+                  }),
+                  typeExpression: null
+                }
+              },
+              to: {
+                type: nodeTypes.TYPE_TAG,
+                lineStart: 4,
+                lineEnd: 4,
+                typeTagName: buildNode.Identifier(4, 4)({
+                  value: 'Boolean',
+                  isGetter: false,
+                  isSetter: false
+                }),
+                typeExpression: null
+              }
+            }
+          }
+        ]
       });
     });
 
-    test('type alias declarations (tuple types)', () => {
+    xtest('type alias declarations (tuple types)', () => {
       expectParseResult({
         source: `
           type alias StringPair = (String, String)
-          type alias FunkyPair = (String, String -> Boolean)
+          #type alias FunkyPair = (String, String -> Boolean)
         `,
-        lineStart: 1,
-        lineEnd: 2,
+        lineStart: 2,
+        lineEnd: 3,
         body: []
       });
     });
 
-    test('type alias declarations (record types)', () => {
+    xtest('type alias declarations (record types)', () => {
       expectParseResult({
         source: `
           type alias Person = { name :: String, age :: Number }
@@ -1124,12 +1173,11 @@ describe('parser', () => {
             comments: [],
             lineStart: 2,
             lineEnd: 2,
-            leftSide: {
-              type: nodeTypes.IDENTIFIER,
+            leftSide: buildNode.Identifier(2, 2)({
               value: 'func1',
-              lineStart: 2,
-              lineEnd: 2
-            },
+              isGetter: false,
+              isSetter: false
+            }),
             rightSide: {
               type: nodeTypes.CALL,
               lineStart: 2,
@@ -1142,18 +1190,12 @@ describe('parser', () => {
                   type: nodeTypes.CALL,
                   lineStart: 2,
                   lineEnd: 2,
-                  callee: {
-                    type: nodeTypes.IDENTIFIER,
+                  callee: buildNode.Identifier(2, 2)({
                     value: 'helloWorld',
-                    lineStart: 2,
-                    lineEnd: 2
-                  },
-                  arg: {
-                    type: nodeTypes.NUMBER,
-                    value: 47,
-                    lineStart: 2,
-                    lineEnd: 2
-                  }
+                    isGetter: false,
+                    isSetter: false
+                  }),
+                  arg: buildNode.Number(2, 2)({ value: 47 })
                 },
                 arg: {
                   type: nodeTypes.STRING,
@@ -1162,12 +1204,11 @@ describe('parser', () => {
                   lineEnd: 2
                 }
               },
-              arg: {
-                type: nodeTypes.IDENTIFIER,
+              arg: buildNode.Identifier(2, 2)({
                 value: 'cool',
-                lineStart: 2,
-                lineEnd: 2
-              }
+                isGetter: false,
+                isSetter: false
+              })
             }
           },
           {
@@ -1175,22 +1216,20 @@ describe('parser', () => {
             comments: [],
             lineStart: 3,
             lineEnd: 3,
-            leftSide: {
-              type: nodeTypes.IDENTIFIER,
+            leftSide: buildNode.Identifier(3, 3)({
               value: 'func2',
-              lineStart: 3,
-              lineEnd: 3
-            },
+              isGetter: false,
+              isSetter: false
+            }),
             rightSide: {
               type: nodeTypes.CALL,
               lineStart: 3,
               lineEnd: 3,
-              callee: {
-                type: nodeTypes.IDENTIFIER,
+              callee: buildNode.Identifier(3, 3)({
                 value: 'func1',
-                lineStart: 3,
-                lineEnd: 3
-              },
+                isGetter: false,
+                isSetter: false
+              }),
               arg: {
                 type: nodeTypes.BOOLEAN,
                 value: true,
@@ -1218,22 +1257,20 @@ describe('parser', () => {
             comments: [],
             lineStart: 2,
             lineEnd: 2,
-            leftSide: {
-              type: nodeTypes.IDENTIFIER,
+            leftSide: buildNode.Identifier(2, 2)({
               value: 'fn',
-              lineStart: 2,
-              lineEnd: 2
-            },
+              isGetter: false,
+              isSetter: false
+            }),
             rightSide: {
               type: nodeTypes.FUNCTION,
               lineStart: 2,
               lineEnd: 2,
-              parameter: {
-                type: nodeTypes.IDENTIFIER,
+              parameter: buildNode.Identifier(2, 2)({
                 value: 'a',
-                lineStart: 2,
-                lineEnd: 2
-              },
+                isGetter: false,
+                isSetter: false
+              }),
               body: {
                 type: nodeTypes.STRING,
                 value: 'hello, world!',
@@ -1246,18 +1283,12 @@ describe('parser', () => {
             type: nodeTypes.CALL,
             lineStart: 4,
             lineEnd: 4,
-            callee: {
-              type: nodeTypes.IDENTIFIER,
+            callee: buildNode.Identifier(4, 4)({
               value: 'fn',
-              lineStart: 4,
-              lineEnd: 4
-            },
-            arg: {
-              type: nodeTypes.NUMBER,
-              value: 1,
-              lineStart: 4,
-              lineEnd: 4
-            }
+              isGetter: false,
+              isSetter: false
+            }),
+            arg: buildNode.Number(4, 4)({ value: 1 })
           }
         ]
       });
@@ -1278,38 +1309,34 @@ describe('parser', () => {
             comments: [],
             lineStart: 2,
             lineEnd: 2,
-            leftSide: {
-              type: nodeTypes.IDENTIFIER,
+            leftSide: buildNode.Identifier(2, 2)({
               value: 'toStr',
-              lineStart: 2,
-              lineEnd: 2
-            },
+              isGetter: false,
+              isSetter: false
+            }),
             rightSide: {
               type: nodeTypes.FUNCTION,
               lineStart: 2,
               lineEnd: 2,
-              parameter: {
-                type: nodeTypes.IDENTIFIER,
+              parameter: buildNode.Identifier(2, 2)({
                 value: 's',
-                lineStart: 2,
-                lineEnd: 2
-              },
+                isGetter: false,
+                isSetter: false
+              }),
               body: {
                 type: nodeTypes.CALL,
                 lineStart: 2,
                 lineEnd: 2,
-                callee: {
-                  type: nodeTypes.IDENTIFIER,
+                callee: buildNode.Identifier(2, 2)({
                   value: 'fn',
-                  lineStart: 2,
-                  lineEnd: 2
-                },
-                arg: {
-                  type: nodeTypes.IDENTIFIER,
+                  isGetter: false,
+                  isSetter: false
+                }),
+                arg: buildNode.Identifier(2, 2)({
                   value: 's',
-                  lineStart: 2,
-                  lineEnd: 2
-                }
+                  isGetter: false,
+                  isSetter: false
+                })
               }
             }
           },
@@ -1318,24 +1345,9 @@ describe('parser', () => {
             lineStart: 4,
             lineEnd: 4,
             elements: [
-              {
-                type: nodeTypes.NUMBER,
-                value: 1,
-                lineStart: 4,
-                lineEnd: 4
-              },
-              {
-                type: nodeTypes.NUMBER,
-                value: 2,
-                lineStart: 4,
-                lineEnd: 4
-              },
-              {
-                type: nodeTypes.NUMBER,
-                value: 3,
-                lineStart: 4,
-                lineEnd: 4
-              }
+              buildNode.Number(4, 4)({ value: 1 }),
+              buildNode.Number(4, 4)({ value: 2 }),
+              buildNode.Number(4, 4)({ value: 3 })
             ]
           }
         ]
@@ -1358,14 +1370,14 @@ describe('parser', () => {
     test('unclosed parentheses', () => {
       expectParseError(
         '(47 "hello"',
-        'Missing closing ")" to match opening "(" at line 1, column 0.'
+        'Expected closing ")" to match opening "(" at line 1, column 0, but found'
       );
     });
 
     test('unclosed array brackets', () => {
       expectParseError(
         'fn [1, 2, 3',
-        'Missing closing "]" to match opening "[" at line 1, column 3.'
+        'Expected closing "]" to match opening "[" at line 1, column 3, but found'
       );
     });
   });
