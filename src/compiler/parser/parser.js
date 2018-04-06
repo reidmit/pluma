@@ -1,6 +1,5 @@
-import * as nodes from '../ast-nodes';
-import { buildNode } from '../ast-nodes';
 import * as u from '../util';
+import { buildNode } from '../ast-nodes';
 import { ParserError } from '../errors';
 import { tokenToString } from '../errors/error-helper';
 import { tokenTypes } from '../constants';
