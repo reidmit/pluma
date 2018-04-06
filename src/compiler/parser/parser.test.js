@@ -885,15 +885,82 @@ describe('parser', () => {
       });
     });
 
-    xtest('type alias declarations (tuple types)', () => {
+    test('type alias declarations (tuple types)', () => {
       expectParseResult({
         source: `
           type alias StringPair = (String, String)
-          #type alias FunkyPair = (String, String -> Boolean)
+          type alias FunkyPair = (String, String -> Boolean)
         `,
         lineStart: 2,
         lineEnd: 3,
-        body: []
+        body: [
+          buildNode.TypeAliasDeclaration(2, 2)({
+            typeName: buildNode.Identifier(2, 2)({
+              value: 'StringPair',
+              isGetter: false,
+              isSetter: false
+            }),
+            typeParameters: [],
+            typeExpression: buildNode.TypeTuple(2, 2)({
+              typeEntries: [
+                buildNode.TypeTag(2, 2)({
+                  typeTagName: buildNode.Identifier(2, 2)({
+                    value: 'String',
+                    isGetter: false,
+                    isSetter: false
+                  }),
+                  typeExpression: null
+                }),
+                buildNode.TypeTag(2, 2)({
+                  typeTagName: buildNode.Identifier(2, 2)({
+                    value: 'String',
+                    isGetter: false,
+                    isSetter: false
+                  }),
+                  typeExpression: null
+                })
+              ]
+            })
+          }),
+          buildNode.TypeAliasDeclaration(3, 3)({
+            typeName: buildNode.Identifier(3, 3)({
+              value: 'FunkyPair',
+              isGetter: false,
+              isSetter: false
+            }),
+            typeParameters: [],
+            typeExpression: buildNode.TypeTuple(3, 3)({
+              typeEntries: [
+                buildNode.TypeTag(3, 3)({
+                  typeTagName: buildNode.Identifier(3, 3)({
+                    value: 'String',
+                    isGetter: false,
+                    isSetter: false
+                  }),
+                  typeExpression: null
+                }),
+                buildNode.TypeFunction(3, 3)({
+                  from: buildNode.TypeTag(3, 3)({
+                    typeTagName: buildNode.Identifier(3, 3)({
+                      value: 'String',
+                      isGetter: false,
+                      isSetter: false
+                    }),
+                    typeExpression: null
+                  }),
+                  to: buildNode.TypeTag(3, 3)({
+                    typeTagName: buildNode.Identifier(3, 3)({
+                      value: 'Boolean',
+                      isGetter: false,
+                      isSetter: false
+                    }),
+                    typeExpression: null
+                  })
+                })
+              ]
+            })
+          })
+        ]
       });
     });
 
@@ -903,7 +970,7 @@ describe('parser', () => {
           type alias Person = { name :: String, age :: Number }
         `,
         lineStart: 1,
-        lineEnd: 2,
+        lineEnd: 3,
         body: []
       });
     });
