@@ -305,7 +305,7 @@ function parse({ source, tokens }) {
 
     if (
       u.isIdentifier(token) &&
-      (u.isComma(tokens[index + 1]) || u.isRightBracket(tokens[index + 1]))
+      (u.isComma(tokens[index + 1]) || u.isRightBrace(tokens[index + 1]))
     ) {
       const key = buildNode.Identifier(token.lineStart, token.lineEnd)({
         value: token.value,
@@ -323,27 +323,31 @@ function parse({ source, tokens }) {
   }
 
   function parseObject() {
-    if (!u.isLeftBracket(token)) return;
+    if (!u.isLeftBrace(token)) return;
 
     const lineStart = token.lineStart;
+    const columnStart = token.columnStart;
 
     advance();
 
     const properties = [];
 
-    while (!u.isRightBracket(token)) {
+    while (!u.isRightBrace(token)) {
       const property = parseObjectProperty();
 
       if (!property) {
-        fail('Failed to parse object property');
+        fail('Failed to parse object property.');
       }
 
       properties.push(property);
 
       if (u.isComma(token)) {
         advance();
-      } else if (!u.isRightBracket(token)) {
-        fail('Missing right bracket }');
+      } else if (!u.isRightBrace(token)) {
+        fail(
+          t =>
+            `Expected closing "}" to match opening "{" at line ${lineStart}, column ${columnStart}, but found ${t} instead.`
+        );
       }
     }
 
@@ -355,16 +359,16 @@ function parse({ source, tokens }) {
   }
 
   function parseArray() {
-    if (!u.isLeftBrace(token)) return;
+    if (!u.isLeftBracket(token)) return;
 
     const lineStart = token.lineStart;
-    const leftBrace = token;
+    const leftBracket = token;
 
     advance();
 
     const elements = [];
 
-    while (!u.isRightBrace(token)) {
+    while (!u.isRightBracket(token)) {
       const expr = parseExpression();
 
       if (!expr) {
@@ -375,12 +379,12 @@ function parse({ source, tokens }) {
 
       if (u.isComma(token)) {
         advance();
-      } else if (!u.isRightBrace(token)) {
+      } else if (!u.isRightBracket(token)) {
         fail(
           t =>
             `Expected closing "]" to match opening "[" at line ${
-              leftBrace.lineStart
-            }, column ${leftBrace.columnStart}, but found ${t} instead.`
+              leftBracket.lineStart
+            }, column ${leftBracket.columnStart}, but found ${t} instead.`
         );
       }
     }
@@ -490,7 +494,7 @@ function parse({ source, tokens }) {
       firstNode.lineEnd = token.lineEnd;
 
       advance();
-    } else if (u.isLeftBracket(token)) {
+    } else if (u.isLeftBrace(token)) {
       const lineStart = token.lineStart;
 
       advance();
@@ -534,7 +538,7 @@ function parse({ source, tokens }) {
           continue;
         }
 
-        if (u.isRightBracket(token)) {
+        if (u.isRightBrace(token)) {
           advance();
 
           break;

@@ -25,17 +25,17 @@ export const isComment = isTokenType('LINE_COMMENT');
 
 export const isBar = isSymbol('|');
 
-export const isLeftBrace = isSymbol('[');
+export const isLeftBracket = isSymbol('[');
 
-export const isRightBrace = isSymbol(']');
+export const isRightBracket = isSymbol(']');
 
 export const isLeftParen = isSymbol('(');
 
 export const isRightParen = isSymbol(')');
 
-export const isLeftBracket = isSymbol('{');
+export const isLeftBrace = isSymbol('{');
 
-export const isRightBracket = isSymbol('}');
+export const isRightBrace = isSymbol('}');
 
 export const isInterpolationStart = isSymbol('${');
 
