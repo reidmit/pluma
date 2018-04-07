@@ -901,7 +901,7 @@ describe('parser', () => {
               isSetter: false
             }),
             typeParameters: [],
-            typeExpression: buildNode.TypeTuple(2, 2)({
+            typeExpression: buildNode.TupleType(2, 2)({
               typeEntries: [
                 buildNode.TypeTag(2, 2)({
                   typeTagName: buildNode.Identifier(2, 2)({
@@ -929,7 +929,7 @@ describe('parser', () => {
               isSetter: false
             }),
             typeParameters: [],
-            typeExpression: buildNode.TypeTuple(3, 3)({
+            typeExpression: buildNode.TupleType(3, 3)({
               typeEntries: [
                 buildNode.TypeTag(3, 3)({
                   typeTagName: buildNode.Identifier(3, 3)({

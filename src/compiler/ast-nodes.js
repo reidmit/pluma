@@ -1,13 +1,5 @@
 import { nodeTypes } from './constants';
 
-function assertParts(nodeType, nodeParts, expectedPartNames) {
-  expectedPartNames.forEach(part => {
-    if (typeof nodeParts[part] === 'undefined') {
-      throw new Error(`Missing part ${part} on node of type ${nodeType}`);
-    }
-  });
-}
-
 const nodeTypesToParts = {
   Array: { type: nodeTypes.ARRAY, parts: ['elements'] },
 
@@ -49,9 +41,21 @@ const nodeTypesToParts = {
 
   ObjectProperty: { type: nodeTypes.OBJECT_PROPERTY, parts: ['key', 'value'] },
 
+  RecordType: {
+    type: nodeTypes.RECORD_TYPE,
+    parts: ['entries']
+  },
+
+  RecordTypeEntry: {
+    type: nodeTypes.RECORD_TYPE_ENTRY,
+    parts: ['name', 'typeExpression']
+  },
+
   String: { type: nodeTypes.STRING, parts: ['value'] },
 
   Tuple: { type: nodeTypes.TUPLE, parts: ['entries'] },
+
+  TupleType: { type: nodeTypes.TUPLE_TYPE, parts: ['typeEntries'] },
 
   TypeAliasDeclaration: {
     type: nodeTypes.TYPE_ALIAS_DECLARATION,
@@ -68,22 +72,10 @@ const nodeTypesToParts = {
     parts: ['typeName', 'typeParameters', 'typeConstructors']
   },
 
-  RecordType: {
-    type: nodeTypes.RECORD_TYPE,
-    parts: ['entries']
-  },
-
-  RecordTypeEntry: {
-    type: nodeTypes.RECORD_TYPE_ENTRY,
-    parts: ['name', 'typeExpression']
-  },
-
   TypeTag: {
     type: nodeTypes.TYPE_TAG,
     parts: ['typeTagName', 'typeExpression']
   },
-
-  TypeTuple: { type: nodeTypes.TYPE_TUPLE, parts: ['typeEntries'] },
 
   TypeVariable: { type: nodeTypes.TYPE_VARIABLE, parts: ['typeName'] }
 };

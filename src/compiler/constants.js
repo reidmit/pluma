@@ -17,11 +17,11 @@ export const nodeTypes = {
   RECORD_TYPE_ENTRY: 'record-type-entry-node',
   STRING: 'string-node',
   TUPLE: 'tuple-node',
+  TUPLE_TYPE: 'tuple-type-node',
   TYPE_ALIAS_DECLARATION: 'type-alias-declaration-node',
   TYPE_CONSTRUCTOR: 'type-constructor-node',
   TYPE_DECLARATION: 'type-declaration-node',
   TYPE_TAG: 'type-tag-node',
-  TYPE_TUPLE: 'type-tuple-node',
   TYPE_VARIABLE: 'type-variable-node'
 };
 
