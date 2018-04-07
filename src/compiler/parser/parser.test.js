@@ -964,14 +964,82 @@ describe('parser', () => {
       });
     });
 
-    xtest('type alias declarations (record types)', () => {
+    test('type alias declarations (record types)', () => {
       expectParseResult({
         source: `
-          type alias Person = { name :: String, age :: Number }
+          type alias Person = { name :: String, age :: Number, test :: String -> Boolean }
         `,
-        lineStart: 1,
-        lineEnd: 3,
-        body: []
+        lineStart: 2,
+        lineEnd: 2,
+        body: [
+          buildNode.TypeAliasDeclaration(2, 2)({
+            typeName: buildNode.Identifier(2, 2)({
+              value: 'Person',
+              isGetter: false,
+              isSetter: false
+            }),
+            typeParameters: [],
+            typeExpression: buildNode.RecordType(2, 2)({
+              entries: [
+                buildNode.RecordTypeEntry(2, 2)({
+                  name: buildNode.Identifier(2, 2)({
+                    value: 'name',
+                    isGetter: false,
+                    isSetter: false
+                  }),
+                  typeExpression: buildNode.TypeTag(2, 2)({
+                    typeTagName: buildNode.Identifier(2, 2)({
+                      value: 'String',
+                      isGetter: false,
+                      isSetter: false
+                    }),
+                    typeExpression: null
+                  })
+                }),
+                buildNode.RecordTypeEntry(2, 2)({
+                  name: buildNode.Identifier(2, 2)({
+                    value: 'age',
+                    isGetter: false,
+                    isSetter: false
+                  }),
+                  typeExpression: buildNode.TypeTag(2, 2)({
+                    typeTagName: buildNode.Identifier(2, 2)({
+                      value: 'Number',
+                      isGetter: false,
+                      isSetter: false
+                    }),
+                    typeExpression: null
+                  })
+                }),
+                buildNode.RecordTypeEntry(2, 2)({
+                  name: buildNode.Identifier(2, 2)({
+                    value: 'test',
+                    isGetter: false,
+                    isSetter: false
+                  }),
+                  typeExpression: buildNode.TypeFunction(2, 2)({
+                    from: buildNode.TypeTag(2, 2)({
+                      typeTagName: buildNode.Identifier(2, 2)({
+                        value: 'String',
+                        isGetter: false,
+                        isSetter: false
+                      }),
+                      typeExpression: null
+                    }),
+                    to: buildNode.TypeTag(2, 2)({
+                      typeTagName: buildNode.Identifier(2, 2)({
+                        value: 'Boolean',
+                        isGetter: false,
+                        isSetter: false
+                      }),
+                      typeExpression: null
+                    })
+                  })
+                })
+              ]
+            })
+          })
+        ]
       });
     });
 

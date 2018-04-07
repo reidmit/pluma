@@ -490,6 +490,65 @@ function parse({ source, tokens }) {
       firstNode.lineEnd = token.lineEnd;
 
       advance();
+    } else if (u.isLeftBracket(token)) {
+      const lineStart = token.lineStart;
+
+      advance();
+
+      const entries = [];
+
+      while (u.isIdentifier(token)) {
+        const name = buildNode.Identifier(token.lineStart, token.lineEnd)({
+          value: token.value,
+          isGetter: false,
+          isSetter: false
+        });
+
+        advance();
+
+        if (!u.isDoubleColon(token)) {
+          fail(
+            t =>
+              `Expected "::" after entry name in record type, but found ${t} instead.`
+          );
+        }
+
+        advance();
+
+        const value = parseTypeExpression();
+
+        if (!value) {
+          fail('Expected valid type expression after "::" in record type.');
+        }
+
+        entries.push(
+          buildNode.RecordTypeEntry(name.lineStart, value.lineEnd)({
+            name,
+            typeExpression: value
+          })
+        );
+
+        if (u.isComma(token)) {
+          advance();
+
+          continue;
+        }
+
+        if (u.isRightBracket(token)) {
+          advance();
+
+          break;
+        }
+
+        fail(t => `Unexpected ${t} found in record type.`);
+      }
+
+      firstNode = buildNode.RecordType(
+        lineStart,
+        entries[entries.length - 1].lineEnd
+      )({
+        entries
+      });
     } else if (u.isIdentifier(token) && /^[a-z]/.test(token.value)) {
       const id = buildNode.Identifier(token.lineStart, token.lineEnd)({
         value: token.value,

@@ -68,6 +68,16 @@ const nodeTypesToParts = {
 
   TypeFunction: { type: nodeTypes.TYPE_FUNCTION, parts: ['from', 'to'] },
 
+  RecordType: {
+    type: nodeTypes.RECORD_TYPE,
+    parts: ['entries']
+  },
+
+  RecordTypeEntry: {
+    type: nodeTypes.RECORD_TYPE_ENTRY,
+    parts: ['name', 'typeExpression']
+  },
+
   TypeTag: {
     type: nodeTypes.TYPE_TAG,
     parts: ['typeTagName', 'typeExpression']
