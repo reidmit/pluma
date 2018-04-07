@@ -790,7 +790,7 @@ describe('parser', () => {
               isSetter: false
             }),
             typeParameters: [],
-            typeExpression: buildNode.TypeFunction(2, 2)({
+            typeExpression: buildNode.FunctionType(2, 2)({
               from: buildNode.TypeTag(2, 2)({
                 typeTagName: buildNode.Identifier(2, 2)({
                   value: 'Number',
@@ -816,7 +816,7 @@ describe('parser', () => {
               isSetter: false
             }),
             typeParameters: [],
-            typeExpression: buildNode.TypeFunction(3, 3)({
+            typeExpression: buildNode.FunctionType(3, 3)({
               from: buildNode.TypeTag(3, 3)({
                 typeTagName: buildNode.Identifier(3, 3)({
                   value: 'Number',
@@ -825,7 +825,7 @@ describe('parser', () => {
                 }),
                 typeExpression: null
               }),
-              to: buildNode.TypeFunction(3, 3)({
+              to: buildNode.FunctionType(3, 3)({
                 from: buildNode.TypeTag(3, 3)({
                   typeTagName: buildNode.Identifier(3, 3)({
                     value: 'String',
@@ -852,8 +852,8 @@ describe('parser', () => {
               isSetter: false
             }),
             typeParameters: [],
-            typeExpression: buildNode.TypeFunction(4, 4)({
-              from: buildNode.TypeFunction(4, 4)({
+            typeExpression: buildNode.FunctionType(4, 4)({
+              from: buildNode.FunctionType(4, 4)({
                 from: buildNode.TypeTag(4, 4)({
                   typeTagName: buildNode.Identifier(4, 4)({
                     value: 'Number',
@@ -939,7 +939,7 @@ describe('parser', () => {
                   }),
                   typeExpression: null
                 }),
-                buildNode.TypeFunction(3, 3)({
+                buildNode.FunctionType(3, 3)({
                   from: buildNode.TypeTag(3, 3)({
                     typeTagName: buildNode.Identifier(3, 3)({
                       value: 'String',
@@ -1017,7 +1017,7 @@ describe('parser', () => {
                     isGetter: false,
                     isSetter: false
                   }),
-                  typeExpression: buildNode.TypeFunction(2, 2)({
+                  typeExpression: buildNode.FunctionType(2, 2)({
                     from: buildNode.TypeTag(2, 2)({
                       typeTagName: buildNode.Identifier(2, 2)({
                         value: 'String',

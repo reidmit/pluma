@@ -5,6 +5,7 @@ export const nodeTypes = {
   CALL: 'call-node',
   CONDITIONAL: 'conditional-node',
   FUNCTION: 'function-node',
+  FUNCTION_TYPE: 'function-type-node',
   IDENTIFIER: 'identifier-node',
   INTERPOLATED_STRING: 'interpolated-string-node',
   MEMBER_EXPRESSION: 'member-expression-node',
@@ -19,7 +20,6 @@ export const nodeTypes = {
   TYPE_ALIAS_DECLARATION: 'type-alias-declaration-node',
   TYPE_CONSTRUCTOR: 'type-constructor-node',
   TYPE_DECLARATION: 'type-declaration-node',
-  TYPE_FUNCTION: 'type-function-node',
   TYPE_TAG: 'type-tag-node',
   TYPE_TUPLE: 'type-tuple-node',
   TYPE_VARIABLE: 'type-variable-node'

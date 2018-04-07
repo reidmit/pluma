@@ -24,6 +24,8 @@ const nodeTypesToParts = {
 
   Function: { type: nodeTypes.FUNCTION, parts: ['parameter', 'body'] },
 
+  FunctionType: { type: nodeTypes.FUNCTION_TYPE, parts: ['from', 'to'] },
+
   Identifier: {
     type: nodeTypes.IDENTIFIER,
     parts: ['value', 'isGetter', 'isSetter']
@@ -65,8 +67,6 @@ const nodeTypesToParts = {
     type: nodeTypes.TYPE_DECLARATION,
     parts: ['typeName', 'typeParameters', 'typeConstructors']
   },
-
-  TypeFunction: { type: nodeTypes.TYPE_FUNCTION, parts: ['from', 'to'] },
 
   RecordType: {
     type: nodeTypes.RECORD_TYPE,

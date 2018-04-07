@@ -597,7 +597,7 @@ function parse({ source, tokens }) {
         );
       }
 
-      return buildNode.TypeFunction(firstNode.lineStart, rightSide.lineEnd)({
+      return buildNode.FunctionType(firstNode.lineStart, rightSide.lineEnd)({
         from: firstNode,
         to: rightSide
       });
