@@ -1,110 +1,120 @@
-import { nodeTypes } from './constants';
-
-const nodeTypesToParts = {
-  Array: { type: nodeTypes.ARRAY, parts: ['elements'] },
-
-  Assignment: { type: nodeTypes.ASSIGNMENT, parts: ['leftSide', 'rightSide'] },
-
-  Boolean: { type: nodeTypes.BOOLEAN, parts: ['value'] },
-
-  Call: { type: nodeTypes.CALL, parts: ['callee', 'arg'] },
-
-  Conditional: {
-    type: nodeTypes.CONDITIONAL,
-    parts: ['predicate', 'thenCase', 'elseCase']
+const nodes = {
+  Array: {
+    props: ['elements']
   },
 
-  Function: { type: nodeTypes.FUNCTION, parts: ['parameter', 'body'] },
+  Assignment: {
+    props: ['id', 'value']
+  },
 
-  FunctionType: { type: nodeTypes.FUNCTION_TYPE, parts: ['from', 'to'] },
+  Boolean: {
+    props: ['value']
+  },
+
+  Call: {
+    props: ['callee', 'arg']
+  },
+
+  Conditional: {
+    props: ['predicate', 'thenCase', 'elseCase']
+  },
+
+  Function: {
+    props: ['parameter', 'body']
+  },
+
+  FunctionType: {
+    props: ['from', 'to']
+  },
 
   Identifier: {
-    type: nodeTypes.IDENTIFIER,
-    parts: ['value', 'isGetter', 'isSetter']
+    props: ['value', 'isGetter', 'isSetter']
   },
 
   InterpolatedString: {
-    type: nodeTypes.INTERPOLATED_STRING,
-    parts: ['literals', 'expressions']
+    props: ['literals', 'expressions']
   },
 
   MemberExpression: {
-    type: nodeTypes.MEMBER_EXPRESSION,
-    parts: ['parts']
+    props: ['parts']
   },
 
-  Module: { type: nodeTypes.MODULE, parts: ['body'] },
+  Module: {
+    props: ['body']
+  },
 
-  Number: { type: nodeTypes.NUMBER, parts: ['value'] },
+  Number: {
+    props: ['value']
+  },
 
-  Object: { type: nodeTypes.OBJECT, parts: ['properties'] },
+  Record: {
+    props: ['properties']
+  },
 
-  ObjectProperty: { type: nodeTypes.OBJECT_PROPERTY, parts: ['key', 'value'] },
+  RecordProperty: {
+    props: ['key', 'value']
+  },
+
+  RecordPropertyType: {
+    props: ['key', 'value']
+  },
 
   RecordType: {
-    type: nodeTypes.RECORD_TYPE,
-    parts: ['entries']
+    props: ['properties']
   },
 
-  RecordTypeEntry: {
-    type: nodeTypes.RECORD_TYPE_ENTRY,
-    parts: ['name', 'typeExpression']
+  String: {
+    props: ['value']
   },
 
-  String: { type: nodeTypes.STRING, parts: ['value'] },
+  Tuple: {
+    props: ['entries']
+  },
 
-  Tuple: { type: nodeTypes.TUPLE, parts: ['entries'] },
-
-  TupleType: { type: nodeTypes.TUPLE_TYPE, parts: ['typeEntries'] },
+  TupleType: {
+    props: ['typeEntries']
+  },
 
   TypeAliasDeclaration: {
-    type: nodeTypes.TYPE_ALIAS_DECLARATION,
-    parts: ['typeName', 'typeParameters', 'typeExpression']
+    props: ['typeName', 'typeParameters', 'typeExpression']
   },
 
   TypeConstructor: {
-    type: nodeTypes.TYPE_CONSTRUCTOR,
-    parts: ['typeName', 'typeParameters']
+    props: ['typeName', 'typeParameters']
   },
 
   TypeDeclaration: {
-    type: nodeTypes.TYPE_DECLARATION,
-    parts: ['typeName', 'typeParameters', 'typeConstructors']
+    props: ['typeName', 'typeParameters', 'typeConstructors']
   },
 
   TypeTag: {
-    type: nodeTypes.TYPE_TAG,
-    parts: ['typeTagName', 'typeExpression']
+    props: ['typeTagName', 'typeExpression']
   },
 
-  TypeVariable: { type: nodeTypes.TYPE_VARIABLE, parts: ['typeName'] }
+  TypeVariable: {
+    props: ['typeName']
+  }
 };
 
-export const buildNode = Object.keys(nodeTypesToParts).reduce(
-  (builders, type) => {
-    builders[type] = (lineStart, lineEnd) => nodeParts => {
-      const nodeType = nodeTypesToParts[type].type;
-      const expectedParts = nodeTypesToParts[type].parts;
+export const buildNode = Object.keys(nodes).reduce((builders, kind) => {
+  builders[kind] = (lineStart, lineEnd) => nodeProps => {
+    const expectedProps = nodes[kind].props;
 
-      if (nodeType === undefined) {
-        throw new Error(`nodeType is undefined for node of type ${type}`);
+    expectedProps.forEach(prop => {
+      if (nodeProps[prop] === undefined) {
+        throw new Error(
+          `Property ${prop} is not given for node of kind ${kind}`
+        );
       }
+    });
 
-      expectedParts.forEach(part => {
-        if (nodeParts[part] === undefined) {
-          throw new Error(`Part ${part} is not given for node of type ${type}`);
-        }
-      });
-
-      return {
-        type: nodeType,
-        lineStart,
-        lineEnd,
-        ...nodeParts
-      };
+    return {
+      kind,
+      lineStart,
+      lineEnd,
+      ...nodeProps
     };
+  };
 
-    return builders;
-  },
-  {}
-);
+  return builders;
+}, {});

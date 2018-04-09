@@ -1,30 +1,3 @@
-export const nodeTypes = {
-  ARRAY: 'array-expression',
-  ASSIGNMENT: 'assignment-node',
-  BOOLEAN: 'boolean-node',
-  CALL: 'call-node',
-  CONDITIONAL: 'conditional-node',
-  FUNCTION: 'function-node',
-  FUNCTION_TYPE: 'function-type-node',
-  IDENTIFIER: 'identifier-node',
-  INTERPOLATED_STRING: 'interpolated-string-node',
-  MEMBER_EXPRESSION: 'member-expression-node',
-  MODULE: 'module-node',
-  NUMBER: 'number-node',
-  OBJECT: 'object-node',
-  OBJECT_PROPERTY: 'object-property-node',
-  RECORD_TYPE: 'record-type-node',
-  RECORD_TYPE_ENTRY: 'record-type-entry-node',
-  STRING: 'string-node',
-  TUPLE: 'tuple-node',
-  TUPLE_TYPE: 'tuple-type-node',
-  TYPE_ALIAS_DECLARATION: 'type-alias-declaration-node',
-  TYPE_CONSTRUCTOR: 'type-constructor-node',
-  TYPE_DECLARATION: 'type-declaration-node',
-  TYPE_TAG: 'type-tag-node',
-  TYPE_VARIABLE: 'type-variable-node'
-};
-
 export const tokenTypes = {
   AT_IDENTIFIER: 'at-identifier-token',
   BOOLEAN: 'boolean-token',

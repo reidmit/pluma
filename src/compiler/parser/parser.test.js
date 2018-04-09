@@ -185,21 +185,21 @@ describe('parser', () => {
         body: [
           buildNode.Assignment(2, 2)({
             comments: [],
-            leftSide: buildNode.Identifier(2, 2)({
+            id: buildNode.Identifier(2, 2)({
               value: 'hello',
               isGetter: false,
               isSetter: false
             }),
-            rightSide: buildNode.Number(2, 2)({ value: 47 })
+            value: buildNode.Number(2, 2)({ value: 47 })
           }),
           buildNode.Assignment(3, 3)({
             comments: [],
-            leftSide: buildNode.Identifier(3, 3)({
+            id: buildNode.Identifier(3, 3)({
               value: 'someString',
               isGetter: false,
               isSetter: false
             }),
-            rightSide: buildNode.String(3, 3)({
+            value: buildNode.String(3, 3)({
               value: 'hello, world!'
             })
           })
@@ -378,28 +378,28 @@ describe('parser', () => {
       });
     });
 
-    test('object expressions (empty)', () => {
+    test('record expressions (empty)', () => {
       expectParseResult({
         source: '{}',
         lineStart: 1,
         lineEnd: 1,
         body: [
-          buildNode.Object(1, 1)({
+          buildNode.Record(1, 1)({
             properties: []
           })
         ]
       });
     });
 
-    test('object expressions (basic)', () => {
+    test('record expressions (basic)', () => {
       expectParseResult({
         source: '{a: 1, b: "hello", c-d: True}',
         lineStart: 1,
         lineEnd: 1,
         body: [
-          buildNode.Object(1, 1)({
+          buildNode.Record(1, 1)({
             properties: [
-              buildNode.ObjectProperty(1, 1)({
+              buildNode.RecordProperty(1, 1)({
                 key: buildNode.Identifier(1, 1)({
                   value: 'a',
                   isGetter: false,
@@ -407,7 +407,7 @@ describe('parser', () => {
                 }),
                 value: buildNode.Number(1, 1)({ value: 1 })
               }),
-              buildNode.ObjectProperty(1, 1)({
+              buildNode.RecordProperty(1, 1)({
                 key: buildNode.Identifier(1, 1)({
                   value: 'b',
                   isGetter: false,
@@ -417,7 +417,7 @@ describe('parser', () => {
                   value: 'hello'
                 })
               }),
-              buildNode.ObjectProperty(1, 1)({
+              buildNode.RecordProperty(1, 1)({
                 key: buildNode.Identifier(1, 1)({
                   value: 'c-d',
                   isGetter: false,
@@ -433,15 +433,15 @@ describe('parser', () => {
       });
     });
 
-    test('object expressions (shorthand keys)', () => {
+    test('record expressions (shorthand keys)', () => {
       expectParseResult({
         source: '{ short, hand }',
         lineStart: 1,
         lineEnd: 1,
         body: [
-          buildNode.Object(1, 1)({
+          buildNode.Record(1, 1)({
             properties: [
-              buildNode.ObjectProperty(1, 1)({
+              buildNode.RecordProperty(1, 1)({
                 key: buildNode.Identifier(1, 1)({
                   value: 'short',
                   isGetter: false,
@@ -453,7 +453,7 @@ describe('parser', () => {
                   isSetter: false
                 })
               }),
-              buildNode.ObjectProperty(1, 1)({
+              buildNode.RecordProperty(1, 1)({
                 key: buildNode.Identifier(1, 1)({
                   value: 'hand',
                   isGetter: false,
@@ -594,12 +594,12 @@ describe('parser', () => {
               ' This is a comment that',
               ' should be preserved for the below assignment'
             ],
-            leftSide: buildNode.Identifier(4, 4)({
+            id: buildNode.Identifier(4, 4)({
               value: 'x',
               isGetter: false,
               isSetter: false
             }),
-            rightSide: buildNode.Number(4, 4)({ value: 47 })
+            value: buildNode.Number(4, 4)({ value: 47 })
           })
         ]
       });
@@ -980,14 +980,14 @@ describe('parser', () => {
             }),
             typeParameters: [],
             typeExpression: buildNode.RecordType(2, 2)({
-              entries: [
-                buildNode.RecordTypeEntry(2, 2)({
-                  name: buildNode.Identifier(2, 2)({
+              properties: [
+                buildNode.RecordPropertyType(2, 2)({
+                  key: buildNode.Identifier(2, 2)({
                     value: 'name',
                     isGetter: false,
                     isSetter: false
                   }),
-                  typeExpression: buildNode.TypeTag(2, 2)({
+                  value: buildNode.TypeTag(2, 2)({
                     typeTagName: buildNode.Identifier(2, 2)({
                       value: 'String',
                       isGetter: false,
@@ -996,13 +996,13 @@ describe('parser', () => {
                     typeExpression: null
                   })
                 }),
-                buildNode.RecordTypeEntry(2, 2)({
-                  name: buildNode.Identifier(2, 2)({
+                buildNode.RecordPropertyType(2, 2)({
+                  key: buildNode.Identifier(2, 2)({
                     value: 'age',
                     isGetter: false,
                     isSetter: false
                   }),
-                  typeExpression: buildNode.TypeTag(2, 2)({
+                  value: buildNode.TypeTag(2, 2)({
                     typeTagName: buildNode.Identifier(2, 2)({
                       value: 'Number',
                       isGetter: false,
@@ -1011,13 +1011,13 @@ describe('parser', () => {
                     typeExpression: null
                   })
                 }),
-                buildNode.RecordTypeEntry(2, 2)({
-                  name: buildNode.Identifier(2, 2)({
+                buildNode.RecordPropertyType(2, 2)({
+                  key: buildNode.Identifier(2, 2)({
                     value: 'test',
                     isGetter: false,
                     isSetter: false
                   }),
-                  typeExpression: buildNode.FunctionType(2, 2)({
+                  value: buildNode.FunctionType(2, 2)({
                     from: buildNode.TypeTag(2, 2)({
                       typeTagName: buildNode.Identifier(2, 2)({
                         value: 'String',
@@ -1054,12 +1054,12 @@ describe('parser', () => {
         body: [
           buildNode.Assignment(2, 2)({
             comments: [],
-            leftSide: buildNode.Identifier(2, 2)({
+            id: buildNode.Identifier(2, 2)({
               value: 'func1',
               isGetter: false,
               isSetter: false
             }),
-            rightSide: buildNode.Call(2, 2)({
+            value: buildNode.Call(2, 2)({
               callee: buildNode.Call(2, 2)({
                 callee: buildNode.Call(2, 2)({
                   callee: buildNode.Identifier(2, 2)({
@@ -1082,12 +1082,12 @@ describe('parser', () => {
           }),
           buildNode.Assignment(3, 3)({
             comments: [],
-            leftSide: buildNode.Identifier(3, 3)({
+            id: buildNode.Identifier(3, 3)({
               value: 'func2',
               isGetter: false,
               isSetter: false
             }),
-            rightSide: buildNode.Call(3, 3)({
+            value: buildNode.Call(3, 3)({
               callee: buildNode.Identifier(3, 3)({
                 value: 'func1',
                 isGetter: false,
@@ -1114,12 +1114,12 @@ describe('parser', () => {
         body: [
           buildNode.Assignment(2, 2)({
             comments: [],
-            leftSide: buildNode.Identifier(2, 2)({
+            id: buildNode.Identifier(2, 2)({
               value: 'fn',
               isGetter: false,
               isSetter: false
             }),
-            rightSide: buildNode.Function(2, 2)({
+            value: buildNode.Function(2, 2)({
               parameter: buildNode.Identifier(2, 2)({
                 value: 'a',
                 isGetter: false,
@@ -1154,12 +1154,12 @@ describe('parser', () => {
         body: [
           buildNode.Assignment(2, 2)({
             comments: [],
-            leftSide: buildNode.Identifier(2, 2)({
+            id: buildNode.Identifier(2, 2)({
               value: 'toStr',
               isGetter: false,
               isSetter: false
             }),
-            rightSide: buildNode.Function(2, 2)({
+            value: buildNode.Function(2, 2)({
               parameter: buildNode.Identifier(2, 2)({
                 value: 's',
                 isGetter: false,

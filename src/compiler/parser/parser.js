@@ -297,7 +297,7 @@ function parse({ source, tokens }) {
         fail('Expected a valid expression after :');
       }
 
-      return buildNode.ObjectProperty(key.lineStart, value.lineEnd)({
+      return buildNode.RecordProperty(key.lineStart, value.lineEnd)({
         key,
         value
       });
@@ -315,7 +315,7 @@ function parse({ source, tokens }) {
 
       advance();
 
-      return buildNode.ObjectProperty(key.lineStart, key.lineEnd)({
+      return buildNode.RecordProperty(key.lineStart, key.lineEnd)({
         key,
         value: key
       });
@@ -336,7 +336,7 @@ function parse({ source, tokens }) {
       const property = parseObjectProperty();
 
       if (!property) {
-        fail('Failed to parse object property.');
+        fail('Failed to parse record property.');
       }
 
       properties.push(property);
@@ -355,7 +355,7 @@ function parse({ source, tokens }) {
 
     advance();
 
-    return buildNode.Object(lineStart, lineEnd)({ properties });
+    return buildNode.Record(lineStart, lineEnd)({ properties });
   }
 
   function parseArray() {
@@ -501,7 +501,7 @@ function parse({ source, tokens }) {
 
       advance();
 
-      const entries = [];
+      const properties = [];
 
       while (u.isIdentifier(token)) {
         const name = buildNode.Identifier(token.lineStart, token.lineEnd)({
@@ -527,10 +527,10 @@ function parse({ source, tokens }) {
           fail('Expected valid type expression after "::" in record type.');
         }
 
-        entries.push(
-          buildNode.RecordTypeEntry(name.lineStart, value.lineEnd)({
-            name,
-            typeExpression: value
+        properties.push(
+          buildNode.RecordPropertyType(name.lineStart, value.lineEnd)({
+            key: name,
+            value
           })
         );
 
@@ -551,9 +551,9 @@ function parse({ source, tokens }) {
 
       firstNode = buildNode.RecordType(
         lineStart,
-        entries[entries.length - 1].lineEnd
+        properties[properties.length - 1].lineEnd
       )({
-        entries
+        properties
       });
     } else if (u.isIdentifier(token) && /^[a-z]/.test(token.value)) {
       const id = buildNode.Identifier(token.lineStart, token.lineEnd)({
@@ -918,8 +918,8 @@ function parse({ source, tokens }) {
       }
 
       const node = buildNode.Assignment(lineStart, valueExpression.lineEnd)({
-        leftSide: id,
-        rightSide: valueExpression
+        id,
+        value: valueExpression
       });
 
       collectComments(node);
