@@ -219,7 +219,7 @@ describe('parser', () => {
               isGetter: true,
               isSetter: false
             }),
-            arg: buildNode.Identifier(1, 1)({
+            argument: buildNode.Identifier(1, 1)({
               value: 'someObject',
               isGetter: false,
               isSetter: false
@@ -242,9 +242,9 @@ describe('parser', () => {
                 isGetter: false,
                 isSetter: true
               }),
-              arg: buildNode.Number(1, 1)({ value: 47 })
+              argument: buildNode.Number(1, 1)({ value: 47 })
             }),
-            arg: buildNode.Identifier(1, 1)({
+            argument: buildNode.Identifier(1, 1)({
               value: 'someObject',
               isGetter: false,
               isSetter: false
@@ -266,7 +266,7 @@ describe('parser', () => {
               isGetter: false,
               isSetter: false
             }),
-            arg: buildNode.Identifier(1, 1)({
+            argument: buildNode.Identifier(1, 1)({
               value: 'someArg',
               isGetter: false,
               isSetter: false
@@ -290,13 +290,13 @@ describe('parser', () => {
                   isGetter: false,
                   isSetter: false
                 }),
-                arg: buildNode.Number(1, 1)({ value: 47 })
+                argument: buildNode.Number(1, 1)({ value: 47 })
               }),
-              arg: buildNode.String(1, 1)({
+              argument: buildNode.String(1, 1)({
                 value: 'something here'
               })
             }),
-            arg: buildNode.Identifier(1, 1)({
+            argument: buildNode.Identifier(1, 1)({
               value: 'cool',
               isGetter: false,
               isSetter: false
@@ -321,16 +321,16 @@ describe('parser', () => {
                 isGetter: false,
                 isSetter: false
               }),
-              arg: buildNode.Call(2, 2)({
+              argument: buildNode.Call(2, 2)({
                 callee: buildNode.Identifier(2, 2)({
                   value: 'someOtherFunc',
                   isGetter: false,
                   isSetter: false
                 }),
-                arg: buildNode.Number(2, 2)({ value: 3 })
+                argument: buildNode.Number(2, 2)({ value: 3 })
               })
             }),
-            arg: buildNode.Number(2, 2)({ value: 4 })
+            argument: buildNode.Number(2, 2)({ value: 4 })
           })
         ]
       });
@@ -539,11 +539,11 @@ describe('parser', () => {
                   isGetter: false,
                   isSetter: false
                 }),
-                arg: buildNode.Boolean(6, 6)({
+                argument: buildNode.Boolean(6, 6)({
                   value: true
                 })
               }),
-              arg: buildNode.Boolean(6, 6)({
+              argument: buildNode.Boolean(6, 6)({
                 value: false
               })
             }),
@@ -1067,13 +1067,13 @@ describe('parser', () => {
                     isGetter: false,
                     isSetter: false
                   }),
-                  arg: buildNode.Number(2, 2)({ value: 47 })
+                  argument: buildNode.Number(2, 2)({ value: 47 })
                 }),
-                arg: buildNode.String(2, 2)({
+                argument: buildNode.String(2, 2)({
                   value: 'something here'
                 })
               }),
-              arg: buildNode.Identifier(2, 2)({
+              argument: buildNode.Identifier(2, 2)({
                 value: 'cool',
                 isGetter: false,
                 isSetter: false
@@ -1093,7 +1093,7 @@ describe('parser', () => {
                 isGetter: false,
                 isSetter: false
               }),
-              arg: buildNode.Boolean(3, 3)({
+              argument: buildNode.Boolean(3, 3)({
                 value: true
               })
             })
@@ -1136,7 +1136,7 @@ describe('parser', () => {
               isGetter: false,
               isSetter: false
             }),
-            arg: buildNode.Number(4, 4)({ value: 1 })
+            argument: buildNode.Number(4, 4)({ value: 1 })
           })
         ]
       });
@@ -1171,7 +1171,7 @@ describe('parser', () => {
                   isGetter: false,
                   isSetter: false
                 }),
-                arg: buildNode.Identifier(2, 2)({
+                argument: buildNode.Identifier(2, 2)({
                   value: 's',
                   isGetter: false,
                   isSetter: false

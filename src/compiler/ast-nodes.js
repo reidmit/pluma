@@ -12,7 +12,7 @@ const nodes = {
   },
 
   Call: {
-    props: ['callee', 'arg']
+    props: ['callee', 'argument']
   },
 
   Conditional: {

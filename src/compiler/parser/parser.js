@@ -210,16 +210,16 @@ function parse({ source, tokens }) {
 
     if (!func) return;
 
-    let arg;
+    let argument;
     while (token && token.columnStart > lastAssignmentColumn) {
       const lineStart = token.lineStart;
       const lineEnd = token.lineEnd;
 
-      arg = parseExpression();
+      argument = parseExpression();
 
-      if (!arg) break;
+      if (!argument) break;
 
-      func = buildNode.Call(lineStart, lineEnd)({ callee: func, arg });
+      func = buildNode.Call(lineStart, lineEnd)({ callee: func, argument });
     }
 
     return func;
