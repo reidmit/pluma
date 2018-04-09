@@ -1,6 +1,7 @@
 import parse from './parser';
 import tokenize from '../tokenizer';
 import { buildNode } from '../ast-nodes';
+import { EFAULT } from 'constants';
 
 const expectParseResult = ({ source, lineStart, lineEnd, body }) => {
   const tokens = tokenize({ source });
@@ -174,7 +175,7 @@ describe('parser', () => {
       });
     });
 
-    test('assignment', () => {
+    test('assignment (without type annotation)', () => {
       expectParseResult({
         source: `
           let hello = 47
@@ -190,6 +191,7 @@ describe('parser', () => {
               isGetter: false,
               isSetter: false
             }),
+            typeAnnotation: null,
             value: buildNode.Number(2, 2)({ value: 47 })
           }),
           buildNode.Assignment(3, 3)({
@@ -199,8 +201,113 @@ describe('parser', () => {
               isGetter: false,
               isSetter: false
             }),
+            typeAnnotation: null,
             value: buildNode.String(3, 3)({
               value: 'hello, world!'
+            })
+          })
+        ]
+      });
+    });
+
+    test('assignment (with type annotation)', () => {
+      expectParseResult({
+        source: `
+          let hello :: Number = 47
+          let someString :: String = "hello, world!"
+          let f2 :: String -> Number -> Boolean
+            = s => n => False
+        `,
+        lineStart: 2,
+        lineEnd: 5,
+        body: [
+          buildNode.Assignment(2, 2)({
+            comments: [],
+            id: buildNode.Identifier(2, 2)({
+              value: 'hello',
+              isGetter: false,
+              isSetter: false
+            }),
+            typeAnnotation: buildNode.TypeTag(2, 2)({
+              typeExpression: null,
+              typeTagName: buildNode.Identifier(2, 2)({
+                value: 'Number',
+                isGetter: false,
+                isSetter: false
+              })
+            }),
+            value: buildNode.Number(2, 2)({ value: 47 })
+          }),
+          buildNode.Assignment(3, 3)({
+            comments: [],
+            id: buildNode.Identifier(3, 3)({
+              value: 'someString',
+              isGetter: false,
+              isSetter: false
+            }),
+            typeAnnotation: buildNode.TypeTag(3, 3)({
+              typeExpression: null,
+              typeTagName: buildNode.Identifier(3, 3)({
+                value: 'String',
+                isGetter: false,
+                isSetter: false
+              })
+            }),
+            value: buildNode.String(3, 3)({
+              value: 'hello, world!'
+            })
+          }),
+          buildNode.Assignment(4, 5)({
+            comments: [],
+            id: buildNode.Identifier(4, 4)({
+              value: 'f2',
+              isGetter: false,
+              isSetter: false
+            }),
+            typeAnnotation: buildNode.FunctionType(4, 4)({
+              from: buildNode.TypeTag(4, 4)({
+                typeExpression: null,
+                typeTagName: buildNode.Identifier(4, 4)({
+                  value: 'String',
+                  isGetter: false,
+                  isSetter: false
+                })
+              }),
+              to: buildNode.FunctionType(4, 4)({
+                from: buildNode.TypeTag(4, 4)({
+                  typeExpression: null,
+                  typeTagName: buildNode.Identifier(4, 4)({
+                    value: 'Number',
+                    isGetter: false,
+                    isSetter: false
+                  })
+                }),
+                to: buildNode.TypeTag(4, 4)({
+                  typeExpression: null,
+                  typeTagName: buildNode.Identifier(4, 4)({
+                    value: 'Boolean',
+                    isGetter: false,
+                    isSetter: false
+                  })
+                })
+              })
+            }),
+            value: buildNode.Function(5, 5)({
+              parameter: buildNode.Identifier(5, 5)({
+                value: 's',
+                isGetter: false,
+                isSetter: false
+              }),
+              body: buildNode.Function(5, 5)({
+                parameter: buildNode.Identifier(5, 5)({
+                  value: 'n',
+                  isGetter: false,
+                  isSetter: false
+                }),
+                body: buildNode.Boolean(5, 5)({
+                  value: false
+                })
+              })
             })
           })
         ]
@@ -599,6 +706,7 @@ describe('parser', () => {
               isGetter: false,
               isSetter: false
             }),
+            typeAnnotation: null,
             value: buildNode.Number(4, 4)({ value: 47 })
           })
         ]
@@ -1059,6 +1167,7 @@ describe('parser', () => {
               isGetter: false,
               isSetter: false
             }),
+            typeAnnotation: null,
             value: buildNode.Call(2, 2)({
               callee: buildNode.Call(2, 2)({
                 callee: buildNode.Call(2, 2)({
@@ -1087,6 +1196,7 @@ describe('parser', () => {
               isGetter: false,
               isSetter: false
             }),
+            typeAnnotation: null,
             value: buildNode.Call(3, 3)({
               callee: buildNode.Identifier(3, 3)({
                 value: 'func1',
@@ -1119,6 +1229,7 @@ describe('parser', () => {
               isGetter: false,
               isSetter: false
             }),
+            typeAnnotation: null,
             value: buildNode.Function(2, 2)({
               parameter: buildNode.Identifier(2, 2)({
                 value: 'a',
@@ -1159,6 +1270,7 @@ describe('parser', () => {
               isGetter: false,
               isSetter: false
             }),
+            typeAnnotation: null,
             value: buildNode.Function(2, 2)({
               parameter: buildNode.Identifier(2, 2)({
                 value: 's',

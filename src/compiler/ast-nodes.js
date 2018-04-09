@@ -4,7 +4,7 @@ const nodes = {
   },
 
   Assignment: {
-    props: ['id', 'value']
+    props: ['id', 'typeAnnotation', 'value']
   },
 
   Boolean: {

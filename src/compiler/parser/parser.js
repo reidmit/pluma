@@ -898,7 +898,10 @@ function parse({ source, tokens }) {
 
     const lineStart = token.lineStart;
 
-    if (u.isIdentifier(tokens[index + 1]) && u.isEquals(tokens[index + 2])) {
+    if (
+      u.isIdentifier(tokens[index + 1]) &&
+      (u.isEquals(tokens[index + 2]) || u.isDoubleColon(tokens[index + 2]))
+    ) {
       lastAssignmentColumn = token.columnStart;
 
       advance();
@@ -909,7 +912,21 @@ function parse({ source, tokens }) {
         isSetter: false
       });
 
-      advance(2);
+      advance();
+
+      let typeAnnotation = null;
+
+      if (u.isDoubleColon(token)) {
+        advance();
+
+        typeAnnotation = parseTypeExpression();
+
+        if (!typeAnnotation) {
+          fail('Expected a valid type annotation after "::" in assignment.');
+        }
+      }
+
+      advance();
 
       const valueExpression = parseExpression(token);
 
@@ -919,6 +936,7 @@ function parse({ source, tokens }) {
 
       const node = buildNode.Assignment(lineStart, valueExpression.lineEnd)({
         id,
+        typeAnnotation,
         value: valueExpression
       });
 
