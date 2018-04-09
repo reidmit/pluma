@@ -412,6 +412,42 @@ describe('parser', () => {
       });
     });
 
+    test('call expression (multiple identifier arguments)', () => {
+      expectParseResult({
+        source: 'combine a b c',
+        lineStart: 1,
+        lineEnd: 1,
+        body: [
+          buildNode.Call(1, 1)({
+            callee: buildNode.Call(1, 1)({
+              callee: buildNode.Call(1, 1)({
+                callee: buildNode.Identifier(1, 1)({
+                  value: 'combine',
+                  isGetter: false,
+                  isSetter: false
+                }),
+                argument: buildNode.Identifier(1, 1)({
+                  value: 'a',
+                  isGetter: false,
+                  isSetter: false
+                })
+              }),
+              argument: buildNode.Identifier(1, 1)({
+                value: 'b',
+                isGetter: false,
+                isSetter: false
+              })
+            }),
+            argument: buildNode.Identifier(1, 1)({
+              value: 'c',
+              isGetter: false,
+              isSetter: false
+            })
+          })
+        ]
+      });
+    });
+
     test('nested call expressions with parentheses', () => {
       expectParseResult({
         source: `
@@ -791,7 +827,7 @@ describe('parser', () => {
             a = 47
             b = "hello"
           in
-            True
+            combine a b
         `,
         lineStart: 2,
         lineEnd: 6,
@@ -819,8 +855,24 @@ describe('parser', () => {
                 value: buildNode.String(4, 4)({ value: 'hello' })
               })
             ],
-            body: buildNode.Boolean(6, 6)({
-              value: true
+            body: buildNode.Call(6, 6)({
+              callee: buildNode.Call(6, 6)({
+                callee: buildNode.Identifier(6, 6)({
+                  value: 'combine',
+                  isGetter: false,
+                  isSetter: false
+                }),
+                argument: buildNode.Identifier(6, 6)({
+                  value: 'a',
+                  isGetter: false,
+                  isSetter: false
+                })
+              }),
+              argument: buildNode.Identifier(6, 6)({
+                value: 'b',
+                isGetter: false,
+                isSetter: false
+              })
             })
           })
         ]

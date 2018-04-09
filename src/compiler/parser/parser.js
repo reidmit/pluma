@@ -204,13 +204,15 @@ function parse({ source, tokens }) {
     });
   }
 
-  function parsePossibleCallExpression() {
+  function parsePossibleCallExpression(disallowCalls) {
     const firstTokenColumnStart = token.columnStart;
 
     let func =
       parseFunction() || parseGetter() || parseSetter() || parseIdentifier();
 
     if (!func) return;
+
+    if (disallowCalls) return func;
 
     let argument;
     while (
@@ -221,7 +223,7 @@ function parse({ source, tokens }) {
       const lineStart = token.lineStart;
       const lineEnd = token.lineEnd;
 
-      argument = parseExpression({ disallowPipes: true });
+      argument = parseExpression({ disallowPipes: true, disallowCalls: true });
 
       if (!argument || argument === true) break;
 
@@ -930,7 +932,7 @@ function parse({ source, tokens }) {
       case tokenTypes.DOT_IDENTIFIER:
       case tokenTypes.AT_IDENTIFIER:
       case tokenTypes.IDENTIFIER:
-        expr = parsePossibleCallExpression();
+        expr = parsePossibleCallExpression(options.disallowCalls);
         break;
 
       case tokenTypes.KEYWORD:
