@@ -206,13 +206,19 @@ function parse({ source, tokens }) {
   }
 
   function parsePossibleCallExpression() {
+    const firstTokenColumnStart = token.columnStart;
+
     let func =
       parseFunction() || parseGetter() || parseSetter() || parseIdentifier();
 
     if (!func) return;
 
     let argument;
-    while (token && token.columnStart > lastAssignmentColumn) {
+    while (
+      token &&
+      token.columnStart > lastAssignmentColumn &&
+      token.columnStart > firstTokenColumnStart
+    ) {
       const lineStart = token.lineStart;
       const lineEnd = token.lineEnd;
 

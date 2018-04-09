@@ -1214,154 +1214,193 @@ describe('parser', () => {
       });
     });
 
-    test('multiple complex assignments', () => {
-      expectParseResult({
-        source: `
+    describe('edge cases', () => {
+      test('multiple complex assignments', () => {
+        expectParseResult({
+          source: `
           let func1 = helloWorld 47 "something here" cool
           let func2 = func1 True
         `,
-        lineStart: 2,
-        lineEnd: 3,
-        body: [
-          buildNode.Assignment(2, 2)({
-            comments: [],
-            id: buildNode.Identifier(2, 2)({
-              value: 'func1',
-              isGetter: false,
-              isSetter: false
-            }),
-            typeAnnotation: null,
-            value: buildNode.Call(2, 2)({
-              callee: buildNode.Call(2, 2)({
-                callee: buildNode.Call(2, 2)({
-                  callee: buildNode.Identifier(2, 2)({
-                    value: 'helloWorld',
-                    isGetter: false,
-                    isSetter: false
-                  }),
-                  argument: buildNode.Number(2, 2)({ value: 47 })
-                }),
-                argument: buildNode.String(2, 2)({
-                  value: 'something here'
-                })
-              }),
-              argument: buildNode.Identifier(2, 2)({
-                value: 'cool',
-                isGetter: false,
-                isSetter: false
-              })
-            })
-          }),
-          buildNode.Assignment(3, 3)({
-            comments: [],
-            id: buildNode.Identifier(3, 3)({
-              value: 'func2',
-              isGetter: false,
-              isSetter: false
-            }),
-            typeAnnotation: null,
-            value: buildNode.Call(3, 3)({
-              callee: buildNode.Identifier(3, 3)({
+          lineStart: 2,
+          lineEnd: 3,
+          body: [
+            buildNode.Assignment(2, 2)({
+              comments: [],
+              id: buildNode.Identifier(2, 2)({
                 value: 'func1',
                 isGetter: false,
                 isSetter: false
               }),
-              argument: buildNode.Boolean(3, 3)({
-                value: true
-              })
-            })
-          })
-        ]
-      });
-    });
-
-    test('function definition followed by call', () => {
-      expectParseResult({
-        source: `
-          let fn = a => "hello, world!"
-
-          fn 1
-        `,
-        lineStart: 2,
-        lineEnd: 4,
-        body: [
-          buildNode.Assignment(2, 2)({
-            comments: [],
-            id: buildNode.Identifier(2, 2)({
-              value: 'fn',
-              isGetter: false,
-              isSetter: false
-            }),
-            typeAnnotation: null,
-            value: buildNode.Function(2, 2)({
-              parameter: buildNode.Identifier(2, 2)({
-                value: 'a',
-                isGetter: false,
-                isSetter: false
-              }),
-              body: buildNode.String(2, 2)({
-                value: 'hello, world!'
-              })
-            })
-          }),
-          buildNode.Call(4, 4)({
-            callee: buildNode.Identifier(4, 4)({
-              value: 'fn',
-              isGetter: false,
-              isSetter: false
-            }),
-            argument: buildNode.Number(4, 4)({ value: 1 })
-          })
-        ]
-      });
-    });
-
-    test('function definition followed by array', () => {
-      expectParseResult({
-        source: `
-          let toStr = s => fn s
-
-          [1, 2, 3]
-        `,
-        lineStart: 2,
-        lineEnd: 4,
-        body: [
-          buildNode.Assignment(2, 2)({
-            comments: [],
-            id: buildNode.Identifier(2, 2)({
-              value: 'toStr',
-              isGetter: false,
-              isSetter: false
-            }),
-            typeAnnotation: null,
-            value: buildNode.Function(2, 2)({
-              parameter: buildNode.Identifier(2, 2)({
-                value: 's',
-                isGetter: false,
-                isSetter: false
-              }),
-              body: buildNode.Call(2, 2)({
-                callee: buildNode.Identifier(2, 2)({
-                  value: 'fn',
-                  isGetter: false,
-                  isSetter: false
+              typeAnnotation: null,
+              value: buildNode.Call(2, 2)({
+                callee: buildNode.Call(2, 2)({
+                  callee: buildNode.Call(2, 2)({
+                    callee: buildNode.Identifier(2, 2)({
+                      value: 'helloWorld',
+                      isGetter: false,
+                      isSetter: false
+                    }),
+                    argument: buildNode.Number(2, 2)({ value: 47 })
+                  }),
+                  argument: buildNode.String(2, 2)({
+                    value: 'something here'
+                  })
                 }),
                 argument: buildNode.Identifier(2, 2)({
-                  value: 's',
+                  value: 'cool',
                   isGetter: false,
                   isSetter: false
                 })
               })
+            }),
+            buildNode.Assignment(3, 3)({
+              comments: [],
+              id: buildNode.Identifier(3, 3)({
+                value: 'func2',
+                isGetter: false,
+                isSetter: false
+              }),
+              typeAnnotation: null,
+              value: buildNode.Call(3, 3)({
+                callee: buildNode.Identifier(3, 3)({
+                  value: 'func1',
+                  isGetter: false,
+                  isSetter: false
+                }),
+                argument: buildNode.Boolean(3, 3)({
+                  value: true
+                })
+              })
             })
-          }),
-          buildNode.Array(4, 4)({
-            elements: [
-              buildNode.Number(4, 4)({ value: 1 }),
-              buildNode.Number(4, 4)({ value: 2 }),
-              buildNode.Number(4, 4)({ value: 3 })
-            ]
-          })
-        ]
+          ]
+        });
+      });
+
+      test('function definition followed by call', () => {
+        expectParseResult({
+          source: `
+          let fn = a => "hello, world!"
+
+          fn 1
+        `,
+          lineStart: 2,
+          lineEnd: 4,
+          body: [
+            buildNode.Assignment(2, 2)({
+              comments: [],
+              id: buildNode.Identifier(2, 2)({
+                value: 'fn',
+                isGetter: false,
+                isSetter: false
+              }),
+              typeAnnotation: null,
+              value: buildNode.Function(2, 2)({
+                parameter: buildNode.Identifier(2, 2)({
+                  value: 'a',
+                  isGetter: false,
+                  isSetter: false
+                }),
+                body: buildNode.String(2, 2)({
+                  value: 'hello, world!'
+                })
+              })
+            }),
+            buildNode.Call(4, 4)({
+              callee: buildNode.Identifier(4, 4)({
+                value: 'fn',
+                isGetter: false,
+                isSetter: false
+              }),
+              argument: buildNode.Number(4, 4)({ value: 1 })
+            })
+          ]
+        });
+      });
+
+      test('function definition followed by array', () => {
+        expectParseResult({
+          source: `
+          let toStr = s => fn s
+
+          [1, 2, 3]
+        `,
+          lineStart: 2,
+          lineEnd: 4,
+          body: [
+            buildNode.Assignment(2, 2)({
+              comments: [],
+              id: buildNode.Identifier(2, 2)({
+                value: 'toStr',
+                isGetter: false,
+                isSetter: false
+              }),
+              typeAnnotation: null,
+              value: buildNode.Function(2, 2)({
+                parameter: buildNode.Identifier(2, 2)({
+                  value: 's',
+                  isGetter: false,
+                  isSetter: false
+                }),
+                body: buildNode.Call(2, 2)({
+                  callee: buildNode.Identifier(2, 2)({
+                    value: 'fn',
+                    isGetter: false,
+                    isSetter: false
+                  }),
+                  argument: buildNode.Identifier(2, 2)({
+                    value: 's',
+                    isGetter: false,
+                    isSetter: false
+                  })
+                })
+              })
+            }),
+            buildNode.Array(4, 4)({
+              elements: [
+                buildNode.Number(4, 4)({ value: 1 }),
+                buildNode.Number(4, 4)({ value: 2 }),
+                buildNode.Number(4, 4)({ value: 3 })
+              ]
+            })
+          ]
+        });
+      });
+
+      test('consecutive function calls with same level of indentation', () => {
+        expectParseResult({
+          source: `
+            f one
+            g two
+          `,
+          lineStart: 2,
+          lineEnd: 3,
+          body: [
+            buildNode.Call(2, 2)({
+              callee: buildNode.Identifier(2, 2)({
+                value: 'f',
+                isGetter: false,
+                isSetter: false
+              }),
+              argument: buildNode.Identifier(2, 2)({
+                value: 'one',
+                isGetter: false,
+                isSetter: false
+              })
+            }),
+            buildNode.Call(3, 3)({
+              callee: buildNode.Identifier(3, 3)({
+                value: 'g',
+                isGetter: false,
+                isSetter: false
+              }),
+              argument: buildNode.Identifier(3, 3)({
+                value: 'two',
+                isGetter: false,
+                isSetter: false
+              })
+            })
+          ]
+        });
       });
     });
   });
