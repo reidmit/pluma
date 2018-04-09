@@ -478,7 +478,9 @@ function parse({ source, tokens }) {
         }
 
         firstNode = buildNode.TupleType(leftParen.lineStart, leftParen.lineEnd)(
-          { typeEntries: [firstNode, ...otherTupleEntries] }
+          {
+            typeEntries: [firstNode, ...otherTupleEntries]
+          }
         );
       }
 
