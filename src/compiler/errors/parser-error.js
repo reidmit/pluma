@@ -16,7 +16,11 @@ class ParserError extends Error {
       });
 
     super(message);
-    this.name = `Syntax error at line ${lineStart}, columns ${columnStart}-${columnEnd}`;
+    this.name =
+      `Syntax error at line ${lineStart}, ` +
+      (columnEnd - columnStart === 1
+        ? `column ${columnStart}`
+        : `columns ${columnStart}-${columnEnd}`);
     this.stack = null;
   }
 }

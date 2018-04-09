@@ -7,7 +7,7 @@ const source = `
 
   [x => 36, y => 37, z => 47]
 
-  let q = {a: 47, b: "nice", c: x => 400}
+  q = {a: 47, b: "nice", c: x => 400}
 
   q.a
 `;

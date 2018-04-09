@@ -1,7 +1,6 @@
 import parse from './parser';
 import tokenize from '../tokenizer';
 import { buildNode } from '../ast-nodes';
-import { EFAULT } from 'constants';
 
 const expectParseResult = ({ source, lineStart, lineEnd, body }) => {
   const tokens = tokenize({ source });
@@ -178,8 +177,8 @@ describe('parser', () => {
     test('assignment (without type annotation)', () => {
       expectParseResult({
         source: `
-          let hello = 47
-          let someString = "hello, world!"
+          hello = 47
+          someString = "hello, world!"
         `,
         lineStart: 2,
         lineEnd: 3,
@@ -213,9 +212,9 @@ describe('parser', () => {
     test('assignment (with type annotation)', () => {
       expectParseResult({
         source: `
-          let hello :: Number = 47
-          let someString :: String = "hello, world!"
-          let f2 :: String -> Number -> Boolean
+          hello :: Number = 47
+          someString :: String = "hello, world!"
+          f2 :: String -> Number -> Boolean
             = s => n => False
         `,
         lineStart: 2,
@@ -752,7 +751,7 @@ describe('parser', () => {
         source: `
           # This is a comment that
           # should be preserved for the below assignment
-          let x = 47 # but not this
+          x = 47 # but not this
 
           # or this
         `,
@@ -1218,8 +1217,8 @@ describe('parser', () => {
       test('multiple complex assignments', () => {
         expectParseResult({
           source: `
-          let func1 = helloWorld 47 "something here" cool
-          let func2 = func1 True
+          func1 = helloWorld 47 "something here" cool
+          func2 = func1 True
         `,
           lineStart: 2,
           lineEnd: 3,
@@ -1279,7 +1278,7 @@ describe('parser', () => {
       test('function definition followed by call', () => {
         expectParseResult({
           source: `
-          let fn = a => "hello, world!"
+          fn = a => "hello, world!"
 
           fn 1
         `,
@@ -1320,7 +1319,7 @@ describe('parser', () => {
       test('function definition followed by array', () => {
         expectParseResult({
           source: `
-          let toStr = s => fn s
+          toStr = s => fn s
 
           [1, 2, 3]
         `,
@@ -1406,13 +1405,6 @@ describe('parser', () => {
   });
 
   describe('error cases', () => {
-    test('unexpected token after "let"', () => {
-      expectParseError(
-        'let let',
-        'Unexpected keyword "let" found after "let" keyword. Expected an identifier.'
-      );
-    });
-
     test('unexpected end of input', () => {
       expectParseError('(', 'Unexpectedly reached end of input.');
     });

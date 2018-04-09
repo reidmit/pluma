@@ -8,7 +8,6 @@ function parse({ source, tokens }) {
   let index = 0;
   let token = tokens[index];
   let lastAssignmentColumn = 0;
-  let lastExpression = null;
   const fullLineComments = {};
 
   function advance(amount = 1) {
@@ -871,35 +870,6 @@ function parse({ source, tokens }) {
     return true;
   }
 
-  function parsePipeExpression() {
-    if (!u.isPipe(token)) return;
-
-    //   advance();
-
-    //   const oldLastExpression = { ...lastExpression };
-    //   console.log({ lastExpression });
-
-    //   const rightSide = parseExpression();
-
-    //   lastExpression.kind = 'BinaryExpression';
-    //   lastExpression.lineEnd = rightSide.lineEnd;
-    //   lastExpression.operator = '|>';
-    //   lastExpression.left = oldLastExpression;
-    //   lastExpression.right = rightSide;
-
-    //   return lastExpression;
-
-    //   //   if (!rightSide) {
-    //   //     fail('Expected a valid expression after "|>".');
-    //   //   }
-
-    //   //   return buildNode.BinaryExpression(expr.lineStart, rightSide.lineEnd)({
-    //   //     operator: '|>',
-    //   //     left: expr,
-    //   //     right: rightSide
-    //   //   });
-  }
-
   function parseExpression(options = {}) {
     if (!token) return;
 
@@ -951,23 +921,17 @@ function parse({ source, tokens }) {
       });
     }
 
-    lastExpression = expr;
-
     return expr;
   }
 
   function parseAssignment() {
-    if (!u.isLet(token)) return;
-
-    const lineStart = token.lineStart;
-
     if (
-      u.isIdentifier(tokens[index + 1]) &&
-      (u.isEquals(tokens[index + 2]) || u.isDoubleColon(tokens[index + 2]))
+      u.isIdentifier(token) &&
+      (u.isEquals(tokens[index + 1]) || u.isDoubleColon(tokens[index + 1]))
     ) {
-      lastAssignmentColumn = token.columnStart;
+      const lineStart = token.lineStart;
 
-      advance();
+      lastAssignmentColumn = token.columnStart;
 
       const id = buildNode.Identifier(token.lineStart, token.lineEnd)({
         value: token.value,
@@ -1007,19 +971,14 @@ function parse({ source, tokens }) {
 
       return node;
     }
-
-    fail(
-      t => `Unexpected ${t} found after "let" keyword. Expected an identifier.`,
-      tokens[index + 1]
-    );
   }
 
   function parseStatement() {
-    const expression = parseExpression();
-    if (expression) return expression;
-
     const assignment = parseAssignment();
     if (assignment) return assignment;
+
+    const expression = parseExpression();
+    if (expression) return expression;
   }
 
   const body = [];
