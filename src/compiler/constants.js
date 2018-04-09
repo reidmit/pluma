@@ -41,7 +41,15 @@ export const symbolRegexes = symbols.map(
     )
 );
 
-export const reservedWords = ['let', 'if', 'then', 'else', 'type', 'alias'];
+export const reservedWords = [
+  'let',
+  'in',
+  'if',
+  'then',
+  'else',
+  'type',
+  'alias'
+];
 
 export const reservedWordRegexes = reservedWords.map(
   word => new RegExp('^' + word + '\\b')

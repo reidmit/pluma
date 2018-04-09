@@ -870,6 +870,42 @@ function parse({ source, tokens }) {
     return true;
   }
 
+  function parseLetExpression() {
+    if (!u.isLet(token)) return;
+
+    const lineStart = token.lineStart;
+
+    advance();
+
+    const assignments = [];
+
+    let assignment;
+    while ((assignment = parseAssignment())) {
+      assignments.push(assignment);
+    }
+
+    if (!assignments.length) {
+      fail('Expected at least one assignment after "let" keyword.');
+    }
+
+    if (!u.isIn(token)) {
+      fail('Expected "in" keyword after assignments in "let" expression.');
+    }
+
+    advance();
+
+    const body = parseExpression();
+
+    if (!body) {
+      fail('Expected a valid expression after "in" in "let" expression.');
+    }
+
+    return buildNode.LetExpression(lineStart, body.lineEnd)({
+      assignments,
+      body
+    });
+  }
+
   function parseExpression(options = {}) {
     if (!token) return;
 
@@ -898,7 +934,8 @@ function parse({ source, tokens }) {
         break;
 
       case tokenTypes.KEYWORD:
-        expr = parseTypeDeclaration() || parseConditional();
+        expr =
+          parseTypeDeclaration() || parseConditional() || parseLetExpression();
         break;
 
       case tokenTypes.SYMBOL:

@@ -746,6 +746,87 @@ describe('parser', () => {
       });
     });
 
+    test('let-in expressions (simple)', () => {
+      expectParseResult({
+        source: `
+          let a = 47 in add a
+        `,
+        lineStart: 2,
+        lineEnd: 2,
+        body: [
+          buildNode.LetExpression(2, 2)({
+            assignments: [
+              buildNode.Assignment(2, 2)({
+                comments: [],
+                id: buildNode.Identifier(2, 2)({
+                  value: 'a',
+                  isGetter: false,
+                  isSetter: false
+                }),
+                typeAnnotation: null,
+                value: buildNode.Number(2, 2)({ value: 47 })
+              })
+            ],
+            body: buildNode.Call(2, 2)({
+              callee: buildNode.Identifier(2, 2)({
+                value: 'add',
+                isGetter: false,
+                isSetter: false
+              }),
+              argument: buildNode.Identifier(2, 2)({
+                value: 'a',
+                isGetter: false,
+                isSetter: false
+              })
+            })
+          })
+        ]
+      });
+    });
+
+    test('let-in expressions (multiple assignments)', () => {
+      expectParseResult({
+        source: `
+          let
+            a = 47
+            b = "hello"
+          in
+            True
+        `,
+        lineStart: 2,
+        lineEnd: 6,
+        body: [
+          buildNode.LetExpression(2, 6)({
+            assignments: [
+              buildNode.Assignment(3, 3)({
+                comments: [],
+                id: buildNode.Identifier(3, 3)({
+                  value: 'a',
+                  isGetter: false,
+                  isSetter: false
+                }),
+                typeAnnotation: null,
+                value: buildNode.Number(3, 3)({ value: 47 })
+              }),
+              buildNode.Assignment(4, 4)({
+                comments: [],
+                id: buildNode.Identifier(4, 4)({
+                  value: 'b',
+                  isGetter: false,
+                  isSetter: false
+                }),
+                typeAnnotation: null,
+                value: buildNode.String(4, 4)({ value: 'hello' })
+              })
+            ],
+            body: buildNode.Boolean(6, 6)({
+              value: true
+            })
+          })
+        ]
+      });
+    });
+
     test('comments', () => {
       expectParseResult({
         source: `

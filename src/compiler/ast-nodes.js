@@ -35,6 +35,10 @@ const nodes = {
     props: ['literals', 'expressions']
   },
 
+  LetExpression: {
+    props: ['assignments', 'body']
+  },
+
   MemberExpression: {
     props: ['parts']
   },

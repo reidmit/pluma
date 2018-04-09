@@ -55,6 +55,8 @@ export const isDoubleColon = isSymbol('::');
 
 export const isLet = isKeyword('let');
 
+export const isIn = isKeyword('in');
+
 export const isIf = isKeyword('if');
 
 export const isThen = isKeyword('then');
