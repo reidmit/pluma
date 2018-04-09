@@ -684,7 +684,7 @@ describe('parser', () => {
       });
     });
 
-    test.only('pipe expression (|>)', () => {
+    test('pipe expression (|>)', () => {
       expectParseResult({
         source: `
           "hello" |> length
