@@ -25,6 +25,8 @@ export const isComment = isTokenType('LINE_COMMENT');
 
 export const isBar = isSymbol('|');
 
+export const isPipe = isSymbol('|>');
+
 export const isLeftBracket = isSymbol('[');
 
 export const isRightBracket = isSymbol(']');

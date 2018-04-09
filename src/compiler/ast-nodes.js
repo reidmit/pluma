@@ -47,6 +47,10 @@ const nodes = {
     props: ['value']
   },
 
+  PipeExpression: {
+    props: ['left', 'right']
+  },
+
   Record: {
     props: ['properties']
   },

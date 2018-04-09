@@ -684,6 +684,69 @@ describe('parser', () => {
       });
     });
 
+    test.only('pipe expression (|>)', () => {
+      expectParseResult({
+        source: `
+          "hello" |> length
+          # separator comment
+          47 |> gt 10
+          # test
+          id 47 |> gt 10
+        `,
+        lineStart: 2,
+        lineEnd: 6,
+        body: [
+          buildNode.PipeExpression(2, 2)({
+            left: buildNode.String(2, 2)({
+              value: 'hello'
+            }),
+            right: buildNode.Identifier(2, 2)({
+              value: 'length',
+              isGetter: false,
+              isSetter: false
+            })
+          }),
+          buildNode.PipeExpression(4, 4)({
+            left: buildNode.Number(4, 4)({
+              value: 47
+            }),
+            right: buildNode.Call(4, 4)({
+              callee: buildNode.Identifier(4, 4)({
+                value: 'gt',
+                isGetter: false,
+                isSetter: false
+              }),
+              argument: buildNode.Number(4, 4)({
+                value: 10
+              })
+            })
+          }),
+          buildNode.PipeExpression(6, 6)({
+            left: buildNode.Call(6, 6)({
+              callee: buildNode.Identifier(6, 6)({
+                value: 'id',
+                isGetter: false,
+                isSetter: false
+              }),
+              argument: buildNode.Number(6, 6)({
+                value: 47
+              })
+            }),
+            right: buildNode.Call(6, 6)({
+              callee: buildNode.Identifier(6, 6)({
+                value: 'gt',
+                isGetter: false,
+                isSetter: false
+              }),
+              argument: buildNode.Number(6, 6)({
+                value: 10
+              })
+            })
+          })
+        ]
+      });
+    });
+
     test('comments', () => {
       expectParseResult({
         source: `

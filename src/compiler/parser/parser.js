@@ -8,6 +8,7 @@ function parse({ source, tokens }) {
   let index = 0;
   let token = tokens[index];
   let lastAssignmentColumn = 0;
+  let lastExpression = null;
   const fullLineComments = {};
 
   function advance(amount = 1) {
@@ -215,9 +216,9 @@ function parse({ source, tokens }) {
       const lineStart = token.lineStart;
       const lineEnd = token.lineEnd;
 
-      argument = parseExpression();
+      argument = parseExpression({ disallowPipes: true });
 
-      if (!argument) break;
+      if (!argument || argument === true) break;
 
       func = buildNode.Call(lineStart, lineEnd)({ callee: func, argument });
     }
@@ -864,33 +865,89 @@ function parse({ source, tokens }) {
     return true;
   }
 
-  function parseExpression() {
+  function parsePipeExpression() {
+    if (!u.isPipe(token)) return;
+
+    //   advance();
+
+    //   const oldLastExpression = { ...lastExpression };
+    //   console.log({ lastExpression });
+
+    //   const rightSide = parseExpression();
+
+    //   lastExpression.kind = 'BinaryExpression';
+    //   lastExpression.lineEnd = rightSide.lineEnd;
+    //   lastExpression.operator = '|>';
+    //   lastExpression.left = oldLastExpression;
+    //   lastExpression.right = rightSide;
+
+    //   return lastExpression;
+
+    //   //   if (!rightSide) {
+    //   //     fail('Expected a valid expression after "|>".');
+    //   //   }
+
+    //   //   return buildNode.BinaryExpression(expr.lineStart, rightSide.lineEnd)({
+    //   //     operator: '|>',
+    //   //     left: expr,
+    //   //     right: rightSide
+    //   //   });
+  }
+
+  function parseExpression(options = {}) {
     if (!token) return;
+
+    let expr = null;
 
     switch (token.type) {
       case tokenTypes.LINE_COMMENT:
         return parseComment();
 
       case tokenTypes.NUMBER:
-        return parseNumber();
+        expr = parseNumber();
+        break;
 
       case tokenTypes.BOOLEAN:
-        return parseBoolean();
+        expr = parseBoolean();
+        break;
 
       case tokenTypes.STRING:
-        return parseString();
+        expr = parseString();
+        break;
 
       case tokenTypes.DOT_IDENTIFIER:
       case tokenTypes.AT_IDENTIFIER:
       case tokenTypes.IDENTIFIER:
-        return parsePossibleCallExpression();
+        expr = parsePossibleCallExpression();
+        break;
 
       case tokenTypes.KEYWORD:
-        return parseTypeDeclaration() || parseConditional();
+        expr = parseTypeDeclaration() || parseConditional();
+        break;
 
       case tokenTypes.SYMBOL:
-        return parseParenthetical() || parseObject() || parseArray();
+        expr = parseParenthetical() || parseObject() || parseArray();
+        break;
     }
+
+    if (!options.disallowPipes && expr && u.isPipe(token)) {
+      advance();
+
+      const rightSide = parseExpression({ disallowPipes: true });
+
+      if (!rightSide) {
+        fail('Expected a valid expression after "|>".');
+      }
+
+      return buildNode.PipeExpression(expr.lineStart, rightSide.lineEnd)({
+        left: expr,
+        right: rightSide
+      });
+    }
+
+    lastExpression = expr;
+
+    return expr;
   }
 
   function parseAssignment() {
@@ -928,7 +985,7 @@ function parse({ source, tokens }) {
 
       advance();
 
-      const valueExpression = parseExpression(token);
+      const valueExpression = parseExpression();
 
       if (!valueExpression) {
         fail('Expected a valid expression on right-hand side of assignment');
@@ -952,10 +1009,10 @@ function parse({ source, tokens }) {
   }
 
   function parseStatement() {
-    const expression = parseExpression(token);
+    const expression = parseExpression();
     if (expression) return expression;
 
-    const assignment = parseAssignment(token);
+    const assignment = parseAssignment();
     if (assignment) return assignment;
   }
 
