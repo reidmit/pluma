@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import stringLength from 'string-length';
-import { tokenTypes } from '../constants';
+import { tokenTypes } from './constants';
 
 /**
  * Given a character and a number, returns a string with that character repeated

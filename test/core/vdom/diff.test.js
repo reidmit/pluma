@@ -1,6 +1,10 @@
-import diff from './diff';
-import el from './el';
-import { REDRAW_PATCH, PROP_CHANGE_PATCH, CHILDREN_PATCH } from './constants';
+import diff from '../../../src/core/vdom/diff';
+import el from '../../../src/core/vdom/el';
+import {
+  REDRAW_PATCH,
+  PROP_CHANGE_PATCH,
+  CHILDREN_PATCH
+} from '../../../src/core/vdom/constants';
 
 xdescribe('diff', () => {
   test('reference-equal elements', () => {

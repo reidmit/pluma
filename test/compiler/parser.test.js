@@ -1,6 +1,6 @@
-import parse from './parser';
-import tokenize from '../tokenizer';
-import { buildNode } from '../ast-nodes';
+import parse from '../../src/compiler/parser';
+import tokenize from '../../src/compiler/tokenizer';
+import { buildNode } from '../../src/compiler/ast-nodes';
 
 const expectParseResult = ({ source, lineStart, lineEnd, body }) => {
   const tokens = tokenize({ source });

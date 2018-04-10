@@ -1,5 +1,5 @@
-import { tokenTypes } from '../constants';
-import tokenize from './tokenizer';
+import { tokenTypes } from '../../src/compiler/constants';
+import tokenize from '../../src/compiler/tokenizer';
 
 const expectTokens = (input, output) =>
   expect(tokenize({ source: input })).toEqual(output);

@@ -1,4 +1,4 @@
-import generate from './generator';
+import generate from '../../src/compiler/generator';
 
 xdescribe('generate', () => {
   describe('basic examples', () => {

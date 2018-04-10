@@ -1,6 +1,6 @@
-import checkTypes from './type-checker';
-import tokenize from '../tokenizer';
-import parse from '../parser';
+import checkTypes from '../../src/compiler/type-checker';
+import tokenize from '../../src/compiler/tokenizer';
+import parse from '../../src/compiler/parser';
 
 const source = `
   47

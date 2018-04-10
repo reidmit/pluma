@@ -1,5 +1,5 @@
-import tokenize from '../tokenizer';
-import parse from '../parser';
+import tokenize from './tokenizer';
+import parse from './parser';
 import { transformFromAst } from 'babel-core';
 
 const targetOptions = {

@@ -1,4 +1,4 @@
-import { formatSourceBlock } from './error-helper';
+import { formatSourceBlock } from '../../src/compiler/error-helper';
 
 const source = `let a = 10
 let b = 20

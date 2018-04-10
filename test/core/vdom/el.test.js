@@ -1,4 +1,4 @@
-import el from './el';
+import el from '../../../src/core/vdom/el';
 
 xdescribe('el', () => {
   it('returns an object', () => {

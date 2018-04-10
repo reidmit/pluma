@@ -1,8 +1,8 @@
-import * as u from '../util';
-import { buildNode } from '../ast-nodes';
-import { ParserError } from '../errors';
-import { tokenToString } from '../errors/error-helper';
-import { tokenTypes } from '../constants';
+import * as u from './util';
+import { buildNode } from './ast-nodes';
+import ParserError from './parser-error';
+import { tokenToString } from './error-helper';
+import { tokenTypes } from './constants';
 
 function parse({ source, tokens }) {
   let index = 0;
