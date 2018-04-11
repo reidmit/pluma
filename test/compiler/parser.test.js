@@ -6,6 +6,7 @@ const expectParseResult = ({
   source,
   lineStart,
   lineEnd,
+  interop = false,
   name = null,
   comments = [],
   exports = [],
@@ -15,6 +16,7 @@ const expectParseResult = ({
   const tokens = tokenize({ source });
   expect(parse({ source, tokens })).toEqual(
     buildNode.Module(lineStart, lineEnd)({
+      interop,
       name,
       comments,
       exports,
@@ -1391,6 +1393,24 @@ describe('parser', () => {
           isSetter: false
         }),
         comments: [' This is a test module', ' that has nothing in it'],
+        body: []
+      });
+    });
+
+    test('interop module declaration', () => {
+      expectParseResult({
+        source: `
+          interop module SomeModule
+        `,
+        lineStart: 2,
+        lineEnd: 2,
+        name: buildNode.Identifier(2, 2)({
+          value: 'SomeModule',
+          isGetter: false,
+          isSetter: false
+        }),
+        interop: true,
+        comments: [],
         body: []
       });
     });

@@ -48,7 +48,7 @@ const nodes = {
   },
 
   Module: {
-    props: ['name', 'body']
+    props: ['interop', 'name', 'body']
   },
 
   Number: {

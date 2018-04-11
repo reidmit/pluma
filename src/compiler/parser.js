@@ -9,6 +9,7 @@ function parse({ source, tokens }) {
   let token = tokens[index];
   let lastAssignmentColumn = 0;
   const fullLineComments = {};
+  let interop = false;
   let moduleName = null;
   const exports = [];
   const imports = [];
@@ -1016,7 +1017,13 @@ function parse({ source, tokens }) {
   }
 
   function parseModuleDeclaration() {
-    if (!u.isModule(token)) return;
+    if (
+      !(
+        u.isModule(token) ||
+        (u.isInterop(token) && u.isModule(tokens[index + 1]))
+      )
+    )
+      return;
 
     if (moduleName) {
       fail(
@@ -1028,6 +1035,11 @@ function parse({ source, tokens }) {
       fail(
         'Invalid "module" declaration. A "module" declaration must be the first statement in its file.'
       );
+    }
+
+    if (u.isInterop(token)) {
+      interop = true;
+      advance();
     }
 
     advance();
@@ -1254,6 +1266,7 @@ function parse({ source, tokens }) {
       : Math.max(firstLine, 1);
 
   const moduleNode = buildNode.Module(firstLine, lastLine)({
+    interop,
     name: moduleName,
     exports,
     imports,

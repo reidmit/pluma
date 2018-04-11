@@ -55,6 +55,8 @@ export const isDoubleColon = isSymbol('::');
 
 export const isModule = isKeyword('module');
 
+export const isInterop = isKeyword('interop');
+
 export const isExport = isKeyword('export');
 
 export const isImport = isKeyword('import');

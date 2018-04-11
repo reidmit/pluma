@@ -52,7 +52,8 @@ export const reservedWords = [
   'then',
   'else',
   'type',
-  'alias'
+  'alias',
+  'interop'
 ];
 
 export const reservedWordRegexes = reservedWords.map(
