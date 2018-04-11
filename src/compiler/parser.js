@@ -9,6 +9,9 @@ function parse({ source, tokens }) {
   let token = tokens[index];
   let lastAssignmentColumn = 0;
   const fullLineComments = {};
+  let moduleName = null;
+  const exports = [];
+  const imports = [];
 
   function advance(amount = 1) {
     index += amount;
@@ -1012,7 +1015,216 @@ function parse({ source, tokens }) {
     }
   }
 
+  function parseModuleDeclaration() {
+    if (!u.isModule(token)) return;
+
+    if (moduleName) {
+      fail(
+        'Duplicate "module" declaration. A file may only contain one "module" declaration.'
+      );
+    }
+
+    if (body.length) {
+      fail(
+        'Invalid "module" declaration. A "module" declaration must be the first statement in its file.'
+      );
+    }
+
+    advance();
+
+    if (!u.isIdentifier(token)) {
+      fail('Expected a valid identifier after "module" in module declaration.');
+    }
+
+    moduleName = buildNode.Identifier(token.lineStart, token.lineEnd)({
+      value: token.value,
+      isGetter: false,
+      isSetter: false
+    });
+
+    advance();
+
+    return true;
+  }
+
+  function parseExport() {
+    if (!u.isExport(token)) return;
+
+    if (imports.length) {
+      fail(
+        'Export statements must come before any import statements in a file.'
+      );
+    }
+
+    advance();
+
+    if (!u.isLeftParen(token)) {
+      fail('Expected "(" after "export" in export statement.');
+    }
+
+    advance();
+
+    if (!u.isIdentifier(token)) {
+      fail('Expected an identifier after "(" in export statement.');
+    }
+
+    while (u.isIdentifier(token)) {
+      exports.push(
+        buildNode.Identifier(token.lineStart, token.lineEnd)({
+          value: token.value,
+          isGetter: false,
+          isSetter: false
+        })
+      );
+
+      advance();
+
+      if (u.isRightParen(token)) break;
+
+      if (u.isComma(token)) advance();
+    }
+
+    if (!u.isRightParen(token)) {
+      fail('Expected closing ")" to match opening "(" in export statement.');
+    }
+
+    advance();
+
+    return true;
+  }
+
+  function parseImport() {
+    if (!u.isImport(token)) return;
+
+    if (body.length) {
+      fail(
+        'Import statements must appear after export statements and before any other content in a file.'
+      );
+    }
+
+    const lineStart = token.lineStart;
+
+    advance();
+
+    if (u.isIdentifier(token)) {
+      imports.push(
+        buildNode.Import(lineStart, token.lineEnd)({
+          identifiers: null,
+          module: buildNode.Identifier(token.lineStart, token.lineEnd)({
+            value: token.value,
+            isGetter: false,
+            isSetter: false
+          })
+        })
+      );
+
+      advance();
+
+      return true;
+    }
+
+    if (!u.isLeftParen(token)) {
+      fail('Expected a module name or "(" after "import" in import statement.');
+    }
+
+    advance();
+
+    if (!u.isIdentifier(token)) {
+      fail('Expected an identifier name after "(" in import statement.');
+    }
+
+    const identifiers = [];
+
+    while (u.isIdentifier(token)) {
+      identifiers.push(
+        buildNode.Identifier(token.lineStart, token.lineEnd)({
+          value: token.value,
+          isGetter: false,
+          isSetter: false
+        })
+      );
+
+      advance();
+
+      if (u.isRightParen(token)) break;
+
+      if (u.isComma(token)) advance();
+    }
+
+    if (!u.isRightParen(token)) {
+      fail('Expected closing ")" to match opening "(" in import statement.');
+    }
+
+    advance();
+
+    if (!u.isFrom(token)) {
+      fail('Expected keyword "from" after ")" in import statement.');
+    }
+
+    advance();
+
+    if (!u.isIdentifier(token)) {
+      fail('Expected identifier after "from" in import statement.');
+    }
+
+    const moduleNameParts = [];
+
+    moduleNameParts.push(
+      buildNode.Identifier(token.lineStart, token.lineEnd)({
+        value: token.value,
+        isGetter: false,
+        isSetter: false
+      })
+    );
+
+    advance();
+
+    while (token && u.isDotIdentifier(token)) {
+      moduleNameParts.push(
+        buildNode.Identifier(token.lineStart, token.lineEnd)({
+          value: token.value,
+          isGetter: false,
+          isSetter: false
+        })
+      );
+
+      advance();
+
+      if (!token) break;
+    }
+
+    let moduleNode;
+    if (moduleNameParts.length === 1) {
+      moduleNode = moduleNameParts[0];
+    } else {
+      moduleNode = buildNode.MemberExpression(
+        moduleNameParts[0].lineStart,
+        moduleNameParts[moduleNameParts.length - 1].lineEnd
+      )({
+        parts: moduleNameParts
+      });
+    }
+
+    imports.push(
+      buildNode.Import(lineStart, moduleNode.lineEnd)({
+        identifiers,
+        module: moduleNode
+      })
+    );
+
+    return true;
+  }
+
   function parseStatement() {
+    const moduleDecl = parseModuleDeclaration();
+    if (moduleDecl) return true;
+
+    const exportStatement = parseExport();
+    if (exportStatement) return true;
+
+    const importStatement = parseImport();
+    if (importStatement) return true;
+
     const assignment = parseAssignment();
     if (assignment) return assignment;
 
@@ -1027,10 +1239,30 @@ function parse({ source, tokens }) {
     if (node !== true) body.push(node);
   }
 
-  const firstLine = body.length ? body[0].lineStart : 1;
-  const lastLine = body.length ? body[body.length - 1].lineEnd : 1;
+  const firstLine = moduleName
+    ? moduleName.lineStart
+    : exports.length
+      ? exports[0].lineStart
+      : imports.length
+        ? imports[0].lineStart
+        : body.length ? body[0].lineStart : 1;
 
-  return buildNode.Module(firstLine, lastLine)({ body });
+  const lastLine = body.length
+    ? body[body.length - 1].lineEnd
+    : imports.length
+      ? imports[imports.length - 1].lineEnd
+      : Math.max(firstLine, 1);
+
+  const moduleNode = buildNode.Module(firstLine, lastLine)({
+    name: moduleName,
+    exports,
+    imports,
+    body
+  });
+
+  collectComments(moduleNode);
+
+  return moduleNode;
 }
 
 export default parse;

@@ -53,6 +53,14 @@ export const isColon = isSymbol(':');
 
 export const isDoubleColon = isSymbol('::');
 
+export const isModule = isKeyword('module');
+
+export const isExport = isKeyword('export');
+
+export const isImport = isKeyword('import');
+
+export const isFrom = isKeyword('from');
+
 export const isLet = isKeyword('let');
 
 export const isIn = isKeyword('in');

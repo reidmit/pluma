@@ -2,10 +2,23 @@ import parse from '../../src/compiler/parser';
 import tokenize from '../../src/compiler/tokenizer';
 import { buildNode } from '../../src/compiler/ast-nodes';
 
-const expectParseResult = ({ source, lineStart, lineEnd, body }) => {
+const expectParseResult = ({
+  source,
+  lineStart,
+  lineEnd,
+  name = null,
+  comments = [],
+  exports = [],
+  imports = [],
+  body
+}) => {
   const tokens = tokenize({ source });
   expect(parse({ source, tokens })).toEqual(
     buildNode.Module(lineStart, lineEnd)({
+      name,
+      comments,
+      exports,
+      imports,
       body
     })
   );
@@ -1343,6 +1356,115 @@ describe('parser', () => {
             })
           })
         ]
+      });
+    });
+
+    test('module declaration (no comments)', () => {
+      expectParseResult({
+        source: `
+          module SomeModule
+        `,
+        lineStart: 2,
+        lineEnd: 2,
+        name: buildNode.Identifier(2, 2)({
+          value: 'SomeModule',
+          isGetter: false,
+          isSetter: false
+        }),
+        comments: [],
+        body: []
+      });
+    });
+
+    test('module declaration (with comments)', () => {
+      expectParseResult({
+        source: `
+          # This is a test module
+          # that has nothing in it
+          module SomeModule
+        `,
+        lineStart: 2,
+        lineEnd: 4,
+        name: buildNode.Identifier(4, 4)({
+          value: 'SomeModule',
+          isGetter: false,
+          isSetter: false
+        }),
+        comments: [' This is a test module', ' that has nothing in it'],
+        body: []
+      });
+    });
+
+    test('export statement', () => {
+      expectParseResult({
+        source: `
+          export (func1, nice)
+        `,
+        lineStart: 2,
+        lineEnd: 2,
+        exports: [
+          buildNode.Identifier(2, 2)({
+            value: 'func1',
+            isGetter: false,
+            isSetter: false
+          }),
+          buildNode.Identifier(2, 2)({
+            value: 'nice',
+            isGetter: false,
+            isSetter: false
+          })
+        ],
+        body: []
+      });
+    });
+
+    test('import statements', () => {
+      expectParseResult({
+        source: `
+          import (func1, nice) from Some.OtherModule
+          import AnotherModule
+        `,
+        lineStart: 2,
+        lineEnd: 3,
+        imports: [
+          buildNode.Import(2, 2)({
+            identifiers: [
+              buildNode.Identifier(2, 2)({
+                value: 'func1',
+                isGetter: false,
+                isSetter: false
+              }),
+              buildNode.Identifier(2, 2)({
+                value: 'nice',
+                isGetter: false,
+                isSetter: false
+              })
+            ],
+            module: buildNode.MemberExpression(2, 2)({
+              parts: [
+                buildNode.Identifier(2, 2)({
+                  value: 'Some',
+                  isGetter: false,
+                  isSetter: false
+                }),
+                buildNode.Identifier(2, 2)({
+                  value: 'OtherModule',
+                  isGetter: false,
+                  isSetter: false
+                })
+              ]
+            })
+          }),
+          buildNode.Import(3, 3)({
+            identifiers: null,
+            module: buildNode.Identifier(3, 3)({
+              value: 'AnotherModule',
+              isGetter: false,
+              isSetter: false
+            })
+          })
+        ],
+        body: []
       });
     });
 

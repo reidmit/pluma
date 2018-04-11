@@ -31,6 +31,10 @@ const nodes = {
     props: ['value', 'isGetter', 'isSetter']
   },
 
+  Import: {
+    props: ['identifiers', 'module']
+  },
+
   InterpolatedString: {
     props: ['literals', 'expressions']
   },
@@ -44,7 +48,7 @@ const nodes = {
   },
 
   Module: {
-    props: ['body']
+    props: ['name', 'body']
   },
 
   Number: {

@@ -42,6 +42,10 @@ export const symbolRegexes = symbols.map(
 );
 
 export const reservedWords = [
+  'module',
+  'export',
+  'import',
+  'from',
   'let',
   'in',
   'if',
