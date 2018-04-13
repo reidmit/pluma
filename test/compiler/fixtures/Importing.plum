@@ -1,0 +1,6 @@
+module Importing
+
+import (alwaysTrue) from Main
+import (alwaysFalse) from Subdirectory.Another
+
+alwaysHello = arg => "hello"

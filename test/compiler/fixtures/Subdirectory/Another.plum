@@ -1,0 +1,4 @@
+module Another
+export (alwaysFalse)
+
+alwaysFalse = arg => False
