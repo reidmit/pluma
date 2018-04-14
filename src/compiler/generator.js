@@ -22,6 +22,15 @@ function generate({ asts, entryExports, options = {} }) {
     output += node.value;
   }
 
+  function generateArray(node) {
+    output += '[';
+    node.elements.forEach((element, i) => {
+      generateNode(element);
+      if (i < node.elements.length - 1) output += ', ';
+    });
+    output += ']';
+  }
+
   function generateAssignment(node) {
     generateIndent();
     generateIdentifier(node.id);
@@ -82,6 +91,22 @@ function generate({ asts, entryExports, options = {} }) {
     output += ')';
   }
 
+  function generateLetExpression(node) {
+    output += '(function() {\n';
+    indent++;
+    generateIndent();
+    const localVars = node.assignments.map(asgn => asgn.id.value).join(', ');
+    output += 'var ' + localVars + ';\n';
+    node.assignments.forEach(generateAssignment);
+    generateIndent();
+    output += 'return ';
+    generateNode(node.body);
+    output += ';\n';
+    indent--;
+    generateIndent();
+    output += '})()';
+  }
+
   function generateCall(node) {
     generateNode(node.callee);
     output += '(';
@@ -101,6 +126,8 @@ function generate({ asts, entryExports, options = {} }) {
 
   function generateNode(node) {
     switch (node.kind) {
+      case 'Array':
+        return generateArray(node);
       case 'Assignment':
         return generateAssignment(node);
       case 'Boolean':
@@ -115,6 +142,8 @@ function generate({ asts, entryExports, options = {} }) {
         return generateIdentifier(node);
       case 'InterpolatedString':
         return generateInterpolatedString(node);
+      case 'LetExpression':
+        return generateLetExpression(node);
       case 'String':
         return generateString(node);
       case 'Number':

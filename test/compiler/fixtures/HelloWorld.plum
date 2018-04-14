@@ -3,11 +3,19 @@ export (b, fn)
 
 b = 47
 
+list = [1, 2, 3, 4]
+
 fn = a => b => c => "hello, world!"
 
 conditional = x => if x then True else False
 
 greet = name => "hi ${name}!"
+
+withLetExpression = firstName =>
+  let
+    lastName = "test"
+  in
+    "hi ${firstName} ${lastName}!"
 
 fn 1 2 3
 

@@ -1640,6 +1640,75 @@ describe('parser', () => {
         });
       });
 
+      test('let expression followed by function call', () => {
+        expectParseResult({
+          source: `module Test
+
+withLetExpression = firstName =>
+  let
+    lastName = "test"
+  in
+    "hi!"
+
+fn 1
+`,
+          lineStart: 1,
+          lineEnd: 9,
+          name: buildNode.Identifier(1, 1)({
+            value: 'Test',
+            isGetter: false,
+            isSetter: false
+          }),
+          body: [
+            buildNode.Assignment(3, 7)({
+              id: buildNode.Identifier(3, 3)({
+                value: 'withLetExpression',
+                isGetter: false,
+                isSetter: false
+              }),
+              typeAnnotation: null,
+              comments: [],
+              value: buildNode.Function(3, 7)({
+                parameter: buildNode.Identifier(3, 3)({
+                  value: 'firstName',
+                  isGetter: false,
+                  isSetter: false
+                }),
+                body: buildNode.LetExpression(4, 7)({
+                  assignments: [
+                    buildNode.Assignment(5, 5)({
+                      id: buildNode.Identifier(5, 5)({
+                        value: 'lastName',
+                        isGetter: false,
+                        isSetter: false
+                      }),
+                      typeAnnotation: null,
+                      comments: [],
+                      value: buildNode.String(5, 5)({
+                        value: 'test'
+                      })
+                    })
+                  ],
+                  body: buildNode.String(7, 7)({
+                    value: 'hi!'
+                  })
+                })
+              })
+            }),
+            buildNode.Call(9, 9)({
+              callee: buildNode.Identifier(9, 9)({
+                value: 'fn',
+                isGetter: false,
+                isSetter: false
+              }),
+              argument: buildNode.Number(9, 9)({
+                value: 1
+              })
+            })
+          ]
+        });
+      });
+
       test('consecutive function calls with same level of indentation', () => {
         expectParseResult({
           source: `

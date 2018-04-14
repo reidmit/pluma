@@ -1,5 +1,4 @@
 import link from '../../src/compiler/linker';
-import { buildNode } from '../../src/compiler/ast-nodes';
 import path from 'path';
 
 const sourceDirectory = path.resolve(__dirname, './fixtures');

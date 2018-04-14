@@ -219,11 +219,7 @@ function parse({ source, tokens }) {
     if (disallowCalls) return func;
 
     let argument;
-    while (
-      token &&
-      token.columnStart > lastAssignmentColumn &&
-      token.columnStart > firstTokenColumnStart
-    ) {
+    while (token && token.columnStart > firstTokenColumnStart) {
       const lineStart = token.lineStart;
       const lineEnd = token.lineEnd;
 
