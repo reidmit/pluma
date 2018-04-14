@@ -50,17 +50,21 @@ function resolveName(sourceDirectory, filePath) {
 function collectAsts(
   sourceDirectory,
   filePath,
-  asts,
+  filePathsToAsts,
   dependencyGraph,
   moduleNamesToFilePaths
 ) {
-  if (asts[filePath]) return;
+  if (filePathsToAsts[filePath]) return;
 
   const ast = fileToAst(filePath);
   const resolvedName = resolveName(sourceDirectory, filePath);
+  const entryExports =
+    ast.exports && ast.exports.length
+      ? `module$${resolvedName.replace('.', '$')}`
+      : null;
   ast.moduleName = resolvedName;
 
-  asts[filePath] = ast;
+  filePathsToAsts[filePath] = ast;
   dependencyGraph[resolvedName] = dependencyGraph[resolvedName] || new Set();
   moduleNamesToFilePaths[resolvedName] = filePath;
 
@@ -76,13 +80,13 @@ function collectAsts(
     collectAsts(
       sourceDirectory,
       importedFilePath,
-      asts,
+      filePathsToAsts,
       dependencyGraph,
       moduleNamesToFilePaths
     );
   });
 
-  return asts;
+  return { filePathsToAsts, entryExports };
 }
 
 function link(options = {}) {
@@ -96,7 +100,7 @@ function link(options = {}) {
 
   const dependencyGraph = {};
   const moduleNamesToFilePaths = {};
-  const filePathsToAsts = collectAsts(
+  const { filePathsToAsts, entryExports } = collectAsts(
     options.sourceDirectory,
     options.entry,
     {},
@@ -112,9 +116,12 @@ function link(options = {}) {
     );
   });
 
-  return sortedModules
-    .map(moduleName => moduleNamesToFilePaths[moduleName])
-    .map(filePath => filePathsToAsts[filePath]);
+  return {
+    asts: sortedModules
+      .map(moduleName => moduleNamesToFilePaths[moduleName])
+      .map(filePath => filePathsToAsts[filePath]),
+    entryExports
+  };
 }
 
 export default link;

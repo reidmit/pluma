@@ -5,6 +5,8 @@ b = 47
 
 fn = a => b => c => "hello, world!"
 
+conditional = x => if x then True else False
+
 greet = name => "hi ${name}!"
 
 fn 1 2 3

@@ -1,27 +1,39 @@
 import link from '../../src/compiler/linker';
+import { buildNode } from '../../src/compiler/ast-nodes';
 import path from 'path';
 
 const sourceDirectory = path.resolve(__dirname, './fixtures');
 
 describe('linker', () => {
   test('a single file with no imports', () => {
-    const linkedAsts = link({
+    const { asts } = link({
       entry: path.resolve(sourceDirectory, 'Main.plum')
     });
 
-    expect(linkedAsts).toHaveLength(1);
-    expect(linkedAsts[0].moduleName).toBe('Main');
+    expect(asts).toHaveLength(1);
+    expect(asts[0].moduleName).toBe('Main');
   });
 
-  test('multiple files with imports', () => {
-    const linkedAsts = link({
+  test('a single file with exports', () => {
+    const { asts, entryExports } = link({
+      entry: path.resolve(sourceDirectory, 'Exporting.plum')
+    });
+
+    expect(asts).toHaveLength(1);
+    expect(asts[0].moduleName).toBe('Exporting');
+    expect(entryExports).toEqual('module$Exporting');
+  });
+
+  test('multiple files with imports and no export from entry point', () => {
+    const { asts, entryExports } = link({
       entry: path.resolve(sourceDirectory, 'Importing.plum')
     });
 
-    expect(linkedAsts).toHaveLength(3);
-    expect(linkedAsts[0].moduleName).toBe('Subdirectory.Another');
-    expect(linkedAsts[1].moduleName).toBe('Main');
-    expect(linkedAsts[2].moduleName).toBe('Importing');
+    expect(asts).toHaveLength(3);
+    expect(asts[0].moduleName).toBe('Subdirectory.Another');
+    expect(asts[1].moduleName).toBe('Main');
+    expect(asts[2].moduleName).toBe('Importing');
+    expect(entryExports).toEqual(null);
   });
 
   test('fails helpfully on circular dependencies', () => {

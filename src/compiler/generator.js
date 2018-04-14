@@ -4,7 +4,7 @@ function fail(message, fileName) {
   throw new CompilerError(message, fileName);
 }
 
-function generate({ asts, options = {} }) {
+function generate({ asts, entryExports, options = {} }) {
   let indent = 0;
   let output = '';
 
@@ -28,6 +28,10 @@ function generate({ asts, options = {} }) {
     output += ' = ';
     generateNode(node.value);
     output += ';\n\n';
+  }
+
+  function generateBoolean(node) {
+    output += node.value;
   }
 
   function generateFunction(node) {
@@ -64,6 +68,7 @@ function generate({ asts, options = {} }) {
   }
 
   function generateInterpolatedString(node) {
+    output += '(';
     generateString(node.literals[0]);
     for (let i = 0; i < node.expressions.length; i++) {
       output += ' + ';
@@ -74,6 +79,7 @@ function generate({ asts, options = {} }) {
         generateString(lit);
       }
     }
+    output += ')';
   }
 
   function generateCall(node) {
@@ -83,12 +89,26 @@ function generate({ asts, options = {} }) {
     output += ')';
   }
 
+  function generateConditional(node) {
+    output += '(';
+    generateNode(node.predicate);
+    output += ' ? ';
+    generateNode(node.thenCase);
+    output += ' : ';
+    generateNode(node.elseCase);
+    output += ')';
+  }
+
   function generateNode(node) {
     switch (node.kind) {
       case 'Assignment':
         return generateAssignment(node);
+      case 'Boolean':
+        return generateBoolean(node);
       case 'Call':
         return generateCall(node);
+      case 'Conditional':
+        return generateConditional(node);
       case 'Function':
         return generateFunction(node);
       case 'Identifier':
@@ -101,6 +121,8 @@ function generate({ asts, options = {} }) {
         return generateNumber(node);
       case 'Record':
         return generateRecord(node);
+      default:
+        throw 'No case for node of kind ' + node.kind;
     }
   }
 
@@ -119,17 +141,20 @@ function generate({ asts, options = {} }) {
   }
 
   function generateModule(moduleNode) {
-    output += `var module$${moduleNode.moduleName} = (function() {\n`;
+    const moduleName = moduleNode.moduleName || moduleNode.name.value;
+    output += `var module$${moduleName} = (function() {\n`;
 
     indent++;
+    generateIndent();
 
     const assignedVariableNames = moduleNode.body
       .filter(node => node.kind === 'Assignment')
       .map(node => node.id.value)
       .join(', ');
 
-    generateIndent();
-    output += 'var ' + assignedVariableNames + ';\n\n';
+    if (assignedVariableNames) {
+      output += 'var ' + assignedVariableNames + ';\n\n';
+    }
 
     moduleNode.body.forEach(node => {
       generateNode(node);
@@ -143,10 +168,19 @@ function generate({ asts, options = {} }) {
     output += '})();';
   }
 
-  output += '(function($$exports) {\n\n';
+  output += `(function(global, factory) {
+  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
+  typeof define === 'function' && define.amd ? define(factory) :
+  (global.Pluma = factory());
+})(this, function() { 'use strict';\n\n`;
+
   asts.map(generateModule);
-  output +=
-    "\n\n})(typeof module !== 'undefined' && module.exports ? module.exports : typeof window !== 'undefined' ? window : {});";
+
+  if (entryExports) {
+    output += `\n\nreturn ${entryExports};`;
+  }
+
+  output += '\n});';
 
   return output;
 }
