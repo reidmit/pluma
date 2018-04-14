@@ -1676,6 +1676,41 @@ describe('parser', () => {
           ]
         });
       });
+
+      test('file with only module name and import', () => {
+        expectParseResult({
+          source: `
+          module CircularA
+          import Circular.CircularB`,
+          lineStart: 2,
+          lineEnd: 3,
+          name: buildNode.Identifier(2, 2)({
+            value: 'CircularA',
+            isGetter: false,
+            isSetter: false
+          }),
+          imports: [
+            buildNode.Import(3, 3)({
+              identifiers: null,
+              module: buildNode.MemberExpression(3, 3)({
+                parts: [
+                  buildNode.Identifier(3, 3)({
+                    value: 'Circular',
+                    isGetter: false,
+                    isSetter: false
+                  }),
+                  buildNode.Identifier(3, 3)({
+                    value: 'CircularB',
+                    isGetter: false,
+                    isSetter: false
+                  })
+                ]
+              })
+            })
+          ],
+          body: []
+        });
+      });
     });
   });
 

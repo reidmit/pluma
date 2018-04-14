@@ -79,3 +79,8 @@ export const isAlias = isKeyword('alias');
 
 export const capitalize = string =>
   string[0].toUpperCase() + string.substring(1);
+
+export const flatten = arr =>
+  Array.isArray(arr)
+    ? arr.reduce((acc, curr) => [...acc, ...flatten(curr)], [])
+    : [arr];

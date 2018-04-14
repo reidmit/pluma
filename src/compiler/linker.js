@@ -1,6 +1,7 @@
 import tokenize from './tokenizer';
 import parse from './parser';
 import LinkerError from './linker-error';
+import topologicalSort from './topological-sort';
 import fs from 'fs';
 import path from 'path';
 
@@ -9,6 +10,7 @@ function fail(message, fileName) {
 }
 
 function fileToAst(filePath) {
+  console.log(filePath);
   let source;
 
   try {
@@ -22,6 +24,7 @@ function fileToAst(filePath) {
 }
 
 function importedModuleToFilePath(sourceDirectory, node) {
+  console.log(node);
   if (node.kind === 'Identifier') {
     return path.resolve(sourceDirectory, node.value + '.plum');
   }
@@ -36,9 +39,7 @@ function importedModuleToFilePath(sourceDirectory, node) {
   );
 }
 
-function resolveName(sourceDirectory, filePath, nameNode) {
-  if (!filePath && nameNode) return nameNode.value;
-
+function resolveName(sourceDirectory, filePath) {
   filePath = filePath.replace(sourceDirectory, '');
   const parsedPath = path.parse(filePath);
 
@@ -48,59 +49,78 @@ function resolveName(sourceDirectory, filePath, nameNode) {
   return pathParts.join('.');
 }
 
-function resolveImports(sourceDirectory, ast, currentFile, filesSeen) {
-  return ast.imports.map(importNode => {
+function collectAsts(
+  sourceDirectory,
+  filePath,
+  asts,
+  dependencyGraph,
+  moduleNamesToFilePaths
+) {
+  if (asts[filePath]) return;
+
+  const ast = fileToAst(filePath);
+  const resolvedName = resolveName(sourceDirectory, filePath);
+  ast.moduleName = resolvedName;
+
+  console.log(JSON.stringify(ast, null, 2));
+
+  asts[filePath] = ast;
+  dependencyGraph[resolvedName] = dependencyGraph[resolvedName] || new Set();
+  moduleNamesToFilePaths[resolvedName] = filePath;
+
+  ast.imports.forEach(importNode => {
     const importedFilePath = importedModuleToFilePath(
       sourceDirectory,
       importNode.module
     );
 
-    const resolvedName = resolveName(sourceDirectory, importedFilePath);
+    console.log({ importedFilePath });
 
-    if (filesSeen[importedFilePath]) {
-      const previousImportingFile =
-        filesSeen[importedFilePath] === true
-          ? 'entry point'
-          : `'${filesSeen[importedFilePath]}'`;
+    const resolvedImportName = resolveName(sourceDirectory, importedFilePath);
+    dependencyGraph[resolvedName].add(resolvedImportName);
 
-      fail(
-        `Circular dependency detected. Module '${resolvedName}' was already imported by ${previousImportingFile}.`,
-        currentFile
-      );
-    }
-
-    filesSeen[importedFilePath] = resolvedName;
-
-    const importedAst = fileToAst(importedFilePath);
-    importedAst.resolvedName = resolvedName;
-    importedAst.resolvedImports = resolveImports(
+    collectAsts(
       sourceDirectory,
-      importedAst,
       importedFilePath,
-      filesSeen
+      asts,
+      dependencyGraph,
+      moduleNamesToFilePaths
     );
-
-    return importedAst;
   });
+
+  return asts;
 }
 
 function link(options = {}) {
-  let { entry, sourceDirectory } = options;
-
-  if (!entry) {
+  if (!options.entry) {
     fail('No entry file given.');
   }
 
-  if (!sourceDirectory) {
-    sourceDirectory = path.dirname(entry);
+  if (!options.sourceDirectory) {
+    options.sourceDirectory = path.dirname(options.entry);
   }
 
-  const filesSeen = { [entry]: true };
-  const ast = fileToAst(entry);
-  ast.resolvedName = resolveName(sourceDirectory, null, ast.name);
-  ast.resolvedImports = resolveImports(sourceDirectory, ast, entry, filesSeen);
+  const dependencyGraph = {};
+  const moduleNamesToFilePaths = {};
+  const filePathsToAsts = collectAsts(
+    options.sourceDirectory,
+    options.entry,
+    {},
+    dependencyGraph,
+    moduleNamesToFilePaths
+  );
 
-  return ast;
+  const sortedModules = topologicalSort(dependencyGraph, cycles => {
+    fail(
+      `Cyclical imports detected. The following cycles were found in the module dependency graph:\n\n${cycles
+        .map(line => '    ' + line)
+        .join('\n')}`
+    );
+  });
+
+  return sortedModules
+    .map(moduleName => moduleNamesToFilePaths[moduleName])
+    .map(filePath => filePathsToAsts[filePath]);
 }
 
 export default link;

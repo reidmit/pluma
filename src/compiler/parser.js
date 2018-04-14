@@ -1118,65 +1118,48 @@ function parse({ source, tokens }) {
 
     advance();
 
-    if (u.isIdentifier(token)) {
-      imports.push(
-        buildNode.Import(lineStart, token.lineEnd)({
-          identifiers: null,
-          module: buildNode.Identifier(token.lineStart, token.lineEnd)({
+    let identifiers = null;
+
+    if (u.isLeftParen(token)) {
+      advance();
+
+      if (!u.isIdentifier(token)) {
+        fail('Expected an identifier name after "(" in import statement.');
+      }
+
+      identifiers = [];
+
+      while (u.isIdentifier(token)) {
+        identifiers.push(
+          buildNode.Identifier(token.lineStart, token.lineEnd)({
             value: token.value,
             isGetter: false,
             isSetter: false
           })
-        })
-      );
+        );
+
+        advance();
+
+        if (u.isRightParen(token)) break;
+
+        if (u.isComma(token)) advance();
+      }
+
+      if (!u.isRightParen(token)) {
+        fail('Expected closing ")" to match opening "(" in import statement.');
+      }
 
       advance();
 
-      return true;
-    }
-
-    if (!u.isLeftParen(token)) {
-      fail('Expected a module name or "(" after "import" in import statement.');
-    }
-
-    advance();
-
-    if (!u.isIdentifier(token)) {
-      fail('Expected an identifier name after "(" in import statement.');
-    }
-
-    const identifiers = [];
-
-    while (u.isIdentifier(token)) {
-      identifiers.push(
-        buildNode.Identifier(token.lineStart, token.lineEnd)({
-          value: token.value,
-          isGetter: false,
-          isSetter: false
-        })
-      );
+      if (!u.isFrom(token)) {
+        fail('Expected keyword "from" after ")" in import statement.');
+      }
 
       advance();
-
-      if (u.isRightParen(token)) break;
-
-      if (u.isComma(token)) advance();
     }
-
-    if (!u.isRightParen(token)) {
-      fail('Expected closing ")" to match opening "(" in import statement.');
-    }
-
-    advance();
-
-    if (!u.isFrom(token)) {
-      fail('Expected keyword "from" after ")" in import statement.');
-    }
-
-    advance();
 
     if (!u.isIdentifier(token)) {
-      fail('Expected identifier after "from" in import statement.');
+      fail('Expected module name in import statement.');
     }
 
     const moduleNameParts = [];

@@ -1,0 +1,13 @@
+module HelloWorld
+export (b, fn)
+
+b = 47
+
+fn = a => b => c => "hello, world!"
+
+greet = name => "hi ${name}!"
+
+fn 1 2 3
+
+obj = { a: 1, b
+}

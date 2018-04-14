@@ -1,11 +1,9 @@
-import tokenize from './tokenizer';
-import parse from './parser';
+import link from './linker';
 import generate from './generator';
 
 const compile = (source, options) => {
-  const tokens = tokenize({ source, options });
-  const ast = parse({ source, tokens, options });
-  return generate({ source, tokens, ast, options });
+  const ast = link({ source, options });
+  return generate({ source, ast, options });
 };
 
 export default compile;
