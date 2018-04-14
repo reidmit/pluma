@@ -5,18 +5,22 @@ import path from 'path';
 const sourceDirectory = path.resolve(__dirname, './fixtures');
 
 describe('generate', () => {
-  describe('basic examples', () => {
-    const linkedAst = link({
+  test('basic examples', () => {
+    const linkedAsts = link({
       entry: path.resolve(sourceDirectory, 'HelloWorld.plum')
     });
 
-    const js = generate({ ast: linkedAst });
-    console.log(js);
+    const generatedJs = generate({ asts: linkedAsts });
+    expect(generatedJs).toBeDefined();
+    console.log(generatedJs);
 
+    let evalError;
     try {
-      eval(js);
+      eval(generatedJs);
     } catch (err) {
-      console.error(err);
+      evalError = err;
+      throw err;
     }
+    expect(evalError).not.toBeDefined();
   });
 });

@@ -24,9 +24,19 @@ describe('linker', () => {
     expect(linkedAsts[2].moduleName).toBe('Importing');
   });
 
-  test.only('fails helpfully on circular dependencies', () => {
-    const linkedAsts = link({
-      entry: path.resolve(sourceDirectory, 'Circular/CircularA.plum')
-    });
+  test('fails helpfully on circular dependencies', () => {
+    let error;
+
+    try {
+      link({
+        entry: path.resolve(sourceDirectory, 'Circular/CircularA.plum')
+      });
+    } catch (err) {
+      error = err;
+    }
+
+    expect(error).toBeDefined();
+    expect(error.message).toContain('CircularA --> CircularB --> CircularA');
+    expect(error.message).toContain('CircularB --> CircularA --> CircularB');
   });
 });

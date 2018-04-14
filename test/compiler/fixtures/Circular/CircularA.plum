@@ -1,2 +1,2 @@
 module CircularA
-import Circular.CircularB
+import CircularB

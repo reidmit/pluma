@@ -4,12 +4,12 @@ function fail(message, fileName) {
   throw new CompilerError(message, fileName);
 }
 
-function generate({ ast, options = {} }) {
+function generate({ asts, options = {} }) {
   let indent = 0;
   let output = '';
 
-  if (!ast) {
-    fail('No syntax tree provided to code generation step.');
+  if (!asts || !asts.length) {
+    fail('No syntax trees provided to code generation step.');
   }
 
   function generateIndent() {
@@ -119,7 +119,7 @@ function generate({ ast, options = {} }) {
   }
 
   function generateModule(moduleNode) {
-    output += `var module$${moduleNode.resolvedName} = (function() {\n`;
+    output += `var module$${moduleNode.moduleName} = (function() {\n`;
 
     indent++;
 
@@ -143,8 +143,10 @@ function generate({ ast, options = {} }) {
     output += '})();';
   }
 
-  ast.resolvedImports.forEach(generateModule);
-  generateModule(ast);
+  output += '(function($$exports) {\n\n';
+  asts.map(generateModule);
+  output +=
+    "\n\n})(typeof module !== 'undefined' && module.exports ? module.exports : typeof window !== 'undefined' ? window : {});";
 
   return output;
 }

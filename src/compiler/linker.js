@@ -10,7 +10,6 @@ function fail(message, fileName) {
 }
 
 function fileToAst(filePath) {
-  console.log(filePath);
   let source;
 
   try {
@@ -24,7 +23,6 @@ function fileToAst(filePath) {
 }
 
 function importedModuleToFilePath(sourceDirectory, node) {
-  console.log(node);
   if (node.kind === 'Identifier') {
     return path.resolve(sourceDirectory, node.value + '.plum');
   }
@@ -62,8 +60,6 @@ function collectAsts(
   const resolvedName = resolveName(sourceDirectory, filePath);
   ast.moduleName = resolvedName;
 
-  console.log(JSON.stringify(ast, null, 2));
-
   asts[filePath] = ast;
   dependencyGraph[resolvedName] = dependencyGraph[resolvedName] || new Set();
   moduleNamesToFilePaths[resolvedName] = filePath;
@@ -73,8 +69,6 @@ function collectAsts(
       sourceDirectory,
       importNode.module
     );
-
-    console.log({ importedFilePath });
 
     const resolvedImportName = resolveName(sourceDirectory, importedFilePath);
     dependencyGraph[resolvedName].add(resolvedImportName);
