@@ -1,0 +1,89 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`generate empty module 1`] = `
+"(function(global, factory) {
+  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
+  typeof define === 'function' && define.amd ? define(factory) :
+  (global.Pluma = factory());
+})(this, function() { 'use strict';
+
+var module$TestModule = (function() {
+    return {};
+})();
+});"
+`;
+
+exports[`generate lots of simple examples 1`] = `
+"(function(global, factory) {
+  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
+  typeof define === 'function' && define.amd ? define(factory) :
+  (global.Pluma = factory());
+})(this, function() { 'use strict';
+
+var module$HelloWorld = (function() {
+  var b, list, fn, conditional, greet, withLetExpression, obj;
+
+  b = 47;
+
+  list = [1, 2, 3, 4];
+
+  fn = function(a) {
+    return function(b) {
+      return function(c) {
+        return \\"hello, world!\\";
+      };
+    };
+  };
+
+  conditional = function(x) {
+    return (x ? true : false);
+  };
+
+  greet = function(name) {
+    return (\\"hi \\" + name + \\"!\\");
+  };
+
+  withLetExpression = function(firstName) {
+    return (function() {
+      var lastName;
+      lastName = \\"test\\";
+
+      return (\\"hi \\" + firstName + \\" \\" + lastName + \\"!\\");
+    })();
+  };
+
+fn(1)(2)(3);
+
+  obj = { a: 1, b: b };
+
+  return { b: b, fn: fn };
+})();
+
+return module$HelloWorld;
+});"
+`;
+
+exports[`generate module with exports from entry point 1`] = `
+"(function(global, factory) {
+  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
+  typeof define === 'function' && define.amd ? define(factory) :
+  (global.Pluma = factory());
+})(this, function() { 'use strict';
+
+var module$Exporting = (function() {
+  var func1, func2;
+
+  func1 = function(x) {
+    return 47;
+  };
+
+  func2 = function(y) {
+    return \\"hi\\";
+  };
+
+  return { func1: func1, func2: func2 };
+})();
+
+return module$Exporting;
+});"
+`;

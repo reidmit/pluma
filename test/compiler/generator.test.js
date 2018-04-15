@@ -41,24 +41,16 @@ function expectJs(asts, entryExports) {
 describe('generate', () => {
   test('empty module', () => {
     const js = expectJsFromSource('module TestModule');
-    expect(js).toBe(`(function(global, factory) {
-  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
-  typeof define === 'function' && define.amd ? define(factory) :
-  (global.Pluma = factory());
-})(this, function() { 'use strict';
-
-var module$TestModule = (function() {
-    return {};
-})();
-});`);
+    expect(js).toMatchSnapshot();
   });
 
   test('module with exports from entry point', () => {
     const js = expectJsFromFile('Exporting.plum');
-    expect(js).toContain('return module$Exporting;');
+    expect(js).toMatchSnapshot();
   });
 
   test('lots of simple examples', () => {
-    expectJsFromFile('HelloWorld.plum');
+    const js = expectJsFromFile('HelloWorld.plum');
+    expect(js).toMatchSnapshot();
   });
 });
