@@ -946,18 +946,24 @@ function parse({ source, tokens }) {
     }
 
     if (!options.disallowPipes && expr && u.isPipe(token)) {
-      advance();
+      let pipeExpr;
 
-      const rightSide = parseExpression({ disallowPipes: true });
+      while (u.isPipe(token)) {
+        advance();
 
-      if (!rightSide) {
-        fail('Expected a valid expression after "|>".');
+        const rightSide = parseExpression({ disallowPipes: true });
+
+        if (!rightSide) {
+          fail('Expected a valid expression after "|>".');
+        }
+
+        pipeExpr = buildNode.PipeExpression(expr.lineStart, rightSide.lineEnd)({
+          left: pipeExpr || expr,
+          right: rightSide
+        });
       }
 
-      return buildNode.PipeExpression(expr.lineStart, rightSide.lineEnd)({
-        left: expr,
-        right: rightSide
-      });
+      return pipeExpr;
     }
 
     return expr;

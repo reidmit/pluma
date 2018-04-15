@@ -30,7 +30,6 @@ function expectJs(asts, entryExports) {
     eval(js);
   } catch (err) {
     evalError = err;
-    console.log(js); //eslint-disable-line
     throw err;
   }
   expect(evalError).not.toBeDefined();

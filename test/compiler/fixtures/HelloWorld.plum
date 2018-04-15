@@ -21,3 +21,9 @@ fn 1 2 3
 
 obj = { a: 1, b
 }
+
+p1 = s => "nice"
+p2 = s => "ok"
+p3 = a => b => "test"
+piped = "reid" |> p1 |> p3 "hi" |> greet
+piped2 = p1 "hello" |> greet

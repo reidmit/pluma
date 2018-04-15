@@ -797,6 +797,81 @@ describe('parser', () => {
       });
     });
 
+    test('pipe expression (multiple pipes)', () => {
+      expectParseResult({
+        source: `
+          "reid" |> p1 |> p2 |> greet
+          "reid" |> p3 arg |> p4 |> greet2 arg
+        `,
+        lineStart: 2,
+        lineEnd: 3,
+        body: [
+          buildNode.PipeExpression(2, 2)({
+            left: buildNode.PipeExpression(2, 2)({
+              left: buildNode.PipeExpression(2, 2)({
+                left: buildNode.String(2, 2)({
+                  value: 'reid'
+                }),
+                right: buildNode.Identifier(2, 2)({
+                  value: 'p1',
+                  isGetter: false,
+                  isSetter: false
+                })
+              }),
+              right: buildNode.Identifier(2, 2)({
+                value: 'p2',
+                isGetter: false,
+                isSetter: false
+              })
+            }),
+            right: buildNode.Identifier(2, 2)({
+              value: 'greet',
+              isGetter: false,
+              isSetter: false
+            })
+          }),
+          buildNode.PipeExpression(3, 3)({
+            left: buildNode.PipeExpression(3, 3)({
+              left: buildNode.PipeExpression(3, 3)({
+                left: buildNode.String(3, 3)({
+                  value: 'reid'
+                }),
+                right: buildNode.Call(3, 3)({
+                  callee: buildNode.Identifier(3, 3)({
+                    value: 'p3',
+                    isGetter: false,
+                    isSetter: false
+                  }),
+                  argument: buildNode.Identifier(3, 3)({
+                    value: 'arg',
+                    isGetter: false,
+                    isSetter: false
+                  })
+                })
+              }),
+              right: buildNode.Identifier(3, 3)({
+                value: 'p4',
+                isGetter: false,
+                isSetter: false
+              })
+            }),
+            right: buildNode.Call(3, 3)({
+              callee: buildNode.Identifier(3, 3)({
+                value: 'greet2',
+                isGetter: false,
+                isSetter: false
+              }),
+              argument: buildNode.Identifier(3, 3)({
+                value: 'arg',
+                isGetter: false,
+                isSetter: false
+              })
+            })
+          })
+        ]
+      });
+    });
+
     test('let-in expressions (simple)', () => {
       expectParseResult({
         source: `

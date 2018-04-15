@@ -124,6 +124,13 @@ function generate({ asts, entryExports, options = {} }) {
     output += ')';
   }
 
+  function generatePipeExpression(node) {
+    generateNode(node.right);
+    output += '(';
+    generateNode(node.left);
+    output += ')';
+  }
+
   function generateNode(node) {
     switch (node.kind) {
       case 'Array':
@@ -148,6 +155,8 @@ function generate({ asts, entryExports, options = {} }) {
         return generateString(node);
       case 'Number':
         return generateNumber(node);
+      case 'PipeExpression':
+        return generatePipeExpression(node);
       case 'Record':
         return generateRecord(node);
       default:
