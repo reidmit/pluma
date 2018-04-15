@@ -126,6 +126,12 @@ var module$Types = (function() {
 
   var Single = { $ctor: 'Single' };
 
+  var Person = function(name) {
+    return function(age) {
+      return { name: name, age: age };
+    };
+  };
+
   return {};
 })();
 });"

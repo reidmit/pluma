@@ -131,6 +131,40 @@ function generate({ asts, entryExports, options = {} }) {
     output += ')';
   }
 
+  function generateTypeAliasDeclaration(node) {
+    if (node.typeExpression.kind !== 'RecordType') return;
+    const record = node.typeExpression;
+
+    generateIndent();
+    output += 'var ';
+    generateIdentifier(node.typeName);
+    output += ' = ';
+
+    record.properties.forEach((prop, i) => {
+      if (i > 0) output += 'return ';
+      output += 'function(';
+      generateIdentifier(prop.key);
+      output += ') {\n';
+      indent++;
+      generateIndent();
+    });
+
+    output += 'return { ';
+    output += record.properties
+      .map(p => `${p.key.value}: ${p.key.value}`)
+      .join(', ');
+    output += ' };\n';
+
+    record.properties.forEach((prop, i) => {
+      indent--;
+      generateIndent();
+      output += '};\n';
+      if (i === record.properties.length - 1) {
+        output += '\n';
+      }
+    });
+  }
+
   function generateTypeDeclaration(node) {
     node.typeConstructors.forEach(ctor => {
       generateIndent();
@@ -198,6 +232,8 @@ function generate({ asts, entryExports, options = {} }) {
         return generatePipeExpression(node);
       case 'Record':
         return generateRecord(node);
+      case 'TypeAliasDeclaration':
+        return generateTypeAliasDeclaration(node);
       case 'TypeDeclaration':
         return generateTypeDeclaration(node);
       default:
