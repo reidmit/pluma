@@ -1,0 +1,5 @@
+module Types
+
+type OneOrTwo a b = One a | Two a b
+
+type SingleConstructor = Single

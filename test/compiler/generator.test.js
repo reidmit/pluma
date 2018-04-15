@@ -52,4 +52,9 @@ describe('generate', () => {
     const js = expectJsFromFile('HelloWorld.plum');
     expect(js).toMatchSnapshot();
   });
+
+  test('type declarations', () => {
+    const js = expectJsFromFile('Types.plum');
+    expect(js).toMatchSnapshot();
+  });
 });

@@ -131,6 +131,45 @@ function generate({ asts, entryExports, options = {} }) {
     output += ')';
   }
 
+  function generateTypeDeclaration(node) {
+    node.typeConstructors.forEach(ctor => {
+      generateIndent();
+      output += 'var ';
+      generateIdentifier(ctor.typeName);
+      output += ' = ';
+
+      if (ctor.typeParameters.length === 0) {
+        output += "{ $ctor: '";
+        generateIdentifier(ctor.typeName);
+        output += "' };\n\n";
+      } else {
+        ctor.typeParameters.forEach((param, i) => {
+          if (i > 0) output += 'return ';
+          output += 'function(';
+          generateIdentifier(param);
+          output += ') {\n';
+          indent++;
+          generateIndent();
+        });
+
+        output += "return { $ctor: '";
+        generateIdentifier(ctor.typeName);
+        output += "', $args: [";
+        output += ctor.typeParameters.map(p => p.value).join(', ');
+        output += '] };\n';
+
+        ctor.typeParameters.forEach((param, i) => {
+          indent--;
+          generateIndent();
+          output += '};\n';
+          if (i === ctor.typeParameters.length - 1) {
+            output += '\n';
+          }
+        });
+      }
+    });
+  }
+
   function generateNode(node) {
     switch (node.kind) {
       case 'Array':
@@ -159,6 +198,8 @@ function generate({ asts, entryExports, options = {} }) {
         return generatePipeExpression(node);
       case 'Record':
         return generateRecord(node);
+      case 'TypeDeclaration':
+        return generateTypeDeclaration(node);
       default:
         throw 'No case for node of kind ' + node.kind;
     }
@@ -180,10 +221,9 @@ function generate({ asts, entryExports, options = {} }) {
 
   function generateModule(moduleNode) {
     const moduleName = moduleNode.moduleName || moduleNode.name.value;
-    output += `var module$${moduleName} = (function() {\n`;
-
-    indent++;
     generateIndent();
+    output += `var module$${moduleName} = (function() {\n`;
+    indent++;
 
     const assignedVariableNames = moduleNode.body
       .filter(node => node.kind === 'Assignment')
@@ -191,6 +231,7 @@ function generate({ asts, entryExports, options = {} }) {
       .join(', ');
 
     if (assignedVariableNames) {
+      generateIndent();
       output += 'var ' + assignedVariableNames + ';\n\n';
     }
 
