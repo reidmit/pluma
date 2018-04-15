@@ -19,6 +19,18 @@ function generate({ asts, entryExports, options = {} }) {
   }
 
   function generateIdentifier(node) {
+    if (node.isGetter) {
+      output += `(function(_){return _.${node.value};})`;
+      return;
+    }
+
+    if (node.isSetter) {
+      output += `(function($val){return function(_){return Object.assign({}, _, {${
+        node.value
+      }:$val})}})`;
+      return;
+    }
+
     output += node.value;
   }
 

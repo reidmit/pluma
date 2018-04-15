@@ -19,8 +19,11 @@ withLetExpression = firstName =>
 
 fn 1 2 3
 
-obj = { a: 1, b
-}
+obj = { a: 1, b }
+
+accessor = .a obj
+
+updater = @a 2 obj
 
 p1 = s => "nice"
 p2 = s => "ok"

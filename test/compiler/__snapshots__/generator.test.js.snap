@@ -21,7 +21,7 @@ exports[`generate lots of simple examples 1`] = `
 })(this, function() { 'use strict';
 
 var module$HelloWorld = (function() {
-  var b, list, fn, conditional, greet, withLetExpression, obj, p1, p2, p3, piped, piped2;
+  var b, list, fn, conditional, greet, withLetExpression, obj, accessor, updater, p1, p2, p3, piped, piped2;
 
   b = 47;
 
@@ -55,6 +55,10 @@ var module$HelloWorld = (function() {
 fn(1)(2)(3);
 
   obj = { a: 1, b: b };
+
+  accessor = (function(_){return _.a;})(obj);
+
+  updater = (function($val){return function(_){return Object.assign({}, _, {a:$val})}})(2)(obj);
 
   p1 = function(s) {
     return \\"nice\\";
