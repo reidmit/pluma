@@ -4,5 +4,9 @@
   "description": "Compiler for Pluma language",
   "main": "index.js",
   "author": "Reid Mitchell",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^2.3.2",
+    "string-length": "^2.0.0"
+  }
 }
