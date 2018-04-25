@@ -1,8 +1,5 @@
-import {
-  formatSourceBlock,
-  tokenToString
-} from '../../src/compiler/error-helper';
-import { tokenTypes } from '../../src/compiler/constants';
+import { formatSourceBlock, tokenToString } from '../src/error-helper';
+import { tokenTypes } from '../src/constants';
 
 const source = `let a = 10
 let b = 20

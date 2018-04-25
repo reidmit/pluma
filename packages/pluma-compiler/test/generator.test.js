@@ -1,7 +1,7 @@
-import link from '../../src/compiler/linker';
-import tokenize from '../../src/compiler/tokenizer';
-import parse from '../../src/compiler/parser';
-import generate from '../../src/compiler/generator';
+import link from '../src/linker';
+import tokenize from '../src/tokenizer';
+import parse from '../src/parser';
+import generate from '../src/generator';
 import path from 'path';
 
 const sourceDirectory = path.resolve(__dirname, './fixtures');

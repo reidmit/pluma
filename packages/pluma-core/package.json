@@ -1,0 +1,8 @@
+{
+  "name": "pluma-core",
+  "version": "1.0.0",
+  "description": "Pluma core libraries",
+  "main": "index.js",
+  "author": "Reid Mitchell",
+  "license": "MIT"
+}

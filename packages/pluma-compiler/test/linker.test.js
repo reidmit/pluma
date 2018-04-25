@@ -1,4 +1,4 @@
-import link from '../../src/compiler/linker';
+import link from '../src/linker';
 import path from 'path';
 
 const sourceDirectory = path.resolve(__dirname, './fixtures');
