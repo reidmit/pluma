@@ -31,6 +31,12 @@
         "scopeName": "source.pluma",
         "path": "./syntaxes/pluma.tmLanguage.json"
       }
+    ],
+    "snippets": [
+      {
+        "language": "pluma",
+        "path": "./snippets/pluma.json"
+      }
     ]
   }
 }
