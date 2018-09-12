@@ -162,9 +162,7 @@ function generate({ asts, entryExports, options = {} }) {
     });
 
     output += 'return { ';
-    output += record.properties
-      .map(p => `${p.key.value}: ${p.key.value}`)
-      .join(', ');
+    output += record.properties.map(p => `${p.key.value}: ${p.key.value}`).join(', ');
     output += ' };\n';
 
     record.properties.forEach((prop, i) => {

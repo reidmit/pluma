@@ -1,7 +1,6 @@
 import { tokenTypes } from './constants';
 
-export const isTokenType = type => token =>
-  token && token.type === tokenTypes[type];
+export const isTokenType = type => token => token && token.type === tokenTypes[type];
 
 export const isSymbol = value => token =>
   token && token.type === tokenTypes.SYMBOL && token.value === value;
@@ -77,10 +76,7 @@ export const isType = isKeyword('type');
 
 export const isAlias = isKeyword('alias');
 
-export const capitalize = string =>
-  string[0].toUpperCase() + string.substring(1);
+export const capitalize = string => string[0].toUpperCase() + string.substring(1);
 
 export const flatten = arr =>
-  Array.isArray(arr)
-    ? arr.reduce((acc, curr) => [...acc, ...flatten(curr)], [])
-    : [arr];
+  Array.isArray(arr) ? arr.reduce((acc, curr) => [...acc, ...flatten(curr)], []) : [arr];

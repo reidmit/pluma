@@ -93,15 +93,10 @@ const fresh = (type, nonGeneric, mappings = {}) => {
   }
 
   if (type.rowTypes) {
-    return new ObjectType(
-      type.rowTypes.map(t => fresh(t, nonGeneric, mappings))
-    );
+    return new ObjectType(type.rowTypes.map(t => fresh(t, nonGeneric, mappings)));
   }
 
-  return new BaseType(
-    type.name,
-    type.types.map(t => fresh(t, nonGeneric, mappings))
-  );
+  return new BaseType(type.name, type.types.map(t => fresh(t, nonGeneric, mappings)));
 };
 
 const occursInType = (type1, type2) => {
@@ -140,10 +135,7 @@ const unify = (type1, type2) => {
   }
 
   if (type1 instanceof BaseType && type2 instanceof BaseType) {
-    if (
-      type1.name !== type2.name ||
-      type1.types.length !== type2.types.length
-    ) {
+    if (type1.name !== type2.name || type1.types.length !== type2.types.length) {
       throw `Type error! ${type1} is not ${type2}`;
     }
 

@@ -982,10 +982,7 @@ describe('parser', () => {
         lineEnd: 4,
         body: [
           buildNode.Assignment(2, 4)({
-            comments: [
-              ' This is a comment that',
-              ' should be preserved for the below assignment'
-            ],
+            comments: [' This is a comment that', ' should be preserved for the below assignment'],
             id: buildNode.Identifier(4, 4)({
               value: 'x',
               isGetter: false,

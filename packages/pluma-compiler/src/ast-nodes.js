@@ -114,9 +114,7 @@ export const buildNode = Object.keys(nodes).reduce((builders, kind) => {
 
     expectedProps.forEach(prop => {
       if (nodeProps[prop] === undefined) {
-        throw new Error(
-          `Property ${prop} is not given for node of kind ${kind}`
-        );
+        throw new Error(`Property ${prop} is not given for node of kind ${kind}`);
       }
     });
 

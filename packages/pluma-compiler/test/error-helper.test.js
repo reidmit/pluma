@@ -79,9 +79,7 @@ describe('formatSourceBlock', () => {
       useColor: false
     });
 
-    expect(sourceBlock).toBe(
-      [' > 9 | let error = 50', '           ^^^^^'].join('\n')
-    );
+    expect(sourceBlock).toBe([' > 9 | let error = 50', '           ^^^^^'].join('\n'));
   });
 });
 
@@ -93,48 +91,38 @@ describe('tokenToString', () => {
   });
 
   test('at-identifiers', () => {
-    expect(
-      tokenToString({ type: tokenTypes.AT_IDENTIFIER, value: 'hello' })
-    ).toBe('identifier "@hello"');
+    expect(tokenToString({ type: tokenTypes.AT_IDENTIFIER, value: 'hello' })).toBe(
+      'identifier "@hello"'
+    );
   });
 
   test('dot-identifiers', () => {
-    expect(
-      tokenToString({ type: tokenTypes.DOT_IDENTIFIER, value: 'hello' })
-    ).toBe('identifier ".hello"');
+    expect(tokenToString({ type: tokenTypes.DOT_IDENTIFIER, value: 'hello' })).toBe(
+      'identifier ".hello"'
+    );
   });
 
   test('keywords', () => {
-    expect(tokenToString({ type: tokenTypes.KEYWORD, value: 'hello' })).toBe(
-      'keyword "hello"'
-    );
+    expect(tokenToString({ type: tokenTypes.KEYWORD, value: 'hello' })).toBe('keyword "hello"');
   });
 
   test('symbols', () => {
-    expect(tokenToString({ type: tokenTypes.SYMBOL, value: '(' })).toBe(
-      'symbol "("'
-    );
+    expect(tokenToString({ type: tokenTypes.SYMBOL, value: '(' })).toBe('symbol "("');
   });
 
   test('booleans', () => {
-    expect(tokenToString({ type: tokenTypes.BOOLEAN, value: true })).toBe(
-      'boolean True'
-    );
+    expect(tokenToString({ type: tokenTypes.BOOLEAN, value: true })).toBe('boolean True');
 
-    expect(tokenToString({ type: tokenTypes.BOOLEAN, value: false })).toBe(
-      'boolean False'
-    );
+    expect(tokenToString({ type: tokenTypes.BOOLEAN, value: false })).toBe('boolean False');
   });
 
   test('strings', () => {
-    expect(tokenToString({ type: tokenTypes.STRING, value: 'hello' })).toBe(
-      'string "hello"'
-    );
+    expect(tokenToString({ type: tokenTypes.STRING, value: 'hello' })).toBe('string "hello"');
   });
 
   test('line comments', () => {
-    expect(
-      tokenToString({ type: tokenTypes.LINE_COMMENT, value: ' a comment' })
-    ).toBe('comment "# a comment"');
+    expect(tokenToString({ type: tokenTypes.LINE_COMMENT, value: ' a comment' })).toBe(
+      'comment "# a comment"'
+    );
   });
 });

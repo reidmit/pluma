@@ -1,8 +1,7 @@
 import { tokenTypes } from '../src/constants';
 import tokenize from '../src/tokenizer';
 
-const expectTokens = (input, output) =>
-  expect(tokenize({ source: input })).toEqual(output);
+const expectTokens = (input, output) => expect(tokenize({ source: input })).toEqual(output);
 
 describe('tokenizer', () => {
   describe('isolated token types', () => {
@@ -1010,9 +1009,7 @@ let z = "test"
 
       expect(errorMessage).toBeDefined();
       expect(errorMessage).toMatch(/Invalid regular expression/);
-      expect(errorMessage).toMatch(
-        /It looks like you may be missing a closing "\)" for a group./
-      );
+      expect(errorMessage).toMatch(/It looks like you may be missing a closing "\)" for a group./);
     });
 
     test('invalid regex (missing "(")', () => {

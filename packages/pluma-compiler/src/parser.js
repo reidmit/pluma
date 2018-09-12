@@ -25,11 +25,7 @@ function parse({ source, tokens }) {
         ? message(badToken ? tokenToString(badToken) : 'end of input')
         : message;
 
-    throw new ParserError(
-      message,
-      source,
-      badToken || tokens[tokens.length - 1]
-    );
+    throw new ParserError(message, source, badToken || tokens[tokens.length - 1]);
   }
 
   function collectComments(node) {
@@ -153,11 +149,7 @@ function parse({ source, tokens }) {
 
     advance();
 
-    while (
-      token &&
-      token.columnStart > lastAssignmentColumn &&
-      u.isDotIdentifier(token)
-    ) {
+    while (token && token.columnStart > lastAssignmentColumn && u.isDotIdentifier(token)) {
       parts.push(
         buildNode.Identifier(token.lineStart, token.lineEnd)({
           value: token.value,
@@ -176,10 +168,7 @@ function parse({ source, tokens }) {
     return parts.reduce((expression, property) => {
       if (!expression) return property;
 
-      return buildNode.MemberExpression(
-        parts[0].lineStart,
-        parts[parts.length - 1].lineStart
-      )({
+      return buildNode.MemberExpression(parts[0].lineStart, parts[parts.length - 1].lineStart)({
         parts
       });
     }, null);
@@ -211,8 +200,7 @@ function parse({ source, tokens }) {
   function parsePossibleCallExpression(disallowCalls) {
     const firstTokenColumnStart = token.columnStart;
 
-    let func =
-      parseFunction() || parseGetter() || parseSetter() || parseIdentifier();
+    let func = parseFunction() || parseGetter() || parseSetter() || parseIdentifier();
 
     if (!func) return;
 
@@ -273,9 +261,9 @@ function parse({ source, tokens }) {
     if (!u.isRightParen(token)) {
       fail(
         t =>
-          `Expected closing ")" to match opening "(" at line ${
-            leftParen.lineStart
-          }, column ${leftParen.columnStart}, but found ${t} instead.`
+          `Expected closing ")" to match opening "(" at line ${leftParen.lineStart}, column ${
+            leftParen.columnStart
+          }, but found ${t} instead.`
       );
     }
 
@@ -283,10 +271,9 @@ function parse({ source, tokens }) {
 
     if (expressions.length === 1) return expressions[0];
 
-    return buildNode.Tuple(
-      lineStart,
-      expressions[expressions.length - 1].lineEnd
-    )({ entries: expressions });
+    return buildNode.Tuple(lineStart, expressions[expressions.length - 1].lineEnd)({
+      entries: expressions
+    });
   }
 
   function parseObjectProperty() {
@@ -390,9 +377,9 @@ function parse({ source, tokens }) {
       } else if (!u.isRightBracket(token)) {
         fail(
           t =>
-            `Expected closing "]" to match opening "[" at line ${
-              leftBracket.lineStart
-            }, column ${leftBracket.columnStart}, but found ${t} instead.`
+            `Expected closing "]" to match opening "[" at line ${leftBracket.lineStart}, column ${
+              leftBracket.columnStart
+            }, but found ${t} instead.`
         );
       }
     }
@@ -428,9 +415,7 @@ function parse({ source, tokens }) {
     const thenCase = parseExpression();
 
     if (!thenCase) {
-      fail(
-        'Expected to find a valid expression after "then" keyword in conditional expression.'
-      );
+      fail('Expected to find a valid expression after "then" keyword in conditional expression.');
     }
 
     if (!u.isElse(token)) {
@@ -444,9 +429,7 @@ function parse({ source, tokens }) {
     const elseCase = parseExpression();
 
     if (!elseCase) {
-      fail(
-        'Expected to find a valid expression after "else" keyword in conditional expression.'
-      );
+      fail('Expected to find a valid expression after "else" keyword in conditional expression.');
     }
 
     return buildNode.Conditional(lineStart, elseCase.lineEnd)({
@@ -477,27 +460,23 @@ function parse({ source, tokens }) {
           const tupleEntry = parseTypeExpression();
 
           if (!tupleEntry) {
-            fail(
-              'Expected a valid type expression after "," in tuple type expression.'
-            );
+            fail('Expected a valid type expression after "," in tuple type expression.');
           }
 
           otherTupleEntries.push(tupleEntry);
         }
 
-        firstNode = buildNode.TupleType(leftParen.lineStart, leftParen.lineEnd)(
-          {
-            typeEntries: [firstNode, ...otherTupleEntries]
-          }
-        );
+        firstNode = buildNode.TupleType(leftParen.lineStart, leftParen.lineEnd)({
+          typeEntries: [firstNode, ...otherTupleEntries]
+        });
       }
 
       if (!u.isRightParen(token)) {
         fail(
           t =>
-            `Expected closing ")" to match opening "(" at line ${
-              leftParen.lineStart
-            }, column ${leftParen.columnStart}, but found ${t} instead.`
+            `Expected closing ")" to match opening "(" at line ${leftParen.lineStart}, column ${
+              leftParen.columnStart
+            }, but found ${t} instead.`
         );
       }
 
@@ -521,10 +500,7 @@ function parse({ source, tokens }) {
         advance();
 
         if (!u.isDoubleColon(token)) {
-          fail(
-            t =>
-              `Expected "::" after entry name in record type, but found ${t} instead.`
-          );
+          fail(t => `Expected "::" after entry name in record type, but found ${t} instead.`);
         }
 
         advance();
@@ -557,10 +533,7 @@ function parse({ source, tokens }) {
         fail(t => `Unexpected ${t} found in record type.`);
       }
 
-      firstNode = buildNode.RecordType(
-        lineStart,
-        properties[properties.length - 1].lineEnd
-      )({
+      firstNode = buildNode.RecordType(lineStart, properties[properties.length - 1].lineEnd)({
         properties
       });
     } else if (u.isIdentifier(token) && /^[a-z]/.test(token.value)) {
@@ -586,10 +559,7 @@ function parse({ source, tokens }) {
 
       const typeExpression = parseTypeExpression() || null;
 
-      firstNode = buildNode.TypeTag(
-        tagName.lineStart,
-        (typeExpression || tagName).lineEnd
-      )({
+      firstNode = buildNode.TypeTag(tagName.lineStart, (typeExpression || tagName).lineEnd)({
         typeTagName: tagName,
         typeExpression
       });
@@ -631,8 +601,7 @@ function parse({ source, tokens }) {
 
     if (!u.isIdentifier(token)) {
       fail(
-        t =>
-          `Expected to find a type name after "type" keyword, but found ${t} instead.`,
+        t => `Expected to find a type name after "type" keyword, but found ${t} instead.`,
         token
       );
     }
@@ -668,11 +637,7 @@ function parse({ source, tokens }) {
     }
 
     if (!u.isEquals(token)) {
-      fail(
-        t =>
-          `Expected symbol "=" in type alias declaration, but found ${t} instead.`,
-        token
-      );
+      fail(t => `Expected symbol "=" in type alias declaration, but found ${t} instead.`, token);
     }
 
     advance();
@@ -704,8 +669,7 @@ function parse({ source, tokens }) {
 
     if (!u.isIdentifier(token)) {
       fail(
-        t =>
-          `Expected to find a type name after "type" keyword, but found ${t} instead.`,
+        t => `Expected to find a type name after "type" keyword, but found ${t} instead.`,
         token
       );
     }
@@ -741,10 +705,7 @@ function parse({ source, tokens }) {
     }
 
     if (!u.isEquals(token)) {
-      fail(
-        t => `Expected symbol "=" in type declaration, but found ${t} instead.`,
-        token
-      );
+      fail(t => `Expected symbol "=" in type declaration, but found ${t} instead.`, token);
     }
 
     advance();
@@ -759,10 +720,7 @@ function parse({ source, tokens }) {
       );
     }
 
-    const firstConstructorName = buildNode.Identifier(
-      token.lineStart,
-      token.lineEnd
-    )({
+    const firstConstructorName = buildNode.Identifier(token.lineStart, token.lineEnd)({
       value: token.value,
       isGetter: false,
       isSetter: false
@@ -806,10 +764,7 @@ function parse({ source, tokens }) {
         );
       }
 
-      const constructorName = buildNode.Identifier(
-        token.lineStart,
-        token.lineEnd
-      )({
+      const constructorName = buildNode.Identifier(token.lineStart, token.lineEnd)({
         value: token.value,
         isGetter: false,
         isSetter: false
@@ -936,8 +891,7 @@ function parse({ source, tokens }) {
         break;
 
       case tokenTypes.KEYWORD:
-        expr =
-          parseTypeDeclaration() || parseConditional() || parseLetExpression();
+        expr = parseTypeDeclaration() || parseConditional() || parseLetExpression();
         break;
 
       case tokenTypes.SYMBOL:
@@ -1019,18 +973,10 @@ function parse({ source, tokens }) {
   }
 
   function parseModuleDeclaration() {
-    if (
-      !(
-        u.isModule(token) ||
-        (u.isInterop(token) && u.isModule(tokens[index + 1]))
-      )
-    )
-      return;
+    if (!(u.isModule(token) || (u.isInterop(token) && u.isModule(tokens[index + 1])))) return;
 
     if (moduleName) {
-      fail(
-        'Duplicate "module" declaration. A file may only contain one "module" declaration.'
-      );
+      fail('Duplicate "module" declaration. A file may only contain one "module" declaration.');
     }
 
     if (body.length) {
@@ -1065,9 +1011,7 @@ function parse({ source, tokens }) {
     if (!u.isExport(token)) return;
 
     if (imports.length) {
-      fail(
-        'Export statements must come before any import statements in a file.'
-      );
+      fail('Export statements must come before any import statements in a file.');
     }
 
     advance();
@@ -1242,7 +1186,9 @@ function parse({ source, tokens }) {
       ? exports[0].lineStart
       : imports.length
         ? imports[0].lineStart
-        : body.length ? body[0].lineStart : 1;
+        : body.length
+          ? body[0].lineStart
+          : 1;
 
   const lastLine = body.length
     ? body[body.length - 1].lineEnd

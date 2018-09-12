@@ -42,14 +42,7 @@ function tokenize({ source }) {
     message,
     { lineNumber = line, columnStart = column, columnEnd = column, hint } = {}
   ) {
-    throw new TokenizerError(
-      message,
-      source,
-      lineNumber,
-      columnStart,
-      columnEnd,
-      hint
-    );
+    throw new TokenizerError(message, source, lineNumber, columnStart, columnEnd, hint);
   }
 
   function pushToken(type, text, value) {
@@ -109,11 +102,7 @@ function tokenize({ source }) {
       continue;
     }
 
-    if (
-      inRegex &&
-      (remaining[0] !== '/' ||
-        (remaining[0] === '/' && source[index - 1] === '\\'))
-    ) {
+    if (inRegex && (remaining[0] !== '/' || (remaining[0] === '/' && source[index - 1] === '\\'))) {
       advance();
       continue;
     }
@@ -240,11 +229,9 @@ function tokenize({ source }) {
         } catch (err) {
           let hint;
           if (err.message.indexOf('Unterminated group') > -1) {
-            hint =
-              'It looks like you may be missing a closing ")" for a group.';
+            hint = 'It looks like you may be missing a closing ")" for a group.';
           } else if (err.message.indexOf('Unmatched ")"')) {
-            hint =
-              'It looks like you have a closing ")" without an opening "(".';
+            hint = 'It looks like you have a closing ")" without an opening "(".';
           }
 
           fail('Invalid regular expression', {
