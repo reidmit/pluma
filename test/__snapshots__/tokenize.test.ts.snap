@@ -1,0 +1,1954 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`tokenizer basic strings 1`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 13,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "hello world",
+  },
+]
+`;
+
+exports[`tokenizer basic strings 2`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 7,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "hello",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 15,
+      "colStart": 8,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "world",
+  },
+]
+`;
+
+exports[`tokenizer basic strings 3`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 14,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "hello\\\\\\"world",
+  },
+]
+`;
+
+exports[`tokenizer basic strings 4`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 5,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "hello",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 13,
+      "colStart": 6,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "world",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 16,
+      "colStart": 14,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "hi",
+  },
+]
+`;
+
+exports[`tokenizer basic strings 5`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 5,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "empty",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 8,
+      "colStart": 6,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 13,
+      "colStart": 9,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "nice",
+  },
+]
+`;
+
+exports[`tokenizer basic strings 6`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 10,
+      "colStart": 0,
+      "lineEnd": 3,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "hello
+
+    world",
+  },
+]
+`;
+
+exports[`tokenizer booleans 1`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 4,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "boolean",
+    "value": "true",
+  },
+]
+`;
+
+exports[`tokenizer booleans 2`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 5,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "boolean",
+    "value": "false",
+  },
+]
+`;
+
+exports[`tokenizer booleans 3`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 5,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "hello",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 10,
+      "colStart": 6,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "boolean",
+    "value": "true",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 16,
+      "colStart": 11,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "world",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 22,
+      "colStart": 17,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "boolean",
+    "value": "false",
+  },
+]
+`;
+
+exports[`tokenizer comments 1`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 12,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "comment",
+    "value": " a comment!",
+  },
+]
+`;
+
+exports[`tokenizer comments 2`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 20,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "comment",
+    "value": "   another comment!",
+  },
+]
+`;
+
+exports[`tokenizer comments 3`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 7,
+      "colStart": 6,
+      "lineEnd": 2,
+      "lineStart": 2,
+    },
+    "type": "identifier",
+    "value": "a",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 14,
+      "colStart": 8,
+      "lineEnd": 2,
+      "lineStart": 2,
+    },
+    "type": "comment",
+    "value": " wow!",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 10,
+      "colStart": 4,
+      "lineEnd": 3,
+      "lineStart": 3,
+    },
+    "type": "comment",
+    "value": "hello",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 7,
+      "colStart": 6,
+      "lineEnd": 4,
+      "lineStart": 4,
+    },
+    "type": "identifier",
+    "value": "b",
+  },
+]
+`;
+
+exports[`tokenizer identifiers 1`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 5,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "hello",
+  },
+]
+`;
+
+exports[`tokenizer identifiers 2`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 6,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "hello2",
+  },
+]
+`;
+
+exports[`tokenizer identifiers 3`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 5,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "hello",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 11,
+      "colStart": 6,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "world",
+  },
+]
+`;
+
+exports[`tokenizer identifiers 4`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 5,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "h_llo",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 11,
+      "colStart": 6,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "wor_d",
+  },
+]
+`;
+
+exports[`tokenizer identifiers 5`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 1,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "_",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 3,
+      "colStart": 2,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "_",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 7,
+      "colStart": 4,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "wow",
+  },
+]
+`;
+
+exports[`tokenizer identifiers 6`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 7,
+      "colStart": 6,
+      "lineEnd": 2,
+      "lineStart": 2,
+    },
+    "type": "identifier",
+    "value": "a",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 7,
+      "colStart": 6,
+      "lineEnd": 4,
+      "lineStart": 4,
+    },
+    "type": "identifier",
+    "value": "b",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 7,
+      "colStart": 6,
+      "lineEnd": 6,
+      "lineStart": 6,
+    },
+    "type": "identifier",
+    "value": "c",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 10,
+      "colStart": 9,
+      "lineEnd": 6,
+      "lineStart": 6,
+    },
+    "type": "identifier",
+    "value": "d",
+  },
+]
+`;
+
+exports[`tokenizer interpolated strings 1`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 7,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "hello ",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 9,
+      "colStart": 7,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "interpolation-start",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 13,
+      "colStart": 9,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "name",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 14,
+      "colStart": 13,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "interpolation-end",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 15,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "",
+  },
+]
+`;
+
+exports[`tokenizer interpolated strings 2`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 16,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "hello \\\\$(name)",
+  },
+]
+`;
+
+exports[`tokenizer interpolated strings 3`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 7,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "hello ",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 9,
+      "colStart": 7,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "interpolation-start",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 11,
+      "colStart": 9,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "hi",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 17,
+      "colStart": 12,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "there",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 18,
+      "colStart": 17,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "interpolation-end",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 19,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "",
+  },
+]
+`;
+
+exports[`tokenizer interpolated strings 4`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 7,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "hello ",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 9,
+      "colStart": 7,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "interpolation-start",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 11,
+      "colStart": 9,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "hi",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 11,
+      "colStart": 6,
+      "lineEnd": 3,
+      "lineStart": 3,
+    },
+    "type": "identifier",
+    "value": "there",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 12,
+      "colStart": 11,
+      "lineEnd": 3,
+      "lineStart": 3,
+    },
+    "type": "interpolation-end",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 13,
+      "colStart": 0,
+      "lineEnd": 3,
+      "lineStart": 3,
+    },
+    "type": "string",
+    "value": "",
+  },
+]
+`;
+
+exports[`tokenizer interpolated strings 5`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 7,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "hello ",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 9,
+      "colStart": 7,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "interpolation-start",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 11,
+      "colStart": 9,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "hi",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 13,
+      "colStart": 12,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "l-paren",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 18,
+      "colStart": 13,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "there",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 19,
+      "colStart": 18,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "r-paren",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 20,
+      "colStart": 19,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "interpolation-end",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 21,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "",
+  },
+]
+`;
+
+exports[`tokenizer interpolated strings 6`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 7,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "hello ",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 9,
+      "colStart": 7,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "interpolation-start",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 25,
+      "colStart": 9,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "another string",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 26,
+      "colStart": 25,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "interpolation-end",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 27,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "",
+  },
+]
+`;
+
+exports[`tokenizer interpolated strings 7`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 7,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "hello ",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 9,
+      "colStart": 7,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "interpolation-start",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 12,
+      "colStart": 9,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "wow",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 29,
+      "colStart": 13,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "another string",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 30,
+      "colStart": 29,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "interpolation-end",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 31,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "",
+  },
+]
+`;
+
+exports[`tokenizer interpolated strings 8`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 7,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "hello ",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 9,
+      "colStart": 7,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "interpolation-start",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 10,
+      "colStart": 9,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "l-paren",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 11,
+      "colStart": 10,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "l-paren",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 12,
+      "colStart": 11,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "l-paren",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 16,
+      "colStart": 12,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "name",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 17,
+      "colStart": 16,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "r-paren",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 18,
+      "colStart": 17,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "r-paren",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 19,
+      "colStart": 18,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "r-paren",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 20,
+      "colStart": 19,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "interpolation-end",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 21,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "",
+  },
+]
+`;
+
+exports[`tokenizer interpolated strings 9`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 7,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "hello ",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 9,
+      "colStart": 7,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "interpolation-start",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 18,
+      "colStart": 9,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "another ",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 20,
+      "colStart": 18,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "interpolation-start",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 33,
+      "colStart": 20,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "interpolation",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 34,
+      "colStart": 33,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "interpolation-end",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 41,
+      "colStart": 9,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": ", nice",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 42,
+      "colStart": 41,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "interpolation-end",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 43,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "",
+  },
+]
+`;
+
+exports[`tokenizer numbers 1`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 2,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "number",
+    "value": "47",
+  },
+]
+`;
+
+exports[`tokenizer numbers 2`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 5,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "number",
+    "value": "47.01",
+  },
+]
+`;
+
+exports[`tokenizer numbers 3`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 5,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "hello",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 10,
+      "colStart": 6,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "number",
+    "value": "1.22",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 16,
+      "colStart": 11,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "world",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 18,
+      "colStart": 17,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "number",
+    "value": "2",
+  },
+]
+`;
+
+exports[`tokenizer numbers 4`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 6,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "number",
+    "value": "47e100",
+  },
+]
+`;
+
+exports[`tokenizer numbers 5`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 4,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "number",
+    "value": "0x10",
+  },
+]
+`;
+
+exports[`tokenizer numbers 6`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 6,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "number",
+    "value": "0b1010",
+  },
+]
+`;
+
+exports[`tokenizer numbers 7`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 8,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "number",
+    "value": "0o122345",
+  },
+]
+`;
+
+exports[`tokenizer operators 1`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 1,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "a",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 3,
+      "colStart": 2,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "operator",
+    "value": "@",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 5,
+      "colStart": 4,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "b",
+  },
+]
+`;
+
+exports[`tokenizer operators 2`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 1,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "a",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 4,
+      "colStart": 2,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "operator",
+    "value": ">=",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 6,
+      "colStart": 5,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "b",
+  },
+]
+`;
+
+exports[`tokenizer operators 3`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 1,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "a",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 3,
+      "colStart": 2,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "equals",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 4,
+      "colStart": 3,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "equals",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 6,
+      "colStart": 5,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "b",
+  },
+]
+`;
+
+exports[`tokenizer operators 4`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 1,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "a",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 4,
+      "colStart": 2,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "operator",
+    "value": "!=",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 6,
+      "colStart": 5,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "b",
+  },
+]
+`;
+
+exports[`tokenizer operators 5`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 1,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "a",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 3,
+      "colStart": 2,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "operator",
+    "value": "<",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 5,
+      "colStart": 4,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "b",
+  },
+]
+`;
+
+exports[`tokenizer operators 6`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 1,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "a",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 3,
+      "colStart": 2,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "operator",
+    "value": ">",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 5,
+      "colStart": 4,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "b",
+  },
+]
+`;
+
+exports[`tokenizer operators 7`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 1,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "a",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 6,
+      "colStart": 2,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "operator",
+    "value": ">=!@",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 8,
+      "colStart": 7,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "b",
+  },
+]
+`;
+
+exports[`tokenizer operators 8`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 1,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "a",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 4,
+      "colStart": 2,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "operator",
+    "value": "@@",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 6,
+      "colStart": 5,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "b",
+  },
+]
+`;
+
+exports[`tokenizer operators 9`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 1,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "a",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 3,
+      "colStart": 2,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "operator",
+    "value": "+",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 5,
+      "colStart": 4,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "b",
+  },
+]
+`;
+
+exports[`tokenizer operators 10`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 1,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "a",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 3,
+      "colStart": 2,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "operator",
+    "value": "*",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 5,
+      "colStart": 4,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "b",
+  },
+]
+`;
+
+exports[`tokenizer operators 11`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 1,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "a",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 3,
+      "colStart": 2,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "operator",
+    "value": "-",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 5,
+      "colStart": 4,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "b",
+  },
+]
+`;
+
+exports[`tokenizer symbols 1`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 1,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "l-brace",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 5,
+      "colStart": 2,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "wow",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 7,
+      "colStart": 6,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "r-brace",
+  },
+]
+`;
+
+exports[`tokenizer symbols 2`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 1,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "l-paren",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 5,
+      "colStart": 2,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "wow",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 7,
+      "colStart": 6,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "r-paren",
+  },
+]
+`;
+
+exports[`tokenizer symbols 3`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 1,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "l-bracket",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 5,
+      "colStart": 2,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "wow",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 7,
+      "colStart": 6,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "r-bracket",
+  },
+]
+`;
+
+exports[`tokenizer symbols 4`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 3,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "wow",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 5,
+      "colStart": 4,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "dot",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 9,
+      "colStart": 6,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "com",
+  },
+]
+`;
+
+exports[`tokenizer symbols 5`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 1,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "a",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 2,
+      "colStart": 1,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "comma",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 4,
+      "colStart": 3,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "b",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 5,
+      "colStart": 4,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "comma",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 7,
+      "colStart": 6,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "c",
+  },
+]
+`;
+
+exports[`tokenizer symbols 6`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 1,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "a",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 4,
+      "colStart": 2,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "double-arrow",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 6,
+      "colStart": 5,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "b",
+  },
+]
+`;
+
+exports[`tokenizer symbols 7`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 1,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "a",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 4,
+      "colStart": 2,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "arrow",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 6,
+      "colStart": 5,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "b",
+  },
+]
+`;
+
+exports[`tokenizer symbols 8`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 1,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "a",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 3,
+      "colStart": 2,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "equals",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 5,
+      "colStart": 4,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "b",
+  },
+]
+`;
+
+exports[`tokenizer symbols 9`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 1,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "a",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 3,
+      "colStart": 2,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "colon",
+  },
+  Object {
+    "location": Object {
+      "colEnd": 5,
+      "colStart": 4,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "identifier",
+    "value": "b",
+  },
+]
+`;
+
+exports[`tokenizer triple-quoted strings 1`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 17,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "hello world",
+  },
+]
+`;
+
+exports[`tokenizer triple-quoted strings 2`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 22,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "hello \\"world\\" ok",
+  },
+]
+`;
+
+exports[`tokenizer triple-quoted strings 3`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 21,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "hello \\"world ok",
+  },
+]
+`;
+
+exports[`tokenizer triple-quoted strings 4`] = `
+Array [
+  Object {
+    "location": Object {
+      "colEnd": 18,
+      "colStart": 0,
+      "lineEnd": 3,
+      "lineStart": 1,
+    },
+    "type": "string",
+    "value": "hello
+
+      \\"world ok",
+  },
+]
+`;

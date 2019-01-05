@@ -1,4 +1,26 @@
-interface Location {
+type TokenType =
+  | 'arrow'
+  | 'boolean'
+  | 'colon'
+  | 'comma'
+  | 'comment'
+  | 'dot'
+  | 'double-arrow'
+  | 'equals'
+  | 'identifier'
+  | 'interpolation-end'
+  | 'interpolation-start'
+  | 'l-brace'
+  | 'l-bracket'
+  | 'l-paren'
+  | 'operator'
+  | 'number'
+  | 'r-brace'
+  | 'r-bracket'
+  | 'r-paren'
+  | 'string';
+
+interface SourceLocation {
   lineStart: number;
   lineEnd: number;
   colStart: number;
@@ -6,27 +28,7 @@ interface Location {
 }
 
 interface Token {
-  type: 'symbol' | 'operator' | 'number' | 'string' | 'boolean';
-  value: any;
-  location: Location;
-}
-
-interface SymbolToken extends Token {
-  type: 'symbol';
-  value: '=' | '{' | '}' | '(' | ')' | '.' | ',' | '[' | ']';
-}
-
-interface OperatorToken extends Token {
-  type: 'operator';
-  value: '@' | '<' | '>' | '==' | '>=' | '<=' | '!=';
-}
-
-interface NumberToken extends Token {
-  type: 'number';
-  value: number;
-}
-
-interface BooleanToken extends Token {
-  type: 'boolean';
-  value: boolean;
+  type: TokenType;
+  value?: string;
+  location: SourceLocation;
 }

@@ -13,9 +13,9 @@ console.time('tokenize');
 const tokens = tokenize(input);
 console.timeEnd('tokenize');
 
-console.time('parse');
-const ast = parse(tokens);
-console.timeEnd('parse');
+// console.time('parse');
+// const ast = parse(tokens);
+// console.timeEnd('parse');
 
 console.log();
 console.log(tokens);
