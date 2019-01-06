@@ -3,13 +3,11 @@
 exports[`tokenizer basic strings 1`] = `
 Array [
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 13,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 13,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "hello world",
   },
 ]
@@ -18,23 +16,19 @@ Array [
 exports[`tokenizer basic strings 2`] = `
 Array [
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 7,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 7,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "hello",
   },
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 15,
-      "colStart": 8,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 15,
+    "colStart": 8,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "world",
   },
 ]
@@ -43,13 +37,11 @@ Array [
 exports[`tokenizer basic strings 3`] = `
 Array [
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 14,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 14,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "hello\\\\\\"world",
   },
 ]
@@ -58,33 +50,27 @@ Array [
 exports[`tokenizer basic strings 4`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 5,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 5,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "hello",
   },
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 13,
-      "colStart": 6,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 13,
+    "colStart": 6,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "world",
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 16,
-      "colStart": 14,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 16,
+    "colStart": 14,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "hi",
   },
 ]
@@ -93,33 +79,27 @@ Array [
 exports[`tokenizer basic strings 5`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 5,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 5,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "empty",
   },
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 8,
-      "colStart": 6,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 8,
+    "colStart": 6,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "",
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 13,
-      "colStart": 9,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 13,
+    "colStart": 9,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "nice",
   },
 ]
@@ -128,13 +108,11 @@ Array [
 exports[`tokenizer basic strings 6`] = `
 Array [
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 10,
-      "colStart": 0,
-      "lineEnd": 3,
-      "lineStart": 1,
-    },
+    "colEnd": 10,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 3,
+    "lineStart": 1,
     "value": "hello
 
     world",
@@ -145,13 +123,11 @@ Array [
 exports[`tokenizer booleans 1`] = `
 Array [
   Object {
-    "kind": "boolean",
-    "location": Object {
-      "colEnd": 4,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 4,
+    "colStart": 0,
+    "kind": "Boolean",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "true",
   },
 ]
@@ -160,13 +136,11 @@ Array [
 exports[`tokenizer booleans 2`] = `
 Array [
   Object {
-    "kind": "boolean",
-    "location": Object {
-      "colEnd": 5,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 5,
+    "colStart": 0,
+    "kind": "Boolean",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "false",
   },
 ]
@@ -175,43 +149,35 @@ Array [
 exports[`tokenizer booleans 3`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 5,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 5,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "hello",
   },
   Object {
-    "kind": "boolean",
-    "location": Object {
-      "colEnd": 10,
-      "colStart": 6,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 10,
+    "colStart": 6,
+    "kind": "Boolean",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "true",
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 16,
-      "colStart": 11,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 16,
+    "colStart": 11,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "world",
   },
   Object {
-    "kind": "boolean",
-    "location": Object {
-      "colEnd": 22,
-      "colStart": 17,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 22,
+    "colStart": 17,
+    "kind": "Boolean",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "false",
   },
 ]
@@ -220,13 +186,11 @@ Array [
 exports[`tokenizer comments 1`] = `
 Array [
   Object {
-    "kind": "comment",
-    "location": Object {
-      "colEnd": 12,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 12,
+    "colStart": 0,
+    "kind": "Comment",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": " a comment!",
   },
 ]
@@ -235,13 +199,11 @@ Array [
 exports[`tokenizer comments 2`] = `
 Array [
   Object {
-    "kind": "comment",
-    "location": Object {
-      "colEnd": 20,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 20,
+    "colStart": 0,
+    "kind": "Comment",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "   another comment!",
   },
 ]
@@ -250,43 +212,35 @@ Array [
 exports[`tokenizer comments 3`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 7,
-      "colStart": 6,
-      "lineEnd": 2,
-      "lineStart": 2,
-    },
+    "colEnd": 7,
+    "colStart": 6,
+    "kind": "Identifier",
+    "lineEnd": 2,
+    "lineStart": 2,
     "value": "a",
   },
   Object {
-    "kind": "comment",
-    "location": Object {
-      "colEnd": 14,
-      "colStart": 8,
-      "lineEnd": 2,
-      "lineStart": 2,
-    },
+    "colEnd": 14,
+    "colStart": 8,
+    "kind": "Comment",
+    "lineEnd": 2,
+    "lineStart": 2,
     "value": " wow!",
   },
   Object {
-    "kind": "comment",
-    "location": Object {
-      "colEnd": 10,
-      "colStart": 4,
-      "lineEnd": 3,
-      "lineStart": 3,
-    },
+    "colEnd": 10,
+    "colStart": 4,
+    "kind": "Comment",
+    "lineEnd": 3,
+    "lineStart": 3,
     "value": "hello",
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 7,
-      "colStart": 6,
-      "lineEnd": 4,
-      "lineStart": 4,
-    },
+    "colEnd": 7,
+    "colStart": 6,
+    "kind": "Identifier",
+    "lineEnd": 4,
+    "lineStart": 4,
     "value": "b",
   },
 ]
@@ -295,13 +249,11 @@ Array [
 exports[`tokenizer identifiers 1`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 5,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 5,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "hello",
   },
 ]
@@ -310,13 +262,11 @@ Array [
 exports[`tokenizer identifiers 2`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 6,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 6,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "hello2",
   },
 ]
@@ -325,23 +275,19 @@ Array [
 exports[`tokenizer identifiers 3`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 5,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 5,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "hello",
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 11,
-      "colStart": 6,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 11,
+    "colStart": 6,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "world",
   },
 ]
@@ -350,23 +296,19 @@ Array [
 exports[`tokenizer identifiers 4`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 5,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 5,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "h_llo",
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 11,
-      "colStart": 6,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 11,
+    "colStart": 6,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "wor_d",
   },
 ]
@@ -375,33 +317,27 @@ Array [
 exports[`tokenizer identifiers 5`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 1,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 1,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "_",
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 3,
-      "colStart": 2,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 3,
+    "colStart": 2,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "_",
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 7,
-      "colStart": 4,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 7,
+    "colStart": 4,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "wow",
   },
 ]
@@ -410,43 +346,35 @@ Array [
 exports[`tokenizer identifiers 6`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 7,
-      "colStart": 6,
-      "lineEnd": 2,
-      "lineStart": 2,
-    },
+    "colEnd": 7,
+    "colStart": 6,
+    "kind": "Identifier",
+    "lineEnd": 2,
+    "lineStart": 2,
     "value": "a",
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 7,
-      "colStart": 6,
-      "lineEnd": 4,
-      "lineStart": 4,
-    },
+    "colEnd": 7,
+    "colStart": 6,
+    "kind": "Identifier",
+    "lineEnd": 4,
+    "lineStart": 4,
     "value": "b",
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 7,
-      "colStart": 6,
-      "lineEnd": 6,
-      "lineStart": 6,
-    },
+    "colEnd": 7,
+    "colStart": 6,
+    "kind": "Identifier",
+    "lineEnd": 6,
+    "lineStart": 6,
     "value": "c",
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 10,
-      "colStart": 9,
-      "lineEnd": 6,
-      "lineStart": 6,
-    },
+    "colEnd": 10,
+    "colStart": 9,
+    "kind": "Identifier",
+    "lineEnd": 6,
+    "lineStart": 6,
     "value": "d",
   },
 ]
@@ -455,51 +383,41 @@ Array [
 exports[`tokenizer interpolated strings 1`] = `
 Array [
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 7,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 7,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "hello ",
   },
   Object {
-    "kind": "interpolation-start",
-    "location": Object {
-      "colEnd": 9,
-      "colStart": 7,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 9,
+    "colStart": 7,
+    "kind": "InterpolationStart",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 13,
-      "colStart": 9,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 13,
+    "colStart": 9,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "name",
   },
   Object {
-    "kind": "interpolation-end",
-    "location": Object {
-      "colEnd": 14,
-      "colStart": 13,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 14,
+    "colStart": 13,
+    "kind": "InterpolationEnd",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 15,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 15,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "",
   },
 ]
@@ -508,13 +426,11 @@ Array [
 exports[`tokenizer interpolated strings 2`] = `
 Array [
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 16,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 16,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "hello \\\\$(name)",
   },
 ]
@@ -523,61 +439,49 @@ Array [
 exports[`tokenizer interpolated strings 3`] = `
 Array [
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 7,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 7,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "hello ",
   },
   Object {
-    "kind": "interpolation-start",
-    "location": Object {
-      "colEnd": 9,
-      "colStart": 7,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 9,
+    "colStart": 7,
+    "kind": "InterpolationStart",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 11,
-      "colStart": 9,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 11,
+    "colStart": 9,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "hi",
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 17,
-      "colStart": 12,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 17,
+    "colStart": 12,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "there",
   },
   Object {
-    "kind": "interpolation-end",
-    "location": Object {
-      "colEnd": 18,
-      "colStart": 17,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 18,
+    "colStart": 17,
+    "kind": "InterpolationEnd",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 19,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 19,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "",
   },
 ]
@@ -586,61 +490,49 @@ Array [
 exports[`tokenizer interpolated strings 4`] = `
 Array [
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 7,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 7,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "hello ",
   },
   Object {
-    "kind": "interpolation-start",
-    "location": Object {
-      "colEnd": 9,
-      "colStart": 7,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 9,
+    "colStart": 7,
+    "kind": "InterpolationStart",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 11,
-      "colStart": 9,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 11,
+    "colStart": 9,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "hi",
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 11,
-      "colStart": 6,
-      "lineEnd": 3,
-      "lineStart": 3,
-    },
+    "colEnd": 11,
+    "colStart": 6,
+    "kind": "Identifier",
+    "lineEnd": 3,
+    "lineStart": 3,
     "value": "there",
   },
   Object {
-    "kind": "interpolation-end",
-    "location": Object {
-      "colEnd": 12,
-      "colStart": 11,
-      "lineEnd": 3,
-      "lineStart": 3,
-    },
+    "colEnd": 12,
+    "colStart": 11,
+    "kind": "InterpolationEnd",
+    "lineEnd": 3,
+    "lineStart": 3,
   },
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 13,
-      "colStart": 0,
-      "lineEnd": 3,
-      "lineStart": 3,
-    },
+    "colEnd": 13,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 3,
+    "lineStart": 3,
     "value": "",
   },
 ]
@@ -649,79 +541,63 @@ Array [
 exports[`tokenizer interpolated strings 5`] = `
 Array [
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 7,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 7,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "hello ",
   },
   Object {
-    "kind": "interpolation-start",
-    "location": Object {
-      "colEnd": 9,
-      "colStart": 7,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 9,
+    "colStart": 7,
+    "kind": "InterpolationStart",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 11,
-      "colStart": 9,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 11,
+    "colStart": 9,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "hi",
   },
   Object {
-    "kind": "l-paren",
-    "location": Object {
-      "colEnd": 13,
-      "colStart": 12,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 13,
+    "colStart": 12,
+    "kind": "LeftParen",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 18,
-      "colStart": 13,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 18,
+    "colStart": 13,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "there",
   },
   Object {
-    "kind": "r-paren",
-    "location": Object {
-      "colEnd": 19,
-      "colStart": 18,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 19,
+    "colStart": 18,
+    "kind": "RightParen",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "interpolation-end",
-    "location": Object {
-      "colEnd": 20,
-      "colStart": 19,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 20,
+    "colStart": 19,
+    "kind": "InterpolationEnd",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 21,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 21,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "",
   },
 ]
@@ -730,51 +606,41 @@ Array [
 exports[`tokenizer interpolated strings 6`] = `
 Array [
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 7,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 7,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "hello ",
   },
   Object {
-    "kind": "interpolation-start",
-    "location": Object {
-      "colEnd": 9,
-      "colStart": 7,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 9,
+    "colStart": 7,
+    "kind": "InterpolationStart",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 25,
-      "colStart": 9,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 25,
+    "colStart": 9,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "another string",
   },
   Object {
-    "kind": "interpolation-end",
-    "location": Object {
-      "colEnd": 26,
-      "colStart": 25,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 26,
+    "colStart": 25,
+    "kind": "InterpolationEnd",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 27,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 27,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "",
   },
 ]
@@ -783,61 +649,49 @@ Array [
 exports[`tokenizer interpolated strings 7`] = `
 Array [
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 7,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 7,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "hello ",
   },
   Object {
-    "kind": "interpolation-start",
-    "location": Object {
-      "colEnd": 9,
-      "colStart": 7,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 9,
+    "colStart": 7,
+    "kind": "InterpolationStart",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 12,
-      "colStart": 9,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 12,
+    "colStart": 9,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "wow",
   },
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 29,
-      "colStart": 13,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 29,
+    "colStart": 13,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "another string",
   },
   Object {
-    "kind": "interpolation-end",
-    "location": Object {
-      "colEnd": 30,
-      "colStart": 29,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 30,
+    "colStart": 29,
+    "kind": "InterpolationEnd",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 31,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 31,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "",
   },
 ]
@@ -846,105 +700,83 @@ Array [
 exports[`tokenizer interpolated strings 8`] = `
 Array [
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 7,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 7,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "hello ",
   },
   Object {
-    "kind": "interpolation-start",
-    "location": Object {
-      "colEnd": 9,
-      "colStart": 7,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 9,
+    "colStart": 7,
+    "kind": "InterpolationStart",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "l-paren",
-    "location": Object {
-      "colEnd": 10,
-      "colStart": 9,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 10,
+    "colStart": 9,
+    "kind": "LeftParen",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "l-paren",
-    "location": Object {
-      "colEnd": 11,
-      "colStart": 10,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 11,
+    "colStart": 10,
+    "kind": "LeftParen",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "l-paren",
-    "location": Object {
-      "colEnd": 12,
-      "colStart": 11,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 12,
+    "colStart": 11,
+    "kind": "LeftParen",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 16,
-      "colStart": 12,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 16,
+    "colStart": 12,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "name",
   },
   Object {
-    "kind": "r-paren",
-    "location": Object {
-      "colEnd": 17,
-      "colStart": 16,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 17,
+    "colStart": 16,
+    "kind": "RightParen",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "r-paren",
-    "location": Object {
-      "colEnd": 18,
-      "colStart": 17,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 18,
+    "colStart": 17,
+    "kind": "RightParen",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "r-paren",
-    "location": Object {
-      "colEnd": 19,
-      "colStart": 18,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 19,
+    "colStart": 18,
+    "kind": "RightParen",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "interpolation-end",
-    "location": Object {
-      "colEnd": 20,
-      "colStart": 19,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 20,
+    "colStart": 19,
+    "kind": "InterpolationEnd",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 21,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 21,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "",
   },
 ]
@@ -953,89 +785,71 @@ Array [
 exports[`tokenizer interpolated strings 9`] = `
 Array [
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 7,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 7,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "hello ",
   },
   Object {
-    "kind": "interpolation-start",
-    "location": Object {
-      "colEnd": 9,
-      "colStart": 7,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 9,
+    "colStart": 7,
+    "kind": "InterpolationStart",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 18,
-      "colStart": 9,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 18,
+    "colStart": 9,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "another ",
   },
   Object {
-    "kind": "interpolation-start",
-    "location": Object {
-      "colEnd": 20,
-      "colStart": 18,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 20,
+    "colStart": 18,
+    "kind": "InterpolationStart",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 33,
-      "colStart": 20,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 33,
+    "colStart": 20,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "interpolation",
   },
   Object {
-    "kind": "interpolation-end",
-    "location": Object {
-      "colEnd": 34,
-      "colStart": 33,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 34,
+    "colStart": 33,
+    "kind": "InterpolationEnd",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 41,
-      "colStart": 9,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 41,
+    "colStart": 9,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": ", nice",
   },
   Object {
-    "kind": "interpolation-end",
-    "location": Object {
-      "colEnd": 42,
-      "colStart": 41,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 42,
+    "colStart": 41,
+    "kind": "InterpolationEnd",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 43,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 43,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "",
   },
 ]
@@ -1044,13 +858,11 @@ Array [
 exports[`tokenizer numbers 1`] = `
 Array [
   Object {
-    "kind": "number",
-    "location": Object {
-      "colEnd": 2,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 2,
+    "colStart": 0,
+    "kind": "Number",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "47",
   },
 ]
@@ -1059,13 +871,11 @@ Array [
 exports[`tokenizer numbers 2`] = `
 Array [
   Object {
-    "kind": "number",
-    "location": Object {
-      "colEnd": 5,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 5,
+    "colStart": 0,
+    "kind": "Number",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "47.01",
   },
 ]
@@ -1074,43 +884,35 @@ Array [
 exports[`tokenizer numbers 3`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 5,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 5,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "hello",
   },
   Object {
-    "kind": "number",
-    "location": Object {
-      "colEnd": 10,
-      "colStart": 6,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 10,
+    "colStart": 6,
+    "kind": "Number",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "1.22",
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 16,
-      "colStart": 11,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 16,
+    "colStart": 11,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "world",
   },
   Object {
-    "kind": "number",
-    "location": Object {
-      "colEnd": 18,
-      "colStart": 17,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 18,
+    "colStart": 17,
+    "kind": "Number",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "2",
   },
 ]
@@ -1119,13 +921,11 @@ Array [
 exports[`tokenizer numbers 4`] = `
 Array [
   Object {
-    "kind": "number",
-    "location": Object {
-      "colEnd": 6,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 6,
+    "colStart": 0,
+    "kind": "Number",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "47e100",
   },
 ]
@@ -1134,13 +934,11 @@ Array [
 exports[`tokenizer numbers 5`] = `
 Array [
   Object {
-    "kind": "number",
-    "location": Object {
-      "colEnd": 4,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 4,
+    "colStart": 0,
+    "kind": "Number",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "0x10",
   },
 ]
@@ -1149,13 +947,11 @@ Array [
 exports[`tokenizer numbers 6`] = `
 Array [
   Object {
-    "kind": "number",
-    "location": Object {
-      "colEnd": 6,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 6,
+    "colStart": 0,
+    "kind": "Number",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "0b1010",
   },
 ]
@@ -1164,13 +960,11 @@ Array [
 exports[`tokenizer numbers 7`] = `
 Array [
   Object {
-    "kind": "number",
-    "location": Object {
-      "colEnd": 8,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 8,
+    "colStart": 0,
+    "kind": "Number",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "0o122345",
   },
 ]
@@ -1179,33 +973,27 @@ Array [
 exports[`tokenizer operators 1`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 1,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 1,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "a",
   },
   Object {
-    "kind": "operator",
-    "location": Object {
-      "colEnd": 3,
-      "colStart": 2,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 3,
+    "colStart": 2,
+    "kind": "Operator",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "@",
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 5,
-      "colStart": 4,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 5,
+    "colStart": 4,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "b",
   },
 ]
@@ -1214,33 +1002,27 @@ Array [
 exports[`tokenizer operators 2`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 1,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 1,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "a",
   },
   Object {
-    "kind": "operator",
-    "location": Object {
-      "colEnd": 4,
-      "colStart": 2,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 4,
+    "colStart": 2,
+    "kind": "Operator",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": ">=",
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 6,
-      "colStart": 5,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 6,
+    "colStart": 5,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "b",
   },
 ]
@@ -1249,41 +1031,33 @@ Array [
 exports[`tokenizer operators 3`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 1,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 1,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "a",
   },
   Object {
-    "kind": "equals",
-    "location": Object {
-      "colEnd": 3,
-      "colStart": 2,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 3,
+    "colStart": 2,
+    "kind": "Equals",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "equals",
-    "location": Object {
-      "colEnd": 4,
-      "colStart": 3,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 4,
+    "colStart": 3,
+    "kind": "Equals",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 6,
-      "colStart": 5,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 6,
+    "colStart": 5,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "b",
   },
 ]
@@ -1292,33 +1066,27 @@ Array [
 exports[`tokenizer operators 4`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 1,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 1,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "a",
   },
   Object {
-    "kind": "operator",
-    "location": Object {
-      "colEnd": 4,
-      "colStart": 2,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 4,
+    "colStart": 2,
+    "kind": "Operator",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "!=",
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 6,
-      "colStart": 5,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 6,
+    "colStart": 5,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "b",
   },
 ]
@@ -1327,33 +1095,27 @@ Array [
 exports[`tokenizer operators 5`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 1,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 1,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "a",
   },
   Object {
-    "kind": "operator",
-    "location": Object {
-      "colEnd": 3,
-      "colStart": 2,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 3,
+    "colStart": 2,
+    "kind": "Operator",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "<",
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 5,
-      "colStart": 4,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 5,
+    "colStart": 4,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "b",
   },
 ]
@@ -1362,33 +1124,27 @@ Array [
 exports[`tokenizer operators 6`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 1,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 1,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "a",
   },
   Object {
-    "kind": "operator",
-    "location": Object {
-      "colEnd": 3,
-      "colStart": 2,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 3,
+    "colStart": 2,
+    "kind": "Operator",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": ">",
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 5,
-      "colStart": 4,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 5,
+    "colStart": 4,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "b",
   },
 ]
@@ -1397,33 +1153,27 @@ Array [
 exports[`tokenizer operators 7`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 1,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 1,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "a",
   },
   Object {
-    "kind": "operator",
-    "location": Object {
-      "colEnd": 6,
-      "colStart": 2,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 6,
+    "colStart": 2,
+    "kind": "Operator",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": ">=!@",
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 8,
-      "colStart": 7,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 8,
+    "colStart": 7,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "b",
   },
 ]
@@ -1432,33 +1182,27 @@ Array [
 exports[`tokenizer operators 8`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 1,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 1,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "a",
   },
   Object {
-    "kind": "operator",
-    "location": Object {
-      "colEnd": 4,
-      "colStart": 2,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 4,
+    "colStart": 2,
+    "kind": "Operator",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "@@",
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 6,
-      "colStart": 5,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 6,
+    "colStart": 5,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "b",
   },
 ]
@@ -1467,33 +1211,27 @@ Array [
 exports[`tokenizer operators 9`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 1,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 1,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "a",
   },
   Object {
-    "kind": "operator",
-    "location": Object {
-      "colEnd": 3,
-      "colStart": 2,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 3,
+    "colStart": 2,
+    "kind": "Operator",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "+",
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 5,
-      "colStart": 4,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 5,
+    "colStart": 4,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "b",
   },
 ]
@@ -1502,33 +1240,27 @@ Array [
 exports[`tokenizer operators 10`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 1,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 1,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "a",
   },
   Object {
-    "kind": "operator",
-    "location": Object {
-      "colEnd": 3,
-      "colStart": 2,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 3,
+    "colStart": 2,
+    "kind": "Operator",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "*",
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 5,
-      "colStart": 4,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 5,
+    "colStart": 4,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "b",
   },
 ]
@@ -1537,33 +1269,27 @@ Array [
 exports[`tokenizer operators 11`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 1,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 1,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "a",
   },
   Object {
-    "kind": "operator",
-    "location": Object {
-      "colEnd": 3,
-      "colStart": 2,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 3,
+    "colStart": 2,
+    "kind": "Operator",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "-",
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 5,
-      "colStart": 4,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 5,
+    "colStart": 4,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "b",
   },
 ]
@@ -1572,32 +1298,26 @@ Array [
 exports[`tokenizer symbols 1`] = `
 Array [
   Object {
-    "kind": "l-brace",
-    "location": Object {
-      "colEnd": 1,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 1,
+    "colStart": 0,
+    "kind": "LeftBrace",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 5,
-      "colStart": 2,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 5,
+    "colStart": 2,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "wow",
   },
   Object {
-    "kind": "r-brace",
-    "location": Object {
-      "colEnd": 7,
-      "colStart": 6,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 7,
+    "colStart": 6,
+    "kind": "RightBrace",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
 ]
 `;
@@ -1605,32 +1325,26 @@ Array [
 exports[`tokenizer symbols 2`] = `
 Array [
   Object {
-    "kind": "l-paren",
-    "location": Object {
-      "colEnd": 1,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 1,
+    "colStart": 0,
+    "kind": "LeftParen",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 5,
-      "colStart": 2,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 5,
+    "colStart": 2,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "wow",
   },
   Object {
-    "kind": "r-paren",
-    "location": Object {
-      "colEnd": 7,
-      "colStart": 6,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 7,
+    "colStart": 6,
+    "kind": "RightParen",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
 ]
 `;
@@ -1638,32 +1352,26 @@ Array [
 exports[`tokenizer symbols 3`] = `
 Array [
   Object {
-    "kind": "l-bracket",
-    "location": Object {
-      "colEnd": 1,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 1,
+    "colStart": 0,
+    "kind": "LeftBracket",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 5,
-      "colStart": 2,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 5,
+    "colStart": 2,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "wow",
   },
   Object {
-    "kind": "r-bracket",
-    "location": Object {
-      "colEnd": 7,
-      "colStart": 6,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 7,
+    "colStart": 6,
+    "kind": "RightBracket",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
 ]
 `;
@@ -1671,32 +1379,26 @@ Array [
 exports[`tokenizer symbols 4`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 3,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 3,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "wow",
   },
   Object {
-    "kind": "dot",
-    "location": Object {
-      "colEnd": 5,
-      "colStart": 4,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 5,
+    "colStart": 4,
+    "kind": "Dot",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 9,
-      "colStart": 6,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 9,
+    "colStart": 6,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "com",
   },
 ]
@@ -1705,51 +1407,41 @@ Array [
 exports[`tokenizer symbols 5`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 1,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 1,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "a",
   },
   Object {
-    "kind": "comma",
-    "location": Object {
-      "colEnd": 2,
-      "colStart": 1,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 2,
+    "colStart": 1,
+    "kind": "Comma",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 4,
-      "colStart": 3,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 4,
+    "colStart": 3,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "b",
   },
   Object {
-    "kind": "comma",
-    "location": Object {
-      "colEnd": 5,
-      "colStart": 4,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 5,
+    "colStart": 4,
+    "kind": "Comma",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 7,
-      "colStart": 6,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 7,
+    "colStart": 6,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "c",
   },
 ]
@@ -1758,32 +1450,26 @@ Array [
 exports[`tokenizer symbols 6`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 1,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 1,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "a",
   },
   Object {
-    "kind": "double-arrow",
-    "location": Object {
-      "colEnd": 4,
-      "colStart": 2,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 4,
+    "colStart": 2,
+    "kind": "DoubleArrow",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 6,
-      "colStart": 5,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 6,
+    "colStart": 5,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "b",
   },
 ]
@@ -1792,32 +1478,26 @@ Array [
 exports[`tokenizer symbols 7`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 1,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 1,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "a",
   },
   Object {
-    "kind": "arrow",
-    "location": Object {
-      "colEnd": 4,
-      "colStart": 2,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 4,
+    "colStart": 2,
+    "kind": "Arrow",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 6,
-      "colStart": 5,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 6,
+    "colStart": 5,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "b",
   },
 ]
@@ -1826,32 +1506,26 @@ Array [
 exports[`tokenizer symbols 8`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 1,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 1,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "a",
   },
   Object {
-    "kind": "equals",
-    "location": Object {
-      "colEnd": 3,
-      "colStart": 2,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 3,
+    "colStart": 2,
+    "kind": "Equals",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 5,
-      "colStart": 4,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 5,
+    "colStart": 4,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "b",
   },
 ]
@@ -1860,32 +1534,26 @@ Array [
 exports[`tokenizer symbols 9`] = `
 Array [
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 1,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 1,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "a",
   },
   Object {
-    "kind": "colon",
-    "location": Object {
-      "colEnd": 3,
-      "colStart": 2,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 3,
+    "colStart": 2,
+    "kind": "Colon",
+    "lineEnd": 1,
+    "lineStart": 1,
   },
   Object {
-    "kind": "identifier",
-    "location": Object {
-      "colEnd": 5,
-      "colStart": 4,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 5,
+    "colStart": 4,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "b",
   },
 ]
@@ -1894,13 +1562,11 @@ Array [
 exports[`tokenizer triple-quoted strings 1`] = `
 Array [
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 17,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 17,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "hello world",
   },
 ]
@@ -1909,13 +1575,11 @@ Array [
 exports[`tokenizer triple-quoted strings 2`] = `
 Array [
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 22,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 22,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "hello \\"world\\" ok",
   },
 ]
@@ -1924,13 +1588,11 @@ Array [
 exports[`tokenizer triple-quoted strings 3`] = `
 Array [
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 21,
-      "colStart": 0,
-      "lineEnd": 1,
-      "lineStart": 1,
-    },
+    "colEnd": 21,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "hello \\"world ok",
   },
 ]
@@ -1939,13 +1601,11 @@ Array [
 exports[`tokenizer triple-quoted strings 4`] = `
 Array [
   Object {
-    "kind": "string",
-    "location": Object {
-      "colEnd": 18,
-      "colStart": 0,
-      "lineEnd": 3,
-      "lineStart": 1,
-    },
+    "colEnd": 18,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 3,
+    "lineStart": 1,
     "value": "hello
 
       \\"world ok",

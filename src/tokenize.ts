@@ -33,21 +33,24 @@ function isBinaryDigit(char: string) {
 }
 
 function isOperatorChar(char: string) {
-  return (
-    char === '@' ||
-    char === '<' ||
-    char === '>' ||
-    char === '=' ||
-    char === '|' ||
-    char === '!' ||
-    char === '+' ||
-    char === '*' ||
-    char === '-'
-  );
+  switch (char) {
+    case '@':
+    case '<':
+    case '>':
+    case '=':
+    case '|':
+    case '!':
+    case '+':
+    case '*':
+    case '-':
+      return true;
+  }
+
+  return false;
 }
 
 class Tokenizer {
-  input: string;
+  source: string;
   chars: string[];
   index: number;
   char: string;
@@ -56,9 +59,9 @@ class Tokenizer {
   lineStartIndex: number;
   eof: boolean;
 
-  constructor(input: string) {
-    this.input = input;
-    this.chars = Array.from(this.input);
+  constructor(source: string) {
+    this.source = source;
+    this.chars = Array.from(this.source);
     this.char = this.chars[0];
     this.index = 0;
     this.tokens = [];
@@ -89,7 +92,7 @@ class Tokenizer {
     return this.chars[this.index - 1] === testChar;
   }
 
-  comment(): Token {
+  readComment(): Token {
     if (!this.charIs('#')) return;
 
     const colStart = this.index - this.lineStartIndex;
@@ -105,18 +108,16 @@ class Tokenizer {
     const colEnd = this.index - this.lineStartIndex;
 
     return {
-      kind: 'comment',
+      kind: 'Comment',
       value,
-      location: {
-        lineStart: this.line,
-        lineEnd: this.line,
-        colStart,
-        colEnd
-      }
+      lineStart: this.line,
+      lineEnd: this.line,
+      colStart,
+      colEnd
     };
   }
 
-  identifier(): Token {
+  readIdentifier(): Token {
     if (!isIdentifierStartChar(this.char)) return;
 
     let value = '';
@@ -131,30 +132,26 @@ class Tokenizer {
 
     if (value === 'true' || value === 'false') {
       return {
-        kind: 'boolean',
+        kind: 'Boolean',
         value,
-        location: {
-          lineStart: this.line,
-          lineEnd: this.line,
-          colStart,
-          colEnd
-        }
-      };
-    }
-
-    return {
-      kind: 'identifier',
-      value,
-      location: {
         lineStart: this.line,
         lineEnd: this.line,
         colStart,
         colEnd
-      }
+      };
+    }
+
+    return {
+      kind: 'Identifier',
+      value,
+      lineStart: this.line,
+      lineEnd: this.line,
+      colStart,
+      colEnd
     };
   }
 
-  number(): Token {
+  readNumber(): Token {
     if (!isDecimalDigit(this.char)) return;
 
     const colStart = this.index - this.lineStartIndex;
@@ -173,14 +170,12 @@ class Tokenizer {
       const colEnd = this.index - this.lineStartIndex;
 
       return {
-        kind: 'number',
+        kind: 'Number',
         value,
-        location: {
-          lineStart: this.line,
-          lineEnd: this.line,
-          colStart,
-          colEnd
-        }
+        lineStart: this.line,
+        lineEnd: this.line,
+        colStart,
+        colEnd
       };
     }
 
@@ -196,14 +191,12 @@ class Tokenizer {
       const colEnd = this.index - this.lineStartIndex;
 
       return {
-        kind: 'number',
+        kind: 'Number',
         value,
-        location: {
-          lineStart: this.line,
-          lineEnd: this.line,
-          colStart,
-          colEnd
-        }
+        lineStart: this.line,
+        lineEnd: this.line,
+        colStart,
+        colEnd
       };
     }
 
@@ -219,14 +212,12 @@ class Tokenizer {
       const colEnd = this.index - this.lineStartIndex;
 
       return {
-        kind: 'number',
+        kind: 'Number',
         value,
-        location: {
-          lineStart: this.line,
-          lineEnd: this.line,
-          colStart,
-          colEnd
-        }
+        lineStart: this.line,
+        lineEnd: this.line,
+        colStart,
+        colEnd
       };
     }
 
@@ -258,18 +249,16 @@ class Tokenizer {
     const colEnd = this.index - this.lineStartIndex;
 
     return {
-      kind: 'number',
+      kind: 'Number',
       value,
-      location: {
-        lineStart: this.line,
-        lineEnd: this.line,
-        colStart,
-        colEnd
-      }
+      lineStart: this.line,
+      lineEnd: this.line,
+      colStart,
+      colEnd
     };
   }
 
-  string(): Token[] {
+  readString(): Token[] {
     if (!this.charIs('"')) return;
 
     const colStart = this.index - this.lineStartIndex;
@@ -305,24 +294,20 @@ class Tokenizer {
         this.advance(2);
 
         stringTokens.push({
-          kind: 'string',
+          kind: 'String',
           value,
-          location: {
-            lineStart,
-            lineEnd: this.line,
-            colStart,
-            colEnd: col
-          }
+          lineStart,
+          lineEnd: this.line,
+          colStart,
+          colEnd: col
         });
 
         stringTokens.push({
-          kind: 'interpolation-start',
-          location: {
-            lineStart: this.line,
-            lineEnd: this.line,
-            colStart: col,
-            colEnd: col + 2
-          }
+          kind: 'InterpolationStart',
+          lineStart: this.line,
+          lineEnd: this.line,
+          colStart: col,
+          colEnd: col + 2
         });
 
         value = '';
@@ -337,18 +322,16 @@ class Tokenizer {
             continue;
           }
 
-          if (innerToken.kind === 'l-paren') {
+          if (innerToken.kind === 'LeftParen') {
             parenStack.push(true);
-          } else if (innerToken.kind === 'r-paren') {
+          } else if (innerToken.kind === 'RightParen') {
             if (!parenStack.length) {
               stringTokens.push({
-                kind: 'interpolation-end',
-                location: {
-                  lineStart: this.line,
-                  lineEnd: this.line,
-                  colStart: innerToken.location.colStart,
-                  colEnd: innerToken.location.colEnd
-                }
+                kind: 'InterpolationEnd',
+                lineStart: this.line,
+                lineEnd: this.line,
+                colStart: innerToken.colStart,
+                colEnd: innerToken.colEnd
               });
 
               lineStart = this.line;
@@ -388,236 +371,36 @@ class Tokenizer {
     const colEnd = this.index - this.lineStartIndex;
 
     stringTokens.push({
-      kind: 'string',
+      kind: 'String',
       value,
-      location: {
-        lineStart,
-        lineEnd: this.line,
-        colStart,
-        colEnd
-      }
+      lineStart,
+      lineEnd: this.line,
+      colStart,
+      colEnd
     });
 
     return stringTokens;
   }
 
-  lBrace(): Token {
-    if (!this.charIs('{')) return;
+  readSymbol(kind: TokenKind, firstChar: string, secondChar?: string): Token {
+    if (!this.charIs(firstChar)) return;
+    if (secondChar && !this.nextCharIs(secondChar)) return;
 
+    const size = secondChar ? 2 : 1;
     const colStart = this.index - this.lineStartIndex;
 
-    this.advance();
+    this.advance(size);
 
     return {
-      kind: 'l-brace',
-      location: {
-        lineStart: this.line,
-        lineEnd: this.line,
-        colStart,
-        colEnd: colStart + 1
-      }
+      kind,
+      lineStart: this.line,
+      lineEnd: this.line,
+      colStart,
+      colEnd: colStart + size
     };
   }
 
-  rBrace(): Token {
-    if (!this.charIs('}')) return;
-
-    const colStart = this.index - this.lineStartIndex;
-
-    this.advance();
-
-    return {
-      kind: 'r-brace',
-      location: {
-        lineStart: this.line,
-        lineEnd: this.line,
-        colStart,
-        colEnd: colStart + 1
-      }
-    };
-  }
-
-  lBracket(): Token {
-    if (!this.charIs('[')) return;
-
-    const colStart = this.index - this.lineStartIndex;
-
-    this.advance();
-
-    return {
-      kind: 'l-bracket',
-      location: {
-        lineStart: this.line,
-        lineEnd: this.line,
-        colStart,
-        colEnd: colStart + 1
-      }
-    };
-  }
-
-  rBracket(): Token {
-    if (!this.charIs(']')) return;
-
-    const colStart = this.index - this.lineStartIndex;
-
-    this.advance();
-
-    return {
-      kind: 'r-bracket',
-      location: {
-        lineStart: this.line,
-        lineEnd: this.line,
-        colStart,
-        colEnd: colStart + 1
-      }
-    };
-  }
-
-  lParen(): Token {
-    if (!this.charIs('(')) return;
-
-    const colStart = this.index - this.lineStartIndex;
-
-    this.advance();
-
-    return {
-      kind: 'l-paren',
-      location: {
-        lineStart: this.line,
-        lineEnd: this.line,
-        colStart,
-        colEnd: colStart + 1
-      }
-    };
-  }
-
-  rParen(): Token {
-    if (!this.charIs(')')) return;
-
-    const colStart = this.index - this.lineStartIndex;
-
-    this.advance();
-
-    return {
-      kind: 'r-paren',
-      location: {
-        lineStart: this.line,
-        lineEnd: this.line,
-        colStart,
-        colEnd: colStart + 1
-      }
-    };
-  }
-
-  dot(): Token {
-    if (!this.charIs('.')) return;
-
-    const colStart = this.index - this.lineStartIndex;
-
-    this.advance();
-
-    return {
-      kind: 'dot',
-      location: {
-        lineStart: this.line,
-        lineEnd: this.line,
-        colStart,
-        colEnd: colStart + 1
-      }
-    };
-  }
-
-  comma(): Token {
-    if (!this.charIs(',')) return;
-
-    const colStart = this.index - this.lineStartIndex;
-
-    this.advance();
-
-    return {
-      kind: 'comma',
-      location: {
-        lineStart: this.line,
-        lineEnd: this.line,
-        colStart,
-        colEnd: colStart + 1
-      }
-    };
-  }
-
-  colon(): Token {
-    if (!this.charIs(':')) return;
-
-    const colStart = this.index - this.lineStartIndex;
-
-    this.advance();
-
-    return {
-      kind: 'colon',
-      location: {
-        lineStart: this.line,
-        lineEnd: this.line,
-        colStart,
-        colEnd: colStart + 1
-      }
-    };
-  }
-
-  equals(): Token {
-    if (!this.charIs('=')) return;
-
-    const colStart = this.index - this.lineStartIndex;
-
-    this.advance();
-
-    return {
-      kind: 'equals',
-      location: {
-        lineStart: this.line,
-        lineEnd: this.line,
-        colStart,
-        colEnd: colStart + 1
-      }
-    };
-  }
-
-  doubleArrow(): Token {
-    if (!this.charIs('=') || !this.nextCharIs('>')) return;
-
-    const colStart = this.index - this.lineStartIndex;
-
-    this.advance(2);
-
-    return {
-      kind: 'double-arrow',
-      location: {
-        lineStart: this.line,
-        lineEnd: this.line,
-        colStart,
-        colEnd: colStart + 2
-      }
-    };
-  }
-
-  arrow(): Token {
-    if (!this.charIs('-') || !this.nextCharIs('>')) return;
-
-    const colStart = this.index - this.lineStartIndex;
-
-    this.advance(2);
-
-    return {
-      kind: 'arrow',
-      location: {
-        lineStart: this.line,
-        lineEnd: this.line,
-        colStart,
-        colEnd: colStart + 2
-      }
-    };
-  }
-
-  operator(): Token {
+  readOperator(): Token {
     if (!isOperatorChar(this.char)) return;
 
     const colStart = this.index - this.lineStartIndex;
@@ -632,18 +415,16 @@ class Tokenizer {
     const colEnd = this.index - this.lineStartIndex;
 
     return {
-      kind: 'operator',
+      kind: 'Operator',
       value,
-      location: {
-        lineStart: this.line,
-        lineEnd: this.line,
-        colStart,
-        colEnd
-      }
+      lineStart: this.line,
+      lineEnd: this.line,
+      colStart,
+      colEnd
     };
   }
 
-  whitespace() {
+  readWhitespace() {
     while (isWhitespace(this.char) && !this.eof) {
       if (this.charIs('\n')) {
         this.line++;
@@ -657,26 +438,26 @@ class Tokenizer {
   nextToken(): Token | Token[] {
     if (this.eof) return;
 
-    this.whitespace();
+    this.readWhitespace();
 
     return (
-      this.identifier() ||
-      this.number() ||
-      this.string() ||
-      this.lBrace() ||
-      this.rBrace() ||
-      this.lParen() ||
-      this.rParen() ||
-      this.lBracket() ||
-      this.rBracket() ||
-      this.dot() ||
-      this.comma() ||
-      this.doubleArrow() ||
-      this.arrow() ||
-      this.colon() ||
-      this.equals() ||
-      this.operator() ||
-      this.comment()
+      this.readIdentifier() ||
+      this.readNumber() ||
+      this.readString() ||
+      this.readSymbol('Arrow', '-', '>') ||
+      this.readSymbol('DoubleArrow', '=', '>') ||
+      this.readSymbol('LeftBrace', '{') ||
+      this.readSymbol('RightBrace', '}') ||
+      this.readSymbol('LeftParen', '(') ||
+      this.readSymbol('RightParen', ')') ||
+      this.readSymbol('LeftBracket', '[') ||
+      this.readSymbol('RightBracket', ']') ||
+      this.readSymbol('Dot', '.') ||
+      this.readSymbol('Comma', ',') ||
+      this.readSymbol('Colon', ':') ||
+      this.readSymbol('Equals', '=') ||
+      this.readOperator() ||
+      this.readComment()
     );
   }
 
@@ -692,6 +473,6 @@ class Tokenizer {
   }
 }
 
-export function tokenize(input: string): Token[] {
-  return new Tokenizer(input).tokenize();
+export function tokenize(source: string): Token[] {
+  return new Tokenizer(source).tokenize();
 }

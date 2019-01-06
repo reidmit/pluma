@@ -8,14 +8,14 @@ describe('tokenizer', () => {
 
     expect(tokens).toHaveLength(3);
 
-    expect(tokens[0].location.lineStart).toBe(1);
-    expect(tokens[0].location.lineEnd).toBe(1);
+    expect(tokens[0].lineStart).toBe(1);
+    expect(tokens[0].lineEnd).toBe(1);
 
-    expect(tokens[1].location.lineStart).toBe(1);
-    expect(tokens[1].location.lineEnd).toBe(1);
+    expect(tokens[1].lineStart).toBe(1);
+    expect(tokens[1].lineEnd).toBe(1);
 
-    expect(tokens[2].location.lineStart).toBe(1);
-    expect(tokens[2].location.lineEnd).toBe(1);
+    expect(tokens[2].lineStart).toBe(1);
+    expect(tokens[2].lineEnd).toBe(1);
 
     tokens = tokenize(`
   a
@@ -27,14 +27,14 @@ describe('tokenizer', () => {
 
     expect(tokens).toHaveLength(3);
 
-    expect(tokens[0].location.lineStart).toBe(2);
-    expect(tokens[0].location.lineEnd).toBe(2);
+    expect(tokens[0].lineStart).toBe(2);
+    expect(tokens[0].lineEnd).toBe(2);
 
-    expect(tokens[1].location.lineStart).toBe(4);
-    expect(tokens[1].location.lineEnd).toBe(4);
+    expect(tokens[1].lineStart).toBe(4);
+    expect(tokens[1].lineEnd).toBe(4);
 
-    expect(tokens[2].location.lineStart).toBe(6);
-    expect(tokens[2].location.lineEnd).toBe(6);
+    expect(tokens[2].lineStart).toBe(6);
+    expect(tokens[2].lineEnd).toBe(6);
 
     tokens = tokenize(`a "hello
 
@@ -45,17 +45,17 @@ describe('tokenizer', () => {
 
     expect(tokens).toHaveLength(4);
 
-    expect(tokens[0].location.lineStart).toBe(1);
-    expect(tokens[0].location.lineEnd).toBe(1);
+    expect(tokens[0].lineStart).toBe(1);
+    expect(tokens[0].lineEnd).toBe(1);
 
-    expect(tokens[1].location.lineStart).toBe(1);
-    expect(tokens[1].location.lineEnd).toBe(3);
+    expect(tokens[1].lineStart).toBe(1);
+    expect(tokens[1].lineEnd).toBe(3);
 
-    expect(tokens[2].location.lineStart).toBe(3);
-    expect(tokens[2].location.lineEnd).toBe(3);
+    expect(tokens[2].lineStart).toBe(3);
+    expect(tokens[2].lineEnd).toBe(3);
 
-    expect(tokens[3].location.lineStart).toBe(5);
-    expect(tokens[3].location.lineEnd).toBe(5);
+    expect(tokens[3].lineStart).toBe(5);
+    expect(tokens[3].lineEnd).toBe(5);
 
     tokens = tokenize(`"hello $(
         a
@@ -67,26 +67,26 @@ describe('tokenizer', () => {
 
     expect(tokens).toHaveLength(7);
 
-    expect(tokens[0].location.lineStart).toBe(1);
-    expect(tokens[0].location.lineEnd).toBe(1);
+    expect(tokens[0].lineStart).toBe(1);
+    expect(tokens[0].lineEnd).toBe(1);
 
-    expect(tokens[1].location.lineStart).toBe(1);
-    expect(tokens[1].location.lineEnd).toBe(1);
+    expect(tokens[1].lineStart).toBe(1);
+    expect(tokens[1].lineEnd).toBe(1);
 
-    expect(tokens[2].location.lineStart).toBe(2);
-    expect(tokens[2].location.lineEnd).toBe(2);
+    expect(tokens[2].lineStart).toBe(2);
+    expect(tokens[2].lineEnd).toBe(2);
 
-    expect(tokens[3].location.lineStart).toBe(4);
-    expect(tokens[3].location.lineEnd).toBe(4);
+    expect(tokens[3].lineStart).toBe(4);
+    expect(tokens[3].lineEnd).toBe(4);
 
-    expect(tokens[4].location.lineStart).toBe(5);
-    expect(tokens[4].location.lineEnd).toBe(5);
+    expect(tokens[4].lineStart).toBe(5);
+    expect(tokens[4].lineEnd).toBe(5);
 
-    expect(tokens[5].location.lineStart).toBe(6);
-    expect(tokens[5].location.lineEnd).toBe(6);
+    expect(tokens[5].lineStart).toBe(6);
+    expect(tokens[5].lineEnd).toBe(6);
 
-    expect(tokens[6].location.lineStart).toBe(6);
-    expect(tokens[6].location.lineEnd).toBe(6);
+    expect(tokens[6].lineStart).toBe(6);
+    expect(tokens[6].lineEnd).toBe(6);
 
     tokens = tokenize(`"hello
       $(
@@ -97,23 +97,23 @@ describe('tokenizer', () => {
 
     expect(tokens).toHaveLength(6);
 
-    expect(tokens[0].location.lineStart).toBe(1);
-    expect(tokens[0].location.lineEnd).toBe(2);
+    expect(tokens[0].lineStart).toBe(1);
+    expect(tokens[0].lineEnd).toBe(2);
 
-    expect(tokens[1].location.lineStart).toBe(2);
-    expect(tokens[1].location.lineEnd).toBe(2);
+    expect(tokens[1].lineStart).toBe(2);
+    expect(tokens[1].lineEnd).toBe(2);
 
-    expect(tokens[2].location.lineStart).toBe(3);
-    expect(tokens[2].location.lineEnd).toBe(3);
+    expect(tokens[2].lineStart).toBe(3);
+    expect(tokens[2].lineEnd).toBe(3);
 
-    expect(tokens[3].location.lineStart).toBe(4);
-    expect(tokens[3].location.lineEnd).toBe(4);
+    expect(tokens[3].lineStart).toBe(4);
+    expect(tokens[3].lineEnd).toBe(4);
 
-    expect(tokens[4].location.lineStart).toBe(4);
-    expect(tokens[4].location.lineEnd).toBe(4);
+    expect(tokens[4].lineStart).toBe(4);
+    expect(tokens[4].lineEnd).toBe(4);
 
-    expect(tokens[5].location.lineStart).toBe(4);
-    expect(tokens[5].location.lineEnd).toBe(5);
+    expect(tokens[5].lineStart).toBe(4);
+    expect(tokens[5].lineEnd).toBe(5);
   });
 
   test('identifiers', () => {

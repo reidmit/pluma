@@ -1,26 +1,26 @@
-type TokenType =
-  | 'arrow'
-  | 'boolean'
-  | 'colon'
-  | 'comma'
-  | 'comment'
-  | 'dot'
-  | 'double-arrow'
-  | 'equals'
-  | 'identifier'
-  | 'interpolation-end'
-  | 'interpolation-start'
-  | 'l-brace'
-  | 'l-bracket'
-  | 'l-paren'
-  | 'operator'
-  | 'number'
-  | 'r-brace'
-  | 'r-bracket'
-  | 'r-paren'
-  | 'string';
+type TokenKind =
+  | 'Arrow'
+  | 'Boolean'
+  | 'Colon'
+  | 'Comma'
+  | 'Comment'
+  | 'Dot'
+  | 'DoubleArrow'
+  | 'Equals'
+  | 'Identifier'
+  | 'InterpolationEnd'
+  | 'InterpolationStart'
+  | 'LeftBrace'
+  | 'LeftBracket'
+  | 'LeftParen'
+  | 'Operator'
+  | 'Number'
+  | 'RightBrace'
+  | 'RightBracket'
+  | 'RightParen'
+  | 'String';
 
-type AstNodeType =
+type NodeKind =
   | 'AssignmentExpression'
   | 'BinaryExpression'
   | 'Block'
@@ -45,13 +45,16 @@ interface SourceLocation {
 }
 
 interface Token {
-  kind: TokenType;
+  kind: TokenKind;
   value?: string;
-  location: SourceLocation;
+  lineStart: number;
+  lineEnd: number;
+  colStart: number;
+  colEnd: number;
 }
 
 interface AstNode {
-  kind: AstNodeType;
+  kind: NodeKind;
   type: null;
   location: SourceLocation;
 }
