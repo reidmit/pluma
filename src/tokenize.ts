@@ -105,7 +105,7 @@ class Tokenizer {
     const colEnd = this.index - this.lineStartIndex;
 
     return {
-      type: 'comment',
+      kind: 'comment',
       value,
       location: {
         lineStart: this.line,
@@ -131,7 +131,7 @@ class Tokenizer {
 
     if (value === 'true' || value === 'false') {
       return {
-        type: 'boolean',
+        kind: 'boolean',
         value,
         location: {
           lineStart: this.line,
@@ -143,7 +143,7 @@ class Tokenizer {
     }
 
     return {
-      type: 'identifier',
+      kind: 'identifier',
       value,
       location: {
         lineStart: this.line,
@@ -173,7 +173,7 @@ class Tokenizer {
       const colEnd = this.index - this.lineStartIndex;
 
       return {
-        type: 'number',
+        kind: 'number',
         value,
         location: {
           lineStart: this.line,
@@ -196,7 +196,7 @@ class Tokenizer {
       const colEnd = this.index - this.lineStartIndex;
 
       return {
-        type: 'number',
+        kind: 'number',
         value,
         location: {
           lineStart: this.line,
@@ -219,7 +219,7 @@ class Tokenizer {
       const colEnd = this.index - this.lineStartIndex;
 
       return {
-        type: 'number',
+        kind: 'number',
         value,
         location: {
           lineStart: this.line,
@@ -258,7 +258,7 @@ class Tokenizer {
     const colEnd = this.index - this.lineStartIndex;
 
     return {
-      type: 'number',
+      kind: 'number',
       value,
       location: {
         lineStart: this.line,
@@ -305,7 +305,7 @@ class Tokenizer {
         this.advance(2);
 
         stringTokens.push({
-          type: 'string',
+          kind: 'string',
           value,
           location: {
             lineStart,
@@ -316,7 +316,7 @@ class Tokenizer {
         });
 
         stringTokens.push({
-          type: 'interpolation-start',
+          kind: 'interpolation-start',
           location: {
             lineStart: this.line,
             lineEnd: this.line,
@@ -337,12 +337,12 @@ class Tokenizer {
             continue;
           }
 
-          if (innerToken.type === 'l-paren') {
+          if (innerToken.kind === 'l-paren') {
             parenStack.push(true);
-          } else if (innerToken.type === 'r-paren') {
+          } else if (innerToken.kind === 'r-paren') {
             if (!parenStack.length) {
               stringTokens.push({
-                type: 'interpolation-end',
+                kind: 'interpolation-end',
                 location: {
                   lineStart: this.line,
                   lineEnd: this.line,
@@ -388,7 +388,7 @@ class Tokenizer {
     const colEnd = this.index - this.lineStartIndex;
 
     stringTokens.push({
-      type: 'string',
+      kind: 'string',
       value,
       location: {
         lineStart,
@@ -409,7 +409,7 @@ class Tokenizer {
     this.advance();
 
     return {
-      type: 'l-brace',
+      kind: 'l-brace',
       location: {
         lineStart: this.line,
         lineEnd: this.line,
@@ -427,7 +427,7 @@ class Tokenizer {
     this.advance();
 
     return {
-      type: 'r-brace',
+      kind: 'r-brace',
       location: {
         lineStart: this.line,
         lineEnd: this.line,
@@ -445,7 +445,7 @@ class Tokenizer {
     this.advance();
 
     return {
-      type: 'l-bracket',
+      kind: 'l-bracket',
       location: {
         lineStart: this.line,
         lineEnd: this.line,
@@ -463,7 +463,7 @@ class Tokenizer {
     this.advance();
 
     return {
-      type: 'r-bracket',
+      kind: 'r-bracket',
       location: {
         lineStart: this.line,
         lineEnd: this.line,
@@ -481,7 +481,7 @@ class Tokenizer {
     this.advance();
 
     return {
-      type: 'l-paren',
+      kind: 'l-paren',
       location: {
         lineStart: this.line,
         lineEnd: this.line,
@@ -499,7 +499,7 @@ class Tokenizer {
     this.advance();
 
     return {
-      type: 'r-paren',
+      kind: 'r-paren',
       location: {
         lineStart: this.line,
         lineEnd: this.line,
@@ -517,7 +517,7 @@ class Tokenizer {
     this.advance();
 
     return {
-      type: 'dot',
+      kind: 'dot',
       location: {
         lineStart: this.line,
         lineEnd: this.line,
@@ -535,7 +535,7 @@ class Tokenizer {
     this.advance();
 
     return {
-      type: 'comma',
+      kind: 'comma',
       location: {
         lineStart: this.line,
         lineEnd: this.line,
@@ -553,7 +553,7 @@ class Tokenizer {
     this.advance();
 
     return {
-      type: 'colon',
+      kind: 'colon',
       location: {
         lineStart: this.line,
         lineEnd: this.line,
@@ -571,7 +571,7 @@ class Tokenizer {
     this.advance();
 
     return {
-      type: 'equals',
+      kind: 'equals',
       location: {
         lineStart: this.line,
         lineEnd: this.line,
@@ -589,7 +589,7 @@ class Tokenizer {
     this.advance(2);
 
     return {
-      type: 'double-arrow',
+      kind: 'double-arrow',
       location: {
         lineStart: this.line,
         lineEnd: this.line,
@@ -607,7 +607,7 @@ class Tokenizer {
     this.advance(2);
 
     return {
-      type: 'arrow',
+      kind: 'arrow',
       location: {
         lineStart: this.line,
         lineEnd: this.line,
@@ -632,7 +632,7 @@ class Tokenizer {
     const colEnd = this.index - this.lineStartIndex;
 
     return {
-      type: 'operator',
+      kind: 'operator',
       value,
       location: {
         lineStart: this.line,

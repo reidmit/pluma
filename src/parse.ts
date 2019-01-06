@@ -1,3 +1,3 @@
-export function parse() {
+export function parse(tokens: Token) {
   // const length = tokens.length;
 }
