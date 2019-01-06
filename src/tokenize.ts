@@ -1,98 +1,46 @@
-function isWhitespace(char: string) {
-  return /^[ \n\r\t]/.test(char);
-}
+import { ParseError } from './errors';
 
-function isIdentifierStartChar(char: string) {
-  return (
-    (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || char === '_'
-  );
-}
-
-function isIdentifierChar(char: string) {
-  return isIdentifierStartChar(char) || isDecimalDigit(char);
-}
-
-function isDecimalDigit(char: string) {
-  return char >= '0' && char <= '9';
-}
-
-function isHexDigit(char: string) {
-  return (
-    isDecimalDigit(char) ||
-    (char >= 'a' && char <= 'f') ||
-    (char >= 'A' && char <= 'F')
-  );
-}
-
-function isOctalDigit(char: string) {
-  return char >= '0' && char <= '7';
-}
-
-function isBinaryDigit(char: string) {
-  return char === '0' || char === '1';
-}
-
-function isOperatorChar(char: string) {
-  switch (char) {
-    case '@':
-    case '<':
-    case '>':
-    case '=':
-    case '|':
-    case '!':
-    case '+':
-    case '*':
-    case '-':
-      return true;
-  }
-
-  return false;
-}
-
-class Tokenizer {
-  source: string;
-  chars: string[];
-  index: number;
-  char: string;
-  tokens: Token[];
-  line: number;
-  lineStartIndex: number;
-  eof: boolean;
+export class Tokenizer {
+  private readonly source: string;
+  private readonly chars: string[];
+  private readonly length: number;
+  private readonly tokens: Token[];
+  private index: number;
+  private char: string;
+  private line: number;
+  private lineStartIndex: number;
+  private eof: boolean;
 
   constructor(source: string) {
     this.source = source;
     this.chars = Array.from(this.source);
+    this.length = this.chars.length;
+    this.tokens = [];
     this.char = this.chars[0];
     this.index = 0;
-    this.tokens = [];
     this.line = 1;
     this.lineStartIndex = 0;
     this.eof = false;
   }
 
-  advance(amount = 1) {
+  private advance(amount = 1) {
     this.index += amount;
     this.char = this.chars[this.index];
-    if (this.index >= this.chars.length) this.eof = true;
+    if (this.index >= this.length) this.eof = true;
   }
 
-  charIs(testChar: string) {
-    return this.char === testChar;
+  private charIs(char: string, nextChar?: string, nextNextChar?: string) {
+    if (this.char !== char) return false;
+    if (nextChar && this.chars[this.index + 1] !== nextChar) return false;
+    if (nextNextChar && this.chars[this.index + 2] !== nextChar) return false;
+    return true;
   }
 
-  nextCharIs(testChar: string) {
-    return this.chars[this.index + 1] === testChar;
-  }
-
-  nextNextCharIs(testChar: string) {
-    return this.chars[this.index + 2] === testChar;
-  }
-
-  prevCharIs(testChar: string) {
+  private prevCharIs(testChar: string) {
     return this.chars[this.index - 1] === testChar;
   }
 
-  readComment(): Token {
+  private readComment(): Token {
     if (!this.charIs('#')) return;
 
     const colStart = this.index - this.lineStartIndex;
@@ -117,7 +65,7 @@ class Tokenizer {
     };
   }
 
-  readIdentifier(): Token {
+  private readIdentifier(): Token {
     if (!isIdentifierStartChar(this.char)) return;
 
     let value = '';
@@ -151,14 +99,14 @@ class Tokenizer {
     };
   }
 
-  readNumber(): Token {
+  private readNumber(): Token {
     if (!isDecimalDigit(this.char)) return;
 
     const colStart = this.index - this.lineStartIndex;
 
     let value = '';
 
-    if (this.charIs('0') && this.nextCharIs('x')) {
+    if (this.charIs('0', 'x')) {
       value += '0x';
       this.advance(2);
 
@@ -179,7 +127,7 @@ class Tokenizer {
       };
     }
 
-    if (this.charIs('0') && this.nextCharIs('o')) {
+    if (this.charIs('0', 'o')) {
       value += '0o';
       this.advance(2);
 
@@ -200,7 +148,7 @@ class Tokenizer {
       };
     }
 
-    if (this.charIs('0') && this.nextCharIs('b')) {
+    if (this.charIs('0', 'b')) {
       value += '0b';
       this.advance(2);
 
@@ -258,14 +206,12 @@ class Tokenizer {
     };
   }
 
-  readString(): Token[] {
+  private readString(): Token[] {
     if (!this.charIs('"')) return;
 
     const colStart = this.index - this.lineStartIndex;
-
     let lineStart = this.line;
-    const tripleQuoted = this.nextCharIs('"') && this.nextNextCharIs('"');
-
+    const tripleQuoted = this.charIs('"', '"', '"');
     const stringTokens: Token[] = [];
     let value = '';
 
@@ -280,15 +226,10 @@ class Tokenizer {
       if (!tripleQuoted) {
         if (this.charIs('"') && !this.prevCharIs('\\')) break;
       } else {
-        if (
-          this.charIs('"') &&
-          this.nextCharIs('"') &&
-          this.nextNextCharIs('"')
-        )
-          break;
+        if (this.charIs('"', '"', '"')) break;
       }
 
-      if (this.charIs('$') && this.nextCharIs('(') && !this.prevCharIs('\\')) {
+      if (this.charIs('$', '(') && !this.prevCharIs('\\')) {
         const col = this.index - this.lineStartIndex;
 
         this.advance(2);
@@ -344,10 +285,6 @@ class Tokenizer {
 
           stringTokens.push(innerToken);
         }
-
-        if (this.eof) {
-          throw new SyntaxError('unexpected EOF');
-        }
       } else {
         value += this.char;
         this.advance();
@@ -355,14 +292,23 @@ class Tokenizer {
     }
 
     if (!tripleQuoted && !this.charIs('"')) {
-      throw new SyntaxError('unclosed string, expected "');
+      const col = this.index - this.lineStartIndex;
+
+      throw new ParseError(
+        this.line,
+        col,
+        `Missing a closing " for string starting on line ${lineStart}`
+      );
     }
 
-    if (
-      tripleQuoted &&
-      (!this.charIs('"') || !this.nextCharIs('"') || !this.nextNextCharIs('"'))
-    ) {
-      throw new SyntaxError('unclosed triple-quoted string, expected """');
+    if (tripleQuoted && !this.charIs('"', '"', '"')) {
+      const col = this.index - this.lineStartIndex;
+
+      throw new ParseError(
+        this.line,
+        col,
+        `Missing a closing """ for string starting on line ${lineStart}`
+      );
     }
 
     const quoteSize = tripleQuoted ? 3 : 1;
@@ -382,9 +328,8 @@ class Tokenizer {
     return stringTokens;
   }
 
-  readSymbol(kind: TokenKind, firstChar: string, secondChar?: string): Token {
-    if (!this.charIs(firstChar)) return;
-    if (secondChar && !this.nextCharIs(secondChar)) return;
+  private readSymbol(kind: TokenKind, firstChar: string, secondChar?: string): Token {
+    if (!this.charIs(firstChar, secondChar)) return;
 
     const size = secondChar ? 2 : 1;
     const colStart = this.index - this.lineStartIndex;
@@ -400,7 +345,7 @@ class Tokenizer {
     };
   }
 
-  readOperator(): Token {
+  private readOperator(): Token {
     if (!isOperatorChar(this.char)) return;
 
     const colStart = this.index - this.lineStartIndex;
@@ -424,7 +369,7 @@ class Tokenizer {
     };
   }
 
-  readWhitespace() {
+  private readWhitespace() {
     while (isWhitespace(this.char) && !this.eof) {
       if (this.charIs('\n')) {
         this.line++;
@@ -435,7 +380,7 @@ class Tokenizer {
     }
   }
 
-  nextToken(): Token | Token[] {
+  private nextToken(): Token | Token[] {
     if (this.eof) return;
 
     this.readWhitespace();
@@ -475,4 +420,99 @@ class Tokenizer {
 
 export function tokenize(source: string): Token[] {
   return new Tokenizer(source).tokenize();
+}
+
+function isWhitespace(char: string) {
+  switch (char) {
+    case ' ':
+    case '\n':
+    case '\t':
+    case '\r':
+      return true;
+    default:
+      return false;
+  }
+}
+
+function isIdentifierStartChar(char: string) {
+  if (!char) return false;
+
+  const codePoint = char.codePointAt(0);
+
+  return (
+    (codePoint >= 97 && codePoint <= 122) ||
+    (codePoint >= 65 && codePoint <= 90) ||
+    codePoint === 95
+  );
+}
+
+function isIdentifierChar(char: string) {
+  return isIdentifierStartChar(char) || isDecimalDigit(char);
+}
+
+function isDecimalDigit(char: string) {
+  switch (char) {
+    case '0':
+    case '1':
+    case '2':
+    case '3':
+    case '4':
+    case '5':
+    case '6':
+    case '7':
+    case '8':
+    case '9':
+      return true;
+    default:
+      return false;
+  }
+}
+
+function isHexDigit(char: string) {
+  return (
+    isDecimalDigit(char) || (char >= 'a' && char <= 'f') || (char >= 'A' && char <= 'F')
+  );
+}
+
+function isOctalDigit(char: string) {
+  switch (char) {
+    case '0':
+    case '1':
+    case '2':
+    case '3':
+    case '4':
+    case '5':
+    case '6':
+    case '7':
+      return true;
+    default:
+      return false;
+  }
+}
+
+function isBinaryDigit(char: string) {
+  switch (char) {
+    case '0':
+    case '1':
+      return true;
+    default:
+      return false;
+  }
+}
+
+function isOperatorChar(char: string) {
+  switch (char) {
+    case '@':
+    case '<':
+    case '>':
+    case '=':
+    case '|':
+    case '!':
+    case '+':
+    case '*':
+    case '-':
+      return true;
+    default:
+      return false;
+  }
 }

@@ -246,6 +246,54 @@ Array [
 ]
 `;
 
+exports[`tokenizer errors unclosed basic string 1`] = `
+"Parse error at line 1, column 17:
+
+Missing a closing \\" for string starting on line 1"
+`;
+
+exports[`tokenizer errors unclosed basic string 2`] = `
+"Parse error at line 1, column 12:
+
+Missing a closing \\" for string starting on line 1"
+`;
+
+exports[`tokenizer errors unclosed basic string 3`] = `
+"Parse error at line 5, column 8:
+
+Missing a closing \\" for string starting on line 3"
+`;
+
+exports[`tokenizer errors unclosed interpolated string 1`] = `
+"Parse error at line 1, column 14:
+
+Missing a closing \\" for string starting on line 1"
+`;
+
+exports[`tokenizer errors unclosed interpolated string 2`] = `
+"Parse error at line 1, column 13:
+
+Missing a closing \\" for string starting on line 1"
+`;
+
+exports[`tokenizer errors unclosed interpolated string 3`] = `
+"Parse error at line 1, column 17:
+
+Missing a closing \\"\\"\\" for string starting on line 1"
+`;
+
+exports[`tokenizer errors unclosed triple-quoted string 1`] = `
+"Parse error at line 1, column 27:
+
+Missing a closing \\"\\"\\" for string starting on line 1"
+`;
+
+exports[`tokenizer errors unclosed triple-quoted string 2`] = `
+"Parse error at line 5, column 10:
+
+Missing a closing \\"\\"\\" for string starting on line 3"
+`;
+
 exports[`tokenizer identifiers 1`] = `
 Array [
   Object {
@@ -947,12 +995,12 @@ Array [
 exports[`tokenizer numbers 6`] = `
 Array [
   Object {
-    "colEnd": 6,
+    "colEnd": 10,
     "colStart": 0,
     "kind": "Number",
     "lineEnd": 1,
     "lineStart": 1,
-    "value": "0b1010",
+    "value": "0xdeadbeef",
   },
 ]
 `;
@@ -965,7 +1013,59 @@ Array [
     "kind": "Number",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": "0xfacade",
+  },
+]
+`;
+
+exports[`tokenizer numbers 8`] = `
+Array [
+  Object {
+    "colEnd": 8,
+    "colStart": 0,
+    "kind": "Number",
+    "lineEnd": 1,
+    "lineStart": 1,
+    "value": "0xFacade",
+  },
+]
+`;
+
+exports[`tokenizer numbers 9`] = `
+Array [
+  Object {
+    "colEnd": 6,
+    "colStart": 0,
+    "kind": "Number",
+    "lineEnd": 1,
+    "lineStart": 1,
+    "value": "0b1010",
+  },
+]
+`;
+
+exports[`tokenizer numbers 10`] = `
+Array [
+  Object {
+    "colEnd": 8,
+    "colStart": 0,
+    "kind": "Number",
+    "lineEnd": 1,
+    "lineStart": 1,
     "value": "0o122345",
+  },
+]
+`;
+
+exports[`tokenizer numbers 11`] = `
+Array [
+  Object {
+    "colEnd": 5,
+    "colStart": 0,
+    "kind": "Number",
+    "lineEnd": 1,
+    "lineStart": 1,
+    "value": "0o707",
   },
 ]
 `;

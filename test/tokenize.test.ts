@@ -157,8 +157,12 @@ describe('tokenizer', () => {
     expect(tokenize('hello 1.22 world 2')).toMatchSnapshot();
     expect(tokenize('47e100')).toMatchSnapshot();
     expect(tokenize('0x10')).toMatchSnapshot();
+    expect(tokenize('0xdeadbeef')).toMatchSnapshot();
+    expect(tokenize('0xfacade')).toMatchSnapshot();
+    expect(tokenize('0xFacade')).toMatchSnapshot();
     expect(tokenize('0b1010')).toMatchSnapshot();
     expect(tokenize('0o122345')).toMatchSnapshot();
+    expect(tokenize('0o707')).toMatchSnapshot();
   });
 
   test('symbols', () => {
@@ -226,8 +230,39 @@ describe('tokenizer', () => {
     expect(tokenize('"hello $("another string")"')).toMatchSnapshot();
     expect(tokenize('"hello $(wow "another string")"')).toMatchSnapshot();
     expect(tokenize('"hello $((((name))))"')).toMatchSnapshot();
-    expect(
-      tokenize('"hello $("another $(interpolation), nice")"')
-    ).toMatchSnapshot();
+    expect(tokenize('"hello $("another $(interpolation), nice")"')).toMatchSnapshot();
+  });
+
+  describe('errors', () => {
+    test('unclosed basic string', () => {
+      expect(() => tokenize('"no closing quote')).toThrowErrorMatchingSnapshot();
+      expect(() => tokenize('hello "world')).toThrowErrorMatchingSnapshot();
+      expect(() =>
+        tokenize(`
+
+        "
+          hello world
+        `)
+      ).toThrowErrorMatchingSnapshot();
+    });
+
+    test('unclosed triple-quoted string', () => {
+      expect(() =>
+        tokenize('"""no third closing quote""')
+      ).toThrowErrorMatchingSnapshot();
+      expect(() =>
+        tokenize(`
+
+        """
+          no third closing quote
+        ""`)
+      ).toThrowErrorMatchingSnapshot();
+    });
+
+    test('unclosed interpolated string', () => {
+      expect(() => tokenize('"hello $(name)')).toThrowErrorMatchingSnapshot();
+      expect(() => tokenize('"hello $(name')).toThrowErrorMatchingSnapshot();
+      expect(() => tokenize('"""hello $(name)"')).toThrowErrorMatchingSnapshot();
+    });
   });
 });
