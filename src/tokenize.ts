@@ -209,13 +209,15 @@ export class Tokenizer {
   private readString(): Token[] {
     if (!this.charIs('"')) return;
 
-    const colStart = this.index - this.lineStartIndex;
-    let lineStart = this.line;
     const tripleQuoted = this.charIs('"', '"', '"');
+    const colStart = this.index - this.lineStartIndex;
+    const quoteSize = tripleQuoted ? 3 : 1;
     const stringTokens: Token[] = [];
+
+    let lineStart = this.line;
     let value = '';
 
-    this.advance(tripleQuoted ? 3 : 1);
+    this.advance(quoteSize);
 
     while (!this.eof) {
       if (this.charIs('\n')) {
@@ -311,7 +313,6 @@ export class Tokenizer {
       );
     }
 
-    const quoteSize = tripleQuoted ? 3 : 1;
     this.advance(quoteSize);
 
     const colEnd = this.index - this.lineStartIndex;
