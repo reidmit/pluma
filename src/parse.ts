@@ -1,14 +1,16 @@
 import { ParseError } from './errors';
+import * as t from './types';
+import * as nodes from './nodes';
 
 class Parser {
-  private readonly tokens: Token[];
+  private readonly tokens: t.Token[];
   private readonly source: string;
   private readonly tokenCount: number;
   private index: number;
-  private token: Token;
+  private token: t.Token;
   private eof: boolean;
 
-  constructor(tokens: Token[], source: string) {
+  constructor(tokens: t.Token[], source: string) {
     this.tokens = tokens;
     this.source = source;
     this.tokenCount = this.tokens.length;
@@ -23,7 +25,7 @@ class Parser {
     if (this.index >= this.tokenCount) this.eof = true;
   }
 
-  private tokenIs(kind: TokenKind, nextKind?: TokenKind) {
+  private tokenIs(kind: t.TokenKind, nextKind?: t.TokenKind) {
     if (this.token.kind !== kind) return false;
 
     if (nextKind) {
@@ -41,7 +43,7 @@ class Parser {
     }
   }
 
-  private parseParenthetical(): Expression {
+  private parseParenthetical(): t.Expression {
     if (!this.tokenIs('LeftParen')) return;
 
     const { lineStart, colStart } = this.token;
@@ -65,7 +67,7 @@ class Parser {
     return expr;
   }
 
-  private parseAssignmentExpression(): AssignmentExpression {
+  private parseAssignmentExpression(): t.AssignmentExpression {
     if (!this.tokenIs('Identifier', 'Equals')) return;
 
     const id = this.parseIdentifier();
@@ -85,44 +87,34 @@ class Parser {
 
     const expr = this.parseExpression();
 
-    return {
-      kind: 'AssignmentExpression',
-      type: null,
-      leftSide: id,
-      rightSide: expr,
-      lineStart: id.lineStart,
-      lineEnd: expr.lineEnd,
-      colStart: id.colStart,
-      colEnd: expr.colEnd
-    };
+    return new nodes.AssignmentExpression(
+      id,
+      expr,
+      id.lineStart,
+      id.colStart,
+      expr.lineEnd,
+      expr.colEnd
+    );
   }
 
-  private parseIdentifier(): Identifier {
+  private parseIdentifier(): t.Identifier {
     if (!this.tokenIs('Identifier')) return;
 
     const { value, lineStart, lineEnd, colStart, colEnd } = this.token;
 
     this.advance();
 
-    return {
-      kind: 'Identifier',
-      type: null,
-      name: value,
-      lineStart,
-      lineEnd,
-      colStart,
-      colEnd
-    };
+    return new nodes.Identifier(value, lineStart, colStart, lineEnd, colEnd);
   }
 
-  private parseBlock(): Block {
+  private parseBlock(): t.Block {
     if (!this.tokenIs('LeftBrace')) return;
 
     const { lineStart, colStart } = this.token;
 
     this.advance();
 
-    const parameters: Identifier[] = [];
+    const parameters: t.Identifier[] = [];
     const firstExpression = this.parseExpression();
 
     let body;
@@ -176,37 +168,26 @@ class Parser {
 
     this.advance();
 
-    return {
-      kind: 'Block',
-      type: null,
-      body,
-      parameters,
-      lineStart,
-      lineEnd,
-      colStart,
-      colEnd
-    };
+    return new nodes.Block(parameters, body, lineStart, colStart, lineEnd, colEnd);
   }
 
-  private parseBooleanLiteral(): BooleanLiteral {
+  private parseBooleanLiteral(): t.BooleanLiteral {
     if (!this.tokenIs('Boolean')) return;
 
     const { value, lineStart, lineEnd, colStart, colEnd } = this.token;
 
     this.advance();
 
-    return {
-      kind: 'BooleanLiteral',
-      type: null,
-      value: value === 'true',
+    return new nodes.BooleanLiteral(
+      value === 'true',
       lineStart,
-      lineEnd,
       colStart,
+      lineEnd,
       colEnd
-    };
+    );
   }
 
-  private parseNumericLiteral(): NumericLiteral {
+  private parseNumericLiteral(): t.NumericLiteral {
     if (!this.tokenIs('Number')) return;
 
     const { value, lineStart, lineEnd, colStart, colEnd } = this.token;
@@ -215,38 +196,28 @@ class Parser {
 
     this.advance();
 
-    return {
-      kind: 'NumericLiteral',
-      type: null,
+    return new nodes.NumericLiteral(
       style,
-      value: numericValue,
-      rawValue: value,
+      numericValue,
+      value,
       lineStart,
-      lineEnd,
       colStart,
+      lineEnd,
       colEnd
-    };
+    );
   }
 
-  parseStringLiteral(): StringLiteral {
+  parseStringLiteral(): t.StringLiteral {
     if (!this.tokenIs('String')) return;
 
     const { value, lineStart, lineEnd, colStart, colEnd } = this.token;
 
     this.advance();
 
-    return {
-      kind: 'StringLiteral',
-      type: null,
-      value,
-      lineStart,
-      lineEnd,
-      colStart,
-      colEnd
-    };
+    return new nodes.StringLiteral(value, lineStart, colStart, lineEnd, colEnd);
   }
 
-  parseExpression(): Expression {
+  parseExpression(): t.Expression {
     if (this.eof) return;
 
     this.parseComments();
@@ -264,9 +235,9 @@ class Parser {
     );
   }
 
-  parseModule(): Module {
-    const definitions: Definition[] = [];
-    const body: Expression[] = [];
+  parseModule(): t.Module {
+    const definitions: t.Definition[] = [];
+    const body: t.Expression[] = [];
 
     let node;
 
@@ -274,23 +245,17 @@ class Parser {
       body.push(node);
     }
 
-    return {
-      kind: 'Module',
-      type: null,
-      definitions,
-      body,
-      lineStart: 0,
-      lineEnd: 0,
-      colStart: 0,
-      colEnd: 0
-    };
+    const bodyLineEnd = body.length ? body[body.length - 1].lineEnd : 0;
+    const bodyColEnd = body.length ? body[body.length - 1].colEnd : 0;
+
+    return new nodes.Module(definitions, body, 1, 0, bodyLineEnd, bodyColEnd);
   }
 }
 
-export function parseExpression(tokens: Token[], source: string): Expression {
+export function parseExpression(tokens: t.Token[], source: string): t.Expression {
   return new Parser(tokens, source).parseExpression();
 }
 
-export function parseModule(tokens: Token[], source: string): Module {
+export function parseModule(tokens: t.Token[], source: string): t.Module {
   return new Parser(tokens, source).parseModule();
 }

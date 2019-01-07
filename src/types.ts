@@ -1,6 +1,6 @@
 import { Visitor } from './visit';
 
-type TokenKind =
+export type TokenKind =
   | 'Arrow'
   | 'Boolean'
   | 'Char'
@@ -24,7 +24,7 @@ type TokenKind =
   | 'RightParen'
   | 'String';
 
-type NodeKind =
+export type NodeKind =
   | 'AssignmentExpression'
   | 'BinaryExpression'
   | 'Block'
@@ -45,33 +45,23 @@ type NodeKind =
   | 'TypeExpression'
   | 'TypeIdentifier';
 
-interface Token {
+export interface Token {
   kind: TokenKind;
   value?: string;
   lineStart: number;
-  lineEnd: number;
   colStart: number;
+  lineEnd: number;
   colEnd: number;
 }
 
-interface AstNode {
-  kind: NodeKind;
-  type: TypeExpression | null;
-  lineStart: number;
-  lineEnd: number;
-  colStart: number;
-  colEnd: number;
-  accept(visitor: Visitor): void;
-}
-
-type Literal =
+export type Literal =
   | BooleanLiteral
   | CharLiteral
   | NumericLiteral
   | InterpolatedStringLiteral
   | StringLiteral;
 
-type Expression =
+export type Expression =
   | AssignmentExpression
   | BinaryExpression
   | Block
@@ -79,86 +69,98 @@ type Expression =
   | Identifier
   | Literal;
 
-type Definition = TypeDefinition;
+export type Definition = TypeDefinition | MethodDefinition;
 
-interface AssignmentExpression extends AstNode {
+export type TypeExpression = TypeIdentifier;
+
+export interface AstNode {
+  kind: NodeKind;
+  type: TypeExpression | null;
+  lineStart: number;
+  colStart: number;
+  lineEnd: number;
+  colEnd: number;
+  accept(visitor: Visitor): void;
+}
+
+export interface AssignmentExpression extends AstNode {
   kind: 'AssignmentExpression';
   leftSide: Identifier;
   rightSide: Expression;
 }
 
-interface BinaryExpression extends AstNode {
+export interface BinaryExpression extends AstNode {
   kind: 'BinaryExpression';
   operator: Operator;
   leftSide: Expression;
   rightSide: Expression;
 }
 
-interface Block extends AstNode {
+export interface Block extends AstNode {
   kind: 'Block';
   parameters: Identifier[];
   body: Expression;
 }
 
-interface BooleanLiteral extends AstNode {
+export interface BooleanLiteral extends AstNode {
   kind: 'BooleanLiteral';
   value: boolean;
 }
 
-interface CallExpression extends AstNode {
+export interface CallExpression extends AstNode {
   kind: 'CallExpression';
   receiver: Identifier | null;
-  methodNameParts: Identifier[];
-  arguments: Expression[][];
+  methodPartNames: Identifier[];
+  methodPartArgs: Expression[][];
 }
 
-interface CharLiteral extends AstNode {
+export interface CharLiteral extends AstNode {
   kind: 'CharLiteral';
   value: string;
 }
 
-interface DictEntry extends AstNode {
+export interface DictEntry extends AstNode {
   kind: 'DictEntry';
   key: StringLiteral;
   value: Expression;
 }
 
-interface DictExpression extends AstNode {
+export interface DictExpression extends AstNode {
   kind: 'DictExpression';
   entries: DictEntry[];
 }
 
-interface ListExpression extends AstNode {
+export interface ListExpression extends AstNode {
   kind: 'ListExpression';
   elements: Expression[];
 }
 
-interface Module extends AstNode {
+export interface Module extends AstNode {
   kind: 'Module';
   // imports: Import[];
   definitions: Definition[];
   body: Expression[];
 }
 
-interface NumericLiteral extends AstNode {
+export interface NumericLiteral extends AstNode {
   kind: 'NumericLiteral';
   style: 'integer' | 'float';
   value: number;
   rawValue: string;
 }
 
-interface Identifier extends AstNode {
+export interface Identifier extends AstNode {
   kind: 'Identifier';
   name: string;
 }
 
-interface InterpolatedStringLiteral extends AstNode {
+export interface InterpolatedStringLiteral extends AstNode {
   kind: 'InterpolatedStringLiteral';
   literals: StringLiteral[];
   interpolations: Expression[];
 }
 
-interface MethodDefinition extends AstNode {
+export interface MethodDefinition extends AstNode {
   kind: 'MethodDefinition';
   exported: boolean;
   methodNameParts: Identifier[];
@@ -167,26 +169,24 @@ interface MethodDefinition extends AstNode {
   // returnType: TypeExpression;
 }
 
-interface Operator extends AstNode {
+export interface Operator extends AstNode {
   kind: 'Operator';
   name: string;
 }
 
-interface StringLiteral extends AstNode {
+export interface StringLiteral extends AstNode {
   kind: 'StringLiteral';
   value: string;
 }
 
-interface TypeDefinition extends AstNode {
+export interface TypeDefinition extends AstNode {
   kind: 'TypeDefinition';
   exported: boolean;
   name: Identifier;
   value: TypeExpression;
 }
 
-type TypeExpression = TypeIdentifier;
-
-interface TypeIdentifier extends AstNode {
+export interface TypeIdentifier extends AstNode {
   kind: 'TypeIdentifier';
   name: string;
   typeParameters: TypeIdentifier[] | null;

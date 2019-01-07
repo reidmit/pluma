@@ -1,13 +1,13 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`parser assignment expressions 1`] = `
-Object {
+Module {
   "body": Array [
-    Object {
+    AssignmentExpression {
       "colEnd": 6,
       "colStart": 0,
       "kind": "AssignmentExpression",
-      "leftSide": Object {
+      "leftSide": Identifier {
         "colEnd": 1,
         "colStart": 0,
         "kind": "Identifier",
@@ -18,7 +18,7 @@ Object {
       },
       "lineEnd": 1,
       "lineStart": 1,
-      "rightSide": Object {
+      "rightSide": NumericLiteral {
         "colEnd": 6,
         "colStart": 4,
         "kind": "NumericLiteral",
@@ -32,24 +32,24 @@ Object {
       "type": null,
     },
   ],
-  "colEnd": 0,
+  "colEnd": 6,
   "colStart": 0,
   "definitions": Array [],
   "kind": "Module",
-  "lineEnd": 0,
-  "lineStart": 0,
+  "lineEnd": 1,
+  "lineStart": 1,
   "type": null,
 }
 `;
 
 exports[`parser assignment expressions 2`] = `
-Object {
+Module {
   "body": Array [
-    Object {
+    AssignmentExpression {
       "colEnd": 10,
       "colStart": 0,
       "kind": "AssignmentExpression",
-      "leftSide": Object {
+      "leftSide": Identifier {
         "colEnd": 1,
         "colStart": 0,
         "kind": "Identifier",
@@ -60,11 +60,11 @@ Object {
       },
       "lineEnd": 1,
       "lineStart": 1,
-      "rightSide": Object {
+      "rightSide": AssignmentExpression {
         "colEnd": 10,
         "colStart": 4,
         "kind": "AssignmentExpression",
-        "leftSide": Object {
+        "leftSide": Identifier {
           "colEnd": 5,
           "colStart": 4,
           "kind": "Identifier",
@@ -75,7 +75,7 @@ Object {
         },
         "lineEnd": 1,
         "lineStart": 1,
-        "rightSide": Object {
+        "rightSide": NumericLiteral {
           "colEnd": 10,
           "colStart": 8,
           "kind": "NumericLiteral",
@@ -91,24 +91,24 @@ Object {
       "type": null,
     },
   ],
-  "colEnd": 0,
+  "colEnd": 10,
   "colStart": 0,
   "definitions": Array [],
   "kind": "Module",
-  "lineEnd": 0,
-  "lineStart": 0,
+  "lineEnd": 1,
+  "lineStart": 1,
   "type": null,
 }
 `;
 
 exports[`parser assignment expressions 3`] = `
-Object {
+Module {
   "body": Array [
-    Object {
+    AssignmentExpression {
       "colEnd": 7,
       "colStart": 0,
       "kind": "AssignmentExpression",
-      "leftSide": Object {
+      "leftSide": Identifier {
         "colEnd": 1,
         "colStart": 0,
         "kind": "Identifier",
@@ -119,7 +119,7 @@ Object {
       },
       "lineEnd": 5,
       "lineStart": 1,
-      "rightSide": Object {
+      "rightSide": StringLiteral {
         "colEnd": 7,
         "colStart": 4,
         "kind": "StringLiteral",
@@ -135,24 +135,24 @@ Object {
       "type": null,
     },
   ],
-  "colEnd": 0,
+  "colEnd": 7,
   "colStart": 0,
   "definitions": Array [],
   "kind": "Module",
-  "lineEnd": 0,
-  "lineStart": 0,
+  "lineEnd": 5,
+  "lineStart": 1,
   "type": null,
 }
 `;
 
 exports[`parser assignment expressions 4`] = `
-Object {
+Module {
   "body": Array [
-    Object {
+    AssignmentExpression {
       "colEnd": 5,
       "colStart": 0,
       "kind": "AssignmentExpression",
-      "leftSide": Object {
+      "leftSide": Identifier {
         "colEnd": 1,
         "colStart": 0,
         "kind": "Identifier",
@@ -163,8 +163,8 @@ Object {
       },
       "lineEnd": 3,
       "lineStart": 1,
-      "rightSide": Object {
-        "body": Object {
+      "rightSide": Block {
+        "body": Identifier {
           "colEnd": 12,
           "colStart": 6,
           "kind": "Identifier",
@@ -179,7 +179,7 @@ Object {
         "lineEnd": 3,
         "lineStart": 1,
         "parameters": Array [
-          Object {
+          Identifier {
             "colEnd": 9,
             "colStart": 6,
             "kind": "Identifier",
@@ -194,21 +194,21 @@ Object {
       "type": null,
     },
   ],
-  "colEnd": 0,
+  "colEnd": 5,
   "colStart": 0,
   "definitions": Array [],
   "kind": "Module",
-  "lineEnd": 0,
-  "lineStart": 0,
+  "lineEnd": 3,
+  "lineStart": 1,
   "type": null,
 }
 `;
 
 exports[`parser blocks with parameters 1`] = `
-Object {
+Module {
   "body": Array [
-    Object {
-      "body": Object {
+    Block {
+      "body": Identifier {
         "colEnd": 13,
         "colStart": 10,
         "kind": "Identifier",
@@ -223,7 +223,7 @@ Object {
       "lineEnd": 1,
       "lineStart": 1,
       "parameters": Array [
-        Object {
+        Identifier {
           "colEnd": 3,
           "colStart": 2,
           "kind": "Identifier",
@@ -232,7 +232,7 @@ Object {
           "name": "a",
           "type": null,
         },
-        Object {
+        Identifier {
           "colEnd": 6,
           "colStart": 5,
           "kind": "Identifier",
@@ -245,21 +245,21 @@ Object {
       "type": null,
     },
   ],
-  "colEnd": 0,
+  "colEnd": 15,
   "colStart": 0,
   "definitions": Array [],
   "kind": "Module",
-  "lineEnd": 0,
-  "lineStart": 0,
+  "lineEnd": 1,
+  "lineStart": 1,
   "type": null,
 }
 `;
 
 exports[`parser blocks with parameters 2`] = `
-Object {
+Module {
   "body": Array [
-    Object {
-      "body": Object {
+    Block {
+      "body": Identifier {
         "colEnd": 14,
         "colStart": 11,
         "kind": "Identifier",
@@ -274,7 +274,7 @@ Object {
       "lineEnd": 1,
       "lineStart": 1,
       "parameters": Array [
-        Object {
+        Identifier {
           "colEnd": 7,
           "colStart": 2,
           "kind": "Identifier",
@@ -287,21 +287,21 @@ Object {
       "type": null,
     },
   ],
-  "colEnd": 0,
+  "colEnd": 16,
   "colStart": 0,
   "definitions": Array [],
   "kind": "Module",
-  "lineEnd": 0,
-  "lineStart": 0,
+  "lineEnd": 1,
+  "lineStart": 1,
   "type": null,
 }
 `;
 
 exports[`parser blocks without parameters 1`] = `
-Object {
+Module {
   "body": Array [
-    Object {
-      "body": Object {
+    Block {
+      "body": Identifier {
         "colEnd": 5,
         "colStart": 2,
         "kind": "Identifier",
@@ -319,21 +319,21 @@ Object {
       "type": null,
     },
   ],
-  "colEnd": 0,
+  "colEnd": 7,
   "colStart": 0,
   "definitions": Array [],
   "kind": "Module",
-  "lineEnd": 0,
-  "lineStart": 0,
+  "lineEnd": 1,
+  "lineStart": 1,
   "type": null,
 }
 `;
 
 exports[`parser blocks without parameters 2`] = `
-Object {
+Module {
   "body": Array [
-    Object {
-      "body": Object {
+    Block {
+      "body": BooleanLiteral {
         "colEnd": 6,
         "colStart": 2,
         "kind": "BooleanLiteral",
@@ -351,20 +351,20 @@ Object {
       "type": null,
     },
   ],
-  "colEnd": 0,
+  "colEnd": 8,
   "colStart": 0,
   "definitions": Array [],
   "kind": "Module",
-  "lineEnd": 0,
-  "lineStart": 0,
+  "lineEnd": 1,
+  "lineStart": 1,
   "type": null,
 }
 `;
 
 exports[`parser boolean literals 1`] = `
-Object {
+Module {
   "body": Array [
-    Object {
+    BooleanLiteral {
       "colEnd": 4,
       "colStart": 0,
       "kind": "BooleanLiteral",
@@ -374,20 +374,20 @@ Object {
       "value": true,
     },
   ],
-  "colEnd": 0,
+  "colEnd": 4,
   "colStart": 0,
   "definitions": Array [],
   "kind": "Module",
-  "lineEnd": 0,
-  "lineStart": 0,
+  "lineEnd": 1,
+  "lineStart": 1,
   "type": null,
 }
 `;
 
 exports[`parser boolean literals 2`] = `
-Object {
+Module {
   "body": Array [
-    Object {
+    BooleanLiteral {
       "colEnd": 5,
       "colStart": 0,
       "kind": "BooleanLiteral",
@@ -397,20 +397,20 @@ Object {
       "value": false,
     },
   ],
-  "colEnd": 0,
+  "colEnd": 5,
   "colStart": 0,
   "definitions": Array [],
   "kind": "Module",
-  "lineEnd": 0,
-  "lineStart": 0,
+  "lineEnd": 1,
+  "lineStart": 1,
   "type": null,
 }
 `;
 
 exports[`parser expressions in parentheses 1`] = `
-Object {
+Module {
   "body": Array [
-    Object {
+    BooleanLiteral {
       "colEnd": 6,
       "colStart": 2,
       "kind": "BooleanLiteral",
@@ -420,20 +420,20 @@ Object {
       "value": true,
     },
   ],
-  "colEnd": 0,
+  "colEnd": 6,
   "colStart": 0,
   "definitions": Array [],
   "kind": "Module",
-  "lineEnd": 0,
-  "lineStart": 0,
+  "lineEnd": 1,
+  "lineStart": 1,
   "type": null,
 }
 `;
 
 exports[`parser expressions in parentheses 2`] = `
-Object {
+Module {
   "body": Array [
-    Object {
+    Identifier {
       "colEnd": 4,
       "colStart": 1,
       "kind": "Identifier",
@@ -443,33 +443,33 @@ Object {
       "type": null,
     },
   ],
-  "colEnd": 0,
+  "colEnd": 4,
   "colStart": 0,
   "definitions": Array [],
   "kind": "Module",
-  "lineEnd": 0,
-  "lineStart": 0,
+  "lineEnd": 1,
+  "lineStart": 1,
   "type": null,
 }
 `;
 
 exports[`parser inline comments 1`] = `
-Object {
+Module {
   "body": Array [],
   "colEnd": 0,
   "colStart": 0,
   "definitions": Array [],
   "kind": "Module",
   "lineEnd": 0,
-  "lineStart": 0,
+  "lineStart": 1,
   "type": null,
 }
 `;
 
 exports[`parser inline comments 2`] = `
-Object {
+Module {
   "body": Array [
-    Object {
+    Identifier {
       "colEnd": 3,
       "colStart": 0,
       "kind": "Identifier",
@@ -479,20 +479,20 @@ Object {
       "type": null,
     },
   ],
-  "colEnd": 0,
+  "colEnd": 3,
   "colStart": 0,
   "definitions": Array [],
   "kind": "Module",
-  "lineEnd": 0,
-  "lineStart": 0,
+  "lineEnd": 1,
+  "lineStart": 1,
   "type": null,
 }
 `;
 
 exports[`parser inline comments 3`] = `
-Object {
+Module {
   "body": Array [
-    Object {
+    Identifier {
       "colEnd": 13,
       "colStart": 8,
       "kind": "Identifier",
@@ -501,7 +501,7 @@ Object {
       "name": "hello",
       "type": null,
     },
-    Object {
+    Identifier {
       "colEnd": 13,
       "colStart": 8,
       "kind": "Identifier",
@@ -511,20 +511,20 @@ Object {
       "type": null,
     },
   ],
-  "colEnd": 0,
+  "colEnd": 13,
   "colStart": 0,
   "definitions": Array [],
   "kind": "Module",
-  "lineEnd": 0,
-  "lineStart": 0,
+  "lineEnd": 4,
+  "lineStart": 1,
   "type": null,
 }
 `;
 
 exports[`parser inline comments 4`] = `
-Object {
+Module {
   "body": Array [
-    Object {
+    Identifier {
       "colEnd": 13,
       "colStart": 8,
       "kind": "Identifier",
@@ -533,7 +533,7 @@ Object {
       "name": "hello",
       "type": null,
     },
-    Object {
+    Identifier {
       "colEnd": 13,
       "colStart": 8,
       "kind": "Identifier",
@@ -543,20 +543,20 @@ Object {
       "type": null,
     },
   ],
-  "colEnd": 0,
+  "colEnd": 13,
   "colStart": 0,
   "definitions": Array [],
   "kind": "Module",
-  "lineEnd": 0,
-  "lineStart": 0,
+  "lineEnd": 5,
+  "lineStart": 1,
   "type": null,
 }
 `;
 
 exports[`parser number literals 1`] = `
-Object {
+Module {
   "body": Array [
-    Object {
+    NumericLiteral {
       "colEnd": 2,
       "colStart": 0,
       "kind": "NumericLiteral",
@@ -568,20 +568,20 @@ Object {
       "value": 47,
     },
   ],
-  "colEnd": 0,
+  "colEnd": 2,
   "colStart": 0,
   "definitions": Array [],
   "kind": "Module",
-  "lineEnd": 0,
-  "lineStart": 0,
+  "lineEnd": 1,
+  "lineStart": 1,
   "type": null,
 }
 `;
 
 exports[`parser number literals 2`] = `
-Object {
+Module {
   "body": Array [
-    Object {
+    NumericLiteral {
       "colEnd": 6,
       "colStart": 0,
       "kind": "NumericLiteral",
@@ -593,20 +593,20 @@ Object {
       "value": 47.123,
     },
   ],
-  "colEnd": 0,
+  "colEnd": 6,
   "colStart": 0,
   "definitions": Array [],
   "kind": "Module",
-  "lineEnd": 0,
-  "lineStart": 0,
+  "lineEnd": 1,
+  "lineStart": 1,
   "type": null,
 }
 `;
 
 exports[`parser number literals 3`] = `
-Object {
+Module {
   "body": Array [
-    Object {
+    NumericLiteral {
       "colEnd": 4,
       "colStart": 0,
       "kind": "NumericLiteral",
@@ -618,20 +618,20 @@ Object {
       "value": 47000,
     },
   ],
-  "colEnd": 0,
+  "colEnd": 4,
   "colStart": 0,
   "definitions": Array [],
   "kind": "Module",
-  "lineEnd": 0,
-  "lineStart": 0,
+  "lineEnd": 1,
+  "lineStart": 1,
   "type": null,
 }
 `;
 
 exports[`parser number literals 4`] = `
-Object {
+Module {
   "body": Array [
-    Object {
+    NumericLiteral {
       "colEnd": 7,
       "colStart": 0,
       "kind": "NumericLiteral",
@@ -643,20 +643,20 @@ Object {
       "value": 10,
     },
   ],
-  "colEnd": 0,
+  "colEnd": 7,
   "colStart": 0,
   "definitions": Array [],
   "kind": "Module",
-  "lineEnd": 0,
-  "lineStart": 0,
+  "lineEnd": 1,
+  "lineStart": 1,
   "type": null,
 }
 `;
 
 exports[`parser plain identifiers 1`] = `
-Object {
+Module {
   "body": Array [
-    Object {
+    Identifier {
       "colEnd": 3,
       "colStart": 0,
       "kind": "Identifier",
@@ -666,20 +666,20 @@ Object {
       "type": null,
     },
   ],
-  "colEnd": 0,
+  "colEnd": 3,
   "colStart": 0,
   "definitions": Array [],
   "kind": "Module",
-  "lineEnd": 0,
-  "lineStart": 0,
+  "lineEnd": 1,
+  "lineStart": 1,
   "type": null,
 }
 `;
 
 exports[`parser plain identifiers 2`] = `
-Object {
+Module {
   "body": Array [
-    Object {
+    Identifier {
       "colEnd": 5,
       "colStart": 0,
       "kind": "Identifier",
@@ -689,20 +689,20 @@ Object {
       "type": null,
     },
   ],
-  "colEnd": 0,
+  "colEnd": 5,
   "colStart": 0,
   "definitions": Array [],
   "kind": "Module",
-  "lineEnd": 0,
-  "lineStart": 0,
+  "lineEnd": 1,
+  "lineStart": 1,
   "type": null,
 }
 `;
 
 exports[`parser string literals 1`] = `
-Object {
+Module {
   "body": Array [
-    Object {
+    StringLiteral {
       "colEnd": 15,
       "colStart": 0,
       "kind": "StringLiteral",
@@ -712,20 +712,20 @@ Object {
       "value": "hello, world!",
     },
   ],
-  "colEnd": 0,
+  "colEnd": 15,
   "colStart": 0,
   "definitions": Array [],
   "kind": "Module",
-  "lineEnd": 0,
-  "lineStart": 0,
+  "lineEnd": 1,
+  "lineStart": 1,
   "type": null,
 }
 `;
 
 exports[`parser string literals 2`] = `
-Object {
+Module {
   "body": Array [
-    Object {
+    StringLiteral {
       "colEnd": 13,
       "colStart": 0,
       "kind": "StringLiteral",
@@ -737,20 +737,20 @@ Object {
       world!",
     },
   ],
-  "colEnd": 0,
+  "colEnd": 13,
   "colStart": 0,
   "definitions": Array [],
   "kind": "Module",
-  "lineEnd": 0,
-  "lineStart": 0,
+  "lineEnd": 3,
+  "lineStart": 1,
   "type": null,
 }
 `;
 
 exports[`parser string literals 3`] = `
-Object {
+Module {
   "body": Array [
-    Object {
+    StringLiteral {
       "colEnd": 15,
       "colStart": 0,
       "kind": "StringLiteral",
@@ -762,12 +762,12 @@ Object {
       world!",
     },
   ],
-  "colEnd": 0,
+  "colEnd": 15,
   "colStart": 0,
   "definitions": Array [],
   "kind": "Module",
-  "lineEnd": 0,
-  "lineStart": 0,
+  "lineEnd": 3,
+  "lineStart": 1,
   "type": null,
 }
 `;

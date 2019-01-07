@@ -1,10 +1,11 @@
 import { ParseError } from './errors';
+import * as t from './types';
 
 class Tokenizer {
   private readonly source: string;
   private readonly chars: string[];
   private readonly length: number;
-  private readonly tokens: Token[];
+  private readonly tokens: t.Token[];
   private index: number;
   private char: string;
   private line: number;
@@ -40,7 +41,7 @@ class Tokenizer {
     return this.chars[this.index - 1] === testChar;
   }
 
-  private readComment(): Token {
+  private readComment(): t.Token {
     if (!this.charIs('#')) return;
 
     const colStart = this.index - this.lineStartIndex;
@@ -65,7 +66,7 @@ class Tokenizer {
     };
   }
 
-  private readIdentifier(): Token {
+  private readIdentifier(): t.Token {
     if (!isIdentifierStartChar(this.char)) return;
 
     let value = '';
@@ -99,7 +100,7 @@ class Tokenizer {
     };
   }
 
-  private readChar(): Token {
+  private readChar(): t.Token {
     if (!this.charIs("'")) return;
 
     const colStart = this.index - this.lineStartIndex;
@@ -132,7 +133,7 @@ class Tokenizer {
     };
   }
 
-  private readNumber(): Token {
+  private readNumber(): t.Token {
     if (!isDecimalDigit(this.char)) return;
 
     const colStart = this.index - this.lineStartIndex;
@@ -239,13 +240,13 @@ class Tokenizer {
     };
   }
 
-  private readString(): Token[] {
+  private readString(): t.Token[] {
     if (!this.charIs('"')) return;
 
     const tripleQuoted = this.charIs('"', '"', '"');
     const colStart = this.index - this.lineStartIndex;
     const quoteSize = tripleQuoted ? 3 : 1;
-    const stringTokens: Token[] = [];
+    const stringTokens: t.Token[] = [];
 
     let lineStart = this.line;
     let value = '';
@@ -362,7 +363,7 @@ class Tokenizer {
     return stringTokens;
   }
 
-  private readSymbol(kind: TokenKind, firstChar: string, secondChar?: string): Token {
+  private readSymbol(kind: t.TokenKind, firstChar: string, secondChar?: string): t.Token {
     if (!this.charIs(firstChar, secondChar)) return;
 
     const size = secondChar ? 2 : 1;
@@ -379,7 +380,7 @@ class Tokenizer {
     };
   }
 
-  private readOperator(): Token {
+  private readOperator(): t.Token {
     if (!isOperatorChar(this.char)) return;
 
     const colStart = this.index - this.lineStartIndex;
@@ -414,7 +415,7 @@ class Tokenizer {
     }
   }
 
-  private readToken(): Token | Token[] {
+  private readToken(): t.Token | t.Token[] {
     if (this.eof) return;
 
     this.readWhitespace();
@@ -442,7 +443,7 @@ class Tokenizer {
     );
   }
 
-  tokenize(): Token[] {
+  tokenize(): t.Token[] {
     let token;
 
     while ((token = this.readToken())) {
@@ -454,7 +455,7 @@ class Tokenizer {
   }
 }
 
-export function tokenize(source: string): Token[] {
+export function tokenize(source: string): t.Token[] {
   return new Tokenizer(source).tokenize();
 }
 
