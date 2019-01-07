@@ -1,7 +1,11 @@
+import { Visitor } from './visit';
+
 type TokenKind =
   | 'Arrow'
   | 'Boolean'
+  | 'Char'
   | 'Colon'
+  | 'ColonEquals'
   | 'Comma'
   | 'Comment'
   | 'Dot'
@@ -27,22 +31,19 @@ type NodeKind =
   | 'BooleanLiteral'
   | 'CallExpression'
   | 'CharLiteral'
-  | 'File'
-  | 'FloatLiteral'
+  | 'DictEntry'
+  | 'DictExpression'
   | 'Identifier'
-  | 'IntLiteral'
   | 'InterpolatedStringLiteral'
+  | 'ListExpression'
   | 'MethodDefinition'
+  | 'Module'
+  | 'NumericLiteral'
   | 'Operator'
   | 'StringLiteral'
-  | 'TypeDefinition';
-
-interface SourceLocation {
-  lineStart: number;
-  lineEnd: number;
-  colStart: number;
-  colEnd: number;
-}
+  | 'TypeDefinition'
+  | 'TypeExpression'
+  | 'TypeIdentifier';
 
 interface Token {
   kind: TokenKind;
@@ -55,19 +56,28 @@ interface Token {
 
 interface AstNode {
   kind: NodeKind;
-  type: null;
-  location: SourceLocation;
+  type: TypeExpression | null;
+  lineStart: number;
+  lineEnd: number;
+  colStart: number;
+  colEnd: number;
+  accept(visitor: Visitor): void;
 }
 
 type Literal =
   | BooleanLiteral
   | CharLiteral
-  | FloatLiteral
-  | IntLiteral
+  | NumericLiteral
   | InterpolatedStringLiteral
   | StringLiteral;
 
-type Expression = AssignmentExpression | BinaryExpression;
+type Expression =
+  | AssignmentExpression
+  | BinaryExpression
+  | Block
+  | CallExpression
+  | Identifier
+  | Literal;
 
 type Definition = TypeDefinition;
 
@@ -107,26 +117,39 @@ interface CharLiteral extends AstNode {
   value: string;
 }
 
-interface File extends AstNode {
-  kind: 'File';
+interface DictEntry extends AstNode {
+  kind: 'DictEntry';
+  key: StringLiteral;
+  value: Expression;
+}
+
+interface DictExpression extends AstNode {
+  kind: 'DictExpression';
+  entries: DictEntry[];
+}
+
+interface ListExpression extends AstNode {
+  kind: 'ListExpression';
+  elements: Expression[];
+}
+
+interface Module extends AstNode {
+  kind: 'Module';
   // imports: Import[];
   definitions: Definition[];
   body: Expression[];
 }
 
-interface FloatLiteral extends AstNode {
-  kind: 'FloatLiteral';
+interface NumericLiteral extends AstNode {
+  kind: 'NumericLiteral';
+  style: 'integer' | 'float';
   value: number;
+  rawValue: string;
 }
 
 interface Identifier extends AstNode {
   kind: 'Identifier';
   name: string;
-}
-
-interface IntLiteral extends AstNode {
-  kind: 'IntLiteral';
-  value: number;
 }
 
 interface InterpolatedStringLiteral extends AstNode {
@@ -158,5 +181,13 @@ interface TypeDefinition extends AstNode {
   kind: 'TypeDefinition';
   exported: boolean;
   name: Identifier;
-  // value: TypeExpression;
+  value: TypeExpression;
+}
+
+type TypeExpression = TypeIdentifier;
+
+interface TypeIdentifier extends AstNode {
+  kind: 'TypeIdentifier';
+  name: string;
+  typeParameters: TypeIdentifier[] | null;
 }

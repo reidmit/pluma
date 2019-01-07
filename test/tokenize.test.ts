@@ -151,6 +151,13 @@ describe('tokenizer', () => {
     expect(tokenize('hello true world false')).toMatchSnapshot();
   });
 
+  test('chars', () => {
+    expect(tokenize("'a'")).toMatchSnapshot();
+    expect(tokenize("'b' 'c'")).toMatchSnapshot();
+    expect(tokenize("hello 'b' world 'c'")).toMatchSnapshot();
+    expect(tokenize("'👀'")).toMatchSnapshot();
+  });
+
   test('numbers', () => {
     expect(tokenize('47')).toMatchSnapshot();
     expect(tokenize('47.01')).toMatchSnapshot();
@@ -175,6 +182,7 @@ describe('tokenizer', () => {
     expect(tokenize('a -> b')).toMatchSnapshot();
     expect(tokenize('a = b')).toMatchSnapshot();
     expect(tokenize('a : b')).toMatchSnapshot();
+    expect(tokenize('a := b')).toMatchSnapshot();
   });
 
   test('operators', () => {
@@ -202,6 +210,7 @@ describe('tokenizer', () => {
 
     world"`)
     ).toMatchSnapshot();
+    expect(tokenize('"emojis! 🐸⛄️"')).toMatchSnapshot();
   });
 
   test('triple-quoted strings', () => {

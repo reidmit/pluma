@@ -1,0 +1,773 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`parser assignment expressions 1`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 6,
+      "colStart": 0,
+      "kind": "AssignmentExpression",
+      "leftSide": Object {
+        "colEnd": 1,
+        "colStart": 0,
+        "kind": "Identifier",
+        "lineEnd": 1,
+        "lineStart": 1,
+        "name": "a",
+        "type": null,
+      },
+      "lineEnd": 1,
+      "lineStart": 1,
+      "rightSide": Object {
+        "colEnd": 6,
+        "colStart": 4,
+        "kind": "NumericLiteral",
+        "lineEnd": 1,
+        "lineStart": 1,
+        "rawValue": "47",
+        "style": "integer",
+        "type": null,
+        "value": 47,
+      },
+      "type": null,
+    },
+  ],
+  "colEnd": 0,
+  "colStart": 0,
+  "definitions": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 0,
+  "type": null,
+}
+`;
+
+exports[`parser assignment expressions 2`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 10,
+      "colStart": 0,
+      "kind": "AssignmentExpression",
+      "leftSide": Object {
+        "colEnd": 1,
+        "colStart": 0,
+        "kind": "Identifier",
+        "lineEnd": 1,
+        "lineStart": 1,
+        "name": "a",
+        "type": null,
+      },
+      "lineEnd": 1,
+      "lineStart": 1,
+      "rightSide": Object {
+        "colEnd": 10,
+        "colStart": 4,
+        "kind": "AssignmentExpression",
+        "leftSide": Object {
+          "colEnd": 5,
+          "colStart": 4,
+          "kind": "Identifier",
+          "lineEnd": 1,
+          "lineStart": 1,
+          "name": "b",
+          "type": null,
+        },
+        "lineEnd": 1,
+        "lineStart": 1,
+        "rightSide": Object {
+          "colEnd": 10,
+          "colStart": 8,
+          "kind": "NumericLiteral",
+          "lineEnd": 1,
+          "lineStart": 1,
+          "rawValue": "10",
+          "style": "integer",
+          "type": null,
+          "value": 10,
+        },
+        "type": null,
+      },
+      "type": null,
+    },
+  ],
+  "colEnd": 0,
+  "colStart": 0,
+  "definitions": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 0,
+  "type": null,
+}
+`;
+
+exports[`parser assignment expressions 3`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 7,
+      "colStart": 0,
+      "kind": "AssignmentExpression",
+      "leftSide": Object {
+        "colEnd": 1,
+        "colStart": 0,
+        "kind": "Identifier",
+        "lineEnd": 1,
+        "lineStart": 1,
+        "name": "a",
+        "type": null,
+      },
+      "lineEnd": 5,
+      "lineStart": 1,
+      "rightSide": Object {
+        "colEnd": 7,
+        "colStart": 4,
+        "kind": "StringLiteral",
+        "lineEnd": 5,
+        "lineStart": 1,
+        "type": null,
+        "value": "
+      a
+      long
+      string
+    ",
+      },
+      "type": null,
+    },
+  ],
+  "colEnd": 0,
+  "colStart": 0,
+  "definitions": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 0,
+  "type": null,
+}
+`;
+
+exports[`parser assignment expressions 4`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 5,
+      "colStart": 0,
+      "kind": "AssignmentExpression",
+      "leftSide": Object {
+        "colEnd": 1,
+        "colStart": 0,
+        "kind": "Identifier",
+        "lineEnd": 1,
+        "lineStart": 1,
+        "name": "a",
+        "type": null,
+      },
+      "lineEnd": 3,
+      "lineStart": 1,
+      "rightSide": Object {
+        "body": Object {
+          "colEnd": 12,
+          "colStart": 6,
+          "kind": "Identifier",
+          "lineEnd": 2,
+          "lineStart": 2,
+          "name": "aBlock",
+          "type": null,
+        },
+        "colEnd": 5,
+        "colStart": 4,
+        "kind": "Block",
+        "lineEnd": 3,
+        "lineStart": 1,
+        "parameters": Array [
+          Object {
+            "colEnd": 9,
+            "colStart": 6,
+            "kind": "Identifier",
+            "lineEnd": 1,
+            "lineStart": 1,
+            "name": "wow",
+            "type": null,
+          },
+        ],
+        "type": null,
+      },
+      "type": null,
+    },
+  ],
+  "colEnd": 0,
+  "colStart": 0,
+  "definitions": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 0,
+  "type": null,
+}
+`;
+
+exports[`parser blocks with parameters 1`] = `
+Object {
+  "body": Array [
+    Object {
+      "body": Object {
+        "colEnd": 13,
+        "colStart": 10,
+        "kind": "Identifier",
+        "lineEnd": 1,
+        "lineStart": 1,
+        "name": "wow",
+        "type": null,
+      },
+      "colEnd": 15,
+      "colStart": 0,
+      "kind": "Block",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "parameters": Array [
+        Object {
+          "colEnd": 3,
+          "colStart": 2,
+          "kind": "Identifier",
+          "lineEnd": 1,
+          "lineStart": 1,
+          "name": "a",
+          "type": null,
+        },
+        Object {
+          "colEnd": 6,
+          "colStart": 5,
+          "kind": "Identifier",
+          "lineEnd": 1,
+          "lineStart": 1,
+          "name": "b",
+          "type": null,
+        },
+      ],
+      "type": null,
+    },
+  ],
+  "colEnd": 0,
+  "colStart": 0,
+  "definitions": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 0,
+  "type": null,
+}
+`;
+
+exports[`parser blocks with parameters 2`] = `
+Object {
+  "body": Array [
+    Object {
+      "body": Object {
+        "colEnd": 14,
+        "colStart": 11,
+        "kind": "Identifier",
+        "lineEnd": 1,
+        "lineStart": 1,
+        "name": "wow",
+        "type": null,
+      },
+      "colEnd": 16,
+      "colStart": 0,
+      "kind": "Block",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "parameters": Array [
+        Object {
+          "colEnd": 7,
+          "colStart": 2,
+          "kind": "Identifier",
+          "lineEnd": 1,
+          "lineStart": 1,
+          "name": "hello",
+          "type": null,
+        },
+      ],
+      "type": null,
+    },
+  ],
+  "colEnd": 0,
+  "colStart": 0,
+  "definitions": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 0,
+  "type": null,
+}
+`;
+
+exports[`parser blocks without parameters 1`] = `
+Object {
+  "body": Array [
+    Object {
+      "body": Object {
+        "colEnd": 5,
+        "colStart": 2,
+        "kind": "Identifier",
+        "lineEnd": 1,
+        "lineStart": 1,
+        "name": "wow",
+        "type": null,
+      },
+      "colEnd": 7,
+      "colStart": 0,
+      "kind": "Block",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "parameters": Array [],
+      "type": null,
+    },
+  ],
+  "colEnd": 0,
+  "colStart": 0,
+  "definitions": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 0,
+  "type": null,
+}
+`;
+
+exports[`parser blocks without parameters 2`] = `
+Object {
+  "body": Array [
+    Object {
+      "body": Object {
+        "colEnd": 6,
+        "colStart": 2,
+        "kind": "BooleanLiteral",
+        "lineEnd": 1,
+        "lineStart": 1,
+        "type": null,
+        "value": true,
+      },
+      "colEnd": 8,
+      "colStart": 0,
+      "kind": "Block",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "parameters": Array [],
+      "type": null,
+    },
+  ],
+  "colEnd": 0,
+  "colStart": 0,
+  "definitions": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 0,
+  "type": null,
+}
+`;
+
+exports[`parser boolean literals 1`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 4,
+      "colStart": 0,
+      "kind": "BooleanLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "type": null,
+      "value": true,
+    },
+  ],
+  "colEnd": 0,
+  "colStart": 0,
+  "definitions": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 0,
+  "type": null,
+}
+`;
+
+exports[`parser boolean literals 2`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 5,
+      "colStart": 0,
+      "kind": "BooleanLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "type": null,
+      "value": false,
+    },
+  ],
+  "colEnd": 0,
+  "colStart": 0,
+  "definitions": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 0,
+  "type": null,
+}
+`;
+
+exports[`parser expressions in parentheses 1`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 6,
+      "colStart": 2,
+      "kind": "BooleanLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "type": null,
+      "value": true,
+    },
+  ],
+  "colEnd": 0,
+  "colStart": 0,
+  "definitions": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 0,
+  "type": null,
+}
+`;
+
+exports[`parser expressions in parentheses 2`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 4,
+      "colStart": 1,
+      "kind": "Identifier",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "name": "wow",
+      "type": null,
+    },
+  ],
+  "colEnd": 0,
+  "colStart": 0,
+  "definitions": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 0,
+  "type": null,
+}
+`;
+
+exports[`parser inline comments 1`] = `
+Object {
+  "body": Array [],
+  "colEnd": 0,
+  "colStart": 0,
+  "definitions": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 0,
+  "type": null,
+}
+`;
+
+exports[`parser inline comments 2`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 3,
+      "colStart": 0,
+      "kind": "Identifier",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "name": "wow",
+      "type": null,
+    },
+  ],
+  "colEnd": 0,
+  "colStart": 0,
+  "definitions": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 0,
+  "type": null,
+}
+`;
+
+exports[`parser inline comments 3`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 13,
+      "colStart": 8,
+      "kind": "Identifier",
+      "lineEnd": 2,
+      "lineStart": 2,
+      "name": "hello",
+      "type": null,
+    },
+    Object {
+      "colEnd": 13,
+      "colStart": 8,
+      "kind": "Identifier",
+      "lineEnd": 4,
+      "lineStart": 4,
+      "name": "world",
+      "type": null,
+    },
+  ],
+  "colEnd": 0,
+  "colStart": 0,
+  "definitions": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 0,
+  "type": null,
+}
+`;
+
+exports[`parser inline comments 4`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 13,
+      "colStart": 8,
+      "kind": "Identifier",
+      "lineEnd": 2,
+      "lineStart": 2,
+      "name": "hello",
+      "type": null,
+    },
+    Object {
+      "colEnd": 13,
+      "colStart": 8,
+      "kind": "Identifier",
+      "lineEnd": 5,
+      "lineStart": 5,
+      "name": "world",
+      "type": null,
+    },
+  ],
+  "colEnd": 0,
+  "colStart": 0,
+  "definitions": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 0,
+  "type": null,
+}
+`;
+
+exports[`parser number literals 1`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 2,
+      "colStart": 0,
+      "kind": "NumericLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "rawValue": "47",
+      "style": "integer",
+      "type": null,
+      "value": 47,
+    },
+  ],
+  "colEnd": 0,
+  "colStart": 0,
+  "definitions": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 0,
+  "type": null,
+}
+`;
+
+exports[`parser number literals 2`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 6,
+      "colStart": 0,
+      "kind": "NumericLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "rawValue": "47.123",
+      "style": "float",
+      "type": null,
+      "value": 47.123,
+    },
+  ],
+  "colEnd": 0,
+  "colStart": 0,
+  "definitions": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 0,
+  "type": null,
+}
+`;
+
+exports[`parser number literals 3`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 4,
+      "colStart": 0,
+      "kind": "NumericLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "rawValue": "47e3",
+      "style": "integer",
+      "type": null,
+      "value": 47000,
+    },
+  ],
+  "colEnd": 0,
+  "colStart": 0,
+  "definitions": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 0,
+  "type": null,
+}
+`;
+
+exports[`parser number literals 4`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 7,
+      "colStart": 0,
+      "kind": "NumericLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "rawValue": "0b01010",
+      "style": "integer",
+      "type": null,
+      "value": 10,
+    },
+  ],
+  "colEnd": 0,
+  "colStart": 0,
+  "definitions": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 0,
+  "type": null,
+}
+`;
+
+exports[`parser plain identifiers 1`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 3,
+      "colStart": 0,
+      "kind": "Identifier",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "name": "wow",
+      "type": null,
+    },
+  ],
+  "colEnd": 0,
+  "colStart": 0,
+  "definitions": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 0,
+  "type": null,
+}
+`;
+
+exports[`parser plain identifiers 2`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 5,
+      "colStart": 0,
+      "kind": "Identifier",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "name": "hello",
+      "type": null,
+    },
+  ],
+  "colEnd": 0,
+  "colStart": 0,
+  "definitions": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 0,
+  "type": null,
+}
+`;
+
+exports[`parser string literals 1`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 15,
+      "colStart": 0,
+      "kind": "StringLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "type": null,
+      "value": "hello, world!",
+    },
+  ],
+  "colEnd": 0,
+  "colStart": 0,
+  "definitions": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 0,
+  "type": null,
+}
+`;
+
+exports[`parser string literals 2`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 13,
+      "colStart": 0,
+      "kind": "StringLiteral",
+      "lineEnd": 3,
+      "lineStart": 1,
+      "type": null,
+      "value": "
+    hello,
+      world!",
+    },
+  ],
+  "colEnd": 0,
+  "colStart": 0,
+  "definitions": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 0,
+  "type": null,
+}
+`;
+
+exports[`parser string literals 3`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 15,
+      "colStart": 0,
+      "kind": "StringLiteral",
+      "lineEnd": 3,
+      "lineStart": 1,
+      "type": null,
+      "value": "
+    hello,
+      world!",
+    },
+  ],
+  "colEnd": 0,
+  "colStart": 0,
+  "definitions": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 0,
+  "type": null,
+}
+`;

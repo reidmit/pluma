@@ -120,6 +120,19 @@ Array [
 ]
 `;
 
+exports[`tokenizer basic strings 7`] = `
+Array [
+  Object {
+    "colEnd": 13,
+    "colStart": 0,
+    "kind": "String",
+    "lineEnd": 1,
+    "lineStart": 1,
+    "value": "emojis! 🐸⛄️",
+  },
+]
+`;
+
 exports[`tokenizer booleans 1`] = `
 Array [
   Object {
@@ -179,6 +192,90 @@ Array [
     "lineEnd": 1,
     "lineStart": 1,
     "value": "false",
+  },
+]
+`;
+
+exports[`tokenizer chars 1`] = `
+Array [
+  Object {
+    "colEnd": 2,
+    "colStart": 0,
+    "kind": "Char",
+    "lineEnd": 1,
+    "lineStart": 1,
+    "value": "a",
+  },
+]
+`;
+
+exports[`tokenizer chars 2`] = `
+Array [
+  Object {
+    "colEnd": 2,
+    "colStart": 0,
+    "kind": "Char",
+    "lineEnd": 1,
+    "lineStart": 1,
+    "value": "b",
+  },
+  Object {
+    "colEnd": 6,
+    "colStart": 4,
+    "kind": "Char",
+    "lineEnd": 1,
+    "lineStart": 1,
+    "value": "c",
+  },
+]
+`;
+
+exports[`tokenizer chars 3`] = `
+Array [
+  Object {
+    "colEnd": 5,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
+    "value": "hello",
+  },
+  Object {
+    "colEnd": 8,
+    "colStart": 6,
+    "kind": "Char",
+    "lineEnd": 1,
+    "lineStart": 1,
+    "value": "b",
+  },
+  Object {
+    "colEnd": 15,
+    "colStart": 10,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
+    "value": "world",
+  },
+  Object {
+    "colEnd": 18,
+    "colStart": 16,
+    "kind": "Char",
+    "lineEnd": 1,
+    "lineStart": 1,
+    "value": "c",
+  },
+]
+`;
+
+exports[`tokenizer chars 4`] = `
+Array [
+  Object {
+    "colEnd": 2,
+    "colStart": 0,
+    "kind": "Char",
+    "lineEnd": 1,
+    "lineStart": 1,
+    "value": "👀",
   },
 ]
 `;
@@ -1651,6 +1748,34 @@ Array [
   Object {
     "colEnd": 5,
     "colStart": 4,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
+    "value": "b",
+  },
+]
+`;
+
+exports[`tokenizer symbols 10`] = `
+Array [
+  Object {
+    "colEnd": 1,
+    "colStart": 0,
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
+    "value": "a",
+  },
+  Object {
+    "colEnd": 4,
+    "colStart": 2,
+    "kind": "ColonEquals",
+    "lineEnd": 1,
+    "lineStart": 1,
+  },
+  Object {
+    "colEnd": 6,
+    "colStart": 5,
     "kind": "Identifier",
     "lineEnd": 1,
     "lineStart": 1,

@@ -1,6 +1,6 @@
 import { ParseError } from './errors';
 
-export class Tokenizer {
+class Tokenizer {
   private readonly source: string;
   private readonly chars: string[];
   private readonly length: number;
@@ -91,6 +91,39 @@ export class Tokenizer {
 
     return {
       kind: 'Identifier',
+      value,
+      lineStart: this.line,
+      lineEnd: this.line,
+      colStart,
+      colEnd
+    };
+  }
+
+  private readChar(): Token {
+    if (!this.charIs("'")) return;
+
+    const colStart = this.index - this.lineStartIndex;
+
+    this.advance();
+
+    const value = this.char;
+
+    this.advance();
+
+    if (!this.charIs("'")) {
+      throw new ParseError(
+        this.line,
+        this.index - this.lineStartIndex,
+        "Expected closing ' after character"
+      );
+    }
+
+    const colEnd = this.index - this.lineStartIndex;
+
+    this.advance();
+
+    return {
+      kind: 'Char',
       value,
       lineStart: this.line,
       lineEnd: this.line,
@@ -259,7 +292,7 @@ export class Tokenizer {
 
         let innerToken;
 
-        while ((innerToken = this.nextToken())) {
+        while ((innerToken = this.readToken())) {
           if (Array.isArray(innerToken)) {
             stringTokens.push(...innerToken);
             continue;
@@ -381,7 +414,7 @@ export class Tokenizer {
     }
   }
 
-  private nextToken(): Token | Token[] {
+  private readToken(): Token | Token[] {
     if (this.eof) return;
 
     this.readWhitespace();
@@ -389,8 +422,10 @@ export class Tokenizer {
     return (
       this.readIdentifier() ||
       this.readNumber() ||
+      this.readChar() ||
       this.readString() ||
       this.readSymbol('Arrow', '-', '>') ||
+      this.readSymbol('ColonEquals', ':', '=') ||
       this.readSymbol('DoubleArrow', '=', '>') ||
       this.readSymbol('LeftBrace', '{') ||
       this.readSymbol('RightBrace', '}') ||
@@ -410,7 +445,7 @@ export class Tokenizer {
   tokenize(): Token[] {
     let token;
 
-    while ((token = this.nextToken())) {
+    while ((token = this.readToken())) {
       if (Array.isArray(token)) this.tokens.push(...token);
       else this.tokens.push(token);
     }
