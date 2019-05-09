@@ -2,6 +2,6 @@
   "compilerOptions": {
     "lib": ["es2015", "dom"],
     "outDir": "dist",
-    "noImplicitAny": true
+    "strict": true
   }
 }

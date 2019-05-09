@@ -711,7 +711,7 @@ Array [
   Object {
     "colEnd": 13,
     "colStart": 12,
-    "kind": "LeftParen",
+    "kind": "(",
     "lineEnd": 1,
     "lineStart": 1,
   },
@@ -726,7 +726,7 @@ Array [
   Object {
     "colEnd": 19,
     "colStart": 18,
-    "kind": "RightParen",
+    "kind": ")",
     "lineEnd": 1,
     "lineStart": 1,
   },
@@ -862,21 +862,21 @@ Array [
   Object {
     "colEnd": 10,
     "colStart": 9,
-    "kind": "LeftParen",
+    "kind": "(",
     "lineEnd": 1,
     "lineStart": 1,
   },
   Object {
     "colEnd": 11,
     "colStart": 10,
-    "kind": "LeftParen",
+    "kind": "(",
     "lineEnd": 1,
     "lineStart": 1,
   },
   Object {
     "colEnd": 12,
     "colStart": 11,
-    "kind": "LeftParen",
+    "kind": "(",
     "lineEnd": 1,
     "lineStart": 1,
   },
@@ -891,21 +891,21 @@ Array [
   Object {
     "colEnd": 17,
     "colStart": 16,
-    "kind": "RightParen",
+    "kind": ")",
     "lineEnd": 1,
     "lineStart": 1,
   },
   Object {
     "colEnd": 18,
     "colStart": 17,
-    "kind": "RightParen",
+    "kind": ")",
     "lineEnd": 1,
     "lineStart": 1,
   },
   Object {
     "colEnd": 19,
     "colStart": 18,
-    "kind": "RightParen",
+    "kind": ")",
     "lineEnd": 1,
     "lineStart": 1,
   },
@@ -1238,14 +1238,14 @@ Array [
   Object {
     "colEnd": 3,
     "colStart": 2,
-    "kind": "Equals",
+    "kind": "=",
     "lineEnd": 1,
     "lineStart": 1,
   },
   Object {
     "colEnd": 4,
     "colStart": 3,
-    "kind": "Equals",
+    "kind": "=",
     "lineEnd": 1,
     "lineStart": 1,
   },
@@ -1497,7 +1497,7 @@ Array [
   Object {
     "colEnd": 1,
     "colStart": 0,
-    "kind": "LeftBrace",
+    "kind": "{",
     "lineEnd": 1,
     "lineStart": 1,
   },
@@ -1512,7 +1512,7 @@ Array [
   Object {
     "colEnd": 7,
     "colStart": 6,
-    "kind": "RightBrace",
+    "kind": "}",
     "lineEnd": 1,
     "lineStart": 1,
   },
@@ -1524,7 +1524,7 @@ Array [
   Object {
     "colEnd": 1,
     "colStart": 0,
-    "kind": "LeftParen",
+    "kind": "(",
     "lineEnd": 1,
     "lineStart": 1,
   },
@@ -1539,7 +1539,7 @@ Array [
   Object {
     "colEnd": 7,
     "colStart": 6,
-    "kind": "RightParen",
+    "kind": ")",
     "lineEnd": 1,
     "lineStart": 1,
   },
@@ -1551,7 +1551,7 @@ Array [
   Object {
     "colEnd": 1,
     "colStart": 0,
-    "kind": "LeftBracket",
+    "kind": "[",
     "lineEnd": 1,
     "lineStart": 1,
   },
@@ -1566,7 +1566,7 @@ Array [
   Object {
     "colEnd": 7,
     "colStart": 6,
-    "kind": "RightBracket",
+    "kind": "]",
     "lineEnd": 1,
     "lineStart": 1,
   },
@@ -1586,7 +1586,7 @@ Array [
   Object {
     "colEnd": 5,
     "colStart": 4,
-    "kind": "Dot",
+    "kind": ".",
     "lineEnd": 1,
     "lineStart": 1,
   },
@@ -1614,7 +1614,7 @@ Array [
   Object {
     "colEnd": 2,
     "colStart": 1,
-    "kind": "Comma",
+    "kind": ",",
     "lineEnd": 1,
     "lineStart": 1,
   },
@@ -1629,7 +1629,7 @@ Array [
   Object {
     "colEnd": 5,
     "colStart": 4,
-    "kind": "Comma",
+    "kind": ",",
     "lineEnd": 1,
     "lineStart": 1,
   },
@@ -1657,7 +1657,7 @@ Array [
   Object {
     "colEnd": 4,
     "colStart": 2,
-    "kind": "DoubleArrow",
+    "kind": "=>",
     "lineEnd": 1,
     "lineStart": 1,
   },
@@ -1685,7 +1685,7 @@ Array [
   Object {
     "colEnd": 4,
     "colStart": 2,
-    "kind": "Arrow",
+    "kind": "->",
     "lineEnd": 1,
     "lineStart": 1,
   },
@@ -1713,7 +1713,7 @@ Array [
   Object {
     "colEnd": 3,
     "colStart": 2,
-    "kind": "Equals",
+    "kind": "=",
     "lineEnd": 1,
     "lineStart": 1,
   },
@@ -1741,7 +1741,7 @@ Array [
   Object {
     "colEnd": 3,
     "colStart": 2,
-    "kind": "Colon",
+    "kind": ":",
     "lineEnd": 1,
     "lineStart": 1,
   },
@@ -1769,7 +1769,7 @@ Array [
   Object {
     "colEnd": 4,
     "colStart": 2,
-    "kind": "ColonEquals",
+    "kind": ":=",
     "lineEnd": 1,
     "lineStart": 1,
   },
