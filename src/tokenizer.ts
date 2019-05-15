@@ -295,6 +295,7 @@ function readString(tok: Tokenizer): t.Token[] | void {
 
       stringTokens.push({
         kind: 'InterpolationStart',
+        value: '$(',
         lineStart: tok.line,
         lineEnd: tok.line,
         colStart: col,
@@ -319,6 +320,7 @@ function readString(tok: Tokenizer): t.Token[] | void {
           if (!parenStack.length) {
             stringTokens.push({
               kind: 'InterpolationEnd',
+              value: ')',
               lineStart: tok.line,
               lineEnd: tok.line,
               colStart: innerToken.colStart,
@@ -392,6 +394,7 @@ function readSymbol(
 
   return {
     kind,
+    value: kind,
     lineStart: tok.line,
     lineEnd: tok.line,
     colStart,

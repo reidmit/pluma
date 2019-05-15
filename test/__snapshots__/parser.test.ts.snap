@@ -1,0 +1,1088 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`parseExpression array expressions array with multiple elements 1`] = `
+Object {
+  "colEnd": 9,
+  "colStart": 0,
+  "comments": Array [],
+  "elements": Array [
+    Object {
+      "colEnd": 2,
+      "colStart": 1,
+      "comments": Array [],
+      "kind": "NumberLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "radix": 10,
+      "value": "1",
+    },
+    Object {
+      "colEnd": 5,
+      "colStart": 4,
+      "comments": Array [],
+      "kind": "NumberLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "radix": 10,
+      "value": "2",
+    },
+    Object {
+      "colEnd": 8,
+      "colStart": 7,
+      "comments": Array [],
+      "kind": "NumberLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "radix": 10,
+      "value": "3",
+    },
+  ],
+  "kind": "ArrayExpression",
+  "lineEnd": 1,
+  "lineStart": 1,
+}
+`;
+
+exports[`parseExpression array expressions array with one element 1`] = `
+Object {
+  "colEnd": 3,
+  "colStart": 0,
+  "comments": Array [],
+  "elements": Array [
+    Object {
+      "colEnd": 2,
+      "colStart": 1,
+      "comments": Array [],
+      "kind": "NumberLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "radix": 10,
+      "value": "1",
+    },
+  ],
+  "kind": "ArrayExpression",
+  "lineEnd": 1,
+  "lineStart": 1,
+}
+`;
+
+exports[`parseExpression array expressions array with trailing comma 1`] = `
+Object {
+  "colEnd": 11,
+  "colStart": 0,
+  "comments": Array [],
+  "elements": Array [
+    Object {
+      "colEnd": 2,
+      "colStart": 1,
+      "comments": Array [],
+      "kind": "NumberLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "radix": 10,
+      "value": "1",
+    },
+    Object {
+      "colEnd": 5,
+      "colStart": 4,
+      "comments": Array [],
+      "kind": "NumberLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "radix": 10,
+      "value": "2",
+    },
+    Object {
+      "colEnd": 8,
+      "colStart": 7,
+      "comments": Array [],
+      "kind": "NumberLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "radix": 10,
+      "value": "3",
+    },
+  ],
+  "kind": "ArrayExpression",
+  "lineEnd": 1,
+  "lineStart": 1,
+}
+`;
+
+exports[`parseExpression array expressions empty array 1`] = `
+Object {
+  "colEnd": 2,
+  "colStart": 0,
+  "comments": Array [],
+  "elements": Array [],
+  "kind": "ArrayExpression",
+  "lineEnd": 1,
+  "lineStart": 1,
+}
+`;
+
+exports[`parseExpression array expressions multi-line array with multiple elements 1`] = `
+Object {
+  "colEnd": 1,
+  "colStart": 0,
+  "comments": Array [],
+  "elements": Array [
+    Object {
+      "colEnd": 3,
+      "colStart": 2,
+      "comments": Array [],
+      "kind": "NumberLiteral",
+      "lineEnd": 2,
+      "lineStart": 2,
+      "radix": 10,
+      "value": "1",
+    },
+    Object {
+      "colEnd": 3,
+      "colStart": 2,
+      "comments": Array [],
+      "kind": "NumberLiteral",
+      "lineEnd": 3,
+      "lineStart": 3,
+      "radix": 10,
+      "value": "2",
+    },
+    Object {
+      "colEnd": 3,
+      "colStart": 2,
+      "comments": Array [],
+      "kind": "NumberLiteral",
+      "lineEnd": 4,
+      "lineStart": 4,
+      "radix": 10,
+      "value": "3",
+    },
+  ],
+  "kind": "ArrayExpression",
+  "lineEnd": 5,
+  "lineStart": 1,
+}
+`;
+
+exports[`parseExpression assignment expressions constant assignment 1`] = `
+Object {
+  "colEnd": 1,
+  "colStart": 0,
+  "comments": Array [],
+  "constant": true,
+  "kind": "AssignmentExpression",
+  "left": Object {
+    "colEnd": 3,
+    "colStart": 0,
+    "comments": Array [],
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
+    "value": "num",
+  },
+  "lineEnd": 1,
+  "lineStart": 1,
+  "right": Object {
+    "colEnd": 8,
+    "colStart": 6,
+    "comments": Array [],
+    "kind": "NumberLiteral",
+    "lineEnd": 1,
+    "lineStart": 1,
+    "radix": 10,
+    "value": "47",
+  },
+}
+`;
+
+exports[`parseExpression assignment expressions variable assignment 1`] = `
+Object {
+  "colEnd": 1,
+  "colStart": 0,
+  "comments": Array [],
+  "constant": false,
+  "kind": "AssignmentExpression",
+  "left": Object {
+    "colEnd": 3,
+    "colStart": 0,
+    "comments": Array [],
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
+    "value": "num",
+  },
+  "lineEnd": 1,
+  "lineStart": 1,
+  "right": Object {
+    "colEnd": 9,
+    "colStart": 7,
+    "comments": Array [],
+    "kind": "NumberLiteral",
+    "lineEnd": 1,
+    "lineStart": 1,
+    "radix": 10,
+    "value": "47",
+  },
+}
+`;
+
+exports[`parseExpression block expressions block with one param 1`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 13,
+      "colStart": 8,
+      "comments": Array [],
+      "kind": "StringExpression",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "parts": Array [
+        Object {
+          "colEnd": 13,
+          "colStart": 8,
+          "comments": Array [],
+          "kind": "StringLiteral",
+          "lineEnd": 1,
+          "lineStart": 1,
+          "value": "yep",
+        },
+      ],
+    },
+  ],
+  "colEnd": 15,
+  "colStart": 0,
+  "comments": Array [],
+  "kind": "BlockExpression",
+  "lineEnd": 1,
+  "lineStart": 1,
+  "params": Array [
+    Object {
+      "colEnd": 4,
+      "colStart": 2,
+      "comments": Array [],
+      "kind": "Identifier",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "value": "p1",
+    },
+  ],
+}
+`;
+
+exports[`parseExpression block expressions block with single expression body 1`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 5,
+      "colStart": 2,
+      "comments": Array [],
+      "kind": "Identifier",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "value": "wow",
+    },
+  ],
+  "colEnd": 7,
+  "colStart": 0,
+  "comments": Array [],
+  "kind": "BlockExpression",
+  "lineEnd": 1,
+  "lineStart": 1,
+  "params": Array [],
+}
+`;
+
+exports[`parseExpression block expressions block with two params 1`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 17,
+      "colStart": 12,
+      "comments": Array [],
+      "kind": "StringExpression",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "parts": Array [
+        Object {
+          "colEnd": 17,
+          "colStart": 12,
+          "comments": Array [],
+          "kind": "StringLiteral",
+          "lineEnd": 1,
+          "lineStart": 1,
+          "value": "yep",
+        },
+      ],
+    },
+  ],
+  "colEnd": 19,
+  "colStart": 0,
+  "comments": Array [],
+  "kind": "BlockExpression",
+  "lineEnd": 1,
+  "lineStart": 1,
+  "params": Array [
+    Object {
+      "colEnd": 4,
+      "colStart": 2,
+      "comments": Array [],
+      "kind": "Identifier",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "value": "p1",
+    },
+    Object {
+      "colEnd": 8,
+      "colStart": 6,
+      "comments": Array [],
+      "kind": "Identifier",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "value": "p2",
+    },
+  ],
+}
+`;
+
+exports[`parseExpression block expressions empty block 1`] = `
+Object {
+  "body": Array [],
+  "colEnd": 2,
+  "colStart": 0,
+  "comments": Array [],
+  "kind": "BlockExpression",
+  "lineEnd": 1,
+  "lineStart": 1,
+  "params": Array [],
+}
+`;
+
+exports[`parseExpression block expressions multi-line block with no params and multple expressions in body 1`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 5,
+      "colStart": 2,
+      "comments": Array [],
+      "kind": "Identifier",
+      "lineEnd": 2,
+      "lineStart": 2,
+      "value": "wow",
+    },
+    Object {
+      "colEnd": 7,
+      "colStart": 2,
+      "comments": Array [],
+      "kind": "StringExpression",
+      "lineEnd": 3,
+      "lineStart": 3,
+      "parts": Array [
+        Object {
+          "colEnd": 7,
+          "colStart": 2,
+          "comments": Array [],
+          "kind": "StringLiteral",
+          "lineEnd": 3,
+          "lineStart": 3,
+          "value": "yep",
+        },
+      ],
+    },
+    Object {
+      "colEnd": 4,
+      "colStart": 2,
+      "comments": Array [],
+      "kind": "NumberLiteral",
+      "lineEnd": 4,
+      "lineStart": 4,
+      "radix": 10,
+      "value": "47",
+    },
+  ],
+  "colEnd": 1,
+  "colStart": 0,
+  "comments": Array [],
+  "kind": "BlockExpression",
+  "lineEnd": 5,
+  "lineStart": 1,
+  "params": Array [],
+}
+`;
+
+exports[`parseExpression block expressions multi-line block with params and multple expressions in body 1`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 5,
+      "colStart": 2,
+      "comments": Array [],
+      "kind": "Identifier",
+      "lineEnd": 2,
+      "lineStart": 2,
+      "value": "wow",
+    },
+    Object {
+      "colEnd": 7,
+      "colStart": 2,
+      "comments": Array [],
+      "kind": "StringExpression",
+      "lineEnd": 3,
+      "lineStart": 3,
+      "parts": Array [
+        Object {
+          "colEnd": 7,
+          "colStart": 2,
+          "comments": Array [],
+          "kind": "StringLiteral",
+          "lineEnd": 3,
+          "lineStart": 3,
+          "value": "yep",
+        },
+      ],
+    },
+    Object {
+      "colEnd": 4,
+      "colStart": 2,
+      "comments": Array [],
+      "kind": "NumberLiteral",
+      "lineEnd": 4,
+      "lineStart": 4,
+      "radix": 10,
+      "value": "47",
+    },
+  ],
+  "colEnd": 1,
+  "colStart": 0,
+  "comments": Array [],
+  "kind": "BlockExpression",
+  "lineEnd": 5,
+  "lineStart": 1,
+  "params": Array [
+    Object {
+      "colEnd": 4,
+      "colStart": 2,
+      "comments": Array [],
+      "kind": "Identifier",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "value": "p1",
+    },
+    Object {
+      "colEnd": 8,
+      "colStart": 6,
+      "comments": Array [],
+      "kind": "Identifier",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "value": "p2",
+    },
+  ],
+}
+`;
+
+exports[`parseExpression call expressions call with multiple arguments 1`] = `
+Object {
+  "args": Array [
+    Object {
+      "colEnd": 16,
+      "colStart": 11,
+      "comments": Array [],
+      "kind": "StringExpression",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "parts": Array [
+        Object {
+          "colEnd": 16,
+          "colStart": 11,
+          "comments": Array [],
+          "kind": "StringLiteral",
+          "lineEnd": 1,
+          "lineStart": 1,
+          "value": "wow",
+        },
+      ],
+    },
+    Object {
+      "colEnd": 23,
+      "colStart": 18,
+      "comments": Array [],
+      "kind": "Identifier",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "value": "great",
+    },
+    Object {
+      "colEnd": 27,
+      "colStart": 25,
+      "comments": Array [],
+      "kind": "NumberLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "radix": 10,
+      "value": "47",
+    },
+    Object {
+      "colEnd": 33,
+      "colStart": 29,
+      "comments": Array [],
+      "kind": "BooleanLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "value": "true",
+    },
+  ],
+  "colEnd": 34,
+  "colStart": 0,
+  "comments": Array [],
+  "id": Object {
+    "colEnd": 10,
+    "colStart": 0,
+    "comments": Array [],
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
+    "value": "myFunction",
+  },
+  "kind": "CallExpression",
+  "lineEnd": 1,
+  "lineStart": 1,
+}
+`;
+
+exports[`parseExpression call expressions call with one argument 1`] = `
+Object {
+  "args": Array [
+    Object {
+      "colEnd": 13,
+      "colStart": 11,
+      "comments": Array [],
+      "kind": "NumberLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "radix": 10,
+      "value": "47",
+    },
+  ],
+  "colEnd": 14,
+  "colStart": 0,
+  "comments": Array [],
+  "id": Object {
+    "colEnd": 10,
+    "colStart": 0,
+    "comments": Array [],
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
+    "value": "myFunction",
+  },
+  "kind": "CallExpression",
+  "lineEnd": 1,
+  "lineStart": 1,
+}
+`;
+
+exports[`parseExpression call expressions call without arguments 1`] = `
+Object {
+  "args": Array [],
+  "colEnd": 12,
+  "colStart": 0,
+  "comments": Array [],
+  "id": Object {
+    "colEnd": 10,
+    "colStart": 0,
+    "comments": Array [],
+    "kind": "Identifier",
+    "lineEnd": 1,
+    "lineStart": 1,
+    "value": "myFunction",
+  },
+  "kind": "CallExpression",
+  "lineEnd": 1,
+  "lineStart": 1,
+}
+`;
+
+exports[`parseExpression simple expressions binary number literal 1`] = `
+Object {
+  "colEnd": 8,
+  "colStart": 0,
+  "comments": Array [],
+  "kind": "NumberLiteral",
+  "lineEnd": 1,
+  "lineStart": 1,
+  "radix": 2,
+  "value": "0b101011",
+}
+`;
+
+exports[`parseExpression simple expressions boolean literals 1`] = `
+Object {
+  "colEnd": 4,
+  "colStart": 0,
+  "comments": Array [],
+  "kind": "BooleanLiteral",
+  "lineEnd": 1,
+  "lineStart": 1,
+  "value": "true",
+}
+`;
+
+exports[`parseExpression simple expressions boolean literals 2`] = `
+Object {
+  "colEnd": 5,
+  "colStart": 0,
+  "comments": Array [],
+  "kind": "BooleanLiteral",
+  "lineEnd": 1,
+  "lineStart": 1,
+  "value": "false",
+}
+`;
+
+exports[`parseExpression simple expressions hex number literal 1`] = `
+Object {
+  "colEnd": 8,
+  "colStart": 0,
+  "comments": Array [],
+  "kind": "NumberLiteral",
+  "lineEnd": 1,
+  "lineStart": 1,
+  "radix": 16,
+  "value": "0xfacade",
+}
+`;
+
+exports[`parseExpression simple expressions identifiers 1`] = `
+Object {
+  "colEnd": 3,
+  "colStart": 0,
+  "comments": Array [],
+  "kind": "Identifier",
+  "lineEnd": 1,
+  "lineStart": 1,
+  "value": "wow",
+}
+`;
+
+exports[`parseExpression simple expressions number literal 1`] = `
+Object {
+  "colEnd": 2,
+  "colStart": 0,
+  "comments": Array [],
+  "kind": "NumberLiteral",
+  "lineEnd": 1,
+  "lineStart": 1,
+  "radix": 10,
+  "value": "47",
+}
+`;
+
+exports[`parseExpression simple expressions number literal with decimal 1`] = `
+Object {
+  "colEnd": 6,
+  "colStart": 0,
+  "comments": Array [],
+  "kind": "NumberLiteral",
+  "lineEnd": 1,
+  "lineStart": 1,
+  "radix": 10,
+  "value": "47.123",
+}
+`;
+
+exports[`parseExpression simple expressions octal number literal 1`] = `
+Object {
+  "colEnd": 6,
+  "colStart": 0,
+  "comments": Array [],
+  "kind": "NumberLiteral",
+  "lineEnd": 1,
+  "lineStart": 1,
+  "radix": 8,
+  "value": "0o1230",
+}
+`;
+
+exports[`parseExpression string expressions multiple interpolations 1`] = `
+Object {
+  "colEnd": 33,
+  "colStart": 0,
+  "comments": Array [],
+  "kind": "StringExpression",
+  "lineEnd": 1,
+  "lineStart": 1,
+  "parts": Array [
+    Object {
+      "colEnd": 7,
+      "colStart": 0,
+      "comments": Array [],
+      "kind": "StringLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "value": "hello ",
+    },
+    Object {
+      "colEnd": 18,
+      "colStart": 9,
+      "comments": Array [],
+      "kind": "Identifier",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "value": "firstName",
+    },
+    Object {
+      "colEnd": 20,
+      "colStart": 0,
+      "comments": Array [],
+      "kind": "StringLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "value": " ",
+    },
+    Object {
+      "colEnd": 30,
+      "colStart": 22,
+      "comments": Array [],
+      "kind": "Identifier",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "value": "lastName",
+    },
+    Object {
+      "colEnd": 33,
+      "colStart": 0,
+      "comments": Array [],
+      "kind": "StringLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "value": "!",
+    },
+  ],
+}
+`;
+
+exports[`parseExpression string expressions nested interpolations 1`] = `
+Object {
+  "colEnd": 35,
+  "colStart": 0,
+  "comments": Array [],
+  "kind": "StringExpression",
+  "lineEnd": 1,
+  "lineStart": 1,
+  "parts": Array [
+    Object {
+      "colEnd": 9,
+      "colStart": 0,
+      "comments": Array [],
+      "kind": "StringLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "value": "this is ",
+    },
+    Object {
+      "colEnd": 33,
+      "colStart": 11,
+      "comments": Array [],
+      "kind": "StringExpression",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "parts": Array [
+        Object {
+          "colEnd": 22,
+          "colStart": 11,
+          "comments": Array [],
+          "kind": "StringLiteral",
+          "lineEnd": 1,
+          "lineStart": 1,
+          "value": "weird but ",
+        },
+        Object {
+          "colEnd": 31,
+          "colStart": 24,
+          "comments": Array [],
+          "kind": "StringExpression",
+          "lineEnd": 1,
+          "lineStart": 1,
+          "parts": Array [
+            Object {
+              "colEnd": 31,
+              "colStart": 24,
+              "comments": Array [],
+              "kind": "StringLiteral",
+              "lineEnd": 1,
+              "lineStart": 1,
+              "value": "valid",
+            },
+          ],
+        },
+        Object {
+          "colEnd": 33,
+          "colStart": 11,
+          "comments": Array [],
+          "kind": "StringLiteral",
+          "lineEnd": 1,
+          "lineStart": 1,
+          "value": "",
+        },
+      ],
+    },
+    Object {
+      "colEnd": 35,
+      "colStart": 0,
+      "comments": Array [],
+      "kind": "StringLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "value": "",
+    },
+  ],
+}
+`;
+
+exports[`parseExpression string expressions no interpolations 1`] = `
+Object {
+  "colEnd": 8,
+  "colStart": 0,
+  "comments": Array [],
+  "kind": "StringExpression",
+  "lineEnd": 1,
+  "lineStart": 1,
+  "parts": Array [
+    Object {
+      "colEnd": 8,
+      "colStart": 0,
+      "comments": Array [],
+      "kind": "StringLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "value": "hello!",
+    },
+  ],
+}
+`;
+
+exports[`parseExpression string expressions no interpolations, multi-line 1`] = `
+Object {
+  "colEnd": 7,
+  "colStart": 0,
+  "comments": Array [],
+  "kind": "StringExpression",
+  "lineEnd": 3,
+  "lineStart": 1,
+  "parts": Array [
+    Object {
+      "colEnd": 7,
+      "colStart": 0,
+      "comments": Array [],
+      "kind": "StringLiteral",
+      "lineEnd": 3,
+      "lineStart": 1,
+      "value": "hello
+
+world!",
+    },
+  ],
+}
+`;
+
+exports[`parseExpression string expressions single interpolation 1`] = `
+Object {
+  "colEnd": 16,
+  "colStart": 0,
+  "comments": Array [],
+  "kind": "StringExpression",
+  "lineEnd": 1,
+  "lineStart": 1,
+  "parts": Array [
+    Object {
+      "colEnd": 7,
+      "colStart": 0,
+      "comments": Array [],
+      "kind": "StringLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "value": "hello ",
+    },
+    Object {
+      "colEnd": 13,
+      "colStart": 9,
+      "comments": Array [],
+      "kind": "Identifier",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "value": "name",
+    },
+    Object {
+      "colEnd": 16,
+      "colStart": 0,
+      "comments": Array [],
+      "kind": "StringLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "value": "!",
+    },
+  ],
+}
+`;
+
+exports[`parseModule comments comment on line before expression 1`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 2,
+      "colStart": 0,
+      "comments": Array [
+        " a good number",
+      ],
+      "constant": true,
+      "kind": "AssignmentExpression",
+      "left": Object {
+        "colEnd": 3,
+        "colStart": 0,
+        "comments": Array [
+          " a good number",
+        ],
+        "kind": "Identifier",
+        "lineEnd": 2,
+        "lineStart": 2,
+        "value": "num",
+      },
+      "lineEnd": 2,
+      "lineStart": 2,
+      "right": Object {
+        "colEnd": 8,
+        "colStart": 6,
+        "comments": Array [
+          " a good number",
+        ],
+        "kind": "NumberLiteral",
+        "lineEnd": 2,
+        "lineStart": 2,
+        "radix": 10,
+        "value": "47",
+      },
+    },
+  ],
+  "colEnd": 2,
+  "colStart": 0,
+  "comments": Array [],
+  "kind": "Module",
+  "lineEnd": 2,
+  "lineStart": 1,
+}
+`;
+
+exports[`parseModule comments multiple comments, nothing else 1`] = `
+Object {
+  "body": Array [],
+  "colEnd": 0,
+  "colStart": 0,
+  "comments": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 1,
+}
+`;
+
+exports[`parseModule comments only one comment 1`] = `
+Object {
+  "body": Array [],
+  "colEnd": 0,
+  "colStart": 0,
+  "comments": Array [],
+  "kind": "Module",
+  "lineEnd": 0,
+  "lineStart": 1,
+}
+`;
+
+exports[`parseModule comments two comments on lines before expression 1`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 3,
+      "colStart": 0,
+      "comments": Array [],
+      "constant": true,
+      "kind": "AssignmentExpression",
+      "left": Object {
+        "colEnd": 3,
+        "colStart": 0,
+        "comments": Array [
+          " line one",
+          " line two",
+        ],
+        "kind": "Identifier",
+        "lineEnd": 3,
+        "lineStart": 3,
+        "value": "num",
+      },
+      "lineEnd": 3,
+      "lineStart": 3,
+      "right": Object {
+        "colEnd": 8,
+        "colStart": 6,
+        "comments": Array [],
+        "kind": "NumberLiteral",
+        "lineEnd": 3,
+        "lineStart": 3,
+        "radix": 10,
+        "value": "47",
+      },
+    },
+  ],
+  "colEnd": 3,
+  "colStart": 0,
+  "comments": Array [],
+  "kind": "Module",
+  "lineEnd": 3,
+  "lineStart": 1,
+}
+`;
+
+exports[`parseModule comments two comments with blank line in between before expression 1`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 4,
+      "colStart": 0,
+      "comments": Array [
+        " line one",
+      ],
+      "constant": true,
+      "kind": "AssignmentExpression",
+      "left": Object {
+        "colEnd": 3,
+        "colStart": 0,
+        "comments": Array [
+          " line one",
+        ],
+        "kind": "Identifier",
+        "lineEnd": 4,
+        "lineStart": 4,
+        "value": "num",
+      },
+      "lineEnd": 4,
+      "lineStart": 4,
+      "right": Object {
+        "colEnd": 8,
+        "colStart": 6,
+        "comments": Array [
+          " line one",
+        ],
+        "kind": "NumberLiteral",
+        "lineEnd": 4,
+        "lineStart": 4,
+        "radix": 10,
+        "value": "47",
+      },
+    },
+  ],
+  "colEnd": 4,
+  "colStart": 0,
+  "comments": Array [],
+  "kind": "Module",
+  "lineEnd": 4,
+  "lineStart": 1,
+}
+`;

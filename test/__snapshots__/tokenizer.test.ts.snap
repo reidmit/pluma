@@ -541,6 +541,7 @@ Array [
     "kind": "InterpolationStart",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": "$(",
   },
   Object {
     "colEnd": 13,
@@ -556,6 +557,7 @@ Array [
     "kind": "InterpolationEnd",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": ")",
   },
   Object {
     "colEnd": 15,
@@ -597,6 +599,7 @@ Array [
     "kind": "InterpolationStart",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": "$(",
   },
   Object {
     "colEnd": 11,
@@ -620,6 +623,7 @@ Array [
     "kind": "InterpolationEnd",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": ")",
   },
   Object {
     "colEnd": 19,
@@ -648,6 +652,7 @@ Array [
     "kind": "InterpolationStart",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": "$(",
   },
   Object {
     "colEnd": 11,
@@ -671,6 +676,7 @@ Array [
     "kind": "InterpolationEnd",
     "lineEnd": 3,
     "lineStart": 3,
+    "value": ")",
   },
   Object {
     "colEnd": 13,
@@ -699,6 +705,7 @@ Array [
     "kind": "InterpolationStart",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": "$(",
   },
   Object {
     "colEnd": 11,
@@ -714,6 +721,7 @@ Array [
     "kind": "(",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": "(",
   },
   Object {
     "colEnd": 18,
@@ -729,6 +737,7 @@ Array [
     "kind": ")",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": ")",
   },
   Object {
     "colEnd": 20,
@@ -736,6 +745,7 @@ Array [
     "kind": "InterpolationEnd",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": ")",
   },
   Object {
     "colEnd": 21,
@@ -764,6 +774,7 @@ Array [
     "kind": "InterpolationStart",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": "$(",
   },
   Object {
     "colEnd": 25,
@@ -779,6 +790,7 @@ Array [
     "kind": "InterpolationEnd",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": ")",
   },
   Object {
     "colEnd": 27,
@@ -807,6 +819,7 @@ Array [
     "kind": "InterpolationStart",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": "$(",
   },
   Object {
     "colEnd": 12,
@@ -830,6 +843,7 @@ Array [
     "kind": "InterpolationEnd",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": ")",
   },
   Object {
     "colEnd": 31,
@@ -858,6 +872,7 @@ Array [
     "kind": "InterpolationStart",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": "$(",
   },
   Object {
     "colEnd": 10,
@@ -865,6 +880,7 @@ Array [
     "kind": "(",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": "(",
   },
   Object {
     "colEnd": 11,
@@ -872,6 +888,7 @@ Array [
     "kind": "(",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": "(",
   },
   Object {
     "colEnd": 12,
@@ -879,6 +896,7 @@ Array [
     "kind": "(",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": "(",
   },
   Object {
     "colEnd": 16,
@@ -894,6 +912,7 @@ Array [
     "kind": ")",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": ")",
   },
   Object {
     "colEnd": 18,
@@ -901,6 +920,7 @@ Array [
     "kind": ")",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": ")",
   },
   Object {
     "colEnd": 19,
@@ -908,6 +928,7 @@ Array [
     "kind": ")",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": ")",
   },
   Object {
     "colEnd": 20,
@@ -915,6 +936,7 @@ Array [
     "kind": "InterpolationEnd",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": ")",
   },
   Object {
     "colEnd": 21,
@@ -943,6 +965,7 @@ Array [
     "kind": "InterpolationStart",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": "$(",
   },
   Object {
     "colEnd": 18,
@@ -958,6 +981,7 @@ Array [
     "kind": "InterpolationStart",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": "$(",
   },
   Object {
     "colEnd": 33,
@@ -973,6 +997,7 @@ Array [
     "kind": "InterpolationEnd",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": ")",
   },
   Object {
     "colEnd": 41,
@@ -988,6 +1013,7 @@ Array [
     "kind": "InterpolationEnd",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": ")",
   },
   Object {
     "colEnd": 43,
@@ -1241,6 +1267,7 @@ Array [
     "kind": "=",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": "=",
   },
   Object {
     "colEnd": 4,
@@ -1248,6 +1275,7 @@ Array [
     "kind": "=",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": "=",
   },
   Object {
     "colEnd": 6,
@@ -1500,6 +1528,7 @@ Array [
     "kind": "{",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": "{",
   },
   Object {
     "colEnd": 5,
@@ -1515,6 +1544,7 @@ Array [
     "kind": "}",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": "}",
   },
 ]
 `;
@@ -1527,6 +1557,7 @@ Array [
     "kind": "(",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": "(",
   },
   Object {
     "colEnd": 5,
@@ -1542,6 +1573,7 @@ Array [
     "kind": ")",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": ")",
   },
 ]
 `;
@@ -1554,6 +1586,7 @@ Array [
     "kind": "[",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": "[",
   },
   Object {
     "colEnd": 5,
@@ -1569,6 +1602,7 @@ Array [
     "kind": "]",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": "]",
   },
 ]
 `;
@@ -1589,6 +1623,7 @@ Array [
     "kind": ".",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": ".",
   },
   Object {
     "colEnd": 9,
@@ -1617,6 +1652,7 @@ Array [
     "kind": ",",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": ",",
   },
   Object {
     "colEnd": 4,
@@ -1632,6 +1668,7 @@ Array [
     "kind": ",",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": ",",
   },
   Object {
     "colEnd": 7,
@@ -1660,6 +1697,7 @@ Array [
     "kind": "=>",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": "=>",
   },
   Object {
     "colEnd": 6,
@@ -1688,6 +1726,7 @@ Array [
     "kind": "->",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": "->",
   },
   Object {
     "colEnd": 6,
@@ -1716,6 +1755,7 @@ Array [
     "kind": "=",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": "=",
   },
   Object {
     "colEnd": 5,
@@ -1744,6 +1784,7 @@ Array [
     "kind": ":",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": ":",
   },
   Object {
     "colEnd": 5,
@@ -1772,6 +1813,7 @@ Array [
     "kind": ":=",
     "lineEnd": 1,
     "lineStart": 1,
+    "value": ":=",
   },
   Object {
     "colEnd": 6,
