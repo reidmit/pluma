@@ -14,6 +14,7 @@ Object {
       "lineEnd": 1,
       "lineStart": 1,
       "radix": 10,
+      "type": null,
       "value": "1",
     },
     Object {
@@ -24,6 +25,7 @@ Object {
       "lineEnd": 1,
       "lineStart": 1,
       "radix": 10,
+      "type": null,
       "value": "2",
     },
     Object {
@@ -34,12 +36,14 @@ Object {
       "lineEnd": 1,
       "lineStart": 1,
       "radix": 10,
+      "type": null,
       "value": "3",
     },
   ],
   "kind": "ArrayExpression",
   "lineEnd": 1,
   "lineStart": 1,
+  "type": null,
 }
 `;
 
@@ -57,12 +61,14 @@ Object {
       "lineEnd": 1,
       "lineStart": 1,
       "radix": 10,
+      "type": null,
       "value": "1",
     },
   ],
   "kind": "ArrayExpression",
   "lineEnd": 1,
   "lineStart": 1,
+  "type": null,
 }
 `;
 
@@ -80,6 +86,7 @@ Object {
       "lineEnd": 1,
       "lineStart": 1,
       "radix": 10,
+      "type": null,
       "value": "1",
     },
     Object {
@@ -90,6 +97,7 @@ Object {
       "lineEnd": 1,
       "lineStart": 1,
       "radix": 10,
+      "type": null,
       "value": "2",
     },
     Object {
@@ -100,12 +108,14 @@ Object {
       "lineEnd": 1,
       "lineStart": 1,
       "radix": 10,
+      "type": null,
       "value": "3",
     },
   ],
   "kind": "ArrayExpression",
   "lineEnd": 1,
   "lineStart": 1,
+  "type": null,
 }
 `;
 
@@ -118,6 +128,7 @@ Object {
   "kind": "ArrayExpression",
   "lineEnd": 1,
   "lineStart": 1,
+  "type": null,
 }
 `;
 
@@ -135,6 +146,7 @@ Object {
       "lineEnd": 2,
       "lineStart": 2,
       "radix": 10,
+      "type": null,
       "value": "1",
     },
     Object {
@@ -145,6 +157,7 @@ Object {
       "lineEnd": 3,
       "lineStart": 3,
       "radix": 10,
+      "type": null,
       "value": "2",
     },
     Object {
@@ -155,12 +168,14 @@ Object {
       "lineEnd": 4,
       "lineStart": 4,
       "radix": 10,
+      "type": null,
       "value": "3",
     },
   ],
   "kind": "ArrayExpression",
   "lineEnd": 5,
   "lineStart": 1,
+  "type": null,
 }
 `;
 
@@ -178,6 +193,7 @@ Object {
     "kind": "Identifier",
     "lineEnd": 1,
     "lineStart": 1,
+    "type": null,
     "value": "num",
   },
   "lineEnd": 1,
@@ -190,8 +206,10 @@ Object {
     "lineEnd": 1,
     "lineStart": 1,
     "radix": 10,
+    "type": null,
     "value": "47",
   },
+  "type": null,
 }
 `;
 
@@ -209,6 +227,7 @@ Object {
     "kind": "Identifier",
     "lineEnd": 1,
     "lineStart": 1,
+    "type": null,
     "value": "num",
   },
   "lineEnd": 1,
@@ -221,8 +240,10 @@ Object {
     "lineEnd": 1,
     "lineStart": 1,
     "radix": 10,
+    "type": null,
     "value": "47",
   },
+  "type": null,
 }
 `;
 
@@ -244,9 +265,11 @@ Object {
           "kind": "StringLiteral",
           "lineEnd": 1,
           "lineStart": 1,
+          "type": null,
           "value": "yep",
         },
       ],
+      "type": null,
     },
   ],
   "colEnd": 15,
@@ -263,9 +286,11 @@ Object {
       "kind": "Identifier",
       "lineEnd": 1,
       "lineStart": 1,
+      "type": null,
       "value": "p1",
     },
   ],
+  "type": null,
 }
 `;
 
@@ -279,6 +304,7 @@ Object {
       "kind": "Identifier",
       "lineEnd": 1,
       "lineStart": 1,
+      "type": null,
       "value": "wow",
     },
   ],
@@ -289,6 +315,7 @@ Object {
   "lineEnd": 1,
   "lineStart": 1,
   "params": Array [],
+  "type": null,
 }
 `;
 
@@ -310,9 +337,11 @@ Object {
           "kind": "StringLiteral",
           "lineEnd": 1,
           "lineStart": 1,
+          "type": null,
           "value": "yep",
         },
       ],
+      "type": null,
     },
   ],
   "colEnd": 19,
@@ -329,6 +358,7 @@ Object {
       "kind": "Identifier",
       "lineEnd": 1,
       "lineStart": 1,
+      "type": null,
       "value": "p1",
     },
     Object {
@@ -338,9 +368,11 @@ Object {
       "kind": "Identifier",
       "lineEnd": 1,
       "lineStart": 1,
+      "type": null,
       "value": "p2",
     },
   ],
+  "type": null,
 }
 `;
 
@@ -354,6 +386,7 @@ Object {
   "lineEnd": 1,
   "lineStart": 1,
   "params": Array [],
+  "type": null,
 }
 `;
 
@@ -367,6 +400,7 @@ Object {
       "kind": "Identifier",
       "lineEnd": 2,
       "lineStart": 2,
+      "type": null,
       "value": "wow",
     },
     Object {
@@ -384,9 +418,11 @@ Object {
           "kind": "StringLiteral",
           "lineEnd": 3,
           "lineStart": 3,
+          "type": null,
           "value": "yep",
         },
       ],
+      "type": null,
     },
     Object {
       "colEnd": 4,
@@ -396,6 +432,7 @@ Object {
       "lineEnd": 4,
       "lineStart": 4,
       "radix": 10,
+      "type": null,
       "value": "47",
     },
   ],
@@ -406,6 +443,7 @@ Object {
   "lineEnd": 5,
   "lineStart": 1,
   "params": Array [],
+  "type": null,
 }
 `;
 
@@ -419,6 +457,7 @@ Object {
       "kind": "Identifier",
       "lineEnd": 2,
       "lineStart": 2,
+      "type": null,
       "value": "wow",
     },
     Object {
@@ -436,9 +475,11 @@ Object {
           "kind": "StringLiteral",
           "lineEnd": 3,
           "lineStart": 3,
+          "type": null,
           "value": "yep",
         },
       ],
+      "type": null,
     },
     Object {
       "colEnd": 4,
@@ -448,6 +489,7 @@ Object {
       "lineEnd": 4,
       "lineStart": 4,
       "radix": 10,
+      "type": null,
       "value": "47",
     },
   ],
@@ -465,6 +507,7 @@ Object {
       "kind": "Identifier",
       "lineEnd": 1,
       "lineStart": 1,
+      "type": null,
       "value": "p1",
     },
     Object {
@@ -474,9 +517,11 @@ Object {
       "kind": "Identifier",
       "lineEnd": 1,
       "lineStart": 1,
+      "type": null,
       "value": "p2",
     },
   ],
+  "type": null,
 }
 `;
 
@@ -498,9 +543,11 @@ Object {
           "kind": "StringLiteral",
           "lineEnd": 1,
           "lineStart": 1,
+          "type": null,
           "value": "wow",
         },
       ],
+      "type": null,
     },
     Object {
       "colEnd": 23,
@@ -509,6 +556,7 @@ Object {
       "kind": "Identifier",
       "lineEnd": 1,
       "lineStart": 1,
+      "type": null,
       "value": "great",
     },
     Object {
@@ -519,6 +567,7 @@ Object {
       "lineEnd": 1,
       "lineStart": 1,
       "radix": 10,
+      "type": null,
       "value": "47",
     },
     Object {
@@ -528,6 +577,7 @@ Object {
       "kind": "BooleanLiteral",
       "lineEnd": 1,
       "lineStart": 1,
+      "type": null,
       "value": "true",
     },
   ],
@@ -541,11 +591,13 @@ Object {
     "kind": "Identifier",
     "lineEnd": 1,
     "lineStart": 1,
+    "type": null,
     "value": "myFunction",
   },
   "kind": "CallExpression",
   "lineEnd": 1,
   "lineStart": 1,
+  "type": null,
 }
 `;
 
@@ -560,6 +612,7 @@ Object {
       "lineEnd": 1,
       "lineStart": 1,
       "radix": 10,
+      "type": null,
       "value": "47",
     },
   ],
@@ -573,11 +626,13 @@ Object {
     "kind": "Identifier",
     "lineEnd": 1,
     "lineStart": 1,
+    "type": null,
     "value": "myFunction",
   },
   "kind": "CallExpression",
   "lineEnd": 1,
   "lineStart": 1,
+  "type": null,
 }
 `;
 
@@ -594,11 +649,13 @@ Object {
     "kind": "Identifier",
     "lineEnd": 1,
     "lineStart": 1,
+    "type": null,
     "value": "myFunction",
   },
   "kind": "CallExpression",
   "lineEnd": 1,
   "lineStart": 1,
+  "type": null,
 }
 `;
 
@@ -611,6 +668,7 @@ Object {
   "lineEnd": 1,
   "lineStart": 1,
   "radix": 2,
+  "type": null,
   "value": "0b101011",
 }
 `;
@@ -623,6 +681,7 @@ Object {
   "kind": "BooleanLiteral",
   "lineEnd": 1,
   "lineStart": 1,
+  "type": null,
   "value": "true",
 }
 `;
@@ -635,6 +694,7 @@ Object {
   "kind": "BooleanLiteral",
   "lineEnd": 1,
   "lineStart": 1,
+  "type": null,
   "value": "false",
 }
 `;
@@ -648,6 +708,7 @@ Object {
   "lineEnd": 1,
   "lineStart": 1,
   "radix": 16,
+  "type": null,
   "value": "0xfacade",
 }
 `;
@@ -660,6 +721,7 @@ Object {
   "kind": "Identifier",
   "lineEnd": 1,
   "lineStart": 1,
+  "type": null,
   "value": "wow",
 }
 `;
@@ -673,6 +735,7 @@ Object {
   "lineEnd": 1,
   "lineStart": 1,
   "radix": 10,
+  "type": null,
   "value": "47",
 }
 `;
@@ -686,6 +749,7 @@ Object {
   "lineEnd": 1,
   "lineStart": 1,
   "radix": 10,
+  "type": null,
   "value": "47.123",
 }
 `;
@@ -699,6 +763,7 @@ Object {
   "lineEnd": 1,
   "lineStart": 1,
   "radix": 8,
+  "type": null,
   "value": "0o1230",
 }
 `;
@@ -719,6 +784,7 @@ Object {
       "kind": "StringLiteral",
       "lineEnd": 1,
       "lineStart": 1,
+      "type": null,
       "value": "hello ",
     },
     Object {
@@ -728,6 +794,7 @@ Object {
       "kind": "Identifier",
       "lineEnd": 1,
       "lineStart": 1,
+      "type": null,
       "value": "firstName",
     },
     Object {
@@ -737,6 +804,7 @@ Object {
       "kind": "StringLiteral",
       "lineEnd": 1,
       "lineStart": 1,
+      "type": null,
       "value": " ",
     },
     Object {
@@ -746,6 +814,7 @@ Object {
       "kind": "Identifier",
       "lineEnd": 1,
       "lineStart": 1,
+      "type": null,
       "value": "lastName",
     },
     Object {
@@ -755,9 +824,11 @@ Object {
       "kind": "StringLiteral",
       "lineEnd": 1,
       "lineStart": 1,
+      "type": null,
       "value": "!",
     },
   ],
+  "type": null,
 }
 `;
 
@@ -777,6 +848,7 @@ Object {
       "kind": "StringLiteral",
       "lineEnd": 1,
       "lineStart": 1,
+      "type": null,
       "value": "this is ",
     },
     Object {
@@ -794,6 +866,7 @@ Object {
           "kind": "StringLiteral",
           "lineEnd": 1,
           "lineStart": 1,
+          "type": null,
           "value": "weird but ",
         },
         Object {
@@ -811,9 +884,11 @@ Object {
               "kind": "StringLiteral",
               "lineEnd": 1,
               "lineStart": 1,
+              "type": null,
               "value": "valid",
             },
           ],
+          "type": null,
         },
         Object {
           "colEnd": 33,
@@ -822,9 +897,11 @@ Object {
           "kind": "StringLiteral",
           "lineEnd": 1,
           "lineStart": 1,
+          "type": null,
           "value": "",
         },
       ],
+      "type": null,
     },
     Object {
       "colEnd": 35,
@@ -833,9 +910,11 @@ Object {
       "kind": "StringLiteral",
       "lineEnd": 1,
       "lineStart": 1,
+      "type": null,
       "value": "",
     },
   ],
+  "type": null,
 }
 `;
 
@@ -855,9 +934,11 @@ Object {
       "kind": "StringLiteral",
       "lineEnd": 1,
       "lineStart": 1,
+      "type": null,
       "value": "hello!",
     },
   ],
+  "type": null,
 }
 `;
 
@@ -877,11 +958,13 @@ Object {
       "kind": "StringLiteral",
       "lineEnd": 3,
       "lineStart": 1,
+      "type": null,
       "value": "hello
 
 world!",
     },
   ],
+  "type": null,
 }
 `;
 
@@ -901,6 +984,7 @@ Object {
       "kind": "StringLiteral",
       "lineEnd": 1,
       "lineStart": 1,
+      "type": null,
       "value": "hello ",
     },
     Object {
@@ -910,6 +994,7 @@ Object {
       "kind": "Identifier",
       "lineEnd": 1,
       "lineStart": 1,
+      "type": null,
       "value": "name",
     },
     Object {
@@ -919,9 +1004,11 @@ Object {
       "kind": "StringLiteral",
       "lineEnd": 1,
       "lineStart": 1,
+      "type": null,
       "value": "!",
     },
   ],
+  "type": null,
 }
 `;
 
@@ -945,6 +1032,7 @@ Object {
         "kind": "Identifier",
         "lineEnd": 2,
         "lineStart": 2,
+        "type": null,
         "value": "num",
       },
       "lineEnd": 2,
@@ -959,8 +1047,10 @@ Object {
         "lineEnd": 2,
         "lineStart": 2,
         "radix": 10,
+        "type": null,
         "value": "47",
       },
+      "type": null,
     },
   ],
   "colEnd": 2,
@@ -1015,6 +1105,7 @@ Object {
         "kind": "Identifier",
         "lineEnd": 3,
         "lineStart": 3,
+        "type": null,
         "value": "num",
       },
       "lineEnd": 3,
@@ -1027,8 +1118,10 @@ Object {
         "lineEnd": 3,
         "lineStart": 3,
         "radix": 10,
+        "type": null,
         "value": "47",
       },
+      "type": null,
     },
   ],
   "colEnd": 3,
@@ -1060,6 +1153,7 @@ Object {
         "kind": "Identifier",
         "lineEnd": 4,
         "lineStart": 4,
+        "type": null,
         "value": "num",
       },
       "lineEnd": 4,
@@ -1074,8 +1168,10 @@ Object {
         "lineEnd": 4,
         "lineStart": 4,
         "radix": 10,
+        "type": null,
         "value": "47",
       },
+      "type": null,
     },
   ],
   "colEnd": 4,

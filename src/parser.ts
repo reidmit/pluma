@@ -14,33 +14,39 @@ interface BaseNode {
 interface IdentifierNode extends BaseNode {
   kind: 'Identifier';
   value: string;
+  type: null;
 }
 
 interface StringLiteralNode extends BaseNode {
   kind: 'StringLiteral';
   value: string;
+  type: null;
 }
 
 interface NumberLiteralNode extends BaseNode {
   kind: 'NumberLiteral';
   value: string;
   radix: 10 | 2 | 8 | 16;
+  type: null;
 }
 
 interface BooleanLiteralNode extends BaseNode {
   kind: 'BooleanLiteral';
   value: string;
+  type: null;
 }
 
 interface StringExpressionNode extends BaseNode {
   kind: 'StringExpression';
   parts: ExpressionNode[];
+  type: null;
 }
 
 interface BlockExpressionNode extends BaseNode {
   kind: 'BlockExpression';
   params: IdentifierNode[];
   body: ExpressionNode[];
+  type: null;
 }
 
 interface AssignmentExpressionNode extends BaseNode {
@@ -48,17 +54,20 @@ interface AssignmentExpressionNode extends BaseNode {
   left: IdentifierNode;
   right: ExpressionNode;
   constant: boolean;
+  type: null;
 }
 
 interface CallExpressionNode extends BaseNode {
   kind: 'CallExpression';
   id: IdentifierNode;
   args: ExpressionNode[];
+  type: null;
 }
 
 interface ArrayExpressionNode extends BaseNode {
   kind: 'ArrayExpression';
   elements: ExpressionNode[];
+  type: null;
 }
 
 interface ModuleNode extends BaseNode {
@@ -187,7 +196,8 @@ class Parser {
       lineStart: id.lineStart,
       colStart: id.colStart,
       lineEnd: expr.lineEnd,
-      colEnd: expr.lineEnd
+      colEnd: expr.lineEnd,
+      type: null
     };
   }
 
@@ -204,7 +214,8 @@ class Parser {
       lineStart,
       colStart,
       lineEnd,
-      colEnd
+      colEnd,
+      type: null
     };
   }
 
@@ -252,7 +263,8 @@ class Parser {
       lineStart: id.lineStart,
       colStart: id.colStart,
       lineEnd,
-      colEnd
+      colEnd,
+      type: null
     };
   }
 
@@ -337,7 +349,8 @@ class Parser {
       lineStart,
       colStart,
       lineEnd,
-      colEnd
+      colEnd,
+      type: null
     };
   }
 
@@ -353,7 +366,8 @@ class Parser {
       lineStart,
       colStart,
       lineEnd,
-      colEnd
+      colEnd,
+      type: null
     };
   }
 
@@ -379,7 +393,8 @@ class Parser {
       lineStart,
       colStart,
       lineEnd,
-      colEnd
+      colEnd,
+      type: null
     };
   }
 
@@ -395,7 +410,8 @@ class Parser {
       lineStart,
       colStart,
       lineEnd,
-      colEnd
+      colEnd,
+      type: null
     };
   }
 
@@ -410,7 +426,8 @@ class Parser {
       lineStart: firstPart.lineStart,
       colStart: firstPart.colStart,
       lineEnd: firstPart.lineEnd,
-      colEnd: firstPart.colEnd
+      colEnd: firstPart.colEnd,
+      type: null
     };
 
     while (this.tokenIs('InterpolationStart')) {
@@ -490,7 +507,8 @@ class Parser {
       lineStart,
       colStart,
       lineEnd,
-      colEnd
+      colEnd,
+      type: null
     };
   }
 
