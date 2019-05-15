@@ -1,7 +1,7 @@
 import * as t from './types';
 import { ParseError } from './errors';
 import { tokenize } from './tokenize';
-export { parseExpression, parseModule };
+export { parse };
 
 interface BaseNode {
   comments: string[];
@@ -553,10 +553,6 @@ class Parser {
   }
 }
 
-function parseExpression(source: string): ExpressionNode | void {
-  return new Parser(tokenize(source), source).parseExpression();
-}
-
-function parseModule(source: string): ModuleNode {
+function parse(source: string): ModuleNode {
   return new Parser(tokenize(source), source).parseModule();
 }
