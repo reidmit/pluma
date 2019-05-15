@@ -1,101 +1,35 @@
-import * as t from './types';
+import { Token, TokenKind } from './tokens';
+import {
+  ModuleNode,
+  ExpressionNode,
+  AssignmentExpressionNode,
+  IdentifierNode,
+  CallExpressionNode,
+  BlockExpressionNode,
+  BooleanLiteralNode,
+  StringExpressionNode,
+  StringLiteralNode,
+  ArrayExpressionNode,
+  NumberLiteralNode
+} from './nodes';
 import { ParseError } from './errors';
 import { tokenize } from './tokenize';
 export { parse };
 
-interface BaseNode {
-  comments: string[];
-  lineStart: number;
-  colStart: number;
-  lineEnd: number;
-  colEnd: number;
+function parse(source: string): ModuleNode {
+  return new Parser(tokenize(source), source).parseModule();
 }
-
-interface IdentifierNode extends BaseNode {
-  kind: 'Identifier';
-  value: string;
-  type: null;
-}
-
-interface StringLiteralNode extends BaseNode {
-  kind: 'StringLiteral';
-  value: string;
-  type: null;
-}
-
-interface NumberLiteralNode extends BaseNode {
-  kind: 'NumberLiteral';
-  value: string;
-  radix: 10 | 2 | 8 | 16;
-  type: null;
-}
-
-interface BooleanLiteralNode extends BaseNode {
-  kind: 'BooleanLiteral';
-  value: string;
-  type: null;
-}
-
-interface StringExpressionNode extends BaseNode {
-  kind: 'StringExpression';
-  parts: ExpressionNode[];
-  type: null;
-}
-
-interface BlockExpressionNode extends BaseNode {
-  kind: 'BlockExpression';
-  params: IdentifierNode[];
-  body: ExpressionNode[];
-  type: null;
-}
-
-interface AssignmentExpressionNode extends BaseNode {
-  kind: 'AssignmentExpression';
-  left: IdentifierNode;
-  right: ExpressionNode;
-  constant: boolean;
-  type: null;
-}
-
-interface CallExpressionNode extends BaseNode {
-  kind: 'CallExpression';
-  id: IdentifierNode;
-  args: ExpressionNode[];
-  type: null;
-}
-
-interface ArrayExpressionNode extends BaseNode {
-  kind: 'ArrayExpression';
-  elements: ExpressionNode[];
-  type: null;
-}
-
-interface ModuleNode extends BaseNode {
-  kind: 'Module';
-  body: ExpressionNode[];
-}
-
-type ExpressionNode =
-  | IdentifierNode
-  | NumberLiteralNode
-  | BooleanLiteralNode
-  | StringLiteralNode
-  | StringExpressionNode
-  | BlockExpressionNode
-  | AssignmentExpressionNode
-  | CallExpressionNode
-  | ArrayExpressionNode;
 
 class Parser {
-  private readonly tokens: t.Token[];
+  private readonly tokens: Token[];
   private readonly source: string;
   private readonly tokenCount: number;
   private index: number;
-  private token: t.Token;
+  private token: Token;
   private comments: Map<number, string>;
   private eof: boolean;
 
-  constructor(tokens: t.Token[], source: string) {
+  constructor(tokens: Token[], source: string) {
     this.tokens = tokens;
     this.source = source;
     this.tokenCount = this.tokens.length;
@@ -111,7 +45,7 @@ class Parser {
     if (this.index >= this.tokenCount) this.eof = true;
   }
 
-  private tokenIs(kind: t.TokenKind, nextKind?: t.TokenKind) {
+  private tokenIs(kind: TokenKind, nextKind?: TokenKind) {
     if (this.eof) return false;
     if (this.token.kind !== kind) return false;
 
@@ -197,6 +131,7 @@ class Parser {
       colStart: id.colStart,
       lineEnd: expr.lineEnd,
       colEnd: expr.lineEnd,
+      typeAnnotation: null,
       type: null
     };
   }
@@ -551,8 +486,4 @@ class Parser {
       colEnd: bodyColEnd
     };
   }
-}
-
-function parse(source: string): ModuleNode {
-  return new Parser(tokenize(source), source).parseModule();
 }

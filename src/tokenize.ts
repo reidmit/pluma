@@ -1,4 +1,4 @@
-import * as t from './types';
+import * as t from './tokens';
 import { ParseError } from './errors';
 export { tokenize };
 

@@ -1,0 +1,25 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`typeCheck number literal 1`] = `
+Object {
+  "body": Array [
+    Object {
+      "colEnd": 2,
+      "colStart": 0,
+      "comments": Array [],
+      "kind": "NumberLiteral",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "radix": 10,
+      "type": null,
+      "value": "47",
+    },
+  ],
+  "colEnd": 2,
+  "colStart": 0,
+  "comments": Array [],
+  "kind": "Module",
+  "lineEnd": 1,
+  "lineStart": 1,
+}
+`;
