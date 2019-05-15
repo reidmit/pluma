@@ -1,6 +1,6 @@
 import * as t from './types';
 import { ParseError } from './errors';
-import { tokenize } from './tokenizer';
+import { tokenize } from './tokenize';
 export { parseExpression, parseModule };
 
 interface BaseNode {

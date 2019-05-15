@@ -1,4 +1,4 @@
-import { parseExpression, parseModule } from '../src/parser';
+import { parseExpression, parseModule } from '../src/parse';
 
 describe('parseExpression', () => {
   describe('simple expressions', () => {

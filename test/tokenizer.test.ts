@@ -1,4 +1,4 @@
-import { tokenize } from '../src/tokenizer';
+import { tokenize } from '../src/tokenize';
 
 describe('tokenizer', () => {
   let tokens;
