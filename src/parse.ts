@@ -1,28 +1,27 @@
 import { Token, TokenKind } from './tokens';
-import {
-  ModuleNode,
-  ExpressionNode,
-  AssignmentExpressionNode,
-  IdentifierNode,
-  CallExpressionNode,
-  BlockExpressionNode,
-  BooleanLiteralNode,
-  StringExpressionNode,
-  StringLiteralNode,
-  ArrayExpressionNode,
-  NumberLiteralNode
-} from './nodes';
 import { ParseError } from './errors';
 import { tokenize } from './tokenize';
-export { parse };
+import { IdentifierNode, IIdentifierNode } from './nodes/IdentifierNode';
+import { IBooleanLiteralNode, BooleanLiteralNode } from './nodes/BooleanLiteralNode';
+import { BlockNode, IBlockNode } from './nodes/BlockNode';
+import { ISyntaxNode, IExpressionNode } from './types';
+import { AssignmentNode, IAssignmentNode } from './nodes/AssignmentNode';
+import { NumberLiteralNode, INumberLiteralNode } from './nodes/NumberLiteralNode';
+import { StringLiteralNode, IStringLiteralNode } from './nodes/StringLiteralNode';
+import { StringExpressionNode, IStringExpressionNode } from './nodes/StringExpressionNode';
+import { ArrayExpressionNode, IArrayExpressionNode } from './nodes/ArrayExpressionNode';
+import { CallNode, ICallNode } from './nodes/CallNode';
+import { ModuleNode, IModuleNode } from './nodes/ModuleNode';
+import { MemberExpressionNode } from './nodes/MemberExpressionNode';
 
-function parse(source: string): ModuleNode {
+export function parse(source: string): IModuleNode {
   return new Parser(tokenize(source), source).parseModule();
 }
 
-class Parser {
-  private readonly tokens: Token[];
-  private readonly source: string;
+export class Parser {
+  readonly tokens: Token[];
+  readonly source: string;
+  readonly fileName: string;
   private readonly tokenCount: number;
   private index: number;
   private token: Token;
@@ -32,6 +31,7 @@ class Parser {
   constructor(tokens: Token[], source: string) {
     this.tokens = tokens;
     this.source = source;
+    this.fileName = '';
     this.tokenCount = this.tokens.length;
     this.index = 0;
     this.token = this.tokens[this.index];
@@ -43,6 +43,12 @@ class Parser {
     this.index += amount;
     this.token = this.tokens[this.index];
     if (this.index >= this.tokenCount) this.eof = true;
+  }
+
+  private unexpectedToken() {
+    if (this.eof) return;
+
+    throw ParseError.fromToken(`Unexpected token: ${this.token.value}`, this.token, this);
   }
 
   private tokenIs(kind: TokenKind, nextKind?: TokenKind) {
@@ -79,7 +85,7 @@ class Parser {
     }
   }
 
-  private parseParenthetical(): ExpressionNode | void {
+  private parseParentheticalExpression(): IExpressionNode | void {
     if (!this.tokenIs('(')) return;
 
     const { lineStart, colStart } = this.token;
@@ -87,12 +93,12 @@ class Parser {
     const expr = this.parseExpression();
 
     if (!this.tokenIs(')')) {
-      throw new ParseError(
-        this.token.lineStart,
-        this.token.lineEnd,
+      throw ParseError.fromToken(
         `Expected a ) to match ( at line ${lineStart}, column ${colStart}, but found ${
           this.token.kind
-        }`
+        }`,
+        this.token,
+        this
       );
     }
     this.advance();
@@ -100,8 +106,14 @@ class Parser {
     return expr;
   }
 
-  private parseAssignmentExpression(): AssignmentExpressionNode | void {
-    if (!(this.tokenIs('Identifier', '=') || this.tokenIs('Identifier', ':='))) {
+  private parseAssignmentExpression(): IAssignmentNode | void {
+    if (
+      !(
+        this.tokenIs('Identifier', '=') ||
+        this.tokenIs('Identifier', ':=') ||
+        this.tokenIs('Identifier', '::')
+      )
+    ) {
       return;
     }
 
@@ -114,58 +126,46 @@ class Parser {
     const expr = this.parseExpression();
 
     if (!expr) {
-      throw new ParseError(
-        id.lineStart,
-        id.colEnd,
-        'Expected expression after = in assignment'
+      throw ParseError.fromSourceLocation(
+        'Expected expression after = in assignment',
+        id.location,
+        this
       );
     }
 
-    return {
-      kind: 'AssignmentExpression',
-      left: id,
-      right: expr,
-      constant,
-      comments: this.collectCommentsForLine(id.lineStart),
-      lineStart: id.lineStart,
-      colStart: id.colStart,
-      lineEnd: expr.lineEnd,
-      colEnd: expr.lineEnd,
-      typeAnnotation: null,
-      type: null
-    };
+    return new AssignmentNode(id, expr, constant)
+      .withComments(this.collectCommentsForLine(id.location.lineStart))
+      .withLocation(
+        id.location.lineStart,
+        id.location.colStart,
+        expr.location.lineEnd,
+        expr.location.colEnd
+      );
   }
 
-  private parseIdentifier(): IdentifierNode | void {
+  private parseIdentifier(): IIdentifierNode | void {
     if (!this.tokenIs('Identifier')) return;
 
     const { value, lineStart, lineEnd, colStart, colEnd } = this.token;
     this.advance();
 
-    return {
-      kind: 'Identifier',
-      comments: this.collectCommentsForLine(lineStart),
-      value,
-      lineStart,
-      colStart,
-      lineEnd,
-      colEnd,
-      type: null
-    };
+    return new IdentifierNode(value)
+      .withComments(this.collectCommentsForLine(lineStart))
+      .withLocation(lineStart, colStart, lineEnd, colEnd);
   }
 
-  private parseCallOrIdentifier(): CallExpressionNode | IdentifierNode | void {
+  private parseCallOrIdentifier(): ICallNode | IIdentifierNode | void {
     if (!this.tokenIs('Identifier')) return;
 
     const id = this.parseIdentifier();
     if (!id) return;
 
-    const isCall = this.tokenIs('(') && this.token.lineStart === id.lineEnd;
+    const isCall = this.tokenIs('(') && this.token.lineStart === id.location.lineEnd;
 
     if (!isCall) return id;
     this.advance();
 
-    const args: ExpressionNode[] = [];
+    const args: IExpressionNode[] = [];
 
     let arg;
     while ((arg = this.parseExpression())) {
@@ -180,61 +180,53 @@ class Parser {
     }
 
     if (!this.tokenIs(')')) {
-      throw new ParseError(
-        this.token.lineStart,
-        this.token.colStart,
-        'Expected ) after arguments'
-      );
+      throw ParseError.fromToken('Expected ) after arguments', this.token, this);
     }
 
     const { lineEnd, colEnd } = this.token;
     this.advance();
 
-    return {
-      kind: 'CallExpression',
-      id,
-      args,
-      comments: this.collectCommentsForLine(id.lineStart),
-      lineStart: id.lineStart,
-      colStart: id.colStart,
-      lineEnd,
-      colEnd,
-      type: null
-    };
+    return new CallNode(id, args)
+      .withComments(this.collectCommentsForLine(id.location.lineStart))
+      .withLocation(id.location.lineStart, id.location.colStart, lineEnd, colEnd);
   }
 
-  private parseBlock(): BlockExpressionNode | void {
+  private parseBlockExpression(): IBlockNode | void {
     if (!this.tokenIs('{')) return;
 
     const { lineStart, colStart } = this.token;
     this.advance();
 
     const paramNames = Object.create(null);
-    const params: IdentifierNode[] = [];
+    const params: IIdentifierNode[] = [];
     const firstExpression = this.parseExpression();
 
-    const body: ExpressionNode[] = [];
+    const body: IExpressionNode[] = [];
 
     if (firstExpression) {
-      if (
-        firstExpression.kind === 'Identifier' &&
-        (this.tokenIs(',') || this.tokenIs('=>'))
-      ) {
-        paramNames[firstExpression.value] = true;
-        params.push(firstExpression);
+      if (firstExpression.kind === 'Identifier' && (this.tokenIs(',') || this.tokenIs('=>'))) {
+        const firstParam = firstExpression as IIdentifierNode;
+        paramNames[firstParam.value] = true;
+        params.push(firstParam);
 
         while (this.tokenIs(',')) {
           this.advance();
+          const paramToken = this.token;
           const parameter = this.parseIdentifier();
+
           if (!parameter) {
-            throw new ParseError(-1, -1, 'Expected a parameter name after , in block');
+            throw ParseError.fromToken(
+              'Expected a parameter name after , in block',
+              paramToken,
+              this
+            );
           }
 
           if (paramNames[parameter.value]) {
-            throw new ParseError(
-              parameter.lineStart,
-              parameter.colStart,
-              `Multiple parameters in block with name '${parameter.value}'`
+            throw ParseError.fromSourceLocation(
+              `Multiple parameters in block with name '${parameter.value}'`,
+              parameter.location,
+              this
             );
           }
 
@@ -243,10 +235,10 @@ class Parser {
         }
 
         if (!this.tokenIs('=>')) {
-          throw new ParseError(
-            this.token.lineStart,
-            this.token.lineEnd,
-            `Expected a => after block parameters, but found ${this.token.kind}`
+          throw ParseError.fromToken(
+            `Expected a => after block parameters, but found ${this.token.kind}`,
+            this.token,
+            this
           );
         }
 
@@ -262,108 +254,64 @@ class Parser {
     }
 
     if (params.length && !body.length) {
-      throw new ParseError(-1, -1, 'Expected an expression after => in block');
+      throw ParseError.fromToken('Expected an expression after => in block', this.token, this);
     }
 
     if (!this.tokenIs('}')) {
-      throw new ParseError(
-        this.token.lineStart,
-        this.token.lineEnd,
-        `Expected a } to close block, but found ${this.token.kind}`
+      throw ParseError.fromToken(
+        `Expected a } to close block, but found ${this.token.kind}`,
+        this.token,
+        this
       );
     }
 
     const { lineEnd, colEnd } = this.token;
     this.advance();
 
-    return {
-      kind: 'BlockExpression',
-      params,
-      body,
-      comments: this.collectCommentsForLine(lineStart),
-      lineStart,
-      colStart,
-      lineEnd,
-      colEnd,
-      type: null
-    };
+    return new BlockNode(params, body)
+      .withComments(this.collectCommentsForLine(lineStart))
+      .withLocation(lineStart, colStart, lineEnd, colEnd);
   }
 
-  private parseBooleanLiteral(): BooleanLiteralNode | void {
+  private parseBooleanLiteral(): IBooleanLiteralNode | void {
     if (!this.tokenIs('Boolean')) return;
     const { value, lineStart, lineEnd, colStart, colEnd } = this.token;
     this.advance();
 
-    return {
-      kind: 'BooleanLiteral',
-      comments: this.collectCommentsForLine(lineStart),
-      value,
-      lineStart,
-      colStart,
-      lineEnd,
-      colEnd,
-      type: null
-    };
+    return new BooleanLiteralNode(value)
+      .withComments(this.collectCommentsForLine(lineStart))
+      .withLocation(lineStart, colStart, lineEnd, colEnd);
   }
 
-  private parseNumberLiteral(): NumberLiteralNode | void {
+  private parseNumberLiteral(): INumberLiteralNode | void {
     if (!this.tokenIs('Number')) return;
 
     const { value, lineStart, lineEnd, colStart, colEnd } = this.token;
-    const radix = /^0b/.test(value)
-      ? 2
-      : /^0o/.test(value)
-      ? 8
-      : /^0x/.test(value)
-      ? 16
-      : 10;
+    const radix = /^0b/.test(value) ? 2 : /^0o/.test(value) ? 8 : /^0x/.test(value) ? 16 : 10;
 
     this.advance();
 
-    return {
-      kind: 'NumberLiteral',
-      value,
-      radix,
-      comments: this.collectCommentsForLine(lineStart),
-      lineStart,
-      colStart,
-      lineEnd,
-      colEnd,
-      type: null
-    };
+    return new NumberLiteralNode(value, radix)
+      .withComments(this.collectCommentsForLine(lineStart))
+      .withLocation(lineStart, colStart, lineEnd, colEnd);
   }
 
-  private parseStringLiteral(): StringLiteralNode | void {
+  private parseStringLiteral(): IStringLiteralNode | void {
     if (!this.tokenIs('String')) return;
     const { value, lineStart, lineEnd, colStart, colEnd } = this.token;
     this.advance();
 
-    return {
-      kind: 'StringLiteral',
-      comments: this.collectCommentsForLine(lineStart),
-      value,
-      lineStart,
-      colStart,
-      lineEnd,
-      colEnd,
-      type: null
-    };
+    return new StringLiteralNode(value)
+      .withComments(this.collectCommentsForLine(lineStart))
+      .withLocation(lineStart, colStart, lineEnd, colEnd);
   }
 
-  private parseStringExpression(): StringExpressionNode | void {
+  private parseStringExpression(): IStringExpressionNode | void {
     const firstPart = this.parseStringLiteral();
     if (!firstPart) return;
 
-    const expr: StringExpressionNode = {
-      kind: 'StringExpression',
-      parts: [firstPart],
-      comments: this.collectCommentsForLine(firstPart.lineStart),
-      lineStart: firstPart.lineStart,
-      colStart: firstPart.colStart,
-      lineEnd: firstPart.lineEnd,
-      colEnd: firstPart.colEnd,
-      type: null
-    };
+    const { lineStart, colStart } = firstPart.location;
+    const parts: IExpressionNode[] = [firstPart];
 
     while (this.tokenIs('InterpolationStart')) {
       const startToken = this.token;
@@ -372,20 +320,27 @@ class Parser {
       const innerExpr = this.parseExpression();
 
       if (!innerExpr) {
-        throw new ParseError(
-          startToken.lineStart,
-          startToken.colStart,
-          'Expected an expression after $( in string interpolation.'
+        throw ParseError.fromToken(
+          'Expected an expression after $( in string interpolation.',
+          startToken,
+          this
         );
       }
 
-      expr.parts.push(innerExpr);
+      parts.push(
+        new CallNode(new IdentifierNode('toString'), [innerExpr]).withLocation(
+          innerExpr.location.lineStart,
+          innerExpr.location.colStart,
+          innerExpr.location.lineEnd,
+          innerExpr.location.colEnd
+        )
+      );
 
       if (!this.tokenIs('InterpolationEnd')) {
-        throw new ParseError(
-          startToken.lineStart,
-          startToken.lineStart,
-          'Expected a closing ) after string interpolation.'
+        throw ParseError.fromToken(
+          'Expected a closing ) after string interpolation.',
+          startToken,
+          this
         );
       }
 
@@ -393,18 +348,19 @@ class Parser {
       const nextStringLiteral = this.parseStringLiteral();
 
       if (nextStringLiteral) {
-        expr.parts.push(nextStringLiteral);
+        parts.push(nextStringLiteral);
       }
     }
 
-    const lastPart = expr.parts[expr.parts.length - 1];
-    expr.lineEnd = lastPart.lineEnd;
-    expr.colEnd = lastPart.colEnd;
+    const lastPart = parts[parts.length - 1];
+    const { lineEnd, colEnd } = lastPart.location;
 
-    return expr;
+    return new StringExpressionNode(parts)
+      .withComments(this.collectCommentsForLine(lineStart))
+      .withLocation(lineStart, colStart, lineEnd, colEnd);
   }
 
-  private parseArrayExpression(): ArrayExpressionNode | void {
+  private parseArrayExpression(): IArrayExpressionNode | void {
     if (!this.tokenIs('[')) return;
 
     const { lineStart, colStart } = this.token;
@@ -425,65 +381,58 @@ class Parser {
     }
 
     if (!this.tokenIs(']')) {
-      throw new ParseError(
-        this.token.lineStart,
-        this.token.colStart,
-        'Expected closing ]'
-      );
+      throw ParseError.fromToken('Expected closing ]', this.token, this);
     }
 
     const { lineEnd, colEnd } = this.token;
     this.advance();
 
-    return {
-      kind: 'ArrayExpression',
-      elements,
-      comments: this.collectCommentsForLine(lineStart),
-      lineStart,
-      colStart,
-      lineEnd,
-      colEnd,
-      type: null
-    };
+    return new ArrayExpressionNode(elements)
+      .withComments(this.collectCommentsForLine(lineStart))
+      .withLocation(lineStart, colStart, lineEnd, colEnd);
   }
 
-  parseExpression(): ExpressionNode | void {
-    if (this.eof) return;
-
+  parseExpression(): IExpressionNode | void {
     this.parseComments();
     if (this.eof) return;
 
-    return (
+    let expr =
       this.parseAssignmentExpression() ||
-      this.parseParenthetical() ||
-      this.parseBlock() ||
+      this.parseParentheticalExpression() ||
+      this.parseBlockExpression() ||
       this.parseArrayExpression() ||
       this.parseCallOrIdentifier() ||
       this.parseBooleanLiteral() ||
       this.parseNumberLiteral() ||
-      this.parseStringExpression()
-    );
+      this.parseStringExpression();
+
+    while (expr && this.tokenIs('.', 'Identifier')) {
+      this.advance();
+      const member = this.parseIdentifier() as IIdentifierNode;
+      const { lineStart, colStart } = expr.location;
+      const { lineEnd, colEnd } = member.location;
+      expr = new MemberExpressionNode(expr, member)
+        .withComments(this.collectCommentsForLine(expr.location.lineStart))
+        .withLocation(lineStart, colStart, lineEnd, colEnd);
+    }
+
+    return expr;
   }
 
-  parseModule(): ModuleNode {
-    const body: ExpressionNode[] = [];
+  parseModule(): IModuleNode {
+    const body: ISyntaxNode[] = [];
 
     let node;
     while ((node = this.parseExpression())) {
       body.push(node);
     }
 
-    const bodyLineEnd = body.length ? body[body.length - 1].lineEnd : 0;
-    const bodyColEnd = body.length ? body[body.length - 1].colEnd : 0;
+    if (!this.eof) this.unexpectedToken();
 
-    return {
-      kind: 'Module',
-      body,
-      comments: [],
-      lineStart: 1,
-      colStart: 0,
-      lineEnd: bodyLineEnd,
-      colEnd: bodyColEnd
-    };
+    const lastNode = body[body.length - 1];
+    const bodyLineEnd = lastNode ? lastNode.location.lineEnd : 1;
+    const bodyColEnd = lastNode ? lastNode.location.colEnd : 0;
+
+    return new ModuleNode(body).withLocation(1, 0, bodyLineEnd, bodyColEnd);
   }
 }

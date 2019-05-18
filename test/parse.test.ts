@@ -147,4 +147,32 @@ describe('parse', () => {
       expect(parse('# not associated\n\n# line one\nnum = 47')).toMatchSnapshot();
     });
   });
+
+  describe('member expressions', () => {
+    test('single member access', () => {
+      expect(parse('a.b')).toMatchSnapshot();
+    });
+
+    test('nested member access', () => {
+      expect(parse('a.b.c')).toMatchSnapshot();
+    });
+
+    test('access member of string expression', () => {
+      expect(parse('"wow".nice')).toMatchSnapshot();
+    });
+
+    test('access member of array expression', () => {
+      expect(parse('["wow", "ok"].nice')).toMatchSnapshot();
+    });
+
+    test('access member of parenthetical expression', () => {
+      expect(parse('(hello("world")).nice')).toMatchSnapshot();
+    });
+  });
+
+  describe('type annotations', () => {
+    test('simple annotation on assignment', () => {
+      expect(parse('num :: Number = 47')).toMatchSnapshot();
+    });
+  });
 });

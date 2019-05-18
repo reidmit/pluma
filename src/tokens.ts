@@ -10,6 +10,7 @@ export type TokenKind =
   | 'String'
   | '->'
   | '=>'
+  | '::'
   | ':'
   | ':='
   | ','

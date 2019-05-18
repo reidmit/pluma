@@ -1,8 +1,8 @@
-import * as t from './tokens';
 import { ParseError } from './errors';
+import { Token, TokenKind } from './tokens';
 export { tokenize };
 
-function tokenize(source: string): t.Token[] {
+function tokenize(source: string): Token[] {
   const tok = new Tokenizer(source);
 
   let token;
@@ -14,11 +14,12 @@ function tokenize(source: string): t.Token[] {
   return tok.tokens;
 }
 
-class Tokenizer {
+export class Tokenizer {
+  readonly fileName: string;
   readonly source: string;
   readonly chars: string[];
   readonly length: number;
-  readonly tokens: t.Token[];
+  readonly tokens: Token[];
   index: number;
   char: string;
   line: number;
@@ -26,6 +27,7 @@ class Tokenizer {
   eof: boolean;
 
   constructor(source: string) {
+    this.fileName = '';
     this.source = source;
     this.chars = Array.from(this.source);
     this.length = this.chars.length;
@@ -55,7 +57,7 @@ function prevCharIs(tok: Tokenizer, testChar: string) {
   return tok.chars[tok.index - 1] === testChar;
 }
 
-function readComment(tok: Tokenizer): t.Token | void {
+function readComment(tok: Tokenizer): Token | void {
   if (!charIs(tok, '#')) return;
 
   const colStart = tok.index - tok.lineStartIndex;
@@ -80,7 +82,7 @@ function readComment(tok: Tokenizer): t.Token | void {
   };
 }
 
-function readIdentifier(tok: Tokenizer): t.Token | void {
+function readIdentifier(tok: Tokenizer): Token | void {
   if (!isIdentifierStartChar(tok.char)) return;
 
   let value = '';
@@ -114,7 +116,7 @@ function readIdentifier(tok: Tokenizer): t.Token | void {
   };
 }
 
-function readChar(tok: Tokenizer): t.Token | void {
+function readChar(tok: Tokenizer): Token | void {
   if (!charIs(tok, "'")) return;
 
   const colStart = tok.index - tok.lineStartIndex;
@@ -126,10 +128,11 @@ function readChar(tok: Tokenizer): t.Token | void {
   advance(tok);
 
   if (!charIs(tok, "'")) {
-    throw new ParseError(
+    throw ParseError.fromLineAndColumn(
+      "Expected closing ' after character",
       tok.line,
       tok.index - tok.lineStartIndex,
-      "Expected closing ' after character"
+      tok
     );
   }
 
@@ -147,7 +150,7 @@ function readChar(tok: Tokenizer): t.Token | void {
   };
 }
 
-function readNumber(tok: Tokenizer): t.Token | void {
+function readNumber(tok: Tokenizer): Token | void {
   if (!isDecimalDigit(tok.char)) return;
 
   const colStart = tok.index - tok.lineStartIndex;
@@ -254,13 +257,13 @@ function readNumber(tok: Tokenizer): t.Token | void {
   };
 }
 
-function readString(tok: Tokenizer): t.Token[] | void {
+function readString(tok: Tokenizer): Token[] | void {
   if (!charIs(tok, '"')) return;
 
   const tripleQuoted = charIs(tok, '"', '"', '"');
   const colStart = tok.index - tok.lineStartIndex;
   const quoteSize = tripleQuoted ? 3 : 1;
-  const stringTokens: t.Token[] = [];
+  const stringTokens: Token[] = [];
 
   let lineStart = tok.line;
   let value = '';
@@ -346,20 +349,22 @@ function readString(tok: Tokenizer): t.Token[] | void {
   if (!tripleQuoted && !charIs(tok, '"')) {
     const col = tok.index - tok.lineStartIndex;
 
-    throw new ParseError(
+    throw ParseError.fromLineAndColumn(
+      `Missing a closing " for string starting on line ${lineStart}`,
       tok.line,
       col,
-      `Missing a closing " for string starting on line ${lineStart}`
+      tok
     );
   }
 
   if (tripleQuoted && !charIs(tok, '"', '"', '"')) {
     const col = tok.index - tok.lineStartIndex;
 
-    throw new ParseError(
+    throw ParseError.fromLineAndColumn(
+      `Missing a closing """ for string starting on line ${lineStart}`,
       tok.line,
       col,
-      `Missing a closing """ for string starting on line ${lineStart}`
+      tok
     );
   }
 
@@ -381,10 +386,10 @@ function readString(tok: Tokenizer): t.Token[] | void {
 
 function readSymbol(
   tok: Tokenizer,
-  kind: t.TokenKind,
+  kind: TokenKind,
   firstChar: string,
   secondChar?: string
-): t.Token | void {
+): Token | void {
   if (!charIs(tok, firstChar, secondChar)) return;
 
   const size = secondChar ? 2 : 1;
@@ -402,7 +407,7 @@ function readSymbol(
   };
 }
 
-function readOperator(tok: Tokenizer): t.Token | void {
+function readOperator(tok: Tokenizer): Token | void {
   if (!isOperatorChar(tok.char)) return;
 
   const colStart = tok.index - tok.lineStartIndex;
@@ -437,7 +442,7 @@ function readWhitespace(tok: Tokenizer) {
   }
 }
 
-function readToken(tok: Tokenizer): t.Token | t.Token[] | void {
+function readToken(tok: Tokenizer): Token | Token[] | void {
   if (tok.eof) return;
 
   readWhitespace(tok);
@@ -449,6 +454,7 @@ function readToken(tok: Tokenizer): t.Token | t.Token[] | void {
     readString(tok) ||
     readSymbol(tok, '->', '-', '>') ||
     readSymbol(tok, ':=', ':', '=') ||
+    readSymbol(tok, '::', ':', ':') ||
     readSymbol(tok, '=>', '=', '>') ||
     readSymbol(tok, '{', '{') ||
     readSymbol(tok, '}', '}') ||
@@ -512,9 +518,7 @@ function isDecimalDigit(char: string) {
 }
 
 function isHexDigit(char: string) {
-  return (
-    isDecimalDigit(char) || (char >= 'a' && char <= 'f') || (char >= 'A' && char <= 'F')
-  );
+  return isDecimalDigit(char) || (char >= 'a' && char <= 'f') || (char >= 'A' && char <= 'F');
 }
 
 function isOctalDigit(char: string) {
