@@ -1,5 +1,72 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
+exports[`typeCheck array expressions 1`] = `
+ModuleNode {
+  "body": Array [
+    ArrayExpressionNode {
+      "comments": Array [],
+      "elements": Array [
+        NumberLiteralNode {
+          "comments": Array [],
+          "kind": "NumberLiteral",
+          "location": Object {
+            "colEnd": 2,
+            "colStart": 1,
+            "lineEnd": 1,
+            "lineStart": 1,
+          },
+          "radix": 10,
+          "type": "Number",
+          "value": "1",
+        },
+        NumberLiteralNode {
+          "comments": Array [],
+          "kind": "NumberLiteral",
+          "location": Object {
+            "colEnd": 5,
+            "colStart": 4,
+            "lineEnd": 1,
+            "lineStart": 1,
+          },
+          "radix": 10,
+          "type": "Number",
+          "value": "2",
+        },
+        NumberLiteralNode {
+          "comments": Array [],
+          "kind": "NumberLiteral",
+          "location": Object {
+            "colEnd": 8,
+            "colStart": 7,
+            "lineEnd": 1,
+            "lineStart": 1,
+          },
+          "radix": 10,
+          "type": "Number",
+          "value": "3",
+        },
+      ],
+      "kind": "ArrayExpression",
+      "location": Object {
+        "colEnd": 9,
+        "colStart": 0,
+        "lineEnd": 1,
+        "lineStart": 1,
+      },
+      "type": "[Number]",
+    },
+  ],
+  "comments": Array [],
+  "kind": "Module",
+  "location": Object {
+    "colEnd": 9,
+    "colStart": 0,
+    "lineEnd": 1,
+    "lineStart": 1,
+  },
+}
+`;
+
 exports[`typeCheck assignment expressions 1`] = `
 ModuleNode {
   "body": Array [

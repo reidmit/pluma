@@ -13,4 +13,8 @@ describe('typeCheck', () => {
     expect(typeCheck(parse('num = 47'))).toMatchSnapshot();
     expect(typeCheck(parse('str = "wow"'))).toMatchSnapshot();
   });
+
+  test('array expressions', () => {
+    expect(typeCheck(parse('[1, 2, 3]'))).toMatchSnapshot();
+  });
 });

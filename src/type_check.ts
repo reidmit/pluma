@@ -5,6 +5,7 @@ import { IStringLiteralNode } from './nodes/StringLiteralNode';
 import { IBooleanLiteralNode } from './nodes/BooleanLiteralNode';
 import { IAssignmentNode } from './nodes/AssignmentNode';
 import { IStringExpressionNode } from './nodes/StringExpressionNode';
+import { IArrayExpressionNode } from './nodes/ArrayExpressionNode';
 
 export function typeCheck(ast: ISyntaxNode) {
   const checker = new TypeChecker();
@@ -13,6 +14,25 @@ export function typeCheck(ast: ISyntaxNode) {
 }
 
 class TypeChecker extends BaseVisitor {
+  visitArrayExpression(node: IArrayExpressionNode) {
+    const firstElement = node.elements[0];
+
+    if (!firstElement) {
+      node.type = '[]';
+      return;
+    }
+
+    for (let i = 1; i < node.elements.length; i++) {
+      if (node.elements[i].type !== firstElement.type) {
+        throw `Array element ${i} has incorrect type: ${node.elements[i].type} (expected ${
+          firstElement.type
+        })`;
+      }
+    }
+
+    node.type = `[${firstElement.type}]`;
+  }
+
   visitAssignment(node: IAssignmentNode) {
     node.type = node.rightSide.type;
   }
