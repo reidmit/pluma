@@ -58,3 +58,11 @@ export class ParseError extends Error {
     this.stack = '';
   }
 }
+
+export class CompileError extends Error {
+  constructor(message: string, fileName: string, moduleName: string) {
+    super(`Error compiling module ${moduleName} (${fileName}):\n\n${message}`);
+
+    this.stack = '';
+  }
+}

@@ -8,17 +8,19 @@ export interface ISourceLocation {
 }
 
 export type SyntaxNodeKind =
+  | 'ArrayExpression'
+  | 'Assignment'
+  | 'Block'
+  | 'BooleanLiteral'
+  | 'Call'
   | 'Identifier'
   | 'StringLiteral'
   | 'NumberLiteral'
-  | 'BooleanLiteral'
   | 'StringExpression'
-  | 'ArrayExpression'
   | 'MemberExpression'
-  | 'Block'
-  | 'Assignment'
-  | 'Call'
-  | 'Module';
+  | 'Range'
+  | 'Module'
+  | 'ModuleSpecifier';
 
 export interface ISyntaxNode {
   kind: SyntaxNodeKind;

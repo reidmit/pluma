@@ -12,7 +12,8 @@ import { StringExpressionNode, IStringExpressionNode } from './nodes/StringExpre
 import { ArrayExpressionNode, IArrayExpressionNode } from './nodes/ArrayExpressionNode';
 import { CallNode, ICallNode } from './nodes/CallNode';
 import { ModuleNode, IModuleNode } from './nodes/ModuleNode';
-import { MemberExpressionNode } from './nodes/MemberExpressionNode';
+import { MemberExpressionNode, IMemberExpressionNode } from './nodes/MemberExpressionNode';
+import { IModuleSpecifierNode, ModuleSpecifierNode } from './nodes/ModuleSpecifierNode';
 
 export function parse(source: string): IModuleNode {
   return new Parser(tokenize(source), source).parseModule();
@@ -419,8 +420,46 @@ export class Parser {
     return expr;
   }
 
+  parseModuleSpecifier(): IModuleSpecifierNode | void {
+    if (!this.tokenIs('Identifier') || this.token.value !== 'module') return;
+
+    const moduleToken = this.token;
+    this.advance();
+
+    if (this.token.lineStart !== moduleToken.lineStart) {
+      throw ParseError.fromToken("Expected a module name after 'module'", moduleToken, this);
+    }
+
+    let name: IIdentifierNode | IMemberExpressionNode | void = this.parseIdentifier();
+
+    while (name && this.tokenIs('.', 'Identifier')) {
+      this.advance();
+      if (this.token.lineStart !== moduleToken.lineStart) break;
+
+      const member = this.parseIdentifier() as IIdentifierNode;
+      const { lineStart, colStart } = name.location;
+      const { lineEnd, colEnd } = member.location;
+      name = new MemberExpressionNode(name, member)
+        .withComments(this.collectCommentsForLine(name.location.lineStart))
+        .withLocation(lineStart, colStart, lineEnd, colEnd);
+    }
+
+    if (!name) {
+      throw ParseError.fromToken("Expected a module name after 'module'", moduleToken, this);
+    }
+
+    return new ModuleSpecifierNode(name).withLocation(
+      moduleToken.lineStart,
+      moduleToken.colStart,
+      name.location.lineEnd,
+      name.location.colEnd
+    );
+  }
+
   parseModule(): IModuleNode {
     const body: ISyntaxNode[] = [];
+
+    const moduleSpecifier = this.parseModuleSpecifier() || null;
 
     let node;
     while ((node = this.parseExpression())) {
@@ -433,6 +472,6 @@ export class Parser {
     const bodyLineEnd = lastNode ? lastNode.location.lineEnd : 1;
     const bodyColEnd = lastNode ? lastNode.location.colEnd : 0;
 
-    return new ModuleNode(body).withLocation(1, 0, bodyLineEnd, bodyColEnd);
+    return new ModuleNode(moduleSpecifier, body).withLocation(1, 0, bodyLineEnd, bodyColEnd);
   }
 }

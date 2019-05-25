@@ -64,6 +64,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -105,6 +106,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -172,6 +174,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -199,6 +202,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -266,6 +270,7 @@ ModuleNode {
     "lineEnd": 5,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -318,6 +323,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -370,6 +376,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -437,6 +444,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -478,6 +486,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -557,6 +566,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -585,6 +595,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -664,6 +675,7 @@ ModuleNode {
     "lineEnd": 5,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -768,6 +780,7 @@ ModuleNode {
     "lineEnd": 5,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -870,6 +883,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -923,6 +937,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -962,6 +977,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -1020,6 +1036,7 @@ ModuleNode {
     "lineEnd": 2,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -1034,6 +1051,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -1048,6 +1066,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -1103,6 +1122,7 @@ ModuleNode {
     "lineEnd": 3,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -1161,6 +1181,7 @@ ModuleNode {
     "lineEnd": 4,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -1262,6 +1283,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -1350,6 +1372,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -1413,6 +1436,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -1486,6 +1510,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -1536,6 +1561,197 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
+}
+`;
+
+exports[`parse module specifier compound module name 1`] = `
+ModuleNode {
+  "body": Array [],
+  "comments": Array [],
+  "kind": "Module",
+  "location": Object {
+    "colEnd": 0,
+    "colStart": 0,
+    "lineEnd": 1,
+    "lineStart": 1,
+  },
+  "specifier": ModuleSpecifierNode {
+    "comments": Array [],
+    "kind": "ModuleSpecifier",
+    "location": Object {
+      "colEnd": 23,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "name": MemberExpressionNode {
+      "comments": Array [],
+      "expression": MemberExpressionNode {
+        "comments": Array [],
+        "expression": IdentifierNode {
+          "comments": Array [],
+          "kind": "Identifier",
+          "location": Object {
+            "colEnd": 12,
+            "colStart": 7,
+            "lineEnd": 1,
+            "lineStart": 1,
+          },
+          "type": null,
+          "value": "Hello",
+        },
+        "kind": "MemberExpression",
+        "location": Object {
+          "colEnd": 18,
+          "colStart": 7,
+          "lineEnd": 1,
+          "lineStart": 1,
+        },
+        "member": IdentifierNode {
+          "comments": Array [],
+          "kind": "Identifier",
+          "location": Object {
+            "colEnd": 18,
+            "colStart": 13,
+            "lineEnd": 1,
+            "lineStart": 1,
+          },
+          "type": null,
+          "value": "World",
+        },
+        "type": null,
+      },
+      "kind": "MemberExpression",
+      "location": Object {
+        "colEnd": 23,
+        "colStart": 7,
+        "lineEnd": 1,
+        "lineStart": 1,
+      },
+      "member": IdentifierNode {
+        "comments": Array [],
+        "kind": "Identifier",
+        "location": Object {
+          "colEnd": 23,
+          "colStart": 19,
+          "lineEnd": 1,
+          "lineStart": 1,
+        },
+        "type": null,
+        "value": "Main",
+      },
+      "type": null,
+    },
+  },
+}
+`;
+
+exports[`parse module specifier module specifier does not span lines 1`] = `
+ModuleNode {
+  "body": Array [
+    IdentifierNode {
+      "comments": Array [],
+      "kind": "Identifier",
+      "location": Object {
+        "colEnd": 13,
+        "colStart": 0,
+        "lineEnd": 2,
+        "lineStart": 2,
+      },
+      "type": null,
+      "value": "somethingElse",
+    },
+  ],
+  "comments": Array [],
+  "kind": "Module",
+  "location": Object {
+    "colEnd": 13,
+    "colStart": 0,
+    "lineEnd": 2,
+    "lineStart": 1,
+  },
+  "specifier": ModuleSpecifierNode {
+    "comments": Array [],
+    "kind": "ModuleSpecifier",
+    "location": Object {
+      "colEnd": 18,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "name": MemberExpressionNode {
+      "comments": Array [],
+      "expression": IdentifierNode {
+        "comments": Array [],
+        "kind": "Identifier",
+        "location": Object {
+          "colEnd": 12,
+          "colStart": 7,
+          "lineEnd": 1,
+          "lineStart": 1,
+        },
+        "type": null,
+        "value": "Hello",
+      },
+      "kind": "MemberExpression",
+      "location": Object {
+        "colEnd": 18,
+        "colStart": 7,
+        "lineEnd": 1,
+        "lineStart": 1,
+      },
+      "member": IdentifierNode {
+        "comments": Array [],
+        "kind": "Identifier",
+        "location": Object {
+          "colEnd": 18,
+          "colStart": 13,
+          "lineEnd": 1,
+          "lineStart": 1,
+        },
+        "type": null,
+        "value": "World",
+      },
+      "type": null,
+    },
+  },
+}
+`;
+
+exports[`parse module specifier simple module name 1`] = `
+ModuleNode {
+  "body": Array [],
+  "comments": Array [],
+  "kind": "Module",
+  "location": Object {
+    "colEnd": 0,
+    "colStart": 0,
+    "lineEnd": 1,
+    "lineStart": 1,
+  },
+  "specifier": ModuleSpecifierNode {
+    "comments": Array [],
+    "kind": "ModuleSpecifier",
+    "location": Object {
+      "colEnd": 11,
+      "colStart": 0,
+      "lineEnd": 1,
+      "lineStart": 1,
+    },
+    "name": IdentifierNode {
+      "comments": Array [],
+      "kind": "Identifier",
+      "location": Object {
+        "colEnd": 11,
+        "colStart": 7,
+        "lineEnd": 1,
+        "lineStart": 1,
+      },
+      "type": null,
+      "value": "Main",
+    },
+  },
 }
 `;
 
@@ -1564,6 +1780,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -1591,6 +1808,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -1618,6 +1836,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -1646,6 +1865,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -1673,6 +1893,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -1701,6 +1922,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -1729,6 +1951,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -1757,6 +1980,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -1895,6 +2119,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -2059,6 +2284,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -2099,6 +2325,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -2141,6 +2368,7 @@ world!",
     "lineEnd": 3,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -2230,6 +2458,7 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;
 
@@ -2306,5 +2535,6 @@ ModuleNode {
     "lineEnd": 1,
     "lineStart": 1,
   },
+  "specifier": null,
 }
 `;

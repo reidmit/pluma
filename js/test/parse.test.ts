@@ -170,6 +170,24 @@ describe('parse', () => {
     });
   });
 
+  describe('module specifier', () => {
+    test('simple module name', () => {
+      expect(parse('module Main')).toMatchSnapshot();
+    });
+
+    test('compound module name', () => {
+      expect(parse('module Hello.World.Main')).toMatchSnapshot();
+    });
+
+    test('module specifier does not span lines', () => {
+      expect(parse('module Hello.World\nsomethingElse')).toMatchSnapshot();
+    });
+
+    test('module specifiers must be all on one line', () => {
+      expect(() => parse('module\nMain')).toThrow();
+    });
+  });
+
   describe('type annotations', () => {
     test('simple annotation on assignment', () => {
       expect(parse('num :: Number = 47')).toMatchSnapshot();
