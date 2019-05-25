@@ -1,0 +1,8 @@
+---
+Language: Cpp
+DerivePointerAlignment: false
+PointerAlignment: Left
+IndentCaseLabels: true
+ColumnLimit: 90
+IndentPPDirectives: AfterHash
+AlignEscapedNewlines: Left
