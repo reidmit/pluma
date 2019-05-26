@@ -1,6 +1,6 @@
 #include "chunk.h"
 #include "debug.h"
-#include "repl.h"
+#include "run.h"
 #include "utils.h"
 #include "vm.h"
 #include <stdio.h>
@@ -12,36 +12,6 @@
 #define PATCH_VERSION 0
 
 int main(int argc, char* argv[]) {
-  initVM();
-
-  Chunk chunk;
-  initChunk(&chunk);
-
-  int constant = addConstant(&chunk, 1.2);
-  writeChunk(&chunk, OP_CONSTANT, 1);
-  writeChunk(&chunk, constant, 1);
-  writeChunk(&chunk, OP_RETURN, 1);
-  writeChunk(&chunk, OP_RETURN, 2);
-  writeChunk(&chunk, OP_RETURN, 3);
-  writeChunk(&chunk, OP_RETURN, 4);
-
-  constant = addConstant(&chunk, 56.8);
-  writeChunk(&chunk, OP_CONSTANT, 5);
-  writeChunk(&chunk, constant, 5);
-  writeChunk(&chunk, OP_RETURN, 5);
-  writeChunk(&chunk, OP_RETURN, 6);
-  writeChunk(&chunk, OP_RETURN, 7);
-
-  disassembleChunk(&chunk, "test chunk");
-  interpret(&chunk);
-
-  freeVM();
-  freeChunk(&chunk);
-
-  return 0;
-}
-
-int main2(int argc, char* argv[]) {
   char* binaryName = argv[0];
 
   if (argc > 1) {
@@ -55,7 +25,11 @@ int main2(int argc, char* argv[]) {
 
       case 6385651512: // "repl"
       case 177687:     //"r"
-        return runRepl();
+        if (argc == 2) {
+          return runRepl();
+        }
+
+        return runFile(argv[2]);
 
       case 229486327000139: //"version"
       case 177691:          //"v"

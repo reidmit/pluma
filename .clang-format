@@ -6,3 +6,8 @@ IndentCaseLabels: true
 ColumnLimit: 90
 IndentPPDirectives: AfterHash
 AlignEscapedNewlines: Left
+MaxEmptyLinesToKeep: 1
+AllowShortBlocksOnASingleLine: false
+AllowShortFunctionsOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
