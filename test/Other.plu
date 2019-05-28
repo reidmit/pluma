@@ -1,0 +1,6 @@
+module Other
+
+import Dir.Wow
+
+hello = "world"
+reid = "cool"

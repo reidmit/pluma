@@ -1,5 +1,6 @@
 import { ParseError } from './errors';
 import { Token, TokenKind } from './tokens';
+import * as fs from 'fs';
 export { tokenize };
 
 function tokenize(source: string): Token[] {
@@ -563,3 +564,6 @@ function isOperatorChar(char: string) {
       return false;
   }
 }
+
+const source = fs.readFileSync('./test/Main.plu', 'utf8');
+console.log(tokenize(source));

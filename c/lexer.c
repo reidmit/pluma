@@ -2,6 +2,7 @@
 #include "common.h"
 #include "memory.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static bool isAtEnd(Lexer* lexer) {
@@ -142,8 +143,9 @@ static Token makeIdentifierToken(Lexer* lexer) {
 }
 
 Lexer* newLexer(const char* source) {
-  Lexer* lexer = (Lexer*)reallocate(NULL, 0, sizeof(*lexer));
-  memset(lexer, 0, sizeof(Lexer));
+  // Lexer* lexer = (Lexer*)reallocate(NULL, 0, sizeof(*lexer));
+  // memset(lexer, 0, sizeof(Lexer));
+  Lexer* lexer = (Lexer*)malloc(sizeof(Lexer*));
 
   lexer->start = source;
   lexer->current = source;

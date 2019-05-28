@@ -8,6 +8,9 @@ typedef struct {
 } Lexer;
 
 typedef enum {
+  TOKEN_EOF,
+  TOKEN_ERROR,
+
   TOKEN_LEFT_PAREN,
   TOKEN_RIGHT_PAREN,
   TOKEN_LEFT_BRACE,
@@ -28,11 +31,6 @@ typedef enum {
   TOKEN_COMMENT,
   TOKEN_NUMBER,
   TOKEN_STRING,
-  TOKEN_INTERPOLATION_START,
-  TOKEN_INTERPOLATION_END,
-
-  TOKEN_ERROR,
-  TOKEN_EOF
 } TokenType;
 
 typedef struct {

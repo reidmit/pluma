@@ -35,6 +35,20 @@ int runRepl() {
 }
 
 int runFile(char* file) {
-  printf("running file: %s", file);
+  printf("running file: %s\n\n", file);
+
+  FILE* reader = fopen(file, "r");
+
+  int c;
+  if (reader) {
+    while ((c = getc(reader)) != EOF) {
+      putchar(c);
+    }
+
+    fclose(reader);
+  } else {
+    printf("Failed to open?");
+  }
+
   return 0;
 }

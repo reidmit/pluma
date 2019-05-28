@@ -1,0 +1,3 @@
+module Dir.Wow
+
+thing = "yep"
