@@ -25,12 +25,8 @@ fn to_string(bytes: &[u8]) -> String {
 impl<'a> Parser<'a> {
   pub fn from_source(source: &'a Vec<u8>, preserve_comments: bool) -> Parser<'a> {
     let mut tokenizer = Tokenizer::new(source, preserve_comments);
-    let mut tokens = Vec::new();
-    let mut token_count = 0;
-    while !tokenizer.is_done {
-      tokens.push(tokenizer.read_token());
-      token_count += 1;
-    }
+    let tokens = tokenizer.collect_tokens();
+    let token_count = tokens.len();
 
     println!("{:#?}", tokens);
 
@@ -46,15 +42,6 @@ impl<'a> Parser<'a> {
 
   fn next_token(&self) -> Option<&Token> {
     self.tokens.get(self.index)
-  }
-
-  fn skip_skipped(&mut self) {
-    loop {
-      match self.next_token() {
-        Some(Token::Skipped) => self.index += 1,
-        _ => break,
-      }
-    }
   }
 
   fn parse_parenthetical(&mut self) -> Option<ParseResult> {
@@ -102,8 +89,6 @@ impl<'a> Parser<'a> {
   }
 
   pub fn parse_expression(&mut self) -> Option<ParseResult> {
-    self.skip_skipped();
-
     if self.index >= self.token_count {
       return None;
     }

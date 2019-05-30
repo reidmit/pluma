@@ -57,6 +57,12 @@ fn print_error(msg: String) {
 }
 
 fn main() {
+  let mut x = 5;
+
+  let y = &x;
+
+  let z = &mut x;
+
   let config = CompilerConfig::new(Some("test/Main.plu".to_owned())).unwrap();
   Compiler::new(config).run().unwrap();
 }
