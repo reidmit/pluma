@@ -23,7 +23,7 @@ impl<'a> Compiler<'a> {
     let mut parser = Parser::from_source(&file_contents, self.preserve_comments);
     let ast = parser.parse_module();
 
-    println!("{:#?}", ast);
+    // println!("{:#?}", ast);
   }
 
   pub fn add_module(&self, abs_file_path: &String) -> Result<bool, String> {

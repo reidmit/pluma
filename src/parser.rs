@@ -74,11 +74,10 @@ impl<'a> Parser<'a> {
     let mut result = None;
     let mut to_advance = 0;
 
-    if let Some(&Token::Identifier { line, value, .. }) = self.next_token() {
+    if let Some(&Token::Identifier { value, .. }) = self.next_token() {
       to_advance = 1;
 
       result = Some(Parsed(Node::Identifier {
-        line,
         value: to_string(value),
         inferred_type: NodeType::Unknown,
       }))

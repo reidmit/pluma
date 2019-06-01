@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Token<'a> {
   Unexpected {
     line: usize,
@@ -126,88 +126,115 @@ impl<'a> Tokenizer<'a> {
   }
 
   pub fn collect_tokens(&mut self) -> Vec<Token<'a>> {
-    let mut tokens = Vec::new();
-
     let source = self.source;
     let length = self.source_length;
 
+    let mut tokens = Vec::new();
     let mut index = 0;
     let mut line = 0;
     let mut line_start_index = 0;
-    let mut string_stack = 0;
+
+    let mut string_stack = Vec::new();
     let mut interpolation_stack = 0;
-    let mut string_literal_start_index = 0;
 
-    /*
-      oh "hello $(name) wow"
-
-      - string starts
-      - interpolation starts, string ends
-    */
-
+    // We iterate through all chars in a single loop, appending tokens as we find them.
+    // The trickiest parts here are related to string interpolations, since they can
+    // be nested arbitrarily deep (e.g. "hello $("Ms. $(name)")"). These parts are
+    // commented below.
     while index < length {
       let start_index = index;
       let byte = source[start_index];
 
-      if string_stack == 0 && byte == b'"' {
-        string_stack += 1;
-        string_literal_start_index = index;
+      if string_stack.is_empty() && byte == b'"' {
+        // If the string stack is empty and byte is ", we are at the beginning of
+        // a brand new string. Save the start index and advance.
+
+        string_stack.push(index);
         index += 1;
         continue;
       }
 
-      if string_stack > 0 {
-        if byte == b'"' {
-          string_stack -= 1;
+      if !string_stack.is_empty() {
+        // If the string stack is not empty, we're somewhere inside a string (maybe
+        // in an interpolation, though). We must check if we need to end the string,
+        // start/end an interpolation, or just carry on.
+        if byte == b'"' && string_stack.len() == interpolation_stack {
+          // If the two stacks have the same size, we must be inside of an interpolation,
+          // so the " indicates the beginning of a nested string literal. Save the index
+          // in the string stack and advance.
+
+          string_stack.push(index);
           index += 1;
+          continue;
+        }
+
+        if byte == b'"' {
+          // Here, the " must indicate the end of a string literal section. Pop from
+          // the string stack, add a new token, then advance.
+
+          let string_start_index = string_stack.pop().unwrap();
 
           tokens.push(Token::String {
             line: line,
-            col: string_literal_start_index - line_start_index,
-            value: &source[string_literal_start_index..index],
+            col: string_start_index - line_start_index,
+            value: &source[string_start_index + 1..index],
           });
 
+          index += 1;
           continue;
-        } else if byte == b'$' && start_index + 1 < length && source[start_index + 1] == b'(' {
+        }
+
+        if byte == b'$' && start_index + 1 < length && source[start_index + 1] == b'(' {
+          // We must be at the beginning of an interpolation, so create a token for
+          // the string literal portion leading up to the interpolation, one for the
+          // interpolation start, and add to the interpolation stack.
+
+          let string_start_index = string_stack.last().unwrap();
+
+          tokens.push(Token::String {
+            line: line,
+            col: string_start_index - line_start_index,
+            value: &source[string_start_index + 1..index],
+          });
+
+          tokens.push(Token::InterpolationStart {
+            line: line,
+            col: index - line_start_index,
+          });
+
           index += 2;
           interpolation_stack += 1;
           continue;
-        } else if byte == b')' {
+        }
+
+        if byte == b')' {
+          // We must be at the end of an interpolation, so make a token for it and
+          // fix the index on the last string in the string stack so that it starts
+          // here. Decrease the interpolation stack.
+
+          tokens.push(Token::InterpolationEnd {
+            line: line,
+            col: index - line_start_index,
+          });
+
+          string_stack.pop();
+          string_stack.push(index);
+
           index += 1;
           interpolation_stack -= 1;
           continue;
         }
 
-        index += 1;
-        continue;
-      }
-
-      if is_identifier_start_char(byte) {
-        while index < length && is_identifier_char(source[index]) {
+        if string_stack.len() > interpolation_stack {
+          // If the string stack is larger than the interpolation stack, we must be
+          // inside of a string literal portion. Just advance past this char so we can
+          // include it in the string later.
           index += 1;
+          continue;
         }
 
-        tokens.push(Token::Identifier {
-          line: line,
-          col: start_index - line_start_index,
-          value: &source[start_index..index],
-        });
-
-        continue;
-      }
-
-      if is_digit(byte) {
-        while index < length && is_digit(source[index]) {
-          index += 1;
-        }
-
-        tokens.push(Token::Number {
-          line: line,
-          col: start_index - line_start_index,
-          value: &source[start_index..index],
-        });
-
-        continue;
+        // At this point, we must be inside an interpolation (not a string literal),
+        // so continue to collect tokens as we would outside of a string.
       }
 
       match byte {
@@ -376,6 +403,34 @@ impl<'a> Tokenizer<'a> {
           }
         }
 
+        _ if is_identifier_start_char(byte) => {
+          while index < length && is_identifier_char(source[index]) {
+            index += 1;
+          }
+
+          tokens.push(Token::Identifier {
+            line: line,
+            col: start_index - line_start_index,
+            value: &source[start_index..index],
+          });
+
+          continue;
+        }
+
+        _ if is_digit(byte) => {
+          while index < length && is_digit(source[index]) {
+            index += 1;
+          }
+
+          tokens.push(Token::Number {
+            line: line,
+            col: start_index - line_start_index,
+            value: &source[start_index..index],
+          });
+
+          continue;
+        }
+
         _ => {
           index += 1;
 
@@ -385,6 +440,15 @@ impl<'a> Tokenizer<'a> {
           })
         }
       };
+    }
+
+    if interpolation_stack > 0 {
+      panic!("Unclosed interpolation");
+    }
+
+    if !string_stack.is_empty() {
+      let string_start_index = string_stack.pop().unwrap();
+      panic!("Unclosed string, starting at {}", string_start_index);
     }
 
     tokens
