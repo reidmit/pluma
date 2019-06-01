@@ -11,8 +11,9 @@ mod errors;
 mod fs;
 mod parser;
 mod tokenizer;
-use compiler::Compiler;
-use config::CompilerConfig;
+
+use crate::compiler::Compiler;
+use crate::config::CompilerConfig;
 use std::env;
 use std::process::exit;
 
@@ -57,12 +58,6 @@ fn print_error(msg: String) {
 }
 
 fn main() {
-  let mut x = 5;
-
-  let y = &x;
-
-  let z = &mut x;
-
   let config = CompilerConfig::new(Some("test/Main.plu".to_owned())).unwrap();
   Compiler::new(config).run().unwrap();
 }

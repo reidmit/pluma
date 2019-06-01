@@ -1,4 +1,4 @@
-use fs;
+use crate::fs;
 
 pub struct CompilerConfig {
   pub entry_path: String,

@@ -1,7 +1,7 @@
-use ast::{Node, NodeType};
-use parser::ParseResult::{ParseError, Parsed};
+use crate::ast::{Node, NodeType};
+use crate::parser::ParseResult::{ParseError, Parsed};
+use crate::tokenizer::{Token, Tokenizer};
 use std::collections::HashMap;
-use tokenizer::{Token, Tokenizer};
 
 pub struct Parser<'a> {
   source: &'a Vec<u8>,

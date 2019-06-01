@@ -1,8 +1,8 @@
-use config::CompilerConfig;
-use fs;
-use parser::Parser;
+use crate::config::CompilerConfig;
+use crate::fs;
+use crate::parser::Parser;
+use crate::tokenizer::Tokenizer;
 use std::collections::HashMap;
-use tokenizer::Tokenizer;
 
 pub struct Compiler<'a> {
   entry_path: String,
