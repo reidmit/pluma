@@ -24,8 +24,7 @@ fn to_string(bytes: &[u8]) -> String {
 
 impl<'a> Parser<'a> {
   pub fn from_source(source: &'a Vec<u8>, preserve_comments: bool) -> Parser<'a> {
-    let mut tokenizer = Tokenizer::new(source, preserve_comments);
-    let tokens = tokenizer.collect_tokens();
+    let tokens = Tokenizer::from_source(source).collect_tokens();
     let token_count = tokens.len();
 
     println!("{:#?}", tokens);

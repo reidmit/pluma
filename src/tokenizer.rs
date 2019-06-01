@@ -115,12 +115,12 @@ fn is_digit(byte: u8) -> bool {
 }
 
 impl<'a> Tokenizer<'a> {
-  pub fn new(source: &'a Vec<u8>, preserve_comments: bool) -> Tokenizer<'a> {
+  pub fn from_source(source: &'a Vec<u8>) -> Tokenizer<'a> {
     let length = source.len();
 
     return Tokenizer {
       source: source,
-      preserve_comments: preserve_comments,
+      preserve_comments: true,
       source_length: length,
     };
   }
@@ -452,5 +452,305 @@ impl<'a> Tokenizer<'a> {
     }
 
     tokens
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn empty() {
+    let src = "";
+    let v = Vec::from(src);
+    let tokens = Tokenizer::from_source(&v).collect_tokens();
+
+    assert_eq!(tokens, vec![])
+  }
+
+  #[test]
+  fn identifer_tokens() {
+    let src = "hello world";
+    let v = Vec::from(src);
+    let tokens = Tokenizer::from_source(&v).collect_tokens();
+
+    assert_eq!(
+      tokens,
+      vec![
+        Token::Identifier {
+          line: 0,
+          col: 0,
+          value: "hello".as_bytes()
+        },
+        Token::Identifier {
+          line: 0,
+          col: 6,
+          value: "world".as_bytes()
+        },
+      ]
+    )
+  }
+
+  #[test]
+  fn number_tokens() {
+    let src = "hello 1 47 wow";
+    let v = Vec::from(src);
+    let tokens = Tokenizer::from_source(&v).collect_tokens();
+
+    assert_eq!(
+      tokens,
+      vec![
+        Token::Identifier {
+          line: 0,
+          col: 0,
+          value: "hello".as_bytes()
+        },
+        Token::Number {
+          line: 0,
+          col: 6,
+          value: "1".as_bytes()
+        },
+        Token::Number {
+          line: 0,
+          col: 8,
+          value: "47".as_bytes()
+        },
+        Token::Identifier {
+          line: 0,
+          col: 11,
+          value: "wow".as_bytes()
+        },
+      ]
+    )
+  }
+
+  #[test]
+  fn symbol_tokens() {
+    let src = "{ . } ( , ) : [ :: ] := = => ->";
+    let v = Vec::from(src);
+    let tokens = Tokenizer::from_source(&v).collect_tokens();
+
+    assert_eq!(tokens.len(), 14);
+    assert_eq!(tokens[0], Token::LeftBrace { line: 0, col: 0 });
+    assert_eq!(tokens[1], Token::Dot { line: 0, col: 2 });
+    assert_eq!(tokens[2], Token::RightBrace { line: 0, col: 4 });
+    assert_eq!(tokens[3], Token::LeftParen { line: 0, col: 6 });
+    assert_eq!(tokens[4], Token::Comma { line: 0, col: 8 });
+    assert_eq!(tokens[5], Token::RightParen { line: 0, col: 10 });
+    assert_eq!(tokens[6], Token::Colon { line: 0, col: 12 });
+    assert_eq!(tokens[7], Token::LeftBracket { line: 0, col: 14 });
+    assert_eq!(tokens[8], Token::DoubleColon { line: 0, col: 16 });
+    assert_eq!(tokens[9], Token::RightBracket { line: 0, col: 19 });
+    assert_eq!(tokens[10], Token::ColonEquals { line: 0, col: 21 });
+    assert_eq!(tokens[11], Token::Equals { line: 0, col: 24 });
+    assert_eq!(tokens[12], Token::DoubleArrow { line: 0, col: 26 });
+    assert_eq!(tokens[13], Token::Arrow { line: 0, col: 29 });
+  }
+
+  #[test]
+  fn unexpected_tokens() {
+    let src = "(@$@)";
+    let v = Vec::from(src);
+    let tokens = Tokenizer::from_source(&v).collect_tokens();
+
+    assert_eq!(tokens.len(), 5);
+    assert_eq!(tokens[0], Token::LeftParen { line: 0, col: 0 });
+    assert_eq!(tokens[1], Token::Unexpected { line: 0, col: 1 });
+    assert_eq!(tokens[2], Token::Unexpected { line: 0, col: 2 });
+    assert_eq!(tokens[3], Token::Unexpected { line: 0, col: 3 });
+    assert_eq!(tokens[4], Token::RightParen { line: 0, col: 4 });
+  }
+
+  #[test]
+  fn strings_without_interpolations() {
+    let src = "\"hello\" \"\" \"world\"";
+    let v = Vec::from(src);
+    let tokens = Tokenizer::from_source(&v).collect_tokens();
+
+    assert_eq!(tokens.len(), 3);
+    assert_eq!(
+      tokens[0],
+      Token::String {
+        line: 0,
+        col: 0,
+        value: "hello".as_bytes()
+      }
+    );
+    assert_eq!(
+      tokens[1],
+      Token::String {
+        line: 0,
+        col: 8,
+        value: "".as_bytes()
+      }
+    );
+    assert_eq!(
+      tokens[2],
+      Token::String {
+        line: 0,
+        col: 11,
+        value: "world".as_bytes()
+      }
+    );
+  }
+
+  #[test]
+  fn strings_with_interpolations() {
+    let src = "\"hello $(name)!\" nice \"$(str)\"";
+    let v = Vec::from(src);
+    let tokens = Tokenizer::from_source(&v).collect_tokens();
+
+    assert_eq!(tokens.len(), 11);
+
+    assert_eq!(
+      tokens[0],
+      Token::String {
+        line: 0,
+        col: 0,
+        value: "hello ".as_bytes()
+      }
+    );
+
+    assert_eq!(tokens[1], Token::InterpolationStart { line: 0, col: 7 });
+
+    assert_eq!(
+      tokens[2],
+      Token::Identifier {
+        line: 0,
+        col: 9,
+        value: "name".as_bytes()
+      }
+    );
+
+    assert_eq!(tokens[3], Token::InterpolationEnd { line: 0, col: 13 });
+
+    assert_eq!(
+      tokens[4],
+      Token::String {
+        line: 0,
+        col: 13,
+        value: "!".as_bytes()
+      }
+    );
+
+    assert_eq!(
+      tokens[5],
+      Token::Identifier {
+        line: 0,
+        col: 17,
+        value: "nice".as_bytes()
+      }
+    );
+
+    assert_eq!(
+      tokens[6],
+      Token::String {
+        line: 0,
+        col: 22,
+        value: "".as_bytes()
+      }
+    );
+
+    assert_eq!(tokens[7], Token::InterpolationStart { line: 0, col: 23 });
+
+    assert_eq!(
+      tokens[8],
+      Token::Identifier {
+        line: 0,
+        col: 25,
+        value: "str".as_bytes()
+      }
+    );
+
+    assert_eq!(tokens[9], Token::InterpolationEnd { line: 0, col: 28 });
+
+    assert_eq!(
+      tokens[10],
+      Token::String {
+        line: 0,
+        col: 28,
+        value: "".as_bytes()
+      }
+    );
+  }
+
+  #[test]
+  fn strings_with_nested_interpolations() {
+    let src = "\"hello $(name \"inner $(o)\" wow)!\"";
+    let v = Vec::from(src);
+    let tokens = Tokenizer::from_source(&v).collect_tokens();
+
+    assert_eq!(tokens.len(), 11);
+
+    assert_eq!(
+      tokens[0],
+      Token::String {
+        line: 0,
+        col: 0,
+        value: "hello ".as_bytes()
+      }
+    );
+
+    assert_eq!(tokens[1], Token::InterpolationStart { line: 0, col: 7 });
+
+    assert_eq!(
+      tokens[2],
+      Token::Identifier {
+        line: 0,
+        col: 9,
+        value: "name".as_bytes()
+      }
+    );
+
+    assert_eq!(
+      tokens[3],
+      Token::String {
+        line: 0,
+        col: 14,
+        value: "inner ".as_bytes()
+      }
+    );
+
+    assert_eq!(tokens[4], Token::InterpolationStart { line: 0, col: 21 });
+
+    assert_eq!(
+      tokens[5],
+      Token::Identifier {
+        line: 0,
+        col: 23,
+        value: "o".as_bytes()
+      }
+    );
+
+    assert_eq!(tokens[6], Token::InterpolationEnd { line: 0, col: 24 });
+
+    assert_eq!(
+      tokens[7],
+      Token::String {
+        line: 0,
+        col: 24,
+        value: "".as_bytes()
+      }
+    );
+
+    assert_eq!(
+      tokens[8],
+      Token::Identifier {
+        line: 0,
+        col: 27,
+        value: "wow".as_bytes()
+      }
+    );
+
+    assert_eq!(tokens[9], Token::InterpolationEnd { line: 0, col: 30 });
+
+    assert_eq!(
+      tokens[10],
+      Token::String {
+        line: 0,
+        col: 30,
+        value: "!".as_bytes()
+      }
+    );
   }
 }

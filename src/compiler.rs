@@ -21,7 +21,7 @@ impl<'a> Compiler<'a> {
 
   pub fn compile_module(&self, file_contents: Vec<u8>) {
     let mut parser = Parser::from_source(&file_contents, self.preserve_comments);
-    let ast = parser.parse_module();
+    let _ast = parser.parse_module();
 
     // println!("{:#?}", ast);
   }
