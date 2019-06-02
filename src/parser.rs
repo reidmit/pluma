@@ -1,7 +1,7 @@
-use crate::ast::{extract_location,Node, NodeType};
+use crate::ast::{extract_location, Node, NodeType};
 use crate::parser::ParseResult::{ParseError, Parsed};
 use crate::tokenizer::Tokenizer;
-use crate::tokens::{ Token};
+use crate::tokens::Token;
 use std::collections::HashMap;
 
 pub struct Parser<'a> {
@@ -66,6 +66,35 @@ impl<'a> Parser<'a> {
     expr
   }
 
+  fn parse_block(&mut self) -> Option<ParseResult> {
+    let (line_start, col_start) = match self.next_token() {
+      Some(&Token::LeftBrace { line, col }) => (line, col),
+      _ => return None,
+    };
+
+    self.index += 1;
+
+    let mut params = Vec::new();
+    let mut body = Vec::new();
+
+    let (line_end, col_end) = match self.next_token() {
+      Some(&Token::RightBrace { line, col }) => (line, col),
+      _ => return Some(ParseError("Missing }".to_owned())),
+    };
+
+    self.index += 1;
+
+    Some(Parsed(Node::Block {
+      line_start,
+      col_start,
+      line_end,
+      col_end,
+      params,
+      body,
+      inferred_type: NodeType::Unknown,
+    }))
+  }
+
   fn parse_number(&mut self) -> Option<ParseResult> {
     let mut result = None;
     let mut to_advance = 0;
@@ -88,7 +117,13 @@ impl<'a> Parser<'a> {
 
   fn parse_string(&mut self) -> Option<ParseResult> {
     let first_string_literal = match self.next_token() {
-      Some(&Token::String { value, line_start, col_start, line_end, col_end }) => Node::StringLiteral {
+      Some(&Token::String {
+        value,
+        line_start,
+        line_end,
+        col_start,
+        col_end,
+      }) => Node::StringLiteral {
         line_start,
         line_end,
         col_start,
@@ -121,16 +156,20 @@ impl<'a> Parser<'a> {
       }
 
       match self.next_token() {
-        Some(&Token::String { value, line_start, col_start, line_end, col_end }) => {
-          interpolation_parts.push(Node::StringLiteral {
-            line_start,
-            line_end,
-            col_start,
-            col_end,
-            value: to_string(value),
-            inferred_type: NodeType::Unknown,
-          })
-        }
+        Some(&Token::String {
+          value,
+          line_start,
+          col_start,
+          line_end,
+          col_end,
+        }) => interpolation_parts.push(Node::StringLiteral {
+          line_start,
+          line_end,
+          col_start,
+          col_end,
+          value: to_string(value),
+          inferred_type: NodeType::Unknown,
+        }),
         _ => {
           return Some(ParseError(
             "Expected a string after interpolation".to_owned(),
@@ -224,6 +263,7 @@ impl<'a> Parser<'a> {
 
     let expr = self
       .parse_parenthetical()
+      .or_else(|| self.parse_block())
       .or_else(|| self.parse_identifier())
       .or_else(|| self.parse_assignment())
       .or_else(|| self.parse_string())

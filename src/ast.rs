@@ -4,6 +4,16 @@ pub enum Node {
     body: Vec<Node>,
   },
 
+  Block {
+    line_start: usize,
+    col_start: usize,
+    line_end: usize,
+    col_end: usize,
+    params: Vec<Node>,
+    body: Vec<Node>,
+    inferred_type: NodeType,
+  },
+
   Identifier {
     line: usize,
     col_start: usize,
