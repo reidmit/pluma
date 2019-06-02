@@ -1,6 +1,8 @@
 use std::collections::VecDeque;
 
-#[derive(Debug, Clone, PartialEq)]
+// TODO: use this to only derive in tests
+// #[cfg_attr(test, derive(Debug, PartialEq))]
+#[derive(Debug, PartialEq)]
 pub enum Token<'a> {
   Unexpected {
     line: usize,

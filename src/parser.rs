@@ -27,7 +27,7 @@ impl<'a> Parser<'a> {
     let tokens = Tokenizer::from_source(source).collect_tokens();
     let token_count = tokens.len();
 
-    println!("{:#?}", tokens);
+    // println!("{:#?}", tokens);
 
     return Parser {
       source,
@@ -65,8 +65,78 @@ impl<'a> Parser<'a> {
     expr
   }
 
-  fn parse_number_literal(&mut self) -> Option<ParseResult> {
-    None
+  fn parse_number(&mut self) -> Option<ParseResult> {
+    let mut result = None;
+    let mut to_advance = 0;
+
+    if let Some(&Token::Number { value, .. }) = self.next_token() {
+      to_advance = 1;
+
+      result = Some(Parsed(Node::IntLiteral {
+        value: to_string(value),
+        inferred_type: NodeType::Unknown,
+      }))
+    }
+
+    self.index += to_advance;
+    result
+  }
+
+  fn parse_string(&mut self) -> Option<ParseResult> {
+    let first_string_literal = match self.next_token() {
+      Some(&Token::String { value, .. }) => Some(Node::StringLiteral {
+        value: to_string(value),
+        inferred_type: NodeType::Unknown,
+      }),
+      _ => return None,
+    };
+
+    self.index += 1;
+
+    let mut interpolation_parts = Vec::new();
+
+    while let Some(&Token::InterpolationStart { .. }) = self.next_token() {
+      self.index += 1;
+
+      match self.parse_expression() {
+        Some(Parsed(expr)) => interpolation_parts.push(expr),
+        _ => {
+          return Some(ParseError(
+            "Expected expression in interpolation".to_owned(),
+          ))
+        }
+      };
+
+      match self.next_token() {
+        Some(&Token::InterpolationEnd { .. }) => self.index += 1,
+        _ => return Some(ParseError("Expected ) to end interpolation".to_owned())),
+      }
+
+      match self.next_token() {
+        Some(&Token::String { value, .. }) => interpolation_parts.push(Node::StringLiteral {
+          value: to_string(value),
+          inferred_type: NodeType::Unknown,
+        }),
+        _ => {
+          return Some(ParseError(
+            "Expected a string after interpolation".to_owned(),
+          ))
+        }
+      }
+
+      self.index += 1;
+    }
+
+    if interpolation_parts.is_empty() {
+      return Some(Parsed(first_string_literal.unwrap()));
+    }
+
+    interpolation_parts.insert(0, first_string_literal.unwrap());
+
+    Some(Parsed(Node::StringInterpolation {
+      parts: interpolation_parts,
+      inferred_type: NodeType::Unknown,
+    }))
   }
 
   fn parse_identifier(&mut self) -> Option<ParseResult> {
@@ -77,12 +147,56 @@ impl<'a> Parser<'a> {
       to_advance = 1;
 
       result = Some(Parsed(Node::Identifier {
-        value: to_string(value),
+        name: to_string(value),
         inferred_type: NodeType::Unknown,
       }))
     }
 
     self.index += to_advance;
+    result
+  }
+
+  fn parse_assignment(&mut self) -> Option<ParseResult> {
+    let mut result = None;
+
+    if self.body.is_empty() {
+      return result;
+    }
+
+    let left = self.body.pop().unwrap();
+
+    if let Some(&Token::Equals { .. }) = self.next_token() {
+      self.index += 1;
+
+      let right = match self.parse_expression() {
+        Some(Parsed(node)) => node,
+        error @ Some(ParseError(_)) => return error,
+        None => return Some(ParseError("Expected expression after =".to_owned())),
+      };
+
+      result = Some(Parsed(Node::Assignment {
+        left: Box::new(left),
+        right: Box::new(right),
+        is_constant: true,
+        inferred_type: NodeType::Unknown,
+      }))
+    } else if let Some(&Token::ColonEquals { .. }) = self.next_token() {
+      self.index += 1;
+
+      let right = match self.parse_expression() {
+        Some(Parsed(node)) => node,
+        error @ Some(ParseError(_)) => return error,
+        None => return Some(ParseError("Expected expression after :=".to_owned())),
+      };
+
+      result = Some(Parsed(Node::Assignment {
+        left: Box::new(left),
+        right: Box::new(right),
+        is_constant: false,
+        inferred_type: NodeType::Unknown,
+      }))
+    }
+
     result
   }
 
@@ -94,22 +208,24 @@ impl<'a> Parser<'a> {
     let expr = self
       .parse_parenthetical()
       .or_else(|| self.parse_identifier())
-      .or_else(|| self.parse_number_literal());
+      .or_else(|| self.parse_assignment())
+      .or_else(|| self.parse_string())
+      .or_else(|| self.parse_number());
 
     expr
   }
 
   pub fn parse_module(&mut self) -> ParseResult {
-    let mut body = Vec::new();
-
     loop {
       match self.parse_expression() {
-        Some(Parsed(expr)) => body.push(expr),
+        Some(Parsed(expr)) => self.body.push(expr),
         Some(ParseError(err)) => return ParseError(err),
         None => break,
       }
     }
 
-    Parsed(Node::Module { body })
+    Parsed(Node::Module {
+      body: self.body.clone(),
+    })
   }
 }

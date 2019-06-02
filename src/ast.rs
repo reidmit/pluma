@@ -1,11 +1,11 @@
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Node {
   Module {
     body: Vec<Node>,
   },
   Identifier {
     // line: usize,
-    value: String,
+    name: String,
     inferred_type: NodeType,
   },
   IntLiteral {
@@ -58,7 +58,7 @@ pub enum Node {
   },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NodeType {
   Unknown,
   Func {

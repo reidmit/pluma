@@ -21,9 +21,9 @@ impl<'a> Compiler<'a> {
 
   pub fn compile_module(&self, file_contents: Vec<u8>) {
     let mut parser = Parser::from_source(&file_contents, self.preserve_comments);
-    let _ast = parser.parse_module();
+    let ast = parser.parse_module();
 
-    // println!("{:#?}", ast);
+    println!("{:#?}", ast);
   }
 
   pub fn add_module(&self, abs_file_path: &String) -> Result<bool, String> {
