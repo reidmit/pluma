@@ -2,6 +2,9 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
+#[macro_use]
+mod test_utils;
+
 mod ast;
 mod cli;
 mod compiler;
@@ -11,6 +14,7 @@ mod errors;
 mod fs;
 mod parser;
 mod tokenizer;
+mod tokens;
 
 use crate::compiler::Compiler;
 use crate::config::CompilerConfig;

@@ -1,102 +1,5 @@
+use crate::tokens::Token;
 use std::collections::VecDeque;
-
-// TODO: use this to only derive in tests
-// #[cfg_attr(test, derive(Debug, PartialEq))]
-#[derive(Debug, PartialEq)]
-pub enum Token<'a> {
-  Unexpected {
-    line: usize,
-    col: usize,
-  },
-  LeftParen {
-    line: usize,
-    col: usize,
-  },
-  RightParen {
-    line: usize,
-    col: usize,
-  },
-  LeftBrace {
-    line: usize,
-    col: usize,
-  },
-  RightBrace {
-    line: usize,
-    col: usize,
-  },
-  LeftBracket {
-    line: usize,
-    col: usize,
-  },
-  RightBracket {
-    line: usize,
-    col: usize,
-  },
-  Comma {
-    line: usize,
-    col: usize,
-  },
-  Dot {
-    line: usize,
-    col: usize,
-  },
-  Colon {
-    line: usize,
-    col: usize,
-  },
-  Equals {
-    line: usize,
-    col: usize,
-  },
-  Minus {
-    line: usize,
-    col: usize,
-  },
-  Arrow {
-    line: usize,
-    col: usize,
-  },
-  DoubleArrow {
-    line: usize,
-    col: usize,
-  },
-  DoubleColon {
-    line: usize,
-    col: usize,
-  },
-  ColonEquals {
-    line: usize,
-    col: usize,
-  },
-  Identifier {
-    line: usize,
-    col: usize,
-    value: &'a [u8],
-  },
-  Comment {
-    line: usize,
-    col: usize,
-    value: &'a [u8],
-  },
-  Number {
-    line: usize,
-    col: usize,
-    value: &'a [u8],
-  },
-  String {
-    line: usize,
-    col: usize,
-    value: &'a [u8],
-  },
-  InterpolationStart {
-    line: usize,
-    col: usize,
-  },
-  InterpolationEnd {
-    line: usize,
-    col: usize,
-  },
-}
 
 pub struct Tokenizer<'a> {
   source: &'a Vec<u8>,
@@ -151,7 +54,7 @@ impl<'a> Tokenizer<'a> {
         // If the string stack is empty and byte is ", we are at the beginning of
         // a brand new string. Save the start index and advance.
 
-        string_stack.push(index);
+        string_stack.push((line, index - line_start_index, index));
         index += 1;
         continue;
       }
@@ -165,7 +68,7 @@ impl<'a> Tokenizer<'a> {
           // so the " indicates the beginning of a nested string literal. Save the index
           // in the string stack and advance.
 
-          string_stack.push(index);
+          string_stack.push((line, index - line_start_index, index));
           index += 1;
           continue;
         }
@@ -174,12 +77,16 @@ impl<'a> Tokenizer<'a> {
           // Here, the " must indicate the end of a string literal section. Pop from
           // the string stack, add a new token, then advance.
 
-          let string_start_index = string_stack.pop().unwrap();
+          let (line_start, col_start, offset) = string_stack.pop().unwrap();
+
+          println!("str ending, {}, {}, {}", line_start, col_start, offset);
 
           tokens.push(Token::String {
-            line: line,
-            col: string_start_index - line_start_index,
-            value: &source[string_start_index + 1..index],
+            line_start,
+            col_start,
+            line_end: line,
+            col_end: index + 1 - line_start_index,
+            value: &source[offset + 1..index],
           });
 
           index += 1;
@@ -191,12 +98,14 @@ impl<'a> Tokenizer<'a> {
           // the string literal portion leading up to the interpolation, one for the
           // interpolation start, and add to the interpolation stack.
 
-          let string_start_index = string_stack.last().unwrap();
+          let (line_start, col_start, offset) = string_stack.last().unwrap();
 
           tokens.push(Token::String {
-            line: line,
-            col: string_start_index - line_start_index,
-            value: &source[string_start_index + 1..index],
+            line_start: *line_start,
+            col_start: *col_start,
+            line_end: line,
+            col_end: index - line_start_index,
+            value: &source[offset + 1..index],
           });
 
           tokens.push(Token::InterpolationStart {
@@ -220,7 +129,7 @@ impl<'a> Tokenizer<'a> {
           });
 
           string_stack.pop();
-          string_stack.push(index);
+          string_stack.push((line, index - line_start_index + 1, index));
 
           index += 1;
           interpolation_stack -= 1;
@@ -449,8 +358,8 @@ impl<'a> Tokenizer<'a> {
     }
 
     if !string_stack.is_empty() {
-      let string_start_index = string_stack.pop().unwrap();
-      panic!("Unclosed string, starting at {}", string_start_index);
+      let (line_start, col_start, _) = string_stack.pop().unwrap();
+      panic!("Unclosed string, starting at {}:{}", line_start, col_start);
     }
 
     tokens
@@ -460,6 +369,7 @@ impl<'a> Tokenizer<'a> {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::test_utils::*;
 
   #[test]
   fn empty() {
@@ -467,7 +377,7 @@ mod tests {
     let v = Vec::from(src);
     let tokens = Tokenizer::from_source(&v).collect_tokens();
 
-    assert_eq!(tokens, vec![])
+    expect_eq!(tokens, vec![])
   }
 
   #[test]
@@ -476,7 +386,7 @@ mod tests {
     let v = Vec::from(src);
     let tokens = Tokenizer::from_source(&v).collect_tokens();
 
-    assert_eq!(
+    expect_eq!(
       tokens,
       vec![
         Token::Identifier {
@@ -499,7 +409,7 @@ mod tests {
     let v = Vec::from(src);
     let tokens = Tokenizer::from_source(&v).collect_tokens();
 
-    assert_eq!(
+    expect_eq!(
       tokens,
       vec![
         Token::Identifier {
@@ -532,21 +442,21 @@ mod tests {
     let v = Vec::from(src);
     let tokens = Tokenizer::from_source(&v).collect_tokens();
 
-    assert_eq!(tokens.len(), 14);
-    assert_eq!(tokens[0], Token::LeftBrace { line: 0, col: 0 });
-    assert_eq!(tokens[1], Token::Dot { line: 0, col: 2 });
-    assert_eq!(tokens[2], Token::RightBrace { line: 0, col: 4 });
-    assert_eq!(tokens[3], Token::LeftParen { line: 0, col: 6 });
-    assert_eq!(tokens[4], Token::Comma { line: 0, col: 8 });
-    assert_eq!(tokens[5], Token::RightParen { line: 0, col: 10 });
-    assert_eq!(tokens[6], Token::Colon { line: 0, col: 12 });
-    assert_eq!(tokens[7], Token::LeftBracket { line: 0, col: 14 });
-    assert_eq!(tokens[8], Token::DoubleColon { line: 0, col: 16 });
-    assert_eq!(tokens[9], Token::RightBracket { line: 0, col: 19 });
-    assert_eq!(tokens[10], Token::ColonEquals { line: 0, col: 21 });
-    assert_eq!(tokens[11], Token::Equals { line: 0, col: 24 });
-    assert_eq!(tokens[12], Token::DoubleArrow { line: 0, col: 26 });
-    assert_eq!(tokens[13], Token::Arrow { line: 0, col: 29 });
+    expect_eq!(tokens.len(), 14);
+    expect_eq!(tokens[0], Token::LeftBrace { line: 0, col: 0 });
+    expect_eq!(tokens[1], Token::Dot { line: 0, col: 2 });
+    expect_eq!(tokens[2], Token::RightBrace { line: 0, col: 4 });
+    expect_eq!(tokens[3], Token::LeftParen { line: 0, col: 6 });
+    expect_eq!(tokens[4], Token::Comma { line: 0, col: 8 });
+    expect_eq!(tokens[5], Token::RightParen { line: 0, col: 10 });
+    expect_eq!(tokens[6], Token::Colon { line: 0, col: 12 });
+    expect_eq!(tokens[7], Token::LeftBracket { line: 0, col: 14 });
+    expect_eq!(tokens[8], Token::DoubleColon { line: 0, col: 16 });
+    expect_eq!(tokens[9], Token::RightBracket { line: 0, col: 19 });
+    expect_eq!(tokens[10], Token::ColonEquals { line: 0, col: 21 });
+    expect_eq!(tokens[11], Token::Equals { line: 0, col: 24 });
+    expect_eq!(tokens[12], Token::DoubleArrow { line: 0, col: 26 });
+    expect_eq!(tokens[13], Token::Arrow { line: 0, col: 29 });
   }
 
   #[test]
@@ -555,12 +465,12 @@ mod tests {
     let v = Vec::from(src);
     let tokens = Tokenizer::from_source(&v).collect_tokens();
 
-    assert_eq!(tokens.len(), 5);
-    assert_eq!(tokens[0], Token::LeftParen { line: 0, col: 0 });
-    assert_eq!(tokens[1], Token::Unexpected { line: 0, col: 1 });
-    assert_eq!(tokens[2], Token::Unexpected { line: 0, col: 2 });
-    assert_eq!(tokens[3], Token::Unexpected { line: 0, col: 3 });
-    assert_eq!(tokens[4], Token::RightParen { line: 0, col: 4 });
+    expect_eq!(tokens.len(), 5);
+    expect_eq!(tokens[0], Token::LeftParen { line: 0, col: 0 });
+    expect_eq!(tokens[1], Token::Unexpected { line: 0, col: 1 });
+    expect_eq!(tokens[2], Token::Unexpected { line: 0, col: 2 });
+    expect_eq!(tokens[3], Token::Unexpected { line: 0, col: 3 });
+    expect_eq!(tokens[4], Token::RightParen { line: 0, col: 4 });
   }
 
   #[test]
@@ -569,28 +479,34 @@ mod tests {
     let v = Vec::from(src);
     let tokens = Tokenizer::from_source(&v).collect_tokens();
 
-    assert_eq!(tokens.len(), 3);
-    assert_eq!(
+    expect_eq!(tokens.len(), 3);
+    expect_eq!(
       tokens[0],
       Token::String {
-        line: 0,
-        col: 0,
+        line_start: 0,
+        col_start: 0,
+        line_end: 0,
+        col_end: 7,
         value: "hello".as_bytes()
       }
     );
-    assert_eq!(
+    expect_eq!(
       tokens[1],
       Token::String {
-        line: 0,
-        col: 8,
+        line_start: 0,
+        col_start: 8,
+        line_end: 0,
+        col_end: 10,
         value: "".as_bytes()
       }
     );
-    assert_eq!(
+    expect_eq!(
       tokens[2],
       Token::String {
-        line: 0,
-        col: 11,
+        line_start: 0,
+        col_start: 11,
+        line_end: 0,
+        col_end: 18,
         value: "world".as_bytes()
       }
     );
@@ -602,20 +518,22 @@ mod tests {
     let v = Vec::from(src);
     let tokens = Tokenizer::from_source(&v).collect_tokens();
 
-    assert_eq!(tokens.len(), 11);
+    expect_eq!(tokens.len(), 11);
 
-    assert_eq!(
+    expect_eq!(
       tokens[0],
       Token::String {
-        line: 0,
-        col: 0,
+        line_start: 0,
+        col_start: 0,
+        line_end: 0,
+        col_end: 7,
         value: "hello ".as_bytes()
       }
     );
 
-    assert_eq!(tokens[1], Token::InterpolationStart { line: 0, col: 7 });
+    expect_eq!(tokens[1], Token::InterpolationStart { line: 0, col: 7 });
 
-    assert_eq!(
+    expect_eq!(
       tokens[2],
       Token::Identifier {
         line: 0,
@@ -624,18 +542,20 @@ mod tests {
       }
     );
 
-    assert_eq!(tokens[3], Token::InterpolationEnd { line: 0, col: 13 });
+    expect_eq!(tokens[3], Token::InterpolationEnd { line: 0, col: 13 });
 
-    assert_eq!(
+    expect_eq!(
       tokens[4],
       Token::String {
-        line: 0,
-        col: 13,
+        line_start: 0,
+        col_start: 14,
+        line_end: 0,
+        col_end: 16,
         value: "!".as_bytes()
       }
     );
 
-    assert_eq!(
+    expect_eq!(
       tokens[5],
       Token::Identifier {
         line: 0,
@@ -644,18 +564,20 @@ mod tests {
       }
     );
 
-    assert_eq!(
+    expect_eq!(
       tokens[6],
       Token::String {
-        line: 0,
-        col: 22,
+        line_start: 0,
+        col_start: 22,
+        line_end: 0,
+        col_end: 23,
         value: "".as_bytes()
       }
     );
 
-    assert_eq!(tokens[7], Token::InterpolationStart { line: 0, col: 23 });
+    expect_eq!(tokens[7], Token::InterpolationStart { line: 0, col: 23 });
 
-    assert_eq!(
+    expect_eq!(
       tokens[8],
       Token::Identifier {
         line: 0,
@@ -664,13 +586,15 @@ mod tests {
       }
     );
 
-    assert_eq!(tokens[9], Token::InterpolationEnd { line: 0, col: 28 });
+    expect_eq!(tokens[9], Token::InterpolationEnd { line: 0, col: 28 });
 
-    assert_eq!(
+    expect_eq!(
       tokens[10],
       Token::String {
-        line: 0,
-        col: 28,
+        line_start: 0,
+        col_start: 29,
+        line_end: 0,
+        col_end: 30,
         value: "".as_bytes()
       }
     );
@@ -682,20 +606,22 @@ mod tests {
     let v = Vec::from(src);
     let tokens = Tokenizer::from_source(&v).collect_tokens();
 
-    assert_eq!(tokens.len(), 11);
+    expect_eq!(tokens.len(), 11);
 
-    assert_eq!(
+    expect_eq!(
       tokens[0],
       Token::String {
-        line: 0,
-        col: 0,
+        line_start: 0,
+        col_start: 0,
+        line_end: 0,
+        col_end: 7,
         value: "hello ".as_bytes()
       }
     );
 
-    assert_eq!(tokens[1], Token::InterpolationStart { line: 0, col: 7 });
+    expect_eq!(tokens[1], Token::InterpolationStart { line: 0, col: 7 });
 
-    assert_eq!(
+    expect_eq!(
       tokens[2],
       Token::Identifier {
         line: 0,
@@ -704,18 +630,20 @@ mod tests {
       }
     );
 
-    assert_eq!(
+    expect_eq!(
       tokens[3],
       Token::String {
-        line: 0,
-        col: 14,
+        line_start: 0,
+        col_start: 14,
+        line_end: 0,
+        col_end: 21,
         value: "inner ".as_bytes()
       }
     );
 
-    assert_eq!(tokens[4], Token::InterpolationStart { line: 0, col: 21 });
+    expect_eq!(tokens[4], Token::InterpolationStart { line: 0, col: 21 });
 
-    assert_eq!(
+    expect_eq!(
       tokens[5],
       Token::Identifier {
         line: 0,
@@ -724,18 +652,20 @@ mod tests {
       }
     );
 
-    assert_eq!(tokens[6], Token::InterpolationEnd { line: 0, col: 24 });
+    expect_eq!(tokens[6], Token::InterpolationEnd { line: 0, col: 24 });
 
-    assert_eq!(
+    expect_eq!(
       tokens[7],
       Token::String {
-        line: 0,
-        col: 24,
+        line_start: 0,
+        col_start: 25,
+        line_end: 0,
+        col_end: 26,
         value: "".as_bytes()
       }
     );
 
-    assert_eq!(
+    expect_eq!(
       tokens[8],
       Token::Identifier {
         line: 0,
@@ -744,13 +674,15 @@ mod tests {
       }
     );
 
-    assert_eq!(tokens[9], Token::InterpolationEnd { line: 0, col: 30 });
+    expect_eq!(tokens[9], Token::InterpolationEnd { line: 0, col: 30 });
 
-    assert_eq!(
+    expect_eq!(
       tokens[10],
       Token::String {
-        line: 0,
-        col: 30,
+        line_start: 0,
+        col_start: 31,
+        line_end: 0,
+        col_end: 33,
         value: "!".as_bytes()
       }
     );

@@ -1,6 +1,7 @@
-use crate::ast::{Node, NodeType};
+use crate::ast::{extract_location,Node, NodeType};
 use crate::parser::ParseResult::{ParseError, Parsed};
-use crate::tokenizer::{Token, Tokenizer};
+use crate::tokenizer::Tokenizer;
+use crate::tokens::{ Token};
 use std::collections::HashMap;
 
 pub struct Parser<'a> {
@@ -69,10 +70,13 @@ impl<'a> Parser<'a> {
     let mut result = None;
     let mut to_advance = 0;
 
-    if let Some(&Token::Number { value, .. }) = self.next_token() {
+    if let Some(&Token::Number { value, line, col }) = self.next_token() {
       to_advance = 1;
 
       result = Some(Parsed(Node::IntLiteral {
+        line,
+        col_start: col,
+        col_end: col + value.len(),
         value: to_string(value),
         inferred_type: NodeType::Unknown,
       }))
@@ -84,10 +88,14 @@ impl<'a> Parser<'a> {
 
   fn parse_string(&mut self) -> Option<ParseResult> {
     let first_string_literal = match self.next_token() {
-      Some(&Token::String { value, .. }) => Some(Node::StringLiteral {
+      Some(&Token::String { value, line_start, col_start, line_end, col_end }) => Node::StringLiteral {
+        line_start,
+        line_end,
+        col_start,
+        col_end,
         value: to_string(value),
         inferred_type: NodeType::Unknown,
-      }),
+      },
       _ => return None,
     };
 
@@ -113,10 +121,16 @@ impl<'a> Parser<'a> {
       }
 
       match self.next_token() {
-        Some(&Token::String { value, .. }) => interpolation_parts.push(Node::StringLiteral {
-          value: to_string(value),
-          inferred_type: NodeType::Unknown,
-        }),
+        Some(&Token::String { value, line_start, col_start, line_end, col_end }) => {
+          interpolation_parts.push(Node::StringLiteral {
+            line_start,
+            line_end,
+            col_start,
+            col_end,
+            value: to_string(value),
+            inferred_type: NodeType::Unknown,
+          })
+        }
         _ => {
           return Some(ParseError(
             "Expected a string after interpolation".to_owned(),
@@ -128,12 +142,19 @@ impl<'a> Parser<'a> {
     }
 
     if interpolation_parts.is_empty() {
-      return Some(Parsed(first_string_literal.unwrap()));
+      return Some(Parsed(first_string_literal));
     }
 
-    interpolation_parts.insert(0, first_string_literal.unwrap());
+
+    let (line_start, line_end, col_start, col_end) = extract_location(&first_string_literal);
+
+    interpolation_parts.insert(0, first_string_literal);
 
     Some(Parsed(Node::StringInterpolation {
+      line_start,
+      line_end,
+      col_start,
+      col_end,
       parts: interpolation_parts,
       inferred_type: NodeType::Unknown,
     }))
@@ -143,10 +164,13 @@ impl<'a> Parser<'a> {
     let mut result = None;
     let mut to_advance = 0;
 
-    if let Some(&Token::Identifier { value, .. }) = self.next_token() {
+    if let Some(&Token::Identifier { value, line, col }) = self.next_token() {
       to_advance = 1;
 
       result = Some(Parsed(Node::Identifier {
+        line,
+        col_start: col,
+        col_end: col + value.len(),
         name: to_string(value),
         inferred_type: NodeType::Unknown,
       }))
@@ -157,47 +181,40 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_assignment(&mut self) -> Option<ParseResult> {
-    let mut result = None;
-
     if self.body.is_empty() {
-      return result;
+      return None;
     }
 
     let left = self.body.pop().unwrap();
+    let mut is_constant = true;
 
-    if let Some(&Token::Equals { .. }) = self.next_token() {
-      self.index += 1;
-
-      let right = match self.parse_expression() {
-        Some(Parsed(node)) => node,
-        error @ Some(ParseError(_)) => return error,
-        None => return Some(ParseError("Expected expression after =".to_owned())),
-      };
-
-      result = Some(Parsed(Node::Assignment {
-        left: Box::new(left),
-        right: Box::new(right),
-        is_constant: true,
-        inferred_type: NodeType::Unknown,
-      }))
-    } else if let Some(&Token::ColonEquals { .. }) = self.next_token() {
-      self.index += 1;
-
-      let right = match self.parse_expression() {
-        Some(Parsed(node)) => node,
-        error @ Some(ParseError(_)) => return error,
-        None => return Some(ParseError("Expected expression after :=".to_owned())),
-      };
-
-      result = Some(Parsed(Node::Assignment {
-        left: Box::new(left),
-        right: Box::new(right),
-        is_constant: false,
-        inferred_type: NodeType::Unknown,
-      }))
+    match self.next_token() {
+      Some(&Token::Equals { .. }) => (),
+      Some(&Token::ColonEquals { .. }) => is_constant = false,
+      _ => return None,
     }
 
-    result
+    self.index += 1;
+
+    let right = match self.parse_expression() {
+      Some(Parsed(node)) => node,
+      error @ Some(ParseError(_)) => return error,
+      None => return Some(ParseError("Expected expression after =".to_owned())),
+    };
+
+    let (line_start, _, col_start, _) = extract_location(&left);
+    let (_, line_end, _, col_end) = extract_location(&right);
+
+    Some(Parsed(Node::Assignment {
+      line_start,
+      line_end,
+      col_start,
+      col_end,
+      left: Box::new(left),
+      right: Box::new(right),
+      is_constant,
+      inferred_type: NodeType::Unknown,
+    }))
   }
 
   pub fn parse_expression(&mut self) -> Option<ParseResult> {
