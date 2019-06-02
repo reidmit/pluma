@@ -42,6 +42,10 @@ impl<'a> Parser<'a> {
     self.tokens.get(self.index)
   }
 
+  fn next_next_token(&self) -> Option<&Token> {
+    self.tokens.get(self.index + 1)
+  }
+
   fn parse_parenthetical(&mut self, body: &mut Vec<Node>) -> Option<ParseResult> {
     match self.next_token() {
       Some(&Token::LeftParen { .. }) => (),
@@ -73,7 +77,46 @@ impl<'a> Parser<'a> {
     self.index += 1;
 
     let mut params = Vec::new();
+
+    match (self.next_token(), self.next_next_token()) {
+      (Some(&Token::Identifier { .. }), Some(&Token::DoubleArrow { .. })) => {
+        match self.parse_identifier() {
+          Some(Parsed(id)) => params.push(id),
+          err @ Some(ParseError(_)) => return err,
+          None => (),
+        }
+
+        self.index += 1; // advance past the arrow
+      }
+
+      (Some(&Token::Identifier { .. }), Some(&Token::Comma { .. })) => loop {
+        match self.parse_identifier() {
+          Some(Parsed(id)) => params.push(id),
+          err @ Some(ParseError(_)) => return err,
+          None => return Some(ParseError("Expected identifier in block params".to_owned())),
+        }
+
+        match self.next_token() {
+          Some(&Token::Comma { .. }) => self.index += 1,
+          Some(&Token::DoubleArrow { .. }) => {
+            self.index += 1;
+            break;
+          }
+          _ => return Some(ParseError("Expected , or => after params".to_owned())),
+        }
+      },
+      _ => (),
+    }
+
     let mut body = Vec::new();
+
+    loop {
+      match self.parse_expression(&mut body) {
+        Some(Parsed(expr)) => body.push(expr),
+        err @ Some(ParseError(_)) => return err,
+        None => break,
+      }
+    }
 
     let (line_end, col_end) = match self.next_token() {
       Some(&Token::RightBrace { line, col }) => (line, col),
@@ -273,8 +316,6 @@ impl<'a> Parser<'a> {
     let mut body = Vec::new();
 
     loop {
-      println!("body: {:#?}", body);
-
       match self.parse_expression(&mut body) {
         Some(Parsed(expr)) => body.push(expr),
         Some(ParseError(err)) => return ParseError(err),
