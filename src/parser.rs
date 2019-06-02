@@ -10,7 +10,6 @@ pub struct Parser<'a> {
   token_count: usize,
   index: usize,
   comments: HashMap<usize, Node>,
-  body: Vec<Node>,
 }
 
 #[derive(Debug)]
@@ -36,7 +35,6 @@ impl<'a> Parser<'a> {
       token_count,
       index: 0,
       comments: HashMap::new(),
-      body: Vec::new(),
     };
   }
 
@@ -44,7 +42,7 @@ impl<'a> Parser<'a> {
     self.tokens.get(self.index)
   }
 
-  fn parse_parenthetical(&mut self) -> Option<ParseResult> {
+  fn parse_parenthetical(&mut self, body: &mut Vec<Node>) -> Option<ParseResult> {
     match self.next_token() {
       Some(&Token::LeftParen { .. }) => (),
       _ => return None,
@@ -52,7 +50,7 @@ impl<'a> Parser<'a> {
 
     self.index += 1;
 
-    let mut expr = match self.parse_expression() {
+    let mut expr = match self.parse_expression(body) {
       e @ Some(_) => e,
       None => Some(ParseError("Expected expr between ()".to_owned())),
     };
@@ -115,7 +113,7 @@ impl<'a> Parser<'a> {
     result
   }
 
-  fn parse_string(&mut self) -> Option<ParseResult> {
+  fn parse_string(&mut self, body: &mut Vec<Node>) -> Option<ParseResult> {
     let first_string_literal = match self.next_token() {
       Some(&Token::String {
         value,
@@ -141,7 +139,7 @@ impl<'a> Parser<'a> {
     while let Some(&Token::InterpolationStart { .. }) = self.next_token() {
       self.index += 1;
 
-      match self.parse_expression() {
+      match self.parse_expression(body) {
         Some(Parsed(expr)) => interpolation_parts.push(expr),
         _ => {
           return Some(ParseError(
@@ -219,23 +217,22 @@ impl<'a> Parser<'a> {
     result
   }
 
-  fn parse_assignment(&mut self) -> Option<ParseResult> {
-    if self.body.is_empty() {
+  fn parse_assignment(&mut self, body: &mut Vec<Node>) -> Option<ParseResult> {
+    if body.is_empty() {
       return None;
     }
 
-    let left = self.body.pop().unwrap();
-    let mut is_constant = true;
-
-    match self.next_token() {
-      Some(&Token::Equals { .. }) => (),
-      Some(&Token::ColonEquals { .. }) => is_constant = false,
+    let is_constant = match self.next_token() {
+      Some(&Token::Equals { .. }) => true,
+      Some(&Token::ColonEquals { .. }) => false,
       _ => return None,
-    }
+    };
 
     self.index += 1;
 
-    let right = match self.parse_expression() {
+    let left = body.pop().unwrap();
+
+    let right = match self.parse_expression(body) {
       Some(Parsed(node)) => node,
       error @ Some(ParseError(_)) => return error,
       None => return Some(ParseError("Expected expression after =".to_owned())),
@@ -256,33 +253,35 @@ impl<'a> Parser<'a> {
     }))
   }
 
-  pub fn parse_expression(&mut self) -> Option<ParseResult> {
+  pub fn parse_expression(&mut self, body: &mut Vec<Node>) -> Option<ParseResult> {
     if self.index >= self.token_count {
       return None;
     }
 
     let expr = self
-      .parse_parenthetical()
+      .parse_parenthetical(body)
       .or_else(|| self.parse_block())
       .or_else(|| self.parse_identifier())
-      .or_else(|| self.parse_assignment())
-      .or_else(|| self.parse_string())
+      .or_else(|| self.parse_assignment(body))
+      .or_else(|| self.parse_string(body))
       .or_else(|| self.parse_number());
 
     expr
   }
 
   pub fn parse_module(&mut self) -> ParseResult {
+    let mut body = Vec::new();
+
     loop {
-      match self.parse_expression() {
-        Some(Parsed(expr)) => self.body.push(expr),
+      println!("body: {:#?}", body);
+
+      match self.parse_expression(&mut body) {
+        Some(Parsed(expr)) => body.push(expr),
         Some(ParseError(err)) => return ParseError(err),
         None => break,
       }
     }
 
-    Parsed(Node::Module {
-      body: self.body.clone(),
-    })
+    Parsed(Node::Module { body })
   }
 }
