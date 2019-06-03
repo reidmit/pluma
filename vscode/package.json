@@ -1,0 +1,59 @@
+{
+  "name": "vscode-pluma",
+  "displayName": "Pluma Language Extension",
+  "version": "0.1.0",
+  "publisher": "reid47",
+  "description": "Support for Pluma language",
+  "author": {
+    "name": "reid47"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "galleryBanner": {
+    "color": "#C80000",
+    "theme": "dark"
+  },
+  "activationEvents": [
+    "onLanguage:pluma"
+  ],
+  "engines": {
+    "vscode": "^1.0.0"
+  },
+  "devDependencies": {
+    "vscode": "^1.1.34"
+  },
+  "main": "./out/extension",
+  "scripts": {},
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "bugs": {
+    "url": "https://github.com/reid47/pluma/issues",
+    "email": "reidmitchell1@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/reid47/pluma.git"
+  },
+  "homepage": "https://github.com/reid47/pluma/blob/master/README.md",
+  "contributes": {
+    "languages": [
+      {
+        "id": "pluma",
+        "aliases": [
+          "Pluma"
+        ],
+        "extensions": [
+          ".pa"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "pluma",
+        "scopeName": "source.pluma",
+        "path": "./syntaxes/pluma.tmGrammar.json"
+      }
+    ]
+  }
+}
