@@ -1,0 +1,33 @@
+/+ dir/wow : nm
+
+Result(T') =
+  | Err(T')
+  | Ok
+
+Bool =
+  | True
+  | False
+
+Maybe(A') =
+  | Some(A')
+  | None
+
+Person = Person (
+  name :: String,
+  age :: Int
+)
+
+haveBirthday(Person) = { p =>
+  p.age := p.age.add(1)
+
+  x = |> p.age
+    | 47 => "Nice"
+    | _ => "Nah"
+}
+
+p1 = Person("Reid", 25).haveBirthday()
+
+MyStr = Ok(String)
+
+hello = "world"
+reid = "cool"
