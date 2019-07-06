@@ -38,7 +38,7 @@
     },
 
     "string": {
-      "name": "string.quoted.double",
+      "name": "string.quoted.double.pluma",
       "begin": "\"",
       "beginCaptures": {
         "0": {
@@ -51,7 +51,24 @@
           "name": "punctuation.definition.string.end.pluma"
         }
       },
-      "patterns": []
+      "patterns": [
+        {
+          "name": "meta.embedded.interpolation.pluma",
+          "begin": "\\$\\(",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.interpolation.begin.pluma"
+            }
+          },
+          "end": "\\)",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.interpolation.end.pluma"
+            }
+          },
+          "patterns": [{ "include": "#any" }]
+        }
+      ]
     },
 
     "paren-expression": {

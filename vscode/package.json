@@ -53,6 +53,16 @@
         "language": "pluma",
         "scopeName": "source.pluma",
         "path": "./syntaxes/pluma.tmGrammar.json"
+      },
+      {
+        "scopeName": "markdown.pluma.codeblock",
+        "path": "./syntaxes/codeblock.json",
+        "injectTo": [
+          "text.html.markdown"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.block.pluma": "pluma"
+        }
       }
     ]
   }
