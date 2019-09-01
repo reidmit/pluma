@@ -18,3 +18,10 @@ impl UsageError {
     }
   }
 }
+
+#[derive(Debug)]
+pub struct TokenizeError {
+  pub message: String,
+  pub line: usize,
+  pub col: usize,
+}

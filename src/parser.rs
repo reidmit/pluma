@@ -9,7 +9,6 @@ pub struct Parser<'a> {
   tokens: Vec<Token<'a>>,
   token_count: usize,
   index: usize,
-  comments: HashMap<usize, Node>,
 }
 
 #[derive(Debug)]
@@ -23,18 +22,17 @@ fn to_string(bytes: &[u8]) -> String {
 }
 
 impl<'a> Parser<'a> {
-  pub fn from_source(source: &'a Vec<u8>, preserve_comments: bool) -> Parser<'a> {
-    let tokens = Tokenizer::from_source(source).collect_tokens();
+  pub fn from_source(source: &'a Vec<u8>, _preserve_comments: bool) -> Parser<'a> {
+    let tokens = Tokenizer::from_source(source).collect_tokens().unwrap();
     let token_count = tokens.len();
 
-    // println!("{:#?}", tokens);
+    println!("{:#?}", tokens);
 
     return Parser {
       source,
       tokens,
       token_count,
       index: 0,
-      comments: HashMap::new(),
     };
   }
 
@@ -44,6 +42,25 @@ impl<'a> Parser<'a> {
 
   fn next_next_token(&self) -> Option<&Token> {
     self.tokens.get(self.index + 1)
+  }
+
+  fn parse_comment(&mut self) -> Option<ParseResult> {
+    let mut to_advance = 0;
+    let mut node = None;
+
+    if let Some(&Token::Comment { value, line, col }) = self.next_token() {
+      to_advance = 1;
+
+      node = Some(Parsed(Node::Comment {
+        line,
+        col_start: col,
+        col_end: col + value.len(),
+        value: to_string(value),
+      }));
+    }
+
+    self.index += to_advance;
+    node
   }
 
   fn parse_parenthetical(&mut self, body: &mut Vec<Node>) -> Option<ParseResult> {
@@ -314,15 +331,31 @@ impl<'a> Parser<'a> {
 
   pub fn parse_module(&mut self) -> ParseResult {
     let mut body = Vec::new();
+    let mut comments = HashMap::new();
+    let mut done = false;
 
     loop {
+      match self.parse_comment() {
+        Some(Parsed(Node::Comment { line, col_start, col_end, value })) => {
+          comments.insert(line, Node::Comment { line, col_start, col_end, value })
+        },
+        _ => None,
+      };
+
+      if done {
+        break;
+      }
+
       match self.parse_expression(&mut body) {
         Some(Parsed(expr)) => body.push(expr),
         Some(ParseError(err)) => return ParseError(err),
-        None => break,
+        None => done = true,
       }
     }
 
-    Parsed(Node::Module { body })
+    Parsed(Node::Module {
+      body,
+      comments,
+    })
   }
 }

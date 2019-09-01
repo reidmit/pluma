@@ -62,7 +62,7 @@ fn print_error(msg: String) {
 }
 
 fn main() {
-  let config = CompilerConfig::new(Some("test/Main.plu".to_owned())).unwrap();
+  let config = CompilerConfig::new(Some("test".to_owned())).unwrap();
   Compiler::new(config).run().unwrap();
 }
 

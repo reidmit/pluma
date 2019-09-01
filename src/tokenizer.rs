@@ -1,4 +1,5 @@
 use crate::tokens::Token;
+use crate::errors::TokenizeError;
 use std::collections::VecDeque;
 
 pub struct Tokenizer<'a> {
@@ -30,7 +31,7 @@ impl<'a> Tokenizer<'a> {
     };
   }
 
-  pub fn collect_tokens(&mut self) -> Vec<Token<'a>> {
+  pub fn collect_tokens(&mut self) -> Result<Vec<Token<'a>>, TokenizeError> {
     let source = self.source;
     let length = self.source_length;
 
@@ -53,7 +54,6 @@ impl<'a> Tokenizer<'a> {
       if string_stack.is_empty() && byte == b'"' {
         // If the string stack is empty and byte is ", we are at the beginning of
         // a brand new string. Save the start index and advance.
-
         string_stack.push((line, index - line_start_index, index));
         index += 1;
         continue;
@@ -63,11 +63,11 @@ impl<'a> Tokenizer<'a> {
         // If the string stack is not empty, we're somewhere inside a string (maybe
         // in an interpolation, though). We must check if we need to end the string,
         // start/end an interpolation, or just carry on.
+
         if byte == b'"' && string_stack.len() == interpolation_stack {
           // If the two stacks have the same size, we must be inside of an interpolation,
           // so the " indicates the beginning of a nested string literal. Save the index
           // in the string stack and advance.
-
           string_stack.push((line, index - line_start_index, index));
           index += 1;
           continue;
@@ -76,7 +76,6 @@ impl<'a> Tokenizer<'a> {
         if byte == b'"' {
           // Here, the " must indicate the end of a string literal section. Pop from
           // the string stack, add a new token, then advance.
-
           let (line_start, col_start, offset) = string_stack.pop().unwrap();
 
           println!("str ending, {}, {}, {}", line_start, col_start, offset);
@@ -97,7 +96,6 @@ impl<'a> Tokenizer<'a> {
           // We must be at the beginning of an interpolation, so create a token for
           // the string literal portion leading up to the interpolation, one for the
           // interpolation start, and add to the interpolation stack.
-
           let (line_start, col_start, offset) = string_stack.last().unwrap();
 
           tokens.push(Token::String {
@@ -122,7 +120,6 @@ impl<'a> Tokenizer<'a> {
           // We must be at the end of an interpolation, so make a token for it and
           // fix the index on the last string in the string stack so that it starts
           // here. Decrease the interpolation stack.
-
           tokens.push(Token::InterpolationEnd {
             line: line,
             col: index - line_start_index,
@@ -309,7 +306,7 @@ impl<'a> Tokenizer<'a> {
             tokens.push(Token::Comment {
               line: line,
               col: start_index - line_start_index,
-              value: &source[start_index..index],
+              value: &source[start_index + 1..index],
             })
           }
         }
@@ -354,15 +351,24 @@ impl<'a> Tokenizer<'a> {
     }
 
     if interpolation_stack > 0 {
-      panic!("Unclosed interpolation");
+      return Err(TokenizeError{
+        message: "Unclosed interpolation".to_owned(),
+        line: 0, // TODO
+        col: 0, // TODO
+      });
     }
 
     if !string_stack.is_empty() {
       let (line_start, col_start, _) = string_stack.pop().unwrap();
-      panic!("Unclosed string, starting at {}:{}", line_start, col_start);
+
+      return Err(TokenizeError{
+        message: "Unclosed string".to_owned(),
+        line: line_start,
+        col: col_start,
+      });
     }
 
-    tokens
+    Ok(tokens)
   }
 }
 
@@ -375,7 +381,7 @@ mod tests {
   fn empty() {
     let src = "";
     let v = Vec::from(src);
-    let tokens = Tokenizer::from_source(&v).collect_tokens();
+    let tokens = Tokenizer::from_source(&v).collect_tokens().unwrap();
 
     expect_eq!(tokens, vec![])
   }
@@ -384,7 +390,7 @@ mod tests {
   fn identifer_tokens() {
     let src = "hello world";
     let v = Vec::from(src);
-    let tokens = Tokenizer::from_source(&v).collect_tokens();
+    let tokens = Tokenizer::from_source(&v).collect_tokens().unwrap();
 
     expect_eq!(
       tokens,
@@ -407,7 +413,7 @@ mod tests {
   fn number_tokens() {
     let src = "hello 1 47 wow";
     let v = Vec::from(src);
-    let tokens = Tokenizer::from_source(&v).collect_tokens();
+    let tokens = Tokenizer::from_source(&v).collect_tokens().unwrap();
 
     expect_eq!(
       tokens,
@@ -437,10 +443,43 @@ mod tests {
   }
 
   #[test]
+  fn comment_tokens() {
+    let src = "# o #nice\n# hello\ntest #same-line";
+    let v = Vec::from(src);
+    let tokens = Tokenizer::from_source(&v).collect_tokens().unwrap();
+
+    expect_eq!(
+      tokens,
+      vec![
+        Token::Comment {
+          line: 0,
+          col: 0,
+          value: " o #nice".as_bytes()
+        },
+        Token::Comment {
+          line: 1,
+          col: 0,
+          value: " hello".as_bytes()
+        },
+        Token::Identifier {
+          line: 2,
+          col: 0,
+          value: "test".as_bytes()
+        },
+        Token::Comment {
+          line: 2,
+          col: 5,
+          value: "same-line".as_bytes()
+        },
+      ]
+    )
+  }
+
+  #[test]
   fn symbol_tokens() {
     let src = "{ . } ( , ) : [ :: ] := = => ->";
     let v = Vec::from(src);
-    let tokens = Tokenizer::from_source(&v).collect_tokens();
+    let tokens = Tokenizer::from_source(&v).collect_tokens().unwrap();
 
     expect_eq!(tokens.len(), 14);
     expect_eq!(tokens[0], Token::LeftBrace { line: 0, col: 0 });
@@ -463,7 +502,7 @@ mod tests {
   fn unexpected_tokens() {
     let src = "(@$@)";
     let v = Vec::from(src);
-    let tokens = Tokenizer::from_source(&v).collect_tokens();
+    let tokens = Tokenizer::from_source(&v).collect_tokens().unwrap();
 
     expect_eq!(tokens.len(), 5);
     expect_eq!(tokens[0], Token::LeftParen { line: 0, col: 0 });
@@ -477,7 +516,7 @@ mod tests {
   fn strings_without_interpolations() {
     let src = "\"hello\" \"\" \"world\"";
     let v = Vec::from(src);
-    let tokens = Tokenizer::from_source(&v).collect_tokens();
+    let tokens = Tokenizer::from_source(&v).collect_tokens().unwrap();
 
     expect_eq!(tokens.len(), 3);
     expect_eq!(
@@ -516,7 +555,7 @@ mod tests {
   fn strings_with_interpolations() {
     let src = "\"hello $(name)!\" nice \"$(str)\"";
     let v = Vec::from(src);
-    let tokens = Tokenizer::from_source(&v).collect_tokens();
+    let tokens = Tokenizer::from_source(&v).collect_tokens().unwrap();
 
     expect_eq!(tokens.len(), 11);
 
@@ -604,7 +643,7 @@ mod tests {
   fn strings_with_nested_interpolations() {
     let src = "\"hello $(name \"inner $(o)\" wow)!\"";
     let v = Vec::from(src);
-    let tokens = Tokenizer::from_source(&v).collect_tokens();
+    let tokens = Tokenizer::from_source(&v).collect_tokens().unwrap();
 
     expect_eq!(tokens.len(), 11);
 

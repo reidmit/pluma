@@ -1,7 +1,10 @@
+use std::collections::HashMap;
+
 #[derive(Debug, Clone)]
 pub enum Node {
   Module {
     body: Vec<Node>,
+    comments: HashMap<usize, Node>,
   },
 
   Block {
@@ -12,6 +15,13 @@ pub enum Node {
     params: Vec<Node>,
     body: Vec<Node>,
     inferred_type: NodeType,
+  },
+
+  Comment {
+    line: usize,
+    col_start: usize,
+    col_end: usize,
+    value: String,
   },
 
   Identifier {
