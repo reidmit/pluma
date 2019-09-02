@@ -1,0 +1,33 @@
+---
+source: compiler/src/parser.rs
+expression: "x := 47"
+---
+Parsed(
+    Module {
+        body: [
+            Assignment {
+                line_start: 0,
+                line_end: 0,
+                col_start: 0,
+                col_end: 7,
+                is_constant: false,
+                left: Identifier {
+                    line: 0,
+                    col_start: 0,
+                    col_end: 1,
+                    name: "x",
+                    inferred_type: Unknown,
+                },
+                right: IntLiteral {
+                    line: 0,
+                    col_start: 5,
+                    col_end: 7,
+                    value: "47",
+                    inferred_type: Unknown,
+                },
+                inferred_type: Unknown,
+            },
+        ],
+        comments: {},
+    },
+)

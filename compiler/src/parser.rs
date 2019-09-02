@@ -373,4 +373,19 @@ mod tests {
     identifier,
     "hello"
   );
+
+  assert_parsed_snapshot!(
+    number,
+    "47"
+  );
+
+  assert_parsed_snapshot!(
+    assignment_constant,
+    "x = 47"
+  );
+
+  assert_parsed_snapshot!(
+    assignment_variable,
+    "x := 47"
+  );
 }
