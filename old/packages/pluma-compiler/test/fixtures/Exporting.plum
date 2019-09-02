@@ -1,6 +1,0 @@
-module Exporting
-export (func1, func2)
-
-func1 = x => 47
-
-func2 = y => "hi"

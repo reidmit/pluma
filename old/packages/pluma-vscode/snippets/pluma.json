@@ -1,9 +1,0 @@
-{
-  "module declaration": {
-    "prefix": "mod",
-    "scope": "source.pluma",
-    "body": ["module ${1:$TM_FILENAME_BASE}", "$0"],
-    "name": "Module declaration",
-    "description": "Inserts a module declaration"
-  }
-}

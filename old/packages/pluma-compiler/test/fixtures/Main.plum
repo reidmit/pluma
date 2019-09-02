@@ -1,4 +1,0 @@
-module Main
-export (alwaysTrue)
-
-alwaysTrue = arg => True
