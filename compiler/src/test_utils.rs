@@ -30,3 +30,18 @@ macro_rules! assert_tokens_snapshot {
     }
   };
 }
+
+#[macro_export]
+macro_rules! assert_parsed_snapshot {
+  ($name: ident, $source: literal) => {
+    #[test]
+    fn $name() {
+      let src = $source;
+      let v = Vec::from($source);
+      let ast = Parser::from_source(&v).parse_module();
+      let value = format!("{:#?}", ast);
+
+      assert_snapshot!(stringify!($name), value, src);
+    }
+  };
+}

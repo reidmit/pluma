@@ -22,11 +22,9 @@ fn to_string(bytes: &[u8]) -> String {
 }
 
 impl<'a> Parser<'a> {
-  pub fn from_source(source: &'a Vec<u8>, _preserve_comments: bool) -> Parser<'a> {
+  pub fn from_source(source: &'a Vec<u8>) -> Parser<'a> {
     let tokens = Tokenizer::from_source(source).collect_tokens().unwrap();
     let token_count = tokens.len();
-
-    println!("{:#?}", tokens);
 
     return Parser {
       source,
@@ -358,4 +356,21 @@ impl<'a> Parser<'a> {
       comments,
     })
   }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::assert_parsed_snapshot;
+  use insta::assert_snapshot;
+
+  assert_parsed_snapshot!(
+    parse_empty,
+    ""
+  );
+
+  assert_parsed_snapshot!(
+    parse_identifier,
+    "hello"
+  );
 }

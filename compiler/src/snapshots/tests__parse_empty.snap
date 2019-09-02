@@ -1,0 +1,10 @@
+---
+source: compiler/src/parser.rs
+expression: ""
+---
+Parsed(
+    Module {
+        body: [],
+        comments: {},
+    },
+)

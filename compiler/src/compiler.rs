@@ -6,7 +6,6 @@ use std::collections::HashMap;
 
 pub struct Compiler<'a> {
   entry_path: String,
-  preserve_comments: bool,
   modules: HashMap<String, Parser<'a>>,
 }
 
@@ -14,13 +13,12 @@ impl<'a> Compiler<'a> {
   pub fn new(config: CompilerConfig) -> Compiler<'a> {
     Compiler {
       entry_path: config.entry_path.clone(),
-      preserve_comments: config.preserve_comments,
       modules: HashMap::new(),
     }
   }
 
   pub fn compile_module(&self, file_contents: Vec<u8>) {
-    let mut parser = Parser::from_source(&file_contents, self.preserve_comments);
+    let mut parser = Parser::from_source(&file_contents);
     let ast = parser.parse_module();
 
     println!("{:#?}", ast);
