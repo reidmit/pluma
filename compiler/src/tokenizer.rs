@@ -378,47 +378,47 @@ mod tests {
   use insta::assert_snapshot;
 
   assert_tokens_snapshot!(
-    no_tokens,
+    empty,
     ""
   );
 
   assert_tokens_snapshot!(
-    identifer_tokens,
+    identifers,
     "hello world"
   );
 
   assert_tokens_snapshot!(
-    number_tokens,
+    numbers,
     "hello 1 47 wow"
   );
 
   assert_tokens_snapshot!(
-    comment_tokens,
+    comments,
     "# o #nice\n# hello\ntest #same-line"
   );
 
   assert_tokens_snapshot!(
-    symbol_tokens,
+    symbols,
     "{ . } ( , ) : [ :: ] := = => ->"
   );
 
   assert_tokens_snapshot!(
-    unexpected_tokens,
+    unexpected,
     "(@$@)"
   );
 
   assert_tokens_snapshot!(
-    string_tokens_without_interpolations,
+    strings_without_interpolations,
     "\"hello\" \"\" \"world\""
   );
 
   assert_tokens_snapshot!(
-    string_tokens_with_interpolations,
+    strings_with_interpolations,
     "\"hello $(name)!\" nice \"$(str)\""
   );
 
   assert_tokens_snapshot!(
-    string_tokens_with_nested_interpolations,
+    strings_with_nested_interpolations,
     "\"hello $(name \"inner $(o)\" wow)!\""
   );
 }

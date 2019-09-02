@@ -365,12 +365,12 @@ mod tests {
   use insta::assert_snapshot;
 
   assert_parsed_snapshot!(
-    parse_empty,
+    empty,
     ""
   );
 
   assert_parsed_snapshot!(
-    parse_identifier,
+    identifier,
     "hello"
   );
 }
