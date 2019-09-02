@@ -1,0 +1,88 @@
+file: "dir/wow/my/stuff/file"
+third: "pkg/third-party"
+lib: "core/some-core-library"
+: "pkg/unqualified"
+
+Result(T') =
+  | Err(T')
+  | Ok
+
+# ok
+
+Bool =
+  | True
+  | False
+
+Maybe(A') =
+  | Some(A')
+  | None
+
+Person = Person (
+  name :: String,
+  age :: Int
+)
+
+thing = lib:MakeThing(1, 2, 3)
+  # :: lib:Thing
+
+haveBirthday(Person) = { p =>
+  p.age :: O := p.age.add(1)
+
+  x = p.age
+    | 47 => "Nice"
+    | _ => "Nah"
+}
+
+if(Bool)then(() -> A')else(() -> A') = { b, t, e =>
+  asBool(b)
+  | True => t()
+  | False => e()
+}
+
+isCool.if()
+  then(47)
+  else(100)
+
+isCool | True => 47 | False => 100
+isCool | True => 47 | False => 100
+
+isCool.ifTrue(47)ifFalse(100)
+
+isCool.if({ =>
+  print "cool!"
+})else({ =>
+  print "nope!"
+})
+
+isCool.if {
+  print "cool!"
+} else {
+  print "nope!"
+}
+
+p1 = (Person "Reid" 25).haveBirthday()
+
+MyStr = Ok(String)
+
+hello = "world"
+reid = "cool"
+
+myCoolString
+  .split("\n")
+  .map({ s => s.toUpperCase() })
+  .filter({ s => s.length().greaterThan(3) })
+  .join("\n")
+
+myCoolString
+  .mapWords(w => w.toUpperCase())
+  .filterWords(w => w.length().greaterThan(3))
+
+myCoolString
+  .mapWords { w => w.toUpperCase() }
+  .filterWords { w => w.length().greaterThan 3 }
+
+m = myCoolString
+  .mapWords({ w => w.toUpperCase() })
+  .filterWords({ w => w.length().greaterThan(3) })
+  | Wow : ok
+  |

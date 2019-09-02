@@ -1,0 +1,9 @@
+notes/
+node_modules
+.vscode/
+
+*.o
+bin
+target/
+
+*.vsix

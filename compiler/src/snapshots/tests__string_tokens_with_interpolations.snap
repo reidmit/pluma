@@ -1,0 +1,88 @@
+---
+source: compiler/src/tokenizer.rs
+expression: "\"hello $(name)!\" nice \"$(str)\""
+---
+[
+    String {
+        line_start: 0,
+        col_start: 0,
+        line_end: 0,
+        col_end: 7,
+        value: [
+            104,
+            101,
+            108,
+            108,
+            111,
+            32,
+        ],
+    },
+    InterpolationStart {
+        line: 0,
+        col: 7,
+    },
+    Identifier {
+        line: 0,
+        col: 9,
+        value: [
+            110,
+            97,
+            109,
+            101,
+        ],
+    },
+    InterpolationEnd {
+        line: 0,
+        col: 13,
+    },
+    String {
+        line_start: 0,
+        col_start: 14,
+        line_end: 0,
+        col_end: 16,
+        value: [
+            33,
+        ],
+    },
+    Identifier {
+        line: 0,
+        col: 17,
+        value: [
+            110,
+            105,
+            99,
+            101,
+        ],
+    },
+    String {
+        line_start: 0,
+        col_start: 22,
+        line_end: 0,
+        col_end: 23,
+        value: [],
+    },
+    InterpolationStart {
+        line: 0,
+        col: 23,
+    },
+    Identifier {
+        line: 0,
+        col: 25,
+        value: [
+            115,
+            116,
+            114,
+        ],
+    },
+    InterpolationEnd {
+        line: 0,
+        col: 28,
+    },
+    String {
+        line_start: 0,
+        col_start: 29,
+        line_end: 0,
+        col_end: 30,
+        value: [],
+    },
+]

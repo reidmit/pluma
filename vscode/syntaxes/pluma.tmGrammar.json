@@ -1,0 +1,106 @@
+{
+  "scopeName": "source.pluma",
+
+  "patterns": [{ "include": "#any" }],
+
+  "repository": {
+    "any": {
+      "patterns": [
+        { "include": "#expression" },
+        { "include": "#symbol" },
+        { "include": "#comment" }
+      ]
+    },
+
+    "expression": {
+      "patterns": [
+        { "include": "#paren-expression" },
+        { "include": "#block-expression" },
+        { "include": "#string" },
+        { "include": "#float" },
+        { "include": "#int" }
+      ]
+    },
+
+    "float": {
+      "name": "constant.numeric.float.pluma",
+      "match": "\\b([0-9]+\\.[0-9]+([eE][+-]?[0-9]+)?|[0-9]+[eE][+-]?[0-9]+)\\b"
+    },
+
+    "int": {
+      "name": "constant.numeric.pluma",
+      "match": "\\b([0-9]+)\\b"
+    },
+
+    "symbol": {
+      "name": "keyword.operator.pluma",
+      "match": "(=>|=|::|:=|\\|)"
+    },
+
+    "string": {
+      "name": "string.quoted.double.pluma",
+      "begin": "\"",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.begin.pluma"
+        }
+      },
+      "end": "\"",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.end.pluma"
+        }
+      },
+      "patterns": [
+        {
+          "name": "meta.embedded.interpolation.pluma",
+          "begin": "\\$\\(",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.interpolation.begin.pluma"
+            }
+          },
+          "end": "\\)",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.interpolation.end.pluma"
+            }
+          },
+          "patterns": [{ "include": "#any" }]
+        }
+      ]
+    },
+
+    "paren-expression": {
+      "name": "expression.group.pluma",
+      "begin": "\\(",
+      "end": "\\)",
+      "beginCaptures": {
+        "0": { "name": "punctuation.paren.open.pluma" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.paren.close.pluma" }
+      },
+      "patterns": [{ "include": "#expression" }]
+    },
+
+    "block-expression": {
+      "name": "expression.block.pluma",
+      "begin": "\\{",
+      "end": "\\}",
+      "beginCaptures": {
+        "0": { "name": "punctuation.block.open.pluma" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.block.close.pluma" }
+      },
+      "patterns": [{ "include": "#any" }]
+    },
+
+    "comment": {
+      "name": "comment.line.number-sign.pluma",
+      "begin": "#",
+      "end": "$"
+    }
+  }
+}
