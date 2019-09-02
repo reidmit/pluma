@@ -377,6 +377,21 @@ mod tests {
   );
 
   assert_parsed_snapshot!(
+    string,
+    "\"hello\""
+  );
+
+  assert_parsed_snapshot!(
+    string_with_interpolation,
+    "\"hello $(name)!\""
+  );
+
+  assert_parsed_snapshot!(
+    string_with_nested_interpolation,
+    "\"hello $(\"aa $(name) bb\")!\""
+  );
+
+  assert_parsed_snapshot!(
     assignment_constant,
     "x = 47"
   );
@@ -384,5 +399,20 @@ mod tests {
   assert_parsed_snapshot!(
     assignment_variable,
     "x := 47"
+  );
+
+  assert_parsed_snapshot!(
+    comment_before,
+    "# a comment before\nsomething"
+  );
+
+  assert_parsed_snapshot!(
+    comment_same_line,
+    "something # a comment on the same line\nsomethingElse"
+  );
+
+  assert_parsed_snapshot!(
+    comment_after,
+    "something\n\n# a comment after"
   );
 }
