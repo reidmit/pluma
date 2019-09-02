@@ -1,6 +1,7 @@
 notes/
 node_modules
 .vscode/
+.DS_Store
 
 *.o
 bin
