@@ -1,0 +1,57 @@
+---
+source: compiler/src/tokenizer.rs
+expression: "# o #nice\n# hello\ntest #same-line"
+---
+[
+    Comment {
+        line: 0,
+        col: 0,
+        value: [
+            32,
+            111,
+            32,
+            35,
+            110,
+            105,
+            99,
+            101,
+        ],
+    },
+    Comment {
+        line: 1,
+        col: 0,
+        value: [
+            32,
+            104,
+            101,
+            108,
+            108,
+            111,
+        ],
+    },
+    Identifier {
+        line: 2,
+        col: 0,
+        value: [
+            116,
+            101,
+            115,
+            116,
+        ],
+    },
+    Comment {
+        line: 2,
+        col: 5,
+        value: [
+            115,
+            97,
+            109,
+            101,
+            45,
+            108,
+            105,
+            110,
+            101,
+        ],
+    },
+]

@@ -374,355 +374,51 @@ impl<'a> Tokenizer<'a> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::expect_eq;
+  use crate::assert_tokens_snapshot;
+  use insta::assert_snapshot;
 
-  #[test]
-  fn empty() {
-    let src = "";
-    let v = Vec::from(src);
-    let tokens = Tokenizer::from_source(&v).collect_tokens().unwrap();
+  assert_tokens_snapshot!(
+    no_tokens,
+    ""
+  );
 
-    expect_eq!(tokens, vec![])
-  }
+  assert_tokens_snapshot!(
+    identifer_tokens,
+    "hello world"
+  );
 
-  #[test]
-  fn identifer_tokens() {
-    let src = "hello world";
-    let v = Vec::from(src);
-    let tokens = Tokenizer::from_source(&v).collect_tokens().unwrap();
+  assert_tokens_snapshot!(
+    number_tokens,
+    "hello 1 47 wow"
+  );
 
-    expect_eq!(
-      tokens,
-      vec![
-        Token::Identifier {
-          line: 0,
-          col: 0,
-          value: "hello".as_bytes()
-        },
-        Token::Identifier {
-          line: 0,
-          col: 6,
-          value: "world".as_bytes()
-        },
-      ]
-    )
-  }
+  assert_tokens_snapshot!(
+    comment_tokens,
+    "# o #nice\n# hello\ntest #same-line"
+  );
 
-  #[test]
-  fn number_tokens() {
-    let src = "hello 1 47 wow";
-    let v = Vec::from(src);
-    let tokens = Tokenizer::from_source(&v).collect_tokens().unwrap();
+  assert_tokens_snapshot!(
+    symbol_tokens,
+    "{ . } ( , ) : [ :: ] := = => ->"
+  );
 
-    expect_eq!(
-      tokens,
-      vec![
-        Token::Identifier {
-          line: 0,
-          col: 0,
-          value: "hello".as_bytes()
-        },
-        Token::Number {
-          line: 0,
-          col: 6,
-          value: "1".as_bytes()
-        },
-        Token::Number {
-          line: 0,
-          col: 8,
-          value: "47".as_bytes()
-        },
-        Token::Identifier {
-          line: 0,
-          col: 11,
-          value: "wow".as_bytes()
-        },
-      ]
-    )
-  }
+  assert_tokens_snapshot!(
+    unexpected_tokens,
+    "(@$@)"
+  );
 
-  #[test]
-  fn comment_tokens() {
-    let src = "# o #nice\n# hello\ntest #same-line";
-    let v = Vec::from(src);
-    let tokens = Tokenizer::from_source(&v).collect_tokens().unwrap();
+  assert_tokens_snapshot!(
+    string_tokens_without_interpolations,
+    "\"hello\" \"\" \"world\""
+  );
 
-    expect_eq!(
-      tokens,
-      vec![
-        Token::Comment {
-          line: 0,
-          col: 0,
-          value: " o #nice".as_bytes()
-        },
-        Token::Comment {
-          line: 1,
-          col: 0,
-          value: " hello".as_bytes()
-        },
-        Token::Identifier {
-          line: 2,
-          col: 0,
-          value: "test".as_bytes()
-        },
-        Token::Comment {
-          line: 2,
-          col: 5,
-          value: "same-line".as_bytes()
-        },
-      ]
-    )
-  }
+  assert_tokens_snapshot!(
+    string_tokens_with_interpolations,
+    "\"hello $(name)!\" nice \"$(str)\""
+  );
 
-  #[test]
-  fn symbol_tokens() {
-    let src = "{ . } ( , ) : [ :: ] := = => ->";
-    let v = Vec::from(src);
-    let tokens = Tokenizer::from_source(&v).collect_tokens().unwrap();
-
-    expect_eq!(tokens.len(), 14);
-    expect_eq!(tokens[0], Token::LeftBrace { line: 0, col: 0 });
-    expect_eq!(tokens[1], Token::Dot { line: 0, col: 2 });
-    expect_eq!(tokens[2], Token::RightBrace { line: 0, col: 4 });
-    expect_eq!(tokens[3], Token::LeftParen { line: 0, col: 6 });
-    expect_eq!(tokens[4], Token::Comma { line: 0, col: 8 });
-    expect_eq!(tokens[5], Token::RightParen { line: 0, col: 10 });
-    expect_eq!(tokens[6], Token::Colon { line: 0, col: 12 });
-    expect_eq!(tokens[7], Token::LeftBracket { line: 0, col: 14 });
-    expect_eq!(tokens[8], Token::DoubleColon { line: 0, col: 16 });
-    expect_eq!(tokens[9], Token::RightBracket { line: 0, col: 19 });
-    expect_eq!(tokens[10], Token::ColonEquals { line: 0, col: 21 });
-    expect_eq!(tokens[11], Token::Equals { line: 0, col: 24 });
-    expect_eq!(tokens[12], Token::DoubleArrow { line: 0, col: 26 });
-    expect_eq!(tokens[13], Token::Arrow { line: 0, col: 29 });
-  }
-
-  #[test]
-  fn unexpected_tokens() {
-    let src = "(@$@)";
-    let v = Vec::from(src);
-    let tokens = Tokenizer::from_source(&v).collect_tokens().unwrap();
-
-    expect_eq!(tokens.len(), 5);
-    expect_eq!(tokens[0], Token::LeftParen { line: 0, col: 0 });
-    expect_eq!(tokens[1], Token::Unexpected { line: 0, col: 1 });
-    expect_eq!(tokens[2], Token::Unexpected { line: 0, col: 2 });
-    expect_eq!(tokens[3], Token::Unexpected { line: 0, col: 3 });
-    expect_eq!(tokens[4], Token::RightParen { line: 0, col: 4 });
-  }
-
-  #[test]
-  fn strings_without_interpolations() {
-    let src = "\"hello\" \"\" \"world\"";
-    let v = Vec::from(src);
-    let tokens = Tokenizer::from_source(&v).collect_tokens().unwrap();
-
-    expect_eq!(tokens.len(), 3);
-    expect_eq!(
-      tokens[0],
-      Token::String {
-        line_start: 0,
-        col_start: 0,
-        line_end: 0,
-        col_end: 7,
-        value: "hello".as_bytes()
-      }
-    );
-    expect_eq!(
-      tokens[1],
-      Token::String {
-        line_start: 0,
-        col_start: 8,
-        line_end: 0,
-        col_end: 10,
-        value: "".as_bytes()
-      }
-    );
-    expect_eq!(
-      tokens[2],
-      Token::String {
-        line_start: 0,
-        col_start: 11,
-        line_end: 0,
-        col_end: 18,
-        value: "world".as_bytes()
-      }
-    );
-  }
-
-  #[test]
-  fn strings_with_interpolations() {
-    let src = "\"hello $(name)!\" nice \"$(str)\"";
-    let v = Vec::from(src);
-    let tokens = Tokenizer::from_source(&v).collect_tokens().unwrap();
-
-    expect_eq!(tokens.len(), 11);
-
-    expect_eq!(
-      tokens[0],
-      Token::String {
-        line_start: 0,
-        col_start: 0,
-        line_end: 0,
-        col_end: 7,
-        value: "hello ".as_bytes()
-      }
-    );
-
-    expect_eq!(tokens[1], Token::InterpolationStart { line: 0, col: 7 });
-
-    expect_eq!(
-      tokens[2],
-      Token::Identifier {
-        line: 0,
-        col: 9,
-        value: "name".as_bytes()
-      }
-    );
-
-    expect_eq!(tokens[3], Token::InterpolationEnd { line: 0, col: 13 });
-
-    expect_eq!(
-      tokens[4],
-      Token::String {
-        line_start: 0,
-        col_start: 14,
-        line_end: 0,
-        col_end: 16,
-        value: "!".as_bytes()
-      }
-    );
-
-    expect_eq!(
-      tokens[5],
-      Token::Identifier {
-        line: 0,
-        col: 17,
-        value: "nice".as_bytes()
-      }
-    );
-
-    expect_eq!(
-      tokens[6],
-      Token::String {
-        line_start: 0,
-        col_start: 22,
-        line_end: 0,
-        col_end: 23,
-        value: "".as_bytes()
-      }
-    );
-
-    expect_eq!(tokens[7], Token::InterpolationStart { line: 0, col: 23 });
-
-    expect_eq!(
-      tokens[8],
-      Token::Identifier {
-        line: 0,
-        col: 25,
-        value: "str".as_bytes()
-      }
-    );
-
-    expect_eq!(tokens[9], Token::InterpolationEnd { line: 0, col: 28 });
-
-    expect_eq!(
-      tokens[10],
-      Token::String {
-        line_start: 0,
-        col_start: 29,
-        line_end: 0,
-        col_end: 30,
-        value: "".as_bytes()
-      }
-    );
-  }
-
-  #[test]
-  fn strings_with_nested_interpolations() {
-    let src = "\"hello $(name \"inner $(o)\" wow)!\"";
-    let v = Vec::from(src);
-    let tokens = Tokenizer::from_source(&v).collect_tokens().unwrap();
-
-    expect_eq!(tokens.len(), 11);
-
-    expect_eq!(
-      tokens[0],
-      Token::String {
-        line_start: 0,
-        col_start: 0,
-        line_end: 0,
-        col_end: 7,
-        value: "hello ".as_bytes()
-      }
-    );
-
-    expect_eq!(tokens[1], Token::InterpolationStart { line: 0, col: 7 });
-
-    expect_eq!(
-      tokens[2],
-      Token::Identifier {
-        line: 0,
-        col: 9,
-        value: "name".as_bytes()
-      }
-    );
-
-    expect_eq!(
-      tokens[3],
-      Token::String {
-        line_start: 0,
-        col_start: 14,
-        line_end: 0,
-        col_end: 21,
-        value: "inner ".as_bytes()
-      }
-    );
-
-    expect_eq!(tokens[4], Token::InterpolationStart { line: 0, col: 21 });
-
-    expect_eq!(
-      tokens[5],
-      Token::Identifier {
-        line: 0,
-        col: 23,
-        value: "o".as_bytes()
-      }
-    );
-
-    expect_eq!(tokens[6], Token::InterpolationEnd { line: 0, col: 24 });
-
-    expect_eq!(
-      tokens[7],
-      Token::String {
-        line_start: 0,
-        col_start: 25,
-        line_end: 0,
-        col_end: 26,
-        value: "".as_bytes()
-      }
-    );
-
-    expect_eq!(
-      tokens[8],
-      Token::Identifier {
-        line: 0,
-        col: 27,
-        value: "wow".as_bytes()
-      }
-    );
-
-    expect_eq!(tokens[9], Token::InterpolationEnd { line: 0, col: 30 });
-
-    expect_eq!(
-      tokens[10],
-      Token::String {
-        line_start: 0,
-        col_start: 31,
-        line_end: 0,
-        col_end: 33,
-        value: "!".as_bytes()
-      }
-    );
-  }
+  assert_tokens_snapshot!(
+    string_tokens_with_nested_interpolations,
+    "\"hello $(name \"inner $(o)\" wow)!\""
+  );
 }

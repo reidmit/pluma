@@ -1,0 +1,41 @@
+---
+source: compiler/src/tokenizer.rs
+expression: hello 1 47 wow
+---
+[
+    Identifier {
+        line: 0,
+        col: 0,
+        value: [
+            104,
+            101,
+            108,
+            108,
+            111,
+        ],
+    },
+    Number {
+        line: 0,
+        col: 6,
+        value: [
+            49,
+        ],
+    },
+    Number {
+        line: 0,
+        col: 8,
+        value: [
+            52,
+            55,
+        ],
+    },
+    Identifier {
+        line: 0,
+        col: 11,
+        value: [
+            119,
+            111,
+            119,
+        ],
+    },
+]

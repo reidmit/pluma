@@ -15,3 +15,18 @@ macro_rules! expect_eq {
     }
   }};
 }
+
+#[macro_export]
+macro_rules! assert_tokens_snapshot {
+  ($name: ident, $source: literal) => {
+    #[test]
+    fn $name() {
+      let src = $source;
+      let v = Vec::from($source);
+      let tokens = Tokenizer::from_source(&v).collect_tokens().unwrap();
+      let value = format!("{:#?}", tokens);
+
+      assert_snapshot!(stringify!($name), value, src);
+    }
+  };
+}
