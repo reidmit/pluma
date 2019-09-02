@@ -23,8 +23,9 @@ macro_rules! assert_tokens_snapshot {
     fn $name() {
       let src = $source;
       let v = Vec::from($source);
-      let tokens = Tokenizer::from_source(&v).collect_tokens().unwrap();
-      let value = format!("{:#?}", tokens);
+      let mut tokenizer = Tokenizer::from_source(&v);
+      let result = tokenizer.collect_tokens();
+      let value = format!("{:#?}", result);
       let file_name = format!("tokenize_{}", stringify!($name));
 
       assert_snapshot!(file_name, value, src);
@@ -39,7 +40,9 @@ macro_rules! assert_parsed_snapshot {
     fn $name() {
       let src = $source;
       let v = Vec::from($source);
-      let ast = Parser::from_source(&v).parse_module();
+      let mut tokenizer = Tokenizer::from_source(&v);
+      let tokens = tokenizer.collect_tokens().unwrap();
+      let ast = Parser::from_tokens(&tokens).parse_module();
       let value = format!("{:#?}", ast);
       let file_name = format!("parse_{}", stringify!($name));
 

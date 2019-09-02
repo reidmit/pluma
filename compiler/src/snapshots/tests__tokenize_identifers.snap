@@ -2,27 +2,29 @@
 source: compiler/src/tokenizer.rs
 expression: hello world
 ---
-[
-    Identifier {
-        line: 0,
-        col: 0,
-        value: [
-            104,
-            101,
-            108,
-            108,
-            111,
-        ],
-    },
-    Identifier {
-        line: 0,
-        col: 6,
-        value: [
-            119,
-            111,
-            114,
-            108,
-            100,
-        ],
-    },
-]
+TokenList(
+    [
+        Identifier {
+            line: 0,
+            col: 0,
+            value: [
+                104,
+                101,
+                108,
+                108,
+                111,
+            ],
+        },
+        Identifier {
+            line: 0,
+            col: 6,
+            value: [
+                119,
+                111,
+                114,
+                108,
+                100,
+            ],
+        },
+    ],
+)

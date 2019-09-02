@@ -1,5 +1,4 @@
 use crate::tokens::Token;
-use crate::errors::TokenizeError;
 
 pub struct Tokenizer<'a> {
   source: &'a Vec<u8>,
@@ -19,6 +18,22 @@ fn is_digit(byte: u8) -> bool {
   byte >= b'0' && byte <= b'9'
 }
 
+#[derive(Debug)]
+pub enum TokenizeResult<'a> {
+  TokenList(Vec<Token<'a>>),
+  UnclosedStringError { line_start: usize, col_start: usize },
+  UnclosedInterpolationError { line_start: usize, col_start: usize },
+}
+
+impl<'a> TokenizeResult<'a> {
+  pub fn unwrap(self) -> Vec<Token<'a>> {
+    match self {
+      TokenizeResult::TokenList(tokens) => tokens,
+      _ => panic!("Unexpected tokenizer error")
+    }
+  }
+}
+
 impl<'a> Tokenizer<'a> {
   pub fn from_source(source: &'a Vec<u8>) -> Tokenizer<'a> {
     let length = source.len();
@@ -30,7 +45,7 @@ impl<'a> Tokenizer<'a> {
     };
   }
 
-  pub fn collect_tokens(&mut self) -> Result<Vec<Token<'a>>, TokenizeError> {
+  pub fn collect_tokens(&mut self) -> TokenizeResult {
     let source = self.source;
     let length = self.source_length;
 
@@ -350,24 +365,22 @@ impl<'a> Tokenizer<'a> {
     }
 
     if interpolation_stack > 0 {
-      return Err(TokenizeError{
-        message: "Unclosed interpolation".to_owned(),
-        line: 0, // TODO
-        col: 0, // TODO
-      });
+      return TokenizeResult::UnclosedInterpolationError {
+        line_start: 0, // TODO
+        col_start: 0, // TODO
+      };
     }
 
     if !string_stack.is_empty() {
       let (line_start, col_start, _) = string_stack.pop().unwrap();
 
-      return Err(TokenizeError{
-        message: "Unclosed string".to_owned(),
-        line: line_start,
-        col: col_start,
-      });
+      return TokenizeResult::UnclosedStringError {
+        line_start,
+        col_start,
+      };
     }
 
-    Ok(tokens)
+    TokenizeResult::TokenList(tokens)
   }
 }
 

@@ -2,91 +2,93 @@
 source: compiler/src/tokenizer.rs
 expression: "\"hello $(name \"inner $(o)\" wow)!\""
 ---
-[
-    String {
-        line_start: 0,
-        col_start: 0,
-        line_end: 0,
-        col_end: 7,
-        value: [
-            104,
-            101,
-            108,
-            108,
-            111,
-            32,
-        ],
-    },
-    InterpolationStart {
-        line: 0,
-        col: 7,
-    },
-    Identifier {
-        line: 0,
-        col: 9,
-        value: [
-            110,
-            97,
-            109,
-            101,
-        ],
-    },
-    String {
-        line_start: 0,
-        col_start: 14,
-        line_end: 0,
-        col_end: 21,
-        value: [
-            105,
-            110,
-            110,
-            101,
-            114,
-            32,
-        ],
-    },
-    InterpolationStart {
-        line: 0,
-        col: 21,
-    },
-    Identifier {
-        line: 0,
-        col: 23,
-        value: [
-            111,
-        ],
-    },
-    InterpolationEnd {
-        line: 0,
-        col: 24,
-    },
-    String {
-        line_start: 0,
-        col_start: 25,
-        line_end: 0,
-        col_end: 26,
-        value: [],
-    },
-    Identifier {
-        line: 0,
-        col: 27,
-        value: [
-            119,
-            111,
-            119,
-        ],
-    },
-    InterpolationEnd {
-        line: 0,
-        col: 30,
-    },
-    String {
-        line_start: 0,
-        col_start: 31,
-        line_end: 0,
-        col_end: 33,
-        value: [
-            33,
-        ],
-    },
-]
+TokenList(
+    [
+        String {
+            line_start: 0,
+            col_start: 0,
+            line_end: 0,
+            col_end: 7,
+            value: [
+                104,
+                101,
+                108,
+                108,
+                111,
+                32,
+            ],
+        },
+        InterpolationStart {
+            line: 0,
+            col: 7,
+        },
+        Identifier {
+            line: 0,
+            col: 9,
+            value: [
+                110,
+                97,
+                109,
+                101,
+            ],
+        },
+        String {
+            line_start: 0,
+            col_start: 14,
+            line_end: 0,
+            col_end: 21,
+            value: [
+                105,
+                110,
+                110,
+                101,
+                114,
+                32,
+            ],
+        },
+        InterpolationStart {
+            line: 0,
+            col: 21,
+        },
+        Identifier {
+            line: 0,
+            col: 23,
+            value: [
+                111,
+            ],
+        },
+        InterpolationEnd {
+            line: 0,
+            col: 24,
+        },
+        String {
+            line_start: 0,
+            col_start: 25,
+            line_end: 0,
+            col_end: 26,
+            value: [],
+        },
+        Identifier {
+            line: 0,
+            col: 27,
+            value: [
+                119,
+                111,
+                119,
+            ],
+        },
+        InterpolationEnd {
+            line: 0,
+            col: 30,
+        },
+        String {
+            line_start: 0,
+            col_start: 31,
+            line_end: 0,
+            col_end: 33,
+            value: [
+                33,
+            ],
+        },
+    ],
+)

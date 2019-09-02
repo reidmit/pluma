@@ -1,12 +1,10 @@
 use crate::ast::{extract_location, Node, NodeType};
 use crate::parser::ParseResult::{ParseError, Parsed};
-use crate::tokenizer::Tokenizer;
 use crate::tokens::Token;
 use std::collections::HashMap;
 
 pub struct Parser<'a> {
-  source: &'a Vec<u8>,
-  tokens: Vec<Token<'a>>,
+  tokens: &'a Vec<Token<'a>>,
   token_count: usize,
   index: usize,
 }
@@ -22,12 +20,10 @@ fn to_string(bytes: &[u8]) -> String {
 }
 
 impl<'a> Parser<'a> {
-  pub fn from_source(source: &'a Vec<u8>) -> Parser<'a> {
-    let tokens = Tokenizer::from_source(source).collect_tokens().unwrap();
+  pub fn from_tokens(tokens: &'a Vec<Token>) -> Parser<'a> {
     let token_count = tokens.len();
 
     return Parser {
-      source,
       tokens,
       token_count,
       index: 0,
@@ -361,6 +357,7 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::tokenizer::Tokenizer;
   use crate::assert_parsed_snapshot;
   use insta::assert_snapshot;
 

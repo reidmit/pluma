@@ -2,61 +2,63 @@
 source: compiler/src/tokenizer.rs
 expression: "{ . } ( , ) : [ :: ] := = => ->"
 ---
-[
-    LeftBrace {
-        line: 0,
-        col: 0,
-    },
-    Dot {
-        line: 0,
-        col: 2,
-    },
-    RightBrace {
-        line: 0,
-        col: 4,
-    },
-    LeftParen {
-        line: 0,
-        col: 6,
-    },
-    Comma {
-        line: 0,
-        col: 8,
-    },
-    RightParen {
-        line: 0,
-        col: 10,
-    },
-    Colon {
-        line: 0,
-        col: 12,
-    },
-    LeftBracket {
-        line: 0,
-        col: 14,
-    },
-    DoubleColon {
-        line: 0,
-        col: 16,
-    },
-    RightBracket {
-        line: 0,
-        col: 19,
-    },
-    ColonEquals {
-        line: 0,
-        col: 21,
-    },
-    Equals {
-        line: 0,
-        col: 24,
-    },
-    DoubleArrow {
-        line: 0,
-        col: 26,
-    },
-    Arrow {
-        line: 0,
-        col: 29,
-    },
-]
+TokenList(
+    [
+        LeftBrace {
+            line: 0,
+            col: 0,
+        },
+        Dot {
+            line: 0,
+            col: 2,
+        },
+        RightBrace {
+            line: 0,
+            col: 4,
+        },
+        LeftParen {
+            line: 0,
+            col: 6,
+        },
+        Comma {
+            line: 0,
+            col: 8,
+        },
+        RightParen {
+            line: 0,
+            col: 10,
+        },
+        Colon {
+            line: 0,
+            col: 12,
+        },
+        LeftBracket {
+            line: 0,
+            col: 14,
+        },
+        DoubleColon {
+            line: 0,
+            col: 16,
+        },
+        RightBracket {
+            line: 0,
+            col: 19,
+        },
+        ColonEquals {
+            line: 0,
+            col: 21,
+        },
+        Equals {
+            line: 0,
+            col: 24,
+        },
+        DoubleArrow {
+            line: 0,
+            col: 26,
+        },
+        Arrow {
+            line: 0,
+            col: 29,
+        },
+    ],
+)

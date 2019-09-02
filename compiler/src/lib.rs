@@ -1,7 +1,3 @@
-// TODO remove these, these are just for testing
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 pub mod ast;
 pub mod compiler;
 pub mod config;

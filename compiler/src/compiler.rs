@@ -1,27 +1,31 @@
 use crate::config::CompilerConfig;
 use crate::fs;
 use crate::parser::Parser;
-use crate::tokenizer::Tokenizer;
-use std::collections::HashMap;
+use crate::tokenizer::{Tokenizer, TokenizeResult};
 
-pub struct Compiler<'a> {
+pub struct Compiler {
   entry_path: String,
-  modules: HashMap<String, Parser<'a>>,
 }
 
-impl<'a> Compiler<'a> {
-  pub fn new(config: CompilerConfig) -> Compiler<'a> {
+impl Compiler {
+  pub fn new(config: CompilerConfig) -> Compiler {
     Compiler {
       entry_path: config.entry_path.clone(),
-      modules: HashMap::new(),
     }
   }
 
-  pub fn compile_module(&self, file_contents: Vec<u8>) {
-    let mut parser = Parser::from_source(&file_contents);
-    let ast = parser.parse_module();
+  pub fn compile_module(&self, source: Vec<u8>) {
+    match Tokenizer::from_source(&source).collect_tokens() {
+      TokenizeResult::TokenList(tokens) => {
+        let mut parser = Parser::from_tokens(&tokens);
+        let ast = parser.parse_module();
+        println!("{:#?}", ast);
+      }
 
-    println!("{:#?}", ast);
+      _ => {
+        panic!("Tokenizer error!"); // TODO
+      }
+    }
   }
 
   pub fn add_module(&self, abs_file_path: &String) -> Result<bool, String> {
@@ -37,8 +41,6 @@ impl<'a> Compiler<'a> {
   pub fn run(&self) -> Result<(), String> {
     let entry = &self.entry_path;
     let _ = self.add_module(entry);
-
-    // println!("{}", result.unwrap());
 
     Ok(())
   }
