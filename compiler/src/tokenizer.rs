@@ -1,6 +1,5 @@
 use crate::tokens::Token;
 use crate::errors::TokenizeError;
-use std::collections::VecDeque;
 
 pub struct Tokenizer<'a> {
   source: &'a Vec<u8>,
@@ -375,7 +374,7 @@ impl<'a> Tokenizer<'a> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::test_utils::*;
+  use crate::expect_eq;
 
   #[test]
   fn empty() {

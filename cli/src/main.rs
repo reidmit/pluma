@@ -2,24 +2,13 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
-#[macro_use]
-mod test_utils;
-
-mod ast;
-mod cli;
-mod compiler;
-mod config;
-mod constants;
-mod errors;
-mod fs;
-mod parser;
-mod tokenizer;
-mod tokens;
-
-use crate::compiler::Compiler;
-use crate::config::CompilerConfig;
+use compiler::compiler::Compiler;
+use compiler::config::CompilerConfig;
 use std::env;
 use std::process::exit;
+
+mod constants;
+mod colors;
 
 fn print_usage() {
   print!(
@@ -38,11 +27,11 @@ Compiler and tools for the Pluma language
 For help with an individual command, run:
   $ {name} <command> -h
 ",
-    bold_name = cli::bold(constants::LANG_NAME),
+    bold_name = colors::bold(constants::LANG_NAME),
     name = constants::LANG_NAME,
     version = constants::VERSION,
-    usage_header = cli::bold("Usage:"),
-    commands_header = cli::bold("Commands:"),
+    usage_header = colors::bold("Usage:"),
+    commands_header = colors::bold("Commands:"),
   );
 }
 
@@ -58,7 +47,7 @@ For a full list of available commands, try:
 }
 
 fn print_error(msg: String) {
-  eprintln!("{} {}", cli::bold_red("Error:"), msg);
+  eprintln!("{} {}", colors::bold_red("Error:"), msg);
 }
 
 fn main() {
