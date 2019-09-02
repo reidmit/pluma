@@ -2,8 +2,8 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
-use compiler::compiler::Compiler;
-use compiler::config::CompilerConfig;
+use pluma_compiler::compiler::Compiler;
+use pluma_compiler::config::CompilerConfig;
 use std::env;
 use std::process::exit;
 
@@ -17,18 +17,18 @@ fn print_usage() {
 Compiler and tools for the Pluma language
 
 {usage_header}
-  $ {name} <command> [...options]
+  $ {cli_name} <command> [...options]
 
 {commands_header}
-  run, r       Build and run a given module
-  help, h      Print this help text
-  version, v   Print version
+  run       Build and run a given module
+  help      Print this usage information
+  version   Print version
 
-For help with an individual command, run:
-  $ {name} <command> -h
+For help with an individual command, try:
+  $ {cli_name} <command> -h
 ",
-    bold_name = colors::bold(constants::LANG_NAME),
-    name = constants::LANG_NAME,
+    bold_name = colors::bold("pluma"),
+    cli_name = "pluma",
     version = constants::VERSION,
     usage_header = colors::bold("Usage:"),
     commands_header = colors::bold("Commands:"),
@@ -40,9 +40,9 @@ fn print_unknown_command(command: &str) {
     "Unknown command: {command_name}
 
 For a full list of available commands, try:
-  $ {name} help",
+  $ {cli_name} help",
     command_name = command,
-    name = constants::LANG_NAME,
+    cli_name = "pluma",
   ));
 }
 
@@ -51,16 +51,11 @@ fn print_error(msg: String) {
 }
 
 fn main() {
-  let config = CompilerConfig::new(Some("test".to_owned())).unwrap();
-  Compiler::new(config).run().unwrap();
-}
-
-fn main2() {
   if env::args().len() > 1 {
     let command = env::args().nth(1).unwrap_or_default();
 
     match command.as_str() {
-      "run" | "r" => {
+      "run" => {
         let given_entry_path = env::args().nth(2);
         let config = CompilerConfig::new(given_entry_path);
 
@@ -84,12 +79,12 @@ fn main2() {
         }
       }
 
-      "help" | "h" => {
+      "help" => {
         print_usage();
         exit(0);
       }
 
-      "version" | "v" => {
+      "version" => {
         print!("v{}", constants::VERSION);
         exit(0);
       }

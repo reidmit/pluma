@@ -5,4 +5,5 @@ authors = ["Reid Mitchell <reidmitchell1@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-compiler = { path = "../compiler" }
+atty = "0.2.13"
+pluma_compiler = { path = "../compiler" }
