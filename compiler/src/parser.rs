@@ -1,6 +1,6 @@
 use crate::ast::{extract_location, Node, NodeType};
-use crate::parser::ParseResult::{ParseError, Parsed};
 use crate::tokens::Token;
+use crate::parser::ParseError::*;
 
 pub struct Parser<'a> {
   tokens: &'a Vec<Token<'a>>,
@@ -9,9 +9,23 @@ pub struct Parser<'a> {
 }
 
 #[derive(Debug)]
-pub enum ParseResult {
-  Parsed(Node),
-  ParseError(String),
+pub enum SourceLocation {
+  Char { line: usize, col: usize },
+  CharSpan { line: usize, col_start: usize, col_end: usize },
+  LineSpan { line_start: usize, line_end: usize, col_start: usize, col_end: usize },
+}
+
+#[derive(Debug)]
+enum ParseResult {
+  Ok(Node),
+  EOF,
+  Error(ParseError),
+}
+
+#[derive(Debug)]
+pub enum ParseError {
+  UnexpectedToken(String, usize),
+  UnexpectedEOF(String),
 }
 
 fn to_string(bytes: &[u8]) -> String {
@@ -29,362 +43,92 @@ impl<'a> Parser<'a> {
     };
   }
 
-  fn next_token(&self) -> Option<&Token> {
+  fn advance(&mut self, amount: usize) {
+    self.index += amount;
+  }
+
+  fn current_token(&self) -> Option<&Token> {
     self.tokens.get(self.index)
   }
 
-  fn next_next_token(&self) -> Option<&Token> {
-    self.tokens.get(self.index + 1)
-  }
-
-  fn parse_parenthetical(&mut self, body: &mut Vec<Node>) -> Option<ParseResult> {
-    match self.next_token() {
-      Some(&Token::LeftParen { .. }) => (),
-      _ => return None,
+  fn parse_identifier(&mut self) -> ParseResult {
+    let (first_value, first_line, first_col) = match self.current_token() {
+      Some(&Token::Identifier { value, line, col }) => (value, line, col),
+      _ => unreachable!()
     };
 
-    self.index += 1;
-
-    let mut expr = match self.parse_expression(body) {
-      e @ Some(_) => e,
-      None => Some(ParseError("Expected expr between ()".to_owned())),
-    };
-
-    match self.next_token() {
-      Some(&Token::RightParen { .. }) => (),
-      _ => expr = Some(ParseError("Missing )".to_owned())),
-    };
-
-    self.index += 1;
-    expr
-  }
-
-  fn parse_parenthetical_or_tuple(&mut self, body: &mut Vec<Node>) -> Option<ParseResult> {
-    let (line_start, col_start) = match self.next_token() {
-      Some(&Token::LeftParen { line, col }) => (line, col),
-      _ => return None,
-    };
-
-    self.index += 1;
-
-    // At this point, we've seen one (
-    let mut expr = match self.parse_expression(body) {
-      e @ Some(_) => e,
-      None => {
-        // If we didn't parse an expression after (, it's either an empty tuple
-        // or it's an error
-        match self.next_token() {
-          Some(&Token::RightParen { line, col }) => {
-            self.index += 1;
-
-            return Some(Parsed(Node::Tuple {
-              line_start,
-              col_start,
-              line_end: line,
-              col_end: col,
-              entries: vec![],
-              inferred_type: NodeType::Unknown,
-            }))
-          },
-
-          _ => return Some(ParseError("Expected expr between ()".to_owned()))
-        };
-      }
-    };
-
-    match self.next_token() {
-      Some(&Token::RightParen { .. }) => {
-        // If it's a ), it's a parenthesized expression, so just advance
-        // and return the expression
-        self.index += 1;
-        return expr
-      },
-
-      Some(&Token::Comma { .. }) => {
-        loop {
-
-        }
-      },
-
-      _ => expr = Some(ParseError("Missing )".to_owned())),
-    };
-
-
-    let mut to_advance = 1;
-
-    match self.next_token() {
-      Some(&Token::RightParen { .. }) => (),
-      _ => expr = Some(ParseError("Missing )".to_owned())),
-    };
-
-    self.index += to_advance;
-    expr
-  }
-
-  fn parse_block(&mut self) -> Option<ParseResult> {
-    let (line_start, col_start) = match self.next_token() {
-      Some(&Token::LeftBrace { line, col }) => (line, col),
-      _ => return None,
-    };
-
-    self.index += 1;
-
-    let mut params = Vec::new();
-
-    match (self.next_token(), self.next_next_token()) {
-      (Some(&Token::Identifier { .. }), Some(&Token::DoubleArrow { .. })) => {
-        match self.parse_identifier() {
-          Some(Parsed(id)) => params.push(id),
-          err @ Some(ParseError(_)) => return err,
-          None => (),
-        }
-
-        self.index += 1; // advance past the arrow
-      }
-
-      (Some(&Token::Identifier { .. }), Some(&Token::Comma { .. })) => loop {
-        match self.parse_identifier() {
-          Some(Parsed(id)) => params.push(id),
-          err @ Some(ParseError(_)) => return err,
-          None => return Some(ParseError("Expected identifier in block params".to_owned())),
-        }
-
-        match self.next_token() {
-          Some(&Token::Comma { .. }) => self.index += 1,
-          Some(&Token::DoubleArrow { .. }) => {
-            self.index += 1;
-            break;
-          }
-          _ => return Some(ParseError("Expected , or => after params".to_owned())),
-        }
-      },
-      _ => (),
-    }
-
-    let mut body = Vec::new();
-
-    loop {
-      match self.parse_expression(&mut body) {
-        Some(Parsed(expr)) => body.push(expr),
-        err @ Some(ParseError(_)) => return err,
-        None => break,
-      }
-    }
-
-    let (line_end, col_end) = match self.next_token() {
-      Some(&Token::RightBrace { line, col }) => (line, col),
-      _ => return Some(ParseError("Missing }".to_owned())),
-    };
-
-    self.index += 1;
-
-    Some(Parsed(Node::Block {
-      line_start,
-      col_start,
-      line_end,
-      col_end,
-      params,
-      body,
+    let mut node = Node::Identifier {
+      line: first_line,
+      col_start: first_col,
+      col_end: first_col + first_value.len(),
+      name: to_string(first_value),
       inferred_type: NodeType::Unknown,
-    }))
-  }
-
-  fn parse_number(&mut self) -> Option<ParseResult> {
-    let mut result = None;
-    let mut to_advance = 0;
-
-    if let Some(&Token::Number { value, line, col }) = self.next_token() {
-      to_advance = 1;
-
-      result = Some(Parsed(Node::IntLiteral {
-        line,
-        col_start: col,
-        col_end: col + value.len(),
-        value: to_string(value),
-        inferred_type: NodeType::Unknown,
-      }))
-    }
-
-    self.index += to_advance;
-    result
-  }
-
-  fn parse_string(&mut self, body: &mut Vec<Node>) -> Option<ParseResult> {
-    let first_string_literal = match self.next_token() {
-      Some(&Token::String {
-        value,
-        line_start,
-        line_end,
-        col_start,
-        col_end,
-      }) => Node::StringLiteral {
-        line_start,
-        line_end,
-        col_start,
-        col_end,
-        value: to_string(value),
-        inferred_type: NodeType::Unknown,
-      },
-      _ => return None,
     };
 
-    self.index += 1;
+    self.advance(1);
 
-    let mut interpolation_parts = Vec::new();
+    while let Some(&Token::Dot { .. }) = self.current_token() {
+      self.advance(1);
 
-    while let Some(&Token::InterpolationStart { .. }) = self.next_token() {
-      self.index += 1;
-
-      match self.parse_expression(body) {
-        Some(Parsed(expr)) => interpolation_parts.push(expr),
-        _ => {
-          return Some(ParseError(
-            "Expected expression in interpolation".to_owned(),
-          ))
-        }
+      let (value, line, col) = match self.current_token() {
+        Some(&Token::Identifier { value, line, col }) => (value, line, col),
+        Some(_) => return ParseResult::Error(UnexpectedToken(
+          "Unexpected token after '.'. Expected to see an identifier.".to_owned(),
+          self.index,
+        )),
+        None => return ParseResult::Error(UnexpectedEOF(
+          "Unexpected end-of-file after '.'. Expected to see an identifier.".to_owned(),
+        )),
       };
 
-      match self.next_token() {
-        Some(&Token::InterpolationEnd { .. }) => self.index += 1,
-        _ => return Some(ParseError("Expected ) to end interpolation".to_owned())),
-      }
+      let (line_start, col_start, _, _) = extract_location(&node);
+      let col_end = col + value.len();
 
-      match self.next_token() {
-        Some(&Token::String {
-          value,
-          line_start,
-          col_start,
-          line_end,
-          col_end,
-        }) => interpolation_parts.push(Node::StringLiteral {
-          line_start,
-          line_end,
-          col_start,
-          col_end,
-          value: to_string(value),
-          inferred_type: NodeType::Unknown,
-        }),
-        _ => {
-          return Some(ParseError(
-            "Expected a string after interpolation".to_owned(),
-          ))
-        }
-      }
-
-      self.index += 1;
-    }
-
-    if interpolation_parts.is_empty() {
-      return Some(Parsed(first_string_literal));
-    }
-
-
-    let (line_start, line_end, col_start, col_end) = extract_location(&first_string_literal);
-
-    interpolation_parts.insert(0, first_string_literal);
-
-    Some(Parsed(Node::StringInterpolation {
-      line_start,
-      line_end,
-      col_start,
-      col_end,
-      parts: interpolation_parts,
-      inferred_type: NodeType::Unknown,
-    }))
-  }
-
-  fn parse_identifier(&mut self) -> Option<ParseResult> {
-    let mut result = None;
-    let mut to_advance = 0;
-
-    if let Some(&Token::Identifier { value, line, col }) = self.next_token() {
-      to_advance = 1;
-
-      result = Some(Parsed(Node::Identifier {
+      let child_node = Node::Identifier {
         line,
         col_start: col,
-        col_end: col + value.len(),
+        col_end,
         name: to_string(value),
         inferred_type: NodeType::Unknown,
-      }))
+      };
+
+      self.advance(1);
+
+      node = Node::Chain {
+        line_start,
+        line_end: line,
+        col_start,
+        col_end,
+        object: Box::new(node),
+        property: Box::new(child_node),
+      }
     }
 
-    self.index += to_advance;
-    result
+    ParseResult::Ok(node)
   }
 
-  fn parse_assignment(&mut self, body: &mut Vec<Node>) -> Option<ParseResult> {
-    if body.is_empty() {
-      return None;
+  fn parse_expression(&mut self) -> ParseResult {
+    match self.current_token() {
+      Some(&Token::Identifier { .. }) => self.parse_identifier(),
+      None => ParseResult::EOF,
+      Some(_) => ParseResult::Error(
+        UnexpectedToken("Unexpected token".to_owned(), self.index)
+      ),
     }
-
-    let is_constant = match self.next_token() {
-      Some(&Token::Equals { .. }) => true,
-      Some(&Token::ColonEquals { .. }) => false,
-      _ => return None,
-    };
-
-    self.index += 1;
-
-    let left = body.pop().unwrap();
-
-    let right = match self.parse_expression(body) {
-      Some(Parsed(node)) => node,
-      error @ Some(ParseError(_)) => return error,
-      None => return Some(ParseError("Expected expression after =".to_owned())),
-    };
-
-    let (line_start, _, col_start, _) = extract_location(&left);
-    let (_, line_end, _, col_end) = extract_location(&right);
-
-    Some(Parsed(Node::Assignment {
-      line_start,
-      line_end,
-      col_start,
-      col_end,
-      left: Box::new(left),
-      right: Box::new(right),
-      is_constant,
-      inferred_type: NodeType::Unknown,
-    }))
   }
 
-  pub fn parse_expression(&mut self, body: &mut Vec<Node>) -> Option<ParseResult> {
-    if self.index >= self.token_count {
-      return None;
-    }
-
-    let expr = self
-      .parse_parenthetical(body)
-      .or_else(|| self.parse_block())
-      .or_else(|| self.parse_identifier())
-      .or_else(|| self.parse_assignment(body))
-      .or_else(|| self.parse_string(body))
-      .or_else(|| self.parse_number());
-
-    // let copy = Some(&expr).cloned().unwrap();
-
-    // match expr {
-    //   Some(Parsed(node)) => {
-    //     self.parse_call(node).or(copy)
-    //   },
-    //   _ => expr
-    // }
-    expr
-  }
-
-  pub fn parse_module(&mut self) -> ParseResult {
+  pub fn parse_module(&mut self) -> Result<Node, ParseError> {
     let mut body = Vec::new();
 
     loop {
-      match self.parse_expression(&mut body) {
-        Some(Parsed(expr)) => body.push(expr),
-        Some(ParseError(err)) => return ParseError(err),
-        None => break
+      match self.parse_expression() {
+        ParseResult::Ok(expr) => body.push(expr),
+        ParseResult::EOF => break,
+        ParseResult::Error(err) => return Err(err),
       }
     }
 
-    Parsed(Node::Module { body })
+    Ok(Node::Module { body })
   }
 }
 

@@ -1,9 +1,28 @@
-use std::collections::HashMap;
+#[derive(Debug, Clone)]
+pub enum UnaryOperator {
+  Minus,
+}
+
+#[derive(Debug, Clone)]
+pub enum NodeType {
+  Unknown,
+}
 
 #[derive(Debug, Clone)]
 pub enum Node {
   Module {
     body: Vec<Node>,
+  },
+
+  Assignment {
+    line_start: usize,
+    line_end: usize,
+    col_start: usize,
+    col_end: usize,
+    is_constant: bool,
+    left: Box<Node>,
+    right: Box<Node>,
+    inferred_type: NodeType,
   },
 
   Block {
@@ -21,7 +40,19 @@ pub enum Node {
     col_start: usize,
     line_end: usize,
     col_end: usize,
+    callee: Box<Node>,
     arguments: Vec<Node>,
+    inferred_type: NodeType,
+  },
+
+  // a.b.c -> (obj:(a.b) , prop:c)
+  Chain {
+    line_start: usize,
+    col_start: usize,
+    line_end: usize,
+    col_end: usize,
+    object: Box<Node>,
+    property: Box<Node>,
   },
 
   Identifier {
@@ -67,25 +98,15 @@ pub enum Node {
     inferred_type: NodeType,
   },
 
-  Assignment {
+  UnaryOperation {
     line_start: usize,
     line_end: usize,
     col_start: usize,
     col_end: usize,
-    is_constant: bool,
-    left: Box<Node>,
-    right: Box<Node>,
+    left_side: Box<Node>,
+    right_side: Box<Node>,
+    operator: UnaryOperator,
     inferred_type: NodeType,
-  },
-}
-
-#[derive(Debug, Clone)]
-pub enum NodeType {
-  Unknown,
-
-  Func {
-    param_types: Vec<NodeType>,
-    return_type: Box<NodeType>,
   },
 }
 

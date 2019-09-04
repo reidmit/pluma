@@ -17,6 +17,8 @@ impl Compiler {
   pub fn compile_module(&self, source: Vec<u8>) {
     match Tokenizer::from_source(&source).collect_tokens() {
       TokenizeResult::Ok(tokens, _) => {
+        println!("{:#?}", tokens);
+
         let mut parser = Parser::from_tokens(&tokens);
         let ast = parser.parse_module();
         println!("{:#?}", ast);
