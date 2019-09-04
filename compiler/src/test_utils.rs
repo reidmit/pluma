@@ -41,7 +41,7 @@ macro_rules! assert_parsed_snapshot {
       let src = $source;
       let v = Vec::from($source);
       let mut tokenizer = Tokenizer::from_source(&v);
-      let tokens = tokenizer.collect_tokens().unwrap();
+      let (tokens, _) = tokenizer.collect_tokens().unwrap();
       let ast = Parser::from_tokens(&tokens).parse_module();
       let value = format!("{:#?}", ast);
       let file_name = format!("parse_{}", stringify!($name));

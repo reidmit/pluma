@@ -2,6 +2,7 @@
 source: compiler/src/tokenizer.rs
 expression: ""
 ---
-TokenList(
+Ok(
     [],
+    {},
 )

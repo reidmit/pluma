@@ -2,7 +2,7 @@
 source: compiler/src/tokenizer.rs
 expression: hello 1 47 wow
 ---
-TokenList(
+Ok(
     [
         Identifier {
             line: 0,
@@ -40,4 +40,5 @@ TokenList(
             ],
         },
     ],
+    {},
 )

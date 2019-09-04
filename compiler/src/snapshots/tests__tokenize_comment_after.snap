@@ -1,0 +1,27 @@
+---
+source: compiler/src/tokenizer.rs
+expression: "ok \n\n#comment"
+---
+Ok(
+    [
+        Identifier {
+            line: 0,
+            col: 0,
+            value: [
+                111,
+                107,
+            ],
+        },
+    ],
+    {
+        2: [
+            99,
+            111,
+            109,
+            109,
+            101,
+            110,
+            116,
+        ],
+    },
+)

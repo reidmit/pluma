@@ -1,7 +1,6 @@
 use crate::ast::{extract_location, Node, NodeType};
 use crate::parser::ParseResult::{ParseError, Parsed};
 use crate::tokens::Token;
-use std::collections::HashMap;
 
 pub struct Parser<'a> {
   tokens: &'a Vec<Token<'a>>,
@@ -38,25 +37,6 @@ impl<'a> Parser<'a> {
     self.tokens.get(self.index + 1)
   }
 
-  fn parse_comment(&mut self) -> Option<ParseResult> {
-    let mut to_advance = 0;
-    let mut node = None;
-
-    if let Some(&Token::Comment { value, line, col }) = self.next_token() {
-      to_advance = 1;
-
-      node = Some(Parsed(Node::Comment {
-        line,
-        col_start: col,
-        col_end: col + value.len(),
-        value: to_string(value),
-      }));
-    }
-
-    self.index += to_advance;
-    node
-  }
-
   fn parse_parenthetical(&mut self, body: &mut Vec<Node>) -> Option<ParseResult> {
     match self.next_token() {
       Some(&Token::LeftParen { .. }) => (),
@@ -76,6 +56,68 @@ impl<'a> Parser<'a> {
     };
 
     self.index += 1;
+    expr
+  }
+
+  fn parse_parenthetical_or_tuple(&mut self, body: &mut Vec<Node>) -> Option<ParseResult> {
+    let (line_start, col_start) = match self.next_token() {
+      Some(&Token::LeftParen { line, col }) => (line, col),
+      _ => return None,
+    };
+
+    self.index += 1;
+
+    // At this point, we've seen one (
+    let mut expr = match self.parse_expression(body) {
+      e @ Some(_) => e,
+      None => {
+        // If we didn't parse an expression after (, it's either an empty tuple
+        // or it's an error
+        match self.next_token() {
+          Some(&Token::RightParen { line, col }) => {
+            self.index += 1;
+
+            return Some(Parsed(Node::Tuple {
+              line_start,
+              col_start,
+              line_end: line,
+              col_end: col,
+              entries: vec![],
+              inferred_type: NodeType::Unknown,
+            }))
+          },
+
+          _ => return Some(ParseError("Expected expr between ()".to_owned()))
+        };
+      }
+    };
+
+    match self.next_token() {
+      Some(&Token::RightParen { .. }) => {
+        // If it's a ), it's a parenthesized expression, so just advance
+        // and return the expression
+        self.index += 1;
+        return expr
+      },
+
+      Some(&Token::Comma { .. }) => {
+        loop {
+
+        }
+      },
+
+      _ => expr = Some(ParseError("Missing )".to_owned())),
+    };
+
+
+    let mut to_advance = 1;
+
+    match self.next_token() {
+      Some(&Token::RightParen { .. }) => (),
+      _ => expr = Some(ParseError("Missing )".to_owned())),
+    };
+
+    self.index += to_advance;
     expr
   }
 
@@ -320,37 +362,29 @@ impl<'a> Parser<'a> {
       .or_else(|| self.parse_string(body))
       .or_else(|| self.parse_number());
 
+    // let copy = Some(&expr).cloned().unwrap();
+
+    // match expr {
+    //   Some(Parsed(node)) => {
+    //     self.parse_call(node).or(copy)
+    //   },
+    //   _ => expr
+    // }
     expr
   }
 
   pub fn parse_module(&mut self) -> ParseResult {
     let mut body = Vec::new();
-    let mut comments = HashMap::new();
-    let mut done = false;
 
     loop {
-      match self.parse_comment() {
-        Some(Parsed(Node::Comment { line, col_start, col_end, value })) => {
-          comments.insert(line, Node::Comment { line, col_start, col_end, value })
-        },
-        _ => None,
-      };
-
-      if done {
-        break;
-      }
-
       match self.parse_expression(&mut body) {
         Some(Parsed(expr)) => body.push(expr),
         Some(ParseError(err)) => return ParseError(err),
-        None => done = true,
+        None => break
       }
     }
 
-    Parsed(Node::Module {
-      body,
-      comments,
-    })
+    Parsed(Node::Module { body })
   }
 }
 
@@ -399,20 +433,5 @@ mod tests {
   assert_parsed_snapshot!(
     assignment_variable,
     "x := 47"
-  );
-
-  assert_parsed_snapshot!(
-    comment_before,
-    "# a comment before\nsomething"
-  );
-
-  assert_parsed_snapshot!(
-    comment_same_line,
-    "something # a comment on the same line\nsomethingElse"
-  );
-
-  assert_parsed_snapshot!(
-    comment_after,
-    "something\n\n# a comment after"
   );
 }

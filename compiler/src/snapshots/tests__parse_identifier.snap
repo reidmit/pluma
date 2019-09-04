@@ -13,6 +13,5 @@ Parsed(
                 inferred_type: Unknown,
             },
         ],
-        comments: {},
     },
 )

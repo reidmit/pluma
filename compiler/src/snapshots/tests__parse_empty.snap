@@ -5,6 +5,5 @@ expression: ""
 Parsed(
     Module {
         body: [],
-        comments: {},
     },
 )

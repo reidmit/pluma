@@ -1,8 +1,8 @@
 use crate::tokens::Token;
+use std::collections::HashMap;
 
 pub struct Tokenizer<'a> {
   source: &'a Vec<u8>,
-  preserve_comments: bool,
   source_length: usize,
 }
 
@@ -18,17 +18,20 @@ fn is_digit(byte: u8) -> bool {
   byte >= b'0' && byte <= b'9'
 }
 
+type TokenList<'a> = Vec<Token<'a>>;
+type CommentMap<'a> = HashMap<usize, &'a[u8]>;
+
 #[derive(Debug)]
 pub enum TokenizeResult<'a> {
-  TokenList(Vec<Token<'a>>),
+  Ok(TokenList<'a>, CommentMap<'a>),
   UnclosedStringError { line_start: usize, col_start: usize },
   UnclosedInterpolationError { line_start: usize, col_start: usize },
 }
 
 impl<'a> TokenizeResult<'a> {
-  pub fn unwrap(self) -> Vec<Token<'a>> {
+  pub fn unwrap(self) -> (TokenList<'a>, CommentMap<'a>) {
     match self {
-      TokenizeResult::TokenList(tokens) => tokens,
+      TokenizeResult::Ok(tokens, comments) => (tokens, comments),
       _ => panic!("Unexpected tokenizer error")
     }
   }
@@ -40,7 +43,6 @@ impl<'a> Tokenizer<'a> {
 
     return Tokenizer {
       source: source,
-      preserve_comments: true,
       source_length: length,
     };
   }
@@ -50,6 +52,8 @@ impl<'a> Tokenizer<'a> {
     let length = self.source_length;
 
     let mut tokens = Vec::new();
+    let mut comments = HashMap::new();
+
     let mut index = 0;
     let mut line = 0;
     let mut line_start_index = 0;
@@ -316,13 +320,7 @@ impl<'a> Tokenizer<'a> {
             index += 1;
           }
 
-          if self.preserve_comments {
-            tokens.push(Token::Comment {
-              line: line,
-              col: start_index - line_start_index,
-              value: &source[start_index + 1..index],
-            })
-          }
+          comments.insert(line, &source[start_index + 1..index]);
         }
 
         _ if is_identifier_start_char(byte) => {
@@ -380,7 +378,7 @@ impl<'a> Tokenizer<'a> {
       };
     }
 
-    TokenizeResult::TokenList(tokens)
+    TokenizeResult::Ok(tokens, comments)
   }
 }
 
@@ -406,8 +404,18 @@ mod tests {
   );
 
   assert_tokens_snapshot!(
-    comments,
-    "# o #nice\n# hello\ntest #same-line"
+    comment_before,
+    "# comment \nok"
+  );
+
+  assert_tokens_snapshot!(
+    comment_same_line,
+    "ok #comment"
+  );
+
+  assert_tokens_snapshot!(
+    comment_after,
+    "ok \n\n#comment"
   );
 
   assert_tokens_snapshot!(

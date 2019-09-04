@@ -2,7 +2,7 @@
 source: compiler/src/tokenizer.rs
 expression: "\"hello $(name)!\" nice \"$(str)\""
 ---
-TokenList(
+Ok(
     [
         String {
             line_start: 0,
@@ -87,4 +87,5 @@ TokenList(
             value: [],
         },
     ],
+    {},
 )

@@ -2,7 +2,7 @@
 source: compiler/src/tokenizer.rs
 expression: "\"hello $(name \"inner $(o)\" wow)!\""
 ---
-TokenList(
+Ok(
     [
         String {
             line_start: 0,
@@ -91,4 +91,5 @@ TokenList(
             ],
         },
     ],
+    {},
 )

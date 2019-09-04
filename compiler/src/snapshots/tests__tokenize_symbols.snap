@@ -2,7 +2,7 @@
 source: compiler/src/tokenizer.rs
 expression: "{ . } ( , ) : [ :: ] := = => ->"
 ---
-TokenList(
+Ok(
     [
         LeftBrace {
             line: 0,
@@ -61,4 +61,5 @@ TokenList(
             col: 29,
         },
     ],
+    {},
 )

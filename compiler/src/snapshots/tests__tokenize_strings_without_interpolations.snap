@@ -2,7 +2,7 @@
 source: compiler/src/tokenizer.rs
 expression: "\"hello\" \"\" \"world\""
 ---
-TokenList(
+Ok(
     [
         String {
             line_start: 0,
@@ -38,4 +38,5 @@ TokenList(
             ],
         },
     ],
+    {},
 )

@@ -2,7 +2,7 @@
 source: compiler/src/tokenizer.rs
 expression: (@$@)
 ---
-TokenList(
+Ok(
     [
         LeftParen {
             line: 0,
@@ -25,4 +25,5 @@ TokenList(
             col: 4,
         },
     ],
+    {},
 )
