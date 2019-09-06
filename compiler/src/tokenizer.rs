@@ -24,6 +24,9 @@ type CommentMap<'a> = HashMap<usize, &'a[u8]>;
 #[derive(Debug)]
 pub enum TokenizeResult<'a> {
   Ok(TokenList<'a>, CommentMap<'a>),
+  InvalidBinaryDigitError { line: usize, col: usize },
+  InvalidHexDigitError { line: usize, col: usize },
+  InvalidOctalDigitError { line: usize, col: usize },
   UnclosedStringError { line_start: usize, col_start: usize },
   UnclosedInterpolationError { line_start: usize, col_start: usize },
 }
@@ -338,11 +341,86 @@ impl<'a> Tokenizer<'a> {
         }
 
         _ if is_digit(byte) => {
+          if byte == b'0' {
+            match source.get(index + 1) {
+              Some(b'b') | Some(b'B') => {
+                index += 2;
+
+                while index < length && is_identifier_char(source[index]) {
+                  if source[index] != b'0' && source[index] != b'1' {
+                    return TokenizeResult::InvalidBinaryDigitError {
+                      line,
+                      col: index - line_start_index,
+                    }
+                  }
+
+                  index += 1;
+                }
+
+                tokens.push(Token::BinaryDigits {
+                  line,
+                  col: start_index - line_start_index,
+                  value: &source[start_index..index],
+                });
+
+                continue;
+              },
+
+              Some(b'x') | Some(b'X') => {
+                index += 2;
+
+                while index < length && is_identifier_char(source[index]) {
+                  if !source[index].is_ascii_hexdigit() {
+                    return TokenizeResult::InvalidHexDigitError {
+                      line,
+                      col: index - line_start_index,
+                    }
+                  }
+
+                  index += 1;
+                }
+
+                tokens.push(Token::HexDigits {
+                  line,
+                  col: start_index - line_start_index,
+                  value: &source[start_index..index],
+                });
+
+                continue;
+              },
+
+              Some(b'o') | Some(b'O') => {
+                index += 2;
+
+                while index < length && is_identifier_char(source[index]) {
+                  if source[index] < 48 || source[index] > 55 {
+                    return TokenizeResult::InvalidOctalDigitError {
+                      line,
+                      col: index - line_start_index,
+                    }
+                  }
+
+                  index += 1;
+                }
+
+                tokens.push(Token::OctalDigits {
+                  line,
+                  col: start_index - line_start_index,
+                  value: &source[start_index..index],
+                });
+
+                continue;
+              },
+
+              _ => {}
+            }
+          }
+
           while index < length && is_digit(source[index]) {
             index += 1;
           }
 
-          tokens.push(Token::Number {
+          tokens.push(Token::DecimalDigits {
             line: line,
             col: start_index - line_start_index,
             value: &source[start_index..index],
@@ -401,6 +479,21 @@ mod tests {
   assert_tokens_snapshot!(
     numbers,
     "hello 1 47 wow"
+  );
+
+  assert_tokens_snapshot!(
+    binary_numbers,
+    "0b101 0b00 0b1 0B0 0b00100"
+  );
+
+  assert_tokens_snapshot!(
+    hex_numbers,
+    "0x101 0x0 0xfacade 0X47"
+  );
+
+  assert_tokens_snapshot!(
+    octal_numbers,
+    "0o101 0o0 0o47 0O47"
   );
 
   assert_tokens_snapshot!(

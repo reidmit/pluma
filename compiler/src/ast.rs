@@ -9,6 +9,12 @@ pub enum NodeType {
 }
 
 #[derive(Debug, Clone)]
+pub enum NumericValue {
+  Int(i64),
+  Float(f64)
+}
+
+#[derive(Debug, Clone)]
 pub enum Node {
   Module {
     body: Vec<Node>,
@@ -71,20 +77,12 @@ pub enum Node {
     inferred_type: NodeType,
   },
 
-  IntLiteral {
+  NumericLiteral {
     line: usize,
     col_start: usize,
     col_end: usize,
-    value: String,
-    inferred_type: NodeType,
-  },
-
-  StringLiteral {
-    line_start: usize,
-    line_end: usize,
-    col_start: usize,
-    col_end: usize,
-    value: String,
+    value: NumericValue,
+    raw_value: String,
     inferred_type: NodeType,
   },
 
@@ -167,20 +165,12 @@ pub fn extract_location(node: &Node) -> (usize, usize, usize, usize) {
       ..
     } => (*line, *line, *col_start, *col_end),
 
-    Node::IntLiteral {
+    Node::NumericLiteral {
       line,
       col_start,
       col_end,
       ..
     } => (*line, *line, *col_start, *col_end),
-
-    Node::StringLiteral {
-      line_start,
-      line_end,
-      col_start,
-      col_end,
-      ..
-    } => (*line_start, *line_end, *col_start, *col_end),
 
     Node::StringInterpolation {
       line_start,

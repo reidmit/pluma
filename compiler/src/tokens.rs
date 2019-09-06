@@ -94,7 +94,25 @@ pub enum Token<'a> {
     value: &'a [u8],
   },
 
-  Number {
+  DecimalDigits {
+    line: usize,
+    col: usize,
+    value: &'a [u8],
+  },
+
+  BinaryDigits {
+    line: usize,
+    col: usize,
+    value: &'a [u8],
+  },
+
+  OctalDigits {
+    line: usize,
+    col: usize,
+    value: &'a [u8],
+  },
+
+  HexDigits {
     line: usize,
     col: usize,
     value: &'a [u8],

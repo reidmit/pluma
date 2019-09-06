@@ -1,0 +1,53 @@
+---
+source: compiler/src/tokenizer.rs
+expression: 0x101 0x0 0xfacade 0X47
+---
+Ok(
+    [
+        HexDigits {
+            line: 0,
+            col: 0,
+            value: [
+                48,
+                120,
+                49,
+                48,
+                49,
+            ],
+        },
+        HexDigits {
+            line: 0,
+            col: 6,
+            value: [
+                48,
+                120,
+                48,
+            ],
+        },
+        HexDigits {
+            line: 0,
+            col: 10,
+            value: [
+                48,
+                120,
+                102,
+                97,
+                99,
+                97,
+                100,
+                101,
+            ],
+        },
+        HexDigits {
+            line: 0,
+            col: 19,
+            value: [
+                48,
+                88,
+                52,
+                55,
+            ],
+        },
+    ],
+    {},
+)

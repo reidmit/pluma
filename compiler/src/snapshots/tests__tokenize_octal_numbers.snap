@@ -1,42 +1,47 @@
 ---
 source: compiler/src/tokenizer.rs
-expression: hello 1 47 wow
+expression: 0o101 0o0 0o47 0O47
 ---
 Ok(
     [
-        Identifier {
+        OctalDigits {
             line: 0,
             col: 0,
             value: [
-                104,
-                101,
-                108,
-                108,
+                48,
                 111,
-            ],
-        },
-        DecimalDigits {
-            line: 0,
-            col: 6,
-            value: [
+                49,
+                48,
                 49,
             ],
         },
-        DecimalDigits {
+        OctalDigits {
             line: 0,
-            col: 8,
+            col: 6,
             value: [
+                48,
+                111,
+                48,
+            ],
+        },
+        OctalDigits {
+            line: 0,
+            col: 10,
+            value: [
+                48,
+                111,
                 52,
                 55,
             ],
         },
-        Identifier {
+        OctalDigits {
             line: 0,
-            col: 11,
+            col: 15,
             value: [
-                119,
-                111,
-                119,
+                48,
+                79,
+                52,
+                55,
             ],
         },
     ],
