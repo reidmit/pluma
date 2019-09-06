@@ -28,7 +28,6 @@ pub enum ParseError {
   UnexpectedToken(String, usize),
   UnexpectedEOF(String),
   UnclosedParentheses(usize),
-  TODO(String),
 }
 
 fn to_string(bytes: &[u8]) -> String {
@@ -60,14 +59,6 @@ impl<'a> Parser<'a> {
 
   fn current_token(&self) -> Option<&Token> {
     self.tokens.get(self.index)
-  }
-
-  fn last_parsed_node(&self) -> Option<&Node> {
-    self.nodes.last()
-  }
-
-  fn last_parsed_line_end(&self) -> Option<usize> {
-    self.nodes.last().map(|node| extract_location(node).1)
   }
 
   fn parse_identifier(&mut self) -> ParseResult {
@@ -173,18 +164,9 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_expression(&mut self) -> ParseResult {
-    let parsed = match self.current_token() {
-      Some(&Token::Identifier { .. }) => self.parse_identifier(),
-      Some(&Token::LeftParen { .. }) => self.parse_parenthetical(),
-      Some(_) => ParseResult::Error(
-        UnexpectedToken("Unexpected token".to_owned(), self.index)
-      ),
-      None => ParseResult::EOF,
-    };
-
-    let mut current = parsed.clone();
-    let mut result = parsed.clone();
+  fn parse_any_calls_after_result(&mut self, previous: ParseResult) -> ParseResult {
+    let mut current = previous.clone();
+    let mut result = previous.clone();
 
     while let ParseResult::Ok(node) = current {
       let (line_start, _, col_start, _) = extract_location(&node);
@@ -240,6 +222,19 @@ impl<'a> Parser<'a> {
     }
 
     return result;
+  }
+
+  fn parse_expression(&mut self) -> ParseResult {
+    let parsed = match self.current_token() {
+      Some(&Token::Identifier { .. }) => self.parse_identifier(),
+      Some(&Token::LeftParen { .. }) => self.parse_parenthetical(),
+      Some(_) => ParseResult::Error(
+        UnexpectedToken("Unexpected token".to_owned(), self.index)
+      ),
+      None => ParseResult::EOF,
+    };
+
+    self.parse_any_calls_after_result(parsed)
   }
 
   pub fn parse_module(&mut self) -> Result<Node, ParseError> {
