@@ -5,8 +5,8 @@ expression: 0o101 0o0 0o47 0O47
 Ok(
     [
         OctalDigits {
-            line: 0,
-            col: 0,
+            start: 0,
+            end: 5,
             value: [
                 48,
                 111,
@@ -16,8 +16,8 @@ Ok(
             ],
         },
         OctalDigits {
-            line: 0,
-            col: 6,
+            start: 6,
+            end: 9,
             value: [
                 48,
                 111,
@@ -25,8 +25,8 @@ Ok(
             ],
         },
         OctalDigits {
-            line: 0,
-            col: 10,
+            start: 10,
+            end: 14,
             value: [
                 48,
                 111,
@@ -35,8 +35,8 @@ Ok(
             ],
         },
         OctalDigits {
-            line: 0,
-            col: 15,
+            start: 15,
+            end: 19,
             value: [
                 48,
                 79,

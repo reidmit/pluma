@@ -5,12 +5,20 @@ expression: "ok \n\n#comment"
 Ok(
     [
         Identifier {
-            line: 0,
-            col: 0,
+            start: 0,
+            end: 2,
             value: [
                 111,
                 107,
             ],
+        },
+        LineBreak {
+            start: 3,
+            end: 4,
+        },
+        LineBreak {
+            start: 4,
+            end: 5,
         },
     ],
     {

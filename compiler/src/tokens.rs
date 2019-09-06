@@ -3,136 +3,139 @@
 #[derive(Debug, PartialEq)]
 pub enum Token<'a> {
   Unexpected {
-    line: usize,
-    col: usize,
+    start: usize,
+    end: usize,
   },
 
   LeftParen {
-    line: usize,
-    col: usize,
+    start: usize,
+    end: usize,
   },
 
   RightParen {
-    line: usize,
-    col: usize,
+    start: usize,
+    end: usize,
   },
 
   LeftBrace {
-    line: usize,
-    col: usize,
+    start: usize,
+    end: usize,
   },
 
   RightBrace {
-    line: usize,
-    col: usize,
+    start: usize,
+    end: usize,
   },
 
   LeftBracket {
-    line: usize,
-    col: usize,
+    start: usize,
+    end: usize,
   },
 
   RightBracket {
-    line: usize,
-    col: usize,
+    start: usize,
+    end: usize,
   },
 
   Comma {
-    line: usize,
-    col: usize,
+    start: usize,
+    end: usize,
   },
 
   Dot {
-    line: usize,
-    col: usize,
+    start: usize,
+    end: usize,
   },
 
   Colon {
-    line: usize,
-    col: usize,
+    start: usize,
+    end: usize,
   },
 
   Equals {
-    line: usize,
-    col: usize,
+    start: usize,
+    end: usize,
   },
 
   Minus {
-    line: usize,
-    col: usize,
+    start: usize,
+    end: usize,
   },
 
   Arrow {
-    line: usize,
-    col: usize,
+    start: usize,
+    end: usize,
   },
 
   DoubleArrow {
-    line: usize,
-    col: usize,
+    start: usize,
+    end: usize,
   },
 
   DoubleColon {
-    line: usize,
-    col: usize,
+    start: usize,
+    end: usize,
   },
 
   ColonEquals {
-    line: usize,
-    col: usize,
+    start: usize,
+    end: usize,
   },
 
   Identifier {
-    line: usize,
-    col: usize,
+    start: usize,
+    end: usize,
     value: &'a [u8],
   },
 
   Comment {
-    line: usize,
-    col: usize,
+    start: usize,
+    end: usize,
     value: &'a [u8],
   },
 
   DecimalDigits {
-    line: usize,
-    col: usize,
+    start: usize,
+    end: usize,
     value: &'a [u8],
   },
 
   BinaryDigits {
-    line: usize,
-    col: usize,
+    start: usize,
+    end: usize,
     value: &'a [u8],
   },
 
   OctalDigits {
-    line: usize,
-    col: usize,
+    start: usize,
+    end: usize,
     value: &'a [u8],
   },
 
   HexDigits {
-    line: usize,
-    col: usize,
+    start: usize,
+    end: usize,
     value: &'a [u8],
   },
 
   String {
-    line_start: usize,
-    col_start: usize,
-    line_end: usize,
-    col_end: usize,
+    start: usize,
+    end: usize,
     value: &'a [u8],
   },
 
   InterpolationStart {
-    line: usize,
-    col: usize,
+    start: usize,
+    end: usize,
   },
 
   InterpolationEnd {
-    line: usize,
-    col: usize,
+    start: usize,
+    end: usize,
+  },
+
+  LineBreak {
+    start: usize,
+    end: usize,
   },
 }

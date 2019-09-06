@@ -5,8 +5,8 @@ expression: hello 1 47 wow
 Ok(
     [
         Identifier {
-            line: 0,
-            col: 0,
+            start: 0,
+            end: 5,
             value: [
                 104,
                 101,
@@ -16,23 +16,23 @@ Ok(
             ],
         },
         DecimalDigits {
-            line: 0,
-            col: 6,
+            start: 6,
+            end: 7,
             value: [
                 49,
             ],
         },
         DecimalDigits {
-            line: 0,
-            col: 8,
+            start: 8,
+            end: 10,
             value: [
                 52,
                 55,
             ],
         },
         Identifier {
-            line: 0,
-            col: 11,
+            start: 11,
+            end: 14,
             value: [
                 119,
                 111,

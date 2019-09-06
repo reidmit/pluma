@@ -61,27 +61,35 @@ impl<'a> Parser<'a> {
     self.tokens.get(self.index)
   }
 
+  fn skip_line_breaks(&mut self) {
+    while let Some(&Token::LineBreak { .. }) = self.current_token() {
+      self.advance(1)
+    }
+  }
+
   fn parse_identifier(&mut self) -> ParseResult {
-    let (first_value, first_line, first_col) = match self.current_token() {
-      Some(&Token::Identifier { value, line, col }) => (value, line, col),
+    // Make sure we're starting with an identifier token, and grab its value & index
+    let (first_value, first_start) = match self.current_token() {
+      Some(&Token::Identifier { value, start, .. }) => (value, start),
       _ => unreachable!()
     };
 
+    // Make a node for the identifier & advance past it
     let mut node = Node::Identifier {
-      line: first_line,
-      col_start: first_col,
-      col_end: first_col + first_value.len(),
+      start: first_start,
+      end: first_start + first_value.len(),
       name: to_string(first_value),
       inferred_type: NodeType::Unknown,
     };
 
     self.advance(1);
 
+    // While we see a '.', parse any chained identifiers
     while let Some(&Token::Dot { .. }) = self.current_token() {
       self.advance(1);
 
-      let (value, line, col) = match self.current_token() {
-        Some(&Token::Identifier { value, line, col }) => (value, line, col),
+      let (value, id_start, id_end) = match self.current_token() {
+        Some(&Token::Identifier { value, start, end }) => (value, start, end),
         Some(_) => return ParseResult::Error(UnexpectedToken(
           "Unexpected token after '.'. Expected to see an identifier.".to_owned(),
           self.index,
@@ -91,13 +99,11 @@ impl<'a> Parser<'a> {
         )),
       };
 
-      let (line_start, col_start, _, _) = extract_location(&node);
-      let col_end = col + value.len();
+      let (node_start, _) = extract_location(&node);
 
       let child_node = Node::Identifier {
-        line,
-        col_start: col,
-        col_end,
+        start: id_start,
+        end: id_end,
         name: to_string(value),
         inferred_type: NodeType::Unknown,
       };
@@ -105,10 +111,8 @@ impl<'a> Parser<'a> {
       self.advance(1);
 
       node = Node::Chain {
-        line_start,
-        line_end: line,
-        col_start,
-        col_end,
+        start: node_start,
+        end: id_end,
         object: Box::new(node),
         property: Box::new(child_node),
       }
@@ -118,8 +122,8 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_parenthetical(&mut self) -> ParseResult {
-    let (line_start, col_start) = match self.current_token() {
-      Some(&Token::LeftParen { line, col }) => (line, col),
+    let paren_start = match self.current_token() {
+      Some(&Token::LeftParen { start, .. }) => start,
       _ => unreachable!()
     };
 
@@ -136,8 +140,10 @@ impl<'a> Parser<'a> {
       }
     }
 
-    let (line_end, col_end) = match self.current_token() {
-      Some(&Token::RightParen { line, col }) => (line, col),
+    self.skip_line_breaks();
+
+    let paren_end = match self.current_token() {
+      Some(&Token::RightParen { end, .. }) => end,
       _ => return ParseResult::Error(UnclosedParentheses(self.index))
     };
 
@@ -145,20 +151,16 @@ impl<'a> Parser<'a> {
 
     if inner_exprs.len() == 1 {
       return ParseResult::Ok(Node::Grouping {
-        line_start,
-        col_start,
-        line_end,
-        col_end,
+        start: paren_start,
+        end: paren_end,
         expr: Box::new(inner_exprs[0].clone()),
         inferred_type: NodeType::Unknown,
       });
     }
 
     ParseResult::Ok(Node::Tuple {
-      line_start,
-      col_start,
-      line_end,
-      col_end,
+      start: paren_start,
+      end: paren_end,
       entries: inner_exprs,
       inferred_type: NodeType::Unknown,
     })
@@ -169,25 +171,19 @@ impl<'a> Parser<'a> {
     let mut result = previous.clone();
 
     while let ParseResult::Ok(node) = current {
-      let (line_start, _, col_start, _) = extract_location(&node);
+      let (call_start, _) = extract_location(&node);
 
-      if let Some(&Token::LeftParen { line, .. }) = self.current_token() {
-        if line != line_start {
-          break
-        }
-
+      if let Some(&Token::LeftParen { .. }) = self.current_token() {
         match self.parse_parenthetical() {
           ParseResult::Ok(Node::Tuple {
-            line_end,
-            col_end,
+            start,
+            end,
             entries,
             ..
           }) => {
             current = ParseResult::Ok(Node::Call {
-              line_start,
-              line_end,
-              col_start,
-              col_end,
+              start,
+              end,
               callee: Box::new(node),
               arguments: entries,
               inferred_type: NodeType::Unknown,
@@ -198,13 +194,11 @@ impl<'a> Parser<'a> {
           },
 
           ParseResult::Ok(expr_in_parens) => {
-            let (_, line_end, _, col_end) = extract_location(&expr_in_parens);
+            let (_, expr_end) = extract_location(&expr_in_parens);
 
             current = ParseResult::Ok(Node::Call {
-              line_start,
-              line_end,
-              col_start,
-              col_end,
+              start: call_start,
+              end: expr_end,
               callee: Box::new(node),
               arguments: vec![ungroup(expr_in_parens)],
               inferred_type: NodeType::Unknown,
@@ -225,6 +219,8 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_expression(&mut self) -> ParseResult {
+    self.skip_line_breaks();
+
     let parsed = match self.current_token() {
       Some(&Token::Identifier { .. }) => self.parse_identifier(),
       Some(&Token::LeftParen { .. }) => self.parse_parenthetical(),

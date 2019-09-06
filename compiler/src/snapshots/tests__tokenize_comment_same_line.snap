@@ -5,8 +5,8 @@ expression: "ok #comment"
 Ok(
     [
         Identifier {
-            line: 0,
-            col: 0,
+            start: 0,
+            end: 2,
             value: [
                 111,
                 107,

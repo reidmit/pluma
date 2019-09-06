@@ -5,10 +5,8 @@ expression: "\"hello $(name)!\" nice \"$(str)\""
 Ok(
     [
         String {
-            line_start: 0,
-            col_start: 0,
-            line_end: 0,
-            col_end: 7,
+            start: 1,
+            end: 7,
             value: [
                 104,
                 101,
@@ -19,12 +17,12 @@ Ok(
             ],
         },
         InterpolationStart {
-            line: 0,
-            col: 7,
+            start: 7,
+            end: 9,
         },
         Identifier {
-            line: 0,
-            col: 9,
+            start: 9,
+            end: 13,
             value: [
                 110,
                 97,
@@ -33,21 +31,19 @@ Ok(
             ],
         },
         InterpolationEnd {
-            line: 0,
-            col: 13,
+            start: 13,
+            end: 14,
         },
         String {
-            line_start: 0,
-            col_start: 14,
-            line_end: 0,
-            col_end: 16,
+            start: 14,
+            end: 15,
             value: [
                 33,
             ],
         },
         Identifier {
-            line: 0,
-            col: 17,
+            start: 17,
+            end: 21,
             value: [
                 110,
                 105,
@@ -56,19 +52,17 @@ Ok(
             ],
         },
         String {
-            line_start: 0,
-            col_start: 22,
-            line_end: 0,
-            col_end: 23,
+            start: 23,
+            end: 23,
             value: [],
         },
         InterpolationStart {
-            line: 0,
-            col: 23,
+            start: 23,
+            end: 25,
         },
         Identifier {
-            line: 0,
-            col: 25,
+            start: 25,
+            end: 28,
             value: [
                 115,
                 116,
@@ -76,14 +70,12 @@ Ok(
             ],
         },
         InterpolationEnd {
-            line: 0,
-            col: 28,
+            start: 28,
+            end: 29,
         },
         String {
-            line_start: 0,
-            col_start: 29,
-            line_end: 0,
-            col_end: 30,
+            start: 29,
+            end: 29,
             value: [],
         },
     ],

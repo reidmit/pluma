@@ -4,9 +4,13 @@ expression: "# comment \nok"
 ---
 Ok(
     [
+        LineBreak {
+            start: 10,
+            end: 11,
+        },
         Identifier {
-            line: 1,
-            col: 0,
+            start: 11,
+            end: 13,
             value: [
                 111,
                 107,

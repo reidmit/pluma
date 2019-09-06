@@ -5,60 +5,60 @@ expression: "{ . } ( , ) : [ :: ] := = => ->"
 Ok(
     [
         LeftBrace {
-            line: 0,
-            col: 0,
+            start: 0,
+            end: 1,
         },
         Dot {
-            line: 0,
-            col: 2,
+            start: 2,
+            end: 3,
         },
         RightBrace {
-            line: 0,
-            col: 4,
+            start: 4,
+            end: 5,
         },
         LeftParen {
-            line: 0,
-            col: 6,
+            start: 6,
+            end: 7,
         },
         Comma {
-            line: 0,
-            col: 8,
+            start: 8,
+            end: 9,
         },
         RightParen {
-            line: 0,
-            col: 10,
+            start: 10,
+            end: 11,
         },
         Colon {
-            line: 0,
-            col: 12,
+            start: 12,
+            end: 13,
         },
         LeftBracket {
-            line: 0,
-            col: 14,
+            start: 14,
+            end: 15,
         },
         DoubleColon {
-            line: 0,
-            col: 16,
+            start: 16,
+            end: 18,
         },
         RightBracket {
-            line: 0,
-            col: 19,
+            start: 19,
+            end: 20,
         },
         ColonEquals {
-            line: 0,
-            col: 21,
+            start: 21,
+            end: 23,
         },
         Equals {
-            line: 0,
-            col: 24,
+            start: 24,
+            end: 25,
         },
         DoubleArrow {
-            line: 0,
-            col: 26,
+            start: 26,
+            end: 28,
         },
         Arrow {
-            line: 0,
-            col: 29,
+            start: 29,
+            end: 31,
         },
     ],
     {},

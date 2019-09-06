@@ -24,11 +24,11 @@ type CommentMap<'a> = HashMap<usize, &'a[u8]>;
 #[derive(Debug)]
 pub enum TokenizeResult<'a> {
   Ok(TokenList<'a>, CommentMap<'a>),
-  InvalidBinaryDigitError { line: usize, col: usize },
-  InvalidHexDigitError { line: usize, col: usize },
-  InvalidOctalDigitError { line: usize, col: usize },
-  UnclosedStringError { line_start: usize, col_start: usize },
-  UnclosedInterpolationError { line_start: usize, col_start: usize },
+  InvalidBinaryDigitError(usize, usize),
+  InvalidHexDigitError(usize, usize),
+  InvalidOctalDigitError(usize, usize),
+  UnclosedStringError(usize, usize),
+  UnclosedInterpolationError(usize, usize),
 }
 
 impl<'a> TokenizeResult<'a> {
@@ -59,7 +59,6 @@ impl<'a> Tokenizer<'a> {
 
     let mut index = 0;
     let mut line = 0;
-    let mut line_start_index = 0;
 
     let mut string_stack = Vec::new();
     let mut interpolation_stack = 0;
@@ -75,7 +74,7 @@ impl<'a> Tokenizer<'a> {
       if string_stack.is_empty() && byte == b'"' {
         // If the string stack is empty and byte is ", we are at the beginning of
         // a brand new string. Save the start index and advance.
-        string_stack.push((line, index - line_start_index, index));
+        string_stack.push(index);
         index += 1;
         continue;
       }
@@ -89,7 +88,7 @@ impl<'a> Tokenizer<'a> {
           // If the two stacks have the same size, we must be inside of an interpolation,
           // so the " indicates the beginning of a nested string literal. Save the index
           // in the string stack and advance.
-          string_stack.push((line, index - line_start_index, index));
+          string_stack.push(index);
           index += 1;
           continue;
         }
@@ -97,16 +96,12 @@ impl<'a> Tokenizer<'a> {
         if byte == b'"' {
           // Here, the " must indicate the end of a string literal section. Pop from
           // the string stack, add a new token, then advance.
-          let (line_start, col_start, offset) = string_stack.pop().unwrap();
-
-          println!("str ending, {}, {}, {}", line_start, col_start, offset);
+          let start_index = string_stack.pop().unwrap();
 
           tokens.push(Token::String {
-            line_start,
-            col_start,
-            line_end: line,
-            col_end: index + 1 - line_start_index,
-            value: &source[offset + 1..index],
+            start: start_index + 1,
+            end: index,
+            value: &source[start_index + 1..index],
           });
 
           index += 1;
@@ -117,19 +112,17 @@ impl<'a> Tokenizer<'a> {
           // We must be at the beginning of an interpolation, so create a token for
           // the string literal portion leading up to the interpolation, one for the
           // interpolation start, and add to the interpolation stack.
-          let (line_start, col_start, offset) = string_stack.last().unwrap();
+          let string_start_index = string_stack.last().unwrap();
 
           tokens.push(Token::String {
-            line_start: *line_start,
-            col_start: *col_start,
-            line_end: line,
-            col_end: index - line_start_index,
-            value: &source[offset + 1..index],
+            start: string_start_index + 1,
+            end: index,
+            value: &source[string_start_index + 1..index],
           });
 
           tokens.push(Token::InterpolationStart {
-            line: line,
-            col: index - line_start_index,
+            start: start_index,
+            end: index + 2,
           });
 
           index += 2;
@@ -142,12 +135,12 @@ impl<'a> Tokenizer<'a> {
           // fix the index on the last string in the string stack so that it starts
           // here. Decrease the interpolation stack.
           tokens.push(Token::InterpolationEnd {
-            line: line,
-            col: index - line_start_index,
+            start: index,
+            end: index + 1,
           });
 
           string_stack.pop();
-          string_stack.push((line, index - line_start_index + 1, index));
+          string_stack.push(index);
 
           index += 1;
           interpolation_stack -= 1;
@@ -174,15 +167,19 @@ impl<'a> Tokenizer<'a> {
         b'\n' => {
           index += 1;
           line += 1;
-          line_start_index = index;
+
+          tokens.push(Token::LineBreak {
+            start: start_index,
+            end: index,
+          })
         }
 
         b'(' => {
           index += 1;
 
           tokens.push(Token::LeftParen {
-            line: line,
-            col: start_index - line_start_index,
+            start: start_index,
+            end: index,
           })
         }
 
@@ -190,8 +187,8 @@ impl<'a> Tokenizer<'a> {
           index += 1;
 
           tokens.push(Token::RightParen {
-            line: line,
-            col: start_index - line_start_index,
+            start: start_index,
+            end: index,
           })
         }
 
@@ -199,8 +196,8 @@ impl<'a> Tokenizer<'a> {
           index += 1;
 
           tokens.push(Token::LeftBrace {
-            line: line,
-            col: start_index - line_start_index,
+            start: start_index,
+            end: index,
           })
         }
 
@@ -208,8 +205,8 @@ impl<'a> Tokenizer<'a> {
           index += 1;
 
           tokens.push(Token::RightBrace {
-            line: line,
-            col: start_index - line_start_index,
+            start: start_index,
+            end: index,
           })
         }
 
@@ -217,8 +214,8 @@ impl<'a> Tokenizer<'a> {
           index += 1;
 
           tokens.push(Token::LeftBracket {
-            line: line,
-            col: start_index - line_start_index,
+            start: start_index,
+            end: index,
           })
         }
 
@@ -226,8 +223,8 @@ impl<'a> Tokenizer<'a> {
           index += 1;
 
           tokens.push(Token::RightBracket {
-            line: line,
-            col: start_index - line_start_index,
+            start: start_index,
+            end: index,
           })
         }
 
@@ -235,8 +232,8 @@ impl<'a> Tokenizer<'a> {
           index += 1;
 
           tokens.push(Token::Comma {
-            line: line,
-            col: start_index - line_start_index,
+            start: start_index,
+            end: index,
           })
         }
 
@@ -244,8 +241,8 @@ impl<'a> Tokenizer<'a> {
           index += 1;
 
           tokens.push(Token::Dot {
-            line: line,
-            col: start_index - line_start_index,
+            start: start_index,
+            end: index,
           })
         }
 
@@ -254,8 +251,8 @@ impl<'a> Tokenizer<'a> {
             index += 2;
 
             tokens.push(Token::DoubleArrow {
-              line: line,
-              col: start_index - line_start_index,
+              start: start_index,
+              end: index,
             })
           }
 
@@ -263,8 +260,8 @@ impl<'a> Tokenizer<'a> {
             index += 1;
 
             tokens.push(Token::Equals {
-              line: line,
-              col: start_index - line_start_index,
+              start: start_index,
+              end: index,
             })
           }
         },
@@ -274,8 +271,8 @@ impl<'a> Tokenizer<'a> {
             index += 2;
 
             tokens.push(Token::Arrow {
-              line: line,
-              col: start_index - line_start_index,
+              start: start_index,
+              end: index,
             })
           }
 
@@ -283,8 +280,8 @@ impl<'a> Tokenizer<'a> {
             index += 1;
 
             tokens.push(Token::Minus {
-              line: line,
-              col: start_index - line_start_index,
+              start: start_index,
+              end: index,
             })
           }
         },
@@ -294,8 +291,8 @@ impl<'a> Tokenizer<'a> {
             index += 2;
 
             tokens.push(Token::ColonEquals {
-              line: line,
-              col: start_index - line_start_index,
+              start: start_index,
+              end: index,
             })
           }
 
@@ -303,8 +300,8 @@ impl<'a> Tokenizer<'a> {
             index += 2;
 
             tokens.push(Token::DoubleColon {
-              line: line,
-              col: start_index - line_start_index,
+              start: start_index,
+              end: index,
             })
           }
 
@@ -312,8 +309,8 @@ impl<'a> Tokenizer<'a> {
             index += 1;
 
             tokens.push(Token::Colon {
-              line: line,
-              col: start_index - line_start_index,
+              start: start_index,
+              end: index,
             })
           }
         },
@@ -332,8 +329,8 @@ impl<'a> Tokenizer<'a> {
           }
 
           tokens.push(Token::Identifier {
-            line: line,
-            col: start_index - line_start_index,
+            start: start_index,
+            end: index,
             value: &source[start_index..index],
           });
 
@@ -348,18 +345,15 @@ impl<'a> Tokenizer<'a> {
 
                 while index < length && is_identifier_char(source[index]) {
                   if source[index] != b'0' && source[index] != b'1' {
-                    return TokenizeResult::InvalidBinaryDigitError {
-                      line,
-                      col: index - line_start_index,
-                    }
+                    return TokenizeResult::InvalidBinaryDigitError(index, index + 1)
                   }
 
                   index += 1;
                 }
 
                 tokens.push(Token::BinaryDigits {
-                  line,
-                  col: start_index - line_start_index,
+                  start: start_index,
+                  end: index,
                   value: &source[start_index..index],
                 });
 
@@ -371,18 +365,15 @@ impl<'a> Tokenizer<'a> {
 
                 while index < length && is_identifier_char(source[index]) {
                   if !source[index].is_ascii_hexdigit() {
-                    return TokenizeResult::InvalidHexDigitError {
-                      line,
-                      col: index - line_start_index,
-                    }
+                    return TokenizeResult::InvalidHexDigitError(index, index + 1)
                   }
 
                   index += 1;
                 }
 
                 tokens.push(Token::HexDigits {
-                  line,
-                  col: start_index - line_start_index,
+                  start: start_index,
+                  end: index,
                   value: &source[start_index..index],
                 });
 
@@ -394,18 +385,15 @@ impl<'a> Tokenizer<'a> {
 
                 while index < length && is_identifier_char(source[index]) {
                   if source[index] < 48 || source[index] > 55 {
-                    return TokenizeResult::InvalidOctalDigitError {
-                      line,
-                      col: index - line_start_index,
-                    }
+                    return TokenizeResult::InvalidOctalDigitError(index, index + 1)
                   }
 
                   index += 1;
                 }
 
                 tokens.push(Token::OctalDigits {
-                  line,
-                  col: start_index - line_start_index,
+                  start: start_index,
+                  end: index,
                   value: &source[start_index..index],
                 });
 
@@ -421,8 +409,8 @@ impl<'a> Tokenizer<'a> {
           }
 
           tokens.push(Token::DecimalDigits {
-            line: line,
-            col: start_index - line_start_index,
+            start: start_index,
+            end: index,
             value: &source[start_index..index],
           });
 
@@ -433,27 +421,21 @@ impl<'a> Tokenizer<'a> {
           index += 1;
 
           tokens.push(Token::Unexpected {
-            line: line,
-            col: start_index - line_start_index,
+            start: start_index,
+            end: index,
           })
         }
       };
     }
 
     if interpolation_stack > 0 {
-      return TokenizeResult::UnclosedInterpolationError {
-        line_start: 0, // TODO
-        col_start: 0, // TODO
-      };
+      return TokenizeResult::UnclosedInterpolationError(0, 0) // TODO
     }
 
     if !string_stack.is_empty() {
-      let (line_start, col_start, _) = string_stack.pop().unwrap();
+      let start_index = string_stack.pop().unwrap();
 
-      return TokenizeResult::UnclosedStringError {
-        line_start,
-        col_start,
-      };
+      return TokenizeResult::UnclosedStringError(start_index, index)
     }
 
     TokenizeResult::Ok(tokens, comments)
