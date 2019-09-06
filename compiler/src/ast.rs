@@ -45,7 +45,6 @@ pub enum Node {
     inferred_type: NodeType,
   },
 
-  // a.b.c -> (obj:(a.b) , prop:c)
   Chain {
     line_start: usize,
     col_start: usize,
@@ -53,6 +52,15 @@ pub enum Node {
     col_end: usize,
     object: Box<Node>,
     property: Box<Node>,
+  },
+
+  Grouping {
+    line_start: usize,
+    col_start: usize,
+    line_end: usize,
+    col_end: usize,
+    expr: Box<Node>,
+    inferred_type: NodeType,
   },
 
   Identifier {
@@ -112,6 +120,46 @@ pub enum Node {
 
 pub fn extract_location(node: &Node) -> (usize, usize, usize, usize) {
   match node {
+    Node::Assignment {
+      line_start,
+      line_end,
+      col_start,
+      col_end,
+      ..
+    } => (*line_start, *line_end, *col_start, *col_end),
+
+    Node::Block {
+      line_start,
+      line_end,
+      col_start,
+      col_end,
+      ..
+    } => (*line_start, *line_end, *col_start, *col_end),
+
+    Node::Call {
+      line_start,
+      line_end,
+      col_start,
+      col_end,
+      ..
+    } => (*line_start, *line_end, *col_start, *col_end),
+
+    Node::Chain {
+      line_start,
+      line_end,
+      col_start,
+      col_end,
+      ..
+    } => (*line_start, *line_end, *col_start, *col_end),
+
+    Node::Grouping {
+      line_start,
+      line_end,
+      col_start,
+      col_end,
+      ..
+    } => (*line_start, *line_end, *col_start, *col_end),
+
     Node::Identifier {
       line,
       col_start,
@@ -142,7 +190,7 @@ pub fn extract_location(node: &Node) -> (usize, usize, usize, usize) {
       ..
     } => (*line_start, *line_end, *col_start, *col_end),
 
-    Node::Assignment {
+    Node::Tuple {
       line_start,
       line_end,
       col_start,
@@ -150,6 +198,14 @@ pub fn extract_location(node: &Node) -> (usize, usize, usize, usize) {
       ..
     } => (*line_start, *line_end, *col_start, *col_end),
 
-    _ => (0, 0, 0, 0),
+    Node::UnaryOperation {
+      line_start,
+      line_end,
+      col_start,
+      col_end,
+      ..
+    } => (*line_start, *line_end, *col_start, *col_end),
+
+    something_else => unimplemented!("unexpected node: {:#?}", something_else),
   }
 }

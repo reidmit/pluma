@@ -6,6 +6,7 @@ pub struct Parser<'a> {
   tokens: &'a Vec<Token<'a>>,
   token_count: usize,
   index: usize,
+  nodes: Vec<Node>,
 }
 
 #[derive(Debug)]
@@ -15,21 +16,30 @@ pub enum SourceLocation {
   LineSpan { line_start: usize, line_end: usize, col_start: usize, col_end: usize },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum ParseResult {
   Ok(Node),
   EOF,
   Error(ParseError),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ParseError {
   UnexpectedToken(String, usize),
   UnexpectedEOF(String),
+  UnclosedParentheses(usize),
+  TODO(String),
 }
 
 fn to_string(bytes: &[u8]) -> String {
   String::from_utf8(bytes.to_vec()).expect("String is not UTF-8")
+}
+
+fn ungroup(node: Node) -> Node {
+  match node {
+    Node::Grouping { expr, .. } => *expr,
+    otherwise => otherwise,
+  }
 }
 
 impl<'a> Parser<'a> {
@@ -40,6 +50,7 @@ impl<'a> Parser<'a> {
       tokens,
       token_count,
       index: 0,
+      nodes: Vec::new(),
     };
   }
 
@@ -49,6 +60,14 @@ impl<'a> Parser<'a> {
 
   fn current_token(&self) -> Option<&Token> {
     self.tokens.get(self.index)
+  }
+
+  fn last_parsed_node(&self) -> Option<&Node> {
+    self.nodes.last()
+  }
+
+  fn last_parsed_line_end(&self) -> Option<usize> {
+    self.nodes.last().map(|node| extract_location(node).1)
   }
 
   fn parse_identifier(&mut self) -> ParseResult {
@@ -107,28 +126,134 @@ impl<'a> Parser<'a> {
     ParseResult::Ok(node)
   }
 
+  fn parse_parenthetical(&mut self) -> ParseResult {
+    let (line_start, col_start) = match self.current_token() {
+      Some(&Token::LeftParen { line, col }) => (line, col),
+      _ => unreachable!()
+    };
+
+    self.advance(1);
+
+    let mut inner_exprs = Vec::new();
+
+    while let ParseResult::Ok(node) = self.parse_expression() {
+      inner_exprs.push(node);
+
+      match self.current_token() {
+        Some(&Token::Comma { .. }) => self.advance(1),
+        _ => break
+      }
+    }
+
+    let (line_end, col_end) = match self.current_token() {
+      Some(&Token::RightParen { line, col }) => (line, col),
+      _ => return ParseResult::Error(UnclosedParentheses(self.index))
+    };
+
+    self.advance(1);
+
+    if inner_exprs.len() == 1 {
+      return ParseResult::Ok(Node::Grouping {
+        line_start,
+        col_start,
+        line_end,
+        col_end,
+        expr: Box::new(inner_exprs[0].clone()),
+        inferred_type: NodeType::Unknown,
+      });
+    }
+
+    ParseResult::Ok(Node::Tuple {
+      line_start,
+      col_start,
+      line_end,
+      col_end,
+      entries: inner_exprs,
+      inferred_type: NodeType::Unknown,
+    })
+  }
+
   fn parse_expression(&mut self) -> ParseResult {
-    match self.current_token() {
+    let parsed = match self.current_token() {
       Some(&Token::Identifier { .. }) => self.parse_identifier(),
-      None => ParseResult::EOF,
+      Some(&Token::LeftParen { .. }) => self.parse_parenthetical(),
       Some(_) => ParseResult::Error(
         UnexpectedToken("Unexpected token".to_owned(), self.index)
       ),
+      None => ParseResult::EOF,
+    };
+
+    let mut current = parsed.clone();
+    let mut result = parsed.clone();
+
+    while let ParseResult::Ok(node) = current {
+      let (line_start, _, col_start, _) = extract_location(&node);
+
+      if let Some(&Token::LeftParen { line, .. }) = self.current_token() {
+        if line != line_start {
+          break
+        }
+
+        match self.parse_parenthetical() {
+          ParseResult::Ok(Node::Tuple {
+            line_end,
+            col_end,
+            entries,
+            ..
+          }) => {
+            current = ParseResult::Ok(Node::Call {
+              line_start,
+              line_end,
+              col_start,
+              col_end,
+              callee: Box::new(node),
+              arguments: entries,
+              inferred_type: NodeType::Unknown,
+            });
+
+            result = current.clone();
+            continue
+          },
+
+          ParseResult::Ok(expr_in_parens) => {
+            let (_, line_end, _, col_end) = extract_location(&expr_in_parens);
+
+            current = ParseResult::Ok(Node::Call {
+              line_start,
+              line_end,
+              col_start,
+              col_end,
+              callee: Box::new(node),
+              arguments: vec![ungroup(expr_in_parens)],
+              inferred_type: NodeType::Unknown,
+            });
+
+            result = current.clone();
+            continue
+          },
+
+          other => return other
+        }
+      }
+
+      break
     }
+
+    return result;
   }
 
   pub fn parse_module(&mut self) -> Result<Node, ParseError> {
-    let mut body = Vec::new();
-
     loop {
       match self.parse_expression() {
-        ParseResult::Ok(expr) => body.push(expr),
+        ParseResult::Ok(expr) => self.nodes.push(expr),
         ParseResult::EOF => break,
         ParseResult::Error(err) => return Err(err),
       }
     }
 
-    Ok(Node::Module { body })
+    Ok(Node::Module {
+      body: self.nodes.clone(),
+    })
   }
 }
 
