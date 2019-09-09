@@ -299,6 +299,7 @@ impl<'a> Parser<'a> {
       if params.is_empty() {
         match self.next_token() {
           Some(&Token::Comma { .. }) => {},
+          Some(&Token::DoubleArrow { .. }) => {},
           _ => break,
         }
       }
