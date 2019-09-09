@@ -114,6 +114,66 @@ impl<'a> Parser<'a> {
     ParseResult::Ok(node)
   }
 
+  fn parse_string(&mut self) -> ParseResult {
+    let (start, end, value) = match self.current_token() {
+      Some(Token::String { start, end, value }) => (*start, *end, value),
+      _ => unreachable!(),
+    };
+
+    let node = Node::StringLiteral {
+      start,
+      end,
+      value: to_string(value),
+      inferred_type: NodeType::Unknown,
+    };
+
+    self.advance(1);
+
+    if let Some(&Token::InterpolationStart { .. }) = self.current_token() {
+      let mut parts = vec![node];
+      let mut interpolation_end = end;
+
+      while let Some(&Token::InterpolationStart { .. }) = self.current_token() {
+        self.advance(1);
+
+        match self.parse_expression() {
+          ParseResult::Ok(part) => parts.push(part),
+          other => return other,
+        }
+
+        match self.current_token() {
+          Some(&Token::InterpolationEnd { .. }) => self.advance(1),
+          Some(_) => return ParseResult::Error(UnexpectedToken("Expected interpolation end".to_owned(), self.index)),
+          None => return ParseResult::Error(UnexpectedEOF("Expected interpolation end".to_owned()))
+        }
+
+        match self.current_token() {
+          Some(&Token::String { start, end, value }) => {
+            interpolation_end = end;
+            parts.push(Node::StringLiteral {
+              start,
+              end,
+              value: to_string(value),
+              inferred_type: NodeType::Unknown,
+            });
+            self.advance(1)
+          },
+          Some(_) => return ParseResult::Error(UnexpectedToken("Expected string".to_owned(), self.index)),
+          None => return ParseResult::Error(UnexpectedEOF("Expected string".to_owned()))
+        }
+      }
+
+      return ParseResult::Ok(Node::StringInterpolation {
+        start,
+        end: interpolation_end,
+        parts,
+        inferred_type: NodeType::Unknown,
+      })
+    }
+
+    ParseResult::Ok(node)
+  }
+
   fn parse_number(&mut self) -> ParseResult {
     let (start, end, value, raw_value) = match self.current_token() {
       Some(&Token::OctalDigits { start, end, value }) => {
@@ -313,6 +373,7 @@ impl<'a> Parser<'a> {
     let parsed = match self.current_token() {
       Some(&Token::Identifier { .. }) => self.parse_identifier(),
       Some(&Token::LeftParen { .. }) => self.parse_parenthetical(),
+      Some(&Token::String { .. }) => self.parse_string(),
       Some(&Token::OctalDigits { .. })
         | Some(&Token::HexDigits { .. })
         | Some(&Token::DecimalDigits { .. })
