@@ -21,6 +21,7 @@ pub enum ParseError {
   UnexpectedToken(String, usize),
   UnexpectedEOF(String),
   UnclosedParentheses(usize),
+  UnclosedBlock(usize),
 }
 
 fn to_string(bytes: &[u8]) -> String {
@@ -52,6 +53,10 @@ impl<'a> Parser<'a> {
 
   fn current_token(&self) -> Option<&Token> {
     self.tokens.get(self.index)
+  }
+
+  fn next_token(&self) -> Option<&Token> {
+    self.tokens.get(self.index + 1)
   }
 
   fn skip_line_breaks(&mut self) {
@@ -315,6 +320,74 @@ impl<'a> Parser<'a> {
     })
   }
 
+  fn parse_block(&mut self) -> ParseResult {
+    let block_start = match self.current_token() {
+      Some(&Token::LeftBrace { start, .. }) => start,
+      _ => unreachable!()
+    };
+
+    self.advance(1);
+
+    let mut params = Vec::new();
+    let mut body = Vec::new();
+
+    while let Some(&Token::Identifier { start, end, value }) = self.current_token() {
+      if params.is_empty() {
+        match self.next_token() {
+          Some(&Token::Comma { .. }) => {},
+          _ => break,
+        }
+      }
+
+      let param = Node::Identifier {
+        start,
+        end,
+        name: to_string(value),
+        inferred_type: NodeType::Unknown,
+      };
+
+      self.advance(1);
+
+      params.push(param);
+
+      match self.current_token() {
+        Some(&Token::Comma { .. }) => self.advance(1),
+        Some(&Token::DoubleArrow { .. }) => break,
+        _ => return ParseResult::Error(UnexpectedToken("Expected a comma or =>".to_owned(), self.index))
+      }
+    }
+
+    match self.current_token() {
+      Some(&Token::DoubleArrow { .. }) => self.advance(1),
+      _ => {
+        if !params.is_empty() {
+          return ParseResult::Error(UnexpectedToken("Expected => after params".to_owned(), self.index))
+        }
+      }
+    }
+
+    while let ParseResult::Ok(node) = self.parse_expression() {
+      body.push(node);
+    }
+
+    self.skip_line_breaks();
+
+    let block_end = match self.current_token() {
+      Some(&Token::RightBrace { end, .. }) => end,
+      _ => return ParseResult::Error(UnclosedBlock(self.index))
+    };
+
+    self.advance(1);
+
+    ParseResult::Ok(Node::Block {
+      start: block_start,
+      end: block_end,
+      params,
+      body,
+      inferred_type: NodeType::Unknown,
+    })
+  }
+
   fn parse_any_calls_after_result(&mut self, previous: ParseResult) -> ParseResult {
     let mut current = previous.clone();
     let mut result = previous.clone();
@@ -374,6 +447,7 @@ impl<'a> Parser<'a> {
       Some(&Token::Identifier { .. }) => self.parse_identifier(),
       Some(&Token::LeftParen { .. }) => self.parse_parenthetical(),
       Some(&Token::String { .. }) => self.parse_string(),
+      Some(&Token::LeftBrace { .. }) => self.parse_block(),
       Some(&Token::OctalDigits { .. })
         | Some(&Token::HexDigits { .. })
         | Some(&Token::DecimalDigits { .. })
