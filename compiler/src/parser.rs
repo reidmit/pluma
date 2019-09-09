@@ -66,14 +66,12 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_identifier(&mut self) -> ParseResult {
-    // Make sure we're starting with an identifier token, and grab its value & index
     let (first_value, first_start) = match self.current_token() {
       Some(&Token::Identifier { value, start, .. }) => (value, start),
       _ => unreachable!()
     };
 
-    // Make a node for the identifier & advance past it
-    let mut node = Node::Identifier {
+    let node = Node::Identifier {
       start: first_start,
       end: first_start + first_value.len(),
       name: to_string(first_value),
@@ -81,40 +79,6 @@ impl<'a> Parser<'a> {
     };
 
     self.advance(1);
-
-    // While we see a '.', parse any chained identifiers
-    while let Some(&Token::Dot { .. }) = self.current_token() {
-      self.advance(1);
-
-      let (value, id_start, id_end) = match self.current_token() {
-        Some(&Token::Identifier { value, start, end }) => (value, start, end),
-        Some(_) => return ParseResult::Error(UnexpectedToken(
-          "Unexpected token after '.'. Expected to see an identifier.".to_owned(),
-          self.index,
-        )),
-        None => return ParseResult::Error(UnexpectedEOF(
-          "Unexpected end-of-file after '.'. Expected to see an identifier.".to_owned(),
-        )),
-      };
-
-      let (node_start, _) = get_node_location(&node);
-
-      let child_node = Node::Identifier {
-        start: id_start,
-        end: id_end,
-        name: to_string(value),
-        inferred_type: NodeType::Unknown,
-      };
-
-      self.advance(1);
-
-      node = Node::Chain {
-        start: node_start,
-        end: id_end,
-        object: Box::new(node),
-        property: Box::new(child_node),
-      }
-    }
 
     ParseResult::Ok(node)
   }
@@ -440,10 +404,46 @@ impl<'a> Parser<'a> {
     return result;
   }
 
+  fn parse_chain(&mut self, previous: ParseResult) -> ParseResult {
+    let previous_node = match previous {
+      ParseResult::Ok(node) => node,
+      other => return other,
+    };
+
+    let chain_start = match self.current_token() {
+      Some(&Token::Dot { start, .. }) => start,
+      _ => unreachable!()
+    };
+
+    self.advance(1);
+
+    let (end, ident) = match self.current_token() {
+      Some(&Token::Identifier { start, end, value }) => (end, Node::Identifier {
+        start,
+        end,
+        name: to_string(value),
+        inferred_type: NodeType::Unknown,
+      }),
+      Some(_) => return ParseResult::Error(
+        UnexpectedToken("Unexpected token".to_owned(), self.index)
+      ),
+      None => return ParseResult::EOF,
+    };
+
+    self.advance(1);
+
+    ParseResult::Ok(Node::Chain {
+      start: chain_start,
+      end,
+      object: Box::new(previous_node),
+      property: Box::new(ident),
+    })
+  }
+
   fn parse_expression(&mut self) -> ParseResult {
     self.skip_line_breaks();
 
-    let parsed = match self.current_token() {
+    let mut parsed = match self.current_token() {
       Some(&Token::Identifier { .. }) => self.parse_identifier(),
       Some(&Token::LeftParen { .. }) => self.parse_parenthetical(),
       Some(&Token::String { .. }) => self.parse_string(),
@@ -458,7 +458,15 @@ impl<'a> Parser<'a> {
       None => ParseResult::EOF,
     };
 
-    self.parse_any_calls_after_result(parsed)
+    loop {
+      match self.current_token() {
+        Some(&Token::LeftParen { .. }) => parsed = self.parse_any_calls_after_result(parsed),
+        Some(&Token::Dot { .. }) => parsed = self.parse_chain(parsed),
+        _ => break,
+      };
+    }
+
+    parsed
   }
 
   pub fn parse_module(&mut self) -> Result<Node, ParseError> {
