@@ -1,5 +1,5 @@
-use crate::ast::{extract_location, Node, NodeType};
-use crate::tokens::Token;
+use crate::ast::{get_node_location, Node, NodeType, NumericValue};
+use crate::tokens::{Token, get_token_location};
 use crate::parser::ParseError::*;
 
 pub struct Parser<'a> {
@@ -7,13 +7,6 @@ pub struct Parser<'a> {
   token_count: usize,
   index: usize,
   nodes: Vec<Node>,
-}
-
-#[derive(Debug)]
-pub enum SourceLocation {
-  Char { line: usize, col: usize },
-  CharSpan { line: usize, col_start: usize, col_end: usize },
-  LineSpan { line_start: usize, line_end: usize, col_start: usize, col_end: usize },
 }
 
 #[derive(Debug, Clone)]
@@ -99,7 +92,7 @@ impl<'a> Parser<'a> {
         )),
       };
 
-      let (node_start, _) = extract_location(&node);
+      let (node_start, _) = get_node_location(&node);
 
       let child_node = Node::Identifier {
         start: id_start,
@@ -119,6 +112,102 @@ impl<'a> Parser<'a> {
     }
 
     ParseResult::Ok(node)
+  }
+
+  fn parse_number(&mut self) -> ParseResult {
+    let (start, end, value, raw_value) = match self.current_token() {
+      Some(&Token::OctalDigits { start, end, value }) => {
+        let string_value = to_string(&value);
+        let bytes = string_value.bytes().rev();
+
+        let mut result: i64 = 0;
+        let mut i: i64 = 1;
+        for byte in bytes {
+          let byte_value = match byte {
+            b'o' | b'O' => break,
+            b'0'...b'7' => byte - 48,
+            _ => unreachable!()
+          };
+
+          result += (byte_value as i64) * i;
+          i *= 8;
+        }
+
+        (start, end, NumericValue::Int(result), value)
+      },
+      Some(&Token::HexDigits { start, end, value }) => {
+        let string_value = to_string(&value);
+        let bytes = string_value.bytes().rev();
+
+        let mut result: i64 = 0;
+        let mut i: i64 = 1;
+        for byte in bytes {
+          let byte_value = match byte {
+            b'x' | b'X' => break,
+            b'0'...b'9' => byte - 48,
+            b'a'...b'f' => byte - 87,
+            b'A'...b'F' => byte - 55,
+            _ => unreachable!()
+          };
+
+          result += (byte_value as i64) * i;
+          i *= 16;
+        }
+
+        (start, end, NumericValue::Int(result), value)
+      },
+      Some(&Token::DecimalDigits { start, end, value }) => {
+        let string_value = to_string(&value);
+        let bytes = string_value.bytes().rev();
+
+        let mut result: i64 = 0;
+        let mut i: i64 = 1;
+        for byte in bytes {
+          let byte_value = match byte {
+            b'0'...b'9' => byte - 48,
+            _ => unreachable!()
+          };
+
+          result += (byte_value as i64) * i;
+          i *= 10;
+        }
+
+        (start, end, NumericValue::Int(result), value)
+      },
+      Some(&Token::BinaryDigits { start, end, value }) => {
+        let string_value = to_string(&value);
+        let bytes = string_value.bytes().rev();
+
+        let mut result: i64 = 0;
+        let mut i: i64 = 1;
+        for byte in bytes {
+          let byte_value = match byte {
+            b'b' | b'B' => break,
+            b'0' => 0,
+            b'1' => 1,
+            _ => unreachable!()
+          };
+
+          result += (byte_value as i64) * i;
+          i *= 2;
+        }
+
+        (start, end, NumericValue::Int(result), value)
+      },
+      _ => unreachable!()
+    };
+
+    let node = ParseResult::Ok(Node::NumericLiteral {
+      start,
+      end,
+      value,
+      raw_value: to_string(raw_value),
+      inferred_type: NodeType::Unknown,
+    });
+
+    self.advance(1);
+
+    node
   }
 
   fn parse_parenthetical(&mut self) -> ParseResult {
@@ -171,7 +260,7 @@ impl<'a> Parser<'a> {
     let mut result = previous.clone();
 
     while let ParseResult::Ok(node) = current {
-      let (call_start, _) = extract_location(&node);
+      let (call_start, _) = get_node_location(&node);
 
       if let Some(&Token::LeftParen { .. }) = self.current_token() {
         match self.parse_parenthetical() {
@@ -194,7 +283,7 @@ impl<'a> Parser<'a> {
           },
 
           ParseResult::Ok(expr_in_parens) => {
-            let (_, expr_end) = extract_location(&expr_in_parens);
+            let (_, expr_end) = get_node_location(&expr_in_parens);
 
             current = ParseResult::Ok(Node::Call {
               start: call_start,
@@ -224,6 +313,10 @@ impl<'a> Parser<'a> {
     let parsed = match self.current_token() {
       Some(&Token::Identifier { .. }) => self.parse_identifier(),
       Some(&Token::LeftParen { .. }) => self.parse_parenthetical(),
+      Some(&Token::OctalDigits { .. })
+        | Some(&Token::HexDigits { .. })
+        | Some(&Token::DecimalDigits { .. })
+        | Some(&Token::BinaryDigits { .. }) => self.parse_number(),
       Some(_) => ParseResult::Error(
         UnexpectedToken("Unexpected token".to_owned(), self.index)
       ),
@@ -243,6 +336,8 @@ impl<'a> Parser<'a> {
     }
 
     Ok(Node::Module {
+      start: 0,
+      end: self.tokens.last().map_or(0, |token| get_token_location(token).1),
       body: self.nodes.clone(),
     })
   }

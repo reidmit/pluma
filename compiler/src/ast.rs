@@ -17,6 +17,8 @@ pub enum NumericValue {
 #[derive(Debug, Clone)]
 pub enum Node {
   Module {
+    start: usize,
+    end: usize,
     body: Vec<Node>,
   },
 
@@ -45,6 +47,14 @@ pub enum Node {
     inferred_type: NodeType,
   },
 
+  Case {
+    start: usize,
+    end: usize,
+    pattern: Box<Node>,
+    body: Box<Node>,
+    inferred_type: NodeType,
+  },
+
   Chain {
     start: usize,
     end: usize,
@@ -63,6 +73,14 @@ pub enum Node {
     start: usize,
     end: usize,
     name: String,
+    inferred_type: NodeType,
+  },
+
+  Match {
+    start: usize,
+    end: usize,
+    discriminant: Box<Node>,
+    cases: Vec<Node>,
     inferred_type: NodeType,
   },
 
@@ -98,19 +116,20 @@ pub enum Node {
   },
 }
 
-pub fn extract_location(node: &Node) -> (usize, usize) {
+pub fn get_node_location(node: &Node) -> (usize, usize) {
   match node {
     Node::Assignment { start, end, .. } => (*start, *end),
     Node::Block { start, end, .. } => (*start, *end),
     Node::Call { start, end, .. } => (*start, *end),
+    Node::Case { start, end, .. } => (*start, *end),
     Node::Chain { start, end, .. } => (*start, *end),
     Node::Grouping { start, end, .. } => (*start, *end),
     Node::Identifier { start, end, .. } => (*start, *end),
+    Node::Match { start, end, .. } => (*start, *end),
+    Node::Module { start, end, .. } => (*start, *end),
     Node::NumericLiteral { start, end, .. } => (*start, *end),
     Node::StringInterpolation { start, end, .. } => (*start, *end),
     Node::Tuple { start, end, .. } => (*start, *end),
     Node::UnaryOperation { start, end, .. } => (*start, *end),
-
-    something_else => unimplemented!("unexpected node: {:#?}", something_else),
   }
 }
