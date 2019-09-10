@@ -1,1 +1,1 @@
-a := 47
+"hello $("$(name1) and $(name2)")"

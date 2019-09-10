@@ -61,7 +61,7 @@ impl<'a> Tokenizer<'a> {
     let mut line = 0;
 
     let mut string_stack = Vec::new();
-    let mut interpolation_stack = 0;
+    let mut interpolation_stack = Vec::new();
 
     // We iterate through all chars in a single loop, appending tokens as we find them.
     // The trickiest parts here are related to string interpolations, since they can
@@ -84,7 +84,7 @@ impl<'a> Tokenizer<'a> {
         // in an interpolation, though). We must check if we need to end the string,
         // start/end an interpolation, or just carry on.
 
-        if byte == b'"' && string_stack.len() == interpolation_stack {
+        if byte == b'"' && string_stack.len() == interpolation_stack.len() {
           // If the two stacks have the same size, we must be inside of an interpolation,
           // so the " indicates the beginning of a nested string literal. Save the index
           // in the string stack and advance.
@@ -125,8 +125,8 @@ impl<'a> Tokenizer<'a> {
             end: index + 2,
           });
 
+          interpolation_stack.push(index);
           index += 2;
-          interpolation_stack += 1;
           continue;
         }
 
@@ -142,12 +142,12 @@ impl<'a> Tokenizer<'a> {
           string_stack.pop();
           string_stack.push(index);
 
+          interpolation_stack.pop();
           index += 1;
-          interpolation_stack -= 1;
           continue;
         }
 
-        if string_stack.len() > interpolation_stack {
+        if string_stack.len() > interpolation_stack.len() {
           // If the string stack is larger than the interpolation stack, we must be
           // inside of a string literal portion. Just advance past this char so we can
           // include it in the string later.
@@ -437,13 +437,13 @@ impl<'a> Tokenizer<'a> {
       };
     }
 
-    if interpolation_stack > 0 {
-      return TokenizeResult::UnclosedInterpolationError(0, 0) // TODO
+    if !interpolation_stack.is_empty() {
+      let start_index = interpolation_stack.pop().unwrap();
+      return TokenizeResult::UnclosedInterpolationError(start_index, index)
     }
 
     if !string_stack.is_empty() {
       let start_index = string_stack.pop().unwrap();
-
       return TokenizeResult::UnclosedStringError(start_index, index)
     }
 
