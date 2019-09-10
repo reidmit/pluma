@@ -60,7 +60,7 @@ isCool.if {
   print "nope!"
 }
 
-p1 = (Person "Reid" 25).haveBirthday()
+p1 = Person("Reid", 25).haveBirthday()
 
 MyStr = Ok(String)
 

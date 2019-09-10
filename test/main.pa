@@ -1,5 +1,1 @@
-bool
-| True => 47
-| False => (wow
-  | True => 1
-  | False => 2)
+a := 47

@@ -26,6 +26,7 @@ pub enum ParseError {
   UnclosedDict(usize),
   UnexpectedArrayElementInDict(Node),
   UnexpectedDictEntryInArray(Node),
+  UnexpectedLineBreakInAssignment(usize),
   MissingArrowInMatchCase(usize),
 }
 
@@ -606,6 +607,39 @@ impl<'a> Parser<'a> {
     })
   }
 
+  fn parse_assignment(&mut self, previous: ParseResult) -> ParseResult {
+    let (start, previous_node) = match previous {
+      ParseResult::Ok(node) => (get_node_location(&node).0, node),
+      other => return other,
+    };
+
+    let is_constant = match self.current_token() {
+      Some(&Token::Equals { .. }) => true,
+      Some(&Token::ColonEquals { .. }) => false,
+      _ => unreachable!()
+    };
+
+    self.advance(1);
+
+    if let Some(&Token::LineBreak { .. }) = self.current_token() {
+      return ParseResult::Error(UnexpectedLineBreakInAssignment(self.index));
+    };
+
+    let (end, value_node) = match self.parse_expression(true) {
+      ParseResult::Ok(node) => (get_node_location(&node).1, node),
+      other => return other,
+    };
+
+    ParseResult::Ok(Node::Assignment {
+      start,
+      end,
+      is_constant,
+      left: Box::new(previous_node),
+      right: Box::new(value_node),
+      inferred_type: NodeType::Unknown,
+    })
+  }
+
   fn parse_expression(&mut self, allow_case: bool) -> ParseResult {
     self.skip_line_breaks();
 
@@ -647,6 +681,8 @@ impl<'a> Parser<'a> {
       match self.current_token() {
         Some(&Token::Dot { .. }) => parsed = self.parse_chain(parsed),
         Some(&Token::Pipe { .. }) if allow_case => parsed = self.parse_match(parsed),
+        Some(&Token::Equals { .. })
+          | Some(&Token::ColonEquals { .. }) => parsed = self.parse_assignment(parsed),
         _ => break,
       };
     }
