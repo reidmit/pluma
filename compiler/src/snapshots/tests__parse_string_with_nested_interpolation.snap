@@ -2,49 +2,40 @@
 source: compiler/src/parser.rs
 expression: "\"hello $(\"aa $(name) bb\")!\""
 ---
-Parsed(
+Ok(
     Module {
+        start: 0,
+        end: 26,
         body: [
             StringInterpolation {
-                line_start: 0,
-                line_end: 0,
-                col_start: 0,
-                col_end: 7,
+                start: 1,
+                end: 26,
                 parts: [
                     StringLiteral {
-                        line_start: 0,
-                        line_end: 0,
-                        col_start: 0,
-                        col_end: 7,
+                        start: 1,
+                        end: 7,
                         value: "hello ",
                         inferred_type: Unknown,
                     },
                     StringInterpolation {
-                        line_start: 0,
-                        line_end: 0,
-                        col_start: 9,
-                        col_end: 13,
+                        start: 10,
+                        end: 23,
                         parts: [
                             StringLiteral {
-                                line_start: 0,
-                                line_end: 0,
-                                col_start: 9,
-                                col_end: 13,
+                                start: 10,
+                                end: 13,
                                 value: "aa ",
                                 inferred_type: Unknown,
                             },
                             Identifier {
-                                line: 0,
-                                col_start: 15,
-                                col_end: 19,
+                                start: 15,
+                                end: 19,
                                 name: "name",
                                 inferred_type: Unknown,
                             },
                             StringLiteral {
-                                line_start: 0,
-                                line_end: 0,
-                                col_start: 20,
-                                col_end: 24,
+                                start: 20,
+                                end: 23,
                                 value: " bb",
                                 inferred_type: Unknown,
                             },
@@ -52,10 +43,8 @@ Parsed(
                         inferred_type: Unknown,
                     },
                     StringLiteral {
-                        line_start: 0,
-                        line_end: 0,
-                        col_start: 25,
-                        col_end: 27,
+                        start: 25,
+                        end: 26,
                         value: "!",
                         inferred_type: Unknown,
                     },
