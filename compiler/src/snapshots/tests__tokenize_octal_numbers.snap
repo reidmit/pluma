@@ -2,7 +2,7 @@
 source: compiler/src/tokenizer.rs
 expression: 0o101 0o0 0o47 0O47
 ---
-Ok(
+Tokenized(
     [
         OctalDigits {
             start: 0,

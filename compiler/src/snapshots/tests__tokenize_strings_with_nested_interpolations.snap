@@ -2,7 +2,7 @@
 source: compiler/src/tokenizer.rs
 expression: "\"hello $(name \"inner $(o)\" wow)!\""
 ---
-Ok(
+Tokenized(
     [
         StringLiteral {
             start: 1,

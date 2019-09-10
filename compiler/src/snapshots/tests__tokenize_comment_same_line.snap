@@ -2,7 +2,7 @@
 source: compiler/src/tokenizer.rs
 expression: "ok #comment"
 ---
-Ok(
+Tokenized(
     [
         Identifier {
             start: 0,

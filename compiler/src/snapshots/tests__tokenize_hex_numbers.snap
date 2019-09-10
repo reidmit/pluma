@@ -2,7 +2,7 @@
 source: compiler/src/tokenizer.rs
 expression: 0x101 0x0 0xfacade 0X47
 ---
-Ok(
+Tokenized(
     [
         HexDigits {
             start: 0,

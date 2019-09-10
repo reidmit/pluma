@@ -1,4 +1,5 @@
-use crate::tokens::Token;
+use crate::tokens::{Token, Token::*};
+use crate::tokenizer::{TokenizeResult::*, TokenizeError::*};
 use std::collections::HashMap;
 
 pub struct Tokenizer<'a> {
@@ -32,7 +33,12 @@ type CommentMap<'a> = HashMap<usize, &'a[u8]>;
 
 #[derive(Debug)]
 pub enum TokenizeResult<'a> {
-  Ok(TokenList<'a>, CommentMap<'a>),
+  Tokenized(TokenList<'a>, CommentMap<'a>),
+  Error(TokenizeError),
+}
+
+#[derive(Debug)]
+pub enum TokenizeError {
   InvalidBinaryDigitError(usize, usize),
   InvalidHexDigitError(usize, usize),
   InvalidOctalDigitError(usize, usize),
@@ -43,7 +49,7 @@ pub enum TokenizeResult<'a> {
 impl<'a> TokenizeResult<'a> {
   pub fn unwrap(self) -> (TokenList<'a>, CommentMap<'a>) {
     match self {
-      TokenizeResult::Ok(tokens, comments) => (tokens, comments),
+      Tokenized(tokens, comments) => (tokens, comments),
       _ => panic!("Unexpected tokenizer error")
     }
   }
@@ -107,7 +113,7 @@ impl<'a> Tokenizer<'a> {
           // the string stack, add a new token, then advance.
           let start_index = string_stack.pop().unwrap();
 
-          tokens.push(Token::StringLiteral {
+          tokens.push(StringLiteral {
             start: start_index + 1,
             end: index,
             value: &source[start_index + 1..index],
@@ -123,13 +129,13 @@ impl<'a> Tokenizer<'a> {
           // interpolation start, and add to the interpolation stack.
           let string_start_index = string_stack.last().unwrap();
 
-          tokens.push(Token::StringLiteral {
+          tokens.push(StringLiteral {
             start: string_start_index + 1,
             end: index,
             value: &source[string_start_index + 1..index],
           });
 
-          tokens.push(Token::InterpolationStart {
+          tokens.push(InterpolationStart {
             start: start_index,
             end: index + 2,
           });
@@ -143,7 +149,7 @@ impl<'a> Tokenizer<'a> {
           // We must be at the end of an interpolation, so make a token for it and
           // fix the index on the last string in the string stack so that it starts
           // here. Decrease the interpolation stack.
-          tokens.push(Token::InterpolationEnd {
+          tokens.push(InterpolationEnd {
             start: index,
             end: index + 1,
           });
@@ -177,7 +183,7 @@ impl<'a> Tokenizer<'a> {
           index += 1;
           line += 1;
 
-          tokens.push(Token::LineBreak {
+          tokens.push(LineBreak {
             start: start_index,
             end: index,
           })
@@ -186,7 +192,7 @@ impl<'a> Tokenizer<'a> {
         b'(' => {
           index += 1;
 
-          tokens.push(Token::LeftParen {
+          tokens.push(LeftParen {
             start: start_index,
             end: index,
           })
@@ -195,7 +201,7 @@ impl<'a> Tokenizer<'a> {
         b')' => {
           index += 1;
 
-          tokens.push(Token::RightParen {
+          tokens.push(RightParen {
             start: start_index,
             end: index,
           })
@@ -204,7 +210,7 @@ impl<'a> Tokenizer<'a> {
         b'{' => {
           index += 1;
 
-          tokens.push(Token::LeftBrace {
+          tokens.push(LeftBrace {
             start: start_index,
             end: index,
           })
@@ -213,7 +219,7 @@ impl<'a> Tokenizer<'a> {
         b'}' => {
           index += 1;
 
-          tokens.push(Token::RightBrace {
+          tokens.push(RightBrace {
             start: start_index,
             end: index,
           })
@@ -222,7 +228,7 @@ impl<'a> Tokenizer<'a> {
         b'[' => {
           index += 1;
 
-          tokens.push(Token::LeftBracket {
+          tokens.push(LeftBracket {
             start: start_index,
             end: index,
           })
@@ -231,7 +237,7 @@ impl<'a> Tokenizer<'a> {
         b']' => {
           index += 1;
 
-          tokens.push(Token::RightBracket {
+          tokens.push(RightBracket {
             start: start_index,
             end: index,
           })
@@ -240,7 +246,7 @@ impl<'a> Tokenizer<'a> {
         b',' => {
           index += 1;
 
-          tokens.push(Token::Comma {
+          tokens.push(Comma {
             start: start_index,
             end: index,
           })
@@ -249,7 +255,7 @@ impl<'a> Tokenizer<'a> {
         b'.' => {
           index += 1;
 
-          tokens.push(Token::Dot {
+          tokens.push(Dot {
             start: start_index,
             end: index,
           })
@@ -258,7 +264,7 @@ impl<'a> Tokenizer<'a> {
         b'|' => {
           index += 1;
 
-          tokens.push(Token::Pipe {
+          tokens.push(Pipe {
             start: start_index,
             end: index,
           })
@@ -268,7 +274,7 @@ impl<'a> Tokenizer<'a> {
           Some(b'>') => {
             index += 2;
 
-            tokens.push(Token::DoubleArrow {
+            tokens.push(DoubleArrow {
               start: start_index,
               end: index,
             })
@@ -277,7 +283,7 @@ impl<'a> Tokenizer<'a> {
           _ => {
             index += 1;
 
-            tokens.push(Token::Equals {
+            tokens.push(Equals {
               start: start_index,
               end: index,
             })
@@ -288,7 +294,7 @@ impl<'a> Tokenizer<'a> {
           Some(b'>') => {
             index += 2;
 
-            tokens.push(Token::Arrow {
+            tokens.push(Arrow {
               start: start_index,
               end: index,
             })
@@ -297,7 +303,7 @@ impl<'a> Tokenizer<'a> {
           _ => {
             index += 1;
 
-            tokens.push(Token::Minus {
+            tokens.push(Minus {
               start: start_index,
               end: index,
             })
@@ -308,7 +314,7 @@ impl<'a> Tokenizer<'a> {
           Some(b'=') => {
             index += 2;
 
-            tokens.push(Token::ColonEquals {
+            tokens.push(ColonEquals {
               start: start_index,
               end: index,
             })
@@ -317,7 +323,7 @@ impl<'a> Tokenizer<'a> {
           Some(b':') => {
             index += 2;
 
-            tokens.push(Token::DoubleColon {
+            tokens.push(DoubleColon {
               start: start_index,
               end: index,
             })
@@ -326,7 +332,7 @@ impl<'a> Tokenizer<'a> {
           _ => {
             index += 1;
 
-            tokens.push(Token::Colon {
+            tokens.push(Colon {
               start: start_index,
               end: index,
             })
@@ -346,7 +352,7 @@ impl<'a> Tokenizer<'a> {
             index += 1;
           }
 
-          tokens.push(Token::Identifier {
+          tokens.push(Identifier {
             start: start_index,
             end: index,
             value: &source[start_index..index],
@@ -363,13 +369,13 @@ impl<'a> Tokenizer<'a> {
 
                 while index < length && is_identifier_char(source[index]) {
                   if source[index] != b'0' && source[index] != b'1' {
-                    return TokenizeResult::InvalidBinaryDigitError(index, index + 1)
+                    return Error(InvalidBinaryDigitError(index, index + 1))
                   }
 
                   index += 1;
                 }
 
-                tokens.push(Token::BinaryDigits {
+                tokens.push(BinaryDigits {
                   start: start_index,
                   end: index,
                   value: &source[start_index..index],
@@ -383,13 +389,13 @@ impl<'a> Tokenizer<'a> {
 
                 while index < length && is_identifier_char(source[index]) {
                   if !source[index].is_ascii_hexdigit() {
-                    return TokenizeResult::InvalidHexDigitError(index, index + 1)
+                    return Error(InvalidHexDigitError(index, index + 1))
                   }
 
                   index += 1;
                 }
 
-                tokens.push(Token::HexDigits {
+                tokens.push(HexDigits {
                   start: start_index,
                   end: index,
                   value: &source[start_index..index],
@@ -403,13 +409,13 @@ impl<'a> Tokenizer<'a> {
 
                 while index < length && is_identifier_char(source[index]) {
                   if source[index] < 48 || source[index] > 55 {
-                    return TokenizeResult::InvalidOctalDigitError(index, index + 1)
+                    return Error(InvalidOctalDigitError(index, index + 1))
                   }
 
                   index += 1;
                 }
 
-                tokens.push(Token::OctalDigits {
+                tokens.push(OctalDigits {
                   start: start_index,
                   end: index,
                   value: &source[start_index..index],
@@ -426,7 +432,7 @@ impl<'a> Tokenizer<'a> {
             index += 1;
           }
 
-          tokens.push(Token::DecimalDigits {
+          tokens.push(DecimalDigits {
             start: start_index,
             end: index,
             value: &source[start_index..index],
@@ -438,7 +444,7 @@ impl<'a> Tokenizer<'a> {
         _ => {
           index += 1;
 
-          tokens.push(Token::Unexpected {
+          tokens.push(Unexpected {
             start: start_index,
             end: index,
           })
@@ -448,15 +454,15 @@ impl<'a> Tokenizer<'a> {
 
     if !interpolation_stack.is_empty() {
       let start_index = interpolation_stack.pop().unwrap();
-      return TokenizeResult::UnclosedInterpolationError(start_index, index)
+      return Error(UnclosedInterpolationError(start_index, index))
     }
 
     if !string_stack.is_empty() {
       let start_index = string_stack.pop().unwrap();
-      return TokenizeResult::UnclosedStringError(start_index, index)
+      return Error(UnclosedStringError(start_index, index))
     }
 
-    TokenizeResult::Ok(tokens, comments)
+    Tokenized(tokens, comments)
   }
 }
 

@@ -2,7 +2,7 @@
 source: compiler/src/tokenizer.rs
 expression: hello 1 47 wow
 ---
-Ok(
+Tokenized(
     [
         Identifier {
             start: 0,

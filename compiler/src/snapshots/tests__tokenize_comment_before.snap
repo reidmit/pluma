@@ -2,7 +2,7 @@
 source: compiler/src/tokenizer.rs
 expression: "# comment \nok"
 ---
-Ok(
+Tokenized(
     [
         LineBreak {
             start: 10,

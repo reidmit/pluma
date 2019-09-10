@@ -18,8 +18,8 @@ enum ParseResult {
 
 #[derive(Debug, Clone)]
 pub enum ParseError {
-  UnexpectedToken(String, usize),
-  UnexpectedEOF(String),
+  UnexpectedToken(usize),
+  UnexpectedEOF,
   UnclosedParentheses(usize),
   UnclosedBlock(usize),
   UnclosedArray(usize),
@@ -27,7 +27,9 @@ pub enum ParseError {
   UnexpectedArrayElementInDict(Node),
   UnexpectedDictEntryInArray(Node),
   UnexpectedLineBreakInAssignment(usize),
+  UnexpectedTokenAfterDot(usize),
   MissingArrowInMatchCase(usize),
+  MissingArrowAfterBlockParams(usize),
 }
 
 fn to_string(bytes: &[u8]) -> String {
@@ -118,8 +120,8 @@ impl<'a> Parser<'a> {
 
         match self.current_token() {
           Some(&Token::InterpolationEnd { .. }) => self.advance(1),
-          Some(_) => return Error(UnexpectedToken("Expected interpolation end".to_owned(), self.index)),
-          None => return Error(UnexpectedEOF("Expected interpolation end".to_owned()))
+          Some(_) => return Error(UnexpectedToken(self.index)),
+          None => return Error(UnexpectedEOF)
         }
 
         match self.current_token() {
@@ -133,8 +135,8 @@ impl<'a> Parser<'a> {
             });
             self.advance(1)
           },
-          Some(_) => return Error(UnexpectedToken("Expected string".to_owned(), self.index)),
-          None => return Error(UnexpectedEOF("Expected string".to_owned()))
+          Some(_) => return Error(UnexpectedToken(self.index)),
+          None => return Error(UnexpectedEOF)
         }
       }
 
@@ -324,7 +326,7 @@ impl<'a> Parser<'a> {
       match self.current_token() {
         Some(&Token::Comma { .. }) => self.advance(1),
         Some(&Token::DoubleArrow { .. }) => break,
-        _ => return Error(UnexpectedToken("Expected a comma or =>".to_owned(), self.index))
+        _ => return Error(MissingArrowAfterBlockParams(self.index))
       }
     }
 
@@ -332,7 +334,7 @@ impl<'a> Parser<'a> {
       Some(&Token::DoubleArrow { .. }) => self.advance(1),
       _ => {
         if !params.is_empty() {
-          return Error(UnexpectedToken("Expected => after params".to_owned(), self.index))
+          return Error(MissingArrowAfterBlockParams(self.index))
         }
       }
     }
@@ -372,7 +374,7 @@ impl<'a> Parser<'a> {
               key: Box::new(string_node),
               value: Box::new(value_node),
             })),
-            _ => return Some(Error(UnexpectedToken("Expected dict value".to_owned(), self.index)))
+            other => return Some(other)
           }
         } else {
           return Some(Parsed(string_node));
@@ -541,9 +543,7 @@ impl<'a> Parser<'a> {
         name: to_string(value),
         inferred_type: NodeType::Unknown,
       }),
-      Some(_) => return Error(
-        UnexpectedToken("Unexpected token".to_owned(), self.index)
-      ),
+      Some(_) => return Error(UnexpectedTokenAfterDot(self.index)),
       None => return EOF,
     };
 
@@ -653,9 +653,7 @@ impl<'a> Parser<'a> {
         | Some(&Token::HexDigits { .. })
         | Some(&Token::DecimalDigits { .. })
         | Some(&Token::BinaryDigits { .. }) => self.parse_number(),
-      Some(_) => Error(
-        UnexpectedToken("Unexpected token".to_owned(), self.index)
-      ),
+      Some(_) => Error(UnexpectedToken(self.index)),
       None => EOF,
     };
 
