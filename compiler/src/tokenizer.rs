@@ -246,6 +246,15 @@ impl<'a> Tokenizer<'a> {
           })
         }
 
+        b'|' => {
+          index += 1;
+
+          tokens.push(Token::Pipe {
+            start: start_index,
+            end: index,
+          })
+        }
+
         b'=' => match source.get(index + 1) {
           Some(b'>') => {
             index += 2;

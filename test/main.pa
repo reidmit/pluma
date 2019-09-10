@@ -1,1 +1,5 @@
-["wow"]
+bool
+| True => 47
+| False => (wow
+  | True => 1
+  | False => 2)

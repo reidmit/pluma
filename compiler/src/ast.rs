@@ -54,14 +54,6 @@ pub enum Node {
     inferred_type: NodeType,
   },
 
-  Case {
-    start: usize,
-    end: usize,
-    pattern: Box<Node>,
-    body: Box<Node>,
-    inferred_type: NodeType,
-  },
-
   Chain {
     start: usize,
     end: usize,
@@ -102,6 +94,14 @@ pub enum Node {
     end: usize,
     discriminant: Box<Node>,
     cases: Vec<Node>,
+    inferred_type: NodeType,
+  },
+
+  MatchCase {
+    start: usize,
+    end: usize,
+    pattern: Box<Node>,
+    body: Box<Node>,
     inferred_type: NodeType,
   },
 
@@ -150,13 +150,13 @@ pub fn get_node_location(node: &Node) -> (usize, usize) {
     Node::Assignment { start, end, .. } => (*start, *end),
     Node::Block { start, end, .. } => (*start, *end),
     Node::Call { start, end, .. } => (*start, *end),
-    Node::Case { start, end, .. } => (*start, *end),
     Node::Chain { start, end, .. } => (*start, *end),
     Node::Dict { start, end, .. } => (*start, *end),
     Node::DictEntry { start, end, .. } => (*start, *end),
     Node::Grouping { start, end, .. } => (*start, *end),
     Node::Identifier { start, end, .. } => (*start, *end),
     Node::Match { start, end, .. } => (*start, *end),
+    Node::MatchCase { start, end, .. } => (*start, *end),
     Node::Module { start, end, .. } => (*start, *end),
     Node::NumericLiteral { start, end, .. } => (*start, *end),
     Node::StringInterpolation { start, end, .. } => (*start, *end),

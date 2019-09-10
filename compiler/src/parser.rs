@@ -26,6 +26,7 @@ pub enum ParseError {
   UnclosedDict(usize),
   UnexpectedArrayElementInDict(Node),
   UnexpectedDictEntryInArray(Node),
+  MissingArrowInMatchCase(usize),
 }
 
 fn to_string(bytes: &[u8]) -> String {
@@ -109,7 +110,7 @@ impl<'a> Parser<'a> {
       while let Some(&Token::InterpolationStart { .. }) = self.current_token() {
         self.advance(1);
 
-        match self.parse_expression() {
+        match self.parse_expression(true) {
           ParseResult::Ok(part) => parts.push(part),
           other => return other,
         }
@@ -253,7 +254,7 @@ impl<'a> Parser<'a> {
 
     let mut inner_exprs = Vec::new();
 
-    while let ParseResult::Ok(node) = self.parse_expression() {
+    while let ParseResult::Ok(node) = self.parse_expression(true) {
       inner_exprs.push(node);
 
       match self.current_token() {
@@ -335,7 +336,7 @@ impl<'a> Parser<'a> {
       }
     }
 
-    while let ParseResult::Ok(node) = self.parse_expression() {
+    while let ParseResult::Ok(node) = self.parse_expression(true) {
       body.push(node);
     }
 
@@ -363,7 +364,7 @@ impl<'a> Parser<'a> {
         if let Some(&Token::Colon { .. }) = self.current_token() {
           self.advance(1);
 
-          match self.parse_expression() {
+          match self.parse_expression(true) {
             ParseResult::Ok(value_node) => return Some(ParseResult::Ok(Node::DictEntry {
               start: 0,
               end: 0,
@@ -377,7 +378,7 @@ impl<'a> Parser<'a> {
         }
       }
     } else {
-      match self.parse_expression() {
+      match self.parse_expression(true) {
         ParseResult::Ok(element_node) => return Some(ParseResult::Ok(element_node)),
         _ => {},
       }
@@ -555,7 +556,57 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_expression(&mut self) -> ParseResult {
+  fn parse_match(&mut self, previous: ParseResult) -> ParseResult {
+    let (start, previous_node) = match previous {
+      ParseResult::Ok(node) => (get_node_location(&node).0, node),
+      other => return other,
+    };
+
+    let mut cases = Vec::new();
+    let mut match_end = start;
+
+    while let Some(&Token::Pipe { start: case_start, .. }) = self.current_token() {
+      self.advance(1);
+
+      let case_pattern = match self.parse_expression(false) {
+        ParseResult::Ok(node) => node,
+        other => return other,
+      };
+
+      match self.current_token() {
+        Some(&Token::DoubleArrow { .. }) => self.advance(1),
+        _ => return ParseResult::Error(MissingArrowInMatchCase(self.index))
+      };
+
+      self.skip_line_breaks();
+
+      let (case_end, case_body) = match self.parse_expression(false) {
+        ParseResult::Ok(node) => (get_node_location(&node).1, node),
+        other => return other,
+      };
+
+      self.skip_line_breaks();
+      match_end = case_end;
+
+      cases.push(Node::MatchCase {
+        start: case_start,
+        end: case_end,
+        pattern: Box::new(case_pattern),
+        body: Box::new(case_body),
+        inferred_type: NodeType::Unknown,
+      });
+    }
+
+    ParseResult::Ok(Node::Match {
+      start,
+      end: match_end,
+      discriminant: Box::new(previous_node),
+      cases,
+      inferred_type: NodeType::Unknown,
+    })
+  }
+
+  fn parse_expression(&mut self, allow_case: bool) -> ParseResult {
     self.skip_line_breaks();
 
     let mut parsed = match self.current_token() {
@@ -574,10 +625,28 @@ impl<'a> Parser<'a> {
       None => ParseResult::EOF,
     };
 
+    let mut parsed_call = false;
+
     loop {
       match self.current_token() {
-        Some(&Token::LeftParen { .. }) => parsed = self.parse_any_calls_after_result(parsed),
+        Some(&Token::LeftParen { .. }) => {
+          parsed = self.parse_any_calls_after_result(parsed);
+          parsed_call = true;
+        },
+        _ => break,
+      };
+    }
+
+    if parsed_call {
+      return parsed;
+    }
+
+    loop {
+      self.skip_line_breaks();
+
+      match self.current_token() {
         Some(&Token::Dot { .. }) => parsed = self.parse_chain(parsed),
+        Some(&Token::Pipe { .. }) if allow_case => parsed = self.parse_match(parsed),
         _ => break,
       };
     }
@@ -587,7 +656,7 @@ impl<'a> Parser<'a> {
 
   pub fn parse_module(&mut self) -> Result<Node, ParseError> {
     loop {
-      match self.parse_expression() {
+      match self.parse_expression(true) {
         ParseResult::Ok(expr) => self.nodes.push(expr),
         ParseResult::EOF => break,
         ParseResult::Error(err) => return Err(err),
