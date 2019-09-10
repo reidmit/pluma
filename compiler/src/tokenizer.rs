@@ -7,15 +7,24 @@ pub struct Tokenizer<'a> {
 }
 
 fn is_identifier_start_char(byte: u8) -> bool {
-  (byte >= b'a' && byte <= b'z') || (byte >= b'A' && byte <= b'Z')
+  match byte {
+    b'a'...b'z' | b'A'...b'Z' => true,
+    _ => false
+  }
 }
 
 fn is_identifier_char(byte: u8) -> bool {
-  (byte >= b'a' && byte <= b'z') || (byte >= b'A' && byte <= b'Z') || (byte >= b'0' && byte <= b'9')
+  match byte {
+    b'a'...b'z' | b'A'...b'Z' | b'0'...b'9' => true,
+    _ => false
+  }
 }
 
 fn is_digit(byte: u8) -> bool {
-  byte >= b'0' && byte <= b'9'
+  match byte {
+    b'0'...b'9' => true,
+    _ => false
+  }
 }
 
 type TokenList<'a> = Vec<Token<'a>>;
@@ -98,7 +107,7 @@ impl<'a> Tokenizer<'a> {
           // the string stack, add a new token, then advance.
           let start_index = string_stack.pop().unwrap();
 
-          tokens.push(Token::String {
+          tokens.push(Token::StringLiteral {
             start: start_index + 1,
             end: index,
             value: &source[start_index + 1..index],
@@ -114,7 +123,7 @@ impl<'a> Tokenizer<'a> {
           // interpolation start, and add to the interpolation stack.
           let string_start_index = string_stack.last().unwrap();
 
-          tokens.push(Token::String {
+          tokens.push(Token::StringLiteral {
             start: string_start_index + 1,
             end: index,
             value: &source[string_start_index + 1..index],

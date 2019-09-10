@@ -27,7 +27,7 @@ pub enum Token<'a> {
   RightBrace { start: usize, end: usize },
   RightBracket { start: usize, end: usize },
   RightParen { start: usize, end: usize },
-  String { start: usize, end: usize, value: &'a [u8] },
+  StringLiteral { start: usize, end: usize, value: &'a [u8] },
   Unexpected { start: usize, end: usize },
 }
 
@@ -58,7 +58,7 @@ pub fn get_token_location(token: &Token) -> (usize, usize) {
     Token::RightBrace { start, end } => (*start, *end),
     Token::RightBracket { start, end } => (*start, *end),
     Token::RightParen { start, end } => (*start, *end),
-    Token::String { start, end, .. } => (*start, *end),
+    Token::StringLiteral { start, end, .. } => (*start, *end),
     Token::Unexpected { start, end } => (*start, *end),
   }
 }

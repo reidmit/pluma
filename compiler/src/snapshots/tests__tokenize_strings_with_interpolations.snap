@@ -4,7 +4,7 @@ expression: "\"hello $(name)!\" nice \"$(str)\""
 ---
 Ok(
     [
-        String {
+        StringLiteral {
             start: 1,
             end: 7,
             value: [
@@ -34,7 +34,7 @@ Ok(
             start: 13,
             end: 14,
         },
-        String {
+        StringLiteral {
             start: 14,
             end: 15,
             value: [
@@ -51,7 +51,7 @@ Ok(
                 101,
             ],
         },
-        String {
+        StringLiteral {
             start: 23,
             end: 23,
             value: [],
@@ -73,7 +73,7 @@ Ok(
             start: 28,
             end: 29,
         },
-        String {
+        StringLiteral {
             start: 29,
             end: 29,
             value: [],

@@ -1,6 +1,6 @@
-use crate::ast::{get_node_location, Node, NodeType, NumericValue};
+use crate::ast::{get_node_location, Node, Node::*, NodeType, NumericValue};
 use crate::tokens::{Token, get_token_location};
-use crate::parser::ParseError::*;
+use crate::parser::{ParseError::*, ParseResult::*};
 
 pub struct Parser<'a> {
   tokens: &'a Vec<Token<'a>>,
@@ -11,7 +11,7 @@ pub struct Parser<'a> {
 
 #[derive(Debug, Clone)]
 enum ParseResult {
-  Ok(Node),
+  Parsed(Node),
   EOF,
   Error(ParseError),
 }
@@ -36,7 +36,7 @@ fn to_string(bytes: &[u8]) -> String {
 
 fn ungroup(node: Node) -> Node {
   match node {
-    Node::Grouping { expr, .. } => *expr,
+    Grouping { expr, .. } => *expr,
     otherwise => otherwise,
   }
 }
@@ -77,7 +77,7 @@ impl<'a> Parser<'a> {
       _ => unreachable!()
     };
 
-    let node = Node::Identifier {
+    let node = Identifier {
       start: first_start,
       end: first_start + first_value.len(),
       name: to_string(first_value),
@@ -86,16 +86,16 @@ impl<'a> Parser<'a> {
 
     self.advance(1);
 
-    ParseResult::Ok(node)
+    Parsed(node)
   }
 
   fn parse_string(&mut self) -> ParseResult {
     let (start, end, value) = match self.current_token() {
-      Some(Token::String { start, end, value }) => (*start, *end, value),
+      Some(Token::StringLiteral { start, end, value }) => (*start, *end, value),
       _ => unreachable!(),
     };
 
-    let node = Node::StringLiteral {
+    let node = StringLiteral {
       start,
       end,
       value: to_string(value),
@@ -112,20 +112,20 @@ impl<'a> Parser<'a> {
         self.advance(1);
 
         match self.parse_expression(true) {
-          ParseResult::Ok(part) => parts.push(part),
+          Parsed(part) => parts.push(part),
           other => return other,
         }
 
         match self.current_token() {
           Some(&Token::InterpolationEnd { .. }) => self.advance(1),
-          Some(_) => return ParseResult::Error(UnexpectedToken("Expected interpolation end".to_owned(), self.index)),
-          None => return ParseResult::Error(UnexpectedEOF("Expected interpolation end".to_owned()))
+          Some(_) => return Error(UnexpectedToken("Expected interpolation end".to_owned(), self.index)),
+          None => return Error(UnexpectedEOF("Expected interpolation end".to_owned()))
         }
 
         match self.current_token() {
-          Some(&Token::String { start, end, value }) => {
+          Some(&Token::StringLiteral { start, end, value }) => {
             interpolation_end = end;
-            parts.push(Node::StringLiteral {
+            parts.push(StringLiteral {
               start,
               end,
               value: to_string(value),
@@ -133,12 +133,12 @@ impl<'a> Parser<'a> {
             });
             self.advance(1)
           },
-          Some(_) => return ParseResult::Error(UnexpectedToken("Expected string".to_owned(), self.index)),
-          None => return ParseResult::Error(UnexpectedEOF("Expected string".to_owned()))
+          Some(_) => return Error(UnexpectedToken("Expected string".to_owned(), self.index)),
+          None => return Error(UnexpectedEOF("Expected string".to_owned()))
         }
       }
 
-      return ParseResult::Ok(Node::StringInterpolation {
+      return Parsed(StringInterpolation {
         start,
         end: interpolation_end,
         parts,
@@ -146,7 +146,7 @@ impl<'a> Parser<'a> {
       })
     }
 
-    ParseResult::Ok(node)
+    Parsed(node)
   }
 
   fn parse_number(&mut self) -> ParseResult {
@@ -232,7 +232,7 @@ impl<'a> Parser<'a> {
       _ => unreachable!()
     };
 
-    let node = ParseResult::Ok(Node::NumericLiteral {
+    let node = Parsed(NumericLiteral {
       start,
       end,
       value,
@@ -255,7 +255,7 @@ impl<'a> Parser<'a> {
 
     let mut inner_exprs = Vec::new();
 
-    while let ParseResult::Ok(node) = self.parse_expression(true) {
+    while let Parsed(node) = self.parse_expression(true) {
       inner_exprs.push(node);
 
       match self.current_token() {
@@ -268,13 +268,13 @@ impl<'a> Parser<'a> {
 
     let paren_end = match self.current_token() {
       Some(&Token::RightParen { end, .. }) => end,
-      _ => return ParseResult::Error(UnclosedParentheses(self.index))
+      _ => return Error(UnclosedParentheses(self.index))
     };
 
     self.advance(1);
 
     if inner_exprs.len() == 1 {
-      return ParseResult::Ok(Node::Grouping {
+      return Parsed(Grouping {
         start: paren_start,
         end: paren_end,
         expr: Box::new(inner_exprs[0].clone()),
@@ -282,7 +282,7 @@ impl<'a> Parser<'a> {
       });
     }
 
-    ParseResult::Ok(Node::Tuple {
+    Parsed(Tuple {
       start: paren_start,
       end: paren_end,
       entries: inner_exprs,
@@ -310,7 +310,7 @@ impl<'a> Parser<'a> {
         }
       }
 
-      let param = Node::Identifier {
+      let param = Identifier {
         start,
         end,
         name: to_string(value),
@@ -324,7 +324,7 @@ impl<'a> Parser<'a> {
       match self.current_token() {
         Some(&Token::Comma { .. }) => self.advance(1),
         Some(&Token::DoubleArrow { .. }) => break,
-        _ => return ParseResult::Error(UnexpectedToken("Expected a comma or =>".to_owned(), self.index))
+        _ => return Error(UnexpectedToken("Expected a comma or =>".to_owned(), self.index))
       }
     }
 
@@ -332,12 +332,12 @@ impl<'a> Parser<'a> {
       Some(&Token::DoubleArrow { .. }) => self.advance(1),
       _ => {
         if !params.is_empty() {
-          return ParseResult::Error(UnexpectedToken("Expected => after params".to_owned(), self.index))
+          return Error(UnexpectedToken("Expected => after params".to_owned(), self.index))
         }
       }
     }
 
-    while let ParseResult::Ok(node) = self.parse_expression(true) {
+    while let Parsed(node) = self.parse_expression(true) {
       body.push(node);
     }
 
@@ -345,12 +345,12 @@ impl<'a> Parser<'a> {
 
     let block_end = match self.current_token() {
       Some(&Token::RightBrace { end, .. }) => end,
-      _ => return ParseResult::Error(UnclosedBlock(self.index))
+      _ => return Error(UnclosedBlock(self.index))
     };
 
     self.advance(1);
 
-    ParseResult::Ok(Node::Block {
+    Parsed(Block {
       start: block_start,
       end: block_end,
       params,
@@ -360,27 +360,27 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_dict_entry_or_array_element(&mut self) -> Option<ParseResult> {
-    if let Some(&Token::String { .. }) = self.current_token() {
-      if let ParseResult::Ok(string_node) = self.parse_string() {
+    if let Some(&Token::StringLiteral { .. }) = self.current_token() {
+      if let Parsed(string_node) = self.parse_string() {
         if let Some(&Token::Colon { .. }) = self.current_token() {
           self.advance(1);
 
           match self.parse_expression(true) {
-            ParseResult::Ok(value_node) => return Some(ParseResult::Ok(Node::DictEntry {
+            Parsed(value_node) => return Some(Parsed(DictEntry {
               start: 0,
               end: 0,
               key: Box::new(string_node),
               value: Box::new(value_node),
             })),
-            _ => return Some(ParseResult::Error(UnexpectedToken("Expected dict value".to_owned(), self.index)))
+            _ => return Some(Error(UnexpectedToken("Expected dict value".to_owned(), self.index)))
           }
         } else {
-          return Some(ParseResult::Ok(string_node));
+          return Some(Parsed(string_node));
         }
       }
     } else {
       match self.parse_expression(true) {
-        ParseResult::Ok(element_node) => return Some(ParseResult::Ok(element_node)),
+        Parsed(element_node) => return Some(Parsed(element_node)),
         _ => {},
       }
     }
@@ -408,18 +408,18 @@ impl<'a> Parser<'a> {
       _ => {
         loop {
           match self.parse_dict_entry_or_array_element() {
-            Some(ParseResult::Ok(entry @ Node::DictEntry { .. })) => {
+            Some(Parsed(entry @ DictEntry { .. })) => {
               if let Some(false) = is_dict {
-                return ParseResult::Error(UnexpectedDictEntryInArray(entry))
+                return Error(UnexpectedDictEntryInArray(entry))
               } else {
                 is_dict = Some(true);
               }
 
               inner_exprs.push(entry)
             },
-            Some(ParseResult::Ok(element)) => {
+            Some(Parsed(element)) => {
               if let Some(true) = is_dict {
-                return ParseResult::Error(UnexpectedArrayElementInDict(element))
+                return Error(UnexpectedArrayElementInDict(element))
               } else {
                 is_dict = Some(false);
               }
@@ -447,13 +447,13 @@ impl<'a> Parser<'a> {
 
     let end = match self.current_token() {
       Some(&Token::RightBracket { end, .. }) => end,
-      _ => return ParseResult::Error(UnclosedArray(self.index))
+      _ => return Error(UnclosedArray(self.index))
     };
 
     self.advance(1);
 
     if let Some(true) = is_dict {
-      return ParseResult::Ok(Node::Dict {
+      return Parsed(Dict {
         start,
         end,
         entries: inner_exprs,
@@ -461,7 +461,7 @@ impl<'a> Parser<'a> {
       })
     }
 
-    ParseResult::Ok(Node::Array {
+    Parsed(Array {
       start,
       end,
       elements: inner_exprs,
@@ -473,18 +473,18 @@ impl<'a> Parser<'a> {
     let mut current = previous.clone();
     let mut result = previous.clone();
 
-    while let ParseResult::Ok(node) = current {
+    while let Parsed(node) = current {
       let (call_start, _) = get_node_location(&node);
 
       if let Some(&Token::LeftParen { .. }) = self.current_token() {
         match self.parse_parenthetical() {
-          ParseResult::Ok(Node::Tuple {
+          Parsed(Tuple {
             start,
             end,
             entries,
             ..
           }) => {
-            current = ParseResult::Ok(Node::Call {
+            current = Parsed(Call {
               start,
               end,
               callee: Box::new(node),
@@ -496,10 +496,10 @@ impl<'a> Parser<'a> {
             continue
           },
 
-          ParseResult::Ok(expr_in_parens) => {
+          Parsed(expr_in_parens) => {
             let (_, expr_end) = get_node_location(&expr_in_parens);
 
-            current = ParseResult::Ok(Node::Call {
+            current = Parsed(Call {
               start: call_start,
               end: expr_end,
               callee: Box::new(node),
@@ -523,7 +523,7 @@ impl<'a> Parser<'a> {
 
   fn parse_chain(&mut self, previous: ParseResult) -> ParseResult {
     let previous_node = match previous {
-      ParseResult::Ok(node) => node,
+      Parsed(node) => node,
       other => return other,
     };
 
@@ -535,21 +535,21 @@ impl<'a> Parser<'a> {
     self.advance(1);
 
     let (end, ident) = match self.current_token() {
-      Some(&Token::Identifier { start, end, value }) => (end, Node::Identifier {
+      Some(&Token::Identifier { start, end, value }) => (end, Identifier {
         start,
         end,
         name: to_string(value),
         inferred_type: NodeType::Unknown,
       }),
-      Some(_) => return ParseResult::Error(
+      Some(_) => return Error(
         UnexpectedToken("Unexpected token".to_owned(), self.index)
       ),
-      None => return ParseResult::EOF,
+      None => return EOF,
     };
 
     self.advance(1);
 
-    ParseResult::Ok(Node::Chain {
+    Parsed(Chain {
       start: chain_start,
       end,
       object: Box::new(previous_node),
@@ -559,7 +559,7 @@ impl<'a> Parser<'a> {
 
   fn parse_match(&mut self, previous: ParseResult) -> ParseResult {
     let (start, previous_node) = match previous {
-      ParseResult::Ok(node) => (get_node_location(&node).0, node),
+      Parsed(node) => (get_node_location(&node).0, node),
       other => return other,
     };
 
@@ -570,26 +570,26 @@ impl<'a> Parser<'a> {
       self.advance(1);
 
       let case_pattern = match self.parse_expression(false) {
-        ParseResult::Ok(node) => node,
+        Parsed(node) => node,
         other => return other,
       };
 
       match self.current_token() {
         Some(&Token::DoubleArrow { .. }) => self.advance(1),
-        _ => return ParseResult::Error(MissingArrowInMatchCase(self.index))
+        _ => return Error(MissingArrowInMatchCase(self.index))
       };
 
       self.skip_line_breaks();
 
       let (case_end, case_body) = match self.parse_expression(false) {
-        ParseResult::Ok(node) => (get_node_location(&node).1, node),
+        Parsed(node) => (get_node_location(&node).1, node),
         other => return other,
       };
 
       self.skip_line_breaks();
       match_end = case_end;
 
-      cases.push(Node::MatchCase {
+      cases.push(MatchCase {
         start: case_start,
         end: case_end,
         pattern: Box::new(case_pattern),
@@ -598,7 +598,7 @@ impl<'a> Parser<'a> {
       });
     }
 
-    ParseResult::Ok(Node::Match {
+    Parsed(Match {
       start,
       end: match_end,
       discriminant: Box::new(previous_node),
@@ -609,7 +609,7 @@ impl<'a> Parser<'a> {
 
   fn parse_assignment(&mut self, previous: ParseResult) -> ParseResult {
     let (start, previous_node) = match previous {
-      ParseResult::Ok(node) => (get_node_location(&node).0, node),
+      Parsed(node) => (get_node_location(&node).0, node),
       other => return other,
     };
 
@@ -622,15 +622,15 @@ impl<'a> Parser<'a> {
     self.advance(1);
 
     if let Some(&Token::LineBreak { .. }) = self.current_token() {
-      return ParseResult::Error(UnexpectedLineBreakInAssignment(self.index));
+      return Error(UnexpectedLineBreakInAssignment(self.index));
     };
 
     let (end, value_node) = match self.parse_expression(true) {
-      ParseResult::Ok(node) => (get_node_location(&node).1, node),
+      Parsed(node) => (get_node_location(&node).1, node),
       other => return other,
     };
 
-    ParseResult::Ok(Node::Assignment {
+    Parsed(Assignment {
       start,
       end,
       is_constant,
@@ -646,17 +646,17 @@ impl<'a> Parser<'a> {
     let mut parsed = match self.current_token() {
       Some(&Token::Identifier { .. }) => self.parse_identifier(),
       Some(&Token::LeftParen { .. }) => self.parse_parenthetical(),
-      Some(&Token::String { .. }) => self.parse_string(),
+      Some(&Token::StringLiteral { .. }) => self.parse_string(),
       Some(&Token::LeftBrace { .. }) => self.parse_block(),
       Some(&Token::LeftBracket { .. }) => self.parse_dict_or_array(),
       Some(&Token::OctalDigits { .. })
         | Some(&Token::HexDigits { .. })
         | Some(&Token::DecimalDigits { .. })
         | Some(&Token::BinaryDigits { .. }) => self.parse_number(),
-      Some(_) => ParseResult::Error(
+      Some(_) => Error(
         UnexpectedToken("Unexpected token".to_owned(), self.index)
       ),
-      None => ParseResult::EOF,
+      None => EOF,
     };
 
     let mut parsed_call = false;
@@ -693,13 +693,13 @@ impl<'a> Parser<'a> {
   pub fn parse_module(&mut self) -> Result<Node, ParseError> {
     loop {
       match self.parse_expression(true) {
-        ParseResult::Ok(expr) => self.nodes.push(expr),
-        ParseResult::EOF => break,
-        ParseResult::Error(err) => return Err(err),
+        Parsed(expr) => self.nodes.push(expr),
+        EOF => break,
+        Error(err) => return Err(err),
       }
     }
 
-    Ok(Node::Module {
+    Ok(Module {
       start: 0,
       end: self.tokens.last().map_or(0, |token| get_token_location(token).1),
       body: self.nodes.clone(),
