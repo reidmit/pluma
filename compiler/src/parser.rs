@@ -22,6 +22,10 @@ pub enum ParseError {
   UnexpectedEOF(String),
   UnclosedParentheses(usize),
   UnclosedBlock(usize),
+  UnclosedArray(usize),
+  UnclosedDict(usize),
+  UnexpectedArrayElementInDict(Node),
+  UnexpectedDictEntryInArray(Node),
 }
 
 fn to_string(bytes: &[u8]) -> String {
@@ -353,6 +357,116 @@ impl<'a> Parser<'a> {
     })
   }
 
+  fn parse_dict_entry_or_array_element(&mut self) -> Option<ParseResult> {
+    if let Some(&Token::String { .. }) = self.current_token() {
+      if let ParseResult::Ok(string_node) = self.parse_string() {
+        if let Some(&Token::Colon { .. }) = self.current_token() {
+          self.advance(1);
+
+          match self.parse_expression() {
+            ParseResult::Ok(value_node) => return Some(ParseResult::Ok(Node::DictEntry {
+              start: 0,
+              end: 0,
+              key: Box::new(string_node),
+              value: Box::new(value_node),
+            })),
+            _ => return Some(ParseResult::Error(UnexpectedToken("Expected dict value".to_owned(), self.index)))
+          }
+        } else {
+          return Some(ParseResult::Ok(string_node));
+        }
+      }
+    } else {
+      match self.parse_expression() {
+        ParseResult::Ok(element_node) => return Some(ParseResult::Ok(element_node)),
+        _ => {},
+      }
+    }
+
+    None
+  }
+
+  fn parse_dict_or_array(&mut self) -> ParseResult {
+    let start = match self.current_token() {
+      Some(&Token::LeftBracket { start, .. }) => start,
+      _ => unreachable!()
+    };
+
+    self.advance(1);
+    self.skip_line_breaks();
+
+    let mut inner_exprs = Vec::new();
+    let mut is_dict = None;
+
+    match self.current_token() {
+      Some(&Token::Colon { .. }) => {
+        self.advance(1);
+        is_dict = Some(true);
+      },
+      _ => {
+        loop {
+          match self.parse_dict_entry_or_array_element() {
+            Some(ParseResult::Ok(entry @ Node::DictEntry { .. })) => {
+              if let Some(false) = is_dict {
+                return ParseResult::Error(UnexpectedDictEntryInArray(entry))
+              } else {
+                is_dict = Some(true);
+              }
+
+              inner_exprs.push(entry)
+            },
+            Some(ParseResult::Ok(element)) => {
+              if let Some(true) = is_dict {
+                return ParseResult::Error(UnexpectedArrayElementInDict(element))
+              } else {
+                is_dict = Some(false);
+              }
+
+              inner_exprs.push(element)
+            },
+            Some(other) => return other,
+            None => break,
+          }
+
+          self.skip_line_breaks();
+
+          match self.current_token() {
+            Some(&Token::Comma { .. }) => {
+              self.advance(1);
+              self.skip_line_breaks();
+            },
+            _ => break
+          }
+        }
+      }
+    }
+
+    self.skip_line_breaks();
+
+    let end = match self.current_token() {
+      Some(&Token::RightBracket { end, .. }) => end,
+      _ => return ParseResult::Error(UnclosedArray(self.index))
+    };
+
+    self.advance(1);
+
+    if let Some(true) = is_dict {
+      return ParseResult::Ok(Node::Dict {
+        start,
+        end,
+        entries: inner_exprs,
+        inferred_type: NodeType::Unknown,
+      })
+    }
+
+    ParseResult::Ok(Node::Array {
+      start,
+      end,
+      elements: inner_exprs,
+      inferred_type: NodeType::Unknown,
+    })
+  }
+
   fn parse_any_calls_after_result(&mut self, previous: ParseResult) -> ParseResult {
     let mut current = previous.clone();
     let mut result = previous.clone();
@@ -449,6 +563,7 @@ impl<'a> Parser<'a> {
       Some(&Token::LeftParen { .. }) => self.parse_parenthetical(),
       Some(&Token::String { .. }) => self.parse_string(),
       Some(&Token::LeftBrace { .. }) => self.parse_block(),
+      Some(&Token::LeftBracket { .. }) => self.parse_dict_or_array(),
       Some(&Token::OctalDigits { .. })
         | Some(&Token::HexDigits { .. })
         | Some(&Token::DecimalDigits { .. })

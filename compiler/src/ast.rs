@@ -22,6 +22,13 @@ pub enum Node {
     body: Vec<Node>,
   },
 
+  Array {
+    start: usize,
+    end: usize,
+    elements: Vec<Node>,
+    inferred_type: NodeType,
+  },
+
   Assignment {
     start: usize,
     end: usize,
@@ -60,6 +67,20 @@ pub enum Node {
     end: usize,
     object: Box<Node>,
     property: Box<Node>,
+  },
+
+  Dict {
+    start: usize,
+    end: usize,
+    entries: Vec<Node>,
+    inferred_type: NodeType,
+  },
+
+  DictEntry {
+    start: usize,
+    end: usize,
+    key: Box<Node>,
+    value: Box<Node>,
   },
 
   Grouping {
@@ -125,11 +146,14 @@ pub enum Node {
 
 pub fn get_node_location(node: &Node) -> (usize, usize) {
   match node {
+    Node::Array { start, end, .. } => (*start, *end),
     Node::Assignment { start, end, .. } => (*start, *end),
     Node::Block { start, end, .. } => (*start, *end),
     Node::Call { start, end, .. } => (*start, *end),
     Node::Case { start, end, .. } => (*start, *end),
     Node::Chain { start, end, .. } => (*start, *end),
+    Node::Dict { start, end, .. } => (*start, *end),
+    Node::DictEntry { start, end, .. } => (*start, *end),
     Node::Grouping { start, end, .. } => (*start, *end),
     Node::Identifier { start, end, .. } => (*start, *end),
     Node::Match { start, end, .. } => (*start, *end),
