@@ -145,9 +145,8 @@ pub enum Node {
   UnaryOperation {
     start: usize,
     end: usize,
-    left_side: Box<Node>,
-    right_side: Box<Node>,
     operator: UnaryOperator,
+    expr: Box<Node>,
     inferred_type: NodeType,
   },
 }

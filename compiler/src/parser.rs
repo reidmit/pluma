@@ -1,4 +1,4 @@
-use crate::ast::{get_node_location, Node, Node::*, NodeType, NumericValue};
+use crate::ast::{get_node_location, Node, Node::*, NodeType, NumericValue, UnaryOperator};
 use crate::tokens::{Token, get_token_location};
 use crate::parser::{ParseError::*, ParseResult::*};
 
@@ -291,6 +291,28 @@ impl<'a> Parser<'a> {
       start: paren_start,
       end: paren_end,
       entries: inner_exprs,
+      inferred_type: NodeType::Unknown,
+    })
+  }
+
+  fn parse_negated_expression(&mut self) -> ParseResult {
+    let start = match self.current_token() {
+      Some(&Token::Minus { start, .. }) => start,
+      _ => unreachable!()
+    };
+
+    self.advance(1);
+
+    let (end, node) = match self.parse_expression(true) {
+      Parsed(node) => (get_node_location(&node).1, node),
+      other => return other
+    };
+
+    Parsed(UnaryOperation {
+      start,
+      end,
+      operator: UnaryOperator::Minus,
+      expr: Box::new(node),
       inferred_type: NodeType::Unknown,
     })
   }
@@ -647,6 +669,7 @@ impl<'a> Parser<'a> {
     self.skip_line_breaks();
 
     let mut parsed = match self.current_token() {
+      Some(&Token::Minus { .. }) => self.parse_negated_expression(),
       Some(&Token::Identifier { .. }) => self.parse_identifier(),
       Some(&Token::LeftParen { .. }) => self.parse_parenthetical(),
       Some(&Token::StringLiteral { .. }) => self.parse_string(),
