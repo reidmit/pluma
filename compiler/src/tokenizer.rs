@@ -230,11 +230,6 @@ impl<'a> Tokenizer<'a> {
           tokens.push(Pipe { start: start_index, end: index })
         }
 
-        b'+' => {
-          index += 1;
-          tokens.push(Plus { start: start_index, end: index })
-        }
-
         b'=' => match source.get(index + 1) {
           Some(b'>') => {
             index += 2;
@@ -289,11 +284,25 @@ impl<'a> Tokenizer<'a> {
             index += 1;
           }
 
-          tokens.push(Identifier {
-            start: start_index,
-            end: index,
-            value: &source[start_index..index],
-          });
+          let value = &source[start_index..index];
+
+          if value == "let".as_bytes() {
+            tokens.push(KeywordLet { start: start_index, end: index })
+          } else if value == "def".as_bytes() {
+            tokens.push(KeywordDef { start: start_index, end: index })
+          } else if value == "type".as_bytes() {
+            tokens.push(KeywordType { start: start_index, end: index })
+          } else if value == "use".as_bytes() {
+            tokens.push(KeywordUse { start: start_index, end: index })
+          } else if value == "as".as_bytes() {
+            tokens.push(KeywordAs { start: start_index, end: index })
+          } else {
+            tokens.push(Identifier {
+              start: start_index,
+              end: index,
+              value,
+            });
+          }
 
           continue;
         }

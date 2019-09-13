@@ -32,6 +32,7 @@ pub enum ParseError {
   UnexpectedTokenInImport(usize),
   MissingArrowInMatchCase(usize),
   MissingArrowAfterBlockParams(usize),
+  MissingAliasAfterAsInImport(usize),
 }
 
 fn to_string(bytes: &[u8]) -> String {
@@ -716,41 +717,50 @@ impl<'a> Parser<'a> {
 
   fn parse_import(&mut self) -> ParseResult {
     let start = match self.current_token() {
-      Some(&Token::Plus { start, .. }) => {
+      Some(&Token::KeywordUse { start, .. }) => {
         self.advance(1);
         start
       },
       _ => unreachable!(),
     };
 
-    let alias = match self.current_token() {
-      Some(&Token::Identifier { value, .. }) => Some(to_string(value)),
-      _ => None
-    };
-
-    if alias.is_some() {
-      self.advance(1);
-    }
-
-    let (end, path) = match self.current_token() {
+    let (path_end, path) = match self.current_token() {
       Some(&Token::StringLiteral { end, value, .. }) => (end, to_string(value)),
       Some(..) => return Error(UnexpectedTokenInImport(self.index)),
       None => return Error(UnexpectedEOF),
     };
 
     self.advance(1);
+
+    let mut alias = None;
+    let mut import_end = path_end;
+
+    if let Some(&Token::KeywordAs { .. }) = self.current_token() {
+      self.advance(1);
+
+      match self.current_token() {
+        Some(&Token::Identifier { value, end, .. }) => {
+          alias = Some(to_string(value));
+          import_end = end;
+        },
+        _ => return Error(MissingAliasAfterAsInImport(self.index))
+      };
+
+      self.advance(1);
+    }
+
     self.skip_line_breaks();
 
     Parsed(Import {
       start,
-      end,
+      end: import_end,
       alias,
       path,
     })
   }
 
   pub fn parse_module(&mut self) -> Result<Node, ParseError> {
-    while let Some(&Token::Plus { .. }) = self.current_token() {
+    while let Some(&Token::KeywordUse { .. }) = self.current_token() {
       match self.parse_import() {
         Parsed(import) => self.imports.push(import),
         EOF => break,
