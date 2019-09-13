@@ -32,6 +32,7 @@ pub enum ParseError {
   MissingArrowInMatchCase(usize),
   MissingArrowAfterBlockParams(usize),
   MissingAliasAfterAsInImport(usize),
+  MissingCasesInMatchExpression(usize),
 }
 
 fn to_string(bytes: &[u8]) -> String {
@@ -116,7 +117,7 @@ impl<'a> Parser<'a> {
       while let Some(&Token::InterpolationStart { .. }) = self.current_token() {
         self.advance(1);
 
-        match self.parse_expression(true) {
+        match self.parse_expression() {
           Parsed(part) => parts.push(part),
           other => return other,
         }
@@ -260,7 +261,7 @@ impl<'a> Parser<'a> {
 
     let mut inner_exprs = Vec::new();
 
-    while let Parsed(node) = self.parse_expression(true) {
+    while let Parsed(node) = self.parse_expression() {
       inner_exprs.push(node);
 
       match self.current_token() {
@@ -303,7 +304,7 @@ impl<'a> Parser<'a> {
 
     self.advance(1);
 
-    let (end, node) = match self.parse_expression(true) {
+    let (end, node) = match self.parse_expression() {
       Parsed(node) => (get_node_location(&node).1, node),
       other => return other
     };
@@ -364,7 +365,7 @@ impl<'a> Parser<'a> {
       }
     }
 
-    while let Parsed(node) = self.parse_expression(true) {
+    while let Parsed(node) = self.parse_expression() {
       body.push(node);
     }
 
@@ -392,7 +393,7 @@ impl<'a> Parser<'a> {
         if let Some(&Token::Colon { .. }) = self.current_token() {
           self.advance(1);
 
-          match self.parse_expression(true) {
+          match self.parse_expression() {
             Parsed(value_node) => return Some(Parsed(DictEntry {
               start: 0,
               end: 0,
@@ -406,7 +407,7 @@ impl<'a> Parser<'a> {
         }
       }
     } else {
-      match self.parse_expression(true) {
+      match self.parse_expression() {
         Parsed(element_node) => return Some(Parsed(element_node)),
         _ => {},
       }
@@ -582,11 +583,21 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_match(&mut self, previous: ParseResult) -> ParseResult {
-    let (start, previous_node) = match previous {
-      Parsed(node) => (get_node_location(&node).0, node),
+  fn parse_match(&mut self) -> ParseResult {
+    let start = match self.current_token() {
+      Some(&Token::KeywordMatch { start, .. }) => {
+        self.advance(1);
+        start
+      },
+      _ => unreachable!()
+    };
+
+    let matched_node = match self.parse_expression() {
+      Parsed(node) => node,
       other => return other,
     };
+
+    self.skip_line_breaks();
 
     let mut cases = Vec::new();
     let mut match_end = start;
@@ -594,7 +605,7 @@ impl<'a> Parser<'a> {
     while let Some(&Token::Pipe { start: case_start, .. }) = self.current_token() {
       self.advance(1);
 
-      let case_pattern = match self.parse_expression(false) {
+      let case_pattern = match self.parse_expression() {
         Parsed(node) => node,
         other => return other,
       };
@@ -606,7 +617,7 @@ impl<'a> Parser<'a> {
 
       self.skip_line_breaks();
 
-      let (case_end, case_body) = match self.parse_expression(false) {
+      let (case_end, case_body) = match self.parse_expression() {
         Parsed(node) => (get_node_location(&node).1, node),
         other => return other,
       };
@@ -623,10 +634,14 @@ impl<'a> Parser<'a> {
       });
     }
 
+    if cases.is_empty() {
+      return Error(MissingCasesInMatchExpression(self.index))
+    }
+
     Parsed(Match {
       start,
       end: match_end,
-      discriminant: Box::new(previous_node),
+      discriminant: Box::new(matched_node),
       cases,
       inferred_type: NodeType::Unknown,
     })
@@ -647,7 +662,7 @@ impl<'a> Parser<'a> {
       _ => unreachable!()
     }
 
-    let (end, value_node) = match self.parse_expression(true) {
+    let (end, value_node) = match self.parse_expression() {
       Parsed(node) => (get_node_location(&node).1, node),
       other => return other,
     };
@@ -684,7 +699,7 @@ impl<'a> Parser<'a> {
     self.advance(1);
     self.skip_line_breaks();
 
-    let (end, value_node) = match self.parse_expression(true) {
+    let (end, value_node) = match self.parse_expression() {
       Parsed(node) => (get_node_location(&node).1, node),
       other => return other,
     };
@@ -699,7 +714,7 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_expression(&mut self, allow_case: bool) -> ParseResult {
+  fn parse_expression(&mut self) -> ParseResult {
     self.skip_line_breaks();
 
     let mut parsed = match self.current_token() {
@@ -708,6 +723,7 @@ impl<'a> Parser<'a> {
       Some(&Token::Identifier { .. }) => self.parse_identifier(),
       Some(&Token::LeftParen { .. }) => self.parse_parenthetical(),
       Some(&Token::StringLiteral { .. }) => self.parse_string(),
+      Some(&Token::KeywordMatch { .. }) => self.parse_match(),
       Some(&Token::LeftBrace { .. }) => self.parse_block(),
       Some(&Token::LeftBracket { .. }) => self.parse_dict_or_array(),
       Some(&Token::OctalDigits { .. })
@@ -739,7 +755,6 @@ impl<'a> Parser<'a> {
 
       match self.current_token() {
         Some(&Token::Dot { .. }) => parsed = self.parse_chain(parsed),
-        Some(&Token::Pipe { .. }) if allow_case => parsed = self.parse_match(parsed),
         Some(&Token::ColonEquals { .. }) => parsed = self.parse_reassignment(parsed),
         _ => break,
       };
@@ -802,7 +817,7 @@ impl<'a> Parser<'a> {
     }
 
     loop {
-      match self.parse_expression(true) {
+      match self.parse_expression() {
         Parsed(expr) => self.nodes.push(expr),
         EOF => break,
         Error(err) => return Err(err),

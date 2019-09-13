@@ -288,6 +288,8 @@ impl<'a> Tokenizer<'a> {
 
           if value == "let".as_bytes() {
             tokens.push(KeywordLet { start: start_index, end: index })
+          } else if value == "match".as_bytes() {
+            tokens.push(KeywordMatch { start: start_index, end: index })
           } else if value == "def".as_bytes() {
             tokens.push(KeywordDef { start: start_index, end: index })
           } else if value == "type".as_bytes() {

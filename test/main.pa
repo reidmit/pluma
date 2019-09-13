@@ -1,6 +1,5 @@
-use "pkg/thing" as thing
-
-let z = 47
-let m := "wow"
-
-m := "ok"
+match wow
+| 47 => "ok"
+| 2 => match maybe
+  | True => "yes"
+  | False => "no"
