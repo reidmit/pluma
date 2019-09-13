@@ -502,6 +502,8 @@ impl<'a> Parser<'a> {
     let mut result = previous.clone();
 
     while let Parsed(node) = current {
+      println!("{:#?}", node);
+
       let (call_start, _) = get_node_location(&node);
 
       if let Some(&Token::LeftParen { .. }) = self.current_token() {
@@ -532,6 +534,25 @@ impl<'a> Parser<'a> {
               end: expr_end,
               callee: Box::new(node),
               arguments: vec![ungroup(expr_in_parens)],
+              inferred_type: NodeType::Unknown,
+            });
+
+            result = current.clone();
+            continue
+          },
+
+          other => return other
+        }
+      } else if let Some(&Token::LeftBrace { .. }) = self.current_token() {
+        match self.parse_block() {
+          Parsed(block) => {
+            let (_, block_end) = get_node_location(&block);
+
+            current = Parsed(Call {
+              start: call_start,
+              end: block_end,
+              callee: Box::new(node),
+              arguments: vec![block],
               inferred_type: NodeType::Unknown,
             });
 
@@ -738,7 +759,7 @@ impl<'a> Parser<'a> {
 
     loop {
       match self.current_token() {
-        Some(&Token::LeftParen { .. }) => {
+        Some(&Token::LeftParen { .. }) | Some(&Token::LeftBrace { .. }) => {
           parsed = self.parse_any_calls_after_result(parsed);
           parsed_call = true;
         },
@@ -750,14 +771,21 @@ impl<'a> Parser<'a> {
       return parsed;
     }
 
-    loop {
-      self.skip_line_breaks();
+    match parsed {
+      Parsed(Block { .. }) => {
+        // Skip blocks here, since we don't support blocks as the left
+        // side of a reassignment (e.g. {} = something) or in a chain
+        // (e.g. {}.thing)
+      },
+      _ => loop {
+        self.skip_line_breaks();
 
-      match self.current_token() {
-        Some(&Token::Dot { .. }) => parsed = self.parse_chain(parsed),
-        Some(&Token::ColonEquals { .. }) => parsed = self.parse_reassignment(parsed),
-        _ => break,
-      };
+        match self.current_token() {
+          Some(&Token::Dot { .. }) => parsed = self.parse_chain(parsed),
+          Some(&Token::ColonEquals { .. }) => parsed = self.parse_reassignment(parsed),
+          _ => break,
+        };
+      }
     }
 
     parsed

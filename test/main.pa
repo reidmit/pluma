@@ -1,5 +1,1 @@
-match wow
-| 47 => "ok"
-| 2 => match maybe
-  | True => "yes"
-  | False => "no"
+cool.split("\n")
