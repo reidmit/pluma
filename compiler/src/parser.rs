@@ -755,37 +755,16 @@ impl<'a> Parser<'a> {
       None => EOF,
     };
 
-    let mut parsed_call = false;
-
     loop {
+      self.skip_line_breaks();
+
       match self.current_token() {
-        Some(&Token::LeftParen { .. }) | Some(&Token::LeftBrace { .. }) => {
-          parsed = self.parse_any_calls_after_result(parsed);
-          parsed_call = true;
-        },
+        Some(&Token::LeftParen { .. })
+          | Some(&Token::LeftBrace { .. }) => parsed = self.parse_any_calls_after_result(parsed),
+        Some(&Token::Dot { .. }) => parsed = self.parse_chain(parsed),
+        Some(&Token::ColonEquals { .. }) => parsed = self.parse_reassignment(parsed),
         _ => break,
       };
-    }
-
-    if parsed_call {
-      return parsed;
-    }
-
-    match parsed {
-      Parsed(Block { .. }) => {
-        // Skip blocks here, since we don't support blocks as the left
-        // side of a reassignment (e.g. {} = something) or in a chain
-        // (e.g. {}.thing)
-      },
-      _ => loop {
-        self.skip_line_breaks();
-
-        match self.current_token() {
-          Some(&Token::Dot { .. }) => parsed = self.parse_chain(parsed),
-          Some(&Token::ColonEquals { .. }) => parsed = self.parse_reassignment(parsed),
-          _ => break,
-        };
-      }
     }
 
     parsed

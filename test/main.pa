@@ -1,1 +1,1 @@
-cool.split("\n")
+x := y := 2.plus(2)
