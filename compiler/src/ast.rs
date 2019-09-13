@@ -121,6 +121,14 @@ pub enum Node {
     inferred_type: NodeType,
   },
 
+  Reassignment {
+    start: usize,
+    end: usize,
+    left: Box<Node>,
+    right: Box<Node>,
+    inferred_type: NodeType,
+  },
+
   StringInterpolation {
     start: usize,
     end: usize,
@@ -167,6 +175,7 @@ pub fn get_node_location(node: &Node) -> (usize, usize) {
     Node::MatchCase { start, end, .. } => (*start, *end),
     Node::Module { start, end, .. } => (*start, *end),
     Node::NumericLiteral { start, end, .. } => (*start, *end),
+    Node::Reassignment { start, end, .. } => (*start, *end),
     Node::StringInterpolation { start, end, .. } => (*start, *end),
     Node::StringLiteral { start, end, .. } => (*start, *end),
     Node::Tuple { start, end, .. } => (*start, *end),

@@ -27,7 +27,6 @@ pub enum ParseError {
   UnclosedDict(usize),
   UnexpectedArrayElementInDict(Node),
   UnexpectedDictEntryInArray(Node),
-  UnexpectedLineBreakInAssignment(usize),
   UnexpectedTokenAfterDot(usize),
   UnexpectedTokenInImport(usize),
   MissingArrowInMatchCase(usize),
@@ -633,9 +632,46 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_assignment(&mut self, previous: ParseResult) -> ParseResult {
+  fn parse_pattern(&mut self) -> ParseResult {
+    self.parse_identifier()
+  }
+
+  fn parse_reassignment(&mut self, previous: ParseResult) -> ParseResult {
     let (start, previous_node) = match previous {
       Parsed(node) => (get_node_location(&node).0, node),
+      other => return other,
+    };
+
+    match self.current_token() {
+      Some(&Token::ColonEquals { .. }) => self.advance(1),
+      _ => unreachable!()
+    }
+
+    let (end, value_node) = match self.parse_expression(true) {
+      Parsed(node) => (get_node_location(&node).1, node),
+      other => return other,
+    };
+
+    Parsed(Reassignment {
+      start,
+      end,
+      left: Box::new(previous_node),
+      right: Box::new(value_node),
+      inferred_type: NodeType::Unknown,
+    })
+  }
+
+  fn parse_assignment(&mut self) -> ParseResult {
+    let start = match self.current_token() {
+      Some(&Token::KeywordLet { start, .. }) => {
+        self.advance(1);
+        start
+      },
+      _ => unreachable!()
+    };
+
+    let left = match self.parse_pattern() {
+      Parsed(node) => Box::new(node),
       other => return other,
     };
 
@@ -646,10 +682,7 @@ impl<'a> Parser<'a> {
     };
 
     self.advance(1);
-
-    if let Some(&Token::LineBreak { .. }) = self.current_token() {
-      return Error(UnexpectedLineBreakInAssignment(self.index));
-    };
+    self.skip_line_breaks();
 
     let (end, value_node) = match self.parse_expression(true) {
       Parsed(node) => (get_node_location(&node).1, node),
@@ -660,7 +693,7 @@ impl<'a> Parser<'a> {
       start,
       end,
       is_constant,
-      left: Box::new(previous_node),
+      left,
       right: Box::new(value_node),
       inferred_type: NodeType::Unknown,
     })
@@ -671,6 +704,7 @@ impl<'a> Parser<'a> {
 
     let mut parsed = match self.current_token() {
       Some(&Token::Minus { .. }) => self.parse_negated_expression(),
+      Some(&Token::KeywordLet { .. }) => self.parse_assignment(),
       Some(&Token::Identifier { .. }) => self.parse_identifier(),
       Some(&Token::LeftParen { .. }) => self.parse_parenthetical(),
       Some(&Token::StringLiteral { .. }) => self.parse_string(),
@@ -706,8 +740,7 @@ impl<'a> Parser<'a> {
       match self.current_token() {
         Some(&Token::Dot { .. }) => parsed = self.parse_chain(parsed),
         Some(&Token::Pipe { .. }) if allow_case => parsed = self.parse_match(parsed),
-        Some(&Token::Equals { .. })
-          | Some(&Token::ColonEquals { .. }) => parsed = self.parse_assignment(parsed),
+        Some(&Token::ColonEquals { .. }) => parsed = self.parse_reassignment(parsed),
         _ => break,
       };
     }

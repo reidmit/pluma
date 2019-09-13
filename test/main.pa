@@ -1,3 +1,6 @@
 use "pkg/thing" as thing
 
-o
+let z = 47
+let m := "wow"
+
+m := "ok"
