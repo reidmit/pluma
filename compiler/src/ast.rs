@@ -19,6 +19,7 @@ pub enum Node {
   Module {
     start: usize,
     end: usize,
+    imports: Vec<Node>,
     body: Vec<Node>,
   },
 
@@ -89,6 +90,13 @@ pub enum Node {
     inferred_type: NodeType,
   },
 
+  Import {
+    start: usize,
+    end: usize,
+    alias: Option<String>,
+    path: String,
+  },
+
   Match {
     start: usize,
     end: usize,
@@ -155,6 +163,7 @@ pub fn get_node_location(node: &Node) -> (usize, usize) {
     Node::DictEntry { start, end, .. } => (*start, *end),
     Node::Grouping { start, end, .. } => (*start, *end),
     Node::Identifier { start, end, .. } => (*start, *end),
+    Node::Import { start, end, .. } => (*start, *end),
     Node::Match { start, end, .. } => (*start, *end),
     Node::MatchCase { start, end, .. } => (*start, *end),
     Node::Module { start, end, .. } => (*start, *end),

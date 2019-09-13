@@ -6,6 +6,7 @@ pub struct Parser<'a> {
   tokens: &'a Vec<Token<'a>>,
   token_count: usize,
   index: usize,
+  imports: Vec<Node>,
   nodes: Vec<Node>,
 }
 
@@ -28,6 +29,7 @@ pub enum ParseError {
   UnexpectedDictEntryInArray(Node),
   UnexpectedLineBreakInAssignment(usize),
   UnexpectedTokenAfterDot(usize),
+  UnexpectedTokenInImport(usize),
   MissingArrowInMatchCase(usize),
   MissingArrowAfterBlockParams(usize),
 }
@@ -51,6 +53,7 @@ impl<'a> Parser<'a> {
       tokens,
       token_count,
       index: 0,
+      imports: Vec::new(),
       nodes: Vec::new(),
     };
   }
@@ -688,7 +691,50 @@ impl<'a> Parser<'a> {
     parsed
   }
 
+  fn parse_import(&mut self) -> ParseResult {
+    let start = match self.current_token() {
+      Some(&Token::Plus { start, .. }) => {
+        self.advance(1);
+        start
+      },
+      _ => unreachable!(),
+    };
+
+    let alias = match self.current_token() {
+      Some(&Token::Identifier { value, .. }) => Some(to_string(value)),
+      _ => None
+    };
+
+    if alias.is_some() {
+      self.advance(1);
+    }
+
+    let (end, path) = match self.current_token() {
+      Some(&Token::StringLiteral { end, value, .. }) => (end, to_string(value)),
+      Some(..) => return Error(UnexpectedTokenInImport(self.index)),
+      None => return Error(UnexpectedEOF),
+    };
+
+    self.advance(1);
+    self.skip_line_breaks();
+
+    Parsed(Import {
+      start,
+      end,
+      alias,
+      path,
+    })
+  }
+
   pub fn parse_module(&mut self) -> Result<Node, ParseError> {
+    while let Some(&Token::Plus { .. }) = self.current_token() {
+      match self.parse_import() {
+        Parsed(import) => self.imports.push(import),
+        EOF => break,
+        Error(err) => return Err(err),
+      }
+    }
+
     loop {
       match self.parse_expression(true) {
         Parsed(expr) => self.nodes.push(expr),
@@ -700,6 +746,7 @@ impl<'a> Parser<'a> {
     Ok(Module {
       start: 0,
       end: self.tokens.last().map_or(0, |token| get_token_location(token).1),
+      imports: self.imports.clone(),
       body: self.nodes.clone(),
     })
   }

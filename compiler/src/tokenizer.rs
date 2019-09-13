@@ -182,160 +182,97 @@ impl<'a> Tokenizer<'a> {
         b'\n' => {
           index += 1;
           line += 1;
-
-          tokens.push(LineBreak {
-            start: start_index,
-            end: index,
-          })
+          tokens.push(LineBreak { start: start_index, end: index })
         }
 
         b'(' => {
           index += 1;
-
-          tokens.push(LeftParen {
-            start: start_index,
-            end: index,
-          })
+          tokens.push(LeftParen { start: start_index, end: index })
         }
 
         b')' => {
           index += 1;
-
-          tokens.push(RightParen {
-            start: start_index,
-            end: index,
-          })
+          tokens.push(RightParen { start: start_index, end: index })
         }
 
         b'{' => {
           index += 1;
-
-          tokens.push(LeftBrace {
-            start: start_index,
-            end: index,
-          })
+          tokens.push(LeftBrace { start: start_index, end: index })
         }
 
         b'}' => {
           index += 1;
-
-          tokens.push(RightBrace {
-            start: start_index,
-            end: index,
-          })
+          tokens.push(RightBrace { start: start_index, end: index })
         }
 
         b'[' => {
           index += 1;
-
-          tokens.push(LeftBracket {
-            start: start_index,
-            end: index,
-          })
+          tokens.push(LeftBracket { start: start_index, end: index })
         }
 
         b']' => {
           index += 1;
-
-          tokens.push(RightBracket {
-            start: start_index,
-            end: index,
-          })
+          tokens.push(RightBracket { start: start_index, end: index })
         }
 
         b',' => {
           index += 1;
-
-          tokens.push(Comma {
-            start: start_index,
-            end: index,
-          })
+          tokens.push(Comma { start: start_index, end: index })
         }
 
         b'.' => {
           index += 1;
-
-          tokens.push(Dot {
-            start: start_index,
-            end: index,
-          })
+          tokens.push(Dot { start: start_index, end: index })
         }
 
         b'|' => {
           index += 1;
+          tokens.push(Pipe { start: start_index, end: index })
+        }
 
-          tokens.push(Pipe {
-            start: start_index,
-            end: index,
-          })
+        b'+' => {
+          index += 1;
+          tokens.push(Plus { start: start_index, end: index })
         }
 
         b'=' => match source.get(index + 1) {
           Some(b'>') => {
             index += 2;
-
-            tokens.push(DoubleArrow {
-              start: start_index,
-              end: index,
-            })
+            tokens.push(DoubleArrow { start: start_index, end: index })
           }
 
           _ => {
             index += 1;
-
-            tokens.push(Equals {
-              start: start_index,
-              end: index,
-            })
+            tokens.push(Equals { start: start_index, end: index })
           }
         },
 
         b'-' => match source.get(index + 1) {
           Some(b'>') => {
             index += 2;
-
-            tokens.push(Arrow {
-              start: start_index,
-              end: index,
-            })
+            tokens.push(Arrow { start: start_index, end: index })
           }
 
           _ => {
             index += 1;
-
-            tokens.push(Minus {
-              start: start_index,
-              end: index,
-            })
+            tokens.push(Minus { start: start_index, end: index })
           }
         },
 
         b':' => match source.get(index + 1) {
           Some(b'=') => {
             index += 2;
-
-            tokens.push(ColonEquals {
-              start: start_index,
-              end: index,
-            })
+            tokens.push(ColonEquals { start: start_index, end: index })
           }
 
           Some(b':') => {
             index += 2;
-
-            tokens.push(DoubleColon {
-              start: start_index,
-              end: index,
-            })
+            tokens.push(DoubleColon { start: start_index, end: index })
           }
 
           _ => {
             index += 1;
-
-            tokens.push(Colon {
-              start: start_index,
-              end: index,
-            })
+            tokens.push(Colon { start: start_index, end: index })
           }
         },
 
@@ -443,11 +380,7 @@ impl<'a> Tokenizer<'a> {
 
         _ => {
           index += 1;
-
-          tokens.push(Unexpected {
-            start: start_index,
-            end: index,
-          })
+          tokens.push(Unexpected { start: start_index, end: index })
         }
       };
     }

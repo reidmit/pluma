@@ -1,1 +1,5 @@
-"hello $("$(name1) and $(name2)")"
++ "hello/world"
++ "pkg/thing"
++ trig "core/math/trig"
+
+47
