@@ -9,36 +9,12 @@ use crate::options::Command;
 mod colors;
 mod errors;
 mod options;
-
-fn print_usage() {
-  print!(
-    "{bold_name} - version {version}
-
-Compiler and tools for the Pluma language
-
-{usage_header}
-  $ {cli_name} <command> [...options]
-
-{commands_header}
-  run       Build and run a given module
-  help      Print this usage information
-  version   Print version
-
-For help with an individual command, try:
-  $ {cli_name} <command> -h
-",
-    bold_name = colors::bold("pluma"),
-    cli_name = "pluma",
-    version = VERSION,
-    usage_header = colors::bold("Usage:"),
-    commands_header = colors::bold("Commands:"),
-  );
-}
+mod usage;
 
 fn main() {
   match options::parse_options() {
     Ok(Command::Help) => {
-      print_usage();
+      println!("{}", usage::main_usage());
       exit(0);
     },
 
@@ -47,7 +23,12 @@ fn main() {
       exit(0);
     },
 
-    Ok(Command::Run { root_dir, entry_path }) => {
+    Ok(Command::BuildHelp) => {
+      println!("{}", usage::build_usage());
+      exit(0);
+    },
+
+    Ok(Command::Build { root_dir, entry_path }) => {
       let mut compiler = Compiler::new(CompilerConfig {
         root_dir,
         entry_path
@@ -65,6 +46,14 @@ fn main() {
           exit(1);
         }
       }
+    },
+
+    Ok(Command::RunHelp) => {
+      unimplemented!();
+    },
+
+    Ok(Command::Run { .. }) => {
+      unimplemented!();
     },
 
     Err(err) => {
@@ -89,7 +78,7 @@ fn print_error_summary(compiler: &Compiler, summary: PackageCompilationErrorSumm
 
   for (module_name, module_errors) in summary.module_errors {
     for ModuleCompilationErrorDetail { module_path, location, message } in module_errors {
-      eprintln!("{} in {}:\n",
+      eprintln!("{} compiling {}:\n",
         colors::bold_red("Error"),
         colors::bold(module_name.as_str()),
       );

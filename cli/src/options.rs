@@ -4,10 +4,16 @@ use crate::errors::UsageError;
 use pluma_compiler::DEFAULT_ENTRY_FILE;
 
 pub enum Command {
+  Build {
+    root_dir: String,
+    entry_path: String,
+  },
+  BuildHelp,
   Run {
     root_dir: String,
     entry_path: String,
   },
+  RunHelp,
   Help,
   Version,
 }
@@ -31,7 +37,29 @@ pub fn parse_options() -> Result<Command, UsageError> {
       Ok(Command::Version)
     },
 
+    "build" => {
+      if show_help() {
+        return Ok(Command::BuildHelp)
+      }
+
+      let entry_path = match env::args().nth(2) {
+        Some(file) => file,
+        None => return Err(UsageError::MissingEntryPath)
+      };
+
+      let (root_dir, entry_path) = get_paths(entry_path)?;
+
+      Ok(Command::Build {
+        root_dir,
+        entry_path,
+      })
+    },
+
     "run" => {
+      if show_help() {
+        return Ok(Command::RunHelp)
+      }
+
       let entry_path = match env::args().nth(2) {
         Some(file) => file,
         None => return Err(UsageError::MissingEntryPath)
@@ -47,6 +75,16 @@ pub fn parse_options() -> Result<Command, UsageError> {
 
     other => Err(UsageError::UnknownCommand(other.to_owned()))
   }
+}
+
+fn show_help() -> bool {
+  for arg in env::args() {
+    if arg == "-h" || arg == "--help" {
+      return true
+    }
+  }
+
+  return false
 }
 
 fn get_paths(entry_path: String) -> Result<(String, String), UsageError> {
