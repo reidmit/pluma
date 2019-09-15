@@ -85,7 +85,7 @@ impl<'a> ErrorFormatter<'a> {
           (
             (start, end),
             format!(
-              "Invalid digit '{}' in binary number.",
+              "Invalid digit `{}` in binary number. Valid binary digits are `0` and `1`.",
               self.read_source(module_path, start, end),
             ),
           ),
@@ -94,7 +94,7 @@ impl<'a> ErrorFormatter<'a> {
           (
             (start, end),
             format!(
-              "Invalid digit '{}' in hexadecimal number.",
+              "Invalid digit `{}` in hexadecimal number. Valid hexadecimal digits are `0` to `9` and `a` to `f`.",
               self.read_source(module_path, start, end),
             ),
           ),
@@ -103,7 +103,7 @@ impl<'a> ErrorFormatter<'a> {
           (
             (start, end),
             format!(
-              "Invalid digit '{}' in octal number.",
+              "Invalid digit `{}` in octal number. Valid octal digits are `0` to `7`.",
               self.read_source(module_path, start, end),
             ),
           ),
