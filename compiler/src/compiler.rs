@@ -37,7 +37,23 @@ impl Compiler {
 
     debug!("{:#?}", self);
 
-    result
+    match result {
+      Ok(()) => {
+        let mut modules_with_errors = Vec::new();
+
+        for (module_path, module) in &self.modules {
+          if let Err(..) = module {
+            modules_with_errors.push(module_path.clone());
+          }
+        }
+
+        match modules_with_errors.is_empty() {
+          true => Ok(()),
+          _ => Err(PackageCompilationError::ModulesFailedToCompile(modules_with_errors))
+        }
+      }
+      err => err,
+    }
   }
 
   pub fn compile_module(&mut self, path: String, import_chain: ImportChain) -> Result<(), PackageCompilationError> {

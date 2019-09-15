@@ -4,7 +4,7 @@ use crate::ast::Node;
 #[derive(Debug)]
 pub enum PackageCompilationError {
   ConfigInvalid(ConfigurationError),
-  ModuleFailedToCompile(ModuleCompilationError),
+  ModulesFailedToCompile(Vec<String>),
   CyclicalDependency(Vec<String>),
 }
 
