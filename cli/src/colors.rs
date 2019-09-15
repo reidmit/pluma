@@ -2,8 +2,8 @@ use std::env;
 use atty::Stream;
 
 fn hide_colors() -> bool {
-  if atty::is(Stream::Stdout) {
-    return false
+  if !atty::is(Stream::Stdout) {
+    return true
   }
 
   match env::var("NO_COLOR") {
