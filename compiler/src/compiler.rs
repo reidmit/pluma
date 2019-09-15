@@ -1,11 +1,7 @@
 use std::collections::HashMap;
 use crate::fs;
-use crate::ast::Node;
 use crate::module::Module;
-use crate::tokenizer::{Tokenizer, TokenizeResult};
 use crate::errors::{PackageCompilationError, ModuleCompilationError};
-
-const DEFAULT_ENTRY_FILE: &str = "main.pa";
 
 pub struct CompilerConfig {
   pub entry_path: Option<String>,

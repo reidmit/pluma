@@ -1,13 +1,11 @@
 use crate::ast::{get_node_location, Node, Node::*, NodeType, NumericValue, UnaryOperator};
 use crate::tokens::{Token, get_token_location};
-use crate::tokenizer::TokenizeResult;
 use crate::parser::{ParseError::*, ParseResult::*};
 use crate::errors::ParseError;
 
 pub struct Parser<'a> {
   source: &'a Vec<u8>,
   tokens: &'a Vec<Token>,
-  token_count: usize,
   index: usize,
   imports: Vec<Node>,
   nodes: Vec<Node>,
@@ -20,10 +18,6 @@ enum ParseResult {
   Error(ParseError),
 }
 
-fn to_string(bytes: &[u8]) -> String {
-  String::from_utf8(bytes.to_vec()).expect("String is not UTF-8")
-}
-
 fn ungroup(node: Node) -> Node {
   match node {
     Grouping { expr, .. } => *expr,
@@ -33,12 +27,9 @@ fn ungroup(node: Node) -> Node {
 
 impl<'a> Parser<'a> {
   pub fn new(source: &'a Vec<u8>, tokens: &'a Vec<Token>) -> Parser<'a> {
-    let token_count = tokens.len();
-
     return Parser {
       source,
       tokens,
-      token_count,
       index: 0,
       imports: Vec::new(),
       nodes: Vec::new(),

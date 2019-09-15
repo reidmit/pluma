@@ -1,9 +1,8 @@
 use crate::fs;
 use crate::ast::Node;
 use crate::parser::Parser;
-use crate::tokens::{Token};
-use crate::tokenizer::{Tokenizer, TokenizeResult, TokenList, CommentMap};
-use crate::errors::{PackageCompilationError, ModuleCompilationError};
+use crate::tokenizer::{Tokenizer, TokenList, CommentMap};
+use crate::errors::ModuleCompilationError;
 use crate::debug;
 
 pub struct Module {
@@ -70,16 +69,5 @@ impl Module {
       (None, _) => panic!("module.parse() called before module.read()"),
       (_, None) => panic!("module.parse() called before module.tokenize()")
     }
-  }
-
-  pub fn get_comment_for_line(&self, line: usize) -> Option<&Token> {
-    match &self.comments {
-      Some(comment_map) => comment_map.get(&line),
-      None => None
-    }
-  }
-
-  pub fn get_referenced_paths(&self) -> Vec<String> {
-    Vec::new()
   }
 }

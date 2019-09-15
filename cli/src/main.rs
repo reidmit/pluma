@@ -1,7 +1,3 @@
-// TODO remove these, these are just for testing
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 use pluma_compiler::compiler::{Compiler, CompilerConfig};
 use pluma_compiler::errors::PackageCompilationError;
 use std::env;
