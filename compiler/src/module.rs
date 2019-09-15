@@ -4,6 +4,7 @@ use crate::parser::Parser;
 use crate::tokens::{Token};
 use crate::tokenizer::{Tokenizer, TokenizeResult, TokenList, CommentMap};
 use crate::errors::{PackageCompilationError, ModuleCompilationError};
+use crate::debug;
 
 pub struct Module {
   path: String,
@@ -29,8 +30,8 @@ impl Module {
     self.tokenize()?;
     self.parse()?;
 
-    println!("tokens: {:#?}", self.tokens);
-    println!("ast: {:#?}", self.ast);
+    debug!("tokens: {:#?}", self.tokens);
+    debug!("ast: {:#?}", self.ast);
 
     Ok(())
   }

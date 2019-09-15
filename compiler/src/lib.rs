@@ -2,13 +2,13 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
-pub mod ast;
 pub mod compiler;
 pub mod errors;
-pub mod fs;
-pub mod module;
-pub mod parser;
-pub mod tokenizer;
-pub mod tokens;
 
-mod test_utils;
+mod ast;
+mod fs;
+mod macros;
+mod module;
+mod parser;
+mod tokenizer;
+mod tokens;
