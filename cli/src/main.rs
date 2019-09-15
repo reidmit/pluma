@@ -1,10 +1,14 @@
 use pluma_compiler::compiler::{Compiler, CompilerConfig};
-use pluma_compiler::errors::PackageCompilationError;
-use std::env;
+use pluma_compiler::error_formatter::ErrorFormatter;
+use pluma_compiler::errors::PackageCompilationErrorSummary;
+use pluma_compiler::VERSION;
+use std::fmt;
 use std::process::exit;
+use crate::options::Command;
 
-mod constants;
 mod colors;
+mod errors;
+mod options;
 
 fn print_usage() {
   print!(
@@ -25,75 +29,67 @@ For help with an individual command, try:
 ",
     bold_name = colors::bold("pluma"),
     cli_name = "pluma",
-    version = constants::VERSION,
+    version = VERSION,
     usage_header = colors::bold("Usage:"),
     commands_header = colors::bold("Commands:"),
   );
 }
 
-fn print_unknown_command(command: &str) {
-  eprintln!("{} {}", colors::bold_red("Error:"), format!(
-    "Unknown command: {command_name}
-
-For a full list of available commands, try:
-  $ {cli_name} help",
-    command_name = command,
-    cli_name = "pluma",
-  ));
-}
-
-fn print_error(msg: PackageCompilationError) {
-  // TODO: display errors nicely
-  eprintln!("{} {:#?}", colors::bold_red("Error:"), msg);
-}
-
 fn main() {
-  if env::args().len() > 1 {
-    let command = env::args().nth(1).unwrap_or_default();
+  match options::parse_options() {
+    Ok(Command::Help) => {
+      print_usage();
+      exit(0);
+    },
 
-    match command.as_str() {
-      "run" => {
-        let compiler = Compiler::new(CompilerConfig {
-          entry_path: env::args().nth(2)
-        });
+    Ok(Command::Version) => {
+      println!("v{}", VERSION);
+      exit(0);
+    },
 
-        match compiler {
-          Ok(mut valid_compiler) => match valid_compiler.run() {
-            Ok(_) => {
-              println!("Compilation succeeded!");
-              exit(0);
-            }
+    Ok(Command::Run { root_dir, entry_path }) => {
+      let mut compiler = Compiler::new(CompilerConfig {
+        root_dir,
+        entry_path
+      });
 
-            Err(e) => {
-              print_error(e);
-              exit(1);
-            }
-          },
+      match compiler.run() {
+        Ok(_) => {
+          println!("Compilation succeeded!");
+          exit(0);
+        }
 
-          Err(e) => {
-            print_error(e);
-            exit(1);
-          }
+        Err(e) => {
+          let error_formatter = ErrorFormatter::new(&compiler, e);
+          print_error_summary(error_formatter.get_error_summary());
+          exit(1);
         }
       }
+    },
 
-      "help" => {
-        print_usage();
-        exit(0);
-      }
-
-      "version" => {
-        print!("v{}", constants::VERSION);
-        exit(0);
-      }
-
-      _ => {
-        print_unknown_command(&command);
-        exit(1);
-      }
+    Err(err) => {
+      print_error(err);
+      exit(1);
     }
   }
+}
 
-  print_usage();
-  exit(0);
+fn print_error<T: fmt::Display>(msg: T) {
+  eprintln!("{} {}", colors::bold_red("Error:"), msg);
+}
+
+fn print_error_summary(summary: PackageCompilationErrorSummary) {
+  if !summary.package_errors.is_empty() {
+    for package_error in summary.package_errors {
+      print_error(package_error);
+    }
+
+    return
+  }
+
+  for (module_path, module_errors) in summary.module_errors {
+    let message = format!("in {}: {:#?}", module_path, module_errors);
+
+    print_error(message);
+  }
 }

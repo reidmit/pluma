@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::Path;
 use crate::fs;
 use crate::module::Module;
 use crate::errors::{PackageCompilationError, ModuleCompilationError};
@@ -6,32 +7,37 @@ use crate::debug;
 use crate::import_chain::ImportChain;
 
 pub struct CompilerConfig {
-  pub entry_path: Option<String>,
+  // Absolute path to the package root directory
+  pub root_dir: String,
+  // Absolute path to the package entry file (main.pa)
+  pub entry_path: String,
 }
 
 #[derive(Debug)]
 pub struct Compiler {
-  root_dir: String,
-  entry_path: String,
-  modules: HashMap<String, Result<Module, ModuleCompilationError>>,
+  pub root_dir: String,
+  pub entry_path: String,
+  pub modules: HashMap<String, Result<Module, ModuleCompilationError>>,
 }
 
 impl Compiler {
-  pub fn new(config: CompilerConfig) -> Result<Compiler, PackageCompilationError> {
-    let (root_dir, entry_path) = fs::find_root_dir_and_entry_file(config.entry_path)
-      .map_err(|err| PackageCompilationError::ConfigInvalid(err))?;
-
-    Ok(Compiler {
-      root_dir,
-      entry_path,
+  pub fn new(config: CompilerConfig) -> Compiler {
+    Compiler {
+      root_dir: config.root_dir,
+      entry_path: config.entry_path,
       modules: HashMap::new(),
-    })
+    }
   }
 
   pub fn run(&mut self) -> Result<(), PackageCompilationError> {
     self.modules.clear();
 
-    let path = self.entry_path.to_string();
+    let path = Path::new(&self.entry_path)
+      .strip_prefix(&self.root_dir)
+      .unwrap()
+      .to_str()
+      .unwrap()
+      .to_owned();
 
     let result = self.compile_module(path, ImportChain::new());
 
@@ -57,8 +63,8 @@ impl Compiler {
   }
 
   pub fn compile_module(&mut self, path: String, import_chain: ImportChain) -> Result<(), PackageCompilationError> {
-    let abs_path = fs::to_absolute_path(&path);
-    let get_path = || abs_path.clone();
+    let abs_path = fs::to_absolute_path(&self.root_dir, &path);
+    let get_path = || path.clone();
     let key = get_path();
 
     if self.modules.contains_key(&key) {
@@ -71,7 +77,7 @@ impl Compiler {
       return Ok(());
     }
 
-    let mut module = Module::new(get_path());
+    let mut module = Module::new(abs_path, get_path());
     let result = module.compile();
 
     match result {

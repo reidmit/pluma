@@ -1,16 +1,22 @@
-use std::fmt;
+use std::collections::HashMap;
 use crate::ast::Node;
 
 #[derive(Debug)]
-pub enum PackageCompilationError {
-  ConfigInvalid(ConfigurationError),
-  ModulesFailedToCompile(Vec<String>),
-  CyclicalDependency(Vec<String>),
+pub struct PackageCompilationErrorSummary {
+  pub package_errors: Vec<String>,
+  pub module_errors: HashMap<String, Vec<ModuleCompilationErrorDetail>>
 }
 
 #[derive(Debug)]
-pub enum ConfigurationError {
-  EntryPathDoesNotExist(String),
+pub struct ModuleCompilationErrorDetail {
+  pub location: Option<(usize, usize)>,
+  pub message: String,
+}
+
+#[derive(Debug)]
+pub enum PackageCompilationError {
+  ModulesFailedToCompile(Vec<String>),
+  CyclicalDependency(Vec<String>),
 }
 
 #[derive(Debug)]
@@ -50,23 +56,4 @@ pub enum ParseError {
   MissingArrowAfterBlockParams(usize),
   MissingAliasAfterAsInImport(usize),
   MissingCasesInMatchExpression(usize),
-}
-
-#[derive(Debug)]
-pub struct UsageError {
-  message: String,
-}
-
-impl fmt::Display for UsageError {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(f, "{}", self.message)
-  }
-}
-
-impl UsageError {
-  pub fn unknown_command(command_name: String) -> UsageError {
-    UsageError {
-      message: format!("Unknown command: {}", command_name),
-    }
-  }
 }

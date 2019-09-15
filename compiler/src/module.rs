@@ -6,7 +6,8 @@ use crate::errors::ModuleCompilationError;
 
 #[derive(Debug)]
 pub struct Module {
-  path: String,
+  abs_path: String,
+  rel_path: String,
   bytes: Option<Vec<u8>>,
   tokens: Option<TokenList>,
   comments: Option<CommentMap>,
@@ -14,9 +15,10 @@ pub struct Module {
 }
 
 impl Module {
-  pub fn new(path: String) -> Module {
+  pub fn new(abs_path: String, rel_path: String) -> Module {
     Module {
-      path,
+      abs_path,
+      rel_path,
       bytes: None,
       tokens: None,
       comments: None,
@@ -52,7 +54,7 @@ impl Module {
   }
 
   fn read(&mut self) -> Result<(), ModuleCompilationError> {
-    match fs::read_file_contents(&self.path) {
+    match fs::read_file_contents(&self.abs_path) {
       Ok(bytes) => Ok(self.bytes = Some(bytes)),
       Err(err) => Err(ModuleCompilationError::FileError(err))
     }
