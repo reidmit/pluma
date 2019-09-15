@@ -22,12 +22,16 @@ impl<'a> ErrorFormatter<'a> {
     match &self.error {
       PackageCompilationError::ModulesFailedToCompile(modules_with_errors) => {
         for module_path in modules_with_errors {
-          let module_result = self.compiler.modules.get(module_path).unwrap();
+          let module = self.compiler.modules.get(module_path).unwrap();
 
-          if let Err(module_err) = module_result {
-            let errors = vec![
-              self.get_module_error_details(&module_path, module_err),
-            ];
+          if module.has_errors() {
+            let mut errors = Vec::new();
+
+            for module_error in &module.errors {
+              errors.push(
+                self.get_module_error_details(&module_path, &module_error)
+              )
+            }
 
             module_errors.insert(module_path.clone(), errors);
           }
@@ -94,8 +98,12 @@ impl<'a> ErrorFormatter<'a> {
     (location, message)
   }
 
-  fn get_source_string(&self, _module_path: &String, _start: usize, _end: usize) -> String {
-    // TODO
-    return "test".to_owned()
+  fn get_source_string(&self, module_path: &String, start: usize, end: usize) -> String {
+    let module = self.compiler.modules.get(module_path).unwrap();
+
+    match &module.bytes {
+      Some(bytes) => String::from_utf8(bytes[start..end].to_vec()).expect("not utf8"),
+      None => "...".to_owned()
+    }
   }
 }

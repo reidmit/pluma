@@ -8,10 +8,11 @@ use crate::errors::ModuleCompilationError;
 pub struct Module {
   abs_path: String,
   rel_path: String,
-  bytes: Option<Vec<u8>>,
+  pub bytes: Option<Vec<u8>>,
   tokens: Option<TokenList>,
   comments: Option<CommentMap>,
   ast: Option<Node>,
+  pub errors: Vec<ModuleCompilationError>,
 }
 
 impl Module {
@@ -23,18 +24,32 @@ impl Module {
       tokens: None,
       comments: None,
       ast: None,
+      errors: Vec::new(),
     }
   }
 
-  pub fn compile(&mut self) -> Result<(), ModuleCompilationError> {
-    self.read()?;
-    self.tokenize()?;
-    self.parse()?;
+  pub fn compile(&mut self) {
+    if let Err(err) = self.read() {
+      self.errors.push(err);
+      return;
+    }
 
-    Ok(())
+    if let Err(err) = self.tokenize() {
+      self.errors.push(err);
+      return;
+    }
+
+    if let Err(err) = self.parse() {
+      self.errors.push(err);
+      return;
+    }
   }
 
-  pub fn get_referenced_paths(&self) -> Vec<String> {
+  pub fn has_errors(&self) -> bool {
+    self.errors.len() > 0
+  }
+
+  pub fn get_referenced_paths(&self) -> Option<Vec<String>> {
     match &self.ast {
       Some(ast) => {
         let mut paths = Vec::new();
@@ -47,9 +62,9 @@ impl Module {
           }
         }
 
-        paths
+        Some(paths)
       },
-      None => panic!("called before module.parse()")
+      None => None
     }
   }
 
@@ -72,7 +87,7 @@ impl Module {
           Err(err) => Err(ModuleCompilationError::TokenizeError(err))
         }
       },
-      None => panic!("called before module.read()")
+      _ => unreachable!()
     }
   }
 
@@ -84,8 +99,7 @@ impl Module {
           Err(err) => Err(ModuleCompilationError::ParseError(err))
         }
       },
-      (None, _) => panic!("called before module.read()"),
-      (_, None) => panic!("called before module.tokenize()")
+      _ => unreachable!()
     }
   }
 }

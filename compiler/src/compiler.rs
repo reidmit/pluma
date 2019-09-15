@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use crate::fs;
 use crate::module::Module;
-use crate::errors::{PackageCompilationError, ModuleCompilationError};
+use crate::errors::{PackageCompilationError};
 use crate::debug;
 use crate::import_chain::ImportChain;
 
@@ -17,7 +17,7 @@ pub struct CompilerConfig {
 pub struct Compiler {
   pub root_dir: String,
   pub entry_path: String,
-  pub modules: HashMap<String, Result<Module, ModuleCompilationError>>,
+  pub modules: HashMap<String, Module>,
 }
 
 impl Compiler {
@@ -48,7 +48,7 @@ impl Compiler {
         let mut modules_with_errors = Vec::new();
 
         for (module_path, module) in &self.modules {
-          if let Err(..) = module {
+          if module.has_errors() {
             modules_with_errors.push(module_path.clone());
           }
         }
@@ -78,14 +78,13 @@ impl Compiler {
     }
 
     let mut module = Module::new(abs_path, get_path());
-    let result = module.compile();
+    module.compile();
 
-    match result {
-      Ok(()) => {
-        let imported_paths = module.get_referenced_paths();
+    let referenced = module.get_referenced_paths();
+    self.modules.insert(key, module);
 
-        self.modules.insert(key, Ok(module));
-
+    match referenced {
+      Some(imported_paths) => {
         for imported_path in imported_paths {
           let module_path = fs::get_full_path_from_import(&self.root_dir, &imported_path);
           let mut new_import_chain = import_chain.clone();
@@ -94,10 +93,8 @@ impl Compiler {
           self.compile_module(module_path, new_import_chain)?;
         }
       },
-      Err(err) => {
-        self.modules.insert(key, Err(err));
-      },
-    };
+      None => {}
+    }
 
     Ok(())
   }
