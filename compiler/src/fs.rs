@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use crate::errors::FileError;
 use crate::FILE_EXTENSION;
 
@@ -10,20 +10,15 @@ pub fn read_file_contents(abs_file_path: &String) -> Result<Vec<u8>, FileError> 
   }
 }
 
-pub fn get_full_path_from_import(root_dir: &String, import_path: &String) -> String {
-  let parts = import_path.split("/");
-
+pub fn to_absolute_path(root_dir: &String, module_name: &String) -> String {
   let mut path = PathBuf::new();
+
   path.push(root_dir);
+  let parts = module_name.split("/");
   for part in parts { path.push(part) }
   path.set_extension(FILE_EXTENSION);
 
-  path.to_str().unwrap().to_owned()
-}
-
-pub fn to_absolute_path(root_dir: &String, path: &String) -> String {
-  Path::new(root_dir)
-    .join(path)
+  path.as_path()
     .canonicalize()
     .expect("Failed to canonicalize")
     .to_str()

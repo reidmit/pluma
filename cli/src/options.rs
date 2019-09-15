@@ -1,17 +1,17 @@
 use std::env;
 use std::path::Path;
 use crate::errors::UsageError;
-use pluma_compiler::DEFAULT_ENTRY_FILE;
+use pluma_compiler::{DEFAULT_ENTRY_MODULE_NAME, FILE_EXTENSION};
 
 pub enum Command {
   Build {
     root_dir: String,
-    entry_path: String,
+    entry_module_name: String,
   },
   BuildHelp,
   Run {
     root_dir: String,
-    entry_path: String,
+    entry_module_name: String,
   },
   RunHelp,
   Help,
@@ -47,11 +47,11 @@ pub fn parse_options() -> Result<Command, UsageError> {
         None => return Err(UsageError::MissingEntryPath)
       };
 
-      let (root_dir, entry_path) = get_paths(entry_path)?;
+      let (root_dir, entry_module_name) = get_root_dir_and_module_name(entry_path)?;
 
       Ok(Command::Build {
         root_dir,
-        entry_path,
+        entry_module_name,
       })
     },
 
@@ -65,11 +65,11 @@ pub fn parse_options() -> Result<Command, UsageError> {
         None => return Err(UsageError::MissingEntryPath)
       };
 
-      let (root_dir, entry_path) = get_paths(entry_path)?;
+      let (root_dir, entry_module_name) = get_root_dir_and_module_name(entry_path)?;
 
       Ok(Command::Run {
         root_dir,
-        entry_path,
+        entry_module_name,
       })
     },
 
@@ -87,18 +87,21 @@ fn show_help() -> bool {
   return false
 }
 
-fn get_paths(entry_path: String) -> Result<(String, String), UsageError> {
+fn get_root_dir_and_module_name(entry_path: String) -> Result<(String, String), UsageError> {
   let joined_path = Path::new(&env::current_dir().unwrap()).join(entry_path);
 
   match joined_path.canonicalize() {
     Ok(abs_path) => {
       if abs_path.is_dir() {
-        return match abs_path.join(DEFAULT_ENTRY_FILE).canonicalize() {
-          Ok(abs_file_path) => Ok((
+        let mut file_path = abs_path.join(DEFAULT_ENTRY_MODULE_NAME);
+        file_path.set_extension(FILE_EXTENSION);
+
+        return match file_path.canonicalize() {
+          Ok(..) => Ok((
             abs_path.to_str().unwrap().to_owned(),
-            abs_file_path.to_str().unwrap().to_owned()
+            DEFAULT_ENTRY_MODULE_NAME.to_owned()
           )),
-          Err(_) => Err(UsageError::EntryDirDoesNotContainEntryFile(
+          Err(..) => Err(UsageError::EntryDirDoesNotContainEntryFile(
             joined_path.to_str().unwrap().to_owned()
           ))
         }
@@ -106,7 +109,7 @@ fn get_paths(entry_path: String) -> Result<(String, String), UsageError> {
 
       Ok((
         abs_path.parent().unwrap().to_str().unwrap().to_owned(),
-        abs_path.to_str().unwrap().to_owned()
+        abs_path.file_stem().unwrap().to_str().unwrap().to_owned()
       ))
     },
 

@@ -1,11 +1,11 @@
-use pluma_compiler::VERSION;
+use pluma_compiler::{VERSION, LANG_NAME, LANG_NAME_UPPER};
 use crate::colors;
 
 pub fn main_usage() -> String {
   format!(
     "{bold_name} - version {version}
 
-Compiler and tools for the Pluma language
+Compiler and tools for the {lang_name_upper} language
 
 {usage_header}
   {cmd_prefix} {cli_name} <command> [...options]
@@ -17,10 +17,10 @@ Compiler and tools for the Pluma language
   version   Print version
 
 For help with an individual command, try:
-  {cmd_prefix} {cli_name} <command> -h
-",
-    bold_name = colors::bold("pluma"),
-    cli_name = "pluma",
+  {cmd_prefix} {cli_name} <command> -h",
+    bold_name = colors::bold(LANG_NAME),
+    cli_name = LANG_NAME,
+    lang_name_upper = LANG_NAME_UPPER,
     version = VERSION,
     usage_header = colors::bold("Usage:"),
     commands_header = colors::bold("Commands:"),
@@ -42,11 +42,10 @@ Compile a Pluma module.
 
 {options_header}
   -o, --out    Path to output file (default: './out.plc')
-  -h, --help   Print this help text and exit
-",
-    bold_name = colors::bold("pluma"),
+  -h, --help   Print this help text and exit",
+    bold_name = colors::bold(LANG_NAME),
     cmd_name = colors::bold("build"),
-    cli_name = "pluma",
+    cli_name = LANG_NAME,
     version = VERSION,
     usage_header = colors::bold("Usage:"),
     args_header = colors::bold("Arguments:"),

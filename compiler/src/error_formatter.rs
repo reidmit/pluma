@@ -47,18 +47,18 @@ impl<'a> ErrorFormatter<'a> {
     }
   }
 
-  fn get_module_error_details(&self, module_path: &String, err: &ModuleCompilationError) -> ModuleCompilationErrorDetail {
+  fn get_module_error_details(&self, module_name: &String, err: &ModuleCompilationError) -> ModuleCompilationErrorDetail {
     let (location, message) = match err {
       ModuleCompilationError::FileError(..) => self.get_file_error_details(err),
-      ModuleCompilationError::TokenizeError(..) => self.get_tokenize_error_details(module_path, err),
+      ModuleCompilationError::TokenizeError(..) => self.get_tokenize_error_details(module_name, err),
       ModuleCompilationError::ParseError(..) => self.get_parse_error_details(err),
     };
 
-    let module = self.compiler.modules.get(module_path).unwrap();
-    let abs_path = module.abs_path.to_string();
+    let module = self.compiler.modules.get(module_name).unwrap();
+    let module_path = module.module_path.to_string();
 
     ModuleCompilationErrorDetail {
-      module_path: abs_path,
+      module_path,
       location,
       message,
     }

@@ -28,10 +28,10 @@ fn main() {
       exit(0);
     },
 
-    Ok(Command::Build { root_dir, entry_path }) => {
+    Ok(Command::Build { root_dir, entry_module_name }) => {
       let mut compiler = Compiler::new(CompilerConfig {
         root_dir,
-        entry_path
+        entry_module_name
       });
 
       match compiler.run() {

@@ -1,2 +1,3 @@
+use "two"
+
 let z = 0b01
-let y = 1234x
