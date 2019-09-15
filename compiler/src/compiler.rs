@@ -3,6 +3,7 @@ use crate::fs;
 use crate::module::Module;
 use crate::errors::{PackageCompilationError, ModuleCompilationError};
 use crate::debug;
+use crate::import_chain::ImportChain;
 
 pub struct CompilerConfig {
   pub entry_path: Option<String>,
@@ -31,22 +32,30 @@ impl Compiler {
     self.modules.clear();
 
     let path = self.entry_path.to_string();
-    self.compile_module(path);
+
+    let result = self.compile_module(path, ImportChain::new());
 
     debug!("{:#?}", self);
 
-    Ok(())
+    result
   }
 
-  pub fn compile_module(&mut self, path: String) {
+  pub fn compile_module(&mut self, path: String, import_chain: ImportChain) -> Result<(), PackageCompilationError> {
     let abs_path = fs::to_absolute_path(&path);
-    let key = abs_path.clone();
+    let get_path = || abs_path.clone();
+    let key = get_path();
 
     if self.modules.contains_key(&key) {
-      return;
+      if import_chain.contains(get_path()) {
+        let mut chain = import_chain.entries;
+        chain.push(get_path());
+        return Err(PackageCompilationError::CyclicalDependency(chain));
+      }
+
+      return Ok(());
     }
 
-    let mut module = Module::new(abs_path);
+    let mut module = Module::new(get_path());
     let result = module.compile();
 
     match result {
@@ -57,12 +66,17 @@ impl Compiler {
 
         for imported_path in imported_paths {
           let module_path = fs::get_full_path_from_import(&self.root_dir, &imported_path);
-          self.compile_module(module_path);
+          let mut new_import_chain = import_chain.clone();
+          new_import_chain.add(get_path());
+
+          self.compile_module(module_path, new_import_chain)?;
         }
       },
       Err(err) => {
         self.modules.insert(key, Err(err));
       },
     };
+
+    Ok(())
   }
 }
