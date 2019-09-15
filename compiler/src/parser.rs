@@ -37,7 +37,7 @@ impl<'a> Parser<'a> {
   }
 
   pub fn parse_module(&mut self) -> Result<Node, ParseError> {
-    while let Some(&Token::KeywordUse { .. }) = self.current_token() {
+    while let Some(&Token::KeywordUse(..)) = self.current_token() {
       match self.parse_import() {
         Parsed(import) => self.imports.push(import),
         EOF => break,
@@ -74,7 +74,7 @@ impl<'a> Parser<'a> {
   }
 
   fn skip_line_breaks(&mut self) {
-    while let Some(&Token::LineBreak { .. }) = self.current_token() {
+    while let Some(&Token::LineBreak(..)) = self.current_token() {
       self.advance(1)
     }
   }
@@ -115,11 +115,11 @@ impl<'a> Parser<'a> {
 
     self.advance(1);
 
-    if let Some(&Token::InterpolationStart { .. }) = self.current_token() {
+    if let Some(&Token::InterpolationStart(..)) = self.current_token() {
       let mut parts = vec![node];
       let mut interpolation_end = end;
 
-      while let Some(&Token::InterpolationStart { .. }) = self.current_token() {
+      while let Some(&Token::InterpolationStart(..)) = self.current_token() {
         self.advance(1);
 
         match self.parse_expression() {
@@ -128,7 +128,7 @@ impl<'a> Parser<'a> {
         }
 
         match self.current_token() {
-          Some(&Token::InterpolationEnd { .. }) => self.advance(1),
+          Some(&Token::InterpolationEnd(..)) => self.advance(1),
           Some(_) => return Error(UnexpectedToken(self.index)),
           None => return Error(UnexpectedEOF)
         }
@@ -243,17 +243,15 @@ impl<'a> Parser<'a> {
       _ => unreachable!()
     };
 
-    let node = Parsed(NumericLiteral {
+    self.advance(1);
+
+    Parsed(NumericLiteral {
       start,
       end,
       value,
       raw_value,
       inferred_type: NodeType::Unknown,
-    });
-
-    self.advance(1);
-
-    node
+    })
   }
 
   fn parse_parenthetical(&mut self) -> ParseResult {
@@ -270,7 +268,7 @@ impl<'a> Parser<'a> {
       inner_exprs.push(node);
 
       match self.current_token() {
-        Some(&Token::Comma { .. }) => self.advance(1),
+        Some(&Token::Comma(..)) => self.advance(1),
         _ => break
       }
     }
@@ -337,8 +335,8 @@ impl<'a> Parser<'a> {
     while let Some(&Token::Identifier(start, end)) = self.current_token() {
       if params.is_empty() {
         match self.next_token() {
-          Some(&Token::Comma { .. }) => {},
-          Some(&Token::DoubleArrow { .. }) => {},
+          Some(&Token::Comma(..)) => {},
+          Some(&Token::DoubleArrow(..)) => {},
           _ => break,
         }
       }
@@ -355,14 +353,14 @@ impl<'a> Parser<'a> {
       params.push(param);
 
       match self.current_token() {
-        Some(&Token::Comma { .. }) => self.advance(1),
-        Some(&Token::DoubleArrow { .. }) => break,
+        Some(&Token::Comma(..)) => self.advance(1),
+        Some(&Token::DoubleArrow(..)) => break,
         _ => return Error(MissingArrowAfterBlockParams(self.index))
       }
     }
 
     match self.current_token() {
-      Some(&Token::DoubleArrow { .. }) => self.advance(1),
+      Some(&Token::DoubleArrow(..)) => self.advance(1),
       _ => {
         if !params.is_empty() {
           return Error(MissingArrowAfterBlockParams(self.index))
@@ -393,9 +391,9 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_dict_entry_or_array_element(&mut self) -> Option<ParseResult> {
-    if let Some(&Token::StringLiteral { .. }) = self.current_token() {
+    if let Some(&Token::StringLiteral(..)) = self.current_token() {
       if let Parsed(string_node) = self.parse_string() {
-        if let Some(&Token::Colon { .. }) = self.current_token() {
+        if let Some(&Token::Colon(..)) = self.current_token() {
           self.advance(1);
 
           match self.parse_expression() {
@@ -434,7 +432,7 @@ impl<'a> Parser<'a> {
     let mut is_dict = None;
 
     match self.current_token() {
-      Some(&Token::Colon { .. }) => {
+      Some(&Token::Colon(..)) => {
         self.advance(1);
         is_dict = Some(true);
       },
@@ -466,7 +464,7 @@ impl<'a> Parser<'a> {
           self.skip_line_breaks();
 
           match self.current_token() {
-            Some(&Token::Comma { .. }) => {
+            Some(&Token::Comma(..)) => {
               self.advance(1);
               self.skip_line_breaks();
             },
@@ -509,7 +507,7 @@ impl<'a> Parser<'a> {
     while let Parsed(node) = current {
       let (call_start, _) = get_node_location(&node);
 
-      if let Some(&Token::LeftParen { .. }) = self.current_token() {
+      if let Some(&Token::LeftParen(..)) = self.current_token() {
         match self.parse_parenthetical() {
           Parsed(Tuple {
             start,
@@ -546,7 +544,7 @@ impl<'a> Parser<'a> {
 
           other => return other
         }
-      } else if let Some(&Token::LeftBrace { .. }) = self.current_token() {
+      } else if let Some(&Token::LeftBrace(..)) = self.current_token() {
         match self.parse_block() {
           Parsed(block) => {
             let (_, block_end) = get_node_location(&block);
@@ -635,7 +633,7 @@ impl<'a> Parser<'a> {
       };
 
       match self.current_token() {
-        Some(&Token::DoubleArrow { .. }) => self.advance(1),
+        Some(&Token::DoubleArrow(..)) => self.advance(1),
         _ => return Error(MissingArrowInMatchCase(self.index))
       };
 
@@ -682,7 +680,7 @@ impl<'a> Parser<'a> {
     };
 
     match self.current_token() {
-      Some(&Token::ColonEquals { .. }) => self.advance(1),
+      Some(&Token::ColonEquals(..)) => self.advance(1),
       _ => unreachable!()
     }
 
@@ -715,8 +713,8 @@ impl<'a> Parser<'a> {
     };
 
     let is_constant = match self.current_token() {
-      Some(&Token::Equals { .. }) => true,
-      Some(&Token::ColonEquals { .. }) => false,
+      Some(&Token::Equals(..)) => true,
+      Some(&Token::ColonEquals(..)) => false,
       _ => unreachable!()
     };
 
@@ -742,18 +740,18 @@ impl<'a> Parser<'a> {
     self.skip_line_breaks();
 
     let mut parsed = match self.current_token() {
-      Some(&Token::Minus { .. }) => self.parse_negated_expression(),
-      Some(&Token::KeywordLet { .. }) => self.parse_assignment(),
-      Some(&Token::Identifier { .. }) => self.parse_identifier(),
-      Some(&Token::LeftParen { .. }) => self.parse_parenthetical(),
-      Some(&Token::StringLiteral { .. }) => self.parse_string(),
-      Some(&Token::KeywordMatch { .. }) => self.parse_match(),
-      Some(&Token::LeftBrace { .. }) => self.parse_block(),
-      Some(&Token::LeftBracket { .. }) => self.parse_dict_or_array(),
-      Some(&Token::OctalDigits { .. })
-        | Some(&Token::HexDigits { .. })
-        | Some(&Token::DecimalDigits { .. })
-        | Some(&Token::BinaryDigits { .. }) => self.parse_number(),
+      Some(&Token::Minus(..)) => self.parse_negated_expression(),
+      Some(&Token::KeywordLet(..)) => self.parse_assignment(),
+      Some(&Token::Identifier(..)) => self.parse_identifier(),
+      Some(&Token::LeftParen(..)) => self.parse_parenthetical(),
+      Some(&Token::StringLiteral(..)) => self.parse_string(),
+      Some(&Token::KeywordMatch(..)) => self.parse_match(),
+      Some(&Token::LeftBrace(..)) => self.parse_block(),
+      Some(&Token::LeftBracket(..)) => self.parse_dict_or_array(),
+      Some(&Token::OctalDigits(..))
+        | Some(&Token::HexDigits(..))
+        | Some(&Token::DecimalDigits(..))
+        | Some(&Token::BinaryDigits(..)) => self.parse_number(),
       Some(_) => Error(UnexpectedToken(self.index)),
       None => EOF,
     };
@@ -762,10 +760,10 @@ impl<'a> Parser<'a> {
       self.skip_line_breaks();
 
       match self.current_token() {
-        Some(&Token::LeftParen { .. })
-          | Some(&Token::LeftBrace { .. }) => parsed = self.parse_any_calls_after_result(parsed),
-        Some(&Token::Dot { .. }) => parsed = self.parse_chain(parsed),
-        Some(&Token::ColonEquals { .. }) => parsed = self.parse_reassignment(parsed),
+        Some(&Token::LeftParen(..))
+          | Some(&Token::LeftBrace(..)) => parsed = self.parse_any_calls_after_result(parsed),
+        Some(&Token::Dot(..)) => parsed = self.parse_chain(parsed),
+        Some(&Token::ColonEquals(..)) => parsed = self.parse_reassignment(parsed),
         _ => break,
       };
     }
@@ -793,7 +791,7 @@ impl<'a> Parser<'a> {
     let mut alias = None;
     let mut import_end = path_end;
 
-    if let Some(&Token::KeywordAs { .. }) = self.current_token() {
+    if let Some(&Token::KeywordAs(..)) = self.current_token() {
       self.advance(1);
 
       match self.current_token() {
