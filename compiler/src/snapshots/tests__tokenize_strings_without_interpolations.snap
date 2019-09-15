@@ -2,35 +2,22 @@
 source: compiler/src/tokenizer.rs
 expression: "\"hello\" \"\" \"world\""
 ---
-Tokenized(
-    [
-        StringLiteral {
-            start: 1,
-            end: 6,
-            value: [
-                104,
-                101,
-                108,
-                108,
-                111,
-            ],
-        },
-        StringLiteral {
-            start: 9,
-            end: 9,
-            value: [],
-        },
-        StringLiteral {
-            start: 12,
-            end: 17,
-            value: [
-                119,
-                111,
-                114,
-                108,
-                100,
-            ],
-        },
-    ],
-    {},
+Ok(
+    (
+        [
+            StringLiteral(
+                1,
+                6,
+            ),
+            StringLiteral(
+                9,
+                9,
+            ),
+            StringLiteral(
+                12,
+                17,
+            ),
+        ],
+        {},
+    ),
 )

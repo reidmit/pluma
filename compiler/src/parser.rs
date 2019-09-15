@@ -866,11 +866,16 @@ mod tests {
 
   assert_parsed_snapshot!(
     assignment_constant,
-    "x = 47"
+    "let x = 47"
   );
 
   assert_parsed_snapshot!(
     assignment_variable,
+    "let x := 47"
+  );
+
+  assert_parsed_snapshot!(
+    reassignment_variable,
     "x := 47"
   );
 }

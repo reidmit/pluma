@@ -2,34 +2,27 @@
 source: compiler/src/tokenizer.rs
 expression: "ok \n\n#comment"
 ---
-Tokenized(
-    [
-        Identifier {
-            start: 0,
-            end: 2,
-            value: [
-                111,
-                107,
-            ],
-        },
-        LineBreak {
-            start: 3,
-            end: 4,
-        },
-        LineBreak {
-            start: 4,
-            end: 5,
-        },
-    ],
-    {
-        2: [
-            99,
-            111,
-            109,
-            109,
-            101,
-            110,
-            116,
+Ok(
+    (
+        [
+            Identifier(
+                0,
+                2,
+            ),
+            LineBreak(
+                3,
+                4,
+            ),
+            LineBreak(
+                4,
+                5,
+            ),
         ],
-    },
+        {
+            2: Comment(
+                6,
+                13,
+            ),
+        },
+    ),
 )

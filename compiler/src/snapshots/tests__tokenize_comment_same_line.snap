@@ -2,26 +2,19 @@
 source: compiler/src/tokenizer.rs
 expression: "ok #comment"
 ---
-Tokenized(
-    [
-        Identifier {
-            start: 0,
-            end: 2,
-            value: [
-                111,
-                107,
-            ],
-        },
-    ],
-    {
-        0: [
-            99,
-            111,
-            109,
-            109,
-            101,
-            110,
-            116,
+Ok(
+    (
+        [
+            Identifier(
+                0,
+                2,
+            ),
         ],
-    },
+        {
+            0: Comment(
+                4,
+                11,
+            ),
+        },
+    ),
 )

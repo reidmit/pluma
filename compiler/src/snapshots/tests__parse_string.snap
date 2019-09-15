@@ -6,6 +6,7 @@ Ok(
     Module {
         start: 0,
         end: 6,
+        imports: [],
         body: [
             StringLiteral {
                 start: 1,

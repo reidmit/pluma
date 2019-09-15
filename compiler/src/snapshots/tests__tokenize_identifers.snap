@@ -2,30 +2,18 @@
 source: compiler/src/tokenizer.rs
 expression: hello world
 ---
-Tokenized(
-    [
-        Identifier {
-            start: 0,
-            end: 5,
-            value: [
-                104,
-                101,
-                108,
-                108,
-                111,
-            ],
-        },
-        Identifier {
-            start: 6,
-            end: 11,
-            value: [
-                119,
-                111,
-                114,
-                108,
-                100,
-            ],
-        },
-    ],
-    {},
+Ok(
+    (
+        [
+            Identifier(
+                0,
+                5,
+            ),
+            Identifier(
+                6,
+                11,
+            ),
+        ],
+        {},
+    ),
 )

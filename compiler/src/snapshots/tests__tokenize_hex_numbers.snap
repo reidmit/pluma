@@ -2,52 +2,26 @@
 source: compiler/src/tokenizer.rs
 expression: 0x101 0x0 0xfacade 0X47
 ---
-Tokenized(
-    [
-        HexDigits {
-            start: 0,
-            end: 5,
-            value: [
-                48,
-                120,
-                49,
-                48,
-                49,
-            ],
-        },
-        HexDigits {
-            start: 6,
-            end: 9,
-            value: [
-                48,
-                120,
-                48,
-            ],
-        },
-        HexDigits {
-            start: 10,
-            end: 18,
-            value: [
-                48,
-                120,
-                102,
-                97,
-                99,
-                97,
-                100,
-                101,
-            ],
-        },
-        HexDigits {
-            start: 19,
-            end: 23,
-            value: [
-                48,
-                88,
-                52,
-                55,
-            ],
-        },
-    ],
-    {},
+Ok(
+    (
+        [
+            HexDigits(
+                0,
+                5,
+            ),
+            HexDigits(
+                6,
+                9,
+            ),
+            HexDigits(
+                10,
+                18,
+            ),
+            HexDigits(
+                19,
+                23,
+            ),
+        ],
+        {},
+    ),
 )

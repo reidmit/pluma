@@ -2,7 +2,9 @@
 source: compiler/src/tokenizer.rs
 expression: ""
 ---
-Tokenized(
-    [],
-    {},
+Ok(
+    (
+        [],
+        {},
+    ),
 )

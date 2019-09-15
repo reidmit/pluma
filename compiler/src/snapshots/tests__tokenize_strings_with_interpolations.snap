@@ -2,82 +2,54 @@
 source: compiler/src/tokenizer.rs
 expression: "\"hello $(name)!\" nice \"$(str)\""
 ---
-Tokenized(
-    [
-        StringLiteral {
-            start: 1,
-            end: 7,
-            value: [
-                104,
-                101,
-                108,
-                108,
-                111,
-                32,
-            ],
-        },
-        InterpolationStart {
-            start: 7,
-            end: 9,
-        },
-        Identifier {
-            start: 9,
-            end: 13,
-            value: [
-                110,
-                97,
-                109,
-                101,
-            ],
-        },
-        InterpolationEnd {
-            start: 13,
-            end: 14,
-        },
-        StringLiteral {
-            start: 14,
-            end: 15,
-            value: [
-                33,
-            ],
-        },
-        Identifier {
-            start: 17,
-            end: 21,
-            value: [
-                110,
-                105,
-                99,
-                101,
-            ],
-        },
-        StringLiteral {
-            start: 23,
-            end: 23,
-            value: [],
-        },
-        InterpolationStart {
-            start: 23,
-            end: 25,
-        },
-        Identifier {
-            start: 25,
-            end: 28,
-            value: [
-                115,
-                116,
-                114,
-            ],
-        },
-        InterpolationEnd {
-            start: 28,
-            end: 29,
-        },
-        StringLiteral {
-            start: 29,
-            end: 29,
-            value: [],
-        },
-    ],
-    {},
+Ok(
+    (
+        [
+            StringLiteral(
+                1,
+                7,
+            ),
+            InterpolationStart(
+                8,
+                9,
+            ),
+            Identifier(
+                9,
+                13,
+            ),
+            InterpolationEnd(
+                13,
+                14,
+            ),
+            StringLiteral(
+                14,
+                15,
+            ),
+            Identifier(
+                17,
+                21,
+            ),
+            StringLiteral(
+                23,
+                23,
+            ),
+            InterpolationStart(
+                24,
+                25,
+            ),
+            Identifier(
+                25,
+                28,
+            ),
+            InterpolationEnd(
+                28,
+                29,
+            ),
+            StringLiteral(
+                29,
+                29,
+            ),
+        ],
+        {},
+    ),
 )

@@ -2,43 +2,26 @@
 source: compiler/src/tokenizer.rs
 expression: hello 1 47 wow
 ---
-Tokenized(
-    [
-        Identifier {
-            start: 0,
-            end: 5,
-            value: [
-                104,
-                101,
-                108,
-                108,
-                111,
-            ],
-        },
-        DecimalDigits {
-            start: 6,
-            end: 7,
-            value: [
-                49,
-            ],
-        },
-        DecimalDigits {
-            start: 8,
-            end: 10,
-            value: [
-                52,
-                55,
-            ],
-        },
-        Identifier {
-            start: 11,
-            end: 14,
-            value: [
-                119,
-                111,
-                119,
-            ],
-        },
-    ],
-    {},
+Ok(
+    (
+        [
+            Identifier(
+                0,
+                5,
+            ),
+            DecimalDigits(
+                6,
+                7,
+            ),
+            DecimalDigits(
+                8,
+                10,
+            ),
+            Identifier(
+                11,
+                14,
+            ),
+        ],
+        {},
+    ),
 )

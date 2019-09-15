@@ -6,6 +6,7 @@ Ok(
     Module {
         start: 0,
         end: 2,
+        imports: [],
         body: [
             NumericLiteral {
                 start: 0,

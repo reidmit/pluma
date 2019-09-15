@@ -2,86 +2,54 @@
 source: compiler/src/tokenizer.rs
 expression: "\"hello $(name \"inner $(o)\" wow)!\""
 ---
-Tokenized(
-    [
-        StringLiteral {
-            start: 1,
-            end: 7,
-            value: [
-                104,
-                101,
-                108,
-                108,
-                111,
+Ok(
+    (
+        [
+            StringLiteral(
+                1,
+                7,
+            ),
+            InterpolationStart(
+                8,
+                9,
+            ),
+            Identifier(
+                9,
+                13,
+            ),
+            StringLiteral(
+                15,
+                21,
+            ),
+            InterpolationStart(
+                22,
+                23,
+            ),
+            Identifier(
+                23,
+                24,
+            ),
+            InterpolationEnd(
+                24,
+                25,
+            ),
+            StringLiteral(
+                25,
+                25,
+            ),
+            Identifier(
+                27,
+                30,
+            ),
+            InterpolationEnd(
+                30,
+                31,
+            ),
+            StringLiteral(
+                31,
                 32,
-            ],
-        },
-        InterpolationStart {
-            start: 7,
-            end: 9,
-        },
-        Identifier {
-            start: 9,
-            end: 13,
-            value: [
-                110,
-                97,
-                109,
-                101,
-            ],
-        },
-        StringLiteral {
-            start: 15,
-            end: 21,
-            value: [
-                105,
-                110,
-                110,
-                101,
-                114,
-                32,
-            ],
-        },
-        InterpolationStart {
-            start: 21,
-            end: 23,
-        },
-        Identifier {
-            start: 23,
-            end: 24,
-            value: [
-                111,
-            ],
-        },
-        InterpolationEnd {
-            start: 24,
-            end: 25,
-        },
-        StringLiteral {
-            start: 25,
-            end: 25,
-            value: [],
-        },
-        Identifier {
-            start: 27,
-            end: 30,
-            value: [
-                119,
-                111,
-                119,
-            ],
-        },
-        InterpolationEnd {
-            start: 30,
-            end: 31,
-        },
-        StringLiteral {
-            start: 31,
-            end: 32,
-            value: [
-                33,
-            ],
-        },
-    ],
-    {},
+            ),
+        ],
+        {},
+    ),
 )

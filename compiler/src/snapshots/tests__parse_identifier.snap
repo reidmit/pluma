@@ -6,6 +6,7 @@ Ok(
     Module {
         start: 0,
         end: 5,
+        imports: [],
         body: [
             Identifier {
                 start: 0,

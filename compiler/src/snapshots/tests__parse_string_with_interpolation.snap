@@ -6,6 +6,7 @@ Ok(
     Module {
         start: 0,
         end: 15,
+        imports: [],
         body: [
             StringInterpolation {
                 start: 1,

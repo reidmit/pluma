@@ -2,48 +2,26 @@
 source: compiler/src/tokenizer.rs
 expression: 0o101 0o0 0o47 0O47
 ---
-Tokenized(
-    [
-        OctalDigits {
-            start: 0,
-            end: 5,
-            value: [
-                48,
-                111,
-                49,
-                48,
-                49,
-            ],
-        },
-        OctalDigits {
-            start: 6,
-            end: 9,
-            value: [
-                48,
-                111,
-                48,
-            ],
-        },
-        OctalDigits {
-            start: 10,
-            end: 14,
-            value: [
-                48,
-                111,
-                52,
-                55,
-            ],
-        },
-        OctalDigits {
-            start: 15,
-            end: 19,
-            value: [
-                48,
-                79,
-                52,
-                55,
-            ],
-        },
-    ],
-    {},
+Ok(
+    (
+        [
+            OctalDigits(
+                0,
+                5,
+            ),
+            OctalDigits(
+                6,
+                9,
+            ),
+            OctalDigits(
+                10,
+                14,
+            ),
+            OctalDigits(
+                15,
+                19,
+            ),
+        ],
+        {},
+    ),
 )
