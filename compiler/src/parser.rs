@@ -718,7 +718,8 @@ impl<'a> Parser<'a> {
     let is_constant = match self.current_token() {
       Some(&Token::Equals(..)) => true,
       Some(&Token::ColonEquals(..)) => false,
-      _ => unreachable!()
+      None => return Error(ParseError::UnexpectedEOF),
+      _ => return Error(ParseError::UnexpectedToken(self.index))
     };
 
     self.advance(1);
@@ -869,5 +870,20 @@ mod tests {
   assert_parsed_snapshot!(
     reassignment_variable,
     "x := 47"
+  );
+
+  assert_parsed_snapshot!(
+    err_incomplete_assignment,
+    "let"
+  );
+
+  assert_parsed_snapshot!(
+    err_incomplete_assignment_2,
+    "let x"
+  );
+
+  assert_parsed_snapshot!(
+    err_incomplete_assignment_3,
+    "let x\nlet y = 3"
   );
 }

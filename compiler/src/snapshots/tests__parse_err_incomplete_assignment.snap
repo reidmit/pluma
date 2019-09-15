@@ -1,0 +1,7 @@
+---
+source: compiler/src/parser.rs
+expression: let
+---
+Err(
+    UnexpectedEOF,
+)
