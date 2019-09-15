@@ -54,7 +54,11 @@ impl<'a> ErrorFormatter<'a> {
       ModuleCompilationError::ParseError(..) => self.get_parse_error_details(err),
     };
 
+    let module = self.compiler.modules.get(module_path).unwrap();
+    let abs_path = module.abs_path.to_string();
+
     ModuleCompilationErrorDetail {
+      module_path: abs_path,
       location,
       message,
     }
@@ -81,7 +85,7 @@ impl<'a> ErrorFormatter<'a> {
           (
             (start, end),
             format!(
-              "Invalid binary digit: '{}'",
+              "Invalid digit '{}' in binary number.",
               self.read_source(module_path, start, end),
             ),
           ),
@@ -90,7 +94,7 @@ impl<'a> ErrorFormatter<'a> {
           (
             (start, end),
             format!(
-              "Invalid hex digit: '{}'",
+              "Invalid digit '{}' in hexadecimal number.",
               self.read_source(module_path, start, end),
             ),
           ),
@@ -99,12 +103,26 @@ impl<'a> ErrorFormatter<'a> {
           (
             (start, end),
             format!(
-              "Invalid octal digit: '{}'",
+              "Invalid digit '{}' in octal number.",
               self.read_source(module_path, start, end),
             ),
           ),
 
-        _ => unimplemented!()
+        &TokenizeError::UnclosedStringError(start, _) =>
+          (
+            (start, start + 1),
+            format!(
+              "Unclosed string",
+            ),
+          ),
+
+        &TokenizeError::UnclosedInterpolationError(start, _) =>
+          (
+            (start, start + 1),
+            format!(
+              "Unclosed string interpolation",
+            ),
+          ),
       },
       _ => unreachable!()
     };
@@ -112,9 +130,13 @@ impl<'a> ErrorFormatter<'a> {
     (Some(location), message)
   }
 
-  fn get_parse_error_details(&self, _err: &ModuleCompilationError) -> (Option<(usize, usize)>, String) {
-    let location = None;
-    let message = "parse_error".to_owned();
+  fn get_parse_error_details(&self, err: &ModuleCompilationError) -> (Option<(usize, usize)>, String) {
+    let (location, message) = match err {
+      ModuleCompilationError::ParseError(parse_err) => match parse_err {
+        er => (None, format!("{:#?}", er))
+      },
+      _ => unreachable!()
+    };
 
     (location, message)
   }

@@ -6,8 +6,8 @@ use crate::errors::ModuleCompilationError;
 
 #[derive(Debug)]
 pub struct Module {
-  abs_path: String,
-  rel_path: String,
+  pub abs_path: String,
+  pub rel_path: String,
   pub bytes: Option<Vec<u8>>,
   tokens: Option<TokenList>,
   comments: Option<CommentMap>,

@@ -1,1 +1,3 @@
-let x
+let z = 0b01
+let y = 0b0130
+let y = 0b0

@@ -10,6 +10,7 @@ pub struct PackageCompilationErrorSummary {
 #[derive(Debug)]
 pub struct ModuleCompilationErrorDetail {
   pub location: Option<(usize, usize)>,
+  pub module_path: String,
   pub message: String,
 }
 

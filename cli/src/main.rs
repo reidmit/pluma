@@ -87,17 +87,18 @@ fn print_error_summary(compiler: &Compiler, summary: PackageCompilationErrorSumm
     return
   }
 
-  for (module_path, module_errors) in summary.module_errors {
-    for ModuleCompilationErrorDetail { location, message } in module_errors {
-      eprintln!("{} in {}:",
+  for (module_name, module_errors) in summary.module_errors {
+    for ModuleCompilationErrorDetail { module_path, location, message } in module_errors {
+      eprintln!("{} in {}:\n",
         colors::bold_red("Error"),
-        colors::bold(module_path.as_str()),
+        colors::bold(module_name.as_str()),
       );
 
       eprintln!("{}", message);
 
       if let Some((start, end)) = location {
-        let module = compiler.modules.get(&module_path).unwrap();
+        let module = compiler.modules.get(&module_name).unwrap();
+        let mut col_index = 0;
 
         if let Some(bytes) = &module.bytes {
           let mut frame_start = start;
@@ -108,6 +109,7 @@ fn print_error_summary(compiler: &Compiler, summary: PackageCompilationErrorSumm
               break;
             }
 
+            col_index += 1;
             frame_start -= 1
           }
 
@@ -124,7 +126,6 @@ fn print_error_summary(compiler: &Compiler, summary: PackageCompilationErrorSumm
 
           let frame = String::from_utf8(bytes[frame_start..frame_end].to_vec()).unwrap();
           let mut line = 1;
-          // let mut col = 0;
 
           frame_start = start;
           while frame_start > 0 {
@@ -135,7 +136,22 @@ fn print_error_summary(compiler: &Compiler, summary: PackageCompilationErrorSumm
             frame_start -= 1;
           }
 
-          eprintln!("\n  | {} | {}", line, frame);
+          eprintln!("\n{} {} {}",
+            colors::bold_red(">"),
+            colors::bold_dim(format!("{}|", line).as_str()),
+            frame);
+
+          let prefix_width = 4 + line.to_string().len();
+
+          eprintln!("{}{}",
+            " ".repeat(prefix_width + col_index),
+            colors::bold_red("^"));
+
+          eprintln!("{}",
+            colors::dim(format!("{}:{}:{}",
+              &module_path,
+              line,
+              col_index + 1).as_str()));
         }
       }
     }
