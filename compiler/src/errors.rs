@@ -34,6 +34,7 @@ pub enum FileError {
 
 #[derive(Debug)]
 pub enum TokenizeError {
+  InvalidDecimalDigitError(usize, usize),
   InvalidBinaryDigitError(usize, usize),
   InvalidHexDigitError(usize, usize),
   InvalidOctalDigitError(usize, usize),

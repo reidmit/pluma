@@ -81,6 +81,15 @@ impl<'a> ErrorFormatter<'a> {
   fn get_tokenize_error_details(&self, module_path: &String, err: &ModuleCompilationError) -> (Option<(usize, usize)>, String) {
     let (location, message) = match err {
       ModuleCompilationError::TokenizeError(tok_err) => match tok_err {
+         &TokenizeError::InvalidDecimalDigitError(start, end) =>
+          (
+            (start, end),
+            format!(
+              "Invalid digit `{}` in number. Valid digits are `0` to `9`.",
+              self.read_source(module_path, start, end),
+            ),
+          ),
+
         &TokenizeError::InvalidBinaryDigitError(start, end) =>
           (
             (start, end),

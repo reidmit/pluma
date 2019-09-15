@@ -292,7 +292,11 @@ impl<'a> Tokenizer<'a> {
             }
           }
 
-          while index < length && is_digit(source[index]) {
+          while index < length && is_identifier_char(source[index]) {
+            if !source[index].is_ascii_digit() {
+              return Err(InvalidDecimalDigitError(index, index + 1))
+            }
+
             index += 1;
           }
 
