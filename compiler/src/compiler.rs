@@ -2,42 +2,67 @@ use std::collections::HashMap;
 use crate::fs;
 use crate::module::Module;
 use crate::errors::{PackageCompilationError, ModuleCompilationError};
+use crate::debug;
 
 pub struct CompilerConfig {
   pub entry_path: Option<String>,
 }
 
+#[derive(Debug)]
 pub struct Compiler {
+  root_dir: String,
   entry_path: String,
-  modules: HashMap<String, Module>,
+  modules: HashMap<String, Result<Module, ModuleCompilationError>>,
 }
 
 impl Compiler {
   pub fn new(config: CompilerConfig) -> Result<Compiler, PackageCompilationError> {
-    let entry_path = fs::find_entry_file(config.entry_path)
+    let (root_dir, entry_path) = fs::find_root_dir_and_entry_file(config.entry_path)
       .map_err(|err| PackageCompilationError::ConfigInvalid(err))?;
 
     Ok(Compiler {
+      root_dir,
       entry_path,
-      modules: HashMap::new()
+      modules: HashMap::new(),
     })
   }
 
-  // TODO: make this support multiple modules (currently only entry)
   pub fn run(&mut self) -> Result<(), PackageCompilationError> {
-    let path = self.entry_path.to_string();
+    self.modules.clear();
 
-    match self.compile_module(path) {
-      Ok(()) => Ok(()),
-      Err(err) => Err(PackageCompilationError::ModuleFailedToCompile(err))
-    }
+    let path = self.entry_path.to_string();
+    self.compile_module(path);
+
+    debug!("{:#?}", self);
+
+    Ok(())
   }
 
-  pub fn compile_module(&mut self, path: String) -> Result<(), ModuleCompilationError> {
-    let key = path.to_string();
-    let mut module = Module::new(path);
+  pub fn compile_module(&mut self, path: String) {
+    let abs_path = fs::to_absolute_path(&path);
+    let key = abs_path.clone();
+
+    if self.modules.contains_key(&key) {
+      return;
+    }
+
+    let mut module = Module::new(abs_path);
     let result = module.compile();
-    self.modules.insert(key, module);
-    result
+
+    match result {
+      Ok(()) => {
+        let imported_paths = module.get_referenced_paths();
+
+        self.modules.insert(key, Ok(module));
+
+        for imported_path in imported_paths {
+          let module_path = fs::get_full_path_from_import(&self.root_dir, &imported_path);
+          self.compile_module(module_path);
+        }
+      },
+      Err(err) => {
+        self.modules.insert(key, Err(err));
+      },
+    };
   }
 }

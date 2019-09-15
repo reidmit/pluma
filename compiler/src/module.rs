@@ -3,8 +3,8 @@ use crate::ast::Node;
 use crate::parser::Parser;
 use crate::tokenizer::{Tokenizer, TokenList, CommentMap};
 use crate::errors::ModuleCompilationError;
-use crate::debug;
 
+#[derive(Debug)]
 pub struct Module {
   path: String,
   bytes: Option<Vec<u8>>,
@@ -29,10 +29,26 @@ impl Module {
     self.tokenize()?;
     self.parse()?;
 
-    debug!("tokens: {:#?}", self.tokens);
-    debug!("ast: {:#?}", self.ast);
-
     Ok(())
+  }
+
+  pub fn get_referenced_paths(&self) -> Vec<String> {
+    match &self.ast {
+      Some(ast) => {
+        let mut paths = Vec::new();
+
+        if let Node::Module { imports, .. } = ast {
+          for import in imports {
+            if let Node::Import { path, .. } = import {
+              paths.push(path.clone());
+            }
+          }
+        }
+
+        paths
+      },
+      None => panic!("called before module.parse()")
+    }
   }
 
   fn read(&mut self) -> Result<(), ModuleCompilationError> {
@@ -54,7 +70,7 @@ impl Module {
           Err(err) => Err(ModuleCompilationError::TokenizeError(err))
         }
       },
-      None => panic!("module.tokenize() called before module.read()")
+      None => panic!("called before module.read()")
     }
   }
 
@@ -66,8 +82,8 @@ impl Module {
           Err(err) => Err(ModuleCompilationError::ParseError(err))
         }
       },
-      (None, _) => panic!("module.parse() called before module.read()"),
-      (_, None) => panic!("module.parse() called before module.tokenize()")
+      (None, _) => panic!("called before module.read()"),
+      (_, None) => panic!("called before module.tokenize()")
     }
   }
 }

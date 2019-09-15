@@ -1,0 +1,3 @@
+use "dir/four"
+
+let three = "three"

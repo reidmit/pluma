@@ -1,1 +1,3 @@
-let h = "hello $(name)$(last)!"
+use "two"
+
+let x = 123
