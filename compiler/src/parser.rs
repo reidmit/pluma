@@ -1,9 +1,12 @@
 use crate::ast::{get_node_location, Node, Node::*, NodeType, NumericValue, UnaryOperator};
 use crate::tokens::{Token, get_token_location};
+use crate::tokenizer::TokenizeResult;
 use crate::parser::{ParseError::*, ParseResult::*};
+use crate::errors::ParseError;
 
 pub struct Parser<'a> {
-  tokens: &'a Vec<Token<'a>>,
+  source: &'a Vec<u8>,
+  tokens: &'a Vec<Token>,
   token_count: usize,
   index: usize,
   imports: Vec<Node>,
@@ -15,24 +18,6 @@ enum ParseResult {
   Parsed(Node),
   EOF,
   Error(ParseError),
-}
-
-#[derive(Debug, Clone)]
-pub enum ParseError {
-  UnexpectedToken(usize),
-  UnexpectedEOF,
-  UnclosedParentheses(usize),
-  UnclosedBlock(usize),
-  UnclosedArray(usize),
-  UnclosedDict(usize),
-  UnexpectedArrayElementInDict(Node),
-  UnexpectedDictEntryInArray(Node),
-  UnexpectedTokenAfterDot(usize),
-  UnexpectedTokenInImport(usize),
-  MissingArrowInMatchCase(usize),
-  MissingArrowAfterBlockParams(usize),
-  MissingAliasAfterAsInImport(usize),
-  MissingCasesInMatchExpression(usize),
 }
 
 fn to_string(bytes: &[u8]) -> String {
@@ -47,16 +32,42 @@ fn ungroup(node: Node) -> Node {
 }
 
 impl<'a> Parser<'a> {
-  pub fn from_tokens(tokens: &'a Vec<Token>) -> Parser<'a> {
+  pub fn new(source: &'a Vec<u8>, tokens: &'a Vec<Token>) -> Parser<'a> {
     let token_count = tokens.len();
 
     return Parser {
+      source,
       tokens,
       token_count,
       index: 0,
       imports: Vec::new(),
       nodes: Vec::new(),
     };
+  }
+
+  pub fn parse_module(&mut self) -> Result<Node, ParseError> {
+    while let Some(&Token::KeywordUse { .. }) = self.current_token() {
+      match self.parse_import() {
+        Parsed(import) => self.imports.push(import),
+        EOF => break,
+        Error(err) => return Err(err),
+      }
+    }
+
+    loop {
+      match self.parse_expression() {
+        Parsed(expr) => self.nodes.push(expr),
+        EOF => break,
+        Error(err) => return Err(err),
+      }
+    }
+
+    Ok(Module {
+      start: 0,
+      end: self.tokens.last().map_or(0, |token| get_token_location(token).1),
+      imports: self.imports.clone(),
+      body: self.nodes.clone(),
+    })
   }
 
   fn advance(&mut self, amount: usize) {
@@ -77,34 +88,37 @@ impl<'a> Parser<'a> {
     }
   }
 
-  fn parse_identifier(&mut self) -> ParseResult {
-    let (first_value, first_start) = match self.current_token() {
-      Some(&Token::Identifier { value, start, .. }) => (value, start),
-      _ => unreachable!()
-    };
+  fn read_string(&self, start: usize, end: usize) -> String {
+    let bytes = self.source[start..end].to_vec();
+    String::from_utf8(bytes).expect("String is not UTF-8")
+  }
 
-    let node = Identifier {
-      start: first_start,
-      end: first_start + first_value.len(),
-      name: to_string(first_value),
-      inferred_type: NodeType::Unknown,
+  fn parse_identifier(&mut self) -> ParseResult {
+    let (start, end, name) = match self.current_token() {
+      Some(&Token::Identifier(start, end)) => (start, end, self.read_string(start, end)),
+      _ => unreachable!()
     };
 
     self.advance(1);
 
-    Parsed(node)
+    Parsed(Identifier {
+      start,
+      end,
+      name,
+      inferred_type: NodeType::Unknown,
+    })
   }
 
   fn parse_string(&mut self) -> ParseResult {
     let (start, end, value) = match self.current_token() {
-      Some(Token::StringLiteral { start, end, value }) => (*start, *end, value),
+      Some(&Token::StringLiteral(start, end)) => (start, end, self.read_string(start, end)),
       _ => unreachable!(),
     };
 
     let node = StringLiteral {
       start,
       end,
-      value: to_string(value),
+      value,
       inferred_type: NodeType::Unknown,
     };
 
@@ -129,12 +143,12 @@ impl<'a> Parser<'a> {
         }
 
         match self.current_token() {
-          Some(&Token::StringLiteral { start, end, value }) => {
+          Some(&Token::StringLiteral(start, end)) => {
             interpolation_end = end;
             parts.push(StringLiteral {
               start,
               end,
-              value: to_string(value),
+              value: self.read_string(start, end),
               inferred_type: NodeType::Unknown,
             });
             self.advance(1)
@@ -157,8 +171,8 @@ impl<'a> Parser<'a> {
 
   fn parse_number(&mut self) -> ParseResult {
     let (start, end, value, raw_value) = match self.current_token() {
-      Some(&Token::OctalDigits { start, end, value }) => {
-        let string_value = to_string(&value);
+      Some(&Token::OctalDigits(start, end)) => {
+        let string_value = self.read_string(start, end);
         let bytes = string_value.bytes().rev();
 
         let mut result: i64 = 0;
@@ -174,10 +188,10 @@ impl<'a> Parser<'a> {
           i *= 8;
         }
 
-        (start, end, NumericValue::Int(result), value)
+        (start, end, NumericValue::Int(result), string_value)
       },
-      Some(&Token::HexDigits { start, end, value }) => {
-        let string_value = to_string(&value);
+      Some(&Token::HexDigits(start, end)) => {
+        let string_value = self.read_string(start, end);
         let bytes = string_value.bytes().rev();
 
         let mut result: i64 = 0;
@@ -195,10 +209,10 @@ impl<'a> Parser<'a> {
           i *= 16;
         }
 
-        (start, end, NumericValue::Int(result), value)
+        (start, end, NumericValue::Int(result), string_value)
       },
-      Some(&Token::DecimalDigits { start, end, value }) => {
-        let string_value = to_string(&value);
+      Some(&Token::DecimalDigits(start, end)) => {
+        let string_value = self.read_string(start, end);
         let bytes = string_value.bytes().rev();
 
         let mut result: i64 = 0;
@@ -213,10 +227,10 @@ impl<'a> Parser<'a> {
           i *= 10;
         }
 
-        (start, end, NumericValue::Int(result), value)
+        (start, end, NumericValue::Int(result), string_value)
       },
-      Some(&Token::BinaryDigits { start, end, value }) => {
-        let string_value = to_string(&value);
+      Some(&Token::BinaryDigits(start, end)) => {
+        let string_value = self.read_string(start, end);
         let bytes = string_value.bytes().rev();
 
         let mut result: i64 = 0;
@@ -233,7 +247,7 @@ impl<'a> Parser<'a> {
           i *= 2;
         }
 
-        (start, end, NumericValue::Int(result), value)
+        (start, end, NumericValue::Int(result), string_value)
       },
       _ => unreachable!()
     };
@@ -242,7 +256,7 @@ impl<'a> Parser<'a> {
       start,
       end,
       value,
-      raw_value: to_string(raw_value),
+      raw_value,
       inferred_type: NodeType::Unknown,
     });
 
@@ -253,7 +267,7 @@ impl<'a> Parser<'a> {
 
   fn parse_parenthetical(&mut self) -> ParseResult {
     let paren_start = match self.current_token() {
-      Some(&Token::LeftParen { start, .. }) => start,
+      Some(&Token::LeftParen(start, _)) => start,
       _ => unreachable!()
     };
 
@@ -273,7 +287,7 @@ impl<'a> Parser<'a> {
     self.skip_line_breaks();
 
     let paren_end = match self.current_token() {
-      Some(&Token::RightParen { end, .. }) => end,
+      Some(&Token::RightParen(_, end)) => end,
       _ => return Error(UnclosedParentheses(self.index))
     };
 
@@ -298,7 +312,7 @@ impl<'a> Parser<'a> {
 
   fn parse_negated_expression(&mut self) -> ParseResult {
     let start = match self.current_token() {
-      Some(&Token::Minus { start, .. }) => start,
+      Some(&Token::Minus(start, _)) => start,
       _ => unreachable!()
     };
 
@@ -320,7 +334,7 @@ impl<'a> Parser<'a> {
 
   fn parse_block(&mut self) -> ParseResult {
     let block_start = match self.current_token() {
-      Some(&Token::LeftBrace { start, .. }) => start,
+      Some(&Token::LeftBrace(start, _)) => start,
       _ => unreachable!()
     };
 
@@ -329,7 +343,7 @@ impl<'a> Parser<'a> {
     let mut params = Vec::new();
     let mut body = Vec::new();
 
-    while let Some(&Token::Identifier { start, end, value }) = self.current_token() {
+    while let Some(&Token::Identifier(start, end)) = self.current_token() {
       if params.is_empty() {
         match self.next_token() {
           Some(&Token::Comma { .. }) => {},
@@ -341,7 +355,7 @@ impl<'a> Parser<'a> {
       let param = Identifier {
         start,
         end,
-        name: to_string(value),
+        name: self.read_string(start, end),
         inferred_type: NodeType::Unknown,
       };
 
@@ -372,7 +386,7 @@ impl<'a> Parser<'a> {
     self.skip_line_breaks();
 
     let block_end = match self.current_token() {
-      Some(&Token::RightBrace { end, .. }) => end,
+      Some(&Token::RightBrace(_, end)) => end,
       _ => return Error(UnclosedBlock(self.index))
     };
 
@@ -418,7 +432,7 @@ impl<'a> Parser<'a> {
 
   fn parse_dict_or_array(&mut self) -> ParseResult {
     let start = match self.current_token() {
-      Some(&Token::LeftBracket { start, .. }) => start,
+      Some(&Token::LeftBracket(start, _)) => start,
       _ => unreachable!()
     };
 
@@ -474,7 +488,7 @@ impl<'a> Parser<'a> {
     self.skip_line_breaks();
 
     let end = match self.current_token() {
-      Some(&Token::RightBracket { end, .. }) => end,
+      Some(&Token::RightBracket(_, end)) => end,
       _ => return Error(UnclosedArray(self.index))
     };
 
@@ -502,8 +516,6 @@ impl<'a> Parser<'a> {
     let mut result = previous.clone();
 
     while let Parsed(node) = current {
-      println!("{:#?}", node);
-
       let (call_start, _) = get_node_location(&node);
 
       if let Some(&Token::LeftParen { .. }) = self.current_token() {
@@ -577,17 +589,17 @@ impl<'a> Parser<'a> {
     };
 
     let chain_start = match self.current_token() {
-      Some(&Token::Dot { start, .. }) => start,
+      Some(&Token::Dot(start, _)) => start,
       _ => unreachable!()
     };
 
     self.advance(1);
 
     let (end, ident) = match self.current_token() {
-      Some(&Token::Identifier { start, end, value }) => (end, Identifier {
+      Some(&Token::Identifier(start, end)) => (end, Identifier {
         start,
         end,
-        name: to_string(value),
+        name: self.read_string(start, end),
         inferred_type: NodeType::Unknown,
       }),
       Some(_) => return Error(UnexpectedTokenAfterDot(self.index)),
@@ -606,7 +618,7 @@ impl<'a> Parser<'a> {
 
   fn parse_match(&mut self) -> ParseResult {
     let start = match self.current_token() {
-      Some(&Token::KeywordMatch { start, .. }) => {
+      Some(&Token::KeywordMatch(start, _)) => {
         self.advance(1);
         start
       },
@@ -623,7 +635,7 @@ impl<'a> Parser<'a> {
     let mut cases = Vec::new();
     let mut match_end = start;
 
-    while let Some(&Token::Pipe { start: case_start, .. }) = self.current_token() {
+    while let Some(&Token::Pipe(case_start, _)) = self.current_token() {
       self.advance(1);
 
       let case_pattern = match self.parse_expression() {
@@ -699,7 +711,7 @@ impl<'a> Parser<'a> {
 
   fn parse_assignment(&mut self) -> ParseResult {
     let start = match self.current_token() {
-      Some(&Token::KeywordLet { start, .. }) => {
+      Some(&Token::KeywordLet(start, _)) => {
         self.advance(1);
         start
       },
@@ -772,7 +784,7 @@ impl<'a> Parser<'a> {
 
   fn parse_import(&mut self) -> ParseResult {
     let start = match self.current_token() {
-      Some(&Token::KeywordUse { start, .. }) => {
+      Some(&Token::KeywordUse(start, _)) => {
         self.advance(1);
         start
       },
@@ -780,7 +792,7 @@ impl<'a> Parser<'a> {
     };
 
     let (path_end, path) = match self.current_token() {
-      Some(&Token::StringLiteral { end, value, .. }) => (end, to_string(value)),
+      Some(&Token::StringLiteral(start, end)) => (end, self.read_string(start, end)),
       Some(..) => return Error(UnexpectedTokenInImport(self.index)),
       None => return Error(UnexpectedEOF),
     };
@@ -794,8 +806,8 @@ impl<'a> Parser<'a> {
       self.advance(1);
 
       match self.current_token() {
-        Some(&Token::Identifier { value, end, .. }) => {
-          alias = Some(to_string(value));
+        Some(&Token::Identifier(start, end)) => {
+          alias = Some(self.read_string(start, end));
           import_end = end;
         },
         _ => return Error(MissingAliasAfterAsInImport(self.index))
@@ -811,31 +823,6 @@ impl<'a> Parser<'a> {
       end: import_end,
       alias,
       path,
-    })
-  }
-
-  pub fn parse_module(&mut self) -> Result<Node, ParseError> {
-    while let Some(&Token::KeywordUse { .. }) = self.current_token() {
-      match self.parse_import() {
-        Parsed(import) => self.imports.push(import),
-        EOF => break,
-        Error(err) => return Err(err),
-      }
-    }
-
-    loop {
-      match self.parse_expression() {
-        Parsed(expr) => self.nodes.push(expr),
-        EOF => break,
-        Error(err) => return Err(err),
-      }
-    }
-
-    Ok(Module {
-      start: 0,
-      end: self.tokens.last().map_or(0, |token| get_token_location(token).1),
-      imports: self.imports.clone(),
-      body: self.nodes.clone(),
     })
   }
 }

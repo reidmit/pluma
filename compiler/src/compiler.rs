@@ -1,49 +1,47 @@
-use crate::config::CompilerConfig;
+use std::collections::HashMap;
 use crate::fs;
-use crate::parser::Parser;
+use crate::ast::Node;
+use crate::module::Module;
 use crate::tokenizer::{Tokenizer, TokenizeResult};
+use crate::errors::{PackageCompilationError, ModuleCompilationError};
+
+const DEFAULT_ENTRY_FILE: &str = "main.pa";
+
+pub struct CompilerConfig {
+  pub entry_path: Option<String>,
+}
 
 pub struct Compiler {
   entry_path: String,
+  modules: HashMap<String, Module>,
 }
 
 impl Compiler {
-  pub fn new(config: CompilerConfig) -> Compiler {
-    Compiler {
-      entry_path: config.entry_path.clone(),
+  pub fn new(config: CompilerConfig) -> Result<Compiler, PackageCompilationError> {
+    let entry_path = fs::find_entry_file(config.entry_path)
+      .map_err(|err| PackageCompilationError::ConfigInvalid(err))?;
+
+    Ok(Compiler {
+      entry_path,
+      modules: HashMap::new()
+    })
+  }
+
+  // TODO: make this support multiple modules (currently only entry)
+  pub fn run(&mut self) -> Result<(), PackageCompilationError> {
+    let path = self.entry_path.to_string();
+
+    match self.compile_module(path) {
+      Ok(()) => Ok(()),
+      Err(err) => Err(PackageCompilationError::ModuleFailedToCompile(err))
     }
   }
 
-  pub fn compile_module(&self, source: Vec<u8>) {
-    match Tokenizer::from_source(&source).collect_tokens() {
-      TokenizeResult::Tokenized(tokens, _) => {
-        println!("{:#?}", tokens);
-
-        let mut parser = Parser::from_tokens(&tokens);
-        let ast = parser.parse_module();
-        println!("{:#?}", ast);
-      }
-
-      _ => {
-        panic!("Tokenizer error!"); // TODO
-      }
-    }
-  }
-
-  pub fn add_module(&self, abs_file_path: &String) -> Result<bool, String> {
-    match fs::read_file_contents(abs_file_path) {
-      Ok(contents) => {
-        self.compile_module(contents);
-        Ok(true)
-      }
-      Err(_) => Ok(false),
-    }
-  }
-
-  pub fn run(&self) -> Result<(), String> {
-    let entry = &self.entry_path;
-    let _ = self.add_module(entry);
-
-    Ok(())
+  pub fn compile_module(&mut self, path: String) -> Result<(), ModuleCompilationError> {
+    let key = path.to_string();
+    let mut module = Module::new(path);
+    let result = module.compile();
+    self.modules.insert(key, module);
+    result
   }
 }

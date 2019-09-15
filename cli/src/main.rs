@@ -2,8 +2,8 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
-use pluma_compiler::compiler::Compiler;
-use pluma_compiler::config::CompilerConfig;
+use pluma_compiler::compiler::{Compiler, CompilerConfig};
+use pluma_compiler::errors::PackageCompilationError;
 use std::env;
 use std::process::exit;
 
@@ -36,7 +36,7 @@ For help with an individual command, try:
 }
 
 fn print_unknown_command(command: &str) {
-  print_error(format!(
+  eprintln!("{} {}", colors::bold_red("Error:"), format!(
     "Unknown command: {command_name}
 
 For a full list of available commands, try:
@@ -46,8 +46,9 @@ For a full list of available commands, try:
   ));
 }
 
-fn print_error(msg: String) {
-  eprintln!("{} {}", colors::bold_red("Error:"), msg);
+fn print_error(msg: PackageCompilationError) {
+  // TODO: display errors nicely
+  eprintln!("{} {:#?}", colors::bold_red("Error:"), msg);
 }
 
 fn main() {
@@ -56,11 +57,12 @@ fn main() {
 
     match command.as_str() {
       "run" => {
-        let given_entry_path = env::args().nth(2);
-        let config = CompilerConfig::new(given_entry_path);
+        let compiler = Compiler::new(CompilerConfig {
+          entry_path: env::args().nth(2)
+        });
 
-        match config {
-          Ok(valid_config) => match Compiler::new(valid_config).run() {
+        match compiler {
+          Ok(mut valid_compiler) => match valid_compiler.run() {
             Ok(_) => {
               println!("Compilation succeeded!");
               exit(0);

@@ -1,10 +1,11 @@
 use std::fs;
 use std::path::Path;
+use crate::errors::{ConfigurationError, FileError};
 
 const DEFAULT_ENTRY_FILE: &str = "main.pa";
 
-pub fn find_entry_file(file_or_dir: Option<String>) -> Result<String, String> {
-  let f = file_or_dir.unwrap_or_else(|| DEFAULT_ENTRY_FILE.to_string());
+pub fn find_entry_file(given_entry_file: Option<String>) -> Result<String, ConfigurationError> {
+  let f = given_entry_file.unwrap_or_else(|| DEFAULT_ENTRY_FILE.to_string());
   let path = Path::new(&f);
 
   if path.is_file() {
@@ -14,17 +15,14 @@ pub fn find_entry_file(file_or_dir: Option<String>) -> Result<String, String> {
 
     return match merged_path.canonicalize() {
       Ok(path) => Ok(path.to_str().unwrap().to_owned()),
-      Err(_) => Err(format!(
-        "Failed to find file: {}",
-        merged_path.to_str().unwrap().to_owned()
-      )),
+      Err(_) => Err(ConfigurationError::EntryPathDoesNotExist(merged_path.to_str().unwrap().to_owned())),
     };
   }
 }
 
-pub fn read_file_contents(abs_file_path: &String) -> Result<Vec<u8>, String> {
-  return match fs::read(abs_file_path) {
+pub fn read_file_contents(abs_file_path: &String) -> Result<Vec<u8>, FileError> {
+  match fs::read(abs_file_path) {
     Ok(bytes) => Ok(bytes),
-    Err(_) => Err(format!("Failed to read file: {}", abs_file_path)),
-  };
+    Err(_) => Err(FileError::FailedToReadFile(abs_file_path.to_string())),
+  }
 }
