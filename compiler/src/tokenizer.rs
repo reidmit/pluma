@@ -248,7 +248,7 @@ impl<'a> Tokenizer<'a> {
 
                 while index < length && is_identifier_char(source[index]) {
                   if source[index] != b'0' && source[index] != b'1' {
-                    return Err(InvalidBinaryDigitError(index, index + 1))
+                    return Err(InvalidBinaryDigit(index, index + 1))
                   }
 
                   index += 1;
@@ -263,7 +263,7 @@ impl<'a> Tokenizer<'a> {
 
                 while index < length && is_identifier_char(source[index]) {
                   if !source[index].is_ascii_hexdigit() {
-                    return Err(InvalidHexDigitError(index, index + 1))
+                    return Err(InvalidHexDigit(index, index + 1))
                   }
 
                   index += 1;
@@ -278,7 +278,7 @@ impl<'a> Tokenizer<'a> {
 
                 while index < length && is_identifier_char(source[index]) {
                   if source[index] < 48 || source[index] > 55 {
-                    return Err(InvalidOctalDigitError(index, index + 1))
+                    return Err(InvalidOctalDigit(index, index + 1))
                   }
 
                   index += 1;
@@ -294,7 +294,7 @@ impl<'a> Tokenizer<'a> {
 
           while index < length && is_identifier_char(source[index]) {
             if !source[index].is_ascii_digit() {
-              return Err(InvalidDecimalDigitError(index, index + 1))
+              return Err(InvalidDecimalDigit(index, index + 1))
             }
 
             index += 1;
@@ -313,12 +313,12 @@ impl<'a> Tokenizer<'a> {
 
     if !interpolation_stack.is_empty() {
       let start_index = interpolation_stack.pop().unwrap();
-      return Err(UnclosedInterpolationError(start_index, index))
+      return Err(UnclosedInterpolation(start_index, index))
     }
 
     if !string_stack.is_empty() {
       let start_index = string_stack.pop().unwrap();
-      return Err(UnclosedStringError(start_index, index))
+      return Err(UnclosedString(start_index, index))
     }
 
     Ok((tokens, comments))

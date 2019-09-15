@@ -81,7 +81,7 @@ impl<'a> ErrorFormatter<'a> {
   fn get_tokenize_error_details(&self, module_path: &String, err: &ModuleCompilationError) -> (Option<(usize, usize)>, String) {
     let (location, message) = match err {
       ModuleCompilationError::TokenizeError(tok_err) => match tok_err {
-         &TokenizeError::InvalidDecimalDigitError(start, end) =>
+         &TokenizeError::InvalidDecimalDigit(start, end) =>
           (
             (start, end),
             format!(
@@ -90,7 +90,7 @@ impl<'a> ErrorFormatter<'a> {
             ),
           ),
 
-        &TokenizeError::InvalidBinaryDigitError(start, end) =>
+        &TokenizeError::InvalidBinaryDigit(start, end) =>
           (
             (start, end),
             format!(
@@ -99,7 +99,7 @@ impl<'a> ErrorFormatter<'a> {
             ),
           ),
 
-        &TokenizeError::InvalidHexDigitError(start, end) =>
+        &TokenizeError::InvalidHexDigit(start, end) =>
           (
             (start, end),
             format!(
@@ -108,7 +108,7 @@ impl<'a> ErrorFormatter<'a> {
             ),
           ),
 
-        &TokenizeError::InvalidOctalDigitError(start, end) =>
+        &TokenizeError::InvalidOctalDigit(start, end) =>
           (
             (start, end),
             format!(
@@ -117,7 +117,7 @@ impl<'a> ErrorFormatter<'a> {
             ),
           ),
 
-        &TokenizeError::UnclosedStringError(start, _) =>
+        &TokenizeError::UnclosedString(start, _) =>
           (
             (start, start + 1),
             format!(
@@ -125,7 +125,7 @@ impl<'a> ErrorFormatter<'a> {
             ),
           ),
 
-        &TokenizeError::UnclosedInterpolationError(start, _) =>
+        &TokenizeError::UnclosedInterpolation(start, _) =>
           (
             (start, start + 1),
             format!(

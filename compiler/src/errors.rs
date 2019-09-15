@@ -34,12 +34,12 @@ pub enum FileError {
 
 #[derive(Debug)]
 pub enum TokenizeError {
-  InvalidDecimalDigitError(usize, usize),
-  InvalidBinaryDigitError(usize, usize),
-  InvalidHexDigitError(usize, usize),
-  InvalidOctalDigitError(usize, usize),
-  UnclosedStringError(usize, usize),
-  UnclosedInterpolationError(usize, usize),
+  InvalidDecimalDigit(usize, usize),
+  InvalidBinaryDigit(usize, usize),
+  InvalidHexDigit(usize, usize),
+  InvalidOctalDigit(usize, usize),
+  UnclosedString(usize, usize),
+  UnclosedInterpolation(usize, usize),
 }
 
 #[derive(Debug, Clone)]
