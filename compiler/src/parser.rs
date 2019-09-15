@@ -670,7 +670,10 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_pattern(&mut self) -> ParseResult {
-    self.parse_identifier()
+    match self.current_token() {
+      Some(..) => self.parse_identifier(),
+      None => Error(ParseError::UnexpectedEOF)
+    }
   }
 
   fn parse_reassignment(&mut self, previous: ParseResult) -> ParseResult {
