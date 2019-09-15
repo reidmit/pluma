@@ -25,9 +25,7 @@ impl ImportChain {
   pub fn add(&mut self, path: String) {
     let key = hash_key(&path);
 
-    if self.seen.contains(&key) {
-      panic!("todo");
-    }
+    debug_assert_eq!(self.seen.contains(&key), false);
 
     self.seen.insert(key);
     self.entries.push(path);
