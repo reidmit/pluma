@@ -80,7 +80,28 @@ impl<'a> ErrorFormatter<'a> {
         &TokenizeError::InvalidBinaryDigitError(start, end) =>
           (
             (start, end),
-            format!("Invalid binary digit: {}", self.get_source_string(module_path, start, end)),
+            format!(
+              "Invalid binary digit: '{}'",
+              self.read_source(module_path, start, end),
+            ),
+          ),
+
+        &TokenizeError::InvalidHexDigitError(start, end) =>
+          (
+            (start, end),
+            format!(
+              "Invalid hex digit: '{}'",
+              self.read_source(module_path, start, end),
+            ),
+          ),
+
+        &TokenizeError::InvalidOctalDigitError(start, end) =>
+          (
+            (start, end),
+            format!(
+              "Invalid octal digit: '{}'",
+              self.read_source(module_path, start, end),
+            ),
           ),
 
         _ => unimplemented!()
@@ -98,12 +119,12 @@ impl<'a> ErrorFormatter<'a> {
     (location, message)
   }
 
-  fn get_source_string(&self, module_path: &String, start: usize, end: usize) -> String {
+  fn read_source(&self, module_path: &String, start: usize, end: usize) -> String {
     let module = self.compiler.modules.get(module_path).unwrap();
 
     match &module.bytes {
       Some(bytes) => String::from_utf8(bytes[start..end].to_vec()).expect("not utf8"),
-      None => "...".to_owned()
+      None => "".to_owned()
     }
   }
 }

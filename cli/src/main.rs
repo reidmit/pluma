@@ -1,6 +1,6 @@
 use pluma_compiler::compiler::{Compiler, CompilerConfig};
 use pluma_compiler::error_formatter::ErrorFormatter;
-use pluma_compiler::errors::PackageCompilationErrorSummary;
+use pluma_compiler::errors::{PackageCompilationErrorSummary, ModuleCompilationErrorDetail};
 use pluma_compiler::VERSION;
 use std::fmt;
 use std::process::exit;
@@ -61,7 +61,7 @@ fn main() {
 
         Err(e) => {
           let error_formatter = ErrorFormatter::new(&compiler, e);
-          print_error_summary(error_formatter.get_error_summary());
+          print_error_summary(&compiler, error_formatter.get_error_summary());
           exit(1);
         }
       }
@@ -78,7 +78,7 @@ fn print_error<T: fmt::Display>(msg: T) {
   eprintln!("{} {}", colors::bold_red("Error:"), msg);
 }
 
-fn print_error_summary(summary: PackageCompilationErrorSummary) {
+fn print_error_summary(compiler: &Compiler, summary: PackageCompilationErrorSummary) {
   if !summary.package_errors.is_empty() {
     for package_error in summary.package_errors {
       print_error(package_error);
@@ -88,8 +88,56 @@ fn print_error_summary(summary: PackageCompilationErrorSummary) {
   }
 
   for (module_path, module_errors) in summary.module_errors {
-    let message = format!("in {}: {:#?}", module_path, module_errors);
+    for ModuleCompilationErrorDetail { location, message } in module_errors {
+      eprintln!("{} in {}:",
+        colors::bold_red("Error"),
+        colors::bold(module_path.as_str()),
+      );
 
-    print_error(message);
+      eprintln!("{}", message);
+
+      if let Some((start, end)) = location {
+        let module = compiler.modules.get(&module_path).unwrap();
+
+        if let Some(bytes) = &module.bytes {
+          let mut frame_start = start;
+          let mut frame_end = end;
+
+          while frame_start > 0 {
+            if let Some(b'\n') = bytes.get(frame_start - 1) {
+              break;
+            }
+
+            frame_start -= 1
+          }
+
+          while let Some(byte) = bytes.get(frame_end) {
+            if frame_end >= bytes.len() - 1 {
+              break
+            }
+
+            match byte {
+              b'\n' => break,
+              _ => frame_end += 1
+            }
+          }
+
+          let frame = String::from_utf8(bytes[frame_start..frame_end].to_vec()).unwrap();
+          let mut line = 1;
+          // let mut col = 0;
+
+          frame_start = start;
+          while frame_start > 0 {
+            if let Some(b'\n') = bytes.get(frame_start - 1) {
+              line += 1;
+            }
+
+            frame_start -= 1;
+          }
+
+          eprintln!("\n  | {} | {}", line, frame);
+        }
+      }
+    }
   }
 }
