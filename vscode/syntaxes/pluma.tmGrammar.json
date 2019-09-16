@@ -18,7 +18,9 @@
         { "include": "#string" },
         { "include": "#float" },
         { "include": "#int" },
-        { "include": "#keyword" },
+        { "include": "#keyword-language" },
+        { "include": "#keyword-control" },
+        { "include": "#storage-type" },
         { "include": "#symbol" }
       ]
     },
@@ -38,9 +40,19 @@
       "match": "(=>|=|::|:=|\\|)"
     },
 
-    "keyword": {
+    "storage-type": {
+      "name": "storage.type.pluma",
+      "match": "\\b(def|let|type)\\b"
+    },
+
+    "keyword-language": {
       "name": "keyword.language.pluma",
-      "match": "\\b(as|def|let|match|type|use)\\b"
+      "match": "\\b(match)\\b"
+    },
+
+    "keyword-control": {
+      "name": "keyword.control.pluma",
+      "match": "\\b(use|as)\\b"
     },
 
     "string": {
