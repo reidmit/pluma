@@ -785,7 +785,7 @@ impl<'a> Parser<'a> {
     };
 
     let (path_end, path) = match self.current_token() {
-      Some(&Token::StringLiteral(start, end)) => (end, self.read_string(start, end)),
+      Some(&Token::ImportPath(start, end)) => (end, self.read_string(start, end)),
       Some(..) => return Error(UnexpectedTokenInImport(self.index)),
       None => return Error(UnexpectedEOF),
     };
@@ -885,5 +885,20 @@ mod tests {
   assert_parsed_snapshot!(
     err_incomplete_assignment_3,
     "let x\nlet y = 3"
+  );
+
+  assert_parsed_snapshot!(
+    import_module,
+    "use something"
+  );
+
+  assert_parsed_snapshot!(
+    import_module_with_alias,
+    "use something as alias"
+  );
+
+  assert_parsed_snapshot!(
+    import_two_modules,
+    "use something\nuse path/to/module\nlet x = 47"
   );
 }

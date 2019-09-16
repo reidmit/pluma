@@ -1,3 +1,1 @@
-use "two"
-
-let z = 0b01
+use two

@@ -1,0 +1,47 @@
+---
+source: compiler/src/parser.rs
+expression: "use something\nuse path/to/module\nlet x = 47"
+---
+Ok(
+    Module {
+        start: 0,
+        end: 43,
+        imports: [
+            Import {
+                start: 0,
+                end: 13,
+                alias: None,
+                path: "something",
+            },
+            Import {
+                start: 14,
+                end: 32,
+                alias: None,
+                path: "path/to/module",
+            },
+        ],
+        body: [
+            Assignment {
+                start: 33,
+                end: 43,
+                is_constant: true,
+                left: Identifier {
+                    start: 37,
+                    end: 38,
+                    name: "x",
+                    inferred_type: Unknown,
+                },
+                right: NumericLiteral {
+                    start: 41,
+                    end: 43,
+                    value: Int(
+                        47,
+                    ),
+                    raw_value: "47",
+                    inferred_type: Unknown,
+                },
+                inferred_type: Unknown,
+            },
+        ],
+    },
+)

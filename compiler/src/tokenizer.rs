@@ -30,6 +30,7 @@ impl<'a> Tokenizer<'a> {
 
     let mut index = 0;
     let mut line = 0;
+    let mut expect_import_path = false;
 
     let mut string_stack = Vec::new();
     let mut interpolation_stack = Vec::new();
@@ -113,6 +114,24 @@ impl<'a> Tokenizer<'a> {
 
         // At this point, we must be inside an interpolation (not a string literal),
         // so continue to collect tokens as we would outside of a string.
+      }
+
+      if expect_import_path && is_path_char(byte) {
+        let mut path_byte = byte;
+
+        while is_path_char(path_byte) {
+          index += 1;
+
+          if index >= length {
+            break
+          }
+
+          path_byte = source[index];
+        }
+
+        tokens.push(ImportPath(start_index, index));
+        expect_import_path = false;
+        continue;
       }
 
       match byte {
@@ -228,11 +247,14 @@ impl<'a> Tokenizer<'a> {
           let value = &source[start_index..index];
 
           match value[0] {
+            b'u' if value == "use".as_bytes() => {
+              expect_import_path = true;
+              tokens.push(KeywordUse(start_index, index))
+            },
             b'l' if value == "let".as_bytes() => tokens.push(KeywordLet(start_index, index)),
             b'm' if value == "match".as_bytes() => tokens.push(KeywordMatch(start_index, index)),
             b'd' if value == "def".as_bytes() => tokens.push(KeywordDef(start_index, index)),
             b't' if value == "type".as_bytes() => tokens.push(KeywordType(start_index, index)),
-            b'u' if value == "use".as_bytes() => tokens.push(KeywordUse(start_index, index)),
             b'a' if value == "as".as_bytes() => tokens.push(KeywordAs(start_index, index)),
             _ => tokens.push(Identifier(start_index, index))
           }
@@ -346,6 +368,14 @@ fn is_digit(byte: u8) -> bool {
   }
 }
 
+fn is_path_char(byte: u8) -> bool {
+  match byte {
+    b'\\' | b'?' | b'%' | b'*' | b':' | b'"' | b'<' | b'>' => false,
+    b if b.is_ascii_whitespace() => false,
+    _ => true
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -420,5 +450,20 @@ mod tests {
   assert_tokens_snapshot!(
     strings_with_nested_interpolations,
     "\"hello $(name \"inner $(o)\" wow)!\""
+  );
+
+  assert_tokens_snapshot!(
+    import,
+    "use path/to/module"
+  );
+
+  assert_tokens_snapshot!(
+    import_multiple,
+    "use path/to/module\nuse another-module"
+  );
+
+  assert_tokens_snapshot!(
+    import_with_let,
+    "use thing\nlet x = 47"
   );
 }
