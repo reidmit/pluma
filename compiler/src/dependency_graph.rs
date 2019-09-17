@@ -19,10 +19,15 @@ pub struct DependencyGraph {
 
 impl DependencyGraph {
   pub fn new(entry: String) -> Self {
+    let mut vertices = HashSet::new();
+    vertices.insert(entry.to_string());
+    let mut edges = HashMap::new();
+    edges.insert(entry.to_string(), HashSet::new());
+
     DependencyGraph {
       entry_vertex: entry,
-      vertices: HashSet::new(),
-      edges: HashMap::new(),
+      vertices,
+      edges,
       cached_sort: None,
     }
   }
@@ -66,7 +71,7 @@ impl DependencyGraph {
     }
 
     let mut queue = VecDeque::new();
-    for (from, _) in &self.edges {
+    for from in &self.vertices {
       if *in_degrees.get(from).unwrap() == 0 {
         queue.push_back(from.to_string());
       }
@@ -210,6 +215,23 @@ mod tests {
             "d".to_owned(),
             "c".to_owned(),
             "b".to_owned(),
+            "a".to_owned(),
+          ]
+        )
+      },
+      TopologicalSort::Cycle(..) => panic!("Unexpected cycle")
+    }
+  }
+
+  #[test]
+  fn test_sort_no_edges() {
+    let mut g = DependencyGraph::new("a".to_owned());
+
+    match g.sort() {
+      TopologicalSort::Sorted(sorted) => {
+        assert_eq!(
+          sorted.to_owned(),
+          vec![
             "a".to_owned(),
           ]
         )
