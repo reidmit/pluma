@@ -1,1 +1,4 @@
 use two
+
+let x = 47
+let y = x.times(2)

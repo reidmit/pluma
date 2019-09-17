@@ -17,7 +17,7 @@ impl<'a> ErrorFormatter<'a> {
 
   pub fn get_error_summary(&self) -> PackageCompilationErrorSummary {
     let mut module_errors = HashMap::new();
-    let package_errors = Vec::new();
+    let mut package_errors = Vec::new();
 
     match &self.error {
       PackageCompilationError::ModulesFailedToCompile(modules_with_errors) => {
@@ -38,7 +38,11 @@ impl<'a> ErrorFormatter<'a> {
         }
       },
 
-      _ => unimplemented!()
+      PackageCompilationError::CyclicalDependency(cycle) => {
+        package_errors.push(
+          format!("Cyclical dependencies between modules:\n\n{}",
+            cycle.join(" --> ")))
+      }
     }
 
     PackageCompilationErrorSummary {

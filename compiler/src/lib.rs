@@ -9,8 +9,8 @@ pub mod errors;
 pub mod error_formatter;
 
 mod ast;
+mod dependency_graph;
 mod fs;
-mod import_chain;
 mod macros;
 mod module;
 mod parser;
