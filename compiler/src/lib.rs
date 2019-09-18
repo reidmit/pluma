@@ -7,6 +7,8 @@ pub const VERSION: &str = "0.1.0";
 pub mod compiler;
 pub mod errors;
 pub mod error_formatter;
+pub mod parser;
+pub mod tokenizer;
 
 mod analyzer;
 mod ast;
@@ -14,6 +16,4 @@ mod dependency_graph;
 mod fs;
 mod macros;
 mod module;
-mod parser;
-mod tokenizer;
 mod tokens;
