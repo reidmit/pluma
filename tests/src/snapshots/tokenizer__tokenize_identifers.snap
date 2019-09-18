@@ -1,0 +1,19 @@
+---
+source: tests/src/tokenizer.rs
+expression: hello world
+---
+Ok(
+    (
+        [
+            Identifier(
+                0,
+                5,
+            ),
+            Identifier(
+                6,
+                11,
+            ),
+        ],
+        {},
+    ),
+)

@@ -1,0 +1,57 @@
+---
+source: tests/src/parser.rs
+expression: "\"hello $(\"aa $(name) bb\")!\""
+---
+Ok(
+    Module {
+        start: 0,
+        end: 26,
+        imports: [],
+        body: [
+            StringInterpolation {
+                start: 1,
+                end: 26,
+                parts: [
+                    StringLiteral {
+                        start: 1,
+                        end: 7,
+                        value: "hello ",
+                        inferred_type: Unknown,
+                    },
+                    StringInterpolation {
+                        start: 10,
+                        end: 23,
+                        parts: [
+                            StringLiteral {
+                                start: 10,
+                                end: 13,
+                                value: "aa ",
+                                inferred_type: Unknown,
+                            },
+                            Identifier {
+                                start: 15,
+                                end: 19,
+                                name: "name",
+                                inferred_type: Unknown,
+                            },
+                            StringLiteral {
+                                start: 20,
+                                end: 23,
+                                value: " bb",
+                                inferred_type: Unknown,
+                            },
+                        ],
+                        inferred_type: Unknown,
+                    },
+                    StringLiteral {
+                        start: 25,
+                        end: 26,
+                        value: "!",
+                        inferred_type: Unknown,
+                    },
+                ],
+                inferred_type: Unknown,
+            },
+        ],
+    },
+)

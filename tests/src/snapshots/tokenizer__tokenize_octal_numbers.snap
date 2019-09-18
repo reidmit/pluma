@@ -1,0 +1,27 @@
+---
+source: tests/src/tokenizer.rs
+expression: 0o101 0o0 0o47 0O47
+---
+Ok(
+    (
+        [
+            OctalDigits(
+                0,
+                5,
+            ),
+            OctalDigits(
+                6,
+                9,
+            ),
+            OctalDigits(
+                10,
+                14,
+            ),
+            OctalDigits(
+                15,
+                19,
+            ),
+        ],
+        {},
+    ),
+)

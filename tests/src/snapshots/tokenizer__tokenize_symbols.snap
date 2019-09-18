@@ -1,0 +1,67 @@
+---
+source: tests/src/tokenizer.rs
+expression: "{ . } ( , ) : [ :: ] := = => ->"
+---
+Ok(
+    (
+        [
+            LeftBrace(
+                0,
+                1,
+            ),
+            Dot(
+                2,
+                3,
+            ),
+            RightBrace(
+                4,
+                5,
+            ),
+            LeftParen(
+                6,
+                7,
+            ),
+            Comma(
+                8,
+                9,
+            ),
+            RightParen(
+                10,
+                11,
+            ),
+            Colon(
+                12,
+                13,
+            ),
+            LeftBracket(
+                14,
+                15,
+            ),
+            DoubleColon(
+                16,
+                18,
+            ),
+            RightBracket(
+                19,
+                20,
+            ),
+            ColonEquals(
+                21,
+                23,
+            ),
+            Equals(
+                24,
+                25,
+            ),
+            DoubleArrow(
+                26,
+                28,
+            ),
+            Arrow(
+                29,
+                31,
+            ),
+        ],
+        {},
+    ),
+)

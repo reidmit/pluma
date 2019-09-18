@@ -1,0 +1,20 @@
+---
+source: tests/src/tokenizer.rs
+expression: "ok #comment"
+---
+Ok(
+    (
+        [
+            Identifier(
+                0,
+                2,
+            ),
+        ],
+        {
+            0: Comment(
+                4,
+                11,
+            ),
+        },
+    ),
+)

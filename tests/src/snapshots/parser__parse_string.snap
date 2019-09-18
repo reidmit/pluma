@@ -1,0 +1,19 @@
+---
+source: tests/src/parser.rs
+expression: "\"hello\""
+---
+Ok(
+    Module {
+        start: 0,
+        end: 6,
+        imports: [],
+        body: [
+            StringLiteral {
+                start: 1,
+                end: 6,
+                value: "hello",
+                inferred_type: Unknown,
+            },
+        ],
+    },
+)

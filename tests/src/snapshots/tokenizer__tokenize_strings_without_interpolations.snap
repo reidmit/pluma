@@ -1,0 +1,23 @@
+---
+source: tests/src/tokenizer.rs
+expression: "\"hello\" \"\" \"world\""
+---
+Ok(
+    (
+        [
+            StringLiteral(
+                1,
+                6,
+            ),
+            StringLiteral(
+                9,
+                9,
+            ),
+            StringLiteral(
+                12,
+                17,
+            ),
+        ],
+        {},
+    ),
+)

@@ -1,0 +1,21 @@
+---
+source: tests/src/parser.rs
+expression: use something as alias
+---
+Ok(
+    Module {
+        start: 0,
+        end: 22,
+        imports: [
+            Import {
+                start: 0,
+                end: 22,
+                alias: Some(
+                    "alias",
+                ),
+                path: "something",
+            },
+        ],
+        body: [],
+    },
+)

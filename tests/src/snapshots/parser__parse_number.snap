@@ -1,0 +1,22 @@
+---
+source: tests/src/parser.rs
+expression: "47"
+---
+Ok(
+    Module {
+        start: 0,
+        end: 2,
+        imports: [],
+        body: [
+            NumericLiteral {
+                start: 0,
+                end: 2,
+                value: Int(
+                    47,
+                ),
+                raw_value: "47",
+                inferred_type: Unknown,
+            },
+        ],
+    },
+)

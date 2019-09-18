@@ -1,0 +1,24 @@
+---
+source: tests/src/tokenizer.rs
+expression: "# comment \nok"
+---
+Ok(
+    (
+        [
+            LineBreak(
+                10,
+                11,
+            ),
+            Identifier(
+                11,
+                13,
+            ),
+        ],
+        {
+            0: Comment(
+                1,
+                10,
+            ),
+        },
+    ),
+)

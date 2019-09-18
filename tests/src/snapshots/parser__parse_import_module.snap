@@ -1,0 +1,19 @@
+---
+source: tests/src/parser.rs
+expression: use something
+---
+Ok(
+    Module {
+        start: 0,
+        end: 13,
+        imports: [
+            Import {
+                start: 0,
+                end: 13,
+                alias: None,
+                path: "something",
+            },
+        ],
+        body: [],
+    },
+)

@@ -1,0 +1,10 @@
+---
+source: tests/src/tokenizer.rs
+expression: ""
+---
+Ok(
+    (
+        [],
+        {},
+    ),
+)

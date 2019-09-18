@@ -1,0 +1,25 @@
+---
+source: tests/src/parser.rs
+expression: func()
+---
+Ok(
+    Module {
+        start: 0,
+        end: 6,
+        imports: [],
+        body: [
+            Call {
+                start: 4,
+                end: 6,
+                callee: Identifier {
+                    start: 0,
+                    end: 4,
+                    name: "func",
+                    inferred_type: Unknown,
+                },
+                arguments: [],
+                inferred_type: Unknown,
+            },
+        ],
+    },
+)
