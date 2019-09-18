@@ -761,11 +761,17 @@ impl<'a> Parser<'a> {
     };
 
     loop {
+      match self.current_token() {
+        Some(&Token::LeftParen(..)) | Some(&Token::LeftBrace(..)) => {
+          parsed = self.parse_any_calls_after_result(parsed);
+          continue;
+        },
+        _ => {}
+      }
+
       self.skip_line_breaks();
 
       match self.current_token() {
-        Some(&Token::LeftParen(..))
-          | Some(&Token::LeftBrace(..)) => parsed = self.parse_any_calls_after_result(parsed),
         Some(&Token::Dot(..)) => parsed = self.parse_chain(parsed),
         Some(&Token::ColonEquals(..)) => parsed = self.parse_reassignment(parsed),
         _ => break,
@@ -900,5 +906,20 @@ mod tests {
   assert_parsed_snapshot!(
     import_two_modules,
     "use something\nuse path/to/module\nlet x = 47"
+  );
+
+  assert_parsed_snapshot!(
+    call,
+    "func()"
+  );
+
+  assert_parsed_snapshot!(
+    call_with_args,
+    "func(1, \"two\", three)"
+  );
+
+  assert_parsed_snapshot!(
+    non_call_multiple_lines,
+    "thing\n(just, a, tuple)"
   );
 }
