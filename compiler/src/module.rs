@@ -1,4 +1,5 @@
 use crate::fs;
+use crate::analyzer::{analyze};
 use crate::ast::Node;
 use crate::parser::Parser;
 use crate::tokenizer::{Tokenizer, TokenList, CommentMap};
@@ -28,7 +29,7 @@ impl Module {
     }
   }
 
-  pub fn compile(&mut self) {
+  pub fn read_and_parse(&mut self) {
     if let Err(err) = self.read() {
       self.errors.push(err);
       return;
@@ -43,6 +44,10 @@ impl Module {
       self.errors.push(err);
       return;
     }
+  }
+
+  pub fn analyze(&mut self) {
+    analyze(&mut self.ast);
   }
 
   pub fn has_errors(&self) -> bool {

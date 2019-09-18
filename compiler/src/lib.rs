@@ -8,6 +8,7 @@ pub mod compiler;
 pub mod errors;
 pub mod error_formatter;
 
+mod analyzer;
 mod ast;
 mod dependency_graph;
 mod fs;

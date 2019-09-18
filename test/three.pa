@@ -1,3 +1,4 @@
-use dir/four
-
+use dir/four as f
+  `
 let three = "three"
+let x = f:wow.map({ x => f:doThing(x) })

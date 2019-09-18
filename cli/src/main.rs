@@ -36,6 +36,7 @@ fn main() {
 
       match compiler.run() {
         Ok(_) => {
+          println!("{:#?}", compiler);
           println!("Compilation succeeded!");
           exit(0);
         }

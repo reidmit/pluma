@@ -48,13 +48,15 @@ impl Compiler {
       return Err(PackageCompilationError::ModulesFailedToCompile(modules_with_errors));
     }
 
-    match self.dependency_graph.sort() {
+    let sorted_modules = match self.dependency_graph.sort() {
       TopologicalSort::Cycle(cycle) => {
         return Err(PackageCompilationError::CyclicalDependency(cycle.to_owned()));
       },
-      TopologicalSort::Sorted(_sorted) => {
-        // TODO
-      }
+      TopologicalSort::Sorted(sorted_modules) => sorted_modules.clone()
+    };
+
+    for module_name in sorted_modules {
+      self.analyze_module(module_name.to_string())?;
     }
 
     Ok(())
@@ -69,7 +71,7 @@ impl Compiler {
     let get_module_name = || module_name.clone();
 
     let mut module = Module::new(get_module_name(), module_path);
-    module.compile();
+    module.read_and_parse();
 
     let referenced = module.get_referenced_paths();
     self.modules.insert(get_module_name(), module);
@@ -84,6 +86,12 @@ impl Compiler {
       None => {}
     }
 
+    Ok(())
+  }
+
+  pub fn analyze_module(&mut self, module_name: String) -> Result<(), PackageCompilationError> {
+    let module = self.modules.get_mut(&module_name).unwrap();
+    module.analyze();
     Ok(())
   }
 }
