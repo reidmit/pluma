@@ -1,7 +1,55 @@
 ---
-source: tests/src/parser.rs
+source: tests/src/valid.rs
 expression: "\"hello $(\"aa $(name) bb\")!\""
 ---
+
+=== Source ===
+"hello $("aa $(name) bb")!"
+
+=== Tokens ===
+[
+    StringLiteral(
+        1,
+        7,
+    ),
+    InterpolationStart(
+        8,
+        9,
+    ),
+    StringLiteral(
+        10,
+        13,
+    ),
+    InterpolationStart(
+        14,
+        15,
+    ),
+    Identifier(
+        15,
+        19,
+    ),
+    InterpolationEnd(
+        19,
+        20,
+    ),
+    StringLiteral(
+        20,
+        23,
+    ),
+    InterpolationEnd(
+        24,
+        25,
+    ),
+    StringLiteral(
+        25,
+        26,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
 Ok(
     Module {
         start: 0,

@@ -1,7 +1,39 @@
 ---
-source: tests/src/parser.rs
+source: tests/src/valid.rs
 expression: "\"hello $(name)!\""
 ---
+
+=== Source ===
+"hello $(name)!"
+
+=== Tokens ===
+[
+    StringLiteral(
+        1,
+        7,
+    ),
+    InterpolationStart(
+        8,
+        9,
+    ),
+    Identifier(
+        9,
+        13,
+    ),
+    InterpolationEnd(
+        13,
+        14,
+    ),
+    StringLiteral(
+        14,
+        15,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
 Ok(
     Module {
         start: 0,

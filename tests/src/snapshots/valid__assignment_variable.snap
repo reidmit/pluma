@@ -1,17 +1,45 @@
 ---
-source: tests/src/parser.rs
-expression: let x = 47
+source: tests/src/valid.rs
+expression: "let x := 47"
 ---
+
+=== Source ===
+let x := 47
+
+=== Tokens ===
+[
+    KeywordLet(
+        0,
+        3,
+    ),
+    Identifier(
+        4,
+        5,
+    ),
+    ColonEquals(
+        6,
+        8,
+    ),
+    DecimalDigits(
+        9,
+        11,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
 Ok(
     Module {
         start: 0,
-        end: 10,
+        end: 11,
         imports: [],
         body: [
             Assignment {
                 start: 0,
-                end: 10,
-                is_constant: true,
+                end: 11,
+                is_constant: false,
                 left: Identifier {
                     start: 4,
                     end: 5,
@@ -19,8 +47,8 @@ Ok(
                     inferred_type: Unknown,
                 },
                 right: NumericLiteral {
-                    start: 8,
-                    end: 10,
+                    start: 9,
+                    end: 11,
                     value: Int(
                         47,
                     ),

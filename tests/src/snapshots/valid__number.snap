@@ -1,7 +1,23 @@
 ---
-source: tests/src/parser.rs
+source: tests/src/valid.rs
 expression: "47"
 ---
+
+=== Source ===
+47
+
+=== Tokens ===
+[
+    DecimalDigits(
+        0,
+        2,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
 Ok(
     Module {
         start: 0,

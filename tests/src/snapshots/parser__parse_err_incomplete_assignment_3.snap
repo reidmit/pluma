@@ -1,9 +1,0 @@
----
-source: tests/src/parser.rs
-expression: "let x\nlet y = 3"
----
-Err(
-    UnexpectedToken(
-        2,
-    ),
-)

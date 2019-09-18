@@ -1,7 +1,18 @@
 ---
-source: tests/src/parser.rs
+source: tests/src/valid.rs
 expression: ""
 ---
+
+=== Source ===
+
+
+=== Tokens ===
+[]
+
+=== Comments ===
+{}
+
+=== AST ===
 Ok(
     Module {
         start: 0,

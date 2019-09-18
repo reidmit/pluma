@@ -1,7 +1,23 @@
 ---
-source: tests/src/parser.rs
+source: tests/src/valid.rs
 expression: "\"hello\""
 ---
+
+=== Source ===
+"hello"
+
+=== Tokens ===
+[
+    StringLiteral(
+        1,
+        6,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
 Ok(
     Module {
         start: 0,

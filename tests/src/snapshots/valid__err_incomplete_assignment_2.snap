@@ -1,0 +1,27 @@
+---
+source: tests/src/valid.rs
+expression: let x
+---
+
+=== Source ===
+let x
+
+=== Tokens ===
+[
+    KeywordLet(
+        0,
+        3,
+    ),
+    Identifier(
+        4,
+        5,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+Err(
+    UnexpectedEOF,
+)

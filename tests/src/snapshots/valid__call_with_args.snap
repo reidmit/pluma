@@ -1,7 +1,51 @@
 ---
-source: tests/src/parser.rs
+source: tests/src/valid.rs
 expression: "func(1, \"two\", three)"
 ---
+
+=== Source ===
+func(1, "two", three)
+
+=== Tokens ===
+[
+    Identifier(
+        0,
+        4,
+    ),
+    LeftParen(
+        4,
+        5,
+    ),
+    DecimalDigits(
+        5,
+        6,
+    ),
+    Comma(
+        6,
+        7,
+    ),
+    StringLiteral(
+        9,
+        12,
+    ),
+    Comma(
+        13,
+        14,
+    ),
+    Identifier(
+        15,
+        20,
+    ),
+    RightParen(
+        20,
+        21,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
 Ok(
     Module {
         start: 0,

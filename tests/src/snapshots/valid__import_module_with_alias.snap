@@ -1,7 +1,35 @@
 ---
-source: tests/src/parser.rs
+source: tests/src/valid.rs
 expression: use something as alias
 ---
+
+=== Source ===
+use something as alias
+
+=== Tokens ===
+[
+    KeywordUse(
+        0,
+        3,
+    ),
+    ImportPath(
+        4,
+        13,
+    ),
+    KeywordAs(
+        14,
+        16,
+    ),
+    Identifier(
+        17,
+        22,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
 Ok(
     Module {
         start: 0,

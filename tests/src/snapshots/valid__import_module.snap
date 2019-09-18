@@ -1,7 +1,27 @@
 ---
-source: tests/src/parser.rs
+source: tests/src/valid.rs
 expression: use something
 ---
+
+=== Source ===
+use something
+
+=== Tokens ===
+[
+    KeywordUse(
+        0,
+        3,
+    ),
+    ImportPath(
+        4,
+        13,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
 Ok(
     Module {
         start: 0,

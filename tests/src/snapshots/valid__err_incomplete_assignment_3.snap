@@ -1,0 +1,50 @@
+---
+source: tests/src/valid.rs
+expression: "let x\nlet y = 3"
+---
+
+=== Source ===
+let x
+let y = 3
+
+=== Tokens ===
+[
+    KeywordLet(
+        0,
+        3,
+    ),
+    Identifier(
+        4,
+        5,
+    ),
+    LineBreak(
+        5,
+        6,
+    ),
+    KeywordLet(
+        6,
+        9,
+    ),
+    Identifier(
+        10,
+        11,
+    ),
+    Equals(
+        12,
+        13,
+    ),
+    DecimalDigits(
+        14,
+        15,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+Err(
+    UnexpectedToken(
+        2,
+    ),
+)

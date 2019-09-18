@@ -1,7 +1,61 @@
 ---
-source: tests/src/parser.rs
+source: tests/src/valid.rs
 expression: "use something\nuse path/to/module\nlet x = 47"
 ---
+
+=== Source ===
+use something
+use path/to/module
+let x = 47
+
+=== Tokens ===
+[
+    KeywordUse(
+        0,
+        3,
+    ),
+    ImportPath(
+        4,
+        13,
+    ),
+    LineBreak(
+        13,
+        14,
+    ),
+    KeywordUse(
+        14,
+        17,
+    ),
+    ImportPath(
+        18,
+        32,
+    ),
+    LineBreak(
+        32,
+        33,
+    ),
+    KeywordLet(
+        33,
+        36,
+    ),
+    Identifier(
+        37,
+        38,
+    ),
+    Equals(
+        39,
+        40,
+    ),
+    DecimalDigits(
+        41,
+        43,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
 Ok(
     Module {
         start: 0,
