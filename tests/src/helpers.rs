@@ -10,14 +10,21 @@ macro_rules! test_valid {
       let ast = Parser::new(&bytes, &tokens).parse_module();
 
       let value = format!(
-        "\n{}\n{}\n\n{}\n{:#?}\n\n{}\n{:#?}\n\n{}\n{:#?}",
-        "=== Source ===",
+        "
+=== Source ===
+{}
+
+=== Tokens ===
+{:#?}
+
+=== Comments ===
+{:#?}
+
+=== AST ===
+{:#?}",
         src,
-        "=== Tokens ===",
         tokens,
-        "=== Comments ===",
         comments,
-        "=== AST ===",
         ast,
       );
 
