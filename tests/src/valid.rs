@@ -80,3 +80,13 @@ test_valid!(non_call_multiple_lines,
   "thing
 (just, a, tuple)"
 );
+
+test_valid!(non_call_block_after_identifier,
+  "x
+{}"
+);
+
+test_valid!(non_call_block_after_assignment,
+  "let x = 2
+{}"
+);

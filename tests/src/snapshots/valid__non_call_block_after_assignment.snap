@@ -1,0 +1,82 @@
+---
+source: tests/src/valid.rs
+expression: "let x = 2\n{}"
+---
+
+=== Source ===
+let x = 2
+{}
+
+=== Tokens ===
+[
+    KeywordLet(
+        0,
+        3,
+    ),
+    Identifier(
+        4,
+        5,
+    ),
+    Equals(
+        6,
+        7,
+    ),
+    DecimalDigits(
+        8,
+        9,
+    ),
+    LineBreak(
+        9,
+        10,
+    ),
+    LeftBrace(
+        10,
+        11,
+    ),
+    RightBrace(
+        11,
+        12,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+Ok(
+    Module {
+        start: 0,
+        end: 12,
+        imports: [],
+        body: [
+            Assignment {
+                start: 0,
+                end: 9,
+                is_constant: true,
+                left: Identifier {
+                    start: 4,
+                    end: 5,
+                    name: "x",
+                    inferred_type: Unknown,
+                },
+                right: NumericLiteral {
+                    start: 8,
+                    end: 9,
+                    value: Int(
+                        2,
+                    ),
+                    raw_value: "2",
+                    inferred_type: Unknown,
+                },
+                inferred_type: Unknown,
+            },
+            Block {
+                start: 10,
+                end: 12,
+                params: [],
+                body: [],
+                inferred_type: Unknown,
+            },
+        ],
+    },
+)

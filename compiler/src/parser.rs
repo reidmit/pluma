@@ -756,8 +756,8 @@ impl<'a> Parser<'a> {
         | Some(&Token::HexDigits(..))
         | Some(&Token::DecimalDigits(..))
         | Some(&Token::BinaryDigits(..)) => self.parse_number(),
-      Some(_) => Error(UnexpectedToken(self.index)),
-      None => EOF,
+      Some(_) => return Error(UnexpectedToken(self.index)),
+      None => return EOF,
     };
 
     loop {
@@ -766,7 +766,10 @@ impl<'a> Parser<'a> {
           parsed = self.parse_any_calls_after_result(parsed);
           continue;
         },
-        _ => {}
+        Some(&Token::Dot(..)) | Some(&Token::ColonEquals(..)) => {
+          self.skip_line_breaks()
+        },
+        _ => break,
       }
 
       self.skip_line_breaks();
