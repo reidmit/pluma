@@ -10,6 +10,7 @@ mod colors;
 mod errors;
 mod options;
 mod usage;
+mod utils;
 
 fn main() {
   match options::parse_options() {
@@ -77,11 +78,17 @@ fn print_error_summary(compiler: &Compiler, summary: PackageCompilationErrorSumm
     return
   }
 
+  if !summary.module_errors.is_empty() {
+    eprintln!("{} while compiling:",
+      colors::bold_red("Error(s)"),
+    );
+  }
+
   for (module_name, module_errors) in summary.module_errors {
     for ModuleCompilationErrorDetail { module_path, location, message } in module_errors {
-      eprintln!("{} compiling {}:\n",
-        colors::bold_red("Error"),
+      eprintln!("\n── module: {} {}\n",
         colors::bold(module_name.as_str()),
+        "─".repeat(utils::get_terminal_width() - module_name.len() - 12),
       );
 
       eprintln!("{}", message);
