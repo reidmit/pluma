@@ -772,8 +772,6 @@ impl<'a> Parser<'a> {
         _ => break,
       }
 
-      self.skip_line_breaks();
-
       match self.current_token() {
         Some(&Token::Dot(..)) => parsed = self.parse_chain(parsed),
         Some(&Token::ColonEquals(..)) => parsed = self.parse_reassignment(parsed),
