@@ -740,12 +740,80 @@ impl<'a> Parser<'a> {
     })
   }
 
+  fn parse_method_definition(&mut self) -> ParseResult {
+    let start = match self.current_token() {
+      Some(&Token::KeywordDef(start, _)) => {
+        self.advance(1);
+        start
+      },
+      _ => unreachable!()
+    };
+
+    let name = match self.parse_identifier() {
+      Parsed(node) => node,
+      EOF => return Error(ParseError::UnexpectedEOF),
+      err => return err,
+    };
+
+    match self.current_token() {
+      Some(&Token::LeftParen(..)) => self.advance(1),
+      _ => return Error(ParseError::UnexpectedToken(self.index))
+    };
+
+    let mut params = Vec::new();
+
+    while let Some(&Token::Identifier(..)) = self.current_token() {
+      match self.parse_identifier() {
+        Parsed(node) => params.push(node),
+        EOF => return Error(ParseError::UnexpectedEOF),
+        err => return err,
+      }
+
+      match self.current_token() {
+        Some(&Token::Comma(..)) => self.advance(1),
+        Some(&Token::RightParen(..)) => break,
+        _ => return Error(ParseError::UnexpectedToken(self.index))
+      }
+    }
+
+    match self.current_token() {
+      Some(&Token::RightParen(..)) => self.advance(1),
+      _ => return Error(ParseError::UnexpectedToken(self.index))
+    };
+
+    match self.current_token() {
+      Some(&Token::Equals(..)) => self.advance(1),
+      _ => return Error(ParseError::UnexpectedToken(self.index))
+    };
+
+    let body = match self.current_token() {
+      Some(&Token::LeftBrace(..)) => match self.parse_block() {
+        Parsed(node) => node,
+        EOF => return Error(ParseError::UnexpectedEOF),
+        err => return err,
+      },
+      _ => return Error(ParseError::UnexpectedToken(self.index))
+    };
+
+    let (_, end) = get_node_location(&body);
+
+    Parsed(MethodDefinition {
+      start,
+      end,
+      name: Box::new(name),
+      params,
+      body: Box::new(body),
+      inferred_type: NodeType::Unknown,
+    })
+  }
+
   fn parse_expression(&mut self) -> ParseResult {
     self.skip_line_breaks();
 
     let mut parsed = match self.current_token() {
       Some(&Token::Minus(..)) => self.parse_negated_expression(),
       Some(&Token::KeywordLet(..)) => self.parse_assignment(),
+      Some(&Token::KeywordDef(..)) => self.parse_method_definition(),
       Some(&Token::Identifier(..)) => self.parse_identifier(),
       Some(&Token::LeftParen(..)) => self.parse_parenthetical(),
       Some(&Token::StringLiteral(..)) => self.parse_string(),

@@ -1,0 +1,72 @@
+---
+source: tests/src/valid.rs
+expression: "def someMethod() = {}"
+---
+
+=== Source ===
+def someMethod() = {}
+
+=== Tokens ===
+[
+    KeywordDef(
+        0,
+        3,
+    ),
+    Identifier(
+        4,
+        14,
+    ),
+    LeftParen(
+        14,
+        15,
+    ),
+    RightParen(
+        15,
+        16,
+    ),
+    Equals(
+        17,
+        18,
+    ),
+    LeftBrace(
+        19,
+        20,
+    ),
+    RightBrace(
+        20,
+        21,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+Ok(
+    Module {
+        start: 0,
+        end: 21,
+        imports: [],
+        body: [
+            MethodDefinition {
+                start: 0,
+                end: 21,
+                name: Identifier {
+                    start: 4,
+                    end: 14,
+                    name: "someMethod",
+                    inferred_type: Unknown,
+                },
+                params: [],
+                body: Block {
+                    start: 19,
+                    end: 21,
+                    params: [],
+                    body: [],
+                    inferred_type: Unknown,
+                },
+                inferred_type: Unknown,
+            },
+        ],
+    },
+)

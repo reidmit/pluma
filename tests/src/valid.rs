@@ -90,3 +90,21 @@ test_valid!(non_call_block_after_assignment,
   "let x = 2
 {}"
 );
+
+test_valid!(method_def_no_params,
+  "def someMethod() = {}"
+);
+
+test_valid!(method_def_no_params_with_body,
+  "def someMethod() = { 47 }"
+);
+
+test_valid!(method_def_no_params_multiline,
+  "def someMethod() = {
+  47
+}"
+);
+
+test_valid!(method_def_with_params,
+  "def someMethod() = { a, b => 47 }"
+);

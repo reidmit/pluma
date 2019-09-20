@@ -1,0 +1,96 @@
+---
+source: tests/src/valid.rs
+expression: "def someMethod() = {\n  47\n}"
+---
+
+=== Source ===
+def someMethod() = {
+  47
+}
+
+=== Tokens ===
+[
+    KeywordDef(
+        0,
+        3,
+    ),
+    Identifier(
+        4,
+        14,
+    ),
+    LeftParen(
+        14,
+        15,
+    ),
+    RightParen(
+        15,
+        16,
+    ),
+    Equals(
+        17,
+        18,
+    ),
+    LeftBrace(
+        19,
+        20,
+    ),
+    LineBreak(
+        20,
+        21,
+    ),
+    DecimalDigits(
+        23,
+        25,
+    ),
+    LineBreak(
+        25,
+        26,
+    ),
+    RightBrace(
+        26,
+        27,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+Ok(
+    Module {
+        start: 0,
+        end: 27,
+        imports: [],
+        body: [
+            MethodDefinition {
+                start: 0,
+                end: 27,
+                name: Identifier {
+                    start: 4,
+                    end: 14,
+                    name: "someMethod",
+                    inferred_type: Unknown,
+                },
+                params: [],
+                body: Block {
+                    start: 19,
+                    end: 27,
+                    params: [],
+                    body: [
+                        NumericLiteral {
+                            start: 23,
+                            end: 25,
+                            value: Int(
+                                47,
+                            ),
+                            raw_value: "47",
+                            inferred_type: Unknown,
+                        },
+                    ],
+                    inferred_type: Unknown,
+                },
+                inferred_type: Unknown,
+            },
+        ],
+    },
+)
