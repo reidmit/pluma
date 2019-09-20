@@ -6,6 +6,29 @@ pub enum UnaryOperator {
 #[derive(Debug, Clone)]
 pub enum NodeType {
   Unknown,
+  Bool,
+  String,
+  Int,
+  Float,
+  Identifier {
+    name: String,
+  },
+  Generic {
+    name: String,
+  },
+  Array {
+    element_type: Box<NodeType>
+  },
+  Dict {
+    value_type: Box<NodeType>
+  },
+  Tuple {
+    entry_types: Vec<NodeType>
+  },
+  Function {
+    param_types: Vec<NodeType>,
+    return_type: Box<NodeType>,
+  },
 }
 
 #[derive(Debug, Clone)]
@@ -190,5 +213,28 @@ pub fn get_node_location(node: &Node) -> (usize, usize) {
     &Node::StringLiteral { start, end, .. } => (start, end),
     &Node::Tuple { start, end, .. } => (start, end),
     &Node::UnaryOperation { start, end, .. } => (start, end),
+  }
+}
+
+pub fn get_node_type(node: &Node) -> NodeType {
+  match &node {
+    &Node::Array { inferred_type, .. } => inferred_type.clone(),
+    &Node::Assignment { inferred_type, .. } => inferred_type.clone(),
+    &Node::Block { inferred_type, .. } => inferred_type.clone(),
+    &Node::Call { inferred_type, .. } => inferred_type.clone(),
+    &Node::Dict { inferred_type, .. } => inferred_type.clone(),
+    &Node::Grouping { inferred_type, .. } => inferred_type.clone(),
+    &Node::Identifier { inferred_type, .. } => inferred_type.clone(),
+    &Node::Match { inferred_type, .. } => inferred_type.clone(),
+    &Node::MatchCase { inferred_type, .. } => inferred_type.clone(),
+    &Node::MethodDefinition { inferred_type, .. } => inferred_type.clone(),
+    &Node::NumericLiteral { inferred_type, .. } => inferred_type.clone(),
+    &Node::Reassignment { inferred_type, .. } => inferred_type.clone(),
+    &Node::StringInterpolation { inferred_type, .. } => inferred_type.clone(),
+    &Node::StringLiteral { inferred_type, .. } => inferred_type.clone(),
+    &Node::Tuple { inferred_type, .. } => inferred_type.clone(),
+    &Node::UnaryOperation { inferred_type, .. } => inferred_type.clone(),
+
+    _ => panic!("uh oh"),
   }
 }

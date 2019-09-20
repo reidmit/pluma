@@ -1,5 +1,5 @@
 use crate::fs;
-use crate::analyzer::{analyze};
+use crate::analyzer::{analyze_ast};
 use crate::ast::Node;
 use crate::parser::Parser;
 use crate::tokenizer::{Tokenizer, TokenList, CommentMap};
@@ -47,7 +47,7 @@ impl Module {
   }
 
   pub fn analyze(&mut self) {
-    analyze(&mut self.ast);
+    analyze_ast(&mut self.ast);
   }
 
   pub fn has_errors(&self) -> bool {
