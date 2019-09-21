@@ -2,26 +2,27 @@
 
 use std::collections::HashMap;
 use crate::ast::{Node, NodeType, get_node_type};
+use crate::errors::{AnalysisError, AnalysisError::*};
 
-pub fn analyze_ast(node: &mut Option<Node>) {
+pub fn analyze_ast(node: &mut Option<Node>) -> Result<(), AnalysisError> {
   let mut state = AnalyzerState::new();
 
   match node {
     Some(node) => analyze(node, &mut state),
-    _ => {}
+    _ => unreachable!()
   }
 }
 
-fn analyze(node: &mut Node, state: &mut AnalyzerState) {
+fn analyze(node: &mut Node, state: &mut AnalyzerState) -> Result<(), AnalysisError> {
   match node {
     Node::Array { elements, .. } => {
       for element in elements {
-        analyze(element, state);
+        analyze(element, state)?;
       }
     },
 
     Node::Assignment { left, right, inferred_type, .. } => {
-      analyze(right, state);
+      analyze(right, state)?;
 
       let name = get_identifier_name(left);
 
@@ -32,19 +33,19 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) {
 
     Node::Block { params, body, .. } => {
       for param in params {
-        analyze(param, state);
+        analyze(param, state)?;
       }
 
       for expr in body {
-        analyze(expr, state);
+        analyze(expr, state)?;
       }
     },
 
     Node::Call { callee, arguments, .. } => {
-      analyze(callee, state);
+      analyze(callee, state)?;
 
       for argument in arguments {
-        analyze(argument, state);
+        analyze(argument, state)?;
       }
     },
 
@@ -93,7 +94,7 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) {
       state.scope.enter();
 
       for body_node in body {
-        analyze(body_node, state);
+        analyze(body_node, state)?;
       }
 
       state.scope.exit();
@@ -109,7 +110,16 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) {
 
     Node::StringInterpolation { parts, inferred_type, .. } => {
       for part in parts {
-        analyze(part, state);
+        analyze(part, state)?;
+
+        match get_node_type(part) {
+          NodeType::String => {},
+          other => return Err(TypeMismatch(
+            part.clone(),
+            NodeType::String,
+            other
+          ))
+        }
       }
 
       *inferred_type = NodeType::String
@@ -127,6 +137,8 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) {
 
     },
   }
+
+  Ok(())
 }
 
 fn get_identifier_name(node: &Node) -> String {

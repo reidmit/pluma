@@ -36,17 +36,7 @@ impl Compiler {
 
     let module_name = &self.entry_module_name.to_string();
     self.parse_module(module_name.to_string())?;
-
-    let mut modules_with_errors = Vec::new();
-    for (module_path, module) in &self.modules {
-      if module.has_errors() {
-        modules_with_errors.push(module_path.clone());
-      }
-    }
-
-    if !modules_with_errors.is_empty() {
-      return Err(PackageCompilationError::ModulesFailedToCompile(modules_with_errors));
-    }
+    self.check_for_module_errors()?;
 
     let sorted_modules = match self.dependency_graph.sort() {
       TopologicalSort::Cycle(cycle) => {
@@ -58,6 +48,8 @@ impl Compiler {
     for module_name in sorted_modules {
       self.analyze_module(module_name.to_string())?;
     }
+
+    self.check_for_module_errors()?;
 
     Ok(())
   }
@@ -92,6 +84,22 @@ impl Compiler {
   pub fn analyze_module(&mut self, module_name: String) -> Result<(), PackageCompilationError> {
     let module = self.modules.get_mut(&module_name).unwrap();
     module.analyze();
+    Ok(())
+  }
+
+  fn check_for_module_errors(&self) -> Result<(), PackageCompilationError> {
+    let mut modules_with_errors = Vec::new();
+
+    for (module_path, module) in &self.modules {
+      if module.has_errors() {
+        modules_with_errors.push(module_path.clone());
+      }
+    }
+
+    if !modules_with_errors.is_empty() {
+      return Err(PackageCompilationError::ModulesFailedToCompile(modules_with_errors));
+    }
+
     Ok(())
   }
 }

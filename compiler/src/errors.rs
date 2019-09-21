@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::ast::Node;
+use crate::ast::{Node, NodeType};
 
 #[derive(Debug)]
 pub struct PackageCompilationErrorSummary {
@@ -25,6 +25,7 @@ pub enum ModuleCompilationError {
   FileError(FileError),
   TokenizeError(TokenizeError),
   ParseError(ParseError),
+  AnalysisError(AnalysisError),
 }
 
 #[derive(Debug)]
@@ -58,4 +59,9 @@ pub enum ParseError {
   MissingArrowAfterBlockParams(usize),
   MissingAliasAfterAsInImport(usize),
   MissingCasesInMatchExpression(usize),
+}
+
+#[derive(Debug, Clone)]
+pub enum AnalysisError {
+  TypeMismatch(Node, NodeType, NodeType)
 }

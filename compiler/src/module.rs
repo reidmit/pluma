@@ -47,7 +47,9 @@ impl Module {
   }
 
   pub fn analyze(&mut self) {
-    analyze_ast(&mut self.ast);
+    if let Err(err) = analyze_ast(&mut self.ast) {
+      self.errors.push(ModuleCompilationError::AnalysisError(err));
+    }
   }
 
   pub fn has_errors(&self) -> bool {

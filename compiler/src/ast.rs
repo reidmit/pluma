@@ -12,6 +12,7 @@ pub enum NodeType {
   Float,
   Identifier {
     name: String,
+    type_params: Vec<NodeType>,
   },
   Generic {
     name: String,

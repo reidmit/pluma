@@ -56,6 +56,7 @@ impl<'a> ErrorFormatter<'a> {
       ModuleCompilationError::FileError(..) => self.get_file_error_details(err),
       ModuleCompilationError::TokenizeError(..) => self.get_tokenize_error_details(module_name, err),
       ModuleCompilationError::ParseError(..) => self.get_parse_error_details(err),
+      ModuleCompilationError::AnalysisError(..) => self.get_analysis_error_details(err),
     };
 
     let module = self.compiler.modules.get(module_name).unwrap();
@@ -146,6 +147,17 @@ impl<'a> ErrorFormatter<'a> {
   fn get_parse_error_details(&self, err: &ModuleCompilationError) -> (Option<(usize, usize)>, String) {
     let (location, message) = match err {
       ModuleCompilationError::ParseError(parse_err) => match parse_err {
+        er => (None, format!("{:#?}", er))
+      },
+      _ => unreachable!()
+    };
+
+    (location, message)
+  }
+
+  fn get_analysis_error_details(&self, err: &ModuleCompilationError) -> (Option<(usize, usize)>, String) {
+    let (location, message) = match err {
+      ModuleCompilationError::AnalysisError(analysis_err) => match analysis_err {
         er => (None, format!("{:#?}", er))
       },
       _ => unreachable!()
