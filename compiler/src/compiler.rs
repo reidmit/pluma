@@ -34,8 +34,8 @@ impl Compiler {
   pub fn run(&mut self) -> Result<(), PackageCompilationError> {
     self.modules.clear();
 
-    let module_name = &self.entry_module_name.to_string();
-    self.parse_module(module_name.to_string())?;
+    let entry_module_name = &self.entry_module_name.to_string();
+    self.parse_module(entry_module_name.to_string())?;
     self.check_for_module_errors()?;
 
     let sorted_modules = match self.dependency_graph.sort() {
