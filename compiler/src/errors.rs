@@ -63,5 +63,7 @@ pub enum ParseError {
 
 #[derive(Debug, Clone)]
 pub enum AnalysisError {
-  TypeMismatch(Node, NodeType, NodeType)
+  TypeMismatch(Node, NodeType, NodeType),
+  TypeMismatchArrayElement(Node, NodeType, NodeType),
+  UndefinedVariable(Node),
 }

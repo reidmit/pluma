@@ -15,9 +15,35 @@ pub fn analyze_ast(node: &mut Option<Node>) -> Result<(), AnalysisError> {
 
 fn analyze(node: &mut Node, state: &mut AnalyzerState) -> Result<(), AnalysisError> {
   match node {
-    Node::Array { elements, .. } => {
+    Node::Array { elements, inferred_type, .. } => {
+      let mut first_element_type = None;
+
       for element in elements {
         analyze(element, state)?;
+
+        let element_type = get_node_type(element);
+
+        if let Some(first_type) = first_element_type.clone() {
+          if first_type != element_type {
+            return Err(TypeMismatchArrayElement(
+              element.clone(),
+              first_type,
+              element_type,
+            ))
+          }
+        } else {
+          first_element_type = Some(element_type.clone());
+        }
+      }
+
+      let type_params = match first_element_type {
+        Some(element_type) => vec![element_type.clone()],
+        None => vec![NodeType::Generic],
+      };
+
+      *inferred_type = NodeType::Identifier {
+        name: "list".to_owned(),
+        type_params,
       }
     },
 
@@ -70,7 +96,7 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) -> Result<(), AnalysisErr
         Some(node_type) => {
           *inferred_type = node_type
         },
-        None => panic!("Not defined: {}", name)
+        None => return Err(UndefinedVariable(node.clone()))
       }
     },
 

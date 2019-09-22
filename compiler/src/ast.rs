@@ -3,7 +3,7 @@ pub enum UnaryOperator {
   Minus,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum NodeType {
   Unknown,
   Bool,
@@ -14,9 +14,7 @@ pub enum NodeType {
     name: String,
     type_params: Vec<NodeType>,
   },
-  Generic {
-    name: String,
-  },
+  Generic,
   Array {
     element_type: Box<NodeType>
   },
