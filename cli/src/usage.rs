@@ -1,5 +1,5 @@
-use pluma_compiler::{VERSION, LANG_NAME, LANG_NAME_UPPER};
 use crate::colors;
+use pluma_compiler::{LANG_NAME, LANG_NAME_UPPER, VERSION};
 
 pub fn main_usage() -> String {
   format!(

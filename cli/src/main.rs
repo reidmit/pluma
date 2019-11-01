@@ -1,9 +1,10 @@
 use pluma_compiler::compiler::{Compiler, CompilerConfig};
 use pluma_compiler::error_formatter::ErrorFormatter;
-use pluma_compiler::errors::{PackageCompilationErrorSummary, ModuleCompilationErrorDetail};
+use pluma_compiler::errors::{ModuleCompilationErrorDetail, PackageCompilationErrorSummary};
 use pluma_compiler::VERSION;
 use std::fmt;
 use std::process::exit;
+
 use crate::options::Command;
 
 mod colors;
@@ -17,22 +18,25 @@ fn main() {
     Ok(Command::Help) => {
       println!("{}", usage::main_usage());
       exit(0);
-    },
+    }
 
     Ok(Command::Version) => {
-      println!("v{}", VERSION);
+      println!("version {}", VERSION);
       exit(0);
-    },
+    }
 
     Ok(Command::BuildHelp) => {
       println!("{}", usage::build_usage());
       exit(0);
-    },
+    }
 
-    Ok(Command::Build { root_dir, entry_module_name }) => {
+    Ok(Command::Build {
+      root_dir,
+      entry_module_name,
+    }) => {
       let mut compiler = Compiler::new(CompilerConfig {
         root_dir,
-        entry_module_name
+        entry_module_name,
       });
 
       match compiler.run() {
@@ -48,15 +52,15 @@ fn main() {
           exit(1);
         }
       }
-    },
+    }
 
     Ok(Command::RunHelp) => {
       unimplemented!();
-    },
+    }
 
     Ok(Command::Run { .. }) => {
       unimplemented!();
-    },
+    }
 
     Err(err) => {
       print_error(err);
@@ -75,18 +79,22 @@ fn print_error_summary(compiler: &Compiler, summary: PackageCompilationErrorSumm
       print_error(package_error);
     }
 
-    return
+    return;
   }
 
   if !summary.module_errors.is_empty() {
-    eprintln!("{} while compiling:",
-      colors::bold_red("Error(s)"),
-    );
+    eprintln!("{} while compiling:", colors::bold_red("Error(s)"),);
   }
 
   for (module_name, module_errors) in summary.module_errors {
-    for ModuleCompilationErrorDetail { module_path, location, message } in module_errors {
-      eprintln!("\n── module: {} {}\n",
+    for ModuleCompilationErrorDetail {
+      module_path,
+      location,
+      message,
+    } in module_errors
+    {
+      eprintln!(
+        "\n── module: {} {}\n",
         colors::bold(module_name.as_str()),
         "─".repeat(utils::get_terminal_width() - module_name.len() - 12),
       );
@@ -112,12 +120,12 @@ fn print_error_summary(compiler: &Compiler, summary: PackageCompilationErrorSumm
 
           while let Some(byte) = bytes.get(frame_end) {
             if frame_end >= bytes.len() - 1 {
-              break
+              break;
             }
 
             match byte {
               b'\n' => break,
-              _ => frame_end += 1
+              _ => frame_end += 1,
             }
           }
 
@@ -133,22 +141,25 @@ fn print_error_summary(compiler: &Compiler, summary: PackageCompilationErrorSumm
             frame_start -= 1;
           }
 
-          eprintln!("\n{} {} {}",
+          eprintln!(
+            "\n{} {} {}",
             colors::bold_red(">"),
             colors::bold_dim(format!("{}|", line).as_str()),
-            frame);
+            frame
+          );
 
           let prefix_width = 4 + line.to_string().len();
 
-          eprintln!("{}{}",
+          eprintln!(
+            "{}{}",
             " ".repeat(prefix_width + col_index),
-            colors::bold_red("^"));
+            colors::bold_red("^")
+          );
 
-          eprintln!("{}",
-            colors::dim(format!("{}:{}:{}",
-              &module_path,
-              line,
-              col_index + 1).as_str()));
+          eprintln!(
+            "{}",
+            colors::dim(format!("{}:{}:{}", &module_path, line, col_index + 1).as_str())
+          );
         }
       }
     }
