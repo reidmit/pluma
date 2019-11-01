@@ -1,21 +1,25 @@
 #![allow(unused_variables)]
 
-use std::collections::HashMap;
-use crate::ast::{Node, NodeType, get_node_type};
+use crate::ast::{get_node_type, Node, NodeType};
 use crate::errors::{AnalysisError, AnalysisError::*};
+use std::collections::HashMap;
 
 pub fn analyze_ast(node: &mut Option<Node>) -> Result<(), AnalysisError> {
   let mut state = AnalyzerState::new();
 
   match node {
     Some(node) => analyze(node, &mut state),
-    _ => unreachable!()
+    _ => unreachable!(),
   }
 }
 
 fn analyze(node: &mut Node, state: &mut AnalyzerState) -> Result<(), AnalysisError> {
   match node {
-    Node::Array { elements, inferred_type, .. } => {
+    Node::Array {
+      elements,
+      inferred_type,
+      ..
+    } => {
       let mut first_element_type = None;
 
       for element in elements {
@@ -29,7 +33,7 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) -> Result<(), AnalysisErr
               element.clone(),
               first_type,
               element_type,
-            ))
+            ));
           }
         } else {
           first_element_type = Some(element_type.clone());
@@ -45,9 +49,14 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) -> Result<(), AnalysisErr
         name: "list".to_owned(),
         type_params,
       }
-    },
+    }
 
-    Node::Assignment { left, right, inferred_type, .. } => {
+    Node::Assignment {
+      left,
+      right,
+      inferred_type,
+      ..
+    } => {
       analyze(right, state)?;
 
       let name = get_identifier_name(left);
@@ -55,66 +64,67 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) -> Result<(), AnalysisErr
       *inferred_type = get_node_type(right);
 
       state.scope.add(name, get_node_type(right));
-    },
+    }
 
-    Node::Block { params, body, .. } => {
+    Node::Block {
+      params,
+      body,
+      inferred_type,
+      ..
+    } => {
+      let mut param_types = vec![];
+      let mut return_type = None;
+
       for param in params {
         analyze(param, state)?;
+        param_types.push(get_node_type(param));
       }
 
       for expr in body {
         analyze(expr, state)?;
+        return_type = Some(get_node_type(expr));
       }
-    },
 
-    Node::Call { callee, arguments, .. } => {
+      *inferred_type = NodeType::Function {
+        param_types,
+        return_type: Box::new(return_type.unwrap()),
+      }
+    }
+
+    Node::Call {
+      callee, arguments, ..
+    } => {
       analyze(callee, state)?;
 
       for argument in arguments {
         analyze(argument, state)?;
       }
+    }
+
+    Node::Chain { start, end, .. } => {}
+
+    Node::Dict { start, end, .. } => {}
+
+    Node::DictEntry { start, end, .. } => {}
+
+    Node::Grouping { start, end, .. } => {}
+
+    Node::Identifier {
+      name,
+      inferred_type,
+      ..
+    } => match state.scope.get(name) {
+      Some(node_type) => *inferred_type = node_type,
+      None => return Err(UndefinedVariable(node.clone())),
     },
 
-    Node::Chain { start, end, .. } => {
+    Node::Import { start, end, .. } => {}
 
-    },
+    Node::Match { start, end, .. } => {}
 
-    Node::Dict { start, end, .. } => {
+    Node::MatchCase { start, end, .. } => {}
 
-    },
-
-    Node::DictEntry { start, end, .. } => {
-
-    },
-
-    Node::Grouping { start, end, .. } => {
-
-    },
-
-    Node::Identifier { name, inferred_type, .. } => {
-      match state.scope.get(name) {
-        Some(node_type) => {
-          *inferred_type = node_type
-        },
-        None => return Err(UndefinedVariable(node.clone()))
-      }
-    },
-
-    Node::Import { start, end, .. } => {
-
-    },
-
-    Node::Match { start, end, .. } => {
-
-    },
-
-    Node::MatchCase { start, end, .. } => {
-
-    },
-
-    Node::MethodDefinition { start, end, .. } => {
-
-    },
+    Node::MethodDefinition { start, end, .. } => {}
 
     Node::Module { body, .. } => {
       state.scope.enter();
@@ -124,44 +134,34 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) -> Result<(), AnalysisErr
       }
 
       state.scope.exit();
-    },
+    }
 
-    Node::NumericLiteral { inferred_type, .. } => {
-      *inferred_type = NodeType::Int
-    },
+    Node::NumericLiteral { inferred_type, .. } => *inferred_type = NodeType::Int,
 
-    Node::Reassignment { start, end, .. } => {
+    Node::Reassignment { start, end, .. } => {}
 
-    },
-
-    Node::StringInterpolation { parts, inferred_type, .. } => {
+    Node::StringInterpolation {
+      parts,
+      inferred_type,
+      ..
+    } => {
       for part in parts {
         analyze(part, state)?;
 
         match get_node_type(part) {
-          NodeType::String => {},
-          other => return Err(TypeMismatch(
-            part.clone(),
-            NodeType::String,
-            other
-          ))
+          NodeType::String => {}
+          other => return Err(TypeMismatch(part.clone(), NodeType::String, other)),
         }
       }
 
       *inferred_type = NodeType::String
-    },
+    }
 
-    Node::StringLiteral { inferred_type, .. } => {
-      *inferred_type = NodeType::String
-    },
+    Node::StringLiteral { inferred_type, .. } => *inferred_type = NodeType::String,
 
-    Node::Tuple { start, end, .. } => {
+    Node::Tuple { start, end, .. } => {}
 
-    },
-
-    Node::UnaryOperation { start, end, .. } => {
-
-    },
+    Node::UnaryOperation { start, end, .. } => {}
   }
 
   Ok(())
@@ -170,7 +170,7 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) -> Result<(), AnalysisErr
 fn get_identifier_name(node: &Node) -> String {
   match node {
     Node::Identifier { name, .. } => name.to_string(),
-    _ => unreachable!()
+    _ => unreachable!(),
   }
 }
 
@@ -181,7 +181,7 @@ struct AnalyzerState {
 impl AnalyzerState {
   fn new() -> Self {
     AnalyzerState {
-      scope: Scope::new()
+      scope: Scope::new(),
     }
   }
 }
@@ -194,7 +194,7 @@ struct Scope {
 impl Scope {
   fn new() -> Self {
     Scope {
-      variables: Vec::new()
+      variables: Vec::new(),
     }
   }
 
