@@ -22,10 +22,7 @@ macro_rules! test_valid {
 
 === AST ===
 {:#?}",
-        src,
-        tokens,
-        comments,
-        ast,
+        src, tokens, comments, ast,
       );
 
       let file_name = format!("{}", stringify!($name));

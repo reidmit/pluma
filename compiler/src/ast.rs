@@ -16,13 +16,13 @@ pub enum NodeType {
   },
   Generic,
   Array {
-    element_type: Box<NodeType>
+    element_type: Box<NodeType>,
   },
   Dict {
-    value_type: Box<NodeType>
+    value_type: Box<NodeType>,
   },
   Tuple {
-    entry_types: Vec<NodeType>
+    entry_types: Vec<NodeType>,
   },
   Function {
     param_types: Vec<NodeType>,
@@ -33,7 +33,7 @@ pub enum NodeType {
 #[derive(Debug, Clone)]
 pub enum NumericValue {
   Int(i64),
-  Float(f64)
+  Float(f64),
 }
 
 #[derive(Debug, Clone)]

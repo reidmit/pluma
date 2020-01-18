@@ -1,6 +1,6 @@
+use crate::errors::{TokenizeError, TokenizeError::*};
 use crate::tokens::{Token, Token::*};
 use std::collections::HashMap;
-use crate::errors::{TokenizeError, TokenizeError::*};
 
 pub struct Tokenizer<'a> {
   source: &'a Vec<u8>,
@@ -123,7 +123,7 @@ impl<'a> Tokenizer<'a> {
           index += 1;
 
           if index >= length {
-            break
+            break;
           }
 
           path_byte = source[index];
@@ -250,13 +250,13 @@ impl<'a> Tokenizer<'a> {
             b'u' if value == "use".as_bytes() => {
               expect_import_path = true;
               tokens.push(KeywordUse(start_index, index))
-            },
+            }
             b'l' if value == "let".as_bytes() => tokens.push(KeywordLet(start_index, index)),
             b'm' if value == "match".as_bytes() => tokens.push(KeywordMatch(start_index, index)),
             b'd' if value == "def".as_bytes() => tokens.push(KeywordDef(start_index, index)),
             b't' if value == "type".as_bytes() => tokens.push(KeywordType(start_index, index)),
             b'a' if value == "as".as_bytes() => tokens.push(KeywordAs(start_index, index)),
-            _ => tokens.push(Identifier(start_index, index))
+            _ => tokens.push(Identifier(start_index, index)),
           }
 
           continue;
@@ -270,7 +270,7 @@ impl<'a> Tokenizer<'a> {
 
                 while index < length && is_identifier_char(source[index]) {
                   if source[index] != b'0' && source[index] != b'1' {
-                    return Err(InvalidBinaryDigit(index, index + 1))
+                    return Err(InvalidBinaryDigit(index, index + 1));
                   }
 
                   index += 1;
@@ -278,14 +278,14 @@ impl<'a> Tokenizer<'a> {
 
                 tokens.push(BinaryDigits(start_index, index));
                 continue;
-              },
+              }
 
               Some(b'x') | Some(b'X') => {
                 index += 2;
 
                 while index < length && is_identifier_char(source[index]) {
                   if !source[index].is_ascii_hexdigit() {
-                    return Err(InvalidHexDigit(index, index + 1))
+                    return Err(InvalidHexDigit(index, index + 1));
                   }
 
                   index += 1;
@@ -293,14 +293,14 @@ impl<'a> Tokenizer<'a> {
 
                 tokens.push(HexDigits(start_index, index));
                 continue;
-              },
+              }
 
               Some(b'o') | Some(b'O') => {
                 index += 2;
 
                 while index < length && is_identifier_char(source[index]) {
                   if source[index] < 48 || source[index] > 55 {
-                    return Err(InvalidOctalDigit(index, index + 1))
+                    return Err(InvalidOctalDigit(index, index + 1));
                   }
 
                   index += 1;
@@ -308,7 +308,7 @@ impl<'a> Tokenizer<'a> {
 
                 tokens.push(OctalDigits(start_index, index));
                 continue;
-              },
+              }
 
               _ => {}
             }
@@ -316,7 +316,7 @@ impl<'a> Tokenizer<'a> {
 
           while index < length && is_identifier_char(source[index]) {
             if !source[index].is_ascii_digit() {
-              return Err(InvalidDecimalDigit(index, index + 1))
+              return Err(InvalidDecimalDigit(index, index + 1));
             }
 
             index += 1;
@@ -335,12 +335,12 @@ impl<'a> Tokenizer<'a> {
 
     if !interpolation_stack.is_empty() {
       let start_index = interpolation_stack.pop().unwrap();
-      return Err(UnclosedInterpolation(start_index, index))
+      return Err(UnclosedInterpolation(start_index, index));
     }
 
     if !string_stack.is_empty() {
       let start_index = string_stack.pop().unwrap();
-      return Err(UnclosedString(start_index, index))
+      return Err(UnclosedString(start_index, index));
     }
 
     Ok((tokens, comments))
@@ -350,21 +350,21 @@ impl<'a> Tokenizer<'a> {
 fn is_identifier_start_char(byte: u8) -> bool {
   match byte {
     b'a'...b'z' | b'A'...b'Z' => true,
-    _ => false
+    _ => false,
   }
 }
 
 fn is_identifier_char(byte: u8) -> bool {
   match byte {
     b'a'...b'z' | b'A'...b'Z' | b'0'...b'9' => true,
-    _ => false
+    _ => false,
   }
 }
 
 fn is_digit(byte: u8) -> bool {
   match byte {
     b'0'...b'9' => true,
-    _ => false
+    _ => false,
   }
 }
 
@@ -372,6 +372,6 @@ fn is_path_char(byte: u8) -> bool {
   match byte {
     b'\\' | b'?' | b'%' | b'*' | b':' | b'"' | b'<' | b'>' => false,
     b if b.is_ascii_whitespace() => false,
-    _ => true
+    _ => true,
   }
 }
