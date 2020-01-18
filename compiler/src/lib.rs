@@ -16,4 +16,5 @@ mod dependency_graph;
 mod fs;
 mod macros;
 mod module;
+mod scope;
 mod tokens;

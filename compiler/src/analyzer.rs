@@ -2,7 +2,7 @@
 
 use crate::ast::{get_node_type, Node, NodeType};
 use crate::errors::{AnalysisError, AnalysisError::*};
-use std::collections::HashMap;
+use crate::scope::Scope;
 
 pub fn analyze_ast(node: &mut Option<Node>) -> Result<(), AnalysisError> {
   let mut state = AnalyzerState::new();
@@ -183,42 +183,5 @@ impl AnalyzerState {
     AnalyzerState {
       scope: Scope::new(),
     }
-  }
-}
-
-#[derive(Debug)]
-struct Scope {
-  variables: Vec<HashMap<String, NodeType>>,
-}
-
-impl Scope {
-  fn new() -> Self {
-    Scope {
-      variables: Vec::new(),
-    }
-  }
-
-  fn enter(&mut self) {
-    self.variables.push(HashMap::new());
-  }
-
-  fn exit(&mut self) {
-    self.variables.pop();
-  }
-
-  fn add(&mut self, name: String, node_type: NodeType) {
-    if let Some(map) = self.variables.last_mut() {
-      map.insert(name, node_type);
-    }
-  }
-
-  fn get(&self, name: &String) -> Option<NodeType> {
-    for level in self.variables.iter().rev() {
-      if level.contains_key(name) {
-        return Some(level.get(name).unwrap().to_owned());
-      }
-    }
-
-    None
   }
 }
