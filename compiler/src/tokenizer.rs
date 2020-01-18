@@ -349,21 +349,21 @@ impl<'a> Tokenizer<'a> {
 
 fn is_identifier_start_char(byte: u8) -> bool {
   match byte {
-    b'a'...b'z' | b'A'...b'Z' => true,
+    b'a'..=b'z' | b'A'..=b'Z' => true,
     _ => false,
   }
 }
 
 fn is_identifier_char(byte: u8) -> bool {
   match byte {
-    b'a'...b'z' | b'A'...b'Z' | b'0'...b'9' => true,
+    b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' => true,
     _ => false,
   }
 }
 
 fn is_digit(byte: u8) -> bool {
   match byte {
-    b'0'...b'9' => true,
+    b'0'..=b'9' => true,
     _ => false,
   }
 }

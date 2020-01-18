@@ -174,7 +174,7 @@ impl<'a> Parser<'a> {
         for byte in bytes {
           let byte_value = match byte {
             b'o' | b'O' => break,
-            b'0'...b'7' => byte - 48,
+            b'0'..=b'7' => byte - 48,
             _ => unreachable!(),
           };
 
@@ -193,9 +193,9 @@ impl<'a> Parser<'a> {
         for byte in bytes {
           let byte_value = match byte {
             b'x' | b'X' => break,
-            b'0'...b'9' => byte - 48,
-            b'a'...b'f' => byte - 87,
-            b'A'...b'F' => byte - 55,
+            b'0'..=b'9' => byte - 48,
+            b'a'..=b'f' => byte - 87,
+            b'A'..=b'F' => byte - 55,
             _ => unreachable!(),
           };
 
@@ -213,7 +213,7 @@ impl<'a> Parser<'a> {
         let mut i: i64 = 1;
         for byte in bytes {
           let byte_value = match byte {
-            b'0'...b'9' => byte - 48,
+            b'0'..=b'9' => byte - 48,
             _ => unreachable!(),
           };
 
