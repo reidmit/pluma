@@ -83,7 +83,12 @@ fn print_error_summary(compiler: &Compiler, summary: PackageCompilationErrorSumm
   }
 
   if !summary.module_errors.is_empty() {
-    eprintln!("{} while compiling:", colors::bold_red("Error(s)"),);
+    let suffix = match summary.module_errors.len() {
+      1 => "".to_owned(),
+      _ => colors::bold_red("(s)"),
+    };
+
+    eprintln!("{}{} while compiling:", colors::bold_red("Error"), suffix);
   }
 
   for (module_name, module_errors) in summary.module_errors {
@@ -94,9 +99,9 @@ fn print_error_summary(compiler: &Compiler, summary: PackageCompilationErrorSumm
     } in module_errors
     {
       eprintln!(
-        "\n── module: {} {}\n",
+        "\n── in module: {} {}\n",
         colors::bold(module_name.as_str()),
-        "─".repeat(utils::get_terminal_width() - module_name.len() - 12),
+        "─".repeat(utils::get_terminal_width() - module_name.len() - 15),
       );
 
       eprintln!("{}", message);
