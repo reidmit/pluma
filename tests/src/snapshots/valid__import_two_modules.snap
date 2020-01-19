@@ -83,6 +83,7 @@ Ok(
                     start: 37,
                     end: 38,
                     name: "x",
+                    qualifier: None,
                     inferred_type: Unknown,
                 },
                 right: NumericLiteral {

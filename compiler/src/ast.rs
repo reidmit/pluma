@@ -109,6 +109,7 @@ pub enum Node {
     start: usize,
     end: usize,
     name: String,
+    qualifier: Option<String>,
     inferred_type: NodeType,
   },
 

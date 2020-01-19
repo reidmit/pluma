@@ -88,17 +88,35 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_identifier(&mut self) -> ParseResult {
-    let (start, end, name) = match self.current_token() {
+    let mut qualifier = None;
+
+    let (start, mut end, mut name) = match self.current_token() {
       Some(&Token::Identifier(start, end)) => (start, end, self.read_string(start, end)),
       _ => unreachable!(),
     };
 
     self.advance(1);
 
+    if let Some(&Token::Colon(..)) = self.current_token() {
+      self.advance(1);
+
+      match self.current_token() {
+        Some(&Token::Identifier(part_start, part_end)) => {
+          qualifier = Some(name);
+          name = self.read_string(part_start, part_end);
+          end = part_end;
+
+          self.advance(1);
+        }
+        _ => return Error(UnexpectedToken(self.index)),
+      };
+    };
+
     Parsed(Identifier {
       start,
       end,
       name,
+      qualifier,
       inferred_type: NodeType::Unknown,
     })
   }
@@ -348,6 +366,7 @@ impl<'a> Parser<'a> {
         start,
         end,
         name: self.read_string(start, end),
+        qualifier: None,
         inferred_type: NodeType::Unknown,
       };
 
@@ -594,6 +613,7 @@ impl<'a> Parser<'a> {
           start,
           end,
           name: self.read_string(start, end),
+          qualifier: None,
           inferred_type: NodeType::Unknown,
         },
       ),

@@ -59,6 +59,7 @@ Ok(
                     start: 4,
                     end: 14,
                     name: "someMethod",
+                    qualifier: None,
                     inferred_type: Unknown,
                 },
                 params: [],

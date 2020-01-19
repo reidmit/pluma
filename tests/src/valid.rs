@@ -10,6 +10,8 @@ test_valid!(empty, "");
 
 test_valid!(identifier, "hello");
 
+test_valid!(qualified_identifier, "qual:hello");
+
 test_valid!(number, "47");
 
 test_valid!(string, "\"hello\"");

@@ -57,6 +57,7 @@ Ok(
                     start: 4,
                     end: 5,
                     name: "x",
+                    qualifier: None,
                     inferred_type: Unknown,
                 },
                 right: NumericLiteral {

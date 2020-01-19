@@ -3,6 +3,7 @@
 use crate::ast::{get_node_type, Node, NodeType};
 use crate::errors::{AnalysisError, AnalysisError::*};
 use crate::scope::Scope;
+use std::collections::HashMap;
 
 pub fn analyze_ast(node: &mut Option<Node>) -> Result<(), AnalysisError> {
   let mut state = AnalyzerState::new();
@@ -63,7 +64,7 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) -> Result<(), AnalysisErr
 
       *inferred_type = get_node_type(right);
 
-      state.scope.add(name, get_node_type(right));
+      state.local_scope.add(name, get_node_type(right));
     }
 
     Node::Block {
@@ -113,7 +114,7 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) -> Result<(), AnalysisErr
       name,
       inferred_type,
       ..
-    } => match state.scope.get(name) {
+    } => match state.local_scope.get(name) {
       Some(node_type) => *inferred_type = node_type,
       None => return Err(UndefinedVariable(node.clone())),
     },
@@ -127,13 +128,13 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) -> Result<(), AnalysisErr
     Node::MethodDefinition { start, end, .. } => {}
 
     Node::Module { body, .. } => {
-      state.scope.enter();
+      state.local_scope.enter();
 
       for body_node in body {
         analyze(body_node, state)?;
       }
 
-      state.scope.exit();
+      state.local_scope.exit();
     }
 
     Node::NumericLiteral { inferred_type, .. } => *inferred_type = NodeType::Int,
@@ -175,13 +176,15 @@ fn get_identifier_name(node: &Node) -> String {
 }
 
 struct AnalyzerState {
-  scope: Scope,
+  local_scope: Scope,
+  qualified_scopes: HashMap<String, Scope>,
 }
 
 impl AnalyzerState {
   fn new() -> Self {
     AnalyzerState {
-      scope: Scope::new(),
+      local_scope: Scope::new(),
+      qualified_scopes: HashMap::new(),
     }
   }
 }

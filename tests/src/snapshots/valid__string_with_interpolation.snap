@@ -54,6 +54,7 @@ Ok(
                         start: 9,
                         end: 13,
                         name: "name",
+                        qualifier: None,
                         inferred_type: Unknown,
                     },
                     StringLiteral {

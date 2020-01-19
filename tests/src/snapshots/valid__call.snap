@@ -39,6 +39,7 @@ Ok(
                     start: 0,
                     end: 4,
                     name: "func",
+                    qualifier: None,
                     inferred_type: Unknown,
                 },
                 arguments: [],

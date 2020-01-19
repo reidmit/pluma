@@ -80,6 +80,7 @@ Ok(
                                 start: 15,
                                 end: 19,
                                 name: "name",
+                                qualifier: None,
                                 inferred_type: Unknown,
                             },
                             StringLiteral {
