@@ -117,7 +117,7 @@ pub enum Node {
     start: usize,
     end: usize,
     alias: Option<String>,
-    path: String,
+    module_name: String,
   },
 
   Match {

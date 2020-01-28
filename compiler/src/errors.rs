@@ -1,10 +1,10 @@
-use std::collections::HashMap;
 use crate::ast::{Node, NodeType};
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct PackageCompilationErrorSummary {
   pub package_errors: Vec<String>,
-  pub module_errors: HashMap<String, Vec<ModuleCompilationErrorDetail>>
+  pub module_errors: HashMap<String, Vec<ModuleCompilationErrorDetail>>,
 }
 
 #[derive(Debug)]
@@ -66,4 +66,5 @@ pub enum AnalysisError {
   TypeMismatch(Node, NodeType, NodeType),
   TypeMismatchArrayElement(Node, NodeType, NodeType),
   UndefinedVariable(Node),
+  UndefinedQualifier(Node),
 }

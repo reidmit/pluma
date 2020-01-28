@@ -914,7 +914,7 @@ impl<'a> Parser<'a> {
       start,
       end: import_end,
       alias,
-      path,
+      module_name: path,
     })
   }
 }

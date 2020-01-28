@@ -1,5 +1,3 @@
-#![allow(unused_variables)]
-
 use crate::ast::{get_node_type, Node, NodeType};
 use crate::errors::{AnalysisError, AnalysisError::*};
 use crate::scope::Scope;
@@ -102,32 +100,58 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) -> Result<(), AnalysisErr
       }
     }
 
-    Node::Chain { start, end, .. } => {}
+    Node::Chain { .. } => {}
 
-    Node::Dict { start, end, .. } => {}
+    Node::Dict { .. } => {}
 
-    Node::DictEntry { start, end, .. } => {}
+    Node::DictEntry { .. } => {}
 
-    Node::Grouping { start, end, .. } => {}
+    Node::Grouping { .. } => {}
 
     Node::Identifier {
       name,
+      qualifier,
       inferred_type,
       ..
-    } => match state.local_scope.get(name) {
-      Some(node_type) => *inferred_type = node_type,
-      None => return Err(UndefinedVariable(node.clone())),
-    },
+    } => {
+      if let Some(qualifier_name) = qualifier {
+        match state.module_aliases.get(qualifier_name) {
+          Some(..) => {
+            // TODO: lookup variable in module scope
+          }
+          None => return Err(UndefinedQualifier(node.clone())),
+        }
+      } else {
+        match state.local_scope.get(name) {
+          Some(node_type) => *inferred_type = node_type,
+          None => return Err(UndefinedVariable(node.clone())),
+        }
+      }
+    }
 
-    Node::Import { start, end, .. } => {}
+    Node::Import {
+      alias, module_name, ..
+    } => {
+      if let Some(alias_name) = alias {
+        state
+          .module_aliases
+          .insert(alias_name.to_string(), module_name.to_string());
+      } else {
+        // TODO: add all top-level defs in imported module to scope
+      }
+    }
 
-    Node::Match { start, end, .. } => {}
+    Node::Match { .. } => {}
 
-    Node::MatchCase { start, end, .. } => {}
+    Node::MatchCase { .. } => {}
 
-    Node::MethodDefinition { start, end, .. } => {}
+    Node::MethodDefinition { .. } => {}
 
-    Node::Module { body, .. } => {
+    Node::Module { body, imports, .. } => {
+      for import_node in imports {
+        analyze(import_node, state)?;
+      }
+
       state.local_scope.enter();
 
       for body_node in body {
@@ -139,7 +163,7 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) -> Result<(), AnalysisErr
 
     Node::NumericLiteral { inferred_type, .. } => *inferred_type = NodeType::Int,
 
-    Node::Reassignment { start, end, .. } => {}
+    Node::Reassignment { .. } => {}
 
     Node::StringInterpolation {
       parts,
@@ -160,9 +184,9 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) -> Result<(), AnalysisErr
 
     Node::StringLiteral { inferred_type, .. } => *inferred_type = NodeType::String,
 
-    Node::Tuple { start, end, .. } => {}
+    Node::Tuple { .. } => {}
 
-    Node::UnaryOperation { start, end, .. } => {}
+    Node::UnaryOperation { .. } => {}
   }
 
   Ok(())
@@ -177,14 +201,14 @@ fn get_identifier_name(node: &Node) -> String {
 
 struct AnalyzerState {
   local_scope: Scope,
-  qualified_scopes: HashMap<String, Scope>,
+  module_aliases: HashMap<String, String>,
 }
 
 impl AnalyzerState {
   fn new() -> Self {
     AnalyzerState {
       local_scope: Scope::new(),
-      qualified_scopes: HashMap::new(),
+      module_aliases: HashMap::new(),
     }
   }
 }

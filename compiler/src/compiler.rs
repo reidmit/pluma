@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use crate::dependency_graph::{DependencyGraph, TopologicalSort};
+use crate::errors::PackageCompilationError;
 use crate::fs;
 use crate::module::Module;
-use crate::errors::{PackageCompilationError};
-use crate::dependency_graph::{DependencyGraph, TopologicalSort};
+use std::collections::HashMap;
 
 pub struct CompilerConfig {
   // Absolute path to the package root directory
@@ -40,9 +40,11 @@ impl Compiler {
 
     let sorted_modules = match self.dependency_graph.sort() {
       TopologicalSort::Cycle(cycle) => {
-        return Err(PackageCompilationError::CyclicalDependency(cycle.to_owned()));
-      },
-      TopologicalSort::Sorted(sorted_modules) => sorted_modules.clone()
+        return Err(PackageCompilationError::CyclicalDependency(
+          cycle.to_owned(),
+        ));
+      }
+      TopologicalSort::Sorted(sorted_modules) => sorted_modules.clone(),
     };
 
     for module_name in sorted_modules {
@@ -71,10 +73,13 @@ impl Compiler {
     match referenced {
       Some(imported_module_names) => {
         for imported_module_name in imported_module_names {
-          self.dependency_graph.add_edge(imported_module_name.to_owned(), get_module_name());
+          self
+            .dependency_graph
+            .add_edge(imported_module_name.to_owned(), get_module_name());
+
           self.parse_module(imported_module_name)?;
         }
-      },
+      }
       None => {}
     }
 
@@ -97,7 +102,9 @@ impl Compiler {
     }
 
     if !modules_with_errors.is_empty() {
-      return Err(PackageCompilationError::ModulesFailedToCompile(modules_with_errors));
+      return Err(PackageCompilationError::ModulesFailedToCompile(
+        modules_with_errors,
+      ));
     }
 
     Ok(())

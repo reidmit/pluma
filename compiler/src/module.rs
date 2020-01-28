@@ -1,9 +1,9 @@
-use crate::fs;
-use crate::analyzer::{analyze_ast};
+use crate::analyzer::analyze_ast;
 use crate::ast::Node;
-use crate::parser::Parser;
-use crate::tokenizer::{Tokenizer, TokenList, CommentMap};
 use crate::errors::ModuleCompilationError;
+use crate::fs;
+use crate::parser::Parser;
+use crate::tokenizer::{CommentMap, TokenList, Tokenizer};
 
 #[derive(Debug)]
 pub struct Module {
@@ -63,50 +63,46 @@ impl Module {
 
         if let Node::Module { imports, .. } = ast {
           for import in imports {
-            if let Node::Import { path, .. } = import {
-              paths.push(path.clone());
+            if let Node::Import { module_name, .. } = import {
+              paths.push(module_name.clone());
             }
           }
         }
 
         Some(paths)
-      },
-      None => None
+      }
+      None => None,
     }
   }
 
   fn read(&mut self) -> Result<(), ModuleCompilationError> {
     match fs::read_file_contents(&self.module_path) {
       Ok(bytes) => Ok(self.bytes = Some(bytes)),
-      Err(err) => Err(ModuleCompilationError::FileError(err))
+      Err(err) => Err(ModuleCompilationError::FileError(err)),
     }
   }
 
   fn tokenize(&mut self) -> Result<(), ModuleCompilationError> {
     match &self.bytes {
-      Some(bytes) => {
-        match Tokenizer::from_source(bytes).collect_tokens() {
-          Ok((tokens, comments)) => {
-            self.tokens = Some(tokens);
-            self.comments = Some(comments);
-            Ok(())
-          },
-          Err(err) => Err(ModuleCompilationError::TokenizeError(err))
+      Some(bytes) => match Tokenizer::from_source(bytes).collect_tokens() {
+        Ok((tokens, comments)) => {
+          self.tokens = Some(tokens);
+          self.comments = Some(comments);
+          Ok(())
         }
+        Err(err) => Err(ModuleCompilationError::TokenizeError(err)),
       },
-      _ => unreachable!()
+      _ => unreachable!(),
     }
   }
 
   fn parse(&mut self) -> Result<(), ModuleCompilationError> {
     match (&self.bytes, &self.tokens) {
-      (Some(source), Some(tokens)) => {
-        match Parser::new(source, tokens).parse_module() {
-          Ok(ast) => Ok(self.ast = Some(ast)),
-          Err(err) => Err(ModuleCompilationError::ParseError(err))
-        }
+      (Some(source), Some(tokens)) => match Parser::new(source, tokens).parse_module() {
+        Ok(ast) => Ok(self.ast = Some(ast)),
+        Err(err) => Err(ModuleCompilationError::ParseError(err)),
       },
-      _ => unreachable!()
+      _ => unreachable!(),
     }
   }
 }
