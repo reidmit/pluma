@@ -6,7 +6,9 @@
   "repository": {
     "any": {
       "patterns": [
-        { "include": "#expression" },
+        {
+          "include": "#expression"
+        },
         { "include": "#comment" }
       ]
     },
@@ -37,12 +39,12 @@
 
     "symbol": {
       "name": "keyword.operator.pluma",
-      "match": "(=>|=|::|:=|\\|)"
+      "match": "(=>|=|::|:=|\\|->)"
     },
 
     "storage-type": {
       "name": "storage.type.pluma",
-      "match": "\\b(def|let|type)\\b"
+      "match": "\\b(def|let|type|trait)\\b"
     },
 
     "keyword-language": {
@@ -52,7 +54,7 @@
 
     "keyword-control": {
       "name": "keyword.control.pluma",
-      "match": "\\b(use|as)\\b"
+      "match": "\\b(use|as|private|where|return|break)\\b"
     },
 
     "string": {
