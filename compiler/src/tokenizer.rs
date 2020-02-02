@@ -239,13 +239,6 @@ impl<'a> Tokenizer<'a> {
           comments.insert(line, Comment(start_index + 1, index));
         }
 
-        //_ if is_upper_identifier_start_char(byte) => {
-        //  while index < length && is_identifier_char(source[index]) {
-        //    index += 1;
-        // }
-
-        //  tokens.push(IdentifierUpper(start_index, index));
-        // }
         _ if is_identifier_start_char(byte) => {
           while index < length && is_identifier_char(source[index]) {
             index += 1;
@@ -357,13 +350,6 @@ impl<'a> Tokenizer<'a> {
     }
 
     Ok((tokens, comments))
-  }
-}
-
-fn is_upper_identifier_start_char(byte: u8) -> bool {
-  match byte {
-    b'A'..=b'Z' => true,
-    _ => false,
   }
 }
 

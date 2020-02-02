@@ -25,6 +25,25 @@ fn ungroup(node: Node) -> Node {
   }
 }
 
+macro_rules! current_token_is {
+  ($self:ident, $tokType:path) => {
+    match $self.current_token() {
+      Some(&$tokType(..)) => true,
+      _ => false,
+    }
+  };
+}
+
+macro_rules! expect_token_and_advance {
+  ($self:ident, $tokType:path) => {
+    match $self.current_token() {
+      Some(&$tokType(..)) => $self.advance(1),
+      Some(tok) => return Error(UnexpectedToken(tok.clone())),
+      None => return Error(UnexpectedEOF),
+    }
+  };
+}
+
 impl<'a> Parser<'a> {
   pub fn new(source: &'a Vec<u8>, tokens: &'a Vec<Token>) -> Parser<'a> {
     return Parser {
@@ -37,7 +56,7 @@ impl<'a> Parser<'a> {
   }
 
   pub fn parse_module(&mut self) -> Result<Node, ParseError> {
-    while let Some(&Token::KeywordUse(..)) = self.current_token() {
+    while current_token_is!(self, Token::KeywordUse) {
       match self.parse_import() {
         Parsed(import) => self.imports.push(import),
         EOF => break,
@@ -77,7 +96,7 @@ impl<'a> Parser<'a> {
   }
 
   fn skip_line_breaks(&mut self) {
-    while let Some(&Token::LineBreak(..)) = self.current_token() {
+    while current_token_is!(self, Token::LineBreak) {
       self.advance(1)
     }
   }
@@ -98,7 +117,7 @@ impl<'a> Parser<'a> {
 
     self.advance(1);
 
-    if let Some(&Token::Colon(..)) = self.current_token() {
+    if current_token_is!(self, Token::Colon) {
       self.advance(1);
 
       match self.current_token() {
@@ -144,11 +163,11 @@ impl<'a> Parser<'a> {
 
     self.advance(1);
 
-    if let Some(&Token::InterpolationStart(..)) = self.current_token() {
+    if current_token_is!(self, Token::InterpolationStart) {
       let mut parts = vec![node];
       let mut interpolation_end = end;
 
-      while let Some(&Token::InterpolationStart(..)) = self.current_token() {
+      while current_token_is!(self, Token::InterpolationStart) {
         self.advance(1);
 
         match self.parse_expression() {
@@ -156,11 +175,7 @@ impl<'a> Parser<'a> {
           other => return other,
         }
 
-        match self.current_token() {
-          Some(&Token::InterpolationEnd(..)) => self.advance(1),
-          Some(tok) => return Error(UnexpectedToken(tok.clone())),
-          None => return Error(UnexpectedEOF),
-        }
+        expect_token_and_advance!(self, Token::InterpolationEnd);
 
         match self.current_token() {
           Some(&Token::StringLiteral(start, end)) => {
@@ -189,27 +204,43 @@ impl<'a> Parser<'a> {
     Parsed(node)
   }
 
-  fn parse_number(&mut self) -> ParseResult {
+  fn parse_decimal_number(&mut self) -> ParseResult {
     let (start, end, value, raw_value) = match self.current_token() {
-      Some(&Token::OctalDigits(start, end)) => {
+      Some(&Token::DecimalDigits(start, end)) => {
         let string_value = self.read_string(start, end);
         let bytes = string_value.bytes().rev();
 
         let mut result: i64 = 0;
         let mut i: i64 = 1;
+
         for byte in bytes {
           let byte_value = match byte {
-            b'o' | b'O' => break,
-            b'0'..=b'7' => byte - 48,
+            b'0'..=b'9' => byte - 48,
             _ => unreachable!(),
           };
 
           result += (byte_value as i64) * i;
-          i *= 8;
+          i *= 10;
         }
 
         (start, end, NumericValue::Int(result), string_value)
       }
+      _ => unreachable!(),
+    };
+
+    self.advance(1);
+
+    Parsed(NumericLiteral {
+      start,
+      end,
+      value,
+      raw_value,
+      inferred_type: NodeType::Unknown,
+    })
+  }
+
+  fn parse_hex_number(&mut self) -> ParseResult {
+    let (start, end, value, raw_value) = match self.current_token() {
       Some(&Token::HexDigits(start, end)) => {
         let string_value = self.read_string(start, end);
         let bytes = string_value.bytes().rev();
@@ -231,7 +262,23 @@ impl<'a> Parser<'a> {
 
         (start, end, NumericValue::Int(result), string_value)
       }
-      Some(&Token::DecimalDigits(start, end)) => {
+      _ => unreachable!(),
+    };
+
+    self.advance(1);
+
+    Parsed(NumericLiteral {
+      start,
+      end,
+      value,
+      raw_value,
+      inferred_type: NodeType::Unknown,
+    })
+  }
+
+  fn parse_octal_number(&mut self) -> ParseResult {
+    let (start, end, value, raw_value) = match self.current_token() {
+      Some(&Token::OctalDigits(start, end)) => {
         let string_value = self.read_string(start, end);
         let bytes = string_value.bytes().rev();
 
@@ -239,16 +286,33 @@ impl<'a> Parser<'a> {
         let mut i: i64 = 1;
         for byte in bytes {
           let byte_value = match byte {
-            b'0'..=b'9' => byte - 48,
+            b'o' | b'O' => break,
+            b'0'..=b'7' => byte - 48,
             _ => unreachable!(),
           };
 
           result += (byte_value as i64) * i;
-          i *= 10;
+          i *= 8;
         }
 
         (start, end, NumericValue::Int(result), string_value)
       }
+      _ => unreachable!(),
+    };
+
+    self.advance(1);
+
+    Parsed(NumericLiteral {
+      start,
+      end,
+      value,
+      raw_value,
+      inferred_type: NodeType::Unknown,
+    })
+  }
+
+  fn parse_binary_number(&mut self) -> ParseResult {
+    let (start, end, value, raw_value) = match self.current_token() {
       Some(&Token::BinaryDigits(start, end)) => {
         let string_value = self.read_string(start, end);
         let bytes = string_value.bytes().rev();
@@ -367,13 +431,10 @@ impl<'a> Parser<'a> {
       }
     }
 
-    match self.current_token() {
-      Some(&Token::DoubleArrow(..)) => self.advance(1),
-      _ => {
-        if !params.is_empty() {
-          return Error(MissingArrowAfterBlockParams(self.index));
-        }
-      }
+    if current_token_is!(self, Token::DoubleArrow) {
+      self.advance(1);
+    } else if !params.is_empty() {
+      return Error(MissingArrowAfterBlockParams(self.index));
     }
 
     while let Parsed(node) = self.parse_expression() {
@@ -399,9 +460,9 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_dict_entry_or_array_element(&mut self) -> Option<ParseResult> {
-    if let Some(&Token::StringLiteral(..)) = self.current_token() {
+    if current_token_is!(self, Token::StringLiteral) {
       if let Parsed(string_node) = self.parse_string() {
-        if let Some(&Token::Colon(..)) = self.current_token() {
+        if current_token_is!(self, Token::Colon) {
           self.advance(1);
 
           match self.parse_expression() {
@@ -515,7 +576,7 @@ impl<'a> Parser<'a> {
     while let Parsed(node) = current {
       let (call_start, _) = get_node_location(&node);
 
-      if let Some(&Token::LeftParen(..)) = self.current_token() {
+      if current_token_is!(self, Token::LeftParen) {
         match self.parse_parenthetical() {
           Parsed(Tuple {
             start,
@@ -552,7 +613,7 @@ impl<'a> Parser<'a> {
 
           other => return other,
         }
-      } else if let Some(&Token::LeftBrace(..)) = self.current_token() {
+      } else if current_token_is!(self, Token::LeftBrace) {
         match self.parse_block() {
           Parsed(block) => {
             let (_, block_end) = get_node_location(&block);
@@ -767,15 +828,11 @@ impl<'a> Parser<'a> {
       err => return err,
     };
 
-    match self.current_token() {
-      Some(&Token::LeftParen(..)) => self.advance(1),
-      Some(&tok) => return Error(ParseError::UnexpectedToken(tok.clone())),
-      None => return Error(ParseError::UnexpectedEOF),
-    };
+    expect_token_and_advance!(self, Token::LeftParen);
 
     let mut params = Vec::new();
 
-    while let Some(&Token::Identifier(..)) = self.current_token() {
+    while current_token_is!(self, Token::Identifier) {
       match self.parse_identifier() {
         Parsed(node) => params.push(node),
         EOF => return Error(ParseError::UnexpectedEOF),
@@ -790,17 +847,9 @@ impl<'a> Parser<'a> {
       }
     }
 
-    match self.current_token() {
-      Some(&Token::RightParen(..)) => self.advance(1),
-      Some(&tok) => return Error(ParseError::UnexpectedToken(tok.clone())),
-      None => return Error(ParseError::UnexpectedEOF),
-    };
+    expect_token_and_advance!(self, Token::RightParen);
 
-    match self.current_token() {
-      Some(&Token::Equals(..)) => self.advance(1),
-      Some(&tok) => return Error(ParseError::UnexpectedToken(tok.clone())),
-      None => return Error(ParseError::UnexpectedEOF),
-    };
+    expect_token_and_advance!(self, Token::Equals);
 
     let body = match self.current_token() {
       Some(&Token::LeftBrace(..)) => match self.parse_block() {
@@ -839,15 +888,11 @@ impl<'a> Parser<'a> {
       err => return err,
     };
 
-    match self.current_token() {
-      Some(&Token::LeftParen(..)) => self.advance(1),
-      Some(tok) => return Error(ParseError::UnexpectedToken(tok.clone())),
-      _ => return Error(ParseError::UnexpectedEOF),
-    };
+    expect_token_and_advance!(self, Token::LeftParen);
 
     let mut params = Vec::new();
 
-    while let Some(&Token::Identifier(..)) = self.current_token() {
+    while current_token_is!(self, Token::Identifier) {
       match self.parse_identifier() {
         Parsed(node) => params.push(node),
         EOF => return Error(ParseError::UnexpectedEOF),
@@ -862,17 +907,9 @@ impl<'a> Parser<'a> {
       }
     }
 
-    match self.current_token() {
-      Some(&Token::RightParen(..)) => self.advance(1),
-      Some(tok) => return Error(ParseError::UnexpectedToken(tok.clone())),
-      _ => return Error(ParseError::UnexpectedEOF),
-    };
+    expect_token_and_advance!(self, Token::RightParen);
 
-    match self.current_token() {
-      Some(&Token::Equals(..)) => self.advance(1),
-      Some(tok) => return Error(ParseError::UnexpectedToken(tok.clone())),
-      _ => return Error(ParseError::UnexpectedEOF),
-    };
+    expect_token_and_advance!(self, Token::Equals);
 
     Parsed(TypeDefinition {
       start,
@@ -894,10 +931,10 @@ impl<'a> Parser<'a> {
       Some(&Token::KeywordMatch(..)) => self.parse_match(),
       Some(&Token::LeftBrace(..)) => self.parse_block(),
       Some(&Token::LeftBracket(..)) => self.parse_dict_or_array(),
-      Some(&Token::OctalDigits(..))
-      | Some(&Token::HexDigits(..))
-      | Some(&Token::DecimalDigits(..))
-      | Some(&Token::BinaryDigits(..)) => self.parse_number(),
+      Some(&Token::DecimalDigits(..)) => self.parse_decimal_number(),
+      Some(&Token::HexDigits(..)) => self.parse_hex_number(),
+      Some(&Token::OctalDigits(..)) => self.parse_octal_number(),
+      Some(&Token::BinaryDigits(..)) => self.parse_binary_number(),
       Some(&tok) => return Error(UnexpectedToken(tok.clone())),
       None => return EOF,
     };

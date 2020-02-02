@@ -177,9 +177,7 @@ impl<'a> ErrorFormatter<'a> {
     let (location, message) = match err {
       ModuleCompilationError::AnalysisError(analysis_err) => match analysis_err {
         AnalysisError::UndefinedVariable(node) => match node {
-          Node::Identifier {
-            start, end, name, ..
-          } => {
+          Node::Identifier { start, name, .. } => {
             let name_length = name.to_string().chars().count();
             (
               Some((*start, *start + name_length)),
