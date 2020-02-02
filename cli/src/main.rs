@@ -99,7 +99,7 @@ fn print_error_summary(compiler: &Compiler, summary: PackageCompilationErrorSumm
     } in module_errors
     {
       eprintln!(
-        "\n── in module: {} {}\n",
+        "\n── module: {} {}\n",
         colors::bold(module_name.as_str()),
         "─".repeat(utils::get_terminal_width() - module_name.len() - 15),
       );
@@ -154,11 +154,12 @@ fn print_error_summary(compiler: &Compiler, summary: PackageCompilationErrorSumm
           );
 
           let prefix_width = 4 + line.to_string().len();
+          let up_arrows = "^".repeat(end - start).to_string();
 
           eprintln!(
             "{}{}",
             " ".repeat(prefix_width + col_index),
-            colors::bold_red("^")
+            colors::bold_red(&up_arrows)
           );
 
           eprintln!(

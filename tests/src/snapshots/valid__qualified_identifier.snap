@@ -37,7 +37,13 @@ Ok(
                 end: 10,
                 name: "hello",
                 qualifier: Some(
-                    "qual",
+                    Identifier {
+                        start: 0,
+                        end: 4,
+                        name: "qual",
+                        qualifier: None,
+                        inferred_type: Unknown,
+                    },
                 ),
                 inferred_type: Unknown,
             },

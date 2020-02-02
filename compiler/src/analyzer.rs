@@ -114,13 +114,13 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) -> Result<(), AnalysisErr
       inferred_type,
       ..
     } => {
-      if let Some(qualifier_name) = qualifier {
-        match state.module_aliases.get(qualifier_name) {
-          Some(..) => {
-            // TODO: lookup variable in module scope
-          }
-          None => return Err(UndefinedQualifier(node.clone())),
-        }
+      if let Some(_qualifier_node) = qualifier {
+        //match state.module_aliases.get(qualifier_name) {
+        //  Some(..) => {
+        // TODO: lookup variable in module scope
+        //  }
+        //  None => return Err(UndefinedQualifier(qualifier_node.clone())),
+        // }
       } else {
         match state.local_scope.get(name) {
           Some(node_type) => *inferred_type = node_type,
@@ -184,9 +184,11 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) -> Result<(), AnalysisErr
 
     Node::StringLiteral { inferred_type, .. } => *inferred_type = NodeType::String,
 
+    Node::TraitDefinition { .. } => {}
+
     Node::Tuple { .. } => {}
 
-    Node::UnaryOperation { .. } => {}
+    Node::TypeDefinition { .. } => {}
   }
 
   Ok(())

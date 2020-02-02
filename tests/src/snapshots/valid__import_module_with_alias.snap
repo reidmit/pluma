@@ -41,7 +41,7 @@ Ok(
                 alias: Some(
                     "alias",
                 ),
-                path: "something",
+                module_name: "something",
             },
         ],
         body: [],

@@ -1,8 +1,3 @@
-#[derive(Debug, Clone)]
-pub enum UnaryOperator {
-  Minus,
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeType {
   Unknown,
@@ -109,7 +104,7 @@ pub enum Node {
     start: usize,
     end: usize,
     name: String,
-    qualifier: Option<String>,
+    qualifier: Option<Box<Node>>,
     inferred_type: NodeType,
   },
 
@@ -175,6 +170,12 @@ pub enum Node {
     inferred_type: NodeType,
   },
 
+  TraitDefinition {
+    start: usize,
+    end: usize,
+    name: Box<Node>,
+  },
+
   Tuple {
     start: usize,
     end: usize,
@@ -182,12 +183,10 @@ pub enum Node {
     inferred_type: NodeType,
   },
 
-  UnaryOperation {
+  TypeDefinition {
     start: usize,
     end: usize,
-    operator: UnaryOperator,
-    expr: Box<Node>,
-    inferred_type: NodeType,
+    name: Box<Node>,
   },
 }
 
@@ -211,8 +210,9 @@ pub fn get_node_location(node: &Node) -> (usize, usize) {
     &Node::Reassignment { start, end, .. } => (start, end),
     &Node::StringInterpolation { start, end, .. } => (start, end),
     &Node::StringLiteral { start, end, .. } => (start, end),
+    &Node::TraitDefinition { start, end, .. } => (start, end),
     &Node::Tuple { start, end, .. } => (start, end),
-    &Node::UnaryOperation { start, end, .. } => (start, end),
+    &Node::TypeDefinition { start, end, .. } => (start, end),
   }
 }
 
@@ -233,8 +233,7 @@ pub fn get_node_type(node: &Node) -> NodeType {
     &Node::StringInterpolation { inferred_type, .. } => inferred_type.clone(),
     &Node::StringLiteral { inferred_type, .. } => inferred_type.clone(),
     &Node::Tuple { inferred_type, .. } => inferred_type.clone(),
-    &Node::UnaryOperation { inferred_type, .. } => inferred_type.clone(),
 
-    _ => panic!("uh oh"),
+    _ => unreachable!(),
   }
 }

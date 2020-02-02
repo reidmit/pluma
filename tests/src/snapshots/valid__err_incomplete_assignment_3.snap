@@ -45,6 +45,9 @@ let y = 3
 === AST ===
 Err(
     UnexpectedToken(
-        2,
+        LineBreak(
+            5,
+            6,
+        ),
     ),
 )

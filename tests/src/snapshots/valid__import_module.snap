@@ -31,7 +31,7 @@ Ok(
                 start: 0,
                 end: 13,
                 alias: None,
-                path: "something",
+                module_name: "something",
             },
         ],
         body: [],

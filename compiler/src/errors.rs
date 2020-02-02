@@ -1,4 +1,5 @@
 use crate::ast::{Node, NodeType};
+use crate::tokens::Token;
 use std::collections::HashMap;
 
 #[derive(Debug)]
@@ -45,7 +46,7 @@ pub enum TokenizeError {
 
 #[derive(Debug, Clone)]
 pub enum ParseError {
-  UnexpectedToken(usize),
+  UnexpectedToken(Token),
   UnexpectedEOF,
   UnclosedParentheses(usize),
   UnclosedBlock(usize),

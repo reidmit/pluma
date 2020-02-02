@@ -239,6 +239,13 @@ impl<'a> Tokenizer<'a> {
           comments.insert(line, Comment(start_index + 1, index));
         }
 
+        //_ if is_upper_identifier_start_char(byte) => {
+        //  while index < length && is_identifier_char(source[index]) {
+        //    index += 1;
+        // }
+
+        //  tokens.push(IdentifierUpper(start_index, index));
+        // }
         _ if is_identifier_start_char(byte) => {
           while index < length && is_identifier_char(source[index]) {
             index += 1;
@@ -246,16 +253,22 @@ impl<'a> Tokenizer<'a> {
 
           let value = &source[start_index..index];
 
-          match value[0] {
-            b'u' if value == "use".as_bytes() => {
+          match value {
+            [b'a', b's'] => tokens.push(KeywordAs(start_index, index)),
+            [b'b', b'r', b'e', b'a', b'k'] => tokens.push(KeywordBreak(start_index, index)),
+            [b'd', b'e', b'f'] => tokens.push(KeywordDef(start_index, index)),
+            [b'l', b'e', b't'] => tokens.push(KeywordLet(start_index, index)),
+            [b'm', b'a', b't', b'c', b'h'] => tokens.push(KeywordMatch(start_index, index)),
+            [b'p', b'r', b'i', b'v', b'a', b't', b'e'] => {
+              tokens.push(KeywordPrivate(start_index, index))
+            }
+            [b'u', b's', b'e'] => {
               expect_import_path = true;
               tokens.push(KeywordUse(start_index, index))
             }
-            b'l' if value == "let".as_bytes() => tokens.push(KeywordLet(start_index, index)),
-            b'm' if value == "match".as_bytes() => tokens.push(KeywordMatch(start_index, index)),
-            b'd' if value == "def".as_bytes() => tokens.push(KeywordDef(start_index, index)),
-            b't' if value == "type".as_bytes() => tokens.push(KeywordType(start_index, index)),
-            b'a' if value == "as".as_bytes() => tokens.push(KeywordAs(start_index, index)),
+            [b'r', b'e', b't', b'u', b'r', b'n'] => tokens.push(KeywordReturn(start_index, index)),
+            [b't', b'r', b'a', b'i', b't'] => tokens.push(KeywordTrait(start_index, index)),
+            [b't', b'y', b'p', b'e'] => tokens.push(KeywordType(start_index, index)),
             _ => tokens.push(Identifier(start_index, index)),
           }
 
@@ -347,17 +360,31 @@ impl<'a> Tokenizer<'a> {
   }
 }
 
+fn is_upper_identifier_start_char(byte: u8) -> bool {
+  match byte {
+    b'A'..=b'Z' => true,
+    _ => false,
+  }
+}
+
 fn is_identifier_start_char(byte: u8) -> bool {
   match byte {
-    b'a'..=b'z' | b'A'..=b'Z' => true,
-    _ => false,
+    b'a'..=b'z' => true,
+    _ if byte.is_ascii_digit() => false,
+    _ if byte.is_ascii_whitespace() => false,
+    _ if byte.is_ascii_punctuation() => false,
+    _ if byte.is_ascii_control() => false,
+    _ => true,
   }
 }
 
 fn is_identifier_char(byte: u8) -> bool {
   match byte {
     b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' => true,
-    _ => false,
+    _ if byte.is_ascii_whitespace() => false,
+    _ if byte.is_ascii_punctuation() => false,
+    _ if byte.is_ascii_control() => false,
+    _ => true,
   }
 }
 

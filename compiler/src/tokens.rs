@@ -1,6 +1,8 @@
+use std::fmt;
+
 // TODO: use this to only derive in tests
 // #[cfg_attr(test, derive(Debug))]
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum Token {
   Arrow(usize, usize),
   BinaryDigits(usize, usize),
@@ -19,9 +21,13 @@ pub enum Token {
   InterpolationEnd(usize, usize),
   InterpolationStart(usize, usize),
   KeywordAs(usize, usize),
+  KeywordBreak(usize, usize),
   KeywordDef(usize, usize),
   KeywordLet(usize, usize),
   KeywordMatch(usize, usize),
+  KeywordPrivate(usize, usize),
+  KeywordReturn(usize, usize),
+  KeywordTrait(usize, usize),
   KeywordType(usize, usize),
   KeywordUse(usize, usize),
   LeftBrace(usize, usize),
@@ -36,6 +42,53 @@ pub enum Token {
   RightParen(usize, usize),
   StringLiteral(usize, usize),
   Unexpected(usize, usize),
+}
+
+impl fmt::Display for Token {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    let as_string = match self {
+      &Token::Arrow(..) => "->",
+      &Token::BinaryDigits(..) => "binary digits",
+      &Token::Colon(..) => ":",
+      &Token::ColonEquals(..) => ":=",
+      &Token::Comma(..) => ",",
+      &Token::Comment(..) => "comment",
+      &Token::DecimalDigits(..) => "digits",
+      &Token::Dot(..) => ".",
+      &Token::DoubleArrow(..) => "=>",
+      &Token::DoubleColon(..) => "::",
+      &Token::Equals(..) => "=",
+      &Token::HexDigits(..) => "hex digits",
+      &Token::Identifier(..) => "identifier",
+      &Token::ImportPath(..) => "import path",
+      &Token::InterpolationEnd(..) => ")",
+      &Token::InterpolationStart(..) => "$(",
+      &Token::KeywordAs(..) => "as",
+      &Token::KeywordBreak(..) => "break",
+      &Token::KeywordDef(..) => "def",
+      &Token::KeywordLet(..) => "let",
+      &Token::KeywordMatch(..) => "match",
+      &Token::KeywordPrivate(..) => "private",
+      &Token::KeywordReturn(..) => "return",
+      &Token::KeywordType(..) => "type",
+      &Token::KeywordTrait(..) => "trait",
+      &Token::KeywordUse(..) => "use",
+      &Token::LeftBrace(..) => "{",
+      &Token::LeftBracket(..) => "[",
+      &Token::LeftParen(..) => "(",
+      &Token::LineBreak(..) => "line break",
+      &Token::Minus(..) => "-",
+      &Token::OctalDigits(..) => "octal digits",
+      &Token::Pipe(..) => "|",
+      &Token::RightBrace(..) => "}",
+      &Token::RightBracket(..) => "]",
+      &Token::RightParen(..) => ")",
+      &Token::StringLiteral(..) => "string",
+      &Token::Unexpected(..) => "unknown",
+    };
+
+    write!(f, "{}", as_string)
+  }
 }
 
 pub fn get_token_location(token: &Token) -> (usize, usize) {
@@ -57,10 +110,14 @@ pub fn get_token_location(token: &Token) -> (usize, usize) {
     &Token::InterpolationEnd(start, end) => (start, end),
     &Token::InterpolationStart(start, end) => (start, end),
     &Token::KeywordAs(start, end) => (start, end),
+    &Token::KeywordBreak(start, end) => (start, end),
     &Token::KeywordDef(start, end) => (start, end),
     &Token::KeywordLet(start, end) => (start, end),
     &Token::KeywordMatch(start, end) => (start, end),
+    &Token::KeywordPrivate(start, end) => (start, end),
+    &Token::KeywordReturn(start, end) => (start, end),
     &Token::KeywordType(start, end) => (start, end),
+    &Token::KeywordTrait(start, end) => (start, end),
     &Token::KeywordUse(start, end) => (start, end),
     &Token::LeftBrace(start, end) => (start, end),
     &Token::LeftBracket(start, end) => (start, end),

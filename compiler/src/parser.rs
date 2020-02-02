@@ -1,4 +1,4 @@
-use crate::ast::{get_node_location, Node, Node::*, NodeType, NumericValue, UnaryOperator};
+use crate::ast::{get_node_location, Node, Node::*, NodeType, NumericValue};
 use crate::errors::ParseError;
 use crate::parser::{ParseError::*, ParseResult::*};
 use crate::tokens::{get_token_location, Token};
@@ -92,7 +92,8 @@ impl<'a> Parser<'a> {
 
     let (start, mut end, mut name) = match self.current_token() {
       Some(&Token::Identifier(start, end)) => (start, end, self.read_string(start, end)),
-      _ => unreachable!(),
+      Some(tok) => return Error(UnexpectedToken(tok.clone())),
+      None => return Error(UnexpectedEOF),
     };
 
     self.advance(1);
@@ -102,13 +103,20 @@ impl<'a> Parser<'a> {
 
       match self.current_token() {
         Some(&Token::Identifier(part_start, part_end)) => {
-          qualifier = Some(name);
+          qualifier = Some(Box::new(Node::Identifier {
+            name,
+            start,
+            end,
+            qualifier: None,
+            inferred_type: NodeType::Unknown,
+          }));
           name = self.read_string(part_start, part_end);
           end = part_end;
 
           self.advance(1);
         }
-        _ => return Error(UnexpectedToken(self.index)),
+        Some(tok) => return Error(UnexpectedToken(tok.clone())),
+        None => return Error(UnexpectedEOF),
       };
     };
 
@@ -150,7 +158,7 @@ impl<'a> Parser<'a> {
 
         match self.current_token() {
           Some(&Token::InterpolationEnd(..)) => self.advance(1),
-          Some(_) => return Error(UnexpectedToken(self.index)),
+          Some(tok) => return Error(UnexpectedToken(tok.clone())),
           None => return Error(UnexpectedEOF),
         }
 
@@ -165,7 +173,7 @@ impl<'a> Parser<'a> {
             });
             self.advance(1)
           }
-          Some(_) => return Error(UnexpectedToken(self.index)),
+          Some(tok) => return Error(UnexpectedToken(tok.clone())),
           None => return Error(UnexpectedEOF),
         }
       }
@@ -316,28 +324,6 @@ impl<'a> Parser<'a> {
       start: paren_start,
       end: paren_end,
       entries: inner_exprs,
-      inferred_type: NodeType::Unknown,
-    })
-  }
-
-  fn parse_negated_expression(&mut self) -> ParseResult {
-    let start = match self.current_token() {
-      Some(&Token::Minus(start, _)) => start,
-      _ => unreachable!(),
-    };
-
-    self.advance(1);
-
-    let (end, node) = match self.parse_expression() {
-      Parsed(node) => (get_node_location(&node).1, node),
-      other => return other,
-    };
-
-    Parsed(UnaryOperation {
-      start,
-      end,
-      operator: UnaryOperator::Minus,
-      expr: Box::new(node),
       inferred_type: NodeType::Unknown,
     })
   }
@@ -744,8 +730,8 @@ impl<'a> Parser<'a> {
     let is_constant = match self.current_token() {
       Some(&Token::Equals(..)) => true,
       Some(&Token::ColonEquals(..)) => false,
+      Some(&tok) => return Error(ParseError::UnexpectedToken(tok.clone())),
       None => return Error(ParseError::UnexpectedEOF),
-      _ => return Error(ParseError::UnexpectedToken(self.index)),
     };
 
     self.advance(1);
@@ -783,7 +769,8 @@ impl<'a> Parser<'a> {
 
     match self.current_token() {
       Some(&Token::LeftParen(..)) => self.advance(1),
-      _ => return Error(ParseError::UnexpectedToken(self.index)),
+      Some(&tok) => return Error(ParseError::UnexpectedToken(tok.clone())),
+      None => return Error(ParseError::UnexpectedEOF),
     };
 
     let mut params = Vec::new();
@@ -798,18 +785,21 @@ impl<'a> Parser<'a> {
       match self.current_token() {
         Some(&Token::Comma(..)) => self.advance(1),
         Some(&Token::RightParen(..)) => break,
-        _ => return Error(ParseError::UnexpectedToken(self.index)),
+        Some(&tok) => return Error(ParseError::UnexpectedToken(tok.clone())),
+        None => return Error(ParseError::UnexpectedEOF),
       }
     }
 
     match self.current_token() {
       Some(&Token::RightParen(..)) => self.advance(1),
-      _ => return Error(ParseError::UnexpectedToken(self.index)),
+      Some(&tok) => return Error(ParseError::UnexpectedToken(tok.clone())),
+      None => return Error(ParseError::UnexpectedEOF),
     };
 
     match self.current_token() {
       Some(&Token::Equals(..)) => self.advance(1),
-      _ => return Error(ParseError::UnexpectedToken(self.index)),
+      Some(&tok) => return Error(ParseError::UnexpectedToken(tok.clone())),
+      None => return Error(ParseError::UnexpectedEOF),
     };
 
     let body = match self.current_token() {
@@ -818,7 +808,8 @@ impl<'a> Parser<'a> {
         EOF => return Error(ParseError::UnexpectedEOF),
         err => return err,
       },
-      _ => return Error(ParseError::UnexpectedToken(self.index)),
+      Some(&tok) => return Error(ParseError::UnexpectedToken(tok.clone())),
+      None => return Error(ParseError::UnexpectedEOF),
     };
 
     let (_, end) = get_node_location(&body);
@@ -833,13 +824,70 @@ impl<'a> Parser<'a> {
     })
   }
 
+  fn parse_type_definition(&mut self) -> ParseResult {
+    let start = match self.current_token() {
+      Some(&Token::KeywordType(start, _)) => {
+        self.advance(1);
+        start
+      }
+      _ => unreachable!(),
+    };
+
+    let name = match self.parse_identifier() {
+      Parsed(node) => node,
+      EOF => return Error(ParseError::UnexpectedEOF),
+      err => return err,
+    };
+
+    match self.current_token() {
+      Some(&Token::LeftParen(..)) => self.advance(1),
+      Some(tok) => return Error(ParseError::UnexpectedToken(tok.clone())),
+      _ => return Error(ParseError::UnexpectedEOF),
+    };
+
+    let mut params = Vec::new();
+
+    while let Some(&Token::Identifier(..)) = self.current_token() {
+      match self.parse_identifier() {
+        Parsed(node) => params.push(node),
+        EOF => return Error(ParseError::UnexpectedEOF),
+        err => return err,
+      }
+
+      match self.current_token() {
+        Some(&Token::Comma(..)) => self.advance(1),
+        Some(&Token::RightParen(..)) => break,
+        Some(tok) => return Error(ParseError::UnexpectedToken(tok.clone())),
+        _ => return Error(ParseError::UnexpectedEOF),
+      }
+    }
+
+    match self.current_token() {
+      Some(&Token::RightParen(..)) => self.advance(1),
+      Some(tok) => return Error(ParseError::UnexpectedToken(tok.clone())),
+      _ => return Error(ParseError::UnexpectedEOF),
+    };
+
+    match self.current_token() {
+      Some(&Token::Equals(..)) => self.advance(1),
+      Some(tok) => return Error(ParseError::UnexpectedToken(tok.clone())),
+      _ => return Error(ParseError::UnexpectedEOF),
+    };
+
+    Parsed(TypeDefinition {
+      start,
+      end: 0,
+      name: Box::new(name),
+    })
+  }
+
   fn parse_expression(&mut self) -> ParseResult {
     self.skip_line_breaks();
 
     let mut parsed = match self.current_token() {
-      Some(&Token::Minus(..)) => self.parse_negated_expression(),
-      Some(&Token::KeywordLet(..)) => self.parse_assignment(),
       Some(&Token::KeywordDef(..)) => self.parse_method_definition(),
+      Some(&Token::KeywordLet(..)) => self.parse_assignment(),
+      Some(&Token::KeywordType(..)) => self.parse_type_definition(),
       Some(&Token::Identifier(..)) => self.parse_identifier(),
       Some(&Token::LeftParen(..)) => self.parse_parenthetical(),
       Some(&Token::StringLiteral(..)) => self.parse_string(),
@@ -850,7 +898,7 @@ impl<'a> Parser<'a> {
       | Some(&Token::HexDigits(..))
       | Some(&Token::DecimalDigits(..))
       | Some(&Token::BinaryDigits(..)) => self.parse_number(),
-      Some(_) => return Error(UnexpectedToken(self.index)),
+      Some(&tok) => return Error(UnexpectedToken(tok.clone())),
       None => return EOF,
     };
 
