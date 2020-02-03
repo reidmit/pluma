@@ -9,7 +9,7 @@ thing
 
 === Tokens ===
 [
-    Identifier(
+    IdentifierLower(
         0,
         5,
     ),
@@ -21,7 +21,7 @@ thing
         6,
         7,
     ),
-    Identifier(
+    IdentifierLower(
         7,
         11,
     ),
@@ -29,7 +29,7 @@ thing
         11,
         12,
     ),
-    Identifier(
+    IdentifierLower(
         13,
         14,
     ),
@@ -37,7 +37,7 @@ thing
         14,
         15,
     ),
-    Identifier(
+    IdentifierLower(
         16,
         21,
     ),
@@ -61,7 +61,6 @@ Ok(
                 start: 0,
                 end: 5,
                 name: "thing",
-                qualifier: None,
                 inferred_type: Unknown,
             },
             Tuple {
@@ -72,21 +71,18 @@ Ok(
                         start: 7,
                         end: 11,
                         name: "just",
-                        qualifier: None,
                         inferred_type: Unknown,
                     },
                     Identifier {
                         start: 13,
                         end: 14,
                         name: "a",
-                        qualifier: None,
                         inferred_type: Unknown,
                     },
                     Identifier {
                         start: 16,
                         end: 21,
                         name: "tuple",
-                        qualifier: None,
                         inferred_type: Unknown,
                     },
                 ],

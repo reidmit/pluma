@@ -12,7 +12,7 @@ def someMethod() = { a, b => 47 }
         0,
         3,
     ),
-    Identifier(
+    IdentifierLower(
         4,
         14,
     ),
@@ -32,7 +32,7 @@ def someMethod() = { a, b => 47 }
         19,
         20,
     ),
-    Identifier(
+    IdentifierLower(
         21,
         22,
     ),
@@ -40,7 +40,7 @@ def someMethod() = { a, b => 47 }
         22,
         23,
     ),
-    Identifier(
+    IdentifierLower(
         24,
         25,
     ),
@@ -75,7 +75,6 @@ Ok(
                     start: 4,
                     end: 14,
                     name: "someMethod",
-                    qualifier: None,
                     inferred_type: Unknown,
                 },
                 params: [],
@@ -87,14 +86,12 @@ Ok(
                             start: 21,
                             end: 22,
                             name: "a",
-                            qualifier: None,
                             inferred_type: Unknown,
                         },
                         Identifier {
                             start: 24,
                             end: 25,
                             name: "b",
-                            qualifier: None,
                             inferred_type: Unknown,
                         },
                     ],

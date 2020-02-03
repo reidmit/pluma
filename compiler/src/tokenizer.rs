@@ -246,24 +246,26 @@ impl<'a> Tokenizer<'a> {
 
           let value = &source[start_index..index];
 
-          match value {
-            [b'a', b's'] => tokens.push(KeywordAs(start_index, index)),
-            [b'b', b'r', b'e', b'a', b'k'] => tokens.push(KeywordBreak(start_index, index)),
-            [b'd', b'e', b'f'] => tokens.push(KeywordDef(start_index, index)),
-            [b'l', b'e', b't'] => tokens.push(KeywordLet(start_index, index)),
-            [b'm', b'a', b't', b'c', b'h'] => tokens.push(KeywordMatch(start_index, index)),
-            [b'p', b'r', b'i', b'v', b'a', b't', b'e'] => {
-              tokens.push(KeywordPrivate(start_index, index))
-            }
-            [b'u', b's', b'e'] => {
-              expect_import_path = true;
-              tokens.push(KeywordUse(start_index, index))
-            }
-            [b'r', b'e', b't', b'u', b'r', b'n'] => tokens.push(KeywordReturn(start_index, index)),
-            [b't', b'r', b'a', b'i', b't'] => tokens.push(KeywordTrait(start_index, index)),
-            [b't', b'y', b'p', b'e'] => tokens.push(KeywordType(start_index, index)),
-            _ => tokens.push(Identifier(start_index, index)),
+          let constructor = match value {
+            [b'a', b's'] => KeywordAs,
+            [b'b', b'r', b'e', b'a', b'k'] => KeywordBreak,
+            [b'd', b'e', b'f'] => KeywordDef,
+            [b'l', b'e', b't'] => KeywordLet,
+            [b'm', b'a', b't', b'c', b'h'] => KeywordMatch,
+            [b'p', b'r', b'i', b'v', b'a', b't', b'e'] => KeywordPrivate,
+            [b'u', b's', b'e'] => KeywordUse,
+            [b'r', b'e', b't', b'u', b'r', b'n'] => KeywordReturn,
+            [b't', b'y', b'p', b'e'] => KeywordType,
+            [b'w', b'h', b'e', b'r', b'e'] => KeywordWhere,
+            _ if is_uppercase(value[0]) => IdentifierUpper,
+            _ => IdentifierLower,
+          };
+
+          if constructor == KeywordUse {
+            expect_import_path = true;
           }
+
+          tokens.push(constructor(start_index, index));
 
           continue;
         }
@@ -356,22 +358,30 @@ impl<'a> Tokenizer<'a> {
 fn is_identifier_start_char(byte: u8) -> bool {
   match byte {
     b'a'..=b'z' => true,
-    _ if byte.is_ascii_digit() => false,
-    _ if byte.is_ascii_whitespace() => false,
-    _ if byte.is_ascii_punctuation() => false,
-    _ if byte.is_ascii_control() => false,
-    _ => true,
+    b'A'..=b'Z' => true,
+    _ => false,
+    // _ if byte.is_ascii_digit() => false,
+    // _ if byte.is_ascii_whitespace() => false,
+    // _ if byte.is_ascii_punctuation() => false,
+    // _ if byte.is_ascii_control() => false,
+    // _ => true,
   }
 }
 
 fn is_identifier_char(byte: u8) -> bool {
   match byte {
     b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' => true,
-    _ if byte.is_ascii_whitespace() => false,
-    _ if byte.is_ascii_punctuation() => false,
-    _ if byte.is_ascii_control() => false,
-    _ => true,
+    _ => false,
+    // _ if byte.is_ascii_whitespace() => false,
+    // _ if byte.is_ascii_punctuation() => false,
+    // _ if byte.is_ascii_control() => false,
+    // _ => true,
   }
+}
+
+fn is_uppercase(byte: u8) -> bool {
+  // TODO: unicode uppercase
+  return byte.is_ascii_uppercase();
 }
 
 fn is_digit(byte: u8) -> bool {

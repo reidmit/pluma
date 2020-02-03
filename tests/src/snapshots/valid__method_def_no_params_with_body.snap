@@ -12,7 +12,7 @@ def someMethod() = { 47 }
         0,
         3,
     ),
-    Identifier(
+    IdentifierLower(
         4,
         14,
     ),
@@ -59,7 +59,6 @@ Ok(
                     start: 4,
                     end: 14,
                     name: "someMethod",
-                    qualifier: None,
                     inferred_type: Unknown,
                 },
                 params: [],

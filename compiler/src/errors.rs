@@ -60,6 +60,7 @@ pub enum ParseError {
   MissingArrowAfterBlockParams(usize),
   MissingAliasAfterAsInImport(usize),
   MissingCasesInMatchExpression(usize),
+  MissingConstraintsAfterWhere(usize),
 }
 
 #[derive(Debug, Clone)]

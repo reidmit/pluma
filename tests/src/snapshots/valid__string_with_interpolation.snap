@@ -16,7 +16,7 @@ expression: "\"hello $(name)!\""
         8,
         9,
     ),
-    Identifier(
+    IdentifierLower(
         9,
         13,
     ),
@@ -54,7 +54,6 @@ Ok(
                         start: 9,
                         end: 13,
                         name: "name",
-                        qualifier: None,
                         inferred_type: Unknown,
                     },
                     StringLiteral {

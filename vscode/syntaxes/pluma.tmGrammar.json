@@ -39,12 +39,12 @@
 
     "symbol": {
       "name": "keyword.operator.pluma",
-      "match": "(=>|=|::|:=|\\|->)"
+      "match": "(=>|=|::|:=|\\||->|\\.)"
     },
 
     "storage-type": {
       "name": "storage.type.pluma",
-      "match": "\\b(def|let|type|trait)\\b"
+      "match": "\\b(def|let|type|where)\\b"
     },
 
     "keyword-language": {
@@ -54,7 +54,7 @@
 
     "keyword-control": {
       "name": "keyword.control.pluma",
-      "match": "\\b(use|as|private|where|return|break)\\b"
+      "match": "\\b(use|as|private|return|break)\\b"
     },
 
     "string": {

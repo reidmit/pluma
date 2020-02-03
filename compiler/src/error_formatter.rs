@@ -1,7 +1,6 @@
 use crate::ast::Node;
 use crate::compiler::Compiler;
 use crate::errors::*;
-use crate::tokens::get_token_location;
 use std::collections::HashMap;
 
 pub struct ErrorFormatter<'a> {
@@ -158,10 +157,10 @@ impl<'a> ErrorFormatter<'a> {
   ) -> (Option<(usize, usize)>, String) {
     let (location, message) = match err {
       ModuleCompilationError::ParseError(parse_err) => match parse_err {
-        ParseError::UnexpectedToken(token) => {
-          let (start, end) = get_token_location(token);
-          (Some((start, end)), format!("Unexpected token: {}", token))
-        }
+        ParseError::UnexpectedToken(token) => (
+          Some(token.get_location()),
+          format!("Unexpected token: {}", token),
+        ),
         er => (None, format!("{:#?}", er)),
       },
       _ => unreachable!(),

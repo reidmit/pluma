@@ -1,7 +1,7 @@
-use crate::ast::{get_node_location, Node, Node::*, NodeType, NumericValue};
+use crate::ast::{Node, Node::*, NodeType, NumericValue};
 use crate::errors::ParseError;
 use crate::parser::{ParseError::*, ParseResult::*};
-use crate::tokens::{get_token_location, Token};
+use crate::tokens::Token;
 
 pub struct Parser<'a> {
   source: &'a Vec<u8>,
@@ -34,10 +34,19 @@ macro_rules! current_token_is {
   };
 }
 
-macro_rules! expect_token_and_advance {
+macro_rules! next_token_is {
   ($self:ident, $tokType:path) => {
+    match $self.next_token() {
+      Some(&$tokType(..)) => true,
+      _ => false,
+    }
+  };
+}
+
+macro_rules! expect_token_and_do {
+  ($self:ident, $tokType:path, $block:tt) => {
     match $self.current_token() {
-      Some(&$tokType(..)) => $self.advance(1),
+      Some(&$tokType(..)) => $block,
       Some(tok) => return Error(UnexpectedToken(tok.clone())),
       None => return Error(UnexpectedEOF),
     }
@@ -74,21 +83,25 @@ impl<'a> Parser<'a> {
 
     Ok(Module {
       start: 0,
-      end: self
-        .tokens
-        .last()
-        .map_or(0, |token| get_token_location(token).1),
+      end: self.tokens.last().map_or(0, |token| token.get_location().1),
       imports: self.imports.clone(),
       body: self.nodes.clone(),
     })
   }
 
-  fn advance(&mut self, amount: usize) {
-    self.index += amount;
+  fn advance(&mut self) {
+    self.index += 1;
   }
 
   fn current_token(&self) -> Option<&Token> {
     self.tokens.get(self.index)
+  }
+
+  fn current_token_location(&self) -> (usize, usize) {
+    self
+      .current_token()
+      .expect("Must have a current token")
+      .get_location()
   }
 
   fn next_token(&self) -> Option<&Token> {
@@ -97,7 +110,7 @@ impl<'a> Parser<'a> {
 
   fn skip_line_breaks(&mut self) {
     while current_token_is!(self, Token::LineBreak) {
-      self.advance(1)
+      self.advance()
     }
   }
 
@@ -106,46 +119,73 @@ impl<'a> Parser<'a> {
     String::from_utf8(bytes).expect("String is not UTF-8")
   }
 
-  fn parse_identifier(&mut self) -> ParseResult {
-    let mut qualifier = None;
-
-    let (start, mut end, mut name) = match self.current_token() {
-      Some(&Token::Identifier(start, end)) => (start, end, self.read_string(start, end)),
-      Some(tok) => return Error(UnexpectedToken(tok.clone())),
-      None => return Error(UnexpectedEOF),
+  fn parse_qualified_identifier(&mut self) -> ParseResult {
+    let first_id = match self.parse_lowercase_identifier() {
+      Parsed(node) => node,
+      other => return other,
     };
 
-    self.advance(1);
+    let (first_start, _) = first_id.get_location();
 
     if current_token_is!(self, Token::Colon) {
-      self.advance(1);
+      self.advance();
 
       match self.current_token() {
-        Some(&Token::Identifier(part_start, part_end)) => {
-          qualifier = Some(Box::new(Node::Identifier {
-            name,
-            start,
-            end,
-            qualifier: None,
-            inferred_type: NodeType::Unknown,
-          }));
-          name = self.read_string(part_start, part_end);
-          end = part_end;
-
-          self.advance(1);
-        }
+        Some(&Token::IdentifierLower(_, end)) => match self.parse_lowercase_identifier() {
+          Parsed(id) => {
+            return Parsed(QualifiedIdentifier {
+              start: first_start,
+              end,
+              qualifier: Box::new(first_id),
+              ident: Box::new(id),
+              inferred_type: NodeType::Unknown,
+            })
+          }
+          err => return err,
+        },
+        Some(&Token::IdentifierUpper(_, end)) => match self.parse_uppercase_identifier() {
+          Parsed(id) => {
+            return Parsed(QualifiedIdentifier {
+              start: first_start,
+              end: end,
+              qualifier: Box::new(first_id),
+              ident: Box::new(id),
+              inferred_type: NodeType::Unknown,
+            })
+          }
+          err => return err,
+        },
         Some(tok) => return Error(UnexpectedToken(tok.clone())),
         None => return Error(UnexpectedEOF),
       };
     };
 
+    Parsed(first_id)
+  }
+
+  fn parse_lowercase_identifier(&mut self) -> ParseResult {
+    let (start, end, name) = expect_token_and_do!(self, Token::IdentifierLower, {
+      let (start, end) = self.current_token_location();
+      self.advance();
+      (start, end, self.read_string(start, end))
+    });
+
     Parsed(Identifier {
       start,
       end,
       name,
-      qualifier,
       inferred_type: NodeType::Unknown,
     })
+  }
+
+  fn parse_uppercase_identifier(&mut self) -> ParseResult {
+    let (start, end, name) = expect_token_and_do!(self, Token::IdentifierUpper, {
+      let (start, end) = self.current_token_location();
+      self.advance();
+      (start, end, self.read_string(start, end))
+    });
+
+    Parsed(TypeIdentifier { start, end, name })
   }
 
   fn parse_string(&mut self) -> ParseResult {
@@ -161,36 +201,38 @@ impl<'a> Parser<'a> {
       inferred_type: NodeType::Unknown,
     };
 
-    self.advance(1);
+    self.advance();
 
     if current_token_is!(self, Token::InterpolationStart) {
       let mut parts = vec![node];
       let mut interpolation_end = end;
 
       while current_token_is!(self, Token::InterpolationStart) {
-        self.advance(1);
+        self.advance();
 
         match self.parse_expression() {
           Parsed(part) => parts.push(part),
           other => return other,
         }
 
-        expect_token_and_advance!(self, Token::InterpolationEnd);
+        expect_token_and_do!(self, Token::InterpolationEnd, {
+          self.advance();
+        });
 
-        match self.current_token() {
-          Some(&Token::StringLiteral(start, end)) => {
-            interpolation_end = end;
-            parts.push(StringLiteral {
-              start,
-              end,
-              value: self.read_string(start, end),
-              inferred_type: NodeType::Unknown,
-            });
-            self.advance(1)
-          }
-          Some(tok) => return Error(UnexpectedToken(tok.clone())),
-          None => return Error(UnexpectedEOF),
-        }
+        expect_token_and_do!(self, Token::StringLiteral, {
+          let (start, end) = self.current_token_location();
+
+          interpolation_end = end;
+
+          parts.push(StringLiteral {
+            start,
+            end,
+            value: self.read_string(start, end),
+            inferred_type: NodeType::Unknown,
+          });
+
+          self.advance()
+        })
       }
 
       return Parsed(StringInterpolation {
@@ -205,30 +247,29 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_decimal_number(&mut self) -> ParseResult {
-    let (start, end, value, raw_value) = match self.current_token() {
-      Some(&Token::DecimalDigits(start, end)) => {
-        let string_value = self.read_string(start, end);
-        let bytes = string_value.bytes().rev();
+    let (start, end, value, raw_value) = expect_token_and_do!(self, Token::DecimalDigits, {
+      let (start, end) = self.current_token_location();
 
-        let mut result: i64 = 0;
-        let mut i: i64 = 1;
+      let string_value = self.read_string(start, end);
+      let bytes = string_value.bytes().rev();
 
-        for byte in bytes {
-          let byte_value = match byte {
-            b'0'..=b'9' => byte - 48,
-            _ => unreachable!(),
-          };
+      let mut result: i64 = 0;
+      let mut i: i64 = 1;
 
-          result += (byte_value as i64) * i;
-          i *= 10;
-        }
+      for byte in bytes {
+        let byte_value = match byte {
+          b'0'..=b'9' => byte - 48,
+          _ => unreachable!(),
+        };
 
-        (start, end, NumericValue::Int(result), string_value)
+        result += (byte_value as i64) * i;
+        i *= 10;
       }
-      _ => unreachable!(),
-    };
 
-    self.advance(1);
+      (start, end, NumericValue::Int(result), string_value)
+    });
+
+    self.advance();
 
     Parsed(NumericLiteral {
       start,
@@ -240,32 +281,32 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_hex_number(&mut self) -> ParseResult {
-    let (start, end, value, raw_value) = match self.current_token() {
-      Some(&Token::HexDigits(start, end)) => {
-        let string_value = self.read_string(start, end);
-        let bytes = string_value.bytes().rev();
+    let (start, end, value, raw_value) = expect_token_and_do!(self, Token::HexDigits, {
+      let (start, end) = self.current_token_location();
 
-        let mut result: i64 = 0;
-        let mut i: i64 = 1;
-        for byte in bytes {
-          let byte_value = match byte {
-            b'x' | b'X' => break,
-            b'0'..=b'9' => byte - 48,
-            b'a'..=b'f' => byte - 87,
-            b'A'..=b'F' => byte - 55,
-            _ => unreachable!(),
-          };
+      let string_value = self.read_string(start, end);
+      let bytes = string_value.bytes().rev();
 
-          result += (byte_value as i64) * i;
-          i *= 16;
-        }
+      let mut result: i64 = 0;
+      let mut i: i64 = 1;
 
-        (start, end, NumericValue::Int(result), string_value)
+      for byte in bytes {
+        let byte_value = match byte {
+          b'x' | b'X' => break,
+          b'0'..=b'9' => byte - 48,
+          b'a'..=b'f' => byte - 87,
+          b'A'..=b'F' => byte - 55,
+          _ => unreachable!(),
+        };
+
+        result += (byte_value as i64) * i;
+        i *= 16;
       }
-      _ => unreachable!(),
-    };
 
-    self.advance(1);
+      (start, end, NumericValue::Int(result), string_value)
+    });
+
+    self.advance();
 
     Parsed(NumericLiteral {
       start,
@@ -277,30 +318,30 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_octal_number(&mut self) -> ParseResult {
-    let (start, end, value, raw_value) = match self.current_token() {
-      Some(&Token::OctalDigits(start, end)) => {
-        let string_value = self.read_string(start, end);
-        let bytes = string_value.bytes().rev();
+    let (start, end, value, raw_value) = expect_token_and_do!(self, Token::OctalDigits, {
+      let (start, end) = self.current_token_location();
 
-        let mut result: i64 = 0;
-        let mut i: i64 = 1;
-        for byte in bytes {
-          let byte_value = match byte {
-            b'o' | b'O' => break,
-            b'0'..=b'7' => byte - 48,
-            _ => unreachable!(),
-          };
+      let string_value = self.read_string(start, end);
+      let bytes = string_value.bytes().rev();
 
-          result += (byte_value as i64) * i;
-          i *= 8;
-        }
+      let mut result: i64 = 0;
+      let mut i: i64 = 1;
 
-        (start, end, NumericValue::Int(result), string_value)
+      for byte in bytes {
+        let byte_value = match byte {
+          b'o' | b'O' => break,
+          b'0'..=b'7' => byte - 48,
+          _ => unreachable!(),
+        };
+
+        result += (byte_value as i64) * i;
+        i *= 8;
       }
-      _ => unreachable!(),
-    };
 
-    self.advance(1);
+      (start, end, NumericValue::Int(result), string_value)
+    });
+
+    self.advance();
 
     Parsed(NumericLiteral {
       start,
@@ -312,31 +353,31 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_binary_number(&mut self) -> ParseResult {
-    let (start, end, value, raw_value) = match self.current_token() {
-      Some(&Token::BinaryDigits(start, end)) => {
-        let string_value = self.read_string(start, end);
-        let bytes = string_value.bytes().rev();
+    let (start, end, value, raw_value) = expect_token_and_do!(self, Token::BinaryDigits, {
+      let (start, end) = self.current_token_location();
 
-        let mut result: i64 = 0;
-        let mut i: i64 = 1;
-        for byte in bytes {
-          let byte_value = match byte {
-            b'b' | b'B' => break,
-            b'0' => 0,
-            b'1' => 1,
-            _ => unreachable!(),
-          };
+      let string_value = self.read_string(start, end);
+      let bytes = string_value.bytes().rev();
 
-          result += (byte_value as i64) * i;
-          i *= 2;
-        }
+      let mut result: i64 = 0;
+      let mut i: i64 = 1;
 
-        (start, end, NumericValue::Int(result), string_value)
+      for byte in bytes {
+        let byte_value = match byte {
+          b'b' | b'B' => break,
+          b'0' => 0,
+          b'1' => 1,
+          _ => unreachable!(),
+        };
+
+        result += (byte_value as i64) * i;
+        i *= 2;
       }
-      _ => unreachable!(),
-    };
 
-    self.advance(1);
+      (start, end, NumericValue::Int(result), string_value)
+    });
+
+    self.advance();
 
     Parsed(NumericLiteral {
       start,
@@ -353,7 +394,7 @@ impl<'a> Parser<'a> {
       _ => unreachable!(),
     };
 
-    self.advance(1);
+    self.advance();
 
     let mut inner_exprs = Vec::new();
 
@@ -361,7 +402,7 @@ impl<'a> Parser<'a> {
       inner_exprs.push(node);
 
       match self.current_token() {
-        Some(&Token::Comma(..)) => self.advance(1),
+        Some(&Token::Comma(..)) => self.advance(),
         _ => break,
       }
     }
@@ -373,7 +414,7 @@ impl<'a> Parser<'a> {
       _ => return Error(UnclosedParentheses(self.index)),
     };
 
-    self.advance(1);
+    self.advance();
 
     if inner_exprs.len() == 1 {
       return Parsed(Grouping {
@@ -398,12 +439,12 @@ impl<'a> Parser<'a> {
       _ => unreachable!(),
     };
 
-    self.advance(1);
+    self.advance();
 
     let mut params = Vec::new();
     let mut body = Vec::new();
 
-    while let Some(&Token::Identifier(start, end)) = self.current_token() {
+    while let Some(&Token::IdentifierLower(start, end)) = self.current_token() {
       if params.is_empty() {
         match self.next_token() {
           Some(&Token::Comma(..)) => {}
@@ -416,23 +457,22 @@ impl<'a> Parser<'a> {
         start,
         end,
         name: self.read_string(start, end),
-        qualifier: None,
         inferred_type: NodeType::Unknown,
       };
 
-      self.advance(1);
+      self.advance();
 
       params.push(param);
 
       match self.current_token() {
-        Some(&Token::Comma(..)) => self.advance(1),
+        Some(&Token::Comma(..)) => self.advance(),
         Some(&Token::DoubleArrow(..)) => break,
         _ => return Error(MissingArrowAfterBlockParams(self.index)),
       }
     }
 
     if current_token_is!(self, Token::DoubleArrow) {
-      self.advance(1);
+      self.advance();
     } else if !params.is_empty() {
       return Error(MissingArrowAfterBlockParams(self.index));
     }
@@ -448,7 +488,7 @@ impl<'a> Parser<'a> {
       _ => return Error(UnclosedBlock(self.index)),
     };
 
-    self.advance(1);
+    self.advance();
 
     Parsed(Block {
       start: block_start,
@@ -463,7 +503,7 @@ impl<'a> Parser<'a> {
     if current_token_is!(self, Token::StringLiteral) {
       if let Parsed(string_node) = self.parse_string() {
         if current_token_is!(self, Token::Colon) {
-          self.advance(1);
+          self.advance();
 
           match self.parse_expression() {
             Parsed(value_node) => {
@@ -496,7 +536,7 @@ impl<'a> Parser<'a> {
       _ => unreachable!(),
     };
 
-    self.advance(1);
+    self.advance();
     self.skip_line_breaks();
 
     let mut inner_exprs = Vec::new();
@@ -504,7 +544,7 @@ impl<'a> Parser<'a> {
 
     match self.current_token() {
       Some(&Token::Colon(..)) => {
-        self.advance(1);
+        self.advance();
         is_dict = Some(true);
       }
       _ => loop {
@@ -535,7 +575,7 @@ impl<'a> Parser<'a> {
 
         match self.current_token() {
           Some(&Token::Comma(..)) => {
-            self.advance(1);
+            self.advance();
             self.skip_line_breaks();
           }
           _ => break,
@@ -550,7 +590,7 @@ impl<'a> Parser<'a> {
       _ => return Error(UnclosedArray(self.index)),
     };
 
-    self.advance(1);
+    self.advance();
 
     if let Some(true) = is_dict {
       return Parsed(Dict {
@@ -574,7 +614,7 @@ impl<'a> Parser<'a> {
     let mut result = previous.clone();
 
     while let Parsed(node) = current {
-      let (call_start, _) = get_node_location(&node);
+      let (call_start, _) = node.get_location();
 
       if current_token_is!(self, Token::LeftParen) {
         match self.parse_parenthetical() {
@@ -597,7 +637,7 @@ impl<'a> Parser<'a> {
           }
 
           Parsed(expr_in_parens) => {
-            let (_, expr_end) = get_node_location(&expr_in_parens);
+            let (_, expr_end) = expr_in_parens.get_location();
 
             current = Parsed(Call {
               start: call_start,
@@ -616,7 +656,7 @@ impl<'a> Parser<'a> {
       } else if current_token_is!(self, Token::LeftBrace) {
         match self.parse_block() {
           Parsed(block) => {
-            let (_, block_end) = get_node_location(&block);
+            let (_, block_end) = block.get_location();
 
             current = Parsed(Call {
               start: call_start,
@@ -651,16 +691,15 @@ impl<'a> Parser<'a> {
       _ => unreachable!(),
     };
 
-    self.advance(1);
+    self.advance();
 
     let (end, ident) = match self.current_token() {
-      Some(&Token::Identifier(start, end)) => (
+      Some(&Token::IdentifierLower(start, end)) => (
         end,
         Identifier {
           start,
           end,
           name: self.read_string(start, end),
-          qualifier: None,
           inferred_type: NodeType::Unknown,
         },
       ),
@@ -668,7 +707,7 @@ impl<'a> Parser<'a> {
       None => return EOF,
     };
 
-    self.advance(1);
+    self.advance();
 
     Parsed(Chain {
       start: chain_start,
@@ -681,7 +720,7 @@ impl<'a> Parser<'a> {
   fn parse_match(&mut self) -> ParseResult {
     let start = match self.current_token() {
       Some(&Token::KeywordMatch(start, _)) => {
-        self.advance(1);
+        self.advance();
         start
       }
       _ => unreachable!(),
@@ -698,7 +737,7 @@ impl<'a> Parser<'a> {
     let mut match_end = start;
 
     while let Some(&Token::Pipe(case_start, _)) = self.current_token() {
-      self.advance(1);
+      self.advance();
 
       let case_pattern = match self.parse_expression() {
         Parsed(node) => node,
@@ -706,14 +745,14 @@ impl<'a> Parser<'a> {
       };
 
       match self.current_token() {
-        Some(&Token::DoubleArrow(..)) => self.advance(1),
+        Some(&Token::DoubleArrow(..)) => self.advance(),
         _ => return Error(MissingArrowInMatchCase(self.index)),
       };
 
       self.skip_line_breaks();
 
       let (case_end, case_body) = match self.parse_expression() {
-        Parsed(node) => (get_node_location(&node).1, node),
+        Parsed(node) => (node.get_location().1, node),
         other => return other,
       };
 
@@ -744,24 +783,24 @@ impl<'a> Parser<'a> {
 
   fn parse_pattern(&mut self) -> ParseResult {
     match self.current_token() {
-      Some(..) => self.parse_identifier(),
+      Some(..) => self.parse_lowercase_identifier(),
       None => Error(ParseError::UnexpectedEOF),
     }
   }
 
   fn parse_reassignment(&mut self, previous: ParseResult) -> ParseResult {
     let (start, previous_node) = match previous {
-      Parsed(node) => (get_node_location(&node).0, node),
+      Parsed(node) => (node.get_location().0, node),
       other => return other,
     };
 
     match self.current_token() {
-      Some(&Token::ColonEquals(..)) => self.advance(1),
+      Some(&Token::ColonEquals(..)) => self.advance(),
       _ => unreachable!(),
     }
 
     let (end, value_node) = match self.parse_expression() {
-      Parsed(node) => (get_node_location(&node).1, node),
+      Parsed(node) => (node.get_location().1, node),
       other => return other,
     };
 
@@ -777,7 +816,7 @@ impl<'a> Parser<'a> {
   fn parse_assignment(&mut self) -> ParseResult {
     let start = match self.current_token() {
       Some(&Token::KeywordLet(start, _)) => {
-        self.advance(1);
+        self.advance();
         start
       }
       _ => unreachable!(),
@@ -795,11 +834,11 @@ impl<'a> Parser<'a> {
       None => return Error(ParseError::UnexpectedEOF),
     };
 
-    self.advance(1);
+    self.advance();
     self.skip_line_breaks();
 
     let (end, value_node) = match self.parse_expression() {
-      Parsed(node) => (get_node_location(&node).1, node),
+      Parsed(node) => (node.get_location().1, node),
       other => return other,
     };
 
@@ -814,54 +853,56 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_method_definition(&mut self) -> ParseResult {
-    let start = match self.current_token() {
-      Some(&Token::KeywordDef(start, _)) => {
-        self.advance(1);
-        start
-      }
-      _ => unreachable!(),
-    };
+    let start = expect_token_and_do!(self, Token::KeywordDef, {
+      let (token_start, _) = self.current_token_location();
+      self.advance();
+      token_start
+    });
 
-    let name = match self.parse_identifier() {
+    let name = match self.parse_lowercase_identifier() {
       Parsed(node) => node,
       EOF => return Error(ParseError::UnexpectedEOF),
       err => return err,
     };
 
-    expect_token_and_advance!(self, Token::LeftParen);
+    expect_token_and_do!(self, Token::LeftParen, {
+      self.advance();
+    });
 
     let mut params = Vec::new();
 
-    while current_token_is!(self, Token::Identifier) {
-      match self.parse_identifier() {
+    while current_token_is!(self, Token::IdentifierLower) {
+      match self.parse_lowercase_identifier() {
         Parsed(node) => params.push(node),
         EOF => return Error(ParseError::UnexpectedEOF),
         err => return err,
       }
 
       match self.current_token() {
-        Some(&Token::Comma(..)) => self.advance(1),
+        Some(&Token::Comma(..)) => self.advance(),
         Some(&Token::RightParen(..)) => break,
         Some(&tok) => return Error(ParseError::UnexpectedToken(tok.clone())),
         None => return Error(ParseError::UnexpectedEOF),
       }
     }
 
-    expect_token_and_advance!(self, Token::RightParen);
+    expect_token_and_do!(self, Token::RightParen, {
+      self.advance();
+    });
 
-    expect_token_and_advance!(self, Token::Equals);
+    expect_token_and_do!(self, Token::Equals, {
+      self.advance();
+    });
 
-    let body = match self.current_token() {
-      Some(&Token::LeftBrace(..)) => match self.parse_block() {
+    let body = expect_token_and_do!(self, Token::LeftBrace, {
+      match self.parse_block() {
         Parsed(node) => node,
         EOF => return Error(ParseError::UnexpectedEOF),
         err => return err,
-      },
-      Some(&tok) => return Error(ParseError::UnexpectedToken(tok.clone())),
-      None => return Error(ParseError::UnexpectedEOF),
-    };
+      }
+    });
 
-    let (_, end) = get_node_location(&body);
+    let (_, end) = body.get_location();
 
     Parsed(MethodDefinition {
       start,
@@ -873,48 +914,254 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_type_definition(&mut self) -> ParseResult {
-    let start = match self.current_token() {
-      Some(&Token::KeywordType(start, _)) => {
-        self.advance(1);
-        start
-      }
-      _ => unreachable!(),
-    };
-
-    let name = match self.parse_identifier() {
+  fn parse_type_constraint(&mut self) -> ParseResult {
+    let type_param = match self.parse_lowercase_identifier() {
       Parsed(node) => node,
       EOF => return Error(ParseError::UnexpectedEOF),
       err => return err,
     };
 
-    expect_token_and_advance!(self, Token::LeftParen);
+    expect_token_and_do!(self, Token::DoubleColon, {
+      self.advance();
+    });
 
-    let mut params = Vec::new();
+    let type_value = match self.parse_uppercase_identifier() {
+      Parsed(node) => node,
+      EOF => return Error(ParseError::UnexpectedEOF),
+      err => return err,
+    };
 
-    while current_token_is!(self, Token::Identifier) {
-      match self.parse_identifier() {
-        Parsed(node) => params.push(node),
+    Parsed(TypeConstraint {
+      start: 0,
+      end: 0,
+      type_param: Box::new(type_param),
+      value: Box::new(type_value),
+    })
+  }
+
+  fn parse_type_constraint_list(&mut self) -> ParseResult {
+    let start = expect_token_and_do!(self, Token::KeywordWhere, {
+      let (token_start, _) = self.current_token_location();
+      self.advance();
+      token_start
+    });
+
+    let mut constraints = Vec::new();
+
+    match self.parse_type_constraint() {
+      Parsed(node) => constraints.push(node),
+      EOF => return Error(ParseError::UnexpectedEOF),
+      err => return err,
+    };
+
+    while current_token_is!(self, Token::Comma) {
+      self.advance();
+
+      match self.parse_type_constraint() {
+        Parsed(node) => constraints.push(node),
+        EOF => return Error(ParseError::UnexpectedEOF),
+        err => return err,
+      };
+    }
+
+    let end = match constraints.last() {
+      Some(constraint) => constraint.get_location().1,
+      None => return Error(ParseError::MissingConstraintsAfterWhere(self.index)),
+    };
+
+    Parsed(TypeConstraintList {
+      start,
+      end,
+      constraints,
+    })
+  }
+
+  fn parse_type_expression(&mut self) -> ParseResult {
+    let name = match self.parse_uppercase_identifier() {
+      Parsed(node) => node,
+      EOF => return Error(ParseError::UnexpectedEOF),
+      err => return err,
+    };
+
+    Parsed(name)
+  }
+
+  fn parse_type_constructor_field(&mut self) -> ParseResult {
+    if current_token_is!(self, Token::IdentifierLower) && next_token_is!(self, Token::DoubleColon) {
+      let name = match self.parse_lowercase_identifier() {
+        Parsed(node) => node,
+        EOF => return Error(ParseError::UnexpectedEOF),
+        err => return err,
+      };
+
+      expect_token_and_do!(self, Token::DoubleColon, {
+        self.advance();
+      });
+
+      let field_type = match self.parse_type_expression() {
+        Parsed(node) => node,
+        EOF => return Error(ParseError::UnexpectedEOF),
+        err => return err,
+      };
+
+      return Parsed(TypeConstructorField {
+        start: 0,
+        end: 0,
+        name: Some(Box::new(name)),
+        field_type: Box::new(field_type),
+      });
+    }
+
+    let field_type = match self.parse_type_expression() {
+      Parsed(node) => node,
+      EOF => return Error(ParseError::UnexpectedEOF),
+      err => return err,
+    };
+
+    return Parsed(TypeConstructorField {
+      start: 0,
+      end: 0,
+      name: None,
+      field_type: Box::new(field_type),
+    });
+  }
+
+  fn parse_type_constructor_definition(&mut self) -> ParseResult {
+    let name = match self.parse_uppercase_identifier() {
+      Parsed(node) => node,
+      EOF => return Error(ParseError::UnexpectedEOF),
+      err => return err,
+    };
+
+    let mut fields = Vec::new();
+
+    if current_token_is!(self, Token::LeftParen) {
+      self.advance();
+
+      match self.parse_type_constructor_field() {
+        Parsed(node) => fields.push(node),
+        EOF => return Error(ParseError::UnexpectedEOF),
+        err => return err,
+      };
+
+      expect_token_and_do!(self, Token::RightParen, {
+        self.advance();
+      })
+    }
+
+    Parsed(TypeConstructorDefinition {
+      start: 0,
+      end: 0,
+      name: Box::new(name),
+      fields,
+    })
+  }
+
+  fn parse_type_enum_definition(&mut self) -> ParseResult {
+    let mut constructors = Vec::new();
+    let mut start = None;
+
+    self.skip_line_breaks();
+
+    while current_token_is!(self, Token::Pipe) {
+      if start.is_none() {
+        start = Some(self.current_token_location().0);
+      }
+
+      expect_token_and_do!(self, Token::Pipe, {
+        self.advance();
+      });
+
+      match self.parse_type_constructor_definition() {
+        Parsed(node) => constructors.push(node),
+        EOF => return Error(ParseError::UnexpectedEOF),
+        err => return err,
+      };
+
+      self.skip_line_breaks();
+    }
+
+    Parsed(TypeEnumDefinition {
+      start: start.unwrap(),
+      end: 0,
+      constructors,
+    })
+  }
+
+  fn parse_type_definition(&mut self) -> ParseResult {
+    let start = expect_token_and_do!(self, Token::KeywordType, {
+      let (token_start, _) = self.current_token_location();
+      self.advance();
+      token_start
+    });
+
+    let name = match self.parse_uppercase_identifier() {
+      Parsed(node) => node,
+      EOF => return Error(ParseError::UnexpectedEOF),
+      err => return err,
+    };
+
+    let mut type_params = Vec::new();
+
+    if current_token_is!(self, Token::LeftParen) {
+      expect_token_and_do!(self, Token::LeftParen, {
+        self.advance();
+      });
+
+      while current_token_is!(self, Token::IdentifierLower) {
+        match self.parse_lowercase_identifier() {
+          Parsed(node) => type_params.push(node),
+          EOF => return Error(ParseError::UnexpectedEOF),
+          err => return err,
+        }
+
+        match self.current_token() {
+          Some(&Token::Comma(..)) => self.advance(),
+          Some(&Token::RightParen(..)) => break,
+          Some(tok) => return Error(ParseError::UnexpectedToken(tok.clone())),
+          _ => return Error(ParseError::UnexpectedEOF),
+        }
+      }
+
+      expect_token_and_do!(self, Token::RightParen, {
+        self.advance();
+      });
+    }
+
+    let constraint_list = if current_token_is!(self, Token::KeywordWhere) {
+      match self.parse_type_constraint_list() {
+        Parsed(list) => Some(Box::new(list)),
         EOF => return Error(ParseError::UnexpectedEOF),
         err => return err,
       }
+    } else {
+      None
+    };
 
-      match self.current_token() {
-        Some(&Token::Comma(..)) => self.advance(1),
-        Some(&Token::RightParen(..)) => break,
-        Some(tok) => return Error(ParseError::UnexpectedToken(tok.clone())),
-        _ => return Error(ParseError::UnexpectedEOF),
-      }
-    }
+    self.skip_line_breaks();
 
-    expect_token_and_advance!(self, Token::RightParen);
+    let parsed_value = match self.current_token() {
+      Some(&Token::Pipe(..)) => self.parse_type_enum_definition(),
+      // TODO: = for aliases, . for traits
+      Some(tok) => return Error(ParseError::UnexpectedToken(tok.clone())),
+      _ => return Error(ParseError::UnexpectedEOF),
+    };
 
-    expect_token_and_advance!(self, Token::Equals);
+    let value = match parsed_value {
+      Parsed(node) => node,
+      EOF => return Error(ParseError::UnexpectedEOF),
+      err => return err,
+    };
+
+    let (_, end) = value.get_location();
 
     Parsed(TypeDefinition {
       start,
-      end: 0,
+      end,
       name: Box::new(name),
+      type_params,
+      constraint_list,
+      value: Box::new(value),
     })
   }
 
@@ -925,7 +1172,8 @@ impl<'a> Parser<'a> {
       Some(&Token::KeywordDef(..)) => self.parse_method_definition(),
       Some(&Token::KeywordLet(..)) => self.parse_assignment(),
       Some(&Token::KeywordType(..)) => self.parse_type_definition(),
-      Some(&Token::Identifier(..)) => self.parse_identifier(),
+      Some(&Token::IdentifierLower(..)) => self.parse_qualified_identifier(),
+      Some(&Token::IdentifierUpper(..)) => self.parse_uppercase_identifier(),
       Some(&Token::LeftParen(..)) => self.parse_parenthetical(),
       Some(&Token::StringLiteral(..)) => self.parse_string(),
       Some(&Token::KeywordMatch(..)) => self.parse_match(),
@@ -962,7 +1210,7 @@ impl<'a> Parser<'a> {
   fn parse_import(&mut self) -> ParseResult {
     let start = match self.current_token() {
       Some(&Token::KeywordUse(start, _)) => {
-        self.advance(1);
+        self.advance();
         start
       }
       _ => unreachable!(),
@@ -974,23 +1222,23 @@ impl<'a> Parser<'a> {
       None => return Error(UnexpectedEOF),
     };
 
-    self.advance(1);
+    self.advance();
 
     let mut alias = None;
     let mut import_end = path_end;
 
-    if let Some(&Token::KeywordAs(..)) = self.current_token() {
-      self.advance(1);
+    if current_token_is!(self, Token::KeywordAs) {
+      self.advance();
 
       match self.current_token() {
-        Some(&Token::Identifier(start, end)) => {
+        Some(&Token::IdentifierLower(start, end)) => {
           alias = Some(self.read_string(start, end));
           import_end = end;
         }
         _ => return Error(MissingAliasAfterAsInImport(self.index)),
       };
 
-      self.advance(1);
+      self.advance();
     }
 
     self.skip_line_breaks();

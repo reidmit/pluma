@@ -64,6 +64,11 @@ pub enum Node {
     inferred_type: NodeType,
   },
 
+  Break {
+    start: usize,
+    end: usize,
+  },
+
   Call {
     start: usize,
     end: usize,
@@ -104,7 +109,6 @@ pub enum Node {
     start: usize,
     end: usize,
     name: String,
-    qualifier: Option<Box<Node>>,
     inferred_type: NodeType,
   },
 
@@ -148,11 +152,31 @@ pub enum Node {
     inferred_type: NodeType,
   },
 
+  PrivateMarker {
+    start: usize,
+    end: usize,
+  },
+
+  QualifiedIdentifier {
+    start: usize,
+    end: usize,
+    qualifier: Box<Node>,
+    ident: Box<Node>,
+    inferred_type: NodeType,
+  },
+
   Reassignment {
     start: usize,
     end: usize,
     left: Box<Node>,
     right: Box<Node>,
+    inferred_type: NodeType,
+  },
+
+  Return {
+    start: usize,
+    end: usize,
+    value: Box<Node>,
     inferred_type: NodeType,
   },
 
@@ -183,57 +207,113 @@ pub enum Node {
     inferred_type: NodeType,
   },
 
+  TypeConstraint {
+    start: usize,
+    end: usize,
+    type_param: Box<Node>,
+    value: Box<Node>,
+  },
+
+  TypeConstraintList {
+    start: usize,
+    end: usize,
+    constraints: Vec<Node>,
+  },
+
+  TypeConstructorDefinition {
+    start: usize,
+    end: usize,
+    name: Box<Node>,
+    fields: Vec<Node>,
+  },
+
+  TypeConstructorField {
+    start: usize,
+    end: usize,
+    name: Option<Box<Node>>,
+    field_type: Box<Node>,
+  },
+
   TypeDefinition {
     start: usize,
     end: usize,
     name: Box<Node>,
+    type_params: Vec<Node>,
+    constraint_list: Option<Box<Node>>,
+    value: Box<Node>,
+  },
+
+  TypeEnumDefinition {
+    start: usize,
+    end: usize,
+    constructors: Vec<Node>,
+  },
+
+  TypeIdentifier {
+    start: usize,
+    end: usize,
+    name: String,
   },
 }
 
-pub fn get_node_location(node: &Node) -> (usize, usize) {
-  match node {
-    &Node::Array { start, end, .. } => (start, end),
-    &Node::Assignment { start, end, .. } => (start, end),
-    &Node::Block { start, end, .. } => (start, end),
-    &Node::Call { start, end, .. } => (start, end),
-    &Node::Chain { start, end, .. } => (start, end),
-    &Node::Dict { start, end, .. } => (start, end),
-    &Node::DictEntry { start, end, .. } => (start, end),
-    &Node::Grouping { start, end, .. } => (start, end),
-    &Node::Identifier { start, end, .. } => (start, end),
-    &Node::Import { start, end, .. } => (start, end),
-    &Node::Match { start, end, .. } => (start, end),
-    &Node::MatchCase { start, end, .. } => (start, end),
-    &Node::MethodDefinition { start, end, .. } => (start, end),
-    &Node::Module { start, end, .. } => (start, end),
-    &Node::NumericLiteral { start, end, .. } => (start, end),
-    &Node::Reassignment { start, end, .. } => (start, end),
-    &Node::StringInterpolation { start, end, .. } => (start, end),
-    &Node::StringLiteral { start, end, .. } => (start, end),
-    &Node::TraitDefinition { start, end, .. } => (start, end),
-    &Node::Tuple { start, end, .. } => (start, end),
-    &Node::TypeDefinition { start, end, .. } => (start, end),
+impl Node {
+  pub fn get_location(&self) -> (usize, usize) {
+    match self {
+      &Node::Array { start, end, .. } => (start, end),
+      &Node::Assignment { start, end, .. } => (start, end),
+      &Node::Block { start, end, .. } => (start, end),
+      &Node::Break { start, end, .. } => (start, end),
+      &Node::Call { start, end, .. } => (start, end),
+      &Node::Chain { start, end, .. } => (start, end),
+      &Node::Dict { start, end, .. } => (start, end),
+      &Node::DictEntry { start, end, .. } => (start, end),
+      &Node::Grouping { start, end, .. } => (start, end),
+      &Node::Identifier { start, end, .. } => (start, end),
+      &Node::Import { start, end, .. } => (start, end),
+      &Node::Match { start, end, .. } => (start, end),
+      &Node::MatchCase { start, end, .. } => (start, end),
+      &Node::MethodDefinition { start, end, .. } => (start, end),
+      &Node::Module { start, end, .. } => (start, end),
+      &Node::NumericLiteral { start, end, .. } => (start, end),
+      &Node::PrivateMarker { start, end, .. } => (start, end),
+      &Node::QualifiedIdentifier { start, end, .. } => (start, end),
+      &Node::Reassignment { start, end, .. } => (start, end),
+      &Node::Return { start, end, .. } => (start, end),
+      &Node::StringInterpolation { start, end, .. } => (start, end),
+      &Node::StringLiteral { start, end, .. } => (start, end),
+      &Node::TraitDefinition { start, end, .. } => (start, end),
+      &Node::Tuple { start, end, .. } => (start, end),
+      &Node::TypeConstraint { start, end, .. } => (start, end),
+      &Node::TypeConstraintList { start, end, .. } => (start, end),
+      &Node::TypeConstructorDefinition { start, end, .. } => (start, end),
+      &Node::TypeConstructorField { start, end, .. } => (start, end),
+      &Node::TypeDefinition { start, end, .. } => (start, end),
+      &Node::TypeEnumDefinition { start, end, .. } => (start, end),
+      &Node::TypeIdentifier { start, end, .. } => (start, end),
+    }
   }
-}
 
-pub fn get_node_type(node: &Node) -> NodeType {
-  match &node {
-    &Node::Array { inferred_type, .. } => inferred_type.clone(),
-    &Node::Assignment { inferred_type, .. } => inferred_type.clone(),
-    &Node::Block { inferred_type, .. } => inferred_type.clone(),
-    &Node::Call { inferred_type, .. } => inferred_type.clone(),
-    &Node::Dict { inferred_type, .. } => inferred_type.clone(),
-    &Node::Grouping { inferred_type, .. } => inferred_type.clone(),
-    &Node::Identifier { inferred_type, .. } => inferred_type.clone(),
-    &Node::Match { inferred_type, .. } => inferred_type.clone(),
-    &Node::MatchCase { inferred_type, .. } => inferred_type.clone(),
-    &Node::MethodDefinition { inferred_type, .. } => inferred_type.clone(),
-    &Node::NumericLiteral { inferred_type, .. } => inferred_type.clone(),
-    &Node::Reassignment { inferred_type, .. } => inferred_type.clone(),
-    &Node::StringInterpolation { inferred_type, .. } => inferred_type.clone(),
-    &Node::StringLiteral { inferred_type, .. } => inferred_type.clone(),
-    &Node::Tuple { inferred_type, .. } => inferred_type.clone(),
+  pub fn get_type(&self) -> NodeType {
+    match self {
+      Node::Array { inferred_type, .. } => inferred_type.clone(),
+      Node::Assignment { inferred_type, .. } => inferred_type.clone(),
+      Node::Block { inferred_type, .. } => inferred_type.clone(),
+      Node::Call { inferred_type, .. } => inferred_type.clone(),
+      Node::Dict { inferred_type, .. } => inferred_type.clone(),
+      Node::Grouping { inferred_type, .. } => inferred_type.clone(),
+      Node::Identifier { inferred_type, .. } => inferred_type.clone(),
+      Node::Match { inferred_type, .. } => inferred_type.clone(),
+      Node::MatchCase { inferred_type, .. } => inferred_type.clone(),
+      Node::MethodDefinition { inferred_type, .. } => inferred_type.clone(),
+      Node::NumericLiteral { inferred_type, .. } => inferred_type.clone(),
+      Node::QualifiedIdentifier { inferred_type, .. } => inferred_type.clone(),
+      Node::Reassignment { inferred_type, .. } => inferred_type.clone(),
+      Node::Return { inferred_type, .. } => inferred_type.clone(),
+      Node::StringInterpolation { inferred_type, .. } => inferred_type.clone(),
+      Node::StringLiteral { inferred_type, .. } => inferred_type.clone(),
+      Node::Tuple { inferred_type, .. } => inferred_type.clone(),
 
-    _ => unreachable!(),
+      _ => unreachable!(),
+    }
   }
 }

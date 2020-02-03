@@ -8,7 +8,7 @@ hello
 
 === Tokens ===
 [
-    Identifier(
+    IdentifierLower(
         0,
         5,
     ),
@@ -28,7 +28,6 @@ Ok(
                 start: 0,
                 end: 5,
                 name: "hello",
-                qualifier: None,
                 inferred_type: Unknown,
             },
         ],

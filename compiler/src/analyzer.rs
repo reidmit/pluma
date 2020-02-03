@@ -1,4 +1,4 @@
-use crate::ast::{get_node_type, Node, NodeType};
+use crate::ast::{Node, NodeType};
 use crate::errors::{AnalysisError, AnalysisError::*};
 use crate::scope::Scope;
 use std::collections::HashMap;
@@ -24,7 +24,7 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) -> Result<(), AnalysisErr
       for element in elements {
         analyze(element, state)?;
 
-        let element_type = get_node_type(element);
+        let element_type = element.get_type();
 
         if let Some(first_type) = first_element_type.clone() {
           if first_type != element_type {
@@ -60,9 +60,9 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) -> Result<(), AnalysisErr
 
       let name = get_identifier_name(left);
 
-      *inferred_type = get_node_type(right);
+      *inferred_type = right.get_type();
 
-      state.local_scope.add(name, get_node_type(right));
+      state.local_scope.add(name, right.get_type());
     }
 
     Node::Block {
@@ -76,12 +76,12 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) -> Result<(), AnalysisErr
 
       for param in params {
         analyze(param, state)?;
-        param_types.push(get_node_type(param));
+        param_types.push(param.get_type());
       }
 
       for expr in body {
         analyze(expr, state)?;
-        return_type = Some(get_node_type(expr));
+        return_type = Some(expr.get_type());
       }
 
       *inferred_type = NodeType::Function {
@@ -89,6 +89,8 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) -> Result<(), AnalysisErr
         return_type: Box::new(return_type.unwrap()),
       }
     }
+
+    Node::Break { .. } => {}
 
     Node::Call {
       callee, arguments, ..
@@ -110,24 +112,12 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) -> Result<(), AnalysisErr
 
     Node::Identifier {
       name,
-      qualifier,
       inferred_type,
       ..
-    } => {
-      if let Some(_qualifier_node) = qualifier {
-        //match state.module_aliases.get(qualifier_name) {
-        //  Some(..) => {
-        // TODO: lookup variable in module scope
-        //  }
-        //  None => return Err(UndefinedQualifier(qualifier_node.clone())),
-        // }
-      } else {
-        match state.local_scope.get(name) {
-          Some(node_type) => *inferred_type = node_type,
-          None => return Err(UndefinedVariable(node.clone())),
-        }
-      }
-    }
+    } => match state.local_scope.get(name) {
+      Some(node_type) => *inferred_type = node_type,
+      None => return Err(UndefinedVariable(node.clone())),
+    },
 
     Node::Import {
       alias, module_name, ..
@@ -163,7 +153,11 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) -> Result<(), AnalysisErr
 
     Node::NumericLiteral { inferred_type, .. } => *inferred_type = NodeType::Int,
 
+    Node::PrivateMarker { .. } => {}
+
     Node::Reassignment { .. } => {}
+
+    Node::Return { .. } => {}
 
     Node::StringInterpolation {
       parts,
@@ -173,7 +167,7 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) -> Result<(), AnalysisErr
       for part in parts {
         analyze(part, state)?;
 
-        match get_node_type(part) {
+        match part.get_type() {
           NodeType::String => {}
           other => return Err(TypeMismatch(part.clone(), NodeType::String, other)),
         }
@@ -189,6 +183,8 @@ fn analyze(node: &mut Node, state: &mut AnalyzerState) -> Result<(), AnalysisErr
     Node::Tuple { .. } => {}
 
     Node::TypeDefinition { .. } => {}
+
+    _ => panic!("yikes"),
   }
 
   Ok(())

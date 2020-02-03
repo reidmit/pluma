@@ -8,7 +8,7 @@ func(1, "two", three)
 
 === Tokens ===
 [
-    Identifier(
+    IdentifierLower(
         0,
         4,
     ),
@@ -32,7 +32,7 @@ func(1, "two", three)
         13,
         14,
     ),
-    Identifier(
+    IdentifierLower(
         15,
         20,
     ),
@@ -59,7 +59,6 @@ Ok(
                     start: 0,
                     end: 4,
                     name: "func",
-                    qualifier: None,
                     inferred_type: Unknown,
                 },
                 arguments: [
@@ -82,7 +81,6 @@ Ok(
                         start: 15,
                         end: 20,
                         name: "three",
-                        qualifier: None,
                         inferred_type: Unknown,
                     },
                 ],

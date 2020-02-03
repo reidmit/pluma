@@ -8,7 +8,7 @@ qual:hello
 
 === Tokens ===
 [
-    Identifier(
+    IdentifierLower(
         0,
         4,
     ),
@@ -16,7 +16,7 @@ qual:hello
         4,
         5,
     ),
-    Identifier(
+    IdentifierLower(
         5,
         10,
     ),
@@ -32,19 +32,21 @@ Ok(
         end: 10,
         imports: [],
         body: [
-            Identifier {
+            QualifiedIdentifier {
                 start: 0,
                 end: 10,
-                name: "hello",
-                qualifier: Some(
-                    Identifier {
-                        start: 0,
-                        end: 4,
-                        name: "qual",
-                        qualifier: None,
-                        inferred_type: Unknown,
-                    },
-                ),
+                qualifier: Identifier {
+                    start: 0,
+                    end: 4,
+                    name: "qual",
+                    inferred_type: Unknown,
+                },
+                ident: Identifier {
+                    start: 5,
+                    end: 10,
+                    name: "hello",
+                    inferred_type: Unknown,
+                },
                 inferred_type: Unknown,
             },
         ],

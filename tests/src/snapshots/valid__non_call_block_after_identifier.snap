@@ -9,7 +9,7 @@ x
 
 === Tokens ===
 [
-    Identifier(
+    IdentifierLower(
         0,
         1,
     ),
@@ -41,7 +41,6 @@ Ok(
                 start: 0,
                 end: 1,
                 name: "x",
-                qualifier: None,
                 inferred_type: Unknown,
             },
             Block {

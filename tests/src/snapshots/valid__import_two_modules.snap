@@ -38,7 +38,7 @@ let x = 47
         33,
         36,
     ),
-    Identifier(
+    IdentifierLower(
         37,
         38,
     ),
@@ -83,7 +83,6 @@ Ok(
                     start: 37,
                     end: 38,
                     name: "x",
-                    qualifier: None,
                     inferred_type: Unknown,
                 },
                 right: NumericLiteral {
