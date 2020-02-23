@@ -8,10 +8,11 @@ pub mod analyzer;
 pub mod compiler;
 pub mod error_formatter;
 pub mod errors;
-pub mod parser;
+pub mod parser2;
 pub mod tokenizer;
 
 mod ast;
+mod ast2;
 mod dependency_graph;
 mod fs;
 mod macros;

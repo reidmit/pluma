@@ -2,7 +2,8 @@ use crate::analyzer::analyze_ast;
 use crate::ast::Node;
 use crate::errors::ModuleCompilationError;
 use crate::fs;
-use crate::parser::Parser;
+// use crate::parser::Parser;
+use crate::parser2::Parser;
 use crate::tokenizer::{CommentMap, TokenList, Tokenizer};
 
 #[derive(Debug)]
@@ -98,10 +99,14 @@ impl Module {
 
   fn parse(&mut self) -> Result<(), ModuleCompilationError> {
     match (&self.bytes, &self.tokens) {
-      (Some(source), Some(tokens)) => match Parser::new(source, tokens).parse_module() {
-        Ok(ast) => Ok(self.ast = Some(ast)),
-        Err(err) => Err(ModuleCompilationError::ParseError(err)),
-      },
+      (Some(source), Some(tokens)) => {
+        let result = Parser::new(source, tokens).parse_module();
+        println!("{:#?}", result);
+        Ok(())
+        // (Some(source), Some(tokens)) => match Parser::new(source, tokens).parse_module() {
+        //   Ok(ast) => Ok(self.ast = Some(ast)),
+        //   Err(err) => Err(ModuleCompilationError::ParseError(err)),
+      }
       _ => unreachable!(),
     }
   }

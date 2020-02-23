@@ -185,51 +185,25 @@ impl<'a> Tokenizer<'a> {
           tokens.push(Dot(start_index, index))
         }
 
-        b'|' => {
-          index += 1;
-          tokens.push(Pipe(start_index, index))
+        _ if is_operator_char(byte) => {
+          while index < length && is_operator_char(source[index]) {
+            index += 1;
+          }
+
+          let value = &source[start_index..index];
+
+          let constructor = match value {
+            b"|" => Pipe,
+            b"=>" => DoubleArrow,
+            b"=" => Equals,
+            b"->" => Arrow,
+            b"::" => DoubleColon,
+            b":" => Colon,
+            _ => Operator,
+          };
+
+          tokens.push(constructor(start_index, index));
         }
-
-        b'=' => match source.get(index + 1) {
-          Some(b'>') => {
-            index += 2;
-            tokens.push(DoubleArrow(start_index, index))
-          }
-
-          _ => {
-            index += 1;
-            tokens.push(Equals(start_index, index))
-          }
-        },
-
-        b'-' => match source.get(index + 1) {
-          Some(b'>') => {
-            index += 2;
-            tokens.push(Arrow(start_index, index))
-          }
-
-          _ => {
-            index += 1;
-            tokens.push(Minus(start_index, index))
-          }
-        },
-
-        b':' => match source.get(index + 1) {
-          Some(b'=') => {
-            index += 2;
-            tokens.push(ColonEquals(start_index, index))
-          }
-
-          Some(b':') => {
-            index += 2;
-            tokens.push(DoubleColon(start_index, index))
-          }
-
-          _ => {
-            index += 1;
-            tokens.push(Colon(start_index, index))
-          }
-        },
 
         b'#' => {
           while index < length && source[index] != b'\n' {
@@ -247,16 +221,16 @@ impl<'a> Tokenizer<'a> {
           let value = &source[start_index..index];
 
           let constructor = match value {
-            [b'a', b's'] => KeywordAs,
-            [b'b', b'r', b'e', b'a', b'k'] => KeywordBreak,
-            [b'd', b'e', b'f'] => KeywordDef,
-            [b'l', b'e', b't'] => KeywordLet,
-            [b'm', b'a', b't', b'c', b'h'] => KeywordMatch,
-            [b'p', b'r', b'i', b'v', b'a', b't', b'e'] => KeywordPrivate,
-            [b'u', b's', b'e'] => KeywordUse,
-            [b'r', b'e', b't', b'u', b'r', b'n'] => KeywordReturn,
-            [b't', b'y', b'p', b'e'] => KeywordType,
-            [b'w', b'h', b'e', b'r', b'e'] => KeywordWhere,
+            b"as" => KeywordAs,
+            b"break" => KeywordBreak,
+            b"def" => KeywordDef,
+            b"let" => KeywordLet,
+            b"match" => KeywordMatch,
+            b"private" => KeywordPrivate,
+            b"use" => KeywordUse,
+            b"return" => KeywordReturn,
+            b"type" => KeywordType,
+            b"where" => KeywordWhere,
             _ if is_uppercase(value[0]) => IdentifierUpper,
             _ => IdentifierLower,
           };
@@ -387,6 +361,26 @@ fn is_uppercase(byte: u8) -> bool {
 fn is_digit(byte: u8) -> bool {
   match byte {
     b'0'..=b'9' => true,
+    _ => false,
+  }
+}
+
+fn is_operator_char(byte: u8) -> bool {
+  match byte {
+    b'*' => true,
+    b'/' => true,
+    b'+' => true,
+    b'-' => true,
+    b'=' => true,
+    b'<' => true,
+    b'>' => true,
+    b'~' => true,
+    b'!' => true,
+    b'$' => true,
+    b'%' => true,
+    b'&' => true,
+    b'@' => true,
+    b'^' => true,
     _ => false,
   }
 }
