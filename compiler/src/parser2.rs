@@ -20,8 +20,12 @@ macro_rules! expect_token_and_do {
           kind: ParseErrorKind::UnexpectedToken(tok.clone()),
         })
       }
-      _ => panic!("hmm"),
-      //None => return Error(UnexpectedEOF),
+      None => {
+        return $self.error(ParseError {
+          pos: ($self.source.len(), $self.source.len()),
+          kind: ParseErrorKind::UnexpectedEOF,
+        })
+      }
     }
   };
 }
@@ -181,13 +185,111 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_decimal_number(&mut self) -> Option<LitNode> {
-    let (start, end, value) = expect_token_and_do!(self, Token::DecimalDigits, {
+  fn parse_binary_operation(&mut self, last_term: ExprNode) -> Option<ExprNode> {
+    let op_node = expect_token_and_do!(self, Token::Operator, {
       let (start, end) = self.current_token_location();
-      (start, end, self.parse_numeric_literal(start, end, 10))
+      let name = read_string!(self, start, end);
+      self.advance();
+
+      Box::new(OperatorNode {
+        id: self.next_id(),
+        pos: (start, end),
+        name,
+      })
     });
 
-    self.advance();
+    let (end, next_term) = match self.parse_operator_branch() {
+      Some(term) => (term.pos.1, Box::new(term)),
+      _ => {
+        return self.error(ParseError {
+          pos: self.current_token_location(),
+          kind: ParseErrorKind::MissingExpressionAfterDot,
+        })
+      }
+    };
+
+    Some(ExprNode {
+      id: self.next_id(),
+      pos: (last_term.pos.0, end),
+      kind: ExprKind::BinaryOperation(Box::new(last_term), op_node, next_term),
+    })
+  }
+
+  fn parse_call(&mut self, last_expr: ExprNode) -> Option<ExprNode> {
+    expect_token_and_do!(self, Token::LeftParen, { self.advance() });
+
+    let mut params = Vec::new();
+
+    if current_token_is!(self, Token::RightParen) {
+      self.advance()
+    } else {
+      while let Some(param) = self.parse_term() {
+        params.push(param);
+
+        if current_token_is!(self, Token::Comma) {
+          self.advance()
+        } else {
+          break;
+        }
+      }
+
+      expect_token_and_do!(self, Token::RightParen, { self.advance() });
+    }
+
+    Some(ExprNode {
+      id: self.next_id(),
+      pos: (last_expr.pos.0, 0),
+      kind: ExprKind::Call(Box::new(last_expr), params),
+    })
+  }
+
+  fn parse_chain(&mut self, last_expr: ExprNode) -> Option<ExprNode> {
+    expect_token_and_do!(self, Token::Dot, { self.advance() });
+
+    let (end, next_expr) = match self.parse_term() {
+      Some(term) => (term.pos.1, Box::new(term)),
+      _ => {
+        return self.error(ParseError {
+          pos: self.current_token_location(),
+          kind: ParseErrorKind::MissingExpressionAfterDot,
+        })
+      }
+    };
+
+    Some(ExprNode {
+      id: self.next_id(),
+      pos: (last_expr.pos.0, end),
+      kind: ExprKind::Chain(Box::new(last_expr), next_expr),
+    })
+  }
+
+  fn parse_decimal_number(&mut self) -> Option<LitNode> {
+    let (start, end) = expect_token_and_do!(self, Token::DecimalDigits, {
+      let pos = self.current_token_location();
+      self.advance();
+      pos
+    });
+
+    if current_token_is!(self, Token::Dot) {
+      self.advance();
+
+      expect_token_and_do!(self, Token::DecimalDigits, {
+        let (_, end) = self.current_token_location();
+
+        self.advance();
+
+        let str_value = read_string!(self, start, end);
+        let float_value = str_value.parse::<f64>().unwrap();
+
+        return Some(LitNode {
+          id: self.next_id(),
+          kind: LitKind::FloatDecimal(float_value),
+          pos: (start, end),
+        });
+      });
+    }
+
+    let value = self.parse_numeric_literal(start, end, 10);
 
     Some(LitNode {
       id: self.next_id(),
@@ -443,7 +545,7 @@ impl<'a> Parser<'a> {
     Some(DefKind::UnaryOperator(op_node, type_node))
   }
 
-  fn parse_expression(&mut self) -> Option<ExprNode> {
+  fn parse_term(&mut self) -> Option<ExprNode> {
     match self.current_token() {
       Some(&Token::LeftBrace(..)) => self.parse_block(),
       Some(&Token::StringLiteral(..)) => self.parse_string(),
@@ -492,6 +594,50 @@ impl<'a> Parser<'a> {
       Some(&Token::Operator(..)) => self.parse_unary_operation(),
       _ => None,
     }
+  }
+
+  fn parse_operator_branch(&mut self) -> Option<ExprNode> {
+    let mut expr = self.parse_term();
+
+    loop {
+      if expr.is_some() {
+        match self.current_token() {
+          Some(&Token::Dot(..)) => {
+            expr = self.parse_chain(expr.unwrap());
+            continue;
+          }
+          Some(&Token::LeftParen(..)) => {
+            expr = self.parse_call(expr.unwrap());
+            continue;
+          }
+          _ => {}
+        }
+      }
+
+      break;
+    }
+
+    expr
+  }
+
+  fn parse_expression(&mut self) -> Option<ExprNode> {
+    let mut expr = self.parse_operator_branch();
+
+    loop {
+      if expr.is_some() {
+        match self.current_token() {
+          Some(&Token::Operator(..)) => {
+            expr = self.parse_binary_operation(expr.unwrap());
+            continue;
+          }
+          _ => {}
+        }
+      }
+
+      break;
+    }
+
+    expr
   }
 
   fn parse_hex_number(&mut self) -> Option<LitNode> {

@@ -93,6 +93,8 @@ pub enum ExprKind {
   Assignment(Box<IdentNode>, Box<ExprNode>),
   BinaryOperation(Box<ExprNode>, Box<OperatorNode>, Box<ExprNode>),
   Block(Vec<IdentNode>, Vec<StatementNode>),
+  Call(Box<ExprNode>, Vec<ExprNode>),
+  Chain(Box<ExprNode>, Box<ExprNode>),
   EmptyTuple,
   Grouping(Box<ExprNode>),
   Identifier(IdentNode),
@@ -119,6 +121,7 @@ pub struct LitNode {
 
 #[derive(Debug)]
 pub enum LitKind {
+  FloatDecimal(f64),
   IntDecimal(i128),
   IntOctal(i128),
   IntHex(i128),
@@ -181,11 +184,13 @@ pub struct ParseError {
 
 #[derive(Debug, Copy, Clone)]
 pub enum ParseErrorKind {
+  UnexpectedEOF,
   UnexpectedToken(Token),
   UnclosedParentheses,
   MissingIdentifier,
   MissingDefinitionBody,
   MissingReturnType,
   MissingType,
+  MissingExpressionAfterDot,
   MissingExpressionAfterOperator,
 }
