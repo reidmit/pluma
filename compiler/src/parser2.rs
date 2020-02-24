@@ -219,11 +219,13 @@ impl<'a> Parser<'a> {
     expect_token_and_do!(self, Token::LeftParen, { self.advance() });
 
     let mut params = Vec::new();
+    let end;
 
     if current_token_is!(self, Token::RightParen) {
+      end = self.current_token_location().1;
       self.advance()
     } else {
-      while let Some(param) = self.parse_term() {
+      while let Some(param) = self.parse_expression() {
         params.push(param);
 
         if current_token_is!(self, Token::Comma) {
@@ -233,12 +235,15 @@ impl<'a> Parser<'a> {
         }
       }
 
-      expect_token_and_do!(self, Token::RightParen, { self.advance() });
+      expect_token_and_do!(self, Token::RightParen, {
+        end = self.current_token_location().1;
+        self.advance()
+      });
     }
 
     Some(ExprNode {
       id: self.next_id(),
-      pos: (last_expr.pos.0, 0),
+      pos: (last_expr.pos.0, end),
       kind: ExprKind::Call(Box::new(last_expr), params),
     })
   }
@@ -545,81 +550,6 @@ impl<'a> Parser<'a> {
     Some(DefKind::UnaryOperator(op_node, type_node))
   }
 
-  fn parse_term(&mut self) -> Option<ExprNode> {
-    match self.current_token() {
-      Some(&Token::LeftBrace(..)) => self.parse_block(),
-      Some(&Token::StringLiteral(..)) => self.parse_string(),
-      Some(&Token::KeywordMatch(..)) => self.parse_match(),
-      Some(&Token::IdentifierLower(..)) | Some(&Token::IdentifierUpper(..)) => self
-        .parse_identifier()
-        .map(|id_node| match self.current_token() {
-          Some(&Token::Equals(..)) => {
-            self.advance();
-
-            let expr = self.parse_expression().unwrap();
-
-            ExprNode {
-              id: self.next_id(),
-              pos: (id_node.pos.0, expr.pos.1),
-              kind: ExprKind::Assignment(Box::new(id_node), Box::new(expr)),
-            }
-          }
-          _ => ExprNode {
-            id: self.next_id(),
-            pos: id_node.pos,
-            kind: ExprKind::Identifier(id_node),
-          },
-        }),
-      Some(&Token::DecimalDigits(..)) => self.parse_decimal_number().map(|lit_node| ExprNode {
-        id: self.next_id(),
-        pos: lit_node.pos,
-        kind: ExprKind::Literal(lit_node),
-      }),
-      Some(&Token::HexDigits(..)) => self.parse_hex_number().map(|lit_node| ExprNode {
-        id: self.next_id(),
-        pos: lit_node.pos,
-        kind: ExprKind::Literal(lit_node),
-      }),
-      Some(&Token::OctalDigits(..)) => self.parse_octal_number().map(|lit_node| ExprNode {
-        id: self.next_id(),
-        pos: lit_node.pos,
-        kind: ExprKind::Literal(lit_node),
-      }),
-      Some(&Token::BinaryDigits(..)) => self.parse_binary_number().map(|lit_node| ExprNode {
-        id: self.next_id(),
-        pos: lit_node.pos,
-        kind: ExprKind::Literal(lit_node),
-      }),
-      Some(&Token::LeftParen(..)) => self.parse_parenthetical(),
-      Some(&Token::Operator(..)) => self.parse_unary_operation(),
-      _ => None,
-    }
-  }
-
-  fn parse_operator_branch(&mut self) -> Option<ExprNode> {
-    let mut expr = self.parse_term();
-
-    loop {
-      if expr.is_some() {
-        match self.current_token() {
-          Some(&Token::Dot(..)) => {
-            expr = self.parse_chain(expr.unwrap());
-            continue;
-          }
-          Some(&Token::LeftParen(..)) => {
-            expr = self.parse_call(expr.unwrap());
-            continue;
-          }
-          _ => {}
-        }
-      }
-
-      break;
-    }
-
-    expr
-  }
-
   fn parse_expression(&mut self) -> Option<ExprNode> {
     let mut expr = self.parse_operator_branch();
 
@@ -799,6 +729,30 @@ impl<'a> Parser<'a> {
     })
   }
 
+  fn parse_operator_branch(&mut self) -> Option<ExprNode> {
+    let mut expr = self.parse_term();
+
+    loop {
+      if expr.is_some() {
+        match self.current_token() {
+          Some(&Token::Dot(..)) => {
+            expr = self.parse_chain(expr.unwrap());
+            continue;
+          }
+          Some(&Token::LeftParen(..)) => {
+            expr = self.parse_call(expr.unwrap());
+            continue;
+          }
+          _ => {}
+        }
+      }
+
+      break;
+    }
+
+    expr
+  }
+
   fn parse_pattern(&mut self) -> Option<PatternNode> {
     self.parse_identifier().map(|id_node| PatternNode {
       id: self.next_id(),
@@ -950,6 +904,57 @@ impl<'a> Parser<'a> {
     }
 
     Some(expr_node)
+  }
+
+  fn parse_term(&mut self) -> Option<ExprNode> {
+    match self.current_token() {
+      Some(&Token::LeftBrace(..)) => self.parse_block(),
+      Some(&Token::StringLiteral(..)) => self.parse_string(),
+      Some(&Token::KeywordMatch(..)) => self.parse_match(),
+      Some(&Token::IdentifierLower(..)) | Some(&Token::IdentifierUpper(..)) => self
+        .parse_identifier()
+        .map(|id_node| match self.current_token() {
+          Some(&Token::Equals(..)) => {
+            self.advance();
+
+            let expr = self.parse_expression().unwrap();
+
+            ExprNode {
+              id: self.next_id(),
+              pos: (id_node.pos.0, expr.pos.1),
+              kind: ExprKind::Assignment(Box::new(id_node), Box::new(expr)),
+            }
+          }
+          _ => ExprNode {
+            id: self.next_id(),
+            pos: id_node.pos,
+            kind: ExprKind::Identifier(id_node),
+          },
+        }),
+      Some(&Token::DecimalDigits(..)) => self.parse_decimal_number().map(|lit_node| ExprNode {
+        id: self.next_id(),
+        pos: lit_node.pos,
+        kind: ExprKind::Literal(lit_node),
+      }),
+      Some(&Token::HexDigits(..)) => self.parse_hex_number().map(|lit_node| ExprNode {
+        id: self.next_id(),
+        pos: lit_node.pos,
+        kind: ExprKind::Literal(lit_node),
+      }),
+      Some(&Token::OctalDigits(..)) => self.parse_octal_number().map(|lit_node| ExprNode {
+        id: self.next_id(),
+        pos: lit_node.pos,
+        kind: ExprKind::Literal(lit_node),
+      }),
+      Some(&Token::BinaryDigits(..)) => self.parse_binary_number().map(|lit_node| ExprNode {
+        id: self.next_id(),
+        pos: lit_node.pos,
+        kind: ExprKind::Literal(lit_node),
+      }),
+      Some(&Token::LeftParen(..)) => self.parse_parenthetical(),
+      Some(&Token::Operator(..)) => self.parse_unary_operation(),
+      _ => None,
+    }
   }
 
   fn parse_top_level_statement(&mut self) -> Option<TopLevelStatementNode> {
