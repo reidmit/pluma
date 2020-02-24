@@ -42,15 +42,30 @@ pub struct DefNode {
 #[derive(Debug)]
 pub enum DefKind {
   // def hi(A, B) -> Ret { ... }
-  Function(Vec<(Box<IdentNode>, Vec<TypeNode>)>),
+  Function {
+    parts: Vec<(Box<IdentNode>, Vec<TypeNode>)>,
+  },
   // def (Receiver).hi() -> Ret { ... }
-  Method(Box<TypeNode>, Vec<(Box<IdentNode>, Vec<TypeNode>)>),
+  Method {
+    receiver: Box<TypeNode>,
+    parts: Vec<(Box<IdentNode>, Vec<TypeNode>)>,
+  },
   // def (Receiver)[Int] -> Ret { ... }
-  Index(Box<TypeNode>, Box<TypeNode>),
+  Index {
+    receiver: Box<TypeNode>,
+    index: Box<TypeNode>,
+  },
   // def (A) ++ (B) -> Ret
-  BinaryOperator(Box<TypeNode>, Box<OperatorNode>, Box<TypeNode>),
+  BinaryOperator {
+    left: Box<TypeNode>,
+    op: Box<OperatorNode>,
+    right: Box<TypeNode>,
+  },
   // def ~(A) -> Ret
-  UnaryOperator(Box<OperatorNode>, Box<TypeNode>),
+  UnaryOperator {
+    op: Box<OperatorNode>,
+    right: Box<TypeNode>,
+  },
 }
 
 #[derive(Debug)]
@@ -91,11 +106,27 @@ pub struct ExprNode {
 #[derive(Debug)]
 pub enum ExprKind {
   Array(Vec<ExprNode>),
-  Assignment(Box<IdentNode>, Box<ExprNode>),
-  BinaryOperation(Box<ExprNode>, Box<OperatorNode>, Box<ExprNode>),
-  Block(Vec<IdentNode>, Vec<StatementNode>),
-  Call(Box<ExprNode>, Vec<ExprNode>),
-  Chain(Box<ExprNode>, Box<ExprNode>),
+  Assignment {
+    left: Box<IdentNode>,
+    right: Box<ExprNode>,
+  },
+  BinaryOperation {
+    left: Box<ExprNode>,
+    op: Box<OperatorNode>,
+    right: Box<ExprNode>,
+  },
+  Block {
+    params: Vec<IdentNode>,
+    body: Vec<StatementNode>,
+  },
+  Call {
+    callee: Box<ExprNode>,
+    args: Vec<ExprNode>,
+  },
+  Chain {
+    obj: Box<ExprNode>,
+    prop: Box<ExprNode>,
+  },
   Dict(Vec<(ExprNode, ExprNode)>),
   EmptyTuple,
   Grouping(Box<ExprNode>),
@@ -105,7 +136,10 @@ pub enum ExprKind {
   Literal(LitNode),
   Match(MatchNode),
   Tuple(Vec<ExprNode>),
-  UnaryOperation(Box<OperatorNode>, Box<ExprNode>),
+  UnaryOperation {
+    op: Box<OperatorNode>,
+    right: Box<ExprNode>,
+  },
 }
 
 #[derive(Debug)]
@@ -195,6 +229,7 @@ pub enum ParseErrorKind {
   MissingIndexBetweenBrackets,
   MissingDefinitionBody,
   MissingDictValue,
+  MissingMatchCases,
   MissingReturnType,
   MissingType,
   MissingExpressionAfterDot,

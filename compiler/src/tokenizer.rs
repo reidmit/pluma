@@ -180,11 +180,6 @@ impl<'a> Tokenizer<'a> {
           tokens.push(Comma(start_index, index))
         }
 
-        b'.' => {
-          index += 1;
-          tokens.push(Dot(start_index, index))
-        }
-
         _ if is_operator_char(byte) => {
           while index < length && is_operator_char(source[index]) {
             index += 1;
@@ -193,6 +188,7 @@ impl<'a> Tokenizer<'a> {
           let value = &source[start_index..index];
 
           let constructor = match value {
+            b"." => Dot,
             b"|" => Pipe,
             b"=>" => DoubleArrow,
             b"=" => Equals,
@@ -368,6 +364,8 @@ fn is_digit(byte: u8) -> bool {
 fn is_operator_char(byte: u8) -> bool {
   match byte {
     b':' => true,
+    b'|' => true,
+    b'.' => true,
     b'*' => true,
     b'/' => true,
     b'+' => true,

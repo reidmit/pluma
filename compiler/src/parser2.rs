@@ -201,11 +201,15 @@ impl<'a> Parser<'a> {
       start
     });
 
+    self.skip_line_breaks();
+
     let mut params = Vec::new();
     let mut body = Vec::new();
 
     while current_token_is!(self, Token::IdentifierLower) {
       if params.is_empty() {
+        // If no params yet, and the next token isn't a , or a =>, assume
+        // there are no params in this block and break out of the loop
         match self.next_token() {
           Some(&Token::Comma(..)) => {}
           Some(&Token::DoubleArrow(..)) => {}
@@ -219,15 +223,12 @@ impl<'a> Parser<'a> {
 
       match self.current_token() {
         Some(&Token::Comma(..)) => self.advance(),
-        Some(&Token::DoubleArrow(..)) => break,
+        Some(&Token::DoubleArrow(..)) => {
+          self.advance();
+          break;
+        }
         _ => todo!(),
       }
-    }
-
-    if current_token_is!(self, Token::DoubleArrow) {
-      self.advance();
-    } else if !params.is_empty() {
-      todo!();
     }
 
     self.skip_line_breaks();
@@ -238,17 +239,16 @@ impl<'a> Parser<'a> {
 
     self.skip_line_breaks();
 
-    let block_end = match self.current_token() {
-      Some(&Token::RightBrace(_, end)) => end,
-      _ => todo!(),
-    };
-
-    self.advance();
+    let block_end = expect_token_and_do!(self, Token::RightBrace, {
+      let pos = self.current_token_location();
+      self.advance();
+      pos.1
+    });
 
     Some(ExprNode {
       id: self.next_id(),
       pos: (block_start, block_end),
-      kind: ExprKind::Block(params, body),
+      kind: ExprKind::Block { params, body },
     })
   }
 
@@ -278,22 +278,26 @@ impl<'a> Parser<'a> {
     Some(ExprNode {
       id: self.next_id(),
       pos: (last_term.pos.0, end),
-      kind: ExprKind::BinaryOperation(Box::new(last_term), op_node, next_term),
+      kind: ExprKind::BinaryOperation {
+        left: Box::new(last_term),
+        op: op_node,
+        right: next_term,
+      },
     })
   }
 
   fn parse_call(&mut self, last_expr: ExprNode) -> Option<ExprNode> {
     expect_token_and_do!(self, Token::LeftParen, { self.advance() });
 
-    let mut params = Vec::new();
+    let mut args = Vec::new();
     let end;
 
     if current_token_is!(self, Token::RightParen) {
       end = self.current_token_location().1;
       self.advance()
     } else {
-      while let Some(param) = self.parse_expression() {
-        params.push(param);
+      while let Some(expr) = self.parse_expression() {
+        args.push(expr);
 
         if current_token_is!(self, Token::Comma) {
           self.advance()
@@ -311,7 +315,10 @@ impl<'a> Parser<'a> {
     Some(ExprNode {
       id: self.next_id(),
       pos: (last_expr.pos.0, end),
-      kind: ExprKind::Call(Box::new(last_expr), params),
+      kind: ExprKind::Call {
+        callee: Box::new(last_expr),
+        args,
+      },
     })
   }
 
@@ -331,7 +338,10 @@ impl<'a> Parser<'a> {
     Some(ExprNode {
       id: self.next_id(),
       pos: (last_expr.pos.0, end),
-      kind: ExprKind::Chain(Box::new(last_expr), next_expr),
+      kind: ExprKind::Chain {
+        obj: Box::new(last_expr),
+        prop: next_expr,
+      },
     })
   }
 
@@ -409,7 +419,7 @@ impl<'a> Parser<'a> {
 
     let (params, body, end) = match self.parse_block() {
       Some(ExprNode {
-        kind: ExprKind::Block(params, body),
+        kind: ExprKind::Block { params, body },
         pos,
         ..
       }) => (params, body, pos.1),
@@ -475,7 +485,9 @@ impl<'a> Parser<'a> {
       self.advance();
     });
 
-    Some(DefKind::Function(vec![(Box::new(ident), type_params)]))
+    Some(DefKind::Function {
+      parts: vec![(Box::new(ident), type_params)],
+    })
   }
 
   fn parse_definition_kind_receiver(&mut self) -> Option<DefKind> {
@@ -514,7 +526,10 @@ impl<'a> Parser<'a> {
         self.advance();
       });
 
-      return Some(DefKind::Index(receiver, type_node));
+      return Some(DefKind::Index {
+        receiver,
+        index: type_node,
+      });
     }
 
     if current_token_is!(self, Token::Operator) {
@@ -548,8 +563,16 @@ impl<'a> Parser<'a> {
         self.advance();
       });
 
-      return Some(DefKind::BinaryOperator(receiver, op_node, type_node));
+      return Some(DefKind::BinaryOperator {
+        left: receiver,
+        op: op_node,
+        right: type_node,
+      });
     }
+
+    expect_token_and_do!(self, Token::Dot, {
+      self.advance();
+    });
 
     let ident = match self.parse_identifier() {
       Some(ident_node) => Box::new(ident_node),
@@ -580,7 +603,10 @@ impl<'a> Parser<'a> {
       self.advance();
     });
 
-    Some(DefKind::Method(receiver, vec![(ident, type_params)]))
+    Some(DefKind::Method {
+      receiver,
+      parts: vec![(ident, type_params)],
+    })
   }
 
   fn parse_definition_kind_unary_op(&mut self) -> Option<DefKind> {
@@ -614,7 +640,10 @@ impl<'a> Parser<'a> {
       self.advance();
     });
 
-    Some(DefKind::UnaryOperator(op_node, type_node))
+    Some(DefKind::UnaryOperator {
+      op: op_node,
+      right: type_node,
+    })
   }
 
   fn parse_expression(&mut self) -> Option<ExprNode> {
@@ -776,7 +805,10 @@ impl<'a> Parser<'a> {
     }
 
     if cases.is_empty() {
-      todo!();
+      self.error::<ExprNode>(ParseError {
+        pos: (start, match_end),
+        kind: ParseErrorKind::MissingMatchCases,
+      });
     }
 
     Some(ExprNode {
@@ -1021,7 +1053,10 @@ impl<'a> Parser<'a> {
             ExprNode {
               id: self.next_id(),
               pos: (id_node.pos.0, expr.pos.1),
-              kind: ExprKind::Assignment(Box::new(id_node), Box::new(expr)),
+              kind: ExprKind::Assignment {
+                left: Box::new(id_node),
+                right: Box::new(expr),
+              },
             }
           }
           _ => ExprNode {
@@ -1253,7 +1288,10 @@ impl<'a> Parser<'a> {
     Some(ExprNode {
       id: self.next_id(),
       pos: (op_node.pos.0, expr_node.pos.1),
-      kind: ExprKind::UnaryOperation(op_node, expr_node),
+      kind: ExprKind::UnaryOperation {
+        op: op_node,
+        right: expr_node,
+      },
     })
   }
 }
