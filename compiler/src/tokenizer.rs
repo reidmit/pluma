@@ -367,6 +367,7 @@ fn is_digit(byte: u8) -> bool {
 
 fn is_operator_char(byte: u8) -> bool {
   match byte {
+    b':' => true,
     b'*' => true,
     b'/' => true,
     b'+' => true,

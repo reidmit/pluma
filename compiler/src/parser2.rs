@@ -112,6 +112,73 @@ impl<'a> Parser<'a> {
     None
   }
 
+  fn parse_array_or_dict(&mut self) -> Option<ExprNode> {
+    let start = expect_token_and_do!(self, Token::LeftBracket, {
+      let pos = self.current_token_location();
+      self.advance();
+      pos.0
+    });
+
+    let mut array_elements = Vec::new();
+    let mut dict_entries = Vec::new();
+
+    while let Some(expr) = self.parse_expression() {
+      if current_token_is!(self, Token::Colon) {
+        if !array_elements.is_empty() {
+          self.error::<ExprNode>(ParseError {
+            pos: self.current_token_location(),
+            kind: ParseErrorKind::UnexpectedDictValueInArray,
+          });
+        }
+
+        self.advance();
+
+        match self.parse_expression() {
+          Some(val) => dict_entries.push((expr, val)),
+          _ => {
+            return self.error(ParseError {
+              pos: self.current_token_location(),
+              kind: ParseErrorKind::MissingDictValue,
+            })
+          }
+        }
+      } else {
+        if !dict_entries.is_empty() {
+          self.error::<ExprNode>(ParseError {
+            pos: self.current_token_location(),
+            kind: ParseErrorKind::MissingDictValue,
+          });
+        }
+
+        array_elements.push(expr);
+      }
+
+      if current_token_is!(self, Token::Comma) {
+        self.advance()
+      } else {
+        break;
+      }
+    }
+
+    let end = expect_token_and_do!(self, Token::RightBracket, {
+      let pos = self.current_token_location();
+      self.advance();
+      pos.1
+    });
+
+    let kind = if dict_entries.is_empty() {
+      ExprKind::Array(array_elements)
+    } else {
+      ExprKind::Dict(dict_entries)
+    };
+
+    Some(ExprNode {
+      id: self.next_id(),
+      pos: (start, end),
+      kind,
+    })
+  }
+
   fn parse_binary_number(&mut self) -> Option<LitNode> {
     let (start, end, value) = expect_token_and_do!(self, Token::BinaryDigits, {
       let (start, end) = self.current_token_location();
@@ -601,6 +668,33 @@ impl<'a> Parser<'a> {
     })
   }
 
+  fn parse_index(&mut self, last_expr: ExprNode) -> Option<ExprNode> {
+    expect_token_and_do!(self, Token::LeftBracket, { self.advance() });
+
+    let index_node;
+    let end;
+
+    if let Some(node) = self.parse_expression() {
+      index_node = Box::new(node);
+
+      expect_token_and_do!(self, Token::RightBracket, {
+        end = self.current_token_location().1;
+        self.advance()
+      });
+    } else {
+      return self.error(ParseError {
+        pos: self.current_token_location(),
+        kind: ParseErrorKind::MissingIndexBetweenBrackets,
+      });
+    }
+
+    Some(ExprNode {
+      id: self.next_id(),
+      pos: (last_expr.pos.0, end),
+      kind: ExprKind::Index(Box::new(last_expr), index_node),
+    })
+  }
+
   fn parse_let_statement(&mut self) -> Option<LetNode> {
     let start = expect_token_and_do!(self, Token::KeywordLet, {
       let (start, _) = self.current_token_location();
@@ -741,6 +835,10 @@ impl<'a> Parser<'a> {
           }
           Some(&Token::LeftParen(..)) => {
             expr = self.parse_call(expr.unwrap());
+            continue;
+          }
+          Some(&Token::LeftBracket(..)) => {
+            expr = self.parse_index(expr.unwrap());
             continue;
           }
           _ => {}
@@ -909,6 +1007,7 @@ impl<'a> Parser<'a> {
   fn parse_term(&mut self) -> Option<ExprNode> {
     match self.current_token() {
       Some(&Token::LeftBrace(..)) => self.parse_block(),
+      Some(&Token::LeftBracket(..)) => self.parse_array_or_dict(),
       Some(&Token::StringLiteral(..)) => self.parse_string(),
       Some(&Token::KeywordMatch(..)) => self.parse_match(),
       Some(&Token::IdentifierLower(..)) | Some(&Token::IdentifierUpper(..)) => self

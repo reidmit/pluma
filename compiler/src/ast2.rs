@@ -90,14 +90,17 @@ pub struct ExprNode {
 
 #[derive(Debug)]
 pub enum ExprKind {
+  Array(Vec<ExprNode>),
   Assignment(Box<IdentNode>, Box<ExprNode>),
   BinaryOperation(Box<ExprNode>, Box<OperatorNode>, Box<ExprNode>),
   Block(Vec<IdentNode>, Vec<StatementNode>),
   Call(Box<ExprNode>, Vec<ExprNode>),
   Chain(Box<ExprNode>, Box<ExprNode>),
+  Dict(Vec<(ExprNode, ExprNode)>),
   EmptyTuple,
   Grouping(Box<ExprNode>),
   Identifier(IdentNode),
+  Index(Box<ExprNode>, Box<ExprNode>),
   Interpolation(Vec<ExprNode>),
   Literal(LitNode),
   Match(MatchNode),
@@ -184,11 +187,14 @@ pub struct ParseError {
 
 #[derive(Debug, Copy, Clone)]
 pub enum ParseErrorKind {
+  UnexpectedDictValueInArray,
   UnexpectedEOF,
   UnexpectedToken(Token),
   UnclosedParentheses,
   MissingIdentifier,
+  MissingIndexBetweenBrackets,
   MissingDefinitionBody,
+  MissingDictValue,
   MissingReturnType,
   MissingType,
   MissingExpressionAfterDot,
