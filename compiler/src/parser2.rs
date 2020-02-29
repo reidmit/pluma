@@ -17,7 +17,7 @@ macro_rules! expect_token_and_do {
       Some(&tok) => {
         return $self.error(ParseError {
           pos: tok.get_location(),
-          kind: ParseErrorKind::UnexpectedToken(tok.clone()),
+          kind: ParseErrorKind::UnexpectedToken,
         })
       }
       None => {
@@ -98,7 +98,10 @@ impl<'a> Parser<'a> {
   }
 
   fn current_token_location(&self) -> (usize, usize) {
-    self.current_token().unwrap().get_location()
+    match self.current_token() {
+      Some(token) => token.get_location(),
+      _ => (0, 0),
+    }
   }
 
   fn next_id(&mut self) -> usize {
@@ -110,6 +113,75 @@ impl<'a> Parser<'a> {
   fn error<A>(&mut self, err: ParseError) -> Option<A> {
     self.errors.push(err);
     None
+  }
+
+  fn parse_alias(&mut self) -> Option<TypeDefNode> {
+    let start = expect_token_and_do!(self, Token::KeywordAlias, {
+      let pos = self.current_token_location();
+      self.advance();
+      pos.0
+    });
+
+    let name = match self.current_token() {
+      Some(&Token::IdentifierUpper(start, end)) => {
+        let name_str = read_string!(self, start, end);
+
+        self.advance();
+
+        Box::new(IdentNode {
+          id: self.next_id(),
+          pos: (start, end),
+          name: name_str,
+        })
+      }
+      _ => {
+        return self.error(ParseError {
+          pos: self.current_token_location(),
+          kind: ParseErrorKind::UnexpectedToken,
+        })
+      }
+    };
+
+    let mut generics = Vec::new();
+
+    if current_token_is!(self, Token::LeftParen) {
+      self.advance();
+
+      while let Some(ident) = self.parse_identifier() {
+        generics.push(ident);
+
+        match self.current_token() {
+          Some(&Token::Comma(..)) => self.advance(),
+          _ => break,
+        }
+      }
+
+      expect_token_and_do!(self, Token::RightParen, {
+        self.advance();
+      });
+    }
+
+    expect_token_and_do!(self, Token::Equals, {
+      self.advance();
+    });
+
+    let type_expr = match self.parse_type_expression() {
+      Some(expr) => expr,
+      _ => {
+        return self.error(ParseError {
+          pos: self.current_token_location(),
+          kind: ParseErrorKind::UnexpectedToken,
+        })
+      }
+    };
+
+    Some(TypeDefNode {
+      id: self.next_id(),
+      pos: (start, type_expr.pos.1),
+      kind: TypeDefKind::Alias { of: type_expr },
+      name,
+      generics,
+    })
   }
 
   fn parse_array_or_dict(&mut self) -> Option<ExprNode> {
@@ -381,20 +453,18 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_definition(&mut self) -> Option<DefNode> {
-    let start = match self.current_token() {
-      Some(&Token::KeywordDef(start, _)) => {
-        self.advance();
-        start
-      }
-      _ => unreachable!(),
-    };
+    let start = expect_token_and_do!(self, Token::KeywordDef, {
+      let pos = self.current_token_location();
+      self.advance();
+      pos.0
+    });
 
     let kind = match self.parse_definition_kind() {
       Some(kind_node) => kind_node,
       _ => {
         return self.error(ParseError {
           pos: self.current_token_location(),
-          kind: ParseErrorKind::UnexpectedToken(*self.current_token().unwrap()),
+          kind: ParseErrorKind::UnexpectedToken,
         })
       }
     };
@@ -414,6 +484,8 @@ impl<'a> Parser<'a> {
     } else {
       None
     };
+
+    expect_token_and_do!(self, Token::Equals, { self.advance() });
 
     self.skip_line_breaks();
 
@@ -486,7 +558,7 @@ impl<'a> Parser<'a> {
     });
 
     Some(DefKind::Function {
-      parts: vec![(Box::new(ident), type_params)],
+      signature: vec![(Box::new(ident), type_params)],
     })
   }
 
@@ -605,7 +677,7 @@ impl<'a> Parser<'a> {
 
     Some(DefKind::Method {
       receiver,
-      parts: vec![(ident, type_params)],
+      signature: vec![(ident, type_params)],
     })
   }
 
@@ -643,6 +715,201 @@ impl<'a> Parser<'a> {
     Some(DefKind::UnaryOperator {
       op: op_node,
       right: type_node,
+    })
+  }
+
+  fn parse_enum(&mut self) -> Option<TypeDefNode> {
+    let start = expect_token_and_do!(self, Token::KeywordEnum, {
+      let pos = self.current_token_location();
+      self.advance();
+      pos.0
+    });
+
+    let name = match self.current_token() {
+      Some(&Token::IdentifierUpper(start, end)) => {
+        let name_str = read_string!(self, start, end);
+
+        self.advance();
+
+        Box::new(IdentNode {
+          id: self.next_id(),
+          pos: (start, end),
+          name: name_str,
+        })
+      }
+      _ => {
+        return self.error(ParseError {
+          pos: self.current_token_location(),
+          kind: ParseErrorKind::UnexpectedToken,
+        })
+      }
+    };
+
+    let mut generics = Vec::new();
+
+    if current_token_is!(self, Token::LeftParen) {
+      self.advance();
+
+      while let Some(ident) = self.parse_identifier() {
+        generics.push(ident);
+
+        match self.current_token() {
+          Some(&Token::Comma(..)) => self.advance(),
+          _ => break,
+        }
+      }
+
+      expect_token_and_do!(self, Token::RightParen, {
+        self.advance();
+      });
+    }
+
+    expect_token_and_do!(self, Token::Equals, {
+      self.advance();
+    });
+
+    let mut variants = Vec::new();
+
+    expect_token_and_do!(self, Token::Pipe, {});
+
+    while let Some(&Token::Pipe(..)) = self.current_token() {
+      self.advance();
+
+      match self.parse_type_expression() {
+        Some(expr) => variants.push(expr),
+        _ => {
+          return self.error(ParseError {
+            pos: self.current_token_location(),
+            kind: ParseErrorKind::UnexpectedToken,
+          })
+        }
+      };
+    }
+
+    if variants.is_empty() {
+      return self.error(ParseError {
+        pos: self.current_token_location(),
+        kind: ParseErrorKind::MissingEnumValues,
+      });
+    }
+
+    Some(TypeDefNode {
+      id: self.next_id(),
+      pos: (start, variants.last().unwrap().pos.1),
+      kind: TypeDefKind::Enum { variants },
+      name,
+      generics,
+    })
+  }
+
+  fn parse_struct(&mut self) -> Option<TypeDefNode> {
+    let start = expect_token_and_do!(self, Token::KeywordStruct, {
+      let pos = self.current_token_location();
+      self.advance();
+      pos.0
+    });
+
+    let name = match self.current_token() {
+      Some(&Token::IdentifierUpper(start, end)) => {
+        let name_str = read_string!(self, start, end);
+
+        self.advance();
+
+        Box::new(IdentNode {
+          id: self.next_id(),
+          pos: (start, end),
+          name: name_str,
+        })
+      }
+      _ => {
+        return self.error(ParseError {
+          pos: self.current_token_location(),
+          kind: ParseErrorKind::UnexpectedToken,
+        })
+      }
+    };
+
+    let mut generics = Vec::new();
+
+    if current_token_is!(self, Token::LeftParen) {
+      self.advance();
+
+      while let Some(ident) = self.parse_identifier() {
+        generics.push(ident);
+
+        match self.current_token() {
+          Some(&Token::Comma(..)) => self.advance(),
+          _ => break,
+        }
+      }
+
+      expect_token_and_do!(self, Token::RightParen, {
+        self.advance();
+      });
+    }
+
+    expect_token_and_do!(self, Token::Equals, {
+      self.advance();
+    });
+
+    let mut fields = Vec::new();
+
+    expect_token_and_do!(self, Token::LeftParen, {
+      self.advance();
+    });
+
+    self.skip_line_breaks();
+
+    while let Some(&Token::IdentifierLower(..)) = self.current_token() {
+      let ident = match self.parse_identifier() {
+        Some(node) => node,
+        _ => break,
+      };
+
+      expect_token_and_do!(self, Token::DoubleColon, {
+        self.advance();
+      });
+
+      match self.parse_type_expression() {
+        Some(expr) => fields.push((ident, expr)),
+        _ => {
+          return self.error(ParseError {
+            pos: self.current_token_location(),
+            kind: ParseErrorKind::UnexpectedToken,
+          })
+        }
+      };
+
+      if current_token_is!(self, Token::Comma) {
+        self.advance();
+      } else {
+        break;
+      }
+
+      self.skip_line_breaks();
+    }
+
+    self.skip_line_breaks();
+
+    let end = expect_token_and_do!(self, Token::RightParen, {
+      let pos = self.current_token_location();
+      self.advance();
+      pos.1
+    });
+
+    if fields.is_empty() {
+      return self.error(ParseError {
+        pos: (start, end),
+        kind: ParseErrorKind::MissingStructFields,
+      });
+    }
+
+    Some(TypeDefNode {
+      id: self.next_id(),
+      pos: (start, end),
+      kind: TypeDefKind::Struct { fields },
+      name,
+      generics,
     })
   }
 
@@ -1109,6 +1376,33 @@ impl<'a> Parser<'a> {
             id: self.next_id(),
             pos: def_node.pos,
             kind: TopLevelStatementKind::Def(def_node),
+          })
+      }
+      Some(&Token::KeywordAlias(..)) => {
+        self
+          .parse_alias()
+          .map(|type_def_node| TopLevelStatementNode {
+            id: self.next_id(),
+            pos: type_def_node.pos,
+            kind: TopLevelStatementKind::TypeDef(type_def_node),
+          })
+      }
+      Some(&Token::KeywordEnum(..)) => {
+        self
+          .parse_enum()
+          .map(|type_def_node| TopLevelStatementNode {
+            id: self.next_id(),
+            pos: type_def_node.pos,
+            kind: TopLevelStatementKind::TypeDef(type_def_node),
+          })
+      }
+      Some(&Token::KeywordStruct(..)) => {
+        self
+          .parse_struct()
+          .map(|type_def_node| TopLevelStatementNode {
+            id: self.next_id(),
+            pos: type_def_node.pos,
+            kind: TopLevelStatementKind::TypeDef(type_def_node),
           })
       }
       _ => self

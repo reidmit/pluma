@@ -217,15 +217,18 @@ impl<'a> Tokenizer<'a> {
           let value = &source[start_index..index];
 
           let constructor = match value {
+            b"alias" => KeywordAlias,
             b"as" => KeywordAs,
             b"break" => KeywordBreak,
             b"def" => KeywordDef,
+            b"enum" => KeywordEnum,
             b"let" => KeywordLet,
             b"match" => KeywordMatch,
             b"private" => KeywordPrivate,
             b"use" => KeywordUse,
             b"return" => KeywordReturn,
-            b"type" => KeywordType,
+            b"struct" => KeywordStruct,
+            b"trait" => KeywordTrait,
             b"where" => KeywordWhere,
             _ if is_uppercase(value[0]) => IdentifierUpper,
             _ => IdentifierLower,
