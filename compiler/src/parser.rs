@@ -1,4 +1,4 @@
-use crate::ast2::*;
+use crate::ast::*;
 use crate::tokens::Token;
 
 macro_rules! current_token_is {

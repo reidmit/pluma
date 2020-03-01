@@ -1,5 +1,3 @@
-use crate::ast::{Node, NodeType};
-use crate::tokens::Token;
 use std::collections::HashMap;
 
 #[derive(Debug)]
@@ -25,8 +23,8 @@ pub enum PackageCompilationError {
 pub enum ModuleCompilationError {
   FileError(FileError),
   TokenizeError(TokenizeError),
-  ParseError(ParseError),
-  AnalysisError(AnalysisError),
+  // ParseError(ParseError),
+  // AnalysisError(AnalysisError),
 }
 
 #[derive(Debug)]
@@ -42,31 +40,4 @@ pub enum TokenizeError {
   InvalidOctalDigit(usize, usize),
   UnclosedString(usize, usize),
   UnclosedInterpolation(usize, usize),
-}
-
-#[derive(Debug, Clone)]
-pub enum ParseError {
-  UnexpectedToken(Token),
-  UnexpectedEOF,
-  UnclosedParentheses(usize),
-  UnclosedBlock(usize),
-  UnclosedArray(usize),
-  UnclosedDict(usize),
-  UnexpectedArrayElementInDict(Node),
-  UnexpectedDictEntryInArray(Node),
-  UnexpectedTokenAfterDot(usize),
-  UnexpectedTokenInImport(usize),
-  MissingArrowInMatchCase(usize),
-  MissingArrowAfterBlockParams(usize),
-  MissingAliasAfterAsInImport(usize),
-  MissingCasesInMatchExpression(usize),
-  MissingConstraintsAfterWhere(usize),
-}
-
-#[derive(Debug, Clone)]
-pub enum AnalysisError {
-  TypeMismatch(Node, NodeType, NodeType),
-  TypeMismatchArrayElement(Node, NodeType, NodeType),
-  UndefinedVariable(Node),
-  UndefinedQualifier(Node),
 }

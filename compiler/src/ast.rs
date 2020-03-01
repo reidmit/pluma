@@ -1,319 +1,269 @@
-#[derive(Debug, Clone, PartialEq)]
-pub enum NodeType {
-  Unknown,
-  Bool,
-  String,
-  Int,
-  Float,
-  Identifier {
-    name: String,
-    type_params: Vec<NodeType>,
+pub type StartOffset = usize;
+pub type EndOffset = usize;
+pub type Position = (StartOffset, EndOffset);
+pub type NodeId = usize;
+pub type SignaturePart = (Box<IdentNode>, Vec<TypeNode>);
+pub type Signature = Vec<SignaturePart>;
+
+#[derive(Debug)]
+pub struct ModuleNode {
+  pub id: NodeId,
+  pub pos: Position,
+  pub body: Vec<TopLevelStatementNode>,
+}
+
+#[derive(Debug)]
+pub struct TopLevelStatementNode {
+  pub id: NodeId,
+  pub pos: Position,
+  pub kind: TopLevelStatementKind,
+}
+
+#[derive(Debug)]
+pub enum TopLevelStatementKind {
+  // UseStatement(UseStatementNode),
+  // private
+  Let(LetNode),
+  TypeDef(TypeDefNode),
+  Def(DefNode),
+  Expr(ExprNode),
+}
+
+#[derive(Debug)]
+pub struct TypeDefNode {
+  pub id: NodeId,
+  pub pos: Position,
+  pub kind: TypeDefKind,
+  pub name: Box<IdentNode>,
+  pub generics: Vec<IdentNode>,
+}
+
+#[derive(Debug)]
+pub struct DefNode {
+  pub id: NodeId,
+  pub pos: Position,
+  pub kind: DefKind,
+  pub return_type: Option<TypeNode>,
+  pub params: Vec<IdentNode>,
+  pub body: Vec<StatementNode>,
+}
+
+#[derive(Debug)]
+pub enum TypeDefKind {
+  // alias StringList = List(String)
+  Alias {
+    of: TypeNode,
   },
-  Generic,
-  Array {
-    element_type: Box<NodeType>,
+  // enum Color = | Red | Green | Blue
+  Enum {
+    variants: Vec<TypeNode>,
   },
-  Dict {
-    value_type: Box<NodeType>,
+  // struct Person = (name :: String, age :: Int)
+  Struct {
+    fields: Vec<(IdentNode, TypeNode)>,
   },
-  Tuple {
-    entry_types: Vec<NodeType>,
+  // trait Named = .name :: String .getName() -> String
+  Trait {
+    fields: Vec<(IdentNode, TypeNode)>,
+    methods: Vec<Signature>,
   },
+}
+
+#[derive(Debug)]
+pub enum DefKind {
+  // def hi(A, B) -> Ret { ... }
   Function {
-    param_types: Vec<NodeType>,
-    return_type: Box<NodeType>,
+    signature: Signature,
+  },
+  // def (Receiver).hi() -> Ret { ... }
+  Method {
+    receiver: Box<TypeNode>,
+    signature: Signature,
+  },
+  // def (Receiver)[Int] -> Ret { ... }
+  Index {
+    receiver: Box<TypeNode>,
+    index: Box<TypeNode>,
+  },
+  // def (A) ++ (B) -> Ret { ... }
+  BinaryOperator {
+    left: Box<TypeNode>,
+    op: Box<OperatorNode>,
+    right: Box<TypeNode>,
+  },
+  // def ~(A) -> Ret { ... }
+  UnaryOperator {
+    op: Box<OperatorNode>,
+    right: Box<TypeNode>,
   },
 }
 
-#[derive(Debug, Clone)]
-pub enum NumericValue {
-  Int(i64),
-  Float(f64),
+#[derive(Debug)]
+pub struct OperatorNode {
+  pub id: NodeId,
+  pub pos: Position,
+  pub name: String,
 }
 
-#[derive(Debug, Clone)]
-pub enum Node {
-  Module {
-    start: usize,
-    end: usize,
-    imports: Vec<Node>,
-    body: Vec<Node>,
-  },
+#[derive(Debug)]
+pub struct StatementNode {
+  pub id: NodeId,
+  pub pos: Position,
+  pub kind: StatementKind,
+}
 
-  Array {
-    start: usize,
-    end: usize,
-    elements: Vec<Node>,
-    inferred_type: NodeType,
-  },
+#[derive(Debug)]
+pub enum StatementKind {
+  Let(LetNode),
+  Expr(ExprNode),
+}
 
+#[derive(Debug)]
+pub struct LetNode {
+  pub id: NodeId,
+  pub pos: Position,
+  pub pattern: PatternNode,
+  pub value: ExprNode,
+}
+
+#[derive(Debug)]
+pub struct ExprNode {
+  pub id: NodeId,
+  pub pos: Position,
+  pub kind: ExprKind,
+}
+
+#[derive(Debug)]
+pub enum ExprKind {
+  Array(Vec<ExprNode>),
   Assignment {
-    start: usize,
-    end: usize,
-    is_constant: bool,
-    left: Box<Node>,
-    right: Box<Node>,
-    inferred_type: NodeType,
+    left: Box<IdentNode>,
+    right: Box<ExprNode>,
   },
-
+  BinaryOperation {
+    left: Box<ExprNode>,
+    op: Box<OperatorNode>,
+    right: Box<ExprNode>,
+  },
   Block {
-    start: usize,
-    end: usize,
-    params: Vec<Node>,
-    body: Vec<Node>,
-    inferred_type: NodeType,
+    params: Vec<IdentNode>,
+    body: Vec<StatementNode>,
   },
-
-  Break {
-    start: usize,
-    end: usize,
-  },
-
   Call {
-    start: usize,
-    end: usize,
-    callee: Box<Node>,
-    arguments: Vec<Node>,
-    inferred_type: NodeType,
+    callee: Box<ExprNode>,
+    args: Vec<ExprNode>,
   },
-
   Chain {
-    start: usize,
-    end: usize,
-    object: Box<Node>,
-    property: Box<Node>,
+    obj: Box<ExprNode>,
+    prop: Box<ExprNode>,
   },
-
-  Dict {
-    start: usize,
-    end: usize,
-    entries: Vec<Node>,
-    inferred_type: NodeType,
-  },
-
-  DictEntry {
-    start: usize,
-    end: usize,
-    key: Box<Node>,
-    value: Box<Node>,
-  },
-
-  Grouping {
-    start: usize,
-    end: usize,
-    expr: Box<Node>,
-    inferred_type: NodeType,
-  },
-
-  Identifier {
-    start: usize,
-    end: usize,
-    name: String,
-    inferred_type: NodeType,
-  },
-
-  Import {
-    start: usize,
-    end: usize,
-    alias: Option<String>,
-    module_name: String,
-  },
-
-  Match {
-    start: usize,
-    end: usize,
-    discriminant: Box<Node>,
-    cases: Vec<Node>,
-    inferred_type: NodeType,
-  },
-
-  MatchCase {
-    start: usize,
-    end: usize,
-    pattern: Box<Node>,
-    body: Box<Node>,
-    inferred_type: NodeType,
-  },
-
-  MethodDefinition {
-    start: usize,
-    end: usize,
-    name: Box<Node>,
-    params: Vec<Node>,
-    body: Box<Node>,
-    inferred_type: NodeType,
-  },
-
-  NumericLiteral {
-    start: usize,
-    end: usize,
-    value: NumericValue,
-    raw_value: String,
-    inferred_type: NodeType,
-  },
-
-  PrivateMarker {
-    start: usize,
-    end: usize,
-  },
-
-  QualifiedIdentifier {
-    start: usize,
-    end: usize,
-    qualifier: Box<Node>,
-    ident: Box<Node>,
-    inferred_type: NodeType,
-  },
-
-  Reassignment {
-    start: usize,
-    end: usize,
-    left: Box<Node>,
-    right: Box<Node>,
-    inferred_type: NodeType,
-  },
-
-  Return {
-    start: usize,
-    end: usize,
-    value: Box<Node>,
-    inferred_type: NodeType,
-  },
-
-  StringInterpolation {
-    start: usize,
-    end: usize,
-    parts: Vec<Node>,
-    inferred_type: NodeType,
-  },
-
-  StringLiteral {
-    start: usize,
-    end: usize,
-    value: String,
-    inferred_type: NodeType,
-  },
-
-  TraitDefinition {
-    start: usize,
-    end: usize,
-    name: Box<Node>,
-  },
-
-  Tuple {
-    start: usize,
-    end: usize,
-    entries: Vec<Node>,
-    inferred_type: NodeType,
-  },
-
-  TypeConstraint {
-    start: usize,
-    end: usize,
-    type_param: Box<Node>,
-    value: Box<Node>,
-  },
-
-  TypeConstraintList {
-    start: usize,
-    end: usize,
-    constraints: Vec<Node>,
-  },
-
-  TypeConstructorDefinition {
-    start: usize,
-    end: usize,
-    name: Box<Node>,
-    fields: Vec<Node>,
-  },
-
-  TypeConstructorField {
-    start: usize,
-    end: usize,
-    name: Option<Box<Node>>,
-    field_type: Box<Node>,
-  },
-
-  TypeDefinition {
-    start: usize,
-    end: usize,
-    name: Box<Node>,
-    type_params: Vec<Node>,
-    constraint_list: Option<Box<Node>>,
-    value: Box<Node>,
-  },
-
-  TypeEnumDefinition {
-    start: usize,
-    end: usize,
-    constructors: Vec<Node>,
-  },
-
-  TypeIdentifier {
-    start: usize,
-    end: usize,
-    name: String,
+  Dict(Vec<(ExprNode, ExprNode)>),
+  EmptyTuple,
+  Grouping(Box<ExprNode>),
+  Identifier(IdentNode),
+  Index(Box<ExprNode>, Box<ExprNode>),
+  Interpolation(Vec<ExprNode>),
+  Literal(LitNode),
+  Match(MatchNode),
+  Tuple(Vec<ExprNode>),
+  UnaryOperation {
+    op: Box<OperatorNode>,
+    right: Box<ExprNode>,
   },
 }
 
-impl Node {
-  pub fn get_location(&self) -> (usize, usize) {
-    match self {
-      &Node::Array { start, end, .. } => (start, end),
-      &Node::Assignment { start, end, .. } => (start, end),
-      &Node::Block { start, end, .. } => (start, end),
-      &Node::Break { start, end, .. } => (start, end),
-      &Node::Call { start, end, .. } => (start, end),
-      &Node::Chain { start, end, .. } => (start, end),
-      &Node::Dict { start, end, .. } => (start, end),
-      &Node::DictEntry { start, end, .. } => (start, end),
-      &Node::Grouping { start, end, .. } => (start, end),
-      &Node::Identifier { start, end, .. } => (start, end),
-      &Node::Import { start, end, .. } => (start, end),
-      &Node::Match { start, end, .. } => (start, end),
-      &Node::MatchCase { start, end, .. } => (start, end),
-      &Node::MethodDefinition { start, end, .. } => (start, end),
-      &Node::Module { start, end, .. } => (start, end),
-      &Node::NumericLiteral { start, end, .. } => (start, end),
-      &Node::PrivateMarker { start, end, .. } => (start, end),
-      &Node::QualifiedIdentifier { start, end, .. } => (start, end),
-      &Node::Reassignment { start, end, .. } => (start, end),
-      &Node::Return { start, end, .. } => (start, end),
-      &Node::StringInterpolation { start, end, .. } => (start, end),
-      &Node::StringLiteral { start, end, .. } => (start, end),
-      &Node::TraitDefinition { start, end, .. } => (start, end),
-      &Node::Tuple { start, end, .. } => (start, end),
-      &Node::TypeConstraint { start, end, .. } => (start, end),
-      &Node::TypeConstraintList { start, end, .. } => (start, end),
-      &Node::TypeConstructorDefinition { start, end, .. } => (start, end),
-      &Node::TypeConstructorField { start, end, .. } => (start, end),
-      &Node::TypeDefinition { start, end, .. } => (start, end),
-      &Node::TypeEnumDefinition { start, end, .. } => (start, end),
-      &Node::TypeIdentifier { start, end, .. } => (start, end),
-    }
-  }
+#[derive(Debug)]
+pub struct IdentNode {
+  pub id: NodeId,
+  pub pos: Position,
+  pub name: String,
+}
 
-  pub fn get_type(&self) -> NodeType {
-    match self {
-      Node::Array { inferred_type, .. } => inferred_type.clone(),
-      Node::Assignment { inferred_type, .. } => inferred_type.clone(),
-      Node::Block { inferred_type, .. } => inferred_type.clone(),
-      Node::Call { inferred_type, .. } => inferred_type.clone(),
-      Node::Dict { inferred_type, .. } => inferred_type.clone(),
-      Node::Grouping { inferred_type, .. } => inferred_type.clone(),
-      Node::Identifier { inferred_type, .. } => inferred_type.clone(),
-      Node::Match { inferred_type, .. } => inferred_type.clone(),
-      Node::MatchCase { inferred_type, .. } => inferred_type.clone(),
-      Node::MethodDefinition { inferred_type, .. } => inferred_type.clone(),
-      Node::NumericLiteral { inferred_type, .. } => inferred_type.clone(),
-      Node::QualifiedIdentifier { inferred_type, .. } => inferred_type.clone(),
-      Node::Reassignment { inferred_type, .. } => inferred_type.clone(),
-      Node::Return { inferred_type, .. } => inferred_type.clone(),
-      Node::StringInterpolation { inferred_type, .. } => inferred_type.clone(),
-      Node::StringLiteral { inferred_type, .. } => inferred_type.clone(),
-      Node::Tuple { inferred_type, .. } => inferred_type.clone(),
+#[derive(Debug)]
+pub struct LitNode {
+  pub id: NodeId,
+  pub pos: Position,
+  pub kind: LitKind,
+}
 
-      _ => unreachable!(),
-    }
-  }
+#[derive(Debug)]
+pub enum LitKind {
+  FloatDecimal(f64),
+  IntDecimal(i128),
+  IntOctal(i128),
+  IntHex(i128),
+  IntBinary(i128),
+  Str(String),
+}
+
+#[derive(Debug)]
+pub struct PatternNode {
+  pub id: NodeId,
+  pub pos: Position,
+  pub kind: PatternKind,
+}
+
+#[derive(Debug)]
+pub enum PatternKind {
+  Ident(IdentNode),
+}
+
+#[derive(Debug)]
+pub struct MatchNode {
+  pub id: NodeId,
+  pub pos: Position,
+  pub subject: Box<ExprNode>,
+  pub cases: Vec<MatchCaseNode>,
+}
+
+#[derive(Debug)]
+pub struct MatchCaseNode {
+  pub id: NodeId,
+  pub pos: Position,
+  pub pattern: PatternNode,
+  pub body: ExprNode,
+}
+
+#[derive(Debug)]
+pub struct TypeNode {
+  pub id: NodeId,
+  pub pos: Position,
+  pub kind: TypeKind,
+}
+
+#[derive(Debug)]
+pub enum TypeKind {
+  // e.g. String
+  Ident(IdentNode),
+  // e.g. List(String),
+  Generic(IdentNode, Vec<TypeNode>),
+  // e.g. { String -> Bool }
+  Block(Vec<TypeNode>, Box<TypeNode>),
+  // e.g. (String, Bool)
+  Tuple(Vec<TypeNode>),
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct ParseError {
+  pub pos: Position,
+  pub kind: ParseErrorKind,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum ParseErrorKind {
+  UnexpectedDictValueInArray,
+  UnexpectedEOF,
+  UnexpectedToken,
+  UnclosedParentheses,
+  MissingIdentifier,
+  MissingIndexBetweenBrackets,
+  MissingDefinitionBody,
+  MissingDictValue,
+  MissingEnumValues,
+  MissingExpressionAfterDot,
+  MissingExpressionAfterOperator,
+  MissingMatchCases,
+  MissingReturnType,
+  MissingStructFields,
+  MissingType,
 }

@@ -1,9 +1,7 @@
-use crate::analyzer::analyze_ast;
-use crate::ast::Node;
+use crate::ast::ModuleNode;
 use crate::errors::ModuleCompilationError;
 use crate::fs;
-// use crate::parser::Parser;
-use crate::parser2::Parser;
+use crate::parser::Parser;
 use crate::tokenizer::{CommentMap, TokenList, Tokenizer};
 
 #[derive(Debug)]
@@ -13,7 +11,7 @@ pub struct Module {
   pub bytes: Option<Vec<u8>>,
   tokens: Option<TokenList>,
   comments: Option<CommentMap>,
-  ast: Option<Node>,
+  ast: Option<ModuleNode>,
   pub errors: Vec<ModuleCompilationError>,
 }
 
@@ -47,11 +45,11 @@ impl Module {
     }
   }
 
-  pub fn analyze(&mut self) {
-    if let Err(err) = analyze_ast(&mut self.ast) {
-      self.errors.push(ModuleCompilationError::AnalysisError(err));
-    }
-  }
+  // pub fn analyze(&mut self) {
+  //   if let Err(err) = analyze_ast(&mut self.ast) {
+  //     self.errors.push(ModuleCompilationError::AnalysisError(err));
+  //   }
+  // }
 
   pub fn has_errors(&self) -> bool {
     self.errors.len() > 0
@@ -62,13 +60,13 @@ impl Module {
       Some(ast) => {
         let mut paths = Vec::new();
 
-        if let Node::Module { imports, .. } = ast {
-          for import in imports {
-            if let Node::Import { module_name, .. } = import {
-              paths.push(module_name.clone());
-            }
-          }
-        }
+        // if let ModuleNode { imports, .. } = ast {
+        //   for import in imports {
+        //     if let Node::Import { module_name, .. } = import {
+        //       paths.push(module_name.clone());
+        //     }
+        //   }
+        // }
 
         Some(paths)
       }
