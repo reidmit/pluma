@@ -41,7 +41,6 @@ fn main() {
 
       match compiler.run() {
         Ok(_) => {
-          println!("{:#?}", compiler);
           println!("Compilation succeeded!");
           exit(0);
         }
@@ -54,11 +53,7 @@ fn main() {
       }
     }
 
-    Ok(Command::RunHelp) => {
-      unimplemented!();
-    }
-
-    Ok(Command::Run { .. }) => {
+    Ok(_) => {
       unimplemented!();
     }
 

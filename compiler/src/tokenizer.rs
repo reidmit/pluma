@@ -21,12 +21,13 @@ impl<'a> Tokenizer<'a> {
     };
   }
 
-  pub fn collect_tokens(&mut self) -> Result<TokenizeResult, TokenizeError> {
+  pub fn collect_tokens(&mut self) -> (TokenList, CommentMap, Vec<TokenizeError>) {
     let source = self.source;
     let length = self.source_length;
 
     let mut tokens = Vec::new();
     let mut comments = HashMap::new();
+    let mut errors = Vec::new();
 
     let mut index = 0;
     let mut line = 0;
@@ -39,7 +40,7 @@ impl<'a> Tokenizer<'a> {
     // The trickiest parts here are related to string interpolations, since they can
     // be nested arbitrarily deep (e.g. "hello $("Ms. $(name)")"). These parts are
     // commented below.
-    while index < length {
+    'main_loop: while index < length {
       let start_index = index;
       let byte = source[start_index];
 
@@ -180,6 +181,11 @@ impl<'a> Tokenizer<'a> {
           tokens.push(Comma(start_index, index))
         }
 
+        b'_' if (index >= length - 1 || source[index + 1] != b'_') => {
+          index += 1;
+          tokens.push(Underscore(start_index, index))
+        }
+
         _ if is_operator_char(byte) => {
           while index < length && is_operator_char(source[index]) {
             index += 1;
@@ -251,7 +257,14 @@ impl<'a> Tokenizer<'a> {
 
                 while index < length && is_identifier_char(source[index]) {
                   if source[index] != b'0' && source[index] != b'1' {
-                    return Err(InvalidBinaryDigit(index, index + 1));
+                    let error_start = index;
+
+                    while index < length && !source[index].is_ascii_whitespace() {
+                      index += 1;
+                    }
+
+                    errors.push(InvalidBinaryDigit(error_start, index));
+                    continue 'main_loop;
                   }
 
                   index += 1;
@@ -266,7 +279,14 @@ impl<'a> Tokenizer<'a> {
 
                 while index < length && is_identifier_char(source[index]) {
                   if !source[index].is_ascii_hexdigit() {
-                    return Err(InvalidHexDigit(index, index + 1));
+                    let error_start = index;
+
+                    while index < length && !source[index].is_ascii_whitespace() {
+                      index += 1;
+                    }
+
+                    errors.push(InvalidHexDigit(error_start, index));
+                    continue 'main_loop;
                   }
 
                   index += 1;
@@ -281,7 +301,14 @@ impl<'a> Tokenizer<'a> {
 
                 while index < length && is_identifier_char(source[index]) {
                   if source[index] < 48 || source[index] > 55 {
-                    return Err(InvalidOctalDigit(index, index + 1));
+                    let error_start = index;
+
+                    while index < length && !source[index].is_ascii_whitespace() {
+                      index += 1;
+                    }
+
+                    errors.push(InvalidOctalDigit(error_start, index));
+                    continue 'main_loop;
                   }
 
                   index += 1;
@@ -297,7 +324,14 @@ impl<'a> Tokenizer<'a> {
 
           while index < length && is_identifier_char(source[index]) {
             if !source[index].is_ascii_digit() {
-              return Err(InvalidDecimalDigit(index, index + 1));
+              let error_start = index;
+
+              while index < length && !source[index].is_ascii_whitespace() {
+                index += 1;
+              }
+
+              errors.push(InvalidDecimalDigit(error_start, index));
+              continue 'main_loop;
             }
 
             index += 1;
@@ -316,15 +350,15 @@ impl<'a> Tokenizer<'a> {
 
     if !interpolation_stack.is_empty() {
       let start_index = interpolation_stack.pop().unwrap();
-      return Err(UnclosedInterpolation(start_index, index));
+      errors.push(UnclosedInterpolation(start_index, index));
     }
 
     if !string_stack.is_empty() {
       let start_index = string_stack.pop().unwrap();
-      return Err(UnclosedString(start_index, index));
+      errors.push(UnclosedString(start_index, index));
     }
 
-    Ok((tokens, comments))
+    (tokens, comments, errors)
   }
 }
 
@@ -332,6 +366,7 @@ fn is_identifier_start_char(byte: u8) -> bool {
   match byte {
     b'a'..=b'z' => true,
     b'A'..=b'Z' => true,
+    b'_' => true,
     _ => false,
     // _ if byte.is_ascii_digit() => false,
     // _ if byte.is_ascii_whitespace() => false,
@@ -343,7 +378,10 @@ fn is_identifier_start_char(byte: u8) -> bool {
 
 fn is_identifier_char(byte: u8) -> bool {
   match byte {
-    b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' => true,
+    b'a'..=b'z' => true,
+    b'A'..=b'Z' => true,
+    b'0'..=b'9' => true,
+    b'_' => true,
     _ => false,
     // _ if byte.is_ascii_whitespace() => false,
     // _ if byte.is_ascii_punctuation() => false,

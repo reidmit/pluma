@@ -34,10 +34,7 @@ impl Module {
       return;
     }
 
-    if let Err(err) = self.tokenize() {
-      self.errors.push(err);
-      return;
-    }
+    self.tokenize();
 
     if let Err(err) = self.parse() {
       self.errors.push(err);
@@ -57,8 +54,8 @@ impl Module {
 
   pub fn get_referenced_paths(&self) -> Option<Vec<String>> {
     match &self.ast {
-      Some(ast) => {
-        let mut paths = Vec::new();
+      Some(_) => {
+        let paths = Vec::new();
 
         // if let ModuleNode { imports, .. } = ast {
         //   for import in imports {
@@ -81,18 +78,21 @@ impl Module {
     }
   }
 
-  fn tokenize(&mut self) -> Result<(), ModuleCompilationError> {
-    match &self.bytes {
-      Some(bytes) => match Tokenizer::from_source(bytes).collect_tokens() {
-        Ok((tokens, comments)) => {
-          self.tokens = Some(tokens);
-          self.comments = Some(comments);
-          Ok(())
-        }
-        Err(err) => Err(ModuleCompilationError::TokenizeError(err)),
-      },
-      _ => unreachable!(),
+  fn tokenize(&mut self) {
+    let bytes = self.bytes.as_ref().unwrap();
+    let (tokens, comments, errors) = Tokenizer::from_source(&bytes).collect_tokens();
+
+    if !errors.is_empty() {
+      self.errors.append(
+        &mut errors
+          .into_iter()
+          .map(ModuleCompilationError::TokenizeError)
+          .collect(),
+      )
     }
+
+    self.tokens = Some(tokens);
+    self.comments = Some(comments);
   }
 
   fn parse(&mut self) -> Result<(), ModuleCompilationError> {

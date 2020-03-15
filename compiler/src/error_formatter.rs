@@ -61,12 +61,12 @@ impl<'a> ErrorFormatter<'a> {
     }
   }
 
-  fn read_source(&self, module_path: &String, start: usize, end: usize) -> String {
-    let module = self.compiler.modules.get(module_path).unwrap();
+  // fn read_source(&self, module_path: &String, start: usize, end: usize) -> String {
+  //   let module = self.compiler.modules.get(module_path).unwrap();
 
-    match &module.bytes {
-      Some(bytes) => String::from_utf8(bytes[start..end].to_vec()).expect("not utf8"),
-      None => "".to_owned(),
-    }
-  }
+  //   match &module.bytes {
+  //     Some(bytes) => String::from_utf8(bytes[start..end].to_vec()).expect("not utf8"),
+  //     None => "".to_owned(),
+  //   }
+  // }
 }

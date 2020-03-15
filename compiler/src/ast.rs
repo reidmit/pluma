@@ -9,6 +9,7 @@ pub type Signature = Vec<SignaturePart>;
 pub struct ModuleNode {
   pub id: NodeId,
   pub pos: Position,
+  pub imports: Vec<UseNode>,
   pub body: Vec<TopLevelStatementNode>,
 }
 
@@ -21,12 +22,18 @@ pub struct TopLevelStatementNode {
 
 #[derive(Debug)]
 pub enum TopLevelStatementKind {
-  // UseStatement(UseStatementNode),
-  // private
   Let(LetNode),
   TypeDef(TypeDefNode),
   Def(DefNode),
   Expr(ExprNode),
+}
+
+#[derive(Debug)]
+pub struct UseNode {
+  pub id: NodeId,
+  pub pos: Position,
+  pub module_name: String,
+  pub qualifier: Box<IdentNode>,
 }
 
 #[derive(Debug)]
@@ -116,6 +123,7 @@ pub struct StatementNode {
 pub enum StatementKind {
   Let(LetNode),
   Expr(ExprNode),
+  Return(ReturnNode),
 }
 
 #[derive(Debug)]
@@ -170,6 +178,14 @@ pub enum ExprKind {
     op: Box<OperatorNode>,
     right: Box<ExprNode>,
   },
+  Underscore,
+}
+
+#[derive(Debug)]
+pub struct ReturnNode {
+  pub id: NodeId,
+  pub pos: Position,
+  pub value: ExprNode,
 }
 
 #[derive(Debug)]
@@ -262,8 +278,11 @@ pub enum ParseErrorKind {
   MissingEnumValues,
   MissingExpressionAfterDot,
   MissingExpressionAfterOperator,
+  MissingExpressionAfterReturn,
   MissingMatchCases,
+  MissingQualifierAfterAs,
   MissingReturnType,
   MissingStructFields,
   MissingType,
+  ReturnOutsideDefinitionBody,
 }

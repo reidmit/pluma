@@ -42,6 +42,7 @@ pub struct Parser<'a> {
   index: usize,
   errors: Vec<ParseError>,
   next_node_id: usize,
+  def_body_stack: i8,
 }
 
 impl<'a> Parser<'a> {
@@ -52,11 +53,26 @@ impl<'a> Parser<'a> {
       index: 0,
       errors: Vec::new(),
       next_node_id: 0,
+      def_body_stack: 0,
     };
   }
 
   pub fn parse_module(&mut self) -> (ModuleNode, Vec<ParseError>) {
+    let mut imports = Vec::new();
     let mut body = Vec::new();
+
+    loop {
+      self.skip_line_breaks();
+
+      if !current_token_is!(self, Token::KeywordUse) {
+        break;
+      }
+
+      match self.parse_use_statement() {
+        Some(use_stmt) => imports.push(use_stmt),
+        _ => break,
+      }
+    }
 
     loop {
       self.skip_line_breaks();
@@ -73,6 +89,7 @@ impl<'a> Parser<'a> {
     let module_node = ModuleNode {
       id: self.next_id(),
       pos: (start, end),
+      imports,
       body,
     };
 
@@ -97,7 +114,7 @@ impl<'a> Parser<'a> {
     self.tokens.get(self.index + 1)
   }
 
-  fn current_token_location(&self) -> (usize, usize) {
+  fn current_token_position(&self) -> (usize, usize) {
     match self.current_token() {
       Some(token) => token.get_location(),
       _ => (0, 0),
@@ -110,6 +127,18 @@ impl<'a> Parser<'a> {
     id
   }
 
+  fn enter_def_body(&mut self) {
+    self.def_body_stack += 1;
+  }
+
+  fn exit_def_body(&mut self) {
+    self.def_body_stack -= 1;
+  }
+
+  fn in_def_body(&mut self) -> bool {
+    self.def_body_stack > 0
+  }
+
   fn error<A>(&mut self, err: ParseError) -> Option<A> {
     self.errors.push(err);
     None
@@ -117,7 +146,7 @@ impl<'a> Parser<'a> {
 
   fn parse_alias(&mut self) -> Option<TypeDefNode> {
     let start = expect_token_and_do!(self, Token::KeywordAlias, {
-      let pos = self.current_token_location();
+      let pos = self.current_token_position();
       self.advance();
       pos.0
     });
@@ -136,7 +165,7 @@ impl<'a> Parser<'a> {
       }
       _ => {
         return self.error(ParseError {
-          pos: self.current_token_location(),
+          pos: self.current_token_position(),
           kind: ParseErrorKind::UnexpectedToken,
         })
       }
@@ -169,7 +198,7 @@ impl<'a> Parser<'a> {
       Some(expr) => expr,
       _ => {
         return self.error(ParseError {
-          pos: self.current_token_location(),
+          pos: self.current_token_position(),
           kind: ParseErrorKind::UnexpectedToken,
         })
       }
@@ -186,7 +215,7 @@ impl<'a> Parser<'a> {
 
   fn parse_array_or_dict(&mut self) -> Option<ExprNode> {
     let start = expect_token_and_do!(self, Token::LeftBracket, {
-      let pos = self.current_token_location();
+      let pos = self.current_token_position();
       self.advance();
       pos.0
     });
@@ -198,7 +227,7 @@ impl<'a> Parser<'a> {
       if current_token_is!(self, Token::Colon) {
         if !array_elements.is_empty() {
           self.error::<ExprNode>(ParseError {
-            pos: self.current_token_location(),
+            pos: self.current_token_position(),
             kind: ParseErrorKind::UnexpectedDictValueInArray,
           });
         }
@@ -209,7 +238,7 @@ impl<'a> Parser<'a> {
           Some(val) => dict_entries.push((expr, val)),
           _ => {
             return self.error(ParseError {
-              pos: self.current_token_location(),
+              pos: self.current_token_position(),
               kind: ParseErrorKind::MissingDictValue,
             })
           }
@@ -217,7 +246,7 @@ impl<'a> Parser<'a> {
       } else {
         if !dict_entries.is_empty() {
           self.error::<ExprNode>(ParseError {
-            pos: self.current_token_location(),
+            pos: self.current_token_position(),
             kind: ParseErrorKind::MissingDictValue,
           });
         }
@@ -233,7 +262,7 @@ impl<'a> Parser<'a> {
     }
 
     let end = expect_token_and_do!(self, Token::RightBracket, {
-      let pos = self.current_token_location();
+      let pos = self.current_token_position();
       self.advance();
       pos.1
     });
@@ -253,7 +282,7 @@ impl<'a> Parser<'a> {
 
   fn parse_binary_number(&mut self) -> Option<LitNode> {
     let (start, end, value) = expect_token_and_do!(self, Token::BinaryDigits, {
-      let (start, end) = self.current_token_location();
+      let (start, end) = self.current_token_position();
       (start, end, self.parse_numeric_literal(start, end, 2))
     });
 
@@ -268,7 +297,7 @@ impl<'a> Parser<'a> {
 
   fn parse_block(&mut self) -> Option<ExprNode> {
     let block_start = expect_token_and_do!(self, Token::LeftBrace, {
-      let (start, _) = self.current_token_location();
+      let (start, _) = self.current_token_position();
       self.advance();
       start
     });
@@ -312,7 +341,7 @@ impl<'a> Parser<'a> {
     self.skip_line_breaks();
 
     let block_end = expect_token_and_do!(self, Token::RightBrace, {
-      let pos = self.current_token_location();
+      let pos = self.current_token_position();
       self.advance();
       pos.1
     });
@@ -326,7 +355,7 @@ impl<'a> Parser<'a> {
 
   fn parse_binary_operation(&mut self, last_term: ExprNode) -> Option<ExprNode> {
     let op_node = expect_token_and_do!(self, Token::Operator, {
-      let (start, end) = self.current_token_location();
+      let (start, end) = self.current_token_position();
       let name = read_string!(self, start, end);
       self.advance();
 
@@ -341,7 +370,7 @@ impl<'a> Parser<'a> {
       Some(term) => (term.pos.1, Box::new(term)),
       _ => {
         return self.error(ParseError {
-          pos: self.current_token_location(),
+          pos: self.current_token_position(),
           kind: ParseErrorKind::MissingExpressionAfterDot,
         })
       }
@@ -365,7 +394,7 @@ impl<'a> Parser<'a> {
     let end;
 
     if current_token_is!(self, Token::RightParen) {
-      end = self.current_token_location().1;
+      end = self.current_token_position().1;
       self.advance()
     } else {
       while let Some(expr) = self.parse_expression() {
@@ -379,7 +408,7 @@ impl<'a> Parser<'a> {
       }
 
       expect_token_and_do!(self, Token::RightParen, {
-        end = self.current_token_location().1;
+        end = self.current_token_position().1;
         self.advance()
       });
     }
@@ -401,7 +430,7 @@ impl<'a> Parser<'a> {
       Some(term) => (term.pos.1, Box::new(term)),
       _ => {
         return self.error(ParseError {
-          pos: self.current_token_location(),
+          pos: self.current_token_position(),
           kind: ParseErrorKind::MissingExpressionAfterDot,
         })
       }
@@ -419,7 +448,7 @@ impl<'a> Parser<'a> {
 
   fn parse_decimal_number(&mut self) -> Option<LitNode> {
     let (start, end) = expect_token_and_do!(self, Token::DecimalDigits, {
-      let pos = self.current_token_location();
+      let pos = self.current_token_position();
       self.advance();
       pos
     });
@@ -428,7 +457,7 @@ impl<'a> Parser<'a> {
       self.advance();
 
       expect_token_and_do!(self, Token::DecimalDigits, {
-        let (_, end) = self.current_token_location();
+        let (_, end) = self.current_token_position();
 
         self.advance();
 
@@ -454,7 +483,7 @@ impl<'a> Parser<'a> {
 
   fn parse_definition(&mut self) -> Option<DefNode> {
     let start = expect_token_and_do!(self, Token::KeywordDef, {
-      let pos = self.current_token_location();
+      let pos = self.current_token_position();
       self.advance();
       pos.0
     });
@@ -463,7 +492,7 @@ impl<'a> Parser<'a> {
       Some(kind_node) => kind_node,
       _ => {
         return self.error(ParseError {
-          pos: self.current_token_location(),
+          pos: self.current_token_position(),
           kind: ParseErrorKind::UnexpectedToken,
         })
       }
@@ -476,7 +505,7 @@ impl<'a> Parser<'a> {
         Some(type_node) => Some(type_node),
         _ => {
           return self.error(ParseError {
-            pos: self.current_token_location(),
+            pos: self.current_token_position(),
             kind: ParseErrorKind::MissingReturnType,
           })
         }
@@ -489,6 +518,8 @@ impl<'a> Parser<'a> {
 
     self.skip_line_breaks();
 
+    self.enter_def_body();
+
     let (params, body, end) = match self.parse_block() {
       Some(ExprNode {
         kind: ExprKind::Block { params, body },
@@ -497,11 +528,13 @@ impl<'a> Parser<'a> {
       }) => (params, body, pos.1),
       _ => {
         return self.error(ParseError {
-          pos: self.current_token_location(),
+          pos: self.current_token_position(),
           kind: ParseErrorKind::MissingDefinitionBody,
         })
       }
     };
+
+    self.exit_def_body();
 
     Some(DefNode {
       id: self.next_id(),
@@ -520,7 +553,7 @@ impl<'a> Parser<'a> {
       Some(&Token::Operator(..)) => self.parse_definition_kind_unary_op(),
       _ => {
         return self.error(ParseError {
-          pos: self.current_token_location(),
+          pos: self.current_token_position(),
           kind: ParseErrorKind::MissingType,
         })
       }
@@ -532,7 +565,7 @@ impl<'a> Parser<'a> {
       Some(ident_node) => ident_node,
       _ => {
         return self.error(ParseError {
-          pos: self.current_token_location(),
+          pos: self.current_token_position(),
           kind: ParseErrorKind::MissingIdentifier,
         })
       }
@@ -571,7 +604,7 @@ impl<'a> Parser<'a> {
       Some(node) => Box::new(node),
       _ => {
         return self.error(ParseError {
-          pos: self.current_token_location(),
+          pos: self.current_token_position(),
           kind: ParseErrorKind::MissingType,
         })
       }
@@ -588,7 +621,7 @@ impl<'a> Parser<'a> {
         Some(node) => Box::new(node),
         _ => {
           return self.error(ParseError {
-            pos: self.current_token_location(),
+            pos: self.current_token_position(),
             kind: ParseErrorKind::MissingType,
           })
         }
@@ -606,7 +639,7 @@ impl<'a> Parser<'a> {
 
     if current_token_is!(self, Token::Operator) {
       let op_node = expect_token_and_do!(self, Token::Operator, {
-        let (start, end) = self.current_token_location();
+        let (start, end) = self.current_token_position();
         let name = read_string!(self, start, end);
         self.advance();
 
@@ -625,7 +658,7 @@ impl<'a> Parser<'a> {
         Some(node) => Box::new(node),
         _ => {
           return self.error(ParseError {
-            pos: self.current_token_location(),
+            pos: self.current_token_position(),
             kind: ParseErrorKind::MissingType,
           })
         }
@@ -650,7 +683,7 @@ impl<'a> Parser<'a> {
       Some(ident_node) => Box::new(ident_node),
       _ => {
         return self.error(ParseError {
-          pos: self.current_token_location(),
+          pos: self.current_token_position(),
           kind: ParseErrorKind::MissingIdentifier,
         })
       }
@@ -683,7 +716,7 @@ impl<'a> Parser<'a> {
 
   fn parse_definition_kind_unary_op(&mut self) -> Option<DefKind> {
     let op_node = expect_token_and_do!(self, Token::Operator, {
-      let (start, end) = self.current_token_location();
+      let (start, end) = self.current_token_position();
       let name = read_string!(self, start, end);
       self.advance();
 
@@ -702,7 +735,7 @@ impl<'a> Parser<'a> {
       Some(node) => Box::new(node),
       _ => {
         return self.error(ParseError {
-          pos: self.current_token_location(),
+          pos: self.current_token_position(),
           kind: ParseErrorKind::MissingType,
         })
       }
@@ -720,7 +753,7 @@ impl<'a> Parser<'a> {
 
   fn parse_enum(&mut self) -> Option<TypeDefNode> {
     let start = expect_token_and_do!(self, Token::KeywordEnum, {
-      let pos = self.current_token_location();
+      let pos = self.current_token_position();
       self.advance();
       pos.0
     });
@@ -739,7 +772,7 @@ impl<'a> Parser<'a> {
       }
       _ => {
         return self.error(ParseError {
-          pos: self.current_token_location(),
+          pos: self.current_token_position(),
           kind: ParseErrorKind::UnexpectedToken,
         })
       }
@@ -779,7 +812,7 @@ impl<'a> Parser<'a> {
         Some(expr) => variants.push(expr),
         _ => {
           return self.error(ParseError {
-            pos: self.current_token_location(),
+            pos: self.current_token_position(),
             kind: ParseErrorKind::UnexpectedToken,
           })
         }
@@ -788,7 +821,7 @@ impl<'a> Parser<'a> {
 
     if variants.is_empty() {
       return self.error(ParseError {
-        pos: self.current_token_location(),
+        pos: self.current_token_position(),
         kind: ParseErrorKind::MissingEnumValues,
       });
     }
@@ -804,7 +837,7 @@ impl<'a> Parser<'a> {
 
   fn parse_struct(&mut self) -> Option<TypeDefNode> {
     let start = expect_token_and_do!(self, Token::KeywordStruct, {
-      let pos = self.current_token_location();
+      let pos = self.current_token_position();
       self.advance();
       pos.0
     });
@@ -823,7 +856,7 @@ impl<'a> Parser<'a> {
       }
       _ => {
         return self.error(ParseError {
-          pos: self.current_token_location(),
+          pos: self.current_token_position(),
           kind: ParseErrorKind::UnexpectedToken,
         })
       }
@@ -874,7 +907,7 @@ impl<'a> Parser<'a> {
         Some(expr) => fields.push((ident, expr)),
         _ => {
           return self.error(ParseError {
-            pos: self.current_token_location(),
+            pos: self.current_token_position(),
             kind: ParseErrorKind::UnexpectedToken,
           })
         }
@@ -892,7 +925,7 @@ impl<'a> Parser<'a> {
     self.skip_line_breaks();
 
     let end = expect_token_and_do!(self, Token::RightParen, {
-      let pos = self.current_token_location();
+      let pos = self.current_token_position();
       self.advance();
       pos.1
     });
@@ -935,7 +968,7 @@ impl<'a> Parser<'a> {
 
   fn parse_hex_number(&mut self) -> Option<LitNode> {
     let (start, end, value) = expect_token_and_do!(self, Token::HexDigits, {
-      let (start, end) = self.current_token_location();
+      let (start, end) = self.current_token_position();
       (start, end, self.parse_numeric_literal(start, end, 16))
     });
 
@@ -950,7 +983,7 @@ impl<'a> Parser<'a> {
 
   fn parse_identifier(&mut self) -> Option<IdentNode> {
     let (start, end) = expect_token_and_do!(self, Token::IdentifierLower, {
-      let (start, end) = self.current_token_location();
+      let (start, end) = self.current_token_position();
       self.advance();
       (start, end)
     });
@@ -974,12 +1007,12 @@ impl<'a> Parser<'a> {
       index_node = Box::new(node);
 
       expect_token_and_do!(self, Token::RightBracket, {
-        end = self.current_token_location().1;
+        end = self.current_token_position().1;
         self.advance()
       });
     } else {
       return self.error(ParseError {
-        pos: self.current_token_location(),
+        pos: self.current_token_position(),
         kind: ParseErrorKind::MissingIndexBetweenBrackets,
       });
     }
@@ -993,7 +1026,7 @@ impl<'a> Parser<'a> {
 
   fn parse_let_statement(&mut self) -> Option<LetNode> {
     let start = expect_token_and_do!(self, Token::KeywordLet, {
-      let (start, _) = self.current_token_location();
+      let (start, _) = self.current_token_position();
       self.advance();
       start
     });
@@ -1109,7 +1142,7 @@ impl<'a> Parser<'a> {
 
   fn parse_octal_number(&mut self) -> Option<LitNode> {
     let (start, end, value) = expect_token_and_do!(self, Token::OctalDigits, {
-      let (start, end) = self.current_token_location();
+      let (start, end) = self.current_token_position();
       (start, end, self.parse_numeric_literal(start, end, 8))
     });
 
@@ -1160,7 +1193,7 @@ impl<'a> Parser<'a> {
 
   fn parse_parenthetical(&mut self) -> Option<ExprNode> {
     let paren_start = expect_token_and_do!(self, Token::LeftParen, {
-      let (start, _) = self.current_token_location();
+      let (start, _) = self.current_token_position();
       self.advance();
       start
     });
@@ -1187,7 +1220,7 @@ impl<'a> Parser<'a> {
       Some(&Token::RightParen(_, end)) => end,
       _ => {
         return self.error(ParseError {
-          pos: self.current_token_location(),
+          pos: self.current_token_position(),
           kind: ParseErrorKind::UnclosedParentheses,
         })
       }
@@ -1220,6 +1253,40 @@ impl<'a> Parser<'a> {
     })
   }
 
+  fn parse_return_statement(&mut self) -> Option<ReturnNode> {
+    let start = expect_token_and_do!(self, Token::KeywordReturn, {
+      let (start, end) = self.current_token_position();
+      self.advance();
+
+      println!("ret: {:#?}", self.def_body_stack);
+
+      if !self.in_def_body() {
+        self.error::<ReturnNode>(ParseError {
+          pos: (start, end),
+          kind: ParseErrorKind::ReturnOutsideDefinitionBody,
+        });
+      }
+
+      start
+    });
+
+    let expr = match self.parse_expression() {
+      Some(node) => node,
+      _ => {
+        return self.error(ParseError {
+          pos: self.current_token_position(),
+          kind: ParseErrorKind::MissingExpressionAfterReturn,
+        })
+      }
+    };
+
+    Some(ReturnNode {
+      id: self.next_id(),
+      pos: (start, expr.pos.1),
+      value: expr,
+    })
+  }
+
   fn parse_statement(&mut self) -> Option<StatementNode> {
     match self.current_token() {
       Some(&Token::KeywordLet(..)) => self.parse_let_statement().map(|let_node| StatementNode {
@@ -1227,6 +1294,15 @@ impl<'a> Parser<'a> {
         pos: let_node.pos,
         kind: StatementKind::Let(let_node),
       }),
+      Some(&Token::KeywordReturn(..)) => {
+        self
+          .parse_return_statement()
+          .map(|expr_node| StatementNode {
+            id: self.next_id(),
+            pos: expr_node.pos,
+            kind: StatementKind::Return(expr_node),
+          })
+      }
       _ => self.parse_expression().map(|expr_node| StatementNode {
         id: self.next_id(),
         pos: expr_node.pos,
@@ -1237,7 +1313,7 @@ impl<'a> Parser<'a> {
 
   fn parse_string(&mut self) -> Option<ExprNode> {
     let (start, end) = expect_token_and_do!(self, Token::StringLiteral, {
-      let pos = self.current_token_location();
+      let pos = self.current_token_position();
       self.advance();
       pos
     });
@@ -1273,7 +1349,7 @@ impl<'a> Parser<'a> {
         });
 
         expect_token_and_do!(self, Token::StringLiteral, {
-          let (start, end) = self.current_token_location();
+          let (start, end) = self.current_token_position();
 
           interpolation_end = end;
 
@@ -1309,6 +1385,7 @@ impl<'a> Parser<'a> {
       Some(&Token::LeftBracket(..)) => self.parse_array_or_dict(),
       Some(&Token::StringLiteral(..)) => self.parse_string(),
       Some(&Token::KeywordMatch(..)) => self.parse_match(),
+      Some(&Token::Underscore(..)) => self.parse_underscore(),
       Some(&Token::IdentifierLower(..)) | Some(&Token::IdentifierUpper(..)) => self
         .parse_identifier()
         .map(|id_node| match self.current_token() {
@@ -1417,7 +1494,7 @@ impl<'a> Parser<'a> {
 
   fn parse_type_block(&mut self) -> Option<TypeNode> {
     let start = expect_token_and_do!(self, Token::LeftBrace, {
-      let pos = self.current_token_location();
+      let pos = self.current_token_position();
       self.advance();
       pos.0
     });
@@ -1440,7 +1517,7 @@ impl<'a> Parser<'a> {
         Some(type_node) => Some(type_node),
         _ => {
           return self.error(ParseError {
-            pos: self.current_token_location(),
+            pos: self.current_token_position(),
             kind: ParseErrorKind::MissingReturnType,
           })
         }
@@ -1448,7 +1525,7 @@ impl<'a> Parser<'a> {
     } else {
       if param_types.len() != 1 {
         return self.error(ParseError {
-          pos: self.current_token_location(),
+          pos: self.current_token_position(),
           kind: ParseErrorKind::MissingReturnType,
         });
       }
@@ -1457,7 +1534,7 @@ impl<'a> Parser<'a> {
     };
 
     let end = expect_token_and_do!(self, Token::RightBrace, {
-      let pos = self.current_token_location();
+      let pos = self.current_token_position();
       self.advance();
       pos.1
     });
@@ -1480,7 +1557,7 @@ impl<'a> Parser<'a> {
 
   fn parse_type_identifier(&mut self) -> Option<TypeNode> {
     let (start, end) = expect_token_and_do!(self, Token::IdentifierUpper, {
-      let pos = self.current_token_location();
+      let pos = self.current_token_position();
       self.advance();
       pos
     });
@@ -1506,7 +1583,7 @@ impl<'a> Parser<'a> {
       }
 
       let params_end = expect_token_and_do!(self, Token::RightParen, {
-        let pos = self.current_token_location();
+        let pos = self.current_token_position();
         self.advance();
         pos.1
       });
@@ -1527,7 +1604,7 @@ impl<'a> Parser<'a> {
 
   fn parse_type_tuple(&mut self) -> Option<TypeNode> {
     let start = expect_token_and_do!(self, Token::LeftParen, {
-      let pos = self.current_token_location();
+      let pos = self.current_token_position();
       self.advance();
       pos.0
     });
@@ -1544,7 +1621,7 @@ impl<'a> Parser<'a> {
     }
 
     let end = expect_token_and_do!(self, Token::RightParen, {
-      let pos = self.current_token_location();
+      let pos = self.current_token_position();
       self.advance();
       pos.1
     });
@@ -1558,7 +1635,7 @@ impl<'a> Parser<'a> {
 
   fn parse_unary_operation(&mut self) -> Option<ExprNode> {
     let op_node = expect_token_and_do!(self, Token::Operator, {
-      let pos = self.current_token_location();
+      let pos = self.current_token_position();
       let name = read_string!(self, pos.0, pos.1);
       self.advance();
 
@@ -1573,7 +1650,7 @@ impl<'a> Parser<'a> {
       Some(node) => Box::new(node),
       _ => {
         return self.error(ParseError {
-          pos: self.current_token_location(),
+          pos: self.current_token_position(),
           kind: ParseErrorKind::MissingExpressionAfterOperator,
         })
       }
@@ -1586,6 +1663,56 @@ impl<'a> Parser<'a> {
         op: op_node,
         right: expr_node,
       },
+    })
+  }
+
+  fn parse_underscore(&mut self) -> Option<ExprNode> {
+    let pos = expect_token_and_do!(self, Token::Underscore, {
+      let pos = self.current_token_position();
+      self.advance();
+      pos
+    });
+
+    Some(ExprNode {
+      id: self.next_id(),
+      pos,
+      kind: ExprKind::Underscore,
+    })
+  }
+
+  fn parse_use_statement(&mut self) -> Option<UseNode> {
+    let start = expect_token_and_do!(self, Token::KeywordUse, {
+      let (start, _) = self.current_token_position();
+      self.advance();
+      start
+    });
+
+    let module_name = expect_token_and_do!(self, Token::ImportPath, {
+      let (start, end) = self.current_token_position();
+      let name_str = read_string!(self, start, end);
+      self.advance();
+      name_str
+    });
+
+    expect_token_and_do!(self, Token::KeywordAs, {
+      self.advance();
+    });
+
+    let qualifier = match self.parse_identifier() {
+      Some(node) => Box::new(node),
+      _ => {
+        return self.error(ParseError {
+          pos: self.current_token_position(),
+          kind: ParseErrorKind::MissingQualifierAfterAs,
+        })
+      }
+    };
+
+    Some(UseNode {
+      id: self.next_id(),
+      pos: (start, qualifier.pos.1),
+      module_name,
+      qualifier,
     })
   }
 }

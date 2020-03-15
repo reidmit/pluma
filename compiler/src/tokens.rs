@@ -44,6 +44,7 @@ pub enum Token {
   RightBracket(usize, usize),
   RightParen(usize, usize),
   StringLiteral(usize, usize),
+  Underscore(usize, usize),
   Unexpected(usize, usize),
 }
 
@@ -90,6 +91,7 @@ impl Token {
       &Token::RightBracket(start, end) => (start, end),
       &Token::RightParen(start, end) => (start, end),
       &Token::StringLiteral(start, end) => (start, end),
+      &Token::Underscore(start, end) => (start, end),
       &Token::Unexpected(start, end) => (start, end),
     }
   }
@@ -138,6 +140,7 @@ impl fmt::Display for Token {
       &Token::RightBracket(..) => "]",
       &Token::RightParen(..) => ")",
       &Token::StringLiteral(..) => "string",
+      &Token::Underscore(..) => "_",
       &Token::Unexpected(..) => "unknown",
     };
 

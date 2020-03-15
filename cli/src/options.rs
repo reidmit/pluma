@@ -74,7 +74,7 @@ pub fn parse_options() -> Result<Command, UsageError> {
 }
 
 fn show_help() -> bool {
-  for arg in env::args() {
+  for arg in env::args_os() {
     if arg == "-h" || arg == "--help" {
       return true;
     }

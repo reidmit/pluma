@@ -86,7 +86,7 @@ impl Compiler {
     Ok(())
   }
 
-  pub fn analyze_module(&mut self, module_name: String) -> Result<(), PackageCompilationError> {
+  pub fn analyze_module(&mut self, _module_name: String) -> Result<(), PackageCompilationError> {
     // let module = self.modules.get_mut(&module_name).unwrap();
     // module.analyze();
     Ok(())
