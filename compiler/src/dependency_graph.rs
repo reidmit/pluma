@@ -1,5 +1,5 @@
-use std::collections::{VecDeque, HashSet, HashMap};
 use std::collections::hash_map::DefaultHasher;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
 use std::hash::Hasher;
 
@@ -14,7 +14,7 @@ pub struct DependencyGraph {
   entry_vertex: String,
   vertices: HashSet<String>,
   edges: HashMap<String, HashSet<String>>,
-  cached_sort: Option<TopologicalSort>
+  cached_sort: Option<TopologicalSort>,
 }
 
 impl DependencyGraph {
@@ -51,7 +51,7 @@ impl DependencyGraph {
 
     match &self.cached_sort {
       Some(sort) => sort,
-      None => unreachable!()
+      None => unreachable!(),
     }
   }
 
@@ -124,11 +124,10 @@ impl DependencyGraph {
   }
 }
 
-
 #[derive(Debug)]
 pub struct ImportChain {
   pub entries: Vec<String>,
-  seen: HashSet<u64>
+  seen: HashSet<u64>,
 }
 
 impl ImportChain {
@@ -196,8 +195,16 @@ mod tests {
     g.add_edge("a".to_owned(), "b".to_owned());
     g.add_edge("b".to_owned(), "c".to_owned());
 
-    assert!(g.edges.get(&"b".to_owned()).unwrap().contains(&"a".to_owned()));
-    assert!(g.edges.get(&"c".to_owned()).unwrap().contains(&"b".to_owned()));
+    assert!(g
+      .edges
+      .get(&"b".to_owned())
+      .unwrap()
+      .contains(&"a".to_owned()));
+    assert!(g
+      .edges
+      .get(&"c".to_owned())
+      .unwrap()
+      .contains(&"b".to_owned()));
   }
 
   #[test]
@@ -208,18 +215,16 @@ mod tests {
     g.add_edge("b".to_owned(), "c".to_owned());
 
     match g.sort() {
-      TopologicalSort::Sorted(sorted) => {
-        assert_eq!(
-          sorted.to_owned(),
-          vec![
-            "d".to_owned(),
-            "c".to_owned(),
-            "b".to_owned(),
-            "a".to_owned(),
-          ]
-        )
-      },
-      TopologicalSort::Cycle(..) => panic!("Unexpected cycle")
+      TopologicalSort::Sorted(sorted) => assert_eq!(
+        sorted.to_owned(),
+        vec![
+          "d".to_owned(),
+          "c".to_owned(),
+          "b".to_owned(),
+          "a".to_owned(),
+        ]
+      ),
+      TopologicalSort::Cycle(..) => panic!("Unexpected cycle"),
     }
   }
 
@@ -228,15 +233,8 @@ mod tests {
     let mut g = DependencyGraph::new("a".to_owned());
 
     match g.sort() {
-      TopologicalSort::Sorted(sorted) => {
-        assert_eq!(
-          sorted.to_owned(),
-          vec![
-            "a".to_owned(),
-          ]
-        )
-      },
-      TopologicalSort::Cycle(..) => panic!("Unexpected cycle")
+      TopologicalSort::Sorted(sorted) => assert_eq!(sorted.to_owned(), vec!["a".to_owned(),]),
+      TopologicalSort::Cycle(..) => panic!("Unexpected cycle"),
     }
   }
 
@@ -248,17 +246,11 @@ mod tests {
     g.add_edge("a".to_owned(), "c".to_owned());
 
     match g.sort() {
-      TopologicalSort::Sorted(sorted) => {
-        assert_eq!(
-          sorted.to_owned(),
-          vec![
-            "c".to_owned(),
-            "b".to_owned(),
-            "a".to_owned(),
-          ]
-        )
-      },
-      TopologicalSort::Cycle(..) => panic!("Unexpected cycle")
+      TopologicalSort::Sorted(sorted) => assert_eq!(
+        sorted.to_owned(),
+        vec!["c".to_owned(), "b".to_owned(), "a".to_owned(),]
+      ),
+      TopologicalSort::Cycle(..) => panic!("Unexpected cycle"),
     }
   }
 
@@ -271,17 +263,15 @@ mod tests {
 
     match g.sort() {
       TopologicalSort::Sorted(..) => panic!("Unexpected sort"),
-      TopologicalSort::Cycle(cycle) => {
-        assert_eq!(
-          cycle.to_vec(),
-          vec![
-            "b".to_owned(),
-            "c".to_owned(),
-            "a".to_owned(),
-            "b".to_owned(),
-          ]
-        )
-      }
+      TopologicalSort::Cycle(cycle) => assert_eq!(
+        cycle.to_vec(),
+        vec![
+          "b".to_owned(),
+          "c".to_owned(),
+          "a".to_owned(),
+          "b".to_owned(),
+        ]
+      ),
     }
   }
 
@@ -296,17 +286,15 @@ mod tests {
 
     match g.sort() {
       TopologicalSort::Sorted(..) => panic!("Unexpected sort"),
-      TopologicalSort::Cycle(cycle) => {
-        assert_eq!(
-          cycle.to_vec(),
-          vec![
-            "c".to_owned(),
-            "d".to_owned(),
-            "e".to_owned(),
-            "c".to_owned(),
-          ]
-        )
-      }
+      TopologicalSort::Cycle(cycle) => assert_eq!(
+        cycle.to_vec(),
+        vec![
+          "c".to_owned(),
+          "d".to_owned(),
+          "e".to_owned(),
+          "c".to_owned(),
+        ]
+      ),
     }
   }
 
@@ -340,11 +328,14 @@ mod tests {
     p.add("b".to_owned());
 
     let cycle = p.cyclic_entries();
-    assert_eq!(cycle, vec![
-      "b".to_owned(),
-      "c".to_owned(),
-      "d".to_owned(),
-      "b".to_owned(),
-    ]);
+    assert_eq!(
+      cycle,
+      vec![
+        "b".to_owned(),
+        "c".to_owned(),
+        "d".to_owned(),
+        "b".to_owned(),
+      ]
+    );
   }
 }

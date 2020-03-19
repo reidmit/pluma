@@ -1,16 +1,16 @@
 use crate::errors::UsageError;
 use pluma_compiler::{DEFAULT_ENTRY_MODULE_NAME, FILE_EXTENSION};
 use std::env;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub enum Command {
   Build {
-    root_dir: String,
+    root_dir: PathBuf,
     entry_module_name: String,
   },
   BuildHelp,
   Run {
-    root_dir: String,
+    root_dir: PathBuf,
     entry_module_name: String,
   },
   RunHelp,
@@ -83,7 +83,7 @@ fn show_help() -> bool {
   return false;
 }
 
-fn get_root_dir_and_module_name(entry_path: String) -> Result<(String, String), UsageError> {
+fn get_root_dir_and_module_name(entry_path: String) -> Result<(PathBuf, String), UsageError> {
   let joined_path = Path::new(&env::current_dir().unwrap()).join(entry_path);
 
   match joined_path.canonicalize() {
@@ -93,10 +93,7 @@ fn get_root_dir_and_module_name(entry_path: String) -> Result<(String, String), 
         file_path.set_extension(FILE_EXTENSION);
 
         return match file_path.canonicalize() {
-          Ok(..) => Ok((
-            abs_path.to_str().unwrap().to_owned(),
-            DEFAULT_ENTRY_MODULE_NAME.to_owned(),
-          )),
+          Ok(..) => Ok((abs_path, DEFAULT_ENTRY_MODULE_NAME.to_owned())),
           Err(..) => Err(UsageError::EntryDirDoesNotContainEntryFile(
             joined_path.to_str().unwrap().to_owned(),
           )),
@@ -104,7 +101,7 @@ fn get_root_dir_and_module_name(entry_path: String) -> Result<(String, String), 
       }
 
       Ok((
-        abs_path.parent().unwrap().to_str().unwrap().to_owned(),
+        abs_path.parent().unwrap().to_path_buf(),
         abs_path.file_stem().unwrap().to_str().unwrap().to_owned(),
       ))
     }

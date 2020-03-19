@@ -1,4 +1,5 @@
 use crate::ast::*;
+use crate::errors::*;
 use crate::tokens::Token;
 
 macro_rules! current_token_is {
@@ -57,7 +58,7 @@ impl<'a> Parser<'a> {
     };
   }
 
-  pub fn parse_module(&mut self) -> (ModuleNode, Vec<ParseError>) {
+  pub fn parse_module(&mut self) -> (ModuleNode, Vec<UseNode>, Vec<ParseError>) {
     let mut imports = Vec::new();
     let mut body = Vec::new();
 
@@ -69,7 +70,7 @@ impl<'a> Parser<'a> {
       }
 
       match self.parse_use_statement() {
-        Some(use_stmt) => imports.push(use_stmt),
+        Some(use_node) => imports.push(use_node),
         _ => break,
       }
     }
@@ -89,11 +90,10 @@ impl<'a> Parser<'a> {
     let module_node = ModuleNode {
       id: self.next_id(),
       pos: (start, end),
-      imports,
       body,
     };
 
-    (module_node, self.errors.clone())
+    (module_node, imports, self.errors.clone())
   }
 
   fn advance(&mut self) {
@@ -117,7 +117,10 @@ impl<'a> Parser<'a> {
   fn current_token_position(&self) -> (usize, usize) {
     match self.current_token() {
       Some(token) => token.get_location(),
-      _ => (0, 0),
+      _ => match self.tokens.last() {
+        Some(token) => token.get_location(),
+        _ => (0, 0),
+      },
     }
   }
 
@@ -526,12 +529,7 @@ impl<'a> Parser<'a> {
         pos,
         ..
       }) => (params, body, pos.1),
-      _ => {
-        return self.error(ParseError {
-          pos: self.current_token_position(),
-          kind: ParseErrorKind::MissingDefinitionBody,
-        })
-      }
+      _ => return None,
     };
 
     self.exit_def_body();
@@ -801,6 +799,8 @@ impl<'a> Parser<'a> {
       self.advance();
     });
 
+    self.skip_line_breaks();
+
     let mut variants = Vec::new();
 
     expect_token_and_do!(self, Token::Pipe, {});
@@ -817,6 +817,8 @@ impl<'a> Parser<'a> {
           })
         }
       };
+
+      self.skip_line_breaks();
     }
 
     if variants.is_empty() {
@@ -1043,7 +1045,12 @@ impl<'a> Parser<'a> {
 
     let (end, value) = match self.parse_expression() {
       Some(node) => (node.pos.1, node),
-      _ => todo!(),
+      _ => {
+        return self.error(ParseError {
+          pos: self.current_token_position(),
+          kind: ParseErrorKind::MissingRightHandSideOfAssignment,
+        })
+      }
     };
 
     Some(LetNode {

@@ -1,112 +1,78 @@
-use crate::dependency_graph::{DependencyGraph, TopologicalSort};
-use crate::errors::PackageCompilationError;
-use crate::fs;
+use crate::diagnostics::Diagnostic;
 use crate::module::Module;
 use std::collections::HashMap;
+use std::path::PathBuf;
+use std::result;
 
-pub struct CompilerConfig {
-  // Absolute path to the package root directory
-  pub root_dir: String,
-  // Entry module name (e.g. "main")
-  pub entry_module_name: String,
-}
+pub type Result<T> = result::Result<T, Vec<Diagnostic>>;
 
 #[derive(Debug)]
 pub struct Compiler {
-  pub root_dir: String,
+  pub root_dir: PathBuf,
   pub entry_module_name: String,
   pub modules: HashMap<String, Module>,
-  dependency_graph: DependencyGraph,
+  diagnostics: Vec<Diagnostic>,
 }
 
 impl Compiler {
-  pub fn new(config: CompilerConfig) -> Compiler {
-    let dependency_graph = DependencyGraph::new(config.entry_module_name.to_string());
+  pub fn from_dir(path: PathBuf) -> Result<Self> {
+    if !path.is_dir() {
+      todo!();
+    }
 
-    Compiler {
-      root_dir: config.root_dir,
-      entry_module_name: config.entry_module_name,
+    let entry_module_path = path.join("main.pa");
+    if !entry_module_path.is_file() {
+      todo!();
+    }
+
+    Ok(Compiler {
+      root_dir: path.canonicalize().unwrap(),
+      entry_module_name: "main".to_owned(),
       modules: HashMap::new(),
-      dependency_graph,
-    }
+      diagnostics: Vec::new(),
+    })
   }
 
-  pub fn run(&mut self) -> Result<(), PackageCompilationError> {
-    self.modules.clear();
+  pub fn run(&mut self) -> Result<()> {
+    self.parse_module(
+      self.entry_module_name.clone(),
+      self.to_module_path(self.entry_module_name.clone()),
+    );
 
-    let entry_module_name = &self.entry_module_name.to_string();
-    self.parse_module(entry_module_name.to_string())?;
-    self.check_for_module_errors()?;
-
-    let sorted_modules = match self.dependency_graph.sort() {
-      TopologicalSort::Cycle(cycle) => {
-        return Err(PackageCompilationError::CyclicalDependency(
-          cycle.to_owned(),
-        ));
-      }
-      TopologicalSort::Sorted(sorted_modules) => sorted_modules.clone(),
-    };
-
-    for module_name in sorted_modules {
-      self.analyze_module(module_name.to_string())?;
-    }
-
-    self.check_for_module_errors()?;
-
-    Ok(())
-  }
-
-  pub fn parse_module(&mut self, module_name: String) -> Result<(), PackageCompilationError> {
-    if self.modules.contains_key(&module_name) {
+    if self.diagnostics.is_empty() {
       return Ok(());
     }
 
-    let module_path = fs::to_absolute_path(&self.root_dir, &module_name);
-    let get_module_name = || module_name.clone();
-
-    let mut module = Module::new(get_module_name(), module_path);
-    module.read_and_parse();
-
-    let referenced = module.get_referenced_paths();
-    self.modules.insert(get_module_name(), module);
-
-    match referenced {
-      Some(imported_module_names) => {
-        for imported_module_name in imported_module_names {
-          self
-            .dependency_graph
-            .add_edge(imported_module_name.to_owned(), get_module_name());
-
-          self.parse_module(imported_module_name)?;
-        }
-      }
-      None => {}
-    }
-
-    Ok(())
+    Err(self.diagnostics.to_vec())
   }
 
-  pub fn analyze_module(&mut self, _module_name: String) -> Result<(), PackageCompilationError> {
-    // let module = self.modules.get_mut(&module_name).unwrap();
-    // module.analyze();
-    Ok(())
+  fn parse_module(&mut self, module_name: String, module_path: PathBuf) {
+    if self.modules.contains_key(&module_name) {
+      return;
+    };
+
+    let mut new_module = Module::new(module_name.clone(), module_path);
+    let result = new_module.parse();
+    let imported_module_names = new_module.get_referenced_module_names();
+    self.modules.insert(module_name, new_module);
+
+    if !result.is_ok() {
+      self.diagnostics.append(&mut result.unwrap_err());
+      return;
+    }
+
+    // println!("{:#?}", new_module);
+    // println!("compiled: {:#?}", module_name);
+
+    for imported_module_name in imported_module_names {
+      self.parse_module(
+        imported_module_name.clone(),
+        self.to_module_path(imported_module_name),
+      )
+    }
   }
 
-  fn check_for_module_errors(&self) -> Result<(), PackageCompilationError> {
-    let mut modules_with_errors = Vec::new();
-
-    for (module_path, module) in &self.modules {
-      if module.has_errors() {
-        modules_with_errors.push(module_path.clone());
-      }
-    }
-
-    if !modules_with_errors.is_empty() {
-      return Err(PackageCompilationError::ModulesFailedToCompile(
-        modules_with_errors,
-      ));
-    }
-
-    Ok(())
+  fn to_module_path(&self, module_name: String) -> PathBuf {
+    self.root_dir.join(module_name).with_extension("pa")
   }
 }

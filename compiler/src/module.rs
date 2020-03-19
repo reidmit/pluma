@@ -1,22 +1,23 @@
-use crate::ast::ModuleNode;
-use crate::errors::ModuleCompilationError;
-use crate::fs;
+use crate::ast::{ModuleNode, UseNode};
+use crate::diagnostics::Diagnostic;
 use crate::parser::Parser;
 use crate::tokenizer::{CommentMap, TokenList, Tokenizer};
+use std::fs;
+use std::path::PathBuf;
 
 #[derive(Debug)]
 pub struct Module {
   pub module_name: String,
-  pub module_path: String,
+  pub module_path: PathBuf,
   pub bytes: Option<Vec<u8>>,
   tokens: Option<TokenList>,
   comments: Option<CommentMap>,
   ast: Option<ModuleNode>,
-  pub errors: Vec<ModuleCompilationError>,
+  imports: Option<Vec<UseNode>>,
 }
 
 impl Module {
-  pub fn new(module_name: String, module_path: String) -> Module {
+  pub fn new(module_name: String, module_path: PathBuf) -> Module {
     Module {
       module_name,
       module_path,
@@ -24,21 +25,96 @@ impl Module {
       tokens: None,
       comments: None,
       ast: None,
-      errors: Vec::new(),
+      imports: None,
     }
   }
 
-  pub fn read_and_parse(&mut self) {
-    if let Err(err) = self.read() {
-      self.errors.push(err);
+  pub fn parse(&mut self) -> Result<(), Vec<Diagnostic>> {
+    let mut diagnostics = Vec::new();
+
+    if !self.read(&mut diagnostics) {
+      return Err(diagnostics);
+    }
+
+    self.tokenize(&mut diagnostics);
+    self.build_ast(&mut diagnostics);
+
+    if diagnostics.is_empty() {
+      return Ok(());
+    }
+
+    return Err(diagnostics);
+  }
+
+  pub fn did_parse(&self) -> bool {
+    self.ast.is_some()
+  }
+
+  pub fn get_referenced_module_names(&self) -> Vec<String> {
+    let mut names = Vec::new();
+
+    if self.imports.is_none() {
+      return names;
+    }
+
+    for import_node in self.imports.as_ref().unwrap() {
+      names.push(import_node.module_name.clone())
+    }
+
+    names
+  }
+
+  fn read(&mut self, diagnostics: &mut Vec<Diagnostic>) -> bool {
+    match fs::read(&self.module_path) {
+      Ok(bytes) => {
+        self.bytes = Some(bytes);
+        true
+      }
+      Err(err) => {
+        diagnostics.push(
+          Diagnostic::error(format!("{}", err))
+            .with_module(self.module_name.clone(), self.module_path.to_path_buf()),
+        );
+
+        false
+      }
+    }
+  }
+
+  fn tokenize(&mut self, diagnostics: &mut Vec<Diagnostic>) {
+    let bytes = self.bytes.as_ref().unwrap();
+    let (tokens, comments, errors) = Tokenizer::from_source(&bytes).collect_tokens();
+
+    for err in errors {
+      let pos = err.pos();
+
+      diagnostics.push(
+        Diagnostic::error(format!("{}", err))
+          .with_pos(pos)
+          .with_module(self.module_name.clone(), self.module_path.to_path_buf()),
+      );
+    }
+
+    self.tokens = Some(tokens);
+    self.comments = Some(comments);
+  }
+
+  fn build_ast(&mut self, diagnostics: &mut Vec<Diagnostic>) {
+    let (ast, imports, errors) =
+      Parser::new(self.bytes.as_ref().unwrap(), self.tokens.as_ref().unwrap()).parse_module();
+
+    if errors.is_empty() {
+      self.ast = Some(ast);
+      self.imports = Some(imports);
       return;
     }
 
-    self.tokenize();
-
-    if let Err(err) = self.parse() {
-      self.errors.push(err);
-      return;
+    for err in errors {
+      diagnostics.push(
+        Diagnostic::error(format!("{}", err))
+          .with_pos(err.pos)
+          .with_module(self.module_name.clone(), self.module_path.to_path_buf()),
+      );
     }
   }
 
@@ -48,64 +124,7 @@ impl Module {
   //   }
   // }
 
-  pub fn has_errors(&self) -> bool {
-    self.errors.len() > 0
-  }
-
-  pub fn get_referenced_paths(&self) -> Option<Vec<String>> {
-    match &self.ast {
-      Some(_) => {
-        let paths = Vec::new();
-
-        // if let ModuleNode { imports, .. } = ast {
-        //   for import in imports {
-        //     if let Node::Import { module_name, .. } = import {
-        //       paths.push(module_name.clone());
-        //     }
-        //   }
-        // }
-
-        Some(paths)
-      }
-      None => None,
-    }
-  }
-
-  fn read(&mut self) -> Result<(), ModuleCompilationError> {
-    match fs::read_file_contents(&self.module_path) {
-      Ok(bytes) => Ok(self.bytes = Some(bytes)),
-      Err(err) => Err(ModuleCompilationError::FileError(err)),
-    }
-  }
-
-  fn tokenize(&mut self) {
-    let bytes = self.bytes.as_ref().unwrap();
-    let (tokens, comments, errors) = Tokenizer::from_source(&bytes).collect_tokens();
-
-    if !errors.is_empty() {
-      self.errors.append(
-        &mut errors
-          .into_iter()
-          .map(ModuleCompilationError::TokenizeError)
-          .collect(),
-      )
-    }
-
-    self.tokens = Some(tokens);
-    self.comments = Some(comments);
-  }
-
-  fn parse(&mut self) -> Result<(), ModuleCompilationError> {
-    match (&self.bytes, &self.tokens) {
-      (Some(source), Some(tokens)) => {
-        let result = Parser::new(source, tokens).parse_module();
-        println!("{:#?}", result);
-        Ok(())
-        // (Some(source), Some(tokens)) => match Parser::new(source, tokens).parse_module() {
-        //   Ok(ast) => Ok(self.ast = Some(ast)),
-        //   Err(err) => Err(ModuleCompilationError::ParseError(err)),
-      }
-      _ => unreachable!(),
-    }
-  }
+  // pub fn has_errors(&self) -> bool {
+  //   self.errors.len() > 0
+  // }
 }

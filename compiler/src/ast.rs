@@ -1,6 +1,4 @@
-pub type StartOffset = usize;
-pub type EndOffset = usize;
-pub type Position = (StartOffset, EndOffset);
+pub type Position = (usize, usize);
 pub type NodeId = usize;
 pub type SignaturePart = (Box<IdentNode>, Vec<TypeNode>);
 pub type Signature = Vec<SignaturePart>;
@@ -9,7 +7,6 @@ pub type Signature = Vec<SignaturePart>;
 pub struct ModuleNode {
   pub id: NodeId,
   pub pos: Position,
-  pub imports: Vec<UseNode>,
   pub body: Vec<TopLevelStatementNode>,
 }
 
@@ -257,32 +254,4 @@ pub enum TypeKind {
   Block(Vec<TypeNode>, Box<TypeNode>),
   // e.g. (String, Bool)
   Tuple(Vec<TypeNode>),
-}
-
-#[derive(Debug, Copy, Clone)]
-pub struct ParseError {
-  pub pos: Position,
-  pub kind: ParseErrorKind,
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum ParseErrorKind {
-  UnexpectedDictValueInArray,
-  UnexpectedEOF,
-  UnexpectedToken,
-  UnclosedParentheses,
-  MissingIdentifier,
-  MissingIndexBetweenBrackets,
-  MissingDefinitionBody,
-  MissingDictValue,
-  MissingEnumValues,
-  MissingExpressionAfterDot,
-  MissingExpressionAfterOperator,
-  MissingExpressionAfterReturn,
-  MissingMatchCases,
-  MissingQualifierAfterAs,
-  MissingReturnType,
-  MissingStructFields,
-  MissingType,
-  ReturnOutsideDefinitionBody,
 }
