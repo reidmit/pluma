@@ -1,27 +1,4 @@
 use std::fmt;
-use std::path::PathBuf;
-
-#[derive(Debug)]
-pub struct CompilerError {
-  kind: CompilerErrorKind,
-}
-
-#[derive(Debug)]
-pub enum CompilerErrorKind {
-  InitializationError(InitializationError),
-  CompilationError(ParseError),
-}
-
-#[derive(Debug)]
-pub struct InitializationError {
-  kind: InitializationErrorKind,
-}
-
-#[derive(Debug)]
-pub enum InitializationErrorKind {
-  InvalidRootDirectory(PathBuf),
-  MissingEntryFileInRootDirectory(PathBuf),
-}
 
 #[derive(Debug, Copy, Clone)]
 pub struct ParseError {
