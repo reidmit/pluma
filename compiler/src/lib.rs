@@ -9,7 +9,6 @@ pub const VERSION: &str = "0.1.0";
 
 pub mod compiler;
 pub mod diagnostics;
-pub mod error_formatter;
 pub mod errors;
 pub mod parser;
 pub mod tokenizer;
