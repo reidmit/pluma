@@ -1,5 +1,7 @@
+use uuid::Uuid;
+
 pub type Position = (usize, usize);
-pub type NodeId = usize;
+pub type NodeId = Uuid;
 pub type SignaturePart = (Box<IdentNode>, Vec<TypeNode>);
 pub type Signature = Vec<SignaturePart>;
 

@@ -1,6 +1,7 @@
 use crate::ast::*;
 use crate::errors::*;
 use crate::tokens::Token;
+use uuid::Uuid;
 
 macro_rules! current_token_is {
   ($self:ident, $tokType:path) => {
@@ -42,7 +43,6 @@ pub struct Parser<'a> {
   tokens: &'a Vec<Token>,
   index: usize,
   errors: Vec<ParseError>,
-  next_node_id: usize,
   def_body_stack: i8,
 }
 
@@ -53,7 +53,6 @@ impl<'a> Parser<'a> {
       tokens,
       index: 0,
       errors: Vec::new(),
-      next_node_id: 0,
       def_body_stack: 0,
     };
   }
@@ -124,10 +123,8 @@ impl<'a> Parser<'a> {
     }
   }
 
-  fn next_id(&mut self) -> usize {
-    let id = self.next_node_id;
-    self.next_node_id += 1;
-    id
+  fn next_id(&mut self) -> Uuid {
+    Uuid::new_v4()
   }
 
   fn enter_def_body(&mut self) {
