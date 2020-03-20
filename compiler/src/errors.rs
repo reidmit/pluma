@@ -41,35 +41,10 @@ pub enum ParseErrorKind {
   MissingStructFields,
   MissingType,
   ReturnOutsideDefinitionBody,
-}
-
-#[derive(Debug)]
-pub enum TokenizeError {
-  InvalidDecimalDigit(usize, usize),
-  InvalidBinaryDigit(usize, usize),
-  InvalidHexDigit(usize, usize),
-  InvalidOctalDigit(usize, usize),
-  UnclosedString(usize, usize),
-  UnclosedInterpolation(usize, usize),
-}
-
-impl TokenizeError {
-  pub fn pos(&self) -> (usize, usize) {
-    match self {
-      TokenizeError::InvalidDecimalDigit(start, end) => (*start, *end),
-      TokenizeError::InvalidBinaryDigit(start, end) => (*start, *end),
-      TokenizeError::InvalidHexDigit(start, end) => (*start, *end),
-      TokenizeError::InvalidOctalDigit(start, end) => (*start, *end),
-      TokenizeError::UnclosedString(start, end) => (*start, *end),
-      TokenizeError::UnclosedInterpolation(start, end) => (*start, *end),
-    }
-  }
-}
-
-impl fmt::Display for TokenizeError {
-  fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-    match self {
-      _ => fmt::Debug::fmt(self, f),
-    }
-  }
+  InvalidDecimalDigit,
+  InvalidBinaryDigit,
+  InvalidHexDigit,
+  InvalidOctalDigit,
+  UnclosedString,
+  UnclosedInterpolation,
 }

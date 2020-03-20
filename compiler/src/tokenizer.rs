@@ -1,4 +1,4 @@
-use crate::errors::{TokenizeError, TokenizeError::*};
+use crate::errors::{ParseError, ParseErrorKind::*};
 use crate::tokens::{Token, Token::*};
 use std::collections::HashMap;
 
@@ -21,7 +21,7 @@ impl<'a> Tokenizer<'a> {
     };
   }
 
-  pub fn collect_tokens(&mut self) -> (TokenList, CommentMap, Vec<TokenizeError>) {
+  pub fn collect_tokens(&mut self) -> (TokenList, CommentMap, Vec<ParseError>) {
     let source = self.source;
     let length = self.source_length;
 
@@ -263,7 +263,11 @@ impl<'a> Tokenizer<'a> {
                       index += 1;
                     }
 
-                    errors.push(InvalidBinaryDigit(error_start, index));
+                    errors.push(ParseError {
+                      pos: (error_start, index),
+                      kind: InvalidBinaryDigit,
+                    });
+
                     continue 'main_loop;
                   }
 
@@ -285,7 +289,11 @@ impl<'a> Tokenizer<'a> {
                       index += 1;
                     }
 
-                    errors.push(InvalidHexDigit(error_start, index));
+                    errors.push(ParseError {
+                      pos: (error_start, index),
+                      kind: InvalidHexDigit,
+                    });
+
                     continue 'main_loop;
                   }
 
@@ -307,7 +315,11 @@ impl<'a> Tokenizer<'a> {
                       index += 1;
                     }
 
-                    errors.push(InvalidOctalDigit(error_start, index));
+                    errors.push(ParseError {
+                      pos: (error_start, index),
+                      kind: InvalidOctalDigit,
+                    });
+
                     continue 'main_loop;
                   }
 
@@ -330,7 +342,11 @@ impl<'a> Tokenizer<'a> {
                 index += 1;
               }
 
-              errors.push(InvalidDecimalDigit(error_start, index));
+              errors.push(ParseError {
+                pos: (error_start, index),
+                kind: InvalidDecimalDigit,
+              });
+
               continue 'main_loop;
             }
 
@@ -350,12 +366,20 @@ impl<'a> Tokenizer<'a> {
 
     if !interpolation_stack.is_empty() {
       let start_index = interpolation_stack.pop().unwrap();
-      errors.push(UnclosedInterpolation(start_index, index));
+
+      errors.push(ParseError {
+        pos: (start_index, index),
+        kind: UnclosedInterpolation,
+      });
     }
 
     if !string_stack.is_empty() {
       let start_index = string_stack.pop().unwrap();
-      errors.push(UnclosedString(start_index, index));
+
+      errors.push(ParseError {
+        pos: (start_index, index),
+        kind: UnclosedString,
+      });
     }
 
     (tokens, comments, errors)

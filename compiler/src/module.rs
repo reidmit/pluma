@@ -86,11 +86,9 @@ impl Module {
     let (tokens, comments, errors) = Tokenizer::from_source(&bytes).collect_tokens();
 
     for err in errors {
-      let pos = err.pos();
-
       diagnostics.push(
         Diagnostic::error(format!("{}", err))
-          .with_pos(pos)
+          .with_pos(err.pos)
           .with_module(self.module_name.clone(), self.module_path.to_path_buf()),
       );
     }
@@ -117,14 +115,4 @@ impl Module {
       );
     }
   }
-
-  // pub fn analyze(&mut self) {
-  //   if let Err(err) = analyze_ast(&mut self.ast) {
-  //     self.errors.push(ModuleCompilationError::AnalysisError(err));
-  //   }
-  // }
-
-  // pub fn has_errors(&self) -> bool {
-  //   self.errors.len() > 0
-  // }
 }
