@@ -193,10 +193,6 @@ impl<'a> Parser<'a> {
       });
     }
 
-    expect_token_and_do!(self, Token::Equals, {
-      self.advance();
-    });
-
     let type_expr = match self.parse_type_expression() {
       Some(expr) => expr,
       _ => {
@@ -517,8 +513,6 @@ impl<'a> Parser<'a> {
       None
     };
 
-    expect_token_and_do!(self, Token::Equals, { self.advance() });
-
     self.skip_line_breaks();
 
     self.enter_def_body();
@@ -795,10 +789,6 @@ impl<'a> Parser<'a> {
       });
     }
 
-    expect_token_and_do!(self, Token::Equals, {
-      self.advance();
-    });
-
     self.skip_line_breaks();
 
     let mut variants = Vec::new();
@@ -882,10 +872,6 @@ impl<'a> Parser<'a> {
         self.advance();
       });
     }
-
-    expect_token_and_do!(self, Token::Equals, {
-      self.advance();
-    });
 
     let mut fields = Vec::new();
 

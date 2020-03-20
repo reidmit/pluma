@@ -14,7 +14,7 @@ impl fmt::Display for ParseError {
       ParseErrorKind::MissingRightHandSideOfAssignment => {
         write!(f, "Missing expression after '=' in 'let' statement.")
       }
-      _ => fmt::Debug::fmt(self, f),
+      _ => fmt::Debug::fmt(&self.kind, f),
     }
   }
 }

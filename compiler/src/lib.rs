@@ -16,6 +16,5 @@ pub mod tokenizer;
 
 mod ast;
 mod dependency_graph;
-mod macros;
 mod module;
 mod tokens;
