@@ -123,7 +123,10 @@ fn print_diagnostics(compiler: &Compiler, diagnostics: Vec<Diagnostic>) {
           }
         }
 
-        let frame = String::from_utf8(bytes[frame_start..frame_end].to_vec()).unwrap();
+        let frame = String::from_utf8(bytes[frame_start..frame_end].to_vec())
+          .unwrap()
+          .replace("\n", " ");
+
         let mut line = 1;
 
         frame_start = start;
