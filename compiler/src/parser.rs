@@ -19,13 +19,13 @@ macro_rules! expect_token_and_do {
       Some(&tok) => {
         return $self.error(ParseError {
           pos: tok.get_location(),
-          kind: ParseErrorKind::UnexpectedToken,
+          kind: ParseErrorKind::UnexpectedToken($tokType(0, 0)),
         })
       }
       None => {
         return $self.error(ParseError {
           pos: ($self.source.len(), $self.source.len()),
-          kind: ParseErrorKind::UnexpectedEOF,
+          kind: ParseErrorKind::UnexpectedEOF($tokType(0, 0)),
         })
       }
     }
@@ -166,7 +166,7 @@ impl<'a> Parser<'a> {
       _ => {
         return self.error(ParseError {
           pos: self.current_token_position(),
-          kind: ParseErrorKind::UnexpectedToken,
+          kind: ParseErrorKind::MissingTypeNameInTypeDefinition,
         })
       }
     };
@@ -193,10 +193,9 @@ impl<'a> Parser<'a> {
     let type_expr = match self.parse_type_expression() {
       Some(expr) => expr,
       _ => {
-        return self.error(ParseError {
-          pos: self.current_token_position(),
-          kind: ParseErrorKind::UnexpectedToken,
-        })
+        // Assume that the failure to parse the type expression
+        // has already generated an error.
+        return None;
       }
     };
 
@@ -362,12 +361,14 @@ impl<'a> Parser<'a> {
       })
     });
 
+    self.skip_line_breaks();
+
     let (end, next_term) = match self.parse_operator_branch() {
       Some(term) => (term.pos.1, Box::new(term)),
       _ => {
         return self.error(ParseError {
           pos: self.current_token_position(),
-          kind: ParseErrorKind::MissingExpressionAfterDot,
+          kind: ParseErrorKind::MissingExpressionAfterOperator,
         })
       }
     };
@@ -487,10 +488,9 @@ impl<'a> Parser<'a> {
     let kind = match self.parse_definition_kind() {
       Some(kind_node) => kind_node,
       _ => {
-        return self.error(ParseError {
-          pos: self.current_token_position(),
-          kind: ParseErrorKind::UnexpectedToken,
-        })
+        // Just return without adding a new error. Assumes that the
+        // failure to parse the kind has already generated an error.
+        return None;
       }
     };
 
@@ -762,7 +762,7 @@ impl<'a> Parser<'a> {
       _ => {
         return self.error(ParseError {
           pos: self.current_token_position(),
-          kind: ParseErrorKind::UnexpectedToken,
+          kind: ParseErrorKind::MissingTypeNameInTypeDefinition,
         })
       }
     };
@@ -798,10 +798,9 @@ impl<'a> Parser<'a> {
       match self.parse_type_expression() {
         Some(expr) => variants.push(expr),
         _ => {
-          return self.error(ParseError {
-            pos: self.current_token_position(),
-            kind: ParseErrorKind::UnexpectedToken,
-          })
+          // Assume that the failure to parse the type expression has
+          // already generated an error.
+          return None;
         }
       };
 
@@ -846,7 +845,7 @@ impl<'a> Parser<'a> {
       _ => {
         return self.error(ParseError {
           pos: self.current_token_position(),
-          kind: ParseErrorKind::UnexpectedToken,
+          kind: ParseErrorKind::MissingTypeNameInTypeDefinition,
         })
       }
     };
@@ -891,10 +890,9 @@ impl<'a> Parser<'a> {
       match self.parse_type_expression() {
         Some(expr) => fields.push((ident, expr)),
         _ => {
-          return self.error(ParseError {
-            pos: self.current_token_position(),
-            kind: ParseErrorKind::UnexpectedToken,
-          })
+          // Assume that the failure to parse the type expression has
+          // already generated an error
+          return None;
         }
       };
 

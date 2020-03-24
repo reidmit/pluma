@@ -1,3 +1,4 @@
+use crate::tokens::Token;
 use std::fmt;
 
 #[derive(Debug, Copy, Clone)]
@@ -8,7 +9,6 @@ pub struct ParseError {
 
 #[derive(Debug, Copy, Clone)]
 pub enum ParseErrorKind {
-  FailedToReadFile,
   InvalidBinaryDigit,
   InvalidDecimalDigit,
   InvalidHexDigit,
@@ -27,13 +27,14 @@ pub enum ParseErrorKind {
   MissingRightHandSideOfAssignment,
   MissingStructFields,
   MissingType,
+  MissingTypeNameInTypeDefinition,
   ReturnOutsideDefinitionBody,
   UnclosedInterpolation,
   UnclosedParentheses,
   UnclosedString,
   UnexpectedDictValueInArray,
-  UnexpectedEOF,
-  UnexpectedToken,
+  UnexpectedEOF(Token),
+  UnexpectedToken(Token),
 }
 
 impl fmt::Display for ParseError {
@@ -41,14 +42,20 @@ impl fmt::Display for ParseError {
     use ParseErrorKind::*;
 
     match self.kind {
-      UnexpectedEOF => write!(f, "Unexpected end of file."),
-      UnclosedString => write!(f, "Unterminated string. Expected another '\"'."),
-      UnexpectedToken => write!(f, "Unexpected token."),
+      InvalidBinaryDigit => write!(f, "Invalid binary digit."),
+      InvalidDecimalDigit => write!(f, "Invalid digit."),
+      InvalidHexDigit => write!(f, "Invalid hexadecimal digit."),
+      InvalidOctalDigit => write!(f, "Invalid octal digit."),
       MissingDefinitionBody => write!(f, "Missing definition body."),
       MissingRightHandSideOfAssignment => {
         write!(f, "Missing expression after '=' in 'let' statement.")
       }
-      _ => write!(f, "{:?}", self.kind),
+      UnclosedInterpolation => write!(f, "Unterminated string interpolation. Expected a ')'."),
+      UnclosedParentheses => write!(f, "Unclosed parentheses. Expected a ')'."),
+      UnclosedString => write!(f, "Unterminated string. Expected a '\"'."),
+      UnexpectedEOF(expected) => write!(f, "Unexpected end of file. Expected {}.", expected),
+      UnexpectedToken(expected) => write!(f, "Unexpected token. Expected {}.", expected),
+      _ => write!(f, "{:#?}", self.kind),
     }
   }
 }
