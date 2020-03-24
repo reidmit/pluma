@@ -50,18 +50,18 @@ impl Module {
     self.ast.is_some()
   }
 
-  pub fn get_referenced_module_names(&self) -> Vec<String> {
-    let mut names = Vec::new();
+  pub fn get_imports(&self) -> Vec<UseNode> {
+    let mut imports = Vec::new();
 
     if self.imports.is_none() {
-      return names;
+      return imports;
     }
 
     for import_node in self.imports.as_ref().unwrap() {
-      names.push(import_node.module_name.clone())
+      imports.push(import_node.clone())
     }
 
-    names
+    imports
   }
 
   fn read(&mut self, diagnostics: &mut Vec<Diagnostic>) -> bool {
@@ -70,9 +70,10 @@ impl Module {
         self.bytes = Some(bytes);
         true
       }
+
       Err(err) => {
         diagnostics.push(
-          Diagnostic::error(format!("{}", err))
+          Diagnostic::error(err)
             .with_module(self.module_name.clone(), self.module_path.to_path_buf()),
         );
 
@@ -87,7 +88,7 @@ impl Module {
 
     for err in errors {
       diagnostics.push(
-        Diagnostic::error(format!("{}", err))
+        Diagnostic::error(err)
           .with_pos(err.pos)
           .with_module(self.module_name.clone(), self.module_path.to_path_buf()),
       );
@@ -109,7 +110,7 @@ impl Module {
 
     for err in errors {
       diagnostics.push(
-        Diagnostic::error(format!("{}", err))
+        Diagnostic::error(err)
           .with_pos(err.pos)
           .with_module(self.module_name.clone(), self.module_path.to_path_buf()),
       );

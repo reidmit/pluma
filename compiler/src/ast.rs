@@ -27,7 +27,7 @@ pub enum TopLevelStatementKind {
   Expr(ExprNode),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UseNode {
   pub id: NodeId,
   pub pos: Position,
@@ -187,7 +187,7 @@ pub struct ReturnNode {
   pub value: ExprNode,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IdentNode {
   pub id: NodeId,
   pub pos: Position,

@@ -377,7 +377,7 @@ impl<'a> Tokenizer<'a> {
       let start_index = string_stack.pop().unwrap();
 
       errors.push(ParseError {
-        pos: (start_index, index),
+        pos: (start_index, start_index + 1),
         kind: UnclosedString,
       });
     }

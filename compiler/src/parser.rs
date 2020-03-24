@@ -1248,8 +1248,6 @@ impl<'a> Parser<'a> {
       let (start, end) = self.current_token_position();
       self.advance();
 
-      println!("ret: {:#?}", self.def_body_stack);
-
       if !self.in_def_body() {
         self.error::<ReturnNode>(ParseError {
           pos: (start, end),

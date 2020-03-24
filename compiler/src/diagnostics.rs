@@ -1,3 +1,4 @@
+use std::fmt;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
@@ -15,10 +16,10 @@ pub enum DiagnosticKind {
 }
 
 impl Diagnostic {
-  pub fn error(message: String) -> Diagnostic {
+  pub fn error<E: fmt::Display>(err: E) -> Diagnostic {
     Diagnostic {
       kind: DiagnosticKind::Error,
-      message,
+      message: format!("{}", err),
       pos: None,
       module_name: None,
       module_path: None,
