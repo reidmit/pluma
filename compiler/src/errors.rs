@@ -41,6 +41,7 @@ impl fmt::Display for ParseError {
     use ParseErrorKind::*;
 
     match self.kind {
+      UnexpectedEOF => write!(f, "Unexpected end of file."),
       UnclosedString => write!(f, "Unterminated string. Expected another '\"'."),
       UnexpectedToken => write!(f, "Unexpected token."),
       MissingDefinitionBody => write!(f, "Missing definition body."),
