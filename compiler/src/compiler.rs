@@ -59,6 +59,8 @@ impl Compiler {
       TopologicalSort::Sorted(names) => names,
     };
 
+    println!("sorted: {:#?}", sorted_names);
+
     Ok(())
   }
 

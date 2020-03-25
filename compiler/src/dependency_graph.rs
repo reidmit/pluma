@@ -56,7 +56,7 @@ impl DependencyGraph {
   }
 
   fn do_sort(&mut self) {
-    let mut sorted = Vec::new();
+    let mut sorted = Vec::with_capacity(self.vertices.len());
 
     let mut in_degrees = HashMap::with_capacity(self.edges.len());
     for vertex in &self.vertices {
@@ -99,6 +99,7 @@ impl DependencyGraph {
     let result = if visited_count != self.edges.len() {
       TopologicalSort::Cycle(self.find_cycle_from_entry())
     } else {
+      sorted.reverse();
       TopologicalSort::Sorted(sorted)
     };
 
