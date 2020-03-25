@@ -28,21 +28,16 @@ impl Diagnostic {
 
   pub fn with_pos(self, pos: (usize, usize)) -> Diagnostic {
     Diagnostic {
-      kind: self.kind,
-      message: self.message,
       pos: Some(pos),
-      module_name: self.module_name,
-      module_path: self.module_path,
+      ..self
     }
   }
 
   pub fn with_module(self, module_name: String, module_path: PathBuf) -> Diagnostic {
     Diagnostic {
-      kind: self.kind,
-      message: self.message,
-      pos: self.pos,
       module_name: Some(module_name),
       module_path: Some(module_path),
+      ..self
     }
   }
 }
