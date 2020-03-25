@@ -1,4 +1,4 @@
-use crate::errors::{ParseError, ParseErrorKind::*};
+use crate::parse_error::{ParseError, ParseErrorKind::*};
 use crate::tokens::{Token, Token::*};
 use std::collections::HashMap;
 

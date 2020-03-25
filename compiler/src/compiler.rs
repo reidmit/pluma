@@ -1,6 +1,6 @@
 use crate::dependency_graph::{DependencyGraph, TopologicalSort};
 use crate::diagnostics::Diagnostic;
-use crate::errors::{ImportError, ImportErrorKind};
+use crate::import_error::{ImportError, ImportErrorKind};
 use crate::module::Module;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

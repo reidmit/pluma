@@ -1,5 +1,5 @@
 use crate::ast::*;
-use crate::errors::*;
+use crate::parse_error::*;
 use crate::tokens::Token;
 use uuid::Uuid;
 
