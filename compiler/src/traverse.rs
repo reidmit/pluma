@@ -13,19 +13,23 @@ impl Traverse for ExprNode {
   fn traverse<V: Visitor>(&self, visitor: &mut V) {
     visitor.enter_expr(self);
 
-    self.kind.traverse(visitor);
-
-    visitor.leave_expr(self);
-  }
-}
-
-impl Traverse for ExprKind {
-  fn traverse<V: Visitor>(&self, visitor: &mut V) {
-    match &self {
-      ExprKind::Literal(node) => node.traverse(visitor),
-      ExprKind::Identifier(node) => node.traverse(visitor),
+    match &self.kind {
+      ExprKind::Literal(literal) => literal.traverse(visitor),
+      ExprKind::Identifier(ident) => ident.traverse(visitor),
+      ExprKind::Interpolation(parts) => {
+        for part in parts {
+          part.traverse(visitor);
+        }
+      }
+      ExprKind::Tuple(entries) => {
+        for entry in entries {
+          entry.traverse(visitor);
+        }
+      }
       _ => todo!(),
     }
+
+    visitor.leave_expr(self);
   }
 }
 

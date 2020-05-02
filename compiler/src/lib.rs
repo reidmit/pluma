@@ -21,4 +21,5 @@ mod module;
 mod parse_error;
 mod tokens;
 mod traverse;
+mod types;
 mod visitor;

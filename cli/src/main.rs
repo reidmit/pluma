@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use pluma_compiler::compiler::Compiler;
-use pluma_compiler::diagnostics::{Diagnostic, DiagnosticKind};
+use pluma_compiler::diagnostics::Diagnostic;
 use pluma_compiler::VERSION;
 use std::fmt;
 use std::path::PathBuf;
@@ -77,12 +77,17 @@ fn print_diagnostics(compiler: &Compiler, diagnostics: Vec<Diagnostic>) {
       eprintln!("")
     }
 
-    let label = match diagnostic.kind {
-      DiagnosticKind::Error => colors::bold_red("Error:"),
-      DiagnosticKind::Warning => colors::bold_yellow("Warning:"),
-    };
+    let is_error = diagnostic.is_error();
 
-    eprintln!("{} {}", label, diagnostic.message);
+    eprintln!(
+      "{} {}",
+      if is_error {
+        colors::bold_red("Error:")
+      } else {
+        colors::bold_yellow("Warning:")
+      },
+      diagnostic.message
+    );
 
     if diagnostic.module_path.is_none() {
       continue;
@@ -145,7 +150,11 @@ fn print_diagnostics(compiler: &Compiler, diagnostics: Vec<Diagnostic>) {
 
         eprintln!(
           "\n{} {} {}",
-          colors::bold_red(">"),
+          if is_error {
+            colors::bold_red(">")
+          } else {
+            colors::bold_yellow(">")
+          },
           colors::bold_dim(format!("{}|", line).as_str()),
           frame
         );
@@ -156,7 +165,11 @@ fn print_diagnostics(compiler: &Compiler, diagnostics: Vec<Diagnostic>) {
         eprintln!(
           "{}{}",
           " ".repeat(prefix_width + col_index),
-          colors::bold_red(&up_arrows)
+          if is_error {
+            colors::bold_red(&up_arrows)
+          } else {
+            colors::bold_yellow(&up_arrows)
+          }
         );
 
         eprintln!(

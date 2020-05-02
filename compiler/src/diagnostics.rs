@@ -51,4 +51,11 @@ impl Diagnostic {
       ..self
     }
   }
+
+  pub fn is_error(&self) -> bool {
+    match &self.kind {
+      DiagnosticKind::Error => true,
+      _ => false,
+    }
+  }
 }

@@ -1,6 +1,7 @@
 use crate::analysis_error::{AnalysisError, AnalysisErrorKind};
 use crate::ast::*;
 use crate::diagnostics::Diagnostic;
+use crate::types::Type;
 use crate::visitor::Visitor;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -35,7 +36,7 @@ impl Analyzer {
     }
   }
 
-  fn add_node_type(&mut self, node_id: Uuid, node_type: String) {
+  fn add_node_type(&mut self, node_id: Uuid, node_type: Type) {
     let current_scope = self.scopes.last_mut().unwrap();
 
     current_scope.add_node_type(node_id, node_type);
@@ -53,7 +54,7 @@ impl Analyzer {
     current_scope.add_reference(name);
   }
 
-  fn get_binding_type(&mut self, node: &IdentifierNode) -> Result<String, AnalysisError> {
+  fn get_binding_type(&mut self, node: &IdentifierNode) -> Result<Type, AnalysisError> {
     let current_scope = self.scopes.last().expect("should always have a scope");
 
     match current_scope.bindings.get(&node.name) {
@@ -73,12 +74,51 @@ impl Analyzer {
     }
   }
 
-  fn get_node_type(&self, node_id: &Uuid) -> Result<String, AnalysisError> {
+  fn get_node_type(&self, node_id: &Uuid) -> Result<Type, AnalysisError> {
     let current_scope = self.scopes.last().unwrap();
 
     match current_scope.node_types.get(node_id) {
       Some(node_type) => Ok(node_type.clone()),
       None => unreachable!("no type for node {}", node_id),
+    }
+  }
+
+  fn get_expr_type(&mut self, node: &ExprNode) -> Result<Type, AnalysisError> {
+    match &node.kind {
+      ExprKind::Identifier(ident) => self.get_binding_type(&ident),
+
+      ExprKind::Literal(lit) => self.get_node_type(&lit.id),
+
+      ExprKind::Interpolation(parts) => {
+        for part in parts {
+          if let Ok(part_type) = self.get_expr_type(&part) {
+            if !part_type.is_core_string() {
+              self.error(AnalysisError {
+                pos: part.pos,
+                kind: AnalysisErrorKind::TypeMismatch {
+                  expected: Type::CoreString,
+                  actual: part_type.clone(),
+                },
+              });
+            }
+          }
+        }
+
+        Ok(Type::CoreString)
+      }
+
+      ExprKind::Tuple(entries) => {
+        let mut entry_types = vec![];
+
+        for entry in entries {
+          let entry_type = self.get_expr_type(&entry)?;
+          entry_types.push(entry_type)
+        }
+
+        Ok(Type::Tuple(entry_types))
+      }
+
+      other => todo!("support more kinds! ({:#?})", other),
     }
   }
 
@@ -113,14 +153,7 @@ impl Visitor for Analyzer {
   }
 
   fn leave_expr(&mut self, node: &ExprNode) {
-    let type_lookup = match &node.kind {
-      ExprKind::Identifier(ident) => self.get_binding_type(&ident),
-      ExprKind::Literal(lit) => self.get_node_type(&lit.id),
-      other => todo!("support more kinds! ({:#?})", other),
-    }
-    .map(|t| t.to_string());
-
-    match type_lookup {
+    match self.get_expr_type(node) {
       Ok(typ) => self.add_node_type(node.id, typ),
       Err(err) => self.error(err),
     }
@@ -133,9 +166,16 @@ impl Visitor for Analyzer {
   }
 
   fn enter_literal(&mut self, node: &LiteralNode) {
-    if let LiteralKind::IntDecimal(val) = node.kind {
-      self.add_node_type(node.id, "Int".to_owned());
-    }
+    let node_type = match &node.kind {
+      LiteralKind::IntDecimal(_)
+      | LiteralKind::IntBinary(_)
+      | LiteralKind::IntHex(_)
+      | LiteralKind::IntOctal(_) => Type::CoreInt,
+      LiteralKind::FloatDecimal(_) => Type::CoreFloat,
+      LiteralKind::Str(_) => Type::CoreString,
+    };
+
+    self.add_node_type(node.id, node_type);
   }
 }
 
@@ -150,7 +190,7 @@ struct Binding {
 #[derive(Debug)]
 struct Scope {
   bindings: HashMap<String, Binding>,
-  node_types: HashMap<Uuid, String>,
+  node_types: HashMap<Uuid, Type>,
 }
 
 impl Scope {
@@ -173,7 +213,7 @@ impl Scope {
     );
   }
 
-  fn add_node_type(&mut self, node_id: Uuid, node_type: String) {
+  fn add_node_type(&mut self, node_id: Uuid, node_type: Type) {
     self.node_types.insert(node_id, node_type);
   }
 
