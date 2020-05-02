@@ -157,7 +157,7 @@ impl<'a> Parser<'a> {
 
         self.advance();
 
-        Box::new(IdentNode {
+        Box::new(IdentifierNode {
           id: self.next_id(),
           pos: (start, end),
           name: name_str,
@@ -275,7 +275,7 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_binary_number(&mut self) -> Option<LitNode> {
+  fn parse_binary_number(&mut self) -> Option<LiteralNode> {
     let (start, end, value) = expect_token_and_do!(self, Token::BinaryDigits, {
       let (start, end) = self.current_token_position();
       (start, end, self.parse_numeric_literal(start, end, 2))
@@ -283,9 +283,9 @@ impl<'a> Parser<'a> {
 
     self.advance();
 
-    Some(LitNode {
+    Some(LiteralNode {
       id: self.next_id(),
-      kind: LitKind::IntBinary(value),
+      kind: LiteralKind::IntBinary(value),
       pos: (start, end),
     })
   }
@@ -443,7 +443,7 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_decimal_number(&mut self) -> Option<LitNode> {
+  fn parse_decimal_number(&mut self) -> Option<LiteralNode> {
     let (start, end) = expect_token_and_do!(self, Token::DecimalDigits, {
       let pos = self.current_token_position();
       self.advance();
@@ -461,9 +461,9 @@ impl<'a> Parser<'a> {
         let str_value = read_string!(self, start, end);
         let float_value = str_value.parse::<f64>().unwrap();
 
-        return Some(LitNode {
+        return Some(LiteralNode {
           id: self.next_id(),
-          kind: LitKind::FloatDecimal(float_value),
+          kind: LiteralKind::FloatDecimal(float_value),
           pos: (start, end),
         });
       });
@@ -471,9 +471,9 @@ impl<'a> Parser<'a> {
 
     let value = self.parse_numeric_literal(start, end, 10);
 
-    Some(LitNode {
+    Some(LiteralNode {
       id: self.next_id(),
-      kind: LitKind::IntDecimal(value),
+      kind: LiteralKind::IntDecimal(value),
       pos: (start, end),
     })
   }
@@ -753,7 +753,7 @@ impl<'a> Parser<'a> {
 
         self.advance();
 
-        Box::new(IdentNode {
+        Box::new(IdentifierNode {
           id: self.next_id(),
           pos: (start, end),
           name: name_str,
@@ -836,7 +836,7 @@ impl<'a> Parser<'a> {
 
         self.advance();
 
-        Box::new(IdentNode {
+        Box::new(IdentifierNode {
           id: self.next_id(),
           pos: (start, end),
           name: name_str,
@@ -949,7 +949,7 @@ impl<'a> Parser<'a> {
     expr
   }
 
-  fn parse_hex_number(&mut self) -> Option<LitNode> {
+  fn parse_hex_number(&mut self) -> Option<LiteralNode> {
     let (start, end, value) = expect_token_and_do!(self, Token::HexDigits, {
       let (start, end) = self.current_token_position();
       (start, end, self.parse_numeric_literal(start, end, 16))
@@ -957,14 +957,14 @@ impl<'a> Parser<'a> {
 
     self.advance();
 
-    Some(LitNode {
+    Some(LiteralNode {
       id: self.next_id(),
-      kind: LitKind::IntHex(value),
+      kind: LiteralKind::IntHex(value),
       pos: (start, end),
     })
   }
 
-  fn parse_identifier(&mut self) -> Option<IdentNode> {
+  fn parse_identifier(&mut self) -> Option<IdentifierNode> {
     let (start, end) = expect_token_and_do!(self, Token::IdentifierLower, {
       let (start, end) = self.current_token_position();
       self.advance();
@@ -973,7 +973,7 @@ impl<'a> Parser<'a> {
 
     let name = read_string!(self, start, end);
 
-    Some(IdentNode {
+    Some(IdentifierNode {
       id: self.next_id(),
       pos: (start, end),
       name,
@@ -1128,7 +1128,7 @@ impl<'a> Parser<'a> {
     result
   }
 
-  fn parse_octal_number(&mut self) -> Option<LitNode> {
+  fn parse_octal_number(&mut self) -> Option<LiteralNode> {
     let (start, end, value) = expect_token_and_do!(self, Token::OctalDigits, {
       let (start, end) = self.current_token_position();
       (start, end, self.parse_numeric_literal(start, end, 8))
@@ -1136,9 +1136,9 @@ impl<'a> Parser<'a> {
 
     self.advance();
 
-    Some(LitNode {
+    Some(LiteralNode {
       id: self.next_id(),
-      kind: LitKind::IntOctal(value),
+      kind: LiteralKind::IntOctal(value),
       pos: (start, end),
     })
   }
@@ -1306,10 +1306,10 @@ impl<'a> Parser<'a> {
 
     let value = read_string!(self, start, end);
 
-    let lit_node = LitNode {
+    let lit_node = LiteralNode {
       id: self.next_id(),
       pos: (start, end),
-      kind: LitKind::Str(value),
+      kind: LiteralKind::Str(value),
     };
 
     let expr_node = ExprNode {
@@ -1344,10 +1344,10 @@ impl<'a> Parser<'a> {
           parts.push(ExprNode {
             id: self.next_id(),
             pos: (start, end),
-            kind: ExprKind::Literal(LitNode {
+            kind: ExprKind::Literal(LiteralNode {
               id: self.next_id(),
               pos: (start, end),
-              kind: LitKind::Str(value),
+              kind: LiteralKind::Str(value),
             }),
           });
 
@@ -1548,7 +1548,7 @@ impl<'a> Parser<'a> {
       pos
     });
 
-    let ident = IdentNode {
+    let ident = IdentifierNode {
       id: self.next_id(),
       pos: (start, end),
       name: read_string!(self, start, end),

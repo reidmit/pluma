@@ -1,3 +1,4 @@
+use crate::analyzer::Analyzer;
 use crate::dependency_graph::{DependencyGraph, TopologicalSort};
 use crate::diagnostics::Diagnostic;
 use crate::import_error::{ImportError, ImportErrorKind};
@@ -59,7 +60,24 @@ impl Compiler {
       TopologicalSort::Sorted(names) => names,
     };
 
-    println!("sorted: {:#?}", sorted_names);
+    // println!("{:#?}", self.modules);
+
+    for module_name in sorted_names {
+      let module_to_analyze = self.modules.get(module_name).unwrap();
+      let mut analyzer = Analyzer::new();
+      module_to_analyze.traverse(&mut analyzer);
+
+      for diagnostic in analyzer.diagnostics {
+        self.diagnostics.push(diagnostic.with_module(
+          module_name.clone(),
+          self.to_module_path(self.entry_module_name.clone()),
+        ))
+      }
+    }
+
+    if !self.diagnostics.is_empty() {
+      return Err(self.diagnostics.to_vec());
+    }
 
     Ok(())
   }

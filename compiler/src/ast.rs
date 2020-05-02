@@ -2,47 +2,8 @@ use uuid::Uuid;
 
 pub type Position = (usize, usize);
 pub type NodeId = Uuid;
-pub type SignaturePart = (Box<IdentNode>, Vec<TypeNode>);
+pub type SignaturePart = (Box<IdentifierNode>, Vec<TypeNode>);
 pub type Signature = Vec<SignaturePart>;
-
-#[derive(Debug)]
-pub struct ModuleNode {
-  pub id: NodeId,
-  pub pos: Position,
-  pub body: Vec<TopLevelStatementNode>,
-}
-
-#[derive(Debug)]
-pub struct TopLevelStatementNode {
-  pub id: NodeId,
-  pub pos: Position,
-  pub kind: TopLevelStatementKind,
-}
-
-#[derive(Debug)]
-pub enum TopLevelStatementKind {
-  Let(LetNode),
-  TypeDef(TypeDefNode),
-  Def(DefNode),
-  Expr(ExprNode),
-}
-
-#[derive(Debug, Clone)]
-pub struct UseNode {
-  pub id: NodeId,
-  pub pos: Position,
-  pub module_name: String,
-  pub qualifier: Box<IdentNode>,
-}
-
-#[derive(Debug)]
-pub struct TypeDefNode {
-  pub id: NodeId,
-  pub pos: Position,
-  pub kind: TypeDefKind,
-  pub name: Box<IdentNode>,
-  pub generics: Vec<IdentNode>,
-}
 
 #[derive(Debug)]
 pub struct DefNode {
@@ -50,29 +11,8 @@ pub struct DefNode {
   pub pos: Position,
   pub kind: DefKind,
   pub return_type: Option<TypeNode>,
-  pub params: Vec<IdentNode>,
+  pub params: Vec<IdentifierNode>,
   pub body: Vec<StatementNode>,
-}
-
-#[derive(Debug)]
-pub enum TypeDefKind {
-  // alias StringList = List(String)
-  Alias {
-    of: TypeNode,
-  },
-  // enum Color = | Red | Green | Blue
-  Enum {
-    variants: Vec<TypeNode>,
-  },
-  // struct Person = (name :: String, age :: Int)
-  Struct {
-    fields: Vec<(IdentNode, TypeNode)>,
-  },
-  // trait Named = .name :: String .getName() -> String
-  Trait {
-    fields: Vec<(IdentNode, TypeNode)>,
-    methods: Vec<Signature>,
-  },
 }
 
 #[derive(Debug)]
@@ -105,35 +45,6 @@ pub enum DefKind {
 }
 
 #[derive(Debug)]
-pub struct OperatorNode {
-  pub id: NodeId,
-  pub pos: Position,
-  pub name: String,
-}
-
-#[derive(Debug)]
-pub struct StatementNode {
-  pub id: NodeId,
-  pub pos: Position,
-  pub kind: StatementKind,
-}
-
-#[derive(Debug)]
-pub enum StatementKind {
-  Let(LetNode),
-  Expr(ExprNode),
-  Return(ReturnNode),
-}
-
-#[derive(Debug)]
-pub struct LetNode {
-  pub id: NodeId,
-  pub pos: Position,
-  pub pattern: PatternNode,
-  pub value: ExprNode,
-}
-
-#[derive(Debug)]
 pub struct ExprNode {
   pub id: NodeId,
   pub pos: Position,
@@ -144,7 +55,7 @@ pub struct ExprNode {
 pub enum ExprKind {
   Array(Vec<ExprNode>),
   Assignment {
-    left: Box<IdentNode>,
+    left: Box<IdentifierNode>,
     right: Box<ExprNode>,
   },
   BinaryOperation {
@@ -153,7 +64,7 @@ pub enum ExprKind {
     right: Box<ExprNode>,
   },
   Block {
-    params: Vec<IdentNode>,
+    params: Vec<IdentifierNode>,
     body: Vec<StatementNode>,
   },
   Call {
@@ -167,10 +78,10 @@ pub enum ExprKind {
   Dict(Vec<(ExprNode, ExprNode)>),
   EmptyTuple,
   Grouping(Box<ExprNode>),
-  Identifier(IdentNode),
+  Identifier(IdentifierNode),
   Index(Box<ExprNode>, Box<ExprNode>),
   Interpolation(Vec<ExprNode>),
-  Literal(LitNode),
+  Literal(LiteralNode),
   Match(MatchNode),
   Tuple(Vec<ExprNode>),
   UnaryOperation {
@@ -180,47 +91,36 @@ pub enum ExprKind {
   Underscore,
 }
 
-#[derive(Debug)]
-pub struct ReturnNode {
-  pub id: NodeId,
-  pub pos: Position,
-  pub value: ExprNode,
-}
-
 #[derive(Debug, Clone)]
-pub struct IdentNode {
+pub struct IdentifierNode {
   pub id: NodeId,
   pub pos: Position,
   pub name: String,
 }
 
 #[derive(Debug)]
-pub struct LitNode {
+pub struct LetNode {
   pub id: NodeId,
   pub pos: Position,
-  pub kind: LitKind,
+  pub pattern: PatternNode,
+  pub value: ExprNode,
 }
 
 #[derive(Debug)]
-pub enum LitKind {
+pub struct LiteralNode {
+  pub id: NodeId,
+  pub pos: Position,
+  pub kind: LiteralKind,
+}
+
+#[derive(Debug)]
+pub enum LiteralKind {
   FloatDecimal(f64),
   IntDecimal(i128),
   IntOctal(i128),
   IntHex(i128),
   IntBinary(i128),
   Str(String),
-}
-
-#[derive(Debug)]
-pub struct PatternNode {
-  pub id: NodeId,
-  pub pos: Position,
-  pub kind: PatternKind,
-}
-
-#[derive(Debug)]
-pub enum PatternKind {
-  Ident(IdentNode),
 }
 
 #[derive(Debug)]
@@ -240,6 +140,68 @@ pub struct MatchCaseNode {
 }
 
 #[derive(Debug)]
+pub struct ModuleNode {
+  pub id: NodeId,
+  pub pos: Position,
+  pub body: Vec<TopLevelStatementNode>,
+}
+
+#[derive(Debug)]
+pub struct OperatorNode {
+  pub id: NodeId,
+  pub pos: Position,
+  pub name: String,
+}
+
+#[derive(Debug)]
+pub struct PatternNode {
+  pub id: NodeId,
+  pub pos: Position,
+  pub kind: PatternKind,
+}
+
+#[derive(Debug)]
+pub enum PatternKind {
+  Ident(IdentifierNode),
+}
+
+#[derive(Debug)]
+pub struct ReturnNode {
+  pub id: NodeId,
+  pub pos: Position,
+  pub value: ExprNode,
+}
+
+#[derive(Debug)]
+pub struct StatementNode {
+  pub id: NodeId,
+  pub pos: Position,
+  pub kind: StatementKind,
+}
+
+#[derive(Debug)]
+pub enum StatementKind {
+  Let(LetNode),
+  Expr(ExprNode),
+  Return(ReturnNode),
+}
+
+#[derive(Debug)]
+pub struct TopLevelStatementNode {
+  pub id: NodeId,
+  pub pos: Position,
+  pub kind: TopLevelStatementKind,
+}
+
+#[derive(Debug)]
+pub enum TopLevelStatementKind {
+  Let(LetNode),
+  TypeDef(TypeDefNode),
+  Def(DefNode),
+  Expr(ExprNode),
+}
+
+#[derive(Debug)]
 pub struct TypeNode {
   pub id: NodeId,
   pub pos: Position,
@@ -249,11 +211,49 @@ pub struct TypeNode {
 #[derive(Debug)]
 pub enum TypeKind {
   // e.g. String
-  Ident(IdentNode),
+  Ident(IdentifierNode),
   // e.g. List(String),
-  Generic(IdentNode, Vec<TypeNode>),
+  Generic(IdentifierNode, Vec<TypeNode>),
   // e.g. { String -> Bool }
   Block(Vec<TypeNode>, Box<TypeNode>),
   // e.g. (String, Bool)
   Tuple(Vec<TypeNode>),
+}
+
+#[derive(Debug)]
+pub struct TypeDefNode {
+  pub id: NodeId,
+  pub pos: Position,
+  pub kind: TypeDefKind,
+  pub name: Box<IdentifierNode>,
+  pub generics: Vec<IdentifierNode>,
+}
+
+#[derive(Debug)]
+pub enum TypeDefKind {
+  // alias StringList = List(String)
+  Alias {
+    of: TypeNode,
+  },
+  // enum Color = | Red | Green | Blue
+  Enum {
+    variants: Vec<TypeNode>,
+  },
+  // struct Person = (name :: String, age :: Int)
+  Struct {
+    fields: Vec<(IdentifierNode, TypeNode)>,
+  },
+  // trait Named = .name :: String .getName() -> String
+  Trait {
+    fields: Vec<(IdentifierNode, TypeNode)>,
+    methods: Vec<Signature>,
+  },
+}
+
+#[derive(Debug, Clone)]
+pub struct UseNode {
+  pub id: NodeId,
+  pub pos: Position,
+  pub module_name: String,
+  pub qualifier: Box<IdentifierNode>,
 }

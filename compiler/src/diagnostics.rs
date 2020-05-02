@@ -13,6 +13,7 @@ pub struct Diagnostic {
 #[derive(Debug, Clone)]
 pub enum DiagnosticKind {
   Error,
+  Warning,
 }
 
 impl Diagnostic {
@@ -20,6 +21,16 @@ impl Diagnostic {
     Diagnostic {
       kind: DiagnosticKind::Error,
       message: format!("{}", err),
+      pos: None,
+      module_name: None,
+      module_path: None,
+    }
+  }
+
+  pub fn warning<W: fmt::Display>(warning: W) -> Diagnostic {
+    Diagnostic {
+      kind: DiagnosticKind::Warning,
+      message: format!("{}", warning),
       pos: None,
       module_name: None,
       module_path: None,

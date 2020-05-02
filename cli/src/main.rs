@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use pluma_compiler::compiler::Compiler;
-use pluma_compiler::diagnostics::Diagnostic;
+use pluma_compiler::diagnostics::{Diagnostic, DiagnosticKind};
 use pluma_compiler::VERSION;
 use std::fmt;
 use std::path::PathBuf;
@@ -77,7 +77,12 @@ fn print_diagnostics(compiler: &Compiler, diagnostics: Vec<Diagnostic>) {
       eprintln!("")
     }
 
-    eprintln!("{} {}", colors::bold_red("Error:"), diagnostic.message);
+    let label = match diagnostic.kind {
+      DiagnosticKind::Error => colors::bold_red("Error:"),
+      DiagnosticKind::Warning => colors::bold_yellow("Warning:"),
+    };
+
+    eprintln!("{} {}", label, diagnostic.message);
 
     if diagnostic.module_path.is_none() {
       continue;

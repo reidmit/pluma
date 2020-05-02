@@ -7,14 +7,18 @@ pub const DEFAULT_ENTRY_MODULE_NAME: &str = "main";
 pub const FILE_EXTENSION: &str = "pa";
 pub const VERSION: &str = "0.1.0";
 
+pub mod analyzer;
 pub mod compiler;
 pub mod diagnostics;
-pub mod import_error;
-pub mod parse_error;
 pub mod parser;
 pub mod tokenizer;
 
+mod analysis_error;
 mod ast;
 mod dependency_graph;
+mod import_error;
 mod module;
+mod parse_error;
 mod tokens;
+mod traverse;
+mod visitor;

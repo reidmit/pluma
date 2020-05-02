@@ -2,6 +2,8 @@ use crate::ast::{ModuleNode, UseNode};
 use crate::diagnostics::Diagnostic;
 use crate::parser::Parser;
 use crate::tokenizer::{CommentMap, TokenList, Tokenizer};
+use crate::traverse::Traverse;
+use crate::visitor::Visitor;
 use std::fs;
 use std::path::PathBuf;
 
@@ -62,6 +64,12 @@ impl Module {
     }
 
     imports
+  }
+
+  pub fn traverse<V: Visitor>(&self, visitor: &mut V) {
+    if let Some(ast) = &self.ast {
+      ast.traverse(visitor)
+    }
   }
 
   fn read(&mut self, diagnostics: &mut Vec<Diagnostic>) -> bool {
