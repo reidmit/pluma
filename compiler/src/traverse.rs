@@ -14,6 +14,15 @@ impl Traverse for ExprNode {
     visitor.enter_expr(self);
 
     match &self.kind {
+      ExprKind::Block { params, body } => {
+        for param in params {
+          param.traverse(visitor);
+        }
+
+        for stmt in body {
+          stmt.traverse(visitor);
+        }
+      }
       ExprKind::Literal(literal) => literal.traverse(visitor),
       ExprKind::Identifier(ident) => ident.traverse(visitor),
       ExprKind::Interpolation(parts) => {
@@ -26,7 +35,7 @@ impl Traverse for ExprNode {
           entry.traverse(visitor);
         }
       }
-      _ => todo!(),
+      other_kind => todo!("traverse {:#?}", other_kind),
     }
 
     visitor.leave_expr(self);
@@ -98,7 +107,19 @@ impl Traverse for ReturnNode {
   }
 }
 
-impl Traverse for StatementNode {}
+impl Traverse for StatementNode {
+  fn traverse<V: Visitor>(&self, visitor: &mut V) {
+    visitor.enter_statement(self);
+
+    match &self.kind {
+      StatementKind::Let(node) => node.traverse(visitor),
+      StatementKind::Expr(node) => node.traverse(visitor),
+      StatementKind::Return(node) => node.traverse(visitor),
+    };
+
+    visitor.leave_statement(self);
+  }
+}
 
 impl Traverse for TopLevelStatementNode {
   fn traverse<V: Visitor>(&self, visitor: &mut V) {

@@ -9,6 +9,7 @@ use uuid::Uuid;
 pub struct Analyzer {
   pub diagnostics: Vec<Diagnostic>,
   scopes: Vec<Scope>,
+  node_types: HashMap<Uuid, Type>,
 }
 
 impl Analyzer {
@@ -16,6 +17,7 @@ impl Analyzer {
     Analyzer {
       diagnostics: Vec::new(),
       scopes: Vec::new(),
+      node_types: HashMap::new(),
     }
   }
 
@@ -37,9 +39,7 @@ impl Analyzer {
   }
 
   fn add_node_type(&mut self, node_id: Uuid, node_type: Type) {
-    let current_scope = self.scopes.last_mut().unwrap();
-
-    current_scope.add_node_type(node_id, node_type);
+    self.node_types.insert(node_id, node_type);
   }
 
   fn add_binding(&mut self, name: String, pos: (usize, usize), node_id: Uuid) {
@@ -59,11 +59,7 @@ impl Analyzer {
 
     match current_scope.bindings.get(&node.name) {
       Some(binding) => {
-        let t = current_scope
-          .node_types
-          .get(&binding.node_id)
-          .unwrap()
-          .clone();
+        let t = self.node_types.get(&binding.node_id).unwrap().clone();
         self.add_reference(&node.name);
         Ok(t)
       }
@@ -75,16 +71,38 @@ impl Analyzer {
   }
 
   fn get_node_type(&self, node_id: &Uuid) -> Result<Type, AnalysisError> {
-    let current_scope = self.scopes.last().unwrap();
-
-    match current_scope.node_types.get(node_id) {
+    match self.node_types.get(node_id) {
       Some(node_type) => Ok(node_type.clone()),
-      None => unreachable!("no type for node {}", node_id),
+
+      None => unreachable!("no type for node {} (scopes: {:#?})", node_id, self.scopes),
     }
   }
 
   fn get_expr_type(&mut self, node: &ExprNode) -> Result<Type, AnalysisError> {
     match &node.kind {
+      ExprKind::Block { params, body } => {
+        self.push_scope();
+
+        let mut param_types = vec![];
+
+        for param in params {
+          param_types.push(Type::Unknown)
+        }
+
+        let mut return_type = Type::Nothing;
+
+        for stmt in body {
+          if let StatementKind::Expr(expr_stmt) = &stmt.kind {
+            let node_type = self.get_expr_type(&expr_stmt)?;
+            return_type = node_type;
+          }
+        }
+
+        self.pop_scope();
+
+        Ok(Type::Func(param_types, Box::new(return_type)))
+      }
+
       ExprKind::Identifier(ident) => self.get_binding_type(&ident),
 
       ExprKind::Literal(lit) => self.get_node_type(&lit.id),
@@ -177,6 +195,16 @@ impl Visitor for Analyzer {
 
     self.add_node_type(node.id, node_type);
   }
+
+  fn leave_statement(&mut self, node: &StatementNode) {
+    match &node.kind {
+      StatementKind::Expr(expr) => match self.get_expr_type(expr) {
+        Ok(typ) => self.add_node_type(node.id, typ),
+        Err(err) => self.error(err),
+      },
+      _ => {}
+    };
+  }
 }
 
 #[derive(Debug)]
@@ -190,14 +218,12 @@ struct Binding {
 #[derive(Debug)]
 struct Scope {
   bindings: HashMap<String, Binding>,
-  node_types: HashMap<Uuid, Type>,
 }
 
 impl Scope {
   fn new() -> Self {
     Scope {
       bindings: HashMap::new(),
-      node_types: HashMap::new(),
     }
   }
 
@@ -211,10 +237,6 @@ impl Scope {
         references: 0,
       },
     );
-  }
-
-  fn add_node_type(&mut self, node_id: Uuid, node_type: Type) {
-    self.node_types.insert(node_id, node_type);
   }
 
   fn add_reference(&mut self, name: &String) {

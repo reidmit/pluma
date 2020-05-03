@@ -11,7 +11,7 @@ pub struct DefNode {
   pub pos: Position,
   pub kind: DefKind,
   pub return_type: Option<TypeNode>,
-  pub params: Vec<IdentifierNode>,
+  pub params: Vec<PatternNode>,
   pub body: Vec<StatementNode>,
 }
 
@@ -64,7 +64,7 @@ pub enum ExprKind {
     right: Box<ExprNode>,
   },
   Block {
-    params: Vec<IdentifierNode>,
+    params: Vec<PatternNode>,
     body: Vec<StatementNode>,
   },
   Call {

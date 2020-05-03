@@ -302,20 +302,8 @@ impl<'a> Parser<'a> {
     let mut params = Vec::new();
     let mut body = Vec::new();
 
-    while current_token_is!(self, Token::IdentifierLower) {
-      if params.is_empty() {
-        // If no params yet, and the next token isn't a , or a =>, assume
-        // there are no params in this block and break out of the loop
-        match self.next_token() {
-          Some(&Token::Comma(..)) => {}
-          Some(&Token::DoubleArrow(..)) => {}
-          _ => break,
-        }
-      }
-
-      let param = self.parse_identifier().unwrap();
-
-      params.push(param);
+    while let Some(pattern) = self.parse_pattern() {
+      params.push(pattern);
 
       match self.current_token() {
         Some(&Token::Comma(..)) => self.advance(),
@@ -323,9 +311,34 @@ impl<'a> Parser<'a> {
           self.advance();
           break;
         }
-        _ => todo!(),
+        _ => break,
       }
     }
+
+    // while current_token_is!(self, Token::IdentifierLower) {
+    //   if params.is_empty() {
+    //     // If no params yet, and the next token isn't a , or a =>, assume
+    //     // there are no params in this block and break out of the loop
+    //     match self.next_token() {
+    //       Some(&Token::Comma(..)) => {}
+    //       Some(&Token::DoubleArrow(..)) => {}
+    //       _ => break,
+    //     }
+    //   }
+
+    //   let param = self.parse_identifier().unwrap();
+
+    //   params.push(param);
+
+    //   match self.current_token() {
+    //     Some(&Token::Comma(..)) => self.advance(),
+    //     Some(&Token::DoubleArrow(..)) => {
+    //       self.advance();
+    //       break;
+    //     }
+    //     _ => todo!(),
+    //   }
+    // }
 
     self.skip_line_breaks();
 

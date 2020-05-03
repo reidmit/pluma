@@ -7,7 +7,10 @@ pub enum Type {
   CoreInt,
   CoreFloat,
   Named(Uuid),
+  Func(Vec<Type>, Box<Type>),
   Tuple(Vec<Type>),
+  Unknown,
+  Nothing,
 }
 
 impl Type {
