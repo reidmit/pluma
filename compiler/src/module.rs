@@ -2,8 +2,8 @@ use crate::ast::{ModuleNode, UseNode};
 use crate::diagnostics::Diagnostic;
 use crate::parser::Parser;
 use crate::tokenizer::{CommentMap, TokenList, Tokenizer};
-use crate::traverse::Traverse;
-use crate::visitor::Visitor;
+use crate::traverse_mut::TraverseMut;
+use crate::visitor_mut::VisitorMut;
 use std::fs;
 use std::path::PathBuf;
 
@@ -66,8 +66,8 @@ impl Module {
     imports
   }
 
-  pub fn traverse<V: Visitor>(&self, visitor: &mut V) {
-    if let Some(ast) = &self.ast {
+  pub fn traverse<V: VisitorMut>(&mut self, visitor: &mut V) {
+    if let Some(ast) = &mut self.ast {
       ast.traverse(visitor)
     }
   }

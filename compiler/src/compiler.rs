@@ -63,8 +63,8 @@ impl Compiler {
     // println!("{:#?}", self.modules);
 
     for module_name in sorted_names {
-      let module_to_analyze = self.modules.get(module_name).unwrap();
       let mut analyzer = Analyzer::new();
+      let module_to_analyze = self.modules.get_mut(module_name).unwrap();
       module_to_analyze.traverse(&mut analyzer);
 
       for diagnostic in analyzer.diagnostics {
