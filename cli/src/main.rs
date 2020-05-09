@@ -123,10 +123,6 @@ fn print_diagnostics(compiler: &Compiler, diagnostics: Vec<Diagnostic>) {
         }
 
         while let Some(byte) = bytes.get(frame_end) {
-          if frame_end >= bytes.len() - 1 {
-            break;
-          }
-
           match byte {
             b'\n' => break,
             _ => frame_end += 1,
