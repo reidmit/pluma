@@ -1,4 +1,4 @@
-use crate::types::Type;
+use crate::types::ValueType;
 use std::fmt;
 
 #[derive(Debug)]
@@ -11,7 +11,15 @@ pub struct AnalysisError {
 pub enum AnalysisErrorKind {
   UndefinedVariable(String),
   UnusedVariable(String),
-  TypeMismatch { expected: Type, actual: Type },
+  NameAlreadyInScope(String),
+  ReassignmentTypeMismatch {
+    expected: ValueType,
+    actual: ValueType,
+  },
+  TypeMismatch {
+    expected: ValueType,
+    actual: ValueType,
+  },
 }
 
 impl fmt::Display for AnalysisError {
@@ -19,11 +27,17 @@ impl fmt::Display for AnalysisError {
     use AnalysisErrorKind::*;
 
     match &self.kind {
+      NameAlreadyInScope(name) => write!(f, "Name '{}' is already defined in this scope.", name),
       UndefinedVariable(name) => write!(f, "Name '{}' is not defined.", name),
       UnusedVariable(name) => write!(f, "Name '{}' is never used.", name),
       TypeMismatch { expected, actual } => write!(
         f,
         "Type mismatch. Expected type {}, but found type {}.",
+        expected, actual
+      ),
+      ReassignmentTypeMismatch { expected, actual } => write!(
+        f,
+        "Variable already has type {}, so cannot be assigned a new value of type {}.",
         expected, actual
       ),
     }

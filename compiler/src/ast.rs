@@ -1,8 +1,9 @@
+use crate::types::ValueType;
 use uuid::Uuid;
 
 pub type Position = (usize, usize);
 pub type NodeId = Uuid;
-pub type SignaturePart = (Box<IdentifierNode>, Vec<TypeNode>);
+pub type SignaturePart = (Box<IdentifierNode>, Vec<TypeExprNode>);
 pub type Signature = Vec<SignaturePart>;
 
 #[derive(Debug)]
@@ -10,7 +11,7 @@ pub struct DefNode {
   pub id: NodeId,
   pub pos: Position,
   pub kind: DefKind,
-  pub return_type: Option<TypeNode>,
+  pub return_type: Option<TypeExprNode>,
   pub params: Vec<PatternNode>,
   pub body: Vec<StatementNode>,
 }
@@ -23,24 +24,24 @@ pub enum DefKind {
   },
   // def (Receiver).hi() -> Ret { ... }
   Method {
-    receiver: Box<TypeNode>,
+    receiver: Box<TypeExprNode>,
     signature: Signature,
   },
   // def (Receiver)[Int] -> Ret { ... }
   Index {
-    receiver: Box<TypeNode>,
-    index: Box<TypeNode>,
+    receiver: Box<TypeExprNode>,
+    index: Box<TypeExprNode>,
   },
   // def (A) ++ (B) -> Ret { ... }
   BinaryOperator {
-    left: Box<TypeNode>,
+    left: Box<TypeExprNode>,
     op: Box<OperatorNode>,
-    right: Box<TypeNode>,
+    right: Box<TypeExprNode>,
   },
   // def ~(A) -> Ret { ... }
   UnaryOperator {
     op: Box<OperatorNode>,
-    right: Box<TypeNode>,
+    right: Box<TypeExprNode>,
   },
 }
 
@@ -49,6 +50,7 @@ pub struct ExprNode {
   pub id: NodeId,
   pub pos: Position,
   pub kind: ExprKind,
+  pub typ: Option<ValueType>,
 }
 
 #[derive(Debug)]
@@ -96,6 +98,7 @@ pub struct IdentifierNode {
   pub id: NodeId,
   pub pos: Position,
   pub name: String,
+  pub typ: Option<ValueType>,
 }
 
 #[derive(Debug)]
@@ -111,6 +114,7 @@ pub struct LiteralNode {
   pub id: NodeId,
   pub pos: Position,
   pub kind: LiteralKind,
+  pub typ: Option<ValueType>,
 }
 
 #[derive(Debug)]
@@ -202,22 +206,22 @@ pub enum TopLevelStatementKind {
 }
 
 #[derive(Debug)]
-pub struct TypeNode {
+pub struct TypeExprNode {
   pub id: NodeId,
   pub pos: Position,
-  pub kind: TypeKind,
+  pub kind: TypeExprKind,
 }
 
 #[derive(Debug)]
-pub enum TypeKind {
+pub enum TypeExprKind {
   // e.g. String
   Ident(IdentifierNode),
   // e.g. List(String),
-  Generic(IdentifierNode, Vec<TypeNode>),
+  Generic(IdentifierNode, Vec<TypeExprNode>),
   // e.g. { String -> Bool }
-  Block(Vec<TypeNode>, Box<TypeNode>),
+  Block(Vec<TypeExprNode>, Box<TypeExprNode>),
   // e.g. (String, Bool)
-  Tuple(Vec<TypeNode>),
+  Tuple(Vec<TypeExprNode>),
 }
 
 #[derive(Debug)]
@@ -233,19 +237,19 @@ pub struct TypeDefNode {
 pub enum TypeDefKind {
   // alias StringList = List(String)
   Alias {
-    of: TypeNode,
+    of: TypeExprNode,
   },
-  // enum Color = | Red | Green | Blue
+  // enum Color | Red | Green | Blue
   Enum {
-    variants: Vec<TypeNode>,
+    variants: Vec<TypeExprNode>,
   },
-  // struct Person = (name :: String, age :: Int)
+  // struct Person (name :: String, age :: Int)
   Struct {
-    fields: Vec<(IdentifierNode, TypeNode)>,
+    fields: Vec<(IdentifierNode, TypeExprNode)>,
   },
-  // trait Named = .name :: String .getName() -> String
+  // trait Named .name :: String .getName() -> String
   Trait {
-    fields: Vec<(IdentifierNode, TypeNode)>,
+    fields: Vec<(IdentifierNode, TypeExprNode)>,
     methods: Vec<Signature>,
   },
 }

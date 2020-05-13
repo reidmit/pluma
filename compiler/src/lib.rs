@@ -1,4 +1,5 @@
 #![allow(unused_variables)]
+#![allow(unused_imports)]
 #![allow(dead_code)]
 
 pub const LANG_NAME: &str = "pluma";
@@ -19,9 +20,11 @@ mod dependency_graph;
 mod import_error;
 mod module;
 mod parse_error;
+mod scope;
 mod tokens;
 mod traverse;
 mod traverse_mut;
+mod type_collector;
 mod types;
 mod visitor;
 mod visitor_mut;

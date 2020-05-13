@@ -1,59 +1,25 @@
 use crate::analysis_error::{AnalysisError, AnalysisErrorKind};
 use crate::ast::*;
 use crate::diagnostics::Diagnostic;
-use crate::types::Type;
+use crate::scope::{Binding, Scope};
+use crate::types::ValueType;
 use crate::visitor_mut::VisitorMut;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-pub struct Analyzer {
+pub struct Analyzer<'a> {
   pub diagnostics: Vec<Diagnostic>,
-  scopes: Vec<Scope>,
-  node_types: HashMap<Uuid, Type>,
+  scope: &'a mut Scope,
   pattern_depth: usize,
 }
 
-impl Analyzer {
-  pub fn new() -> Analyzer {
+impl<'a> Analyzer<'a> {
+  pub fn new(scope: &'a mut Scope) -> Analyzer<'a> {
     Analyzer {
+      scope,
       diagnostics: Vec::new(),
-      scopes: Vec::new(),
-      node_types: HashMap::new(),
       pattern_depth: 0,
     }
-  }
-
-  fn push_scope(&mut self) {
-    self.scopes.push(Scope::new());
-  }
-
-  fn pop_scope(&mut self) {
-    let popped_scope = self.scopes.pop().unwrap();
-
-    for (name, binding) in popped_scope.bindings.iter() {
-      if binding.references == 0 {
-        self.warning(AnalysisError {
-          pos: binding.pos,
-          kind: AnalysisErrorKind::UnusedVariable(name.to_string()),
-        })
-      }
-    }
-  }
-
-  fn add_node_type(&mut self, node_id: Uuid, node_type: Type) {
-    self.node_types.insert(node_id, node_type);
-  }
-
-  fn add_binding(&mut self, name: String, pos: (usize, usize), node_id: Uuid) {
-    let current_scope = self.scopes.last_mut().unwrap();
-
-    current_scope.add_binding(name, node_id, pos, false);
-  }
-
-  fn add_reference(&mut self, name: &String) {
-    let current_scope = self.scopes.last_mut().unwrap();
-
-    current_scope.add_reference(name);
   }
 
   fn error(&mut self, err: AnalysisError) {
@@ -69,348 +35,90 @@ impl Analyzer {
   }
 }
 
-impl VisitorMut for Analyzer {
+impl<'a> VisitorMut for Analyzer<'a> {
   fn enter_module(&mut self, node: &mut ModuleNode) {
-    self.push_scope();
+    // self.push_scope();
+
+    // for (name, typ) in &self.top_level_defs {
+    //   // self.add_binding(name.clone(), (0, 0), node_id: Uuid)
+    // }
   }
 
   fn leave_module(&mut self, node: &mut ModuleNode) {
-    self.pop_scope();
+    // self.pop_scope();
   }
 
   fn leave_let(&mut self, node: &mut LetNode) {
     println!("leaving let!");
-  }
 
-  fn enter_literal(&mut self, node: &mut LiteralNode) {
-    println!("entering literal: {:#?}", node);
+    match &mut node.pattern.kind {
+      PatternKind::Ident(ident_node) => {
+        let existing_binding = self.scope.get_let_binding(&ident_node.name);
 
-    if let LiteralKind::Str(str_node) = &mut node.kind {
-      *str_node = str_node.to_uppercase();
+        if existing_binding.is_some() {
+          self.error(AnalysisError {
+            pos: ident_node.pos,
+            kind: AnalysisErrorKind::NameAlreadyInScope(ident_node.name.clone()),
+          })
+        } else {
+          let value_type = node.value.typ.as_ref().expect("no type for let value");
+
+          self
+            .scope
+            .add_let_binding(ident_node.name.clone(), value_type.clone());
+
+          ident_node.typ = Some(value_type.clone());
+        }
+      }
     }
   }
 
   fn leave_literal(&mut self, node: &mut LiteralNode) {
-    println!("leaving literal: {:#?}", node);
-  }
-}
-
-#[derive(Debug)]
-struct Binding {
-  node_id: Uuid,
-  pos: (usize, usize),
-  mutable: bool,
-  references: usize,
-}
-
-#[derive(Debug)]
-struct Scope {
-  bindings: HashMap<String, Binding>,
-}
-
-impl Scope {
-  fn new() -> Self {
-    Scope {
-      bindings: HashMap::new(),
+    match &node.kind {
+      LiteralKind::IntDecimal { .. } => node.typ = Some(ValueType::CoreInt),
+      LiteralKind::IntBinary { .. } => node.typ = Some(ValueType::CoreInt),
+      LiteralKind::IntHex { .. } => node.typ = Some(ValueType::CoreInt),
+      LiteralKind::IntOctal { .. } => node.typ = Some(ValueType::CoreInt),
+      LiteralKind::FloatDecimal { .. } => node.typ = Some(ValueType::CoreFloat),
+      LiteralKind::Str { .. } => node.typ = Some(ValueType::CoreString),
     }
   }
 
-  fn add_binding(&mut self, name: String, node_id: Uuid, pos: (usize, usize), mutable: bool) {
-    self.bindings.insert(
-      name,
-      Binding {
-        node_id,
-        pos,
-        mutable,
-        references: 0,
-      },
-    );
+  fn leave_expr(&mut self, node: &mut ExprNode) {
+    match &node.kind {
+      ExprKind::Identifier(ident_node) => node.typ = ident_node.typ.clone(),
+      ExprKind::Literal(lit_node) => node.typ = lit_node.typ.clone(),
+
+      ExprKind::Assignment { left, right } => {
+        let existing_binding = self.scope.get_let_binding(&left.name);
+
+        if let Some(binding) = existing_binding {
+          let current_type = binding.clone();
+          let new_type = right.typ.as_ref().unwrap().clone();
+
+          if current_type != new_type {
+            self.error(AnalysisError {
+              pos: right.pos,
+              kind: AnalysisErrorKind::ReassignmentTypeMismatch {
+                expected: current_type,
+                actual: new_type,
+              },
+            })
+          }
+        }
+      }
+
+      _ => todo!("more expr kinds"),
+    }
   }
 
-  fn add_reference(&mut self, name: &String) {
-    self.bindings.get_mut(name).map(|b| b.references += 1);
+  fn enter_identifier(&mut self, node: &mut IdentifierNode) {
+    match self.scope.get_let_binding(&node.name) {
+      Some(typ) => node.typ = Some(typ.clone()),
+      None => self.error(AnalysisError {
+        pos: node.pos,
+        kind: AnalysisErrorKind::UndefinedVariable(node.name.clone()),
+      }),
+    };
   }
 }
-
-// use crate::analysis_error::{AnalysisError, AnalysisErrorKind};
-// use crate::ast::*;
-// use crate::diagnostics::Diagnostic;
-// use crate::types::Type;
-// use crate::visitor::Visitor;
-// use std::collections::HashMap;
-// use uuid::Uuid;
-
-// pub struct Analyzer {
-//   pub diagnostics: Vec<Diagnostic>,
-//   scopes: Vec<Scope>,
-//   node_types: HashMap<Uuid, Type>,
-//   pattern_depth: usize,
-// }
-
-// impl Analyzer {
-//   pub fn new() -> Analyzer {
-//     Analyzer {
-//       diagnostics: Vec::new(),
-//       scopes: Vec::new(),
-//       node_types: HashMap::new(),
-//       pattern_depth: 0,
-//     }
-//   }
-
-//   fn push_scope(&mut self) {
-//     self.scopes.push(Scope::new());
-//   }
-
-//   fn pop_scope(&mut self) {
-//     let popped_scope = self.scopes.pop().unwrap();
-
-//     for (name, binding) in popped_scope.bindings.iter() {
-//       if binding.references == 0 {
-//         self.warning(AnalysisError {
-//           pos: binding.pos,
-//           kind: AnalysisErrorKind::UnusedVariable(name.to_string()),
-//         })
-//       }
-//     }
-//   }
-
-//   fn add_node_type(&mut self, node_id: Uuid, node_type: Type) {
-//     self.node_types.insert(node_id, node_type);
-//   }
-
-//   fn add_binding(&mut self, name: String, pos: (usize, usize), node_id: Uuid) {
-//     let current_scope = self.scopes.last_mut().unwrap();
-
-//     current_scope.add_binding(name, node_id, pos, false);
-//   }
-
-//   fn add_reference(&mut self, name: &String) {
-//     let current_scope = self.scopes.last_mut().unwrap();
-
-//     current_scope.add_reference(name);
-//   }
-
-//   fn get_binding_type(&mut self, node: &IdentifierNode) -> Result<Type, AnalysisError> {
-//     let current_scope = self.scopes.last().expect("should always have a scope");
-
-//     match current_scope.bindings.get(&node.name) {
-//       Some(binding) => {
-//         println!("id: {:#?}", &binding.node_id);
-//         println!("nodetypes: {:#?}", self.node_types);
-//         println!("node: {:#?}", node);
-
-//         let t = self
-//           .node_types
-//           .get(&binding.node_id)
-//           .expect("no node type for id")
-//           .clone();
-
-//         self.add_reference(&node.name);
-
-//         Ok(t)
-//       }
-//       None => Err(AnalysisError {
-//         pos: node.pos,
-//         kind: AnalysisErrorKind::UndefinedVariable(node.name.clone()),
-//       }),
-//     }
-//   }
-
-//   fn get_node_type(&self, node_id: &Uuid) -> Result<Type, AnalysisError> {
-//     match self.node_types.get(node_id) {
-//       Some(node_type) => Ok(node_type.clone()),
-
-//       None => unreachable!("no type for node {} (scopes: {:#?})", node_id, self.scopes),
-//     }
-//   }
-
-//   fn get_expr_type(&mut self, node: &ExprNode) -> Result<Type, AnalysisError> {
-//     match &node.kind {
-//       ExprKind::Block { params, body } => {
-//         let mut param_types = vec![];
-
-//         for param in params {
-//           param_types.push(Type::Unknown)
-//         }
-
-//         let mut return_type = Type::Nothing;
-
-//         for stmt in body {
-//           if let StatementKind::Expr(expr_stmt) = &stmt.kind {
-//             let node_type = self.get_expr_type(&expr_stmt)?;
-//             return_type = node_type;
-//           }
-//         }
-
-//         self.pop_scope();
-
-//         Ok(Type::Func(param_types, Box::new(return_type)))
-//       }
-
-//       ExprKind::Identifier(ident) => self.get_binding_type(&ident),
-
-//       ExprKind::Literal(lit) => self.get_node_type(&lit.id),
-
-//       ExprKind::Interpolation(parts) => {
-//         for part in parts {
-//           if let Ok(part_type) = self.get_expr_type(&part) {
-//             if !part_type.is_core_string() {
-//               self.error(AnalysisError {
-//                 pos: part.pos,
-//                 kind: AnalysisErrorKind::TypeMismatch {
-//                   expected: Type::CoreString,
-//                   actual: part_type.clone(),
-//                 },
-//               });
-//             }
-//           }
-//         }
-
-//         Ok(Type::CoreString)
-//       }
-
-//       ExprKind::Tuple(entries) => {
-//         let mut entry_types = vec![];
-
-//         for entry in entries {
-//           let entry_type = self.get_expr_type(&entry)?;
-//           entry_types.push(entry_type)
-//         }
-
-//         Ok(Type::Tuple(entry_types))
-//       }
-
-//       other => todo!("support more kinds! ({:#?})", other),
-//     }
-//   }
-
-//   fn error(&mut self, err: AnalysisError) {
-//     let pos = err.pos;
-//     self.diagnostics.push(Diagnostic::error(err).with_pos(pos))
-//   }
-
-//   fn warning(&mut self, err: AnalysisError) {
-//     let pos = err.pos;
-//     self
-//       .diagnostics
-//       .push(Diagnostic::warning(err).with_pos(pos))
-//   }
-// }
-
-// impl Visitor for Analyzer {
-//   fn enter_module(&mut self, node: &ModuleNode) {
-//     self.push_scope();
-//   }
-
-//   fn leave_module(&mut self, node: &ModuleNode) {
-//     self.pop_scope();
-//   }
-
-//   fn leave_let(&mut self, node: &LetNode) {
-//     // println!("{:#?}", self.scopes);
-
-//     // match &node.pattern.kind {
-//     //   PatternKind::Ident(ident) => self.add_binding(ident.name.clone(), ident.pos, node.value.id),
-//     // };
-//   }
-
-//   fn enter_pattern(&mut self, node: &PatternNode) {
-//     self.pattern_depth += 1;
-
-//     println!("entering pattern");
-
-//     match &node.kind {
-//       PatternKind::Ident(ident) => self.add_binding(ident.name.clone(), ident.pos, node.id),
-//     };
-//   }
-
-//   fn leave_pattern(&mut self, node: &PatternNode) {
-//     self.pattern_depth -= 1;
-//     println!("leaving pattern");
-//   }
-
-//   fn enter_expr(&mut self, node: &ExprNode) {
-//     if let ExprKind::Block { params, body } = &node.kind {
-//       self.push_scope();
-
-//       for param in params {
-//         match &param.kind {
-//           PatternKind::Ident(ident) => self.add_binding(ident.name.clone(), ident.pos, param.id),
-//         };
-//       }
-//     }
-//   }
-
-//   fn leave_expr(&mut self, node: &ExprNode) {
-//     match self.get_expr_type(node) {
-//       Ok(typ) => self.add_node_type(node.id, typ),
-//       Err(err) => self.error(err),
-//     }
-//   }
-
-//   fn enter_identifier(&mut self, node: &IdentifierNode) {
-//     println!("ID: {}", node.name);
-
-//     println!("--> type: {:#?}", self.get_binding_type(&node))
-//   }
-
-//   fn enter_literal(&mut self, node: &LiteralNode) {
-//     let node_type = match &node.kind {
-//       LiteralKind::IntDecimal(_)
-//       | LiteralKind::IntBinary(_)
-//       | LiteralKind::IntHex(_)
-//       | LiteralKind::IntOctal(_) => Type::CoreInt,
-//       LiteralKind::FloatDecimal(_) => Type::CoreFloat,
-//       LiteralKind::Str(_) => Type::CoreString,
-//     };
-
-//     self.add_node_type(node.id, node_type);
-//   }
-
-//   fn leave_statement(&mut self, node: &StatementNode) {
-//     match &node.kind {
-//       StatementKind::Expr(expr) => match self.get_expr_type(expr) {
-//         Ok(typ) => self.add_node_type(node.id, typ),
-//         Err(err) => self.error(err),
-//       },
-//       _ => {}
-//     };
-//   }
-// }
-
-// #[derive(Debug)]
-// struct Binding {
-//   node_id: Uuid,
-//   pos: (usize, usize),
-//   mutable: bool,
-//   references: usize,
-// }
-
-// #[derive(Debug)]
-// struct Scope {
-//   bindings: HashMap<String, Binding>,
-// }
-
-// impl Scope {
-//   fn new() -> Self {
-//     Scope {
-//       bindings: HashMap::new(),
-//     }
-//   }
-
-//   fn add_binding(&mut self, name: String, node_id: Uuid, pos: (usize, usize), mutable: bool) {
-//     self.bindings.insert(
-//       name,
-//       Binding {
-//         node_id,
-//         pos,
-//         mutable,
-//         references: 0,
-//       },
-//     );
-//   }
-
-//   fn add_reference(&mut self, name: &String) {
-//     self.bindings.get_mut(name).map(|b| b.references += 1);
-//   }
-// }

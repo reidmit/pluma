@@ -14,6 +14,10 @@ impl TraverseMut for ExprNode {
     visitor.enter_expr(self);
 
     match &mut self.kind {
+      ExprKind::Assignment { left, right } => {
+        right.traverse(visitor);
+        left.traverse(visitor);
+      }
       ExprKind::Block { params, body } => {
         for param in params {
           param.traverse(visitor);
@@ -22,6 +26,13 @@ impl TraverseMut for ExprNode {
         for stmt in body {
           stmt.traverse(visitor);
         }
+      }
+      ExprKind::Call { callee, args } => {
+        for arg in args {
+          arg.traverse(visitor);
+        }
+
+        callee.traverse(visitor);
       }
       ExprKind::Literal(literal) => literal.traverse(visitor),
       ExprKind::Identifier(ident) => ident.traverse(visitor),
@@ -142,12 +153,14 @@ impl TraverseMut for TopLevelStatementNode {
   }
 }
 
-impl TraverseMut for TypeNode {
+impl TraverseMut for TypeExprNode {
   // todo
 }
 
 impl TraverseMut for TypeDefNode {
   fn traverse<V: VisitorMut>(&mut self, visitor: &mut V) {
+    visitor.enter_type_def(self);
+
     // match &self.kind {
     //   TypeDefKind::Enum { variants } => {
     //     for variant in variants {
@@ -156,5 +169,7 @@ impl TraverseMut for TypeDefNode {
     //   }
     //   _ => todo!("not yet implemented"),
     // }
+
+    visitor.leave_type_def(self);
   }
 }

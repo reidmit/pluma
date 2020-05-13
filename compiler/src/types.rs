@@ -1,33 +1,33 @@
 use std::fmt;
-use uuid::Uuid;
 
-#[derive(Debug, Clone)]
-pub enum Type {
+#[derive(Debug, Clone, PartialEq)]
+pub enum ValueType {
   CoreString,
   CoreInt,
   CoreFloat,
-  Named(Uuid),
-  Func(Vec<Type>, Box<Type>),
-  Tuple(Vec<Type>),
+  Named(String),
+  Func(Vec<ValueType>, Box<ValueType>),
+  Tuple(Vec<ValueType>),
   Unknown,
   Nothing,
 }
 
-impl Type {
+impl ValueType {
   pub fn is_core_string(&self) -> bool {
     match self {
-      Type::CoreString => true,
+      ValueType::CoreString => true,
       _ => false,
     }
   }
 }
 
-impl fmt::Display for Type {
+impl fmt::Display for ValueType {
   fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
     match self {
-      Type::CoreString => write!(f, "String"),
-      Type::CoreInt => write!(f, "Int"),
-      Type::CoreFloat => write!(f, "Float"),
+      ValueType::CoreString => write!(f, "String"),
+      ValueType::CoreInt => write!(f, "Int"),
+      ValueType::CoreFloat => write!(f, "Float"),
+      ValueType::Named(name) => write!(f, "{}", name),
       _ => write!(f, "{:#?}", self),
     }
   }

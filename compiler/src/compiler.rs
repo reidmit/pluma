@@ -3,6 +3,8 @@ use crate::dependency_graph::{DependencyGraph, TopologicalSort};
 use crate::diagnostics::Diagnostic;
 use crate::import_error::{ImportError, ImportErrorKind};
 use crate::module::Module;
+use crate::scope::Scope;
+use crate::type_collector::TypeCollector;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::result;
@@ -63,8 +65,16 @@ impl Compiler {
     // println!("{:#?}", self.modules);
 
     for module_name in sorted_names {
-      let mut analyzer = Analyzer::new();
+      let mut module_scope = Scope::new();
+
       let module_to_analyze = self.modules.get_mut(module_name).unwrap();
+
+      let mut type_collector = TypeCollector::new(&mut module_scope);
+      module_to_analyze.traverse(&mut type_collector);
+
+      println!("scope after collection: {:#?}", module_scope);
+
+      let mut analyzer = Analyzer::new(&mut module_scope);
       module_to_analyze.traverse(&mut analyzer);
 
       for diagnostic in analyzer.diagnostics {
@@ -73,6 +83,8 @@ impl Compiler {
           self.to_module_path(self.entry_module_name.clone()),
         ))
       }
+
+      println!("scope after analysis: {:#?}", module_scope);
     }
 
     if !self.diagnostics.is_empty() {
