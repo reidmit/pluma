@@ -67,6 +67,8 @@ impl Compiler {
     for module_name in sorted_names {
       let mut module_scope = Scope::new();
 
+      module_scope.enter();
+
       let module_to_analyze = self.modules.get_mut(module_name).unwrap();
 
       let mut type_collector = TypeCollector::new(&mut module_scope);

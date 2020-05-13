@@ -24,33 +24,21 @@ impl<'a> Analyzer<'a> {
 
   fn error(&mut self, err: AnalysisError) {
     let pos = err.pos;
-    self.diagnostics.push(Diagnostic::error(err).with_pos(pos))
+    self.diagnostic(Diagnostic::error(err).with_pos(pos))
   }
 
   fn warning(&mut self, err: AnalysisError) {
     let pos = err.pos;
-    self
-      .diagnostics
-      .push(Diagnostic::warning(err).with_pos(pos))
+    self.diagnostic(Diagnostic::warning(err).with_pos(pos))
+  }
+
+  fn diagnostic(&mut self, diag: Diagnostic) {
+    self.diagnostics.push(diag)
   }
 }
 
 impl<'a> VisitorMut for Analyzer<'a> {
-  fn enter_module(&mut self, node: &mut ModuleNode) {
-    // self.push_scope();
-
-    // for (name, typ) in &self.top_level_defs {
-    //   // self.add_binding(name.clone(), (0, 0), node_id: Uuid)
-    // }
-  }
-
-  fn leave_module(&mut self, node: &mut ModuleNode) {
-    // self.pop_scope();
-  }
-
   fn leave_let(&mut self, node: &mut LetNode) {
-    println!("leaving let!");
-
     match &mut node.pattern.kind {
       PatternKind::Ident(ident_node) => {
         let existing_binding = self.scope.get_let_binding(&ident_node.name);
@@ -61,13 +49,13 @@ impl<'a> VisitorMut for Analyzer<'a> {
             kind: AnalysisErrorKind::NameAlreadyInScope(ident_node.name.clone()),
           })
         } else {
-          let value_type = node.value.typ.as_ref().expect("no type for let value");
+          if let Some(value_type) = &node.value.typ {
+            self
+              .scope
+              .add_let_binding(ident_node.name.clone(), value_type.clone(), ident_node.pos);
 
-          self
-            .scope
-            .add_let_binding(ident_node.name.clone(), value_type.clone());
-
-          ident_node.typ = Some(value_type.clone());
+            ident_node.typ = Some(value_type.clone());
+          }
         }
       }
     }
@@ -84,9 +72,20 @@ impl<'a> VisitorMut for Analyzer<'a> {
     }
   }
 
+  fn enter_expr(&mut self, node: &mut ExprNode) {
+    match &node.kind {
+      ExprKind::Block { params, body } => {
+        self.scope.enter();
+      }
+
+      _ => {}
+    }
+  }
+
   fn leave_expr(&mut self, node: &mut ExprNode) {
     match &node.kind {
       ExprKind::Identifier(ident_node) => node.typ = ident_node.typ.clone(),
+
       ExprKind::Literal(lit_node) => node.typ = lit_node.typ.clone(),
 
       ExprKind::Assignment { left, right } => {
@@ -108,7 +107,50 @@ impl<'a> VisitorMut for Analyzer<'a> {
         }
       }
 
-      _ => todo!("more expr kinds"),
+      ExprKind::Block { params, body } => {
+        let mut param_types = Vec::new();
+        let mut return_type = ValueType::Nothing;
+
+        for param in params {
+          match &param.kind {
+            PatternKind::Ident(ident) => param_types.push(ValueType::Unknown),
+          }
+        }
+
+        for stmt in body {
+          if let StatementKind::Expr(expr) = &stmt.kind {
+            if let Some(typ) = &expr.typ {
+              return_type = typ.clone();
+            }
+          }
+        }
+
+        node.typ = Some(ValueType::Func(param_types, Box::new(return_type)));
+
+        if let Err(diagnostics) = self.scope.exit() {
+          for diagnostic in diagnostics {
+            self.diagnostic(diagnostic);
+          }
+        }
+      }
+
+      ExprKind::Call { callee, args } => {
+        let callee_type = callee.typ.as_ref().unwrap();
+
+        match callee_type {
+          ValueType::Func(param_types, return_type) => {
+            // TODO assert on matching param types
+
+            node.typ = Some(*return_type.clone());
+          }
+          _ => self.error(AnalysisError {
+            pos: node.pos,
+            kind: AnalysisErrorKind::CalleeNotCallable(callee_type.clone()),
+          }),
+        }
+      }
+
+      t => todo!("more expr kinds: {:#?}", t),
     }
   }
 

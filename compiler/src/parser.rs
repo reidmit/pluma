@@ -305,16 +305,32 @@ impl<'a> Parser<'a> {
     let mut params = Vec::new();
     let mut body = Vec::new();
 
-    while let Some(pattern) = self.parse_pattern() {
-      params.push(pattern);
-
-      match self.current_token() {
-        Some(&Token::Comma(..)) => self.advance(),
-        Some(&Token::DoubleArrow(..)) => {
-          self.advance();
+    // Look ahead to see if there is an arrow
+    let mut has_params = false;
+    let mut lookahead_index = self.index;
+    while let Some(tok) = self.tokens.get(lookahead_index) {
+      match tok {
+        Token::IdentifierLower(..) | Token::Comma(..) => lookahead_index += 1,
+        Token::DoubleArrow(..) => {
+          has_params = true;
           break;
         }
         _ => break,
+      }
+    }
+
+    if has_params {
+      while let Some(pattern) = self.parse_pattern() {
+        params.push(pattern);
+
+        match self.current_token() {
+          Some(&Token::Comma(..)) => self.advance(),
+          Some(&Token::DoubleArrow(..)) => {
+            self.advance();
+            break;
+          }
+          _ => break,
+        }
       }
     }
 
@@ -322,6 +338,8 @@ impl<'a> Parser<'a> {
 
     while let Some(node) = self.parse_statement() {
       body.push(node);
+
+      self.skip_line_breaks();
     }
 
     self.skip_line_breaks();

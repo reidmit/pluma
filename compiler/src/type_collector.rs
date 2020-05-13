@@ -32,7 +32,9 @@ impl<'a> VisitorMut for TypeCollector<'a> {
               let variant_name = ident_node.name.clone();
               let variant_type = typ.clone();
 
-              self.scope.add_let_binding(variant_name, variant_type);
+              self
+                .scope
+                .add_let_binding(variant_name, variant_type, ident_node.pos);
             }
             _ => todo!("other variants"),
           }

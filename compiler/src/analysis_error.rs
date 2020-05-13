@@ -11,7 +11,9 @@ pub struct AnalysisError {
 pub enum AnalysisErrorKind {
   UndefinedVariable(String),
   UnusedVariable(String),
+  UselessExpressionStatement,
   NameAlreadyInScope(String),
+  CalleeNotCallable(ValueType),
   ReassignmentTypeMismatch {
     expected: ValueType,
     actual: ValueType,
@@ -30,6 +32,10 @@ impl fmt::Display for AnalysisError {
       NameAlreadyInScope(name) => write!(f, "Name '{}' is already defined in this scope.", name),
       UndefinedVariable(name) => write!(f, "Name '{}' is not defined.", name),
       UnusedVariable(name) => write!(f, "Name '{}' is never used.", name),
+      UselessExpressionStatement => {
+        write!(f, "Expression has no effect and its value is never used.")
+      }
+      CalleeNotCallable(typ) => write!(f, "Cannot call value of type {} like a function.", typ),
       TypeMismatch { expected, actual } => write!(
         f,
         "Type mismatch. Expected type {}, but found type {}.",
