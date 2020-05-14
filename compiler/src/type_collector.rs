@@ -23,6 +23,8 @@ impl<'a> VisitorMut for TypeCollector<'a> {
     let typ = ValueType::Named(node.name.name.clone());
 
     match &node.kind {
+      TypeDefKind::Intrinsic => {}
+
       TypeDefKind::Enum { variants } => {
         for variant in variants {
           match &variant.kind {

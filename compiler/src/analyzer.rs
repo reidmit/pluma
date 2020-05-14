@@ -10,7 +10,6 @@ use uuid::Uuid;
 pub struct Analyzer<'a> {
   pub diagnostics: Vec<Diagnostic>,
   scope: &'a mut Scope,
-  pattern_depth: usize,
 }
 
 impl<'a> Analyzer<'a> {
@@ -18,7 +17,6 @@ impl<'a> Analyzer<'a> {
     Analyzer {
       scope,
       diagnostics: Vec::new(),
-      pattern_depth: 0,
     }
   }
 
@@ -63,12 +61,12 @@ impl<'a> VisitorMut for Analyzer<'a> {
 
   fn leave_literal(&mut self, node: &mut LiteralNode) {
     match &node.kind {
-      LiteralKind::IntDecimal { .. } => node.typ = Some(ValueType::CoreInt),
-      LiteralKind::IntBinary { .. } => node.typ = Some(ValueType::CoreInt),
-      LiteralKind::IntHex { .. } => node.typ = Some(ValueType::CoreInt),
-      LiteralKind::IntOctal { .. } => node.typ = Some(ValueType::CoreInt),
-      LiteralKind::FloatDecimal { .. } => node.typ = Some(ValueType::CoreFloat),
-      LiteralKind::Str { .. } => node.typ = Some(ValueType::CoreString),
+      LiteralKind::IntDecimal { .. } => node.typ = Some(ValueType::Named("Int".to_owned())),
+      LiteralKind::IntBinary { .. } => node.typ = Some(ValueType::Named("Int".to_owned())),
+      LiteralKind::IntHex { .. } => node.typ = Some(ValueType::Named("Int".to_owned())),
+      LiteralKind::IntOctal { .. } => node.typ = Some(ValueType::Named("Int".to_owned())),
+      LiteralKind::FloatDecimal { .. } => node.typ = Some(ValueType::Named("Float".to_owned())),
+      LiteralKind::Str { .. } => node.typ = Some(ValueType::Named("String".to_owned())),
     }
   }
 

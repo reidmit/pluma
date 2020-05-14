@@ -44,7 +44,7 @@
 
     "storage-type": {
       "name": "storage.type.pluma",
-      "match": "\\b(def|let|where|enum|struct|alias)\\b"
+      "match": "\\b(def|let|where|enum|struct|alias|trait|intrinsic)\\b"
     },
 
     "keyword-language": {

@@ -228,6 +228,7 @@ impl<'a> Tokenizer<'a> {
             b"break" => KeywordBreak,
             b"def" => KeywordDef,
             b"enum" => KeywordEnum,
+            b"intrinsic" => KeywordIntrinsic,
             b"let" => KeywordLet,
             b"match" => KeywordMatch,
             b"private" => KeywordPrivate,

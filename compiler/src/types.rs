@@ -2,32 +2,28 @@ use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValueType {
-  CoreString,
-  CoreInt,
-  CoreFloat,
   Named(String),
   Func(Vec<ValueType>, Box<ValueType>),
   Tuple(Vec<ValueType>),
-  Unknown,
   Nothing,
+  Unknown,
 }
 
-impl ValueType {
-  pub fn is_core_string(&self) -> bool {
-    match self {
-      ValueType::CoreString => true,
-      _ => false,
-    }
-  }
-}
+impl ValueType {}
 
 impl fmt::Display for ValueType {
   fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
     match self {
-      ValueType::CoreString => write!(f, "String"),
-      ValueType::CoreInt => write!(f, "Int"),
-      ValueType::CoreFloat => write!(f, "Float"),
       ValueType::Named(name) => write!(f, "{}", name),
+      ValueType::Tuple(entry_types) => write!(
+        f,
+        "({})",
+        entry_types
+          .iter()
+          .map(|t| format!("{}", t))
+          .collect::<Vec<String>>()
+          .join(", ")
+      ),
       _ => write!(f, "{:#?}", self),
     }
   }

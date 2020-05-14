@@ -252,6 +252,8 @@ pub enum TypeDefKind {
     fields: Vec<(IdentifierNode, TypeExprNode)>,
     methods: Vec<Signature>,
   },
+  // intrinsic Int
+  Intrinsic,
 }
 
 #[derive(Debug, Clone)]

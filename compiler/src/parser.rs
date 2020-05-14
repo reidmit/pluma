@@ -755,6 +755,46 @@ impl<'a> Parser<'a> {
     })
   }
 
+  fn parse_intrinsic(&mut self) -> Option<TypeDefNode> {
+    let start = expect_token_and_do!(self, Token::KeywordIntrinsic, {
+      let pos = self.current_token_position();
+      self.advance();
+      pos.0
+    });
+
+    let (name, end) = match self.current_token() {
+      Some(&Token::IdentifierUpper(start, end)) => {
+        let name_str = read_string!(self, start, end);
+
+        self.advance();
+
+        (
+          Box::new(IdentifierNode {
+            id: self.next_id(),
+            pos: (start, end),
+            name: name_str,
+            typ: None,
+          }),
+          end,
+        )
+      }
+      _ => {
+        return self.error(ParseError {
+          pos: self.current_token_position(),
+          kind: ParseErrorKind::MissingTypeNameInTypeDefinition,
+        })
+      }
+    };
+
+    Some(TypeDefNode {
+      id: self.next_id(),
+      pos: (start, end),
+      kind: TypeDefKind::Intrinsic,
+      name,
+      generics: Vec::new(),
+    })
+  }
+
   fn parse_enum(&mut self) -> Option<TypeDefNode> {
     let start = expect_token_and_do!(self, Token::KeywordEnum, {
       let pos = self.current_token_position();
@@ -1495,6 +1535,15 @@ impl<'a> Parser<'a> {
       Some(&Token::KeywordEnum(..)) => {
         self
           .parse_enum()
+          .map(|type_def_node| TopLevelStatementNode {
+            id: self.next_id(),
+            pos: type_def_node.pos,
+            kind: TopLevelStatementKind::TypeDef(type_def_node),
+          })
+      }
+      Some(&Token::KeywordIntrinsic(..)) => {
+        self
+          .parse_intrinsic()
           .map(|type_def_node| TopLevelStatementNode {
             id: self.next_id(),
             pos: type_def_node.pos,
