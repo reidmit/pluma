@@ -12,9 +12,9 @@ pub struct Module {
   pub module_name: String,
   pub module_path: PathBuf,
   pub bytes: Option<Vec<u8>>,
+  pub ast: Option<ModuleNode>,
   tokens: Option<TokenList>,
   comments: Option<CommentMap>,
-  ast: Option<ModuleNode>,
   imports: Option<Vec<UseNode>>,
 }
 

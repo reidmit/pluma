@@ -1,7 +1,6 @@
 use crate::ast::*;
 use crate::parse_error::*;
 use crate::tokens::Token;
-use uuid::Uuid;
 
 macro_rules! current_token_is {
   ($self:ident, $tokType:path) => {
@@ -87,7 +86,6 @@ impl<'a> Parser<'a> {
     let end = body.last().map_or(0, |node| node.pos.1);
 
     let module_node = ModuleNode {
-      id: self.next_id(),
       pos: (start, end),
       body,
     };
@@ -123,10 +121,6 @@ impl<'a> Parser<'a> {
     }
   }
 
-  fn next_id(&mut self) -> Uuid {
-    Uuid::new_v4()
-  }
-
   fn enter_def_body(&mut self) {
     self.def_body_stack += 1;
   }
@@ -152,13 +146,12 @@ impl<'a> Parser<'a> {
     });
 
     let name = match self.current_token() {
-      Some(&Token::IdentifierUpper(start, end)) => {
+      Some(&Token::Identifier(start, end)) => {
         let name_str = read_string!(self, start, end);
 
         self.advance();
 
         Box::new(IdentifierNode {
-          id: self.next_id(),
           pos: (start, end),
           name: name_str,
           typ: None,
@@ -201,7 +194,6 @@ impl<'a> Parser<'a> {
     };
 
     Some(TypeDefNode {
-      id: self.next_id(),
       pos: (start, type_expr.pos.1),
       kind: TypeDefKind::Alias { of: type_expr },
       name,
@@ -270,7 +262,6 @@ impl<'a> Parser<'a> {
     };
 
     Some(ExprNode {
-      id: self.next_id(),
       pos: (start, end),
       kind,
       typ: None,
@@ -286,7 +277,6 @@ impl<'a> Parser<'a> {
     self.advance();
 
     Some(LiteralNode {
-      id: self.next_id(),
       kind: LiteralKind::IntBinary(value),
       pos: (start, end),
       typ: None,
@@ -310,7 +300,7 @@ impl<'a> Parser<'a> {
     let mut lookahead_index = self.index;
     while let Some(tok) = self.tokens.get(lookahead_index) {
       match tok {
-        Token::IdentifierLower(..) | Token::Comma(..) => lookahead_index += 1,
+        Token::Identifier(..) | Token::Comma(..) => lookahead_index += 1,
         Token::DoubleArrow(..) => {
           has_params = true;
           break;
@@ -351,7 +341,6 @@ impl<'a> Parser<'a> {
     });
 
     Some(ExprNode {
-      id: self.next_id(),
       pos: (block_start, block_end),
       kind: ExprKind::Block { params, body },
       typ: None,
@@ -365,7 +354,6 @@ impl<'a> Parser<'a> {
       self.advance();
 
       Box::new(OperatorNode {
-        id: self.next_id(),
         pos: (start, end),
         name,
       })
@@ -384,7 +372,6 @@ impl<'a> Parser<'a> {
     };
 
     Some(ExprNode {
-      id: self.next_id(),
       pos: (last_term.pos.0, end),
       kind: ExprKind::BinaryOperation {
         left: Box::new(last_term),
@@ -422,7 +409,6 @@ impl<'a> Parser<'a> {
     }
 
     Some(ExprNode {
-      id: self.next_id(),
       pos: (last_expr.pos.0, end),
       kind: ExprKind::Call {
         callee: Box::new(last_expr),
@@ -446,7 +432,6 @@ impl<'a> Parser<'a> {
     };
 
     Some(ExprNode {
-      id: self.next_id(),
       pos: (last_expr.pos.0, end),
       kind: ExprKind::Chain {
         obj: Box::new(last_expr),
@@ -475,7 +460,6 @@ impl<'a> Parser<'a> {
         let float_value = str_value.parse::<f64>().unwrap();
 
         return Some(LiteralNode {
-          id: self.next_id(),
           kind: LiteralKind::FloatDecimal(float_value),
           pos: (start, end),
           typ: None,
@@ -486,7 +470,6 @@ impl<'a> Parser<'a> {
     let value = self.parse_numeric_literal(start, end, 10);
 
     Some(LiteralNode {
-      id: self.next_id(),
       kind: LiteralKind::IntDecimal(value),
       pos: (start, end),
       typ: None,
@@ -541,7 +524,6 @@ impl<'a> Parser<'a> {
     self.exit_def_body();
 
     Some(DefNode {
-      id: self.next_id(),
       pos: (start, end),
       kind,
       return_type,
@@ -551,62 +533,10 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_definition_kind(&mut self) -> Option<DefKind> {
-    match self.current_token() {
-      Some(&Token::IdentifierLower(..)) => self.parse_definition_kind_function(),
-      Some(&Token::LeftParen(..)) => self.parse_definition_kind_receiver(),
-      Some(&Token::Operator(..)) => self.parse_definition_kind_unary_op(),
-      _ => {
-        return self.error(ParseError {
-          pos: self.current_token_position(),
-          kind: ParseErrorKind::MissingType,
-        })
-      }
-    }
-  }
-
-  fn parse_definition_kind_function(&mut self) -> Option<DefKind> {
-    let ident = match self.parse_identifier() {
-      Some(ident_node) => ident_node,
-      _ => {
-        return self.error(ParseError {
-          pos: self.current_token_position(),
-          kind: ParseErrorKind::MissingIdentifier,
-        })
-      }
-    };
-
-    expect_token_and_do!(self, Token::LeftParen, {
-      self.advance();
-    });
-
-    let mut type_params = Vec::new();
-
-    while let Some(type_node) = self.parse_type_expression() {
-      type_params.push(type_node);
-
-      match self.current_token() {
-        Some(&Token::Comma(..)) => self.advance(),
-        _ => break,
-      }
-    }
-
-    expect_token_and_do!(self, Token::RightParen, {
-      self.advance();
-    });
-
-    Some(DefKind::Function {
-      signature: vec![(Box::new(ident), type_params)],
-    })
-  }
-
-  fn parse_definition_kind_receiver(&mut self) -> Option<DefKind> {
-    expect_token_and_do!(self, Token::LeftParen, {
-      self.advance();
-    });
-
-    let receiver = match self.parse_type_expression() {
-      Some(node) => Box::new(node),
-      _ => {
+    // The first ident might be a type ident or a simple method part name
+    let type_ident = match self.parse_type_identifier() {
+      Some(t) => t,
+      None => {
         return self.error(ParseError {
           pos: self.current_token_position(),
           kind: ParseErrorKind::MissingType,
@@ -614,145 +544,59 @@ impl<'a> Parser<'a> {
       }
     };
 
-    expect_token_and_do!(self, Token::RightParen, {
-      self.advance();
-    });
+    let mut receiver = None;
+    let mut signature: Signature = Vec::new();
 
-    if current_token_is!(self, Token::LeftBracket) {
+    if current_token_is!(self, Token::Dot) {
+      // If we have a dot now, we know the first ident was a receiver type
+      receiver = Some(type_ident);
       self.advance();
+    } else {
+      // If not, the first ident was the first part of the method name
+      if let TypeExprKind::Constructor(part_name) = type_ident.kind {
+        // So, grab the param type for this part
+        match self.parse_type_expression() {
+          Some(part_param) => signature.push((Box::new(part_name), Box::new(part_param))),
+          _ => {
+            return self.error(ParseError {
+              pos: self.current_token_position(),
+              kind: ParseErrorKind::MissingType,
+            })
+          }
+        }
+      }
+    }
 
-      let type_node = match self.parse_type_expression() {
-        Some(node) => Box::new(node),
+    // Now, collect any remaining parts
+    while current_token_is!(self, Token::Identifier) {
+      let part_name = self.parse_identifier().unwrap();
+
+      match self.parse_type_expression() {
+        Some(part_param) => signature.push((Box::new(part_name), Box::new(part_param))),
         _ => {
           return self.error(ParseError {
             pos: self.current_token_position(),
             kind: ParseErrorKind::MissingType,
           })
         }
-      };
-
-      expect_token_and_do!(self, Token::RightBracket, {
-        self.advance();
-      });
-
-      return Some(DefKind::Index {
-        receiver,
-        index: type_node,
-      });
-    }
-
-    if current_token_is!(self, Token::Operator) {
-      let op_node = expect_token_and_do!(self, Token::Operator, {
-        let (start, end) = self.current_token_position();
-        let name = read_string!(self, start, end);
-        self.advance();
-
-        Box::new(OperatorNode {
-          id: self.next_id(),
-          pos: (start, end),
-          name,
-        })
-      });
-
-      expect_token_and_do!(self, Token::LeftParen, {
-        self.advance();
-      });
-
-      let type_node = match self.parse_type_expression() {
-        Some(node) => Box::new(node),
-        _ => {
-          return self.error(ParseError {
-            pos: self.current_token_position(),
-            kind: ParseErrorKind::MissingType,
-          })
-        }
-      };
-
-      expect_token_and_do!(self, Token::RightParen, {
-        self.advance();
-      });
-
-      return Some(DefKind::BinaryOperator {
-        left: receiver,
-        op: op_node,
-        right: type_node,
-      });
-    }
-
-    expect_token_and_do!(self, Token::Dot, {
-      self.advance();
-    });
-
-    let ident = match self.parse_identifier() {
-      Some(ident_node) => Box::new(ident_node),
-      _ => {
-        return self.error(ParseError {
-          pos: self.current_token_position(),
-          kind: ParseErrorKind::MissingIdentifier,
-        })
-      }
-    };
-
-    expect_token_and_do!(self, Token::LeftParen, {
-      self.advance();
-    });
-
-    let mut type_params = Vec::new();
-
-    while let Some(type_node) = self.parse_type_expression() {
-      type_params.push(type_node);
-
-      match self.current_token() {
-        Some(&Token::Comma(..)) => self.advance(),
-        _ => break,
       }
     }
 
-    expect_token_and_do!(self, Token::RightParen, {
-      self.advance();
-    });
+    if signature.is_empty() {
+      return self.error(ParseError {
+        pos: self.current_token_position(),
+        kind: ParseErrorKind::IncompleteMethodSignature,
+      });
+    }
 
-    Some(DefKind::Method {
-      receiver,
-      signature: vec![(ident, type_params)],
-    })
-  }
+    if let Some(rec) = receiver {
+      return Some(DefKind::Method {
+        receiver: Box::new(rec),
+        signature,
+      });
+    }
 
-  fn parse_definition_kind_unary_op(&mut self) -> Option<DefKind> {
-    let op_node = expect_token_and_do!(self, Token::Operator, {
-      let (start, end) = self.current_token_position();
-      let name = read_string!(self, start, end);
-      self.advance();
-
-      Box::new(OperatorNode {
-        id: self.next_id(),
-        pos: (start, end),
-        name,
-      })
-    });
-
-    expect_token_and_do!(self, Token::LeftParen, {
-      self.advance();
-    });
-
-    let type_node = match self.parse_type_expression() {
-      Some(node) => Box::new(node),
-      _ => {
-        return self.error(ParseError {
-          pos: self.current_token_position(),
-          kind: ParseErrorKind::MissingType,
-        })
-      }
-    };
-
-    expect_token_and_do!(self, Token::RightParen, {
-      self.advance();
-    });
-
-    Some(DefKind::UnaryOperator {
-      op: op_node,
-      right: type_node,
-    })
+    Some(DefKind::Function { signature })
   }
 
   fn parse_intrinsic(&mut self) -> Option<TypeDefNode> {
@@ -763,14 +607,13 @@ impl<'a> Parser<'a> {
     });
 
     let (name, end) = match self.current_token() {
-      Some(&Token::IdentifierUpper(start, end)) => {
+      Some(&Token::Identifier(start, end)) => {
         let name_str = read_string!(self, start, end);
 
         self.advance();
 
         (
           Box::new(IdentifierNode {
-            id: self.next_id(),
             pos: (start, end),
             name: name_str,
             typ: None,
@@ -787,7 +630,6 @@ impl<'a> Parser<'a> {
     };
 
     Some(TypeDefNode {
-      id: self.next_id(),
       pos: (start, end),
       kind: TypeDefKind::Intrinsic,
       name,
@@ -803,13 +645,12 @@ impl<'a> Parser<'a> {
     });
 
     let name = match self.current_token() {
-      Some(&Token::IdentifierUpper(start, end)) => {
+      Some(&Token::Identifier(start, end)) => {
         let name_str = read_string!(self, start, end);
 
         self.advance();
 
         Box::new(IdentifierNode {
-          id: self.next_id(),
           pos: (start, end),
           name: name_str,
           typ: None,
@@ -871,7 +712,6 @@ impl<'a> Parser<'a> {
     }
 
     Some(TypeDefNode {
-      id: self.next_id(),
       pos: (start, variants.last().unwrap().pos.1),
       kind: TypeDefKind::Enum { variants },
       name,
@@ -887,13 +727,12 @@ impl<'a> Parser<'a> {
     });
 
     let name = match self.current_token() {
-      Some(&Token::IdentifierUpper(start, end)) => {
+      Some(&Token::Identifier(start, end)) => {
         let name_str = read_string!(self, start, end);
 
         self.advance();
 
         Box::new(IdentifierNode {
-          id: self.next_id(),
           pos: (start, end),
           name: name_str,
           typ: None,
@@ -934,7 +773,7 @@ impl<'a> Parser<'a> {
 
     self.skip_line_breaks();
 
-    while let Some(&Token::IdentifierLower(..)) = self.current_token() {
+    while let Some(&Token::Identifier(..)) = self.current_token() {
       let ident = match self.parse_identifier() {
         Some(node) => node,
         _ => break,
@@ -978,7 +817,6 @@ impl<'a> Parser<'a> {
     }
 
     Some(TypeDefNode {
-      id: self.next_id(),
       pos: (start, end),
       kind: TypeDefKind::Struct { fields },
       name,
@@ -1015,7 +853,6 @@ impl<'a> Parser<'a> {
     self.advance();
 
     Some(LiteralNode {
-      id: self.next_id(),
       kind: LiteralKind::IntHex(value),
       pos: (start, end),
       typ: None,
@@ -1024,11 +861,7 @@ impl<'a> Parser<'a> {
 
   fn parse_identifier(&mut self) -> Option<IdentifierNode> {
     let (start, end) = match self.current_token() {
-      Some(&Token::IdentifierLower(start, end)) => {
-        self.advance();
-        (start, end)
-      }
-      Some(&Token::IdentifierUpper(start, end)) => {
+      Some(&Token::Identifier(start, end)) => {
         self.advance();
         (start, end)
       }
@@ -1038,7 +871,6 @@ impl<'a> Parser<'a> {
     let name = read_string!(self, start, end);
 
     Some(IdentifierNode {
-      id: self.next_id(),
       pos: (start, end),
       name,
       typ: None,
@@ -1066,7 +898,6 @@ impl<'a> Parser<'a> {
     }
 
     Some(ExprNode {
-      id: self.next_id(),
       pos: (last_expr.pos.0, end),
       kind: ExprKind::Index(Box::new(last_expr), index_node),
       typ: None,
@@ -1101,7 +932,6 @@ impl<'a> Parser<'a> {
     };
 
     Some(LetNode {
-      id: self.next_id(),
       pos: (start, end),
       pattern,
       value,
@@ -1151,7 +981,6 @@ impl<'a> Parser<'a> {
       match_end = case_end;
 
       cases.push(MatchCaseNode {
-        id: self.next_id(),
         pos: (case_start, case_end),
         pattern,
         body,
@@ -1166,10 +995,8 @@ impl<'a> Parser<'a> {
     }
 
     Some(ExprNode {
-      id: self.next_id(),
       pos: (start, match_end),
       kind: ExprKind::Match(MatchNode {
-        id: self.next_id(),
         pos: (start, match_end),
         subject: Box::new(subject),
         cases,
@@ -1204,7 +1031,6 @@ impl<'a> Parser<'a> {
     self.advance();
 
     Some(LiteralNode {
-      id: self.next_id(),
       kind: LiteralKind::IntOctal(value),
       pos: (start, end),
       typ: None,
@@ -1241,7 +1067,6 @@ impl<'a> Parser<'a> {
 
   fn parse_pattern(&mut self) -> Option<PatternNode> {
     self.parse_identifier().map(|id_node| PatternNode {
-      id: self.next_id(),
       pos: id_node.pos,
       kind: PatternKind::Ident(id_node),
     })
@@ -1286,7 +1111,6 @@ impl<'a> Parser<'a> {
 
     if first_expr.is_none() {
       return Some(ExprNode {
-        id: self.next_id(),
         pos: (paren_start, paren_end),
         kind: ExprKind::EmptyTuple,
         typ: None,
@@ -1295,7 +1119,6 @@ impl<'a> Parser<'a> {
 
     if other_exprs.is_empty() {
       return Some(ExprNode {
-        id: self.next_id(),
         pos: (paren_start, paren_end),
         kind: ExprKind::Grouping(Box::new(first_expr.unwrap())),
         typ: None,
@@ -1305,7 +1128,6 @@ impl<'a> Parser<'a> {
     other_exprs.insert(0, first_expr.unwrap());
 
     Some(ExprNode {
-      id: self.next_id(),
       pos: (paren_start, paren_end),
       kind: ExprKind::Tuple(other_exprs),
       typ: None,
@@ -1338,7 +1160,6 @@ impl<'a> Parser<'a> {
     };
 
     Some(ReturnNode {
-      id: self.next_id(),
       pos: (start, expr.pos.1),
       value: expr,
     })
@@ -1347,7 +1168,6 @@ impl<'a> Parser<'a> {
   fn parse_statement(&mut self) -> Option<StatementNode> {
     match self.current_token() {
       Some(&Token::KeywordLet(..)) => self.parse_let_statement().map(|let_node| StatementNode {
-        id: self.next_id(),
         pos: let_node.pos,
         kind: StatementKind::Let(let_node),
       }),
@@ -1355,13 +1175,11 @@ impl<'a> Parser<'a> {
         self
           .parse_return_statement()
           .map(|expr_node| StatementNode {
-            id: self.next_id(),
             pos: expr_node.pos,
             kind: StatementKind::Return(expr_node),
           })
       }
       _ => self.parse_expression().map(|expr_node| StatementNode {
-        id: self.next_id(),
         pos: expr_node.pos,
         kind: StatementKind::Expr(expr_node),
       }),
@@ -1378,14 +1196,12 @@ impl<'a> Parser<'a> {
     let value = read_string!(self, start, end);
 
     let lit_node = LiteralNode {
-      id: self.next_id(),
       pos: (start, end),
       kind: LiteralKind::Str(value),
       typ: None,
     };
 
     let expr_node = ExprNode {
-      id: self.next_id(),
       pos: (start, end),
       kind: ExprKind::Literal(lit_node),
       typ: None,
@@ -1415,10 +1231,8 @@ impl<'a> Parser<'a> {
           let value = read_string!(self, start, end);
 
           parts.push(ExprNode {
-            id: self.next_id(),
             pos: (start, end),
             kind: ExprKind::Literal(LiteralNode {
-              id: self.next_id(),
               pos: (start, end),
               kind: LiteralKind::Str(value),
               typ: None,
@@ -1431,7 +1245,6 @@ impl<'a> Parser<'a> {
       }
 
       return Some(ExprNode {
-        id: self.next_id(),
         pos: (start, interpolation_end),
         kind: ExprKind::Interpolation(parts),
         typ: None,
@@ -1448,51 +1261,47 @@ impl<'a> Parser<'a> {
       Some(&Token::StringLiteral(..)) => self.parse_string(),
       Some(&Token::KeywordMatch(..)) => self.parse_match(),
       Some(&Token::Underscore(..)) => self.parse_underscore(),
-      Some(&Token::IdentifierLower(..)) | Some(&Token::IdentifierUpper(..)) => self
-        .parse_identifier()
-        .map(|id_node| match self.current_token() {
-          Some(&Token::Equals(..)) => {
-            self.advance();
+      Some(&Token::Identifier(..)) => {
+        self
+          .parse_identifier()
+          .map(|id_node| match self.current_token() {
+            Some(&Token::Equals(..)) => {
+              self.advance();
 
-            let expr = self.parse_expression().unwrap();
+              let expr = self.parse_expression().unwrap();
 
-            ExprNode {
-              id: self.next_id(),
-              pos: (id_node.pos.0, expr.pos.1),
-              kind: ExprKind::Assignment {
-                left: Box::new(id_node),
-                right: Box::new(expr),
-              },
-              typ: None,
+              ExprNode {
+                pos: (id_node.pos.0, expr.pos.1),
+                kind: ExprKind::Assignment {
+                  left: Box::new(id_node),
+                  right: Box::new(expr),
+                },
+                typ: None,
+              }
             }
-          }
-          _ => ExprNode {
-            id: self.next_id(),
-            pos: id_node.pos,
-            kind: ExprKind::Identifier(id_node),
-            typ: None,
-          },
-        }),
+            _ => ExprNode {
+              pos: id_node.pos,
+              kind: ExprKind::Identifier(id_node),
+              typ: None,
+            },
+          })
+      }
       Some(&Token::DecimalDigits(..)) => self.parse_decimal_number().map(|lit_node| ExprNode {
-        id: self.next_id(),
         pos: lit_node.pos,
         kind: ExprKind::Literal(lit_node),
         typ: None,
       }),
       Some(&Token::HexDigits(..)) => self.parse_hex_number().map(|lit_node| ExprNode {
-        id: self.next_id(),
         pos: lit_node.pos,
         kind: ExprKind::Literal(lit_node),
         typ: None,
       }),
       Some(&Token::OctalDigits(..)) => self.parse_octal_number().map(|lit_node| ExprNode {
-        id: self.next_id(),
         pos: lit_node.pos,
         kind: ExprKind::Literal(lit_node),
         typ: None,
       }),
       Some(&Token::BinaryDigits(..)) => self.parse_binary_number().map(|lit_node| ExprNode {
-        id: self.next_id(),
         pos: lit_node.pos,
         kind: ExprKind::Literal(lit_node),
         typ: None,
@@ -1509,7 +1318,6 @@ impl<'a> Parser<'a> {
         self
           .parse_let_statement()
           .map(|let_node| TopLevelStatementNode {
-            id: self.next_id(),
             pos: let_node.pos,
             kind: TopLevelStatementKind::Let(let_node),
           })
@@ -1518,7 +1326,6 @@ impl<'a> Parser<'a> {
         self
           .parse_definition()
           .map(|def_node| TopLevelStatementNode {
-            id: self.next_id(),
             pos: def_node.pos,
             kind: TopLevelStatementKind::Def(def_node),
           })
@@ -1527,7 +1334,6 @@ impl<'a> Parser<'a> {
         self
           .parse_alias()
           .map(|type_def_node| TopLevelStatementNode {
-            id: self.next_id(),
             pos: type_def_node.pos,
             kind: TopLevelStatementKind::TypeDef(type_def_node),
           })
@@ -1536,7 +1342,6 @@ impl<'a> Parser<'a> {
         self
           .parse_enum()
           .map(|type_def_node| TopLevelStatementNode {
-            id: self.next_id(),
             pos: type_def_node.pos,
             kind: TopLevelStatementKind::TypeDef(type_def_node),
           })
@@ -1545,7 +1350,6 @@ impl<'a> Parser<'a> {
         self
           .parse_intrinsic()
           .map(|type_def_node| TopLevelStatementNode {
-            id: self.next_id(),
             pos: type_def_node.pos,
             kind: TopLevelStatementKind::TypeDef(type_def_node),
           })
@@ -1554,7 +1358,6 @@ impl<'a> Parser<'a> {
         self
           .parse_struct()
           .map(|type_def_node| TopLevelStatementNode {
-            id: self.next_id(),
             pos: type_def_node.pos,
             kind: TopLevelStatementKind::TypeDef(type_def_node),
           })
@@ -1562,91 +1365,80 @@ impl<'a> Parser<'a> {
       _ => self
         .parse_expression()
         .map(|expr_node| TopLevelStatementNode {
-          id: self.next_id(),
           pos: expr_node.pos,
           kind: TopLevelStatementKind::Expr(expr_node),
         }),
     }
   }
 
-  fn parse_type_block(&mut self) -> Option<TypeExprNode> {
+  fn parse_type_func(&mut self) -> Option<TypeExprNode> {
     let start = expect_token_and_do!(self, Token::LeftBrace, {
-      let pos = self.current_token_position();
+      let (start, _) = self.current_token_position();
       self.advance();
-      pos.0
+      start
     });
 
-    let mut param_types = Vec::new();
+    self.skip_line_breaks();
 
-    while let Some(type_node) = self.parse_type_expression() {
-      param_types.push(type_node);
-
-      match self.current_token() {
-        Some(&Token::Comma(..)) => self.advance(),
-        _ => break,
+    let param_type = match self.parse_type_expression() {
+      Some(type_expr) => Box::new(type_expr),
+      _ => {
+        return self.error(ParseError {
+          pos: self.current_token_position(),
+          kind: ParseErrorKind::MissingType,
+        })
       }
-    }
+    };
 
-    let return_type = if current_token_is!(self, Token::Arrow) {
+    expect_token_and_do!(self, Token::Arrow, {
       self.advance();
+    });
 
-      match self.parse_type_expression() {
-        Some(type_node) => Some(type_node),
-        _ => {
-          return self.error(ParseError {
-            pos: self.current_token_position(),
-            kind: ParseErrorKind::MissingReturnType,
-          })
-        }
-      }
-    } else {
-      if param_types.len() != 1 {
+    let return_type = match self.parse_type_expression() {
+      Some(type_expr) => Box::new(type_expr),
+      _ => {
         return self.error(ParseError {
           pos: self.current_token_position(),
           kind: ParseErrorKind::MissingReturnType,
-        });
+        })
       }
-
-      param_types.pop()
     };
 
     let end = expect_token_and_do!(self, Token::RightBrace, {
-      let pos = self.current_token_position();
+      let (_, end) = self.current_token_position();
       self.advance();
-      pos.1
+      end
     });
 
     Some(TypeExprNode {
-      id: self.next_id(),
       pos: (start, end),
-      kind: TypeExprKind::Block(param_types, Box::new(return_type.unwrap())),
+      kind: TypeExprKind::Func(param_type, return_type),
     })
   }
 
   fn parse_type_expression(&mut self) -> Option<TypeExprNode> {
     match self.current_token() {
-      Some(&Token::IdentifierUpper(..)) => self.parse_type_identifier(),
-      Some(&Token::LeftParen(..)) => self.parse_type_tuple(),
-      Some(&Token::LeftBrace(..)) => self.parse_type_block(),
+      Some(&Token::Identifier(..)) => self.parse_type_identifier(),
+      Some(&Token::LeftParen(..)) => self.parse_type_parenthetical(),
+      Some(&Token::LeftBrace(..)) => self.parse_type_func(),
       _ => None,
     }
   }
 
   fn parse_type_identifier(&mut self) -> Option<TypeExprNode> {
-    let (start, end) = expect_token_and_do!(self, Token::IdentifierUpper, {
+    let (start, end) = expect_token_and_do!(self, Token::Identifier, {
       let pos = self.current_token_position();
       self.advance();
       pos
     });
 
     let ident = IdentifierNode {
-      id: self.next_id(),
       pos: (start, end),
       name: read_string!(self, start, end),
       typ: None,
     };
 
-    if current_token_is!(self, Token::LeftParen) {
+    if current_token_is!(self, Token::LeftAngle) {
       self.advance();
 
       let mut type_params = Vec::new();
@@ -1660,37 +1452,40 @@ impl<'a> Parser<'a> {
         }
       }
 
-      let params_end = expect_token_and_do!(self, Token::RightParen, {
+      let params_end = expect_token_and_do!(self, Token::RightAngle, {
         let pos = self.current_token_position();
         self.advance();
         pos.1
       });
 
       return Some(TypeExprNode {
-        id: self.next_id(),
         pos: (start, params_end),
-        kind: TypeExprKind::Generic(ident, type_params),
+        kind: TypeExprKind::ConstructorGeneric(ident, type_params),
       });
     }
 
     Some(TypeExprNode {
-      id: self.next_id(),
       pos: (start, end),
-      kind: TypeExprKind::Ident(ident),
+      kind: TypeExprKind::Constructor(ident),
     })
   }
 
-  fn parse_type_tuple(&mut self) -> Option<TypeExprNode> {
+  fn parse_type_parenthetical(&mut self) -> Option<TypeExprNode> {
     let start = expect_token_and_do!(self, Token::LeftParen, {
       let pos = self.current_token_position();
       self.advance();
       pos.0
     });
 
-    let mut entries = Vec::new();
+    let mut first_entry = None;
+    let mut other_entries = Vec::new();
 
     while let Some(type_node) = self.parse_type_expression() {
-      entries.push(type_node);
+      if first_entry.is_none() {
+        first_entry = Some(type_node)
+      } else {
+        other_entries.push(type_node);
+      }
 
       match self.current_token() {
         Some(&Token::Comma(..)) => self.advance(),
@@ -1704,10 +1499,25 @@ impl<'a> Parser<'a> {
       pos.1
     });
 
+    if first_entry.is_none() {
+      return Some(TypeExprNode {
+        pos: (start, end),
+        kind: TypeExprKind::EmptyTuple,
+      });
+    }
+
+    if other_entries.is_empty() {
+      return Some(TypeExprNode {
+        pos: (start, end),
+        kind: TypeExprKind::Grouping(Box::new(first_entry.unwrap())),
+      });
+    }
+
+    other_entries.insert(0, first_entry.unwrap());
+
     Some(TypeExprNode {
-      id: self.next_id(),
       pos: (start, end),
-      kind: TypeExprKind::Tuple(entries),
+      kind: TypeExprKind::Tuple(other_entries),
     })
   }
 
@@ -1717,11 +1527,7 @@ impl<'a> Parser<'a> {
       let name = read_string!(self, pos.0, pos.1);
       self.advance();
 
-      Box::new(OperatorNode {
-        id: self.next_id(),
-        pos,
-        name,
-      })
+      Box::new(OperatorNode { pos, name })
     });
 
     let expr_node = match self.parse_expression() {
@@ -1735,7 +1541,6 @@ impl<'a> Parser<'a> {
     };
 
     Some(ExprNode {
-      id: self.next_id(),
       pos: (op_node.pos.0, expr_node.pos.1),
       kind: ExprKind::UnaryOperation {
         op: op_node,
@@ -1753,7 +1558,6 @@ impl<'a> Parser<'a> {
     });
 
     Some(ExprNode {
-      id: self.next_id(),
       pos,
       kind: ExprKind::Underscore,
       typ: None,
@@ -1789,7 +1593,6 @@ impl<'a> Parser<'a> {
     };
 
     Some(UseNode {
-      id: self.next_id(),
       pos: (start, qualifier.pos.1),
       module_name,
       qualifier,

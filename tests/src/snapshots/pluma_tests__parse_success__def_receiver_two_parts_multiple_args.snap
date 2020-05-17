@@ -1,0 +1,302 @@
+---
+source: tests/src/parse_success.rs
+expression: "def Person . hello (String, Int) world () {\n  a, b, c => \"wow!\"\n}"
+---
+
+=== Source ===
+def Person . hello (String, Int) world () {
+  a, b, c => "wow!"
+}
+
+=== Tokens ===
+[
+    KeywordDef(
+        0,
+        3,
+    ),
+    Identifier(
+        4,
+        10,
+    ),
+    Dot(
+        11,
+        12,
+    ),
+    Identifier(
+        13,
+        18,
+    ),
+    LeftParen(
+        19,
+        20,
+    ),
+    Identifier(
+        20,
+        26,
+    ),
+    Comma(
+        26,
+        27,
+    ),
+    Identifier(
+        28,
+        31,
+    ),
+    RightParen(
+        31,
+        32,
+    ),
+    Identifier(
+        33,
+        38,
+    ),
+    LeftParen(
+        39,
+        40,
+    ),
+    RightParen(
+        40,
+        41,
+    ),
+    LeftBrace(
+        42,
+        43,
+    ),
+    LineBreak(
+        43,
+        44,
+    ),
+    Identifier(
+        46,
+        47,
+    ),
+    Comma(
+        47,
+        48,
+    ),
+    Identifier(
+        49,
+        50,
+    ),
+    Comma(
+        50,
+        51,
+    ),
+    Identifier(
+        52,
+        53,
+    ),
+    DoubleArrow(
+        54,
+        56,
+    ),
+    StringLiteral(
+        58,
+        62,
+    ),
+    LineBreak(
+        63,
+        64,
+    ),
+    RightBrace(
+        64,
+        65,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        65,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                65,
+            ),
+            kind: Def(
+                DefNode {
+                    pos: (
+                        0,
+                        65,
+                    ),
+                    kind: Method {
+                        receiver: TypeExprNode {
+                            pos: (
+                                4,
+                                10,
+                            ),
+                            kind: Constructor(
+                                IdentifierNode {
+                                    pos: (
+                                        4,
+                                        10,
+                                    ),
+                                    name: "Person",
+                                    typ: None,
+                                },
+                            ),
+                        },
+                        signature: [
+                            (
+                                IdentifierNode {
+                                    pos: (
+                                        13,
+                                        18,
+                                    ),
+                                    name: "hello",
+                                    typ: None,
+                                },
+                                TypeExprNode {
+                                    pos: (
+                                        19,
+                                        32,
+                                    ),
+                                    kind: Tuple(
+                                        [
+                                            TypeExprNode {
+                                                pos: (
+                                                    20,
+                                                    26,
+                                                ),
+                                                kind: Constructor(
+                                                    IdentifierNode {
+                                                        pos: (
+                                                            20,
+                                                            26,
+                                                        ),
+                                                        name: "String",
+                                                        typ: None,
+                                                    },
+                                                ),
+                                            },
+                                            TypeExprNode {
+                                                pos: (
+                                                    28,
+                                                    31,
+                                                ),
+                                                kind: Constructor(
+                                                    IdentifierNode {
+                                                        pos: (
+                                                            28,
+                                                            31,
+                                                        ),
+                                                        name: "Int",
+                                                        typ: None,
+                                                    },
+                                                ),
+                                            },
+                                        ],
+                                    ),
+                                },
+                            ),
+                            (
+                                IdentifierNode {
+                                    pos: (
+                                        33,
+                                        38,
+                                    ),
+                                    name: "world",
+                                    typ: None,
+                                },
+                                TypeExprNode {
+                                    pos: (
+                                        39,
+                                        41,
+                                    ),
+                                    kind: EmptyTuple,
+                                },
+                            ),
+                        ],
+                    },
+                    return_type: None,
+                    params: [
+                        PatternNode {
+                            pos: (
+                                46,
+                                47,
+                            ),
+                            kind: Ident(
+                                IdentifierNode {
+                                    pos: (
+                                        46,
+                                        47,
+                                    ),
+                                    name: "a",
+                                    typ: None,
+                                },
+                            ),
+                        },
+                        PatternNode {
+                            pos: (
+                                49,
+                                50,
+                            ),
+                            kind: Ident(
+                                IdentifierNode {
+                                    pos: (
+                                        49,
+                                        50,
+                                    ),
+                                    name: "b",
+                                    typ: None,
+                                },
+                            ),
+                        },
+                        PatternNode {
+                            pos: (
+                                52,
+                                53,
+                            ),
+                            kind: Ident(
+                                IdentifierNode {
+                                    pos: (
+                                        52,
+                                        53,
+                                    ),
+                                    name: "c",
+                                    typ: None,
+                                },
+                            ),
+                        },
+                    ],
+                    body: [
+                        StatementNode {
+                            pos: (
+                                58,
+                                62,
+                            ),
+                            kind: Expr(
+                                ExprNode {
+                                    pos: (
+                                        58,
+                                        62,
+                                    ),
+                                    kind: Literal(
+                                        LiteralNode {
+                                            pos: (
+                                                58,
+                                                62,
+                                            ),
+                                            kind: Str(
+                                                "wow!",
+                                            ),
+                                            typ: None,
+                                        },
+                                    ),
+                                    typ: None,
+                                },
+                            ),
+                        },
+                    ],
+                },
+            ),
+        },
+    ],
+}
+

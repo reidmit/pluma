@@ -62,8 +62,6 @@ impl Compiler {
       TopologicalSort::Sorted(names) => names,
     };
 
-    // println!("{:#?}", self.modules);
-
     for module_name in sorted_names {
       let mut module_scope = Scope::new();
 
@@ -71,10 +69,10 @@ impl Compiler {
 
       let module_to_analyze = self.modules.get_mut(module_name).unwrap();
 
+      println!("{:#?}", module_to_analyze.ast);
+
       let mut type_collector = TypeCollector::new(&mut module_scope);
       module_to_analyze.traverse(&mut type_collector);
-
-      println!("scope after collection: {:#?}", module_scope);
 
       let mut analyzer = Analyzer::new(&mut module_scope);
       module_to_analyze.traverse(&mut analyzer);
@@ -85,8 +83,6 @@ impl Compiler {
           self.to_module_path(self.entry_module_name.clone()),
         ))
       }
-
-      println!("scope after analysis: {:#?}", module_scope);
     }
 
     if !self.diagnostics.is_empty() {

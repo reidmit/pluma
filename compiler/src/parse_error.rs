@@ -22,10 +22,12 @@ pub enum ParseErrorKind {
   MissingIdentifier,
   MissingIndexBetweenBrackets,
   MissingMatchCases,
+  IncompleteMethodSignature,
   MissingQualifierAfterAs,
   MissingReturnType,
   MissingRightHandSideOfAssignment,
   MissingStructFields,
+  MissingTupleEntries,
   MissingType,
   MissingTypeNameInTypeDefinition,
   ReturnOutsideDefinitionBody,
@@ -42,6 +44,7 @@ impl fmt::Display for ParseError {
     use ParseErrorKind::*;
 
     match self.kind {
+      IncompleteMethodSignature => write!(f, "Incomplete method signature."),
       InvalidBinaryDigit => write!(f, "Invalid binary digit."),
       InvalidDecimalDigit => write!(f, "Invalid digit."),
       InvalidHexDigit => write!(f, "Invalid hexadecimal digit."),

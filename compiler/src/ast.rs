@@ -1,14 +1,13 @@
 use crate::types::ValueType;
+use std::fmt;
 use uuid::Uuid;
 
 pub type Position = (usize, usize);
-pub type NodeId = Uuid;
-pub type SignaturePart = (Box<IdentifierNode>, Vec<TypeExprNode>);
+pub type SignaturePart = (Box<IdentifierNode>, Box<TypeExprNode>);
 pub type Signature = Vec<SignaturePart>;
 
 #[derive(Debug)]
 pub struct DefNode {
-  pub id: NodeId,
   pub pos: Position,
   pub kind: DefKind,
   pub return_type: Option<TypeExprNode>,
@@ -47,7 +46,6 @@ pub enum DefKind {
 
 #[derive(Debug)]
 pub struct ExprNode {
-  pub id: NodeId,
   pub pos: Position,
   pub kind: ExprKind,
   pub typ: Option<ValueType>,
@@ -95,7 +93,6 @@ pub enum ExprKind {
 
 #[derive(Debug, Clone)]
 pub struct IdentifierNode {
-  pub id: NodeId,
   pub pos: Position,
   pub name: String,
   pub typ: Option<ValueType>,
@@ -103,7 +100,6 @@ pub struct IdentifierNode {
 
 #[derive(Debug)]
 pub struct LetNode {
-  pub id: NodeId,
   pub pos: Position,
   pub pattern: PatternNode,
   pub value: ExprNode,
@@ -111,7 +107,6 @@ pub struct LetNode {
 
 #[derive(Debug)]
 pub struct LiteralNode {
-  pub id: NodeId,
   pub pos: Position,
   pub kind: LiteralKind,
   pub typ: Option<ValueType>,
@@ -129,7 +124,6 @@ pub enum LiteralKind {
 
 #[derive(Debug)]
 pub struct MatchNode {
-  pub id: NodeId,
   pub pos: Position,
   pub subject: Box<ExprNode>,
   pub cases: Vec<MatchCaseNode>,
@@ -137,7 +131,6 @@ pub struct MatchNode {
 
 #[derive(Debug)]
 pub struct MatchCaseNode {
-  pub id: NodeId,
   pub pos: Position,
   pub pattern: PatternNode,
   pub body: ExprNode,
@@ -145,21 +138,18 @@ pub struct MatchCaseNode {
 
 #[derive(Debug)]
 pub struct ModuleNode {
-  pub id: NodeId,
   pub pos: Position,
   pub body: Vec<TopLevelStatementNode>,
 }
 
 #[derive(Debug)]
 pub struct OperatorNode {
-  pub id: NodeId,
   pub pos: Position,
   pub name: String,
 }
 
 #[derive(Debug)]
 pub struct PatternNode {
-  pub id: NodeId,
   pub pos: Position,
   pub kind: PatternKind,
 }
@@ -171,14 +161,12 @@ pub enum PatternKind {
 
 #[derive(Debug)]
 pub struct ReturnNode {
-  pub id: NodeId,
   pub pos: Position,
   pub value: ExprNode,
 }
 
 #[derive(Debug)]
 pub struct StatementNode {
-  pub id: NodeId,
   pub pos: Position,
   pub kind: StatementKind,
 }
@@ -192,7 +180,6 @@ pub enum StatementKind {
 
 #[derive(Debug)]
 pub struct TopLevelStatementNode {
-  pub id: NodeId,
   pub pos: Position,
   pub kind: TopLevelStatementKind,
 }
@@ -207,7 +194,6 @@ pub enum TopLevelStatementKind {
 
 #[derive(Debug)]
 pub struct TypeExprNode {
-  pub id: NodeId,
   pub pos: Position,
   pub kind: TypeExprKind,
 }
@@ -215,18 +201,21 @@ pub struct TypeExprNode {
 #[derive(Debug)]
 pub enum TypeExprKind {
   // e.g. String
-  Ident(IdentifierNode),
-  // e.g. List(String),
-  Generic(IdentifierNode, Vec<TypeExprNode>),
-  // e.g. { String -> Bool }
-  Block(Vec<TypeExprNode>, Box<TypeExprNode>),
+  Constructor(IdentifierNode),
+  // e.g. Dict<Int, String>
+  ConstructorGeneric(IdentifierNode, Vec<TypeExprNode>),
+  // e.g. String -> Bool
+  Func(Box<TypeExprNode>, Box<TypeExprNode>),
   // e.g. (String, Bool)
   Tuple(Vec<TypeExprNode>),
+  // e.g. ()
+  EmptyTuple,
+  // e.g. (String) or (String -> Bool)
+  Grouping(Box<TypeExprNode>),
 }
 
 #[derive(Debug)]
 pub struct TypeDefNode {
-  pub id: NodeId,
   pub pos: Position,
   pub kind: TypeDefKind,
   pub name: Box<IdentifierNode>,
@@ -258,7 +247,6 @@ pub enum TypeDefKind {
 
 #[derive(Debug, Clone)]
 pub struct UseNode {
-  pub id: NodeId,
   pub pos: Position,
   pub module_name: String,
   pub qualifier: Box<IdentifierNode>,

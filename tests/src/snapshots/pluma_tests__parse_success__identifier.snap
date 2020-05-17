@@ -1,0 +1,54 @@
+---
+source: tests/src/parse_success.rs
+expression: cool
+---
+
+=== Source ===
+cool
+
+=== Tokens ===
+[
+    Identifier(
+        0,
+        4,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        4,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                4,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        0,
+                        4,
+                    ),
+                    kind: Identifier(
+                        IdentifierNode {
+                            pos: (
+                                0,
+                                4,
+                            ),
+                            name: "cool",
+                            typ: None,
+                        },
+                    ),
+                    typ: None,
+                },
+            ),
+        },
+    ],
+}
+

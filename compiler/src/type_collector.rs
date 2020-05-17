@@ -28,7 +28,7 @@ impl<'a> VisitorMut for TypeCollector<'a> {
       TypeDefKind::Enum { variants } => {
         for variant in variants {
           match &variant.kind {
-            TypeExprKind::Ident(ident_node) => {
+            TypeExprKind::Constructor(ident_node) => {
               println!("variant: {:#?}", ident_node.name);
 
               let variant_name = ident_node.name.clone();

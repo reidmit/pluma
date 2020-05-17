@@ -23,7 +23,8 @@
         { "include": "#keyword-language" },
         { "include": "#keyword-control" },
         { "include": "#storage-type" },
-        { "include": "#symbol" }
+        { "include": "#symbol" },
+        { "include": "#generics" }
       ]
     },
 
@@ -115,6 +116,19 @@
         "0": { "name": "punctuation.block.close.pluma" }
       },
       "patterns": [{ "include": "#any" }]
+    },
+
+    "generics": {
+      "name": "punctuation.definition.typeparameters.pluma",
+      "begin": "<",
+      "end": ">",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.typeparameters.begin.pluma" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.typeparameters.end.pluma" }
+      },
+      "patterns": []
     },
 
     "comment": {

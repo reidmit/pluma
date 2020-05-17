@@ -1,0 +1,183 @@
+---
+source: tests/src/parse_success.rs
+expression: "def Person . greet String {\n  a => \"wow!\"\n}"
+---
+
+=== Source ===
+def Person . greet String {
+  a => "wow!"
+}
+
+=== Tokens ===
+[
+    KeywordDef(
+        0,
+        3,
+    ),
+    Identifier(
+        4,
+        10,
+    ),
+    Dot(
+        11,
+        12,
+    ),
+    Identifier(
+        13,
+        18,
+    ),
+    Identifier(
+        19,
+        25,
+    ),
+    LeftBrace(
+        26,
+        27,
+    ),
+    LineBreak(
+        27,
+        28,
+    ),
+    Identifier(
+        30,
+        31,
+    ),
+    DoubleArrow(
+        32,
+        34,
+    ),
+    StringLiteral(
+        36,
+        40,
+    ),
+    LineBreak(
+        41,
+        42,
+    ),
+    RightBrace(
+        42,
+        43,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        43,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                43,
+            ),
+            kind: Def(
+                DefNode {
+                    pos: (
+                        0,
+                        43,
+                    ),
+                    kind: Method {
+                        receiver: TypeExprNode {
+                            pos: (
+                                4,
+                                10,
+                            ),
+                            kind: Constructor(
+                                IdentifierNode {
+                                    pos: (
+                                        4,
+                                        10,
+                                    ),
+                                    name: "Person",
+                                    typ: None,
+                                },
+                            ),
+                        },
+                        signature: [
+                            (
+                                IdentifierNode {
+                                    pos: (
+                                        13,
+                                        18,
+                                    ),
+                                    name: "greet",
+                                    typ: None,
+                                },
+                                TypeExprNode {
+                                    pos: (
+                                        19,
+                                        25,
+                                    ),
+                                    kind: Constructor(
+                                        IdentifierNode {
+                                            pos: (
+                                                19,
+                                                25,
+                                            ),
+                                            name: "String",
+                                            typ: None,
+                                        },
+                                    ),
+                                },
+                            ),
+                        ],
+                    },
+                    return_type: None,
+                    params: [
+                        PatternNode {
+                            pos: (
+                                30,
+                                31,
+                            ),
+                            kind: Ident(
+                                IdentifierNode {
+                                    pos: (
+                                        30,
+                                        31,
+                                    ),
+                                    name: "a",
+                                    typ: None,
+                                },
+                            ),
+                        },
+                    ],
+                    body: [
+                        StatementNode {
+                            pos: (
+                                36,
+                                40,
+                            ),
+                            kind: Expr(
+                                ExprNode {
+                                    pos: (
+                                        36,
+                                        40,
+                                    ),
+                                    kind: Literal(
+                                        LiteralNode {
+                                            pos: (
+                                                36,
+                                                40,
+                                            ),
+                                            kind: Str(
+                                                "wow!",
+                                            ),
+                                            typ: None,
+                                        },
+                                    ),
+                                    typ: None,
+                                },
+                            ),
+                        },
+                    ],
+                },
+            ),
+        },
+    ],
+}
+

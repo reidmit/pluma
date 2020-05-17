@@ -219,10 +219,10 @@ mod tests {
       TopologicalSort::Sorted(sorted) => assert_eq!(
         sorted.to_owned(),
         vec![
-          "d".to_owned(),
-          "c".to_owned(),
-          "b".to_owned(),
           "a".to_owned(),
+          "b".to_owned(),
+          "c".to_owned(),
+          "d".to_owned(),
         ]
       ),
       TopologicalSort::Cycle(..) => panic!("Unexpected cycle"),
@@ -249,7 +249,7 @@ mod tests {
     match g.sort() {
       TopologicalSort::Sorted(sorted) => assert_eq!(
         sorted.to_owned(),
-        vec!["c".to_owned(), "b".to_owned(), "a".to_owned(),]
+        vec!["a".to_owned(), "b".to_owned(), "c".to_owned(),]
       ),
       TopologicalSort::Cycle(..) => panic!("Unexpected cycle"),
     }

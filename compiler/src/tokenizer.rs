@@ -186,6 +186,16 @@ impl<'a> Tokenizer<'a> {
           tokens.push(Underscore(start_index, index))
         }
 
+        b'$' if index < length - 1 && is_digit(source[index + 1]) => {
+          index += 1;
+
+          while index < length && is_digit(source[index]) {
+            index += 1;
+          }
+
+          tokens.push(ParamPlaceholder(start_index, index));
+        }
+
         _ if is_operator_char(byte) => {
           while index < length && is_operator_char(source[index]) {
             index += 1;
@@ -201,6 +211,8 @@ impl<'a> Tokenizer<'a> {
             b"->" => Arrow,
             b"::" => DoubleColon,
             b":" => Colon,
+            b"<" => LeftAngle,
+            b">" => RightAngle,
             _ => Operator,
           };
 
@@ -237,8 +249,7 @@ impl<'a> Tokenizer<'a> {
             b"struct" => KeywordStruct,
             b"trait" => KeywordTrait,
             b"where" => KeywordWhere,
-            _ if is_uppercase(value[0]) => IdentifierUpper,
-            _ => IdentifierLower,
+            _ => Identifier,
           };
 
           if constructor == KeywordUse {
