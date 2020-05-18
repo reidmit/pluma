@@ -1,0 +1,81 @@
+---
+source: tests/src/parse_success.rs
+expression: func()
+---
+
+=== Source ===
+func()
+
+=== Tokens ===
+[
+    Identifier(
+        0,
+        4,
+    ),
+    LeftParen(
+        4,
+        5,
+    ),
+    RightParen(
+        5,
+        6,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        6,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                6,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        0,
+                        6,
+                    ),
+                    kind: Call {
+                        callee: ExprNode {
+                            pos: (
+                                0,
+                                4,
+                            ),
+                            kind: Identifier(
+                                IdentifierNode {
+                                    pos: (
+                                        0,
+                                        4,
+                                    ),
+                                    name: "func",
+                                    typ: None,
+                                },
+                            ),
+                            typ: None,
+                        },
+                        args: [
+                            ExprNode {
+                                pos: (
+                                    4,
+                                    6,
+                                ),
+                                kind: EmptyTuple,
+                                typ: None,
+                            },
+                        ],
+                    },
+                    typ: None,
+                },
+            ),
+        },
+    ],
+}
+

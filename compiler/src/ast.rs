@@ -48,7 +48,6 @@ pub struct ExprNode {
 
 #[derive(Debug)]
 pub enum ExprKind {
-  Array(Vec<ExprNode>),
   Assignment {
     left: Box<IdentifierNode>,
     right: Box<ExprNode>,
@@ -76,6 +75,7 @@ pub enum ExprKind {
   Identifier(IdentifierNode),
   MultiPartIdentifier(Vec<IdentifierNode>),
   Interpolation(Vec<ExprNode>),
+  List(Vec<ExprNode>),
   Literal(LiteralNode),
   Match(MatchNode),
   Tuple(Vec<ExprNode>),

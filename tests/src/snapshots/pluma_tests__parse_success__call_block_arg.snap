@@ -1,0 +1,148 @@
+---
+source: tests/src/parse_success.rs
+expression: "do { print \"hey\" }"
+---
+
+=== Source ===
+do { print "hey" }
+
+=== Tokens ===
+[
+    Identifier(
+        0,
+        2,
+    ),
+    LeftBrace(
+        3,
+        4,
+    ),
+    Identifier(
+        5,
+        10,
+    ),
+    StringLiteral(
+        12,
+        15,
+    ),
+    RightBrace(
+        17,
+        18,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        18,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                18,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        0,
+                        18,
+                    ),
+                    kind: Call {
+                        callee: ExprNode {
+                            pos: (
+                                0,
+                                2,
+                            ),
+                            kind: Identifier(
+                                IdentifierNode {
+                                    pos: (
+                                        0,
+                                        2,
+                                    ),
+                                    name: "do",
+                                    typ: None,
+                                },
+                            ),
+                            typ: None,
+                        },
+                        args: [
+                            ExprNode {
+                                pos: (
+                                    3,
+                                    18,
+                                ),
+                                kind: Block {
+                                    params: [],
+                                    body: [
+                                        StatementNode {
+                                            pos: (
+                                                5,
+                                                15,
+                                            ),
+                                            kind: Expr(
+                                                ExprNode {
+                                                    pos: (
+                                                        5,
+                                                        15,
+                                                    ),
+                                                    kind: Call {
+                                                        callee: ExprNode {
+                                                            pos: (
+                                                                5,
+                                                                10,
+                                                            ),
+                                                            kind: Identifier(
+                                                                IdentifierNode {
+                                                                    pos: (
+                                                                        5,
+                                                                        10,
+                                                                    ),
+                                                                    name: "print",
+                                                                    typ: None,
+                                                                },
+                                                            ),
+                                                            typ: None,
+                                                        },
+                                                        args: [
+                                                            ExprNode {
+                                                                pos: (
+                                                                    12,
+                                                                    15,
+                                                                ),
+                                                                kind: Literal(
+                                                                    LiteralNode {
+                                                                        pos: (
+                                                                            12,
+                                                                            15,
+                                                                        ),
+                                                                        kind: Str(
+                                                                            "hey",
+                                                                        ),
+                                                                        typ: None,
+                                                                    },
+                                                                ),
+                                                                typ: None,
+                                                            },
+                                                        ],
+                                                    },
+                                                    typ: None,
+                                                },
+                                            ),
+                                        },
+                                    ],
+                                },
+                                typ: None,
+                            },
+                        ],
+                    },
+                    typ: None,
+                },
+            ),
+        },
+    ],
+}
+

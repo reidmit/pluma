@@ -1,0 +1,88 @@
+---
+source: tests/src/parse_success.rs
+expression: func 1
+---
+
+=== Source ===
+func 1
+
+=== Tokens ===
+[
+    Identifier(
+        0,
+        4,
+    ),
+    DecimalDigits(
+        5,
+        6,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        6,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                6,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        0,
+                        6,
+                    ),
+                    kind: Call {
+                        callee: ExprNode {
+                            pos: (
+                                0,
+                                4,
+                            ),
+                            kind: Identifier(
+                                IdentifierNode {
+                                    pos: (
+                                        0,
+                                        4,
+                                    ),
+                                    name: "func",
+                                    typ: None,
+                                },
+                            ),
+                            typ: None,
+                        },
+                        args: [
+                            ExprNode {
+                                pos: (
+                                    5,
+                                    6,
+                                ),
+                                kind: Literal(
+                                    LiteralNode {
+                                        pos: (
+                                            5,
+                                            6,
+                                        ),
+                                        kind: IntDecimal(
+                                            1,
+                                        ),
+                                        typ: None,
+                                    },
+                                ),
+                                typ: None,
+                            },
+                        ],
+                    },
+                    typ: None,
+                },
+            ),
+        },
+    ],
+}
+

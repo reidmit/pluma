@@ -1,0 +1,158 @@
+---
+source: tests/src/parse_success.rs
+expression: "[\"hey\", \"wow\", \"cool\", \"multi-\n\nline\"]"
+---
+
+=== Source ===
+["hey", "wow", "cool", "multi-
+
+line"]
+
+=== Tokens ===
+[
+    LeftBracket(
+        0,
+        1,
+    ),
+    StringLiteral(
+        2,
+        5,
+    ),
+    Comma(
+        6,
+        7,
+    ),
+    StringLiteral(
+        9,
+        12,
+    ),
+    Comma(
+        13,
+        14,
+    ),
+    StringLiteral(
+        16,
+        20,
+    ),
+    Comma(
+        21,
+        22,
+    ),
+    StringLiteral(
+        24,
+        36,
+    ),
+    RightBracket(
+        37,
+        38,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        38,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                38,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        0,
+                        38,
+                    ),
+                    kind: List(
+                        [
+                            ExprNode {
+                                pos: (
+                                    2,
+                                    5,
+                                ),
+                                kind: Literal(
+                                    LiteralNode {
+                                        pos: (
+                                            2,
+                                            5,
+                                        ),
+                                        kind: Str(
+                                            "hey",
+                                        ),
+                                        typ: None,
+                                    },
+                                ),
+                                typ: None,
+                            },
+                            ExprNode {
+                                pos: (
+                                    9,
+                                    12,
+                                ),
+                                kind: Literal(
+                                    LiteralNode {
+                                        pos: (
+                                            9,
+                                            12,
+                                        ),
+                                        kind: Str(
+                                            "wow",
+                                        ),
+                                        typ: None,
+                                    },
+                                ),
+                                typ: None,
+                            },
+                            ExprNode {
+                                pos: (
+                                    16,
+                                    20,
+                                ),
+                                kind: Literal(
+                                    LiteralNode {
+                                        pos: (
+                                            16,
+                                            20,
+                                        ),
+                                        kind: Str(
+                                            "cool",
+                                        ),
+                                        typ: None,
+                                    },
+                                ),
+                                typ: None,
+                            },
+                            ExprNode {
+                                pos: (
+                                    24,
+                                    36,
+                                ),
+                                kind: Literal(
+                                    LiteralNode {
+                                        pos: (
+                                            24,
+                                            36,
+                                        ),
+                                        kind: Str(
+                                            "multi-\n\nline",
+                                        ),
+                                        typ: None,
+                                    },
+                                ),
+                                typ: None,
+                            },
+                        ],
+                    ),
+                    typ: None,
+                },
+            ),
+        },
+    ],
+}
+

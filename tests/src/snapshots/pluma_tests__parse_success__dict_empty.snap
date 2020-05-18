@@ -1,0 +1,55 @@
+---
+source: tests/src/parse_success.rs
+expression: "[:]"
+---
+
+=== Source ===
+[:]
+
+=== Tokens ===
+[
+    LeftBracket(
+        0,
+        1,
+    ),
+    Colon(
+        1,
+        2,
+    ),
+    RightBracket(
+        2,
+        3,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        3,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                3,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        0,
+                        3,
+                    ),
+                    kind: Dict(
+                        [],
+                    ),
+                    typ: None,
+                },
+            ),
+        },
+    ],
+}
+

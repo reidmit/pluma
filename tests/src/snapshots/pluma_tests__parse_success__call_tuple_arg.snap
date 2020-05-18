@@ -1,0 +1,134 @@
+---
+source: tests/src/parse_success.rs
+expression: "func (1, \"wow\")"
+---
+
+=== Source ===
+func (1, "wow")
+
+=== Tokens ===
+[
+    Identifier(
+        0,
+        4,
+    ),
+    LeftParen(
+        5,
+        6,
+    ),
+    DecimalDigits(
+        6,
+        7,
+    ),
+    Comma(
+        7,
+        8,
+    ),
+    StringLiteral(
+        10,
+        13,
+    ),
+    RightParen(
+        14,
+        15,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        15,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                15,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        0,
+                        15,
+                    ),
+                    kind: Call {
+                        callee: ExprNode {
+                            pos: (
+                                0,
+                                4,
+                            ),
+                            kind: Identifier(
+                                IdentifierNode {
+                                    pos: (
+                                        0,
+                                        4,
+                                    ),
+                                    name: "func",
+                                    typ: None,
+                                },
+                            ),
+                            typ: None,
+                        },
+                        args: [
+                            ExprNode {
+                                pos: (
+                                    5,
+                                    15,
+                                ),
+                                kind: Tuple(
+                                    [
+                                        ExprNode {
+                                            pos: (
+                                                6,
+                                                7,
+                                            ),
+                                            kind: Literal(
+                                                LiteralNode {
+                                                    pos: (
+                                                        6,
+                                                        7,
+                                                    ),
+                                                    kind: IntDecimal(
+                                                        1,
+                                                    ),
+                                                    typ: None,
+                                                },
+                                            ),
+                                            typ: None,
+                                        },
+                                        ExprNode {
+                                            pos: (
+                                                10,
+                                                13,
+                                            ),
+                                            kind: Literal(
+                                                LiteralNode {
+                                                    pos: (
+                                                        10,
+                                                        13,
+                                                    ),
+                                                    kind: Str(
+                                                        "wow",
+                                                    ),
+                                                    typ: None,
+                                                },
+                                            ),
+                                            typ: None,
+                                        },
+                                    ],
+                                ),
+                                typ: None,
+                            },
+                        ],
+                    },
+                    typ: None,
+                },
+            ),
+        },
+    ],
+}
+

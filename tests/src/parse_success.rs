@@ -3,6 +3,9 @@ use pluma_compiler::parser::Parser;
 use pluma_compiler::tokenizer::Tokenizer;
 
 test_parse_success! {
+  empty: r#"
+  "#,
+
   number: r#"
     |47
   "#,
@@ -11,8 +14,37 @@ test_parse_success! {
     |"wow"
   "#,
 
+  string_multiple_lines: r#"
+    |"wow
+    |this
+    |   is
+    |cool!"
+  "#,
+
   identifier: r#"
     |cool
+  "#,
+
+  list_empty: r#"
+    |[]
+  "#,
+
+  list_of_numbers: r#"
+    |[1, 2, 3]
+  "#,
+
+  list_of_strings: r#"
+    |["hey", "wow", "cool", "multi-
+    |
+    |line"]
+  "#,
+
+  list_of_expressions: r#"
+    |[1, callThing(), repeat 3 times "wow"]
+  "#,
+
+  dict_empty: r#"
+    |[:]
   "#,
 
   def_one_part_empty_arg: r#"
@@ -54,6 +86,38 @@ test_parse_success! {
   def_receiver_two_parts_multiple_args: r#"
     |def Person . hello (String, Int) world () {
     |  a, b, c => "wow!"
+    |}
+  "#,
+
+  call_empty_arg: r#"
+    |func()
+  "#,
+
+  call_number_arg: r#"
+    |func 1
+  "#,
+
+  call_tuple_arg: r#"
+    |func (1, "wow")
+  "#,
+
+  call_multiple_parts: r#"
+    |multiply 1 by 2
+  "#,
+
+  call_with_parens_around_single_args: r#"
+    |multiply(1)by(2)
+  "#,
+
+  call_block_arg: r#"
+    |do { print "hey" }
+  "#,
+
+  call_spanning_multiple_lines: r#"
+    |if thing then {
+    |  print "yep!"
+    |} else {
+    |  print "nope!"
     |}
   "#,
 

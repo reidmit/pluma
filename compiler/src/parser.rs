@@ -201,73 +201,6 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_array_or_dict(&mut self) -> Option<ExprNode> {
-    let start = expect_token_and_do!(self, Token::LeftBracket, {
-      let pos = self.current_token_position();
-      self.advance();
-      pos.0
-    });
-
-    let mut array_elements = Vec::new();
-    let mut dict_entries = Vec::new();
-
-    while let Some(expr) = self.parse_expression() {
-      if current_token_is!(self, Token::Colon) {
-        if !array_elements.is_empty() {
-          self.error::<ExprNode>(ParseError {
-            pos: self.current_token_position(),
-            kind: ParseErrorKind::UnexpectedDictValueInArray,
-          });
-        }
-
-        self.advance();
-
-        match self.parse_expression() {
-          Some(val) => dict_entries.push((expr, val)),
-          _ => {
-            return self.error(ParseError {
-              pos: self.current_token_position(),
-              kind: ParseErrorKind::MissingDictValue,
-            })
-          }
-        }
-      } else {
-        if !dict_entries.is_empty() {
-          self.error::<ExprNode>(ParseError {
-            pos: self.current_token_position(),
-            kind: ParseErrorKind::MissingDictValue,
-          });
-        }
-
-        array_elements.push(expr);
-      }
-
-      if current_token_is!(self, Token::Comma) {
-        self.advance()
-      } else {
-        break;
-      }
-    }
-
-    let end = expect_token_and_do!(self, Token::RightBracket, {
-      let pos = self.current_token_position();
-      self.advance();
-      pos.1
-    });
-
-    let kind = if dict_entries.is_empty() {
-      ExprKind::Array(array_elements)
-    } else {
-      ExprKind::Dict(dict_entries)
-    };
-
-    Some(ExprNode {
-      pos: (start, end),
-      kind,
-      typ: None,
-    })
-  }
-
   fn parse_binary_number(&mut self) -> Option<LiteralNode> {
     let (start, end, value) = expect_token_and_do!(self, Token::BinaryDigits, {
       let (start, end) = self.current_token_position();
@@ -396,19 +329,18 @@ impl<'a> Parser<'a> {
     }
 
     let callee = match last_expr.kind {
-      ExprKind::Identifier(first_part) => {
-        let start = first_part.pos.0;
+      ExprKind::Identifier(first_callee_part) => {
+        let start = first_callee_part.pos.0;
 
-        let mut ident_callee_parts = Vec::new();
+        let mut rest_callee_parts = Vec::new();
 
         // If the last expr was an identifier, we allow multi-part names here
-        ident_callee_parts.push(first_part);
 
         // If there is an identifier now, it means this is a call to a multi-part name.
         while current_token_is!(self, Token::Identifier) {
           match self.parse_identifier() {
             Some(next_callee_part) => {
-              ident_callee_parts.push(next_callee_part);
+              rest_callee_parts.push(next_callee_part);
 
               // Grab the argument for this part
               match self.parse_term() {
@@ -431,9 +363,24 @@ impl<'a> Parser<'a> {
           }
         }
 
+        let (pos, kind) = if rest_callee_parts.len() > 0 {
+          let mut all_parts = vec![first_callee_part];
+          all_parts.append(&mut rest_callee_parts);
+
+          (
+            (start, all_parts.last().unwrap().pos.1),
+            ExprKind::MultiPartIdentifier(all_parts),
+          )
+        } else {
+          (
+            first_callee_part.pos,
+            ExprKind::Identifier(first_callee_part),
+          )
+        };
+
         ExprNode {
-          pos: (start, ident_callee_parts.last().unwrap().pos.1),
-          kind: ExprKind::MultiPartIdentifier(ident_callee_parts),
+          pos,
+          kind,
           typ: None,
         }
       }
@@ -701,44 +648,6 @@ impl<'a> Parser<'a> {
     Some(DefKind::Function { signature })
   }
 
-  fn parse_intrinsic(&mut self) -> Option<TypeDefNode> {
-    let start = expect_token_and_do!(self, Token::KeywordIntrinsic, {
-      let pos = self.current_token_position();
-      self.advance();
-      pos.0
-    });
-
-    let (name, end) = match self.current_token() {
-      Some(&Token::Identifier(start, end)) => {
-        let name_str = read_string!(self, start, end);
-
-        self.advance();
-
-        (
-          Box::new(IdentifierNode {
-            pos: (start, end),
-            name: name_str,
-            typ: None,
-          }),
-          end,
-        )
-      }
-      _ => {
-        return self.error(ParseError {
-          pos: self.current_token_position(),
-          kind: ParseErrorKind::MissingTypeNameInTypeDefinition,
-        })
-      }
-    };
-
-    Some(TypeDefNode {
-      pos: (start, end),
-      kind: TypeDefKind::Intrinsic,
-      name,
-      generics: Vec::new(),
-    })
-  }
-
   fn parse_enum(&mut self) -> Option<TypeDefNode> {
     let start = expect_token_and_do!(self, Token::KeywordEnum, {
       let pos = self.current_token_position();
@@ -821,111 +730,6 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_struct(&mut self) -> Option<TypeDefNode> {
-    let start = expect_token_and_do!(self, Token::KeywordStruct, {
-      let pos = self.current_token_position();
-      self.advance();
-      pos.0
-    });
-
-    let name = match self.current_token() {
-      Some(&Token::Identifier(start, end)) => {
-        let name_str = read_string!(self, start, end);
-
-        self.advance();
-
-        Box::new(IdentifierNode {
-          pos: (start, end),
-          name: name_str,
-          typ: None,
-        })
-      }
-      _ => {
-        return self.error(ParseError {
-          pos: self.current_token_position(),
-          kind: ParseErrorKind::MissingTypeNameInTypeDefinition,
-        })
-      }
-    };
-
-    let mut generics = Vec::new();
-
-    if current_token_is!(self, Token::LeftParen) {
-      self.advance();
-
-      while let Some(ident) = self.parse_identifier() {
-        generics.push(ident);
-
-        match self.current_token() {
-          Some(&Token::Comma(..)) => self.advance(),
-          _ => break,
-        }
-      }
-
-      expect_token_and_do!(self, Token::RightParen, {
-        self.advance();
-      });
-    }
-
-    let mut fields = Vec::new();
-
-    expect_token_and_do!(self, Token::LeftParen, {
-      self.advance();
-    });
-
-    self.skip_line_breaks();
-
-    while let Some(&Token::Identifier(..)) = self.current_token() {
-      let ident = match self.parse_identifier() {
-        Some(node) => node,
-        _ => break,
-      };
-
-      expect_token_and_do!(self, Token::DoubleColon, {
-        self.advance();
-      });
-
-      match self.parse_type_expression() {
-        Some(expr) => fields.push((ident, expr)),
-        _ => {
-          // Assume that the failure to parse the type expression has
-          // already generated an error
-          return None;
-        }
-      };
-
-      if current_token_is!(self, Token::Comma) {
-        self.advance();
-      } else {
-        break;
-      }
-
-      self.skip_line_breaks();
-    }
-
-    self.skip_line_breaks();
-
-    let end = expect_token_and_do!(self, Token::RightParen, {
-      let pos = self.current_token_position();
-      self.advance();
-      pos.1
-    });
-
-    if fields.is_empty() {
-      return self.error(ParseError {
-        pos: (start, end),
-        kind: ParseErrorKind::MissingStructFields,
-      });
-    }
-
-    Some(TypeDefNode {
-      pos: (start, end),
-      kind: TypeDefKind::Struct { fields },
-      name,
-      generics,
-    })
-  }
-
   fn parse_expression(&mut self) -> Option<ExprNode> {
     let mut expr = self.parse_operator_branch();
 
@@ -979,6 +783,44 @@ impl<'a> Parser<'a> {
     })
   }
 
+  fn parse_intrinsic(&mut self) -> Option<TypeDefNode> {
+    let start = expect_token_and_do!(self, Token::KeywordIntrinsic, {
+      let pos = self.current_token_position();
+      self.advance();
+      pos.0
+    });
+
+    let (name, end) = match self.current_token() {
+      Some(&Token::Identifier(start, end)) => {
+        let name_str = read_string!(self, start, end);
+
+        self.advance();
+
+        (
+          Box::new(IdentifierNode {
+            pos: (start, end),
+            name: name_str,
+            typ: None,
+          }),
+          end,
+        )
+      }
+      _ => {
+        return self.error(ParseError {
+          pos: self.current_token_position(),
+          kind: ParseErrorKind::MissingTypeNameInTypeDefinition,
+        })
+      }
+    };
+
+    Some(TypeDefNode {
+      pos: (start, end),
+      kind: TypeDefKind::Intrinsic,
+      name,
+      generics: Vec::new(),
+    })
+  }
+
   fn parse_let_statement(&mut self) -> Option<LetNode> {
     let start = expect_token_and_do!(self, Token::KeywordLet, {
       let (start, _) = self.current_token_position();
@@ -1010,6 +852,80 @@ impl<'a> Parser<'a> {
       pos: (start, end),
       pattern,
       value,
+    })
+  }
+
+  fn parse_list_or_dict(&mut self) -> Option<ExprNode> {
+    let start = expect_token_and_do!(self, Token::LeftBracket, {
+      let pos = self.current_token_position();
+      self.advance();
+      pos.0
+    });
+
+    let mut list_elements = Vec::new();
+    let mut dict_entries = Vec::new();
+
+    while let Some(expr) = self.parse_expression() {
+      if current_token_is!(self, Token::Colon) {
+        if !list_elements.is_empty() {
+          self.error::<ExprNode>(ParseError {
+            pos: self.current_token_position(),
+            kind: ParseErrorKind::UnexpectedDictValueInArray,
+          });
+        }
+
+        self.advance();
+
+        match self.parse_expression() {
+          Some(val) => dict_entries.push((expr, val)),
+          _ => {
+            return self.error(ParseError {
+              pos: self.current_token_position(),
+              kind: ParseErrorKind::MissingDictValue,
+            })
+          }
+        }
+      } else {
+        if !dict_entries.is_empty() {
+          self.error::<ExprNode>(ParseError {
+            pos: self.current_token_position(),
+            kind: ParseErrorKind::MissingDictValue,
+          });
+        }
+
+        list_elements.push(expr);
+      }
+
+      if current_token_is!(self, Token::Comma) {
+        self.advance()
+      } else {
+        break;
+      }
+    }
+
+    let kind = if list_elements.is_empty() && dict_entries.is_empty() {
+      if current_token_is!(self, Token::Colon) {
+        self.advance();
+        ExprKind::Dict(vec![])
+      } else {
+        ExprKind::List(vec![])
+      }
+    } else if list_elements.len() > 0 {
+      ExprKind::List(list_elements)
+    } else {
+      ExprKind::Dict(dict_entries)
+    };
+
+    let end = expect_token_and_do!(self, Token::RightBracket, {
+      let pos = self.current_token_position();
+      self.advance();
+      pos.1
+    });
+
+    Some(ExprNode {
+      pos: (start, end),
+      kind,
+      typ: None,
     })
   }
 
@@ -1335,10 +1251,115 @@ impl<'a> Parser<'a> {
     Some(expr_node)
   }
 
+  fn parse_struct(&mut self) -> Option<TypeDefNode> {
+    let start = expect_token_and_do!(self, Token::KeywordStruct, {
+      let pos = self.current_token_position();
+      self.advance();
+      pos.0
+    });
+
+    let name = match self.current_token() {
+      Some(&Token::Identifier(start, end)) => {
+        let name_str = read_string!(self, start, end);
+
+        self.advance();
+
+        Box::new(IdentifierNode {
+          pos: (start, end),
+          name: name_str,
+          typ: None,
+        })
+      }
+      _ => {
+        return self.error(ParseError {
+          pos: self.current_token_position(),
+          kind: ParseErrorKind::MissingTypeNameInTypeDefinition,
+        })
+      }
+    };
+
+    let mut generics = Vec::new();
+
+    if current_token_is!(self, Token::LeftParen) {
+      self.advance();
+
+      while let Some(ident) = self.parse_identifier() {
+        generics.push(ident);
+
+        match self.current_token() {
+          Some(&Token::Comma(..)) => self.advance(),
+          _ => break,
+        }
+      }
+
+      expect_token_and_do!(self, Token::RightParen, {
+        self.advance();
+      });
+    }
+
+    let mut fields = Vec::new();
+
+    expect_token_and_do!(self, Token::LeftParen, {
+      self.advance();
+    });
+
+    self.skip_line_breaks();
+
+    while let Some(&Token::Identifier(..)) = self.current_token() {
+      let ident = match self.parse_identifier() {
+        Some(node) => node,
+        _ => break,
+      };
+
+      expect_token_and_do!(self, Token::DoubleColon, {
+        self.advance();
+      });
+
+      match self.parse_type_expression() {
+        Some(expr) => fields.push((ident, expr)),
+        _ => {
+          // Assume that the failure to parse the type expression has
+          // already generated an error
+          return None;
+        }
+      };
+
+      if current_token_is!(self, Token::Comma) {
+        self.advance();
+      } else {
+        break;
+      }
+
+      self.skip_line_breaks();
+    }
+
+    self.skip_line_breaks();
+
+    let end = expect_token_and_do!(self, Token::RightParen, {
+      let pos = self.current_token_position();
+      self.advance();
+      pos.1
+    });
+
+    if fields.is_empty() {
+      return self.error(ParseError {
+        pos: (start, end),
+        kind: ParseErrorKind::MissingStructFields,
+      });
+    }
+
+    Some(TypeDefNode {
+      pos: (start, end),
+      kind: TypeDefKind::Struct { fields },
+      name,
+      generics,
+    })
+  }
+
   fn parse_term(&mut self) -> Option<ExprNode> {
     match self.current_token() {
       Some(&Token::LeftBrace(..)) => self.parse_block(),
-      Some(&Token::LeftBracket(..)) => self.parse_array_or_dict(),
+      Some(&Token::LeftBracket(..)) => self.parse_list_or_dict(),
       Some(&Token::StringLiteral(..)) => self.parse_string(),
       Some(&Token::KeywordMatch(..)) => self.parse_match(),
       Some(&Token::Underscore(..)) => self.parse_underscore(),
