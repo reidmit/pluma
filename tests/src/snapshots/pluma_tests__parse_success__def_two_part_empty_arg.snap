@@ -137,37 +137,21 @@ ModuleNode {
                     },
                     return_type: None,
                     params: [
-                        PatternNode {
+                        IdentifierNode {
                             pos: (
                                 26,
                                 27,
                             ),
-                            kind: Ident(
-                                IdentifierNode {
-                                    pos: (
-                                        26,
-                                        27,
-                                    ),
-                                    name: "a",
-                                    typ: None,
-                                },
-                            ),
+                            name: "a",
+                            typ: None,
                         },
-                        PatternNode {
+                        IdentifierNode {
                             pos: (
                                 29,
                                 30,
                             ),
-                            kind: Ident(
-                                IdentifierNode {
-                                    pos: (
-                                        29,
-                                        30,
-                                    ),
-                                    name: "b",
-                                    typ: None,
-                                },
-                            ),
+                            name: "b",
+                            typ: None,
                         },
                     ],
                     body: [

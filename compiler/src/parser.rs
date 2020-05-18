@@ -310,8 +310,8 @@ impl<'a> Parser<'a> {
     }
 
     if has_params {
-      while let Some(pattern) = self.parse_pattern() {
-        params.push(pattern);
+      while let Some(ident) = self.parse_identifier() {
+        params.push(ident);
 
         match self.current_token() {
           Some(&Token::Comma(..)) => self.advance(),
@@ -383,35 +383,70 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_call(&mut self, last_expr: ExprNode) -> Option<ExprNode> {
-    expect_token_and_do!(self, Token::LeftParen, { self.advance() });
+    // At this point, last_expr is either an Identifier (e.g. print in `print "hello"`)
+    // or a Chain (e.g. `a 1 . b` in `a 1 . b 2.`).
+    let callee;
 
+    let start = last_expr.pos.0;
+    let mut ident_callee_parts = Vec::new();
     let mut args = Vec::new();
-    let end;
 
-    if current_token_is!(self, Token::RightParen) {
-      end = self.current_token_position().1;
-      self.advance()
-    } else {
-      while let Some(expr) = self.parse_expression() {
-        args.push(expr);
+    println!("last_expr: {:#?}", last_expr);
 
-        if current_token_is!(self, Token::Comma) {
-          self.advance()
-        } else {
-          break;
+    // Grab the first argument (the next expression).
+    match self.parse_term() {
+      Some(arg) => args.push(arg),
+      _ => return None,
+    }
+
+    if let ExprKind::Identifier(first_part) = last_expr.kind {
+      // If the last expr was an identifier, we allow multi-part names here
+      ident_callee_parts.push(first_part);
+
+      // If there is an identifier now, it means this is a call to a multi-part name.
+      while current_token_is!(self, Token::Identifier) {
+        match self.parse_identifier() {
+          Some(next_callee_part) => {
+            ident_callee_parts.push(next_callee_part);
+
+            // Grab the argument for this part
+            match self.parse_term() {
+              Some(arg) => args.push(arg),
+              _ => {
+                return self.error(ParseError {
+                  pos: self.current_token_position(),
+                  kind: ParseErrorKind::MissingArgumentInCall,
+                })
+              }
+            }
+          }
+
+          _ => {
+            return self.error(ParseError {
+              pos: self.current_token_position(),
+              kind: ParseErrorKind::UnexpectedToken(Token::Identifier(0, 0)),
+            })
+          }
         }
       }
 
-      expect_token_and_do!(self, Token::RightParen, {
-        end = self.current_token_position().1;
-        self.advance()
-      });
+      callee = CalleeNode {
+        pos: last_expr.pos,
+        kind: CalleeKind::IdentifierParts(ident_callee_parts),
+        typ: None,
+      }
+    } else {
+      callee = CalleeNode {
+        pos: last_expr.pos,
+        kind: CalleeKind::Expr(last_expr),
+        typ: None,
+      }
     }
 
     Some(ExprNode {
-      pos: (last_expr.pos.0, end),
+      pos: (start, args.last().unwrap().pos.1),
       kind: ExprKind::Call {
-        callee: Box::new(last_expr),
+        callee: Box::new(callee),
         args,
       },
       typ: None,
@@ -877,33 +912,6 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_index(&mut self, last_expr: ExprNode) -> Option<ExprNode> {
-    expect_token_and_do!(self, Token::LeftBracket, { self.advance() });
-
-    let index_node;
-    let end;
-
-    if let Some(node) = self.parse_expression() {
-      index_node = Box::new(node);
-
-      expect_token_and_do!(self, Token::RightBracket, {
-        end = self.current_token_position().1;
-        self.advance()
-      });
-    } else {
-      return self.error(ParseError {
-        pos: self.current_token_position(),
-        kind: ParseErrorKind::MissingIndexBetweenBrackets,
-      });
-    }
-
-    Some(ExprNode {
-      pos: (last_expr.pos.0, end),
-      kind: ExprKind::Index(Box::new(last_expr), index_node),
-      typ: None,
-    })
-  }
-
   fn parse_let_statement(&mut self) -> Option<LetNode> {
     let start = expect_token_and_do!(self, Token::KeywordLet, {
       let (start, _) = self.current_token_position();
@@ -1047,12 +1055,16 @@ impl<'a> Parser<'a> {
             expr = self.parse_chain(expr.unwrap());
             continue;
           }
-          Some(&Token::LeftParen(..)) => {
+          Some(&Token::LeftParen(..))
+          | Some(&Token::OctalDigits(..))
+          | Some(&Token::DecimalDigits(..))
+          | Some(&Token::BinaryDigits(..))
+          | Some(&Token::HexDigits(..))
+          | Some(&Token::StringLiteral(..))
+          | Some(&Token::Identifier(..))
+          | Some(&Token::LeftBracket(..))
+          | Some(&Token::LeftBrace(..)) => {
             expr = self.parse_call(expr.unwrap());
-            continue;
-          }
-          Some(&Token::LeftBracket(..)) => {
-            expr = self.parse_index(expr.unwrap());
             continue;
           }
           _ => {}

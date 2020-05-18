@@ -5,6 +5,10 @@ pub trait TraverseMut {
   fn traverse<V: VisitorMut>(&mut self, visitor: &mut V) {}
 }
 
+impl TraverseMut for CalleeNode {
+  // todo
+}
+
 impl TraverseMut for DefNode {
   // todo
 }

@@ -9,10 +9,12 @@ pub struct ParseError {
 
 #[derive(Debug, Copy, Clone)]
 pub enum ParseErrorKind {
+  IncompleteMethodSignature,
   InvalidBinaryDigit,
   InvalidDecimalDigit,
   InvalidHexDigit,
   InvalidOctalDigit,
+  MissingArgumentInCall,
   MissingDefinitionBody,
   MissingDictValue,
   MissingEnumValues,
@@ -22,7 +24,6 @@ pub enum ParseErrorKind {
   MissingIdentifier,
   MissingIndexBetweenBrackets,
   MissingMatchCases,
-  IncompleteMethodSignature,
   MissingQualifierAfterAs,
   MissingReturnType,
   MissingRightHandSideOfAssignment,
@@ -36,6 +37,7 @@ pub enum ParseErrorKind {
   UnclosedString,
   UnexpectedDictValueInArray,
   UnexpectedEOF(Token),
+  UnexpectedMethodPart,
   UnexpectedToken(Token),
 }
 

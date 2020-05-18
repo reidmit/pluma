@@ -74,6 +74,12 @@ impl<'a> VisitorMut for Analyzer<'a> {
     match &node.kind {
       ExprKind::Block { params, body } => {
         self.scope.enter();
+
+        for param in params {
+          self
+            .scope
+            .add_let_binding(param.name.clone(), ValueType::Unknown, param.pos);
+        }
       }
 
       _ => {}
@@ -110,9 +116,7 @@ impl<'a> VisitorMut for Analyzer<'a> {
         let mut return_type = ValueType::Nothing;
 
         for param in params {
-          match &param.kind {
-            PatternKind::Ident(ident) => param_types.push(ValueType::Unknown),
-          }
+          param_types.push(ValueType::Unknown);
         }
 
         for stmt in body {

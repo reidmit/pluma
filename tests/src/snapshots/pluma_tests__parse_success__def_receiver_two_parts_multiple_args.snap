@@ -216,53 +216,29 @@ ModuleNode {
                     },
                     return_type: None,
                     params: [
-                        PatternNode {
+                        IdentifierNode {
                             pos: (
                                 46,
                                 47,
                             ),
-                            kind: Ident(
-                                IdentifierNode {
-                                    pos: (
-                                        46,
-                                        47,
-                                    ),
-                                    name: "a",
-                                    typ: None,
-                                },
-                            ),
+                            name: "a",
+                            typ: None,
                         },
-                        PatternNode {
+                        IdentifierNode {
                             pos: (
                                 49,
                                 50,
                             ),
-                            kind: Ident(
-                                IdentifierNode {
-                                    pos: (
-                                        49,
-                                        50,
-                                    ),
-                                    name: "b",
-                                    typ: None,
-                                },
-                            ),
+                            name: "b",
+                            typ: None,
                         },
-                        PatternNode {
+                        IdentifierNode {
                             pos: (
                                 52,
                                 53,
                             ),
-                            kind: Ident(
-                                IdentifierNode {
-                                    pos: (
-                                        52,
-                                        53,
-                                    ),
-                                    name: "c",
-                                    typ: None,
-                                },
-                            ),
+                            name: "c",
+                            typ: None,
                         },
                     ],
                     body: [
