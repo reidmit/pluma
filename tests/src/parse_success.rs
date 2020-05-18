@@ -125,6 +125,10 @@ test_parse_success! {
     |"hello" . f1 () . f2 "wow" .f3(47)
   "#,
 
+  chain_field_access: r#"
+    |x . field1 . field2 . field3
+  "#,
+
   chain_call_multiple_parts: r#"
     |"hello" . replace "x" with "y"
   "#,
