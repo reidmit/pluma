@@ -76,7 +76,7 @@ ModuleNode {
                                 22,
                             ),
                             kind: Chain {
-                                obj: ExprNode {
+                                receiver: ExprNode {
                                     pos: (
                                         1,
                                         16,
@@ -88,7 +88,7 @@ ModuleNode {
                                                 14,
                                             ),
                                             kind: Chain {
-                                                obj: ExprNode {
+                                                receiver: ExprNode {
                                                     pos: (
                                                         1,
                                                         6,

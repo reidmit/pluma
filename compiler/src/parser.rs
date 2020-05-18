@@ -389,8 +389,6 @@ impl<'a> Parser<'a> {
     let start = last_expr.pos.0;
     let mut args = Vec::new();
 
-    // println!("last_expr: {:#?}", last_expr);
-
     // Grab the first argument (the next expression).
     match self.parse_term() {
       Some(arg) => args.push(arg),
@@ -439,7 +437,7 @@ impl<'a> Parser<'a> {
           typ: None,
         }
       }
-      ExprKind::Chain { prop, obj }
+      ExprKind::Chain { prop, receiver }
         if match &prop.kind {
           ExprKind::Identifier(..) => true,
           _ => false,
@@ -499,7 +497,7 @@ impl<'a> Parser<'a> {
         ExprNode {
           pos: last_expr.pos,
           kind: ExprKind::Chain {
-            obj,
+            receiver,
             prop: Box::new(ExprNode {
               pos: prop_pos,
               kind: prop_kind,
@@ -538,7 +536,7 @@ impl<'a> Parser<'a> {
     Some(ExprNode {
       pos: (last_expr.pos.0, end),
       kind: ExprKind::Chain {
-        obj: Box::new(last_expr),
+        receiver: Box::new(last_expr),
         prop: next_expr,
       },
       typ: None,

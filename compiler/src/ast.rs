@@ -67,7 +67,7 @@ pub enum ExprKind {
     args: Vec<ExprNode>,
   },
   Chain {
-    obj: Box<ExprNode>,
+    receiver: Box<ExprNode>,
     prop: Box<ExprNode>,
   },
   Dict(Vec<(ExprNode, ExprNode)>),
