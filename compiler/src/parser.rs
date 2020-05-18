@@ -385,13 +385,11 @@ impl<'a> Parser<'a> {
   fn parse_call(&mut self, last_expr: ExprNode) -> Option<ExprNode> {
     // At this point, last_expr is either an Identifier (e.g. print in `print "hello"`)
     // or a Chain (e.g. `a 1 . b` in `a 1 . b 2.`).
-    let callee;
 
     let start = last_expr.pos.0;
-    let mut ident_callee_parts = Vec::new();
     let mut args = Vec::new();
 
-    println!("last_expr: {:#?}", last_expr);
+    // println!("last_expr: {:#?}", last_expr);
 
     // Grab the first argument (the next expression).
     match self.parse_term() {
@@ -399,49 +397,120 @@ impl<'a> Parser<'a> {
       _ => return None,
     }
 
-    if let ExprKind::Identifier(first_part) = last_expr.kind {
-      // If the last expr was an identifier, we allow multi-part names here
-      ident_callee_parts.push(first_part);
+    let callee = match last_expr.kind {
+      ExprKind::Identifier(first_part) => {
+        let start = first_part.pos.0;
 
-      // If there is an identifier now, it means this is a call to a multi-part name.
-      while current_token_is!(self, Token::Identifier) {
-        match self.parse_identifier() {
-          Some(next_callee_part) => {
-            ident_callee_parts.push(next_callee_part);
+        let mut ident_callee_parts = Vec::new();
 
-            // Grab the argument for this part
-            match self.parse_term() {
-              Some(arg) => args.push(arg),
-              _ => {
-                return self.error(ParseError {
-                  pos: self.current_token_position(),
-                  kind: ParseErrorKind::MissingArgumentInCall,
-                })
+        // If the last expr was an identifier, we allow multi-part names here
+        ident_callee_parts.push(first_part);
+
+        // If there is an identifier now, it means this is a call to a multi-part name.
+        while current_token_is!(self, Token::Identifier) {
+          match self.parse_identifier() {
+            Some(next_callee_part) => {
+              ident_callee_parts.push(next_callee_part);
+
+              // Grab the argument for this part
+              match self.parse_term() {
+                Some(arg) => args.push(arg),
+                _ => {
+                  return self.error(ParseError {
+                    pos: self.current_token_position(),
+                    kind: ParseErrorKind::MissingArgumentInCall,
+                  })
+                }
               }
             }
-          }
 
-          _ => {
-            return self.error(ParseError {
-              pos: self.current_token_position(),
-              kind: ParseErrorKind::UnexpectedToken(Token::Identifier(0, 0)),
-            })
+            _ => {
+              return self.error(ParseError {
+                pos: self.current_token_position(),
+                kind: ParseErrorKind::UnexpectedToken(Token::Identifier(0, 0)),
+              })
+            }
           }
         }
-      }
 
-      callee = CalleeNode {
-        pos: last_expr.pos,
-        kind: CalleeKind::IdentifierParts(ident_callee_parts),
-        typ: None,
+        ExprNode {
+          pos: (start, ident_callee_parts.last().unwrap().pos.1),
+          kind: ExprKind::MultiPartIdentifier(ident_callee_parts),
+          typ: None,
+        }
       }
-    } else {
-      callee = CalleeNode {
-        pos: last_expr.pos,
-        kind: CalleeKind::Expr(last_expr),
-        typ: None,
+      ExprKind::Chain { prop, obj }
+        if match &prop.kind {
+          ExprKind::Identifier(..) => true,
+          _ => false,
+        } =>
+      {
+        let first_callee_part = match prop.kind {
+          ExprKind::Identifier(first_part) => first_part,
+          _ => unreachable!(),
+        };
+
+        let mut rest_callee_parts = Vec::new();
+
+        // If there is an identifier now, it means this is a call to a multi-part name.
+        while current_token_is!(self, Token::Identifier) {
+          match self.parse_identifier() {
+            Some(next_callee_part) => {
+              rest_callee_parts.push(next_callee_part);
+
+              // Grab the argument for this part
+              match self.parse_term() {
+                Some(arg) => args.push(arg),
+                _ => {
+                  return self.error(ParseError {
+                    pos: self.current_token_position(),
+                    kind: ParseErrorKind::MissingArgumentInCall,
+                  })
+                }
+              }
+            }
+
+            _ => {
+              return self.error(ParseError {
+                pos: self.current_token_position(),
+                kind: ParseErrorKind::UnexpectedToken(Token::Identifier(0, 0)),
+              })
+            }
+          }
+        }
+
+        let prop_pos;
+
+        let prop_kind = if rest_callee_parts.len() > 0 {
+          prop_pos = (
+            first_callee_part.pos.0,
+            rest_callee_parts.last().unwrap().pos.1,
+          );
+          let mut all_parts = vec![first_callee_part];
+          all_parts.append(&mut rest_callee_parts);
+
+          ExprKind::MultiPartIdentifier(all_parts)
+        } else {
+          prop_pos = first_callee_part.pos;
+
+          ExprKind::Identifier(first_callee_part)
+        };
+
+        ExprNode {
+          pos: last_expr.pos,
+          kind: ExprKind::Chain {
+            obj,
+            prop: Box::new(ExprNode {
+              pos: prop_pos,
+              kind: prop_kind,
+              typ: None,
+            }),
+          },
+          typ: None,
+        }
       }
-    }
+      _ => last_expr,
+    };
 
     Some(ExprNode {
       pos: (start, args.last().unwrap().pos.1),
@@ -1049,6 +1118,8 @@ impl<'a> Parser<'a> {
     let mut expr = self.parse_term();
 
     loop {
+      self.skip_line_breaks();
+
       if expr.is_some() {
         match self.current_token() {
           Some(&Token::Dot(..)) => {

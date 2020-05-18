@@ -7,19 +7,6 @@ pub type SignaturePart = (Box<IdentifierNode>, Box<TypeExprNode>);
 pub type Signature = Vec<SignaturePart>;
 
 #[derive(Debug)]
-pub struct CalleeNode {
-  pub pos: Position,
-  pub kind: CalleeKind,
-  pub typ: Option<ValueType>,
-}
-
-#[derive(Debug)]
-pub enum CalleeKind {
-  Expr(ExprNode),
-  IdentifierParts(Vec<IdentifierNode>),
-}
-
-#[derive(Debug)]
 pub struct DefNode {
   pub pos: Position,
   pub kind: DefKind,
@@ -76,7 +63,7 @@ pub enum ExprKind {
     body: Vec<StatementNode>,
   },
   Call {
-    callee: Box<CalleeNode>,
+    callee: Box<ExprNode>,
     args: Vec<ExprNode>,
   },
   Chain {
@@ -87,6 +74,7 @@ pub enum ExprKind {
   EmptyTuple,
   Grouping(Box<ExprNode>),
   Identifier(IdentifierNode),
+  MultiPartIdentifier(Vec<IdentifierNode>),
   Interpolation(Vec<ExprNode>),
   Literal(LiteralNode),
   Match(MatchNode),

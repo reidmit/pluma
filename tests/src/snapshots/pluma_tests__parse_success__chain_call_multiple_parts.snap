@@ -1,0 +1,161 @@
+---
+source: tests/src/parse_success.rs
+expression: "\"hello\" . replace \"x\" with \"y\""
+---
+
+=== Source ===
+"hello" . replace "x" with "y"
+
+=== Tokens ===
+[
+    StringLiteral(
+        1,
+        6,
+    ),
+    Dot(
+        8,
+        9,
+    ),
+    Identifier(
+        10,
+        17,
+    ),
+    StringLiteral(
+        19,
+        20,
+    ),
+    Identifier(
+        22,
+        26,
+    ),
+    StringLiteral(
+        28,
+        29,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        1,
+        29,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                1,
+                29,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        1,
+                        29,
+                    ),
+                    kind: Call {
+                        callee: ExprNode {
+                            pos: (
+                                1,
+                                17,
+                            ),
+                            kind: Chain {
+                                obj: ExprNode {
+                                    pos: (
+                                        1,
+                                        6,
+                                    ),
+                                    kind: Literal(
+                                        LiteralNode {
+                                            pos: (
+                                                1,
+                                                6,
+                                            ),
+                                            kind: Str(
+                                                "hello",
+                                            ),
+                                            typ: None,
+                                        },
+                                    ),
+                                    typ: None,
+                                },
+                                prop: ExprNode {
+                                    pos: (
+                                        10,
+                                        26,
+                                    ),
+                                    kind: MultiPartIdentifier(
+                                        [
+                                            IdentifierNode {
+                                                pos: (
+                                                    10,
+                                                    17,
+                                                ),
+                                                name: "replace",
+                                                typ: None,
+                                            },
+                                            IdentifierNode {
+                                                pos: (
+                                                    22,
+                                                    26,
+                                                ),
+                                                name: "with",
+                                                typ: None,
+                                            },
+                                        ],
+                                    ),
+                                    typ: None,
+                                },
+                            },
+                            typ: None,
+                        },
+                        args: [
+                            ExprNode {
+                                pos: (
+                                    19,
+                                    20,
+                                ),
+                                kind: Literal(
+                                    LiteralNode {
+                                        pos: (
+                                            19,
+                                            20,
+                                        ),
+                                        kind: Str(
+                                            "x",
+                                        ),
+                                        typ: None,
+                                    },
+                                ),
+                                typ: None,
+                            },
+                            ExprNode {
+                                pos: (
+                                    28,
+                                    29,
+                                ),
+                                kind: Literal(
+                                    LiteralNode {
+                                        pos: (
+                                            28,
+                                            29,
+                                        ),
+                                        kind: Str(
+                                            "y",
+                                        ),
+                                        typ: None,
+                                    },
+                                ),
+                                typ: None,
+                            },
+                        ],
+                    },
+                    typ: None,
+                },
+            ),
+        },
+    ],
+}
+

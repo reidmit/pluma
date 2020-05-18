@@ -56,4 +56,24 @@ test_parse_success! {
     |  a, b, c => "wow!"
     |}
   "#,
+
+  chain_one_line: r#"
+    |"hello" . f1 () . f2 "wow" .f3(47)
+  "#,
+
+  chain_call_multiple_parts: r#"
+    |"hello" . replace "x" with "y"
+  "#,
+
+  chain_across_lines: r#"
+    |"hello"
+    |  . f1
+    |  .f2
+  "#,
+
+  chain_calls_across_lines: r#"
+    |"hello"
+    |  . f1 1
+    |  .f2 2
+  "#,
 }
