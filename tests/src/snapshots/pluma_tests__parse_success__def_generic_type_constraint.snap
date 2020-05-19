@@ -1,11 +1,11 @@
 ---
 source: tests/src/parse_success.rs
-expression: "def hello { A -> B } -> String {\n  a => \"wow!\"\n}"
+expression: "def hello A -> A where A :: Any {\n  x => x\n}"
 ---
 
 === Source ===
-def hello { A -> B } -> String {
-  a => "wow!"
+def hello A -> A where A :: Any {
+  x => x
 }
 
 === Tokens ===
@@ -18,61 +18,61 @@ def hello { A -> B } -> String {
         4,
         9,
     ),
-    LeftBrace(
+    Identifier(
         10,
         11,
     ),
-    Identifier(
-        12,
-        13,
-    ),
     Arrow(
+        12,
         14,
+    ),
+    Identifier(
+        15,
         16,
     ),
-    Identifier(
+    KeywordWhere(
         17,
-        18,
-    ),
-    RightBrace(
-        19,
-        20,
-    ),
-    Arrow(
-        21,
-        23,
+        22,
     ),
     Identifier(
+        23,
         24,
-        30,
+    ),
+    DoubleColon(
+        25,
+        27,
+    ),
+    Identifier(
+        28,
+        31,
     ),
     LeftBrace(
-        31,
-        32,
-    ),
-    LineBreak(
         32,
         33,
     ),
+    LineBreak(
+        33,
+        34,
+    ),
     Identifier(
-        35,
         36,
+        37,
     ),
     DoubleArrow(
-        37,
-        39,
+        38,
+        40,
     ),
-    StringLiteral(
+    Identifier(
         41,
-        45,
+        42,
     ),
     LineBreak(
-        46,
-        47,
+        42,
+        43,
     ),
     RightBrace(
-        47,
-        48,
+        43,
+        44,
     ),
 ]
 
@@ -83,19 +83,19 @@ def hello { A -> B } -> String {
 ModuleNode {
     pos: (
         0,
-        48,
+        44,
     ),
     body: [
         TopLevelStatementNode {
             pos: (
                 0,
-                48,
+                44,
             ),
             kind: Def(
                 DefNode {
                     pos: (
                         0,
-                        48,
+                        44,
                     ),
                     kind: Function {
                         signature: [
@@ -111,40 +111,16 @@ ModuleNode {
                                 TypeExprNode {
                                     pos: (
                                         10,
-                                        20,
+                                        11,
                                     ),
-                                    kind: Func(
-                                        TypeExprNode {
+                                    kind: Constructor(
+                                        IdentifierNode {
                                             pos: (
-                                                12,
-                                                13,
+                                                10,
+                                                11,
                                             ),
-                                            kind: Constructor(
-                                                IdentifierNode {
-                                                    pos: (
-                                                        12,
-                                                        13,
-                                                    ),
-                                                    name: "A",
-                                                    typ: None,
-                                                },
-                                            ),
-                                        },
-                                        TypeExprNode {
-                                            pos: (
-                                                17,
-                                                18,
-                                            ),
-                                            kind: Constructor(
-                                                IdentifierNode {
-                                                    pos: (
-                                                        17,
-                                                        18,
-                                                    ),
-                                                    name: "B",
-                                                    typ: None,
-                                                },
-                                            ),
+                                            name: "A",
+                                            typ: None,
                                         },
                                     ),
                                 },
@@ -154,29 +130,56 @@ ModuleNode {
                     return_type: Some(
                         TypeExprNode {
                             pos: (
-                                24,
-                                30,
+                                15,
+                                16,
                             ),
                             kind: Constructor(
                                 IdentifierNode {
                                     pos: (
-                                        24,
-                                        30,
+                                        15,
+                                        16,
                                     ),
-                                    name: "String",
+                                    name: "A",
                                     typ: None,
                                 },
                             ),
                         },
                     ),
-                    generic_type_constraints: [],
+                    generic_type_constraints: [
+                        (
+                            IdentifierNode {
+                                pos: (
+                                    23,
+                                    24,
+                                ),
+                                name: "A",
+                                typ: None,
+                            },
+                            TypeExprNode {
+                                pos: (
+                                    28,
+                                    31,
+                                ),
+                                kind: Constructor(
+                                    IdentifierNode {
+                                        pos: (
+                                            28,
+                                            31,
+                                        ),
+                                        name: "Any",
+                                        typ: None,
+                                    },
+                                ),
+                            },
+                        ),
+                    ],
                     params: [
                         IdentifierNode {
                             pos: (
-                                35,
                                 36,
+                                37,
                             ),
-                            name: "a",
+                            name: "x",
                             typ: None,
                         },
                     ],
@@ -184,23 +187,21 @@ ModuleNode {
                         StatementNode {
                             pos: (
                                 41,
-                                45,
+                                42,
                             ),
                             kind: Expr(
                                 ExprNode {
                                     pos: (
                                         41,
-                                        45,
+                                        42,
                                     ),
-                                    kind: Literal(
-                                        LiteralNode {
+                                    kind: Identifier(
+                                        IdentifierNode {
                                             pos: (
                                                 41,
-                                                45,
+                                                42,
                                             ),
-                                            kind: Str(
-                                                "wow!",
-                                            ),
+                                            name: "x",
                                             typ: None,
                                         },
                                     ),

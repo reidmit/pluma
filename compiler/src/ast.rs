@@ -11,6 +11,7 @@ pub struct DefNode {
   pub pos: Position,
   pub kind: DefKind,
   pub return_type: Option<TypeExprNode>,
+  pub generic_type_constraints: Vec<(IdentifierNode, TypeExprNode)>,
   pub params: Vec<IdentifierNode>,
   pub body: Vec<StatementNode>,
 }

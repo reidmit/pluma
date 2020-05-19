@@ -1,3 +1,3 @@
 #!/bin/bash
 
-cargo test --lib "$@" || cargo insta review
+cargo test -q --lib "$@" || cargo insta review

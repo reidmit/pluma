@@ -124,6 +124,7 @@ ModuleNode {
                             ),
                         },
                     ),
+                    generic_type_constraints: [],
                     params: [
                         IdentifierNode {
                             pos: (

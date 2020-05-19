@@ -1,0 +1,20 @@
+intrinsic Any
+
+enum Bool
+  | True
+  | False
+
+def if Bool then { () -> A } else { () -> A } -> A where A :: Any {
+  cond, then, else =>
+    match cond
+    | True => then()
+    | False => else()
+}
+
+let b = True
+
+if b then {
+  print "yes!"
+} else {
+  print "nope :("
+}

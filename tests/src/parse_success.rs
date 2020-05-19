@@ -141,6 +141,12 @@ test_parse_success! {
     |}
   "#,
 
+  def_generic_type_constraint: r#"
+    |def hello A -> A where A :: Any {
+    |  x => x
+    |}
+  "#,
+
   call_empty_arg: r#"
     |func()
   "#,

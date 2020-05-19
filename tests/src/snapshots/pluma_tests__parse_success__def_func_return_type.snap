@@ -172,6 +172,7 @@ ModuleNode {
                             ),
                         },
                     ),
+                    generic_type_constraints: [],
                     params: [],
                     body: [
                         StatementNode {

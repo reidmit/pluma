@@ -568,6 +568,37 @@ impl<'a> Parser<'a> {
 
     self.skip_line_breaks();
 
+    let mut generic_type_constraints = Vec::new();
+
+    if current_token_is!(self, Token::KeywordWhere) {
+      self.advance();
+
+      while let Some(generic_name) = self.parse_identifier() {
+        expect_token_and_do!(self, Token::DoubleColon, {
+          self.advance();
+        });
+
+        let type_expr = match self.parse_type_expression() {
+          Some(expr) => expr,
+          _ => {
+            return self.error(ParseError {
+              pos: self.current_token_position(),
+              kind: ParseErrorKind::MissingType,
+            })
+          }
+        };
+
+        generic_type_constraints.push((generic_name, type_expr));
+
+        match self.current_token() {
+          Some(&Token::Comma(..)) => self.advance(),
+          _ => break,
+        }
+      }
+    }
+
+    self.skip_line_breaks();
+
     self.enter_def_body();
 
     let (params, body, end) = match self.parse_block() {
@@ -585,6 +616,7 @@ impl<'a> Parser<'a> {
       pos: (start, end),
       kind,
       return_type,
+      generic_type_constraints,
       params,
       body,
     })
