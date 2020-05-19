@@ -25,4 +25,5 @@ mod tokens;
 mod traverse;
 mod type_collector;
 mod types;
+mod usage_error;
 mod visitor;

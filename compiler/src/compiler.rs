@@ -5,7 +5,10 @@ use crate::import_error::{ImportError, ImportErrorKind};
 use crate::module::Module;
 use crate::scope::Scope;
 use crate::type_collector::TypeCollector;
+use crate::usage_error::{UsageError, UsageErrorKind};
+use crate::{DEFAULT_ENTRY_MODULE_NAME, FILE_EXTENSION, LANG_NAME};
 use std::collections::HashMap;
+use std::env;
 use std::path::{Path, PathBuf};
 use std::result;
 
@@ -20,22 +23,24 @@ pub struct Compiler {
 }
 
 impl Compiler {
-  pub fn from_dir(path: PathBuf) -> Result<Self> {
-    if !path.is_dir() {
-      todo!();
-    }
+  pub fn from_path(entry_path: String) -> Result<Self> {
+    let (root_dir, entry_module_name) = Compiler::resolve_entry(entry_path)?;
 
-    let entry_module_path = path.join("main.pa");
-    if !entry_module_path.is_file() {
-      todo!();
-    }
+    println!("{:#?}, {:#?}", root_dir, entry_module_name);
 
     Ok(Compiler {
-      root_dir: path.canonicalize().unwrap(),
-      entry_module_name: "main".to_owned(),
+      root_dir,
+      entry_module_name,
       modules: HashMap::new(),
       diagnostics: Vec::new(),
     })
+  }
+
+  fn resolve_entry(entry_path: String) -> Result<(PathBuf, String)> {
+    match get_root_dir_and_module_name(entry_path) {
+      Ok(result) => Ok(result),
+      Err(usage_error) => Err(vec![Diagnostic::error(usage_error)]),
+    }
   }
 
   pub fn run(&mut self) -> Result<()> {
@@ -158,5 +163,41 @@ impl Compiler {
 
   fn to_module_path(&self, module_name: String) -> PathBuf {
     self.root_dir.join(module_name).with_extension("pa")
+  }
+}
+
+fn get_root_dir_and_module_name(
+  entry_path: String,
+) -> std::result::Result<(PathBuf, String), UsageError> {
+  let mut joined_path = Path::new(&env::current_dir().unwrap()).join(entry_path);
+  let mut found_dir = false;
+
+  if !joined_path.exists() {
+    joined_path.set_extension(FILE_EXTENSION);
+  } else if joined_path.is_dir() {
+    found_dir = true;
+    joined_path.push(DEFAULT_ENTRY_MODULE_NAME);
+    joined_path.set_extension(FILE_EXTENSION);
+  }
+
+  match joined_path.canonicalize() {
+    Ok(abs_path) => Ok((
+      abs_path.parent().unwrap().to_path_buf(),
+      abs_path.file_stem().unwrap().to_str().unwrap().to_owned(),
+    )),
+
+    Err(e) => {
+      if found_dir {
+        return Err(UsageError {
+          kind: UsageErrorKind::EntryDirDoesNotContainEntryFile(
+            joined_path.parent().unwrap().to_str().unwrap().to_owned(),
+          ),
+        });
+      }
+
+      Err(UsageError {
+        kind: UsageErrorKind::InvalidEntryPath(joined_path.to_str().unwrap().to_owned()),
+      })
+    }
   }
 }

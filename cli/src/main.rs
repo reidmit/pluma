@@ -32,11 +32,11 @@ fn main() {
       exit(0);
     }
 
-    Ok(Command::Build { root_dir, .. }) => {
-      let mut compiler = match Compiler::from_dir(root_dir) {
+    Ok(Command::Build { entry_path }) => {
+      let mut compiler = match Compiler::from_path(entry_path) {
         Ok(c) => c,
-        Err(e) => {
-          println!("{:#?}", e);
+        Err(diagnostics) => {
+          print_diagnostics(None, diagnostics);
           exit(1);
         }
       };
@@ -48,7 +48,7 @@ fn main() {
         }
 
         Err(diagnostics) => {
-          print_diagnostics(&compiler, diagnostics);
+          print_diagnostics(Some(&compiler), diagnostics);
           exit(1);
         }
       }
@@ -69,7 +69,7 @@ fn print_error<T: fmt::Display>(msg: T) {
   eprintln!("{} {}", colors::bold_red("Error:"), msg);
 }
 
-fn print_diagnostics(compiler: &Compiler, diagnostics: Vec<Diagnostic>) {
+fn print_diagnostics(compiler: Option<&Compiler>, diagnostics: Vec<Diagnostic>) {
   let mut first = true;
 
   for diagnostic in diagnostics {
@@ -102,84 +102,86 @@ fn print_diagnostics(compiler: &Compiler, diagnostics: Vec<Diagnostic>) {
         .to_path_buf();
     }
 
-    if let Some((start, end)) = diagnostic.pos {
-      let module_name = diagnostic.module_name.unwrap();
+    if let Some(compiler) = compiler {
+      if let Some((start, end)) = diagnostic.pos {
+        let module_name = diagnostic.module_name.unwrap();
 
-      let module = compiler.modules.get(&module_name).unwrap();
+        let module = compiler.modules.get(&module_name).unwrap();
 
-      let mut col_index = 0;
+        let mut col_index = 0;
 
-      if let Some(bytes) = &module.bytes {
-        let mut frame_start = start;
-        let mut frame_end = end;
+        if let Some(bytes) = &module.bytes {
+          let mut frame_start = start;
+          let mut frame_end = end;
 
-        while frame_start > 0 {
-          if let Some(b'\n') = bytes.get(frame_start - 1) {
-            break;
+          while frame_start > 0 {
+            if let Some(b'\n') = bytes.get(frame_start - 1) {
+              break;
+            }
+
+            col_index += 1;
+            frame_start -= 1
           }
 
-          col_index += 1;
-          frame_start -= 1
-        }
-
-        while let Some(byte) = bytes.get(frame_end) {
-          match byte {
-            b'\n' => break,
-            _ => frame_end += 1,
-          }
-        }
-
-        let frame = String::from_utf8(bytes[frame_start..frame_end].to_vec())
-          .unwrap()
-          .replace("\n", " ");
-
-        let mut line = 1;
-
-        frame_start = start;
-        while frame_start > 0 {
-          if let Some(b'\n') = bytes.get(frame_start - 1) {
-            line += 1;
+          while let Some(byte) = bytes.get(frame_end) {
+            match byte {
+              b'\n' => break,
+              _ => frame_end += 1,
+            }
           }
 
-          frame_start -= 1;
-        }
+          let frame = String::from_utf8(bytes[frame_start..frame_end].to_vec())
+            .unwrap()
+            .replace("\n", " ");
 
-        eprintln!(
-          "\n{} {} {}",
-          if is_error {
-            colors::bold_red(">")
-          } else {
-            colors::bold_yellow(">")
-          },
-          colors::bold_dim(format!("{}|", line).as_str()),
-          frame
-        );
+          let mut line = 1;
 
-        let prefix_width = 4 + line.to_string().len();
-        let up_arrows = "^".repeat(end - start).to_string();
+          frame_start = start;
+          while frame_start > 0 {
+            if let Some(b'\n') = bytes.get(frame_start - 1) {
+              line += 1;
+            }
 
-        eprintln!(
-          "{}{}",
-          " ".repeat(prefix_width + col_index),
-          if is_error {
-            colors::bold_red(&up_arrows)
-          } else {
-            colors::bold_yellow(&up_arrows)
+            frame_start -= 1;
           }
-        );
 
-        eprintln!(
-          "{}",
-          colors::dim(
-            format!(
-              "{}:{}:{}",
-              module_path.to_str().unwrap(),
-              line,
-              col_index + 1
+          eprintln!(
+            "\n{} {} {}",
+            if is_error {
+              colors::bold_red(">")
+            } else {
+              colors::bold_yellow(">")
+            },
+            colors::bold_dim(format!("{}|", line).as_str()),
+            frame
+          );
+
+          let prefix_width = 4 + line.to_string().len();
+          let up_arrows = "^".repeat(end - start).to_string();
+
+          eprintln!(
+            "{}{}",
+            " ".repeat(prefix_width + col_index),
+            if is_error {
+              colors::bold_red(&up_arrows)
+            } else {
+              colors::bold_yellow(&up_arrows)
+            }
+          );
+
+          eprintln!(
+            "{}",
+            colors::dim(
+              format!(
+                "{}:{}:{}",
+                module_path.to_str().unwrap(),
+                line,
+                col_index + 1
+              )
+              .as_str()
             )
-            .as_str()
-          )
-        );
+          );
+        }
       }
     }
 
