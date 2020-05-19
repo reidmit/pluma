@@ -168,4 +168,12 @@ test_parse_success! {
     |  . f1 1
     |  .f2 2
   "#,
+
+  private_defs: r#"
+    |def isPublic() {}
+    |
+    |private
+    |
+    |def isPrivate() {}
+  "#,
 }

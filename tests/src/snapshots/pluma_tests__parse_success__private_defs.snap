@@ -1,0 +1,180 @@
+---
+source: tests/src/parse_success.rs
+expression: "def isPublic() {}\n\nprivate\n\ndef isPrivate() {}"
+---
+
+=== Source ===
+def isPublic() {}
+
+private
+
+def isPrivate() {}
+
+=== Tokens ===
+[
+    KeywordDef(
+        0,
+        3,
+    ),
+    Identifier(
+        4,
+        12,
+    ),
+    LeftParen(
+        12,
+        13,
+    ),
+    RightParen(
+        13,
+        14,
+    ),
+    LeftBrace(
+        15,
+        16,
+    ),
+    RightBrace(
+        16,
+        17,
+    ),
+    LineBreak(
+        17,
+        18,
+    ),
+    LineBreak(
+        18,
+        19,
+    ),
+    KeywordPrivate(
+        19,
+        26,
+    ),
+    LineBreak(
+        26,
+        27,
+    ),
+    LineBreak(
+        27,
+        28,
+    ),
+    KeywordDef(
+        28,
+        31,
+    ),
+    Identifier(
+        32,
+        41,
+    ),
+    LeftParen(
+        41,
+        42,
+    ),
+    RightParen(
+        42,
+        43,
+    ),
+    LeftBrace(
+        44,
+        45,
+    ),
+    RightBrace(
+        45,
+        46,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        46,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                17,
+            ),
+            kind: Def(
+                DefNode {
+                    pos: (
+                        0,
+                        17,
+                    ),
+                    kind: Function {
+                        signature: [
+                            (
+                                IdentifierNode {
+                                    pos: (
+                                        4,
+                                        12,
+                                    ),
+                                    name: "isPublic",
+                                    typ: None,
+                                },
+                                TypeExprNode {
+                                    pos: (
+                                        12,
+                                        14,
+                                    ),
+                                    kind: EmptyTuple,
+                                },
+                            ),
+                        ],
+                    },
+                    return_type: None,
+                    params: [],
+                    body: [],
+                },
+            ),
+        },
+        TopLevelStatementNode {
+            pos: (
+                19,
+                26,
+            ),
+            kind: PrivateMarker,
+        },
+        TopLevelStatementNode {
+            pos: (
+                28,
+                46,
+            ),
+            kind: Def(
+                DefNode {
+                    pos: (
+                        28,
+                        46,
+                    ),
+                    kind: Function {
+                        signature: [
+                            (
+                                IdentifierNode {
+                                    pos: (
+                                        32,
+                                        41,
+                                    ),
+                                    name: "isPrivate",
+                                    typ: None,
+                                },
+                                TypeExprNode {
+                                    pos: (
+                                        41,
+                                        43,
+                                    ),
+                                    kind: EmptyTuple,
+                                },
+                            ),
+                        ],
+                    },
+                    return_type: None,
+                    params: [],
+                    body: [],
+                },
+            ),
+        },
+    ],
+}
+

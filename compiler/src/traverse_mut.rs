@@ -147,6 +147,7 @@ impl TraverseMut for TopLevelStatementNode {
       TopLevelStatementKind::TypeDef(node) => node.traverse(visitor),
       TopLevelStatementKind::Def(node) => node.traverse(visitor),
       TopLevelStatementKind::Expr(node) => node.traverse(visitor),
+      TopLevelStatementKind::PrivateMarker => {}
     };
 
     visitor.leave_top_level_statement(self);

@@ -1131,6 +1131,19 @@ impl<'a> Parser<'a> {
     })
   }
 
+  fn parse_private(&mut self) -> Option<TopLevelStatementNode> {
+    let pos = expect_token_and_do!(self, Token::KeywordPrivate, {
+      let pos = self.current_token_position();
+      self.advance();
+      pos
+    });
+
+    Some(TopLevelStatementNode {
+      pos: pos,
+      kind: TopLevelStatementKind::PrivateMarker,
+    })
+  }
+
   fn parse_return_statement(&mut self) -> Option<ReturnNode> {
     let start = expect_token_and_do!(self, Token::KeywordReturn, {
       let (start, end) = self.current_token_position();
@@ -1464,6 +1477,7 @@ impl<'a> Parser<'a> {
             kind: TopLevelStatementKind::TypeDef(type_def_node),
           })
       }
+      Some(&Token::KeywordPrivate(..)) => self.parse_private(),
       _ => self
         .parse_expression()
         .map(|expr_node| TopLevelStatementNode {

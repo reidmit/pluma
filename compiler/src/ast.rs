@@ -185,6 +185,7 @@ pub enum TopLevelStatementKind {
   TypeDef(TypeDefNode),
   Def(DefNode),
   Expr(ExprNode),
+  PrivateMarker,
 }
 
 #[derive(Debug)]
