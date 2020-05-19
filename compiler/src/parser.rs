@@ -1087,7 +1087,10 @@ impl<'a> Parser<'a> {
       }
 
       match self.current_token() {
-        Some(&Token::Comma(..)) => self.advance(),
+        Some(&Token::Comma(..)) => {
+          self.advance();
+          self.skip_line_breaks();
+        }
         _ => break,
       }
     }
@@ -1371,6 +1374,8 @@ impl<'a> Parser<'a> {
 
   fn parse_term(&mut self) -> Option<ExprNode> {
     match self.current_token() {
+      Some(&Token::LeftParen(..)) => self.parse_parenthetical(),
+      Some(&Token::Operator(..)) => self.parse_unary_operation(),
       Some(&Token::LeftBrace(..)) => self.parse_block(),
       Some(&Token::LeftBracket(..)) => self.parse_list_or_dict(),
       Some(&Token::StringLiteral(..)) => self.parse_string(),
@@ -1421,8 +1426,6 @@ impl<'a> Parser<'a> {
         kind: ExprKind::Literal(lit_node),
         typ: None,
       }),
-      Some(&Token::LeftParen(..)) => self.parse_parenthetical(),
-      Some(&Token::Operator(..)) => self.parse_unary_operation(),
       _ => None,
     }
   }

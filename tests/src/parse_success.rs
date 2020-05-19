@@ -25,6 +25,34 @@ test_parse_success! {
     |cool
   "#,
 
+  parenthesized: r#"
+    |(1)
+  "#,
+
+  tuple_empty: r#"
+    |()
+  "#,
+
+  tuple_two_elements: r#"
+    |(1, "wow")
+  "#,
+
+  tuple_multiple_elements: r#"
+    |(1, "wow", { x => x }, (lol, ()))
+  "#,
+
+  tuple_empty_across_lines: r#"
+    |(
+    |
+    |)
+  "#,
+
+  tuple_across_lines: r#"
+    |(1,
+    | 2
+    |)
+  "#,
+
   list_empty: r#"
     |[]
   "#,

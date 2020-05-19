@@ -1,0 +1,112 @@
+---
+source: tests/src/parse_success.rs
+expression: "(1,\n 2\n)"
+---
+
+=== Source ===
+(1,
+ 2
+)
+
+=== Tokens ===
+[
+    LeftParen(
+        0,
+        1,
+    ),
+    DecimalDigits(
+        1,
+        2,
+    ),
+    Comma(
+        2,
+        3,
+    ),
+    LineBreak(
+        3,
+        4,
+    ),
+    DecimalDigits(
+        5,
+        6,
+    ),
+    LineBreak(
+        6,
+        7,
+    ),
+    RightParen(
+        7,
+        8,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        8,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                8,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        0,
+                        8,
+                    ),
+                    kind: Tuple(
+                        [
+                            ExprNode {
+                                pos: (
+                                    1,
+                                    2,
+                                ),
+                                kind: Literal(
+                                    LiteralNode {
+                                        pos: (
+                                            1,
+                                            2,
+                                        ),
+                                        kind: IntDecimal(
+                                            1,
+                                        ),
+                                        typ: None,
+                                    },
+                                ),
+                                typ: None,
+                            },
+                            ExprNode {
+                                pos: (
+                                    5,
+                                    6,
+                                ),
+                                kind: Literal(
+                                    LiteralNode {
+                                        pos: (
+                                            5,
+                                            6,
+                                        ),
+                                        kind: IntDecimal(
+                                            2,
+                                        ),
+                                        typ: None,
+                                    },
+                                ),
+                                typ: None,
+                            },
+                        ],
+                    ),
+                    typ: None,
+                },
+            ),
+        },
+    ],
+}
+

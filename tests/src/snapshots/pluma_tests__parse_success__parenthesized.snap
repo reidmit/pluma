@@ -1,0 +1,73 @@
+---
+source: tests/src/parse_success.rs
+expression: (1)
+---
+
+=== Source ===
+(1)
+
+=== Tokens ===
+[
+    LeftParen(
+        0,
+        1,
+    ),
+    DecimalDigits(
+        1,
+        2,
+    ),
+    RightParen(
+        2,
+        3,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        3,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                3,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        0,
+                        3,
+                    ),
+                    kind: Grouping(
+                        ExprNode {
+                            pos: (
+                                1,
+                                2,
+                            ),
+                            kind: Literal(
+                                LiteralNode {
+                                    pos: (
+                                        1,
+                                        2,
+                                    ),
+                                    kind: IntDecimal(
+                                        1,
+                                    ),
+                                    typ: None,
+                                },
+                            ),
+                            typ: None,
+                        },
+                    ),
+                    typ: None,
+                },
+            ),
+        },
+    ],
+}
+
