@@ -281,16 +281,25 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_binary_operation(&mut self, last_term: ExprNode) -> Option<ExprNode> {
-    let op_node = expect_token_and_do!(self, Token::Operator, {
-      let (start, end) = self.current_token_position();
-      let name = read_string!(self, start, end);
-      self.advance();
+    let op_node = match self.current_token() {
+      Some(&Token::Operator(start, end))
+      | Some(&Token::LeftAngle(start, end))
+      | Some(&Token::RightAngle(start, end)) => {
+        let name = read_string!(self, start, end);
+        self.advance();
 
-      Box::new(OperatorNode {
-        pos: (start, end),
-        name,
-      })
-    });
+        Box::new(OperatorNode {
+          pos: (start, end),
+          name,
+        })
+      }
+      _ => {
+        return self.error(ParseError {
+          pos: self.current_token_position(),
+          kind: ParseErrorKind::UnexpectedToken(Token::Operator(0, 0)),
+        })
+      }
+    };
 
     self.skip_line_breaks();
 
@@ -736,7 +745,9 @@ impl<'a> Parser<'a> {
     loop {
       if expr.is_some() {
         match self.current_token() {
-          Some(&Token::Operator(..)) => {
+          Some(&Token::Operator(..))
+          | Some(&Token::LeftAngle(..))
+          | Some(&Token::RightAngle(..)) => {
             expr = self.parse_binary_operation(expr.unwrap());
             continue;
           }

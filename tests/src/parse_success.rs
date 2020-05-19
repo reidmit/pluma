@@ -197,6 +197,22 @@ test_parse_success! {
     |  .f2 2
   "#,
 
+  binary_op_plus: r#"
+    |5 + 5
+  "#,
+
+  binary_op_plusplus: r#"
+    |"a" ++ "b"
+  "#,
+
+  binary_op_less_than: r#"
+    |"a" < "b"
+  "#,
+
+  binary_op_greater_than: r#"
+    |"a" > "b"
+  "#,
+
   private_defs: r#"
     |def isPublic() {}
     |

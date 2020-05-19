@@ -1,0 +1,99 @@
+---
+source: tests/src/parse_success.rs
+expression: 5 + 5
+---
+
+=== Source ===
+5 + 5
+
+=== Tokens ===
+[
+    DecimalDigits(
+        0,
+        1,
+    ),
+    Operator(
+        2,
+        3,
+    ),
+    DecimalDigits(
+        4,
+        5,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        5,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                5,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        0,
+                        5,
+                    ),
+                    kind: BinaryOperation {
+                        left: ExprNode {
+                            pos: (
+                                0,
+                                1,
+                            ),
+                            kind: Literal(
+                                LiteralNode {
+                                    pos: (
+                                        0,
+                                        1,
+                                    ),
+                                    kind: IntDecimal(
+                                        5,
+                                    ),
+                                    typ: None,
+                                },
+                            ),
+                            typ: None,
+                        },
+                        op: OperatorNode {
+                            pos: (
+                                2,
+                                3,
+                            ),
+                            name: "+",
+                        },
+                        right: ExprNode {
+                            pos: (
+                                4,
+                                5,
+                            ),
+                            kind: Literal(
+                                LiteralNode {
+                                    pos: (
+                                        4,
+                                        5,
+                                    ),
+                                    kind: IntDecimal(
+                                        5,
+                                    ),
+                                    typ: None,
+                                },
+                            ),
+                            typ: None,
+                        },
+                    },
+                    typ: None,
+                },
+            ),
+        },
+    ],
+}
+
