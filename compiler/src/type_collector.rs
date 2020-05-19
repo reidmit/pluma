@@ -2,7 +2,7 @@ use crate::ast::*;
 use crate::diagnostics::Diagnostic;
 use crate::scope::Scope;
 use crate::types::ValueType;
-use crate::visitor_mut::VisitorMut;
+use crate::visitor::Visitor;
 
 pub struct TypeCollector<'a> {
   pub diagnostics: Vec<Diagnostic>,
@@ -18,7 +18,7 @@ impl<'a> TypeCollector<'a> {
   }
 }
 
-impl<'a> VisitorMut for TypeCollector<'a> {
+impl<'a> Visitor for TypeCollector<'a> {
   fn enter_type_def(&mut self, node: &mut TypeDefNode) {
     let typ = ValueType::Named(node.name.name.clone());
 

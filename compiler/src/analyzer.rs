@@ -3,7 +3,7 @@ use crate::ast::*;
 use crate::diagnostics::Diagnostic;
 use crate::scope::{Binding, Scope};
 use crate::types::ValueType;
-use crate::visitor_mut::VisitorMut;
+use crate::visitor::Visitor;
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -35,7 +35,7 @@ impl<'a> Analyzer<'a> {
   }
 }
 
-impl<'a> VisitorMut for Analyzer<'a> {
+impl<'a> Visitor for Analyzer<'a> {
   fn leave_let(&mut self, node: &mut LetNode) {
     match &mut node.pattern.kind {
       PatternKind::Ident(ident_node) => {

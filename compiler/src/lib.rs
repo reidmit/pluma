@@ -23,8 +23,6 @@ mod parse_error;
 mod scope;
 mod tokens;
 mod traverse;
-mod traverse_mut;
 mod type_collector;
 mod types;
 mod visitor;
-mod visitor_mut;
