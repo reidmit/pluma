@@ -9,8 +9,8 @@ use std::process::exit;
 
 use crate::options::Command;
 
+mod cli_error;
 mod colors;
-mod errors;
 mod options;
 mod usage;
 mod utils;

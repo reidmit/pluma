@@ -1,4 +1,4 @@
-use crate::errors::UsageError;
+use crate::cli_error::CliError;
 use std::env;
 use std::path::PathBuf;
 
@@ -16,14 +16,14 @@ pub enum Command {
   Version,
 }
 
-pub fn parse_options() -> Result<Command, UsageError> {
+pub fn parse_options() -> Result<Command, CliError> {
   if env::args().len() < 2 {
     return Ok(Command::Help);
   }
 
   let command_name = match env::args().nth(1) {
     Some(name) => name,
-    None => return Err(UsageError::NoCommand),
+    None => return Err(CliError::NoCommand),
   };
 
   match command_name.as_str() {
@@ -38,7 +38,7 @@ pub fn parse_options() -> Result<Command, UsageError> {
 
       let entry_path = match env::args().nth(2) {
         Some(file) => file,
-        None => return Err(UsageError::MissingEntryPath),
+        None => return Err(CliError::MissingEntryPath),
       };
 
       Ok(Command::Build { entry_path })
@@ -46,7 +46,7 @@ pub fn parse_options() -> Result<Command, UsageError> {
 
     "run" => todo!(),
 
-    other => Err(UsageError::UnknownCommand(other.to_owned())),
+    other => Err(CliError::UnknownCommand(other.to_owned())),
   }
 }
 
