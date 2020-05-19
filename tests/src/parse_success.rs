@@ -89,6 +89,30 @@ test_parse_success! {
     |}
   "#,
 
+  def_return_type: r#"
+    |def hello () -> String {
+    |  a => "wow!"
+    |}
+  "#,
+
+  def_func_arg: r#"
+    |def hello { A -> B } -> String {
+    |  a => "wow!"
+    |}
+  "#,
+
+  def_func_taking_tuple_arg: r#"
+    |def hello { (A, B) -> C } {
+    |  x => x
+    |}
+  "#,
+
+  def_func_return_type: r#"
+    |def hello () -> { A -> B } {
+    |  { x => y }
+    |}
+  "#,
+
   call_empty_arg: r#"
     |func()
   "#,
