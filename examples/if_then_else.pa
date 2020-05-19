@@ -1,4 +1,6 @@
-intrinsic Any
+intrinsic_type Any
+
+intrinsic_def print String -> String
 
 enum Bool
   | True
@@ -7,8 +9,8 @@ enum Bool
 def if Bool then { () -> A } else { () -> A } -> A where A :: Any {
   cond, then, else =>
     match cond
-    | True => then()
-    | False => else()
+      | True => then()
+      | False => else()
 }
 
 let b = True

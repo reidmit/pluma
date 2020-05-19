@@ -5,15 +5,24 @@ use uuid::Uuid;
 pub type Position = (usize, usize);
 pub type SignaturePart = (Box<IdentifierNode>, Box<TypeExprNode>);
 pub type Signature = Vec<SignaturePart>;
+pub type GenericTypeConstraints = Vec<(IdentifierNode, TypeExprNode)>;
 
 #[derive(Debug)]
 pub struct DefNode {
   pub pos: Position,
   pub kind: DefKind,
   pub return_type: Option<TypeExprNode>,
-  pub generic_type_constraints: Vec<(IdentifierNode, TypeExprNode)>,
+  pub generic_type_constraints: GenericTypeConstraints,
   pub params: Vec<IdentifierNode>,
   pub body: Vec<StatementNode>,
+}
+
+#[derive(Debug)]
+pub struct IntrinsicDefNode {
+  pub pos: Position,
+  pub kind: DefKind,
+  pub return_type: Option<TypeExprNode>,
+  pub generic_type_constraints: GenericTypeConstraints,
 }
 
 #[derive(Debug)]
@@ -184,7 +193,9 @@ pub struct TopLevelStatementNode {
 pub enum TopLevelStatementKind {
   Let(LetNode),
   TypeDef(TypeDefNode),
+  IntrinsicTypeDef(IntrinsicTypeDefNode),
   Def(DefNode),
+  IntrinsicDef(IntrinsicDefNode),
   Expr(ExprNode),
   PrivateMarker,
 }
@@ -216,7 +227,14 @@ pub struct TypeDefNode {
   pub pos: Position,
   pub kind: TypeDefKind,
   pub name: Box<IdentifierNode>,
-  pub generics: Vec<IdentifierNode>,
+  pub generic_type_constraints: GenericTypeConstraints,
+}
+
+#[derive(Debug)]
+pub struct IntrinsicTypeDefNode {
+  pub pos: Position,
+  pub name: Box<IdentifierNode>,
+  pub generic_type_constraints: GenericTypeConstraints,
 }
 
 #[derive(Debug)]
@@ -238,8 +256,6 @@ pub enum TypeDefKind {
     fields: Vec<(IdentifierNode, TypeExprNode)>,
     methods: Vec<Signature>,
   },
-  // intrinsic Int
-  Intrinsic,
 }
 
 #[derive(Debug, Clone)]

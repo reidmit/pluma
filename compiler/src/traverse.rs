@@ -61,6 +61,14 @@ impl Traverse for IdentifierNode {
   }
 }
 
+impl Traverse for IntrinsicDefNode {
+  // todo
+}
+
+impl Traverse for IntrinsicTypeDefNode {
+  // todo
+}
+
 impl Traverse for LetNode {
   fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
     visitor.enter_let(self);
@@ -147,6 +155,8 @@ impl Traverse for TopLevelStatementNode {
       TopLevelStatementKind::TypeDef(node) => node.traverse(visitor),
       TopLevelStatementKind::Def(node) => node.traverse(visitor),
       TopLevelStatementKind::Expr(node) => node.traverse(visitor),
+      TopLevelStatementKind::IntrinsicDef(node) => node.traverse(visitor),
+      TopLevelStatementKind::IntrinsicTypeDef(node) => node.traverse(visitor),
       TopLevelStatementKind::PrivateMarker => {}
     };
 

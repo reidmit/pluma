@@ -35,6 +35,7 @@ impl<'a> Tokenizer<'a> {
 
     let mut string_stack = Vec::new();
     let mut interpolation_stack = Vec::new();
+    let mut brace_depth = 0;
 
     // We iterate through all chars in a single loop, appending tokens as we find them.
     // The trickiest parts here are related to string interpolations, since they can
@@ -158,11 +159,13 @@ impl<'a> Tokenizer<'a> {
 
         b'{' => {
           index += 1;
+          brace_depth += 1;
           tokens.push(LeftBrace(start_index, index))
         }
 
         b'}' => {
           index += 1;
+          brace_depth -= 1;
           tokens.push(RightBrace(start_index, index))
         }
 
@@ -235,20 +238,26 @@ impl<'a> Tokenizer<'a> {
           let value = &source[start_index..index];
 
           let constructor = match value {
-            b"alias" => KeywordAlias,
-            b"as" => KeywordAs,
+            // These keywords cannot be used as identifiers anywhere:
             b"break" => KeywordBreak,
-            b"def" => KeywordDef,
-            b"enum" => KeywordEnum,
-            b"intrinsic" => KeywordIntrinsic,
             b"let" => KeywordLet,
             b"match" => KeywordMatch,
-            b"private" => KeywordPrivate,
-            b"use" => KeywordUse,
             b"return" => KeywordReturn,
-            b"struct" => KeywordStruct,
-            b"trait" => KeywordTrait,
-            b"where" => KeywordWhere,
+
+            // These are only considered keywords if they appear at the top level:
+            b"def" if brace_depth == 0 => KeywordDef,
+            b"enum" if brace_depth == 0 => KeywordEnum,
+            b"alias" if brace_depth == 0 => KeywordAlias,
+            b"as" if brace_depth == 0 => KeywordAs,
+            b"intrinsic_def" if brace_depth == 0 => KeywordIntrinsicDef,
+            b"intrinsic_type" if brace_depth == 0 => KeywordIntrinsicType,
+            b"private" if brace_depth == 0 => KeywordPrivate,
+            b"use" if brace_depth == 0 => KeywordUse,
+            b"struct" if brace_depth == 0 => KeywordStruct,
+            b"trait" if brace_depth == 0 => KeywordTrait,
+            b"where" if brace_depth == 0 => KeywordWhere,
+
+            // Anything else is just an identifier:
             _ => Identifier,
           };
 

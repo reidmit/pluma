@@ -111,6 +111,10 @@ impl<'a> Parser<'a> {
     self.tokens.get(self.index + 1)
   }
 
+  fn prev_token(&self) -> Option<&Token> {
+    self.tokens.get(self.index - 1)
+  }
+
   fn current_token_position(&self) -> (usize, usize) {
     match self.current_token() {
       Some(token) => token.get_location(),
@@ -145,18 +149,11 @@ impl<'a> Parser<'a> {
       pos.0
     });
 
-    let name = match self.current_token() {
-      Some(&Token::Identifier(start, end)) => {
-        let name_str = read_string!(self, start, end);
-
-        self.advance();
-
-        Box::new(IdentifierNode {
-          pos: (start, end),
-          name: name_str,
-          typ: None,
-        })
-      }
+    let name = match self.parse_type_identifier() {
+      Some(type_expr) => match type_expr.kind {
+        TypeExprKind::Constructor(id) => Box::new(id),
+        _ => unreachable!(),
+      },
       _ => {
         return self.error(ParseError {
           pos: self.current_token_position(),
@@ -165,24 +162,9 @@ impl<'a> Parser<'a> {
       }
     };
 
-    let mut generics = Vec::new();
+    self.skip_line_breaks();
 
-    if current_token_is!(self, Token::LeftParen) {
-      self.advance();
-
-      while let Some(ident) = self.parse_identifier() {
-        generics.push(ident);
-
-        match self.current_token() {
-          Some(&Token::Comma(..)) => self.advance(),
-          _ => break,
-        }
-      }
-
-      expect_token_and_do!(self, Token::RightParen, {
-        self.advance();
-      });
-    }
+    let generic_type_constraints = self.parse_generic_type_constraints().unwrap_or_default();
 
     let type_expr = match self.parse_type_expression() {
       Some(expr) => expr,
@@ -197,7 +179,7 @@ impl<'a> Parser<'a> {
       pos: (start, type_expr.pos.1),
       kind: TypeDefKind::Alias { of: type_expr },
       name,
-      generics,
+      generic_type_constraints,
     })
   }
 
@@ -534,6 +516,55 @@ impl<'a> Parser<'a> {
     })
   }
 
+  fn parse_intrinsic_definition(&mut self) -> Option<IntrinsicDefNode> {
+    let start = expect_token_and_do!(self, Token::KeywordIntrinsicDef, {
+      let pos = self.current_token_position();
+      self.advance();
+      pos.0
+    });
+
+    let kind = match self.parse_definition_kind() {
+      Some(kind_node) => kind_node,
+      _ => {
+        // Just return without adding a new error. Assumes that the
+        // failure to parse the kind has already generated an error.
+        return None;
+      }
+    };
+
+    let return_type = if current_token_is!(self, Token::Arrow) {
+      self.advance();
+
+      match self.parse_type_expression() {
+        Some(type_node) => Some(type_node),
+        _ => {
+          return self.error(ParseError {
+            pos: self.current_token_position(),
+            kind: ParseErrorKind::MissingReturnType,
+          })
+        }
+      }
+    } else {
+      None
+    };
+
+    self.skip_line_breaks();
+
+    let generic_type_constraints = self.parse_generic_type_constraints().unwrap_or_default();
+
+    let end = match self.prev_token() {
+      Some(token) => token.get_location().1,
+      _ => start,
+    };
+
+    Some(IntrinsicDefNode {
+      pos: (start, end),
+      kind,
+      return_type,
+      generic_type_constraints,
+    })
+  }
+
   fn parse_definition(&mut self) -> Option<DefNode> {
     let start = expect_token_and_do!(self, Token::KeywordDef, {
       let pos = self.current_token_position();
@@ -568,36 +599,7 @@ impl<'a> Parser<'a> {
 
     self.skip_line_breaks();
 
-    let mut generic_type_constraints = Vec::new();
-
-    if current_token_is!(self, Token::KeywordWhere) {
-      self.advance();
-
-      while let Some(generic_name) = self.parse_identifier() {
-        expect_token_and_do!(self, Token::DoubleColon, {
-          self.advance();
-        });
-
-        let type_expr = match self.parse_type_expression() {
-          Some(expr) => expr,
-          _ => {
-            return self.error(ParseError {
-              pos: self.current_token_position(),
-              kind: ParseErrorKind::MissingType,
-            })
-          }
-        };
-
-        generic_type_constraints.push((generic_name, type_expr));
-
-        match self.current_token() {
-          Some(&Token::Comma(..)) => self.advance(),
-          _ => break,
-        }
-      }
-    }
-
-    self.skip_line_breaks();
+    let generic_type_constraints = self.parse_generic_type_constraints().unwrap_or_default();
 
     self.enter_def_body();
 
@@ -620,6 +622,41 @@ impl<'a> Parser<'a> {
       params,
       body,
     })
+  }
+
+  fn parse_generic_type_constraints(&mut self) -> Option<GenericTypeConstraints> {
+    let mut generic_type_constraints = Vec::new();
+
+    if current_token_is!(self, Token::KeywordWhere) {
+      self.advance();
+
+      while let Some(generic_name) = self.parse_identifier() {
+        expect_token_and_do!(self, Token::DoubleColon, {
+          self.advance();
+        });
+
+        let type_expr = match self.parse_type_expression() {
+          Some(expr) => expr,
+          _ => {
+            return self.error(ParseError {
+              pos: self.current_token_position(),
+              kind: ParseErrorKind::MissingType,
+            });
+          }
+        };
+
+        generic_type_constraints.push((generic_name, type_expr));
+
+        match self.current_token() {
+          Some(&Token::Comma(..)) => self.advance(),
+          _ => break,
+        }
+      }
+    }
+
+    self.skip_line_breaks();
+
+    Some(generic_type_constraints)
   }
 
   fn parse_definition_kind(&mut self) -> Option<DefKind> {
@@ -696,18 +733,11 @@ impl<'a> Parser<'a> {
       pos.0
     });
 
-    let name = match self.current_token() {
-      Some(&Token::Identifier(start, end)) => {
-        let name_str = read_string!(self, start, end);
-
-        self.advance();
-
-        Box::new(IdentifierNode {
-          pos: (start, end),
-          name: name_str,
-          typ: None,
-        })
-      }
+    let name = match self.parse_type_identifier() {
+      Some(type_expr) => match type_expr.kind {
+        TypeExprKind::Constructor(id) => Box::new(id),
+        _ => unreachable!(),
+      },
       _ => {
         return self.error(ParseError {
           pos: self.current_token_position(),
@@ -716,26 +746,9 @@ impl<'a> Parser<'a> {
       }
     };
 
-    let mut generics = Vec::new();
-
-    if current_token_is!(self, Token::LeftParen) {
-      self.advance();
-
-      while let Some(ident) = self.parse_identifier() {
-        generics.push(ident);
-
-        match self.current_token() {
-          Some(&Token::Comma(..)) => self.advance(),
-          _ => break,
-        }
-      }
-
-      expect_token_and_do!(self, Token::RightParen, {
-        self.advance();
-      });
-    }
-
     self.skip_line_breaks();
+
+    let generic_type_constraints = self.parse_generic_type_constraints().unwrap_or_default();
 
     let mut variants = Vec::new();
 
@@ -767,7 +780,7 @@ impl<'a> Parser<'a> {
       pos: (start, variants.last().unwrap().pos.1),
       kind: TypeDefKind::Enum { variants },
       name,
-      generics,
+      generic_type_constraints,
     })
   }
 
@@ -826,8 +839,8 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_intrinsic(&mut self) -> Option<TypeDefNode> {
-    let start = expect_token_and_do!(self, Token::KeywordIntrinsic, {
+  fn parse_intrinsic_type(&mut self) -> Option<IntrinsicTypeDefNode> {
+    let start = expect_token_and_do!(self, Token::KeywordIntrinsicType, {
       let pos = self.current_token_position();
       self.advance();
       pos.0
@@ -856,11 +869,10 @@ impl<'a> Parser<'a> {
       }
     };
 
-    Some(TypeDefNode {
+    Some(IntrinsicTypeDefNode {
       pos: (start, end),
-      kind: TypeDefKind::Intrinsic,
       name,
-      generics: Vec::new(),
+      generic_type_constraints: Vec::new(),
     })
   }
 
@@ -1317,18 +1329,11 @@ impl<'a> Parser<'a> {
       pos.0
     });
 
-    let name = match self.current_token() {
-      Some(&Token::Identifier(start, end)) => {
-        let name_str = read_string!(self, start, end);
-
-        self.advance();
-
-        Box::new(IdentifierNode {
-          pos: (start, end),
-          name: name_str,
-          typ: None,
-        })
-      }
+    let name = match self.parse_type_identifier() {
+      Some(type_expr) => match type_expr.kind {
+        TypeExprKind::Constructor(id) => Box::new(id),
+        _ => unreachable!(),
+      },
       _ => {
         return self.error(ParseError {
           pos: self.current_token_position(),
@@ -1337,24 +1342,9 @@ impl<'a> Parser<'a> {
       }
     };
 
-    let mut generics = Vec::new();
+    self.skip_line_breaks();
 
-    if current_token_is!(self, Token::LeftParen) {
-      self.advance();
-
-      while let Some(ident) = self.parse_identifier() {
-        generics.push(ident);
-
-        match self.current_token() {
-          Some(&Token::Comma(..)) => self.advance(),
-          _ => break,
-        }
-      }
-
-      expect_token_and_do!(self, Token::RightParen, {
-        self.advance();
-      });
-    }
+    let generic_type_constraints = self.parse_generic_type_constraints().unwrap_or_default();
 
     let mut fields = Vec::new();
 
@@ -1411,7 +1401,7 @@ impl<'a> Parser<'a> {
       pos: (start, end),
       kind: TypeDefKind::Struct { fields },
       name,
-      generics,
+      generic_type_constraints,
     })
   }
 
@@ -1491,6 +1481,14 @@ impl<'a> Parser<'a> {
             kind: TopLevelStatementKind::Def(def_node),
           })
       }
+      Some(&Token::KeywordIntrinsicDef(..)) => {
+        self
+          .parse_intrinsic_definition()
+          .map(|intrinsic_def_node| TopLevelStatementNode {
+            pos: intrinsic_def_node.pos,
+            kind: TopLevelStatementKind::IntrinsicDef(intrinsic_def_node),
+          })
+      }
       Some(&Token::KeywordAlias(..)) => {
         self
           .parse_alias()
@@ -1507,12 +1505,12 @@ impl<'a> Parser<'a> {
             kind: TopLevelStatementKind::TypeDef(type_def_node),
           })
       }
-      Some(&Token::KeywordIntrinsic(..)) => {
+      Some(&Token::KeywordIntrinsicType(..)) => {
         self
-          .parse_intrinsic()
-          .map(|type_def_node| TopLevelStatementNode {
-            pos: type_def_node.pos,
-            kind: TopLevelStatementKind::TypeDef(type_def_node),
+          .parse_intrinsic_type()
+          .map(|intrinsic_type_def_node| TopLevelStatementNode {
+            pos: intrinsic_type_def_node.pos,
+            kind: TopLevelStatementKind::IntrinsicTypeDef(intrinsic_type_def_node),
           })
       }
       Some(&Token::KeywordStruct(..)) => {
