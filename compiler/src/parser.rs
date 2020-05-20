@@ -540,7 +540,7 @@ impl<'a> Parser<'a> {
         _ => {
           return self.error(ParseError {
             pos: self.current_token_position(),
-            kind: ParseErrorKind::MissingReturnType,
+            kind: ParseErrorKind::IncompleteMethodSignature,
           })
         }
       }
@@ -666,7 +666,7 @@ impl<'a> Parser<'a> {
       None => {
         return self.error(ParseError {
           pos: self.current_token_position(),
-          kind: ParseErrorKind::MissingType,
+          kind: ParseErrorKind::IncompleteMethodSignature,
         })
       }
     };
@@ -687,7 +687,7 @@ impl<'a> Parser<'a> {
           _ => {
             return self.error(ParseError {
               pos: self.current_token_position(),
-              kind: ParseErrorKind::MissingType,
+              kind: ParseErrorKind::IncompleteMethodSignature,
             })
           }
         }
@@ -703,7 +703,7 @@ impl<'a> Parser<'a> {
         _ => {
           return self.error(ParseError {
             pos: self.current_token_position(),
-            kind: ParseErrorKind::MissingType,
+            kind: ParseErrorKind::IncompleteMethodSignature,
           })
         }
       }
