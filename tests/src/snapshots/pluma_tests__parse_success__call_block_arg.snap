@@ -51,94 +51,108 @@ ModuleNode {
                         0,
                         18,
                     ),
-                    kind: Call {
-                        callee: ExprNode {
+                    kind: Call(
+                        CallNode {
                             pos: (
                                 0,
-                                2,
+                                18,
                             ),
-                            kind: Identifier(
-                                IdentifierNode {
-                                    pos: (
-                                        0,
-                                        2,
-                                    ),
-                                    name: "do",
-                                    typ: None,
-                                },
-                            ),
-                            typ: None,
-                        },
-                        args: [
-                            ExprNode {
+                            callee: ExprNode {
                                 pos: (
-                                    3,
-                                    18,
+                                    0,
+                                    2,
                                 ),
-                                kind: Block {
-                                    params: [],
-                                    body: [
-                                        StatementNode {
-                                            pos: (
-                                                5,
-                                                15,
-                                            ),
-                                            kind: Expr(
-                                                ExprNode {
-                                                    pos: (
-                                                        5,
-                                                        15,
-                                                    ),
-                                                    kind: Call {
-                                                        callee: ExprNode {
-                                                            pos: (
-                                                                5,
-                                                                10,
-                                                            ),
-                                                            kind: Identifier(
-                                                                IdentifierNode {
+                                kind: Identifier(
+                                    IdentifierNode {
+                                        pos: (
+                                            0,
+                                            2,
+                                        ),
+                                        name: "do",
+                                        typ: None,
+                                    },
+                                ),
+                                typ: None,
+                            },
+                            args: [
+                                ExprNode {
+                                    pos: (
+                                        3,
+                                        18,
+                                    ),
+                                    kind: Block {
+                                        params: [],
+                                        body: [
+                                            StatementNode {
+                                                pos: (
+                                                    5,
+                                                    15,
+                                                ),
+                                                kind: Expr(
+                                                    ExprNode {
+                                                        pos: (
+                                                            5,
+                                                            15,
+                                                        ),
+                                                        kind: Call(
+                                                            CallNode {
+                                                                pos: (
+                                                                    5,
+                                                                    15,
+                                                                ),
+                                                                callee: ExprNode {
                                                                     pos: (
                                                                         5,
                                                                         10,
                                                                     ),
-                                                                    name: "print",
+                                                                    kind: Identifier(
+                                                                        IdentifierNode {
+                                                                            pos: (
+                                                                                5,
+                                                                                10,
+                                                                            ),
+                                                                            name: "print",
+                                                                            typ: None,
+                                                                        },
+                                                                    ),
                                                                     typ: None,
                                                                 },
-                                                            ),
-                                                            typ: None,
-                                                        },
-                                                        args: [
-                                                            ExprNode {
-                                                                pos: (
-                                                                    12,
-                                                                    15,
-                                                                ),
-                                                                kind: Literal(
-                                                                    LiteralNode {
+                                                                args: [
+                                                                    ExprNode {
                                                                         pos: (
                                                                             12,
                                                                             15,
                                                                         ),
-                                                                        kind: Str(
-                                                                            "hey",
+                                                                        kind: Literal(
+                                                                            LiteralNode {
+                                                                                pos: (
+                                                                                    12,
+                                                                                    15,
+                                                                                ),
+                                                                                kind: Str(
+                                                                                    "hey",
+                                                                                ),
+                                                                                typ: None,
+                                                                            },
                                                                         ),
                                                                         typ: None,
                                                                     },
-                                                                ),
+                                                                ],
                                                                 typ: None,
                                                             },
-                                                        ],
+                                                        ),
+                                                        typ: None,
                                                     },
-                                                    typ: None,
-                                                },
-                                            ),
-                                        },
-                                    ],
+                                                ),
+                                            },
+                                        ],
+                                    },
+                                    typ: None,
                                 },
-                                typ: None,
-                            },
-                        ],
-                    },
+                            ],
+                            typ: None,
+                        },
+                    ),
                     typ: None,
                 },
             ),

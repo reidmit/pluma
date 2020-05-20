@@ -8,6 +8,14 @@ pub type Signature = Vec<SignaturePart>;
 pub type GenericTypeConstraints = Vec<(IdentifierNode, TypeExprNode)>;
 
 #[derive(Debug)]
+pub struct CallNode {
+  pub pos: Position,
+  pub callee: Box<ExprNode>,
+  pub args: Vec<ExprNode>,
+  pub typ: Option<ValueType>,
+}
+
+#[derive(Debug)]
 pub struct DefNode {
   pub pos: Position,
   pub kind: DefKind,
@@ -50,6 +58,18 @@ pub enum DefKind {
 }
 
 #[derive(Debug)]
+pub struct EnumVariantNode {
+  pub pos: Position,
+  pub kind: EnumVariantKind,
+}
+
+#[derive(Debug)]
+pub enum EnumVariantKind {
+  Ident(IdentifierNode),
+  Call(CallNode),
+}
+
+#[derive(Debug)]
 pub struct ExprNode {
   pub pos: Position,
   pub kind: ExprKind,
@@ -71,10 +91,7 @@ pub enum ExprKind {
     params: Vec<IdentifierNode>,
     body: Vec<StatementNode>,
   },
-  Call {
-    callee: Box<ExprNode>,
-    args: Vec<ExprNode>,
-  },
+  Call(CallNode),
   Chain {
     receiver: Box<ExprNode>,
     prop: Box<ExprNode>,
@@ -245,7 +262,7 @@ pub enum TypeDefKind {
   },
   // enum Color | Red | Green | Blue
   Enum {
-    variants: Vec<TypeExprNode>,
+    variants: Vec<EnumVariantNode>,
   },
   // struct Person (name :: String, age :: Int)
   Struct {

@@ -63,93 +63,100 @@ ModuleNode {
                         0,
                         16,
                     ),
-                    kind: Call {
-                        callee: ExprNode {
+                    kind: Call(
+                        CallNode {
                             pos: (
                                 0,
-                                13,
+                                16,
                             ),
-                            kind: MultiPartIdentifier(
-                                [
-                                    IdentifierNode {
-                                        pos: (
-                                            0,
-                                            8,
-                                        ),
-                                        name: "multiply",
-                                        typ: None,
-                                    },
-                                    IdentifierNode {
-                                        pos: (
-                                            11,
-                                            13,
-                                        ),
-                                        name: "by",
-                                        typ: None,
-                                    },
-                                ],
-                            ),
+                            callee: ExprNode {
+                                pos: (
+                                    0,
+                                    13,
+                                ),
+                                kind: MultiPartIdentifier(
+                                    [
+                                        IdentifierNode {
+                                            pos: (
+                                                0,
+                                                8,
+                                            ),
+                                            name: "multiply",
+                                            typ: None,
+                                        },
+                                        IdentifierNode {
+                                            pos: (
+                                                11,
+                                                13,
+                                            ),
+                                            name: "by",
+                                            typ: None,
+                                        },
+                                    ],
+                                ),
+                                typ: None,
+                            },
+                            args: [
+                                ExprNode {
+                                    pos: (
+                                        8,
+                                        11,
+                                    ),
+                                    kind: Grouping(
+                                        ExprNode {
+                                            pos: (
+                                                9,
+                                                10,
+                                            ),
+                                            kind: Literal(
+                                                LiteralNode {
+                                                    pos: (
+                                                        9,
+                                                        10,
+                                                    ),
+                                                    kind: IntDecimal(
+                                                        1,
+                                                    ),
+                                                    typ: None,
+                                                },
+                                            ),
+                                            typ: None,
+                                        },
+                                    ),
+                                    typ: None,
+                                },
+                                ExprNode {
+                                    pos: (
+                                        13,
+                                        16,
+                                    ),
+                                    kind: Grouping(
+                                        ExprNode {
+                                            pos: (
+                                                14,
+                                                15,
+                                            ),
+                                            kind: Literal(
+                                                LiteralNode {
+                                                    pos: (
+                                                        14,
+                                                        15,
+                                                    ),
+                                                    kind: IntDecimal(
+                                                        2,
+                                                    ),
+                                                    typ: None,
+                                                },
+                                            ),
+                                            typ: None,
+                                        },
+                                    ),
+                                    typ: None,
+                                },
+                            ],
                             typ: None,
                         },
-                        args: [
-                            ExprNode {
-                                pos: (
-                                    8,
-                                    11,
-                                ),
-                                kind: Grouping(
-                                    ExprNode {
-                                        pos: (
-                                            9,
-                                            10,
-                                        ),
-                                        kind: Literal(
-                                            LiteralNode {
-                                                pos: (
-                                                    9,
-                                                    10,
-                                                ),
-                                                kind: IntDecimal(
-                                                    1,
-                                                ),
-                                                typ: None,
-                                            },
-                                        ),
-                                        typ: None,
-                                    },
-                                ),
-                                typ: None,
-                            },
-                            ExprNode {
-                                pos: (
-                                    13,
-                                    16,
-                                ),
-                                kind: Grouping(
-                                    ExprNode {
-                                        pos: (
-                                            14,
-                                            15,
-                                        ),
-                                        kind: Literal(
-                                            LiteralNode {
-                                                pos: (
-                                                    14,
-                                                    15,
-                                                ),
-                                                kind: IntDecimal(
-                                                    2,
-                                                ),
-                                                typ: None,
-                                            },
-                                        ),
-                                        typ: None,
-                                    },
-                                ),
-                                typ: None,
-                            },
-                        ],
-                    },
+                    ),
                     typ: None,
                 },
             ),

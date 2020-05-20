@@ -5,6 +5,20 @@ pub trait Traverse {
   fn traverse<V: Visitor>(&mut self, visitor: &mut V) {}
 }
 
+impl Traverse for CallNode {
+  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+    visitor.enter_call(self);
+
+    for arg in &mut self.args {
+      arg.traverse(visitor);
+    }
+
+    self.callee.traverse(visitor);
+
+    visitor.leave_call(self);
+  }
+}
+
 impl Traverse for DefNode {
   // todo
 }
@@ -27,13 +41,7 @@ impl Traverse for ExprNode {
           stmt.traverse(visitor);
         }
       }
-      ExprKind::Call { callee, args } => {
-        for arg in args {
-          arg.traverse(visitor);
-        }
-
-        callee.traverse(visitor);
-      }
+      ExprKind::Call(call) => call.traverse(visitor),
       ExprKind::Literal(literal) => literal.traverse(visitor),
       ExprKind::Identifier(ident) => ident.traverse(visitor),
       ExprKind::Interpolation(parts) => {

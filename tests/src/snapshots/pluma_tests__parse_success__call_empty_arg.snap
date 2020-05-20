@@ -43,35 +43,42 @@ ModuleNode {
                         0,
                         6,
                     ),
-                    kind: Call {
-                        callee: ExprNode {
+                    kind: Call(
+                        CallNode {
                             pos: (
                                 0,
-                                4,
+                                6,
                             ),
-                            kind: Identifier(
-                                IdentifierNode {
-                                    pos: (
-                                        0,
-                                        4,
-                                    ),
-                                    name: "func",
-                                    typ: None,
-                                },
-                            ),
-                            typ: None,
-                        },
-                        args: [
-                            ExprNode {
+                            callee: ExprNode {
                                 pos: (
+                                    0,
                                     4,
-                                    6,
                                 ),
-                                kind: EmptyTuple,
+                                kind: Identifier(
+                                    IdentifierNode {
+                                        pos: (
+                                            0,
+                                            4,
+                                        ),
+                                        name: "func",
+                                        typ: None,
+                                    },
+                                ),
                                 typ: None,
                             },
-                        ],
-                    },
+                            args: [
+                                ExprNode {
+                                    pos: (
+                                        4,
+                                        6,
+                                    ),
+                                    kind: EmptyTuple,
+                                    typ: None,
+                                },
+                            ],
+                            typ: None,
+                        },
+                    ),
                     typ: None,
                 },
             ),

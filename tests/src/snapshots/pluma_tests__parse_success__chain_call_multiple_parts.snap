@@ -55,103 +55,110 @@ ModuleNode {
                         1,
                         29,
                     ),
-                    kind: Call {
-                        callee: ExprNode {
+                    kind: Call(
+                        CallNode {
                             pos: (
                                 1,
-                                17,
+                                29,
                             ),
-                            kind: Chain {
-                                receiver: ExprNode {
+                            callee: ExprNode {
+                                pos: (
+                                    1,
+                                    17,
+                                ),
+                                kind: Chain {
+                                    receiver: ExprNode {
+                                        pos: (
+                                            1,
+                                            6,
+                                        ),
+                                        kind: Literal(
+                                            LiteralNode {
+                                                pos: (
+                                                    1,
+                                                    6,
+                                                ),
+                                                kind: Str(
+                                                    "hello",
+                                                ),
+                                                typ: None,
+                                            },
+                                        ),
+                                        typ: None,
+                                    },
+                                    prop: ExprNode {
+                                        pos: (
+                                            10,
+                                            26,
+                                        ),
+                                        kind: MultiPartIdentifier(
+                                            [
+                                                IdentifierNode {
+                                                    pos: (
+                                                        10,
+                                                        17,
+                                                    ),
+                                                    name: "replace",
+                                                    typ: None,
+                                                },
+                                                IdentifierNode {
+                                                    pos: (
+                                                        22,
+                                                        26,
+                                                    ),
+                                                    name: "with",
+                                                    typ: None,
+                                                },
+                                            ],
+                                        ),
+                                        typ: None,
+                                    },
+                                },
+                                typ: None,
+                            },
+                            args: [
+                                ExprNode {
                                     pos: (
-                                        1,
-                                        6,
+                                        19,
+                                        20,
                                     ),
                                     kind: Literal(
                                         LiteralNode {
                                             pos: (
-                                                1,
-                                                6,
+                                                19,
+                                                20,
                                             ),
                                             kind: Str(
-                                                "hello",
+                                                "x",
                                             ),
                                             typ: None,
                                         },
                                     ),
                                     typ: None,
                                 },
-                                prop: ExprNode {
+                                ExprNode {
                                     pos: (
-                                        10,
-                                        26,
+                                        28,
+                                        29,
                                     ),
-                                    kind: MultiPartIdentifier(
-                                        [
-                                            IdentifierNode {
-                                                pos: (
-                                                    10,
-                                                    17,
-                                                ),
-                                                name: "replace",
-                                                typ: None,
-                                            },
-                                            IdentifierNode {
-                                                pos: (
-                                                    22,
-                                                    26,
-                                                ),
-                                                name: "with",
-                                                typ: None,
-                                            },
-                                        ],
+                                    kind: Literal(
+                                        LiteralNode {
+                                            pos: (
+                                                28,
+                                                29,
+                                            ),
+                                            kind: Str(
+                                                "y",
+                                            ),
+                                            typ: None,
+                                        },
                                     ),
                                     typ: None,
                                 },
-                            },
+                            ],
                             typ: None,
                         },
-                        args: [
-                            ExprNode {
-                                pos: (
-                                    19,
-                                    20,
-                                ),
-                                kind: Literal(
-                                    LiteralNode {
-                                        pos: (
-                                            19,
-                                            20,
-                                        ),
-                                        kind: Str(
-                                            "x",
-                                        ),
-                                        typ: None,
-                                    },
-                                ),
-                                typ: None,
-                            },
-                            ExprNode {
-                                pos: (
-                                    28,
-                                    29,
-                                ),
-                                kind: Literal(
-                                    LiteralNode {
-                                        pos: (
-                                            28,
-                                            29,
-                                        ),
-                                        kind: Str(
-                                            "y",
-                                        ),
-                                        typ: None,
-                                    },
-                                ),
-                                typ: None,
-                            },
-                        ],
-                    },
+                    ),
                     typ: None,
                 },
             ),

@@ -25,19 +25,19 @@ impl<'a> Visitor for TypeCollector<'a> {
     match &node.kind {
       TypeDefKind::Enum { variants } => {
         for variant in variants {
-          match &variant.kind {
-            TypeExprKind::Constructor(ident_node) => {
-              println!("variant: {:#?}", ident_node.name);
+          // match &variant.kind {
+          //   TypeExprKind::Constructor(ident_node) => {
+          //     println!("variant: {:#?}", ident_node.name);
 
-              let variant_name = ident_node.name.clone();
-              let variant_type = typ.clone();
+          //     let variant_name = ident_node.name.clone();
+          //     let variant_type = typ.clone();
 
-              self
-                .scope
-                .add_let_binding(variant_name, variant_type, ident_node.pos);
-            }
-            _ => todo!("other variants"),
-          }
+          //     self
+          //       .scope
+          //       .add_let_binding(variant_name, variant_type, ident_node.pos);
+          //   }
+          //   _ => todo!("other variants"),
+          // }
         }
       }
       _ => todo!("other type defs"),

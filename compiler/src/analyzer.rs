@@ -36,6 +36,22 @@ impl<'a> Analyzer<'a> {
 }
 
 impl<'a> Visitor for Analyzer<'a> {
+  fn leave_call(&mut self, node: &mut CallNode) {
+    let callee_type = node.callee.typ.as_ref().unwrap();
+
+    match callee_type {
+      ValueType::Func(param_types, return_type) => {
+        // TODO assert on matching param types
+
+        node.typ = Some(*return_type.clone());
+      }
+      _ => self.error(AnalysisError {
+        pos: node.pos,
+        kind: AnalysisErrorKind::CalleeNotCallable(callee_type.clone()),
+      }),
+    }
+  }
+
   fn leave_let(&mut self, node: &mut LetNode) {
     match &mut node.pattern.kind {
       PatternKind::Ident(ident_node) => {
@@ -92,6 +108,8 @@ impl<'a> Visitor for Analyzer<'a> {
 
       ExprKind::Literal(lit_node) => node.typ = lit_node.typ.clone(),
 
+      ExprKind::Call(call_node) => node.typ = call_node.typ.clone(),
+
       ExprKind::Assignment { left, right } => {
         let existing_binding = self.scope.get_let_binding(&left.name);
 
@@ -133,22 +151,6 @@ impl<'a> Visitor for Analyzer<'a> {
           for diagnostic in diagnostics {
             self.diagnostic(diagnostic);
           }
-        }
-      }
-
-      ExprKind::Call { callee, args } => {
-        let callee_type = callee.typ.as_ref().unwrap();
-
-        match callee_type {
-          ValueType::Func(param_types, return_type) => {
-            // TODO assert on matching param types
-
-            node.typ = Some(*return_type.clone());
-          }
-          _ => self.error(AnalysisError {
-            pos: node.pos,
-            kind: AnalysisErrorKind::CalleeNotCallable(callee_type.clone()),
-          }),
         }
       }
 

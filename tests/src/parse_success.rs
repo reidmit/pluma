@@ -226,4 +226,23 @@ test_parse_success! {
     |
     |def isPrivate() {}
   "#,
+
+  type_enum_same_line: r#"
+    |enum Bool | True | False
+  "#,
+
+  type_enum_across_lines: r#"
+    |enum Color
+    |  | Red
+    |  | Green
+    |  | Blue
+  "#,
+
+  type_enum_constructor_args: r#"
+    |enum Thing
+    |  | Wow Int
+    |  | Cool(String)
+    |  | NoArg
+    |  | TupleArg (Int, String)
+  "#,
 }

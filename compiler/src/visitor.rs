@@ -1,6 +1,10 @@
 use crate::ast::*;
 
 pub trait Visitor {
+  fn enter_call(&mut self, node: &mut CallNode) {}
+
+  fn leave_call(&mut self, node: &mut CallNode) {}
+
   fn enter_def(&mut self, node: &mut DefNode) {}
 
   fn leave_def(&mut self, node: &mut DefNode) {}

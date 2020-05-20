@@ -306,7 +306,7 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_call(&mut self, last_expr: ExprNode) -> Option<ExprNode> {
+  fn parse_call(&mut self, last_expr: ExprNode) -> Option<CallNode> {
     // At this point, last_expr is either an Identifier (e.g. print in `print "hello"`)
     // or a Chain (e.g. `a 1 . b` in `a 1 . b 2.`).
 
@@ -448,12 +448,10 @@ impl<'a> Parser<'a> {
       _ => last_expr,
     };
 
-    Some(ExprNode {
+    Some(CallNode {
       pos: (start, args.last().unwrap().pos.1),
-      kind: ExprKind::Call {
-        callee: Box::new(callee),
-        args,
-      },
+      callee: Box::new(callee),
+      args,
       typ: None,
     })
   }
@@ -757,14 +755,36 @@ impl<'a> Parser<'a> {
     while let Some(&Token::Pipe(..)) = self.current_token() {
       self.advance();
 
-      match self.parse_type_expression() {
-        Some(expr) => variants.push(expr),
-        _ => {
-          // Assume that the failure to parse the type expression has
-          // already generated an error.
-          return None;
+      match self.parse_identifier() {
+        Some(id) => {
+          match self.current_token() {
+            // A variant can either be a call with an argument, in which case we
+            // expect to find an argument here:
+            Some(&Token::Identifier(..)) | Some(&Token::LeftParen(..)) => {
+              let constructor = ExprNode {
+                pos: id.pos,
+                kind: ExprKind::Identifier(id),
+                typ: None,
+              };
+
+              match self.parse_call(constructor) {
+                Some(call_expr) => variants.push(EnumVariantNode {
+                  pos: call_expr.pos,
+                  kind: EnumVariantKind::Call(call_expr),
+                }),
+                _ => return None,
+              }
+            }
+
+            // ...or else just a plain identifier:
+            _ => variants.push(EnumVariantNode {
+              pos: id.pos,
+              kind: EnumVariantKind::Ident(id),
+            }),
+          }
         }
-      };
+        _ => return None,
+      }
 
       self.skip_line_breaks();
     }
@@ -1104,7 +1124,11 @@ impl<'a> Parser<'a> {
           | Some(&Token::Identifier(..))
           | Some(&Token::LeftBracket(..))
           | Some(&Token::LeftBrace(..)) => {
-            expr = self.parse_call(expr.unwrap());
+            expr = self.parse_call(expr.unwrap()).map(|call_node| ExprNode {
+              pos: call_node.pos,
+              kind: ExprKind::Call(call_node),
+              typ: None,
+            });
             continue;
           }
           _ => {}

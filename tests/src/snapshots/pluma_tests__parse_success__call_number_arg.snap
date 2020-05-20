@@ -39,46 +39,53 @@ ModuleNode {
                         0,
                         6,
                     ),
-                    kind: Call {
-                        callee: ExprNode {
+                    kind: Call(
+                        CallNode {
                             pos: (
                                 0,
-                                4,
+                                6,
                             ),
-                            kind: Identifier(
-                                IdentifierNode {
-                                    pos: (
-                                        0,
-                                        4,
-                                    ),
-                                    name: "func",
-                                    typ: None,
-                                },
-                            ),
-                            typ: None,
-                        },
-                        args: [
-                            ExprNode {
+                            callee: ExprNode {
                                 pos: (
-                                    5,
-                                    6,
+                                    0,
+                                    4,
                                 ),
-                                kind: Literal(
-                                    LiteralNode {
+                                kind: Identifier(
+                                    IdentifierNode {
                                         pos: (
-                                            5,
-                                            6,
+                                            0,
+                                            4,
                                         ),
-                                        kind: IntDecimal(
-                                            1,
-                                        ),
+                                        name: "func",
                                         typ: None,
                                     },
                                 ),
                                 typ: None,
                             },
-                        ],
-                    },
+                            args: [
+                                ExprNode {
+                                    pos: (
+                                        5,
+                                        6,
+                                    ),
+                                    kind: Literal(
+                                        LiteralNode {
+                                            pos: (
+                                                5,
+                                                6,
+                                            ),
+                                            kind: IntDecimal(
+                                                1,
+                                            ),
+                                            typ: None,
+                                        },
+                                    ),
+                                    typ: None,
+                                },
+                            ],
+                            typ: None,
+                        },
+                    ),
                     typ: None,
                 },
             ),

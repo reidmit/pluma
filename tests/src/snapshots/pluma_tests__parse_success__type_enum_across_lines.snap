@@ -1,0 +1,147 @@
+---
+source: tests/src/parse_success.rs
+expression: "enum Color\n  | Red\n  | Green\n  | Blue"
+---
+
+=== Source ===
+enum Color
+  | Red
+  | Green
+  | Blue
+
+=== Tokens ===
+[
+    KeywordEnum(
+        0,
+        4,
+    ),
+    Identifier(
+        5,
+        10,
+    ),
+    LineBreak(
+        10,
+        11,
+    ),
+    Pipe(
+        13,
+        14,
+    ),
+    Identifier(
+        15,
+        18,
+    ),
+    LineBreak(
+        18,
+        19,
+    ),
+    Pipe(
+        21,
+        22,
+    ),
+    Identifier(
+        23,
+        28,
+    ),
+    LineBreak(
+        28,
+        29,
+    ),
+    Pipe(
+        31,
+        32,
+    ),
+    Identifier(
+        33,
+        37,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        37,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                37,
+            ),
+            kind: TypeDef(
+                TypeDefNode {
+                    pos: (
+                        0,
+                        37,
+                    ),
+                    kind: Enum {
+                        variants: [
+                            EnumVariantNode {
+                                pos: (
+                                    15,
+                                    18,
+                                ),
+                                kind: Ident(
+                                    IdentifierNode {
+                                        pos: (
+                                            15,
+                                            18,
+                                        ),
+                                        name: "Red",
+                                        typ: None,
+                                    },
+                                ),
+                            },
+                            EnumVariantNode {
+                                pos: (
+                                    23,
+                                    28,
+                                ),
+                                kind: Ident(
+                                    IdentifierNode {
+                                        pos: (
+                                            23,
+                                            28,
+                                        ),
+                                        name: "Green",
+                                        typ: None,
+                                    },
+                                ),
+                            },
+                            EnumVariantNode {
+                                pos: (
+                                    33,
+                                    37,
+                                ),
+                                kind: Ident(
+                                    IdentifierNode {
+                                        pos: (
+                                            33,
+                                            37,
+                                        ),
+                                        name: "Blue",
+                                        typ: None,
+                                    },
+                                ),
+                            },
+                        ],
+                    },
+                    name: IdentifierNode {
+                        pos: (
+                            5,
+                            10,
+                        ),
+                        name: "Color",
+                        typ: None,
+                    },
+                    generic_type_constraints: [],
+                },
+            ),
+        },
+    ],
+}
+
