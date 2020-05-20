@@ -245,4 +245,23 @@ test_parse_success! {
     |  | NoArg
     |  | TupleArg (Int, String)
   "#,
+
+  type_struct_same_line: r#"
+    |struct Person (name :: String, age :: Int)
+  "#,
+
+  type_struct_across_lines: r#"
+    |struct Person (
+    |  name :: String,
+    |  age :: Int
+    |)
+  "#,
+
+  type_struct_generic_constraints: r#"
+    |struct Thing<A, B> where A :: Any, B :: Comparable (
+    |  first :: A,
+    |  second :: B,
+    |  third :: Int
+    |)
+  "#,
 }

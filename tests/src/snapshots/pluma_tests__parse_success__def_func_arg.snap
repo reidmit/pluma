@@ -119,14 +119,21 @@ ModuleNode {
                                                 12,
                                                 13,
                                             ),
-                                            kind: Constructor(
-                                                IdentifierNode {
+                                            kind: Single(
+                                                TypeIdentifierNode {
                                                     pos: (
                                                         12,
                                                         13,
                                                     ),
-                                                    name: "A",
-                                                    typ: None,
+                                                    name: IdentifierNode {
+                                                        pos: (
+                                                            12,
+                                                            13,
+                                                        ),
+                                                        name: "A",
+                                                        typ: None,
+                                                    },
+                                                    generics: [],
                                                 },
                                             ),
                                         },
@@ -135,14 +142,21 @@ ModuleNode {
                                                 17,
                                                 18,
                                             ),
-                                            kind: Constructor(
-                                                IdentifierNode {
+                                            kind: Single(
+                                                TypeIdentifierNode {
                                                     pos: (
                                                         17,
                                                         18,
                                                     ),
-                                                    name: "B",
-                                                    typ: None,
+                                                    name: IdentifierNode {
+                                                        pos: (
+                                                            17,
+                                                            18,
+                                                        ),
+                                                        name: "B",
+                                                        typ: None,
+                                                    },
+                                                    generics: [],
                                                 },
                                             ),
                                         },
@@ -157,14 +171,21 @@ ModuleNode {
                                 24,
                                 30,
                             ),
-                            kind: Constructor(
-                                IdentifierNode {
+                            kind: Single(
+                                TypeIdentifierNode {
                                     pos: (
                                         24,
                                         30,
                                     ),
-                                    name: "String",
-                                    typ: None,
+                                    name: IdentifierNode {
+                                        pos: (
+                                            24,
+                                            30,
+                                        ),
+                                        name: "String",
+                                        typ: None,
+                                    },
+                                    generics: [],
                                 },
                             ),
                         },

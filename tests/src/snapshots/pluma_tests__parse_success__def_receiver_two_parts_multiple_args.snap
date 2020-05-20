@@ -126,21 +126,20 @@ ModuleNode {
                         65,
                     ),
                     kind: Method {
-                        receiver: TypeExprNode {
+                        receiver: TypeIdentifierNode {
                             pos: (
                                 4,
                                 10,
                             ),
-                            kind: Constructor(
-                                IdentifierNode {
-                                    pos: (
-                                        4,
-                                        10,
-                                    ),
-                                    name: "Person",
-                                    typ: None,
-                                },
-                            ),
+                            name: IdentifierNode {
+                                pos: (
+                                    4,
+                                    10,
+                                ),
+                                name: "Person",
+                                typ: None,
+                            },
+                            generics: [],
                         },
                         signature: [
                             (
@@ -164,14 +163,21 @@ ModuleNode {
                                                     20,
                                                     26,
                                                 ),
-                                                kind: Constructor(
-                                                    IdentifierNode {
+                                                kind: Single(
+                                                    TypeIdentifierNode {
                                                         pos: (
                                                             20,
                                                             26,
                                                         ),
-                                                        name: "String",
-                                                        typ: None,
+                                                        name: IdentifierNode {
+                                                            pos: (
+                                                                20,
+                                                                26,
+                                                            ),
+                                                            name: "String",
+                                                            typ: None,
+                                                        },
+                                                        generics: [],
                                                     },
                                                 ),
                                             },
@@ -180,14 +186,21 @@ ModuleNode {
                                                     28,
                                                     31,
                                                 ),
-                                                kind: Constructor(
-                                                    IdentifierNode {
+                                                kind: Single(
+                                                    TypeIdentifierNode {
                                                         pos: (
                                                             28,
                                                             31,
                                                         ),
-                                                        name: "Int",
-                                                        typ: None,
+                                                        name: IdentifierNode {
+                                                            pos: (
+                                                                28,
+                                                                31,
+                                                            ),
+                                                            name: "Int",
+                                                            typ: None,
+                                                        },
+                                                        generics: [],
                                                     },
                                                 ),
                                             },

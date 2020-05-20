@@ -113,14 +113,21 @@ ModuleNode {
                                         10,
                                         11,
                                     ),
-                                    kind: Constructor(
-                                        IdentifierNode {
+                                    kind: Single(
+                                        TypeIdentifierNode {
                                             pos: (
                                                 10,
                                                 11,
                                             ),
-                                            name: "A",
-                                            typ: None,
+                                            name: IdentifierNode {
+                                                pos: (
+                                                    10,
+                                                    11,
+                                                ),
+                                                name: "A",
+                                                typ: None,
+                                            },
+                                            generics: [],
                                         },
                                     ),
                                 },
@@ -133,14 +140,21 @@ ModuleNode {
                                 15,
                                 16,
                             ),
-                            kind: Constructor(
-                                IdentifierNode {
+                            kind: Single(
+                                TypeIdentifierNode {
                                     pos: (
                                         15,
                                         16,
                                     ),
-                                    name: "A",
-                                    typ: None,
+                                    name: IdentifierNode {
+                                        pos: (
+                                            15,
+                                            16,
+                                        ),
+                                        name: "A",
+                                        typ: None,
+                                    },
+                                    generics: [],
                                 },
                             ),
                         },
@@ -160,14 +174,21 @@ ModuleNode {
                                     28,
                                     31,
                                 ),
-                                kind: Constructor(
-                                    IdentifierNode {
+                                kind: Single(
+                                    TypeIdentifierNode {
                                         pos: (
                                             28,
                                             31,
                                         ),
-                                        name: "Any",
-                                        typ: None,
+                                        name: IdentifierNode {
+                                            pos: (
+                                                28,
+                                                31,
+                                            ),
+                                            name: "Any",
+                                            typ: None,
+                                        },
+                                        generics: [],
                                     },
                                 ),
                             },

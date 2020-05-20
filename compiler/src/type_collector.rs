@@ -20,7 +20,7 @@ impl<'a> TypeCollector<'a> {
 
 impl<'a> Visitor for TypeCollector<'a> {
   fn enter_type_def(&mut self, node: &mut TypeDefNode) {
-    let typ = ValueType::Named(node.name.name.clone());
+    // let typ = ValueType::Named(node.name.name.clone());
 
     match &node.kind {
       TypeDefKind::Enum { variants } => {

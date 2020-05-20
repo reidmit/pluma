@@ -41,7 +41,7 @@ pub enum DefKind {
   },
   // def (Receiver).hi() -> Ret { ... }
   Method {
-    receiver: Box<TypeExprNode>,
+    receiver: Box<TypeIdentifierNode>,
     signature: Signature,
   },
   // def (A) ++ (B) -> Ret { ... }
@@ -225,10 +225,8 @@ pub struct TypeExprNode {
 
 #[derive(Debug)]
 pub enum TypeExprKind {
-  // e.g. String
-  Constructor(IdentifierNode),
-  // e.g. Dict<Int, String>
-  ConstructorGeneric(IdentifierNode, Vec<TypeExprNode>),
+  // e.g. String or Dict<Int, String>
+  Single(TypeIdentifierNode),
   // e.g. String -> Bool
   Func(Box<TypeExprNode>, Box<TypeExprNode>),
   // e.g. (String, Bool)
@@ -243,7 +241,7 @@ pub enum TypeExprKind {
 pub struct TypeDefNode {
   pub pos: Position,
   pub kind: TypeDefKind,
-  pub name: Box<IdentifierNode>,
+  pub name: Box<TypeIdentifierNode>,
   pub generic_type_constraints: GenericTypeConstraints,
 }
 
@@ -273,6 +271,13 @@ pub enum TypeDefKind {
     fields: Vec<(IdentifierNode, TypeExprNode)>,
     methods: Vec<Signature>,
   },
+}
+
+#[derive(Debug)]
+pub struct TypeIdentifierNode {
+  pub pos: Position,
+  pub name: Box<IdentifierNode>,
+  pub generics: Vec<TypeExprNode>,
 }
 
 #[derive(Debug, Clone)]

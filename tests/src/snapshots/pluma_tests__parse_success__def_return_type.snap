@@ -112,14 +112,21 @@ ModuleNode {
                                 16,
                                 22,
                             ),
-                            kind: Constructor(
-                                IdentifierNode {
+                            kind: Single(
+                                TypeIdentifierNode {
                                     pos: (
                                         16,
                                         22,
                                     ),
-                                    name: "String",
-                                    typ: None,
+                                    name: IdentifierNode {
+                                        pos: (
+                                            16,
+                                            22,
+                                        ),
+                                        name: "String",
+                                        typ: None,
+                                    },
+                                    generics: [],
                                 },
                             ),
                         },

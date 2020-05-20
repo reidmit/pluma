@@ -130,13 +130,20 @@ ModuleNode {
                             },
                         ],
                     },
-                    name: IdentifierNode {
+                    name: TypeIdentifierNode {
                         pos: (
                             5,
                             10,
                         ),
-                        name: "Color",
-                        typ: None,
+                        name: IdentifierNode {
+                            pos: (
+                                5,
+                                10,
+                            ),
+                            name: "Color",
+                            typ: None,
+                        },
+                        generics: [],
                     },
                     generic_type_constraints: [],
                 },

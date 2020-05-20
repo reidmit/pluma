@@ -82,21 +82,20 @@ ModuleNode {
                         43,
                     ),
                     kind: Method {
-                        receiver: TypeExprNode {
+                        receiver: TypeIdentifierNode {
                             pos: (
                                 4,
                                 10,
                             ),
-                            kind: Constructor(
-                                IdentifierNode {
-                                    pos: (
-                                        4,
-                                        10,
-                                    ),
-                                    name: "Person",
-                                    typ: None,
-                                },
-                            ),
+                            name: IdentifierNode {
+                                pos: (
+                                    4,
+                                    10,
+                                ),
+                                name: "Person",
+                                typ: None,
+                            },
+                            generics: [],
                         },
                         signature: [
                             (
@@ -113,14 +112,21 @@ ModuleNode {
                                         19,
                                         25,
                                     ),
-                                    kind: Constructor(
-                                        IdentifierNode {
+                                    kind: Single(
+                                        TypeIdentifierNode {
                                             pos: (
                                                 19,
                                                 25,
                                             ),
-                                            name: "String",
-                                            typ: None,
+                                            name: IdentifierNode {
+                                                pos: (
+                                                    19,
+                                                    25,
+                                                ),
+                                                name: "String",
+                                                typ: None,
+                                            },
+                                            generics: [],
                                         },
                                     ),
                                 },

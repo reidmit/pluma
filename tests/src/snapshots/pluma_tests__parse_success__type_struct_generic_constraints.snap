@@ -1,0 +1,404 @@
+---
+source: tests/src/parse_success.rs
+expression: "struct Thing<A, B> where A :: Any, B :: Comparable (\n  first :: A,\n  second :: B,\n  third :: Int\n)"
+---
+
+=== Source ===
+struct Thing<A, B> where A :: Any, B :: Comparable (
+  first :: A,
+  second :: B,
+  third :: Int
+)
+
+=== Tokens ===
+[
+    KeywordStruct(
+        0,
+        6,
+    ),
+    Identifier(
+        7,
+        12,
+    ),
+    LeftAngle(
+        12,
+        13,
+    ),
+    Identifier(
+        13,
+        14,
+    ),
+    Comma(
+        14,
+        15,
+    ),
+    Identifier(
+        16,
+        17,
+    ),
+    RightAngle(
+        17,
+        18,
+    ),
+    KeywordWhere(
+        19,
+        24,
+    ),
+    Identifier(
+        25,
+        26,
+    ),
+    DoubleColon(
+        27,
+        29,
+    ),
+    Identifier(
+        30,
+        33,
+    ),
+    Comma(
+        33,
+        34,
+    ),
+    Identifier(
+        35,
+        36,
+    ),
+    DoubleColon(
+        37,
+        39,
+    ),
+    Identifier(
+        40,
+        50,
+    ),
+    LeftParen(
+        51,
+        52,
+    ),
+    LineBreak(
+        52,
+        53,
+    ),
+    Identifier(
+        55,
+        60,
+    ),
+    DoubleColon(
+        61,
+        63,
+    ),
+    Identifier(
+        64,
+        65,
+    ),
+    Comma(
+        65,
+        66,
+    ),
+    LineBreak(
+        66,
+        67,
+    ),
+    Identifier(
+        69,
+        75,
+    ),
+    DoubleColon(
+        76,
+        78,
+    ),
+    Identifier(
+        79,
+        80,
+    ),
+    Comma(
+        80,
+        81,
+    ),
+    LineBreak(
+        81,
+        82,
+    ),
+    Identifier(
+        84,
+        89,
+    ),
+    DoubleColon(
+        90,
+        92,
+    ),
+    Identifier(
+        93,
+        96,
+    ),
+    LineBreak(
+        96,
+        97,
+    ),
+    RightParen(
+        97,
+        98,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        98,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                98,
+            ),
+            kind: TypeDef(
+                TypeDefNode {
+                    pos: (
+                        0,
+                        98,
+                    ),
+                    kind: Struct {
+                        fields: [
+                            (
+                                IdentifierNode {
+                                    pos: (
+                                        55,
+                                        60,
+                                    ),
+                                    name: "first",
+                                    typ: None,
+                                },
+                                TypeExprNode {
+                                    pos: (
+                                        64,
+                                        65,
+                                    ),
+                                    kind: Single(
+                                        TypeIdentifierNode {
+                                            pos: (
+                                                64,
+                                                65,
+                                            ),
+                                            name: IdentifierNode {
+                                                pos: (
+                                                    64,
+                                                    65,
+                                                ),
+                                                name: "A",
+                                                typ: None,
+                                            },
+                                            generics: [],
+                                        },
+                                    ),
+                                },
+                            ),
+                            (
+                                IdentifierNode {
+                                    pos: (
+                                        69,
+                                        75,
+                                    ),
+                                    name: "second",
+                                    typ: None,
+                                },
+                                TypeExprNode {
+                                    pos: (
+                                        79,
+                                        80,
+                                    ),
+                                    kind: Single(
+                                        TypeIdentifierNode {
+                                            pos: (
+                                                79,
+                                                80,
+                                            ),
+                                            name: IdentifierNode {
+                                                pos: (
+                                                    79,
+                                                    80,
+                                                ),
+                                                name: "B",
+                                                typ: None,
+                                            },
+                                            generics: [],
+                                        },
+                                    ),
+                                },
+                            ),
+                            (
+                                IdentifierNode {
+                                    pos: (
+                                        84,
+                                        89,
+                                    ),
+                                    name: "third",
+                                    typ: None,
+                                },
+                                TypeExprNode {
+                                    pos: (
+                                        93,
+                                        96,
+                                    ),
+                                    kind: Single(
+                                        TypeIdentifierNode {
+                                            pos: (
+                                                93,
+                                                96,
+                                            ),
+                                            name: IdentifierNode {
+                                                pos: (
+                                                    93,
+                                                    96,
+                                                ),
+                                                name: "Int",
+                                                typ: None,
+                                            },
+                                            generics: [],
+                                        },
+                                    ),
+                                },
+                            ),
+                        ],
+                    },
+                    name: TypeIdentifierNode {
+                        pos: (
+                            7,
+                            18,
+                        ),
+                        name: IdentifierNode {
+                            pos: (
+                                7,
+                                12,
+                            ),
+                            name: "Thing",
+                            typ: None,
+                        },
+                        generics: [
+                            TypeExprNode {
+                                pos: (
+                                    13,
+                                    14,
+                                ),
+                                kind: Single(
+                                    TypeIdentifierNode {
+                                        pos: (
+                                            13,
+                                            14,
+                                        ),
+                                        name: IdentifierNode {
+                                            pos: (
+                                                13,
+                                                14,
+                                            ),
+                                            name: "A",
+                                            typ: None,
+                                        },
+                                        generics: [],
+                                    },
+                                ),
+                            },
+                            TypeExprNode {
+                                pos: (
+                                    16,
+                                    17,
+                                ),
+                                kind: Single(
+                                    TypeIdentifierNode {
+                                        pos: (
+                                            16,
+                                            17,
+                                        ),
+                                        name: IdentifierNode {
+                                            pos: (
+                                                16,
+                                                17,
+                                            ),
+                                            name: "B",
+                                            typ: None,
+                                        },
+                                        generics: [],
+                                    },
+                                ),
+                            },
+                        ],
+                    },
+                    generic_type_constraints: [
+                        (
+                            IdentifierNode {
+                                pos: (
+                                    25,
+                                    26,
+                                ),
+                                name: "A",
+                                typ: None,
+                            },
+                            TypeExprNode {
+                                pos: (
+                                    30,
+                                    33,
+                                ),
+                                kind: Single(
+                                    TypeIdentifierNode {
+                                        pos: (
+                                            30,
+                                            33,
+                                        ),
+                                        name: IdentifierNode {
+                                            pos: (
+                                                30,
+                                                33,
+                                            ),
+                                            name: "Any",
+                                            typ: None,
+                                        },
+                                        generics: [],
+                                    },
+                                ),
+                            },
+                        ),
+                        (
+                            IdentifierNode {
+                                pos: (
+                                    35,
+                                    36,
+                                ),
+                                name: "B",
+                                typ: None,
+                            },
+                            TypeExprNode {
+                                pos: (
+                                    40,
+                                    50,
+                                ),
+                                kind: Single(
+                                    TypeIdentifierNode {
+                                        pos: (
+                                            40,
+                                            50,
+                                        ),
+                                        name: IdentifierNode {
+                                            pos: (
+                                                40,
+                                                50,
+                                            ),
+                                            name: "Comparable",
+                                            typ: None,
+                                        },
+                                        generics: [],
+                                    },
+                                ),
+                            },
+                        ),
+                    ],
+                },
+            ),
+        },
+    ],
+}
+

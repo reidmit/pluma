@@ -150,10 +150,7 @@ impl<'a> Parser<'a> {
     });
 
     let name = match self.parse_type_identifier() {
-      Some(type_expr) => match type_expr.kind {
-        TypeExprKind::Constructor(id) => Box::new(id),
-        _ => unreachable!(),
-      },
+      Some(type_id) => type_id,
       _ => {
         return self.error(ParseError {
           pos: self.current_token_position(),
@@ -178,7 +175,7 @@ impl<'a> Parser<'a> {
     Some(TypeDefNode {
       pos: (start, type_expr.pos.1),
       kind: TypeDefKind::Alias { of: type_expr },
-      name,
+      name: Box::new(name),
       generic_type_constraints,
     })
   }
@@ -678,16 +675,14 @@ impl<'a> Parser<'a> {
       self.advance();
     } else {
       // If not, the first ident was the first part of the method name
-      if let TypeExprKind::Constructor(part_name) = type_ident.kind {
-        // So, grab the param type for this part
-        match self.parse_type_expression() {
-          Some(part_param) => signature.push((Box::new(part_name), Box::new(part_param))),
-          _ => {
-            return self.error(ParseError {
-              pos: self.current_token_position(),
-              kind: ParseErrorKind::IncompleteMethodSignature,
-            })
-          }
+      // So, grab the param type for this part
+      match self.parse_type_expression() {
+        Some(part_param) => signature.push((type_ident.name, Box::new(part_param))),
+        _ => {
+          return self.error(ParseError {
+            pos: self.current_token_position(),
+            kind: ParseErrorKind::IncompleteMethodSignature,
+          })
         }
       }
     }
@@ -732,10 +727,7 @@ impl<'a> Parser<'a> {
     });
 
     let name = match self.parse_type_identifier() {
-      Some(type_expr) => match type_expr.kind {
-        TypeExprKind::Constructor(id) => Box::new(id),
-        _ => unreachable!(),
-      },
+      Some(type_id) => type_id,
       _ => {
         return self.error(ParseError {
           pos: self.current_token_position(),
@@ -799,7 +791,7 @@ impl<'a> Parser<'a> {
     Some(TypeDefNode {
       pos: (start, variants.last().unwrap().pos.1),
       kind: TypeDefKind::Enum { variants },
-      name,
+      name: Box::new(name),
       generic_type_constraints,
     })
   }
@@ -1354,10 +1346,7 @@ impl<'a> Parser<'a> {
     });
 
     let name = match self.parse_type_identifier() {
-      Some(type_expr) => match type_expr.kind {
-        TypeExprKind::Constructor(id) => Box::new(id),
-        _ => unreachable!(),
-      },
+      Some(type_id) => type_id,
       _ => {
         return self.error(ParseError {
           pos: self.current_token_position(),
@@ -1424,7 +1413,7 @@ impl<'a> Parser<'a> {
     Some(TypeDefNode {
       pos: (start, end),
       kind: TypeDefKind::Struct { fields },
-      name,
+      name: Box::new(name),
       generic_type_constraints,
     })
   }
@@ -1602,33 +1591,36 @@ impl<'a> Parser<'a> {
 
   fn parse_type_expression(&mut self) -> Option<TypeExprNode> {
     match self.current_token() {
-      Some(&Token::Identifier(..)) => self.parse_type_identifier(),
+      Some(&Token::Identifier(..)) => self.parse_type_identifier().map(|type_id| TypeExprNode {
+        pos: type_id.pos,
+        kind: TypeExprKind::Single(type_id),
+      }),
       Some(&Token::LeftParen(..)) => self.parse_type_parenthetical(),
       Some(&Token::LeftBrace(..)) => self.parse_type_func(),
       _ => None,
     }
   }
 
-  fn parse_type_identifier(&mut self) -> Option<TypeExprNode> {
-    let (start, end) = expect_token_and_do!(self, Token::Identifier, {
+  fn parse_type_identifier(&mut self) -> Option<TypeIdentifierNode> {
+    let (start, mut end) = expect_token_and_do!(self, Token::Identifier, {
       let pos = self.current_token_position();
       self.advance();
       pos
     });
 
-    let ident = IdentifierNode {
+    let name = IdentifierNode {
       pos: (start, end),
       name: read_string!(self, start, end),
       typ: None,
     };
 
+    let mut generics = Vec::new();
+
     if current_token_is!(self, Token::LeftAngle) {
       self.advance();
 
-      let mut type_params = Vec::new();
-
       while let Some(type_node) = self.parse_type_expression() {
-        type_params.push(type_node);
+        generics.push(type_node);
 
         match self.current_token() {
           Some(&Token::Comma(..)) => self.advance(),
@@ -1636,21 +1628,17 @@ impl<'a> Parser<'a> {
         }
       }
 
-      let params_end = expect_token_and_do!(self, Token::RightAngle, {
+      end = expect_token_and_do!(self, Token::RightAngle, {
         let pos = self.current_token_position();
         self.advance();
         pos.1
       });
-
-      return Some(TypeExprNode {
-        pos: (start, params_end),
-        kind: TypeExprKind::ConstructorGeneric(ident, type_params),
-      });
     }
 
-    Some(TypeExprNode {
+    Some(TypeIdentifierNode {
       pos: (start, end),
-      kind: TypeExprKind::Constructor(ident),
+      name: Box::new(name),
+      generics,
     })
   }
 
