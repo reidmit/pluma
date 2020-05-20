@@ -246,6 +246,12 @@ test_parse_success! {
     |  | TupleArg (Int, String)
   "#,
 
+  type_enum_generic_constraints: r#"
+    |enum Optional<A> where A :: Any
+    |  | Some(A)
+    |  | None
+  "#,
+
   type_struct_same_line: r#"
     |struct Person (name :: String, age :: Int)
   "#,
@@ -263,5 +269,19 @@ test_parse_success! {
     |  second :: B,
     |  third :: Int
     |)
+  "#,
+
+  type_alias_same_line: r#"
+    |alias Alpha Beta
+  "#,
+
+  type_alias_across_lines: r#"
+    |alias Alpha
+    |  Beta
+  "#,
+
+  type_alias_generic_constraints: r#"
+    |alias CoolFunc<A> where A :: Any
+    |  { (A, Int) -> Cool }
   "#,
 }
