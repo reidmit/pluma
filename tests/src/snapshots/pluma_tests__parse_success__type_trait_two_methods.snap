@@ -1,0 +1,214 @@
+---
+source: tests/src/parse_success.rs
+expression: "trait Wowie\n  . getWow () -> Wow\n  . setWow Wow -> ()"
+---
+
+=== Source ===
+trait Wowie
+  . getWow () -> Wow
+  . setWow Wow -> ()
+
+=== Tokens ===
+[
+    KeywordTrait(
+        0,
+        5,
+    ),
+    Identifier(
+        6,
+        11,
+    ),
+    LineBreak(
+        11,
+        12,
+    ),
+    Dot(
+        14,
+        15,
+    ),
+    Identifier(
+        16,
+        22,
+    ),
+    LeftParen(
+        23,
+        24,
+    ),
+    RightParen(
+        24,
+        25,
+    ),
+    Arrow(
+        26,
+        28,
+    ),
+    Identifier(
+        29,
+        32,
+    ),
+    LineBreak(
+        32,
+        33,
+    ),
+    Dot(
+        35,
+        36,
+    ),
+    Identifier(
+        37,
+        43,
+    ),
+    Identifier(
+        44,
+        47,
+    ),
+    Arrow(
+        48,
+        50,
+    ),
+    LeftParen(
+        51,
+        52,
+    ),
+    RightParen(
+        52,
+        53,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        53,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                53,
+            ),
+            kind: TypeDef(
+                TypeDefNode {
+                    pos: (
+                        0,
+                        53,
+                    ),
+                    kind: Trait {
+                        fields: [],
+                        methods: [
+                            (
+                                [
+                                    (
+                                        IdentifierNode {
+                                            pos: (
+                                                16,
+                                                22,
+                                            ),
+                                            name: "getWow",
+                                            typ: None,
+                                        },
+                                        TypeExprNode {
+                                            pos: (
+                                                23,
+                                                25,
+                                            ),
+                                            kind: EmptyTuple,
+                                        },
+                                    ),
+                                ],
+                                TypeExprNode {
+                                    pos: (
+                                        29,
+                                        32,
+                                    ),
+                                    kind: Single(
+                                        TypeIdentifierNode {
+                                            pos: (
+                                                29,
+                                                32,
+                                            ),
+                                            name: IdentifierNode {
+                                                pos: (
+                                                    29,
+                                                    32,
+                                                ),
+                                                name: "Wow",
+                                                typ: None,
+                                            },
+                                            generics: [],
+                                        },
+                                    ),
+                                },
+                            ),
+                            (
+                                [
+                                    (
+                                        IdentifierNode {
+                                            pos: (
+                                                37,
+                                                43,
+                                            ),
+                                            name: "setWow",
+                                            typ: None,
+                                        },
+                                        TypeExprNode {
+                                            pos: (
+                                                44,
+                                                47,
+                                            ),
+                                            kind: Single(
+                                                TypeIdentifierNode {
+                                                    pos: (
+                                                        44,
+                                                        47,
+                                                    ),
+                                                    name: IdentifierNode {
+                                                        pos: (
+                                                            44,
+                                                            47,
+                                                        ),
+                                                        name: "Wow",
+                                                        typ: None,
+                                                    },
+                                                    generics: [],
+                                                },
+                                            ),
+                                        },
+                                    ),
+                                ],
+                                TypeExprNode {
+                                    pos: (
+                                        51,
+                                        53,
+                                    ),
+                                    kind: EmptyTuple,
+                                },
+                            ),
+                        ],
+                    },
+                    name: TypeIdentifierNode {
+                        pos: (
+                            6,
+                            11,
+                        ),
+                        name: IdentifierNode {
+                            pos: (
+                                6,
+                                11,
+                            ),
+                            name: "Wowie",
+                            typ: None,
+                        },
+                        generics: [],
+                    },
+                    generic_type_constraints: [],
+                },
+            ),
+        },
+    ],
+}
+

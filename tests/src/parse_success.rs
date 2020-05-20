@@ -284,4 +284,31 @@ test_parse_success! {
     |alias CoolFunc<A> where A :: Any
     |  { (A, Int) -> Cool }
   "#,
+
+  type_trait_same_line_one_field: r#"
+    |trait HasName . name :: String
+  "#,
+
+  type_trait_same_line_two_fields: r#"
+    |trait HasNameAndAge . name :: String . age :: Int
+  "#,
+
+  type_trait_across_lines_two_fields: r#"
+    |trait HasNameAndAge
+    |  . name :: String
+    |  . age :: Int
+  "#,
+
+  type_trait_two_methods: r#"
+    |trait Wowie
+    |  . getWow () -> Wow
+    |  . setWow Wow -> ()
+  "#,
+
+  type_trait_mix_fields_and_methods: r#"
+    |trait WowieWithName
+    |  . getWow () -> Wow
+    |  . setWow Wow -> ()
+    |  . name :: String
+  "#,
 }

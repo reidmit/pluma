@@ -28,6 +28,7 @@ pub enum ParseErrorKind {
   MissingReturnType,
   MissingRightHandSideOfAssignment,
   MissingStructFields,
+  MissingTraitConstraints,
   MissingTupleEntries,
   MissingType,
   MissingTypeNameInTypeDefinition,

@@ -1534,6 +1534,14 @@ impl<'a> Parser<'a> {
             kind: TopLevelStatementKind::TypeDef(type_def_node),
           })
       }
+      Some(&Token::KeywordTrait(..)) => {
+        self
+          .parse_trait()
+          .map(|type_def_node| TopLevelStatementNode {
+            pos: type_def_node.pos,
+            kind: TopLevelStatementKind::TypeDef(type_def_node),
+          })
+      }
       Some(&Token::KeywordPrivate(..)) => self.parse_private(),
       _ => self
         .parse_expression()
@@ -1542,6 +1550,119 @@ impl<'a> Parser<'a> {
           kind: TopLevelStatementKind::Expr(expr_node),
         }),
     }
+  }
+
+  fn parse_trait(&mut self) -> Option<TypeDefNode> {
+    let start = expect_token_and_do!(self, Token::KeywordTrait, {
+      let pos = self.current_token_position();
+      self.advance();
+      pos.0
+    });
+
+    let name = match self.parse_type_identifier() {
+      Some(type_id) => type_id,
+      _ => {
+        return self.error(ParseError {
+          pos: self.current_token_position(),
+          kind: ParseErrorKind::MissingTypeNameInTypeDefinition,
+        })
+      }
+    };
+
+    self.skip_line_breaks();
+
+    let generic_type_constraints = self.parse_generic_type_constraints().unwrap_or_default();
+
+    self.skip_line_breaks();
+
+    let mut fields = Vec::new();
+    let mut methods = Vec::new();
+    let mut end = start;
+
+    'outer: while let Some(&Token::Dot(..)) = self.current_token() {
+      self.advance();
+
+      let mut signature = Vec::new();
+
+      while current_token_is!(self, Token::Identifier) {
+        let part_name = self.parse_identifier().unwrap();
+
+        if current_token_is!(self, Token::DoubleColon) {
+          self.advance();
+
+          // If there's a :: here, it's only valid if there has only been a single part
+          // so far (since it must be a field, not a method).
+          if signature.is_empty() {
+            match self.parse_type_expression() {
+              Some(field_type) => {
+                end = field_type.pos.1;
+                fields.push((part_name, field_type));
+              }
+              _ => {
+                return self.error(ParseError {
+                  pos: self.current_token_position(),
+                  kind: ParseErrorKind::IncompleteMethodSignature,
+                })
+              }
+            }
+          } else {
+            self.error::<TypeDefNode>(ParseError {
+              pos: self.current_token_position(),
+              kind: ParseErrorKind::UnexpectedToken(Token::Dot(0, 0)),
+            });
+          }
+
+          self.skip_line_breaks();
+
+          continue 'outer;
+        }
+
+        match self.parse_type_expression() {
+          Some(part_param) => signature.push((Box::new(part_name), Box::new(part_param))),
+          _ => {
+            return self.error(ParseError {
+              pos: self.current_token_position(),
+              kind: ParseErrorKind::IncompleteMethodSignature,
+            })
+          }
+        }
+      }
+
+      expect_token_and_do!(self, Token::Arrow, {
+        self.advance();
+      });
+
+      match self.parse_type_expression() {
+        Some(return_type) => {
+          end = return_type.pos.1;
+          methods.push((signature, return_type));
+        }
+        _ => {
+          return self.error(ParseError {
+            pos: self.current_token_position(),
+            kind: ParseErrorKind::IncompleteMethodSignature,
+          })
+        }
+      }
+
+      self.skip_line_breaks();
+    }
+
+    self.skip_line_breaks();
+
+    if fields.is_empty() && methods.is_empty() {
+      return self.error(ParseError {
+        pos: self.current_token_position(),
+        kind: ParseErrorKind::MissingTraitConstraints,
+      });
+    }
+
+    Some(TypeDefNode {
+      pos: (start, end),
+      kind: TypeDefKind::Trait { fields, methods },
+      name: Box::new(name),
+      generic_type_constraints,
+    })
   }
 
   fn parse_type_func(&mut self) -> Option<TypeExprNode> {

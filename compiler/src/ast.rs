@@ -254,7 +254,7 @@ pub struct IntrinsicTypeDefNode {
 
 #[derive(Debug)]
 pub enum TypeDefKind {
-  // alias StringList = List(String)
+  // alias StringList List<String>
   Alias {
     of: TypeExprNode,
   },
@@ -269,7 +269,7 @@ pub enum TypeDefKind {
   // trait Named .name :: String .getName() -> String
   Trait {
     fields: Vec<(IdentifierNode, TypeExprNode)>,
-    methods: Vec<Signature>,
+    methods: Vec<(Signature, TypeExprNode)>,
   },
 }
 
