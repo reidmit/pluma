@@ -45,8 +45,6 @@ impl<'a> Tokenizer<'a> {
       let start_index = index;
       let byte = source[start_index];
 
-      println!("byte: {:#?}", byte);
-
       if string_stack.is_empty() && byte == b'"' {
         // If the string stack is empty and byte is ", we are at the beginning of
         // a brand new string. Save the start index and advance.
@@ -70,14 +68,18 @@ impl<'a> Tokenizer<'a> {
         }
 
         if byte == b'"' {
-          // Here, the " must indicate the end of a string literal section. Pop from
-          // the string stack, add a new token, then advance.
-          let start_index = string_stack.pop().unwrap();
+          let is_escaped = index > 0 && source[index - 1] == b'\\';
 
-          tokens.push(StringLiteral(start_index + 1, index));
+          if !is_escaped {
+            // Here, the " must indicate the end of a string literal section. Pop from
+            // the string stack, add a new token, then advance.
+            let start_index = string_stack.pop().unwrap();
 
-          index += 1;
-          continue;
+            tokens.push(StringLiteral(start_index + 1, index));
+
+            index += 1;
+            continue;
+          }
         }
 
         if byte == b'$' && start_index + 1 < length && source[start_index + 1] == b'(' {

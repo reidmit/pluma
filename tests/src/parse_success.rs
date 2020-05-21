@@ -14,6 +14,18 @@ test_parse_success! {
     |"wow"
   "#,
 
+  string_escape_quote: r#"
+    |"line 1\"line 2"
+  "#,
+
+  string_escape_newline: r#"
+    |"line 1\nline 2"
+  "#,
+
+  string_escape_tab: r#"
+    |"hello\tworld"
+  "#,
+
   string_emoji: r#"
     |"frog 🐸"
   "#,

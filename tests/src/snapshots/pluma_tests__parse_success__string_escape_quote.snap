@@ -1,0 +1,56 @@
+---
+source: tests/src/parse_success.rs
+expression: "\"line 1\\\"line 2\""
+---
+
+=== Source ===
+"line 1\"line 2"
+
+=== Tokens ===
+[
+    StringLiteral(
+        1,
+        15,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        1,
+        15,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                1,
+                15,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        1,
+                        15,
+                    ),
+                    kind: Literal(
+                        LiteralNode {
+                            pos: (
+                                1,
+                                15,
+                            ),
+                            kind: Str(
+                                "line 1\\\"line 2",
+                            ),
+                            typ: None,
+                        },
+                    ),
+                    typ: None,
+                },
+            ),
+        },
+    ],
+}
+
