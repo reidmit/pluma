@@ -18,8 +18,16 @@ test_parse_success! {
     |"line 1\"line 2"
   "#,
 
+  string_escape_backslash: r#"
+    |"part 1\\part 2"
+  "#,
+
   string_escape_newline: r#"
     |"line 1\nline 2"
+  "#,
+
+  string_escape_return: r#"
+    |"line 1\rline 2"
   "#,
 
   string_escape_tab: r#"

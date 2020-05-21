@@ -37,6 +37,17 @@ macro_rules! read_string {
   };
 }
 
+macro_rules! read_string_with_escapes {
+  ($self:ident, $start:expr, $end:expr) => {
+    read_string!($self, $start, $end)
+      .replace("\\\"", "\"")
+      .replace("\\\\", "\\")
+      .replace("\\t", "\t")
+      .replace("\\r", "\r")
+      .replace("\\n", "\n");
+  };
+}
+
 pub struct Parser<'a> {
   source: &'a Vec<u8>,
   tokens: &'a Vec<Token>,
@@ -1277,7 +1288,7 @@ impl<'a> Parser<'a> {
       pos
     });
 
-    let value = read_string!(self, start, end);
+    let value = read_string_with_escapes!(self, start, end);
 
     let lit_node = LiteralNode {
       pos: (start, end),
@@ -1312,7 +1323,7 @@ impl<'a> Parser<'a> {
 
           interpolation_end = end;
 
-          let value = read_string!(self, start, end);
+          let value = read_string_with_escapes!(self, start, end);
 
           parts.push(ExprNode {
             pos: (start, end),

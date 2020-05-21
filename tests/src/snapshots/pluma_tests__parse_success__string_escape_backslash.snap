@@ -1,16 +1,16 @@
 ---
 source: tests/src/parse_success.rs
-expression: "\"hello\\tworld\""
+expression: "\"part 1\\\\part 2\""
 ---
 
 === Source ===
-"hello\tworld"
+"part 1\\part 2"
 
 === Tokens ===
 [
     StringLiteral(
         1,
-        13,
+        15,
     ),
 ]
 
@@ -21,28 +21,28 @@ expression: "\"hello\\tworld\""
 ModuleNode {
     pos: (
         1,
-        13,
+        15,
     ),
     body: [
         TopLevelStatementNode {
             pos: (
                 1,
-                13,
+                15,
             ),
             kind: Expr(
                 ExprNode {
                     pos: (
                         1,
-                        13,
+                        15,
                     ),
                     kind: Literal(
                         LiteralNode {
                             pos: (
                                 1,
-                                13,
+                                15,
                             ),
                             kind: Str(
-                                "hello\tworld",
+                                "part 1\\part 2",
                             ),
                             typ: None,
                         },

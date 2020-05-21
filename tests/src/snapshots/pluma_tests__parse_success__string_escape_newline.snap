@@ -42,7 +42,7 @@ ModuleNode {
                                 15,
                             ),
                             kind: Str(
-                                "line 1\\nline 2",
+                                "line 1\nline 2",
                             ),
                             typ: None,
                         },
