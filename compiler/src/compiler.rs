@@ -26,8 +26,6 @@ impl Compiler {
   pub fn from_path(entry_path: String) -> Result<Self> {
     let (root_dir, entry_module_name) = Compiler::resolve_entry(entry_path)?;
 
-    println!("{:#?}, {:#?}", root_dir, entry_module_name);
-
     Ok(Compiler {
       root_dir,
       entry_module_name,

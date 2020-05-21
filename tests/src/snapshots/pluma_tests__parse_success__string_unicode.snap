@@ -1,0 +1,56 @@
+---
+source: tests/src/parse_success.rs
+expression: "\"this is u̲n̲d̲e̲r̲l̲i̲n̲e̲d̲ with unicode chars\""
+---
+
+=== Source ===
+"this is u̲n̲d̲e̲r̲l̲i̲n̲e̲d̲ with unicode chars"
+
+=== Tokens ===
+[
+    StringLiteral(
+        1,
+        58,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        1,
+        58,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                1,
+                58,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        1,
+                        58,
+                    ),
+                    kind: Literal(
+                        LiteralNode {
+                            pos: (
+                                1,
+                                58,
+                            ),
+                            kind: Str(
+                                "this is u\u{332}n\u{332}d\u{332}e\u{332}r\u{332}l\u{332}i\u{332}n\u{332}e\u{332}d\u{332} with unicode chars",
+                            ),
+                            typ: None,
+                        },
+                    ),
+                    typ: None,
+                },
+            ),
+        },
+    ],
+}
+

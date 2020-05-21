@@ -45,6 +45,8 @@ impl<'a> Tokenizer<'a> {
       let start_index = index;
       let byte = source[start_index];
 
+      println!("byte: {:#?}", byte);
+
       if string_stack.is_empty() && byte == b'"' {
         // If the string stack is empty and byte is ", we are at the beginning of
         // a brand new string. Save the start index and advance.
@@ -409,35 +411,21 @@ impl<'a> Tokenizer<'a> {
 
 fn is_identifier_start_char(byte: u8) -> bool {
   match byte {
-    b'a'..=b'z' => true,
-    b'A'..=b'Z' => true,
-    b'_' => true,
-    _ => false,
-    // _ if byte.is_ascii_digit() => false,
-    // _ if byte.is_ascii_whitespace() => false,
-    // _ if byte.is_ascii_punctuation() => false,
-    // _ if byte.is_ascii_control() => false,
-    // _ => true,
+    _ if byte.is_ascii_digit() => false,
+    _ if byte.is_ascii_whitespace() => false,
+    _ if byte.is_ascii_punctuation() => false,
+    _ if byte.is_ascii_control() => false,
+    _ => true,
   }
 }
 
 fn is_identifier_char(byte: u8) -> bool {
   match byte {
-    b'a'..=b'z' => true,
-    b'A'..=b'Z' => true,
-    b'0'..=b'9' => true,
-    b'_' => true,
-    _ => false,
-    // _ if byte.is_ascii_whitespace() => false,
-    // _ if byte.is_ascii_punctuation() => false,
-    // _ if byte.is_ascii_control() => false,
-    // _ => true,
+    _ if byte.is_ascii_whitespace() => false,
+    _ if byte.is_ascii_punctuation() => false,
+    _ if byte.is_ascii_control() => false,
+    _ => true,
   }
-}
-
-fn is_uppercase(byte: u8) -> bool {
-  // TODO: unicode uppercase
-  return byte.is_ascii_uppercase();
 }
 
 fn is_digit(byte: u8) -> bool {

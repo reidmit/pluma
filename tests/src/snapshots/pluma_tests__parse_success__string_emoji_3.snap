@@ -1,0 +1,56 @@
+---
+source: tests/src/parse_success.rs
+expression: "\"🏳️‍🌈\""
+---
+
+=== Source ===
+"🏳️‍🌈"
+
+=== Tokens ===
+[
+    StringLiteral(
+        1,
+        15,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        1,
+        15,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                1,
+                15,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        1,
+                        15,
+                    ),
+                    kind: Literal(
+                        LiteralNode {
+                            pos: (
+                                1,
+                                15,
+                            ),
+                            kind: Str(
+                                "🏳\u{fe0f}\u{200d}🌈",
+                            ),
+                            typ: None,
+                        },
+                    ),
+                    typ: None,
+                },
+            ),
+        },
+    ],
+}
+

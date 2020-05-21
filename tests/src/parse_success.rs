@@ -14,6 +14,22 @@ test_parse_success! {
     |"wow"
   "#,
 
+  string_emoji: r#"
+    |"frog 🐸"
+  "#,
+
+  string_emoji_2: r#"
+    |"🌝"
+  "#,
+
+  string_emoji_3: r#"
+    |"🏳️‍🌈"
+  "#,
+
+  string_unicode: r#"
+    |"this is u̲n̲d̲e̲r̲l̲i̲n̲e̲d̲ with unicode chars"
+  "#,
+
   string_multiple_lines: r#"
     |"wow
     |this
@@ -23,6 +39,10 @@ test_parse_success! {
 
   identifier: r#"
     |cool
+  "#,
+
+  identifier_not_ascii: r#"
+    |こんにちは
   "#,
 
   parenthesized: r#"
