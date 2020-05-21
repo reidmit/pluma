@@ -65,7 +65,7 @@ pub struct EnumVariantNode {
 
 #[derive(Debug)]
 pub enum EnumVariantKind {
-  Ident(IdentifierNode),
+  Identifier(IdentifierNode),
   Call(CallNode),
 }
 
@@ -178,7 +178,18 @@ pub struct PatternNode {
 
 #[derive(Debug)]
 pub enum PatternKind {
-  Ident(IdentifierNode),
+  // e.g. let x =
+  Identifier(IdentifierNode),
+  // e.g. let Person (x, y) =
+  Constructor(IdentifierNode, Box<PatternNode>),
+  // e.g. let (x, y) =
+  Tuple(Vec<PatternNode>),
+  // e.g. '_' in let (x, _) =
+  Underscore,
+  // e.g. '1' in match x | 1 => "yes" | _ => "no"
+  Literal(LiteralNode),
+  // e.g. match str | "$(thing)?" => "yes" | _ => "no"
+  Interpolation(Vec<ExprNode>),
 }
 
 #[derive(Debug)]

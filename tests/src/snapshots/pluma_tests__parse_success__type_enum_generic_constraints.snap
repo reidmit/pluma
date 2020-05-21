@@ -172,7 +172,7 @@ ModuleNode {
                                     48,
                                     52,
                                 ),
-                                kind: Ident(
+                                kind: Identifier(
                                     IdentifierNode {
                                         pos: (
                                             48,

@@ -267,6 +267,37 @@ test_parse_success! {
     |def isPrivate() {}
   "#,
 
+  let_pattern_identifier: r#"
+    |let x = 47
+  "#,
+
+  let_pattern_underscore: r#"
+    |let _ = 47
+  "#,
+
+  let_pattern_tuple: r#"
+    |let (a, b) = (47, "cool")
+  "#,
+
+  let_pattern_nested_tuples: r#"
+    |let (a, _, (_, b)) = (47, something, tuple)
+  "#,
+
+  let_pattern_struct_constructor: r#"
+    |let Person (name, age) = Person ("Reid", 26)
+  "#,
+
+  match_pattern_same_line: r#"
+    |match thing | 1 => "one" | 2 => "two" | _ => "idk"
+  "#,
+
+  match_pattern_across_lines: r#"
+    |match thing
+    |  | (a, b) => "one"
+    |  | (1, _) => "two"
+    |  | _ => "idk"
+  "#,
+
   type_enum_same_line: r#"
     |enum Bool | True | False
   "#,

@@ -54,7 +54,7 @@ impl<'a> Visitor for Analyzer<'a> {
 
   fn leave_let(&mut self, node: &mut LetNode) {
     match &mut node.pattern.kind {
-      PatternKind::Ident(ident_node) => {
+      PatternKind::Identifier(ident_node) => {
         let existing_binding = self.scope.get_let_binding(&ident_node.name);
 
         if existing_binding.is_some() {
@@ -72,6 +72,8 @@ impl<'a> Visitor for Analyzer<'a> {
           }
         }
       }
+
+      _ => todo!(),
     }
   }
 

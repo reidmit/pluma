@@ -85,7 +85,7 @@ ModuleNode {
                                     15,
                                     18,
                                 ),
-                                kind: Ident(
+                                kind: Identifier(
                                     IdentifierNode {
                                         pos: (
                                             15,
@@ -101,7 +101,7 @@ ModuleNode {
                                     23,
                                     28,
                                 ),
-                                kind: Ident(
+                                kind: Identifier(
                                     IdentifierNode {
                                         pos: (
                                             23,
@@ -117,7 +117,7 @@ ModuleNode {
                                     33,
                                     37,
                                 ),
-                                kind: Ident(
+                                kind: Identifier(
                                     IdentifierNode {
                                         pos: (
                                             33,

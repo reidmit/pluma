@@ -245,7 +245,7 @@ ModuleNode {
                                     44,
                                     49,
                                 ),
-                                kind: Ident(
+                                kind: Identifier(
                                     IdentifierNode {
                                         pos: (
                                             44,

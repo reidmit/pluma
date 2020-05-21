@@ -782,7 +782,7 @@ impl<'a> Parser<'a> {
             // ...or else just a plain identifier:
             _ => variants.push(EnumVariantNode {
               pos: id.pos,
-              kind: EnumVariantKind::Ident(id),
+              kind: EnumVariantKind::Identifier(id),
             }),
           }
         }
@@ -1145,10 +1145,94 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_pattern(&mut self) -> Option<PatternNode> {
-    self.parse_identifier().map(|id_node| PatternNode {
-      pos: id_node.pos,
-      kind: PatternKind::Ident(id_node),
-    })
+    match self.current_token() {
+      Some(&Token::Identifier(..)) => {
+        let id_node = self.parse_identifier().unwrap();
+
+        if let Some(arg_pattern) = self.parse_pattern() {
+          return Some(PatternNode {
+            pos: id_node.pos,
+            kind: PatternKind::Constructor(id_node, Box::new(arg_pattern)),
+          });
+        }
+
+        Some(PatternNode {
+          pos: id_node.pos,
+          kind: PatternKind::Identifier(id_node),
+        })
+      }
+
+      Some(&Token::LeftParen(start, _)) => {
+        self.advance();
+
+        let mut entries = Vec::new();
+
+        while let Some(pattern) = self.parse_pattern() {
+          entries.push(pattern);
+
+          match self.current_token() {
+            Some(&Token::Comma(..)) => self.advance(),
+            _ => break,
+          }
+        }
+
+        let end = expect_token_and_do!(self, Token::RightParen, {
+          let (_, end) = self.current_token_position();
+          self.advance();
+          end
+        });
+
+        Some(PatternNode {
+          pos: (start, end),
+          kind: PatternKind::Tuple(entries),
+        })
+      }
+
+      Some(&Token::Underscore(start, end)) => {
+        self.advance();
+
+        Some(PatternNode {
+          pos: (start, end),
+          kind: PatternKind::Underscore,
+        })
+      }
+
+      Some(&Token::StringLiteral(..)) => {
+        self.parse_string().map(|expr_node| match expr_node.kind {
+          ExprKind::Literal(lit_node) => PatternNode {
+            pos: lit_node.pos,
+            kind: PatternKind::Literal(lit_node),
+          },
+          ExprKind::Interpolation(expr_nodes) => PatternNode {
+            pos: expr_node.pos,
+            kind: PatternKind::Interpolation(expr_nodes),
+          },
+          _ => unreachable!(),
+        })
+      }
+
+      Some(&Token::DecimalDigits(..)) => self.parse_decimal_number().map(|lit_node| PatternNode {
+        pos: lit_node.pos,
+        kind: PatternKind::Literal(lit_node),
+      }),
+
+      Some(&Token::HexDigits(..)) => self.parse_hex_number().map(|lit_node| PatternNode {
+        pos: lit_node.pos,
+        kind: PatternKind::Literal(lit_node),
+      }),
+
+      Some(&Token::OctalDigits(..)) => self.parse_octal_number().map(|lit_node| PatternNode {
+        pos: lit_node.pos,
+        kind: PatternKind::Literal(lit_node),
+      }),
+
+      Some(&Token::BinaryDigits(..)) => self.parse_binary_number().map(|lit_node| PatternNode {
+        pos: lit_node.pos,
+        kind: PatternKind::Literal(lit_node),
+      }),
+
+      _ => None,
+    }
   }
 
   fn parse_parenthetical(&mut self) -> Option<ExprNode> {
