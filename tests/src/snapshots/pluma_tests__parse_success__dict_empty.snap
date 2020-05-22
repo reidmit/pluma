@@ -46,7 +46,7 @@ ModuleNode {
                     kind: Dict(
                         [],
                     ),
-                    typ: None,
+                    typ: Unknown,
                 },
             ),
         },

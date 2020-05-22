@@ -44,10 +44,10 @@ ModuleNode {
                             kind: Str(
                                 "part 1\\part 2",
                             ),
-                            typ: None,
+                            typ: Unknown,
                         },
                     ),
-                    typ: None,
+                    typ: Unknown,
                 },
             ),
         },

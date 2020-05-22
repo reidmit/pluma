@@ -137,7 +137,7 @@ ModuleNode {
                                     10,
                                 ),
                                 name: "Person",
-                                typ: None,
+                                typ: Unknown,
                             },
                             generics: [],
                         },
@@ -149,7 +149,7 @@ ModuleNode {
                                         18,
                                     ),
                                     name: "hello",
-                                    typ: None,
+                                    typ: Unknown,
                                 },
                                 TypeExprNode {
                                     pos: (
@@ -175,7 +175,7 @@ ModuleNode {
                                                                 26,
                                                             ),
                                                             name: "String",
-                                                            typ: None,
+                                                            typ: Unknown,
                                                         },
                                                         generics: [],
                                                     },
@@ -198,7 +198,7 @@ ModuleNode {
                                                                 31,
                                                             ),
                                                             name: "Int",
-                                                            typ: None,
+                                                            typ: Unknown,
                                                         },
                                                         generics: [],
                                                     },
@@ -215,7 +215,7 @@ ModuleNode {
                                         38,
                                     ),
                                     name: "world",
-                                    typ: None,
+                                    typ: Unknown,
                                 },
                                 TypeExprNode {
                                     pos: (
@@ -236,7 +236,7 @@ ModuleNode {
                                 47,
                             ),
                             name: "a",
-                            typ: None,
+                            typ: Unknown,
                         },
                         IdentifierNode {
                             pos: (
@@ -244,7 +244,7 @@ ModuleNode {
                                 50,
                             ),
                             name: "b",
-                            typ: None,
+                            typ: Unknown,
                         },
                         IdentifierNode {
                             pos: (
@@ -252,7 +252,7 @@ ModuleNode {
                                 53,
                             ),
                             name: "c",
-                            typ: None,
+                            typ: Unknown,
                         },
                     ],
                     body: [
@@ -276,10 +276,10 @@ ModuleNode {
                                             kind: Str(
                                                 "wow!",
                                             ),
-                                            typ: None,
+                                            typ: Unknown,
                                         },
                                     ),
-                                    typ: None,
+                                    typ: Unknown,
                                 },
                             ),
                         },

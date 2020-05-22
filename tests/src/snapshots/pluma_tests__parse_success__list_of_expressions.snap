@@ -95,10 +95,10 @@ ModuleNode {
                                         kind: IntDecimal(
                                             1,
                                         ),
-                                        typ: None,
+                                        typ: Unknown,
                                     },
                                 ),
-                                typ: None,
+                                typ: Unknown,
                             },
                             ExprNode {
                                 pos: (
@@ -123,10 +123,10 @@ ModuleNode {
                                                         13,
                                                     ),
                                                     name: "callThing",
-                                                    typ: None,
+                                                    typ: Unknown,
                                                 },
                                             ),
-                                            typ: None,
+                                            typ: Unknown,
                                         },
                                         args: [
                                             ExprNode {
@@ -135,13 +135,13 @@ ModuleNode {
                                                     15,
                                                 ),
                                                 kind: EmptyTuple,
-                                                typ: None,
+                                                typ: Unknown,
                                             },
                                         ],
-                                        typ: None,
+                                        typ: Unknown,
                                     },
                                 ),
-                                typ: None,
+                                typ: Unknown,
                             },
                             ExprNode {
                                 pos: (
@@ -167,7 +167,7 @@ ModuleNode {
                                                             23,
                                                         ),
                                                         name: "repeat",
-                                                        typ: None,
+                                                        typ: Unknown,
                                                     },
                                                     IdentifierNode {
                                                         pos: (
@@ -175,11 +175,11 @@ ModuleNode {
                                                             31,
                                                         ),
                                                         name: "times",
-                                                        typ: None,
+                                                        typ: Unknown,
                                                     },
                                                 ],
                                             ),
-                                            typ: None,
+                                            typ: Unknown,
                                         },
                                         args: [
                                             ExprNode {
@@ -196,10 +196,10 @@ ModuleNode {
                                                         kind: IntDecimal(
                                                             3,
                                                         ),
-                                                        typ: None,
+                                                        typ: Unknown,
                                                     },
                                                 ),
-                                                typ: None,
+                                                typ: Unknown,
                                             },
                                             ExprNode {
                                                 pos: (
@@ -215,20 +215,20 @@ ModuleNode {
                                                         kind: Str(
                                                             "wow",
                                                         ),
-                                                        typ: None,
+                                                        typ: Unknown,
                                                     },
                                                 ),
-                                                typ: None,
+                                                typ: Unknown,
                                             },
                                         ],
-                                        typ: None,
+                                        typ: Unknown,
                                     },
                                 ),
-                                typ: None,
+                                typ: Unknown,
                             },
                         ],
                     ),
-                    typ: None,
+                    typ: Unknown,
                 },
             ),
         },

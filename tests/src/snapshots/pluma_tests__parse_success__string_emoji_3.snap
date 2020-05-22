@@ -44,10 +44,10 @@ ModuleNode {
                             kind: Str(
                                 "🏳\u{fe0f}\u{200d}🌈",
                             ),
-                            typ: None,
+                            typ: Unknown,
                         },
                     ),
-                    typ: None,
+                    typ: Unknown,
                 },
             ),
         },

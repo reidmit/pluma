@@ -112,7 +112,7 @@ ModuleNode {
                                         12,
                                     ),
                                     name: "isPublic",
-                                    typ: None,
+                                    typ: Unknown,
                                 },
                                 TypeExprNode {
                                     pos: (
@@ -158,7 +158,7 @@ ModuleNode {
                                         41,
                                     ),
                                     name: "isPrivate",
-                                    typ: None,
+                                    typ: Unknown,
                                 },
                                 TypeExprNode {
                                     pos: (

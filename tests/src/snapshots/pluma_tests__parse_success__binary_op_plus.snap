@@ -58,10 +58,10 @@ ModuleNode {
                                     kind: IntDecimal(
                                         5,
                                     ),
-                                    typ: None,
+                                    typ: Unknown,
                                 },
                             ),
-                            typ: None,
+                            typ: Unknown,
                         },
                         op: OperatorNode {
                             pos: (
@@ -84,13 +84,13 @@ ModuleNode {
                                     kind: IntDecimal(
                                         5,
                                     ),
-                                    typ: None,
+                                    typ: Unknown,
                                 },
                             ),
-                            typ: None,
+                            typ: Unknown,
                         },
                     },
-                    typ: None,
+                    typ: Unknown,
                 },
             ),
         },

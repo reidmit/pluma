@@ -66,7 +66,7 @@ ModuleNode {
                                                 8,
                                             ),
                                             name: "multiply",
-                                            typ: None,
+                                            typ: Unknown,
                                         },
                                         IdentifierNode {
                                             pos: (
@@ -74,11 +74,11 @@ ModuleNode {
                                                 13,
                                             ),
                                             name: "by",
-                                            typ: None,
+                                            typ: Unknown,
                                         },
                                     ],
                                 ),
-                                typ: None,
+                                typ: Unknown,
                             },
                             args: [
                                 ExprNode {
@@ -95,10 +95,10 @@ ModuleNode {
                                             kind: IntDecimal(
                                                 1,
                                             ),
-                                            typ: None,
+                                            typ: Unknown,
                                         },
                                     ),
-                                    typ: None,
+                                    typ: Unknown,
                                 },
                                 ExprNode {
                                     pos: (
@@ -114,16 +114,16 @@ ModuleNode {
                                             kind: IntDecimal(
                                                 2,
                                             ),
-                                            typ: None,
+                                            typ: Unknown,
                                         },
                                     ),
-                                    typ: None,
+                                    typ: Unknown,
                                 },
                             ],
-                            typ: None,
+                            typ: Unknown,
                         },
                     ),
-                    typ: None,
+                    typ: Unknown,
                 },
             ),
         },

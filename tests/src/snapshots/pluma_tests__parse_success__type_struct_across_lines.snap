@@ -99,7 +99,7 @@ ModuleNode {
                                         22,
                                     ),
                                     name: "name",
-                                    typ: None,
+                                    typ: Unknown,
                                 },
                                 TypeExprNode {
                                     pos: (
@@ -118,7 +118,7 @@ ModuleNode {
                                                     32,
                                                 ),
                                                 name: "String",
-                                                typ: None,
+                                                typ: Unknown,
                                             },
                                             generics: [],
                                         },
@@ -132,7 +132,7 @@ ModuleNode {
                                         39,
                                     ),
                                     name: "age",
-                                    typ: None,
+                                    typ: Unknown,
                                 },
                                 TypeExprNode {
                                     pos: (
@@ -151,7 +151,7 @@ ModuleNode {
                                                     46,
                                                 ),
                                                 name: "Int",
-                                                typ: None,
+                                                typ: Unknown,
                                             },
                                             generics: [],
                                         },
@@ -171,7 +171,7 @@ ModuleNode {
                                 13,
                             ),
                             name: "Person",
-                            typ: None,
+                            typ: Unknown,
                         },
                         generics: [],
                     },

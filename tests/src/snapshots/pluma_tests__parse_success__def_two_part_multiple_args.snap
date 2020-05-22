@@ -122,7 +122,7 @@ ModuleNode {
                                         9,
                                     ),
                                     name: "hello",
-                                    typ: None,
+                                    typ: Unknown,
                                 },
                                 TypeExprNode {
                                     pos: (
@@ -148,7 +148,7 @@ ModuleNode {
                                                                 12,
                                                             ),
                                                             name: "A",
-                                                            typ: None,
+                                                            typ: Unknown,
                                                         },
                                                         generics: [],
                                                     },
@@ -171,7 +171,7 @@ ModuleNode {
                                                                 15,
                                                             ),
                                                             name: "B",
-                                                            typ: None,
+                                                            typ: Unknown,
                                                         },
                                                         generics: [],
                                                     },
@@ -188,7 +188,7 @@ ModuleNode {
                                         22,
                                     ),
                                     name: "world",
-                                    typ: None,
+                                    typ: Unknown,
                                 },
                                 TypeExprNode {
                                     pos: (
@@ -207,7 +207,7 @@ ModuleNode {
                                                     24,
                                                 ),
                                                 name: "C",
-                                                typ: None,
+                                                typ: Unknown,
                                             },
                                             generics: [],
                                         },
@@ -225,7 +225,7 @@ ModuleNode {
                                 30,
                             ),
                             name: "a",
-                            typ: None,
+                            typ: Unknown,
                         },
                         IdentifierNode {
                             pos: (
@@ -233,7 +233,7 @@ ModuleNode {
                                 33,
                             ),
                             name: "b",
-                            typ: None,
+                            typ: Unknown,
                         },
                         IdentifierNode {
                             pos: (
@@ -241,7 +241,7 @@ ModuleNode {
                                 36,
                             ),
                             name: "c",
-                            typ: None,
+                            typ: Unknown,
                         },
                     ],
                     body: [
@@ -265,10 +265,10 @@ ModuleNode {
                                             kind: Str(
                                                 "wow!",
                                             ),
-                                            typ: None,
+                                            typ: Unknown,
                                         },
                                     ),
-                                    typ: None,
+                                    typ: Unknown,
                                 },
                             ),
                         },

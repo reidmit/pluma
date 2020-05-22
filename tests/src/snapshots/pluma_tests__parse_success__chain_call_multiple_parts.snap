@@ -81,10 +81,10 @@ ModuleNode {
                                                 kind: Str(
                                                     "hello",
                                                 ),
-                                                typ: None,
+                                                typ: Unknown,
                                             },
                                         ),
-                                        typ: None,
+                                        typ: Unknown,
                                     },
                                     prop: ExprNode {
                                         pos: (
@@ -99,7 +99,7 @@ ModuleNode {
                                                         17,
                                                     ),
                                                     name: "replace",
-                                                    typ: None,
+                                                    typ: Unknown,
                                                 },
                                                 IdentifierNode {
                                                     pos: (
@@ -107,14 +107,14 @@ ModuleNode {
                                                         26,
                                                     ),
                                                     name: "with",
-                                                    typ: None,
+                                                    typ: Unknown,
                                                 },
                                             ],
                                         ),
-                                        typ: None,
+                                        typ: Unknown,
                                     },
                                 },
-                                typ: None,
+                                typ: Unknown,
                             },
                             args: [
                                 ExprNode {
@@ -131,10 +131,10 @@ ModuleNode {
                                             kind: Str(
                                                 "x",
                                             ),
-                                            typ: None,
+                                            typ: Unknown,
                                         },
                                     ),
-                                    typ: None,
+                                    typ: Unknown,
                                 },
                                 ExprNode {
                                     pos: (
@@ -150,16 +150,16 @@ ModuleNode {
                                             kind: Str(
                                                 "y",
                                             ),
-                                            typ: None,
+                                            typ: Unknown,
                                         },
                                     ),
-                                    typ: None,
+                                    typ: Unknown,
                                 },
                             ],
-                            typ: None,
+                            typ: Unknown,
                         },
                     ),
-                    typ: None,
+                    typ: Unknown,
                 },
             ),
         },

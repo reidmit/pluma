@@ -54,6 +54,7 @@ impl Traverse for ExprNode {
           entry.traverse(visitor);
         }
       }
+      ExprKind::EmptyTuple => {}
       other_kind => todo!("traverse {:#?}", other_kind),
     }
 

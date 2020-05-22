@@ -64,7 +64,7 @@ ModuleNode {
                                         20,
                                     ),
                                     name: "name",
-                                    typ: None,
+                                    typ: Unknown,
                                 },
                                 TypeExprNode {
                                     pos: (
@@ -83,7 +83,7 @@ ModuleNode {
                                                     30,
                                                 ),
                                                 name: "String",
-                                                typ: None,
+                                                typ: Unknown,
                                             },
                                             generics: [],
                                         },
@@ -104,7 +104,7 @@ ModuleNode {
                                 13,
                             ),
                             name: "HasName",
-                            typ: None,
+                            typ: Unknown,
                         },
                         generics: [],
                     },

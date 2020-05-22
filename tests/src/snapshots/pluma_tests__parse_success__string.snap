@@ -44,10 +44,10 @@ ModuleNode {
                             kind: Str(
                                 "wow",
                             ),
-                            typ: None,
+                            typ: Unknown,
                         },
                     ),
-                    typ: None,
+                    typ: Unknown,
                 },
             ),
         },

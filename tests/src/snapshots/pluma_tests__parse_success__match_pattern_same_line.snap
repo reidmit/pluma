@@ -105,10 +105,10 @@ ModuleNode {
                                             11,
                                         ),
                                         name: "thing",
-                                        typ: None,
+                                        typ: Unknown,
                                     },
                                 ),
-                                typ: None,
+                                typ: Unknown,
                             },
                             cases: [
                                 MatchCaseNode {
@@ -130,7 +130,7 @@ ModuleNode {
                                                 kind: IntDecimal(
                                                     1,
                                                 ),
-                                                typ: None,
+                                                typ: Unknown,
                                             },
                                         ),
                                     },
@@ -148,10 +148,10 @@ ModuleNode {
                                                 kind: Str(
                                                     "one",
                                                 ),
-                                                typ: None,
+                                                typ: Unknown,
                                             },
                                         ),
-                                        typ: None,
+                                        typ: Unknown,
                                     },
                                 },
                                 MatchCaseNode {
@@ -173,7 +173,7 @@ ModuleNode {
                                                 kind: IntDecimal(
                                                     2,
                                                 ),
-                                                typ: None,
+                                                typ: Unknown,
                                             },
                                         ),
                                     },
@@ -191,10 +191,10 @@ ModuleNode {
                                                 kind: Str(
                                                     "two",
                                                 ),
-                                                typ: None,
+                                                typ: Unknown,
                                             },
                                         ),
-                                        typ: None,
+                                        typ: Unknown,
                                     },
                                 },
                                 MatchCaseNode {
@@ -223,16 +223,16 @@ ModuleNode {
                                                 kind: Str(
                                                     "idk",
                                                 ),
-                                                typ: None,
+                                                typ: Unknown,
                                             },
                                         ),
-                                        typ: None,
+                                        typ: Unknown,
                                     },
                                 },
                             ],
                         },
                     ),
-                    typ: None,
+                    typ: Unknown,
                 },
             ),
         },

@@ -12,7 +12,7 @@ pub struct CallNode {
   pub pos: Position,
   pub callee: Box<ExprNode>,
   pub args: Vec<ExprNode>,
-  pub typ: Option<ValueType>,
+  pub typ: ValueType,
 }
 
 #[derive(Debug)]
@@ -73,7 +73,7 @@ pub enum EnumVariantKind {
 pub struct ExprNode {
   pub pos: Position,
   pub kind: ExprKind,
-  pub typ: Option<ValueType>,
+  pub typ: ValueType,
 }
 
 #[derive(Debug)]
@@ -117,7 +117,7 @@ pub enum ExprKind {
 pub struct IdentifierNode {
   pub pos: Position,
   pub name: String,
-  pub typ: Option<ValueType>,
+  pub typ: ValueType,
 }
 
 #[derive(Debug)]
@@ -131,7 +131,7 @@ pub struct LetNode {
 pub struct LiteralNode {
   pub pos: Position,
   pub kind: LiteralKind,
-  pub typ: Option<ValueType>,
+  pub typ: ValueType,
 }
 
 #[derive(Debug)]

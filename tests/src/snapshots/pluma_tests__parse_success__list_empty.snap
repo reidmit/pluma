@@ -42,7 +42,7 @@ ModuleNode {
                     kind: List(
                         [],
                     ),
-                    typ: None,
+                    typ: Unknown,
                 },
             ),
         },

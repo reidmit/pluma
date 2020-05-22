@@ -85,10 +85,10 @@ ModuleNode {
                                         kind: Str(
                                             "hey",
                                         ),
-                                        typ: None,
+                                        typ: Unknown,
                                     },
                                 ),
-                                typ: None,
+                                typ: Unknown,
                             },
                             ExprNode {
                                 pos: (
@@ -104,10 +104,10 @@ ModuleNode {
                                         kind: Str(
                                             "wow",
                                         ),
-                                        typ: None,
+                                        typ: Unknown,
                                     },
                                 ),
-                                typ: None,
+                                typ: Unknown,
                             },
                             ExprNode {
                                 pos: (
@@ -123,10 +123,10 @@ ModuleNode {
                                         kind: Str(
                                             "cool",
                                         ),
-                                        typ: None,
+                                        typ: Unknown,
                                     },
                                 ),
-                                typ: None,
+                                typ: Unknown,
                             },
                             ExprNode {
                                 pos: (
@@ -142,14 +142,14 @@ ModuleNode {
                                         kind: Str(
                                             "multi-\n\nline",
                                         ),
-                                        typ: None,
+                                        typ: Unknown,
                                     },
                                 ),
-                                typ: None,
+                                typ: Unknown,
                             },
                         ],
                     ),
-                    typ: None,
+                    typ: Unknown,
                 },
             ),
         },

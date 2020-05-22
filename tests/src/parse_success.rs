@@ -271,6 +271,12 @@ test_parse_success! {
     |let x = 47
   "#,
 
+  let_followed_by_expr: r#"
+    |let x = "wow"
+    |
+    |x
+  "#,
+
   let_pattern_underscore: r#"
     |let _ = 47
   "#,

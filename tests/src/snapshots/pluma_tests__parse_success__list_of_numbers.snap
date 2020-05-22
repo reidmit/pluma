@@ -75,10 +75,10 @@ ModuleNode {
                                         kind: IntDecimal(
                                             1,
                                         ),
-                                        typ: None,
+                                        typ: Unknown,
                                     },
                                 ),
-                                typ: None,
+                                typ: Unknown,
                             },
                             ExprNode {
                                 pos: (
@@ -94,10 +94,10 @@ ModuleNode {
                                         kind: IntDecimal(
                                             2,
                                         ),
-                                        typ: None,
+                                        typ: Unknown,
                                     },
                                 ),
-                                typ: None,
+                                typ: Unknown,
                             },
                             ExprNode {
                                 pos: (
@@ -113,14 +113,14 @@ ModuleNode {
                                         kind: IntDecimal(
                                             3,
                                         ),
-                                        typ: None,
+                                        typ: Unknown,
                                     },
                                 ),
-                                typ: None,
+                                typ: Unknown,
                             },
                         ],
                     ),
-                    typ: None,
+                    typ: Unknown,
                 },
             ),
         },

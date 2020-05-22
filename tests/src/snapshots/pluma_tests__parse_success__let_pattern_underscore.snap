@@ -68,10 +68,10 @@ ModuleNode {
                                 kind: IntDecimal(
                                     47,
                                 ),
-                                typ: None,
+                                typ: Unknown,
                             },
                         ),
-                        typ: None,
+                        typ: Unknown,
                     },
                 },
             ),

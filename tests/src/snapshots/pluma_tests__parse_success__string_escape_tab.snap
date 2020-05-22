@@ -44,10 +44,10 @@ ModuleNode {
                             kind: Str(
                                 "hello\tworld",
                             ),
-                            typ: None,
+                            typ: Unknown,
                         },
                     ),
-                    typ: None,
+                    typ: Unknown,
                 },
             ),
         },

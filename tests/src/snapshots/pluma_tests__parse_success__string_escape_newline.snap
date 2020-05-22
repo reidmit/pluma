@@ -44,10 +44,10 @@ ModuleNode {
                             kind: Str(
                                 "line 1\nline 2",
                             ),
-                            typ: None,
+                            typ: Unknown,
                         },
                     ),
-                    typ: None,
+                    typ: Unknown,
                 },
             ),
         },

@@ -127,7 +127,7 @@ ModuleNode {
                                         70,
                                     ),
                                     name: "name",
-                                    typ: None,
+                                    typ: Unknown,
                                 },
                                 TypeExprNode {
                                     pos: (
@@ -146,7 +146,7 @@ ModuleNode {
                                                     80,
                                                 ),
                                                 name: "String",
-                                                typ: None,
+                                                typ: Unknown,
                                             },
                                             generics: [],
                                         },
@@ -164,7 +164,7 @@ ModuleNode {
                                                 30,
                                             ),
                                             name: "getWow",
-                                            typ: None,
+                                            typ: Unknown,
                                         },
                                         TypeExprNode {
                                             pos: (
@@ -192,7 +192,7 @@ ModuleNode {
                                                     40,
                                                 ),
                                                 name: "Wow",
-                                                typ: None,
+                                                typ: Unknown,
                                             },
                                             generics: [],
                                         },
@@ -208,7 +208,7 @@ ModuleNode {
                                                 51,
                                             ),
                                             name: "setWow",
-                                            typ: None,
+                                            typ: Unknown,
                                         },
                                         TypeExprNode {
                                             pos: (
@@ -227,7 +227,7 @@ ModuleNode {
                                                             55,
                                                         ),
                                                         name: "Wow",
-                                                        typ: None,
+                                                        typ: Unknown,
                                                     },
                                                     generics: [],
                                                 },
@@ -256,7 +256,7 @@ ModuleNode {
                                 19,
                             ),
                             name: "WowieWithName",
-                            typ: None,
+                            typ: Unknown,
                         },
                         generics: [],
                     },

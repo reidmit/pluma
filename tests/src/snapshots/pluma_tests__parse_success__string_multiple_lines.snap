@@ -47,10 +47,10 @@ ModuleNode {
                             kind: Str(
                                 "wow\nthis\n   is\ncool!",
                             ),
-                            typ: None,
+                            typ: Unknown,
                         },
                     ),
-                    typ: None,
+                    typ: Unknown,
                 },
             ),
         },

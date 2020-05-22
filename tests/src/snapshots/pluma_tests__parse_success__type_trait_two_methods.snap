@@ -109,7 +109,7 @@ ModuleNode {
                                                 22,
                                             ),
                                             name: "getWow",
-                                            typ: None,
+                                            typ: Unknown,
                                         },
                                         TypeExprNode {
                                             pos: (
@@ -137,7 +137,7 @@ ModuleNode {
                                                     32,
                                                 ),
                                                 name: "Wow",
-                                                typ: None,
+                                                typ: Unknown,
                                             },
                                             generics: [],
                                         },
@@ -153,7 +153,7 @@ ModuleNode {
                                                 43,
                                             ),
                                             name: "setWow",
-                                            typ: None,
+                                            typ: Unknown,
                                         },
                                         TypeExprNode {
                                             pos: (
@@ -172,7 +172,7 @@ ModuleNode {
                                                             47,
                                                         ),
                                                         name: "Wow",
-                                                        typ: None,
+                                                        typ: Unknown,
                                                     },
                                                     generics: [],
                                                 },
@@ -201,7 +201,7 @@ ModuleNode {
                                 11,
                             ),
                             name: "Wowie",
-                            typ: None,
+                            typ: Unknown,
                         },
                         generics: [],
                     },

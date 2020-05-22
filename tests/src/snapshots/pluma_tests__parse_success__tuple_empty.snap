@@ -40,7 +40,7 @@ ModuleNode {
                         2,
                     ),
                     kind: EmptyTuple,
-                    typ: None,
+                    typ: Unknown,
                 },
             ),
         },

@@ -172,7 +172,7 @@ ModuleNode {
                                         60,
                                     ),
                                     name: "first",
-                                    typ: None,
+                                    typ: Unknown,
                                 },
                                 TypeExprNode {
                                     pos: (
@@ -191,7 +191,7 @@ ModuleNode {
                                                     65,
                                                 ),
                                                 name: "A",
-                                                typ: None,
+                                                typ: Unknown,
                                             },
                                             generics: [],
                                         },
@@ -205,7 +205,7 @@ ModuleNode {
                                         75,
                                     ),
                                     name: "second",
-                                    typ: None,
+                                    typ: Unknown,
                                 },
                                 TypeExprNode {
                                     pos: (
@@ -224,7 +224,7 @@ ModuleNode {
                                                     80,
                                                 ),
                                                 name: "B",
-                                                typ: None,
+                                                typ: Unknown,
                                             },
                                             generics: [],
                                         },
@@ -238,7 +238,7 @@ ModuleNode {
                                         89,
                                     ),
                                     name: "third",
-                                    typ: None,
+                                    typ: Unknown,
                                 },
                                 TypeExprNode {
                                     pos: (
@@ -257,7 +257,7 @@ ModuleNode {
                                                     96,
                                                 ),
                                                 name: "Int",
-                                                typ: None,
+                                                typ: Unknown,
                                             },
                                             generics: [],
                                         },
@@ -277,7 +277,7 @@ ModuleNode {
                                 12,
                             ),
                             name: "Thing",
-                            typ: None,
+                            typ: Unknown,
                         },
                         generics: [
                             TypeExprNode {
@@ -297,7 +297,7 @@ ModuleNode {
                                                 14,
                                             ),
                                             name: "A",
-                                            typ: None,
+                                            typ: Unknown,
                                         },
                                         generics: [],
                                     },
@@ -320,7 +320,7 @@ ModuleNode {
                                                 17,
                                             ),
                                             name: "B",
-                                            typ: None,
+                                            typ: Unknown,
                                         },
                                         generics: [],
                                     },
@@ -336,7 +336,7 @@ ModuleNode {
                                     26,
                                 ),
                                 name: "A",
-                                typ: None,
+                                typ: Unknown,
                             },
                             TypeExprNode {
                                 pos: (
@@ -355,7 +355,7 @@ ModuleNode {
                                                 33,
                                             ),
                                             name: "Any",
-                                            typ: None,
+                                            typ: Unknown,
                                         },
                                         generics: [],
                                     },
@@ -369,7 +369,7 @@ ModuleNode {
                                     36,
                                 ),
                                 name: "B",
-                                typ: None,
+                                typ: Unknown,
                             },
                             TypeExprNode {
                                 pos: (
@@ -388,7 +388,7 @@ ModuleNode {
                                                 50,
                                             ),
                                             name: "Comparable",
-                                            typ: None,
+                                            typ: Unknown,
                                         },
                                         generics: [],
                                     },
