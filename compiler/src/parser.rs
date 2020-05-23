@@ -187,7 +187,7 @@ impl<'a> Parser<'a> {
     Some(TypeDefNode {
       pos: (start, type_expr.pos.1),
       kind: TypeDefKind::Alias { of: type_expr },
-      name: Box::new(name),
+      name,
       generic_type_constraints,
     })
   }
@@ -689,7 +689,15 @@ impl<'a> Parser<'a> {
       // If not, the first ident was the first part of the method name
       // So, grab the param type for this part
       match self.parse_type_expression() {
-        Some(part_param) => signature.push((type_ident.name, Box::new(part_param))),
+        Some(part_param) => {
+          let ident = IdentifierNode {
+            pos: type_ident.pos,
+            name: type_ident.name,
+            typ: ValueType::Unknown,
+          };
+
+          signature.push((ident, Box::new(part_param)))
+        }
         _ => {
           return self.error(ParseError {
             pos: self.current_token_position(),
@@ -704,7 +712,7 @@ impl<'a> Parser<'a> {
       let part_name = self.parse_identifier().unwrap();
 
       match self.parse_type_expression() {
-        Some(part_param) => signature.push((Box::new(part_name), Box::new(part_param))),
+        Some(part_param) => signature.push((part_name, Box::new(part_param))),
         _ => {
           return self.error(ParseError {
             pos: self.current_token_position(),
@@ -803,7 +811,7 @@ impl<'a> Parser<'a> {
     Some(TypeDefNode {
       pos: (start, variants.last().unwrap().pos.1),
       kind: TypeDefKind::Enum { variants },
-      name: Box::new(name),
+      name,
       generic_type_constraints,
     })
   }
@@ -877,11 +885,11 @@ impl<'a> Parser<'a> {
         self.advance();
 
         (
-          Box::new(IdentifierNode {
+          IdentifierNode {
             pos: (start, end),
             name: name_str,
             typ: ValueType::Unknown,
-          }),
+          },
           end,
         )
       }
@@ -1516,7 +1524,7 @@ impl<'a> Parser<'a> {
     Some(TypeDefNode {
       pos: (start, end),
       kind: TypeDefKind::Struct { fields },
-      name: Box::new(name),
+      name,
       generic_type_constraints,
     })
   }
@@ -1721,7 +1729,7 @@ impl<'a> Parser<'a> {
         }
 
         match self.parse_type_expression() {
-          Some(part_param) => signature.push((Box::new(part_name), Box::new(part_param))),
+          Some(part_param) => signature.push((part_name, Box::new(part_param))),
           _ => {
             return self.error(ParseError {
               pos: self.current_token_position(),
@@ -1763,7 +1771,7 @@ impl<'a> Parser<'a> {
     Some(TypeDefNode {
       pos: (start, end),
       kind: TypeDefKind::Trait { fields, methods },
-      name: Box::new(name),
+      name,
       generic_type_constraints,
     })
   }
@@ -1832,11 +1840,7 @@ impl<'a> Parser<'a> {
       pos
     });
 
-    let name = IdentifierNode {
-      pos: (start, end),
-      name: read_string!(self, start, end),
-      typ: ValueType::Unknown,
-    };
+    let name = read_string!(self, start, end);
 
     let mut generics = Vec::new();
 
@@ -1861,7 +1865,7 @@ impl<'a> Parser<'a> {
 
     Some(TypeIdentifierNode {
       pos: (start, end),
-      name: Box::new(name),
+      name,
       generics,
     })
   }

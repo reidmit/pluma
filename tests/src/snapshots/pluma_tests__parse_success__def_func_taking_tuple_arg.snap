@@ -140,14 +140,7 @@ ModuleNode {
                                                                     13,
                                                                     14,
                                                                 ),
-                                                                name: IdentifierNode {
-                                                                    pos: (
-                                                                        13,
-                                                                        14,
-                                                                    ),
-                                                                    name: "A",
-                                                                    typ: Unknown,
-                                                                },
+                                                                name: "A",
                                                                 generics: [],
                                                             },
                                                         ),
@@ -163,14 +156,7 @@ ModuleNode {
                                                                     16,
                                                                     17,
                                                                 ),
-                                                                name: IdentifierNode {
-                                                                    pos: (
-                                                                        16,
-                                                                        17,
-                                                                    ),
-                                                                    name: "B",
-                                                                    typ: Unknown,
-                                                                },
+                                                                name: "B",
                                                                 generics: [],
                                                             },
                                                         ),
@@ -189,14 +175,7 @@ ModuleNode {
                                                         22,
                                                         23,
                                                     ),
-                                                    name: IdentifierNode {
-                                                        pos: (
-                                                            22,
-                                                            23,
-                                                        ),
-                                                        name: "C",
-                                                        typ: Unknown,
-                                                    },
+                                                    name: "C",
                                                     generics: [],
                                                 },
                                             ),

@@ -40,7 +40,7 @@
 
     "symbol": {
       "name": "keyword.operator.pluma",
-      "match": "(=>|=|::|:=|\\||->|\\.)"
+      "match": "([:|.*/+-=<>~!%&@^]+)"
     },
 
     "storage-type": {

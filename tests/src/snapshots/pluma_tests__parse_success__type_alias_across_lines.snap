@@ -60,14 +60,7 @@ ModuleNode {
                                         14,
                                         18,
                                     ),
-                                    name: IdentifierNode {
-                                        pos: (
-                                            14,
-                                            18,
-                                        ),
-                                        name: "Beta",
-                                        typ: Unknown,
-                                    },
+                                    name: "Beta",
                                     generics: [],
                                 },
                             ),
@@ -78,14 +71,7 @@ ModuleNode {
                             6,
                             11,
                         ),
-                        name: IdentifierNode {
-                            pos: (
-                                6,
-                                11,
-                            ),
-                            name: "Alpha",
-                            typ: Unknown,
-                        },
+                        name: "Alpha",
                         generics: [],
                     },
                     generic_type_constraints: [],

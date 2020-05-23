@@ -140,14 +140,7 @@ ModuleNode {
                                                 74,
                                                 80,
                                             ),
-                                            name: IdentifierNode {
-                                                pos: (
-                                                    74,
-                                                    80,
-                                                ),
-                                                name: "String",
-                                                typ: Unknown,
-                                            },
+                                            name: "String",
                                             generics: [],
                                         },
                                     ),
@@ -186,14 +179,7 @@ ModuleNode {
                                                 37,
                                                 40,
                                             ),
-                                            name: IdentifierNode {
-                                                pos: (
-                                                    37,
-                                                    40,
-                                                ),
-                                                name: "Wow",
-                                                typ: Unknown,
-                                            },
+                                            name: "Wow",
                                             generics: [],
                                         },
                                     ),
@@ -221,14 +207,7 @@ ModuleNode {
                                                         52,
                                                         55,
                                                     ),
-                                                    name: IdentifierNode {
-                                                        pos: (
-                                                            52,
-                                                            55,
-                                                        ),
-                                                        name: "Wow",
-                                                        typ: Unknown,
-                                                    },
+                                                    name: "Wow",
                                                     generics: [],
                                                 },
                                             ),
@@ -250,14 +229,7 @@ ModuleNode {
                             6,
                             19,
                         ),
-                        name: IdentifierNode {
-                            pos: (
-                                6,
-                                19,
-                            ),
-                            name: "WowieWithName",
-                            typ: Unknown,
-                        },
+                        name: "WowieWithName",
                         generics: [],
                     },
                     generic_type_constraints: [],

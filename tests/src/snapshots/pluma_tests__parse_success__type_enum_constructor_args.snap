@@ -342,14 +342,7 @@ ModuleNode {
                             5,
                             10,
                         ),
-                        name: IdentifierNode {
-                            pos: (
-                                5,
-                                10,
-                            ),
-                            name: "Thing",
-                            typ: Unknown,
-                        },
+                        name: "Thing",
                         generics: [],
                     },
                     generic_type_constraints: [],

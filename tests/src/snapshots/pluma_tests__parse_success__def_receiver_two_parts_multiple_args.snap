@@ -131,14 +131,7 @@ ModuleNode {
                                 4,
                                 10,
                             ),
-                            name: IdentifierNode {
-                                pos: (
-                                    4,
-                                    10,
-                                ),
-                                name: "Person",
-                                typ: Unknown,
-                            },
+                            name: "Person",
                             generics: [],
                         },
                         signature: [
@@ -169,14 +162,7 @@ ModuleNode {
                                                             20,
                                                             26,
                                                         ),
-                                                        name: IdentifierNode {
-                                                            pos: (
-                                                                20,
-                                                                26,
-                                                            ),
-                                                            name: "String",
-                                                            typ: Unknown,
-                                                        },
+                                                        name: "String",
                                                         generics: [],
                                                     },
                                                 ),
@@ -192,14 +178,7 @@ ModuleNode {
                                                             28,
                                                             31,
                                                         ),
-                                                        name: IdentifierNode {
-                                                            pos: (
-                                                                28,
-                                                                31,
-                                                            ),
-                                                            name: "Int",
-                                                            typ: Unknown,
-                                                        },
+                                                        name: "Int",
                                                         generics: [],
                                                     },
                                                 ),

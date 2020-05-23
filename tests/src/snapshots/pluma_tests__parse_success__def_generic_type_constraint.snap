@@ -119,14 +119,7 @@ ModuleNode {
                                                 10,
                                                 11,
                                             ),
-                                            name: IdentifierNode {
-                                                pos: (
-                                                    10,
-                                                    11,
-                                                ),
-                                                name: "A",
-                                                typ: Unknown,
-                                            },
+                                            name: "A",
                                             generics: [],
                                         },
                                     ),
@@ -146,14 +139,7 @@ ModuleNode {
                                         15,
                                         16,
                                     ),
-                                    name: IdentifierNode {
-                                        pos: (
-                                            15,
-                                            16,
-                                        ),
-                                        name: "A",
-                                        typ: Unknown,
-                                    },
+                                    name: "A",
                                     generics: [],
                                 },
                             ),
@@ -180,14 +166,7 @@ ModuleNode {
                                             28,
                                             31,
                                         ),
-                                        name: IdentifierNode {
-                                            pos: (
-                                                28,
-                                                31,
-                                            ),
-                                            name: "Any",
-                                            typ: Unknown,
-                                        },
+                                        name: "Any",
                                         generics: [],
                                     },
                                 ),

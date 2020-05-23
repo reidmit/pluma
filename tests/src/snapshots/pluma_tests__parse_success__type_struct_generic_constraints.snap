@@ -185,14 +185,7 @@ ModuleNode {
                                                 64,
                                                 65,
                                             ),
-                                            name: IdentifierNode {
-                                                pos: (
-                                                    64,
-                                                    65,
-                                                ),
-                                                name: "A",
-                                                typ: Unknown,
-                                            },
+                                            name: "A",
                                             generics: [],
                                         },
                                     ),
@@ -218,14 +211,7 @@ ModuleNode {
                                                 79,
                                                 80,
                                             ),
-                                            name: IdentifierNode {
-                                                pos: (
-                                                    79,
-                                                    80,
-                                                ),
-                                                name: "B",
-                                                typ: Unknown,
-                                            },
+                                            name: "B",
                                             generics: [],
                                         },
                                     ),
@@ -251,14 +237,7 @@ ModuleNode {
                                                 93,
                                                 96,
                                             ),
-                                            name: IdentifierNode {
-                                                pos: (
-                                                    93,
-                                                    96,
-                                                ),
-                                                name: "Int",
-                                                typ: Unknown,
-                                            },
+                                            name: "Int",
                                             generics: [],
                                         },
                                     ),
@@ -271,14 +250,7 @@ ModuleNode {
                             7,
                             18,
                         ),
-                        name: IdentifierNode {
-                            pos: (
-                                7,
-                                12,
-                            ),
-                            name: "Thing",
-                            typ: Unknown,
-                        },
+                        name: "Thing",
                         generics: [
                             TypeExprNode {
                                 pos: (
@@ -291,14 +263,7 @@ ModuleNode {
                                             13,
                                             14,
                                         ),
-                                        name: IdentifierNode {
-                                            pos: (
-                                                13,
-                                                14,
-                                            ),
-                                            name: "A",
-                                            typ: Unknown,
-                                        },
+                                        name: "A",
                                         generics: [],
                                     },
                                 ),
@@ -314,14 +279,7 @@ ModuleNode {
                                             16,
                                             17,
                                         ),
-                                        name: IdentifierNode {
-                                            pos: (
-                                                16,
-                                                17,
-                                            ),
-                                            name: "B",
-                                            typ: Unknown,
-                                        },
+                                        name: "B",
                                         generics: [],
                                     },
                                 ),
@@ -349,14 +307,7 @@ ModuleNode {
                                             30,
                                             33,
                                         ),
-                                        name: IdentifierNode {
-                                            pos: (
-                                                30,
-                                                33,
-                                            ),
-                                            name: "Any",
-                                            typ: Unknown,
-                                        },
+                                        name: "Any",
                                         generics: [],
                                     },
                                 ),
@@ -382,14 +333,7 @@ ModuleNode {
                                             40,
                                             50,
                                         ),
-                                        name: IdentifierNode {
-                                            pos: (
-                                                40,
-                                                50,
-                                            ),
-                                            name: "Comparable",
-                                            typ: Unknown,
-                                        },
+                                        name: "Comparable",
                                         generics: [],
                                     },
                                 ),

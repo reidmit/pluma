@@ -126,14 +126,7 @@ ModuleNode {
                                                             11,
                                                             17,
                                                         ),
-                                                        name: IdentifierNode {
-                                                            pos: (
-                                                                11,
-                                                                17,
-                                                            ),
-                                                            name: "String",
-                                                            typ: Unknown,
-                                                        },
+                                                        name: "String",
                                                         generics: [],
                                                     },
                                                 ),
@@ -149,14 +142,7 @@ ModuleNode {
                                                             19,
                                                             22,
                                                         ),
-                                                        name: IdentifierNode {
-                                                            pos: (
-                                                                19,
-                                                                22,
-                                                            ),
-                                                            name: "Int",
-                                                            typ: Unknown,
-                                                        },
+                                                        name: "Int",
                                                         generics: [],
                                                     },
                                                 ),

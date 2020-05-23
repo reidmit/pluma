@@ -190,14 +190,7 @@ ModuleNode {
                             5,
                             16,
                         ),
-                        name: IdentifierNode {
-                            pos: (
-                                5,
-                                13,
-                            ),
-                            name: "Optional",
-                            typ: Unknown,
-                        },
+                        name: "Optional",
                         generics: [
                             TypeExprNode {
                                 pos: (
@@ -210,14 +203,7 @@ ModuleNode {
                                             14,
                                             15,
                                         ),
-                                        name: IdentifierNode {
-                                            pos: (
-                                                14,
-                                                15,
-                                            ),
-                                            name: "A",
-                                            typ: Unknown,
-                                        },
+                                        name: "A",
                                         generics: [],
                                     },
                                 ),
@@ -245,14 +231,7 @@ ModuleNode {
                                             28,
                                             31,
                                         ),
-                                        name: IdentifierNode {
-                                            pos: (
-                                                28,
-                                                31,
-                                            ),
-                                            name: "Any",
-                                            typ: Unknown,
-                                        },
+                                        name: "Any",
                                         generics: [],
                                     },
                                 ),

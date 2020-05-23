@@ -131,14 +131,7 @@ ModuleNode {
                                                 29,
                                                 32,
                                             ),
-                                            name: IdentifierNode {
-                                                pos: (
-                                                    29,
-                                                    32,
-                                                ),
-                                                name: "Wow",
-                                                typ: Unknown,
-                                            },
+                                            name: "Wow",
                                             generics: [],
                                         },
                                     ),
@@ -166,14 +159,7 @@ ModuleNode {
                                                         44,
                                                         47,
                                                     ),
-                                                    name: IdentifierNode {
-                                                        pos: (
-                                                            44,
-                                                            47,
-                                                        ),
-                                                        name: "Wow",
-                                                        typ: Unknown,
-                                                    },
+                                                    name: "Wow",
                                                     generics: [],
                                                 },
                                             ),
@@ -195,14 +181,7 @@ ModuleNode {
                             6,
                             11,
                         ),
-                        name: IdentifierNode {
-                            pos: (
-                                6,
-                                11,
-                            ),
-                            name: "Wowie",
-                            typ: Unknown,
-                        },
+                        name: "Wowie",
                         generics: [],
                     },
                     generic_type_constraints: [],

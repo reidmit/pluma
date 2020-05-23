@@ -135,14 +135,7 @@ ModuleNode {
                             5,
                             10,
                         ),
-                        name: IdentifierNode {
-                            pos: (
-                                5,
-                                10,
-                            ),
-                            name: "Color",
-                            typ: Unknown,
-                        },
+                        name: "Color",
                         generics: [],
                     },
                     generic_type_constraints: [],

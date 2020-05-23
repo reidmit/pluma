@@ -101,10 +101,36 @@ impl<'a> Visitor for Analyzer<'a> {
 
     match callee_type {
       ValueType::Func(param_types, return_type) => {
-        // TODO assert on matching param types
+        if param_types.len() != node.args.len() {
+          self.error(AnalysisError {
+            pos: node.pos,
+            kind: AnalysisErrorKind::IncorrectNumberOfArguments {
+              expected: param_types.len(),
+              actual: node.args.len(),
+            },
+          })
+        }
+
+        for i in 0..param_types.len() {
+          let param_type = param_types.get(i).unwrap();
+          let given_type = &node.args.get(i).unwrap().typ;
+
+          if param_type != given_type {
+            let pos = node.args.get(i).unwrap().pos;
+
+            self.error(AnalysisError {
+              pos,
+              kind: AnalysisErrorKind::TypeMismatch {
+                expected: param_type.clone(),
+                actual: given_type.clone(),
+              },
+            })
+          }
+        }
 
         node.typ = *return_type.clone();
       }
+
       _ => self.error(AnalysisError {
         pos: node.pos,
         kind: AnalysisErrorKind::CalleeNotCallable(callee_type.clone()),

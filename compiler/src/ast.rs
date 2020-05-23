@@ -3,7 +3,7 @@ use std::fmt;
 use uuid::Uuid;
 
 pub type Position = (usize, usize);
-pub type SignaturePart = (Box<IdentifierNode>, Box<TypeExprNode>);
+pub type SignaturePart = (IdentifierNode, Box<TypeExprNode>);
 pub type Signature = Vec<SignaturePart>;
 pub type GenericTypeConstraints = Vec<(IdentifierNode, TypeExprNode)>;
 
@@ -252,14 +252,14 @@ pub enum TypeExprKind {
 pub struct TypeDefNode {
   pub pos: Position,
   pub kind: TypeDefKind,
-  pub name: Box<TypeIdentifierNode>,
+  pub name: TypeIdentifierNode,
   pub generic_type_constraints: GenericTypeConstraints,
 }
 
 #[derive(Debug)]
 pub struct IntrinsicTypeDefNode {
   pub pos: Position,
-  pub name: Box<IdentifierNode>,
+  pub name: IdentifierNode,
   pub generic_type_constraints: GenericTypeConstraints,
 }
 
@@ -287,7 +287,7 @@ pub enum TypeDefKind {
 #[derive(Debug)]
 pub struct TypeIdentifierNode {
   pub pos: Position,
-  pub name: Box<IdentifierNode>,
+  pub name: String,
   pub generics: Vec<TypeExprNode>,
 }
 

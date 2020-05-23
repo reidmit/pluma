@@ -451,7 +451,6 @@ fn is_operator_char(byte: u8) -> bool {
     b'>' => true,
     b'~' => true,
     b'!' => true,
-    b'$' => true,
     b'%' => true,
     b'&' => true,
     b'@' => true,

@@ -16,6 +16,10 @@ pub enum AnalysisErrorKind {
   NameAlreadyInScope(String),
   CalleeNotCallable(ValueType),
   PatternMismatchExpectedTuple(ValueType),
+  IncorrectNumberOfArguments {
+    expected: usize,
+    actual: usize,
+  },
   PatternMismatchTupleSize {
     pattern_size: usize,
     value_size: usize,
@@ -50,6 +54,12 @@ impl fmt::Display for AnalysisError {
 
       CalleeNotCallable(typ) => write!(f, "Cannot call value of type {} like a function.", typ),
 
+      IncorrectNumberOfArguments { expected, actual } => write!(
+        f,
+        "Incorrect number of arguments given to function. Expected {}, but found {}.",
+        expected, actual
+      ),
+
       PatternMismatchExpectedTuple(typ) => write!(
         f,
         "Cannot destructure non-tuple value using a tuple pattern. Value has type {}.",
@@ -82,8 +92,7 @@ impl fmt::Display for AnalysisError {
         "Variable already has type {}, so cannot be assigned a new value of type {}.",
         expected, actual
       ),
-
-      _ => write!(f, "{:#?}", self.kind),
+      // _ => write!(f, "{:#?}", self.kind),
     }
   }
 }
