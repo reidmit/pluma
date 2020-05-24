@@ -8,31 +8,56 @@ use uuid::Uuid;
 pub struct Binding {
   pub typ: ValueType,
   pub ref_count: usize,
-  pos: (usize, usize),
+  pub pos: (usize, usize),
+  pub kind: BindingKind,
+}
+
+#[derive(Debug)]
+pub struct TypeBinding {
+  pub typ: ValueType,
+  pub ref_count: usize,
+  pub pos: (usize, usize),
+  pub kind: TypeBindingKind,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum BindingKind {
+  Let,
+  Def,
+  Param,
+  EnumVariant,
+  StructConstructor,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum TypeBindingKind {
+  Enum,
+  Struct,
+  Alias,
+  Trait,
+  IntrinsicType,
 }
 
 #[derive(Debug)]
 struct ScopeLevel {
-  pub let_bindings: HashMap<String, Binding>,
+  pub bindings: HashMap<String, Binding>,
+  pub type_bindings: HashMap<String, TypeBinding>,
 }
 
 #[derive(Debug)]
 pub struct Scope {
-  pub type_bindings: HashMap<String, ValueType>,
   levels: Vec<ScopeLevel>,
 }
 
 impl Scope {
   pub fn new() -> Self {
-    Scope {
-      levels: Vec::new(),
-      type_bindings: HashMap::new(),
-    }
+    Scope { levels: Vec::new() }
   }
 
   pub fn enter(&mut self) {
     self.levels.push(ScopeLevel {
-      let_bindings: HashMap::new(),
+      bindings: HashMap::new(),
+      type_bindings: HashMap::new(),
     });
   }
 
@@ -40,7 +65,7 @@ impl Scope {
     let mut diagnostics = Vec::new();
 
     if let Some(exited_level) = self.levels.pop() {
-      for (name, binding) in exited_level.let_bindings {
+      for (name, binding) in exited_level.bindings {
         if binding.ref_count == 0 {
           diagnostics.push(
             Diagnostic::warning(AnalysisError {
@@ -60,29 +85,64 @@ impl Scope {
     Ok(())
   }
 
-  pub fn add_let_binding(&mut self, name: String, typ: ValueType, pos: (usize, usize)) {
+  pub fn add_binding(
+    &mut self,
+    kind: BindingKind,
+    name: String,
+    typ: ValueType,
+    pos: (usize, usize),
+  ) {
     let current_level = self.levels.last_mut().expect("no current scope");
 
-    current_level.let_bindings.insert(
+    current_level.bindings.insert(
       name,
       Binding {
         typ,
         ref_count: 0,
         pos,
+        kind,
       },
     );
   }
 
-  pub fn add_type_binding(&mut self, name: String, typ: ValueType) {
-    self.type_bindings.insert(name, typ);
+  pub fn add_type_binding(
+    &mut self,
+    kind: TypeBindingKind,
+    name: String,
+    typ: ValueType,
+    pos: (usize, usize),
+  ) {
+    let current_level = self.levels.last_mut().expect("no current scope");
+
+    current_level.type_bindings.insert(
+      name,
+      TypeBinding {
+        typ,
+        ref_count: 0,
+        pos,
+        kind,
+      },
+    );
   }
 
-  pub fn get_let_binding(&mut self, name: &String) -> Option<&ValueType> {
+  pub fn get_binding(&mut self, name: &String) -> Option<&Binding> {
     for level in self.levels.iter_mut().rev() {
-      if let Some(binding) = level.let_bindings.get_mut(name) {
+      if let Some(binding) = level.bindings.get_mut(name) {
         binding.ref_count += 1;
 
-        return Some(&binding.typ);
+        return Some(binding);
+      }
+    }
+
+    None
+  }
+
+  pub fn get_type_binding(&mut self, name: &String) -> Option<&TypeBinding> {
+    for level in self.levels.iter_mut().rev() {
+      if let Some(binding) = level.type_bindings.get_mut(name) {
+        binding.ref_count += 1;
+
+        return Some(binding);
       }
     }
 

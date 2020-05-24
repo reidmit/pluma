@@ -134,49 +134,30 @@ ModuleNode {
                                     15,
                                     22,
                                 ),
-                                kind: Call(
-                                    CallNode {
+                                kind: Constructor(
+                                    IdentifierNode {
                                         pos: (
                                             15,
+                                            18,
+                                        ),
+                                        name: "Wow",
+                                        typ: Unknown,
+                                    },
+                                    TypeExprNode {
+                                        pos: (
+                                            19,
                                             22,
                                         ),
-                                        callee: ExprNode {
-                                            pos: (
-                                                15,
-                                                18,
-                                            ),
-                                            kind: Identifier(
-                                                IdentifierNode {
-                                                    pos: (
-                                                        15,
-                                                        18,
-                                                    ),
-                                                    name: "Wow",
-                                                    typ: Unknown,
-                                                },
-                                            ),
-                                            typ: Unknown,
-                                        },
-                                        args: [
-                                            ExprNode {
+                                        kind: Single(
+                                            TypeIdentifierNode {
                                                 pos: (
                                                     19,
                                                     22,
                                                 ),
-                                                kind: Identifier(
-                                                    IdentifierNode {
-                                                        pos: (
-                                                            19,
-                                                            22,
-                                                        ),
-                                                        name: "Int",
-                                                        typ: Unknown,
-                                                    },
-                                                ),
-                                                typ: Unknown,
+                                                name: "Int",
+                                                generics: [],
                                             },
-                                        ],
-                                        typ: Unknown,
+                                        ),
                                     },
                                 ),
                             },
@@ -185,58 +166,38 @@ ModuleNode {
                                     27,
                                     39,
                                 ),
-                                kind: Call(
-                                    CallNode {
+                                kind: Constructor(
+                                    IdentifierNode {
                                         pos: (
                                             27,
+                                            31,
+                                        ),
+                                        name: "Cool",
+                                        typ: Unknown,
+                                    },
+                                    TypeExprNode {
+                                        pos: (
+                                            31,
                                             39,
                                         ),
-                                        callee: ExprNode {
-                                            pos: (
-                                                27,
-                                                31,
-                                            ),
-                                            kind: Identifier(
-                                                IdentifierNode {
-                                                    pos: (
-                                                        27,
-                                                        31,
-                                                    ),
-                                                    name: "Cool",
-                                                    typ: Unknown,
-                                                },
-                                            ),
-                                            typ: Unknown,
-                                        },
-                                        args: [
-                                            ExprNode {
+                                        kind: Grouping(
+                                            TypeExprNode {
                                                 pos: (
-                                                    31,
-                                                    39,
+                                                    32,
+                                                    38,
                                                 ),
-                                                kind: Grouping(
-                                                    ExprNode {
+                                                kind: Single(
+                                                    TypeIdentifierNode {
                                                         pos: (
                                                             32,
                                                             38,
                                                         ),
-                                                        kind: Identifier(
-                                                            IdentifierNode {
-                                                                pos: (
-                                                                    32,
-                                                                    38,
-                                                                ),
-                                                                name: "String",
-                                                                typ: Unknown,
-                                                            },
-                                                        ),
-                                                        typ: Unknown,
+                                                        name: "String",
+                                                        generics: [],
                                                     },
                                                 ),
-                                                typ: Unknown,
                                             },
-                                        ],
-                                        typ: Unknown,
+                                        ),
                                     },
                                 ),
                             },
@@ -261,77 +222,56 @@ ModuleNode {
                                     54,
                                     76,
                                 ),
-                                kind: Call(
-                                    CallNode {
+                                kind: Constructor(
+                                    IdentifierNode {
                                         pos: (
                                             54,
+                                            62,
+                                        ),
+                                        name: "TupleArg",
+                                        typ: Unknown,
+                                    },
+                                    TypeExprNode {
+                                        pos: (
+                                            63,
                                             76,
                                         ),
-                                        callee: ExprNode {
-                                            pos: (
-                                                54,
-                                                62,
-                                            ),
-                                            kind: Identifier(
-                                                IdentifierNode {
+                                        kind: Tuple(
+                                            [
+                                                TypeExprNode {
                                                     pos: (
-                                                        54,
-                                                        62,
+                                                        64,
+                                                        67,
                                                     ),
-                                                    name: "TupleArg",
-                                                    typ: Unknown,
-                                                },
-                                            ),
-                                            typ: Unknown,
-                                        },
-                                        args: [
-                                            ExprNode {
-                                                pos: (
-                                                    63,
-                                                    76,
-                                                ),
-                                                kind: Tuple(
-                                                    [
-                                                        ExprNode {
+                                                    kind: Single(
+                                                        TypeIdentifierNode {
                                                             pos: (
                                                                 64,
                                                                 67,
                                                             ),
-                                                            kind: Identifier(
-                                                                IdentifierNode {
-                                                                    pos: (
-                                                                        64,
-                                                                        67,
-                                                                    ),
-                                                                    name: "Int",
-                                                                    typ: Unknown,
-                                                                },
-                                                            ),
-                                                            typ: Unknown,
+                                                            name: "Int",
+                                                            generics: [],
                                                         },
-                                                        ExprNode {
+                                                    ),
+                                                },
+                                                TypeExprNode {
+                                                    pos: (
+                                                        69,
+                                                        75,
+                                                    ),
+                                                    kind: Single(
+                                                        TypeIdentifierNode {
                                                             pos: (
                                                                 69,
                                                                 75,
                                                             ),
-                                                            kind: Identifier(
-                                                                IdentifierNode {
-                                                                    pos: (
-                                                                        69,
-                                                                        75,
-                                                                    ),
-                                                                    name: "String",
-                                                                    typ: Unknown,
-                                                                },
-                                                            ),
-                                                            typ: Unknown,
+                                                            name: "String",
+                                                            generics: [],
                                                         },
-                                                    ],
-                                                ),
-                                                typ: Unknown,
-                                            },
-                                        ],
-                                        typ: Unknown,
+                                                    ),
+                                                },
+                                            ],
+                                        ),
                                     },
                                 ),
                             },

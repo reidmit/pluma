@@ -66,7 +66,7 @@ pub struct EnumVariantNode {
 #[derive(Debug)]
 pub enum EnumVariantKind {
   Identifier(IdentifierNode),
-  Call(CallNode),
+  Constructor(IdentifierNode, TypeExprNode),
 }
 
 #[derive(Debug)]

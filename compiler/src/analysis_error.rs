@@ -10,7 +10,9 @@ pub struct AnalysisError {
 #[derive(Debug)]
 pub enum AnalysisErrorKind {
   CannotAssignToLiteral,
-  UndefinedVariable(String),
+  UndefinedName(String),
+  UndefinedMultiPartName(Vec<String>),
+  UndefinedTypeConstructor(String),
   UnusedVariable(String),
   UselessExpressionStatement,
   NameAlreadyInScope(String),
@@ -44,7 +46,13 @@ impl fmt::Display for AnalysisError {
 
       NameAlreadyInScope(name) => write!(f, "Name '{}' is already defined in this scope.", name),
 
-      UndefinedVariable(name) => write!(f, "Name '{}' is not defined.", name),
+      UndefinedName(name) => write!(f, "Name '{}' is not defined.", name),
+
+      UndefinedMultiPartName(names) => {
+        write!(f, "Name '{}' is not defined.", names.join(" _ ") + " _")
+      }
+
+      UndefinedTypeConstructor(name) => write!(f, "Type constructor '{}' is not defined.", name),
 
       UnusedVariable(name) => write!(f, "Name '{}' is never used.", name),
 

@@ -112,58 +112,38 @@ ModuleNode {
                                     36,
                                     43,
                                 ),
-                                kind: Call(
-                                    CallNode {
+                                kind: Constructor(
+                                    IdentifierNode {
                                         pos: (
                                             36,
+                                            40,
+                                        ),
+                                        name: "Some",
+                                        typ: Unknown,
+                                    },
+                                    TypeExprNode {
+                                        pos: (
+                                            40,
                                             43,
                                         ),
-                                        callee: ExprNode {
-                                            pos: (
-                                                36,
-                                                40,
-                                            ),
-                                            kind: Identifier(
-                                                IdentifierNode {
-                                                    pos: (
-                                                        36,
-                                                        40,
-                                                    ),
-                                                    name: "Some",
-                                                    typ: Unknown,
-                                                },
-                                            ),
-                                            typ: Unknown,
-                                        },
-                                        args: [
-                                            ExprNode {
+                                        kind: Grouping(
+                                            TypeExprNode {
                                                 pos: (
-                                                    40,
-                                                    43,
+                                                    41,
+                                                    42,
                                                 ),
-                                                kind: Grouping(
-                                                    ExprNode {
+                                                kind: Single(
+                                                    TypeIdentifierNode {
                                                         pos: (
                                                             41,
                                                             42,
                                                         ),
-                                                        kind: Identifier(
-                                                            IdentifierNode {
-                                                                pos: (
-                                                                    41,
-                                                                    42,
-                                                                ),
-                                                                name: "A",
-                                                                typ: Unknown,
-                                                            },
-                                                        ),
-                                                        typ: Unknown,
+                                                        name: "A",
+                                                        generics: [],
                                                     },
                                                 ),
-                                                typ: Unknown,
                                             },
-                                        ],
-                                        typ: Unknown,
+                                        ),
                                     },
                                 ),
                             },

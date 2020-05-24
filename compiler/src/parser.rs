@@ -773,16 +773,10 @@ impl<'a> Parser<'a> {
             // A variant can either be a call with an argument, in which case we
             // expect to find an argument here:
             Some(&Token::Identifier(..)) | Some(&Token::LeftParen(..)) => {
-              let constructor = ExprNode {
-                pos: id.pos,
-                kind: ExprKind::Identifier(id),
-                typ: ValueType::Unknown,
-              };
-
-              match self.parse_call(constructor) {
-                Some(call_expr) => variants.push(EnumVariantNode {
-                  pos: call_expr.pos,
-                  kind: EnumVariantKind::Call(call_expr),
+              match self.parse_type_expression() {
+                Some(type_expr) => variants.push(EnumVariantNode {
+                  pos: (id.pos.0, type_expr.pos.1),
+                  kind: EnumVariantKind::Constructor(id, type_expr),
                 }),
                 _ => return None,
               }

@@ -1,7 +1,7 @@
 use crate::analysis_error::{AnalysisError, AnalysisErrorKind};
 use crate::ast::*;
 use crate::diagnostics::Diagnostic;
-use crate::scope::{Binding, Scope};
+use crate::scope::{Binding, BindingKind, Scope};
 use crate::types::ValueType;
 use crate::visitor::Visitor;
 use std::collections::HashMap;
@@ -34,10 +34,10 @@ impl<'a> Analyzer<'a> {
     self.diagnostics.push(diag)
   }
 
-  fn destructure_pattern(&mut self, pattern: &mut PatternNode, typ: &mut ValueType) {
-    match &mut pattern.kind {
+  fn destructure_pattern(&mut self, pattern: &PatternNode, typ: &ValueType) {
+    match &pattern.kind {
       PatternKind::Identifier(ident_node) => {
-        let existing_binding = self.scope.get_let_binding(&ident_node.name);
+        let existing_binding = self.scope.get_binding(&ident_node.name);
 
         if existing_binding.is_some() {
           self.error(AnalysisError {
@@ -45,11 +45,12 @@ impl<'a> Analyzer<'a> {
             kind: AnalysisErrorKind::NameAlreadyInScope(ident_node.name.clone()),
           })
         } else {
-          self
-            .scope
-            .add_let_binding(ident_node.name.clone(), typ.clone(), ident_node.pos);
-
-          ident_node.typ = typ.clone();
+          self.scope.add_binding(
+            BindingKind::Let,
+            ident_node.name.clone(),
+            typ.clone(),
+            ident_node.pos,
+          );
         }
       }
 
@@ -66,10 +67,10 @@ impl<'a> Analyzer<'a> {
           }
 
           for i in 0..element_patterns.len() {
-            let mut element_pattern = element_patterns.get_mut(i).unwrap();
-            let mut element_type = element_types.get_mut(i).unwrap();
+            let element_pattern = element_patterns.get(i).unwrap();
+            let element_type = element_types.get(i).unwrap();
 
-            self.destructure_pattern(&mut element_pattern, &mut element_type);
+            self.destructure_pattern(&element_pattern, &element_type);
           }
         }
 
@@ -79,14 +80,39 @@ impl<'a> Analyzer<'a> {
         }),
       },
 
+      PatternKind::Constructor(ident, param_pattern) => {
+        let binding = self.scope.get_binding(&ident.name);
+
+        if binding.is_none() {
+          self.error(AnalysisError {
+            pos: pattern.pos,
+            kind: AnalysisErrorKind::UndefinedTypeConstructor(ident.name.clone()),
+          });
+
+          return;
+        }
+
+        let existing_binding = binding.unwrap();
+
+        // Constructor patterns are only allowed for struct types
+        if existing_binding.kind != BindingKind::StructConstructor {
+          return;
+        }
+
+        let param_type = match &existing_binding.typ {
+          ValueType::Func(param_types, _) => param_types.get(0).unwrap().clone(),
+          _ => return,
+        };
+
+        self.destructure_pattern(param_pattern, &param_type);
+      }
+
       PatternKind::Underscore => {}
 
-      PatternKind::Literal(lit_node) => self.error(AnalysisError {
+      PatternKind::Literal(..) | PatternKind::Interpolation(..) => self.error(AnalysisError {
         pos: pattern.pos,
         kind: AnalysisErrorKind::CannotAssignToLiteral,
       }),
-
-      _ => todo!("other pattern kinds"),
     }
   }
 }
@@ -159,9 +185,12 @@ impl<'a> Visitor for Analyzer<'a> {
         self.scope.enter();
 
         for param in params {
-          self
-            .scope
-            .add_let_binding(param.name.clone(), ValueType::Unknown, param.pos);
+          self.scope.add_binding(
+            BindingKind::Param,
+            param.name.clone(),
+            ValueType::Unknown,
+            param.pos,
+          );
         }
       }
 
@@ -171,17 +200,42 @@ impl<'a> Visitor for Analyzer<'a> {
 
   fn leave_expr(&mut self, node: &mut ExprNode) {
     match &node.kind {
-      ExprKind::Identifier(ident_node) => node.typ = ident_node.typ.clone(),
+      ExprKind::Identifier(ident_node) => {
+        match self.scope.get_binding(&ident_node.name) {
+          Some(binding) => node.typ = binding.typ.clone(),
+          None => self.error(AnalysisError {
+            pos: node.pos,
+            kind: AnalysisErrorKind::UndefinedName(ident_node.name.clone()),
+          }),
+        };
+      }
+
+      ExprKind::MultiPartIdentifier(ident_nodes) => {
+        let names = ident_nodes
+          .iter()
+          .map(|node| node.name.clone())
+          .collect::<Vec<String>>();
+
+        let merged_name = names.join(" ");
+
+        match self.scope.get_binding(&merged_name) {
+          Some(binding) => node.typ = binding.typ.clone(),
+          None => self.error(AnalysisError {
+            pos: node.pos,
+            kind: AnalysisErrorKind::UndefinedMultiPartName(names),
+          }),
+        };
+      }
 
       ExprKind::Literal(lit_node) => node.typ = lit_node.typ.clone(),
 
       ExprKind::Call(call_node) => node.typ = call_node.typ.clone(),
 
       ExprKind::Assignment { left, right } => {
-        let existing_binding = self.scope.get_let_binding(&left.name);
+        let existing_binding = self.scope.get_binding(&left.name);
 
         if let Some(binding) = existing_binding {
-          let current_type = binding.clone();
+          let current_type = binding.typ.clone();
           let new_type = right.typ.clone();
 
           if current_type != new_type {
@@ -248,15 +302,5 @@ impl<'a> Visitor for Analyzer<'a> {
 
       t => todo!("more expr kinds: {:#?}", t),
     }
-  }
-
-  fn enter_identifier(&mut self, node: &mut IdentifierNode) {
-    match self.scope.get_let_binding(&node.name) {
-      Some(typ) => node.typ = typ.clone(),
-      None => self.error(AnalysisError {
-        pos: node.pos,
-        kind: AnalysisErrorKind::UndefinedVariable(node.name.clone()),
-      }),
-    };
   }
 }

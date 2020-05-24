@@ -17,6 +17,14 @@ pub trait Visitor {
 
   fn leave_identifier(&mut self, node: &mut IdentifierNode) {}
 
+  fn enter_intrinsic_def_node(&mut self, node: &mut IntrinsicDefNode) {}
+
+  fn leave_intrinsic_def_node(&mut self, node: &mut IntrinsicDefNode) {}
+
+  fn enter_intrinsic_type_def(&mut self, node: &mut IntrinsicTypeDefNode) {}
+
+  fn leave_intrinsic_type_def(&mut self, node: &mut IntrinsicTypeDefNode) {}
+
   fn enter_let(&mut self, node: &mut LetNode) {}
 
   fn leave_let(&mut self, node: &mut LetNode) {}
@@ -64,4 +72,8 @@ pub trait Visitor {
   fn enter_type_def(&mut self, node: &mut TypeDefNode) {}
 
   fn leave_type_def(&mut self, node: &mut TypeDefNode) {}
+
+  fn enter_type_identifier(&mut self, node: &mut TypeIdentifierNode) {}
+
+  fn leave_type_identifier(&mut self, node: &mut TypeIdentifierNode) {}
 }

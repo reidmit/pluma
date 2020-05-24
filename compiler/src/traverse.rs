@@ -20,7 +20,43 @@ impl Traverse for CallNode {
 }
 
 impl Traverse for DefNode {
-  // todo
+  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+    visitor.enter_def(self);
+
+    match &mut self.kind {
+      DefKind::BinaryOperator { left, op, right } => {
+        right.traverse(visitor);
+        left.traverse(visitor);
+        op.traverse(visitor);
+      }
+
+      DefKind::Function { signature } => {
+        for (ident, type_expr) in signature {
+          ident.traverse(visitor);
+          type_expr.traverse(visitor);
+        }
+      }
+
+      DefKind::Method {
+        receiver,
+        signature,
+      } => {
+        for (ident, type_expr) in signature {
+          ident.traverse(visitor);
+          type_expr.traverse(visitor);
+        }
+
+        receiver.traverse(visitor);
+      }
+
+      DefKind::UnaryOperator { op, right } => {
+        right.traverse(visitor);
+        op.traverse(visitor);
+      }
+    }
+
+    visitor.leave_def(self);
+  }
 }
 
 impl Traverse for ExprNode {
@@ -55,6 +91,11 @@ impl Traverse for ExprNode {
         }
       }
       ExprKind::EmptyTuple => {}
+      ExprKind::MultiPartIdentifier(parts) => {
+        for part in parts {
+          part.traverse(visitor);
+        }
+      }
       other_kind => todo!("traverse {:#?}", other_kind),
     }
 
@@ -71,11 +112,19 @@ impl Traverse for IdentifierNode {
 }
 
 impl Traverse for IntrinsicDefNode {
-  // todo
+  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+    visitor.enter_intrinsic_def_node(self);
+
+    visitor.leave_intrinsic_def_node(self);
+  }
 }
 
 impl Traverse for IntrinsicTypeDefNode {
-  // todo
+  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+    visitor.enter_intrinsic_type_def(self);
+
+    visitor.leave_intrinsic_type_def(self);
+  }
 }
 
 impl Traverse for LetNode {
@@ -191,5 +240,13 @@ impl Traverse for TypeDefNode {
     // }
 
     visitor.leave_type_def(self);
+  }
+}
+
+impl Traverse for TypeIdentifierNode {
+  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+    visitor.enter_type_identifier(self);
+
+    visitor.leave_type_identifier(self);
   }
 }
