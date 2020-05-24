@@ -1,0 +1,18 @@
+intrinsic_type Int
+
+intrinsic_type Float
+
+intrinsic_type String
+
+intrinsic_type Any
+
+enum Bool
+  | True
+  | False
+
+def if Bool then { () -> A } else { () -> A } where A :: Any {
+  condition, thenCase, elseCase =>
+    match condition
+      | True => thenCase ()
+      | False => elseCase ()
+}
