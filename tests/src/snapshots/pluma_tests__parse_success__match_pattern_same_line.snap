@@ -105,7 +105,6 @@ ModuleNode {
                                             11,
                                         ),
                                         name: "thing",
-                                        typ: Unknown,
                                     },
                                 ),
                                 typ: Unknown,

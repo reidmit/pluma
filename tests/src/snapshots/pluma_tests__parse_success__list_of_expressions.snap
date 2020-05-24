@@ -123,7 +123,6 @@ ModuleNode {
                                                         13,
                                                     ),
                                                     name: "callThing",
-                                                    typ: Unknown,
                                                 },
                                             ),
                                             typ: Unknown,
@@ -167,7 +166,6 @@ ModuleNode {
                                                             23,
                                                         ),
                                                         name: "repeat",
-                                                        typ: Unknown,
                                                     },
                                                     IdentifierNode {
                                                         pos: (
@@ -175,7 +173,6 @@ ModuleNode {
                                                             31,
                                                         ),
                                                         name: "times",
-                                                        typ: Unknown,
                                                     },
                                                 ],
                                             ),

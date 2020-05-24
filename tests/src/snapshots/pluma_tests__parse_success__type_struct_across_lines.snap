@@ -99,7 +99,6 @@ ModuleNode {
                                         22,
                                     ),
                                     name: "name",
-                                    typ: Unknown,
                                 },
                                 TypeExprNode {
                                     pos: (
@@ -125,7 +124,6 @@ ModuleNode {
                                         39,
                                     ),
                                     name: "age",
-                                    typ: Unknown,
                                 },
                                 TypeExprNode {
                                     pos: (

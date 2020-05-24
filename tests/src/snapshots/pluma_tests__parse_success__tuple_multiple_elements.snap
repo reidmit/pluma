@@ -156,7 +156,6 @@ ModuleNode {
                                                 14,
                                             ),
                                             name: "x",
-                                            typ: Unknown,
                                         },
                                     ],
                                     body: [
@@ -178,7 +177,6 @@ ModuleNode {
                                                                 19,
                                                             ),
                                                             name: "x",
-                                                            typ: Unknown,
                                                         },
                                                     ),
                                                     typ: Unknown,
@@ -208,7 +206,6 @@ ModuleNode {
                                                         27,
                                                     ),
                                                     name: "lol",
-                                                    typ: Unknown,
                                                 },
                                             ),
                                             typ: Unknown,

@@ -109,7 +109,6 @@ ModuleNode {
                                                 22,
                                             ),
                                             name: "getWow",
-                                            typ: Unknown,
                                         },
                                         TypeExprNode {
                                             pos: (
@@ -146,7 +145,6 @@ ModuleNode {
                                                 43,
                                             ),
                                             name: "setWow",
-                                            typ: Unknown,
                                         },
                                         TypeExprNode {
                                             pos: (

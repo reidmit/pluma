@@ -98,7 +98,6 @@ ModuleNode {
                                         18,
                                     ),
                                     name: "greet",
-                                    typ: Unknown,
                                 },
                                 TypeExprNode {
                                     pos: (
@@ -128,7 +127,6 @@ ModuleNode {
                                 31,
                             ),
                             name: "a",
-                            typ: Unknown,
                         },
                     ],
                     body: [

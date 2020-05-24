@@ -141,7 +141,6 @@ ModuleNode {
                                             18,
                                         ),
                                         name: "Wow",
-                                        typ: Unknown,
                                     },
                                     TypeExprNode {
                                         pos: (
@@ -173,7 +172,6 @@ ModuleNode {
                                             31,
                                         ),
                                         name: "Cool",
-                                        typ: Unknown,
                                     },
                                     TypeExprNode {
                                         pos: (
@@ -213,7 +211,6 @@ ModuleNode {
                                             49,
                                         ),
                                         name: "NoArg",
-                                        typ: Unknown,
                                     },
                                 ),
                             },
@@ -229,7 +226,6 @@ ModuleNode {
                                             62,
                                         ),
                                         name: "TupleArg",
-                                        typ: Unknown,
                                     },
                                     TypeExprNode {
                                         pos: (

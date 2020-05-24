@@ -142,7 +142,6 @@ ModuleNode {
                                         18,
                                     ),
                                     name: "hello",
-                                    typ: Unknown,
                                 },
                                 TypeExprNode {
                                     pos: (
@@ -194,7 +193,6 @@ ModuleNode {
                                         38,
                                     ),
                                     name: "world",
-                                    typ: Unknown,
                                 },
                                 TypeExprNode {
                                     pos: (
@@ -215,7 +213,6 @@ ModuleNode {
                                 47,
                             ),
                             name: "a",
-                            typ: Unknown,
                         },
                         IdentifierNode {
                             pos: (
@@ -223,7 +220,6 @@ ModuleNode {
                                 50,
                             ),
                             name: "b",
-                            typ: Unknown,
                         },
                         IdentifierNode {
                             pos: (
@@ -231,7 +227,6 @@ ModuleNode {
                                 53,
                             ),
                             name: "c",
-                            typ: Unknown,
                         },
                     ],
                     body: [

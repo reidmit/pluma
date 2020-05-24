@@ -59,7 +59,6 @@ ModuleNode {
                                     5,
                                 ),
                                 name: "x",
-                                typ: Unknown,
                             },
                         ),
                     },

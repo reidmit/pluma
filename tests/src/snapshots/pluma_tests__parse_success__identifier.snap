@@ -42,7 +42,6 @@ ModuleNode {
                                 4,
                             ),
                             name: "cool",
-                            typ: Unknown,
                         },
                     ),
                     typ: Unknown,

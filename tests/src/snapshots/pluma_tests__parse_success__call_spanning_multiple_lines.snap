@@ -118,7 +118,6 @@ ModuleNode {
                                                 2,
                                             ),
                                             name: "if",
-                                            typ: Unknown,
                                         },
                                         IdentifierNode {
                                             pos: (
@@ -126,7 +125,6 @@ ModuleNode {
                                                 13,
                                             ),
                                             name: "then",
-                                            typ: Unknown,
                                         },
                                         IdentifierNode {
                                             pos: (
@@ -134,7 +132,6 @@ ModuleNode {
                                                 37,
                                             ),
                                             name: "else",
-                                            typ: Unknown,
                                         },
                                     ],
                                 ),
@@ -153,7 +150,6 @@ ModuleNode {
                                                 8,
                                             ),
                                             name: "thing",
-                                            typ: Unknown,
                                         },
                                     ),
                                     typ: Unknown,
@@ -195,7 +191,6 @@ ModuleNode {
                                                                                 23,
                                                                             ),
                                                                             name: "print",
-                                                                            typ: Unknown,
                                                                         },
                                                                     ),
                                                                     typ: Unknown,
@@ -269,7 +264,6 @@ ModuleNode {
                                                                                 47,
                                                                             ),
                                                                             name: "print",
-                                                                            typ: Unknown,
                                                                         },
                                                                     ),
                                                                     typ: Unknown,

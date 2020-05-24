@@ -99,7 +99,6 @@ ModuleNode {
                                                         17,
                                                     ),
                                                     name: "replace",
-                                                    typ: Unknown,
                                                 },
                                                 IdentifierNode {
                                                     pos: (
@@ -107,7 +106,6 @@ ModuleNode {
                                                         26,
                                                     ),
                                                     name: "with",
-                                                    typ: Unknown,
                                                 },
                                             ],
                                         ),

@@ -42,7 +42,6 @@ ModuleNode {
                                 15,
                             ),
                             name: "こんにちは",
-                            typ: Unknown,
                         },
                     ),
                     typ: Unknown,

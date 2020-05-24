@@ -64,7 +64,6 @@ ModuleNode {
                                         20,
                                     ),
                                     name: "name",
-                                    typ: Unknown,
                                 },
                                 TypeExprNode {
                                     pos: (

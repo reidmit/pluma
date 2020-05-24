@@ -1,7 +1,8 @@
-use crate::ast::*;
 use crate::parse_error::*;
 use crate::tokens::Token;
-use crate::types::ValueType;
+use pluma_ast::common::*;
+use pluma_ast::nodes::*;
+use pluma_ast::value_type::ValueType;
 
 macro_rules! current_token_is {
   ($self:ident, $tokType:path) => {
@@ -117,10 +118,6 @@ impl<'a> Parser<'a> {
 
   fn current_token(&self) -> Option<&Token> {
     self.tokens.get(self.index)
-  }
-
-  fn next_token(&self) -> Option<&Token> {
-    self.tokens.get(self.index + 1)
   }
 
   fn prev_token(&self) -> Option<&Token> {
@@ -693,7 +690,6 @@ impl<'a> Parser<'a> {
           let ident = IdentifierNode {
             pos: type_ident.pos,
             name: type_ident.name,
-            typ: ValueType::Unknown,
           };
 
           signature.push((ident, Box::new(part_param)))
@@ -861,7 +857,6 @@ impl<'a> Parser<'a> {
     Some(IdentifierNode {
       pos: (start, end),
       name,
-      typ: ValueType::Unknown,
     })
   }
 
@@ -882,7 +877,6 @@ impl<'a> Parser<'a> {
           IdentifierNode {
             pos: (start, end),
             name: name_str,
-            typ: ValueType::Unknown,
           },
           end,
         )

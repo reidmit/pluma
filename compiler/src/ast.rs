@@ -1,6 +1,5 @@
 use crate::types::ValueType;
 use std::fmt;
-use uuid::Uuid;
 
 pub type Position = (usize, usize);
 pub type SignaturePart = (IdentifierNode, Box<TypeExprNode>);

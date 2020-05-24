@@ -119,7 +119,6 @@ ModuleNode {
                                             40,
                                         ),
                                         name: "Some",
-                                        typ: Unknown,
                                     },
                                     TypeExprNode {
                                         pos: (
@@ -159,7 +158,6 @@ ModuleNode {
                                             52,
                                         ),
                                         name: "None",
-                                        typ: Unknown,
                                     },
                                 ),
                             },
@@ -198,7 +196,6 @@ ModuleNode {
                                     24,
                                 ),
                                 name: "A",
-                                typ: Unknown,
                             },
                             TypeExprNode {
                                 pos: (

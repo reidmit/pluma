@@ -82,7 +82,6 @@ ModuleNode {
                                                 8,
                                             ),
                                             name: "multiply",
-                                            typ: Unknown,
                                         },
                                         IdentifierNode {
                                             pos: (
@@ -90,7 +89,6 @@ ModuleNode {
                                                 13,
                                             ),
                                             name: "by",
-                                            typ: Unknown,
                                         },
                                     ],
                                 ),

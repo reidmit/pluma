@@ -61,7 +61,6 @@ ModuleNode {
                                             4,
                                         ),
                                         name: "func",
-                                        typ: Unknown,
                                     },
                                 ),
                                 typ: Unknown,

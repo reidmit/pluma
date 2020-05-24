@@ -1,8 +1,8 @@
-use crate::ast::*;
 use crate::diagnostics::Diagnostic;
 use crate::scope::{BindingKind, Scope, TypeBindingKind};
-use crate::types::ValueType;
 use crate::visitor::Visitor;
+use pluma_ast::nodes::*;
+use pluma_ast::value_type::ValueType;
 
 pub struct TypeCollector<'a> {
   pub diagnostics: Vec<Diagnostic>,
@@ -140,7 +140,7 @@ impl<'a> Visitor for TypeCollector<'a> {
         let mut param_types = Vec::new();
 
         for field in fields {
-          let (field_name, field_type) = field;
+          let (_, field_type) = field;
           let value_type = self.type_expr_to_value_type(field_type);
           param_types.push(value_type);
         }
@@ -156,7 +156,7 @@ impl<'a> Visitor for TypeCollector<'a> {
         )
       }
 
-      TypeDefKind::Alias { of } => {
+      TypeDefKind::Alias { .. } => {
         self.scope.add_type_binding(
           TypeBindingKind::Alias,
           node.name.name.clone(),
@@ -165,7 +165,7 @@ impl<'a> Visitor for TypeCollector<'a> {
         );
       }
 
-      TypeDefKind::Trait { fields, methods } => {
+      TypeDefKind::Trait { .. } => {
         self.scope.add_type_binding(
           TypeBindingKind::Trait,
           node.name.name.clone(),

@@ -1,8 +1,8 @@
-use crate::ast::*;
 use crate::visitor::Visitor;
+use pluma_ast::nodes::*;
 
 pub trait Traverse {
-  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {}
+  fn traverse<V: Visitor>(&mut self, _visitor: &mut V) {}
 }
 
 impl Traverse for CallNode {

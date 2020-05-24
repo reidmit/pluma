@@ -172,7 +172,6 @@ ModuleNode {
                                         60,
                                     ),
                                     name: "first",
-                                    typ: Unknown,
                                 },
                                 TypeExprNode {
                                     pos: (
@@ -198,7 +197,6 @@ ModuleNode {
                                         75,
                                     ),
                                     name: "second",
-                                    typ: Unknown,
                                 },
                                 TypeExprNode {
                                     pos: (
@@ -224,7 +222,6 @@ ModuleNode {
                                         89,
                                     ),
                                     name: "third",
-                                    typ: Unknown,
                                 },
                                 TypeExprNode {
                                     pos: (
@@ -294,7 +291,6 @@ ModuleNode {
                                     26,
                                 ),
                                 name: "A",
-                                typ: Unknown,
                             },
                             TypeExprNode {
                                 pos: (
@@ -320,7 +316,6 @@ ModuleNode {
                                     36,
                                 ),
                                 name: "B",
-                                typ: Unknown,
                             },
                             TypeExprNode {
                                 pos: (

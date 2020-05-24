@@ -1,8 +1,7 @@
 use crate::analysis_error::{AnalysisError, AnalysisErrorKind};
 use crate::diagnostics::Diagnostic;
-use crate::types::ValueType;
+use pluma_ast::value_type::ValueType;
 use std::collections::HashMap;
-use uuid::Uuid;
 
 #[derive(Debug)]
 pub struct Binding {

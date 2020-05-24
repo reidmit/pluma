@@ -1,0 +1,6 @@
+[package]
+name = "pluma_ast"
+version = "0.1.0"
+license = "MIT"
+authors = ["Reid Mitchell <reidmitchell1@gmail.com>"]
+edition = "2018"

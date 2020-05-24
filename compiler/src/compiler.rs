@@ -6,7 +6,7 @@ use crate::module::Module;
 use crate::scope::Scope;
 use crate::type_collector::TypeCollector;
 use crate::usage_error::{UsageError, UsageErrorKind};
-use crate::{DEFAULT_ENTRY_MODULE_NAME, FILE_EXTENSION, LANG_NAME};
+use crate::{DEFAULT_ENTRY_MODULE_NAME, FILE_EXTENSION};
 use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
@@ -184,7 +184,7 @@ fn get_root_dir_and_module_name(
       abs_path.file_stem().unwrap().to_str().unwrap().to_owned(),
     )),
 
-    Err(e) => {
+    Err(_) => {
       if found_dir {
         return Err(UsageError {
           kind: UsageErrorKind::EntryDirDoesNotContainEntryFile(

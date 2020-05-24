@@ -1,4 +1,4 @@
-use crate::types::ValueType;
+use pluma_ast::value_type::ValueType;
 use std::fmt;
 
 #[derive(Debug)]
@@ -14,7 +14,6 @@ pub enum AnalysisErrorKind {
   UndefinedMultiPartName(Vec<String>),
   UndefinedTypeConstructor(String),
   UnusedVariable(String),
-  UselessExpressionStatement,
   NameAlreadyInScope(String),
   CalleeNotCallable(ValueType),
   PatternMismatchExpectedTuple(ValueType),
@@ -59,10 +58,6 @@ impl fmt::Display for AnalysisError {
       UndefinedTypeConstructor(name) => write!(f, "Type constructor '{}' is not defined.", name),
 
       UnusedVariable(name) => write!(f, "Name '{}' is never used.", name),
-
-      UselessExpressionStatement => {
-        write!(f, "Expression has no effect and its value is never used.")
-      }
 
       CalleeNotCallable(typ) => write!(f, "Cannot call value of type {} like a function.", typ),
 

@@ -90,7 +90,7 @@ ModuleNode {
                     pattern: PatternNode {
                         pos: (
                             4,
-                            10,
+                            22,
                         ),
                         kind: Constructor(
                             IdentifierNode {
@@ -99,7 +99,6 @@ ModuleNode {
                                     10,
                                 ),
                                 name: "Person",
-                                typ: Unknown,
                             },
                             PatternNode {
                                 pos: (
@@ -120,7 +119,6 @@ ModuleNode {
                                                         16,
                                                     ),
                                                     name: "name",
-                                                    typ: Unknown,
                                                 },
                                             ),
                                         },
@@ -136,7 +134,6 @@ ModuleNode {
                                                         21,
                                                     ),
                                                     name: "age",
-                                                    typ: Unknown,
                                                 },
                                             ),
                                         },
@@ -168,7 +165,6 @@ ModuleNode {
                                                 31,
                                             ),
                                             name: "Person",
-                                            typ: Unknown,
                                         },
                                     ),
                                     typ: Unknown,

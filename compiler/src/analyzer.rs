@@ -1,11 +1,9 @@
 use crate::analysis_error::{AnalysisError, AnalysisErrorKind};
-use crate::ast::*;
 use crate::diagnostics::Diagnostic;
-use crate::scope::{Binding, BindingKind, Scope};
-use crate::types::ValueType;
+use crate::scope::{BindingKind, Scope};
 use crate::visitor::Visitor;
-use std::collections::HashMap;
-use uuid::Uuid;
+use pluma_ast::nodes::*;
+use pluma_ast::value_type::ValueType;
 
 pub struct Analyzer<'a> {
   pub diagnostics: Vec<Diagnostic>,
@@ -23,11 +21,6 @@ impl<'a> Analyzer<'a> {
   fn error(&mut self, err: AnalysisError) {
     let pos = err.pos;
     self.diagnostic(Diagnostic::error(err).with_pos(pos))
-  }
-
-  fn warning(&mut self, err: AnalysisError) {
-    let pos = err.pos;
-    self.diagnostic(Diagnostic::warning(err).with_pos(pos))
   }
 
   fn diagnostic(&mut self, diag: Diagnostic) {
@@ -134,7 +127,7 @@ impl<'a> Analyzer<'a> {
 }
 
 impl<'a> Visitor for Analyzer<'a> {
-  fn leave_module(&mut self, node: &mut ModuleNode) {
+  fn leave_module(&mut self, _node: &mut ModuleNode) {
     println!("end scope: {:#?}", self.scope);
   }
 
@@ -197,7 +190,7 @@ impl<'a> Visitor for Analyzer<'a> {
 
   fn enter_expr(&mut self, node: &mut ExprNode) {
     match &node.kind {
-      ExprKind::Block { params, body } => {
+      ExprKind::Block { params, .. } => {
         self.scope.enter();
 
         for param in params {
@@ -270,7 +263,7 @@ impl<'a> Visitor for Analyzer<'a> {
         let mut param_types = Vec::new();
         let mut return_type = ValueType::Nothing;
 
-        for param in params {
+        for _param in params {
           param_types.push(ValueType::Unknown);
         }
 
