@@ -18,6 +18,10 @@ pub enum AnalysisErrorKind {
   NameAlreadyInScope(String),
   CalleeNotCallable(ValueType),
   PatternMismatchExpectedTuple(ValueType),
+  PatternMismatchExpectedConstructor {
+    constructor_type: ValueType,
+    actual_type: ValueType,
+  },
   IncorrectNumberOfArguments {
     expected: usize,
     actual: usize,
@@ -72,6 +76,15 @@ impl fmt::Display for AnalysisError {
         f,
         "Cannot destructure non-tuple value using a tuple pattern. Value has type {}.",
         typ
+      ),
+
+      PatternMismatchExpectedConstructor {
+        constructor_type,
+        actual_type,
+      } => write!(
+        f,
+        "Cannot destructure value as a {} type. Value has type {}.",
+        constructor_type, actual_type,
       ),
 
       PatternMismatchTupleSize {

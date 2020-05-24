@@ -1161,7 +1161,7 @@ impl<'a> Parser<'a> {
 
         if let Some(arg_pattern) = self.parse_pattern() {
           return Some(PatternNode {
-            pos: id_node.pos,
+            pos: (id_node.pos.0, arg_pattern.pos.1),
             kind: PatternKind::Constructor(id_node, Box::new(arg_pattern)),
           });
         }

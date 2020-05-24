@@ -99,10 +99,26 @@ impl<'a> Analyzer<'a> {
           return;
         }
 
-        let param_type = match &existing_binding.typ {
-          ValueType::Func(param_types, _) => param_types.get(0).unwrap().clone(),
+        let (param_type, constructor_type) = match &existing_binding.typ {
+          ValueType::Func(param_types, return_type) => {
+            (param_types.get(0).unwrap().clone(), (**return_type).clone())
+          }
           _ => return,
         };
+
+        let actual_type = typ.clone();
+
+        if constructor_type != actual_type {
+          self.error(AnalysisError {
+            pos: pattern.pos,
+            kind: AnalysisErrorKind::PatternMismatchExpectedConstructor {
+              constructor_type,
+              actual_type,
+            },
+          });
+
+          return;
+        }
 
         self.destructure_pattern(param_pattern, &param_type);
       }
