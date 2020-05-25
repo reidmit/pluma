@@ -47,7 +47,6 @@ ModuleNode {
                             kind: Str(
                                 "wow\nthis\n   is\ncool!",
                             ),
-                            typ: Unknown,
                         },
                     ),
                     typ: Unknown,

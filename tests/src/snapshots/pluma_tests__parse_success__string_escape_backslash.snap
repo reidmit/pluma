@@ -44,7 +44,6 @@ ModuleNode {
                             kind: Str(
                                 "part 1\\part 2",
                             ),
-                            typ: Unknown,
                         },
                     ),
                     typ: Unknown,

@@ -1,8 +1,9 @@
 use crate::diagnostics::Diagnostic;
-use crate::scope::{BindingKind, Scope, TypeBindingKind};
+use crate::scope::{Binding, BindingKind, Scope, TypeBindingKind};
 use crate::visitor::Visitor;
 use pluma_ast::nodes::*;
 use pluma_ast::value_type::ValueType;
+use std::collections::HashMap;
 
 pub struct TypeCollector<'a> {
   pub diagnostics: Vec<Diagnostic>,
@@ -78,12 +79,9 @@ impl<'a> Visitor for TypeCollector<'a> {
     };
 
     if let Some(typ) = intrinsic_type {
-      self.scope.add_type_binding(
-        TypeBindingKind::IntrinsicType,
-        node.name.name.clone(),
-        typ,
-        node.name.pos,
-      );
+      self
+        .scope
+        .add_type_binding(typ, TypeBindingKind::IntrinsicType, node.name.pos);
     }
   }
 
@@ -92,12 +90,9 @@ impl<'a> Visitor for TypeCollector<'a> {
 
     match &node.kind {
       TypeDefKind::Enum { variants } => {
-        self.scope.add_type_binding(
-          TypeBindingKind::Enum,
-          node.name.name.clone(),
-          typ.clone(),
-          node.name.pos,
-        );
+        self
+          .scope
+          .add_type_binding(typ.clone(), TypeBindingKind::Enum, node.name.pos);
 
         for variant in variants {
           match &variant.kind {
@@ -130,20 +125,29 @@ impl<'a> Visitor for TypeCollector<'a> {
       }
 
       TypeDefKind::Struct { fields } => {
-        self.scope.add_type_binding(
-          TypeBindingKind::Struct,
-          node.name.name.clone(),
-          typ.clone(),
-          node.name.pos,
-        );
-
         let mut param_types = Vec::new();
+        let mut fields_map = HashMap::new();
 
         for field in fields {
-          let (_, field_type) = field;
-          let value_type = self.type_expr_to_value_type(field_type);
-          param_types.push(value_type);
+          let (field_id, field_type) = field;
+          param_types.push(self.type_expr_to_value_type(field_type));
+
+          fields_map.insert(
+            field_id.name.clone(),
+            Binding {
+              kind: BindingKind::Field,
+              ref_count: 0,
+              pos: field_id.pos,
+              typ: self.type_expr_to_value_type(field_type),
+            },
+          );
         }
+
+        self.scope.add_type_binding(
+          typ.clone(),
+          TypeBindingKind::Struct { fields: fields_map },
+          node.name.pos,
+        );
 
         let param_tuple_type = ValueType::Tuple(param_types);
         let constructor_type = ValueType::Func(vec![param_tuple_type], Box::new(typ));
@@ -153,23 +157,21 @@ impl<'a> Visitor for TypeCollector<'a> {
           node.name.name.clone(),
           constructor_type,
           node.name.pos,
-        )
+        );
       }
 
       TypeDefKind::Alias { .. } => {
         self.scope.add_type_binding(
-          TypeBindingKind::Alias,
-          node.name.name.clone(),
           typ.clone(),
+          TypeBindingKind::Alias,
           node.name.pos,
         );
       }
 
       TypeDefKind::Trait { .. } => {
         self.scope.add_type_binding(
-          TypeBindingKind::Trait,
-          node.name.name.clone(),
           typ.clone(),
+          TypeBindingKind::Trait,
           node.name.pos,
         );
       }

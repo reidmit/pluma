@@ -130,7 +130,6 @@ ModuleNode {
                                                                                 kind: Str(
                                                                                     "hey",
                                                                                 ),
-                                                                                typ: Unknown,
                                                                             },
                                                                         ),
                                                                         typ: Unknown,

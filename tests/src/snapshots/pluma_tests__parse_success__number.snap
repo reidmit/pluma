@@ -44,7 +44,6 @@ ModuleNode {
                             kind: IntDecimal(
                                 47,
                             ),
-                            typ: Unknown,
                         },
                     ),
                     typ: Unknown,

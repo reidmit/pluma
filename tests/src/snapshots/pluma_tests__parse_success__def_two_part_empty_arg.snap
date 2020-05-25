@@ -172,7 +172,6 @@ ModuleNode {
                                             kind: Str(
                                                 "wow!",
                                             ),
-                                            typ: Unknown,
                                         },
                                     ),
                                     typ: Unknown,

@@ -66,7 +66,7 @@ ModuleNode {
                                     1,
                                     17,
                                 ),
-                                kind: Chain {
+                                kind: MethodAccess {
                                     receiver: ExprNode {
                                         pos: (
                                             1,
@@ -81,36 +81,26 @@ ModuleNode {
                                                 kind: Str(
                                                     "hello",
                                                 ),
-                                                typ: Unknown,
                                             },
                                         ),
                                         typ: Unknown,
                                     },
-                                    prop: ExprNode {
-                                        pos: (
-                                            10,
-                                            26,
-                                        ),
-                                        kind: MultiPartIdentifier(
-                                            [
-                                                IdentifierNode {
-                                                    pos: (
-                                                        10,
-                                                        17,
-                                                    ),
-                                                    name: "replace",
-                                                },
-                                                IdentifierNode {
-                                                    pos: (
-                                                        22,
-                                                        26,
-                                                    ),
-                                                    name: "with",
-                                                },
-                                            ],
-                                        ),
-                                        typ: Unknown,
-                                    },
+                                    method_parts: [
+                                        IdentifierNode {
+                                            pos: (
+                                                10,
+                                                17,
+                                            ),
+                                            name: "replace",
+                                        },
+                                        IdentifierNode {
+                                            pos: (
+                                                22,
+                                                26,
+                                            ),
+                                            name: "with",
+                                        },
+                                    ],
                                 },
                                 typ: Unknown,
                             },
@@ -129,7 +119,6 @@ ModuleNode {
                                             kind: Str(
                                                 "x",
                                             ),
-                                            typ: Unknown,
                                         },
                                     ),
                                     typ: Unknown,
@@ -148,7 +137,6 @@ ModuleNode {
                                             kind: Str(
                                                 "y",
                                             ),
-                                            typ: Unknown,
                                         },
                                     ),
                                     typ: Unknown,

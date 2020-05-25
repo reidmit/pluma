@@ -1,11 +1,9 @@
 use crate::common::*;
-use crate::value_type::ValueType;
 
 #[derive(Debug)]
 pub struct LiteralNode {
   pub pos: Position,
   pub kind: LiteralKind,
-  pub typ: ValueType,
 }
 
 #[derive(Debug)]

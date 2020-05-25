@@ -96,6 +96,19 @@ impl Traverse for ExprNode {
           part.traverse(visitor);
         }
       }
+      ExprKind::FieldAccess { receiver, field } => {
+        receiver.traverse(visitor);
+        field.traverse(visitor);
+      }
+      ExprKind::MethodAccess {
+        receiver,
+        method_parts,
+      } => {
+        receiver.traverse(visitor);
+        for part in method_parts {
+          part.traverse(visitor);
+        }
+      }
       other_kind => todo!("traverse {:#?}", other_kind),
     }
 

@@ -44,7 +44,6 @@ ModuleNode {
                             kind: Str(
                                 "this is u\u{332}n\u{332}d\u{332}e\u{332}r\u{332}l\u{332}i\u{332}n\u{332}e\u{332}d\u{332} with unicode chars",
                             ),
-                            typ: Unknown,
                         },
                     ),
                     typ: Unknown,

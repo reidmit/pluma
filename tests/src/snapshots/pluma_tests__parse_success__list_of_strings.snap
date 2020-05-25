@@ -85,7 +85,6 @@ ModuleNode {
                                         kind: Str(
                                             "hey",
                                         ),
-                                        typ: Unknown,
                                     },
                                 ),
                                 typ: Unknown,
@@ -104,7 +103,6 @@ ModuleNode {
                                         kind: Str(
                                             "wow",
                                         ),
-                                        typ: Unknown,
                                     },
                                 ),
                                 typ: Unknown,
@@ -123,7 +121,6 @@ ModuleNode {
                                         kind: Str(
                                             "cool",
                                         ),
-                                        typ: Unknown,
                                     },
                                 ),
                                 typ: Unknown,
@@ -142,7 +139,6 @@ ModuleNode {
                                         kind: Str(
                                             "multi-\n\nline",
                                         ),
-                                        typ: Unknown,
                                     },
                                 ),
                                 typ: Unknown,

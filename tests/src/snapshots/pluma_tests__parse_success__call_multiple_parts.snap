@@ -93,7 +93,6 @@ ModuleNode {
                                             kind: IntDecimal(
                                                 1,
                                             ),
-                                            typ: Unknown,
                                         },
                                     ),
                                     typ: Unknown,
@@ -112,7 +111,6 @@ ModuleNode {
                                             kind: IntDecimal(
                                                 2,
                                             ),
-                                            typ: Unknown,
                                         },
                                     ),
                                     typ: Unknown,

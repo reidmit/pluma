@@ -13,6 +13,10 @@ pub enum AnalysisErrorKind {
   UndefinedName(String),
   UndefinedMultiPartName(Vec<String>),
   UndefinedTypeConstructor(String),
+  UndefinedFieldForType {
+    field_name: String,
+    receiver_type: ValueType,
+  },
   UnusedVariable(String),
   NameAlreadyInScope(String),
   CalleeNotCallable(ValueType),
@@ -56,6 +60,15 @@ impl fmt::Display for AnalysisError {
       }
 
       UndefinedTypeConstructor(name) => write!(f, "Type constructor '{}' is not defined.", name),
+
+      UndefinedFieldForType {
+        field_name,
+        receiver_type,
+      } => write!(
+        f,
+        "Field '{}' does not exist on type {}.",
+        field_name, receiver_type
+      ),
 
       UnusedVariable(name) => write!(f, "Name '{}' is never used.", name),
 

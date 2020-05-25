@@ -44,7 +44,6 @@ ModuleNode {
                             kind: Str(
                                 "line 1\nline 2",
                             ),
-                            typ: Unknown,
                         },
                     ),
                     typ: Unknown,

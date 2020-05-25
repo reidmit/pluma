@@ -129,7 +129,6 @@ ModuleNode {
                                                 kind: IntDecimal(
                                                     1,
                                                 ),
-                                                typ: Unknown,
                                             },
                                         ),
                                     },
@@ -147,7 +146,6 @@ ModuleNode {
                                                 kind: Str(
                                                     "one",
                                                 ),
-                                                typ: Unknown,
                                             },
                                         ),
                                         typ: Unknown,
@@ -172,7 +170,6 @@ ModuleNode {
                                                 kind: IntDecimal(
                                                     2,
                                                 ),
-                                                typ: Unknown,
                                             },
                                         ),
                                     },
@@ -190,7 +187,6 @@ ModuleNode {
                                                 kind: Str(
                                                     "two",
                                                 ),
-                                                typ: Unknown,
                                             },
                                         ),
                                         typ: Unknown,
@@ -222,7 +218,6 @@ ModuleNode {
                                                 kind: Str(
                                                     "idk",
                                                 ),
-                                                typ: Unknown,
                                             },
                                         ),
                                         typ: Unknown,

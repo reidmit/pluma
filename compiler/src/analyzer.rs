@@ -1,6 +1,6 @@
 use crate::analysis_error::{AnalysisError, AnalysisErrorKind};
 use crate::diagnostics::Diagnostic;
-use crate::scope::{BindingKind, Scope};
+use crate::scope::{BindingKind, Scope, TypeBindingKind};
 use crate::visitor::Visitor;
 use pluma_ast::nodes::*;
 use pluma_ast::value_type::ValueType;
@@ -177,17 +177,6 @@ impl<'a> Visitor for Analyzer<'a> {
     self.destructure_pattern(&mut node.pattern, &mut node.value.typ)
   }
 
-  fn leave_literal(&mut self, node: &mut LiteralNode) {
-    match &node.kind {
-      LiteralKind::IntDecimal { .. } => node.typ = ValueType::Named("Int".to_owned()),
-      LiteralKind::IntBinary { .. } => node.typ = ValueType::Named("Int".to_owned()),
-      LiteralKind::IntHex { .. } => node.typ = ValueType::Named("Int".to_owned()),
-      LiteralKind::IntOctal { .. } => node.typ = ValueType::Named("Int".to_owned()),
-      LiteralKind::FloatDecimal { .. } => node.typ = ValueType::Named("Float".to_owned()),
-      LiteralKind::Str { .. } => node.typ = ValueType::Named("String".to_owned()),
-    }
-  }
-
   fn enter_expr(&mut self, node: &mut ExprNode) {
     match &node.kind {
       ExprKind::Block { params, .. } => {
@@ -236,7 +225,14 @@ impl<'a> Visitor for Analyzer<'a> {
         };
       }
 
-      ExprKind::Literal(lit_node) => node.typ = lit_node.typ.clone(),
+      ExprKind::Literal(lit_node) => match &lit_node.kind {
+        LiteralKind::IntDecimal { .. } => node.typ = ValueType::Named("Int".to_owned()),
+        LiteralKind::IntBinary { .. } => node.typ = ValueType::Named("Int".to_owned()),
+        LiteralKind::IntHex { .. } => node.typ = ValueType::Named("Int".to_owned()),
+        LiteralKind::IntOctal { .. } => node.typ = ValueType::Named("Int".to_owned()),
+        LiteralKind::FloatDecimal { .. } => node.typ = ValueType::Named("Float".to_owned()),
+        LiteralKind::Str { .. } => node.typ = ValueType::Named("String".to_owned()),
+      },
 
       ExprKind::Call(call_node) => node.typ = call_node.typ.clone(),
 
@@ -305,6 +301,32 @@ impl<'a> Visitor for Analyzer<'a> {
         }
 
         node.typ = string_type;
+      }
+
+      ExprKind::FieldAccess { receiver, field } => {
+        let receiver_type_binding = self.scope.get_type_binding(&receiver.typ).unwrap();
+
+        if let TypeBindingKind::Struct { fields } = &receiver_type_binding.kind {
+          match fields.get(&field.name) {
+            Some(binding) => node.typ = binding.typ.clone(),
+
+            None => self.error(AnalysisError {
+              pos: field.pos,
+              kind: AnalysisErrorKind::UndefinedFieldForType {
+                field_name: field.name.clone(),
+                receiver_type: receiver.typ.clone(),
+              },
+            }),
+          }
+        } else {
+          self.error(AnalysisError {
+            pos: field.pos,
+            kind: AnalysisErrorKind::UndefinedFieldForType {
+              field_name: field.name.clone(),
+              receiver_type: receiver.typ.clone(),
+            },
+          })
+        }
       }
 
       ExprKind::EmptyTuple => node.typ = ValueType::Nothing,

@@ -44,7 +44,6 @@ ModuleNode {
                             kind: Str(
                                 "🏳\u{fe0f}\u{200d}🌈",
                             ),
-                            typ: Unknown,
                         },
                     ),
                     typ: Unknown,

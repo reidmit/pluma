@@ -58,7 +58,6 @@ ModuleNode {
                                     kind: Str(
                                         "a",
                                     ),
-                                    typ: Unknown,
                                 },
                             ),
                             typ: Unknown,
@@ -84,7 +83,6 @@ ModuleNode {
                                     kind: Str(
                                         "b",
                                     ),
-                                    typ: Unknown,
                                 },
                             ),
                             typ: Unknown,

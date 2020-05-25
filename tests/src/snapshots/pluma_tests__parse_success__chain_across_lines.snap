@@ -61,13 +61,13 @@ ModuleNode {
                         1,
                         20,
                     ),
-                    kind: Chain {
+                    kind: FieldAccess {
                         receiver: ExprNode {
                             pos: (
                                 1,
                                 14,
                             ),
-                            kind: Chain {
+                            kind: FieldAccess {
                                 receiver: ExprNode {
                                     pos: (
                                         1,
@@ -82,45 +82,26 @@ ModuleNode {
                                             kind: Str(
                                                 "hello",
                                             ),
-                                            typ: Unknown,
                                         },
                                     ),
                                     typ: Unknown,
                                 },
-                                prop: ExprNode {
+                                field: IdentifierNode {
                                     pos: (
                                         12,
                                         14,
                                     ),
-                                    kind: Identifier(
-                                        IdentifierNode {
-                                            pos: (
-                                                12,
-                                                14,
-                                            ),
-                                            name: "f1",
-                                        },
-                                    ),
-                                    typ: Unknown,
+                                    name: "f1",
                                 },
                             },
                             typ: Unknown,
                         },
-                        prop: ExprNode {
+                        field: IdentifierNode {
                             pos: (
                                 18,
                                 20,
                             ),
-                            kind: Identifier(
-                                IdentifierNode {
-                                    pos: (
-                                        18,
-                                        20,
-                                    ),
-                                    name: "f2",
-                                },
-                            ),
-                            typ: Unknown,
+                            name: "f2",
                         },
                     },
                     typ: Unknown,

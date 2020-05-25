@@ -59,19 +59,19 @@ ModuleNode {
                         0,
                         28,
                     ),
-                    kind: Chain {
+                    kind: FieldAccess {
                         receiver: ExprNode {
                             pos: (
                                 0,
                                 19,
                             ),
-                            kind: Chain {
+                            kind: FieldAccess {
                                 receiver: ExprNode {
                                     pos: (
                                         0,
                                         10,
                                     ),
-                                    kind: Chain {
+                                    kind: FieldAccess {
                                         receiver: ExprNode {
                                             pos: (
                                                 0,
@@ -88,59 +88,32 @@ ModuleNode {
                                             ),
                                             typ: Unknown,
                                         },
-                                        prop: ExprNode {
+                                        field: IdentifierNode {
                                             pos: (
                                                 4,
                                                 10,
                                             ),
-                                            kind: Identifier(
-                                                IdentifierNode {
-                                                    pos: (
-                                                        4,
-                                                        10,
-                                                    ),
-                                                    name: "field1",
-                                                },
-                                            ),
-                                            typ: Unknown,
+                                            name: "field1",
                                         },
                                     },
                                     typ: Unknown,
                                 },
-                                prop: ExprNode {
+                                field: IdentifierNode {
                                     pos: (
                                         13,
                                         19,
                                     ),
-                                    kind: Identifier(
-                                        IdentifierNode {
-                                            pos: (
-                                                13,
-                                                19,
-                                            ),
-                                            name: "field2",
-                                        },
-                                    ),
-                                    typ: Unknown,
+                                    name: "field2",
                                 },
                             },
                             typ: Unknown,
                         },
-                        prop: ExprNode {
+                        field: IdentifierNode {
                             pos: (
                                 22,
                                 28,
                             ),
-                            kind: Identifier(
-                                IdentifierNode {
-                                    pos: (
-                                        22,
-                                        28,
-                                    ),
-                                    name: "field3",
-                                },
-                            ),
-                            typ: Unknown,
+                            name: "field3",
                         },
                     },
                     typ: Unknown,

@@ -210,7 +210,6 @@ ModuleNode {
                                                                                 kind: Str(
                                                                                     "yep!",
                                                                                 ),
-                                                                                typ: Unknown,
                                                                             },
                                                                         ),
                                                                         typ: Unknown,
@@ -283,7 +282,6 @@ ModuleNode {
                                                                                 kind: Str(
                                                                                     "nope!",
                                                                                 ),
-                                                                                typ: Unknown,
                                                                             },
                                                                         ),
                                                                         typ: Unknown,

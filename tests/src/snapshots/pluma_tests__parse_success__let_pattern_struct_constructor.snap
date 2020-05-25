@@ -191,7 +191,6 @@ ModuleNode {
                                                             kind: Str(
                                                                 "Reid",
                                                             ),
-                                                            typ: Unknown,
                                                         },
                                                     ),
                                                     typ: Unknown,
@@ -210,7 +209,6 @@ ModuleNode {
                                                             kind: IntDecimal(
                                                                 26,
                                                             ),
-                                                            typ: Unknown,
                                                         },
                                                     ),
                                                     typ: Unknown,

@@ -13,7 +13,6 @@ pub struct Binding {
 
 #[derive(Debug)]
 pub struct TypeBinding {
-  pub typ: ValueType,
   pub ref_count: usize,
   pub pos: (usize, usize),
   pub kind: TypeBindingKind,
@@ -26,12 +25,13 @@ pub enum BindingKind {
   Param,
   EnumVariant,
   StructConstructor,
+  Field,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub enum TypeBindingKind {
   Enum,
-  Struct,
+  Struct { fields: HashMap<String, Binding> },
   Alias,
   Trait,
   IntrinsicType,
@@ -40,23 +40,25 @@ pub enum TypeBindingKind {
 #[derive(Debug)]
 struct ScopeLevel {
   pub bindings: HashMap<String, Binding>,
-  pub type_bindings: HashMap<String, TypeBinding>,
 }
 
 #[derive(Debug)]
 pub struct Scope {
   levels: Vec<ScopeLevel>,
+  type_bindings: HashMap<ValueType, TypeBinding>,
 }
 
 impl Scope {
   pub fn new() -> Self {
-    Scope { levels: Vec::new() }
+    Scope {
+      levels: Vec::new(),
+      type_bindings: HashMap::new(),
+    }
   }
 
   pub fn enter(&mut self) {
     self.levels.push(ScopeLevel {
       bindings: HashMap::new(),
-      type_bindings: HashMap::new(),
     });
   }
 
@@ -104,19 +106,10 @@ impl Scope {
     );
   }
 
-  pub fn add_type_binding(
-    &mut self,
-    kind: TypeBindingKind,
-    name: String,
-    typ: ValueType,
-    pos: (usize, usize),
-  ) {
-    let current_level = self.levels.last_mut().expect("no current scope");
-
-    current_level.type_bindings.insert(
-      name,
+  pub fn add_type_binding(&mut self, typ: ValueType, kind: TypeBindingKind, pos: (usize, usize)) {
+    self.type_bindings.insert(
+      typ,
       TypeBinding {
-        typ,
         ref_count: 0,
         pos,
         kind,
@@ -136,13 +129,11 @@ impl Scope {
     None
   }
 
-  pub fn get_type_binding(&mut self, name: &String) -> Option<&TypeBinding> {
-    for level in self.levels.iter_mut().rev() {
-      if let Some(binding) = level.type_bindings.get_mut(name) {
-        binding.ref_count += 1;
+  pub fn get_type_binding(&mut self, typ: &ValueType) -> Option<&TypeBinding> {
+    if let Some(binding) = self.type_bindings.get_mut(typ) {
+      binding.ref_count += 1;
 
-        return Some(binding);
-      }
+      return Some(binding);
     }
 
     None

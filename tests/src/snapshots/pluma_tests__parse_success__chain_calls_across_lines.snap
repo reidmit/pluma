@@ -80,7 +80,7 @@ ModuleNode {
                                     1,
                                     22,
                                 ),
-                                kind: Chain {
+                                kind: MethodAccess {
                                     receiver: ExprNode {
                                         pos: (
                                             1,
@@ -97,7 +97,7 @@ ModuleNode {
                                                         1,
                                                         14,
                                                     ),
-                                                    kind: Chain {
+                                                    kind: MethodAccess {
                                                         receiver: ExprNode {
                                                             pos: (
                                                                 1,
@@ -112,27 +112,19 @@ ModuleNode {
                                                                     kind: Str(
                                                                         "hello",
                                                                     ),
-                                                                    typ: Unknown,
                                                                 },
                                                             ),
                                                             typ: Unknown,
                                                         },
-                                                        prop: ExprNode {
-                                                            pos: (
-                                                                12,
-                                                                14,
-                                                            ),
-                                                            kind: Identifier(
-                                                                IdentifierNode {
-                                                                    pos: (
-                                                                        12,
-                                                                        14,
-                                                                    ),
-                                                                    name: "f1",
-                                                                },
-                                                            ),
-                                                            typ: Unknown,
-                                                        },
+                                                        method_parts: [
+                                                            IdentifierNode {
+                                                                pos: (
+                                                                    12,
+                                                                    14,
+                                                                ),
+                                                                name: "f1",
+                                                            },
+                                                        ],
                                                     },
                                                     typ: Unknown,
                                                 },
@@ -151,7 +143,6 @@ ModuleNode {
                                                                 kind: IntDecimal(
                                                                     1,
                                                                 ),
-                                                                typ: Unknown,
                                                             },
                                                         ),
                                                         typ: Unknown,
@@ -162,22 +153,15 @@ ModuleNode {
                                         ),
                                         typ: Unknown,
                                     },
-                                    prop: ExprNode {
-                                        pos: (
-                                            20,
-                                            22,
-                                        ),
-                                        kind: Identifier(
-                                            IdentifierNode {
-                                                pos: (
-                                                    20,
-                                                    22,
-                                                ),
-                                                name: "f2",
-                                            },
-                                        ),
-                                        typ: Unknown,
-                                    },
+                                    method_parts: [
+                                        IdentifierNode {
+                                            pos: (
+                                                20,
+                                                22,
+                                            ),
+                                            name: "f2",
+                                        },
+                                    ],
                                 },
                                 typ: Unknown,
                             },
@@ -196,7 +180,6 @@ ModuleNode {
                                             kind: IntDecimal(
                                                 2,
                                             ),
-                                            typ: Unknown,
                                         },
                                     ),
                                     typ: Unknown,

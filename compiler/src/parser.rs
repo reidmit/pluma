@@ -200,7 +200,6 @@ impl<'a> Parser<'a> {
     Some(LiteralNode {
       kind: LiteralKind::IntBinary(value),
       pos: (start, end),
-      typ: ValueType::Unknown,
     })
   }
 
@@ -381,17 +380,8 @@ impl<'a> Parser<'a> {
           typ: ValueType::Unknown,
         }
       }
-      ExprKind::Chain { prop, receiver }
-        if match &prop.kind {
-          ExprKind::Identifier(..) => true,
-          _ => false,
-        } =>
-      {
-        let first_callee_part = match prop.kind {
-          ExprKind::Identifier(first_part) => first_part,
-          _ => unreachable!(),
-        };
 
+      ExprKind::FieldAccess { receiver, field } => {
         let mut rest_callee_parts = Vec::new();
 
         // If there is an identifier now, it means this is a call to a multi-part name.
@@ -421,32 +411,17 @@ impl<'a> Parser<'a> {
           }
         }
 
-        let prop_pos;
+        let mut method_parts = vec![field];
 
-        let prop_kind = if rest_callee_parts.len() > 0 {
-          prop_pos = (
-            first_callee_part.pos.0,
-            rest_callee_parts.last().unwrap().pos.1,
-          );
-          let mut all_parts = vec![first_callee_part];
-          all_parts.append(&mut rest_callee_parts);
-
-          ExprKind::MultiPartIdentifier(all_parts)
-        } else {
-          prop_pos = first_callee_part.pos;
-
-          ExprKind::Identifier(first_callee_part)
-        };
+        if rest_callee_parts.len() > 0 {
+          method_parts.append(&mut rest_callee_parts);
+        }
 
         ExprNode {
           pos: last_expr.pos,
-          kind: ExprKind::Chain {
+          kind: ExprKind::MethodAccess {
             receiver,
-            prop: Box::new(ExprNode {
-              pos: prop_pos,
-              kind: prop_kind,
-              typ: ValueType::Unknown,
-            }),
+            method_parts,
           },
           typ: ValueType::Unknown,
         }
@@ -465,8 +440,37 @@ impl<'a> Parser<'a> {
   fn parse_chain(&mut self, last_expr: ExprNode) -> Option<ExprNode> {
     expect_token_and_do!(self, Token::Dot, { self.advance() });
 
-    let (end, next_expr) = match self.parse_term() {
-      Some(term) => (term.pos.1, Box::new(term)),
+    match self.parse_term() {
+      Some(ExprNode { kind, pos, .. }) => match kind {
+        ExprKind::Identifier(ident) => {
+          return Some(ExprNode {
+            pos: (last_expr.pos.0, pos.1),
+            kind: ExprKind::FieldAccess {
+              receiver: Box::new(last_expr),
+              field: ident,
+            },
+            typ: ValueType::Unknown,
+          })
+        }
+
+        // ExprKind::Call(call) => {
+        //   return Some(ExprNode {
+        //     pos: (last_expr.pos.0, pos.1),
+        //     kind: ExprKind::MethodAccess {
+        //       receiver: Box::new(last_expr),
+        //       field: ident,
+        //     },
+        //     typ: ValueType::Unknown,
+        //   });
+        // }
+        _ => {
+          return self.error(ParseError {
+            pos,
+            kind: ParseErrorKind::UnexpectedExpressionAfterDot,
+          })
+        }
+      },
+
       _ => {
         return self.error(ParseError {
           pos: self.current_token_position(),
@@ -474,15 +478,6 @@ impl<'a> Parser<'a> {
         })
       }
     };
-
-    Some(ExprNode {
-      pos: (last_expr.pos.0, end),
-      kind: ExprKind::Chain {
-        receiver: Box::new(last_expr),
-        prop: next_expr,
-      },
-      typ: ValueType::Unknown,
-    })
   }
 
   fn parse_decimal_number(&mut self) -> Option<LiteralNode> {
@@ -506,7 +501,6 @@ impl<'a> Parser<'a> {
         return Some(LiteralNode {
           kind: LiteralKind::FloatDecimal(float_value),
           pos: (start, end),
-          typ: ValueType::Unknown,
         });
       });
     }
@@ -516,7 +510,6 @@ impl<'a> Parser<'a> {
     Some(LiteralNode {
       kind: LiteralKind::IntDecimal(value),
       pos: (start, end),
-      typ: ValueType::Unknown,
     })
   }
 
@@ -839,7 +832,6 @@ impl<'a> Parser<'a> {
     Some(LiteralNode {
       kind: LiteralKind::IntHex(value),
       pos: (start, end),
-      typ: ValueType::Unknown,
     })
   }
 
@@ -1098,7 +1090,6 @@ impl<'a> Parser<'a> {
     Some(LiteralNode {
       kind: LiteralKind::IntOctal(value),
       pos: (start, end),
-      typ: ValueType::Unknown,
     })
   }
 
@@ -1381,7 +1372,6 @@ impl<'a> Parser<'a> {
     let lit_node = LiteralNode {
       pos: (start, end),
       kind: LiteralKind::Str(value),
-      typ: ValueType::Unknown,
     };
 
     let expr_node = ExprNode {
@@ -1418,7 +1408,6 @@ impl<'a> Parser<'a> {
             kind: ExprKind::Literal(LiteralNode {
               pos: (start, end),
               kind: LiteralKind::Str(value),
-              typ: ValueType::Unknown,
             }),
             typ: ValueType::Unknown,
           });

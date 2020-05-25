@@ -4,15 +4,73 @@ intrinsic_type Float
 
 intrinsic_type String
 
-intrinsic_type Any
+trait Any ()
 
 enum Bool
   | True
   | False
 
+enum Option<A> where A :: Any
+  | None
+  | Some A
+
+enum LoopResult
+  | LoopBreak
+  | LoopContinue
+
+intrinsic_def loop { () -> LoopResult }
+
 def if Bool then { () -> A } else { () -> A } where A :: Any {
   condition, thenCase, elseCase =>
     match condition
-      | True => thenCase ()
-      | False => elseCase ()
+      | True => thenCase
+      | False => elseCase
+
+    ()
+}
+
+def while { () -> Bool } do { () -> () } {
+  condition, block =>
+    loop {
+      let loopResult = match condition ()
+        | True => {
+            block ()
+            LoopContinue
+          }
+        | False => {
+            LoopBreak
+          }
+
+      loopResult
+    }
+
+    ()
+}
+
+def until { () -> Bool } do { () -> () } {
+  condition, block =>
+    loop {
+      let loopResult = match condition ()
+        | False => {
+            block ()
+            LoopContinue
+          }
+        | True => {
+            LoopBreak
+          }
+
+      loopResult
+    }
+
+    ()
+}
+
+def repeat Int times { () -> () } {
+  amount, block =>
+    let mut i = 0
+
+    while { i < amount } do {
+      block ()
+      i = i + 1
+    }
 }

@@ -44,7 +44,6 @@ ModuleNode {
                             kind: Str(
                                 "🌝",
                             ),
-                            typ: Unknown,
                         },
                     ),
                     typ: Unknown,

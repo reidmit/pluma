@@ -76,7 +76,6 @@ ModuleNode {
                                             kind: IntDecimal(
                                                 1,
                                             ),
-                                            typ: Unknown,
                                         },
                                     ),
                                     typ: Unknown,

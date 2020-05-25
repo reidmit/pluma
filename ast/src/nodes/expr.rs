@@ -25,14 +25,18 @@ pub enum ExprKind {
     body: Vec<StatementNode>,
   },
   Call(CallNode),
-  Chain {
-    receiver: Box<ExprNode>,
-    prop: Box<ExprNode>,
-  },
   Dict(Vec<(ExprNode, ExprNode)>),
   EmptyTuple,
+  FieldAccess {
+    receiver: Box<ExprNode>,
+    field: IdentifierNode,
+  },
   Grouping(Box<ExprNode>),
   Identifier(IdentifierNode),
+  MethodAccess {
+    receiver: Box<ExprNode>,
+    method_parts: Vec<IdentifierNode>,
+  },
   MultiPartIdentifier(Vec<IdentifierNode>),
   Interpolation(Vec<ExprNode>),
   List(Vec<ExprNode>),

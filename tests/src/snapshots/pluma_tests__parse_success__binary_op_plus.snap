@@ -58,7 +58,6 @@ ModuleNode {
                                     kind: IntDecimal(
                                         5,
                                     ),
-                                    typ: Unknown,
                                 },
                             ),
                             typ: Unknown,
@@ -84,7 +83,6 @@ ModuleNode {
                                     kind: IntDecimal(
                                         5,
                                     ),
-                                    typ: Unknown,
                                 },
                             ),
                             typ: Unknown,

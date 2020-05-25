@@ -39,6 +39,7 @@ pub enum ParseErrorKind {
   UnexpectedDictValueInArray,
   UnexpectedEOF(Token),
   UnexpectedMethodPart,
+  UnexpectedExpressionAfterDot,
   UnexpectedToken(Token),
 }
 

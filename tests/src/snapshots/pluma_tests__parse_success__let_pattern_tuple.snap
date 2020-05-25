@@ -140,7 +140,6 @@ ModuleNode {
                                             kind: IntDecimal(
                                                 47,
                                             ),
-                                            typ: Unknown,
                                         },
                                     ),
                                     typ: Unknown,
@@ -159,7 +158,6 @@ ModuleNode {
                                             kind: Str(
                                                 "cool",
                                             ),
-                                            typ: Unknown,
                                         },
                                     ),
                                     typ: Unknown,
