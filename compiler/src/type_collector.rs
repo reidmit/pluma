@@ -67,6 +67,30 @@ impl<'a> Visitor for TypeCollector<'a> {
           .add_binding(BindingKind::Def, merged_name, def_type, node.pos);
       }
 
+      DefKind::Method {
+        receiver,
+        signature,
+      } => {
+        let receiver_type = ValueType::Named(receiver.name.clone());
+
+        let return_type = match &node.return_type {
+          Some(type_expr) => self.type_expr_to_value_type(&type_expr),
+          None => ValueType::Nothing,
+        };
+
+        let mut method_parts = Vec::new();
+        let mut param_types = Vec::new();
+
+        for (part_name, part_type_expr) in signature {
+          method_parts.push(part_name.name.clone());
+          param_types.push(self.type_expr_to_value_type(part_type_expr));
+        }
+
+        self
+          .scope
+          .add_type_method(receiver_type, method_parts, param_types, return_type)
+      }
+
       _ => {}
     }
   }
@@ -161,19 +185,15 @@ impl<'a> Visitor for TypeCollector<'a> {
       }
 
       TypeDefKind::Alias { .. } => {
-        self.scope.add_type_binding(
-          typ.clone(),
-          TypeBindingKind::Alias,
-          node.name.pos,
-        );
+        self
+          .scope
+          .add_type_binding(typ.clone(), TypeBindingKind::Alias, node.name.pos);
       }
 
       TypeDefKind::Trait { .. } => {
-        self.scope.add_type_binding(
-          typ.clone(),
-          TypeBindingKind::Trait,
-          node.name.pos,
-        );
+        self
+          .scope
+          .add_type_binding(typ.clone(), TypeBindingKind::Trait, node.name.pos);
       }
     }
   }

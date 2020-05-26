@@ -329,6 +329,35 @@ impl<'a> Visitor for Analyzer<'a> {
         }
       }
 
+      ExprKind::MethodAccess {
+        receiver,
+        method_parts,
+      } => {
+        let receiver_type_binding = self.scope.get_type_binding(&receiver.typ).unwrap();
+
+        let method_name_parts = method_parts
+          .iter()
+          .map(|n| n.name.clone())
+          .collect::<Vec<String>>();
+
+        if let Some(method_type) = receiver_type_binding.methods.get(&method_name_parts) {
+          node.typ = method_type.clone();
+        } else {
+          let pos = (
+            method_parts.first().unwrap().pos.0,
+            method_parts.last().unwrap().pos.1,
+          );
+
+          self.error(AnalysisError {
+            pos,
+            kind: AnalysisErrorKind::UndefinedMethodForType {
+              method_name_parts,
+              receiver_type: receiver.typ.clone(),
+            },
+          })
+        }
+      }
+
       ExprKind::EmptyTuple => node.typ = ValueType::Nothing,
 
       t => todo!("more expr kinds: {:#?}", t),

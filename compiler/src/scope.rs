@@ -16,6 +16,7 @@ pub struct TypeBinding {
   pub ref_count: usize,
   pub pos: (usize, usize),
   pub kind: TypeBindingKind,
+  pub methods: HashMap<Vec<String>, ValueType>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -113,8 +114,31 @@ impl Scope {
         ref_count: 0,
         pos,
         kind,
+        methods: HashMap::new(),
       },
     );
+  }
+
+  pub fn add_type_method(
+    &mut self,
+    typ: ValueType,
+    method_parts: Vec<String>,
+    param_types: Vec<ValueType>,
+    return_type: ValueType,
+  ) {
+    let binding = self.get_type_binding(&typ).expect("no binding for type");
+
+    let method_type = ValueType::Func(param_types, Box::new(return_type));
+
+    binding.methods.insert(method_parts, method_type);
+
+    // if let Some(param_types_to_return_types) = binding.methods.get_mut(&method_parts) {
+    //   param_types_to_return_types.insert(param_types, return_type);
+    // } else {
+    //   let mut h = HashMap::new();
+    //   h.insert(param_types, return_type);
+    //   binding.methods.insert(method_parts, h);
+    // }
   }
 
   pub fn get_binding(&mut self, name: &String) -> Option<&Binding> {
@@ -129,7 +153,7 @@ impl Scope {
     None
   }
 
-  pub fn get_type_binding(&mut self, typ: &ValueType) -> Option<&TypeBinding> {
+  pub fn get_type_binding(&mut self, typ: &ValueType) -> Option<&mut TypeBinding> {
     if let Some(binding) = self.type_bindings.get_mut(typ) {
       binding.ref_count += 1;
 

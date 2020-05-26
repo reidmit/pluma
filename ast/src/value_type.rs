@@ -17,7 +17,7 @@ impl std::cmp::Eq for ValueType {}
 impl fmt::Display for ValueType {
   fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
     match self {
-      ValueType::Unknown => write!(f, "?"),
+      ValueType::Unknown => write!(f, "unknown"),
 
       ValueType::Nothing => write!(f, "()"),
 

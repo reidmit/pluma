@@ -17,6 +17,10 @@ pub enum AnalysisErrorKind {
     field_name: String,
     receiver_type: ValueType,
   },
+  UndefinedMethodForType {
+    method_name_parts: Vec<String>,
+    receiver_type: ValueType,
+  },
   UnusedVariable(String),
   NameAlreadyInScope(String),
   CalleeNotCallable(ValueType),
@@ -68,6 +72,16 @@ impl fmt::Display for AnalysisError {
         f,
         "Field '{}' does not exist on type {}.",
         field_name, receiver_type
+      ),
+
+      UndefinedMethodForType {
+        method_name_parts,
+        receiver_type,
+      } => write!(
+        f,
+        "Method '{}' is not defined for type {}.",
+        method_name_parts.join(" "),
+        receiver_type
       ),
 
       UnusedVariable(name) => write!(f, "Name '{}' is never used.", name),
