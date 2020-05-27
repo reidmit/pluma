@@ -811,6 +811,10 @@ impl<'a> Parser<'a> {
             expr = self.parse_binary_operation(expr.unwrap());
             continue;
           }
+          Some(&Token::DoubleColon(..)) => {
+            expr = self.parse_type_assertion(expr.unwrap());
+            continue;
+          }
           _ => {}
         }
       }
@@ -1753,6 +1757,33 @@ impl<'a> Parser<'a> {
     })
   }
 
+  fn parse_type_assertion(&mut self, last_term: ExprNode) -> Option<ExprNode> {
+    expect_token_and_do!(self, Token::DoubleColon, {
+      self.advance();
+    });
+
+    self.skip_line_breaks();
+
+    let (end, asserted_type) = match self.parse_type_expression() {
+      Some(type_expr) => (type_expr.pos.1, type_expr),
+      _ => {
+        return self.error(ParseError {
+          pos: self.current_token_position(),
+          kind: ParseErrorKind::MissingTypeInTypeAssertion,
+        })
+      }
+    };
+
+    Some(ExprNode {
+      pos: (last_term.pos.0, end),
+      kind: ExprKind::TypeAssertion {
+        expr: Box::new(last_term),
+        asserted_type,
+      },
+      typ: ValueType::Unknown,
+    })
+  }
+
   fn parse_type_func(&mut self) -> Option<TypeExprNode> {
     let start = expect_token_and_do!(self, Token::LeftBrace, {
       let (start, _) = self.current_token_position();
@@ -1795,6 +1826,7 @@ impl<'a> Parser<'a> {
     Some(TypeExprNode {
       pos: (start, end),
       kind: TypeExprKind::Func(param_type, return_type),
+      typ: ValueType::Unknown,
     })
   }
 
@@ -1803,6 +1835,7 @@ impl<'a> Parser<'a> {
       Some(&Token::Identifier(..)) => self.parse_type_identifier().map(|type_id| TypeExprNode {
         pos: type_id.pos,
         kind: TypeExprKind::Single(type_id),
+        typ: ValueType::Unknown,
       }),
       Some(&Token::LeftParen(..)) => self.parse_type_parenthetical(),
       Some(&Token::LeftBrace(..)) => self.parse_type_func(),
@@ -1880,6 +1913,7 @@ impl<'a> Parser<'a> {
       return Some(TypeExprNode {
         pos: (start, end),
         kind: TypeExprKind::EmptyTuple,
+        typ: ValueType::Unknown,
       });
     }
 
@@ -1887,6 +1921,7 @@ impl<'a> Parser<'a> {
       return Some(TypeExprNode {
         pos: (start, end),
         kind: TypeExprKind::Grouping(Box::new(first_entry.unwrap())),
+        typ: ValueType::Unknown,
       });
     }
 
@@ -1895,6 +1930,7 @@ impl<'a> Parser<'a> {
     Some(TypeExprNode {
       pos: (start, end),
       kind: TypeExprKind::Tuple(other_entries),
+      typ: ValueType::Unknown,
     })
   }
 

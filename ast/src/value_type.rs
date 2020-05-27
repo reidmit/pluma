@@ -46,7 +46,7 @@ impl fmt::Display for ValueType {
 
       ValueType::Func(param_types, return_type) => write!(
         f,
-        "{} -> {}",
+        "{{ {} -> {} }}",
         param_types
           .iter()
           .map(|t| format!("{}", t))

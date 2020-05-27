@@ -304,6 +304,14 @@ test_parse_success! {
     |  | _ => "idk"
   "#,
 
+  type_assertion_basic: r#"
+    |1 :: Int
+  "#,
+
+  type_assertion_complex: r#"
+    |f :: { Int -> { () -> (Bool, Int) } }
+  "#,
+
   type_enum_same_line: r#"
     |enum Bool | True | False
   "#,

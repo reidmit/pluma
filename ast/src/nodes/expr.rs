@@ -43,6 +43,10 @@ pub enum ExprKind {
   Literal(LiteralNode),
   Match(MatchNode),
   Tuple(Vec<ExprNode>),
+  TypeAssertion {
+    expr: Box<ExprNode>,
+    asserted_type: TypeExprNode,
+  },
   UnaryOperation {
     op: Box<OperatorNode>,
     right: Box<ExprNode>,

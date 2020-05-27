@@ -45,6 +45,10 @@ pub enum AnalysisErrorKind {
     expected: ValueType,
     actual: ValueType,
   },
+  TypeMismatchInTypeAssertion {
+    expected: ValueType,
+    actual: ValueType,
+  },
   TypeMismatchInStringInterpolation(ValueType),
 }
 
@@ -128,6 +132,12 @@ impl fmt::Display for AnalysisError {
         f,
         "Expected type String in interpolation, but value type {}.",
         actual
+      ),
+
+      TypeMismatchInTypeAssertion { expected, actual } => write!(
+        f,
+        "Type assertion failed. Type {} is not convertible to type {}.",
+        actual, expected,
       ),
 
       ReassignmentTypeMismatch { expected, actual } => write!(

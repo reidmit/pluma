@@ -1,0 +1,88 @@
+---
+source: tests/src/parse_success.rs
+expression: "1 :: Int"
+---
+
+=== Source ===
+1 :: Int
+
+=== Tokens ===
+[
+    DecimalDigits(
+        0,
+        1,
+    ),
+    DoubleColon(
+        2,
+        4,
+    ),
+    Identifier(
+        5,
+        8,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        8,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                8,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        0,
+                        8,
+                    ),
+                    kind: TypeAssertion {
+                        expr: ExprNode {
+                            pos: (
+                                0,
+                                1,
+                            ),
+                            kind: Literal(
+                                LiteralNode {
+                                    pos: (
+                                        0,
+                                        1,
+                                    ),
+                                    kind: IntDecimal(
+                                        1,
+                                    ),
+                                },
+                            ),
+                            typ: Unknown,
+                        },
+                        asserted_type: TypeExprNode {
+                            pos: (
+                                5,
+                                8,
+                            ),
+                            kind: Single(
+                                TypeIdentifierNode {
+                                    pos: (
+                                        5,
+                                        8,
+                                    ),
+                                    name: "Int",
+                                    generics: [],
+                                },
+                            ),
+                        },
+                    },
+                    typ: Unknown,
+                },
+            ),
+        },
+    ],
+}
+

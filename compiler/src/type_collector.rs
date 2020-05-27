@@ -43,6 +43,10 @@ impl<'a> TypeCollector<'a> {
 }
 
 impl<'a> Visitor for TypeCollector<'a> {
+  fn enter_type_expr(&mut self, node: &mut TypeExprNode) {
+    node.typ = self.type_expr_to_value_type(node);
+  }
+
   fn enter_def(&mut self, node: &mut DefNode) {
     match &node.kind {
       DefKind::Function { signature } => {

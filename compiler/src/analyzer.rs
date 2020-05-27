@@ -333,7 +333,10 @@ impl<'a> Visitor for Analyzer<'a> {
         receiver,
         method_parts,
       } => {
-        let receiver_type_binding = self.scope.get_type_binding(&receiver.typ).unwrap();
+        let receiver_type_binding = match self.scope.get_type_binding(&receiver.typ) {
+          Some(binding) => binding,
+          _ => return,
+        };
 
         let method_name_parts = method_parts
           .iter()
@@ -356,6 +359,28 @@ impl<'a> Visitor for Analyzer<'a> {
             },
           })
         }
+      }
+
+      ExprKind::TypeAssertion {
+        expr,
+        asserted_type,
+      } => {
+        let expr_type = &expr.typ;
+        let asserted_type = &asserted_type.typ;
+
+        if expr_type != asserted_type {
+          self.error(AnalysisError {
+            pos: node.pos,
+            kind: AnalysisErrorKind::TypeMismatchInTypeAssertion {
+              expected: asserted_type.clone(),
+              actual: expr_type.clone(),
+            },
+          });
+
+          return;
+        }
+
+        node.typ = asserted_type.clone();
       }
 
       ExprKind::EmptyTuple => node.typ = ValueType::Nothing,

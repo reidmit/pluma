@@ -65,9 +65,9 @@ pub trait Visitor {
 
   fn leave_top_level_statement(&mut self, _node: &mut TopLevelStatementNode) {}
 
-  fn enter_type(&mut self, _node: &mut TypeExprNode) {}
+  fn enter_type_expr(&mut self, _node: &mut TypeExprNode) {}
 
-  fn leave_type(&mut self, _node: &mut TypeExprNode) {}
+  fn leave_type_expr(&mut self, _node: &mut TypeExprNode) {}
 
   fn enter_type_def(&mut self, _node: &mut TypeDefNode) {}
 

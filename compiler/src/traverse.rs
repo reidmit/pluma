@@ -109,6 +109,13 @@ impl Traverse for ExprNode {
           part.traverse(visitor);
         }
       }
+      ExprKind::TypeAssertion {
+        expr,
+        asserted_type,
+      } => {
+        expr.traverse(visitor);
+        asserted_type.traverse(visitor);
+      }
       other_kind => todo!("traverse {:#?}", other_kind),
     }
 
@@ -236,21 +243,16 @@ impl Traverse for TopLevelStatementNode {
 }
 
 impl Traverse for TypeExprNode {
-  // todo
+  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+    visitor.enter_type_expr(self);
+
+    visitor.leave_type_expr(self);
+  }
 }
 
 impl Traverse for TypeDefNode {
   fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
     visitor.enter_type_def(self);
-
-    // match &self.kind {
-    //   TypeDefKind::Enum { variants } => {
-    //     for variant in variants {
-    //       visitor.visit_type(&variant);
-    //     }
-    //   }
-    //   _ => todo!("not yet implemented"),
-    // }
 
     visitor.leave_type_def(self);
   }
