@@ -106,6 +106,7 @@ ModuleNode {
                                             generics: [],
                                         },
                                     ),
+                                    typ: Unknown,
                                 },
                             ),
                             (
@@ -131,6 +132,7 @@ ModuleNode {
                                             generics: [],
                                         },
                                     ),
+                                    typ: Unknown,
                                 },
                             ),
                         ],

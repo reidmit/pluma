@@ -122,6 +122,7 @@ ModuleNode {
                                             generics: [],
                                         },
                                     ),
+                                    typ: Unknown,
                                 },
                             ),
                         ],
@@ -142,6 +143,7 @@ ModuleNode {
                                     generics: [],
                                 },
                             ),
+                            typ: Unknown,
                         },
                     ),
                     generic_type_constraints: [
@@ -168,6 +170,7 @@ ModuleNode {
                                         generics: [],
                                     },
                                 ),
+                                typ: Unknown,
                             },
                         ),
                     ],

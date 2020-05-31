@@ -80,6 +80,7 @@ ModuleNode {
                                             generics: [],
                                         },
                                     ),
+                                    typ: Unknown,
                                 },
                             ),
                         ],

@@ -93,6 +93,7 @@ ModuleNode {
                                         12,
                                     ),
                                     kind: EmptyTuple,
+                                    typ: Unknown,
                                 },
                             ),
                         ],

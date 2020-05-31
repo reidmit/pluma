@@ -137,6 +137,7 @@ ModuleNode {
                                                         generics: [],
                                                     },
                                                 ),
+                                                typ: Unknown,
                                             },
                                             TypeExprNode {
                                                 pos: (
@@ -153,9 +154,11 @@ ModuleNode {
                                                         generics: [],
                                                     },
                                                 ),
+                                                typ: Unknown,
                                             },
                                         ],
                                     ),
+                                    typ: Unknown,
                                 },
                                 TypeExprNode {
                                     pos: (
@@ -172,8 +175,10 @@ ModuleNode {
                                             generics: [],
                                         },
                                     ),
+                                    typ: Unknown,
                                 },
                             ),
+                            typ: Unknown,
                         },
                     },
                     name: TypeIdentifierNode {
@@ -198,6 +203,7 @@ ModuleNode {
                                         generics: [],
                                     },
                                 ),
+                                typ: Unknown,
                             },
                         ],
                     },
@@ -225,6 +231,7 @@ ModuleNode {
                                         generics: [],
                                     },
                                 ),
+                                typ: Unknown,
                             },
                         ),
                     ],

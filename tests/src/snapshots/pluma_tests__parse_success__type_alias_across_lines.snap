@@ -64,6 +64,7 @@ ModuleNode {
                                     generics: [],
                                 },
                             ),
+                            typ: Unknown,
                         },
                     },
                     name: TypeIdentifierNode {

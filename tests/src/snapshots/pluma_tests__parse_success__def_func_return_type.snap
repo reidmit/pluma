@@ -125,6 +125,7 @@ ModuleNode {
                                         12,
                                     ),
                                     kind: EmptyTuple,
+                                    typ: Unknown,
                                 },
                             ),
                         ],
@@ -151,6 +152,7 @@ ModuleNode {
                                             generics: [],
                                         },
                                     ),
+                                    typ: Unknown,
                                 },
                                 TypeExprNode {
                                     pos: (
@@ -167,8 +169,10 @@ ModuleNode {
                                             generics: [],
                                         },
                                     ),
+                                    typ: Unknown,
                                 },
                             ),
+                            typ: Unknown,
                         },
                     ),
                     generic_type_constraints: [],

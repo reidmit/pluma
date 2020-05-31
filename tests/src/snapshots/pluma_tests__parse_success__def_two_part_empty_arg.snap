@@ -113,6 +113,7 @@ ModuleNode {
                                         12,
                                     ),
                                     kind: EmptyTuple,
+                                    typ: Unknown,
                                 },
                             ),
                             (
@@ -129,6 +130,7 @@ ModuleNode {
                                         21,
                                     ),
                                     kind: EmptyTuple,
+                                    typ: Unknown,
                                 },
                             ),
                         ],

@@ -188,6 +188,7 @@ ModuleNode {
                                             generics: [],
                                         },
                                     ),
+                                    typ: Unknown,
                                 },
                             ),
                             (
@@ -213,6 +214,7 @@ ModuleNode {
                                             generics: [],
                                         },
                                     ),
+                                    typ: Unknown,
                                 },
                             ),
                             (
@@ -238,6 +240,7 @@ ModuleNode {
                                             generics: [],
                                         },
                                     ),
+                                    typ: Unknown,
                                 },
                             ),
                         ],
@@ -264,6 +267,7 @@ ModuleNode {
                                         generics: [],
                                     },
                                 ),
+                                typ: Unknown,
                             },
                             TypeExprNode {
                                 pos: (
@@ -280,6 +284,7 @@ ModuleNode {
                                         generics: [],
                                     },
                                 ),
+                                typ: Unknown,
                             },
                         ],
                     },
@@ -307,6 +312,7 @@ ModuleNode {
                                         generics: [],
                                     },
                                 ),
+                                typ: Unknown,
                             },
                         ),
                         (
@@ -332,6 +338,7 @@ ModuleNode {
                                         generics: [],
                                     },
                                 ),
+                                typ: Unknown,
                             },
                         ),
                     ],

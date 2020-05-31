@@ -133,6 +133,7 @@ ModuleNode {
                                             generics: [],
                                         },
                                     ),
+                                    typ: Unknown,
                                 },
                                 TypeExprNode {
                                     pos: (
@@ -146,6 +147,7 @@ ModuleNode {
                                                 18,
                                             ),
                                             kind: EmptyTuple,
+                                            typ: Unknown,
                                         },
                                         TypeExprNode {
                                             pos: (
@@ -169,6 +171,7 @@ ModuleNode {
                                                                 generics: [],
                                                             },
                                                         ),
+                                                        typ: Unknown,
                                                     },
                                                     TypeExprNode {
                                                         pos: (
@@ -185,13 +188,17 @@ ModuleNode {
                                                                 generics: [],
                                                             },
                                                         ),
+                                                        typ: Unknown,
                                                     },
                                                 ],
                                             ),
+                                            typ: Unknown,
                                         },
                                     ),
+                                    typ: Unknown,
                                 },
                             ),
+                            typ: Unknown,
                         },
                     },
                     typ: Unknown,

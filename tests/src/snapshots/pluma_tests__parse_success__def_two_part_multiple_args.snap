@@ -145,6 +145,7 @@ ModuleNode {
                                                         generics: [],
                                                     },
                                                 ),
+                                                typ: Unknown,
                                             },
                                             TypeExprNode {
                                                 pos: (
@@ -161,9 +162,11 @@ ModuleNode {
                                                         generics: [],
                                                     },
                                                 ),
+                                                typ: Unknown,
                                             },
                                         ],
                                     ),
+                                    typ: Unknown,
                                 },
                             ),
                             (
@@ -189,6 +192,7 @@ ModuleNode {
                                             generics: [],
                                         },
                                     ),
+                                    typ: Unknown,
                                 },
                             ),
                         ],
