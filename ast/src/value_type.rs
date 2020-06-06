@@ -6,8 +6,18 @@ pub enum ValueType {
   Generic(String, Vec<ValueType>),
   Func(Vec<ValueType>, Box<ValueType>),
   Tuple(Vec<ValueType>),
+  Constrained(TypeConstraint),
   Nothing,
   Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Hash)]
+pub enum TypeConstraint {
+  NamedTrait(String),
+  InlineTrait {
+    fields: Vec<(String, ValueType)>,
+    methods: Vec<(Vec<(String, ValueType)>, ValueType)>,
+  },
 }
 
 impl ValueType {}
@@ -54,6 +64,32 @@ impl fmt::Display for ValueType {
           .join(", "),
         return_type,
       ),
+
+      ValueType::Constrained(constraint) => match constraint {
+        TypeConstraint::NamedTrait(name) => write!(f, "{}", name),
+
+        TypeConstraint::InlineTrait { fields, methods } => {
+          write!(f, "(")?;
+
+          for (field_name, field_type) in fields {
+            write!(f, ". {} :: {}, ", field_name, field_type)?;
+          }
+
+          for (method_parts, return_type) in methods {
+            write!(f, ". ")?;
+
+            for (part_name, part_param_type) in method_parts {
+              write!(f, "{} {} ", part_name, part_param_type)?;
+            }
+
+            write!(f, "-> {}, ", return_type)?;
+          }
+
+          write!(f, ")")?;
+
+          Ok(())
+        }
+      },
     }
   }
 }
