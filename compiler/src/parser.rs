@@ -18,10 +18,12 @@ macro_rules! expect_token_and_do {
     match $self.current_token() {
       Some(&$tokType(..)) => $block,
       Some(&tok) => {
+        println!("CURRENT TOKEN IS: {:#?}", $self.current_token());
+
         return $self.error(ParseError {
           pos: tok.get_location(),
           kind: ParseErrorKind::UnexpectedToken($tokType(0, 0)),
-        })
+        });
       }
       None => {
         return $self.error(ParseError {
@@ -1350,7 +1352,11 @@ impl<'a> Parser<'a> {
       start
     });
 
+    self.skip_line_breaks();
+
     let maybe_reg_expr_node = self.parse_regular_expression_body();
+
+    self.skip_line_breaks();
 
     let end = expect_token_and_do!(self, Token::ForwardSlash, {
       let (_, end) = self.current_token_position();
@@ -1383,6 +1389,8 @@ impl<'a> Parser<'a> {
 
     loop {
       if term.is_some() {
+        self.skip_line_breaks();
+
         if first_term.is_none() {
           first_term = term;
         } else {
@@ -1425,6 +1433,8 @@ impl<'a> Parser<'a> {
     let mut other_parts = Vec::new();
 
     loop {
+      self.skip_line_breaks();
+
       let part = match self.current_token() {
         Some(&Token::Identifier(start, end)) => {
           self.advance();
@@ -1540,6 +1550,8 @@ impl<'a> Parser<'a> {
 
         _ => part,
       };
+
+      self.skip_line_breaks();
 
       if first_part.is_none() {
         first_part = Some(modified_part);

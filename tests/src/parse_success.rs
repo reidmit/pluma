@@ -101,6 +101,15 @@ test_parse_success! {
     |/"aa" <middle: "bb" | "oo"> "cc"/
   "#,
 
+  regex_across_lines: r#"
+    |/"w"
+    |  (
+    |  "o"
+    |  |
+    |  "a")? "w"
+    |/
+  "#,
+
   parenthesized: r#"
     |(1)
   "#,
