@@ -65,6 +65,42 @@ test_parse_success! {
     |こんにちは
   "#,
 
+  regex_simple: r#"
+    |/space/
+  "#,
+
+  regex_sequence: r#"
+    |/space digit space/
+  "#,
+
+  regex_literals: r#"
+    |/"w" "oooo" "w"/
+  "#,
+
+  regex_alternations: r#"
+    |/"a" | "b" | "c"/
+  "#,
+
+  regex_plus: r#"
+    |/"w" "o"+ "w"/
+  "#,
+
+  regex_star: r#"
+    |/"w" "o"* "w"/
+  "#,
+
+  regex_optional: r#"
+    |/"w" "o"? "w"/
+  "#,
+
+  regex_group: r#"
+    |/"w" ("o" | "a")? "w"/
+  "#,
+
+  regex_named_capture: r#"
+    |/"aa" <middle: "bb" | "oo"> "cc"/
+  "#,
+
   parenthesized: r#"
     |(1)
   "#,

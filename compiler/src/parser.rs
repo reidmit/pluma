@@ -1343,6 +1343,230 @@ impl<'a> Parser<'a> {
     })
   }
 
+  fn parse_regular_expression(&mut self) -> Option<ExprNode> {
+    let start = expect_token_and_do!(self, Token::ForwardSlash, {
+      let (start, _) = self.current_token_position();
+      self.advance();
+      start
+    });
+
+    let maybe_reg_expr_node = self.parse_regular_expression_body();
+
+    let end = expect_token_and_do!(self, Token::ForwardSlash, {
+      let (_, end) = self.current_token_position();
+      self.advance();
+      end
+    });
+
+    let reg_expr_node = match maybe_reg_expr_node {
+      Some(expr) => expr,
+      None => {
+        return self.error(ParseError {
+          pos: (start, end),
+          kind: ParseErrorKind::EmptyRegularExpression,
+        })
+      }
+    };
+
+    Some(ExprNode {
+      pos: (start, end),
+      kind: ExprKind::RegExpr(reg_expr_node),
+      typ: ValueType::Unknown,
+    })
+  }
+
+  fn parse_regular_expression_body(&mut self) -> Option<RegExprNode> {
+    let mut first_term = None;
+    let mut other_terms = Vec::new();
+
+    let mut term = self.parse_regular_expression_term();
+
+    loop {
+      if term.is_some() {
+        if first_term.is_none() {
+          first_term = term;
+        } else {
+          other_terms.push(term.unwrap());
+        }
+
+        match self.current_token() {
+          Some(&Token::Pipe(..)) => {
+            self.advance();
+            term = self.parse_regular_expression_term();
+            continue;
+          }
+          _ => {}
+        }
+      }
+
+      break;
+    }
+
+    if first_term.is_none() {
+      return None;
+    }
+
+    if other_terms.is_empty() {
+      return first_term;
+    }
+
+    other_terms.insert(0, first_term.unwrap());
+    let start = other_terms.first().unwrap().pos.0;
+    let end = other_terms.last().unwrap().pos.1;
+
+    Some(RegExprNode {
+      pos: (start, end),
+      kind: RegExprKind::Alternation(other_terms),
+    })
+  }
+
+  fn parse_regular_expression_term(&mut self) -> Option<RegExprNode> {
+    let mut first_part = None;
+    let mut other_parts = Vec::new();
+
+    loop {
+      let part = match self.current_token() {
+        Some(&Token::Identifier(start, end)) => {
+          self.advance();
+
+          let name = read_string!(self, start, end);
+
+          RegExprNode {
+            pos: (start, end),
+            kind: RegExprKind::CharacterClass(name),
+          }
+        }
+
+        Some(&Token::StringLiteral(start, end)) => {
+          self.advance();
+
+          let value = read_string_with_escapes!(self, start, end);
+
+          RegExprNode {
+            pos: (start, end),
+            kind: RegExprKind::Literal(value),
+          }
+        }
+
+        Some(&Token::LeftParen(start, end)) => {
+          self.advance();
+
+          let expr = match self.parse_regular_expression_body() {
+            Some(expr) => expr,
+            None => {
+              return self.error(ParseError {
+                pos: (start, end),
+                kind: ParseErrorKind::EmptyRegularExpressionGroup,
+              })
+            }
+          };
+
+          expect_token_and_do!(self, Token::RightParen, { self.advance() });
+
+          RegExprNode {
+            pos: (start, end),
+            kind: RegExprKind::Grouping(Box::new(expr)),
+          }
+        }
+
+        Some(&Token::LeftAngle(start, end)) => {
+          self.advance();
+
+          let name = expect_token_and_do!(self, Token::Identifier, {
+            let (start, end) = self.current_token_position();
+            let name = read_string!(self, start, end);
+            self.advance();
+            name
+          });
+
+          expect_token_and_do!(self, Token::Colon, { self.advance() });
+
+          let expr = match self.parse_regular_expression_body() {
+            Some(expr) => expr,
+            None => {
+              return self.error(ParseError {
+                pos: (start, end),
+                kind: ParseErrorKind::EmptyRegularExpressionGroup,
+              })
+            }
+          };
+
+          expect_token_and_do!(self, Token::RightAngle, { self.advance() });
+
+          RegExprNode {
+            pos: (start, end),
+            kind: RegExprKind::NamedCapture(name, Box::new(expr)),
+          }
+        }
+
+        _ => break,
+      };
+
+      let modified_part = match self.current_token() {
+        Some(&Token::Operator(start, end)) => {
+          let op = &self.source[start..end];
+
+          match op {
+            b"*" => {
+              self.advance();
+
+              RegExprNode {
+                pos: (start, part.pos.1),
+                kind: RegExprKind::ZeroOrMore(Box::new(part)),
+              }
+            }
+
+            b"+" => {
+              self.advance();
+
+              RegExprNode {
+                pos: (start, part.pos.1),
+                kind: RegExprKind::OneOrMore(Box::new(part)),
+              }
+            }
+
+            b"?" => {
+              self.advance();
+
+              RegExprNode {
+                pos: (start, part.pos.1),
+                kind: RegExprKind::OneOrZero(Box::new(part)),
+              }
+            }
+
+            _ => part,
+          }
+        }
+
+        _ => part,
+      };
+
+      if first_part.is_none() {
+        first_part = Some(modified_part);
+      } else {
+        other_parts.push(modified_part);
+      }
+    }
+
+    if other_parts.is_empty() {
+      if first_part.is_some() {
+        return first_part;
+      }
+
+      return None;
+    }
+
+    match first_part {
+      Some(part) => other_parts.insert(0, part),
+      None => return None,
+    };
+
+    Some(RegExprNode {
+      pos: (0, 0),
+      kind: RegExprKind::Sequence(other_parts),
+    })
+  }
+
   fn parse_statement(&mut self) -> Option<StatementNode> {
     match self.current_token() {
       Some(&Token::KeywordLet(..)) => self.parse_let_statement().map(|let_node| StatementNode {
@@ -1513,6 +1737,7 @@ impl<'a> Parser<'a> {
   fn parse_term(&mut self) -> Option<ExprNode> {
     match self.current_token() {
       Some(&Token::LeftParen(..)) => self.parse_parenthetical(),
+      Some(&Token::ForwardSlash(..)) => self.parse_regular_expression(),
       Some(&Token::Operator(..)) => self.parse_unary_operation(),
       Some(&Token::LeftBrace(..)) => self.parse_block(),
       Some(&Token::LeftBracket(..)) => self.parse_list_or_dict(),

@@ -9,6 +9,8 @@ pub struct ParseError {
 
 #[derive(Debug, Copy, Clone)]
 pub enum ParseErrorKind {
+  EmptyRegularExpression,
+  EmptyRegularExpressionGroup,
   IncompleteMethodSignature,
   InvalidBinaryDigit,
   InvalidDecimalDigit,
@@ -49,6 +51,7 @@ impl fmt::Display for ParseError {
     use ParseErrorKind::*;
 
     match self.kind {
+      EmptyRegularExpression => write!(f, "Empty regular expression."),
       IncompleteMethodSignature => write!(f, "Incomplete method signature."),
       InvalidBinaryDigit => write!(f, "Invalid binary digit."),
       InvalidDecimalDigit => write!(f, "Invalid digit."),

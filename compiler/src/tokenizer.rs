@@ -183,6 +183,11 @@ impl<'a> Tokenizer<'a> {
           tokens.push(RightBracket(start_index, index))
         }
 
+        b'/' => {
+          index += 1;
+          tokens.push(ForwardSlash(start_index, index))
+        }
+
         b',' => {
           index += 1;
           tokens.push(Comma(start_index, index))
@@ -455,6 +460,7 @@ fn is_operator_char(byte: u8) -> bool {
     b'&' => true,
     b'@' => true,
     b'^' => true,
+    b'?' => true,
     _ => false,
   }
 }

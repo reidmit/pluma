@@ -41,10 +41,6 @@ pub enum AnalysisErrorKind {
     expected: ValueType,
     actual: ValueType,
   },
-  TypeMismatch {
-    expected: ValueType,
-    actual: ValueType,
-  },
   ParameterTypeMismatch {
     expected: ValueType,
     actual: ValueType,
@@ -124,12 +120,6 @@ impl fmt::Display for AnalysisError {
         f,
         "Mismatched number of elements in tuple pattern. Pattern expects {}, but value has {}.",
         pattern_size, value_size,
-      ),
-
-      TypeMismatch { expected, actual } => write!(
-        f,
-        "Type mismatch. Expected type {}, but found type {}.",
-        expected, actual
       ),
 
       ParameterTypeMismatch { expected, actual } => write!(
