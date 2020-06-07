@@ -34,7 +34,7 @@ pub enum TypeBindingKind {
   Enum,
   Struct { fields: HashMap<String, Binding> },
   Alias,
-  Trait,
+  Trait { fields: HashMap<String, Binding> },
   IntrinsicType,
 }
 

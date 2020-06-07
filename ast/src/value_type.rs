@@ -14,6 +14,7 @@ pub enum ValueType {
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub enum TypeConstraint {
   NamedTrait(String),
+  GenericTrait(String, Vec<ValueType>),
   InlineTrait {
     fields: Vec<(String, ValueType)>,
     methods: Vec<(Vec<(String, ValueType)>, ValueType)>,
@@ -67,6 +68,17 @@ impl fmt::Display for ValueType {
 
       ValueType::Constrained(constraint) => match constraint {
         TypeConstraint::NamedTrait(name) => write!(f, "{}", name),
+
+        TypeConstraint::GenericTrait(name, generic_params) => write!(
+          f,
+          "{}<{}>",
+          name,
+          generic_params
+            .iter()
+            .map(|p| format!("{}", p))
+            .collect::<Vec<String>>()
+            .join(", ")
+        ),
 
         TypeConstraint::InlineTrait { fields, methods } => {
           write!(f, "(")?;

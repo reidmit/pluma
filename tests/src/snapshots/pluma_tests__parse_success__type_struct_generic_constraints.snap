@@ -297,22 +297,13 @@ ModuleNode {
                                 ),
                                 name: "A",
                             },
-                            TypeExprNode {
+                            TypeIdentifierNode {
                                 pos: (
                                     30,
                                     33,
                                 ),
-                                kind: Single(
-                                    TypeIdentifierNode {
-                                        pos: (
-                                            30,
-                                            33,
-                                        ),
-                                        name: "Any",
-                                        generics: [],
-                                    },
-                                ),
-                                typ: Unknown,
+                                name: "Any",
+                                generics: [],
                             },
                         ),
                         (
@@ -323,22 +314,13 @@ ModuleNode {
                                 ),
                                 name: "B",
                             },
-                            TypeExprNode {
+                            TypeIdentifierNode {
                                 pos: (
                                     40,
                                     50,
                                 ),
-                                kind: Single(
-                                    TypeIdentifierNode {
-                                        pos: (
-                                            40,
-                                            50,
-                                        ),
-                                        name: "Comparable",
-                                        generics: [],
-                                    },
-                                ),
-                                typ: Unknown,
+                                name: "Comparable",
+                                generics: [],
                             },
                         ),
                     ],

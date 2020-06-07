@@ -632,7 +632,7 @@ impl<'a> Parser<'a> {
           self.advance();
         });
 
-        let type_expr = match self.parse_type_expression() {
+        let type_expr = match self.parse_type_identifier() {
           Some(expr) => expr,
           _ => {
             return self.error(ParseError {

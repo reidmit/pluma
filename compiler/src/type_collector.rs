@@ -1,21 +1,16 @@
-use crate::diagnostics::Diagnostic;
 use crate::scope::{Binding, BindingKind, Scope, TypeBindingKind};
 use crate::visitor::Visitor;
 use pluma_ast::nodes::*;
-use pluma_ast::value_type::ValueType;
+use pluma_ast::value_type::*;
 use std::collections::HashMap;
 
 pub struct TypeCollector<'a> {
-  pub diagnostics: Vec<Diagnostic>,
   pub scope: &'a mut Scope,
 }
 
 impl<'a> TypeCollector<'a> {
   pub fn new(scope: &'a mut Scope) -> Self {
-    TypeCollector {
-      diagnostics: Vec::new(),
-      scope,
-    }
+    TypeCollector { scope }
   }
 
   fn type_expr_to_value_type(&self, node: &TypeExprNode) -> ValueType {
@@ -48,6 +43,28 @@ impl<'a> Visitor for TypeCollector<'a> {
   }
 
   fn enter_def(&mut self, node: &mut DefNode) {
+    let mut constraints_map = HashMap::new();
+
+    for (constraint_name, constraint_type_id) in &node.generic_type_constraints {
+      let constraint = if constraint_type_id.generics.is_empty() {
+        TypeConstraint::NamedTrait(constraint_type_id.name.clone())
+      } else {
+        TypeConstraint::GenericTrait(
+          constraint_type_id.name.clone(),
+          constraint_type_id
+            .generics
+            .iter()
+            .map(|type_expr| self.type_expr_to_value_type(type_expr))
+            .collect(),
+        )
+      };
+
+      constraints_map.insert(
+        constraint_name.name.clone(),
+        ValueType::Constrained(constraint),
+      );
+    }
+
     match &node.kind {
       DefKind::Function { signature } => {
         let mut name_parts = Vec::new();
@@ -55,7 +72,18 @@ impl<'a> Visitor for TypeCollector<'a> {
 
         for (part_name, part_type) in signature {
           name_parts.push(part_name.name.clone());
-          param_types.push(self.type_expr_to_value_type(part_type));
+
+          let param_type = self.type_expr_to_value_type(part_type);
+
+          if let ValueType::Named(name) = &param_type {
+            if let Some(constraint) = constraints_map.get(name) {
+              param_types.push(constraint.clone());
+            } else {
+              param_types.push(param_type);
+            }
+          } else {
+            param_types.push(param_type);
+          }
         }
 
         let return_type = match &node.return_type {
@@ -194,10 +222,28 @@ impl<'a> Visitor for TypeCollector<'a> {
           .add_type_binding(typ.clone(), TypeBindingKind::Alias, node.name.pos);
       }
 
-      TypeDefKind::Trait { .. } => {
-        self
-          .scope
-          .add_type_binding(typ.clone(), TypeBindingKind::Trait, node.name.pos);
+      TypeDefKind::Trait { fields, .. } => {
+        let mut fields_map = HashMap::new();
+
+        for field in fields {
+          let (field_id, field_type) = field;
+
+          fields_map.insert(
+            field_id.name.clone(),
+            Binding {
+              kind: BindingKind::Field,
+              ref_count: 0,
+              pos: field_id.pos,
+              typ: self.type_expr_to_value_type(field_type),
+            },
+          );
+        }
+
+        self.scope.add_type_binding(
+          typ.clone(),
+          TypeBindingKind::Trait { fields: fields_map },
+          node.name.pos,
+        );
       }
     }
   }

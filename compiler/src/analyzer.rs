@@ -155,7 +155,7 @@ impl<'a> Visitor for Analyzer<'a> {
 
             self.error(AnalysisError {
               pos,
-              kind: AnalysisErrorKind::TypeMismatch {
+              kind: AnalysisErrorKind::ParameterTypeMismatch {
                 expected: param_type.clone(),
                 actual: given_type.clone(),
               },

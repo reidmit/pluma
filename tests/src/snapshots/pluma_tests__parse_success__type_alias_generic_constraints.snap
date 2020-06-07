@@ -216,22 +216,13 @@ ModuleNode {
                                 ),
                                 name: "A",
                             },
-                            TypeExprNode {
+                            TypeIdentifierNode {
                                 pos: (
                                     29,
                                     32,
                                 ),
-                                kind: Single(
-                                    TypeIdentifierNode {
-                                        pos: (
-                                            29,
-                                            32,
-                                        ),
-                                        name: "Any",
-                                        generics: [],
-                                    },
-                                ),
-                                typ: Unknown,
+                                name: "Any",
+                                generics: [],
                             },
                         ),
                     ],
