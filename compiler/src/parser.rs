@@ -1521,7 +1521,7 @@ impl<'a> Parser<'a> {
               self.advance();
 
               RegExprNode {
-                pos: (start, part.pos.1),
+                pos: (part.pos.0, end),
                 kind: RegExprKind::ZeroOrMore(Box::new(part)),
               }
             }
@@ -1530,7 +1530,7 @@ impl<'a> Parser<'a> {
               self.advance();
 
               RegExprNode {
-                pos: (start, part.pos.1),
+                pos: (part.pos.0, end),
                 kind: RegExprKind::OneOrMore(Box::new(part)),
               }
             }
@@ -1539,7 +1539,7 @@ impl<'a> Parser<'a> {
               self.advance();
 
               RegExprNode {
-                pos: (start, part.pos.1),
+                pos: (part.pos.0, end),
                 kind: RegExprKind::OneOrZero(Box::new(part)),
               }
             }

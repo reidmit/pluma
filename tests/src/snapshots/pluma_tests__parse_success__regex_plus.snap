@@ -74,8 +74,8 @@ ModuleNode {
                                     },
                                     RegExprNode {
                                         pos: (
-                                            8,
-                                            7,
+                                            6,
+                                            9,
                                         ),
                                         kind: OneOrMore(
                                             RegExprNode {
