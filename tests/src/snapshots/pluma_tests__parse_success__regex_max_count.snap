@@ -1,0 +1,124 @@
+---
+source: tests/src/parse_success.rs
+expression: "/\"aa\" \"b\"{ , 2 } \"cc\"/"
+---
+
+=== Source ===
+/"aa" "b"{ , 2 } "cc"/
+
+=== Tokens ===
+[
+    ForwardSlash(
+        0,
+        1,
+    ),
+    StringLiteral(
+        2,
+        4,
+    ),
+    StringLiteral(
+        7,
+        8,
+    ),
+    LeftBrace(
+        9,
+        10,
+    ),
+    Comma(
+        11,
+        12,
+    ),
+    DecimalDigits(
+        13,
+        14,
+    ),
+    RightBrace(
+        15,
+        16,
+    ),
+    StringLiteral(
+        18,
+        20,
+    ),
+    ForwardSlash(
+        21,
+        22,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        22,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                22,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        0,
+                        22,
+                    ),
+                    kind: RegExpr(
+                        RegExprNode {
+                            pos: (
+                                0,
+                                0,
+                            ),
+                            kind: Sequence(
+                                [
+                                    RegExprNode {
+                                        pos: (
+                                            2,
+                                            4,
+                                        ),
+                                        kind: Literal(
+                                            "aa",
+                                        ),
+                                    },
+                                    RegExprNode {
+                                        pos: (
+                                            7,
+                                            16,
+                                        ),
+                                        kind: AtMostCount(
+                                            RegExprNode {
+                                                pos: (
+                                                    7,
+                                                    8,
+                                                ),
+                                                kind: Literal(
+                                                    "b",
+                                                ),
+                                            },
+                                            2,
+                                        ),
+                                    },
+                                    RegExprNode {
+                                        pos: (
+                                            18,
+                                            20,
+                                        ),
+                                        kind: Literal(
+                                            "cc",
+                                        ),
+                                    },
+                                ],
+                            ),
+                        },
+                    ),
+                    typ: Unknown,
+                },
+            ),
+        },
+    ],
+}
+

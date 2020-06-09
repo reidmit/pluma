@@ -1548,6 +1548,78 @@ impl<'a> Parser<'a> {
           }
         }
 
+        Some(&Token::LeftBrace(_, _)) => {
+          self.advance();
+
+          let mut min_count = None;
+          let mut max_count = None;
+          let mut has_comma = false;
+
+          if current_token_is!(self, Token::DecimalDigits) {
+            let (start, end) = self.current_token_position();
+            let value = self.parse_numeric_literal(start, end, 10) as usize;
+            min_count = Some(value);
+            self.advance();
+          }
+
+          if current_token_is!(self, Token::Comma) {
+            has_comma = true;
+
+            self.advance();
+
+            if current_token_is!(self, Token::DecimalDigits) {
+              let (start, end) = self.current_token_position();
+              let value = self.parse_numeric_literal(start, end, 10) as usize;
+              max_count = Some(value);
+              self.advance();
+            }
+          }
+
+          let end = expect_token_and_do!(self, Token::RightBrace, {
+            let (_, end) = self.current_token_position();
+            self.advance();
+            end
+          });
+
+          match (min_count, max_count, has_comma) {
+            (Some(min), None, true) => RegExprNode {
+              pos: (part.pos.0, end),
+              kind: RegExprKind::AtLeastCount(Box::new(part), min),
+            },
+
+            (None, Some(max), true) => RegExprNode {
+              pos: (part.pos.0, end),
+              kind: RegExprKind::AtMostCount(Box::new(part), max),
+            },
+
+            (Some(min), None, false) => RegExprNode {
+              pos: (part.pos.0, end),
+              kind: RegExprKind::ExactCount(Box::new(part), min),
+            },
+
+            (Some(min), Some(max), true) => {
+              if min > max {
+                self.error::<RegExprNode>(ParseError {
+                  pos: (part.pos.0, end),
+                  kind: ParseErrorKind::InvalidRegularExpressionCountModifier,
+                });
+              }
+
+              RegExprNode {
+                pos: (part.pos.0, end),
+                kind: RegExprKind::RangeCount(Box::new(part), min, max),
+              }
+            }
+
+            _ => {
+              return self.error(ParseError {
+                pos: (part.pos.0, end),
+                kind: ParseErrorKind::EmptyRegularExpressionCount,
+              })
+            }
+          }
+        }
+
         _ => part,
       };
 

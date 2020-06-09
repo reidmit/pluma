@@ -101,6 +101,22 @@ test_parse_success! {
     |/"aa" <middle: "bb" | "oo"> "cc"/
   "#,
 
+  regex_min_count: r#"
+    |/"aa" "b"{2, } "cc"/
+  "#,
+
+  regex_max_count: r#"
+    |/"aa" "b"{ , 2 } "cc"/
+  "#,
+
+  regex_range_count: r#"
+    |/"aa" "b"{1,8} "cc"/
+  "#,
+
+  regex_exact_count: r#"
+    |/"aa" "b"{18} "cc"/
+  "#,
+
   regex_across_lines: r#"
     |/"w"
     |  (

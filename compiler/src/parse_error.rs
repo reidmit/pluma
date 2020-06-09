@@ -11,11 +11,13 @@ pub struct ParseError {
 pub enum ParseErrorKind {
   EmptyRegularExpression,
   EmptyRegularExpressionGroup,
+  EmptyRegularExpressionCount,
   IncompleteMethodSignature,
   InvalidBinaryDigit,
   InvalidDecimalDigit,
   InvalidHexDigit,
   InvalidOctalDigit,
+  InvalidRegularExpressionCountModifier,
   MissingArgumentInCall,
   MissingDefinitionBody,
   MissingDictValue,
