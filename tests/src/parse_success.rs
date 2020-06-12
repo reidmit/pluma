@@ -248,6 +248,14 @@ test_parse_success! {
     |}
   "#,
 
+  intrinsic_def_binary_op_plus: r#"
+    |intrinsic_def Int + Int -> Int
+  "#,
+
+  def_binary_op: r#"
+    |def A + A -> A {}
+  "#,
+
   call_empty_arg: r#"
     |func()
   "#,

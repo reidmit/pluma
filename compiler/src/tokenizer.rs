@@ -418,19 +418,30 @@ impl<'a> Tokenizer<'a> {
 
 fn is_identifier_start_char(byte: u8) -> bool {
   match byte {
-    _ if byte.is_ascii_digit() => false,
-    _ if byte.is_ascii_whitespace() => false,
-    _ if byte.is_ascii_punctuation() => false,
-    _ if byte.is_ascii_control() => false,
-    _ => true,
+    _ if is_digit(byte) => false,
+    _ => is_identifier_char(byte),
   }
 }
 
 fn is_identifier_char(byte: u8) -> bool {
   match byte {
     _ if byte.is_ascii_whitespace() => false,
-    _ if byte.is_ascii_punctuation() => false,
     _ if byte.is_ascii_control() => false,
+    _ if is_operator_char(byte) => false,
+    b'"' => false,
+    b'#' => false,
+    b'$' => false,
+    b'\'' => false,
+    b'(' => false,
+    b')' => false,
+    b',' => false,
+    b';' => false,
+    b'`' => false,
+    b'[' => false,
+    b']' => false,
+    b'^' => false,
+    b'{' => false,
+    b'}' => false,
     _ => true,
   }
 }

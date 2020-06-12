@@ -1,0 +1,108 @@
+---
+source: tests/src/parse_success.rs
+expression: intrinsic_def Int + Int -> Int
+---
+
+=== Source ===
+intrinsic_def Int + Int -> Int
+
+=== Tokens ===
+[
+    KeywordIntrinsicDef(
+        0,
+        13,
+    ),
+    Identifier(
+        14,
+        17,
+    ),
+    Operator(
+        18,
+        19,
+    ),
+    Identifier(
+        20,
+        23,
+    ),
+    Arrow(
+        24,
+        26,
+    ),
+    Identifier(
+        27,
+        30,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        30,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                30,
+            ),
+            kind: IntrinsicDef(
+                IntrinsicDefNode {
+                    pos: (
+                        0,
+                        30,
+                    ),
+                    kind: BinaryOperator {
+                        left: TypeIdentifierNode {
+                            pos: (
+                                14,
+                                17,
+                            ),
+                            name: "Int",
+                            generics: [],
+                        },
+                        op: OperatorNode {
+                            pos: (
+                                18,
+                                19,
+                            ),
+                            name: "+",
+                        },
+                        right: TypeIdentifierNode {
+                            pos: (
+                                20,
+                                23,
+                            ),
+                            name: "Int",
+                            generics: [],
+                        },
+                    },
+                    return_type: Some(
+                        TypeExprNode {
+                            pos: (
+                                27,
+                                30,
+                            ),
+                            kind: Single(
+                                TypeIdentifierNode {
+                                    pos: (
+                                        27,
+                                        30,
+                                    ),
+                                    name: "Int",
+                                    generics: [],
+                                },
+                            ),
+                            typ: Unknown,
+                        },
+                    ),
+                    generic_type_constraints: [],
+                },
+            ),
+        },
+    ],
+}
+

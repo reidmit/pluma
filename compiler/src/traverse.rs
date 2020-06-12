@@ -55,6 +55,10 @@ impl Traverse for DefNode {
       }
     }
 
+    for statement in &mut self.body {
+      statement.traverse(visitor);
+    }
+
     visitor.leave_def(self);
   }
 }
@@ -68,6 +72,13 @@ impl Traverse for ExprNode {
         right.traverse(visitor);
         left.traverse(visitor);
       }
+
+      ExprKind::BinaryOperation { op, left, right } => {
+        op.traverse(visitor);
+        left.traverse(visitor);
+        right.traverse(visitor);
+      }
+
       ExprKind::Block { params, body } => {
         for param in params {
           param.traverse(visitor);
@@ -77,29 +88,40 @@ impl Traverse for ExprNode {
           stmt.traverse(visitor);
         }
       }
+
       ExprKind::Call(call) => call.traverse(visitor),
+
       ExprKind::Literal(literal) => literal.traverse(visitor),
+
+      ExprKind::Grouping(inner) => inner.traverse(visitor),
+
       ExprKind::Identifier(ident) => ident.traverse(visitor),
+
       ExprKind::Interpolation(parts) => {
         for part in parts {
           part.traverse(visitor);
         }
       }
+
       ExprKind::Tuple(entries) => {
         for entry in entries {
           entry.traverse(visitor);
         }
       }
+
       ExprKind::EmptyTuple => {}
+
       ExprKind::MultiPartIdentifier(parts) => {
         for part in parts {
           part.traverse(visitor);
         }
       }
+
       ExprKind::FieldAccess { receiver, field } => {
         receiver.traverse(visitor);
         field.traverse(visitor);
       }
+
       ExprKind::MethodAccess {
         receiver,
         method_parts,
@@ -109,6 +131,7 @@ impl Traverse for ExprNode {
           part.traverse(visitor);
         }
       }
+
       ExprKind::TypeAssertion {
         expr,
         asserted_type,
@@ -133,9 +156,9 @@ impl Traverse for IdentifierNode {
 
 impl Traverse for IntrinsicDefNode {
   fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
-    visitor.enter_intrinsic_def_node(self);
+    visitor.enter_intrinsic_def(self);
 
-    visitor.leave_intrinsic_def_node(self);
+    visitor.leave_intrinsic_def(self);
   }
 }
 

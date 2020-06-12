@@ -1,0 +1,15 @@
+intrinsic_type Int
+
+intrinsic_type Float
+
+intrinsic_type String
+
+trait Any ()
+
+enum Bool
+  | True
+  | False
+
+enum Option<A> where A :: Any
+  | None
+  | Some A

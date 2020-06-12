@@ -6,5 +6,7 @@ node_modules
 *.o
 bin
 target/
+llvm/
+experiment/
 
 *.vsix

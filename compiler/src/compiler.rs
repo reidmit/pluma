@@ -46,7 +46,7 @@ impl Compiler {
 
     self.parse_module(
       self.entry_module_name.clone(),
-      self.to_module_path(self.entry_module_name.clone()),
+      to_module_path(self.root_dir.clone(), self.entry_module_name.clone()),
       &mut dependency_graph,
     );
 
@@ -72,18 +72,25 @@ impl Compiler {
 
       let module_to_analyze = self.modules.get_mut(module_name).unwrap();
 
-      println!("{:#?}", module_to_analyze.ast);
-
       let mut type_collector = TypeCollector::new(&mut module_scope);
       module_to_analyze.traverse(&mut type_collector);
+
+      for diagnostic in type_collector.diagnostics {
+        self.diagnostics.push(diagnostic.with_module(
+          module_name.clone(),
+          to_module_path(self.root_dir.clone(), self.entry_module_name.clone()),
+        ))
+      }
 
       let mut analyzer = Analyzer::new(&mut module_scope);
       module_to_analyze.traverse(&mut analyzer);
 
+      // println!("{:#?}", module_to_analyze.ast);
+
       for diagnostic in analyzer.diagnostics {
         self.diagnostics.push(diagnostic.with_module(
           module_name.clone(),
-          self.to_module_path(self.entry_module_name.clone()),
+          to_module_path(self.root_dir.clone(), self.entry_module_name.clone()),
         ))
       }
     }
@@ -118,8 +125,7 @@ impl Compiler {
           Diagnostic::error(ImportError {
             kind: ImportErrorKind::ModuleNotFound(
               import_node.module_name.clone(),
-              self
-                .to_module_path(import_node.module_name.clone())
+              to_module_path(self.root_dir.clone(), import_node.module_name.clone())
                 .to_str()
                 .unwrap()
                 .to_owned(),
@@ -136,7 +142,7 @@ impl Compiler {
 
       self.parse_module(
         import_node.module_name.clone(),
-        self.to_module_path(import_node.module_name),
+        to_module_path(self.root_dir.clone(), import_node.module_name),
         dependency_graph,
       )
     }
@@ -152,16 +158,16 @@ impl Compiler {
       return true;
     }
 
-    if Path::new(&self.to_module_path(module_name.clone())).is_file() {
+    if Path::new(&to_module_path(self.root_dir.clone(), module_name.clone())).is_file() {
       return true;
     }
 
     return false;
   }
+}
 
-  fn to_module_path(&self, module_name: String) -> PathBuf {
-    self.root_dir.join(module_name).with_extension("pa")
-  }
+fn to_module_path(root_dir: PathBuf, module_name: String) -> PathBuf {
+  root_dir.join(module_name).with_extension("pa")
 }
 
 fn get_root_dir_and_module_name(

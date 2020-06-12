@@ -125,8 +125,20 @@ impl Scope {
     method_parts: Vec<String>,
     param_types: Vec<ValueType>,
     return_type: ValueType,
-  ) {
-    let binding = self.get_type_binding(&typ).expect("no binding for type");
+    typ_pos: (usize, usize),
+  ) -> Result<(), Diagnostic> {
+    let binding = match self.get_type_binding(&typ) {
+      Some(binding) => binding,
+      None => {
+        return Err(
+          Diagnostic::error(AnalysisError {
+            pos: typ_pos,
+            kind: AnalysisErrorKind::UndefinedTypeInMethodDef(typ.clone()),
+          })
+          .with_pos(typ_pos),
+        )
+      }
+    };
 
     let method_type = ValueType::Func(param_types, Box::new(return_type));
 
@@ -139,6 +151,8 @@ impl Scope {
     //   h.insert(param_types, return_type);
     //   binding.methods.insert(method_parts, h);
     // }
+
+    Ok(())
   }
 
   pub fn get_binding(&mut self, name: &String) -> Option<&Binding> {

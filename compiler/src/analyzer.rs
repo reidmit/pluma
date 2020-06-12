@@ -124,6 +124,42 @@ impl<'a> Analyzer<'a> {
       }),
     }
   }
+
+  // This is similar to the method used in the type_collector, but here we impose the additional
+  // restriction that named types must already be defined.
+  fn type_expr_to_value_type(&mut self, node: &TypeExprNode) -> ValueType {
+    match &node.kind {
+      TypeExprKind::EmptyTuple => ValueType::Nothing,
+      TypeExprKind::Grouping(inner) => self.type_expr_to_value_type(&inner),
+      TypeExprKind::Single(ident) => {
+        let named_value_type = ValueType::Named(ident.name.clone());
+
+        if self.scope.get_type_binding(&named_value_type).is_none() {
+          self.error(AnalysisError {
+            pos: ident.pos,
+            kind: AnalysisErrorKind::UndefinedType(named_value_type.clone()),
+          })
+        }
+
+        named_value_type
+      }
+      TypeExprKind::Tuple(entries) => {
+        let mut entry_types = Vec::new();
+
+        for entry in entries {
+          entry_types.push(self.type_expr_to_value_type(entry));
+        }
+
+        ValueType::Tuple(entry_types)
+      }
+      TypeExprKind::Func(param, ret) => {
+        let param_type = self.type_expr_to_value_type(param);
+        let return_type = self.type_expr_to_value_type(ret);
+
+        ValueType::Func(vec![param_type], Box::new(return_type))
+      }
+    }
+  }
 }
 
 impl<'a> Visitor for Analyzer<'a> {
@@ -175,6 +211,71 @@ impl<'a> Visitor for Analyzer<'a> {
 
   fn leave_let(&mut self, node: &mut LetNode) {
     self.destructure_pattern(&mut node.pattern, &mut node.value.typ)
+  }
+
+  fn enter_def(&mut self, node: &mut DefNode) {
+    self.scope.enter();
+
+    let mut param_types = Vec::new();
+
+    match &node.kind {
+      DefKind::Function { signature } => {
+        for (_, part_type_expr) in signature {
+          let part_type = self.type_expr_to_value_type(part_type_expr);
+
+          match part_type {
+            ValueType::Tuple(entry_types) => {
+              for entry_type in entry_types {
+                param_types.push(entry_type);
+              }
+            }
+            other => param_types.push(other),
+          }
+        }
+      }
+
+      _ => {}
+    };
+
+    if param_types.len() != node.params.len() {
+      let err_start = match node.params.first() {
+        Some(param) => param.pos.0,
+        _ => node.pos.0,
+      };
+
+      let err_end = match node.params.last() {
+        Some(param) => param.pos.1,
+        _ => node.pos.1,
+      };
+
+      self.error(AnalysisError {
+        pos: (err_start, err_end),
+        kind: AnalysisErrorKind::ParamCountMismatchInDefinition {
+          expected: param_types.len(),
+          actual: node.params.len(),
+        },
+      })
+    }
+
+    for i in 0..node.params.len() {
+      let param = &node.params[i];
+      let param_type = &param_types[i];
+
+      self.scope.add_binding(
+        BindingKind::Param,
+        param.name.clone(),
+        param_type.clone(),
+        param.pos,
+      );
+    }
+  }
+
+  fn leave_def(&mut self, _node: &mut DefNode) {
+    if let Err(diagnostics) = self.scope.exit() {
+      for diagnostic in diagnostics {
+        self.diagnostic(diagnostic);
+      }
+    }
   }
 
   fn enter_expr(&mut self, node: &mut ExprNode) {
@@ -252,6 +353,28 @@ impl<'a> Visitor for Analyzer<'a> {
               },
             })
           }
+        }
+      }
+
+      ExprKind::BinaryOperation { op, left, right } => {
+        let receiver_type_binding = match self.scope.get_type_binding(&left.typ) {
+          Some(binding) => binding,
+          _ => return,
+        };
+
+        let method_name_parts = vec![op.name.clone()];
+
+        if let Some(method_type) = receiver_type_binding.methods.get(&method_name_parts) {
+          node.typ = method_type.clone();
+        } else {
+          self.error(AnalysisError {
+            pos: op.pos,
+            kind: AnalysisErrorKind::UndefinedOperatorForType {
+              op_name: op.name.clone(),
+              receiver_type: left.typ.clone(),
+              param_type: right.typ.clone(),
+            },
+          })
         }
       }
 
@@ -382,6 +505,8 @@ impl<'a> Visitor for Analyzer<'a> {
 
         node.typ = asserted_type.clone();
       }
+
+      ExprKind::Grouping(inner) => node.typ = inner.typ.clone(),
 
       ExprKind::EmptyTuple => node.typ = ValueType::Nothing,
 

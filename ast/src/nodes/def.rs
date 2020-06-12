@@ -32,13 +32,13 @@ pub enum DefKind {
   },
   // def (A) ++ (B) -> Ret { ... }
   BinaryOperator {
-    left: Box<TypeExprNode>,
+    left: Box<TypeIdentifierNode>,
     op: Box<OperatorNode>,
-    right: Box<TypeExprNode>,
+    right: Box<TypeIdentifierNode>,
   },
   // def ~(A) -> Ret { ... }
   UnaryOperator {
     op: Box<OperatorNode>,
-    right: Box<TypeExprNode>,
+    right: Box<TypeIdentifierNode>,
   },
 }

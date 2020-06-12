@@ -1,51 +1,45 @@
+use crate::diagnostics::Diagnostic;
 use crate::scope::{Binding, BindingKind, Scope, TypeBindingKind};
+use crate::type_utils;
 use crate::visitor::Visitor;
+use pluma_ast::common::*;
 use pluma_ast::nodes::*;
 use pluma_ast::value_type::*;
 use std::collections::HashMap;
 
 pub struct TypeCollector<'a> {
   pub scope: &'a mut Scope,
+  pub diagnostics: Vec<Diagnostic>,
 }
 
 impl<'a> TypeCollector<'a> {
   pub fn new(scope: &'a mut Scope) -> Self {
-    TypeCollector { scope }
-  }
-
-  fn type_expr_to_value_type(&self, node: &TypeExprNode) -> ValueType {
-    match &node.kind {
-      TypeExprKind::EmptyTuple => ValueType::Nothing,
-      TypeExprKind::Grouping(inner) => self.type_expr_to_value_type(&inner),
-      TypeExprKind::Single(ident) => ValueType::Named(ident.name.clone()),
-      TypeExprKind::Tuple(entries) => {
-        let mut entry_types = Vec::new();
-
-        for entry in entries {
-          entry_types.push(self.type_expr_to_value_type(entry));
-        }
-
-        ValueType::Tuple(entry_types)
-      }
-      TypeExprKind::Func(param, ret) => {
-        let param_type = self.type_expr_to_value_type(param);
-        let return_type = self.type_expr_to_value_type(ret);
-
-        ValueType::Func(vec![param_type], Box::new(return_type))
-      }
+    TypeCollector {
+      scope,
+      diagnostics: Vec::new(),
     }
   }
-}
 
-impl<'a> Visitor for TypeCollector<'a> {
-  fn enter_type_expr(&mut self, node: &mut TypeExprNode) {
-    node.typ = self.type_expr_to_value_type(node);
+  fn diagnostic(&mut self, diag: Diagnostic) {
+    self.diagnostics.push(diag)
   }
 
-  fn enter_def(&mut self, node: &mut DefNode) {
+  fn check_result(&mut self, result: Result<(), Diagnostic>) {
+    if let Err(diag) = result {
+      self.diagnostic(diag);
+    }
+  }
+
+  fn collect_def(
+    &mut self,
+    pos: Position,
+    generic_type_constraints: &mut GenericTypeConstraints,
+    kind: &mut DefKind,
+    return_type: &Option<TypeExprNode>,
+  ) {
     let mut constraints_map = HashMap::new();
 
-    for (constraint_name, constraint_type_id) in &node.generic_type_constraints {
+    for (constraint_name, constraint_type_id) in generic_type_constraints {
       let constraint = if constraint_type_id.generics.is_empty() {
         TypeConstraint::NamedTrait(constraint_type_id.name.clone())
       } else {
@@ -54,7 +48,7 @@ impl<'a> Visitor for TypeCollector<'a> {
           constraint_type_id
             .generics
             .iter()
-            .map(|type_expr| self.type_expr_to_value_type(type_expr))
+            .map(|type_expr| type_utils::type_expr_to_value_type(type_expr))
             .collect(),
         )
       };
@@ -65,7 +59,7 @@ impl<'a> Visitor for TypeCollector<'a> {
       );
     }
 
-    match &node.kind {
+    match kind {
       DefKind::Function { signature } => {
         let mut name_parts = Vec::new();
         let mut param_types = Vec::new();
@@ -73,7 +67,7 @@ impl<'a> Visitor for TypeCollector<'a> {
         for (part_name, part_type) in signature {
           name_parts.push(part_name.name.clone());
 
-          let param_type = self.type_expr_to_value_type(part_type);
+          let param_type = type_utils::type_expr_to_value_type(part_type);
 
           if let ValueType::Named(name) = &param_type {
             if let Some(constraint) = constraints_map.get(name) {
@@ -86,8 +80,8 @@ impl<'a> Visitor for TypeCollector<'a> {
           }
         }
 
-        let return_type = match &node.return_type {
-          Some(ret) => self.type_expr_to_value_type(&ret),
+        let return_type = match return_type {
+          Some(ret) => type_utils::type_expr_to_value_type(&ret),
           None => ValueType::Nothing,
         };
 
@@ -96,7 +90,7 @@ impl<'a> Visitor for TypeCollector<'a> {
 
         self
           .scope
-          .add_binding(BindingKind::Def, merged_name, def_type, node.pos);
+          .add_binding(BindingKind::Def, merged_name, def_type, pos);
       }
 
       DefKind::Method {
@@ -105,8 +99,8 @@ impl<'a> Visitor for TypeCollector<'a> {
       } => {
         let receiver_type = ValueType::Named(receiver.name.clone());
 
-        let return_type = match &node.return_type {
-          Some(type_expr) => self.type_expr_to_value_type(&type_expr),
+        let return_type = match return_type {
+          Some(type_expr) => type_utils::type_expr_to_value_type(&type_expr),
           None => ValueType::Nothing,
         };
 
@@ -115,30 +109,70 @@ impl<'a> Visitor for TypeCollector<'a> {
 
         for (part_name, part_type_expr) in signature {
           method_parts.push(part_name.name.clone());
-          param_types.push(self.type_expr_to_value_type(part_type_expr));
+          param_types.push(type_utils::type_expr_to_value_type(part_type_expr));
         }
 
-        self
-          .scope
-          .add_type_method(receiver_type, method_parts, param_types, return_type)
+        let result = self.scope.add_type_method(
+          receiver_type,
+          method_parts,
+          param_types,
+          return_type,
+          receiver.pos,
+        );
+
+        self.check_result(result);
+      }
+
+      DefKind::BinaryOperator { op, left, right } => {
+        let receiver_type = type_utils::type_ident_to_value_type(left);
+
+        let param_type = type_utils::type_ident_to_value_type(right);
+
+        let return_type = match return_type {
+          Some(type_expr) => type_utils::type_expr_to_value_type(&type_expr),
+          None => ValueType::Nothing,
+        };
+
+        let method_parts = vec![op.name.clone()];
+        let param_types = vec![param_type];
+
+        let result = self.scope.add_type_method(
+          receiver_type,
+          method_parts,
+          param_types,
+          return_type,
+          left.pos,
+        );
+
+        self.check_result(result);
       }
 
       _ => {}
     }
   }
+}
 
-  fn enter_intrinsic_type_def(&mut self, node: &mut IntrinsicTypeDefNode) {
-    let intrinsic_type = match &node.name.name[..] {
-      "Int" => Some(ValueType::Named("Int".to_owned())),
-      "String" => Some(ValueType::Named("String".to_owned())),
-      _ => None,
-    };
+impl<'a> Visitor for TypeCollector<'a> {
+  fn enter_type_expr(&mut self, node: &mut TypeExprNode) {
+    node.typ = type_utils::type_expr_to_value_type(node);
+  }
 
-    if let Some(typ) = intrinsic_type {
-      self
-        .scope
-        .add_type_binding(typ, TypeBindingKind::IntrinsicType, node.name.pos);
-    }
+  fn enter_def(&mut self, node: &mut DefNode) {
+    self.collect_def(
+      node.pos,
+      &mut node.generic_type_constraints,
+      &mut node.kind,
+      &node.return_type,
+    );
+  }
+
+  fn enter_intrinsic_def(&mut self, node: &mut IntrinsicDefNode) {
+    self.collect_def(
+      node.pos,
+      &mut node.generic_type_constraints,
+      &mut node.kind,
+      &node.return_type,
+    );
   }
 
   fn enter_type_def(&mut self, node: &mut TypeDefNode) {
@@ -166,7 +200,7 @@ impl<'a> Visitor for TypeCollector<'a> {
 
             EnumVariantKind::Constructor(constructor_node, param_node) => {
               let constructor_name = constructor_node.name.clone();
-              let param_type = self.type_expr_to_value_type(param_node);
+              let param_type = type_utils::type_expr_to_value_type(param_node);
               let constructor_type = ValueType::Func(vec![param_type], Box::new(typ.clone()));
 
               self.scope.add_binding(
@@ -186,7 +220,7 @@ impl<'a> Visitor for TypeCollector<'a> {
 
         for field in fields {
           let (field_id, field_type) = field;
-          param_types.push(self.type_expr_to_value_type(field_type));
+          param_types.push(type_utils::type_expr_to_value_type(field_type));
 
           fields_map.insert(
             field_id.name.clone(),
@@ -194,7 +228,7 @@ impl<'a> Visitor for TypeCollector<'a> {
               kind: BindingKind::Field,
               ref_count: 0,
               pos: field_id.pos,
-              typ: self.type_expr_to_value_type(field_type),
+              typ: type_utils::type_expr_to_value_type(field_type),
             },
           );
         }
@@ -234,7 +268,7 @@ impl<'a> Visitor for TypeCollector<'a> {
               kind: BindingKind::Field,
               ref_count: 0,
               pos: field_id.pos,
-              typ: self.type_expr_to_value_type(field_type),
+              typ: type_utils::type_expr_to_value_type(field_type),
             },
           );
         }
@@ -245,6 +279,21 @@ impl<'a> Visitor for TypeCollector<'a> {
           node.name.pos,
         );
       }
+    }
+  }
+
+  fn enter_intrinsic_type_def(&mut self, node: &mut IntrinsicTypeDefNode) {
+    let intrinsic_type = match &node.name.name[..] {
+      "Int" => Some(ValueType::Named("Int".to_owned())),
+      "Float" => Some(ValueType::Named("Float".to_owned())),
+      "String" => Some(ValueType::Named("String".to_owned())),
+      _ => None,
+    };
+
+    if let Some(typ) = intrinsic_type {
+      self
+        .scope
+        .add_type_binding(typ, TypeBindingKind::IntrinsicType, node.name.pos);
     }
   }
 }

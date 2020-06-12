@@ -1,0 +1,118 @@
+---
+source: tests/src/parse_success.rs
+expression: "def A + A -> A {}"
+---
+
+=== Source ===
+def A + A -> A {}
+
+=== Tokens ===
+[
+    KeywordDef(
+        0,
+        3,
+    ),
+    Identifier(
+        4,
+        5,
+    ),
+    Operator(
+        6,
+        7,
+    ),
+    Identifier(
+        8,
+        9,
+    ),
+    Arrow(
+        10,
+        12,
+    ),
+    Identifier(
+        13,
+        14,
+    ),
+    LeftBrace(
+        15,
+        16,
+    ),
+    RightBrace(
+        16,
+        17,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        17,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                17,
+            ),
+            kind: Def(
+                DefNode {
+                    pos: (
+                        0,
+                        17,
+                    ),
+                    kind: BinaryOperator {
+                        left: TypeIdentifierNode {
+                            pos: (
+                                4,
+                                5,
+                            ),
+                            name: "A",
+                            generics: [],
+                        },
+                        op: OperatorNode {
+                            pos: (
+                                6,
+                                7,
+                            ),
+                            name: "+",
+                        },
+                        right: TypeIdentifierNode {
+                            pos: (
+                                8,
+                                9,
+                            ),
+                            name: "A",
+                            generics: [],
+                        },
+                    },
+                    return_type: Some(
+                        TypeExprNode {
+                            pos: (
+                                13,
+                                14,
+                            ),
+                            kind: Single(
+                                TypeIdentifierNode {
+                                    pos: (
+                                        13,
+                                        14,
+                                    ),
+                                    name: "A",
+                                    generics: [],
+                                },
+                            ),
+                            typ: Unknown,
+                        },
+                    ),
+                    generic_type_constraints: [],
+                    params: [],
+                    body: [],
+                },
+            ),
+        },
+    ],
+}
+

@@ -18,8 +18,6 @@ macro_rules! expect_token_and_do {
     match $self.current_token() {
       Some(&$tokType(..)) => $block,
       Some(&tok) => {
-        println!("CURRENT TOKEN IS: {:#?}", $self.current_token());
-
         return $self.error(ParseError {
           pos: tok.get_location(),
           kind: ParseErrorKind::UnexpectedToken($tokType(0, 0)),
@@ -671,11 +669,25 @@ impl<'a> Parser<'a> {
     };
 
     let mut receiver = None;
+    let mut binary_operator = None;
     let mut signature: Signature = Vec::new();
 
     if current_token_is!(self, Token::Dot) {
       // If we have a dot now, we know the first ident was a receiver type
       receiver = Some(type_ident);
+      self.advance();
+    } else if current_token_is!(self, Token::Operator) {
+      // If we have an operator now, this is a binary operator definition
+      receiver = Some(type_ident);
+
+      let (start, end) = self.current_token_position();
+      let name = read_string!(self, start, end);
+
+      binary_operator = Some(OperatorNode {
+        pos: (start, end),
+        name,
+      });
+
       self.advance();
     } else {
       // If not, the first ident was the first part of the method name
@@ -696,6 +708,28 @@ impl<'a> Parser<'a> {
           })
         }
       }
+    }
+
+    // Binary operator defs can only have a single type identifier after the operator (and a return value),
+    // so handle that here.
+    if let Some(op) = binary_operator {
+      let left_type = receiver.unwrap();
+
+      let right_type = match self.parse_type_identifier() {
+        Some(t) => t,
+        None => {
+          return self.error(ParseError {
+            pos: self.current_token_position(),
+            kind: ParseErrorKind::IncompleteMethodSignature,
+          })
+        }
+      };
+
+      return Some(DefKind::BinaryOperator {
+        left: Box::new(left_type),
+        op: Box::new(op),
+        right: Box::new(right_type),
+      });
     }
 
     // Now, collect any remaining parts

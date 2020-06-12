@@ -1,0 +1,25 @@
+intrinsic_type Int
+intrinsic_def Int + Int -> Int
+intrinsic_def Int * Int -> Int
+intrinsic_def Int - Int -> Int
+intrinsic_def Int / Int -> Int
+
+intrinsic_type Float
+intrinsic_def Float + Float -> Float
+intrinsic_def Float * Float -> Float
+intrinsic_def Float - Float -> Float
+intrinsic_def Float / Float -> Float
+
+intrinsic_type String
+
+intrinsic_type Regex
+
+# trait Any ()
+
+# enum Bool
+#   | True
+#   | False
+
+# enum Option<A> where A :: Any
+#   | None
+#   | Some A

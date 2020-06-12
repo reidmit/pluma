@@ -11,6 +11,8 @@ pub struct AnalysisError {
 pub enum AnalysisErrorKind {
   CannotAssignToLiteral,
   UndefinedName(String),
+  UndefinedType(ValueType),
+  UndefinedTypeInMethodDef(ValueType),
   UndefinedMultiPartName(Vec<String>),
   UndefinedTypeConstructor(String),
   UndefinedFieldForType {
@@ -21,6 +23,11 @@ pub enum AnalysisErrorKind {
     method_name_parts: Vec<String>,
     receiver_type: ValueType,
   },
+  UndefinedOperatorForType {
+    op_name: String,
+    receiver_type: ValueType,
+    param_type: ValueType,
+  },
   UnusedVariable(String),
   NameAlreadyInScope(String),
   CalleeNotCallable(ValueType),
@@ -30,6 +37,10 @@ pub enum AnalysisErrorKind {
     actual_type: ValueType,
   },
   IncorrectNumberOfArguments {
+    expected: usize,
+    actual: usize,
+  },
+  ParamCountMismatchInDefinition {
     expected: usize,
     actual: usize,
   },
@@ -63,6 +74,10 @@ impl fmt::Display for AnalysisError {
 
       UndefinedName(name) => write!(f, "Name '{}' is not defined.", name),
 
+      UndefinedType(typ) => write!(f, "Type {} is not defined.", typ),
+
+      UndefinedTypeInMethodDef(typ) => write!(f, "Cannot define method on undefined type {}.", typ),
+
       UndefinedMultiPartName(names) => {
         write!(f, "Name '{}' is not defined.", names.join(" _ ") + " _")
       }
@@ -88,6 +103,16 @@ impl fmt::Display for AnalysisError {
         receiver_type
       ),
 
+      UndefinedOperatorForType {
+        op_name,
+        receiver_type,
+        param_type,
+      } => write!(
+        f,
+        "Operator '{}' is not defined for types {} and {}.",
+        op_name, receiver_type, param_type,
+      ),
+
       UnusedVariable(name) => write!(f, "Name '{}' is never used.", name),
 
       CalleeNotCallable(typ) => write!(f, "Cannot call value of type {} like a function.", typ),
@@ -95,6 +120,12 @@ impl fmt::Display for AnalysisError {
       IncorrectNumberOfArguments { expected, actual } => write!(
         f,
         "Incorrect number of arguments given to function. Expected {}, but found {}.",
+        expected, actual
+      ),
+
+      ParamCountMismatchInDefinition { expected, actual } => write!(
+        f,
+        "Incorrect number of parameters in function body. Signature lists {}, but found {}.",
         expected, actual
       ),
 
