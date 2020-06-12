@@ -1,15 +1,5 @@
-intrinsic_type Int
+enum LoopResult
+  | LoopBreak
+  | LoopContinue
 
-intrinsic_type Float
-
-intrinsic_type String
-
-trait Any ()
-
-enum Bool
-  | True
-  | False
-
-enum Option<A> where A :: Any
-  | None
-  | Some A
+intrinsic_def loop () -> LoopResult

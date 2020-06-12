@@ -1,4 +1,5 @@
 use crate::analyzer::Analyzer;
+use crate::code_generator::CodeGenerator;
 use crate::dependency_graph::{DependencyGraph, TopologicalSort};
 use crate::diagnostics::Diagnostic;
 use crate::import_error::{ImportError, ImportErrorKind};
@@ -7,6 +8,8 @@ use crate::scope::Scope;
 use crate::type_collector::TypeCollector;
 use crate::usage_error::{UsageError, UsageErrorKind};
 use crate::{DEFAULT_ENTRY_MODULE_NAME, FILE_EXTENSION};
+use inkwell::context::Context;
+use inkwell::passes::PassManager;
 use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
@@ -98,6 +101,32 @@ impl Compiler {
     if !self.diagnostics.is_empty() {
       return Err(self.diagnostics.to_vec());
     }
+
+    let llvm_context = Context::create();
+    let llvm_builder = llvm_context.create_builder();
+    let llvm_module = llvm_context.create_module("root_module");
+    let llvm_pass_manager = PassManager::create(&llvm_module);
+    // TODO: add passes!
+    llvm_pass_manager.initialize();
+
+    let mut generator = CodeGenerator::new(
+      &llvm_context,
+      &llvm_builder,
+      &llvm_pass_manager,
+      &llvm_module,
+    );
+
+    for module_name in sorted_names {
+      let module_to_analyze = self.modules.get_mut(module_name).unwrap();
+
+      module_to_analyze.traverse(&mut generator);
+    }
+
+    println!("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+
+    generator.root_function.print_to_stderr();
+
+    println!("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
 
     Ok(())
   }

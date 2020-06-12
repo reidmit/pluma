@@ -382,8 +382,12 @@ impl<'a> Visitor for Analyzer<'a> {
         let mut param_types = Vec::new();
         let mut return_type = ValueType::Nothing;
 
-        for _param in params {
-          param_types.push(ValueType::Unknown);
+        if params.is_empty() {
+          param_types.push(ValueType::Nothing);
+        } else {
+          for _param in params {
+            param_types.push(ValueType::Unknown);
+          }
         }
 
         for stmt in body {
@@ -461,6 +465,22 @@ impl<'a> Visitor for Analyzer<'a> {
           _ => return,
         };
 
+        // There is a special case here, where if we are calling a function that's a field
+        // on a struct, rather than a method, it will be parsed as a MethodAccess at this point.
+        // Check to see if we're in that case:
+        if let TypeBindingKind::Struct { fields } = &receiver_type_binding.kind {
+          if method_parts.len() == 1 {
+            let potential_field_name = &method_parts[0].name.clone();
+
+            if let Some(field_binding) = fields.get(potential_field_name) {
+              node.typ = field_binding.typ.clone();
+              return;
+            }
+          }
+        }
+
+        // If we didn't get into that special case, carry on and analyze this as a normal
+        // method call.
         let method_name_parts = method_parts
           .iter()
           .map(|n| n.name.clone())

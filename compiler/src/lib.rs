@@ -11,7 +11,7 @@ pub mod parser;
 pub mod tokenizer;
 
 mod analysis_error;
-mod codegen;
+mod code_generator;
 mod dependency_graph;
 mod import_error;
 mod module;
