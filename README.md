@@ -5,15 +5,14 @@ A fun, friendly, statically-typed programming language.
 **a work-in-progress...** (this readme will be updated if/when it's ready for people to try out)
 
 to run while developing:
-`cargo run`
+`./scripts/run`
+`./scripts/run build path/to/main.pa`
 
 to test:
-`cargo install cargo-insta` (install snapshot review tool)
-`cargo test` (run tests)
-`cargo insta review` (review snapshot changes)
+`./scripts/test`
 
-to build:
-`cargo build --release`
+to build in release mode:
+`./scripts/build`
 
 ## examples
 
