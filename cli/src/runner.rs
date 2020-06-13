@@ -73,7 +73,7 @@ pub fn run(app: &mut App) {
     }
 
     ("version", _) => {
-      println!("{}", VERSION);
+      println!("pluma version {}", VERSION);
     }
 
     ("repl", _) => {

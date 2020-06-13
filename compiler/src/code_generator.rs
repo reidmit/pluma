@@ -11,8 +11,6 @@ use inkwell::types::BasicTypeEnum;
 use inkwell::values::{BasicValue, BasicValueEnum, FloatValue, FunctionValue, PointerValue};
 use inkwell::{FloatPredicate, OptimizationLevel};
 use pluma_ast::nodes::*;
-use std::env;
-use std::fs::File;
 use std::io::prelude::*;
 use std::process::{Command, Stdio};
 
