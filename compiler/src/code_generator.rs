@@ -15,7 +15,7 @@ pub struct CodeGenerator<'a, 'ctx> {
   pub llvm_builder: &'a Builder<'ctx>,
   pub llvm_pass_manager: &'a PassManager<FunctionValue<'ctx>>,
   pub llvm_module: &'a Module<'ctx>,
-  pub root_function: FunctionValue<'ctx>,
+  pub main_function: FunctionValue<'ctx>,
 }
 
 impl<'a, 'ctx> CodeGenerator<'a, 'ctx> {
@@ -25,16 +25,16 @@ impl<'a, 'ctx> CodeGenerator<'a, 'ctx> {
     llvm_pass_manager: &'a PassManager<FunctionValue<'ctx>>,
     llvm_module: &'a Module<'ctx>,
   ) -> CodeGenerator<'a, 'ctx> {
-    let return_type = llvm_context.f64_type().fn_type(&Vec::new(), false);
+    let return_type = llvm_context.i32_type().fn_type(&Vec::new(), false);
 
-    let root_function = llvm_module.add_function("root", return_type, None);
+    let main_function = llvm_module.add_function("main", return_type, None);
 
     return CodeGenerator {
       llvm_context,
       llvm_builder,
       llvm_pass_manager,
       llvm_module,
-      root_function,
+      main_function,
     };
   }
 }
@@ -43,9 +43,13 @@ impl<'a, 'ctx> Visitor for CodeGenerator<'a, 'ctx> {
   fn enter_module(&mut self, _node: &mut ModuleNode) {
     let entry_block = self
       .llvm_context
-      .append_basic_block(self.root_function, "entry");
+      .append_basic_block(self.main_function, "entry");
 
     self.llvm_builder.position_at_end(entry_block);
+
+    let default_return_value = self.llvm_context.i32_type().const_int(0, true);
+
+    self.llvm_builder.build_return(Some(&default_return_value));
   }
 
   fn enter_top_level_statement(&mut self, node: &mut TopLevelStatementNode) {

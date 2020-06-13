@@ -10,6 +10,7 @@ use crate::usage_error::{UsageError, UsageErrorKind};
 use crate::{DEFAULT_ENTRY_MODULE_NAME, FILE_EXTENSION};
 use inkwell::context::Context;
 use inkwell::passes::PassManager;
+use inkwell::OptimizationLevel;
 use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
@@ -44,7 +45,7 @@ impl Compiler {
     }
   }
 
-  pub fn run(&mut self) -> Result<()> {
+  pub fn compile(&mut self) -> Result<()> {
     let mut dependency_graph = DependencyGraph::new(self.entry_module_name.clone());
 
     self.parse_module(
@@ -123,10 +124,34 @@ impl Compiler {
     }
 
     println!("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-
-    generator.root_function.print_to_stderr();
-
+    generator.main_function.print_to_stderr();
     println!("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+    if generator.main_function.verify(true) {
+      // llvm_pass_manager.run_on(&generator.main_function);
+
+      let ee = llvm_module
+        .create_jit_execution_engine(OptimizationLevel::None)
+        .unwrap();
+
+      let maybe_fn = unsafe { ee.get_function::<unsafe extern "C" fn() -> i32>("main") };
+
+      let compiled_fn = match maybe_fn {
+        Ok(f) => f,
+        Err(err) => {
+          println!("!> Error during execution: {:?}", err);
+          return Ok(());
+        }
+      };
+      println!("{:#?}", compiled_fn);
+
+      unsafe {
+        println!("=> {}", compiled_fn.call());
+      }
+    } else {
+      unsafe {
+        generator.main_function.delete();
+      }
+    }
 
     Ok(())
   }

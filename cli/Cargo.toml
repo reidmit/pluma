@@ -7,5 +7,5 @@ edition = "2018"
 
 [dependencies]
 atty = "0.2.13"
-term_size = "0.3.1"
+clap = "3.0.0-beta.1"
 pluma_compiler = { path = "../compiler" }
