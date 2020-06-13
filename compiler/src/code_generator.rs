@@ -1,5 +1,6 @@
 #![allow(unused_imports)]
 
+use crate::diagnostics::Diagnostic;
 use crate::visitor::Visitor;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
@@ -10,6 +11,10 @@ use inkwell::types::BasicTypeEnum;
 use inkwell::values::{BasicValue, BasicValueEnum, FloatValue, FunctionValue, PointerValue};
 use inkwell::{FloatPredicate, OptimizationLevel};
 use pluma_ast::nodes::*;
+use std::env;
+use std::fs::File;
+use std::io::prelude::*;
+use std::process::{Command, Stdio};
 
 pub struct CodeGenerator<'ctx> {
   llvm_context: &'ctx Context,
@@ -45,8 +50,29 @@ impl<'ctx> CodeGenerator<'ctx> {
     self.main_function.print_to_string().to_string()
   }
 
-  pub fn write_to_path(&self, path: &std::path::Path) {
-    self.llvm_module.write_bitcode_to_path(path);
+  pub fn write_to_path(&self, path: &std::path::Path) -> Result<(), Diagnostic> {
+    let mut process = Command::new("clang")
+      .args(&["-x", "ir", "-", "-o", path.to_str().unwrap()])
+      .stdin(Stdio::piped())
+      .stdout(Stdio::piped())
+      .spawn()
+      .map_err(|_| Diagnostic::error("Failed to spawn process."))?;
+
+    let child_stdin = process.stdin.as_mut().unwrap();
+
+    child_stdin
+      .write_all(&self.write_to_string().as_bytes()[..])
+      .map_err(|_| Diagnostic::error("Failed to pipe input to process."))?;
+
+    let output = process
+      .wait_with_output()
+      .map_err(|_| Diagnostic::error("Problem waiting for process to exit."))?;
+
+    if !output.status.success() {
+      return Err(Diagnostic::error("Process did not terminate successfully."));
+    }
+
+    Ok(())
   }
 
   pub fn optimize(&mut self) {
@@ -68,10 +94,7 @@ impl<'ctx> CodeGenerator<'ctx> {
 
     let compiled_fn = maybe_fn.expect("Should always have a function called 'main'");
 
-    unsafe {
-      // println!("=> {}", compiled_fn.call());
-      compiled_fn.call() as i32
-    }
+    unsafe { compiled_fn.call() as i32 }
   }
 }
 

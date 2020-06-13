@@ -117,10 +117,14 @@ impl Compiler {
       generator.optimize();
     }
 
+    debug_assert!(generator.is_valid());
+
     println!("LLIR:\n{}", generator.write_to_string());
 
     if let Some(path) = &self.output_path {
-      generator.write_to_path(Path::new(&path));
+      if let Err(err) = generator.write_to_path(Path::new(&path)) {
+        self.diagnostics.push(err);
+      }
     }
 
     if self.execute_after_compilation {
