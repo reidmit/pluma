@@ -1,5 +1,6 @@
 use crate::analyzer::Analyzer;
 use crate::code_generator::CodeGenerator;
+use crate::compiler_options::{CompilerMode, CompilerOptions};
 use crate::dependency_graph::{DependencyGraph, TopologicalSort};
 use crate::diagnostics::Diagnostic;
 use crate::import_error::{ImportError, ImportErrorKind};
@@ -9,43 +10,44 @@ use crate::type_collector::TypeCollector;
 use crate::usage_error::{UsageError, UsageErrorKind};
 use crate::{DEFAULT_ENTRY_MODULE_NAME, FILE_EXTENSION};
 use inkwell::context::Context;
-use inkwell::passes::PassManager;
-use inkwell::OptimizationLevel;
 use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
-use std::result;
-
-pub type Result<T> = result::Result<T, Vec<Diagnostic>>;
 
 #[derive(Debug)]
 pub struct Compiler {
   pub root_dir: PathBuf,
   pub entry_module_name: String,
   pub modules: HashMap<String, Module>,
+  mode: CompilerMode,
+  output_path: Option<String>,
+  execute_after_compilation: bool,
   diagnostics: Vec<Diagnostic>,
 }
 
 impl Compiler {
-  pub fn from_path(entry_path: String) -> Result<Self> {
-    let (root_dir, entry_module_name) = Compiler::resolve_entry(entry_path)?;
+  pub fn from_options(options: CompilerOptions) -> Result<Self, Vec<Diagnostic>> {
+    let (root_dir, entry_module_name) = Compiler::resolve_entry(options.entry_path)?;
 
     Ok(Compiler {
       root_dir,
       entry_module_name,
       modules: HashMap::new(),
       diagnostics: Vec::new(),
+      output_path: options.output_path,
+      mode: options.mode,
+      execute_after_compilation: options.execute_after_compilation,
     })
   }
 
-  fn resolve_entry(entry_path: String) -> Result<(PathBuf, String)> {
+  fn resolve_entry(entry_path: String) -> Result<(PathBuf, String), Vec<Diagnostic>> {
     match get_root_dir_and_module_name(entry_path) {
       Ok(result) => Ok(result),
       Err(usage_error) => Err(vec![Diagnostic::error(usage_error)]),
     }
   }
 
-  pub fn compile(&mut self) -> Result<()> {
+  pub fn compile(&mut self) -> Result<Option<i32>, Vec<Diagnostic>> {
     let mut dependency_graph = DependencyGraph::new(self.entry_module_name.clone());
 
     self.parse_module(
@@ -104,56 +106,29 @@ impl Compiler {
     }
 
     let llvm_context = Context::create();
-    let llvm_builder = llvm_context.create_builder();
-    let llvm_module = llvm_context.create_module("root_module");
-    let llvm_pass_manager = PassManager::create(&llvm_module);
-    // TODO: add passes!
-    llvm_pass_manager.initialize();
-
-    let mut generator = CodeGenerator::new(
-      &llvm_context,
-      &llvm_builder,
-      &llvm_pass_manager,
-      &llvm_module,
-    );
+    let mut generator = CodeGenerator::new(&llvm_context);
 
     for module_name in sorted_names {
-      let module_to_analyze = self.modules.get_mut(module_name).unwrap();
-
-      module_to_analyze.traverse(&mut generator);
+      let module_to_emit = self.modules.get_mut(module_name).unwrap();
+      module_to_emit.traverse(&mut generator);
     }
 
-    println!("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-    generator.main_function.print_to_stderr();
-    println!("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-    if generator.main_function.verify(true) {
-      // llvm_pass_manager.run_on(&generator.main_function);
-
-      let ee = llvm_module
-        .create_jit_execution_engine(OptimizationLevel::None)
-        .unwrap();
-
-      let maybe_fn = unsafe { ee.get_function::<unsafe extern "C" fn() -> i32>("main") };
-
-      let compiled_fn = match maybe_fn {
-        Ok(f) => f,
-        Err(err) => {
-          println!("!> Error during execution: {:?}", err);
-          return Ok(());
-        }
-      };
-      println!("{:#?}", compiled_fn);
-
-      unsafe {
-        println!("=> {}", compiled_fn.call());
-      }
-    } else {
-      unsafe {
-        generator.main_function.delete();
-      }
+    if self.release_mode() {
+      generator.optimize();
     }
 
-    Ok(())
+    println!("LLIR:\n{}", generator.write_to_string());
+
+    if let Some(path) = &self.output_path {
+      generator.write_to_path(Path::new(&path));
+    }
+
+    if self.execute_after_compilation {
+      let exit_code = generator.execute();
+      return Ok(Some(exit_code));
+    }
+
+    Ok(None)
   }
 
   fn parse_module(
@@ -217,6 +192,13 @@ impl Compiler {
     }
 
     return false;
+  }
+
+  fn release_mode(&self) -> bool {
+    match self.mode {
+      CompilerMode::Release => true,
+      _ => false,
+    }
   }
 }
 

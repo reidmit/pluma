@@ -1,5 +1,4 @@
-pub const LANG_NAME: &str = "pluma";
-pub const LANG_NAME_UPPER: &str = "Pluma";
+pub const BINARY_NAME: &str = "pluma";
 pub const DEFAULT_ENTRY_MODULE_NAME: &str = "main";
 pub const FILE_EXTENSION: &str = "pa";
 pub const VERSION: &str = "0.1.0";
@@ -9,6 +8,7 @@ pub mod compiler;
 pub mod diagnostics;
 pub mod parser;
 pub mod tokenizer;
+pub mod compiler_options;
 
 mod analysis_error;
 mod code_generator;
