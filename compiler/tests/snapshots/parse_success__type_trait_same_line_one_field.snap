@@ -1,0 +1,103 @@
+---
+source: compiler/tests/parse_success.rs
+expression: "trait HasName . name :: String"
+---
+
+=== Source ===
+trait HasName . name :: String
+
+=== Tokens ===
+[
+    KeywordTrait(
+        0,
+        5,
+    ),
+    Identifier(
+        6,
+        13,
+    ),
+    Dot(
+        14,
+        15,
+    ),
+    Identifier(
+        16,
+        20,
+    ),
+    DoubleColon(
+        21,
+        23,
+    ),
+    Identifier(
+        24,
+        30,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        30,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                30,
+            ),
+            kind: TypeDef(
+                TypeDefNode {
+                    pos: (
+                        0,
+                        30,
+                    ),
+                    kind: Trait {
+                        fields: [
+                            (
+                                IdentifierNode {
+                                    pos: (
+                                        16,
+                                        20,
+                                    ),
+                                    name: "name",
+                                },
+                                TypeExprNode {
+                                    pos: (
+                                        24,
+                                        30,
+                                    ),
+                                    kind: Single(
+                                        TypeIdentifierNode {
+                                            pos: (
+                                                24,
+                                                30,
+                                            ),
+                                            name: "String",
+                                            generics: [],
+                                        },
+                                    ),
+                                    typ: Unknown,
+                                },
+                            ),
+                        ],
+                        methods: [],
+                    },
+                    name: TypeIdentifierNode {
+                        pos: (
+                            6,
+                            13,
+                        ),
+                        name: "HasName",
+                        generics: [],
+                    },
+                    generic_type_constraints: [],
+                },
+            ),
+        },
+    ],
+}
+

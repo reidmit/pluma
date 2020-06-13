@@ -5,10 +5,10 @@ pub const VERSION: &str = "0.1.0";
 
 pub mod analyzer;
 pub mod compiler;
+pub mod compiler_options;
 pub mod diagnostics;
 pub mod parser;
 pub mod tokenizer;
-pub mod compiler_options;
 
 mod analysis_error;
 mod code_generator;

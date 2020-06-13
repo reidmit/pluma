@@ -1,0 +1,113 @@
+---
+source: compiler/tests/parse_success.rs
+expression: "\"hello\"\n  . f1\n  .f2"
+---
+
+=== Source ===
+"hello"
+  . f1
+  .f2
+
+=== Tokens ===
+[
+    StringLiteral(
+        1,
+        6,
+    ),
+    LineBreak(
+        7,
+        8,
+    ),
+    Dot(
+        10,
+        11,
+    ),
+    Identifier(
+        12,
+        14,
+    ),
+    LineBreak(
+        14,
+        15,
+    ),
+    Dot(
+        17,
+        18,
+    ),
+    Identifier(
+        18,
+        20,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        1,
+        20,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                1,
+                20,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        1,
+                        20,
+                    ),
+                    kind: FieldAccess {
+                        receiver: ExprNode {
+                            pos: (
+                                1,
+                                14,
+                            ),
+                            kind: FieldAccess {
+                                receiver: ExprNode {
+                                    pos: (
+                                        1,
+                                        6,
+                                    ),
+                                    kind: Literal(
+                                        LiteralNode {
+                                            pos: (
+                                                1,
+                                                6,
+                                            ),
+                                            kind: Str(
+                                                "hello",
+                                            ),
+                                        },
+                                    ),
+                                    typ: Unknown,
+                                },
+                                field: IdentifierNode {
+                                    pos: (
+                                        12,
+                                        14,
+                                    ),
+                                    name: "f1",
+                                },
+                            },
+                            typ: Unknown,
+                        },
+                        field: IdentifierNode {
+                            pos: (
+                                18,
+                                20,
+                            ),
+                            name: "f2",
+                        },
+                    },
+                    typ: Unknown,
+                },
+            ),
+        },
+    ],
+}
+

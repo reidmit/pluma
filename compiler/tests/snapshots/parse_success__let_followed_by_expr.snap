@@ -1,0 +1,126 @@
+---
+source: compiler/tests/parse_success.rs
+expression: "let x = \"wow\"\n\nx"
+---
+
+=== Source ===
+let x = "wow"
+
+x
+
+=== Tokens ===
+[
+    KeywordLet(
+        0,
+        3,
+    ),
+    Identifier(
+        4,
+        5,
+    ),
+    Equals(
+        6,
+        7,
+    ),
+    StringLiteral(
+        9,
+        12,
+    ),
+    LineBreak(
+        13,
+        14,
+    ),
+    LineBreak(
+        14,
+        15,
+    ),
+    Identifier(
+        15,
+        16,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        16,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                12,
+            ),
+            kind: Let(
+                LetNode {
+                    pos: (
+                        0,
+                        12,
+                    ),
+                    pattern: PatternNode {
+                        pos: (
+                            4,
+                            5,
+                        ),
+                        kind: Identifier(
+                            IdentifierNode {
+                                pos: (
+                                    4,
+                                    5,
+                                ),
+                                name: "x",
+                            },
+                        ),
+                    },
+                    value: ExprNode {
+                        pos: (
+                            9,
+                            12,
+                        ),
+                        kind: Literal(
+                            LiteralNode {
+                                pos: (
+                                    9,
+                                    12,
+                                ),
+                                kind: Str(
+                                    "wow",
+                                ),
+                            },
+                        ),
+                        typ: Unknown,
+                    },
+                },
+            ),
+        },
+        TopLevelStatementNode {
+            pos: (
+                15,
+                16,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        15,
+                        16,
+                    ),
+                    kind: Identifier(
+                        IdentifierNode {
+                            pos: (
+                                15,
+                                16,
+                            ),
+                            name: "x",
+                        },
+                    ),
+                    typ: Unknown,
+                },
+            ),
+        },
+    ],
+}
+

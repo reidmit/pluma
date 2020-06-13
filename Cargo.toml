@@ -3,5 +3,9 @@ members = [
   "ast",
   "cli",
   "compiler",
-  "tests",
 ]
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = 'abort'

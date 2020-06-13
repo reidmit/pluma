@@ -1,0 +1,58 @@
+---
+source: compiler/tests/parse_success.rs
+expression: "\"wow\nthis\n   is\ncool!\""
+---
+
+=== Source ===
+"wow
+this
+   is
+cool!"
+
+=== Tokens ===
+[
+    StringLiteral(
+        1,
+        21,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        1,
+        21,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                1,
+                21,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        1,
+                        21,
+                    ),
+                    kind: Literal(
+                        LiteralNode {
+                            pos: (
+                                1,
+                                21,
+                            ),
+                            kind: Str(
+                                "wow\nthis\n   is\ncool!",
+                            ),
+                        },
+                    ),
+                    typ: Unknown,
+                },
+            ),
+        },
+    ],
+}
+

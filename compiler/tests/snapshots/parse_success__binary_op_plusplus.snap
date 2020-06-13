@@ -1,0 +1,97 @@
+---
+source: compiler/tests/parse_success.rs
+expression: "\"a\" ++ \"b\""
+---
+
+=== Source ===
+"a" ++ "b"
+
+=== Tokens ===
+[
+    StringLiteral(
+        1,
+        2,
+    ),
+    Operator(
+        4,
+        6,
+    ),
+    StringLiteral(
+        8,
+        9,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        1,
+        9,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                1,
+                9,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        1,
+                        9,
+                    ),
+                    kind: BinaryOperation {
+                        left: ExprNode {
+                            pos: (
+                                1,
+                                2,
+                            ),
+                            kind: Literal(
+                                LiteralNode {
+                                    pos: (
+                                        1,
+                                        2,
+                                    ),
+                                    kind: Str(
+                                        "a",
+                                    ),
+                                },
+                            ),
+                            typ: Unknown,
+                        },
+                        op: OperatorNode {
+                            pos: (
+                                4,
+                                6,
+                            ),
+                            name: "++",
+                        },
+                        right: ExprNode {
+                            pos: (
+                                8,
+                                9,
+                            ),
+                            kind: Literal(
+                                LiteralNode {
+                                    pos: (
+                                        8,
+                                        9,
+                                    ),
+                                    kind: Str(
+                                        "b",
+                                    ),
+                                },
+                            ),
+                            typ: Unknown,
+                        },
+                    },
+                    typ: Unknown,
+                },
+            ),
+        },
+    ],
+}
+

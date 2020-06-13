@@ -1,0 +1,218 @@
+---
+source: compiler/tests/parse_success.rs
+expression: "enum Optional<A> where A :: Any\n  | Some(A)\n  | None"
+---
+
+=== Source ===
+enum Optional<A> where A :: Any
+  | Some(A)
+  | None
+
+=== Tokens ===
+[
+    KeywordEnum(
+        0,
+        4,
+    ),
+    Identifier(
+        5,
+        13,
+    ),
+    LeftAngle(
+        13,
+        14,
+    ),
+    Identifier(
+        14,
+        15,
+    ),
+    RightAngle(
+        15,
+        16,
+    ),
+    KeywordWhere(
+        17,
+        22,
+    ),
+    Identifier(
+        23,
+        24,
+    ),
+    DoubleColon(
+        25,
+        27,
+    ),
+    Identifier(
+        28,
+        31,
+    ),
+    LineBreak(
+        31,
+        32,
+    ),
+    Pipe(
+        34,
+        35,
+    ),
+    Identifier(
+        36,
+        40,
+    ),
+    LeftParen(
+        40,
+        41,
+    ),
+    Identifier(
+        41,
+        42,
+    ),
+    RightParen(
+        42,
+        43,
+    ),
+    LineBreak(
+        43,
+        44,
+    ),
+    Pipe(
+        46,
+        47,
+    ),
+    Identifier(
+        48,
+        52,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        52,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                52,
+            ),
+            kind: TypeDef(
+                TypeDefNode {
+                    pos: (
+                        0,
+                        52,
+                    ),
+                    kind: Enum {
+                        variants: [
+                            EnumVariantNode {
+                                pos: (
+                                    36,
+                                    43,
+                                ),
+                                kind: Constructor(
+                                    IdentifierNode {
+                                        pos: (
+                                            36,
+                                            40,
+                                        ),
+                                        name: "Some",
+                                    },
+                                    TypeExprNode {
+                                        pos: (
+                                            40,
+                                            43,
+                                        ),
+                                        kind: Grouping(
+                                            TypeExprNode {
+                                                pos: (
+                                                    41,
+                                                    42,
+                                                ),
+                                                kind: Single(
+                                                    TypeIdentifierNode {
+                                                        pos: (
+                                                            41,
+                                                            42,
+                                                        ),
+                                                        name: "A",
+                                                        generics: [],
+                                                    },
+                                                ),
+                                                typ: Unknown,
+                                            },
+                                        ),
+                                        typ: Unknown,
+                                    },
+                                ),
+                            },
+                            EnumVariantNode {
+                                pos: (
+                                    48,
+                                    52,
+                                ),
+                                kind: Identifier(
+                                    IdentifierNode {
+                                        pos: (
+                                            48,
+                                            52,
+                                        ),
+                                        name: "None",
+                                    },
+                                ),
+                            },
+                        ],
+                    },
+                    name: TypeIdentifierNode {
+                        pos: (
+                            5,
+                            16,
+                        ),
+                        name: "Optional",
+                        generics: [
+                            TypeExprNode {
+                                pos: (
+                                    14,
+                                    15,
+                                ),
+                                kind: Single(
+                                    TypeIdentifierNode {
+                                        pos: (
+                                            14,
+                                            15,
+                                        ),
+                                        name: "A",
+                                        generics: [],
+                                    },
+                                ),
+                                typ: Unknown,
+                            },
+                        ],
+                    },
+                    generic_type_constraints: [
+                        (
+                            IdentifierNode {
+                                pos: (
+                                    23,
+                                    24,
+                                ),
+                                name: "A",
+                            },
+                            TypeIdentifierNode {
+                                pos: (
+                                    28,
+                                    31,
+                                ),
+                                name: "Any",
+                                generics: [],
+                            },
+                        ),
+                    ],
+                },
+            ),
+        },
+    ],
+}
+

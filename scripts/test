@@ -2,4 +2,4 @@
 
 export LLVM_SYS_100_PREFIX=$HOME/code/clang+llvm-10.0.0-x86_64-apple-darwin
 
-cargo test -q --lib "$@" || cargo insta review
+cargo test -q "$@" || cargo insta review

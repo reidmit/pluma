@@ -1,0 +1,55 @@
+---
+source: compiler/tests/parse_success.rs
+expression: "\"🌝\""
+---
+
+=== Source ===
+"🌝"
+
+=== Tokens ===
+[
+    StringLiteral(
+        1,
+        5,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        1,
+        5,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                1,
+                5,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        1,
+                        5,
+                    ),
+                    kind: Literal(
+                        LiteralNode {
+                            pos: (
+                                1,
+                                5,
+                            ),
+                            kind: Str(
+                                "🌝",
+                            ),
+                        },
+                    ),
+                    typ: Unknown,
+                },
+            ),
+        },
+    ],
+}
+

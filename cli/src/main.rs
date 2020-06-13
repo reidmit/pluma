@@ -3,6 +3,7 @@ use pluma_compiler::{BINARY_NAME, VERSION};
 
 mod colors;
 mod diagnostics;
+mod repl;
 mod runner;
 mod templates;
 
@@ -72,6 +73,11 @@ fn main() {
             .long("out")
             .value_name("PATH"),
         ),
+    )
+    .subcommand(
+      App::new("repl")
+        .help_template(cmd_help_template)
+        .about("Starts an interactive REPL session"),
     );
 
   runner::run(&mut app);

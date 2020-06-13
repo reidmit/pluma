@@ -1,0 +1,145 @@
+---
+source: compiler/tests/parse_success.rs
+expression: "def hello () {\n  a => \"wow!\"\n}"
+---
+
+=== Source ===
+def hello () {
+  a => "wow!"
+}
+
+=== Tokens ===
+[
+    KeywordDef(
+        0,
+        3,
+    ),
+    Identifier(
+        4,
+        9,
+    ),
+    LeftParen(
+        10,
+        11,
+    ),
+    RightParen(
+        11,
+        12,
+    ),
+    LeftBrace(
+        13,
+        14,
+    ),
+    LineBreak(
+        14,
+        15,
+    ),
+    Identifier(
+        17,
+        18,
+    ),
+    DoubleArrow(
+        19,
+        21,
+    ),
+    StringLiteral(
+        23,
+        27,
+    ),
+    LineBreak(
+        28,
+        29,
+    ),
+    RightBrace(
+        29,
+        30,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        30,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                30,
+            ),
+            kind: Def(
+                DefNode {
+                    pos: (
+                        0,
+                        30,
+                    ),
+                    kind: Function {
+                        signature: [
+                            (
+                                IdentifierNode {
+                                    pos: (
+                                        4,
+                                        9,
+                                    ),
+                                    name: "hello",
+                                },
+                                TypeExprNode {
+                                    pos: (
+                                        10,
+                                        12,
+                                    ),
+                                    kind: EmptyTuple,
+                                    typ: Unknown,
+                                },
+                            ),
+                        ],
+                    },
+                    return_type: None,
+                    generic_type_constraints: [],
+                    params: [
+                        IdentifierNode {
+                            pos: (
+                                17,
+                                18,
+                            ),
+                            name: "a",
+                        },
+                    ],
+                    body: [
+                        StatementNode {
+                            pos: (
+                                23,
+                                27,
+                            ),
+                            kind: Expr(
+                                ExprNode {
+                                    pos: (
+                                        23,
+                                        27,
+                                    ),
+                                    kind: Literal(
+                                        LiteralNode {
+                                            pos: (
+                                                23,
+                                                27,
+                                            ),
+                                            kind: Str(
+                                                "wow!",
+                                            ),
+                                        },
+                                    ),
+                                    typ: Unknown,
+                                },
+                            ),
+                        },
+                    ],
+                },
+            ),
+        },
+    ],
+}
+

@@ -1,0 +1,99 @@
+---
+source: compiler/tests/parse_success.rs
+expression: /space digit space/
+---
+
+=== Source ===
+/space digit space/
+
+=== Tokens ===
+[
+    ForwardSlash(
+        0,
+        1,
+    ),
+    Identifier(
+        1,
+        6,
+    ),
+    Identifier(
+        7,
+        12,
+    ),
+    Identifier(
+        13,
+        18,
+    ),
+    ForwardSlash(
+        18,
+        19,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        19,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                19,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        0,
+                        19,
+                    ),
+                    kind: RegExpr(
+                        RegExprNode {
+                            pos: (
+                                0,
+                                0,
+                            ),
+                            kind: Sequence(
+                                [
+                                    RegExprNode {
+                                        pos: (
+                                            1,
+                                            6,
+                                        ),
+                                        kind: CharacterClass(
+                                            "space",
+                                        ),
+                                    },
+                                    RegExprNode {
+                                        pos: (
+                                            7,
+                                            12,
+                                        ),
+                                        kind: CharacterClass(
+                                            "digit",
+                                        ),
+                                    },
+                                    RegExprNode {
+                                        pos: (
+                                            13,
+                                            18,
+                                        ),
+                                        kind: CharacterClass(
+                                            "space",
+                                        ),
+                                    },
+                                ],
+                            ),
+                        },
+                    ),
+                    typ: Unknown,
+                },
+            ),
+        },
+    ],
+}
+

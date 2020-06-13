@@ -1,0 +1,208 @@
+---
+source: compiler/tests/parse_success.rs
+expression: "def hello A -> A where A :: Any {\n  x => x\n}"
+---
+
+=== Source ===
+def hello A -> A where A :: Any {
+  x => x
+}
+
+=== Tokens ===
+[
+    KeywordDef(
+        0,
+        3,
+    ),
+    Identifier(
+        4,
+        9,
+    ),
+    Identifier(
+        10,
+        11,
+    ),
+    Arrow(
+        12,
+        14,
+    ),
+    Identifier(
+        15,
+        16,
+    ),
+    KeywordWhere(
+        17,
+        22,
+    ),
+    Identifier(
+        23,
+        24,
+    ),
+    DoubleColon(
+        25,
+        27,
+    ),
+    Identifier(
+        28,
+        31,
+    ),
+    LeftBrace(
+        32,
+        33,
+    ),
+    LineBreak(
+        33,
+        34,
+    ),
+    Identifier(
+        36,
+        37,
+    ),
+    DoubleArrow(
+        38,
+        40,
+    ),
+    Identifier(
+        41,
+        42,
+    ),
+    LineBreak(
+        42,
+        43,
+    ),
+    RightBrace(
+        43,
+        44,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        44,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                44,
+            ),
+            kind: Def(
+                DefNode {
+                    pos: (
+                        0,
+                        44,
+                    ),
+                    kind: Function {
+                        signature: [
+                            (
+                                IdentifierNode {
+                                    pos: (
+                                        4,
+                                        9,
+                                    ),
+                                    name: "hello",
+                                },
+                                TypeExprNode {
+                                    pos: (
+                                        10,
+                                        11,
+                                    ),
+                                    kind: Single(
+                                        TypeIdentifierNode {
+                                            pos: (
+                                                10,
+                                                11,
+                                            ),
+                                            name: "A",
+                                            generics: [],
+                                        },
+                                    ),
+                                    typ: Unknown,
+                                },
+                            ),
+                        ],
+                    },
+                    return_type: Some(
+                        TypeExprNode {
+                            pos: (
+                                15,
+                                16,
+                            ),
+                            kind: Single(
+                                TypeIdentifierNode {
+                                    pos: (
+                                        15,
+                                        16,
+                                    ),
+                                    name: "A",
+                                    generics: [],
+                                },
+                            ),
+                            typ: Unknown,
+                        },
+                    ),
+                    generic_type_constraints: [
+                        (
+                            IdentifierNode {
+                                pos: (
+                                    23,
+                                    24,
+                                ),
+                                name: "A",
+                            },
+                            TypeIdentifierNode {
+                                pos: (
+                                    28,
+                                    31,
+                                ),
+                                name: "Any",
+                                generics: [],
+                            },
+                        ),
+                    ],
+                    params: [
+                        IdentifierNode {
+                            pos: (
+                                36,
+                                37,
+                            ),
+                            name: "x",
+                        },
+                    ],
+                    body: [
+                        StatementNode {
+                            pos: (
+                                41,
+                                42,
+                            ),
+                            kind: Expr(
+                                ExprNode {
+                                    pos: (
+                                        41,
+                                        42,
+                                    ),
+                                    kind: Identifier(
+                                        IdentifierNode {
+                                            pos: (
+                                                41,
+                                                42,
+                                            ),
+                                            name: "x",
+                                        },
+                                    ),
+                                    typ: Unknown,
+                                },
+                            ),
+                        },
+                    ],
+                },
+            ),
+        },
+    ],
+}
+

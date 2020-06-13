@@ -1,0 +1,55 @@
+---
+source: compiler/tests/parse_success.rs
+expression: "\"hello\\tworld\""
+---
+
+=== Source ===
+"hello\tworld"
+
+=== Tokens ===
+[
+    StringLiteral(
+        1,
+        13,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        1,
+        13,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                1,
+                13,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        1,
+                        13,
+                    ),
+                    kind: Literal(
+                        LiteralNode {
+                            pos: (
+                                1,
+                                13,
+                            ),
+                            kind: Str(
+                                "hello\tworld",
+                            ),
+                        },
+                    ),
+                    typ: Unknown,
+                },
+            ),
+        },
+    ],
+}
+

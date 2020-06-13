@@ -1,0 +1,49 @@
+---
+source: compiler/tests/parse_success.rs
+expression: ()
+---
+
+=== Source ===
+()
+
+=== Tokens ===
+[
+    LeftParen(
+        0,
+        1,
+    ),
+    RightParen(
+        1,
+        2,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        2,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                2,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        0,
+                        2,
+                    ),
+                    kind: EmptyTuple,
+                    typ: Unknown,
+                },
+            ),
+        },
+    ],
+}
+

@@ -1,0 +1,155 @@
+---
+source: compiler/tests/parse_success.rs
+expression: "trait HasNameAndAge\n  . name :: String\n  . age :: Int"
+---
+
+=== Source ===
+trait HasNameAndAge
+  . name :: String
+  . age :: Int
+
+=== Tokens ===
+[
+    KeywordTrait(
+        0,
+        5,
+    ),
+    Identifier(
+        6,
+        19,
+    ),
+    LineBreak(
+        19,
+        20,
+    ),
+    Dot(
+        22,
+        23,
+    ),
+    Identifier(
+        24,
+        28,
+    ),
+    DoubleColon(
+        29,
+        31,
+    ),
+    Identifier(
+        32,
+        38,
+    ),
+    LineBreak(
+        38,
+        39,
+    ),
+    Dot(
+        41,
+        42,
+    ),
+    Identifier(
+        43,
+        46,
+    ),
+    DoubleColon(
+        47,
+        49,
+    ),
+    Identifier(
+        50,
+        53,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        53,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                53,
+            ),
+            kind: TypeDef(
+                TypeDefNode {
+                    pos: (
+                        0,
+                        53,
+                    ),
+                    kind: Trait {
+                        fields: [
+                            (
+                                IdentifierNode {
+                                    pos: (
+                                        24,
+                                        28,
+                                    ),
+                                    name: "name",
+                                },
+                                TypeExprNode {
+                                    pos: (
+                                        32,
+                                        38,
+                                    ),
+                                    kind: Single(
+                                        TypeIdentifierNode {
+                                            pos: (
+                                                32,
+                                                38,
+                                            ),
+                                            name: "String",
+                                            generics: [],
+                                        },
+                                    ),
+                                    typ: Unknown,
+                                },
+                            ),
+                            (
+                                IdentifierNode {
+                                    pos: (
+                                        43,
+                                        46,
+                                    ),
+                                    name: "age",
+                                },
+                                TypeExprNode {
+                                    pos: (
+                                        50,
+                                        53,
+                                    ),
+                                    kind: Single(
+                                        TypeIdentifierNode {
+                                            pos: (
+                                                50,
+                                                53,
+                                            ),
+                                            name: "Int",
+                                            generics: [],
+                                        },
+                                    ),
+                                    typ: Unknown,
+                                },
+                            ),
+                        ],
+                        methods: [],
+                    },
+                    name: TypeIdentifierNode {
+                        pos: (
+                            6,
+                            19,
+                        ),
+                        name: "HasNameAndAge",
+                        generics: [],
+                    },
+                    generic_type_constraints: [],
+                },
+            ),
+        },
+    ],
+}
+

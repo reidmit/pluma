@@ -1,0 +1,235 @@
+---
+source: compiler/tests/parse_success.rs
+expression: "match thing | 1 => \"one\" | 2 => \"two\" | _ => \"idk\""
+---
+
+=== Source ===
+match thing | 1 => "one" | 2 => "two" | _ => "idk"
+
+=== Tokens ===
+[
+    KeywordMatch(
+        0,
+        5,
+    ),
+    Identifier(
+        6,
+        11,
+    ),
+    Pipe(
+        12,
+        13,
+    ),
+    DecimalDigits(
+        14,
+        15,
+    ),
+    DoubleArrow(
+        16,
+        18,
+    ),
+    StringLiteral(
+        20,
+        23,
+    ),
+    Pipe(
+        25,
+        26,
+    ),
+    DecimalDigits(
+        27,
+        28,
+    ),
+    DoubleArrow(
+        29,
+        31,
+    ),
+    StringLiteral(
+        33,
+        36,
+    ),
+    Pipe(
+        38,
+        39,
+    ),
+    Underscore(
+        40,
+        41,
+    ),
+    DoubleArrow(
+        42,
+        44,
+    ),
+    StringLiteral(
+        46,
+        49,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        49,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                49,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        0,
+                        49,
+                    ),
+                    kind: Match(
+                        MatchNode {
+                            pos: (
+                                0,
+                                49,
+                            ),
+                            subject: ExprNode {
+                                pos: (
+                                    6,
+                                    11,
+                                ),
+                                kind: Identifier(
+                                    IdentifierNode {
+                                        pos: (
+                                            6,
+                                            11,
+                                        ),
+                                        name: "thing",
+                                    },
+                                ),
+                                typ: Unknown,
+                            },
+                            cases: [
+                                MatchCaseNode {
+                                    pos: (
+                                        12,
+                                        23,
+                                    ),
+                                    pattern: PatternNode {
+                                        pos: (
+                                            14,
+                                            15,
+                                        ),
+                                        kind: Literal(
+                                            LiteralNode {
+                                                pos: (
+                                                    14,
+                                                    15,
+                                                ),
+                                                kind: IntDecimal(
+                                                    1,
+                                                ),
+                                            },
+                                        ),
+                                    },
+                                    body: ExprNode {
+                                        pos: (
+                                            20,
+                                            23,
+                                        ),
+                                        kind: Literal(
+                                            LiteralNode {
+                                                pos: (
+                                                    20,
+                                                    23,
+                                                ),
+                                                kind: Str(
+                                                    "one",
+                                                ),
+                                            },
+                                        ),
+                                        typ: Unknown,
+                                    },
+                                },
+                                MatchCaseNode {
+                                    pos: (
+                                        25,
+                                        36,
+                                    ),
+                                    pattern: PatternNode {
+                                        pos: (
+                                            27,
+                                            28,
+                                        ),
+                                        kind: Literal(
+                                            LiteralNode {
+                                                pos: (
+                                                    27,
+                                                    28,
+                                                ),
+                                                kind: IntDecimal(
+                                                    2,
+                                                ),
+                                            },
+                                        ),
+                                    },
+                                    body: ExprNode {
+                                        pos: (
+                                            33,
+                                            36,
+                                        ),
+                                        kind: Literal(
+                                            LiteralNode {
+                                                pos: (
+                                                    33,
+                                                    36,
+                                                ),
+                                                kind: Str(
+                                                    "two",
+                                                ),
+                                            },
+                                        ),
+                                        typ: Unknown,
+                                    },
+                                },
+                                MatchCaseNode {
+                                    pos: (
+                                        38,
+                                        49,
+                                    ),
+                                    pattern: PatternNode {
+                                        pos: (
+                                            40,
+                                            41,
+                                        ),
+                                        kind: Underscore,
+                                    },
+                                    body: ExprNode {
+                                        pos: (
+                                            46,
+                                            49,
+                                        ),
+                                        kind: Literal(
+                                            LiteralNode {
+                                                pos: (
+                                                    46,
+                                                    49,
+                                                ),
+                                                kind: Str(
+                                                    "idk",
+                                                ),
+                                            },
+                                        ),
+                                        typ: Unknown,
+                                    },
+                                },
+                            ],
+                        },
+                    ),
+                    typ: Unknown,
+                },
+            ),
+        },
+    ],
+}
+

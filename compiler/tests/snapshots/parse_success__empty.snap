@@ -1,0 +1,23 @@
+---
+source: compiler/tests/parse_success.rs
+expression: ""
+---
+
+=== Source ===
+
+
+=== Tokens ===
+[]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        0,
+    ),
+    body: [],
+}
+

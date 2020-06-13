@@ -1,5 +1,6 @@
 use crate::colors;
 use crate::diagnostics;
+use crate::repl;
 use clap::App;
 use pluma_compiler::compiler::Compiler;
 use pluma_compiler::compiler_options::{CompilerMode, CompilerOptions};
@@ -73,6 +74,10 @@ pub fn run(app: &mut App) {
 
     ("version", _) => {
       println!("{}", VERSION);
+    }
+
+    ("repl", _) => {
+      repl::run();
     }
 
     (unknown_command, _) => {

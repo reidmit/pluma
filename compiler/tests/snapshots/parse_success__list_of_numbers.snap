@@ -1,0 +1,126 @@
+---
+source: compiler/tests/parse_success.rs
+expression: "[1, 2, 3]"
+---
+
+=== Source ===
+[1, 2, 3]
+
+=== Tokens ===
+[
+    LeftBracket(
+        0,
+        1,
+    ),
+    DecimalDigits(
+        1,
+        2,
+    ),
+    Comma(
+        2,
+        3,
+    ),
+    DecimalDigits(
+        4,
+        5,
+    ),
+    Comma(
+        5,
+        6,
+    ),
+    DecimalDigits(
+        7,
+        8,
+    ),
+    RightBracket(
+        8,
+        9,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        9,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                9,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        0,
+                        9,
+                    ),
+                    kind: List(
+                        [
+                            ExprNode {
+                                pos: (
+                                    1,
+                                    2,
+                                ),
+                                kind: Literal(
+                                    LiteralNode {
+                                        pos: (
+                                            1,
+                                            2,
+                                        ),
+                                        kind: IntDecimal(
+                                            1,
+                                        ),
+                                    },
+                                ),
+                                typ: Unknown,
+                            },
+                            ExprNode {
+                                pos: (
+                                    4,
+                                    5,
+                                ),
+                                kind: Literal(
+                                    LiteralNode {
+                                        pos: (
+                                            4,
+                                            5,
+                                        ),
+                                        kind: IntDecimal(
+                                            2,
+                                        ),
+                                    },
+                                ),
+                                typ: Unknown,
+                            },
+                            ExprNode {
+                                pos: (
+                                    7,
+                                    8,
+                                ),
+                                kind: Literal(
+                                    LiteralNode {
+                                        pos: (
+                                            7,
+                                            8,
+                                        ),
+                                        kind: IntDecimal(
+                                            3,
+                                        ),
+                                    },
+                                ),
+                                typ: Unknown,
+                            },
+                        ],
+                    ),
+                    typ: Unknown,
+                },
+            ),
+        },
+    ],
+}
+

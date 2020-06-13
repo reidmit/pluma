@@ -1,0 +1,55 @@
+---
+source: compiler/tests/parse_success.rs
+expression: "\"frog 🐸\""
+---
+
+=== Source ===
+"frog 🐸"
+
+=== Tokens ===
+[
+    StringLiteral(
+        1,
+        10,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        1,
+        10,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                1,
+                10,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        1,
+                        10,
+                    ),
+                    kind: Literal(
+                        LiteralNode {
+                            pos: (
+                                1,
+                                10,
+                            ),
+                            kind: Str(
+                                "frog 🐸",
+                            ),
+                        },
+                    ),
+                    typ: Unknown,
+                },
+            ),
+        },
+    ],
+}
+

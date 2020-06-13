@@ -1,0 +1,99 @@
+---
+source: compiler/tests/parse_success.rs
+expression: "/\"w\" \"oooo\" \"w\"/"
+---
+
+=== Source ===
+/"w" "oooo" "w"/
+
+=== Tokens ===
+[
+    ForwardSlash(
+        0,
+        1,
+    ),
+    StringLiteral(
+        2,
+        3,
+    ),
+    StringLiteral(
+        6,
+        10,
+    ),
+    StringLiteral(
+        13,
+        14,
+    ),
+    ForwardSlash(
+        15,
+        16,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        16,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                16,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        0,
+                        16,
+                    ),
+                    kind: RegExpr(
+                        RegExprNode {
+                            pos: (
+                                0,
+                                0,
+                            ),
+                            kind: Sequence(
+                                [
+                                    RegExprNode {
+                                        pos: (
+                                            2,
+                                            3,
+                                        ),
+                                        kind: Literal(
+                                            "w",
+                                        ),
+                                    },
+                                    RegExprNode {
+                                        pos: (
+                                            6,
+                                            10,
+                                        ),
+                                        kind: Literal(
+                                            "oooo",
+                                        ),
+                                    },
+                                    RegExprNode {
+                                        pos: (
+                                            13,
+                                            14,
+                                        ),
+                                        kind: Literal(
+                                            "w",
+                                        ),
+                                    },
+                                ],
+                            ),
+                        },
+                    ),
+                    typ: Unknown,
+                },
+            ),
+        },
+    ],
+}
+
