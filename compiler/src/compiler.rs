@@ -78,6 +78,8 @@ impl Compiler {
 
       let module_to_analyze = self.modules.get_mut(module_name).unwrap();
 
+      println!("\nAST:\n{:#?}", module_to_analyze);
+
       let mut type_collector = TypeCollector::new(&mut module_scope);
       module_to_analyze.traverse(&mut type_collector);
 
@@ -117,9 +119,11 @@ impl Compiler {
       generator.optimize();
     }
 
-    debug_assert!(generator.is_valid());
+    println!("\nLLIR:\n{}", generator.write_to_string());
 
-    println!("LLIR:\n{}", generator.write_to_string());
+    if let Err(err) = generator.verify() {
+      self.diagnostics.push(err);
+    }
 
     if let Some(path) = &self.output_path {
       if let Err(err) = generator.write_to_path(Path::new(&path)) {

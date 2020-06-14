@@ -4,14 +4,18 @@ use crate::diagnostics::Diagnostic;
 use crate::visitor::Visitor;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
-use inkwell::module::Module;
+use inkwell::module::{Linkage, Module};
 use inkwell::passes::PassManager;
 use inkwell::targets::TargetTriple;
-use inkwell::types::BasicTypeEnum;
+use inkwell::types;
 use inkwell::values::{BasicValue, BasicValueEnum, FloatValue, FunctionValue, PointerValue};
-use inkwell::{FloatPredicate, OptimizationLevel};
+use inkwell::{AddressSpace, FloatPredicate, OptimizationLevel};
+use pluma_ast::common::*;
 use pluma_ast::nodes::*;
+use pluma_ast::value_type::ValueType;
+use std::convert::TryInto;
 use std::io::prelude::*;
+use std::ops::Deref;
 use std::process::{Command, Stdio};
 
 pub struct CodeGenerator<'ctx> {
@@ -39,13 +43,15 @@ impl<'ctx> CodeGenerator<'ctx> {
     };
   }
 
-  pub fn is_valid(&self) -> bool {
-    // This will print error messages if things go wrong!
-    self.main_function.verify(true)
+  pub fn verify(&self) -> Result<(), Diagnostic> {
+    self
+      .llvm_module
+      .verify()
+      .map_err(|err_msg| Diagnostic::error(err_msg))
   }
 
   pub fn write_to_string(&self) -> String {
-    self.main_function.print_to_string().to_string()
+    self.llvm_module.print_to_string().to_string()
   }
 
   pub fn write_to_path(&self, path: &std::path::Path) -> Result<(), Diagnostic> {
@@ -87,12 +93,151 @@ impl<'ctx> CodeGenerator<'ctx> {
       .create_jit_execution_engine(OptimizationLevel::None)
       .unwrap();
 
-    let maybe_fn =
-      unsafe { execution_engine.get_function::<unsafe extern "C" fn() -> i32>("main") };
+    let result = unsafe { execution_engine.run_function_as_main(self.main_function, &[]) };
 
-    let compiled_fn = maybe_fn.expect("Should always have a function called 'main'");
+    println!("execution finished with code: {}", result);
 
-    unsafe { compiled_fn.call() as i32 }
+    result
+  }
+
+  fn compile_call(&self, call: &CallNode) -> BasicValueEnum {
+    let callee_name = match &call.callee.kind {
+      ExprKind::Identifier(ident) => ident.name.clone(),
+      _ => todo!(),
+    };
+
+    let func = self
+      .llvm_module
+      .get_function(&callee_name[..])
+      .expect("should have function defined");
+
+    let mut compiled_args = Vec::with_capacity(1);
+
+    for arg in &call.args {
+      compiled_args.push(self.compile_expr(&arg));
+    }
+
+    let argsv: Vec<BasicValueEnum> = compiled_args
+      .iter()
+      .by_ref()
+      .map(|&val| val.into())
+      .collect();
+
+    let call_site_value = self.llvm_builder.build_call(func, argsv.as_slice(), "tmp");
+
+    call_site_value
+      .try_as_basic_value()
+      .left()
+      .expect("call did not return a basic value")
+  }
+
+  fn compile_expr(&self, expr: &ExprNode) -> BasicValueEnum {
+    match &expr.kind {
+      ExprKind::Literal(lit) => self.compile_literal(lit),
+
+      ExprKind::Call(call) => self.compile_call(call),
+
+      other => todo!("compile expr kind: {:#?}", other),
+    }
+  }
+
+  fn compile_literal(&self, lit: &LiteralNode) -> BasicValueEnum {
+    match &lit.kind {
+      LiteralKind::IntDecimal(value) => self
+        .llvm_context
+        .i128_type()
+        .const_int((*value).try_into().unwrap(), true)
+        .into(),
+
+      LiteralKind::FloatDecimal(value) => self.llvm_context.f64_type().const_float(*value).into(),
+
+      LiteralKind::Str(value) => {
+        // hmm
+        let global_value = self
+          .llvm_builder
+          .build_global_string_ptr(value.as_str(), "str");
+
+        global_value.as_pointer_value().into()
+      }
+
+      other => todo!("compile literal kind: {:#?}", other),
+    }
+  }
+
+  fn build_intrinsic_function(&mut self, name: String) {
+    match &name[..] {
+      "exit_with" => {
+        let param_types = vec![self.llvm_context.i128_type().into()];
+        let param_types = param_types.as_slice();
+
+        let fn_type = self
+          .llvm_context
+          .struct_type(&[], false)
+          .fn_type(&param_types, false);
+
+        let function = self.llvm_module.add_function(&name[..], fn_type, None);
+
+        let entry = self.llvm_context.append_basic_block(function, "entry");
+
+        let return_value = self.llvm_context.const_struct(&[], false);
+
+        self.llvm_builder.position_at_end(entry);
+        self.llvm_builder.build_return(Some(&return_value));
+      }
+
+      "print" => {
+        {
+          // add extern "puts" definition
+          let param_types = vec![self
+            .llvm_context
+            .i8_type()
+            .ptr_type(AddressSpace::Generic)
+            .into()];
+          let param_types = param_types.as_slice();
+          let fn_type = self.llvm_context.i32_type().fn_type(&param_types, false);
+
+          self
+            .llvm_module
+            .add_function("puts", fn_type, Some(Linkage::External));
+        }
+
+        // add definition for wrapping "print" func
+        let param_types = vec![self
+          .llvm_context
+          .i8_type()
+          .ptr_type(AddressSpace::Generic)
+          .into()];
+        let param_types = param_types.as_slice();
+
+        let fn_type = self
+          .llvm_context
+          .struct_type(&[], false)
+          .fn_type(&param_types, false);
+
+        let function = self.llvm_module.add_function(&name[..], fn_type, None);
+
+        let entry = self.llvm_context.append_basic_block(function, "entry");
+        self.llvm_builder.position_at_end(entry);
+
+        let first_param = function.get_first_param().unwrap();
+        first_param.set_name("a");
+
+        let args = vec![first_param];
+
+        let func = self
+          .llvm_module
+          .get_function("puts")
+          .expect("should have function defined");
+
+        self.llvm_builder.build_call(func, args.as_slice(), "tmp");
+
+        let return_value = self.llvm_context.const_struct(&[], false);
+        self.llvm_builder.position_at_end(entry);
+        self.llvm_builder.build_return(Some(&return_value));
+      }
+
+      _ => todo!(),
+    }
   }
 }
 
@@ -103,6 +248,12 @@ impl<'ctx> Visitor for CodeGenerator<'ctx> {
       .append_basic_block(self.main_function, "entry");
 
     self.llvm_builder.position_at_end(entry_block);
+  }
+
+  fn leave_module(&mut self, _node: &mut ModuleNode) {
+    let main_block = self.main_function.get_last_basic_block().unwrap();
+
+    self.llvm_builder.position_at_end(main_block);
 
     let default_return_value = self.llvm_context.i32_type().const_int(47, true);
 
@@ -111,7 +262,27 @@ impl<'ctx> Visitor for CodeGenerator<'ctx> {
 
   fn enter_top_level_statement(&mut self, node: &mut TopLevelStatementNode) {
     match &node.kind {
-      TopLevelStatementKind::Expr(_expr) => {}
+      TopLevelStatementKind::IntrinsicDef(def) => match &def.kind {
+        DefKind::Function { signature } => {
+          let name = signature.first().unwrap().0.name.clone();
+          self.build_intrinsic_function(name);
+        }
+
+        _ => {}
+      },
+
+      TopLevelStatementKind::Expr(expr) => {
+        // Go back to the end of the entry block in main
+        let block = self
+          .main_function
+          .get_last_basic_block()
+          .expect("should have at least one block");
+
+        self.llvm_builder.position_at_end(block);
+
+        // ...
+        self.compile_expr(expr);
+      }
 
       _ => {}
     }

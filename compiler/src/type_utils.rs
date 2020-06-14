@@ -2,14 +2,19 @@ use pluma_ast::nodes::*;
 use pluma_ast::value_type::*;
 
 pub fn type_ident_to_value_type(node: &TypeIdentifierNode) -> ValueType {
-  ValueType::Named(node.name.clone())
+  match &node.name[..] {
+    "Int" => ValueType::Int,
+    "Float" => ValueType::Float,
+    "String" => ValueType::String,
+    _ => ValueType::Named(node.name.clone()),
+  }
 }
 
 pub fn type_expr_to_value_type(node: &TypeExprNode) -> ValueType {
   match &node.kind {
     TypeExprKind::EmptyTuple => ValueType::Nothing,
     TypeExprKind::Grouping(inner) => type_expr_to_value_type(&inner),
-    TypeExprKind::Single(ident) => ValueType::Named(ident.name.clone()),
+    TypeExprKind::Single(ident) => type_ident_to_value_type(&ident),
     TypeExprKind::Tuple(entries) => {
       let mut entry_types = Vec::new();
 

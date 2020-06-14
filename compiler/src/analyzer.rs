@@ -1,6 +1,7 @@
 use crate::analysis_error::{AnalysisError, AnalysisErrorKind};
 use crate::diagnostics::Diagnostic;
 use crate::scope::{BindingKind, Scope, TypeBindingKind};
+use crate::type_utils;
 use crate::visitor::Visitor;
 use pluma_ast::nodes::*;
 use pluma_ast::value_type::ValueType;
@@ -132,7 +133,7 @@ impl<'a> Analyzer<'a> {
       TypeExprKind::EmptyTuple => ValueType::Nothing,
       TypeExprKind::Grouping(inner) => self.type_expr_to_value_type(&inner),
       TypeExprKind::Single(ident) => {
-        let named_value_type = ValueType::Named(ident.name.clone());
+        let named_value_type = type_utils::type_ident_to_value_type(&ident);
 
         if self.scope.get_type_binding(&named_value_type).is_none() {
           self.error(AnalysisError {
@@ -327,12 +328,12 @@ impl<'a> Visitor for Analyzer<'a> {
       }
 
       ExprKind::Literal(lit_node) => match &lit_node.kind {
-        LiteralKind::IntDecimal { .. } => node.typ = ValueType::Named("Int".to_owned()),
-        LiteralKind::IntBinary { .. } => node.typ = ValueType::Named("Int".to_owned()),
-        LiteralKind::IntHex { .. } => node.typ = ValueType::Named("Int".to_owned()),
-        LiteralKind::IntOctal { .. } => node.typ = ValueType::Named("Int".to_owned()),
-        LiteralKind::FloatDecimal { .. } => node.typ = ValueType::Named("Float".to_owned()),
-        LiteralKind::Str { .. } => node.typ = ValueType::Named("String".to_owned()),
+        LiteralKind::IntDecimal { .. } => node.typ = ValueType::Int,
+        LiteralKind::IntBinary { .. } => node.typ = ValueType::Int,
+        LiteralKind::IntHex { .. } => node.typ = ValueType::Int,
+        LiteralKind::IntOctal { .. } => node.typ = ValueType::Int,
+        LiteralKind::FloatDecimal { .. } => node.typ = ValueType::Float,
+        LiteralKind::Str { .. } => node.typ = ValueType::String,
       },
 
       ExprKind::Call(call_node) => node.typ = call_node.typ.clone(),

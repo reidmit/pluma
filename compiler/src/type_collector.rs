@@ -284,9 +284,9 @@ impl<'a> Visitor for TypeCollector<'a> {
 
   fn enter_intrinsic_type_def(&mut self, node: &mut IntrinsicTypeDefNode) {
     let intrinsic_type = match &node.name.name[..] {
-      "Int" => Some(ValueType::Named("Int".to_owned())),
-      "Float" => Some(ValueType::Named("Float".to_owned())),
-      "String" => Some(ValueType::Named("String".to_owned())),
+      "Int" => Some(ValueType::Int),
+      "Float" => Some(ValueType::Float),
+      "String" => Some(ValueType::String),
       _ => None,
     };
 

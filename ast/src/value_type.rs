@@ -2,6 +2,9 @@ use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub enum ValueType {
+  Int,
+  Float,
+  String,
   Named(String),
   Generic(String, Vec<ValueType>),
   Func(Vec<ValueType>, Box<ValueType>),
@@ -31,6 +34,12 @@ impl fmt::Display for ValueType {
       ValueType::Unknown => write!(f, "unknown"),
 
       ValueType::Nothing => write!(f, "()"),
+
+      ValueType::Int => write!(f, "Int"),
+
+      ValueType::Float => write!(f, "Float"),
+
+      ValueType::String => write!(f, "String"),
 
       ValueType::Named(name) => write!(f, "{}", name),
 
