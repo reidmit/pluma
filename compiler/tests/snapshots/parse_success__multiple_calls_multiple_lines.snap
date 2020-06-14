@@ -1,0 +1,166 @@
+---
+source: compiler/tests/parse_success.rs
+expression: "print \"one\"\nprint \"two\""
+---
+
+=== Source ===
+print "one"
+print "two"
+
+=== Tokens ===
+[
+    Identifier(
+        0,
+        5,
+    ),
+    StringLiteral(
+        7,
+        10,
+    ),
+    LineBreak(
+        11,
+        12,
+    ),
+    Identifier(
+        12,
+        17,
+    ),
+    StringLiteral(
+        19,
+        22,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        22,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                10,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        0,
+                        10,
+                    ),
+                    kind: Call(
+                        CallNode {
+                            pos: (
+                                0,
+                                10,
+                            ),
+                            callee: ExprNode {
+                                pos: (
+                                    0,
+                                    5,
+                                ),
+                                kind: Identifier(
+                                    IdentifierNode {
+                                        pos: (
+                                            0,
+                                            5,
+                                        ),
+                                        name: "print",
+                                    },
+                                ),
+                                typ: Unknown,
+                            },
+                            args: [
+                                ExprNode {
+                                    pos: (
+                                        7,
+                                        10,
+                                    ),
+                                    kind: Literal(
+                                        LiteralNode {
+                                            pos: (
+                                                7,
+                                                10,
+                                            ),
+                                            kind: Str(
+                                                "one",
+                                            ),
+                                        },
+                                    ),
+                                    typ: Unknown,
+                                },
+                            ],
+                            typ: Unknown,
+                        },
+                    ),
+                    typ: Unknown,
+                },
+            ),
+        },
+        TopLevelStatementNode {
+            pos: (
+                12,
+                22,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        12,
+                        22,
+                    ),
+                    kind: Call(
+                        CallNode {
+                            pos: (
+                                12,
+                                22,
+                            ),
+                            callee: ExprNode {
+                                pos: (
+                                    12,
+                                    17,
+                                ),
+                                kind: Identifier(
+                                    IdentifierNode {
+                                        pos: (
+                                            12,
+                                            17,
+                                        ),
+                                        name: "print",
+                                    },
+                                ),
+                                typ: Unknown,
+                            },
+                            args: [
+                                ExprNode {
+                                    pos: (
+                                        19,
+                                        22,
+                                    ),
+                                    kind: Literal(
+                                        LiteralNode {
+                                            pos: (
+                                                19,
+                                                22,
+                                            ),
+                                            kind: Str(
+                                                "two",
+                                            ),
+                                        },
+                                    ),
+                                    typ: Unknown,
+                                },
+                            ],
+                            typ: Unknown,
+                        },
+                    ),
+                    typ: Unknown,
+                },
+            ),
+        },
+    ],
+}
+

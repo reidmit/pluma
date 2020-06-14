@@ -96,7 +96,7 @@ impl<'a> Tokenizer<'a> {
           continue;
         }
 
-        if byte == b')' {
+        if interpolation_stack.len() > 0 && byte == b')' {
           // We must be at the end of an interpolation, so make a token for it and
           // fix the index on the last string in the string stack so that it starts
           // here. Decrease the interpolation stack.

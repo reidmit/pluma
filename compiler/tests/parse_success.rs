@@ -95,6 +95,10 @@ test_parse_success! {
     |"this is u̲n̲d̲e̲r̲l̲i̲n̲e̲d̲ with unicode chars"
   "#,
 
+  string_close_parens: r#"
+    |"I AM HERE :---)"
+  "#,
+
   string_multiple_lines: r#"
     |"wow
     |this
@@ -331,6 +335,11 @@ test_parse_success! {
     |} else {
     |  print "nope!"
     |}
+  "#,
+
+  multiple_calls_multiple_lines: r#"
+    |print "one"
+    |print "two"
   "#,
 
   chain_one_line: r#"

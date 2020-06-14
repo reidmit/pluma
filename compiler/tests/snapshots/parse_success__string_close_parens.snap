@@ -1,0 +1,55 @@
+---
+source: compiler/tests/parse_success.rs
+expression: "\"I AM HERE :---)\""
+---
+
+=== Source ===
+"I AM HERE :---)"
+
+=== Tokens ===
+[
+    StringLiteral(
+        1,
+        16,
+    ),
+]
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        1,
+        16,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                1,
+                16,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        1,
+                        16,
+                    ),
+                    kind: Literal(
+                        LiteralNode {
+                            pos: (
+                                1,
+                                16,
+                            ),
+                            kind: Str(
+                                "I AM HERE :---)",
+                            ),
+                        },
+                    ),
+                    typ: Unknown,
+                },
+            ),
+        },
+    ],
+}
+
