@@ -165,7 +165,7 @@ impl<'a> Analyzer<'a> {
 
 impl<'a> Visitor for Analyzer<'a> {
   fn leave_module(&mut self, _node: &mut ModuleNode) {
-    println!("end scope: {:#?}", self.scope);
+    // println!("end scope: {:#?}", self.scope);
   }
 
   fn leave_call(&mut self, node: &mut CallNode) {

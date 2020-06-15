@@ -13,6 +13,7 @@ use inkwell::context::Context;
 use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 #[derive(Debug)]
 pub struct Compiler {
@@ -48,6 +49,8 @@ impl Compiler {
   }
 
   pub fn compile(&mut self) -> Result<Option<i32>, Vec<Diagnostic>> {
+    let start_time = Instant::now();
+
     let mut dependency_graph = DependencyGraph::new(self.entry_module_name.clone());
 
     self.parse_module(
@@ -55,6 +58,8 @@ impl Compiler {
       to_module_path(self.root_dir.clone(), self.entry_module_name.clone()),
       &mut dependency_graph,
     );
+
+    debug_println!("finished parsing: {:#?}", start_time.elapsed());
 
     if !self.diagnostics.is_empty() {
       return Err(self.diagnostics.to_vec());
@@ -71,14 +76,14 @@ impl Compiler {
       TopologicalSort::Sorted(names) => names,
     };
 
+    debug_println!("finished sorting: {:#?}", start_time.elapsed());
+
     for module_name in sorted_names {
       let mut module_scope = Scope::new();
 
       module_scope.enter();
 
       let module_to_analyze = self.modules.get_mut(module_name).unwrap();
-
-      println!("\nAST:\n{:#?}", module_to_analyze);
 
       let mut type_collector = TypeCollector::new(&mut module_scope);
       module_to_analyze.traverse(&mut type_collector);
@@ -93,7 +98,7 @@ impl Compiler {
       let mut analyzer = Analyzer::new(&mut module_scope);
       module_to_analyze.traverse(&mut analyzer);
 
-      // println!("{:#?}", module_to_analyze.ast);
+      // debug_println!("AST: {:#?}", module_to_analyze.ast);
 
       for diagnostic in analyzer.diagnostics {
         self.diagnostics.push(diagnostic.with_module(
@@ -102,6 +107,8 @@ impl Compiler {
         ))
       }
     }
+
+    debug_println!("finished analysis: {:#?}", start_time.elapsed());
 
     if !self.diagnostics.is_empty() {
       return Err(self.diagnostics.to_vec());
@@ -115,11 +122,13 @@ impl Compiler {
       module_to_emit.traverse(&mut generator);
     }
 
+    debug_println!("finished codegen: {:#?}", start_time.elapsed());
+
     if self.release_mode() {
       generator.optimize();
     }
 
-    println!("\nLLIR:\n{}", generator.write_to_string());
+    debug_println!("\nLLIR:\n{}", generator.write_to_string());
 
     if let Err(err) = generator.verify() {
       self.diagnostics.push(err);
@@ -133,6 +142,9 @@ impl Compiler {
 
     if self.execute_after_compilation {
       let exit_code = generator.execute();
+
+      debug_println!("finished execution: {:#?}", start_time.elapsed());
+
       return Ok(Some(exit_code));
     }
 

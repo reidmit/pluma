@@ -1,25 +1,40 @@
 intrinsic_type Int
+
 intrinsic_def Int + Int -> Int
+
 intrinsic_def Int * Int -> Int
+
 intrinsic_def Int - Int -> Int
+
 intrinsic_def Int / Int -> Int
 
 intrinsic_type Float
+
 intrinsic_def Float + Float -> Float
+
 intrinsic_def Float * Float -> Float
+
 intrinsic_def Float - Float -> Float
+
 intrinsic_def Float / Float -> Float
 
 intrinsic_type String
 
 intrinsic_type Regex
 
-# trait Any ()
+intrinsic_def exit Int -> ()
 
-# enum Bool
-#   | True
-#   | False
+intrinsic_def print String -> ()
 
-# enum Option<A> where A :: Any
-#   | None
-#   | Some A
+# The Any trait specifies no fields or methods, so it is satisfied by
+# any value. This is useful for functions that simply "pass through" their
+# arguments without needing to access any fields or methods on them.
+trait Any
+
+enum Bool
+  | True
+  | False
+
+enum Option<A> where A :: Any
+  | None
+  | Some A

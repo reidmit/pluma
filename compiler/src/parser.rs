@@ -1102,9 +1102,9 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_numeric_literal(&self, start: usize, end: usize, radix: i128) -> i128 {
-    let mut result: i128 = 0;
-    let mut i: i128 = 1;
+  fn parse_numeric_literal(&self, start: usize, end: usize, radix: i32) -> i32 {
+    let mut result: i32 = 0;
+    let mut i: i32 = 1;
 
     for byte in self.source[start..end].iter().rev() {
       let byte_value = match byte {
@@ -1112,7 +1112,7 @@ impl<'a> Parser<'a> {
         _ => unreachable!(),
       };
 
-      result += (byte_value as i128) * i;
+      result += (byte_value as i32) * i;
       i *= radix;
     }
 

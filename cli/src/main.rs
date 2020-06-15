@@ -1,84 +1,75 @@
-use clap::{App, AppSettings, Arg};
-use pluma_compiler::{BINARY_NAME, VERSION};
-
+mod arg_parser;
 mod colors;
+mod commands;
 mod diagnostics;
-mod repl;
-mod runner;
-mod templates;
 
 fn main() {
-  let help_template = &templates::main_help_template()[..];
-  let cmd_help_template = &templates::command_help_template()[..];
-  let cmd_help_template_no_options = &templates::command_help_template_no_options()[..];
+  let args = std::env::args().skip(1).collect();
+  let parsed_args = arg_parser::parse_args(args);
 
-  let mut app = App::new(BINARY_NAME)
-    .version(VERSION)
-    .help_template(help_template)
-    .about("Compiler & tools for the Pluma language")
-    .setting(AppSettings::SubcommandRequiredElseHelp)
-    .setting(AppSettings::DisableVersion)
-    .setting(AppSettings::VersionlessSubcommands)
-    .setting(AppSettings::AllowExternalSubcommands)
-    .subcommand(
-      App::new("version")
-        .help_template(cmd_help_template_no_options)
-        .about("Prints version and exits"),
-    )
-    .subcommand(
-      App::new("run")
-        .help_template(cmd_help_template)
-        .about("Compiles & runs a module")
-        .arg(
-          Arg::with_name("entry")
-            .about("Path to entry module or directory")
-            .required(true),
-        )
-        .arg(
-          Arg::with_name("mode")
-            .about("Compiler optimization mode")
-            .takes_value(true)
-            .short('m')
-            .long("mode")
-            .default_value("debug")
-            .value_name("MODE")
-            .possible_values(&["debug", "release"]),
-        ),
-    )
-    .subcommand(
-      App::new("build")
-        .help_template(cmd_help_template)
-        .about("Compiles a module into an executable")
-        .arg(
-          Arg::with_name("entry")
-            .about("Path to entry module or directory")
-            .required(true),
-        )
-        .arg(
-          Arg::with_name("mode")
-            .about("Compiler optimization mode")
-            .takes_value(true)
-            .short('m')
-            .long("mode")
-            .default_value("debug")
-            .value_name("MODE")
-            .possible_values(&["debug", "release"]),
-        )
-        .arg(
-          Arg::with_name("out")
-            .about("Executable output file")
-            .takes_value(true)
-            .required(true)
-            .short('o')
-            .long("out")
-            .value_name("PATH"),
-        ),
-    )
-    .subcommand(
-      App::new("repl")
-        .help_template(cmd_help_template)
-        .about("Starts an interactive REPL session"),
-    );
+  match &parsed_args.subcommand()[..] {
+    "build" => {
+      if parsed_args.is_help_requested() {
+        commands::build::print_help();
+      } else {
+        let opts = commands::build::extract_options(parsed_args);
+        commands::build::execute(opts);
+      }
+    }
 
-  runner::run(&mut app);
+    "check" => {
+      if parsed_args.is_help_requested() {
+        commands::check::print_help();
+      } else {
+        let opts = commands::check::extract_options(parsed_args);
+        commands::check::execute(opts);
+      }
+    }
+
+    "run" => {
+      if parsed_args.is_help_requested() {
+        commands::run::print_help();
+      } else {
+        let opts = commands::run::extract_options(parsed_args);
+        commands::run::execute(opts);
+      }
+    }
+
+    "repl" => {
+      if parsed_args.is_help_requested() {
+        commands::repl::print_help();
+      } else {
+        commands::repl::execute();
+      }
+    }
+
+    "version" => {
+      if parsed_args.is_help_requested() {
+        commands::version::print_help();
+      } else {
+        commands::version::execute();
+      }
+    }
+
+    "help" => {
+      if parsed_args.is_help_requested() {
+        commands::help::print_help();
+      } else {
+        match parsed_args.get_positional_arg(0) {
+          Some(val) => match &val[..] {
+            "build" => commands::build::print_help(),
+            "run" => commands::run::print_help(),
+            "help" => commands::help::print_help(),
+            "repl" => commands::repl::print_help(),
+            "version" => commands::version::print_help(),
+            _ => commands::help::execute(),
+          },
+
+          _ => commands::help::execute(),
+        }
+      }
+    }
+
+    _ => commands::help::execute(),
+  }
 }

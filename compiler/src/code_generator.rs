@@ -145,7 +145,7 @@ impl<'ctx> CodeGenerator<'ctx> {
     match &lit.kind {
       LiteralKind::IntDecimal(value) => self
         .llvm_context
-        .i128_type()
+        .i32_type()
         .const_int((*value).try_into().unwrap(), true)
         .into(),
 
@@ -167,7 +167,19 @@ impl<'ctx> CodeGenerator<'ctx> {
   fn build_intrinsic_function(&mut self, name: String) {
     match &name[..] {
       "exit_with" => {
-        let param_types = vec![self.llvm_context.i128_type().into()];
+        {
+          // add extern "exit" definition
+          let param_types = vec![self.llvm_context.i32_type().into()];
+          let param_types = param_types.as_slice();
+          let fn_type = self.llvm_context.void_type().fn_type(&param_types, false);
+
+          self
+            .llvm_module
+            .add_function("exit", fn_type, Some(Linkage::External));
+        }
+
+        // add wrapping func definition
+        let param_types = vec![self.llvm_context.i32_type().into()];
         let param_types = param_types.as_slice();
 
         let fn_type = self
@@ -178,9 +190,20 @@ impl<'ctx> CodeGenerator<'ctx> {
         let function = self.llvm_module.add_function(&name[..], fn_type, None);
 
         let entry = self.llvm_context.append_basic_block(function, "entry");
+        self.llvm_builder.position_at_end(entry);
 
+        let first_param = function.get_first_param().unwrap();
+
+        // call extern function
+        let args = vec![first_param];
+        let func = self
+          .llvm_module
+          .get_function("exit")
+          .expect("should have function defined");
+        self.llvm_builder.build_call(func, args.as_slice(), "");
+
+        // return ()
         let return_value = self.llvm_context.const_struct(&[], false);
-
         self.llvm_builder.position_at_end(entry);
         self.llvm_builder.build_return(Some(&return_value));
       }
@@ -229,14 +252,14 @@ impl<'ctx> CodeGenerator<'ctx> {
           .get_function("puts")
           .expect("should have function defined");
 
-        self.llvm_builder.build_call(func, args.as_slice(), "tmp");
+        self.llvm_builder.build_call(func, args.as_slice(), "");
 
         let return_value = self.llvm_context.const_struct(&[], false);
         self.llvm_builder.position_at_end(entry);
         self.llvm_builder.build_return(Some(&return_value));
       }
 
-      _ => todo!(),
+      _ => unreachable!(),
     }
   }
 }
@@ -280,7 +303,6 @@ impl<'ctx> Visitor for CodeGenerator<'ctx> {
 
         self.llvm_builder.position_at_end(block);
 
-        // ...
         self.compile_expr(expr);
       }
 
