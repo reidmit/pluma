@@ -308,6 +308,7 @@ dependencies = [
  "atty 0.2.14 (registry+https://github.com/rust-lang/crates.io-index)",
  "pluma_compiler 0.1.0",
  "pluma_constants 0.1.0",
+ "pluma_diagnostics 0.1.0",
  "rustyline 6.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -318,7 +319,10 @@ dependencies = [
  "inkwell 0.1.0 (git+https://github.com/TheDan64/inkwell?branch=llvm10-0)",
  "pluma_ast 0.1.0",
  "pluma_constants 0.1.0",
+ "pluma_diagnostics 0.1.0",
+ "pluma_emitter 0.1.0",
  "pluma_parser 0.1.0",
+ "pluma_visitor 0.1.0",
 ]
 
 [[package]]
@@ -326,10 +330,31 @@ name = "pluma_constants"
 version = "0.1.0"
 
 [[package]]
+name = "pluma_diagnostics"
+version = "0.1.0"
+
+[[package]]
+name = "pluma_emitter"
+version = "0.1.0"
+dependencies = [
+ "inkwell 0.1.0 (git+https://github.com/TheDan64/inkwell?branch=llvm10-0)",
+ "pluma_ast 0.1.0",
+ "pluma_diagnostics 0.1.0",
+ "pluma_visitor 0.1.0",
+]
+
+[[package]]
 name = "pluma_parser"
 version = "0.1.0"
 dependencies = [
  "insta 0.16.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pluma_ast 0.1.0",
+]
+
+[[package]]
+name = "pluma_visitor"
+version = "0.1.0"
+dependencies = [
  "pluma_ast 0.1.0",
 ]
 

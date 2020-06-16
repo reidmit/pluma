@@ -1,8 +1,6 @@
 use crate::analyzer::Analyzer;
-use crate::code_generator::CodeGenerator;
 use crate::compiler_options::{CompilerMode, CompilerOptions};
 use crate::dependency_graph::{DependencyGraph, TopologicalSort};
-use crate::diagnostics::Diagnostic;
 use crate::import_error::{ImportError, ImportErrorKind};
 use crate::module::Module;
 use crate::scope::Scope;
@@ -10,6 +8,8 @@ use crate::type_collector::TypeCollector;
 use crate::usage_error::{UsageError, UsageErrorKind};
 use inkwell::context::Context;
 use pluma_constants::{DEFAULT_ENTRY_MODULE_NAME, FILE_EXTENSION};
+use pluma_diagnostics::diagnostics::Diagnostic;
+use pluma_emitter::code_generator::CodeGenerator;
 use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};

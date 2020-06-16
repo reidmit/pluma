@@ -1,10 +1,10 @@
 use crate::analysis_error::{AnalysisError, AnalysisErrorKind};
-use crate::diagnostics::Diagnostic;
 use crate::scope::{BindingKind, Scope, TypeBindingKind};
 use crate::type_utils;
-use crate::visitor::Visitor;
 use pluma_ast::nodes::*;
 use pluma_ast::value_type::ValueType;
+use pluma_diagnostics::diagnostics::Diagnostic;
+use pluma_visitor::visitor::Visitor;
 
 pub struct Analyzer<'a> {
   pub diagnostics: Vec<Diagnostic>,

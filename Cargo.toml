@@ -4,7 +4,10 @@ members = [
   "pluma_cli",
   "pluma_compiler",
   "pluma_constants",
+  "pluma_diagnostics",
+  "pluma_emitter",
   "pluma_parser",
+  "pluma_visitor",
 ]
 
 [profile.release]

@@ -1,7 +1,5 @@
 #![allow(unused_imports)]
 
-use crate::diagnostics::Diagnostic;
-use crate::visitor::Visitor;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
@@ -13,6 +11,8 @@ use inkwell::{AddressSpace, FloatPredicate, OptimizationLevel};
 use pluma_ast::common::*;
 use pluma_ast::nodes::*;
 use pluma_ast::value_type::ValueType;
+use pluma_diagnostics::diagnostics::Diagnostic;
+use pluma_visitor::visitor::Visitor;
 use std::convert::TryInto;
 use std::io::prelude::*;
 use std::ops::Deref;

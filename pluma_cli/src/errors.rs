@@ -1,7 +1,7 @@
 use crate::colors;
 use pluma_compiler::compiler::Compiler;
-use pluma_compiler::diagnostics::Diagnostic;
 use pluma_constants::BINARY_NAME;
+use pluma_diagnostics::diagnostics::Diagnostic;
 use std::path::PathBuf;
 
 pub fn print_usage_error(message: String) {
