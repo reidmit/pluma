@@ -1,4 +1,4 @@
-use crate::{DEFAULT_ENTRY_MODULE_NAME, FILE_EXTENSION};
+use pluma_constants::{DEFAULT_ENTRY_MODULE_NAME, FILE_EXTENSION};
 use std::fmt;
 
 #[derive(Debug, Clone)]

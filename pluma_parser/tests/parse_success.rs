@@ -1,6 +1,6 @@
 use insta::assert_snapshot;
-use pluma_compiler::parser::Parser;
-use pluma_compiler::tokenizer::Tokenizer;
+use pluma_parser::parser::Parser;
+use pluma_parser::tokenizer::Tokenizer;
 
 macro_rules! test_parse_success {
   ($($name:ident: $source:literal,)*) => {

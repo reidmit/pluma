@@ -1,9 +1,9 @@
 use crate::diagnostics::Diagnostic;
-use crate::parser::Parser;
-use crate::tokenizer::{CommentMap, TokenList, Tokenizer};
 use crate::traverse::Traverse;
 use crate::visitor::Visitor;
 use pluma_ast::nodes::*;
+use pluma_parser::parser::Parser;
+use pluma_parser::tokenizer::{CommentMap, TokenList, Tokenizer};
 use std::fs;
 use std::path::PathBuf;
 

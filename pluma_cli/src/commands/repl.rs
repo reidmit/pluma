@@ -1,5 +1,5 @@
 use crate::colors;
-use pluma_compiler::{BINARY_NAME, VERSION};
+use pluma_constants::{BINARY_NAME, VERSION};
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 

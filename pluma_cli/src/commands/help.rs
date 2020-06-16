@@ -1,6 +1,6 @@
 use crate::colors;
 use crate::commands;
-use pluma_compiler::{BINARY_NAME, VERSION};
+use pluma_constants::{BINARY_NAME, VERSION};
 
 pub fn description() -> String {
   format!("{}", "Compiles a module into an executable")

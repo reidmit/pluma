@@ -1,8 +1,10 @@
 [workspace]
 members = [
-  "ast",
-  "cli",
-  "compiler",
+  "pluma_ast",
+  "pluma_cli",
+  "pluma_compiler",
+  "pluma_constants",
+  "pluma_parser",
 ]
 
 [profile.release]
