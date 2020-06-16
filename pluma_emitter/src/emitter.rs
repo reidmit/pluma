@@ -24,6 +24,10 @@ pub struct Emitter<'ctx> {
 }
 
 impl<'ctx> Emitter<'ctx> {
+  pub fn create_context() -> Context {
+    Context::create()
+  }
+
   pub fn new(llvm_context: &'ctx Context) -> Emitter<'ctx> {
     let llvm_builder = llvm_context.create_builder();
     let llvm_module = llvm_context.create_module("root_module");

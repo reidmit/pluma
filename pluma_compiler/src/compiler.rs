@@ -6,7 +6,6 @@ use crate::module::Module;
 use crate::scope::Scope;
 use crate::type_collector::TypeCollector;
 use crate::usage_error::{UsageError, UsageErrorKind};
-use inkwell::context::Context;
 use pluma_constants::*;
 use pluma_diagnostics::*;
 use pluma_emitter::*;
@@ -114,7 +113,7 @@ impl Compiler {
       return Err(self.diagnostics.to_vec());
     }
 
-    let llvm_context = Context::create();
+    let llvm_context = Emitter::create_context();
     let mut emitter = Emitter::new(&llvm_context);
 
     for module_name in sorted_names {

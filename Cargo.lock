@@ -316,7 +316,6 @@ dependencies = [
 name = "pluma_compiler"
 version = "0.1.0"
 dependencies = [
- "inkwell 0.1.0 (git+https://github.com/TheDan64/inkwell?branch=llvm10-0)",
  "pluma_ast 0.1.0",
  "pluma_constants 0.1.0",
  "pluma_diagnostics 0.1.0",
