@@ -1,7 +1,7 @@
 mod arg_parser;
 mod colors;
 mod commands;
-mod diagnostics;
+mod errors;
 
 fn main() {
   let args = std::env::args().skip(1).collect();
@@ -62,7 +62,13 @@ fn main() {
             "help" => commands::help::print_help(),
             "repl" => commands::repl::print_help(),
             "version" => commands::version::print_help(),
-            _ => commands::help::execute(),
+            unknown => {
+              errors::print_usage_error(format!(
+                "Cannot retrieve help for unrecognized command '{}'.",
+                unknown
+              ));
+              std::process::exit(1);
+            }
           },
 
           _ => commands::help::execute(),
@@ -70,6 +76,9 @@ fn main() {
       }
     }
 
-    _ => commands::help::execute(),
+    unknown => {
+      errors::print_usage_error(format!("Command '{}' is not recognized.", unknown));
+      std::process::exit(1);
+    }
   }
 }

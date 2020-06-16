@@ -3,7 +3,7 @@ use crate::commands;
 use pluma_compiler::{BINARY_NAME, VERSION};
 
 pub fn description() -> String {
-  format!("{}", "Compiles a module into an executable.")
+  format!("{}", "Compiles a module into an executable")
 }
 
 pub fn print_help() {
@@ -29,9 +29,9 @@ pub fn print_help() {
 
 pub fn execute() {
   println!(
-    "{binary_name} - version {version}
+    "{binary_name_bold} - version {version}
 
-Compiler & tools for the Pluma language.
+Compiler & tools for the Pluma language
 
 {usage_header}
     {cmd_prefix} {binary_name} <command> [options...]
@@ -46,6 +46,7 @@ Compiler & tools for the Pluma language.
 
 For help with an individual command, try:
     {cmd_prefix} {binary_name} help <command>",
+    binary_name_bold = format!("{}", colors::bold(BINARY_NAME)),
     binary_name = BINARY_NAME,
     version = VERSION,
     usage_header = colors::bold("Usage:"),

@@ -1,6 +1,6 @@
 use crate::arg_parser::ParsedArgs;
 use crate::colors;
-use crate::diagnostics;
+use crate::errors;
 use pluma_compiler::compiler::Compiler;
 use pluma_compiler::compiler_options::*;
 use pluma_compiler::BINARY_NAME;
@@ -26,7 +26,7 @@ pub fn extract_options(args: ParsedArgs) -> Options {
 }
 
 pub fn description() -> String {
-  format!("{}", "Compiles a module into an executable.")
+  format!("{}", "Compiles a module into an executable")
 }
 
 pub fn print_help() {
@@ -66,7 +66,7 @@ pub fn execute(opts: Options) {
   let mut compiler = match Compiler::from_options(compiler_options) {
     Ok(c) => c,
     Err(diagnostics) => {
-      diagnostics::print(None, diagnostics);
+      errors::print_diagnostics(None, diagnostics);
       exit(1);
     }
   };
@@ -77,7 +77,7 @@ pub fn execute(opts: Options) {
     }
 
     Err(diagnostics) => {
-      diagnostics::print(Some(&compiler), diagnostics);
+      errors::print_diagnostics(Some(&compiler), diagnostics);
       exit(1);
     }
   }

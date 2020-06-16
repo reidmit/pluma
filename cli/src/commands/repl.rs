@@ -4,7 +4,7 @@ use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
 pub fn description() -> String {
-  format!("{}", "Starts an interactive REPL session.")
+  format!("{}", "Starts an interactive REPL session")
 }
 
 pub fn print_help() {

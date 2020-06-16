@@ -1,9 +1,20 @@
 use crate::colors;
 use pluma_compiler::compiler::Compiler;
 use pluma_compiler::diagnostics::Diagnostic;
+use pluma_compiler::BINARY_NAME;
 use std::path::PathBuf;
 
-pub fn print(compiler: Option<&Compiler>, diagnostics: Vec<Diagnostic>) {
+pub fn print_usage_error(message: String) {
+  eprintln!(
+    "{prefix} {message}\n\nFor help and a list of available commands, try:\n    {cmd_prefix} {binary_name} help",
+    prefix = colors::bold_red("Error:"),
+    message = message,
+    binary_name = BINARY_NAME,
+    cmd_prefix = colors::bold_dim("$")
+  )
+}
+
+pub fn print_diagnostics(compiler: Option<&Compiler>, diagnostics: Vec<Diagnostic>) {
   let mut first = true;
 
   for diagnostic in diagnostics {

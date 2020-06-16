@@ -2,7 +2,7 @@ use crate::colors;
 use pluma_compiler::{BINARY_NAME, VERSION};
 
 pub fn description() -> String {
-  format!("{}", "Prints compiler version and information.")
+  format!("{}", "Prints compiler version and information")
 }
 
 pub fn print_help() {
