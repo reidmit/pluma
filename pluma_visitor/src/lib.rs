@@ -1,2 +1,5 @@
-pub mod traverse;
-pub mod visitor;
+mod traverse;
+mod visitor;
+
+pub use traverse::*;
+pub use visitor::*;

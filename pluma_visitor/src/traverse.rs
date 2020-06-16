@@ -1,5 +1,5 @@
 use crate::visitor::Visitor;
-use pluma_ast::nodes::*;
+use pluma_ast::*;
 
 pub trait Traverse {
   fn traverse<V: Visitor>(&mut self, _visitor: &mut V) {}

@@ -1,9 +1,8 @@
-use pluma_ast::nodes::*;
-use pluma_diagnostics::diagnostics::Diagnostic;
+use pluma_ast::*;
+use pluma_diagnostics::*;
 use pluma_parser::parser::Parser;
 use pluma_parser::tokenizer::{CommentMap, TokenList, Tokenizer};
-use pluma_visitor::traverse::Traverse;
-use pluma_visitor::visitor::Visitor;
+use pluma_visitor::*;
 use std::fs;
 use std::path::PathBuf;
 

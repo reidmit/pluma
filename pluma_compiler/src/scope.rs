@@ -1,6 +1,6 @@
 use crate::analysis_error::{AnalysisError, AnalysisErrorKind};
-use pluma_ast::value_type::ValueType;
-use pluma_diagnostics::diagnostics::Diagnostic;
+use pluma_ast::*;
+use pluma_diagnostics::*;
 use std::collections::HashMap;
 
 #[derive(Debug)]

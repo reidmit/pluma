@@ -1,10 +1,8 @@
 use crate::scope::{Binding, BindingKind, Scope, TypeBindingKind};
 use crate::type_utils;
-use pluma_ast::common::*;
-use pluma_ast::nodes::*;
-use pluma_ast::value_type::*;
-use pluma_diagnostics::diagnostics::Diagnostic;
-use pluma_visitor::visitor::Visitor;
+use pluma_ast::*;
+use pluma_diagnostics::*;
+use pluma_visitor::*;
 use std::collections::HashMap;
 
 pub struct TypeCollector<'a> {

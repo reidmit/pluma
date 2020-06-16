@@ -1,9 +1,8 @@
 use crate::arg_parser::ParsedArgs;
 use crate::colors;
 use crate::errors;
-use pluma_compiler::compiler::Compiler;
-use pluma_compiler::compiler_options::*;
-use pluma_constants::BINARY_NAME;
+use pluma_compiler::*;
+use pluma_constants::*;
 use std::process::exit;
 
 #[derive(Debug)]

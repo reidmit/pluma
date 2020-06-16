@@ -8,25 +8,23 @@ use inkwell::targets::TargetTriple;
 use inkwell::types;
 use inkwell::values::{BasicValue, BasicValueEnum, FloatValue, FunctionValue, PointerValue};
 use inkwell::{AddressSpace, FloatPredicate, OptimizationLevel};
-use pluma_ast::common::*;
-use pluma_ast::nodes::*;
-use pluma_ast::value_type::ValueType;
-use pluma_diagnostics::diagnostics::Diagnostic;
-use pluma_visitor::visitor::Visitor;
+use pluma_ast::*;
+use pluma_diagnostics::*;
+use pluma_visitor::*;
 use std::convert::TryInto;
 use std::io::prelude::*;
 use std::ops::Deref;
 use std::process::{Command, Stdio};
 
-pub struct CodeGenerator<'ctx> {
+pub struct Emitter<'ctx> {
   llvm_context: &'ctx Context,
   llvm_builder: Builder<'ctx>,
   llvm_module: Module<'ctx>,
   main_function: FunctionValue<'ctx>,
 }
 
-impl<'ctx> CodeGenerator<'ctx> {
-  pub fn new(llvm_context: &'ctx Context) -> CodeGenerator<'ctx> {
+impl<'ctx> Emitter<'ctx> {
+  pub fn new(llvm_context: &'ctx Context) -> Emitter<'ctx> {
     let llvm_builder = llvm_context.create_builder();
     let llvm_module = llvm_context.create_module("root_module");
 
@@ -35,7 +33,7 @@ impl<'ctx> CodeGenerator<'ctx> {
     let return_type = llvm_context.i32_type().fn_type(&Vec::new(), false);
     let main_function = llvm_module.add_function("main", return_type, None);
 
-    return CodeGenerator {
+    return Emitter {
       llvm_context,
       llvm_builder,
       llvm_module,
@@ -264,7 +262,7 @@ impl<'ctx> CodeGenerator<'ctx> {
   }
 }
 
-impl<'ctx> Visitor for CodeGenerator<'ctx> {
+impl<'ctx> Visitor for Emitter<'ctx> {
   fn enter_module(&mut self, _node: &mut ModuleNode) {
     let entry_block = self
       .llvm_context

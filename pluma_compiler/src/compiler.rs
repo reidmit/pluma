@@ -7,9 +7,9 @@ use crate::scope::Scope;
 use crate::type_collector::TypeCollector;
 use crate::usage_error::{UsageError, UsageErrorKind};
 use inkwell::context::Context;
-use pluma_constants::{DEFAULT_ENTRY_MODULE_NAME, FILE_EXTENSION};
-use pluma_diagnostics::diagnostics::Diagnostic;
-use pluma_emitter::code_generator::CodeGenerator;
+use pluma_constants::*;
+use pluma_diagnostics::*;
+use pluma_emitter::*;
 use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
@@ -115,33 +115,33 @@ impl Compiler {
     }
 
     let llvm_context = Context::create();
-    let mut generator = CodeGenerator::new(&llvm_context);
+    let mut emitter = Emitter::new(&llvm_context);
 
     for module_name in sorted_names {
       let module_to_emit = self.modules.get_mut(module_name).unwrap();
-      module_to_emit.traverse(&mut generator);
+      module_to_emit.traverse(&mut emitter);
     }
 
     debug_println!("finished codegen: {:#?}", start_time.elapsed());
 
     if self.release_mode() {
-      generator.optimize();
+      emitter.optimize();
     }
 
-    debug_println!("\nLLIR:\n{}", generator.write_to_string());
+    debug_println!("\nLLIR:\n{}", emitter.write_to_string());
 
-    if let Err(err) = generator.verify() {
+    if let Err(err) = emitter.verify() {
       self.diagnostics.push(err);
     }
 
     if let Some(path) = &self.output_path {
-      if let Err(err) = generator.write_to_path(Path::new(&path)) {
+      if let Err(err) = emitter.write_to_path(Path::new(&path)) {
         self.diagnostics.push(err);
       }
     }
 
     if self.execute_after_compilation {
-      let exit_code = generator.execute();
+      let exit_code = emitter.execute();
 
       debug_println!("finished execution: {:#?}", start_time.elapsed());
 

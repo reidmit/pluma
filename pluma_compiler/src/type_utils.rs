@@ -1,5 +1,4 @@
-use pluma_ast::nodes::*;
-use pluma_ast::value_type::*;
+use pluma_ast::*;
 
 pub fn type_ident_to_value_type(node: &TypeIdentifierNode) -> ValueType {
   match &node.name[..] {

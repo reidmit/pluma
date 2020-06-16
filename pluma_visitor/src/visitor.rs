@@ -1,4 +1,4 @@
-use pluma_ast::nodes::*;
+use pluma_ast::*;
 
 pub trait Visitor {
   fn enter_call(&mut self, _node: &mut CallNode) {}

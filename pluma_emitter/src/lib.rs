@@ -1,1 +1,3 @@
-pub mod code_generator;
+mod emitter;
+
+pub use emitter::*;

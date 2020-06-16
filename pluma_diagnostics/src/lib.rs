@@ -1,1 +1,3 @@
-pub mod diagnostics;
+mod diagnostics;
+
+pub use diagnostics::*;
