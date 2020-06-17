@@ -12,7 +12,6 @@ use pluma_emitter::*;
 use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
-use std::time::Instant;
 
 #[derive(Debug)]
 pub struct Compiler {
@@ -21,13 +20,15 @@ pub struct Compiler {
   pub modules: HashMap<String, Module>,
   mode: CompilerMode,
   output_path: Option<String>,
-  execute_after_compilation: bool,
   diagnostics: Vec<Diagnostic>,
+  dependency_graph: DependencyGraph,
 }
 
 impl Compiler {
+  /// Creates a new Compiler instance from the given options
   pub fn from_options(options: CompilerOptions) -> Result<Self, Vec<Diagnostic>> {
-    let (root_dir, entry_module_name) = Compiler::resolve_entry(options.entry_path)?;
+    let (root_dir, entry_module_name) = resolve_entry(options.entry_path)?;
+    let dependency_graph = DependencyGraph::new(entry_module_name.clone());
 
     Ok(Compiler {
       root_dir,
@@ -36,35 +37,22 @@ impl Compiler {
       diagnostics: Vec::new(),
       output_path: options.output_path,
       mode: options.mode,
-      execute_after_compilation: options.execute_after_compilation,
+      dependency_graph,
     })
   }
 
-  fn resolve_entry(entry_path: String) -> Result<(PathBuf, String), Vec<Diagnostic>> {
-    match get_root_dir_and_module_name(entry_path) {
-      Ok(result) => Ok(result),
-      Err(usage_error) => Err(vec![Diagnostic::error(usage_error)]),
-    }
-  }
-
-  pub fn compile(&mut self) -> Result<Option<i32>, Vec<Diagnostic>> {
-    let start_time = Instant::now();
-
-    let mut dependency_graph = DependencyGraph::new(self.entry_module_name.clone());
-
+  /// Parses & analyzes input files without generating or emitting code
+  pub fn check(&mut self) -> Result<(), Vec<Diagnostic>> {
     self.parse_module(
       self.entry_module_name.clone(),
       to_module_path(self.root_dir.clone(), self.entry_module_name.clone()),
-      &mut dependency_graph,
     );
-
-    debug_println!("finished parsing: {:#?}", start_time.elapsed());
 
     if !self.diagnostics.is_empty() {
       return Err(self.diagnostics.to_vec());
     }
 
-    let sorted_names = match dependency_graph.sort() {
+    let sorted_names = match self.dependency_graph.sort() {
       TopologicalSort::Cycle(names) => {
         self.diagnostics.push(Diagnostic::error(ImportError {
           kind: ImportErrorKind::CyclicalDependency(names.to_vec()),
@@ -72,10 +60,9 @@ impl Compiler {
 
         return Err(self.diagnostics.to_vec());
       }
+
       TopologicalSort::Sorted(names) => names,
     };
-
-    debug_println!("finished sorting: {:#?}", start_time.elapsed());
 
     for module_name in sorted_names {
       let mut module_scope = Scope::new();
@@ -97,8 +84,6 @@ impl Compiler {
       let mut analyzer = Analyzer::new(&mut module_scope);
       module_to_analyze.traverse(&mut analyzer);
 
-      // debug_println!("AST: {:#?}", module_to_analyze.ast);
-
       for diagnostic in analyzer.diagnostics {
         self.diagnostics.push(diagnostic.with_module(
           module_name.clone(),
@@ -107,27 +92,28 @@ impl Compiler {
       }
     }
 
-    debug_println!("finished analysis: {:#?}", start_time.elapsed());
-
     if !self.diagnostics.is_empty() {
       return Err(self.diagnostics.to_vec());
     }
 
+    Ok(())
+  }
+
+  /// Fully compiles input files & emits generated code
+  pub fn emit(&mut self) -> Result<(), Vec<Diagnostic>> {
+    self.check()?;
+
     let llvm_context = Emitter::create_context();
     let mut emitter = Emitter::new(&llvm_context);
 
-    for module_name in sorted_names {
-      let module_to_emit = self.modules.get_mut(module_name).unwrap();
+    for module_name in self.sorted_module_names() {
+      let module_to_emit = self.modules.get_mut(&module_name).unwrap();
       module_to_emit.traverse(&mut emitter);
     }
-
-    debug_println!("finished codegen: {:#?}", start_time.elapsed());
 
     if self.release_mode() {
       emitter.optimize();
     }
-
-    debug_println!("\nLLIR:\n{}", emitter.write_to_string());
 
     if let Err(err) = emitter.verify() {
       self.diagnostics.push(err);
@@ -139,23 +125,39 @@ impl Compiler {
       }
     }
 
-    if self.execute_after_compilation {
-      let exit_code = emitter.execute();
-
-      debug_println!("finished execution: {:#?}", start_time.elapsed());
-
-      return Ok(Some(exit_code));
+    if !self.diagnostics.is_empty() {
+      return Err(self.diagnostics.to_vec());
     }
 
-    Ok(None)
+    Ok(())
   }
 
-  fn parse_module(
-    &mut self,
-    module_name: String,
-    module_path: PathBuf,
-    dependency_graph: &mut DependencyGraph,
-  ) {
+  /// Executes input without emitting any generated code
+  pub fn run(&mut self) -> Result<i32, Vec<Diagnostic>> {
+    self.check()?;
+
+    let llvm_context = Emitter::create_context();
+    let mut emitter = Emitter::new(&llvm_context);
+
+    for module_name in self.sorted_module_names() {
+      let module_to_emit = self.modules.get_mut(&module_name).unwrap();
+      module_to_emit.traverse(&mut emitter);
+    }
+
+    if let Err(err) = emitter.verify() {
+      self.diagnostics.push(err);
+    }
+
+    if !self.diagnostics.is_empty() {
+      return Err(self.diagnostics.to_vec());
+    }
+
+    let exit_code = emitter.execute();
+
+    return Ok(exit_code);
+  }
+
+  fn parse_module(&mut self, module_name: String, module_path: PathBuf) {
     if self.modules.contains_key(&module_name) {
       return;
     };
@@ -186,12 +188,13 @@ impl Compiler {
         continue;
       }
 
-      dependency_graph.add_edge(import_node.module_name.clone(), module_name.clone());
+      self
+        .dependency_graph
+        .add_edge(import_node.module_name.clone(), module_name.clone());
 
       self.parse_module(
         import_node.module_name.clone(),
         to_module_path(self.root_dir.clone(), import_node.module_name),
-        dependency_graph,
       )
     }
 
@@ -218,6 +221,20 @@ impl Compiler {
       CompilerMode::Release => true,
       _ => false,
     }
+  }
+
+  fn sorted_module_names(&mut self) -> Vec<String> {
+    match self.dependency_graph.sort() {
+      TopologicalSort::Sorted(sorted_names) => sorted_names.to_vec(),
+      _ => unreachable!(),
+    }
+  }
+}
+
+fn resolve_entry(entry_path: String) -> Result<(PathBuf, String), Vec<Diagnostic>> {
+  match get_root_dir_and_module_name(entry_path) {
+    Ok(result) => Ok(result),
+    Err(usage_error) => Err(vec![Diagnostic::error(usage_error)]),
   }
 }
 

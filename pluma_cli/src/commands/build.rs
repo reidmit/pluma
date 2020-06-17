@@ -53,13 +53,12 @@ pub fn print_help() {
 
 pub fn execute(opts: Options) {
   let compiler_options = CompilerOptions {
-    entry_path: opts.entry_path.unwrap_or("main.pa".to_owned()),
+    entry_path: opts.entry_path.unwrap_or(DEFAULT_ENTRY_FILE.to_owned()),
     mode: match opts.mode {
       Some(val) if val == "release" => CompilerMode::Release,
       _ => CompilerMode::Debug,
     },
     output_path: opts.output_path,
-    execute_after_compilation: false,
   };
 
   let mut compiler = match Compiler::from_options(compiler_options) {
@@ -70,7 +69,7 @@ pub fn execute(opts: Options) {
     }
   };
 
-  match compiler.compile() {
+  match compiler.emit() {
     Ok(_) => {
       println!("Compilation succeeded!");
     }
