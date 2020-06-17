@@ -10,10 +10,10 @@ pub fn print_help() {
     "{description}
 
 {usage_header}
-    {cmd_prefix} {binary_name} version
+  {cmd_prefix} {binary_name} version
 
 {options_header}
-    -h, --help    Print this help text",
+  -h, --help    Print this help text",
     description = description(),
     usage_header = colors::bold("Usage:"),
     binary_name = BINARY_NAME,

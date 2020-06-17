@@ -58,6 +58,7 @@ fn main() {
         match parsed_args.get_positional_arg(0) {
           Some(val) => match &val[..] {
             "build" => commands::build::print_help(),
+            "check" => commands::check::print_help(),
             "run" => commands::run::print_help(),
             "help" => commands::help::print_help(),
             "repl" => commands::repl::print_help(),
@@ -74,6 +75,11 @@ fn main() {
           _ => commands::help::execute(),
         }
       }
+    }
+
+    "" => {
+      errors::print_usage_error(format!("No command given."));
+      std::process::exit(1);
     }
 
     unknown => {

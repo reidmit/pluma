@@ -33,15 +33,15 @@ pub fn print_help() {
     "{description}
 
 {usage_header}
-    {cmd_prefix} {binary_name} build <path> [options...]
+  {cmd_prefix} {binary_name} build <path> [options...]
 
 {arguments_header}
-    <path>    Path to Pluma module or directory
+  <path>    Path to Pluma module or directory
 
 {options_header}
-    -o, --out     Output executable path
-    -m, --mode    Optimization mode ('release' or 'debug', default: 'debug')
-    -h, --help    Print this help text",
+  -o, --out     Output executable path
+  -m, --mode    Optimization mode ('release' or 'debug', default: 'debug')
+  -h, --help    Print this help text",
     description = description(),
     usage_header = colors::bold("Usage:"),
     binary_name = BINARY_NAME,

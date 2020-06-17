@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 pub fn print_usage_error(message: String) {
   eprintln!(
-    "{prefix} {message}\n\nFor help and a list of available commands, try:\n    {cmd_prefix} {binary_name} help",
+    "{prefix} {message}\n\nFor help and a list of available commands, try:\n  {cmd_prefix} {binary_name} help",
     prefix = colors::bold_red("Error:"),
     message = message,
     binary_name = BINARY_NAME,

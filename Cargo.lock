@@ -298,11 +298,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pluma_ast"
-version = "0.1.0"
-
-[[package]]
-name = "pluma_cli"
+name = "pluma"
 version = "0.1.0"
 dependencies = [
  "atty 0.2.14 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -311,6 +307,10 @@ dependencies = [
  "pluma_diagnostics 0.1.0",
  "rustyline 6.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "pluma_ast"
+version = "0.1.0"
 
 [[package]]
 name = "pluma_compiler"

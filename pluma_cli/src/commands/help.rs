@@ -11,13 +11,13 @@ pub fn print_help() {
     "{description}
 
 {usage_header}
-    {cmd_prefix} {binary_name} help [<command>]
+  {cmd_prefix} {binary_name} help [<command>]
 
 {arguments_header}
-    <command>    Name of command to print help for
+  <command>    Name of command to print help for
 
 {options_header}
-    -h, --help    Print this help text",
+  -h, --help    Print this help text",
     description = description(),
     usage_header = colors::bold("Usage:"),
     binary_name = BINARY_NAME,
@@ -34,18 +34,18 @@ pub fn execute() {
 Compiler & tools for the Pluma language
 
 {usage_header}
-    {cmd_prefix} {binary_name} <command> [options...]
+  {cmd_prefix} {binary_name} <command> [options...]
 
 {commands_header}
-    build     {build_description}
-    check     {check_description}
-    repl      {repl_description}
-    run       {run_description}
-    version   {version_description}
-    help      {help_description}
+  build     {build_description}
+  check     {check_description}
+  repl      {repl_description}
+  run       {run_description}
+  version   {version_description}
+  help      {help_description}
 
 For help with an individual command, try:
-    {cmd_prefix} {binary_name} help <command>",
+  {cmd_prefix} {binary_name} help <command>",
     binary_name_bold = format!("{}", colors::bold(BINARY_NAME)),
     binary_name = BINARY_NAME,
     version = VERSION,
