@@ -1,5 +1,5 @@
 #!/bin/bash
 
-export LLVM_SYS_100_PREFIX=$HOME/code/clang+llvm-10.0.0-x86_64-apple-darwin
+source ./env
 
 cargo test -q "$@" || cargo insta review
