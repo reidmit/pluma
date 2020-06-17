@@ -5,14 +5,14 @@ A fun, friendly, statically-typed programming language.
 **a work-in-progress...** (this readme will be updated if/when it's ready for people to try out)
 
 to run while developing:
-`./scripts/run`
-`./scripts/run build path/to/main.pa`
+`./bin/run run`
+`./bin/run build path/to/main.pa`
 
 to test:
-`./scripts/test`
+`./bin/test`
 
 to build in release mode:
-`./scripts/build`
+`./bin/build_release`
 
 ## examples
 

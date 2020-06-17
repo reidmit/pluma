@@ -2,4 +2,4 @@
 
 source ./env
 
-cargo build
+cargo build --release
