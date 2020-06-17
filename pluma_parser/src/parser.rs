@@ -1179,6 +1179,19 @@ impl<'a> Parser<'a> {
 
   fn parse_pattern(&mut self) -> Option<PatternNode> {
     match self.current_token() {
+      Some(&Token::KeywordMut(start, _)) => {
+        self.advance();
+
+        expect_token_and_do!(self, Token::Identifier, {});
+
+        let id_node = self.parse_identifier().unwrap();
+
+        Some(PatternNode {
+          pos: (start, id_node.pos.1),
+          kind: PatternKind::Identifier(id_node, true),
+        })
+      }
+
       Some(&Token::Identifier(..)) => {
         let id_node = self.parse_identifier().unwrap();
 
@@ -1191,7 +1204,7 @@ impl<'a> Parser<'a> {
 
         Some(PatternNode {
           pos: id_node.pos,
-          kind: PatternKind::Identifier(id_node),
+          kind: PatternKind::Identifier(id_node, false),
         })
       }
 

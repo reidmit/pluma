@@ -1,10 +1,10 @@
 ---
 source: pluma_parser/tests/parse_success.rs
-expression: let x = 47
+expression: let mut x = 47
 ---
 
 === Source ===
-let x = 47
+let mut x = 47
 
 === Tokens ===
 [
@@ -12,17 +12,21 @@ let x = 47
         0,
         3,
     ),
-    Identifier(
+    KeywordMut(
         4,
-        5,
-    ),
-    Equals(
-        6,
         7,
     ),
-    DecimalDigits(
+    Identifier(
         8,
+        9,
+    ),
+    Equals(
         10,
+        11,
+    ),
+    DecimalDigits(
+        12,
+        14,
     ),
 ]
 
@@ -33,46 +37,46 @@ let x = 47
 ModuleNode {
     pos: (
         0,
-        10,
+        14,
     ),
     body: [
         TopLevelStatementNode {
             pos: (
                 0,
-                10,
+                14,
             ),
             kind: Let(
                 LetNode {
                     pos: (
                         0,
-                        10,
+                        14,
                     ),
                     pattern: PatternNode {
                         pos: (
                             4,
-                            5,
+                            9,
                         ),
                         kind: Identifier(
                             IdentifierNode {
                                 pos: (
-                                    4,
-                                    5,
+                                    8,
+                                    9,
                                 ),
                                 name: "x",
                             },
-                            false,
+                            true,
                         ),
                     },
                     value: ExprNode {
                         pos: (
-                            8,
-                            10,
+                            12,
+                            14,
                         ),
                         kind: Literal(
                             LiteralNode {
                                 pos: (
-                                    8,
-                                    10,
+                                    12,
+                                    14,
                                 ),
                                 kind: IntDecimal(
                                     47,

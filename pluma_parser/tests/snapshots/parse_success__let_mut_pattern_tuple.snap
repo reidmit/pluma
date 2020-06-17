@@ -1,10 +1,10 @@
 ---
 source: pluma_parser/tests/parse_success.rs
-expression: "let (a, b) = (47, \"cool\")"
+expression: "let (a, mut b) = (47, \"cool\")"
 ---
 
 === Source ===
-let (a, b) = (47, "cool")
+let (a, mut b) = (47, "cool")
 
 === Tokens ===
 [
@@ -24,37 +24,41 @@ let (a, b) = (47, "cool")
         6,
         7,
     ),
-    Identifier(
+    KeywordMut(
         8,
-        9,
+        11,
+    ),
+    Identifier(
+        12,
+        13,
     ),
     RightParen(
-        9,
-        10,
-    ),
-    Equals(
-        11,
-        12,
-    ),
-    LeftParen(
         13,
         14,
     ),
-    DecimalDigits(
-        14,
+    Equals(
+        15,
         16,
+    ),
+    LeftParen(
+        17,
+        18,
+    ),
+    DecimalDigits(
+        18,
+        20,
     ),
     Comma(
-        16,
-        17,
+        20,
+        21,
     ),
     StringLiteral(
-        19,
         23,
+        27,
     ),
     RightParen(
-        24,
-        25,
+        28,
+        29,
     ),
 ]
 
@@ -65,24 +69,24 @@ let (a, b) = (47, "cool")
 ModuleNode {
     pos: (
         0,
-        25,
+        29,
     ),
     body: [
         TopLevelStatementNode {
             pos: (
                 0,
-                25,
+                29,
             ),
             kind: Let(
                 LetNode {
                     pos: (
                         0,
-                        25,
+                        29,
                     ),
                     pattern: PatternNode {
                         pos: (
                             4,
-                            10,
+                            14,
                         ),
                         kind: Tuple(
                             [
@@ -105,17 +109,17 @@ ModuleNode {
                                 PatternNode {
                                     pos: (
                                         8,
-                                        9,
+                                        13,
                                     ),
                                     kind: Identifier(
                                         IdentifierNode {
                                             pos: (
-                                                8,
-                                                9,
+                                                12,
+                                                13,
                                             ),
                                             name: "b",
                                         },
-                                        false,
+                                        true,
                                     ),
                                 },
                             ],
@@ -123,21 +127,21 @@ ModuleNode {
                     },
                     value: ExprNode {
                         pos: (
-                            13,
-                            25,
+                            17,
+                            29,
                         ),
                         kind: Tuple(
                             [
                                 ExprNode {
                                     pos: (
-                                        14,
-                                        16,
+                                        18,
+                                        20,
                                     ),
                                     kind: Literal(
                                         LiteralNode {
                                             pos: (
-                                                14,
-                                                16,
+                                                18,
+                                                20,
                                             ),
                                             kind: IntDecimal(
                                                 47,
@@ -148,14 +152,14 @@ ModuleNode {
                                 },
                                 ExprNode {
                                     pos: (
-                                        19,
                                         23,
+                                        27,
                                     ),
                                     kind: Literal(
                                         LiteralNode {
                                             pos: (
-                                                19,
                                                 23,
+                                                27,
                                             ),
                                             kind: Str(
                                                 "cool",

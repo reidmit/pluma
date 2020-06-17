@@ -251,6 +251,7 @@ impl<'a> Tokenizer<'a> {
             b"break" => KeywordBreak,
             b"let" => KeywordLet,
             b"match" => KeywordMatch,
+            b"mut" => KeywordMut,
             b"return" => KeywordReturn,
 
             // These are only considered keywords if they appear at the top level:

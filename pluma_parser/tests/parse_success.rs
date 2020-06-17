@@ -394,6 +394,10 @@ test_parse_success! {
     |let x = 47
   "#,
 
+  let_mut_pattern_identifier: r#"
+    |let mut x = 47
+  "#,
+
   let_followed_by_expr: r#"
     |let x = "wow"
     |
@@ -408,12 +412,20 @@ test_parse_success! {
     |let (a, b) = (47, "cool")
   "#,
 
+  let_mut_pattern_tuple: r#"
+    |let (a, mut b) = (47, "cool")
+  "#,
+
   let_pattern_nested_tuples: r#"
     |let (a, _, (_, b)) = (47, something, tuple)
   "#,
 
   let_pattern_struct_constructor: r#"
     |let Person (name, age) = Person ("Reid", 26)
+  "#,
+
+  let_pattern_mut_struct_constructor: r#"
+    |let Person (mut name, age) = Person ("Reid", 26)
   "#,
 
   match_pattern_same_line: r#"

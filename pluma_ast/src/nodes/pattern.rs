@@ -10,7 +10,7 @@ pub struct PatternNode {
 #[derive(Debug)]
 pub enum PatternKind {
   // e.g. let x =
-  Identifier(IdentifierNode),
+  Identifier(IdentifierNode, bool),
   // e.g. let Person (x, y) =
   Constructor(IdentifierNode, Box<PatternNode>),
   // e.g. let (x, y) =

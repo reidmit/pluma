@@ -29,7 +29,7 @@ impl<'a> Analyzer<'a> {
 
   fn destructure_pattern(&mut self, pattern: &PatternNode, typ: &ValueType) {
     match &pattern.kind {
-      PatternKind::Identifier(ident_node) => {
+      PatternKind::Identifier(ident_node, _is_mutable) => {
         let existing_binding = self.scope.get_binding(&ident_node.name);
 
         if existing_binding.is_some() {

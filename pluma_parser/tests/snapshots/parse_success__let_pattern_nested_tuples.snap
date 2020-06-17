@@ -1,5 +1,5 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "let (a, _, (_, b)) = (47, something, tuple)"
 ---
 
@@ -131,6 +131,7 @@ ModuleNode {
                                             ),
                                             name: "a",
                                         },
+                                        false,
                                     ),
                                 },
                                 PatternNode {
@@ -167,6 +168,7 @@ ModuleNode {
                                                         ),
                                                         name: "b",
                                                     },
+                                                    false,
                                                 ),
                                             },
                                         ],

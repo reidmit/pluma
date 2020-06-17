@@ -1,10 +1,10 @@
 ---
 source: pluma_parser/tests/parse_success.rs
-expression: "let Person (name, age) = Person (\"Reid\", 26)"
+expression: "let Person (mut name, age) = Person (\"Reid\", 26)"
 ---
 
 === Source ===
-let Person (name, age) = Person ("Reid", 26)
+let Person (mut name, age) = Person ("Reid", 26)
 
 === Tokens ===
 [
@@ -20,49 +20,53 @@ let Person (name, age) = Person ("Reid", 26)
         11,
         12,
     ),
-    Identifier(
+    KeywordMut(
         12,
+        15,
+    ),
+    Identifier(
         16,
+        20,
     ),
     Comma(
-        16,
-        17,
+        20,
+        21,
     ),
     Identifier(
-        18,
-        21,
+        22,
+        25,
     ),
     RightParen(
-        21,
-        22,
+        25,
+        26,
     ),
     Equals(
-        23,
-        24,
+        27,
+        28,
     ),
     Identifier(
-        25,
-        31,
+        29,
+        35,
     ),
     LeftParen(
-        32,
-        33,
+        36,
+        37,
     ),
     StringLiteral(
-        34,
         38,
+        42,
     ),
     Comma(
-        39,
-        40,
-    ),
-    DecimalDigits(
-        41,
-        43,
-    ),
-    RightParen(
         43,
         44,
+    ),
+    DecimalDigits(
+        45,
+        47,
+    ),
+    RightParen(
+        47,
+        48,
     ),
 ]
 
@@ -73,24 +77,24 @@ let Person (name, age) = Person ("Reid", 26)
 ModuleNode {
     pos: (
         0,
-        44,
+        48,
     ),
     body: [
         TopLevelStatementNode {
             pos: (
                 0,
-                44,
+                48,
             ),
             kind: Let(
                 LetNode {
                     pos: (
                         0,
-                        44,
+                        48,
                     ),
                     pattern: PatternNode {
                         pos: (
                             4,
-                            22,
+                            26,
                         ),
                         kind: Constructor(
                             IdentifierNode {
@@ -103,36 +107,36 @@ ModuleNode {
                             PatternNode {
                                 pos: (
                                     11,
-                                    22,
+                                    26,
                                 ),
                                 kind: Tuple(
                                     [
                                         PatternNode {
                                             pos: (
                                                 12,
-                                                16,
+                                                20,
                                             ),
                                             kind: Identifier(
                                                 IdentifierNode {
                                                     pos: (
-                                                        12,
                                                         16,
+                                                        20,
                                                     ),
                                                     name: "name",
                                                 },
-                                                false,
+                                                true,
                                             ),
                                         },
                                         PatternNode {
                                             pos: (
-                                                18,
-                                                21,
+                                                22,
+                                                25,
                                             ),
                                             kind: Identifier(
                                                 IdentifierNode {
                                                     pos: (
-                                                        18,
-                                                        21,
+                                                        22,
+                                                        25,
                                                     ),
                                                     name: "age",
                                                 },
@@ -146,25 +150,25 @@ ModuleNode {
                     },
                     value: ExprNode {
                         pos: (
-                            25,
-                            44,
+                            29,
+                            48,
                         ),
                         kind: Call(
                             CallNode {
                                 pos: (
-                                    25,
-                                    44,
+                                    29,
+                                    48,
                                 ),
                                 callee: ExprNode {
                                     pos: (
-                                        25,
-                                        31,
+                                        29,
+                                        35,
                                     ),
                                     kind: Identifier(
                                         IdentifierNode {
                                             pos: (
-                                                25,
-                                                31,
+                                                29,
+                                                35,
                                             ),
                                             name: "Person",
                                         },
@@ -174,21 +178,21 @@ ModuleNode {
                                 args: [
                                     ExprNode {
                                         pos: (
-                                            32,
-                                            44,
+                                            36,
+                                            48,
                                         ),
                                         kind: Tuple(
                                             [
                                                 ExprNode {
                                                     pos: (
-                                                        34,
                                                         38,
+                                                        42,
                                                     ),
                                                     kind: Literal(
                                                         LiteralNode {
                                                             pos: (
-                                                                34,
                                                                 38,
+                                                                42,
                                                             ),
                                                             kind: Str(
                                                                 "Reid",
@@ -199,14 +203,14 @@ ModuleNode {
                                                 },
                                                 ExprNode {
                                                     pos: (
-                                                        41,
-                                                        43,
+                                                        45,
+                                                        47,
                                                     ),
                                                     kind: Literal(
                                                         LiteralNode {
                                                             pos: (
-                                                                41,
-                                                                43,
+                                                                45,
+                                                                47,
                                                             ),
                                                             kind: IntDecimal(
                                                                 26,

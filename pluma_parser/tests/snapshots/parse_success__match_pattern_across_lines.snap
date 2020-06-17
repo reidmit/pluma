@@ -1,5 +1,5 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "match thing\n  | (a, b) => \"one\"\n  | (1, _) => \"two\"\n  | _ => \"idk\""
 ---
 
@@ -182,6 +182,7 @@ ModuleNode {
                                                             ),
                                                             name: "a",
                                                         },
+                                                        false,
                                                     ),
                                                 },
                                                 PatternNode {
@@ -197,6 +198,7 @@ ModuleNode {
                                                             ),
                                                             name: "b",
                                                         },
+                                                        false,
                                                     ),
                                                 },
                                             ],
