@@ -1,5 +1,5 @@
 #!/bin/bash
 
-source ./env
+source $(dirname $0)/env
 
 cargo run -q -- "$@"
