@@ -1,0 +1,15 @@
+#!/bin/bash
+
+source $(dirname $0)/env
+
+echo "Checking debug build..."
+cargo check -q
+
+echo "Checking release build..."
+cargo check --release -q
+
+echo "Running tests..."
+cargo -q test
+
+echo "Pushing..."
+git push
