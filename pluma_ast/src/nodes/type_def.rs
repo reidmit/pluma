@@ -1,7 +1,7 @@
 use super::*;
 use crate::common::*;
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct TypeDefNode {
   pub pos: Position,
   pub kind: TypeDefKind,
@@ -9,14 +9,14 @@ pub struct TypeDefNode {
   pub generic_type_constraints: GenericTypeConstraints,
 }
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct IntrinsicTypeDefNode {
   pub pos: Position,
   pub name: IdentifierNode,
   pub generic_type_constraints: GenericTypeConstraints,
 }
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum TypeDefKind {
   // alias StringList List<String>
   Alias {

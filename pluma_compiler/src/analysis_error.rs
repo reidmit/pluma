@@ -1,13 +1,13 @@
 use pluma_ast::*;
 use std::fmt;
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct AnalysisError {
   pub pos: (usize, usize),
   pub kind: AnalysisErrorKind,
 }
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum AnalysisErrorKind {
   CannotAssignToLiteral,
   UndefinedName(String),
@@ -176,7 +176,6 @@ impl fmt::Display for AnalysisError {
         "Variable already has type {}, so cannot be assigned a new value of type {}.",
         expected, actual
       ),
-      // _ => write!(f, "{:#?}", self.kind),
     }
   }
 }

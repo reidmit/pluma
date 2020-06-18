@@ -1,13 +1,13 @@
 use super::*;
 use crate::common::*;
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct StatementNode {
   pub pos: Position,
   pub kind: StatementKind,
 }
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum StatementKind {
   Let(LetNode),
   Expr(ExprNode),

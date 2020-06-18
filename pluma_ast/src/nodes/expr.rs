@@ -2,14 +2,14 @@ use super::*;
 use crate::common::*;
 use crate::value_type::ValueType;
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct ExprNode {
   pub pos: Position,
   pub kind: ExprKind,
   pub typ: ValueType,
 }
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum ExprKind {
   Assignment {
     left: Box<IdentifierNode>,

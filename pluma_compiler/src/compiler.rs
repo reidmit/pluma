@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct Compiler {
   pub root_dir: PathBuf,
   pub entry_module_name: String,

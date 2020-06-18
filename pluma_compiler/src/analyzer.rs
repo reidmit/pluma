@@ -163,10 +163,6 @@ impl<'a> Analyzer<'a> {
 }
 
 impl<'a> Visitor for Analyzer<'a> {
-  fn leave_module(&mut self, _node: &mut ModuleNode) {
-    // println!("end scope: {:#?}", self.scope);
-  }
-
   fn leave_call(&mut self, node: &mut CallNode) {
     let callee_type = &node.callee.typ;
 
@@ -530,7 +526,7 @@ impl<'a> Visitor for Analyzer<'a> {
 
       ExprKind::EmptyTuple => node.typ = ValueType::Nothing,
 
-      t => todo!("more expr kinds: {:#?}", t),
+      _other => todo!("more expr kinds!"),
     }
   }
 }

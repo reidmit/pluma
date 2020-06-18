@@ -1,7 +1,8 @@
 use super::*;
 use crate::common::*;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct UseNode {
   pub pos: Position,
   pub module_name: String,

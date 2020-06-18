@@ -5,7 +5,7 @@ use pluma_compiler::*;
 use pluma_constants::*;
 use std::process::exit;
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct Options {
   pub entry_path: Option<String>,
   pub mode: Option<String>,

@@ -1,12 +1,14 @@
 use pluma_constants::{DEFAULT_ENTRY_MODULE_NAME, FILE_EXTENSION};
 use std::fmt;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct UsageError {
   pub kind: UsageErrorKind,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum UsageErrorKind {
   InvalidEntryPath(String),
   EntryDirDoesNotContainEntryFile(String),

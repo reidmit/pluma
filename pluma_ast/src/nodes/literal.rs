@@ -1,12 +1,12 @@
 use crate::common::*;
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct LiteralNode {
   pub pos: Position,
   pub kind: LiteralKind,
 }
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum LiteralKind {
   FloatDecimal(f64),
   IntDecimal(i32),

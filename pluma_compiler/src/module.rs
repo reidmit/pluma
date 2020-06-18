@@ -6,7 +6,7 @@ use pluma_visitor::*;
 use std::fs;
 use std::path::PathBuf;
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct Module {
   pub module_name: String,
   pub module_path: PathBuf,

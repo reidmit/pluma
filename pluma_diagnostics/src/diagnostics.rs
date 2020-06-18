@@ -1,7 +1,8 @@
 use std::fmt;
 use std::path::PathBuf;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct Diagnostic {
   pub kind: DiagnosticKind,
   pub message: String,
@@ -10,7 +11,8 @@ pub struct Diagnostic {
   pub module_path: Option<PathBuf>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum DiagnosticKind {
   Error,
   Warning,

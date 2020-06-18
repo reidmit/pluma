@@ -1,12 +1,12 @@
 use crate::common::*;
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct RegExprNode {
   pub pos: Position,
   pub kind: RegExprKind,
 }
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum RegExprKind {
   Literal(String),
   CharacterClass(String),

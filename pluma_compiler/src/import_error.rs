@@ -1,11 +1,13 @@
 use std::fmt;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct ImportError {
   pub kind: ImportErrorKind,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum ImportErrorKind {
   CyclicalDependency(Vec<String>),
   ModuleNotFound(String, String),

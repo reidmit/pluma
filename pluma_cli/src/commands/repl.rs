@@ -76,7 +76,7 @@ pub fn execute() {
       }
 
       Err(err) => {
-        println!("Error: {:?}", err);
+        println!("Error: {}", err);
         break;
       }
     }

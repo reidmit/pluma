@@ -1,13 +1,13 @@
 use super::*;
 use crate::common::*;
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct EnumVariantNode {
   pub pos: Position,
   pub kind: EnumVariantKind,
 }
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum EnumVariantKind {
   Identifier(IdentifierNode),
   Constructor(IdentifierNode, TypeExprNode),

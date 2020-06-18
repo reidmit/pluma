@@ -1,6 +1,7 @@
 use std::fmt;
 
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Clone, PartialEq, Hash)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum ValueType {
   Int,
   Float,
@@ -14,7 +15,8 @@ pub enum ValueType {
   Unknown,
 }
 
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Clone, PartialEq, Hash)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum TypeConstraint {
   NamedTrait(String),
   GenericTrait(String, Vec<ValueType>),

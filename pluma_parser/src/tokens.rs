@@ -1,8 +1,7 @@
 use std::fmt;
 
-// TODO: use this to only derive in tests
-// #[cfg_attr(test, derive(Debug))]
-#[derive(Debug, Copy, Clone)]
+#[derive(Copy, Clone)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum Token {
   Arrow(usize, usize),
   BinaryDigits(usize, usize),

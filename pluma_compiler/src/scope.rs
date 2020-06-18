@@ -3,7 +3,7 @@ use pluma_ast::*;
 use pluma_diagnostics::*;
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct Binding {
   pub typ: ValueType,
   pub ref_count: usize,
@@ -11,7 +11,7 @@ pub struct Binding {
   pub kind: BindingKind,
 }
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct TypeBinding {
   pub ref_count: usize,
   pub pos: (usize, usize),
@@ -19,7 +19,8 @@ pub struct TypeBinding {
   pub methods: HashMap<Vec<String>, ValueType>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum BindingKind {
   Let,
   Def,
@@ -29,7 +30,7 @@ pub enum BindingKind {
   Field,
 }
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum TypeBindingKind {
   Enum,
   Struct { fields: HashMap<String, Binding> },
@@ -38,12 +39,12 @@ pub enum TypeBindingKind {
   IntrinsicType,
 }
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 struct ScopeLevel {
   pub bindings: HashMap<String, Binding>,
 }
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct Scope {
   levels: Vec<ScopeLevel>,
   type_bindings: HashMap<ValueType, TypeBinding>,

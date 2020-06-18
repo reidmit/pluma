@@ -3,13 +3,13 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
 use std::hash::Hasher;
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum TopologicalSort {
   Sorted(Vec<String>),
   Cycle(Vec<String>),
 }
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct DependencyGraph {
   entry_vertex: String,
   vertices: HashSet<String>,
@@ -125,7 +125,7 @@ impl DependencyGraph {
   }
 }
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct ImportChain {
   pub entries: Vec<String>,
   seen: HashSet<u64>,

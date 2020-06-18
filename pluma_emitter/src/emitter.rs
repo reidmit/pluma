@@ -57,6 +57,7 @@ impl<'ctx> Emitter<'ctx> {
   }
 
   pub fn write_to_path(&self, path: &std::path::Path) -> Result<(), Diagnostic> {
+    println!("HEEYYY");
     let mut process = Command::new("clang")
       .args(&["-x", "ir", "-", "-o", path.to_str().unwrap()])
       .stdin(Stdio::piped())
@@ -95,11 +96,9 @@ impl<'ctx> Emitter<'ctx> {
       .create_jit_execution_engine(OptimizationLevel::None)
       .unwrap();
 
-    let result = unsafe { execution_engine.run_function_as_main(self.main_function, &[]) };
+    let exit_code = unsafe { execution_engine.run_function_as_main(self.main_function, &[]) };
 
-    println!("execution finished with code: {}", result);
-
-    result
+    exit_code
   }
 
   fn compile_call(&self, call: &CallNode) -> BasicValueEnum {
@@ -139,7 +138,7 @@ impl<'ctx> Emitter<'ctx> {
 
       ExprKind::Call(call) => self.compile_call(call),
 
-      other => todo!("compile expr kind: {:#?}", other),
+      _other => todo!("compile expr kind"),
     }
   }
 
@@ -162,7 +161,7 @@ impl<'ctx> Emitter<'ctx> {
         global_value.as_pointer_value().into()
       }
 
-      other => todo!("compile literal kind: {:#?}", other),
+      _other => todo!("compile literal kind"),
     }
   }
 

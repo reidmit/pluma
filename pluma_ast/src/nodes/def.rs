@@ -1,7 +1,7 @@
 use super::*;
 use crate::common::*;
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct DefNode {
   pub pos: Position,
   pub kind: DefKind,
@@ -11,7 +11,7 @@ pub struct DefNode {
   pub body: Vec<StatementNode>,
 }
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct IntrinsicDefNode {
   pub pos: Position,
   pub kind: DefKind,
@@ -19,7 +19,7 @@ pub struct IntrinsicDefNode {
   pub generic_type_constraints: GenericTypeConstraints,
 }
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum DefKind {
   // def hi(A, B) -> Ret { ... }
   Function {

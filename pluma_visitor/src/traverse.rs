@@ -139,7 +139,7 @@ impl Traverse for ExprNode {
         expr.traverse(visitor);
         asserted_type.traverse(visitor);
       }
-      other_kind => todo!("traverse {:#?}", other_kind),
+      _other_kind => todo!("traverse other kind"),
     }
 
     visitor.leave_expr(self);

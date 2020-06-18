@@ -1,13 +1,13 @@
 use super::*;
 use crate::common::*;
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct PatternNode {
   pub pos: Position,
   pub kind: PatternKind,
 }
 
-#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum PatternKind {
   // e.g. let x =
   Identifier(IdentifierNode, bool),
