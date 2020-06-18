@@ -1,19 +1,15 @@
-#![allow(unused_imports)]
-
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
 use inkwell::passes::PassManager;
 use inkwell::targets::TargetTriple;
-use inkwell::types;
-use inkwell::values::{BasicValue, BasicValueEnum, FloatValue, FunctionValue, PointerValue};
-use inkwell::{AddressSpace, FloatPredicate, OptimizationLevel};
+use inkwell::values::*;
+use inkwell::{AddressSpace, OptimizationLevel};
 use pluma_ast::*;
 use pluma_diagnostics::*;
 use pluma_visitor::*;
 use std::convert::TryInto;
 use std::io::prelude::*;
-use std::ops::Deref;
 use std::process::{Command, Stdio};
 
 pub struct Emitter<'ctx> {
