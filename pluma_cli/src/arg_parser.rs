@@ -60,45 +60,20 @@ pub fn parse_args(args: Vec<String>) -> ParsedArgs {
       continue;
     }
 
-    if arg.starts_with("--") {
-      if arg.len() == 2 {
+    if arg.starts_with("-") {
+      if arg == "--" {
         found_additional_separator = true;
         i += 1;
         continue;
       }
 
-      let arg_name = arg[2..].to_owned();
+      let is_long_flag = arg.len() > 1 && arg.bytes().nth(1).unwrap() == b'-';
+      let name_start = if is_long_flag { 2 } else { 1 };
+      let arg_name = arg[name_start..].to_owned();
 
       let next_value = args.get(i + 1);
 
-      if next_value.is_none() || !next_value.unwrap().starts_with("-") {
-        if !parsed.flags.contains_key(&arg_name) {
-          parsed.flags.insert(arg_name, vec![]);
-        }
-
-        i += 1;
-        continue;
-      }
-
-      if parsed.flags.contains_key(&arg_name) {
-        let entry = parsed.flags.get_mut(&arg_name).unwrap();
-        entry.push(next_value.unwrap().clone());
-      } else {
-        parsed
-          .flags
-          .insert(arg_name, vec![next_value.unwrap().clone()]);
-      }
-
-      i += 2;
-      continue;
-    }
-
-    if arg.starts_with("-") {
-      let arg_name = arg[1..].to_owned();
-
-      let next_value = args.get(i + 1);
-
-      if next_value.is_none() || !next_value.unwrap().starts_with("-") {
+      if next_value.is_none() || next_value.unwrap().starts_with("-") {
         if !parsed.flags.contains_key(&arg_name) {
           parsed.flags.insert(arg_name, vec![]);
         }
