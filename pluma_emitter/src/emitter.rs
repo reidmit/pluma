@@ -53,7 +53,6 @@ impl<'ctx> Emitter<'ctx> {
   }
 
   pub fn write_to_path(&self, path: &std::path::Path) -> Result<(), Diagnostic> {
-    println!("HEEYYY");
     let mut process = Command::new("clang")
       .args(&["-x", "ir", "-", "-o", path.to_str().unwrap()])
       .stdin(Stdio::piped())
@@ -190,6 +189,7 @@ impl<'ctx> Emitter<'ctx> {
         self.llvm_builder.position_at_end(entry);
 
         let first_param = function.get_first_param().unwrap();
+        first_param.set_name("a");
 
         // call extern function
         let args = vec![first_param];
