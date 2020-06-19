@@ -7,6 +7,7 @@ members = [
   "pluma_diagnostics",
   "pluma_emitter",
   "pluma_parser",
+  "pluma_repl",
   "pluma_visitor",
 ]
 

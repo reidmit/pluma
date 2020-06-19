@@ -10,4 +10,4 @@ atty = "0.2.13"
 pluma_compiler = { path = "../pluma_compiler" }
 pluma_constants = { path = "../pluma_constants" }
 pluma_diagnostics = { path = "../pluma_diagnostics" }
-rustyline = "6.2.0"
+pluma_repl = { path = "../pluma_repl" }

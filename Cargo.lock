@@ -305,7 +305,7 @@ dependencies = [
  "pluma_compiler 0.1.0",
  "pluma_constants 0.1.0",
  "pluma_diagnostics 0.1.0",
- "rustyline 6.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pluma_repl 0.1.0",
 ]
 
 [[package]]
@@ -348,6 +348,14 @@ version = "0.1.0"
 dependencies = [
  "insta 0.16.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pluma_ast 0.1.0",
+]
+
+[[package]]
+name = "pluma_repl"
+version = "0.1.0"
+dependencies = [
+ "pluma_compiler 0.1.0",
+ "rustyline 6.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
