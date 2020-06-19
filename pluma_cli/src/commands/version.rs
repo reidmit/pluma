@@ -1,27 +1,35 @@
+use crate::arg_parser::ParsedArgs;
 use crate::colors;
+use crate::command::Command;
 use pluma_constants::{BINARY_NAME, VERSION};
 
-pub fn description() -> String {
-  format!("{}", "Prints compiler version and information")
-}
+#[cfg_attr(debug_assertions, derive(Debug))]
+pub struct VersionCommand {}
 
-pub fn print_help() {
-  println!(
-    "{description}
+impl Command for VersionCommand {
+  fn help_text() -> String {
+    format!(
+      "{binary_name} version
+
+Prints compiler version and related information
 
 {usage_header}
   {cmd_prefix} {binary_name} version
 
 {options_header}
   -h, --help    Print this help text",
-    description = description(),
-    usage_header = colors::bold("Usage:"),
-    binary_name = BINARY_NAME,
-    options_header = colors::bold("Options:"),
-    cmd_prefix = colors::dim("$"),
-  )
-}
+      usage_header = colors::bold("Usage:"),
+      binary_name = BINARY_NAME,
+      options_header = colors::bold("Options:"),
+      cmd_prefix = colors::dim("$"),
+    )
+  }
 
-pub fn execute() {
-  println!("pluma version {}", VERSION);
+  fn from_inputs(_args: ParsedArgs) -> Self {
+    VersionCommand {}
+  }
+
+  fn execute(self) {
+    println!("pluma version {}", VERSION);
+  }
 }

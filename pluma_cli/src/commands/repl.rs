@@ -1,88 +1,96 @@
+use crate::arg_parser::ParsedArgs;
 use crate::colors;
+use crate::command::Command;
 use pluma_constants::{BINARY_NAME, VERSION};
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
-pub fn description() -> String {
-  format!("{}", "Starts an interactive REPL session")
-}
+#[cfg_attr(debug_assertions, derive(Debug))]
+pub struct ReplCommand {}
 
-pub fn print_help() {
-  println!(
-    "{description}
+impl Command for ReplCommand {
+  fn help_text() -> String {
+    format!(
+      "{binary_name} repl
+
+Starts an interactive REPL session
 
 {usage_header}
   {cmd_prefix} {binary_name} repl
 
 {options_header}
   -h, --help    Print this help text",
-    description = description(),
-    usage_header = colors::bold("Usage:"),
-    binary_name = BINARY_NAME,
-    options_header = colors::bold("Options:"),
-    cmd_prefix = colors::dim("$"),
-  )
-}
-
-pub fn execute() {
-  println!(
-    "{} {} (version {})",
-    colors::bold(BINARY_NAME),
-    colors::bold("repl"),
-    VERSION
-  );
-  println!("Use Ctrl-D or type '.exit' to quit.");
-  println!("Type '.help' for more.");
-
-  let mut rl = Editor::<()>::new();
-  if rl.load_history("history.txt").is_err() {
-    println!("No previous history.");
+      usage_header = colors::bold("Usage:"),
+      binary_name = BINARY_NAME,
+      options_header = colors::bold("Options:"),
+      cmd_prefix = colors::dim("$"),
+    )
   }
 
-  let mut last_ctrl_c = false;
+  fn from_inputs(_args: ParsedArgs) -> Self {
+    ReplCommand {}
+  }
 
-  loop {
-    let readline = rl.readline(&colors::bold_dim("\n> ")[..]);
+  fn execute(self) {
+    println!(
+      "{} {} (version {})",
+      colors::bold(BINARY_NAME),
+      colors::bold("repl"),
+      VERSION
+    );
+    println!("Use Ctrl-D or type '.exit' to quit.");
+    println!("Type '.help' for more.");
 
-    match readline {
-      Ok(line) => {
-        last_ctrl_c = false;
+    let mut rl = Editor::<()>::new();
+    if rl.load_history("history.txt").is_err() {
+      println!("No previous history.");
+    }
 
-        rl.add_history_entry(line.as_str());
+    let mut last_ctrl_c = false;
 
-        if line.starts_with(".") {
-          if handle_keyword(&line) {
-            break;
-          } else {
-            continue;
+    loop {
+      let readline = rl.readline(&colors::bold_dim("\n> ")[..]);
+
+      match readline {
+        Ok(line) => {
+          last_ctrl_c = false;
+
+          rl.add_history_entry(line.as_str());
+
+          if line.starts_with(".") {
+            if handle_keyword(&line) {
+              break;
+            } else {
+              continue;
+            }
           }
+
+          println!("Line: {}", line);
         }
 
-        println!("Line: {}", line);
-      }
+        Err(ReadlineError::Interrupted) => {
+          if last_ctrl_c {
+            println!("Exiting.");
+            break;
+          }
 
-      Err(ReadlineError::Interrupted) => {
-        if last_ctrl_c {
+          last_ctrl_c = true;
+        }
+
+        Err(ReadlineError::Eof) => {
           println!("Exiting.");
           break;
         }
 
-        last_ctrl_c = true;
-      }
-
-      Err(ReadlineError::Eof) => {
-        println!("Exiting.");
-        break;
-      }
-
-      Err(err) => {
-        println!("Error: {}", err);
-        break;
+        Err(err) => {
+          println!("Error: {}", err);
+          break;
+        }
       }
     }
-  }
 
-  rl.save_history("history.txt").unwrap();
+    rl.save_history("history.txt").unwrap();
+  }
 }
 
 fn handle_keyword(line: &String) -> bool {

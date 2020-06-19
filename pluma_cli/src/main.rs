@@ -1,5 +1,9 @@
+use crate::command::Command;
+use crate::commands::*;
+
 mod arg_parser;
 mod colors;
+mod command;
 mod commands;
 mod errors;
 
@@ -10,59 +14,56 @@ fn main() {
   match &parsed_args.subcommand()[..] {
     "build" => {
       if parsed_args.is_help_requested() {
-        commands::build::print_help();
+        BuildCommand::print_help();
       } else {
-        let opts = commands::build::extract_options(parsed_args);
-        commands::build::execute(opts);
+        BuildCommand::from_inputs(parsed_args).execute();
       }
     }
 
     "check" => {
       if parsed_args.is_help_requested() {
-        commands::check::print_help();
+        CheckCommand::print_help();
       } else {
-        let opts = commands::check::extract_options(parsed_args);
-        commands::check::execute(opts);
+        CheckCommand::from_inputs(parsed_args).execute();
       }
     }
 
     "run" => {
       if parsed_args.is_help_requested() {
-        commands::run::print_help();
+        RunCommand::print_help();
       } else {
-        let opts = commands::run::extract_options(parsed_args);
-        commands::run::execute(opts);
+        RunCommand::from_inputs(parsed_args).execute();
       }
     }
 
     "repl" => {
       if parsed_args.is_help_requested() {
-        commands::repl::print_help();
+        ReplCommand::print_help();
       } else {
-        commands::repl::execute();
+        ReplCommand::from_inputs(parsed_args).execute();
       }
     }
 
     "version" => {
       if parsed_args.is_help_requested() {
-        commands::version::print_help();
+        VersionCommand::print_help();
       } else {
-        commands::version::execute();
+        VersionCommand::from_inputs(parsed_args).execute();
       }
     }
 
     "help" => {
       if parsed_args.is_help_requested() {
-        commands::help::print_help();
+        HelpCommand::print_help();
       } else {
         match parsed_args.get_positional_arg(0) {
           Some(val) => match &val[..] {
-            "build" => commands::build::print_help(),
-            "check" => commands::check::print_help(),
-            "run" => commands::run::print_help(),
-            "help" => commands::help::print_help(),
-            "repl" => commands::repl::print_help(),
-            "version" => commands::version::print_help(),
+            "build" => BuildCommand::print_help(),
+            "check" => CheckCommand::print_help(),
+            "run" => RunCommand::print_help(),
+            "help" => HelpCommand::print_help(),
+            "repl" => ReplCommand::print_help(),
+            "version" => VersionCommand::print_help(),
             unknown => {
               errors::print_usage_error(format!(
                 "Cannot retrieve help for unrecognized command '{}'.",
@@ -72,7 +73,7 @@ fn main() {
             }
           },
 
-          _ => commands::help::execute(),
+          _ => HelpCommand::from_inputs(parsed_args).execute(),
         }
       }
     }
