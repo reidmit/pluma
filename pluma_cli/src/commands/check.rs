@@ -15,14 +15,7 @@ pub struct CheckCommand<'a> {
 
 impl<'a> Command<'a> for CheckCommand<'a> {
   fn info() -> CommandInfo {
-    CommandInfo {
-      name: "check",
-      description: "Parses & type-checks a module without compiling",
-      args: None,
-      flags: Some(vec![
-        Flag::with_names("help", "h").description("Print help text")
-      ]),
-    }
+    CommandInfo::new("check", "Parses & type-checks a module without compiling").with_help()
   }
 
   fn from_inputs(args: &'a mut ParsedArgs) -> Self {

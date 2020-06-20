@@ -71,8 +71,12 @@ fn run() -> Result<(), command_error::CommandError> {
     }
 
     "" => {
-      errors::print_usage_error(format!("No command given."));
-      exit(1);
+      if parsed_args.is_help_requested() {
+        HelpCommand::from_inputs(&mut parsed_args).execute()?;
+      } else {
+        errors::print_usage_error(format!("No command given."));
+        exit(1);
+      }
     }
 
     unknown => {

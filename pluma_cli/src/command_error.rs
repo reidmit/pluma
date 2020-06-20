@@ -17,8 +17,7 @@ impl fmt::Display for CommandError {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match &self.kind {
       CommandErrorKind::UnexpectedArgument(arg) => write!(f, "Unexpected argument '{}'.", arg,)?,
-
-      CommandErrorKind::UnexpectedFlag(flag) => write!(f, "Unknown flag '{}'.", flag)?,
+      CommandErrorKind::UnexpectedFlag(flag) => write!(f, "Flag '{}' is not recognized.", flag)?,
     }
 
     write!(

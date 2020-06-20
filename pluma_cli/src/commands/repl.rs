@@ -14,14 +14,7 @@ pub struct ReplCommand<'a> {
 
 impl<'a> Command<'a> for ReplCommand<'a> {
   fn info() -> CommandInfo {
-    CommandInfo {
-      name: "repl",
-      description: "Starts an interactive REPL session",
-      args: None,
-      flags: Some(vec![
-        Flag::with_names("help", "h").description("Print help text")
-      ]),
-    }
+    CommandInfo::new("repl", "Starts an interactive REPL session").with_help()
   }
 
   fn from_inputs(args: &'a mut ParsedArgs) -> Self {

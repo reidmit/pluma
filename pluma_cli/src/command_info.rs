@@ -9,6 +9,41 @@ pub struct CommandInfo {
   pub flags: Option<Vec<Flag>>,
 }
 
+impl CommandInfo {
+  pub fn new(name: &'static str, description: &'static str) -> Self {
+    CommandInfo {
+      name,
+      description,
+      args: None,
+      flags: None,
+    }
+  }
+
+  pub fn args(mut self, args: Vec<Arg>) -> Self {
+    self.args = Some(args);
+    self
+  }
+
+  pub fn flags(mut self, flags: Vec<Flag>) -> Self {
+    self.flags = Some(flags);
+    self
+  }
+
+  pub fn with_help(self) -> Self {
+    let mut flags = match self.flags {
+      Some(flags) => flags,
+      None => vec![],
+    };
+
+    flags.push(Flag::with_names("help", "h").description("Print help text"));
+
+    CommandInfo {
+      flags: Some(flags),
+      ..self
+    }
+  }
+}
+
 pub struct Arg {
   pub name: &'static str,
   pub description: &'static str,

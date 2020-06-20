@@ -17,13 +17,11 @@ pub struct BuildCommand<'a> {
 
 impl<'a> Command<'a> for BuildCommand<'a> {
   fn info() -> CommandInfo {
-    CommandInfo {
-      name: "build",
-      description: "Compiles a module into an executable",
-      args: Some(vec![
+    CommandInfo::new("build", "Compiles a module into an executable")
+      .args(vec![
         Arg::new("entry", "Path to Pluma module or directory").default(DEFAULT_ENTRY_FILE)
-      ]),
-      flags: Some(vec![
+      ])
+      .flags(vec![
         Flag::with_names("out", "o")
           .description("Output executable path")
           .value_name("output"),
@@ -32,9 +30,8 @@ impl<'a> Command<'a> for BuildCommand<'a> {
           .value_name("path")
           .possible_values(vec!["release", "debug"])
           .default("debug"),
-        Flag::with_names("help", "h").description("Print help text"),
-      ]),
-    }
+      ])
+      .with_help()
   }
 
   fn from_inputs(args: &'a mut ParsedArgs) -> Self {

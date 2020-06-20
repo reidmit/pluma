@@ -11,14 +11,7 @@ pub struct VersionCommand<'a> {
 
 impl<'a> Command<'a> for VersionCommand<'a> {
   fn info() -> CommandInfo {
-    CommandInfo {
-      name: "version",
-      description: "Prints compiler version and related information",
-      args: None,
-      flags: Some(vec![
-        Flag::with_names("help", "h").description("Print help text")
-      ]),
-    }
+    CommandInfo::new("version", "Prints compiler version and related information").with_help()
   }
 
   fn from_inputs(args: &'a mut ParsedArgs) -> Self {

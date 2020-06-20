@@ -15,14 +15,11 @@ pub struct HelpCommand<'a> {
 
 impl<'a> Command<'a> for HelpCommand<'a> {
   fn info() -> CommandInfo {
-    CommandInfo {
-      name: "help",
-      description: "Prints help text for the Pluma CLI or a particular command",
-      args: None,
-      flags: Some(vec![
-        Flag::with_names("help", "h").description("Print help text")
-      ]),
-    }
+    CommandInfo::new(
+      "help",
+      "Prints help text for the compiler or a particular command",
+    )
+    .with_help()
   }
 
   fn from_inputs(args: &'a mut ParsedArgs) -> Self {
@@ -73,10 +70,10 @@ Compiler & tools for the Pluma language
         let cmd_info: Vec<CommandInfo> = vec![
           BuildCommand::info(),
           CheckCommand::info(),
-          HelpCommand::info(),
           ReplCommand::info(),
           RunCommand::info(),
           VersionCommand::info(),
+          HelpCommand::info(),
         ];
 
         let mut max_cmd_length = 0;
@@ -95,7 +92,7 @@ Compiler & tools for the Pluma language
 
         println!(
           "\nFor help with an individual command, try:
-  {binary_name} help <command>",
+  {binary_name} <command> -h",
           binary_name = BINARY_NAME,
         )
       }

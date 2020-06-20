@@ -16,14 +16,7 @@ pub struct RunCommand<'a> {
 
 impl<'a> Command<'a> for RunCommand<'a> {
   fn info() -> CommandInfo {
-    CommandInfo {
-      name: "run",
-      description: "Compiles & runs a Pluma module directly",
-      args: None,
-      flags: Some(vec![
-        Flag::with_names("help", "h").description("Print help text")
-      ]),
-    }
+    CommandInfo::new("run", "Compiles & runs a Pluma module directly").with_help()
   }
 
   fn from_inputs(args: &'a mut ParsedArgs) -> Self {
