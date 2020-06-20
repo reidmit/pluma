@@ -9,3 +9,6 @@ llvm/
 experiment/
 
 *.vsix
+
+*.github
+*.pluma
