@@ -3,6 +3,8 @@ use crate::colors;
 use crate::command::Command;
 use pluma_constants::*;
 use pluma_repl::repl;
+use std::path::PathBuf;
+use std::str::FromStr;
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub struct ReplCommand {}
@@ -36,6 +38,8 @@ Starts an interactive REPL session
     println!("Use Ctrl-D or type '.exit' to quit.");
     println!("Type '.help' for more.");
 
-    repl::start();
+    let mut repl = repl::Repl::new(PathBuf::from_str(".pluma").ok());
+
+    repl.start();
   }
 }
