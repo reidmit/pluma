@@ -1,16 +1,24 @@
 use crate::colors;
+use crate::command_error::CommandError;
 use pluma_compiler::*;
 use pluma_constants::*;
 use pluma_diagnostics::*;
 use std::path::PathBuf;
 
+pub fn print_command_error(err: CommandError) {
+  eprintln!(
+    "{prefix} {err}",
+    prefix = colors::bold_red("Error:"),
+    err = err
+  )
+}
+
 pub fn print_usage_error(message: String) {
   eprintln!(
-    "{prefix} {message}\n\nFor help and a list of available commands, try:\n  {cmd_prefix} {binary_name} help",
+    "{prefix} {message}\n\nFor help and a list of available commands, try:\n  {binary_name} help",
     prefix = colors::bold_red("Error:"),
     message = message,
     binary_name = BINARY_NAME,
-    cmd_prefix = colors::bold_dim("$")
   )
 }
 

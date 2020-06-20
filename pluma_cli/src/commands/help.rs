@@ -1,63 +1,106 @@
 use crate::arg_parser::ParsedArgs;
 use crate::colors;
 use crate::command::Command;
+use crate::command_error::CommandError;
+use crate::command_info::*;
+use crate::commands::*;
+use crate::errors;
 use pluma_constants::{BINARY_NAME, VERSION};
 
 #[cfg_attr(debug_assertions, derive(Debug))]
-pub struct HelpCommand {}
+pub struct HelpCommand<'a> {
+  subcommand: Option<String>,
+  args: &'a mut ParsedArgs,
+}
 
-impl Command for HelpCommand {
-  fn help_text() -> String {
-    format!(
-      "{binary_name} help
-
-Prints help text for the Pluma CLI or a particular command
-
-{usage_header}
-  {cmd_prefix} {binary_name} help [<command>]
-
-{arguments_header}
-  <command>    Name of command to print help for
-
-{options_header}
-  -h, --help    Print this help text",
-      usage_header = colors::bold("Usage:"),
-      binary_name = BINARY_NAME,
-      arguments_header = colors::bold("Arguments:"),
-      options_header = colors::bold("Options:"),
-      cmd_prefix = colors::dim("$"),
-    )
+impl<'a> Command<'a> for HelpCommand<'a> {
+  fn info() -> CommandInfo {
+    CommandInfo {
+      name: "help",
+      description: "Prints help text for the Pluma CLI or a particular command",
+      args: None,
+      flags: Some(vec![
+        Flag::with_names("help", "h").description("Print help text")
+      ]),
+    }
   }
 
-  fn from_inputs(_args: ParsedArgs) -> Self {
-    HelpCommand {}
+  fn from_inputs(args: &'a mut ParsedArgs) -> Self {
+    HelpCommand {
+      subcommand: args.get_positional_arg(0),
+      args,
+    }
   }
 
-  fn execute(self) {
-    println!(
-      "{binary_name_bold} - version {version}
+  fn execute(self) -> Result<(), CommandError> {
+    self.args.check_valid()?;
+
+    match self.subcommand {
+      Some(val) => match &val[..] {
+        "build" => BuildCommand::print_help(),
+        "check" => CheckCommand::print_help(),
+        "run" => RunCommand::print_help(),
+        "help" => HelpCommand::print_help(),
+        "repl" => ReplCommand::print_help(),
+        "version" => VersionCommand::print_help(),
+        unknown => {
+          errors::print_usage_error(format!(
+            "Cannot retrieve help for unrecognized command '{}'.",
+            unknown
+          ));
+
+          std::process::exit(1);
+        }
+      },
+
+      _ => {
+        println!(
+          "{binary_name_bold} - version {version}
 
 Compiler & tools for the Pluma language
 
 {usage_header}
-  {cmd_prefix} {binary_name} <command> [options...]
+  {binary_name} <command> [options]
 
-{commands_header}
-  build     TODO
-  check     TODO
-  repl      TODO
-  run       TODO
-  version   TODO
-  help      TODO
+{commands_header}",
+          binary_name_bold = format!("{}", colors::bold(BINARY_NAME)),
+          binary_name = BINARY_NAME,
+          version = VERSION,
+          usage_header = colors::bold("Usage:"),
+          commands_header = colors::bold("Commands:"),
+        );
 
-For help with an individual command, try:
-  {cmd_prefix} {binary_name} help <command>",
-      binary_name_bold = format!("{}", colors::bold(BINARY_NAME)),
-      binary_name = BINARY_NAME,
-      version = VERSION,
-      usage_header = colors::bold("Usage:"),
-      commands_header = colors::bold("Commands:"),
-      cmd_prefix = colors::dim("$"),
-    )
+        let cmd_info: Vec<CommandInfo> = vec![
+          BuildCommand::info(),
+          CheckCommand::info(),
+          HelpCommand::info(),
+          ReplCommand::info(),
+          RunCommand::info(),
+          VersionCommand::info(),
+        ];
+
+        let mut max_cmd_length = 0;
+        for info in &cmd_info {
+          max_cmd_length = std::cmp::max(max_cmd_length, info.name.len());
+        }
+
+        for info in cmd_info {
+          println!(
+            "  {:width$}   {}",
+            info.name,
+            info.description,
+            width = max_cmd_length
+          );
+        }
+
+        println!(
+          "\nFor help with an individual command, try:
+  {binary_name} help <command>",
+          binary_name = BINARY_NAME,
+        )
+      }
+    }
+
+    Ok(())
   }
 }

@@ -1,13 +1,19 @@
 use crate::arg_parser::ParsedArgs;
+use crate::command_error::CommandError;
+use crate::command_info::CommandInfo;
 
-pub trait Command {
-  fn help_text() -> String;
+pub trait Command<'a> {
+  fn info() -> CommandInfo;
 
-  fn from_inputs(args: ParsedArgs) -> Self;
+  fn from_inputs(args: &'a mut ParsedArgs) -> Self;
 
-  fn execute(self);
+  fn execute(self) -> Result<(), CommandError>;
 
   fn print_help() {
-    println!("{}", Self::help_text());
+    println!("{}", Self::info());
+  }
+
+  fn description() -> &'static str {
+    Self::info().description
   }
 }

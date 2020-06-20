@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use crate::command_error::{CommandError, CommandErrorKind};
+use std::collections::{HashMap, HashSet};
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub struct ParsedArgs {
@@ -6,6 +7,8 @@ pub struct ParsedArgs {
   positional_args: Vec<String>,
   flags: HashMap<String, Vec<String>>,
   additional_args: Vec<String>,
+  retrieved_args: HashSet<usize>,
+  retrieved_flags: HashSet<String>,
 }
 
 impl ParsedArgs {
@@ -13,14 +16,18 @@ impl ParsedArgs {
     &self.subcommand
   }
 
-  pub fn get_positional_arg(&self, index: usize) -> Option<String> {
+  pub fn get_positional_arg(&mut self, index: usize) -> Option<String> {
+    self.retrieved_args.insert(index);
+
     match self.positional_args.get(index) {
       None => None,
       Some(arg) => Some(arg.clone()),
     }
   }
 
-  pub fn get_flag_value(&self, flag: &'static str) -> Option<String> {
+  pub fn get_flag_value(&mut self, flag: &'static str) -> Option<String> {
+    self.retrieved_flags.insert(flag.to_owned());
+
     match self.flags.get(flag) {
       None => None,
       Some(vals) if vals.is_empty() => None,
@@ -28,15 +35,45 @@ impl ParsedArgs {
     }
   }
 
-  pub fn is_flag_present(&self, flag: &'static str) -> bool {
+  pub fn is_flag_present(&mut self, flag: &'static str) -> bool {
+    self.retrieved_flags.insert(flag.to_owned());
+
     match self.flags.get(flag) {
       None => false,
       _ => true,
     }
   }
 
-  pub fn is_help_requested(&self) -> bool {
+  pub fn is_help_requested(&mut self) -> bool {
     self.is_flag_present("help") || self.is_flag_present("h")
+  }
+
+  pub fn check_valid(&self) -> Result<(), CommandError> {
+    let mut index = 0;
+
+    while index < self.positional_args.len() {
+      if self.retrieved_args.get(&index).is_none() {
+        return Err(CommandError {
+          command: self.subcommand.clone(),
+          kind: CommandErrorKind::UnexpectedArgument(
+            self.positional_args.get(index).unwrap().to_owned(),
+          ),
+        });
+      }
+
+      index += 1;
+    }
+
+    for (given_flag, _) in &self.flags {
+      if !self.retrieved_flags.contains(given_flag) {
+        return Err(CommandError {
+          command: self.subcommand.clone(),
+          kind: CommandErrorKind::UnexpectedFlag(given_flag.to_owned()),
+        });
+      }
+    }
+
+    Ok(())
   }
 }
 
@@ -46,6 +83,8 @@ pub fn parse_args(args: Vec<String>) -> ParsedArgs {
     positional_args: Vec::new(),
     flags: HashMap::new(),
     additional_args: Vec::new(),
+    retrieved_args: HashSet::new(),
+    retrieved_flags: HashSet::new(),
   };
 
   let mut i = 0;

@@ -1,46 +1,40 @@
 use crate::arg_parser::ParsedArgs;
-use crate::colors;
 use crate::command::Command;
+use crate::command_error::CommandError;
+use crate::command_info::*;
 use crate::errors;
 use pluma_compiler::*;
 use pluma_constants::*;
 use std::process::exit;
 
 #[cfg_attr(debug_assertions, derive(Debug))]
-pub struct CheckCommand {
+pub struct CheckCommand<'a> {
   pub entry_path: Option<String>,
+  args: &'a mut ParsedArgs,
 }
 
-impl Command for CheckCommand {
-  fn help_text() -> String {
-    format!(
-      "{binary_name} check
-
-Parses & type-checks a module without compiling
-
-{usage_header}
-  {cmd_prefix} {binary_name} check <path> [options...]
-
-{arguments_header}
-  <path>    Path to Pluma module or directory
-
-{options_header}
-  -h, --help    Print this help text",
-      usage_header = colors::bold("Usage:"),
-      binary_name = BINARY_NAME,
-      arguments_header = colors::bold("Arguments:"),
-      options_header = colors::bold("Options:"),
-      cmd_prefix = colors::dim("$"),
-    )
-  }
-
-  fn from_inputs(args: ParsedArgs) -> Self {
-    CheckCommand {
-      entry_path: args.get_positional_arg(0),
+impl<'a> Command<'a> for CheckCommand<'a> {
+  fn info() -> CommandInfo {
+    CommandInfo {
+      name: "check",
+      description: "Parses & type-checks a module without compiling",
+      args: None,
+      flags: Some(vec![
+        Flag::with_names("help", "h").description("Print help text")
+      ]),
     }
   }
 
-  fn execute(self) {
+  fn from_inputs(args: &'a mut ParsedArgs) -> Self {
+    CheckCommand {
+      entry_path: args.get_positional_arg(0),
+      args,
+    }
+  }
+
+  fn execute(self) -> Result<(), CommandError> {
+    self.args.check_valid()?;
+
     let compiler_options = CompilerOptions {
       entry_path: self.entry_path.unwrap_or(DEFAULT_ENTRY_FILE.to_owned()),
       mode: CompilerMode::Debug,
@@ -65,5 +59,7 @@ Parses & type-checks a module without compiling
         exit(1);
       }
     }
+
+    Ok(())
   }
 }
