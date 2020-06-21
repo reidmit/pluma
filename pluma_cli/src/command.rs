@@ -2,7 +2,7 @@ use crate::arg_parser::ParsedArgs;
 use crate::command_error::CommandError;
 use crate::command_info::CommandInfo;
 
-pub trait Command<'a> {
+pub trait Command {
   fn info() -> CommandInfo;
 
   fn execute(args: &ParsedArgs) -> Result<(), CommandError>;

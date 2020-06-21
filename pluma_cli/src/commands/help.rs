@@ -7,13 +7,9 @@ use crate::commands::*;
 use crate::errors;
 use pluma_constants::{BINARY_NAME, VERSION};
 
-#[cfg_attr(debug_assertions, derive(Debug))]
-pub struct HelpCommand<'a> {
-  subcommand: Option<String>,
-  args: &'a mut ParsedArgs,
-}
+pub struct HelpCommand {}
 
-impl<'a> Command<'a> for HelpCommand<'a> {
+impl Command for HelpCommand {
   fn info() -> CommandInfo {
     CommandInfo::new("help", "Prints help text")
       .args(vec![Arg::new("command", "Command to print help for")])

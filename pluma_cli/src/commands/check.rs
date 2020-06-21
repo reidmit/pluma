@@ -7,13 +7,9 @@ use pluma_compiler::*;
 use pluma_constants::*;
 use std::process::exit;
 
-#[cfg_attr(debug_assertions, derive(Debug))]
-pub struct CheckCommand<'a> {
-  pub entry_path: Option<String>,
-  args: &'a mut ParsedArgs,
-}
+pub struct CheckCommand {}
 
-impl<'a> Command<'a> for CheckCommand<'a> {
+impl Command for CheckCommand {
   fn info() -> CommandInfo {
     CommandInfo::new("check", "Parses & type-checks a module without compiling")
       .args(vec![

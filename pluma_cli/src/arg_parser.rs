@@ -4,7 +4,6 @@ use std::collections::{HashMap, HashSet};
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub struct ParsedArgs {
-  command_name: String,
   positional_args: Vec<String>,
   bool_flags: HashSet<String>,
   single_value_flags: HashMap<String, String>,
@@ -30,6 +29,14 @@ impl ParsedArgs {
     match self.single_value_flags.get(flag) {
       Some(val) => Some(val.clone()),
       None => None,
+    }
+  }
+
+  #[allow(dead_code)]
+  pub fn get_flag_values(&self, flag: &'static str) -> Vec<String> {
+    match self.multi_value_flags.get(flag) {
+      Some(vals) => vals.to_vec(),
+      None => vec![],
     }
   }
 }
@@ -59,7 +66,6 @@ pub fn parse_args_for_command(
   cmd: CommandInfo,
 ) -> Result<ParsedArgs, CommandError> {
   let mut parsed = ParsedArgs {
-    command_name: cmd.name.to_owned(),
     positional_args: Vec::new(),
     single_value_flags: HashMap::new(),
     multi_value_flags: HashMap::new(),
@@ -155,11 +161,11 @@ pub fn parse_args_for_command(
           .single_value_flags
           .insert(flag_name, next_value.clone());
 
-        i += 1;
+        i += 2;
         continue;
       }
 
-      if flag_info.style == FlagStyle::MultipleValue {
+      if flag_info.style == FlagStyle::MultipleValues {
         if let Some(values) = parsed.multi_value_flags.get_mut(&flag_name) {
           values.push(next_value.clone());
         } else {
@@ -167,20 +173,23 @@ pub fn parse_args_for_command(
             .multi_value_flags
             .insert(flag_name, vec![next_value.clone()]);
         }
+
+        i += 2;
+        continue;
       }
 
       i += 1;
       continue;
     }
 
-    if parsed.positional_args.len() >= positional_arg_count {
+    parsed.positional_args.push(arg.clone());
+
+    if parsed.positional_args.len() > positional_arg_count {
       return Err(CommandError {
         command: cmd.name.to_owned(),
         kind: CommandErrorKind::UnexpectedArgument(arg.clone()),
       });
     }
-
-    parsed.positional_args.push(arg.clone());
 
     i += 1;
   }
@@ -214,68 +223,42 @@ mod tests {
 
     assert_eq!(parsed.is_flag_present("bool-flag"), false);
   }
+
+  #[test]
+  fn single_value_flags() {
+    let cmd = CommandInfo::new("testcmd", "just for testing").flags(vec![
+      Flag::with_names("name", "n").single_value(),
+      Flag::with_names("date", "d").single_value(),
+    ]);
+
+    let args = vec![
+      "--name".to_owned(),
+      "lol".to_owned(),
+      "-d".to_owned(),
+      "wow".to_owned(),
+    ];
+    let parsed = parse_args_for_command(args, cmd).expect("should be valid");
+
+    assert_eq!(parsed.get_flag_value("name").unwrap(), "lol".to_owned());
+    assert_eq!(parsed.get_flag_value("date").unwrap(), "wow".to_owned());
+  }
+
+  #[test]
+  fn multi_value_flags() {
+    let cmd = CommandInfo::new("testcmd", "just for testing")
+      .flags(vec![Flag::with_names("name", "n").multiple_values()]);
+
+    let args = vec![
+      "--name".to_owned(),
+      "lol".to_owned(),
+      "-n".to_owned(),
+      "wow".to_owned(),
+    ];
+    let parsed = parse_args_for_command(args, cmd).expect("should be valid");
+
+    assert_eq!(
+      parsed.get_flag_values("name"),
+      vec!["lol".to_owned(), "wow".to_owned()]
+    );
+  }
 }
-
-// pub fn parse_args(args: Vec<String>) -> ParsedArgs {
-//   let mut parsed = ParsedArgs {
-//     positional_args: Vec::new(),
-//     flags: HashMap::new(),
-//     additional_args: Vec::new(),
-//     retrieved_args: HashSet::new(),
-//     retrieved_flags: HashSet::new(),
-//   };
-
-//   let mut i = 0;
-//   let mut found_additional_separator = false;
-
-//   while i < args.len() {
-//     let arg = &args[i];
-
-//     if found_additional_separator {
-//       parsed.additional_args.push(arg.clone());
-//       i += 1;
-//       continue;
-//     }
-
-//     if arg.starts_with("-") {
-//       if arg == "--" {
-//         found_additional_separator = true;
-//         i += 1;
-//         continue;
-//       }
-
-//       let is_long_flag = arg.len() > 1 && arg.bytes().nth(1).unwrap() == b'-';
-//       let name_start = if is_long_flag { 2 } else { 1 };
-//       let arg_name = arg[name_start..].to_owned();
-
-//       let next_value = args.get(i + 1);
-
-//       if next_value.is_none() || next_value.unwrap().starts_with("-") {
-//         if !parsed.flags.contains_key(&arg_name) {
-//           parsed.flags.insert(arg_name, vec![]);
-//         }
-
-//         i += 1;
-//         continue;
-//       }
-
-//       if parsed.flags.contains_key(&arg_name) {
-//         let entry = parsed.flags.get_mut(&arg_name).unwrap();
-//         entry.push(next_value.unwrap().clone());
-//       } else {
-//         parsed
-//           .flags
-//           .insert(arg_name, vec![next_value.unwrap().clone()]);
-//       }
-
-//       i += 2;
-//       continue;
-//     }
-
-//     parsed.positional_args.push(arg.clone());
-
-//     i += 1;
-//   }
-
-//   parsed
-// }

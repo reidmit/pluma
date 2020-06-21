@@ -7,14 +7,9 @@ use pluma_compiler::*;
 use pluma_constants::*;
 use std::process::exit;
 
-#[cfg_attr(debug_assertions, derive(Debug))]
-pub struct BuildCommand {
-  pub entry_path: Option<String>,
-  pub output_path: Option<String>,
-  pub mode: Option<String>,
-}
+pub struct BuildCommand {}
 
-impl<'a> Command<'a> for BuildCommand {
+impl Command for BuildCommand {
   fn info() -> CommandInfo {
     CommandInfo::new("build", "Compiles a module into an executable")
       .args(vec![

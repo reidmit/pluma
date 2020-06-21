@@ -115,8 +115,16 @@ impl Flag {
     self
   }
 
+  #[allow(dead_code)]
+  pub fn multiple_values(mut self) -> Self {
+    self.style = FlagStyle::MultipleValues;
+    self
+  }
+
   pub fn supports_value(&self, value: &String) -> bool {
     match &self.possible_values {
+      None => true,
+
       Some(values) => {
         for val in values {
           if *val == value {
@@ -126,7 +134,6 @@ impl Flag {
 
         false
       }
-      None => false,
     }
   }
 }
@@ -135,7 +142,7 @@ impl Flag {
 pub enum FlagStyle {
   Boolean,
   SingleValue,
-  MultipleValue,
+  MultipleValues,
 }
 
 impl fmt::Display for CommandInfo {

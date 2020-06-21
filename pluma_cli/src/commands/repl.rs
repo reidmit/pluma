@@ -8,12 +8,9 @@ use pluma_repl::repl;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-#[cfg_attr(debug_assertions, derive(Debug))]
-pub struct ReplCommand<'a> {
-  args: &'a mut ParsedArgs,
-}
+pub struct ReplCommand {}
 
-impl<'a> Command<'a> for ReplCommand<'a> {
+impl Command for ReplCommand {
   fn info() -> CommandInfo {
     CommandInfo::new("repl", "Starts an interactive REPL session").with_help()
   }

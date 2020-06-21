@@ -35,7 +35,7 @@ macro_rules! run_command {
 fn integration_run_command_basic() {
   let (status, _, _) = run_command!("pluma");
 
-  assert_eq!(status, 1);
+  assert_eq!(status, 0);
 }
 
 #[test]

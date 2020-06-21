@@ -4,16 +4,12 @@ use crate::command_error::CommandError;
 use crate::command_info::*;
 use pluma_constants::VERSION;
 
-#[cfg_attr(debug_assertions, derive(Debug))]
-pub struct VersionCommand<'a> {
-  args: &'a mut ParsedArgs,
-}
+pub struct VersionCommand {}
 
-impl<'a> Command<'a> for VersionCommand<'a> {
+impl Command for VersionCommand {
   fn info() -> CommandInfo {
     CommandInfo::new("version", "Prints compiler version and related information").with_help()
   }
-
 
   fn execute(_args: &ParsedArgs) -> Result<(), CommandError> {
     println!("pluma version {}", VERSION);

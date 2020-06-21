@@ -7,14 +7,9 @@ use pluma_compiler::*;
 use pluma_constants::*;
 use std::process::exit;
 
-#[cfg_attr(debug_assertions, derive(Debug))]
-pub struct RunCommand<'a> {
-  pub entry_path: Option<String>,
-  pub mode: Option<String>,
-  args: &'a mut ParsedArgs,
-}
+pub struct RunCommand {}
 
-impl<'a> Command<'a> for RunCommand<'a> {
+impl Command for RunCommand {
   fn info() -> CommandInfo {
     CommandInfo::new("run", "Compiles & runs a Pluma module directly")
       .args(vec![
