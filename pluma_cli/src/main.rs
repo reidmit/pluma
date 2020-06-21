@@ -1,4 +1,5 @@
 use crate::command::Command;
+use crate::command_error::*;
 use crate::commands::*;
 use std::process::exit;
 
@@ -18,70 +19,81 @@ fn main() {
 }
 
 fn run() -> Result<(), command_error::CommandError> {
-  let args = std::env::args().skip(1).collect();
-  let mut parsed_args = arg_parser::parse_args(args);
+  let (subcommand, is_help_requested, args) = arg_parser::find_subcommand();
 
-  match &parsed_args.subcommand()[..] {
+  if subcommand.is_none() {
+    if is_help_requested {
+      let mut parsed_args = arg_parser::parse_args_for_command(args, HelpCommand::info())?;
+      HelpCommand::execute(&mut parsed_args)?;
+      return Ok(());
+    } else {
+      return Err(CommandError {
+        command: "".to_owned(),
+        kind: CommandErrorKind::NoCommandGiven,
+      });
+    }
+  }
+
+  match &subcommand.unwrap()[..] {
     "build" => {
-      if parsed_args.is_help_requested() {
+      if is_help_requested {
         BuildCommand::print_help();
       } else {
-        BuildCommand::from_inputs(&mut parsed_args).execute()?;
+        let mut parsed_args = arg_parser::parse_args_for_command(args, BuildCommand::info())?;
+        BuildCommand::execute(&mut parsed_args)?;
       }
     }
 
     "check" => {
-      if parsed_args.is_help_requested() {
+      if is_help_requested {
         CheckCommand::print_help();
       } else {
-        CheckCommand::from_inputs(&mut parsed_args).execute()?;
+        let mut parsed_args = arg_parser::parse_args_for_command(args, CheckCommand::info())?;
+        CheckCommand::execute(&mut parsed_args)?;
       }
     }
 
     "run" => {
-      if parsed_args.is_help_requested() {
+      if is_help_requested {
         RunCommand::print_help();
       } else {
-        RunCommand::from_inputs(&mut parsed_args).execute()?;
+        let mut parsed_args = arg_parser::parse_args_for_command(args, RunCommand::info())?;
+        RunCommand::execute(&mut parsed_args)?;
       }
     }
 
     "repl" => {
-      if parsed_args.is_help_requested() {
+      if is_help_requested {
         ReplCommand::print_help();
       } else {
-        ReplCommand::from_inputs(&mut parsed_args).execute()?;
+        let mut parsed_args = arg_parser::parse_args_for_command(args, ReplCommand::info())?;
+        ReplCommand::execute(&mut parsed_args)?;
       }
     }
 
     "version" => {
-      if parsed_args.is_help_requested() {
+      if is_help_requested {
         VersionCommand::print_help();
       } else {
-        VersionCommand::from_inputs(&mut parsed_args).execute()?;
+        let mut parsed_args = arg_parser::parse_args_for_command(args, VersionCommand::info())?;
+        VersionCommand::execute(&mut parsed_args)?;
       }
     }
 
     "help" => {
-      if parsed_args.is_help_requested() {
+      if is_help_requested {
         HelpCommand::print_help();
       } else {
-        HelpCommand::from_inputs(&mut parsed_args).execute()?;
-      }
-    }
-
-    "" => {
-      if parsed_args.is_help_requested() {
-        HelpCommand::from_inputs(&mut parsed_args).execute()?;
-      } else {
-        errors::print_usage_error(format!("No command given."));
-        exit(1);
+        let mut parsed_args = arg_parser::parse_args_for_command(args, HelpCommand::info())?;
+        HelpCommand::execute(&mut parsed_args)?;
       }
     }
 
     unknown => {
-      errors::print_usage_error(format!("Command '{}' is not recognized.", unknown));
-      exit(1);
+      return Err(CommandError {
+        command: "".to_owned(),
+        kind: CommandErrorKind::UnexpectedCommand(unknown.to_owned()),
+      });
     }
   }
 

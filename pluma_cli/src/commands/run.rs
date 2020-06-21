@@ -16,28 +16,30 @@ pub struct RunCommand<'a> {
 
 impl<'a> Command<'a> for RunCommand<'a> {
   fn info() -> CommandInfo {
-    CommandInfo::new("run", "Compiles & runs a Pluma module directly").with_help()
+    CommandInfo::new("run", "Compiles & runs a Pluma module directly")
+      .args(vec![
+        Arg::new("entry", "Path to Pluma module or directory").default(DEFAULT_ENTRY_FILE)
+      ])
+      .flags(vec![Flag::with_names("mode", "m")
+        .description("Optimization mode")
+        .single_value()
+        .value_name("path")
+        .possible_values(vec!["release", "debug"])
+        .default("debug")])
+      .with_help()
   }
 
-  fn from_inputs(args: &'a mut ParsedArgs) -> Self {
-    RunCommand {
-      entry_path: args.get_positional_arg(0),
-      mode: args
-        .get_flag_value("mode")
-        .or_else(|| args.get_flag_value("m")),
-      args,
-    }
-  }
-
-  fn execute(self) -> Result<(), CommandError> {
-    self.args.check_valid()?;
-
+  fn execute(args: &ParsedArgs) -> Result<(), CommandError> {
     let options = CompilerOptions {
-      entry_path: self.entry_path.unwrap_or(DEFAULT_ENTRY_FILE.to_owned()),
-      mode: match self.mode {
+      entry_path: args
+        .get_positional_arg(0)
+        .unwrap_or(DEFAULT_ENTRY_FILE.to_owned()),
+
+      mode: match args.get_flag_value("mode") {
         Some(val) if val == "release" => CompilerMode::Release,
         _ => CompilerMode::Debug,
       },
+
       output_path: None,
     };
 

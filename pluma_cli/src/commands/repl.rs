@@ -17,13 +17,7 @@ impl<'a> Command<'a> for ReplCommand<'a> {
     CommandInfo::new("repl", "Starts an interactive REPL session").with_help()
   }
 
-  fn from_inputs(args: &'a mut ParsedArgs) -> Self {
-    ReplCommand { args }
-  }
-
-  fn execute(self) -> Result<(), CommandError> {
-    self.args.check_valid()?;
-
+  fn execute(_args: &ParsedArgs) -> Result<(), CommandError> {
     println!("{} repl (version {})\n", BINARY_NAME, VERSION);
 
     println!("Use Ctrl-D or type '.exit' to quit.");

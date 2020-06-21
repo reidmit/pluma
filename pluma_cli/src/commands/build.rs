@@ -8,14 +8,13 @@ use pluma_constants::*;
 use std::process::exit;
 
 #[cfg_attr(debug_assertions, derive(Debug))]
-pub struct BuildCommand<'a> {
+pub struct BuildCommand {
   pub entry_path: Option<String>,
   pub output_path: Option<String>,
   pub mode: Option<String>,
-  args: &'a mut ParsedArgs,
 }
 
-impl<'a> Command<'a> for BuildCommand<'a> {
+impl<'a> Command<'a> for BuildCommand {
   fn info() -> CommandInfo {
     CommandInfo::new("build", "Compiles a module into an executable")
       .args(vec![
@@ -24,9 +23,11 @@ impl<'a> Command<'a> for BuildCommand<'a> {
       .flags(vec![
         Flag::with_names("out", "o")
           .description("Output executable path")
+          .single_value()
           .value_name("output"),
         Flag::with_names("mode", "m")
           .description("Optimization mode")
+          .single_value()
           .value_name("path")
           .possible_values(vec!["release", "debug"])
           .default("debug"),
@@ -34,29 +35,18 @@ impl<'a> Command<'a> for BuildCommand<'a> {
       .with_help()
   }
 
-  fn from_inputs(args: &'a mut ParsedArgs) -> Self {
-    BuildCommand {
-      entry_path: args.get_positional_arg(0),
-      output_path: args
-        .get_flag_value("out")
-        .or_else(|| args.get_flag_value("o")),
-      mode: args
-        .get_flag_value("mode")
-        .or_else(|| args.get_flag_value("m")),
-      args,
-    }
-  }
-
-  fn execute(self) -> Result<(), CommandError> {
-    self.args.check_valid()?;
-
+  fn execute(args: &ParsedArgs) -> Result<(), CommandError> {
     let compiler_options = CompilerOptions {
-      entry_path: self.entry_path.unwrap_or(DEFAULT_ENTRY_FILE.to_owned()),
-      mode: match self.mode {
+      entry_path: args
+        .get_positional_arg(0)
+        .unwrap_or(DEFAULT_ENTRY_FILE.to_owned()),
+
+      mode: match args.get_flag_value("mode") {
         Some(val) if val == "release" => CompilerMode::Release,
         _ => CompilerMode::Debug,
       },
-      output_path: self.output_path,
+
+      output_path: args.get_flag_value("out"),
     };
 
     let mut compiler = match Compiler::from_options(compiler_options) {

@@ -15,21 +15,21 @@ pub struct CheckCommand<'a> {
 
 impl<'a> Command<'a> for CheckCommand<'a> {
   fn info() -> CommandInfo {
-    CommandInfo::new("check", "Parses & type-checks a module without compiling").with_help()
+    CommandInfo::new("check", "Parses & type-checks a module without compiling")
+      .args(vec![
+        Arg::new("entry", "Path to Pluma module or directory").default(DEFAULT_ENTRY_FILE)
+      ])
+      .flags(vec![
+        Flag::with_names("parse-only", "p").description("Skip type-checking of input files")
+      ])
+      .with_help()
   }
 
-  fn from_inputs(args: &'a mut ParsedArgs) -> Self {
-    CheckCommand {
-      entry_path: args.get_positional_arg(0),
-      args,
-    }
-  }
-
-  fn execute(self) -> Result<(), CommandError> {
-    self.args.check_valid()?;
-
+  fn execute(args: &ParsedArgs) -> Result<(), CommandError> {
     let compiler_options = CompilerOptions {
-      entry_path: self.entry_path.unwrap_or(DEFAULT_ENTRY_FILE.to_owned()),
+      entry_path: args
+        .get_positional_arg(0)
+        .unwrap_or(DEFAULT_ENTRY_FILE.to_owned()),
       mode: CompilerMode::Debug,
       output_path: None,
     };
@@ -42,7 +42,15 @@ impl<'a> Command<'a> for CheckCommand<'a> {
       }
     };
 
-    match compiler.check() {
+    let parse_only = args.is_flag_present("parse-only");
+
+    let result = if parse_only {
+      compiler.parse()
+    } else {
+      compiler.check()
+    };
+
+    match result {
       Ok(_) => {
         println!("Check succeeded without errors!");
       }

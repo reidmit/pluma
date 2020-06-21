@@ -48,6 +48,7 @@ pub struct Arg {
   pub name: &'static str,
   pub description: &'static str,
   pub default: Option<&'static str>,
+  pub required: bool,
 }
 
 impl Arg {
@@ -56,6 +57,7 @@ impl Arg {
       name,
       description,
       default: None,
+      required: false,
     }
   }
 
@@ -66,12 +68,13 @@ impl Arg {
 }
 
 pub struct Flag {
-  long_name: &'static str,
-  description: &'static str,
-  short_name: Option<&'static str>,
-  value_name: Option<&'static str>,
-  default: Option<&'static str>,
-  possible_values: Option<Vec<&'static str>>,
+  pub long_name: &'static str,
+  pub short_name: Option<&'static str>,
+  pub style: FlagStyle,
+  pub description: &'static str,
+  pub value_name: Option<&'static str>,
+  pub default: Option<&'static str>,
+  pub possible_values: Option<Vec<&'static str>>,
 }
 
 impl Flag {
@@ -83,6 +86,7 @@ impl Flag {
       value_name: None,
       default: None,
       possible_values: None,
+      style: FlagStyle::Boolean,
     }
   }
 
@@ -105,6 +109,33 @@ impl Flag {
     self.possible_values = Some(possible_values);
     self
   }
+
+  pub fn single_value(mut self) -> Self {
+    self.style = FlagStyle::SingleValue;
+    self
+  }
+
+  pub fn supports_value(&self, value: &String) -> bool {
+    match &self.possible_values {
+      Some(values) => {
+        for val in values {
+          if *val == value {
+            return true;
+          }
+        }
+
+        false
+      }
+      None => false,
+    }
+  }
+}
+
+#[derive(PartialEq)]
+pub enum FlagStyle {
+  Boolean,
+  SingleValue,
+  MultipleValue,
 }
 
 impl fmt::Display for CommandInfo {
@@ -125,10 +156,10 @@ impl fmt::Display for CommandInfo {
       for arg in args {
         max_arg_length = std::cmp::max(max_arg_length, arg.name.len() + 2);
 
-        if arg.default.is_some() {
-          write!(f, " [<{}>]", arg.name)?;
-        } else {
+        if arg.required {
           write!(f, " <{}>", arg.name)?;
+        } else {
+          write!(f, " [<{}>]", arg.name)?;
         }
       }
     }

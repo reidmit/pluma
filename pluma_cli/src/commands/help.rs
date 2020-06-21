@@ -19,20 +19,12 @@ impl<'a> Command<'a> for HelpCommand<'a> {
       "help",
       "Prints help text for the compiler or a particular command",
     )
+    .args(vec![Arg::new("command", "Command to print help for")])
     .with_help()
   }
 
-  fn from_inputs(args: &'a mut ParsedArgs) -> Self {
-    HelpCommand {
-      subcommand: args.get_positional_arg(0),
-      args,
-    }
-  }
-
-  fn execute(self) -> Result<(), CommandError> {
-    self.args.check_valid()?;
-
-    match self.subcommand {
+  fn execute(args: &ParsedArgs) -> Result<(), CommandError> {
+    match args.get_positional_arg(0) {
       Some(val) => match &val[..] {
         "build" => BuildCommand::print_help(),
         "check" => CheckCommand::print_help(),

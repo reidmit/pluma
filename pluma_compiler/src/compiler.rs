@@ -41,8 +41,8 @@ impl Compiler {
     })
   }
 
-  /// Parses & analyzes input files without generating or emitting code
-  pub fn check(&mut self) -> Result<(), Vec<Diagnostic>> {
+  /// Parses input files without analyzing.
+  pub fn parse(&mut self) -> Result<(), Vec<Diagnostic>> {
     self.parse_module(
       self.entry_module_name.clone(),
       to_module_path(self.root_dir.clone(), self.entry_module_name.clone()),
@@ -51,6 +51,14 @@ impl Compiler {
     if !self.diagnostics.is_empty() {
       return Err(self.diagnostics.to_vec());
     }
+
+    Ok(())
+  }
+
+  /// Checks input files without generating or emitting code (parses,
+  /// resolves circular dependencies, type-checks).
+  pub fn check(&mut self) -> Result<(), Vec<Diagnostic>> {
+    self.parse()?;
 
     let sorted_names = match self.dependency_graph.sort() {
       TopologicalSort::Cycle(names) => {

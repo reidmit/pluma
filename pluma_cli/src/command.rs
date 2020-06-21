@@ -5,9 +5,7 @@ use crate::command_info::CommandInfo;
 pub trait Command<'a> {
   fn info() -> CommandInfo;
 
-  fn from_inputs(args: &'a mut ParsedArgs) -> Self;
-
-  fn execute(self) -> Result<(), CommandError>;
+  fn execute(args: &ParsedArgs) -> Result<(), CommandError>;
 
   fn print_help() {
     println!("{}", Self::info());

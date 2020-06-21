@@ -14,13 +14,8 @@ impl<'a> Command<'a> for VersionCommand<'a> {
     CommandInfo::new("version", "Prints compiler version and related information").with_help()
   }
 
-  fn from_inputs(args: &'a mut ParsedArgs) -> Self {
-    VersionCommand { args }
-  }
 
-  fn execute(self) -> Result<(), CommandError> {
-    self.args.check_valid()?;
-
+  fn execute(_args: &ParsedArgs) -> Result<(), CommandError> {
     println!("pluma version {}", VERSION);
 
     Ok(())
