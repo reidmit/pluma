@@ -1,18 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "\"wow\""
 ---
 
 === Source ===
 "wow"
-
-=== Tokens ===
-[
-    StringLiteral(
-        1,
-        4,
-    ),
-]
 
 === Comments ===
 {}

@@ -1,38 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: enum Bool | True | False
 ---
 
 === Source ===
 enum Bool | True | False
-
-=== Tokens ===
-[
-    KeywordEnum(
-        0,
-        4,
-    ),
-    Identifier(
-        5,
-        9,
-    ),
-    Pipe(
-        10,
-        11,
-    ),
-    Identifier(
-        12,
-        16,
-    ),
-    Pipe(
-        17,
-        18,
-    ),
-    Identifier(
-        19,
-        24,
-    ),
-]
 
 === Comments ===
 {}

@@ -1,58 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "struct Person (name :: String, age :: Int)"
 ---
 
 === Source ===
 struct Person (name :: String, age :: Int)
-
-=== Tokens ===
-[
-    KeywordStruct(
-        0,
-        6,
-    ),
-    Identifier(
-        7,
-        13,
-    ),
-    LeftParen(
-        14,
-        15,
-    ),
-    Identifier(
-        15,
-        19,
-    ),
-    DoubleColon(
-        20,
-        22,
-    ),
-    Identifier(
-        23,
-        29,
-    ),
-    Comma(
-        29,
-        30,
-    ),
-    Identifier(
-        31,
-        34,
-    ),
-    DoubleColon(
-        35,
-        37,
-    ),
-    Identifier(
-        38,
-        41,
-    ),
-    RightParen(
-        41,
-        42,
-    ),
-]
 
 === Comments ===
 {}

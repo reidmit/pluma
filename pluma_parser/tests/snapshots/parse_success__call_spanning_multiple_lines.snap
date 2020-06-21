@@ -1,5 +1,5 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "if thing then {\n  print \"yep!\"\n} else {\n  print \"nope!\"\n}"
 ---
 
@@ -9,74 +9,6 @@ if thing then {
 } else {
   print "nope!"
 }
-
-=== Tokens ===
-[
-    Identifier(
-        0,
-        2,
-    ),
-    Identifier(
-        3,
-        8,
-    ),
-    Identifier(
-        9,
-        13,
-    ),
-    LeftBrace(
-        14,
-        15,
-    ),
-    LineBreak(
-        15,
-        16,
-    ),
-    Identifier(
-        18,
-        23,
-    ),
-    StringLiteral(
-        25,
-        29,
-    ),
-    LineBreak(
-        30,
-        31,
-    ),
-    RightBrace(
-        31,
-        32,
-    ),
-    Identifier(
-        33,
-        37,
-    ),
-    LeftBrace(
-        38,
-        39,
-    ),
-    LineBreak(
-        39,
-        40,
-    ),
-    Identifier(
-        42,
-        47,
-    ),
-    StringLiteral(
-        49,
-        54,
-    ),
-    LineBreak(
-        55,
-        56,
-    ),
-    RightBrace(
-        56,
-        57,
-    ),
-]
 
 === Comments ===
 {}

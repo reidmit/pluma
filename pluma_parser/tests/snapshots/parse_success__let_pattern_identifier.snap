@@ -6,26 +6,6 @@ expression: let x = 47
 === Source ===
 let x = 47
 
-=== Tokens ===
-[
-    KeywordLet(
-        0,
-        3,
-    ),
-    Identifier(
-        4,
-        5,
-    ),
-    Equals(
-        6,
-        7,
-    ),
-    DecimalDigits(
-        8,
-        10,
-    ),
-]
-
 === Comments ===
 {}
 

@@ -1,5 +1,5 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "enum Color\n  | Red\n  | Green\n  | Blue"
 ---
 
@@ -8,54 +8,6 @@ enum Color
   | Red
   | Green
   | Blue
-
-=== Tokens ===
-[
-    KeywordEnum(
-        0,
-        4,
-    ),
-    Identifier(
-        5,
-        10,
-    ),
-    LineBreak(
-        10,
-        11,
-    ),
-    Pipe(
-        13,
-        14,
-    ),
-    Identifier(
-        15,
-        18,
-    ),
-    LineBreak(
-        18,
-        19,
-    ),
-    Pipe(
-        21,
-        22,
-    ),
-    Identifier(
-        23,
-        28,
-    ),
-    LineBreak(
-        28,
-        29,
-    ),
-    Pipe(
-        31,
-        32,
-    ),
-    Identifier(
-        33,
-        37,
-    ),
-]
 
 === Comments ===
 {}

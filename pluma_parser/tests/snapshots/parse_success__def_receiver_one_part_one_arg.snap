@@ -1,5 +1,5 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "def Person . greet String {\n  a => \"wow!\"\n}"
 ---
 
@@ -7,58 +7,6 @@ expression: "def Person . greet String {\n  a => \"wow!\"\n}"
 def Person . greet String {
   a => "wow!"
 }
-
-=== Tokens ===
-[
-    KeywordDef(
-        0,
-        3,
-    ),
-    Identifier(
-        4,
-        10,
-    ),
-    Dot(
-        11,
-        12,
-    ),
-    Identifier(
-        13,
-        18,
-    ),
-    Identifier(
-        19,
-        25,
-    ),
-    LeftBrace(
-        26,
-        27,
-    ),
-    LineBreak(
-        27,
-        28,
-    ),
-    Identifier(
-        30,
-        31,
-    ),
-    DoubleArrow(
-        32,
-        34,
-    ),
-    StringLiteral(
-        36,
-        40,
-    ),
-    LineBreak(
-        41,
-        42,
-    ),
-    RightBrace(
-        42,
-        43,
-    ),
-]
 
 === Comments ===
 {}

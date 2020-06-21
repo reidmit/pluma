@@ -1,5 +1,5 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "(1,\n 2\n)"
 ---
 
@@ -7,38 +7,6 @@ expression: "(1,\n 2\n)"
 (1,
  2
 )
-
-=== Tokens ===
-[
-    LeftParen(
-        0,
-        1,
-    ),
-    DecimalDigits(
-        1,
-        2,
-    ),
-    Comma(
-        2,
-        3,
-    ),
-    LineBreak(
-        3,
-        4,
-    ),
-    DecimalDigits(
-        5,
-        6,
-    ),
-    LineBreak(
-        6,
-        7,
-    ),
-    RightParen(
-        7,
-        8,
-    ),
-]
 
 === Comments ===
 {}

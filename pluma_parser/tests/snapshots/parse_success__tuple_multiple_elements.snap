@@ -1,86 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "(1, \"wow\", { x => x }, (lol, ()))"
 ---
 
 === Source ===
 (1, "wow", { x => x }, (lol, ()))
-
-=== Tokens ===
-[
-    LeftParen(
-        0,
-        1,
-    ),
-    DecimalDigits(
-        1,
-        2,
-    ),
-    Comma(
-        2,
-        3,
-    ),
-    StringLiteral(
-        5,
-        8,
-    ),
-    Comma(
-        9,
-        10,
-    ),
-    LeftBrace(
-        11,
-        12,
-    ),
-    Identifier(
-        13,
-        14,
-    ),
-    DoubleArrow(
-        15,
-        17,
-    ),
-    Identifier(
-        18,
-        19,
-    ),
-    RightBrace(
-        20,
-        21,
-    ),
-    Comma(
-        21,
-        22,
-    ),
-    LeftParen(
-        23,
-        24,
-    ),
-    Identifier(
-        24,
-        27,
-    ),
-    Comma(
-        27,
-        28,
-    ),
-    LeftParen(
-        29,
-        30,
-    ),
-    RightParen(
-        30,
-        31,
-    ),
-    RightParen(
-        31,
-        32,
-    ),
-    RightParen(
-        32,
-        33,
-    ),
-]
 
 === Comments ===
 {}

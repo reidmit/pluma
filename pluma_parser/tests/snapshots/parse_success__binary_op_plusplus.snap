@@ -1,26 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "\"a\" ++ \"b\""
 ---
 
 === Source ===
 "a" ++ "b"
-
-=== Tokens ===
-[
-    StringLiteral(
-        1,
-        2,
-    ),
-    Operator(
-        4,
-        6,
-    ),
-    StringLiteral(
-        8,
-        9,
-    ),
-]
 
 === Comments ===
 {}

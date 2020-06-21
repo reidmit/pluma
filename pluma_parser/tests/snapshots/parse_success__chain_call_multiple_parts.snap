@@ -1,38 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "\"hello\" . replace \"x\" with \"y\""
 ---
 
 === Source ===
 "hello" . replace "x" with "y"
-
-=== Tokens ===
-[
-    StringLiteral(
-        1,
-        6,
-    ),
-    Dot(
-        8,
-        9,
-    ),
-    Identifier(
-        10,
-        17,
-    ),
-    StringLiteral(
-        19,
-        20,
-    ),
-    Identifier(
-        22,
-        26,
-    ),
-    StringLiteral(
-        28,
-        29,
-    ),
-]
 
 === Comments ===
 {}

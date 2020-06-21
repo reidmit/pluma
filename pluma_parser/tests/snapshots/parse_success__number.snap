@@ -1,18 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "47"
 ---
 
 === Source ===
 47
-
-=== Tokens ===
-[
-    DecimalDigits(
-        0,
-        2,
-    ),
-]
 
 === Comments ===
 {}

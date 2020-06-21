@@ -1,13 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: ""
 ---
 
 === Source ===
 
-
-=== Tokens ===
-[]
 
 === Comments ===
 {}

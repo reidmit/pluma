@@ -1,38 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "/\"w\" \"o\"+ \"w\"/"
 ---
 
 === Source ===
 /"w" "o"+ "w"/
-
-=== Tokens ===
-[
-    ForwardSlash(
-        0,
-        1,
-    ),
-    StringLiteral(
-        2,
-        3,
-    ),
-    StringLiteral(
-        6,
-        7,
-    ),
-    Operator(
-        8,
-        9,
-    ),
-    StringLiteral(
-        11,
-        12,
-    ),
-    ForwardSlash(
-        13,
-        14,
-    ),
-]
 
 === Comments ===
 {}

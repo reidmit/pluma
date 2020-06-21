@@ -1,18 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: こんにちは
 ---
 
 === Source ===
 こんにちは
-
-=== Tokens ===
-[
-    Identifier(
-        0,
-        15,
-    ),
-]
 
 === Comments ===
 {}

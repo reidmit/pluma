@@ -1,18 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "\"part 1\\\\part 2\""
 ---
 
 === Source ===
 "part 1\\part 2"
-
-=== Tokens ===
-[
-    StringLiteral(
-        1,
-        15,
-    ),
-]
 
 === Comments ===
 {}

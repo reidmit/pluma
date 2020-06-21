@@ -1,58 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "/\"aa\" <middle: \"bb\" | \"oo\"> \"cc\"/"
 ---
 
 === Source ===
 /"aa" <middle: "bb" | "oo"> "cc"/
-
-=== Tokens ===
-[
-    ForwardSlash(
-        0,
-        1,
-    ),
-    StringLiteral(
-        2,
-        4,
-    ),
-    LeftAngle(
-        6,
-        7,
-    ),
-    Identifier(
-        7,
-        13,
-    ),
-    Colon(
-        13,
-        14,
-    ),
-    StringLiteral(
-        16,
-        18,
-    ),
-    Pipe(
-        20,
-        21,
-    ),
-    StringLiteral(
-        23,
-        25,
-    ),
-    RightAngle(
-        26,
-        27,
-    ),
-    StringLiteral(
-        29,
-        31,
-    ),
-    ForwardSlash(
-        32,
-        33,
-    ),
-]
 
 === Comments ===
 {}

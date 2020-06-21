@@ -8,38 +8,6 @@ let x = "wow"
 
 x
 
-=== Tokens ===
-[
-    KeywordLet(
-        0,
-        3,
-    ),
-    Identifier(
-        4,
-        5,
-    ),
-    Equals(
-        6,
-        7,
-    ),
-    StringLiteral(
-        9,
-        12,
-    ),
-    LineBreak(
-        13,
-        14,
-    ),
-    LineBreak(
-        14,
-        15,
-    ),
-    Identifier(
-        15,
-        16,
-    ),
-]
-
 === Comments ===
 {}
 

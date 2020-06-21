@@ -6,66 +6,6 @@ expression: "let Person (name, age) = Person (\"Reid\", 26)"
 === Source ===
 let Person (name, age) = Person ("Reid", 26)
 
-=== Tokens ===
-[
-    KeywordLet(
-        0,
-        3,
-    ),
-    Identifier(
-        4,
-        10,
-    ),
-    LeftParen(
-        11,
-        12,
-    ),
-    Identifier(
-        12,
-        16,
-    ),
-    Comma(
-        16,
-        17,
-    ),
-    Identifier(
-        18,
-        21,
-    ),
-    RightParen(
-        21,
-        22,
-    ),
-    Equals(
-        23,
-        24,
-    ),
-    Identifier(
-        25,
-        31,
-    ),
-    LeftParen(
-        32,
-        33,
-    ),
-    StringLiteral(
-        34,
-        38,
-    ),
-    Comma(
-        39,
-        40,
-    ),
-    DecimalDigits(
-        41,
-        43,
-    ),
-    RightParen(
-        43,
-        44,
-    ),
-]
-
 === Comments ===
 {}
 

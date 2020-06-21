@@ -1,26 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: /space/
 ---
 
 === Source ===
 /space/
-
-=== Tokens ===
-[
-    ForwardSlash(
-        0,
-        1,
-    ),
-    Identifier(
-        1,
-        6,
-    ),
-    ForwardSlash(
-        6,
-        7,
-    ),
-]
 
 === Comments ===
 {}

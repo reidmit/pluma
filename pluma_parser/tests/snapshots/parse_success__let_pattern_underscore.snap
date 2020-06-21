@@ -1,30 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: let _ = 47
 ---
 
 === Source ===
 let _ = 47
-
-=== Tokens ===
-[
-    KeywordLet(
-        0,
-        3,
-    ),
-    Underscore(
-        4,
-        5,
-    ),
-    Equals(
-        6,
-        7,
-    ),
-    DecimalDigits(
-        8,
-        10,
-    ),
-]
 
 === Comments ===
 {}

@@ -1,66 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "\"hello\" . f1 () . f2 \"wow\" .f3(47)"
 ---
 
 === Source ===
 "hello" . f1 () . f2 "wow" .f3(47)
-
-=== Tokens ===
-[
-    StringLiteral(
-        1,
-        6,
-    ),
-    Dot(
-        8,
-        9,
-    ),
-    Identifier(
-        10,
-        12,
-    ),
-    LeftParen(
-        13,
-        14,
-    ),
-    RightParen(
-        14,
-        15,
-    ),
-    Dot(
-        16,
-        17,
-    ),
-    Identifier(
-        18,
-        20,
-    ),
-    StringLiteral(
-        22,
-        25,
-    ),
-    Dot(
-        27,
-        28,
-    ),
-    Identifier(
-        28,
-        30,
-    ),
-    LeftParen(
-        30,
-        31,
-    ),
-    DecimalDigits(
-        31,
-        33,
-    ),
-    RightParen(
-        33,
-        34,
-    ),
-]
 
 === Comments ===
 {}

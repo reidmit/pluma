@@ -1,5 +1,5 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "def hello () {\n  a => \"wow!\"\n}"
 ---
 
@@ -7,54 +7,6 @@ expression: "def hello () {\n  a => \"wow!\"\n}"
 def hello () {
   a => "wow!"
 }
-
-=== Tokens ===
-[
-    KeywordDef(
-        0,
-        3,
-    ),
-    Identifier(
-        4,
-        9,
-    ),
-    LeftParen(
-        10,
-        11,
-    ),
-    RightParen(
-        11,
-        12,
-    ),
-    LeftBrace(
-        13,
-        14,
-    ),
-    LineBreak(
-        14,
-        15,
-    ),
-    Identifier(
-        17,
-        18,
-    ),
-    DoubleArrow(
-        19,
-        21,
-    ),
-    StringLiteral(
-        23,
-        27,
-    ),
-    LineBreak(
-        28,
-        29,
-    ),
-    RightBrace(
-        29,
-        30,
-    ),
-]
 
 === Comments ===
 {}

@@ -1,70 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "match thing | 1 => \"one\" | 2 => \"two\" | _ => \"idk\""
 ---
 
 === Source ===
 match thing | 1 => "one" | 2 => "two" | _ => "idk"
-
-=== Tokens ===
-[
-    KeywordMatch(
-        0,
-        5,
-    ),
-    Identifier(
-        6,
-        11,
-    ),
-    Pipe(
-        12,
-        13,
-    ),
-    DecimalDigits(
-        14,
-        15,
-    ),
-    DoubleArrow(
-        16,
-        18,
-    ),
-    StringLiteral(
-        20,
-        23,
-    ),
-    Pipe(
-        25,
-        26,
-    ),
-    DecimalDigits(
-        27,
-        28,
-    ),
-    DoubleArrow(
-        29,
-        31,
-    ),
-    StringLiteral(
-        33,
-        36,
-    ),
-    Pipe(
-        38,
-        39,
-    ),
-    Underscore(
-        40,
-        41,
-    ),
-    DoubleArrow(
-        42,
-        44,
-    ),
-    StringLiteral(
-        46,
-        49,
-    ),
-]
 
 === Comments ===
 {}

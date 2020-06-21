@@ -1,5 +1,5 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "enum Optional<A> where A :: Any\n  | Some(A)\n  | None"
 ---
 
@@ -7,82 +7,6 @@ expression: "enum Optional<A> where A :: Any\n  | Some(A)\n  | None"
 enum Optional<A> where A :: Any
   | Some(A)
   | None
-
-=== Tokens ===
-[
-    KeywordEnum(
-        0,
-        4,
-    ),
-    Identifier(
-        5,
-        13,
-    ),
-    LeftAngle(
-        13,
-        14,
-    ),
-    Identifier(
-        14,
-        15,
-    ),
-    RightAngle(
-        15,
-        16,
-    ),
-    KeywordWhere(
-        17,
-        22,
-    ),
-    Identifier(
-        23,
-        24,
-    ),
-    DoubleColon(
-        25,
-        27,
-    ),
-    Identifier(
-        28,
-        31,
-    ),
-    LineBreak(
-        31,
-        32,
-    ),
-    Pipe(
-        34,
-        35,
-    ),
-    Identifier(
-        36,
-        40,
-    ),
-    LeftParen(
-        40,
-        41,
-    ),
-    Identifier(
-        41,
-        42,
-    ),
-    RightParen(
-        42,
-        43,
-    ),
-    LineBreak(
-        43,
-        44,
-    ),
-    Pipe(
-        46,
-        47,
-    ),
-    Identifier(
-        48,
-        52,
-    ),
-]
 
 === Comments ===
 {}

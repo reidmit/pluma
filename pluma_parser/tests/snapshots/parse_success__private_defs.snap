@@ -1,5 +1,5 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "def isPublic() {}\n\nprivate\n\ndef isPrivate() {}"
 ---
 
@@ -9,78 +9,6 @@ def isPublic() {}
 private
 
 def isPrivate() {}
-
-=== Tokens ===
-[
-    KeywordDef(
-        0,
-        3,
-    ),
-    Identifier(
-        4,
-        12,
-    ),
-    LeftParen(
-        12,
-        13,
-    ),
-    RightParen(
-        13,
-        14,
-    ),
-    LeftBrace(
-        15,
-        16,
-    ),
-    RightBrace(
-        16,
-        17,
-    ),
-    LineBreak(
-        17,
-        18,
-    ),
-    LineBreak(
-        18,
-        19,
-    ),
-    KeywordPrivate(
-        19,
-        26,
-    ),
-    LineBreak(
-        26,
-        27,
-    ),
-    LineBreak(
-        27,
-        28,
-    ),
-    KeywordDef(
-        28,
-        31,
-    ),
-    Identifier(
-        32,
-        41,
-    ),
-    LeftParen(
-        41,
-        42,
-    ),
-    RightParen(
-        42,
-        43,
-    ),
-    LeftBrace(
-        44,
-        45,
-    ),
-    RightBrace(
-        45,
-        46,
-    ),
-]
 
 === Comments ===
 {}

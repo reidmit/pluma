@@ -1,5 +1,5 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "[\"hey\", \"wow\", \"cool\", \"multi-\n\nline\"]"
 ---
 
@@ -7,46 +7,6 @@ expression: "[\"hey\", \"wow\", \"cool\", \"multi-\n\nline\"]"
 ["hey", "wow", "cool", "multi-
 
 line"]
-
-=== Tokens ===
-[
-    LeftBracket(
-        0,
-        1,
-    ),
-    StringLiteral(
-        2,
-        5,
-    ),
-    Comma(
-        6,
-        7,
-    ),
-    StringLiteral(
-        9,
-        12,
-    ),
-    Comma(
-        13,
-        14,
-    ),
-    StringLiteral(
-        16,
-        20,
-    ),
-    Comma(
-        21,
-        22,
-    ),
-    StringLiteral(
-        24,
-        36,
-    ),
-    RightBracket(
-        37,
-        38,
-    ),
-]
 
 === Comments ===
 {}

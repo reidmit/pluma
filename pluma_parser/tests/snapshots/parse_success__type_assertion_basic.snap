@@ -1,26 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "1 :: Int"
 ---
 
 === Source ===
 1 :: Int
-
-=== Tokens ===
-[
-    DecimalDigits(
-        0,
-        1,
-    ),
-    DoubleColon(
-        2,
-        4,
-    ),
-    Identifier(
-        5,
-        8,
-    ),
-]
 
 === Comments ===
 {}

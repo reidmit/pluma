@@ -1,54 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "trait HasNameAndAge . name :: String . age :: Int"
 ---
 
 === Source ===
 trait HasNameAndAge . name :: String . age :: Int
-
-=== Tokens ===
-[
-    KeywordTrait(
-        0,
-        5,
-    ),
-    Identifier(
-        6,
-        19,
-    ),
-    Dot(
-        20,
-        21,
-    ),
-    Identifier(
-        22,
-        26,
-    ),
-    DoubleColon(
-        27,
-        29,
-    ),
-    Identifier(
-        30,
-        36,
-    ),
-    Dot(
-        37,
-        38,
-    ),
-    Identifier(
-        39,
-        42,
-    ),
-    DoubleColon(
-        43,
-        45,
-    ),
-    Identifier(
-        46,
-        49,
-    ),
-]
 
 === Comments ===
 {}

@@ -1,42 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: x . field1 . field2 . field3
 ---
 
 === Source ===
 x . field1 . field2 . field3
-
-=== Tokens ===
-[
-    Identifier(
-        0,
-        1,
-    ),
-    Dot(
-        2,
-        3,
-    ),
-    Identifier(
-        4,
-        10,
-    ),
-    Dot(
-        11,
-        12,
-    ),
-    Identifier(
-        13,
-        19,
-    ),
-    Dot(
-        20,
-        21,
-    ),
-    Identifier(
-        22,
-        28,
-    ),
-]
 
 === Comments ===
 {}

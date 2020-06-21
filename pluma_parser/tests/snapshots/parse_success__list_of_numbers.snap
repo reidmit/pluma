@@ -1,42 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "[1, 2, 3]"
 ---
 
 === Source ===
 [1, 2, 3]
-
-=== Tokens ===
-[
-    LeftBracket(
-        0,
-        1,
-    ),
-    DecimalDigits(
-        1,
-        2,
-    ),
-    Comma(
-        2,
-        3,
-    ),
-    DecimalDigits(
-        4,
-        5,
-    ),
-    Comma(
-        5,
-        6,
-    ),
-    DecimalDigits(
-        7,
-        8,
-    ),
-    RightBracket(
-        8,
-        9,
-    ),
-]
 
 === Comments ===
 {}

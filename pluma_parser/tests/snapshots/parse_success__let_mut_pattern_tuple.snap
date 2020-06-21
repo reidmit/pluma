@@ -6,62 +6,6 @@ expression: "let (a, mut b) = (47, \"cool\")"
 === Source ===
 let (a, mut b) = (47, "cool")
 
-=== Tokens ===
-[
-    KeywordLet(
-        0,
-        3,
-    ),
-    LeftParen(
-        4,
-        5,
-    ),
-    Identifier(
-        5,
-        6,
-    ),
-    Comma(
-        6,
-        7,
-    ),
-    KeywordMut(
-        8,
-        11,
-    ),
-    Identifier(
-        12,
-        13,
-    ),
-    RightParen(
-        13,
-        14,
-    ),
-    Equals(
-        15,
-        16,
-    ),
-    LeftParen(
-        17,
-        18,
-    ),
-    DecimalDigits(
-        18,
-        20,
-    ),
-    Comma(
-        20,
-        21,
-    ),
-    StringLiteral(
-        23,
-        27,
-    ),
-    RightParen(
-        28,
-        29,
-    ),
-]
-
 === Comments ===
 {}
 

@@ -1,5 +1,5 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "def hello A -> A where A :: Any {\n  x => x\n}"
 ---
 
@@ -7,74 +7,6 @@ expression: "def hello A -> A where A :: Any {\n  x => x\n}"
 def hello A -> A where A :: Any {
   x => x
 }
-
-=== Tokens ===
-[
-    KeywordDef(
-        0,
-        3,
-    ),
-    Identifier(
-        4,
-        9,
-    ),
-    Identifier(
-        10,
-        11,
-    ),
-    Arrow(
-        12,
-        14,
-    ),
-    Identifier(
-        15,
-        16,
-    ),
-    KeywordWhere(
-        17,
-        22,
-    ),
-    Identifier(
-        23,
-        24,
-    ),
-    DoubleColon(
-        25,
-        27,
-    ),
-    Identifier(
-        28,
-        31,
-    ),
-    LeftBrace(
-        32,
-        33,
-    ),
-    LineBreak(
-        33,
-        34,
-    ),
-    Identifier(
-        36,
-        37,
-    ),
-    DoubleArrow(
-        38,
-        40,
-    ),
-    Identifier(
-        41,
-        42,
-    ),
-    LineBreak(
-        42,
-        43,
-    ),
-    RightBrace(
-        43,
-        44,
-    ),
-]
 
 === Comments ===
 {}

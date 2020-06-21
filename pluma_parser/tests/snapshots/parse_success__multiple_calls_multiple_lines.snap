@@ -1,35 +1,11 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "print \"one\"\nprint \"two\""
 ---
 
 === Source ===
 print "one"
 print "two"
-
-=== Tokens ===
-[
-    Identifier(
-        0,
-        5,
-    ),
-    StringLiteral(
-        7,
-        10,
-    ),
-    LineBreak(
-        11,
-        12,
-    ),
-    Identifier(
-        12,
-        17,
-    ),
-    StringLiteral(
-        19,
-        22,
-    ),
-]
 
 === Comments ===
 {}

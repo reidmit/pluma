@@ -1,18 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "\"line 1\\\"line 2\""
 ---
 
 === Source ===
 "line 1\"line 2"
-
-=== Tokens ===
-[
-    StringLiteral(
-        1,
-        15,
-    ),
-]
 
 === Comments ===
 {}

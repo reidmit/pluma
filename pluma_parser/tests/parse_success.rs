@@ -31,15 +31,12 @@ macro_rules! test_parse_success {
 === Source ===
 {}
 
-=== Tokens ===
-{:#?}
-
 === Comments ===
 {:#?}
 
 === AST ===
 {:#?}
-", source_copy, tokens, comments, ast);
+", source_copy, comments, ast);
 
             assert_snapshot!(file_name, formatted, &source_copy);
         }

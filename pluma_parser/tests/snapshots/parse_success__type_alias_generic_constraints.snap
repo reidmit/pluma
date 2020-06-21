@@ -1,91 +1,11 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "alias CoolFunc<A> where A :: Any\n  { (A, Int) -> Cool }"
 ---
 
 === Source ===
 alias CoolFunc<A> where A :: Any
   { (A, Int) -> Cool }
-
-=== Tokens ===
-[
-    KeywordAlias(
-        0,
-        5,
-    ),
-    Identifier(
-        6,
-        14,
-    ),
-    LeftAngle(
-        14,
-        15,
-    ),
-    Identifier(
-        15,
-        16,
-    ),
-    RightAngle(
-        16,
-        17,
-    ),
-    KeywordWhere(
-        18,
-        23,
-    ),
-    Identifier(
-        24,
-        25,
-    ),
-    DoubleColon(
-        26,
-        28,
-    ),
-    Identifier(
-        29,
-        32,
-    ),
-    LineBreak(
-        32,
-        33,
-    ),
-    LeftBrace(
-        35,
-        36,
-    ),
-    LeftParen(
-        37,
-        38,
-    ),
-    Identifier(
-        38,
-        39,
-    ),
-    Comma(
-        39,
-        40,
-    ),
-    Identifier(
-        41,
-        44,
-    ),
-    RightParen(
-        44,
-        45,
-    ),
-    Arrow(
-        46,
-        48,
-    ),
-    Identifier(
-        49,
-        53,
-    ),
-    RightBrace(
-        54,
-        55,
-    ),
-]
 
 === Comments ===
 {}

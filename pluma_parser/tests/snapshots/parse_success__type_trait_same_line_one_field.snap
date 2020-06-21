@@ -1,38 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "trait HasName . name :: String"
 ---
 
 === Source ===
 trait HasName . name :: String
-
-=== Tokens ===
-[
-    KeywordTrait(
-        0,
-        5,
-    ),
-    Identifier(
-        6,
-        13,
-    ),
-    Dot(
-        14,
-        15,
-    ),
-    Identifier(
-        16,
-        20,
-    ),
-    DoubleColon(
-        21,
-        23,
-    ),
-    Identifier(
-        24,
-        30,
-    ),
-]
 
 === Comments ===
 {}

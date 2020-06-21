@@ -1,26 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: 5 + 5
 ---
 
 === Source ===
 5 + 5
-
-=== Tokens ===
-[
-    DecimalDigits(
-        0,
-        1,
-    ),
-    Operator(
-        2,
-        3,
-    ),
-    DecimalDigits(
-        4,
-        5,
-    ),
-]
 
 === Comments ===
 {}

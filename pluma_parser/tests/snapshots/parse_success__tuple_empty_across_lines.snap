@@ -1,5 +1,5 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "(\n\n)"
 ---
 
@@ -7,26 +7,6 @@ expression: "(\n\n)"
 (
 
 )
-
-=== Tokens ===
-[
-    LeftParen(
-        0,
-        1,
-    ),
-    LineBreak(
-        1,
-        2,
-    ),
-    LineBreak(
-        2,
-        3,
-    ),
-    RightParen(
-        3,
-        4,
-    ),
-]
 
 === Comments ===
 {}

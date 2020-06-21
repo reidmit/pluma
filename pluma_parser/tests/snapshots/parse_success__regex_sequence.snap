@@ -1,34 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: /space digit space/
 ---
 
 === Source ===
 /space digit space/
-
-=== Tokens ===
-[
-    ForwardSlash(
-        0,
-        1,
-    ),
-    Identifier(
-        1,
-        6,
-    ),
-    Identifier(
-        7,
-        12,
-    ),
-    Identifier(
-        13,
-        18,
-    ),
-    ForwardSlash(
-        18,
-        19,
-    ),
-]
 
 === Comments ===
 {}

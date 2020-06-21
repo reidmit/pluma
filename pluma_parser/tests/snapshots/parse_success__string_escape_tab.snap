@@ -1,18 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "\"hello\\tworld\""
 ---
 
 === Source ===
 "hello\tworld"
-
-=== Tokens ===
-[
-    StringLiteral(
-        1,
-        13,
-    ),
-]
 
 === Comments ===
 {}

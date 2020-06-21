@@ -1,42 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "/\"a\" | \"b\" | \"c\"/"
 ---
 
 === Source ===
 /"a" | "b" | "c"/
-
-=== Tokens ===
-[
-    ForwardSlash(
-        0,
-        1,
-    ),
-    StringLiteral(
-        2,
-        3,
-    ),
-    Pipe(
-        5,
-        6,
-    ),
-    StringLiteral(
-        8,
-        9,
-    ),
-    Pipe(
-        11,
-        12,
-    ),
-    StringLiteral(
-        14,
-        15,
-    ),
-    ForwardSlash(
-        16,
-        17,
-    ),
-]
 
 === Comments ===
 {}

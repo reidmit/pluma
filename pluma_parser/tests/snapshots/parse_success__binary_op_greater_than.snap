@@ -1,26 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "\"a\" > \"b\""
 ---
 
 === Source ===
 "a" > "b"
-
-=== Tokens ===
-[
-    StringLiteral(
-        1,
-        2,
-    ),
-    RightAngle(
-        4,
-        5,
-    ),
-    StringLiteral(
-        7,
-        8,
-    ),
-]
 
 === Comments ===
 {}

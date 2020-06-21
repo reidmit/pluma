@@ -6,30 +6,6 @@ expression: let mut x = 47
 === Source ===
 let mut x = 47
 
-=== Tokens ===
-[
-    KeywordLet(
-        0,
-        3,
-    ),
-    KeywordMut(
-        4,
-        7,
-    ),
-    Identifier(
-        8,
-        9,
-    ),
-    Equals(
-        10,
-        11,
-    ),
-    DecimalDigits(
-        12,
-        14,
-    ),
-]
-
 === Comments ===
 {}
 

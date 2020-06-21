@@ -1,62 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "[1, callThing(), repeat 3 times \"wow\"]"
 ---
 
 === Source ===
 [1, callThing(), repeat 3 times "wow"]
-
-=== Tokens ===
-[
-    LeftBracket(
-        0,
-        1,
-    ),
-    DecimalDigits(
-        1,
-        2,
-    ),
-    Comma(
-        2,
-        3,
-    ),
-    Identifier(
-        4,
-        13,
-    ),
-    LeftParen(
-        13,
-        14,
-    ),
-    RightParen(
-        14,
-        15,
-    ),
-    Comma(
-        15,
-        16,
-    ),
-    Identifier(
-        17,
-        23,
-    ),
-    DecimalDigits(
-        24,
-        25,
-    ),
-    Identifier(
-        26,
-        31,
-    ),
-    StringLiteral(
-        33,
-        36,
-    ),
-    RightBracket(
-        37,
-        38,
-    ),
-]
 
 === Comments ===
 {}

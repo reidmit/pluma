@@ -1,5 +1,5 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "\"hello\"\n  . f1 1\n  .f2 2"
 ---
 
@@ -7,46 +7,6 @@ expression: "\"hello\"\n  . f1 1\n  .f2 2"
 "hello"
   . f1 1
   .f2 2
-
-=== Tokens ===
-[
-    StringLiteral(
-        1,
-        6,
-    ),
-    LineBreak(
-        7,
-        8,
-    ),
-    Dot(
-        10,
-        11,
-    ),
-    Identifier(
-        12,
-        14,
-    ),
-    DecimalDigits(
-        15,
-        16,
-    ),
-    LineBreak(
-        16,
-        17,
-    ),
-    Dot(
-        19,
-        20,
-    ),
-    Identifier(
-        20,
-        22,
-    ),
-    DecimalDigits(
-        23,
-        24,
-    ),
-]
 
 === Comments ===
 {}

@@ -1,5 +1,5 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "trait Wowie\n  . getWow () -> Wow\n  . setWow Wow -> ()"
 ---
 
@@ -7,74 +7,6 @@ expression: "trait Wowie\n  . getWow () -> Wow\n  . setWow Wow -> ()"
 trait Wowie
   . getWow () -> Wow
   . setWow Wow -> ()
-
-=== Tokens ===
-[
-    KeywordTrait(
-        0,
-        5,
-    ),
-    Identifier(
-        6,
-        11,
-    ),
-    LineBreak(
-        11,
-        12,
-    ),
-    Dot(
-        14,
-        15,
-    ),
-    Identifier(
-        16,
-        22,
-    ),
-    LeftParen(
-        23,
-        24,
-    ),
-    RightParen(
-        24,
-        25,
-    ),
-    Arrow(
-        26,
-        28,
-    ),
-    Identifier(
-        29,
-        32,
-    ),
-    LineBreak(
-        32,
-        33,
-    ),
-    Dot(
-        35,
-        36,
-    ),
-    Identifier(
-        37,
-        43,
-    ),
-    Identifier(
-        44,
-        47,
-    ),
-    Arrow(
-        48,
-        50,
-    ),
-    LeftParen(
-        51,
-        52,
-    ),
-    RightParen(
-        52,
-        53,
-    ),
-]
 
 === Comments ===
 {}

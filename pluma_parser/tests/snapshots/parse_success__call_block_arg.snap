@@ -1,34 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "do { print \"hey\" }"
 ---
 
 === Source ===
 do { print "hey" }
-
-=== Tokens ===
-[
-    Identifier(
-        0,
-        2,
-    ),
-    LeftBrace(
-        3,
-        4,
-    ),
-    Identifier(
-        5,
-        10,
-    ),
-    StringLiteral(
-        12,
-        15,
-    ),
-    RightBrace(
-        17,
-        18,
-    ),
-]
 
 === Comments ===
 {}

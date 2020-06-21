@@ -1,50 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: "/\"aa\" \"b\"{ , 2 } \"cc\"/"
 ---
 
 === Source ===
 /"aa" "b"{ , 2 } "cc"/
-
-=== Tokens ===
-[
-    ForwardSlash(
-        0,
-        1,
-    ),
-    StringLiteral(
-        2,
-        4,
-    ),
-    StringLiteral(
-        7,
-        8,
-    ),
-    LeftBrace(
-        9,
-        10,
-    ),
-    Comma(
-        11,
-        12,
-    ),
-    DecimalDigits(
-        13,
-        14,
-    ),
-    RightBrace(
-        15,
-        16,
-    ),
-    StringLiteral(
-        18,
-        20,
-    ),
-    ForwardSlash(
-        21,
-        22,
-    ),
-]
 
 === Comments ===
 {}

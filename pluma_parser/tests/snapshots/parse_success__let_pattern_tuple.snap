@@ -6,58 +6,6 @@ expression: "let (a, b) = (47, \"cool\")"
 === Source ===
 let (a, b) = (47, "cool")
 
-=== Tokens ===
-[
-    KeywordLet(
-        0,
-        3,
-    ),
-    LeftParen(
-        4,
-        5,
-    ),
-    Identifier(
-        5,
-        6,
-    ),
-    Comma(
-        6,
-        7,
-    ),
-    Identifier(
-        8,
-        9,
-    ),
-    RightParen(
-        9,
-        10,
-    ),
-    Equals(
-        11,
-        12,
-    ),
-    LeftParen(
-        13,
-        14,
-    ),
-    DecimalDigits(
-        14,
-        16,
-    ),
-    Comma(
-        16,
-        17,
-    ),
-    StringLiteral(
-        19,
-        23,
-    ),
-    RightParen(
-        24,
-        25,
-    ),
-]
-
 === Comments ===
 {}
 

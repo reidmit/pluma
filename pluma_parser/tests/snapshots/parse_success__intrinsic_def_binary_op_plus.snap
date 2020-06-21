@@ -1,38 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: intrinsic_def Int + Int -> Int
 ---
 
 === Source ===
 intrinsic_def Int + Int -> Int
-
-=== Tokens ===
-[
-    KeywordIntrinsicDef(
-        0,
-        13,
-    ),
-    Identifier(
-        14,
-        17,
-    ),
-    Operator(
-        18,
-        19,
-    ),
-    Identifier(
-        20,
-        23,
-    ),
-    Arrow(
-        24,
-        26,
-    ),
-    Identifier(
-        27,
-        30,
-    ),
-]
 
 === Comments ===
 {}

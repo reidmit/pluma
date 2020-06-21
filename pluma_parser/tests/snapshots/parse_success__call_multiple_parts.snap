@@ -1,30 +1,10 @@
 ---
-source: compiler/tests/parse_success.rs
+source: pluma_parser/tests/parse_success.rs
 expression: multiply 1 by 2
 ---
 
 === Source ===
 multiply 1 by 2
-
-=== Tokens ===
-[
-    Identifier(
-        0,
-        8,
-    ),
-    DecimalDigits(
-        9,
-        10,
-    ),
-    Identifier(
-        11,
-        13,
-    ),
-    DecimalDigits(
-        14,
-        15,
-    ),
-]
 
 === Comments ===
 {}
