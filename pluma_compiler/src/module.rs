@@ -1,7 +1,7 @@
 use pluma_ast::*;
 use pluma_diagnostics::*;
 use pluma_parser::parser::Parser;
-use pluma_parser::tokenizer::{CommentMap, TokenList, Tokenizer};
+use pluma_parser::tokenizer::Tokenizer;
 use pluma_visitor::*;
 use std::fs;
 use std::path::PathBuf;
@@ -12,8 +12,6 @@ pub struct Module {
   pub module_path: PathBuf,
   pub bytes: Option<Vec<u8>>,
   pub ast: Option<ModuleNode>,
-  tokens: Option<TokenList>,
-  comments: Option<CommentMap>,
   imports: Option<Vec<UseNode>>,
 }
 
@@ -23,8 +21,6 @@ impl Module {
       module_name,
       module_path,
       bytes: None,
-      tokens: None,
-      comments: None,
       ast: None,
       imports: None,
     }
@@ -37,7 +33,6 @@ impl Module {
       return Err(diagnostics);
     }
 
-    self.tokenize(&mut diagnostics);
     self.build_ast(&mut diagnostics);
 
     if diagnostics.is_empty() {
@@ -89,25 +84,12 @@ impl Module {
     }
   }
 
-  fn tokenize(&mut self, diagnostics: &mut Vec<Diagnostic>) {
-    let bytes = self.bytes.as_ref().unwrap();
-    let (tokens, comments, errors) = Tokenizer::from_source(&bytes).collect_tokens();
-
-    for err in errors {
-      diagnostics.push(
-        Diagnostic::error(err)
-          .with_pos(err.pos)
-          .with_module(self.module_name.clone(), self.module_path.to_path_buf()),
-      );
-    }
-
-    self.tokens = Some(tokens);
-    self.comments = Some(comments);
-  }
-
   fn build_ast(&mut self, diagnostics: &mut Vec<Diagnostic>) {
+    let bytes = self.bytes.as_ref().unwrap();
+    let tokenizer = Tokenizer::from_source(&bytes);
+
     let (ast, imports, errors) =
-      Parser::new(self.bytes.as_ref().unwrap(), self.tokens.as_ref().unwrap()).parse_module();
+      Parser::new(self.bytes.as_ref().unwrap(), tokenizer).parse_module();
 
     if errors.is_empty() {
       self.ast = Some(ast);

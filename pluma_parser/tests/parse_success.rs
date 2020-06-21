@@ -1,6 +1,7 @@
 use insta::assert_snapshot;
 use pluma_parser::parser::Parser;
 use pluma_parser::tokenizer::Tokenizer;
+use std::collections::HashMap;
 
 macro_rules! test_parse_success {
   ($($name:ident: $source:literal,)*) => {
@@ -11,14 +12,8 @@ macro_rules! test_parse_success {
             let source = replaced.trim();
             let source_copy = source.clone();
             let bytes = Vec::from(source);
-            let mut tokenizer = Tokenizer::from_source(&bytes);
-            let (tokens, comments, errors) = tokenizer.collect_tokens();
-
-            if !errors.is_empty() {
-              panic!("tokenize errors: {:#?}", errors);
-            }
-
-            let mut parser = Parser::new(&bytes, &tokens);
+            let tokenizer = Tokenizer::from_source(&bytes);
+            let mut parser = Parser::new(&bytes, tokenizer);
             let (ast, _imports, errors) = parser.parse_module();
 
             if !errors.is_empty() {
@@ -36,7 +31,7 @@ macro_rules! test_parse_success {
 
 === AST ===
 {:#?}
-", source_copy, comments, ast);
+", source_copy, HashMap::<(), ()>::new(), ast);
 
             assert_snapshot!(file_name, formatted, &source_copy);
         }
