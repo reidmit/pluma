@@ -22,16 +22,9 @@ fn run() -> Result<(), command_error::CommandError> {
   let (subcommand, is_help_requested, args) = arg_parser::find_subcommand();
 
   if subcommand.is_none() {
-    if is_help_requested {
-      let mut parsed_args = arg_parser::parse_args_for_command(args, HelpCommand::info())?;
-      HelpCommand::execute(&mut parsed_args)?;
-      return Ok(());
-    } else {
-      return Err(CommandError {
-        command: "".to_owned(),
-        kind: CommandErrorKind::NoCommandGiven,
-      });
-    }
+    let mut parsed_args = arg_parser::parse_args_for_command(args, HelpCommand::info())?;
+    HelpCommand::execute(&mut parsed_args)?;
+    return Ok(());
   }
 
   match &subcommand.unwrap()[..] {

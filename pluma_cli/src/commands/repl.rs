@@ -1,4 +1,5 @@
 use crate::arg_parser::ParsedArgs;
+use crate::colors;
 use crate::command::Command;
 use crate::command_error::CommandError;
 use crate::command_info::*;
@@ -18,8 +19,12 @@ impl<'a> Command<'a> for ReplCommand<'a> {
   }
 
   fn execute(_args: &ParsedArgs) -> Result<(), CommandError> {
-    println!("{} repl (version {})\n", BINARY_NAME, VERSION);
-
+    println!(
+      "{} {} - version {}",
+      colors::bold(BINARY_NAME),
+      colors::bold("repl"),
+      VERSION
+    );
     println!("Use Ctrl-D or type '.exit' to quit.");
     println!("Type '.help' for more.");
 

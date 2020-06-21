@@ -15,12 +15,9 @@ pub struct HelpCommand<'a> {
 
 impl<'a> Command<'a> for HelpCommand<'a> {
   fn info() -> CommandInfo {
-    CommandInfo::new(
-      "help",
-      "Prints help text for the compiler or a particular command",
-    )
-    .args(vec![Arg::new("command", "Command to print help for")])
-    .with_help()
+    CommandInfo::new("help", "Prints help text")
+      .args(vec![Arg::new("command", "Command to print help for")])
+      .with_help()
   }
 
   fn execute(args: &ParsedArgs) -> Result<(), CommandError> {

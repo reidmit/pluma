@@ -9,7 +9,6 @@ pub struct CommandError {
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub enum CommandErrorKind {
-  NoCommandGiven,
   UnexpectedCommand(String),
   UnexpectedArgument(String),
   UnexpectedFlag(String),
@@ -21,7 +20,6 @@ pub enum CommandErrorKind {
 impl fmt::Display for CommandError {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match &self.kind {
-      CommandErrorKind::NoCommandGiven => write!(f, "No command specified.")?,
       CommandErrorKind::UnexpectedCommand(arg) => {
         write!(f, "Command '{}' is not recognized.", arg)?
       }
