@@ -17,7 +17,7 @@ impl Command for ReplCommand {
 
   fn execute(_args: &ParsedArgs) -> Result<(), CommandError> {
     println!(
-      "{} {} - version {}",
+      "🌸 {} {} - version {}",
       colors::bold(BINARY_NAME),
       colors::bold("repl"),
       VERSION

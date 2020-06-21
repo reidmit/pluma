@@ -241,7 +241,7 @@ impl<'a> Visitor for Analyzer<'a> {
 
       let err_end = match node.params.last() {
         Some(param) => param.pos.1,
-        _ => node.pos.1,
+        _ => node.pos.0 + 3,
       };
 
       self.error(AnalysisError {
@@ -250,7 +250,9 @@ impl<'a> Visitor for Analyzer<'a> {
           expected: param_types.len(),
           actual: node.params.len(),
         },
-      })
+      });
+
+      return;
     }
 
     for i in 0..node.params.len() {
