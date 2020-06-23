@@ -1,0 +1,16 @@
+intrinsic_type Int
+
+def takeInt Int -> Int {
+  i => i
+}
+
+intrinsic_def -Int -> Int
+intrinsic_def Int + Int -> Int
+
+let first = 2
+
+match first
+  | 1 => 100
+  | 2 => 200
+  | 3 => -300
+  | 4 => 1 + 20
