@@ -7,7 +7,6 @@ mod compiler;
 mod compiler_options;
 mod dependency_graph;
 mod import_error;
-mod module;
 mod scope;
 mod type_collector;
 mod type_utils;

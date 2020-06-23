@@ -6,6 +6,8 @@ members = [
   "pluma_constants",
   "pluma_diagnostics",
   "pluma_emitter",
+  "pluma_formatter",
+  "pluma_module",
   "pluma_parser",
   "pluma_repl",
   "pluma_visitor",

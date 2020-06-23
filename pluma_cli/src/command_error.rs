@@ -15,6 +15,7 @@ pub enum CommandErrorKind {
   MissingValueForFlag(String),
   DuplicateValueForFlag(String),
   InvalidValueForFlag(String, String),
+  InvalidFilePatternArgument(String),
 }
 
 impl fmt::Display for CommandError {
@@ -31,6 +32,9 @@ impl fmt::Display for CommandError {
       }
       CommandErrorKind::InvalidValueForFlag(flag, value) => {
         write!(f, "Invalid value '{}' for flag '{}'.", value, flag)?
+      }
+      CommandErrorKind::InvalidFilePatternArgument(pattern) => {
+        write!(f, "File pattern '{}' is not valid.", pattern)?
       }
     }
 

@@ -1,16 +1,13 @@
 [package]
-name = "pluma"
+name = "pluma_formatter"
 version = "0.1.0"
 license = "MIT"
 authors = ["Reid Mitchell <reidmitchell1@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-atty = "0.2.13"
-glob = "0.3.0"
-pluma_compiler = { path = "../pluma_compiler" }
+pluma_ast = { path = "../pluma_ast" }
 pluma_constants = { path = "../pluma_constants" }
 pluma_diagnostics = { path = "../pluma_diagnostics" }
-pluma_formatter = { path = "../pluma_formatter" }
-pluma_parser = { path = "../pluma_parser" }
-pluma_repl = { path = "../pluma_repl" }
+pluma_module = { path = "../pluma_module" }
+pluma_visitor = { path = "../pluma_visitor" }

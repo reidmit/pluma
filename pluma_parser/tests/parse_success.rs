@@ -1,6 +1,5 @@
 use insta::assert_snapshot;
-use pluma_parser::parser::Parser;
-use pluma_parser::tokenizer::Tokenizer;
+use pluma_parser::*;
 use std::collections::HashMap;
 
 macro_rules! test_parse_success {
@@ -193,6 +192,14 @@ test_parse_success! {
     |(1,
     | 2
     |)
+  "#,
+
+  tuple_weirdly_spaced_across_lines: r#"
+    |(
+    |    1,
+    |  2
+    |
+    |        )
   "#,
 
   list_empty: r#"

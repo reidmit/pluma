@@ -1,7 +1,6 @@
 use pluma_ast::*;
 use pluma_diagnostics::*;
-use pluma_parser::parser::Parser;
-use pluma_parser::tokenizer::Tokenizer;
+use pluma_parser::*;
 use pluma_visitor::*;
 use std::fs;
 use std::path::PathBuf;

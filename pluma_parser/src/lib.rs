@@ -1,4 +1,7 @@
-pub mod parse_error;
-pub mod parser;
-pub mod tokenizer;
-pub mod tokens;
+mod parse_error;
+mod parser;
+mod tokenizer;
+mod tokens;
+
+pub use parser::*;
+pub use tokenizer::*;

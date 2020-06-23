@@ -685,7 +685,7 @@ impl<'a> Parser<'a> {
       return Some(DefKind::UnaryOperator {
         op: Box::new(op),
         right: Box::new(right),
-      })
+      });
     }
 
     // If not a unary op def, the first ident might be a type ident or a simple method part name
@@ -1320,12 +1320,16 @@ impl<'a> Parser<'a> {
     let mut first_expr = None;
     let mut other_exprs = Vec::new();
 
+    self.skip_line_breaks();
+
     while let Some(node) = self.parse_expression() {
       if first_expr.is_none() {
         first_expr = Some(node)
       } else {
         other_exprs.push(node);
       }
+
+      self.skip_line_breaks();
 
       match self.current_token {
         Some(Token::Comma(..)) => {
