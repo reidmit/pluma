@@ -360,17 +360,51 @@ impl<'a> Visitor for Analyzer<'a> {
           _ => return,
         };
 
-        let method_name_parts = vec![op.name.clone()];
+        let method_name_parts = vec!["$".to_owned(), op.name.clone(), "$".to_owned()];
 
         if let Some(method_type) = receiver_type_binding.methods.get(&method_name_parts) {
-          node.typ = method_type.clone();
+          let param_types = method_type.func_param_types();
+          let first_param_type = param_types.first().unwrap();
+
+          node.typ = method_type.func_return_type();
+
+          if right.typ != *first_param_type {
+            self.error(AnalysisError {
+              pos: right.pos,
+              kind: AnalysisErrorKind::ParameterTypeMismatch {
+                expected: first_param_type.clone(),
+                actual: right.typ.clone(),
+              },
+            })
+          }
         } else {
           self.error(AnalysisError {
             pos: op.pos,
-            kind: AnalysisErrorKind::UndefinedOperatorForType {
+            kind: AnalysisErrorKind::UndefinedBinaryOperatorForType {
               op_name: op.name.clone(),
               receiver_type: left.typ.clone(),
               param_type: right.typ.clone(),
+            },
+          })
+        }
+      }
+
+      ExprKind::UnaryOperation { op, right } => {
+        let receiver_type_binding = match self.scope.get_type_binding(&right.typ) {
+          Some(binding) => binding,
+          _ => return,
+        };
+
+        let method_name_parts = vec![op.name.clone(), "$".to_owned()];
+
+        if let Some(method_type) = receiver_type_binding.methods.get(&method_name_parts) {
+          node.typ = method_type.func_return_type();
+        } else {
+          self.error(AnalysisError {
+            pos: op.pos,
+            kind: AnalysisErrorKind::UndefinedUnaryOperatorForType {
+              op_name: op.name.clone(),
+              receiver_type: right.typ.clone(),
             },
           })
         }
@@ -522,6 +556,32 @@ impl<'a> Visitor for Analyzer<'a> {
         }
 
         node.typ = asserted_type.clone();
+      }
+
+      ExprKind::Match(match_node) => {
+        let _subject_type = &match_node.subject.typ;
+        let mut case_type: Option<ValueType> = None;
+
+        for case in &match_node.cases {
+          if let Some(expected_case_type) = &case_type {
+            let actual_case_type = &case.body.typ;
+
+            // TODO: more than equality comparison?
+            if expected_case_type != actual_case_type {
+              self.error(AnalysisError {
+                pos: case.body.pos,
+                kind: AnalysisErrorKind::TypeMismatchInMatchCase {
+                  expected: expected_case_type.clone(),
+                  actual: actual_case_type.clone(),
+                },
+              });
+            }
+          } else {
+            case_type = Some(case.body.typ.clone());
+          }
+        }
+
+        node.typ = case_type.unwrap().clone();
       }
 
       ExprKind::Grouping(inner) => node.typ = inner.typ.clone(),

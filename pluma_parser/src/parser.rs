@@ -468,16 +468,6 @@ impl<'a> Parser<'a> {
           })
         }
 
-        // ExprKind::Call(call) => {
-        //   return Some(ExprNode {
-        //     pos: (last_expr.pos.0, pos.1),
-        //     kind: ExprKind::MethodAccess {
-        //       receiver: Box::new(last_expr),
-        //       field: ident,
-        //     },
-        //     typ: ValueType::Unknown,
-        //   });
-        // }
         _ => {
           return self.error(ParseError {
             pos,
@@ -672,7 +662,33 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_definition_kind(&mut self) -> Option<DefKind> {
-    // The first ident might be a type ident or a simple method part name
+    if current_token_is!(self, Token::Operator) {
+      let (start, end) = self.current_token_position();
+      let name = read_string!(self, start, end);
+      let op = OperatorNode {
+        pos: (start, end),
+        name,
+      };
+
+      self.advance();
+
+      let right = match self.parse_type_identifier() {
+        Some(t) => t,
+        None => {
+          return self.error(ParseError {
+            pos: self.current_token_position(),
+            kind: ParseErrorKind::IncompleteMethodSignature,
+          })
+        }
+      };
+
+      return Some(DefKind::UnaryOperator {
+        op: Box::new(op),
+        right: Box::new(right),
+      })
+    }
+
+    // If not a unary op def, the first ident might be a type ident or a simple method part name
     let type_ident = match self.parse_type_identifier() {
       Some(t) => t,
       None => {

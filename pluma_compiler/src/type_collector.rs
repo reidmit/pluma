@@ -131,7 +131,7 @@ impl<'a> TypeCollector<'a> {
           None => ValueType::Nothing,
         };
 
-        let method_parts = vec![op.name.clone()];
+        let method_parts = vec!["$".to_owned(), op.name.clone(), "$".to_owned()];
         let param_types = vec![param_type];
 
         let result = self.scope.add_type_method(
@@ -145,7 +145,27 @@ impl<'a> TypeCollector<'a> {
         self.check_result(result);
       }
 
-      _ => {}
+      DefKind::UnaryOperator { op,  right } => {
+        let receiver_type = type_utils::type_ident_to_value_type(right);
+
+        let return_type = match return_type {
+          Some(type_expr) => type_utils::type_expr_to_value_type(&type_expr),
+          None => ValueType::Nothing,
+        };
+
+        let method_parts = vec![op.name.clone(), "$".to_owned()];
+        let param_types = vec![];
+
+        let result = self.scope.add_type_method(
+          receiver_type,
+          method_parts,
+          param_types,
+          return_type,
+          right.pos,
+        );
+
+        self.check_result(result);
+      }
     }
   }
 }

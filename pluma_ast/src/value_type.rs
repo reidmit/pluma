@@ -26,7 +26,21 @@ pub enum TypeConstraint {
   },
 }
 
-impl ValueType {}
+impl ValueType {
+  pub fn func_param_types(&self) -> Vec<ValueType> {
+    match &self {
+      ValueType::Func(param_types, _) => param_types.to_vec(),
+      _ => unreachable!(),
+    }
+  }
+
+  pub fn func_return_type(&self) -> ValueType {
+    match &self {
+      ValueType::Func(_, return_type) => *return_type.clone(),
+      _ => unreachable!(),
+    }
+  }
+}
 
 impl std::cmp::Eq for ValueType {}
 

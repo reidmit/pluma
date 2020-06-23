@@ -23,10 +23,14 @@ pub enum AnalysisErrorKind {
     method_name_parts: Vec<String>,
     receiver_type: ValueType,
   },
-  UndefinedOperatorForType {
+  UndefinedBinaryOperatorForType {
     op_name: String,
     receiver_type: ValueType,
     param_type: ValueType,
+  },
+  UndefinedUnaryOperatorForType {
+    op_name: String,
+    receiver_type: ValueType,
   },
   UnusedVariable(String),
   NameAlreadyInScope(String),
@@ -61,6 +65,10 @@ pub enum AnalysisErrorKind {
     actual: ValueType,
   },
   TypeMismatchInStringInterpolation(ValueType),
+  TypeMismatchInMatchCase{
+    expected: ValueType,
+    actual: ValueType,
+  },
 }
 
 impl fmt::Display for AnalysisError {
@@ -103,14 +111,23 @@ impl fmt::Display for AnalysisError {
         receiver_type
       ),
 
-      UndefinedOperatorForType {
+      UndefinedBinaryOperatorForType {
         op_name,
         receiver_type,
         param_type,
       } => write!(
         f,
-        "Operator '{}' is not defined for types {} and {}.",
+        "Binary operator '{}' is not defined for types {} and {}.",
         op_name, receiver_type, param_type,
+      ),
+
+      UndefinedUnaryOperatorForType {
+        op_name,
+        receiver_type,
+      } => write!(
+        f,
+        "Unary operator '{}' is not defined for type {}.",
+        op_name, receiver_type,
       ),
 
       UnusedVariable(name) => write!(f, "Name '{}' is never used.", name),
@@ -161,7 +178,7 @@ impl fmt::Display for AnalysisError {
 
       TypeMismatchInStringInterpolation(actual) => write!(
         f,
-        "Expected type String in interpolation, but value type {}.",
+        "Expected type String in interpolation, but found type {}.",
         actual
       ),
 
@@ -169,6 +186,12 @@ impl fmt::Display for AnalysisError {
         f,
         "Type assertion failed. Type {} is not convertible to type {}.",
         actual, expected,
+      ),
+
+      TypeMismatchInMatchCase { expected, actual } => write!(
+        f,
+        "Expected type {} for this case, but found type {}.",
+        expected,actual,
       ),
 
       ReassignmentTypeMismatch { expected, actual } => write!(

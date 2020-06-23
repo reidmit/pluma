@@ -97,6 +97,13 @@ impl Traverse for ExprNode {
 
       ExprKind::Identifier(ident) => ident.traverse(visitor),
 
+      ExprKind::Match(match_node) => match_node.traverse(visitor),
+
+      ExprKind::UnaryOperation { op, right } => {
+        op.traverse(visitor);
+        right.traverse(visitor);
+      },
+
       ExprKind::Interpolation(parts) => {
         for part in parts {
           part.traverse(visitor);
@@ -139,7 +146,8 @@ impl Traverse for ExprNode {
         expr.traverse(visitor);
         asserted_type.traverse(visitor);
       }
-      _other_kind => todo!("traverse other kind"),
+
+      _other_kind => todo!("traverse other kind")
     }
 
     visitor.leave_expr(self);
@@ -190,11 +198,28 @@ impl Traverse for LiteralNode {
 }
 
 impl Traverse for MatchNode {
-  // todo
+  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+    visitor.enter_match(self);
+
+    self.subject.traverse(visitor);
+
+    for case in &mut self.cases {
+      case.traverse(visitor);
+    }
+
+    visitor.leave_match(self);
+  }
 }
 
 impl Traverse for MatchCaseNode {
-  // todo
+  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+    visitor.enter_match_case(self);
+
+    self.pattern.traverse(visitor);
+    self.body.traverse(visitor);
+
+    visitor.leave_match_case(self);
+  }
 }
 
 impl Traverse for ModuleNode {
