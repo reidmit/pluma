@@ -1,0 +1,52 @@
+---
+source: pluma_analyzer/tests/analyze_tests.rs
+expression: "intrinsic_type Int\nintrinsic_def Int + Int -> Int\n\nlet result = 3 + 4"
+---
+
+=== Source ===
+intrinsic_type Int
+intrinsic_def Int + Int -> Int
+
+let result = 3 + 4
+
+=== Top-level scope ===
+Scope {
+    levels: [
+        ScopeLevel {
+            bindings: {
+                "result": Binding {
+                    typ: Int,
+                    ref_count: 0,
+                    pos: (
+                        55,
+                        61,
+                    ),
+                    kind: Let,
+                },
+            },
+        },
+    ],
+    type_bindings: {
+        Int: TypeBinding {
+            ref_count: 2,
+            pos: (
+                15,
+                18,
+            ),
+            kind: IntrinsicType,
+            methods: {
+                [
+                    "$",
+                    "+",
+                    "$",
+                ]: Func(
+                    [
+                        Int,
+                    ],
+                    Int,
+                ),
+            },
+        },
+    },
+}
+

@@ -1,10 +1,11 @@
 ---
 source: pluma_analyzer/tests/analyze_tests.rs
-expression: "let fine = 47\nfine"
+expression: "let fine = 47\n\nfine"
 ---
 
 === Source ===
 let fine = 47
+
 fine
 
 === Top-level scope ===
