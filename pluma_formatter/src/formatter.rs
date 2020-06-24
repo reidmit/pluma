@@ -34,9 +34,7 @@ impl<'a> Formatter<'a> {
 
     module.parse()?;
 
-    println!("AST: {:#?}", module.ast);
     let mut output = String::new();
-
     let mut tree_formatter = TreeFormatter::new(&mut output);
     module.traverse(&mut tree_formatter);
 
