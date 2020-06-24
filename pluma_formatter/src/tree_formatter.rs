@@ -142,7 +142,7 @@ where
 
       ExprKind::Literal(lit) => self.format_literal(lit),
 
-      o => todo!("format other expr kinds: {:#?}", o),
+      _o => todo!("format other expr kinds"),
     }
   }
 
