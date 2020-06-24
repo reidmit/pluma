@@ -1,0 +1,29 @@
+---
+source: pluma_analyzer/tests/analyze_tests.rs
+expression: "let fine = 47\nfine"
+---
+
+=== Source ===
+let fine = 47
+fine
+
+=== Top-level scope ===
+Scope {
+    levels: [
+        ScopeLevel {
+            bindings: {
+                "fine": Binding {
+                    typ: Int,
+                    ref_count: 1,
+                    pos: (
+                        4,
+                        8,
+                    ),
+                    kind: Let,
+                },
+            },
+        },
+    ],
+    type_bindings: {},
+}
+

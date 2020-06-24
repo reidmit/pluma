@@ -1,0 +1,24 @@
+---
+source: pluma_analyzer/tests/analyze_tests.rs
+expression: wat
+---
+
+=== Source ===
+wat
+
+=== Diagnostics ===
+[
+    Diagnostic {
+        kind: Error,
+        message: "Name \'wat\' is not defined.",
+        pos: Some(
+            (
+                0,
+                3,
+            ),
+        ),
+        module_name: None,
+        module_path: None,
+    },
+]
+
