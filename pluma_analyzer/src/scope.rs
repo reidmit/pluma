@@ -2,6 +2,7 @@ use crate::analysis_error::{AnalysisError, AnalysisErrorKind};
 use pluma_ast::*;
 use pluma_diagnostics::*;
 use std::collections::HashMap;
+use std::fmt;
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub struct Binding {
@@ -39,15 +40,54 @@ pub enum TypeBindingKind {
   IntrinsicType,
 }
 
-#[cfg_attr(debug_assertions, derive(Debug))]
 struct ScopeLevel {
   pub bindings: HashMap<String, Binding>,
 }
 
-#[cfg_attr(debug_assertions, derive(Debug))]
+#[cfg(debug_assertions)]
+impl fmt::Debug for ScopeLevel {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    // Some trickiness here just to get the map to print in a stable
+    // order (sorted by key). This allows for snapshot testing.
+    let mut sorted_bindings = Vec::new();
+    for (key, val) in self.bindings.iter() {
+      sorted_bindings.push((key, val));
+    }
+
+    sorted_bindings.sort_by(|a, b| a.0.cmp(b.0));
+
+    f.debug_struct("ScopeLevel")
+      .field("bindings", &sorted_bindings)
+      .finish()?;
+
+    Ok(())
+  }
+}
+
 pub struct Scope {
   levels: Vec<ScopeLevel>,
   type_bindings: HashMap<ValueType, TypeBinding>,
+}
+
+#[cfg(debug_assertions)]
+impl fmt::Debug for Scope {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    // Some trickiness here just to get the map to print in a stable
+    // order (sorted by key). This allows for snapshot testing.
+    let mut sorted_bindings = Vec::new();
+    for (key, val) in self.type_bindings.iter() {
+      sorted_bindings.push((key, val));
+    }
+
+    sorted_bindings.sort_by(|a, b| format!("{:#?}", a.0).cmp(&format!("{:#?}", b.0)));
+
+    f.debug_struct("Scope")
+      .field("levels", &self.levels)
+      .field("type_bindings", &sorted_bindings)
+      .finish()?;
+
+    Ok(())
+  }
 }
 
 impl Scope {

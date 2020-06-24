@@ -12,19 +12,22 @@ fine
 Scope {
     levels: [
         ScopeLevel {
-            bindings: {
-                "fine": Binding {
-                    typ: Int,
-                    ref_count: 1,
-                    pos: (
-                        4,
-                        8,
-                    ),
-                    kind: Let,
-                },
-            },
+            bindings: [
+                (
+                    "fine",
+                    Binding {
+                        typ: Int,
+                        ref_count: 1,
+                        pos: (
+                            4,
+                            8,
+                        ),
+                        kind: Let,
+                    },
+                ),
+            ],
         },
     ],
-    type_bindings: {},
+    type_bindings: [],
 }
 

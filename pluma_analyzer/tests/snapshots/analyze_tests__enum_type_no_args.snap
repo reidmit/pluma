@@ -1,0 +1,107 @@
+---
+source: pluma_analyzer/tests/analyze_tests.rs
+expression: "enum Color | Red | Green | Blue\n\nlet r = Red\nlet g = Green"
+---
+
+=== Source ===
+enum Color | Red | Green | Blue
+
+let r = Red
+let g = Green
+
+=== Top-level scope ===
+Scope {
+    levels: [
+        ScopeLevel {
+            bindings: [
+                (
+                    "Blue",
+                    Binding {
+                        typ: Named(
+                            "Color",
+                        ),
+                        ref_count: 0,
+                        pos: (
+                            27,
+                            31,
+                        ),
+                        kind: EnumVariant,
+                    },
+                ),
+                (
+                    "Green",
+                    Binding {
+                        typ: Named(
+                            "Color",
+                        ),
+                        ref_count: 1,
+                        pos: (
+                            19,
+                            24,
+                        ),
+                        kind: EnumVariant,
+                    },
+                ),
+                (
+                    "Red",
+                    Binding {
+                        typ: Named(
+                            "Color",
+                        ),
+                        ref_count: 1,
+                        pos: (
+                            13,
+                            16,
+                        ),
+                        kind: EnumVariant,
+                    },
+                ),
+                (
+                    "g",
+                    Binding {
+                        typ: Named(
+                            "Color",
+                        ),
+                        ref_count: 0,
+                        pos: (
+                            49,
+                            50,
+                        ),
+                        kind: Let,
+                    },
+                ),
+                (
+                    "r",
+                    Binding {
+                        typ: Named(
+                            "Color",
+                        ),
+                        ref_count: 0,
+                        pos: (
+                            37,
+                            38,
+                        ),
+                        kind: Let,
+                    },
+                ),
+            ],
+        },
+    ],
+    type_bindings: [
+        (
+            Named(
+                "Color",
+            ),
+            TypeBinding {
+                ref_count: 0,
+                pos: (
+                    5,
+                    10,
+                ),
+                kind: Enum,
+                methods: {},
+            },
+        ),
+    ],
+}
+

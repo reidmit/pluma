@@ -25,4 +25,11 @@ test_analyze! {
     |
     |let result = 3 + "yikes"
   "#,
+
+  enum_type_no_args (true): r#"
+    |enum Color | Red | Green | Blue
+    |
+    |let r = Red
+    |let g = Green
+  "#,
 }
