@@ -317,6 +317,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pluma_analyzer"
+version = "0.1.0"
+dependencies = [
+ "pluma_ast 0.1.0",
+ "pluma_constants 0.1.0",
+ "pluma_diagnostics 0.1.0",
+ "pluma_visitor 0.1.0",
+]
+
+[[package]]
 name = "pluma_ast"
 version = "0.1.0"
 
@@ -324,6 +334,7 @@ version = "0.1.0"
 name = "pluma_compiler"
 version = "0.1.0"
 dependencies = [
+ "pluma_analyzer 0.1.0",
  "pluma_ast 0.1.0",
  "pluma_constants 0.1.0",
  "pluma_diagnostics 0.1.0",

@@ -1,10 +1,8 @@
-use crate::analyzer::Analyzer;
 use crate::compiler_options::{CompilerMode, CompilerOptions};
 use crate::dependency_graph::{DependencyGraph, TopologicalSort};
 use crate::import_error::{ImportError, ImportErrorKind};
-use crate::scope::Scope;
-use crate::type_collector::TypeCollector;
 use crate::usage_error::{UsageError, UsageErrorKind};
+use pluma_analyzer::*;
 use pluma_constants::*;
 use pluma_diagnostics::*;
 use pluma_emitter::*;

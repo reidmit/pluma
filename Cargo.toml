@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "pluma_analyzer",
   "pluma_ast",
   "pluma_cli",
   "pluma_compiler",
