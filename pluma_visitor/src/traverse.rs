@@ -102,7 +102,7 @@ impl Traverse for ExprNode {
       ExprKind::UnaryOperation { op, right } => {
         op.traverse(visitor);
         right.traverse(visitor);
-      },
+      }
 
       ExprKind::Interpolation(parts) => {
         for part in parts {
@@ -110,9 +110,16 @@ impl Traverse for ExprNode {
         }
       }
 
-      ExprKind::Tuple(entries) => {
+      ExprKind::UnlabeledTuple(entries) => {
         for entry in entries {
           entry.traverse(visitor);
+        }
+      }
+
+      ExprKind::LabeledTuple(entries) => {
+        for (label, value) in entries {
+          label.traverse(visitor);
+          value.traverse(visitor);
         }
       }
 
@@ -147,7 +154,7 @@ impl Traverse for ExprNode {
         asserted_type.traverse(visitor);
       }
 
-      _other_kind => todo!("traverse other kind")
+      _other_kind => todo!("traverse other kind"),
     }
 
     visitor.leave_expr(self);

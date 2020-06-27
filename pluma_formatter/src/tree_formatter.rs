@@ -121,7 +121,7 @@ where
 
       ExprKind::Identifier(ident) => self.format_identifier(ident),
 
-      ExprKind::Tuple(entries) => {
+      ExprKind::UnlabeledTuple(entries) => {
         self.out_str("(");
 
         let mut i = 0;

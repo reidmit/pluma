@@ -1374,7 +1374,7 @@ impl<'a> Parser<'a> {
 
     Some(ExprNode {
       pos: (paren_start, paren_end),
-      kind: ExprKind::Tuple(other_exprs),
+      kind: ExprKind::UnlabeledTuple(other_exprs),
       typ: ValueType::Unknown,
     })
   }

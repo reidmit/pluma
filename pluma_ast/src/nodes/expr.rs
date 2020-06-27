@@ -43,7 +43,8 @@ pub enum ExprKind {
   Literal(LiteralNode),
   Match(MatchNode),
   RegExpr(RegExprNode),
-  Tuple(Vec<ExprNode>),
+  LabeledTuple(Vec<(IdentifierNode, ExprNode)>),
+  UnlabeledTuple(Vec<ExprNode>),
   TypeAssertion {
     expr: Box<ExprNode>,
     asserted_type: TypeExprNode,

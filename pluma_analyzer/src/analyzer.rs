@@ -437,7 +437,7 @@ impl<'a> Visitor for Analyzer<'a> {
         }
       }
 
-      ExprKind::Tuple(elements) => {
+      ExprKind::UnlabeledTuple(elements) => {
         let mut element_types = Vec::new();
 
         for element in elements {
