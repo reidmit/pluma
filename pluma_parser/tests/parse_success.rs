@@ -165,6 +165,21 @@ test_parse_success! {
     |        )
   "#,
 
+  labeled_tuple_one_element: r#"
+    |(aaa: "wow")
+  "#,
+
+  labeled_tuple_two_elements: r#"
+    |(aaa: 1, bbb: "wow")
+  "#,
+
+  labeled_tuple_across_lines: r#"
+    |(wow: 1,
+    | nice  :   2,
+    |cool:
+    |3)
+  "#,
+
   list_empty: r#"
     |[]
   "#,

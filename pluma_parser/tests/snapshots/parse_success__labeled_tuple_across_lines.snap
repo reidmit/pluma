@@ -1,0 +1,124 @@
+---
+source: pluma_parser/tests/parse_success.rs
+expression: "(wow: 1,\n nice  :   2,\ncool:\n3)"
+---
+
+=== Source ===
+(wow: 1,
+ nice  :   2,
+cool:
+3)
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        31,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                31,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        0,
+                        31,
+                    ),
+                    kind: LabeledTuple(
+                        [
+                            (
+                                IdentifierNode {
+                                    pos: (
+                                        1,
+                                        4,
+                                    ),
+                                    name: "wow",
+                                },
+                                ExprNode {
+                                    pos: (
+                                        6,
+                                        7,
+                                    ),
+                                    kind: Literal(
+                                        LiteralNode {
+                                            pos: (
+                                                6,
+                                                7,
+                                            ),
+                                            kind: IntDecimal(
+                                                1,
+                                            ),
+                                        },
+                                    ),
+                                    typ: Unknown,
+                                },
+                            ),
+                            (
+                                IdentifierNode {
+                                    pos: (
+                                        10,
+                                        14,
+                                    ),
+                                    name: "nice",
+                                },
+                                ExprNode {
+                                    pos: (
+                                        20,
+                                        21,
+                                    ),
+                                    kind: Literal(
+                                        LiteralNode {
+                                            pos: (
+                                                20,
+                                                21,
+                                            ),
+                                            kind: IntDecimal(
+                                                2,
+                                            ),
+                                        },
+                                    ),
+                                    typ: Unknown,
+                                },
+                            ),
+                            (
+                                IdentifierNode {
+                                    pos: (
+                                        23,
+                                        27,
+                                    ),
+                                    name: "cool",
+                                },
+                                ExprNode {
+                                    pos: (
+                                        29,
+                                        30,
+                                    ),
+                                    kind: Literal(
+                                        LiteralNode {
+                                            pos: (
+                                                29,
+                                                30,
+                                            ),
+                                            kind: IntDecimal(
+                                                3,
+                                            ),
+                                        },
+                                    ),
+                                    typ: Unknown,
+                                },
+                            ),
+                        ],
+                    ),
+                    typ: Unknown,
+                },
+            ),
+        },
+    ],
+}
+

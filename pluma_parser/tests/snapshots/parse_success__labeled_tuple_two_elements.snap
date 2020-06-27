@@ -1,0 +1,94 @@
+---
+source: pluma_parser/tests/parse_success.rs
+expression: "(aaa: 1, bbb: \"wow\")"
+---
+
+=== Source ===
+(aaa: 1, bbb: "wow")
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        20,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                20,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        0,
+                        20,
+                    ),
+                    kind: LabeledTuple(
+                        [
+                            (
+                                IdentifierNode {
+                                    pos: (
+                                        1,
+                                        4,
+                                    ),
+                                    name: "aaa",
+                                },
+                                ExprNode {
+                                    pos: (
+                                        6,
+                                        7,
+                                    ),
+                                    kind: Literal(
+                                        LiteralNode {
+                                            pos: (
+                                                6,
+                                                7,
+                                            ),
+                                            kind: IntDecimal(
+                                                1,
+                                            ),
+                                        },
+                                    ),
+                                    typ: Unknown,
+                                },
+                            ),
+                            (
+                                IdentifierNode {
+                                    pos: (
+                                        9,
+                                        12,
+                                    ),
+                                    name: "bbb",
+                                },
+                                ExprNode {
+                                    pos: (
+                                        15,
+                                        18,
+                                    ),
+                                    kind: Literal(
+                                        LiteralNode {
+                                            pos: (
+                                                15,
+                                                18,
+                                            ),
+                                            kind: Str(
+                                                "wow",
+                                            ),
+                                        },
+                                    ),
+                                    typ: Unknown,
+                                },
+                            ),
+                        ],
+                    ),
+                    typ: Unknown,
+                },
+            ),
+        },
+    ],
+}
+

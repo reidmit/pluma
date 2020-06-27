@@ -1311,6 +1311,12 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_parenthetical(&mut self) -> Option<ExprNode> {
+    // "parentheticals" are a little tricky, because they could be a number of things:
+    //  - "()" is an empty tuple
+    //  - "(expr)" is an expression in parentheses (a grouping),
+    //  - "(expr, expr, ...)" is an unlabeled tuple
+    //  - "(ident: expr, ...)" is a labeled tuple
+
     let paren_start = expect_token_and_do!(self, Token::LeftParen, {
       let (start, _) = self.current_token_position();
       self.advance();
@@ -1319,12 +1325,65 @@ impl<'a> Parser<'a> {
 
     let mut first_expr = None;
     let mut other_exprs = Vec::new();
+    let mut labeled = false;
+    let mut labeled_entries = Vec::new();
 
     self.skip_line_breaks();
 
     while let Some(node) = self.parse_expression() {
-      if first_expr.is_none() {
-        first_expr = Some(node)
+      if labeled {
+        match node.kind {
+          ExprKind::Identifier(label) => {
+            expect_token_and_do!(self, Token::Colon, {
+              self.advance();
+            });
+
+            self.skip_line_breaks();
+
+            if let Some(value) = self.parse_expression() {
+              labeled_entries.push((label, value));
+            } else {
+              self.error::<ExprNode>(ParseError {
+                pos: node.pos,
+                kind: ParseErrorKind::MissingExpressionAfterLabelInTuple,
+              });
+            }
+          }
+          _ => {
+            self.error::<ExprNode>(ParseError {
+              pos: node.pos,
+              kind: ParseErrorKind::MissingLabelInTuple,
+            });
+          }
+        }
+      } else if first_expr.is_none() {
+        if current_token_is!(self, Token::Colon) {
+          self.advance();
+          labeled = true;
+
+          match node.kind {
+            ExprKind::Identifier(label) => {
+              self.skip_line_breaks();
+
+              if let Some(value) = self.parse_expression() {
+                labeled_entries.push((label, value));
+              } else {
+                self.error::<ExprNode>(ParseError {
+                  pos: node.pos,
+                  kind: ParseErrorKind::MissingExpressionAfterLabelInTuple,
+                });
+              }
+            }
+            _ => {
+              self.error::<ExprNode>(ParseError {
+                pos: node.pos,
+                kind: ParseErrorKind::MissingLabelInTuple,
+              });
+            }
+          }
+        } else {
+          first_expr = Some(node)
+        }
       } else {
         other_exprs.push(node);
       }
@@ -1354,7 +1413,17 @@ impl<'a> Parser<'a> {
 
     self.advance();
 
+    if !labeled_entries.is_empty() {
+      // If we collected labeled entries, this is a labeled tuple
+      return Some(ExprNode {
+        pos: (paren_start, paren_end),
+        kind: ExprKind::LabeledTuple(labeled_entries),
+        typ: ValueType::Unknown,
+      });
+    }
+
     if first_expr.is_none() {
+      // If no expressions were found between the ()s, it's an empty tuple
       return Some(ExprNode {
         pos: (paren_start, paren_end),
         kind: ExprKind::EmptyTuple,
