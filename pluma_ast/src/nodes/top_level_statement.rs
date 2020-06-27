@@ -15,5 +15,5 @@ pub enum TopLevelStatementKind {
   Def(DefNode),
   IntrinsicDef(IntrinsicDefNode),
   Expr(ExprNode),
-  PrivateMarker,
+  VisibilityMarker(ExportVisibility),
 }

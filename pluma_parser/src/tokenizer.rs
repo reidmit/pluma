@@ -286,6 +286,7 @@ impl<'a> Iterator for Tokenizer<'a> {
             b"intrinsic_def" if self.brace_depth == 0 => KeywordIntrinsicDef,
             b"intrinsic_type" if self.brace_depth == 0 => KeywordIntrinsicType,
             b"private" if self.brace_depth == 0 => KeywordPrivate,
+            b"internal" if self.brace_depth == 0 => KeywordInternal,
             b"use" if self.brace_depth == 0 => KeywordUse,
             b"struct" if self.brace_depth == 0 => KeywordStruct,
             b"trait" if self.brace_depth == 0 => KeywordTrait,

@@ -30,6 +30,7 @@ ModuleNode {
                         0,
                         48,
                     ),
+                    visibility: Public,
                     kind: Struct {
                         fields: [
                             (

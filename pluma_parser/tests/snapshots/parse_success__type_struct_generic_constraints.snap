@@ -31,6 +31,7 @@ ModuleNode {
                         0,
                         98,
                     ),
+                    visibility: Public,
                     kind: Struct {
                         fields: [
                             (

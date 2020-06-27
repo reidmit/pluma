@@ -29,6 +29,7 @@ ModuleNode {
                         0,
                         43,
                     ),
+                    visibility: Public,
                     kind: Method {
                         receiver: TypeIdentifierNode {
                             pos: (

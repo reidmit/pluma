@@ -4,6 +4,7 @@ use crate::common::*;
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub struct TypeDefNode {
   pub pos: Position,
+  pub visibility: ExportVisibility,
   pub kind: TypeDefKind,
   pub name: TypeIdentifierNode,
   pub generic_type_constraints: GenericTypeConstraints,
@@ -12,6 +13,7 @@ pub struct TypeDefNode {
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub struct IntrinsicTypeDefNode {
   pub pos: Position,
+  pub visibility: ExportVisibility,
   pub name: IdentifierNode,
   pub generic_type_constraints: GenericTypeConstraints,
 }

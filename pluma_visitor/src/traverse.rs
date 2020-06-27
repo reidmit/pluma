@@ -290,7 +290,7 @@ impl Traverse for TopLevelStatementNode {
       TopLevelStatementKind::Expr(node) => node.traverse(visitor),
       TopLevelStatementKind::IntrinsicDef(node) => node.traverse(visitor),
       TopLevelStatementKind::IntrinsicTypeDef(node) => node.traverse(visitor),
-      TopLevelStatementKind::PrivateMarker => {}
+      TopLevelStatementKind::VisibilityMarker(..) => {}
     };
 
     visitor.leave_top_level_statement(self);

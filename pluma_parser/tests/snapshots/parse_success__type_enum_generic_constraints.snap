@@ -29,6 +29,7 @@ ModuleNode {
                         0,
                         52,
                     ),
+                    visibility: Public,
                     kind: Enum {
                         variants: [
                             EnumVariantNode {

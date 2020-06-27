@@ -31,6 +31,7 @@ ModuleNode {
                         0,
                         17,
                     ),
+                    visibility: Public,
                     kind: Function {
                         signature: [
                             (
@@ -64,7 +65,9 @@ ModuleNode {
                 19,
                 26,
             ),
-            kind: PrivateMarker,
+            kind: VisibilityMarker(
+                Private,
+            ),
         },
         TopLevelStatementNode {
             pos: (
@@ -77,6 +80,7 @@ ModuleNode {
                         28,
                         46,
                     ),
+                    visibility: Private,
                     kind: Function {
                         signature: [
                             (

@@ -57,6 +57,7 @@ pub struct Parser<'a> {
   def_body_stack: i8,
   current_token: Option<Token>,
   prev_token: Option<Token>,
+  current_visibility: ExportVisibility,
 }
 
 impl<'a> Parser<'a> {
@@ -69,6 +70,7 @@ impl<'a> Parser<'a> {
       def_body_stack: 0,
       current_token: None,
       prev_token: None,
+      current_visibility: ExportVisibility::Public,
     };
   }
 
@@ -186,6 +188,7 @@ impl<'a> Parser<'a> {
       kind: TypeDefKind::Alias { of: type_expr },
       name,
       generic_type_constraints,
+      visibility: self.current_visibility,
     })
   }
 
@@ -561,6 +564,7 @@ impl<'a> Parser<'a> {
 
     Some(IntrinsicDefNode {
       pos: (start, end),
+      visibility: self.current_visibility,
       kind,
       return_type,
       generic_type_constraints,
@@ -618,6 +622,7 @@ impl<'a> Parser<'a> {
 
     Some(DefNode {
       pos: (start, end),
+      visibility: self.current_visibility,
       kind,
       return_type,
       generic_type_constraints,
@@ -860,6 +865,7 @@ impl<'a> Parser<'a> {
 
     Some(TypeDefNode {
       pos: (start, variants.last().unwrap().pos.1),
+      visibility: self.current_visibility,
       kind: TypeDefKind::Enum { variants },
       name,
       generic_type_constraints,
@@ -921,6 +927,21 @@ impl<'a> Parser<'a> {
     })
   }
 
+  fn parse_internal(&mut self) -> Option<TopLevelStatementNode> {
+    let pos = expect_token_and_do!(self, Token::KeywordInternal, {
+      let pos = self.current_token_position();
+      self.advance();
+      pos
+    });
+
+    self.current_visibility = ExportVisibility::Internal;
+
+    Some(TopLevelStatementNode {
+      pos: pos,
+      kind: TopLevelStatementKind::VisibilityMarker(ExportVisibility::Internal),
+    })
+  }
+
   fn parse_intrinsic_type(&mut self) -> Option<IntrinsicTypeDefNode> {
     let start = expect_token_and_do!(self, Token::KeywordIntrinsicType, {
       let pos = self.current_token_position();
@@ -952,6 +973,7 @@ impl<'a> Parser<'a> {
 
     Some(IntrinsicTypeDefNode {
       pos: (start, end),
+      visibility: self.current_visibility,
       name,
       generic_type_constraints: Vec::new(),
     })
@@ -1455,9 +1477,11 @@ impl<'a> Parser<'a> {
       pos
     });
 
+    self.current_visibility = ExportVisibility::Private;
+
     Some(TopLevelStatementNode {
       pos: pos,
-      kind: TopLevelStatementKind::PrivateMarker,
+      kind: TopLevelStatementKind::VisibilityMarker(ExportVisibility::Private),
     })
   }
 
@@ -1959,6 +1983,7 @@ impl<'a> Parser<'a> {
 
     Some(TypeDefNode {
       pos: (start, end),
+      visibility: self.current_visibility,
       kind: TypeDefKind::Struct { fields },
       name,
       generic_type_constraints,
@@ -2091,6 +2116,7 @@ impl<'a> Parser<'a> {
           })
       }
       Some(Token::KeywordPrivate(..)) => self.parse_private(),
+      Some(Token::KeywordInternal(..)) => self.parse_internal(),
       _ => self
         .parse_expression()
         .map(|expr_node| TopLevelStatementNode {
@@ -2207,6 +2233,7 @@ impl<'a> Parser<'a> {
 
     Some(TypeDefNode {
       pos: (start, end),
+      visibility: self.current_visibility,
       kind: TypeDefKind::Trait { fields, methods },
       name,
       generic_type_constraints,

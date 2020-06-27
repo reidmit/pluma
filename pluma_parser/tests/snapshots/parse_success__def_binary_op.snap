@@ -27,6 +27,7 @@ ModuleNode {
                         0,
                         17,
                     ),
+                    visibility: Public,
                     kind: BinaryOperator {
                         left: TypeIdentifierNode {
                             pos: (

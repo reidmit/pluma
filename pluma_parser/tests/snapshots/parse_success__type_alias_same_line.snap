@@ -27,6 +27,7 @@ ModuleNode {
                         0,
                         16,
                     ),
+                    visibility: Public,
                     kind: Alias {
                         of: TypeExprNode {
                             pos: (

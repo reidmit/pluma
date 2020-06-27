@@ -29,6 +29,7 @@ ModuleNode {
                         0,
                         44,
                     ),
+                    visibility: Public,
                     kind: Function {
                         signature: [
                             (

@@ -30,6 +30,7 @@ ModuleNode {
                         0,
                         80,
                     ),
+                    visibility: Public,
                     kind: Trait {
                         fields: [
                             (
