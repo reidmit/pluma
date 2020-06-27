@@ -1,0 +1,462 @@
+---
+source: pluma_parser/tests/parse_success.rs
+expression: "# these are public by default:\ndef pub1() {}\nintrinsic_def pub2()\nenum Pub3 | A | B\n\ninternal\n\ndef internal1() {}\nintrinsic_def internal2()\nenum Internal3 | AA | BB\n\nprivate\n\ndef priv1() {}\nintrinsic_def priv2()\nenum Priv3 | AAA | BBB"
+---
+
+=== Source ===
+# these are public by default:
+def pub1() {}
+intrinsic_def pub2()
+enum Pub3 | A | B
+
+internal
+
+def internal1() {}
+intrinsic_def internal2()
+enum Internal3 | AA | BB
+
+private
+
+def priv1() {}
+intrinsic_def priv2()
+enum Priv3 | AAA | BBB
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        31,
+        234,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                31,
+                44,
+            ),
+            kind: Def(
+                DefNode {
+                    pos: (
+                        31,
+                        44,
+                    ),
+                    visibility: Public,
+                    kind: Function {
+                        signature: [
+                            (
+                                IdentifierNode {
+                                    pos: (
+                                        35,
+                                        39,
+                                    ),
+                                    name: "pub1",
+                                },
+                                TypeExprNode {
+                                    pos: (
+                                        39,
+                                        41,
+                                    ),
+                                    kind: EmptyTuple,
+                                    typ: Unknown,
+                                },
+                            ),
+                        ],
+                    },
+                    return_type: None,
+                    generic_type_constraints: [],
+                    params: [],
+                    body: [],
+                },
+            ),
+        },
+        TopLevelStatementNode {
+            pos: (
+                45,
+                66,
+            ),
+            kind: IntrinsicDef(
+                IntrinsicDefNode {
+                    pos: (
+                        45,
+                        66,
+                    ),
+                    visibility: Public,
+                    kind: Function {
+                        signature: [
+                            (
+                                IdentifierNode {
+                                    pos: (
+                                        59,
+                                        63,
+                                    ),
+                                    name: "pub2",
+                                },
+                                TypeExprNode {
+                                    pos: (
+                                        63,
+                                        65,
+                                    ),
+                                    kind: EmptyTuple,
+                                    typ: Unknown,
+                                },
+                            ),
+                        ],
+                    },
+                    return_type: None,
+                    generic_type_constraints: [],
+                },
+            ),
+        },
+        TopLevelStatementNode {
+            pos: (
+                66,
+                83,
+            ),
+            kind: TypeDef(
+                TypeDefNode {
+                    pos: (
+                        66,
+                        83,
+                    ),
+                    visibility: Public,
+                    kind: Enum {
+                        variants: [
+                            EnumVariantNode {
+                                pos: (
+                                    78,
+                                    79,
+                                ),
+                                kind: Identifier(
+                                    IdentifierNode {
+                                        pos: (
+                                            78,
+                                            79,
+                                        ),
+                                        name: "A",
+                                    },
+                                ),
+                            },
+                            EnumVariantNode {
+                                pos: (
+                                    82,
+                                    83,
+                                ),
+                                kind: Identifier(
+                                    IdentifierNode {
+                                        pos: (
+                                            82,
+                                            83,
+                                        ),
+                                        name: "B",
+                                    },
+                                ),
+                            },
+                        ],
+                    },
+                    name: TypeIdentifierNode {
+                        pos: (
+                            71,
+                            75,
+                        ),
+                        name: "Pub3",
+                        generics: [],
+                    },
+                    generic_type_constraints: [],
+                },
+            ),
+        },
+        TopLevelStatementNode {
+            pos: (
+                85,
+                93,
+            ),
+            kind: VisibilityMarker(
+                Internal,
+            ),
+        },
+        TopLevelStatementNode {
+            pos: (
+                95,
+                113,
+            ),
+            kind: Def(
+                DefNode {
+                    pos: (
+                        95,
+                        113,
+                    ),
+                    visibility: Internal,
+                    kind: Function {
+                        signature: [
+                            (
+                                IdentifierNode {
+                                    pos: (
+                                        99,
+                                        108,
+                                    ),
+                                    name: "internal1",
+                                },
+                                TypeExprNode {
+                                    pos: (
+                                        108,
+                                        110,
+                                    ),
+                                    kind: EmptyTuple,
+                                    typ: Unknown,
+                                },
+                            ),
+                        ],
+                    },
+                    return_type: None,
+                    generic_type_constraints: [],
+                    params: [],
+                    body: [],
+                },
+            ),
+        },
+        TopLevelStatementNode {
+            pos: (
+                114,
+                140,
+            ),
+            kind: IntrinsicDef(
+                IntrinsicDefNode {
+                    pos: (
+                        114,
+                        140,
+                    ),
+                    visibility: Internal,
+                    kind: Function {
+                        signature: [
+                            (
+                                IdentifierNode {
+                                    pos: (
+                                        128,
+                                        137,
+                                    ),
+                                    name: "internal2",
+                                },
+                                TypeExprNode {
+                                    pos: (
+                                        137,
+                                        139,
+                                    ),
+                                    kind: EmptyTuple,
+                                    typ: Unknown,
+                                },
+                            ),
+                        ],
+                    },
+                    return_type: None,
+                    generic_type_constraints: [],
+                },
+            ),
+        },
+        TopLevelStatementNode {
+            pos: (
+                140,
+                164,
+            ),
+            kind: TypeDef(
+                TypeDefNode {
+                    pos: (
+                        140,
+                        164,
+                    ),
+                    visibility: Internal,
+                    kind: Enum {
+                        variants: [
+                            EnumVariantNode {
+                                pos: (
+                                    157,
+                                    159,
+                                ),
+                                kind: Identifier(
+                                    IdentifierNode {
+                                        pos: (
+                                            157,
+                                            159,
+                                        ),
+                                        name: "AA",
+                                    },
+                                ),
+                            },
+                            EnumVariantNode {
+                                pos: (
+                                    162,
+                                    164,
+                                ),
+                                kind: Identifier(
+                                    IdentifierNode {
+                                        pos: (
+                                            162,
+                                            164,
+                                        ),
+                                        name: "BB",
+                                    },
+                                ),
+                            },
+                        ],
+                    },
+                    name: TypeIdentifierNode {
+                        pos: (
+                            145,
+                            154,
+                        ),
+                        name: "Internal3",
+                        generics: [],
+                    },
+                    generic_type_constraints: [],
+                },
+            ),
+        },
+        TopLevelStatementNode {
+            pos: (
+                166,
+                173,
+            ),
+            kind: VisibilityMarker(
+                Private,
+            ),
+        },
+        TopLevelStatementNode {
+            pos: (
+                175,
+                189,
+            ),
+            kind: Def(
+                DefNode {
+                    pos: (
+                        175,
+                        189,
+                    ),
+                    visibility: Private,
+                    kind: Function {
+                        signature: [
+                            (
+                                IdentifierNode {
+                                    pos: (
+                                        179,
+                                        184,
+                                    ),
+                                    name: "priv1",
+                                },
+                                TypeExprNode {
+                                    pos: (
+                                        184,
+                                        186,
+                                    ),
+                                    kind: EmptyTuple,
+                                    typ: Unknown,
+                                },
+                            ),
+                        ],
+                    },
+                    return_type: None,
+                    generic_type_constraints: [],
+                    params: [],
+                    body: [],
+                },
+            ),
+        },
+        TopLevelStatementNode {
+            pos: (
+                190,
+                212,
+            ),
+            kind: IntrinsicDef(
+                IntrinsicDefNode {
+                    pos: (
+                        190,
+                        212,
+                    ),
+                    visibility: Private,
+                    kind: Function {
+                        signature: [
+                            (
+                                IdentifierNode {
+                                    pos: (
+                                        204,
+                                        209,
+                                    ),
+                                    name: "priv2",
+                                },
+                                TypeExprNode {
+                                    pos: (
+                                        209,
+                                        211,
+                                    ),
+                                    kind: EmptyTuple,
+                                    typ: Unknown,
+                                },
+                            ),
+                        ],
+                    },
+                    return_type: None,
+                    generic_type_constraints: [],
+                },
+            ),
+        },
+        TopLevelStatementNode {
+            pos: (
+                212,
+                234,
+            ),
+            kind: TypeDef(
+                TypeDefNode {
+                    pos: (
+                        212,
+                        234,
+                    ),
+                    visibility: Private,
+                    kind: Enum {
+                        variants: [
+                            EnumVariantNode {
+                                pos: (
+                                    225,
+                                    228,
+                                ),
+                                kind: Identifier(
+                                    IdentifierNode {
+                                        pos: (
+                                            225,
+                                            228,
+                                        ),
+                                        name: "AAA",
+                                    },
+                                ),
+                            },
+                            EnumVariantNode {
+                                pos: (
+                                    231,
+                                    234,
+                                ),
+                                kind: Identifier(
+                                    IdentifierNode {
+                                        pos: (
+                                            231,
+                                            234,
+                                        ),
+                                        name: "BBB",
+                                    },
+                                ),
+                            },
+                        ],
+                    },
+                    name: TypeIdentifierNode {
+                        pos: (
+                            217,
+                            222,
+                        ),
+                        name: "Priv3",
+                        generics: [],
+                    },
+                    generic_type_constraints: [],
+                },
+            ),
+        },
+    ],
+}
+

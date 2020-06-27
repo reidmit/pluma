@@ -508,4 +508,23 @@ test_parse_success! {
     |  . setWow Wow -> ()
     |  . name :: String
   "#,
+
+  export_visibilities: r#"
+    |# these are public by default:
+    |def pub1() {}
+    |intrinsic_def pub2()
+    |enum Pub3 | A | B
+    |
+    |internal
+    |
+    |def internal1() {}
+    |intrinsic_def internal2()
+    |enum Internal3 | AA | BB
+    |
+    |private
+    |
+    |def priv1() {}
+    |intrinsic_def priv2()
+    |enum Priv3 | AAA | BBB
+  "#,
 }
