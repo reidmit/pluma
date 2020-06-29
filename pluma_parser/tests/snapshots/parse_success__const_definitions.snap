@@ -1,0 +1,100 @@
+---
+source: pluma_parser/tests/parse_success.rs
+expression: "const wow = \"wow!\"\nconst num = 47"
+---
+
+=== Source ===
+const wow = "wow!"
+const num = 47
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        33,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                17,
+            ),
+            kind: Const(
+                ConstNode {
+                    pos: (
+                        0,
+                        17,
+                    ),
+                    name: IdentifierNode {
+                        pos: (
+                            6,
+                            9,
+                        ),
+                        name: "wow",
+                    },
+                    value: ExprNode {
+                        pos: (
+                            13,
+                            17,
+                        ),
+                        kind: Literal(
+                            LiteralNode {
+                                pos: (
+                                    13,
+                                    17,
+                                ),
+                                kind: Str(
+                                    "wow!",
+                                ),
+                            },
+                        ),
+                        typ: Unknown,
+                    },
+                },
+            ),
+        },
+        TopLevelStatementNode {
+            pos: (
+                19,
+                33,
+            ),
+            kind: Const(
+                ConstNode {
+                    pos: (
+                        19,
+                        33,
+                    ),
+                    name: IdentifierNode {
+                        pos: (
+                            25,
+                            28,
+                        ),
+                        name: "num",
+                    },
+                    value: ExprNode {
+                        pos: (
+                            31,
+                            33,
+                        ),
+                        kind: Literal(
+                            LiteralNode {
+                                pos: (
+                                    31,
+                                    33,
+                                ),
+                                kind: IntDecimal(
+                                    47,
+                                ),
+                            },
+                        ),
+                        typ: Unknown,
+                    },
+                },
+            ),
+        },
+    ],
+}
+

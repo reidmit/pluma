@@ -488,6 +488,39 @@ impl<'a> Parser<'a> {
     };
   }
 
+  fn parse_const(&mut self) -> Option<ConstNode> {
+    let start = expect_token_and_do!(self, Token::KeywordConst, {
+      let (start, _) = self.current_token_position();
+      self.advance();
+      start
+    });
+
+    let name = match self.parse_identifier() {
+      Some(node) => node,
+      _ => todo!(),
+    };
+
+    expect_token_and_do!(self, Token::Equals, {
+      self.advance();
+    });
+
+    let (end, value) = match self.parse_expression() {
+      Some(node) => (node.pos.1, node),
+      _ => {
+        return self.error(ParseError {
+          pos: self.current_token_position(),
+          kind: ParseErrorKind::MissingRightHandSideOfAssignment,
+        })
+      }
+    };
+
+    Some(ConstNode {
+      pos: (start, end),
+      name,
+      value,
+    })
+  }
+
   fn parse_decimal_number(&mut self) -> Option<LiteralNode> {
     let (start, end) = expect_token_and_do!(self, Token::DecimalDigits, {
       let pos = self.current_token_position();
@@ -2059,6 +2092,10 @@ impl<'a> Parser<'a> {
             kind: TopLevelStatementKind::Let(let_node),
           })
       }
+      Some(Token::KeywordConst(..)) => self.parse_const().map(|const_node| TopLevelStatementNode {
+        pos: const_node.pos,
+        kind: TopLevelStatementKind::Const(const_node),
+      }),
       Some(Token::KeywordDef(..)) => {
         self
           .parse_definition()

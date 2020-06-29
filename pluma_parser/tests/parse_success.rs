@@ -509,6 +509,11 @@ test_parse_success! {
     |  . name :: String
   "#,
 
+  const_definitions: r#"
+    |const wow = "wow!"
+    |const num = 47
+  "#,
+
   export_visibilities: r#"
     |# these are public by default:
     |def pub1() {}

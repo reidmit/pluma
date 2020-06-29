@@ -10,6 +10,7 @@ pub struct TopLevelStatementNode {
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub enum TopLevelStatementKind {
   Let(LetNode),
+  Const(ConstNode),
   TypeDef(TypeDefNode),
   IntrinsicTypeDef(IntrinsicTypeDefNode),
   Def(DefNode),

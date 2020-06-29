@@ -19,6 +19,17 @@ impl Traverse for CallNode {
   }
 }
 
+impl Traverse for ConstNode {
+  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+    visitor.enter_const(self);
+
+    self.name.traverse(visitor);
+    self.value.traverse(visitor);
+
+    visitor.leave_const(self);
+  }
+}
+
 impl Traverse for DefNode {
   fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
     visitor.enter_def(self);
@@ -285,6 +296,7 @@ impl Traverse for TopLevelStatementNode {
 
     match &mut self.kind {
       TopLevelStatementKind::Let(node) => node.traverse(visitor),
+      TopLevelStatementKind::Const(node) => node.traverse(visitor),
       TopLevelStatementKind::TypeDef(node) => node.traverse(visitor),
       TopLevelStatementKind::Def(node) => node.traverse(visitor),
       TopLevelStatementKind::Expr(node) => node.traverse(visitor),

@@ -1,4 +1,5 @@
 mod call;
+mod r#const;
 mod def;
 mod enum_variant;
 mod expr;
@@ -29,6 +30,7 @@ pub use self::match_case::*;
 pub use self::module::*;
 pub use self::operator::*;
 pub use self::pattern::*;
+pub use self::r#const::*;
 pub use self::r#let::*;
 pub use self::r#match::*;
 pub use self::r#return::*;

@@ -280,6 +280,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 
             // These are only considered keywords if they appear at the top level:
             b"def" if self.brace_depth == 0 => KeywordDef,
+            b"const" if self.brace_depth == 0 => KeywordConst,
             b"enum" if self.brace_depth == 0 => KeywordEnum,
             b"alias" if self.brace_depth == 0 => KeywordAlias,
             b"as" if self.brace_depth == 0 => KeywordAs,
