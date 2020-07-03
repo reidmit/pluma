@@ -145,7 +145,7 @@ impl<'a> TypeCollector<'a> {
         self.check_result(result);
       }
 
-      DefKind::UnaryOperator { op,  right } => {
+      DefKind::UnaryOperator { op, right } => {
         let receiver_type = type_utils::type_ident_to_value_type(right);
 
         let return_type = match return_type {

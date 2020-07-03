@@ -57,10 +57,6 @@ pub trait Visitor {
 
   fn leave_pattern(&mut self, _node: &mut PatternNode) {}
 
-  fn enter_return(&mut self, _node: &mut ReturnNode) {}
-
-  fn leave_return(&mut self, _node: &mut ReturnNode) {}
-
   fn enter_statement(&mut self, _node: &mut StatementNode) {}
 
   fn leave_statement(&mut self, _node: &mut StatementNode) {}

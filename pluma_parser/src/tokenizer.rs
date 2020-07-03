@@ -276,7 +276,6 @@ impl<'a> Iterator for Tokenizer<'a> {
             b"let" => KeywordLet,
             b"match" => KeywordMatch,
             b"mut" => KeywordMut,
-            b"return" => KeywordReturn,
 
             // These are only considered keywords if they appear at the top level:
             b"def" if self.brace_depth == 0 => KeywordDef,

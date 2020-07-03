@@ -198,7 +198,6 @@ where
     match &mut node.kind {
       StatementKind::Expr(expr) => self.format_expr(expr),
       StatementKind::Let(let_node) => self.format_let(let_node),
-      _ => todo!("other stmt kinds"),
     }
   }
 }

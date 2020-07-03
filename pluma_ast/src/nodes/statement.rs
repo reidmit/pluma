@@ -11,5 +11,4 @@ pub struct StatementNode {
 pub enum StatementKind {
   Let(LetNode),
   Expr(ExprNode),
-  Return(ReturnNode),
 }

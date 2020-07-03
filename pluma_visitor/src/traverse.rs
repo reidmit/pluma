@@ -266,16 +266,6 @@ impl Traverse for PatternNode {
   }
 }
 
-impl Traverse for ReturnNode {
-  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
-    visitor.enter_return(self);
-
-    self.value.traverse(visitor);
-
-    visitor.leave_return(self);
-  }
-}
-
 impl Traverse for StatementNode {
   fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
     visitor.enter_statement(self);
@@ -283,7 +273,6 @@ impl Traverse for StatementNode {
     match &mut self.kind {
       StatementKind::Let(node) => node.traverse(visitor),
       StatementKind::Expr(node) => node.traverse(visitor),
-      StatementKind::Return(node) => node.traverse(visitor),
     };
 
     visitor.leave_statement(self);

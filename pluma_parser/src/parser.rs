@@ -54,7 +54,6 @@ pub struct Parser<'a> {
   tokenizer: Tokenizer<'a>,
   index: usize,
   errors: Vec<ParseError>,
-  def_body_stack: i8,
   current_token: Option<Token>,
   prev_token: Option<Token>,
   current_visibility: ExportVisibility,
@@ -67,7 +66,6 @@ impl<'a> Parser<'a> {
       tokenizer,
       index: 0,
       errors: Vec::new(),
-      def_body_stack: 0,
       current_token: None,
       prev_token: None,
       current_visibility: ExportVisibility::Public,
@@ -134,18 +132,6 @@ impl<'a> Parser<'a> {
         _ => (0, 0),
       },
     }
-  }
-
-  fn enter_def_body(&mut self) {
-    self.def_body_stack += 1;
-  }
-
-  fn exit_def_body(&mut self) {
-    self.def_body_stack -= 1;
-  }
-
-  fn in_def_body(&mut self) -> bool {
-    self.def_body_stack > 0
   }
 
   fn error<A>(&mut self, err: ParseError) -> Option<A> {
@@ -640,8 +626,6 @@ impl<'a> Parser<'a> {
 
     let generic_type_constraints = self.parse_generic_type_constraints().unwrap_or_default();
 
-    self.enter_def_body();
-
     let (params, body, end) = match self.parse_block() {
       Some(ExprNode {
         kind: ExprKind::Block { params, body },
@@ -650,8 +634,6 @@ impl<'a> Parser<'a> {
       }) => (params, body, pos.1),
       _ => return None,
     };
-
-    self.exit_def_body();
 
     Some(DefNode {
       pos: (start, end),
@@ -1518,37 +1500,6 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_return_statement(&mut self) -> Option<ReturnNode> {
-    let start = expect_token_and_do!(self, Token::KeywordReturn, {
-      let (start, end) = self.current_token_position();
-      self.advance();
-
-      if !self.in_def_body() {
-        self.error::<ReturnNode>(ParseError {
-          pos: (start, end),
-          kind: ParseErrorKind::ReturnOutsideDefinitionBody,
-        });
-      }
-
-      start
-    });
-
-    let expr = match self.parse_expression() {
-      Some(node) => node,
-      _ => {
-        return self.error(ParseError {
-          pos: self.current_token_position(),
-          kind: ParseErrorKind::MissingExpressionAfterReturn,
-        })
-      }
-    };
-
-    Some(ReturnNode {
-      pos: (start, expr.pos.1),
-      value: expr,
-    })
-  }
-
   fn parse_regular_expression(&mut self) -> Option<ExprNode> {
     let start = expect_token_and_do!(self, Token::ForwardSlash, {
       let (start, _) = self.current_token_position();
@@ -1861,14 +1812,6 @@ impl<'a> Parser<'a> {
         pos: let_node.pos,
         kind: StatementKind::Let(let_node),
       }),
-      Some(Token::KeywordReturn(..)) => {
-        self
-          .parse_return_statement()
-          .map(|expr_node| StatementNode {
-            pos: expr_node.pos,
-            kind: StatementKind::Return(expr_node),
-          })
-      }
       _ => self.parse_expression().map(|expr_node| StatementNode {
         pos: expr_node.pos,
         kind: StatementKind::Expr(expr_node),
