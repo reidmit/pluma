@@ -11,6 +11,7 @@ glob = "0.3.0"
 pluma_compiler = { path = "../pluma_compiler" }
 pluma_constants = { path = "../pluma_constants" }
 pluma_diagnostics = { path = "../pluma_diagnostics" }
+pluma_doc = { path = "../pluma_doc" }
 pluma_formatter = { path = "../pluma_formatter" }
 pluma_parser = { path = "../pluma_parser" }
 pluma_repl = { path = "../pluma_repl" }

@@ -46,6 +46,15 @@ fn run() -> Result<(), command_error::CommandError> {
       }
     }
 
+    "doc" => {
+      if is_help_requested {
+        DocCommand::print_help();
+      } else {
+        let mut parsed_args = arg_parser::parse_args_for_command(args, DocCommand::info())?;
+        DocCommand::execute(&mut parsed_args)?;
+      }
+    }
+
     "format" => {
       if is_help_requested {
         FormatCommand::print_help();

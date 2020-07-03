@@ -311,6 +311,7 @@ dependencies = [
  "pluma_compiler 0.1.0",
  "pluma_constants 0.1.0",
  "pluma_diagnostics 0.1.0",
+ "pluma_doc 0.1.0",
  "pluma_formatter 0.1.0",
  "pluma_parser 0.1.0",
  "pluma_repl 0.1.0",
@@ -352,6 +353,10 @@ version = "0.1.0"
 
 [[package]]
 name = "pluma_diagnostics"
+version = "0.1.0"
+
+[[package]]
+name = "pluma_doc"
 version = "0.1.0"
 
 [[package]]

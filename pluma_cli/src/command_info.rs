@@ -149,9 +149,10 @@ impl fmt::Display for CommandInfo {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     writeln!(
       f,
-      "{} {}\n",
+      "{} {} - version {}\n",
       colors::bold(BINARY_NAME),
-      colors::bold(self.name)
+      colors::bold(self.name),
+      VERSION,
     )?;
     writeln!(f, "{}\n", self.description)?;
 
