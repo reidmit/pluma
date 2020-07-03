@@ -2,7 +2,6 @@ use crate::analysis_error::{AnalysisError, AnalysisErrorKind};
 use pluma_ast::*;
 use pluma_diagnostics::*;
 use std::collections::HashMap;
-use std::fmt;
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub struct Binding {
@@ -45,8 +44,8 @@ struct ScopeLevel {
 }
 
 #[cfg(debug_assertions)]
-impl fmt::Debug for ScopeLevel {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl std::fmt::Debug for ScopeLevel {
+  fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
     // Some trickiness here just to get the map to print in a stable
     // order (sorted by key). This allows for snapshot testing.
     let mut sorted_bindings = Vec::new();
@@ -70,8 +69,8 @@ pub struct Scope {
 }
 
 #[cfg(debug_assertions)]
-impl fmt::Debug for Scope {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl std::fmt::Debug for Scope {
+  fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
     // Some trickiness here just to get the map to print in a stable
     // order (sorted by key). This allows for snapshot testing.
     let mut sorted_bindings = Vec::new();

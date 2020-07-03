@@ -18,7 +18,7 @@ impl DocBuilder {
       let mut item_collector = ItemCollector::new(comments, line_break_positions);
       module.traverse(&mut item_collector);
 
-      println!("items: {:#?}", item_collector.items);
+      // println!("items: {:#?}", item_collector.items);
     }
   }
 }

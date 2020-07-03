@@ -11,5 +11,5 @@ pub enum DocItemKind {
   Const,
   Def,
   Enum,
-  Struct,
+  Struct { fields: Vec<DocItem> },
 }
