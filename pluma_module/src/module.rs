@@ -11,6 +11,7 @@ pub struct Module {
   pub module_path: PathBuf,
   pub ast: Option<ModuleNode>,
   pub comments: Option<CommentMap>,
+  pub line_break_positions: Option<Vec<Position>>,
   imports: Option<Vec<UseNode>>,
   collect_comments: bool,
 }
@@ -23,6 +24,7 @@ impl Module {
       ast: None,
       imports: None,
       comments: None,
+      line_break_positions: None,
       collect_comments,
     }
   }
@@ -78,13 +80,19 @@ impl Module {
   fn build_ast(&mut self, bytes: Vec<u8>, diagnostics: &mut Vec<Diagnostic>) {
     let tokenizer = Tokenizer::from_source(&bytes, self.collect_comments);
 
-    let (ast, imports, comments, errors) =
+    let (ast, imports, comment_data, errors) =
       Parser::new(&bytes, tokenizer, self.collect_comments).parse_module();
 
     if errors.is_empty() {
       self.ast = Some(ast);
       self.imports = Some(imports);
-      self.comments = comments;
+
+      if self.collect_comments {
+        let (comments, line_break_positions) = comment_data.unwrap();
+        self.comments = Some(comments);
+        self.line_break_positions = Some(line_break_positions);
+      }
+
       return;
     }
 

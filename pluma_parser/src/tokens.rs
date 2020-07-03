@@ -55,7 +55,7 @@ pub enum Token {
 }
 
 impl Token {
-  pub fn get_location(&self) -> (usize, usize) {
+  pub fn get_position(&self) -> (usize, usize) {
     match self {
       &Token::Arrow(start, end) => (start, end),
       &Token::BinaryDigits(start, end) => (start, end),

@@ -1,5 +1,5 @@
 mod doc_builder;
-mod doc_generator;
+mod doc_item;
+mod item_collector;
 
 pub use doc_builder::*;
-pub use doc_generator::*;

@@ -18,7 +18,7 @@ macro_rules! expect_token_and_do {
       Some($tokType(..)) => $block,
       Some(tok) => {
         return $self.error(ParseError {
-          pos: tok.get_location(),
+          pos: tok.get_position(),
           kind: ParseErrorKind::UnexpectedToken($tokType(0, 0)),
         });
       }
@@ -58,6 +58,7 @@ pub struct Parser<'a> {
   prev_token: Option<Token>,
   current_visibility: ExportVisibility,
   collect_comments: bool,
+  line_break_positions: Vec<Position>,
 }
 
 impl<'a> Parser<'a> {
@@ -71,6 +72,7 @@ impl<'a> Parser<'a> {
       prev_token: None,
       current_visibility: ExportVisibility::Public,
       collect_comments,
+      line_break_positions: Vec::new(),
     };
   }
 
@@ -79,7 +81,7 @@ impl<'a> Parser<'a> {
   ) -> (
     ModuleNode,
     Vec<UseNode>,
-    Option<CommentMap>,
+    Option<(CommentMap, Vec<Position>)>,
     Vec<ParseError>,
   ) {
     let mut imports = Vec::new();
@@ -118,12 +120,15 @@ impl<'a> Parser<'a> {
       body,
     };
 
-    let comments = match self.collect_comments {
-      true => Some(self.tokenizer.comments.clone()),
+    let comment_data = match self.collect_comments {
+      true => Some((
+        self.tokenizer.comments.clone(),
+        self.line_break_positions.clone(),
+      )),
       false => None,
     };
 
-    (module_node, imports, comments, self.errors.clone())
+    (module_node, imports, comment_data, self.errors.clone())
   }
 
   fn advance(&mut self) {
@@ -134,15 +139,21 @@ impl<'a> Parser<'a> {
 
   fn skip_line_breaks(&mut self) {
     while current_token_is!(self, Token::LineBreak) {
+      if self.collect_comments {
+        self
+          .line_break_positions
+          .push(self.current_token_position())
+      }
+
       self.advance()
     }
   }
 
   fn current_token_position(&self) -> (usize, usize) {
     match self.current_token {
-      Some(token) => token.get_location(),
+      Some(token) => token.get_position(),
       _ => match self.prev_token {
-        Some(token) => token.get_location(),
+        Some(token) => token.get_position(),
         _ => (0, 0),
       },
     }
@@ -591,7 +602,7 @@ impl<'a> Parser<'a> {
     let generic_type_constraints = self.parse_generic_type_constraints().unwrap_or_default();
 
     let end = match self.prev_token {
-      Some(token) => token.get_location().1,
+      Some(token) => token.get_position().1,
       _ => start,
     };
 
