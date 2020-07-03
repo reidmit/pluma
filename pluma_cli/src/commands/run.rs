@@ -29,13 +29,12 @@ impl Command for RunCommand {
       entry_path: args
         .get_positional_arg(0)
         .unwrap_or(DEFAULT_ENTRY_FILE.to_owned()),
-
       mode: match args.get_flag_value("mode") {
         Some(val) if val == "release" => CompilerMode::Release,
         _ => CompilerMode::Debug,
       },
-
       output_path: None,
+      collect_comments: false,
     };
 
     let mut compiler = match Compiler::from_options(options) {

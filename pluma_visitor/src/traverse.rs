@@ -2,14 +2,14 @@ use crate::visitor::Visitor;
 use pluma_ast::*;
 
 pub trait Traverse {
-  fn traverse<V: Visitor>(&mut self, _visitor: &mut V) {}
+  fn traverse<V: Visitor>(&self, _visitor: &mut V) {}
 }
 
 impl Traverse for CallNode {
-  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+  fn traverse<V: Visitor>(&self, visitor: &mut V) {
     visitor.enter_call(self);
 
-    for arg in &mut self.args {
+    for arg in &self.args {
       arg.traverse(visitor);
     }
 
@@ -20,7 +20,7 @@ impl Traverse for CallNode {
 }
 
 impl Traverse for ConstNode {
-  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+  fn traverse<V: Visitor>(&self, visitor: &mut V) {
     visitor.enter_const(self);
 
     self.name.traverse(visitor);
@@ -31,10 +31,10 @@ impl Traverse for ConstNode {
 }
 
 impl Traverse for DefNode {
-  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+  fn traverse<V: Visitor>(&self, visitor: &mut V) {
     visitor.enter_def(self);
 
-    match &mut self.kind {
+    match &self.kind {
       DefKind::BinaryOperator { left, op, right } => {
         right.traverse(visitor);
         left.traverse(visitor);
@@ -66,7 +66,7 @@ impl Traverse for DefNode {
       }
     }
 
-    for statement in &mut self.body {
+    for statement in &self.body {
       statement.traverse(visitor);
     }
 
@@ -75,10 +75,10 @@ impl Traverse for DefNode {
 }
 
 impl Traverse for ExprNode {
-  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+  fn traverse<V: Visitor>(&self, visitor: &mut V) {
     visitor.enter_expr(self);
 
-    match &mut self.kind {
+    match &self.kind {
       ExprKind::Assignment { left, right } => {
         right.traverse(visitor);
         left.traverse(visitor);
@@ -173,7 +173,7 @@ impl Traverse for ExprNode {
 }
 
 impl Traverse for IdentifierNode {
-  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+  fn traverse<V: Visitor>(&self, visitor: &mut V) {
     visitor.enter_identifier(self);
 
     visitor.leave_identifier(self);
@@ -181,7 +181,7 @@ impl Traverse for IdentifierNode {
 }
 
 impl Traverse for IntrinsicDefNode {
-  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+  fn traverse<V: Visitor>(&self, visitor: &mut V) {
     visitor.enter_intrinsic_def(self);
 
     visitor.leave_intrinsic_def(self);
@@ -189,7 +189,7 @@ impl Traverse for IntrinsicDefNode {
 }
 
 impl Traverse for IntrinsicTypeDefNode {
-  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+  fn traverse<V: Visitor>(&self, visitor: &mut V) {
     visitor.enter_intrinsic_type_def(self);
 
     visitor.leave_intrinsic_type_def(self);
@@ -197,7 +197,7 @@ impl Traverse for IntrinsicTypeDefNode {
 }
 
 impl Traverse for LetNode {
-  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+  fn traverse<V: Visitor>(&self, visitor: &mut V) {
     visitor.enter_let(self);
 
     self.pattern.traverse(visitor);
@@ -208,7 +208,7 @@ impl Traverse for LetNode {
 }
 
 impl Traverse for LiteralNode {
-  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+  fn traverse<V: Visitor>(&self, visitor: &mut V) {
     visitor.enter_literal(self);
 
     visitor.leave_literal(self);
@@ -216,12 +216,12 @@ impl Traverse for LiteralNode {
 }
 
 impl Traverse for MatchNode {
-  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+  fn traverse<V: Visitor>(&self, visitor: &mut V) {
     visitor.enter_match(self);
 
     self.subject.traverse(visitor);
 
-    for case in &mut self.cases {
+    for case in &self.cases {
       case.traverse(visitor);
     }
 
@@ -230,7 +230,7 @@ impl Traverse for MatchNode {
 }
 
 impl Traverse for MatchCaseNode {
-  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+  fn traverse<V: Visitor>(&self, visitor: &mut V) {
     visitor.enter_match_case(self);
 
     self.pattern.traverse(visitor);
@@ -241,10 +241,10 @@ impl Traverse for MatchCaseNode {
 }
 
 impl Traverse for ModuleNode {
-  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+  fn traverse<V: Visitor>(&self, visitor: &mut V) {
     visitor.enter_module(self);
 
-    for node in &mut self.body {
+    for node in &self.body {
       node.traverse(visitor);
     }
 
@@ -257,7 +257,7 @@ impl Traverse for OperatorNode {
 }
 
 impl Traverse for PatternNode {
-  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+  fn traverse<V: Visitor>(&self, visitor: &mut V) {
     visitor.enter_pattern(self);
 
     // ?
@@ -267,10 +267,10 @@ impl Traverse for PatternNode {
 }
 
 impl Traverse for StatementNode {
-  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+  fn traverse<V: Visitor>(&self, visitor: &mut V) {
     visitor.enter_statement(self);
 
-    match &mut self.kind {
+    match &self.kind {
       StatementKind::Let(node) => node.traverse(visitor),
       StatementKind::Expr(node) => node.traverse(visitor),
     };
@@ -280,10 +280,10 @@ impl Traverse for StatementNode {
 }
 
 impl Traverse for TopLevelStatementNode {
-  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+  fn traverse<V: Visitor>(&self, visitor: &mut V) {
     visitor.enter_top_level_statement(self);
 
-    match &mut self.kind {
+    match &self.kind {
       TopLevelStatementKind::Let(node) => node.traverse(visitor),
       TopLevelStatementKind::Const(node) => node.traverse(visitor),
       TopLevelStatementKind::TypeDef(node) => node.traverse(visitor),
@@ -299,7 +299,7 @@ impl Traverse for TopLevelStatementNode {
 }
 
 impl Traverse for TypeExprNode {
-  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+  fn traverse<V: Visitor>(&self, visitor: &mut V) {
     visitor.enter_type_expr(self);
 
     visitor.leave_type_expr(self);
@@ -307,7 +307,7 @@ impl Traverse for TypeExprNode {
 }
 
 impl Traverse for TypeDefNode {
-  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+  fn traverse<V: Visitor>(&self, visitor: &mut V) {
     visitor.enter_type_def(self);
 
     visitor.leave_type_def(self);
@@ -315,7 +315,7 @@ impl Traverse for TypeDefNode {
 }
 
 impl Traverse for TypeIdentifierNode {
-  fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
+  fn traverse<V: Visitor>(&self, visitor: &mut V) {
     visitor.enter_type_identifier(self);
 
     visitor.leave_type_identifier(self);

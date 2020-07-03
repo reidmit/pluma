@@ -5,6 +5,7 @@ use std::collections::HashMap;
 pub type CommentMap = HashMap<usize, Token>;
 
 pub struct Tokenizer<'a> {
+  pub comments: CommentMap,
   source: &'a Vec<u8>,
   length: usize,
   index: usize,
@@ -13,13 +14,13 @@ pub struct Tokenizer<'a> {
   string_stack: Vec<usize>,
   interpolation_stack: Vec<usize>,
   brace_depth: i32,
-  comments: CommentMap,
   errors: Vec<ParseError>,
   next_token: Option<Token>,
+  collect_comments: bool,
 }
 
 impl<'a> Tokenizer<'a> {
-  pub fn from_source(source: &'a Vec<u8>) -> Self {
+  pub fn from_source(source: &'a Vec<u8>, collect_comments: bool) -> Self {
     let length = source.len();
 
     return Tokenizer {
@@ -34,6 +35,7 @@ impl<'a> Tokenizer<'a> {
       comments: HashMap::new(),
       errors: Vec::new(),
       next_token: None,
+      collect_comments,
     };
   }
 }
@@ -258,9 +260,11 @@ impl<'a> Iterator for Tokenizer<'a> {
             self.index += 1;
           }
 
-          self
-            .comments
-            .insert(self.line, Comment(start_index + 1, self.index));
+          if self.collect_comments {
+            self
+              .comments
+              .insert(self.line, Comment(start_index + 1, self.index));
+          }
         }
 
         _ if is_identifier_start_char(byte) => {

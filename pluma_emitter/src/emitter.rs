@@ -262,7 +262,7 @@ impl<'ctx> Emitter<'ctx> {
 }
 
 impl<'ctx> Visitor for Emitter<'ctx> {
-  fn enter_module(&mut self, _node: &mut ModuleNode) {
+  fn enter_module(&mut self, _node: &ModuleNode) {
     let entry_block = self
       .llvm_context
       .append_basic_block(self.main_function, "entry");
@@ -270,7 +270,7 @@ impl<'ctx> Visitor for Emitter<'ctx> {
     self.llvm_builder.position_at_end(entry_block);
   }
 
-  fn leave_module(&mut self, _node: &mut ModuleNode) {
+  fn leave_module(&mut self, _node: &ModuleNode) {
     let main_block = self.main_function.get_last_basic_block().unwrap();
 
     self.llvm_builder.position_at_end(main_block);
@@ -280,7 +280,7 @@ impl<'ctx> Visitor for Emitter<'ctx> {
     self.llvm_builder.build_return(Some(&default_return_value));
   }
 
-  fn enter_top_level_statement(&mut self, node: &mut TopLevelStatementNode) {
+  fn enter_top_level_statement(&mut self, node: &TopLevelStatementNode) {
     match &node.kind {
       TopLevelStatementKind::IntrinsicDef(def) => match &def.kind {
         DefKind::Function { signature } => {
@@ -307,5 +307,5 @@ impl<'ctx> Visitor for Emitter<'ctx> {
     }
   }
 
-  fn enter_expr(&mut self, _node: &mut ExprNode) {}
+  fn enter_expr(&mut self, _node: &ExprNode) {}
 }

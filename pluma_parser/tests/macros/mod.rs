@@ -12,9 +12,9 @@ macro_rules! test_parse_success {
             let source = replaced.trim();
             let source_copy = source.clone();
             let bytes = Vec::from(source);
-            let tokenizer = Tokenizer::from_source(&bytes);
-            let mut parser = Parser::new(&bytes, tokenizer);
-            let (ast, _imports, errors) = parser.parse_module();
+            let tokenizer = Tokenizer::from_source(&bytes, false);
+            let mut parser = Parser::new(&bytes, tokenizer, false);
+            let (ast, _imports, _, errors) = parser.parse_module();
 
             if !errors.is_empty() {
               panic!("parse errors: {:#?}", errors);

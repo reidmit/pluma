@@ -9,4 +9,5 @@ pub struct CompilerOptions {
   pub entry_path: String,
   pub mode: CompilerMode,
   pub output_path: Option<String>,
+  pub collect_comments: bool,
 }

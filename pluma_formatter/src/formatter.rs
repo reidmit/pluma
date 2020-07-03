@@ -30,7 +30,7 @@ impl<'a> Formatter<'a> {
   }
 
   fn format_file(&self, path: &PathBuf) -> Result<(), Vec<Diagnostic>> {
-    let mut module = Module::new("".to_owned(), path.into());
+    let mut module = Module::new("".to_owned(), path.into(), true);
 
     module.parse()?;
 

@@ -8,3 +8,5 @@ edition = "2018"
 [dependencies]
 pluma_ast = { path = "../pluma_ast" }
 pluma_compiler = { path = "../pluma_compiler" }
+pluma_parser = { path = "../pluma_parser" }
+pluma_visitor = { path = "../pluma_visitor" }

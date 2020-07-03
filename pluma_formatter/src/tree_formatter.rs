@@ -35,35 +35,35 @@ where
     self.output.write_char('\n');
   }
 
-  fn format_identifier(&mut self, node: &mut IdentifierNode) {
+  fn format_identifier(&mut self, node: &IdentifierNode) {
     self.out(format_args!("{}", node.name));
   }
 
-  fn format_call(&mut self, node: &mut CallNode) {
-    match &mut node.callee.kind {
+  fn format_call(&mut self, node: &CallNode) {
+    match &node.callee.kind {
       ExprKind::MultiPartIdentifier(parts) => {
         let count = parts.len();
         let mut i = 0;
 
         while i < count {
-          let mut part_name = parts.get_mut(i).unwrap();
-          let mut part_arg = node.args.get_mut(i).unwrap();
+          let part_name = parts.get(i).unwrap();
+          let part_arg = node.args.get(i).unwrap();
 
           if i > 0 {
             self.out_str(" ");
           }
-          self.format_identifier(&mut part_name);
+          self.format_identifier(&part_name);
           self.out_str(" ");
-          self.format_expr(&mut part_arg);
+          self.format_expr(&part_arg);
 
           i += 1;
         }
       }
 
       _ => {
-        self.format_expr(&mut node.callee);
+        self.format_expr(&node.callee);
 
-        for arg in &mut node.args {
+        for arg in &node.args {
           self.out_str(" ");
           self.format_expr(arg);
         }
@@ -71,8 +71,8 @@ where
     }
   }
 
-  fn format_expr(&mut self, node: &mut ExprNode) {
-    match &mut node.kind {
+  fn format_expr(&mut self, node: &ExprNode) {
+    match &node.kind {
       ExprKind::Block { params, body } => {
         self.brace_depth += 1;
 
@@ -146,8 +146,8 @@ where
     }
   }
 
-  fn format_literal(&mut self, node: &mut LiteralNode) {
-    match &mut node.kind {
+  fn format_literal(&mut self, node: &LiteralNode) {
+    match &node.kind {
       LiteralKind::FloatDecimal(val) => {
         self.out(format_args!("{}", val));
       }
@@ -169,14 +169,14 @@ where
     }
   }
 
-  fn format_let(&mut self, node: &mut LetNode) {
+  fn format_let(&mut self, node: &LetNode) {
     self.out_str("let ");
-    self.format_pattern(&mut node.pattern);
+    self.format_pattern(&node.pattern);
     self.out_str(" = ");
-    self.format_expr(&mut node.value);
+    self.format_expr(&node.value);
   }
 
-  fn format_pattern(&mut self, node: &mut PatternNode) {
+  fn format_pattern(&mut self, node: &PatternNode) {
     match &node.kind {
       PatternKind::Identifier(id, is_mutable) => {
         if *is_mutable {
@@ -190,12 +190,12 @@ where
     }
   }
 
-  fn format_statement(&mut self, node: &mut StatementNode) {
+  fn format_statement(&mut self, node: &StatementNode) {
     for _ in 0..self.brace_depth {
       self.out_str("  ");
     }
 
-    match &mut node.kind {
+    match &node.kind {
       StatementKind::Expr(expr) => self.format_expr(expr),
       StatementKind::Let(let_node) => self.format_let(let_node),
     }
@@ -206,8 +206,8 @@ impl<W> Visitor for TreeFormatter<W>
 where
   W: Write,
 {
-  fn enter_top_level_statement(&mut self, node: &mut TopLevelStatementNode) {
-    match &mut node.kind {
+  fn enter_top_level_statement(&mut self, node: &TopLevelStatementNode) {
+    match &node.kind {
       TopLevelStatementKind::Expr(node) => self.format_expr(node),
       TopLevelStatementKind::Let(node) => self.format_let(node),
       _ => todo!("other top level kinds"),

@@ -7,15 +7,15 @@ macro_rules! test_analyze {
             use insta::assert_snapshot;
             use pluma_analyzer::*;
             use pluma_parser::*;
-            use pluma_visitor::Traverse;
+            use pluma_visitor::TraverseMut;
 
             let replaced = $source.replace("\n    |", "\n");
             let source = replaced.trim();
             let source_copy = source.clone();
             let bytes = Vec::from(source);
-            let tokenizer = Tokenizer::from_source(&bytes);
-            let mut parser = Parser::new(&bytes, tokenizer);
-            let (mut ast, _imports, errors) = parser.parse_module();
+            let tokenizer = Tokenizer::from_source(&bytes, false);
+            let mut parser = Parser::new(&bytes, tokenizer, false);
+            let (mut ast, _imports, _, errors) = parser.parse_module();
 
             if !errors.is_empty() {
               panic!("parse errors: {:#?}", errors);
@@ -27,11 +27,11 @@ macro_rules! test_analyze {
             scope.enter();
 
             let mut type_collector = TypeCollector::new(&mut scope);
-            ast.traverse(&mut type_collector);
+            ast.traverse_mut(&mut type_collector);
             diagnostics.append(&mut type_collector.diagnostics);
 
             let mut analyzer = Analyzer::new(&mut scope);
-            ast.traverse(&mut analyzer);
+            ast.traverse_mut(&mut analyzer);
             diagnostics.append(&mut analyzer.diagnostics);
 
             let file_name = format!("{}", stringify!($name));

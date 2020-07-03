@@ -28,6 +28,7 @@ impl Command for CheckCommand {
         .unwrap_or(DEFAULT_ENTRY_FILE.to_owned()),
       mode: CompilerMode::Debug,
       output_path: None,
+      collect_comments: false,
     };
 
     let mut compiler = match Compiler::from_options(compiler_options) {

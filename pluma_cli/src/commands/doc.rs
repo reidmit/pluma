@@ -32,6 +32,7 @@ impl Command for DocCommand {
         .unwrap_or(DEFAULT_ENTRY_FILE.to_owned()),
       mode: CompilerMode::Debug,
       output_path: None,
+      collect_comments: true,
     };
 
     let mut compiler = match Compiler::from_options(compiler_options) {
@@ -50,9 +51,9 @@ impl Command for DocCommand {
       }
     }
 
-    let doc_generator = DocGenerator::new(compiler);
+    let mut doc_builder = DocBuilder::new(compiler);
 
-    doc_generator.generate();
+    doc_builder.build();
 
     Ok(())
   }

@@ -170,7 +170,7 @@ impl<'a> TypeCollector<'a> {
   }
 }
 
-impl<'a> Visitor for TypeCollector<'a> {
+impl<'a> VisitorMut for TypeCollector<'a> {
   fn enter_type_expr(&mut self, node: &mut TypeExprNode) {
     node.typ = type_utils::type_expr_to_value_type(node);
   }

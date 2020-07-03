@@ -162,7 +162,7 @@ impl<'a> Analyzer<'a> {
   }
 }
 
-impl<'a> Visitor for Analyzer<'a> {
+impl<'a> VisitorMut for Analyzer<'a> {
   fn leave_call(&mut self, node: &mut CallNode) {
     let callee_type = &node.callee.typ;
 

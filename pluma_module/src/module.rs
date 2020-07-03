@@ -10,16 +10,20 @@ pub struct Module {
   pub module_name: String,
   pub module_path: PathBuf,
   pub ast: Option<ModuleNode>,
+  pub comments: Option<CommentMap>,
   imports: Option<Vec<UseNode>>,
+  collect_comments: bool,
 }
 
 impl Module {
-  pub fn new(module_name: String, module_path: PathBuf) -> Module {
+  pub fn new(module_name: String, module_path: PathBuf, collect_comments: bool) -> Module {
     Module {
       module_name,
       module_path,
       ast: None,
       imports: None,
+      comments: None,
+      collect_comments,
     }
   }
 
@@ -59,20 +63,28 @@ impl Module {
     imports
   }
 
-  pub fn traverse<V: Visitor>(&mut self, visitor: &mut V) {
-    if let Some(ast) = &mut self.ast {
+  pub fn traverse<V: Visitor>(&self, visitor: &mut V) {
+    if let Some(ast) = &self.ast {
       ast.traverse(visitor)
     }
   }
 
-  fn build_ast(&mut self, bytes: Vec<u8>, diagnostics: &mut Vec<Diagnostic>) {
-    let tokenizer = Tokenizer::from_source(&bytes);
+  pub fn traverse_mut<V: VisitorMut>(&mut self, visitor: &mut V) {
+    if let Some(ast) = &mut self.ast {
+      ast.traverse_mut(visitor)
+    }
+  }
 
-    let (ast, imports, errors) = Parser::new(&bytes, tokenizer).parse_module();
+  fn build_ast(&mut self, bytes: Vec<u8>, diagnostics: &mut Vec<Diagnostic>) {
+    let tokenizer = Tokenizer::from_source(&bytes, self.collect_comments);
+
+    let (ast, imports, comments, errors) =
+      Parser::new(&bytes, tokenizer, self.collect_comments).parse_module();
 
     if errors.is_empty() {
       self.ast = Some(ast);
       self.imports = Some(imports);
+      self.comments = comments;
       return;
     }
 

@@ -1,5 +1,5 @@
 use crate::parse_error::*;
-use crate::tokenizer::Tokenizer;
+use crate::tokenizer::{CommentMap, Tokenizer};
 use crate::tokens::Token;
 use pluma_ast::*;
 
@@ -57,10 +57,11 @@ pub struct Parser<'a> {
   current_token: Option<Token>,
   prev_token: Option<Token>,
   current_visibility: ExportVisibility,
+  collect_comments: bool,
 }
 
 impl<'a> Parser<'a> {
-  pub fn new(source: &'a Vec<u8>, tokenizer: Tokenizer<'a>) -> Parser<'a> {
+  pub fn new(source: &'a Vec<u8>, tokenizer: Tokenizer<'a>, collect_comments: bool) -> Parser<'a> {
     return Parser {
       source,
       tokenizer,
@@ -69,10 +70,18 @@ impl<'a> Parser<'a> {
       current_token: None,
       prev_token: None,
       current_visibility: ExportVisibility::Public,
+      collect_comments,
     };
   }
 
-  pub fn parse_module(&mut self) -> (ModuleNode, Vec<UseNode>, Vec<ParseError>) {
+  pub fn parse_module(
+    &mut self,
+  ) -> (
+    ModuleNode,
+    Vec<UseNode>,
+    Option<CommentMap>,
+    Vec<ParseError>,
+  ) {
     let mut imports = Vec::new();
     let mut body = Vec::new();
 
@@ -109,7 +118,12 @@ impl<'a> Parser<'a> {
       body,
     };
 
-    (module_node, imports, self.errors.clone())
+    let comments = match self.collect_comments {
+      true => Some(self.tokenizer.comments.clone()),
+      false => None,
+    };
+
+    (module_node, imports, comments, self.errors.clone())
   }
 
   fn advance(&mut self) {

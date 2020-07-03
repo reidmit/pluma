@@ -20,6 +20,7 @@ pub struct Compiler {
   output_path: Option<String>,
   diagnostics: Vec<Diagnostic>,
   dependency_graph: DependencyGraph,
+  collect_comments: bool,
 }
 
 impl Compiler {
@@ -35,6 +36,7 @@ impl Compiler {
       diagnostics: Vec::new(),
       output_path: options.output_path,
       mode: options.mode,
+      collect_comments: options.collect_comments,
       dependency_graph,
     })
   }
@@ -78,7 +80,7 @@ impl Compiler {
       let module_to_analyze = self.modules.get_mut(module_name).unwrap();
 
       let mut type_collector = TypeCollector::new(&mut module_scope);
-      module_to_analyze.traverse(&mut type_collector);
+      module_to_analyze.traverse_mut(&mut type_collector);
 
       for diagnostic in type_collector.diagnostics {
         self.diagnostics.push(diagnostic.with_module(
@@ -88,7 +90,7 @@ impl Compiler {
       }
 
       let mut analyzer = Analyzer::new(&mut module_scope);
-      module_to_analyze.traverse(&mut analyzer);
+      module_to_analyze.traverse_mut(&mut analyzer);
 
       for diagnostic in analyzer.diagnostics {
         self.diagnostics.push(diagnostic.with_module(
@@ -168,7 +170,12 @@ impl Compiler {
       return;
     };
 
-    let mut new_module = Module::new(module_name.clone(), module_path.to_owned());
+    let mut new_module = Module::new(
+      module_name.clone(),
+      module_path.to_owned(),
+      self.collect_comments,
+    );
+
     let result = new_module.parse();
     let imports = new_module.get_imports();
     self.modules.insert(module_name.clone(), new_module);
