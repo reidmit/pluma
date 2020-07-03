@@ -1,24 +1,33 @@
 #!/bin/bash
 
-set -eo pipefail
-
 source $(dirname $0)/env
 
 usage() {
-  echo "usage: $0 [-p|--package PACKAGE] [-t|--test TEST_PATTERN]"
+  echo "usage: $0 [-p|--package PACKAGE] [-t|--test TEST_PATTERN] [-r|--review]"
 }
 
 test_name_filter=
 package_name_filter=
+review_snapshots=
 
 while [ "$1" != "" ]; do
   case $1 in
     -p | --package ) shift; package_name_filter="-p $1"; ;;
     -t | --test ) shift; test_name_filter="$1"; ;;
+    -r | --review ) review_snapshots=true; ;;
     * ) usage; exit 1
   esac
 
   shift
 done
 
-cargo test --no-fail-fast $package_name_filter "$test_name_filter" #|| cargo insta review
+run_tests() {
+  cargo test --no-fail-fast $package_name_filter "$test_name_filter"
+}
+
+if [ -z "$review_snapshots " ]
+then
+  run_tests
+else
+  run_tests || cargo insta review
+fi
