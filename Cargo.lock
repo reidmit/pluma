@@ -358,6 +358,10 @@ version = "0.1.0"
 [[package]]
 name = "pluma_doc"
 version = "0.1.0"
+dependencies = [
+ "pluma_ast 0.1.0",
+ "pluma_compiler 0.1.0",
+]
 
 [[package]]
 name = "pluma_emitter"

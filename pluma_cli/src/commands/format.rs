@@ -52,7 +52,7 @@ impl Command for FormatCommand {
     let formatter = Formatter::new(&paths);
 
     if let Err(diagnostics) = formatter.format() {
-      print_diagnostics(None, diagnostics);
+      print_diagnostics(diagnostics);
     }
 
     Ok(())

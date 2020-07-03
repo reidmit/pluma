@@ -37,7 +37,7 @@ impl Command for DocCommand {
     let mut compiler = match Compiler::from_options(compiler_options) {
       Ok(c) => c,
       Err(diagnostics) => {
-        errors::print_diagnostics(None, diagnostics);
+        errors::print_diagnostics(diagnostics);
         exit(1);
       }
     };
@@ -45,12 +45,12 @@ impl Command for DocCommand {
     match compiler.check() {
       Ok(_) => {}
       Err(diagnostics) => {
-        errors::print_diagnostics(Some(&compiler), diagnostics);
+        errors::print_diagnostics(diagnostics);
         exit(1);
       }
     }
 
-    let doc_generator = DocGenerator::new();
+    let doc_generator = DocGenerator::new(compiler);
 
     doc_generator.generate();
 

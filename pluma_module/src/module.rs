@@ -9,7 +9,6 @@ use std::path::PathBuf;
 pub struct Module {
   pub module_name: String,
   pub module_path: PathBuf,
-  pub bytes: Option<Vec<u8>>,
   pub ast: Option<ModuleNode>,
   imports: Option<Vec<UseNode>>,
 }
@@ -19,7 +18,6 @@ impl Module {
     Module {
       module_name,
       module_path,
-      bytes: None,
       ast: None,
       imports: None,
     }
@@ -28,11 +26,13 @@ impl Module {
   pub fn parse(&mut self) -> Result<(), Vec<Diagnostic>> {
     let mut diagnostics = Vec::new();
 
-    if !self.read(&mut diagnostics) {
-      return Err(diagnostics);
+    match fs::read(&self.module_path) {
+      Ok(bytes) => self.build_ast(bytes, &mut diagnostics),
+      Err(err) => diagnostics.push(
+        Diagnostic::error(err)
+          .with_module(self.module_name.clone(), self.module_path.to_path_buf()),
+      ),
     }
-
-    self.build_ast(&mut diagnostics);
 
     if diagnostics.is_empty() {
       return Ok(());
@@ -65,30 +65,10 @@ impl Module {
     }
   }
 
-  fn read(&mut self, diagnostics: &mut Vec<Diagnostic>) -> bool {
-    match fs::read(&self.module_path) {
-      Ok(bytes) => {
-        self.bytes = Some(bytes);
-        true
-      }
-
-      Err(err) => {
-        diagnostics.push(
-          Diagnostic::error(err)
-            .with_module(self.module_name.clone(), self.module_path.to_path_buf()),
-        );
-
-        false
-      }
-    }
-  }
-
-  fn build_ast(&mut self, diagnostics: &mut Vec<Diagnostic>) {
-    let bytes = self.bytes.as_ref().unwrap();
+  fn build_ast(&mut self, bytes: Vec<u8>, diagnostics: &mut Vec<Diagnostic>) {
     let tokenizer = Tokenizer::from_source(&bytes);
 
-    let (ast, imports, errors) =
-      Parser::new(self.bytes.as_ref().unwrap(), tokenizer).parse_module();
+    let (ast, imports, errors) = Parser::new(&bytes, tokenizer).parse_module();
 
     if errors.is_empty() {
       self.ast = Some(ast);

@@ -30,10 +30,7 @@ impl CommandInfo {
   }
 
   pub fn with_help(self) -> Self {
-    let mut flags = match self.flags {
-      Some(flags) => flags,
-      None => vec![],
-    };
+    let mut flags = self.flags.unwrap_or_default();
 
     flags.push(Flag::with_names("help", "h").description("Print help text"));
 

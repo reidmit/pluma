@@ -2261,7 +2261,7 @@ impl<'a> Parser<'a> {
       _ => {
         return self.error(ParseError {
           pos: self.current_token_position(),
-          kind: ParseErrorKind::MissingType,
+          kind: ParseErrorKind::MissingTypeInBlockType,
         })
       }
     };

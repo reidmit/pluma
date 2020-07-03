@@ -47,7 +47,7 @@ impl Command for BuildCommand {
     let mut compiler = match Compiler::from_options(compiler_options) {
       Ok(c) => c,
       Err(diagnostics) => {
-        errors::print_diagnostics(None, diagnostics);
+        errors::print_diagnostics(diagnostics);
         exit(1);
       }
     };
@@ -58,7 +58,7 @@ impl Command for BuildCommand {
       }
 
       Err(diagnostics) => {
-        errors::print_diagnostics(Some(&compiler), diagnostics);
+        errors::print_diagnostics(diagnostics);
         exit(1);
       }
     }

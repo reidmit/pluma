@@ -41,7 +41,7 @@ impl Command for RunCommand {
     let mut compiler = match Compiler::from_options(options) {
       Ok(c) => c,
       Err(diagnostics) => {
-        errors::print_diagnostics(None, diagnostics);
+        errors::print_diagnostics(diagnostics);
         exit(1);
       }
     };
@@ -52,7 +52,7 @@ impl Command for RunCommand {
       }
 
       Err(diagnostics) => {
-        errors::print_diagnostics(Some(&compiler), diagnostics);
+        errors::print_diagnostics(diagnostics);
         exit(1);
       }
     }
