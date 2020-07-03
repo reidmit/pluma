@@ -7,9 +7,9 @@ pub struct DocItem {
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub enum DocItemKind {
-  Alias,
-  Const,
+  // Alias,
+  // Const,
   Def,
-  Enum,
-  Struct { fields: Vec<DocItem> },
+  // Enum,
+  // Struct { fields: Vec<DocItem> },
 }

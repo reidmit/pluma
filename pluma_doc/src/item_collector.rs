@@ -52,7 +52,7 @@ impl<'a> ItemCollector<'a> {
     0
   }
 
-  fn def_to_item_name(&self, node: &DefNode) -> String {
+  fn def_to_item_name(&self, _node: &DefNode) -> String {
     "lol".to_owned()
   }
 }
