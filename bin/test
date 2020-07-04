@@ -24,7 +24,7 @@ while [ "$1" != "" ]; do
 done
 
 run_tests() {
-  if [ -x "$watch" ]
+  if [ -z "$watch" ]
   then
     cargo test --no-fail-fast $package_name_filter "$test_name_filter"
   else

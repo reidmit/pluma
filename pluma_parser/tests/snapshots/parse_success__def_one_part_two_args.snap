@@ -45,7 +45,7 @@ ModuleNode {
                                         10,
                                         23,
                                     ),
-                                    kind: Tuple(
+                                    kind: UnlabeledTuple(
                                         [
                                             TypeExprNode {
                                                 pos: (

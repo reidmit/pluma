@@ -1,0 +1,185 @@
+---
+source: pluma_parser/tests/parse_success.rs
+expression: "def hello (one: Int, two: String) -> String {\n  a => a.two\n}"
+---
+
+=== Source ===
+def hello (one: Int, two: String) -> String {
+  a => a.two
+}
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        60,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                60,
+            ),
+            kind: Def(
+                DefNode {
+                    pos: (
+                        0,
+                        60,
+                    ),
+                    visibility: Public,
+                    kind: Function {
+                        signature: [
+                            (
+                                IdentifierNode {
+                                    pos: (
+                                        4,
+                                        9,
+                                    ),
+                                    name: "hello",
+                                },
+                                TypeExprNode {
+                                    pos: (
+                                        10,
+                                        33,
+                                    ),
+                                    kind: LabeledTuple(
+                                        [
+                                            (
+                                                IdentifierNode {
+                                                    pos: (
+                                                        11,
+                                                        14,
+                                                    ),
+                                                    name: "one",
+                                                },
+                                                TypeExprNode {
+                                                    pos: (
+                                                        16,
+                                                        19,
+                                                    ),
+                                                    kind: Single(
+                                                        TypeIdentifierNode {
+                                                            pos: (
+                                                                16,
+                                                                19,
+                                                            ),
+                                                            name: "Int",
+                                                            generics: [],
+                                                        },
+                                                    ),
+                                                    typ: Unknown,
+                                                },
+                                            ),
+                                            (
+                                                IdentifierNode {
+                                                    pos: (
+                                                        21,
+                                                        24,
+                                                    ),
+                                                    name: "two",
+                                                },
+                                                TypeExprNode {
+                                                    pos: (
+                                                        26,
+                                                        32,
+                                                    ),
+                                                    kind: Single(
+                                                        TypeIdentifierNode {
+                                                            pos: (
+                                                                26,
+                                                                32,
+                                                            ),
+                                                            name: "String",
+                                                            generics: [],
+                                                        },
+                                                    ),
+                                                    typ: Unknown,
+                                                },
+                                            ),
+                                        ],
+                                    ),
+                                    typ: Unknown,
+                                },
+                            ),
+                        ],
+                    },
+                    return_type: Some(
+                        TypeExprNode {
+                            pos: (
+                                37,
+                                43,
+                            ),
+                            kind: Single(
+                                TypeIdentifierNode {
+                                    pos: (
+                                        37,
+                                        43,
+                                    ),
+                                    name: "String",
+                                    generics: [],
+                                },
+                            ),
+                            typ: Unknown,
+                        },
+                    ),
+                    generic_type_constraints: [],
+                    params: [
+                        IdentifierNode {
+                            pos: (
+                                48,
+                                49,
+                            ),
+                            name: "a",
+                        },
+                    ],
+                    body: [
+                        StatementNode {
+                            pos: (
+                                53,
+                                58,
+                            ),
+                            kind: Expr(
+                                ExprNode {
+                                    pos: (
+                                        53,
+                                        58,
+                                    ),
+                                    kind: FieldAccess {
+                                        receiver: ExprNode {
+                                            pos: (
+                                                53,
+                                                54,
+                                            ),
+                                            kind: Identifier(
+                                                IdentifierNode {
+                                                    pos: (
+                                                        53,
+                                                        54,
+                                                    ),
+                                                    name: "a",
+                                                },
+                                            ),
+                                            typ: Unknown,
+                                        },
+                                        field: IdentifierNode {
+                                            pos: (
+                                                55,
+                                                58,
+                                            ),
+                                            name: "two",
+                                        },
+                                    },
+                                    typ: Unknown,
+                                },
+                            ),
+                        },
+                    ],
+                },
+            ),
+        },
+    ],
+}
+

@@ -32,7 +32,7 @@ ModuleNode {
                             4,
                             10,
                         ),
-                        kind: Tuple(
+                        kind: UnlabeledTuple(
                             [
                                 PatternNode {
                                     pos: (

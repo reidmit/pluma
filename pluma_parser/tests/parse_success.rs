@@ -268,6 +268,12 @@ test_parse_success! {
     |}
   "#,
 
+  def_labeled_tuple_arg: r#"
+    |def hello (one: Int, two: String) -> String {
+    |  a => a.two
+    |}
+  "#,
+
   def_generic_type_constraint: r#"
     |def hello A -> A where A :: Any {
     |  x => x

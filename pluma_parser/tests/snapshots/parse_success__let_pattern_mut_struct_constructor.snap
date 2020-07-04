@@ -45,7 +45,7 @@ ModuleNode {
                                     11,
                                     26,
                                 ),
-                                kind: Tuple(
+                                kind: UnlabeledTuple(
                                     [
                                         PatternNode {
                                             pos: (

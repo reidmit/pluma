@@ -2377,10 +2377,69 @@ impl<'a> Parser<'a> {
 
     let mut first_entry = None;
     let mut other_entries = Vec::new();
+    let mut labeled = false;
+    let mut labeled_entries = Vec::new();
 
     while let Some(type_node) = self.parse_type_expression() {
-      if first_entry.is_none() {
-        first_entry = Some(type_node)
+      if labeled {
+        match type_node.kind {
+          TypeExprKind::Single(label) => {
+            let label_ident = IdentifierNode {
+              name: label.name,
+              pos: label.pos,
+            };
+
+            expect_token_and_do!(self, Token::Colon, { self.advance() });
+
+            if let Some(value) = self.parse_type_expression() {
+              labeled_entries.push((label_ident, value));
+            } else {
+              self.error::<TypeExprNode>(ParseError {
+                pos: type_node.pos,
+                kind: ParseErrorKind::MissingExpressionAfterLabelInTuple,
+              });
+            }
+          }
+
+          _ => {
+            self.error::<TypeExprNode>(ParseError {
+              pos: type_node.pos,
+              kind: ParseErrorKind::MissingLabelInTuple,
+            });
+          }
+        }
+      } else if first_entry.is_none() {
+        if current_token_is!(self, Token::Colon) {
+          self.advance();
+          labeled = true;
+
+          match type_node.kind {
+            TypeExprKind::Single(label) => {
+              let label_ident = IdentifierNode {
+                name: label.name,
+                pos: label.pos,
+              };
+
+              if let Some(value) = self.parse_type_expression() {
+                labeled_entries.push((label_ident, value));
+              } else {
+                self.error::<TypeExprNode>(ParseError {
+                  pos: type_node.pos,
+                  kind: ParseErrorKind::MissingExpressionAfterLabelInTuple,
+                });
+              }
+            }
+
+            _ => {
+              self.error::<TypeExprNode>(ParseError {
+                pos: type_node.pos,
+                kind: ParseErrorKind::MissingLabelInTuple,
+              });
+            }
+          }
+        } else {
+          first_entry = Some(type_node)
+        }
       } else {
         other_entries.push(type_node);
       }
@@ -2396,6 +2455,14 @@ impl<'a> Parser<'a> {
       self.advance();
       pos.1
     });
+
+    if labeled {
+      return Some(TypeExprNode {
+        pos: (start, end),
+        kind: TypeExprKind::LabeledTuple(labeled_entries),
+        typ: ValueType::Unknown,
+      });
+    }
 
     if first_entry.is_none() {
       return Some(TypeExprNode {

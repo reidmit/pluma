@@ -63,7 +63,7 @@ ModuleNode {
                                             16,
                                             22,
                                         ),
-                                        kind: Tuple(
+                                        kind: UnlabeledTuple(
                                             [
                                                 PatternNode {
                                                     pos: (
@@ -129,7 +129,7 @@ ModuleNode {
                                             36,
                                             42,
                                         ),
-                                        kind: Tuple(
+                                        kind: UnlabeledTuple(
                                             [
                                                 PatternNode {
                                                     pos: (
