@@ -14,7 +14,7 @@ pub fn type_expr_to_value_type(node: &TypeExprNode) -> ValueType {
     TypeExprKind::EmptyTuple => ValueType::Nothing,
     TypeExprKind::Grouping(inner) => type_expr_to_value_type(&inner),
     TypeExprKind::Single(ident) => type_ident_to_value_type(&ident),
-    TypeExprKind::Tuple(entries) => {
+    TypeExprKind::UnlabeledTuple(entries) => {
       let mut entry_types = Vec::new();
 
       for entry in entries {
@@ -22,6 +22,15 @@ pub fn type_expr_to_value_type(node: &TypeExprNode) -> ValueType {
       }
 
       ValueType::UnlabeledTuple(entry_types)
+    }
+    TypeExprKind::LabeledTuple(entries) => {
+      let mut entry_types = Vec::new();
+
+      for (label_ident, entry) in entries {
+        entry_types.push((label_ident.name.clone(), type_expr_to_value_type(entry)));
+      }
+
+      ValueType::LabeledTuple(entry_types)
     }
     TypeExprKind::Func(param, ret) => {
       let param_type = type_expr_to_value_type(param);

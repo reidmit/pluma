@@ -10,6 +10,7 @@ pub enum ValueType {
   Generic(String, Vec<ValueType>),
   Func(Vec<ValueType>, Box<ValueType>),
   UnlabeledTuple(Vec<ValueType>),
+  LabeledTuple(Vec<(String, ValueType)>),
   Constrained(TypeConstraint),
   Nothing,
   Unknown,
@@ -76,6 +77,16 @@ impl fmt::Display for ValueType {
         entry_types
           .iter()
           .map(|t| format!("{}", t))
+          .collect::<Vec<String>>()
+          .join(", ")
+      ),
+
+      ValueType::LabeledTuple(entries) => write!(
+        f,
+        "({})",
+        entries
+          .iter()
+          .map(|(label, typ)| format!("{}: {}", label, typ))
           .collect::<Vec<String>>()
           .join(", ")
       ),

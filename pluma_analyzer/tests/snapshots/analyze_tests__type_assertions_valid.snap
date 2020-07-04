@@ -1,0 +1,72 @@
+---
+source: pluma_analyzer/tests/analyze_tests.rs
+expression: "intrinsic_type Int\nintrinsic_type String\n\nlet n = 47 :: Int\nlet s = \"lol\" :: String"
+---
+
+=== Source ===
+intrinsic_type Int
+intrinsic_type String
+
+let n = 47 :: Int
+let s = "lol" :: String
+
+=== Top-level scope ===
+Scope {
+    levels: [
+        ScopeLevel {
+            bindings: [
+                (
+                    "n",
+                    Binding {
+                        typ: Int,
+                        ref_count: 0,
+                        pos: (
+                            46,
+                            47,
+                        ),
+                        kind: Let,
+                    },
+                ),
+                (
+                    "s",
+                    Binding {
+                        typ: String,
+                        ref_count: 0,
+                        pos: (
+                            64,
+                            65,
+                        ),
+                        kind: Let,
+                    },
+                ),
+            ],
+        },
+    ],
+    type_bindings: [
+        (
+            Int,
+            TypeBinding {
+                ref_count: 0,
+                pos: (
+                    15,
+                    18,
+                ),
+                kind: IntrinsicType,
+                methods: {},
+            },
+        ),
+        (
+            String,
+            TypeBinding {
+                ref_count: 0,
+                pos: (
+                    34,
+                    40,
+                ),
+                kind: IntrinsicType,
+                methods: {},
+            },
+        ),
+    ],
+}
+

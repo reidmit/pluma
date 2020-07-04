@@ -1,0 +1,40 @@
+---
+source: pluma_analyzer/tests/analyze_tests.rs
+expression: "intrinsic_type Int\nintrinsic_type String\n\nlet n = 47 :: String\nlet s = \"lol\" :: Int"
+---
+
+=== Source ===
+intrinsic_type Int
+intrinsic_type String
+
+let n = 47 :: String
+let s = "lol" :: Int
+
+=== Diagnostics ===
+[
+    Diagnostic {
+        kind: Error,
+        message: "Type assertion failed. Type Int is not convertible to type String.",
+        pos: Some(
+            (
+                50,
+                62,
+            ),
+        ),
+        module_name: None,
+        module_path: None,
+    },
+    Diagnostic {
+        kind: Error,
+        message: "Type assertion failed. Type String is not convertible to type Int.",
+        pos: Some(
+            (
+                72,
+                83,
+            ),
+        ),
+        module_name: None,
+        module_path: None,
+    },
+]
+

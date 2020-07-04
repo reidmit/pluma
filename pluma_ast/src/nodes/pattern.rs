@@ -9,12 +9,12 @@ pub struct PatternNode {
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub enum PatternKind {
-  // e.g. let x =
+  // e.g. let x = / let mut x
   Identifier(IdentifierNode, bool),
   // e.g. let Person (x, y) =
   Constructor(IdentifierNode, Box<PatternNode>),
   // e.g. let (x, y) =
-  Tuple(Vec<PatternNode>),
+  UnlabeledTuple(Vec<PatternNode>),
   // e.g. '_' in let (x, _) =
   Underscore,
   // e.g. '1' in match x | 1 => "yes" | _ => "no"

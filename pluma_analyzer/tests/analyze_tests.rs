@@ -91,4 +91,20 @@ test_analyze! {
     |  arg => ()
     |}
   "#,
+
+  type_assertions_valid (true): r#"
+    |intrinsic_type Int
+    |intrinsic_type String
+    |
+    |let n = 47 :: Int
+    |let s = "lol" :: String
+  "#,
+
+  type_assertions_invalid (false): r#"
+    |intrinsic_type Int
+    |intrinsic_type String
+    |
+    |let n = 47 :: String
+    |let s = "lol" :: Int
+  "#,
 }

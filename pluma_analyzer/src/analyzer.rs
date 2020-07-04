@@ -47,7 +47,7 @@ impl<'a> Analyzer<'a> {
         }
       }
 
-      PatternKind::Tuple(element_patterns) => match typ {
+      PatternKind::UnlabeledTuple(element_patterns) => match typ {
         ValueType::UnlabeledTuple(element_types) => {
           if element_patterns.len() != element_types.len() {
             return self.error(AnalysisError {
@@ -143,7 +143,7 @@ impl<'a> Analyzer<'a> {
 
         named_value_type
       }
-      TypeExprKind::Tuple(entries) => {
+      TypeExprKind::UnlabeledTuple(entries) => {
         let mut entry_types = Vec::new();
 
         for entry in entries {
@@ -151,6 +151,18 @@ impl<'a> Analyzer<'a> {
         }
 
         ValueType::UnlabeledTuple(entry_types)
+      }
+      TypeExprKind::LabeledTuple(entries) => {
+        let mut entry_types = Vec::new();
+
+        for (label_ident, entry) in entries {
+          entry_types.push((
+            label_ident.name.clone(),
+            self.type_expr_to_value_type(entry),
+          ));
+        }
+
+        ValueType::LabeledTuple(entry_types)
       }
       TypeExprKind::Func(param, ret) => {
         let param_type = self.type_expr_to_value_type(param);
@@ -411,6 +423,8 @@ impl<'a> Analyzer<'a> {
         expr,
         asserted_type,
       } => {
+        self.analyze_expr(expr);
+
         let expr_type = &expr.typ;
         let asserted_type = &asserted_type.typ;
 

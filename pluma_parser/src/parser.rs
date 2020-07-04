@@ -1323,7 +1323,7 @@ impl<'a> Parser<'a> {
 
         Some(PatternNode {
           pos: (start, end),
-          kind: PatternKind::Tuple(entries),
+          kind: PatternKind::UnlabeledTuple(entries),
         })
       }
 
@@ -2417,7 +2417,7 @@ impl<'a> Parser<'a> {
 
     Some(TypeExprNode {
       pos: (start, end),
-      kind: TypeExprKind::Tuple(other_entries),
+      kind: TypeExprKind::UnlabeledTuple(other_entries),
       typ: ValueType::Unknown,
     })
   }
