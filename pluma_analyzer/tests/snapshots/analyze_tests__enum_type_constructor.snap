@@ -1,0 +1,132 @@
+---
+source: pluma_analyzer/tests/analyze_tests.rs
+expression: "intrinsic_type Int\nintrinsic_type String\n\nenum Either\n | Left(Int)\n | Right(String)\n\nlet a = Left(47)\nlet b = Right(\"hi\")"
+---
+
+=== Source ===
+intrinsic_type Int
+intrinsic_type String
+
+enum Either
+ | Left(Int)
+ | Right(String)
+
+let a = Left(47)
+let b = Right("hi")
+
+=== Top-level scope ===
+Scope {
+    levels: [
+        ScopeLevel {
+            bindings: [
+                (
+                    "Left",
+                    Binding {
+                        typ: Func(
+                            [
+                                Int,
+                            ],
+                            Named(
+                                "Either",
+                            ),
+                        ),
+                        ref_count: 1,
+                        pos: (
+                            57,
+                            66,
+                        ),
+                        kind: EnumVariant,
+                    },
+                ),
+                (
+                    "Right",
+                    Binding {
+                        typ: Func(
+                            [
+                                String,
+                            ],
+                            Named(
+                                "Either",
+                            ),
+                        ),
+                        ref_count: 1,
+                        pos: (
+                            70,
+                            83,
+                        ),
+                        kind: EnumVariant,
+                    },
+                ),
+                (
+                    "a",
+                    Binding {
+                        typ: Named(
+                            "Either",
+                        ),
+                        ref_count: 0,
+                        pos: (
+                            89,
+                            90,
+                        ),
+                        kind: Let,
+                    },
+                ),
+                (
+                    "b",
+                    Binding {
+                        typ: Named(
+                            "Either",
+                        ),
+                        ref_count: 0,
+                        pos: (
+                            106,
+                            107,
+                        ),
+                        kind: Let,
+                    },
+                ),
+            ],
+        },
+    ],
+    type_bindings: [
+        (
+            Int,
+            TypeBinding {
+                ref_count: 0,
+                pos: (
+                    15,
+                    18,
+                ),
+                kind: IntrinsicType,
+                methods: {},
+            },
+        ),
+        (
+            Named(
+                "Either",
+            ),
+            TypeBinding {
+                ref_count: 0,
+                pos: (
+                    47,
+                    53,
+                ),
+                kind: Enum,
+                methods: {},
+            },
+        ),
+        (
+            String,
+            TypeBinding {
+                ref_count: 0,
+                pos: (
+                    34,
+                    40,
+                ),
+                kind: IntrinsicType,
+                methods: {},
+            },
+        ),
+    ],
+}
+

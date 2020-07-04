@@ -32,4 +32,63 @@ test_analyze! {
     |let r = Red
     |let g = Green
   "#,
+
+  enum_type_constructor (true): r#"
+    |intrinsic_type Int
+    |intrinsic_type String
+    |
+    |enum Either
+    | | Left(Int)
+    | | Right(String)
+    |
+    |let a = Left(47)
+    |let b = Right("hi")
+  "#,
+
+  enum_type_constructor_invalid_args (false): r#"
+    |intrinsic_type Int
+    |intrinsic_type String
+    |
+    |enum Either
+    | | Left(Int)
+    | | Right(String)
+    |
+    |let a = Left("hi")
+    |let b = Right(47)
+  "#,
+
+  let_unlabeled_tuple_pattern (true): r#"
+    |let tup = (47, "wow", 1.23)
+    |let (a, b, c) = tup
+    |
+    |let tup2 = (47, ("wow", 1.23))
+    |let (d, (e, f)) = tup2
+  "#,
+
+  def_function (true): r#"
+    |intrinsic_type Int
+    |
+    |def returnsNothing () {
+    |  arg => ()
+    |}
+    |
+    |def intToInt Int -> Int {
+    |  x => x
+    |}
+    |
+    |let void = returnsNothing()
+    |let n = intToInt 100
+  "#,
+
+  undefined_type_in_signature (false): r#"
+    |def takesSomething Wat {
+    |  arg => ()
+    |}
+  "#,
+
+  undefined_return_type_in_signature (false): r#"
+    |def takesSomething () -> Wat {
+    |  arg => ()
+    |}
+  "#,
 }

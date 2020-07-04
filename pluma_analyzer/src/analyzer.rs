@@ -200,7 +200,7 @@ impl<'a> Analyzer<'a> {
 
       ExprKind::Literal(lit_node) => node.typ = self.analyze_literal(lit_node),
 
-      ExprKind::Call(call_node) => node.typ = call_node.typ.clone(),
+      ExprKind::Call(call_node) => node.typ = self.analyze_call(call_node),
 
       ExprKind::Assignment { left, right } => {
         let existing_binding = self.scope.get_binding(&left.name);
@@ -311,6 +311,7 @@ impl<'a> Analyzer<'a> {
         let mut element_types = Vec::new();
 
         for element in elements {
+          self.analyze_expr(element);
           element_types.push(element.typ.clone());
         }
 
@@ -454,11 +455,65 @@ impl<'a> Analyzer<'a> {
         node.typ = case_type.unwrap().clone();
       }
 
-      ExprKind::Grouping(inner) => node.typ = inner.typ.clone(),
+      ExprKind::Grouping(inner) => {
+        self.analyze_expr(inner);
+        node.typ = inner.typ.clone();
+      }
 
       ExprKind::EmptyTuple => node.typ = ValueType::Nothing,
 
       _other => todo!("more expr kinds!"),
+    }
+  }
+
+  fn analyze_call(&mut self, node: &mut CallNode) -> ValueType {
+    self.analyze_expr(&mut node.callee);
+
+    let callee_type = &node.callee.typ;
+
+    match callee_type {
+      ValueType::Func(param_types, return_type) => {
+        if param_types.len() != node.args.len() {
+          self.error(AnalysisError {
+            pos: node.pos,
+            kind: AnalysisErrorKind::IncorrectNumberOfArguments {
+              expected: param_types.len(),
+              actual: node.args.len(),
+            },
+          })
+        }
+
+        for i in 0..param_types.len() {
+          let arg = node.args.get_mut(i).unwrap();
+          self.analyze_expr(arg);
+
+          let param_type = param_types.get(i).unwrap();
+          let given_type = &arg.typ;
+
+          if param_type != given_type {
+            let pos = arg.pos;
+
+            self.error(AnalysisError {
+              pos,
+              kind: AnalysisErrorKind::ParameterTypeMismatch {
+                expected: param_type.clone(),
+                actual: given_type.clone(),
+              },
+            })
+          }
+        }
+
+        *return_type.clone()
+      }
+
+      _ => {
+        self.error(AnalysisError {
+          pos: node.pos,
+          kind: AnalysisErrorKind::CalleeNotCallable(callee_type.clone()),
+        });
+
+        ValueType::Unknown
+      }
     }
   }
 
@@ -475,50 +530,12 @@ impl<'a> Analyzer<'a> {
 }
 
 impl<'a> VisitorMut for Analyzer<'a> {
-  fn leave_call(&mut self, node: &mut CallNode) {
-    let callee_type = &node.callee.typ;
-
-    match callee_type {
-      ValueType::Func(param_types, return_type) => {
-        if param_types.len() != node.args.len() {
-          self.error(AnalysisError {
-            pos: node.pos,
-            kind: AnalysisErrorKind::IncorrectNumberOfArguments {
-              expected: param_types.len(),
-              actual: node.args.len(),
-            },
-          })
-        }
-
-        for i in 0..param_types.len() {
-          let param_type = param_types.get(i).unwrap();
-          let given_type = &node.args.get(i).unwrap().typ;
-
-          if param_type != given_type {
-            let pos = node.args.get(i).unwrap().pos;
-
-            self.error(AnalysisError {
-              pos,
-              kind: AnalysisErrorKind::ParameterTypeMismatch {
-                expected: param_type.clone(),
-                actual: given_type.clone(),
-              },
-            })
-          }
-        }
-
-        node.typ = *return_type.clone();
-      }
-
-      _ => self.error(AnalysisError {
-        pos: node.pos,
-        kind: AnalysisErrorKind::CalleeNotCallable(callee_type.clone()),
-      }),
-    }
-  }
-
   fn enter_def(&mut self, node: &mut DefNode) {
     self.scope.enter();
+
+    if let Some(return_type) = &node.return_type {
+      self.type_expr_to_value_type(&return_type);
+    }
 
     let mut param_types = Vec::new();
 
@@ -573,14 +590,6 @@ impl<'a> VisitorMut for Analyzer<'a> {
         param_type.clone(),
         param.pos,
       );
-    }
-  }
-
-  fn leave_def(&mut self, _node: &mut DefNode) {
-    if let Err(diagnostics) = self.scope.exit() {
-      for diagnostic in diagnostics {
-        self.diagnostic(diagnostic);
-      }
     }
   }
 

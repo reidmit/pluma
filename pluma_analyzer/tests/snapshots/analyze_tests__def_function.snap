@@ -1,0 +1,133 @@
+---
+source: pluma_analyzer/tests/analyze_tests.rs
+expression: "intrinsic_type Int\n\ndef returnsNothing () {\n  arg => ()\n}\n\ndef intToInt Int -> Int {\n  x => x\n}\n\nlet void = returnsNothing()\nlet n = intToInt 100"
+---
+
+=== Source ===
+intrinsic_type Int
+
+def returnsNothing () {
+  arg => ()
+}
+
+def intToInt Int -> Int {
+  x => x
+}
+
+let void = returnsNothing()
+let n = intToInt 100
+
+=== Top-level scope ===
+Scope {
+    levels: [
+        ScopeLevel {
+            bindings: [
+                (
+                    "intToInt",
+                    Binding {
+                        typ: Func(
+                            [
+                                Int,
+                            ],
+                            Int,
+                        ),
+                        ref_count: 1,
+                        pos: (
+                            59,
+                            95,
+                        ),
+                        kind: Def,
+                    },
+                ),
+                (
+                    "returnsNothing",
+                    Binding {
+                        typ: Func(
+                            [
+                                Nothing,
+                            ],
+                            Nothing,
+                        ),
+                        ref_count: 1,
+                        pos: (
+                            20,
+                            57,
+                        ),
+                        kind: Def,
+                    },
+                ),
+            ],
+        },
+        ScopeLevel {
+            bindings: [
+                (
+                    "arg",
+                    Binding {
+                        typ: Nothing,
+                        ref_count: 0,
+                        pos: (
+                            46,
+                            49,
+                        ),
+                        kind: Param,
+                    },
+                ),
+            ],
+        },
+        ScopeLevel {
+            bindings: [
+                (
+                    "n",
+                    Binding {
+                        typ: Int,
+                        ref_count: 0,
+                        pos: (
+                            129,
+                            130,
+                        ),
+                        kind: Let,
+                    },
+                ),
+                (
+                    "void",
+                    Binding {
+                        typ: Nothing,
+                        ref_count: 0,
+                        pos: (
+                            101,
+                            105,
+                        ),
+                        kind: Let,
+                    },
+                ),
+                (
+                    "x",
+                    Binding {
+                        typ: Int,
+                        ref_count: 0,
+                        pos: (
+                            87,
+                            88,
+                        ),
+                        kind: Param,
+                    },
+                ),
+            ],
+        },
+    ],
+    type_bindings: [
+        (
+            Int,
+            TypeBinding {
+                ref_count: 2,
+                pos: (
+                    15,
+                    18,
+                ),
+                kind: IntrinsicType,
+                methods: {},
+            },
+        ),
+    ],
+}
+
