@@ -98,6 +98,9 @@ impl Compiler {
           to_module_path(self.root_dir.clone(), self.entry_module_name.clone()),
         ))
       }
+
+      // println!("module {:#?}", module_to_analyze);
+      println!("scope {:#?}", module_scope);
     }
 
     if !self.diagnostics.is_empty() {

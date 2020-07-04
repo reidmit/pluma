@@ -160,151 +160,25 @@ impl<'a> Analyzer<'a> {
       }
     }
   }
-}
 
-impl<'a> VisitorMut for Analyzer<'a> {
-  fn leave_call(&mut self, node: &mut CallNode) {
-    let callee_type = &node.callee.typ;
+  fn analyze_identifier(&mut self, node: &IdentifierNode) -> ValueType {
+    match self.scope.get_binding(&node.name) {
+      Some(binding) => binding.typ.clone(),
+      None => {
+        self.error(AnalysisError {
+          pos: node.pos,
+          kind: AnalysisErrorKind::UndefinedName(node.name.clone()),
+        });
 
-    match callee_type {
-      ValueType::Func(param_types, return_type) => {
-        if param_types.len() != node.args.len() {
-          self.error(AnalysisError {
-            pos: node.pos,
-            kind: AnalysisErrorKind::IncorrectNumberOfArguments {
-              expected: param_types.len(),
-              actual: node.args.len(),
-            },
-          })
-        }
-
-        for i in 0..param_types.len() {
-          let param_type = param_types.get(i).unwrap();
-          let given_type = &node.args.get(i).unwrap().typ;
-
-          if param_type != given_type {
-            let pos = node.args.get(i).unwrap().pos;
-
-            self.error(AnalysisError {
-              pos,
-              kind: AnalysisErrorKind::ParameterTypeMismatch {
-                expected: param_type.clone(),
-                actual: given_type.clone(),
-              },
-            })
-          }
-        }
-
-        node.typ = *return_type.clone();
-      }
-
-      _ => self.error(AnalysisError {
-        pos: node.pos,
-        kind: AnalysisErrorKind::CalleeNotCallable(callee_type.clone()),
-      }),
-    }
-  }
-
-  fn leave_let(&mut self, node: &mut LetNode) {
-    self.destructure_pattern(&mut node.pattern, &mut node.value.typ)
-  }
-
-  fn enter_def(&mut self, node: &mut DefNode) {
-    self.scope.enter();
-
-    let mut param_types = Vec::new();
-
-    match &node.kind {
-      DefKind::Function { signature } => {
-        for (_, part_type_expr) in signature {
-          let part_type = self.type_expr_to_value_type(part_type_expr);
-
-          match part_type {
-            ValueType::Tuple(entry_types) => {
-              for entry_type in entry_types {
-                param_types.push(entry_type);
-              }
-            }
-            other => param_types.push(other),
-          }
-        }
-      }
-
-      _ => {}
-    };
-
-    if param_types.len() != node.params.len() {
-      let err_start = match node.params.first() {
-        Some(param) => param.pos.0,
-        _ => node.pos.0,
-      };
-
-      let err_end = match node.params.last() {
-        Some(param) => param.pos.1,
-        _ => node.pos.0 + 3,
-      };
-
-      self.error(AnalysisError {
-        pos: (err_start, err_end),
-        kind: AnalysisErrorKind::ParamCountMismatchInDefinition {
-          expected: param_types.len(),
-          actual: node.params.len(),
-        },
-      });
-
-      return;
-    }
-
-    for i in 0..node.params.len() {
-      let param = &node.params[i];
-      let param_type = &param_types[i];
-
-      self.scope.add_binding(
-        BindingKind::Param,
-        param.name.clone(),
-        param_type.clone(),
-        param.pos,
-      );
-    }
-  }
-
-  fn leave_def(&mut self, _node: &mut DefNode) {
-    if let Err(diagnostics) = self.scope.exit() {
-      for diagnostic in diagnostics {
-        self.diagnostic(diagnostic);
+        ValueType::Unknown
       }
     }
   }
 
-  fn enter_expr(&mut self, node: &mut ExprNode) {
-    match &node.kind {
-      ExprKind::Block { params, .. } => {
-        self.scope.enter();
-
-        for param in params {
-          self.scope.add_binding(
-            BindingKind::Param,
-            param.name.clone(),
-            ValueType::Unknown,
-            param.pos,
-          );
-        }
-      }
-
-      _ => {}
-    }
-  }
-
-  fn leave_expr(&mut self, node: &mut ExprNode) {
-    match &node.kind {
+  fn analyze_expr(&mut self, node: &mut ExprNode) {
+    match &mut node.kind {
       ExprKind::Identifier(ident_node) => {
-        match self.scope.get_binding(&ident_node.name) {
-          Some(binding) => node.typ = binding.typ.clone(),
-          None => self.error(AnalysisError {
-            pos: node.pos,
-            kind: AnalysisErrorKind::UndefinedName(ident_node.name.clone()),
-          }),
-        };
+        node.typ = self.analyze_identifier(ident_node);
       }
 
       ExprKind::MultiPartIdentifier(ident_nodes) => {
@@ -324,14 +198,7 @@ impl<'a> VisitorMut for Analyzer<'a> {
         };
       }
 
-      ExprKind::Literal(lit_node) => match &lit_node.kind {
-        LiteralKind::IntDecimal { .. } => node.typ = ValueType::Int,
-        LiteralKind::IntBinary { .. } => node.typ = ValueType::Int,
-        LiteralKind::IntHex { .. } => node.typ = ValueType::Int,
-        LiteralKind::IntOctal { .. } => node.typ = ValueType::Int,
-        LiteralKind::FloatDecimal { .. } => node.typ = ValueType::Float,
-        LiteralKind::Str { .. } => node.typ = ValueType::String,
-      },
+      ExprKind::Literal(lit_node) => node.typ = self.analyze_literal(lit_node),
 
       ExprKind::Call(call_node) => node.typ = call_node.typ.clone(),
 
@@ -355,6 +222,9 @@ impl<'a> VisitorMut for Analyzer<'a> {
       }
 
       ExprKind::BinaryOperation { op, left, right } => {
+        self.analyze_expr(left);
+        self.analyze_expr(right);
+
         let receiver_type_binding = match self.scope.get_type_binding(&left.typ) {
           Some(binding) => binding,
           _ => return,
@@ -589,6 +459,162 @@ impl<'a> VisitorMut for Analyzer<'a> {
       ExprKind::EmptyTuple => node.typ = ValueType::Nothing,
 
       _other => todo!("more expr kinds!"),
+    }
+  }
+
+  fn analyze_literal(&mut self, node: &LiteralNode) -> ValueType {
+    match &node.kind {
+      LiteralKind::IntDecimal { .. } => ValueType::Int,
+      LiteralKind::IntBinary { .. } => ValueType::Int,
+      LiteralKind::IntHex { .. } => ValueType::Int,
+      LiteralKind::IntOctal { .. } => ValueType::Int,
+      LiteralKind::FloatDecimal { .. } => ValueType::Float,
+      LiteralKind::Str { .. } => ValueType::String,
+    }
+  }
+}
+
+impl<'a> VisitorMut for Analyzer<'a> {
+  fn leave_call(&mut self, node: &mut CallNode) {
+    let callee_type = &node.callee.typ;
+
+    match callee_type {
+      ValueType::Func(param_types, return_type) => {
+        if param_types.len() != node.args.len() {
+          self.error(AnalysisError {
+            pos: node.pos,
+            kind: AnalysisErrorKind::IncorrectNumberOfArguments {
+              expected: param_types.len(),
+              actual: node.args.len(),
+            },
+          })
+        }
+
+        for i in 0..param_types.len() {
+          let param_type = param_types.get(i).unwrap();
+          let given_type = &node.args.get(i).unwrap().typ;
+
+          if param_type != given_type {
+            let pos = node.args.get(i).unwrap().pos;
+
+            self.error(AnalysisError {
+              pos,
+              kind: AnalysisErrorKind::ParameterTypeMismatch {
+                expected: param_type.clone(),
+                actual: given_type.clone(),
+              },
+            })
+          }
+        }
+
+        node.typ = *return_type.clone();
+      }
+
+      _ => self.error(AnalysisError {
+        pos: node.pos,
+        kind: AnalysisErrorKind::CalleeNotCallable(callee_type.clone()),
+      }),
+    }
+  }
+
+  fn enter_def(&mut self, node: &mut DefNode) {
+    self.scope.enter();
+
+    let mut param_types = Vec::new();
+
+    match &node.kind {
+      DefKind::Function { signature } => {
+        for (_, part_type_expr) in signature {
+          let part_type = self.type_expr_to_value_type(part_type_expr);
+
+          match part_type {
+            ValueType::Tuple(entry_types) => {
+              for entry_type in entry_types {
+                param_types.push(entry_type);
+              }
+            }
+            other => param_types.push(other),
+          }
+        }
+      }
+
+      _ => {}
+    };
+
+    if param_types.len() != node.params.len() {
+      let err_start = match node.params.first() {
+        Some(param) => param.pos.0,
+        _ => node.pos.0,
+      };
+
+      let err_end = match node.params.last() {
+        Some(param) => param.pos.1,
+        _ => node.pos.0 + 3,
+      };
+
+      self.error(AnalysisError {
+        pos: (err_start, err_end),
+        kind: AnalysisErrorKind::ParamCountMismatchInDefinition {
+          expected: param_types.len(),
+          actual: node.params.len(),
+        },
+      });
+
+      return;
+    }
+
+    for i in 0..node.params.len() {
+      let param = &node.params[i];
+      let param_type = &param_types[i];
+
+      self.scope.add_binding(
+        BindingKind::Param,
+        param.name.clone(),
+        param_type.clone(),
+        param.pos,
+      );
+    }
+  }
+
+  fn leave_def(&mut self, _node: &mut DefNode) {
+    if let Err(diagnostics) = self.scope.exit() {
+      for diagnostic in diagnostics {
+        self.diagnostic(diagnostic);
+      }
+    }
+  }
+
+  // fn enter_expr(&mut self, node: &mut ExprNode) {
+  //   match &node.kind {
+  //     ExprKind::Block { params, .. } => {
+  //       self.scope.enter();
+
+  //       for param in params {
+  //         self.scope.add_binding(
+  //           BindingKind::Param,
+  //           param.name.clone(),
+  //           ValueType::Unknown,
+  //           param.pos,
+  //         );
+  //       }
+  //     }
+
+  //     _ => {}
+  //   }
+  // }
+
+  fn enter_top_level_statement(&mut self, node: &mut TopLevelStatementNode) {
+    match &mut node.kind {
+      TopLevelStatementKind::Let(let_node) => {
+        self.analyze_expr(&mut let_node.value);
+        self.destructure_pattern(&mut let_node.pattern, &mut let_node.value.typ)
+      }
+
+      TopLevelStatementKind::Expr(expr) => {
+        self.analyze_expr(expr);
+      }
+
+      _ => {}
     }
   }
 }

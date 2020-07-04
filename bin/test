@@ -3,18 +3,20 @@
 source $(dirname $0)/env
 
 usage() {
-  echo "usage: $0 [-p|--package PACKAGE] [-t|--test TEST_PATTERN] [-r|--review]"
+  echo "usage: $0 [-p|--package PACKAGE] [-t|--test TEST_PATTERN] [-r|--review] [-w|--watch]"
 }
 
 test_name_filter=
 package_name_filter=
 review_snapshots=
+watch=
 
 while [ "$1" != "" ]; do
   case $1 in
     -p | --package ) shift; package_name_filter="-p $1"; ;;
     -t | --test ) shift; test_name_filter="$1"; ;;
     -r | --review ) review_snapshots=true; ;;
+    -w | --watch ) watch=true; ;;
     * ) usage; exit 1
   esac
 
@@ -22,7 +24,12 @@ while [ "$1" != "" ]; do
 done
 
 run_tests() {
-  cargo test --no-fail-fast $package_name_filter "$test_name_filter"
+  if [ -x "$watch" ]
+  then
+    cargo test --no-fail-fast $package_name_filter "$test_name_filter"
+  else
+    cargo watch --ignore "*.snap*" -x "test --no-fail-fast $package_name_filter '$test_name_filter'"
+  fi
 }
 
 if [ -z "$review_snapshots " ]
