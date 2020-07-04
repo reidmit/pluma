@@ -21,7 +21,7 @@ pub fn type_expr_to_value_type(node: &TypeExprNode) -> ValueType {
         entry_types.push(type_expr_to_value_type(entry));
       }
 
-      ValueType::Tuple(entry_types)
+      ValueType::UnlabeledTuple(entry_types)
     }
     TypeExprKind::Func(param, ret) => {
       let param_type = type_expr_to_value_type(param);

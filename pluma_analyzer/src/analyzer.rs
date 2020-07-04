@@ -48,7 +48,7 @@ impl<'a> Analyzer<'a> {
       }
 
       PatternKind::Tuple(element_patterns) => match typ {
-        ValueType::Tuple(element_types) => {
+        ValueType::UnlabeledTuple(element_types) => {
           if element_patterns.len() != element_types.len() {
             return self.error(AnalysisError {
               pos: pattern.pos,
@@ -150,7 +150,7 @@ impl<'a> Analyzer<'a> {
           entry_types.push(self.type_expr_to_value_type(entry));
         }
 
-        ValueType::Tuple(entry_types)
+        ValueType::UnlabeledTuple(entry_types)
       }
       TypeExprKind::Func(param, ret) => {
         let param_type = self.type_expr_to_value_type(param);
@@ -315,7 +315,7 @@ impl<'a> Analyzer<'a> {
           element_types.push(element.typ.clone());
         }
 
-        node.typ = ValueType::Tuple(element_types);
+        node.typ = ValueType::UnlabeledTuple(element_types);
       }
 
       ExprKind::Interpolation(parts) => {
@@ -545,7 +545,7 @@ impl<'a> VisitorMut for Analyzer<'a> {
           let part_type = self.type_expr_to_value_type(part_type_expr);
 
           match part_type {
-            ValueType::Tuple(entry_types) => {
+            ValueType::UnlabeledTuple(entry_types) => {
               for entry_type in entry_types {
                 param_types.push(entry_type);
               }

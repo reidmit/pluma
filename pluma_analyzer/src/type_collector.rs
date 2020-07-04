@@ -257,7 +257,7 @@ impl<'a> VisitorMut for TypeCollector<'a> {
           node.name.pos,
         );
 
-        let param_tuple_type = ValueType::Tuple(param_types);
+        let param_tuple_type = ValueType::UnlabeledTuple(param_types);
         let constructor_type = ValueType::Func(vec![param_tuple_type], Box::new(typ));
 
         self.scope.add_binding(

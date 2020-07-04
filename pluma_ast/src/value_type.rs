@@ -9,7 +9,7 @@ pub enum ValueType {
   Named(String),
   Generic(String, Vec<ValueType>),
   Func(Vec<ValueType>, Box<ValueType>),
-  Tuple(Vec<ValueType>),
+  UnlabeledTuple(Vec<ValueType>),
   Constrained(TypeConstraint),
   Nothing,
   Unknown,
@@ -70,7 +70,7 @@ impl fmt::Display for ValueType {
           .join(", ")
       ),
 
-      ValueType::Tuple(entry_types) => write!(
+      ValueType::UnlabeledTuple(entry_types) => write!(
         f,
         "({})",
         entry_types

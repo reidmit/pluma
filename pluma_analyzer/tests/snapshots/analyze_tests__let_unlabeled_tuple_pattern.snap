@@ -90,7 +90,7 @@ Scope {
                 (
                     "tup",
                     Binding {
-                        typ: Tuple(
+                        typ: UnlabeledTuple(
                             [
                                 Int,
                                 String,
@@ -108,10 +108,10 @@ Scope {
                 (
                     "tup2",
                     Binding {
-                        typ: Tuple(
+                        typ: UnlabeledTuple(
                             [
                                 Int,
-                                Tuple(
+                                UnlabeledTuple(
                                     [
                                         String,
                                         Float,
