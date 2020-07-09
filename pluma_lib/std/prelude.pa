@@ -26,15 +26,21 @@ intrinsic_def exit Int -> ()
 
 intrinsic_def print String -> ()
 
-# The Any trait specifies no fields or methods, so it is satisfied by
-# any value. This is useful for functions that simply "pass through" their
-# arguments without needing to access any fields or methods on them.
 trait Any
 
 enum Bool
   | True
   | False
 
-enum Option<A> where A :: Any
-  | None
+enum Maybe<A> where A :: Any
   | Some A
+  | None
+
+enum Result<A, B> where A :: Any, B :: Any
+  | Ok A
+  | Err B
+
+intrinsic_type Never
+
+trait BlockHandle<A> where A :: Any
+  . return A -> Never
