@@ -45,12 +45,12 @@
 
     "storage-type": {
       "name": "storage.type.pluma",
-      "match": "\\b(def|enum|struct|alias|trait|intrinsic_type|intrinsic_def)\\b"
+      "match": "\\b(const|def|enum|struct|alias|trait|intrinsic_type|intrinsic_def)\\b"
     },
 
     "keyword-language": {
       "name": "keyword.language.pluma",
-      "match": "\\b(match|let|where)\\b"
+      "match": "\\b(match|let|mut|where)\\b"
     },
 
     "keyword-control": {
