@@ -229,46 +229,22 @@ impl<'a> Parser<'a> {
     let mut params = Vec::new();
     let mut body = Vec::new();
 
-    match self.parse_statement() {
-      Some(stmt) => {
-        if current_token_is!(self, Token::Comma) || current_token_is!(self, Token::DoubleArrow) {
-          match &stmt.kind {
-            StatementKind::Expr(expr) => match &expr.kind {
-              ExprKind::Identifier(ident) => {
-                if current_token_is!(self, Token::Comma) {
-                  self.advance();
-                }
+    if current_token_is!(self, Token::Pipe) {
+      self.advance();
 
-                params.push(IdentifierNode {
-                  pos: ident.pos,
-                  name: ident.name.clone(),
-                });
-              }
-              _ => body.push(stmt),
-            },
-            _ => body.push(stmt),
-          }
-        } else {
-          body.push(stmt);
-        }
-      }
-      None => {}
-    }
-
-    if !params.is_empty() {
-      while let Some(ident) = self.parse_identifier() {
-        params.push(ident);
+      while let Some(pattern) = self.parse_pattern() {
+        params.push(pattern);
 
         match self.current_token {
           Some(Token::Comma(..)) => self.advance(),
-          Some(Token::DoubleArrow(..)) => {
+          Some(Token::Pipe(..)) => {
             break;
           }
           _ => break,
         }
       }
 
-      expect_token_and_do!(self, Token::DoubleArrow, {
+      expect_token_and_do!(self, Token::Pipe, {
         self.advance();
       });
     }

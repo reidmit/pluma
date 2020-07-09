@@ -53,7 +53,7 @@ where
       for param in &node.params {
         self.out_str(" ");
 
-        self.format_identifier(param);
+        self.format_pattern(param);
 
         if i < count - 1 {
           self.out_str(",");

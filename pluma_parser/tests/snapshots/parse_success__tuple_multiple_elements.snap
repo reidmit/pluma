@@ -1,10 +1,10 @@
 ---
 source: pluma_parser/tests/parse_success.rs
-expression: "(1, \"wow\", { x => x }, (lol, ()))"
+expression: "(1, \"wow\", { |x| x }, (lol, ()))"
 ---
 
 === Source ===
-(1, "wow", { x => x }, (lol, ()))
+(1, "wow", { |x| x }, (lol, ()))
 
 === Comments ===
 {}
@@ -13,19 +13,19 @@ expression: "(1, \"wow\", { x => x }, (lol, ()))"
 ModuleNode {
     pos: (
         0,
-        33,
+        32,
     ),
     body: [
         TopLevelStatementNode {
             pos: (
                 0,
-                33,
+                32,
             ),
             kind: Expr(
                 ExprNode {
                     pos: (
                         0,
-                        33,
+                        32,
                     ),
                     kind: UnlabeledTuple(
                         [
@@ -68,40 +68,49 @@ ModuleNode {
                             ExprNode {
                                 pos: (
                                     11,
-                                    21,
+                                    20,
                                 ),
                                 kind: Block(
                                     BlockNode {
                                         pos: (
                                             11,
-                                            21,
+                                            20,
                                         ),
                                         params: [
-                                            IdentifierNode {
+                                            PatternNode {
                                                 pos: (
-                                                    13,
                                                     14,
+                                                    15,
                                                 ),
-                                                name: "x",
+                                                kind: Identifier(
+                                                    IdentifierNode {
+                                                        pos: (
+                                                            14,
+                                                            15,
+                                                        ),
+                                                        name: "x",
+                                                    },
+                                                    false,
+                                                ),
                                             },
                                         ],
                                         body: [
                                             StatementNode {
                                                 pos: (
+                                                    17,
                                                     18,
-                                                    19,
                                                 ),
                                                 kind: Expr(
                                                     ExprNode {
                                                         pos: (
+                                                            17,
                                                             18,
-                                                            19,
                                                         ),
                                                         kind: Identifier(
                                                             IdentifierNode {
                                                                 pos: (
+                                                                    17,
                                                                     18,
-                                                                    19,
                                                                 ),
                                                                 name: "x",
                                                             },
@@ -117,21 +126,21 @@ ModuleNode {
                             },
                             ExprNode {
                                 pos: (
-                                    23,
-                                    32,
+                                    22,
+                                    31,
                                 ),
                                 kind: UnlabeledTuple(
                                     [
                                         ExprNode {
                                             pos: (
-                                                24,
-                                                27,
+                                                23,
+                                                26,
                                             ),
                                             kind: Identifier(
                                                 IdentifierNode {
                                                     pos: (
-                                                        24,
-                                                        27,
+                                                        23,
+                                                        26,
                                                     ),
                                                     name: "lol",
                                                 },
@@ -140,8 +149,8 @@ ModuleNode {
                                         },
                                         ExprNode {
                                             pos: (
-                                                29,
-                                                31,
+                                                28,
+                                                30,
                                             ),
                                             kind: EmptyTuple,
                                             typ: Unknown,

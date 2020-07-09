@@ -1,11 +1,11 @@
 ---
 source: pluma_analyzer/tests/analyze_tests.rs
-expression: "def takesSomething Wat {\n  arg => ()\n}"
+expression: "def takesSomething Wat {\n  |arg| ()\n}"
 ---
 
 === Source ===
 def takesSomething Wat {
-  arg => ()
+  |arg| ()
 }
 
 === Diagnostics ===

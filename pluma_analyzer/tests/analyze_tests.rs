@@ -101,11 +101,11 @@ test_analyze! {
     |intrinsic_type Int
     |
     |def returnsNothing () {
-    |  arg => ()
+    |  |arg| ()
     |}
     |
     |def intToInt Int -> Int {
-    |  x => x
+    |  |x| x
     |}
     |
     |let void = returnsNothing()
@@ -114,13 +114,13 @@ test_analyze! {
 
   undefined_type_in_signature (false): r#"
     |def takesSomething Wat {
-    |  arg => ()
+    |  |arg| ()
     |}
   "#,
 
   undefined_return_type_in_signature (false): r#"
     |def takesSomething () -> Wat {
-    |  arg => ()
+    |  |arg| ()
     |}
   "#,
 
@@ -128,7 +128,7 @@ test_analyze! {
     |enum Color | Red | Green | Blue
     |
     |def Color . funk Color -> Color {
-    |  self, b => b
+    |  |self, b| b
     |}
     |
     |let c = Blue

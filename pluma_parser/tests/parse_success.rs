@@ -142,7 +142,7 @@ test_parse_success! {
   "#,
 
   tuple_multiple_elements: r#"
-    |(1, "wow", { x => x }, (lol, ()))
+    |(1, "wow", { |x| x }, (lol, ()))
   "#,
 
   tuple_empty_across_lines: r#"
@@ -209,81 +209,89 @@ test_parse_success! {
     |[:]
   "#,
 
+  block_empty: r#"
+    |{}
+  "#,
+
+  block_tuple_pattern: r#"
+    |{ |(a, (b, c))| a + b + c }
+  "#,
+
   def_one_part_empty_arg: r#"
     |def hello () {
-    |  a => "wow!"
+    |  |a| "wow!"
     |}
   "#,
 
   def_one_part_one_arg: r#"
     |def hello String {
-    |  a => "wow!"
+    |  |a| "wow!"
     |}
   "#,
 
   def_one_part_two_args: r#"
     |def hello (String, Int) {
-    |  a, b => "wow!"
+    |  |a, b| "wow!"
     |}
   "#,
 
   def_two_part_empty_arg: r#"
     |def hello () world () {
-    |  a, b => "wow!"
+    |  |a, b| "wow!"
     |}
   "#,
 
   def_two_part_multiple_args: r#"
     |def hello (A, B) world C {
-    |  a, b, c => "wow!"
+    |  |a, b, c| "wow!"
     |}
   "#,
 
   def_receiver_one_part_one_arg: r#"
     |def Person . greet String {
-    |  a => "wow!"
+    |  |a| "wow!"
     |}
   "#,
 
   def_receiver_two_parts_multiple_args: r#"
     |def Person . hello (String, Int) world () {
-    |  a, b, c => "wow!"
+    |  |a, b, c| "wow!"
     |}
   "#,
 
   def_return_type: r#"
     |def hello () -> String {
-    |  a => "wow!"
+    |  |a| "wow!"
     |}
   "#,
 
   def_func_arg: r#"
     |def hello { A -> B } -> String {
-    |  a => "wow!"
+    |  |a| "wow!"
     |}
   "#,
 
   def_func_taking_tuple_arg: r#"
     |def hello { (A, B) -> C } {
-    |  x => x
+    |  |x| x
     |}
   "#,
 
   def_func_return_type: r#"
     |def hello () -> { A -> B } {
-    |  { x => y }
+    |  { |x| y }
     |}
   "#,
 
   def_labeled_tuple_arg: r#"
     |def hello (one: Int, two: String) -> String {
-    |  a => a.two
+    |  |a| a.two
     |}
   "#,
 
   def_generic_type_constraint: r#"
     |def hello A -> A where A :: Any {
-    |  x => x
+    |  |x| x
     |}
   "#,
 

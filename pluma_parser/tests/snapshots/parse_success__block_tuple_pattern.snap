@@ -1,0 +1,204 @@
+---
+source: pluma_parser/tests/parse_success.rs
+expression: "{ |(a, (b, c))| a + b + c }"
+---
+
+=== Source ===
+{ |(a, (b, c))| a + b + c }
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        27,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                27,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        0,
+                        27,
+                    ),
+                    kind: Block(
+                        BlockNode {
+                            pos: (
+                                0,
+                                27,
+                            ),
+                            params: [
+                                PatternNode {
+                                    pos: (
+                                        3,
+                                        14,
+                                    ),
+                                    kind: UnlabeledTuple(
+                                        [
+                                            PatternNode {
+                                                pos: (
+                                                    4,
+                                                    5,
+                                                ),
+                                                kind: Identifier(
+                                                    IdentifierNode {
+                                                        pos: (
+                                                            4,
+                                                            5,
+                                                        ),
+                                                        name: "a",
+                                                    },
+                                                    false,
+                                                ),
+                                            },
+                                            PatternNode {
+                                                pos: (
+                                                    7,
+                                                    13,
+                                                ),
+                                                kind: UnlabeledTuple(
+                                                    [
+                                                        PatternNode {
+                                                            pos: (
+                                                                8,
+                                                                9,
+                                                            ),
+                                                            kind: Identifier(
+                                                                IdentifierNode {
+                                                                    pos: (
+                                                                        8,
+                                                                        9,
+                                                                    ),
+                                                                    name: "b",
+                                                                },
+                                                                false,
+                                                            ),
+                                                        },
+                                                        PatternNode {
+                                                            pos: (
+                                                                11,
+                                                                12,
+                                                            ),
+                                                            kind: Identifier(
+                                                                IdentifierNode {
+                                                                    pos: (
+                                                                        11,
+                                                                        12,
+                                                                    ),
+                                                                    name: "c",
+                                                                },
+                                                                false,
+                                                            ),
+                                                        },
+                                                    ],
+                                                ),
+                                            },
+                                        ],
+                                    ),
+                                },
+                            ],
+                            body: [
+                                StatementNode {
+                                    pos: (
+                                        16,
+                                        25,
+                                    ),
+                                    kind: Expr(
+                                        ExprNode {
+                                            pos: (
+                                                16,
+                                                25,
+                                            ),
+                                            kind: BinaryOperation {
+                                                left: ExprNode {
+                                                    pos: (
+                                                        16,
+                                                        21,
+                                                    ),
+                                                    kind: BinaryOperation {
+                                                        left: ExprNode {
+                                                            pos: (
+                                                                16,
+                                                                17,
+                                                            ),
+                                                            kind: Identifier(
+                                                                IdentifierNode {
+                                                                    pos: (
+                                                                        16,
+                                                                        17,
+                                                                    ),
+                                                                    name: "a",
+                                                                },
+                                                            ),
+                                                            typ: Unknown,
+                                                        },
+                                                        op: OperatorNode {
+                                                            pos: (
+                                                                18,
+                                                                19,
+                                                            ),
+                                                            name: "+",
+                                                        },
+                                                        right: ExprNode {
+                                                            pos: (
+                                                                20,
+                                                                21,
+                                                            ),
+                                                            kind: Identifier(
+                                                                IdentifierNode {
+                                                                    pos: (
+                                                                        20,
+                                                                        21,
+                                                                    ),
+                                                                    name: "b",
+                                                                },
+                                                            ),
+                                                            typ: Unknown,
+                                                        },
+                                                    },
+                                                    typ: Unknown,
+                                                },
+                                                op: OperatorNode {
+                                                    pos: (
+                                                        22,
+                                                        23,
+                                                    ),
+                                                    name: "+",
+                                                },
+                                                right: ExprNode {
+                                                    pos: (
+                                                        24,
+                                                        25,
+                                                    ),
+                                                    kind: Identifier(
+                                                        IdentifierNode {
+                                                            pos: (
+                                                                24,
+                                                                25,
+                                                            ),
+                                                            name: "c",
+                                                        },
+                                                    ),
+                                                    typ: Unknown,
+                                                },
+                                            },
+                                            typ: Unknown,
+                                        },
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                    typ: Unknown,
+                },
+            ),
+        },
+    ],
+}
+

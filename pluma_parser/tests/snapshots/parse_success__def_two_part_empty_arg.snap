@@ -1,11 +1,11 @@
 ---
 source: pluma_parser/tests/parse_success.rs
-expression: "def hello () world () {\n  a, b => \"wow!\"\n}"
+expression: "def hello () world () {\n  |a, b| \"wow!\"\n}"
 ---
 
 === Source ===
 def hello () world () {
-  a, b => "wow!"
+  |a, b| "wow!"
 }
 
 === Comments ===
@@ -15,19 +15,19 @@ def hello () world () {
 ModuleNode {
     pos: (
         0,
-        42,
+        41,
     ),
     body: [
         TopLevelStatementNode {
             pos: (
                 0,
-                42,
+                41,
             ),
             kind: Def(
                 DefNode {
                     pos: (
                         0,
-                        42,
+                        41,
                     ),
                     visibility: Public,
                     kind: Function {
@@ -73,41 +73,59 @@ ModuleNode {
                     block: BlockNode {
                         pos: (
                             22,
-                            42,
+                            41,
                         ),
                         params: [
-                            IdentifierNode {
+                            PatternNode {
                                 pos: (
-                                    26,
                                     27,
+                                    28,
                                 ),
-                                name: "a",
+                                kind: Identifier(
+                                    IdentifierNode {
+                                        pos: (
+                                            27,
+                                            28,
+                                        ),
+                                        name: "a",
+                                    },
+                                    false,
+                                ),
                             },
-                            IdentifierNode {
+                            PatternNode {
                                 pos: (
-                                    29,
                                     30,
+                                    31,
                                 ),
-                                name: "b",
+                                kind: Identifier(
+                                    IdentifierNode {
+                                        pos: (
+                                            30,
+                                            31,
+                                        ),
+                                        name: "b",
+                                    },
+                                    false,
+                                ),
                             },
                         ],
                         body: [
                             StatementNode {
                                 pos: (
-                                    35,
-                                    39,
+                                    34,
+                                    38,
                                 ),
                                 kind: Expr(
                                     ExprNode {
                                         pos: (
-                                            35,
-                                            39,
+                                            34,
+                                            38,
                                         ),
                                         kind: Literal(
                                             LiteralNode {
                                                 pos: (
-                                                    35,
-                                                    39,
+                                                    34,
+                                                    38,
                                                 ),
                                                 kind: Str(
                                                     "wow!",

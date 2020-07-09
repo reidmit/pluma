@@ -1,11 +1,11 @@
 ---
 source: pluma_parser/tests/parse_success.rs
-expression: "def hello A -> A where A :: Any {\n  x => x\n}"
+expression: "def hello A -> A where A :: Any {\n  |x| x\n}"
 ---
 
 === Source ===
 def hello A -> A where A :: Any {
-  x => x
+  |x| x
 }
 
 === Comments ===
@@ -15,19 +15,19 @@ def hello A -> A where A :: Any {
 ModuleNode {
     pos: (
         0,
-        44,
+        43,
     ),
     body: [
         TopLevelStatementNode {
             pos: (
                 0,
-                44,
+                43,
             ),
             kind: Def(
                 DefNode {
                     pos: (
                         0,
-                        44,
+                        43,
                     ),
                     visibility: Public,
                     kind: Function {
@@ -101,34 +101,43 @@ ModuleNode {
                     block: BlockNode {
                         pos: (
                             32,
-                            44,
+                            43,
                         ),
                         params: [
-                            IdentifierNode {
+                            PatternNode {
                                 pos: (
-                                    36,
                                     37,
+                                    38,
                                 ),
-                                name: "x",
+                                kind: Identifier(
+                                    IdentifierNode {
+                                        pos: (
+                                            37,
+                                            38,
+                                        ),
+                                        name: "x",
+                                    },
+                                    false,
+                                ),
                             },
                         ],
                         body: [
                             StatementNode {
                                 pos: (
+                                    40,
                                     41,
-                                    42,
                                 ),
                                 kind: Expr(
                                     ExprNode {
                                         pos: (
+                                            40,
                                             41,
-                                            42,
                                         ),
                                         kind: Identifier(
                                             IdentifierNode {
                                                 pos: (
+                                                    40,
                                                     41,
-                                                    42,
                                                 ),
                                                 name: "x",
                                             },

@@ -1,0 +1,46 @@
+---
+source: pluma_parser/tests/parse_success.rs
+expression: "{}"
+---
+
+=== Source ===
+{}
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        2,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                2,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        0,
+                        2,
+                    ),
+                    kind: Block(
+                        BlockNode {
+                            pos: (
+                                0,
+                                2,
+                            ),
+                            params: [],
+                            body: [],
+                        },
+                    ),
+                    typ: Unknown,
+                },
+            ),
+        },
+    ],
+}
+

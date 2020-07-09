@@ -1,13 +1,13 @@
 ---
 source: pluma_analyzer/tests/analyze_tests.rs
-expression: "enum Color | Red | Green | Blue\n\ndef Color . funk Color -> Color {\n  self, b => b\n}\n\nlet c = Blue\nc.funk(Red)"
+expression: "enum Color | Red | Green | Blue\n\ndef Color . funk Color -> Color {\n  |self, b| b\n}\n\nlet c = Blue\nc.funk(Red)"
 ---
 
 === Source ===
 enum Color | Red | Green | Blue
 
 def Color . funk Color -> Color {
-  self, b => b
+  |self, b| b
 }
 
 let c = Blue
@@ -68,8 +68,8 @@ Scope {
                         ),
                         ref_count: 1,
                         pos: (
+                            88,
                             89,
-                            90,
                         ),
                         kind: Let,
                     },
