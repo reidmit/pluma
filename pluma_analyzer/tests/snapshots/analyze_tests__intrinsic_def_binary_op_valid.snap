@@ -33,7 +33,7 @@ Scope {
         (
             Int,
             TypeBinding {
-                ref_count: 2,
+                ref_count: 3,
                 pos: (
                     15,
                     18,

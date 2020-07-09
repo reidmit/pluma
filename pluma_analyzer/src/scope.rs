@@ -210,7 +210,7 @@ impl Scope {
 
   pub fn get_type_binding(&mut self, typ: &ValueType) -> Option<&mut TypeBinding> {
     if let Some(binding) = self.type_bindings.get_mut(typ) {
-      binding.ref_count += 1;
+      // binding.ref_count += 1;
 
       return Some(binding);
     }

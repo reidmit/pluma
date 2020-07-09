@@ -384,7 +384,7 @@ impl<'a> Analyzer<'a> {
 
             match matching_type_field {
               None => self.error(AnalysisError {
-                pos: pattern.pos,
+                pos: label.pos,
                 kind: AnalysisErrorKind::PatternMismatchUnknownField {
                   field_name: label.name.clone(),
                   value_type: typ.clone(),
@@ -507,7 +507,15 @@ impl<'a> Analyzer<'a> {
   }
 
   fn analyze_def(&mut self, node: &mut DefNode) {
-    match &mut node.kind {
+    self.analyze_def_kind(&mut node.kind);
+
+    if let Some(return_type) = &mut node.return_type {
+      self.analyze_type_expr(return_type);
+    }
+  }
+
+  fn analyze_def_kind(&mut self, kind: &mut DefKind) {
+    match kind {
       DefKind::Function { signature } => {
         for (_part_name, part_type) in signature {
           self.analyze_type_expr(part_type);
@@ -518,16 +526,21 @@ impl<'a> Analyzer<'a> {
         receiver,
         signature,
       } => {
+        self.analyze_type_identifier(receiver);
+
         for (_part_name, part_type) in signature {
           self.analyze_type_expr(part_type);
         }
       }
 
-      _ => todo!(),
-    }
+      DefKind::BinaryOperator { left, right, .. } => {
+        self.analyze_type_identifier(left);
+        self.analyze_type_identifier(right);
+      }
 
-    if let Some(return_type) = &mut node.return_type {
-      self.analyze_type_expr(return_type);
+      DefKind::UnaryOperator { right, .. } => {
+        self.analyze_type_identifier(right);
+      }
     }
   }
 
@@ -556,6 +569,7 @@ impl<'a> Analyzer<'a> {
         self.analyze_expr(left);
         self.analyze_expr(right);
 
+        println!("gtb 1");
         let receiver_type_binding = match self.scope.get_type_binding(&left.typ) {
           Some(binding) => binding,
           _ => return,
@@ -622,6 +636,7 @@ impl<'a> Analyzer<'a> {
       ExprKind::EmptyTuple => node.typ = ValueType::Nothing,
 
       ExprKind::FieldAccess { receiver, field } => {
+        println!("gtb 2");
         let receiver_type_binding = self.scope.get_type_binding(&receiver.typ).unwrap();
 
         if let TypeBindingKind::Struct { fields } = &receiver_type_binding.kind {
@@ -679,6 +694,7 @@ impl<'a> Analyzer<'a> {
       } => {
         self.analyze_expr(receiver);
 
+        println!("gtb 3");
         let receiver_type_binding = match self.scope.get_type_binding(&receiver.typ) {
           Some(binding) => binding,
           _ => return,
@@ -792,6 +808,7 @@ impl<'a> Analyzer<'a> {
       }
 
       ExprKind::UnaryOperation { op, right } => {
+        println!("gtb 4");
         let receiver_type_binding = match self.scope.get_type_binding(&right.typ) {
           Some(binding) => binding,
           _ => return,
@@ -852,6 +869,14 @@ impl<'a> Analyzer<'a> {
     }
   }
 
+  fn analyze_intrinsic_def(&mut self, node: &mut IntrinsicDefNode) {
+    self.analyze_def_kind(&mut node.kind);
+
+    if let Some(return_type) = &mut node.return_type {
+      self.analyze_type_expr(return_type);
+    }
+  }
+
   fn analyze_literal(&mut self, node: &LiteralNode) -> ValueType {
     match &node.kind {
       LiteralKind::IntDecimal { .. } => ValueType::Int,
@@ -863,6 +888,21 @@ impl<'a> Analyzer<'a> {
     }
   }
 
+  fn analyze_type_identifier(&mut self, node: &mut TypeIdentifierNode) -> ValueType {
+    let named_value_type = type_utils::type_ident_to_value_type(&node);
+
+    println!("gtb 5");
+    match self.scope.get_type_binding(&named_value_type) {
+      Some(binding) => binding.ref_count += 1,
+      None => self.error(AnalysisError {
+        pos: node.pos,
+        kind: AnalysisErrorKind::UndefinedType(named_value_type.clone()),
+      }),
+    }
+
+    named_value_type
+  }
+
   fn analyze_type_expr(&mut self, node: &mut TypeExprNode) {
     let typ = match &mut node.kind {
       TypeExprKind::EmptyTuple => ValueType::Nothing,
@@ -872,18 +912,7 @@ impl<'a> Analyzer<'a> {
         inner.typ.clone()
       }
 
-      TypeExprKind::Single(ident) => {
-        let named_value_type = type_utils::type_ident_to_value_type(&ident);
-
-        if self.scope.get_type_binding(&named_value_type).is_none() {
-          self.error(AnalysisError {
-            pos: ident.pos,
-            kind: AnalysisErrorKind::UndefinedType(named_value_type.clone()),
-          })
-        }
-
-        named_value_type
-      }
+      TypeExprKind::Single(ident) => self.analyze_type_identifier(ident),
 
       TypeExprKind::UnlabeledTuple(entries) => {
         let mut entry_types = Vec::new();
@@ -961,6 +990,10 @@ impl<'a> VisitorMut for Analyzer<'a> {
     match &mut node.kind {
       TopLevelStatementKind::Def(def_node) => {
         self.analyze_def(def_node);
+      }
+
+      TopLevelStatementKind::IntrinsicDef(def_node) => {
+        self.analyze_intrinsic_def(def_node);
       }
 
       TopLevelStatementKind::Let(let_node) => {

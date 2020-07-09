@@ -83,7 +83,7 @@ Scope {
                 "Color",
             ),
             TypeBinding {
-                ref_count: 4,
+                ref_count: 3,
                 pos: (
                     5,
                     10,

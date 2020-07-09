@@ -77,6 +77,26 @@ test_analyze! {
     |age2 :: Int
   "#,
 
+  let_labeled_tuple_pattern_out_of_order (true): r#"
+    |intrinsic_type Int
+    |intrinsic_type String
+    |
+    |let tup = (name: "Reid", age: 26)
+    |let (age: age2, name: name2) = tup
+    |
+    |tup :: (name :: String, age :: Int)
+    |name2 :: String
+    |age2 :: Int
+  "#,
+
+  let_labeled_tuple_unknown_field (false): r#"
+    |intrinsic_type Int
+    |intrinsic_type String
+    |
+    |let tup = (name: "Reid", age: 26)
+    |let (age: age2, wat: name2) = tup
+  "#,
+
   def_function (true): r#"
     |intrinsic_type Int
     |
