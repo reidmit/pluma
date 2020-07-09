@@ -65,6 +65,18 @@ test_analyze! {
     |let (d, (e, f)) = tup2
   "#,
 
+  let_labeled_tuple_pattern (true): r#"
+    |intrinsic_type Int
+    |intrinsic_type String
+    |
+    |let tup = (name: "Reid", age: 26)
+    |let (name: name2, age: age2) = tup
+    |
+    |tup :: (name :: String, age :: Int)
+    |name2 :: String
+    |age2 :: Int
+  "#,
+
   def_function (true): r#"
     |intrinsic_type Int
     |

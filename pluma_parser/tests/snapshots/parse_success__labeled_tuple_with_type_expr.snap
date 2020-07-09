@@ -1,0 +1,305 @@
+---
+source: pluma_parser/tests/parse_success.rs
+expression: "let tup = (name: \"Reid\", age: 26)\nlet (name: name2, age: age2) = tup\n\ntup :: (name :: String, age :: Int)"
+---
+
+=== Source ===
+let tup = (name: "Reid", age: 26)
+let (name: name2, age: age2) = tup
+
+tup :: (name :: String, age :: Int)
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        105,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                33,
+            ),
+            kind: Let(
+                LetNode {
+                    pos: (
+                        0,
+                        33,
+                    ),
+                    pattern: PatternNode {
+                        pos: (
+                            4,
+                            7,
+                        ),
+                        kind: Identifier(
+                            IdentifierNode {
+                                pos: (
+                                    4,
+                                    7,
+                                ),
+                                name: "tup",
+                            },
+                            false,
+                        ),
+                    },
+                    value: ExprNode {
+                        pos: (
+                            10,
+                            33,
+                        ),
+                        kind: LabeledTuple(
+                            [
+                                (
+                                    IdentifierNode {
+                                        pos: (
+                                            11,
+                                            15,
+                                        ),
+                                        name: "name",
+                                    },
+                                    ExprNode {
+                                        pos: (
+                                            18,
+                                            22,
+                                        ),
+                                        kind: Literal(
+                                            LiteralNode {
+                                                pos: (
+                                                    18,
+                                                    22,
+                                                ),
+                                                kind: Str(
+                                                    "Reid",
+                                                ),
+                                            },
+                                        ),
+                                        typ: Unknown,
+                                    },
+                                ),
+                                (
+                                    IdentifierNode {
+                                        pos: (
+                                            25,
+                                            28,
+                                        ),
+                                        name: "age",
+                                    },
+                                    ExprNode {
+                                        pos: (
+                                            30,
+                                            32,
+                                        ),
+                                        kind: Literal(
+                                            LiteralNode {
+                                                pos: (
+                                                    30,
+                                                    32,
+                                                ),
+                                                kind: IntDecimal(
+                                                    26,
+                                                ),
+                                            },
+                                        ),
+                                        typ: Unknown,
+                                    },
+                                ),
+                            ],
+                        ),
+                        typ: Unknown,
+                    },
+                },
+            ),
+        },
+        TopLevelStatementNode {
+            pos: (
+                34,
+                68,
+            ),
+            kind: Let(
+                LetNode {
+                    pos: (
+                        34,
+                        68,
+                    ),
+                    pattern: PatternNode {
+                        pos: (
+                            38,
+                            62,
+                        ),
+                        kind: LabeledTuple(
+                            [
+                                (
+                                    IdentifierNode {
+                                        pos: (
+                                            39,
+                                            43,
+                                        ),
+                                        name: "name",
+                                    },
+                                    PatternNode {
+                                        pos: (
+                                            45,
+                                            50,
+                                        ),
+                                        kind: Identifier(
+                                            IdentifierNode {
+                                                pos: (
+                                                    45,
+                                                    50,
+                                                ),
+                                                name: "name2",
+                                            },
+                                            false,
+                                        ),
+                                    },
+                                ),
+                                (
+                                    IdentifierNode {
+                                        pos: (
+                                            52,
+                                            55,
+                                        ),
+                                        name: "age",
+                                    },
+                                    PatternNode {
+                                        pos: (
+                                            57,
+                                            61,
+                                        ),
+                                        kind: Identifier(
+                                            IdentifierNode {
+                                                pos: (
+                                                    57,
+                                                    61,
+                                                ),
+                                                name: "age2",
+                                            },
+                                            false,
+                                        ),
+                                    },
+                                ),
+                            ],
+                        ),
+                    },
+                    value: ExprNode {
+                        pos: (
+                            65,
+                            68,
+                        ),
+                        kind: Identifier(
+                            IdentifierNode {
+                                pos: (
+                                    65,
+                                    68,
+                                ),
+                                name: "tup",
+                            },
+                        ),
+                        typ: Unknown,
+                    },
+                },
+            ),
+        },
+        TopLevelStatementNode {
+            pos: (
+                70,
+                105,
+            ),
+            kind: Expr(
+                ExprNode {
+                    pos: (
+                        70,
+                        105,
+                    ),
+                    kind: TypeAssertion {
+                        expr: ExprNode {
+                            pos: (
+                                70,
+                                73,
+                            ),
+                            kind: Identifier(
+                                IdentifierNode {
+                                    pos: (
+                                        70,
+                                        73,
+                                    ),
+                                    name: "tup",
+                                },
+                            ),
+                            typ: Unknown,
+                        },
+                        asserted_type: TypeExprNode {
+                            pos: (
+                                77,
+                                105,
+                            ),
+                            kind: LabeledTuple(
+                                [
+                                    (
+                                        IdentifierNode {
+                                            pos: (
+                                                78,
+                                                82,
+                                            ),
+                                            name: "name",
+                                        },
+                                        TypeExprNode {
+                                            pos: (
+                                                86,
+                                                92,
+                                            ),
+                                            kind: Single(
+                                                TypeIdentifierNode {
+                                                    pos: (
+                                                        86,
+                                                        92,
+                                                    ),
+                                                    name: "String",
+                                                    generics: [],
+                                                },
+                                            ),
+                                            typ: Unknown,
+                                        },
+                                    ),
+                                    (
+                                        IdentifierNode {
+                                            pos: (
+                                                94,
+                                                97,
+                                            ),
+                                            name: "age",
+                                        },
+                                        TypeExprNode {
+                                            pos: (
+                                                101,
+                                                104,
+                                            ),
+                                            kind: Single(
+                                                TypeIdentifierNode {
+                                                    pos: (
+                                                        101,
+                                                        104,
+                                                    ),
+                                                    name: "Int",
+                                                    generics: [],
+                                                },
+                                            ),
+                                            typ: Unknown,
+                                        },
+                                    ),
+                                ],
+                            ),
+                            typ: Unknown,
+                        },
+                    },
+                    typ: Unknown,
+                },
+            ),
+        },
+    ],
+}
+

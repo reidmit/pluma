@@ -15,6 +15,8 @@ pub enum PatternKind {
   Constructor(IdentifierNode, Box<PatternNode>),
   // e.g. let (x, y) =
   UnlabeledTuple(Vec<PatternNode>),
+  // e.g. let (x: a, y: b) =
+  LabeledTuple(Vec<(IdentifierNode, PatternNode)>),
   // e.g. '_' in let (x, _) =
   Underscore,
   // e.g. '1' in match x | 1 => "yes" | _ => "no"

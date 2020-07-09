@@ -1,0 +1,99 @@
+---
+source: pluma_analyzer/tests/analyze_tests.rs
+expression: "intrinsic_type Int\nintrinsic_type String\n\nlet tup = (name: \"Reid\", age: 26)\nlet (name: name2, age: age2) = tup\n\ntup :: (name :: String, age :: Int)\nname2 :: String\nage2 :: Int"
+---
+
+=== Source ===
+intrinsic_type Int
+intrinsic_type String
+
+let tup = (name: "Reid", age: 26)
+let (name: name2, age: age2) = tup
+
+tup :: (name :: String, age :: Int)
+name2 :: String
+age2 :: Int
+
+=== Top-level scope ===
+Scope {
+    levels: [
+        ScopeLevel {
+            bindings: [
+                (
+                    "age2",
+                    Binding {
+                        typ: Int,
+                        ref_count: 1,
+                        pos: (
+                            99,
+                            103,
+                        ),
+                        kind: Let,
+                    },
+                ),
+                (
+                    "name2",
+                    Binding {
+                        typ: String,
+                        ref_count: 1,
+                        pos: (
+                            87,
+                            92,
+                        ),
+                        kind: Let,
+                    },
+                ),
+                (
+                    "tup",
+                    Binding {
+                        typ: LabeledTuple(
+                            [
+                                (
+                                    "name",
+                                    String,
+                                ),
+                                (
+                                    "age",
+                                    Int,
+                                ),
+                            ],
+                        ),
+                        ref_count: 2,
+                        pos: (
+                            46,
+                            49,
+                        ),
+                        kind: Let,
+                    },
+                ),
+            ],
+        },
+    ],
+    type_bindings: [
+        (
+            Int,
+            TypeBinding {
+                ref_count: 2,
+                pos: (
+                    15,
+                    18,
+                ),
+                kind: IntrinsicType,
+                methods: {},
+            },
+        ),
+        (
+            String,
+            TypeBinding {
+                ref_count: 2,
+                pos: (
+                    34,
+                    40,
+                ),
+                kind: IntrinsicType,
+                methods: {},
+            },
+        ),
+    ],
+}
+

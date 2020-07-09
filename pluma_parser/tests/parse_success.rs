@@ -180,6 +180,13 @@ test_parse_success! {
     |3)
   "#,
 
+  labeled_tuple_with_type_expr: r#"
+    |let tup = (name: "Reid", age: 26)
+    |let (name: name2, age: age2) = tup
+    |
+    |tup :: (name :: String, age :: Int)
+  "#,
+
   list_empty: r#"
     |[]
   "#,

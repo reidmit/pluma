@@ -5,6 +5,7 @@ use pluma_ast::*;
 use pluma_diagnostics::*;
 use pluma_visitor::*;
 use std::collections::HashMap;
+use std::iter::Iterator;
 
 pub struct Analyzer<'a> {
   pub diagnostics: Vec<Diagnostic>,
@@ -355,6 +356,44 @@ impl<'a> Analyzer<'a> {
             let element_type = element_types.get(i).unwrap();
 
             self.destructure_pattern(&element_pattern, &element_type);
+          }
+        }
+
+        typ => self.error(AnalysisError {
+          pos: pattern.pos,
+          kind: AnalysisErrorKind::PatternMismatchExpectedTuple(typ.clone()),
+        }),
+      },
+
+      PatternKind::LabeledTuple(element_patterns) => match typ {
+        ValueType::LabeledTuple(element_types) => {
+          if element_patterns.len() != element_types.len() {
+            return self.error(AnalysisError {
+              pos: pattern.pos,
+              kind: AnalysisErrorKind::PatternMismatchTupleSize {
+                pattern_size: element_patterns.len(),
+                value_size: element_types.len(),
+              },
+            });
+          }
+
+          for (label, element_pattern) in element_patterns {
+            let matching_type_field = element_types
+              .iter()
+              .find(|(field_label, _)| *field_label == label.name);
+
+            match matching_type_field {
+              None => self.error(AnalysisError {
+                pos: pattern.pos,
+                kind: AnalysisErrorKind::PatternMismatchUnknownField {
+                  field_name: label.name.clone(),
+                  value_type: typ.clone(),
+                },
+              }),
+              Some((_, element_type)) => {
+                self.destructure_pattern(&element_pattern, &element_type);
+              }
+            }
           }
         }
 
@@ -773,15 +812,26 @@ impl<'a> Analyzer<'a> {
         }
       }
 
-      ExprKind::UnlabeledTuple(elements) => {
-        let mut element_types = Vec::new();
+      ExprKind::UnlabeledTuple(entries) => {
+        let mut entry_types = Vec::new();
 
-        for element in elements {
-          self.analyze_expr(element);
-          element_types.push(element.typ.clone());
+        for entry in entries {
+          self.analyze_expr(entry);
+          entry_types.push(entry.typ.clone());
         }
 
-        node.typ = ValueType::UnlabeledTuple(element_types);
+        node.typ = ValueType::UnlabeledTuple(entry_types);
+      }
+
+      ExprKind::LabeledTuple(entries) => {
+        let mut entry_types = Vec::new();
+
+        for (label, entry) in entries {
+          self.analyze_expr(entry);
+          entry_types.push((label.name.clone(), entry.typ.clone()));
+        }
+
+        node.typ = ValueType::LabeledTuple(entry_types);
       }
 
       _other => todo!("more expr kinds!"),

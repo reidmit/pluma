@@ -17,6 +17,7 @@ pub struct Tokenizer<'a> {
   errors: Vec<ParseError>,
   next_token: Option<Token>,
   collect_comments: bool,
+  peek_queue: Vec<Token>,
 }
 
 impl<'a> Tokenizer<'a> {
@@ -36,7 +37,18 @@ impl<'a> Tokenizer<'a> {
       errors: Vec::new(),
       next_token: None,
       collect_comments,
+      peek_queue: Vec::with_capacity(2),
     };
+  }
+
+  pub fn peek(&mut self) -> Option<Token> {
+    let peeked_token = self.next();
+
+    if let Some(token) = peeked_token {
+      self.peek_queue.insert(0, token);
+    }
+
+    peeked_token
   }
 }
 
@@ -44,6 +56,10 @@ impl<'a> Iterator for Tokenizer<'a> {
   type Item = Token;
 
   fn next(&mut self) -> Option<Token> {
+    if !self.peek_queue.is_empty() {
+      return self.peek_queue.pop();
+    }
+
     if self.index >= self.length {
       return None;
     }

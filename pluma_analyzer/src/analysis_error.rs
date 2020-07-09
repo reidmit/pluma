@@ -35,6 +35,10 @@ pub enum AnalysisErrorKind {
   UnusedVariable(String),
   NameAlreadyInScope(String),
   CalleeNotCallable(ValueType),
+  PatternMismatchUnknownField {
+    field_name: String,
+    value_type: ValueType,
+  },
   PatternMismatchExpectedTuple(ValueType),
   PatternMismatchExpectedConstructor {
     constructor_type: ValueType,
@@ -145,6 +149,15 @@ impl fmt::Display for AnalysisError {
         f,
         "Incorrect number of parameters in function body. Signature lists {}, but found {}.",
         expected, actual
+      ),
+
+      PatternMismatchUnknownField {
+        field_name,
+        value_type,
+      } => write!(
+        f,
+        "Cannot destructure unknown field '{}' in pattern. Value has type {}.",
+        field_name, value_type,
       ),
 
       PatternMismatchExpectedTuple(typ) => write!(

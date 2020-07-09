@@ -1304,6 +1304,43 @@ impl<'a> Parser<'a> {
       Some(Token::LeftParen(start, _)) => {
         self.advance();
 
+        let next_token = self.tokenizer.peek();
+
+        match (self.current_token, next_token) {
+          (Some(Token::Identifier(..)), Some(Token::Colon(..))) => {
+            // It's a labeled tuple!
+            let mut labeled_entries = Vec::new();
+
+            while let Some(label) = self.parse_identifier() {
+              expect_token_and_do!(self, Token::Colon, { self.advance() });
+
+              let pattern = match self.parse_pattern() {
+                Some(pattern) => pattern,
+                _ => break,
+              };
+
+              labeled_entries.push((label, pattern));
+
+              match self.current_token {
+                Some(Token::Comma(..)) => self.advance(),
+                _ => break,
+              }
+            }
+
+            let end = expect_token_and_do!(self, Token::RightParen, {
+              let (_, end) = self.current_token_position();
+              self.advance();
+              end
+            });
+
+            return Some(PatternNode {
+              pos: (start, end),
+              kind: PatternKind::LabeledTuple(labeled_entries),
+            });
+          }
+          _ => {}
+        }
+
         let mut entries = Vec::new();
 
         while let Some(pattern) = self.parse_pattern() {
@@ -2389,7 +2426,7 @@ impl<'a> Parser<'a> {
               pos: label.pos,
             };
 
-            expect_token_and_do!(self, Token::Colon, { self.advance() });
+            expect_token_and_do!(self, Token::DoubleColon, { self.advance() });
 
             if let Some(value) = self.parse_type_expression() {
               labeled_entries.push((label_ident, value));
@@ -2409,7 +2446,7 @@ impl<'a> Parser<'a> {
           }
         }
       } else if first_entry.is_none() {
-        if current_token_is!(self, Token::Colon) {
+        if current_token_is!(self, Token::DoubleColon) {
           self.advance();
           labeled = true;
 
