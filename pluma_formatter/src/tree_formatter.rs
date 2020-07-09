@@ -39,6 +39,50 @@ where
     self.out(format_args!("{}", node.name));
   }
 
+  fn format_block(&mut self, node: &BlockNode) {
+    self.brace_depth += 1;
+
+    self.out_str("{");
+
+    let one_line = node.body.len() < 2;
+
+    if !node.params.is_empty() {
+      let count = &node.params.len();
+      let mut i = 0;
+
+      for param in &node.params {
+        self.out_str(" ");
+
+        self.format_identifier(param);
+
+        if i < count - 1 {
+          self.out_str(",");
+        }
+
+        i += 1;
+      }
+
+      self.out_str(" =>");
+    }
+
+    if one_line {
+      for stmt in &node.body {
+        self.format_statement(stmt);
+      }
+    } else {
+      for stmt in &node.body {
+        self.line_break();
+        self.format_statement(stmt);
+      }
+
+      self.line_break();
+    }
+
+    self.brace_depth -= 1;
+
+    self.out_str("}");
+  }
+
   fn format_call(&mut self, node: &CallNode) {
     match &node.callee.kind {
       ExprKind::MultiPartIdentifier(parts) => {
@@ -73,49 +117,7 @@ where
 
   fn format_expr(&mut self, node: &ExprNode) {
     match &node.kind {
-      ExprKind::Block { params, body } => {
-        self.brace_depth += 1;
-
-        self.out_str("{");
-
-        let one_line = body.len() < 2;
-
-        if !params.is_empty() {
-          let count = params.len();
-          let mut i = 0;
-
-          for param in params {
-            self.out_str(" ");
-
-            self.format_identifier(param);
-
-            if i < count - 1 {
-              self.out_str(",");
-            }
-
-            i += 1;
-          }
-
-          self.out_str(" =>");
-        }
-
-        if one_line {
-          for stmt in body {
-            self.format_statement(stmt);
-          }
-        } else {
-          for stmt in body {
-            self.line_break();
-            self.format_statement(stmt);
-          }
-
-          self.line_break();
-        }
-
-        self.brace_depth -= 1;
-
-        self.out_str("}");
-      }
+      ExprKind::Block(block) => self.format_block(block),
 
       ExprKind::Call(call) => self.format_call(call),
 

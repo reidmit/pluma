@@ -62,43 +62,49 @@ ModuleNode {
                     },
                     return_type: None,
                     generic_type_constraints: [],
-                    params: [
-                        IdentifierNode {
-                            pos: (
-                                21,
-                                22,
-                            ),
-                            name: "a",
-                        },
-                    ],
-                    body: [
-                        StatementNode {
-                            pos: (
-                                27,
-                                31,
-                            ),
-                            kind: Expr(
-                                ExprNode {
-                                    pos: (
-                                        27,
-                                        31,
-                                    ),
-                                    kind: Literal(
-                                        LiteralNode {
-                                            pos: (
-                                                27,
-                                                31,
-                                            ),
-                                            kind: Str(
-                                                "wow!",
-                                            ),
-                                        },
-                                    ),
-                                    typ: Unknown,
-                                },
-                            ),
-                        },
-                    ],
+                    block: BlockNode {
+                        pos: (
+                            17,
+                            34,
+                        ),
+                        params: [
+                            IdentifierNode {
+                                pos: (
+                                    21,
+                                    22,
+                                ),
+                                name: "a",
+                            },
+                        ],
+                        body: [
+                            StatementNode {
+                                pos: (
+                                    27,
+                                    31,
+                                ),
+                                kind: Expr(
+                                    ExprNode {
+                                        pos: (
+                                            27,
+                                            31,
+                                        ),
+                                        kind: Literal(
+                                            LiteralNode {
+                                                pos: (
+                                                    27,
+                                                    31,
+                                                ),
+                                                kind: Str(
+                                                    "wow!",
+                                                ),
+                                            },
+                                        ),
+                                        typ: Unknown,
+                                    },
+                                ),
+                            },
+                        ],
+                    },
                 },
             ),
         },

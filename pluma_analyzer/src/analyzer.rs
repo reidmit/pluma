@@ -35,6 +35,14 @@ impl<'a> Analyzer<'a> {
     }
   }
 
+  fn check_results(&mut self, result: Result<(), Vec<Diagnostic>>) {
+    if let Err(diags) = result {
+      for diag in diags {
+        self.diagnostic(diag);
+      }
+    }
+  }
+
   fn collect_def(
     &mut self,
     pos: Position,
@@ -455,6 +463,27 @@ impl<'a> Analyzer<'a> {
     }
   }
 
+  fn analyze_block(&mut self, node: &mut BlockNode) -> ValueType {
+    let mut param_types = Vec::new();
+    let mut return_type = ValueType::Nothing;
+
+    if node.params.is_empty() {
+      param_types.push(ValueType::Nothing);
+    } else {
+      for _param in &node.params {
+        param_types.push(ValueType::Unknown);
+      }
+    }
+
+    for stmt in &node.body {
+      if let StatementKind::Expr(expr) = &stmt.kind {
+        return_type = expr.typ.clone();
+      }
+    }
+
+    ValueType::Func(param_types, Box::new(return_type))
+  }
+
   fn analyze_call(&mut self, node: &mut CallNode) -> ValueType {
     self.analyze_expr(&mut node.callee);
 
@@ -507,16 +536,25 @@ impl<'a> Analyzer<'a> {
   }
 
   fn analyze_def(&mut self, node: &mut DefNode) {
-    self.analyze_def_kind(&mut node.kind);
+    self.scope.enter();
 
-    if let Some(return_type) = &mut node.return_type {
-      self.analyze_type_expr(return_type);
-    }
-  }
-
-  fn analyze_def_kind(&mut self, kind: &mut DefKind) {
-    match kind {
+    match &mut node.kind {
       DefKind::Function { signature } => {
+        let params = &node.block.params;
+
+        if params.len() != signature.len() {
+          let start = params.first().map(|p| p.pos.0).unwrap_or(node.pos.0);
+          let end = params.last().map(|p| p.pos.1).unwrap_or(node.pos.1);
+
+          self.error(AnalysisError {
+            pos: (start, end),
+            kind: AnalysisErrorKind::ParamCountMismatchInDefinition {
+              expected: signature.len(),
+              actual: params.len(),
+            },
+          })
+        }
+
         for (_part_name, part_type) in signature {
           self.analyze_type_expr(part_type);
         }
@@ -542,6 +580,14 @@ impl<'a> Analyzer<'a> {
         self.analyze_type_identifier(right);
       }
     }
+
+    if let Some(return_type) = &mut node.return_type {
+      self.analyze_type_expr(return_type);
+    }
+
+    let results = self.scope.exit();
+
+    self.check_results(results);
   }
 
   fn analyze_expr(&mut self, node: &mut ExprNode) {
@@ -569,7 +615,6 @@ impl<'a> Analyzer<'a> {
         self.analyze_expr(left);
         self.analyze_expr(right);
 
-        println!("gtb 1");
         let receiver_type_binding = match self.scope.get_type_binding(&left.typ) {
           Some(binding) => binding,
           _ => return,
@@ -604,39 +649,13 @@ impl<'a> Analyzer<'a> {
         }
       }
 
-      ExprKind::Block { params, body } => {
-        let mut param_types = Vec::new();
-        let mut return_type = ValueType::Nothing;
-
-        if params.is_empty() {
-          param_types.push(ValueType::Nothing);
-        } else {
-          for _param in params {
-            param_types.push(ValueType::Unknown);
-          }
-        }
-
-        for stmt in body {
-          if let StatementKind::Expr(expr) = &stmt.kind {
-            return_type = expr.typ.clone();
-          }
-        }
-
-        node.typ = ValueType::Func(param_types, Box::new(return_type));
-
-        if let Err(diagnostics) = self.scope.exit() {
-          for diagnostic in diagnostics {
-            self.diagnostic(diagnostic);
-          }
-        }
-      }
+      ExprKind::Block(block) => node.typ = self.analyze_block(block),
 
       ExprKind::Call(call_node) => node.typ = self.analyze_call(call_node),
 
       ExprKind::EmptyTuple => node.typ = ValueType::Nothing,
 
       ExprKind::FieldAccess { receiver, field } => {
-        println!("gtb 2");
         let receiver_type_binding = self.scope.get_type_binding(&receiver.typ).unwrap();
 
         if let TypeBindingKind::Struct { fields } = &receiver_type_binding.kind {
@@ -694,7 +713,6 @@ impl<'a> Analyzer<'a> {
       } => {
         self.analyze_expr(receiver);
 
-        println!("gtb 3");
         let receiver_type_binding = match self.scope.get_type_binding(&receiver.typ) {
           Some(binding) => binding,
           _ => return,
@@ -808,7 +826,6 @@ impl<'a> Analyzer<'a> {
       }
 
       ExprKind::UnaryOperation { op, right } => {
-        println!("gtb 4");
         let receiver_type_binding = match self.scope.get_type_binding(&right.typ) {
           Some(binding) => binding,
           _ => return,
@@ -870,7 +887,33 @@ impl<'a> Analyzer<'a> {
   }
 
   fn analyze_intrinsic_def(&mut self, node: &mut IntrinsicDefNode) {
-    self.analyze_def_kind(&mut node.kind);
+    match &mut node.kind {
+      DefKind::Function { signature } => {
+        for (_part_name, part_type) in signature {
+          self.analyze_type_expr(part_type);
+        }
+      }
+
+      DefKind::Method {
+        receiver,
+        signature,
+      } => {
+        self.analyze_type_identifier(receiver);
+
+        for (_part_name, part_type) in signature {
+          self.analyze_type_expr(part_type);
+        }
+      }
+
+      DefKind::BinaryOperator { left, right, .. } => {
+        self.analyze_type_identifier(left);
+        self.analyze_type_identifier(right);
+      }
+
+      DefKind::UnaryOperator { right, .. } => {
+        self.analyze_type_identifier(right);
+      }
+    }
 
     if let Some(return_type) = &mut node.return_type {
       self.analyze_type_expr(return_type);
@@ -891,7 +934,6 @@ impl<'a> Analyzer<'a> {
   fn analyze_type_identifier(&mut self, node: &mut TypeIdentifierNode) -> ValueType {
     let named_value_type = type_utils::type_ident_to_value_type(&node);
 
-    println!("gtb 5");
     match self.scope.get_type_binding(&named_value_type) {
       Some(binding) => binding.ref_count += 1,
       None => self.error(AnalysisError {

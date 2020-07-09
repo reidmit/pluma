@@ -55,8 +55,14 @@ ModuleNode {
                     },
                     return_type: None,
                     generic_type_constraints: [],
-                    params: [],
-                    body: [],
+                    block: BlockNode {
+                        pos: (
+                            15,
+                            17,
+                        ),
+                        params: [],
+                        body: [],
+                    },
                 },
             ),
         },
@@ -104,8 +110,14 @@ ModuleNode {
                     },
                     return_type: None,
                     generic_type_constraints: [],
-                    params: [],
-                    body: [],
+                    block: BlockNode {
+                        pos: (
+                            44,
+                            46,
+                        ),
+                        params: [],
+                        body: [],
+                    },
                 },
             ),
         },

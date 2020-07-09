@@ -1,6 +1,10 @@
 use pluma_ast::*;
 
 pub trait Visitor {
+  fn enter_block(&mut self, _node: &BlockNode) {}
+
+  fn leave_block(&mut self, _node: &BlockNode) {}
+
   fn enter_call(&mut self, _node: &CallNode) {}
 
   fn leave_call(&mut self, _node: &CallNode) {}

@@ -73,8 +73,14 @@ ModuleNode {
                         },
                     ),
                     generic_type_constraints: [],
-                    params: [],
-                    body: [],
+                    block: BlockNode {
+                        pos: (
+                            15,
+                            17,
+                        ),
+                        params: [],
+                        body: [],
+                    },
                 },
             ),
         },

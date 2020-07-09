@@ -70,43 +70,49 @@ ModuleNode {
                                     11,
                                     21,
                                 ),
-                                kind: Block {
-                                    params: [
-                                        IdentifierNode {
-                                            pos: (
-                                                13,
-                                                14,
-                                            ),
-                                            name: "x",
-                                        },
-                                    ],
-                                    body: [
-                                        StatementNode {
-                                            pos: (
-                                                18,
-                                                19,
-                                            ),
-                                            kind: Expr(
-                                                ExprNode {
-                                                    pos: (
-                                                        18,
-                                                        19,
-                                                    ),
-                                                    kind: Identifier(
-                                                        IdentifierNode {
-                                                            pos: (
-                                                                18,
-                                                                19,
-                                                            ),
-                                                            name: "x",
-                                                        },
-                                                    ),
-                                                    typ: Unknown,
-                                                },
-                                            ),
-                                        },
-                                    ],
-                                },
+                                kind: Block(
+                                    BlockNode {
+                                        pos: (
+                                            11,
+                                            21,
+                                        ),
+                                        params: [
+                                            IdentifierNode {
+                                                pos: (
+                                                    13,
+                                                    14,
+                                                ),
+                                                name: "x",
+                                            },
+                                        ],
+                                        body: [
+                                            StatementNode {
+                                                pos: (
+                                                    18,
+                                                    19,
+                                                ),
+                                                kind: Expr(
+                                                    ExprNode {
+                                                        pos: (
+                                                            18,
+                                                            19,
+                                                        ),
+                                                        kind: Identifier(
+                                                            IdentifierNode {
+                                                                pos: (
+                                                                    18,
+                                                                    19,
+                                                                ),
+                                                                name: "x",
+                                                            },
+                                                        ),
+                                                        typ: Unknown,
+                                                    },
+                                                ),
+                                            },
+                                        ],
+                                    },
+                                ),
                                 typ: Unknown,
                             },
                             ExprNode {

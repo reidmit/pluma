@@ -20,10 +20,7 @@ pub enum ExprKind {
     op: Box<OperatorNode>,
     right: Box<ExprNode>,
   },
-  Block {
-    params: Vec<IdentifierNode>,
-    body: Vec<StatementNode>,
-  },
+  Block(BlockNode),
   Call(CallNode),
   Dict(Vec<(ExprNode, ExprNode)>),
   EmptyTuple,

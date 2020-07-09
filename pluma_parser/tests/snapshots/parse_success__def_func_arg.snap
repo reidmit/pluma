@@ -106,43 +106,49 @@ ModuleNode {
                         },
                     ),
                     generic_type_constraints: [],
-                    params: [
-                        IdentifierNode {
-                            pos: (
-                                35,
-                                36,
-                            ),
-                            name: "a",
-                        },
-                    ],
-                    body: [
-                        StatementNode {
-                            pos: (
-                                41,
-                                45,
-                            ),
-                            kind: Expr(
-                                ExprNode {
-                                    pos: (
-                                        41,
-                                        45,
-                                    ),
-                                    kind: Literal(
-                                        LiteralNode {
-                                            pos: (
-                                                41,
-                                                45,
-                                            ),
-                                            kind: Str(
-                                                "wow!",
-                                            ),
-                                        },
-                                    ),
-                                    typ: Unknown,
-                                },
-                            ),
-                        },
-                    ],
+                    block: BlockNode {
+                        pos: (
+                            31,
+                            48,
+                        ),
+                        params: [
+                            IdentifierNode {
+                                pos: (
+                                    35,
+                                    36,
+                                ),
+                                name: "a",
+                            },
+                        ],
+                        body: [
+                            StatementNode {
+                                pos: (
+                                    41,
+                                    45,
+                                ),
+                                kind: Expr(
+                                    ExprNode {
+                                        pos: (
+                                            41,
+                                            45,
+                                        ),
+                                        kind: Literal(
+                                            LiteralNode {
+                                                pos: (
+                                                    41,
+                                                    45,
+                                                ),
+                                                kind: Str(
+                                                    "wow!",
+                                                ),
+                                            },
+                                        ),
+                                        typ: Unknown,
+                                    },
+                                ),
+                            },
+                        ],
+                    },
                 },
             ),
         },

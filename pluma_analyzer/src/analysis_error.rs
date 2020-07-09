@@ -147,7 +147,7 @@ impl fmt::Display for AnalysisError {
 
       ParamCountMismatchInDefinition { expected, actual } => write!(
         f,
-        "Incorrect number of parameters in function body. Signature lists {}, but found {}.",
+        "Incorrect number of parameters in function body. The signature shows {}, but found {}.",
         expected, actual
       ),
 

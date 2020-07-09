@@ -8,8 +8,7 @@ pub struct DefNode {
   pub kind: DefKind,
   pub return_type: Option<TypeExprNode>,
   pub generic_type_constraints: GenericTypeConstraints,
-  pub params: Vec<IdentifierNode>,
-  pub body: Vec<StatementNode>,
+  pub block: BlockNode,
 }
 
 #[cfg_attr(debug_assertions, derive(Debug))]

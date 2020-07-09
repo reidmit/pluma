@@ -97,61 +97,73 @@ ModuleNode {
                         },
                     ),
                     generic_type_constraints: [],
-                    params: [],
-                    body: [
-                        StatementNode {
-                            pos: (
-                                31,
-                                41,
-                            ),
-                            kind: Expr(
-                                ExprNode {
-                                    pos: (
-                                        31,
-                                        41,
-                                    ),
-                                    kind: Block {
-                                        params: [
-                                            IdentifierNode {
+                    block: BlockNode {
+                        pos: (
+                            27,
+                            43,
+                        ),
+                        params: [],
+                        body: [
+                            StatementNode {
+                                pos: (
+                                    31,
+                                    41,
+                                ),
+                                kind: Expr(
+                                    ExprNode {
+                                        pos: (
+                                            31,
+                                            41,
+                                        ),
+                                        kind: Block(
+                                            BlockNode {
                                                 pos: (
-                                                    33,
-                                                    34,
+                                                    31,
+                                                    41,
                                                 ),
-                                                name: "x",
-                                            },
-                                        ],
-                                        body: [
-                                            StatementNode {
-                                                pos: (
-                                                    38,
-                                                    39,
-                                                ),
-                                                kind: Expr(
-                                                    ExprNode {
+                                                params: [
+                                                    IdentifierNode {
+                                                        pos: (
+                                                            33,
+                                                            34,
+                                                        ),
+                                                        name: "x",
+                                                    },
+                                                ],
+                                                body: [
+                                                    StatementNode {
                                                         pos: (
                                                             38,
                                                             39,
                                                         ),
-                                                        kind: Identifier(
-                                                            IdentifierNode {
+                                                        kind: Expr(
+                                                            ExprNode {
                                                                 pos: (
                                                                     38,
                                                                     39,
                                                                 ),
-                                                                name: "y",
+                                                                kind: Identifier(
+                                                                    IdentifierNode {
+                                                                        pos: (
+                                                                            38,
+                                                                            39,
+                                                                        ),
+                                                                        name: "y",
+                                                                    },
+                                                                ),
+                                                                typ: Unknown,
                                                             },
                                                         ),
-                                                        typ: Unknown,
                                                     },
-                                                ),
+                                                ],
                                             },
-                                        ],
+                                        ),
+                                        typ: Unknown,
                                     },
-                                    typ: Unknown,
-                                },
-                            ),
-                        },
-                    ],
+                                ),
+                            },
+                        ],
+                    },
                 },
             ),
         },

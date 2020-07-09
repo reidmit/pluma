@@ -115,57 +115,63 @@ ModuleNode {
                     },
                     return_type: None,
                     generic_type_constraints: [],
-                    params: [
-                        IdentifierNode {
-                            pos: (
-                                46,
-                                47,
-                            ),
-                            name: "a",
-                        },
-                        IdentifierNode {
-                            pos: (
-                                49,
-                                50,
-                            ),
-                            name: "b",
-                        },
-                        IdentifierNode {
-                            pos: (
-                                52,
-                                53,
-                            ),
-                            name: "c",
-                        },
-                    ],
-                    body: [
-                        StatementNode {
-                            pos: (
-                                58,
-                                62,
-                            ),
-                            kind: Expr(
-                                ExprNode {
-                                    pos: (
-                                        58,
-                                        62,
-                                    ),
-                                    kind: Literal(
-                                        LiteralNode {
-                                            pos: (
-                                                58,
-                                                62,
-                                            ),
-                                            kind: Str(
-                                                "wow!",
-                                            ),
-                                        },
-                                    ),
-                                    typ: Unknown,
-                                },
-                            ),
-                        },
-                    ],
+                    block: BlockNode {
+                        pos: (
+                            42,
+                            65,
+                        ),
+                        params: [
+                            IdentifierNode {
+                                pos: (
+                                    46,
+                                    47,
+                                ),
+                                name: "a",
+                            },
+                            IdentifierNode {
+                                pos: (
+                                    49,
+                                    50,
+                                ),
+                                name: "b",
+                            },
+                            IdentifierNode {
+                                pos: (
+                                    52,
+                                    53,
+                                ),
+                                name: "c",
+                            },
+                        ],
+                        body: [
+                            StatementNode {
+                                pos: (
+                                    58,
+                                    62,
+                                ),
+                                kind: Expr(
+                                    ExprNode {
+                                        pos: (
+                                            58,
+                                            62,
+                                        ),
+                                        kind: Literal(
+                                            LiteralNode {
+                                                pos: (
+                                                    58,
+                                                    62,
+                                                ),
+                                                kind: Str(
+                                                    "wow!",
+                                                ),
+                                            },
+                                        ),
+                                        typ: Unknown,
+                                    },
+                                ),
+                            },
+                        ],
+                    },
                 },
             ),
         },

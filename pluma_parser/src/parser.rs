@@ -217,7 +217,7 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_block(&mut self) -> Option<ExprNode> {
+  fn parse_block(&mut self) -> Option<BlockNode> {
     let block_start = expect_token_and_do!(self, Token::LeftBrace, {
       let (start, _) = self.current_token_position();
       self.advance();
@@ -289,10 +289,10 @@ impl<'a> Parser<'a> {
       pos.1
     });
 
-    Some(ExprNode {
+    Some(BlockNode {
       pos: (block_start, block_end),
-      kind: ExprKind::Block { params, body },
-      typ: ValueType::Unknown,
+      params,
+      body,
     })
   }
 
@@ -651,23 +651,18 @@ impl<'a> Parser<'a> {
 
     let generic_type_constraints = self.parse_generic_type_constraints().unwrap_or_default();
 
-    let (params, body, end) = match self.parse_block() {
-      Some(ExprNode {
-        kind: ExprKind::Block { params, body },
-        pos,
-        ..
-      }) => (params, body, pos.1),
+    let block = match self.parse_block() {
+      Some(block) => block,
       _ => return None,
     };
 
     Some(DefNode {
-      pos: (start, end),
+      pos: (start, block.pos.1),
       visibility: self.current_visibility,
       kind,
       return_type,
       generic_type_constraints,
-      params,
-      body,
+      block,
     })
   }
 
@@ -2033,7 +2028,11 @@ impl<'a> Parser<'a> {
       Some(Token::LeftParen(..)) => self.parse_parenthetical(),
       Some(Token::ForwardSlash(..)) => self.parse_regular_expression(),
       Some(Token::Operator(..)) => self.parse_unary_operation(),
-      Some(Token::LeftBrace(..)) => self.parse_block(),
+      Some(Token::LeftBrace(..)) => self.parse_block().map(|block_node| ExprNode {
+        pos: block_node.pos,
+        kind: ExprKind::Block(block_node),
+        typ: ValueType::Unknown,
+      }),
       Some(Token::LeftBracket(..)) => self.parse_list_or_dict(),
       Some(Token::StringLiteral(..)) => self.parse_string(),
       Some(Token::KeywordMatch(..)) => self.parse_match(),

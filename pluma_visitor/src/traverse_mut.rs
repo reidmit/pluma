@@ -5,6 +5,22 @@ pub trait TraverseMut {
   fn traverse_mut<V: VisitorMut>(&mut self, _visitor: &mut V) {}
 }
 
+impl TraverseMut for BlockNode {
+  fn traverse_mut<V: VisitorMut>(&mut self, visitor: &mut V) {
+    visitor.enter_block(self);
+
+    for param in &mut self.params {
+      param.traverse_mut(visitor);
+    }
+
+    for stmt in &mut self.body {
+      stmt.traverse_mut(visitor);
+    }
+
+    visitor.leave_block(self);
+  }
+}
+
 impl TraverseMut for CallNode {
   fn traverse_mut<V: VisitorMut>(&mut self, visitor: &mut V) {
     visitor.enter_call(self);
@@ -66,9 +82,7 @@ impl TraverseMut for DefNode {
       }
     }
 
-    for statement in &mut self.body {
-      statement.traverse_mut(visitor);
-    }
+    self.block.traverse_mut(visitor);
 
     visitor.leave_def(self);
   }
@@ -90,15 +104,7 @@ impl TraverseMut for ExprNode {
         right.traverse_mut(visitor);
       }
 
-      ExprKind::Block { params, body } => {
-        for param in params {
-          param.traverse_mut(visitor);
-        }
-
-        for stmt in body {
-          stmt.traverse_mut(visitor);
-        }
-      }
+      ExprKind::Block(block) => block.traverse_mut(visitor),
 
       ExprKind::Call(call) => call.traverse_mut(visitor),
 

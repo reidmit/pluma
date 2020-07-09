@@ -1,3 +1,4 @@
+mod block;
 mod call;
 mod r#const;
 mod def;
@@ -19,6 +20,7 @@ mod type_expr;
 mod type_identifier;
 mod r#use;
 
+pub use self::block::*;
 pub use self::call::*;
 pub use self::def::*;
 pub use self::enum_variant::*;

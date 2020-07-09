@@ -5,6 +5,22 @@ pub trait Traverse {
   fn traverse<V: Visitor>(&self, _visitor: &mut V) {}
 }
 
+impl Traverse for BlockNode {
+  fn traverse<V: Visitor>(&self, visitor: &mut V) {
+    visitor.enter_block(self);
+
+    for param in &self.params {
+      param.traverse(visitor);
+    }
+
+    for stmt in &self.body {
+      stmt.traverse(visitor);
+    }
+
+    visitor.leave_block(self);
+  }
+}
+
 impl Traverse for CallNode {
   fn traverse<V: Visitor>(&self, visitor: &mut V) {
     visitor.enter_call(self);
@@ -66,9 +82,7 @@ impl Traverse for DefNode {
       }
     }
 
-    for statement in &self.body {
-      statement.traverse(visitor);
-    }
+    self.block.traverse(visitor);
 
     visitor.leave_def(self);
   }
@@ -90,15 +104,7 @@ impl Traverse for ExprNode {
         right.traverse(visitor);
       }
 
-      ExprKind::Block { params, body } => {
-        for param in params {
-          param.traverse(visitor);
-        }
-
-        for stmt in body {
-          stmt.traverse(visitor);
-        }
-      }
+      ExprKind::Block(block) => block.traverse(visitor),
 
       ExprKind::Call(call) => call.traverse(visitor),
 
