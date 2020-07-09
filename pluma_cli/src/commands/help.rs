@@ -23,8 +23,8 @@ impl Command for HelpCommand {
         "check" => CheckCommand::print_help(),
         "doc" => DocCommand::print_help(),
         "format" => FormatCommand::print_help(),
-        "run" => RunCommand::print_help(),
         "help" => HelpCommand::print_help(),
+        "run" => RunCommand::print_help(),
         "repl" => ReplCommand::print_help(),
         "version" => VersionCommand::print_help(),
         unknown => {

@@ -1,0 +1,110 @@
+---
+source: pluma_analyzer/tests/analyze_tests.rs
+expression: "enum Color | Red | Green | Blue\n\ndef Color . funk Color -> Color {\n  self, b => b\n}\n\nlet c = Blue\nc.funk(Red)"
+---
+
+=== Source ===
+enum Color | Red | Green | Blue
+
+def Color . funk Color -> Color {
+  self, b => b
+}
+
+let c = Blue
+c.funk(Red)
+
+=== Top-level scope ===
+Scope {
+    levels: [
+        ScopeLevel {
+            bindings: [
+                (
+                    "Blue",
+                    Binding {
+                        typ: Named(
+                            "Color",
+                        ),
+                        ref_count: 1,
+                        pos: (
+                            27,
+                            31,
+                        ),
+                        kind: EnumVariant,
+                    },
+                ),
+                (
+                    "Green",
+                    Binding {
+                        typ: Named(
+                            "Color",
+                        ),
+                        ref_count: 0,
+                        pos: (
+                            19,
+                            24,
+                        ),
+                        kind: EnumVariant,
+                    },
+                ),
+                (
+                    "Red",
+                    Binding {
+                        typ: Named(
+                            "Color",
+                        ),
+                        ref_count: 1,
+                        pos: (
+                            13,
+                            16,
+                        ),
+                        kind: EnumVariant,
+                    },
+                ),
+                (
+                    "c",
+                    Binding {
+                        typ: Named(
+                            "Color",
+                        ),
+                        ref_count: 1,
+                        pos: (
+                            89,
+                            90,
+                        ),
+                        kind: Let,
+                    },
+                ),
+            ],
+        },
+    ],
+    type_bindings: [
+        (
+            Named(
+                "Color",
+            ),
+            TypeBinding {
+                ref_count: 4,
+                pos: (
+                    5,
+                    10,
+                ),
+                kind: Enum,
+                methods: {
+                    [
+                        "funk",
+                    ]: Func(
+                        [
+                            Named(
+                                "Color",
+                            ),
+                        ],
+                        Named(
+                            "Color",
+                        ),
+                    ),
+                },
+            },
+        ),
+    ],
+}
+

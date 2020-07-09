@@ -1,9 +1,10 @@
 use crate::analysis_error::{AnalysisError, AnalysisErrorKind};
-use crate::scope::{BindingKind, Scope, TypeBindingKind};
+use crate::scope::{Binding, BindingKind, Scope, TypeBindingKind};
 use crate::type_utils;
 use pluma_ast::*;
 use pluma_diagnostics::*;
 use pluma_visitor::*;
+use std::collections::HashMap;
 
 pub struct Analyzer<'a> {
   pub diagnostics: Vec<Diagnostic>,
@@ -25,6 +26,296 @@ impl<'a> Analyzer<'a> {
 
   fn diagnostic(&mut self, diag: Diagnostic) {
     self.diagnostics.push(diag)
+  }
+
+  fn check_result(&mut self, result: Result<(), Diagnostic>) {
+    if let Err(diag) = result {
+      self.diagnostic(diag);
+    }
+  }
+
+  fn collect_def(
+    &mut self,
+    pos: Position,
+    generic_type_constraints: &mut GenericTypeConstraints,
+    kind: &mut DefKind,
+    return_type: &Option<TypeExprNode>,
+  ) {
+    let mut constraints_map = HashMap::new();
+
+    for (constraint_name, constraint_type_id) in generic_type_constraints {
+      let constraint = if constraint_type_id.generics.is_empty() {
+        TypeConstraint::NamedTrait(constraint_type_id.name.clone())
+      } else {
+        TypeConstraint::GenericTrait(
+          constraint_type_id.name.clone(),
+          constraint_type_id
+            .generics
+            .iter()
+            .map(|type_expr| type_utils::type_expr_to_value_type(type_expr))
+            .collect(),
+        )
+      };
+
+      constraints_map.insert(
+        constraint_name.name.clone(),
+        ValueType::Constrained(constraint),
+      );
+    }
+
+    match kind {
+      DefKind::Function { signature } => {
+        let mut name_parts = Vec::new();
+        let mut param_types = Vec::new();
+
+        for (part_name, part_type) in signature {
+          name_parts.push(part_name.name.clone());
+
+          let param_type = type_utils::type_expr_to_value_type(part_type);
+
+          if let ValueType::Named(name) = &param_type {
+            if let Some(constraint) = constraints_map.get(name) {
+              param_types.push(constraint.clone());
+            } else {
+              param_types.push(param_type);
+            }
+          } else {
+            param_types.push(param_type);
+          }
+        }
+
+        let return_type = match return_type {
+          Some(ret) => type_utils::type_expr_to_value_type(&ret),
+          None => ValueType::Nothing,
+        };
+
+        let def_type = ValueType::Func(param_types, Box::new(return_type));
+        let merged_name = name_parts.join(" ");
+
+        self
+          .scope
+          .add_binding(BindingKind::Def, merged_name, def_type, pos);
+      }
+
+      DefKind::Method {
+        receiver,
+        signature,
+      } => {
+        let receiver_type = ValueType::Named(receiver.name.clone());
+
+        let return_type = match return_type {
+          Some(type_expr) => type_utils::type_expr_to_value_type(&type_expr),
+          None => ValueType::Nothing,
+        };
+
+        let mut method_parts = Vec::new();
+        let mut param_types = Vec::new();
+
+        for (part_name, part_type_expr) in signature {
+          method_parts.push(part_name.name.clone());
+          param_types.push(type_utils::type_expr_to_value_type(part_type_expr));
+        }
+
+        let result = self.scope.add_type_method(
+          receiver_type,
+          method_parts,
+          param_types,
+          return_type,
+          receiver.pos,
+        );
+
+        self.check_result(result);
+      }
+
+      DefKind::BinaryOperator { op, left, right } => {
+        let receiver_type = type_utils::type_ident_to_value_type(left);
+
+        let param_type = type_utils::type_ident_to_value_type(right);
+
+        let return_type = match return_type {
+          Some(type_expr) => type_utils::type_expr_to_value_type(&type_expr),
+          None => ValueType::Nothing,
+        };
+
+        let method_parts = vec!["$".to_owned(), op.name.clone(), "$".to_owned()];
+        let param_types = vec![param_type];
+
+        let result = self.scope.add_type_method(
+          receiver_type,
+          method_parts,
+          param_types,
+          return_type,
+          left.pos,
+        );
+
+        self.check_result(result);
+      }
+
+      DefKind::UnaryOperator { op, right } => {
+        let receiver_type = type_utils::type_ident_to_value_type(right);
+
+        let return_type = match return_type {
+          Some(type_expr) => type_utils::type_expr_to_value_type(&type_expr),
+          None => ValueType::Nothing,
+        };
+
+        let method_parts = vec![op.name.clone(), "$".to_owned()];
+        let param_types = vec![];
+
+        let result = self.scope.add_type_method(
+          receiver_type,
+          method_parts,
+          param_types,
+          return_type,
+          right.pos,
+        );
+
+        self.check_result(result);
+      }
+    }
+  }
+
+  fn collect_const(&mut self, node: &mut ConstNode) {
+    let const_type = match &node.value.kind {
+      ExprKind::Literal(lit) => self.analyze_literal(lit),
+      _ => {
+        self.error(AnalysisError {
+          pos: node.value.pos,
+          kind: AnalysisErrorKind::InvalidValueForConst,
+        });
+
+        return;
+      }
+    };
+
+    self.scope.add_binding(
+      BindingKind::Const,
+      node.name.name.clone(),
+      const_type,
+      node.pos,
+    );
+  }
+
+  fn collect_type_def(&mut self, node: &mut TypeDefNode) {
+    let typ = ValueType::Named(node.name.name.clone());
+
+    match &node.kind {
+      TypeDefKind::Enum { variants } => {
+        self
+          .scope
+          .add_type_binding(typ.clone(), TypeBindingKind::Enum, node.name.pos);
+
+        for variant in variants {
+          match &variant.kind {
+            EnumVariantKind::Identifier(ident_node) => {
+              let variant_name = ident_node.name.clone();
+              let variant_type = typ.clone();
+
+              self.scope.add_binding(
+                BindingKind::EnumVariant,
+                variant_name,
+                variant_type,
+                ident_node.pos,
+              );
+            }
+
+            EnumVariantKind::Constructor(constructor_node, param_node) => {
+              let constructor_name = constructor_node.name.clone();
+              let param_type = type_utils::type_expr_to_value_type(param_node);
+              let constructor_type = ValueType::Func(vec![param_type], Box::new(typ.clone()));
+
+              self.scope.add_binding(
+                BindingKind::EnumVariant,
+                constructor_name,
+                constructor_type,
+                variant.pos,
+              );
+            }
+          }
+        }
+      }
+
+      TypeDefKind::Struct { fields } => {
+        let mut param_types = Vec::new();
+        let mut fields_map = HashMap::new();
+
+        for field in fields {
+          let (field_id, field_type) = field;
+          param_types.push(type_utils::type_expr_to_value_type(field_type));
+
+          fields_map.insert(
+            field_id.name.clone(),
+            Binding {
+              kind: BindingKind::Field,
+              ref_count: 0,
+              pos: field_id.pos,
+              typ: type_utils::type_expr_to_value_type(field_type),
+            },
+          );
+        }
+
+        self.scope.add_type_binding(
+          typ.clone(),
+          TypeBindingKind::Struct { fields: fields_map },
+          node.name.pos,
+        );
+
+        let param_tuple_type = ValueType::UnlabeledTuple(param_types);
+        let constructor_type = ValueType::Func(vec![param_tuple_type], Box::new(typ));
+
+        self.scope.add_binding(
+          BindingKind::StructConstructor,
+          node.name.name.clone(),
+          constructor_type,
+          node.name.pos,
+        );
+      }
+
+      TypeDefKind::Alias { .. } => {
+        self
+          .scope
+          .add_type_binding(typ.clone(), TypeBindingKind::Alias, node.name.pos);
+      }
+
+      TypeDefKind::Trait { fields, .. } => {
+        let mut fields_map = HashMap::new();
+
+        for field in fields {
+          let (field_id, field_type) = field;
+
+          fields_map.insert(
+            field_id.name.clone(),
+            Binding {
+              kind: BindingKind::Field,
+              ref_count: 0,
+              pos: field_id.pos,
+              typ: type_utils::type_expr_to_value_type(field_type),
+            },
+          );
+        }
+
+        self.scope.add_type_binding(
+          typ.clone(),
+          TypeBindingKind::Trait { fields: fields_map },
+          node.name.pos,
+        );
+      }
+    }
+  }
+
+  fn collect_intrinsic_type_def(&mut self, node: &mut IntrinsicTypeDefNode) {
+    let intrinsic_type = match &node.name.name[..] {
+      "Int" => Some(ValueType::Int),
+      "Float" => Some(ValueType::Float),
+      "String" => Some(ValueType::String),
+      _ => None,
+    };
+
+    if let Some(typ) = intrinsic_type {
+      self
+        .scope
+        .add_type_binding(typ, TypeBindingKind::IntrinsicType, node.name.pos);
+    }
   }
 
   fn destructure_pattern(&mut self, pattern: &PatternNode, typ: &ValueType) {
@@ -125,61 +416,50 @@ impl<'a> Analyzer<'a> {
     }
   }
 
-  // This is similar to the method used in the type_collector, but here we impose the additional
-  // restriction that named types must already be defined.
-  fn type_expr_to_value_type(&mut self, node: &TypeExprNode) -> ValueType {
-    match &node.kind {
-      TypeExprKind::EmptyTuple => ValueType::Nothing,
-      TypeExprKind::Grouping(inner) => self.type_expr_to_value_type(&inner),
-      TypeExprKind::Single(ident) => {
-        let named_value_type = type_utils::type_ident_to_value_type(&ident);
+  fn analyze_call(&mut self, node: &mut CallNode) -> ValueType {
+    self.analyze_expr(&mut node.callee);
 
-        if self.scope.get_type_binding(&named_value_type).is_none() {
+    let callee_type = &node.callee.typ;
+
+    match callee_type {
+      ValueType::Func(param_types, return_type) => {
+        if param_types.len() != node.args.len() {
           self.error(AnalysisError {
-            pos: ident.pos,
-            kind: AnalysisErrorKind::UndefinedType(named_value_type.clone()),
+            pos: node.pos,
+            kind: AnalysisErrorKind::IncorrectNumberOfArguments {
+              expected: param_types.len(),
+              actual: node.args.len(),
+            },
           })
         }
 
-        named_value_type
-      }
-      TypeExprKind::UnlabeledTuple(entries) => {
-        let mut entry_types = Vec::new();
+        for i in 0..param_types.len() {
+          let arg = node.args.get_mut(i).unwrap();
+          self.analyze_expr(arg);
 
-        for entry in entries {
-          entry_types.push(self.type_expr_to_value_type(entry));
+          let param_type = param_types.get(i).unwrap();
+          let given_type = &arg.typ;
+
+          if param_type != given_type {
+            let pos = arg.pos;
+
+            self.error(AnalysisError {
+              pos,
+              kind: AnalysisErrorKind::ParameterTypeMismatch {
+                expected: param_type.clone(),
+                actual: given_type.clone(),
+              },
+            })
+          }
         }
 
-        ValueType::UnlabeledTuple(entry_types)
+        *return_type.clone()
       }
-      TypeExprKind::LabeledTuple(entries) => {
-        let mut entry_types = Vec::new();
 
-        for (label_ident, entry) in entries {
-          entry_types.push((
-            label_ident.name.clone(),
-            self.type_expr_to_value_type(entry),
-          ));
-        }
-
-        ValueType::LabeledTuple(entry_types)
-      }
-      TypeExprKind::Func(param, ret) => {
-        let param_type = self.type_expr_to_value_type(param);
-        let return_type = self.type_expr_to_value_type(ret);
-
-        ValueType::Func(vec![param_type], Box::new(return_type))
-      }
-    }
-  }
-
-  fn analyze_identifier(&mut self, node: &IdentifierNode) -> ValueType {
-    match self.scope.get_binding(&node.name) {
-      Some(binding) => binding.typ.clone(),
-      None => {
+      _ => {
         self.error(AnalysisError {
           pos: node.pos,
-          kind: AnalysisErrorKind::UndefinedName(node.name.clone()),
+          kind: AnalysisErrorKind::CalleeNotCallable(callee_type.clone()),
         });
 
         ValueType::Unknown
@@ -187,33 +467,33 @@ impl<'a> Analyzer<'a> {
     }
   }
 
+  fn analyze_def(&mut self, node: &mut DefNode) {
+    match &mut node.kind {
+      DefKind::Function { signature } => {
+        for (_part_name, part_type) in signature {
+          self.analyze_type_expr(part_type);
+        }
+      }
+
+      DefKind::Method {
+        receiver,
+        signature,
+      } => {
+        for (_part_name, part_type) in signature {
+          self.analyze_type_expr(part_type);
+        }
+      }
+
+      _ => todo!(),
+    }
+
+    if let Some(return_type) = &mut node.return_type {
+      self.analyze_type_expr(return_type);
+    }
+  }
+
   fn analyze_expr(&mut self, node: &mut ExprNode) {
     match &mut node.kind {
-      ExprKind::Identifier(ident_node) => {
-        node.typ = self.analyze_identifier(ident_node);
-      }
-
-      ExprKind::MultiPartIdentifier(ident_nodes) => {
-        let names = ident_nodes
-          .iter()
-          .map(|node| node.name.clone())
-          .collect::<Vec<String>>();
-
-        let merged_name = names.join(" ");
-
-        match self.scope.get_binding(&merged_name) {
-          Some(binding) => node.typ = binding.typ.clone(),
-          None => self.error(AnalysisError {
-            pos: node.pos,
-            kind: AnalysisErrorKind::UndefinedMultiPartName(names),
-          }),
-        };
-      }
-
-      ExprKind::Literal(lit_node) => node.typ = self.analyze_literal(lit_node),
-
-      ExprKind::Call(call_node) => node.typ = self.analyze_call(call_node),
-
       ExprKind::Assignment { left, right } => {
         let existing_binding = self.scope.get_binding(&left.name);
 
@@ -271,27 +551,6 @@ impl<'a> Analyzer<'a> {
         }
       }
 
-      ExprKind::UnaryOperation { op, right } => {
-        let receiver_type_binding = match self.scope.get_type_binding(&right.typ) {
-          Some(binding) => binding,
-          _ => return,
-        };
-
-        let method_name_parts = vec![op.name.clone(), "$".to_owned()];
-
-        if let Some(method_type) = receiver_type_binding.methods.get(&method_name_parts) {
-          node.typ = method_type.func_return_type();
-        } else {
-          self.error(AnalysisError {
-            pos: op.pos,
-            kind: AnalysisErrorKind::UndefinedUnaryOperatorForType {
-              op_name: op.name.clone(),
-              receiver_type: right.typ.clone(),
-            },
-          })
-        }
-      }
-
       ExprKind::Block { params, body } => {
         let mut param_types = Vec::new();
         let mut return_type = ValueType::Nothing;
@@ -319,31 +578,9 @@ impl<'a> Analyzer<'a> {
         }
       }
 
-      ExprKind::UnlabeledTuple(elements) => {
-        let mut element_types = Vec::new();
+      ExprKind::Call(call_node) => node.typ = self.analyze_call(call_node),
 
-        for element in elements {
-          self.analyze_expr(element);
-          element_types.push(element.typ.clone());
-        }
-
-        node.typ = ValueType::UnlabeledTuple(element_types);
-      }
-
-      ExprKind::Interpolation(parts) => {
-        let string_type = ValueType::Named("String".to_owned());
-
-        for part in parts {
-          if part.typ != string_type {
-            self.error(AnalysisError {
-              pos: part.pos,
-              kind: AnalysisErrorKind::TypeMismatchInStringInterpolation(part.typ.clone()),
-            })
-          }
-        }
-
-        node.typ = string_type;
-      }
+      ExprKind::EmptyTuple => node.typ = ValueType::Nothing,
 
       ExprKind::FieldAccess { receiver, field } => {
         let receiver_type_binding = self.scope.get_type_binding(&receiver.typ).unwrap();
@@ -371,10 +608,38 @@ impl<'a> Analyzer<'a> {
         }
       }
 
+      ExprKind::Grouping(inner) => {
+        self.analyze_expr(inner);
+        node.typ = inner.typ.clone();
+      }
+
+      ExprKind::Identifier(ident_node) => {
+        node.typ = self.analyze_identifier(ident_node);
+      }
+
+      ExprKind::Interpolation(parts) => {
+        let string_type = ValueType::Named("String".to_owned());
+
+        for part in parts {
+          if part.typ != string_type {
+            self.error(AnalysisError {
+              pos: part.pos,
+              kind: AnalysisErrorKind::TypeMismatchInStringInterpolation(part.typ.clone()),
+            })
+          }
+        }
+
+        node.typ = string_type;
+      }
+
+      ExprKind::Literal(lit_node) => node.typ = self.analyze_literal(lit_node),
+
       ExprKind::MethodAccess {
         receiver,
         method_parts,
       } => {
+        self.analyze_expr(receiver);
+
         let receiver_type_binding = match self.scope.get_type_binding(&receiver.typ) {
           Some(binding) => binding,
           _ => return,
@@ -419,30 +684,6 @@ impl<'a> Analyzer<'a> {
         }
       }
 
-      ExprKind::TypeAssertion {
-        expr,
-        asserted_type,
-      } => {
-        self.analyze_expr(expr);
-
-        let expr_type = &expr.typ;
-        let asserted_type = &asserted_type.typ;
-
-        if expr_type != asserted_type {
-          self.error(AnalysisError {
-            pos: node.pos,
-            kind: AnalysisErrorKind::TypeMismatchInTypeAssertion {
-              expected: asserted_type.clone(),
-              actual: expr_type.clone(),
-            },
-          });
-
-          return;
-        }
-
-        node.typ = asserted_type.clone();
-      }
-
       ExprKind::Match(match_node) => {
         let _subject_type = &match_node.subject.typ;
         let mut case_type: Option<ValueType> = None;
@@ -469,61 +710,91 @@ impl<'a> Analyzer<'a> {
         node.typ = case_type.unwrap().clone();
       }
 
-      ExprKind::Grouping(inner) => {
-        self.analyze_expr(inner);
-        node.typ = inner.typ.clone();
+      ExprKind::MultiPartIdentifier(ident_nodes) => {
+        let names = ident_nodes
+          .iter()
+          .map(|node| node.name.clone())
+          .collect::<Vec<String>>();
+
+        let merged_name = names.join(" ");
+
+        match self.scope.get_binding(&merged_name) {
+          Some(binding) => node.typ = binding.typ.clone(),
+          None => self.error(AnalysisError {
+            pos: node.pos,
+            kind: AnalysisErrorKind::UndefinedMultiPartName(names),
+          }),
+        };
       }
 
-      ExprKind::EmptyTuple => node.typ = ValueType::Nothing,
+      ExprKind::TypeAssertion {
+        expr,
+        asserted_type,
+      } => {
+        self.analyze_type_expr(asserted_type);
+        self.analyze_expr(expr);
+
+        let expr_type = &expr.typ;
+        let asserted_type = &asserted_type.typ;
+
+        if expr_type != asserted_type {
+          self.error(AnalysisError {
+            pos: node.pos,
+            kind: AnalysisErrorKind::TypeMismatchInTypeAssertion {
+              expected: asserted_type.clone(),
+              actual: expr_type.clone(),
+            },
+          });
+
+          return;
+        }
+
+        node.typ = asserted_type.clone();
+      }
+
+      ExprKind::UnaryOperation { op, right } => {
+        let receiver_type_binding = match self.scope.get_type_binding(&right.typ) {
+          Some(binding) => binding,
+          _ => return,
+        };
+
+        let method_name_parts = vec![op.name.clone(), "$".to_owned()];
+
+        if let Some(method_type) = receiver_type_binding.methods.get(&method_name_parts) {
+          node.typ = method_type.func_return_type();
+        } else {
+          self.error(AnalysisError {
+            pos: op.pos,
+            kind: AnalysisErrorKind::UndefinedUnaryOperatorForType {
+              op_name: op.name.clone(),
+              receiver_type: right.typ.clone(),
+            },
+          })
+        }
+      }
+
+      ExprKind::UnlabeledTuple(elements) => {
+        let mut element_types = Vec::new();
+
+        for element in elements {
+          self.analyze_expr(element);
+          element_types.push(element.typ.clone());
+        }
+
+        node.typ = ValueType::UnlabeledTuple(element_types);
+      }
 
       _other => todo!("more expr kinds!"),
     }
   }
 
-  fn analyze_call(&mut self, node: &mut CallNode) -> ValueType {
-    self.analyze_expr(&mut node.callee);
-
-    let callee_type = &node.callee.typ;
-
-    match callee_type {
-      ValueType::Func(param_types, return_type) => {
-        if param_types.len() != node.args.len() {
-          self.error(AnalysisError {
-            pos: node.pos,
-            kind: AnalysisErrorKind::IncorrectNumberOfArguments {
-              expected: param_types.len(),
-              actual: node.args.len(),
-            },
-          })
-        }
-
-        for i in 0..param_types.len() {
-          let arg = node.args.get_mut(i).unwrap();
-          self.analyze_expr(arg);
-
-          let param_type = param_types.get(i).unwrap();
-          let given_type = &arg.typ;
-
-          if param_type != given_type {
-            let pos = arg.pos;
-
-            self.error(AnalysisError {
-              pos,
-              kind: AnalysisErrorKind::ParameterTypeMismatch {
-                expected: param_type.clone(),
-                actual: given_type.clone(),
-              },
-            })
-          }
-        }
-
-        *return_type.clone()
-      }
-
-      _ => {
+  fn analyze_identifier(&mut self, node: &IdentifierNode) -> ValueType {
+    match self.scope.get_binding(&node.name) {
+      Some(binding) => binding.typ.clone(),
+      None => {
         self.error(AnalysisError {
           pos: node.pos,
-          kind: AnalysisErrorKind::CalleeNotCallable(callee_type.clone()),
+          kind: AnalysisErrorKind::UndefinedName(node.name.clone()),
         });
 
         ValueType::Unknown
@@ -541,103 +812,119 @@ impl<'a> Analyzer<'a> {
       LiteralKind::Str { .. } => ValueType::String,
     }
   }
+
+  fn analyze_type_expr(&mut self, node: &mut TypeExprNode) {
+    let typ = match &mut node.kind {
+      TypeExprKind::EmptyTuple => ValueType::Nothing,
+
+      TypeExprKind::Grouping(inner) => {
+        self.analyze_type_expr(inner);
+        inner.typ.clone()
+      }
+
+      TypeExprKind::Single(ident) => {
+        let named_value_type = type_utils::type_ident_to_value_type(&ident);
+
+        if self.scope.get_type_binding(&named_value_type).is_none() {
+          self.error(AnalysisError {
+            pos: ident.pos,
+            kind: AnalysisErrorKind::UndefinedType(named_value_type.clone()),
+          })
+        }
+
+        named_value_type
+      }
+
+      TypeExprKind::UnlabeledTuple(entries) => {
+        let mut entry_types = Vec::new();
+
+        for entry in entries {
+          self.analyze_type_expr(entry);
+          entry_types.push(entry.typ.clone());
+        }
+
+        ValueType::UnlabeledTuple(entry_types)
+      }
+
+      TypeExprKind::LabeledTuple(entries) => {
+        let mut entry_types = Vec::new();
+
+        for (label_ident, entry) in entries {
+          self.analyze_type_expr(entry);
+          entry_types.push((label_ident.name.clone(), entry.typ.clone()));
+        }
+
+        ValueType::LabeledTuple(entry_types)
+      }
+
+      TypeExprKind::Func(param, ret) => {
+        self.analyze_type_expr(param);
+        self.analyze_type_expr(ret);
+
+        let param_type = param.typ.clone();
+        let return_type = ret.typ.clone();
+
+        ValueType::Func(vec![param_type], Box::new(return_type))
+      }
+    };
+
+    node.typ = typ;
+  }
 }
 
 impl<'a> VisitorMut for Analyzer<'a> {
-  fn enter_def(&mut self, node: &mut DefNode) {
-    self.scope.enter();
+  fn enter_module(&mut self, node: &mut ModuleNode) {
+    // First thing, go through the top-level statements and collect the definitions,
+    // since they may be used before they are defined.
+    for statement in &mut node.body {
+      match &mut statement.kind {
+        TopLevelStatementKind::Const(const_node) => self.collect_const(const_node),
 
-    if let Some(return_type) = &node.return_type {
-      self.type_expr_to_value_type(&return_type);
-    }
+        TopLevelStatementKind::Def(def_node) => self.collect_def(
+          def_node.pos,
+          &mut def_node.generic_type_constraints,
+          &mut def_node.kind,
+          &def_node.return_type,
+        ),
 
-    let mut param_types = Vec::new();
+        TopLevelStatementKind::IntrinsicDef(def_node) => self.collect_def(
+          def_node.pos,
+          &mut def_node.generic_type_constraints,
+          &mut def_node.kind,
+          &def_node.return_type,
+        ),
 
-    match &node.kind {
-      DefKind::Function { signature } => {
-        for (_, part_type_expr) in signature {
-          let part_type = self.type_expr_to_value_type(part_type_expr);
+        TopLevelStatementKind::TypeDef(type_def_node) => self.collect_type_def(type_def_node),
 
-          match part_type {
-            ValueType::UnlabeledTuple(entry_types) => {
-              for entry_type in entry_types {
-                param_types.push(entry_type);
-              }
-            }
-            other => param_types.push(other),
-          }
+        TopLevelStatementKind::IntrinsicTypeDef(type_def_node) => {
+          self.collect_intrinsic_type_def(type_def_node)
+        }
+
+        _ => {
+          // Other kinds handled below
         }
       }
-
-      _ => {}
-    };
-
-    if param_types.len() != node.params.len() {
-      let err_start = match node.params.first() {
-        Some(param) => param.pos.0,
-        _ => node.pos.0,
-      };
-
-      let err_end = match node.params.last() {
-        Some(param) => param.pos.1,
-        _ => node.pos.0 + 3,
-      };
-
-      self.error(AnalysisError {
-        pos: (err_start, err_end),
-        kind: AnalysisErrorKind::ParamCountMismatchInDefinition {
-          expected: param_types.len(),
-          actual: node.params.len(),
-        },
-      });
-
-      return;
-    }
-
-    for i in 0..node.params.len() {
-      let param = &node.params[i];
-      let param_type = &param_types[i];
-
-      self.scope.add_binding(
-        BindingKind::Param,
-        param.name.clone(),
-        param_type.clone(),
-        param.pos,
-      );
     }
   }
 
-  // fn enter_expr(&mut self, node: &mut ExprNode) {
-  //   match &node.kind {
-  //     ExprKind::Block { params, .. } => {
-  //       self.scope.enter();
-
-  //       for param in params {
-  //         self.scope.add_binding(
-  //           BindingKind::Param,
-  //           param.name.clone(),
-  //           ValueType::Unknown,
-  //           param.pos,
-  //         );
-  //       }
-  //     }
-
-  //     _ => {}
-  //   }
-  // }
-
   fn enter_top_level_statement(&mut self, node: &mut TopLevelStatementNode) {
     match &mut node.kind {
+      TopLevelStatementKind::Def(def_node) => {
+        self.analyze_def(def_node);
+      }
+
       TopLevelStatementKind::Let(let_node) => {
         self.analyze_expr(&mut let_node.value);
-        self.destructure_pattern(&mut let_node.pattern, &mut let_node.value.typ)
+        self.destructure_pattern(&mut let_node.pattern, &mut let_node.value.typ);
       }
 
       TopLevelStatementKind::Expr(expr) => {
         self.analyze_expr(expr);
       }
 
-      _ => {}
+      _ => {
+        // Other kinds handled above
+      }
     }
   }
 }

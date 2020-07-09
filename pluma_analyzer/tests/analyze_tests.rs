@@ -92,6 +92,17 @@ test_analyze! {
     |}
   "#,
 
+  def_method (true): r#"
+    |enum Color | Red | Green | Blue
+    |
+    |def Color . funk Color -> Color {
+    |  self, b => b
+    |}
+    |
+    |let c = Blue
+    |c.funk(Red)
+  "#,
+
   type_assertions_valid (true): r#"
     |intrinsic_type Int
     |intrinsic_type String

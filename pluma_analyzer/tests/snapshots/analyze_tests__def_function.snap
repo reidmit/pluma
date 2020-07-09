@@ -40,6 +40,18 @@ Scope {
                     },
                 ),
                 (
+                    "n",
+                    Binding {
+                        typ: Int,
+                        ref_count: 0,
+                        pos: (
+                            129,
+                            130,
+                        ),
+                        kind: Let,
+                    },
+                ),
+                (
                     "returnsNothing",
                     Binding {
                         typ: Func(
@@ -56,38 +68,6 @@ Scope {
                         kind: Def,
                     },
                 ),
-            ],
-        },
-        ScopeLevel {
-            bindings: [
-                (
-                    "arg",
-                    Binding {
-                        typ: Nothing,
-                        ref_count: 0,
-                        pos: (
-                            46,
-                            49,
-                        ),
-                        kind: Param,
-                    },
-                ),
-            ],
-        },
-        ScopeLevel {
-            bindings: [
-                (
-                    "n",
-                    Binding {
-                        typ: Int,
-                        ref_count: 0,
-                        pos: (
-                            129,
-                            130,
-                        ),
-                        kind: Let,
-                    },
-                ),
                 (
                     "void",
                     Binding {
@@ -98,18 +78,6 @@ Scope {
                             105,
                         ),
                         kind: Let,
-                    },
-                ),
-                (
-                    "x",
-                    Binding {
-                        typ: Int,
-                        ref_count: 0,
-                        pos: (
-                            87,
-                            88,
-                        ),
-                        kind: Param,
                     },
                 ),
             ],

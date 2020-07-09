@@ -79,16 +79,6 @@ impl Compiler {
 
       let module_to_analyze = self.modules.get_mut(module_name).unwrap();
 
-      let mut type_collector = TypeCollector::new(&mut module_scope);
-      module_to_analyze.traverse_mut(&mut type_collector);
-
-      for diagnostic in type_collector.diagnostics {
-        self.diagnostics.push(diagnostic.with_module(
-          module_name.clone(),
-          to_module_path(self.root_dir.clone(), self.entry_module_name.clone()),
-        ))
-      }
-
       let mut analyzer = Analyzer::new(&mut module_scope);
       module_to_analyze.traverse_mut(&mut analyzer);
 

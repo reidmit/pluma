@@ -65,10 +65,11 @@ pub enum AnalysisErrorKind {
     actual: ValueType,
   },
   TypeMismatchInStringInterpolation(ValueType),
-  TypeMismatchInMatchCase{
+  TypeMismatchInMatchCase {
     expected: ValueType,
     actual: ValueType,
   },
+  InvalidValueForConst,
 }
 
 impl fmt::Display for AnalysisError {
@@ -191,7 +192,7 @@ impl fmt::Display for AnalysisError {
       TypeMismatchInMatchCase { expected, actual } => write!(
         f,
         "Expected type {} for this case, but found type {}.",
-        expected,actual,
+        expected, actual,
       ),
 
       ReassignmentTypeMismatch { expected, actual } => write!(
@@ -199,6 +200,8 @@ impl fmt::Display for AnalysisError {
         "Variable already has type {}, so cannot be assigned a new value of type {}.",
         expected, actual
       ),
+
+      InvalidValueForConst => write!(f, "Value of const statement must be a literal."),
     }
   }
 }

@@ -22,6 +22,7 @@ pub struct TypeBinding {
 #[derive(PartialEq)]
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub enum BindingKind {
+  Const,
   Let,
   Def,
   Param,

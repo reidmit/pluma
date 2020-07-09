@@ -26,10 +26,6 @@ macro_rules! test_analyze {
 
             scope.enter();
 
-            let mut type_collector = TypeCollector::new(&mut scope);
-            ast.traverse_mut(&mut type_collector);
-            diagnostics.append(&mut type_collector.diagnostics);
-
             let mut analyzer = Analyzer::new(&mut scope);
             ast.traverse_mut(&mut analyzer);
             diagnostics.append(&mut analyzer.diagnostics);

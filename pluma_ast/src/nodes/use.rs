@@ -6,5 +6,5 @@ use crate::common::*;
 pub struct UseNode {
   pub pos: Position,
   pub module_name: String,
-  pub qualifier: Box<IdentifierNode>,
+  pub qualifier: Option<IdentifierNode>,
 }

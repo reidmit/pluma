@@ -83,25 +83,31 @@ impl Module {
     let (ast, imports, comment_data, errors) =
       Parser::new(&bytes, tokenizer, self.collect_comments).parse_module();
 
-    if errors.is_empty() {
-      self.ast = Some(ast);
-      self.imports = Some(imports);
-
-      if self.collect_comments {
-        let (comments, line_break_positions) = comment_data.unwrap();
-        self.comments = Some(comments);
-        self.line_break_positions = Some(line_break_positions);
+    if !errors.is_empty() {
+      for err in errors {
+        diagnostics.push(
+          Diagnostic::error(err)
+            .with_pos(err.pos)
+            .with_module(self.module_name.clone(), self.module_path.to_path_buf()),
+        );
       }
 
       return;
     }
 
-    for err in errors {
-      diagnostics.push(
-        Diagnostic::error(err)
-          .with_pos(err.pos)
-          .with_module(self.module_name.clone(), self.module_path.to_path_buf()),
-      );
+    // imports.push(UseNode {
+    //   pos: (0, 0),
+    //   module_name: "std/prelude".into(),
+    //   qualifier: None,
+    // });
+
+    self.ast = Some(ast);
+    self.imports = Some(imports);
+
+    if self.collect_comments {
+      let (comments, line_break_positions) = comment_data.unwrap();
+      self.comments = Some(comments);
+      self.line_break_positions = Some(line_break_positions);
     }
   }
 }

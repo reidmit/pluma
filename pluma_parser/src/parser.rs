@@ -2539,29 +2539,34 @@ impl<'a> Parser<'a> {
       start
     });
 
-    let module_name = expect_token_and_do!(self, Token::ImportPath, {
+    let (module_name, end) = expect_token_and_do!(self, Token::ImportPath, {
       let (start, end) = self.current_token_position();
       let name_str = read_string!(self, start, end);
       self.advance();
-      name_str
+      (name_str, end)
     });
 
-    expect_token_and_do!(self, Token::KeywordAs, {
+    let (qualifier, end) = if current_token_is!(self, Token::KeywordAs) {
       self.advance();
-    });
 
-    let qualifier = match self.parse_identifier() {
-      Some(node) => Box::new(node),
-      _ => {
-        return self.error(ParseError {
-          pos: self.current_token_position(),
-          kind: ParseErrorKind::MissingQualifierAfterAs,
-        })
+      match self.parse_identifier() {
+        Some(node) => {
+          let qualifier_end = node.pos.1;
+          (Some(node), qualifier_end)
+        }
+        _ => {
+          return self.error(ParseError {
+            pos: self.current_token_position(),
+            kind: ParseErrorKind::MissingQualifierAfterAs,
+          })
+        }
       }
+    } else {
+      (None, end)
     };
 
     Some(UseNode {
-      pos: (start, qualifier.pos.1),
+      pos: (start, end),
       module_name,
       qualifier,
     })
