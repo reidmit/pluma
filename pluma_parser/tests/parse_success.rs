@@ -284,7 +284,7 @@ test_parse_success! {
   "#,
 
   def_labeled_tuple_arg: r#"
-    |def hello (one: Int, two: String) -> String {
+    |def hello (one :: Int, two :: String) -> String {
     |  |a| a.two
     |}
   "#,
