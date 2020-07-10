@@ -1,13 +1,13 @@
 ---
 source: pluma_analyzer/tests/analyze_tests.rs
-expression: "intrinsic_type Int\n\ndef returnsNothing () {\n  |arg| ()\n}\n\ndef intToInt Int -> Int {\n  |x| x\n}\n\nlet void = returnsNothing()\nlet n = intToInt 100"
+expression: "intrinsic_type Int\n\ndef returnsNothing () {\n  |_| ()\n}\n\ndef intToInt Int -> Int {\n  |x| x\n}\n\nlet void = returnsNothing()\nlet n = intToInt 100"
 ---
 
 === Source ===
 intrinsic_type Int
 
 def returnsNothing () {
-  |arg| ()
+  |_| ()
 }
 
 def intToInt Int -> Int {
@@ -33,8 +33,8 @@ Scope {
                         ),
                         ref_count: 1,
                         pos: (
-                            58,
-                            93,
+                            56,
+                            91,
                         ),
                         kind: Def,
                     },
@@ -45,8 +45,8 @@ Scope {
                         typ: Int,
                         ref_count: 0,
                         pos: (
-                            127,
-                            128,
+                            125,
+                            126,
                         ),
                         kind: Let,
                     },
@@ -63,7 +63,7 @@ Scope {
                         ref_count: 1,
                         pos: (
                             20,
-                            56,
+                            54,
                         ),
                         kind: Def,
                     },
@@ -74,8 +74,8 @@ Scope {
                         typ: Nothing,
                         ref_count: 0,
                         pos: (
-                            99,
-                            103,
+                            97,
+                            101,
                         ),
                         kind: Let,
                     },

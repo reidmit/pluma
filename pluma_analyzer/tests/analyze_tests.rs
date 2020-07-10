@@ -101,7 +101,7 @@ test_analyze! {
     |intrinsic_type Int
     |
     |def returnsNothing () {
-    |  |arg| ()
+    |  |_| ()
     |}
     |
     |def intToInt Int -> Int {
@@ -128,7 +128,7 @@ test_analyze! {
     |enum Color | Red | Green | Blue
     |
     |def Color . funk Color -> Color {
-    |  |self, b| b
+    |  |_, b| b
     |}
     |
     |let c = Blue

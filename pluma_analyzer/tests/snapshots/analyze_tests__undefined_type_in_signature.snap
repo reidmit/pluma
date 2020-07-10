@@ -22,5 +22,17 @@ def takesSomething Wat {
         module_name: None,
         module_path: None,
     },
+    Diagnostic {
+        kind: Warning,
+        message: "Name \'arg\' is never used.",
+        pos: Some(
+            (
+                28,
+                31,
+            ),
+        ),
+        module_name: None,
+        module_path: None,
+    },
 ]
 

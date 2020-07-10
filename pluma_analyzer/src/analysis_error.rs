@@ -60,6 +60,10 @@ pub enum AnalysisErrorKind {
     expected: ValueType,
     actual: ValueType,
   },
+  ReturnTypeMismatch {
+    expected: ValueType,
+    actual: ValueType,
+  },
   ParameterTypeMismatch {
     expected: ValueType,
     actual: ValueType,
@@ -187,6 +191,12 @@ impl fmt::Display for AnalysisError {
       ParameterTypeMismatch { expected, actual } => write!(
         f,
         "Parameter type mismatch. Expected type {}, but found type {}.",
+        expected, actual
+      ),
+
+      ReturnTypeMismatch { expected, actual } => write!(
+        f,
+        "Return type mismatch. Expected type {}, but found type {}.",
         expected, actual
       ),
 

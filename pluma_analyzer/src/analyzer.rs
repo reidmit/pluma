@@ -43,6 +43,10 @@ impl<'a> Analyzer<'a> {
     }
   }
 
+  fn compatible_types(&mut self, expected: &ValueType, actual: &ValueType) -> bool {
+    expected == actual
+  }
+
   fn collect_def(
     &mut self,
     pos: Position,
@@ -439,7 +443,7 @@ impl<'a> Analyzer<'a> {
 
         let actual_type = typ.clone();
 
-        if constructor_type != actual_type {
+        if !self.compatible_types(&constructor_type, &actual_type) {
           self.error(AnalysisError {
             pos: pattern.pos,
             kind: AnalysisErrorKind::PatternMismatchExpectedConstructor {
@@ -510,7 +514,7 @@ impl<'a> Analyzer<'a> {
           let param_type = param_types.get(i).unwrap();
           let given_type = &arg.typ;
 
-          if param_type != given_type {
+          if !self.compatible_types(&param_type, &given_type) {
             let pos = arg.pos;
 
             self.error(AnalysisError {
@@ -539,6 +543,7 @@ impl<'a> Analyzer<'a> {
 
   fn analyze_def(&mut self, node: &mut DefNode) {
     let mut param_types = Vec::new();
+    let mut return_type = ValueType::Nothing;
 
     match &mut node.kind {
       DefKind::Function { signature } => {
@@ -594,8 +599,9 @@ impl<'a> Analyzer<'a> {
       }
     }
 
-    if let Some(return_type) = &mut node.return_type {
-      self.analyze_type_expr(return_type);
+    if let Some(type_expr) = &mut node.return_type {
+      self.analyze_type_expr(type_expr);
+      return_type = type_expr.typ.clone();
     }
 
     self.scope.enter();
@@ -611,12 +617,39 @@ impl<'a> Analyzer<'a> {
 
         i += 1;
       }
+    } else {
+      let mut i = 0;
+      for pattern in &mut node.block.params {
+        let param_type = param_types.get(i).unwrap();
+        self.destructure_pattern(pattern, param_type);
+
+        i += 1;
+      }
     }
 
-    self.analyze_block(&mut node.block);
+    let mut block_return_type = ValueType::Nothing;
+    let mut block_return_pos = node.block.pos;
+
+    for stmt in &mut node.block.body {
+      self.analyze_statement(stmt);
+
+      if let StatementKind::Expr(expr) = &stmt.kind {
+        block_return_type = expr.typ.clone();
+        block_return_pos = expr.pos;
+      }
+    }
+
+    if !self.compatible_types(&return_type, &block_return_type) {
+      self.error(AnalysisError {
+        pos: block_return_pos,
+        kind: AnalysisErrorKind::ReturnTypeMismatch {
+          expected: return_type,
+          actual: block_return_type,
+        },
+      })
+    }
 
     let results = self.scope.exit();
-
     self.check_results(results);
   }
 
@@ -629,7 +662,7 @@ impl<'a> Analyzer<'a> {
           let current_type = binding.typ.clone();
           let new_type = right.typ.clone();
 
-          if current_type != new_type {
+          if !self.compatible_types(&current_type, &new_type) {
             self.error(AnalysisError {
               pos: right.pos,
               kind: AnalysisErrorKind::ReassignmentTypeMismatch {
@@ -658,7 +691,7 @@ impl<'a> Analyzer<'a> {
 
           node.typ = method_type.func_return_type();
 
-          if right.typ != *first_param_type {
+          if !self.compatible_types(&right.typ, first_param_type) {
             self.error(AnalysisError {
               pos: right.pos,
               kind: AnalysisErrorKind::ParameterTypeMismatch {
@@ -724,7 +757,7 @@ impl<'a> Analyzer<'a> {
         let string_type = ValueType::Named("String".to_owned());
 
         for part in parts {
-          if part.typ != string_type {
+          if !self.compatible_types(&string_type, &part.typ) {
             self.error(AnalysisError {
               pos: part.pos,
               kind: AnalysisErrorKind::TypeMismatchInStringInterpolation(part.typ.clone()),
@@ -795,8 +828,7 @@ impl<'a> Analyzer<'a> {
           if let Some(expected_case_type) = &case_type {
             let actual_case_type = &case.body.typ;
 
-            // TODO: more than equality comparison?
-            if expected_case_type != actual_case_type {
+            if !self.compatible_types(&expected_case_type, &actual_case_type) {
               self.error(AnalysisError {
                 pos: case.body.pos,
                 kind: AnalysisErrorKind::TypeMismatchInMatchCase {
@@ -840,7 +872,7 @@ impl<'a> Analyzer<'a> {
         let expr_type = &expr.typ;
         let asserted_type = &asserted_type.typ;
 
-        if expr_type != asserted_type {
+        if !self.compatible_types(asserted_type, expr_type) {
           self.error(AnalysisError {
             pos: node.pos,
             kind: AnalysisErrorKind::TypeMismatchInTypeAssertion {

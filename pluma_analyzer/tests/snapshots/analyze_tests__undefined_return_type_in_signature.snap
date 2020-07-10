@@ -22,5 +22,29 @@ def takesSomething () -> Wat {
         module_name: None,
         module_path: None,
     },
+    Diagnostic {
+        kind: Error,
+        message: "Return type mismatch. Expected type Wat, but found type ().",
+        pos: Some(
+            (
+                39,
+                41,
+            ),
+        ),
+        module_name: None,
+        module_path: None,
+    },
+    Diagnostic {
+        kind: Warning,
+        message: "Name \'arg\' is never used.",
+        pos: Some(
+            (
+                34,
+                37,
+            ),
+        ),
+        module_name: None,
+        module_path: None,
+    },
 ]
 
