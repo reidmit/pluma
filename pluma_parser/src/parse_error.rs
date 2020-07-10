@@ -79,12 +79,12 @@ impl fmt::Display for ParseError {
       MissingExpressionAfterReturn => write!(f, "Missing expression after 'return'."),
       MissingIdentifier => write!(f, "Missing identifier."),
       MissingIndexBetweenBrackets => write!(f, "Missing index between '[' and ']'."),
-      MissingLabelInTuple => write!(f, "Missing identifier in labeled tuple."),
-      MissingMatchCases => write!(f, "Missing cases in 'match' expression."),
+      MissingLabelInTuple => write!(f, "Missing label in labeled tuple."),
+      MissingMatchCases => write!(f, "Missing cases in match expression."),
       MissingQualifierAfterAs => write!(f, "Missing identifier after 'as'."),
       MissingReturnType => write!(f, "Missing return type."),
       MissingRightHandSideOfAssignment => {
-        write!(f, "Missing expression after '=' in 'let' statement.")
+        write!(f, "Missing expression after '=' in let statement.")
       }
       MissingStructFields => write!(f, "Missing struct fields."),
       MissingTraitConstraints => write!(f, "Missing trait constraints."),

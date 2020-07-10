@@ -245,7 +245,20 @@ impl<'a> Iterator for Tokenizer<'a> {
             self.index += 1;
           }
 
-          return Some(ParamPlaceholder(start_index, self.index));
+          return Some(IdentifierSpecialParam(start_index, self.index));
+        }
+
+        b'$'
+          if self.index < self.length - 1
+            && is_identifier_start_char(self.source[self.index + 1]) =>
+        {
+          self.index += 1;
+
+          while self.index < self.length && is_identifier_char(self.source[self.index]) {
+            self.index += 1;
+          }
+
+          return Some(IdentifierSpecialOther(start_index, self.index));
         }
 
         _ if is_operator_char(byte) => {

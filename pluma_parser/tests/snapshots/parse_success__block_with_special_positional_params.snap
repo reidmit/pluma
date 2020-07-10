@@ -1,0 +1,125 @@
+---
+source: pluma_parser/tests/parse_success.rs
+expression: "let b = { $0 + $1 }"
+---
+
+=== Source ===
+let b = { $0 + $1 }
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        19,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                19,
+            ),
+            kind: Let(
+                LetNode {
+                    pos: (
+                        0,
+                        19,
+                    ),
+                    pattern: PatternNode {
+                        pos: (
+                            4,
+                            5,
+                        ),
+                        kind: Identifier(
+                            IdentifierNode {
+                                pos: (
+                                    4,
+                                    5,
+                                ),
+                                name: "b",
+                            },
+                            false,
+                        ),
+                    },
+                    value: ExprNode {
+                        pos: (
+                            8,
+                            19,
+                        ),
+                        kind: Block(
+                            BlockNode {
+                                pos: (
+                                    8,
+                                    19,
+                                ),
+                                params: [],
+                                body: [
+                                    StatementNode {
+                                        pos: (
+                                            10,
+                                            17,
+                                        ),
+                                        kind: Expr(
+                                            ExprNode {
+                                                pos: (
+                                                    10,
+                                                    17,
+                                                ),
+                                                kind: BinaryOperation {
+                                                    left: ExprNode {
+                                                        pos: (
+                                                            10,
+                                                            12,
+                                                        ),
+                                                        kind: Identifier(
+                                                            IdentifierNode {
+                                                                pos: (
+                                                                    10,
+                                                                    12,
+                                                                ),
+                                                                name: "$0",
+                                                            },
+                                                        ),
+                                                        typ: Unknown,
+                                                    },
+                                                    op: OperatorNode {
+                                                        pos: (
+                                                            13,
+                                                            14,
+                                                        ),
+                                                        name: "+",
+                                                    },
+                                                    right: ExprNode {
+                                                        pos: (
+                                                            15,
+                                                            17,
+                                                        ),
+                                                        kind: Identifier(
+                                                            IdentifierNode {
+                                                                pos: (
+                                                                    15,
+                                                                    17,
+                                                                ),
+                                                                name: "$1",
+                                                            },
+                                                        ),
+                                                        typ: Unknown,
+                                                    },
+                                                },
+                                                typ: Unknown,
+                                            },
+                                        ),
+                                    },
+                                ],
+                            },
+                        ),
+                        typ: Unknown,
+                    },
+                },
+            ),
+        },
+    ],
+}
+

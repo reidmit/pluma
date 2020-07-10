@@ -339,7 +339,7 @@ impl<'a> Parser<'a> {
 
         // If there is an identifier now, it means this is a call to a multi-part name.
         while current_token_is!(self, Token::Identifier) {
-          match self.parse_identifier() {
+          match self.parse_identifier(false) {
             Some(next_callee_part) => {
               rest_callee_parts.push(next_callee_part);
 
@@ -391,7 +391,7 @@ impl<'a> Parser<'a> {
 
         // If there is an identifier now, it means this is a call to a multi-part name.
         while current_token_is!(self, Token::Identifier) {
-          match self.parse_identifier() {
+          match self.parse_identifier(false) {
             Some(next_callee_part) => {
               rest_callee_parts.push(next_callee_part);
 
@@ -482,7 +482,7 @@ impl<'a> Parser<'a> {
       start
     });
 
-    let name = match self.parse_identifier() {
+    let name = match self.parse_identifier(false) {
       Some(node) => node,
       _ => todo!(),
     };
@@ -648,7 +648,7 @@ impl<'a> Parser<'a> {
     if current_token_is!(self, Token::KeywordWhere) {
       self.advance();
 
-      while let Some(generic_name) = self.parse_identifier() {
+      while let Some(generic_name) = self.parse_identifier(false) {
         expect_token_and_do!(self, Token::DoubleColon, {
           self.advance();
         });
@@ -781,7 +781,7 @@ impl<'a> Parser<'a> {
 
     // Now, collect any remaining parts
     while current_token_is!(self, Token::Identifier) {
-      let part_name = self.parse_identifier().unwrap();
+      let part_name = self.parse_identifier(false).unwrap();
 
       match self.parse_type_expression() {
         Some(part_param) => signature.push((part_name, Box::new(part_param))),
@@ -839,7 +839,7 @@ impl<'a> Parser<'a> {
     while let Some(Token::Pipe(..)) = self.current_token {
       self.advance();
 
-      match self.parse_identifier() {
+      match self.parse_identifier(false) {
         Some(id) => {
           match self.current_token {
             // A variant can either be a call with an argument, in which case we
@@ -921,9 +921,17 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_identifier(&mut self) -> Option<IdentifierNode> {
+  fn parse_identifier(&mut self, allow_special: bool) -> Option<IdentifierNode> {
     let (start, end) = match self.current_token {
       Some(Token::Identifier(start, end)) => {
+        self.advance();
+        (start, end)
+      }
+      Some(Token::IdentifierSpecialOther(start, end)) if allow_special => {
+        self.advance();
+        (start, end)
+      }
+      Some(Token::IdentifierSpecialParam(start, end)) if allow_special => {
         self.advance();
         (start, end)
       }
@@ -1248,7 +1256,7 @@ impl<'a> Parser<'a> {
 
         expect_token_and_do!(self, Token::Identifier, {});
 
-        let id_node = self.parse_identifier().unwrap();
+        let id_node = self.parse_identifier(false).unwrap();
 
         Some(PatternNode {
           pos: (start, id_node.pos.1),
@@ -1257,7 +1265,7 @@ impl<'a> Parser<'a> {
       }
 
       Some(Token::Identifier(..)) => {
-        let id_node = self.parse_identifier().unwrap();
+        let id_node = self.parse_identifier(false).unwrap();
 
         if let Some(arg_pattern) = self.parse_pattern() {
           return Some(PatternNode {
@@ -1282,7 +1290,7 @@ impl<'a> Parser<'a> {
             // It's a labeled tuple!
             let mut labeled_entries = Vec::new();
 
-            while let Some(label) = self.parse_identifier() {
+            while let Some(label) = self.parse_identifier(false) {
               expect_token_and_do!(self, Token::Colon, { self.advance() });
 
               let pattern = match self.parse_pattern() {
@@ -1948,7 +1956,7 @@ impl<'a> Parser<'a> {
     self.skip_line_breaks();
 
     while let Some(Token::Identifier(..)) = self.current_token {
-      let ident = match self.parse_identifier() {
+      let ident = match self.parse_identifier(false) {
         Some(node) => node,
         _ => break,
       };
@@ -2013,9 +2021,11 @@ impl<'a> Parser<'a> {
       Some(Token::StringLiteral(..)) => self.parse_string(),
       Some(Token::KeywordMatch(..)) => self.parse_match(),
       Some(Token::Underscore(..)) => self.parse_underscore(),
-      Some(Token::Identifier(..)) => {
+      Some(Token::Identifier(..))
+      | Some(Token::IdentifierSpecialParam(..))
+      | Some(Token::IdentifierSpecialOther(..)) => {
         self
-          .parse_identifier()
+          .parse_identifier(true)
           .map(|id_node| match self.current_token {
             Some(Token::Equals(..)) => {
               self.advance();
@@ -2176,7 +2186,7 @@ impl<'a> Parser<'a> {
       let mut signature = Vec::new();
 
       while current_token_is!(self, Token::Identifier) {
-        let part_name = self.parse_identifier().unwrap();
+        let part_name = self.parse_identifier(false).unwrap();
 
         if current_token_is!(self, Token::DoubleColon) {
           self.advance();
@@ -2561,7 +2571,7 @@ impl<'a> Parser<'a> {
     let (qualifier, end) = if current_token_is!(self, Token::KeywordAs) {
       self.advance();
 
-      match self.parse_identifier() {
+      match self.parse_identifier(false) {
         Some(node) => {
           let qualifier_end = node.pos.1;
           (Some(node), qualifier_end)

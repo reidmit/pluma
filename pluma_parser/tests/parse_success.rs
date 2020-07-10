@@ -299,6 +299,14 @@ test_parse_success! {
     |intrinsic_def Int + Int -> Int
   "#,
 
+  block_with_special_positional_params: r#"
+    |let b = { $0 + $1 }
+  "#,
+
+  block_with_special_self_arg: r#"
+    |let b = { $self .return 47 }
+  "#,
+
   def_binary_op: r#"
     |def A + A -> A {}
   "#,

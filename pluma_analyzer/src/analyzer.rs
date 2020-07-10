@@ -475,7 +475,9 @@ impl<'a> Analyzer<'a> {
       }
     }
 
-    for stmt in &node.body {
+    for stmt in &mut node.body {
+      self.analyze_statement(stmt);
+
       if let StatementKind::Expr(expr) = &stmt.kind {
         return_type = expr.typ.clone();
       }
@@ -536,13 +538,13 @@ impl<'a> Analyzer<'a> {
   }
 
   fn analyze_def(&mut self, node: &mut DefNode) {
-    self.scope.enter();
+    let mut param_types = Vec::new();
 
     match &mut node.kind {
       DefKind::Function { signature } => {
         let params = &node.block.params;
 
-        if params.len() != signature.len() {
+        if params.len() > signature.len() {
           let start = params.first().map(|p| p.pos.0).unwrap_or(node.pos.0);
           let end = params.last().map(|p| p.pos.1).unwrap_or(node.pos.1);
 
@@ -557,6 +559,8 @@ impl<'a> Analyzer<'a> {
 
         for (_part_name, part_type) in signature {
           self.analyze_type_expr(part_type);
+
+          param_types.push(part_type.typ.clone());
         }
       }
 
@@ -564,26 +568,52 @@ impl<'a> Analyzer<'a> {
         receiver,
         signature,
       } => {
-        self.analyze_type_identifier(receiver);
+        let receiver_type = self.analyze_type_identifier(receiver);
+
+        param_types.push(receiver_type);
 
         for (_part_name, part_type) in signature {
           self.analyze_type_expr(part_type);
+
+          param_types.push(part_type.typ.clone());
         }
       }
 
       DefKind::BinaryOperator { left, right, .. } => {
-        self.analyze_type_identifier(left);
-        self.analyze_type_identifier(right);
+        let left_type = self.analyze_type_identifier(left);
+        let right_type = self.analyze_type_identifier(right);
+
+        param_types.push(left_type);
+        param_types.push(right_type);
       }
 
       DefKind::UnaryOperator { right, .. } => {
-        self.analyze_type_identifier(right);
+        let right_type = self.analyze_type_identifier(right);
+
+        param_types.push(right_type);
       }
     }
 
     if let Some(return_type) = &mut node.return_type {
       self.analyze_type_expr(return_type);
     }
+
+    self.scope.enter();
+
+    if node.block.params.is_empty() {
+      let pos = (node.block.pos.0, node.block.pos.0);
+
+      let mut i = 0;
+      for param_type in param_types {
+        self
+          .scope
+          .add_binding(BindingKind::Param, format!("${}", i), param_type, pos);
+
+        i += 1;
+      }
+    }
+
+    self.analyze_block(&mut node.block);
 
     let results = self.scope.exit();
 
@@ -920,6 +950,12 @@ impl<'a> Analyzer<'a> {
     }
   }
 
+  fn analyze_let(&mut self, node: &mut LetNode) {
+    self.analyze_expr(&mut node.value);
+
+    self.destructure_pattern(&mut node.pattern, &mut node.value.typ);
+  }
+
   fn analyze_literal(&mut self, node: &LiteralNode) -> ValueType {
     match &node.kind {
       LiteralKind::IntDecimal { .. } => ValueType::Int,
@@ -928,6 +964,14 @@ impl<'a> Analyzer<'a> {
       LiteralKind::IntOctal { .. } => ValueType::Int,
       LiteralKind::FloatDecimal { .. } => ValueType::Float,
       LiteralKind::Str { .. } => ValueType::String,
+    }
+  }
+
+  fn analyze_statement(&mut self, node: &mut StatementNode) {
+    match &mut node.kind {
+      StatementKind::Expr(expr_node) => self.analyze_expr(expr_node),
+
+      StatementKind::Let(let_node) => self.analyze_let(let_node),
     }
   }
 
@@ -1030,22 +1074,13 @@ impl<'a> VisitorMut for Analyzer<'a> {
 
   fn enter_top_level_statement(&mut self, node: &mut TopLevelStatementNode) {
     match &mut node.kind {
-      TopLevelStatementKind::Def(def_node) => {
-        self.analyze_def(def_node);
-      }
+      TopLevelStatementKind::Def(def_node) => self.analyze_def(def_node),
 
-      TopLevelStatementKind::IntrinsicDef(def_node) => {
-        self.analyze_intrinsic_def(def_node);
-      }
+      TopLevelStatementKind::IntrinsicDef(def_node) => self.analyze_intrinsic_def(def_node),
 
-      TopLevelStatementKind::Let(let_node) => {
-        self.analyze_expr(&mut let_node.value);
-        self.destructure_pattern(&mut let_node.pattern, &mut let_node.value.typ);
-      }
+      TopLevelStatementKind::Let(let_node) => self.analyze_let(let_node),
 
-      TopLevelStatementKind::Expr(expr) => {
-        self.analyze_expr(expr);
-      }
+      TopLevelStatementKind::Expr(expr) => self.analyze_expr(expr),
 
       _ => {
         // Other kinds handled above
