@@ -59,6 +59,7 @@ ModuleNode {
                                     ),
                                     name: "Int",
                                     generics: [],
+                                    constraints: None,
                                 },
                             ),
                             typ: Unknown,

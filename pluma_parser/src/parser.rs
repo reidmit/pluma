@@ -1947,61 +1947,19 @@ impl<'a> Parser<'a> {
 
     let generic_type_constraints = self.parse_generic_type_constraints().unwrap_or_default();
 
-    let mut fields = Vec::new();
-
-    expect_token_and_do!(self, Token::LeftParen, {
-      self.advance();
-    });
-
-    self.skip_line_breaks();
-
-    while let Some(Token::Identifier(..)) = self.current_token {
-      let ident = match self.parse_identifier(false) {
-        Some(node) => node,
-        _ => break,
-      };
-
-      expect_token_and_do!(self, Token::DoubleColon, {
-        self.advance();
-      });
-
-      match self.parse_type_expression() {
-        Some(expr) => fields.push((ident, expr)),
-        _ => {
-          // Assume that the failure to parse the type expression has
-          // already generated an error
-          return None;
-        }
-      };
-
-      if current_token_is!(self, Token::Comma) {
-        self.advance();
-      } else {
-        break;
+    let inner = match self.parse_type_expression() {
+      Some(type_expr) => type_expr,
+      _ => {
+        // Assume that the failure to parse the type expression has
+        // already generated an error
+        return None;
       }
-
-      self.skip_line_breaks();
-    }
-
-    self.skip_line_breaks();
-
-    let end = expect_token_and_do!(self, Token::RightParen, {
-      let pos = self.current_token_position();
-      self.advance();
-      pos.1
-    });
-
-    if fields.is_empty() {
-      return self.error(ParseError {
-        pos: (start, end),
-        kind: ParseErrorKind::MissingStructFields,
-      });
-    }
+    };
 
     Some(TypeDefNode {
-      pos: (start, end),
+      pos: (start, inner.pos.1),
       visibility: self.current_visibility,
-      kind: TypeDefKind::Struct { fields },
+      kind: TypeDefKind::Struct { inner },
       name,
       generic_type_constraints,
     })
@@ -2387,6 +2345,7 @@ impl<'a> Parser<'a> {
       pos: (start, end),
       name,
       generics,
+      constraints: None,
     })
   }
 

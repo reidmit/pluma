@@ -38,6 +38,7 @@ ModuleNode {
                             ),
                             name: "Person",
                             generics: [],
+                            constraints: None,
                         },
                         signature: [
                             (
@@ -61,6 +62,7 @@ ModuleNode {
                                             ),
                                             name: "String",
                                             generics: [],
+                                            constraints: None,
                                         },
                                     ),
                                     typ: Unknown,

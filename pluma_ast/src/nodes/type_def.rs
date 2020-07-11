@@ -29,8 +29,9 @@ pub enum TypeDefKind {
     variants: Vec<EnumVariantNode>,
   },
   // struct Person (name :: String, age :: Int)
+  // struct MyInt Int
   Struct {
-    fields: Vec<(IdentifierNode, TypeExprNode)>,
+    inner: TypeExprNode,
   },
   // trait Named .name :: String .getName() -> String
   Trait {

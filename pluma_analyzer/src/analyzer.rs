@@ -1,5 +1,6 @@
 use crate::analysis_error::{AnalysisError, AnalysisErrorKind};
-use crate::scope::{Binding, BindingKind, Scope, TypeBindingKind};
+use crate::binding::*;
+use crate::scope::*;
 use crate::type_utils;
 use pluma_ast::*;
 use pluma_diagnostics::*;
@@ -101,6 +102,8 @@ impl<'a> Analyzer<'a> {
           Some(ret) => type_utils::type_expr_to_value_type(&ret),
           None => ValueType::Nothing,
         };
+
+        println!("param_types {:#?}", param_types);
 
         let def_type = ValueType::Func(param_types, Box::new(return_type));
         let merged_name = name_parts.join(" ");
@@ -248,33 +251,17 @@ impl<'a> Analyzer<'a> {
         }
       }
 
-      TypeDefKind::Struct { fields } => {
-        let mut param_types = Vec::new();
-        let mut fields_map = HashMap::new();
-
-        for field in fields {
-          let (field_id, field_type) = field;
-          param_types.push(type_utils::type_expr_to_value_type(field_type));
-
-          fields_map.insert(
-            field_id.name.clone(),
-            Binding {
-              kind: BindingKind::Field,
-              ref_count: 0,
-              pos: field_id.pos,
-              typ: type_utils::type_expr_to_value_type(field_type),
-            },
-          );
-        }
+      TypeDefKind::Struct { inner } => {
+        let fields = type_utils::type_expr_to_struct_fields(inner);
 
         self.scope.add_type_binding(
           typ.clone(),
-          TypeBindingKind::Struct { fields: fields_map },
+          TypeBindingKind::Struct { fields },
           node.name.pos,
         );
 
-        let param_tuple_type = ValueType::UnlabeledTuple(param_types);
-        let constructor_type = ValueType::Func(vec![param_tuple_type], Box::new(typ));
+        let inner_type = type_utils::type_expr_to_value_type(inner);
+        let constructor_type = ValueType::Func(vec![inner_type], Box::new(typ));
 
         self.scope.add_binding(
           BindingKind::StructConstructor,
@@ -563,6 +550,8 @@ impl<'a> Analyzer<'a> {
         }
 
         for (_part_name, part_type) in signature {
+          println!("part_type: {:#?}", part_type);
+
           self.analyze_type_expr(part_type);
 
           param_types.push(part_type.typ.clone());

@@ -69,6 +69,7 @@ ModuleNode {
                         ),
                         name: "Bool",
                         generics: [],
+                        constraints: None,
                     },
                     generic_type_constraints: [],
                 },

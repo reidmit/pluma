@@ -65,6 +65,7 @@ ModuleNode {
                                     ),
                                     name: "String",
                                     generics: [],
+                                    constraints: None,
                                 },
                             ),
                             typ: Unknown,

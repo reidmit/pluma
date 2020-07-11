@@ -36,6 +36,7 @@ ModuleNode {
                             ),
                             name: "Int",
                             generics: [],
+                            constraints: None,
                         },
                         op: OperatorNode {
                             pos: (
@@ -51,6 +52,7 @@ ModuleNode {
                             ),
                             name: "Int",
                             generics: [],
+                            constraints: None,
                         },
                     },
                     return_type: Some(
@@ -67,6 +69,7 @@ ModuleNode {
                                     ),
                                     name: "Int",
                                     generics: [],
+                                    constraints: None,
                                 },
                             ),
                             typ: Unknown,
