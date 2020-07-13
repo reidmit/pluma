@@ -44,7 +44,73 @@ impl<'a> Analyzer<'a> {
     }
   }
 
+  fn constraint_to_required_fields(
+    &mut self,
+    constraint: &TypeConstraint,
+  ) -> HashMap<String, Binding> {
+    match &constraint {
+      TypeConstraint::NamedTrait(name) => {
+        let value_type = ValueType::Named(name.to_owned());
+        let type_binding = self.scope.get_type_binding(&value_type).unwrap();
+        type_binding.fields()
+      }
+      _ => todo!("other constraint flavors"),
+    }
+  }
+
+  fn type_to_field_types(&mut self, typ: &ValueType) -> HashMap<String, ValueType> {
+    let mut field_types = HashMap::new();
+
+    match typ {
+      ValueType::UnlabeledTuple(entries) => {
+        for i in 0..entries.len() {
+          field_types.insert(format!("{}", i), entries.get(i).unwrap().clone());
+        }
+      }
+
+      ValueType::LabeledTuple(entries) => {
+        for (label, typ) in entries {
+          field_types.insert(format!("{}", label), typ.clone());
+        }
+      }
+
+      ValueType::Named(..) => {
+        let type_binding = self.scope.get_type_binding(&typ).unwrap();
+        return type_binding.field_types();
+      }
+
+      _ => {}
+    }
+
+    field_types
+  }
+
   fn compatible_types(&mut self, expected: &ValueType, actual: &ValueType) -> bool {
+    // if let ValueType::Constrained(constraint) = expected {
+    //   let actual_fields = match self.scope.get_type_binding(actual) {
+    //     Some(type_binding) => type_binding.fields(),
+    //   };
+    //   let required_trait_fields = self.constraint_to_required_fields(constraint);
+
+    //   for (field_name, required_field_binding) in required_trait_fields {
+    //     match actual_fields.get(&field_name) {
+    //       None => {
+    //         println!("no trait field! (field_name: {})", field_name);
+    //         return false;
+    //       }
+
+    //       Some(actual_field_binding) => {
+    //         if !self.compatible_types(&required_field_binding.typ, &actual_field_binding.typ) {
+    //           println!("incompatible field types! (field_name: {})", field_name);
+    //           return false;
+    //         }
+
+    //         return true;
+    //       }
+    //     }
+    //   }
+    // }
+
     expected == actual
   }
 
@@ -71,10 +137,7 @@ impl<'a> Analyzer<'a> {
         )
       };
 
-      constraints_map.insert(
-        constraint_name.name.clone(),
-        ValueType::Constrained(constraint),
-      );
+      constraints_map.insert(constraint_name.name.clone(), constraint);
     }
 
     match kind {
@@ -89,7 +152,11 @@ impl<'a> Analyzer<'a> {
 
           if let ValueType::Named(name) = &param_type {
             if let Some(constraint) = constraints_map.get(name) {
-              param_types.push(constraint.clone());
+              param_types.push(ValueType::Constrained(constraint.clone()));
+
+              part_type
+                .to_type_identifier_mut()
+                .add_constraint(constraint.clone())
             } else {
               param_types.push(param_type);
             }
@@ -102,8 +169,6 @@ impl<'a> Analyzer<'a> {
           Some(ret) => type_utils::type_expr_to_value_type(&ret),
           None => ValueType::Nothing,
         };
-
-        println!("param_types {:#?}", param_types);
 
         let def_type = ValueType::Func(param_types, Box::new(return_type));
         let merged_name = name_parts.join(" ");
@@ -550,8 +615,6 @@ impl<'a> Analyzer<'a> {
         }
 
         for (_part_name, part_type) in signature {
-          println!("part_type: {:#?}", part_type);
-
           self.analyze_type_expr(part_type);
 
           param_types.push(part_type.typ.clone());
@@ -708,28 +771,23 @@ impl<'a> Analyzer<'a> {
       ExprKind::EmptyTuple => node.typ = ValueType::Nothing,
 
       ExprKind::FieldAccess { receiver, field } => {
-        let receiver_type_binding = self.scope.get_type_binding(&receiver.typ).unwrap();
+        self.analyze_expr(receiver);
 
-        if let TypeBindingKind::Struct { fields } = &receiver_type_binding.kind {
-          match fields.get(&field.name) {
-            Some(binding) => node.typ = binding.typ.clone(),
+        println!("scope: {:#?}", self.scope);
+        println!("rec: {:#?}", receiver);
 
-            None => self.error(AnalysisError {
-              pos: field.pos,
-              kind: AnalysisErrorKind::UndefinedFieldForType {
-                field_name: field.name.clone(),
-                receiver_type: receiver.typ.clone(),
-              },
-            }),
-          }
-        } else {
-          self.error(AnalysisError {
+        let receiver_type_fields = self.type_to_field_types(&receiver.typ);
+
+        match receiver_type_fields.get(&field.name) {
+          Some(field_typ) => node.typ = field_typ.clone(),
+
+          None => self.error(AnalysisError {
             pos: field.pos,
             kind: AnalysisErrorKind::UndefinedFieldForType {
               field_name: field.name.clone(),
               receiver_type: receiver.typ.clone(),
             },
-          })
+          }),
         }
       }
 
@@ -997,6 +1055,11 @@ impl<'a> Analyzer<'a> {
   }
 
   fn analyze_type_identifier(&mut self, node: &mut TypeIdentifierNode) -> ValueType {
+    if let Some(constraints) = &node.constraints {
+      // TODO: more than just the first here?
+      return ValueType::Constrained(constraints.first().unwrap().clone());
+    }
+
     let named_value_type = type_utils::type_ident_to_value_type(&node);
 
     match self.scope.get_type_binding(&named_value_type) {

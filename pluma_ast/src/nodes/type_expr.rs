@@ -24,3 +24,12 @@ pub enum TypeExprKind {
   // e.g. (String) or (String -> Bool)
   Grouping(Box<TypeExprNode>),
 }
+
+impl TypeExprNode {
+  pub fn to_type_identifier_mut(&mut self) -> &mut TypeIdentifierNode {
+    match &mut self.kind {
+      TypeExprKind::Single(ident) => ident,
+      _ => unreachable!("must be called on type identifier"),
+    }
+  }
+}

@@ -445,34 +445,51 @@ impl<'a> Parser<'a> {
   fn parse_field_access(&mut self, last_expr: ExprNode) -> Option<ExprNode> {
     expect_token_and_do!(self, Token::Dot, { self.advance() });
 
-    match self.parse_term() {
-      Some(ExprNode { kind, pos, .. }) => match kind {
-        ExprKind::Identifier(ident) => {
-          return Some(ExprNode {
-            pos: (last_expr.pos.0, pos.1),
-            kind: ExprKind::FieldAccess {
-              receiver: Box::new(last_expr),
-              field: ident,
+    let term = self.parse_term();
+
+    if term.is_none() {
+      return self.error(ParseError {
+        pos: self.current_token_position(),
+        kind: ParseErrorKind::MissingExpressionAfterDot,
+      });
+    }
+
+    let term = term.unwrap();
+
+    if let ExprKind::Identifier(ident) = term.kind {
+      // If it's an identifier, it is a normal field access
+      return Some(ExprNode {
+        pos: (last_expr.pos.0, term.pos.1),
+        kind: ExprKind::FieldAccess {
+          receiver: Box::new(last_expr),
+          field: ident,
+        },
+        typ: ValueType::Unknown,
+      });
+    }
+
+    if let ExprKind::Literal(lit) = term.kind {
+      // If it's a decimal number, it is a tuple field access (e.g. ".0")
+      if let LiteralKind::IntDecimal(val) = lit.kind {
+        return Some(ExprNode {
+          pos: (last_expr.pos.0, term.pos.1),
+          kind: ExprKind::FieldAccess {
+            receiver: Box::new(last_expr),
+            field: IdentifierNode {
+              pos: lit.pos,
+              name: format!("{}", val),
             },
-            typ: ValueType::Unknown,
-          })
-        }
-
-        _ => {
-          return self.error(ParseError {
-            pos,
-            kind: ParseErrorKind::UnexpectedExpressionAfterDot,
-          })
-        }
-      },
-
-      _ => {
-        return self.error(ParseError {
-          pos: self.current_token_position(),
-          kind: ParseErrorKind::MissingExpressionAfterDot,
-        })
+          },
+          typ: ValueType::Unknown,
+        });
       }
-    };
+    }
+
+    // Reject any other expr kinds
+    return self.error(ParseError {
+      pos: term.pos,
+      kind: ParseErrorKind::UnexpectedExpressionAfterDot,
+    });
   }
 
   fn parse_method_access(&mut self, last_expr: ExprNode) -> Option<ExprNode> {
