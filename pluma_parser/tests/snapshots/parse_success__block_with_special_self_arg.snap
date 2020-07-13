@@ -1,10 +1,10 @@
 ---
 source: pluma_parser/tests/parse_success.rs
-expression: "let b = { $self .return 47 }"
+expression: "let b = { $self .. return 47 }"
 ---
 
 === Source ===
-let b = { $self .return 47 }
+let b = { $self .. return 47 }
 
 === Comments ===
 {}
@@ -13,19 +13,19 @@ let b = { $self .return 47 }
 ModuleNode {
     pos: (
         0,
-        28,
+        30,
     ),
     body: [
         TopLevelStatementNode {
             pos: (
                 0,
-                28,
+                30,
             ),
             kind: Let(
                 LetNode {
                     pos: (
                         0,
-                        28,
+                        30,
                     ),
                     pattern: PatternNode {
                         pos: (
@@ -46,37 +46,37 @@ ModuleNode {
                     value: ExprNode {
                         pos: (
                             8,
-                            28,
+                            30,
                         ),
                         kind: Block(
                             BlockNode {
                                 pos: (
                                     8,
-                                    28,
+                                    30,
                                 ),
                                 params: [],
                                 body: [
                                     StatementNode {
                                         pos: (
                                             10,
-                                            26,
+                                            28,
                                         ),
                                         kind: Expr(
                                             ExprNode {
                                                 pos: (
                                                     10,
-                                                    26,
+                                                    28,
                                                 ),
                                                 kind: Call(
                                                     CallNode {
                                                         pos: (
                                                             10,
-                                                            26,
+                                                            28,
                                                         ),
                                                         callee: ExprNode {
                                                             pos: (
                                                                 10,
-                                                                23,
+                                                                15,
                                                             ),
                                                             kind: MethodAccess {
                                                                 receiver: ExprNode {
@@ -98,8 +98,8 @@ ModuleNode {
                                                                 method_parts: [
                                                                     IdentifierNode {
                                                                         pos: (
-                                                                            17,
-                                                                            23,
+                                                                            19,
+                                                                            25,
                                                                         ),
                                                                         name: "return",
                                                                     },
@@ -110,14 +110,14 @@ ModuleNode {
                                                         args: [
                                                             ExprNode {
                                                                 pos: (
-                                                                    24,
                                                                     26,
+                                                                    28,
                                                                 ),
                                                                 kind: Literal(
                                                                     LiteralNode {
                                                                         pos: (
-                                                                            24,
                                                                             26,
+                                                                            28,
                                                                         ),
                                                                         kind: IntDecimal(
                                                                             47,

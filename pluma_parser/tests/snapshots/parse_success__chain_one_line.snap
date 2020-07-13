@@ -1,10 +1,10 @@
 ---
 source: pluma_parser/tests/parse_success.rs
-expression: "\"hello\" . f1 () . f2 \"wow\" .f3(47)"
+expression: "\"hello\" .. f1 () .. f2 \"wow\" .f3(47)"
 ---
 
 === Source ===
-"hello" . f1 () . f2 "wow" .f3(47)
+"hello" .. f1 () .. f2 "wow" .f3(47)
 
 === Comments ===
 {}
@@ -13,64 +13,64 @@ expression: "\"hello\" . f1 () . f2 \"wow\" .f3(47)"
 ModuleNode {
     pos: (
         1,
-        34,
+        36,
     ),
     body: [
         TopLevelStatementNode {
             pos: (
                 1,
-                34,
+                36,
             ),
             kind: Expr(
                 ExprNode {
                     pos: (
                         1,
-                        34,
+                        36,
                     ),
                     kind: Call(
                         CallNode {
                             pos: (
                                 1,
-                                34,
+                                36,
                             ),
                             callee: ExprNode {
                                 pos: (
                                     1,
-                                    30,
+                                    32,
                                 ),
                                 kind: MethodAccess {
                                     receiver: ExprNode {
                                         pos: (
                                             1,
-                                            25,
+                                            27,
                                         ),
                                         kind: Call(
                                             CallNode {
                                                 pos: (
                                                     1,
-                                                    25,
+                                                    27,
                                                 ),
                                                 callee: ExprNode {
                                                     pos: (
                                                         1,
-                                                        20,
+                                                        16,
                                                     ),
                                                     kind: MethodAccess {
                                                         receiver: ExprNode {
                                                             pos: (
                                                                 1,
-                                                                15,
+                                                                16,
                                                             ),
                                                             kind: Call(
                                                                 CallNode {
                                                                     pos: (
                                                                         1,
-                                                                        15,
+                                                                        16,
                                                                     ),
                                                                     callee: ExprNode {
                                                                         pos: (
                                                                             1,
-                                                                            12,
+                                                                            6,
                                                                         ),
                                                                         kind: MethodAccess {
                                                                             receiver: ExprNode {
@@ -94,8 +94,8 @@ ModuleNode {
                                                                             method_parts: [
                                                                                 IdentifierNode {
                                                                                     pos: (
-                                                                                        10,
-                                                                                        12,
+                                                                                        11,
+                                                                                        13,
                                                                                     ),
                                                                                     name: "f1",
                                                                                 },
@@ -106,8 +106,8 @@ ModuleNode {
                                                                     args: [
                                                                         ExprNode {
                                                                             pos: (
-                                                                                13,
-                                                                                15,
+                                                                                14,
+                                                                                16,
                                                                             ),
                                                                             kind: EmptyTuple,
                                                                             typ: Unknown,
@@ -121,8 +121,8 @@ ModuleNode {
                                                         method_parts: [
                                                             IdentifierNode {
                                                                 pos: (
-                                                                    18,
                                                                     20,
+                                                                    22,
                                                                 ),
                                                                 name: "f2",
                                                             },
@@ -133,14 +133,14 @@ ModuleNode {
                                                 args: [
                                                     ExprNode {
                                                         pos: (
-                                                            22,
-                                                            25,
+                                                            24,
+                                                            27,
                                                         ),
                                                         kind: Literal(
                                                             LiteralNode {
                                                                 pos: (
-                                                                    22,
-                                                                    25,
+                                                                    24,
+                                                                    27,
                                                                 ),
                                                                 kind: Str(
                                                                     "wow",
@@ -158,8 +158,8 @@ ModuleNode {
                                     method_parts: [
                                         IdentifierNode {
                                             pos: (
-                                                28,
                                                 30,
+                                                32,
                                             ),
                                             name: "f3",
                                         },
@@ -170,20 +170,20 @@ ModuleNode {
                             args: [
                                 ExprNode {
                                     pos: (
-                                        30,
-                                        34,
+                                        32,
+                                        36,
                                     ),
                                     kind: Grouping(
                                         ExprNode {
                                             pos: (
-                                                31,
                                                 33,
+                                                35,
                                             ),
                                             kind: Literal(
                                                 LiteralNode {
                                                     pos: (
-                                                        31,
                                                         33,
+                                                        35,
                                                     ),
                                                     kind: IntDecimal(
                                                         47,

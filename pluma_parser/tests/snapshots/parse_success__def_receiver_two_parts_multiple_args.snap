@@ -1,10 +1,10 @@
 ---
 source: pluma_parser/tests/parse_success.rs
-expression: "def Person . hello (String, Int) world () {\n  |a, b, c| \"wow!\"\n}"
+expression: "def Person .. hello (String, Int) world () {\n  |a, b, c| \"wow!\"\n}"
 ---
 
 === Source ===
-def Person . hello (String, Int) world () {
+def Person .. hello (String, Int) world () {
   |a, b, c| "wow!"
 }
 
@@ -15,19 +15,19 @@ def Person . hello (String, Int) world () {
 ModuleNode {
     pos: (
         0,
-        64,
+        65,
     ),
     body: [
         TopLevelStatementNode {
             pos: (
                 0,
-                64,
+                65,
             ),
             kind: Def(
                 DefNode {
                     pos: (
                         0,
-                        64,
+                        65,
                     ),
                     visibility: Public,
                     kind: Method {
@@ -44,28 +44,28 @@ ModuleNode {
                             (
                                 IdentifierNode {
                                     pos: (
-                                        13,
-                                        18,
+                                        14,
+                                        19,
                                     ),
                                     name: "hello",
                                 },
                                 TypeExprNode {
                                     pos: (
-                                        19,
-                                        32,
+                                        20,
+                                        33,
                                     ),
                                     kind: UnlabeledTuple(
                                         [
                                             TypeExprNode {
                                                 pos: (
-                                                    20,
-                                                    26,
+                                                    21,
+                                                    27,
                                                 ),
                                                 kind: Single(
                                                     TypeIdentifierNode {
                                                         pos: (
-                                                            20,
-                                                            26,
+                                                            21,
+                                                            27,
                                                         ),
                                                         name: "String",
                                                         generics: [],
@@ -76,14 +76,14 @@ ModuleNode {
                                             },
                                             TypeExprNode {
                                                 pos: (
-                                                    28,
-                                                    31,
+                                                    29,
+                                                    32,
                                                 ),
                                                 kind: Single(
                                                     TypeIdentifierNode {
                                                         pos: (
-                                                            28,
-                                                            31,
+                                                            29,
+                                                            32,
                                                         ),
                                                         name: "Int",
                                                         generics: [],
@@ -100,15 +100,15 @@ ModuleNode {
                             (
                                 IdentifierNode {
                                     pos: (
-                                        33,
-                                        38,
+                                        34,
+                                        39,
                                     ),
                                     name: "world",
                                 },
                                 TypeExprNode {
                                     pos: (
-                                        39,
-                                        41,
+                                        40,
+                                        42,
                                     ),
                                     kind: EmptyTuple,
                                     typ: Unknown,
@@ -120,20 +120,20 @@ ModuleNode {
                     generic_type_constraints: [],
                     block: BlockNode {
                         pos: (
-                            42,
-                            64,
+                            43,
+                            65,
                         ),
                         params: [
                             PatternNode {
                                 pos: (
-                                    47,
                                     48,
+                                    49,
                                 ),
                                 kind: Identifier(
                                     IdentifierNode {
                                         pos: (
-                                            47,
                                             48,
+                                            49,
                                         ),
                                         name: "a",
                                     },
@@ -142,14 +142,14 @@ ModuleNode {
                             },
                             PatternNode {
                                 pos: (
-                                    50,
                                     51,
+                                    52,
                                 ),
                                 kind: Identifier(
                                     IdentifierNode {
                                         pos: (
-                                            50,
                                             51,
+                                            52,
                                         ),
                                         name: "b",
                                     },
@@ -158,14 +158,14 @@ ModuleNode {
                             },
                             PatternNode {
                                 pos: (
-                                    53,
                                     54,
+                                    55,
                                 ),
                                 kind: Identifier(
                                     IdentifierNode {
                                         pos: (
-                                            53,
                                             54,
+                                            55,
                                         ),
                                         name: "c",
                                     },
@@ -176,20 +176,20 @@ ModuleNode {
                         body: [
                             StatementNode {
                                 pos: (
-                                    57,
-                                    61,
+                                    58,
+                                    62,
                                 ),
                                 kind: Expr(
                                     ExprNode {
                                         pos: (
-                                            57,
-                                            61,
+                                            58,
+                                            62,
                                         ),
                                         kind: Literal(
                                             LiteralNode {
                                                 pos: (
-                                                    57,
-                                                    61,
+                                                    58,
+                                                    62,
                                                 ),
                                                 kind: Str(
                                                     "wow!",

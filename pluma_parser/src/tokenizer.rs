@@ -270,6 +270,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 
           let constructor = match value {
             b"." => Dot,
+            b".." => DoubleDot,
             b"|" => Pipe,
             b"=>" => DoubleArrow,
             b"=" => Equals,
