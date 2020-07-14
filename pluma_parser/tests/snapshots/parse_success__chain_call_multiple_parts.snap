@@ -1,10 +1,10 @@
 ---
 source: pluma_parser/tests/parse_success.rs
-expression: "\"hello\" .. replace \"x\" with \"y\""
+expression: "\"hello\" . replace \"x\" with \"y\""
 ---
 
 === Source ===
-"hello" .. replace "x" with "y"
+"hello" . replace "x" with "y"
 
 === Comments ===
 {}
@@ -13,30 +13,30 @@ expression: "\"hello\" .. replace \"x\" with \"y\""
 ModuleNode {
     pos: (
         1,
-        30,
+        29,
     ),
     body: [
         TopLevelStatementNode {
             pos: (
                 1,
-                30,
+                29,
             ),
             kind: Expr(
                 ExprNode {
                     pos: (
                         1,
-                        30,
+                        29,
                     ),
                     kind: Call(
                         CallNode {
                             pos: (
                                 1,
-                                30,
+                                29,
                             ),
                             callee: ExprNode {
                                 pos: (
                                     1,
-                                    6,
+                                    17,
                                 ),
                                 kind: MethodAccess {
                                     receiver: ExprNode {
@@ -60,15 +60,15 @@ ModuleNode {
                                     method_parts: [
                                         IdentifierNode {
                                             pos: (
-                                                11,
-                                                18,
+                                                10,
+                                                17,
                                             ),
                                             name: "replace",
                                         },
                                         IdentifierNode {
                                             pos: (
-                                                23,
-                                                27,
+                                                22,
+                                                26,
                                             ),
                                             name: "with",
                                         },
@@ -79,14 +79,14 @@ ModuleNode {
                             args: [
                                 ExprNode {
                                     pos: (
+                                        19,
                                         20,
-                                        21,
                                     ),
                                     kind: Literal(
                                         LiteralNode {
                                             pos: (
+                                                19,
                                                 20,
-                                                21,
                                             ),
                                             kind: Str(
                                                 "x",
@@ -97,14 +97,14 @@ ModuleNode {
                                 },
                                 ExprNode {
                                     pos: (
+                                        28,
                                         29,
-                                        30,
                                     ),
                                     kind: Literal(
                                         LiteralNode {
                                             pos: (
+                                                28,
                                                 29,
-                                                30,
                                             ),
                                             kind: Str(
                                                 "y",

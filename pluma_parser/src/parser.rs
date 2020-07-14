@@ -442,7 +442,7 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_field_access(&mut self, last_expr: ExprNode) -> Option<ExprNode> {
+  fn parse_chain(&mut self, last_expr: ExprNode) -> Option<ExprNode> {
     expect_token_and_do!(self, Token::Dot, { self.advance() });
 
     let term = self.parse_term();
@@ -490,65 +490,6 @@ impl<'a> Parser<'a> {
       pos: term.pos,
       kind: ParseErrorKind::UnexpectedExpressionAfterDot,
     });
-  }
-
-  fn parse_method_access(&mut self, last_expr: ExprNode) -> Option<ExprNode> {
-    expect_token_and_do!(self, Token::DoubleDot, { self.advance() });
-
-    let mut method_parts = Vec::new();
-    let mut method_args = Vec::new();
-
-    expect_token_and_do!(self, Token::Identifier, {});
-
-    while current_token_is!(self, Token::Identifier) {
-      match self.parse_identifier(false) {
-        Some(next_method_part) => {
-          method_parts.push(next_method_part);
-
-          // Grab the argument for this part
-          match self.parse_term() {
-            Some(arg) => method_args.push(arg),
-            _ => {
-              return self.error(ParseError {
-                pos: self.current_token_position(),
-                kind: ParseErrorKind::MissingArgumentInCall,
-              })
-            }
-          }
-        }
-
-        _ => {
-          return self.error(ParseError {
-            pos: self.current_token_position(),
-            kind: ParseErrorKind::UnexpectedToken(Token::Identifier(0, 0)),
-          })
-        }
-      }
-    }
-
-    let start = last_expr.pos.0;
-
-    let callee = ExprNode {
-      pos: last_expr.pos,
-      kind: ExprKind::MethodAccess {
-        receiver: Box::new(last_expr),
-        method_parts,
-      },
-      typ: ValueType::Unknown,
-    };
-
-    let call = CallNode {
-      pos: (start, method_args.last().unwrap().pos.1),
-      callee: Box::new(callee),
-      args: method_args,
-      typ: ValueType::Unknown,
-    };
-
-    Some(ExprNode {
-      pos: call.pos,
-      kind: ExprKind::Call(call),
-      typ: ValueType::Unknown,
-    })
   }
 
   fn parse_const(&mut self) -> Option<ConstNode> {
@@ -795,8 +736,8 @@ impl<'a> Parser<'a> {
     let mut binary_operator = None;
     let mut signature: Signature = Vec::new();
 
-    if current_token_is!(self, Token::DoubleDot) {
-      // If we have a .. now, we know the first ident was a receiver type
+    if current_token_is!(self, Token::Dot) {
+      // If we have a dot now, we know the first ident was a receiver type
       receiver = Some(type_ident);
       self.advance();
     } else if current_token_is!(self, Token::Operator) {
@@ -1294,11 +1235,7 @@ impl<'a> Parser<'a> {
       if expr.is_some() {
         match self.current_token {
           Some(Token::Dot(..)) => {
-            expr = self.parse_field_access(expr.unwrap());
-            continue;
-          }
-          Some(Token::DoubleDot(..)) => {
-            expr = self.parse_method_access(expr.unwrap());
+            expr = self.parse_chain(expr.unwrap());
             continue;
           }
           Some(Token::LeftParen(..))
@@ -2218,49 +2155,25 @@ impl<'a> Parser<'a> {
     let mut methods = Vec::new();
     let mut end = start;
 
-    loop {
-      match self.current_token {
-        Some(Token::Dot(..)) => {
-          // It's a field!
+    'outer: while let Some(Token::Dot(..)) = self.current_token {
+      self.advance();
 
+      let mut signature = Vec::new();
+
+      while current_token_is!(self, Token::Identifier) {
+        let part_name = self.parse_identifier(false).unwrap();
+
+        if current_token_is!(self, Token::DoubleColon) {
           self.advance();
 
-          expect_token_and_do!(self, Token::Identifier, {});
-
-          let field_name = self.parse_identifier(false).unwrap();
-
-          expect_token_and_do!(self, Token::DoubleColon, {});
-
-          match self.parse_type_expression() {
-            Some(field_type) => {
-              end = field_type.pos.1;
-              fields.push((field_name, field_type));
-            }
-            _ => {
-              return self.error(ParseError {
-                pos: self.current_token_position(),
-                kind: ParseErrorKind::MissingType,
-              })
-            }
-          }
-
-          self.skip_line_breaks();
-        }
-
-        Some(Token::DoubleDot(..)) => {
-          // It's a method!
-
-          self.advance();
-
-          expect_token_and_do!(self, Token::Identifier, {});
-
-          let mut signature = Vec::new();
-
-          while current_token_is!(self, Token::Identifier) {
-            let part_name = self.parse_identifier(false).unwrap();
-
+          // If there's a :: here, it's only valid if there has only been a single part
+          // so far (since it must be a field, not a method).
+          if signature.is_empty() {
             match self.parse_type_expression() {
-              Some(part_param) => signature.push((part_name, Box::new(part_param))),
+              Some(field_type) => {
+                end = field_type.pos.1;
+                fields.push((part_name, field_type));
+              }
               _ => {
                 return self.error(ParseError {
                   pos: self.current_token_position(),
@@ -2268,31 +2181,47 @@ impl<'a> Parser<'a> {
                 })
               }
             }
-          }
-
-          // TODO: allow excluding return type here? default to ()?
-          expect_token_and_do!(self, Token::Arrow, {
-            self.advance();
-          });
-
-          match self.parse_type_expression() {
-            Some(return_type) => {
-              end = return_type.pos.1;
-              methods.push((signature, return_type));
-            }
-            _ => {
-              return self.error(ParseError {
-                pos: self.current_token_position(),
-                kind: ParseErrorKind::IncompleteMethodSignature,
-              })
-            }
+          } else {
+            self.error::<TypeDefNode>(ParseError {
+              pos: self.current_token_position(),
+              kind: ParseErrorKind::UnexpectedToken(Token::Dot(0, 0)),
+            });
           }
 
           self.skip_line_breaks();
+
+          continue 'outer;
         }
 
-        _ => break,
+        match self.parse_type_expression() {
+          Some(part_param) => signature.push((part_name, Box::new(part_param))),
+          _ => {
+            return self.error(ParseError {
+              pos: self.current_token_position(),
+              kind: ParseErrorKind::IncompleteMethodSignature,
+            })
+          }
+        }
       }
+
+      expect_token_and_do!(self, Token::Arrow, {
+        self.advance();
+      });
+
+      match self.parse_type_expression() {
+        Some(return_type) => {
+          end = return_type.pos.1;
+          methods.push((signature, return_type));
+        }
+        _ => {
+          return self.error(ParseError {
+            pos: self.current_token_position(),
+            kind: ParseErrorKind::IncompleteMethodSignature,
+          })
+        }
+      }
+
+      self.skip_line_breaks();
     }
 
     self.skip_line_breaks();
