@@ -362,8 +362,8 @@ test_parse_success! {
 
   chain_across_lines: r#"
     |"hello"
-    |  . f1
-    |  .f2
+    |  .. f1
+    |  ..f2
   "#,
 
   chain_calls_across_lines: r#"

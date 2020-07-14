@@ -127,12 +127,12 @@ test_analyze! {
   def_method (true): r#"
     |enum Color | Red | Green | Blue
     |
-    |def Color .. funk Color -> Color {
+    |def Color . funk Color -> Color {
     |  |_, b| b
     |}
     |
     |let c = Blue
-    |c .. funk(Red)
+    |c.funk(Red)
   "#,
 
   type_assertions_valid (true): r#"

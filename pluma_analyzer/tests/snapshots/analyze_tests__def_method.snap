@@ -1,17 +1,17 @@
 ---
 source: pluma_analyzer/tests/analyze_tests.rs
-expression: "enum Color | Red | Green | Blue\n\ndef Color .. funk Color -> Color {\n  |_, b| b\n}\n\nlet c = Blue\nc .. funk(Red)"
+expression: "enum Color | Red | Green | Blue\n\ndef Color . funk Color -> Color {\n  |_, b| b\n}\n\nlet c = Blue\nc.funk(Red)"
 ---
 
 === Source ===
 enum Color | Red | Green | Blue
 
-def Color .. funk Color -> Color {
+def Color . funk Color -> Color {
   |_, b| b
 }
 
 let c = Blue
-c .. funk(Red)
+c.funk(Red)
 
 === Top-level scope ===
 Scope {
@@ -68,8 +68,8 @@ Scope {
                         ),
                         ref_count: 1,
                         pos: (
+                            85,
                             86,
-                            87,
                         ),
                         kind: Let,
                     },
