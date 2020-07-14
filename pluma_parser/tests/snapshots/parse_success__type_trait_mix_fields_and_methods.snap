@@ -1,12 +1,12 @@
 ---
 source: pluma_parser/tests/parse_success.rs
-expression: "trait WowieWithName\n  . getWow () -> Wow\n  . setWow Wow -> ()\n  . name :: String"
+expression: "trait WowieWithName\n  .. getWow () -> Wow\n  .. setWow Wow -> ()\n  . name :: String"
 ---
 
 === Source ===
 trait WowieWithName
-  . getWow () -> Wow
-  . setWow Wow -> ()
+  .. getWow () -> Wow
+  .. setWow Wow -> ()
   . name :: String
 
 === Comments ===
@@ -16,19 +16,19 @@ trait WowieWithName
 ModuleNode {
     pos: (
         0,
-        80,
+        82,
     ),
     body: [
         TopLevelStatementNode {
             pos: (
                 0,
-                80,
+                82,
             ),
             kind: TypeDef(
                 TypeDefNode {
                     pos: (
                         0,
-                        80,
+                        82,
                     ),
                     visibility: Public,
                     kind: Trait {
@@ -36,21 +36,21 @@ ModuleNode {
                             (
                                 IdentifierNode {
                                     pos: (
-                                        66,
-                                        70,
+                                        68,
+                                        72,
                                     ),
                                     name: "name",
                                 },
                                 TypeExprNode {
                                     pos: (
-                                        74,
-                                        80,
+                                        76,
+                                        82,
                                     ),
                                     kind: Single(
                                         TypeIdentifierNode {
                                             pos: (
-                                                74,
-                                                80,
+                                                76,
+                                                82,
                                             ),
                                             name: "String",
                                             generics: [],
@@ -67,15 +67,15 @@ ModuleNode {
                                     (
                                         IdentifierNode {
                                             pos: (
-                                                24,
-                                                30,
+                                                25,
+                                                31,
                                             ),
                                             name: "getWow",
                                         },
                                         TypeExprNode {
                                             pos: (
-                                                31,
-                                                33,
+                                                32,
+                                                34,
                                             ),
                                             kind: EmptyTuple,
                                             typ: Unknown,
@@ -84,14 +84,14 @@ ModuleNode {
                                 ],
                                 TypeExprNode {
                                     pos: (
-                                        37,
-                                        40,
+                                        38,
+                                        41,
                                     ),
                                     kind: Single(
                                         TypeIdentifierNode {
                                             pos: (
-                                                37,
-                                                40,
+                                                38,
+                                                41,
                                             ),
                                             name: "Wow",
                                             generics: [],
@@ -106,21 +106,21 @@ ModuleNode {
                                     (
                                         IdentifierNode {
                                             pos: (
-                                                45,
-                                                51,
+                                                47,
+                                                53,
                                             ),
                                             name: "setWow",
                                         },
                                         TypeExprNode {
                                             pos: (
-                                                52,
-                                                55,
+                                                54,
+                                                57,
                                             ),
                                             kind: Single(
                                                 TypeIdentifierNode {
                                                     pos: (
-                                                        52,
-                                                        55,
+                                                        54,
+                                                        57,
                                                     ),
                                                     name: "Wow",
                                                     generics: [],
@@ -133,8 +133,8 @@ ModuleNode {
                                 ],
                                 TypeExprNode {
                                     pos: (
-                                        59,
                                         61,
+                                        63,
                                     ),
                                     kind: EmptyTuple,
                                     typ: Unknown,

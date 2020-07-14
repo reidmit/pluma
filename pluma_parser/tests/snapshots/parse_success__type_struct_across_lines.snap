@@ -32,60 +32,71 @@ ModuleNode {
                     ),
                     visibility: Public,
                     kind: Struct {
-                        fields: [
-                            (
-                                IdentifierNode {
-                                    pos: (
-                                        18,
-                                        22,
-                                    ),
-                                    name: "name",
-                                },
-                                TypeExprNode {
-                                    pos: (
-                                        26,
-                                        32,
-                                    ),
-                                    kind: Single(
-                                        TypeIdentifierNode {
+                        inner: TypeExprNode {
+                            pos: (
+                                14,
+                                48,
+                            ),
+                            kind: LabeledTuple(
+                                [
+                                    (
+                                        IdentifierNode {
+                                            pos: (
+                                                18,
+                                                22,
+                                            ),
+                                            name: "name",
+                                        },
+                                        TypeExprNode {
                                             pos: (
                                                 26,
                                                 32,
                                             ),
-                                            name: "String",
-                                            generics: [],
+                                            kind: Single(
+                                                TypeIdentifierNode {
+                                                    pos: (
+                                                        26,
+                                                        32,
+                                                    ),
+                                                    name: "String",
+                                                    generics: [],
+                                                    constraints: None,
+                                                },
+                                            ),
+                                            typ: Unknown,
                                         },
                                     ),
-                                    typ: Unknown,
-                                },
-                            ),
-                            (
-                                IdentifierNode {
-                                    pos: (
-                                        36,
-                                        39,
-                                    ),
-                                    name: "age",
-                                },
-                                TypeExprNode {
-                                    pos: (
-                                        43,
-                                        46,
-                                    ),
-                                    kind: Single(
-                                        TypeIdentifierNode {
+                                    (
+                                        IdentifierNode {
+                                            pos: (
+                                                36,
+                                                39,
+                                            ),
+                                            name: "age",
+                                        },
+                                        TypeExprNode {
                                             pos: (
                                                 43,
                                                 46,
                                             ),
-                                            name: "Int",
-                                            generics: [],
+                                            kind: Single(
+                                                TypeIdentifierNode {
+                                                    pos: (
+                                                        43,
+                                                        46,
+                                                    ),
+                                                    name: "Int",
+                                                    generics: [],
+                                                    constraints: None,
+                                                },
+                                            ),
+                                            typ: Unknown,
                                         },
                                     ),
-                                    typ: Unknown,
-                                },
+                                ],
                             ),
-                        ],
+                            typ: Unknown,
+                        },
                     },
                     name: TypeIdentifierNode {
                         pos: (
@@ -94,6 +105,7 @@ ModuleNode {
                         ),
                         name: "Person",
                         generics: [],
+                        constraints: None,
                     },
                     generic_type_constraints: [],
                 },

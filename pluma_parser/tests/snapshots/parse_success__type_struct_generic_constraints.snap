@@ -33,86 +33,98 @@ ModuleNode {
                     ),
                     visibility: Public,
                     kind: Struct {
-                        fields: [
-                            (
-                                IdentifierNode {
-                                    pos: (
-                                        55,
-                                        60,
-                                    ),
-                                    name: "first",
-                                },
-                                TypeExprNode {
-                                    pos: (
-                                        64,
-                                        65,
-                                    ),
-                                    kind: Single(
-                                        TypeIdentifierNode {
+                        inner: TypeExprNode {
+                            pos: (
+                                51,
+                                98,
+                            ),
+                            kind: LabeledTuple(
+                                [
+                                    (
+                                        IdentifierNode {
+                                            pos: (
+                                                55,
+                                                60,
+                                            ),
+                                            name: "first",
+                                        },
+                                        TypeExprNode {
                                             pos: (
                                                 64,
                                                 65,
                                             ),
-                                            name: "A",
-                                            generics: [],
+                                            kind: Single(
+                                                TypeIdentifierNode {
+                                                    pos: (
+                                                        64,
+                                                        65,
+                                                    ),
+                                                    name: "A",
+                                                    generics: [],
+                                                    constraints: None,
+                                                },
+                                            ),
+                                            typ: Unknown,
                                         },
                                     ),
-                                    typ: Unknown,
-                                },
-                            ),
-                            (
-                                IdentifierNode {
-                                    pos: (
-                                        69,
-                                        75,
-                                    ),
-                                    name: "second",
-                                },
-                                TypeExprNode {
-                                    pos: (
-                                        79,
-                                        80,
-                                    ),
-                                    kind: Single(
-                                        TypeIdentifierNode {
+                                    (
+                                        IdentifierNode {
+                                            pos: (
+                                                69,
+                                                75,
+                                            ),
+                                            name: "second",
+                                        },
+                                        TypeExprNode {
                                             pos: (
                                                 79,
                                                 80,
                                             ),
-                                            name: "B",
-                                            generics: [],
+                                            kind: Single(
+                                                TypeIdentifierNode {
+                                                    pos: (
+                                                        79,
+                                                        80,
+                                                    ),
+                                                    name: "B",
+                                                    generics: [],
+                                                    constraints: None,
+                                                },
+                                            ),
+                                            typ: Unknown,
                                         },
                                     ),
-                                    typ: Unknown,
-                                },
-                            ),
-                            (
-                                IdentifierNode {
-                                    pos: (
-                                        84,
-                                        89,
-                                    ),
-                                    name: "third",
-                                },
-                                TypeExprNode {
-                                    pos: (
-                                        93,
-                                        96,
-                                    ),
-                                    kind: Single(
-                                        TypeIdentifierNode {
+                                    (
+                                        IdentifierNode {
+                                            pos: (
+                                                84,
+                                                89,
+                                            ),
+                                            name: "third",
+                                        },
+                                        TypeExprNode {
                                             pos: (
                                                 93,
                                                 96,
                                             ),
-                                            name: "Int",
-                                            generics: [],
+                                            kind: Single(
+                                                TypeIdentifierNode {
+                                                    pos: (
+                                                        93,
+                                                        96,
+                                                    ),
+                                                    name: "Int",
+                                                    generics: [],
+                                                    constraints: None,
+                                                },
+                                            ),
+                                            typ: Unknown,
                                         },
                                     ),
-                                    typ: Unknown,
-                                },
+                                ],
                             ),
-                        ],
+                            typ: Unknown,
+                        },
                     },
                     name: TypeIdentifierNode {
                         pos: (
@@ -134,6 +146,7 @@ ModuleNode {
                                         ),
                                         name: "A",
                                         generics: [],
+                                        constraints: None,
                                     },
                                 ),
                                 typ: Unknown,
@@ -151,11 +164,13 @@ ModuleNode {
                                         ),
                                         name: "B",
                                         generics: [],
+                                        constraints: None,
                                     },
                                 ),
                                 typ: Unknown,
                             },
                         ],
+                        constraints: None,
                     },
                     generic_type_constraints: [
                         (
@@ -173,6 +188,7 @@ ModuleNode {
                                 ),
                                 name: "Any",
                                 generics: [],
+                                constraints: None,
                             },
                         ),
                         (
@@ -190,6 +206,7 @@ ModuleNode {
                                 ),
                                 name: "Comparable",
                                 generics: [],
+                                constraints: None,
                             },
                         ),
                     ],
