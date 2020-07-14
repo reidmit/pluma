@@ -1,10 +1,10 @@
 ---
 source: pluma_parser/tests/parse_success.rs
-expression: "trait HasNameAndAge . name :: String . age :: Int"
+expression: "trait HasNameAndAge . name : String . age : Int"
 ---
 
 === Source ===
-trait HasNameAndAge . name :: String . age :: Int
+trait HasNameAndAge . name : String . age : Int
 
 === Comments ===
 {}
@@ -13,19 +13,19 @@ trait HasNameAndAge . name :: String . age :: Int
 ModuleNode {
     pos: (
         0,
-        49,
+        47,
     ),
     body: [
         TopLevelStatementNode {
             pos: (
                 0,
-                49,
+                47,
             ),
             kind: TypeDef(
                 TypeDefNode {
                     pos: (
                         0,
-                        49,
+                        47,
                     ),
                     visibility: Public,
                     kind: Trait {
@@ -40,14 +40,14 @@ ModuleNode {
                                 },
                                 TypeExprNode {
                                     pos: (
-                                        30,
-                                        36,
+                                        29,
+                                        35,
                                     ),
                                     kind: Single(
                                         TypeIdentifierNode {
                                             pos: (
-                                                30,
-                                                36,
+                                                29,
+                                                35,
                                             ),
                                             name: "String",
                                             generics: [],
@@ -60,21 +60,21 @@ ModuleNode {
                             (
                                 IdentifierNode {
                                     pos: (
-                                        39,
-                                        42,
+                                        38,
+                                        41,
                                     ),
                                     name: "age",
                                 },
                                 TypeExprNode {
                                     pos: (
-                                        46,
-                                        49,
+                                        44,
+                                        47,
                                     ),
                                     kind: Single(
                                         TypeIdentifierNode {
                                             pos: (
-                                                46,
-                                                49,
+                                                44,
+                                                47,
                                             ),
                                             name: "Int",
                                             generics: [],

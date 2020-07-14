@@ -184,7 +184,7 @@ test_parse_success! {
     |let tup = (name: "Reid", age: 26)
     |let (name: name2, age: age2) = tup
     |
-    |tup :: (name :: String, age :: Int)
+    |tup :: (name : String, age : Int)
   "#,
 
   list_empty: r#"
@@ -284,7 +284,7 @@ test_parse_success! {
   "#,
 
   def_labeled_tuple_arg: r#"
-    |def hello (one :: Int, two :: String) -> String {
+    |def hello (one : Int, two : String) -> String {
     |  |a| a.two
     |}
   "#,
@@ -479,21 +479,21 @@ test_parse_success! {
   "#,
 
   type_struct_same_line: r#"
-    |struct Person (name :: String, age :: Int)
+    |struct Person (name : String, age : Int)
   "#,
 
   type_struct_across_lines: r#"
     |struct Person (
-    |  name :: String,
-    |  age :: Int
+    |  name : String,
+    |  age : Int
     |)
   "#,
 
   type_struct_generic_constraints: r#"
     |struct Thing<A, B> where A :: Any, B :: Comparable (
-    |  first :: A,
-    |  second :: B,
-    |  third :: Int
+    |  first : A,
+    |  second : B,
+    |  third : Int
     |)
   "#,
 
@@ -512,17 +512,17 @@ test_parse_success! {
   "#,
 
   type_trait_same_line_one_field: r#"
-    |trait HasName . name :: String
+    |trait HasName . name : String
   "#,
 
   type_trait_same_line_two_fields: r#"
-    |trait HasNameAndAge . name :: String . age :: Int
+    |trait HasNameAndAge . name : String . age : Int
   "#,
 
   type_trait_across_lines_two_fields: r#"
     |trait HasNameAndAge
-    |  . name :: String
-    |  . age :: Int
+    |  . name : String
+    |  . age : Int
   "#,
 
   type_trait_two_methods: r#"
@@ -535,7 +535,7 @@ test_parse_success! {
     |trait WowieWithName
     |  . getWow () -> Wow
     |  . setWow Wow -> ()
-    |  . name :: String
+    |  . name : String
   "#,
 
   const_definitions: r#"

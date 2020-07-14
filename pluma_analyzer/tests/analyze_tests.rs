@@ -72,7 +72,7 @@ test_analyze! {
     |let tup = (name: "Reid", age: 26)
     |let (name: name2, age: age2) = tup
     |
-    |tup :: (name :: String, age :: Int)
+    |tup :: (name : String, age : Int)
     |name2 :: String
     |age2 :: Int
   "#,
@@ -84,7 +84,7 @@ test_analyze! {
     |let tup = (name: "Reid", age: 26)
     |let (age: age2, name: name2) = tup
     |
-    |tup :: (name :: String, age :: Int)
+    |tup :: (name : String, age : Int)
     |name2 :: String
     |age2 :: Int
   "#,

@@ -1,6 +1,6 @@
 ---
 source: pluma_analyzer/tests/analyze_tests.rs
-expression: "intrinsic_type Int\nintrinsic_type String\n\nlet tup = (name: \"Reid\", age: 26)\nlet (age: age2, name: name2) = tup\n\ntup :: (name :: String, age :: Int)\nname2 :: String\nage2 :: Int"
+expression: "intrinsic_type Int\nintrinsic_type String\n\nlet tup = (name: \"Reid\", age: 26)\nlet (age: age2, name: name2) = tup\n\ntup :: (name : String, age : Int)\nname2 :: String\nage2 :: Int"
 ---
 
 === Source ===
@@ -10,7 +10,7 @@ intrinsic_type String
 let tup = (name: "Reid", age: 26)
 let (age: age2, name: name2) = tup
 
-tup :: (name :: String, age :: Int)
+tup :: (name : String, age : Int)
 name2 :: String
 age2 :: Int
 

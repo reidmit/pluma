@@ -2163,7 +2163,7 @@ impl<'a> Parser<'a> {
       while current_token_is!(self, Token::Identifier) {
         let part_name = self.parse_identifier(false).unwrap();
 
-        if current_token_is!(self, Token::DoubleColon) {
+        if current_token_is!(self, Token::Colon) {
           self.advance();
 
           // If there's a :: here, it's only valid if there has only been a single part
@@ -2389,7 +2389,7 @@ impl<'a> Parser<'a> {
               pos: label.pos,
             };
 
-            expect_token_and_do!(self, Token::DoubleColon, { self.advance() });
+            expect_token_and_do!(self, Token::Colon, { self.advance() });
 
             if let Some(value) = self.parse_type_expression() {
               labeled_entries.push((label_ident, value));
@@ -2409,7 +2409,7 @@ impl<'a> Parser<'a> {
           }
         }
       } else if first_entry.is_none() {
-        if current_token_is!(self, Token::DoubleColon) {
+        if current_token_is!(self, Token::Colon) {
           self.advance();
           labeled = true;
 

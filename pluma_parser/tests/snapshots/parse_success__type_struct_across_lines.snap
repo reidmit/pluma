@@ -1,12 +1,12 @@
 ---
 source: pluma_parser/tests/parse_success.rs
-expression: "struct Person (\n  name :: String,\n  age :: Int\n)"
+expression: "struct Person (\n  name : String,\n  age : Int\n)"
 ---
 
 === Source ===
 struct Person (
-  name :: String,
-  age :: Int
+  name : String,
+  age : Int
 )
 
 === Comments ===
@@ -16,26 +16,26 @@ struct Person (
 ModuleNode {
     pos: (
         0,
-        48,
+        46,
     ),
     body: [
         TopLevelStatementNode {
             pos: (
                 0,
-                48,
+                46,
             ),
             kind: TypeDef(
                 TypeDefNode {
                     pos: (
                         0,
-                        48,
+                        46,
                     ),
                     visibility: Public,
                     kind: Struct {
                         inner: TypeExprNode {
                             pos: (
                                 14,
-                                48,
+                                46,
                             ),
                             kind: LabeledTuple(
                                 [
@@ -49,14 +49,14 @@ ModuleNode {
                                         },
                                         TypeExprNode {
                                             pos: (
-                                                26,
-                                                32,
+                                                25,
+                                                31,
                                             ),
                                             kind: Single(
                                                 TypeIdentifierNode {
                                                     pos: (
-                                                        26,
-                                                        32,
+                                                        25,
+                                                        31,
                                                     ),
                                                     name: "String",
                                                     generics: [],
@@ -69,21 +69,21 @@ ModuleNode {
                                     (
                                         IdentifierNode {
                                             pos: (
-                                                36,
-                                                39,
+                                                35,
+                                                38,
                                             ),
                                             name: "age",
                                         },
                                         TypeExprNode {
                                             pos: (
-                                                43,
-                                                46,
+                                                41,
+                                                44,
                                             ),
                                             kind: Single(
                                                 TypeIdentifierNode {
                                                     pos: (
-                                                        43,
-                                                        46,
+                                                        41,
+                                                        44,
                                                     ),
                                                     name: "Int",
                                                     generics: [],

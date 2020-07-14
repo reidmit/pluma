@@ -1,13 +1,13 @@
 ---
 source: pluma_parser/tests/parse_success.rs
-expression: "let tup = (name: \"Reid\", age: 26)\nlet (name: name2, age: age2) = tup\n\ntup :: (name :: String, age :: Int)"
+expression: "let tup = (name: \"Reid\", age: 26)\nlet (name: name2, age: age2) = tup\n\ntup :: (name : String, age : Int)"
 ---
 
 === Source ===
 let tup = (name: "Reid", age: 26)
 let (name: name2, age: age2) = tup
 
-tup :: (name :: String, age :: Int)
+tup :: (name : String, age : Int)
 
 === Comments ===
 {}
@@ -16,7 +16,7 @@ tup :: (name :: String, age :: Int)
 ModuleNode {
     pos: (
         0,
-        105,
+        103,
     ),
     body: [
         TopLevelStatementNode {
@@ -207,13 +207,13 @@ ModuleNode {
         TopLevelStatementNode {
             pos: (
                 70,
-                105,
+                103,
             ),
             kind: Expr(
                 ExprNode {
                     pos: (
                         70,
-                        105,
+                        103,
                     ),
                     kind: TypeAssertion {
                         expr: ExprNode {
@@ -235,7 +235,7 @@ ModuleNode {
                         asserted_type: TypeExprNode {
                             pos: (
                                 77,
-                                105,
+                                103,
                             ),
                             kind: LabeledTuple(
                                 [
@@ -249,14 +249,14 @@ ModuleNode {
                                         },
                                         TypeExprNode {
                                             pos: (
-                                                86,
-                                                92,
+                                                85,
+                                                91,
                                             ),
                                             kind: Single(
                                                 TypeIdentifierNode {
                                                     pos: (
-                                                        86,
-                                                        92,
+                                                        85,
+                                                        91,
                                                     ),
                                                     name: "String",
                                                     generics: [],
@@ -269,21 +269,21 @@ ModuleNode {
                                     (
                                         IdentifierNode {
                                             pos: (
-                                                94,
-                                                97,
+                                                93,
+                                                96,
                                             ),
                                             name: "age",
                                         },
                                         TypeExprNode {
                                             pos: (
-                                                101,
-                                                104,
+                                                99,
+                                                102,
                                             ),
                                             kind: Single(
                                                 TypeIdentifierNode {
                                                     pos: (
-                                                        101,
-                                                        104,
+                                                        99,
+                                                        102,
                                                     ),
                                                     name: "Int",
                                                     generics: [],

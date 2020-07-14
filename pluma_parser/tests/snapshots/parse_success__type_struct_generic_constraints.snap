@@ -1,13 +1,13 @@
 ---
 source: pluma_parser/tests/parse_success.rs
-expression: "struct Thing<A, B> where A :: Any, B :: Comparable (\n  first :: A,\n  second :: B,\n  third :: Int\n)"
+expression: "struct Thing<A, B> where A :: Any, B :: Comparable (\n  first : A,\n  second : B,\n  third : Int\n)"
 ---
 
 === Source ===
 struct Thing<A, B> where A :: Any, B :: Comparable (
-  first :: A,
-  second :: B,
-  third :: Int
+  first : A,
+  second : B,
+  third : Int
 )
 
 === Comments ===
@@ -17,26 +17,26 @@ struct Thing<A, B> where A :: Any, B :: Comparable (
 ModuleNode {
     pos: (
         0,
-        98,
+        95,
     ),
     body: [
         TopLevelStatementNode {
             pos: (
                 0,
-                98,
+                95,
             ),
             kind: TypeDef(
                 TypeDefNode {
                     pos: (
                         0,
-                        98,
+                        95,
                     ),
                     visibility: Public,
                     kind: Struct {
                         inner: TypeExprNode {
                             pos: (
                                 51,
-                                98,
+                                95,
                             ),
                             kind: LabeledTuple(
                                 [
@@ -50,14 +50,14 @@ ModuleNode {
                                         },
                                         TypeExprNode {
                                             pos: (
+                                                63,
                                                 64,
-                                                65,
                                             ),
                                             kind: Single(
                                                 TypeIdentifierNode {
                                                     pos: (
+                                                        63,
                                                         64,
-                                                        65,
                                                     ),
                                                     name: "A",
                                                     generics: [],
@@ -70,21 +70,21 @@ ModuleNode {
                                     (
                                         IdentifierNode {
                                             pos: (
-                                                69,
-                                                75,
+                                                68,
+                                                74,
                                             ),
                                             name: "second",
                                         },
                                         TypeExprNode {
                                             pos: (
-                                                79,
-                                                80,
+                                                77,
+                                                78,
                                             ),
                                             kind: Single(
                                                 TypeIdentifierNode {
                                                     pos: (
-                                                        79,
-                                                        80,
+                                                        77,
+                                                        78,
                                                     ),
                                                     name: "B",
                                                     generics: [],
@@ -97,21 +97,21 @@ ModuleNode {
                                     (
                                         IdentifierNode {
                                             pos: (
-                                                84,
-                                                89,
+                                                82,
+                                                87,
                                             ),
                                             name: "third",
                                         },
                                         TypeExprNode {
                                             pos: (
+                                                90,
                                                 93,
-                                                96,
                                             ),
                                             kind: Single(
                                                 TypeIdentifierNode {
                                                     pos: (
+                                                        90,
                                                         93,
-                                                        96,
                                                     ),
                                                     name: "Int",
                                                     generics: [],

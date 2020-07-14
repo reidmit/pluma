@@ -1,10 +1,10 @@
 ---
 source: pluma_parser/tests/parse_success.rs
-expression: "trait HasName . name :: String"
+expression: "trait HasName . name : String"
 ---
 
 === Source ===
-trait HasName . name :: String
+trait HasName . name : String
 
 === Comments ===
 {}
@@ -13,19 +13,19 @@ trait HasName . name :: String
 ModuleNode {
     pos: (
         0,
-        30,
+        29,
     ),
     body: [
         TopLevelStatementNode {
             pos: (
                 0,
-                30,
+                29,
             ),
             kind: TypeDef(
                 TypeDefNode {
                     pos: (
                         0,
-                        30,
+                        29,
                     ),
                     visibility: Public,
                     kind: Trait {
@@ -40,14 +40,14 @@ ModuleNode {
                                 },
                                 TypeExprNode {
                                     pos: (
-                                        24,
-                                        30,
+                                        23,
+                                        29,
                                     ),
                                     kind: Single(
                                         TypeIdentifierNode {
                                             pos: (
-                                                24,
-                                                30,
+                                                23,
+                                                29,
                                             ),
                                             name: "String",
                                             generics: [],

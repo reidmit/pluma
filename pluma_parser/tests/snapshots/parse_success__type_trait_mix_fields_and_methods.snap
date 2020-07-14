@@ -1,13 +1,13 @@
 ---
 source: pluma_parser/tests/parse_success.rs
-expression: "trait WowieWithName\n  . getWow () -> Wow\n  . setWow Wow -> ()\n  . name :: String"
+expression: "trait WowieWithName\n  . getWow () -> Wow\n  . setWow Wow -> ()\n  . name : String"
 ---
 
 === Source ===
 trait WowieWithName
   . getWow () -> Wow
   . setWow Wow -> ()
-  . name :: String
+  . name : String
 
 === Comments ===
 {}
@@ -16,19 +16,19 @@ trait WowieWithName
 ModuleNode {
     pos: (
         0,
-        80,
+        79,
     ),
     body: [
         TopLevelStatementNode {
             pos: (
                 0,
-                80,
+                79,
             ),
             kind: TypeDef(
                 TypeDefNode {
                     pos: (
                         0,
-                        80,
+                        79,
                     ),
                     visibility: Public,
                     kind: Trait {
@@ -43,14 +43,14 @@ ModuleNode {
                                 },
                                 TypeExprNode {
                                     pos: (
-                                        74,
-                                        80,
+                                        73,
+                                        79,
                                     ),
                                     kind: Single(
                                         TypeIdentifierNode {
                                             pos: (
-                                                74,
-                                                80,
+                                                73,
+                                                79,
                                             ),
                                             name: "String",
                                             generics: [],
