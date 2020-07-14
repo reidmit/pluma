@@ -2373,6 +2373,8 @@ impl<'a> Parser<'a> {
       pos.0
     });
 
+    self.skip_line_breaks();
+
     let mut first_entry = None;
     let mut other_entries = Vec::new();
     let mut labeled = false;
@@ -2446,7 +2448,11 @@ impl<'a> Parser<'a> {
         Some(Token::Comma(..)) => self.advance(),
         _ => break,
       }
+
+      self.skip_line_breaks();
     }
+
+    self.skip_line_breaks();
 
     let end = expect_token_and_do!(self, Token::RightParen, {
       let pos = self.current_token_position();
