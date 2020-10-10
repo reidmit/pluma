@@ -12,7 +12,7 @@ pub struct ExprNode {
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub enum ExprKind {
   Assignment {
-    left: Box<IdentifierNode>,
+    left: Box<ExprNode>,
     right: Box<ExprNode>,
   },
   BinaryOperation {
@@ -32,7 +32,7 @@ pub enum ExprKind {
   EmptyTuple,
   FieldAccess {
     receiver: Box<ExprNode>,
-    field: IdentifierNode,
+    field: Box<ExprNode>,
   },
   Grouping {
     inner: Box<ExprNode>,

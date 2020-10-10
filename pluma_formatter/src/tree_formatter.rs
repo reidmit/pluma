@@ -84,35 +84,35 @@ where
   }
 
   fn format_call(&mut self, node: &CallNode) {
-    match &node.callee.kind {
-      ExprKind::MultiPartIdentifier { parts } => {
-        let count = parts.len();
-        let mut i = 0;
+    // match &node.callee.kind {
+    //   ExprKind::MultiPartIdentifier { parts } => {
+    //     let count = parts.len();
+    //     let mut i = 0;
 
-        while i < count {
-          let part_name = parts.get(i).unwrap();
-          let part_arg = node.args.get(i).unwrap();
+    //     while i < count {
+    //       let part_name = parts.get(i).unwrap();
+    //       let part_arg = node.args.get(i).unwrap();
 
-          if i > 0 {
-            self.out_str(" ");
-          }
-          self.format_identifier(&part_name);
-          self.out_str(" ");
-          self.format_expr(&part_arg);
+    //       if i > 0 {
+    //         self.out_str(" ");
+    //       }
+    //       self.format_identifier(&part_name);
+    //       self.out_str(" ");
+    //       self.format_expr(&part_arg);
 
-          i += 1;
-        }
-      }
+    //       i += 1;
+    //     }
+    //   }
 
-      _ => {
-        self.format_expr(&node.callee);
+    //   _ => {
+    //     self.format_expr(&node.callee);
 
-        for arg in &node.args {
-          self.out_str(" ");
-          self.format_expr(arg);
-        }
-      }
-    }
+    //     for arg in &node.args {
+    //       self.out_str(" ");
+    //       self.format_expr(arg);
+    //     }
+    //   }
+    // }
   }
 
   fn format_expr(&mut self, node: &ExprNode) {

@@ -225,52 +225,6 @@ impl<'a> Analyzer<'a> {
 
         self.check_result(result);
       }
-
-      DefKind::BinaryOperator { op, left, right } => {
-        let receiver_type = type_utils::type_ident_to_value_type(left);
-
-        let param_type = type_utils::type_ident_to_value_type(right);
-
-        let return_type = match return_type {
-          Some(type_expr) => type_utils::type_expr_to_value_type(&type_expr),
-          None => ValueType::Nothing,
-        };
-
-        let method_parts = vec!["$".to_owned(), op.name.clone(), "$".to_owned()];
-        let param_types = vec![param_type];
-
-        let result = self.scope.add_type_method(
-          receiver_type,
-          method_parts,
-          param_types,
-          return_type,
-          left.pos,
-        );
-
-        self.check_result(result);
-      }
-
-      DefKind::UnaryOperator { op, right } => {
-        let receiver_type = type_utils::type_ident_to_value_type(right);
-
-        let return_type = match return_type {
-          Some(type_expr) => type_utils::type_expr_to_value_type(&type_expr),
-          None => ValueType::Nothing,
-        };
-
-        let method_parts = vec![op.name.clone(), "$".to_owned()];
-        let param_types = vec![];
-
-        let result = self.scope.add_type_method(
-          receiver_type,
-          method_parts,
-          param_types,
-          return_type,
-          right.pos,
-        );
-
-        self.check_result(result);
-      }
     }
   }
 
@@ -561,54 +515,55 @@ impl<'a> Analyzer<'a> {
   }
 
   fn analyze_call(&mut self, node: &mut CallNode) -> ValueType {
-    self.analyze_expr(&mut node.callee);
+    ValueType::Nothing
+    // self.analyze_expr(&mut node.callee);
 
-    let callee_type = &node.callee.typ;
+    // let callee_type = &node.callee.typ;
 
-    match callee_type {
-      ValueType::Func(param_types, return_type) => {
-        if param_types.len() != node.args.len() {
-          self.error(AnalysisError {
-            pos: node.pos,
-            kind: AnalysisErrorKind::IncorrectNumberOfArguments {
-              expected: param_types.len(),
-              actual: node.args.len(),
-            },
-          })
-        }
+    // match callee_type {
+    //   ValueType::Func(param_types, return_type) => {
+    //     if param_types.len() != node.args.len() {
+    //       self.error(AnalysisError {
+    //         pos: node.pos,
+    //         kind: AnalysisErrorKind::IncorrectNumberOfArguments {
+    //           expected: param_types.len(),
+    //           actual: node.args.len(),
+    //         },
+    //       })
+    //     }
 
-        for i in 0..param_types.len() {
-          let arg = node.args.get_mut(i).unwrap();
-          self.analyze_expr(arg);
+    //     for i in 0..param_types.len() {
+    //       let arg = node.args.get_mut(i).unwrap();
+    //       self.analyze_expr(arg);
 
-          let param_type = param_types.get(i).unwrap();
-          let given_type = &arg.typ;
+    //       let param_type = param_types.get(i).unwrap();
+    //       let given_type = &arg.typ;
 
-          if !self.compatible_types(&param_type, &given_type) {
-            let pos = arg.pos;
+    //       if !self.compatible_types(&param_type, &given_type) {
+    //         let pos = arg.pos;
 
-            self.error(AnalysisError {
-              pos,
-              kind: AnalysisErrorKind::ParameterTypeMismatch {
-                expected: param_type.clone(),
-                actual: given_type.clone(),
-              },
-            })
-          }
-        }
+    //         self.error(AnalysisError {
+    //           pos,
+    //           kind: AnalysisErrorKind::ParameterTypeMismatch {
+    //             expected: param_type.clone(),
+    //             actual: given_type.clone(),
+    //           },
+    //         })
+    //       }
+    //     }
 
-        *return_type.clone()
-      }
+    //     *return_type.clone()
+    //   }
 
-      _ => {
-        self.error(AnalysisError {
-          pos: node.pos,
-          kind: AnalysisErrorKind::CalleeNotCallable(callee_type.clone()),
-        });
+    //   _ => {
+    //     self.error(AnalysisError {
+    //       pos: node.pos,
+    //       kind: AnalysisErrorKind::CalleeNotCallable(callee_type.clone()),
+    //     });
 
-        ValueType::Unknown
-      }
-    }
+    //     ValueType::Unknown
+    //   }
+    // }
   }
 
   fn analyze_def(&mut self, node: &mut DefNode) {
@@ -652,20 +607,6 @@ impl<'a> Analyzer<'a> {
 
           param_types.push(part_type.typ.clone());
         }
-      }
-
-      DefKind::BinaryOperator { left, right, .. } => {
-        let left_type = self.analyze_type_identifier(left);
-        let right_type = self.analyze_type_identifier(right);
-
-        param_types.push(left_type);
-        param_types.push(right_type);
-      }
-
-      DefKind::UnaryOperator { right, .. } => {
-        let right_type = self.analyze_type_identifier(right);
-
-        param_types.push(right_type);
       }
     }
 
@@ -728,60 +669,60 @@ impl<'a> Analyzer<'a> {
   fn analyze_expr(&mut self, node: &mut ExprNode) {
     match &mut node.kind {
       ExprKind::Assignment { left, right } => {
-        let existing_binding = self.scope.get_binding(&left.name);
+        // let existing_binding = self.scope.get_binding(&left.name);
 
-        if let Some(binding) = existing_binding {
-          let current_type = binding.typ.clone();
-          let new_type = right.typ.clone();
+        // if let Some(binding) = existing_binding {
+        //   let current_type = binding.typ.clone();
+        //   let new_type = right.typ.clone();
 
-          if !self.compatible_types(&current_type, &new_type) {
-            self.error(AnalysisError {
-              pos: right.pos,
-              kind: AnalysisErrorKind::ReassignmentTypeMismatch {
-                expected: current_type,
-                actual: new_type,
-              },
-            })
-          }
-        }
+        //   if !self.compatible_types(&current_type, &new_type) {
+        //     self.error(AnalysisError {
+        //       pos: right.pos,
+        //       kind: AnalysisErrorKind::ReassignmentTypeMismatch {
+        //         expected: current_type,
+        //         actual: new_type,
+        //       },
+        //     })
+        //   }
+        // }
       }
 
       ExprKind::BinaryOperation { op, left, right } => {
         self.analyze_expr(left);
         self.analyze_expr(right);
 
-        let receiver_type_binding = match self.scope.get_type_binding(&left.typ) {
-          Some(binding) => binding,
-          _ => return,
-        };
+        // let receiver_type_binding = match self.scope.get_type_binding(&left.typ) {
+        //   Some(binding) => binding,
+        //   _ => return,
+        // };
 
-        let method_name_parts = vec!["$".to_owned(), op.name.clone(), "$".to_owned()];
+        // let method_name_parts = vec!["$".to_owned(), op.name.clone(), "$".to_owned()];
 
-        if let Some(method_type) = receiver_type_binding.methods.get(&method_name_parts) {
-          let param_types = method_type.func_param_types();
-          let first_param_type = param_types.first().unwrap();
+        // if let Some(method_type) = receiver_type_binding.methods.get(&method_name_parts) {
+        //   let param_types = method_type.func_param_types();
+        //   let first_param_type = param_types.first().unwrap();
 
-          node.typ = method_type.func_return_type();
+        //   node.typ = method_type.func_return_type();
 
-          if !self.compatible_types(&right.typ, first_param_type) {
-            self.error(AnalysisError {
-              pos: right.pos,
-              kind: AnalysisErrorKind::ParameterTypeMismatch {
-                expected: first_param_type.clone(),
-                actual: right.typ.clone(),
-              },
-            })
-          }
-        } else {
-          self.error(AnalysisError {
-            pos: op.pos,
-            kind: AnalysisErrorKind::UndefinedBinaryOperatorForType {
-              op_name: op.name.clone(),
-              receiver_type: left.typ.clone(),
-              param_type: right.typ.clone(),
-            },
-          })
-        }
+        //   if !self.compatible_types(&right.typ, first_param_type) {
+        //     self.error(AnalysisError {
+        //       pos: right.pos,
+        //       kind: AnalysisErrorKind::ParameterTypeMismatch {
+        //         expected: first_param_type.clone(),
+        //         actual: right.typ.clone(),
+        //       },
+        //     })
+        //   }
+        // } else {
+        //   self.error(AnalysisError {
+        //     pos: op.pos,
+        //     kind: AnalysisErrorKind::UndefinedBinaryOperatorForType {
+        //       op_name: op.name.clone(),
+        //       receiver_type: left.typ.clone(),
+        //       param_type: right.typ.clone(),
+        //     },
+        //   })
+        // }
       }
 
       ExprKind::Block { block } => node.typ = self.analyze_block(block),
@@ -796,19 +737,19 @@ impl<'a> Analyzer<'a> {
         println!("scope: {:#?}", self.scope);
         println!("rec: {:#?}", receiver);
 
-        let receiver_type_fields = self.type_to_field_types(&receiver.typ);
+        // let receiver_type_fields = self.type_to_field_types(&receiver.typ);
 
-        match receiver_type_fields.get(&field.name) {
-          Some(field_typ) => node.typ = field_typ.clone(),
+        // match receiver_type_fields.get(&field.name) {
+        //   Some(field_typ) => node.typ = field_typ.clone(),
 
-          None => self.error(AnalysisError {
-            pos: field.pos,
-            kind: AnalysisErrorKind::UndefinedFieldForType {
-              field_name: field.name.clone(),
-              receiver_type: receiver.typ.clone(),
-            },
-          }),
-        }
+        //   None => self.error(AnalysisError {
+        //     pos: field.pos,
+        //     kind: AnalysisErrorKind::UndefinedFieldForType {
+        //       field_name: field.name.clone(),
+        //       receiver_type: receiver.typ.clone(),
+        //     },
+        //   }),
+        // }
       }
 
       ExprKind::Grouping { inner } => {
@@ -954,27 +895,26 @@ impl<'a> Analyzer<'a> {
         node.typ = asserted_type.clone();
       }
 
-      ExprKind::UnaryOperation { op, right } => {
-        let receiver_type_binding = match self.scope.get_type_binding(&right.typ) {
-          Some(binding) => binding,
-          _ => return,
-        };
+      // ExprKind::UnaryOperation { op, right } => {
+      //   let receiver_type_binding = match self.scope.get_type_binding(&right.typ) {
+      //     Some(binding) => binding,
+      //     _ => return,
+      //   };
 
-        let method_name_parts = vec![op.name.clone(), "$".to_owned()];
+      //   let method_name_parts = vec![op.name.clone(), "$".to_owned()];
 
-        if let Some(method_type) = receiver_type_binding.methods.get(&method_name_parts) {
-          node.typ = method_type.func_return_type();
-        } else {
-          self.error(AnalysisError {
-            pos: op.pos,
-            kind: AnalysisErrorKind::UndefinedUnaryOperatorForType {
-              op_name: op.name.clone(),
-              receiver_type: right.typ.clone(),
-            },
-          })
-        }
-      }
-
+      //   if let Some(method_type) = receiver_type_binding.methods.get(&method_name_parts) {
+      //     node.typ = method_type.func_return_type();
+      //   } else {
+      //     self.error(AnalysisError {
+      //       pos: op.pos,
+      //       kind: AnalysisErrorKind::UndefinedUnaryOperatorForType {
+      //         op_name: op.name.clone(),
+      //         receiver_type: right.typ.clone(),
+      //       },
+      //     })
+      //   }
+      // }
       ExprKind::UnlabeledTuple { entries } => {
         let mut entry_types = Vec::new();
 
@@ -1032,15 +972,6 @@ impl<'a> Analyzer<'a> {
         for (_part_name, part_type) in signature {
           self.analyze_type_expr(part_type);
         }
-      }
-
-      DefKind::BinaryOperator { left, right, .. } => {
-        self.analyze_type_identifier(left);
-        self.analyze_type_identifier(right);
-      }
-
-      DefKind::UnaryOperator { right, .. } => {
-        self.analyze_type_identifier(right);
       }
     }
 

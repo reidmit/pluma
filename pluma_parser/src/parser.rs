@@ -272,229 +272,98 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_binary_operation(&mut self, last_term: ExprNode) -> Option<ExprNode> {
-    let op_node = match self.current_token {
-      Some(Token::Operator(start, end))
-      | Some(Token::LeftAngle(start, end))
-      | Some(Token::RightAngle(start, end)) => {
-        let name = read_string!(self, start, end);
-        self.advance();
-
-        Box::new(OperatorNode {
-          pos: (start, end),
-          name,
-        })
-      }
-      _ => {
-        return self.error(ParseError {
-          pos: self.current_token_position(),
-          kind: ParseErrorKind::UnexpectedToken(Token::Operator(0, 0)),
-        })
-      }
-    };
-
-    self.skip_line_breaks();
-
-    let (end, next_term) = match self.parse_operator_branch() {
-      Some(term) => (term.pos.1, Box::new(term)),
-      _ => {
-        return self.error(ParseError {
-          pos: self.current_token_position(),
-          kind: ParseErrorKind::MissingExpressionAfterOperator,
-        })
-      }
-    };
-
-    Some(ExprNode {
-      pos: (last_term.pos.0, end),
-      kind: ExprKind::BinaryOperation {
-        left: Box::new(last_term),
-        op: op_node,
-        right: next_term,
-      },
-      typ: ValueType::Unknown,
-    })
-  }
-
-  fn parse_call(&mut self, last_expr: ExprNode) -> Option<CallNode> {
-    // At this point, last_expr is either an Identifier (e.g. print in `print "hello"`)
-    // or a Chain (e.g. `a 1 . b` in `a 1 . b 2.`).
-
-    let start = last_expr.pos.0;
+  fn parse_call(&mut self) -> Option<CallNode> {
+    let mut method_parts = Vec::new();
     let mut args = Vec::new();
 
-    // Grab the first argument (the next expression).
-    match self.parse_term() {
-      Some(arg) => args.push(arg),
-      _ => return None,
+    while current_token_is!(self, Token::Identifier) {
+      match self.parse_identifier(false) {
+        Some(next_callee_part) => {
+          method_parts.push(next_callee_part);
+
+          // Grab the argument for this part
+          // TODO correct precedence here
+          match self.parse_expression_precedence_2() {
+            Some(arg) => args.push(arg),
+            _ => {
+              return self.error(ParseError {
+                pos: self.current_token_position(),
+                kind: ParseErrorKind::MissingArgumentInCall,
+              })
+            }
+          }
+        }
+
+        _ => {
+          return self.error(ParseError {
+            pos: self.current_token_position(),
+            kind: ParseErrorKind::UnexpectedToken(Token::Identifier(0, 0)),
+          })
+        }
+      }
     }
 
-    let callee = match last_expr.kind {
-      ExprKind::Identifier {
-        ident: first_callee_part,
-      } => {
-        let start = first_callee_part.pos.0;
-
-        let mut rest_callee_parts = Vec::new();
-
-        // If the last expr was an identifier, we allow multi-part names here
-
-        // If there is an identifier now, it means this is a call to a multi-part name.
-        while current_token_is!(self, Token::Identifier) {
-          match self.parse_identifier(false) {
-            Some(next_callee_part) => {
-              rest_callee_parts.push(next_callee_part);
-
-              // Grab the argument for this part
-              match self.parse_term() {
-                Some(arg) => args.push(arg),
-                _ => {
-                  return self.error(ParseError {
-                    pos: self.current_token_position(),
-                    kind: ParseErrorKind::MissingArgumentInCall,
-                  })
-                }
-              }
-            }
-
-            _ => {
-              return self.error(ParseError {
-                pos: self.current_token_position(),
-                kind: ParseErrorKind::UnexpectedToken(Token::Identifier(0, 0)),
-              })
-            }
-          }
-        }
-
-        let (pos, kind) = if rest_callee_parts.len() > 0 {
-          let mut all_parts = vec![first_callee_part];
-          all_parts.append(&mut rest_callee_parts);
-
-          (
-            (start, all_parts.last().unwrap().pos.1),
-            ExprKind::MultiPartIdentifier { parts: all_parts },
-          )
-        } else {
-          (
-            first_callee_part.pos,
-            ExprKind::Identifier {
-              ident: first_callee_part,
-            },
-          )
-        };
-
-        ExprNode {
-          pos,
-          kind,
-          typ: ValueType::Unknown,
-        }
-      }
-
-      ExprKind::FieldAccess { receiver, field } => {
-        let mut rest_callee_parts = Vec::new();
-
-        // If there is an identifier now, it means this is a call to a multi-part name.
-        while current_token_is!(self, Token::Identifier) {
-          match self.parse_identifier(false) {
-            Some(next_callee_part) => {
-              rest_callee_parts.push(next_callee_part);
-
-              // Grab the argument for this part
-              match self.parse_term() {
-                Some(arg) => args.push(arg),
-                _ => {
-                  return self.error(ParseError {
-                    pos: self.current_token_position(),
-                    kind: ParseErrorKind::MissingArgumentInCall,
-                  })
-                }
-              }
-            }
-
-            _ => {
-              return self.error(ParseError {
-                pos: self.current_token_position(),
-                kind: ParseErrorKind::UnexpectedToken(Token::Identifier(0, 0)),
-              })
-            }
-          }
-        }
-
-        let mut method_parts = vec![field];
-
-        if rest_callee_parts.len() > 0 {
-          method_parts.append(&mut rest_callee_parts);
-        }
-
-        ExprNode {
-          pos: last_expr.pos,
-          kind: ExprKind::MethodAccess {
-            receiver,
-            method_parts,
-          },
-          typ: ValueType::Unknown,
-        }
-      }
-      _ => last_expr,
-    };
+    let start = method_parts.first().unwrap().pos.0;
+    let end = args.last().unwrap().pos.1;
 
     Some(CallNode {
-      pos: (start, args.last().unwrap().pos.1),
-      callee: Box::new(callee),
+      pos: (start, end),
+      receiver: None, // no receiver here, will be added in later when parsing .. chains
+      method_parts,
       args,
       typ: ValueType::Unknown,
     })
   }
 
-  fn parse_chain(&mut self, last_expr: ExprNode) -> Option<ExprNode> {
-    expect_token_and_do!(self, Token::Dot, { self.advance() });
+  // fn parse_chain(&mut self, last_expr: ExprNode) -> Option<ExprNode> {
+  //   expect_token_and_do!(self, Token::Dot, { self.advance() });
 
-    let term = self.parse_term();
+  //   let term = self.parse_term();
 
-    if term.is_none() {
-      return self.error(ParseError {
-        pos: self.current_token_position(),
-        kind: ParseErrorKind::MissingExpressionAfterDot,
-      });
-    }
+  //   if term.is_none() {
+  //     return self.error(ParseError {
+  //       pos: self.current_token_position(),
+  //       kind: ParseErrorKind::MissingExpressionAfterDot,
+  //     });
+  //   }
 
-    let term = term.unwrap();
+  //   let term = term.unwrap();
 
-    if let ExprKind::Identifier { ident } = term.kind {
-      // If it's an identifier, it is a normal field access
-      return Some(ExprNode {
-        pos: (last_expr.pos.0, term.pos.1),
-        kind: ExprKind::FieldAccess {
-          receiver: Box::new(last_expr),
-          field: ident,
-        },
-        typ: ValueType::Unknown,
-      });
-    }
+  //   if let ExprKind::Identifier { ident } = term.kind {
+  //     // If it's an identifier, it is a normal field access
+  //     return Some(ExprNode {
+  //       pos: (last_expr.pos.0, term.pos.1),
+  //       kind: ExprKind::FieldAccess {
+  //         receiver: Box::new(last_expr),
+  //         field: ident,
+  //       },
+  //       typ: ValueType::Unknown,
+  //     });
+  //   }
 
-    if let ExprKind::Literal { literal } = term.kind {
-      // If it's a decimal number, it is a tuple field access (e.g. ".0")
-      if let LiteralKind::IntDecimal(val) = literal.kind {
-        return Some(ExprNode {
-          pos: (last_expr.pos.0, term.pos.1),
-          kind: ExprKind::FieldAccess {
-            receiver: Box::new(last_expr),
-            field: IdentifierNode {
-              pos: literal.pos,
-              name: format!("{}", val),
-            },
-          },
-          typ: ValueType::Unknown,
-        });
-      }
-    }
+  //   if let ExprKind::Literal { literal } = term.kind {
+  //     // If it's a decimal number, it is a tuple field access (e.g. ".0")
+  //     if let LiteralKind::IntDecimal(val) = literal.kind {
+  //       return Some(ExprNode {
+  //         pos: (last_expr.pos.0, term.pos.1),
+  //         kind: ExprKind::FieldAccess {
+  //           receiver: Box::new(last_expr),
+  //           field: IdentifierNode {
+  //             pos: literal.pos,
+  //             name: format!("{}", val),
+  //           },
+  //         },
+  //         typ: ValueType::Unknown,
+  //       });
+  //     }
+  //   }
 
-    // Reject any other expr kinds
-    return self.error(ParseError {
-      pos: term.pos,
-      kind: ParseErrorKind::UnexpectedExpressionAfterDot,
-    });
-  }
+  //   // Reject any other expr kinds
+  //   return self.error(ParseError {
+  //     pos: term.pos,
+  //     kind: ParseErrorKind::UnexpectedExpressionAfterDot,
+  //   });
+  // }
 
   fn parse_const(&mut self) -> Option<ConstNode> {
     let start = expect_token_and_do!(self, Token::KeywordConst, {
@@ -508,7 +377,7 @@ impl<'a> Parser<'a> {
       _ => todo!(),
     };
 
-    expect_token_and_do!(self, Token::Equals, {
+    expect_token_and_do!(self, Token::Equal, {
       self.advance();
     });
 
@@ -699,33 +568,7 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_definition_kind(&mut self) -> Option<DefKind> {
-    if current_token_is!(self, Token::Operator) {
-      let (start, end) = self.current_token_position();
-      let name = read_string!(self, start, end);
-      let op = OperatorNode {
-        pos: (start, end),
-        name,
-      };
-
-      self.advance();
-
-      let right = match self.parse_type_identifier() {
-        Some(t) => t,
-        None => {
-          return self.error(ParseError {
-            pos: self.current_token_position(),
-            kind: ParseErrorKind::IncompleteMethodSignature,
-          })
-        }
-      };
-
-      return Some(DefKind::UnaryOperator {
-        op: Box::new(op),
-        right: Box::new(right),
-      });
-    }
-
-    // If not a unary op def, the first ident might be a type ident or a simple method part name
+    // The first ident might be a type ident or a simple method part name
     let type_ident = match self.parse_type_identifier() {
       Some(t) => t,
       None => {
@@ -737,25 +580,11 @@ impl<'a> Parser<'a> {
     };
 
     let mut receiver = None;
-    let mut binary_operator = None;
     let mut signature: Signature = Vec::new();
 
     if current_token_is!(self, Token::Dot) {
       // If we have a dot now, we know the first ident was a receiver type
       receiver = Some(type_ident);
-      self.advance();
-    } else if current_token_is!(self, Token::Operator) {
-      // If we have an operator now, this is a binary operator definition
-      receiver = Some(type_ident);
-
-      let (start, end) = self.current_token_position();
-      let name = read_string!(self, start, end);
-
-      binary_operator = Some(OperatorNode {
-        pos: (start, end),
-        name,
-      });
-
       self.advance();
     } else {
       // If not, the first ident was the first part of the method name
@@ -776,28 +605,6 @@ impl<'a> Parser<'a> {
           })
         }
       }
-    }
-
-    // Binary operator defs can only have a single type identifier after the operator (and a return value),
-    // so handle that here.
-    if let Some(op) = binary_operator {
-      let left_type = receiver.unwrap();
-
-      let right_type = match self.parse_type_identifier() {
-        Some(t) => t,
-        None => {
-          return self.error(ParseError {
-            pos: self.current_token_position(),
-            kind: ParseErrorKind::IncompleteMethodSignature,
-          })
-        }
-      };
-
-      return Some(DefKind::BinaryOperator {
-        left: Box::new(left_type),
-        op: Box::new(op),
-        right: Box::new(right_type),
-      });
     }
 
     // Now, collect any remaining parts
@@ -904,25 +711,447 @@ impl<'a> Parser<'a> {
     })
   }
 
+  /// This method and the following methods (...precedence_<n>) parse
+  /// expressions according to their precedence. The "top level", handled
+  /// in this method, represents the lowest (weakest) precedence: assignment
+  /// via the = operator.
   fn parse_expression(&mut self) -> Option<ExprNode> {
-    let mut expr = self.parse_operator_branch();
+    let mut expr = self.parse_expression_precedence_1();
 
-    loop {
-      if expr.is_some() {
-        match self.current_token {
-          Some(Token::Operator(..)) | Some(Token::LeftAngle(..)) | Some(Token::RightAngle(..)) => {
-            expr = self.parse_binary_operation(expr.unwrap());
-            continue;
-          }
-          Some(Token::DoubleColon(..)) => {
-            expr = self.parse_type_assertion(expr.unwrap());
-            continue;
-          }
-          _ => {}
+    while expr.is_some() {
+      match self.current_token {
+        Some(Token::Equal(..)) => {
+          self.advance();
+
+          let left_side = expr.unwrap();
+          let right_side = self.parse_expression_precedence_1().unwrap();
+          let (start, end) = (left_side.pos.0, right_side.pos.1);
+
+          expr = Some(ExprNode {
+            pos: (start, end),
+            kind: ExprKind::Assignment {
+              left: Box::new(left_side),
+              right: Box::new(right_side),
+            },
+            typ: ValueType::Unknown,
+          });
         }
+        _ => break,
+      }
+    }
+
+    expr
+  }
+
+  fn parse_expression_precedence_1(&mut self) -> Option<ExprNode> {
+    let mut expr = self.parse_expression_precedence_2();
+
+    while expr.is_some() {
+      match self.current_token {
+        Some(Token::DoubleDot(..)) => {
+          self.advance();
+
+          let receiver = expr.unwrap();
+          let mut call_node = self.parse_call().unwrap();
+          let (start, end) = (receiver.pos.0, call_node.pos.1);
+
+          call_node.receiver = Some(Box::new(receiver));
+
+          expr = Some(ExprNode {
+            pos: (start, end),
+            kind: ExprKind::Call { call: call_node },
+            typ: ValueType::Unknown,
+          });
+        }
+        _ => break,
+      }
+    }
+
+    expr
+  }
+
+  fn parse_expression_precedence_2(&mut self) -> Option<ExprNode> {
+    let mut expr = self.parse_expression_precedence_3();
+
+    while expr.is_some() {
+      match self.current_token {
+        Some(Token::DoublePipe(..)) => {
+          let op_node = self.parse_operator().unwrap();
+          let left_side = expr.unwrap();
+          let right_side = self.parse_expression_precedence_3().unwrap();
+          let (start, end) = (left_side.pos.0, right_side.pos.1);
+
+          expr = Some(ExprNode {
+            pos: (start, end),
+            kind: ExprKind::BinaryOperation {
+              op: Box::new(op_node),
+              left: Box::new(left_side),
+              right: Box::new(right_side),
+            },
+            typ: ValueType::Unknown,
+          });
+        }
+        _ => break,
+      }
+    }
+
+    expr
+  }
+
+  fn parse_expression_precedence_3(&mut self) -> Option<ExprNode> {
+    let mut expr = self.parse_expression_precedence_4();
+
+    while expr.is_some() {
+      match self.current_token {
+        Some(Token::DoubleAnd(..)) => {
+          let op_node = self.parse_operator().unwrap();
+          let left_side = expr.unwrap();
+          let right_side = self.parse_expression_precedence_4().unwrap();
+          let (start, end) = (left_side.pos.0, right_side.pos.1);
+
+          expr = Some(ExprNode {
+            pos: (start, end),
+            kind: ExprKind::BinaryOperation {
+              op: Box::new(op_node),
+              left: Box::new(left_side),
+              right: Box::new(right_side),
+            },
+            typ: ValueType::Unknown,
+          });
+        }
+        _ => break,
+      }
+    }
+
+    expr
+  }
+
+  fn parse_expression_precedence_4(&mut self) -> Option<ExprNode> {
+    let mut expr = self.parse_expression_precedence_5();
+
+    while expr.is_some() {
+      match self.current_token {
+        Some(Token::DoubleColon(start, _)) => {
+          self.advance();
+          let left_side = expr.unwrap();
+          let right_side = self.parse_type_expression().unwrap();
+          let end = right_side.pos.1;
+
+          expr = Some(ExprNode {
+            pos: (start, end),
+            kind: ExprKind::TypeAssertion {
+              expr: Box::new(left_side),
+              asserted_type: right_side,
+            },
+            typ: ValueType::Unknown,
+          });
+        }
+        _ => break,
+      }
+    }
+
+    expr
+  }
+
+  fn parse_expression_precedence_5(&mut self) -> Option<ExprNode> {
+    let mut expr = self.parse_expression_precedence_6();
+
+    while expr.is_some() {
+      match self.current_token {
+        Some(Token::Pipe(..)) => {
+          let op_node = self.parse_operator().unwrap();
+          let left_side = expr.unwrap();
+          let right_side = self.parse_expression_precedence_6().unwrap();
+          let (start, end) = (left_side.pos.0, right_side.pos.1);
+
+          expr = Some(ExprNode {
+            pos: (start, end),
+            kind: ExprKind::BinaryOperation {
+              op: Box::new(op_node),
+              left: Box::new(left_side),
+              right: Box::new(right_side),
+            },
+            typ: ValueType::Unknown,
+          });
+        }
+        _ => break,
+      }
+    }
+
+    expr
+  }
+
+  fn parse_expression_precedence_6(&mut self) -> Option<ExprNode> {
+    let mut expr = self.parse_expression_precedence_7();
+
+    while expr.is_some() {
+      match self.current_token {
+        Some(Token::Caret(..)) => {
+          let op_node = self.parse_operator().unwrap();
+          let left_side = expr.unwrap();
+          let right_side = self.parse_expression_precedence_7().unwrap();
+          let (start, end) = (left_side.pos.0, right_side.pos.1);
+
+          expr = Some(ExprNode {
+            pos: (start, end),
+            kind: ExprKind::BinaryOperation {
+              op: Box::new(op_node),
+              left: Box::new(left_side),
+              right: Box::new(right_side),
+            },
+            typ: ValueType::Unknown,
+          });
+        }
+        _ => break,
+      }
+    }
+
+    expr
+  }
+
+  fn parse_expression_precedence_7(&mut self) -> Option<ExprNode> {
+    let mut expr = self.parse_expression_precedence_8();
+
+    while expr.is_some() {
+      match self.current_token {
+        Some(Token::And(..)) => {
+          let op_node = self.parse_operator().unwrap();
+          let left_side = expr.unwrap();
+          let right_side = self.parse_expression_precedence_8().unwrap();
+          let (start, end) = (left_side.pos.0, right_side.pos.1);
+
+          expr = Some(ExprNode {
+            pos: (start, end),
+            kind: ExprKind::BinaryOperation {
+              op: Box::new(op_node),
+              left: Box::new(left_side),
+              right: Box::new(right_side),
+            },
+            typ: ValueType::Unknown,
+          });
+        }
+        _ => break,
+      }
+    }
+
+    expr
+  }
+
+  fn parse_expression_precedence_8(&mut self) -> Option<ExprNode> {
+    let mut expr = self.parse_expression_precedence_9();
+
+    while expr.is_some() {
+      match self.current_token {
+        Some(Token::Equal(..)) | Some(Token::BangEqual(..)) => {
+          let op_node = self.parse_operator().unwrap();
+          let left_side = expr.unwrap();
+          let right_side = self.parse_expression_precedence_9().unwrap();
+          let (start, end) = (left_side.pos.0, right_side.pos.1);
+
+          expr = Some(ExprNode {
+            pos: (start, end),
+            kind: ExprKind::BinaryOperation {
+              op: Box::new(op_node),
+              left: Box::new(left_side),
+              right: Box::new(right_side),
+            },
+            typ: ValueType::Unknown,
+          });
+        }
+        _ => break,
+      }
+    }
+
+    expr
+  }
+
+  fn parse_expression_precedence_9(&mut self) -> Option<ExprNode> {
+    let mut expr = self.parse_expression_precedence_10();
+
+    while expr.is_some() {
+      match self.current_token {
+        Some(Token::LeftAngle(..))
+        | Some(Token::RightAngle(..))
+        | Some(Token::LeftAngleEqual(..))
+        | Some(Token::RightAngleEqual(..)) => {
+          let op_node = self.parse_operator().unwrap();
+          let left_side = expr.unwrap();
+          let right_side = self.parse_expression_precedence_10().unwrap();
+          let (start, end) = (left_side.pos.0, right_side.pos.1);
+
+          expr = Some(ExprNode {
+            pos: (start, end),
+            kind: ExprKind::BinaryOperation {
+              op: Box::new(op_node),
+              left: Box::new(left_side),
+              right: Box::new(right_side),
+            },
+            typ: ValueType::Unknown,
+          });
+        }
+        _ => break,
+      }
+    }
+
+    expr
+  }
+
+  fn parse_expression_precedence_10(&mut self) -> Option<ExprNode> {
+    let mut expr = self.parse_expression_precedence_11();
+
+    while expr.is_some() {
+      match self.current_token {
+        Some(Token::DoubleLeftAngle(..)) | Some(Token::DoubleRightAngle(..)) => {
+          let op_node = self.parse_operator().unwrap();
+          let left_side = expr.unwrap();
+          let right_side = self.parse_expression_precedence_11().unwrap();
+          let (start, end) = (left_side.pos.0, right_side.pos.1);
+
+          expr = Some(ExprNode {
+            pos: (start, end),
+            kind: ExprKind::BinaryOperation {
+              op: Box::new(op_node),
+              left: Box::new(left_side),
+              right: Box::new(right_side),
+            },
+            typ: ValueType::Unknown,
+          });
+        }
+        _ => break,
+      }
+    }
+
+    expr
+  }
+
+  fn parse_expression_precedence_11(&mut self) -> Option<ExprNode> {
+    let mut expr = self.parse_expression_precedence_12();
+
+    while expr.is_some() {
+      match self.current_token {
+        Some(Token::Plus(..)) | Some(Token::Minus(..)) => {
+          let op_node = self.parse_operator().unwrap();
+          let left_side = expr.unwrap();
+          let right_side = self.parse_expression_precedence_12().unwrap();
+          let (start, end) = (left_side.pos.0, right_side.pos.1);
+
+          expr = Some(ExprNode {
+            pos: (start, end),
+            kind: ExprKind::BinaryOperation {
+              op: Box::new(op_node),
+              left: Box::new(left_side),
+              right: Box::new(right_side),
+            },
+            typ: ValueType::Unknown,
+          });
+        }
+        _ => break,
+      }
+    }
+
+    expr
+  }
+
+  fn parse_expression_precedence_12(&mut self) -> Option<ExprNode> {
+    let mut expr = self.parse_expression_precedence_13();
+
+    while expr.is_some() {
+      match self.current_token {
+        Some(Token::Star(..)) | Some(Token::ForwardSlash(..)) | Some(Token::Percent(..)) => {
+          let op_node = self.parse_operator().unwrap();
+          let left_side = expr.unwrap();
+          let right_side = self.parse_expression_precedence_13().unwrap();
+          let (start, end) = (left_side.pos.0, right_side.pos.1);
+
+          expr = Some(ExprNode {
+            pos: (start, end),
+            kind: ExprKind::BinaryOperation {
+              op: Box::new(op_node),
+              left: Box::new(left_side),
+              right: Box::new(right_side),
+            },
+            typ: ValueType::Unknown,
+          });
+        }
+        _ => break,
+      }
+    }
+
+    expr
+  }
+
+  fn parse_expression_precedence_13(&mut self) -> Option<ExprNode> {
+    let mut expr = self.parse_expression_precedence_14();
+
+    while expr.is_some() {
+      match self.current_token {
+        Some(Token::DoubleStar(..)) => {
+          let op_node = self.parse_operator().unwrap();
+          let left_side = expr.unwrap();
+          let right_side = self.parse_expression_precedence_14().unwrap();
+          let (start, end) = (left_side.pos.0, right_side.pos.1);
+
+          expr = Some(ExprNode {
+            pos: (start, end),
+            kind: ExprKind::BinaryOperation {
+              op: Box::new(op_node),
+              left: Box::new(left_side),
+              right: Box::new(right_side),
+            },
+            typ: ValueType::Unknown,
+          });
+        }
+        _ => break,
+      }
+    }
+
+    expr
+  }
+
+  fn parse_expression_precedence_14(&mut self) -> Option<ExprNode> {
+    match self.current_token {
+      Some(Token::Bang(..)) | Some(Token::Minus(..)) | Some(Token::Tilde(..)) => {
+        let op_node = self.parse_operator().unwrap();
+        let right_side = self.parse_expression_precedence_14().unwrap();
+        let (start, end) = (op_node.pos.0, right_side.pos.1);
+
+        Some(ExprNode {
+          pos: (start, end),
+          kind: ExprKind::UnaryOperation {
+            op: Box::new(op_node),
+            right: Box::new(right_side),
+          },
+          typ: ValueType::Unknown,
+        })
       }
 
-      break;
+      _ => self.parse_expression_precedence_15(),
+    }
+  }
+
+  fn parse_expression_precedence_15(&mut self) -> Option<ExprNode> {
+    let mut expr = self.parse_term();
+
+    while expr.is_some() {
+      match self.current_token {
+        Some(Token::Dot(..)) => {
+          self.advance();
+
+          let left_side = expr.unwrap();
+          let right_side = self.parse_term().unwrap();
+          let (start, end) = (left_side.pos.0, right_side.pos.1);
+
+          expr = Some(ExprNode {
+            pos: (start, end),
+            kind: ExprKind::FieldAccess {
+              receiver: Box::new(left_side),
+              field: Box::new(right_side),
+            },
+            typ: ValueType::Unknown,
+          });
+        }
+        _ => break,
+      }
     }
 
     expr
@@ -1031,7 +1260,7 @@ impl<'a> Parser<'a> {
       _ => todo!(),
     };
 
-    expect_token_and_do!(self, Token::Equals, {
+    expect_token_and_do!(self, Token::Equal, {
       self.advance();
     });
 
@@ -1230,50 +1459,41 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_operator_branch(&mut self) -> Option<ExprNode> {
-    let mut expr = self.parse_term();
+  fn parse_operator(&mut self) -> Option<OperatorNode> {
+    let (start, end, kind) = match self.current_token {
+      Some(Token::Plus(start, end)) => (start, end, OperatorKind::Add),
+      Some(Token::Minus(start, end)) => (start, end, OperatorKind::Subtract),
 
-    loop {
-      // Skip line breaks if there are any, but keep track of whether or not
-      // there were. Line breaks are not allowed between a callee and its
-      // argument, but they are allowed between the receiver and the "." in
-      // a chain expression.
-      let index_before_breaks = self.index;
-      self.skip_line_breaks();
-      let skipped_any_line_breaks = self.index != index_before_breaks;
+      Some(Token::Star(start, end)) => (start, end, OperatorKind::Multiply),
+      Some(Token::ForwardSlash(start, end)) => (start, end, OperatorKind::Divide),
+      Some(Token::Percent(start, end)) => (start, end, OperatorKind::Mod),
+      Some(Token::DoubleStar(start, end)) => (start, end, OperatorKind::Exponent),
 
-      if expr.is_some() {
-        match self.current_token {
-          Some(Token::Dot(..)) => {
-            expr = self.parse_chain(expr.unwrap());
-            continue;
-          }
-          Some(Token::LeftParen(..))
-          | Some(Token::OctalDigits(..))
-          | Some(Token::DecimalDigits(..))
-          | Some(Token::BinaryDigits(..))
-          | Some(Token::HexDigits(..))
-          | Some(Token::StringLiteral(..))
-          | Some(Token::Identifier(..))
-          | Some(Token::LeftBracket(..))
-          | Some(Token::LeftBrace(..))
-            if !skipped_any_line_breaks =>
-          {
-            expr = self.parse_call(expr.unwrap()).map(|call| ExprNode {
-              pos: call.pos,
-              kind: ExprKind::Call { call },
-              typ: ValueType::Unknown,
-            });
-            continue;
-          }
-          _ => {}
-        }
-      }
+      Some(Token::And(start, end)) => (start, end, OperatorKind::BitwiseAnd),
+      Some(Token::Pipe(start, end)) => (start, end, OperatorKind::BitwiseOr),
+      Some(Token::Caret(start, end)) => (start, end, OperatorKind::BitwiseXor),
+      Some(Token::DoubleLeftAngle(start, end)) => (start, end, OperatorKind::BitwiseLeftShift),
+      Some(Token::DoubleRightAngle(start, end)) => (start, end, OperatorKind::BitwiseRightShift),
 
-      break;
-    }
+      Some(Token::DoubleAnd(start, end)) => (start, end, OperatorKind::LogicalAnd),
+      Some(Token::DoublePipe(start, end)) => (start, end, OperatorKind::LogicalOr),
 
-    expr
+      Some(Token::LeftAngle(start, end)) => (start, end, OperatorKind::LessThan),
+      Some(Token::RightAngle(start, end)) => (start, end, OperatorKind::GreaterThan),
+      Some(Token::LeftAngleEqual(start, end)) => (start, end, OperatorKind::LessThanEquals),
+      Some(Token::RightAngleEqual(start, end)) => (start, end, OperatorKind::GreaterThanEquals),
+      Some(Token::Equal(start, end)) => (start, end, OperatorKind::Equals),
+      Some(Token::BangEqual(start, end)) => (start, end, OperatorKind::NotEquals),
+
+      _ => return None,
+    };
+
+    self.advance();
+
+    Some(OperatorNode {
+      pos: (start, end),
+      kind,
+    })
   }
 
   fn parse_pattern(&mut self) -> Option<PatternNode> {
@@ -1742,38 +1962,30 @@ impl<'a> Parser<'a> {
       };
 
       let modified_part = match self.current_token {
-        Some(Token::Operator(start, end)) => {
-          let op = &self.source[start..end];
+        Some(Token::Star(_, end)) => {
+          self.advance();
 
-          match op {
-            b"*" => {
-              self.advance();
+          RegExprNode {
+            pos: (part.pos.0, end),
+            kind: RegExprKind::ZeroOrMore(Box::new(part)),
+          }
+        }
 
-              RegExprNode {
-                pos: (part.pos.0, end),
-                kind: RegExprKind::ZeroOrMore(Box::new(part)),
-              }
-            }
+        Some(Token::Plus(_, end)) => {
+          self.advance();
 
-            b"+" => {
-              self.advance();
+          RegExprNode {
+            pos: (part.pos.0, end),
+            kind: RegExprKind::OneOrMore(Box::new(part)),
+          }
+        }
 
-              RegExprNode {
-                pos: (part.pos.0, end),
-                kind: RegExprKind::OneOrMore(Box::new(part)),
-              }
-            }
+        Some(Token::Question(_, end)) => {
+          self.advance();
 
-            b"?" => {
-              self.advance();
-
-              RegExprNode {
-                pos: (part.pos.0, end),
-                kind: RegExprKind::OneOrZero(Box::new(part)),
-              }
-            }
-
-            _ => part,
+          RegExprNode {
+            pos: (part.pos.0, end),
+            kind: RegExprKind::OneOrZero(Box::new(part)),
           }
         }
 
@@ -2004,7 +2216,9 @@ impl<'a> Parser<'a> {
     match self.current_token {
       Some(Token::LeftParen(..)) => self.parse_parenthetical(),
       Some(Token::ForwardSlash(..)) => self.parse_regular_expression(),
-      Some(Token::Operator(..)) => self.parse_unary_operation(),
+      Some(Token::Bang(..)) | Some(Token::Minus(..)) | Some(Token::Tilde(..)) => {
+        self.parse_unary_operation()
+      }
       Some(Token::LeftBrace(..)) => self.parse_block().map(|block| ExprNode {
         pos: block.pos,
         kind: ExprKind::Block { block },
@@ -2017,29 +2231,11 @@ impl<'a> Parser<'a> {
       Some(Token::Identifier(..))
       | Some(Token::IdentifierSpecialParam(..))
       | Some(Token::IdentifierSpecialOther(..)) => {
-        self
-          .parse_identifier(true)
-          .map(|ident| match self.current_token {
-            Some(Token::Equals(..)) => {
-              self.advance();
-
-              let expr = self.parse_expression().unwrap();
-
-              ExprNode {
-                pos: (ident.pos.0, expr.pos.1),
-                kind: ExprKind::Assignment {
-                  left: Box::new(ident),
-                  right: Box::new(expr),
-                },
-                typ: ValueType::Unknown,
-              }
-            }
-            _ => ExprNode {
-              pos: ident.pos,
-              kind: ExprKind::Identifier { ident },
-              typ: ValueType::Unknown,
-            },
-          })
+        self.parse_identifier(true).map(|ident| ExprNode {
+          pos: ident.pos,
+          kind: ExprKind::Identifier { ident },
+          typ: ValueType::Unknown,
+        })
       }
       Some(Token::DecimalDigits(..)) => self.parse_decimal_number().map(|literal| ExprNode {
         pos: literal.pos,
@@ -2505,14 +2701,17 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_unary_operation(&mut self) -> Option<ExprNode> {
-    let op_node = expect_token_and_do!(self, Token::Operator, {
-      let pos = self.current_token_position();
-      let name = read_string!(self, pos.0, pos.1);
-      self.advance();
+    let op_node = match self.parse_operator() {
+      Some(op_node) => op_node,
+      None => {
+        return self.error(ParseError {
+          pos: self.current_token_position(),
+          kind: ParseErrorKind::UnexpectedTokenExpectedOperator,
+        })
+      }
+    };
 
-      Box::new(OperatorNode { pos, name })
-    });
-
+    // TODO only allow correct precedence here
     let expr_node = match self.parse_expression() {
       Some(node) => Box::new(node),
       _ => {
@@ -2526,7 +2725,7 @@ impl<'a> Parser<'a> {
     Some(ExprNode {
       pos: (op_node.pos.0, expr_node.pos.1),
       kind: ExprKind::UnaryOperation {
-        op: op_node,
+        op: Box::new(op_node),
         right: expr_node,
       },
       typ: ValueType::Unknown,

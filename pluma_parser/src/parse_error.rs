@@ -51,6 +51,7 @@ pub enum ParseErrorKind {
   UnexpectedMethodPart,
   UnexpectedExpressionAfterDot,
   UnexpectedToken(Token),
+  UnexpectedTokenExpectedOperator,
 }
 
 impl fmt::Display for ParseError {
@@ -102,6 +103,7 @@ impl fmt::Display for ParseError {
       UnexpectedMethodPart => write!(f, "Unexpected part of method name."),
       UnexpectedExpressionAfterDot => write!(f, "Unexpected expression after '.'."),
       UnexpectedToken(expected) => write!(f, "Unexpected token. Expected {}.", expected),
+      UnexpectedTokenExpectedOperator => write!(f, "Unexpected token. Expected an operator."),
     }
   }
 }

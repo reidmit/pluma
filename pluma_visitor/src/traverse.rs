@@ -25,11 +25,11 @@ impl Traverse for CallNode {
   fn traverse<V: Visitor>(&self, visitor: &mut V) {
     visitor.enter_call(self);
 
-    for arg in &self.args {
-      arg.traverse(visitor);
-    }
+    // for arg in &self.args {
+    //   arg.traverse(visitor);
+    // }
 
-    self.callee.traverse(visitor);
+    // self.callee.traverse(visitor);
 
     visitor.leave_call(self);
   }
@@ -51,12 +51,6 @@ impl Traverse for DefNode {
     visitor.enter_def(self);
 
     match &self.kind {
-      DefKind::BinaryOperator { left, op, right } => {
-        right.traverse(visitor);
-        left.traverse(visitor);
-        op.traverse(visitor);
-      }
-
       DefKind::Function { signature } => {
         for (ident, type_expr) in signature {
           ident.traverse(visitor);
@@ -74,11 +68,6 @@ impl Traverse for DefNode {
         }
 
         receiver.traverse(visitor);
-      }
-
-      DefKind::UnaryOperator { op, right } => {
-        right.traverse(visitor);
-        op.traverse(visitor);
       }
     }
 

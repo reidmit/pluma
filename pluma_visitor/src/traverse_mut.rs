@@ -25,11 +25,11 @@ impl TraverseMut for CallNode {
   fn traverse_mut<V: VisitorMut>(&mut self, visitor: &mut V) {
     visitor.enter_call(self);
 
-    for arg in &mut self.args {
-      arg.traverse_mut(visitor);
-    }
+    // for arg in &mut self.args {
+    //   arg.traverse_mut(visitor);
+    // }
 
-    self.callee.traverse_mut(visitor);
+    // self.callee.traverse_mut(visitor);
 
     visitor.leave_call(self);
   }
@@ -51,12 +51,6 @@ impl TraverseMut for DefNode {
     visitor.enter_def(self);
 
     match &mut self.kind {
-      DefKind::BinaryOperator { left, op, right } => {
-        right.traverse_mut(visitor);
-        left.traverse_mut(visitor);
-        op.traverse_mut(visitor);
-      }
-
       DefKind::Function { signature } => {
         for (ident, type_expr) in signature {
           ident.traverse_mut(visitor);
@@ -74,11 +68,6 @@ impl TraverseMut for DefNode {
         }
 
         receiver.traverse_mut(visitor);
-      }
-
-      DefKind::UnaryOperator { op, right } => {
-        right.traverse_mut(visitor);
-        op.traverse_mut(visitor);
       }
     }
 

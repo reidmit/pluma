@@ -6,7 +6,9 @@ pub enum Token {
   And(usize, usize),
   Arrow(usize, usize),
   Bang(usize, usize),
+  BangEqual(usize, usize),
   BinaryDigits(usize, usize),
+  Caret(usize, usize),
   Colon(usize, usize),
   Comma(usize, usize),
   Comment(usize, usize),
@@ -20,7 +22,8 @@ pub enum Token {
   DoubleLeftAngle(usize, usize),
   DoublePipe(usize, usize),
   DoubleRightAngle(usize, usize),
-  Equals(usize, usize),
+  DoubleStar(usize, usize),
+  Equal(usize, usize),
   ForwardSlash(usize, usize),
   HexDigits(usize, usize),
   Identifier(usize, usize),
@@ -52,9 +55,12 @@ pub enum Token {
   LeftBracket(usize, usize),
   LeftParen(usize, usize),
   LineBreak(usize, usize),
+  Minus(usize, usize),
   OctalDigits(usize, usize),
   Percent(usize, usize),
   Pipe(usize, usize),
+  Plus(usize, usize),
+  Question(usize, usize),
   RightAngle(usize, usize),
   RightAngleEqual(usize, usize),
   RightBrace(usize, usize),
@@ -62,6 +68,7 @@ pub enum Token {
   RightParen(usize, usize),
   Star(usize, usize),
   StringLiteral(usize, usize),
+  Tilde(usize, usize),
   Underscore(usize, usize),
   Unexpected(usize, usize),
 }
@@ -74,7 +81,9 @@ impl Token {
       And(start, end)
       | Arrow(start, end)
       | Bang(start, end)
+      | BangEqual(start, end)
       | BinaryDigits(start, end)
+      | Caret(start, end)
       | Colon(start, end)
       | Comma(start, end)
       | Comment(start, end)
@@ -85,8 +94,11 @@ impl Token {
       | DoubleColon(start, end)
       | DoubleDot(start, end)
       | DoubleEquals(start, end)
+      | DoubleLeftAngle(start, end)
+      | DoubleRightAngle(start, end)
       | DoublePipe(start, end)
-      | Equals(start, end)
+      | DoubleStar(start, end)
+      | Equal(start, end)
       | ForwardSlash(start, end)
       | HexDigits(start, end)
       | Identifier(start, end)
@@ -113,19 +125,25 @@ impl Token {
       | KeywordUse(start, end)
       | KeywordWhere(start, end)
       | LeftAngle(start, end)
+      | LeftAngleEqual(start, end)
       | LeftBrace(start, end)
       | LeftBracket(start, end)
       | LeftParen(start, end)
       | LineBreak(start, end)
+      | Minus(start, end)
       | OctalDigits(start, end)
       | Percent(start, end)
       | Pipe(start, end)
+      | Plus(start, end)
+      | Question(start, end)
       | RightAngle(start, end)
+      | RightAngleEqual(start, end)
       | RightBrace(start, end)
       | RightBracket(start, end)
       | RightParen(start, end)
       | Star(start, end)
       | StringLiteral(start, end)
+      | Tilde(start, end)
       | Underscore(start, end)
       | Unexpected(start, end) => (*start, *end),
     }
@@ -140,7 +158,9 @@ impl fmt::Display for Token {
       &And(..) => "a '&'",
       &Arrow(..) => "a '->'",
       &Bang(..) => "a '!'",
+      &BangEqual(..) => "a '!='",
       &BinaryDigits(..) => "binary digits",
+      &Caret(..) => "a '^'",
       &Colon(..) => "a ':'",
       &Comma(..) => "a ','",
       &Comment(..) => "a comment",
@@ -151,8 +171,11 @@ impl fmt::Display for Token {
       &DoubleColon(..) => "a '::'",
       &DoubleDot(..) => "a '..'",
       &DoubleEquals(..) => "a '=='",
+      &DoubleLeftAngle(..) => "a '<<'",
       &DoublePipe(..) => "a '||'",
-      &Equals(..) => "a '='",
+      &DoubleRightAngle(..) => "a '>>'",
+      &DoubleStar(..) => "a '||'",
+      &Equal(..) => "a '='",
       &ForwardSlash(..) => "a '/'",
       &HexDigits(..) => "hex digits",
       &Identifier(..) => "an identifier",
@@ -179,17 +202,25 @@ impl fmt::Display for Token {
       &KeywordUse(..) => "keyword 'use'",
       &KeywordWhere(..) => "keyword 'where'",
       &LeftAngle(..) => "a '<'",
+      &LeftAngleEqual(..) => "a '<='",
       &LeftBrace(..) => "a '{'",
       &LeftBracket(..) => "a '['",
       &LeftParen(..) => "a '('",
       &LineBreak(..) => "a line break",
+      &Minus(..) => "a '-'",
       &OctalDigits(..) => "octal digits",
+      &Percent(..) => "a '%'",
       &Pipe(..) => "a '|'",
+      &Plus(..) => "a '+'",
+      &Question(..) => "a '?'",
       &RightAngle(..) => "a '>'",
+      &RightAngleEqual(..) => "a '>='",
       &RightBrace(..) => "a '}'",
       &RightBracket(..) => "a ']'",
       &RightParen(..) => "a ')'",
+      &Star(..) => "a '*'",
       &StringLiteral(..) => "a string",
+      &Tilde(..) => "a '~'",
       &Underscore(..) => "a '_'",
       &Unexpected(..) => "unknown",
     };

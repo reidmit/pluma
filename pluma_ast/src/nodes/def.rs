@@ -31,15 +31,4 @@ pub enum DefKind {
     receiver: Box<TypeIdentifierNode>,
     signature: Signature,
   },
-  // def (A) ++ (B) -> Ret { ... }
-  BinaryOperator {
-    left: Box<TypeIdentifierNode>,
-    op: Box<OperatorNode>,
-    right: Box<TypeIdentifierNode>,
-  },
-  // def ~(A) -> Ret { ... }
-  UnaryOperator {
-    op: Box<OperatorNode>,
-    right: Box<TypeIdentifierNode>,
-  },
 }

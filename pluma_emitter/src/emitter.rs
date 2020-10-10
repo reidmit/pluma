@@ -97,10 +97,11 @@ impl<'ctx> Emitter<'ctx> {
   }
 
   fn compile_call(&self, call: &CallNode) -> BasicValueEnum {
-    let callee_name = match &call.callee.kind {
-      ExprKind::Identifier { ident } => ident.name.clone(),
-      _ => todo!(),
-    };
+    // let callee_name = match &call.callee.kind {
+    //   ExprKind::Identifier { ident } => ident.name.clone(),
+    //   _ => todo!(),
+    // };
+    let callee_name = "TODO_IDK_AAHHH".to_owned();
 
     let func = self
       .llvm_module

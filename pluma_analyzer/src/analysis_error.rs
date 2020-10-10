@@ -23,15 +23,6 @@ pub enum AnalysisErrorKind {
     method_name_parts: Vec<String>,
     receiver_type: ValueType,
   },
-  UndefinedBinaryOperatorForType {
-    op_name: String,
-    receiver_type: ValueType,
-    param_type: ValueType,
-  },
-  UndefinedUnaryOperatorForType {
-    op_name: String,
-    receiver_type: ValueType,
-  },
   UnusedVariable(String),
   NameAlreadyInScope(String),
   CalleeNotCallable(ValueType),
@@ -118,25 +109,6 @@ impl fmt::Display for AnalysisError {
         "Method '{}' is not defined for type {}.",
         method_name_parts.join(" "),
         receiver_type
-      ),
-
-      UndefinedBinaryOperatorForType {
-        op_name,
-        receiver_type,
-        param_type,
-      } => write!(
-        f,
-        "Binary operator '{}' is not defined for types {} and {}.",
-        op_name, receiver_type, param_type,
-      ),
-
-      UndefinedUnaryOperatorForType {
-        op_name,
-        receiver_type,
-      } => write!(
-        f,
-        "Unary operator '{}' is not defined for type {}.",
-        op_name, receiver_type,
       ),
 
       UnusedVariable(name) => write!(f, "Name '{}' is never used.", name),

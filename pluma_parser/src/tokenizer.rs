@@ -233,9 +233,14 @@ impl<'a> Iterator for Tokenizer<'a> {
           return Some(Percent(start_index, self.index));
         }
 
-        b'!' => {
+        b'-' => {
           self.index += 1;
-          return Some(Bang(start_index, self.index));
+          return Some(Minus(start_index, self.index));
+        }
+
+        b'+' => {
+          self.index += 1;
+          return Some(Plus(start_index, self.index));
         }
 
         b',' => {
@@ -243,9 +248,41 @@ impl<'a> Iterator for Tokenizer<'a> {
           return Some(Comma(start_index, self.index));
         }
 
+        b'^' => {
+          self.index += 1;
+          return Some(Caret(start_index, self.index));
+        }
+
+        b'~' => {
+          self.index += 1;
+          return Some(Tilde(start_index, self.index));
+        }
+
         b'_' if (self.index >= self.length - 1 || self.source[self.index + 1] != b'_') => {
           self.index += 1;
           return Some(Underscore(start_index, self.index));
+        }
+
+        b'!' => {
+          self.index += 1;
+
+          if self.source[self.index] == b'=' {
+            self.index += 1;
+            return Some(BangEqual(start_index, self.index));
+          }
+
+          return Some(Bang(start_index, self.index));
+        }
+
+        b'*' => {
+          self.index += 1;
+
+          if self.source[self.index] == b'*' {
+            self.index += 1;
+            return Some(DoubleStar(start_index, self.index));
+          }
+
+          return Some(Star(start_index, self.index));
         }
 
         b'.' => {
@@ -574,7 +611,6 @@ fn is_identifier_char(byte: u8) -> bool {
     b'`' => false,
     b'[' => false,
     b']' => false,
-    b'^' => false,
     b'{' => false,
     b'}' => false,
     _ => true,
