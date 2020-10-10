@@ -3,15 +3,23 @@ use std::fmt;
 #[derive(Copy, Clone)]
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub enum Token {
+  And(usize, usize),
   Arrow(usize, usize),
+  Bang(usize, usize),
   BinaryDigits(usize, usize),
   Colon(usize, usize),
   Comma(usize, usize),
   Comment(usize, usize),
   DecimalDigits(usize, usize),
   Dot(usize, usize),
+  DoubleAnd(usize, usize),
   DoubleArrow(usize, usize),
   DoubleColon(usize, usize),
+  DoubleDot(usize, usize),
+  DoubleEquals(usize, usize),
+  DoubleLeftAngle(usize, usize),
+  DoublePipe(usize, usize),
+  DoubleRightAngle(usize, usize),
   Equals(usize, usize),
   ForwardSlash(usize, usize),
   HexDigits(usize, usize),
@@ -39,17 +47,20 @@ pub enum Token {
   KeywordUse(usize, usize),
   KeywordWhere(usize, usize),
   LeftAngle(usize, usize),
+  LeftAngleEqual(usize, usize),
   LeftBrace(usize, usize),
   LeftBracket(usize, usize),
   LeftParen(usize, usize),
   LineBreak(usize, usize),
   OctalDigits(usize, usize),
-  Operator(usize, usize),
+  Percent(usize, usize),
   Pipe(usize, usize),
   RightAngle(usize, usize),
+  RightAngleEqual(usize, usize),
   RightBrace(usize, usize),
   RightBracket(usize, usize),
   RightParen(usize, usize),
+  Star(usize, usize),
   StringLiteral(usize, usize),
   Underscore(usize, usize),
   Unexpected(usize, usize),
@@ -57,114 +68,130 @@ pub enum Token {
 
 impl Token {
   pub fn get_position(&self) -> (usize, usize) {
+    use Token::*;
+
     match self {
-      &Token::Arrow(start, end) => (start, end),
-      &Token::BinaryDigits(start, end) => (start, end),
-      &Token::Colon(start, end) => (start, end),
-      &Token::Comma(start, end) => (start, end),
-      &Token::Comment(start, end) => (start, end),
-      &Token::DecimalDigits(start, end) => (start, end),
-      &Token::Dot(start, end) => (start, end),
-      &Token::DoubleArrow(start, end) => (start, end),
-      &Token::DoubleColon(start, end) => (start, end),
-      &Token::Equals(start, end) => (start, end),
-      &Token::ForwardSlash(start, end) => (start, end),
-      &Token::HexDigits(start, end) => (start, end),
-      &Token::Identifier(start, end) => (start, end),
-      &Token::IdentifierSpecialOther(start, end) => (start, end),
-      &Token::IdentifierSpecialParam(start, end) => (start, end),
-      &Token::ImportPath(start, end) => (start, end),
-      &Token::InterpolationEnd(start, end) => (start, end),
-      &Token::InterpolationStart(start, end) => (start, end),
-      &Token::KeywordAlias(start, end) => (start, end),
-      &Token::KeywordAs(start, end) => (start, end),
-      &Token::KeywordBreak(start, end) => (start, end),
-      &Token::KeywordConst(start, end) => (start, end),
-      &Token::KeywordDef(start, end) => (start, end),
-      &Token::KeywordEnum(start, end) => (start, end),
-      &Token::KeywordInternal(start, end) => (start, end),
-      &Token::KeywordIntrinsicDef(start, end) => (start, end),
-      &Token::KeywordIntrinsicType(start, end) => (start, end),
-      &Token::KeywordLet(start, end) => (start, end),
-      &Token::KeywordMatch(start, end) => (start, end),
-      &Token::KeywordMut(start, end) => (start, end),
-      &Token::KeywordPrivate(start, end) => (start, end),
-      &Token::KeywordStruct(start, end) => (start, end),
-      &Token::KeywordTrait(start, end) => (start, end),
-      &Token::KeywordUse(start, end) => (start, end),
-      &Token::KeywordWhere(start, end) => (start, end),
-      &Token::LeftAngle(start, end) => (start, end),
-      &Token::LeftBrace(start, end) => (start, end),
-      &Token::LeftBracket(start, end) => (start, end),
-      &Token::LeftParen(start, end) => (start, end),
-      &Token::LineBreak(start, end) => (start, end),
-      &Token::OctalDigits(start, end) => (start, end),
-      &Token::Operator(start, end) => (start, end),
-      &Token::Pipe(start, end) => (start, end),
-      &Token::RightAngle(start, end) => (start, end),
-      &Token::RightBrace(start, end) => (start, end),
-      &Token::RightBracket(start, end) => (start, end),
-      &Token::RightParen(start, end) => (start, end),
-      &Token::StringLiteral(start, end) => (start, end),
-      &Token::Underscore(start, end) => (start, end),
-      &Token::Unexpected(start, end) => (start, end),
+      And(start, end)
+      | Arrow(start, end)
+      | Bang(start, end)
+      | BinaryDigits(start, end)
+      | Colon(start, end)
+      | Comma(start, end)
+      | Comment(start, end)
+      | DecimalDigits(start, end)
+      | Dot(start, end)
+      | DoubleAnd(start, end)
+      | DoubleArrow(start, end)
+      | DoubleColon(start, end)
+      | DoubleDot(start, end)
+      | DoubleEquals(start, end)
+      | DoublePipe(start, end)
+      | Equals(start, end)
+      | ForwardSlash(start, end)
+      | HexDigits(start, end)
+      | Identifier(start, end)
+      | IdentifierSpecialOther(start, end)
+      | IdentifierSpecialParam(start, end)
+      | ImportPath(start, end)
+      | InterpolationEnd(start, end)
+      | InterpolationStart(start, end)
+      | KeywordAlias(start, end)
+      | KeywordAs(start, end)
+      | KeywordBreak(start, end)
+      | KeywordConst(start, end)
+      | KeywordDef(start, end)
+      | KeywordEnum(start, end)
+      | KeywordInternal(start, end)
+      | KeywordIntrinsicDef(start, end)
+      | KeywordIntrinsicType(start, end)
+      | KeywordLet(start, end)
+      | KeywordMatch(start, end)
+      | KeywordMut(start, end)
+      | KeywordPrivate(start, end)
+      | KeywordStruct(start, end)
+      | KeywordTrait(start, end)
+      | KeywordUse(start, end)
+      | KeywordWhere(start, end)
+      | LeftAngle(start, end)
+      | LeftBrace(start, end)
+      | LeftBracket(start, end)
+      | LeftParen(start, end)
+      | LineBreak(start, end)
+      | OctalDigits(start, end)
+      | Percent(start, end)
+      | Pipe(start, end)
+      | RightAngle(start, end)
+      | RightBrace(start, end)
+      | RightBracket(start, end)
+      | RightParen(start, end)
+      | Star(start, end)
+      | StringLiteral(start, end)
+      | Underscore(start, end)
+      | Unexpected(start, end) => (*start, *end),
     }
   }
 }
 
 impl fmt::Display for Token {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    use Token::*;
+
     let as_string = match self {
-      &Token::Arrow(..) => "a '->'",
-      &Token::BinaryDigits(..) => "binary digits",
-      &Token::Colon(..) => "a ':'",
-      &Token::Comma(..) => "a ','",
-      &Token::Comment(..) => "a comment",
-      &Token::DecimalDigits(..) => "digits",
-      &Token::Dot(..) => "a '.'",
-      &Token::DoubleArrow(..) => "a '=>'",
-      &Token::DoubleColon(..) => "a '::'",
-      &Token::Equals(..) => "a '='",
-      &Token::ForwardSlash(..) => "a '/'",
-      &Token::HexDigits(..) => "hex digits",
-      &Token::Identifier(..) => "an identifier",
-      &Token::IdentifierSpecialOther(..) => "an identifier starting with '$'",
-      &Token::IdentifierSpecialParam(..) => "an identifier starting with '$'",
-      &Token::ImportPath(..) => "an import path",
-      &Token::InterpolationEnd(..) => "a ')'",
-      &Token::InterpolationStart(..) => "a '$('",
-      &Token::KeywordAlias(..) => "keyword 'alias'",
-      &Token::KeywordAs(..) => "keyword 'as'",
-      &Token::KeywordBreak(..) => "keyword 'break'",
-      &Token::KeywordConst(..) => "keyword 'const'",
-      &Token::KeywordDef(..) => "keyword 'def'",
-      &Token::KeywordEnum(..) => "keyword 'enum'",
-      &Token::KeywordInternal(..) => "keyword 'internal'",
-      &Token::KeywordIntrinsicDef(..) => "keyword 'intrinsic_def'",
-      &Token::KeywordIntrinsicType(..) => "keyword 'intrinsic_type'",
-      &Token::KeywordLet(..) => "keyword 'let'",
-      &Token::KeywordMatch(..) => "keyword 'match'",
-      &Token::KeywordMut(..) => "keyword 'mut'",
-      &Token::KeywordPrivate(..) => "keyword 'private'",
-      &Token::KeywordStruct(..) => "keyword 'struct'",
-      &Token::KeywordTrait(..) => "keyword 'trait'",
-      &Token::KeywordUse(..) => "keyword 'use'",
-      &Token::KeywordWhere(..) => "keyword 'where'",
-      &Token::LeftAngle(..) => "a '<'",
-      &Token::LeftBrace(..) => "a '{'",
-      &Token::LeftBracket(..) => "a '['",
-      &Token::LeftParen(..) => "a '('",
-      &Token::LineBreak(..) => "a line break",
-      &Token::OctalDigits(..) => "octal digits",
-      &Token::Operator(..) => "an operator",
-      &Token::Pipe(..) => "a '|'",
-      &Token::RightAngle(..) => "a '>'",
-      &Token::RightBrace(..) => "a '}'",
-      &Token::RightBracket(..) => "a ']'",
-      &Token::RightParen(..) => "a ')'",
-      &Token::StringLiteral(..) => "a string",
-      &Token::Underscore(..) => "a '_'",
-      &Token::Unexpected(..) => "unknown",
+      &And(..) => "a '&'",
+      &Arrow(..) => "a '->'",
+      &Bang(..) => "a '!'",
+      &BinaryDigits(..) => "binary digits",
+      &Colon(..) => "a ':'",
+      &Comma(..) => "a ','",
+      &Comment(..) => "a comment",
+      &DecimalDigits(..) => "digits",
+      &Dot(..) => "a '.'",
+      &DoubleAnd(..) => "a '&&'",
+      &DoubleArrow(..) => "a '=>'",
+      &DoubleColon(..) => "a '::'",
+      &DoubleDot(..) => "a '..'",
+      &DoubleEquals(..) => "a '=='",
+      &DoublePipe(..) => "a '||'",
+      &Equals(..) => "a '='",
+      &ForwardSlash(..) => "a '/'",
+      &HexDigits(..) => "hex digits",
+      &Identifier(..) => "an identifier",
+      &IdentifierSpecialOther(..) => "an identifier starting with '$'",
+      &IdentifierSpecialParam(..) => "an identifier starting with '$'",
+      &ImportPath(..) => "an import path",
+      &InterpolationEnd(..) => "a ')'",
+      &InterpolationStart(..) => "a '$('",
+      &KeywordAlias(..) => "keyword 'alias'",
+      &KeywordAs(..) => "keyword 'as'",
+      &KeywordBreak(..) => "keyword 'break'",
+      &KeywordConst(..) => "keyword 'const'",
+      &KeywordDef(..) => "keyword 'def'",
+      &KeywordEnum(..) => "keyword 'enum'",
+      &KeywordInternal(..) => "keyword 'internal'",
+      &KeywordIntrinsicDef(..) => "keyword 'intrinsic_def'",
+      &KeywordIntrinsicType(..) => "keyword 'intrinsic_type'",
+      &KeywordLet(..) => "keyword 'let'",
+      &KeywordMatch(..) => "keyword 'match'",
+      &KeywordMut(..) => "keyword 'mut'",
+      &KeywordPrivate(..) => "keyword 'private'",
+      &KeywordStruct(..) => "keyword 'struct'",
+      &KeywordTrait(..) => "keyword 'trait'",
+      &KeywordUse(..) => "keyword 'use'",
+      &KeywordWhere(..) => "keyword 'where'",
+      &LeftAngle(..) => "a '<'",
+      &LeftBrace(..) => "a '{'",
+      &LeftBracket(..) => "a '['",
+      &LeftParen(..) => "a '('",
+      &LineBreak(..) => "a line break",
+      &OctalDigits(..) => "octal digits",
+      &Pipe(..) => "a '|'",
+      &RightAngle(..) => "a '>'",
+      &RightBrace(..) => "a '}'",
+      &RightBracket(..) => "a ']'",
+      &RightParen(..) => "a ')'",
+      &StringLiteral(..) => "a string",
+      &Underscore(..) => "a '_'",
+      &Unexpected(..) => "unknown",
     };
 
     write!(f, "{}", as_string)

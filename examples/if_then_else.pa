@@ -20,3 +20,8 @@ if b then {
 } else {
   print "nope :("
 }
+
+let number = 47
+let floo = 12.435
+
+let x = wow.com()

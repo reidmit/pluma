@@ -20,28 +20,54 @@ pub enum ExprKind {
     op: Box<OperatorNode>,
     right: Box<ExprNode>,
   },
-  Block(BlockNode),
-  Call(CallNode),
-  Dict(Vec<(ExprNode, ExprNode)>),
+  Block {
+    block: BlockNode,
+  },
+  Call {
+    call: CallNode,
+  },
+  Dict {
+    entries: Vec<(ExprNode, ExprNode)>,
+  },
   EmptyTuple,
   FieldAccess {
     receiver: Box<ExprNode>,
     field: IdentifierNode,
   },
-  Grouping(Box<ExprNode>),
-  Identifier(IdentifierNode),
+  Grouping {
+    inner: Box<ExprNode>,
+  },
+  Identifier {
+    ident: IdentifierNode,
+  },
   MethodAccess {
     receiver: Box<ExprNode>,
     method_parts: Vec<IdentifierNode>,
   },
-  MultiPartIdentifier(Vec<IdentifierNode>),
-  Interpolation(Vec<ExprNode>),
-  List(Vec<ExprNode>),
-  Literal(LiteralNode),
-  Match(MatchNode),
-  RegExpr(RegExprNode),
-  LabeledTuple(Vec<(IdentifierNode, ExprNode)>),
-  UnlabeledTuple(Vec<ExprNode>),
+  MultiPartIdentifier {
+    parts: Vec<IdentifierNode>,
+  },
+  Interpolation {
+    parts: Vec<ExprNode>,
+  },
+  List {
+    elements: Vec<ExprNode>,
+  },
+  Literal {
+    literal: LiteralNode,
+  },
+  Match {
+    match_: MatchNode,
+  },
+  RegExpr {
+    regex: RegExprNode,
+  },
+  LabeledTuple {
+    entries: Vec<(IdentifierNode, ExprNode)>,
+  },
+  UnlabeledTuple {
+    entries: Vec<ExprNode>,
+  },
   TypeAssertion {
     expr: Box<ExprNode>,
     asserted_type: TypeExprNode,

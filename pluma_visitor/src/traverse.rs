@@ -104,36 +104,36 @@ impl Traverse for ExprNode {
         right.traverse(visitor);
       }
 
-      ExprKind::Block(block) => block.traverse(visitor),
+      ExprKind::Block { block } => block.traverse(visitor),
 
-      ExprKind::Call(call) => call.traverse(visitor),
+      ExprKind::Call { call } => call.traverse(visitor),
 
-      ExprKind::Literal(literal) => literal.traverse(visitor),
+      ExprKind::Literal { literal } => literal.traverse(visitor),
 
-      ExprKind::Grouping(inner) => inner.traverse(visitor),
+      ExprKind::Grouping { inner } => inner.traverse(visitor),
 
-      ExprKind::Identifier(ident) => ident.traverse(visitor),
+      ExprKind::Identifier { ident } => ident.traverse(visitor),
 
-      ExprKind::Match(match_node) => match_node.traverse(visitor),
+      ExprKind::Match { match_ } => match_.traverse(visitor),
 
       ExprKind::UnaryOperation { op, right } => {
         op.traverse(visitor);
         right.traverse(visitor);
       }
 
-      ExprKind::Interpolation(parts) => {
+      ExprKind::Interpolation { parts } => {
         for part in parts {
           part.traverse(visitor);
         }
       }
 
-      ExprKind::UnlabeledTuple(entries) => {
+      ExprKind::UnlabeledTuple { entries } => {
         for entry in entries {
           entry.traverse(visitor);
         }
       }
 
-      ExprKind::LabeledTuple(entries) => {
+      ExprKind::LabeledTuple { entries } => {
         for (label, value) in entries {
           label.traverse(visitor);
           value.traverse(visitor);
@@ -142,7 +142,7 @@ impl Traverse for ExprNode {
 
       ExprKind::EmptyTuple => {}
 
-      ExprKind::MultiPartIdentifier(parts) => {
+      ExprKind::MultiPartIdentifier { parts } => {
         for part in parts {
           part.traverse(visitor);
         }

@@ -85,7 +85,7 @@ where
 
   fn format_call(&mut self, node: &CallNode) {
     match &node.callee.kind {
-      ExprKind::MultiPartIdentifier(parts) => {
+      ExprKind::MultiPartIdentifier { parts } => {
         let count = parts.len();
         let mut i = 0;
 
@@ -117,13 +117,13 @@ where
 
   fn format_expr(&mut self, node: &ExprNode) {
     match &node.kind {
-      ExprKind::Block(block) => self.format_block(block),
+      ExprKind::Block { block } => self.format_block(block),
 
-      ExprKind::Call(call) => self.format_call(call),
+      ExprKind::Call { call } => self.format_call(call),
 
-      ExprKind::Identifier(ident) => self.format_identifier(ident),
+      ExprKind::Identifier { ident } => self.format_identifier(ident),
 
-      ExprKind::UnlabeledTuple(entries) => {
+      ExprKind::UnlabeledTuple { entries } => {
         self.out_str("(");
 
         let mut i = 0;
@@ -142,7 +142,7 @@ where
         self.out_str(")");
       }
 
-      ExprKind::Literal(lit) => self.format_literal(lit),
+      ExprKind::Literal { literal } => self.format_literal(literal),
 
       _o => todo!("format other expr kinds"),
     }

@@ -104,36 +104,36 @@ impl TraverseMut for ExprNode {
         right.traverse_mut(visitor);
       }
 
-      ExprKind::Block(block) => block.traverse_mut(visitor),
+      ExprKind::Block { block } => block.traverse_mut(visitor),
 
-      ExprKind::Call(call) => call.traverse_mut(visitor),
+      ExprKind::Call { call } => call.traverse_mut(visitor),
 
-      ExprKind::Literal(literal) => literal.traverse_mut(visitor),
+      ExprKind::Literal { literal } => literal.traverse_mut(visitor),
 
-      ExprKind::Grouping(inner) => inner.traverse_mut(visitor),
+      ExprKind::Grouping { inner } => inner.traverse_mut(visitor),
 
-      ExprKind::Identifier(ident) => ident.traverse_mut(visitor),
+      ExprKind::Identifier { ident } => ident.traverse_mut(visitor),
 
-      ExprKind::Match(match_node) => match_node.traverse_mut(visitor),
+      ExprKind::Match { match_ } => match_.traverse_mut(visitor),
 
       ExprKind::UnaryOperation { op, right } => {
         op.traverse_mut(visitor);
         right.traverse_mut(visitor);
       }
 
-      ExprKind::Interpolation(parts) => {
+      ExprKind::Interpolation { parts } => {
         for part in parts {
           part.traverse_mut(visitor);
         }
       }
 
-      ExprKind::UnlabeledTuple(entries) => {
+      ExprKind::UnlabeledTuple { entries } => {
         for entry in entries {
           entry.traverse_mut(visitor);
         }
       }
 
-      ExprKind::LabeledTuple(entries) => {
+      ExprKind::LabeledTuple { entries } => {
         for (label, value) in entries {
           label.traverse_mut(visitor);
           value.traverse_mut(visitor);
@@ -142,7 +142,7 @@ impl TraverseMut for ExprNode {
 
       ExprKind::EmptyTuple => {}
 
-      ExprKind::MultiPartIdentifier(parts) => {
+      ExprKind::MultiPartIdentifier { parts } => {
         for part in parts {
           part.traverse_mut(visitor);
         }

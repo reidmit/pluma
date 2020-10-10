@@ -228,6 +228,16 @@ impl<'a> Iterator for Tokenizer<'a> {
           return Some(ForwardSlash(start_index, self.index));
         }
 
+        b'%' => {
+          self.index += 1;
+          return Some(Percent(start_index, self.index));
+        }
+
+        b'!' => {
+          self.index += 1;
+          return Some(Bang(start_index, self.index));
+        }
+
         b',' => {
           self.index += 1;
           return Some(Comma(start_index, self.index));
@@ -236,6 +246,82 @@ impl<'a> Iterator for Tokenizer<'a> {
         b'_' if (self.index >= self.length - 1 || self.source[self.index + 1] != b'_') => {
           self.index += 1;
           return Some(Underscore(start_index, self.index));
+        }
+
+        b'.' => {
+          self.index += 1;
+
+          if self.source[self.index] == b'.' {
+            self.index += 1;
+            return Some(DoubleDot(start_index, self.index));
+          }
+
+          return Some(Dot(start_index, self.index));
+        }
+
+        b'&' => {
+          self.index += 1;
+
+          if self.source[self.index] == b'&' {
+            self.index += 1;
+            return Some(DoubleAnd(start_index, self.index));
+          }
+
+          return Some(And(start_index, self.index));
+        }
+
+        b'|' => {
+          self.index += 1;
+
+          if self.source[self.index] == b'|' {
+            self.index += 1;
+            return Some(DoublePipe(start_index, self.index));
+          }
+
+          return Some(Pipe(start_index, self.index));
+        }
+
+        b':' => {
+          self.index += 1;
+
+          if self.source[self.index] == b':' {
+            self.index += 1;
+            return Some(DoubleColon(start_index, self.index));
+          }
+
+          return Some(Colon(start_index, self.index));
+        }
+
+        b'<' => {
+          self.index += 1;
+
+          if self.source[self.index] == b'=' {
+            self.index += 1;
+            return Some(LeftAngleEqual(start_index, self.index));
+          }
+
+          if self.source[self.index] == b'<' {
+            self.index += 1;
+            return Some(DoubleLeftAngle(start_index, self.index));
+          }
+
+          return Some(LeftAngle(start_index, self.index));
+        }
+
+        b'>' => {
+          self.index += 1;
+
+          if self.source[self.index] == b'=' {
+            self.index += 1;
+            return Some(RightAngleEqual(start_index, self.index));
+          }
+
+          if self.source[self.index] == b'>' {
+            self.index += 1;
+            return Some(DoubleRightAngle(start_index, self.index));
+          }
+
+          return Some(RightAngle(start_index, self.index));
         }
 
         b'$' if self.index < self.length - 1 && is_digit(self.source[self.index + 1]) => {
@@ -259,29 +345,6 @@ impl<'a> Iterator for Tokenizer<'a> {
           }
 
           return Some(IdentifierSpecialOther(start_index, self.index));
-        }
-
-        _ if is_operator_char(byte) => {
-          while self.index < self.length && is_operator_char(self.source[self.index]) {
-            self.index += 1;
-          }
-
-          let value = &self.source[start_index..self.index];
-
-          let constructor = match value {
-            b"." => Dot,
-            b"|" => Pipe,
-            b"=>" => DoubleArrow,
-            b"=" => Equals,
-            b"->" => Arrow,
-            b"::" => DoubleColon,
-            b":" => Colon,
-            b"<" => LeftAngle,
-            b">" => RightAngle,
-            _ => Operator,
-          };
-
-          return Some(constructor(start_index, self.index));
         }
 
         b'#' => {
@@ -483,7 +546,23 @@ fn is_identifier_char(byte: u8) -> bool {
   match byte {
     _ if byte.is_ascii_whitespace() => false,
     _ if byte.is_ascii_control() => false,
-    _ if is_operator_char(byte) => false,
+    b':' => false,
+    b'|' => false,
+    b'.' => false,
+    b'*' => false,
+    b'/' => false,
+    b'+' => false,
+    b'-' => false,
+    b'=' => false,
+    b'<' => false,
+    b'>' => false,
+    b'~' => false,
+    b'!' => false,
+    b'%' => false,
+    b'&' => false,
+    b'@' => false,
+    b'^' => false,
+    b'?' => false,
     b'"' => false,
     b'#' => false,
     b'$' => false,
@@ -505,29 +584,6 @@ fn is_identifier_char(byte: u8) -> bool {
 fn is_digit(byte: u8) -> bool {
   match byte {
     b'0'..=b'9' => true,
-    _ => false,
-  }
-}
-
-fn is_operator_char(byte: u8) -> bool {
-  match byte {
-    b':' => true,
-    b'|' => true,
-    b'.' => true,
-    b'*' => true,
-    b'/' => true,
-    b'+' => true,
-    b'-' => true,
-    b'=' => true,
-    b'<' => true,
-    b'>' => true,
-    b'~' => true,
-    b'!' => true,
-    b'%' => true,
-    b'&' => true,
-    b'@' => true,
-    b'^' => true,
-    b'?' => true,
     _ => false,
   }
 }

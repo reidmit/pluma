@@ -48,6 +48,9 @@ impl Compiler {
       to_module_path(self.root_dir.clone(), self.entry_module_name.clone()),
     );
 
+    // TODO remove
+    println!("{:#?}", self.modules["main"]);
+
     if !self.diagnostics.is_empty() {
       return Err(self.diagnostics.to_vec());
     }

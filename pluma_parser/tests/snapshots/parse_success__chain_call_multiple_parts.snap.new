@@ -1,10 +1,10 @@
 ---
 source: pluma_parser/tests/parse_success.rs
-expression: "\"hello\" .. f1 () .. f2 \"wow\" .f3(47)"
+expression: "\"hello\" .. replace \"x\" with \"y\""
 ---
 
 === Source ===
-"hello" .. f1 () .. f2 "wow" .f3(47)
+"hello" .. replace "x" with "y"
 
 === Comments ===
 {}

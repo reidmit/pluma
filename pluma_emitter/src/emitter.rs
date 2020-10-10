@@ -98,7 +98,7 @@ impl<'ctx> Emitter<'ctx> {
 
   fn compile_call(&self, call: &CallNode) -> BasicValueEnum {
     let callee_name = match &call.callee.kind {
-      ExprKind::Identifier(ident) => ident.name.clone(),
+      ExprKind::Identifier { ident } => ident.name.clone(),
       _ => todo!(),
     };
 
@@ -129,9 +129,9 @@ impl<'ctx> Emitter<'ctx> {
 
   fn compile_expr(&self, expr: &ExprNode) -> BasicValueEnum {
     match &expr.kind {
-      ExprKind::Literal(lit) => self.compile_literal(lit),
+      ExprKind::Literal { literal } => self.compile_literal(literal),
 
-      ExprKind::Call(call) => self.compile_call(call),
+      ExprKind::Call { call } => self.compile_call(call),
 
       _other => todo!("compile expr kind"),
     }

@@ -1,0 +1,52 @@
+---
+source: pluma_parser/tests/parse_success.rs
+expression: "trait Wowie\n  .. getWow () -> Wow\n  .. setWow Wow -> ()"
+---
+
+=== Source ===
+trait Wowie
+  .. getWow () -> Wow
+  .. setWow Wow -> ()
+
+=== Comments ===
+{}
+
+=== AST ===
+ModuleNode {
+    pos: (
+        0,
+        0,
+    ),
+    body: [
+        TopLevelStatementNode {
+            pos: (
+                0,
+                0,
+            ),
+            kind: TypeDef(
+                TypeDefNode {
+                    pos: (
+                        0,
+                        0,
+                    ),
+                    visibility: Public,
+                    kind: Trait {
+                        fields: [],
+                        methods: [],
+                    },
+                    name: TypeIdentifierNode {
+                        pos: (
+                            6,
+                            11,
+                        ),
+                        name: "Wowie",
+                        generics: [],
+                        constraints: None,
+                    },
+                    generic_type_constraints: [],
+                },
+            ),
+        },
+    ],
+}
+

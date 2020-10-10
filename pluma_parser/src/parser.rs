@@ -330,7 +330,9 @@ impl<'a> Parser<'a> {
     }
 
     let callee = match last_expr.kind {
-      ExprKind::Identifier(first_callee_part) => {
+      ExprKind::Identifier {
+        ident: first_callee_part,
+      } => {
         let start = first_callee_part.pos.0;
 
         let mut rest_callee_parts = Vec::new();
@@ -370,12 +372,14 @@ impl<'a> Parser<'a> {
 
           (
             (start, all_parts.last().unwrap().pos.1),
-            ExprKind::MultiPartIdentifier(all_parts),
+            ExprKind::MultiPartIdentifier { parts: all_parts },
           )
         } else {
           (
             first_callee_part.pos,
-            ExprKind::Identifier(first_callee_part),
+            ExprKind::Identifier {
+              ident: first_callee_part,
+            },
           )
         };
 
@@ -456,7 +460,7 @@ impl<'a> Parser<'a> {
 
     let term = term.unwrap();
 
-    if let ExprKind::Identifier(ident) = term.kind {
+    if let ExprKind::Identifier { ident } = term.kind {
       // If it's an identifier, it is a normal field access
       return Some(ExprNode {
         pos: (last_expr.pos.0, term.pos.1),
@@ -468,15 +472,15 @@ impl<'a> Parser<'a> {
       });
     }
 
-    if let ExprKind::Literal(lit) = term.kind {
+    if let ExprKind::Literal { literal } = term.kind {
       // If it's a decimal number, it is a tuple field access (e.g. ".0")
-      if let LiteralKind::IntDecimal(val) = lit.kind {
+      if let LiteralKind::IntDecimal(val) = literal.kind {
         return Some(ExprNode {
           pos: (last_expr.pos.0, term.pos.1),
           kind: ExprKind::FieldAccess {
             receiver: Box::new(last_expr),
             field: IdentifierNode {
-              pos: lit.pos,
+              pos: literal.pos,
               name: format!("{}", val),
             },
           },
@@ -1099,14 +1103,18 @@ impl<'a> Parser<'a> {
     let kind = if list_elements.is_empty() && dict_entries.is_empty() {
       if current_token_is!(self, Token::Colon) {
         self.advance();
-        ExprKind::Dict(vec![])
+        ExprKind::Dict { entries: vec![] }
       } else {
-        ExprKind::List(vec![])
+        ExprKind::List { elements: vec![] }
       }
     } else if list_elements.len() > 0 {
-      ExprKind::List(list_elements)
+      ExprKind::List {
+        elements: list_elements,
+      }
     } else {
-      ExprKind::Dict(dict_entries)
+      ExprKind::Dict {
+        entries: dict_entries,
+      }
     };
 
     let end = expect_token_and_do!(self, Token::RightBracket, {
@@ -1180,11 +1188,13 @@ impl<'a> Parser<'a> {
 
     Some(ExprNode {
       pos: (start, match_end),
-      kind: ExprKind::Match(MatchNode {
-        pos: (start, match_end),
-        subject: Box::new(subject),
-        cases,
-      }),
+      kind: ExprKind::Match {
+        match_: MatchNode {
+          pos: (start, match_end),
+          subject: Box::new(subject),
+          cases,
+        },
+      },
       typ: ValueType::Unknown,
     })
   }
@@ -1249,9 +1259,9 @@ impl<'a> Parser<'a> {
           | Some(Token::LeftBrace(..))
             if !skipped_any_line_breaks =>
           {
-            expr = self.parse_call(expr.unwrap()).map(|call_node| ExprNode {
-              pos: call_node.pos,
-              kind: ExprKind::Call(call_node),
+            expr = self.parse_call(expr.unwrap()).map(|call| ExprNode {
+              pos: call.pos,
+              kind: ExprKind::Call { call },
               typ: ValueType::Unknown,
             });
             continue;
@@ -1370,13 +1380,13 @@ impl<'a> Parser<'a> {
       }
 
       Some(Token::StringLiteral(..)) => self.parse_string().map(|expr_node| match expr_node.kind {
-        ExprKind::Literal(lit_node) => PatternNode {
-          pos: lit_node.pos,
-          kind: PatternKind::Literal(lit_node),
+        ExprKind::Literal { literal } => PatternNode {
+          pos: literal.pos,
+          kind: PatternKind::Literal(literal),
         },
-        ExprKind::Interpolation(expr_nodes) => PatternNode {
+        ExprKind::Interpolation { parts } => PatternNode {
           pos: expr_node.pos,
-          kind: PatternKind::Interpolation(expr_nodes),
+          kind: PatternKind::Interpolation(parts),
         },
         _ => unreachable!(),
       }),
@@ -1428,7 +1438,7 @@ impl<'a> Parser<'a> {
     while let Some(node) = self.parse_expression() {
       if labeled {
         match node.kind {
-          ExprKind::Identifier(label) => {
+          ExprKind::Identifier { ident: label } => {
             expect_token_and_do!(self, Token::Colon, {
               self.advance();
             });
@@ -1457,7 +1467,7 @@ impl<'a> Parser<'a> {
           labeled = true;
 
           match node.kind {
-            ExprKind::Identifier(label) => {
+            ExprKind::Identifier { ident: label } => {
               self.skip_line_breaks();
 
               if let Some(value) = self.parse_expression() {
@@ -1512,7 +1522,9 @@ impl<'a> Parser<'a> {
       // If we collected labeled entries, this is a labeled tuple
       return Some(ExprNode {
         pos: (paren_start, paren_end),
-        kind: ExprKind::LabeledTuple(labeled_entries),
+        kind: ExprKind::LabeledTuple {
+          entries: labeled_entries,
+        },
         typ: ValueType::Unknown,
       });
     }
@@ -1529,7 +1541,9 @@ impl<'a> Parser<'a> {
     if other_exprs.is_empty() {
       return Some(ExprNode {
         pos: (paren_start, paren_end),
-        kind: ExprKind::Grouping(Box::new(first_expr.unwrap())),
+        kind: ExprKind::Grouping {
+          inner: Box::new(first_expr.unwrap()),
+        },
         typ: ValueType::Unknown,
       });
     }
@@ -1538,7 +1552,9 @@ impl<'a> Parser<'a> {
 
     Some(ExprNode {
       pos: (paren_start, paren_end),
-      kind: ExprKind::UnlabeledTuple(other_exprs),
+      kind: ExprKind::UnlabeledTuple {
+        entries: other_exprs,
+      },
       typ: ValueType::Unknown,
     })
   }
@@ -1577,7 +1593,7 @@ impl<'a> Parser<'a> {
       end
     });
 
-    let reg_expr_node = match maybe_reg_expr_node {
+    let regex = match maybe_reg_expr_node {
       Some(expr) => expr,
       None => {
         return self.error(ParseError {
@@ -1589,7 +1605,7 @@ impl<'a> Parser<'a> {
 
     Some(ExprNode {
       pos: (start, end),
-      kind: ExprKind::RegExpr(reg_expr_node),
+      kind: ExprKind::RegExpr { regex },
       typ: ValueType::Unknown,
     })
   }
@@ -1886,14 +1902,14 @@ impl<'a> Parser<'a> {
 
     let value = read_string_with_escapes!(self, start, end);
 
-    let lit_node = LiteralNode {
+    let literal = LiteralNode {
       pos: (start, end),
       kind: LiteralKind::Str(value),
     };
 
     let expr_node = ExprNode {
       pos: (start, end),
-      kind: ExprKind::Literal(lit_node),
+      kind: ExprKind::Literal { literal },
       typ: ValueType::Unknown,
     };
 
@@ -1922,10 +1938,12 @@ impl<'a> Parser<'a> {
 
           parts.push(ExprNode {
             pos: (start, end),
-            kind: ExprKind::Literal(LiteralNode {
-              pos: (start, end),
-              kind: LiteralKind::Str(value),
-            }),
+            kind: ExprKind::Literal {
+              literal: LiteralNode {
+                pos: (start, end),
+                kind: LiteralKind::Str(value),
+              },
+            },
             typ: ValueType::Unknown,
           });
 
@@ -1935,7 +1953,7 @@ impl<'a> Parser<'a> {
 
       return Some(ExprNode {
         pos: (start, interpolation_end),
-        kind: ExprKind::Interpolation(parts),
+        kind: ExprKind::Interpolation { parts },
         typ: ValueType::Unknown,
       });
     }
@@ -1987,9 +2005,9 @@ impl<'a> Parser<'a> {
       Some(Token::LeftParen(..)) => self.parse_parenthetical(),
       Some(Token::ForwardSlash(..)) => self.parse_regular_expression(),
       Some(Token::Operator(..)) => self.parse_unary_operation(),
-      Some(Token::LeftBrace(..)) => self.parse_block().map(|block_node| ExprNode {
-        pos: block_node.pos,
-        kind: ExprKind::Block(block_node),
+      Some(Token::LeftBrace(..)) => self.parse_block().map(|block| ExprNode {
+        pos: block.pos,
+        kind: ExprKind::Block { block },
         typ: ValueType::Unknown,
       }),
       Some(Token::LeftBracket(..)) => self.parse_list_or_dict(),
@@ -2001,46 +2019,46 @@ impl<'a> Parser<'a> {
       | Some(Token::IdentifierSpecialOther(..)) => {
         self
           .parse_identifier(true)
-          .map(|id_node| match self.current_token {
+          .map(|ident| match self.current_token {
             Some(Token::Equals(..)) => {
               self.advance();
 
               let expr = self.parse_expression().unwrap();
 
               ExprNode {
-                pos: (id_node.pos.0, expr.pos.1),
+                pos: (ident.pos.0, expr.pos.1),
                 kind: ExprKind::Assignment {
-                  left: Box::new(id_node),
+                  left: Box::new(ident),
                   right: Box::new(expr),
                 },
                 typ: ValueType::Unknown,
               }
             }
             _ => ExprNode {
-              pos: id_node.pos,
-              kind: ExprKind::Identifier(id_node),
+              pos: ident.pos,
+              kind: ExprKind::Identifier { ident },
               typ: ValueType::Unknown,
             },
           })
       }
-      Some(Token::DecimalDigits(..)) => self.parse_decimal_number().map(|lit_node| ExprNode {
-        pos: lit_node.pos,
-        kind: ExprKind::Literal(lit_node),
+      Some(Token::DecimalDigits(..)) => self.parse_decimal_number().map(|literal| ExprNode {
+        pos: literal.pos,
+        kind: ExprKind::Literal { literal },
         typ: ValueType::Unknown,
       }),
-      Some(Token::HexDigits(..)) => self.parse_hex_number().map(|lit_node| ExprNode {
-        pos: lit_node.pos,
-        kind: ExprKind::Literal(lit_node),
+      Some(Token::HexDigits(..)) => self.parse_hex_number().map(|literal| ExprNode {
+        pos: literal.pos,
+        kind: ExprKind::Literal { literal },
         typ: ValueType::Unknown,
       }),
-      Some(Token::OctalDigits(..)) => self.parse_octal_number().map(|lit_node| ExprNode {
-        pos: lit_node.pos,
-        kind: ExprKind::Literal(lit_node),
+      Some(Token::OctalDigits(..)) => self.parse_octal_number().map(|literal| ExprNode {
+        pos: literal.pos,
+        kind: ExprKind::Literal { literal },
         typ: ValueType::Unknown,
       }),
-      Some(Token::BinaryDigits(..)) => self.parse_binary_number().map(|lit_node| ExprNode {
-        pos: lit_node.pos,
-        kind: ExprKind::Literal(lit_node),
+      Some(Token::BinaryDigits(..)) => self.parse_binary_number().map(|literal| ExprNode {
+        pos: literal.pos,
+        kind: ExprKind::Literal { literal },
         typ: ValueType::Unknown,
       }),
       _ => None,
@@ -2225,13 +2243,6 @@ impl<'a> Parser<'a> {
     }
 
     self.skip_line_breaks();
-
-    if fields.is_empty() && methods.is_empty() {
-      return self.error(ParseError {
-        pos: self.current_token_position(),
-        kind: ParseErrorKind::MissingTraitConstraints,
-      });
-    }
 
     Some(TypeDefNode {
       pos: (start, end),

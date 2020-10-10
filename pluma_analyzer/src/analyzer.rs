@@ -86,32 +86,34 @@ impl<'a> Analyzer<'a> {
   }
 
   fn compatible_types(&mut self, expected: &ValueType, actual: &ValueType) -> bool {
-    // if let ValueType::Constrained(constraint) = expected {
-    //   let actual_fields = match self.scope.get_type_binding(actual) {
-    //     Some(type_binding) => type_binding.fields(),
-    //   };
-    //   let required_trait_fields = self.constraint_to_required_fields(constraint);
+    match expected {
+      ValueType::Constrained(constraint) => {
+        // For constrained types, we need to make sure the actual type has each
+        // of the fields and methods defined by the constraint (with compatible types)
 
-    //   for (field_name, required_field_binding) in required_trait_fields {
-    //     match actual_fields.get(&field_name) {
-    //       None => {
-    //         println!("no trait field! (field_name: {})", field_name);
-    //         return false;
-    //       }
+        let required_fields = self.constraint_to_required_fields(constraint);
+        let actual_fields = self.type_to_field_types(actual);
 
-    //       Some(actual_field_binding) => {
-    //         if !self.compatible_types(&required_field_binding.typ, &actual_field_binding.typ) {
-    //           println!("incompatible field types! (field_name: {})", field_name);
-    //           return false;
-    //         }
+        for (field_name, field_binding) in required_fields {
+          match actual_fields.get(&field_name) {
+            None => {
+              println!("missing trait field! {}", field_name);
+              return false;
+            }
 
-    //         return true;
-    //       }
-    //     }
-    //   }
-    // }
+            Some(actual_type) => {
+              if !self.compatible_types(&field_binding.typ, actual_type) {
+                println!("incompatible field types! {}", field_name);
+                return false;
+              }
+            }
+          }
+        }
 
-    expected == actual
+        true
+      }
+      _ => expected == actual,
+    }
   }
 
   fn collect_def(
@@ -119,8 +121,10 @@ impl<'a> Analyzer<'a> {
     pos: Position,
     generic_type_constraints: &mut GenericTypeConstraints,
     kind: &mut DefKind,
-    return_type: &Option<TypeExprNode>,
+    return_type: &mut Option<TypeExprNode>,
   ) {
+    // First, go through the type constraints (where clause); this will help us know
+    // if any of the types in the def signature are generics.
     let mut constraints_map = HashMap::new();
 
     for (constraint_name, constraint_type_id) in generic_type_constraints {
@@ -165,12 +169,26 @@ impl<'a> Analyzer<'a> {
           }
         }
 
-        let return_type = match return_type {
-          Some(ret) => type_utils::type_expr_to_value_type(&ret),
+        let func_return_type = match return_type {
+          Some(ret) => {
+            let mut func_return_type = type_utils::type_expr_to_value_type(&ret);
+
+            if let ValueType::Named(name) = &func_return_type {
+              if let Some(constraint) = constraints_map.get(name) {
+                func_return_type = ValueType::Constrained(constraint.clone());
+
+                ret
+                  .to_type_identifier_mut()
+                  .add_constraint(constraint.clone());
+              }
+            }
+
+            func_return_type
+          }
           None => ValueType::Nothing,
         };
 
-        let def_type = ValueType::Func(param_types, Box::new(return_type));
+        let def_type = ValueType::Func(param_types, Box::new(func_return_type));
         let merged_name = name_parts.join(" ");
 
         self
@@ -258,7 +276,7 @@ impl<'a> Analyzer<'a> {
 
   fn collect_const(&mut self, node: &mut ConstNode) {
     let const_type = match &node.value.kind {
-      ExprKind::Literal(lit) => self.analyze_literal(lit),
+      ExprKind::Literal { literal } => self.analyze_literal(literal),
       _ => {
         self.error(AnalysisError {
           pos: node.value.pos,
@@ -652,7 +670,9 @@ impl<'a> Analyzer<'a> {
     }
 
     if let Some(type_expr) = &mut node.return_type {
+      println!("ret type_expr: {:#?}", type_expr);
       self.analyze_type_expr(type_expr);
+
       return_type = type_expr.typ.clone();
     }
 
@@ -764,9 +784,9 @@ impl<'a> Analyzer<'a> {
         }
       }
 
-      ExprKind::Block(block) => node.typ = self.analyze_block(block),
+      ExprKind::Block { block } => node.typ = self.analyze_block(block),
 
-      ExprKind::Call(call_node) => node.typ = self.analyze_call(call_node),
+      ExprKind::Call { call } => node.typ = self.analyze_call(call),
 
       ExprKind::EmptyTuple => node.typ = ValueType::Nothing,
 
@@ -791,16 +811,16 @@ impl<'a> Analyzer<'a> {
         }
       }
 
-      ExprKind::Grouping(inner) => {
+      ExprKind::Grouping { inner } => {
         self.analyze_expr(inner);
         node.typ = inner.typ.clone();
       }
 
-      ExprKind::Identifier(ident_node) => {
-        node.typ = self.analyze_identifier(ident_node);
+      ExprKind::Identifier { ident } => {
+        node.typ = self.analyze_identifier(ident);
       }
 
-      ExprKind::Interpolation(parts) => {
+      ExprKind::Interpolation { parts } => {
         let string_type = ValueType::Named("String".to_owned());
 
         for part in parts {
@@ -815,7 +835,7 @@ impl<'a> Analyzer<'a> {
         node.typ = string_type;
       }
 
-      ExprKind::Literal(lit_node) => node.typ = self.analyze_literal(lit_node),
+      ExprKind::Literal { literal } => node.typ = self.analyze_literal(literal),
 
       ExprKind::MethodAccess {
         receiver,
@@ -867,11 +887,11 @@ impl<'a> Analyzer<'a> {
         }
       }
 
-      ExprKind::Match(match_node) => {
-        let _subject_type = &match_node.subject.typ;
+      ExprKind::Match { match_ } => {
+        let _subject_type = &match_.subject.typ;
         let mut case_type: Option<ValueType> = None;
 
-        for case in &match_node.cases {
+        for case in &match_.cases {
           if let Some(expected_case_type) = &case_type {
             let actual_case_type = &case.body.typ;
 
@@ -892,8 +912,8 @@ impl<'a> Analyzer<'a> {
         node.typ = case_type.unwrap().clone();
       }
 
-      ExprKind::MultiPartIdentifier(ident_nodes) => {
-        let names = ident_nodes
+      ExprKind::MultiPartIdentifier { parts } => {
+        let names = parts
           .iter()
           .map(|node| node.name.clone())
           .collect::<Vec<String>>();
@@ -955,7 +975,7 @@ impl<'a> Analyzer<'a> {
         }
       }
 
-      ExprKind::UnlabeledTuple(entries) => {
+      ExprKind::UnlabeledTuple { entries } => {
         let mut entry_types = Vec::new();
 
         for entry in entries {
@@ -966,7 +986,7 @@ impl<'a> Analyzer<'a> {
         node.typ = ValueType::UnlabeledTuple(entry_types);
       }
 
-      ExprKind::LabeledTuple(entries) => {
+      ExprKind::LabeledTuple { entries } => {
         let mut entry_types = Vec::new();
 
         for (label, entry) in entries {
@@ -1133,14 +1153,14 @@ impl<'a> VisitorMut for Analyzer<'a> {
           def_node.pos,
           &mut def_node.generic_type_constraints,
           &mut def_node.kind,
-          &def_node.return_type,
+          &mut def_node.return_type,
         ),
 
         TopLevelStatementKind::IntrinsicDef(def_node) => self.collect_def(
           def_node.pos,
           &mut def_node.generic_type_constraints,
           &mut def_node.kind,
-          &def_node.return_type,
+          &mut def_node.return_type,
         ),
 
         TopLevelStatementKind::TypeDef(type_def_node) => self.collect_type_def(type_def_node),
