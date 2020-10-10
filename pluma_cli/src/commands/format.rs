@@ -5,7 +5,6 @@ use crate::command_info::*;
 use crate::errors::print_diagnostics;
 use glob::{glob_with, MatchOptions};
 use pluma_constants::*;
-use pluma_formatter::*;
 
 pub struct FormatCommand {}
 
@@ -49,11 +48,11 @@ impl Command for FormatCommand {
       }
     }
 
-    let formatter = Formatter::new(&paths);
+    // let formatter = Formatter::new(&paths);
 
-    if let Err(diagnostics) = formatter.format() {
-      print_diagnostics(diagnostics);
-    }
+    // if let Err(diagnostics) = formatter.format() {
+    //   print_diagnostics(diagnostics);
+    // }
 
     Ok(())
   }

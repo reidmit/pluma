@@ -1,8 +1,8 @@
 use super::*;
 use crate::common::*;
 use crate::value_type::ValueType;
+use std::fmt;
 
-#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct ExprNode {
   pub pos: Position,
   pub kind: ExprKind,
@@ -11,6 +11,10 @@ pub struct ExprNode {
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub enum ExprKind {
+  Access {
+    receiver: Box<ExprNode>,
+    property: Box<ExprNode>,
+  },
   Assignment {
     left: Box<ExprNode>,
     right: Box<ExprNode>,
@@ -30,19 +34,11 @@ pub enum ExprKind {
     entries: Vec<(ExprNode, ExprNode)>,
   },
   EmptyTuple,
-  FieldAccess {
-    receiver: Box<ExprNode>,
-    field: Box<ExprNode>,
-  },
   Grouping {
     inner: Box<ExprNode>,
   },
   Identifier {
     ident: IdentifierNode,
-  },
-  MethodAccess {
-    receiver: Box<ExprNode>,
-    method_parts: Vec<IdentifierNode>,
   },
   MultiPartIdentifier {
     parts: Vec<IdentifierNode>,
@@ -58,6 +54,14 @@ pub enum ExprKind {
   },
   Match {
     match_: MatchNode,
+  },
+  QualifiedIdentifier {
+    qualifier: QualifierNode,
+    ident: Box<IdentifierNode>,
+  },
+  QualifiedMultiPartIdentifier {
+    qualifier: QualifierNode,
+    parts: Vec<IdentifierNode>,
   },
   RegExpr {
     regex: RegExprNode,
@@ -77,4 +81,28 @@ pub enum ExprKind {
     right: Box<ExprNode>,
   },
   Underscore,
+}
+
+#[cfg(debug_assertions)]
+impl fmt::Debug for ExprNode {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "Expr{:?} ", self.pos)?;
+
+    match &self.kind {
+      ExprKind::Call { call } => write!(f, "{:#?}", call),
+      ExprKind::Block { block } => write!(f, "{:#?}", block),
+      ExprKind::Literal { literal } => write!(f, "{:?}", literal),
+      ExprKind::Identifier { ident } => write!(f, "{:?}", ident),
+      ExprKind::QualifiedIdentifier { qualifier, ident } => {
+        write!(f, "{:?} {:?}", qualifier, ident)
+      }
+      ExprKind::MultiPartIdentifier { parts } => write!(f, "MultiPartIdent {:?}", parts),
+      ExprKind::QualifiedMultiPartIdentifier { qualifier, parts } => {
+        write!(f, "MultiPartIdent {:?} {:?}", qualifier, parts)
+      }
+      ExprKind::UnlabeledTuple { entries } => write!(f, "UnlabeledTuple {:#?}", entries),
+      ExprKind::LabeledTuple { entries } => write!(f, "LabeledTuple {:#?}", entries),
+      _ => write!(f, "{:#?}", self.kind),
+    }
+  }
 }

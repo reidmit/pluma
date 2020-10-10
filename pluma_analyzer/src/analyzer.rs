@@ -228,27 +228,6 @@ impl<'a> Analyzer<'a> {
     }
   }
 
-  fn collect_const(&mut self, node: &mut ConstNode) {
-    let const_type = match &node.value.kind {
-      ExprKind::Literal { literal } => self.analyze_literal(literal),
-      _ => {
-        self.error(AnalysisError {
-          pos: node.value.pos,
-          kind: AnalysisErrorKind::InvalidValueForConst,
-        });
-
-        return;
-      }
-    };
-
-    self.scope.add_binding(
-      BindingKind::Const,
-      node.name.name.clone(),
-      const_type,
-      node.pos,
-    );
-  }
-
   fn collect_type_def(&mut self, node: &mut TypeDefNode) {
     let typ = ValueType::Named(node.name.name.clone());
 
@@ -731,7 +710,7 @@ impl<'a> Analyzer<'a> {
 
       ExprKind::EmptyTuple => node.typ = ValueType::Nothing,
 
-      ExprKind::FieldAccess { receiver, field } => {
+      ExprKind::Access { receiver, property } => {
         self.analyze_expr(receiver);
 
         println!("scope: {:#?}", self.scope);
@@ -778,56 +757,55 @@ impl<'a> Analyzer<'a> {
 
       ExprKind::Literal { literal } => node.typ = self.analyze_literal(literal),
 
-      ExprKind::MethodAccess {
-        receiver,
-        method_parts,
-      } => {
-        self.analyze_expr(receiver);
+      // ExprKind::MethodAccess {
+      //   receiver,
+      //   method_parts,
+      // } => {
+      //   self.analyze_expr(receiver);
 
-        let receiver_type_binding = match self.scope.get_type_binding(&receiver.typ) {
-          Some(binding) => binding,
-          _ => return,
-        };
+      //   let receiver_type_binding = match self.scope.get_type_binding(&receiver.typ) {
+      //     Some(binding) => binding,
+      //     _ => return,
+      //   };
 
-        // There is a special case here, where if we are calling a function that's a field
-        // on a struct, rather than a method, it will be parsed as a MethodAccess at this point.
-        // Check to see if we're in that case:
-        if let TypeBindingKind::Struct { fields } = &receiver_type_binding.kind {
-          if method_parts.len() == 1 {
-            let potential_field_name = &method_parts[0].name.clone();
+      //   // There is a special case here, where if we are calling a function that's a field
+      //   // on a struct, rather than a method, it will be parsed as a MethodAccess at this point.
+      //   // Check to see if we're in that case:
+      //   if let TypeBindingKind::Struct { fields } = &receiver_type_binding.kind {
+      //     if method_parts.len() == 1 {
+      //       let potential_field_name = &method_parts[0].name.clone();
 
-            if let Some(field_binding) = fields.get(potential_field_name) {
-              node.typ = field_binding.typ.clone();
-              return;
-            }
-          }
-        }
+      //       if let Some(field_binding) = fields.get(potential_field_name) {
+      //         node.typ = field_binding.typ.clone();
+      //         return;
+      //       }
+      //     }
+      //   }
 
-        // If we didn't get into that special case, carry on and analyze this as a normal
-        // method call.
-        let method_name_parts = method_parts
-          .iter()
-          .map(|n| n.name.clone())
-          .collect::<Vec<String>>();
+      //   // If we didn't get into that special case, carry on and analyze this as a normal
+      //   // method call.
+      //   let method_name_parts = method_parts
+      //     .iter()
+      //     .map(|n| n.name.clone())
+      //     .collect::<Vec<String>>();
 
-        if let Some(method_type) = receiver_type_binding.methods.get(&method_name_parts) {
-          node.typ = method_type.clone();
-        } else {
-          let pos = (
-            method_parts.first().unwrap().pos.0,
-            method_parts.last().unwrap().pos.1,
-          );
+      //   if let Some(method_type) = receiver_type_binding.methods.get(&method_name_parts) {
+      //     node.typ = method_type.clone();
+      //   } else {
+      //     let pos = (
+      //       method_parts.first().unwrap().pos.0,
+      //       method_parts.last().unwrap().pos.1,
+      //     );
 
-          self.error(AnalysisError {
-            pos,
-            kind: AnalysisErrorKind::UndefinedMethodForType {
-              method_name_parts,
-              receiver_type: receiver.typ.clone(),
-            },
-          })
-        }
-      }
-
+      //     self.error(AnalysisError {
+      //       pos,
+      //       kind: AnalysisErrorKind::UndefinedMethodForType {
+      //         method_name_parts,
+      //         receiver_type: receiver.typ.clone(),
+      //       },
+      //     })
+      //   }
+      // }
       ExprKind::Match { match_ } => {
         let _subject_type = &match_.subject.typ;
         let mut case_type: Option<ValueType> = None;
@@ -1078,8 +1056,6 @@ impl<'a> VisitorMut for Analyzer<'a> {
     // since they may be used before they are defined.
     for statement in &mut node.body {
       match &mut statement.kind {
-        TopLevelStatementKind::Const(const_node) => self.collect_const(const_node),
-
         TopLevelStatementKind::Def(def_node) => self.collect_def(
           def_node.pos,
           &mut def_node.generic_type_constraints,

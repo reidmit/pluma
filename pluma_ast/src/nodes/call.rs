@@ -1,12 +1,18 @@
 use super::*;
 use crate::common::*;
 use crate::value_type::ValueType;
+use std::fmt;
 
-#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct CallNode {
   pub pos: Position,
-  pub receiver: Option<Box<ExprNode>>,
-  pub method_parts: Vec<IdentifierNode>,
+  pub callee: Box<ExprNode>,
   pub args: Vec<ExprNode>,
   pub typ: ValueType,
+}
+
+#[cfg(debug_assertions)]
+impl fmt::Debug for CallNode {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "Call{:?} {:#?} {:#?}", self.pos, self.callee, self.args)
+  }
 }

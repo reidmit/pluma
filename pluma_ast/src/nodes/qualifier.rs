@@ -2,14 +2,14 @@ use crate::common::*;
 use std::fmt;
 
 #[derive(Clone)]
-pub struct IdentifierNode {
+pub struct QualifierNode {
   pub pos: Position,
   pub name: String,
 }
 
 #[cfg(debug_assertions)]
-impl fmt::Debug for IdentifierNode {
+impl fmt::Debug for QualifierNode {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "Ident{:?} {:#?}", self.pos, self.name)
+    write!(f, "Qualifier{:?} {:#?}", self.pos, self.name)
   }
 }

@@ -18,7 +18,7 @@ pub enum Token {
   DoubleArrow(usize, usize),
   DoubleColon(usize, usize),
   DoubleDot(usize, usize),
-  DoubleEquals(usize, usize),
+  DoubleEqual(usize, usize),
   DoubleLeftAngle(usize, usize),
   DoublePipe(usize, usize),
   DoubleRightAngle(usize, usize),
@@ -33,9 +33,7 @@ pub enum Token {
   InterpolationEnd(usize, usize),
   InterpolationStart(usize, usize),
   KeywordAlias(usize, usize),
-  KeywordAs(usize, usize),
   KeywordBreak(usize, usize),
-  KeywordConst(usize, usize),
   KeywordDef(usize, usize),
   KeywordEnum(usize, usize),
   KeywordInternal(usize, usize),
@@ -60,6 +58,7 @@ pub enum Token {
   Percent(usize, usize),
   Pipe(usize, usize),
   Plus(usize, usize),
+  Qualifier(usize, usize),
   Question(usize, usize),
   RightAngle(usize, usize),
   RightAngleEqual(usize, usize),
@@ -93,7 +92,7 @@ impl Token {
       | DoubleArrow(start, end)
       | DoubleColon(start, end)
       | DoubleDot(start, end)
-      | DoubleEquals(start, end)
+      | DoubleEqual(start, end)
       | DoubleLeftAngle(start, end)
       | DoubleRightAngle(start, end)
       | DoublePipe(start, end)
@@ -108,9 +107,7 @@ impl Token {
       | InterpolationEnd(start, end)
       | InterpolationStart(start, end)
       | KeywordAlias(start, end)
-      | KeywordAs(start, end)
       | KeywordBreak(start, end)
-      | KeywordConst(start, end)
       | KeywordDef(start, end)
       | KeywordEnum(start, end)
       | KeywordInternal(start, end)
@@ -135,6 +132,7 @@ impl Token {
       | Percent(start, end)
       | Pipe(start, end)
       | Plus(start, end)
+      | Qualifier(start, end)
       | Question(start, end)
       | RightAngle(start, end)
       | RightAngleEqual(start, end)
@@ -146,6 +144,24 @@ impl Token {
       | Tilde(start, end)
       | Underscore(start, end)
       | Unexpected(start, end) => (*start, *end),
+    }
+  }
+
+  pub fn can_start_expression(&self) -> bool {
+    use Token::*;
+
+    match self {
+      Identifier(..)
+      | IdentifierSpecialOther(..)
+      | IdentifierSpecialParam(..)
+      | DecimalDigits(..)
+      | BinaryDigits(..)
+      | OctalDigits(..)
+      | HexDigits(..)
+      | LeftParen(..)
+      | ForwardSlash(..)
+      | StringLiteral(..) => true,
+      _ => false,
     }
   }
 }
@@ -170,7 +186,7 @@ impl fmt::Display for Token {
       &DoubleArrow(..) => "a '=>'",
       &DoubleColon(..) => "a '::'",
       &DoubleDot(..) => "a '..'",
-      &DoubleEquals(..) => "a '=='",
+      &DoubleEqual(..) => "a '=='",
       &DoubleLeftAngle(..) => "a '<<'",
       &DoublePipe(..) => "a '||'",
       &DoubleRightAngle(..) => "a '>>'",
@@ -185,9 +201,7 @@ impl fmt::Display for Token {
       &InterpolationEnd(..) => "a ')'",
       &InterpolationStart(..) => "a '$('",
       &KeywordAlias(..) => "keyword 'alias'",
-      &KeywordAs(..) => "keyword 'as'",
       &KeywordBreak(..) => "keyword 'break'",
-      &KeywordConst(..) => "keyword 'const'",
       &KeywordDef(..) => "keyword 'def'",
       &KeywordEnum(..) => "keyword 'enum'",
       &KeywordInternal(..) => "keyword 'internal'",
@@ -212,6 +226,7 @@ impl fmt::Display for Token {
       &Percent(..) => "a '%'",
       &Pipe(..) => "a '|'",
       &Plus(..) => "a '+'",
+      &Qualifier(..) => "a qualifier",
       &Question(..) => "a '?'",
       &RightAngle(..) => "a '>'",
       &RightAngleEqual(..) => "a '>='",

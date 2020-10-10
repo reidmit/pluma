@@ -12,6 +12,15 @@ macro_rules! current_token_is {
   };
 }
 
+macro_rules! next_token_is {
+  ($self:ident, $tokType:path) => {
+    match $self.tokenizer.peek() {
+      Some($tokType(..)) => true,
+      _ => false,
+    }
+  };
+}
+
 macro_rules! expect_token_and_do {
   ($self:ident, $tokType:path, $block:tt) => {
     match $self.current_token {
@@ -110,6 +119,13 @@ impl<'a> Parser<'a> {
         Some(statement) => body.push(statement),
         _ => break,
       }
+    }
+
+    if let Some(_extra_token) = self.current_token {
+      self.error::<ModuleNode>(ParseError {
+        pos: self.current_token_position(),
+        kind: ParseErrorKind::UnexpectedTokenExpectedEOF,
+      });
     }
 
     let start = body.first().map_or(0, |node| node.pos.0);
@@ -272,17 +288,129 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_call(&mut self) -> Option<CallNode> {
+  fn parse_call_with_receiver(&mut self, receiver: ExprNode) -> Option<CallNode> {
     let mut method_parts = Vec::new();
     let mut args = Vec::new();
 
     while current_token_is!(self, Token::Identifier) {
       match self.parse_identifier(false) {
         Some(next_callee_part) => {
+          let part_pos = next_callee_part.pos;
+
           method_parts.push(next_callee_part);
 
           // Grab the argument for this part
-          // TODO correct precedence here
+          match self.parse_expression_precedence_2() {
+            Some(arg) => args.push(arg),
+            _ => {
+              // If there's no argument, break out of the loop. No more parts allowed.
+              // Only the last part may not take an argument. This is equivalent to passing
+              // () to the last part.
+              // ex: thing . part1 "arg1" part2
+              args.push(ExprNode {
+                pos: (part_pos.1, part_pos.1),
+                kind: ExprKind::EmptyTuple,
+                typ: ValueType::Unknown,
+              });
+              break;
+            }
+          }
+        }
+
+        _ => {
+          return self.error(ParseError {
+            pos: self.current_token_position(),
+            kind: ParseErrorKind::UnexpectedToken(Token::Identifier(0, 0)),
+          })
+        }
+      }
+    }
+
+    let start = receiver.pos.0;
+    let end = args.last().unwrap().pos.1;
+
+    let property = if method_parts.len() == 1 {
+      let ident = method_parts[0].clone();
+
+      ExprNode {
+        pos: ident.pos,
+        kind: ExprKind::Identifier { ident },
+        typ: ValueType::Unknown,
+      }
+    } else {
+      let multi_start = method_parts.first().unwrap().pos.0;
+      let multi_end = method_parts.last().unwrap().pos.1;
+
+      ExprNode {
+        pos: (multi_start, multi_end),
+        kind: ExprKind::MultiPartIdentifier {
+          parts: method_parts,
+        },
+        typ: ValueType::Unknown,
+      }
+    };
+
+    let callee = ExprNode {
+      pos: (start, property.pos.1),
+      kind: ExprKind::Access {
+        receiver: Box::new(receiver),
+        property: Box::new(property),
+      },
+      typ: ValueType::Unknown,
+    };
+
+    Some(CallNode {
+      pos: (start, end),
+      callee: Box::new(callee),
+      args,
+      typ: ValueType::Unknown,
+    })
+  }
+
+  fn parse_call_without_receiver(&mut self, prev_expr: ExprNode) -> Option<CallNode> {
+    let first_arg = self.parse_expression_precedence_2().expect("expr in call");
+    let first_arg_end = first_arg.pos.1;
+
+    let allow_multi_part = match prev_expr.kind {
+      ExprKind::Identifier { .. } => true,
+      ExprKind::QualifiedIdentifier { .. } => true,
+      _ => false,
+    };
+
+    let mut args = vec![first_arg];
+
+    if !allow_multi_part {
+      // Simpler case: can't have a multi-part identifier here, so our single arg
+      // must be the only arg.
+
+      let start = prev_expr.pos.0;
+
+      return Some(CallNode {
+        pos: (start, first_arg_end),
+        callee: Box::new(prev_expr),
+        args,
+        typ: ValueType::Unknown,
+      });
+    }
+
+    let mut callee_parts = Vec::new();
+    let mut first_part_qualifier = None;
+
+    match prev_expr.kind {
+      ExprKind::Identifier { ident } => callee_parts.push(ident),
+      ExprKind::QualifiedIdentifier { ident, qualifier } => {
+        first_part_qualifier = Some(qualifier);
+        callee_parts.push(*ident);
+      }
+      _ => unreachable!(),
+    };
+
+    while current_token_is!(self, Token::Identifier) {
+      match self.parse_identifier(false) {
+        Some(next_callee_part) => {
+          callee_parts.push(next_callee_part);
+
+          // Grab the argument for this part
           match self.parse_expression_precedence_2() {
             Some(arg) => args.push(arg),
             _ => {
@@ -303,98 +431,48 @@ impl<'a> Parser<'a> {
       }
     }
 
-    let start = method_parts.first().unwrap().pos.0;
-    let end = args.last().unwrap().pos.1;
+    let callee_start = if let Some(qualifier) = &first_part_qualifier {
+      qualifier.pos.0
+    } else {
+      callee_parts.first().unwrap().pos.0
+    };
+    let callee_end = callee_parts.last().unwrap().pos.1;
+    let call_end = if args.is_empty() {
+      callee_end
+    } else {
+      args.last().unwrap().pos.1
+    };
+
+    let callee_kind = match (callee_parts.len() == 1, first_part_qualifier) {
+      (true, Some(qualifier)) => {
+        let ident = callee_parts[0].clone();
+        ExprKind::QualifiedIdentifier {
+          qualifier,
+          ident: Box::new(ident),
+        }
+      }
+      (true, None) => {
+        let ident = callee_parts[0].clone();
+        ExprKind::Identifier { ident }
+      }
+      (false, Some(qualifier)) => ExprKind::QualifiedMultiPartIdentifier {
+        qualifier,
+        parts: callee_parts,
+      },
+      (false, None) => ExprKind::MultiPartIdentifier {
+        parts: callee_parts,
+      },
+    };
 
     Some(CallNode {
-      pos: (start, end),
-      receiver: None, // no receiver here, will be added in later when parsing .. chains
-      method_parts,
+      pos: (callee_start, call_end),
+      callee: Box::new(ExprNode {
+        pos: (callee_start, callee_end),
+        kind: callee_kind,
+        typ: ValueType::Unknown,
+      }),
       args,
       typ: ValueType::Unknown,
-    })
-  }
-
-  // fn parse_chain(&mut self, last_expr: ExprNode) -> Option<ExprNode> {
-  //   expect_token_and_do!(self, Token::Dot, { self.advance() });
-
-  //   let term = self.parse_term();
-
-  //   if term.is_none() {
-  //     return self.error(ParseError {
-  //       pos: self.current_token_position(),
-  //       kind: ParseErrorKind::MissingExpressionAfterDot,
-  //     });
-  //   }
-
-  //   let term = term.unwrap();
-
-  //   if let ExprKind::Identifier { ident } = term.kind {
-  //     // If it's an identifier, it is a normal field access
-  //     return Some(ExprNode {
-  //       pos: (last_expr.pos.0, term.pos.1),
-  //       kind: ExprKind::FieldAccess {
-  //         receiver: Box::new(last_expr),
-  //         field: ident,
-  //       },
-  //       typ: ValueType::Unknown,
-  //     });
-  //   }
-
-  //   if let ExprKind::Literal { literal } = term.kind {
-  //     // If it's a decimal number, it is a tuple field access (e.g. ".0")
-  //     if let LiteralKind::IntDecimal(val) = literal.kind {
-  //       return Some(ExprNode {
-  //         pos: (last_expr.pos.0, term.pos.1),
-  //         kind: ExprKind::FieldAccess {
-  //           receiver: Box::new(last_expr),
-  //           field: IdentifierNode {
-  //             pos: literal.pos,
-  //             name: format!("{}", val),
-  //           },
-  //         },
-  //         typ: ValueType::Unknown,
-  //       });
-  //     }
-  //   }
-
-  //   // Reject any other expr kinds
-  //   return self.error(ParseError {
-  //     pos: term.pos,
-  //     kind: ParseErrorKind::UnexpectedExpressionAfterDot,
-  //   });
-  // }
-
-  fn parse_const(&mut self) -> Option<ConstNode> {
-    let start = expect_token_and_do!(self, Token::KeywordConst, {
-      let (start, _) = self.current_token_position();
-      self.advance();
-      start
-    });
-
-    let name = match self.parse_identifier(false) {
-      Some(node) => node,
-      _ => todo!(),
-    };
-
-    expect_token_and_do!(self, Token::Equal, {
-      self.advance();
-    });
-
-    let (end, value) = match self.parse_expression() {
-      Some(node) => (node.pos.1, node),
-      _ => {
-        return self.error(ParseError {
-          pos: self.current_token_position(),
-          kind: ParseErrorKind::MissingRightHandSideOfAssignment,
-        })
-      }
-    };
-
-    Some(ConstNode {
-      pos: (start, end),
-      name,
-      value,
     })
   }
 
@@ -405,7 +483,7 @@ impl<'a> Parser<'a> {
       pos
     });
 
-    if current_token_is!(self, Token::Dot) {
+    if current_token_is!(self, Token::Dot) && next_token_is!(self, Token::DecimalDigits) {
       self.advance();
 
       expect_token_and_do!(self, Token::DecimalDigits, {
@@ -752,17 +830,27 @@ impl<'a> Parser<'a> {
           self.advance();
 
           let receiver = expr.unwrap();
-          let mut call_node = self.parse_call().unwrap();
-          let (start, end) = (receiver.pos.0, call_node.pos.1);
-
-          call_node.receiver = Some(Box::new(receiver));
+          let call_node = self.parse_call_with_receiver(receiver).unwrap();
 
           expr = Some(ExprNode {
-            pos: (start, end),
+            pos: call_node.pos,
             kind: ExprKind::Call { call: call_node },
             typ: ValueType::Unknown,
           });
         }
+
+        // Another token on this same line?! Maybe it's an argument in call expression
+        Some(other_token) if other_token.can_start_expression() => {
+          let prev_expr = expr.unwrap();
+          let call_node = self.parse_call_without_receiver(prev_expr).unwrap();
+
+          expr = Some(ExprNode {
+            pos: call_node.pos,
+            kind: ExprKind::Call { call: call_node },
+            typ: ValueType::Unknown,
+          });
+        }
+
         _ => break,
       }
     }
@@ -942,10 +1030,13 @@ impl<'a> Parser<'a> {
 
     while expr.is_some() {
       match self.current_token {
-        Some(Token::Equal(..)) | Some(Token::BangEqual(..)) => {
+        Some(Token::DoubleEqual(..)) | Some(Token::BangEqual(..)) => {
           let op_node = self.parse_operator().unwrap();
           let left_side = expr.unwrap();
-          let right_side = self.parse_expression_precedence_9().unwrap();
+          let right_side = self
+            .parse_expression_precedence_9()
+            .expect("expr after == or !=");
+
           let (start, end) = (left_side.pos.0, right_side.pos.1);
 
           expr = Some(ExprNode {
@@ -1143,9 +1234,9 @@ impl<'a> Parser<'a> {
 
           expr = Some(ExprNode {
             pos: (start, end),
-            kind: ExprKind::FieldAccess {
+            kind: ExprKind::Access {
               receiver: Box::new(left_side),
-              field: Box::new(right_side),
+              property: Box::new(right_side),
             },
             typ: ValueType::Unknown,
           });
@@ -1482,7 +1573,7 @@ impl<'a> Parser<'a> {
       Some(Token::RightAngle(start, end)) => (start, end, OperatorKind::GreaterThan),
       Some(Token::LeftAngleEqual(start, end)) => (start, end, OperatorKind::LessThanEquals),
       Some(Token::RightAngleEqual(start, end)) => (start, end, OperatorKind::GreaterThanEquals),
-      Some(Token::Equal(start, end)) => (start, end, OperatorKind::Equals),
+      Some(Token::DoubleEqual(start, end)) => (start, end, OperatorKind::Equals),
       Some(Token::BangEqual(start, end)) => (start, end, OperatorKind::NotEquals),
 
       _ => return None,
@@ -1791,6 +1882,38 @@ impl<'a> Parser<'a> {
     Some(TopLevelStatementNode {
       pos: pos,
       kind: TopLevelStatementKind::VisibilityMarker(ExportVisibility::Private),
+    })
+  }
+
+  fn parse_qualified(&mut self) -> Option<ExprNode> {
+    let qualifier = self.parse_qualifier().unwrap();
+
+    let ident = expect_token_and_do!(self, Token::Identifier, {
+      self.parse_identifier(false).unwrap()
+    });
+
+    Some(ExprNode {
+      pos: qualifier.pos,
+      kind: ExprKind::QualifiedIdentifier {
+        qualifier,
+        ident: Box::new(ident),
+      },
+      typ: ValueType::Unknown,
+    })
+  }
+
+  fn parse_qualifier(&mut self) -> Option<QualifierNode> {
+    let (start, end) = expect_token_and_do!(self, Token::Qualifier, {
+      let (start, end) = self.current_token_position();
+      self.advance();
+      (start, end)
+    });
+
+    let name = read_string!(self, start, end);
+
+    Some(QualifierNode {
+      pos: (start, end),
+      name,
     })
   }
 
@@ -2228,6 +2351,7 @@ impl<'a> Parser<'a> {
       Some(Token::StringLiteral(..)) => self.parse_string(),
       Some(Token::KeywordMatch(..)) => self.parse_match(),
       Some(Token::Underscore(..)) => self.parse_underscore(),
+      Some(Token::Qualifier(..)) => self.parse_qualified(),
       Some(Token::Identifier(..))
       | Some(Token::IdentifierSpecialParam(..))
       | Some(Token::IdentifierSpecialOther(..)) => {
@@ -2271,10 +2395,6 @@ impl<'a> Parser<'a> {
             kind: TopLevelStatementKind::Let(let_node),
           })
       }
-      Some(Token::KeywordConst(..)) => self.parse_const().map(|const_node| TopLevelStatementNode {
-        pos: const_node.pos,
-        kind: TopLevelStatementKind::Const(const_node),
-      }),
       Some(Token::KeywordDef(..)) => {
         self
           .parse_definition()
@@ -2753,31 +2873,20 @@ impl<'a> Parser<'a> {
       start
     });
 
+    println!("ct: {:#?}", self.current_token);
+
+    let qualifier = if current_token_is!(self, Token::Qualifier) {
+      self.parse_qualifier()
+    } else {
+      None
+    };
+
     let (module_name, end) = expect_token_and_do!(self, Token::ImportPath, {
       let (start, end) = self.current_token_position();
       let name_str = read_string!(self, start, end);
       self.advance();
       (name_str, end)
     });
-
-    let (qualifier, end) = if current_token_is!(self, Token::KeywordAs) {
-      self.advance();
-
-      match self.parse_identifier(false) {
-        Some(node) => {
-          let qualifier_end = node.pos.1;
-          (Some(node), qualifier_end)
-        }
-        _ => {
-          return self.error(ParseError {
-            pos: self.current_token_position(),
-            kind: ParseErrorKind::MissingQualifierAfterAs,
-          })
-        }
-      }
-    } else {
-      (None, end)
-    };
 
     Some(UseNode {
       pos: (start, end),

@@ -7,7 +7,6 @@ members = [
   "pluma_constants",
   "pluma_diagnostics",
   "pluma_emitter",
-  "pluma_formatter",
   "pluma_module",
   "pluma_parser",
   "pluma_repl",
@@ -16,5 +15,5 @@ members = [
 
 [profile.release]
 lto = true
-codegen-units =   1
+codegen-units = 1
 panic = 'abort'

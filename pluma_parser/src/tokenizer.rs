@@ -274,6 +274,17 @@ impl<'a> Iterator for Tokenizer<'a> {
           return Some(Bang(start_index, self.index));
         }
 
+        b'=' => {
+          self.index += 1;
+
+          if self.source[self.index] == b'=' {
+            self.index += 1;
+            return Some(DoubleEqual(start_index, self.index));
+          }
+
+          return Some(Equal(start_index, self.index));
+        }
+
         b'*' => {
           self.index += 1;
 
@@ -396,6 +407,19 @@ impl<'a> Iterator for Tokenizer<'a> {
           }
         }
 
+        b'@'
+          if self.index < self.length - 1
+            && is_identifier_start_char(self.source[self.index + 1]) =>
+        {
+          self.index += 1;
+
+          while self.index < self.length && is_identifier_char(self.source[self.index]) {
+            self.index += 1;
+          }
+
+          return Some(Qualifier(start_index, self.index));
+        }
+
         _ if is_identifier_start_char(byte) => {
           while self.index < self.length && is_identifier_char(self.source[self.index]) {
             self.index += 1;
@@ -412,10 +436,8 @@ impl<'a> Iterator for Tokenizer<'a> {
 
             // These are only considered keywords if they appear at the top level:
             b"def" if self.brace_depth == 0 => KeywordDef,
-            b"const" if self.brace_depth == 0 => KeywordConst,
             b"enum" if self.brace_depth == 0 => KeywordEnum,
             b"alias" if self.brace_depth == 0 => KeywordAlias,
-            b"as" if self.brace_depth == 0 => KeywordAs,
             b"intrinsic_def" if self.brace_depth == 0 => KeywordIntrinsicDef,
             b"intrinsic_type" if self.brace_depth == 0 => KeywordIntrinsicType,
             b"private" if self.brace_depth == 0 => KeywordPrivate,
@@ -626,7 +648,7 @@ fn is_digit(byte: u8) -> bool {
 
 fn is_path_char(byte: u8) -> bool {
   match byte {
-    b'\\' | b'?' | b'%' | b'*' | b':' | b'"' | b'<' | b'>' => false,
+    b'@' | b'\\' | b'?' | b'%' | b'*' | b':' | b'"' | b'<' | b'>' => false,
     b if b.is_ascii_whitespace() => false,
     _ => true,
   }

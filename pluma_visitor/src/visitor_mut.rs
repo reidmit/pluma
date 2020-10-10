@@ -9,10 +9,6 @@ pub trait VisitorMut {
 
   fn leave_call(&mut self, _node: &mut CallNode) {}
 
-  fn enter_const(&mut self, _node: &mut ConstNode) {}
-
-  fn leave_const(&mut self, _node: &mut ConstNode) {}
-
   fn enter_def(&mut self, _node: &mut DefNode) {}
 
   fn leave_def(&mut self, _node: &mut DefNode) {}

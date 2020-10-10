@@ -68,7 +68,6 @@ pub enum AnalysisErrorKind {
     expected: ValueType,
     actual: ValueType,
   },
-  InvalidValueForConst,
 }
 
 impl fmt::Display for AnalysisError {

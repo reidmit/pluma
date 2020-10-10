@@ -1,6 +1,6 @@
 use crate::common::*;
+use std::fmt;
 
-#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct OperatorNode {
   pub pos: Position,
   pub kind: OperatorKind,
@@ -32,4 +32,11 @@ pub enum OperatorKind {
   GreaterThanEquals,
   Equals,
   NotEquals,
+}
+
+#[cfg(debug_assertions)]
+impl fmt::Debug for OperatorNode {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "Operator{:?} {:?}", self.pos, self.kind)
+  }
 }

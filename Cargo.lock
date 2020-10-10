@@ -312,7 +312,6 @@ dependencies = [
  "pluma_constants 0.1.0",
  "pluma_diagnostics 0.1.0",
  "pluma_doc 0.1.0",
- "pluma_formatter 0.1.0",
  "pluma_parser 0.1.0",
  "pluma_repl 0.1.0",
 ]
@@ -372,17 +371,6 @@ dependencies = [
  "inkwell 0.1.0 (git+https://github.com/TheDan64/inkwell?branch=llvm10-0)",
  "pluma_ast 0.1.0",
  "pluma_diagnostics 0.1.0",
- "pluma_visitor 0.1.0",
-]
-
-[[package]]
-name = "pluma_formatter"
-version = "0.1.0"
-dependencies = [
- "pluma_ast 0.1.0",
- "pluma_constants 0.1.0",
- "pluma_diagnostics 0.1.0",
- "pluma_module 0.1.0",
  "pluma_visitor 0.1.0",
 ]
 

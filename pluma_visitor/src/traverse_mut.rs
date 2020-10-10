@@ -35,17 +35,6 @@ impl TraverseMut for CallNode {
   }
 }
 
-impl TraverseMut for ConstNode {
-  fn traverse_mut<V: VisitorMut>(&mut self, visitor: &mut V) {
-    visitor.enter_const(self);
-
-    self.name.traverse_mut(visitor);
-    self.value.traverse_mut(visitor);
-
-    visitor.leave_const(self);
-  }
-}
-
 impl TraverseMut for DefNode {
   fn traverse_mut<V: VisitorMut>(&mut self, visitor: &mut V) {
     visitor.enter_def(self);
@@ -82,6 +71,11 @@ impl TraverseMut for ExprNode {
     visitor.enter_expr(self);
 
     match &mut self.kind {
+      ExprKind::Access { receiver, property } => {
+        receiver.traverse_mut(visitor);
+        property.traverse_mut(visitor);
+      }
+
       ExprKind::Assignment { left, right } => {
         right.traverse_mut(visitor);
         left.traverse_mut(visitor);
@@ -133,21 +127,6 @@ impl TraverseMut for ExprNode {
 
       ExprKind::MultiPartIdentifier { parts } => {
         for part in parts {
-          part.traverse_mut(visitor);
-        }
-      }
-
-      ExprKind::FieldAccess { receiver, field } => {
-        receiver.traverse_mut(visitor);
-        field.traverse_mut(visitor);
-      }
-
-      ExprKind::MethodAccess {
-        receiver,
-        method_parts,
-      } => {
-        receiver.traverse_mut(visitor);
-        for part in method_parts {
           part.traverse_mut(visitor);
         }
       }
@@ -280,7 +259,6 @@ impl TraverseMut for TopLevelStatementNode {
 
     match &mut self.kind {
       TopLevelStatementKind::Let(node) => node.traverse_mut(visitor),
-      TopLevelStatementKind::Const(node) => node.traverse_mut(visitor),
       TopLevelStatementKind::TypeDef(node) => node.traverse_mut(visitor),
       TopLevelStatementKind::Def(node) => node.traverse_mut(visitor),
       TopLevelStatementKind::Expr(node) => node.traverse_mut(visitor),
