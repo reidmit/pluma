@@ -1,24 +1,22 @@
 intrinsic_type Int
 
-intrinsic_def Int + Int -> Int
-
-intrinsic_def Int * Int -> Int
-
-intrinsic_def Int - Int -> Int
-
-intrinsic_def Int / Int -> Int
+intrinsic_def Int .add Int -> Int
+intrinsic_def Int .multiply  Int -> Int
+intrinsic_def Int .subtract Int -> Int
+intrinsic_def Int .divide Int -> Int
+intrinsic_def Int .mod Int -> Int
 
 intrinsic_type Float
 
-intrinsic_def Float + Float -> Float
-
-intrinsic_def Float * Float -> Float
-
-intrinsic_def Float - Float -> Float
-
-intrinsic_def Float / Float -> Float
+intrinsic_def Float .add Float -> Float
+intrinsic_def Float .multiply  Float -> Float
+intrinsic_def Float .subtract Float -> Float
+intrinsic_def Float .divide Float -> Float
+intrinsic_def Float .mod Float -> Float
 
 intrinsic_type String
+
+intrinsic_def String .concat String -> String
 
 intrinsic_type Regex
 
