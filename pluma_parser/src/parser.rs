@@ -2590,33 +2590,6 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_type_assertion(&mut self, last_term: ExprNode) -> Option<ExprNode> {
-    expect_token_and_do!(self, Token::DoubleColon, {
-      self.advance();
-    });
-
-    self.skip_line_breaks();
-
-    let (end, asserted_type) = match self.parse_type_expression() {
-      Some(type_expr) => (type_expr.pos.1, type_expr),
-      _ => {
-        return self.error(ParseError {
-          pos: self.current_token_position(),
-          kind: ParseErrorKind::MissingTypeInTypeAssertion,
-        })
-      }
-    };
-
-    Some(ExprNode {
-      pos: (last_term.pos.0, end),
-      kind: ExprKind::TypeAssertion {
-        expr: Box::new(last_term),
-        asserted_type,
-      },
-      typ: ValueType::Unknown,
-    })
-  }
-
   fn parse_type_func(&mut self) -> Option<TypeExprNode> {
     let start = expect_token_and_do!(self, Token::LeftBrace, {
       let (start, _) = self.current_token_position();
