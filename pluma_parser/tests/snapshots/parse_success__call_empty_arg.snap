@@ -10,62 +10,39 @@ func()
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        6,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 6) [
+    TopLevelStatement(0, 6) Expr(
+        ExprNode {
             pos: (
                 0,
                 6,
             ),
-            kind: Expr(
-                ExprNode {
-                    pos: (
-                        0,
-                        6,
-                    ),
-                    kind: Call(
-                        CallNode {
+            kind: Call {
+                call: Call {
+                    callee: ExprNode {
+                        pos: (
+                            0,
+                            4,
+                        ),
+                        kind: Identifier {
+                            ident: Ident(0, 4) "func",
+                        },
+                        typ: Unknown,
+                    },
+                    args: [
+                        ExprNode {
                             pos: (
-                                0,
+                                4,
                                 6,
                             ),
-                            callee: ExprNode {
-                                pos: (
-                                    0,
-                                    4,
-                                ),
-                                kind: Identifier(
-                                    IdentifierNode {
-                                        pos: (
-                                            0,
-                                            4,
-                                        ),
-                                        name: "func",
-                                    },
-                                ),
-                                typ: Unknown,
-                            },
-                            args: [
-                                ExprNode {
-                                    pos: (
-                                        4,
-                                        6,
-                                    ),
-                                    kind: EmptyTuple,
-                                    typ: Unknown,
-                                },
-                            ],
+                            kind: EmptyTuple,
                             typ: Unknown,
                         },
-                    ),
-                    typ: Unknown,
+                    ],
                 },
-            ),
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

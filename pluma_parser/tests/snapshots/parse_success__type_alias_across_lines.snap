@@ -11,57 +11,45 @@ alias Alpha
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        18,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 18) [
+    TopLevelStatement(0, 18) TypeDef(
+        TypeDefNode {
             pos: (
                 0,
                 18,
             ),
-            kind: TypeDef(
-                TypeDefNode {
+            visibility: Public,
+            kind: Alias {
+                of: TypeExprNode {
                     pos: (
-                        0,
+                        14,
                         18,
                     ),
-                    visibility: Public,
-                    kind: Alias {
-                        of: TypeExprNode {
+                    kind: Single(
+                        TypeIdentifierNode {
                             pos: (
                                 14,
                                 18,
                             ),
-                            kind: Single(
-                                TypeIdentifierNode {
-                                    pos: (
-                                        14,
-                                        18,
-                                    ),
-                                    name: "Beta",
-                                    generics: [],
-                                    constraints: None,
-                                },
-                            ),
-                            typ: Unknown,
+                            name: "Beta",
+                            generics: [],
+                            constraints: None,
                         },
-                    },
-                    name: TypeIdentifierNode {
-                        pos: (
-                            6,
-                            11,
-                        ),
-                        name: "Alpha",
-                        generics: [],
-                        constraints: None,
-                    },
-                    generic_type_constraints: [],
+                    ),
+                    typ: Unknown,
                 },
-            ),
+            },
+            name: TypeIdentifierNode {
+                pos: (
+                    6,
+                    11,
+                ),
+                name: "Alpha",
+                generics: [],
+                constraints: None,
+            },
+            generic_type_constraints: [],
         },
-    ],
-}
+    ),
+]
 

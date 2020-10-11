@@ -12,200 +12,110 @@ def hello (A, B) world C {
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        47,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 47) [
+    TopLevelStatement(0, 47) Def(
+        DefNode {
             pos: (
                 0,
                 47,
             ),
-            kind: Def(
-                DefNode {
-                    pos: (
-                        0,
-                        47,
-                    ),
-                    visibility: Public,
-                    kind: Function {
-                        signature: [
-                            (
-                                IdentifierNode {
-                                    pos: (
-                                        4,
-                                        9,
-                                    ),
-                                    name: "hello",
-                                },
-                                TypeExprNode {
-                                    pos: (
-                                        10,
-                                        16,
-                                    ),
-                                    kind: UnlabeledTuple(
-                                        [
-                                            TypeExprNode {
+            visibility: Public,
+            kind: Function {
+                signature: [
+                    (
+                        Ident(4, 9) "hello",
+                        TypeExprNode {
+                            pos: (
+                                10,
+                                16,
+                            ),
+                            kind: UnlabeledTuple(
+                                [
+                                    TypeExprNode {
+                                        pos: (
+                                            11,
+                                            12,
+                                        ),
+                                        kind: Single(
+                                            TypeIdentifierNode {
                                                 pos: (
                                                     11,
                                                     12,
                                                 ),
-                                                kind: Single(
-                                                    TypeIdentifierNode {
-                                                        pos: (
-                                                            11,
-                                                            12,
-                                                        ),
-                                                        name: "A",
-                                                        generics: [],
-                                                        constraints: None,
-                                                    },
-                                                ),
-                                                typ: Unknown,
-                                            },
-                                            TypeExprNode {
-                                                pos: (
-                                                    14,
-                                                    15,
-                                                ),
-                                                kind: Single(
-                                                    TypeIdentifierNode {
-                                                        pos: (
-                                                            14,
-                                                            15,
-                                                        ),
-                                                        name: "B",
-                                                        generics: [],
-                                                        constraints: None,
-                                                    },
-                                                ),
-                                                typ: Unknown,
-                                            },
-                                        ],
-                                    ),
-                                    typ: Unknown,
-                                },
-                            ),
-                            (
-                                IdentifierNode {
-                                    pos: (
-                                        17,
-                                        22,
-                                    ),
-                                    name: "world",
-                                },
-                                TypeExprNode {
-                                    pos: (
-                                        23,
-                                        24,
-                                    ),
-                                    kind: Single(
-                                        TypeIdentifierNode {
-                                            pos: (
-                                                23,
-                                                24,
-                                            ),
-                                            name: "C",
-                                            generics: [],
-                                            constraints: None,
-                                        },
-                                    ),
-                                    typ: Unknown,
-                                },
-                            ),
-                        ],
-                    },
-                    return_type: None,
-                    generic_type_constraints: [],
-                    block: BlockNode {
-                        pos: (
-                            25,
-                            47,
-                        ),
-                        params: [
-                            PatternNode {
-                                pos: (
-                                    30,
-                                    31,
-                                ),
-                                kind: Identifier(
-                                    IdentifierNode {
-                                        pos: (
-                                            30,
-                                            31,
-                                        ),
-                                        name: "a",
-                                    },
-                                    false,
-                                ),
-                            },
-                            PatternNode {
-                                pos: (
-                                    33,
-                                    34,
-                                ),
-                                kind: Identifier(
-                                    IdentifierNode {
-                                        pos: (
-                                            33,
-                                            34,
-                                        ),
-                                        name: "b",
-                                    },
-                                    false,
-                                ),
-                            },
-                            PatternNode {
-                                pos: (
-                                    36,
-                                    37,
-                                ),
-                                kind: Identifier(
-                                    IdentifierNode {
-                                        pos: (
-                                            36,
-                                            37,
-                                        ),
-                                        name: "c",
-                                    },
-                                    false,
-                                ),
-                            },
-                        ],
-                        body: [
-                            StatementNode {
-                                pos: (
-                                    40,
-                                    44,
-                                ),
-                                kind: Expr(
-                                    ExprNode {
-                                        pos: (
-                                            40,
-                                            44,
-                                        ),
-                                        kind: Literal(
-                                            LiteralNode {
-                                                pos: (
-                                                    40,
-                                                    44,
-                                                ),
-                                                kind: Str(
-                                                    "wow!",
-                                                ),
+                                                name: "A",
+                                                generics: [],
+                                                constraints: None,
                                             },
                                         ),
                                         typ: Unknown,
                                     },
-                                ),
-                            },
-                        ],
+                                    TypeExprNode {
+                                        pos: (
+                                            14,
+                                            15,
+                                        ),
+                                        kind: Single(
+                                            TypeIdentifierNode {
+                                                pos: (
+                                                    14,
+                                                    15,
+                                                ),
+                                                name: "B",
+                                                generics: [],
+                                                constraints: None,
+                                            },
+                                        ),
+                                        typ: Unknown,
+                                    },
+                                ],
+                            ),
+                            typ: Unknown,
+                        },
+                    ),
+                    (
+                        Ident(17, 22) "world",
+                        TypeExprNode {
+                            pos: (
+                                23,
+                                24,
+                            ),
+                            kind: Single(
+                                TypeIdentifierNode {
+                                    pos: (
+                                        23,
+                                        24,
+                                    ),
+                                    name: "C",
+                                    generics: [],
+                                    constraints: None,
+                                },
+                            ),
+                            typ: Unknown,
+                        },
+                    ),
+                ],
+            },
+            return_type: None,
+            generic_type_constraints: [],
+            block: Block(25, 47) ([
+                Pattern(30, 31) Identifier(Ident(30, 31) "a", false),
+                Pattern(33, 34) Identifier(Ident(33, 34) "b", false),
+                Pattern(36, 37) Identifier(Ident(36, 37) "c", false),
+            ]) [
+                Statement(40, 44) Expr(
+                    ExprNode {
+                        pos: (
+                            40,
+                            44,
+                        ),
+                        kind: Literal {
+                            literal: Literal(40, 44) Str("wow!"),
+                        },
+                        typ: Unknown,
                     },
-                },
-            ),
+                ),
+            ],
         },
-    ],
-}
+    ),
+]
 

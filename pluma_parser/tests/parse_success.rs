@@ -248,13 +248,13 @@ test_parse_success! {
   "#,
 
   def_receiver_one_part_one_arg: r#"
-    |def Person .. greet String {
+    |def Person . greet String {
     |  |a| "wow!"
     |}
   "#,
 
   def_receiver_two_parts_multiple_args: r#"
-    |def Person .. hello (String, Int) world () {
+    |def Person . hello (String, Int) world () {
     |  |a, b, c| "wow!"
     |}
   "#,
@@ -295,20 +295,12 @@ test_parse_success! {
     |}
   "#,
 
-  intrinsic_def_binary_op_plus: r#"
-    |intrinsic_def Int + Int -> Int
-  "#,
-
   block_with_special_positional_params: r#"
     |let b = { $0 + $1 }
   "#,
 
   block_with_special_self_arg: r#"
-    |let b = { $self .. return 47 }
-  "#,
-
-  def_binary_op: r#"
-    |def A + A -> A {}
+    |let b = { $self . return 47 }
   "#,
 
   call_empty_arg: r#"
@@ -349,7 +341,7 @@ test_parse_success! {
   "#,
 
   chain_one_line: r#"
-    |"hello" .. f1 () .. f2 "wow" .f3(47)
+    |"hello" . f1 () . f2 "wow" .f3(47)
   "#,
 
   chain_field_access: r#"
@@ -357,7 +349,7 @@ test_parse_success! {
   "#,
 
   chain_call_multiple_parts: r#"
-    |"hello" .. replace "x" with "y"
+    |"hello" . replace "x" with "y"
   "#,
 
   chain_across_lines: r#"
@@ -368,8 +360,8 @@ test_parse_success! {
 
   chain_calls_across_lines: r#"
     |"hello"
-    |  .. f1 1
-    |  ..f2 2
+    |  . f1 1
+    |  .f2 2
   "#,
 
   binary_op_plus: r#"
@@ -435,14 +427,14 @@ test_parse_success! {
   "#,
 
   match_pattern_same_line: r#"
-    |match thing | 1 => "one" | 2 => "two" | _ => "idk"
+    |match thing when 1 => "one" when 2 => "two" when _ => "idk"
   "#,
 
   match_pattern_across_lines: r#"
     |match thing
-    |  | (a, b) => "one"
-    |  | (1, _) => "two"
-    |  | _ => "idk"
+    |  when (a, b) => "one"
+    |  when (1, _) => "two"
+    |  when _ => "idk"
   "#,
 
   type_assertion_basic: r#"
@@ -527,14 +519,14 @@ test_parse_success! {
 
   type_trait_two_methods: r#"
     |trait Wowie
-    |  .. getWow () -> Wow
-    |  .. setWow Wow -> ()
+    |  . getWow () -> Wow
+    |  . setWow Wow -> ()
   "#,
 
   type_trait_mix_fields_and_methods: r#"
     |trait WowieWithName
-    |  .. getWow () -> Wow
-    |  .. setWow Wow -> ()
+    |  . getWow () -> Wow
+    |  . setWow Wow -> ()
     |  . name : String
   "#,
 

@@ -10,38 +10,18 @@ expression: "\"hello\\tworld\""
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        1,
-        13,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(1, 13) [
+    TopLevelStatement(1, 13) Expr(
+        ExprNode {
             pos: (
                 1,
                 13,
             ),
-            kind: Expr(
-                ExprNode {
-                    pos: (
-                        1,
-                        13,
-                    ),
-                    kind: Literal(
-                        LiteralNode {
-                            pos: (
-                                1,
-                                13,
-                            ),
-                            kind: Str(
-                                "hello\tworld",
-                            ),
-                        },
-                    ),
-                    typ: Unknown,
-                },
-            ),
+            kind: Literal {
+                literal: Literal(1, 13) Str("hello\tworld"),
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

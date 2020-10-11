@@ -10,84 +10,75 @@ x . field1 . field2 . field3
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        28,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 28) [
+    TopLevelStatement(0, 28) Expr(
+        ExprNode {
             pos: (
                 0,
                 28,
             ),
-            kind: Expr(
-                ExprNode {
+            kind: Access {
+                receiver: ExprNode {
                     pos: (
                         0,
-                        28,
+                        19,
                     ),
-                    kind: FieldAccess {
+                    kind: Access {
                         receiver: ExprNode {
                             pos: (
                                 0,
-                                19,
+                                10,
                             ),
-                            kind: FieldAccess {
+                            kind: Access {
                                 receiver: ExprNode {
                                     pos: (
                                         0,
-                                        10,
+                                        1,
                                     ),
-                                    kind: FieldAccess {
-                                        receiver: ExprNode {
-                                            pos: (
-                                                0,
-                                                1,
-                                            ),
-                                            kind: Identifier(
-                                                IdentifierNode {
-                                                    pos: (
-                                                        0,
-                                                        1,
-                                                    ),
-                                                    name: "x",
-                                                },
-                                            ),
-                                            typ: Unknown,
-                                        },
-                                        field: IdentifierNode {
-                                            pos: (
-                                                4,
-                                                10,
-                                            ),
-                                            name: "field1",
-                                        },
+                                    kind: Identifier {
+                                        ident: Ident(0, 1) "x",
                                     },
                                     typ: Unknown,
                                 },
-                                field: IdentifierNode {
+                                property: ExprNode {
                                     pos: (
-                                        13,
-                                        19,
+                                        4,
+                                        10,
                                     ),
-                                    name: "field2",
+                                    kind: Identifier {
+                                        ident: Ident(4, 10) "field1",
+                                    },
+                                    typ: Unknown,
                                 },
                             },
                             typ: Unknown,
                         },
-                        field: IdentifierNode {
+                        property: ExprNode {
                             pos: (
-                                22,
-                                28,
+                                13,
+                                19,
                             ),
-                            name: "field3",
+                            kind: Identifier {
+                                ident: Ident(13, 19) "field2",
+                            },
+                            typ: Unknown,
                         },
                     },
                     typ: Unknown,
                 },
-            ),
+                property: ExprNode {
+                    pos: (
+                        22,
+                        28,
+                    ),
+                    kind: Identifier {
+                        ident: Ident(22, 28) "field3",
+                    },
+                    typ: Unknown,
+                },
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

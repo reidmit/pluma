@@ -10,38 +10,18 @@ expression: "\"part 1\\\\part 2\""
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        1,
-        15,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(1, 15) [
+    TopLevelStatement(1, 15) Expr(
+        ExprNode {
             pos: (
                 1,
                 15,
             ),
-            kind: Expr(
-                ExprNode {
-                    pos: (
-                        1,
-                        15,
-                    ),
-                    kind: Literal(
-                        LiteralNode {
-                            pos: (
-                                1,
-                                15,
-                            ),
-                            kind: Str(
-                                "part 1\\part 2",
-                            ),
-                        },
-                    ),
-                    typ: Unknown,
-                },
-            ),
+            kind: Literal {
+                literal: Literal(1, 15) Str("part 1\\part 2"),
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

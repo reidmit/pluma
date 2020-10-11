@@ -10,36 +10,18 @@ cool
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        4,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 4) [
+    TopLevelStatement(0, 4) Expr(
+        ExprNode {
             pos: (
                 0,
                 4,
             ),
-            kind: Expr(
-                ExprNode {
-                    pos: (
-                        0,
-                        4,
-                    ),
-                    kind: Identifier(
-                        IdentifierNode {
-                            pos: (
-                                0,
-                                4,
-                            ),
-                            name: "cool",
-                        },
-                    ),
-                    typ: Unknown,
-                },
-            ),
+            kind: Identifier {
+                ident: Ident(0, 4) "cool",
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

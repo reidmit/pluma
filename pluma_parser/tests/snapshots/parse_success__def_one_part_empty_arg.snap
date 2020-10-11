@@ -12,102 +12,48 @@ def hello () {
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        29,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 29) [
+    TopLevelStatement(0, 29) Def(
+        DefNode {
             pos: (
                 0,
                 29,
             ),
-            kind: Def(
-                DefNode {
-                    pos: (
-                        0,
-                        29,
-                    ),
-                    visibility: Public,
-                    kind: Function {
-                        signature: [
-                            (
-                                IdentifierNode {
-                                    pos: (
-                                        4,
-                                        9,
-                                    ),
-                                    name: "hello",
-                                },
-                                TypeExprNode {
-                                    pos: (
-                                        10,
-                                        12,
-                                    ),
-                                    kind: EmptyTuple,
-                                    typ: Unknown,
-                                },
+            visibility: Public,
+            kind: Function {
+                signature: [
+                    (
+                        Ident(4, 9) "hello",
+                        TypeExprNode {
+                            pos: (
+                                10,
+                                12,
                             ),
-                        ],
-                    },
-                    return_type: None,
-                    generic_type_constraints: [],
-                    block: BlockNode {
+                            kind: EmptyTuple,
+                            typ: Unknown,
+                        },
+                    ),
+                ],
+            },
+            return_type: None,
+            generic_type_constraints: [],
+            block: Block(13, 29) ([
+                Pattern(18, 19) Identifier(Ident(18, 19) "a", false),
+            ]) [
+                Statement(22, 26) Expr(
+                    ExprNode {
                         pos: (
-                            13,
-                            29,
+                            22,
+                            26,
                         ),
-                        params: [
-                            PatternNode {
-                                pos: (
-                                    18,
-                                    19,
-                                ),
-                                kind: Identifier(
-                                    IdentifierNode {
-                                        pos: (
-                                            18,
-                                            19,
-                                        ),
-                                        name: "a",
-                                    },
-                                    false,
-                                ),
-                            },
-                        ],
-                        body: [
-                            StatementNode {
-                                pos: (
-                                    22,
-                                    26,
-                                ),
-                                kind: Expr(
-                                    ExprNode {
-                                        pos: (
-                                            22,
-                                            26,
-                                        ),
-                                        kind: Literal(
-                                            LiteralNode {
-                                                pos: (
-                                                    22,
-                                                    26,
-                                                ),
-                                                kind: Str(
-                                                    "wow!",
-                                                ),
-                                            },
-                                        ),
-                                        typ: Unknown,
-                                    },
-                                ),
-                            },
-                        ],
+                        kind: Literal {
+                            literal: Literal(22, 26) Str("wow!"),
+                        },
+                        typ: Unknown,
                     },
-                },
-            ),
+                ),
+            ],
         },
-    ],
-}
+    ),
+]
 

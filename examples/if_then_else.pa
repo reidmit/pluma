@@ -7,7 +7,7 @@ enum Bool
   | False
 
 def if Bool then { () -> A } else { () -> A } -> A where A :: Any {
-  cond, then, else =>
+  | cond, then, else |
     match cond
     | True => then ()
     | False => else ()

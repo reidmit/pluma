@@ -153,7 +153,9 @@ impl<'a> Parser<'a> {
     self.index += 1;
   }
 
-  fn skip_line_breaks(&mut self) {
+  fn skip_line_breaks(&mut self) -> bool {
+    let mut skipped_any = false;
+
     while current_token_is!(self, Token::LineBreak) {
       if self.collect_comments {
         self
@@ -161,8 +163,12 @@ impl<'a> Parser<'a> {
           .push(self.current_token_position())
       }
 
+      skipped_any = true;
+
       self.advance()
     }
+
+    skipped_any
   }
 
   fn current_token_position(&self) -> (usize, usize) {
@@ -288,15 +294,13 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_call_with_receiver(&mut self, receiver: ExprNode) -> Option<CallNode> {
+  fn parse_call_with_receiver(&mut self, receiver: ExprNode) -> Option<ExprNode> {
     let mut method_parts = Vec::new();
     let mut args = Vec::new();
 
     while current_token_is!(self, Token::Identifier) {
       match self.parse_identifier(false) {
         Some(next_callee_part) => {
-          let part_pos = next_callee_part.pos;
-
           method_parts.push(next_callee_part);
 
           // Grab the argument for this part
@@ -304,14 +308,8 @@ impl<'a> Parser<'a> {
             Some(arg) => args.push(arg),
             _ => {
               // If there's no argument, break out of the loop. No more parts allowed.
-              // Only the last part may not take an argument. This is equivalent to passing
-              // () to the last part.
+              // Only the last part may not take an argument.
               // ex: thing . part1 "arg1" part2
-              args.push(ExprNode {
-                pos: (part_pos.1, part_pos.1),
-                kind: ExprKind::EmptyTuple,
-                typ: ValueType::Unknown,
-              });
               break;
             }
           }
@@ -327,6 +325,29 @@ impl<'a> Parser<'a> {
     }
 
     let start = receiver.pos.0;
+
+    if args.is_empty() {
+      // If we collected 0 args, it's an expression like `thing.field`. Consider a plain
+      // Access, not a call (even though it may be calling a method with no args). The analyzer
+      // will figure that out later.
+      let ident = method_parts[0].clone();
+
+      let property = ExprNode {
+        pos: ident.pos,
+        kind: ExprKind::Identifier { ident },
+        typ: ValueType::Unknown,
+      };
+
+      return Some(ExprNode {
+        pos: (start, property.pos.1),
+        kind: ExprKind::Access {
+          receiver: Box::new(receiver),
+          property: Box::new(property),
+        },
+        typ: ValueType::Unknown,
+      });
+    }
+
     let end = args.last().unwrap().pos.1;
 
     let property = if method_parts.len() == 1 {
@@ -359,16 +380,22 @@ impl<'a> Parser<'a> {
       typ: ValueType::Unknown,
     };
 
-    Some(CallNode {
+    let call = CallNode {
       pos: (start, end),
       callee: Box::new(callee),
       args,
+      typ: ValueType::Unknown,
+    };
+
+    Some(ExprNode {
+      pos: call.pos,
+      kind: ExprKind::Call { call },
       typ: ValueType::Unknown,
     })
   }
 
   fn parse_call_without_receiver(&mut self, prev_expr: ExprNode) -> Option<CallNode> {
-    let first_arg = self.parse_expression_precedence_2().expect("expr in call");
+    let first_arg = self.parse_expression_precedence_2()?;
     let first_arg_end = first_arg.pos.1;
 
     let allow_multi_part = match prev_expr.kind {
@@ -384,6 +411,16 @@ impl<'a> Parser<'a> {
       // must be the only arg.
 
       let start = prev_expr.pos.0;
+
+      match self.current_token {
+        Some(token) if token.can_start_expression() => {
+          self.error::<ExprNode>(ParseError {
+            pos: self.current_token_position(),
+            kind: ParseErrorKind::UnexpectedExpressionAfterCall,
+          });
+        }
+        _ => {}
+      }
 
       return Some(CallNode {
         pos: (start, first_arg_end),
@@ -429,6 +466,16 @@ impl<'a> Parser<'a> {
           })
         }
       }
+    }
+
+    match self.current_token {
+      Some(token) if token.can_start_expression() => {
+        self.error::<ExprNode>(ParseError {
+          pos: self.current_token_position(),
+          kind: ParseErrorKind::UnexpectedExpressionAfterCall,
+        });
+      }
+      _ => {}
     }
 
     let callee_start = if let Some(qualifier) = &first_part_qualifier {
@@ -825,24 +872,25 @@ impl<'a> Parser<'a> {
     let mut expr = self.parse_expression_precedence_2();
 
     while expr.is_some() {
+      // Skip line breaks, but keep track of whether there were actually any to skip.
+      // We need to know this because line breaks are allowed before a '.' in a chain
+      // expression (e.g. "a\n .b\n .c"), but not between arguments in a function call
+      // (e.g. "something someArg\nthisIsNotAnArg").
+      let had_line_breaks = self.skip_line_breaks();
+
       match self.current_token {
-        Some(Token::DoubleDot(..)) => {
+        Some(Token::Dot(..)) => {
           self.advance();
 
           let receiver = expr.unwrap();
-          let call_node = self.parse_call_with_receiver(receiver).unwrap();
 
-          expr = Some(ExprNode {
-            pos: call_node.pos,
-            kind: ExprKind::Call { call: call_node },
-            typ: ValueType::Unknown,
-          });
+          expr = self.parse_call_with_receiver(receiver);
         }
 
         // Another token on this same line?! Maybe it's an argument in call expression
-        Some(other_token) if other_token.can_start_expression() => {
+        Some(other_token) if !had_line_breaks && other_token.can_start_expression() => {
           let prev_expr = expr.unwrap();
-          let call_node = self.parse_call_without_receiver(prev_expr).unwrap();
+          let call_node = self.parse_call_without_receiver(prev_expr)?;
 
           expr = Some(ExprNode {
             pos: call_node.pos,
@@ -1120,10 +1168,10 @@ impl<'a> Parser<'a> {
 
     while expr.is_some() {
       match self.current_token {
-        Some(Token::Plus(..)) | Some(Token::Minus(..)) => {
+        Some(Token::Plus(..)) | Some(Token::Minus(..)) | Some(Token::DoublePlus(..)) => {
           let op_node = self.parse_operator().unwrap();
           let left_side = expr.unwrap();
-          let right_side = self.parse_expression_precedence_12().unwrap();
+          let right_side = self.parse_expression_precedence_12()?;
           let (start, end) = (left_side.pos.0, right_side.pos.1);
 
           expr = Some(ExprNode {
@@ -1216,36 +1264,8 @@ impl<'a> Parser<'a> {
         })
       }
 
-      _ => self.parse_expression_precedence_15(),
+      _ => self.parse_term(),
     }
-  }
-
-  fn parse_expression_precedence_15(&mut self) -> Option<ExprNode> {
-    let mut expr = self.parse_term();
-
-    while expr.is_some() {
-      match self.current_token {
-        Some(Token::Dot(..)) => {
-          self.advance();
-
-          let left_side = expr.unwrap();
-          let right_side = self.parse_term().unwrap();
-          let (start, end) = (left_side.pos.0, right_side.pos.1);
-
-          expr = Some(ExprNode {
-            pos: (start, end),
-            kind: ExprKind::Access {
-              receiver: Box::new(left_side),
-              property: Box::new(right_side),
-            },
-            typ: ValueType::Unknown,
-          });
-        }
-        _ => break,
-      }
-    }
-
-    expr
   }
 
   fn parse_hex_number(&mut self) -> Option<LiteralNode> {
@@ -1469,7 +1489,7 @@ impl<'a> Parser<'a> {
     let mut cases = Vec::new();
     let mut match_end = start;
 
-    while let Some(Token::Pipe(case_start, _)) = self.current_token {
+    while let Some(Token::KeywordWhen(case_start, _)) = self.current_token {
       self.advance();
 
       let pattern = match self.parse_pattern() {
@@ -1575,6 +1595,8 @@ impl<'a> Parser<'a> {
       Some(Token::RightAngleEqual(start, end)) => (start, end, OperatorKind::GreaterThanEquals),
       Some(Token::DoubleEqual(start, end)) => (start, end, OperatorKind::Equals),
       Some(Token::BangEqual(start, end)) => (start, end, OperatorKind::NotEquals),
+
+      Some(Token::DoublePlus(start, end)) => (start, end, OperatorKind::Concat),
 
       _ => return None,
     };
@@ -2350,7 +2372,6 @@ impl<'a> Parser<'a> {
       Some(Token::LeftBracket(..)) => self.parse_list_or_dict(),
       Some(Token::StringLiteral(..)) => self.parse_string(),
       Some(Token::KeywordMatch(..)) => self.parse_match(),
-      Some(Token::Underscore(..)) => self.parse_underscore(),
       Some(Token::Qualifier(..)) => self.parse_qualified(),
       Some(Token::Identifier(..))
       | Some(Token::IdentifierSpecialParam(..))
@@ -2852,28 +2873,12 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_underscore(&mut self) -> Option<ExprNode> {
-    let pos = expect_token_and_do!(self, Token::Underscore, {
-      let pos = self.current_token_position();
-      self.advance();
-      pos
-    });
-
-    Some(ExprNode {
-      pos,
-      kind: ExprKind::Underscore,
-      typ: ValueType::Unknown,
-    })
-  }
-
   fn parse_use_statement(&mut self) -> Option<UseNode> {
     let start = expect_token_and_do!(self, Token::KeywordUse, {
       let (start, _) = self.current_token_position();
       self.advance();
       start
     });
-
-    println!("ct: {:#?}", self.current_token);
 
     let qualifier = if current_token_is!(self, Token::Qualifier) {
       self.parse_qualifier()

@@ -10,164 +10,62 @@ let Person (name, age) = Person ("Reid", 26)
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        44,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 44) [
+    TopLevelStatement(0, 44) Let(
+        Let(0, 44) Pattern(4, 22) Constructor(Ident(4, 10) "Person", Pattern(11, 22) UnlabeledTuple([Pattern(12, 16) Identifier(Ident(12, 16) "name", false), Pattern(18, 21) Identifier(Ident(18, 21) "age", false)])) ExprNode {
             pos: (
-                0,
+                25,
                 44,
             ),
-            kind: Let(
-                LetNode {
-                    pos: (
-                        0,
-                        44,
-                    ),
-                    pattern: PatternNode {
-                        pos: (
-                            4,
-                            22,
-                        ),
-                        kind: Constructor(
-                            IdentifierNode {
-                                pos: (
-                                    4,
-                                    10,
-                                ),
-                                name: "Person",
-                            },
-                            PatternNode {
-                                pos: (
-                                    11,
-                                    22,
-                                ),
-                                kind: UnlabeledTuple(
-                                    [
-                                        PatternNode {
-                                            pos: (
-                                                12,
-                                                16,
-                                            ),
-                                            kind: Identifier(
-                                                IdentifierNode {
-                                                    pos: (
-                                                        12,
-                                                        16,
-                                                    ),
-                                                    name: "name",
-                                                },
-                                                false,
-                                            ),
-                                        },
-                                        PatternNode {
-                                            pos: (
-                                                18,
-                                                21,
-                                            ),
-                                            kind: Identifier(
-                                                IdentifierNode {
-                                                    pos: (
-                                                        18,
-                                                        21,
-                                                    ),
-                                                    name: "age",
-                                                },
-                                                false,
-                                            ),
-                                        },
-                                    ],
-                                ),
-                            },
-                        ),
-                    },
-                    value: ExprNode {
+            kind: Call {
+                call: Call {
+                    callee: ExprNode {
                         pos: (
                             25,
-                            44,
+                            31,
                         ),
-                        kind: Call(
-                            CallNode {
-                                pos: (
-                                    25,
-                                    44,
-                                ),
-                                callee: ExprNode {
-                                    pos: (
-                                        25,
-                                        31,
-                                    ),
-                                    kind: Identifier(
-                                        IdentifierNode {
-                                            pos: (
-                                                25,
-                                                31,
-                                            ),
-                                            name: "Person",
-                                        },
-                                    ),
-                                    typ: Unknown,
-                                },
-                                args: [
+                        kind: Identifier {
+                            ident: Ident(25, 31) "Person",
+                        },
+                        typ: Unknown,
+                    },
+                    args: [
+                        ExprNode {
+                            pos: (
+                                32,
+                                44,
+                            ),
+                            kind: UnlabeledTuple {
+                                entries: [
                                     ExprNode {
                                         pos: (
-                                            32,
-                                            44,
+                                            34,
+                                            38,
                                         ),
-                                        kind: UnlabeledTuple(
-                                            [
-                                                ExprNode {
-                                                    pos: (
-                                                        34,
-                                                        38,
-                                                    ),
-                                                    kind: Literal(
-                                                        LiteralNode {
-                                                            pos: (
-                                                                34,
-                                                                38,
-                                                            ),
-                                                            kind: Str(
-                                                                "Reid",
-                                                            ),
-                                                        },
-                                                    ),
-                                                    typ: Unknown,
-                                                },
-                                                ExprNode {
-                                                    pos: (
-                                                        41,
-                                                        43,
-                                                    ),
-                                                    kind: Literal(
-                                                        LiteralNode {
-                                                            pos: (
-                                                                41,
-                                                                43,
-                                                            ),
-                                                            kind: IntDecimal(
-                                                                26,
-                                                            ),
-                                                        },
-                                                    ),
-                                                    typ: Unknown,
-                                                },
-                                            ],
+                                        kind: Literal {
+                                            literal: Literal(34, 38) Str("Reid"),
+                                        },
+                                        typ: Unknown,
+                                    },
+                                    ExprNode {
+                                        pos: (
+                                            41,
+                                            43,
                                         ),
+                                        kind: Literal {
+                                            literal: Literal(41, 43) IntDecimal(26),
+                                        },
                                         typ: Unknown,
                                     },
                                 ],
-                                typ: Unknown,
                             },
-                        ),
-                        typ: Unknown,
-                    },
+                            typ: Unknown,
+                        },
+                    ],
                 },
-            ),
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

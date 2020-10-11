@@ -14,242 +14,137 @@ if thing then {
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        57,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 57) [
+    TopLevelStatement(0, 57) Expr(
+        ExprNode {
             pos: (
                 0,
                 57,
             ),
-            kind: Expr(
-                ExprNode {
-                    pos: (
-                        0,
-                        57,
-                    ),
-                    kind: Call(
-                        CallNode {
-                            pos: (
-                                0,
-                                57,
-                            ),
-                            callee: ExprNode {
-                                pos: (
-                                    0,
-                                    37,
-                                ),
-                                kind: MultiPartIdentifier(
-                                    [
-                                        IdentifierNode {
-                                            pos: (
-                                                0,
-                                                2,
-                                            ),
-                                            name: "if",
-                                        },
-                                        IdentifierNode {
-                                            pos: (
-                                                9,
-                                                13,
-                                            ),
-                                            name: "then",
-                                        },
-                                        IdentifierNode {
-                                            pos: (
-                                                33,
-                                                37,
-                                            ),
-                                            name: "else",
-                                        },
-                                    ],
-                                ),
-                                typ: Unknown,
-                            },
-                            args: [
-                                ExprNode {
-                                    pos: (
-                                        3,
-                                        8,
-                                    ),
-                                    kind: Identifier(
-                                        IdentifierNode {
-                                            pos: (
-                                                3,
-                                                8,
-                                            ),
-                                            name: "thing",
-                                        },
-                                    ),
-                                    typ: Unknown,
-                                },
-                                ExprNode {
-                                    pos: (
-                                        14,
-                                        32,
-                                    ),
-                                    kind: Block(
-                                        BlockNode {
-                                            pos: (
-                                                14,
-                                                32,
-                                            ),
-                                            params: [],
-                                            body: [
-                                                StatementNode {
-                                                    pos: (
-                                                        18,
-                                                        29,
-                                                    ),
-                                                    kind: Expr(
-                                                        ExprNode {
-                                                            pos: (
-                                                                18,
-                                                                29,
-                                                            ),
-                                                            kind: Call(
-                                                                CallNode {
-                                                                    pos: (
-                                                                        18,
-                                                                        29,
-                                                                    ),
-                                                                    callee: ExprNode {
-                                                                        pos: (
-                                                                            18,
-                                                                            23,
-                                                                        ),
-                                                                        kind: Identifier(
-                                                                            IdentifierNode {
-                                                                                pos: (
-                                                                                    18,
-                                                                                    23,
-                                                                                ),
-                                                                                name: "print",
-                                                                            },
-                                                                        ),
-                                                                        typ: Unknown,
-                                                                    },
-                                                                    args: [
-                                                                        ExprNode {
-                                                                            pos: (
-                                                                                25,
-                                                                                29,
-                                                                            ),
-                                                                            kind: Literal(
-                                                                                LiteralNode {
-                                                                                    pos: (
-                                                                                        25,
-                                                                                        29,
-                                                                                    ),
-                                                                                    kind: Str(
-                                                                                        "yep!",
-                                                                                    ),
-                                                                                },
-                                                                            ),
-                                                                            typ: Unknown,
-                                                                        },
-                                                                    ],
-                                                                    typ: Unknown,
-                                                                },
-                                                            ),
-                                                            typ: Unknown,
-                                                        },
-                                                    ),
-                                                },
-                                            ],
-                                        },
-                                    ),
-                                    typ: Unknown,
-                                },
-                                ExprNode {
-                                    pos: (
-                                        38,
-                                        57,
-                                    ),
-                                    kind: Block(
-                                        BlockNode {
-                                            pos: (
-                                                38,
-                                                57,
-                                            ),
-                                            params: [],
-                                            body: [
-                                                StatementNode {
-                                                    pos: (
-                                                        42,
-                                                        54,
-                                                    ),
-                                                    kind: Expr(
-                                                        ExprNode {
-                                                            pos: (
-                                                                42,
-                                                                54,
-                                                            ),
-                                                            kind: Call(
-                                                                CallNode {
-                                                                    pos: (
-                                                                        42,
-                                                                        54,
-                                                                    ),
-                                                                    callee: ExprNode {
-                                                                        pos: (
-                                                                            42,
-                                                                            47,
-                                                                        ),
-                                                                        kind: Identifier(
-                                                                            IdentifierNode {
-                                                                                pos: (
-                                                                                    42,
-                                                                                    47,
-                                                                                ),
-                                                                                name: "print",
-                                                                            },
-                                                                        ),
-                                                                        typ: Unknown,
-                                                                    },
-                                                                    args: [
-                                                                        ExprNode {
-                                                                            pos: (
-                                                                                49,
-                                                                                54,
-                                                                            ),
-                                                                            kind: Literal(
-                                                                                LiteralNode {
-                                                                                    pos: (
-                                                                                        49,
-                                                                                        54,
-                                                                                    ),
-                                                                                    kind: Str(
-                                                                                        "nope!",
-                                                                                    ),
-                                                                                },
-                                                                            ),
-                                                                            typ: Unknown,
-                                                                        },
-                                                                    ],
-                                                                    typ: Unknown,
-                                                                },
-                                                            ),
-                                                            typ: Unknown,
-                                                        },
-                                                    ),
-                                                },
-                                            ],
-                                        },
-                                    ),
-                                    typ: Unknown,
-                                },
+            kind: Call {
+                call: Call {
+                    callee: ExprNode {
+                        pos: (
+                            0,
+                            37,
+                        ),
+                        kind: MultiPartIdentifier {
+                            parts: [
+                                Ident(0, 2) "if",
+                                Ident(9, 13) "then",
+                                Ident(33, 37) "else",
                             ],
+                        },
+                        typ: Unknown,
+                    },
+                    args: [
+                        ExprNode {
+                            pos: (
+                                3,
+                                8,
+                            ),
+                            kind: Identifier {
+                                ident: Ident(3, 8) "thing",
+                            },
                             typ: Unknown,
                         },
-                    ),
-                    typ: Unknown,
+                        ExprNode {
+                            pos: (
+                                14,
+                                32,
+                            ),
+                            kind: Block {
+                                block: Block(14, 32) ([]) [
+                                    Statement(18, 29) Expr(
+                                        ExprNode {
+                                            pos: (
+                                                18,
+                                                29,
+                                            ),
+                                            kind: Call {
+                                                call: Call {
+                                                    callee: ExprNode {
+                                                        pos: (
+                                                            18,
+                                                            23,
+                                                        ),
+                                                        kind: Identifier {
+                                                            ident: Ident(18, 23) "print",
+                                                        },
+                                                        typ: Unknown,
+                                                    },
+                                                    args: [
+                                                        ExprNode {
+                                                            pos: (
+                                                                25,
+                                                                29,
+                                                            ),
+                                                            kind: Literal {
+                                                                literal: Literal(25, 29) Str("yep!"),
+                                                            },
+                                                            typ: Unknown,
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            typ: Unknown,
+                                        },
+                                    ),
+                                ],
+                            },
+                            typ: Unknown,
+                        },
+                        ExprNode {
+                            pos: (
+                                38,
+                                57,
+                            ),
+                            kind: Block {
+                                block: Block(38, 57) ([]) [
+                                    Statement(42, 54) Expr(
+                                        ExprNode {
+                                            pos: (
+                                                42,
+                                                54,
+                                            ),
+                                            kind: Call {
+                                                call: Call {
+                                                    callee: ExprNode {
+                                                        pos: (
+                                                            42,
+                                                            47,
+                                                        ),
+                                                        kind: Identifier {
+                                                            ident: Ident(42, 47) "print",
+                                                        },
+                                                        typ: Unknown,
+                                                    },
+                                                    args: [
+                                                        ExprNode {
+                                                            pos: (
+                                                                49,
+                                                                54,
+                                                            ),
+                                                            kind: Literal {
+                                                                literal: Literal(49, 54) Str("nope!"),
+                                                            },
+                                                            typ: Unknown,
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            typ: Unknown,
+                                        },
+                                    ),
+                                ],
+                            },
+                            typ: Unknown,
+                        },
+                    ],
                 },
-            ),
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

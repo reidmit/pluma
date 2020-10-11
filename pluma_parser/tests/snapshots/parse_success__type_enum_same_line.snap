@@ -10,71 +10,47 @@ enum Bool | True | False
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        24,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 24) [
+    TopLevelStatement(0, 24) TypeDef(
+        TypeDefNode {
             pos: (
                 0,
                 24,
             ),
-            kind: TypeDef(
-                TypeDefNode {
-                    pos: (
-                        0,
-                        24,
-                    ),
-                    visibility: Public,
-                    kind: Enum {
-                        variants: [
-                            EnumVariantNode {
-                                pos: (
-                                    12,
-                                    16,
-                                ),
-                                kind: Identifier(
-                                    IdentifierNode {
-                                        pos: (
-                                            12,
-                                            16,
-                                        ),
-                                        name: "True",
-                                    },
-                                ),
-                            },
-                            EnumVariantNode {
-                                pos: (
-                                    19,
-                                    24,
-                                ),
-                                kind: Identifier(
-                                    IdentifierNode {
-                                        pos: (
-                                            19,
-                                            24,
-                                        ),
-                                        name: "False",
-                                    },
-                                ),
-                            },
-                        ],
-                    },
-                    name: TypeIdentifierNode {
+            visibility: Public,
+            kind: Enum {
+                variants: [
+                    EnumVariantNode {
                         pos: (
-                            5,
-                            9,
+                            12,
+                            16,
                         ),
-                        name: "Bool",
-                        generics: [],
-                        constraints: None,
+                        kind: Identifier(
+                            Ident(12, 16) "True",
+                        ),
                     },
-                    generic_type_constraints: [],
-                },
-            ),
+                    EnumVariantNode {
+                        pos: (
+                            19,
+                            24,
+                        ),
+                        kind: Identifier(
+                            Ident(19, 24) "False",
+                        ),
+                    },
+                ],
+            },
+            name: TypeIdentifierNode {
+                pos: (
+                    5,
+                    9,
+                ),
+                name: "Bool",
+                generics: [],
+                constraints: None,
+            },
+            generic_type_constraints: [],
         },
-    ],
-}
+    ),
+]
 

@@ -49,7 +49,7 @@ impl Compiler {
     );
 
     // TODO remove
-    println!("{:#?}", self.modules["main"]);
+    println!("{:#?}", self.modules[&self.entry_module_name]);
 
     if !self.diagnostics.is_empty() {
       return Err(self.diagnostics.to_vec());

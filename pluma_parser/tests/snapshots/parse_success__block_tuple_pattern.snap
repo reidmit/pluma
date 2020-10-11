@@ -10,195 +10,73 @@ expression: "{ |(a, (b, c))| a + b + c }"
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        27,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 27) [
+    TopLevelStatement(0, 27) Expr(
+        ExprNode {
             pos: (
                 0,
                 27,
             ),
-            kind: Expr(
-                ExprNode {
-                    pos: (
-                        0,
-                        27,
-                    ),
-                    kind: Block(
-                        BlockNode {
+            kind: Block {
+                block: Block(0, 27) ([
+                    Pattern(3, 14) UnlabeledTuple([Pattern(4, 5) Identifier(Ident(4, 5) "a", false), Pattern(7, 13) UnlabeledTuple([Pattern(8, 9) Identifier(Ident(8, 9) "b", false), Pattern(11, 12) Identifier(Ident(11, 12) "c", false)])]),
+                ]) [
+                    Statement(16, 25) Expr(
+                        ExprNode {
                             pos: (
-                                0,
-                                27,
+                                16,
+                                25,
                             ),
-                            params: [
-                                PatternNode {
-                                    pos: (
-                                        3,
-                                        14,
-                                    ),
-                                    kind: UnlabeledTuple(
-                                        [
-                                            PatternNode {
-                                                pos: (
-                                                    4,
-                                                    5,
-                                                ),
-                                                kind: Identifier(
-                                                    IdentifierNode {
-                                                        pos: (
-                                                            4,
-                                                            5,
-                                                        ),
-                                                        name: "a",
-                                                    },
-                                                    false,
-                                                ),
-                                            },
-                                            PatternNode {
-                                                pos: (
-                                                    7,
-                                                    13,
-                                                ),
-                                                kind: UnlabeledTuple(
-                                                    [
-                                                        PatternNode {
-                                                            pos: (
-                                                                8,
-                                                                9,
-                                                            ),
-                                                            kind: Identifier(
-                                                                IdentifierNode {
-                                                                    pos: (
-                                                                        8,
-                                                                        9,
-                                                                    ),
-                                                                    name: "b",
-                                                                },
-                                                                false,
-                                                            ),
-                                                        },
-                                                        PatternNode {
-                                                            pos: (
-                                                                11,
-                                                                12,
-                                                            ),
-                                                            kind: Identifier(
-                                                                IdentifierNode {
-                                                                    pos: (
-                                                                        11,
-                                                                        12,
-                                                                    ),
-                                                                    name: "c",
-                                                                },
-                                                                false,
-                                                            ),
-                                                        },
-                                                    ],
-                                                ),
-                                            },
-                                        ],
-                                    ),
-                                },
-                            ],
-                            body: [
-                                StatementNode {
+                            kind: BinaryOperation {
+                                left: ExprNode {
                                     pos: (
                                         16,
-                                        25,
+                                        21,
                                     ),
-                                    kind: Expr(
-                                        ExprNode {
+                                    kind: BinaryOperation {
+                                        left: ExprNode {
                                             pos: (
                                                 16,
-                                                25,
+                                                17,
                                             ),
-                                            kind: BinaryOperation {
-                                                left: ExprNode {
-                                                    pos: (
-                                                        16,
-                                                        21,
-                                                    ),
-                                                    kind: BinaryOperation {
-                                                        left: ExprNode {
-                                                            pos: (
-                                                                16,
-                                                                17,
-                                                            ),
-                                                            kind: Identifier(
-                                                                IdentifierNode {
-                                                                    pos: (
-                                                                        16,
-                                                                        17,
-                                                                    ),
-                                                                    name: "a",
-                                                                },
-                                                            ),
-                                                            typ: Unknown,
-                                                        },
-                                                        op: OperatorNode {
-                                                            pos: (
-                                                                18,
-                                                                19,
-                                                            ),
-                                                            name: "+",
-                                                        },
-                                                        right: ExprNode {
-                                                            pos: (
-                                                                20,
-                                                                21,
-                                                            ),
-                                                            kind: Identifier(
-                                                                IdentifierNode {
-                                                                    pos: (
-                                                                        20,
-                                                                        21,
-                                                                    ),
-                                                                    name: "b",
-                                                                },
-                                                            ),
-                                                            typ: Unknown,
-                                                        },
-                                                    },
-                                                    typ: Unknown,
-                                                },
-                                                op: OperatorNode {
-                                                    pos: (
-                                                        22,
-                                                        23,
-                                                    ),
-                                                    name: "+",
-                                                },
-                                                right: ExprNode {
-                                                    pos: (
-                                                        24,
-                                                        25,
-                                                    ),
-                                                    kind: Identifier(
-                                                        IdentifierNode {
-                                                            pos: (
-                                                                24,
-                                                                25,
-                                                            ),
-                                                            name: "c",
-                                                        },
-                                                    ),
-                                                    typ: Unknown,
-                                                },
+                                            kind: Identifier {
+                                                ident: Ident(16, 17) "a",
                                             },
                                             typ: Unknown,
                                         },
-                                    ),
+                                        op: Operator(18, 19) Add,
+                                        right: ExprNode {
+                                            pos: (
+                                                20,
+                                                21,
+                                            ),
+                                            kind: Identifier {
+                                                ident: Ident(20, 21) "b",
+                                            },
+                                            typ: Unknown,
+                                        },
+                                    },
+                                    typ: Unknown,
                                 },
-                            ],
+                                op: Operator(22, 23) Add,
+                                right: ExprNode {
+                                    pos: (
+                                        24,
+                                        25,
+                                    ),
+                                    kind: Identifier {
+                                        ident: Ident(24, 25) "c",
+                                    },
+                                    typ: Unknown,
+                                },
+                            },
+                            typ: Unknown,
                         },
                     ),
-                    typ: Unknown,
-                },
-            ),
+                ],
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

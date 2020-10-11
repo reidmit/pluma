@@ -14,113 +14,63 @@ def isPrivate() {}
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        46,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 46) [
+    TopLevelStatement(0, 17) Def(
+        DefNode {
             pos: (
                 0,
                 17,
             ),
-            kind: Def(
-                DefNode {
-                    pos: (
-                        0,
-                        17,
-                    ),
-                    visibility: Public,
-                    kind: Function {
-                        signature: [
-                            (
-                                IdentifierNode {
-                                    pos: (
-                                        4,
-                                        12,
-                                    ),
-                                    name: "isPublic",
-                                },
-                                TypeExprNode {
-                                    pos: (
-                                        12,
-                                        14,
-                                    ),
-                                    kind: EmptyTuple,
-                                    typ: Unknown,
-                                },
+            visibility: Public,
+            kind: Function {
+                signature: [
+                    (
+                        Ident(4, 12) "isPublic",
+                        TypeExprNode {
+                            pos: (
+                                12,
+                                14,
                             ),
-                        ],
-                    },
-                    return_type: None,
-                    generic_type_constraints: [],
-                    block: BlockNode {
-                        pos: (
-                            15,
-                            17,
-                        ),
-                        params: [],
-                        body: [],
-                    },
-                },
-            ),
+                            kind: EmptyTuple,
+                            typ: Unknown,
+                        },
+                    ),
+                ],
+            },
+            return_type: None,
+            generic_type_constraints: [],
+            block: Block(15, 17) ([]) [],
         },
-        TopLevelStatementNode {
-            pos: (
-                19,
-                26,
-            ),
-            kind: VisibilityMarker(
-                Private,
-            ),
-        },
-        TopLevelStatementNode {
+    ),
+    TopLevelStatement(19, 26) VisibilityMarker(
+        Private,
+    ),
+    TopLevelStatement(28, 46) Def(
+        DefNode {
             pos: (
                 28,
                 46,
             ),
-            kind: Def(
-                DefNode {
-                    pos: (
-                        28,
-                        46,
-                    ),
-                    visibility: Private,
-                    kind: Function {
-                        signature: [
-                            (
-                                IdentifierNode {
-                                    pos: (
-                                        32,
-                                        41,
-                                    ),
-                                    name: "isPrivate",
-                                },
-                                TypeExprNode {
-                                    pos: (
-                                        41,
-                                        43,
-                                    ),
-                                    kind: EmptyTuple,
-                                    typ: Unknown,
-                                },
+            visibility: Private,
+            kind: Function {
+                signature: [
+                    (
+                        Ident(32, 41) "isPrivate",
+                        TypeExprNode {
+                            pos: (
+                                41,
+                                43,
                             ),
-                        ],
-                    },
-                    return_type: None,
-                    generic_type_constraints: [],
-                    block: BlockNode {
-                        pos: (
-                            44,
-                            46,
-                        ),
-                        params: [],
-                        body: [],
-                    },
-                },
-            ),
+                            kind: EmptyTuple,
+                            typ: Unknown,
+                        },
+                    ),
+                ],
+            },
+            return_type: None,
+            generic_type_constraints: [],
+            block: Block(44, 46) ([]) [],
         },
-    ],
-}
+    ),
+]
 

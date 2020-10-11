@@ -10,38 +10,18 @@ expression: "\"frog 🐸\""
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        1,
-        10,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(1, 10) [
+    TopLevelStatement(1, 10) Expr(
+        ExprNode {
             pos: (
                 1,
                 10,
             ),
-            kind: Expr(
-                ExprNode {
-                    pos: (
-                        1,
-                        10,
-                    ),
-                    kind: Literal(
-                        LiteralNode {
-                            pos: (
-                                1,
-                                10,
-                            ),
-                            kind: Str(
-                                "frog 🐸",
-                            ),
-                        },
-                    ),
-                    typ: Unknown,
-                },
-            ),
+            kind: Literal {
+                literal: Literal(1, 10) Str("frog 🐸"),
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

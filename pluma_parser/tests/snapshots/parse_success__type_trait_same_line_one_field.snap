@@ -10,69 +10,51 @@ trait HasName . name : String
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        29,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 29) [
+    TopLevelStatement(0, 29) TypeDef(
+        TypeDefNode {
             pos: (
                 0,
                 29,
             ),
-            kind: TypeDef(
-                TypeDefNode {
-                    pos: (
-                        0,
-                        29,
-                    ),
-                    visibility: Public,
-                    kind: Trait {
-                        fields: [
-                            (
-                                IdentifierNode {
-                                    pos: (
-                                        16,
-                                        20,
-                                    ),
-                                    name: "name",
-                                },
-                                TypeExprNode {
+            visibility: Public,
+            kind: Trait {
+                fields: [
+                    (
+                        Ident(16, 20) "name",
+                        TypeExprNode {
+                            pos: (
+                                23,
+                                29,
+                            ),
+                            kind: Single(
+                                TypeIdentifierNode {
                                     pos: (
                                         23,
                                         29,
                                     ),
-                                    kind: Single(
-                                        TypeIdentifierNode {
-                                            pos: (
-                                                23,
-                                                29,
-                                            ),
-                                            name: "String",
-                                            generics: [],
-                                            constraints: None,
-                                        },
-                                    ),
-                                    typ: Unknown,
+                                    name: "String",
+                                    generics: [],
+                                    constraints: None,
                                 },
                             ),
-                        ],
-                        methods: [],
-                    },
-                    name: TypeIdentifierNode {
-                        pos: (
-                            6,
-                            13,
-                        ),
-                        name: "HasName",
-                        generics: [],
-                        constraints: None,
-                    },
-                    generic_type_constraints: [],
-                },
-            ),
+                            typ: Unknown,
+                        },
+                    ),
+                ],
+                methods: [],
+            },
+            name: TypeIdentifierNode {
+                pos: (
+                    6,
+                    13,
+                ),
+                name: "HasName",
+                generics: [],
+                constraints: None,
+            },
+            generic_type_constraints: [],
         },
-    ],
-}
+    ),
+]
 

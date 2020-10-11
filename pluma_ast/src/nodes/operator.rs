@@ -32,6 +32,8 @@ pub enum OperatorKind {
   GreaterThanEquals,
   Equals,
   NotEquals,
+
+  Concat,
 }
 
 #[cfg(debug_assertions)]

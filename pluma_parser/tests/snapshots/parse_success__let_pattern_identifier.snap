@@ -10,60 +10,18 @@ let x = 47
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        10,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 10) [
+    TopLevelStatement(0, 10) Let(
+        Let(0, 10) Pattern(4, 5) Identifier(Ident(4, 5) "x", false) ExprNode {
             pos: (
-                0,
+                8,
                 10,
             ),
-            kind: Let(
-                LetNode {
-                    pos: (
-                        0,
-                        10,
-                    ),
-                    pattern: PatternNode {
-                        pos: (
-                            4,
-                            5,
-                        ),
-                        kind: Identifier(
-                            IdentifierNode {
-                                pos: (
-                                    4,
-                                    5,
-                                ),
-                                name: "x",
-                            },
-                            false,
-                        ),
-                    },
-                    value: ExprNode {
-                        pos: (
-                            8,
-                            10,
-                        ),
-                        kind: Literal(
-                            LiteralNode {
-                                pos: (
-                                    8,
-                                    10,
-                                ),
-                                kind: IntDecimal(
-                                    47,
-                                ),
-                            },
-                        ),
-                        typ: Unknown,
-                    },
-                },
-            ),
+            kind: Literal {
+                literal: Literal(8, 10) IntDecimal(47),
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

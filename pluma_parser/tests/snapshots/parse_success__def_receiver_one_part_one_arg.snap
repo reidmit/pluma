@@ -12,121 +12,67 @@ def Person . greet String {
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        42,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 42) [
+    TopLevelStatement(0, 42) Def(
+        DefNode {
             pos: (
                 0,
                 42,
             ),
-            kind: Def(
-                DefNode {
+            visibility: Public,
+            kind: Method {
+                receiver: TypeIdentifierNode {
                     pos: (
-                        0,
-                        42,
+                        4,
+                        10,
                     ),
-                    visibility: Public,
-                    kind: Method {
-                        receiver: TypeIdentifierNode {
+                    name: "Person",
+                    generics: [],
+                    constraints: None,
+                },
+                signature: [
+                    (
+                        Ident(13, 18) "greet",
+                        TypeExprNode {
                             pos: (
-                                4,
-                                10,
+                                19,
+                                25,
                             ),
-                            name: "Person",
-                            generics: [],
-                            constraints: None,
-                        },
-                        signature: [
-                            (
-                                IdentifierNode {
-                                    pos: (
-                                        13,
-                                        18,
-                                    ),
-                                    name: "greet",
-                                },
-                                TypeExprNode {
+                            kind: Single(
+                                TypeIdentifierNode {
                                     pos: (
                                         19,
                                         25,
                                     ),
-                                    kind: Single(
-                                        TypeIdentifierNode {
-                                            pos: (
-                                                19,
-                                                25,
-                                            ),
-                                            name: "String",
-                                            generics: [],
-                                            constraints: None,
-                                        },
-                                    ),
-                                    typ: Unknown,
+                                    name: "String",
+                                    generics: [],
+                                    constraints: None,
                                 },
                             ),
-                        ],
-                    },
-                    return_type: None,
-                    generic_type_constraints: [],
-                    block: BlockNode {
+                            typ: Unknown,
+                        },
+                    ),
+                ],
+            },
+            return_type: None,
+            generic_type_constraints: [],
+            block: Block(26, 42) ([
+                Pattern(31, 32) Identifier(Ident(31, 32) "a", false),
+            ]) [
+                Statement(35, 39) Expr(
+                    ExprNode {
                         pos: (
-                            26,
-                            42,
+                            35,
+                            39,
                         ),
-                        params: [
-                            PatternNode {
-                                pos: (
-                                    31,
-                                    32,
-                                ),
-                                kind: Identifier(
-                                    IdentifierNode {
-                                        pos: (
-                                            31,
-                                            32,
-                                        ),
-                                        name: "a",
-                                    },
-                                    false,
-                                ),
-                            },
-                        ],
-                        body: [
-                            StatementNode {
-                                pos: (
-                                    35,
-                                    39,
-                                ),
-                                kind: Expr(
-                                    ExprNode {
-                                        pos: (
-                                            35,
-                                            39,
-                                        ),
-                                        kind: Literal(
-                                            LiteralNode {
-                                                pos: (
-                                                    35,
-                                                    39,
-                                                ),
-                                                kind: Str(
-                                                    "wow!",
-                                                ),
-                                            },
-                                        ),
-                                        typ: Unknown,
-                                    },
-                                ),
-                            },
-                        ],
+                        kind: Literal {
+                            literal: Literal(35, 39) Str("wow!"),
+                        },
+                        typ: Unknown,
                     },
-                },
-            ),
+                ),
+            ],
         },
-    ],
-}
+    ),
+]
 

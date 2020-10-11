@@ -10,11 +10,5 @@ expression: ""
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        0,
-    ),
-    body: [],
-}
+Module(0, 0) []
 

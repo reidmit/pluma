@@ -12,146 +12,102 @@ expression: "\"hello\"\n  . f1 1\n  .f2 2"
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        1,
-        24,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(1, 24) [
+    TopLevelStatement(1, 24) Expr(
+        ExprNode {
             pos: (
                 1,
                 24,
             ),
-            kind: Expr(
-                ExprNode {
-                    pos: (
-                        1,
-                        24,
-                    ),
-                    kind: Call(
-                        CallNode {
-                            pos: (
-                                1,
-                                24,
-                            ),
-                            callee: ExprNode {
+            kind: Call {
+                call: Call {
+                    callee: ExprNode {
+                        pos: (
+                            1,
+                            22,
+                        ),
+                        kind: Access {
+                            receiver: ExprNode {
                                 pos: (
                                     1,
-                                    22,
+                                    16,
                                 ),
-                                kind: MethodAccess {
-                                    receiver: ExprNode {
-                                        pos: (
-                                            1,
-                                            16,
-                                        ),
-                                        kind: Call(
-                                            CallNode {
-                                                pos: (
-                                                    1,
-                                                    16,
-                                                ),
-                                                callee: ExprNode {
+                                kind: Call {
+                                    call: Call {
+                                        callee: ExprNode {
+                                            pos: (
+                                                1,
+                                                14,
+                                            ),
+                                            kind: Access {
+                                                receiver: ExprNode {
                                                     pos: (
                                                         1,
-                                                        14,
+                                                        6,
                                                     ),
-                                                    kind: MethodAccess {
-                                                        receiver: ExprNode {
-                                                            pos: (
-                                                                1,
-                                                                6,
-                                                            ),
-                                                            kind: Literal(
-                                                                LiteralNode {
-                                                                    pos: (
-                                                                        1,
-                                                                        6,
-                                                                    ),
-                                                                    kind: Str(
-                                                                        "hello",
-                                                                    ),
-                                                                },
-                                                            ),
-                                                            typ: Unknown,
-                                                        },
-                                                        method_parts: [
-                                                            IdentifierNode {
-                                                                pos: (
-                                                                    12,
-                                                                    14,
-                                                                ),
-                                                                name: "f1",
-                                                            },
-                                                        ],
+                                                    kind: Literal {
+                                                        literal: Literal(1, 6) Str("hello"),
                                                     },
                                                     typ: Unknown,
                                                 },
-                                                args: [
-                                                    ExprNode {
-                                                        pos: (
-                                                            15,
-                                                            16,
-                                                        ),
-                                                        kind: Literal(
-                                                            LiteralNode {
-                                                                pos: (
-                                                                    15,
-                                                                    16,
-                                                                ),
-                                                                kind: IntDecimal(
-                                                                    1,
-                                                                ),
-                                                            },
-                                                        ),
-                                                        typ: Unknown,
+                                                property: ExprNode {
+                                                    pos: (
+                                                        12,
+                                                        14,
+                                                    ),
+                                                    kind: Identifier {
+                                                        ident: Ident(12, 14) "f1",
                                                     },
-                                                ],
+                                                    typ: Unknown,
+                                                },
+                                            },
+                                            typ: Unknown,
+                                        },
+                                        args: [
+                                            ExprNode {
+                                                pos: (
+                                                    15,
+                                                    16,
+                                                ),
+                                                kind: Literal {
+                                                    literal: Literal(15, 16) IntDecimal(1),
+                                                },
                                                 typ: Unknown,
                                             },
-                                        ),
-                                        typ: Unknown,
+                                        ],
                                     },
-                                    method_parts: [
-                                        IdentifierNode {
-                                            pos: (
-                                                20,
-                                                22,
-                                            ),
-                                            name: "f2",
-                                        },
-                                    ],
                                 },
                                 typ: Unknown,
                             },
-                            args: [
-                                ExprNode {
-                                    pos: (
-                                        23,
-                                        24,
-                                    ),
-                                    kind: Literal(
-                                        LiteralNode {
-                                            pos: (
-                                                23,
-                                                24,
-                                            ),
-                                            kind: IntDecimal(
-                                                2,
-                                            ),
-                                        },
-                                    ),
-                                    typ: Unknown,
+                            property: ExprNode {
+                                pos: (
+                                    20,
+                                    22,
+                                ),
+                                kind: Identifier {
+                                    ident: Ident(20, 22) "f2",
                                 },
-                            ],
+                                typ: Unknown,
+                            },
+                        },
+                        typ: Unknown,
+                    },
+                    args: [
+                        ExprNode {
+                            pos: (
+                                23,
+                                24,
+                            ),
+                            kind: Literal {
+                                literal: Literal(23, 24) IntDecimal(2),
+                            },
                             typ: Unknown,
                         },
-                    ),
-                    typ: Unknown,
+                    ],
                 },
-            ),
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

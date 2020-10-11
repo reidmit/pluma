@@ -13,112 +13,58 @@ cool:
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        31,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 31) [
+    TopLevelStatement(0, 31) Expr(
+        ExprNode {
             pos: (
                 0,
                 31,
             ),
-            kind: Expr(
-                ExprNode {
-                    pos: (
-                        0,
-                        31,
+            kind: LabeledTuple {
+                entries: [
+                    (
+                        Ident(1, 4) "wow",
+                        ExprNode {
+                            pos: (
+                                6,
+                                7,
+                            ),
+                            kind: Literal {
+                                literal: Literal(6, 7) IntDecimal(1),
+                            },
+                            typ: Unknown,
+                        },
                     ),
-                    kind: LabeledTuple(
-                        [
-                            (
-                                IdentifierNode {
-                                    pos: (
-                                        1,
-                                        4,
-                                    ),
-                                    name: "wow",
-                                },
-                                ExprNode {
-                                    pos: (
-                                        6,
-                                        7,
-                                    ),
-                                    kind: Literal(
-                                        LiteralNode {
-                                            pos: (
-                                                6,
-                                                7,
-                                            ),
-                                            kind: IntDecimal(
-                                                1,
-                                            ),
-                                        },
-                                    ),
-                                    typ: Unknown,
-                                },
+                    (
+                        Ident(10, 14) "nice",
+                        ExprNode {
+                            pos: (
+                                20,
+                                21,
                             ),
-                            (
-                                IdentifierNode {
-                                    pos: (
-                                        10,
-                                        14,
-                                    ),
-                                    name: "nice",
-                                },
-                                ExprNode {
-                                    pos: (
-                                        20,
-                                        21,
-                                    ),
-                                    kind: Literal(
-                                        LiteralNode {
-                                            pos: (
-                                                20,
-                                                21,
-                                            ),
-                                            kind: IntDecimal(
-                                                2,
-                                            ),
-                                        },
-                                    ),
-                                    typ: Unknown,
-                                },
-                            ),
-                            (
-                                IdentifierNode {
-                                    pos: (
-                                        23,
-                                        27,
-                                    ),
-                                    name: "cool",
-                                },
-                                ExprNode {
-                                    pos: (
-                                        29,
-                                        30,
-                                    ),
-                                    kind: Literal(
-                                        LiteralNode {
-                                            pos: (
-                                                29,
-                                                30,
-                                            ),
-                                            kind: IntDecimal(
-                                                3,
-                                            ),
-                                        },
-                                    ),
-                                    typ: Unknown,
-                                },
-                            ),
-                        ],
+                            kind: Literal {
+                                literal: Literal(20, 21) IntDecimal(2),
+                            },
+                            typ: Unknown,
+                        },
                     ),
-                    typ: Unknown,
-                },
-            ),
+                    (
+                        Ident(23, 27) "cool",
+                        ExprNode {
+                            pos: (
+                                29,
+                                30,
+                            ),
+                            kind: Literal {
+                                literal: Literal(29, 30) IntDecimal(3),
+                            },
+                            typ: Unknown,
+                        },
+                    ),
+                ],
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

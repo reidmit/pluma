@@ -13,38 +13,18 @@ cool!"
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        1,
-        21,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(1, 21) [
+    TopLevelStatement(1, 21) Expr(
+        ExprNode {
             pos: (
                 1,
                 21,
             ),
-            kind: Expr(
-                ExprNode {
-                    pos: (
-                        1,
-                        21,
-                    ),
-                    kind: Literal(
-                        LiteralNode {
-                            pos: (
-                                1,
-                                21,
-                            ),
-                            kind: Str(
-                                "wow\nthis\n   is\ncool!",
-                            ),
-                        },
-                    ),
-                    typ: Unknown,
-                },
-            ),
+            kind: Literal {
+                literal: Literal(1, 21) Str("wow\nthis\n   is\ncool!"),
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

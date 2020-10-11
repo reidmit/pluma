@@ -1,220 +1,98 @@
 ---
 source: pluma_parser/tests/parse_success.rs
-expression: "match thing\n  | (a, b) => \"one\"\n  | (1, _) => \"two\"\n  | _ => \"idk\""
+expression: "match thing\n  when (a, b) => \"one\"\n  when (1, _) => \"two\"\n  when _ => \"idk\""
 ---
 
 === Source ===
 match thing
-  | (a, b) => "one"
-  | (1, _) => "two"
-  | _ => "idk"
+  when (a, b) => "one"
+  when (1, _) => "two"
+  when _ => "idk"
 
 === Comments ===
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        65,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 74) [
+    TopLevelStatement(0, 74) Expr(
+        ExprNode {
             pos: (
                 0,
-                65,
+                74,
             ),
-            kind: Expr(
-                ExprNode {
+            kind: Match {
+                match_: MatchNode {
                     pos: (
                         0,
-                        65,
+                        74,
                     ),
-                    kind: Match(
-                        MatchNode {
+                    subject: ExprNode {
+                        pos: (
+                            6,
+                            11,
+                        ),
+                        kind: Identifier {
+                            ident: Ident(6, 11) "thing",
+                        },
+                        typ: Unknown,
+                    },
+                    cases: [
+                        MatchCaseNode {
                             pos: (
-                                0,
-                                65,
+                                14,
+                                33,
                             ),
-                            subject: ExprNode {
+                            pattern: Pattern(19, 25) UnlabeledTuple([Pattern(20, 21) Identifier(Ident(20, 21) "a", false), Pattern(23, 24) Identifier(Ident(23, 24) "b", false)]),
+                            body: ExprNode {
                                 pos: (
-                                    6,
-                                    11,
+                                    30,
+                                    33,
                                 ),
-                                kind: Identifier(
-                                    IdentifierNode {
-                                        pos: (
-                                            6,
-                                            11,
-                                        ),
-                                        name: "thing",
-                                    },
-                                ),
+                                kind: Literal {
+                                    literal: Literal(30, 33) Str("one"),
+                                },
                                 typ: Unknown,
                             },
-                            cases: [
-                                MatchCaseNode {
-                                    pos: (
-                                        14,
-                                        30,
-                                    ),
-                                    pattern: PatternNode {
-                                        pos: (
-                                            16,
-                                            22,
-                                        ),
-                                        kind: UnlabeledTuple(
-                                            [
-                                                PatternNode {
-                                                    pos: (
-                                                        17,
-                                                        18,
-                                                    ),
-                                                    kind: Identifier(
-                                                        IdentifierNode {
-                                                            pos: (
-                                                                17,
-                                                                18,
-                                                            ),
-                                                            name: "a",
-                                                        },
-                                                        false,
-                                                    ),
-                                                },
-                                                PatternNode {
-                                                    pos: (
-                                                        20,
-                                                        21,
-                                                    ),
-                                                    kind: Identifier(
-                                                        IdentifierNode {
-                                                            pos: (
-                                                                20,
-                                                                21,
-                                                            ),
-                                                            name: "b",
-                                                        },
-                                                        false,
-                                                    ),
-                                                },
-                                            ],
-                                        ),
-                                    },
-                                    body: ExprNode {
-                                        pos: (
-                                            27,
-                                            30,
-                                        ),
-                                        kind: Literal(
-                                            LiteralNode {
-                                                pos: (
-                                                    27,
-                                                    30,
-                                                ),
-                                                kind: Str(
-                                                    "one",
-                                                ),
-                                            },
-                                        ),
-                                        typ: Unknown,
-                                    },
-                                },
-                                MatchCaseNode {
-                                    pos: (
-                                        34,
-                                        50,
-                                    ),
-                                    pattern: PatternNode {
-                                        pos: (
-                                            36,
-                                            42,
-                                        ),
-                                        kind: UnlabeledTuple(
-                                            [
-                                                PatternNode {
-                                                    pos: (
-                                                        37,
-                                                        38,
-                                                    ),
-                                                    kind: Literal(
-                                                        LiteralNode {
-                                                            pos: (
-                                                                37,
-                                                                38,
-                                                            ),
-                                                            kind: IntDecimal(
-                                                                1,
-                                                            ),
-                                                        },
-                                                    ),
-                                                },
-                                                PatternNode {
-                                                    pos: (
-                                                        40,
-                                                        41,
-                                                    ),
-                                                    kind: Underscore,
-                                                },
-                                            ],
-                                        ),
-                                    },
-                                    body: ExprNode {
-                                        pos: (
-                                            47,
-                                            50,
-                                        ),
-                                        kind: Literal(
-                                            LiteralNode {
-                                                pos: (
-                                                    47,
-                                                    50,
-                                                ),
-                                                kind: Str(
-                                                    "two",
-                                                ),
-                                            },
-                                        ),
-                                        typ: Unknown,
-                                    },
-                                },
-                                MatchCaseNode {
-                                    pos: (
-                                        54,
-                                        65,
-                                    ),
-                                    pattern: PatternNode {
-                                        pos: (
-                                            56,
-                                            57,
-                                        ),
-                                        kind: Underscore,
-                                    },
-                                    body: ExprNode {
-                                        pos: (
-                                            62,
-                                            65,
-                                        ),
-                                        kind: Literal(
-                                            LiteralNode {
-                                                pos: (
-                                                    62,
-                                                    65,
-                                                ),
-                                                kind: Str(
-                                                    "idk",
-                                                ),
-                                            },
-                                        ),
-                                        typ: Unknown,
-                                    },
-                                },
-                            ],
                         },
-                    ),
-                    typ: Unknown,
+                        MatchCaseNode {
+                            pos: (
+                                37,
+                                56,
+                            ),
+                            pattern: Pattern(42, 48) UnlabeledTuple([Pattern(43, 44) Literal(Literal(43, 44) IntDecimal(1)), Pattern(46, 47) Underscore]),
+                            body: ExprNode {
+                                pos: (
+                                    53,
+                                    56,
+                                ),
+                                kind: Literal {
+                                    literal: Literal(53, 56) Str("two"),
+                                },
+                                typ: Unknown,
+                            },
+                        },
+                        MatchCaseNode {
+                            pos: (
+                                60,
+                                74,
+                            ),
+                            pattern: Pattern(65, 66) Underscore,
+                            body: ExprNode {
+                                pos: (
+                                    71,
+                                    74,
+                                ),
+                                kind: Literal {
+                                    literal: Literal(71, 74) Str("idk"),
+                                },
+                                typ: Unknown,
+                            },
+                        },
+                    ],
                 },
-            ),
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

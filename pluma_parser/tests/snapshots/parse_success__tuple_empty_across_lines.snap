@@ -12,28 +12,16 @@ expression: "(\n\n)"
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        4,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 4) [
+    TopLevelStatement(0, 4) Expr(
+        ExprNode {
             pos: (
                 0,
                 4,
             ),
-            kind: Expr(
-                ExprNode {
-                    pos: (
-                        0,
-                        4,
-                    ),
-                    kind: EmptyTuple,
-                    typ: Unknown,
-                },
-            ),
+            kind: EmptyTuple,
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

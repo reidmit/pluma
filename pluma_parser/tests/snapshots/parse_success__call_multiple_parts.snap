@@ -10,99 +10,54 @@ multiply 1 by 2
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        15,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 15) [
+    TopLevelStatement(0, 15) Expr(
+        ExprNode {
             pos: (
                 0,
                 15,
             ),
-            kind: Expr(
-                ExprNode {
-                    pos: (
-                        0,
-                        15,
-                    ),
-                    kind: Call(
-                        CallNode {
-                            pos: (
-                                0,
-                                15,
-                            ),
-                            callee: ExprNode {
-                                pos: (
-                                    0,
-                                    13,
-                                ),
-                                kind: MultiPartIdentifier(
-                                    [
-                                        IdentifierNode {
-                                            pos: (
-                                                0,
-                                                8,
-                                            ),
-                                            name: "multiply",
-                                        },
-                                        IdentifierNode {
-                                            pos: (
-                                                11,
-                                                13,
-                                            ),
-                                            name: "by",
-                                        },
-                                    ],
-                                ),
-                                typ: Unknown,
-                            },
-                            args: [
-                                ExprNode {
-                                    pos: (
-                                        9,
-                                        10,
-                                    ),
-                                    kind: Literal(
-                                        LiteralNode {
-                                            pos: (
-                                                9,
-                                                10,
-                                            ),
-                                            kind: IntDecimal(
-                                                1,
-                                            ),
-                                        },
-                                    ),
-                                    typ: Unknown,
-                                },
-                                ExprNode {
-                                    pos: (
-                                        14,
-                                        15,
-                                    ),
-                                    kind: Literal(
-                                        LiteralNode {
-                                            pos: (
-                                                14,
-                                                15,
-                                            ),
-                                            kind: IntDecimal(
-                                                2,
-                                            ),
-                                        },
-                                    ),
-                                    typ: Unknown,
-                                },
+            kind: Call {
+                call: Call {
+                    callee: ExprNode {
+                        pos: (
+                            0,
+                            13,
+                        ),
+                        kind: MultiPartIdentifier {
+                            parts: [
+                                Ident(0, 8) "multiply",
+                                Ident(11, 13) "by",
                             ],
+                        },
+                        typ: Unknown,
+                    },
+                    args: [
+                        ExprNode {
+                            pos: (
+                                9,
+                                10,
+                            ),
+                            kind: Literal {
+                                literal: Literal(9, 10) IntDecimal(1),
+                            },
                             typ: Unknown,
                         },
-                    ),
-                    typ: Unknown,
+                        ExprNode {
+                            pos: (
+                                14,
+                                15,
+                            ),
+                            kind: Literal {
+                                literal: Literal(14, 15) IntDecimal(2),
+                            },
+                            typ: Unknown,
+                        },
+                    ],
                 },
-            ),
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

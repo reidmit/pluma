@@ -10,74 +10,62 @@ expression: "/\"w\" \"o\"+ \"w\"/"
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        14,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 14) [
+    TopLevelStatement(0, 14) Expr(
+        ExprNode {
             pos: (
                 0,
                 14,
             ),
-            kind: Expr(
-                ExprNode {
+            kind: RegExpr {
+                regex: RegExprNode {
                     pos: (
                         0,
-                        14,
+                        0,
                     ),
-                    kind: RegExpr(
-                        RegExprNode {
-                            pos: (
-                                0,
-                                0,
-                            ),
-                            kind: Sequence(
-                                [
-                                    RegExprNode {
-                                        pos: (
-                                            2,
-                                            3,
-                                        ),
-                                        kind: Literal(
-                                            "w",
-                                        ),
-                                    },
+                    kind: Sequence(
+                        [
+                            RegExprNode {
+                                pos: (
+                                    2,
+                                    3,
+                                ),
+                                kind: Literal(
+                                    "w",
+                                ),
+                            },
+                            RegExprNode {
+                                pos: (
+                                    6,
+                                    9,
+                                ),
+                                kind: OneOrMore(
                                     RegExprNode {
                                         pos: (
                                             6,
-                                            9,
-                                        ),
-                                        kind: OneOrMore(
-                                            RegExprNode {
-                                                pos: (
-                                                    6,
-                                                    7,
-                                                ),
-                                                kind: Literal(
-                                                    "o",
-                                                ),
-                                            },
-                                        ),
-                                    },
-                                    RegExprNode {
-                                        pos: (
-                                            11,
-                                            12,
+                                            7,
                                         ),
                                         kind: Literal(
-                                            "w",
+                                            "o",
                                         ),
                                     },
-                                ],
-                            ),
-                        },
+                                ),
+                            },
+                            RegExprNode {
+                                pos: (
+                                    11,
+                                    12,
+                                ),
+                                kind: Literal(
+                                    "w",
+                                ),
+                            },
+                        ],
                     ),
-                    typ: Unknown,
                 },
-            ),
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

@@ -10,67 +10,39 @@ expression: "(1, \"wow\")"
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        10,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 10) [
+    TopLevelStatement(0, 10) Expr(
+        ExprNode {
             pos: (
                 0,
                 10,
             ),
-            kind: Expr(
-                ExprNode {
-                    pos: (
-                        0,
-                        10,
-                    ),
-                    kind: UnlabeledTuple(
-                        [
-                            ExprNode {
-                                pos: (
-                                    1,
-                                    2,
-                                ),
-                                kind: Literal(
-                                    LiteralNode {
-                                        pos: (
-                                            1,
-                                            2,
-                                        ),
-                                        kind: IntDecimal(
-                                            1,
-                                        ),
-                                    },
-                                ),
-                                typ: Unknown,
-                            },
-                            ExprNode {
-                                pos: (
-                                    5,
-                                    8,
-                                ),
-                                kind: Literal(
-                                    LiteralNode {
-                                        pos: (
-                                            5,
-                                            8,
-                                        ),
-                                        kind: Str(
-                                            "wow",
-                                        ),
-                                    },
-                                ),
-                                typ: Unknown,
-                            },
-                        ],
-                    ),
-                    typ: Unknown,
-                },
-            ),
+            kind: UnlabeledTuple {
+                entries: [
+                    ExprNode {
+                        pos: (
+                            1,
+                            2,
+                        ),
+                        kind: Literal {
+                            literal: Literal(1, 2) IntDecimal(1),
+                        },
+                        typ: Unknown,
+                    },
+                    ExprNode {
+                        pos: (
+                            5,
+                            8,
+                        ),
+                        kind: Literal {
+                            literal: Literal(5, 8) Str("wow"),
+                        },
+                        typ: Unknown,
+                    },
+                ],
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

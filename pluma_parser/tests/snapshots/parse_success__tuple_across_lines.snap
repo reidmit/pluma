@@ -12,67 +12,39 @@ expression: "(1,\n 2\n)"
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        8,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 8) [
+    TopLevelStatement(0, 8) Expr(
+        ExprNode {
             pos: (
                 0,
                 8,
             ),
-            kind: Expr(
-                ExprNode {
-                    pos: (
-                        0,
-                        8,
-                    ),
-                    kind: UnlabeledTuple(
-                        [
-                            ExprNode {
-                                pos: (
-                                    1,
-                                    2,
-                                ),
-                                kind: Literal(
-                                    LiteralNode {
-                                        pos: (
-                                            1,
-                                            2,
-                                        ),
-                                        kind: IntDecimal(
-                                            1,
-                                        ),
-                                    },
-                                ),
-                                typ: Unknown,
-                            },
-                            ExprNode {
-                                pos: (
-                                    5,
-                                    6,
-                                ),
-                                kind: Literal(
-                                    LiteralNode {
-                                        pos: (
-                                            5,
-                                            6,
-                                        ),
-                                        kind: IntDecimal(
-                                            2,
-                                        ),
-                                    },
-                                ),
-                                typ: Unknown,
-                            },
-                        ],
-                    ),
-                    typ: Unknown,
-                },
-            ),
+            kind: UnlabeledTuple {
+                entries: [
+                    ExprNode {
+                        pos: (
+                            1,
+                            2,
+                        ),
+                        kind: Literal {
+                            literal: Literal(1, 2) IntDecimal(1),
+                        },
+                        typ: Unknown,
+                    },
+                    ExprNode {
+                        pos: (
+                            5,
+                            6,
+                        ),
+                        kind: Literal {
+                            literal: Literal(5, 6) IntDecimal(2),
+                        },
+                        typ: Unknown,
+                    },
+                ],
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

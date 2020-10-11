@@ -3,31 +3,24 @@
 source $(dirname $0)/env
 
 usage() {
-  echo "usage: $0 [-p|--package PACKAGE] [-t|--test TEST_PATTERN] [-r|--review] [-w|--watch]"
+  echo "usage: $0 [-p|--package PACKAGE] [-t|--test TEST_PATTERN]"
 }
 
 test_name_filter=
 package_name_filter=
-review_snapshots=
 
 while [ "$1" != "" ]; do
   case $1 in
     -p | --package ) shift; package_name_filter="-p $1"; ;;
     -t | --test ) shift; test_name_filter="$1"; ;;
-    -r | --review ) review_snapshots=true; ;;
     * ) usage; exit 1
   esac
 
   shift
 done
 
-run_tests() {
-  cargo test --quiet --no-fail-fast $package_name_filter "$test_name_filter"
-}
-
-if [ -z "$review_snapshots " ]
-then
-  run_tests
-else
-  run_tests || cargo insta review
-fi
+cargo test \
+  --quiet \
+  --no-fail-fast \
+  $package_name_filter \
+  "$test_name_filter"

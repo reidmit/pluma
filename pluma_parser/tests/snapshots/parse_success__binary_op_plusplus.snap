@@ -10,72 +10,38 @@ expression: "\"a\" ++ \"b\""
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        1,
-        9,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(1, 9) [
+    TopLevelStatement(1, 9) Expr(
+        ExprNode {
             pos: (
                 1,
                 9,
             ),
-            kind: Expr(
-                ExprNode {
+            kind: BinaryOperation {
+                left: ExprNode {
                     pos: (
                         1,
-                        9,
+                        2,
                     ),
-                    kind: BinaryOperation {
-                        left: ExprNode {
-                            pos: (
-                                1,
-                                2,
-                            ),
-                            kind: Literal(
-                                LiteralNode {
-                                    pos: (
-                                        1,
-                                        2,
-                                    ),
-                                    kind: Str(
-                                        "a",
-                                    ),
-                                },
-                            ),
-                            typ: Unknown,
-                        },
-                        op: OperatorNode {
-                            pos: (
-                                4,
-                                6,
-                            ),
-                            name: "++",
-                        },
-                        right: ExprNode {
-                            pos: (
-                                8,
-                                9,
-                            ),
-                            kind: Literal(
-                                LiteralNode {
-                                    pos: (
-                                        8,
-                                        9,
-                                    ),
-                                    kind: Str(
-                                        "b",
-                                    ),
-                                },
-                            ),
-                            typ: Unknown,
-                        },
+                    kind: Literal {
+                        literal: Literal(1, 2) Str("a"),
                     },
                     typ: Unknown,
                 },
-            ),
+                op: Operator(4, 6) Concat,
+                right: ExprNode {
+                    pos: (
+                        8,
+                        9,
+                    ),
+                    kind: Literal {
+                        literal: Literal(8, 9) Str("b"),
+                    },
+                    typ: Unknown,
+                },
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

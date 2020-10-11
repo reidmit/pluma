@@ -10,85 +10,49 @@ expression: "[1, 2, 3]"
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        9,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 9) [
+    TopLevelStatement(0, 9) Expr(
+        ExprNode {
             pos: (
                 0,
                 9,
             ),
-            kind: Expr(
-                ExprNode {
-                    pos: (
-                        0,
-                        9,
-                    ),
-                    kind: List(
-                        [
-                            ExprNode {
-                                pos: (
-                                    1,
-                                    2,
-                                ),
-                                kind: Literal(
-                                    LiteralNode {
-                                        pos: (
-                                            1,
-                                            2,
-                                        ),
-                                        kind: IntDecimal(
-                                            1,
-                                        ),
-                                    },
-                                ),
-                                typ: Unknown,
-                            },
-                            ExprNode {
-                                pos: (
-                                    4,
-                                    5,
-                                ),
-                                kind: Literal(
-                                    LiteralNode {
-                                        pos: (
-                                            4,
-                                            5,
-                                        ),
-                                        kind: IntDecimal(
-                                            2,
-                                        ),
-                                    },
-                                ),
-                                typ: Unknown,
-                            },
-                            ExprNode {
-                                pos: (
-                                    7,
-                                    8,
-                                ),
-                                kind: Literal(
-                                    LiteralNode {
-                                        pos: (
-                                            7,
-                                            8,
-                                        ),
-                                        kind: IntDecimal(
-                                            3,
-                                        ),
-                                    },
-                                ),
-                                typ: Unknown,
-                            },
-                        ],
-                    ),
-                    typ: Unknown,
-                },
-            ),
+            kind: List {
+                elements: [
+                    ExprNode {
+                        pos: (
+                            1,
+                            2,
+                        ),
+                        kind: Literal {
+                            literal: Literal(1, 2) IntDecimal(1),
+                        },
+                        typ: Unknown,
+                    },
+                    ExprNode {
+                        pos: (
+                            4,
+                            5,
+                        ),
+                        kind: Literal {
+                            literal: Literal(4, 5) IntDecimal(2),
+                        },
+                        typ: Unknown,
+                    },
+                    ExprNode {
+                        pos: (
+                            7,
+                            8,
+                        ),
+                        kind: Literal {
+                            literal: Literal(7, 8) IntDecimal(3),
+                        },
+                        typ: Unknown,
+                    },
+                ],
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

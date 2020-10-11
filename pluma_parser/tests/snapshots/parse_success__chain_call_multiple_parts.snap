@@ -10,117 +10,73 @@ expression: "\"hello\" . replace \"x\" with \"y\""
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        1,
-        29,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(1, 29) [
+    TopLevelStatement(1, 29) Expr(
+        ExprNode {
             pos: (
                 1,
                 29,
             ),
-            kind: Expr(
-                ExprNode {
-                    pos: (
-                        1,
-                        29,
-                    ),
-                    kind: Call(
-                        CallNode {
-                            pos: (
-                                1,
-                                29,
-                            ),
-                            callee: ExprNode {
+            kind: Call {
+                call: Call {
+                    callee: ExprNode {
+                        pos: (
+                            1,
+                            26,
+                        ),
+                        kind: Access {
+                            receiver: ExprNode {
                                 pos: (
                                     1,
-                                    17,
+                                    6,
                                 ),
-                                kind: MethodAccess {
-                                    receiver: ExprNode {
-                                        pos: (
-                                            1,
-                                            6,
-                                        ),
-                                        kind: Literal(
-                                            LiteralNode {
-                                                pos: (
-                                                    1,
-                                                    6,
-                                                ),
-                                                kind: Str(
-                                                    "hello",
-                                                ),
-                                            },
-                                        ),
-                                        typ: Unknown,
-                                    },
-                                    method_parts: [
-                                        IdentifierNode {
-                                            pos: (
-                                                10,
-                                                17,
-                                            ),
-                                            name: "replace",
-                                        },
-                                        IdentifierNode {
-                                            pos: (
-                                                22,
-                                                26,
-                                            ),
-                                            name: "with",
-                                        },
+                                kind: Literal {
+                                    literal: Literal(1, 6) Str("hello"),
+                                },
+                                typ: Unknown,
+                            },
+                            property: ExprNode {
+                                pos: (
+                                    10,
+                                    26,
+                                ),
+                                kind: MultiPartIdentifier {
+                                    parts: [
+                                        Ident(10, 17) "replace",
+                                        Ident(22, 26) "with",
                                     ],
                                 },
                                 typ: Unknown,
                             },
-                            args: [
-                                ExprNode {
-                                    pos: (
-                                        19,
-                                        20,
-                                    ),
-                                    kind: Literal(
-                                        LiteralNode {
-                                            pos: (
-                                                19,
-                                                20,
-                                            ),
-                                            kind: Str(
-                                                "x",
-                                            ),
-                                        },
-                                    ),
-                                    typ: Unknown,
-                                },
-                                ExprNode {
-                                    pos: (
-                                        28,
-                                        29,
-                                    ),
-                                    kind: Literal(
-                                        LiteralNode {
-                                            pos: (
-                                                28,
-                                                29,
-                                            ),
-                                            kind: Str(
-                                                "y",
-                                            ),
-                                        },
-                                    ),
-                                    typ: Unknown,
-                                },
-                            ],
+                        },
+                        typ: Unknown,
+                    },
+                    args: [
+                        ExprNode {
+                            pos: (
+                                19,
+                                20,
+                            ),
+                            kind: Literal {
+                                literal: Literal(19, 20) Str("x"),
+                            },
                             typ: Unknown,
                         },
-                    ),
-                    typ: Unknown,
+                        ExprNode {
+                            pos: (
+                                28,
+                                29,
+                            ),
+                            kind: Literal {
+                                literal: Literal(28, 29) Str("y"),
+                            },
+                            typ: Unknown,
+                        },
+                    ],
                 },
-            ),
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

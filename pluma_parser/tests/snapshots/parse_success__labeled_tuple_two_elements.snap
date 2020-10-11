@@ -10,85 +10,45 @@ expression: "(aaa: 1, bbb: \"wow\")"
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        20,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 20) [
+    TopLevelStatement(0, 20) Expr(
+        ExprNode {
             pos: (
                 0,
                 20,
             ),
-            kind: Expr(
-                ExprNode {
-                    pos: (
-                        0,
-                        20,
-                    ),
-                    kind: LabeledTuple(
-                        [
-                            (
-                                IdentifierNode {
-                                    pos: (
-                                        1,
-                                        4,
-                                    ),
-                                    name: "aaa",
-                                },
-                                ExprNode {
-                                    pos: (
-                                        6,
-                                        7,
-                                    ),
-                                    kind: Literal(
-                                        LiteralNode {
-                                            pos: (
-                                                6,
-                                                7,
-                                            ),
-                                            kind: IntDecimal(
-                                                1,
-                                            ),
-                                        },
-                                    ),
-                                    typ: Unknown,
-                                },
+            kind: LabeledTuple {
+                entries: [
+                    (
+                        Ident(1, 4) "aaa",
+                        ExprNode {
+                            pos: (
+                                6,
+                                7,
                             ),
-                            (
-                                IdentifierNode {
-                                    pos: (
-                                        9,
-                                        12,
-                                    ),
-                                    name: "bbb",
-                                },
-                                ExprNode {
-                                    pos: (
-                                        15,
-                                        18,
-                                    ),
-                                    kind: Literal(
-                                        LiteralNode {
-                                            pos: (
-                                                15,
-                                                18,
-                                            ),
-                                            kind: Str(
-                                                "wow",
-                                            ),
-                                        },
-                                    ),
-                                    typ: Unknown,
-                                },
-                            ),
-                        ],
+                            kind: Literal {
+                                literal: Literal(6, 7) IntDecimal(1),
+                            },
+                            typ: Unknown,
+                        },
                     ),
-                    typ: Unknown,
-                },
-            ),
+                    (
+                        Ident(9, 12) "bbb",
+                        ExprNode {
+                            pos: (
+                                15,
+                                18,
+                            ),
+                            kind: Literal {
+                                literal: Literal(15, 18) Str("wow"),
+                            },
+                            typ: Unknown,
+                        },
+                    ),
+                ],
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

@@ -10,66 +10,54 @@ expression: /space digit space/
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        19,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 19) [
+    TopLevelStatement(0, 19) Expr(
+        ExprNode {
             pos: (
                 0,
                 19,
             ),
-            kind: Expr(
-                ExprNode {
+            kind: RegExpr {
+                regex: RegExprNode {
                     pos: (
                         0,
-                        19,
+                        0,
                     ),
-                    kind: RegExpr(
-                        RegExprNode {
-                            pos: (
-                                0,
-                                0,
-                            ),
-                            kind: Sequence(
-                                [
-                                    RegExprNode {
-                                        pos: (
-                                            1,
-                                            6,
-                                        ),
-                                        kind: CharacterClass(
-                                            "space",
-                                        ),
-                                    },
-                                    RegExprNode {
-                                        pos: (
-                                            7,
-                                            12,
-                                        ),
-                                        kind: CharacterClass(
-                                            "digit",
-                                        ),
-                                    },
-                                    RegExprNode {
-                                        pos: (
-                                            13,
-                                            18,
-                                        ),
-                                        kind: CharacterClass(
-                                            "space",
-                                        ),
-                                    },
-                                ],
-                            ),
-                        },
+                    kind: Sequence(
+                        [
+                            RegExprNode {
+                                pos: (
+                                    1,
+                                    6,
+                                ),
+                                kind: CharacterClass(
+                                    "space",
+                                ),
+                            },
+                            RegExprNode {
+                                pos: (
+                                    7,
+                                    12,
+                                ),
+                                kind: CharacterClass(
+                                    "digit",
+                                ),
+                            },
+                            RegExprNode {
+                                pos: (
+                                    13,
+                                    18,
+                                ),
+                                kind: CharacterClass(
+                                    "space",
+                                ),
+                            },
+                        ],
                     ),
-                    typ: Unknown,
                 },
-            ),
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

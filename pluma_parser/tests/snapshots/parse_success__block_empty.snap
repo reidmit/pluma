@@ -10,37 +10,18 @@ expression: "{}"
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        2,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 2) [
+    TopLevelStatement(0, 2) Expr(
+        ExprNode {
             pos: (
                 0,
                 2,
             ),
-            kind: Expr(
-                ExprNode {
-                    pos: (
-                        0,
-                        2,
-                    ),
-                    kind: Block(
-                        BlockNode {
-                            pos: (
-                                0,
-                                2,
-                            ),
-                            params: [],
-                            body: [],
-                        },
-                    ),
-                    typ: Unknown,
-                },
-            ),
+            kind: Block {
+                block: Block(0, 2) ([]) [],
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

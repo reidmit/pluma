@@ -10,36 +10,18 @@ expression: こんにちは
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        15,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 15) [
+    TopLevelStatement(0, 15) Expr(
+        ExprNode {
             pos: (
                 0,
                 15,
             ),
-            kind: Expr(
-                ExprNode {
-                    pos: (
-                        0,
-                        15,
-                    ),
-                    kind: Identifier(
-                        IdentifierNode {
-                            pos: (
-                                0,
-                                15,
-                            ),
-                            name: "こんにちは",
-                        },
-                    ),
-                    typ: Unknown,
-                },
-            ),
+            kind: Identifier {
+                ident: Ident(0, 15) "こんにちは",
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

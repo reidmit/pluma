@@ -13,6 +13,9 @@ pub struct CallNode {
 #[cfg(debug_assertions)]
 impl fmt::Debug for CallNode {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "Call{:?} {:#?} {:#?}", self.pos, self.callee, self.args)
+    f.debug_struct("Call")
+      .field("callee", &self.callee)
+      .field("args", &self.args)
+      .finish()
   }
 }

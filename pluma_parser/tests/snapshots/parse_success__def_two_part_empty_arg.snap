@@ -12,135 +12,60 @@ def hello () world () {
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        41,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 41) [
+    TopLevelStatement(0, 41) Def(
+        DefNode {
             pos: (
                 0,
                 41,
             ),
-            kind: Def(
-                DefNode {
-                    pos: (
-                        0,
-                        41,
+            visibility: Public,
+            kind: Function {
+                signature: [
+                    (
+                        Ident(4, 9) "hello",
+                        TypeExprNode {
+                            pos: (
+                                10,
+                                12,
+                            ),
+                            kind: EmptyTuple,
+                            typ: Unknown,
+                        },
                     ),
-                    visibility: Public,
-                    kind: Function {
-                        signature: [
-                            (
-                                IdentifierNode {
-                                    pos: (
-                                        4,
-                                        9,
-                                    ),
-                                    name: "hello",
-                                },
-                                TypeExprNode {
-                                    pos: (
-                                        10,
-                                        12,
-                                    ),
-                                    kind: EmptyTuple,
-                                    typ: Unknown,
-                                },
+                    (
+                        Ident(13, 18) "world",
+                        TypeExprNode {
+                            pos: (
+                                19,
+                                21,
                             ),
-                            (
-                                IdentifierNode {
-                                    pos: (
-                                        13,
-                                        18,
-                                    ),
-                                    name: "world",
-                                },
-                                TypeExprNode {
-                                    pos: (
-                                        19,
-                                        21,
-                                    ),
-                                    kind: EmptyTuple,
-                                    typ: Unknown,
-                                },
-                            ),
-                        ],
-                    },
-                    return_type: None,
-                    generic_type_constraints: [],
-                    block: BlockNode {
+                            kind: EmptyTuple,
+                            typ: Unknown,
+                        },
+                    ),
+                ],
+            },
+            return_type: None,
+            generic_type_constraints: [],
+            block: Block(22, 41) ([
+                Pattern(27, 28) Identifier(Ident(27, 28) "a", false),
+                Pattern(30, 31) Identifier(Ident(30, 31) "b", false),
+            ]) [
+                Statement(34, 38) Expr(
+                    ExprNode {
                         pos: (
-                            22,
-                            41,
+                            34,
+                            38,
                         ),
-                        params: [
-                            PatternNode {
-                                pos: (
-                                    27,
-                                    28,
-                                ),
-                                kind: Identifier(
-                                    IdentifierNode {
-                                        pos: (
-                                            27,
-                                            28,
-                                        ),
-                                        name: "a",
-                                    },
-                                    false,
-                                ),
-                            },
-                            PatternNode {
-                                pos: (
-                                    30,
-                                    31,
-                                ),
-                                kind: Identifier(
-                                    IdentifierNode {
-                                        pos: (
-                                            30,
-                                            31,
-                                        ),
-                                        name: "b",
-                                    },
-                                    false,
-                                ),
-                            },
-                        ],
-                        body: [
-                            StatementNode {
-                                pos: (
-                                    34,
-                                    38,
-                                ),
-                                kind: Expr(
-                                    ExprNode {
-                                        pos: (
-                                            34,
-                                            38,
-                                        ),
-                                        kind: Literal(
-                                            LiteralNode {
-                                                pos: (
-                                                    34,
-                                                    38,
-                                                ),
-                                                kind: Str(
-                                                    "wow!",
-                                                ),
-                                            },
-                                        ),
-                                        typ: Unknown,
-                                    },
-                                ),
-                            },
-                        ],
+                        kind: Literal {
+                            literal: Literal(34, 38) Str("wow!"),
+                        },
+                        typ: Unknown,
                     },
-                },
-            ),
+                ),
+            ],
         },
-    ],
-}
+    ),
+]
 

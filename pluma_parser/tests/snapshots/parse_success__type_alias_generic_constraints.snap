@@ -11,151 +11,133 @@ alias CoolFunc<A> where A :: Any
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        55,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 55) [
+    TopLevelStatement(0, 55) TypeDef(
+        TypeDefNode {
             pos: (
                 0,
                 55,
             ),
-            kind: TypeDef(
-                TypeDefNode {
+            visibility: Public,
+            kind: Alias {
+                of: TypeExprNode {
                     pos: (
-                        0,
+                        35,
                         55,
                     ),
-                    visibility: Public,
-                    kind: Alias {
-                        of: TypeExprNode {
+                    kind: Func(
+                        TypeExprNode {
                             pos: (
-                                35,
-                                55,
+                                37,
+                                45,
                             ),
-                            kind: Func(
-                                TypeExprNode {
-                                    pos: (
-                                        37,
-                                        45,
-                                    ),
-                                    kind: UnlabeledTuple(
-                                        [
-                                            TypeExprNode {
+                            kind: UnlabeledTuple(
+                                [
+                                    TypeExprNode {
+                                        pos: (
+                                            38,
+                                            39,
+                                        ),
+                                        kind: Single(
+                                            TypeIdentifierNode {
                                                 pos: (
                                                     38,
                                                     39,
                                                 ),
-                                                kind: Single(
-                                                    TypeIdentifierNode {
-                                                        pos: (
-                                                            38,
-                                                            39,
-                                                        ),
-                                                        name: "A",
-                                                        generics: [],
-                                                        constraints: None,
-                                                    },
-                                                ),
-                                                typ: Unknown,
+                                                name: "A",
+                                                generics: [],
+                                                constraints: None,
                                             },
-                                            TypeExprNode {
+                                        ),
+                                        typ: Unknown,
+                                    },
+                                    TypeExprNode {
+                                        pos: (
+                                            41,
+                                            44,
+                                        ),
+                                        kind: Single(
+                                            TypeIdentifierNode {
                                                 pos: (
                                                     41,
                                                     44,
                                                 ),
-                                                kind: Single(
-                                                    TypeIdentifierNode {
-                                                        pos: (
-                                                            41,
-                                                            44,
-                                                        ),
-                                                        name: "Int",
-                                                        generics: [],
-                                                        constraints: None,
-                                                    },
-                                                ),
-                                                typ: Unknown,
+                                                name: "Int",
+                                                generics: [],
+                                                constraints: None,
                                             },
-                                        ],
-                                    ),
-                                    typ: Unknown,
-                                },
-                                TypeExprNode {
+                                        ),
+                                        typ: Unknown,
+                                    },
+                                ],
+                            ),
+                            typ: Unknown,
+                        },
+                        TypeExprNode {
+                            pos: (
+                                49,
+                                53,
+                            ),
+                            kind: Single(
+                                TypeIdentifierNode {
                                     pos: (
                                         49,
                                         53,
                                     ),
-                                    kind: Single(
-                                        TypeIdentifierNode {
-                                            pos: (
-                                                49,
-                                                53,
-                                            ),
-                                            name: "Cool",
-                                            generics: [],
-                                            constraints: None,
-                                        },
-                                    ),
-                                    typ: Unknown,
+                                    name: "Cool",
+                                    generics: [],
+                                    constraints: None,
                                 },
                             ),
                             typ: Unknown,
                         },
-                    },
-                    name: TypeIdentifierNode {
+                    ),
+                    typ: Unknown,
+                },
+            },
+            name: TypeIdentifierNode {
+                pos: (
+                    6,
+                    17,
+                ),
+                name: "CoolFunc",
+                generics: [
+                    TypeExprNode {
                         pos: (
-                            6,
-                            17,
+                            15,
+                            16,
                         ),
-                        name: "CoolFunc",
-                        generics: [
-                            TypeExprNode {
+                        kind: Single(
+                            TypeIdentifierNode {
                                 pos: (
                                     15,
                                     16,
                                 ),
-                                kind: Single(
-                                    TypeIdentifierNode {
-                                        pos: (
-                                            15,
-                                            16,
-                                        ),
-                                        name: "A",
-                                        generics: [],
-                                        constraints: None,
-                                    },
-                                ),
-                                typ: Unknown,
-                            },
-                        ],
-                        constraints: None,
-                    },
-                    generic_type_constraints: [
-                        (
-                            IdentifierNode {
-                                pos: (
-                                    24,
-                                    25,
-                                ),
                                 name: "A",
-                            },
-                            TypeIdentifierNode {
-                                pos: (
-                                    29,
-                                    32,
-                                ),
-                                name: "Any",
                                 generics: [],
                                 constraints: None,
                             },
                         ),
-                    ],
-                },
-            ),
+                        typ: Unknown,
+                    },
+                ],
+                constraints: None,
+            },
+            generic_type_constraints: [
+                (
+                    Ident(24, 25) "A",
+                    TypeIdentifierNode {
+                        pos: (
+                            29,
+                            32,
+                        ),
+                        name: "Any",
+                        generics: [],
+                        constraints: None,
+                    },
+                ),
+            ],
         },
-    ],
-}
+    ),
+]
 

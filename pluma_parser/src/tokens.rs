@@ -17,10 +17,10 @@ pub enum Token {
   DoubleAnd(usize, usize),
   DoubleArrow(usize, usize),
   DoubleColon(usize, usize),
-  DoubleDot(usize, usize),
   DoubleEqual(usize, usize),
   DoubleLeftAngle(usize, usize),
   DoublePipe(usize, usize),
+  DoublePlus(usize, usize),
   DoubleRightAngle(usize, usize),
   DoubleStar(usize, usize),
   Equal(usize, usize),
@@ -46,6 +46,7 @@ pub enum Token {
   KeywordStruct(usize, usize),
   KeywordTrait(usize, usize),
   KeywordUse(usize, usize),
+  KeywordWhen(usize, usize),
   KeywordWhere(usize, usize),
   LeftAngle(usize, usize),
   LeftAngleEqual(usize, usize),
@@ -91,11 +92,11 @@ impl Token {
       | DoubleAnd(start, end)
       | DoubleArrow(start, end)
       | DoubleColon(start, end)
-      | DoubleDot(start, end)
       | DoubleEqual(start, end)
       | DoubleLeftAngle(start, end)
       | DoubleRightAngle(start, end)
       | DoublePipe(start, end)
+      | DoublePlus(start, end)
       | DoubleStar(start, end)
       | Equal(start, end)
       | ForwardSlash(start, end)
@@ -120,6 +121,7 @@ impl Token {
       | KeywordStruct(start, end)
       | KeywordTrait(start, end)
       | KeywordUse(start, end)
+      | KeywordWhen(start, end)
       | KeywordWhere(start, end)
       | LeftAngle(start, end)
       | LeftAngleEqual(start, end)
@@ -159,6 +161,8 @@ impl Token {
       | OctalDigits(..)
       | HexDigits(..)
       | LeftParen(..)
+      | LeftBrace(..)
+      | LeftBracket(..)
       | ForwardSlash(..)
       | StringLiteral(..) => true,
       _ => false,
@@ -185,10 +189,10 @@ impl fmt::Display for Token {
       &DoubleAnd(..) => "a '&&'",
       &DoubleArrow(..) => "a '=>'",
       &DoubleColon(..) => "a '::'",
-      &DoubleDot(..) => "a '..'",
       &DoubleEqual(..) => "a '=='",
       &DoubleLeftAngle(..) => "a '<<'",
       &DoublePipe(..) => "a '||'",
+      &DoublePlus(..) => "a '++'",
       &DoubleRightAngle(..) => "a '>>'",
       &DoubleStar(..) => "a '||'",
       &Equal(..) => "a '='",
@@ -214,6 +218,7 @@ impl fmt::Display for Token {
       &KeywordStruct(..) => "keyword 'struct'",
       &KeywordTrait(..) => "keyword 'trait'",
       &KeywordUse(..) => "keyword 'use'",
+      &KeywordWhen(..) => "keyword 'when'",
       &KeywordWhere(..) => "keyword 'where'",
       &LeftAngle(..) => "a '<'",
       &LeftAngleEqual(..) => "a '<='",

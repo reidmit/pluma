@@ -12,84 +12,30 @@ x
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        16,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 16) [
+    TopLevelStatement(0, 12) Let(
+        Let(0, 12) Pattern(4, 5) Identifier(Ident(4, 5) "x", false) ExprNode {
             pos: (
-                0,
+                9,
                 12,
             ),
-            kind: Let(
-                LetNode {
-                    pos: (
-                        0,
-                        12,
-                    ),
-                    pattern: PatternNode {
-                        pos: (
-                            4,
-                            5,
-                        ),
-                        kind: Identifier(
-                            IdentifierNode {
-                                pos: (
-                                    4,
-                                    5,
-                                ),
-                                name: "x",
-                            },
-                            false,
-                        ),
-                    },
-                    value: ExprNode {
-                        pos: (
-                            9,
-                            12,
-                        ),
-                        kind: Literal(
-                            LiteralNode {
-                                pos: (
-                                    9,
-                                    12,
-                                ),
-                                kind: Str(
-                                    "wow",
-                                ),
-                            },
-                        ),
-                        typ: Unknown,
-                    },
-                },
-            ),
+            kind: Literal {
+                literal: Literal(9, 12) Str("wow"),
+            },
+            typ: Unknown,
         },
-        TopLevelStatementNode {
+    ),
+    TopLevelStatement(15, 16) Expr(
+        ExprNode {
             pos: (
                 15,
                 16,
             ),
-            kind: Expr(
-                ExprNode {
-                    pos: (
-                        15,
-                        16,
-                    ),
-                    kind: Identifier(
-                        IdentifierNode {
-                            pos: (
-                                15,
-                                16,
-                            ),
-                            name: "x",
-                        },
-                    ),
-                    typ: Unknown,
-                },
-            ),
+            kind: Identifier {
+                ident: Ident(15, 16) "x",
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

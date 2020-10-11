@@ -12,199 +12,109 @@ def Person . hello (String, Int) world () {
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        64,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 64) [
+    TopLevelStatement(0, 64) Def(
+        DefNode {
             pos: (
                 0,
                 64,
             ),
-            kind: Def(
-                DefNode {
+            visibility: Public,
+            kind: Method {
+                receiver: TypeIdentifierNode {
                     pos: (
-                        0,
-                        64,
+                        4,
+                        10,
                     ),
-                    visibility: Public,
-                    kind: Method {
-                        receiver: TypeIdentifierNode {
+                    name: "Person",
+                    generics: [],
+                    constraints: None,
+                },
+                signature: [
+                    (
+                        Ident(13, 18) "hello",
+                        TypeExprNode {
                             pos: (
-                                4,
-                                10,
+                                19,
+                                32,
                             ),
-                            name: "Person",
-                            generics: [],
-                            constraints: None,
-                        },
-                        signature: [
-                            (
-                                IdentifierNode {
-                                    pos: (
-                                        13,
-                                        18,
-                                    ),
-                                    name: "hello",
-                                },
-                                TypeExprNode {
-                                    pos: (
-                                        19,
-                                        32,
-                                    ),
-                                    kind: UnlabeledTuple(
-                                        [
-                                            TypeExprNode {
+                            kind: UnlabeledTuple(
+                                [
+                                    TypeExprNode {
+                                        pos: (
+                                            20,
+                                            26,
+                                        ),
+                                        kind: Single(
+                                            TypeIdentifierNode {
                                                 pos: (
                                                     20,
                                                     26,
                                                 ),
-                                                kind: Single(
-                                                    TypeIdentifierNode {
-                                                        pos: (
-                                                            20,
-                                                            26,
-                                                        ),
-                                                        name: "String",
-                                                        generics: [],
-                                                        constraints: None,
-                                                    },
-                                                ),
-                                                typ: Unknown,
-                                            },
-                                            TypeExprNode {
-                                                pos: (
-                                                    28,
-                                                    31,
-                                                ),
-                                                kind: Single(
-                                                    TypeIdentifierNode {
-                                                        pos: (
-                                                            28,
-                                                            31,
-                                                        ),
-                                                        name: "Int",
-                                                        generics: [],
-                                                        constraints: None,
-                                                    },
-                                                ),
-                                                typ: Unknown,
-                                            },
-                                        ],
-                                    ),
-                                    typ: Unknown,
-                                },
-                            ),
-                            (
-                                IdentifierNode {
-                                    pos: (
-                                        33,
-                                        38,
-                                    ),
-                                    name: "world",
-                                },
-                                TypeExprNode {
-                                    pos: (
-                                        39,
-                                        41,
-                                    ),
-                                    kind: EmptyTuple,
-                                    typ: Unknown,
-                                },
-                            ),
-                        ],
-                    },
-                    return_type: None,
-                    generic_type_constraints: [],
-                    block: BlockNode {
-                        pos: (
-                            42,
-                            64,
-                        ),
-                        params: [
-                            PatternNode {
-                                pos: (
-                                    47,
-                                    48,
-                                ),
-                                kind: Identifier(
-                                    IdentifierNode {
-                                        pos: (
-                                            47,
-                                            48,
-                                        ),
-                                        name: "a",
-                                    },
-                                    false,
-                                ),
-                            },
-                            PatternNode {
-                                pos: (
-                                    50,
-                                    51,
-                                ),
-                                kind: Identifier(
-                                    IdentifierNode {
-                                        pos: (
-                                            50,
-                                            51,
-                                        ),
-                                        name: "b",
-                                    },
-                                    false,
-                                ),
-                            },
-                            PatternNode {
-                                pos: (
-                                    53,
-                                    54,
-                                ),
-                                kind: Identifier(
-                                    IdentifierNode {
-                                        pos: (
-                                            53,
-                                            54,
-                                        ),
-                                        name: "c",
-                                    },
-                                    false,
-                                ),
-                            },
-                        ],
-                        body: [
-                            StatementNode {
-                                pos: (
-                                    57,
-                                    61,
-                                ),
-                                kind: Expr(
-                                    ExprNode {
-                                        pos: (
-                                            57,
-                                            61,
-                                        ),
-                                        kind: Literal(
-                                            LiteralNode {
-                                                pos: (
-                                                    57,
-                                                    61,
-                                                ),
-                                                kind: Str(
-                                                    "wow!",
-                                                ),
+                                                name: "String",
+                                                generics: [],
+                                                constraints: None,
                                             },
                                         ),
                                         typ: Unknown,
                                     },
-                                ),
-                            },
-                        ],
+                                    TypeExprNode {
+                                        pos: (
+                                            28,
+                                            31,
+                                        ),
+                                        kind: Single(
+                                            TypeIdentifierNode {
+                                                pos: (
+                                                    28,
+                                                    31,
+                                                ),
+                                                name: "Int",
+                                                generics: [],
+                                                constraints: None,
+                                            },
+                                        ),
+                                        typ: Unknown,
+                                    },
+                                ],
+                            ),
+                            typ: Unknown,
+                        },
+                    ),
+                    (
+                        Ident(33, 38) "world",
+                        TypeExprNode {
+                            pos: (
+                                39,
+                                41,
+                            ),
+                            kind: EmptyTuple,
+                            typ: Unknown,
+                        },
+                    ),
+                ],
+            },
+            return_type: None,
+            generic_type_constraints: [],
+            block: Block(42, 64) ([
+                Pattern(47, 48) Identifier(Ident(47, 48) "a", false),
+                Pattern(50, 51) Identifier(Ident(50, 51) "b", false),
+                Pattern(53, 54) Identifier(Ident(53, 54) "c", false),
+            ]) [
+                Statement(57, 61) Expr(
+                    ExprNode {
+                        pos: (
+                            57,
+                            61,
+                        ),
+                        kind: Literal {
+                            literal: Literal(57, 61) Str("wow!"),
+                        },
+                        typ: Unknown,
                     },
-                },
-            ),
+                ),
+            ],
         },
-    ],
-}
+    ),
+]
 

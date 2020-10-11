@@ -10,38 +10,18 @@ expression: "\"🌝\""
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        1,
-        5,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(1, 5) [
+    TopLevelStatement(1, 5) Expr(
+        ExprNode {
             pos: (
                 1,
                 5,
             ),
-            kind: Expr(
-                ExprNode {
-                    pos: (
-                        1,
-                        5,
-                    ),
-                    kind: Literal(
-                        LiteralNode {
-                            pos: (
-                                1,
-                                5,
-                            ),
-                            kind: Str(
-                                "🌝",
-                            ),
-                        },
-                    ),
-                    typ: Unknown,
-                },
-            ),
+            kind: Literal {
+                literal: Literal(1, 5) Str("🌝"),
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

@@ -13,104 +13,80 @@ struct Person (
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        46,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 46) [
+    TopLevelStatement(0, 46) TypeDef(
+        TypeDefNode {
             pos: (
                 0,
                 46,
             ),
-            kind: TypeDef(
-                TypeDefNode {
+            visibility: Public,
+            kind: Struct {
+                inner: TypeExprNode {
                     pos: (
-                        0,
+                        14,
                         46,
                     ),
-                    visibility: Public,
-                    kind: Struct {
-                        inner: TypeExprNode {
-                            pos: (
-                                14,
-                                46,
-                            ),
-                            kind: LabeledTuple(
-                                [
-                                    (
-                                        IdentifierNode {
-                                            pos: (
-                                                18,
-                                                22,
-                                            ),
-                                            name: "name",
-                                        },
-                                        TypeExprNode {
+                    kind: LabeledTuple(
+                        [
+                            (
+                                Ident(18, 22) "name",
+                                TypeExprNode {
+                                    pos: (
+                                        25,
+                                        31,
+                                    ),
+                                    kind: Single(
+                                        TypeIdentifierNode {
                                             pos: (
                                                 25,
                                                 31,
                                             ),
-                                            kind: Single(
-                                                TypeIdentifierNode {
-                                                    pos: (
-                                                        25,
-                                                        31,
-                                                    ),
-                                                    name: "String",
-                                                    generics: [],
-                                                    constraints: None,
-                                                },
-                                            ),
-                                            typ: Unknown,
+                                            name: "String",
+                                            generics: [],
+                                            constraints: None,
                                         },
                                     ),
-                                    (
-                                        IdentifierNode {
-                                            pos: (
-                                                35,
-                                                38,
-                                            ),
-                                            name: "age",
-                                        },
-                                        TypeExprNode {
+                                    typ: Unknown,
+                                },
+                            ),
+                            (
+                                Ident(35, 38) "age",
+                                TypeExprNode {
+                                    pos: (
+                                        41,
+                                        44,
+                                    ),
+                                    kind: Single(
+                                        TypeIdentifierNode {
                                             pos: (
                                                 41,
                                                 44,
                                             ),
-                                            kind: Single(
-                                                TypeIdentifierNode {
-                                                    pos: (
-                                                        41,
-                                                        44,
-                                                    ),
-                                                    name: "Int",
-                                                    generics: [],
-                                                    constraints: None,
-                                                },
-                                            ),
-                                            typ: Unknown,
+                                            name: "Int",
+                                            generics: [],
+                                            constraints: None,
                                         },
                                     ),
-                                ],
+                                    typ: Unknown,
+                                },
                             ),
-                            typ: Unknown,
-                        },
-                    },
-                    name: TypeIdentifierNode {
-                        pos: (
-                            7,
-                            13,
-                        ),
-                        name: "Person",
-                        generics: [],
-                        constraints: None,
-                    },
-                    generic_type_constraints: [],
+                        ],
+                    ),
+                    typ: Unknown,
                 },
-            ),
+            },
+            name: TypeIdentifierNode {
+                pos: (
+                    7,
+                    13,
+                ),
+                name: "Person",
+                generics: [],
+                constraints: None,
+            },
+            generic_type_constraints: [],
         },
-    ],
-}
+    ),
+]
 

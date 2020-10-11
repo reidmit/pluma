@@ -10,38 +10,18 @@ expression: "47"
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        2,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 2) [
+    TopLevelStatement(0, 2) Expr(
+        ExprNode {
             pos: (
                 0,
                 2,
             ),
-            kind: Expr(
-                ExprNode {
-                    pos: (
-                        0,
-                        2,
-                    ),
-                    kind: Literal(
-                        LiteralNode {
-                            pos: (
-                                0,
-                                2,
-                            ),
-                            kind: IntDecimal(
-                                47,
-                            ),
-                        },
-                    ),
-                    typ: Unknown,
-                },
-            ),
+            kind: Literal {
+                literal: Literal(0, 2) IntDecimal(47),
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

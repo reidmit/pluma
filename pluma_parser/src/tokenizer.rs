@@ -235,11 +235,23 @@ impl<'a> Iterator for Tokenizer<'a> {
 
         b'-' => {
           self.index += 1;
+
+          if self.source[self.index] == b'>' {
+            self.index += 1;
+            return Some(Arrow(start_index, self.index));
+          }
+
           return Some(Minus(start_index, self.index));
         }
 
         b'+' => {
           self.index += 1;
+
+          if self.source[self.index] == b'+' {
+            self.index += 1;
+            return Some(DoublePlus(start_index, self.index));
+          }
+
           return Some(Plus(start_index, self.index));
         }
 
@@ -256,6 +268,11 @@ impl<'a> Iterator for Tokenizer<'a> {
         b'~' => {
           self.index += 1;
           return Some(Tilde(start_index, self.index));
+        }
+
+        b'?' => {
+          self.index += 1;
+          return Some(Question(start_index, self.index));
         }
 
         b'_' if (self.index >= self.length - 1 || self.source[self.index + 1] != b'_') => {
@@ -282,6 +299,11 @@ impl<'a> Iterator for Tokenizer<'a> {
             return Some(DoubleEqual(start_index, self.index));
           }
 
+          if self.source[self.index] == b'>' {
+            self.index += 1;
+            return Some(DoubleArrow(start_index, self.index));
+          }
+
           return Some(Equal(start_index, self.index));
         }
 
@@ -298,12 +320,6 @@ impl<'a> Iterator for Tokenizer<'a> {
 
         b'.' => {
           self.index += 1;
-
-          if self.source[self.index] == b'.' {
-            self.index += 1;
-            return Some(DoubleDot(start_index, self.index));
-          }
-
           return Some(Dot(start_index, self.index));
         }
 
@@ -433,6 +449,7 @@ impl<'a> Iterator for Tokenizer<'a> {
             b"let" => KeywordLet,
             b"match" => KeywordMatch,
             b"mut" => KeywordMut,
+            b"when" => KeywordWhen,
 
             // These are only considered keywords if they appear at the top level:
             b"def" if self.brace_depth == 0 => KeywordDef,

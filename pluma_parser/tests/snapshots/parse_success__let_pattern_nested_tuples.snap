@@ -10,153 +10,49 @@ let (a, _, (_, b)) = (47, something, tuple)
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        43,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 43) [
+    TopLevelStatement(0, 43) Let(
+        Let(0, 43) Pattern(4, 18) UnlabeledTuple([Pattern(5, 6) Identifier(Ident(5, 6) "a", false), Pattern(8, 9) Underscore, Pattern(11, 17) UnlabeledTuple([Pattern(12, 13) Underscore, Pattern(15, 16) Identifier(Ident(15, 16) "b", false)])]) ExprNode {
             pos: (
-                0,
+                21,
                 43,
             ),
-            kind: Let(
-                LetNode {
-                    pos: (
-                        0,
-                        43,
-                    ),
-                    pattern: PatternNode {
+            kind: UnlabeledTuple {
+                entries: [
+                    ExprNode {
                         pos: (
-                            4,
-                            18,
+                            22,
+                            24,
                         ),
-                        kind: UnlabeledTuple(
-                            [
-                                PatternNode {
-                                    pos: (
-                                        5,
-                                        6,
-                                    ),
-                                    kind: Identifier(
-                                        IdentifierNode {
-                                            pos: (
-                                                5,
-                                                6,
-                                            ),
-                                            name: "a",
-                                        },
-                                        false,
-                                    ),
-                                },
-                                PatternNode {
-                                    pos: (
-                                        8,
-                                        9,
-                                    ),
-                                    kind: Underscore,
-                                },
-                                PatternNode {
-                                    pos: (
-                                        11,
-                                        17,
-                                    ),
-                                    kind: UnlabeledTuple(
-                                        [
-                                            PatternNode {
-                                                pos: (
-                                                    12,
-                                                    13,
-                                                ),
-                                                kind: Underscore,
-                                            },
-                                            PatternNode {
-                                                pos: (
-                                                    15,
-                                                    16,
-                                                ),
-                                                kind: Identifier(
-                                                    IdentifierNode {
-                                                        pos: (
-                                                            15,
-                                                            16,
-                                                        ),
-                                                        name: "b",
-                                                    },
-                                                    false,
-                                                ),
-                                            },
-                                        ],
-                                    ),
-                                },
-                            ],
-                        ),
-                    },
-                    value: ExprNode {
-                        pos: (
-                            21,
-                            43,
-                        ),
-                        kind: UnlabeledTuple(
-                            [
-                                ExprNode {
-                                    pos: (
-                                        22,
-                                        24,
-                                    ),
-                                    kind: Literal(
-                                        LiteralNode {
-                                            pos: (
-                                                22,
-                                                24,
-                                            ),
-                                            kind: IntDecimal(
-                                                47,
-                                            ),
-                                        },
-                                    ),
-                                    typ: Unknown,
-                                },
-                                ExprNode {
-                                    pos: (
-                                        26,
-                                        35,
-                                    ),
-                                    kind: Identifier(
-                                        IdentifierNode {
-                                            pos: (
-                                                26,
-                                                35,
-                                            ),
-                                            name: "something",
-                                        },
-                                    ),
-                                    typ: Unknown,
-                                },
-                                ExprNode {
-                                    pos: (
-                                        37,
-                                        42,
-                                    ),
-                                    kind: Identifier(
-                                        IdentifierNode {
-                                            pos: (
-                                                37,
-                                                42,
-                                            ),
-                                            name: "tuple",
-                                        },
-                                    ),
-                                    typ: Unknown,
-                                },
-                            ],
-                        ),
+                        kind: Literal {
+                            literal: Literal(22, 24) IntDecimal(47),
+                        },
                         typ: Unknown,
                     },
-                },
-            ),
+                    ExprNode {
+                        pos: (
+                            26,
+                            35,
+                        ),
+                        kind: Identifier {
+                            ident: Ident(26, 35) "something",
+                        },
+                        typ: Unknown,
+                    },
+                    ExprNode {
+                        pos: (
+                            37,
+                            42,
+                        ),
+                        kind: Identifier {
+                            ident: Ident(37, 42) "tuple",
+                        },
+                        typ: Unknown,
+                    },
+                ],
+            },
+            typ: Unknown,
         },
-    ],
-}
+    ),
+]
 

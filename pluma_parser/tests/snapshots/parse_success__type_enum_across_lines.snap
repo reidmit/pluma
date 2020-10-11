@@ -13,86 +13,56 @@ enum Color
 {}
 
 === AST ===
-ModuleNode {
-    pos: (
-        0,
-        37,
-    ),
-    body: [
-        TopLevelStatementNode {
+Module(0, 37) [
+    TopLevelStatement(0, 37) TypeDef(
+        TypeDefNode {
             pos: (
                 0,
                 37,
             ),
-            kind: TypeDef(
-                TypeDefNode {
-                    pos: (
-                        0,
-                        37,
-                    ),
-                    visibility: Public,
-                    kind: Enum {
-                        variants: [
-                            EnumVariantNode {
-                                pos: (
-                                    15,
-                                    18,
-                                ),
-                                kind: Identifier(
-                                    IdentifierNode {
-                                        pos: (
-                                            15,
-                                            18,
-                                        ),
-                                        name: "Red",
-                                    },
-                                ),
-                            },
-                            EnumVariantNode {
-                                pos: (
-                                    23,
-                                    28,
-                                ),
-                                kind: Identifier(
-                                    IdentifierNode {
-                                        pos: (
-                                            23,
-                                            28,
-                                        ),
-                                        name: "Green",
-                                    },
-                                ),
-                            },
-                            EnumVariantNode {
-                                pos: (
-                                    33,
-                                    37,
-                                ),
-                                kind: Identifier(
-                                    IdentifierNode {
-                                        pos: (
-                                            33,
-                                            37,
-                                        ),
-                                        name: "Blue",
-                                    },
-                                ),
-                            },
-                        ],
-                    },
-                    name: TypeIdentifierNode {
+            visibility: Public,
+            kind: Enum {
+                variants: [
+                    EnumVariantNode {
                         pos: (
-                            5,
-                            10,
+                            15,
+                            18,
                         ),
-                        name: "Color",
-                        generics: [],
-                        constraints: None,
+                        kind: Identifier(
+                            Ident(15, 18) "Red",
+                        ),
                     },
-                    generic_type_constraints: [],
-                },
-            ),
+                    EnumVariantNode {
+                        pos: (
+                            23,
+                            28,
+                        ),
+                        kind: Identifier(
+                            Ident(23, 28) "Green",
+                        ),
+                    },
+                    EnumVariantNode {
+                        pos: (
+                            33,
+                            37,
+                        ),
+                        kind: Identifier(
+                            Ident(33, 37) "Blue",
+                        ),
+                    },
+                ],
+            },
+            name: TypeIdentifierNode {
+                pos: (
+                    5,
+                    10,
+                ),
+                name: "Color",
+                generics: [],
+                constraints: None,
+            },
+            generic_type_constraints: [],
         },
-    ],
-}
+    ),
+]
 
