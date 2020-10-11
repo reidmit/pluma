@@ -11,46 +11,52 @@ enum Bool | True | False
 
 === AST ===
 Module(0, 24) [
-    TopLevelStatement(0, 24) TypeDef(
-        TypeDefNode {
-            pos: (
-                0,
-                24,
-            ),
-            visibility: Public,
-            kind: Enum {
-                variants: [
-                    EnumVariantNode {
-                        pos: (
-                            12,
-                            16,
-                        ),
-                        kind: Identifier(
-                            Ident(12, 16) "True",
-                        ),
-                    },
-                    EnumVariantNode {
-                        pos: (
-                            19,
-                            24,
-                        ),
-                        kind: Identifier(
-                            Ident(19, 24) "False",
-                        ),
-                    },
-                ],
-            },
-            name: TypeIdentifierNode {
+    TopLevelStatementNode {
+        pos: (
+            0,
+            24,
+        ),
+        kind: TypeDef(
+            TypeDefNode {
                 pos: (
-                    5,
-                    9,
+                    0,
+                    24,
                 ),
-                name: "Bool",
-                generics: [],
-                constraints: None,
+                visibility: Public,
+                kind: Enum {
+                    variants: [
+                        EnumVariantNode {
+                            pos: (
+                                12,
+                                16,
+                            ),
+                            kind: Identifier(
+                                Ident(12, 16) "True",
+                            ),
+                        },
+                        EnumVariantNode {
+                            pos: (
+                                19,
+                                24,
+                            ),
+                            kind: Identifier(
+                                Ident(19, 24) "False",
+                            ),
+                        },
+                    ],
+                },
+                name: TypeIdentifierNode {
+                    pos: (
+                        5,
+                        9,
+                    ),
+                    name: "Bool",
+                    generics: [],
+                    constraints: None,
+                },
+                generic_type_constraints: [],
             },
-            generic_type_constraints: [],
-        },
-    ),
+        ),
+    },
 ]
 

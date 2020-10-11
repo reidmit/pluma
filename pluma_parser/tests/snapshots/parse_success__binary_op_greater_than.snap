@@ -11,37 +11,65 @@ expression: "\"a\" > \"b\""
 
 === AST ===
 Module(1, 8) [
-    TopLevelStatement(1, 8) Expr(
-        ExprNode {
-            pos: (
-                1,
-                8,
-            ),
-            kind: BinaryOperation {
-                left: ExprNode {
-                    pos: (
-                        1,
-                        2,
-                    ),
-                    kind: Literal {
-                        literal: Literal(1, 2) Str("a"),
+    TopLevelStatementNode {
+        pos: (
+            1,
+            8,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    1,
+                    8,
+                ),
+                kind: BinaryOperation {
+                    left: ExprNode {
+                        pos: (
+                            1,
+                            2,
+                        ),
+                        kind: Literal {
+                            literal: LiteralNode {
+                                pos: (
+                                    1,
+                                    2,
+                                ),
+                                kind: Str(
+                                    "a",
+                                ),
+                            },
+                        },
+                        typ: Unknown,
                     },
-                    typ: Unknown,
-                },
-                op: Operator(4, 5) GreaterThan,
-                right: ExprNode {
-                    pos: (
-                        7,
-                        8,
-                    ),
-                    kind: Literal {
-                        literal: Literal(7, 8) Str("b"),
+                    op: OperatorNode {
+                        pos: (
+                            4,
+                            5,
+                        ),
+                        kind: GreaterThan,
                     },
-                    typ: Unknown,
+                    right: ExprNode {
+                        pos: (
+                            7,
+                            8,
+                        ),
+                        kind: Literal {
+                            literal: LiteralNode {
+                                pos: (
+                                    7,
+                                    8,
+                                ),
+                                kind: Str(
+                                    "b",
+                                ),
+                            },
+                        },
+                        typ: Unknown,
+                    },
                 },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

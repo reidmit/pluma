@@ -11,50 +11,91 @@ let b = { $0 + $1 }
 
 === AST ===
 Module(0, 19) [
-    TopLevelStatement(0, 19) Let(
-        Let(0, 19) Pattern(4, 5) Identifier(Ident(4, 5) "b", false) ExprNode {
-            pos: (
-                8,
-                19,
-            ),
-            kind: Block {
-                block: Block(8, 19) ([]) [
-                    Statement(10, 17) Expr(
-                        ExprNode {
+    TopLevelStatementNode {
+        pos: (
+            0,
+            19,
+        ),
+        kind: Let(
+            LetNode {
+                pos: (
+                    0,
+                    19,
+                ),
+                pattern: PatternNode {
+                    pos: (
+                        4,
+                        5,
+                    ),
+                    kind: Identifier(
+                        Ident(4, 5) "b",
+                        false,
+                    ),
+                },
+                value: ExprNode {
+                    pos: (
+                        8,
+                        19,
+                    ),
+                    kind: Block {
+                        block: BlockNode {
                             pos: (
-                                10,
-                                17,
+                                8,
+                                19,
                             ),
-                            kind: BinaryOperation {
-                                left: ExprNode {
+                            params: [],
+                            body: [
+                                StatementNode {
                                     pos: (
                                         10,
-                                        12,
-                                    ),
-                                    kind: Identifier {
-                                        ident: Ident(10, 12) "$0",
-                                    },
-                                    typ: Unknown,
-                                },
-                                op: Operator(13, 14) Add,
-                                right: ExprNode {
-                                    pos: (
-                                        15,
                                         17,
                                     ),
-                                    kind: Identifier {
-                                        ident: Ident(15, 17) "$1",
-                                    },
-                                    typ: Unknown,
+                                    kind: Expr(
+                                        ExprNode {
+                                            pos: (
+                                                10,
+                                                17,
+                                            ),
+                                            kind: BinaryOperation {
+                                                left: ExprNode {
+                                                    pos: (
+                                                        10,
+                                                        12,
+                                                    ),
+                                                    kind: Identifier {
+                                                        ident: Ident(10, 12) "$0",
+                                                    },
+                                                    typ: Unknown,
+                                                },
+                                                op: OperatorNode {
+                                                    pos: (
+                                                        13,
+                                                        14,
+                                                    ),
+                                                    kind: Add,
+                                                },
+                                                right: ExprNode {
+                                                    pos: (
+                                                        15,
+                                                        17,
+                                                    ),
+                                                    kind: Identifier {
+                                                        ident: Ident(15, 17) "$1",
+                                                    },
+                                                    typ: Unknown,
+                                                },
+                                            },
+                                            typ: Unknown,
+                                        },
+                                    ),
                                 },
-                            },
-                            typ: Unknown,
+                            ],
                         },
-                    ),
-                ],
+                    },
+                    typ: Unknown,
+                },
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

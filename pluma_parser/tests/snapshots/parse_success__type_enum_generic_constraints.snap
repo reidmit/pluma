@@ -13,105 +13,111 @@ enum Optional<A> where A :: Any
 
 === AST ===
 Module(0, 52) [
-    TopLevelStatement(0, 52) TypeDef(
-        TypeDefNode {
-            pos: (
-                0,
-                52,
-            ),
-            visibility: Public,
-            kind: Enum {
-                variants: [
-                    EnumVariantNode {
-                        pos: (
-                            36,
-                            43,
-                        ),
-                        kind: Constructor(
-                            Ident(36, 40) "Some",
-                            TypeExprNode {
-                                pos: (
-                                    40,
-                                    43,
-                                ),
-                                kind: Grouping(
-                                    TypeExprNode {
-                                        pos: (
-                                            41,
-                                            42,
-                                        ),
-                                        kind: Single(
-                                            TypeIdentifierNode {
-                                                pos: (
-                                                    41,
-                                                    42,
-                                                ),
-                                                name: "A",
-                                                generics: [],
-                                                constraints: None,
-                                            },
-                                        ),
-                                        typ: Unknown,
-                                    },
-                                ),
-                                typ: Unknown,
-                            },
-                        ),
-                    },
-                    EnumVariantNode {
-                        pos: (
-                            48,
-                            52,
-                        ),
-                        kind: Identifier(
-                            Ident(48, 52) "None",
-                        ),
-                    },
-                ],
-            },
-            name: TypeIdentifierNode {
+    TopLevelStatementNode {
+        pos: (
+            0,
+            52,
+        ),
+        kind: TypeDef(
+            TypeDefNode {
                 pos: (
-                    5,
-                    16,
+                    0,
+                    52,
                 ),
-                name: "Optional",
-                generics: [
-                    TypeExprNode {
-                        pos: (
-                            14,
-                            15,
-                        ),
-                        kind: Single(
-                            TypeIdentifierNode {
-                                pos: (
-                                    14,
-                                    15,
-                                ),
-                                name: "A",
-                                generics: [],
-                                constraints: None,
-                            },
-                        ),
-                        typ: Unknown,
-                    },
+                visibility: Public,
+                kind: Enum {
+                    variants: [
+                        EnumVariantNode {
+                            pos: (
+                                36,
+                                43,
+                            ),
+                            kind: Constructor(
+                                Ident(36, 40) "Some",
+                                TypeExprNode {
+                                    pos: (
+                                        40,
+                                        43,
+                                    ),
+                                    kind: Grouping(
+                                        TypeExprNode {
+                                            pos: (
+                                                41,
+                                                42,
+                                            ),
+                                            kind: Single(
+                                                TypeIdentifierNode {
+                                                    pos: (
+                                                        41,
+                                                        42,
+                                                    ),
+                                                    name: "A",
+                                                    generics: [],
+                                                    constraints: None,
+                                                },
+                                            ),
+                                            typ: Unknown,
+                                        },
+                                    ),
+                                    typ: Unknown,
+                                },
+                            ),
+                        },
+                        EnumVariantNode {
+                            pos: (
+                                48,
+                                52,
+                            ),
+                            kind: Identifier(
+                                Ident(48, 52) "None",
+                            ),
+                        },
+                    ],
+                },
+                name: TypeIdentifierNode {
+                    pos: (
+                        5,
+                        16,
+                    ),
+                    name: "Optional",
+                    generics: [
+                        TypeExprNode {
+                            pos: (
+                                14,
+                                15,
+                            ),
+                            kind: Single(
+                                TypeIdentifierNode {
+                                    pos: (
+                                        14,
+                                        15,
+                                    ),
+                                    name: "A",
+                                    generics: [],
+                                    constraints: None,
+                                },
+                            ),
+                            typ: Unknown,
+                        },
+                    ],
+                    constraints: None,
+                },
+                generic_type_constraints: [
+                    (
+                        Ident(23, 24) "A",
+                        TypeIdentifierNode {
+                            pos: (
+                                28,
+                                31,
+                            ),
+                            name: "Any",
+                            generics: [],
+                            constraints: None,
+                        },
+                    ),
                 ],
-                constraints: None,
             },
-            generic_type_constraints: [
-                (
-                    Ident(23, 24) "A",
-                    TypeIdentifierNode {
-                        pos: (
-                            28,
-                            31,
-                        ),
-                        name: "Any",
-                        generics: [],
-                        constraints: None,
-                    },
-                ),
-            ],
-        },
-    ),
+        ),
+    },
 ]
 

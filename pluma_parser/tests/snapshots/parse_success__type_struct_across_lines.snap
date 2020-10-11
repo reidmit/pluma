@@ -14,79 +14,85 @@ struct Person (
 
 === AST ===
 Module(0, 46) [
-    TopLevelStatement(0, 46) TypeDef(
-        TypeDefNode {
-            pos: (
-                0,
-                46,
-            ),
-            visibility: Public,
-            kind: Struct {
-                inner: TypeExprNode {
-                    pos: (
-                        14,
-                        46,
-                    ),
-                    kind: LabeledTuple(
-                        [
-                            (
-                                Ident(18, 22) "name",
-                                TypeExprNode {
-                                    pos: (
-                                        25,
-                                        31,
-                                    ),
-                                    kind: Single(
-                                        TypeIdentifierNode {
-                                            pos: (
-                                                25,
-                                                31,
-                                            ),
-                                            name: "String",
-                                            generics: [],
-                                            constraints: None,
-                                        },
-                                    ),
-                                    typ: Unknown,
-                                },
-                            ),
-                            (
-                                Ident(35, 38) "age",
-                                TypeExprNode {
-                                    pos: (
-                                        41,
-                                        44,
-                                    ),
-                                    kind: Single(
-                                        TypeIdentifierNode {
-                                            pos: (
-                                                41,
-                                                44,
-                                            ),
-                                            name: "Int",
-                                            generics: [],
-                                            constraints: None,
-                                        },
-                                    ),
-                                    typ: Unknown,
-                                },
-                            ),
-                        ],
-                    ),
-                    typ: Unknown,
-                },
-            },
-            name: TypeIdentifierNode {
+    TopLevelStatementNode {
+        pos: (
+            0,
+            46,
+        ),
+        kind: TypeDef(
+            TypeDefNode {
                 pos: (
-                    7,
-                    13,
+                    0,
+                    46,
                 ),
-                name: "Person",
-                generics: [],
-                constraints: None,
+                visibility: Public,
+                kind: Struct {
+                    inner: TypeExprNode {
+                        pos: (
+                            14,
+                            46,
+                        ),
+                        kind: LabeledTuple(
+                            [
+                                (
+                                    Ident(18, 22) "name",
+                                    TypeExprNode {
+                                        pos: (
+                                            25,
+                                            31,
+                                        ),
+                                        kind: Single(
+                                            TypeIdentifierNode {
+                                                pos: (
+                                                    25,
+                                                    31,
+                                                ),
+                                                name: "String",
+                                                generics: [],
+                                                constraints: None,
+                                            },
+                                        ),
+                                        typ: Unknown,
+                                    },
+                                ),
+                                (
+                                    Ident(35, 38) "age",
+                                    TypeExprNode {
+                                        pos: (
+                                            41,
+                                            44,
+                                        ),
+                                        kind: Single(
+                                            TypeIdentifierNode {
+                                                pos: (
+                                                    41,
+                                                    44,
+                                                ),
+                                                name: "Int",
+                                                generics: [],
+                                                constraints: None,
+                                            },
+                                        ),
+                                        typ: Unknown,
+                                    },
+                                ),
+                            ],
+                        ),
+                        typ: Unknown,
+                    },
+                },
+                name: TypeIdentifierNode {
+                    pos: (
+                        7,
+                        13,
+                    ),
+                    name: "Person",
+                    generics: [],
+                    constraints: None,
+                },
+                generic_type_constraints: [],
             },
-            generic_type_constraints: [],
-        },
-    ),
+        ),
+    },
 ]
 

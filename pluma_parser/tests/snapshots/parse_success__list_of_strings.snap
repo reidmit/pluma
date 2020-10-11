@@ -13,58 +13,96 @@ line"]
 
 === AST ===
 Module(0, 38) [
-    TopLevelStatement(0, 38) Expr(
-        ExprNode {
-            pos: (
-                0,
-                38,
-            ),
-            kind: List {
-                elements: [
-                    ExprNode {
-                        pos: (
-                            2,
-                            5,
-                        ),
-                        kind: Literal {
-                            literal: Literal(2, 5) Str("hey"),
+    TopLevelStatementNode {
+        pos: (
+            0,
+            38,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    0,
+                    38,
+                ),
+                kind: List {
+                    elements: [
+                        ExprNode {
+                            pos: (
+                                2,
+                                5,
+                            ),
+                            kind: Literal {
+                                literal: LiteralNode {
+                                    pos: (
+                                        2,
+                                        5,
+                                    ),
+                                    kind: Str(
+                                        "hey",
+                                    ),
+                                },
+                            },
+                            typ: Unknown,
                         },
-                        typ: Unknown,
-                    },
-                    ExprNode {
-                        pos: (
-                            9,
-                            12,
-                        ),
-                        kind: Literal {
-                            literal: Literal(9, 12) Str("wow"),
+                        ExprNode {
+                            pos: (
+                                9,
+                                12,
+                            ),
+                            kind: Literal {
+                                literal: LiteralNode {
+                                    pos: (
+                                        9,
+                                        12,
+                                    ),
+                                    kind: Str(
+                                        "wow",
+                                    ),
+                                },
+                            },
+                            typ: Unknown,
                         },
-                        typ: Unknown,
-                    },
-                    ExprNode {
-                        pos: (
-                            16,
-                            20,
-                        ),
-                        kind: Literal {
-                            literal: Literal(16, 20) Str("cool"),
+                        ExprNode {
+                            pos: (
+                                16,
+                                20,
+                            ),
+                            kind: Literal {
+                                literal: LiteralNode {
+                                    pos: (
+                                        16,
+                                        20,
+                                    ),
+                                    kind: Str(
+                                        "cool",
+                                    ),
+                                },
+                            },
+                            typ: Unknown,
                         },
-                        typ: Unknown,
-                    },
-                    ExprNode {
-                        pos: (
-                            24,
-                            36,
-                        ),
-                        kind: Literal {
-                            literal: Literal(24, 36) Str("multi-\n\nline"),
+                        ExprNode {
+                            pos: (
+                                24,
+                                36,
+                            ),
+                            kind: Literal {
+                                literal: LiteralNode {
+                                    pos: (
+                                        24,
+                                        36,
+                                    ),
+                                    kind: Str(
+                                        "multi-\n\nline",
+                                    ),
+                                },
+                            },
+                            typ: Unknown,
                         },
-                        typ: Unknown,
-                    },
-                ],
+                    ],
+                },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

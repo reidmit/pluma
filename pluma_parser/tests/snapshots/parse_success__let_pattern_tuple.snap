@@ -11,38 +11,96 @@ let (a, b) = (47, "cool")
 
 === AST ===
 Module(0, 25) [
-    TopLevelStatement(0, 25) Let(
-        Let(0, 25) Pattern(4, 10) UnlabeledTuple([Pattern(5, 6) Identifier(Ident(5, 6) "a", false), Pattern(8, 9) Identifier(Ident(8, 9) "b", false)]) ExprNode {
-            pos: (
-                13,
-                25,
-            ),
-            kind: UnlabeledTuple {
-                entries: [
-                    ExprNode {
-                        pos: (
-                            14,
-                            16,
-                        ),
-                        kind: Literal {
-                            literal: Literal(14, 16) IntDecimal(47),
-                        },
-                        typ: Unknown,
+    TopLevelStatementNode {
+        pos: (
+            0,
+            25,
+        ),
+        kind: Let(
+            LetNode {
+                pos: (
+                    0,
+                    25,
+                ),
+                pattern: PatternNode {
+                    pos: (
+                        4,
+                        10,
+                    ),
+                    kind: UnlabeledTuple(
+                        [
+                            PatternNode {
+                                pos: (
+                                    5,
+                                    6,
+                                ),
+                                kind: Identifier(
+                                    Ident(5, 6) "a",
+                                    false,
+                                ),
+                            },
+                            PatternNode {
+                                pos: (
+                                    8,
+                                    9,
+                                ),
+                                kind: Identifier(
+                                    Ident(8, 9) "b",
+                                    false,
+                                ),
+                            },
+                        ],
+                    ),
+                },
+                value: ExprNode {
+                    pos: (
+                        13,
+                        25,
+                    ),
+                    kind: UnlabeledTuple {
+                        entries: [
+                            ExprNode {
+                                pos: (
+                                    14,
+                                    16,
+                                ),
+                                kind: Literal {
+                                    literal: LiteralNode {
+                                        pos: (
+                                            14,
+                                            16,
+                                        ),
+                                        kind: IntDecimal(
+                                            47,
+                                        ),
+                                    },
+                                },
+                                typ: Unknown,
+                            },
+                            ExprNode {
+                                pos: (
+                                    19,
+                                    23,
+                                ),
+                                kind: Literal {
+                                    literal: LiteralNode {
+                                        pos: (
+                                            19,
+                                            23,
+                                        ),
+                                        kind: Str(
+                                            "cool",
+                                        ),
+                                    },
+                                },
+                                typ: Unknown,
+                            },
+                        ],
                     },
-                    ExprNode {
-                        pos: (
-                            19,
-                            23,
-                        ),
-                        kind: Literal {
-                            literal: Literal(19, 23) Str("cool"),
-                        },
-                        typ: Unknown,
-                    },
-                ],
+                    typ: Unknown,
+                },
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

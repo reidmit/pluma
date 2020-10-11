@@ -11,72 +11,107 @@ expression: "\"hello\" . replace \"x\" with \"y\""
 
 === AST ===
 Module(1, 29) [
-    TopLevelStatement(1, 29) Expr(
-        ExprNode {
-            pos: (
-                1,
-                29,
-            ),
-            kind: Call {
-                call: Call {
-                    callee: ExprNode {
+    TopLevelStatementNode {
+        pos: (
+            1,
+            29,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    1,
+                    29,
+                ),
+                kind: Call {
+                    call: CallNode {
                         pos: (
                             1,
-                            26,
+                            29,
                         ),
-                        kind: Access {
-                            receiver: ExprNode {
+                        callee: ExprNode {
+                            pos: (
+                                1,
+                                26,
+                            ),
+                            kind: Access {
+                                receiver: ExprNode {
+                                    pos: (
+                                        1,
+                                        6,
+                                    ),
+                                    kind: Literal {
+                                        literal: LiteralNode {
+                                            pos: (
+                                                1,
+                                                6,
+                                            ),
+                                            kind: Str(
+                                                "hello",
+                                            ),
+                                        },
+                                    },
+                                    typ: Unknown,
+                                },
+                                property: ExprNode {
+                                    pos: (
+                                        10,
+                                        26,
+                                    ),
+                                    kind: MultiPartIdentifier {
+                                        parts: [
+                                            Ident(10, 17) "replace",
+                                            Ident(22, 26) "with",
+                                        ],
+                                    },
+                                    typ: Unknown,
+                                },
+                            },
+                            typ: Unknown,
+                        },
+                        args: [
+                            ExprNode {
                                 pos: (
-                                    1,
-                                    6,
+                                    19,
+                                    20,
                                 ),
                                 kind: Literal {
-                                    literal: Literal(1, 6) Str("hello"),
+                                    literal: LiteralNode {
+                                        pos: (
+                                            19,
+                                            20,
+                                        ),
+                                        kind: Str(
+                                            "x",
+                                        ),
+                                    },
                                 },
                                 typ: Unknown,
                             },
-                            property: ExprNode {
+                            ExprNode {
                                 pos: (
-                                    10,
-                                    26,
+                                    28,
+                                    29,
                                 ),
-                                kind: MultiPartIdentifier {
-                                    parts: [
-                                        Ident(10, 17) "replace",
-                                        Ident(22, 26) "with",
-                                    ],
+                                kind: Literal {
+                                    literal: LiteralNode {
+                                        pos: (
+                                            28,
+                                            29,
+                                        ),
+                                        kind: Str(
+                                            "y",
+                                        ),
+                                    },
                                 },
                                 typ: Unknown,
                             },
-                        },
+                        ],
                         typ: Unknown,
                     },
-                    args: [
-                        ExprNode {
-                            pos: (
-                                19,
-                                20,
-                            ),
-                            kind: Literal {
-                                literal: Literal(19, 20) Str("x"),
-                            },
-                            typ: Unknown,
-                        },
-                        ExprNode {
-                            pos: (
-                                28,
-                                29,
-                            ),
-                            kind: Literal {
-                                literal: Literal(28, 29) Str("y"),
-                            },
-                            typ: Unknown,
-                        },
-                    ],
                 },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

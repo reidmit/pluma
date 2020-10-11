@@ -12,113 +12,151 @@ const num = 47
 
 === AST ===
 Module(0, 33) [
-    TopLevelStatement(0, 17) Expr(
-        ExprNode {
-            pos: (
-                0,
-                17,
-            ),
-            kind: Assignment {
-                left: ExprNode {
-                    pos: (
-                        0,
-                        9,
-                    ),
-                    kind: Call {
-                        call: Call {
-                            callee: ExprNode {
+    TopLevelStatementNode {
+        pos: (
+            0,
+            17,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    0,
+                    17,
+                ),
+                kind: Assignment {
+                    left: ExprNode {
+                        pos: (
+                            0,
+                            9,
+                        ),
+                        kind: Call {
+                            call: CallNode {
                                 pos: (
                                     0,
-                                    5,
+                                    9,
                                 ),
-                                kind: Identifier {
-                                    ident: Ident(0, 5) "const",
-                                },
-                                typ: Unknown,
-                            },
-                            args: [
-                                ExprNode {
+                                callee: ExprNode {
                                     pos: (
-                                        6,
-                                        9,
+                                        0,
+                                        5,
                                     ),
                                     kind: Identifier {
-                                        ident: Ident(6, 9) "wow",
+                                        ident: Ident(0, 5) "const",
                                     },
                                     typ: Unknown,
                                 },
-                            ],
+                                args: [
+                                    ExprNode {
+                                        pos: (
+                                            6,
+                                            9,
+                                        ),
+                                        kind: Identifier {
+                                            ident: Ident(6, 9) "wow",
+                                        },
+                                        typ: Unknown,
+                                    },
+                                ],
+                                typ: Unknown,
+                            },
                         },
+                        typ: Unknown,
                     },
-                    typ: Unknown,
-                },
-                right: ExprNode {
-                    pos: (
-                        13,
-                        17,
-                    ),
-                    kind: Literal {
-                        literal: Literal(13, 17) Str("wow!"),
+                    right: ExprNode {
+                        pos: (
+                            13,
+                            17,
+                        ),
+                        kind: Literal {
+                            literal: LiteralNode {
+                                pos: (
+                                    13,
+                                    17,
+                                ),
+                                kind: Str(
+                                    "wow!",
+                                ),
+                            },
+                        },
+                        typ: Unknown,
                     },
-                    typ: Unknown,
                 },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
-    TopLevelStatement(19, 33) Expr(
-        ExprNode {
-            pos: (
-                19,
-                33,
-            ),
-            kind: Assignment {
-                left: ExprNode {
-                    pos: (
-                        19,
-                        28,
-                    ),
-                    kind: Call {
-                        call: Call {
-                            callee: ExprNode {
+        ),
+    },
+    TopLevelStatementNode {
+        pos: (
+            19,
+            33,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    19,
+                    33,
+                ),
+                kind: Assignment {
+                    left: ExprNode {
+                        pos: (
+                            19,
+                            28,
+                        ),
+                        kind: Call {
+                            call: CallNode {
                                 pos: (
                                     19,
-                                    24,
+                                    28,
                                 ),
-                                kind: Identifier {
-                                    ident: Ident(19, 24) "const",
-                                },
-                                typ: Unknown,
-                            },
-                            args: [
-                                ExprNode {
+                                callee: ExprNode {
                                     pos: (
-                                        25,
-                                        28,
+                                        19,
+                                        24,
                                     ),
                                     kind: Identifier {
-                                        ident: Ident(25, 28) "num",
+                                        ident: Ident(19, 24) "const",
                                     },
                                     typ: Unknown,
                                 },
-                            ],
+                                args: [
+                                    ExprNode {
+                                        pos: (
+                                            25,
+                                            28,
+                                        ),
+                                        kind: Identifier {
+                                            ident: Ident(25, 28) "num",
+                                        },
+                                        typ: Unknown,
+                                    },
+                                ],
+                                typ: Unknown,
+                            },
                         },
+                        typ: Unknown,
                     },
-                    typ: Unknown,
-                },
-                right: ExprNode {
-                    pos: (
-                        31,
-                        33,
-                    ),
-                    kind: Literal {
-                        literal: Literal(31, 33) IntDecimal(47),
+                    right: ExprNode {
+                        pos: (
+                            31,
+                            33,
+                        ),
+                        kind: Literal {
+                            literal: LiteralNode {
+                                pos: (
+                                    31,
+                                    33,
+                                ),
+                                kind: IntDecimal(
+                                    47,
+                                ),
+                            },
+                        },
+                        typ: Unknown,
                     },
-                    typ: Unknown,
                 },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

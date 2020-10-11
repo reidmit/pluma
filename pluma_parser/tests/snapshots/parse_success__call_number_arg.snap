@@ -11,40 +11,59 @@ func 1
 
 === AST ===
 Module(0, 6) [
-    TopLevelStatement(0, 6) Expr(
-        ExprNode {
-            pos: (
-                0,
-                6,
-            ),
-            kind: Call {
-                call: Call {
-                    callee: ExprNode {
+    TopLevelStatementNode {
+        pos: (
+            0,
+            6,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    0,
+                    6,
+                ),
+                kind: Call {
+                    call: CallNode {
                         pos: (
                             0,
-                            4,
+                            6,
                         ),
-                        kind: Identifier {
-                            ident: Ident(0, 4) "func",
-                        },
-                        typ: Unknown,
-                    },
-                    args: [
-                        ExprNode {
+                        callee: ExprNode {
                             pos: (
-                                5,
-                                6,
+                                0,
+                                4,
                             ),
-                            kind: Literal {
-                                literal: Literal(5, 6) IntDecimal(1),
+                            kind: Identifier {
+                                ident: Ident(0, 4) "func",
                             },
                             typ: Unknown,
                         },
-                    ],
+                        args: [
+                            ExprNode {
+                                pos: (
+                                    5,
+                                    6,
+                                ),
+                                kind: Literal {
+                                    literal: LiteralNode {
+                                        pos: (
+                                            5,
+                                            6,
+                                        ),
+                                        kind: IntDecimal(
+                                            1,
+                                        ),
+                                    },
+                                },
+                                typ: Unknown,
+                            },
+                        ],
+                        typ: Unknown,
+                    },
                 },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

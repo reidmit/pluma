@@ -14,55 +14,61 @@ enum Color
 
 === AST ===
 Module(0, 37) [
-    TopLevelStatement(0, 37) TypeDef(
-        TypeDefNode {
-            pos: (
-                0,
-                37,
-            ),
-            visibility: Public,
-            kind: Enum {
-                variants: [
-                    EnumVariantNode {
-                        pos: (
-                            15,
-                            18,
-                        ),
-                        kind: Identifier(
-                            Ident(15, 18) "Red",
-                        ),
-                    },
-                    EnumVariantNode {
-                        pos: (
-                            23,
-                            28,
-                        ),
-                        kind: Identifier(
-                            Ident(23, 28) "Green",
-                        ),
-                    },
-                    EnumVariantNode {
-                        pos: (
-                            33,
-                            37,
-                        ),
-                        kind: Identifier(
-                            Ident(33, 37) "Blue",
-                        ),
-                    },
-                ],
-            },
-            name: TypeIdentifierNode {
+    TopLevelStatementNode {
+        pos: (
+            0,
+            37,
+        ),
+        kind: TypeDef(
+            TypeDefNode {
                 pos: (
-                    5,
-                    10,
+                    0,
+                    37,
                 ),
-                name: "Color",
-                generics: [],
-                constraints: None,
+                visibility: Public,
+                kind: Enum {
+                    variants: [
+                        EnumVariantNode {
+                            pos: (
+                                15,
+                                18,
+                            ),
+                            kind: Identifier(
+                                Ident(15, 18) "Red",
+                            ),
+                        },
+                        EnumVariantNode {
+                            pos: (
+                                23,
+                                28,
+                            ),
+                            kind: Identifier(
+                                Ident(23, 28) "Green",
+                            ),
+                        },
+                        EnumVariantNode {
+                            pos: (
+                                33,
+                                37,
+                            ),
+                            kind: Identifier(
+                                Ident(33, 37) "Blue",
+                            ),
+                        },
+                    ],
+                },
+                name: TypeIdentifierNode {
+                    pos: (
+                        5,
+                        10,
+                    ),
+                    name: "Color",
+                    generics: [],
+                    constraints: None,
+                },
+                generic_type_constraints: [],
             },
-            generic_type_constraints: [],
-        },
-    ),
+        ),
+    },
 ]
 

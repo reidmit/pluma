@@ -11,81 +11,87 @@ expression: "/\"aa\" <middle: \"bb\" | \"oo\"> \"cc\"/"
 
 === AST ===
 Module(0, 33) [
-    TopLevelStatement(0, 33) Expr(
-        ExprNode {
-            pos: (
-                0,
-                33,
-            ),
-            kind: RegExpr {
-                regex: RegExprNode {
-                    pos: (
-                        0,
-                        0,
-                    ),
-                    kind: Sequence(
-                        [
-                            RegExprNode {
-                                pos: (
-                                    2,
-                                    4,
-                                ),
-                                kind: Literal(
-                                    "aa",
-                                ),
-                            },
-                            RegExprNode {
-                                pos: (
-                                    6,
-                                    7,
-                                ),
-                                kind: NamedCapture(
-                                    "middle",
-                                    RegExprNode {
-                                        pos: (
-                                            16,
-                                            25,
-                                        ),
-                                        kind: Alternation(
-                                            [
-                                                RegExprNode {
-                                                    pos: (
-                                                        16,
-                                                        18,
-                                                    ),
-                                                    kind: Literal(
-                                                        "bb",
-                                                    ),
-                                                },
-                                                RegExprNode {
-                                                    pos: (
-                                                        23,
-                                                        25,
-                                                    ),
-                                                    kind: Literal(
-                                                        "oo",
-                                                    ),
-                                                },
-                                            ],
-                                        ),
-                                    },
-                                ),
-                            },
-                            RegExprNode {
-                                pos: (
-                                    29,
-                                    31,
-                                ),
-                                kind: Literal(
-                                    "cc",
-                                ),
-                            },
-                        ],
-                    ),
+    TopLevelStatementNode {
+        pos: (
+            0,
+            33,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    0,
+                    33,
+                ),
+                kind: RegExpr {
+                    regex: RegExprNode {
+                        pos: (
+                            0,
+                            0,
+                        ),
+                        kind: Sequence(
+                            [
+                                RegExprNode {
+                                    pos: (
+                                        2,
+                                        4,
+                                    ),
+                                    kind: Literal(
+                                        "aa",
+                                    ),
+                                },
+                                RegExprNode {
+                                    pos: (
+                                        6,
+                                        7,
+                                    ),
+                                    kind: NamedCapture(
+                                        "middle",
+                                        RegExprNode {
+                                            pos: (
+                                                16,
+                                                25,
+                                            ),
+                                            kind: Alternation(
+                                                [
+                                                    RegExprNode {
+                                                        pos: (
+                                                            16,
+                                                            18,
+                                                        ),
+                                                        kind: Literal(
+                                                            "bb",
+                                                        ),
+                                                    },
+                                                    RegExprNode {
+                                                        pos: (
+                                                            23,
+                                                            25,
+                                                        ),
+                                                        kind: Literal(
+                                                            "oo",
+                                                        ),
+                                                    },
+                                                ],
+                                            ),
+                                        },
+                                    ),
+                                },
+                                RegExprNode {
+                                    pos: (
+                                        29,
+                                        31,
+                                    ),
+                                    kind: Literal(
+                                        "cc",
+                                    ),
+                                },
+                            ],
+                        ),
+                    },
                 },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

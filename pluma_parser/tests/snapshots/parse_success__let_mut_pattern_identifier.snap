@@ -11,17 +11,47 @@ let mut x = 47
 
 === AST ===
 Module(0, 14) [
-    TopLevelStatement(0, 14) Let(
-        Let(0, 14) Pattern(4, 9) Identifier(Ident(8, 9) "x", true) ExprNode {
-            pos: (
-                12,
-                14,
-            ),
-            kind: Literal {
-                literal: Literal(12, 14) IntDecimal(47),
+    TopLevelStatementNode {
+        pos: (
+            0,
+            14,
+        ),
+        kind: Let(
+            LetNode {
+                pos: (
+                    0,
+                    14,
+                ),
+                pattern: PatternNode {
+                    pos: (
+                        4,
+                        9,
+                    ),
+                    kind: Identifier(
+                        Ident(8, 9) "x",
+                        true,
+                    ),
+                },
+                value: ExprNode {
+                    pos: (
+                        12,
+                        14,
+                    ),
+                    kind: Literal {
+                        literal: LiteralNode {
+                            pos: (
+                                12,
+                                14,
+                            ),
+                            kind: IntDecimal(
+                                47,
+                            ),
+                        },
+                    },
+                    typ: Unknown,
+                },
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

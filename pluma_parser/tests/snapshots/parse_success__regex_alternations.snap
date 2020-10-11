@@ -11,53 +11,59 @@ expression: "/\"a\" | \"b\" | \"c\"/"
 
 === AST ===
 Module(0, 17) [
-    TopLevelStatement(0, 17) Expr(
-        ExprNode {
-            pos: (
-                0,
-                17,
-            ),
-            kind: RegExpr {
-                regex: RegExprNode {
-                    pos: (
-                        2,
-                        15,
-                    ),
-                    kind: Alternation(
-                        [
-                            RegExprNode {
-                                pos: (
-                                    2,
-                                    3,
-                                ),
-                                kind: Literal(
-                                    "a",
-                                ),
-                            },
-                            RegExprNode {
-                                pos: (
-                                    8,
-                                    9,
-                                ),
-                                kind: Literal(
-                                    "b",
-                                ),
-                            },
-                            RegExprNode {
-                                pos: (
-                                    14,
-                                    15,
-                                ),
-                                kind: Literal(
-                                    "c",
-                                ),
-                            },
-                        ],
-                    ),
+    TopLevelStatementNode {
+        pos: (
+            0,
+            17,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    0,
+                    17,
+                ),
+                kind: RegExpr {
+                    regex: RegExprNode {
+                        pos: (
+                            2,
+                            15,
+                        ),
+                        kind: Alternation(
+                            [
+                                RegExprNode {
+                                    pos: (
+                                        2,
+                                        3,
+                                    ),
+                                    kind: Literal(
+                                        "a",
+                                    ),
+                                },
+                                RegExprNode {
+                                    pos: (
+                                        8,
+                                        9,
+                                    ),
+                                    kind: Literal(
+                                        "b",
+                                    ),
+                                },
+                                RegExprNode {
+                                    pos: (
+                                        14,
+                                        15,
+                                    ),
+                                    kind: Literal(
+                                        "c",
+                                    ),
+                                },
+                            ],
+                        ),
+                    },
                 },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

@@ -15,129 +15,70 @@ enum Thing
 
 === AST ===
 Module(0, 76) [
-    TopLevelStatement(0, 76) TypeDef(
-        TypeDefNode {
-            pos: (
-                0,
-                76,
-            ),
-            visibility: Public,
-            kind: Enum {
-                variants: [
-                    EnumVariantNode {
-                        pos: (
-                            15,
-                            22,
-                        ),
-                        kind: Constructor(
-                            Ident(15, 18) "Wow",
-                            TypeExprNode {
-                                pos: (
-                                    19,
-                                    22,
-                                ),
-                                kind: Single(
-                                    TypeIdentifierNode {
-                                        pos: (
-                                            19,
-                                            22,
-                                        ),
-                                        name: "Int",
-                                        generics: [],
-                                        constraints: None,
-                                    },
-                                ),
-                                typ: Unknown,
-                            },
-                        ),
-                    },
-                    EnumVariantNode {
-                        pos: (
-                            27,
-                            39,
-                        ),
-                        kind: Constructor(
-                            Ident(27, 31) "Cool",
-                            TypeExprNode {
-                                pos: (
-                                    31,
-                                    39,
-                                ),
-                                kind: Grouping(
-                                    TypeExprNode {
-                                        pos: (
-                                            32,
-                                            38,
-                                        ),
-                                        kind: Single(
-                                            TypeIdentifierNode {
-                                                pos: (
-                                                    32,
-                                                    38,
-                                                ),
-                                                name: "String",
-                                                generics: [],
-                                                constraints: None,
-                                            },
-                                        ),
-                                        typ: Unknown,
-                                    },
-                                ),
-                                typ: Unknown,
-                            },
-                        ),
-                    },
-                    EnumVariantNode {
-                        pos: (
-                            44,
-                            49,
-                        ),
-                        kind: Identifier(
-                            Ident(44, 49) "NoArg",
-                        ),
-                    },
-                    EnumVariantNode {
-                        pos: (
-                            54,
-                            76,
-                        ),
-                        kind: Constructor(
-                            Ident(54, 62) "TupleArg",
-                            TypeExprNode {
-                                pos: (
-                                    63,
-                                    76,
-                                ),
-                                kind: UnlabeledTuple(
-                                    [
-                                        TypeExprNode {
+    TopLevelStatementNode {
+        pos: (
+            0,
+            76,
+        ),
+        kind: TypeDef(
+            TypeDefNode {
+                pos: (
+                    0,
+                    76,
+                ),
+                visibility: Public,
+                kind: Enum {
+                    variants: [
+                        EnumVariantNode {
+                            pos: (
+                                15,
+                                22,
+                            ),
+                            kind: Constructor(
+                                Ident(15, 18) "Wow",
+                                TypeExprNode {
+                                    pos: (
+                                        19,
+                                        22,
+                                    ),
+                                    kind: Single(
+                                        TypeIdentifierNode {
                                             pos: (
-                                                64,
-                                                67,
+                                                19,
+                                                22,
                                             ),
-                                            kind: Single(
-                                                TypeIdentifierNode {
-                                                    pos: (
-                                                        64,
-                                                        67,
-                                                    ),
-                                                    name: "Int",
-                                                    generics: [],
-                                                    constraints: None,
-                                                },
-                                            ),
-                                            typ: Unknown,
+                                            name: "Int",
+                                            generics: [],
+                                            constraints: None,
                                         },
+                                    ),
+                                    typ: Unknown,
+                                },
+                            ),
+                        },
+                        EnumVariantNode {
+                            pos: (
+                                27,
+                                39,
+                            ),
+                            kind: Constructor(
+                                Ident(27, 31) "Cool",
+                                TypeExprNode {
+                                    pos: (
+                                        31,
+                                        39,
+                                    ),
+                                    kind: Grouping(
                                         TypeExprNode {
                                             pos: (
-                                                69,
-                                                75,
+                                                32,
+                                                38,
                                             ),
                                             kind: Single(
                                                 TypeIdentifierNode {
                                                     pos: (
-                                                        69,
-                                                        75,
+                                                        32,
+                                                        38,
                                                     ),
                                                     name: "String",
                                                     generics: [],
@@ -146,25 +87,90 @@ Module(0, 76) [
                                             ),
                                             typ: Unknown,
                                         },
-                                    ],
-                                ),
-                                typ: Unknown,
-                            },
-                        ),
-                    },
-                ],
+                                    ),
+                                    typ: Unknown,
+                                },
+                            ),
+                        },
+                        EnumVariantNode {
+                            pos: (
+                                44,
+                                49,
+                            ),
+                            kind: Identifier(
+                                Ident(44, 49) "NoArg",
+                            ),
+                        },
+                        EnumVariantNode {
+                            pos: (
+                                54,
+                                76,
+                            ),
+                            kind: Constructor(
+                                Ident(54, 62) "TupleArg",
+                                TypeExprNode {
+                                    pos: (
+                                        63,
+                                        76,
+                                    ),
+                                    kind: UnlabeledTuple(
+                                        [
+                                            TypeExprNode {
+                                                pos: (
+                                                    64,
+                                                    67,
+                                                ),
+                                                kind: Single(
+                                                    TypeIdentifierNode {
+                                                        pos: (
+                                                            64,
+                                                            67,
+                                                        ),
+                                                        name: "Int",
+                                                        generics: [],
+                                                        constraints: None,
+                                                    },
+                                                ),
+                                                typ: Unknown,
+                                            },
+                                            TypeExprNode {
+                                                pos: (
+                                                    69,
+                                                    75,
+                                                ),
+                                                kind: Single(
+                                                    TypeIdentifierNode {
+                                                        pos: (
+                                                            69,
+                                                            75,
+                                                        ),
+                                                        name: "String",
+                                                        generics: [],
+                                                        constraints: None,
+                                                    },
+                                                ),
+                                                typ: Unknown,
+                                            },
+                                        ],
+                                    ),
+                                    typ: Unknown,
+                                },
+                            ),
+                        },
+                    ],
+                },
+                name: TypeIdentifierNode {
+                    pos: (
+                        5,
+                        10,
+                    ),
+                    name: "Thing",
+                    generics: [],
+                    constraints: None,
+                },
+                generic_type_constraints: [],
             },
-            name: TypeIdentifierNode {
-                pos: (
-                    5,
-                    10,
-                ),
-                name: "Thing",
-                generics: [],
-                constraints: None,
-            },
-            generic_type_constraints: [],
-        },
-    ),
+        ),
+    },
 ]
 

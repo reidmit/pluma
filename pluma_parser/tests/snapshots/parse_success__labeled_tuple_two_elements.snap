@@ -11,44 +11,66 @@ expression: "(aaa: 1, bbb: \"wow\")"
 
 === AST ===
 Module(0, 20) [
-    TopLevelStatement(0, 20) Expr(
-        ExprNode {
-            pos: (
-                0,
-                20,
-            ),
-            kind: LabeledTuple {
-                entries: [
-                    (
-                        Ident(1, 4) "aaa",
-                        ExprNode {
-                            pos: (
-                                6,
-                                7,
-                            ),
-                            kind: Literal {
-                                literal: Literal(6, 7) IntDecimal(1),
+    TopLevelStatementNode {
+        pos: (
+            0,
+            20,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    0,
+                    20,
+                ),
+                kind: LabeledTuple {
+                    entries: [
+                        (
+                            Ident(1, 4) "aaa",
+                            ExprNode {
+                                pos: (
+                                    6,
+                                    7,
+                                ),
+                                kind: Literal {
+                                    literal: LiteralNode {
+                                        pos: (
+                                            6,
+                                            7,
+                                        ),
+                                        kind: IntDecimal(
+                                            1,
+                                        ),
+                                    },
+                                },
+                                typ: Unknown,
                             },
-                            typ: Unknown,
-                        },
-                    ),
-                    (
-                        Ident(9, 12) "bbb",
-                        ExprNode {
-                            pos: (
-                                15,
-                                18,
-                            ),
-                            kind: Literal {
-                                literal: Literal(15, 18) Str("wow"),
+                        ),
+                        (
+                            Ident(9, 12) "bbb",
+                            ExprNode {
+                                pos: (
+                                    15,
+                                    18,
+                                ),
+                                kind: Literal {
+                                    literal: LiteralNode {
+                                        pos: (
+                                            15,
+                                            18,
+                                        ),
+                                        kind: Str(
+                                            "wow",
+                                        ),
+                                    },
+                                },
+                                typ: Unknown,
                             },
-                            typ: Unknown,
-                        },
-                    ),
-                ],
+                        ),
+                    ],
+                },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

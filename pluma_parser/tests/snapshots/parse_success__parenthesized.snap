@@ -11,26 +11,40 @@ expression: (1)
 
 === AST ===
 Module(0, 3) [
-    TopLevelStatement(0, 3) Expr(
-        ExprNode {
-            pos: (
-                0,
-                3,
-            ),
-            kind: Grouping {
-                inner: ExprNode {
-                    pos: (
-                        1,
-                        2,
-                    ),
-                    kind: Literal {
-                        literal: Literal(1, 2) IntDecimal(1),
+    TopLevelStatementNode {
+        pos: (
+            0,
+            3,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    0,
+                    3,
+                ),
+                kind: Grouping {
+                    inner: ExprNode {
+                        pos: (
+                            1,
+                            2,
+                        ),
+                        kind: Literal {
+                            literal: LiteralNode {
+                                pos: (
+                                    1,
+                                    2,
+                                ),
+                                kind: IntDecimal(
+                                    1,
+                                ),
+                            },
+                        },
+                        typ: Unknown,
                     },
-                    typ: Unknown,
                 },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

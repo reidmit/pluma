@@ -11,117 +11,123 @@ f :: { Int -> { () -> (Bool, Int) } }
 
 === AST ===
 Module(2, 37) [
-    TopLevelStatement(2, 37) Expr(
-        ExprNode {
-            pos: (
-                2,
-                37,
-            ),
-            kind: TypeAssertion {
-                expr: ExprNode {
-                    pos: (
-                        0,
-                        1,
-                    ),
-                    kind: Identifier {
-                        ident: Ident(0, 1) "f",
+    TopLevelStatementNode {
+        pos: (
+            2,
+            37,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    2,
+                    37,
+                ),
+                kind: TypeAssertion {
+                    expr: ExprNode {
+                        pos: (
+                            0,
+                            1,
+                        ),
+                        kind: Identifier {
+                            ident: Ident(0, 1) "f",
+                        },
+                        typ: Unknown,
                     },
-                    typ: Unknown,
+                    asserted_type: TypeExprNode {
+                        pos: (
+                            5,
+                            37,
+                        ),
+                        kind: Func(
+                            TypeExprNode {
+                                pos: (
+                                    7,
+                                    10,
+                                ),
+                                kind: Single(
+                                    TypeIdentifierNode {
+                                        pos: (
+                                            7,
+                                            10,
+                                        ),
+                                        name: "Int",
+                                        generics: [],
+                                        constraints: None,
+                                    },
+                                ),
+                                typ: Unknown,
+                            },
+                            TypeExprNode {
+                                pos: (
+                                    14,
+                                    35,
+                                ),
+                                kind: Func(
+                                    TypeExprNode {
+                                        pos: (
+                                            16,
+                                            18,
+                                        ),
+                                        kind: EmptyTuple,
+                                        typ: Unknown,
+                                    },
+                                    TypeExprNode {
+                                        pos: (
+                                            22,
+                                            33,
+                                        ),
+                                        kind: UnlabeledTuple(
+                                            [
+                                                TypeExprNode {
+                                                    pos: (
+                                                        23,
+                                                        27,
+                                                    ),
+                                                    kind: Single(
+                                                        TypeIdentifierNode {
+                                                            pos: (
+                                                                23,
+                                                                27,
+                                                            ),
+                                                            name: "Bool",
+                                                            generics: [],
+                                                            constraints: None,
+                                                        },
+                                                    ),
+                                                    typ: Unknown,
+                                                },
+                                                TypeExprNode {
+                                                    pos: (
+                                                        29,
+                                                        32,
+                                                    ),
+                                                    kind: Single(
+                                                        TypeIdentifierNode {
+                                                            pos: (
+                                                                29,
+                                                                32,
+                                                            ),
+                                                            name: "Int",
+                                                            generics: [],
+                                                            constraints: None,
+                                                        },
+                                                    ),
+                                                    typ: Unknown,
+                                                },
+                                            ],
+                                        ),
+                                        typ: Unknown,
+                                    },
+                                ),
+                                typ: Unknown,
+                            },
+                        ),
+                        typ: Unknown,
+                    },
                 },
-                asserted_type: TypeExprNode {
-                    pos: (
-                        5,
-                        37,
-                    ),
-                    kind: Func(
-                        TypeExprNode {
-                            pos: (
-                                7,
-                                10,
-                            ),
-                            kind: Single(
-                                TypeIdentifierNode {
-                                    pos: (
-                                        7,
-                                        10,
-                                    ),
-                                    name: "Int",
-                                    generics: [],
-                                    constraints: None,
-                                },
-                            ),
-                            typ: Unknown,
-                        },
-                        TypeExprNode {
-                            pos: (
-                                14,
-                                35,
-                            ),
-                            kind: Func(
-                                TypeExprNode {
-                                    pos: (
-                                        16,
-                                        18,
-                                    ),
-                                    kind: EmptyTuple,
-                                    typ: Unknown,
-                                },
-                                TypeExprNode {
-                                    pos: (
-                                        22,
-                                        33,
-                                    ),
-                                    kind: UnlabeledTuple(
-                                        [
-                                            TypeExprNode {
-                                                pos: (
-                                                    23,
-                                                    27,
-                                                ),
-                                                kind: Single(
-                                                    TypeIdentifierNode {
-                                                        pos: (
-                                                            23,
-                                                            27,
-                                                        ),
-                                                        name: "Bool",
-                                                        generics: [],
-                                                        constraints: None,
-                                                    },
-                                                ),
-                                                typ: Unknown,
-                                            },
-                                            TypeExprNode {
-                                                pos: (
-                                                    29,
-                                                    32,
-                                                ),
-                                                kind: Single(
-                                                    TypeIdentifierNode {
-                                                        pos: (
-                                                            29,
-                                                            32,
-                                                        ),
-                                                        name: "Int",
-                                                        generics: [],
-                                                        constraints: None,
-                                                    },
-                                                ),
-                                                typ: Unknown,
-                                            },
-                                        ],
-                                    ),
-                                    typ: Unknown,
-                                },
-                            ),
-                            typ: Unknown,
-                        },
-                    ),
-                    typ: Unknown,
-                },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

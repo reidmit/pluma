@@ -11,31 +11,45 @@ expression: "(aaa: \"wow\")"
 
 === AST ===
 Module(0, 12) [
-    TopLevelStatement(0, 12) Expr(
-        ExprNode {
-            pos: (
-                0,
-                12,
-            ),
-            kind: LabeledTuple {
-                entries: [
-                    (
-                        Ident(1, 4) "aaa",
-                        ExprNode {
-                            pos: (
-                                7,
-                                10,
-                            ),
-                            kind: Literal {
-                                literal: Literal(7, 10) Str("wow"),
+    TopLevelStatementNode {
+        pos: (
+            0,
+            12,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    0,
+                    12,
+                ),
+                kind: LabeledTuple {
+                    entries: [
+                        (
+                            Ident(1, 4) "aaa",
+                            ExprNode {
+                                pos: (
+                                    7,
+                                    10,
+                                ),
+                                kind: Literal {
+                                    literal: LiteralNode {
+                                        pos: (
+                                            7,
+                                            10,
+                                        ),
+                                        kind: Str(
+                                            "wow",
+                                        ),
+                                    },
+                                },
+                                typ: Unknown,
                             },
-                            typ: Unknown,
-                        },
-                    ),
-                ],
+                        ),
+                    ],
+                },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

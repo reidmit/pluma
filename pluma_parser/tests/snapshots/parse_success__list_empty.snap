@@ -11,17 +11,23 @@ expression: "[]"
 
 === AST ===
 Module(0, 2) [
-    TopLevelStatement(0, 2) Expr(
-        ExprNode {
-            pos: (
-                0,
-                2,
-            ),
-            kind: List {
-                elements: [],
+    TopLevelStatementNode {
+        pos: (
+            0,
+            2,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    0,
+                    2,
+                ),
+                kind: List {
+                    elements: [],
+                },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

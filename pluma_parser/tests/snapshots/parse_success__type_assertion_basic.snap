@@ -11,44 +11,58 @@ expression: "1 :: Int"
 
 === AST ===
 Module(2, 8) [
-    TopLevelStatement(2, 8) Expr(
-        ExprNode {
-            pos: (
-                2,
-                8,
-            ),
-            kind: TypeAssertion {
-                expr: ExprNode {
-                    pos: (
-                        0,
-                        1,
-                    ),
-                    kind: Literal {
-                        literal: Literal(0, 1) IntDecimal(1),
-                    },
-                    typ: Unknown,
-                },
-                asserted_type: TypeExprNode {
-                    pos: (
-                        5,
-                        8,
-                    ),
-                    kind: Single(
-                        TypeIdentifierNode {
-                            pos: (
-                                5,
-                                8,
-                            ),
-                            name: "Int",
-                            generics: [],
-                            constraints: None,
+    TopLevelStatementNode {
+        pos: (
+            2,
+            8,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    2,
+                    8,
+                ),
+                kind: TypeAssertion {
+                    expr: ExprNode {
+                        pos: (
+                            0,
+                            1,
+                        ),
+                        kind: Literal {
+                            literal: LiteralNode {
+                                pos: (
+                                    0,
+                                    1,
+                                ),
+                                kind: IntDecimal(
+                                    1,
+                                ),
+                            },
                         },
-                    ),
-                    typ: Unknown,
+                        typ: Unknown,
+                    },
+                    asserted_type: TypeExprNode {
+                        pos: (
+                            5,
+                            8,
+                        ),
+                        kind: Single(
+                            TypeIdentifierNode {
+                                pos: (
+                                    5,
+                                    8,
+                                ),
+                                name: "Int",
+                                generics: [],
+                                constraints: None,
+                            },
+                        ),
+                        typ: Unknown,
+                    },
                 },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

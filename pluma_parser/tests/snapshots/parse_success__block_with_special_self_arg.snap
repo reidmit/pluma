@@ -11,72 +11,120 @@ let b = { $self . return 47 }
 
 === AST ===
 Module(0, 29) [
-    TopLevelStatement(0, 29) Let(
-        Let(0, 29) Pattern(4, 5) Identifier(Ident(4, 5) "b", false) ExprNode {
-            pos: (
-                8,
-                29,
-            ),
-            kind: Block {
-                block: Block(8, 29) ([]) [
-                    Statement(10, 27) Expr(
-                        ExprNode {
+    TopLevelStatementNode {
+        pos: (
+            0,
+            29,
+        ),
+        kind: Let(
+            LetNode {
+                pos: (
+                    0,
+                    29,
+                ),
+                pattern: PatternNode {
+                    pos: (
+                        4,
+                        5,
+                    ),
+                    kind: Identifier(
+                        Ident(4, 5) "b",
+                        false,
+                    ),
+                },
+                value: ExprNode {
+                    pos: (
+                        8,
+                        29,
+                    ),
+                    kind: Block {
+                        block: BlockNode {
                             pos: (
-                                10,
-                                27,
+                                8,
+                                29,
                             ),
-                            kind: Call {
-                                call: Call {
-                                    callee: ExprNode {
-                                        pos: (
-                                            10,
-                                            24,
-                                        ),
-                                        kind: Access {
-                                            receiver: ExprNode {
-                                                pos: (
-                                                    10,
-                                                    15,
-                                                ),
-                                                kind: Identifier {
-                                                    ident: Ident(10, 15) "$self",
-                                                },
-                                                typ: Unknown,
-                                            },
-                                            property: ExprNode {
-                                                pos: (
-                                                    18,
-                                                    24,
-                                                ),
-                                                kind: Identifier {
-                                                    ident: Ident(18, 24) "return",
-                                                },
-                                                typ: Unknown,
-                                            },
-                                        },
-                                        typ: Unknown,
-                                    },
-                                    args: [
+                            params: [],
+                            body: [
+                                StatementNode {
+                                    pos: (
+                                        10,
+                                        27,
+                                    ),
+                                    kind: Expr(
                                         ExprNode {
                                             pos: (
-                                                25,
+                                                10,
                                                 27,
                                             ),
-                                            kind: Literal {
-                                                literal: Literal(25, 27) IntDecimal(47),
+                                            kind: Call {
+                                                call: CallNode {
+                                                    pos: (
+                                                        10,
+                                                        27,
+                                                    ),
+                                                    callee: ExprNode {
+                                                        pos: (
+                                                            10,
+                                                            24,
+                                                        ),
+                                                        kind: Access {
+                                                            receiver: ExprNode {
+                                                                pos: (
+                                                                    10,
+                                                                    15,
+                                                                ),
+                                                                kind: Identifier {
+                                                                    ident: Ident(10, 15) "$self",
+                                                                },
+                                                                typ: Unknown,
+                                                            },
+                                                            property: ExprNode {
+                                                                pos: (
+                                                                    18,
+                                                                    24,
+                                                                ),
+                                                                kind: Identifier {
+                                                                    ident: Ident(18, 24) "return",
+                                                                },
+                                                                typ: Unknown,
+                                                            },
+                                                        },
+                                                        typ: Unknown,
+                                                    },
+                                                    args: [
+                                                        ExprNode {
+                                                            pos: (
+                                                                25,
+                                                                27,
+                                                            ),
+                                                            kind: Literal {
+                                                                literal: LiteralNode {
+                                                                    pos: (
+                                                                        25,
+                                                                        27,
+                                                                    ),
+                                                                    kind: IntDecimal(
+                                                                        47,
+                                                                    ),
+                                                                },
+                                                            },
+                                                            typ: Unknown,
+                                                        },
+                                                    ],
+                                                    typ: Unknown,
+                                                },
                                             },
                                             typ: Unknown,
                                         },
-                                    ],
+                                    ),
                                 },
-                            },
-                            typ: Unknown,
+                            ],
                         },
-                    ),
-                ],
+                    },
+                    typ: Unknown,
+                },
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

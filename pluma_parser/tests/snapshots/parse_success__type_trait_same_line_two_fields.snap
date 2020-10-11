@@ -11,71 +11,77 @@ trait HasNameAndAge . name : String . age : Int
 
 === AST ===
 Module(0, 47) [
-    TopLevelStatement(0, 47) TypeDef(
-        TypeDefNode {
-            pos: (
-                0,
-                47,
-            ),
-            visibility: Public,
-            kind: Trait {
-                fields: [
-                    (
-                        Ident(22, 26) "name",
-                        TypeExprNode {
-                            pos: (
-                                29,
-                                35,
-                            ),
-                            kind: Single(
-                                TypeIdentifierNode {
-                                    pos: (
-                                        29,
-                                        35,
-                                    ),
-                                    name: "String",
-                                    generics: [],
-                                    constraints: None,
-                                },
-                            ),
-                            typ: Unknown,
-                        },
-                    ),
-                    (
-                        Ident(38, 41) "age",
-                        TypeExprNode {
-                            pos: (
-                                44,
-                                47,
-                            ),
-                            kind: Single(
-                                TypeIdentifierNode {
-                                    pos: (
-                                        44,
-                                        47,
-                                    ),
-                                    name: "Int",
-                                    generics: [],
-                                    constraints: None,
-                                },
-                            ),
-                            typ: Unknown,
-                        },
-                    ),
-                ],
-                methods: [],
-            },
-            name: TypeIdentifierNode {
+    TopLevelStatementNode {
+        pos: (
+            0,
+            47,
+        ),
+        kind: TypeDef(
+            TypeDefNode {
                 pos: (
-                    6,
-                    19,
+                    0,
+                    47,
                 ),
-                name: "HasNameAndAge",
-                generics: [],
-                constraints: None,
+                visibility: Public,
+                kind: Trait {
+                    fields: [
+                        (
+                            Ident(22, 26) "name",
+                            TypeExprNode {
+                                pos: (
+                                    29,
+                                    35,
+                                ),
+                                kind: Single(
+                                    TypeIdentifierNode {
+                                        pos: (
+                                            29,
+                                            35,
+                                        ),
+                                        name: "String",
+                                        generics: [],
+                                        constraints: None,
+                                    },
+                                ),
+                                typ: Unknown,
+                            },
+                        ),
+                        (
+                            Ident(38, 41) "age",
+                            TypeExprNode {
+                                pos: (
+                                    44,
+                                    47,
+                                ),
+                                kind: Single(
+                                    TypeIdentifierNode {
+                                        pos: (
+                                            44,
+                                            47,
+                                        ),
+                                        name: "Int",
+                                        generics: [],
+                                        constraints: None,
+                                    },
+                                ),
+                                typ: Unknown,
+                            },
+                        ),
+                    ],
+                    methods: [],
+                },
+                name: TypeIdentifierNode {
+                    pos: (
+                        6,
+                        19,
+                    ),
+                    name: "HasNameAndAge",
+                    generics: [],
+                    constraints: None,
+                },
+                generic_type_constraints: [],
             },
-            generic_type_constraints: [],
-        },
-    ),
+        ),
+    },
 ]
 

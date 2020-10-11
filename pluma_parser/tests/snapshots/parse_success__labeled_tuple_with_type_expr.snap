@@ -14,130 +14,222 @@ tup :: (name : String, age : Int)
 
 === AST ===
 Module(0, 103) [
-    TopLevelStatement(0, 33) Let(
-        Let(0, 33) Pattern(4, 7) Identifier(Ident(4, 7) "tup", false) ExprNode {
-            pos: (
-                10,
-                33,
-            ),
-            kind: LabeledTuple {
-                entries: [
-                    (
-                        Ident(11, 15) "name",
-                        ExprNode {
-                            pos: (
-                                18,
-                                22,
-                            ),
-                            kind: Literal {
-                                literal: Literal(18, 22) Str("Reid"),
-                            },
-                            typ: Unknown,
-                        },
-                    ),
-                    (
-                        Ident(25, 28) "age",
-                        ExprNode {
-                            pos: (
-                                30,
-                                32,
-                            ),
-                            kind: Literal {
-                                literal: Literal(30, 32) IntDecimal(26),
-                            },
-                            typ: Unknown,
-                        },
-                    ),
-                ],
-            },
-            typ: Unknown,
-        },
-    ),
-    TopLevelStatement(34, 68) Let(
-        Let(34, 68) Pattern(38, 62) LabeledTuple([(Ident(39, 43) "name", Pattern(45, 50) Identifier(Ident(45, 50) "name2", false)), (Ident(52, 55) "age", Pattern(57, 61) Identifier(Ident(57, 61) "age2", false))]) ExprNode {
-            pos: (
-                65,
-                68,
-            ),
-            kind: Identifier {
-                ident: Ident(65, 68) "tup",
-            },
-            typ: Unknown,
-        },
-    ),
-    TopLevelStatement(74, 103) Expr(
-        ExprNode {
-            pos: (
-                74,
-                103,
-            ),
-            kind: TypeAssertion {
-                expr: ExprNode {
+    TopLevelStatementNode {
+        pos: (
+            0,
+            33,
+        ),
+        kind: Let(
+            LetNode {
+                pos: (
+                    0,
+                    33,
+                ),
+                pattern: PatternNode {
                     pos: (
-                        70,
-                        73,
+                        4,
+                        7,
                     ),
-                    kind: Identifier {
-                        ident: Ident(70, 73) "tup",
-                    },
-                    typ: Unknown,
+                    kind: Identifier(
+                        Ident(4, 7) "tup",
+                        false,
+                    ),
                 },
-                asserted_type: TypeExprNode {
+                value: ExprNode {
                     pos: (
-                        77,
-                        103,
+                        10,
+                        33,
                     ),
-                    kind: LabeledTuple(
-                        [
+                    kind: LabeledTuple {
+                        entries: [
                             (
-                                Ident(78, 82) "name",
-                                TypeExprNode {
+                                Ident(11, 15) "name",
+                                ExprNode {
                                     pos: (
-                                        85,
-                                        91,
+                                        18,
+                                        22,
                                     ),
-                                    kind: Single(
-                                        TypeIdentifierNode {
+                                    kind: Literal {
+                                        literal: LiteralNode {
                                             pos: (
-                                                85,
-                                                91,
+                                                18,
+                                                22,
                                             ),
-                                            name: "String",
-                                            generics: [],
-                                            constraints: None,
+                                            kind: Str(
+                                                "Reid",
+                                            ),
                                         },
-                                    ),
+                                    },
                                     typ: Unknown,
                                 },
                             ),
                             (
-                                Ident(93, 96) "age",
-                                TypeExprNode {
+                                Ident(25, 28) "age",
+                                ExprNode {
                                     pos: (
-                                        99,
-                                        102,
+                                        30,
+                                        32,
                                     ),
-                                    kind: Single(
-                                        TypeIdentifierNode {
+                                    kind: Literal {
+                                        literal: LiteralNode {
                                             pos: (
-                                                99,
-                                                102,
+                                                30,
+                                                32,
                                             ),
-                                            name: "Int",
-                                            generics: [],
-                                            constraints: None,
+                                            kind: IntDecimal(
+                                                26,
+                                            ),
                                         },
-                                    ),
+                                    },
                                     typ: Unknown,
                                 },
                             ),
                         ],
-                    ),
+                    },
                     typ: Unknown,
                 },
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
+    TopLevelStatementNode {
+        pos: (
+            34,
+            68,
+        ),
+        kind: Let(
+            LetNode {
+                pos: (
+                    34,
+                    68,
+                ),
+                pattern: PatternNode {
+                    pos: (
+                        38,
+                        62,
+                    ),
+                    kind: LabeledTuple(
+                        [
+                            (
+                                Ident(39, 43) "name",
+                                PatternNode {
+                                    pos: (
+                                        45,
+                                        50,
+                                    ),
+                                    kind: Identifier(
+                                        Ident(45, 50) "name2",
+                                        false,
+                                    ),
+                                },
+                            ),
+                            (
+                                Ident(52, 55) "age",
+                                PatternNode {
+                                    pos: (
+                                        57,
+                                        61,
+                                    ),
+                                    kind: Identifier(
+                                        Ident(57, 61) "age2",
+                                        false,
+                                    ),
+                                },
+                            ),
+                        ],
+                    ),
+                },
+                value: ExprNode {
+                    pos: (
+                        65,
+                        68,
+                    ),
+                    kind: Identifier {
+                        ident: Ident(65, 68) "tup",
+                    },
+                    typ: Unknown,
+                },
+            },
+        ),
+    },
+    TopLevelStatementNode {
+        pos: (
+            74,
+            103,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    74,
+                    103,
+                ),
+                kind: TypeAssertion {
+                    expr: ExprNode {
+                        pos: (
+                            70,
+                            73,
+                        ),
+                        kind: Identifier {
+                            ident: Ident(70, 73) "tup",
+                        },
+                        typ: Unknown,
+                    },
+                    asserted_type: TypeExprNode {
+                        pos: (
+                            77,
+                            103,
+                        ),
+                        kind: LabeledTuple(
+                            [
+                                (
+                                    Ident(78, 82) "name",
+                                    TypeExprNode {
+                                        pos: (
+                                            85,
+                                            91,
+                                        ),
+                                        kind: Single(
+                                            TypeIdentifierNode {
+                                                pos: (
+                                                    85,
+                                                    91,
+                                                ),
+                                                name: "String",
+                                                generics: [],
+                                                constraints: None,
+                                            },
+                                        ),
+                                        typ: Unknown,
+                                    },
+                                ),
+                                (
+                                    Ident(93, 96) "age",
+                                    TypeExprNode {
+                                        pos: (
+                                            99,
+                                            102,
+                                        ),
+                                        kind: Single(
+                                            TypeIdentifierNode {
+                                                pos: (
+                                                    99,
+                                                    102,
+                                                ),
+                                                name: "Int",
+                                                generics: [],
+                                                constraints: None,
+                                            },
+                                        ),
+                                        typ: Unknown,
+                                    },
+                                ),
+                            ],
+                        ),
+                        typ: Unknown,
+                    },
+                },
+                typ: Unknown,
+            },
+        ),
+    },
 ]
 

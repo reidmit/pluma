@@ -13,66 +13,102 @@ def Person . greet String {
 
 === AST ===
 Module(0, 42) [
-    TopLevelStatement(0, 42) Def(
-        DefNode {
-            pos: (
-                0,
-                42,
-            ),
-            visibility: Public,
-            kind: Method {
-                receiver: TypeIdentifierNode {
-                    pos: (
-                        4,
-                        10,
-                    ),
-                    name: "Person",
-                    generics: [],
-                    constraints: None,
+    TopLevelStatementNode {
+        pos: (
+            0,
+            42,
+        ),
+        kind: Def(
+            DefNode {
+                pos: (
+                    0,
+                    42,
+                ),
+                visibility: Public,
+                kind: Method {
+                    receiver: TypeIdentifierNode {
+                        pos: (
+                            4,
+                            10,
+                        ),
+                        name: "Person",
+                        generics: [],
+                        constraints: None,
+                    },
+                    signature: [
+                        (
+                            Ident(13, 18) "greet",
+                            TypeExprNode {
+                                pos: (
+                                    19,
+                                    25,
+                                ),
+                                kind: Single(
+                                    TypeIdentifierNode {
+                                        pos: (
+                                            19,
+                                            25,
+                                        ),
+                                        name: "String",
+                                        generics: [],
+                                        constraints: None,
+                                    },
+                                ),
+                                typ: Unknown,
+                            },
+                        ),
+                    ],
                 },
-                signature: [
-                    (
-                        Ident(13, 18) "greet",
-                        TypeExprNode {
+                return_type: None,
+                generic_type_constraints: [],
+                block: BlockNode {
+                    pos: (
+                        26,
+                        42,
+                    ),
+                    params: [
+                        PatternNode {
                             pos: (
-                                19,
-                                25,
+                                31,
+                                32,
                             ),
-                            kind: Single(
-                                TypeIdentifierNode {
+                            kind: Identifier(
+                                Ident(31, 32) "a",
+                                false,
+                            ),
+                        },
+                    ],
+                    body: [
+                        StatementNode {
+                            pos: (
+                                35,
+                                39,
+                            ),
+                            kind: Expr(
+                                ExprNode {
                                     pos: (
-                                        19,
-                                        25,
+                                        35,
+                                        39,
                                     ),
-                                    name: "String",
-                                    generics: [],
-                                    constraints: None,
+                                    kind: Literal {
+                                        literal: LiteralNode {
+                                            pos: (
+                                                35,
+                                                39,
+                                            ),
+                                            kind: Str(
+                                                "wow!",
+                                            ),
+                                        },
+                                    },
+                                    typ: Unknown,
                                 },
                             ),
-                            typ: Unknown,
                         },
-                    ),
-                ],
+                    ],
+                },
             },
-            return_type: None,
-            generic_type_constraints: [],
-            block: Block(26, 42) ([
-                Pattern(31, 32) Identifier(Ident(31, 32) "a", false),
-            ]) [
-                Statement(35, 39) Expr(
-                    ExprNode {
-                        pos: (
-                            35,
-                            39,
-                        ),
-                        kind: Literal {
-                            literal: Literal(35, 39) Str("wow!"),
-                        },
-                        typ: Unknown,
-                    },
-                ),
-            ],
-        },
-    ),
+        ),
+    },
 ]
 

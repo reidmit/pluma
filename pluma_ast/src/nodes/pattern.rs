@@ -1,7 +1,7 @@
 use super::*;
 use crate::common::*;
-use std::fmt;
 
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct PatternNode {
   pub pos: Position,
   pub kind: PatternKind,
@@ -23,11 +23,4 @@ pub enum PatternKind {
   Literal(LiteralNode),
   // e.g. match str | "$(thing)?" => "yes" | _ => "no"
   Interpolation(Vec<ExprNode>),
-}
-
-#[cfg(debug_assertions)]
-impl fmt::Debug for PatternNode {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "Pattern{:?} {:?}", self.pos, self.kind)
-  }
 }

@@ -11,62 +11,68 @@ expression: "/\"aa\" \"b\"{ , 2 } \"cc\"/"
 
 === AST ===
 Module(0, 22) [
-    TopLevelStatement(0, 22) Expr(
-        ExprNode {
-            pos: (
-                0,
-                22,
-            ),
-            kind: RegExpr {
-                regex: RegExprNode {
-                    pos: (
-                        0,
-                        0,
-                    ),
-                    kind: Sequence(
-                        [
-                            RegExprNode {
-                                pos: (
-                                    2,
-                                    4,
-                                ),
-                                kind: Literal(
-                                    "aa",
-                                ),
-                            },
-                            RegExprNode {
-                                pos: (
-                                    7,
-                                    16,
-                                ),
-                                kind: AtMostCount(
-                                    RegExprNode {
-                                        pos: (
-                                            7,
-                                            8,
-                                        ),
-                                        kind: Literal(
-                                            "b",
-                                        ),
-                                    },
-                                    2,
-                                ),
-                            },
-                            RegExprNode {
-                                pos: (
-                                    18,
-                                    20,
-                                ),
-                                kind: Literal(
-                                    "cc",
-                                ),
-                            },
-                        ],
-                    ),
+    TopLevelStatementNode {
+        pos: (
+            0,
+            22,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    0,
+                    22,
+                ),
+                kind: RegExpr {
+                    regex: RegExprNode {
+                        pos: (
+                            0,
+                            0,
+                        ),
+                        kind: Sequence(
+                            [
+                                RegExprNode {
+                                    pos: (
+                                        2,
+                                        4,
+                                    ),
+                                    kind: Literal(
+                                        "aa",
+                                    ),
+                                },
+                                RegExprNode {
+                                    pos: (
+                                        7,
+                                        16,
+                                    ),
+                                    kind: AtMostCount(
+                                        RegExprNode {
+                                            pos: (
+                                                7,
+                                                8,
+                                            ),
+                                            kind: Literal(
+                                                "b",
+                                            ),
+                                        },
+                                        2,
+                                    ),
+                                },
+                                RegExprNode {
+                                    pos: (
+                                        18,
+                                        20,
+                                    ),
+                                    kind: Literal(
+                                        "cc",
+                                    ),
+                                },
+                            ],
+                        ),
+                    },
                 },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

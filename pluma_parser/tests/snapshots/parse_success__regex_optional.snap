@@ -11,61 +11,67 @@ expression: "/\"w\" \"o\"? \"w\"/"
 
 === AST ===
 Module(0, 14) [
-    TopLevelStatement(0, 14) Expr(
-        ExprNode {
-            pos: (
-                0,
-                14,
-            ),
-            kind: RegExpr {
-                regex: RegExprNode {
-                    pos: (
-                        0,
-                        0,
-                    ),
-                    kind: Sequence(
-                        [
-                            RegExprNode {
-                                pos: (
-                                    2,
-                                    3,
-                                ),
-                                kind: Literal(
-                                    "w",
-                                ),
-                            },
-                            RegExprNode {
-                                pos: (
-                                    6,
-                                    9,
-                                ),
-                                kind: OneOrZero(
-                                    RegExprNode {
-                                        pos: (
-                                            6,
-                                            7,
-                                        ),
-                                        kind: Literal(
-                                            "o",
-                                        ),
-                                    },
-                                ),
-                            },
-                            RegExprNode {
-                                pos: (
-                                    11,
-                                    12,
-                                ),
-                                kind: Literal(
-                                    "w",
-                                ),
-                            },
-                        ],
-                    ),
+    TopLevelStatementNode {
+        pos: (
+            0,
+            14,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    0,
+                    14,
+                ),
+                kind: RegExpr {
+                    regex: RegExprNode {
+                        pos: (
+                            0,
+                            0,
+                        ),
+                        kind: Sequence(
+                            [
+                                RegExprNode {
+                                    pos: (
+                                        2,
+                                        3,
+                                    ),
+                                    kind: Literal(
+                                        "w",
+                                    ),
+                                },
+                                RegExprNode {
+                                    pos: (
+                                        6,
+                                        9,
+                                    ),
+                                    kind: OneOrZero(
+                                        RegExprNode {
+                                            pos: (
+                                                6,
+                                                7,
+                                            ),
+                                            kind: Literal(
+                                                "o",
+                                            ),
+                                        },
+                                    ),
+                                },
+                                RegExprNode {
+                                    pos: (
+                                        11,
+                                        12,
+                                    ),
+                                    kind: Literal(
+                                        "w",
+                                    ),
+                                },
+                            ],
+                        ),
+                    },
                 },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

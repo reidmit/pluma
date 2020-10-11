@@ -11,17 +11,23 @@ cool
 
 === AST ===
 Module(0, 4) [
-    TopLevelStatement(0, 4) Expr(
-        ExprNode {
-            pos: (
-                0,
-                4,
-            ),
-            kind: Identifier {
-                ident: Ident(0, 4) "cool",
+    TopLevelStatementNode {
+        pos: (
+            0,
+            4,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    0,
+                    4,
+                ),
+                kind: Identifier {
+                    ident: Ident(0, 4) "cool",
+                },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

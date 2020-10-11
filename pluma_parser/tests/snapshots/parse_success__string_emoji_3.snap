@@ -11,17 +11,31 @@ expression: "\"🏳️‍🌈\""
 
 === AST ===
 Module(1, 15) [
-    TopLevelStatement(1, 15) Expr(
-        ExprNode {
-            pos: (
-                1,
-                15,
-            ),
-            kind: Literal {
-                literal: Literal(1, 15) Str("🏳\u{fe0f}\u{200d}🌈"),
+    TopLevelStatementNode {
+        pos: (
+            1,
+            15,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    1,
+                    15,
+                ),
+                kind: Literal {
+                    literal: LiteralNode {
+                        pos: (
+                            1,
+                            15,
+                        ),
+                        kind: Str(
+                            "🏳\u{fe0f}\u{200d}🌈",
+                        ),
+                    },
+                },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

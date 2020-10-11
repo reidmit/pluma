@@ -12,75 +12,113 @@ print "two"
 
 === AST ===
 Module(0, 22) [
-    TopLevelStatement(0, 10) Expr(
-        ExprNode {
-            pos: (
-                0,
-                10,
-            ),
-            kind: Call {
-                call: Call {
-                    callee: ExprNode {
+    TopLevelStatementNode {
+        pos: (
+            0,
+            10,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    0,
+                    10,
+                ),
+                kind: Call {
+                    call: CallNode {
                         pos: (
                             0,
-                            5,
+                            10,
                         ),
-                        kind: Identifier {
-                            ident: Ident(0, 5) "print",
-                        },
-                        typ: Unknown,
-                    },
-                    args: [
-                        ExprNode {
+                        callee: ExprNode {
                             pos: (
-                                7,
-                                10,
+                                0,
+                                5,
                             ),
-                            kind: Literal {
-                                literal: Literal(7, 10) Str("one"),
+                            kind: Identifier {
+                                ident: Ident(0, 5) "print",
                             },
                             typ: Unknown,
                         },
-                    ],
+                        args: [
+                            ExprNode {
+                                pos: (
+                                    7,
+                                    10,
+                                ),
+                                kind: Literal {
+                                    literal: LiteralNode {
+                                        pos: (
+                                            7,
+                                            10,
+                                        ),
+                                        kind: Str(
+                                            "one",
+                                        ),
+                                    },
+                                },
+                                typ: Unknown,
+                            },
+                        ],
+                        typ: Unknown,
+                    },
                 },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
-    TopLevelStatement(12, 22) Expr(
-        ExprNode {
-            pos: (
-                12,
-                22,
-            ),
-            kind: Call {
-                call: Call {
-                    callee: ExprNode {
+        ),
+    },
+    TopLevelStatementNode {
+        pos: (
+            12,
+            22,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    12,
+                    22,
+                ),
+                kind: Call {
+                    call: CallNode {
                         pos: (
                             12,
-                            17,
+                            22,
                         ),
-                        kind: Identifier {
-                            ident: Ident(12, 17) "print",
-                        },
-                        typ: Unknown,
-                    },
-                    args: [
-                        ExprNode {
+                        callee: ExprNode {
                             pos: (
-                                19,
-                                22,
+                                12,
+                                17,
                             ),
-                            kind: Literal {
-                                literal: Literal(19, 22) Str("two"),
+                            kind: Identifier {
+                                ident: Ident(12, 17) "print",
                             },
                             typ: Unknown,
                         },
-                    ],
+                        args: [
+                            ExprNode {
+                                pos: (
+                                    19,
+                                    22,
+                                ),
+                                kind: Literal {
+                                    literal: LiteralNode {
+                                        pos: (
+                                            19,
+                                            22,
+                                        ),
+                                        kind: Str(
+                                            "two",
+                                        ),
+                                    },
+                                },
+                                typ: Unknown,
+                            },
+                        ],
+                        typ: Unknown,
+                    },
                 },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

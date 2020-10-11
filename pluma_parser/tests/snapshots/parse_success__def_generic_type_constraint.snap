@@ -13,89 +13,117 @@ def hello A -> A where A :: Any {
 
 === AST ===
 Module(0, 43) [
-    TopLevelStatement(0, 43) Def(
-        DefNode {
-            pos: (
-                0,
-                43,
-            ),
-            visibility: Public,
-            kind: Function {
-                signature: [
+    TopLevelStatementNode {
+        pos: (
+            0,
+            43,
+        ),
+        kind: Def(
+            DefNode {
+                pos: (
+                    0,
+                    43,
+                ),
+                visibility: Public,
+                kind: Function {
+                    signature: [
+                        (
+                            Ident(4, 9) "hello",
+                            TypeExprNode {
+                                pos: (
+                                    10,
+                                    11,
+                                ),
+                                kind: Single(
+                                    TypeIdentifierNode {
+                                        pos: (
+                                            10,
+                                            11,
+                                        ),
+                                        name: "A",
+                                        generics: [],
+                                        constraints: None,
+                                    },
+                                ),
+                                typ: Unknown,
+                            },
+                        ),
+                    ],
+                },
+                return_type: Some(
+                    TypeExprNode {
+                        pos: (
+                            15,
+                            16,
+                        ),
+                        kind: Single(
+                            TypeIdentifierNode {
+                                pos: (
+                                    15,
+                                    16,
+                                ),
+                                name: "A",
+                                generics: [],
+                                constraints: None,
+                            },
+                        ),
+                        typ: Unknown,
+                    },
+                ),
+                generic_type_constraints: [
                     (
-                        Ident(4, 9) "hello",
-                        TypeExprNode {
-                            pos: (
-                                10,
-                                11,
-                            ),
-                            kind: Single(
-                                TypeIdentifierNode {
-                                    pos: (
-                                        10,
-                                        11,
-                                    ),
-                                    name: "A",
-                                    generics: [],
-                                    constraints: None,
-                                },
-                            ),
-                            typ: Unknown,
-                        },
-                    ),
-                ],
-            },
-            return_type: Some(
-                TypeExprNode {
-                    pos: (
-                        15,
-                        16,
-                    ),
-                    kind: Single(
+                        Ident(23, 24) "A",
                         TypeIdentifierNode {
                             pos: (
-                                15,
-                                16,
+                                28,
+                                31,
                             ),
-                            name: "A",
+                            name: "Any",
                             generics: [],
                             constraints: None,
                         },
                     ),
-                    typ: Unknown,
-                },
-            ),
-            generic_type_constraints: [
-                (
-                    Ident(23, 24) "A",
-                    TypeIdentifierNode {
-                        pos: (
-                            28,
-                            31,
-                        ),
-                        name: "Any",
-                        generics: [],
-                        constraints: None,
-                    },
-                ),
-            ],
-            block: Block(32, 43) ([
-                Pattern(37, 38) Identifier(Ident(37, 38) "x", false),
-            ]) [
-                Statement(40, 41) Expr(
-                    ExprNode {
-                        pos: (
-                            40,
-                            41,
-                        ),
-                        kind: Identifier {
-                            ident: Ident(40, 41) "x",
+                ],
+                block: BlockNode {
+                    pos: (
+                        32,
+                        43,
+                    ),
+                    params: [
+                        PatternNode {
+                            pos: (
+                                37,
+                                38,
+                            ),
+                            kind: Identifier(
+                                Ident(37, 38) "x",
+                                false,
+                            ),
                         },
-                        typ: Unknown,
-                    },
-                ),
-            ],
-        },
-    ),
+                    ],
+                    body: [
+                        StatementNode {
+                            pos: (
+                                40,
+                                41,
+                            ),
+                            kind: Expr(
+                                ExprNode {
+                                    pos: (
+                                        40,
+                                        41,
+                                    ),
+                                    kind: Identifier {
+                                        ident: Ident(40, 41) "x",
+                                    },
+                                    typ: Unknown,
+                                },
+                            ),
+                        },
+                    ],
+                },
+            },
+        ),
+    },
 ]
 

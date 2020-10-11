@@ -11,62 +11,68 @@ expression: "/\"aa\" \"b\"{18} \"cc\"/"
 
 === AST ===
 Module(0, 19) [
-    TopLevelStatement(0, 19) Expr(
-        ExprNode {
-            pos: (
-                0,
-                19,
-            ),
-            kind: RegExpr {
-                regex: RegExprNode {
-                    pos: (
-                        0,
-                        0,
-                    ),
-                    kind: Sequence(
-                        [
-                            RegExprNode {
-                                pos: (
-                                    2,
-                                    4,
-                                ),
-                                kind: Literal(
-                                    "aa",
-                                ),
-                            },
-                            RegExprNode {
-                                pos: (
-                                    7,
-                                    13,
-                                ),
-                                kind: ExactCount(
-                                    RegExprNode {
-                                        pos: (
-                                            7,
-                                            8,
-                                        ),
-                                        kind: Literal(
-                                            "b",
-                                        ),
-                                    },
-                                    18,
-                                ),
-                            },
-                            RegExprNode {
-                                pos: (
-                                    15,
-                                    17,
-                                ),
-                                kind: Literal(
-                                    "cc",
-                                ),
-                            },
-                        ],
-                    ),
+    TopLevelStatementNode {
+        pos: (
+            0,
+            19,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    0,
+                    19,
+                ),
+                kind: RegExpr {
+                    regex: RegExprNode {
+                        pos: (
+                            0,
+                            0,
+                        ),
+                        kind: Sequence(
+                            [
+                                RegExprNode {
+                                    pos: (
+                                        2,
+                                        4,
+                                    ),
+                                    kind: Literal(
+                                        "aa",
+                                    ),
+                                },
+                                RegExprNode {
+                                    pos: (
+                                        7,
+                                        13,
+                                    ),
+                                    kind: ExactCount(
+                                        RegExprNode {
+                                            pos: (
+                                                7,
+                                                8,
+                                            ),
+                                            kind: Literal(
+                                                "b",
+                                            ),
+                                        },
+                                        18,
+                                    ),
+                                },
+                                RegExprNode {
+                                    pos: (
+                                        15,
+                                        17,
+                                    ),
+                                    kind: Literal(
+                                        "cc",
+                                    ),
+                                },
+                            ],
+                        ),
+                    },
                 },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

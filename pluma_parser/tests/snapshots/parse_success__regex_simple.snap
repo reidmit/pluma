@@ -11,25 +11,31 @@ expression: /space/
 
 === AST ===
 Module(0, 7) [
-    TopLevelStatement(0, 7) Expr(
-        ExprNode {
-            pos: (
-                0,
-                7,
-            ),
-            kind: RegExpr {
-                regex: RegExprNode {
-                    pos: (
-                        1,
-                        6,
-                    ),
-                    kind: CharacterClass(
-                        "space",
-                    ),
+    TopLevelStatementNode {
+        pos: (
+            0,
+            7,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    0,
+                    7,
+                ),
+                kind: RegExpr {
+                    regex: RegExprNode {
+                        pos: (
+                            1,
+                            6,
+                        ),
+                        kind: CharacterClass(
+                            "space",
+                        ),
+                    },
                 },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

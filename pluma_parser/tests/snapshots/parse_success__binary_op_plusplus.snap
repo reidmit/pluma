@@ -11,37 +11,65 @@ expression: "\"a\" ++ \"b\""
 
 === AST ===
 Module(1, 9) [
-    TopLevelStatement(1, 9) Expr(
-        ExprNode {
-            pos: (
-                1,
-                9,
-            ),
-            kind: BinaryOperation {
-                left: ExprNode {
-                    pos: (
-                        1,
-                        2,
-                    ),
-                    kind: Literal {
-                        literal: Literal(1, 2) Str("a"),
+    TopLevelStatementNode {
+        pos: (
+            1,
+            9,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    1,
+                    9,
+                ),
+                kind: BinaryOperation {
+                    left: ExprNode {
+                        pos: (
+                            1,
+                            2,
+                        ),
+                        kind: Literal {
+                            literal: LiteralNode {
+                                pos: (
+                                    1,
+                                    2,
+                                ),
+                                kind: Str(
+                                    "a",
+                                ),
+                            },
+                        },
+                        typ: Unknown,
                     },
-                    typ: Unknown,
-                },
-                op: Operator(4, 6) Concat,
-                right: ExprNode {
-                    pos: (
-                        8,
-                        9,
-                    ),
-                    kind: Literal {
-                        literal: Literal(8, 9) Str("b"),
+                    op: OperatorNode {
+                        pos: (
+                            4,
+                            6,
+                        ),
+                        kind: Concat,
                     },
-                    typ: Unknown,
+                    right: ExprNode {
+                        pos: (
+                            8,
+                            9,
+                        ),
+                        kind: Literal {
+                            literal: LiteralNode {
+                                pos: (
+                                    8,
+                                    9,
+                                ),
+                                kind: Str(
+                                    "b",
+                                ),
+                            },
+                        },
+                        typ: Unknown,
+                    },
                 },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

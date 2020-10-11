@@ -11,105 +11,145 @@ expression: "[1, callThing(), repeat 3 times \"wow\"]"
 
 === AST ===
 Module(0, 38) [
-    TopLevelStatement(0, 38) Expr(
-        ExprNode {
-            pos: (
-                0,
-                38,
-            ),
-            kind: List {
-                elements: [
-                    ExprNode {
-                        pos: (
-                            1,
-                            2,
-                        ),
-                        kind: Literal {
-                            literal: Literal(1, 2) IntDecimal(1),
+    TopLevelStatementNode {
+        pos: (
+            0,
+            38,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    0,
+                    38,
+                ),
+                kind: List {
+                    elements: [
+                        ExprNode {
+                            pos: (
+                                1,
+                                2,
+                            ),
+                            kind: Literal {
+                                literal: LiteralNode {
+                                    pos: (
+                                        1,
+                                        2,
+                                    ),
+                                    kind: IntDecimal(
+                                        1,
+                                    ),
+                                },
+                            },
+                            typ: Unknown,
                         },
-                        typ: Unknown,
-                    },
-                    ExprNode {
-                        pos: (
-                            4,
-                            15,
-                        ),
-                        kind: Call {
-                            call: Call {
-                                callee: ExprNode {
+                        ExprNode {
+                            pos: (
+                                4,
+                                15,
+                            ),
+                            kind: Call {
+                                call: CallNode {
                                     pos: (
                                         4,
-                                        13,
+                                        15,
                                     ),
-                                    kind: Identifier {
-                                        ident: Ident(4, 13) "callThing",
-                                    },
-                                    typ: Unknown,
-                                },
-                                args: [
-                                    ExprNode {
+                                    callee: ExprNode {
                                         pos: (
+                                            4,
                                             13,
-                                            15,
                                         ),
-                                        kind: EmptyTuple,
+                                        kind: Identifier {
+                                            ident: Ident(4, 13) "callThing",
+                                        },
                                         typ: Unknown,
                                     },
-                                ],
+                                    args: [
+                                        ExprNode {
+                                            pos: (
+                                                13,
+                                                15,
+                                            ),
+                                            kind: EmptyTuple,
+                                            typ: Unknown,
+                                        },
+                                    ],
+                                    typ: Unknown,
+                                },
                             },
+                            typ: Unknown,
                         },
-                        typ: Unknown,
-                    },
-                    ExprNode {
-                        pos: (
-                            17,
-                            36,
-                        ),
-                        kind: Call {
-                            call: Call {
-                                callee: ExprNode {
+                        ExprNode {
+                            pos: (
+                                17,
+                                36,
+                            ),
+                            kind: Call {
+                                call: CallNode {
                                     pos: (
                                         17,
-                                        31,
+                                        36,
                                     ),
-                                    kind: MultiPartIdentifier {
-                                        parts: [
-                                            Ident(17, 23) "repeat",
-                                            Ident(26, 31) "times",
-                                        ],
+                                    callee: ExprNode {
+                                        pos: (
+                                            17,
+                                            31,
+                                        ),
+                                        kind: MultiPartIdentifier {
+                                            parts: [
+                                                Ident(17, 23) "repeat",
+                                                Ident(26, 31) "times",
+                                            ],
+                                        },
+                                        typ: Unknown,
                                     },
+                                    args: [
+                                        ExprNode {
+                                            pos: (
+                                                24,
+                                                25,
+                                            ),
+                                            kind: Literal {
+                                                literal: LiteralNode {
+                                                    pos: (
+                                                        24,
+                                                        25,
+                                                    ),
+                                                    kind: IntDecimal(
+                                                        3,
+                                                    ),
+                                                },
+                                            },
+                                            typ: Unknown,
+                                        },
+                                        ExprNode {
+                                            pos: (
+                                                33,
+                                                36,
+                                            ),
+                                            kind: Literal {
+                                                literal: LiteralNode {
+                                                    pos: (
+                                                        33,
+                                                        36,
+                                                    ),
+                                                    kind: Str(
+                                                        "wow",
+                                                    ),
+                                                },
+                                            },
+                                            typ: Unknown,
+                                        },
+                                    ],
                                     typ: Unknown,
                                 },
-                                args: [
-                                    ExprNode {
-                                        pos: (
-                                            24,
-                                            25,
-                                        ),
-                                        kind: Literal {
-                                            literal: Literal(24, 25) IntDecimal(3),
-                                        },
-                                        typ: Unknown,
-                                    },
-                                    ExprNode {
-                                        pos: (
-                                            33,
-                                            36,
-                                        ),
-                                        kind: Literal {
-                                            literal: Literal(33, 36) Str("wow"),
-                                        },
-                                        typ: Unknown,
-                                    },
-                                ],
                             },
+                            typ: Unknown,
                         },
-                        typ: Unknown,
-                    },
-                ],
+                    ],
+                },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

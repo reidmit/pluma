@@ -11,50 +11,56 @@ trait HasName . name : String
 
 === AST ===
 Module(0, 29) [
-    TopLevelStatement(0, 29) TypeDef(
-        TypeDefNode {
-            pos: (
-                0,
-                29,
-            ),
-            visibility: Public,
-            kind: Trait {
-                fields: [
-                    (
-                        Ident(16, 20) "name",
-                        TypeExprNode {
-                            pos: (
-                                23,
-                                29,
-                            ),
-                            kind: Single(
-                                TypeIdentifierNode {
-                                    pos: (
-                                        23,
-                                        29,
-                                    ),
-                                    name: "String",
-                                    generics: [],
-                                    constraints: None,
-                                },
-                            ),
-                            typ: Unknown,
-                        },
-                    ),
-                ],
-                methods: [],
-            },
-            name: TypeIdentifierNode {
+    TopLevelStatementNode {
+        pos: (
+            0,
+            29,
+        ),
+        kind: TypeDef(
+            TypeDefNode {
                 pos: (
-                    6,
-                    13,
+                    0,
+                    29,
                 ),
-                name: "HasName",
-                generics: [],
-                constraints: None,
+                visibility: Public,
+                kind: Trait {
+                    fields: [
+                        (
+                            Ident(16, 20) "name",
+                            TypeExprNode {
+                                pos: (
+                                    23,
+                                    29,
+                                ),
+                                kind: Single(
+                                    TypeIdentifierNode {
+                                        pos: (
+                                            23,
+                                            29,
+                                        ),
+                                        name: "String",
+                                        generics: [],
+                                        constraints: None,
+                                    },
+                                ),
+                                typ: Unknown,
+                            },
+                        ),
+                    ],
+                    methods: [],
+                },
+                name: TypeIdentifierNode {
+                    pos: (
+                        6,
+                        13,
+                    ),
+                    name: "HasName",
+                    generics: [],
+                    constraints: None,
+                },
+                generic_type_constraints: [],
             },
-            generic_type_constraints: [],
-        },
-    ),
+        ),
+    },
 ]
 

@@ -1,6 +1,6 @@
 use crate::common::*;
-use std::fmt;
 
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct LiteralNode {
   pub pos: Position,
   pub kind: LiteralKind,
@@ -14,11 +14,4 @@ pub enum LiteralKind {
   IntHex(i32),
   IntBinary(i32),
   Str(String),
-}
-
-#[cfg(debug_assertions)]
-impl fmt::Debug for LiteralNode {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "Literal{:?} {:?}", self.pos, self.kind)
-  }
 }

@@ -11,17 +11,47 @@ let x = 47
 
 === AST ===
 Module(0, 10) [
-    TopLevelStatement(0, 10) Let(
-        Let(0, 10) Pattern(4, 5) Identifier(Ident(4, 5) "x", false) ExprNode {
-            pos: (
-                8,
-                10,
-            ),
-            kind: Literal {
-                literal: Literal(8, 10) IntDecimal(47),
+    TopLevelStatementNode {
+        pos: (
+            0,
+            10,
+        ),
+        kind: Let(
+            LetNode {
+                pos: (
+                    0,
+                    10,
+                ),
+                pattern: PatternNode {
+                    pos: (
+                        4,
+                        5,
+                    ),
+                    kind: Identifier(
+                        Ident(4, 5) "x",
+                        false,
+                    ),
+                },
+                value: ExprNode {
+                    pos: (
+                        8,
+                        10,
+                    ),
+                    kind: Literal {
+                        literal: LiteralNode {
+                            pos: (
+                                8,
+                                10,
+                            ),
+                            kind: IntDecimal(
+                                47,
+                            ),
+                        },
+                    },
+                    typ: Unknown,
+                },
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

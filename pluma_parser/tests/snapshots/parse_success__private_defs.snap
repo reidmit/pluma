@@ -15,62 +15,94 @@ def isPrivate() {}
 
 === AST ===
 Module(0, 46) [
-    TopLevelStatement(0, 17) Def(
-        DefNode {
-            pos: (
-                0,
-                17,
-            ),
-            visibility: Public,
-            kind: Function {
-                signature: [
-                    (
-                        Ident(4, 12) "isPublic",
-                        TypeExprNode {
-                            pos: (
-                                12,
-                                14,
-                            ),
-                            kind: EmptyTuple,
-                            typ: Unknown,
-                        },
+    TopLevelStatementNode {
+        pos: (
+            0,
+            17,
+        ),
+        kind: Def(
+            DefNode {
+                pos: (
+                    0,
+                    17,
+                ),
+                visibility: Public,
+                kind: Function {
+                    signature: [
+                        (
+                            Ident(4, 12) "isPublic",
+                            TypeExprNode {
+                                pos: (
+                                    12,
+                                    14,
+                                ),
+                                kind: EmptyTuple,
+                                typ: Unknown,
+                            },
+                        ),
+                    ],
+                },
+                return_type: None,
+                generic_type_constraints: [],
+                block: BlockNode {
+                    pos: (
+                        15,
+                        17,
                     ),
-                ],
+                    params: [],
+                    body: [],
+                },
             },
-            return_type: None,
-            generic_type_constraints: [],
-            block: Block(15, 17) ([]) [],
-        },
-    ),
-    TopLevelStatement(19, 26) VisibilityMarker(
-        Private,
-    ),
-    TopLevelStatement(28, 46) Def(
-        DefNode {
-            pos: (
-                28,
-                46,
-            ),
-            visibility: Private,
-            kind: Function {
-                signature: [
-                    (
-                        Ident(32, 41) "isPrivate",
-                        TypeExprNode {
-                            pos: (
-                                41,
-                                43,
-                            ),
-                            kind: EmptyTuple,
-                            typ: Unknown,
-                        },
+        ),
+    },
+    TopLevelStatementNode {
+        pos: (
+            19,
+            26,
+        ),
+        kind: VisibilityMarker(
+            Private,
+        ),
+    },
+    TopLevelStatementNode {
+        pos: (
+            28,
+            46,
+        ),
+        kind: Def(
+            DefNode {
+                pos: (
+                    28,
+                    46,
+                ),
+                visibility: Private,
+                kind: Function {
+                    signature: [
+                        (
+                            Ident(32, 41) "isPrivate",
+                            TypeExprNode {
+                                pos: (
+                                    41,
+                                    43,
+                                ),
+                                kind: EmptyTuple,
+                                typ: Unknown,
+                            },
+                        ),
+                    ],
+                },
+                return_type: None,
+                generic_type_constraints: [],
+                block: BlockNode {
+                    pos: (
+                        44,
+                        46,
                     ),
-                ],
+                    params: [],
+                    body: [],
+                },
             },
-            return_type: None,
-            generic_type_constraints: [],
-            block: Block(44, 46) ([]) [],
-        },
-    ),
+        ),
+    },
 ]
 

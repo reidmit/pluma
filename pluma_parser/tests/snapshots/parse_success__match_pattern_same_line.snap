@@ -11,85 +11,153 @@ match thing when 1 => "one" when 2 => "two" when _ => "idk"
 
 === AST ===
 Module(0, 58) [
-    TopLevelStatement(0, 58) Expr(
-        ExprNode {
-            pos: (
-                0,
-                58,
-            ),
-            kind: Match {
-                match_: MatchNode {
-                    pos: (
-                        0,
-                        58,
-                    ),
-                    subject: ExprNode {
+    TopLevelStatementNode {
+        pos: (
+            0,
+            58,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    0,
+                    58,
+                ),
+                kind: Match {
+                    match_: MatchNode {
                         pos: (
-                            6,
-                            11,
+                            0,
+                            58,
                         ),
-                        kind: Identifier {
-                            ident: Ident(6, 11) "thing",
-                        },
-                        typ: Unknown,
-                    },
-                    cases: [
-                        MatchCaseNode {
+                        subject: ExprNode {
                             pos: (
-                                12,
-                                26,
+                                6,
+                                11,
                             ),
-                            pattern: Pattern(17, 18) Literal(Literal(17, 18) IntDecimal(1)),
-                            body: ExprNode {
+                            kind: Identifier {
+                                ident: Ident(6, 11) "thing",
+                            },
+                            typ: Unknown,
+                        },
+                        cases: [
+                            MatchCaseNode {
                                 pos: (
-                                    23,
+                                    12,
                                     26,
                                 ),
-                                kind: Literal {
-                                    literal: Literal(23, 26) Str("one"),
+                                pattern: PatternNode {
+                                    pos: (
+                                        17,
+                                        18,
+                                    ),
+                                    kind: Literal(
+                                        LiteralNode {
+                                            pos: (
+                                                17,
+                                                18,
+                                            ),
+                                            kind: IntDecimal(
+                                                1,
+                                            ),
+                                        },
+                                    ),
                                 },
-                                typ: Unknown,
+                                body: ExprNode {
+                                    pos: (
+                                        23,
+                                        26,
+                                    ),
+                                    kind: Literal {
+                                        literal: LiteralNode {
+                                            pos: (
+                                                23,
+                                                26,
+                                            ),
+                                            kind: Str(
+                                                "one",
+                                            ),
+                                        },
+                                    },
+                                    typ: Unknown,
+                                },
                             },
-                        },
-                        MatchCaseNode {
-                            pos: (
-                                28,
-                                42,
-                            ),
-                            pattern: Pattern(33, 34) Literal(Literal(33, 34) IntDecimal(2)),
-                            body: ExprNode {
+                            MatchCaseNode {
                                 pos: (
-                                    39,
+                                    28,
                                     42,
                                 ),
-                                kind: Literal {
-                                    literal: Literal(39, 42) Str("two"),
+                                pattern: PatternNode {
+                                    pos: (
+                                        33,
+                                        34,
+                                    ),
+                                    kind: Literal(
+                                        LiteralNode {
+                                            pos: (
+                                                33,
+                                                34,
+                                            ),
+                                            kind: IntDecimal(
+                                                2,
+                                            ),
+                                        },
+                                    ),
                                 },
-                                typ: Unknown,
+                                body: ExprNode {
+                                    pos: (
+                                        39,
+                                        42,
+                                    ),
+                                    kind: Literal {
+                                        literal: LiteralNode {
+                                            pos: (
+                                                39,
+                                                42,
+                                            ),
+                                            kind: Str(
+                                                "two",
+                                            ),
+                                        },
+                                    },
+                                    typ: Unknown,
+                                },
                             },
-                        },
-                        MatchCaseNode {
-                            pos: (
-                                44,
-                                58,
-                            ),
-                            pattern: Pattern(49, 50) Underscore,
-                            body: ExprNode {
+                            MatchCaseNode {
                                 pos: (
-                                    55,
+                                    44,
                                     58,
                                 ),
-                                kind: Literal {
-                                    literal: Literal(55, 58) Str("idk"),
+                                pattern: PatternNode {
+                                    pos: (
+                                        49,
+                                        50,
+                                    ),
+                                    kind: Underscore,
                                 },
-                                typ: Unknown,
+                                body: ExprNode {
+                                    pos: (
+                                        55,
+                                        58,
+                                    ),
+                                    kind: Literal {
+                                        literal: LiteralNode {
+                                            pos: (
+                                                55,
+                                                58,
+                                            ),
+                                            kind: Str(
+                                                "idk",
+                                            ),
+                                        },
+                                    },
+                                    typ: Unknown,
+                                },
                             },
-                        },
-                    ],
+                        ],
+                    },
                 },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

@@ -11,61 +11,88 @@ func (1, "wow")
 
 === AST ===
 Module(0, 15) [
-    TopLevelStatement(0, 15) Expr(
-        ExprNode {
-            pos: (
-                0,
-                15,
-            ),
-            kind: Call {
-                call: Call {
-                    callee: ExprNode {
+    TopLevelStatementNode {
+        pos: (
+            0,
+            15,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    0,
+                    15,
+                ),
+                kind: Call {
+                    call: CallNode {
                         pos: (
                             0,
-                            4,
+                            15,
                         ),
-                        kind: Identifier {
-                            ident: Ident(0, 4) "func",
-                        },
-                        typ: Unknown,
-                    },
-                    args: [
-                        ExprNode {
+                        callee: ExprNode {
                             pos: (
-                                5,
-                                15,
+                                0,
+                                4,
                             ),
-                            kind: UnlabeledTuple {
-                                entries: [
-                                    ExprNode {
-                                        pos: (
-                                            6,
-                                            7,
-                                        ),
-                                        kind: Literal {
-                                            literal: Literal(6, 7) IntDecimal(1),
-                                        },
-                                        typ: Unknown,
-                                    },
-                                    ExprNode {
-                                        pos: (
-                                            10,
-                                            13,
-                                        ),
-                                        kind: Literal {
-                                            literal: Literal(10, 13) Str("wow"),
-                                        },
-                                        typ: Unknown,
-                                    },
-                                ],
+                            kind: Identifier {
+                                ident: Ident(0, 4) "func",
                             },
                             typ: Unknown,
                         },
-                    ],
+                        args: [
+                            ExprNode {
+                                pos: (
+                                    5,
+                                    15,
+                                ),
+                                kind: UnlabeledTuple {
+                                    entries: [
+                                        ExprNode {
+                                            pos: (
+                                                6,
+                                                7,
+                                            ),
+                                            kind: Literal {
+                                                literal: LiteralNode {
+                                                    pos: (
+                                                        6,
+                                                        7,
+                                                    ),
+                                                    kind: IntDecimal(
+                                                        1,
+                                                    ),
+                                                },
+                                            },
+                                            typ: Unknown,
+                                        },
+                                        ExprNode {
+                                            pos: (
+                                                10,
+                                                13,
+                                            ),
+                                            kind: Literal {
+                                                literal: LiteralNode {
+                                                    pos: (
+                                                        10,
+                                                        13,
+                                                    ),
+                                                    kind: Str(
+                                                        "wow",
+                                                    ),
+                                                },
+                                            },
+                                            typ: Unknown,
+                                        },
+                                    ],
+                                },
+                                typ: Unknown,
+                            },
+                        ],
+                        typ: Unknown,
+                    },
                 },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

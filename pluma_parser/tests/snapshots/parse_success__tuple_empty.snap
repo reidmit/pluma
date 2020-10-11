@@ -11,15 +11,21 @@ expression: ()
 
 === AST ===
 Module(0, 2) [
-    TopLevelStatement(0, 2) Expr(
-        ExprNode {
-            pos: (
-                0,
-                2,
-            ),
-            kind: EmptyTuple,
-            typ: Unknown,
-        },
-    ),
+    TopLevelStatementNode {
+        pos: (
+            0,
+            2,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    0,
+                    2,
+                ),
+                kind: EmptyTuple,
+                typ: Unknown,
+            },
+        ),
+    },
 ]
 

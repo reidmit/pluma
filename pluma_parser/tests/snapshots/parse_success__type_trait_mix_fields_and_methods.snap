@@ -14,117 +14,123 @@ trait WowieWithName
 
 === AST ===
 Module(0, 79) [
-    TopLevelStatement(0, 79) TypeDef(
-        TypeDefNode {
-            pos: (
-                0,
-                79,
-            ),
-            visibility: Public,
-            kind: Trait {
-                fields: [
-                    (
-                        Ident(66, 70) "name",
-                        TypeExprNode {
-                            pos: (
-                                73,
-                                79,
-                            ),
-                            kind: Single(
-                                TypeIdentifierNode {
-                                    pos: (
-                                        73,
-                                        79,
-                                    ),
-                                    name: "String",
-                                    generics: [],
-                                    constraints: None,
-                                },
-                            ),
-                            typ: Unknown,
-                        },
-                    ),
-                ],
-                methods: [
-                    (
-                        [
-                            (
-                                Ident(24, 30) "getWow",
-                                TypeExprNode {
-                                    pos: (
-                                        31,
-                                        33,
-                                    ),
-                                    kind: EmptyTuple,
-                                    typ: Unknown,
-                                },
-                            ),
-                        ],
-                        TypeExprNode {
-                            pos: (
-                                37,
-                                40,
-                            ),
-                            kind: Single(
-                                TypeIdentifierNode {
-                                    pos: (
-                                        37,
-                                        40,
-                                    ),
-                                    name: "Wow",
-                                    generics: [],
-                                    constraints: None,
-                                },
-                            ),
-                            typ: Unknown,
-                        },
-                    ),
-                    (
-                        [
-                            (
-                                Ident(45, 51) "setWow",
-                                TypeExprNode {
-                                    pos: (
-                                        52,
-                                        55,
-                                    ),
-                                    kind: Single(
-                                        TypeIdentifierNode {
-                                            pos: (
-                                                52,
-                                                55,
-                                            ),
-                                            name: "Wow",
-                                            generics: [],
-                                            constraints: None,
-                                        },
-                                    ),
-                                    typ: Unknown,
-                                },
-                            ),
-                        ],
-                        TypeExprNode {
-                            pos: (
-                                59,
-                                61,
-                            ),
-                            kind: EmptyTuple,
-                            typ: Unknown,
-                        },
-                    ),
-                ],
-            },
-            name: TypeIdentifierNode {
+    TopLevelStatementNode {
+        pos: (
+            0,
+            79,
+        ),
+        kind: TypeDef(
+            TypeDefNode {
                 pos: (
-                    6,
-                    19,
+                    0,
+                    79,
                 ),
-                name: "WowieWithName",
-                generics: [],
-                constraints: None,
+                visibility: Public,
+                kind: Trait {
+                    fields: [
+                        (
+                            Ident(66, 70) "name",
+                            TypeExprNode {
+                                pos: (
+                                    73,
+                                    79,
+                                ),
+                                kind: Single(
+                                    TypeIdentifierNode {
+                                        pos: (
+                                            73,
+                                            79,
+                                        ),
+                                        name: "String",
+                                        generics: [],
+                                        constraints: None,
+                                    },
+                                ),
+                                typ: Unknown,
+                            },
+                        ),
+                    ],
+                    methods: [
+                        (
+                            [
+                                (
+                                    Ident(24, 30) "getWow",
+                                    TypeExprNode {
+                                        pos: (
+                                            31,
+                                            33,
+                                        ),
+                                        kind: EmptyTuple,
+                                        typ: Unknown,
+                                    },
+                                ),
+                            ],
+                            TypeExprNode {
+                                pos: (
+                                    37,
+                                    40,
+                                ),
+                                kind: Single(
+                                    TypeIdentifierNode {
+                                        pos: (
+                                            37,
+                                            40,
+                                        ),
+                                        name: "Wow",
+                                        generics: [],
+                                        constraints: None,
+                                    },
+                                ),
+                                typ: Unknown,
+                            },
+                        ),
+                        (
+                            [
+                                (
+                                    Ident(45, 51) "setWow",
+                                    TypeExprNode {
+                                        pos: (
+                                            52,
+                                            55,
+                                        ),
+                                        kind: Single(
+                                            TypeIdentifierNode {
+                                                pos: (
+                                                    52,
+                                                    55,
+                                                ),
+                                                name: "Wow",
+                                                generics: [],
+                                                constraints: None,
+                                            },
+                                        ),
+                                        typ: Unknown,
+                                    },
+                                ),
+                            ],
+                            TypeExprNode {
+                                pos: (
+                                    59,
+                                    61,
+                                ),
+                                kind: EmptyTuple,
+                                typ: Unknown,
+                            },
+                        ),
+                    ],
+                },
+                name: TypeIdentifierNode {
+                    pos: (
+                        6,
+                        19,
+                    ),
+                    name: "WowieWithName",
+                    generics: [],
+                    constraints: None,
+                },
+                generic_type_constraints: [],
             },
-            generic_type_constraints: [],
-        },
-    ),
+        ),
+    },
 ]
 

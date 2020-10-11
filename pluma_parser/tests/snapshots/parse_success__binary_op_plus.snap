@@ -11,37 +11,65 @@ expression: 5 + 5
 
 === AST ===
 Module(0, 5) [
-    TopLevelStatement(0, 5) Expr(
-        ExprNode {
-            pos: (
-                0,
-                5,
-            ),
-            kind: BinaryOperation {
-                left: ExprNode {
-                    pos: (
-                        0,
-                        1,
-                    ),
-                    kind: Literal {
-                        literal: Literal(0, 1) IntDecimal(5),
+    TopLevelStatementNode {
+        pos: (
+            0,
+            5,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    0,
+                    5,
+                ),
+                kind: BinaryOperation {
+                    left: ExprNode {
+                        pos: (
+                            0,
+                            1,
+                        ),
+                        kind: Literal {
+                            literal: LiteralNode {
+                                pos: (
+                                    0,
+                                    1,
+                                ),
+                                kind: IntDecimal(
+                                    5,
+                                ),
+                            },
+                        },
+                        typ: Unknown,
                     },
-                    typ: Unknown,
-                },
-                op: Operator(2, 3) Add,
-                right: ExprNode {
-                    pos: (
-                        4,
-                        5,
-                    ),
-                    kind: Literal {
-                        literal: Literal(4, 5) IntDecimal(5),
+                    op: OperatorNode {
+                        pos: (
+                            2,
+                            3,
+                        ),
+                        kind: Add,
                     },
-                    typ: Unknown,
+                    right: ExprNode {
+                        pos: (
+                            4,
+                            5,
+                        ),
+                        kind: Literal {
+                            literal: LiteralNode {
+                                pos: (
+                                    4,
+                                    5,
+                                ),
+                                kind: IntDecimal(
+                                    5,
+                                ),
+                            },
+                        },
+                        typ: Unknown,
+                    },
                 },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

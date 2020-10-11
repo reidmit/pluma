@@ -13,29 +13,65 @@ x
 
 === AST ===
 Module(0, 16) [
-    TopLevelStatement(0, 12) Let(
-        Let(0, 12) Pattern(4, 5) Identifier(Ident(4, 5) "x", false) ExprNode {
-            pos: (
-                9,
-                12,
-            ),
-            kind: Literal {
-                literal: Literal(9, 12) Str("wow"),
+    TopLevelStatementNode {
+        pos: (
+            0,
+            12,
+        ),
+        kind: Let(
+            LetNode {
+                pos: (
+                    0,
+                    12,
+                ),
+                pattern: PatternNode {
+                    pos: (
+                        4,
+                        5,
+                    ),
+                    kind: Identifier(
+                        Ident(4, 5) "x",
+                        false,
+                    ),
+                },
+                value: ExprNode {
+                    pos: (
+                        9,
+                        12,
+                    ),
+                    kind: Literal {
+                        literal: LiteralNode {
+                            pos: (
+                                9,
+                                12,
+                            ),
+                            kind: Str(
+                                "wow",
+                            ),
+                        },
+                    },
+                    typ: Unknown,
+                },
             },
-            typ: Unknown,
-        },
-    ),
-    TopLevelStatement(15, 16) Expr(
-        ExprNode {
-            pos: (
-                15,
-                16,
-            ),
-            kind: Identifier {
-                ident: Ident(15, 16) "x",
+        ),
+    },
+    TopLevelStatementNode {
+        pos: (
+            15,
+            16,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    15,
+                    16,
+                ),
+                kind: Identifier {
+                    ident: Ident(15, 16) "x",
+                },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

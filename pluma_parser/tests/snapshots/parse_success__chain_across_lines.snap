@@ -13,55 +13,69 @@ expression: "\"hello\"\n  . f1\n  .f2"
 
 === AST ===
 Module(1, 20) [
-    TopLevelStatement(1, 20) Expr(
-        ExprNode {
-            pos: (
-                1,
-                20,
-            ),
-            kind: Access {
-                receiver: ExprNode {
-                    pos: (
-                        1,
-                        14,
-                    ),
-                    kind: Access {
-                        receiver: ExprNode {
-                            pos: (
-                                1,
-                                6,
-                            ),
-                            kind: Literal {
-                                literal: Literal(1, 6) Str("hello"),
+    TopLevelStatementNode {
+        pos: (
+            1,
+            20,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    1,
+                    20,
+                ),
+                kind: Access {
+                    receiver: ExprNode {
+                        pos: (
+                            1,
+                            14,
+                        ),
+                        kind: Access {
+                            receiver: ExprNode {
+                                pos: (
+                                    1,
+                                    6,
+                                ),
+                                kind: Literal {
+                                    literal: LiteralNode {
+                                        pos: (
+                                            1,
+                                            6,
+                                        ),
+                                        kind: Str(
+                                            "hello",
+                                        ),
+                                    },
+                                },
+                                typ: Unknown,
                             },
-                            typ: Unknown,
-                        },
-                        property: ExprNode {
-                            pos: (
-                                12,
-                                14,
-                            ),
-                            kind: Identifier {
-                                ident: Ident(12, 14) "f1",
+                            property: ExprNode {
+                                pos: (
+                                    12,
+                                    14,
+                                ),
+                                kind: Identifier {
+                                    ident: Ident(12, 14) "f1",
+                                },
+                                typ: Unknown,
                             },
-                            typ: Unknown,
                         },
+                        typ: Unknown,
                     },
-                    typ: Unknown,
-                },
-                property: ExprNode {
-                    pos: (
-                        18,
-                        20,
-                    ),
-                    kind: Identifier {
-                        ident: Ident(18, 20) "f2",
+                    property: ExprNode {
+                        pos: (
+                            18,
+                            20,
+                        ),
+                        kind: Identifier {
+                            ident: Ident(18, 20) "f2",
+                        },
+                        typ: Unknown,
                     },
-                    typ: Unknown,
                 },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

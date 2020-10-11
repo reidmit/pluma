@@ -16,88 +16,94 @@ expression: "/\"w\"\n  (\n  \"o\"\n  |\n  \"a\")? \"w\"\n/"
 
 === AST ===
 Module(0, 32) [
-    TopLevelStatement(0, 32) Expr(
-        ExprNode {
-            pos: (
-                0,
-                32,
-            ),
-            kind: RegExpr {
-                regex: RegExprNode {
-                    pos: (
-                        0,
-                        0,
-                    ),
-                    kind: Sequence(
-                        [
-                            RegExprNode {
-                                pos: (
-                                    2,
-                                    3,
-                                ),
-                                kind: Literal(
-                                    "w",
-                                ),
-                            },
-                            RegExprNode {
-                                pos: (
-                                    7,
-                                    26,
-                                ),
-                                kind: OneOrZero(
-                                    RegExprNode {
-                                        pos: (
-                                            7,
-                                            8,
-                                        ),
-                                        kind: Grouping(
-                                            RegExprNode {
-                                                pos: (
-                                                    12,
-                                                    23,
-                                                ),
-                                                kind: Alternation(
-                                                    [
-                                                        RegExprNode {
-                                                            pos: (
-                                                                12,
-                                                                13,
-                                                            ),
-                                                            kind: Literal(
-                                                                "o",
-                                                            ),
-                                                        },
-                                                        RegExprNode {
-                                                            pos: (
-                                                                22,
-                                                                23,
-                                                            ),
-                                                            kind: Literal(
-                                                                "a",
-                                                            ),
-                                                        },
-                                                    ],
-                                                ),
-                                            },
-                                        ),
-                                    },
-                                ),
-                            },
-                            RegExprNode {
-                                pos: (
-                                    28,
-                                    29,
-                                ),
-                                kind: Literal(
-                                    "w",
-                                ),
-                            },
-                        ],
-                    ),
+    TopLevelStatementNode {
+        pos: (
+            0,
+            32,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    0,
+                    32,
+                ),
+                kind: RegExpr {
+                    regex: RegExprNode {
+                        pos: (
+                            0,
+                            0,
+                        ),
+                        kind: Sequence(
+                            [
+                                RegExprNode {
+                                    pos: (
+                                        2,
+                                        3,
+                                    ),
+                                    kind: Literal(
+                                        "w",
+                                    ),
+                                },
+                                RegExprNode {
+                                    pos: (
+                                        7,
+                                        26,
+                                    ),
+                                    kind: OneOrZero(
+                                        RegExprNode {
+                                            pos: (
+                                                7,
+                                                8,
+                                            ),
+                                            kind: Grouping(
+                                                RegExprNode {
+                                                    pos: (
+                                                        12,
+                                                        23,
+                                                    ),
+                                                    kind: Alternation(
+                                                        [
+                                                            RegExprNode {
+                                                                pos: (
+                                                                    12,
+                                                                    13,
+                                                                ),
+                                                                kind: Literal(
+                                                                    "o",
+                                                                ),
+                                                            },
+                                                            RegExprNode {
+                                                                pos: (
+                                                                    22,
+                                                                    23,
+                                                                ),
+                                                                kind: Literal(
+                                                                    "a",
+                                                                ),
+                                                            },
+                                                        ],
+                                                    ),
+                                                },
+                                            ),
+                                        },
+                                    ),
+                                },
+                                RegExprNode {
+                                    pos: (
+                                        28,
+                                        29,
+                                    ),
+                                    kind: Literal(
+                                        "w",
+                                    ),
+                                },
+                            ],
+                        ),
+                    },
                 },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

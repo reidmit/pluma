@@ -13,47 +13,83 @@ def hello () {
 
 === AST ===
 Module(0, 29) [
-    TopLevelStatement(0, 29) Def(
-        DefNode {
-            pos: (
-                0,
-                29,
-            ),
-            visibility: Public,
-            kind: Function {
-                signature: [
-                    (
-                        Ident(4, 9) "hello",
-                        TypeExprNode {
-                            pos: (
-                                10,
-                                12,
-                            ),
-                            kind: EmptyTuple,
-                            typ: Unknown,
-                        },
-                    ),
-                ],
-            },
-            return_type: None,
-            generic_type_constraints: [],
-            block: Block(13, 29) ([
-                Pattern(18, 19) Identifier(Ident(18, 19) "a", false),
-            ]) [
-                Statement(22, 26) Expr(
-                    ExprNode {
-                        pos: (
-                            22,
-                            26,
-                        ),
-                        kind: Literal {
-                            literal: Literal(22, 26) Str("wow!"),
-                        },
-                        typ: Unknown,
-                    },
+    TopLevelStatementNode {
+        pos: (
+            0,
+            29,
+        ),
+        kind: Def(
+            DefNode {
+                pos: (
+                    0,
+                    29,
                 ),
-            ],
-        },
-    ),
+                visibility: Public,
+                kind: Function {
+                    signature: [
+                        (
+                            Ident(4, 9) "hello",
+                            TypeExprNode {
+                                pos: (
+                                    10,
+                                    12,
+                                ),
+                                kind: EmptyTuple,
+                                typ: Unknown,
+                            },
+                        ),
+                    ],
+                },
+                return_type: None,
+                generic_type_constraints: [],
+                block: BlockNode {
+                    pos: (
+                        13,
+                        29,
+                    ),
+                    params: [
+                        PatternNode {
+                            pos: (
+                                18,
+                                19,
+                            ),
+                            kind: Identifier(
+                                Ident(18, 19) "a",
+                                false,
+                            ),
+                        },
+                    ],
+                    body: [
+                        StatementNode {
+                            pos: (
+                                22,
+                                26,
+                            ),
+                            kind: Expr(
+                                ExprNode {
+                                    pos: (
+                                        22,
+                                        26,
+                                    ),
+                                    kind: Literal {
+                                        literal: LiteralNode {
+                                            pos: (
+                                                22,
+                                                26,
+                                            ),
+                                            kind: Str(
+                                                "wow!",
+                                            ),
+                                        },
+                                    },
+                                    typ: Unknown,
+                                },
+                            ),
+                        },
+                    ],
+                },
+            },
+        ),
+    },
 ]
 

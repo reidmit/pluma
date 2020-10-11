@@ -11,38 +11,49 @@ func()
 
 === AST ===
 Module(0, 6) [
-    TopLevelStatement(0, 6) Expr(
-        ExprNode {
-            pos: (
-                0,
-                6,
-            ),
-            kind: Call {
-                call: Call {
-                    callee: ExprNode {
+    TopLevelStatementNode {
+        pos: (
+            0,
+            6,
+        ),
+        kind: Expr(
+            ExprNode {
+                pos: (
+                    0,
+                    6,
+                ),
+                kind: Call {
+                    call: CallNode {
                         pos: (
                             0,
-                            4,
+                            6,
                         ),
-                        kind: Identifier {
-                            ident: Ident(0, 4) "func",
-                        },
-                        typ: Unknown,
-                    },
-                    args: [
-                        ExprNode {
+                        callee: ExprNode {
                             pos: (
+                                0,
                                 4,
-                                6,
                             ),
-                            kind: EmptyTuple,
+                            kind: Identifier {
+                                ident: Ident(0, 4) "func",
+                            },
                             typ: Unknown,
                         },
-                    ],
+                        args: [
+                            ExprNode {
+                                pos: (
+                                    4,
+                                    6,
+                                ),
+                                kind: EmptyTuple,
+                                typ: Unknown,
+                            },
+                        ],
+                        typ: Unknown,
+                    },
                 },
+                typ: Unknown,
             },
-            typ: Unknown,
-        },
-    ),
+        ),
+    },
 ]
 

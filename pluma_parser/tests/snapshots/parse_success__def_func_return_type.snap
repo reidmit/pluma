@@ -13,106 +13,147 @@ def hello () -> { A -> B } {
 
 === AST ===
 Module(0, 42) [
-    TopLevelStatement(0, 42) Def(
-        DefNode {
-            pos: (
-                0,
-                42,
-            ),
-            visibility: Public,
-            kind: Function {
-                signature: [
-                    (
-                        Ident(4, 9) "hello",
-                        TypeExprNode {
-                            pos: (
-                                10,
-                                12,
-                            ),
-                            kind: EmptyTuple,
-                            typ: Unknown,
-                        },
-                    ),
-                ],
-            },
-            return_type: Some(
-                TypeExprNode {
-                    pos: (
-                        16,
-                        26,
-                    ),
-                    kind: Func(
-                        TypeExprNode {
-                            pos: (
-                                18,
-                                19,
-                            ),
-                            kind: Single(
-                                TypeIdentifierNode {
-                                    pos: (
-                                        18,
-                                        19,
-                                    ),
-                                    name: "A",
-                                    generics: [],
-                                    constraints: None,
-                                },
-                            ),
-                            typ: Unknown,
-                        },
-                        TypeExprNode {
-                            pos: (
-                                23,
-                                24,
-                            ),
-                            kind: Single(
-                                TypeIdentifierNode {
-                                    pos: (
-                                        23,
-                                        24,
-                                    ),
-                                    name: "B",
-                                    generics: [],
-                                    constraints: None,
-                                },
-                            ),
-                            typ: Unknown,
-                        },
-                    ),
-                    typ: Unknown,
-                },
-            ),
-            generic_type_constraints: [],
-            block: Block(27, 42) ([]) [
-                Statement(31, 40) Expr(
-                    ExprNode {
-                        pos: (
-                            31,
-                            40,
+    TopLevelStatementNode {
+        pos: (
+            0,
+            42,
+        ),
+        kind: Def(
+            DefNode {
+                pos: (
+                    0,
+                    42,
+                ),
+                visibility: Public,
+                kind: Function {
+                    signature: [
+                        (
+                            Ident(4, 9) "hello",
+                            TypeExprNode {
+                                pos: (
+                                    10,
+                                    12,
+                                ),
+                                kind: EmptyTuple,
+                                typ: Unknown,
+                            },
                         ),
-                        kind: Block {
-                            block: Block(31, 40) ([
-                                Pattern(34, 35) Identifier(Ident(34, 35) "x", false),
-                            ]) [
-                                Statement(37, 38) Expr(
-                                    ExprNode {
+                    ],
+                },
+                return_type: Some(
+                    TypeExprNode {
+                        pos: (
+                            16,
+                            26,
+                        ),
+                        kind: Func(
+                            TypeExprNode {
+                                pos: (
+                                    18,
+                                    19,
+                                ),
+                                kind: Single(
+                                    TypeIdentifierNode {
                                         pos: (
-                                            37,
-                                            38,
+                                            18,
+                                            19,
                                         ),
-                                        kind: Identifier {
-                                            ident: Ident(37, 38) "y",
-                                        },
-                                        typ: Unknown,
+                                        name: "A",
+                                        generics: [],
+                                        constraints: None,
                                     },
                                 ),
-                            ],
-                        },
+                                typ: Unknown,
+                            },
+                            TypeExprNode {
+                                pos: (
+                                    23,
+                                    24,
+                                ),
+                                kind: Single(
+                                    TypeIdentifierNode {
+                                        pos: (
+                                            23,
+                                            24,
+                                        ),
+                                        name: "B",
+                                        generics: [],
+                                        constraints: None,
+                                    },
+                                ),
+                                typ: Unknown,
+                            },
+                        ),
                         typ: Unknown,
                     },
                 ),
-            ],
-        },
-    ),
+                generic_type_constraints: [],
+                block: BlockNode {
+                    pos: (
+                        27,
+                        42,
+                    ),
+                    params: [],
+                    body: [
+                        StatementNode {
+                            pos: (
+                                31,
+                                40,
+                            ),
+                            kind: Expr(
+                                ExprNode {
+                                    pos: (
+                                        31,
+                                        40,
+                                    ),
+                                    kind: Block {
+                                        block: BlockNode {
+                                            pos: (
+                                                31,
+                                                40,
+                                            ),
+                                            params: [
+                                                PatternNode {
+                                                    pos: (
+                                                        34,
+                                                        35,
+                                                    ),
+                                                    kind: Identifier(
+                                                        Ident(34, 35) "x",
+                                                        false,
+                                                    ),
+                                                },
+                                            ],
+                                            body: [
+                                                StatementNode {
+                                                    pos: (
+                                                        37,
+                                                        38,
+                                                    ),
+                                                    kind: Expr(
+                                                        ExprNode {
+                                                            pos: (
+                                                                37,
+                                                                38,
+                                                            ),
+                                                            kind: Identifier {
+                                                                ident: Ident(37, 38) "y",
+                                                            },
+                                                            typ: Unknown,
+                                                        },
+                                                    ),
+                                                },
+                                            ],
+                                        },
+                                    },
+                                    typ: Unknown,
+                                },
+                            ),
+                        },
+                    ],
+                },
+            },
+        ),
+    },
 ]
 
