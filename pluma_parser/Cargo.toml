@@ -6,6 +6,3 @@ edition = "2018"
 
 [dependencies]
 pluma_ast = { path = "../pluma_ast" }
-
-[dev-dependencies]
-insta = { version = "0.16.0" }
