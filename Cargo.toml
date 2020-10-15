@@ -1,16 +1,16 @@
 [workspace]
 members = [
-  "pluma_analyzer",
-  "pluma_ast",
-  "pluma_cli",
-  "pluma_compiler",
-  "pluma_constants",
-  "pluma_diagnostics",
-  "pluma_emitter",
-  "pluma_module",
-  "pluma_parser",
-  "pluma_repl",
-  "pluma_visitor",
+  "analyzer",
+  "ast",
+  "cli",
+  "compiler",
+  "constants",
+  "diagnostics",
+  "emitter",
+  "module",
+  "parser",
+  "repl",
+  "visitor",
   "tests",
 ]
 

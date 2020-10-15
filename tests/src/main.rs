@@ -1,4 +1,4 @@
-use pluma_compiler::*;
+use compiler::*;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs::{self, DirEntry};

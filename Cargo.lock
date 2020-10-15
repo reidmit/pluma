@@ -9,6 +9,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "analyzer"
+version = "0.1.0"
+dependencies = [
+ "ast 0.1.0",
+ "constants 0.1.0",
+ "diagnostics 0.1.0",
+ "parser 0.1.0",
+ "visitor 0.1.0",
+]
+
+[[package]]
 name = "arrayref"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -17,6 +28,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "arrayvec"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "ast"
+version = "0.1.0"
 
 [[package]]
 name = "atty"
@@ -72,9 +87,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "compiler"
+version = "0.1.0"
+dependencies = [
+ "analyzer 0.1.0",
+ "ast 0.1.0",
+ "constants 0.1.0",
+ "diagnostics 0.1.0",
+ "emitter 0.1.0",
+ "module 0.1.0",
+ "parser 0.1.0",
+ "visitor 0.1.0",
+]
+
+[[package]]
 name = "constant_time_eq"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "constants"
+version = "0.1.0"
 
 [[package]]
 name = "crossbeam-utils"
@@ -85,6 +118,10 @@ dependencies = [
  "cfg-if 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "diagnostics"
+version = "0.1.0"
 
 [[package]]
 name = "dirs-next"
@@ -109,6 +146,16 @@ dependencies = [
 name = "either"
 version = "1.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "emitter"
+version = "0.1.0"
+dependencies = [
+ "ast 0.1.0",
+ "diagnostics 0.1.0",
+ "inkwell 0.1.0 (git+https://github.com/TheDan64/inkwell?branch=llvm10-0)",
+ "visitor 0.1.0",
+]
 
 [[package]]
 name = "getrandom"
@@ -201,6 +248,17 @@ version = "2.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "module"
+version = "0.1.0"
+dependencies = [
+ "ast 0.1.0",
+ "constants 0.1.0",
+ "diagnostics 0.1.0",
+ "parser 0.1.0",
+ "visitor 0.1.0",
+]
+
+[[package]]
 name = "nix"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -240,96 +298,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "parser"
+version = "0.1.0"
+dependencies = [
+ "ast 0.1.0",
+]
+
+[[package]]
 name = "pluma"
 version = "0.1.0"
 dependencies = [
  "atty 0.2.14 (registry+https://github.com/rust-lang/crates.io-index)",
+ "compiler 0.1.0",
+ "constants 0.1.0",
+ "diagnostics 0.1.0",
  "glob 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "pluma_compiler 0.1.0",
- "pluma_constants 0.1.0",
- "pluma_diagnostics 0.1.0",
- "pluma_parser 0.1.0",
- "pluma_repl 0.1.0",
-]
-
-[[package]]
-name = "pluma_analyzer"
-version = "0.1.0"
-dependencies = [
- "pluma_ast 0.1.0",
- "pluma_constants 0.1.0",
- "pluma_diagnostics 0.1.0",
- "pluma_parser 0.1.0",
- "pluma_visitor 0.1.0",
-]
-
-[[package]]
-name = "pluma_ast"
-version = "0.1.0"
-
-[[package]]
-name = "pluma_compiler"
-version = "0.1.0"
-dependencies = [
- "pluma_analyzer 0.1.0",
- "pluma_ast 0.1.0",
- "pluma_constants 0.1.0",
- "pluma_diagnostics 0.1.0",
- "pluma_emitter 0.1.0",
- "pluma_module 0.1.0",
- "pluma_parser 0.1.0",
- "pluma_visitor 0.1.0",
-]
-
-[[package]]
-name = "pluma_constants"
-version = "0.1.0"
-
-[[package]]
-name = "pluma_diagnostics"
-version = "0.1.0"
-
-[[package]]
-name = "pluma_emitter"
-version = "0.1.0"
-dependencies = [
- "inkwell 0.1.0 (git+https://github.com/TheDan64/inkwell?branch=llvm10-0)",
- "pluma_ast 0.1.0",
- "pluma_diagnostics 0.1.0",
- "pluma_visitor 0.1.0",
-]
-
-[[package]]
-name = "pluma_module"
-version = "0.1.0"
-dependencies = [
- "pluma_ast 0.1.0",
- "pluma_constants 0.1.0",
- "pluma_diagnostics 0.1.0",
- "pluma_parser 0.1.0",
- "pluma_visitor 0.1.0",
-]
-
-[[package]]
-name = "pluma_parser"
-version = "0.1.0"
-dependencies = [
- "pluma_ast 0.1.0",
-]
-
-[[package]]
-name = "pluma_repl"
-version = "0.1.0"
-dependencies = [
- "pluma_compiler 0.1.0",
- "rustyline 6.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "pluma_visitor"
-version = "0.1.0"
-dependencies = [
- "pluma_ast 0.1.0",
+ "parser 0.1.0",
+ "repl 0.1.0",
 ]
 
 [[package]]
@@ -378,6 +363,14 @@ dependencies = [
 name = "regex-syntax"
 version = "0.6.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "repl"
+version = "0.1.0"
+dependencies = [
+ "compiler 0.1.0",
+ "rustyline 6.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "rust-argon2"
@@ -445,7 +438,7 @@ dependencies = [
 name = "tests"
 version = "0.1.0"
 dependencies = [
- "pluma_compiler 0.1.0",
+ "compiler 0.1.0",
 ]
 
 [[package]]
@@ -475,6 +468,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "utf8parse"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "visitor"
+version = "0.1.0"
+dependencies = [
+ "ast 0.1.0",
+]
 
 [[package]]
 name = "void"

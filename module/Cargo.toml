@@ -1,0 +1,13 @@
+[package]
+name = "module"
+version = "0.1.0"
+license = "MIT"
+authors = ["Reid Mitchell <reidmitchell1@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+ast = { path = "../ast" }
+constants = { path = "../constants" }
+diagnostics = { path = "../diagnostics" }
+parser = { path = "../parser" }
+visitor = { path = "../visitor" }
