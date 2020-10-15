@@ -11,6 +11,7 @@ members = [
   "pluma_parser",
   "pluma_repl",
   "pluma_visitor",
+  "tests",
 ]
 
 [profile.release]

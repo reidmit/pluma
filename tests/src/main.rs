@@ -1,5 +1,6 @@
 use pluma_compiler::*;
 use std::collections::HashMap;
+use std::ffi::OsStr;
 use std::fs::{self, DirEntry};
 use std::io;
 use std::path::Path;
@@ -18,7 +19,7 @@ fn main() -> io::Result<()> {
   let cases_dir = Path::new("tests/cases").canonicalize()?;
   let mut all_results = HashMap::new();
 
-  visit_dirs(&cases_dir, &mut all_results, &|entry, all_results| {
+  visit_pluma_files(&cases_dir, &mut all_results, &|entry, all_results| {
     let current_dir = std::env::current_dir().unwrap();
     let entry_path = &entry.path();
     let short_path = entry_path.strip_prefix(current_dir).unwrap();
@@ -48,10 +49,6 @@ fn main() -> io::Result<()> {
   println!("\n\x1b[32m✔ All passed!\x1b[0m");
 
   Ok(())
-}
-
-fn path_to_string(path: &Path) -> String {
-  path.to_string_lossy().to_owned().to_string()
 }
 
 fn check_module(path: &Path) -> Vec<ModuleAnalysisTestResult> {
@@ -125,7 +122,7 @@ fn check_module(path: &Path) -> Vec<ModuleAnalysisTestResult> {
   module_results
 }
 
-fn visit_dirs(
+fn visit_pluma_files(
   dir: &Path,
   results: &mut HashMap<String, Vec<ModuleAnalysisTestResult>>,
   cb: &dyn Fn(&DirEntry, &mut HashMap<String, Vec<ModuleAnalysisTestResult>>),
@@ -136,12 +133,18 @@ fn visit_dirs(
       let path = entry.path();
 
       if path.is_dir() {
-        visit_dirs(&path, results, cb)?;
-      } else {
-        cb(&entry, results);
+        visit_pluma_files(&path, results, cb)?;
+      } else if let Some(extension) = path.extension() {
+        if extension == OsStr::new("pa") {
+          cb(&entry, results);
+        }
       }
     }
   }
 
   Ok(())
+}
+
+fn path_to_string(path: &Path) -> String {
+  path.to_string_lossy().to_owned().to_string()
 }

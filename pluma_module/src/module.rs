@@ -2,6 +2,7 @@ use pluma_ast::*;
 use pluma_diagnostics::*;
 use pluma_parser::*;
 use pluma_visitor::*;
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -10,22 +11,20 @@ pub struct Module {
   pub module_name: String,
   pub module_path: PathBuf,
   pub ast: Option<ModuleNode>,
-  pub comments: Option<CommentMap>,
-  pub line_break_positions: Option<Vec<Position>>,
+  pub comments: HashMap<usize, String>,
+  pub line_break_starts: Vec<usize>,
   imports: Option<Vec<UseNode>>,
-  collect_comments: bool,
 }
 
 impl Module {
-  pub fn new(module_name: String, module_path: PathBuf, collect_comments: bool) -> Module {
+  pub fn new(module_name: String, module_path: PathBuf) -> Module {
     Module {
       module_name,
       module_path,
       ast: None,
       imports: None,
-      comments: None,
-      line_break_positions: None,
-      collect_comments,
+      comments: HashMap::new(),
+      line_break_starts: Vec::new(),
     }
   }
 
@@ -65,6 +64,24 @@ impl Module {
     imports
   }
 
+  pub fn get_line_for_position(&self, pos: Position) -> usize {
+    let mut line = 1;
+
+    for break_start in &self.line_break_starts {
+      if break_start >= &pos.0 && break_start <= &pos.1 {
+        return line;
+      }
+
+      line += 1
+    }
+
+    line
+  }
+
+  pub fn get_comment_for_line(&self, line: usize) -> Option<&String> {
+    self.comments.get(&line)
+  }
+
   pub fn traverse<V: Visitor>(&self, visitor: &mut V) {
     if let Some(ast) = &self.ast {
       ast.traverse(visitor)
@@ -78,22 +95,9 @@ impl Module {
   }
 
   fn build_ast(&mut self, bytes: Vec<u8>, diagnostics: &mut Vec<Diagnostic>) {
-    let tokenizer = Tokenizer::from_source(&bytes, self.collect_comments);
+    let tokenizer = Tokenizer::from_source(&bytes);
 
-    let (ast, imports, comment_data, errors) =
-      Parser::new(&bytes, tokenizer, self.collect_comments).parse_module();
-
-    if !errors.is_empty() {
-      for err in errors {
-        diagnostics.push(
-          Diagnostic::error(err)
-            .with_pos(err.pos)
-            .with_module(self.module_name.clone(), self.module_path.to_path_buf()),
-        );
-      }
-
-      return;
-    }
+    let (ast, imports, comment_data, errors) = Parser::new(&bytes, tokenizer).parse_module();
 
     // imports.push(UseNode {
     //   pos: (0, 0),
@@ -104,10 +108,18 @@ impl Module {
     self.ast = Some(ast);
     self.imports = Some(imports);
 
-    if self.collect_comments {
-      let (comments, line_break_positions) = comment_data.unwrap();
-      self.comments = Some(comments);
-      self.line_break_positions = Some(line_break_positions);
+    let (comments, line_break_starts) = comment_data;
+    self.comments = comments;
+    self.line_break_starts = line_break_starts;
+
+    if !errors.is_empty() {
+      for err in errors {
+        diagnostics.push(
+          Diagnostic::error(err)
+            .with_pos(err.pos)
+            .with_module(self.module_name.clone(), self.module_path.to_path_buf()),
+        );
+      }
     }
   }
 }

@@ -20,7 +20,6 @@ pub struct Compiler {
   output_path: Option<String>,
   diagnostics: Vec<Diagnostic>,
   dependency_graph: DependencyGraph,
-  collect_comments: bool,
 }
 
 impl Compiler {
@@ -36,7 +35,6 @@ impl Compiler {
       diagnostics: Vec::new(),
       output_path: options.output_path,
       mode: options.mode,
-      collect_comments: options.collect_comments,
       dependency_graph,
     })
   }
@@ -47,9 +45,6 @@ impl Compiler {
       self.entry_module_name.clone(),
       to_module_path(self.root_dir.clone(), self.entry_module_name.clone()),
     );
-
-    // TODO remove
-    println!("{:#?}", self.modules[&self.entry_module_name]);
 
     if !self.diagnostics.is_empty() {
       return Err(self.diagnostics.to_vec());
@@ -91,9 +86,6 @@ impl Compiler {
           to_module_path(self.root_dir.clone(), self.entry_module_name.clone()),
         ))
       }
-
-      // println!("module {:#?}", module_to_analyze);
-      println!("scope {:#?}", module_scope);
     }
 
     if !self.diagnostics.is_empty() {
@@ -166,11 +158,7 @@ impl Compiler {
       return;
     };
 
-    let mut new_module = Module::new(
-      module_name.clone(),
-      module_path.to_owned(),
-      self.collect_comments,
-    );
+    let mut new_module = Module::new(module_name.clone(), module_path.to_owned());
 
     let result = new_module.parse();
     let imports = new_module.get_imports();

@@ -194,8 +194,6 @@ impl fmt::Display for AnalysisError {
         "Variable already has type {}, so cannot be assigned a new value of type {}.",
         expected, actual
       ),
-
-      InvalidValueForConst => write!(f, "Value of const statement must be a literal."),
     }
   }
 }

@@ -2,10 +2,14 @@ use crate::parse_error::{ParseError, ParseErrorKind::*};
 use crate::tokens::{Token, Token::*};
 use std::collections::HashMap;
 
-pub type CommentMap = HashMap<usize, Token>;
+macro_rules! read_string {
+  ($self:ident, $start:expr, $end:expr) => {
+    String::from_utf8($self.source[$start..$end].to_vec()).expect("not utf-8");
+  };
+}
 
 pub struct Tokenizer<'a> {
-  pub comments: CommentMap,
+  pub comments: HashMap<usize, String>,
   source: &'a Vec<u8>,
   length: usize,
   index: usize,
@@ -16,19 +20,18 @@ pub struct Tokenizer<'a> {
   brace_depth: i32,
   errors: Vec<ParseError>,
   next_token: Option<Token>,
-  collect_comments: bool,
   peek_queue: Vec<Token>,
 }
 
 impl<'a> Tokenizer<'a> {
-  pub fn from_source(source: &'a Vec<u8>, collect_comments: bool) -> Self {
+  pub fn from_source(source: &'a Vec<u8>) -> Self {
     let length = source.len();
 
     return Tokenizer {
       source,
       length,
       index: 0,
-      line: 0,
+      line: 1,
       expect_import_path: false,
       string_stack: Vec::new(),
       interpolation_stack: Vec::new(),
@@ -36,7 +39,6 @@ impl<'a> Tokenizer<'a> {
       comments: HashMap::new(),
       errors: Vec::new(),
       next_token: None,
-      collect_comments,
       peek_queue: Vec::with_capacity(2),
     };
   }
@@ -416,11 +418,9 @@ impl<'a> Iterator for Tokenizer<'a> {
             self.index += 1;
           }
 
-          if self.collect_comments {
-            self
-              .comments
-              .insert(self.line, Comment(start_index + 1, self.index));
-          }
+          let comment = read_string!(self, start_index + 1, self.index);
+
+          self.comments.insert(self.line, comment);
         }
 
         b'@'

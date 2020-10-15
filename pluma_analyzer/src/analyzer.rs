@@ -494,55 +494,54 @@ impl<'a> Analyzer<'a> {
   }
 
   fn analyze_call(&mut self, node: &mut CallNode) -> ValueType {
-    ValueType::Nothing
-    // self.analyze_expr(&mut node.callee);
+    self.analyze_expr(&mut node.callee);
 
-    // let callee_type = &node.callee.typ;
+    let callee_type = &node.callee.typ;
 
-    // match callee_type {
-    //   ValueType::Func(param_types, return_type) => {
-    //     if param_types.len() != node.args.len() {
-    //       self.error(AnalysisError {
-    //         pos: node.pos,
-    //         kind: AnalysisErrorKind::IncorrectNumberOfArguments {
-    //           expected: param_types.len(),
-    //           actual: node.args.len(),
-    //         },
-    //       })
-    //     }
+    match callee_type {
+      ValueType::Func(param_types, return_type) => {
+        if param_types.len() != node.args.len() {
+          self.error(AnalysisError {
+            pos: node.pos,
+            kind: AnalysisErrorKind::IncorrectNumberOfArguments {
+              expected: param_types.len(),
+              actual: node.args.len(),
+            },
+          })
+        }
 
-    //     for i in 0..param_types.len() {
-    //       let arg = node.args.get_mut(i).unwrap();
-    //       self.analyze_expr(arg);
+        for i in 0..param_types.len() {
+          let arg = node.args.get_mut(i).unwrap();
+          self.analyze_expr(arg);
 
-    //       let param_type = param_types.get(i).unwrap();
-    //       let given_type = &arg.typ;
+          let param_type = param_types.get(i).unwrap();
+          let given_type = &arg.typ;
 
-    //       if !self.compatible_types(&param_type, &given_type) {
-    //         let pos = arg.pos;
+          if !self.compatible_types(&param_type, &given_type) {
+            let pos = arg.pos;
 
-    //         self.error(AnalysisError {
-    //           pos,
-    //           kind: AnalysisErrorKind::ParameterTypeMismatch {
-    //             expected: param_type.clone(),
-    //             actual: given_type.clone(),
-    //           },
-    //         })
-    //       }
-    //     }
+            self.error(AnalysisError {
+              pos,
+              kind: AnalysisErrorKind::ParameterTypeMismatch {
+                expected: param_type.clone(),
+                actual: given_type.clone(),
+              },
+            })
+          }
+        }
 
-    //     *return_type.clone()
-    //   }
+        *return_type.clone()
+      }
 
-    //   _ => {
-    //     self.error(AnalysisError {
-    //       pos: node.pos,
-    //       kind: AnalysisErrorKind::CalleeNotCallable(callee_type.clone()),
-    //     });
+      _ => {
+        self.error(AnalysisError {
+          pos: node.pos,
+          kind: AnalysisErrorKind::CalleeNotCallable(callee_type.clone()),
+        });
 
-    //     ValueType::Unknown
-    //   }
-    // }
+        ValueType::Unknown
+      }
+    }
   }
 
   fn analyze_def(&mut self, node: &mut DefNode) {
@@ -647,7 +646,7 @@ impl<'a> Analyzer<'a> {
 
   fn analyze_expr(&mut self, node: &mut ExprNode) {
     match &mut node.kind {
-      ExprKind::Assignment { left, right } => {
+      ExprKind::Assignment { left: _, right: _ } => {
         // let existing_binding = self.scope.get_binding(&left.name);
 
         // if let Some(binding) = existing_binding {
@@ -669,6 +668,16 @@ impl<'a> Analyzer<'a> {
       ExprKind::BinaryOperation { op, left, right } => {
         self.analyze_expr(left);
         self.analyze_expr(right);
+
+        match op.kind {
+          OperatorKind::Add => {
+            // self.ensure_satisfies_trait(left, "Add");
+            // self.ensure_satisfies_trait(right, "Add");
+            // self.ensure_same_type(left, right);
+          }
+
+          _ => todo!(),
+        }
 
         // let receiver_type_binding = match self.scope.get_type_binding(&left.typ) {
         //   Some(binding) => binding,
@@ -713,22 +722,54 @@ impl<'a> Analyzer<'a> {
       ExprKind::Access { receiver, property } => {
         self.analyze_expr(receiver);
 
-        println!("scope: {:#?}", self.scope);
-        println!("rec: {:#?}", receiver);
+        match &property.kind {
+          ExprKind::Identifier { ident } => {
+            // If an identifier, then the receiver must have a field or method with this name.
 
-        // let receiver_type_fields = self.type_to_field_types(&receiver.typ);
+            let receiver_type_fields = self.type_to_field_types(&receiver.typ);
 
-        // match receiver_type_fields.get(&field.name) {
-        //   Some(field_typ) => node.typ = field_typ.clone(),
+            match receiver_type_fields.get(&ident.name) {
+              Some(field_typ) => node.typ = field_typ.clone(),
 
-        //   None => self.error(AnalysisError {
-        //     pos: field.pos,
-        //     kind: AnalysisErrorKind::UndefinedFieldForType {
-        //       field_name: field.name.clone(),
-        //       receiver_type: receiver.typ.clone(),
-        //     },
-        //   }),
-        // }
+              // TODO check methods?
+              None => self.error(AnalysisError {
+                pos: property.pos,
+                kind: AnalysisErrorKind::UndefinedFieldForType {
+                  field_name: ident.name.clone(),
+                  receiver_type: receiver.typ.clone(),
+                },
+              }),
+            }
+          }
+
+          ExprKind::MultiPartIdentifier { parts } => {
+            let method_name_parts = parts
+              .iter()
+              .map(|n| n.name.clone())
+              .collect::<Vec<String>>();
+
+            let receiver_type_binding = match self.scope.get_type_binding(&receiver.typ) {
+              Some(binding) => binding,
+              _ => return,
+            };
+
+            if let Some(method_type) = receiver_type_binding.methods.get(&method_name_parts) {
+              node.typ = method_type.clone();
+            } else {
+              let pos = (parts.first().unwrap().pos.0, parts.last().unwrap().pos.1);
+
+              self.error(AnalysisError {
+                pos,
+                kind: AnalysisErrorKind::UndefinedMethodForType {
+                  method_name_parts,
+                  receiver_type: receiver.typ.clone(),
+                },
+              })
+            }
+          }
+
+          _ => todo!(),
+        }
       }
 
       ExprKind::Grouping { inner } => {
@@ -757,55 +798,6 @@ impl<'a> Analyzer<'a> {
 
       ExprKind::Literal { literal } => node.typ = self.analyze_literal(literal),
 
-      // ExprKind::MethodAccess {
-      //   receiver,
-      //   method_parts,
-      // } => {
-      //   self.analyze_expr(receiver);
-
-      //   let receiver_type_binding = match self.scope.get_type_binding(&receiver.typ) {
-      //     Some(binding) => binding,
-      //     _ => return,
-      //   };
-
-      //   // There is a special case here, where if we are calling a function that's a field
-      //   // on a struct, rather than a method, it will be parsed as a MethodAccess at this point.
-      //   // Check to see if we're in that case:
-      //   if let TypeBindingKind::Struct { fields } = &receiver_type_binding.kind {
-      //     if method_parts.len() == 1 {
-      //       let potential_field_name = &method_parts[0].name.clone();
-
-      //       if let Some(field_binding) = fields.get(potential_field_name) {
-      //         node.typ = field_binding.typ.clone();
-      //         return;
-      //       }
-      //     }
-      //   }
-
-      //   // If we didn't get into that special case, carry on and analyze this as a normal
-      //   // method call.
-      //   let method_name_parts = method_parts
-      //     .iter()
-      //     .map(|n| n.name.clone())
-      //     .collect::<Vec<String>>();
-
-      //   if let Some(method_type) = receiver_type_binding.methods.get(&method_name_parts) {
-      //     node.typ = method_type.clone();
-      //   } else {
-      //     let pos = (
-      //       method_parts.first().unwrap().pos.0,
-      //       method_parts.last().unwrap().pos.1,
-      //     );
-
-      //     self.error(AnalysisError {
-      //       pos,
-      //       kind: AnalysisErrorKind::UndefinedMethodForType {
-      //         method_name_parts,
-      //         receiver_type: receiver.typ.clone(),
-      //       },
-      //     })
-      //   }
-      // }
       ExprKind::Match { match_ } => {
         let _subject_type = &match_.subject.typ;
         let mut case_type: Option<ValueType> = None;

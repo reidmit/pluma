@@ -9,3 +9,4 @@ mod usage_error;
 
 pub use compiler::*;
 pub use compiler_options::*;
+pub use pluma_diagnostics::*;

@@ -1,7 +1,8 @@
 use crate::parse_error::*;
-use crate::tokenizer::{CommentMap, Tokenizer};
+use crate::tokenizer::Tokenizer;
 use crate::tokens::Token;
 use pluma_ast::*;
+use std::collections::HashMap;
 
 macro_rules! current_token_is {
   ($self:ident, $tokType:path) => {
@@ -66,12 +67,11 @@ pub struct Parser<'a> {
   current_token: Option<Token>,
   prev_token: Option<Token>,
   current_visibility: ExportVisibility,
-  collect_comments: bool,
-  line_break_positions: Vec<Position>,
+  line_break_starts: Vec<usize>,
 }
 
 impl<'a> Parser<'a> {
-  pub fn new(source: &'a Vec<u8>, tokenizer: Tokenizer<'a>, collect_comments: bool) -> Parser<'a> {
+  pub fn new(source: &'a Vec<u8>, tokenizer: Tokenizer<'a>) -> Parser<'a> {
     return Parser {
       source,
       tokenizer,
@@ -80,8 +80,7 @@ impl<'a> Parser<'a> {
       current_token: None,
       prev_token: None,
       current_visibility: ExportVisibility::Public,
-      collect_comments,
-      line_break_positions: Vec::new(),
+      line_break_starts: Vec::new(),
     };
   }
 
@@ -90,7 +89,7 @@ impl<'a> Parser<'a> {
   ) -> (
     ModuleNode,
     Vec<UseNode>,
-    Option<(CommentMap, Vec<Position>)>,
+    (HashMap<usize, String>, Vec<usize>),
     Vec<ParseError>,
   ) {
     let mut imports = Vec::new();
@@ -136,13 +135,10 @@ impl<'a> Parser<'a> {
       body,
     };
 
-    let comment_data = match self.collect_comments {
-      true => Some((
-        self.tokenizer.comments.clone(),
-        self.line_break_positions.clone(),
-      )),
-      false => None,
-    };
+    let comment_data = (
+      self.tokenizer.comments.clone(),
+      self.line_break_starts.clone(),
+    );
 
     (module_node, imports, comment_data, self.errors.clone())
   }
@@ -157,11 +153,7 @@ impl<'a> Parser<'a> {
     let mut skipped_any = false;
 
     while current_token_is!(self, Token::LineBreak) {
-      if self.collect_comments {
-        self
-          .line_break_positions
-          .push(self.current_token_position())
-      }
+      self.line_break_starts.push(self.current_token_position().0);
 
       skipped_any = true;
 
@@ -228,7 +220,7 @@ impl<'a> Parser<'a> {
   fn parse_binary_number(&mut self) -> Option<LiteralNode> {
     let (start, end, value) = expect_token_and_do!(self, Token::BinaryDigits, {
       let (start, end) = self.current_token_position();
-      (start, end, self.parse_numeric_literal(start, end, 2))
+      (start, end, self.parse_numeric_literal(start + 2, end, 2))
     });
 
     self.advance();
@@ -1271,7 +1263,7 @@ impl<'a> Parser<'a> {
   fn parse_hex_number(&mut self) -> Option<LiteralNode> {
     let (start, end, value) = expect_token_and_do!(self, Token::HexDigits, {
       let (start, end) = self.current_token_position();
-      (start, end, self.parse_numeric_literal(start, end, 16))
+      (start, end, self.parse_numeric_literal(start + 2, end, 16))
     });
 
     self.advance();
@@ -1546,6 +1538,8 @@ impl<'a> Parser<'a> {
     for byte in self.source[start..end].iter().rev() {
       let byte_value = match byte {
         b'0'..=b'9' => byte - 48,
+        b'A'..=b'F' => byte - 65,
+        b'a'..=b'f' => byte - 97,
         _ => unreachable!(),
       };
 
@@ -1559,7 +1553,7 @@ impl<'a> Parser<'a> {
   fn parse_octal_number(&mut self) -> Option<LiteralNode> {
     let (start, end, value) = expect_token_and_do!(self, Token::OctalDigits, {
       let (start, end) = self.current_token_position();
-      (start, end, self.parse_numeric_literal(start, end, 8))
+      (start, end, self.parse_numeric_literal(start + 2, end, 8))
     });
 
     self.advance();
