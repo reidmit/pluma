@@ -34,7 +34,6 @@ impl Command for RunCommand {
         _ => CompilerMode::Debug,
       },
       output_path: None,
-      collect_comments: false,
     };
 
     let mut compiler = match Compiler::from_options(options) {

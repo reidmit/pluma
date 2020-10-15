@@ -21,8 +21,6 @@ impl Command for HelpCommand {
       Some(val) => match &val[..] {
         "build" => BuildCommand::print_help(),
         "check" => CheckCommand::print_help(),
-        "doc" => DocCommand::print_help(),
-        "format" => FormatCommand::print_help(),
         "help" => HelpCommand::print_help(),
         "run" => RunCommand::print_help(),
         "repl" => ReplCommand::print_help(),
@@ -57,8 +55,6 @@ Compiler & tools for the Pluma language
         let cmd_info: Vec<CommandInfo> = vec![
           BuildCommand::info(),
           CheckCommand::info(),
-          DocCommand::info(),
-          FormatCommand::info(),
           ReplCommand::info(),
           RunCommand::info(),
           VersionCommand::info(),

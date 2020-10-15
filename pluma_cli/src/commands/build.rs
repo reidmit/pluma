@@ -40,7 +40,6 @@ impl Command for BuildCommand {
         _ => CompilerMode::Debug,
       },
       output_path: args.get_flag_value("out"),
-      collect_comments: false,
     };
 
     let mut compiler = match Compiler::from_options(compiler_options) {
