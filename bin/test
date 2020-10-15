@@ -4,4 +4,4 @@ source $(dirname $0)/env
 
 cargo run \
   --quiet \
-  -p tests
+  --bin tests
