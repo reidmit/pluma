@@ -8,6 +8,7 @@ edition = "2018"
 ast = { path = "../ast" }
 constants = { path = "../constants" }
 diagnostics = { path = "../diagnostics" }
+macros = { path = "../macros" }
 visitor = { path = "../visitor" }
 
 [dev-dependencies]

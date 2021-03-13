@@ -1,6 +1,3 @@
-#[macro_use]
-mod macros;
-
 mod compiler;
 mod compiler_options;
 mod dependency_graph;

@@ -128,7 +128,7 @@ impl Scope {
     &mut self,
     typ: ValueType,
     method_parts: Vec<String>,
-    param_types: Vec<ValueType>,
+    param_type: ValueType,
     return_type: ValueType,
     typ_pos: (usize, usize),
   ) -> Result<(), Diagnostic> {
@@ -145,7 +145,7 @@ impl Scope {
       }
     };
 
-    let method_type = ValueType::Func(param_types, Box::new(return_type));
+    let method_type = ValueType::Func(Box::new(param_type), Box::new(return_type));
 
     binding.methods.insert(method_parts, method_type);
 

@@ -119,7 +119,7 @@ def emptyArg() { () => print "hello" }
 emptyArg()
 
 # simple arg:
-def simpleArg String { print $0 }
+def simpleArg String { print $ }
 oneArg "hello"
 
 # simple arg, explicit:
@@ -127,7 +127,7 @@ def oneArg String { a => print a }
 oneArg "hello"
 
 # tuple arg:
-def tupleArg (Int, Int) { print $0 + $1 }
+def tupleArg (Int, Int) { print $.0 + $.1 }
 tupleArg (1, 2)
 
 # tuple arg, explicit:

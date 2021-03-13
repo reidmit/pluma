@@ -15,6 +15,7 @@ dependencies = [
  "ast 0.1.0",
  "constants 0.1.0",
  "diagnostics 0.1.0",
+ "macros 0.1.0",
  "parser 0.1.0",
  "visitor 0.1.0",
 ]
@@ -95,6 +96,7 @@ dependencies = [
  "constants 0.1.0",
  "diagnostics 0.1.0",
  "emitter 0.1.0",
+ "macros 0.1.0",
  "module 0.1.0",
  "parser 0.1.0",
  "visitor 0.1.0",
@@ -243,6 +245,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "macros"
+version = "0.1.0"
+
+[[package]]
 name = "memchr"
 version = "2.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -302,6 +308,7 @@ name = "parser"
 version = "0.1.0"
 dependencies = [
  "ast 0.1.0",
+ "macros 0.1.0",
 ]
 
 [[package]]

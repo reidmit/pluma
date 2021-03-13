@@ -8,9 +8,8 @@ pub enum ValueType {
   String,
   Named(String),
   Generic(String, Vec<ValueType>),
-  Func(Vec<ValueType>, Box<ValueType>),
-  UnlabeledTuple(Vec<ValueType>),
-  LabeledTuple(Vec<(String, ValueType)>),
+  Func(Box<ValueType>, Box<ValueType>),
+  Tuple(Vec<(Option<String>, ValueType)>),
   Constrained(TypeConstraint),
   Nothing,
   Unknown,
@@ -28,9 +27,9 @@ pub enum TypeConstraint {
 }
 
 impl ValueType {
-  pub fn func_param_types(&self) -> Vec<ValueType> {
+  pub fn func_param_type(&self) -> &ValueType {
     match &self {
-      ValueType::Func(param_types, _) => param_types.to_vec(),
+      ValueType::Func(param_type, _) => param_type,
       _ => unreachable!(),
     }
   }
@@ -71,36 +70,24 @@ impl fmt::Display for ValueType {
           .join(", ")
       ),
 
-      ValueType::UnlabeledTuple(entry_types) => write!(
-        f,
-        "({})",
-        entry_types
-          .iter()
-          .map(|t| format!("{}", t))
-          .collect::<Vec<String>>()
-          .join(", ")
-      ),
-
-      ValueType::LabeledTuple(entries) => write!(
+      ValueType::Tuple(entries) => write!(
         f,
         "({})",
         entries
           .iter()
-          .map(|(label, typ)| format!("{}: {}", label, typ))
+          .map(|(label, typ)| {
+            match label {
+              Some(label) => format!("{}: {}", label, typ),
+              None => format!("{}", typ),
+            }
+          })
           .collect::<Vec<String>>()
           .join(", ")
       ),
 
-      ValueType::Func(param_types, return_type) => write!(
-        f,
-        "{{ {} -> {} }}",
-        param_types
-          .iter()
-          .map(|t| format!("{}", t))
-          .collect::<Vec<String>>()
-          .join(", "),
-        return_type,
-      ),
+      ValueType::Func(param_type, return_type) => {
+        write!(f, "{{ {} -> {} }}", param_type, return_type,)
+      }
 
       ValueType::Constrained(constraint) => match constraint {
         TypeConstraint::NamedTrait(name) => write!(f, "{}", name),

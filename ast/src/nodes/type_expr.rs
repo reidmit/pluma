@@ -15,10 +15,8 @@ pub enum TypeExprKind {
   Single(TypeIdentifierNode),
   // e.g. String -> Bool
   Func(Box<TypeExprNode>, Box<TypeExprNode>),
-  // e.g. (String, Bool)
-  UnlabeledTuple(Vec<TypeExprNode>),
-  // e.g. (a: String, b: Bool)
-  LabeledTuple(Vec<(IdentifierNode, TypeExprNode)>),
+  // e.g. (a: String, b: Bool) or (String, Bool)
+  Tuple(Vec<(Option<IdentifierNode>, TypeExprNode)>),
   // e.g. ()
   EmptyTuple,
   // e.g. (String) or (String -> Bool)

@@ -24,6 +24,7 @@ pub enum ParseErrorKind {
   MissingDefinitionBody,
   MissingDictValue,
   MissingEnumValues,
+  MissingExpressionAfterArrowInCase,
   MissingExpressionAfterDot,
   MissingExpressionAfterLabelInTuple,
   MissingExpressionAfterOperator,
@@ -76,6 +77,9 @@ impl fmt::Display for ParseError {
       MissingDefinitionBody => write!(f, "Missing definition body."),
       MissingDictValue => write!(f, "Missing dictionary value."),
       MissingEnumValues => write!(f, "Missing enum values."),
+      MissingExpressionAfterArrowInCase => {
+        write!(f, "Missing expression after '=>' in match case.")
+      }
       MissingExpressionAfterDot => write!(f, "Missing expression after '.'."),
       MissingExpressionAfterLabelInTuple => write!(f, "Missing value after ':' in labeled tuple."),
       MissingExpressionAfterOperator => write!(f, "Missing expression after operator."),

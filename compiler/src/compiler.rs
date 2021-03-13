@@ -80,6 +80,8 @@ impl Compiler {
       let mut analyzer = Analyzer::new(&mut module_scope);
       module_to_analyze.traverse_mut(&mut analyzer);
 
+      macros::dump!("AST", module_to_analyze);
+
       for diagnostic in analyzer.diagnostics {
         self.diagnostics.push(diagnostic.with_module(
           module_name.clone(),

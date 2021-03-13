@@ -68,6 +68,10 @@ pub enum AnalysisErrorKind {
     expected: ValueType,
     actual: ValueType,
   },
+  TypeMismatchInPattern {
+    expected: ValueType,
+    actual: ValueType,
+  },
 }
 
 impl fmt::Display for AnalysisError {
@@ -186,6 +190,12 @@ impl fmt::Display for AnalysisError {
       TypeMismatchInMatchCase { expected, actual } => write!(
         f,
         "Expected type {} for this case, but found type {}.",
+        expected, actual,
+      ),
+
+      TypeMismatchInPattern { expected, actual } => write!(
+        f,
+        "Incompatible types in pattern match. Expected type {} here, but found type {}.",
         expected, actual,
       ),
 

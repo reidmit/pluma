@@ -9,7 +9,7 @@ impl Traverse for BlockNode {
   fn traverse<V: Visitor>(&self, visitor: &mut V) {
     visitor.enter_block(self);
 
-    for param in &self.params {
+    if let Some(param) = &self.param {
       param.traverse(visitor);
     }
 
@@ -110,15 +110,12 @@ impl Traverse for ExprNode {
         }
       }
 
-      ExprKind::UnlabeledTuple { entries } => {
-        for entry in entries {
-          entry.traverse(visitor);
-        }
-      }
-
-      ExprKind::LabeledTuple { entries } => {
+      ExprKind::Tuple { entries } => {
         for (label, value) in entries {
-          label.traverse(visitor);
+          if let Some(ident) = label {
+            ident.traverse(visitor);
+          }
+
           value.traverse(visitor);
         }
       }

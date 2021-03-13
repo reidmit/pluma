@@ -30,6 +30,10 @@ impl<'a> Analyzer<'a> {
     self.diagnostics.push(diag)
   }
 
+  fn diagnostics(&mut self, diags: &mut Vec<Diagnostic>) {
+    self.diagnostics.append(diags);
+  }
+
   fn check_result(&mut self, result: Result<(), Diagnostic>) {
     if let Err(diag) = result {
       self.diagnostic(diag);
@@ -62,15 +66,17 @@ impl<'a> Analyzer<'a> {
     let mut field_types = HashMap::new();
 
     match typ {
-      ValueType::UnlabeledTuple(entries) => {
-        for i in 0..entries.len() {
-          field_types.insert(format!("{}", i), entries.get(i).unwrap().clone());
-        }
-      }
+      ValueType::Tuple(entries) => {
+        let mut i = 0;
 
-      ValueType::LabeledTuple(entries) => {
         for (label, typ) in entries {
-          field_types.insert(format!("{}", label), typ.clone());
+          field_types.insert(format!("{}", i), typ.clone());
+
+          if let Some(label) = label {
+            field_types.insert(format!("{}", label), typ.clone());
+          }
+
+          i += 1;
         }
       }
 
@@ -188,12 +194,12 @@ impl<'a> Analyzer<'a> {
           None => ValueType::Nothing,
         };
 
-        let def_type = ValueType::Func(param_types, Box::new(func_return_type));
-        let merged_name = name_parts.join(" ");
+        // let def_type = ValueType::Func(param_types, Box::new(func_return_type));
+        // let merged_name = name_parts.join(" ");
 
-        self
-          .scope
-          .add_binding(BindingKind::Def, merged_name, def_type, pos);
+        // self
+        //   .scope
+        //   .add_binding(BindingKind::Def, merged_name, def_type, pos);
       }
 
       DefKind::Method {
@@ -215,15 +221,15 @@ impl<'a> Analyzer<'a> {
           param_types.push(type_utils::type_expr_to_value_type(part_type_expr));
         }
 
-        let result = self.scope.add_type_method(
-          receiver_type,
-          method_parts,
-          param_types,
-          return_type,
-          receiver.pos,
-        );
+        // let result = self.scope.add_type_method(
+        //   receiver_type,
+        //   method_parts,
+        //   param_types,
+        //   return_type,
+        //   receiver.pos,
+        // );
 
-        self.check_result(result);
+        // self.check_result(result);
       }
     }
   }
@@ -254,7 +260,7 @@ impl<'a> Analyzer<'a> {
             EnumVariantKind::Constructor(constructor_node, param_node) => {
               let constructor_name = constructor_node.name.clone();
               let param_type = type_utils::type_expr_to_value_type(param_node);
-              let constructor_type = ValueType::Func(vec![param_type], Box::new(typ.clone()));
+              let constructor_type = ValueType::Func(Box::new(param_type), Box::new(typ.clone()));
 
               self.scope.add_binding(
                 BindingKind::EnumVariant,
@@ -277,7 +283,7 @@ impl<'a> Analyzer<'a> {
         );
 
         let inner_type = type_utils::type_expr_to_value_type(inner);
-        let constructor_type = ValueType::Func(vec![inner_type], Box::new(typ));
+        let constructor_type = ValueType::Func(Box::new(inner_type), Box::new(typ));
 
         self.scope.add_binding(
           BindingKind::StructConstructor,
@@ -334,7 +340,7 @@ impl<'a> Analyzer<'a> {
     }
   }
 
-  fn destructure_pattern(&mut self, pattern: &PatternNode, typ: &ValueType) {
+  fn destructure_pattern(&mut self, pattern: &PatternNode, typ: &ValueType, allow_refutable: bool) {
     match &pattern.kind {
       PatternKind::Identifier(ident_node, _is_mutable) => {
         let existing_binding = self.scope.get_binding(&ident_node.name);
@@ -354,70 +360,69 @@ impl<'a> Analyzer<'a> {
         }
       }
 
-      PatternKind::UnlabeledTuple(element_patterns) => match typ {
-        ValueType::UnlabeledTuple(element_types) => {
-          if element_patterns.len() != element_types.len() {
-            return self.error(AnalysisError {
-              pos: pattern.pos,
-              kind: AnalysisErrorKind::PatternMismatchTupleSize {
-                pattern_size: element_patterns.len(),
-                value_size: element_types.len(),
-              },
-            });
-          }
+      // PatternKind::UnlabeledTuple(element_patterns) => match typ {
+      //   ValueType::UnlabeledTuple(element_types) => {
+      //     if element_patterns.len() != element_types.len() {
+      //       return self.error(AnalysisError {
+      //         pos: pattern.pos,
+      //         kind: AnalysisErrorKind::PatternMismatchTupleSize {
+      //           pattern_size: element_patterns.len(),
+      //           value_size: element_types.len(),
+      //         },
+      //       });
+      //     }
 
-          for i in 0..element_patterns.len() {
-            let element_pattern = element_patterns.get(i).unwrap();
-            let element_type = element_types.get(i).unwrap();
+      //     for i in 0..element_patterns.len() {
+      //       let element_pattern = element_patterns.get(i).unwrap();
+      //       let element_type = element_types.get(i).unwrap();
 
-            self.destructure_pattern(&element_pattern, &element_type);
-          }
-        }
+      //       self.destructure_pattern(&element_pattern, &element_type, allow_refutable);
+      //     }
+      //   }
 
-        typ => self.error(AnalysisError {
-          pos: pattern.pos,
-          kind: AnalysisErrorKind::PatternMismatchExpectedTuple(typ.clone()),
-        }),
-      },
+      //   typ => self.error(AnalysisError {
+      //     pos: pattern.pos,
+      //     kind: AnalysisErrorKind::PatternMismatchExpectedTuple(typ.clone()),
+      //   }),
+      // },
 
-      PatternKind::LabeledTuple(element_patterns) => match typ {
-        ValueType::LabeledTuple(element_types) => {
-          if element_patterns.len() != element_types.len() {
-            return self.error(AnalysisError {
-              pos: pattern.pos,
-              kind: AnalysisErrorKind::PatternMismatchTupleSize {
-                pattern_size: element_patterns.len(),
-                value_size: element_types.len(),
-              },
-            });
-          }
+      // PatternKind::LabeledTuple(element_patterns) => match typ {
+      //   ValueType::LabeledTuple(element_types) => {
+      //     if element_patterns.len() != element_types.len() {
+      //       return self.error(AnalysisError {
+      //         pos: pattern.pos,
+      //         kind: AnalysisErrorKind::PatternMismatchTupleSize {
+      //           pattern_size: element_patterns.len(),
+      //           value_size: element_types.len(),
+      //         },
+      //       });
+      //     }
 
-          for (label, element_pattern) in element_patterns {
-            let matching_type_field = element_types
-              .iter()
-              .find(|(field_label, _)| *field_label == label.name);
+      //     for (label, element_pattern) in element_patterns {
+      //       let matching_type_field = element_types
+      //         .iter()
+      //         .find(|(field_label, _)| *field_label == label.name);
 
-            match matching_type_field {
-              None => self.error(AnalysisError {
-                pos: label.pos,
-                kind: AnalysisErrorKind::PatternMismatchUnknownField {
-                  field_name: label.name.clone(),
-                  value_type: typ.clone(),
-                },
-              }),
-              Some((_, element_type)) => {
-                self.destructure_pattern(&element_pattern, &element_type);
-              }
-            }
-          }
-        }
+      //       match matching_type_field {
+      //         None => self.error(AnalysisError {
+      //           pos: label.pos,
+      //           kind: AnalysisErrorKind::PatternMismatchUnknownField {
+      //             field_name: label.name.clone(),
+      //             value_type: typ.clone(),
+      //           },
+      //         }),
+      //         Some((_, element_type)) => {
+      //           self.destructure_pattern(&element_pattern, &element_type, allow_refutable);
+      //         }
+      //       }
+      //     }
+      //   }
 
-        typ => self.error(AnalysisError {
-          pos: pattern.pos,
-          kind: AnalysisErrorKind::PatternMismatchExpectedTuple(typ.clone()),
-        }),
-      },
-
+      //   typ => self.error(AnalysisError {
+      //     pos: pattern.pos,
+      //     kind: AnalysisErrorKind::PatternMismatchExpectedTuple(typ.clone()),
+      //   }),
+      // },
       PatternKind::Constructor(ident, param_pattern) => {
         let binding = self.scope.get_binding(&ident.name);
 
@@ -438,9 +443,7 @@ impl<'a> Analyzer<'a> {
         }
 
         let (param_type, constructor_type) = match &existing_binding.typ {
-          ValueType::Func(param_types, return_type) => {
-            (param_types.get(0).unwrap().clone(), (**return_type).clone())
-          }
+          ValueType::Func(param_type, return_type) => (param_type.clone(), (**return_type).clone()),
           _ => return,
         };
 
@@ -458,29 +461,64 @@ impl<'a> Analyzer<'a> {
           return;
         }
 
-        self.destructure_pattern(param_pattern, &param_type);
+        self.destructure_pattern(param_pattern, &param_type, allow_refutable);
       }
 
       PatternKind::Underscore => {}
 
-      PatternKind::Literal(..) | PatternKind::Interpolation(..) => self.error(AnalysisError {
+      // Disallow assignments like `let 4 = 5` or `let "hi" = "wow"`
+      PatternKind::Literal(..) if !allow_refutable => self.error(AnalysisError {
         pos: pattern.pos,
         kind: AnalysisErrorKind::CannotAssignToLiteral,
       }),
+
+      // Disallow assignments like `let "hello $(name)" = 5`
+      PatternKind::Interpolation(..) if !allow_refutable => self.error(AnalysisError {
+        pos: pattern.pos,
+        kind: AnalysisErrorKind::CannotAssignToLiteral,
+      }),
+
+      // Allow matches like `x.match { 3 => "yep" }`
+      PatternKind::Literal(literal) => {
+        let literal_type = self.analyze_literal(literal);
+
+        if !self.compatible_types(typ, &literal_type) {
+          self.error(AnalysisError {
+            pos: pattern.pos,
+            kind: AnalysisErrorKind::TypeMismatchInPattern {
+              expected: typ.clone(),
+              actual: literal_type,
+            },
+          });
+        }
+      }
+
+      // Allow matches like `x.match { "hello $(name)" => "yep" }`
+      PatternKind::Interpolation(..) => {
+        let interpolation_type = ValueType::String;
+
+        if !self.compatible_types(typ, &interpolation_type) {
+          self.error(AnalysisError {
+            pos: pattern.pos,
+            kind: AnalysisErrorKind::TypeMismatchInPattern {
+              expected: typ.clone(),
+              actual: interpolation_type,
+            },
+          });
+        }
+      }
+
+      _ => todo!(),
     }
   }
 
   fn analyze_block(&mut self, node: &mut BlockNode) -> ValueType {
-    let mut param_types = Vec::new();
     let mut return_type = ValueType::Nothing;
 
-    if node.params.is_empty() {
-      param_types.push(ValueType::Nothing);
-    } else {
-      for _param in &node.params {
-        param_types.push(ValueType::Unknown);
-      }
-    }
+    let param_type = match &node.param {
+      Some(_) => ValueType::Unknown,
+      None => ValueType::Nothing,
+    };
 
     for stmt in &mut node.body {
       self.analyze_statement(stmt);
@@ -490,7 +528,7 @@ impl<'a> Analyzer<'a> {
       }
     }
 
-    ValueType::Func(param_types, Box::new(return_type))
+    ValueType::Func(Box::new(param_type), Box::new(return_type))
   }
 
   fn analyze_call(&mut self, node: &mut CallNode) -> ValueType {
@@ -499,35 +537,35 @@ impl<'a> Analyzer<'a> {
     let callee_type = &node.callee.typ;
 
     match callee_type {
-      ValueType::Func(param_types, return_type) => {
-        if param_types.len() != node.args.len() {
-          self.error(AnalysisError {
-            pos: node.pos,
-            kind: AnalysisErrorKind::IncorrectNumberOfArguments {
-              expected: param_types.len(),
-              actual: node.args.len(),
-            },
-          })
-        }
+      ValueType::Func(param_type, return_type) => {
+        let mut arg_types = Vec::new();
 
-        for i in 0..param_types.len() {
-          let arg = node.args.get_mut(i).unwrap();
+        for arg in &mut node.args {
           self.analyze_expr(arg);
 
-          let param_type = param_types.get(i).unwrap();
-          let given_type = &arg.typ;
+          match &arg.typ {
+            ValueType::Tuple(entries) => {
+              for entry in entries {
+                arg_types.push(entry.clone());
+              }
+            }
 
-          if !self.compatible_types(&param_type, &given_type) {
-            let pos = arg.pos;
-
-            self.error(AnalysisError {
-              pos,
-              kind: AnalysisErrorKind::ParameterTypeMismatch {
-                expected: param_type.clone(),
-                actual: given_type.clone(),
-              },
-            })
+            typ => arg_types.push((None, typ.clone())),
           }
+        }
+
+        let given_type = ValueType::Tuple(arg_types);
+
+        if !self.compatible_types(&param_type, &given_type) {
+          let pos = node.pos;
+
+          self.error(AnalysisError {
+            pos,
+            kind: AnalysisErrorKind::ParameterTypeMismatch {
+              expected: (**param_type).clone(),
+              actual: given_type.clone(),
+            },
+          })
         }
 
         *return_type.clone()
@@ -545,103 +583,102 @@ impl<'a> Analyzer<'a> {
   }
 
   fn analyze_def(&mut self, node: &mut DefNode) {
-    let mut param_types = Vec::new();
-    let mut return_type = ValueType::Nothing;
+    // let mut param_types = Vec::new();
+    // let mut return_type = ValueType::Nothing;
 
-    match &mut node.kind {
-      DefKind::Function { signature } => {
-        let params = &node.block.params;
+    // match &mut node.kind {
+    //   DefKind::Function { signature } => {
+    //     let params = &node.block.params;
 
-        if params.len() > signature.len() {
-          let start = params.first().map(|p| p.pos.0).unwrap_or(node.pos.0);
-          let end = params.last().map(|p| p.pos.1).unwrap_or(node.pos.1);
+    //     if params.len() > signature.len() {
+    //       let start = params.first().map(|p| p.pos.0).unwrap_or(node.pos.0);
+    //       let end = params.last().map(|p| p.pos.1).unwrap_or(node.pos.1);
 
-          self.error(AnalysisError {
-            pos: (start, end),
-            kind: AnalysisErrorKind::ParamCountMismatchInDefinition {
-              expected: signature.len(),
-              actual: params.len(),
-            },
-          })
-        }
+    //       self.error(AnalysisError {
+    //         pos: (start, end),
+    //         kind: AnalysisErrorKind::ParamCountMismatchInDefinition {
+    //           expected: signature.len(),
+    //           actual: params.len(),
+    //         },
+    //       })
+    //     }
 
-        for (_part_name, part_type) in signature {
-          self.analyze_type_expr(part_type);
+    //     for (_part_name, part_type) in signature {
+    //       self.analyze_type_expr(part_type);
 
-          param_types.push(part_type.typ.clone());
-        }
-      }
+    //       param_types.push(part_type.typ.clone());
+    //     }
+    //   }
 
-      DefKind::Method {
-        receiver,
-        signature,
-      } => {
-        let receiver_type = self.analyze_type_identifier(receiver);
+    //   DefKind::Method {
+    //     receiver,
+    //     signature,
+    //   } => {
+    //     let receiver_type = self.analyze_type_identifier(receiver);
 
-        param_types.push(receiver_type);
+    //     param_types.push(receiver_type);
 
-        for (_part_name, part_type) in signature {
-          self.analyze_type_expr(part_type);
+    //     for (_part_name, part_type) in signature {
+    //       self.analyze_type_expr(part_type);
 
-          param_types.push(part_type.typ.clone());
-        }
-      }
-    }
+    //       param_types.push(part_type.typ.clone());
+    //     }
+    //   }
+    // }
 
-    if let Some(type_expr) = &mut node.return_type {
-      println!("ret type_expr: {:#?}", type_expr);
-      self.analyze_type_expr(type_expr);
+    // if let Some(type_expr) = &mut node.return_type {
+    //   self.analyze_type_expr(type_expr);
 
-      return_type = type_expr.typ.clone();
-    }
+    //   return_type = type_expr.typ.clone();
+    // }
 
-    self.scope.enter();
+    // self.scope.enter();
 
-    if node.block.params.is_empty() {
-      let pos = (node.block.pos.0, node.block.pos.0);
+    // if node.block.params.is_empty() {
+    //   let pos = (node.block.pos.0, node.block.pos.0);
 
-      let mut i = 0;
-      for param_type in param_types {
-        self
-          .scope
-          .add_binding(BindingKind::Param, format!("${}", i), param_type, pos);
+    //   let mut i = 0;
+    //   for param_type in param_types {
+    //     self
+    //       .scope
+    //       .add_binding(BindingKind::Param, format!("${}", i), param_type, pos);
 
-        i += 1;
-      }
-    } else {
-      let mut i = 0;
-      for pattern in &mut node.block.params {
-        let param_type = param_types.get(i).unwrap();
-        self.destructure_pattern(pattern, param_type);
+    //     i += 1;
+    //   }
+    // } else {
+    //   let mut i = 0;
+    //   for pattern in &mut node.block.params {
+    //     let param_type = param_types.get(i).unwrap();
+    //     self.destructure_pattern(pattern, param_type, false);
 
-        i += 1;
-      }
-    }
+    //     i += 1;
+    //   }
+    // }
 
-    let mut block_return_type = ValueType::Nothing;
-    let mut block_return_pos = node.block.pos;
+    // let mut block_return_type = ValueType::Nothing;
+    // let mut block_return_pos = node.block.pos;
 
-    for stmt in &mut node.block.body {
-      self.analyze_statement(stmt);
+    // for stmt in &mut node.block.body {
+    //   self.analyze_statement(stmt);
 
-      if let StatementKind::Expr(expr) = &stmt.kind {
-        block_return_type = expr.typ.clone();
-        block_return_pos = expr.pos;
-      }
-    }
+    //   if let StatementKind::Expr(expr) = &stmt.kind {
+    //     block_return_type = expr.typ.clone();
+    //     block_return_pos = expr.pos;
+    //   }
+    // }
 
-    if !self.compatible_types(&return_type, &block_return_type) {
-      self.error(AnalysisError {
-        pos: block_return_pos,
-        kind: AnalysisErrorKind::ReturnTypeMismatch {
-          expected: return_type,
-          actual: block_return_type,
-        },
-      })
-    }
+    // if !self.compatible_types(&return_type, &block_return_type) {
+    //   self.error(AnalysisError {
+    //     pos: block_return_pos,
+    //     kind: AnalysisErrorKind::ReturnTypeMismatch {
+    //       expected: return_type,
+    //       actual: block_return_type,
+    //     },
+    //   })
+    // }
 
-    let results = self.scope.exit();
-    self.check_results(results);
+    // let results = self.scope.exit();
+    // self.check_results(results);
   }
 
   fn analyze_expr(&mut self, node: &mut ExprNode) {
@@ -799,10 +836,24 @@ impl<'a> Analyzer<'a> {
       ExprKind::Literal { literal } => node.typ = self.analyze_literal(literal),
 
       ExprKind::Match { match_ } => {
-        let _subject_type = &match_.subject.typ;
+        self.analyze_expr(&mut match_.subject);
+
+        let subject_type = &match_.subject.typ;
         let mut case_type: Option<ValueType> = None;
 
-        for case in &match_.cases {
+        // TODO: for each case, make sure it's a pattern that can destructure the subject type
+        // and then make sure patterns are exhaustive!
+
+        for case in &mut match_.cases {
+          self.scope.enter();
+
+          self.destructure_pattern(&case.pattern, subject_type, true);
+          self.analyze_expr(&mut case.body);
+
+          if let Err(mut diagnostics) = self.scope.exit() {
+            self.diagnostics(&mut diagnostics);
+          }
+
           if let Some(expected_case_type) = &case_type {
             let actual_case_type = &case.body.typ;
 
@@ -885,29 +936,19 @@ impl<'a> Analyzer<'a> {
       //     })
       //   }
       // }
-      ExprKind::UnlabeledTuple { entries } => {
-        let mut entry_types = Vec::new();
 
-        for entry in entries {
-          self.analyze_expr(entry);
-          entry_types.push(entry.typ.clone());
-        }
-
-        node.typ = ValueType::UnlabeledTuple(entry_types);
-      }
-
-      ExprKind::LabeledTuple { entries } => {
+      ExprKind::Tuple { entries } => {
         let mut entry_types = Vec::new();
 
         for (label, entry) in entries {
           self.analyze_expr(entry);
-          entry_types.push((label.name.clone(), entry.typ.clone()));
+          entry_types.push((label.as_ref().map(|l| l.name.clone()), entry.typ.clone()));
         }
 
-        node.typ = ValueType::LabeledTuple(entry_types);
+        node.typ = ValueType::Tuple(entry_types);
       }
 
-      _other => todo!("more expr kinds!"),
+      _other => todo!("more expr kinds! {:#?}", _other),
     }
   }
 
@@ -953,7 +994,7 @@ impl<'a> Analyzer<'a> {
   fn analyze_let(&mut self, node: &mut LetNode) {
     self.analyze_expr(&mut node.value);
 
-    self.destructure_pattern(&mut node.pattern, &mut node.value.typ);
+    self.destructure_pattern(&mut node.pattern, &mut node.value.typ, false);
   }
 
   fn analyze_literal(&mut self, node: &LiteralNode) -> ValueType {
@@ -1005,26 +1046,20 @@ impl<'a> Analyzer<'a> {
 
       TypeExprKind::Single(ident) => self.analyze_type_identifier(ident),
 
-      TypeExprKind::UnlabeledTuple(entries) => {
+      TypeExprKind::Tuple(entries) => {
         let mut entry_types = Vec::new();
 
-        for entry in entries {
+        for (label, entry) in entries {
           self.analyze_type_expr(entry);
-          entry_types.push(entry.typ.clone());
+
+          if let Some(label) = label {
+            entry_types.push((Some(label.name.clone()), entry.typ.clone()));
+          } else {
+            entry_types.push((None, entry.typ.clone()));
+          }
         }
 
-        ValueType::UnlabeledTuple(entry_types)
-      }
-
-      TypeExprKind::LabeledTuple(entries) => {
-        let mut entry_types = Vec::new();
-
-        for (label_ident, entry) in entries {
-          self.analyze_type_expr(entry);
-          entry_types.push((label_ident.name.clone(), entry.typ.clone()));
-        }
-
-        ValueType::LabeledTuple(entry_types)
+        ValueType::Tuple(entry_types)
       }
 
       TypeExprKind::Func(param, ret) => {
@@ -1034,7 +1069,7 @@ impl<'a> Analyzer<'a> {
         let param_type = param.typ.clone();
         let return_type = ret.typ.clone();
 
-        ValueType::Func(vec![param_type], Box::new(return_type))
+        ValueType::Func(Box::new(param_type), Box::new(return_type))
       }
     };
 

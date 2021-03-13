@@ -9,7 +9,7 @@ impl TraverseMut for BlockNode {
   fn traverse_mut<V: VisitorMut>(&mut self, visitor: &mut V) {
     visitor.enter_block(self);
 
-    for param in &mut self.params {
+    if let Some(param) = &mut self.param {
       param.traverse_mut(visitor);
     }
 
@@ -91,6 +91,8 @@ impl TraverseMut for ExprNode {
 
       ExprKind::Call { call } => call.traverse_mut(visitor),
 
+      ExprKind::EmptyTuple => {}
+
       ExprKind::Literal { literal } => literal.traverse_mut(visitor),
 
       ExprKind::Grouping { inner } => inner.traverse_mut(visitor),
@@ -110,24 +112,19 @@ impl TraverseMut for ExprNode {
         }
       }
 
-      ExprKind::UnlabeledTuple { entries } => {
-        for entry in entries {
-          entry.traverse_mut(visitor);
-        }
-      }
-
-      ExprKind::LabeledTuple { entries } => {
-        for (label, value) in entries {
-          label.traverse_mut(visitor);
-          value.traverse_mut(visitor);
-        }
-      }
-
-      ExprKind::EmptyTuple => {}
-
       ExprKind::MultiPartIdentifier { parts } => {
         for part in parts {
           part.traverse_mut(visitor);
+        }
+      }
+
+      ExprKind::Tuple { entries } => {
+        for (label, entry) in entries {
+          if let Some(ident) = label {
+            ident.traverse_mut(visitor);
+          }
+
+          entry.traverse_mut(visitor);
         }
       }
 

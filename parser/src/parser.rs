@@ -62,7 +62,6 @@ macro_rules! read_string_with_escapes {
 pub struct Parser<'a> {
   source: &'a Vec<u8>,
   tokenizer: Tokenizer<'a>,
-  index: usize,
   errors: Vec<ParseError>,
   current_token: Option<Token>,
   prev_token: Option<Token>,
@@ -75,7 +74,6 @@ impl<'a> Parser<'a> {
     return Parser {
       source,
       tokenizer,
-      index: 0,
       errors: Vec::new(),
       current_token: None,
       prev_token: None,
@@ -146,7 +144,6 @@ impl<'a> Parser<'a> {
   fn advance(&mut self) {
     self.prev_token = self.current_token;
     self.current_token = self.tokenizer.next();
-    self.index += 1;
   }
 
   fn skip_line_breaks(&mut self) -> bool {
@@ -240,27 +237,21 @@ impl<'a> Parser<'a> {
 
     self.skip_line_breaks();
 
-    let mut params = Vec::new();
+    // a few possible ways blocks might look:
+    // - empty: {}
+    // - with param pattern: { () => ... } or { arg => ... }
+    // - no param pattern: { expr } or { statements... }
+
+    let mut param = None;
     let mut body = Vec::new();
 
-    if current_token_is!(self, Token::Pipe) {
+    let param_or_first_stmt = self.parse_pattern();
+
+    if current_token_is!(self, Token::DoubleArrow) {
+      param = param_or_first_stmt;
       self.advance();
-
-      while let Some(pattern) = self.parse_pattern() {
-        params.push(pattern);
-
-        match self.current_token {
-          Some(Token::Comma(..)) => self.advance(),
-          Some(Token::Pipe(..)) => {
-            break;
-          }
-          _ => break,
-        }
-      }
-
-      expect_token_and_do!(self, Token::Pipe, {
-        self.advance();
-      });
+    } else if let Some(pattern) = param_or_first_stmt {
+      body.push(pattern.to_statement()?);
     }
 
     self.skip_line_breaks();
@@ -281,7 +272,7 @@ impl<'a> Parser<'a> {
 
     Some(BlockNode {
       pos: (block_start, block_end),
-      params,
+      param,
       body,
     })
   }
@@ -290,28 +281,43 @@ impl<'a> Parser<'a> {
     let mut method_parts = Vec::new();
     let mut args = Vec::new();
 
-    while current_token_is!(self, Token::Identifier) {
-      match self.parse_identifier(false) {
-        Some(next_callee_part) => {
-          method_parts.push(next_callee_part);
+    if current_token_is!(self, Token::DecimalDigits) {
+      // If there's a decimal number here, it must be a tuple/list element access
+      // like `tuple.1`. Just grab that number and treat it like an identifier.
+      let pos = self.current_token_position();
 
-          // Grab the argument for this part
-          match self.parse_expression_precedence_2() {
-            Some(arg) => args.push(arg),
-            _ => {
-              // If there's no argument, break out of the loop. No more parts allowed.
-              // Only the last part may not take an argument.
-              // ex: thing . part1 "arg1" part2
-              break;
+      self.advance();
+
+      let name = read_string!(self, pos.0, pos.1);
+
+      method_parts.push(IdentifierNode {
+        pos,
+        name,
+      })
+    } else {
+      while current_token_is!(self, Token::Identifier) {
+        match self.parse_identifier(false) {
+          Some(next_callee_part) => {
+            method_parts.push(next_callee_part);
+
+            // Grab the argument for this part
+            match self.parse_expression_precedence_2() {
+              Some(arg) => args.push(arg),
+              _ => {
+                // If there's no argument, break out of the loop. No more parts allowed.
+                // Only the last part may not take an argument.
+                // ex: thing . part1 "arg1" part2
+                break;
+              }
             }
           }
-        }
 
-        _ => {
-          return self.error(ParseError {
-            pos: self.current_token_position(),
-            kind: ParseErrorKind::UnexpectedToken(Token::Identifier(0, 0)),
-          })
+          _ => {
+            return self.error(ParseError {
+              pos: self.current_token_position(),
+              kind: ParseErrorKind::UnexpectedToken(Token::Identifier(0, 0)),
+            })
+          }
         }
       }
     }
@@ -322,7 +328,7 @@ impl<'a> Parser<'a> {
       // If we collected 0 args, it's an expression like `thing.field`. Consider a plain
       // Access, not a call (even though it may be calling a method with no args). The analyzer
       // will figure that out later.
-      let ident = method_parts[0].clone();
+      let ident = method_parts.get(0).expect("at least one method part").clone();
 
       let property = ExprNode {
         pos: ident.pos,
@@ -876,7 +882,14 @@ impl<'a> Parser<'a> {
 
           let receiver = expr.unwrap();
 
-          expr = self.parse_call_with_receiver(receiver);
+          // After a dot, we have two possibilities:
+          expr = if current_token_is!(self, Token::KeywordMatch) {
+            // Either it's a match (which looks sort of like a method call):
+            self.parse_match(receiver)
+          } else {
+            // Or it's a normal method call:
+            self.parse_call_with_receiver(receiver)
+          }
         }
 
         // Another token on this same line?! Maybe it's an argument in call expression
@@ -1462,54 +1475,54 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_match(&mut self) -> Option<ExprNode> {
-    let start = match self.current_token {
-      Some(Token::KeywordMatch(start, _)) => {
-        self.advance();
-        start
-      }
-      _ => unreachable!(),
-    };
+  fn parse_match(&mut self, prev_expr: ExprNode) -> Option<ExprNode> {
+    let start = expect_token_and_do!(self, Token::KeywordMatch, {
+      let (start, _) = self.current_token_position();
+      self.advance();
+      start
+    });
 
-    let subject = match self.parse_expression() {
-      Some(node) => node,
-      _ => todo!(),
-    };
+    self.skip_line_breaks();
+
+    expect_token_and_do!(self, Token::LeftBrace, {
+      self.advance();
+    });
 
     self.skip_line_breaks();
 
     let mut cases = Vec::new();
-    let mut match_end = start;
 
-    while let Some(Token::KeywordWhen(case_start, _)) = self.current_token {
-      self.advance();
+    while let Some(pattern) = self.parse_pattern() {
+      expect_token_and_do!(self, Token::DoubleArrow, {
+        self.advance();
+      });
 
-      let pattern = match self.parse_pattern() {
-        Some(node) => node,
-        _ => todo!(),
-      };
-
-      match self.current_token {
-        Some(Token::DoubleArrow(..)) => self.advance(),
-        _ => todo!(),
-      };
-
-      self.skip_line_breaks();
-
-      let (case_end, body) = match self.parse_expression() {
-        Some(node) => (node.pos.1, node),
-        other => return other,
+      let body = match self.parse_expression() {
+        Some(expr) => expr,
+        None => {
+          return self.error(ParseError {
+            pos: self.current_token_position(),
+            kind: ParseErrorKind::MissingExpressionAfterArrowInCase,
+          })
+        }
       };
 
       self.skip_line_breaks();
-      match_end = case_end;
 
       cases.push(MatchCaseNode {
-        pos: (case_start, case_end),
+        pos: (pattern.pos.0, body.pos.1),
         pattern,
         body,
       });
     }
+
+    self.skip_line_breaks();
+
+    let match_end = expect_token_and_do!(self, Token::RightBrace, {
+      let (_, end) = self.current_token_position();
+      self.advance();
+      end
+    });
 
     if cases.is_empty() {
       self.error::<ExprNode>(ParseError {
@@ -1523,7 +1536,7 @@ impl<'a> Parser<'a> {
       kind: ExprKind::Match {
         match_: MatchNode {
           pos: (start, match_end),
-          subject: Box::new(subject),
+          subject: Box::new(prev_expr),
           cases,
         },
       },
@@ -1637,14 +1650,16 @@ impl<'a> Parser<'a> {
       Some(Token::LeftParen(start, _)) => {
         self.advance();
 
-        let next_token = self.tokenizer.peek();
+        let mut entries = Vec::new();
 
-        match (self.current_token, next_token) {
-          (Some(Token::Identifier(..)), Some(Token::Colon(..))) => {
-            // It's a labeled tuple!
-            let mut labeled_entries = Vec::new();
+        loop {
+          let next_token = self.tokenizer.peek();
 
-            while let Some(label) = self.parse_identifier(false) {
+          match (self.current_token, next_token) {
+            (Some(Token::Identifier(..)), Some(Token::Colon(..))) => {
+              // It's a labeled entry!
+              let label = self.parse_identifier(false).unwrap();
+
               expect_token_and_do!(self, Token::Colon, { self.advance() });
 
               let pattern = match self.parse_pattern() {
@@ -1652,32 +1667,19 @@ impl<'a> Parser<'a> {
                 _ => break,
               };
 
-              labeled_entries.push((label, pattern));
-
-              match self.current_token {
-                Some(Token::Comma(..)) => self.advance(),
-                _ => break,
-              }
+              entries.push((Some(label), pattern));
             }
 
-            let end = expect_token_and_do!(self, Token::RightParen, {
-              let (_, end) = self.current_token_position();
-              self.advance();
-              end
-            });
+            _ => {
+              // It's an unlabeled entry...
+              let pattern = match self.parse_pattern() {
+                Some(pattern) => pattern,
+                _ => break,
+              };
 
-            return Some(PatternNode {
-              pos: (start, end),
-              kind: PatternKind::LabeledTuple(labeled_entries),
-            });
+              entries.push((None, pattern));
+            }
           }
-          _ => {}
-        }
-
-        let mut entries = Vec::new();
-
-        while let Some(pattern) = self.parse_pattern() {
-          entries.push(pattern);
 
           match self.current_token {
             Some(Token::Comma(..)) => self.advance(),
@@ -1693,7 +1695,7 @@ impl<'a> Parser<'a> {
 
         Some(PatternNode {
           pos: (start, end),
-          kind: PatternKind::UnlabeledTuple(entries),
+          kind: PatternKind::Tuple(entries),
         })
       }
 
@@ -1755,25 +1757,20 @@ impl<'a> Parser<'a> {
       start
     });
 
-    let mut first_expr = None;
-    let mut other_exprs = Vec::new();
-    let mut labeled = false;
-    let mut labeled_entries = Vec::new();
-
     self.skip_line_breaks();
 
+    let mut entries = Vec::new();
+
     while let Some(node) = self.parse_expression() {
-      if labeled {
+      if current_token_is!(self, Token::Colon) {
+        self.advance();
+
         match node.kind {
           ExprKind::Identifier { ident: label } => {
-            expect_token_and_do!(self, Token::Colon, {
-              self.advance();
-            });
-
             self.skip_line_breaks();
 
             if let Some(value) = self.parse_expression() {
-              labeled_entries.push((label, value));
+              entries.push((Some(label), value));
             } else {
               self.error::<ExprNode>(ParseError {
                 pos: node.pos,
@@ -1788,36 +1785,8 @@ impl<'a> Parser<'a> {
             });
           }
         }
-      } else if first_expr.is_none() {
-        if current_token_is!(self, Token::Colon) {
-          self.advance();
-          labeled = true;
-
-          match node.kind {
-            ExprKind::Identifier { ident: label } => {
-              self.skip_line_breaks();
-
-              if let Some(value) = self.parse_expression() {
-                labeled_entries.push((label, value));
-              } else {
-                self.error::<ExprNode>(ParseError {
-                  pos: node.pos,
-                  kind: ParseErrorKind::MissingExpressionAfterLabelInTuple,
-                });
-              }
-            }
-            _ => {
-              self.error::<ExprNode>(ParseError {
-                pos: node.pos,
-                kind: ParseErrorKind::MissingLabelInTuple,
-              });
-            }
-          }
-        } else {
-          first_expr = Some(node)
-        }
       } else {
-        other_exprs.push(node);
+        entries.push((None, node));
       }
 
       self.skip_line_breaks();
@@ -1833,30 +1802,15 @@ impl<'a> Parser<'a> {
 
     self.skip_line_breaks();
 
-    let paren_end = match self.current_token {
-      Some(Token::RightParen(_, end)) => end,
-      _ => {
-        return self.error(ParseError {
-          pos: self.current_token_position(),
-          kind: ParseErrorKind::UnclosedParentheses,
-        })
-      }
-    };
+    let paren_end = expect_token_and_do!(self, Token::RightParen, {
+      let pos = self.current_token_position();
+      self.advance();
+      pos.1
+    });
 
     self.advance();
 
-    if !labeled_entries.is_empty() {
-      // If we collected labeled entries, this is a labeled tuple
-      return Some(ExprNode {
-        pos: (paren_start, paren_end),
-        kind: ExprKind::LabeledTuple {
-          entries: labeled_entries,
-        },
-        typ: ValueType::Unknown,
-      });
-    }
-
-    if first_expr.is_none() {
+    if entries.is_empty() {
       // If no expressions were found between the ()s, it's an empty tuple
       return Some(ExprNode {
         pos: (paren_start, paren_end),
@@ -1865,23 +1819,22 @@ impl<'a> Parser<'a> {
       });
     }
 
-    if other_exprs.is_empty() {
-      return Some(ExprNode {
-        pos: (paren_start, paren_end),
-        kind: ExprKind::Grouping {
-          inner: Box::new(first_expr.unwrap()),
-        },
-        typ: ValueType::Unknown,
-      });
+    if entries.len() == 1 {
+      // If only one, unlabeled expression was found, it's a grouping
+      if let Some((None, first_expr)) = entries.pop() {
+        return Some(ExprNode {
+          pos: (paren_start, paren_end),
+          kind: ExprKind::Grouping {
+            inner: Box::new(first_expr),
+          },
+          typ: ValueType::Unknown,
+        });
+      }
     }
-
-    other_exprs.insert(0, first_expr.unwrap());
 
     Some(ExprNode {
       pos: (paren_start, paren_end),
-      kind: ExprKind::UnlabeledTuple {
-        entries: other_exprs,
-      },
+      kind: ExprKind::Tuple { entries },
       typ: ValueType::Unknown,
     })
   }
@@ -2365,7 +2318,6 @@ impl<'a> Parser<'a> {
       }),
       Some(Token::LeftBracket(..)) => self.parse_list_or_dict(),
       Some(Token::StringLiteral(..)) => self.parse_string(),
-      Some(Token::KeywordMatch(..)) => self.parse_match(),
       Some(Token::Qualifier(..)) => self.parse_qualified(),
       Some(Token::Identifier(..))
       | Some(Token::IdentifierSpecialParam(..))
@@ -2690,13 +2642,12 @@ impl<'a> Parser<'a> {
 
     self.skip_line_breaks();
 
-    let mut first_entry = None;
-    let mut other_entries = Vec::new();
-    let mut labeled = false;
-    let mut labeled_entries = Vec::new();
+    let mut entries = Vec::new();
 
     while let Some(type_node) = self.parse_type_expression() {
-      if labeled {
+      if current_token_is!(self, Token::Colon) {
+        self.advance();
+
         match type_node.kind {
           TypeExprKind::Single(label) => {
             let label_ident = IdentifierNode {
@@ -2704,10 +2655,8 @@ impl<'a> Parser<'a> {
               pos: label.pos,
             };
 
-            expect_token_and_do!(self, Token::Colon, { self.advance() });
-
             if let Some(value) = self.parse_type_expression() {
-              labeled_entries.push((label_ident, value));
+              entries.push((Some(label_ident), value));
             } else {
               self.error::<TypeExprNode>(ParseError {
                 pos: type_node.pos,
@@ -2723,48 +2672,19 @@ impl<'a> Parser<'a> {
             });
           }
         }
-      } else if first_entry.is_none() {
-        if current_token_is!(self, Token::Colon) {
-          self.advance();
-          labeled = true;
-
-          match type_node.kind {
-            TypeExprKind::Single(label) => {
-              let label_ident = IdentifierNode {
-                name: label.name,
-                pos: label.pos,
-              };
-
-              if let Some(value) = self.parse_type_expression() {
-                labeled_entries.push((label_ident, value));
-              } else {
-                self.error::<TypeExprNode>(ParseError {
-                  pos: type_node.pos,
-                  kind: ParseErrorKind::MissingExpressionAfterLabelInTuple,
-                });
-              }
-            }
-
-            _ => {
-              self.error::<TypeExprNode>(ParseError {
-                pos: type_node.pos,
-                kind: ParseErrorKind::MissingLabelInTuple,
-              });
-            }
-          }
-        } else {
-          first_entry = Some(type_node)
-        }
       } else {
-        other_entries.push(type_node);
-      }
-
-      match self.current_token {
-        Some(Token::Comma(..)) => self.advance(),
-        _ => break,
+        entries.push((None, type_node));
       }
 
       self.skip_line_breaks();
+
+      match self.current_token {
+        Some(Token::Comma(..)) => {
+          self.advance();
+          self.skip_line_breaks();
+        }
+        _ => break,
+      }
     }
 
     self.skip_line_breaks();
@@ -2775,15 +2695,7 @@ impl<'a> Parser<'a> {
       pos.1
     });
 
-    if labeled {
-      return Some(TypeExprNode {
-        pos: (start, end),
-        kind: TypeExprKind::LabeledTuple(labeled_entries),
-        typ: ValueType::Unknown,
-      });
-    }
-
-    if first_entry.is_none() {
+    if entries.is_empty() {
       return Some(TypeExprNode {
         pos: (start, end),
         kind: TypeExprKind::EmptyTuple,
@@ -2791,19 +2703,19 @@ impl<'a> Parser<'a> {
       });
     }
 
-    if other_entries.is_empty() {
-      return Some(TypeExprNode {
-        pos: (start, end),
-        kind: TypeExprKind::Grouping(Box::new(first_entry.unwrap())),
-        typ: ValueType::Unknown,
-      });
+    if entries.len() == 1 {
+      if let Some((None, first_entry)) = entries.pop() {
+        return Some(TypeExprNode {
+          pos: (start, end),
+          kind: TypeExprKind::Grouping(Box::new(first_entry)),
+          typ: ValueType::Unknown,
+        });
+      }
     }
-
-    other_entries.insert(0, first_entry.unwrap());
 
     Some(TypeExprNode {
       pos: (start, end),
-      kind: TypeExprKind::UnlabeledTuple(other_entries),
+      kind: TypeExprKind::Tuple(entries),
       typ: ValueType::Unknown,
     })
   }

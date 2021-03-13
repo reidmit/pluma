@@ -46,9 +46,6 @@ pub enum ExprKind {
   Interpolation {
     parts: Vec<ExprNode>,
   },
-  LabeledTuple {
-    entries: Vec<(IdentifierNode, ExprNode)>,
-  },
   List {
     elements: Vec<ExprNode>,
   },
@@ -69,6 +66,9 @@ pub enum ExprKind {
   RegExpr {
     regex: RegExprNode,
   },
+  Tuple {
+    entries: Vec<(Option<IdentifierNode>, ExprNode)>,
+  },
   TypeAssertion {
     expr: Box<ExprNode>,
     asserted_type: TypeExprNode,
@@ -76,8 +76,5 @@ pub enum ExprKind {
   UnaryOperation {
     op: Box<OperatorNode>,
     right: Box<ExprNode>,
-  },
-  UnlabeledTuple {
-    entries: Vec<ExprNode>,
   },
 }
