@@ -1,7 +1,0 @@
-let x = 47
-
-let helloWorld = 123
-
-let ALL_CAPS = "wow!"
-
-let snake_case = "fine, tho not recommended"

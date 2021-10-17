@@ -1,3 +1,5 @@
+use @io std/io
+
 intrinsic_type Int
 
 intrinsic_def Int .add Int -> Int
@@ -22,8 +24,6 @@ intrinsic_type Regex
 
 intrinsic_def exit Int -> ()
 
-intrinsic_def print String -> ()
-
 trait Any
 
 enum Bool
@@ -41,4 +41,17 @@ enum Result<A, B> where A :: Any, B :: Any
 intrinsic_type Never
 
 trait BlockHandle<A> where A :: Any
-  . return A -> Never
+  | return A -> Never
+
+trait AsString
+  | toString -> String
+
+def print T -> T where T :: AsString {
+  val =>
+    @io out "$(val | toString)\n"
+    val
+}
+
+def T | print -> T where T :: AsString {
+  val => print val
+}

@@ -5,6 +5,7 @@ use std::fmt;
 pub enum Token {
   And(usize, usize),
   Arrow(usize, usize),
+  BackSlash(usize, usize),
   Bang(usize, usize),
   BangEqual(usize, usize),
   BinaryDigits(usize, usize),
@@ -27,8 +28,6 @@ pub enum Token {
   ForwardSlash(usize, usize),
   HexDigits(usize, usize),
   Identifier(usize, usize),
-  IdentifierSpecialOther(usize, usize),
-  IdentifierSpecialParam(usize, usize),
   ImportPath(usize, usize),
   InterpolationEnd(usize, usize),
   InterpolationStart(usize, usize),
@@ -80,6 +79,7 @@ impl Token {
     match self {
       And(start, end)
       | Arrow(start, end)
+      | BackSlash(start, end)
       | Bang(start, end)
       | BangEqual(start, end)
       | BinaryDigits(start, end)
@@ -102,8 +102,6 @@ impl Token {
       | ForwardSlash(start, end)
       | HexDigits(start, end)
       | Identifier(start, end)
-      | IdentifierSpecialOther(start, end)
-      | IdentifierSpecialParam(start, end)
       | ImportPath(start, end)
       | InterpolationEnd(start, end)
       | InterpolationStart(start, end)
@@ -153,18 +151,9 @@ impl Token {
     use Token::*;
 
     match self {
-      Identifier(..)
-      | IdentifierSpecialOther(..)
-      | IdentifierSpecialParam(..)
-      | DecimalDigits(..)
-      | BinaryDigits(..)
-      | OctalDigits(..)
-      | HexDigits(..)
-      | LeftParen(..)
-      | LeftBrace(..)
-      | LeftBracket(..)
-      | ForwardSlash(..)
-      | StringLiteral(..) => true,
+      Identifier(..) | BackSlash(..) | Colon(..) | DecimalDigits(..) | BinaryDigits(..)
+      | OctalDigits(..) | HexDigits(..) | LeftParen(..) | LeftBrace(..) | LeftBracket(..)
+      | ForwardSlash(..) | StringLiteral(..) => true,
       _ => false,
     }
   }
@@ -177,6 +166,7 @@ impl fmt::Display for Token {
     let as_string = match self {
       &And(..) => "a '&'",
       &Arrow(..) => "a '->'",
+      &BackSlash(..) => "a '\\'",
       &Bang(..) => "a '!'",
       &BangEqual(..) => "a '!='",
       &BinaryDigits(..) => "binary digits",
@@ -199,11 +189,9 @@ impl fmt::Display for Token {
       &ForwardSlash(..) => "a '/'",
       &HexDigits(..) => "hex digits",
       &Identifier(..) => "an identifier",
-      &IdentifierSpecialOther(..) => "an identifier starting with '$'",
-      &IdentifierSpecialParam(..) => "an identifier starting with '$'",
       &ImportPath(..) => "an import path",
       &InterpolationEnd(..) => "a ')'",
-      &InterpolationStart(..) => "a '$('",
+      &InterpolationStart(..) => "a '\\('",
       &KeywordAlias(..) => "keyword 'alias'",
       &KeywordBreak(..) => "keyword 'break'",
       &KeywordDef(..) => "keyword 'def'",

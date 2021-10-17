@@ -2,6 +2,27 @@
 
 ## Basic types
 
+Integers:
+
+```
+let n = 47
+let age = 27
+```
+
+Floats:
+
+```
+let price = 19.99
+let gpa = 4.0
+```
+
+Booleans (actually a built-in enum type):
+
+```pluma
+let t = True
+let f = False
+```
+
 ## Tuples
 
 Tuples are ordered, heterogenous collections of values.
@@ -31,16 +52,18 @@ When a tuple has labels, the labels are part of its type.
 
 ```pluma
 # Type signature specifies labels:
-def labeledTuple(a: Int, b: Int) { (a, b) => a + b }
+def labeledTuple (a: Int, b: Int) = \args:
+  args.a + args.b
 
 # Still valid, since (1, 2) is convertible to (a: Int, b: Int).
-labeledTuple(1, 2)
+labeledTuple (1, 2)
 
 # Type signature specifies no labels:
-def unlabeledTuple(Int, Int) { (a, b) => a + b }
+def unlabeledTuple (Int, Int) = \a:
+  a.0 + a.1
 
 # Still valid, since (a: 1, b: 2) is convertible to (Int, Int)
-unlabeledTuple(a: 1, b: 2)
+unlabeledTuple (a: 1, b: 2)
 ```
 
 Tuples may be partially labeled.
@@ -60,9 +83,9 @@ The empty tuple is a special case: `()`. It is often used to mean "nothing" or "
 
 ```pluma
 # takes (), and also implicitly returns ()
-def hello() {
+def hello () = \:
   print "hello"
-}
+
 
 let result = hello() # result is ()
 ```
@@ -79,59 +102,67 @@ Blocks usually have their types inferred from usage. Type assertions can be used
 
 ```pluma
 # empty arg:
-let emptyArg = { print "hello" }
+let emptyArg = : print "hello"
 emptyArg()
 
 # empty arg, explicit:
-let emptyArg = { () => print "hello" }
+let emptyArg = \(): print "hello"
+emptyArg()
+
+# empty arg, with line break:
+let emptyArg = :
+  print "hello"
 emptyArg()
 
 # simple arg:
-let simpleArg = { print $0 }
+let simpleArg = \a: print a
 oneArg "hello"
 
-# simple arg, explicit:
-let oneArg = { a => print a }
+# simple arg, with line break:
+let oneArg = \a:
+  print a
 oneArg "hello"
 
-# tuple arg:
-let tupleArg = { print $0 + $1 }
+# unlabeled tuple arg:
+let tupleArg = \tup: print (tup.0 + tup.1)
 tupleArg (1, 2)
 
-# tuple arg, explicit:
-let tupleArg = { (a, b) => print a + b }
+# labeled tuple arg:
+let tupleArg = \tup: print (tup.a + tup.b)
+tupleArg (a: 1, b: 2)
+
+# unlabeled tuple arg, destructured:
+let tupleArg = \(a, b): print a + b
 tupleArg (a, b)
 ```
 
 ### Functions
 
-Functions must be defined at the top level. They can be exported from a module, if they are public.
+Functions must be defined at the top level. They will be exported from a module if they are public.
 
 Functions must have a full, correct type signature.
 
 ```pluma
 # empty arg:
-def emptyArg() { print "hello" }
+def emptyArg () = :
+  print "hello"
 emptyArg()
 
 # empty arg, explicit:
-def emptyArg() { () => print "hello" }
+def emptyArg () = \():
+  print "hello"
 emptyArg()
 
 # simple arg:
-def simpleArg String { print $ }
-oneArg "hello"
-
-# simple arg, explicit:
-def oneArg String { a => print a }
+def simpleArg String = \s: print s
 oneArg "hello"
 
 # tuple arg:
-def tupleArg (Int, Int) { print $.0 + $.1 }
+def tupleArg (Int, Int) = \tup: print (tup.0 + tup.1)
 tupleArg (1, 2)
 
-# tuple arg, explicit:
-def tupleArg (Int, Int) { (a, b) => print a + b }
+# tuple arg, destructured:
+def tupleArg (Int, Int) = \(a, b): print (a + b)
 tupleArg (1, 2)
 ```
 
@@ -139,11 +170,11 @@ Functions may have multi-part names. They still only take one argument; each par
 
 ```pluma
 # multi-part, tuple arg:
-def tupleArg Int and Int { (a, b) => print a + b }
+def tupleArg Int and Int = \(a, b): print (a + b)
 tupleArg 1 and 2
 
 # ...is roughly equivalent to:
-def tupleArg_and_ (Int, Int) { (a, b) => print a + b }
+def tupleArg_and_ (Int, Int) = \(a, b): print (a + b)
 tupleArg_and_ (1, 2)
 ```
 
@@ -157,16 +188,19 @@ The receiver is passed into the block in a tuple with the rest of the passed val
 let p = Person(name: "Reid")
 
 # self + empty arg:
-def Person.emptyArg() { print "hello" }
+def Person | emptyArg () = :
+  print "hello"
 p.emptyArg()
 
 # self + empty arg, explicit:
-def Person.emptyArg() { (self, ()) => print "hello" }
+def Person | emptyArg () = \(self, ()):
+  print "hello"
 p.emptyArg()
 
 # self + simple arg:
-def Person.simpleArg String { print $1 }
-p.oneArg "hello"
+def Person | simpleArg String = \(self, arg):
+  print arg
+p.simpleArg "hello"
 
 # self + simple arg, explicit:
 def Person.oneArg String { (self, a) => print a }
@@ -190,14 +224,65 @@ def Person.namedArg (a: Int, b: Int) {
 }
 ```
 
-## Packages, modules, and export visibility
+## Modules, packages, and export visibility
 
-This is how your organize and share your code across different files, directories, and projects.
+This section describes how to organize and share your code across different files, directories, and projects.
+
+### Modules
+
+A module is a file.
+
+Imagine you have a file called `helpers/math.pa`:
+
+```pluma
+def add (Int, Int) -> Int {
+  (a, b) => a + b
+}
+```
+
+And in another file, called `main.pa`:
+
+```pluma
+use @math helpers/math
+
+let three = @math add (1, 2)
+```
+
+You could also import all exports into the common namespace:
+
+```pluma
+use helpers/math
+
+let three = add (1, 2)
+```
+
+If you had multiple `use` statements, and each one declared a name `add`, you'd get a compile error due to the duplicate declarations. It's recommended to qualify your imports with `@qualifier`.
 
 ### Packages
 
 A package is like a "project": a directory containing modules.
 
-### Modules
+If a package is compiled directly as a binary, the compiler will look for a `main.pa` file in the directory to use as the entrypoint.
 
-A module is a file. It is identified by its file path relative to your
+### Export visibility
+
+```pluma
+# All top-level defs are exported by default:
+def somePublicDef() {}
+def anotherPublicDef() {}
+
+# But you can change the visibility of following defs with the `private`/`internal`
+# keywords.
+
+internal
+
+# The following can only be accessed by modules within the same package (directory):
+def thisIsInternal() {}
+
+private
+
+# The following can only be accessed within this module (file):
+def thisIsPrivate() {}
+```
+
+Although you may repeat these keywords (e.g. have a default public section, then a `private`, then an `internal`, then another `private`), it's recommended to stick to the above example (all public defs first, then all `internal` if any, then all `private` if any).

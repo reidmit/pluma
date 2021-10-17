@@ -1,0 +1,12 @@
+use @pkg std/pkg
+
+let thing = @pkg git(
+	repo: "https://github.com/reidmit/some-thing"
+	ref: "main"
+)
+
+let other = @pkg git(
+	repo: "https://github.com/reidmit/some-other"
+	ref: "v2.20.3"
+)
+

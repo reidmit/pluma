@@ -1,0 +1,41 @@
+use @task std/tasks
+use @fs std/fs
+
+@task define "clean" is {
+
+  @task run "pre:clean"
+
+  print "Cleaning..."
+
+  @fs removeDir "./dist"
+  @fs removeDir "./generated"
+
+  print "Done!"
+}
+
+@task define (
+  name: "clean",
+  help: "Cleans up built files"
+) as {
+  print "Cleaning..."
+
+  @fs removeDir "./dist"
+  @fs removeDir "./generated"
+
+  print "Done!"
+}
+
+@task define (
+  name: "clean",
+  help: "Cleans up built files"
+) needs [
+  "pre-clean",
+  "check",
+] as {
+  print "Cleaning..."
+
+  @fs removeDir "./dist"
+  @fs removeDir "./generated"
+
+  print "Done!"
+}

@@ -1,17 +1,17 @@
 let x = 47
 
-let result = x.match {
+let result = x | match {
   1 => "yep"
   _ => "nope"
 }
 
-let (_, second, third) = result.match {
+let (_, second, third) = result | match {
   "yep" => (1, 2, 3)
   "nope" => (4, 5, 6)
 }
 
-second .match {
-  2 => third.match {
+second | match {
+  2 => third | match {
     3 => { 100 }
     _ => { 400 }
   }

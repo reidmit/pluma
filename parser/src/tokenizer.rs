@@ -390,29 +390,6 @@ impl<'a> Iterator for Tokenizer<'a> {
           return Some(RightAngle(start_index, self.index));
         }
 
-        b'$' if self.index < self.length - 1 && is_digit(self.source[self.index + 1]) => {
-          self.index += 1;
-
-          while self.index < self.length && is_digit(self.source[self.index]) {
-            self.index += 1;
-          }
-
-          return Some(IdentifierSpecialParam(start_index, self.index));
-        }
-
-        b'$'
-          if self.index < self.length - 1
-            && is_identifier_start_char(self.source[self.index + 1]) =>
-        {
-          self.index += 1;
-
-          while self.index < self.length && is_identifier_char(self.source[self.index]) {
-            self.index += 1;
-          }
-
-          return Some(IdentifierSpecialOther(start_index, self.index));
-        }
-
         b'#' => {
           while self.index < self.length && self.source[self.index] != b'\n' {
             self.index += 1;

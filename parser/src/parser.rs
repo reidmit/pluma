@@ -290,13 +290,10 @@ impl<'a> Parser<'a> {
 
       let name = read_string!(self, pos.0, pos.1);
 
-      method_parts.push(IdentifierNode {
-        pos,
-        name,
-      })
+      method_parts.push(IdentifierNode { pos, name })
     } else {
       while current_token_is!(self, Token::Identifier) {
-        match self.parse_identifier(false) {
+        match self.parse_identifier() {
           Some(next_callee_part) => {
             method_parts.push(next_callee_part);
 
@@ -328,7 +325,10 @@ impl<'a> Parser<'a> {
       // If we collected 0 args, it's an expression like `thing.field`. Consider a plain
       // Access, not a call (even though it may be calling a method with no args). The analyzer
       // will figure that out later.
-      let ident = method_parts.get(0).expect("at least one method part").clone();
+      let ident = method_parts
+        .get(0)
+        .expect("at least one method part")
+        .clone();
 
       let property = ExprNode {
         pos: ident.pos,
@@ -441,7 +441,7 @@ impl<'a> Parser<'a> {
     };
 
     while current_token_is!(self, Token::Identifier) {
-      match self.parse_identifier(false) {
+      match self.parse_identifier() {
         Some(next_callee_part) => {
           callee_parts.push(next_callee_part);
 
@@ -661,7 +661,7 @@ impl<'a> Parser<'a> {
     if current_token_is!(self, Token::KeywordWhere) {
       self.advance();
 
-      while let Some(generic_name) = self.parse_identifier(false) {
+      while let Some(generic_name) = self.parse_identifier() {
         expect_token_and_do!(self, Token::DoubleColon, {
           self.advance();
         });
@@ -705,8 +705,8 @@ impl<'a> Parser<'a> {
     let mut receiver = None;
     let mut signature: Signature = Vec::new();
 
-    if current_token_is!(self, Token::Dot) {
-      // If we have a dot now, we know the first ident was a receiver type
+    if current_token_is!(self, Token::Pipe) {
+      // If we have a pipe now, we know the first ident was a receiver type
       receiver = Some(type_ident);
       self.advance();
     } else {
@@ -732,7 +732,7 @@ impl<'a> Parser<'a> {
 
     // Now, collect any remaining parts
     while current_token_is!(self, Token::Identifier) {
-      let part_name = self.parse_identifier(false).unwrap();
+      let part_name = self.parse_identifier().unwrap();
 
       match self.parse_type_expression() {
         Some(part_param) => signature.push((part_name, Box::new(part_param))),
@@ -790,7 +790,7 @@ impl<'a> Parser<'a> {
     while let Some(Token::Pipe(..)) = self.current_token {
       self.advance();
 
-      match self.parse_identifier(false) {
+      match self.parse_identifier() {
         Some(id) => {
           match self.current_token {
             // A variant can either be a call with an argument, in which case we
@@ -1287,17 +1287,9 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_identifier(&mut self, allow_special: bool) -> Option<IdentifierNode> {
+  fn parse_identifier(&mut self) -> Option<IdentifierNode> {
     let (start, end) = match self.current_token {
       Some(Token::Identifier(start, end)) => {
-        self.advance();
-        (start, end)
-      }
-      Some(Token::IdentifierSpecialOther(start, end)) if allow_special => {
-        self.advance();
-        (start, end)
-      }
-      Some(Token::IdentifierSpecialParam(start, end)) if allow_special => {
         self.advance();
         (start, end)
       }
@@ -1623,7 +1615,7 @@ impl<'a> Parser<'a> {
 
         expect_token_and_do!(self, Token::Identifier, {});
 
-        let id_node = self.parse_identifier(false).unwrap();
+        let id_node = self.parse_identifier().unwrap();
 
         Some(PatternNode {
           pos: (start, id_node.pos.1),
@@ -1632,7 +1624,7 @@ impl<'a> Parser<'a> {
       }
 
       Some(Token::Identifier(..)) => {
-        let id_node = self.parse_identifier(false).unwrap();
+        let id_node = self.parse_identifier().unwrap();
 
         if let Some(arg_pattern) = self.parse_pattern() {
           return Some(PatternNode {
@@ -1658,7 +1650,7 @@ impl<'a> Parser<'a> {
           match (self.current_token, next_token) {
             (Some(Token::Identifier(..)), Some(Token::Colon(..))) => {
               // It's a labeled entry!
-              let label = self.parse_identifier(false).unwrap();
+              let label = self.parse_identifier().unwrap();
 
               expect_token_and_do!(self, Token::Colon, { self.advance() });
 
@@ -1858,7 +1850,7 @@ impl<'a> Parser<'a> {
     let qualifier = self.parse_qualifier().unwrap();
 
     let ident = expect_token_and_do!(self, Token::Identifier, {
-      self.parse_identifier(false).unwrap()
+      self.parse_identifier().unwrap()
     });
 
     Some(ExprNode {
@@ -2319,15 +2311,11 @@ impl<'a> Parser<'a> {
       Some(Token::LeftBracket(..)) => self.parse_list_or_dict(),
       Some(Token::StringLiteral(..)) => self.parse_string(),
       Some(Token::Qualifier(..)) => self.parse_qualified(),
-      Some(Token::Identifier(..))
-      | Some(Token::IdentifierSpecialParam(..))
-      | Some(Token::IdentifierSpecialOther(..)) => {
-        self.parse_identifier(true).map(|ident| ExprNode {
-          pos: ident.pos,
-          kind: ExprKind::Identifier { ident },
-          typ: ValueType::Unknown,
-        })
-      }
+      Some(Token::Identifier(..)) => self.parse_identifier().map(|ident| ExprNode {
+        pos: ident.pos,
+        kind: ExprKind::Identifier { ident },
+        typ: ValueType::Unknown,
+      }),
       Some(Token::DecimalDigits(..)) => self.parse_decimal_number().map(|literal| ExprNode {
         pos: literal.pos,
         kind: ExprKind::Literal { literal },
@@ -2462,7 +2450,7 @@ impl<'a> Parser<'a> {
       let mut signature = Vec::new();
 
       while current_token_is!(self, Token::Identifier) {
-        let part_name = self.parse_identifier(false).unwrap();
+        let part_name = self.parse_identifier().unwrap();
 
         if current_token_is!(self, Token::Colon) {
           self.advance();

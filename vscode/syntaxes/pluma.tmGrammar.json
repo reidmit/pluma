@@ -41,27 +41,27 @@
 
     "operator": {
       "name": "keyword.operator.pluma",
-      "match": "\\b(::|\\||\\|\\||&|&&|\\+|-|\\*|/|%|\\.|\\.\\.|=>|->)\\b"
+      "match": "\\b(::|&|&&|\\+|\\-|\\*|/|%|\\.|=>|->)\\b"
     },
 
     "qualifier": {
       "name": "entity.name.qualifier.pluma",
-      "match": "\\b@[a-zA-Z_][a-zA-Z0-9_]*\\b"
+      "match": "\\b(@[a-zA-Z_][a-zA-Z0-9_]*)\\b"
     },
 
     "storage-type": {
       "name": "storage.type.pluma",
-      "match": "\\b(const|def|enum|struct|alias|trait|intrinsic_type|intrinsic_def)\\b"
+      "match": "\\b(const|def|enum|struct|alias|trait|intrinsic_type|intrinsic_def|where)\\b"
     },
 
     "keyword-language": {
       "name": "keyword.language.pluma",
-      "match": "\\b(match|let|mut|where)\\b"
+      "match": "\\b(match|let|mut)\\b"
     },
 
     "keyword-control": {
       "name": "keyword.control.pluma",
-      "match": "\\b(use|as|private|internal)\\b"
+      "match": "\\b(use|private|internal)\\b"
     },
 
     "string": {

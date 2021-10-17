@@ -5,7 +5,7 @@ use crate::usage_error::{UsageError, UsageErrorKind};
 use analyzer::*;
 use constants::*;
 use diagnostics::*;
-use emitter::*;
+// use emitter::*;
 use module::*;
 use std::collections::HashMap;
 use std::env;
@@ -101,31 +101,31 @@ impl Compiler {
   pub fn emit(&mut self) -> Result<(), Vec<Diagnostic>> {
     self.check()?;
 
-    let llvm_context = Emitter::create_context();
-    let mut emitter = Emitter::new(&llvm_context);
+    // let llvm_context = Emitter::create_context();
+    // let mut emitter = Emitter::new(&llvm_context);
 
-    for module_name in self.sorted_module_names() {
-      let module_to_emit = self.modules.get_mut(&module_name).unwrap();
-      module_to_emit.traverse(&mut emitter);
-    }
+    // for module_name in self.sorted_module_names() {
+    //   let module_to_emit = self.modules.get_mut(&module_name).unwrap();
+    //   module_to_emit.traverse(&mut emitter);
+    // }
 
-    if self.release_mode() {
-      emitter.optimize();
-    }
+    // if self.release_mode() {
+    //   emitter.optimize();
+    // }
 
-    if let Err(err) = emitter.verify() {
-      self.diagnostics.push(err);
-    }
+    // if let Err(err) = emitter.verify() {
+    //   self.diagnostics.push(err);
+    // }
 
-    if let Some(path) = &self.output_path {
-      if let Err(err) = emitter.write_to_path(Path::new(&path)) {
-        self.diagnostics.push(err);
-      }
-    }
+    // if let Some(path) = &self.output_path {
+    //   if let Err(err) = emitter.write_to_path(Path::new(&path)) {
+    //     self.diagnostics.push(err);
+    //   }
+    // }
 
-    if !self.diagnostics.is_empty() {
-      return Err(self.diagnostics.to_vec());
-    }
+    // if !self.diagnostics.is_empty() {
+    //   return Err(self.diagnostics.to_vec());
+    // }
 
     Ok(())
   }
@@ -134,25 +134,27 @@ impl Compiler {
   pub fn run(&mut self) -> Result<i32, Vec<Diagnostic>> {
     self.check()?;
 
-    let llvm_context = Emitter::create_context();
-    let mut emitter = Emitter::new(&llvm_context);
+    return Ok(0);
 
-    for module_name in self.sorted_module_names() {
-      let module_to_emit = self.modules.get_mut(&module_name).unwrap();
-      module_to_emit.traverse(&mut emitter);
-    }
+    // let llvm_context = Emitter::create_context();
+    // let mut emitter = Emitter::new(&llvm_context);
 
-    if let Err(err) = emitter.verify() {
-      self.diagnostics.push(err);
-    }
+    // for module_name in self.sorted_module_names() {
+    //   let module_to_emit = self.modules.get_mut(&module_name).unwrap();
+    //   module_to_emit.traverse(&mut emitter);
+    // }
 
-    if !self.diagnostics.is_empty() {
-      return Err(self.diagnostics.to_vec());
-    }
+    // if let Err(err) = emitter.verify() {
+    //   self.diagnostics.push(err);
+    // }
 
-    let exit_code = emitter.execute();
+    // if !self.diagnostics.is_empty() {
+    //   return Err(self.diagnostics.to_vec());
+    // }
 
-    return Ok(exit_code);
+    // let exit_code = emitter.execute();
+
+    // return Ok(exit_code);
   }
 
   fn parse_module(&mut self, module_name: String, module_path: PathBuf) {

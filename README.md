@@ -50,17 +50,30 @@ enum Color
   | Green
   | Blue
 
-def randomColor() -> Color {
-  match randomIntBetween 1 and 3
-  | 1 => Red
-  | 2 => Green
-  | 3 => Blue
-}
+def randomColor() -> Color =
+  \():
+    randomIntBetween 1 and 3 | match:
+      case 1: Red
+      case 2: Green
+      case 3: Blue
 
 let c = randomColor()
 
-match c
-| Red => print "it's red!"
-| Green => print "it's green!"
-| Blue => print "it's blue!"
+c | match:
+  case Red(): print "it's red!"
+  case Green(): print "it's green!"
+  case Blue(): print "it's blue!"
+  case _: print "???"
+
+let c = randomColorFormat()
+
+c | match:
+  case RGB(r, g, b):
+    print "rgb($(r), $(g), $(b))"
+  case HSL(h, s, l):
+    print "hsl($(h), $(s), $(l))"
+  case Hex(val):
+    print "#$(val)"
+  case _:
+    print "???"
 ```

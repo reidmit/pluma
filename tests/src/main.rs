@@ -33,20 +33,20 @@ fn main() -> io::Result<()> {
 
   for (path, module_results) in all_results {
     if module_results.is_empty() {
-      println!("\x1b[32m✔ {}\x1b[0m", path);
+      println!("\x1b[32m✔\x1b[0m {}", path);
     } else {
-      eprintln!("\x1b[31m𝙭 {}\x1b[0m", path);
+      eprintln!("\x1b[31m𝙭\x1b[0m {}", path);
       eprintln!("{:#?}", module_results);
       failures += 1;
     }
   }
 
   if failures > 0 {
-    eprintln!("\n\x1b[31m𝙭 FAILED: {} errors\x1b[0m", failures);
+    eprintln!("\n\x1b[31m𝙭\x1b[0m FAILED: {} errors", failures);
     std::process::exit(47);
   }
 
-  println!("\n\x1b[32m✔ All passed!\x1b[0m");
+  println!("\n\x1b[32m✔\x1b[0m All passed!");
 
   Ok(())
 }
