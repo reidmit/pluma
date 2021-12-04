@@ -1,6 +1,0 @@
-#!/bin/bash
-
-# make rustc fail on all warnings
-export RUSTFLAGS='-D warnings'
-
-cargo build --bin pluma --release

@@ -1,9 +1,0 @@
-#!/bin/bash
-
-# allow the dump! macro to print things when run in this way (see macros crate)
-export PLUMA_DUMP=true
-
-# ignore all warnings when running (just for development)
-export RUSTFLAGS=-Awarnings
-
-cargo run --bin pluma -q -- "$@"

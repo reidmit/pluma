@@ -1,5 +1,0 @@
-#!/bin/bash
-
-cargo run \
-  --quiet \
-  --bin tests
