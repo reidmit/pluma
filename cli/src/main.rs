@@ -28,39 +28,12 @@ fn run() -> Result<(), command_error::CommandError> {
   }
 
   match &subcommand.unwrap()[..] {
-    "build" => {
-      if is_help_requested {
-        BuildCommand::print_help();
-      } else {
-        let mut parsed_args = arg_parser::parse_args_for_command(args, BuildCommand::info())?;
-        BuildCommand::execute(&mut parsed_args)?;
-      }
-    }
-
     "check" => {
       if is_help_requested {
         CheckCommand::print_help();
       } else {
         let mut parsed_args = arg_parser::parse_args_for_command(args, CheckCommand::info())?;
         CheckCommand::execute(&mut parsed_args)?;
-      }
-    }
-
-    "run" => {
-      if is_help_requested {
-        RunCommand::print_help();
-      } else {
-        let mut parsed_args = arg_parser::parse_args_for_command(args, RunCommand::info())?;
-        RunCommand::execute(&mut parsed_args)?;
-      }
-    }
-
-    "repl" => {
-      if is_help_requested {
-        ReplCommand::print_help();
-      } else {
-        let mut parsed_args = arg_parser::parse_args_for_command(args, ReplCommand::info())?;
-        ReplCommand::execute(&mut parsed_args)?;
       }
     }
 

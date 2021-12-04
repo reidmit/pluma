@@ -1,5 +1,5 @@
 [package]
-name = "pluma"
+name = "cli"
 version = "0.1.0"
 license = "MIT"
 authors = ["Reid Mitchell <reidmitchell1@gmail.com>"]
@@ -12,4 +12,3 @@ compiler = { path = "../compiler" }
 constants = { path = "../constants" }
 diagnostics = { path = "../diagnostics" }
 parser = { path = "../parser" }
-repl = { path = "../repl" }

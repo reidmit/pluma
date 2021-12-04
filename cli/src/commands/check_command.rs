@@ -15,9 +15,6 @@ impl Command for CheckCommand {
       .args(vec![
         Arg::new("entry", "Path to Pluma module or directory").default(DEFAULT_ENTRY_FILE)
       ])
-      .flags(vec![
-        Flag::with_names("parse-only", "p").description("Skip type-checking of input files")
-      ])
       .with_help()
   }
 
@@ -38,13 +35,7 @@ impl Command for CheckCommand {
       }
     };
 
-    let parse_only = args.is_flag_present("parse-only");
-
-    let result = if parse_only {
-      compiler.parse()
-    } else {
-      compiler.check()
-    };
+    let result = compiler.check();
 
     match result {
       Ok(_) => {

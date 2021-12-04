@@ -50,20 +50,6 @@ impl Module {
     self.ast.is_some()
   }
 
-  pub fn get_imports(&self) -> Vec<UseNode> {
-    let mut imports = Vec::new();
-
-    if self.imports.is_none() {
-      return imports;
-    }
-
-    for import_node in self.imports.as_ref().unwrap() {
-      imports.push(import_node.clone())
-    }
-
-    imports
-  }
-
   pub fn get_line_for_position(&self, pos: Position) -> usize {
     let mut line = 1;
 
@@ -97,16 +83,9 @@ impl Module {
   fn build_ast(&mut self, bytes: Vec<u8>, diagnostics: &mut Vec<Diagnostic>) {
     let tokenizer = Tokenizer::from_source(&bytes);
 
-    let (ast, imports, comment_data, errors) = Parser::new(&bytes, tokenizer).parse_module();
-
-    // imports.push(UseNode {
-    //   pos: (0, 0),
-    //   module_name: "std/prelude".into(),
-    //   qualifier: None,
-    // });
+    let (ast, comment_data, errors) = Parser::new(&bytes, tokenizer).parse_module();
 
     self.ast = Some(ast);
-    self.imports = Some(imports);
 
     let (comments, line_break_starts) = comment_data;
     self.comments = comments;

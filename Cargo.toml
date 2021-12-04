@@ -6,11 +6,9 @@ members = [
   "compiler",
   "constants",
   "diagnostics",
-  "emitter",
   "macros",
   "module",
   "parser",
-  "repl",
   "tests",
   "visitor",
 ]

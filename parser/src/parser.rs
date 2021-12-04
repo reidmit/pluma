@@ -86,28 +86,13 @@ impl<'a> Parser<'a> {
     &mut self,
   ) -> (
     ModuleNode,
-    Vec<UseNode>,
     (HashMap<usize, String>, Vec<usize>),
     Vec<ParseError>,
   ) {
-    let mut imports = Vec::new();
     let mut body = Vec::new();
 
     // Read the first token
     self.advance();
-
-    loop {
-      self.skip_line_breaks();
-
-      if !current_token_is!(self, Token::KeywordUse) {
-        break;
-      }
-
-      match self.parse_use_statement() {
-        Some(use_node) => imports.push(use_node),
-        _ => break,
-      }
-    }
 
     loop {
       self.skip_line_breaks();
@@ -138,7 +123,7 @@ impl<'a> Parser<'a> {
       self.line_break_starts.clone(),
     );
 
-    (module_node, imports, comment_data, self.errors.clone())
+    (module_node, comment_data, self.errors.clone())
   }
 
   fn advance(&mut self) {
@@ -214,20 +199,6 @@ impl<'a> Parser<'a> {
     })
   }
 
-  fn parse_binary_number(&mut self) -> Option<LiteralNode> {
-    let (start, end, value) = expect_token_and_do!(self, Token::BinaryDigits, {
-      let (start, end) = self.current_token_position();
-      (start, end, self.parse_numeric_literal(start + 2, end, 2))
-    });
-
-    self.advance();
-
-    Some(LiteralNode {
-      kind: LiteralKind::IntBinary(value),
-      pos: (start, end),
-    })
-  }
-
   fn parse_block(&mut self) -> Option<BlockNode> {
     let block_start = expect_token_and_do!(self, Token::LeftBrace, {
       let (start, _) = self.current_token_position();
@@ -281,7 +252,7 @@ impl<'a> Parser<'a> {
     let mut method_parts = Vec::new();
     let mut args = Vec::new();
 
-    if current_token_is!(self, Token::DecimalDigits) {
+    if current_token_is!(self, Token::Digits) {
       // If there's a decimal number here, it must be a tuple/list element access
       // like `tuple.1`. Just grab that number and treat it like an identifier.
       let pos = self.current_token_position();
@@ -522,16 +493,16 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_decimal_number(&mut self) -> Option<LiteralNode> {
-    let (start, end) = expect_token_and_do!(self, Token::DecimalDigits, {
+    let (start, end) = expect_token_and_do!(self, Token::Digits, {
       let pos = self.current_token_position();
       self.advance();
       pos
     });
 
-    if current_token_is!(self, Token::Dot) && next_token_is!(self, Token::DecimalDigits) {
+    if current_token_is!(self, Token::Dot) && next_token_is!(self, Token::Digits) {
       self.advance();
 
-      expect_token_and_do!(self, Token::DecimalDigits, {
+      expect_token_and_do!(self, Token::Digits, {
         let (_, end) = self.current_token_position();
 
         self.advance();
@@ -551,107 +522,6 @@ impl<'a> Parser<'a> {
     Some(LiteralNode {
       kind: LiteralKind::IntDecimal(value),
       pos: (start, end),
-    })
-  }
-
-  fn parse_intrinsic_definition(&mut self) -> Option<IntrinsicDefNode> {
-    let start = expect_token_and_do!(self, Token::KeywordIntrinsicDef, {
-      let pos = self.current_token_position();
-      self.advance();
-      pos.0
-    });
-
-    let kind = match self.parse_definition_kind() {
-      Some(kind_node) => kind_node,
-      _ => {
-        // Just return without adding a new error. Assumes that the
-        // failure to parse the kind has already generated an error.
-        return None;
-      }
-    };
-
-    let return_type = if current_token_is!(self, Token::Arrow) {
-      self.advance();
-
-      match self.parse_type_expression() {
-        Some(type_node) => Some(type_node),
-        _ => {
-          return self.error(ParseError {
-            pos: self.current_token_position(),
-            kind: ParseErrorKind::IncompleteMethodSignature,
-          })
-        }
-      }
-    } else {
-      None
-    };
-
-    self.skip_line_breaks();
-
-    let generic_type_constraints = self.parse_generic_type_constraints().unwrap_or_default();
-
-    let end = match self.prev_token {
-      Some(token) => token.get_position().1,
-      _ => start,
-    };
-
-    Some(IntrinsicDefNode {
-      pos: (start, end),
-      visibility: self.current_visibility,
-      kind,
-      return_type,
-      generic_type_constraints,
-    })
-  }
-
-  fn parse_definition(&mut self) -> Option<DefNode> {
-    let start = expect_token_and_do!(self, Token::KeywordDef, {
-      let pos = self.current_token_position();
-      self.advance();
-      pos.0
-    });
-
-    let kind = match self.parse_definition_kind() {
-      Some(kind_node) => kind_node,
-      _ => {
-        // Just return without adding a new error. Assumes that the
-        // failure to parse the kind has already generated an error.
-        return None;
-      }
-    };
-
-    let return_type = if current_token_is!(self, Token::Arrow) {
-      self.advance();
-
-      match self.parse_type_expression() {
-        Some(type_node) => Some(type_node),
-        _ => {
-          return self.error(ParseError {
-            pos: self.current_token_position(),
-            kind: ParseErrorKind::MissingReturnType,
-          })
-        }
-      }
-    } else {
-      None
-    };
-
-    self.skip_line_breaks();
-
-    let generic_type_constraints = self.parse_generic_type_constraints().unwrap_or_default();
-
-    let block = match self.parse_block() {
-      Some(block) => block,
-      _ => return None,
-    };
-
-    Some(DefNode {
-      pos: (start, block.pos.1),
-      visibility: self.current_visibility,
-      kind,
-      return_type,
-      generic_type_constraints,
-      block,
     })
   }
 
@@ -688,78 +558,6 @@ impl<'a> Parser<'a> {
     self.skip_line_breaks();
 
     Some(generic_type_constraints)
-  }
-
-  fn parse_definition_kind(&mut self) -> Option<DefKind> {
-    // The first ident might be a type ident or a simple method part name
-    let type_ident = match self.parse_type_identifier() {
-      Some(t) => t,
-      None => {
-        return self.error(ParseError {
-          pos: self.current_token_position(),
-          kind: ParseErrorKind::IncompleteMethodSignature,
-        })
-      }
-    };
-
-    let mut receiver = None;
-    let mut signature: Signature = Vec::new();
-
-    if current_token_is!(self, Token::Pipe) {
-      // If we have a pipe now, we know the first ident was a receiver type
-      receiver = Some(type_ident);
-      self.advance();
-    } else {
-      // If not, the first ident was the first part of the method name
-      // So, grab the param type for this part
-      match self.parse_type_expression() {
-        Some(part_param) => {
-          let ident = IdentifierNode {
-            pos: type_ident.pos,
-            name: type_ident.name,
-          };
-
-          signature.push((ident, Box::new(part_param)))
-        }
-        _ => {
-          return self.error(ParseError {
-            pos: self.current_token_position(),
-            kind: ParseErrorKind::IncompleteMethodSignature,
-          })
-        }
-      }
-    }
-
-    // Now, collect any remaining parts
-    while current_token_is!(self, Token::Identifier) {
-      let part_name = self.parse_identifier().unwrap();
-
-      match self.parse_type_expression() {
-        Some(part_param) => signature.push((part_name, Box::new(part_param))),
-        _ => {
-          return self.error(ParseError {
-            pos: self.current_token_position(),
-            kind: ParseErrorKind::IncompleteMethodSignature,
-          })
-        }
-      }
-    }
-
-    if signature.is_empty() {
-      return self.error(ParseError {
-        pos: self.current_token_position(),
-        kind: ParseErrorKind::IncompleteMethodSignature,
-      });
-    }
-
-    if let Some(rec) = receiver {
-      return Some(DefKind::Method {
-        receiver: Box::new(rec),
-        signature,
-      });
-    }
-
-    Some(DefKind::Function { signature })
   }
 
   fn parse_enum(&mut self) -> Option<TypeDefNode> {
@@ -1273,20 +1071,6 @@ impl<'a> Parser<'a> {
     }
   }
 
-  fn parse_hex_number(&mut self) -> Option<LiteralNode> {
-    let (start, end, value) = expect_token_and_do!(self, Token::HexDigits, {
-      let (start, end) = self.current_token_position();
-      (start, end, self.parse_numeric_literal(start + 2, end, 16))
-    });
-
-    self.advance();
-
-    Some(LiteralNode {
-      kind: LiteralKind::IntHex(value),
-      pos: (start, end),
-    })
-  }
-
   fn parse_identifier(&mut self) -> Option<IdentifierNode> {
     let (start, end) = match self.current_token {
       Some(Token::Identifier(start, end)) => {
@@ -1301,58 +1085,6 @@ impl<'a> Parser<'a> {
     Some(IdentifierNode {
       pos: (start, end),
       name,
-    })
-  }
-
-  fn parse_internal(&mut self) -> Option<TopLevelStatementNode> {
-    let pos = expect_token_and_do!(self, Token::KeywordInternal, {
-      let pos = self.current_token_position();
-      self.advance();
-      pos
-    });
-
-    self.current_visibility = ExportVisibility::Internal;
-
-    Some(TopLevelStatementNode {
-      pos: pos,
-      kind: TopLevelStatementKind::VisibilityMarker(ExportVisibility::Internal),
-    })
-  }
-
-  fn parse_intrinsic_type(&mut self) -> Option<IntrinsicTypeDefNode> {
-    let start = expect_token_and_do!(self, Token::KeywordIntrinsicType, {
-      let pos = self.current_token_position();
-      self.advance();
-      pos.0
-    });
-
-    let (name, end) = match self.current_token {
-      Some(Token::Identifier(start, end)) => {
-        let name_str = read_string!(self, start, end);
-
-        self.advance();
-
-        (
-          IdentifierNode {
-            pos: (start, end),
-            name: name_str,
-          },
-          end,
-        )
-      }
-      _ => {
-        return self.error(ParseError {
-          pos: self.current_token_position(),
-          kind: ParseErrorKind::MissingTypeNameInTypeDefinition,
-        })
-      }
-    };
-
-    Some(IntrinsicTypeDefNode {
-      pos: (start, end),
-      visibility: self.current_visibility,
-      name,
-      generic_type_constraints: Vec::new(),
     })
   }
 
@@ -1555,20 +1287,6 @@ impl<'a> Parser<'a> {
     result
   }
 
-  fn parse_octal_number(&mut self) -> Option<LiteralNode> {
-    let (start, end, value) = expect_token_and_do!(self, Token::OctalDigits, {
-      let (start, end) = self.current_token_position();
-      (start, end, self.parse_numeric_literal(start + 2, end, 8))
-    });
-
-    self.advance();
-
-    Some(LiteralNode {
-      kind: LiteralKind::IntOctal(value),
-      pos: (start, end),
-    })
-  }
-
   fn parse_operator(&mut self) -> Option<OperatorNode> {
     let (start, end, kind) = match self.current_token {
       Some(Token::Plus(start, end)) => (start, end, OperatorKind::Add),
@@ -1712,22 +1430,7 @@ impl<'a> Parser<'a> {
         _ => unreachable!(),
       }),
 
-      Some(Token::DecimalDigits(..)) => self.parse_decimal_number().map(|lit_node| PatternNode {
-        pos: lit_node.pos,
-        kind: PatternKind::Literal(lit_node),
-      }),
-
-      Some(Token::HexDigits(..)) => self.parse_hex_number().map(|lit_node| PatternNode {
-        pos: lit_node.pos,
-        kind: PatternKind::Literal(lit_node),
-      }),
-
-      Some(Token::OctalDigits(..)) => self.parse_octal_number().map(|lit_node| PatternNode {
-        pos: lit_node.pos,
-        kind: PatternKind::Literal(lit_node),
-      }),
-
-      Some(Token::BinaryDigits(..)) => self.parse_binary_number().map(|lit_node| PatternNode {
+      Some(Token::Digits(..)) => self.parse_decimal_number().map(|lit_node| PatternNode {
         pos: lit_node.pos,
         kind: PatternKind::Literal(lit_node),
       }),
@@ -1828,53 +1531,6 @@ impl<'a> Parser<'a> {
       pos: (paren_start, paren_end),
       kind: ExprKind::Tuple { entries },
       typ: ValueType::Unknown,
-    })
-  }
-
-  fn parse_private(&mut self) -> Option<TopLevelStatementNode> {
-    let pos = expect_token_and_do!(self, Token::KeywordPrivate, {
-      let pos = self.current_token_position();
-      self.advance();
-      pos
-    });
-
-    self.current_visibility = ExportVisibility::Private;
-
-    Some(TopLevelStatementNode {
-      pos: pos,
-      kind: TopLevelStatementKind::VisibilityMarker(ExportVisibility::Private),
-    })
-  }
-
-  fn parse_qualified(&mut self) -> Option<ExprNode> {
-    let qualifier = self.parse_qualifier().unwrap();
-
-    let ident = expect_token_and_do!(self, Token::Identifier, {
-      self.parse_identifier().unwrap()
-    });
-
-    Some(ExprNode {
-      pos: qualifier.pos,
-      kind: ExprKind::QualifiedIdentifier {
-        qualifier,
-        ident: Box::new(ident),
-      },
-      typ: ValueType::Unknown,
-    })
-  }
-
-  fn parse_qualifier(&mut self) -> Option<QualifierNode> {
-    let (start, end) = expect_token_and_do!(self, Token::Qualifier, {
-      let (start, end) = self.current_token_position();
-      self.advance();
-      (start, end)
-    });
-
-    let name = read_string!(self, start, end);
-
-    Some(QualifierNode {
-      pos: (start, end),
-      name,
     })
   }
 
@@ -2080,7 +1736,7 @@ impl<'a> Parser<'a> {
           let mut max_count = None;
           let mut has_comma = false;
 
-          if current_token_is!(self, Token::DecimalDigits) {
+          if current_token_is!(self, Token::Digits) {
             let (start, end) = self.current_token_position();
             let value = self.parse_numeric_literal(start, end, 10) as usize;
             min_count = Some(value);
@@ -2092,7 +1748,7 @@ impl<'a> Parser<'a> {
 
             self.advance();
 
-            if current_token_is!(self, Token::DecimalDigits) {
+            if current_token_is!(self, Token::Digits) {
               let (start, end) = self.current_token_position();
               let value = self.parse_numeric_literal(start, end, 10) as usize;
               max_count = Some(value);
@@ -2203,58 +1859,11 @@ impl<'a> Parser<'a> {
       kind: LiteralKind::Str(value),
     };
 
-    let expr_node = ExprNode {
+    Some(ExprNode {
       pos: (start, end),
       kind: ExprKind::Literal { literal },
       typ: ValueType::Unknown,
-    };
-
-    if current_token_is!(self, Token::InterpolationStart) {
-      let mut parts = vec![expr_node];
-      let mut interpolation_end = end;
-
-      while current_token_is!(self, Token::InterpolationStart) {
-        self.advance();
-
-        match self.parse_expression() {
-          Some(node) => parts.push(node),
-          _ => break,
-        }
-
-        expect_token_and_do!(self, Token::InterpolationEnd, {
-          self.advance();
-        });
-
-        expect_token_and_do!(self, Token::StringLiteral, {
-          let (start, end) = self.current_token_position();
-
-          interpolation_end = end;
-
-          let value = read_string_with_escapes!(self, start, end);
-
-          parts.push(ExprNode {
-            pos: (start, end),
-            kind: ExprKind::Literal {
-              literal: LiteralNode {
-                pos: (start, end),
-                kind: LiteralKind::Str(value),
-              },
-            },
-            typ: ValueType::Unknown,
-          });
-
-          self.advance()
-        })
-      }
-
-      return Some(ExprNode {
-        pos: (start, interpolation_end),
-        kind: ExprKind::Interpolation { parts },
-        typ: ValueType::Unknown,
-      });
-    }
-
-    Some(expr_node)
+    })
   }
 
   fn parse_struct(&mut self) -> Option<TypeDefNode> {
@@ -2310,28 +1919,12 @@ impl<'a> Parser<'a> {
       }),
       Some(Token::LeftBracket(..)) => self.parse_list_or_dict(),
       Some(Token::StringLiteral(..)) => self.parse_string(),
-      Some(Token::Qualifier(..)) => self.parse_qualified(),
       Some(Token::Identifier(..)) => self.parse_identifier().map(|ident| ExprNode {
         pos: ident.pos,
         kind: ExprKind::Identifier { ident },
         typ: ValueType::Unknown,
       }),
-      Some(Token::DecimalDigits(..)) => self.parse_decimal_number().map(|literal| ExprNode {
-        pos: literal.pos,
-        kind: ExprKind::Literal { literal },
-        typ: ValueType::Unknown,
-      }),
-      Some(Token::HexDigits(..)) => self.parse_hex_number().map(|literal| ExprNode {
-        pos: literal.pos,
-        kind: ExprKind::Literal { literal },
-        typ: ValueType::Unknown,
-      }),
-      Some(Token::OctalDigits(..)) => self.parse_octal_number().map(|literal| ExprNode {
-        pos: literal.pos,
-        kind: ExprKind::Literal { literal },
-        typ: ValueType::Unknown,
-      }),
-      Some(Token::BinaryDigits(..)) => self.parse_binary_number().map(|literal| ExprNode {
+      Some(Token::Digits(..)) => self.parse_decimal_number().map(|literal| ExprNode {
         pos: literal.pos,
         kind: ExprKind::Literal { literal },
         typ: ValueType::Unknown,
@@ -2350,22 +1943,6 @@ impl<'a> Parser<'a> {
             kind: TopLevelStatementKind::Let(let_node),
           })
       }
-      Some(Token::KeywordDef(..)) => {
-        self
-          .parse_definition()
-          .map(|def_node| TopLevelStatementNode {
-            pos: def_node.pos,
-            kind: TopLevelStatementKind::Def(def_node),
-          })
-      }
-      Some(Token::KeywordIntrinsicDef(..)) => {
-        self
-          .parse_intrinsic_definition()
-          .map(|intrinsic_def_node| TopLevelStatementNode {
-            pos: intrinsic_def_node.pos,
-            kind: TopLevelStatementKind::IntrinsicDef(intrinsic_def_node),
-          })
-      }
       Some(Token::KeywordAlias(..)) => {
         self
           .parse_alias()
@@ -2380,14 +1957,6 @@ impl<'a> Parser<'a> {
           .map(|type_def_node| TopLevelStatementNode {
             pos: type_def_node.pos,
             kind: TopLevelStatementKind::TypeDef(type_def_node),
-          })
-      }
-      Some(Token::KeywordIntrinsicType(..)) => {
-        self
-          .parse_intrinsic_type()
-          .map(|intrinsic_type_def_node| TopLevelStatementNode {
-            pos: intrinsic_type_def_node.pos,
-            kind: TopLevelStatementKind::IntrinsicTypeDef(intrinsic_type_def_node),
           })
       }
       Some(Token::KeywordStruct(..)) => {
@@ -2406,8 +1975,6 @@ impl<'a> Parser<'a> {
             kind: TopLevelStatementKind::TypeDef(type_def_node),
           })
       }
-      Some(Token::KeywordPrivate(..)) => self.parse_private(),
-      Some(Token::KeywordInternal(..)) => self.parse_internal(),
       _ => self
         .parse_expression()
         .map(|expr_node| TopLevelStatementNode {
@@ -2737,33 +2304,6 @@ impl<'a> Parser<'a> {
         right: expr_node,
       },
       typ: ValueType::Unknown,
-    })
-  }
-
-  fn parse_use_statement(&mut self) -> Option<UseNode> {
-    let start = expect_token_and_do!(self, Token::KeywordUse, {
-      let (start, _) = self.current_token_position();
-      self.advance();
-      start
-    });
-
-    let qualifier = if current_token_is!(self, Token::Qualifier) {
-      self.parse_qualifier()
-    } else {
-      None
-    };
-
-    let (module_name, end) = expect_token_and_do!(self, Token::ImportPath, {
-      let (start, end) = self.current_token_position();
-      let name_str = read_string!(self, start, end);
-      self.advance();
-      (name_str, end)
-    });
-
-    Some(UseNode {
-      pos: (start, end),
-      module_name,
-      qualifier,
     })
   }
 }

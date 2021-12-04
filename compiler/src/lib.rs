@@ -1,7 +1,6 @@
 mod compiler;
 mod compiler_options;
 mod dependency_graph;
-mod import_error;
 mod usage_error;
 
 pub use compiler::*;

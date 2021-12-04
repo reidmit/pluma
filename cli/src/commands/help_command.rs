@@ -19,11 +19,8 @@ impl Command for HelpCommand {
   fn execute(args: &ParsedArgs) -> Result<(), CommandError> {
     match args.get_positional_arg(0) {
       Some(val) => match &val[..] {
-        "build" => BuildCommand::print_help(),
         "check" => CheckCommand::print_help(),
         "help" => HelpCommand::print_help(),
-        "run" => RunCommand::print_help(),
-        "repl" => ReplCommand::print_help(),
         "version" => VersionCommand::print_help(),
         unknown => {
           errors::print_usage_error(format!(
@@ -53,10 +50,7 @@ Compiler & tools for the Pluma language
         );
 
         let cmd_info: Vec<CommandInfo> = vec![
-          BuildCommand::info(),
           CheckCommand::info(),
-          ReplCommand::info(),
-          RunCommand::info(),
           VersionCommand::info(),
           HelpCommand::info(),
         ];

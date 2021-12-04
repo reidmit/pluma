@@ -18,20 +18,6 @@ impl ParsedArgs {
     }
   }
 
-  pub fn is_flag_present(&self, flag: &'static str) -> bool {
-    match self.bool_flags.get(flag) {
-      None => false,
-      _ => true,
-    }
-  }
-
-  pub fn get_flag_value(&self, flag: &'static str) -> Option<String> {
-    match self.single_value_flags.get(flag) {
-      Some(val) => Some(val.clone()),
-      None => None,
-    }
-  }
-
   #[allow(dead_code)]
   pub fn get_flag_values(&self, flag: &'static str) -> Vec<String> {
     match self.multi_value_flags.get(flag) {
@@ -195,70 +181,4 @@ pub fn parse_args_for_command(
   }
 
   Ok(parsed)
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn bool_flag() {
-    let cmd = CommandInfo::new("testcmd", "just for testing")
-      .flags(vec![Flag::with_names("bool-flag", "b")]);
-
-    let args = vec!["--bool-flag".to_owned()];
-    let parsed = parse_args_for_command(args, cmd).expect("should be valid");
-
-    assert_eq!(parsed.is_flag_present("bool-flag"), true);
-    assert_eq!(parsed.is_flag_present("something-else"), false);
-  }
-
-  #[test]
-  fn bool_flag_not_provided() {
-    let cmd = CommandInfo::new("testcmd", "just for testing")
-      .flags(vec![Flag::with_names("bool-flag", "b")]);
-
-    let args = vec![];
-    let parsed = parse_args_for_command(args, cmd).expect("should be valid");
-
-    assert_eq!(parsed.is_flag_present("bool-flag"), false);
-  }
-
-  #[test]
-  fn single_value_flags() {
-    let cmd = CommandInfo::new("testcmd", "just for testing").flags(vec![
-      Flag::with_names("name", "n").single_value(),
-      Flag::with_names("date", "d").single_value(),
-    ]);
-
-    let args = vec![
-      "--name".to_owned(),
-      "lol".to_owned(),
-      "-d".to_owned(),
-      "wow".to_owned(),
-    ];
-    let parsed = parse_args_for_command(args, cmd).expect("should be valid");
-
-    assert_eq!(parsed.get_flag_value("name").unwrap(), "lol".to_owned());
-    assert_eq!(parsed.get_flag_value("date").unwrap(), "wow".to_owned());
-  }
-
-  #[test]
-  fn multi_value_flags() {
-    let cmd = CommandInfo::new("testcmd", "just for testing")
-      .flags(vec![Flag::with_names("name", "n").multiple_values()]);
-
-    let args = vec![
-      "--name".to_owned(),
-      "lol".to_owned(),
-      "-n".to_owned(),
-      "wow".to_owned(),
-    ];
-    let parsed = parse_args_for_command(args, cmd).expect("should be valid");
-
-    assert_eq!(
-      parsed.get_flag_values("name"),
-      vec!["lol".to_owned(), "wow".to_owned()]
-    );
-  }
 }

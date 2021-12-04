@@ -24,11 +24,6 @@ impl CommandInfo {
     self
   }
 
-  pub fn flags(mut self, flags: Vec<Flag>) -> Self {
-    self.flags = Some(flags);
-    self
-  }
-
   pub fn with_help(self) -> Self {
     let mut flags = self.flags.unwrap_or_default();
 
@@ -89,26 +84,6 @@ impl Flag {
 
   pub fn description(mut self, description: &'static str) -> Self {
     self.description = description;
-    self
-  }
-
-  pub fn value_name(mut self, value_name: &'static str) -> Self {
-    self.value_name = Some(value_name);
-    self
-  }
-
-  pub fn default(mut self, default: &'static str) -> Self {
-    self.default = Some(default);
-    self
-  }
-
-  pub fn possible_values(mut self, possible_values: Vec<&'static str>) -> Self {
-    self.possible_values = Some(possible_values);
-    self
-  }
-
-  pub fn single_value(mut self) -> Self {
-    self.style = FlagStyle::SingleValue;
     self
   }
 

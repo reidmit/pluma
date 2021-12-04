@@ -32,6 +32,7 @@ impl DependencyGraph {
     }
   }
 
+  #[allow(dead_code)]
   pub fn add_edge(&mut self, imported: String, importer: String) {
     self.cached_sort = None;
 

@@ -2,8 +2,6 @@
 
 set -e
 
-source $(dirname $0)/env
-
 echo "Checking debug build..."
 cargo check -q
 

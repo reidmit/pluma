@@ -1,7 +1,5 @@
 #!/bin/bash
 
-source $(dirname $0)/env
-
 cargo run \
   --quiet \
   --bin tests

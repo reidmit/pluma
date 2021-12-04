@@ -2,21 +2,23 @@
 
 ## Basic types
 
-Integers:
+### Integers
 
-```
+```pluma
 let n = 47
 let age = 27
 ```
 
-Floats:
+### Floats
 
-```
+```pluma
 let price = 19.99
 let gpa = 4.0
 ```
 
-Booleans (actually a built-in enum type):
+### Booleans
+
+Actually a built-in enum type!
 
 ```pluma
 let t = True
@@ -25,7 +27,7 @@ let f = False
 
 ## Tuples
 
-Tuples are ordered, heterogenous collections of values.
+Tuples are ordered, fixed-length, heterogenous collections of values.
 
 ```pluma
 let tuple = (1, "hello")
@@ -86,8 +88,29 @@ The empty tuple is a special case: `()`. It is often used to mean "nothing" or "
 def hello () = \:
   print "hello"
 
-
 let result = hello() # result is ()
+```
+
+## Lists
+
+Lists are not fixed-length, but they must contain elements of a single type.
+
+```pluma
+let nums = [1, 2, 3]
+let strings = ["hey", "there"]
+
+nums[0] + nums[1] == nums[2]
+```
+
+## Dicts
+
+Dicts are not fixed-size, but they must contain string keys and values of a single type.
+
+```pluma
+let dict = { "a": True, "b": False }
+let people = { "jack": 47, "jill": 42 }
+
+people["jack"] == 47
 ```
 
 ## Blocks, functions, and methods
@@ -103,37 +126,46 @@ Blocks usually have their types inferred from usage. Type assertions can be used
 ```pluma
 # empty arg:
 let emptyArg = : print "hello"
-emptyArg()
+emptyArg | call
 
 # empty arg, explicit:
 let emptyArg = \(): print "hello"
-emptyArg()
+emptyArg | call ()
 
 # empty arg, with line break:
 let emptyArg = :
   print "hello"
-emptyArg()
+emptyArg | call
 
 # simple arg:
 let simpleArg = \a: print a
-oneArg "hello"
+oneArg | call "hello"
 
 # simple arg, with line break:
 let oneArg = \a:
   print a
-oneArg "hello"
+oneArg | call "hello"
 
 # unlabeled tuple arg:
 let tupleArg = \tup: print (tup.0 + tup.1)
-tupleArg (1, 2)
+tupleArg | call (1, 2)
 
 # labeled tuple arg:
 let tupleArg = \tup: print (tup.a + tup.b)
-tupleArg (a: 1, b: 2)
+tupleArg | call (a: 1, b: 2)
 
 # unlabeled tuple arg, destructured:
 let tupleArg = \(a, b): print a + b
-tupleArg (a, b)
+tupleArg | call (a, b)
+
+# takes no args, returns ()
+let noop = :()
+noop | call
+noop | call ()
+
+# with a type assertion
+let withTypeAssertion :: (Int, Int) -> Int =
+  \(a, b): a + b
 ```
 
 ### Functions
@@ -185,43 +217,44 @@ Methods follow similar rules to functions. They must appear at the top level, th
 The receiver is passed into the block in a tuple with the rest of the passed values. The receiver is always the first element.
 
 ```pluma
-let p = Person(name: "Reid")
+let p = Person (name: "Reid")
 
 # self + empty arg:
 def Person | emptyArg () = :
   print "hello"
-p.emptyArg()
+p | emptyArg()
 
 # self + empty arg, explicit:
 def Person | emptyArg () = \(self, ()):
   print "hello"
-p.emptyArg()
+p | emptyArg()
 
 # self + simple arg:
 def Person | simpleArg String = \(self, arg):
   print arg
-p.simpleArg "hello"
+p | simpleArg "hello"
 
 # self + simple arg, explicit:
-def Person.oneArg String { (self, a) => print a }
-p.oneArg "hello"
+def Person | oneArg String = \(self, a): print a
+p | oneArg "hello"
 
 # self + tuple arg:
-def Person.tupleArg (Int, Int) { print $1 + $2 }
-p.tupleArg (1, 2)
+def Person | tupleArg (Int, Int) = \(self, a, b): print a + b
+p | tupleArg (1, 2)
 
 # self + tuple arg, explicit:
-def Person.tupleArg (Int, Int) { (self, a, b) => print a + b }
-p.tupleArg (1, 2)
+def Person | tupleArg (Int, Int) = \(self, a, b): print a + b
+p | tupleArg (1, 2)
 
 # self + multi-part, tuple arg:
-def Person.tupleArg Int and Int { (self, a, b) => print a + b }
-p.tupleArg 1 and 2
+def Person | tupleArg Int and Int = \(self, a, b):
+  print a + b
+p | tupleArg 1 and 2
 
 # an interesting case occurs when a method takes labeled tuple args:
-def Person.namedArg (a: Int, b: Int) {
-  (self, a, b) => print a + b
-}
+def Person | namedArg (a: Int, b: Int) = \(self, a, b):
+  print a + b
+p | namedArg (a: 1, b: 2)
 ```
 
 ## Modules, packages, and export visibility
@@ -235,9 +268,8 @@ A module is a file.
 Imagine you have a file called `helpers/math.pa`:
 
 ```pluma
-def add (Int, Int) -> Int {
-  (a, b) => a + b
-}
+def add (Int, Int) -> Int = \arg:
+  arg.0 + arg.1
 ```
 
 And in another file, called `main.pa`:
@@ -268,8 +300,8 @@ If a package is compiled directly as a binary, the compiler will look for a `mai
 
 ```pluma
 # All top-level defs are exported by default:
-def somePublicDef() {}
-def anotherPublicDef() {}
+def somePublicDef() = : ()
+def anotherPublicDef() = : ()
 
 # But you can change the visibility of following defs with the `private`/`internal`
 # keywords.
@@ -277,12 +309,12 @@ def anotherPublicDef() {}
 internal
 
 # The following can only be accessed by modules within the same package (directory):
-def thisIsInternal() {}
+def thisIsInternal() = : ()
 
 private
 
 # The following can only be accessed within this module (file):
-def thisIsPrivate() {}
+def thisIsPrivate() = : ()
 ```
 
 Although you may repeat these keywords (e.g. have a default public section, then a `private`, then an `internal`, then another `private`), it's recommended to stick to the above example (all public defs first, then all `internal` if any, then all `private` if any).

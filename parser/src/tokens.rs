@@ -1,74 +1,164 @@
 use std::fmt;
 
+/// Represents a token in the source code.
+///
+/// Each token has a start and end index associated with it (byte index into
+/// the source code file).
 #[derive(Copy, Clone)]
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub enum Token {
+  /// `&` token
   And(usize, usize),
+
+  /// `->` token
   Arrow(usize, usize),
+
+  /// `\` token
   BackSlash(usize, usize),
+
+  /// `!` token
   Bang(usize, usize),
+
+  /// `!=` token
   BangEqual(usize, usize),
-  BinaryDigits(usize, usize),
+
+  /// `^` token
   Caret(usize, usize),
+
+  /// `:` token
   Colon(usize, usize),
+
+  /// `,` token
   Comma(usize, usize),
+
+  /// e.g. # hello ... (until end of line)
   Comment(usize, usize),
-  DecimalDigits(usize, usize),
+
+  /// e.g. `0` or `123`
+  Digits(usize, usize),
+
+  /// `.` token
   Dot(usize, usize),
+
+  /// `&&` token
   DoubleAnd(usize, usize),
+
+  /// `=>` token
   DoubleArrow(usize, usize),
+
+  /// `::` token
   DoubleColon(usize, usize),
+
+  /// `==` token
   DoubleEqual(usize, usize),
+
+  /// `<<` token
   DoubleLeftAngle(usize, usize),
+
+  /// `||` token
   DoublePipe(usize, usize),
+
+  /// `++ token
   DoublePlus(usize, usize),
+
+  /// `>>` token
   DoubleRightAngle(usize, usize),
+
+  /// `**` token
   DoubleStar(usize, usize),
+
+  /// `=` token
   Equal(usize, usize),
+
+  /// `/` token
   ForwardSlash(usize, usize),
-  HexDigits(usize, usize),
+
+  /// e.g. `hello` or `hello-world`
   Identifier(usize, usize),
-  ImportPath(usize, usize),
-  InterpolationEnd(usize, usize),
-  InterpolationStart(usize, usize),
+
+  /// `alias` keyword
   KeywordAlias(usize, usize),
-  KeywordBreak(usize, usize),
-  KeywordDef(usize, usize),
+
+  /// `enum` keyword
   KeywordEnum(usize, usize),
-  KeywordInternal(usize, usize),
-  KeywordIntrinsicDef(usize, usize),
-  KeywordIntrinsicType(usize, usize),
+
+  /// `let` keyword
   KeywordLet(usize, usize),
+
+  /// `match` keyword
   KeywordMatch(usize, usize),
+
+  /// `mut` keyword
   KeywordMut(usize, usize),
-  KeywordPrivate(usize, usize),
+
+  /// `struct` keyword
   KeywordStruct(usize, usize),
+
+  /// `trait` keyword
   KeywordTrait(usize, usize),
-  KeywordUse(usize, usize),
-  KeywordWhen(usize, usize),
+
+  /// `where` keyword
   KeywordWhere(usize, usize),
+
+  /// `<` token
   LeftAngle(usize, usize),
+
+  /// `<=` token
   LeftAngleEqual(usize, usize),
+
+  /// `{` token
   LeftBrace(usize, usize),
+
+  /// `[` token
   LeftBracket(usize, usize),
+
+  /// `(` token
   LeftParen(usize, usize),
+
+  /// a newline
   LineBreak(usize, usize),
+
+  /// `-` token
   Minus(usize, usize),
-  OctalDigits(usize, usize),
+
+  /// `%` token
   Percent(usize, usize),
+
+  /// `|` token
   Pipe(usize, usize),
+
+  /// `+` token
   Plus(usize, usize),
-  Qualifier(usize, usize),
+
+  /// `?` token
   Question(usize, usize),
+
+  /// `>` token
   RightAngle(usize, usize),
+
+  /// `>=` token
   RightAngleEqual(usize, usize),
+
+  /// `}` token
   RightBrace(usize, usize),
+
+  /// `]` token
   RightBracket(usize, usize),
+
+  /// `)` token
   RightParen(usize, usize),
+
+  /// `*` token
   Star(usize, usize),
   StringLiteral(usize, usize),
+
+  /// `~` token
   Tilde(usize, usize),
+
+  /// `_` token
   Underscore(usize, usize),
+
+  /// any unexpected token
   Unexpected(usize, usize),
 }
 
@@ -82,12 +172,11 @@ impl Token {
       | BackSlash(start, end)
       | Bang(start, end)
       | BangEqual(start, end)
-      | BinaryDigits(start, end)
       | Caret(start, end)
       | Colon(start, end)
       | Comma(start, end)
       | Comment(start, end)
-      | DecimalDigits(start, end)
+      | Digits(start, end)
       | Dot(start, end)
       | DoubleAnd(start, end)
       | DoubleArrow(start, end)
@@ -100,26 +189,14 @@ impl Token {
       | DoubleStar(start, end)
       | Equal(start, end)
       | ForwardSlash(start, end)
-      | HexDigits(start, end)
       | Identifier(start, end)
-      | ImportPath(start, end)
-      | InterpolationEnd(start, end)
-      | InterpolationStart(start, end)
       | KeywordAlias(start, end)
-      | KeywordBreak(start, end)
-      | KeywordDef(start, end)
       | KeywordEnum(start, end)
-      | KeywordInternal(start, end)
-      | KeywordIntrinsicDef(start, end)
-      | KeywordIntrinsicType(start, end)
       | KeywordLet(start, end)
       | KeywordMatch(start, end)
       | KeywordMut(start, end)
-      | KeywordPrivate(start, end)
       | KeywordStruct(start, end)
       | KeywordTrait(start, end)
-      | KeywordUse(start, end)
-      | KeywordWhen(start, end)
       | KeywordWhere(start, end)
       | LeftAngle(start, end)
       | LeftAngleEqual(start, end)
@@ -128,11 +205,9 @@ impl Token {
       | LeftParen(start, end)
       | LineBreak(start, end)
       | Minus(start, end)
-      | OctalDigits(start, end)
       | Percent(start, end)
       | Pipe(start, end)
       | Plus(start, end)
-      | Qualifier(start, end)
       | Question(start, end)
       | RightAngle(start, end)
       | RightAngleEqual(start, end)
@@ -151,9 +226,8 @@ impl Token {
     use Token::*;
 
     match self {
-      Identifier(..) | BackSlash(..) | Colon(..) | DecimalDigits(..) | BinaryDigits(..)
-      | OctalDigits(..) | HexDigits(..) | LeftParen(..) | LeftBrace(..) | LeftBracket(..)
-      | ForwardSlash(..) | StringLiteral(..) => true,
+      Identifier(..) | BackSlash(..) | Colon(..) | Digits(..) | LeftParen(..) | LeftBrace(..)
+      | LeftBracket(..) | ForwardSlash(..) | StringLiteral(..) => true,
       _ => false,
     }
   }
@@ -169,12 +243,11 @@ impl fmt::Display for Token {
       &BackSlash(..) => "a '\\'",
       &Bang(..) => "a '!'",
       &BangEqual(..) => "a '!='",
-      &BinaryDigits(..) => "binary digits",
       &Caret(..) => "a '^'",
       &Colon(..) => "a ':'",
       &Comma(..) => "a ','",
       &Comment(..) => "a comment",
-      &DecimalDigits(..) => "digits",
+      &Digits(..) => "digits",
       &Dot(..) => "a '.'",
       &DoubleAnd(..) => "a '&&'",
       &DoubleArrow(..) => "a '=>'",
@@ -187,26 +260,14 @@ impl fmt::Display for Token {
       &DoubleStar(..) => "a '||'",
       &Equal(..) => "a '='",
       &ForwardSlash(..) => "a '/'",
-      &HexDigits(..) => "hex digits",
       &Identifier(..) => "an identifier",
-      &ImportPath(..) => "an import path",
-      &InterpolationEnd(..) => "a ')'",
-      &InterpolationStart(..) => "a '\\('",
       &KeywordAlias(..) => "keyword 'alias'",
-      &KeywordBreak(..) => "keyword 'break'",
-      &KeywordDef(..) => "keyword 'def'",
       &KeywordEnum(..) => "keyword 'enum'",
-      &KeywordInternal(..) => "keyword 'internal'",
-      &KeywordIntrinsicDef(..) => "keyword 'intrinsic_def'",
-      &KeywordIntrinsicType(..) => "keyword 'intrinsic_type'",
       &KeywordLet(..) => "keyword 'let'",
       &KeywordMatch(..) => "keyword 'match'",
       &KeywordMut(..) => "keyword 'mut'",
-      &KeywordPrivate(..) => "keyword 'private'",
       &KeywordStruct(..) => "keyword 'struct'",
       &KeywordTrait(..) => "keyword 'trait'",
-      &KeywordUse(..) => "keyword 'use'",
-      &KeywordWhen(..) => "keyword 'when'",
       &KeywordWhere(..) => "keyword 'where'",
       &LeftAngle(..) => "a '<'",
       &LeftAngleEqual(..) => "a '<='",
@@ -215,11 +276,9 @@ impl fmt::Display for Token {
       &LeftParen(..) => "a '('",
       &LineBreak(..) => "a line break",
       &Minus(..) => "a '-'",
-      &OctalDigits(..) => "octal digits",
       &Percent(..) => "a '%'",
       &Pipe(..) => "a '|'",
       &Plus(..) => "a '+'",
-      &Qualifier(..) => "a qualifier",
       &Question(..) => "a '?'",
       &RightAngle(..) => "a '>'",
       &RightAngleEqual(..) => "a '>='",

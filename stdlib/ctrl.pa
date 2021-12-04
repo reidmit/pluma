@@ -1,5 +1,0 @@
-enum LoopResult
-  | LoopBreak
-  | LoopContinue
-
-intrinsic_def loop () -> LoopResult

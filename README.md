@@ -20,60 +20,47 @@ The syntax shown here may not be supported yet, or it may be slightly out of dat
 
 ```pluma
 let name = "Reid"
-let str = "hello $(name)!"
+let str = "hello " ++ name ++ "!"
 
 str
-  . replace "hello" with "what's up"
-  . replace "!" with "?"
-  . uppercase ()
-  . then { print $0 }
+  | replace "hello" with "what's up"
+  | replace "!" with "?"
+  | uppercase
+  | then (print _)
 ```
 
 ```pluma
-struct Person (
-  name :: String,
-  age :: Int
+type person = struct (
+  name :: string
+  age :: int
 )
 
-def Person . greeting () -> String {
-  p => "hi there, $(p.name)"
+let _ | greeting :: person -> string {
+  p => "hi there, " ++ p.name
 }
 
-let p = Person ("Reid", 26)
+let p = person ("Reid", 27)
 
-print (person . greeting ())
+print (person | greeting)
 ```
 
 ```pluma
-enum Color
-  | Red
-  | Green
-  | Blue
+type color = enum { red, green, blue }
 
-def randomColor() -> Color =
-  \():
-    randomIntBetween 1 and 3 | match:
-      case 1: Red
-      case 2: Green
-      case 3: Blue
+let random-color :: () -> color = {
+  random-int-between 1 and 3 | match {
+    case 1 => red
+    case 2 => green
+    case 3 => blue
+  }
+}
 
-let c = randomColor()
+let c = random-color ()
 
-c | match:
-  case Red(): print "it's red!"
-  case Green(): print "it's green!"
-  case Blue(): print "it's blue!"
-  case _: print "???"
-
-let c = randomColorFormat()
-
-c | match:
-  case RGB(r, g, b):
-    print "rgb($(r), $(g), $(b))"
-  case HSL(h, s, l):
-    print "hsl($(h), $(s), $(l))"
-  case Hex(val):
-    print "#$(val)"
-  case _:
-    print "???"
+c | match {
+  case red => print "it's red!"
+  case green => print "it's green!"
+  case blue => print "it's blue!"
+  case _ => print "???"
+}
 ```

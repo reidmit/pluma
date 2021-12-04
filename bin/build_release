@@ -1,7 +1,5 @@
 #!/bin/bash
 
-source $(dirname $0)/env
-
 # make rustc fail on all warnings
 export RUSTFLAGS='-D warnings'
 

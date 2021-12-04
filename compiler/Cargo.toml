@@ -10,7 +10,6 @@ analyzer = { path = "../analyzer" }
 ast = { path = "../ast" }
 constants = { path = "../constants" }
 diagnostics = { path = "../diagnostics" }
-emitter = { path = "../emitter" }
 macros = { path = "../macros" }
 module = { path = "../module" }
 parser = { path = "../parser" }

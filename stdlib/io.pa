@@ -1,5 +1,0 @@
-# Writes a string to stdout, followed by a newline.
-intrinsic_def out String -> String
-
-# Writes a string to stderr, followed by a newline.
-intrinsic_def err String -> String

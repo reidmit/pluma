@@ -1,69 +1,86 @@
 {
   "scopeName": "source.pluma",
-
-  "patterns": [{ "include": "#any" }],
-
+  "patterns": [
+    {
+      "include": "#any"
+    }
+  ],
   "repository": {
     "any": {
       "patterns": [
         {
           "include": "#expression"
         },
-        { "include": "#comment" }
+        {
+          "include": "#comment"
+        }
       ]
     },
-
     "expression": {
       "patterns": [
-        { "include": "#paren-expression" },
-        { "include": "#block-expression" },
-        { "include": "#string" },
-        { "include": "#float" },
-        { "include": "#int" },
-        { "include": "#keyword-language" },
-        { "include": "#keyword-control" },
-        { "include": "#storage-type" },
-        { "include": "#operator" },
-        { "include": "#qualifier" },
-        { "include": "#generics" }
+        {
+          "include": "#paren-expression"
+        },
+        {
+          "include": "#block-expression"
+        },
+        {
+          "include": "#string"
+        },
+        {
+          "include": "#float"
+        },
+        {
+          "include": "#int"
+        },
+        {
+          "include": "#keyword-language"
+        },
+        {
+          "include": "#keyword-control"
+        },
+        {
+          "include": "#storage-type"
+        },
+        {
+          "include": "#operator"
+        },
+        {
+          "include": "#qualifier"
+        },
+        {
+          "include": "#generics"
+        }
       ]
     },
-
     "float": {
       "name": "constant.numeric.float.pluma",
       "match": "\\b([0-9]+\\.[0-9]+([eE][+-]?[0-9]+)?|[0-9]+[eE][+-]?[0-9]+)\\b"
     },
-
     "int": {
       "name": "constant.numeric.pluma",
       "match": "\\b([0-9]+)\\b"
     },
-
     "operator": {
       "name": "keyword.operator.pluma",
       "match": "\\b(::|&|&&|\\+|\\-|\\*|/|%|\\.|=>|->)\\b"
     },
-
     "qualifier": {
       "name": "entity.name.qualifier.pluma",
       "match": "\\b(@[a-zA-Z_][a-zA-Z0-9_]*)\\b"
     },
-
     "storage-type": {
       "name": "storage.type.pluma",
-      "match": "\\b(const|def|enum|struct|alias|trait|intrinsic_type|intrinsic_def|where)\\b"
+      "match": "\\b(let|type|enum|struct|alias|trait|where)\\b"
     },
-
     "keyword-language": {
       "name": "keyword.language.pluma",
-      "match": "\\b(match|let|mut)\\b"
+      "match": "\\b(match|case|mut|self)\\b"
     },
-
     "keyword-control": {
       "name": "keyword.control.pluma",
       "match": "\\b(use|private|internal)\\b"
     },
-
     "string": {
       "name": "string.quoted.double.pluma",
       "begin": "\"",
@@ -93,50 +110,70 @@
               "name": "punctuation.interpolation.end.pluma"
             }
           },
-          "patterns": [{ "include": "#any" }]
+          "patterns": [
+            {
+              "include": "#any"
+            }
+          ]
         }
       ]
     },
-
     "paren-expression": {
       "name": "expression.group.pluma",
       "begin": "\\(",
       "end": "\\)",
       "beginCaptures": {
-        "0": { "name": "punctuation.paren.open.pluma" }
+        "0": {
+          "name": "punctuation.paren.open.pluma"
+        }
       },
       "endCaptures": {
-        "0": { "name": "punctuation.paren.close.pluma" }
+        "0": {
+          "name": "punctuation.paren.close.pluma"
+        }
       },
-      "patterns": [{ "include": "#expression" }]
+      "patterns": [
+        {
+          "include": "#expression"
+        }
+      ]
     },
-
     "block-expression": {
       "name": "expression.block.pluma",
       "begin": "\\{",
       "end": "\\}",
       "beginCaptures": {
-        "0": { "name": "punctuation.block.open.pluma" }
+        "0": {
+          "name": "punctuation.block.open.pluma"
+        }
       },
       "endCaptures": {
-        "0": { "name": "punctuation.block.close.pluma" }
+        "0": {
+          "name": "punctuation.block.close.pluma"
+        }
       },
-      "patterns": [{ "include": "#any" }]
+      "patterns": [
+        {
+          "include": "#any"
+        }
+      ]
     },
-
     "generics": {
       "name": "punctuation.definition.typeparameters.pluma",
       "begin": "<",
       "end": ">",
       "beginCaptures": {
-        "0": { "name": "punctuation.definition.typeparameters.begin.pluma" }
+        "0": {
+          "name": "punctuation.definition.typeparameters.begin.pluma"
+        }
       },
       "endCaptures": {
-        "0": { "name": "punctuation.definition.typeparameters.end.pluma" }
+        "0": {
+          "name": "punctuation.definition.typeparameters.end.pluma"
+        }
       },
       "patterns": []
     },
-
     "comment": {
       "name": "comment.line.number-sign.pluma",
       "begin": "#",

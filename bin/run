@@ -1,7 +1,5 @@
 #!/bin/bash
 
-source $(dirname $0)/env
-
 # allow the dump! macro to print things when run in this way (see macros crate)
 export PLUMA_DUMP=true
 
