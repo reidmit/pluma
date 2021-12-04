@@ -1,320 +1,252 @@
 # Pluma language reference
 
-## Basic types
+## Conventions
 
-### Integers
+- Files must be UTF-8
+- Kebab-case, all-lowercase identifiers preferred
+- Use tabs for indentaion
 
-```pluma
-let n = 47
-let age = 27
-```
-
-### Floats
+## Examples
 
 ```pluma
-let price = 19.99
-let gpa = 4.0
+# value assignments
+let a = 1
+let is-cool = true
+let is-uncool = false
+let list = [1, 2, 3]
+let dict = ["a": 1, "b": 2]
+let unlabeled-tuple = ("hey", 2)
+let labeled-tuple = (a: 1, b: "hey")
+let char = 'a'
 ```
-
-### Booleans
-
-Actually a built-in enum type!
 
 ```pluma
-let t = True
-let f = False
+# value assignments with type annotations (optional)
+let a :: int = 1
 ```
-
-## Tuples
-
-Tuples are ordered, fixed-length, heterogenous collections of values.
 
 ```pluma
-let tuple = (1, "hello")
-
-# can always be accessed by position:
-print (tuple.0)
+# mutable values
+let mut a = 1
+a = a + 1
 ```
-
-Tuple elements can always be accessed by position, starting with 0. Accessing a position that doesn't exist (e.g. `("a", "b").4`) is a compile-time error, since the size of tuples is always fixed and known at compile time.
-
-Tuple elements may also be given labels for convenience or readability.
 
 ```pluma
-let tuple = (a: 1, b: "hello")
-
-# can now be accessed by label:
-print (tuple.b)
-
-# can still be accessed by position:
-print (tuple.0)
+# single-arg function (int)
+let add1 _ :: int -> int = {
+  x => x + 1
+}
+# called like:
+add1 47
 ```
-
-When a tuple has labels, the labels are part of its type.
 
 ```pluma
-# Type signature specifies labels:
-def labeledTuple (a: Int, b: Int) = \args:
-  args.a + args.b
-
-# Still valid, since (1, 2) is convertible to (a: Int, b: Int).
-labeledTuple (1, 2)
-
-# Type signature specifies no labels:
-def unlabeledTuple (Int, Int) = \a:
-  a.0 + a.1
-
-# Still valid, since (a: 1, b: 2) is convertible to (Int, Int)
-unlabeledTuple (a: 1, b: 2)
+# single-arg function (tuple)
+let add _ :: (int, int) -> int = {
+  (x, y) => x + y
+}
+# called like:
+add (46, 1)
 ```
-
-Tuples may be partially labeled.
 
 ```pluma
-let tup = (10, 20, a: "wow", b: "cool")
-
-print (tup.0)
-print (tup.1)
-print (tup.a == tup.2)
-print (tup.b == tup.3)
+# multi-arg function (all args merged into single tuple)
+let add _ to _ :: (int, int) -> int = {
+  (x, y) => x + y
+}
+# called like:
+add 46 to 1
 ```
-
-### Empty tuple
-
-The empty tuple is a special case: `()`. It is often used to mean "nothing" or "no value". It has no fields or methods.
 
 ```pluma
-# takes (), and also implicitly returns ()
-def hello () = \:
-  print "hello"
-
-let result = hello() # result is ()
+# "zero-arg" function (really single empty arg)
+let random-color :: nil -> color = {
+  # ...
+}
+# called like:
+random-color ()
 ```
-
-## Lists
-
-Lists are not fixed-length, but they must contain elements of a single type.
 
 ```pluma
-let nums = [1, 2, 3]
-let strings = ["hey", "there"]
-
-nums[0] + nums[1] == nums[2]
+# function with receiver
+let _ | say-name :: person -> nil = {
+  self => print ("my name is " ++ self.name)
+}
+# called like:
+let reid = person("reid", 27)
+reid | say-name
 ```
-
-## Dicts
-
-Dicts are not fixed-size, but they must contain string keys and values of a single type.
 
 ```pluma
-let dict = { "a": True, "b": False }
-let people = { "jack": 47, "jill": 42 }
-
-people["jack"] == 47
+# function chaining
+let transformed = "reid" | to-uppercase | split-chars | filter (is-not-ascii _)
 ```
-
-## Blocks, functions, and methods
-
-Each of these **always takes exactly one argument**. However, with tuples (and the empty tuple), you can pass multiple values (or no values).
-
-### Blocks
-
-Blocks can appear anywhere, at any level. They cannot be exported from a module, even if defined at the top level.
-
-Blocks usually have their types inferred from usage. Type assertions can be used to explicitly mark/assert that a block has a certain type.
 
 ```pluma
-# empty arg:
-let emptyArg = : print "hello"
-emptyArg | call
-
-# empty arg, explicit:
-let emptyArg = \(): print "hello"
-emptyArg | call ()
-
-# empty arg, with line break:
-let emptyArg = :
-  print "hello"
-emptyArg | call
-
-# simple arg:
-let simpleArg = \a: print a
-oneArg | call "hello"
-
-# simple arg, with line break:
-let oneArg = \a:
-  print a
-oneArg | call "hello"
-
-# unlabeled tuple arg:
-let tupleArg = \tup: print (tup.0 + tup.1)
-tupleArg | call (1, 2)
-
-# labeled tuple arg:
-let tupleArg = \tup: print (tup.a + tup.b)
-tupleArg | call (a: 1, b: 2)
-
-# unlabeled tuple arg, destructured:
-let tupleArg = \(a, b): print a + b
-tupleArg | call (a, b)
-
-# takes no args, returns ()
-let noop = :()
-noop | call
-noop | call ()
-
-# with a type assertion
-let withTypeAssertion :: (Int, Int) -> Int =
-  \(a, b): a + b
+# passing around functions as first-class values
+let list2 = [1, 2, 3] | map (add1 _)
+let list2 = [1, 2, 3] | map { el => add1 el }
+[(1, 2), (3, 4)] | map (add _ to _)
+people | map (_ | say-name)
+let add_tuple = add _ to _
+add_tuple (1, 2)
 ```
-
-### Functions
-
-Functions must be defined at the top level. They will be exported from a module if they are public.
-
-Functions must have a full, correct type signature.
 
 ```pluma
-# empty arg:
-def emptyArg () = :
-  print "hello"
-emptyArg()
-
-# empty arg, explicit:
-def emptyArg () = \():
-  print "hello"
-emptyArg()
-
-# simple arg:
-def simpleArg String = \s: print s
-oneArg "hello"
-
-# tuple arg:
-def tupleArg (Int, Int) = \tup: print (tup.0 + tup.1)
-tupleArg (1, 2)
-
-# tuple arg, destructured:
-def tupleArg (Int, Int) = \(a, b): print (a + b)
-tupleArg (1, 2)
+# destructuring assignment
+let (a, b) = (1, 2)
+let (a, _) = (1, 2)
+let person(name, age) = p
+# dicts + lists can NOT be destructured, since they don't have fixed elements
+#   e.g. let [a, b] = someList # can't work, because someList may have only 1 element
 ```
-
-Functions may have multi-part names. They still only take one argument; each part's arguments are collected into a tuple.
 
 ```pluma
-# multi-part, tuple arg:
-def tupleArg Int and Int = \(a, b): print (a + b)
-tupleArg 1 and 2
-
-# ...is roughly equivalent to:
-def tupleArg_and_ (Int, Int) = \(a, b): print (a + b)
-tupleArg_and_ (1, 2)
+# match expressions
+get-color | match {
+  case color.red => print "it's red"
+  case color.green => print "it's green"
+  case color.blue => print "it's blue"
+  case color.rgb(r, g, b) => print ("it's %s, %s, %s" | format [r, g, b])
+  case _ => print "it's something else?"
+}
 ```
-
-### Methods
-
-Methods follow similar rules to functions. They must appear at the top level, they can be exported, and they can have multi-part names. The big difference is that **methods have receivers**. They are defined on a type, and must be called on values of that type.
-
-The receiver is passed into the block in a tuple with the rest of the passed values. The receiver is always the first element.
 
 ```pluma
-let p = Person (name: "Reid")
-
-# self + empty arg:
-def Person | emptyArg () = :
-  print "hello"
-p | emptyArg()
-
-# self + empty arg, explicit:
-def Person | emptyArg () = \(self, ()):
-  print "hello"
-p | emptyArg()
-
-# self + simple arg:
-def Person | simpleArg String = \(self, arg):
-  print arg
-p | simpleArg "hello"
-
-# self + simple arg, explicit:
-def Person | oneArg String = \(self, a): print a
-p | oneArg "hello"
-
-# self + tuple arg:
-def Person | tupleArg (Int, Int) = \(self, a, b): print a + b
-p | tupleArg (1, 2)
-
-# self + tuple arg, explicit:
-def Person | tupleArg (Int, Int) = \(self, a, b): print a + b
-p | tupleArg (1, 2)
-
-# self + multi-part, tuple arg:
-def Person | tupleArg Int and Int = \(self, a, b):
-  print a + b
-p | tupleArg 1 and 2
-
-# an interesting case occurs when a method takes labeled tuple args:
-def Person | namedArg (a: Int, b: Int) = \(self, a, b):
-  print a + b
-p | namedArg (a: 1, b: 2)
+# built-in types
+nil
+bool
+float
+int
+string
+char
+_ -> _
+any
 ```
-
-## Modules, packages, and export visibility
-
-This section describes how to organize and share your code across different files, directories, and projects.
-
-### Modules
-
-A module is a file.
-
-Imagine you have a file called `helpers/math.pa`:
 
 ```pluma
-def add (Int, Int) -> Int = \arg:
-  arg.0 + arg.1
-```
+# struct types
+type person = struct (
+  name: string
+  age: int
+)
 
-And in another file, called `main.pa`:
+let p = person ("reid", 27)
+let p = person (name: "reid", age: 27)
+```
 
 ```pluma
-use @math helpers/math
+# enum types
+type bool = enum {
+  true
+  false
+}
+let t = true
 
-let three = @math add (1, 2)
+type color = enum {
+  red :: color
+  green :: color
+  blue :: color
+  r _ g _ b _ :: (int, int, int) -> color
+  hex _ :: string -> color
+}
+let r = red
+let c = custom (100, 200, 255)
+
+type maybe a' = enum {
+  some _ :: a' -> maybe a'
+  none
+}
+
+let r :: maybe string = none
+let o = some "reid"
 ```
-
-You could also import all exports into the common namespace:
 
 ```pluma
-use helpers/math
+# traits
+type any = trait {}
 
-let three = add (1, 2)
+type person-like = trait {
+  .name :: string
+  .age :: int
+}
+
+type growable = trait {
+  | grow _ :: (mut self, int) -> nil
+}
 ```
-
-If you had multiple `use` statements, and each one declared a name `add`, you'd get a compile error due to the duplicate declarations. It's recommended to qualify your imports with `@qualifier`.
-
-### Packages
-
-A package is like a "project": a directory containing modules.
-
-If a package is compiled directly as a binary, the compiler will look for a `main.pa` file in the directory to use as the entrypoint.
-
-### Export visibility
 
 ```pluma
-# All top-level defs are exported by default:
-def somePublicDef() = : ()
-def anotherPublicDef() = : ()
+# alias types
+type bool-list = alias list bool
+let bs :: bool-list = [true, false, true]
 
-# But you can change the visibility of following defs with the `private`/`internal`
-# keywords.
-
-internal
-
-# The following can only be accessed by modules within the same package (directory):
-def thisIsInternal() = : ()
-
-private
-
-# The following can only be accessed within this module (file):
-def thisIsPrivate() = : ()
+type identity-func a' where a' :: any = alias a' -> a'
 ```
 
-Although you may repeat these keywords (e.g. have a default public section, then a `private`, then an `internal`, then another `private`), it's recommended to stick to the above example (all public defs first, then all `internal` if any, then all `private` if any).
+```pluma
+# person.pa
+
+# this is private (syntax tbd)
+type person = person (name: string, age: int, counter: int)
+
+# this is public/exported
+let new-person _ :: (string, int) -> person = {
+  init => person (
+    name: init.name,
+    age: init.age,
+    counter: 0
+  )
+}
+
+let _ | grow :: mut person -> nil = {
+  self => self.age = self.age + 1
+}
+
+# another file...
+
+let me = new-person ("reid", 27)
+
+# INVALID, since `person` type name isn't exported:
+let me2 = person (name: "reid", age: 27, counter: 10)
+```
+
+```pluma
+# colors.pa
+
+type color = enum {
+  red :: color
+  green :: color
+  blue :: color
+  r _ g _ b _ :: (int, int, int) -> color
+  hex _ :: string -> color
+}
+
+let new-color :: -> color = {
+  red
+}
+
+let random-color :: -> color = {
+  random-int-between 0 and 4 | match {
+    case 0 => red
+    case 1 => green
+    case 2 => blue
+    case _ => hex "#000"
+  }
+}
+
+# another file...
+
+let rc = random-color
+
+rc | match {
+  case red => print "it's red"
+  case _ => print "it's not red"
+}
+
+if rc == red then {
+  print "it's red"
+} else {
+  print "it's not red"
+}
+```
