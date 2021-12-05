@@ -65,7 +65,6 @@ pub struct Parser<'a> {
   errors: Vec<ParseError>,
   current_token: Option<Token>,
   prev_token: Option<Token>,
-  current_visibility: ExportVisibility,
   line_break_starts: Vec<usize>,
 }
 
@@ -77,7 +76,6 @@ impl<'a> Parser<'a> {
       errors: Vec::new(),
       current_token: None,
       prev_token: None,
-      current_visibility: ExportVisibility::Public,
       line_break_starts: Vec::new(),
     };
   }
@@ -195,7 +193,6 @@ impl<'a> Parser<'a> {
       kind: TypeDefKind::Alias { of: type_expr },
       name,
       generic_type_constraints,
-      visibility: self.current_visibility,
     })
   }
 
@@ -525,6 +522,59 @@ impl<'a> Parser<'a> {
     })
   }
 
+  fn parse_def_statement(&mut self) -> Option<DefNode> {
+    let start = expect_token_and_do!(self, Token::KeywordDef, {
+      let (start, _) = self.current_token_position();
+      self.advance();
+      start
+    });
+
+    let mut has_receiver = false;
+
+    if current_token_is!(self, Token::Underscore) {
+      has_receiver = true;
+
+      self.advance();
+
+      expect_token_and_do!(self, Token::Pipe, {
+        self.advance();
+      });
+    }
+
+    let mut name_parts = Vec::new();
+
+    while current_token_is!(self, Token::Identifier) {
+      let part = self.parse_identifier().unwrap();
+
+      name_parts.push(part);
+
+      expect_token_and_do!(self, Token::Underscore, {
+        self.advance();
+      });
+    }
+
+    expect_token_and_do!(self, Token::Equal, {
+      self.advance();
+    });
+
+    let (end, block) = match self.parse_block() {
+      Some(node) => (node.pos.1, node),
+      _ => {
+        return self.error(ParseError {
+          pos: self.current_token_position(),
+          kind: ParseErrorKind::MissingRightHandSideOfAssignment,
+        })
+      }
+    };
+
+    Some(DefNode {
+      pos: (start, end),
+      has_receiver,
+      name_parts,
+      block,
+    })
+  }
+
   fn parse_generic_type_constraints(&mut self) -> Option<GenericTypeConstraints> {
     let mut generic_type_constraints = Vec::new();
 
@@ -625,7 +675,6 @@ impl<'a> Parser<'a> {
 
     Some(TypeDefNode {
       pos: (start, variants.last().unwrap().pos.1),
-      visibility: self.current_visibility,
       kind: TypeDefKind::Enum { variants },
       name,
       generic_type_constraints,
@@ -1838,6 +1887,10 @@ impl<'a> Parser<'a> {
         pos: let_node.pos,
         kind: StatementKind::Let(let_node),
       }),
+      Some(Token::KeywordDef(..)) => self.parse_def_statement().map(|def_node| StatementNode {
+        pos: def_node.pos,
+        kind: StatementKind::Def(def_node),
+      }),
       Some(Token::KeywordAlias(..)) => self.parse_alias().map(|type_def_node| StatementNode {
         pos: type_def_node.pos,
         kind: StatementKind::Type(type_def_node),
@@ -1914,7 +1967,6 @@ impl<'a> Parser<'a> {
 
     Some(TypeDefNode {
       pos: (start, inner.pos.1),
-      visibility: self.current_visibility,
       kind: TypeDefKind::Struct { inner },
       name,
       generic_type_constraints,
@@ -2049,7 +2101,6 @@ impl<'a> Parser<'a> {
 
     Some(TypeDefNode {
       pos: (start, end),
-      visibility: self.current_visibility,
       kind: TypeDefKind::Trait { fields, methods },
       name,
       generic_type_constraints,

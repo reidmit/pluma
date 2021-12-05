@@ -39,26 +39,26 @@ impl Traverse for DefNode {
   fn traverse<V: Visitor>(&self, visitor: &mut V) {
     visitor.enter_def(self);
 
-    match &self.kind {
-      DefKind::Function { signature } => {
-        for (ident, type_expr) in signature {
-          ident.traverse(visitor);
-          type_expr.traverse(visitor);
-        }
-      }
+    // match &self.kind {
+    //   DefKind::Function { signature } => {
+    //     for (ident, type_expr) in signature {
+    //       ident.traverse(visitor);
+    //       type_expr.traverse(visitor);
+    //     }
+    //   }
 
-      DefKind::Method {
-        receiver,
-        signature,
-      } => {
-        for (ident, type_expr) in signature {
-          ident.traverse(visitor);
-          type_expr.traverse(visitor);
-        }
+    //   DefKind::Method {
+    //     receiver,
+    //     signature,
+    //   } => {
+    //     for (ident, type_expr) in signature {
+    //       ident.traverse(visitor);
+    //       type_expr.traverse(visitor);
+    //     }
 
-        receiver.traverse(visitor);
-      }
-    }
+    //     receiver.traverse(visitor);
+    //   }
+    // }
 
     self.block.traverse(visitor);
 
@@ -151,22 +151,6 @@ impl Traverse for IdentifierNode {
   }
 }
 
-impl Traverse for IntrinsicDefNode {
-  fn traverse<V: Visitor>(&self, visitor: &mut V) {
-    visitor.enter_intrinsic_def(self);
-
-    visitor.leave_intrinsic_def(self);
-  }
-}
-
-impl Traverse for IntrinsicTypeDefNode {
-  fn traverse<V: Visitor>(&self, visitor: &mut V) {
-    visitor.enter_intrinsic_type_def(self);
-
-    visitor.leave_intrinsic_type_def(self);
-  }
-}
-
 impl Traverse for LetNode {
   fn traverse<V: Visitor>(&self, visitor: &mut V) {
     visitor.enter_let(self);
@@ -243,6 +227,7 @@ impl Traverse for StatementNode {
 
     match &self.kind {
       StatementKind::Let(node) => node.traverse(visitor),
+      StatementKind::Def(node) => node.traverse(visitor),
       StatementKind::Type(node) => node.traverse(visitor),
       StatementKind::Expr(node) => node.traverse(visitor),
     };

@@ -39,26 +39,26 @@ impl TraverseMut for DefNode {
   fn traverse_mut<V: VisitorMut>(&mut self, visitor: &mut V) {
     visitor.enter_def(self);
 
-    match &mut self.kind {
-      DefKind::Function { signature } => {
-        for (ident, type_expr) in signature {
-          ident.traverse_mut(visitor);
-          type_expr.traverse_mut(visitor);
-        }
-      }
+    // match &mut self.kind {
+    //   DefKind::Function { signature } => {
+    //     for (ident, type_expr) in signature {
+    //       ident.traverse_mut(visitor);
+    //       type_expr.traverse_mut(visitor);
+    //     }
+    //   }
 
-      DefKind::Method {
-        receiver,
-        signature,
-      } => {
-        for (ident, type_expr) in signature {
-          ident.traverse_mut(visitor);
-          type_expr.traverse_mut(visitor);
-        }
+    //   DefKind::Method {
+    //     receiver,
+    //     signature,
+    //   } => {
+    //     for (ident, type_expr) in signature {
+    //       ident.traverse_mut(visitor);
+    //       type_expr.traverse_mut(visitor);
+    //     }
 
-        receiver.traverse_mut(visitor);
-      }
-    }
+    //     receiver.traverse_mut(visitor);
+    //   }
+    // }
 
     self.block.traverse_mut(visitor);
 
@@ -151,22 +151,6 @@ impl TraverseMut for IdentifierNode {
   }
 }
 
-impl TraverseMut for IntrinsicDefNode {
-  fn traverse_mut<V: VisitorMut>(&mut self, visitor: &mut V) {
-    visitor.enter_intrinsic_def(self);
-
-    visitor.leave_intrinsic_def(self);
-  }
-}
-
-impl TraverseMut for IntrinsicTypeDefNode {
-  fn traverse_mut<V: VisitorMut>(&mut self, visitor: &mut V) {
-    visitor.enter_intrinsic_type_def(self);
-
-    visitor.leave_intrinsic_type_def(self);
-  }
-}
-
 impl TraverseMut for LetNode {
   fn traverse_mut<V: VisitorMut>(&mut self, visitor: &mut V) {
     visitor.enter_let(self);
@@ -243,6 +227,7 @@ impl TraverseMut for StatementNode {
 
     match &mut self.kind {
       StatementKind::Let(node) => node.traverse_mut(visitor),
+      StatementKind::Def(node) => node.traverse_mut(visitor),
       StatementKind::Type(node) => node.traverse_mut(visitor),
       StatementKind::Expr(node) => node.traverse_mut(visitor),
     };

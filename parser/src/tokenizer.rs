@@ -329,17 +329,17 @@ impl<'a> Iterator for Tokenizer<'a> {
           let value = &self.source[start_index..self.index];
 
           let constructor = match value {
-            // These keywords cannot be used as identifiers anywhere:
+            b"alias" => KeywordAlias,
+            b"case" => KeywordCase,
+            b"def" => KeywordDef,
+            b"enum" => KeywordEnum,
             b"let" => KeywordLet,
             b"match" => KeywordMatch,
             b"mut" => KeywordMut,
-
-            // These are only considered keywords if they appear at the top level:
-            b"enum" if self.brace_depth == 0 => KeywordEnum,
-            b"alias" if self.brace_depth == 0 => KeywordAlias,
-            b"struct" if self.brace_depth == 0 => KeywordStruct,
-            b"trait" if self.brace_depth == 0 => KeywordTrait,
-            b"where" if self.brace_depth == 0 => KeywordWhere,
+            b"struct" => KeywordStruct,
+            b"trait" => KeywordTrait,
+            b"type" => KeywordType,
+            b"where" => KeywordWhere,
 
             // Anything else is just an identifier:
             _ => Identifier,

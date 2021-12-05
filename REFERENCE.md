@@ -33,7 +33,7 @@ a = a + 1
 
 ```pluma
 # single-arg function (int)
-let add1 _ :: int -> int = {
+def add1 _ :: int -> int = {
   x => x + 1
 }
 # called like:
@@ -42,7 +42,7 @@ add1 47
 
 ```pluma
 # single-arg function (tuple)
-let add _ :: (int, int) -> int = {
+def add _ :: (int, int) -> int = {
   (x, y) => x + y
 }
 # called like:
@@ -51,7 +51,7 @@ add (46, 1)
 
 ```pluma
 # multi-arg function (all args merged into single tuple)
-let add _ to _ :: (int, int) -> int = {
+def add _ to _ :: (int, int) -> int = {
   (x, y) => x + y
 }
 # called like:
@@ -60,7 +60,7 @@ add 46 to 1
 
 ```pluma
 # "zero-arg" function (really single empty arg)
-let random-color :: nil -> color = {
+def random-color :: nil -> color = {
   # ...
 }
 # called like:
@@ -69,7 +69,7 @@ random-color ()
 
 ```pluma
 # function with receiver
-let _ | say-name :: person -> nil = {
+def _ | say-name :: person -> nil = {
   self => print ("my name is " ++ self.name)
 }
 # called like:
@@ -88,8 +88,8 @@ let list2 = [1, 2, 3] | map (add1 _)
 let list2 = [1, 2, 3] | map { el => add1 el }
 [(1, 2), (3, 4)] | map (add _ to _)
 people | map (_ | say-name)
-let add_tuple = add _ to _
-add_tuple (1, 2)
+let add-tuple = add _ to _
+add-tuple (1, 2)
 ```
 
 ```pluma
@@ -191,7 +191,7 @@ type identity-func a' where a' :: any = alias a' -> a'
 type person = person (name: string, age: int, counter: int)
 
 # this is public/exported
-let new-person _ :: (string, int) -> person = {
+def new-person _ :: (string, int) -> person = {
   init => person (
     name: init.name,
     age: init.age,
@@ -199,7 +199,7 @@ let new-person _ :: (string, int) -> person = {
   )
 }
 
-let _ | grow :: mut person -> nil = {
+def _ | grow :: mut person -> nil = {
   self => self.age = self.age + 1
 }
 
@@ -222,11 +222,11 @@ type color = enum {
   hex _ :: string -> color
 }
 
-let new-color :: -> color = {
+def new-color _ :: () -> color = {
   red
 }
 
-let random-color :: -> color = {
+def random-color _ :: () -> color = {
   random-int-between 0 and 4 | match {
     case 0 => red
     case 1 => green
@@ -237,7 +237,7 @@ let random-color :: -> color = {
 
 # another file...
 
-let rc = random-color
+let rc = random-color ()
 
 rc | match {
   case red => print "it's red"
@@ -249,4 +249,21 @@ if rc == red then {
 } else {
   print "it's not red"
 }
+```
+
+### `let` vs `def`
+
+At first glance, `let` and `def` keywords look similar, but there are important differences.
+
+- `let` allows destructuring with patterns
+- `def` allows parameter placeholders (`_`s) and multi-part names
+
+In practice, you should usually use `def` for definitions that use the block syntax (`def thing _ = { ... }`).
+
+```pluma
+# preferred:
+def add _ = { (x, y) => x + y }
+
+# possible, but less flexible:
+let add = { (x, y) => x + y}
 ```

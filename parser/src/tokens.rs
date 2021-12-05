@@ -79,6 +79,12 @@ pub enum Token {
   /// `alias` keyword
   KeywordAlias(usize, usize),
 
+  /// `case` keyword
+  KeywordCase(usize, usize),
+
+  /// `def` keyword
+  KeywordDef(usize, usize),
+
   /// `enum` keyword
   KeywordEnum(usize, usize),
 
@@ -96,6 +102,9 @@ pub enum Token {
 
   /// `trait` keyword
   KeywordTrait(usize, usize),
+
+  /// `type` keyword
+  KeywordType(usize, usize),
 
   /// `where` keyword
   KeywordWhere(usize, usize),
@@ -191,12 +200,15 @@ impl Token {
       | ForwardSlash(start, end)
       | Identifier(start, end)
       | KeywordAlias(start, end)
+      | KeywordCase(start, end)
+      | KeywordDef(start, end)
       | KeywordEnum(start, end)
       | KeywordLet(start, end)
       | KeywordMatch(start, end)
       | KeywordMut(start, end)
       | KeywordStruct(start, end)
       | KeywordTrait(start, end)
+      | KeywordType(start, end)
       | KeywordWhere(start, end)
       | LeftAngle(start, end)
       | LeftAngleEqual(start, end)
@@ -262,12 +274,15 @@ impl fmt::Display for Token {
       &ForwardSlash(..) => "a '/'",
       &Identifier(..) => "an identifier",
       &KeywordAlias(..) => "keyword 'alias'",
+      &KeywordDef(..) => "keyword 'def'",
+      &KeywordCase(..) => "keyword 'case'",
       &KeywordEnum(..) => "keyword 'enum'",
       &KeywordLet(..) => "keyword 'let'",
       &KeywordMatch(..) => "keyword 'match'",
       &KeywordMut(..) => "keyword 'mut'",
       &KeywordStruct(..) => "keyword 'struct'",
       &KeywordTrait(..) => "keyword 'trait'",
+      &KeywordType(..) => "keyword 'type'",
       &KeywordWhere(..) => "keyword 'where'",
       &LeftAngle(..) => "a '<'",
       &LeftAngleEqual(..) => "a '<='",

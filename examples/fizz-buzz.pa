@@ -1,0 +1,13 @@
+let n = 100
+
+from 1 to n do { i =>
+  if i % 15 == 0 then {
+    print "FizzBuzz"
+  } elif i % 5 == 0 then {
+    print "Fizz"
+  } elif i % 5 == 0 then {
+    print "Buzz"
+  } else {
+    print i
+  }
+}

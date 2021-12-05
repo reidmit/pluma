@@ -6,7 +6,6 @@ authors = ["Reid Mitchell <reidmitchell1@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-analyzer = { path = "../analyzer" }
 ast = { path = "../ast" }
 constants = { path = "../constants" }
 diagnostics = { path = "../diagnostics" }

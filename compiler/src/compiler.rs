@@ -1,7 +1,6 @@
 use crate::compiler_options::{CompilerMode, CompilerOptions};
 use crate::dependency_graph::{DependencyGraph, TopologicalSort};
 use crate::usage_error::{UsageError, UsageErrorKind};
-use analyzer::*;
 use constants::*;
 use diagnostics::*;
 use module::*;
@@ -56,7 +55,7 @@ impl Compiler {
   pub fn check(&mut self) -> Result<(), Vec<Diagnostic>> {
     self.parse()?;
 
-    let sorted_names = match self.dependency_graph.sort() {
+    let _sorted_names = match self.dependency_graph.sort() {
       TopologicalSort::Cycle(_names) => {
         return Err(self.diagnostics.to_vec());
       }
@@ -64,25 +63,25 @@ impl Compiler {
       TopologicalSort::Sorted(names) => names,
     };
 
-    for module_name in sorted_names {
-      let mut module_scope = Scope::new();
+    // for module_name in sorted_names {
+    //   let mut module_scope = Scope::new();
 
-      module_scope.enter();
+    //   module_scope.enter();
 
-      let module_to_analyze = self.modules.get_mut(module_name).unwrap();
+    //   let module_to_analyze = self.modules.get_mut(module_name).unwrap();
 
-      let mut analyzer = Analyzer::new(&mut module_scope);
-      module_to_analyze.traverse_mut(&mut analyzer);
+    //   let mut analyzer = Analyzer::new(&mut module_scope);
+    //   module_to_analyze.traverse_mut(&mut analyzer);
 
-      macros::dump!("AST", module_to_analyze);
+    //   macros::dump!("AST", module_to_analyze);
 
-      for diagnostic in analyzer.diagnostics {
-        self.diagnostics.push(diagnostic.with_module(
-          module_name.clone(),
-          to_module_path(self.root_dir.clone(), self.entry_module_name.clone()),
-        ))
-      }
-    }
+    //   for diagnostic in analyzer.diagnostics {
+    //     self.diagnostics.push(diagnostic.with_module(
+    //       module_name.clone(),
+    //       to_module_path(self.root_dir.clone(), self.entry_module_name.clone()),
+    //     ))
+    //   }
+    // }
 
     if !self.diagnostics.is_empty() {
       return Err(self.diagnostics.to_vec());
@@ -117,6 +116,9 @@ impl Compiler {
     let mut new_module = Module::new(module_name.clone(), module_path.to_owned());
 
     let result = new_module.parse();
+
+    println!("AST: {:#?}", new_module.ast);
+
     self.modules.insert(module_name.clone(), new_module);
 
     if !result.is_ok() {

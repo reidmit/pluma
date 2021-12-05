@@ -1,8 +1,8 @@
-let add-ints _ :: (int, int) -> int = {
+def add-ints _ = {
   (x, y) => x + y
 }
 
-let subtract _ from _ :: (int, int) -> int = {
+def subtract _ from _ = {
   (x, y) => y - x
 }
 
