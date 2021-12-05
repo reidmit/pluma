@@ -1,27 +1,16 @@
-intrinsic_type Any
+enum bool { true, false }
 
-intrinsic_def print String -> String
-
-enum Bool
-  | True
-  | False
-
-def if Bool then { () -> A } else { () -> A } -> A where A :: Any {
-  | cond, then, else |
-    match cond
-    | True => then ()
-    | False => else ()
+def if _ then _ else _ :: (bool, () -> a, () -> a) -> a where a :: any {
+  (cond, then-block, else-block) => cond | match {
+    true => then-block ()
+    false => else-block ()
+  }
 }
 
-let b = True
+let b = true
 
 if b then {
   print "yes!"
 } else {
   print "nope :("
 }
-
-let number = 47
-let floo = 12.435
-
-let x = wow.com()

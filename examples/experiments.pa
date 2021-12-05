@@ -1,37 +1,34 @@
 use @fs core/fs
 
-let contents = @fs readFile "./lol.txt"
+let contents = @fs read-file "./lol.txt"
 
 let lines = contents
-  | splitLines
-  | filter (\line => line | test /^ \s+ $/ | not)
+  | split-lines
+  | filter { line => line | test /^ \s+ $/ | not }
 
 lines | each { line =>
-  print "line is: $(line)"
+  print "line is: " ++ line
 }
 
-someBool | then {
+some-bool | then {
   print "yes"
 } else {
   print "no"
 }
 
-if someBool then {
+if some-bool then {
   print "yes"
 } else {
   print "no"
 }
 
-lines | each:
-  print "line is \(it)"
-  
 
 let vowels = contents
   | split "\n"
-  | map: \line => line
+  | map { line =>
+    line
       | split ""
-      | filter: \_ => _ | isVowel
+      | keep { c => _ | isVowel }
       | join ""
+  }
   | join "\n"
-  
-def ()
