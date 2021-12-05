@@ -1,6 +1,6 @@
 enum bool { true, false }
 
-def if _ then _ else _ :: (bool, () -> a, () -> a) -> a where a :: any {
+let if_then_else_ :: (bool, () -> a, () -> a) -> a where a :: any = {
   (cond, then-block, else-block) => cond | match {
     true => then-block ()
     false => else-block ()
