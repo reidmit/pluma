@@ -1,0 +1,11 @@
+let add-ints _ :: (int, int) -> int = {
+  (x, y) => x + y
+}
+
+let subtract _ from _ :: (int, int) -> int = {
+  (x, y) => y - x
+}
+
+let result1 = add-ints (1, 2)
+
+let result2 = subtract 2 from 10

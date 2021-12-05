@@ -12,4 +12,4 @@ build-release:
 
 .PHONY: run
 run:
-	@ cargo run --quiet --bin cli
+	@ cargo run --quiet --bin cli check examples/simple-math.pa
