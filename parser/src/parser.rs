@@ -97,7 +97,7 @@ impl<'a> Parser<'a> {
     loop {
       self.skip_line_breaks();
 
-      match self.parse_top_level_statement() {
+      match self.parse_statement() {
         Some(statement) => body.push(statement),
         _ => break,
       }
@@ -1838,6 +1838,22 @@ impl<'a> Parser<'a> {
         pos: let_node.pos,
         kind: StatementKind::Let(let_node),
       }),
+      Some(Token::KeywordAlias(..)) => self.parse_alias().map(|type_def_node| StatementNode {
+        pos: type_def_node.pos,
+        kind: StatementKind::Type(type_def_node),
+      }),
+      Some(Token::KeywordEnum(..)) => self.parse_enum().map(|type_def_node| StatementNode {
+        pos: type_def_node.pos,
+        kind: StatementKind::Type(type_def_node),
+      }),
+      Some(Token::KeywordStruct(..)) => self.parse_struct().map(|type_def_node| StatementNode {
+        pos: type_def_node.pos,
+        kind: StatementKind::Type(type_def_node),
+      }),
+      Some(Token::KeywordTrait(..)) => self.parse_trait().map(|type_def_node| StatementNode {
+        pos: type_def_node.pos,
+        kind: StatementKind::Type(type_def_node),
+      }),
       _ => self.parse_expression().map(|expr_node| StatementNode {
         pos: expr_node.pos,
         kind: StatementKind::Expr(expr_node),
@@ -1930,57 +1946,6 @@ impl<'a> Parser<'a> {
         typ: ValueType::Unknown,
       }),
       _ => None,
-    }
-  }
-
-  fn parse_top_level_statement(&mut self) -> Option<TopLevelStatementNode> {
-    match self.current_token {
-      Some(Token::KeywordLet(..)) => {
-        self
-          .parse_let_statement()
-          .map(|let_node| TopLevelStatementNode {
-            pos: let_node.pos,
-            kind: TopLevelStatementKind::Let(let_node),
-          })
-      }
-      Some(Token::KeywordAlias(..)) => {
-        self
-          .parse_alias()
-          .map(|type_def_node| TopLevelStatementNode {
-            pos: type_def_node.pos,
-            kind: TopLevelStatementKind::TypeDef(type_def_node),
-          })
-      }
-      Some(Token::KeywordEnum(..)) => {
-        self
-          .parse_enum()
-          .map(|type_def_node| TopLevelStatementNode {
-            pos: type_def_node.pos,
-            kind: TopLevelStatementKind::TypeDef(type_def_node),
-          })
-      }
-      Some(Token::KeywordStruct(..)) => {
-        self
-          .parse_struct()
-          .map(|type_def_node| TopLevelStatementNode {
-            pos: type_def_node.pos,
-            kind: TopLevelStatementKind::TypeDef(type_def_node),
-          })
-      }
-      Some(Token::KeywordTrait(..)) => {
-        self
-          .parse_trait()
-          .map(|type_def_node| TopLevelStatementNode {
-            pos: type_def_node.pos,
-            kind: TopLevelStatementKind::TypeDef(type_def_node),
-          })
-      }
-      _ => self
-        .parse_expression()
-        .map(|expr_node| TopLevelStatementNode {
-          pos: expr_node.pos,
-          kind: TopLevelStatementKind::Expr(expr_node),
-        }),
     }
   }
 

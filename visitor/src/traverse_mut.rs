@@ -243,28 +243,11 @@ impl TraverseMut for StatementNode {
 
     match &mut self.kind {
       StatementKind::Let(node) => node.traverse_mut(visitor),
+      StatementKind::Type(node) => node.traverse_mut(visitor),
       StatementKind::Expr(node) => node.traverse_mut(visitor),
     };
 
     visitor.leave_statement(self);
-  }
-}
-
-impl TraverseMut for TopLevelStatementNode {
-  fn traverse_mut<V: VisitorMut>(&mut self, visitor: &mut V) {
-    visitor.enter_top_level_statement(self);
-
-    match &mut self.kind {
-      TopLevelStatementKind::Let(node) => node.traverse_mut(visitor),
-      TopLevelStatementKind::TypeDef(node) => node.traverse_mut(visitor),
-      TopLevelStatementKind::Def(node) => node.traverse_mut(visitor),
-      TopLevelStatementKind::Expr(node) => node.traverse_mut(visitor),
-      TopLevelStatementKind::IntrinsicDef(node) => node.traverse_mut(visitor),
-      TopLevelStatementKind::IntrinsicTypeDef(node) => node.traverse_mut(visitor),
-      TopLevelStatementKind::VisibilityMarker(..) => {}
-    };
-
-    visitor.leave_top_level_statement(self);
   }
 }
 

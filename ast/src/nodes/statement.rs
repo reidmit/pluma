@@ -10,5 +10,6 @@ pub struct StatementNode {
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub enum StatementKind {
   Let(LetNode),
+  Type(TypeDefNode),
   Expr(ExprNode),
 }

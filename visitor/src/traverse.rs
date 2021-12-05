@@ -243,28 +243,11 @@ impl Traverse for StatementNode {
 
     match &self.kind {
       StatementKind::Let(node) => node.traverse(visitor),
+      StatementKind::Type(node) => node.traverse(visitor),
       StatementKind::Expr(node) => node.traverse(visitor),
     };
 
     visitor.leave_statement(self);
-  }
-}
-
-impl Traverse for TopLevelStatementNode {
-  fn traverse<V: Visitor>(&self, visitor: &mut V) {
-    visitor.enter_top_level_statement(self);
-
-    match &self.kind {
-      TopLevelStatementKind::Let(node) => node.traverse(visitor),
-      TopLevelStatementKind::TypeDef(node) => node.traverse(visitor),
-      TopLevelStatementKind::Def(node) => node.traverse(visitor),
-      TopLevelStatementKind::Expr(node) => node.traverse(visitor),
-      TopLevelStatementKind::IntrinsicDef(node) => node.traverse(visitor),
-      TopLevelStatementKind::IntrinsicTypeDef(node) => node.traverse(visitor),
-      TopLevelStatementKind::VisibilityMarker(..) => {}
-    };
-
-    visitor.leave_top_level_statement(self);
   }
 }
 

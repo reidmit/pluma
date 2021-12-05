@@ -13,7 +13,6 @@ pub struct Module {
   pub ast: Option<ModuleNode>,
   pub comments: HashMap<usize, String>,
   pub line_break_starts: Vec<usize>,
-  imports: Option<Vec<UseNode>>,
 }
 
 impl Module {
@@ -22,7 +21,6 @@ impl Module {
       module_name,
       module_path,
       ast: None,
-      imports: None,
       comments: HashMap::new(),
       line_break_starts: Vec::new(),
     }

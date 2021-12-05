@@ -936,7 +936,6 @@ impl<'a> Analyzer<'a> {
       //     })
       //   }
       // }
-
       ExprKind::Tuple { entries } => {
         let mut entry_types = Vec::new();
 
@@ -1013,6 +1012,8 @@ impl<'a> Analyzer<'a> {
       StatementKind::Expr(expr_node) => self.analyze_expr(expr_node),
 
       StatementKind::Let(let_node) => self.analyze_let(let_node),
+
+      _ => todo!("type statements"),
     }
   }
 
@@ -1083,45 +1084,11 @@ impl<'a> VisitorMut for Analyzer<'a> {
     // since they may be used before they are defined.
     for statement in &mut node.body {
       match &mut statement.kind {
-        TopLevelStatementKind::Def(def_node) => self.collect_def(
-          def_node.pos,
-          &mut def_node.generic_type_constraints,
-          &mut def_node.kind,
-          &mut def_node.return_type,
-        ),
-
-        TopLevelStatementKind::IntrinsicDef(def_node) => self.collect_def(
-          def_node.pos,
-          &mut def_node.generic_type_constraints,
-          &mut def_node.kind,
-          &mut def_node.return_type,
-        ),
-
-        TopLevelStatementKind::TypeDef(type_def_node) => self.collect_type_def(type_def_node),
-
-        TopLevelStatementKind::IntrinsicTypeDef(type_def_node) => {
-          self.collect_intrinsic_type_def(type_def_node)
-        }
+        StatementKind::Type(type_def_node) => self.collect_type_def(type_def_node),
 
         _ => {
           // Other kinds handled below
         }
-      }
-    }
-  }
-
-  fn enter_top_level_statement(&mut self, node: &mut TopLevelStatementNode) {
-    match &mut node.kind {
-      TopLevelStatementKind::Def(def_node) => self.analyze_def(def_node),
-
-      TopLevelStatementKind::IntrinsicDef(def_node) => self.analyze_intrinsic_def(def_node),
-
-      TopLevelStatementKind::Let(let_node) => self.analyze_let(let_node),
-
-      TopLevelStatementKind::Expr(expr) => self.analyze_expr(expr),
-
-      _ => {
-        // Other kinds handled above
       }
     }
   }
