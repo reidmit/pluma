@@ -1,0 +1,18 @@
+version: 3
+
+tasks:
+  check:
+    cmds:
+      - cargo check
+
+  build:
+    cmds:
+      - cargo build --bin cli
+
+  build-release:
+    cmds:
+      - cargo build --release --bin cli
+
+  example:
+    cmds:
+      - cargo run --quiet --bin cli check {{.CLI_ARGS}}
