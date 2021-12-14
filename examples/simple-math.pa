@@ -1,8 +1,8 @@
-def add-ints _ = {
+def add-ints _ {
   (x, y) => x + y
 }
 
-def subtract _ from _ = {
+def subtract _ from _ {
   (x, y) => y - x
 }
 

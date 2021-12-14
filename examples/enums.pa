@@ -1,0 +1,16 @@
+type color = enum { red, green, yellow }
+
+type action = enum { stop, go, slow-down }
+
+def get-action-for-color _ :: color -> action {
+  light => match light {
+    case red => stop
+    case green => go
+    case yellow => slow-down
+  }
+}
+
+let light = green
+let result = get-action-for-color light
+
+# print "the light is $(light), so you should $(result)!"
