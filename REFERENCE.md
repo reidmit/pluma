@@ -33,7 +33,7 @@ a = a + 1
 
 ```pluma
 # single-arg function (int)
-def add1 _ :: int -> int = {
+def add1 _ :: int -> int {
   x => x + 1
 }
 # called like:
@@ -42,7 +42,7 @@ add1 47
 
 ```pluma
 # single-arg function (tuple)
-def add _ :: (int, int) -> int = {
+def add _ :: (int, int) -> int {
   (x, y) => x + y
 }
 # called like:
@@ -51,7 +51,7 @@ add (46, 1)
 
 ```pluma
 # multi-arg function (all args merged into single tuple)
-def add _ to _ :: (int, int) -> int = {
+def add _ to _ :: (int, int) -> int {
   (x, y) => x + y
 }
 # called like:
@@ -60,7 +60,7 @@ add 46 to 1
 
 ```pluma
 # "zero-arg" function (really single empty arg)
-def random-color :: nil -> color = {
+def random-color :: nil -> color {
   # ...
 }
 # called like:
@@ -69,7 +69,7 @@ random-color ()
 
 ```pluma
 # function with receiver
-def _ | say-name :: person -> nil = {
+def _ | say-name :: person -> nil {
   self => print ("my name is " ++ self.name)
 }
 # called like:
@@ -104,31 +104,32 @@ let person(name, age) = p
 ```pluma
 # match expressions
 get-color | match {
-  case color.red => print "it's red"
-  case color.green => print "it's green"
-  case color.blue => print "it's blue"
-  case color.rgb(r, g, b) => print ("it's %s, %s, %s" | format [r, g, b])
+  case red => print "it's red"
+  case green => print "it's green"
+  case blue => print "it's blue"
+  case rgb(r, g, b) => print ("it's %s, %s, %s" | format [r, g, b])
   case _ => print "it's something else?"
 }
 ```
 
 ```pluma
 # built-in types
-nil
+()
 bool
 float
 int
 string
 char
-_ -> _
 any
+_ -> _
+(_, _)
 ```
 
 ```pluma
 # struct types
-type person = struct (
-  name: string
-  age: int
+struct person (
+  name :: string
+  age :: int
 )
 
 let p = person ("reid", 27)
@@ -137,13 +138,10 @@ let p = person (name: "reid", age: 27)
 
 ```pluma
 # enum types
-type bool = enum {
-  true
-  false
-}
+enum bool { true, false }
 let t = true
 
-type color = enum {
+enum color {
   red :: color
   green :: color
   blue :: color
@@ -153,8 +151,8 @@ type color = enum {
 let r = red
 let c = custom (100, 200, 255)
 
-type maybe a' = enum {
-  some _ :: a' -> maybe a'
+enum maybe<a> where a :: any {
+  some _ :: a -> self
   none
 }
 
@@ -164,34 +162,35 @@ let o = some "reid"
 
 ```pluma
 # traits
-type any = trait {}
+trait any {}
 
-type person-like = trait {
+trait person-like {
   .name :: string
   .age :: int
 }
 
-type growable = trait {
+trait growable {
   | grow _ :: (mut self, int) -> nil
 }
 ```
 
 ```pluma
 # alias types
-type bool-list = alias list bool
+alias bool-list = list<bool>
+
 let bs :: bool-list = [true, false, true]
 
-type identity-func a' where a' :: any = alias a' -> a'
+alias identity-func<a> where a :: any = a -> a
 ```
 
 ```pluma
 # person.pa
 
 # this is private (syntax tbd)
-type person = person (name: string, age: int, counter: int)
+struct person = (name :: string, age :: int, counter :: int)
 
 # this is public/exported
-def new-person _ :: (string, int) -> person = {
+def new-person _ :: (string, int) -> person {
   init => person (
     name: init.name,
     age: init.age,
@@ -199,7 +198,7 @@ def new-person _ :: (string, int) -> person = {
   )
 }
 
-def _ | grow :: mut person -> nil = {
+def _ | grow :: mut person -> nil {
   self => self.age = self.age + 1
 }
 
@@ -214,7 +213,7 @@ let me2 = person (name: "reid", age: 27, counter: 10)
 ```pluma
 # colors.pa
 
-type color = enum {
+enum color {
   red :: color
   green :: color
   blue :: color
@@ -222,11 +221,11 @@ type color = enum {
   hex _ :: string -> color
 }
 
-def new-color _ :: () -> color = {
+def new-color _ :: () -> color {
   red
 }
 
-def random-color _ :: () -> color = {
+def random-color _ :: () -> color {
   random-int-between 0 and 4 | match {
     case 0 => red
     case 1 => green
@@ -258,12 +257,36 @@ At first glance, `let` and `def` keywords look similar, but there are important 
 - `let` allows destructuring with patterns
 - `def` allows parameter placeholders (`_`s) and multi-part names
 
-In practice, you should usually use `def` for definitions that use the block syntax (`def thing _ = { ... }`).
+In practice, you should usually use `def` for definitions that use the block syntax (`def thing _ { ... }`).
 
 ```pluma
 # preferred:
-def add _ = { (x, y) => x + y }
+def add _ { (x, y) => x + y }
 
 # possible, but less flexible:
 let add = { (x, y) => x + y}
+```
+
+# Type expressions
+
+```pluma
+# can appear as annotations on lets
+let x :: int = something 123
+let t :: (int, bool) = (1, true)
+let empty :: () = ()
+
+# can appear as annotations on defs
+def add _ :: (int, int) -> int {
+  # ...
+}
+
+# can appear as the value in type aliases
+alias string-list = list<string>
+
+# can NOT appear as each variant in an enum
+enum color {
+  red # NOT type expression, just type identifier
+  green # same
+  blue # same
+}
 ```
