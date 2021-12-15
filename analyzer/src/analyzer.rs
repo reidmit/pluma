@@ -126,7 +126,7 @@ impl<'a> Analyzer<'a> {
     &mut self,
     pos: Position,
     generic_type_constraints: &mut GenericTypeConstraints,
-    kind: &mut DefKind,
+    // kind: &mut DefKind,
     return_type: &mut Option<TypeExprNode>,
   ) {
     // First, go through the type constraints (where clause); this will help us know
@@ -150,88 +150,88 @@ impl<'a> Analyzer<'a> {
       constraints_map.insert(constraint_name.name.clone(), constraint);
     }
 
-    match kind {
-      DefKind::Function { signature } => {
-        let mut name_parts = Vec::new();
-        let mut param_types = Vec::new();
+    // match kind {
+    //   DefKind::Function { signature } => {
+    //     let mut name_parts = Vec::new();
+    //     let mut param_types = Vec::new();
 
-        for (part_name, part_type) in signature {
-          name_parts.push(part_name.name.clone());
+    //     for (part_name, part_type) in signature {
+    //       name_parts.push(part_name.name.clone());
 
-          let param_type = type_utils::type_expr_to_value_type(part_type);
+    //       let param_type = type_utils::type_expr_to_value_type(part_type);
 
-          if let ValueType::Named(name) = &param_type {
-            if let Some(constraint) = constraints_map.get(name) {
-              param_types.push(ValueType::Constrained(constraint.clone()));
+    //       if let ValueType::Named(name) = &param_type {
+    //         if let Some(constraint) = constraints_map.get(name) {
+    //           param_types.push(ValueType::Constrained(constraint.clone()));
 
-              part_type
-                .to_type_identifier_mut()
-                .add_constraint(constraint.clone())
-            } else {
-              param_types.push(param_type);
-            }
-          } else {
-            param_types.push(param_type);
-          }
-        }
+    //           part_type
+    //             .to_type_identifier_mut()
+    //             .add_constraint(constraint.clone())
+    //         } else {
+    //           param_types.push(param_type);
+    //         }
+    //       } else {
+    //         param_types.push(param_type);
+    //       }
+    //     }
 
-        let func_return_type = match return_type {
-          Some(ret) => {
-            let mut func_return_type = type_utils::type_expr_to_value_type(&ret);
+    //     let func_return_type = match return_type {
+    //       Some(ret) => {
+    //         let mut func_return_type = type_utils::type_expr_to_value_type(&ret);
 
-            if let ValueType::Named(name) = &func_return_type {
-              if let Some(constraint) = constraints_map.get(name) {
-                func_return_type = ValueType::Constrained(constraint.clone());
+    //         if let ValueType::Named(name) = &func_return_type {
+    //           if let Some(constraint) = constraints_map.get(name) {
+    //             func_return_type = ValueType::Constrained(constraint.clone());
 
-                ret
-                  .to_type_identifier_mut()
-                  .add_constraint(constraint.clone());
-              }
-            }
+    //             ret
+    //               .to_type_identifier_mut()
+    //               .add_constraint(constraint.clone());
+    //           }
+    //         }
 
-            func_return_type
-          }
-          None => ValueType::Nothing,
-        };
+    //         func_return_type
+    //       }
+    //       None => ValueType::Nothing,
+    //     };
 
-        // let def_type = ValueType::Func(param_types, Box::new(func_return_type));
-        // let merged_name = name_parts.join(" ");
+    //     // let def_type = ValueType::Func(param_types, Box::new(func_return_type));
+    //     // let merged_name = name_parts.join(" ");
 
-        // self
-        //   .scope
-        //   .add_binding(BindingKind::Def, merged_name, def_type, pos);
-      }
+    //     // self
+    //     //   .scope
+    //     //   .add_binding(BindingKind::Def, merged_name, def_type, pos);
+    //   }
 
-      DefKind::Method {
-        receiver,
-        signature,
-      } => {
-        let receiver_type = ValueType::Named(receiver.name.clone());
+    //   DefKind::Method {
+    //     receiver,
+    //     signature,
+    //   } => {
+    //     let receiver_type = ValueType::Named(receiver.name.clone());
 
-        let return_type = match return_type {
-          Some(type_expr) => type_utils::type_expr_to_value_type(&type_expr),
-          None => ValueType::Nothing,
-        };
+    //     let return_type = match return_type {
+    //       Some(type_expr) => type_utils::type_expr_to_value_type(&type_expr),
+    //       None => ValueType::Nothing,
+    //     };
 
-        let mut method_parts = Vec::new();
-        let mut param_types = Vec::new();
+    //     let mut method_parts = Vec::new();
+    //     let mut param_types = Vec::new();
 
-        for (part_name, part_type_expr) in signature {
-          method_parts.push(part_name.name.clone());
-          param_types.push(type_utils::type_expr_to_value_type(part_type_expr));
-        }
+    //     for (part_name, part_type_expr) in signature {
+    //       method_parts.push(part_name.name.clone());
+    //       param_types.push(type_utils::type_expr_to_value_type(part_type_expr));
+    //     }
 
-        // let result = self.scope.add_type_method(
-        //   receiver_type,
-        //   method_parts,
-        //   param_types,
-        //   return_type,
-        //   receiver.pos,
-        // );
+    //     // let result = self.scope.add_type_method(
+    //     //   receiver_type,
+    //     //   method_parts,
+    //     //   param_types,
+    //     //   return_type,
+    //     //   receiver.pos,
+    //     // );
 
-        // self.check_result(result);
-      }
-    }
+    //     // self.check_result(result);
+    //   }
+    // }
   }
 
   fn collect_type_def(&mut self, node: &mut TypeDefNode) {
@@ -322,21 +322,6 @@ impl<'a> Analyzer<'a> {
           node.name.pos,
         );
       }
-    }
-  }
-
-  fn collect_intrinsic_type_def(&mut self, node: &mut IntrinsicTypeDefNode) {
-    let intrinsic_type = match &node.name.name[..] {
-      "Int" => Some(ValueType::Int),
-      "Float" => Some(ValueType::Float),
-      "String" => Some(ValueType::String),
-      _ => None,
-    };
-
-    if let Some(typ) = intrinsic_type {
-      self
-        .scope
-        .add_type_binding(typ, TypeBindingKind::IntrinsicType, node.name.pos);
     }
   }
 
@@ -962,31 +947,6 @@ impl<'a> Analyzer<'a> {
 
         ValueType::Unknown
       }
-    }
-  }
-
-  fn analyze_intrinsic_def(&mut self, node: &mut IntrinsicDefNode) {
-    match &mut node.kind {
-      DefKind::Function { signature } => {
-        for (_part_name, part_type) in signature {
-          self.analyze_type_expr(part_type);
-        }
-      }
-
-      DefKind::Method {
-        receiver,
-        signature,
-      } => {
-        self.analyze_type_identifier(receiver);
-
-        for (_part_name, part_type) in signature {
-          self.analyze_type_expr(part_type);
-        }
-      }
-    }
-
-    if let Some(return_type) = &mut node.return_type {
-      self.analyze_type_expr(return_type);
     }
   }
 

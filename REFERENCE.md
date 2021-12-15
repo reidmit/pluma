@@ -187,7 +187,7 @@ alias identity-func<a> where a :: any = a -> a
 # person.pa
 
 # this is private (syntax tbd)
-struct person = (name :: string, age :: int, counter :: int)
+struct person (name :: string, age :: int, counter :: int)
 
 # this is public/exported
 def new-person _ :: (string, int) -> person {
@@ -256,6 +256,7 @@ At first glance, `let` and `def` keywords look similar, but there are important 
 
 - `let` allows destructuring with patterns
 - `def` allows parameter placeholders (`_`s) and multi-part names
+- `def`s can be exported
 
 In practice, you should usually use `def` for definitions that use the block syntax (`def thing _ { ... }`).
 
@@ -264,7 +265,7 @@ In practice, you should usually use `def` for definitions that use the block syn
 def add _ { (x, y) => x + y }
 
 # possible, but less flexible:
-let add = { (x, y) => x + y}
+let add = { (x, y) => x + y }
 ```
 
 # Type expressions

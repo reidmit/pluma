@@ -553,10 +553,6 @@ impl<'a> Parser<'a> {
       });
     }
 
-    expect_token_and_do!(self, Token::Equal, {
-      self.advance();
-    });
-
     let (end, block) = match self.parse_block() {
       Some(node) => (node.pos.1, node),
       _ => {
@@ -1657,6 +1653,7 @@ impl<'a> Parser<'a> {
     }
 
     other_terms.insert(0, first_term.unwrap());
+
     let start = other_terms.first().unwrap().pos.0;
     let end = other_terms.last().unwrap().pos.1;
 

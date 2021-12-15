@@ -11,15 +11,15 @@ pub struct TypeExprNode {
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub enum TypeExprKind {
-  // e.g. String or Dict<Int, String>
+  // e.g. string or dict<int, string>
   Single(TypeIdentifierNode),
-  // e.g. String -> Bool
+  // e.g. string -> bool
   Func(Box<TypeExprNode>, Box<TypeExprNode>),
-  // e.g. (a: String, b: Bool) or (String, Bool)
+  // e.g. (a: string, b: bool) or (string, bool)
   Tuple(Vec<(Option<IdentifierNode>, TypeExprNode)>),
   // e.g. ()
   EmptyTuple,
-  // e.g. (String) or (String -> Bool)
+  // e.g. (string) or (string -> bool)
   Grouping(Box<TypeExprNode>),
 }
 

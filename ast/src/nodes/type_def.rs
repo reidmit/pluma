@@ -4,34 +4,27 @@ use crate::common::*;
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub struct TypeDefNode {
   pub pos: Position,
-  pub kind: TypeDefKind,
   pub name: TypeIdentifierNode,
-  pub generic_type_constraints: GenericTypeConstraints,
-}
-
-#[cfg_attr(debug_assertions, derive(Debug))]
-pub struct IntrinsicTypeDefNode {
-  pub pos: Position,
-  pub name: IdentifierNode,
+  pub kind: TypeDefKind,
   pub generic_type_constraints: GenericTypeConstraints,
 }
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub enum TypeDefKind {
-  // alias StringList List<String>
+  // type string-list = list<string>
   Alias {
     of: TypeExprNode,
   },
-  // enum Color | Red | Green | Blue
+  // type color = enum { red, green, blue }
   Enum {
     variants: Vec<EnumVariantNode>,
   },
-  // struct Person (name :: String, age :: Int)
-  // struct MyInt Int
+  // type person = struct (name :: string, age :: int)
+  // type my-int = struct int
   Struct {
     inner: TypeExprNode,
   },
-  // trait Named .name :: String .getName() -> String
+  // type named = trait { .name :: string, | get-name _ :: self -> string }
   Trait {
     fields: Vec<(IdentifierNode, TypeExprNode)>,
     methods: Vec<(Signature, TypeExprNode)>,
