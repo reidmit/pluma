@@ -1,16 +1,16 @@
 [workspace]
 members = [
-  "analyzer",
-  "ast",
-  "cli",
-  "compiler",
-  "constants",
-  "diagnostics",
-  "macros",
-  "module",
-  "parser",
-  "tests",
-  "visitor",
+	"analyzer",
+	"ast",
+	"cli",
+	"compiler",
+	"constants",
+	"diagnostics",
+	"macros",
+	"module",
+	"parser",
+	"tests",
+	"visitor",
 ]
 
 [profile.release]

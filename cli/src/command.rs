@@ -3,15 +3,15 @@ use crate::command_error::CommandError;
 use crate::command_info::CommandInfo;
 
 pub trait Command {
-  fn info() -> CommandInfo;
+	fn info() -> CommandInfo;
 
-  fn execute(args: &ParsedArgs) -> Result<(), CommandError>;
+	fn execute(args: &ParsedArgs) -> Result<(), CommandError>;
 
-  fn print_help() {
-    println!("{}", Self::info());
-  }
+	fn print_help() {
+		println!("{}", Self::info());
+	}
 
-  fn description() -> &'static str {
-    Self::info().description
-  }
+	fn description() -> &'static str {
+		Self::info().description
+	}
 }

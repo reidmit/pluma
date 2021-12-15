@@ -7,13 +7,13 @@ use constants::VERSION;
 pub struct VersionCommand {}
 
 impl Command for VersionCommand {
-  fn info() -> CommandInfo {
-    CommandInfo::new("version", "Prints compiler version and related information").with_help()
-  }
+	fn info() -> CommandInfo {
+		CommandInfo::new("version", "Prints compiler version and related information").with_help()
+	}
 
-  fn execute(_args: &ParsedArgs) -> Result<(), CommandError> {
-    println!("pluma version {}", VERSION);
+	fn execute(_args: &ParsedArgs) -> Result<(), CommandError> {
+		println!("pluma version {}", VERSION);
 
-    Ok(())
-  }
+		Ok(())
+	}
 }
