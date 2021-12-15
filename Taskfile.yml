@@ -1,22 +1,22 @@
 version: 3
 
 tasks:
-	check:
-		desc: check source code without building
-		cmds:
-			- cargo check
+  check:
+    desc: check source code without building
+    cmds:
+      - cargo check
 
-	build-debug:
-		desc: build in debug mode
-		cmds:
-			- cargo build --bin cli
+  build-debug:
+    desc: build in debug mode
+    cmds:
+      - cargo build --bin cli
 
-	build-release:
-		desc: build in release mode
-		cmds:
-			- cargo build --release --bin cli
+  build-release:
+    desc: build in release mode
+    cmds:
+      - cargo build --release --bin cli
 
-	example:
-		desc: run CLI on an example file
-		cmds:
-			- cargo run --quiet --bin cli check {{.file}}
+  example:
+    desc: run CLI on an example file
+    cmds:
+      - cargo run --quiet --bin cli check {{.file}}
