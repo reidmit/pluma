@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 macro_rules! read_string {
 	($self:ident, $start:expr, $end:expr) => {
-		String::from_utf8($self.source[$start..$end].to_vec()).expect("not utf-8");
+		String::from_utf8($self.source[$start..$end].to_vec()).expect("not utf-8")
 	};
 }
 
@@ -81,10 +81,8 @@ impl<'a> Iterator for Tokenizer<'a> {
 			}
 
 			if let Some(string_start) = self.string_start {
-				// If the string stack is not empty, we're somewhere inside a string (maybe
-				// in an interpolation, though). We must check if we need to end the string,
-				// start/end an interpolation, or just carry on.
-
+				// If the string start is not empty, we're somewhere inside a string literal.
+				// We must check if we need to end the string, or just carry on.
 				if byte == b'"' {
 					let is_escaped = self.index > 0 && self.source[self.index - 1] == b'\\';
 
@@ -100,7 +98,9 @@ impl<'a> Iterator for Tokenizer<'a> {
 					}
 				}
 
+				// Just continue reading the string literal characters.
 				self.index += 1;
+				continue;
 			}
 
 			match byte {

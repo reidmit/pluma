@@ -44,7 +44,7 @@ macro_rules! expect_token_and_do {
 
 macro_rules! read_string {
 	($self:ident, $start:expr, $end:expr) => {
-		String::from_utf8($self.source[$start..$end].to_vec()).expect("not utf-8");
+		String::from_utf8($self.source[$start..$end].to_vec()).expect("not utf-8")
 	};
 }
 
@@ -55,7 +55,7 @@ macro_rules! read_string_with_escapes {
 			.replace("\\\\", "\\")
 			.replace("\\t", "\t")
 			.replace("\\r", "\r")
-			.replace("\\n", "\n");
+			.replace("\\n", "\n")
 	};
 }
 
@@ -127,6 +127,8 @@ impl<'a> Parser<'a> {
 	fn advance(&mut self) {
 		self.prev_token = self.current_token;
 		self.current_token = self.tokenizer.next();
+
+		dbg!(self.current_token);
 	}
 
 	fn skip_line_breaks(&mut self) -> bool {
