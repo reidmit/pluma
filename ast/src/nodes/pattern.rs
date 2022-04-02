@@ -45,7 +45,7 @@ impl PatternNode {
 				ExprKind::Tuple { entries }
 			}
 
-			_ => todo!(),
+			other => todo!("other expr kind in pattern: {:#?}", other),
 		};
 
 		ExprNode {

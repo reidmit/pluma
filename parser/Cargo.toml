@@ -7,3 +7,6 @@ edition = "2018"
 [dependencies]
 ast = { path = "../ast" }
 macros = { path = "../macros" }
+
+[dev-dependencies]
+insta = "1.13.0"

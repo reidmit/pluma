@@ -353,9 +353,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 						if !self.source[self.index].is_ascii_digit() {
 							let error_start = self.index;
 
-							while self.index < self.length
-								&& !self.source[self.index].is_ascii_whitespace()
-							{
+							while self.index < self.length && !self.source[self.index].is_ascii_whitespace() {
 								self.index += 1;
 							}
 
@@ -412,5 +410,26 @@ fn is_digit(byte: u8) -> bool {
 	match byte {
 		b'0'..=b'9' => true,
 		_ => false,
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn tokenize_snapshot(source: &str) {
+		let bytes = source.as_bytes().to_vec();
+		let mut tokens = Vec::new();
+		let mut tokenizer = Tokenizer::from_source(&bytes);
+		while let Some(token) = tokenizer.next() {
+			tokens.push(token);
+		}
+
+		insta::assert_snapshot!(format!("{}\n\n{:#?}", source, tokens));
+	}
+
+	#[test]
+	fn tokenizing_hello_world() {
+		tokenize_snapshot("hello world")
 	}
 }

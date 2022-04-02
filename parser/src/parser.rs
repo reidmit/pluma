@@ -217,6 +217,8 @@ impl<'a> Parser<'a> {
 
 		let param_or_first_stmt = self.parse_pattern();
 
+		println!("{:#?}", param_or_first_stmt);
+
 		if current_token_is!(self, Token::DoubleArrow) {
 			param = param_or_first_stmt;
 			self.advance();
@@ -1046,9 +1048,7 @@ impl<'a> Parser<'a> {
 
 		while expr.is_some() {
 			match self.current_token {
-				Some(Token::Star(..))
-				| Some(Token::ForwardSlash(..))
-				| Some(Token::Percent(..)) => {
+				Some(Token::Star(..)) | Some(Token::ForwardSlash(..)) | Some(Token::Percent(..)) => {
 					let op_node = self.parse_operator().unwrap();
 					let left_side = expr.unwrap();
 					let right_side = self.parse_expression_precedence_13().unwrap();
@@ -1349,12 +1349,8 @@ impl<'a> Parser<'a> {
 			Some(Token::And(start, end)) => (start, end, OperatorKind::BitwiseAnd),
 			Some(Token::Pipe(start, end)) => (start, end, OperatorKind::BitwiseOr),
 			Some(Token::Caret(start, end)) => (start, end, OperatorKind::BitwiseXor),
-			Some(Token::DoubleLeftAngle(start, end)) => {
-				(start, end, OperatorKind::BitwiseLeftShift)
-			}
-			Some(Token::DoubleRightAngle(start, end)) => {
-				(start, end, OperatorKind::BitwiseRightShift)
-			}
+			Some(Token::DoubleLeftAngle(start, end)) => (start, end, OperatorKind::BitwiseLeftShift),
+			Some(Token::DoubleRightAngle(start, end)) => (start, end, OperatorKind::BitwiseRightShift),
 
 			Some(Token::DoubleAnd(start, end)) => (start, end, OperatorKind::LogicalAnd),
 			Some(Token::DoublePipe(start, end)) => (start, end, OperatorKind::LogicalOr),
@@ -1362,9 +1358,7 @@ impl<'a> Parser<'a> {
 			Some(Token::LeftAngle(start, end)) => (start, end, OperatorKind::LessThan),
 			Some(Token::RightAngle(start, end)) => (start, end, OperatorKind::GreaterThan),
 			Some(Token::LeftAngleEqual(start, end)) => (start, end, OperatorKind::LessThanEquals),
-			Some(Token::RightAngleEqual(start, end)) => {
-				(start, end, OperatorKind::GreaterThanEquals)
-			}
+			Some(Token::RightAngleEqual(start, end)) => (start, end, OperatorKind::GreaterThanEquals),
 			Some(Token::DoubleEqual(start, end)) => (start, end, OperatorKind::Equals),
 			Some(Token::BangEqual(start, end)) => (start, end, OperatorKind::NotEquals),
 
@@ -1473,19 +1467,17 @@ impl<'a> Parser<'a> {
 				})
 			}
 
-			Some(Token::StringLiteral(..)) => {
-				self.parse_string().map(|expr_node| match expr_node.kind {
-					ExprKind::Literal { literal } => PatternNode {
-						pos: literal.pos,
-						kind: PatternKind::Literal(literal),
-					},
-					ExprKind::Interpolation { parts } => PatternNode {
-						pos: expr_node.pos,
-						kind: PatternKind::Interpolation(parts),
-					},
-					_ => unreachable!(),
-				})
-			}
+			Some(Token::StringLiteral(..)) => self.parse_string().map(|expr_node| match expr_node.kind {
+				ExprKind::Literal { literal } => PatternNode {
+					pos: literal.pos,
+					kind: PatternKind::Literal(literal),
+				},
+				ExprKind::Interpolation { parts } => PatternNode {
+					pos: expr_node.pos,
+					kind: PatternKind::Interpolation(parts),
+				},
+				_ => unreachable!(),
+			}),
 
 			Some(Token::Digits(..)) => self.parse_decimal_number().map(|lit_node| PatternNode {
 				pos: lit_node.pos,
@@ -1892,40 +1884,30 @@ impl<'a> Parser<'a> {
 
 	fn parse_statement(&mut self) -> Option<StatementNode> {
 		match self.current_token {
-			Some(Token::KeywordLet(..)) => {
-				self.parse_let_statement().map(|let_node| StatementNode {
-					pos: let_node.pos,
-					kind: StatementKind::Let(let_node),
-				})
-			}
-			Some(Token::KeywordDef(..)) => {
-				self.parse_def_statement().map(|def_node| StatementNode {
-					pos: def_node.pos,
-					kind: StatementKind::Def(def_node),
-				})
-			}
-			Some(Token::KeywordAlias(..)) => {
-				self.parse_alias().map(|type_def_node| StatementNode {
-					pos: type_def_node.pos,
-					kind: StatementKind::Type(type_def_node),
-				})
-			}
+			Some(Token::KeywordLet(..)) => self.parse_let_statement().map(|let_node| StatementNode {
+				pos: let_node.pos,
+				kind: StatementKind::Let(let_node),
+			}),
+			Some(Token::KeywordDef(..)) => self.parse_def_statement().map(|def_node| StatementNode {
+				pos: def_node.pos,
+				kind: StatementKind::Def(def_node),
+			}),
+			Some(Token::KeywordAlias(..)) => self.parse_alias().map(|type_def_node| StatementNode {
+				pos: type_def_node.pos,
+				kind: StatementKind::Type(type_def_node),
+			}),
 			Some(Token::KeywordEnum(..)) => self.parse_enum().map(|type_def_node| StatementNode {
 				pos: type_def_node.pos,
 				kind: StatementKind::Type(type_def_node),
 			}),
-			Some(Token::KeywordStruct(..)) => {
-				self.parse_struct().map(|type_def_node| StatementNode {
-					pos: type_def_node.pos,
-					kind: StatementKind::Type(type_def_node),
-				})
-			}
-			Some(Token::KeywordTrait(..)) => {
-				self.parse_trait().map(|type_def_node| StatementNode {
-					pos: type_def_node.pos,
-					kind: StatementKind::Type(type_def_node),
-				})
-			}
+			Some(Token::KeywordStruct(..)) => self.parse_struct().map(|type_def_node| StatementNode {
+				pos: type_def_node.pos,
+				kind: StatementKind::Type(type_def_node),
+			}),
+			Some(Token::KeywordTrait(..)) => self.parse_trait().map(|type_def_node| StatementNode {
+				pos: type_def_node.pos,
+				kind: StatementKind::Type(type_def_node),
+			}),
 			_ => self.parse_expression().map(|expr_node| StatementNode {
 				pos: expr_node.pos,
 				kind: StatementKind::Expr(expr_node),
@@ -2174,13 +2156,11 @@ impl<'a> Parser<'a> {
 
 	fn parse_type_expression(&mut self) -> Option<TypeExprNode> {
 		match self.current_token {
-			Some(Token::Identifier(..)) => {
-				self.parse_type_identifier().map(|type_id| TypeExprNode {
-					pos: type_id.pos,
-					kind: TypeExprKind::Single(type_id),
-					typ: ValueType::Unknown,
-				})
-			}
+			Some(Token::Identifier(..)) => self.parse_type_identifier().map(|type_id| TypeExprNode {
+				pos: type_id.pos,
+				kind: TypeExprKind::Single(type_id),
+				typ: ValueType::Unknown,
+			}),
 			Some(Token::LeftParen(..)) => self.parse_type_parenthetical(),
 			Some(Token::LeftBrace(..)) => self.parse_type_func(),
 			_ => None,
