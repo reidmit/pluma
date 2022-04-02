@@ -412,24 +412,3 @@ fn is_digit(byte: u8) -> bool {
 		_ => false,
 	}
 }
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	fn tokenize_snapshot(source: &str) {
-		let bytes = source.as_bytes().to_vec();
-		let mut tokens = Vec::new();
-		let mut tokenizer = Tokenizer::from_source(&bytes);
-		while let Some(token) = tokenizer.next() {
-			tokens.push(token);
-		}
-
-		insta::assert_snapshot!(format!("{}\n\n{:#?}", source, tokens));
-	}
-
-	#[test]
-	fn tokenizing_hello_world() {
-		tokenize_snapshot("hello world")
-	}
-}

@@ -1,0 +1,24 @@
+---
+source: parser/src/tokenizer_test.rs
+expression: "format!(\"{}\\n\\n{:#?}\", source, tokens)"
+---
+1 2 3 4
+
+[
+    Digits(
+        0,
+        1,
+    ),
+    Digits(
+        2,
+        3,
+    ),
+    Digits(
+        4,
+        5,
+    ),
+    Digits(
+        6,
+        7,
+    ),
+]

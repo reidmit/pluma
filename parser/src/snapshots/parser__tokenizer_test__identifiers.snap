@@ -1,0 +1,16 @@
+---
+source: parser/src/tokenizer_test.rs
+expression: "format!(\"{}\\n\\n{:#?}\", source, tokens)"
+---
+hello world
+
+[
+    Identifier(
+        0,
+        5,
+    ),
+    Identifier(
+        6,
+        11,
+    ),
+]
