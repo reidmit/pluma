@@ -1,0 +1,69 @@
+---
+source: parser/src/parser_test.rs
+expression: "format!(\"{}\\n\\n{:#?}\", source, result)"
+---
+let x = 47.123
+
+(
+    ModuleNode {
+        pos: (
+            0,
+            14,
+        ),
+        body: [
+            StatementNode {
+                pos: (
+                    0,
+                    14,
+                ),
+                kind: Let(
+                    LetNode {
+                        pos: (
+                            0,
+                            14,
+                        ),
+                        pattern: PatternNode {
+                            pos: (
+                                4,
+                                5,
+                            ),
+                            kind: Identifier(
+                                IdentifierNode {
+                                    pos: (
+                                        4,
+                                        5,
+                                    ),
+                                    name: "x",
+                                },
+                                false,
+                            ),
+                        },
+                        value: ExprNode {
+                            pos: (
+                                8,
+                                14,
+                            ),
+                            kind: Literal {
+                                literal: LiteralNode {
+                                    pos: (
+                                        8,
+                                        14,
+                                    ),
+                                    kind: FloatDecimal(
+                                        47.123,
+                                    ),
+                                },
+                            },
+                            typ: Unknown,
+                        },
+                    },
+                ),
+            },
+        ],
+    },
+    (
+        {},
+        [],
+    ),
+    [],
+)

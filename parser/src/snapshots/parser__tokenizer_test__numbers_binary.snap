@@ -1,0 +1,16 @@
+---
+source: parser/src/tokenizer_test.rs
+expression: "format!(\"{}\\n\\n{:#?}\", source, tokens)"
+---
+0b10101 0b0001
+
+[
+    BinaryDigits(
+        0,
+        7,
+    ),
+    BinaryDigits(
+        8,
+        14,
+    ),
+]

@@ -27,6 +27,12 @@ macro_rules! snapshot {
 
 snapshot!(numbers, "1 2 3 4");
 
+snapshot!(numbers_octal, "0o755 0o01");
+
+snapshot!(numbers_hex, "0xfaCaDE 0XBEEFFACE");
+
+snapshot!(numbers_binary, "0b10101 0b0001");
+
 snapshot!(identifiers, "hello world");
 
 snapshot!(identifier_snake_cased, "my_name");
@@ -38,3 +44,9 @@ snapshot!(identifier_kebab_cased, "my-name");
 snapshot!(string_literals, "\"a\" \"bb\" \"ccc\"");
 
 snapshot!(string_interpolations, "\"before $(some-variable) after\"");
+
+snapshot!(assignment_with_let, "let x = 47");
+
+snapshot!(function_declaration_with_def, "def replace _ with _ { }");
+
+snapshot!(method_declaration_with_def, "def _ | replace _ with _ { }");

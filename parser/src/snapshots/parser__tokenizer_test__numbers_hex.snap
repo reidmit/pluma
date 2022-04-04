@@ -1,0 +1,16 @@
+---
+source: parser/src/tokenizer_test.rs
+expression: "format!(\"{}\\n\\n{:#?}\", source, tokens)"
+---
+0xfaCaDE 0XBEEFFACE
+
+[
+    HexDigits(
+        0,
+        8,
+    ),
+    HexDigits(
+        9,
+        19,
+    ),
+]

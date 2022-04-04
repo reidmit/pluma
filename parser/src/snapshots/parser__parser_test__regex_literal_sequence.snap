@@ -1,0 +1,75 @@
+---
+source: parser/src/parser_test.rs
+expression: "format!(\"{}\\n\\n{:#?}\", source, result)"
+---
+/ "a" "b" "c" /
+
+(
+    ModuleNode {
+        pos: (
+            0,
+            15,
+        ),
+        body: [
+            StatementNode {
+                pos: (
+                    0,
+                    15,
+                ),
+                kind: Expr(
+                    ExprNode {
+                        pos: (
+                            0,
+                            15,
+                        ),
+                        kind: RegExpr {
+                            regex: RegExprNode {
+                                pos: (
+                                    0,
+                                    0,
+                                ),
+                                kind: Sequence(
+                                    [
+                                        RegExprNode {
+                                            pos: (
+                                                3,
+                                                4,
+                                            ),
+                                            kind: Literal(
+                                                "a",
+                                            ),
+                                        },
+                                        RegExprNode {
+                                            pos: (
+                                                7,
+                                                8,
+                                            ),
+                                            kind: Literal(
+                                                "b",
+                                            ),
+                                        },
+                                        RegExprNode {
+                                            pos: (
+                                                11,
+                                                12,
+                                            ),
+                                            kind: Literal(
+                                                "c",
+                                            ),
+                                        },
+                                    ],
+                                ),
+                            },
+                        },
+                        typ: Unknown,
+                    },
+                ),
+            },
+        ],
+    },
+    (
+        {},
+        [],
+    ),
+    [],
+)

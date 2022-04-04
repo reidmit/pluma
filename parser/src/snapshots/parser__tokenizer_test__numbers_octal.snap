@@ -1,0 +1,16 @@
+---
+source: parser/src/tokenizer_test.rs
+expression: "format!(\"{}\\n\\n{:#?}\", source, tokens)"
+---
+0o755 0o01
+
+[
+    OctalDigits(
+        0,
+        5,
+    ),
+    OctalDigits(
+        6,
+        10,
+    ),
+]

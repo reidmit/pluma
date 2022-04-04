@@ -1,0 +1,44 @@
+---
+source: parser/src/tokenizer_test.rs
+expression: "format!(\"{}\\n\\n{:#?}\", source, tokens)"
+---
+def _ | replace _ with _ { }
+
+[
+    KeywordDef(
+        0,
+        3,
+    ),
+    Underscore(
+        4,
+        5,
+    ),
+    Pipe(
+        6,
+        7,
+    ),
+    Identifier(
+        8,
+        15,
+    ),
+    Underscore(
+        16,
+        17,
+    ),
+    Identifier(
+        18,
+        22,
+    ),
+    Underscore(
+        23,
+        24,
+    ),
+    LeftBrace(
+        25,
+        26,
+    ),
+    RightBrace(
+        27,
+        28,
+    ),
+]

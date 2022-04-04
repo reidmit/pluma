@@ -22,3 +22,21 @@ macro_rules! snapshot {
 }
 
 snapshot!(hello_world, "hello world");
+
+snapshot!(simple_assignment, "let x = 47.123");
+
+snapshot!(regex_literal_sequence, "/ \"a\" \"b\" \"c\" /");
+
+snapshot!(regex_literal_one_or_more, "/ \"a\" \"b\"+ \"c\" /");
+
+snapshot!(regex_literal_zero_or_more, "/ \"a\" \"b\"* \"c\" /");
+
+snapshot!(regex_literal_alternation, "/ \"a\" (\"b\" | \"c\") \"d\" /");
+
+snapshot!(regex_literal_exact_count, "/ \"a\" \"b\"{3} \"c\" /");
+
+snapshot!(regex_literal_range_count, "/ \"a\" \"b\"{1,3} \"c\" /");
+
+snapshot!(regex_literal_at_least_count, "/ \"a\" \"b\"{1,} \"c\" /");
+
+snapshot!(regex_literal_at_most_count, "/ \"a\" \"b\"{,3} \"c\" /");
