@@ -1,4 +1,4 @@
-use crate::compiler_options::{CompilerMode, CompilerOptions};
+use crate::compiler_options::CompilerOptions;
 use crate::dependency_graph::{DependencyGraph, TopologicalSort};
 use crate::usage_error::{UsageError, UsageErrorKind};
 use constants::*;
@@ -13,8 +13,6 @@ pub struct Compiler {
 	pub root_dir: PathBuf,
 	pub entry_module_name: String,
 	pub modules: HashMap<String, Module>,
-	mode: CompilerMode,
-	output_path: Option<String>,
 	diagnostics: Vec<Diagnostic>,
 	dependency_graph: DependencyGraph,
 }
@@ -30,8 +28,6 @@ impl Compiler {
 			entry_module_name,
 			modules: HashMap::new(),
 			diagnostics: Vec::new(),
-			output_path: options.output_path,
-			mode: options.mode,
 			dependency_graph,
 		})
 	}
