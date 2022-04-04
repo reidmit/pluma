@@ -3,7 +3,7 @@ enum color { red, green, yellow }
 enum action { stop, go, slow-down }
 
 def get-action-for-color _ :: color -> action {
-  light => match light {
+  light => light | match {
     case red => stop
     case green => go
     case yellow => slow-down

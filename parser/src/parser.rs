@@ -253,7 +253,7 @@ impl<'a> Parser<'a> {
 		let mut method_parts = Vec::new();
 		let mut args = Vec::new();
 
-		if current_token_is!(self, Token::Digits) {
+		if current_token_is!(self, Token::DecimalDigits) {
 			// If there's a decimal number here, it must be a tuple/list element access
 			// like `tuple.1`. Just grab that number and treat it like an identifier.
 			let pos = self.current_token_position();
@@ -494,16 +494,16 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_decimal_number(&mut self) -> Option<LiteralNode> {
-		let (start, end) = expect_token_and_do!(self, Token::Digits, {
+		let (start, end) = expect_token_and_do!(self, Token::DecimalDigits, {
 			let pos = self.current_token_position();
 			self.advance();
 			pos
 		});
 
-		if current_token_is!(self, Token::Dot) && next_token_is!(self, Token::Digits) {
+		if current_token_is!(self, Token::Dot) && next_token_is!(self, Token::DecimalDigits) {
 			self.advance();
 
-			expect_token_and_do!(self, Token::Digits, {
+			expect_token_and_do!(self, Token::DecimalDigits, {
 				let (_, end) = self.current_token_position();
 
 				self.advance();
@@ -1479,11 +1479,12 @@ impl<'a> Parser<'a> {
 				_ => unreachable!(),
 			}),
 
-			Some(Token::Digits(..)) => self.parse_decimal_number().map(|lit_node| PatternNode {
+			Some(Token::DecimalDigits(..)) => self.parse_decimal_number().map(|lit_node| PatternNode {
 				pos: lit_node.pos,
 				kind: PatternKind::Literal(lit_node),
 			}),
 
+			// TODO: other kinds of digits here
 			_ => None,
 		}
 	}
@@ -1786,7 +1787,7 @@ impl<'a> Parser<'a> {
 					let mut max_count = None;
 					let mut has_comma = false;
 
-					if current_token_is!(self, Token::Digits) {
+					if current_token_is!(self, Token::DecimalDigits) {
 						let (start, end) = self.current_token_position();
 						let value = self.parse_numeric_literal(start, end, 10) as usize;
 						min_count = Some(value);
@@ -1798,7 +1799,7 @@ impl<'a> Parser<'a> {
 
 						self.advance();
 
-						if current_token_is!(self, Token::Digits) {
+						if current_token_is!(self, Token::DecimalDigits) {
 							let (start, end) = self.current_token_position();
 							let value = self.parse_numeric_literal(start, end, 10) as usize;
 							max_count = Some(value);
@@ -1993,11 +1994,12 @@ impl<'a> Parser<'a> {
 				kind: ExprKind::Identifier { ident },
 				typ: ValueType::Unknown,
 			}),
-			Some(Token::Digits(..)) => self.parse_decimal_number().map(|literal| ExprNode {
+			Some(Token::DecimalDigits(..)) => self.parse_decimal_number().map(|literal| ExprNode {
 				pos: literal.pos,
 				kind: ExprKind::Literal { literal },
 				typ: ValueType::Unknown,
 			}),
+			// TODO: other types of digits
 			_ => None,
 		}
 	}

@@ -22,6 +22,9 @@ pub enum Token {
 	/// `!=` token
 	BangEqual(usize, usize),
 
+	/// e.g. `0b10101`
+	BinaryDigits(usize, usize),
+
 	/// `^` token
 	Caret(usize, usize),
 
@@ -34,8 +37,8 @@ pub enum Token {
 	/// e.g. # hello ... (until end of line)
 	Comment(usize, usize),
 
-	/// e.g. `0` or `123`
-	Digits(usize, usize),
+	/// e.g. `47`
+	DecimalDigits(usize, usize),
 
 	/// `.` token
 	Dot(usize, usize),
@@ -73,8 +76,20 @@ pub enum Token {
 	/// `/` token
 	ForwardSlash(usize, usize),
 
+	/// e.g. `0xbeef`
+	HexDigits(usize, usize),
+
 	/// e.g. `hello` or `hello-world`
 	Identifier(usize, usize),
+
+	/// e.g. `path/to/some/module`
+	ImportPath(usize, usize),
+
+	/// e.g. `)` in `"hello $(name)"`
+	InterpolationEnd(usize, usize),
+
+	/// e.g. `$(` in `"hello $(name)"`
+	InterpolationStart(usize, usize),
 
 	/// `alias` keyword
 	KeywordAlias(usize, usize),
@@ -103,8 +118,8 @@ pub enum Token {
 	/// `trait` keyword
 	KeywordTrait(usize, usize),
 
-	/// `type` keyword
-	KeywordType(usize, usize),
+	/// `use` keyword
+	KeywordUse(usize, usize),
 
 	/// `where` keyword
 	KeywordWhere(usize, usize),
@@ -130,6 +145,9 @@ pub enum Token {
 	/// `-` token
 	Minus(usize, usize),
 
+	/// e.g. `0o755`
+	OctalDigits(usize, usize),
+
 	/// `%` token
 	Percent(usize, usize),
 
@@ -139,7 +157,10 @@ pub enum Token {
 	/// `+` token
 	Plus(usize, usize),
 
-	/// `?` token
+	/// e.g. `@pkg` in `@pkg some-identifier`
+	Qualifier(usize, usize),
+
+	/// `?` token (appears in reg exprs)
 	Question(usize, usize),
 
 	/// `>` token
@@ -159,6 +180,8 @@ pub enum Token {
 
 	/// `*` token
 	Star(usize, usize),
+
+	/// e.g. `"hello"`
 	StringLiteral(usize, usize),
 
 	/// `~` token
@@ -181,24 +204,29 @@ impl Token {
 			| BackSlash(start, end)
 			| Bang(start, end)
 			| BangEqual(start, end)
+			| BinaryDigits(start, end)
 			| Caret(start, end)
 			| Colon(start, end)
 			| Comma(start, end)
 			| Comment(start, end)
-			| Digits(start, end)
+			| DecimalDigits(start, end)
 			| Dot(start, end)
 			| DoubleAnd(start, end)
 			| DoubleArrow(start, end)
 			| DoubleColon(start, end)
 			| DoubleEqual(start, end)
 			| DoubleLeftAngle(start, end)
-			| DoubleRightAngle(start, end)
 			| DoublePipe(start, end)
 			| DoublePlus(start, end)
+			| DoubleRightAngle(start, end)
 			| DoubleStar(start, end)
 			| Equal(start, end)
 			| ForwardSlash(start, end)
+			| HexDigits(start, end)
 			| Identifier(start, end)
+			| ImportPath(start, end)
+			| InterpolationEnd(start, end)
+			| InterpolationStart(start, end)
 			| KeywordAlias(start, end)
 			| KeywordCase(start, end)
 			| KeywordDef(start, end)
@@ -208,7 +236,7 @@ impl Token {
 			| KeywordMut(start, end)
 			| KeywordStruct(start, end)
 			| KeywordTrait(start, end)
-			| KeywordType(start, end)
+			| KeywordUse(start, end)
 			| KeywordWhere(start, end)
 			| LeftAngle(start, end)
 			| LeftAngleEqual(start, end)
@@ -217,9 +245,11 @@ impl Token {
 			| LeftParen(start, end)
 			| LineBreak(start, end)
 			| Minus(start, end)
+			| OctalDigits(start, end)
 			| Percent(start, end)
 			| Pipe(start, end)
 			| Plus(start, end)
+			| Qualifier(start, end)
 			| Question(start, end)
 			| RightAngle(start, end)
 			| RightAngleEqual(start, end)
@@ -238,8 +268,9 @@ impl Token {
 		use Token::*;
 
 		match self {
-			Identifier(..) | BackSlash(..) | Colon(..) | Digits(..) | LeftParen(..)
-			| LeftBrace(..) | LeftBracket(..) | ForwardSlash(..) | StringLiteral(..) => true,
+			Identifier(..) | BackSlash(..) | Colon(..) | DecimalDigits(..) | HexDigits(..)
+			| BinaryDigits(..) | OctalDigits(..) | LeftParen(..) | LeftBrace(..) | LeftBracket(..)
+			| ForwardSlash(..) | StringLiteral(..) => true,
 			_ => false,
 		}
 	}
@@ -255,11 +286,12 @@ impl fmt::Display for Token {
 			&BackSlash(..) => "a '\\'",
 			&Bang(..) => "a '!'",
 			&BangEqual(..) => "a '!='",
+			&BinaryDigits(..) => "binary digits (e.g. 0b101)",
 			&Caret(..) => "a '^'",
 			&Colon(..) => "a ':'",
 			&Comma(..) => "a ','",
 			&Comment(..) => "a comment",
-			&Digits(..) => "digits",
+			&DecimalDigits(..) => "decimal digits (e.g. 47)",
 			&Dot(..) => "a '.'",
 			&DoubleAnd(..) => "a '&&'",
 			&DoubleArrow(..) => "a '=>'",
@@ -272,17 +304,21 @@ impl fmt::Display for Token {
 			&DoubleStar(..) => "a '||'",
 			&Equal(..) => "a '='",
 			&ForwardSlash(..) => "a '/'",
+			&HexDigits(..) => "hex digits (e.g. 0xf4c3)",
 			&Identifier(..) => "an identifier",
+			&ImportPath(..) => "a path to a module (e.g. 'path/to/module')",
+			&InterpolationEnd(..) => "a ')'",
+			&InterpolationStart(..) => "a '$('",
 			&KeywordAlias(..) => "keyword 'alias'",
-			&KeywordDef(..) => "keyword 'def'",
 			&KeywordCase(..) => "keyword 'case'",
+			&KeywordDef(..) => "keyword 'def'",
 			&KeywordEnum(..) => "keyword 'enum'",
 			&KeywordLet(..) => "keyword 'let'",
 			&KeywordMatch(..) => "keyword 'match'",
 			&KeywordMut(..) => "keyword 'mut'",
 			&KeywordStruct(..) => "keyword 'struct'",
 			&KeywordTrait(..) => "keyword 'trait'",
-			&KeywordType(..) => "keyword 'type'",
+			&KeywordUse(..) => "keyword 'use'",
 			&KeywordWhere(..) => "keyword 'where'",
 			&LeftAngle(..) => "a '<'",
 			&LeftAngleEqual(..) => "a '<='",
@@ -291,9 +327,11 @@ impl fmt::Display for Token {
 			&LeftParen(..) => "a '('",
 			&LineBreak(..) => "a line break",
 			&Minus(..) => "a '-'",
+			&OctalDigits(..) => "octal digits (e.g. 0o755)",
 			&Percent(..) => "a '%'",
 			&Pipe(..) => "a '|'",
 			&Plus(..) => "a '+'",
+			&Qualifier(..) => "a qualifier",
 			&Question(..) => "a '?'",
 			&RightAngle(..) => "a '>'",
 			&RightAngleEqual(..) => "a '>='",

@@ -9,7 +9,6 @@ members = [
 	"macros",
 	"module",
 	"parser",
-	"tests",
 	"visitor",
 ]
 

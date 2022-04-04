@@ -5,19 +5,19 @@ expression: "format!(\"{}\\n\\n{:#?}\", source, tokens)"
 1 2 3 4
 
 [
-    Digits(
+    DecimalDigits(
         0,
         1,
     ),
-    Digits(
+    DecimalDigits(
         2,
         3,
     ),
-    Digits(
+    DecimalDigits(
         4,
         5,
     ),
-    Digits(
+    DecimalDigits(
         6,
         7,
     ),

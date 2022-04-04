@@ -1,0 +1,36 @@
+---
+source: parser/src/tokenizer_test.rs
+expression: "format!(\"{}\\n\\n{:#?}\", source, tokens)"
+---
+"before $(some-variable) after"
+
+[
+    StringLiteral(
+        1,
+        8,
+    ),
+    InterpolationStart(
+        10,
+        9,
+    ),
+    Identifier(
+        10,
+        14,
+    ),
+    Minus(
+        14,
+        15,
+    ),
+    Identifier(
+        15,
+        23,
+    ),
+    InterpolationEnd(
+        23,
+        24,
+    ),
+    StringLiteral(
+        24,
+        30,
+    ),
+]
