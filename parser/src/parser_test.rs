@@ -12,7 +12,7 @@ macro_rules! snapshot {
 		fn $test_name() {
 			let source = $raw_source;
 			let bytes = source.as_bytes().to_vec();
-			let mut tokenizer = Tokenizer::from_source(&bytes);
+			let tokenizer = Tokenizer::from_source(&bytes);
 			let mut parser = Parser::new(&bytes, tokenizer);
 			let result = parser.parse_module();
 
