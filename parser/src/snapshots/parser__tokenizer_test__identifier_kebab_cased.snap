@@ -1,0 +1,12 @@
+---
+source: parser/src/tokenizer_test.rs
+expression: "format!(\"{}\\n\\n{:#?}\", source, tokens)"
+---
+my-name
+
+[
+    Identifier(
+        0,
+        7,
+    ),
+]

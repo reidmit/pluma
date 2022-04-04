@@ -29,6 +29,12 @@ snapshot!(numbers, "1 2 3 4");
 
 snapshot!(identifiers, "hello world");
 
+snapshot!(identifier_snake_cased, "my_name");
+
+snapshot!(identifier_camel_cased, "myName");
+
+snapshot!(identifier_kebab_cased, "my-name");
+
 snapshot!(string_literals, "\"a\" \"bb\" \"ccc\"");
 
 snapshot!(string_interpolations, "\"before $(some-variable) after\"");

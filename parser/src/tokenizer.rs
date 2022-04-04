@@ -596,7 +596,6 @@ fn is_identifier_char(byte: u8) -> bool {
 		b'*' => false,
 		b'/' => false,
 		b'+' => false,
-		b'-' => false,
 		b'=' => false,
 		b'<' => false,
 		b'>' => false,

@@ -15,14 +15,6 @@ expression: "format!(\"{}\\n\\n{:#?}\", source, tokens)"
     ),
     Identifier(
         10,
-        14,
-    ),
-    Minus(
-        14,
-        15,
-    ),
-    Identifier(
-        15,
         23,
     ),
     InterpolationEnd(
