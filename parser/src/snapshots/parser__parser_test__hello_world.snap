@@ -1,0 +1,79 @@
+---
+source: parser/src/parser_test.rs
+expression: "format!(\"{}\\n\\n{:#?}\", source, result)"
+---
+hello world
+
+(
+    ModuleNode {
+        pos: (
+            0,
+            11,
+        ),
+        body: [
+            StatementNode {
+                pos: (
+                    0,
+                    11,
+                ),
+                kind: Expr(
+                    ExprNode {
+                        pos: (
+                            0,
+                            11,
+                        ),
+                        kind: Call {
+                            call: CallNode {
+                                pos: (
+                                    0,
+                                    11,
+                                ),
+                                callee: ExprNode {
+                                    pos: (
+                                        0,
+                                        5,
+                                    ),
+                                    kind: Identifier {
+                                        ident: IdentifierNode {
+                                            pos: (
+                                                0,
+                                                5,
+                                            ),
+                                            name: "hello",
+                                        },
+                                    },
+                                    typ: Unknown,
+                                },
+                                args: [
+                                    ExprNode {
+                                        pos: (
+                                            6,
+                                            11,
+                                        ),
+                                        kind: Identifier {
+                                            ident: IdentifierNode {
+                                                pos: (
+                                                    6,
+                                                    11,
+                                                ),
+                                                name: "world",
+                                            },
+                                        },
+                                        typ: Unknown,
+                                    },
+                                ],
+                                typ: Unknown,
+                            },
+                        },
+                        typ: Unknown,
+                    },
+                ),
+            },
+        ],
+    },
+    (
+        {},
+        [],
+    ),
+    [],
+)
