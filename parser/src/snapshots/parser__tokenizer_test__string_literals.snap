@@ -1,0 +1,20 @@
+---
+source: parser/src/tokenizer_test.rs
+expression: "format!(\"{}\\n\\n{:#?}\", source, tokens)"
+---
+"a" "bb" "ccc"
+
+[
+    StringLiteral(
+        1,
+        2,
+    ),
+    StringLiteral(
+        5,
+        7,
+    ),
+    StringLiteral(
+        10,
+        13,
+    ),
+]

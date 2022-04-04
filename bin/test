@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+cargo insta test --review -- --lib

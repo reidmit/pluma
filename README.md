@@ -30,12 +30,12 @@ str
 ```
 
 ```pluma
-type person = struct (
+struct person (
   name :: string
   age :: int
 )
 
-let _ | greeting :: person -> string {
+def _ | greeting :: person -> string {
   p => "hi there, " ++ p.name
 }
 
@@ -45,9 +45,9 @@ print (person | greeting)
 ```
 
 ```pluma
-type color = enum { red, green, blue }
+enum color { red, green, blue }
 
-let random-color :: () -> color = {
+def random-color _ :: () -> color {
   random-int-between 1 and 3 | match {
     case 1 => red
     case 2 => green

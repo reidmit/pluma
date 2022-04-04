@@ -28,3 +28,5 @@ macro_rules! snapshot {
 snapshot!(numbers, "1 2 3 4");
 
 snapshot!(identifiers, "hello world");
+
+snapshot!(string_literals, "\"a\" \"bb\" \"ccc\"");

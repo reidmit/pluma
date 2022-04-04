@@ -1,3 +1,3 @@
 mod module;
 
-pub use module::*;
+pub use crate::module::*;

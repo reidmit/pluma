@@ -6,5 +6,5 @@ mod tokens;
 #[cfg(test)]
 mod tokenizer_test;
 
-pub use parser::*;
-pub use tokenizer::*;
+pub use self::parser::*;
+pub use self::tokenizer::*;

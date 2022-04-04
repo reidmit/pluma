@@ -7,5 +7,5 @@ mod binding;
 mod scope;
 mod type_utils;
 
-pub use analyzer::*;
-pub use scope::*;
+pub use crate::analyzer::*;
+pub use crate::scope::*;

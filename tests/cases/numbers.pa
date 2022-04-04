@@ -1,4 +1,4 @@
-let decimalInt = 47
+let decimal-int = 47
 
 let hexBeef = 0xbeef
 let hexBEEF = 0XBEEF

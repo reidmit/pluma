@@ -1,3 +1,3 @@
 mod diagnostics;
 
-pub use diagnostics::*;
+pub use crate::diagnostics::*;
