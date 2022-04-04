@@ -3,8 +3,9 @@
 ## Conventions
 
 - Files must be UTF-8
-- Kebab-case, all-lowercase identifiers preferred
-- Use tabs for indentaion
+- Use kebab-case, all-lowercase identifiers (e.g. `my-name` instead of `myName` or `my_name`)
+- Use kebab-case for separating words in file and directory names
+- Use tabs for indentation
 
 ## Examples
 
@@ -156,8 +157,8 @@ enum maybe<a> where a :: any {
   none
 }
 
-let r :: maybe string = none
-let o = some "reid"
+let r :: maybe<string> = none
+let o :: maybe<string> = some "reid"
 ```
 
 ```pluma
