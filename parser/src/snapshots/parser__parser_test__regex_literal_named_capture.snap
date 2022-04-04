@@ -1,0 +1,111 @@
+---
+source: parser/src/parser_test.rs
+expression: "format!(\"{}\\n\\n{:#?}\", source, result)"
+---
+/ "a" <b_or_c:("b" | "c")> "d" /
+
+(
+    ModuleNode {
+        pos: (
+            0,
+            32,
+        ),
+        body: [
+            StatementNode {
+                pos: (
+                    0,
+                    32,
+                ),
+                kind: Expr(
+                    ExprNode {
+                        pos: (
+                            0,
+                            32,
+                        ),
+                        kind: RegExpr {
+                            regex: RegExprNode {
+                                pos: (
+                                    0,
+                                    0,
+                                ),
+                                kind: Sequence(
+                                    [
+                                        RegExprNode {
+                                            pos: (
+                                                3,
+                                                4,
+                                            ),
+                                            kind: Literal(
+                                                "a",
+                                            ),
+                                        },
+                                        RegExprNode {
+                                            pos: (
+                                                6,
+                                                7,
+                                            ),
+                                            kind: NamedCapture(
+                                                "b_or_c",
+                                                RegExprNode {
+                                                    pos: (
+                                                        14,
+                                                        15,
+                                                    ),
+                                                    kind: Grouping(
+                                                        RegExprNode {
+                                                            pos: (
+                                                                16,
+                                                                23,
+                                                            ),
+                                                            kind: Alternation(
+                                                                [
+                                                                    RegExprNode {
+                                                                        pos: (
+                                                                            16,
+                                                                            17,
+                                                                        ),
+                                                                        kind: Literal(
+                                                                            "b",
+                                                                        ),
+                                                                    },
+                                                                    RegExprNode {
+                                                                        pos: (
+                                                                            22,
+                                                                            23,
+                                                                        ),
+                                                                        kind: Literal(
+                                                                            "c",
+                                                                        ),
+                                                                    },
+                                                                ],
+                                                            ),
+                                                        },
+                                                    ),
+                                                },
+                                            ),
+                                        },
+                                        RegExprNode {
+                                            pos: (
+                                                28,
+                                                29,
+                                            ),
+                                            kind: Literal(
+                                                "d",
+                                            ),
+                                        },
+                                    ],
+                                ),
+                            },
+                        },
+                        typ: Unknown,
+                    },
+                ),
+            },
+        ],
+    },
+    (
+        {},
+        [],
+    ),
+    [],
+)
