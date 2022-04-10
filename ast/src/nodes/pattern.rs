@@ -45,6 +45,25 @@ impl PatternNode {
 				ExprKind::Tuple { entries }
 			}
 
+			PatternKind::Constructor(ident, arg) => {
+				let callee = ExprNode {
+					pos: ident.pos,
+					kind: ExprKind::Identifier { ident },
+					typ: ValueType::Unknown,
+				};
+
+				let arg_expr = arg.to_expr();
+
+				let call = CallNode {
+					pos,
+					callee: Box::new(callee),
+					args: vec![arg_expr],
+					typ: ValueType::Unknown,
+				};
+
+				ExprKind::Call { call }
+			}
+
 			other => todo!("other expr kind in pattern: {:#?}", other),
 		};
 

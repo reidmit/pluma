@@ -215,14 +215,19 @@ impl<'a> Parser<'a> {
 		let mut param = None;
 		let mut body = Vec::new();
 
+		// We don't yet know if this block has a parameter pattern (before the
+		// arrow), or if it only has a body and no params. We try to parse a
+		// pattern here...
 		let param_or_first_stmt = self.parse_pattern();
 
-		println!("{:#?}", param_or_first_stmt);
-
 		if current_token_is!(self, Token::DoubleArrow) {
+			// ...and if there's an arrow afterwards, we've confirmed it's a param
+			// pattern, so treat it as such.
 			param = param_or_first_stmt;
 			self.advance();
 		} else if let Some(pattern) = param_or_first_stmt {
+			// ...but if there's no arrow, convert this pattern to a statement and
+			// treat it as the beginning of the block body.
 			body.push(pattern.to_statement()?);
 		}
 

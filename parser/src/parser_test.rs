@@ -47,3 +47,5 @@ snapshot!(
 	regex_literal_named_capture,
 	"/ \"a\" <b_or_c:(\"b\" | \"c\")> \"d\" /"
 );
+
+snapshot!(let_block_no_params, "let b = { hello \"world\" }");

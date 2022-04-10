@@ -1,0 +1,129 @@
+---
+source: parser/src/parser_test.rs
+expression: "format!(\"{}\\n\\n{:#?}\", source, result)"
+---
+let b = { hello "world" }
+
+(
+    ModuleNode {
+        pos: (
+            0,
+            25,
+        ),
+        body: [
+            StatementNode {
+                pos: (
+                    0,
+                    25,
+                ),
+                kind: Let(
+                    LetNode {
+                        pos: (
+                            0,
+                            25,
+                        ),
+                        pattern: PatternNode {
+                            pos: (
+                                4,
+                                5,
+                            ),
+                            kind: Identifier(
+                                IdentifierNode {
+                                    pos: (
+                                        4,
+                                        5,
+                                    ),
+                                    name: "b",
+                                },
+                                false,
+                            ),
+                        },
+                        value: ExprNode {
+                            pos: (
+                                8,
+                                25,
+                            ),
+                            kind: Block {
+                                block: BlockNode {
+                                    pos: (
+                                        8,
+                                        25,
+                                    ),
+                                    param: None,
+                                    body: [
+                                        StatementNode {
+                                            pos: (
+                                                10,
+                                                22,
+                                            ),
+                                            kind: Expr(
+                                                ExprNode {
+                                                    pos: (
+                                                        10,
+                                                        22,
+                                                    ),
+                                                    kind: Call {
+                                                        call: CallNode {
+                                                            pos: (
+                                                                10,
+                                                                22,
+                                                            ),
+                                                            callee: ExprNode {
+                                                                pos: (
+                                                                    10,
+                                                                    15,
+                                                                ),
+                                                                kind: Identifier {
+                                                                    ident: IdentifierNode {
+                                                                        pos: (
+                                                                            10,
+                                                                            15,
+                                                                        ),
+                                                                        name: "hello",
+                                                                    },
+                                                                },
+                                                                typ: Unknown,
+                                                            },
+                                                            args: [
+                                                                ExprNode {
+                                                                    pos: (
+                                                                        17,
+                                                                        22,
+                                                                    ),
+                                                                    kind: Literal {
+                                                                        literal: LiteralNode {
+                                                                            pos: (
+                                                                                17,
+                                                                                22,
+                                                                            ),
+                                                                            kind: Str(
+                                                                                "world",
+                                                                            ),
+                                                                        },
+                                                                    },
+                                                                    typ: Unknown,
+                                                                },
+                                                            ],
+                                                            typ: Unknown,
+                                                        },
+                                                    },
+                                                    typ: Unknown,
+                                                },
+                                            ),
+                                        },
+                                    ],
+                                },
+                            },
+                            typ: Unknown,
+                        },
+                    },
+                ),
+            },
+        ],
+    },
+    (
+        {},
+        [],
+    ),
+    [],
+)
