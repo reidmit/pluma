@@ -2,10 +2,10 @@
   "name": "vscode-pluma",
   "displayName": "Pluma Language Extension",
   "version": "0.1.0",
-  "publisher": "reid47",
+  "publisher": "reidmit",
   "description": "Support for Pluma language",
   "author": {
-    "name": "reid47"
+    "name": "reidmit"
   },
   "categories": [
     "Programming Languages"
@@ -27,14 +27,14 @@
   "scripts": {},
   "license": "SEE LICENSE IN LICENSE.txt",
   "bugs": {
-    "url": "https://github.com/reid47/pluma/issues",
+    "url": "https://github.com/reidmit/pluma/issues",
     "email": "reidmitchell1@gmail.com"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/reid47/pluma.git"
+    "url": "https://github.com/reidmit/pluma.git"
   },
-  "homepage": "https://github.com/reid47/pluma/blob/master/README.md",
+  "homepage": "https://github.com/reidmit/pluma/blob/main/README.md",
   "contributes": {
     "languages": [
       {
