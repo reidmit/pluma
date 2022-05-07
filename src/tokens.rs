@@ -49,6 +49,9 @@ pub enum Token {
 	/// `==` token
 	DoubleEqual(usize, usize),
 
+	/// `/` token
+	DoubleForwardSlash(usize, usize),
+
 	/// `<<` token
 	DoubleLeftAngle(usize, usize),
 
@@ -192,6 +195,7 @@ impl Token {
 			| Dot(start, end)
 			| DoubleAnd(start, end)
 			| DoubleEqual(start, end)
+			| DoubleForwardSlash(start, end)
 			| DoubleLeftAngle(start, end)
 			| DoublePipe(start, end)
 			| DoublePlus(start, end)
@@ -267,6 +271,7 @@ impl fmt::Display for Token {
 			&Dot(..) => "a '.'",
 			&DoubleAnd(..) => "a '&&'",
 			&DoubleEqual(..) => "a '=='",
+			&DoubleForwardSlash(..) => "a '//'",
 			&DoubleLeftAngle(..) => "a '<<'",
 			&DoublePipe(..) => "a '||'",
 			&DoublePlus(..) => "a '++'",

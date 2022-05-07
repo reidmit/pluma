@@ -109,3 +109,12 @@ dict = {
 
 set<a> = alias
   dict<a, done>
+
+
+
+
+division = 10 / 2
+
+use path/to/some/module
+
+regex = // "hello" //

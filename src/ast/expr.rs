@@ -14,6 +14,11 @@ pub enum ExprKind {
 		left: Box<ExprNode>,
 		right: Box<ExprNode>,
 	},
+	BinaryOperation {
+		op: Operator,
+		left: Box<ExprNode>,
+		right: Box<ExprNode>,
+	},
 	Lambda(LambdaNode),
 	Call(CallNode),
 	Dict {
@@ -30,9 +35,7 @@ pub enum ExprKind {
 		elements: Vec<ExprNode>,
 	},
 	Literal(LiteralNode),
-	RegExpr {
-		regex: RegExprNode,
-	},
+	RegExpr(RegExprNode),
 	Tuple {
 		entries: Vec<(Option<IdentifierNode>, ExprNode)>,
 	},
@@ -51,6 +54,7 @@ impl std::fmt::Debug for ExprKind {
 		match &self {
 			Access { receiver, property } => write!(f, "{:?}.{:?}", receiver, property),
 			Assignment { left, right } => write!(f, "({:?}) {:?}", left, right),
+			BinaryOperation { op, left, right } => write!(f, "{:#?} {:#?}", op, vec![left, right]),
 			Lambda(lambda) => write!(f, "{:#?}", lambda),
 			Call(call) => write!(f, "{:#?}", call),
 			Dict { entries } => write!(f, "{:#?}", entries),
@@ -61,7 +65,7 @@ impl std::fmt::Debug for ExprKind {
 			Let(let_node) => write!(f, "{:#?}", let_node),
 			List { elements } => write!(f, "{:#?}", elements),
 			Literal(lit) => write!(f, "{:?}", lit),
-			RegExpr { regex } => write!(f, "{:#?}", regex),
+			RegExpr(regex) => write!(f, "{:#?}", regex),
 			Tuple { entries } => write!(f, "tuple {:#?}", entries),
 		}
 	}

@@ -230,9 +230,13 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_expression(&mut self) -> Option<ExprNode> {
-		let expr = match self.current_token {
+		self.parse_expression_with_binding_power(0)
+	}
+
+	fn parse_expression_with_binding_power(&mut self, min_bp: u8) -> Option<ExprNode> {
+		let mut lhs_expr = match self.current_token {
 			Some(Token::LeftParen(..)) => self.parse_parenthetical(),
-			Some(Token::ForwardSlash(..)) => self.parse_regular_expression(),
+			Some(Token::DoubleForwardSlash(..)) => self.parse_regular_expression(),
 			Some(Token::KeywordLet(..)) => self.parse_let_expression().map(|node| ExprNode {
 				pos: node.pos,
 				kind: ExprKind::Let(node),
@@ -253,43 +257,40 @@ impl<'a> Parser<'a> {
 			}),
 			// TODO: other types of digits
 			_ => None,
-		};
+		}?;
 
-		if expr.is_some()
-			&& self.current_token.is_some()
-			&& self.current_token.unwrap().can_start_expression()
-		{
-			// Parse it as a call!
-			let expr = expr.unwrap();
-			let start = expr.pos.0;
-			let mut args = Vec::new();
+		loop {
+			let operator: Operator = match self.current_token {
+				Some(token) => match token.try_into() {
+					Ok(operator) => {
+						self.advance();
+						operator
+					}
+					_ => break,
+				},
+				_ => break,
+			};
 
-			while self.current_token.is_some() && self.current_token.unwrap().can_start_expression() {
-				let arg = self.parse_expression()?;
-				args.push(arg);
+			let (left_bp, right_bp) = operator.infix_binding_power();
+
+			if left_bp < min_bp {
+				break;
 			}
 
-			let end = match args.last() {
-				Some(arg) => arg.pos.1,
-				_ => start,
-			};
+			let rhs_expr = self.parse_expression_with_binding_power(right_bp)?;
 
-			let call_node = CallNode {
-				pos: (start, end),
-				callee: Box::new(expr),
-				args,
-			};
-
-			return Some(ExprNode {
-				pos: call_node.pos,
-				kind: ExprKind::Call(call_node),
-			});
+			lhs_expr = ExprNode {
+				pos: (lhs_expr.pos.0, rhs_expr.pos.1),
+				kind: ExprKind::BinaryOperation {
+					op: operator,
+					left: Box::new(lhs_expr),
+					right: Box::new(rhs_expr),
+				},
+			}
 		}
 
-		expr
+		Some(lhs_expr)
 	}
-
-	fn parse_expression_with_binding_power(&mut self, min_binding_power: usize) -> Option<ExprNode> {}
 
 	fn parse_identifier(&mut self) -> Option<IdentifierNode> {
 		let (start, end) = match self.current_token {
@@ -528,7 +529,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_regular_expression(&mut self) -> Option<ExprNode> {
-		let start = expect_token_and_do!(self, Token::ForwardSlash, {
+		let start = expect_token_and_do!(self, Token::DoubleForwardSlash, {
 			let (start, _) = self.current_token_position();
 			self.advance();
 			start
@@ -540,7 +541,7 @@ impl<'a> Parser<'a> {
 
 		self.skip_line_breaks();
 
-		let end = expect_token_and_do!(self, Token::ForwardSlash, {
+		let end = expect_token_and_do!(self, Token::DoubleForwardSlash, {
 			let (_, end) = self.current_token_position();
 			self.advance();
 			end
@@ -558,7 +559,7 @@ impl<'a> Parser<'a> {
 
 		Some(ExprNode {
 			pos: (start, end),
-			kind: ExprKind::RegExpr { regex },
+			kind: ExprKind::RegExpr(regex),
 		})
 	}
 
