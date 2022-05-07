@@ -52,8 +52,8 @@ pub enum ParseErrorKind {
 	UnexpectedMethodPart,
 	UnexpectedExpressionAfterCall,
 	UnexpectedExpressionAfterDot,
-	UnexpectedToken(Token),
-	UnexpectedTokenExpectedEOF,
+	UnexpectedToken { actual: Token, expected: Token },
+	UnexpectedTokenExpectedEOF { actual: Token },
 	UnexpectedTokenExpectedOperator,
 }
 
@@ -119,8 +119,12 @@ impl fmt::Display for ParseError {
 			UnexpectedMethodPart => write!(f, "Unexpected part of method name."),
 			UnexpectedExpressionAfterCall => write!(f, "Unexpected expression after arguments."),
 			UnexpectedExpressionAfterDot => write!(f, "Unexpected expression after '.'."),
-			UnexpectedToken(expected) => write!(f, "Unexpected token. Expected {}.", expected),
-			UnexpectedTokenExpectedEOF => write!(f, "Unexpected token. Expected end of file."),
+			UnexpectedToken { actual, expected } => {
+				write!(f, "Unexpected token ({}). Expected {}.", actual, expected)
+			}
+			UnexpectedTokenExpectedEOF { actual } => {
+				write!(f, "Unexpected token ({}). Expected end of file.", actual)
+			}
 			UnexpectedTokenExpectedOperator => write!(f, "Unexpected token. Expected an operator."),
 		}
 	}

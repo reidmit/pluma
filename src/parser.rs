@@ -29,7 +29,10 @@ macro_rules! expect_token_and_do {
 			Some(tok) => {
 				return $self.error(ParseError {
 					pos: tok.get_position(),
-					kind: ParseErrorKind::UnexpectedToken($tokType(0, 0)),
+					kind: ParseErrorKind::UnexpectedToken {
+						actual: tok,
+						expected: $tokType(0, 0),
+					},
 				});
 			}
 			None => {
@@ -101,10 +104,12 @@ impl<'a> Parser<'a> {
 			}
 		}
 
-		if let Some(_extra_token) = self.current_token {
+		if let Some(extra_token) = self.current_token {
 			self.error::<ModuleNode>(ParseError {
 				pos: self.current_token_position(),
-				kind: ParseErrorKind::UnexpectedTokenExpectedEOF,
+				kind: ParseErrorKind::UnexpectedTokenExpectedEOF {
+					actual: extra_token,
+				},
 			});
 		}
 
@@ -262,13 +267,14 @@ impl<'a> Parser<'a> {
 		loop {
 			let operator: Operator = match self.current_token {
 				Some(token) => match token.try_into() {
-					Ok(operator) => {
-						self.advance();
-						operator
+					Ok(operator) => operator,
+					_ => {
+						break;
 					}
-					_ => break,
 				},
-				_ => break,
+				_ => {
+					break;
+				}
 			};
 
 			let (left_bp, right_bp) = operator.infix_binding_power();
@@ -276,6 +282,9 @@ impl<'a> Parser<'a> {
 			if left_bp < min_bp {
 				break;
 			}
+
+			// advance past the operator, now that we're going to use it
+			self.advance();
 
 			let rhs_expr = self.parse_expression_with_binding_power(right_bp)?;
 
@@ -288,6 +297,8 @@ impl<'a> Parser<'a> {
 				},
 			}
 		}
+
+		println!("lhs {:#?}", lhs_expr);
 
 		Some(lhs_expr)
 	}

@@ -1,7 +1,7 @@
 use pencil::*;
 
 const SOURCE: &str = r#"
-result = 47 + 2 * 3
+result = 1 + 2 - 3
 "#;
 
 pub fn main() {
