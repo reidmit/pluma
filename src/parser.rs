@@ -1,0 +1,907 @@
+use crate::ast::*;
+use crate::parse_error::*;
+use crate::tokenizer::Tokenizer;
+use crate::tokens::Token;
+use std::collections::HashMap;
+
+macro_rules! current_token_is {
+	($self:ident, $tokType:path) => {
+		match $self.current_token {
+			Some($tokType(..)) => true,
+			_ => false,
+		}
+	};
+}
+
+macro_rules! next_token_is {
+	($self:ident, $tokType:path) => {
+		match $self.tokenizer.peek() {
+			Some($tokType(..)) => true,
+			_ => false,
+		}
+	};
+}
+
+macro_rules! expect_token_and_do {
+	($self:ident, $tokType:path, $block:tt) => {
+		match $self.current_token {
+			Some($tokType(..)) => $block,
+			Some(tok) => {
+				return $self.error(ParseError {
+					pos: tok.get_position(),
+					kind: ParseErrorKind::UnexpectedToken($tokType(0, 0)),
+				});
+			}
+			None => {
+				return $self.error(ParseError {
+					pos: ($self.source.len(), $self.source.len()),
+					kind: ParseErrorKind::UnexpectedEOF($tokType(0, 0)),
+				});
+			}
+		}
+	};
+}
+
+macro_rules! read_string {
+	($self:ident, $start:expr, $end:expr) => {
+		String::from_utf8($self.source[$start..$end].to_vec()).expect("not utf-8")
+	};
+}
+
+macro_rules! read_string_with_escapes {
+	($self:ident, $start:expr, $end:expr) => {
+		read_string!($self, $start, $end)
+			.replace("\\\"", "\"")
+			.replace("\\\\", "\\")
+			.replace("\\t", "\t")
+			.replace("\\r", "\r")
+			.replace("\\n", "\n")
+	};
+}
+
+pub struct Parser<'a> {
+	source: &'a Vec<u8>,
+	tokenizer: Tokenizer<'a>,
+	errors: Vec<ParseError>,
+	current_token: Option<Token>,
+	prev_token: Option<Token>,
+	line_break_starts: Vec<usize>,
+}
+
+impl<'a> Parser<'a> {
+	pub fn new(source: &'a Vec<u8>, tokenizer: Tokenizer<'a>) -> Parser<'a> {
+		return Parser {
+			source,
+			tokenizer,
+			errors: Vec::new(),
+			current_token: None,
+			prev_token: None,
+			line_break_starts: Vec::new(),
+		};
+	}
+
+	pub fn parse_module(
+		&mut self,
+	) -> (
+		ModuleNode,
+		(HashMap<usize, String>, Vec<usize>),
+		Vec<ParseError>,
+	) {
+		let mut body = Vec::new();
+
+		// Read the first token
+		self.advance();
+
+		loop {
+			self.skip_line_breaks();
+
+			match self.parse_definition() {
+				Some(statement) => body.push(statement),
+				_ => break,
+			}
+		}
+
+		if let Some(_extra_token) = self.current_token {
+			self.error::<ModuleNode>(ParseError {
+				pos: self.current_token_position(),
+				kind: ParseErrorKind::UnexpectedTokenExpectedEOF,
+			});
+		}
+
+		let start = body.first().map_or(0, |node| node.pos.0);
+		let end = body.last().map_or(0, |node| node.pos.1);
+
+		let module_node = ModuleNode {
+			pos: (start, end),
+			body,
+		};
+
+		let comment_data = (
+			self.tokenizer.comments.clone(),
+			self.line_break_starts.clone(),
+		);
+
+		(module_node, comment_data, self.errors.clone())
+	}
+
+	fn advance(&mut self) {
+		self.prev_token = self.current_token;
+		self.current_token = self.tokenizer.next();
+	}
+
+	fn skip_line_breaks(&mut self) -> bool {
+		let mut skipped_any = false;
+
+		while current_token_is!(self, Token::LineBreak) {
+			self.line_break_starts.push(self.current_token_position().0);
+
+			skipped_any = true;
+
+			self.advance()
+		}
+
+		skipped_any
+	}
+
+	fn current_token_position(&self) -> (usize, usize) {
+		match self.current_token {
+			Some(token) => token.get_position(),
+			_ => match self.prev_token {
+				Some(token) => token.get_position(),
+				_ => (0, 0),
+			},
+		}
+	}
+
+	fn error<A>(&mut self, err: ParseError) -> Option<A> {
+		self.errors.push(err);
+		None
+	}
+
+	fn parse_lambda(&mut self) -> Option<LambdaNode> {
+		let start = expect_token_and_do!(self, Token::BackSlash, {
+			let (start, _) = self.current_token_position();
+			self.advance();
+			start
+		});
+
+		self.skip_line_breaks();
+
+		let mut body = Vec::new();
+
+		self.skip_line_breaks();
+
+		while let Some(node) = self.parse_expression() {
+			body.push(node);
+
+			if current_token_is!(self, Token::Semicolon) {
+				self.advance();
+				self.skip_line_breaks();
+			} else {
+				break;
+			}
+		}
+
+		self.skip_line_breaks();
+
+		let end = match body.last() {
+			Some(expr) => expr.pos.1,
+			_ => start,
+		};
+
+		Some(LambdaNode {
+			pos: (start, end),
+			params: Vec::new(),
+			body,
+		})
+	}
+
+	fn parse_decimal_number(&mut self) -> Option<LiteralNode> {
+		let (start, end) = expect_token_and_do!(self, Token::DecimalDigits, {
+			let pos = self.current_token_position();
+			self.advance();
+			pos
+		});
+
+		if current_token_is!(self, Token::Dot) && next_token_is!(self, Token::DecimalDigits) {
+			self.advance();
+
+			expect_token_and_do!(self, Token::DecimalDigits, {
+				let (_, end) = self.current_token_position();
+
+				self.advance();
+
+				let str_value = read_string!(self, start, end);
+				let float_value = str_value.parse::<f64>().unwrap();
+
+				return Some(LiteralNode {
+					kind: LiteralKind::FloatDecimal(float_value),
+					pos: (start, end),
+				});
+			});
+		}
+
+		let value = self.parse_numeric_literal(start, end, 10);
+
+		Some(LiteralNode {
+			kind: LiteralKind::IntDecimal(value),
+			pos: (start, end),
+		})
+	}
+
+	fn parse_expression(&mut self) -> Option<ExprNode> {
+		let expr = match self.current_token {
+			Some(Token::LeftParen(..)) => self.parse_parenthetical(),
+			Some(Token::ForwardSlash(..)) => self.parse_regular_expression(),
+			Some(Token::KeywordLet(..)) => self.parse_let_expression().map(|node| ExprNode {
+				pos: node.pos,
+				kind: ExprKind::Let(node),
+			}),
+			Some(Token::BackSlash(..)) => self.parse_lambda().map(|lambda| ExprNode {
+				pos: lambda.pos,
+				kind: ExprKind::Lambda(lambda),
+			}),
+			Some(Token::LeftBracket(..)) => self.parse_list_or_dict(),
+			Some(Token::StringLiteral(..)) => self.parse_string(),
+			Some(Token::Identifier(..)) => self.parse_identifier().map(|ident| ExprNode {
+				pos: ident.pos,
+				kind: ExprKind::Identifier(ident),
+			}),
+			Some(Token::DecimalDigits(..)) => self.parse_decimal_number().map(|literal| ExprNode {
+				pos: literal.pos,
+				kind: ExprKind::Literal(literal),
+			}),
+			// TODO: other types of digits
+			_ => None,
+		};
+
+		if expr.is_some()
+			&& self.current_token.is_some()
+			&& self.current_token.unwrap().can_start_expression()
+		{
+			// Parse it as a call!
+			let expr = expr.unwrap();
+			let start = expr.pos.0;
+			let mut args = Vec::new();
+
+			while self.current_token.is_some() && self.current_token.unwrap().can_start_expression() {
+				let arg = self.parse_expression()?;
+				args.push(arg);
+			}
+
+			let end = match args.last() {
+				Some(arg) => arg.pos.1,
+				_ => start,
+			};
+
+			let call_node = CallNode {
+				pos: (start, end),
+				callee: Box::new(expr),
+				args,
+			};
+
+			return Some(ExprNode {
+				pos: call_node.pos,
+				kind: ExprKind::Call(call_node),
+			});
+		}
+
+		expr
+	}
+
+	fn parse_expression_with_binding_power(&mut self, min_binding_power: usize) -> Option<ExprNode> {}
+
+	fn parse_identifier(&mut self) -> Option<IdentifierNode> {
+		let (start, end) = match self.current_token {
+			Some(Token::Identifier(start, end)) => {
+				self.advance();
+				(start, end)
+			}
+			_ => return None,
+		};
+
+		let name = read_string!(self, start, end);
+
+		Some(IdentifierNode {
+			pos: (start, end),
+			name,
+		})
+	}
+
+	fn parse_let_expression(&mut self) -> Option<LetNode> {
+		let start = expect_token_and_do!(self, Token::KeywordLet, {
+			let (start, _) = self.current_token_position();
+			self.advance();
+			start
+		});
+
+		let name = match self.parse_identifier() {
+			Some(node) => node,
+			_ => todo!(),
+		};
+
+		expect_token_and_do!(self, Token::Equal, {
+			self.advance();
+		});
+
+		let (end, value) = match self.parse_expression() {
+			Some(node) => (node.pos.1, node),
+			_ => {
+				return self.error(ParseError {
+					pos: self.current_token_position(),
+					kind: ParseErrorKind::MissingRightHandSideOfAssignment,
+				})
+			}
+		};
+
+		Some(LetNode {
+			pos: (start, end),
+			name,
+			value: Box::new(value),
+		})
+	}
+
+	fn parse_list_or_dict(&mut self) -> Option<ExprNode> {
+		let start = expect_token_and_do!(self, Token::LeftBracket, {
+			let pos = self.current_token_position();
+			self.advance();
+			pos.0
+		});
+
+		let mut list_elements = Vec::new();
+		let mut dict_entries = Vec::new();
+
+		while let Some(expr) = self.parse_expression() {
+			if current_token_is!(self, Token::Colon) {
+				if !list_elements.is_empty() {
+					self.error::<ExprNode>(ParseError {
+						pos: self.current_token_position(),
+						kind: ParseErrorKind::UnexpectedDictValueInArray,
+					});
+				}
+
+				self.advance();
+
+				match self.parse_expression() {
+					Some(val) => dict_entries.push((expr, val)),
+					_ => {
+						return self.error(ParseError {
+							pos: self.current_token_position(),
+							kind: ParseErrorKind::MissingDictValue,
+						})
+					}
+				}
+			} else {
+				if !dict_entries.is_empty() {
+					self.error::<ExprNode>(ParseError {
+						pos: self.current_token_position(),
+						kind: ParseErrorKind::MissingDictValue,
+					});
+				}
+
+				list_elements.push(expr);
+			}
+
+			if current_token_is!(self, Token::Comma) {
+				self.advance()
+			} else {
+				break;
+			}
+		}
+
+		let kind = if list_elements.is_empty() && dict_entries.is_empty() {
+			if current_token_is!(self, Token::Colon) {
+				self.advance();
+				ExprKind::Dict { entries: vec![] }
+			} else {
+				ExprKind::List { elements: vec![] }
+			}
+		} else if list_elements.len() > 0 {
+			ExprKind::List {
+				elements: list_elements,
+			}
+		} else {
+			ExprKind::Dict {
+				entries: dict_entries,
+			}
+		};
+
+		let end = expect_token_and_do!(self, Token::RightBracket, {
+			let pos = self.current_token_position();
+			self.advance();
+			pos.1
+		});
+
+		Some(ExprNode {
+			pos: (start, end),
+			kind,
+		})
+	}
+
+	fn parse_numeric_literal(&self, start: usize, end: usize, radix: i32) -> i32 {
+		let mut result: i32 = 0;
+		let mut i: i32 = 1;
+
+		for byte in self.source[start..end].iter().rev() {
+			let byte_value = match byte {
+				b'0'..=b'9' => byte - 48,
+				b'A'..=b'F' => byte - 65,
+				b'a'..=b'f' => byte - 97,
+				_ => unreachable!(),
+			};
+
+			result += (byte_value as i32) * i;
+			i *= radix;
+		}
+
+		result
+	}
+
+	fn parse_parenthetical(&mut self) -> Option<ExprNode> {
+		// "parentheticals" are a little tricky, because they could be a number of things:
+		//  - "()" is an empty tuple
+		//  - "(expr)" is an expression in parentheses (a grouping),
+		//  - "(expr, expr, ...)" is an unlabeled tuple
+		//  - "(ident: expr, ...)" is a labeled tuple
+
+		let paren_start = expect_token_and_do!(self, Token::LeftParen, {
+			let (start, _) = self.current_token_position();
+			self.advance();
+			start
+		});
+
+		self.skip_line_breaks();
+
+		let mut entries = Vec::new();
+
+		while let Some(node) = self.parse_expression() {
+			if current_token_is!(self, Token::Colon) {
+				self.advance();
+
+				match node.kind {
+					ExprKind::Identifier(label) => {
+						self.skip_line_breaks();
+
+						if let Some(value) = self.parse_expression() {
+							entries.push((Some(label), value));
+						} else {
+							self.error::<ExprNode>(ParseError {
+								pos: node.pos,
+								kind: ParseErrorKind::MissingExpressionAfterLabelInTuple,
+							});
+						}
+					}
+					_ => {
+						self.error::<ExprNode>(ParseError {
+							pos: node.pos,
+							kind: ParseErrorKind::MissingLabelInTuple,
+						});
+					}
+				}
+			} else {
+				entries.push((None, node));
+			}
+
+			self.skip_line_breaks();
+
+			match self.current_token {
+				Some(Token::Comma(..)) => {
+					self.advance();
+					self.skip_line_breaks();
+				}
+				_ => break,
+			}
+		}
+
+		self.skip_line_breaks();
+
+		let paren_end = expect_token_and_do!(self, Token::RightParen, {
+			let pos = self.current_token_position();
+			self.advance();
+			pos.1
+		});
+
+		self.advance();
+
+		if entries.is_empty() {
+			// If no expressions were found between the ()s, it's an empty tuple
+			return Some(ExprNode {
+				pos: (paren_start, paren_end),
+				kind: ExprKind::EmptyTuple,
+			});
+		}
+
+		if entries.len() == 1 {
+			// If only one, unlabeled expression was found, it's a grouping
+			if let Some((None, first_expr)) = entries.pop() {
+				return Some(ExprNode {
+					pos: (paren_start, paren_end),
+					kind: ExprKind::Grouping(Box::new(first_expr)),
+				});
+			}
+		}
+
+		Some(ExprNode {
+			pos: (paren_start, paren_end),
+			kind: ExprKind::Tuple { entries },
+		})
+	}
+
+	fn parse_regular_expression(&mut self) -> Option<ExprNode> {
+		let start = expect_token_and_do!(self, Token::ForwardSlash, {
+			let (start, _) = self.current_token_position();
+			self.advance();
+			start
+		});
+
+		self.skip_line_breaks();
+
+		let maybe_reg_expr_node = self.parse_regular_expression_body();
+
+		self.skip_line_breaks();
+
+		let end = expect_token_and_do!(self, Token::ForwardSlash, {
+			let (_, end) = self.current_token_position();
+			self.advance();
+			end
+		});
+
+		let regex = match maybe_reg_expr_node {
+			Some(expr) => expr,
+			None => {
+				return self.error(ParseError {
+					pos: (start, end),
+					kind: ParseErrorKind::EmptyRegularExpression,
+				})
+			}
+		};
+
+		Some(ExprNode {
+			pos: (start, end),
+			kind: ExprKind::RegExpr { regex },
+		})
+	}
+
+	fn parse_regular_expression_body(&mut self) -> Option<RegExprNode> {
+		let mut first_term = None;
+		let mut other_terms = Vec::new();
+
+		let mut term = self.parse_regular_expression_term();
+
+		loop {
+			if term.is_some() {
+				self.skip_line_breaks();
+
+				if first_term.is_none() {
+					first_term = term;
+				} else {
+					other_terms.push(term.unwrap());
+				}
+
+				match self.current_token {
+					Some(Token::Pipe(..)) => {
+						self.advance();
+						term = self.parse_regular_expression_term();
+						continue;
+					}
+					_ => {}
+				}
+			}
+
+			break;
+		}
+
+		if first_term.is_none() {
+			return None;
+		}
+
+		if other_terms.is_empty() {
+			return first_term;
+		}
+
+		other_terms.insert(0, first_term.unwrap());
+
+		let start = other_terms.first().unwrap().pos.0;
+		let end = other_terms.last().unwrap().pos.1;
+
+		Some(RegExprNode {
+			pos: (start, end),
+			kind: RegExprKind::Alternation(other_terms),
+		})
+	}
+
+	fn parse_regular_expression_term(&mut self) -> Option<RegExprNode> {
+		let mut first_part = None;
+		let mut other_parts = Vec::new();
+
+		loop {
+			self.skip_line_breaks();
+
+			let part = match self.current_token {
+				Some(Token::Identifier(start, end)) => {
+					self.advance();
+
+					let name = read_string!(self, start, end);
+
+					RegExprNode {
+						pos: (start, end),
+						kind: RegExprKind::CharacterClass(name),
+					}
+				}
+
+				Some(Token::StringLiteral(start, end)) => {
+					self.advance();
+
+					let value = read_string_with_escapes!(self, start, end);
+
+					RegExprNode {
+						pos: (start, end),
+						kind: RegExprKind::Literal(value),
+					}
+				}
+
+				Some(Token::LeftParen(start, end)) => {
+					self.advance();
+
+					let expr = match self.parse_regular_expression_body() {
+						Some(expr) => expr,
+						None => {
+							return self.error(ParseError {
+								pos: (start, end),
+								kind: ParseErrorKind::EmptyRegularExpressionGroup,
+							})
+						}
+					};
+
+					expect_token_and_do!(self, Token::RightParen, { self.advance() });
+
+					RegExprNode {
+						pos: (start, end),
+						kind: RegExprKind::Grouping(Box::new(expr)),
+					}
+				}
+
+				Some(Token::LeftAngle(start, end)) => {
+					self.advance();
+
+					let name = expect_token_and_do!(self, Token::Identifier, {
+						let (start, end) = self.current_token_position();
+						let name = read_string!(self, start, end);
+						self.advance();
+						name
+					});
+
+					expect_token_and_do!(self, Token::Colon, { self.advance() });
+
+					let expr = match self.parse_regular_expression_body() {
+						Some(expr) => expr,
+						None => {
+							return self.error(ParseError {
+								pos: (start, end),
+								kind: ParseErrorKind::EmptyRegularExpressionGroup,
+							})
+						}
+					};
+
+					expect_token_and_do!(self, Token::RightAngle, { self.advance() });
+
+					RegExprNode {
+						pos: (start, end),
+						kind: RegExprKind::NamedCapture(name, Box::new(expr)),
+					}
+				}
+
+				_ => break,
+			};
+
+			let modified_part = match self.current_token {
+				Some(Token::Star(_, end)) => {
+					self.advance();
+
+					RegExprNode {
+						pos: (part.pos.0, end),
+						kind: RegExprKind::ZeroOrMore(Box::new(part)),
+					}
+				}
+
+				Some(Token::Plus(_, end)) => {
+					self.advance();
+
+					RegExprNode {
+						pos: (part.pos.0, end),
+						kind: RegExprKind::OneOrMore(Box::new(part)),
+					}
+				}
+
+				Some(Token::Question(_, end)) => {
+					self.advance();
+
+					RegExprNode {
+						pos: (part.pos.0, end),
+						kind: RegExprKind::OneOrZero(Box::new(part)),
+					}
+				}
+
+				Some(Token::LeftBrace(_, _)) => {
+					self.advance();
+
+					let mut min_count = None;
+					let mut max_count = None;
+					let mut has_comma = false;
+
+					if current_token_is!(self, Token::DecimalDigits) {
+						let (start, end) = self.current_token_position();
+						let value = self.parse_numeric_literal(start, end, 10) as usize;
+						min_count = Some(value);
+						self.advance();
+					}
+
+					if current_token_is!(self, Token::Comma) {
+						has_comma = true;
+
+						self.advance();
+
+						if current_token_is!(self, Token::DecimalDigits) {
+							let (start, end) = self.current_token_position();
+							let value = self.parse_numeric_literal(start, end, 10) as usize;
+							max_count = Some(value);
+							self.advance();
+						}
+					}
+
+					let end = expect_token_and_do!(self, Token::RightBrace, {
+						let (_, end) = self.current_token_position();
+						self.advance();
+						end
+					});
+
+					match (min_count, max_count, has_comma) {
+						(Some(min), None, true) => RegExprNode {
+							pos: (part.pos.0, end),
+							kind: RegExprKind::AtLeastCount(Box::new(part), min),
+						},
+
+						(None, Some(max), true) => RegExprNode {
+							pos: (part.pos.0, end),
+							kind: RegExprKind::AtMostCount(Box::new(part), max),
+						},
+
+						(Some(min), None, false) => RegExprNode {
+							pos: (part.pos.0, end),
+							kind: RegExprKind::ExactCount(Box::new(part), min),
+						},
+
+						(Some(min), Some(max), true) => {
+							if min > max {
+								self.error::<RegExprNode>(ParseError {
+									pos: (part.pos.0, end),
+									kind: ParseErrorKind::InvalidRegularExpressionCountModifier,
+								});
+							}
+
+							RegExprNode {
+								pos: (part.pos.0, end),
+								kind: RegExprKind::RangeCount(Box::new(part), min, max),
+							}
+						}
+
+						_ => {
+							return self.error(ParseError {
+								pos: (part.pos.0, end),
+								kind: ParseErrorKind::EmptyRegularExpressionCount,
+							})
+						}
+					}
+				}
+
+				_ => part,
+			};
+
+			self.skip_line_breaks();
+
+			if first_part.is_none() {
+				first_part = Some(modified_part);
+			} else {
+				other_parts.push(modified_part);
+			}
+		}
+
+		if other_parts.is_empty() {
+			if first_part.is_some() {
+				return first_part;
+			}
+
+			return None;
+		}
+
+		match first_part {
+			Some(part) => other_parts.insert(0, part),
+			None => return None,
+		};
+
+		Some(RegExprNode {
+			pos: (0, 0),
+			kind: RegExprKind::Sequence(other_parts),
+		})
+	}
+
+	fn parse_definition(&mut self) -> Option<DefinitionNode> {
+		let name = self.parse_identifier()?;
+		let start = name.pos.0;
+
+		expect_token_and_do!(self, Token::Equal, { self.advance() });
+
+		let value = self.parse_expression()?;
+
+		let end = value.pos.1;
+
+		Some(DefinitionNode {
+			name,
+			pos: (start, end),
+			kind: DefinitionKind::Expr(value),
+		})
+	}
+
+	fn parse_string(&mut self) -> Option<ExprNode> {
+		let (start, end) = expect_token_and_do!(self, Token::StringLiteral, {
+			let pos = self.current_token_position();
+			self.advance();
+			pos
+		});
+
+		let value = read_string_with_escapes!(self, start, end);
+
+		let literal = LiteralNode {
+			pos: (start, end),
+			kind: LiteralKind::Str(value),
+		};
+
+		let expr_node = ExprNode {
+			pos: (start, end),
+			kind: ExprKind::Literal(literal),
+		};
+
+		if current_token_is!(self, Token::InterpolationStart) {
+			let mut parts = vec![expr_node];
+			let mut interpolation_end = end;
+
+			while current_token_is!(self, Token::InterpolationStart) {
+				self.advance();
+
+				match self.parse_expression() {
+					Some(node) => parts.push(node),
+					_ => break,
+				}
+
+				expect_token_and_do!(self, Token::InterpolationEnd, {
+					self.advance();
+				});
+
+				expect_token_and_do!(self, Token::StringLiteral, {
+					let (start, end) = self.current_token_position();
+
+					interpolation_end = end;
+
+					let value = read_string_with_escapes!(self, start, end);
+
+					parts.push(ExprNode {
+						pos: (start, end),
+						kind: ExprKind::Literal(LiteralNode {
+							pos: (start, end),
+							kind: LiteralKind::Str(value),
+						}),
+					});
+
+					self.advance()
+				})
+			}
+
+			return Some(ExprNode {
+				pos: (start, interpolation_end),
+				kind: ExprKind::Interpolation { parts },
+			});
+		}
+
+		Some(expr_node)
+	}
+}
