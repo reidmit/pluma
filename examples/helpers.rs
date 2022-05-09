@@ -22,3 +22,8 @@ pub fn parse_and_print(source: &str) {
     println!("errors: {:#?}", errors);
   }
 }
+
+#[allow(dead_code)]
+pub fn main() {
+  println!(":-----)")
+}

@@ -484,7 +484,7 @@ impl<'a> Parser<'a> {
 		})
 	}
 
-	fn parse_numeric_literal(&self, start: usize, end: usize, radix: usize) -> usize {
+	fn parse_numeric_literal(&mut self, start: usize, end: usize, radix: usize) -> usize {
 		let mut result: usize = 0;
 		let mut i: usize = 1;
 
@@ -496,9 +496,25 @@ impl<'a> Parser<'a> {
 				_ => unreachable!(),
 			} as usize;
 
-			result += byte_value * i;
+			if let Some(next_result) = result.checked_add(byte_value * i) {
+				result = next_result;
+			} else {
+				self.error::<LiteralNode>(ParseError {
+					pos: (start, end),
+					kind: ParseErrorKind::OverflowingIntegerLiteral,
+				});
+				return 0;
+			}
 
-			i *= radix;
+			if let Some(next_i) = i.checked_mul(radix) {
+				i = next_i;
+			} else {
+				self.error::<LiteralNode>(ParseError {
+					pos: (start, end),
+					kind: ParseErrorKind::OverflowingIntegerLiteral,
+				});
+				return 0;
+			}
 		}
 
 		result

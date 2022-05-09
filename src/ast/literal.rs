@@ -19,11 +19,11 @@ impl std::fmt::Debug for LiteralNode {
 		use LiteralKind::*;
 
 		match &self.kind {
-			FloatDecimal(val) => write!(f, "float:{}-{} {}", self.pos.0, self.pos.1, val),
-			IntDecimal(val) => write!(f, "decimal:{}-{} {}", self.pos.0, self.pos.1, val),
-			IntOctal(val) => write!(f, "octal:{}-{} {}", self.pos.0, self.pos.1, val),
-			IntHex(val) => write!(f, "hex:{}-{} {}", self.pos.0, self.pos.1, val),
-			IntBinary(val) => write!(f, "binary:{}-{} {}", self.pos.0, self.pos.1, val),
+			FloatDecimal(val) => write!(f, "float:{}-{} {:?}", self.pos.0, self.pos.1, val),
+			IntDecimal(val) => write!(f, "int:{}-{} {:?}", self.pos.0, self.pos.1, val),
+			IntOctal(val) => write!(f, "int:{}-{} {:?}", self.pos.0, self.pos.1, val),
+			IntHex(val) => write!(f, "int:{}-{} {:?}", self.pos.0, self.pos.1, val),
+			IntBinary(val) => write!(f, "int:{}-{} {:?}", self.pos.0, self.pos.1, val),
 			Str(val) => write!(f, "string:{}-{} {:?}", self.pos.0, self.pos.1, val),
 		}
 	}

@@ -43,6 +43,7 @@ pub enum ParseErrorKind {
 	MissingTypeInBlockType,
 	MissingTypeInTypeAssertion,
 	MissingTypeNameInTypeDefinition,
+	OverflowingIntegerLiteral,
 	ReturnOutsideDefinitionBody,
 	UnclosedInterpolation,
 	UnclosedParentheses,
@@ -106,6 +107,7 @@ impl fmt::Display for ParseError {
 			}
 			MissingTypeInTypeAssertion => write!(f, "Missing type in type assertion."),
 			MissingTypeNameInTypeDefinition => write!(f, "Missing type name in type definition."),
+			OverflowingIntegerLiteral => write!(f, "Number is too large to be stored as int."),
 			ReturnOutsideDefinitionBody => {
 				write!(f, "A 'return' cannot appear outside of a 'def'.")
 			}
