@@ -230,6 +230,11 @@ impl<'a> Iterator for Tokenizer<'a> {
 					return Some(Semicolon(start_index, self.index));
 				}
 
+				b'`' => {
+					self.index += 1;
+					return Some(Backtick(start_index, self.index));
+				}
+
 				b'\\' => {
 					self.index += 1;
 					return Some(BackSlash(start_index, self.index));
@@ -327,6 +332,12 @@ impl<'a> Iterator for Tokenizer<'a> {
 
 				b'.' => {
 					self.index += 1;
+
+					if self.source[self.index] == b'.' {
+						self.index += 1;
+						return Some(DoubleDot(start_index, self.index));
+					}
+
 					return Some(Dot(start_index, self.index));
 				}
 

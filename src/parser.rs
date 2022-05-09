@@ -241,7 +241,7 @@ impl<'a> Parser<'a> {
 	fn parse_expression_with_binding_power(&mut self, min_bp: u8) -> Option<ExprNode> {
 		let mut lhs_expr = match self.current_token {
 			Some(Token::LeftParen(..)) => self.parse_parenthetical(),
-			Some(Token::DoubleForwardSlash(..)) => self.parse_regular_expression(),
+			Some(Token::Backtick(..)) => self.parse_regular_expression(),
 			Some(Token::KeywordLet(..)) => self.parse_let_expression().map(|node| ExprNode {
 				pos: node.pos,
 				kind: ExprKind::Let(node),
@@ -297,8 +297,6 @@ impl<'a> Parser<'a> {
 				},
 			}
 		}
-
-		println!("lhs {:#?}", lhs_expr);
 
 		Some(lhs_expr)
 	}
@@ -475,7 +473,7 @@ impl<'a> Parser<'a> {
 						self.skip_line_breaks();
 
 						if let Some(value) = self.parse_expression() {
-							entries.push((Some(label), value));
+							entries.push(TupleEntry(Some(label), value));
 						} else {
 							self.error::<ExprNode>(ParseError {
 								pos: node.pos,
@@ -491,7 +489,7 @@ impl<'a> Parser<'a> {
 					}
 				}
 			} else {
-				entries.push((None, node));
+				entries.push(TupleEntry(None, node));
 			}
 
 			self.skip_line_breaks();
@@ -513,8 +511,6 @@ impl<'a> Parser<'a> {
 			pos.1
 		});
 
-		self.advance();
-
 		if entries.is_empty() {
 			// If no expressions were found between the ()s, it's an empty tuple
 			return Some(ExprNode {
@@ -525,7 +521,7 @@ impl<'a> Parser<'a> {
 
 		if entries.len() == 1 {
 			// If only one, unlabeled expression was found, it's a grouping
-			if let Some((None, first_expr)) = entries.pop() {
+			if let Some(TupleEntry(None, first_expr)) = entries.pop() {
 				return Some(ExprNode {
 					pos: (paren_start, paren_end),
 					kind: ExprKind::Grouping(Box::new(first_expr)),
@@ -533,14 +529,16 @@ impl<'a> Parser<'a> {
 			}
 		}
 
+		// Otherwise, it's a tuple with multiple entries, some of which may
+		// have labels:
 		Some(ExprNode {
 			pos: (paren_start, paren_end),
-			kind: ExprKind::Tuple { entries },
+			kind: ExprKind::Tuple(entries),
 		})
 	}
 
 	fn parse_regular_expression(&mut self) -> Option<ExprNode> {
-		let start = expect_token_and_do!(self, Token::DoubleForwardSlash, {
+		let start = expect_token_and_do!(self, Token::Backtick, {
 			let (start, _) = self.current_token_position();
 			self.advance();
 			start
@@ -552,7 +550,7 @@ impl<'a> Parser<'a> {
 
 		self.skip_line_breaks();
 
-		let end = expect_token_and_do!(self, Token::DoubleForwardSlash, {
+		let end = expect_token_and_do!(self, Token::Backtick, {
 			let (_, end) = self.current_token_position();
 			self.advance();
 			end
@@ -910,7 +908,7 @@ impl<'a> Parser<'a> {
 
 			return Some(ExprNode {
 				pos: (start, interpolation_end),
-				kind: ExprKind::Interpolation { parts },
+				kind: ExprKind::Interpolation(parts),
 			});
 		}
 

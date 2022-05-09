@@ -2,7 +2,9 @@ mod helpers;
 
 const SOURCE: &str = r#"
 main = \
-  print "hello, world"
+  let sum = 1 + 2;
+  let product = sum * 100;
+  product ** 120 - 10
 "#;
 
 pub fn main() {

@@ -16,6 +16,9 @@ pub enum Token {
 	/// `\` token
 	BackSlash(usize, usize),
 
+	/// `\`` token
+	Backtick(usize, usize),
+
 	/// `!` token
 	Bang(usize, usize),
 
@@ -45,6 +48,9 @@ pub enum Token {
 
 	/// `&&` token
 	DoubleAnd(usize, usize),
+
+	/// `..` token
+	DoubleDot(usize, usize),
 
 	/// `==` token
 	DoubleEqual(usize, usize),
@@ -184,6 +190,7 @@ impl Token {
 			And(start, end)
 			| Arrow(start, end)
 			| BackSlash(start, end)
+			| Backtick(start, end)
 			| Bang(start, end)
 			| BangEqual(start, end)
 			| BinaryDigits(start, end)
@@ -194,6 +201,7 @@ impl Token {
 			| DecimalDigits(start, end)
 			| Dot(start, end)
 			| DoubleAnd(start, end)
+			| DoubleDot(start, end)
 			| DoubleEqual(start, end)
 			| DoubleForwardSlash(start, end)
 			| DoubleLeftAngle(start, end)
@@ -260,6 +268,7 @@ impl fmt::Display for Token {
 			&And(..) => "a '&'",
 			&Arrow(..) => "a '->'",
 			&BackSlash(..) => "a '\\'",
+			&Backtick(..) => "a '`'",
 			&Bang(..) => "a '!'",
 			&BangEqual(..) => "a '!='",
 			&BinaryDigits(..) => "binary digits (e.g. 0b101)",
@@ -270,6 +279,7 @@ impl fmt::Display for Token {
 			&DecimalDigits(..) => "decimal digits (e.g. 47)",
 			&Dot(..) => "a '.'",
 			&DoubleAnd(..) => "a '&&'",
+			&DoubleDot(..) => "a '..'",
 			&DoubleEqual(..) => "a '=='",
 			&DoubleForwardSlash(..) => "a '//'",
 			&DoubleLeftAngle(..) => "a '<<'",

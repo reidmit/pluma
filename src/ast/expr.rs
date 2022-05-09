@@ -27,19 +27,17 @@ pub enum ExprKind {
 	EmptyTuple,
 	Grouping(Box<ExprNode>),
 	Identifier(IdentifierNode),
-	Interpolation {
-		parts: Vec<ExprNode>,
-	},
+	Interpolation(Vec<ExprNode>),
 	Let(LetNode),
 	List {
 		elements: Vec<ExprNode>,
 	},
 	Literal(LiteralNode),
 	RegExpr(RegExprNode),
-	Tuple {
-		entries: Vec<(Option<IdentifierNode>, ExprNode)>,
-	},
+	Tuple(Vec<TupleEntry>),
 }
+
+pub struct TupleEntry(pub Option<IdentifierNode>, pub ExprNode);
 
 impl std::fmt::Debug for ExprNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -61,12 +59,22 @@ impl std::fmt::Debug for ExprKind {
 			EmptyTuple => write!(f, "()"),
 			Grouping(expr) => write!(f, "({:#?})", expr),
 			Identifier(ident) => write!(f, "{:#?}", ident),
-			Interpolation { parts } => write!(f, "interpolation {:#?}", parts),
+			Interpolation(parts) => write!(f, "interpolation {:#?}", parts),
 			Let(let_node) => write!(f, "{:#?}", let_node),
 			List { elements } => write!(f, "{:#?}", elements),
 			Literal(lit) => write!(f, "{:?}", lit),
 			RegExpr(regex) => write!(f, "{:#?}", regex),
-			Tuple { entries } => write!(f, "tuple {:#?}", entries),
+			Tuple(entries) => write!(f, "tuple {:#?}", entries),
+		}
+	}
+}
+
+impl std::fmt::Debug for TupleEntry {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		if let Some(label) = &self.0 {
+			write!(f, "(label {:?}) {:#?}", label, self.1)
+		} else {
+			write!(f, "{:#?}", self.1)
 		}
 	}
 }

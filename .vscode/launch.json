@@ -26,15 +26,15 @@
     {
       "type": "lldb",
       "request": "launch",
-      "name": "Debug example 'hello_world'",
+      "name": "Debug 'debugging' example",
       "cargo": {
         "args": [
           "build",
-          "--example=hello_world",
+          "--example=debugging",
           "--package=pencil"
         ],
         "filter": {
-          "name": "hello_world",
+          "name": "debugging",
           "kind": "example"
         }
       },

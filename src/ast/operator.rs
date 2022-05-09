@@ -5,17 +5,19 @@ pub enum Operator {
   Subtraction,
   Multiplication,
   Division,
+  Exponentiation,
 }
 
 impl Operator {
   pub fn infix_binding_power(&self) -> (u8, u8) {
     use Operator::*;
 
-    // if right > left, it's right-associative
-    // if left > right, it's left-associative
+    // if left < right, it's left-associative
+    // if left > right, it's right-associative
     match &self {
       Addition | Subtraction => (1, 2),
       Multiplication | Division => (3, 4),
+      Exponentiation => (6, 5),
     }
   }
 }
@@ -29,6 +31,7 @@ impl TryFrom<Token> for Operator {
       Token::Minus(..) => Ok(Operator::Subtraction),
       Token::Star(..) => Ok(Operator::Multiplication),
       Token::ForwardSlash(..) => Ok(Operator::Division),
+      Token::DoubleStar(..) => Ok(Operator::Exponentiation),
       _ => Err(()),
     }
   }
@@ -41,6 +44,7 @@ impl std::fmt::Debug for Operator {
       Operator::Subtraction => write!(f, "op-subtract"),
       Operator::Multiplication => write!(f, "op-multiply"),
       Operator::Division => write!(f, "op-divide"),
+      Operator::Exponentiation => write!(f, "op-exponent"),
     }
   }
 }
