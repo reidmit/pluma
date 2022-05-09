@@ -7,10 +7,10 @@ pub struct LiteralNode {
 
 pub enum LiteralKind {
 	FloatDecimal(f64),
-	IntDecimal(i32),
-	IntOctal(i32),
-	IntHex(i32),
-	IntBinary(i32),
+	IntDecimal(usize),
+	IntOctal(usize),
+	IntHex(usize),
+	IntBinary(usize),
 	Str(String),
 }
 

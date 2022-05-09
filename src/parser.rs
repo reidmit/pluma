@@ -234,6 +234,51 @@ impl<'a> Parser<'a> {
 		})
 	}
 
+	fn parse_binary_number(&mut self) -> Option<LiteralNode> {
+		let (start, end) = expect_token_and_do!(self, Token::BinaryDigits, {
+			let pos = self.current_token_position();
+			self.advance();
+			pos
+		});
+
+		let value = self.parse_numeric_literal(start + 2, end, 2);
+
+		Some(LiteralNode {
+			kind: LiteralKind::IntBinary(value),
+			pos: (start, end),
+		})
+	}
+
+	fn parse_octal_number(&mut self) -> Option<LiteralNode> {
+		let (start, end) = expect_token_and_do!(self, Token::OctalDigits, {
+			let pos = self.current_token_position();
+			self.advance();
+			pos
+		});
+
+		let value = self.parse_numeric_literal(start + 2, end, 8);
+
+		Some(LiteralNode {
+			kind: LiteralKind::IntOctal(value),
+			pos: (start, end),
+		})
+	}
+
+	fn parse_hex_number(&mut self) -> Option<LiteralNode> {
+		let (start, end) = expect_token_and_do!(self, Token::HexDigits, {
+			let pos = self.current_token_position();
+			self.advance();
+			pos
+		});
+
+		let value = self.parse_numeric_literal(start + 2, end, 16);
+
+		Some(LiteralNode {
+			kind: LiteralKind::IntHex(value),
+			pos: (start, end),
+		})
+	}
+
 	fn parse_expression(&mut self) -> Option<ExprNode> {
 		self.parse_expression_with_binding_power(0)
 	}
@@ -260,7 +305,18 @@ impl<'a> Parser<'a> {
 				pos: literal.pos,
 				kind: ExprKind::Literal(literal),
 			}),
-			// TODO: other types of digits
+			Some(Token::BinaryDigits(..)) => self.parse_binary_number().map(|literal| ExprNode {
+				pos: literal.pos,
+				kind: ExprKind::Literal(literal),
+			}),
+			Some(Token::OctalDigits(..)) => self.parse_octal_number().map(|literal| ExprNode {
+				pos: literal.pos,
+				kind: ExprKind::Literal(literal),
+			}),
+			Some(Token::HexDigits(..)) => self.parse_hex_number().map(|literal| ExprNode {
+				pos: literal.pos,
+				kind: ExprKind::Literal(literal),
+			}),
 			_ => None,
 		}?;
 
@@ -428,19 +484,20 @@ impl<'a> Parser<'a> {
 		})
 	}
 
-	fn parse_numeric_literal(&self, start: usize, end: usize, radix: i32) -> i32 {
-		let mut result: i32 = 0;
-		let mut i: i32 = 1;
+	fn parse_numeric_literal(&self, start: usize, end: usize, radix: usize) -> usize {
+		let mut result: usize = 0;
+		let mut i: usize = 1;
 
 		for byte in self.source[start..end].iter().rev() {
 			let byte_value = match byte {
 				b'0'..=b'9' => byte - 48,
-				b'A'..=b'F' => byte - 65,
-				b'a'..=b'f' => byte - 97,
+				b'A'..=b'F' => byte - 55,
+				b'a'..=b'f' => byte - 87,
 				_ => unreachable!(),
-			};
+			} as usize;
 
-			result += (byte_value as i32) * i;
+			result += byte_value * i;
+
 			i *= radix;
 		}
 

@@ -10,7 +10,7 @@ match expressions w/ patterns
 
 ## phase 1.5
 
-imports of other modules
+imports of other modules (`use`)
 
 ## phase 2
 
