@@ -911,8 +911,15 @@ impl<'a> Parser<'a> {
 	fn parse_definition(&mut self) -> Option<DefinitionNode> {
 		let name = self.parse_identifier()?;
 		let start = name.pos.0;
+		let doc_comment_lines_start = self.line_break_starts.len();
 
-		expect_token_and_do!(self, Token::Equal, { self.advance() });
+		self.skip_line_breaks();
+
+		let doc_comment_lines_end = self.line_break_starts.len();
+
+		expect_token_and_do!(self, Token::Equal, {
+			self.advance();
+		});
 
 		let value = self.parse_expression()?;
 
@@ -921,6 +928,7 @@ impl<'a> Parser<'a> {
 		Some(DefinitionNode {
 			name,
 			pos: (start, end),
+			doc_comment_lines: (doc_comment_lines_start..doc_comment_lines_end),
 			kind: DefinitionKind::Expr(value),
 		})
 	}

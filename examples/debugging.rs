@@ -1,7 +1,10 @@
 mod helpers;
 
 const SOURCE: &str = r#"
-haha = 0xdeadbeef
+haha
+  # lol ???
+  # line 2 haha
+  = 0xdeadbeef
 "#;
 
 pub fn main() {
