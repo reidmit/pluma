@@ -1,23 +1,26 @@
-done = struct
+done
+  = struct ()
 
+any
+  = trait
 
-any = trait
+bool
+  = enum
+    | true
+    | false
 
+entrypoint
+  = alias
+    list<string> -> done
 
-bool = enum
-  | true
-  | false
+printable
+  = trait
+    | stringify self -> string
 
+ref
+  = struct<a>
+    . value : mutable<a>
 
-entrypoint = alias
-  list<string> -> done
-
-
-printable = trait
-  | stringify self -> string
-
-
-ref = struct<a>
-  . value : mutable<a>
-
-
+do func
+  : (() -> done) -> done
+  = func ()

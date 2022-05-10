@@ -68,7 +68,7 @@ pub struct Parser<'a> {
 	errors: Vec<ParseError>,
 	current_token: Option<Token>,
 	prev_token: Option<Token>,
-	line_break_starts: Vec<usize>,
+	line_breaks: Vec<Position>,
 }
 
 impl<'a> Parser<'a> {
@@ -79,17 +79,11 @@ impl<'a> Parser<'a> {
 			errors: Vec::new(),
 			current_token: None,
 			prev_token: None,
-			line_break_starts: Vec::new(),
+			line_breaks: Vec::new(),
 		};
 	}
 
-	pub fn parse_module(
-		&mut self,
-	) -> (
-		ModuleNode,
-		(HashMap<usize, String>, Vec<usize>),
-		Vec<ParseError>,
-	) {
+	pub fn parse_module(&mut self) -> (ModuleNode, HashMap<usize, String>, Vec<ParseError>) {
 		let mut body = Vec::new();
 
 		// Read the first token
@@ -121,12 +115,11 @@ impl<'a> Parser<'a> {
 			body,
 		};
 
-		let comment_data = (
+		(
+			module_node,
 			self.tokenizer.comments.clone(),
-			self.line_break_starts.clone(),
-		);
-
-		(module_node, comment_data, self.errors.clone())
+			self.errors.clone(),
+		)
 	}
 
 	fn advance(&mut self) {
@@ -138,7 +131,7 @@ impl<'a> Parser<'a> {
 		let mut skipped_any = false;
 
 		while current_token_is!(self, Token::LineBreak) {
-			self.line_break_starts.push(self.current_token_position().0);
+			self.line_breaks.push(self.current_token_position());
 
 			skipped_any = true;
 
@@ -158,31 +151,70 @@ impl<'a> Parser<'a> {
 		}
 	}
 
+	fn get_indent_level(&self, index: usize) -> usize {
+		match self.line_breaks.last() {
+			Some((_, line_break_end)) => index - line_break_end,
+			_ => 0,
+		}
+	}
+
+	fn current_token_indent_level(&self) -> usize {
+		match self.current_token {
+			Some(token) => self.get_indent_level(token.get_position().0),
+			_ => 0,
+		}
+	}
+
 	fn error<A>(&mut self, err: ParseError) -> Option<A> {
 		self.errors.push(err);
 		None
 	}
 
 	fn parse_lambda(&mut self) -> Option<LambdaNode> {
-		let start = expect_token_and_do!(self, Token::BackSlash, {
+		let start = expect_token_and_do!(self, Token::KeywordFun, {
 			let (start, _) = self.current_token_position();
 			self.advance();
 			start
 		});
 
+		let mut params = Vec::new();
+
+		// TODO: allow patterns here, not just identifiers
+		while current_token_is!(self, Token::Identifier) {
+			let param = self.parse_identifier()?;
+			params.push(param);
+		}
+
+		expect_token_and_do!(self, Token::Arrow, {
+			self.advance();
+		});
+
+		if self.current_token.is_some() && self.current_token.unwrap().can_start_expression() {
+			// must be a one-line lambda, so parse a single expression and return
+			let node = self.parse_expression()?;
+			let body_end = node.pos.1;
+
+			self.skip_line_breaks();
+
+			return Some(LambdaNode {
+				pos: (start, body_end),
+				params,
+				body: vec![node],
+			});
+		}
+
 		self.skip_line_breaks();
+
+		let body_indent_level = self.current_token_indent_level();
 
 		let mut body = Vec::new();
-
-		self.skip_line_breaks();
 
 		while let Some(node) = self.parse_expression() {
 			body.push(node);
 
-			if current_token_is!(self, Token::Semicolon) {
-				self.advance();
-				self.skip_line_breaks();
-			} else {
+			self.skip_line_breaks();
+
+			if self.current_token_indent_level() != body_indent_level {
 				break;
 			}
 		}
@@ -196,7 +228,7 @@ impl<'a> Parser<'a> {
 
 		Some(LambdaNode {
 			pos: (start, end),
-			params: Vec::new(),
+			params,
 			body,
 		})
 	}
@@ -286,17 +318,22 @@ impl<'a> Parser<'a> {
 	fn parse_expression_with_binding_power(&mut self, min_bp: u8) -> Option<ExprNode> {
 		let mut lhs_expr = match self.current_token {
 			Some(Token::LeftParen(..)) => self.parse_parenthetical(),
+			Some(Token::LeftBracket(..)) => self.parse_list(),
+			Some(Token::LeftBrace(..)) => self.parse_dict(),
 			Some(Token::Backtick(..)) => self.parse_regular_expression(),
+			Some(Token::StringLiteral(..)) => self.parse_string(),
+			Some(Token::KeywordIf(..)) => self.parse_if_expression().map(|if_node| ExprNode {
+				pos: if_node.pos,
+				kind: ExprKind::If(if_node),
+			}),
 			Some(Token::KeywordLet(..)) => self.parse_let_expression().map(|node| ExprNode {
 				pos: node.pos,
 				kind: ExprKind::Let(node),
 			}),
-			Some(Token::BackSlash(..)) => self.parse_lambda().map(|lambda| ExprNode {
+			Some(Token::KeywordFun(..)) => self.parse_lambda().map(|lambda| ExprNode {
 				pos: lambda.pos,
 				kind: ExprKind::Lambda(lambda),
 			}),
-			Some(Token::LeftBracket(..)) => self.parse_list_or_dict(),
-			Some(Token::StringLiteral(..)) => self.parse_string(),
 			Some(Token::Identifier(..)) => self.parse_identifier().map(|ident| ExprNode {
 				pos: ident.pos,
 				kind: ExprKind::Identifier(ident),
@@ -321,16 +358,9 @@ impl<'a> Parser<'a> {
 		}?;
 
 		loop {
-			let operator: Operator = match self.current_token {
-				Some(token) => match token.try_into() {
-					Ok(operator) => operator,
-					_ => {
-						break;
-					}
-				},
-				_ => {
-					break;
-				}
+			let operator = match self.current_token.and_then(Operator::from_token) {
+				Some(op) => op,
+				_ => break,
 			};
 
 			let (left_bp, right_bp) = operator.infix_binding_power();
@@ -374,6 +404,152 @@ impl<'a> Parser<'a> {
 		})
 	}
 
+	fn parse_if_expression(&mut self) -> Option<IfNode> {
+		let start = expect_token_and_do!(self, Token::KeywordIf, {
+			let (start, _) = self.current_token_position();
+			self.advance();
+			start
+		});
+
+		let discriminant = self.parse_expression()?;
+
+		self.skip_line_breaks();
+
+		let mut cases = Vec::new();
+
+		expect_token_and_do!(self, Token::KeywordIs, {});
+
+		while current_token_is!(self, Token::KeywordIs) {
+			let case_start = self.current_token_position().0;
+
+			self.advance();
+
+			let case_pattern = self.parse_pattern()?;
+
+			expect_token_and_do!(self, Token::KeywordThen, {
+				self.advance();
+			});
+
+			let case_body = self.parse_expression()?;
+
+			self.skip_line_breaks();
+
+			cases.push(IfCaseNode {
+				pos: (case_start, case_body.pos.1),
+				pattern: case_pattern,
+				body: case_body,
+			})
+		}
+
+		Some(IfNode {
+			pos: (start, 0),
+			discriminant: Box::new(discriminant),
+			cases,
+		})
+	}
+
+	fn parse_pattern(&mut self) -> Option<PatternNode> {
+		match self.current_token {
+			Some(Token::Identifier(..)) => {
+				let id_node = self.parse_identifier().unwrap();
+
+				// TODO: handle constructors with multiple args
+				if let Some(arg_pattern) = self.parse_pattern() {
+					return Some(PatternNode {
+						pos: (id_node.pos.0, arg_pattern.pos.1),
+						kind: PatternKind::Constructor(id_node, Box::new(arg_pattern)),
+					});
+				}
+
+				Some(PatternNode {
+					pos: id_node.pos,
+					kind: PatternKind::Identifier(id_node),
+				})
+			}
+
+			Some(Token::LeftParen(start, _)) => {
+				self.advance();
+
+				let mut entries = Vec::new();
+
+				loop {
+					let next_token = self.tokenizer.peek();
+
+					match (self.current_token, next_token) {
+						(Some(Token::Identifier(..)), Some(Token::Colon(..))) => {
+							// It's a labeled entry!
+							let label = self.parse_identifier().unwrap();
+
+							expect_token_and_do!(self, Token::Colon, { self.advance() });
+
+							let pattern = match self.parse_pattern() {
+								Some(pattern) => pattern,
+								_ => break,
+							};
+
+							entries.push((Some(label), pattern));
+						}
+
+						_ => {
+							// It's an unlabeled entry...
+							let pattern = match self.parse_pattern() {
+								Some(pattern) => pattern,
+								_ => break,
+							};
+
+							entries.push((None, pattern));
+						}
+					}
+
+					match self.current_token {
+						Some(Token::Comma(..)) => self.advance(),
+						_ => break,
+					}
+				}
+
+				let end = expect_token_and_do!(self, Token::RightParen, {
+					let (_, end) = self.current_token_position();
+					self.advance();
+					end
+				});
+
+				Some(PatternNode {
+					pos: (start, end),
+					kind: PatternKind::Tuple(entries),
+				})
+			}
+
+			Some(Token::Underscore(start, end)) => {
+				self.advance();
+
+				Some(PatternNode {
+					pos: (start, end),
+					kind: PatternKind::Underscore,
+				})
+			}
+
+			Some(Token::StringLiteral(..)) => self.parse_string().map(|expr_node| match expr_node.kind {
+				ExprKind::Literal(literal) => PatternNode {
+					pos: literal.pos,
+					kind: PatternKind::Literal(literal),
+				},
+				ExprKind::Interpolation(parts) => PatternNode {
+					pos: expr_node.pos,
+					kind: PatternKind::Interpolation(parts),
+				},
+				_ => unreachable!(),
+			}),
+
+			Some(Token::DecimalDigits(..)) => self.parse_decimal_number().map(|lit_node| PatternNode {
+				pos: lit_node.pos,
+				kind: PatternKind::Literal(lit_node),
+			}),
+
+			// TODO: other kinds of digits here
+			_ => None,
+		}
+	}
+
 	fn parse_let_expression(&mut self) -> Option<LetNode> {
 		let start = expect_token_and_do!(self, Token::KeywordLet, {
 			let (start, _) = self.current_token_position();
@@ -407,70 +583,77 @@ impl<'a> Parser<'a> {
 		})
 	}
 
-	fn parse_list_or_dict(&mut self) -> Option<ExprNode> {
+	fn parse_dict(&mut self) -> Option<ExprNode> {
+		let start = expect_token_and_do!(self, Token::LeftBrace, {
+			let pos = self.current_token_position();
+			self.advance();
+			pos.0
+		});
+
+		self.skip_line_breaks();
+
+		let mut entries = Vec::new();
+
+		while let Some(expr) = self.parse_expression() {
+			expect_token_and_do!(self, Token::Colon, {
+				self.advance();
+			});
+
+			match self.parse_expression() {
+				Some(val) => entries.push((expr, val)),
+				_ => {
+					return self.error(ParseError {
+						pos: self.current_token_position(),
+						kind: ParseErrorKind::MissingDictValue,
+					})
+				}
+			}
+
+			if current_token_is!(self, Token::Comma) {
+				self.advance();
+				self.skip_line_breaks();
+			} else {
+				break;
+			}
+		}
+
+		self.skip_line_breaks();
+
+		let end = expect_token_and_do!(self, Token::RightBrace, {
+			let pos = self.current_token_position();
+			self.advance();
+			pos.1
+		});
+
+		Some(ExprNode {
+			pos: (start, end),
+			kind: ExprKind::Dict(entries),
+		})
+	}
+
+	fn parse_list(&mut self) -> Option<ExprNode> {
 		let start = expect_token_and_do!(self, Token::LeftBracket, {
 			let pos = self.current_token_position();
 			self.advance();
 			pos.0
 		});
 
-		let mut list_elements = Vec::new();
-		let mut dict_entries = Vec::new();
+		self.skip_line_breaks();
+
+		let mut elements = Vec::new();
 
 		while let Some(expr) = self.parse_expression() {
-			if current_token_is!(self, Token::Colon) {
-				if !list_elements.is_empty() {
-					self.error::<ExprNode>(ParseError {
-						pos: self.current_token_position(),
-						kind: ParseErrorKind::UnexpectedDictValueInArray,
-					});
-				}
-
-				self.advance();
-
-				match self.parse_expression() {
-					Some(val) => dict_entries.push((expr, val)),
-					_ => {
-						return self.error(ParseError {
-							pos: self.current_token_position(),
-							kind: ParseErrorKind::MissingDictValue,
-						})
-					}
-				}
-			} else {
-				if !dict_entries.is_empty() {
-					self.error::<ExprNode>(ParseError {
-						pos: self.current_token_position(),
-						kind: ParseErrorKind::MissingDictValue,
-					});
-				}
-
-				list_elements.push(expr);
-			}
+			elements.push(expr);
 
 			if current_token_is!(self, Token::Comma) {
-				self.advance()
+				self.advance();
+				self.skip_line_breaks();
 			} else {
 				break;
 			}
 		}
 
-		let kind = if list_elements.is_empty() && dict_entries.is_empty() {
-			if current_token_is!(self, Token::Colon) {
-				self.advance();
-				ExprKind::Dict { entries: vec![] }
-			} else {
-				ExprKind::List { elements: vec![] }
-			}
-		} else if list_elements.len() > 0 {
-			ExprKind::List {
-				elements: list_elements,
-			}
-		} else {
-			ExprKind::Dict {
-				entries: dict_entries,
-			}
-		};
+		self.skip_line_breaks();
 
 		let end = expect_token_and_do!(self, Token::RightBracket, {
 			let pos = self.current_token_position();
@@ -480,7 +663,7 @@ impl<'a> Parser<'a> {
 
 		Some(ExprNode {
 			pos: (start, end),
-			kind,
+			kind: ExprKind::List(elements),
 		})
 	}
 
@@ -911,11 +1094,11 @@ impl<'a> Parser<'a> {
 	fn parse_definition(&mut self) -> Option<DefinitionNode> {
 		let name = self.parse_identifier()?;
 		let start = name.pos.0;
-		let doc_comment_lines_start = self.line_break_starts.len();
+		let doc_comment_lines_start = self.line_breaks.len();
 
 		self.skip_line_breaks();
 
-		let doc_comment_lines_end = self.line_break_starts.len();
+		let doc_comment_lines_end = self.line_breaks.len();
 
 		expect_token_and_do!(self, Token::Equal, {
 			self.advance();

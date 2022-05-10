@@ -1,10 +1,8 @@
 mod helpers;
 
 const SOURCE: &str = r#"
-haha
-  # lol ???
-  # line 2 haha
-  = 0xdeadbeef
+main = fun a b c ->
+  a + b * c
 "#;
 
 pub fn main() {

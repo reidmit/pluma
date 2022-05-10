@@ -10,7 +10,7 @@ pub fn parse_and_print(source: &str) {
 
   let mut parser = Parser::new(&bytes, tokenizer);
 
-  let (module, (comments, _), errors) = parser.parse_module();
+  let (module, comments, errors) = parser.parse_module();
 
   if comments.len() > 0 {
     println!("comments: {:#?}", comments);

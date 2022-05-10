@@ -97,11 +97,23 @@ pub enum Token {
 	/// `enum` keyword
 	KeywordEnum(usize, usize),
 
+	/// `fun` keyword
+	KeywordFun(usize, usize),
+
+	/// `if` keyword
+	KeywordIf(usize, usize),
+
+	/// `is` keyword
+	KeywordIs(usize, usize),
+
 	/// `let` keyword
 	KeywordLet(usize, usize),
 
 	/// `struct` keyword
 	KeywordStruct(usize, usize),
+
+	/// `then` keyword
+	KeywordThen(usize, usize),
 
 	/// `trait` keyword
 	KeywordTrait(usize, usize),
@@ -147,9 +159,6 @@ pub enum Token {
 
 	/// `?` token (appears in reg exprs)
 	Question(usize, usize),
-
-	/// `;` token
-	Semicolon(usize, usize),
 
 	/// `>` token
 	RightAngle(usize, usize),
@@ -217,8 +226,12 @@ impl Token {
 			| InterpolationStart(start, end)
 			| KeywordAlias(start, end)
 			| KeywordEnum(start, end)
+			| KeywordFun(start, end)
+			| KeywordIf(start, end)
+			| KeywordIs(start, end)
 			| KeywordLet(start, end)
 			| KeywordStruct(start, end)
+			| KeywordThen(start, end)
 			| KeywordTrait(start, end)
 			| KeywordUse(start, end)
 			| LeftAngle(start, end)
@@ -234,7 +247,6 @@ impl Token {
 			| Pipe(start, end)
 			| Plus(start, end)
 			| Question(start, end)
-			| Semicolon(start, end)
 			| RightAngle(start, end)
 			| RightAngleEqual(start, end)
 			| RightBrace(start, end)
@@ -294,9 +306,13 @@ impl fmt::Display for Token {
 			&InterpolationEnd(..) => "a ')'",
 			&InterpolationStart(..) => "a '$('",
 			&KeywordAlias(..) => "keyword 'alias'",
+			&KeywordFun(..) => "keyword 'fun'",
+			&KeywordIf(..) => "keyword 'if'",
+			&KeywordIs(..) => "keyword 'is'",
 			&KeywordEnum(..) => "keyword 'enum'",
 			&KeywordLet(..) => "keyword 'let'",
 			&KeywordStruct(..) => "keyword 'struct'",
+			&KeywordThen(..) => "keyword 'then'",
 			&KeywordTrait(..) => "keyword 'trait'",
 			&KeywordUse(..) => "keyword 'use'",
 			&LeftAngle(..) => "a '<'",
@@ -317,7 +333,6 @@ impl fmt::Display for Token {
 			&RightBrace(..) => "a '}'",
 			&RightBracket(..) => "a ']'",
 			&RightParen(..) => "a ')'",
-			&Semicolon(..) => "a ';'",
 			&Star(..) => "a '*'",
 			&StringLiteral(..) => "a string",
 			&Tilde(..) => "a '~'",

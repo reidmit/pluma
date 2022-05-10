@@ -225,11 +225,6 @@ impl<'a> Iterator for Tokenizer<'a> {
 					return Some(RightBracket(start_index, self.index));
 				}
 
-				b';' => {
-					self.index += 1;
-					return Some(Semicolon(start_index, self.index));
-				}
-
 				b'`' => {
 					self.index += 1;
 					return Some(Backtick(start_index, self.index));
@@ -419,11 +414,15 @@ impl<'a> Iterator for Tokenizer<'a> {
 					let value = &self.source[start_index..self.index];
 
 					let constructor = match value {
+						b"alias" => KeywordAlias,
+						b"if" => KeywordIf,
+						b"is" => KeywordIs,
 						b"let" => KeywordLet,
 						b"enum" => KeywordEnum,
-						b"alias" => KeywordAlias,
+						b"fun" => KeywordFun,
 						b"use" => KeywordUse,
 						b"struct" => KeywordStruct,
+						b"then" => KeywordThen,
 						b"trait" => KeywordTrait,
 
 						// Anything else is just an identifier:

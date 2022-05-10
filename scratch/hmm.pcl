@@ -1,0 +1,18 @@
+main = fun (args)
+  let thing : maybe<int> = get-answer ()
+
+  let x : int = if thing
+    is some n then n
+    is none then 0
+
+  let x : int = thing ?? 0
+
+  let y : option<int> = if thing
+    is some n then some (n + 10)
+    is none then none
+
+  let y : option<int> = thing
+    | map fun n: n + 10
+
+  repeat 10 fun:
+    print x
