@@ -2,48 +2,50 @@ use crate::tokens::Token;
 
 pub enum Operator {
   Addition,
-  SubtractionOrNegation,
-  Multiplication,
-  Division,
-  Remainder,
-  Exponentiation,
-  LogicalAnd,
-  LogicalOr,
-  LogicalNot,
-  LessThan,
-  GreaterThan,
-  LessThanEquals,
-  GreaterThanEquals,
-  Equality,
-  Inequality,
-  FunctionCall,
-  FieldAccess,
-  IndexAccess,
-  NullCoalescing,
   Chain,
+  Division,
+  Equality,
+  Exponentiation,
+  FieldAccess,
+  FunctionCall,
+  GreaterThan,
+  GreaterThanEquals,
+  IndexAccess,
+  Inequality,
+  LessThan,
+  LessThanEquals,
+  LogicalAnd,
+  LogicalNot,
+  LogicalOr,
+  Multiplication,
+  NullCoalescing,
+  Range,
+  Remainder,
+  SubtractionOrNegation,
 }
 
 impl Operator {
   pub fn from_token(token: Token) -> Option<Operator> {
     match token {
-      Token::Pipe(..) => Some(Operator::Chain),
-      Token::Plus(..) => Some(Operator::Addition),
-      Token::Minus(..) => Some(Operator::SubtractionOrNegation),
-      Token::Star(..) => Some(Operator::Multiplication),
-      Token::ForwardSlash(..) => Some(Operator::Division),
-      Token::Percent(..) => Some(Operator::Remainder),
-      Token::DoubleStar(..) => Some(Operator::Exponentiation),
-      Token::DoubleAnd(..) => Some(Operator::LogicalAnd),
-      Token::DoublePipe(..) => Some(Operator::LogicalOr),
-      Token::LeftAngle(..) => Some(Operator::LessThan),
-      Token::RightAngle(..) => Some(Operator::GreaterThan),
-      Token::LeftAngleEqual(..) => Some(Operator::LessThanEquals),
-      Token::RightAngleEqual(..) => Some(Operator::GreaterThanEquals),
-      Token::DoubleEqual(..) => Some(Operator::Equality),
       Token::BangEqual(..) => Some(Operator::Inequality),
       Token::Dot(..) => Some(Operator::FieldAccess),
-      Token::LeftBracket(..) => Some(Operator::IndexAccess),
+      Token::DoubleAnd(..) => Some(Operator::LogicalAnd),
+      Token::DoubleDot(..) => Some(Operator::Range),
+      Token::DoubleEqual(..) => Some(Operator::Equality),
+      Token::DoublePipe(..) => Some(Operator::LogicalOr),
       Token::DoubleQuestion(..) => Some(Operator::NullCoalescing),
+      Token::DoubleStar(..) => Some(Operator::Exponentiation),
+      Token::ForwardSlash(..) => Some(Operator::Division),
+      Token::LeftAngle(..) => Some(Operator::LessThan),
+      Token::LeftAngleEqual(..) => Some(Operator::LessThanEquals),
+      Token::LeftBracket(..) => Some(Operator::IndexAccess),
+      Token::Minus(..) => Some(Operator::SubtractionOrNegation),
+      Token::Percent(..) => Some(Operator::Remainder),
+      Token::Pipe(..) => Some(Operator::Chain),
+      Token::Plus(..) => Some(Operator::Addition),
+      Token::RightAngle(..) => Some(Operator::GreaterThan),
+      Token::RightAngleEqual(..) => Some(Operator::GreaterThanEquals),
+      Token::Star(..) => Some(Operator::Multiplication),
       _ => None,
     }
   }
@@ -53,8 +55,10 @@ impl Operator {
 
     // if left < right, it's left-associative
     // if left > right, it's right-associative
+    // lower numbers bind weaker than higher numbers
     match &self {
       Chain => Some((0, 1)),
+      Range => Some((10, 11)),
       LogicalOr | NullCoalescing => Some((20, 21)),
       LogicalAnd => Some((30, 31)),
       Equality | Inequality => Some((40, 41)),
@@ -71,6 +75,7 @@ impl Operator {
   pub fn prefix_binding_power(&self) -> ((), u8) {
     use Operator::*;
 
+    // these numbers are relative to those above (see infix_binding_power);
     match &self {
       SubtractionOrNegation => ((), 75),
       LogicalNot => ((), 35),
@@ -84,26 +89,27 @@ impl std::fmt::Debug for Operator {
     use Operator::*;
 
     match &self {
-      Chain => write!(f, "op-chain"),
       Addition => write!(f, "op-add"),
-      SubtractionOrNegation => write!(f, "op-minus"),
-      Multiplication => write!(f, "op-multiply"),
+      Chain => write!(f, "op-chain"),
       Division => write!(f, "op-divide"),
-      Remainder => write!(f, "op-remainder"),
-      Exponentiation => write!(f, "op-exponent"),
-      LogicalAnd => write!(f, "op-logical-and"),
-      LogicalOr => write!(f, "op-logical-or"),
-      LogicalNot => write!(f, "op-logical-not"),
-      LessThan => write!(f, "op-less-than"),
-      GreaterThan => write!(f, "op-greater-than"),
-      LessThanEquals => write!(f, "op-less-than-equals"),
-      GreaterThanEquals => write!(f, "op-greater-than-equals"),
       Equality => write!(f, "op-equality"),
-      Inequality => write!(f, "op-inequality"),
-      FunctionCall => write!(f, "op-call"),
+      Exponentiation => write!(f, "op-exponent"),
       FieldAccess => write!(f, "op-field-access"),
+      FunctionCall => write!(f, "op-call"),
+      GreaterThan => write!(f, "op-greater-than"),
+      GreaterThanEquals => write!(f, "op-greater-than-equals"),
       IndexAccess => write!(f, "op-index-access"),
+      Inequality => write!(f, "op-inequality"),
+      LessThan => write!(f, "op-less-than"),
+      LessThanEquals => write!(f, "op-less-than-equals"),
+      LogicalAnd => write!(f, "op-logical-and"),
+      LogicalNot => write!(f, "op-logical-not"),
+      LogicalOr => write!(f, "op-logical-or"),
+      Multiplication => write!(f, "op-multiply"),
       NullCoalescing => write!(f, "op-null-coalesce"),
+      Range => write!(f, "op-range"),
+      Remainder => write!(f, "op-remainder"),
+      SubtractionOrNegation => write!(f, "op-minus"),
     }
   }
 }

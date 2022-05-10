@@ -1,4 +1,1 @@
-main = fun a b c ->
-  if a && b && c | print
-    is true then "eo"
-    is false then "nooo"
+main = 1 .. get-end ?? 100
