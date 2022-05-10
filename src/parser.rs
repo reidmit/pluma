@@ -354,34 +354,62 @@ impl<'a> Parser<'a> {
 				pos: literal.pos,
 				kind: ExprKind::Literal(literal),
 			}),
+			Some(t @ Token::Minus(start, ..) | t @ Token::Bang(start, ..)) => {
+				let operator = Operator::from_token(t).unwrap();
+				self.advance();
+
+				let (_, right_bp) = operator.prefix_binding_power();
+				let rhs_expr = self.parse_expression_with_binding_power(right_bp)?;
+
+				Some(ExprNode {
+					pos: (start, start),
+					kind: ExprKind::UnaryOperation {
+						op: operator,
+						right: Box::new(rhs_expr),
+					},
+				})
+			}
 			_ => None,
 		}?;
 
 		loop {
+			self.skip_line_breaks();
+
 			let operator = match self.current_token.and_then(Operator::from_token) {
 				Some(op) => op,
 				_ => break,
 			};
 
-			let (left_bp, right_bp) = operator.infix_binding_power();
+			if let Some((left_bp, right_bp)) = operator.infix_binding_power() {
+				if left_bp < min_bp {
+					break;
+				}
 
-			if left_bp < min_bp {
-				break;
+				// advance past the operator
+				self.advance();
+
+				let rhs_expr = self.parse_expression_with_binding_power(right_bp)?;
+
+				if let Operator::IndexAccess = operator {
+					// special case: the [ operator needs a closing ]
+					expect_token_and_do!(self, Token::RightBracket, {
+						self.advance();
+					});
+				}
+
+				lhs_expr = ExprNode {
+					pos: (lhs_expr.pos.0, rhs_expr.pos.1),
+					kind: ExprKind::BinaryOperation {
+						op: operator,
+						left: Box::new(lhs_expr),
+						right: Box::new(rhs_expr),
+					},
+				};
+
+				continue;
 			}
 
-			// advance past the operator, now that we're going to use it
-			self.advance();
-
-			let rhs_expr = self.parse_expression_with_binding_power(right_bp)?;
-
-			lhs_expr = ExprNode {
-				pos: (lhs_expr.pos.0, rhs_expr.pos.1),
-				kind: ExprKind::BinaryOperation {
-					op: operator,
-					left: Box::new(lhs_expr),
-					right: Box::new(rhs_expr),
-				},
-			}
+			break;
 		}
 
 		Some(lhs_expr)

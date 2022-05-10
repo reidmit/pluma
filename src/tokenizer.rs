@@ -284,6 +284,12 @@ impl<'a> Iterator for Tokenizer<'a> {
 
 				b'?' => {
 					self.index += 1;
+
+					if self.source[self.index] == b'?' {
+						self.index += 1;
+						return Some(DoubleQuestion(start_index, self.index));
+					}
+
 					return Some(Question(start_index, self.index));
 				}
 

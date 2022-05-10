@@ -67,6 +67,9 @@ pub enum Token {
 	/// `++ token
 	DoublePlus(usize, usize),
 
+	/// `??` token
+	DoubleQuestion(usize, usize),
+
 	/// `>>` token
 	DoubleRightAngle(usize, usize),
 
@@ -216,6 +219,7 @@ impl Token {
 			| DoubleLeftAngle(start, end)
 			| DoublePipe(start, end)
 			| DoublePlus(start, end)
+			| DoubleQuestion(start, end)
 			| DoubleRightAngle(start, end)
 			| DoubleStar(start, end)
 			| Equal(start, end)
@@ -264,9 +268,9 @@ impl Token {
 		use Token::*;
 
 		match self {
-			Identifier(..) | BackSlash(..) | Colon(..) | DecimalDigits(..) | HexDigits(..)
+			Identifier(..) | KeywordFun(..) | KeywordIf(..) | DecimalDigits(..) | HexDigits(..)
 			| BinaryDigits(..) | OctalDigits(..) | LeftParen(..) | LeftBrace(..) | LeftBracket(..)
-			| ForwardSlash(..) | StringLiteral(..) => true,
+			| Backtick(..) | StringLiteral(..) => true,
 			_ => false,
 		}
 	}
@@ -297,6 +301,7 @@ impl fmt::Display for Token {
 			&DoubleLeftAngle(..) => "a '<<'",
 			&DoublePipe(..) => "a '||'",
 			&DoublePlus(..) => "a '++'",
+			&DoubleQuestion(..) => "a '??'",
 			&DoubleRightAngle(..) => "a '>>'",
 			&DoubleStar(..) => "a '**'",
 			&Equal(..) => "a '='",

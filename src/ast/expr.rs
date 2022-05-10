@@ -19,6 +19,10 @@ pub enum ExprKind {
 		left: Box<ExprNode>,
 		right: Box<ExprNode>,
 	},
+	UnaryOperation {
+		op: Operator,
+		right: Box<ExprNode>,
+	},
 	Lambda(LambdaNode),
 	Call(CallNode),
 	Dict(Vec<(ExprNode, ExprNode)>),
@@ -50,6 +54,7 @@ impl std::fmt::Debug for ExprKind {
 			Access { receiver, property } => write!(f, "{:?}.{:?}", receiver, property),
 			Assignment { left, right } => write!(f, "({:?}) {:?}", left, right),
 			BinaryOperation { op, left, right } => write!(f, "{:#?} {:#?}", op, vec![left, right]),
+			UnaryOperation { op, right } => write!(f, "{:#?} {:#?}", op, right),
 			Lambda(lambda) => write!(f, "{:#?}", lambda),
 			Call(call) => write!(f, "{:#?}", call),
 			Dict(entries) => write!(f, "{:#?}", entries),
