@@ -1,3 +1,0 @@
-main = fun ->
-  x || y || z
-    | lol nice
