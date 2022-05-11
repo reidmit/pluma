@@ -1,1 +1,6 @@
-main = 1 .. get-end ?? 100
+main = \a b c:
+  when vals is (1, 2, 3):
+    4747
+
+  when vals is (1, 2, 3):
+    4747

@@ -36,6 +36,8 @@ pub enum ExprKind {
 	Literal(LiteralNode),
 	RegExpr(RegExprNode),
 	Tuple(Vec<TupleEntry>),
+	When(WhenNode),
+	While(WhileNode),
 }
 
 pub struct TupleEntry(pub Option<IdentifierNode>, pub ExprNode);
@@ -68,6 +70,8 @@ impl std::fmt::Debug for ExprKind {
 			Literal(lit) => write!(f, "{:?}", lit),
 			RegExpr(regex) => write!(f, "{:#?}", regex),
 			Tuple(entries) => write!(f, "tuple {:#?}", entries),
+			When(when_node) => write!(f, "{:#?}", when_node),
+			While(while_node) => write!(f, "{:#?}", while_node),
 		}
 	}
 }

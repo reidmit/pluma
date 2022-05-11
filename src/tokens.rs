@@ -100,8 +100,8 @@ pub enum Token {
 	/// `enum` keyword
 	KeywordEnum(usize, usize),
 
-	/// `fun` keyword
-	KeywordFun(usize, usize),
+	/// `for` keyword
+	KeywordFor(usize, usize),
 
 	/// `if` keyword
 	KeywordIf(usize, usize),
@@ -109,20 +109,26 @@ pub enum Token {
 	/// `is` keyword
 	KeywordIs(usize, usize),
 
+	/// `in` keyword
+	KeywordIn(usize, usize),
+
 	/// `let` keyword
 	KeywordLet(usize, usize),
 
 	/// `struct` keyword
 	KeywordStruct(usize, usize),
 
-	/// `then` keyword
-	KeywordThen(usize, usize),
-
 	/// `trait` keyword
 	KeywordTrait(usize, usize),
 
 	/// `use` keyword
 	KeywordUse(usize, usize),
+
+	/// `when` keyword
+	KeywordWhen(usize, usize),
+
+	/// `while` keyword
+	KeywordWhile(usize, usize),
 
 	/// `<` token
 	LeftAngle(usize, usize),
@@ -230,14 +236,16 @@ impl Token {
 			| InterpolationStart(start, end)
 			| KeywordAlias(start, end)
 			| KeywordEnum(start, end)
-			| KeywordFun(start, end)
+			| KeywordFor(start, end)
 			| KeywordIf(start, end)
+			| KeywordIn(start, end)
 			| KeywordIs(start, end)
 			| KeywordLet(start, end)
 			| KeywordStruct(start, end)
-			| KeywordThen(start, end)
 			| KeywordTrait(start, end)
 			| KeywordUse(start, end)
+			| KeywordWhen(start, end)
+			| KeywordWhile(start, end)
 			| LeftAngle(start, end)
 			| LeftAngleEqual(start, end)
 			| LeftBrace(start, end)
@@ -268,7 +276,7 @@ impl Token {
 		use Token::*;
 
 		match self {
-			Identifier(..) | KeywordFun(..) | KeywordIf(..) | DecimalDigits(..) | HexDigits(..)
+			Identifier(..) | BackSlash(..) | KeywordIf(..) | DecimalDigits(..) | HexDigits(..)
 			| BinaryDigits(..) | OctalDigits(..) | LeftParen(..) | LeftBrace(..) | LeftBracket(..)
 			| Backtick(..) | StringLiteral(..) => true,
 			_ => false,
@@ -311,15 +319,17 @@ impl fmt::Display for Token {
 			&InterpolationEnd(..) => "a ')'",
 			&InterpolationStart(..) => "a '$('",
 			&KeywordAlias(..) => "keyword 'alias'",
-			&KeywordFun(..) => "keyword 'fun'",
+			&KeywordFor(..) => "keyword 'for'",
 			&KeywordIf(..) => "keyword 'if'",
+			&KeywordIn(..) => "keyword 'in'",
 			&KeywordIs(..) => "keyword 'is'",
 			&KeywordEnum(..) => "keyword 'enum'",
 			&KeywordLet(..) => "keyword 'let'",
 			&KeywordStruct(..) => "keyword 'struct'",
-			&KeywordThen(..) => "keyword 'then'",
 			&KeywordTrait(..) => "keyword 'trait'",
 			&KeywordUse(..) => "keyword 'use'",
+			&KeywordWhen(..) => "keyword 'when'",
+			&KeywordWhile(..) => "keyword 'while'",
 			&LeftAngle(..) => "a '<'",
 			&LeftAngleEqual(..) => "a '<='",
 			&LeftBrace(..) => "a '{'",

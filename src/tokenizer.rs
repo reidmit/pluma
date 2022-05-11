@@ -421,15 +421,17 @@ impl<'a> Iterator for Tokenizer<'a> {
 
 					let constructor = match value {
 						b"alias" => KeywordAlias,
+						b"enum" => KeywordEnum,
+						b"for" => KeywordFor,
 						b"if" => KeywordIf,
+						b"in" => KeywordIn,
 						b"is" => KeywordIs,
 						b"let" => KeywordLet,
-						b"enum" => KeywordEnum,
-						b"fun" => KeywordFun,
-						b"use" => KeywordUse,
 						b"struct" => KeywordStruct,
-						b"then" => KeywordThen,
 						b"trait" => KeywordTrait,
+						b"use" => KeywordUse,
+						b"when" => KeywordWhen,
+						b"while" => KeywordWhile,
 
 						// Anything else is just an identifier:
 						_ => Identifier,

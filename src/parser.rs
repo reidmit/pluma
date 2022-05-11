@@ -170,8 +170,34 @@ impl<'a> Parser<'a> {
 		None
 	}
 
+	fn parse_body_expressions(&mut self) -> Option<Vec<ExprNode>> {
+		if self.current_token.is_some() && self.current_token.unwrap().can_start_expression() {
+			// must be a one-line body, so parse a single expression and return
+			let node = self.parse_expression()?;
+			self.skip_line_breaks();
+			return Some(vec![node]);
+		}
+
+		self.skip_line_breaks();
+
+		let mut body = Vec::new();
+		let body_indent_level = self.current_token_indent_level();
+
+		while let Some(node) = self.parse_expression() {
+			body.push(node);
+
+			self.skip_line_breaks();
+
+			if self.current_token_indent_level() != body_indent_level {
+				break;
+			}
+		}
+
+		Some(body)
+	}
+
 	fn parse_lambda(&mut self) -> Option<LambdaNode> {
-		let start = expect_token_and_do!(self, Token::KeywordFun, {
+		let start = expect_token_and_do!(self, Token::BackSlash, {
 			let (start, _) = self.current_token_position();
 			self.advance();
 			start
@@ -185,39 +211,13 @@ impl<'a> Parser<'a> {
 			params.push(param);
 		}
 
-		expect_token_and_do!(self, Token::Arrow, {
+		expect_token_and_do!(self, Token::Colon, {
 			self.advance();
 		});
 
-		if self.current_token.is_some() && self.current_token.unwrap().can_start_expression() {
-			// must be a one-line lambda, so parse a single expression and return
-			let node = self.parse_expression()?;
-			let body_end = node.pos.1;
+		let body = self.parse_body_expressions()?;
 
-			self.skip_line_breaks();
-
-			return Some(LambdaNode {
-				pos: (start, body_end),
-				params,
-				body: vec![node],
-			});
-		}
-
-		self.skip_line_breaks();
-
-		let body_indent_level = self.current_token_indent_level();
-
-		let mut body = Vec::new();
-
-		while let Some(node) = self.parse_expression() {
-			body.push(node);
-
-			self.skip_line_breaks();
-
-			if self.current_token_indent_level() != body_indent_level {
-				break;
-			}
-		}
+		println!("body: {:#?}", body);
 
 		self.skip_line_breaks();
 
@@ -326,11 +326,19 @@ impl<'a> Parser<'a> {
 				pos: if_node.pos,
 				kind: ExprKind::If(if_node),
 			}),
+			Some(Token::KeywordWhen(..)) => self.parse_when_expression().map(|when_node| ExprNode {
+				pos: when_node.pos,
+				kind: ExprKind::When(when_node),
+			}),
+			Some(Token::KeywordWhile(..)) => self.parse_while_expression().map(|while_node| ExprNode {
+				pos: while_node.pos,
+				kind: ExprKind::While(while_node),
+			}),
 			Some(Token::KeywordLet(..)) => self.parse_let_expression().map(|node| ExprNode {
 				pos: node.pos,
 				kind: ExprKind::Let(node),
 			}),
-			Some(Token::KeywordFun(..)) => self.parse_lambda().map(|lambda| ExprNode {
+			Some(Token::BackSlash(..)) => self.parse_lambda().map(|lambda| ExprNode {
 				pos: lambda.pos,
 				kind: ExprKind::Lambda(lambda),
 			}),
@@ -435,6 +443,39 @@ impl<'a> Parser<'a> {
 		})
 	}
 
+	fn parse_when_expression(&mut self) -> Option<WhenNode> {
+		let start = expect_token_and_do!(self, Token::KeywordWhen, {
+			let (start, _) = self.current_token_position();
+			self.advance();
+			start
+		});
+
+		let condition = self.parse_expression()?;
+
+		println!("when! {:#?}", condition);
+
+		expect_token_and_do!(self, Token::KeywordIs, {
+			self.advance();
+		});
+
+		let pattern = self.parse_pattern()?;
+
+		let end = expect_token_and_do!(self, Token::Colon, {
+			let colon_end = self.current_token_position().1;
+			self.advance();
+			colon_end
+		});
+
+		let body = self.parse_body_expressions()?;
+
+		Some(WhenNode {
+			pos: (start, end),
+			condition: Box::new(condition),
+			pattern,
+			body,
+		})
+	}
+
 	fn parse_if_expression(&mut self) -> Option<IfNode> {
 		let start = expect_token_and_do!(self, Token::KeywordIf, {
 			let (start, _) = self.current_token_position();
@@ -457,7 +498,7 @@ impl<'a> Parser<'a> {
 
 			let case_pattern = self.parse_pattern()?;
 
-			expect_token_and_do!(self, Token::KeywordThen, {
+			expect_token_and_do!(self, Token::Colon, {
 				self.advance();
 			});
 
@@ -476,6 +517,37 @@ impl<'a> Parser<'a> {
 			pos: (start, 0),
 			discriminant: Box::new(discriminant),
 			cases,
+		})
+	}
+
+	fn parse_while_expression(&mut self) -> Option<WhileNode> {
+		let start = expect_token_and_do!(self, Token::KeywordWhile, {
+			let (start, _) = self.current_token_position();
+			self.advance();
+			start
+		});
+
+		let condition = self.parse_expression()?;
+
+		expect_token_and_do!(self, Token::KeywordIs, {
+			self.advance();
+		});
+
+		let pattern = self.parse_pattern()?;
+
+		let end = expect_token_and_do!(self, Token::Colon, {
+			let colon_end = self.current_token_position().1;
+			self.advance();
+			colon_end
+		});
+
+		let body = self.parse_body_expressions()?;
+
+		Some(WhileNode {
+			pos: (start, end),
+			condition: Box::new(condition),
+			pattern,
+			body,
 		})
 	}
 
