@@ -355,9 +355,12 @@ impl<'a> Parser<'a> {
 				kind: ExprKind::Literal(literal),
 			}),
 			Some(t @ Token::Minus(start, ..) | t @ Token::Bang(start, ..)) => {
+				// these are prefix unary operators!
 				let operator = Operator::from_token(t).unwrap();
 				self.advance();
 
+				// make sure to parse the expression following the operator with
+				// the correct binding power:
 				let (_, right_bp) = operator.prefix_binding_power();
 				let rhs_expr = self.parse_expression_with_binding_power(right_bp)?;
 
