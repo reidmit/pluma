@@ -1,6 +1,7 @@
 mod call;
 mod definition;
 mod expr;
+mod r#for;
 mod identifier;
 mod r#if;
 mod lambda;
@@ -22,6 +23,7 @@ pub use self::literal::*;
 pub use self::module::*;
 pub use self::operator::*;
 pub use self::pattern::*;
+pub use self::r#for::*;
 pub use self::r#if::*;
 pub use self::r#let::*;
 pub use self::r#while::*;

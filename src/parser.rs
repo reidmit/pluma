@@ -334,6 +334,10 @@ impl<'a> Parser<'a> {
 				pos: while_node.pos,
 				kind: ExprKind::While(while_node),
 			}),
+			Some(Token::KeywordFor(..)) => self.parse_for_expression().map(|for_node| ExprNode {
+				pos: for_node.pos,
+				kind: ExprKind::For(for_node),
+			}),
 			Some(Token::KeywordLet(..)) => self.parse_let_expression().map(|node| ExprNode {
 				pos: node.pos,
 				kind: ExprKind::Let(node),
@@ -546,6 +550,37 @@ impl<'a> Parser<'a> {
 		Some(WhileNode {
 			pos: (start, end),
 			condition: Box::new(condition),
+			pattern,
+			body,
+		})
+	}
+
+	fn parse_for_expression(&mut self) -> Option<ForNode> {
+		let start = expect_token_and_do!(self, Token::KeywordFor, {
+			let (start, _) = self.current_token_position();
+			self.advance();
+			start
+		});
+
+		let pattern = self.parse_pattern()?;
+
+		expect_token_and_do!(self, Token::KeywordIn, {
+			self.advance();
+		});
+
+		let data = self.parse_expression()?;
+
+		let end = expect_token_and_do!(self, Token::Colon, {
+			let colon_end = self.current_token_position().1;
+			self.advance();
+			colon_end
+		});
+
+		let body = self.parse_body_expressions()?;
+
+		Some(ForNode {
+			pos: (start, end),
+			data: Box::new(data),
 			pattern,
 			body,
 		})
