@@ -63,7 +63,7 @@ impl std::fmt::Debug for ExprKind {
 			Dict(entries) => write!(f, "{:#?}", entries),
 			EmptyTuple => write!(f, "()"),
 			For(for_node) => write!(f, "{:#?}", for_node),
-			Grouping(expr) => write!(f, "({:#?})", expr),
+			Grouping(expr) => write!(f, "grouping {:#?}", expr),
 			Identifier(ident) => write!(f, "{:#?}", ident),
 			If(if_node) => write!(f, "{:#?}", if_node),
 			Interpolation(parts) => write!(f, "interpolation {:#?}", parts),

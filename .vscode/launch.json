@@ -7,25 +7,6 @@
     {
       "type": "lldb",
       "request": "launch",
-      "name": "Debug unit tests in library 'pencil'",
-      "cargo": {
-        "args": [
-          "test",
-          "--no-run",
-          "--lib",
-          "--package=pencil"
-        ],
-        "filter": {
-          "name": "pencil",
-          "kind": "lib"
-        }
-      },
-      "args": [],
-      "cwd": "${workspaceFolder}"
-    },
-    {
-      "type": "lldb",
-      "request": "launch",
       "name": "Debug 'debugging' example",
       "cargo": {
         "args": [
@@ -35,25 +16,6 @@
         ],
         "filter": {
           "name": "debugging",
-          "kind": "example"
-        }
-      },
-      "args": [],
-      "cwd": "${workspaceFolder}"
-    },
-    {
-      "type": "lldb",
-      "request": "launch",
-      "name": "Debug unit tests in example 'hello_world'",
-      "cargo": {
-        "args": [
-          "test",
-          "--no-run",
-          "--example=hello_world",
-          "--package=pencil"
-        ],
-        "filter": {
-          "name": "hello_world",
           "kind": "example"
         }
       },

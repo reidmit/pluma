@@ -184,6 +184,9 @@ pub enum Token {
 	/// `)` token
 	RightParen(usize, usize),
 
+	/// `;` token
+	Semicolon(usize, usize),
+
 	/// `*` token
 	Star(usize, usize),
 
@@ -264,6 +267,7 @@ impl Token {
 			| RightBrace(start, end)
 			| RightBracket(start, end)
 			| RightParen(start, end)
+			| Semicolon(start, end)
 			| Star(start, end)
 			| StringLiteral(start, end)
 			| Tilde(start, end)
@@ -348,6 +352,7 @@ impl fmt::Display for Token {
 			&RightBrace(..) => "a '}'",
 			&RightBracket(..) => "a ']'",
 			&RightParen(..) => "a ')'",
+			&Semicolon(..) => "a ';'",
 			&Star(..) => "a '*'",
 			&StringLiteral(..) => "a string",
 			&Tilde(..) => "a '~'",

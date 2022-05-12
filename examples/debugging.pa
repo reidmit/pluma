@@ -1,3 +1,2 @@
 main = \args:
-  for arg in args:
-    arg + 10
+  one (1 + 2)

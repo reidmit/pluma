@@ -151,44 +151,21 @@ impl<'a> Parser<'a> {
 		}
 	}
 
-	fn get_indent_level(&self, index: usize) -> usize {
-		match self.line_breaks.last() {
-			Some((_, line_break_end)) => index - line_break_end,
-			_ => 0,
-		}
-	}
-
-	fn current_token_indent_level(&self) -> usize {
-		match self.current_token {
-			Some(token) => self.get_indent_level(token.get_position().0),
-			_ => 0,
-		}
-	}
-
 	fn error<A>(&mut self, err: ParseError) -> Option<A> {
 		self.errors.push(err);
 		None
 	}
 
 	fn parse_body_expressions(&mut self) -> Option<Vec<ExprNode>> {
-		if self.current_token.is_some() && self.current_token.unwrap().can_start_expression() {
-			// must be a one-line body, so parse a single expression and return
-			let node = self.parse_expression()?;
-			self.skip_line_breaks();
-			return Some(vec![node]);
-		}
-
-		self.skip_line_breaks();
-
 		let mut body = Vec::new();
-		let body_indent_level = self.current_token_indent_level();
 
 		while let Some(node) = self.parse_expression() {
 			body.push(node);
 
-			self.skip_line_breaks();
-
-			if self.current_token_indent_level() != body_indent_level {
+			if current_token_is!(self, Token::Semicolon) {
+				self.advance();
+				self.skip_line_breaks();
+			} else {
 				break;
 			}
 		}
@@ -214,6 +191,8 @@ impl<'a> Parser<'a> {
 		expect_token_and_do!(self, Token::Colon, {
 			self.advance();
 		});
+
+		self.skip_line_breaks();
 
 		let body = self.parse_body_expressions()?;
 
@@ -386,10 +365,15 @@ impl<'a> Parser<'a> {
 		}?;
 
 		loop {
-			self.skip_line_breaks();
-
-			let operator = match self.current_token.and_then(Operator::from_token) {
-				Some(op) => op,
+			let operator = match self.current_token {
+				Some(token) => match Operator::from_token(token) {
+					Some(op) => {
+						self.skip_line_breaks();
+						op
+					}
+					_ if token.can_start_expression() => Operator::FunctionCall,
+					_ => break,
+				},
 				_ => break,
 			};
 
@@ -398,26 +382,48 @@ impl<'a> Parser<'a> {
 					break;
 				}
 
-				// advance past the operator
-				self.advance();
+				if let Operator::FunctionCall = operator {
+					// special case: function calls don't have a real operator token,
+					// and they may take any number of args, so we handle all that here
+					let mut args = Vec::new();
 
-				let rhs_expr = self.parse_expression_with_binding_power(right_bp)?;
+					while let Some(arg_expr) = self.parse_expression_with_binding_power(right_bp) {
+						args.push(arg_expr);
+					}
 
-				if let Operator::IndexAccess = operator {
-					// special case: the [ operator needs a closing ]
-					expect_token_and_do!(self, Token::RightBracket, {
-						self.advance();
-					});
+					let start = lhs_expr.pos.1;
+					let end = args.last().expect("at least one arg").pos.1;
+
+					lhs_expr = ExprNode {
+						pos: (start, end),
+						kind: ExprKind::Call(CallNode {
+							pos: (start, end),
+							callee: Box::new(lhs_expr),
+							args,
+						}),
+					};
+				} else {
+					// advance past the operator token
+					self.advance();
+
+					let rhs_expr = self.parse_expression_with_binding_power(right_bp)?;
+
+					if let Operator::IndexAccess = operator {
+						// special case: the [ operator needs a closing ]
+						expect_token_and_do!(self, Token::RightBracket, {
+							self.advance();
+						});
+					}
+
+					lhs_expr = ExprNode {
+						pos: (lhs_expr.pos.0, rhs_expr.pos.1),
+						kind: ExprKind::BinaryOperation {
+							op: operator,
+							left: Box::new(lhs_expr),
+							right: Box::new(rhs_expr),
+						},
+					};
 				}
-
-				lhs_expr = ExprNode {
-					pos: (lhs_expr.pos.0, rhs_expr.pos.1),
-					kind: ExprKind::BinaryOperation {
-						op: operator,
-						left: Box::new(lhs_expr),
-						right: Box::new(rhs_expr),
-					},
-				};
 
 				continue;
 			}

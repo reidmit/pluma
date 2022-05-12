@@ -1,3 +1,3 @@
-# run a single example from the examples/ dir
-example name:
-  @ cargo run --quiet --example {{name}}
+# run on a single file path
+run path:
+  @ cargo run --quiet {{path}}

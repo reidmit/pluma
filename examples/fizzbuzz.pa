@@ -1,11 +1,11 @@
-fizzbuzz = fun n -> if (n % 3, n % 5)
-  is (0, 0) then "FizzBuzz"
-  is (0, _) then "Fizz"
-  is (_, 0) then if env.get "LIGHTYEAR"
-    is some val then val
-    is none then "Buzz"
-  is _ then n | stringify
+fizzbuzz = \n: if (n % 3, n % 5)
+  is (0, 0): "FizzBuzz"
+  is (0, _): "Fizz"
+  is (_, 0): if env.get "LIGHTYEAR"
+    is some val: val
+    is none: "Buzz"
+  is _: n | stringify
 
-main = fun ->
-  1 .. 100 | each fun i ->
+main = \:
+  1 .. 100 | each \i:
     fizzbuzz i | print
