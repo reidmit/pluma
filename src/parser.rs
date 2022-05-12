@@ -217,8 +217,6 @@ impl<'a> Parser<'a> {
 
 		let body = self.parse_body_expressions()?;
 
-		println!("body: {:#?}", body);
-
 		self.skip_line_breaks();
 
 		let end = match body.last() {
@@ -455,8 +453,6 @@ impl<'a> Parser<'a> {
 		});
 
 		let condition = self.parse_expression()?;
-
-		println!("when! {:#?}", condition);
 
 		expect_token_and_do!(self, Token::KeywordIs, {
 			self.advance();
