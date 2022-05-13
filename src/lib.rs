@@ -1,8 +1,20 @@
+mod analyzer;
 mod ast;
-mod parse_error;
+mod colors;
+mod compiler;
+mod diagnostic;
+mod errors;
+mod module;
 mod parser;
 mod tokenizer;
 mod tokens;
+mod value_type;
 
-pub use parser::*;
-pub use tokenizer::*;
+pub use compiler::*;
+pub use diagnostic::*;
+
+pub const BINARY_NAME: &str = "pencil";
+pub const DEFAULT_ENTRY_MODULE_NAME: &str = "main";
+pub const DEFAULT_ENTRY_FILE: &str = "main.pa";
+pub const FILE_EXTENSION: &str = "pa";
+pub const VERSION: &str = "0.1.0";

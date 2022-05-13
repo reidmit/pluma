@@ -1,7 +1,0 @@
-def fizzbuzz = \n: if some-tuple
-  is (0, 0): "FizzBuzz"
-  is (0, _): "Fizz"
-
-def main = \:
-  1 .. 100 | each \:
-    fizzbuzz i | print

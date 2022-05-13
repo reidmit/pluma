@@ -1,3 +1,6 @@
-main = \args:
+# gets 1 2, gets 2, and gets 3, and adds them together
+# @param args: arguments to the function
+# @returns: nothing
+def main = fun args:
   get 1 2 + get 2 + get 3;
   print "hello world"

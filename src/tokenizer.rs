@@ -1,4 +1,4 @@
-use crate::parse_error::{ParseError, ParseErrorKind::*};
+use crate::errors::{ParseError, ParseErrorKind::*};
 use crate::tokens::{Token, Token::*};
 use std::collections::HashMap;
 
@@ -230,11 +230,6 @@ impl<'a> Iterator for Tokenizer<'a> {
 					return Some(Backtick(start_index, self.index));
 				}
 
-				b'\\' => {
-					self.index += 1;
-					return Some(BackSlash(start_index, self.index));
-				}
-
 				b'/' => {
 					self.index += 1;
 					return Some(ForwardSlash(start_index, self.index));
@@ -430,6 +425,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 						b"def" => KeywordDef,
 						b"enum" => KeywordEnum,
 						b"for" => KeywordFor,
+						b"fun" => KeywordFun,
 						b"if" => KeywordIf,
 						b"in" => KeywordIn,
 						b"is" => KeywordIs,

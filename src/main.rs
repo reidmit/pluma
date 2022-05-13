@@ -6,19 +6,22 @@ fn main() {
     None => panic!("no arg given"),
   };
 
-  let source = std::fs::read(entry_path).unwrap();
-  let tokenizer = Tokenizer::from_source(&source);
-  let mut parser = Parser::new(&source, tokenizer);
+  let mut compiler = match Compiler::from_entry_path(entry_path) {
+    Ok(c) => c,
+    Err(diagnostics) => {
+      print_diagnostics(diagnostics);
+      std::process::exit(1);
+    }
+  };
 
-  let (module, comments, errors) = parser.parse_module();
+  match compiler.check() {
+    Ok(_) => {
+      println!("Check succeeded without errors!");
+    }
 
-  if comments.len() > 0 {
-    println!("comments: {:#?}", comments);
-  }
-
-  println!("{:#?}", module);
-
-  if errors.len() > 0 {
-    println!("errors: {:#?}", errors);
+    Err(diagnostics) => {
+      print_diagnostics(diagnostics);
+      std::process::exit(1);
+    }
   }
 }

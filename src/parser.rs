@@ -1,5 +1,5 @@
 use crate::ast::*;
-use crate::parse_error::*;
+use crate::errors::*;
 use crate::tokenizer::Tokenizer;
 use crate::tokens::Token;
 use std::collections::HashMap;
@@ -176,7 +176,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_lambda(&mut self) -> Option<LambdaNode> {
-		let start = expect_token_and_do!(self, Token::BackSlash, {
+		let start = expect_token_and_do!(self, Token::KeywordFun, {
 			let (start, _) = self.current_token_position();
 			self.advance();
 			start
@@ -319,7 +319,7 @@ impl<'a> Parser<'a> {
 				pos: node.pos,
 				kind: ExprKind::Let(node),
 			}),
-			Some(Token::BackSlash(..)) => self.parse_lambda().map(|lambda| ExprNode {
+			Some(Token::KeywordFun(..)) => self.parse_lambda().map(|lambda| ExprNode {
 				pos: lambda.pos,
 				kind: ExprKind::Lambda(lambda),
 			}),
@@ -365,6 +365,8 @@ impl<'a> Parser<'a> {
 		}?;
 
 		loop {
+			self.skip_line_breaks();
+
 			let operator = match self.current_token {
 				Some(token) => match Operator::from_token(token) {
 					Some(op) => {

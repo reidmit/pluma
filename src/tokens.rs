@@ -13,9 +13,6 @@ pub enum Token {
 	/// `->` token
 	Arrow(usize, usize),
 
-	/// `\` token
-	BackSlash(usize, usize),
-
 	/// `\`` token
 	Backtick(usize, usize),
 
@@ -105,6 +102,9 @@ pub enum Token {
 
 	/// `for` keyword
 	KeywordFor(usize, usize),
+
+	/// `fun` keyword
+	KeywordFun(usize, usize),
 
 	/// `if` keyword
 	KeywordIf(usize, usize),
@@ -213,7 +213,6 @@ impl Token {
 		match self {
 			And(start, end)
 			| Arrow(start, end)
-			| BackSlash(start, end)
 			| Backtick(start, end)
 			| Bang(start, end)
 			| BangEqual(start, end)
@@ -244,6 +243,7 @@ impl Token {
 			| KeywordDef(start, end)
 			| KeywordEnum(start, end)
 			| KeywordFor(start, end)
+			| KeywordFun(start, end)
 			| KeywordIf(start, end)
 			| KeywordIn(start, end)
 			| KeywordIs(start, end)
@@ -284,7 +284,7 @@ impl Token {
 		use Token::*;
 
 		match self {
-			Identifier(..) | BackSlash(..) | KeywordIf(..) | DecimalDigits(..) | HexDigits(..)
+			Identifier(..) | KeywordFun(..) | KeywordIf(..) | DecimalDigits(..) | HexDigits(..)
 			| BinaryDigits(..) | OctalDigits(..) | LeftParen(..) | LeftBrace(..) | LeftBracket(..)
 			| Backtick(..) | StringLiteral(..) => true,
 			_ => false,
@@ -299,7 +299,6 @@ impl fmt::Display for Token {
 		let as_string = match self {
 			&And(..) => "a '&'",
 			&Arrow(..) => "a '->'",
-			&BackSlash(..) => "a '\\'",
 			&Backtick(..) => "a '`'",
 			&Bang(..) => "a '!'",
 			&BangEqual(..) => "a '!='",
@@ -330,6 +329,7 @@ impl fmt::Display for Token {
 			&KeywordDef(..) => "keyword 'def'",
 			&KeywordEnum(..) => "keyword 'enum'",
 			&KeywordFor(..) => "keyword 'for'",
+			&KeywordFun(..) => "keyword 'fun'",
 			&KeywordIf(..) => "keyword 'if'",
 			&KeywordIn(..) => "keyword 'in'",
 			&KeywordIs(..) => "keyword 'is'",
