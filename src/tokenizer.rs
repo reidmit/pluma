@@ -427,6 +427,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 
 					let constructor = match value {
 						b"alias" => KeywordAlias,
+						b"def" => KeywordDef,
 						b"enum" => KeywordEnum,
 						b"for" => KeywordFor,
 						b"if" => KeywordIf,

@@ -38,7 +38,9 @@ macro_rules! expect_token_and_do {
 			None => {
 				return $self.error(ParseError {
 					pos: ($self.source.len(), $self.source.len()),
-					kind: ParseErrorKind::UnexpectedEOF($tokType(0, 0)),
+					kind: ParseErrorKind::UnexpectedEOF {
+						expected: $tokType(0, 0),
+					},
 				});
 			}
 		}
@@ -93,7 +95,7 @@ impl<'a> Parser<'a> {
 			self.skip_line_breaks();
 
 			match self.parse_definition() {
-				Some(statement) => body.push(statement),
+				Some(definition) => body.push(definition),
 				_ => break,
 			}
 		}
@@ -195,8 +197,6 @@ impl<'a> Parser<'a> {
 		self.skip_line_breaks();
 
 		let body = self.parse_body_expressions()?;
-
-		self.skip_line_breaks();
 
 		let end = match body.last() {
 			Some(expr) => expr.pos.1,
@@ -1232,8 +1232,15 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_definition(&mut self) -> Option<DefinitionNode> {
+		let start = match self.current_token {
+			Some(Token::KeywordDef(start, _)) => {
+				self.advance();
+				start
+			}
+			_ => return None,
+		};
+
 		let name = self.parse_identifier()?;
-		let start = name.pos.0;
 		let doc_comment_lines_start = self.line_breaks.len();
 
 		self.skip_line_breaks();
@@ -1247,6 +1254,8 @@ impl<'a> Parser<'a> {
 		let value = self.parse_expression()?;
 
 		let end = value.pos.1;
+
+		self.skip_line_breaks();
 
 		Some(DefinitionNode {
 			name,

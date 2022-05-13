@@ -1,4 +1,4 @@
-fizzbuzz = \n: if (n % 3, n % 5)
+def fizzbuzz = \n: if (n % 3, n % 5)
   is (0, 0): "FizzBuzz"
   is (0, _): "Fizz"
   is (_, 0): if env.get "LIGHTYEAR"
@@ -6,6 +6,6 @@ fizzbuzz = \n: if (n % 3, n % 5)
     is none: "Buzz"
   is _: n | stringify
 
-main = \:
-  1 .. 100 | each \i:
+def main = \:
+  1 .. 100 | each \:
     fizzbuzz i | print
