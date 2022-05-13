@@ -161,8 +161,10 @@ impl<'a> Parser<'a> {
 	fn parse_body_expressions(&mut self) -> Option<Vec<ExprNode>> {
 		let mut body = Vec::new();
 
-		while let Some(node) = self.parse_expression() {
-			body.push(node);
+		loop {
+			if let Some(node) = self.parse_expression() {
+				body.push(node);
+			}
 
 			if current_token_is!(self, Token::Semicolon) {
 				self.advance();
