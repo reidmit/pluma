@@ -8,14 +8,6 @@ pub struct ExprNode {
 }
 
 pub enum ExprKind {
-	Access {
-		receiver: Box<ExprNode>,
-		property: Box<ExprNode>,
-	},
-	Assignment {
-		left: Box<ExprNode>,
-		right: Box<ExprNode>,
-	},
 	BinaryOperation {
 		op: Operator,
 		left: Box<ExprNode>,
@@ -56,8 +48,6 @@ impl std::fmt::Debug for ExprKind {
 		use ExprKind::*;
 
 		match &self {
-			Access { receiver, property } => write!(f, "{:?}.{:?}", receiver, property),
-			Assignment { left, right } => write!(f, "({:?}) {:?}", left, right),
 			BinaryOperation { op, left, right } => write!(f, "{:#?} {:#?}", op, vec![left, right]),
 			UnaryOperation { op, right } => write!(f, "{:#?} {:#?}", op, right),
 			Lambda(lambda) => write!(f, "{:#?}", lambda),

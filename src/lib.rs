@@ -1,12 +1,12 @@
 mod analyzer;
 mod ast;
+mod binding;
 mod colors;
 mod compiler;
 mod diagnostic;
 mod errors;
 mod module;
 mod parser;
-mod scope;
 mod tokenizer;
 mod tokens;
 mod value_type;

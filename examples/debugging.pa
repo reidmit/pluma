@@ -5,4 +5,4 @@ def main = fun:
 
 def name = "Reid"
 
-def age = 28
+def interp = "hello ${name}"

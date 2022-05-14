@@ -7,6 +7,7 @@ pub enum ValueType {
   Int,
   Float,
   String,
+  Regex,
   Named(String),
   Func(Vec<ValueType>, Box<ValueType>),
   Tuple(Vec<(Option<String>, ValueType)>),
@@ -25,6 +26,8 @@ impl fmt::Display for ValueType {
       ValueType::Float => write!(f, "float"),
 
       ValueType::String => write!(f, "string"),
+
+      ValueType::Regex => write!(f, "regex"),
 
       ValueType::Named(name) => write!(f, "{}", name),
 
