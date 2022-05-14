@@ -1,8 +1,10 @@
 use super::*;
+use crate::value_type::*;
 
 pub struct ExprNode {
 	pub pos: Position,
 	pub kind: ExprKind,
+	pub resolved_type: ValueType,
 }
 
 pub enum ExprKind {

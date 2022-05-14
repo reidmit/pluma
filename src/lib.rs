@@ -6,6 +6,7 @@ mod diagnostic;
 mod errors;
 mod module;
 mod parser;
+mod scope;
 mod tokenizer;
 mod tokens;
 mod value_type;

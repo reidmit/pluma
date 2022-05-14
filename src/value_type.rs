@@ -3,15 +3,14 @@ use std::fmt;
 #[derive(Clone, PartialEq, Hash)]
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub enum ValueType {
+  Unknown,
   Int,
   Float,
   String,
   Named(String),
-  Generic(String, Vec<ValueType>),
   Func(Vec<ValueType>, Box<ValueType>),
   Tuple(Vec<(Option<String>, ValueType)>),
   Nothing,
-  Unknown,
 }
 
 impl fmt::Display for ValueType {
@@ -28,17 +27,6 @@ impl fmt::Display for ValueType {
       ValueType::String => write!(f, "string"),
 
       ValueType::Named(name) => write!(f, "{}", name),
-
-      ValueType::Generic(name, generic_params) => write!(
-        f,
-        "{}<{}>",
-        name,
-        generic_params
-          .iter()
-          .map(|p| format!("{}", p))
-          .collect::<Vec<String>>()
-          .join(", ")
-      ),
 
       ValueType::Tuple(entries) => write!(
         f,

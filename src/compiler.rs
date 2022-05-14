@@ -1,3 +1,4 @@
+use crate::analyzer::*;
 use crate::diagnostic::*;
 use crate::errors::*;
 use crate::module::*;
@@ -32,11 +33,15 @@ impl Compiler {
 			to_module_path(self.root_dir.clone(), self.entry_module_name.clone()),
 		);
 
-		if !self.diagnostics.is_empty() {
-			return Err(self.diagnostics.to_vec());
-		}
+		let module = self.modules.get_mut(&self.entry_module_name).unwrap();
+		let mut analyzer = Analyzer::new(&mut self.diagnostics);
+		analyzer.analyze(module);
 
-		Ok(())
+		if !self.diagnostics.is_empty() {
+			Err(self.diagnostics.to_vec())
+		} else {
+			Ok(())
+		}
 	}
 
 	fn parse_module(&mut self, module_name: String, module_path: PathBuf) {

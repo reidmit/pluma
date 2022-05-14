@@ -2,3 +2,7 @@ def main = fun:
 	let t = (1, 2, "red", "blue");
 	let result = t.0 + t.2;
 	print result
+
+def name = "Reid"
+
+def age = 28
