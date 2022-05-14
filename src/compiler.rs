@@ -26,21 +26,11 @@ impl Compiler {
 		})
 	}
 
-	pub fn parse(&mut self) -> Result<(), Vec<Diagnostic>> {
+	pub fn check(&mut self) -> Result<(), Vec<Diagnostic>> {
 		self.parse_module(
 			self.entry_module_name.clone(),
 			to_module_path(self.root_dir.clone(), self.entry_module_name.clone()),
 		);
-
-		if !self.diagnostics.is_empty() {
-			return Err(self.diagnostics.to_vec());
-		}
-
-		Ok(())
-	}
-
-	pub fn check(&mut self) -> Result<(), Vec<Diagnostic>> {
-		self.parse()?;
 
 		if !self.diagnostics.is_empty() {
 			return Err(self.diagnostics.to_vec());
@@ -56,16 +46,9 @@ impl Compiler {
 
 		let mut new_module = Module::new(module_name.clone(), module_path.to_owned());
 
-		let result = new_module.parse();
-
-		println!("AST: {:#?}", new_module.ast);
+		new_module.parse(&mut self.diagnostics);
 
 		self.modules.insert(module_name.clone(), new_module);
-
-		if !result.is_ok() {
-			self.diagnostics.append(&mut result.unwrap_err());
-			return;
-		}
 	}
 }
 
@@ -80,9 +63,7 @@ fn to_module_path(root_dir: PathBuf, module_name: String) -> PathBuf {
 	root_dir.join(module_name).with_extension(FILE_EXTENSION)
 }
 
-fn get_root_dir_and_module_name(
-	entry_path: String,
-) -> std::result::Result<(PathBuf, String), UsageError> {
+fn get_root_dir_and_module_name(entry_path: String) -> Result<(PathBuf, String), UsageError> {
 	let mut joined_path = Path::new(&env::current_dir().unwrap()).join(entry_path);
 	let mut found_dir = false;
 

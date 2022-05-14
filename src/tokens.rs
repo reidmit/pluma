@@ -203,7 +203,7 @@ pub enum Token {
 	Underscore(usize, usize),
 
 	/// any unexpected token
-	Unexpected(usize, usize),
+	Unexpected(u8, usize, usize),
 }
 
 impl Token {
@@ -276,7 +276,7 @@ impl Token {
 			| StringLiteral(start, end)
 			| Tilde(start, end)
 			| Underscore(start, end)
-			| Unexpected(start, end) => (*start, *end),
+			| Unexpected(_, start, end) => (*start, *end),
 		}
 	}
 
@@ -295,6 +295,10 @@ impl Token {
 impl fmt::Display for Token {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		use Token::*;
+
+		if let Unexpected(c, ..) = self {
+			return write!(f, "'{}'", String::from_utf8_lossy(&[*c]));
+		}
 
 		let as_string = match self {
 			&And(..) => "a '&'",
@@ -362,7 +366,7 @@ impl fmt::Display for Token {
 			&StringLiteral(..) => "a string",
 			&Tilde(..) => "a '~'",
 			&Underscore(..) => "a '_'",
-			&Unexpected(..) => "unknown",
+			&Unexpected(..) => unreachable!("handled above"),
 		};
 
 		write!(f, "{}", as_string)

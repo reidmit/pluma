@@ -134,6 +134,7 @@ pub fn print_diagnostics(diagnostics: Vec<Diagnostic>) {
 
 			let frame = String::from_utf8(bytes[frame_start..frame_end].to_vec())
 				.unwrap()
+				.replace("\t", " ")
 				.replace("\n", " ");
 
 			let mut line = 1;

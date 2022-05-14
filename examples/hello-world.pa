@@ -1,4 +1,1 @@
-def main = fun args: args
-  | map fun a: (uppercase a);
-  | filter fun a: a == "WOW";
-  | then print
+def main = fun: nothing

@@ -26,22 +26,14 @@ impl Module {
 		}
 	}
 
-	pub fn parse(&mut self) -> Result<(), Vec<Diagnostic>> {
-		let mut diagnostics = Vec::new();
-
+	pub fn parse(&mut self, diagnostics: &mut Vec<Diagnostic>) {
 		match fs::read(&self.module_path) {
-			Ok(bytes) => self.build_ast(bytes, &mut diagnostics),
+			Ok(bytes) => self.build_ast(bytes, diagnostics),
 			Err(err) => diagnostics.push(
 				Diagnostic::error(err)
 					.with_module(self.module_name.clone(), self.module_path.to_path_buf()),
 			),
 		}
-
-		if diagnostics.is_empty() {
-			return Ok(());
-		}
-
-		return Err(diagnostics);
 	}
 
 	pub fn did_parse(&self) -> bool {
@@ -74,14 +66,12 @@ impl Module {
 		self.ast = Some(ast);
 		self.comments = comments;
 
-		if !errors.is_empty() {
-			for err in errors {
-				diagnostics.push(
-					Diagnostic::error(err)
-						.with_pos(err.pos)
-						.with_module(self.module_name.clone(), self.module_path.to_path_buf()),
-				);
-			}
+		for err in errors {
+			diagnostics.push(
+				Diagnostic::error(err)
+					.with_pos(err.pos)
+					.with_module(self.module_name.clone(), self.module_path.to_path_buf()),
+			);
 		}
 	}
 }

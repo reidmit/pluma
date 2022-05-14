@@ -554,9 +554,9 @@ impl<'a> Iterator for Tokenizer<'a> {
 					return Some(DecimalDigits(start_index, self.index));
 				}
 
-				_ => {
+				other_char => {
 					self.index += 1;
-					return Some(Unexpected(start_index, self.index));
+					return Some(Unexpected(other_char, start_index, self.index));
 				}
 			};
 		}
