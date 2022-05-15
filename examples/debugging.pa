@@ -1,8 +1,14 @@
-def main = fun:
-	let t = (1, 2, "red", "blue");
-	let result = t.0 + t.2;
-	print result
+def main = fun {
+	let args = std/env/args | slice 1
 
-def name = "Reid"
+	for arg in args {
+		if arg is "hello" {
+			print "nice"
+		}
 
-def interp = "hello ${name}"
+		when arg is "hello" {
+		} is "goodbye" {
+		} is _ {
+		}
+	}
+}

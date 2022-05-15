@@ -1,35 +1,35 @@
 use super::*;
 
-pub struct RegExprNode {
+pub struct RegexNode {
 	pub pos: Position,
-	pub kind: RegExprKind,
+	pub kind: RegexKind,
 }
 
-pub enum RegExprKind {
+pub enum RegexKind {
 	Literal(String),
 	CharacterClass(String),
-	OneOrMore(Box<RegExprNode>),
-	ZeroOrMore(Box<RegExprNode>),
-	OneOrZero(Box<RegExprNode>),
-	AtLeastCount(Box<RegExprNode>, usize),
-	AtMostCount(Box<RegExprNode>, usize),
-	ExactCount(Box<RegExprNode>, usize),
-	RangeCount(Box<RegExprNode>, usize, usize),
-	Grouping(Box<RegExprNode>),
-	Sequence(Vec<RegExprNode>),
-	Alternation(Vec<RegExprNode>),
-	NamedCapture(String, Box<RegExprNode>),
+	OneOrMore(Box<RegexNode>),
+	ZeroOrMore(Box<RegexNode>),
+	OneOrZero(Box<RegexNode>),
+	AtLeastCount(Box<RegexNode>, usize),
+	AtMostCount(Box<RegexNode>, usize),
+	ExactCount(Box<RegexNode>, usize),
+	RangeCount(Box<RegexNode>, usize, usize),
+	Grouping(Box<RegexNode>),
+	Sequence(Vec<RegexNode>),
+	Alternation(Vec<RegexNode>),
+	NamedCapture(String, Box<RegexNode>),
 }
 
-impl std::fmt::Debug for RegExprNode {
+impl std::fmt::Debug for RegexNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "regex:{}-{} {:#?}", self.pos.0, self.pos.1, self.kind)
 	}
 }
 
-impl std::fmt::Debug for RegExprKind {
+impl std::fmt::Debug for RegexKind {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		use RegExprKind::*;
+		use RegexKind::*;
 
 		match &self {
 			Literal(lit) => {

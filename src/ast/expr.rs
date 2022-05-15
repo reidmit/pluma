@@ -1,15 +1,15 @@
 use super::*;
-use crate::value_type::*;
+use crate::expr_type::*;
 
 pub struct ExprNode {
 	pub pos: Position,
 	pub kind: ExprKind,
-	pub resolved_type: ValueType,
+	pub resolved_type: ExprType,
 }
 
 pub enum ExprKind {
 	BinaryOperation {
-		op: Operator,
+		op: OperatorNode,
 		left: Box<ExprNode>,
 		right: Box<ExprNode>,
 	},
@@ -19,7 +19,7 @@ pub enum ExprKind {
 	},
 	Lambda(LambdaNode),
 	Call(CallNode),
-	Dict(Vec<(ExprNode, ExprNode)>),
+	Case(CaseNode),
 	EmptyTuple,
 	For(ForNode),
 	Grouping(Box<ExprNode>),
@@ -29,9 +29,8 @@ pub enum ExprKind {
 	Let(LetNode),
 	List(Vec<ExprNode>),
 	Literal(LiteralNode),
-	RegExpr(RegExprNode),
+	Regex(RegexNode),
 	Tuple(Vec<TupleEntry>),
-	When(WhenNode),
 	While(WhileNode),
 }
 
@@ -52,7 +51,7 @@ impl std::fmt::Debug for ExprKind {
 			UnaryOperation { op, right } => write!(f, "{:#?} {:#?}", op, right),
 			Lambda(lambda) => write!(f, "{:#?}", lambda),
 			Call(call) => write!(f, "{:#?}", call),
-			Dict(entries) => write!(f, "{:#?}", entries),
+			Case(case) => write!(f, "{:#?}", case),
 			EmptyTuple => write!(f, "()"),
 			For(for_node) => write!(f, "{:#?}", for_node),
 			Grouping(expr) => write!(f, "grouping {:#?}", expr),
@@ -62,9 +61,8 @@ impl std::fmt::Debug for ExprKind {
 			Let(let_node) => write!(f, "{:#?}", let_node),
 			List(elements) => write!(f, "{:#?}", elements),
 			Literal(lit) => write!(f, "{:?}", lit),
-			RegExpr(regex) => write!(f, "{:#?}", regex),
+			Regex(regex) => write!(f, "{:#?}", regex),
 			Tuple(entries) => write!(f, "tuple {:#?}", entries),
-			When(when_node) => write!(f, "{:#?}", when_node),
 			While(while_node) => write!(f, "{:#?}", while_node),
 		}
 	}

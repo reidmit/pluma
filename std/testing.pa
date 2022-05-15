@@ -1,0 +1,7 @@
+def test = alias void -> test-result
+
+def test-failure = alias (
+  message: string
+)
+
+def test-result = alias result<nothing, list<test-failure>>

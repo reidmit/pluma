@@ -368,6 +368,11 @@ impl<'a> Iterator for Tokenizer<'a> {
 				b':' => {
 					self.index += 1;
 
+					if self.source[self.index] == b':' {
+						self.index += 1;
+						return Some(DoubleColon(start_index, self.index));
+					}
+
 					return Some(Colon(start_index, self.index));
 				}
 
@@ -430,9 +435,6 @@ impl<'a> Iterator for Tokenizer<'a> {
 						b"in" => KeywordIn,
 						b"is" => KeywordIs,
 						b"let" => KeywordLet,
-						b"struct" => KeywordStruct,
-						b"trait" => KeywordTrait,
-						b"use" => KeywordUse,
 						b"when" => KeywordWhen,
 						b"while" => KeywordWhile,
 
@@ -440,9 +442,9 @@ impl<'a> Iterator for Tokenizer<'a> {
 						_ => Identifier,
 					};
 
-					if constructor == KeywordUse {
-						self.expect_import_path = true;
-					}
+					// if constructor == KeywordUse {
+					// 	self.expect_import_path = true;
+					// }
 
 					return Some(constructor(start_index, self.index));
 				}

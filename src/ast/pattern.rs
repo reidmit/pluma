@@ -1,5 +1,5 @@
 use super::*;
-use crate::value_type::*;
+use crate::expr_type::*;
 
 pub struct PatternNode {
   pub pos: Position,
@@ -46,7 +46,7 @@ impl PatternNode {
         let callee = ExprNode {
           pos: ident.pos,
           kind: ExprKind::Identifier(ident),
-          resolved_type: ValueType::Unknown,
+          resolved_type: ExprType::Unknown,
         };
 
         let arg_expr = arg.to_expr();
@@ -66,7 +66,7 @@ impl PatternNode {
     ExprNode {
       pos,
       kind: expr_kind,
-      resolved_type: ValueType::Unknown,
+      resolved_type: ExprType::Unknown,
     }
   }
 }

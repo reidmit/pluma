@@ -5,11 +5,12 @@ mod colors;
 mod compiler;
 mod diagnostic;
 mod errors;
+mod expr_type;
+mod intrinsics;
 mod module;
 mod parser;
 mod tokenizer;
 mod tokens;
-mod value_type;
 
 pub use compiler::*;
 pub use diagnostic::*;

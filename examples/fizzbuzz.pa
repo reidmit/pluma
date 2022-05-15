@@ -1,12 +1,17 @@
-def fizzbuzz = fun n:
-  if (n % 3, n % 5)
-    is (0, 0): "FizzBuzz"
-    is (0, _): "Fizz"
-    is (_, 0): if env.get "LIGHTYEAR"
-      is some val: val
-      is none: "Buzz"
-    is _: stringify n
+def fizzbuzz = fun n {
+  when (n % 3, n % 5) is (0, 0) {
+    "FizzBuzz"
+  } is (0, _) {
+    "Fizz"
+  } is (_, 0) {
+    "Buzz"
+  } is _ {
+    stringify n
+  }
+}
 
-def main = fun:
-  each (1..100) fun i:
+def main = fun {
+  for i in 1..100 {
     print (fizzbuzz i)
+  }
+}

@@ -2,16 +2,18 @@ use crate::ast::*;
 use crate::binding::*;
 use crate::diagnostic::*;
 use crate::errors::*;
+use crate::expr_type::*;
+use crate::intrinsics::*;
 use crate::module::Module;
-use crate::value_type::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use AnalysisErrorKind::*;
 
 pub struct Analyzer<'compiler> {
   module_name: Option<String>,
   module_path: Option<PathBuf>,
   diagnostics: &'compiler mut Vec<Diagnostic>,
-  scope_levels: Vec<HashMap<String, Binding>>,
+  value_scopes: Vec<HashMap<String, ValueBinding>>,
 }
 
 impl<'compiler> Analyzer<'compiler> {
@@ -20,7 +22,8 @@ impl<'compiler> Analyzer<'compiler> {
       module_name: None,
       module_path: None,
       diagnostics,
-      scope_levels: Vec::new(),
+      // initialize top-leve scope with intrinsics:
+      value_scopes: vec![get_intrinsic_values()],
     }
   }
 
@@ -29,74 +32,59 @@ impl<'compiler> Analyzer<'compiler> {
     self.module_path = Some(module.module_path.clone());
 
     if let Some(ast) = &mut module.ast {
-      self.enter_scope();
-
       for definition in &mut ast.body {
         self.analyze_definition(definition)
       }
-
-      // we intentionally don't call leave_scope() here, to avoid warnings
-      // about top-level bindings being unused
-      self.scope_levels.pop();
     }
+  }
+
+  fn diagnostic(&mut self, pos: (usize, usize), diag: Diagnostic) {
+    let mut diag = diag.with_pos(pos);
+
+    if let Some(module_name) = &self.module_name {
+      diag = diag.with_module(module_name.clone(), self.module_path.clone().unwrap())
+    }
+
+    self.diagnostics.push(diag)
   }
 
   fn warning(&mut self, pos: (usize, usize), kind: AnalysisErrorKind) {
-    let mut diagnostic = Diagnostic::warning(AnalysisError { pos, kind }).with_pos(pos);
-
-    if let Some(module_name) = &self.module_name {
-      diagnostic = diagnostic.with_module(module_name.clone(), self.module_path.clone().unwrap())
-    }
-
-    self.diagnostics.push(diagnostic)
+    self.diagnostic(pos, Diagnostic::warning(AnalysisError { pos, kind }));
   }
 
   fn error(&mut self, pos: (usize, usize), kind: AnalysisErrorKind) {
-    let mut diagnostic = Diagnostic::error(AnalysisError { pos, kind }).with_pos(pos);
-
-    if let Some(module_name) = &self.module_name {
-      diagnostic = diagnostic.with_module(module_name.clone(), self.module_path.clone().unwrap())
-    }
-
-    self.diagnostics.push(diagnostic)
+    self.diagnostic(pos, Diagnostic::error(AnalysisError { pos, kind }));
   }
 
   fn enter_scope(&mut self) {
-    self.scope_levels.push(HashMap::new());
+    self.value_scopes.push(HashMap::new());
   }
 
   pub fn leave_scope(&mut self) {
-    if let Some(exited_level) = self.scope_levels.pop() {
+    if let Some(exited_level) = self.value_scopes.pop() {
       for (name, binding) in exited_level {
         if binding.ref_count == 0 {
-          self.warning(binding.pos, AnalysisErrorKind::UnusedBinding { name });
+          self.warning(binding.pos, UnusedBinding { name });
         }
       }
     }
   }
 
-  pub fn add_binding(
-    &mut self,
-    name: String,
-    typ: ValueType,
-    pos: (usize, usize),
-    kind: BindingKind,
-  ) {
-    let current_level = self.scope_levels.last_mut().expect("no current scope");
+  pub fn add_value_binding(&mut self, name: String, typ: ExprType, pos: (usize, usize)) {
+    let current_level = self.value_scopes.last_mut().expect("no current scope");
 
     current_level.insert(
       name,
-      Binding {
+      ValueBinding {
         typ,
         ref_count: 0,
         pos,
-        kind,
       },
     );
   }
 
-  pub fn get_binding(&mut self, name: &String) -> Option<&Binding> {
-    for level in self.scope_levels.iter_mut().rev() {
+  pub fn get_binding(&mut self, name: &String) -> Option<&ValueBinding> {
+    for level in self.value_scopes.iter_mut().rev() {
       if let Some(binding) = level.get_mut(name) {
         binding.ref_count += 1;
 
@@ -114,43 +102,227 @@ impl<'compiler> Analyzer<'compiler> {
       DefinitionKind::Expr(expr) => self.analyze_expr(expr),
     };
 
-    if let ValueType::Unknown = resolved_type {
+    if let ExprType::Unknown = resolved_type {
       self.error(
         definition.name.pos,
-        AnalysisErrorKind::CouldNotInferDefinitionType { name: name.clone() },
+        CouldNotInferDefinitionType { name: name.clone() },
       );
     }
 
-    self.add_binding(name, resolved_type, definition.name.pos, BindingKind::Def)
+    self.add_value_binding(name, resolved_type, definition.name.pos)
   }
 
-  fn analyze_expr(&mut self, expr: &mut ExprNode) -> ValueType {
+  fn analyze_expr(&mut self, expr: &mut ExprNode) -> ExprType {
     match &mut expr.kind {
       ExprKind::Identifier(ident) => self.analyze_identifier(ident),
       ExprKind::Literal(literal) => self.analyze_literal(literal),
       ExprKind::Tuple(entries) => self.analyze_tuple_entries(entries),
-      ExprKind::EmptyTuple => ValueType::Nothing,
+      ExprKind::EmptyTuple => ExprType::Nothing,
       ExprKind::Lambda(lambda) => self.analyze_lambda(lambda),
       ExprKind::Let(let_node) => self.analyze_let(let_node),
       ExprKind::Interpolation(parts) => self.analyze_interpolation(parts),
+      ExprKind::Regex(..) => ExprType::Regex,
       ExprKind::Grouping(inner) => self.analyze_expr(inner),
+      ExprKind::BinaryOperation { op, left, right } => self.analyze_binary_op(op, left, right),
+      ExprKind::Call(call) => self.analyze_call(call),
       // TODO! more here!
-      _ => ValueType::Unknown,
+      _ => ExprType::Unknown,
     }
   }
 
-  fn analyze_lambda(&mut self, lambda: &mut LambdaNode) -> ValueType {
+  fn analyze_call(&mut self, call: &mut CallNode) -> ExprType {
+    let callee_type = self.analyze_expr(&mut call.callee);
+
+    if let ExprType::Func(param_types, return_type) = callee_type {
+      let arg_types: Vec<ExprType> = call
+        .args
+        .iter_mut()
+        .map(|arg| self.analyze_expr(arg))
+        .collect();
+
+      if arg_types.len() != param_types.len() {
+        self.error(
+          call.pos,
+          IncorrectNumberOfArguments {
+            arg_types,
+            param_types,
+          },
+        );
+      } else {
+        for i in 0..arg_types.len() {
+          if !arg_types[i].is_convertible_to(&param_types[i]) {
+            let arg_pos = call.args[i].pos;
+            self.error(
+              arg_pos,
+              MismatchedTypes {
+                expected: param_types[i].clone(),
+                actual: arg_types[i].clone(),
+              },
+            )
+          }
+        }
+      }
+
+      // return the expected return type even if the args were incorrect
+      // to give type analysis something to work with
+      return *return_type.clone();
+    } else {
+      self.error(
+        call.callee.pos,
+        CalleeNotFunction {
+          actual: callee_type,
+        },
+      )
+    }
+
+    ExprType::Unknown
+  }
+
+  fn analyze_binary_op(
+    &mut self,
+    op: &mut OperatorNode,
+    left: &mut ExprNode,
+    right: &mut ExprNode,
+  ) -> ExprType {
+    match op.kind {
+      Operator::Addition
+      | Operator::SubtractionOrNegation
+      | Operator::Multiplication
+      | Operator::Exponentiation
+      | Operator::Division
+      | Operator::Remainder => {
+        let left_type = self.analyze_expr(left);
+        let right_type = self.analyze_expr(right);
+
+        match (&left_type, &right_type) {
+          (ExprType::Int, ExprType::Int) => return ExprType::Int,
+          (ExprType::Float, ExprType::Float) => return ExprType::Float,
+          (ExprType::Int, _) | (_, ExprType::Int) => self.error(
+            op.pos,
+            MismatchedTypesForOperator {
+              op: op.kind.clone(),
+              expected: ExprType::Int,
+              actual_left: left_type,
+              actual_right: right_type,
+            },
+          ),
+          (ExprType::Float, _) | (_, ExprType::Float) => self.error(
+            op.pos,
+            MismatchedTypesForOperator {
+              op: op.kind.clone(),
+              expected: ExprType::Float,
+              actual_left: left_type,
+              actual_right: right_type,
+            },
+          ),
+          _ => self.error(
+            op.pos,
+            MismatchedTypesForOperator {
+              op: op.kind.clone(),
+              expected: ExprType::Int,
+              actual_left: left_type,
+              actual_right: right_type,
+            },
+          ),
+        };
+
+        ExprType::Unknown
+      }
+
+      Operator::LogicalAnd | Operator::LogicalOr => {
+        let left_type = self.analyze_expr(left);
+        let right_type = self.analyze_expr(right);
+
+        match (&left_type, &right_type) {
+          (ExprType::Bool, ExprType::Bool) => return ExprType::Bool,
+          _ => self.error(
+            op.pos,
+            MismatchedTypesForOperator {
+              op: op.kind.clone(),
+              expected: ExprType::Bool,
+              actual_left: left_type,
+              actual_right: right_type,
+            },
+          ),
+        };
+
+        ExprType::Unknown
+      }
+
+      Operator::Equality | Operator::IndexAccess => {
+        let left_type = self.analyze_expr(left);
+        let right_type = self.analyze_expr(right);
+
+        if left_type != right_type {
+          self.error(
+            op.pos,
+            MismatchedTypesForOperator {
+              op: op.kind.clone(),
+              expected: left_type.clone(),
+              actual_left: left_type,
+              actual_right: right_type,
+            },
+          );
+
+          return ExprType::Unknown;
+        }
+
+        left_type
+      }
+
+      Operator::FieldAccess => {
+        let receiver_type = self.analyze_expr(left);
+
+        // The parser allows any expression on the right of the field
+        // access operator, but we want to limit it to decimal literals
+        // or identifiers as field names.
+        let field_name = match &right.kind {
+          ExprKind::Literal(LiteralNode {
+            kind: LiteralKind::IntDecimal(value),
+            ..
+          }) => {
+            format!("{}", value)
+          }
+          ExprKind::Identifier(IdentifierNode { name, .. }) => name.clone(),
+          _ => {
+            self.error(right.pos, InvalidFieldAccess);
+            return ExprType::Unknown;
+          }
+        };
+
+        match receiver_type.get_field_type(&field_name) {
+          Some(field_type) => field_type,
+          None => {
+            self.error(
+              right.pos,
+              UndefinedFieldForType {
+                field_name: field_name.clone(),
+                receiver_type,
+              },
+            );
+
+            ExprType::Unknown
+          }
+        }
+      }
+
+      // TODO: more binary ops!
+      _ => ExprType::Unknown,
+    }
+  }
+
+  fn analyze_lambda(&mut self, lambda: &mut LambdaNode) -> ExprType {
     let mut param_types = Vec::new();
-    let mut return_type = ValueType::Unknown;
+    let mut return_type = ExprType::Unknown;
 
     self.enter_scope();
 
     for param in &lambda.params {
       let name = param.name.clone();
 
-      self.add_binding(name, ValueType::Unknown, param.pos, BindingKind::Param);
+      self.add_value_binding(name, ExprType::Unknown, param.pos);
 
-      param_types.push(ValueType::Unknown);
+      param_types.push(ExprType::Unknown);
     }
 
     for expr in &mut lambda.body {
@@ -159,56 +331,51 @@ impl<'compiler> Analyzer<'compiler> {
 
     self.leave_scope();
 
-    ValueType::Func(param_types, Box::new(return_type))
+    ExprType::Func(param_types, Box::new(return_type))
   }
 
-  fn analyze_identifier(&mut self, ident: &mut IdentifierNode) -> ValueType {
+  fn analyze_identifier(&mut self, ident: &mut IdentifierNode) -> ExprType {
     if let Some(binding) = self.get_binding(&ident.name) {
       binding.typ.clone()
     } else {
       self.error(
         ident.pos,
-        AnalysisErrorKind::NameNotBound {
+        NameNotBound {
           name: ident.name.clone(),
         },
       );
 
-      ValueType::Unknown
+      ExprType::Unknown
     }
   }
 
-  fn analyze_let(&mut self, let_node: &mut LetNode) -> ValueType {
+  fn analyze_let(&mut self, let_node: &mut LetNode) -> ExprType {
     let name = let_node.name.name.clone();
-    let value_type = self.analyze_expr(&mut let_node.value);
+    let expr_type = self.analyze_expr(&mut let_node.value);
 
-    self.add_binding(
-      name,
-      value_type.clone(),
-      let_node.name.pos,
-      BindingKind::Let,
-    );
+    self.add_value_binding(name, expr_type.clone(), let_node.name.pos);
 
-    value_type
+    expr_type
   }
 
-  fn analyze_interpolation(&mut self, parts: &mut Vec<ExprNode>) -> ValueType {
+  fn analyze_interpolation(&mut self, parts: &mut Vec<ExprNode>) -> ExprType {
     for part in parts {
       match self.analyze_expr(part) {
-        ValueType::String => {}
+        ExprType::String => {}
         other_type => self.error(
           part.pos,
-          AnalysisErrorKind::MismatchedTypes {
-            expected: ValueType::String,
+          MismatchedTypes {
+            expected: ExprType::String,
             actual: other_type,
           },
         ),
       }
     }
 
-    ValueType::String
+    ExprType::String
   }
 
-  fn analyze_tuple_entries(&mut self, entries: &mut Vec<TupleEntry>) -> ValueType {
+  fn analyze_tuple_entries(&mut self, entries: &mut Vec<TupleEntry>) -> ExprType {
     let mut entry_types = Vec::new();
 
     for TupleEntry(maybe_label, value) in entries {
@@ -222,17 +389,17 @@ impl<'compiler> Analyzer<'compiler> {
       entry_types.push((entry_label, entry_type));
     }
 
-    ValueType::Tuple(entry_types)
+    ExprType::Tuple(entry_types)
   }
 
-  fn analyze_literal(&mut self, literal: &mut LiteralNode) -> ValueType {
+  fn analyze_literal(&mut self, literal: &mut LiteralNode) -> ExprType {
     match &mut literal.kind {
-      LiteralKind::IntDecimal(..) => ValueType::Int,
-      LiteralKind::IntBinary(..) => ValueType::Int,
-      LiteralKind::IntOctal(..) => ValueType::Int,
-      LiteralKind::IntHex(..) => ValueType::Int,
-      LiteralKind::FloatDecimal(..) => ValueType::Float,
-      LiteralKind::Str(..) => ValueType::String,
+      LiteralKind::IntDecimal(..) => ExprType::Int,
+      LiteralKind::IntBinary(..) => ExprType::Int,
+      LiteralKind::IntOctal(..) => ExprType::Int,
+      LiteralKind::IntHex(..) => ExprType::Int,
+      LiteralKind::FloatDecimal(..) => ExprType::Float,
+      LiteralKind::Str(..) => ExprType::String,
     }
   }
 }

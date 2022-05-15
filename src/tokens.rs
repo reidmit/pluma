@@ -46,6 +46,9 @@ pub enum Token {
 	/// `&&` token
 	DoubleAnd(usize, usize),
 
+	/// `::` token
+	DoubleColon(usize, usize),
+
 	/// `..` token
 	DoubleDot(usize, usize),
 
@@ -117,15 +120,6 @@ pub enum Token {
 
 	/// `let` keyword
 	KeywordLet(usize, usize),
-
-	/// `struct` keyword
-	KeywordStruct(usize, usize),
-
-	/// `trait` keyword
-	KeywordTrait(usize, usize),
-
-	/// `use` keyword
-	KeywordUse(usize, usize),
 
 	/// `when` keyword
 	KeywordWhen(usize, usize),
@@ -224,6 +218,7 @@ impl Token {
 			| DecimalDigits(start, end)
 			| Dot(start, end)
 			| DoubleAnd(start, end)
+			| DoubleColon(start, end)
 			| DoubleDot(start, end)
 			| DoubleEqual(start, end)
 			| DoubleForwardSlash(start, end)
@@ -248,11 +243,8 @@ impl Token {
 			| KeywordIn(start, end)
 			| KeywordIs(start, end)
 			| KeywordLet(start, end)
-			| KeywordStruct(start, end)
-			| KeywordTrait(start, end)
-			| KeywordUse(start, end)
-			| KeywordWhen(start, end)
 			| KeywordWhile(start, end)
+			| KeywordWhen(start, end)
 			| LeftAngle(start, end)
 			| LeftAngleEqual(start, end)
 			| LeftBrace(start, end)
@@ -284,8 +276,8 @@ impl Token {
 		use Token::*;
 
 		match self {
-			Identifier(..) | KeywordFun(..) | KeywordIf(..) | DecimalDigits(..) | HexDigits(..)
-			| BinaryDigits(..) | OctalDigits(..) | LeftParen(..) | LeftBrace(..) | LeftBracket(..)
+			Identifier(..) | KeywordFun(..) | KeywordIf(..) | KeywordWhen(..) | DecimalDigits(..)
+			| HexDigits(..) | BinaryDigits(..) | OctalDigits(..) | LeftParen(..) | LeftBracket(..)
 			| Backtick(..) | StringLiteral(..) => true,
 			_ => false,
 		}
@@ -315,6 +307,7 @@ impl fmt::Display for Token {
 			&Dot(..) => "a '.'",
 			&DoubleAnd(..) => "a '&&'",
 			&DoubleDot(..) => "a '..'",
+			&DoubleColon(..) => "a '::'",
 			&DoubleEqual(..) => "a '=='",
 			&DoubleForwardSlash(..) => "a '//'",
 			&DoubleLeftAngle(..) => "a '<<'",
@@ -327,8 +320,8 @@ impl fmt::Display for Token {
 			&ForwardSlash(..) => "a '/'",
 			&HexDigits(..) => "hex digits (e.g. 0xf4c3)",
 			&Identifier(..) => "an identifier",
-			&InterpolationEnd(..) => "a ')'",
-			&InterpolationStart(..) => "a '$('",
+			&InterpolationEnd(..) => "a '}'",
+			&InterpolationStart(..) => "a '${'",
 			&KeywordAlias(..) => "keyword 'alias'",
 			&KeywordDef(..) => "keyword 'def'",
 			&KeywordEnum(..) => "keyword 'enum'",
@@ -338,11 +331,8 @@ impl fmt::Display for Token {
 			&KeywordIn(..) => "keyword 'in'",
 			&KeywordIs(..) => "keyword 'is'",
 			&KeywordLet(..) => "keyword 'let'",
-			&KeywordStruct(..) => "keyword 'struct'",
-			&KeywordTrait(..) => "keyword 'trait'",
-			&KeywordUse(..) => "keyword 'use'",
-			&KeywordWhen(..) => "keyword 'when'",
 			&KeywordWhile(..) => "keyword 'while'",
+			&KeywordWhen(..) => "keyword 'when'",
 			&LeftAngle(..) => "a '<'",
 			&LeftAngleEqual(..) => "a '<='",
 			&LeftBrace(..) => "a '{'",

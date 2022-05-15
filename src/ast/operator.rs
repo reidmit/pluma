@@ -1,5 +1,18 @@
+use super::*;
 use crate::tokens::Token;
 
+pub struct OperatorNode {
+  pub pos: Position,
+  pub kind: Operator,
+}
+
+impl std::fmt::Debug for OperatorNode {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "op:{}-{} {:?}", self.pos.0, self.pos.1, self.kind)
+  }
+}
+
+#[derive(Clone)]
 pub enum Operator {
   Addition,
   Chain,
@@ -85,30 +98,36 @@ impl Operator {
 
 impl std::fmt::Debug for Operator {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self)
+  }
+}
+
+impl std::fmt::Display for Operator {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     use Operator::*;
 
     match &self {
-      Addition => write!(f, "op-add"),
-      Chain => write!(f, "op-chain"),
-      Division => write!(f, "op-divide"),
-      Equality => write!(f, "op-equality"),
-      Exponentiation => write!(f, "op-exponent"),
-      FieldAccess => write!(f, "op-field-access"),
-      FunctionCall => write!(f, "op-call"),
-      GreaterThan => write!(f, "op-greater-than"),
-      GreaterThanEquals => write!(f, "op-greater-than-equals"),
-      IndexAccess => write!(f, "op-index-access"),
-      Inequality => write!(f, "op-inequality"),
-      LessThan => write!(f, "op-less-than"),
-      LessThanEquals => write!(f, "op-less-than-equals"),
-      LogicalAnd => write!(f, "op-logical-and"),
-      LogicalNot => write!(f, "op-logical-not"),
-      LogicalOr => write!(f, "op-logical-or"),
-      Multiplication => write!(f, "op-multiply"),
-      NullCoalescing => write!(f, "op-null-coalesce"),
-      Range => write!(f, "op-range"),
-      Remainder => write!(f, "op-remainder"),
-      SubtractionOrNegation => write!(f, "op-minus"),
+      Addition => write!(f, "+"),
+      Chain => write!(f, "|"),
+      Division => write!(f, "/"),
+      Equality => write!(f, "=="),
+      Exponentiation => write!(f, "**"),
+      FieldAccess => write!(f, "."),
+      FunctionCall => write!(f, "call"),
+      GreaterThan => write!(f, ">"),
+      GreaterThanEquals => write!(f, ">="),
+      IndexAccess => write!(f, "[]"),
+      Inequality => write!(f, "!="),
+      LessThan => write!(f, "<"),
+      LessThanEquals => write!(f, "<="),
+      LogicalAnd => write!(f, "&&"),
+      LogicalNot => write!(f, "!"),
+      LogicalOr => write!(f, "||"),
+      Multiplication => write!(f, "*"),
+      NullCoalescing => write!(f, "??"),
+      Range => write!(f, ".."),
+      Remainder => write!(f, "%"),
+      SubtractionOrNegation => write!(f, "-"),
     }
   }
 }
