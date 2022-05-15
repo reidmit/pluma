@@ -41,6 +41,13 @@ pub enum AnalysisErrorKind {
 		field_name: String,
 		receiver_type: ExprType,
 	},
+	PatternMismatchExpectedTuple {
+		actual: ExprType,
+	},
+	PatternMismatchTupleSize {
+		pattern_size: usize,
+		subject_size: usize,
+	},
 }
 
 impl fmt::Display for AnalysisError {
@@ -118,6 +125,21 @@ impl fmt::Display for AnalysisError {
 					field_name, receiver_type,
 				)
 			}
+
+			PatternMismatchExpectedTuple { actual } => write!(
+				f,
+				"Pattern mismatch: expected a tuple type, but found '{}'.",
+				actual
+			),
+
+			PatternMismatchTupleSize {
+				pattern_size,
+				subject_size,
+			} => write!(
+				f,
+				"Pattern mismatch: pattern expects a tuple of size {}, but found tuple of size {}.",
+				pattern_size, subject_size,
+			),
 		}
 	}
 }

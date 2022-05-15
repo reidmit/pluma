@@ -95,6 +95,66 @@ impl<'compiler> Analyzer<'compiler> {
     None
   }
 
+  fn destructure_pattern(&mut self, pattern: &mut PatternNode, subject_type: &ExprType) {
+    match &mut pattern.kind {
+      PatternKind::Underscore => {
+        // matches anything and adds nothing to scope, so nothing to do here
+      }
+
+      PatternKind::Identifier(ident_node) => {
+        self.add_value_binding(
+          ident_node.name.clone(),
+          subject_type.clone(),
+          ident_node.pos,
+        );
+      }
+
+      PatternKind::Literal(literal) => {
+        let literal_type = self.analyze_literal(literal);
+
+        if !literal_type.is_convertible_to(&subject_type) {
+          self.error(
+            pattern.pos,
+            MismatchedTypes {
+              expected: subject_type.clone(),
+              actual: literal_type,
+            },
+          );
+        }
+      }
+
+      PatternKind::Tuple(entry_patterns) => match subject_type {
+        ExprType::Tuple(entry_types) => {
+          if entry_patterns.len() != entry_types.len() {
+            self.error(
+              pattern.pos,
+              PatternMismatchTupleSize {
+                pattern_size: entry_patterns.len(),
+                subject_size: entry_types.len(),
+              },
+            );
+          }
+
+          for i in 0..entry_patterns.len() {
+            let (_, entry_pattern) = entry_patterns.get_mut(i).unwrap();
+            let (_, entry_type) = entry_types.get(i).unwrap();
+
+            self.destructure_pattern(entry_pattern, entry_type);
+          }
+        }
+
+        _ => self.error(
+          pattern.pos,
+          PatternMismatchExpectedTuple {
+            actual: subject_type.clone(),
+          },
+        ),
+      },
+
+      _ => {}
+    }
+  }
+
   fn analyze_definition(&mut self, definition: &mut DefinitionNode) {
     let name = definition.name.name.clone();
 
@@ -125,9 +185,24 @@ impl<'compiler> Analyzer<'compiler> {
       ExprKind::Grouping(inner) => self.analyze_expr(inner),
       ExprKind::BinaryOperation { op, left, right } => self.analyze_binary_op(op, left, right),
       ExprKind::Call(call) => self.analyze_call(call),
+      ExprKind::When(when) => self.analyze_when(when),
       // TODO! more here!
       _ => ExprType::Unknown,
     }
+  }
+
+  fn analyze_when(&mut self, when: &mut WhenNode) -> ExprType {
+    let subject_type = self.analyze_expr(&mut when.subject);
+
+    for case in &mut when.cases {
+      self.enter_scope();
+
+      self.destructure_pattern(&mut case.pattern, &subject_type);
+
+      self.leave_scope();
+    }
+
+    ExprType::Unknown
   }
 
   fn analyze_call(&mut self, call: &mut CallNode) -> ExprType {

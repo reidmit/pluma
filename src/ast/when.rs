@@ -2,7 +2,7 @@ use super::*;
 
 pub struct WhenNode {
   pub pos: Position,
-  pub discriminant: Box<ExprNode>,
+  pub subject: Box<ExprNode>,
   pub cases: Vec<CaseNode>,
 }
 
@@ -17,8 +17,8 @@ impl std::fmt::Debug for WhenNode {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(
       f,
-      "when:{}-{} discriminant:({:#?}) {:#?}",
-      self.pos.0, self.pos.1, self.discriminant, self.cases
+      "when:{}-{} subject:({:#?}) {:#?}",
+      self.pos.0, self.pos.1, self.subject, self.cases
     )
   }
 }

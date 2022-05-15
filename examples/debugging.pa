@@ -1,14 +1,9 @@
 def main = fun {
-	let args = std/env/args | slice 1
+	let n = (1, "hey");
 
-	for arg in args {
-		if arg is "hello" {
-			print "nice"
-		}
-
-		when arg is "hello" {
-		} is "goodbye" {
-		} is _ {
-		}
+	when n is (100, 2) {
+		print "yes"
+	} is _ {
+		print "no"
 	}
 }

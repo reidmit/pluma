@@ -7,17 +7,17 @@ pub struct PatternNode {
 }
 
 pub enum PatternKind {
-  // e.g. if val is x then ...
+  // e.g. if val is x { ... }
   Identifier(IdentifierNode),
-  // e.g. if val is person _ then ...
+  // e.g. if val is enum-variant _ { ... }
   Constructor(IdentifierNode, Box<PatternNode>),
-  // e.g. if val is (a: 1, b: 2) then ...
+  // e.g. if val is (a: 1, b: 2) { ... }
   Tuple(Vec<(Option<IdentifierNode>, PatternNode)>),
-  // e.g. if val is _ then ...
+  // e.g. if val is _ { ... }
   Underscore,
-  // e.g. if val is 1 then ...
+  // e.g. if val is 1 { ... }
   Literal(LiteralNode),
-  // e.g. if val is "$(thing)?" then ...
+  // e.g. if name is "${first} ${last}" { ... }
   Interpolation(Vec<ExprNode>),
 }
 

@@ -518,7 +518,7 @@ impl<'a> Parser<'a> {
 			start
 		});
 
-		let discriminant = self.parse_expression()?;
+		let subject = self.parse_expression()?;
 
 		self.skip_line_breaks();
 
@@ -558,7 +558,7 @@ impl<'a> Parser<'a> {
 
 		Some(WhenNode {
 			pos: (start, end),
-			discriminant: Box::new(discriminant),
+			subject: Box::new(subject),
 			cases,
 		})
 	}
