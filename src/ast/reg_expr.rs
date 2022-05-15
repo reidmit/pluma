@@ -21,12 +21,14 @@ pub enum RegexKind {
 	NamedCapture(String, Box<RegexNode>),
 }
 
+#[cfg(debug_assertions)]
 impl std::fmt::Debug for RegexNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "regex:{}-{} {:#?}", self.pos.0, self.pos.1, self.kind)
 	}
 }
 
+#[cfg(debug_assertions)]
 impl std::fmt::Debug for RegexKind {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		use RegexKind::*;

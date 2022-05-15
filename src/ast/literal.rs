@@ -14,6 +14,7 @@ pub enum LiteralKind {
 	Str(String),
 }
 
+#[cfg(debug_assertions)]
 impl std::fmt::Debug for LiteralNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		use LiteralKind::*;

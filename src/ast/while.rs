@@ -7,6 +7,7 @@ pub struct WhileNode {
   pub body: Vec<ExprNode>,
 }
 
+#[cfg(debug_assertions)]
 impl std::fmt::Debug for WhileNode {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(

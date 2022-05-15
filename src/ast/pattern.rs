@@ -71,12 +71,14 @@ impl PatternNode {
   }
 }
 
+#[cfg(debug_assertions)]
 impl std::fmt::Debug for PatternNode {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "pattern:{}-{} {:#?}", self.pos.0, self.pos.1, self.kind)
   }
 }
 
+#[cfg(debug_assertions)]
 impl std::fmt::Debug for PatternKind {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     use PatternKind::*;

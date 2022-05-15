@@ -19,7 +19,6 @@ pub enum ExprKind {
 	},
 	Lambda(LambdaNode),
 	Call(CallNode),
-	Case(CaseNode),
 	EmptyTuple,
 	For(ForNode),
 	Grouping(Box<ExprNode>),
@@ -31,17 +30,20 @@ pub enum ExprKind {
 	Literal(LiteralNode),
 	Regex(RegexNode),
 	Tuple(Vec<TupleEntry>),
+	When(WhenNode),
 	While(WhileNode),
 }
 
 pub struct TupleEntry(pub Option<IdentifierNode>, pub ExprNode);
 
+#[cfg(debug_assertions)]
 impl std::fmt::Debug for ExprNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "expr:{}-{} ({:#?})", self.pos.0, self.pos.1, self.kind)
 	}
 }
 
+#[cfg(debug_assertions)]
 impl std::fmt::Debug for ExprKind {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		use ExprKind::*;
@@ -51,7 +53,6 @@ impl std::fmt::Debug for ExprKind {
 			UnaryOperation { op, right } => write!(f, "{:#?} {:#?}", op, right),
 			Lambda(lambda) => write!(f, "{:#?}", lambda),
 			Call(call) => write!(f, "{:#?}", call),
-			Case(case) => write!(f, "{:#?}", case),
 			EmptyTuple => write!(f, "()"),
 			For(for_node) => write!(f, "{:#?}", for_node),
 			Grouping(expr) => write!(f, "grouping {:#?}", expr),
@@ -63,11 +64,13 @@ impl std::fmt::Debug for ExprKind {
 			Literal(lit) => write!(f, "{:?}", lit),
 			Regex(regex) => write!(f, "{:#?}", regex),
 			Tuple(entries) => write!(f, "tuple {:#?}", entries),
+			When(when) => write!(f, "{:#?}", when),
 			While(while_node) => write!(f, "{:#?}", while_node),
 		}
 	}
 }
 
+#[cfg(debug_assertions)]
 impl std::fmt::Debug for TupleEntry {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		if let Some(label) = &self.0 {

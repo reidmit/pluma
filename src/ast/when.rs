@@ -1,18 +1,19 @@
 use super::*;
 
-pub struct CaseNode {
+pub struct WhenNode {
   pub pos: Position,
   pub discriminant: Box<ExprNode>,
-  pub cases: Vec<CaseBranchNode>,
+  pub cases: Vec<CaseNode>,
 }
 
-pub struct CaseBranchNode {
+pub struct CaseNode {
   pub pos: Position,
   pub pattern: PatternNode,
   pub body: Vec<ExprNode>,
 }
 
-impl std::fmt::Debug for CaseNode {
+#[cfg(debug_assertions)]
+impl std::fmt::Debug for WhenNode {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(
       f,
@@ -22,7 +23,8 @@ impl std::fmt::Debug for CaseNode {
   }
 }
 
-impl std::fmt::Debug for CaseBranchNode {
+#[cfg(debug_assertions)]
+impl std::fmt::Debug for CaseNode {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(
       f,

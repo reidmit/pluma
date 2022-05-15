@@ -303,9 +303,9 @@ impl<'a> Parser<'a> {
 			// Some(Token::LeftBrace(..)) => self.parse_dict(),
 			Some(Token::Backtick(..)) => self.parse_regular_expression(),
 			Some(Token::StringLiteral(..)) => self.parse_string(),
-			Some(Token::KeywordWhen(..)) => self.parse_when_expression().map(|case_node| ExprNode {
-				pos: case_node.pos,
-				kind: ExprKind::Case(case_node),
+			Some(Token::KeywordWhen(..)) => self.parse_when_expression().map(|when_node| ExprNode {
+				pos: when_node.pos,
+				kind: ExprKind::When(when_node),
 				resolved_type: ExprType::Unknown,
 			}),
 			Some(Token::KeywordIf(..)) => self.parse_if_expression().map(|when_node| ExprNode {
@@ -511,7 +511,7 @@ impl<'a> Parser<'a> {
 		})
 	}
 
-	fn parse_when_expression(&mut self) -> Option<CaseNode> {
+	fn parse_when_expression(&mut self) -> Option<WhenNode> {
 		let start = expect_token_and_do!(self, Token::KeywordWhen, {
 			let (start, _) = self.current_token_position();
 			self.advance();
@@ -547,7 +547,7 @@ impl<'a> Parser<'a> {
 
 			self.skip_line_breaks();
 
-			cases.push(CaseBranchNode {
+			cases.push(CaseNode {
 				pos: (case_start, case_end),
 				pattern: case_pattern,
 				body: case_body,
@@ -556,7 +556,7 @@ impl<'a> Parser<'a> {
 
 		let end = cases.last().unwrap().pos.1;
 
-		Some(CaseNode {
+		Some(WhenNode {
 			pos: (start, end),
 			discriminant: Box::new(discriminant),
 			cases,

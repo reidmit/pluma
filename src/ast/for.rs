@@ -7,6 +7,7 @@ pub struct ForNode {
   pub body: Vec<ExprNode>,
 }
 
+#[cfg(debug_assertions)]
 impl std::fmt::Debug for ForNode {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(

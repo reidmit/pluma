@@ -6,6 +6,7 @@ pub struct OperatorNode {
   pub kind: Operator,
 }
 
+#[cfg(debug_assertions)]
 impl std::fmt::Debug for OperatorNode {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "op:{}-{} {:?}", self.pos.0, self.pos.1, self.kind)
@@ -96,6 +97,7 @@ impl Operator {
   }
 }
 
+#[cfg(debug_assertions)]
 impl std::fmt::Debug for Operator {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "{}", self)

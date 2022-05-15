@@ -6,6 +6,7 @@ pub struct LambdaNode {
 	pub body: Vec<ExprNode>,
 }
 
+#[cfg(debug_assertions)]
 impl std::fmt::Debug for LambdaNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(

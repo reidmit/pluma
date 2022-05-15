@@ -12,6 +12,7 @@ pub enum DefinitionKind {
 	// Type(TypeDefNode),
 }
 
+#[cfg(debug_assertions)]
 impl std::fmt::Debug for DefinitionNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(
@@ -22,6 +23,7 @@ impl std::fmt::Debug for DefinitionNode {
 	}
 }
 
+#[cfg(debug_assertions)]
 impl std::fmt::Debug for DefinitionKind {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match &self {

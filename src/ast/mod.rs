@@ -1,5 +1,4 @@
 mod call;
-mod case;
 mod definition;
 mod expr;
 mod r#for;
@@ -12,10 +11,10 @@ mod module;
 mod operator;
 mod pattern;
 mod reg_expr;
+mod when;
 mod r#while;
 
 pub use self::call::*;
-pub use self::case::*;
 pub use self::definition::*;
 pub use self::expr::*;
 pub use self::identifier::*;
@@ -29,5 +28,6 @@ pub use self::r#if::*;
 pub use self::r#let::*;
 pub use self::r#while::*;
 pub use self::reg_expr::*;
+pub use self::when::*;
 
 pub type Position = (usize, usize);

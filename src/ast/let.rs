@@ -6,6 +6,7 @@ pub struct LetNode {
 	pub value: Box<ExprNode>,
 }
 
+#[cfg(debug_assertions)]
 impl std::fmt::Debug for LetNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(
