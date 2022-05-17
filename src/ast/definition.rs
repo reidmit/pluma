@@ -4,12 +4,12 @@ pub struct DefinitionNode {
 	pub pos: Position,
 	pub name: IdentifierNode,
 	pub kind: DefinitionKind,
-	pub doc_comment_lines: std::ops::Range<usize>,
+	pub doc_comment_range: std::ops::Range<usize>,
 }
 
 pub enum DefinitionKind {
 	Expr(ExprNode),
-	// Type(TypeDefNode),
+	Alias(TypeExprNode),
 }
 
 #[cfg(debug_assertions)]
@@ -28,6 +28,7 @@ impl std::fmt::Debug for DefinitionKind {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match &self {
 			DefinitionKind::Expr(expr) => write!(f, "{:#?}", expr),
+			DefinitionKind::Alias(type_expr) => write!(f, "alias {:#?}", type_expr),
 		}
 	}
 }

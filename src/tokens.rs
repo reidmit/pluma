@@ -103,11 +103,8 @@ pub enum Token {
 	/// `enum` keyword
 	KeywordEnum(usize, usize),
 
-	/// `for` keyword
-	KeywordFor(usize, usize),
-
-	/// `fun` keyword
-	KeywordFun(usize, usize),
+	/// `fn` keyword
+	KeywordFn(usize, usize),
 
 	/// `if` keyword
 	KeywordIf(usize, usize),
@@ -237,8 +234,7 @@ impl Token {
 			| KeywordAlias(start, end)
 			| KeywordDef(start, end)
 			| KeywordEnum(start, end)
-			| KeywordFor(start, end)
-			| KeywordFun(start, end)
+			| KeywordFn(start, end)
 			| KeywordIf(start, end)
 			| KeywordIn(start, end)
 			| KeywordIs(start, end)
@@ -276,7 +272,7 @@ impl Token {
 		use Token::*;
 
 		match self {
-			Identifier(..) | KeywordFun(..) | KeywordIf(..) | KeywordWhen(..) | DecimalDigits(..)
+			Identifier(..) | KeywordFn(..) | KeywordIf(..) | KeywordWhen(..) | DecimalDigits(..)
 			| HexDigits(..) | BinaryDigits(..) | OctalDigits(..) | LeftParen(..) | LeftBracket(..)
 			| Backtick(..) | StringLiteral(..) => true,
 			_ => false,
@@ -325,8 +321,7 @@ impl fmt::Display for Token {
 			&KeywordAlias(..) => "keyword 'alias'",
 			&KeywordDef(..) => "keyword 'def'",
 			&KeywordEnum(..) => "keyword 'enum'",
-			&KeywordFor(..) => "keyword 'for'",
-			&KeywordFun(..) => "keyword 'fun'",
+			&KeywordFn(..) => "keyword 'fn'",
 			&KeywordIf(..) => "keyword 'if'",
 			&KeywordIn(..) => "keyword 'in'",
 			&KeywordIs(..) => "keyword 'is'",

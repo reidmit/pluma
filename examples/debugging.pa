@@ -1,9 +1,13 @@
-def main = fun {
-	let n = (1, "hey");
+def person = alias (
+  name: string,
+  age: int
+)
 
-	when n is (100, 2) {
-		print "yes"
-	} is _ {
-		print "no"
-	}
+def main = fn {
+  let p = person (name: "reid", age: 28);
+  p.name
+}
+
+def make-person = fn {
+  person (name: "idk", age: 47)
 }

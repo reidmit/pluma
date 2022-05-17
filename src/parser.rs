@@ -181,7 +181,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_lambda(&mut self) -> Option<LambdaNode> {
-		let start = expect_token_and_do!(self, Token::KeywordFun, {
+		let start = expect_token_and_do!(self, Token::KeywordFn, {
 			let (start, _) = self.current_token_position();
 			self.advance();
 			start
@@ -318,17 +318,12 @@ impl<'a> Parser<'a> {
 				kind: ExprKind::While(while_node),
 				resolved_type: ExprType::Unknown,
 			}),
-			Some(Token::KeywordFor(..)) => self.parse_for_expression().map(|for_node| ExprNode {
-				pos: for_node.pos,
-				kind: ExprKind::For(for_node),
-				resolved_type: ExprType::Unknown,
-			}),
 			Some(Token::KeywordLet(..)) => self.parse_let_expression().map(|node| ExprNode {
 				pos: node.pos,
 				kind: ExprKind::Let(node),
 				resolved_type: ExprType::Unknown,
 			}),
-			Some(Token::KeywordFun(..)) => self.parse_lambda().map(|lambda| ExprNode {
+			Some(Token::KeywordFn(..)) => self.parse_lambda().map(|lambda| ExprNode {
 				pos: lambda.pos,
 				kind: ExprKind::Lambda(lambda),
 				resolved_type: ExprType::Unknown,
@@ -505,7 +500,7 @@ impl<'a> Parser<'a> {
 
 		Some(IfNode {
 			pos: (start, end),
-			condition: Box::new(condition),
+			subject: Box::new(condition),
 			pattern,
 			body,
 		})
@@ -593,41 +588,6 @@ impl<'a> Parser<'a> {
 		Some(WhileNode {
 			pos: (start, end),
 			condition: Box::new(condition),
-			pattern,
-			body,
-		})
-	}
-
-	fn parse_for_expression(&mut self) -> Option<ForNode> {
-		let start = expect_token_and_do!(self, Token::KeywordFor, {
-			let (start, _) = self.current_token_position();
-			self.advance();
-			start
-		});
-
-		let pattern = self.parse_pattern()?;
-
-		expect_token_and_do!(self, Token::KeywordIn, {
-			self.advance();
-		});
-
-		let data = self.parse_expression()?;
-
-		expect_token_and_do!(self, Token::LeftBrace, {
-			self.advance();
-		});
-
-		let body = self.parse_body_expressions()?;
-
-		let end = expect_token_and_do!(self, Token::RightBrace, {
-			let end = self.current_token_position().1;
-			self.advance();
-			end
-		});
-
-		Some(ForNode {
-			pos: (start, end),
-			data: Box::new(data),
 			pattern,
 			body,
 		})
@@ -1247,24 +1207,41 @@ impl<'a> Parser<'a> {
 
 		self.skip_line_breaks();
 
-		let doc_comment_lines_end = self.line_breaks.len();
+		let doc_comment_range = doc_comment_lines_start..self.line_breaks.len();
 
 		expect_token_and_do!(self, Token::Equal, {
 			self.advance();
 		});
 
-		let value = self.parse_expression()?;
+		match self.current_token {
+			Some(Token::KeywordAlias(..)) => {
+				self.advance();
 
-		let end = value.pos.1;
+				let type_expr = self.parse_type_expression()?;
 
-		self.skip_line_breaks();
+				self.skip_line_breaks();
 
-		Some(DefinitionNode {
-			name,
-			pos: (start, end),
-			doc_comment_lines: (doc_comment_lines_start..doc_comment_lines_end),
-			kind: DefinitionKind::Expr(value),
-		})
+				Some(DefinitionNode {
+					name,
+					pos: (start, type_expr.pos.1),
+					doc_comment_range,
+					kind: DefinitionKind::Alias(type_expr),
+				})
+			}
+
+			_ => {
+				let value = self.parse_expression()?;
+
+				self.skip_line_breaks();
+
+				Some(DefinitionNode {
+					name,
+					pos: (start, value.pos.1),
+					doc_comment_range,
+					kind: DefinitionKind::Expr(value),
+				})
+			}
+		}
 	}
 
 	fn parse_string(&mut self) -> Option<ExprNode> {
@@ -1331,5 +1308,179 @@ impl<'a> Parser<'a> {
 		}
 
 		Some(expr_node)
+	}
+
+	fn parse_type_identifier(&mut self) -> Option<TypeIdentifierNode> {
+		let (start, mut end) = expect_token_and_do!(self, Token::Identifier, {
+			let pos = self.current_token_position();
+			self.advance();
+			pos
+		});
+
+		let name = read_string!(self, start, end);
+
+		let mut generics = Vec::new();
+
+		if current_token_is!(self, Token::LeftAngle) {
+			self.advance();
+
+			while let Some(type_node) = self.parse_type_expression() {
+				generics.push(type_node);
+
+				match self.current_token {
+					Some(Token::Comma(..)) => self.advance(),
+					_ => break,
+				}
+			}
+
+			end = expect_token_and_do!(self, Token::RightAngle, {
+				let pos = self.current_token_position();
+				self.advance();
+				pos.1
+			});
+		}
+
+		Some(TypeIdentifierNode {
+			pos: (start, end),
+			name,
+			generics,
+		})
+	}
+
+	fn parse_type_expression(&mut self) -> Option<TypeExprNode> {
+		match self.current_token {
+			Some(Token::Identifier(..)) => self.parse_type_identifier().map(|type_id| TypeExprNode {
+				pos: type_id.pos,
+				kind: TypeExprKind::Single(type_id),
+			}),
+			Some(Token::LeftParen(..)) => self.parse_type_parenthetical(),
+			Some(Token::KeywordFn(..)) => self.parse_type_lambda(),
+			_ => None,
+		}
+	}
+
+	fn parse_type_lambda(&mut self) -> Option<TypeExprNode> {
+		let start = expect_token_and_do!(self, Token::KeywordFn, {
+			let (start, _) = self.current_token_position();
+			self.advance();
+			start
+		});
+
+		self.skip_line_breaks();
+
+		let mut param_types = Vec::new();
+
+		while let Some(type_expr) = self.parse_type_expression() {
+			param_types.push(type_expr);
+		}
+
+		expect_token_and_do!(self, Token::Arrow, {
+			self.advance();
+		});
+
+		let return_type = match self.parse_type_expression() {
+			Some(type_expr) => Box::new(type_expr),
+			_ => {
+				return self.error(ParseError {
+					pos: self.current_token_position(),
+					kind: ParseErrorKind::MissingReturnType,
+				})
+			}
+		};
+
+		let end = expect_token_and_do!(self, Token::RightBrace, {
+			let (_, end) = self.current_token_position();
+			self.advance();
+			end
+		});
+
+		Some(TypeExprNode {
+			pos: (start, end),
+			kind: TypeExprKind::Func(param_types, return_type),
+		})
+	}
+
+	fn parse_type_parenthetical(&mut self) -> Option<TypeExprNode> {
+		let start = expect_token_and_do!(self, Token::LeftParen, {
+			let pos = self.current_token_position();
+			self.advance();
+			pos.0
+		});
+
+		self.skip_line_breaks();
+
+		let mut entries = Vec::new();
+
+		while let Some(type_node) = self.parse_type_expression() {
+			if current_token_is!(self, Token::Colon) {
+				self.advance();
+
+				match type_node.kind {
+					TypeExprKind::Single(label) => {
+						let label_ident = IdentifierNode {
+							name: label.name,
+							pos: label.pos,
+						};
+
+						if let Some(value) = self.parse_type_expression() {
+							entries.push((Some(label_ident), value));
+						} else {
+							self.error::<TypeExprNode>(ParseError {
+								pos: type_node.pos,
+								kind: ParseErrorKind::MissingExpressionAfterLabelInTuple,
+							});
+						}
+					}
+
+					_ => {
+						self.error::<TypeExprNode>(ParseError {
+							pos: type_node.pos,
+							kind: ParseErrorKind::MissingLabelInTuple,
+						});
+					}
+				}
+			} else {
+				entries.push((None, type_node));
+			}
+
+			self.skip_line_breaks();
+
+			match self.current_token {
+				Some(Token::Comma(..)) => {
+					self.advance();
+					self.skip_line_breaks();
+				}
+				_ => break,
+			}
+		}
+
+		self.skip_line_breaks();
+
+		let end = expect_token_and_do!(self, Token::RightParen, {
+			let pos = self.current_token_position();
+			self.advance();
+			pos.1
+		});
+
+		if entries.is_empty() {
+			return Some(TypeExprNode {
+				pos: (start, end),
+				kind: TypeExprKind::EmptyTuple,
+			});
+		}
+
+		if entries.len() == 1 {
+			if let Some((None, first_entry)) = entries.pop() {
+				return Some(TypeExprNode {
+					pos: (start, end),
+					kind: TypeExprKind::Grouping(Box::new(first_entry)),
+				});
+			}
+		}
+
+		Some(TypeExprNode {
+			pos: (start, end),
+			kind: TypeExprKind::Tuple(entries),
+		})
 	}
 }

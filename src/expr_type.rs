@@ -15,35 +15,10 @@ pub enum ExprType {
   Func(Vec<ExprType>, Box<ExprType>),
   Tuple(Vec<(Option<String>, ExprType)>),
   Named(String),
+  NamedWithParams(String, Vec<ExprType>),
 }
 
 impl ExprType {
-  pub fn get_field_type(&self, field_name: &String) -> Option<ExprType> {
-    match self {
-      ExprType::Tuple(entries) => {
-        let mut index = 0;
-
-        for (label, entry_type) in entries {
-          if *field_name == format!("{}", index) {
-            return Some(entry_type.clone());
-          }
-
-          if let Some(label) = label {
-            if *label == *field_name {
-              return Some(entry_type.clone());
-            }
-          }
-
-          index = index + 1;
-        }
-
-        None
-      }
-
-      _ => None,
-    }
-  }
-
   pub fn is_convertible_to(&self, other: &ExprType) -> bool {
     // TODO: more than just equality?
     *self == *other
@@ -69,6 +44,19 @@ impl fmt::Display for ExprType {
 
       ExprType::Named(name) => write!(f, "{}", name),
 
+      ExprType::NamedWithParams(name, params) => {
+        write!(
+          f,
+          "{}<{}>",
+          name,
+          params
+            .iter()
+            .map(|p| format!("{}", p))
+            .collect::<Vec<String>>()
+            .join(", ")
+        )
+      }
+
       ExprType::Tuple(entries) => write!(
         f,
         "({})",
@@ -87,7 +75,7 @@ impl fmt::Display for ExprType {
       ExprType::Func(param_types, return_type) => {
         write!(
           f,
-          "{} -> {}",
+          "fn {} -> {}",
           param_types
             .iter()
             .map(|p| format!("{}", p))

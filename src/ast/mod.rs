@@ -1,7 +1,6 @@
 mod call;
 mod definition;
 mod expr;
-mod r#for;
 mod identifier;
 mod r#if;
 mod lambda;
@@ -11,6 +10,8 @@ mod module;
 mod operator;
 mod pattern;
 mod reg_expr;
+mod type_expr;
+mod type_identifier;
 mod when;
 mod r#while;
 
@@ -23,11 +24,12 @@ pub use self::literal::*;
 pub use self::module::*;
 pub use self::operator::*;
 pub use self::pattern::*;
-pub use self::r#for::*;
 pub use self::r#if::*;
 pub use self::r#let::*;
 pub use self::r#while::*;
 pub use self::reg_expr::*;
+pub use self::type_expr::*;
+pub use self::type_identifier::*;
 pub use self::when::*;
 
 pub type Position = (usize, usize);

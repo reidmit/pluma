@@ -22,6 +22,7 @@ pub enum ParseErrorKind {
 	MissingExpressionAfterLabelInTuple,
 	MissingLabelInTuple,
 	MissingRightHandSideOfAssignment,
+	MissingReturnType,
 	OverflowingIntegerLiteral,
 	UnclosedInterpolation,
 	UnclosedString,
@@ -50,6 +51,10 @@ impl fmt::Display for ParseError {
 			MissingExpressionAfterLabelInTuple => write!(f, "MissingExpressionAfterLabelInTuple"),
 			MissingLabelInTuple => write!(f, "MissingLabelInTuple"),
 			MissingRightHandSideOfAssignment => write!(f, "MissingRightHandSideOfAssignment"),
+			MissingReturnType => write!(
+				f,
+				"Missing return type after '->' in function type expression"
+			),
 			OverflowingIntegerLiteral => write!(f, "OverflowingIntegerLiteral"),
 			UnclosedInterpolation => write!(f, "Unclosed string interpolation."),
 			UnclosedString => write!(f, "Unclosed string."),

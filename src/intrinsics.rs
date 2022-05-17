@@ -2,7 +2,7 @@ use crate::binding::*;
 use crate::expr_type::*;
 use std::collections::HashMap;
 
-pub fn _get_intrinsic_types() -> HashMap<String, TypeBinding> {
+pub fn get_intrinsic_types() -> HashMap<String, TypeBinding> {
   let mut intrinsics = HashMap::new();
 
   intrinsics.insert(

@@ -13,6 +13,7 @@ pub struct Analyzer<'compiler> {
   module_name: Option<String>,
   module_path: Option<PathBuf>,
   diagnostics: &'compiler mut Vec<Diagnostic>,
+  type_scope: HashMap<String, TypeBinding>,
   value_scopes: Vec<HashMap<String, ValueBinding>>,
 }
 
@@ -22,7 +23,8 @@ impl<'compiler> Analyzer<'compiler> {
       module_name: None,
       module_path: None,
       diagnostics,
-      // initialize top-leve scope with intrinsics:
+      // initialize top-level scopes with intrinsics:
+      type_scope: get_intrinsic_types(),
       value_scopes: vec![get_intrinsic_values()],
     }
   }
@@ -83,7 +85,11 @@ impl<'compiler> Analyzer<'compiler> {
     );
   }
 
-  pub fn get_binding(&mut self, name: &String) -> Option<&ValueBinding> {
+  pub fn add_type_binding(&mut self, name: String, typ: ExprType, pos: (usize, usize)) {
+    self.type_scope.insert(name, TypeBinding { typ, pos });
+  }
+
+  pub fn get_value_binding(&mut self, name: &String) -> Option<&ValueBinding> {
     for level in self.value_scopes.iter_mut().rev() {
       if let Some(binding) = level.get_mut(name) {
         binding.ref_count += 1;
@@ -93,6 +99,48 @@ impl<'compiler> Analyzer<'compiler> {
     }
 
     None
+  }
+
+  pub fn get_type_binding(&self, name: &String) -> Option<&TypeBinding> {
+    if let Some(binding) = self.type_scope.get(name) {
+      return Some(binding);
+    }
+
+    None
+  }
+
+  pub fn get_field_type(&self, typ: &ExprType, field_name: &String) -> Option<ExprType> {
+    match typ {
+      ExprType::Tuple(entries) => {
+        let mut index = 0;
+
+        for (label, entry_type) in entries {
+          if *field_name == format!("{}", index) {
+            return Some(entry_type.clone());
+          }
+
+          if let Some(label) = label {
+            if *label == *field_name {
+              return Some(entry_type.clone());
+            }
+          }
+
+          index = index + 1;
+        }
+
+        None
+      }
+
+      ExprType::Named(name) => {
+        if let Some(binding) = self.get_type_binding(name) {
+          return self.get_field_type(&binding.typ, field_name);
+        }
+
+        None
+      }
+
+      _ => None,
+    }
   }
 
   fn destructure_pattern(&mut self, pattern: &mut PatternNode, subject_type: &ExprType) {
@@ -158,18 +206,38 @@ impl<'compiler> Analyzer<'compiler> {
   fn analyze_definition(&mut self, definition: &mut DefinitionNode) {
     let name = definition.name.name.clone();
 
-    let resolved_type = match &mut definition.kind {
-      DefinitionKind::Expr(expr) => self.analyze_expr(expr),
+    match &mut definition.kind {
+      DefinitionKind::Expr(expr) => {
+        let resolved_type = self.analyze_expr(expr);
+
+        if let ExprType::Unknown = resolved_type {
+          self.error(
+            definition.name.pos,
+            CouldNotInferDefinitionType { name: name.clone() },
+          );
+        }
+
+        println!("{} :: {}", name, resolved_type);
+
+        self.add_value_binding(name, resolved_type, definition.name.pos)
+      }
+
+      DefinitionKind::Alias(type_expr) => {
+        let aliased_type = self.analyze_type_expr(type_expr);
+
+        self.add_type_binding(name.clone(), aliased_type.clone(), definition.name.pos);
+
+        self.add_value_binding(
+          name.clone(),
+          ExprType::Func(vec![aliased_type.clone()], Box::new(ExprType::Named(name))),
+          definition.name.pos,
+        );
+      }
     };
+  }
 
-    if let ExprType::Unknown = resolved_type {
-      self.error(
-        definition.name.pos,
-        CouldNotInferDefinitionType { name: name.clone() },
-      );
-    }
-
-    self.add_value_binding(name, resolved_type, definition.name.pos)
+  fn analyze_type_expr(&mut self, type_expr: &mut TypeExprNode) -> ExprType {
+    type_expr.to_type()
   }
 
   fn analyze_expr(&mut self, expr: &mut ExprNode) -> ExprType {
@@ -186,6 +254,7 @@ impl<'compiler> Analyzer<'compiler> {
       ExprKind::BinaryOperation { op, left, right } => self.analyze_binary_op(op, left, right),
       ExprKind::Call(call) => self.analyze_call(call),
       ExprKind::When(when) => self.analyze_when(when),
+      ExprKind::If(if_node) => self.analyze_if(if_node),
       // TODO! more here!
       _ => ExprType::Unknown,
     }
@@ -194,15 +263,48 @@ impl<'compiler> Analyzer<'compiler> {
   fn analyze_when(&mut self, when: &mut WhenNode) -> ExprType {
     let subject_type = self.analyze_expr(&mut when.subject);
 
+    let mut case_type = None;
+
     for case in &mut when.cases {
       self.enter_scope();
 
       self.destructure_pattern(&mut case.pattern, &subject_type);
 
+      for expr in &mut case.body {
+        let expr_type = self.analyze_expr(expr);
+
+        if let Some(case_type) = &case_type {
+          if !expr_type.is_convertible_to(case_type) {
+            self.error(
+              expr.pos,
+              MismatchedTypesForWhenCases {
+                expected: case_type.clone(),
+                actual: expr_type,
+              },
+            )
+          }
+        } else {
+          case_type = Some(expr_type);
+        }
+      }
+
       self.leave_scope();
     }
 
-    ExprType::Unknown
+    case_type.expect("should have at least one case")
+  }
+
+  fn analyze_if(&mut self, if_node: &mut IfNode) -> ExprType {
+    let subject_type = self.analyze_expr(&mut if_node.subject);
+
+    self.destructure_pattern(&mut if_node.pattern, &subject_type);
+
+    for expr in &mut if_node.body {
+      self.analyze_expr(expr);
+    }
+
+    // ifs always have type nothing
+    ExprType::Nothing
   }
 
   fn analyze_call(&mut self, call: &mut CallNode) -> ExprType {
@@ -227,6 +329,7 @@ impl<'compiler> Analyzer<'compiler> {
         for i in 0..arg_types.len() {
           if !arg_types[i].is_convertible_to(&param_types[i]) {
             let arg_pos = call.args[i].pos;
+
             self.error(
               arg_pos,
               MismatchedTypes {
@@ -365,7 +468,7 @@ impl<'compiler> Analyzer<'compiler> {
           }
         };
 
-        match receiver_type.get_field_type(&field_name) {
+        match self.get_field_type(&receiver_type, &field_name) {
           Some(field_type) => field_type,
           None => {
             self.error(
@@ -406,11 +509,15 @@ impl<'compiler> Analyzer<'compiler> {
 
     self.leave_scope();
 
+    if param_types.is_empty() {
+      param_types.push(ExprType::Nothing);
+    }
+
     ExprType::Func(param_types, Box::new(return_type))
   }
 
   fn analyze_identifier(&mut self, ident: &mut IdentifierNode) -> ExprType {
-    if let Some(binding) = self.get_binding(&ident.name) {
+    if let Some(binding) = self.get_value_binding(&ident.name) {
       binding.typ.clone()
     } else {
       self.error(

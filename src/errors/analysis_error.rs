@@ -30,6 +30,10 @@ pub enum AnalysisErrorKind {
 		expected: ExprType,
 		actual: ExprType,
 	},
+	MismatchedTypesForWhenCases {
+		expected: ExprType,
+		actual: ExprType,
+	},
 	MismatchedTypesForOperator {
 		op: Operator,
 		expected: ExprType,
@@ -94,6 +98,12 @@ impl fmt::Display for AnalysisError {
 			MismatchedTypes { expected, actual } => write!(
 				f,
 				"Mismatched types: expected '{}', but found '{}'.",
+				expected, actual
+			),
+
+			MismatchedTypesForWhenCases { expected, actual } => write!(
+				f,
+				"Mismatched types in 'when': expected all cases to have type '{}', but found '{}'.",
 				expected, actual
 			),
 
