@@ -29,7 +29,7 @@ macro_rules! expect_token_and_do {
 			Some($tokType(..)) => $block,
 			Some(tok) => {
 				return $self.error(ParseError {
-					loc: tok.get_position(),
+					loc: tok.get_location(),
 					kind: ParseErrorKind::UnexpectedToken {
 						actual: tok,
 						expected: $tokType(0, 0),
@@ -103,7 +103,7 @@ impl<'a> Parser<'a> {
 
 		if let Some(extra_token) = self.current_token {
 			self.error::<ModuleNode>(ParseError {
-				loc: self.current_token_position(),
+				loc: self.current_token_location(),
 				kind: ParseErrorKind::UnexpectedTokenExpectedEOF {
 					actual: extra_token,
 				},
@@ -137,7 +137,7 @@ impl<'a> Parser<'a> {
 				| Token::LineBreakWithIndentIncrease(..)
 				| Token::LineBreakWithIndentDecrease(..),
 			) => {
-				self.line_breaks.push(self.current_token_position());
+				self.line_breaks.push(self.current_token_location());
 				self.advance();
 			}
 
@@ -145,11 +145,11 @@ impl<'a> Parser<'a> {
 		}
 	}
 
-	fn current_token_position(&self) -> (usize, usize) {
+	fn current_token_location(&self) -> (usize, usize) {
 		match self.current_token {
-			Some(token) => token.get_position(),
+			Some(token) => token.get_location(),
 			_ => match self.prev_token {
-				Some(token) => token.get_position(),
+				Some(token) => token.get_location(),
 				_ => (0, 0),
 			},
 		}
@@ -183,7 +183,7 @@ impl<'a> Parser<'a> {
 
 	fn parse_lambda(&mut self) -> Option<LambdaNode> {
 		let start = expect_token_and_do!(self, Token::KeywordFun, {
-			let (start, _) = self.current_token_position();
+			let (start, _) = self.current_token_location();
 			self.advance();
 			start
 		});
@@ -207,7 +207,7 @@ impl<'a> Parser<'a> {
 		let body = self.parse_body_expressions()?;
 
 		let end = expect_token_and_do!(self, Token::RightBrace, {
-			let end = self.current_token_position().1;
+			let end = self.current_token_location().1;
 			self.advance();
 			end
 		});
@@ -221,7 +221,7 @@ impl<'a> Parser<'a> {
 
 	fn parse_decimal_number(&mut self) -> Option<LiteralNode> {
 		let (start, end) = expect_token_and_do!(self, Token::DecimalDigits, {
-			let loc = self.current_token_position();
+			let loc = self.current_token_location();
 			self.advance();
 			loc
 		});
@@ -230,7 +230,7 @@ impl<'a> Parser<'a> {
 			self.advance();
 
 			expect_token_and_do!(self, Token::DecimalDigits, {
-				let (_, end) = self.current_token_position();
+				let (_, end) = self.current_token_location();
 
 				self.advance();
 
@@ -254,7 +254,7 @@ impl<'a> Parser<'a> {
 
 	fn parse_binary_number(&mut self) -> Option<LiteralNode> {
 		let (start, end) = expect_token_and_do!(self, Token::BinaryDigits, {
-			let loc = self.current_token_position();
+			let loc = self.current_token_location();
 			self.advance();
 			loc
 		});
@@ -269,7 +269,7 @@ impl<'a> Parser<'a> {
 
 	fn parse_octal_number(&mut self) -> Option<LiteralNode> {
 		let (start, end) = expect_token_and_do!(self, Token::OctalDigits, {
-			let loc = self.current_token_position();
+			let loc = self.current_token_location();
 			self.advance();
 			loc
 		});
@@ -284,7 +284,7 @@ impl<'a> Parser<'a> {
 
 	fn parse_hex_number(&mut self) -> Option<LiteralNode> {
 		let (start, end) = expect_token_and_do!(self, Token::HexDigits, {
-			let loc = self.current_token_position();
+			let loc = self.current_token_location();
 			self.advance();
 			loc
 		});
@@ -426,7 +426,7 @@ impl<'a> Parser<'a> {
 						inferred_type: ExprType::Unknown,
 					};
 				} else {
-					let op_pos = self.current_token_position();
+					let op_pos = self.current_token_location();
 
 					// advance past the operator token
 					self.advance();
@@ -482,7 +482,7 @@ impl<'a> Parser<'a> {
 
 	fn parse_if_expression(&mut self) -> Option<IfNode> {
 		let start = expect_token_and_do!(self, Token::KeywordIf, {
-			let (start, _) = self.current_token_position();
+			let (start, _) = self.current_token_location();
 			self.advance();
 			start
 		});
@@ -502,7 +502,7 @@ impl<'a> Parser<'a> {
 		let body = self.parse_body_expressions()?;
 
 		let end = expect_token_and_do!(self, Token::RightBrace, {
-			let block_end = self.current_token_position().1;
+			let block_end = self.current_token_location().1;
 			self.advance();
 			block_end
 		});
@@ -517,7 +517,7 @@ impl<'a> Parser<'a> {
 
 	fn parse_when_expression(&mut self) -> Option<WhenNode> {
 		let start = expect_token_and_do!(self, Token::KeywordWhen, {
-			let (start, _) = self.current_token_position();
+			let (start, _) = self.current_token_location();
 			self.advance();
 			start
 		});
@@ -531,7 +531,7 @@ impl<'a> Parser<'a> {
 		expect_token_and_do!(self, Token::KeywordIs, {});
 
 		while current_token_is!(self, Token::KeywordIs) {
-			let case_start = self.current_token_position().0;
+			let case_start = self.current_token_location().0;
 
 			self.advance();
 
@@ -544,7 +544,7 @@ impl<'a> Parser<'a> {
 			let case_body = self.parse_body_expressions()?;
 
 			let case_end = expect_token_and_do!(self, Token::RightBrace, {
-				let block_end = self.current_token_position().1;
+				let block_end = self.current_token_location().1;
 				self.advance();
 				block_end
 			});
@@ -569,7 +569,7 @@ impl<'a> Parser<'a> {
 
 	fn parse_while_expression(&mut self) -> Option<WhileNode> {
 		let start = expect_token_and_do!(self, Token::KeywordWhile, {
-			let (start, _) = self.current_token_position();
+			let (start, _) = self.current_token_location();
 			self.advance();
 			start
 		});
@@ -589,7 +589,7 @@ impl<'a> Parser<'a> {
 		let body = self.parse_body_expressions()?;
 
 		let end = expect_token_and_do!(self, Token::RightBrace, {
-			let block_end = self.current_token_position().1;
+			let block_end = self.current_token_location().1;
 			self.advance();
 			block_end
 		});
@@ -644,7 +644,7 @@ impl<'a> Parser<'a> {
 				self.skip_line_breaks();
 
 				let end = expect_token_and_do!(self, Token::RightParen, {
-					let (_, end) = self.current_token_position();
+					let (_, end) = self.current_token_location();
 					self.advance();
 					end
 				});
@@ -680,7 +680,7 @@ impl<'a> Parser<'a> {
 				}
 
 				let end = expect_token_and_do!(self, Token::RightBrace, {
-					let (_, end) = self.current_token_position();
+					let (_, end) = self.current_token_location();
 					self.advance();
 					end
 				});
@@ -724,7 +724,7 @@ impl<'a> Parser<'a> {
 
 	fn parse_let_expression(&mut self) -> Option<LetNode> {
 		let start = expect_token_and_do!(self, Token::KeywordLet, {
-			let (start, _) = self.current_token_position();
+			let (start, _) = self.current_token_location();
 			self.advance();
 			start
 		});
@@ -742,7 +742,7 @@ impl<'a> Parser<'a> {
 			Some(node) => (node.loc.1, node),
 			_ => {
 				return self.error(ParseError {
-					loc: self.current_token_position(),
+					loc: self.current_token_location(),
 					kind: ParseErrorKind::MissingRightHandSideOfAssignment,
 				})
 			}
@@ -757,7 +757,7 @@ impl<'a> Parser<'a> {
 
 	fn parse_list(&mut self) -> Option<ExprNode> {
 		let start = expect_token_and_do!(self, Token::LeftBracket, {
-			let loc = self.current_token_position();
+			let loc = self.current_token_location();
 			self.advance();
 			loc.0
 		});
@@ -780,7 +780,7 @@ impl<'a> Parser<'a> {
 		self.skip_line_breaks();
 
 		let end = expect_token_and_do!(self, Token::RightBracket, {
-			let loc = self.current_token_position();
+			let loc = self.current_token_location();
 			self.advance();
 			loc.1
 		});
@@ -830,7 +830,7 @@ impl<'a> Parser<'a> {
 
 	fn parse_record(&mut self) -> Option<ExprNode> {
 		let record_start = expect_token_and_do!(self, Token::LeftBrace, {
-			let (start, _) = self.current_token_position();
+			let (start, _) = self.current_token_location();
 			self.advance();
 			start
 		});
@@ -861,7 +861,7 @@ impl<'a> Parser<'a> {
 		self.skip_line_breaks();
 
 		let record_end = expect_token_and_do!(self, Token::RightBrace, {
-			let loc = self.current_token_position();
+			let loc = self.current_token_location();
 			self.advance();
 			loc.1
 		});
@@ -880,7 +880,7 @@ impl<'a> Parser<'a> {
 		//  - "(expr1, expr2, expr3)" is a tuple
 
 		let paren_start = expect_token_and_do!(self, Token::LeftParen, {
-			let (start, _) = self.current_token_position();
+			let (start, _) = self.current_token_location();
 			self.advance();
 			start
 		});
@@ -907,7 +907,7 @@ impl<'a> Parser<'a> {
 		self.skip_line_breaks();
 
 		let paren_end = expect_token_and_do!(self, Token::RightParen, {
-			let loc = self.current_token_position();
+			let loc = self.current_token_location();
 			self.advance();
 			loc.1
 		});
@@ -941,7 +941,7 @@ impl<'a> Parser<'a> {
 
 	fn parse_regular_expression(&mut self) -> Option<ExprNode> {
 		let start = expect_token_and_do!(self, Token::Backtick, {
-			let (start, _) = self.current_token_position();
+			let (start, _) = self.current_token_location();
 			self.advance();
 			start
 		});
@@ -953,7 +953,7 @@ impl<'a> Parser<'a> {
 		self.skip_line_breaks();
 
 		let end = expect_token_and_do!(self, Token::Backtick, {
-			let (_, end) = self.current_token_position();
+			let (_, end) = self.current_token_location();
 			self.advance();
 			end
 		});
@@ -1078,7 +1078,7 @@ impl<'a> Parser<'a> {
 					self.advance();
 
 					let name = expect_token_and_do!(self, Token::Identifier, {
-						let (start, end) = self.current_token_position();
+						let (start, end) = self.current_token_location();
 						let name = read_string!(self, start, end);
 						self.advance();
 						name
@@ -1143,7 +1143,7 @@ impl<'a> Parser<'a> {
 					let mut has_comma = false;
 
 					if current_token_is!(self, Token::DecimalDigits) {
-						let (start, end) = self.current_token_position();
+						let (start, end) = self.current_token_location();
 						let value = self.parse_numeric_literal(start, end, 10) as usize;
 						min_count = Some(value);
 						self.advance();
@@ -1155,7 +1155,7 @@ impl<'a> Parser<'a> {
 						self.advance();
 
 						if current_token_is!(self, Token::DecimalDigits) {
-							let (start, end) = self.current_token_position();
+							let (start, end) = self.current_token_location();
 							let value = self.parse_numeric_literal(start, end, 10) as usize;
 							max_count = Some(value);
 							self.advance();
@@ -1163,7 +1163,7 @@ impl<'a> Parser<'a> {
 					}
 
 					let end = expect_token_and_do!(self, Token::RightBrace, {
-						let (_, end) = self.current_token_position();
+						let (_, end) = self.current_token_location();
 						self.advance();
 						end
 					});
@@ -1282,7 +1282,7 @@ impl<'a> Parser<'a> {
 
 	fn parse_string(&mut self) -> Option<ExprNode> {
 		let (start, end) = expect_token_and_do!(self, Token::StringLiteral, {
-			let loc = self.current_token_position();
+			let loc = self.current_token_location();
 			self.advance();
 			loc
 		});
@@ -1317,7 +1317,7 @@ impl<'a> Parser<'a> {
 				});
 
 				expect_token_and_do!(self, Token::StringLiteral, {
-					let (start, end) = self.current_token_position();
+					let (start, end) = self.current_token_location();
 
 					interpolation_end = end;
 
@@ -1348,7 +1348,7 @@ impl<'a> Parser<'a> {
 
 	fn parse_type_identifier(&mut self) -> Option<TypeIdentifierNode> {
 		let (start, mut end) = expect_token_and_do!(self, Token::Identifier, {
-			let loc = self.current_token_position();
+			let loc = self.current_token_location();
 			self.advance();
 			loc
 		});
@@ -1370,7 +1370,7 @@ impl<'a> Parser<'a> {
 			}
 
 			end = expect_token_and_do!(self, Token::RightAngle, {
-				let loc = self.current_token_position();
+				let loc = self.current_token_location();
 				self.advance();
 				loc.1
 			});
@@ -1398,7 +1398,7 @@ impl<'a> Parser<'a> {
 
 	fn parse_type_lambda(&mut self) -> Option<TypeExprNode> {
 		let start = expect_token_and_do!(self, Token::KeywordFun, {
-			let (start, _) = self.current_token_position();
+			let (start, _) = self.current_token_location();
 			self.advance();
 			start
 		});
@@ -1419,14 +1419,14 @@ impl<'a> Parser<'a> {
 			Some(type_expr) => Box::new(type_expr),
 			_ => {
 				return self.error(ParseError {
-					loc: self.current_token_position(),
+					loc: self.current_token_location(),
 					kind: ParseErrorKind::MissingReturnType,
 				})
 			}
 		};
 
 		let end = expect_token_and_do!(self, Token::RightBrace, {
-			let (_, end) = self.current_token_position();
+			let (_, end) = self.current_token_location();
 			self.advance();
 			end
 		});
@@ -1439,7 +1439,7 @@ impl<'a> Parser<'a> {
 
 	fn parse_type_record(&mut self) -> Option<TypeExprNode> {
 		let record_start = expect_token_and_do!(self, Token::LeftBrace, {
-			let (start, _) = self.current_token_position();
+			let (start, _) = self.current_token_location();
 			self.advance();
 			start
 		});
@@ -1470,7 +1470,7 @@ impl<'a> Parser<'a> {
 		self.skip_line_breaks();
 
 		let record_end = expect_token_and_do!(self, Token::RightBrace, {
-			let loc = self.current_token_position();
+			let loc = self.current_token_location();
 			self.advance();
 			loc.1
 		});
@@ -1483,7 +1483,7 @@ impl<'a> Parser<'a> {
 
 	fn parse_type_parenthetical(&mut self) -> Option<TypeExprNode> {
 		let start = expect_token_and_do!(self, Token::LeftParen, {
-			let loc = self.current_token_position();
+			let loc = self.current_token_location();
 			self.advance();
 			loc.0
 		});
@@ -1510,7 +1510,7 @@ impl<'a> Parser<'a> {
 		self.skip_line_breaks();
 
 		let end = expect_token_and_do!(self, Token::RightParen, {
-			let loc = self.current_token_position();
+			let loc = self.current_token_location();
 			self.advance();
 			loc.1
 		});

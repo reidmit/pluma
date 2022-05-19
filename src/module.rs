@@ -40,7 +40,7 @@ impl Module {
 		self.ast.is_some()
 	}
 
-	pub fn get_line_for_position(&self, loc: Location) -> usize {
+	pub fn get_line_for_location(&self, loc: Location) -> usize {
 		let mut line = 1;
 
 		for break_start in &self.line_break_starts {
