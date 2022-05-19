@@ -204,7 +204,7 @@ pub enum Token {
 }
 
 impl Token {
-	pub fn get_location(&self) -> (usize, usize) {
+	pub fn get_span(&self) -> (usize, usize) {
 		use Token::*;
 
 		match self {

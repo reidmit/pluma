@@ -3,7 +3,7 @@ use crate::tokens::Token;
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub struct OperatorNode {
-  pub loc: Location,
+  pub span: Span,
   pub kind: Operator,
 }
 

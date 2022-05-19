@@ -58,8 +58,8 @@ impl<'compiler> Analyzer<'compiler> {
 
 // Helper methods
 impl<'compiler> Analyzer<'compiler> {
-  fn diagnostic(&mut self, loc: (usize, usize), diag: Diagnostic) {
-    let mut diag = diag.with_pos(loc);
+  fn diagnostic(&mut self, span: (usize, usize), diag: Diagnostic) {
+    let mut diag = diag.with_pos(span);
 
     if let Some(module_name) = &self.module_name {
       diag = diag.with_module(module_name.clone(), self.module_path.clone().unwrap())
@@ -68,12 +68,12 @@ impl<'compiler> Analyzer<'compiler> {
     self.diagnostics.push(diag)
   }
 
-  fn warning(&mut self, loc: (usize, usize), kind: AnalysisErrorKind) {
-    self.diagnostic(loc, Diagnostic::warning(AnalysisError { loc, kind }));
+  fn warning(&mut self, span: (usize, usize), kind: AnalysisErrorKind) {
+    self.diagnostic(span, Diagnostic::warning(AnalysisError { span, kind }));
   }
 
-  fn error(&mut self, loc: (usize, usize), kind: AnalysisErrorKind) {
-    self.diagnostic(loc, Diagnostic::error(AnalysisError { loc, kind }));
+  fn error(&mut self, span: (usize, usize), kind: AnalysisErrorKind) {
+    self.diagnostic(span, Diagnostic::error(AnalysisError { span, kind }));
   }
 
   fn enter_scope(&mut self) {
@@ -84,7 +84,7 @@ impl<'compiler> Analyzer<'compiler> {
     if let Some(exited_level) = self.value_scopes.pop() {
       for (name, binding) in exited_level {
         if binding.ref_count == 0 {
-          self.warning(binding.loc, UnusedBinding { name });
+          self.warning(binding.span, UnusedBinding { name });
         }
       }
     }
@@ -96,7 +96,7 @@ impl<'compiler> Analyzer<'compiler> {
     ExprType::Placeholder(placeholder_id)
   }
 
-  fn add_value_binding(&mut self, name: String, typ: ExprType, loc: (usize, usize)) {
+  fn add_value_binding(&mut self, name: String, typ: ExprType, span: (usize, usize)) {
     let current_level = self.value_scopes.last_mut().expect("no current scope");
 
     current_level.insert(
@@ -104,13 +104,13 @@ impl<'compiler> Analyzer<'compiler> {
       ValueBinding {
         typ,
         ref_count: 0,
-        loc,
+        span,
       },
     );
   }
 
-  pub fn add_type_binding(&mut self, name: String, typ: ExprType, loc: (usize, usize)) {
-    self.type_scope.insert(name, TypeBinding { typ, loc });
+  pub fn add_type_binding(&mut self, name: String, typ: ExprType, span: (usize, usize)) {
+    self.type_scope.insert(name, TypeBinding { typ, span });
   }
 
   pub fn get_value_binding(&mut self, name: &String) -> Option<&ValueBinding> {
@@ -195,7 +195,7 @@ impl<'compiler> Analyzer<'compiler> {
       DefinitionKind::Expr(_) => self.add_value_binding(
         definition.name.name.clone(),
         definition.inferred_type.clone(),
-        definition.name.loc,
+        definition.name.span,
       ),
       _ => {
         // todo :---)
@@ -231,7 +231,7 @@ impl<'compiler> Analyzer<'compiler> {
           expr.inferred_type = binding.typ.clone();
         } else {
           self.error(
-            ident.loc,
+            ident.span,
             NameNotBound {
               name: ident.name.clone(),
             },
@@ -256,7 +256,7 @@ impl<'compiler> Analyzer<'compiler> {
         } in params
         {
           let param_type = self.new_placeholder_type();
-          self.add_value_binding(ident.name.clone(), param_type.clone(), ident.loc);
+          self.add_value_binding(ident.name.clone(), param_type.clone(), ident.span);
           *inferred_type = param_type;
         }
 
@@ -271,7 +271,7 @@ impl<'compiler> Analyzer<'compiler> {
 
       ExprKind::Let(LetNode { name, value, .. }) => {
         let binding_type = self.new_placeholder_type();
-        self.add_value_binding(name.name.clone(), binding_type, name.loc);
+        self.add_value_binding(name.name.clone(), binding_type, name.span);
 
         self.annotate_expr(value);
 

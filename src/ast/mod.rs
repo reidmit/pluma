@@ -32,4 +32,4 @@ pub use self::type_expr::*;
 pub use self::type_identifier::*;
 pub use self::when::*;
 
-pub type Location = (usize, usize);
+pub type Span = (usize, usize);

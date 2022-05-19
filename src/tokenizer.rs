@@ -488,7 +488,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 										}
 
 										self.errors.push(ParseError {
-											loc: (error_start, self.index),
+											span: (error_start, self.index),
 											kind: InvalidBinaryDigit,
 										});
 
@@ -514,7 +514,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 										}
 
 										self.errors.push(ParseError {
-											loc: (error_start, self.index),
+											span: (error_start, self.index),
 											kind: InvalidHexDigit,
 										});
 
@@ -540,7 +540,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 										}
 
 										self.errors.push(ParseError {
-											loc: (error_start, self.index),
+											span: (error_start, self.index),
 											kind: InvalidOctalDigit,
 										});
 
@@ -566,7 +566,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 							}
 
 							self.errors.push(ParseError {
-								loc: (error_start, self.index),
+								span: (error_start, self.index),
 								kind: InvalidDecimalDigit,
 							});
 
@@ -590,7 +590,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 			let start_index = self.interpolation_stack.pop().unwrap();
 
 			self.errors.push(ParseError {
-				loc: (start_index, self.index),
+				span: (start_index, self.index),
 				kind: UnclosedInterpolation,
 			});
 		}
@@ -599,7 +599,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 			let start_index = self.string_stack.pop().unwrap();
 
 			self.errors.push(ParseError {
-				loc: (start_index, start_index + 1),
+				span: (start_index, start_index + 1),
 				kind: UnclosedString,
 			});
 		}

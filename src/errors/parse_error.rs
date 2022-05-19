@@ -4,7 +4,7 @@ use std::fmt;
 #[derive(Copy, Clone)]
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub struct ParseError {
-	pub loc: (usize, usize),
+	pub span: (usize, usize),
 	pub kind: ParseErrorKind,
 }
 

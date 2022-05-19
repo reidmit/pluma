@@ -3,7 +3,7 @@ use crate::expr_type::*;
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub struct ExprNode {
-	pub loc: Location,
+	pub span: Span,
 	pub kind: ExprKind,
 	pub inferred_type: ExprType,
 }

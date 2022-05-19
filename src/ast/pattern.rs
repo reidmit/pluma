@@ -3,7 +3,7 @@ use crate::expr_type::*;
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub struct PatternNode {
-  pub loc: Location,
+  pub span: Span,
   pub kind: PatternKind,
 }
 
@@ -27,7 +27,7 @@ pub enum PatternKind {
 
 impl PatternNode {
   pub fn to_expr(self) -> ExprNode {
-    let loc = self.loc;
+    let span = self.span;
 
     let expr_kind = match self.kind {
       PatternKind::Identifier(ident) => ExprKind::Identifier(ident),
@@ -58,7 +58,7 @@ impl PatternNode {
 
       PatternKind::Constructor(ident, arg) => {
         let callee = ExprNode {
-          loc: ident.loc,
+          span: ident.span,
           kind: ExprKind::Identifier(ident),
           inferred_type: ExprType::Unknown,
         };
@@ -66,7 +66,7 @@ impl PatternNode {
         let arg_expr = arg.to_expr();
 
         let call = CallNode {
-          loc,
+          span,
           callee: Box::new(callee),
           args: vec![arg_expr],
         };
@@ -78,7 +78,7 @@ impl PatternNode {
     };
 
     ExprNode {
-      loc,
+      span,
       kind: expr_kind,
       inferred_type: ExprType::Unknown,
     }

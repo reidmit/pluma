@@ -4,7 +4,7 @@ use std::fmt;
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub struct AnalysisError {
-	pub loc: (usize, usize),
+	pub span: (usize, usize),
 	pub kind: AnalysisErrorKind,
 }
 
