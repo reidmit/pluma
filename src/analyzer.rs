@@ -5,7 +5,7 @@ use crate::errors::*;
 use crate::expr_type::*;
 use crate::intrinsics::*;
 use crate::module::Module;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use AnalysisErrorKind::*;
 
@@ -15,8 +15,11 @@ pub struct Analyzer<'compiler> {
   diagnostics: &'compiler mut Vec<Diagnostic>,
   type_scope: HashMap<String, TypeBinding>,
   value_scopes: Vec<HashMap<String, ValueBinding>>,
+  next_placeholder_id: usize,
+  constraints: HashSet<(ExprType, ExprType)>,
 }
 
+// Public interface
 impl<'compiler> Analyzer<'compiler> {
   pub fn new(diagnostics: &'compiler mut Vec<Diagnostic>) -> Self {
     Self {
@@ -26,6 +29,8 @@ impl<'compiler> Analyzer<'compiler> {
       // initialize top-level scopes with intrinsics:
       type_scope: get_intrinsic_types(),
       value_scopes: vec![get_intrinsic_values()],
+      next_placeholder_id: 0,
+      constraints: HashSet::new(),
     }
   }
 
@@ -34,12 +39,23 @@ impl<'compiler> Analyzer<'compiler> {
     self.module_path = Some(module.module_path.clone());
 
     if let Some(ast) = &mut module.ast {
-      for definition in &mut ast.body {
-        self.analyze_definition(definition)
+      // phase 1: annotation
+      self.annotate(ast);
+
+      // phase 2: constraint generation
+      self.generate_constraints(ast);
+
+      println!("AFTER: {:#?}", ast);
+      println!("CONSTRAINTS:");
+      for c in &self.constraints {
+        println!("{} :: {}", c.0, c.1)
       }
     }
   }
+}
 
+// Helper methods
+impl<'compiler> Analyzer<'compiler> {
   fn diagnostic(&mut self, pos: (usize, usize), diag: Diagnostic) {
     let mut diag = diag.with_pos(pos);
 
@@ -72,7 +88,13 @@ impl<'compiler> Analyzer<'compiler> {
     }
   }
 
-  pub fn add_value_binding(&mut self, name: String, typ: ExprType, pos: (usize, usize)) {
+  fn new_placeholder_type(&mut self) -> ExprType {
+    let placeholder_id = self.next_placeholder_id;
+    self.next_placeholder_id += 1;
+    ExprType::Placeholder(placeholder_id)
+  }
+
+  fn add_value_binding(&mut self, name: String, typ: ExprType, pos: (usize, usize)) {
     let current_level = self.value_scopes.last_mut().expect("no current scope");
 
     current_level.insert(
@@ -206,7 +228,249 @@ impl<'compiler> Analyzer<'compiler> {
       _ => {}
     }
   }
+}
 
+// Annotation methods
+impl<'compiler> Analyzer<'compiler> {
+  fn annotate(&mut self, module: &mut ModuleNode) {
+    // we first do a shallow pass to annotate all top-level defs,
+    // so that they can be referenced anywhere within the bodies
+    // of other defs
+    for definition in &mut module.body {
+      self.annotate_definition(definition)
+    }
+
+    // and then we do a deeper pass over the def bodies
+    for definition in &mut module.body {
+      self.annotate_definition_body(definition)
+    }
+  }
+
+  fn annotate_definition(&mut self, definition: &mut DefinitionNode) {
+    definition.inferred_type = self.new_placeholder_type();
+
+    match &mut definition.kind {
+      DefinitionKind::Expr(_) => self.add_value_binding(
+        definition.name.name.clone(),
+        definition.inferred_type.clone(),
+        definition.name.pos,
+      ),
+      _ => {
+        // todo :---)
+      }
+    }
+  }
+
+  fn annotate_definition_body(&mut self, definition: &mut DefinitionNode) {
+    match &mut definition.kind {
+      DefinitionKind::Expr(expr) => self.annotate_expr(expr),
+      _ => {
+        // todo :---)
+      }
+    }
+  }
+
+  fn annotate_expr(&mut self, expr: &mut ExprNode) {
+    match &mut expr.kind {
+      ExprKind::Literal(_) | ExprKind::Regex(_) | ExprKind::EmptyTuple => {
+        // these are all "leaf" nodes (can't contain inner expressions), so
+        // just give them each a new placeholder type
+        expr.inferred_type = self.new_placeholder_type();
+      }
+
+      ExprKind::Grouping(inner) => {
+        self.annotate_expr(inner);
+        expr.inferred_type = self.new_placeholder_type();
+      }
+
+      ExprKind::Identifier(ident) => {
+        if let Some(binding) = self.get_value_binding(&ident.name) {
+          expr.inferred_type = binding.typ.clone();
+        } else {
+          self.error(
+            ident.pos,
+            NameNotBound {
+              name: ident.name.clone(),
+            },
+          )
+        }
+      }
+
+      ExprKind::BinaryOperation { left, right, .. } => {
+        self.annotate_expr(left);
+        self.annotate_expr(right);
+
+        expr.inferred_type = self.new_placeholder_type();
+      }
+
+      ExprKind::Lambda(LambdaNode { params, body, .. }) => {
+        self.enter_scope();
+
+        for LambdaParamNode {
+          ident,
+          inferred_type,
+          ..
+        } in params
+        {
+          let param_type = self.new_placeholder_type();
+          self.add_value_binding(ident.name.clone(), param_type.clone(), ident.pos);
+          *inferred_type = param_type;
+        }
+
+        for expr in body {
+          self.annotate_expr(expr);
+        }
+
+        self.leave_scope();
+
+        expr.inferred_type = self.new_placeholder_type();
+      }
+
+      ExprKind::Let(LetNode { name, value, .. }) => {
+        let binding_type = self.new_placeholder_type();
+        self.add_value_binding(name.name.clone(), binding_type, name.pos);
+
+        self.annotate_expr(value);
+
+        expr.inferred_type = self.new_placeholder_type();
+      }
+
+      ExprKind::Call(CallNode { callee, args, .. }) => {
+        self.annotate_expr(callee);
+
+        for arg in args {
+          self.annotate_expr(arg);
+        }
+
+        expr.inferred_type = self.new_placeholder_type();
+      }
+
+      // TODO! more here!
+      other => {
+        println!("other kind of expr: {:#?}", other)
+      }
+    };
+  }
+}
+
+// Constraint-generation methods
+impl<'compiler> Analyzer<'compiler> {
+  fn generate_constraints(&mut self, module: &mut ModuleNode) {
+    for definition in &mut module.body {
+      self.constraints_from_definition(definition)
+    }
+  }
+
+  fn constraint(&mut self, type_a: ExprType, type_b: ExprType) {
+    self.constraints.insert((type_a, type_b));
+  }
+
+  fn constraints_from_definition(&mut self, definition: &mut DefinitionNode) {
+    match &mut definition.kind {
+      DefinitionKind::Expr(expr) => {
+        self.constraints_from_expr(expr);
+        self.constraint(definition.inferred_type.clone(), expr.inferred_type.clone());
+      }
+      _ => {
+        // todo :---)
+      }
+    }
+  }
+
+  fn constraints_from_expr(&mut self, expr: &mut ExprNode) {
+    let inferred_type = expr.inferred_type.clone();
+
+    match &mut expr.kind {
+      ExprKind::Identifier(..) => { /* no constraints to add */ }
+
+      ExprKind::Literal(literal) => self.constraints_from_literal(inferred_type, literal),
+
+      ExprKind::Regex(..) => self.constraint(inferred_type, ExprType::Regex),
+
+      ExprKind::Grouping(inner) => {
+        self.constraints_from_expr(inner);
+        self.constraint(inferred_type, inner.inferred_type.clone());
+      }
+
+      ExprKind::BinaryOperation { left, right, op } => {
+        self.constraints_from_expr(left);
+        self.constraints_from_expr(right);
+
+        match op.kind {
+          Operator::Addition => {
+            // todo: floats?
+            self.constraint(left.inferred_type.clone(), ExprType::Int);
+            self.constraint(right.inferred_type.clone(), ExprType::Int);
+            self.constraint(inferred_type.clone(), ExprType::Int);
+          }
+          _ => {
+            // todo :----)
+          }
+        }
+      }
+
+      ExprKind::Lambda(LambdaNode { params, body, .. }) => {
+        let param_types = params.iter().map(|p| p.inferred_type.clone()).collect();
+
+        let mut return_type = ExprType::Nothing;
+
+        for expr in body {
+          self.constraints_from_expr(expr);
+          return_type = expr.inferred_type.clone();
+        }
+
+        // we know that this lambda must be a function that takes
+        // the param types and returns the return type
+        self.constraint(
+          inferred_type,
+          ExprType::Func(param_types, Box::new(return_type)),
+        )
+      }
+
+      ExprKind::Call(CallNode { callee, args, .. }) => {
+        let arg_types = args.iter().map(|a| a.inferred_type.clone()).collect();
+
+        self.constraints_from_expr(callee);
+
+        for arg in args {
+          self.constraints_from_expr(arg);
+        }
+
+        // we know that the callee should be a function that takes
+        // the given arg types and returns the type of this whole expr
+        self.constraint(
+          callee.inferred_type.clone(),
+          ExprType::Func(arg_types, Box::new(inferred_type)),
+        )
+      }
+
+      ExprKind::Let(LetNode { value, .. }) => {
+        self.constraints_from_expr(value);
+
+        // let expressions always evaluate to ()
+        self.constraint(inferred_type, ExprType::Nothing)
+      }
+
+      _ => {
+        // todo :---)
+      }
+    }
+  }
+
+  fn constraints_from_literal(&mut self, typ: ExprType, literal: &mut LiteralNode) {
+    match &mut literal.kind {
+      LiteralKind::Str(..) => self.constraint(typ, ExprType::String),
+      LiteralKind::FloatDecimal(..) => self.constraint(typ, ExprType::Float),
+      LiteralKind::IntDecimal(..)
+      | LiteralKind::IntHex(..)
+      | LiteralKind::IntBinary(..)
+      | LiteralKind::IntOctal(..) => self.constraint(typ, ExprType::Int),
+    }
+  }
+}
+
+// Analysis methods
+impl<'compiler> Analyzer<'compiler> {
   fn analyze_definition(&mut self, definition: &mut DefinitionNode) {
     let name = definition.name.name.clone();
 
@@ -220,8 +484,6 @@ impl<'compiler> Analyzer<'compiler> {
             CouldNotInferDefinitionType { name: name.clone() },
           );
         }
-
-        println!("{} :: {}", name, resolved_type);
 
         self.add_value_binding(name, resolved_type, definition.name.pos)
       }
@@ -500,10 +762,10 @@ impl<'compiler> Analyzer<'compiler> {
 
     self.enter_scope();
 
-    for param in &lambda.params {
-      let name = param.name.clone();
+    for LambdaParamNode { ident, .. } in &lambda.params {
+      let name = ident.name.clone();
 
-      self.add_value_binding(name, ExprType::Unknown, param.pos);
+      self.add_value_binding(name, ExprType::Unknown, ident.pos);
 
       param_types.push(ExprType::Unknown);
     }

@@ -58,7 +58,7 @@ impl PatternNode {
         let callee = ExprNode {
           pos: ident.pos,
           kind: ExprKind::Identifier(ident),
-          resolved_type: ExprType::Unknown,
+          inferred_type: ExprType::Unknown,
         };
 
         let arg_expr = arg.to_expr();
@@ -78,7 +78,7 @@ impl PatternNode {
     ExprNode {
       pos,
       kind: expr_kind,
-      resolved_type: ExprType::Unknown,
+      inferred_type: ExprType::Unknown,
     }
   }
 }

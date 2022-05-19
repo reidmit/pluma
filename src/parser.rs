@@ -192,8 +192,12 @@ impl<'a> Parser<'a> {
 
 		// TODO: allow patterns here, not just identifiers
 		while current_token_is!(self, Token::Identifier) {
-			let param = self.parse_identifier()?;
-			params.push(param);
+			let ident = self.parse_identifier()?;
+
+			params.push(LambdaParamNode {
+				ident,
+				inferred_type: ExprType::Unknown,
+			});
 		}
 
 		expect_token_and_do!(self, Token::LeftBrace, {
@@ -307,52 +311,52 @@ impl<'a> Parser<'a> {
 			Some(Token::KeywordWhen(..)) => self.parse_when_expression().map(|when_node| ExprNode {
 				pos: when_node.pos,
 				kind: ExprKind::When(when_node),
-				resolved_type: ExprType::Unknown,
+				inferred_type: ExprType::Unknown,
 			}),
 			Some(Token::KeywordIf(..)) => self.parse_if_expression().map(|when_node| ExprNode {
 				pos: when_node.pos,
 				kind: ExprKind::If(when_node),
-				resolved_type: ExprType::Unknown,
+				inferred_type: ExprType::Unknown,
 			}),
 			Some(Token::KeywordWhile(..)) => self.parse_while_expression().map(|while_node| ExprNode {
 				pos: while_node.pos,
 				kind: ExprKind::While(while_node),
-				resolved_type: ExprType::Unknown,
+				inferred_type: ExprType::Unknown,
 			}),
 			Some(Token::KeywordLet(..)) => self.parse_let_expression().map(|node| ExprNode {
 				pos: node.pos,
 				kind: ExprKind::Let(node),
-				resolved_type: ExprType::Unknown,
+				inferred_type: ExprType::Unknown,
 			}),
 			Some(Token::KeywordFun(..)) => self.parse_lambda().map(|lambda| ExprNode {
 				pos: lambda.pos,
 				kind: ExprKind::Lambda(lambda),
-				resolved_type: ExprType::Unknown,
+				inferred_type: ExprType::Unknown,
 			}),
 			Some(Token::Identifier(..)) => self.parse_identifier().map(|ident| ExprNode {
 				pos: ident.pos,
 				kind: ExprKind::Identifier(ident),
-				resolved_type: ExprType::Unknown,
+				inferred_type: ExprType::Unknown,
 			}),
 			Some(Token::DecimalDigits(..)) => self.parse_decimal_number().map(|literal| ExprNode {
 				pos: literal.pos,
 				kind: ExprKind::Literal(literal),
-				resolved_type: ExprType::Unknown,
+				inferred_type: ExprType::Unknown,
 			}),
 			Some(Token::BinaryDigits(..)) => self.parse_binary_number().map(|literal| ExprNode {
 				pos: literal.pos,
 				kind: ExprKind::Literal(literal),
-				resolved_type: ExprType::Unknown,
+				inferred_type: ExprType::Unknown,
 			}),
 			Some(Token::OctalDigits(..)) => self.parse_octal_number().map(|literal| ExprNode {
 				pos: literal.pos,
 				kind: ExprKind::Literal(literal),
-				resolved_type: ExprType::Unknown,
+				inferred_type: ExprType::Unknown,
 			}),
 			Some(Token::HexDigits(..)) => self.parse_hex_number().map(|literal| ExprNode {
 				pos: literal.pos,
 				kind: ExprKind::Literal(literal),
-				resolved_type: ExprType::Unknown,
+				inferred_type: ExprType::Unknown,
 			}),
 			Some(t @ Token::Minus(start, ..) | t @ Token::Bang(start, ..)) => {
 				// these are prefix unary operators!
@@ -370,7 +374,7 @@ impl<'a> Parser<'a> {
 						op: operator,
 						right: Box::new(rhs_expr),
 					},
-					resolved_type: ExprType::Unknown,
+					inferred_type: ExprType::Unknown,
 				})
 			}
 			_ => None,
@@ -419,7 +423,7 @@ impl<'a> Parser<'a> {
 							callee: Box::new(lhs_expr),
 							args,
 						}),
-						resolved_type: ExprType::Unknown,
+						inferred_type: ExprType::Unknown,
 					};
 				} else {
 					let op_pos = self.current_token_position();
@@ -446,7 +450,7 @@ impl<'a> Parser<'a> {
 							left: Box::new(lhs_expr),
 							right: Box::new(rhs_expr),
 						},
-						resolved_type: ExprType::Unknown,
+						inferred_type: ExprType::Unknown,
 					};
 				}
 
@@ -784,7 +788,7 @@ impl<'a> Parser<'a> {
 		Some(ExprNode {
 			pos: (start, end),
 			kind: ExprKind::List(elements),
-			resolved_type: ExprType::Unknown,
+			inferred_type: ExprType::Unknown,
 		})
 	}
 
@@ -865,7 +869,7 @@ impl<'a> Parser<'a> {
 		Some(ExprNode {
 			pos: (record_start, record_end),
 			kind: ExprKind::Record(entries),
-			resolved_type: ExprType::Unknown,
+			inferred_type: ExprType::Unknown,
 		})
 	}
 
@@ -912,7 +916,7 @@ impl<'a> Parser<'a> {
 			return Some(ExprNode {
 				pos: (paren_start, paren_end),
 				kind: ExprKind::EmptyTuple,
-				resolved_type: ExprType::Unknown,
+				inferred_type: ExprType::Unknown,
 			});
 		}
 
@@ -922,7 +926,7 @@ impl<'a> Parser<'a> {
 				return Some(ExprNode {
 					pos: (paren_start, paren_end),
 					kind: ExprKind::Grouping(Box::new(first_expr)),
-					resolved_type: ExprType::Unknown,
+					inferred_type: ExprType::Unknown,
 				});
 			}
 		}
@@ -931,7 +935,7 @@ impl<'a> Parser<'a> {
 		Some(ExprNode {
 			pos: (paren_start, paren_end),
 			kind: ExprKind::Tuple(entries),
-			resolved_type: ExprType::Unknown,
+			inferred_type: ExprType::Unknown,
 		})
 	}
 
@@ -967,7 +971,7 @@ impl<'a> Parser<'a> {
 		Some(ExprNode {
 			pos: (start, end),
 			kind: ExprKind::Regex(regex),
-			resolved_type: ExprType::Unknown,
+			inferred_type: ExprType::Unknown,
 		})
 	}
 
@@ -1257,6 +1261,7 @@ impl<'a> Parser<'a> {
 					name,
 					pos: (start, type_expr.pos.1),
 					kind: DefinitionKind::Alias(type_expr),
+					inferred_type: ExprType::Unknown,
 				})
 			}
 
@@ -1269,6 +1274,7 @@ impl<'a> Parser<'a> {
 					name,
 					pos: (start, value.pos.1),
 					kind: DefinitionKind::Expr(value),
+					inferred_type: ExprType::Unknown,
 				})
 			}
 		}
@@ -1291,7 +1297,7 @@ impl<'a> Parser<'a> {
 		let expr_node = ExprNode {
 			pos: (start, end),
 			kind: ExprKind::Literal(literal),
-			resolved_type: ExprType::String,
+			inferred_type: ExprType::String,
 		};
 
 		if current_token_is!(self, Token::InterpolationStart) {
@@ -1323,7 +1329,7 @@ impl<'a> Parser<'a> {
 							pos: (start, end),
 							kind: LiteralKind::Str(value),
 						}),
-						resolved_type: ExprType::String,
+						inferred_type: ExprType::String,
 					});
 
 					self.advance()
@@ -1333,7 +1339,7 @@ impl<'a> Parser<'a> {
 			return Some(ExprNode {
 				pos: (start, interpolation_end),
 				kind: ExprKind::Interpolation(parts),
-				resolved_type: ExprType::String,
+				inferred_type: ExprType::String,
 			});
 		}
 

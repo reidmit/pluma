@@ -1,9 +1,11 @@
 use super::*;
+use crate::expr_type::*;
 
 pub struct DefinitionNode {
 	pub pos: Position,
 	pub name: IdentifierNode,
 	pub kind: DefinitionKind,
+	pub inferred_type: ExprType,
 }
 
 pub enum DefinitionKind {
@@ -16,8 +18,8 @@ impl std::fmt::Debug for DefinitionNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(
 			f,
-			"def:{}-{} ({:?}) ({:#?})",
-			self.pos.0, self.pos.1, self.name, self.kind
+			"def:{}-{}::{} ({:?}) ({:#?})",
+			self.pos.0, self.pos.1, self.inferred_type, self.name, self.kind
 		)
 	}
 }

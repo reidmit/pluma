@@ -4,7 +4,7 @@ use crate::expr_type::*;
 pub struct ExprNode {
 	pub pos: Position,
 	pub kind: ExprKind,
-	pub resolved_type: ExprType,
+	pub inferred_type: ExprType,
 }
 
 pub enum ExprKind {
@@ -37,7 +37,11 @@ pub enum ExprKind {
 #[cfg(debug_assertions)]
 impl std::fmt::Debug for ExprNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "expr:{}-{} ({:#?})", self.pos.0, self.pos.1, self.kind)
+		write!(
+			f,
+			"expr:{}-{}::{} ({:#?})",
+			self.pos.0, self.pos.1, self.inferred_type, self.kind
+		)
 	}
 }
 

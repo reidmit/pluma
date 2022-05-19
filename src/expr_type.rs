@@ -1,8 +1,9 @@
 use std::fmt;
 
-#[derive(Clone, PartialEq, Hash)]
+#[derive(Clone, PartialEq, Hash, Eq)]
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub enum ExprType {
+  Placeholder(usize),
   Unknown,
   Nothing,
   Bool,
@@ -28,6 +29,8 @@ impl ExprType {
 impl fmt::Display for ExprType {
   fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
     match self {
+      ExprType::Placeholder(n) => write!(f, "t{}", n),
+
       ExprType::Unknown => write!(f, "unknown"),
 
       ExprType::Nothing => write!(f, "nothing"),
