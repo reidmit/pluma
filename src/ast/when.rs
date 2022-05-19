@@ -1,35 +1,15 @@
 use super::*;
 
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct WhenNode {
-  pub pos: Position,
+  pub loc: Location,
   pub subject: Box<ExprNode>,
   pub cases: Vec<CaseNode>,
 }
 
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct CaseNode {
-  pub pos: Position,
+  pub loc: Location,
   pub pattern: PatternNode,
   pub body: Vec<ExprNode>,
-}
-
-#[cfg(debug_assertions)]
-impl std::fmt::Debug for WhenNode {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(
-      f,
-      "when:{}-{} subject:({:#?}) {:#?}",
-      self.pos.0, self.pos.1, self.subject, self.cases
-    )
-  }
-}
-
-#[cfg(debug_assertions)]
-impl std::fmt::Debug for CaseNode {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(
-      f,
-      "case:{}-{} ({:#?}) {:#?}",
-      self.pos.0, self.pos.1, self.pattern, self.body
-    )
-  }
 }

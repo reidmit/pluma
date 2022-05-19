@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt;
 
 #[derive(Clone, PartialEq, Hash, Eq)]
@@ -23,6 +24,47 @@ impl ExprType {
   pub fn is_convertible_to(&self, other: &ExprType) -> bool {
     // TODO: more than just equality?
     *self == *other
+  }
+
+  pub fn has_any_placeholder(&self) -> bool {
+    match &self {
+      ExprType::Placeholder(_) => true,
+
+      ExprType::Nothing
+      | ExprType::Int
+      | ExprType::Float
+      | ExprType::String
+      | ExprType::Regex
+      | ExprType::Unknown => false,
+
+      ExprType::Func(param_types, return_type) => {
+        for param_type in param_types {
+          if param_type.has_any_placeholder() {
+            return true;
+          }
+        }
+
+        return return_type.has_any_placeholder();
+      }
+
+      _ => false, // TODO: ??
+    }
+  }
+
+  pub fn replace_placeholders(&self, mapping: &HashMap<usize, ExprType>) -> ExprType {
+    match &self {
+      ExprType::Placeholder(n) if mapping.contains_key(n) => mapping.get(n).unwrap().clone(),
+
+      ExprType::Func(param_types, return_type) => ExprType::Func(
+        param_types
+          .iter()
+          .map(|p| p.replace_placeholders(mapping))
+          .collect(),
+        return_type.replace_placeholders(mapping).into(),
+      ),
+
+      other => (*other).clone(),
+    }
   }
 }
 

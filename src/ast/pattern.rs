@@ -1,11 +1,13 @@
 use super::*;
 use crate::expr_type::*;
 
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct PatternNode {
-  pub pos: Position,
+  pub loc: Location,
   pub kind: PatternKind,
 }
 
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum PatternKind {
   // e.g. if val is x { ... }
   Identifier(IdentifierNode),
@@ -25,7 +27,7 @@ pub enum PatternKind {
 
 impl PatternNode {
   pub fn to_expr(self) -> ExprNode {
-    let pos = self.pos;
+    let loc = self.loc;
 
     let expr_kind = match self.kind {
       PatternKind::Identifier(ident) => ExprKind::Identifier(ident),
@@ -56,7 +58,7 @@ impl PatternNode {
 
       PatternKind::Constructor(ident, arg) => {
         let callee = ExprNode {
-          pos: ident.pos,
+          loc: ident.loc,
           kind: ExprKind::Identifier(ident),
           inferred_type: ExprType::Unknown,
         };
@@ -64,7 +66,7 @@ impl PatternNode {
         let arg_expr = arg.to_expr();
 
         let call = CallNode {
-          pos,
+          loc,
           callee: Box::new(callee),
           args: vec![arg_expr],
         };
@@ -76,33 +78,9 @@ impl PatternNode {
     };
 
     ExprNode {
-      pos,
+      loc,
       kind: expr_kind,
       inferred_type: ExprType::Unknown,
-    }
-  }
-}
-
-#[cfg(debug_assertions)]
-impl std::fmt::Debug for PatternNode {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "pattern:{}-{} {:#?}", self.pos.0, self.pos.1, self.kind)
-  }
-}
-
-#[cfg(debug_assertions)]
-impl std::fmt::Debug for PatternKind {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    use PatternKind::*;
-
-    match &self {
-      Identifier(ident) => write!(f, "{:?}", ident),
-      Constructor(ctor, arg_pattern) => write!(f, "constructor {:?} ({:#?})", ctor, arg_pattern),
-      Tuple(elem_patterns) => write!(f, "tuple ({:#?})", elem_patterns),
-      Record(elem_patterns) => write!(f, "record ({:#?})", elem_patterns),
-      Underscore => write!(f, "wildcard"),
-      Literal(lit) => write!(f, "literal ({:#?})", lit),
-      Interpolation(parts) => write!(f, "interpolation ({:#?})", parts),
     }
   }
 }

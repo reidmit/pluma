@@ -9,7 +9,7 @@ use std::path::PathBuf;
 pub struct Diagnostic {
 	pub kind: DiagnosticKind,
 	pub message: String,
-	pub pos: Option<(usize, usize)>,
+	pub loc: Option<(usize, usize)>,
 	pub module_name: Option<String>,
 	pub module_path: Option<PathBuf>,
 }
@@ -26,7 +26,7 @@ impl Diagnostic {
 		Diagnostic {
 			kind: DiagnosticKind::Error,
 			message: format!("{}", err),
-			pos: None,
+			loc: None,
 			module_name: None,
 			module_path: None,
 		}
@@ -36,15 +36,15 @@ impl Diagnostic {
 		Diagnostic {
 			kind: DiagnosticKind::Warning,
 			message: format!("{}", warning),
-			pos: None,
+			loc: None,
 			module_name: None,
 			module_path: None,
 		}
 	}
 
-	pub fn with_pos(self, pos: (usize, usize)) -> Diagnostic {
+	pub fn with_pos(self, loc: (usize, usize)) -> Diagnostic {
 		Diagnostic {
-			pos: Some(pos),
+			loc: Some(loc),
 			..self
 		}
 	}
@@ -99,7 +99,7 @@ pub fn print_diagnostics(diagnostics: Vec<Diagnostic>) {
 				.to_path_buf();
 		}
 
-		if let Some((start, end)) = diagnostic.pos {
+		if let Some((start, end)) = diagnostic.loc {
 			let mut col_index = 0;
 
 			let bytes = match module_bytes.get(&module_path) {

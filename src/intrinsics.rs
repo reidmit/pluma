@@ -8,7 +8,7 @@ pub fn get_intrinsic_types() -> HashMap<String, TypeBinding> {
   intrinsics.insert(
     "intrinsic-nothing".into(),
     TypeBinding {
-      pos: (0, 0),
+      loc: (0, 0),
       typ: ExprType::Nothing,
     },
   );
@@ -16,7 +16,7 @@ pub fn get_intrinsic_types() -> HashMap<String, TypeBinding> {
   intrinsics.insert(
     "intrinsic-bool".into(),
     TypeBinding {
-      pos: (0, 0),
+      loc: (0, 0),
       typ: ExprType::Bool,
     },
   );
@@ -24,7 +24,7 @@ pub fn get_intrinsic_types() -> HashMap<String, TypeBinding> {
   intrinsics.insert(
     "intrinsic-int".into(),
     TypeBinding {
-      pos: (0, 0),
+      loc: (0, 0),
       typ: ExprType::Int,
     },
   );
@@ -32,7 +32,7 @@ pub fn get_intrinsic_types() -> HashMap<String, TypeBinding> {
   intrinsics.insert(
     "intrinsic-float".into(),
     TypeBinding {
-      pos: (0, 0),
+      loc: (0, 0),
       typ: ExprType::Float,
     },
   );
@@ -40,7 +40,7 @@ pub fn get_intrinsic_types() -> HashMap<String, TypeBinding> {
   intrinsics.insert(
     "intrinsic-string".into(),
     TypeBinding {
-      pos: (0, 0),
+      loc: (0, 0),
       typ: ExprType::String,
     },
   );
@@ -48,7 +48,7 @@ pub fn get_intrinsic_types() -> HashMap<String, TypeBinding> {
   intrinsics.insert(
     "intrinsic-regex".into(),
     TypeBinding {
-      pos: (0, 0),
+      loc: (0, 0),
       typ: ExprType::Regex,
     },
   );
@@ -63,7 +63,7 @@ pub fn get_intrinsic_values() -> HashMap<String, ValueBinding> {
   intrinsics.insert(
     "intrinsic-print".into(),
     ValueBinding {
-      pos: (0, 0),
+      loc: (0, 0),
       ref_count: 0,
       typ: ExprType::Func(vec![ExprType::String], Box::new(ExprType::Nothing)),
     },

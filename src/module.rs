@@ -40,11 +40,11 @@ impl Module {
 		self.ast.is_some()
 	}
 
-	pub fn get_line_for_position(&self, pos: Position) -> usize {
+	pub fn get_line_for_position(&self, loc: Location) -> usize {
 		let mut line = 1;
 
 		for break_start in &self.line_break_starts {
-			if break_start >= &pos.0 && break_start <= &pos.1 {
+			if break_start >= &loc.0 && break_start <= &loc.1 {
 				return line;
 			}
 
@@ -69,7 +69,7 @@ impl Module {
 		for err in errors {
 			diagnostics.push(
 				Diagnostic::error(err)
-					.with_pos(err.pos)
+					.with_pos(err.loc)
 					.with_module(self.module_name.clone(), self.module_path.to_path_buf()),
 			);
 		}
