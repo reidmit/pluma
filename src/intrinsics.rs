@@ -2,60 +2,6 @@ use crate::binding::*;
 use crate::expr_type::*;
 use std::collections::HashMap;
 
-pub fn get_intrinsic_types() -> HashMap<String, TypeBinding> {
-  let mut intrinsics = HashMap::new();
-
-  intrinsics.insert(
-    "intrinsic-nothing".into(),
-    TypeBinding {
-      span: (0, 0),
-      typ: ExprType::Nothing,
-    },
-  );
-
-  intrinsics.insert(
-    "intrinsic-bool".into(),
-    TypeBinding {
-      span: (0, 0),
-      typ: ExprType::Bool,
-    },
-  );
-
-  intrinsics.insert(
-    "intrinsic-int".into(),
-    TypeBinding {
-      span: (0, 0),
-      typ: ExprType::Int,
-    },
-  );
-
-  intrinsics.insert(
-    "intrinsic-float".into(),
-    TypeBinding {
-      span: (0, 0),
-      typ: ExprType::Float,
-    },
-  );
-
-  intrinsics.insert(
-    "intrinsic-string".into(),
-    TypeBinding {
-      span: (0, 0),
-      typ: ExprType::String,
-    },
-  );
-
-  intrinsics.insert(
-    "intrinsic-regex".into(),
-    TypeBinding {
-      span: (0, 0),
-      typ: ExprType::Regex,
-    },
-  );
-
-  intrinsics
-}
-
 pub fn get_intrinsic_values() -> HashMap<String, ValueBinding> {
   let mut intrinsics = HashMap::new();
 

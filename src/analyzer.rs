@@ -16,7 +16,6 @@ pub struct Analyzer<'compiler> {
   module_name: Option<String>,
   module_path: Option<PathBuf>,
   diagnostics: &'compiler mut Vec<Diagnostic>,
-  type_scope: HashMap<String, TypeBinding>,
   value_scopes: Vec<HashMap<String, ValueBinding>>,
   next_placeholder_id: usize,
 }
@@ -28,8 +27,6 @@ impl<'compiler> Analyzer<'compiler> {
       module_name: None,
       module_path: None,
       diagnostics,
-      // initialize top-level scopes with intrinsics:
-      type_scope: get_intrinsic_types(),
       value_scopes: vec![get_intrinsic_values()],
       next_placeholder_id: 0,
     }
@@ -109,10 +106,6 @@ impl<'compiler> Analyzer<'compiler> {
     );
   }
 
-  pub fn add_type_binding(&mut self, name: String, typ: ExprType, span: (usize, usize)) {
-    self.type_scope.insert(name, TypeBinding { typ, span });
-  }
-
   pub fn get_value_binding(&mut self, name: &String) -> Option<&ValueBinding> {
     for level in self.value_scopes.iter_mut().rev() {
       if let Some(binding) = level.get_mut(name) {
@@ -123,52 +116,6 @@ impl<'compiler> Analyzer<'compiler> {
     }
 
     None
-  }
-
-  pub fn get_type_binding(&self, name: &String) -> Option<&TypeBinding> {
-    if let Some(binding) = self.type_scope.get(name) {
-      return Some(binding);
-    }
-
-    None
-  }
-
-  pub fn get_field_type(&self, typ: &ExprType, field_name: &String) -> Option<ExprType> {
-    match typ {
-      ExprType::Tuple(entries) => {
-        let mut index = 0;
-
-        for entry_type in entries {
-          if *field_name == format!("{}", index) {
-            return Some(entry_type.clone());
-          }
-
-          index = index + 1;
-        }
-
-        None
-      }
-
-      ExprType::Record(entries) => {
-        for (label, entry_type) in entries {
-          if *field_name == *label {
-            return Some(entry_type.clone());
-          }
-        }
-
-        None
-      }
-
-      ExprType::Named(name) => {
-        if let Some(binding) = self.get_type_binding(name) {
-          return self.get_field_type(&binding.typ, field_name);
-        }
-
-        None
-      }
-
-      _ => None,
-    }
   }
 }
 
@@ -436,6 +383,8 @@ impl<'compiler> Analyzer<'compiler> {
   fn solve_constraints(&mut self, constraints: &mut ConstraintSet) -> SolutionMap {
     let mut solutions = HashMap::new();
 
+    let mut hack = 0;
+
     while !constraints.is_empty() {
       let mut remaining_constraints = HashSet::new();
 
@@ -444,6 +393,18 @@ impl<'compiler> Analyzer<'compiler> {
       }
 
       *constraints = remaining_constraints;
+
+      hack += 1;
+
+      if hack < 100 {
+        println!("breaking! likely infinite loop!");
+        println!("constraints:");
+        for c in constraints.iter() {
+          println!("  {} :: {}", c.0, c.1);
+        }
+        println!("solutions: {:#?}", solutions);
+        break;
+      }
     }
 
     solutions
@@ -499,6 +460,9 @@ impl<'compiler> Analyzer<'compiler> {
           type_a.replace_placeholders(&solutions),
           type_b.replace_placeholders(&solutions),
         );
+
+        println!("unsolved: {} :: {}", type_a, type_b);
+        println!("substted: {} :: {}", substituted.0, substituted.1);
 
         remaining_constraints.insert(substituted);
       }

@@ -206,6 +206,8 @@ impl<'a> Parser<'a> {
 
 		let body = self.parse_body_expressions()?;
 
+		self.skip_line_breaks();
+
 		let end = expect_token_and_do!(self, Token::RightBrace, {
 			let end = self.current_token_span().1;
 			self.advance();

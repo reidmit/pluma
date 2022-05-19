@@ -1,3 +1,1 @@
-def lol fun x y { x + y }
-
-def result lol 1 2
+def lol fun x { x }

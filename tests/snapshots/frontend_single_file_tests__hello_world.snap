@@ -1,0 +1,54 @@
+---
+source: tests/frontend_single_file_tests.rs
+expression: result
+---
+Ok(
+    Some(
+        ModuleNode {
+            span: (
+                0,
+                28,
+            ),
+            body: [
+                DefinitionNode {
+                    span: (
+                        0,
+                        28,
+                    ),
+                    name: IdentifierNode {
+                        span: (
+                            4,
+                            15,
+                        ),
+                        name: "hello-world",
+                    },
+                    kind: Expr(
+                        ExprNode {
+                            span: (
+                                17,
+                                28,
+                            ),
+                            kind: Literal(
+                                LiteralNode {
+                                    span: (
+                                        17,
+                                        28,
+                                    ),
+                                    kind: Str(
+                                        "hello-world",
+                                    ),
+                                },
+                            ),
+                            inferred_type: Placeholder(
+                                1,
+                            ),
+                        },
+                    ),
+                    inferred_type: Placeholder(
+                        0,
+                    ),
+                },
+            ],
+        },
+    ),
+)
