@@ -1,4 +1,4 @@
-def fizzbuzz = fun n {
+def fizzbuzz fun n {
   when (n % 3, n % 5) is (0, 0) {
     "FizzBuzz"
   } is (0, _) {
@@ -10,8 +10,8 @@ def fizzbuzz = fun n {
   }
 }
 
-def main = fun {
-  for i in 1..100 {
+def main fun {
+  each 1..100 fun i {
     print (fizzbuzz i)
   }
 }

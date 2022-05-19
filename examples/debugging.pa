@@ -1,13 +1,8 @@
-def person = alias (
-  name: string,
-  age: int
-)
-
-def main = fn {
-  let p = person (name: "reid", age: 28);
-  p.name
-}
-
-def make-person = fn {
-  person (name: "idk", age: 47)
+def person {
+  name: "reid"
+  age: 2
+  inner: {
+    word: "lol"
+    numm: 47
+  }
 }

@@ -19,8 +19,6 @@ pub enum ParseErrorKind {
 	InvalidHexDigit,
 	InvalidOctalDigit,
 	InvalidRegularExpressionCountModifier,
-	MissingExpressionAfterLabelInTuple,
-	MissingLabelInTuple,
 	MissingRightHandSideOfAssignment,
 	MissingReturnType,
 	OverflowingIntegerLiteral,
@@ -48,8 +46,6 @@ impl fmt::Display for ParseError {
 			InvalidRegularExpressionCountModifier => {
 				write!(f, "Invalid regular expression count modifier.")
 			}
-			MissingExpressionAfterLabelInTuple => write!(f, "MissingExpressionAfterLabelInTuple"),
-			MissingLabelInTuple => write!(f, "MissingLabelInTuple"),
 			MissingRightHandSideOfAssignment => write!(f, "MissingRightHandSideOfAssignment"),
 			MissingReturnType => write!(
 				f,

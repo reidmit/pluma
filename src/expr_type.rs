@@ -11,9 +11,9 @@ pub enum ExprType {
   String,
   Regex,
   List(Box<ExprType>),
-  Dict(Box<ExprType>, Box<ExprType>),
   Func(Vec<ExprType>, Box<ExprType>),
-  Tuple(Vec<(Option<String>, ExprType)>),
+  Record(Vec<(String, ExprType)>),
+  Tuple(Vec<ExprType>),
   Named(String),
   NamedWithParams(String, Vec<ExprType>),
 }
@@ -62,12 +62,17 @@ impl fmt::Display for ExprType {
         "({})",
         entries
           .iter()
-          .map(|(label, typ)| {
-            match label {
-              Some(label) => format!("{}: {}", label, typ),
-              None => format!("{}", typ),
-            }
-          })
+          .map(|typ| format!("{}", typ))
+          .collect::<Vec<String>>()
+          .join(", ")
+      ),
+
+      ExprType::Record(entries) => write!(
+        f,
+        "{{ {} }}",
+        entries
+          .iter()
+          .map(|(label, typ)| format!("{}: {}", label, typ))
           .collect::<Vec<String>>()
           .join(", ")
       ),
@@ -87,10 +92,6 @@ impl fmt::Display for ExprType {
 
       ExprType::List(element_type) => {
         write!(f, "list<{}>", element_type)
-      }
-
-      ExprType::Dict(key_type, val_type) => {
-        write!(f, "dict<{}, {}>", key_type, val_type)
       }
     }
   }

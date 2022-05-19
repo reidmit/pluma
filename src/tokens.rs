@@ -103,8 +103,8 @@ pub enum Token {
 	/// `enum` keyword
 	KeywordEnum(usize, usize),
 
-	/// `fn` keyword
-	KeywordFn(usize, usize),
+	/// `fun` keyword
+	KeywordFun(usize, usize),
 
 	/// `if` keyword
 	KeywordIf(usize, usize),
@@ -141,6 +141,12 @@ pub enum Token {
 
 	/// a newline
 	LineBreak(usize, usize),
+
+	/// a decrease in indentation level
+	LineBreakWithIndentDecrease(usize, usize),
+
+	/// an increase in indentation level
+	LineBreakWithIndentIncrease(usize, usize),
 
 	/// `-` token
 	Minus(usize, usize),
@@ -234,7 +240,7 @@ impl Token {
 			| KeywordAlias(start, end)
 			| KeywordDef(start, end)
 			| KeywordEnum(start, end)
-			| KeywordFn(start, end)
+			| KeywordFun(start, end)
 			| KeywordIf(start, end)
 			| KeywordIn(start, end)
 			| KeywordIs(start, end)
@@ -247,6 +253,8 @@ impl Token {
 			| LeftBracket(start, end)
 			| LeftParen(start, end)
 			| LineBreak(start, end)
+			| LineBreakWithIndentDecrease(start, end)
+			| LineBreakWithIndentIncrease(start, end)
 			| Minus(start, end)
 			| OctalDigits(start, end)
 			| Path(start, end)
@@ -272,7 +280,7 @@ impl Token {
 		use Token::*;
 
 		match self {
-			Identifier(..) | KeywordFn(..) | KeywordIf(..) | KeywordWhen(..) | DecimalDigits(..)
+			Identifier(..) | KeywordFun(..) | KeywordIf(..) | KeywordWhen(..) | DecimalDigits(..)
 			| HexDigits(..) | BinaryDigits(..) | OctalDigits(..) | LeftParen(..) | LeftBracket(..)
 			| Backtick(..) | StringLiteral(..) => true,
 			_ => false,
@@ -321,7 +329,7 @@ impl fmt::Display for Token {
 			&KeywordAlias(..) => "keyword 'alias'",
 			&KeywordDef(..) => "keyword 'def'",
 			&KeywordEnum(..) => "keyword 'enum'",
-			&KeywordFn(..) => "keyword 'fn'",
+			&KeywordFun(..) => "keyword 'fun'",
 			&KeywordIf(..) => "keyword 'if'",
 			&KeywordIn(..) => "keyword 'in'",
 			&KeywordIs(..) => "keyword 'is'",
@@ -334,6 +342,8 @@ impl fmt::Display for Token {
 			&LeftBracket(..) => "a '['",
 			&LeftParen(..) => "a '('",
 			&LineBreak(..) => "a line break",
+			&LineBreakWithIndentDecrease(..) => "a decrease in indent level",
+			&LineBreakWithIndentIncrease(..) => "an increase in indent level",
 			&Minus(..) => "a '-'",
 			&OctalDigits(..) => "octal digits (e.g. 0o755)",
 			&Path(..) => "a path to a module or imported identifier (e.g. 'path/to/module')",

@@ -13,8 +13,10 @@ pub enum TypeExprKind {
   Single(TypeIdentifierNode),
   // e.g. fn string int -> bool
   Func(Vec<TypeExprNode>, Box<TypeExprNode>),
-  // e.g. (a: string, b: bool) or (string, bool)
-  Tuple(Vec<(Option<IdentifierNode>, TypeExprNode)>),
+  // e.g. (string, bool)
+  Tuple(Vec<TypeExprNode>),
+  // e.g. {a: string, b: bool}
+  Record(Vec<(IdentifierNode, TypeExprNode)>),
   // e.g. ()
   EmptyTuple,
   // e.g. (string) or (fn string -> bool)
@@ -53,13 +55,12 @@ impl TypeExprNode {
         Box::new(returned.to_type()),
       ),
 
-      Tuple(entries) => ExprType::Tuple(
+      Tuple(entries) => ExprType::Tuple(entries.iter().map(|t_expr| t_expr.to_type()).collect()),
+
+      Record(entries) => ExprType::Record(
         entries
           .iter()
-          .map(|(label, t_expr)| match label {
-            Some(label) => (Some(label.name.clone()), t_expr.to_type()),
-            None => (None, t_expr.to_type()),
-          })
+          .map(|(label, t_expr)| (label.name.clone(), t_expr.to_type()))
           .collect(),
       ),
     }

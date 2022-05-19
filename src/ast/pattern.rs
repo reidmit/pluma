@@ -11,8 +11,10 @@ pub enum PatternKind {
   Identifier(IdentifierNode),
   // e.g. if val is enum-variant _ { ... }
   Constructor(IdentifierNode, Box<PatternNode>),
-  // e.g. if val is (a: 1, b: 2) { ... }
-  Tuple(Vec<(Option<IdentifierNode>, PatternNode)>),
+  // e.g. if val is (a, b) { ... }
+  Tuple(Vec<PatternNode>),
+  // e.g. if val is {a: 1, b: 2} { ... }
+  Record(Vec<(IdentifierNode, PatternNode)>),
   // e.g. if val is _ { ... }
   Underscore,
   // e.g. if val is 1 { ... }
@@ -35,11 +37,21 @@ impl PatternNode {
       PatternKind::Tuple(entry_patterns) => {
         let mut entries = Vec::new();
 
-        for (label, pat) in entry_patterns {
-          entries.push(TupleEntry(label, pat.to_expr()))
+        for pat in entry_patterns {
+          entries.push(pat.to_expr())
         }
 
         ExprKind::Tuple(entries)
+      }
+
+      PatternKind::Record(entry_patterns) => {
+        let mut entries = Vec::new();
+
+        for (label, pat) in entry_patterns {
+          entries.push((label, pat.to_expr()))
+        }
+
+        ExprKind::Record(entries)
       }
 
       PatternKind::Constructor(ident, arg) => {
@@ -87,6 +99,7 @@ impl std::fmt::Debug for PatternKind {
       Identifier(ident) => write!(f, "{:?}", ident),
       Constructor(ctor, arg_pattern) => write!(f, "constructor {:?} ({:#?})", ctor, arg_pattern),
       Tuple(elem_patterns) => write!(f, "tuple ({:#?})", elem_patterns),
+      Record(elem_patterns) => write!(f, "record ({:#?})", elem_patterns),
       Underscore => write!(f, "wildcard"),
       Literal(lit) => write!(f, "literal ({:#?})", lit),
       Interpolation(parts) => write!(f, "interpolation ({:#?})", parts),

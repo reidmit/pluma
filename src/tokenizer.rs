@@ -21,6 +21,7 @@ pub struct Tokenizer<'a> {
 	errors: Vec<ParseError>,
 	next_token: Option<Token>,
 	peek_queue: Vec<Token>,
+	indent_level: usize,
 }
 
 impl<'a> Tokenizer<'a> {
@@ -40,6 +41,7 @@ impl<'a> Tokenizer<'a> {
 			errors: Vec::new(),
 			next_token: None,
 			peek_queue: Vec::with_capacity(2),
+			indent_level: 0,
 		};
 	}
 
@@ -190,7 +192,29 @@ impl<'a> Iterator for Tokenizer<'a> {
 				b'\n' => {
 					self.index += 1;
 					self.line += 1;
-					return Some(LineBreak(start_index, self.index));
+
+					let indentation_start = self.index;
+					let mut indentation_size = 0;
+
+					while self.index < self.length && is_indentation_char(self.source[self.index]) {
+						self.index += 1;
+						indentation_size += 1;
+					}
+
+					if self.indent_level == indentation_size {
+						// no change in indentation
+						return Some(LineBreak(start_index, self.index));
+					}
+
+					let is_increase = self.indent_level < indentation_size;
+
+					self.indent_level = indentation_size;
+
+					return Some(if is_increase {
+						LineBreakWithIndentIncrease(indentation_start, self.index)
+					} else {
+						LineBreakWithIndentDecrease(indentation_start, self.index)
+					});
 				}
 
 				b'(' => {
@@ -429,7 +453,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 						b"alias" => KeywordAlias,
 						b"def" => KeywordDef,
 						b"enum" => KeywordEnum,
-						b"fn" => KeywordFn,
+						b"fun" => KeywordFun,
 						b"if" => KeywordIf,
 						b"in" => KeywordIn,
 						b"is" => KeywordIs,
@@ -632,6 +656,14 @@ fn is_identifier_char(byte: u8) -> bool {
 fn is_digit(byte: u8) -> bool {
 	match byte {
 		b'0'..=b'9' => true,
+		_ => false,
+	}
+}
+
+fn is_indentation_char(byte: u8) -> bool {
+	match byte {
+		b'\t' => true,
+		b' ' => true,
 		_ => false,
 	}
 }

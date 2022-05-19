@@ -4,7 +4,6 @@ pub struct DefinitionNode {
 	pub pos: Position,
 	pub name: IdentifierNode,
 	pub kind: DefinitionKind,
-	pub doc_comment_range: std::ops::Range<usize>,
 }
 
 pub enum DefinitionKind {

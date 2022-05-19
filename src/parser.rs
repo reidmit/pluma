@@ -130,18 +130,19 @@ impl<'a> Parser<'a> {
 		self.current_token = self.tokenizer.next();
 	}
 
-	fn skip_line_breaks(&mut self) -> bool {
-		let mut skipped_any = false;
+	fn skip_line_breaks(&mut self) {
+		match &self.current_token {
+			Some(
+				Token::LineBreak(..)
+				| Token::LineBreakWithIndentIncrease(..)
+				| Token::LineBreakWithIndentDecrease(..),
+			) => {
+				self.line_breaks.push(self.current_token_position());
+				self.advance();
+			}
 
-		while current_token_is!(self, Token::LineBreak) {
-			self.line_breaks.push(self.current_token_position());
-
-			skipped_any = true;
-
-			self.advance()
+			_ => {}
 		}
-
-		skipped_any
 	}
 
 	fn current_token_position(&self) -> (usize, usize) {
@@ -181,7 +182,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_lambda(&mut self) -> Option<LambdaNode> {
-		let start = expect_token_and_do!(self, Token::KeywordFn, {
+		let start = expect_token_and_do!(self, Token::KeywordFun, {
 			let (start, _) = self.current_token_position();
 			self.advance();
 			start
@@ -299,8 +300,8 @@ impl<'a> Parser<'a> {
 	fn parse_expression_with_binding_power(&mut self, min_bp: u8) -> Option<ExprNode> {
 		let mut lhs_expr = match self.current_token {
 			Some(Token::LeftParen(..)) => self.parse_parenthetical(),
+			Some(Token::LeftBrace(..)) => self.parse_record(),
 			Some(Token::LeftBracket(..)) => self.parse_list(),
-			// Some(Token::LeftBrace(..)) => self.parse_dict(),
 			Some(Token::Backtick(..)) => self.parse_regular_expression(),
 			Some(Token::StringLiteral(..)) => self.parse_string(),
 			Some(Token::KeywordWhen(..)) => self.parse_when_expression().map(|when_node| ExprNode {
@@ -323,7 +324,7 @@ impl<'a> Parser<'a> {
 				kind: ExprKind::Let(node),
 				resolved_type: ExprType::Unknown,
 			}),
-			Some(Token::KeywordFn(..)) => self.parse_lambda().map(|lambda| ExprNode {
+			Some(Token::KeywordFun(..)) => self.parse_lambda().map(|lambda| ExprNode {
 				pos: lambda.pos,
 				kind: ExprKind::Lambda(lambda),
 				resolved_type: ExprType::Unknown,
@@ -376,7 +377,11 @@ impl<'a> Parser<'a> {
 		}?;
 
 		loop {
-			self.skip_line_breaks();
+			if current_token_is!(self, Token::LineBreak)
+				|| current_token_is!(self, Token::LineBreakWithIndentDecrease)
+			{
+				break;
+			}
 
 			let operator = match self.current_token {
 				Some(token) => match Operator::from_token(token) {
@@ -617,40 +622,22 @@ impl<'a> Parser<'a> {
 
 				let mut entries = Vec::new();
 
-				loop {
-					let next_token = self.tokenizer.peek();
-
-					match (self.current_token, next_token) {
-						(Some(Token::Identifier(..)), Some(Token::Colon(..))) => {
-							// It's a labeled entry!
-							let label = self.parse_identifier().unwrap();
-
-							expect_token_and_do!(self, Token::Colon, { self.advance() });
-
-							let pattern = match self.parse_pattern() {
-								Some(pattern) => pattern,
-								_ => break,
-							};
-
-							entries.push((Some(label), pattern));
-						}
-
-						_ => {
-							// It's an unlabeled entry...
-							let pattern = match self.parse_pattern() {
-								Some(pattern) => pattern,
-								_ => break,
-							};
-
-							entries.push((None, pattern));
-						}
-					}
+				while let Some(pattern) = self.parse_pattern() {
+					entries.push(pattern);
 
 					match self.current_token {
-						Some(Token::Comma(..)) => self.advance(),
+						Some(Token::Comma(..)) => {
+							self.advance();
+							self.skip_line_breaks();
+						}
+						Some(Token::LineBreak(..)) => {
+							self.skip_line_breaks();
+						}
 						_ => break,
 					}
 				}
+
+				self.skip_line_breaks();
 
 				let end = expect_token_and_do!(self, Token::RightParen, {
 					let (_, end) = self.current_token_position();
@@ -661,6 +648,42 @@ impl<'a> Parser<'a> {
 				Some(PatternNode {
 					pos: (start, end),
 					kind: PatternKind::Tuple(entries),
+				})
+			}
+
+			Some(Token::LeftBrace(start, _)) => {
+				self.advance();
+
+				let mut entries = Vec::new();
+
+				while let Some(field_name) = self.parse_identifier() {
+					expect_token_and_do!(self, Token::Colon, { self.advance() });
+
+					let field_pattern = self.parse_pattern()?;
+
+					entries.push((field_name, field_pattern));
+
+					match self.current_token {
+						Some(Token::Comma(..)) => {
+							self.advance();
+							self.skip_line_breaks();
+						}
+						Some(Token::LineBreak(..)) => {
+							self.skip_line_breaks();
+						}
+						_ => break,
+					}
+				}
+
+				let end = expect_token_and_do!(self, Token::RightBrace, {
+					let (_, end) = self.current_token_position();
+					self.advance();
+					end
+				});
+
+				Some(PatternNode {
+					pos: (start, end),
+					kind: PatternKind::Record(entries),
 				})
 			}
 
@@ -801,12 +824,56 @@ impl<'a> Parser<'a> {
 		result
 	}
 
+	fn parse_record(&mut self) -> Option<ExprNode> {
+		let record_start = expect_token_and_do!(self, Token::LeftBrace, {
+			let (start, _) = self.current_token_position();
+			self.advance();
+			start
+		});
+
+		self.skip_line_breaks();
+
+		let mut entries = Vec::new();
+
+		while let Some(field_name) = self.parse_identifier() {
+			expect_token_and_do!(self, Token::Colon, { self.advance() });
+
+			let field_value = self.parse_expression()?;
+
+			entries.push((field_name, field_value));
+
+			match self.current_token {
+				Some(Token::Comma(..)) => {
+					self.advance();
+					self.skip_line_breaks();
+				}
+				Some(Token::LineBreak(..)) => {
+					self.skip_line_breaks();
+				}
+				_ => break,
+			}
+		}
+
+		self.skip_line_breaks();
+
+		let record_end = expect_token_and_do!(self, Token::RightBrace, {
+			let pos = self.current_token_position();
+			self.advance();
+			pos.1
+		});
+
+		Some(ExprNode {
+			pos: (record_start, record_end),
+			kind: ExprKind::Record(entries),
+			resolved_type: ExprType::Unknown,
+		})
+	}
+
 	fn parse_parenthetical(&mut self) -> Option<ExprNode> {
-		// "parentheticals" are a little tricky, because they could be a number of things:
+		// "parentheticals" could be a number of things:
 		//  - "()" is an empty tuple
 		//  - "(expr)" is an expression in parentheses (a grouping),
-		//  - "(expr, expr, ...)" is an unlabeled tuple
-		//  - "(ident: expr, ...)" is a labeled tuple
+		//  - "(expr1, expr2, expr3)" is a tuple
 
 		let paren_start = expect_token_and_do!(self, Token::LeftParen, {
 			let (start, _) = self.current_token_position();
@@ -819,38 +886,14 @@ impl<'a> Parser<'a> {
 		let mut entries = Vec::new();
 
 		while let Some(node) = self.parse_expression() {
-			if current_token_is!(self, Token::Colon) {
-				self.advance();
-
-				match node.kind {
-					ExprKind::Identifier(label) => {
-						self.skip_line_breaks();
-
-						if let Some(value) = self.parse_expression() {
-							entries.push(TupleEntry(Some(label), value));
-						} else {
-							self.error::<ExprNode>(ParseError {
-								pos: node.pos,
-								kind: ParseErrorKind::MissingExpressionAfterLabelInTuple,
-							});
-						}
-					}
-					_ => {
-						self.error::<ExprNode>(ParseError {
-							pos: node.pos,
-							kind: ParseErrorKind::MissingLabelInTuple,
-						});
-					}
-				}
-			} else {
-				entries.push(TupleEntry(None, node));
-			}
-
-			self.skip_line_breaks();
+			entries.push(node);
 
 			match self.current_token {
 				Some(Token::Comma(..)) => {
 					self.advance();
+					self.skip_line_breaks();
+				}
+				Some(Token::LineBreak(..)) => {
 					self.skip_line_breaks();
 				}
 				_ => break,
@@ -866,7 +909,6 @@ impl<'a> Parser<'a> {
 		});
 
 		if entries.is_empty() {
-			// If no expressions were found between the ()s, it's an empty tuple
 			return Some(ExprNode {
 				pos: (paren_start, paren_end),
 				kind: ExprKind::EmptyTuple,
@@ -875,8 +917,8 @@ impl<'a> Parser<'a> {
 		}
 
 		if entries.len() == 1 {
-			// If only one, unlabeled expression was found, it's a grouping
-			if let Some(TupleEntry(None, first_expr)) = entries.pop() {
+			// If only one expression was found, it's a grouping
+			if let Some(first_expr) = entries.pop() {
 				return Some(ExprNode {
 					pos: (paren_start, paren_end),
 					kind: ExprKind::Grouping(Box::new(first_expr)),
@@ -885,8 +927,7 @@ impl<'a> Parser<'a> {
 			}
 		}
 
-		// Otherwise, it's a tuple with multiple entries, some of which may
-		// have labels:
+		// Otherwise, it's a tuple with multiple entries:
 		Some(ExprNode {
 			pos: (paren_start, paren_end),
 			kind: ExprKind::Tuple(entries),
@@ -1203,15 +1244,6 @@ impl<'a> Parser<'a> {
 		};
 
 		let name = self.parse_identifier()?;
-		let doc_comment_lines_start = self.line_breaks.len();
-
-		self.skip_line_breaks();
-
-		let doc_comment_range = doc_comment_lines_start..self.line_breaks.len();
-
-		expect_token_and_do!(self, Token::Equal, {
-			self.advance();
-		});
 
 		match self.current_token {
 			Some(Token::KeywordAlias(..)) => {
@@ -1224,7 +1256,6 @@ impl<'a> Parser<'a> {
 				Some(DefinitionNode {
 					name,
 					pos: (start, type_expr.pos.1),
-					doc_comment_range,
 					kind: DefinitionKind::Alias(type_expr),
 				})
 			}
@@ -1237,7 +1268,6 @@ impl<'a> Parser<'a> {
 				Some(DefinitionNode {
 					name,
 					pos: (start, value.pos.1),
-					doc_comment_range,
 					kind: DefinitionKind::Expr(value),
 				})
 			}
@@ -1354,13 +1384,14 @@ impl<'a> Parser<'a> {
 				kind: TypeExprKind::Single(type_id),
 			}),
 			Some(Token::LeftParen(..)) => self.parse_type_parenthetical(),
-			Some(Token::KeywordFn(..)) => self.parse_type_lambda(),
+			Some(Token::LeftBrace(..)) => self.parse_type_record(),
+			Some(Token::KeywordFun(..)) => self.parse_type_lambda(),
 			_ => None,
 		}
 	}
 
 	fn parse_type_lambda(&mut self) -> Option<TypeExprNode> {
-		let start = expect_token_and_do!(self, Token::KeywordFn, {
+		let start = expect_token_and_do!(self, Token::KeywordFun, {
 			let (start, _) = self.current_token_position();
 			self.advance();
 			start
@@ -1400,6 +1431,50 @@ impl<'a> Parser<'a> {
 		})
 	}
 
+	fn parse_type_record(&mut self) -> Option<TypeExprNode> {
+		let record_start = expect_token_and_do!(self, Token::LeftBrace, {
+			let (start, _) = self.current_token_position();
+			self.advance();
+			start
+		});
+
+		self.skip_line_breaks();
+
+		let mut entries = Vec::new();
+
+		while let Some(field_name) = self.parse_identifier() {
+			expect_token_and_do!(self, Token::Colon, { self.advance() });
+
+			let field_type = self.parse_type_expression()?;
+
+			entries.push((field_name, field_type));
+
+			match self.current_token {
+				Some(Token::Comma(..)) => {
+					self.advance();
+					self.skip_line_breaks();
+				}
+				Some(Token::LineBreak(..)) => {
+					self.skip_line_breaks();
+				}
+				_ => break,
+			}
+		}
+
+		self.skip_line_breaks();
+
+		let record_end = expect_token_and_do!(self, Token::RightBrace, {
+			let pos = self.current_token_position();
+			self.advance();
+			pos.1
+		});
+
+		Some(TypeExprNode {
+			pos: (record_start, record_end),
+			kind: TypeExprKind::Record(entries),
+		})
+	}
+
 	fn parse_type_parenthetical(&mut self) -> Option<TypeExprNode> {
 		let start = expect_token_and_do!(self, Token::LeftParen, {
 			let pos = self.current_token_position();
@@ -1412,42 +1487,14 @@ impl<'a> Parser<'a> {
 		let mut entries = Vec::new();
 
 		while let Some(type_node) = self.parse_type_expression() {
-			if current_token_is!(self, Token::Colon) {
-				self.advance();
-
-				match type_node.kind {
-					TypeExprKind::Single(label) => {
-						let label_ident = IdentifierNode {
-							name: label.name,
-							pos: label.pos,
-						};
-
-						if let Some(value) = self.parse_type_expression() {
-							entries.push((Some(label_ident), value));
-						} else {
-							self.error::<TypeExprNode>(ParseError {
-								pos: type_node.pos,
-								kind: ParseErrorKind::MissingExpressionAfterLabelInTuple,
-							});
-						}
-					}
-
-					_ => {
-						self.error::<TypeExprNode>(ParseError {
-							pos: type_node.pos,
-							kind: ParseErrorKind::MissingLabelInTuple,
-						});
-					}
-				}
-			} else {
-				entries.push((None, type_node));
-			}
-
-			self.skip_line_breaks();
+			entries.push(type_node);
 
 			match self.current_token {
 				Some(Token::Comma(..)) => {
 					self.advance();
+					self.skip_line_breaks();
+				}
+				Some(Token::LineBreak(..)) => {
 					self.skip_line_breaks();
 				}
 				_ => break,
@@ -1470,7 +1517,7 @@ impl<'a> Parser<'a> {
 		}
 
 		if entries.len() == 1 {
-			if let Some((None, first_entry)) = entries.pop() {
+			if let Some(first_entry) = entries.pop() {
 				return Some(TypeExprNode {
 					pos: (start, end),
 					kind: TypeExprKind::Grouping(Box::new(first_entry)),

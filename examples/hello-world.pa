@@ -1,1 +1,3 @@
-def main = fun: nothing
+def main fun {
+  print "hello, world"
+}

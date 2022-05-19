@@ -114,18 +114,22 @@ impl<'compiler> Analyzer<'compiler> {
       ExprType::Tuple(entries) => {
         let mut index = 0;
 
-        for (label, entry_type) in entries {
+        for entry_type in entries {
           if *field_name == format!("{}", index) {
             return Some(entry_type.clone());
           }
 
-          if let Some(label) = label {
-            if *label == *field_name {
-              return Some(entry_type.clone());
-            }
-          }
-
           index = index + 1;
+        }
+
+        None
+      }
+
+      ExprType::Record(entries) => {
+        for (label, entry_type) in entries {
+          if *field_name == *label {
+            return Some(entry_type.clone());
+          }
         }
 
         None
@@ -184,8 +188,8 @@ impl<'compiler> Analyzer<'compiler> {
           }
 
           for i in 0..entry_patterns.len() {
-            let (_, entry_pattern) = entry_patterns.get_mut(i).unwrap();
-            let (_, entry_type) = entry_types.get(i).unwrap();
+            let entry_pattern = entry_patterns.get_mut(i).unwrap();
+            let entry_type = entry_types.get(i).unwrap();
 
             self.destructure_pattern(entry_pattern, entry_type);
           }
@@ -245,6 +249,7 @@ impl<'compiler> Analyzer<'compiler> {
       ExprKind::Identifier(ident) => self.analyze_identifier(ident),
       ExprKind::Literal(literal) => self.analyze_literal(literal),
       ExprKind::Tuple(entries) => self.analyze_tuple_entries(entries),
+      ExprKind::Record(entries) => self.analyze_record_entries(entries),
       ExprKind::EmptyTuple => ExprType::Nothing,
       ExprKind::Lambda(lambda) => self.analyze_lambda(lambda),
       ExprKind::Let(let_node) => self.analyze_let(let_node),
@@ -557,21 +562,28 @@ impl<'compiler> Analyzer<'compiler> {
     ExprType::String
   }
 
-  fn analyze_tuple_entries(&mut self, entries: &mut Vec<TupleEntry>) -> ExprType {
+  fn analyze_tuple_entries(&mut self, entries: &mut Vec<ExprNode>) -> ExprType {
     let mut entry_types = Vec::new();
 
-    for TupleEntry(maybe_label, value) in entries {
-      let entry_label = match maybe_label {
-        Some(ident) => Some(ident.name.clone()),
-        None => None,
-      };
+    for entry in entries {
+      let entry_type = self.analyze_expr(entry);
 
-      let entry_type = self.analyze_expr(value);
-
-      entry_types.push((entry_label, entry_type));
+      entry_types.push(entry_type);
     }
 
     ExprType::Tuple(entry_types)
+  }
+
+  fn analyze_record_entries(&mut self, entries: &mut Vec<(IdentifierNode, ExprNode)>) -> ExprType {
+    let mut entry_types = Vec::new();
+
+    for (label, entry) in entries {
+      let entry_type = self.analyze_expr(entry);
+
+      entry_types.push((label.name.clone(), entry_type));
+    }
+
+    ExprType::Record(entry_types)
   }
 
   fn analyze_literal(&mut self, literal: &mut LiteralNode) -> ExprType {

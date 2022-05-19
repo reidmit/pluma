@@ -27,13 +27,12 @@ pub enum ExprKind {
 	Let(LetNode),
 	List(Vec<ExprNode>),
 	Literal(LiteralNode),
+	Record(Vec<(IdentifierNode, ExprNode)>),
 	Regex(RegexNode),
-	Tuple(Vec<TupleEntry>),
+	Tuple(Vec<ExprNode>),
 	When(WhenNode),
 	While(WhileNode),
 }
-
-pub struct TupleEntry(pub Option<IdentifierNode>, pub ExprNode);
 
 #[cfg(debug_assertions)]
 impl std::fmt::Debug for ExprNode {
@@ -60,21 +59,11 @@ impl std::fmt::Debug for ExprKind {
 			Let(let_node) => write!(f, "{:#?}", let_node),
 			List(elements) => write!(f, "{:#?}", elements),
 			Literal(lit) => write!(f, "{:?}", lit),
+			Record(entries) => write!(f, "record {:#?}", entries),
 			Regex(regex) => write!(f, "{:#?}", regex),
 			Tuple(entries) => write!(f, "tuple {:#?}", entries),
 			When(when) => write!(f, "{:#?}", when),
 			While(while_node) => write!(f, "{:#?}", while_node),
-		}
-	}
-}
-
-#[cfg(debug_assertions)]
-impl std::fmt::Debug for TupleEntry {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		if let Some(label) = &self.0 {
-			write!(f, "(label {:?}) {:#?}", label, self.1)
-		} else {
-			write!(f, "{:#?}", self.1)
 		}
 	}
 }

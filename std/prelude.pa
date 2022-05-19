@@ -6,30 +6,40 @@ def string = alias intrinsic-string
 
 def regex = alias intrinsic-regex
 
-def list<e> = alias intrinsic-list
+def list 'e = alias intrinsic-list
 
-def nothing = enum (
+def nothing enum (
   nothing
 )
 
-def bool = enum (
+def bool enum (
   true
   false
 )
 
-def option<a> = enum (
-  some a
+def option 'a enum (
+  some 'a
   none
 )
 
-def result<a, b> = enum (
-  ok a
-  err b
+def result 'a 'b enum (
+  ok 'a
+  err 'b
 )
 
-def range = alias (
+def range alias (
   start: int
   end: int
 )
 
-def print :: string -> nothing = intrinsic-print
+def print :: string -> () = intrinsic-print
+
+def call :: (() -> 'a) -> 'a = fun f {
+  f ()
+}
+
+def each :: (next: () -> option 'a) ('a -> 'b) -> () = fun iterator callback {
+  while call iterator.next is some val {
+    callback val
+  }
+}
