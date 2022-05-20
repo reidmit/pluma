@@ -1,0 +1,92 @@
+---
+source: tests/frontend_single_file_tests.rs
+expression: result
+---
+Ok(
+    Some(
+        ModuleNode {
+            span: (
+                0,
+                26,
+            ),
+            body: [
+                DefinitionNode {
+                    span: (
+                        0,
+                        26,
+                    ),
+                    name: IdentifierNode {
+                        span: (
+                            4,
+                            12,
+                        ),
+                        name: "identity",
+                    },
+                    kind: Expr(
+                        ExprNode {
+                            span: (
+                                13,
+                                26,
+                            ),
+                            kind: Lambda(
+                                LambdaNode {
+                                    span: (
+                                        13,
+                                        26,
+                                    ),
+                                    params: [
+                                        LambdaParamNode {
+                                            ident: IdentifierNode {
+                                                span: (
+                                                    17,
+                                                    18,
+                                                ),
+                                                name: "x",
+                                            },
+                                            inferred_type: Placeholder(
+                                                1,
+                                            ),
+                                        },
+                                    ],
+                                    body: [
+                                        ExprNode {
+                                            span: (
+                                                23,
+                                                24,
+                                            ),
+                                            kind: Identifier(
+                                                IdentifierNode {
+                                                    span: (
+                                                        23,
+                                                        24,
+                                                    ),
+                                                    name: "x",
+                                                },
+                                            ),
+                                            inferred_type: Placeholder(
+                                                1,
+                                            ),
+                                        },
+                                    ],
+                                },
+                            ),
+                            inferred_type: Placeholder(
+                                2,
+                            ),
+                        },
+                    ),
+                    inferred_type: Func(
+                        [
+                            Placeholder(
+                                1,
+                            ),
+                        ],
+                        Placeholder(
+                            1,
+                        ),
+                    ),
+                },
+            ],
+        },
+    ),
+)

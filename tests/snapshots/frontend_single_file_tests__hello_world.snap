@@ -7,32 +7,32 @@ Ok(
         ModuleNode {
             span: (
                 0,
-                28,
+                27,
             ),
             body: [
                 DefinitionNode {
                     span: (
                         0,
-                        28,
+                        27,
                     ),
                     name: IdentifierNode {
                         span: (
                             4,
-                            15,
+                            14,
                         ),
-                        name: "hello-world",
+                        name: "helloWorld",
                     },
                     kind: Expr(
                         ExprNode {
                             span: (
-                                17,
-                                28,
+                                16,
+                                27,
                             ),
                             kind: Literal(
                                 LiteralNode {
                                     span: (
-                                        17,
-                                        28,
+                                        16,
+                                        27,
                                     ),
                                     kind: Str(
                                         "hello-world",
