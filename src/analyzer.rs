@@ -11,7 +11,57 @@ use AnalysisErrorKind::*;
 
 type Constraint = (ExprType, ExprType);
 type ConstraintSet = Vec<Constraint>;
-type SolutionMap = HashMap<usize, ExprType>;
+
+#[derive(Debug)]
+struct SolutionMap {
+  solutions: HashMap<usize, ExprType>,
+}
+
+impl SolutionMap {
+  fn empty() -> Self {
+    Self {
+      solutions: HashMap::new(),
+    }
+  }
+
+  fn with_entry(key: usize, value: ExprType) -> Self {
+    let mut solutions = HashMap::with_capacity(1);
+    solutions.insert(key, value);
+    Self { solutions }
+  }
+
+  fn apply_to_constraints(&self, constraints: &[Constraint]) -> ConstraintSet {
+    constraints
+      .iter()
+      .map(|c| self.apply_to_constraint(c))
+      .collect()
+  }
+
+  fn apply_to_constraint(&self, (a, b): &Constraint) -> Constraint {
+    (
+      a.replace_placeholders(&self.solutions),
+      b.replace_placeholders(&self.solutions),
+    )
+  }
+
+  fn compose(&self, other: SolutionMap) -> SolutionMap {
+    let mut merged_solutions = HashMap::new();
+
+    for (k, v) in &self.solutions {
+      // add self.solutions with replacements from other
+      merged_solutions.insert(*k, v.replace_placeholders(&other.solutions));
+    }
+
+    for (k, v) in &other.solutions {
+      // add other.solutions
+      merged_solutions.insert(*k, v.clone());
+    }
+
+    SolutionMap {
+      solutions: merged_solutions,
+    }
+  }
+}
 
 pub struct Analyzer<'compiler> {
   module_name: Option<String>,
@@ -38,23 +88,12 @@ impl<'compiler> Analyzer<'compiler> {
     self.module_path = Some(module.module_path.clone());
 
     if let Some(ast) = &mut module.ast {
-      // phase 1: annotate w/placeholders
-      self.annotate(ast);
+      self.annotate_with_placeholders(ast);
 
-      // phase 2: generate constraints
-      let mut constraints = self.generate_constraints(ast);
+      let constraints = self.generate_constraints(ast);
+      let solutions = self.unify_constraints(&constraints);
 
-      println!("CONSTRAINTS:",);
-      for c in constraints.clone() {
-        println!("  {} :: {}", c.0, c.1);
-      }
-
-      // phase 3: solve constraints
-      let solutions = self.unify_constraints(&mut constraints);
-
-      // phase 4: decorate w/inferred types
-      println!("{:#?}", solutions);
-      self.decorate(ast, &solutions);
+      self.decorate_with_inferred_types(ast, &solutions);
     }
   }
 }
@@ -127,7 +166,7 @@ impl<'compiler> Analyzer<'compiler> {
 
 // Annotation methods
 impl<'compiler> Analyzer<'compiler> {
-  fn annotate(&mut self, module: &mut ModuleNode) {
+  fn annotate_with_placeholders(&mut self, module: &mut ModuleNode) {
     // we first do a shallow pass to annotate all top-level defs,
     // so that they can be referenced anywhere within the bodies
     // of other defs
@@ -388,174 +427,63 @@ impl<'compiler> Analyzer<'compiler> {
 
 // Constraint-solving methods
 impl<'compiler> Analyzer<'compiler> {
-  fn unify_constraints(&mut self, constraints: &mut ConstraintSet) -> SolutionMap {
-    let mut solutions = HashMap::new();
-
-    while !constraints.is_empty() {
-      let mut remaining_constraints = Vec::new();
-
-      for constraint in constraints.drain(..) {
-        self.unify_constraint(&constraint, &mut remaining_constraints, &mut solutions)
-      }
-
-      println!("remaining: {:#?}", remaining_constraints);
-
-      *constraints = remaining_constraints
-        .iter()
-        .map(|(t1, t2)| {
-          (
-            t1.replace_placeholders(&solutions),
-            t2.replace_placeholders(&solutions),
-          )
-        })
-        .collect();
+  fn unify_constraints(&self, constraints: &ConstraintSet) -> SolutionMap {
+    if constraints.is_empty() {
+      return SolutionMap::empty();
     }
 
-    solutions
+    let solutions_for_head = self.unify_constraint(&constraints[0]);
+    let new_tail_constraints = solutions_for_head.apply_to_constraints(&constraints[1..]);
+    let solutions_for_tail = self.unify_constraints(&new_tail_constraints);
+    solutions_for_head.compose(solutions_for_tail)
   }
 
-  fn unify_constraint(
-    &mut self,
-    constraint: &Constraint,
-    constraints: &mut ConstraintSet,
-    solutions: &mut SolutionMap,
-  ) {
+  fn unify_constraint(&self, constraint: &Constraint) -> SolutionMap {
     match constraint {
-      (t1, t2) if !t1.has_any_placeholder() && !t2.has_any_placeholder() => {
-        // both are "leaf" nodes; nothing to add to the solution
-      }
+      // both are "leaf" nodes; nothing to add to the solution
+      (t1, t2) if !t1.has_any_placeholders() && !t2.has_any_placeholders() => SolutionMap::empty(),
 
       (
         ExprType::Func(param_types_1, return_type_1),
         ExprType::Func(param_types_2, return_type_2),
       ) => {
-        // add some new constraints to unify param types:
+        // add some new constraints to unify param & return types:
+        let mut constraints = Vec::with_capacity(param_types_1.len() + 1);
         for i in 0..param_types_1.len() {
           constraints.push((param_types_1[i].clone(), param_types_2[i].clone()))
         }
-
-        // and one to unify return types:
         constraints.push((*return_type_1.clone(), *return_type_2.clone()));
+        self.unify_constraints(&constraints)
       }
 
-      (ExprType::Placeholder(n1), t) | (t, ExprType::Placeholder(n1)) => {
-        match t {
-          ExprType::Placeholder(n2) if n1 == n2 => {
-            // nothing to add to the solution
+      (ExprType::Placeholder(n), t) | (t, ExprType::Placeholder(n)) => match t {
+        ExprType::Placeholder(n2) if n == n2 => SolutionMap::empty(),
+        ExprType::Placeholder(n) => SolutionMap::with_entry(*n, t.clone()),
+        other => {
+          if other.contains_placeholder(n) {
+            todo!("circular reference! can't unify!")
           }
 
-          ExprType::Placeholder(n2) => {
-            solutions.insert(*n2, t.replace_placeholders(solutions));
-          }
-
-          other => {
-            // TODO: occurs check here
-            solutions.insert(*n1, other.replace_placeholders(solutions));
-          }
+          SolutionMap::with_entry(*n, t.clone())
         }
-      }
+      },
 
-      other => todo!("unexpected constraint: {:?}", constraint),
+      other => todo!("unexpected constraint: {:?}", other),
     }
-  }
-
-  fn unify_old(
-    &mut self,
-    remaining_constraints: &mut ConstraintSet,
-    solutions: &mut SolutionMap,
-    t1: &ExprType,
-    t2: &ExprType,
-  ) {
-    match (t1, t2) {
-      (t1, t2) if !t1.has_any_placeholder() && !t2.has_any_placeholder() => {
-        // both are "leaf" nodes, so nothing to do
-      }
-
-      // (ExprType::Placeholder(n), t) if !t.has_any_placeholder() => {
-      //   // if a is a placeholder and b is a "leaf", add to the solution
-      //   solutions.insert(*n, t.clone());
-      // }
-
-      // (t, ExprType::Placeholder(n)) if !t.has_any_placeholder() => {
-      //   // similarly, if b is a placeholder and a is a "leaf", add to the solution
-      //   solutions.insert(*n, t.clone());
-      // }
-      (ExprType::Placeholder(n), t) | (t, ExprType::Placeholder(n)) => {
-        println!("var/type or type/var case: t{} :: {}", n, t);
-        println!("   solutions: {:?}", solutions);
-        println!("   remaining: {:?}", remaining_constraints);
-
-        match t {
-          ExprType::Placeholder(n2) if n2 == n => {
-            // same placeholder; nothing to do!
-          }
-
-          ExprType::Placeholder(n2) => {
-            // we know that two placeholders are the same type, so
-            // replace occurrences of one with the other in the constraints
-            // solutions.insert(*n2, t.clone());
-          }
-
-          other => {
-            // TODO: occurs-in check here
-
-            solutions.insert(*n, other.clone());
-          }
-        }
-      }
-
-      (
-        ExprType::Func(param_types_t1, return_type_t1),
-        ExprType::Func(param_types_t2, return_type_t2),
-      ) => {
-        println!("func/func case");
-
-        for i in 0..param_types_t1.len() {
-          self.unify_old(
-            remaining_constraints,
-            solutions,
-            &param_types_t1[i],
-            &param_types_t2[i],
-          )
-        }
-
-        self.unify_old(
-          remaining_constraints,
-          solutions,
-          &return_type_t1,
-          &return_type_t2,
-        )
-      }
-
-      (type_a, type_b) => {
-        println!("failed to unify: {} :: {}", type_a, type_b);
-
-        // otherwise, perform any substitutions we can and include
-        // in the remaining constraints
-        let substituted = (
-          type_a.replace_placeholders(&solutions),
-          type_b.replace_placeholders(&solutions),
-        );
-
-        remaining_constraints.push(substituted);
-      }
-    }
-
-    println!("after unify, {:#?}", remaining_constraints)
   }
 }
 
 // Decoration methods
 impl<'compiler> Analyzer<'compiler> {
-  fn decorate(&mut self, module: &mut ModuleNode, solutions: &SolutionMap) {
+  fn decorate_with_inferred_types(&mut self, module: &mut ModuleNode, solutions: &SolutionMap) {
     for definition in &mut module.body {
       self.decorate_definition(definition, solutions)
     }
   }
 
-  fn decorate_definition(&mut self, definition: &mut DefinitionNode, solutions: &SolutionMap) {
+  fn decorate_definition(&mut self, definition: &mut DefinitionNode, solution_map: &SolutionMap) {
     if let ExprType::Placeholder(n) = definition.inferred_type {
-      if let Some(actual_type) = solutions.get(&n) {
+      if let Some(actual_type) = solution_map.solutions.get(&n) {
         definition.inferred_type = actual_type.clone();
       }
     }

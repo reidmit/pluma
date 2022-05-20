@@ -26,9 +26,21 @@ impl ExprType {
     *self == *other
   }
 
-  pub fn has_any_placeholder(&self) -> bool {
+  pub fn has_any_placeholders(&self) -> bool {
+    self.search_placeholders(None)
+  }
+
+  pub fn contains_placeholder(&self, placeholder: &usize) -> bool {
+    self.search_placeholders(Some(placeholder))
+  }
+
+  fn search_placeholders(&self, placeholder: Option<&usize>) -> bool {
     match &self {
-      ExprType::Placeholder(_) => true,
+      ExprType::Placeholder(n) => match placeholder {
+        Some(expected) if n == expected => true,
+        None => true,
+        _ => false,
+      },
 
       ExprType::Nothing
       | ExprType::Int
@@ -39,28 +51,28 @@ impl ExprType {
 
       ExprType::Func(param_types, return_type) => {
         for param_type in param_types {
-          if param_type.has_any_placeholder() {
+          if param_type.search_placeholders(placeholder) {
             return true;
           }
         }
 
-        return return_type.has_any_placeholder();
+        return return_type.search_placeholders(placeholder);
       }
 
       _ => false, // TODO: ??
     }
   }
 
-  pub fn replace_placeholders(&self, mapping: &HashMap<usize, ExprType>) -> ExprType {
+  pub fn replace_placeholders(&self, solutions: &HashMap<usize, ExprType>) -> ExprType {
     match &self {
-      ExprType::Placeholder(n) if mapping.contains_key(n) => mapping.get(n).unwrap().clone(),
+      ExprType::Placeholder(n) if solutions.contains_key(n) => solutions.get(n).unwrap().clone(),
 
       ExprType::Func(param_types, return_type) => ExprType::Func(
         param_types
           .iter()
-          .map(|p| p.replace_placeholders(mapping))
+          .map(|p| p.replace_placeholders(solutions))
           .collect(),
-        return_type.replace_placeholders(mapping).into(),
+        return_type.replace_placeholders(solutions).into(),
       ),
 
       other => (*other).clone(),

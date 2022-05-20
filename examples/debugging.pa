@@ -1,3 +1,5 @@
 def lol fun x { x }
 
 def wow lol 3
+
+def reid "hey there"
