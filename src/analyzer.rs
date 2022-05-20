@@ -5,11 +5,12 @@ use crate::errors::*;
 use crate::expr_type::*;
 use crate::intrinsics::*;
 use crate::module::Module;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use AnalysisErrorKind::*;
 
-type ConstraintSet = HashSet<(ExprType, ExprType)>;
+type Constraint = (ExprType, ExprType);
+type ConstraintSet = Vec<Constraint>;
 type SolutionMap = HashMap<usize, ExprType>;
 
 pub struct Analyzer<'compiler> {
@@ -43,12 +44,17 @@ impl<'compiler> Analyzer<'compiler> {
       // phase 2: generate constraints
       let mut constraints = self.generate_constraints(ast);
 
-      // phase 3: solve constraints
-      let solutions = self.solve_constraints(&mut constraints);
+      println!("CONSTRAINTS:",);
+      for c in constraints.clone() {
+        println!("  {} :: {}", c.0, c.1);
+      }
 
-      // phase 4: annotate w/inferred types
-      // TODO :---)
+      // phase 3: solve constraints
+      let solutions = self.unify_constraints(&mut constraints);
+
+      // phase 4: decorate w/inferred types
       println!("{:#?}", solutions);
+      self.decorate(ast, &solutions);
     }
   }
 }
@@ -246,7 +252,7 @@ impl<'compiler> Analyzer<'compiler> {
 // Constraint-generation methods
 impl<'compiler> Analyzer<'compiler> {
   fn generate_constraints(&mut self, module: &mut ModuleNode) -> ConstraintSet {
-    let mut constraints = HashSet::new();
+    let mut constraints = Vec::new();
 
     for definition in &mut module.body {
       self.constraints_from_definition(definition, &mut constraints)
@@ -263,7 +269,7 @@ impl<'compiler> Analyzer<'compiler> {
     match &mut definition.kind {
       DefinitionKind::Expr(expr) => {
         self.constraints_from_expr(expr, constraints);
-        constraints.insert((definition.inferred_type.clone(), expr.inferred_type.clone()));
+        constraints.push((definition.inferred_type.clone(), expr.inferred_type.clone()));
       }
       _ => {
         // todo :---)
@@ -282,12 +288,12 @@ impl<'compiler> Analyzer<'compiler> {
       }
 
       ExprKind::Regex(..) => {
-        constraints.insert((inferred_type, ExprType::Regex));
+        constraints.push((inferred_type, ExprType::Regex));
       }
 
       ExprKind::Grouping(inner) => {
         self.constraints_from_expr(inner, constraints);
-        constraints.insert((inferred_type, inner.inferred_type.clone()));
+        constraints.push((inferred_type, inner.inferred_type.clone()));
       }
 
       ExprKind::BinaryOperation { left, right, op } => {
@@ -297,9 +303,9 @@ impl<'compiler> Analyzer<'compiler> {
         match op.kind {
           Operator::Addition => {
             // todo: floats?
-            constraints.insert((left.inferred_type.clone(), ExprType::Int));
-            constraints.insert((right.inferred_type.clone(), ExprType::Int));
-            constraints.insert((inferred_type.clone(), ExprType::Int));
+            constraints.push((left.inferred_type.clone(), ExprType::Int));
+            constraints.push((right.inferred_type.clone(), ExprType::Int));
+            constraints.push((inferred_type.clone(), ExprType::Int));
           }
           _ => {
             // todo :----)
@@ -319,7 +325,7 @@ impl<'compiler> Analyzer<'compiler> {
 
         // we know that this lambda must be a function that takes
         // the param types and returns the return type
-        constraints.insert((
+        constraints.push((
           inferred_type,
           ExprType::Func(param_types, Box::new(return_type)),
         ));
@@ -336,7 +342,7 @@ impl<'compiler> Analyzer<'compiler> {
 
         // we know that the callee should be a function that takes
         // the given arg types and returns the type of this whole expr
-        constraints.insert((
+        constraints.push((
           callee.inferred_type.clone(),
           ExprType::Func(arg_types, Box::new(inferred_type)),
         ));
@@ -346,7 +352,7 @@ impl<'compiler> Analyzer<'compiler> {
         self.constraints_from_expr(value, constraints);
 
         // let expressions always evaluate to ()
-        constraints.insert((inferred_type, ExprType::Nothing));
+        constraints.push((inferred_type, ExprType::Nothing));
       }
 
       _ => {
@@ -363,16 +369,18 @@ impl<'compiler> Analyzer<'compiler> {
   ) {
     match &mut literal.kind {
       LiteralKind::Str(..) => {
-        constraints.insert((typ, ExprType::String));
+        constraints.push((typ, ExprType::String));
       }
+
       LiteralKind::FloatDecimal(..) => {
-        constraints.insert((typ, ExprType::Float));
+        constraints.push((typ, ExprType::Float));
       }
+
       LiteralKind::IntDecimal(..)
       | LiteralKind::IntHex(..)
       | LiteralKind::IntBinary(..)
       | LiteralKind::IntOctal(..) => {
-        constraints.insert((typ, ExprType::Int));
+        constraints.push((typ, ExprType::Int));
       }
     }
   }
@@ -380,37 +388,78 @@ impl<'compiler> Analyzer<'compiler> {
 
 // Constraint-solving methods
 impl<'compiler> Analyzer<'compiler> {
-  fn solve_constraints(&mut self, constraints: &mut ConstraintSet) -> SolutionMap {
+  fn unify_constraints(&mut self, constraints: &mut ConstraintSet) -> SolutionMap {
     let mut solutions = HashMap::new();
 
-    let mut hack = 0;
-
     while !constraints.is_empty() {
-      let mut remaining_constraints = HashSet::new();
+      let mut remaining_constraints = Vec::new();
 
-      for (t1, t2) in constraints.drain() {
-        self.unify(&mut remaining_constraints, &mut solutions, &t1, &t2)
+      for constraint in constraints.drain(..) {
+        self.unify_constraint(&constraint, &mut remaining_constraints, &mut solutions)
       }
 
-      *constraints = remaining_constraints;
+      println!("remaining: {:#?}", remaining_constraints);
 
-      hack += 1;
-
-      if hack < 100 {
-        println!("breaking! likely infinite loop!");
-        println!("constraints:");
-        for c in constraints.iter() {
-          println!("  {} :: {}", c.0, c.1);
-        }
-        println!("solutions: {:#?}", solutions);
-        break;
-      }
+      *constraints = remaining_constraints
+        .iter()
+        .map(|(t1, t2)| {
+          (
+            t1.replace_placeholders(&solutions),
+            t2.replace_placeholders(&solutions),
+          )
+        })
+        .collect();
     }
 
     solutions
   }
 
-  fn unify(
+  fn unify_constraint(
+    &mut self,
+    constraint: &Constraint,
+    constraints: &mut ConstraintSet,
+    solutions: &mut SolutionMap,
+  ) {
+    match constraint {
+      (t1, t2) if !t1.has_any_placeholder() && !t2.has_any_placeholder() => {
+        // both are "leaf" nodes; nothing to add to the solution
+      }
+
+      (
+        ExprType::Func(param_types_1, return_type_1),
+        ExprType::Func(param_types_2, return_type_2),
+      ) => {
+        // add some new constraints to unify param types:
+        for i in 0..param_types_1.len() {
+          constraints.push((param_types_1[i].clone(), param_types_2[i].clone()))
+        }
+
+        // and one to unify return types:
+        constraints.push((*return_type_1.clone(), *return_type_2.clone()));
+      }
+
+      (ExprType::Placeholder(n1), t) | (t, ExprType::Placeholder(n1)) => {
+        match t {
+          ExprType::Placeholder(n2) if n1 == n2 => {
+            // nothing to add to the solution
+          }
+
+          ExprType::Placeholder(n2) => {
+            solutions.insert(*n2, t.replace_placeholders(solutions));
+          }
+
+          other => {
+            // TODO: occurs check here
+            solutions.insert(*n1, other.replace_placeholders(solutions));
+          }
+        }
+      }
+
+      other => todo!("unexpected constraint: {:?}", constraint),
+    }
+  }
+
+  fn unify_old(
     &mut self,
     remaining_constraints: &mut ConstraintSet,
     solutions: &mut SolutionMap,
@@ -422,22 +471,47 @@ impl<'compiler> Analyzer<'compiler> {
         // both are "leaf" nodes, so nothing to do
       }
 
-      (ExprType::Placeholder(n), t) if !t.has_any_placeholder() => {
-        // if a is a placeholder and b is a "leaf", add to the solution
-        solutions.insert(*n, t.clone());
-      }
+      // (ExprType::Placeholder(n), t) if !t.has_any_placeholder() => {
+      //   // if a is a placeholder and b is a "leaf", add to the solution
+      //   solutions.insert(*n, t.clone());
+      // }
 
-      (t, ExprType::Placeholder(n)) if !t.has_any_placeholder() => {
-        // similarly, if b is a placeholder and a is a "leaf", add to the solution
-        solutions.insert(*n, t.clone());
+      // (t, ExprType::Placeholder(n)) if !t.has_any_placeholder() => {
+      //   // similarly, if b is a placeholder and a is a "leaf", add to the solution
+      //   solutions.insert(*n, t.clone());
+      // }
+      (ExprType::Placeholder(n), t) | (t, ExprType::Placeholder(n)) => {
+        println!("var/type or type/var case: t{} :: {}", n, t);
+        println!("   solutions: {:?}", solutions);
+        println!("   remaining: {:?}", remaining_constraints);
+
+        match t {
+          ExprType::Placeholder(n2) if n2 == n => {
+            // same placeholder; nothing to do!
+          }
+
+          ExprType::Placeholder(n2) => {
+            // we know that two placeholders are the same type, so
+            // replace occurrences of one with the other in the constraints
+            // solutions.insert(*n2, t.clone());
+          }
+
+          other => {
+            // TODO: occurs-in check here
+
+            solutions.insert(*n, other.clone());
+          }
+        }
       }
 
       (
         ExprType::Func(param_types_t1, return_type_t1),
         ExprType::Func(param_types_t2, return_type_t2),
       ) => {
+        println!("func/func case");
+
         for i in 0..param_types_t1.len() {
-          self.unify(
+          self.unify_old(
             remaining_constraints,
             solutions,
             &param_types_t1[i],
@@ -445,7 +519,7 @@ impl<'compiler> Analyzer<'compiler> {
           )
         }
 
-        self.unify(
+        self.unify_old(
           remaining_constraints,
           solutions,
           &return_type_t1,
@@ -454,6 +528,8 @@ impl<'compiler> Analyzer<'compiler> {
       }
 
       (type_a, type_b) => {
+        println!("failed to unify: {} :: {}", type_a, type_b);
+
         // otherwise, perform any substitutions we can and include
         // in the remaining constraints
         let substituted = (
@@ -461,11 +537,29 @@ impl<'compiler> Analyzer<'compiler> {
           type_b.replace_placeholders(&solutions),
         );
 
-        println!("unsolved: {} :: {}", type_a, type_b);
-        println!("substted: {} :: {}", substituted.0, substituted.1);
-
-        remaining_constraints.insert(substituted);
+        remaining_constraints.push(substituted);
       }
     }
+
+    println!("after unify, {:#?}", remaining_constraints)
+  }
+}
+
+// Decoration methods
+impl<'compiler> Analyzer<'compiler> {
+  fn decorate(&mut self, module: &mut ModuleNode, solutions: &SolutionMap) {
+    for definition in &mut module.body {
+      self.decorate_definition(definition, solutions)
+    }
+  }
+
+  fn decorate_definition(&mut self, definition: &mut DefinitionNode, solutions: &SolutionMap) {
+    if let ExprType::Placeholder(n) = definition.inferred_type {
+      if let Some(actual_type) = solutions.get(&n) {
+        definition.inferred_type = actual_type.clone();
+      }
+    }
+
+    println!("{} :: {}", definition.name.name, definition.inferred_type);
   }
 }

@@ -1,1 +1,3 @@
 def lol fun x { x }
+
+def wow lol 3

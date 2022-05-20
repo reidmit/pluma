@@ -1,0 +1,34 @@
+def iterator 'a alias {
+  next: () -> option 'a,
+}
+
+def person alias {
+  name: string,
+  age: int,
+}
+
+# person -> { next: () -> option 'a }
+def birthday-iterator fun person {
+  let current = 0;
+  let final = person.age;
+
+  let next = fun {
+    if current < final is true {
+      current <- current + 1
+      some current
+    } else {
+      none
+    }
+  };
+
+  { next: next }
+}
+
+def main fun {
+  let p = person { name: "reid", age: 28 };
+  let iter = birthday-iterator p;
+
+  while iter.next () is some age {
+    print "age: ${age}"
+  }
+}
