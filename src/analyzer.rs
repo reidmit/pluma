@@ -423,6 +423,14 @@ impl<'compiler> Analyzer<'compiler> {
 
 // Decoration methods
 impl<'compiler> Analyzer<'compiler> {
+  fn fill_in_placeholder(&mut self, ty: &mut ExprType, solutions: &SolutionMap) {
+    if let ExprType::Placeholder(n) = ty {
+      if let Some(actual_type) = solutions.solutions.get(&n) {
+        *ty = actual_type.clone();
+      }
+    }
+  }
+
   fn decorate_with_inferred_types(&mut self, module: &mut ModuleNode, solutions: &SolutionMap) {
     for definition in &mut module.body {
       self.decorate_definition(definition, solutions)
@@ -430,11 +438,7 @@ impl<'compiler> Analyzer<'compiler> {
   }
 
   fn decorate_definition(&mut self, definition: &mut DefinitionNode, solutions: &SolutionMap) {
-    if let ExprType::Placeholder(n) = definition.inferred_type {
-      if let Some(actual_type) = solutions.solutions.get(&n) {
-        definition.inferred_type = actual_type.clone();
-      }
-    }
+    self.fill_in_placeholder(&mut definition.inferred_type, solutions);
 
     match &mut definition.kind {
       DefinitionKind::Expr(expr) => self.decorate_expr(expr, solutions),
@@ -443,10 +447,28 @@ impl<'compiler> Analyzer<'compiler> {
   }
 
   fn decorate_expr(&mut self, expr: &mut ExprNode, solutions: &SolutionMap) {
-    if let ExprType::Placeholder(n) = expr.inferred_type {
-      if let Some(actual_type) = solutions.solutions.get(&n) {
-        expr.inferred_type = actual_type.clone();
+    self.fill_in_placeholder(&mut expr.inferred_type, solutions);
+
+    match &mut expr.kind {
+      ExprKind::Lambda(LambdaNode { params, body, .. }) => {
+        for param in params {
+          self.fill_in_placeholder(&mut param.inferred_type, solutions);
+        }
+
+        for expr in body {
+          self.fill_in_placeholder(&mut expr.inferred_type, solutions);
+        }
       }
+
+      ExprKind::Call(CallNode { callee, args, .. }) => {
+        self.fill_in_placeholder(&mut callee.inferred_type, solutions);
+
+        for expr in args {
+          self.fill_in_placeholder(&mut expr.inferred_type, solutions);
+        }
+      }
+
+      _ => {}
     }
   }
 }
