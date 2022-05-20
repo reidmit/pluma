@@ -7,7 +7,7 @@ Ok(
         ModuleNode {
             span: (
                 0,
-                26,
+                69,
             ),
             body: [
                 DefinitionNode {
@@ -44,7 +44,7 @@ Ok(
                                                 name: "x",
                                             },
                                             inferred_type: Placeholder(
-                                                1,
+                                                3,
                                             ),
                                         },
                                     ],
@@ -64,27 +64,168 @@ Ok(
                                                 },
                                             ),
                                             inferred_type: Placeholder(
-                                                1,
+                                                3,
                                             ),
                                         },
                                     ],
                                 },
                             ),
-                            inferred_type: Placeholder(
-                                2,
+                            inferred_type: Func(
+                                [
+                                    Int,
+                                ],
+                                Int,
                             ),
                         },
                     ),
                     inferred_type: Func(
                         [
-                            Placeholder(
-                                1,
-                            ),
+                            Int,
                         ],
-                        Placeholder(
-                            1,
-                        ),
+                        Int,
                     ),
+                },
+                DefinitionNode {
+                    span: (
+                        28,
+                        47,
+                    ),
+                    name: IdentifierNode {
+                        span: (
+                            32,
+                            35,
+                        ),
+                        name: "num",
+                    },
+                    kind: Expr(
+                        ExprNode {
+                            span: (
+                                36,
+                                47,
+                            ),
+                            kind: Call(
+                                CallNode {
+                                    span: (
+                                        36,
+                                        47,
+                                    ),
+                                    callee: ExprNode {
+                                        span: (
+                                            36,
+                                            44,
+                                        ),
+                                        kind: Identifier(
+                                            IdentifierNode {
+                                                span: (
+                                                    36,
+                                                    44,
+                                                ),
+                                                name: "identity",
+                                            },
+                                        ),
+                                        inferred_type: Placeholder(
+                                            0,
+                                        ),
+                                    },
+                                    args: [
+                                        ExprNode {
+                                            span: (
+                                                45,
+                                                47,
+                                            ),
+                                            kind: Literal(
+                                                LiteralNode {
+                                                    span: (
+                                                        45,
+                                                        47,
+                                                    ),
+                                                    kind: IntDecimal(
+                                                        47,
+                                                    ),
+                                                },
+                                            ),
+                                            inferred_type: Placeholder(
+                                                5,
+                                            ),
+                                        },
+                                    ],
+                                },
+                            ),
+                            inferred_type: Int,
+                        },
+                    ),
+                    inferred_type: Int,
+                },
+                DefinitionNode {
+                    span: (
+                        49,
+                        69,
+                    ),
+                    name: IdentifierNode {
+                        span: (
+                            53,
+                            56,
+                        ),
+                        name: "str",
+                    },
+                    kind: Expr(
+                        ExprNode {
+                            span: (
+                                57,
+                                69,
+                            ),
+                            kind: Call(
+                                CallNode {
+                                    span: (
+                                        57,
+                                        69,
+                                    ),
+                                    callee: ExprNode {
+                                        span: (
+                                            57,
+                                            65,
+                                        ),
+                                        kind: Identifier(
+                                            IdentifierNode {
+                                                span: (
+                                                    57,
+                                                    65,
+                                                ),
+                                                name: "identity",
+                                            },
+                                        ),
+                                        inferred_type: Placeholder(
+                                            0,
+                                        ),
+                                    },
+                                    args: [
+                                        ExprNode {
+                                            span: (
+                                                67,
+                                                69,
+                                            ),
+                                            kind: Literal(
+                                                LiteralNode {
+                                                    span: (
+                                                        67,
+                                                        69,
+                                                    ),
+                                                    kind: Str(
+                                                        "hi",
+                                                    ),
+                                                },
+                                            ),
+                                            inferred_type: Placeholder(
+                                                7,
+                                            ),
+                                        },
+                                    ],
+                                },
+                            ),
+                            inferred_type: Int,
+                        },
+                    ),
+                    inferred_type: Int,
                 },
             ],
         },

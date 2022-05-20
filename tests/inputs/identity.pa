@@ -1,3 +1,7 @@
 def identity fun x {
   x
 }
+
+def num identity 47
+
+def str identity "hi"

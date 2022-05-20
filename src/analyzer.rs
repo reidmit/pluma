@@ -429,13 +429,24 @@ impl<'compiler> Analyzer<'compiler> {
     }
   }
 
-  fn decorate_definition(&mut self, definition: &mut DefinitionNode, solution_map: &SolutionMap) {
+  fn decorate_definition(&mut self, definition: &mut DefinitionNode, solutions: &SolutionMap) {
     if let ExprType::Placeholder(n) = definition.inferred_type {
-      if let Some(actual_type) = solution_map.solutions.get(&n) {
+      if let Some(actual_type) = solutions.solutions.get(&n) {
         definition.inferred_type = actual_type.clone();
       }
     }
 
-    println!("{} :: {}", definition.name.name, definition.inferred_type);
+    match &mut definition.kind {
+      DefinitionKind::Expr(expr) => self.decorate_expr(expr, solutions),
+      _ => { /* todo */ }
+    }
+  }
+
+  fn decorate_expr(&mut self, expr: &mut ExprNode, solutions: &SolutionMap) {
+    if let ExprType::Placeholder(n) = expr.inferred_type {
+      if let Some(actual_type) = solutions.solutions.get(&n) {
+        expr.inferred_type = actual_type.clone();
+      }
+    }
   }
 }
