@@ -1,3 +1,4 @@
+use crate::expr_type::*;
 use std::fmt;
 
 #[cfg_attr(debug_assertions, derive(Debug))]
@@ -10,6 +11,7 @@ pub struct AnalysisError {
 pub enum AnalysisErrorKind {
 	NameNotBound { name: String },
 	UnusedBinding { name: String },
+	TypeMismatch { expected: ExprType, found: ExprType },
 }
 
 impl fmt::Display for AnalysisError {
@@ -22,6 +24,12 @@ impl fmt::Display for AnalysisError {
 			}
 
 			UnusedBinding { name } => write!(f, "Name '{}' is never used.", name),
+
+			TypeMismatch { expected, found } => write!(
+				f,
+				"Type mismatch: expected '{}', but found '{}'.",
+				expected, found
+			),
 		}
 	}
 }

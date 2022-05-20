@@ -18,6 +18,10 @@ pub enum ExprType {
   Tuple(Vec<ExprType>),
   Named(String),
   NamedWithParams(String, Vec<ExprType>),
+  Invalid {
+    actual: Box<ExprType>,
+    expected: Box<ExprType>,
+  },
 }
 
 impl ExprType {
@@ -150,6 +154,8 @@ impl fmt::Display for ExprType {
       ExprType::List(element_type) => {
         write!(f, "list<{}>", element_type)
       }
+
+      ExprType::Invalid { actual, .. } => write!(f, "{}", actual),
     }
   }
 }

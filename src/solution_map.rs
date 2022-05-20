@@ -22,10 +22,11 @@ impl SolutionMap {
   pub fn apply_to_constraints(&self, constraints: &[Constraint]) -> ConstraintSet {
     constraints
       .iter()
-      .map(|(a, b)| {
+      .map(|(a, b, span)| {
         (
           a.replace_placeholders(&self.solutions),
           b.replace_placeholders(&self.solutions),
+          *span,
         )
       })
       .collect()

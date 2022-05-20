@@ -1,0 +1,7 @@
+def add fun x {
+  x
+}
+
+def okay add 1
+
+def wrong add "reid"

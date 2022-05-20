@@ -3,5 +3,3 @@ def identity fun x {
 }
 
 def num identity 47
-
-def str identity "hi"

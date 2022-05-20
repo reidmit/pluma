@@ -37,8 +37,13 @@ impl<'compiler> Analyzer<'compiler> {
 
     if let Some(ast) = &mut module.ast {
       self.annotate_with_placeholders(ast);
+      // println!("ast with placeholders: {:#?}", ast);
 
       let constraints = self.generate_constraints(ast);
+      // for c in &constraints {
+      //   println!("{} :: {}", c.0, c.1);
+      // }
+
       let solutions = self.unify_constraints(&constraints);
 
       self.decorate_with_inferred_types(ast, &solutions);
@@ -256,7 +261,11 @@ impl<'compiler> Analyzer<'compiler> {
     match &mut definition.kind {
       DefinitionKind::Expr(expr) => {
         self.constraints_from_expr(expr, constraints);
-        constraints.push((definition.inferred_type.clone(), expr.inferred_type.clone()));
+        constraints.push((
+          definition.inferred_type.clone(),
+          expr.inferred_type.clone(),
+          definition.span,
+        ));
       }
       _ => {
         // todo :---)
@@ -275,12 +284,12 @@ impl<'compiler> Analyzer<'compiler> {
       }
 
       ExprKind::Regex(..) => {
-        constraints.push((inferred_type, ExprType::Regex));
+        constraints.push((inferred_type, ExprType::Regex, expr.span));
       }
 
       ExprKind::Grouping(inner) => {
         self.constraints_from_expr(inner, constraints);
-        constraints.push((inferred_type, inner.inferred_type.clone()));
+        constraints.push((inferred_type, inner.inferred_type.clone(), inner.span));
       }
 
       ExprKind::BinaryOperation { left, right, op } => {
@@ -290,9 +299,9 @@ impl<'compiler> Analyzer<'compiler> {
         match op.kind {
           Operator::Addition => {
             // todo: floats?
-            constraints.push((left.inferred_type.clone(), ExprType::Int));
-            constraints.push((right.inferred_type.clone(), ExprType::Int));
-            constraints.push((inferred_type.clone(), ExprType::Int));
+            constraints.push((left.inferred_type.clone(), ExprType::Int, left.span));
+            constraints.push((right.inferred_type.clone(), ExprType::Int, right.span));
+            constraints.push((inferred_type.clone(), ExprType::Int, op.span));
           }
           _ => {
             // todo :----)
@@ -300,7 +309,7 @@ impl<'compiler> Analyzer<'compiler> {
         }
       }
 
-      ExprKind::Lambda(LambdaNode { params, body, .. }) => {
+      ExprKind::Lambda(LambdaNode { params, body, span }) => {
         let param_types = params.iter().map(|p| p.inferred_type.clone()).collect();
 
         let mut return_type = ExprType::Nothing;
@@ -315,10 +324,11 @@ impl<'compiler> Analyzer<'compiler> {
         constraints.push((
           inferred_type,
           ExprType::Func(param_types, Box::new(return_type)),
+          *span,
         ));
       }
 
-      ExprKind::Call(CallNode { callee, args, .. }) => {
+      ExprKind::Call(CallNode { callee, args, span }) => {
         let arg_types = args.iter().map(|a| a.inferred_type.clone()).collect();
 
         self.constraints_from_expr(callee, constraints);
@@ -332,14 +342,15 @@ impl<'compiler> Analyzer<'compiler> {
         constraints.push((
           callee.inferred_type.clone(),
           ExprType::Func(arg_types, Box::new(inferred_type)),
+          *span,
         ));
       }
 
-      ExprKind::Let(LetNode { value, .. }) => {
+      ExprKind::Let(LetNode { value, span, .. }) => {
         self.constraints_from_expr(value, constraints);
 
         // let expressions always evaluate to ()
-        constraints.push((inferred_type, ExprType::Nothing));
+        constraints.push((inferred_type, ExprType::Nothing, *span));
       }
 
       _ => {
@@ -356,18 +367,18 @@ impl<'compiler> Analyzer<'compiler> {
   ) {
     match &mut literal.kind {
       LiteralKind::Str(..) => {
-        constraints.push((typ, ExprType::String));
+        constraints.push((typ, ExprType::String, literal.span));
       }
 
       LiteralKind::FloatDecimal(..) => {
-        constraints.push((typ, ExprType::Float));
+        constraints.push((typ, ExprType::Float, literal.span));
       }
 
       LiteralKind::IntDecimal(..)
       | LiteralKind::IntHex(..)
       | LiteralKind::IntBinary(..)
       | LiteralKind::IntOctal(..) => {
-        constraints.push((typ, ExprType::Int));
+        constraints.push((typ, ExprType::Int, literal.span));
       }
     }
   }
@@ -375,7 +386,7 @@ impl<'compiler> Analyzer<'compiler> {
 
 // Constraint-solving methods
 impl<'compiler> Analyzer<'compiler> {
-  fn unify_constraints(&self, constraints: &ConstraintSet) -> SolutionMap {
+  fn unify_constraints(&mut self, constraints: &ConstraintSet) -> SolutionMap {
     if constraints.is_empty() {
       return SolutionMap::empty();
     }
@@ -386,27 +397,33 @@ impl<'compiler> Analyzer<'compiler> {
     solutions_for_head.compose(solutions_for_tail)
   }
 
-  fn unify_constraint(&self, constraint: &Constraint) -> SolutionMap {
+  fn unify_constraint(&mut self, constraint: &Constraint) -> SolutionMap {
     match constraint {
-      // both are "leaf" nodes; nothing to add to the solution
-      (t1, t2) if !t1.has_any_placeholders() && !t2.has_any_placeholders() => SolutionMap::empty(),
+      // same types, and both are "leaf" nodes; nothing to add to the solution
+      (t1, t2, _) if t1 == t2 && !t1.has_any_placeholders() && !t2.has_any_placeholders() => {
+        SolutionMap::empty()
+      }
 
       (
         ExprType::Func(param_types_1, return_type_1),
         ExprType::Func(param_types_2, return_type_2),
+        span,
       ) => {
         // add some new constraints to unify param & return types:
         let mut constraints = Vec::with_capacity(param_types_1.len() + 1);
+
         for i in 0..param_types_1.len() {
-          constraints.push((param_types_1[i].clone(), param_types_2[i].clone()))
+          constraints.push((param_types_1[i].clone(), param_types_2[i].clone(), *span))
         }
-        constraints.push((*return_type_1.clone(), *return_type_2.clone()));
+
+        constraints.push((*return_type_1.clone(), *return_type_2.clone(), *span));
+
         self.unify_constraints(&constraints)
       }
 
-      (ExprType::Placeholder(n), t) | (t, ExprType::Placeholder(n)) => match t {
+      (ExprType::Placeholder(n), t, _) | (t, ExprType::Placeholder(n), _) => match t {
         ExprType::Placeholder(n2) if n == n2 => SolutionMap::empty(),
-        ExprType::Placeholder(n) => SolutionMap::with_entry(*n, t.clone()),
+        ExprType::Placeholder(_) => SolutionMap::with_entry(*n, t.clone()),
         other => {
           if other.contains_placeholder(n) {
             todo!("circular reference! can't unify!")
@@ -416,7 +433,17 @@ impl<'compiler> Analyzer<'compiler> {
         }
       },
 
-      other => todo!("unexpected constraint: {:?}", other),
+      (a, b, span) => {
+        self.error(
+          *span,
+          TypeMismatch {
+            expected: a.clone(),
+            found: b.clone(),
+          },
+        );
+
+        SolutionMap::empty()
+      }
     }
   }
 }
@@ -439,6 +466,8 @@ impl<'compiler> Analyzer<'compiler> {
 
   fn decorate_definition(&mut self, definition: &mut DefinitionNode, solutions: &SolutionMap) {
     self.fill_in_placeholder(&mut definition.inferred_type, solutions);
+
+    println!("{} :: {}", definition.name.name, definition.inferred_type);
 
     match &mut definition.kind {
       DefinitionKind::Expr(expr) => self.decorate_expr(expr, solutions),

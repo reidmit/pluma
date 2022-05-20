@@ -23,5 +23,5 @@ pub const FILE_EXTENSION: &str = "pa";
 pub const VERSION: &str = "0.1.0";
 
 // Some common types:
-type Constraint = (expr_type::ExprType, expr_type::ExprType);
+type Constraint = (expr_type::ExprType, expr_type::ExprType, ast::Span);
 type ConstraintSet = Vec<Constraint>;
