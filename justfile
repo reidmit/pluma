@@ -4,4 +4,4 @@ run path:
 
 # run tests
 test:
-  @ cargo insta review
+  @ cargo insta test --review

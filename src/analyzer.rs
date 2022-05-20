@@ -5,12 +5,11 @@ use crate::errors::*;
 use crate::expr_type::*;
 use crate::intrinsics::*;
 use crate::module::Module;
+use crate::solution_map::*;
+use crate::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use AnalysisErrorKind::*;
-
-type Constraint = (ExprType, ExprType);
-type ConstraintSet = Vec<Constraint>;
 
 pub struct Analyzer<'compiler> {
   module_name: Option<String>,
@@ -438,56 +437,5 @@ impl<'compiler> Analyzer<'compiler> {
     }
 
     println!("{} :: {}", definition.name.name, definition.inferred_type);
-  }
-}
-
-#[derive(Debug)]
-struct SolutionMap {
-  solutions: HashMap<usize, ExprType>,
-}
-
-impl SolutionMap {
-  fn empty() -> Self {
-    Self {
-      solutions: HashMap::new(),
-    }
-  }
-
-  fn with_entry(key: usize, value: ExprType) -> Self {
-    let mut solutions = HashMap::with_capacity(1);
-    solutions.insert(key, value);
-    Self { solutions }
-  }
-
-  fn apply_to_constraints(&self, constraints: &[Constraint]) -> ConstraintSet {
-    constraints
-      .iter()
-      .map(|c| self.apply_to_constraint(c))
-      .collect()
-  }
-
-  fn apply_to_constraint(&self, (a, b): &Constraint) -> Constraint {
-    (
-      a.replace_placeholders(&self.solutions),
-      b.replace_placeholders(&self.solutions),
-    )
-  }
-
-  fn compose(&self, other: SolutionMap) -> SolutionMap {
-    let mut merged_solutions = HashMap::new();
-
-    for (k, v) in &self.solutions {
-      // add self.solutions with replacements from other
-      merged_solutions.insert(*k, v.replace_placeholders(&other.solutions));
-    }
-
-    for (k, v) in &other.solutions {
-      // add other.solutions
-      merged_solutions.insert(*k, v.clone());
-    }
-
-    SolutionMap {
-      solutions: merged_solutions,
-    }
   }
 }

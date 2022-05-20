@@ -9,6 +9,7 @@ mod expr_type;
 mod intrinsics;
 mod module;
 mod parser;
+mod solution_map;
 mod tokenizer;
 mod tokens;
 
@@ -20,3 +21,7 @@ pub const DEFAULT_ENTRY_MODULE_NAME: &str = "main";
 pub const DEFAULT_ENTRY_FILE: &str = "main.pa";
 pub const FILE_EXTENSION: &str = "pa";
 pub const VERSION: &str = "0.1.0";
+
+// Some common types:
+type Constraint = (expr_type::ExprType, expr_type::ExprType);
+type ConstraintSet = Vec<Constraint>;

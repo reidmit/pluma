@@ -44,9 +44,7 @@ Ok(
                             ),
                         },
                     ),
-                    inferred_type: Placeholder(
-                        0,
-                    ),
+                    inferred_type: String,
                 },
             ],
         },
