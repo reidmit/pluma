@@ -23,10 +23,13 @@ macro_rules! next_token_is {
 	};
 }
 
-macro_rules! expect_token_and_do {
-	($self:ident, $tokType:path, $block:tt) => {
+macro_rules! expect_token_and_advance {
+	($self:ident, $tokType:path) => {
 		match $self.current_token {
-			Some($tokType(..)) => $block,
+			Some($tokType(start, end)) => {
+				$self.advance();
+				(start, end)
+			}
 			Some(tok) => {
 				return $self.error(ParseError {
 					span: tok.get_span(),
@@ -182,11 +185,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_lambda(&mut self) -> Option<LambdaNode> {
-		let start = expect_token_and_do!(self, Token::KeywordFun, {
-			let (start, _) = self.current_token_span();
-			self.advance();
-			start
-		});
+		let (start, _) = expect_token_and_advance!(self, Token::KeywordFun);
 
 		let mut params = Vec::new();
 
@@ -200,19 +199,13 @@ impl<'a> Parser<'a> {
 			});
 		}
 
-		expect_token_and_do!(self, Token::LeftBrace, {
-			self.advance();
-		});
+		expect_token_and_advance!(self, Token::LeftBrace);
 
 		let body = self.parse_body_expressions()?;
 
 		self.skip_line_breaks();
 
-		let end = expect_token_and_do!(self, Token::RightBrace, {
-			let end = self.current_token_span().1;
-			self.advance();
-			end
-		});
+		let (_, end) = expect_token_and_advance!(self, Token::RightBrace);
 
 		Some(LambdaNode {
 			span: (start, end),
@@ -222,27 +215,19 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_decimal_number(&mut self) -> Option<LiteralNode> {
-		let (start, end) = expect_token_and_do!(self, Token::DecimalDigits, {
-			let span = self.current_token_span();
-			self.advance();
-			span
-		});
+		let (start, end) = expect_token_and_advance!(self, Token::DecimalDigits);
 
 		if current_token_is!(self, Token::Dot) && next_token_is!(self, Token::DecimalDigits) {
 			self.advance();
 
-			expect_token_and_do!(self, Token::DecimalDigits, {
-				let (_, end) = self.current_token_span();
+			let (_, end) = expect_token_and_advance!(self, Token::DecimalDigits);
 
-				self.advance();
+			let str_value = read_string!(self, start, end);
+			let float_value = str_value.parse::<f64>().unwrap();
 
-				let str_value = read_string!(self, start, end);
-				let float_value = str_value.parse::<f64>().unwrap();
-
-				return Some(LiteralNode {
-					kind: LiteralKind::FloatDecimal(float_value),
-					span: (start, end),
-				});
+			return Some(LiteralNode {
+				kind: LiteralKind::FloatDecimal(float_value),
+				span: (start, end),
 			});
 		}
 
@@ -255,11 +240,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_binary_number(&mut self) -> Option<LiteralNode> {
-		let (start, end) = expect_token_and_do!(self, Token::BinaryDigits, {
-			let span = self.current_token_span();
-			self.advance();
-			span
-		});
+		let (start, end) = expect_token_and_advance!(self, Token::BinaryDigits);
 
 		let value = self.parse_numeric_literal(start + 2, end, 2);
 
@@ -270,11 +251,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_octal_number(&mut self) -> Option<LiteralNode> {
-		let (start, end) = expect_token_and_do!(self, Token::OctalDigits, {
-			let span = self.current_token_span();
-			self.advance();
-			span
-		});
+		let (start, end) = expect_token_and_advance!(self, Token::OctalDigits);
 
 		let value = self.parse_numeric_literal(start + 2, end, 8);
 
@@ -285,11 +262,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_hex_number(&mut self) -> Option<LiteralNode> {
-		let (start, end) = expect_token_and_do!(self, Token::HexDigits, {
-			let span = self.current_token_span();
-			self.advance();
-			span
-		});
+		let (start, end) = expect_token_and_advance!(self, Token::HexDigits);
 
 		let value = self.parse_numeric_literal(start + 2, end, 16);
 
@@ -437,9 +410,7 @@ impl<'a> Parser<'a> {
 
 					if let Operator::IndexAccess = operator {
 						// special case: the [ operator needs a closing ]
-						expect_token_and_do!(self, Token::RightBracket, {
-							self.advance();
-						});
+						expect_token_and_advance!(self, Token::RightBracket);
 					}
 
 					lhs_expr = ExprNode {
@@ -483,31 +454,19 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_if_expression(&mut self) -> Option<IfNode> {
-		let start = expect_token_and_do!(self, Token::KeywordIf, {
-			let (start, _) = self.current_token_span();
-			self.advance();
-			start
-		});
+		let (start, _) = expect_token_and_advance!(self, Token::KeywordIf);
 
 		let condition = self.parse_expression()?;
 
-		expect_token_and_do!(self, Token::KeywordIs, {
-			self.advance();
-		});
+		expect_token_and_advance!(self, Token::KeywordIs);
 
 		let pattern = self.parse_pattern()?;
 
-		expect_token_and_do!(self, Token::LeftBrace, {
-			self.advance();
-		});
+		expect_token_and_advance!(self, Token::LeftBrace);
 
 		let body = self.parse_body_expressions()?;
 
-		let end = expect_token_and_do!(self, Token::RightBrace, {
-			let block_end = self.current_token_span().1;
-			self.advance();
-			block_end
-		});
+		let (_, end) = expect_token_and_advance!(self, Token::RightBrace);
 
 		Some(IfNode {
 			span: (start, end),
@@ -518,19 +477,13 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_when_expression(&mut self) -> Option<WhenNode> {
-		let start = expect_token_and_do!(self, Token::KeywordWhen, {
-			let (start, _) = self.current_token_span();
-			self.advance();
-			start
-		});
+		let (start, _) = expect_token_and_advance!(self, Token::KeywordWhen);
 
 		let subject = self.parse_expression()?;
 
 		self.skip_line_breaks();
 
 		let mut cases = Vec::new();
-
-		expect_token_and_do!(self, Token::KeywordIs, {});
 
 		while current_token_is!(self, Token::KeywordIs) {
 			let case_start = self.current_token_span().0;
@@ -539,17 +492,11 @@ impl<'a> Parser<'a> {
 
 			let case_pattern = self.parse_pattern()?;
 
-			expect_token_and_do!(self, Token::LeftBrace, {
-				self.advance();
-			});
+			expect_token_and_advance!(self, Token::LeftBrace);
 
 			let case_body = self.parse_body_expressions()?;
 
-			let case_end = expect_token_and_do!(self, Token::RightBrace, {
-				let block_end = self.current_token_span().1;
-				self.advance();
-				block_end
-			});
+			let (_, case_end) = expect_token_and_advance!(self, Token::RightBrace);
 
 			self.skip_line_breaks();
 
@@ -560,7 +507,8 @@ impl<'a> Parser<'a> {
 			})
 		}
 
-		let end = cases.last().unwrap().span.1;
+		// TODO: error if 0 cases
+		let end = cases.last().expect("> 0 cases").span.1;
 
 		Some(WhenNode {
 			span: (start, end),
@@ -570,31 +518,19 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_while_expression(&mut self) -> Option<WhileNode> {
-		let start = expect_token_and_do!(self, Token::KeywordWhile, {
-			let (start, _) = self.current_token_span();
-			self.advance();
-			start
-		});
+		let (start, _) = expect_token_and_advance!(self, Token::KeywordWhile);
 
 		let condition = self.parse_expression()?;
 
-		expect_token_and_do!(self, Token::KeywordIs, {
-			self.advance();
-		});
+		expect_token_and_advance!(self, Token::KeywordIs);
 
 		let pattern = self.parse_pattern()?;
 
-		expect_token_and_do!(self, Token::LeftBrace, {
-			self.advance();
-		});
+		expect_token_and_advance!(self, Token::LeftBrace);
 
 		let body = self.parse_body_expressions()?;
 
-		let end = expect_token_and_do!(self, Token::RightBrace, {
-			let block_end = self.current_token_span().1;
-			self.advance();
-			block_end
-		});
+		let (_, end) = expect_token_and_advance!(self, Token::RightBrace);
 
 		Some(WhileNode {
 			span: (start, end),
@@ -645,11 +581,7 @@ impl<'a> Parser<'a> {
 
 				self.skip_line_breaks();
 
-				let end = expect_token_and_do!(self, Token::RightParen, {
-					let (_, end) = self.current_token_span();
-					self.advance();
-					end
-				});
+				let (_, end) = expect_token_and_advance!(self, Token::RightParen);
 
 				Some(PatternNode {
 					span: (start, end),
@@ -663,7 +595,7 @@ impl<'a> Parser<'a> {
 				let mut entries = Vec::new();
 
 				while let Some(field_name) = self.parse_identifier() {
-					expect_token_and_do!(self, Token::Colon, { self.advance() });
+					expect_token_and_advance!(self, Token::Colon);
 
 					let field_pattern = self.parse_pattern()?;
 
@@ -681,11 +613,7 @@ impl<'a> Parser<'a> {
 					}
 				}
 
-				let end = expect_token_and_do!(self, Token::RightBrace, {
-					let (_, end) = self.current_token_span();
-					self.advance();
-					end
-				});
+				let (_, end) = expect_token_and_advance!(self, Token::RightBrace);
 
 				Some(PatternNode {
 					span: (start, end),
@@ -725,20 +653,14 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_let_expression(&mut self) -> Option<LetNode> {
-		let start = expect_token_and_do!(self, Token::KeywordLet, {
-			let (start, _) = self.current_token_span();
-			self.advance();
-			start
-		});
+		let (start, _) = expect_token_and_advance!(self, Token::KeywordLet);
 
 		let name = match self.parse_identifier() {
 			Some(node) => node,
 			_ => todo!(),
 		};
 
-		expect_token_and_do!(self, Token::Equal, {
-			self.advance();
-		});
+		expect_token_and_advance!(self, Token::Equal);
 
 		let (end, value) = match self.parse_expression() {
 			Some(node) => (node.span.1, node),
@@ -758,11 +680,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_list(&mut self) -> Option<ExprNode> {
-		let start = expect_token_and_do!(self, Token::LeftBracket, {
-			let span = self.current_token_span();
-			self.advance();
-			span.0
-		});
+		let (start, _) = expect_token_and_advance!(self, Token::LeftBracket);
 
 		self.skip_line_breaks();
 
@@ -781,11 +699,7 @@ impl<'a> Parser<'a> {
 
 		self.skip_line_breaks();
 
-		let end = expect_token_and_do!(self, Token::RightBracket, {
-			let span = self.current_token_span();
-			self.advance();
-			span.1
-		});
+		let (_, end) = expect_token_and_advance!(self, Token::RightBracket);
 
 		Some(ExprNode {
 			span: (start, end),
@@ -831,18 +745,14 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_record(&mut self) -> Option<ExprNode> {
-		let record_start = expect_token_and_do!(self, Token::LeftBrace, {
-			let (start, _) = self.current_token_span();
-			self.advance();
-			start
-		});
+		let (record_start, _) = expect_token_and_advance!(self, Token::LeftBrace);
 
 		self.skip_line_breaks();
 
 		let mut entries = Vec::new();
 
 		while let Some(field_name) = self.parse_identifier() {
-			expect_token_and_do!(self, Token::Colon, { self.advance() });
+			expect_token_and_advance!(self, Token::Colon);
 
 			let field_value = self.parse_expression()?;
 
@@ -862,11 +772,7 @@ impl<'a> Parser<'a> {
 
 		self.skip_line_breaks();
 
-		let record_end = expect_token_and_do!(self, Token::RightBrace, {
-			let span = self.current_token_span();
-			self.advance();
-			span.1
-		});
+		let (_, record_end) = expect_token_and_advance!(self, Token::RightBrace);
 
 		Some(ExprNode {
 			span: (record_start, record_end),
@@ -881,11 +787,7 @@ impl<'a> Parser<'a> {
 		//  - "(expr)" is an expression in parentheses (a grouping),
 		//  - "(expr1, expr2, expr3)" is a tuple
 
-		let paren_start = expect_token_and_do!(self, Token::LeftParen, {
-			let (start, _) = self.current_token_span();
-			self.advance();
-			start
-		});
+		let (paren_start, _) = expect_token_and_advance!(self, Token::LeftParen);
 
 		self.skip_line_breaks();
 
@@ -908,11 +810,7 @@ impl<'a> Parser<'a> {
 
 		self.skip_line_breaks();
 
-		let paren_end = expect_token_and_do!(self, Token::RightParen, {
-			let span = self.current_token_span();
-			self.advance();
-			span.1
-		});
+		let (_, paren_end) = expect_token_and_advance!(self, Token::RightParen);
 
 		if entries.is_empty() {
 			return Some(ExprNode {
@@ -942,11 +840,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_regular_expression(&mut self) -> Option<ExprNode> {
-		let start = expect_token_and_do!(self, Token::Backtick, {
-			let (start, _) = self.current_token_span();
-			self.advance();
-			start
-		});
+		let (start, _) = expect_token_and_advance!(self, Token::Backtick);
 
 		self.skip_line_breaks();
 
@@ -954,11 +848,7 @@ impl<'a> Parser<'a> {
 
 		self.skip_line_breaks();
 
-		let end = expect_token_and_do!(self, Token::Backtick, {
-			let (_, end) = self.current_token_span();
-			self.advance();
-			end
-		});
+		let (_, end) = expect_token_and_advance!(self, Token::Backtick);
 
 		let regex = match maybe_reg_expr_node {
 			Some(expr) => expr,
@@ -1068,7 +958,7 @@ impl<'a> Parser<'a> {
 						}
 					};
 
-					expect_token_and_do!(self, Token::RightParen, { self.advance() });
+					expect_token_and_advance!(self, Token::RightParen);
 
 					RegexNode {
 						span: (start, end),
@@ -1079,14 +969,10 @@ impl<'a> Parser<'a> {
 				Some(Token::LeftAngle(start, end)) => {
 					self.advance();
 
-					let name = expect_token_and_do!(self, Token::Identifier, {
-						let (start, end) = self.current_token_span();
-						let name = read_string!(self, start, end);
-						self.advance();
-						name
-					});
+					let name_span = expect_token_and_advance!(self, Token::Identifier);
+					let name = read_string!(self, name_span.0, name_span.1);
 
-					expect_token_and_do!(self, Token::Colon, { self.advance() });
+					expect_token_and_advance!(self, Token::Colon);
 
 					let expr = match self.parse_regular_expression_body() {
 						Some(expr) => expr,
@@ -1098,7 +984,7 @@ impl<'a> Parser<'a> {
 						}
 					};
 
-					expect_token_and_do!(self, Token::RightAngle, { self.advance() });
+					expect_token_and_advance!(self, Token::RightAngle);
 
 					RegexNode {
 						span: (start, end),
@@ -1164,11 +1050,7 @@ impl<'a> Parser<'a> {
 						}
 					}
 
-					let end = expect_token_and_do!(self, Token::RightBrace, {
-						let (_, end) = self.current_token_span();
-						self.advance();
-						end
-					});
+					let (_, end) = expect_token_and_advance!(self, Token::RightBrace);
 
 					match (min_count, max_count, has_comma) {
 						(Some(min), None, true) => RegexNode {
@@ -1283,11 +1165,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_string(&mut self) -> Option<ExprNode> {
-		let (start, end) = expect_token_and_do!(self, Token::StringLiteral, {
-			let span = self.current_token_span();
-			self.advance();
-			span
-		});
+		let (start, end) = expect_token_and_advance!(self, Token::StringLiteral);
 
 		let value = read_string_with_escapes!(self, start, end);
 
@@ -1314,28 +1192,22 @@ impl<'a> Parser<'a> {
 					_ => break,
 				}
 
-				expect_token_and_do!(self, Token::InterpolationEnd, {
-					self.advance();
-				});
+				expect_token_and_advance!(self, Token::InterpolationEnd);
 
-				expect_token_and_do!(self, Token::StringLiteral, {
-					let (start, end) = self.current_token_span();
+				let (start, end) = expect_token_and_advance!(self, Token::StringLiteral);
 
-					interpolation_end = end;
+				interpolation_end = end;
 
-					let value = read_string_with_escapes!(self, start, end);
+				let value = read_string_with_escapes!(self, start, end);
 
-					parts.push(ExprNode {
+				parts.push(ExprNode {
+					span: (start, end),
+					kind: ExprKind::Literal(LiteralNode {
 						span: (start, end),
-						kind: ExprKind::Literal(LiteralNode {
-							span: (start, end),
-							kind: LiteralKind::Str(value),
-						}),
-						inferred_type: ExprType::String,
-					});
-
-					self.advance()
-				})
+						kind: LiteralKind::Str(value),
+					}),
+					inferred_type: ExprType::String,
+				});
 			}
 
 			return Some(ExprNode {
@@ -1349,11 +1221,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_type_identifier(&mut self) -> Option<TypeIdentifierNode> {
-		let (start, mut end) = expect_token_and_do!(self, Token::Identifier, {
-			let span = self.current_token_span();
-			self.advance();
-			span
-		});
+		let (start, mut end) = expect_token_and_advance!(self, Token::Identifier);
 
 		let name = read_string!(self, start, end);
 
@@ -1371,11 +1239,9 @@ impl<'a> Parser<'a> {
 				}
 			}
 
-			end = expect_token_and_do!(self, Token::RightAngle, {
-				let span = self.current_token_span();
-				self.advance();
-				span.1
-			});
+			let (_, angle_end) = expect_token_and_advance!(self, Token::RightAngle);
+
+			end = angle_end;
 		}
 
 		Some(TypeIdentifierNode {
@@ -1399,11 +1265,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_type_lambda(&mut self) -> Option<TypeExprNode> {
-		let start = expect_token_and_do!(self, Token::KeywordFun, {
-			let (start, _) = self.current_token_span();
-			self.advance();
-			start
-		});
+		let (start, _) = expect_token_and_advance!(self, Token::KeywordFun);
 
 		self.skip_line_breaks();
 
@@ -1413,9 +1275,7 @@ impl<'a> Parser<'a> {
 			param_types.push(type_expr);
 		}
 
-		expect_token_and_do!(self, Token::Arrow, {
-			self.advance();
-		});
+		expect_token_and_advance!(self, Token::Arrow);
 
 		let return_type = match self.parse_type_expression() {
 			Some(type_expr) => Box::new(type_expr),
@@ -1427,11 +1287,7 @@ impl<'a> Parser<'a> {
 			}
 		};
 
-		let end = expect_token_and_do!(self, Token::RightBrace, {
-			let (_, end) = self.current_token_span();
-			self.advance();
-			end
-		});
+		let (_, end) = expect_token_and_advance!(self, Token::RightBrace);
 
 		Some(TypeExprNode {
 			span: (start, end),
@@ -1440,18 +1296,14 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_type_record(&mut self) -> Option<TypeExprNode> {
-		let record_start = expect_token_and_do!(self, Token::LeftBrace, {
-			let (start, _) = self.current_token_span();
-			self.advance();
-			start
-		});
+		let (record_start, _) = expect_token_and_advance!(self, Token::LeftBrace);
 
 		self.skip_line_breaks();
 
 		let mut entries = Vec::new();
 
 		while let Some(field_name) = self.parse_identifier() {
-			expect_token_and_do!(self, Token::Colon, { self.advance() });
+			expect_token_and_advance!(self, Token::Colon);
 
 			let field_type = self.parse_type_expression()?;
 
@@ -1471,11 +1323,7 @@ impl<'a> Parser<'a> {
 
 		self.skip_line_breaks();
 
-		let record_end = expect_token_and_do!(self, Token::RightBrace, {
-			let span = self.current_token_span();
-			self.advance();
-			span.1
-		});
+		let (_, record_end) = expect_token_and_advance!(self, Token::RightBrace);
 
 		Some(TypeExprNode {
 			span: (record_start, record_end),
@@ -1484,11 +1332,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_type_parenthetical(&mut self) -> Option<TypeExprNode> {
-		let start = expect_token_and_do!(self, Token::LeftParen, {
-			let span = self.current_token_span();
-			self.advance();
-			span.0
-		});
+		let (start, _) = expect_token_and_advance!(self, Token::LeftParen);
 
 		self.skip_line_breaks();
 
@@ -1511,11 +1355,7 @@ impl<'a> Parser<'a> {
 
 		self.skip_line_breaks();
 
-		let end = expect_token_and_do!(self, Token::RightParen, {
-			let span = self.current_token_span();
-			self.advance();
-			span.1
-		});
+		let (_, end) = expect_token_and_advance!(self, Token::RightParen);
 
 		if entries.is_empty() {
 			return Some(TypeExprNode {

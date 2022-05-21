@@ -1,1 +1,1 @@
-def identity fun x { x }
+def identity fun x
