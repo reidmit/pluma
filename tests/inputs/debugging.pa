@@ -1,1 +1,1 @@
-def person (1,2,3,4)
+def identity fun x { x }
