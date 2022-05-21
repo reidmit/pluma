@@ -1,4 +1,8 @@
+mod colors;
+mod printing;
+
 use compiler::*;
+use printing::*;
 
 fn main() {
   let entry_path = match std::env::args().nth(1) {

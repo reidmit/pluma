@@ -1,7 +1,6 @@
 mod analyzer;
 mod ast;
 mod binding;
-mod colors;
 mod compiler;
 mod constraint;
 mod diagnostic;
