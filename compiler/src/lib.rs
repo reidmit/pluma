@@ -13,7 +13,6 @@ mod solution_map;
 mod tokenizer;
 mod tokens;
 
-pub mod cli;
 pub use compiler::*;
 pub use diagnostic::*;
 
