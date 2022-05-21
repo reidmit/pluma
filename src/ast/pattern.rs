@@ -74,7 +74,7 @@ impl PatternNode {
         ExprKind::Call(call)
       }
 
-      other => todo!("other expr kind in pattern: {:#?}", other),
+      _other => todo!("other expr kind in pattern"),
     };
 
     ExprNode {

@@ -1,14 +1,12 @@
 use super::*;
 use crate::tokens::Token;
 
-#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct OperatorNode {
   pub span: Span,
   pub kind: Operator,
 }
 
 #[derive(Clone)]
-#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum Operator {
   Addition,
   Chain,
@@ -89,6 +87,13 @@ impl Operator {
       LogicalNot => ((), 35),
       _ => unreachable!(),
     }
+  }
+}
+
+#[cfg(debug_assertions)]
+impl std::fmt::Debug for OperatorNode {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "op({}-{}) `{}`", self.span.0, self.span.1, self.kind)
   }
 }
 

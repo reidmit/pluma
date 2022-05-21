@@ -1,12 +1,10 @@
 use super::*;
 
-#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct LiteralNode {
 	pub span: Span,
 	pub kind: LiteralKind,
 }
 
-#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum LiteralKind {
 	FloatDecimal(f64),
 	IntDecimal(usize),
@@ -14,4 +12,31 @@ pub enum LiteralKind {
 	IntHex(usize),
 	IntBinary(usize),
 	Str(String),
+}
+
+#[cfg(debug_assertions)]
+impl std::fmt::Debug for LiteralNode {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(
+			f,
+			"literal({}-{}) {:#?}",
+			self.span.0, self.span.1, self.kind
+		)
+	}
+}
+
+#[cfg(debug_assertions)]
+impl std::fmt::Debug for LiteralKind {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		use LiteralKind::*;
+
+		match &self {
+			FloatDecimal(v) => write!(f, "float {}", v),
+			IntDecimal(v) => write!(f, "int {}", v),
+			IntHex(v) => write!(f, "hex int {}", v),
+			IntOctal(v) => write!(f, "octal int {}", v),
+			IntBinary(v) => write!(f, "binary int {}", v),
+			Str(v) => write!(f, "string \"{}\"", v),
+		}
+	}
 }

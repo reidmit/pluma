@@ -3,6 +3,7 @@ mod ast;
 mod binding;
 mod colors;
 mod compiler;
+mod constraint;
 mod diagnostic;
 mod errors;
 mod expr_type;
@@ -21,7 +22,3 @@ pub const DEFAULT_ENTRY_MODULE_NAME: &str = "main";
 pub const DEFAULT_ENTRY_FILE: &str = "main.pa";
 pub const FILE_EXTENSION: &str = "pa";
 pub const VERSION: &str = "0.1.0";
-
-// Some common types:
-type Constraint = (expr_type::ExprType, expr_type::ExprType, ast::Span);
-type ConstraintSet = Vec<Constraint>;

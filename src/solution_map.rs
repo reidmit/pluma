@@ -1,6 +1,7 @@
+use crate::constraint::*;
 use crate::expr_type::*;
-use crate::*;
 use std::collections::HashMap;
+use Constraint::*;
 
 pub struct SolutionMap {
   pub solutions: HashMap<usize, ExprType>,
@@ -22,12 +23,11 @@ impl SolutionMap {
   pub fn apply_to_constraints(&self, constraints: &[Constraint]) -> ConstraintSet {
     constraints
       .iter()
-      .map(|(a, b, span)| {
-        (
+      .map(|con| match con {
+        Eq(a, b) => Eq(
           a.replace_placeholders(&self.solutions),
           b.replace_placeholders(&self.solutions),
-          *span,
-        )
+        ),
       })
       .collect()
   }

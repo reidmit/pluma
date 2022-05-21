@@ -130,7 +130,7 @@ impl fmt::Display for ExprType {
 
       ExprType::Record(entries) => write!(
         f,
-        "{{ {} }}",
+        "{{{}}}",
         entries
           .iter()
           .map(|(label, typ)| format!("{}: {}", label, typ))
@@ -141,7 +141,7 @@ impl fmt::Display for ExprType {
       ExprType::Func(param_types, return_type) => {
         write!(
           f,
-          "fn {} -> {}",
+          "{} -> {}",
           param_types
             .iter()
             .map(|p| format!("{}", p))

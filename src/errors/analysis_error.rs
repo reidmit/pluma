@@ -20,14 +20,14 @@ impl fmt::Display for AnalysisError {
 
 		match &self.kind {
 			NameNotBound { name } => {
-				write!(f, "Name '{}' is not defined.", name)
+				write!(f, "Name `{}` is not defined.", name)
 			}
 
-			UnusedBinding { name } => write!(f, "Name '{}' is never used.", name),
+			UnusedBinding { name } => write!(f, "Name `{}` is never used.", name),
 
 			TypeMismatch { expected, found } => write!(
 				f,
-				"Type mismatch: expected '{}', but found '{}'.",
+				"Type mismatch: expected `{}`, but found `{}`.",
 				expected, found
 			),
 		}

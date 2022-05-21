@@ -1,15 +1,16 @@
 use crate::ast::*;
 use crate::binding::*;
+use crate::constraint::*;
 use crate::diagnostic::*;
 use crate::errors::*;
 use crate::expr_type::*;
 use crate::intrinsics::*;
 use crate::module::Module;
 use crate::solution_map::*;
-use crate::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use AnalysisErrorKind::*;
+use Constraint::*;
 
 pub struct Analyzer<'compiler> {
   module_name: Option<String>,
@@ -37,16 +38,21 @@ impl<'compiler> Analyzer<'compiler> {
 
     if let Some(ast) = &mut module.ast {
       self.annotate_with_placeholders(ast);
-      // println!("ast with placeholders: {:#?}", ast);
+      println!("ast with placeholders: {:#?}", ast);
 
-      let constraints = self.generate_constraints(ast);
+      // let constraints = self.generate_constraints(ast);
       // for c in &constraints {
-      //   println!("{} :: {}", c.0, c.1);
+      //   if let Eq(a, b) = c {
+      //     println!("{} :: {}", a, b);
+      //   }
       // }
 
-      let solutions = self.unify_constraints(&constraints);
+      // let solutions = self.unify_constraints(&constraints);
+      // for c in &solutions.solutions {
+      //   println!("{} = {}", c.0, c.1);
+      // }
 
-      self.decorate_with_inferred_types(ast, &solutions);
+      // self.decorate_with_inferred_types(ast, &solutions);
     }
   }
 }
@@ -234,8 +240,8 @@ impl<'compiler> Analyzer<'compiler> {
       }
 
       // TODO! more here!
-      other => {
-        println!("other kind of expr: {:#?}", other)
+      _other => {
+        println!("other kind of expr")
       }
     };
   }
@@ -261,10 +267,9 @@ impl<'compiler> Analyzer<'compiler> {
     match &mut definition.kind {
       DefinitionKind::Expr(expr) => {
         self.constraints_from_expr(expr, constraints);
-        constraints.push((
+        constraints.push(Eq(
           definition.inferred_type.clone(),
           expr.inferred_type.clone(),
-          definition.span,
         ));
       }
       _ => {
@@ -284,12 +289,12 @@ impl<'compiler> Analyzer<'compiler> {
       }
 
       ExprKind::Regex(..) => {
-        constraints.push((inferred_type, ExprType::Regex, expr.span));
+        constraints.push(Eq(inferred_type, ExprType::Regex));
       }
 
       ExprKind::Grouping(inner) => {
         self.constraints_from_expr(inner, constraints);
-        constraints.push((inferred_type, inner.inferred_type.clone(), inner.span));
+        constraints.push(Eq(inferred_type, inner.inferred_type.clone()));
       }
 
       ExprKind::BinaryOperation { left, right, op } => {
@@ -299,9 +304,9 @@ impl<'compiler> Analyzer<'compiler> {
         match op.kind {
           Operator::Addition => {
             // todo: floats?
-            constraints.push((left.inferred_type.clone(), ExprType::Int, left.span));
-            constraints.push((right.inferred_type.clone(), ExprType::Int, right.span));
-            constraints.push((inferred_type.clone(), ExprType::Int, op.span));
+            constraints.push(Eq(left.inferred_type.clone(), ExprType::Int));
+            constraints.push(Eq(right.inferred_type.clone(), ExprType::Int));
+            constraints.push(Eq(inferred_type.clone(), ExprType::Int));
           }
           _ => {
             // todo :----)
@@ -309,7 +314,7 @@ impl<'compiler> Analyzer<'compiler> {
         }
       }
 
-      ExprKind::Lambda(LambdaNode { params, body, span }) => {
+      ExprKind::Lambda(LambdaNode { params, body, .. }) => {
         let param_types = params.iter().map(|p| p.inferred_type.clone()).collect();
 
         let mut return_type = ExprType::Nothing;
@@ -321,15 +326,14 @@ impl<'compiler> Analyzer<'compiler> {
 
         // we know that this lambda must be a function that takes
         // the param types and returns the return type
-        constraints.push((
+        constraints.push(Eq(
           inferred_type,
           ExprType::Func(param_types, Box::new(return_type)),
-          *span,
         ));
       }
 
-      ExprKind::Call(CallNode { callee, args, span }) => {
-        let arg_types = args.iter().map(|a| a.inferred_type.clone()).collect();
+      ExprKind::Call(CallNode { callee, args, .. }) => {
+        let arg_types: Vec<ExprType> = args.iter().map(|a| a.inferred_type.clone()).collect();
 
         self.constraints_from_expr(callee, constraints);
 
@@ -339,18 +343,24 @@ impl<'compiler> Analyzer<'compiler> {
 
         // we know that the callee should be a function that takes
         // the given arg types and returns the type of this whole expr
-        constraints.push((
-          callee.inferred_type.clone(),
-          ExprType::Func(arg_types, Box::new(inferred_type)),
-          *span,
-        ));
+        // TODO: i don't think this is quite right, since it doesn't
+        // allow for (e.g.) the identify function to be used on diff types
+        println!(
+          "HERE: adding {} :: {}",
+          callee.inferred_type,
+          ExprType::Func(arg_types.clone(), Box::new(inferred_type.clone()))
+        );
+        // constraints.push(Eq(
+        //   callee.inferred_type.clone(),
+        //   ExprType::Func(arg_types, Box::new(inferred_type)),
+        // ));
       }
 
-      ExprKind::Let(LetNode { value, span, .. }) => {
+      ExprKind::Let(LetNode { value, .. }) => {
         self.constraints_from_expr(value, constraints);
 
         // let expressions always evaluate to ()
-        constraints.push((inferred_type, ExprType::Nothing, *span));
+        constraints.push(Eq(inferred_type, ExprType::Nothing));
       }
 
       _ => {
@@ -367,18 +377,18 @@ impl<'compiler> Analyzer<'compiler> {
   ) {
     match &mut literal.kind {
       LiteralKind::Str(..) => {
-        constraints.push((typ, ExprType::String, literal.span));
+        constraints.push(Eq(typ, ExprType::String));
       }
 
       LiteralKind::FloatDecimal(..) => {
-        constraints.push((typ, ExprType::Float, literal.span));
+        constraints.push(Eq(typ, ExprType::Float));
       }
 
       LiteralKind::IntDecimal(..)
       | LiteralKind::IntHex(..)
       | LiteralKind::IntBinary(..)
       | LiteralKind::IntOctal(..) => {
-        constraints.push((typ, ExprType::Int, literal.span));
+        constraints.push(Eq(typ, ExprType::Int));
       }
     }
   }
@@ -400,28 +410,27 @@ impl<'compiler> Analyzer<'compiler> {
   fn unify_constraint(&mut self, constraint: &Constraint) -> SolutionMap {
     match constraint {
       // same types, and both are "leaf" nodes; nothing to add to the solution
-      (t1, t2, _) if t1 == t2 && !t1.has_any_placeholders() && !t2.has_any_placeholders() => {
+      Eq(t1, t2) if t1 == t2 && !t1.has_any_placeholders() && !t2.has_any_placeholders() => {
         SolutionMap::empty()
       }
 
-      (
+      Eq(
         ExprType::Func(param_types_1, return_type_1),
         ExprType::Func(param_types_2, return_type_2),
-        span,
       ) => {
         // add some new constraints to unify param & return types:
         let mut constraints = Vec::with_capacity(param_types_1.len() + 1);
 
         for i in 0..param_types_1.len() {
-          constraints.push((param_types_1[i].clone(), param_types_2[i].clone(), *span))
+          constraints.push(Eq(param_types_1[i].clone(), param_types_2[i].clone()))
         }
 
-        constraints.push((*return_type_1.clone(), *return_type_2.clone(), *span));
+        constraints.push(Eq(*return_type_1.clone(), *return_type_2.clone()));
 
         self.unify_constraints(&constraints)
       }
 
-      (ExprType::Placeholder(n), t, _) | (t, ExprType::Placeholder(n), _) => match t {
+      Eq(ExprType::Placeholder(n), t) | Eq(t, ExprType::Placeholder(n)) => match t {
         ExprType::Placeholder(n2) if n == n2 => SolutionMap::empty(),
         ExprType::Placeholder(_) => SolutionMap::with_entry(*n, t.clone()),
         other => {
@@ -433,16 +442,22 @@ impl<'compiler> Analyzer<'compiler> {
         }
       },
 
-      (a, b, span) => {
-        self.error(
-          *span,
-          TypeMismatch {
-            expected: a.clone(),
-            found: b.clone(),
-          },
-        );
+      Eq(a, b) => {
+        // self.error(
+        //   *span,
+        //   TypeMismatch {
+        //     expected: a.clone(),
+        //     found: b.clone(),
+        //   },
+        // );
+        panic!("failed to unify {} and {}", a, b);
 
-        SolutionMap::empty()
+        // SolutionMap::empty()
+      }
+
+      _ => {
+        // ???
+        todo!()
       }
     }
   }

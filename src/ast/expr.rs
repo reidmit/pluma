@@ -1,14 +1,12 @@
 use super::*;
 use crate::expr_type::*;
 
-#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct ExprNode {
 	pub span: Span,
 	pub kind: ExprKind,
 	pub inferred_type: ExprType,
 }
 
-#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum ExprKind {
 	BinaryOperation {
 		op: OperatorNode,
@@ -34,4 +32,79 @@ pub enum ExprKind {
 	Tuple(Vec<ExprNode>),
 	When(WhenNode),
 	While(WhileNode),
+}
+
+#[cfg(debug_assertions)]
+impl std::fmt::Debug for ExprNode {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct(&format!(
+			"expr({}-{}) :: {}",
+			self.span.0, self.span.1, self.inferred_type
+		))
+		.field("kind", &self.kind)
+		.finish()
+	}
+}
+
+#[cfg(debug_assertions)]
+impl std::fmt::Debug for ExprKind {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		use ExprKind::*;
+
+		match &self {
+			BinaryOperation { op, left, right } => f
+				.debug_struct(&format!("binary {:#?}", op))
+				.field("left", left)
+				.field("right", right)
+				.finish(),
+			UnaryOperation { op, right } => {
+				write!(f, "unary {} {:#?}", op, right)
+			}
+			Lambda(lambda) => {
+				write!(f, "{:#?}", lambda)
+			}
+			Call(call) => {
+				write!(f, "{:#?}", call)
+			}
+			EmptyTuple => {
+				write!(f, "()")
+			}
+			Grouping(inner) => {
+				write!(f, "{:#?}", inner)
+			}
+			Identifier(ident) => {
+				write!(f, "{:#?}", ident)
+			}
+			If(if_node) => {
+				write!(f, "{:#?}", if_node)
+			}
+			Interpolation(parts) => {
+				write!(f, "{:#?}", parts)
+			}
+			Let(let_node) => {
+				write!(f, "{:#?}", let_node)
+			}
+			List(elements) => {
+				write!(f, "{:#?}", elements)
+			}
+			Literal(literal) => {
+				write!(f, "{:#?}", literal)
+			}
+			Record(fields) => {
+				write!(f, "record {:#?}", fields)
+			}
+			Regex(regex) => {
+				write!(f, "{:#?}", regex)
+			}
+			Tuple(entries) => {
+				write!(f, "tuple {:#?}", entries)
+			}
+			When(when_node) => {
+				write!(f, "{:#?}", when_node)
+			}
+			While(while_node) => {
+				write!(f, "{:#?}", while_node)
+			}
+		}
+	}
 }

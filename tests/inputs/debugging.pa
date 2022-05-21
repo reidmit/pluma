@@ -1,7 +1,1 @@
-def add fun x {
-  x
-}
-
-def okay add 1
-
-def wrong add "reid"
+def person (1,2,3,4)

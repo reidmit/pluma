@@ -1,8 +1,14 @@
 use super::*;
 
-#[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone)]
 pub struct IdentifierNode {
-	pub span: Span,
 	pub name: String,
+	pub span: Span,
+}
+
+#[cfg(debug_assertions)]
+impl std::fmt::Debug for IdentifierNode {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "ident({}-{}) `{}`", self.span.0, self.span.1, self.name)
+	}
 }
