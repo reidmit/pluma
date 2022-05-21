@@ -25,9 +25,6 @@ pub enum Token {
 	/// e.g. `0b10101`
 	BinaryDigits(usize, usize),
 
-	/// `^` token
-	Caret(usize, usize),
-
 	/// `:` token
 	Colon(usize, usize),
 
@@ -214,7 +211,6 @@ impl Token {
 			| Bang(start, end)
 			| BangEqual(start, end)
 			| BinaryDigits(start, end)
-			| Caret(start, end)
 			| Colon(start, end)
 			| Comma(start, end)
 			| Comment(start, end)
@@ -292,10 +288,6 @@ impl fmt::Display for Token {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		use Token::*;
 
-		if let Unexpected(c, ..) = self {
-			return write!(f, "'{}'", String::from_utf8_lossy(&[*c]));
-		}
-
 		let as_string = match self {
 			&And(..) => "a '&'",
 			&Arrow(..) => "a '->'",
@@ -303,7 +295,6 @@ impl fmt::Display for Token {
 			&Bang(..) => "a '!'",
 			&BangEqual(..) => "a '!='",
 			&BinaryDigits(..) => "binary digits (e.g. 0b101)",
-			&Caret(..) => "a '^'",
 			&Colon(..) => "a ':'",
 			&Comma(..) => "a ','",
 			&Comment(..) => "a comment",
@@ -361,7 +352,7 @@ impl fmt::Display for Token {
 			&StringLiteral(..) => "a string",
 			&Tilde(..) => "a '~'",
 			&Underscore(..) => "a '_'",
-			&Unexpected(..) => unreachable!("handled above"),
+			&Unexpected(c, ..) => return write!(f, "'{}'", String::from_utf8_lossy(&[c])),
 		};
 
 		write!(f, "{}", as_string)

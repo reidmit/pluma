@@ -20,7 +20,6 @@ pub struct Tokenizer<'a> {
 	brace_depth: i32,
 	errors: Vec<ParseError>,
 	next_token: Option<Token>,
-	peek_queue: Vec<Token>,
 	indent_level: usize,
 }
 
@@ -40,19 +39,8 @@ impl<'a> Tokenizer<'a> {
 			comments: HashMap::new(),
 			errors: Vec::new(),
 			next_token: None,
-			peek_queue: Vec::with_capacity(2),
 			indent_level: 0,
 		};
-	}
-
-	pub fn peek(&mut self) -> Option<Token> {
-		let peeked_token = self.next();
-
-		if let Some(token) = peeked_token {
-			self.peek_queue.insert(0, token);
-		}
-
-		peeked_token
 	}
 }
 
@@ -60,10 +48,6 @@ impl<'a> Iterator for Tokenizer<'a> {
 	type Item = Token;
 
 	fn next(&mut self) -> Option<Token> {
-		if !self.peek_queue.is_empty() {
-			return self.peek_queue.pop();
-		}
-
 		if self.index >= self.length {
 			return None;
 		}
@@ -289,11 +273,6 @@ impl<'a> Iterator for Tokenizer<'a> {
 				b',' => {
 					self.index += 1;
 					return Some(Comma(start_index, self.index));
-				}
-
-				b'^' => {
-					self.index += 1;
-					return Some(Caret(start_index, self.index));
 				}
 
 				b'~' => {
@@ -616,39 +595,14 @@ fn is_identifier_start_char(byte: u8) -> bool {
 }
 
 fn is_identifier_char(byte: u8) -> bool {
+	// we want to allow for as many valid identifiers as we can (i.e. not just ASCII!),
+	// so we only exclude chars here that are whitespace/punctuation/operators/etc.
 	match byte {
 		_ if byte.is_ascii_whitespace() => false,
 		_ if byte.is_ascii_control() => false,
-		b':' => false,
-		b'|' => false,
-		b'.' => false,
-		b'*' => false,
-		b'\\' => false,
-		b'/' => false,
-		b'+' => false,
-		b'=' => false,
-		b'<' => false,
-		b'>' => false,
-		b'~' => false,
-		b'!' => false,
-		b'%' => false,
-		b'&' => false,
-		b'@' => false,
-		b'^' => false,
-		b'?' => false,
-		b'"' => false,
-		b'#' => false,
-		b'$' => false,
-		b'\'' => false,
-		b'(' => false,
-		b')' => false,
-		b',' => false,
-		b';' => false,
-		b'`' => false,
-		b'[' => false,
-		b']' => false,
-		b'{' => false,
-		b'}' => false,
+		b':' | b'|' | b'.' | b'*' | b'\\' | b'/' | b'+' | b'-' | b'=' | b'<' | b'>' | b'~' | b'!'
+		| b'%' | b'&' | b'@' | b'^' | b'?' | b'"' | b'#' | b'$' | b'\'' | b'(' | b')' | b',' | b';'
+		| b'`' | b'[' | b']' | b'{' | b'}' => false,
 		_ => true,
 	}
 }

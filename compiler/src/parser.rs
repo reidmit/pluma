@@ -14,15 +14,6 @@ macro_rules! current_token_is {
 	};
 }
 
-macro_rules! next_token_is {
-	($self:ident, $tokType:path) => {
-		match $self.tokenizer.peek() {
-			Some($tokType(..)) => true,
-			_ => false,
-		}
-	};
-}
-
 macro_rules! expect_token_and_advance {
 	($self:ident, $tokType:path) => {
 		match $self.current_token {
@@ -217,7 +208,7 @@ impl<'a> Parser<'a> {
 	fn parse_decimal_number(&mut self) -> Option<LiteralNode> {
 		let (start, end) = expect_token_and_advance!(self, Token::DecimalDigits);
 
-		if current_token_is!(self, Token::Dot) && next_token_is!(self, Token::DecimalDigits) {
+		if current_token_is!(self, Token::Dot) {
 			self.advance();
 
 			let (_, end) = expect_token_and_advance!(self, Token::DecimalDigits);
@@ -1117,7 +1108,7 @@ impl<'a> Parser<'a> {
 		};
 
 		Some(RegexNode {
-			span: (0, 0),
+			span: (0, 0), // TODO!
 			kind: RegexKind::Sequence(other_parts),
 		})
 	}
