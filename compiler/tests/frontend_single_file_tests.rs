@@ -1,4 +1,4 @@
-use pencil::*;
+use compiler::*;
 
 /// These tests are meant to test the "frontend" of the compiler, which
 /// mostly means parsing and type analysis. They use input files located

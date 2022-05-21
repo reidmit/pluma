@@ -1,4 +1,4 @@
-use pencil::*;
+use compiler::*;
 
 fn main() {
   let entry_path = match std::env::args().nth(1) {

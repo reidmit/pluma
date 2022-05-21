@@ -1,0 +1,16 @@
+---
+source: compiler/tests/frontend_single_file_tests.rs
+expression: result
+---
+Ok(
+    Some(
+        module(0-27) [
+            def(0-27) :: t0 {
+                name: ident(4-14) `helloWorld`,
+                kind: expr(16-27) :: t1 {
+                    kind: literal(16-27) string "hello-world",
+                },
+            },
+        ],
+    ),
+)

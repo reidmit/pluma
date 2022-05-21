@@ -1,17 +1,5 @@
-[package]
-name = "pencil"
-version = "0.1.0"
-edition = "2021"
-
-[lib]
-doctest = false
-
-[[bin]]
-name = "pencil"
-test = false
-
-[dependencies]
-atty = "0.2.13"
-
-[dev-dependencies]
-insta = "1.13.0"
+[workspace]
+members = [
+  "cli",
+  "compiler",
+]

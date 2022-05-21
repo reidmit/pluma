@@ -1,0 +1,44 @@
+---
+source: compiler/tests/frontend_single_file_tests.rs
+expression: result
+---
+Ok(
+    Some(
+        module(0-47) [
+            def(0-26) :: t0 {
+                name: ident(4-12) `identity`,
+                kind: expr(13-26) :: t3 {
+                    kind: lambda(13-26) {
+                        params: [
+                            ident(17-18) `x` :: t2,
+                        ],
+                        body: [
+                            expr(23-24) :: t2 {
+                                kind: ident(23-24) `x`,
+                            },
+                        ],
+                    },
+                },
+            },
+            def(28-47) :: t1 {
+                name: ident(32-35) `num`,
+                kind: expr(36-47) :: t5 {
+                    kind: CallNode {
+                        span: (
+                            36,
+                            47,
+                        ),
+                        callee: expr(36-44) :: t0 {
+                            kind: ident(36-44) `identity`,
+                        },
+                        args: [
+                            expr(45-47) :: t4 {
+                                kind: literal(45-47) int 47,
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+)
