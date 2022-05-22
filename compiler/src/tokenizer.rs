@@ -101,7 +101,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 					}
 				}
 
-				if byte == b'$' && start_index + 1 < self.length && self.source[start_index + 1] == b'{' {
+				if byte == b'$' && start_index + 1 < self.length && self.source[start_index + 1] == b'(' {
 					// We must be at the beginning of an interpolation, so create a token for
 					// the string literal portion leading up to the interpolation, one for the
 					// interpolation start, and add to the interpolation stack.
@@ -122,7 +122,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 					return Some(StringLiteral(string_start_index, string_end_index));
 				}
 
-				if self.interpolation_stack.len() > 0 && byte == b'}' {
+				if self.interpolation_stack.len() > 0 && byte == b')' {
 					// We must be at the end of an interpolation, so make a token for it and
 					// fix the index on the last string in the string stack so that it starts
 					// here. Decrease the interpolation stack.
@@ -420,6 +420,10 @@ impl<'a> Iterator for Tokenizer<'a> {
 
 					let constructor = match value {
 						b"_" => Underscore,
+
+						b"true" => BoolTrue,
+						b"false" => BoolFalse,
+
 						b"alias" => KeywordAlias,
 						b"def" => KeywordDef,
 						b"enum" => KeywordEnum,

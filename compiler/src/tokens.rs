@@ -25,6 +25,12 @@ pub enum Token {
 	/// e.g. `0b10101`
 	BinaryDigits(usize, usize),
 
+	/// `true` (bool constructor)
+	BoolTrue(usize, usize),
+
+	/// `false` (bool constructor)
+	BoolFalse(usize, usize),
+
 	/// `:` token
 	Colon(usize, usize),
 
@@ -208,6 +214,8 @@ impl Token {
 			| Bang(start, end)
 			| BangEqual(start, end)
 			| BinaryDigits(start, end)
+			| BoolTrue(start, end)
+			| BoolFalse(start, end)
 			| Colon(start, end)
 			| Comma(start, end)
 			| Comment(start, end)
@@ -274,7 +282,7 @@ impl Token {
 		match self {
 			Identifier(..) | KeywordFun(..) | KeywordIf(..) | KeywordWhen(..) | DecimalDigits(..)
 			| HexDigits(..) | BinaryDigits(..) | OctalDigits(..) | LeftParen(..) | LeftBracket(..)
-			| Backtick(..) | StringLiteral(..) => true,
+			| Backtick(..) | StringLiteral(..) | BoolTrue(..) | BoolFalse(..) => true,
 			_ => false,
 		}
 	}
@@ -291,6 +299,8 @@ impl fmt::Display for Token {
 			&Bang(..) => "a '!'",
 			&BangEqual(..) => "a '!='",
 			&BinaryDigits(..) => "binary digits (e.g. 0b101)",
+			&BoolFalse(..) => "`false`",
+			&BoolTrue(..) => "`true`",
 			&Colon(..) => "a ':'",
 			&Comma(..) => "a ','",
 			&Comment(..) => "a comment",
@@ -311,18 +321,18 @@ impl fmt::Display for Token {
 			&ForwardSlash(..) => "a '/'",
 			&HexDigits(..) => "hex digits (e.g. 0xf4c3)",
 			&Identifier(..) => "an identifier",
-			&InterpolationEnd(..) => "a '}'",
-			&InterpolationStart(..) => "a '${'",
-			&KeywordAlias(..) => "keyword 'alias'",
-			&KeywordDef(..) => "keyword 'def'",
-			&KeywordEnum(..) => "keyword 'enum'",
-			&KeywordFun(..) => "keyword 'fun'",
-			&KeywordIf(..) => "keyword 'if'",
-			&KeywordIn(..) => "keyword 'in'",
-			&KeywordIs(..) => "keyword 'is'",
-			&KeywordLet(..) => "keyword 'let'",
-			&KeywordWhile(..) => "keyword 'while'",
-			&KeywordWhen(..) => "keyword 'when'",
+			&InterpolationEnd(..) => "a ')'",
+			&InterpolationStart(..) => "a '$('",
+			&KeywordAlias(..) => "keyword `alias`",
+			&KeywordDef(..) => "keyword `def`",
+			&KeywordEnum(..) => "keyword `enum`",
+			&KeywordFun(..) => "keyword `fun`",
+			&KeywordIf(..) => "keyword `if`",
+			&KeywordIn(..) => "keyword `in`",
+			&KeywordIs(..) => "keyword `is`",
+			&KeywordLet(..) => "keyword `let`",
+			&KeywordWhile(..) => "keyword `while`",
+			&KeywordWhen(..) => "keyword `when`",
 			&LeftAngle(..) => "a '<'",
 			&LeftAngleEqual(..) => "a '<='",
 			&LeftBrace(..) => "a '{'",

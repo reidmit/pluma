@@ -79,7 +79,7 @@ impl std::fmt::Debug for ExprKind {
 				write!(f, "{:#?}", if_node)
 			}
 			Interpolation(parts) => {
-				write!(f, "{:#?}", parts)
+				write!(f, "interpolation {:#?}", parts)
 			}
 			Let(let_node) => {
 				write!(f, "{:#?}", let_node)

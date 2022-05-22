@@ -6,6 +6,7 @@ pub struct LiteralNode {
 }
 
 pub enum LiteralKind {
+	Bool(bool),
 	FloatDecimal(f64),
 	IntDecimal(usize),
 	IntOctal(usize),
@@ -31,6 +32,7 @@ impl std::fmt::Debug for LiteralKind {
 		use LiteralKind::*;
 
 		match &self {
+			Bool(v) => write!(f, "bool {}", v),
 			FloatDecimal(v) => write!(f, "float {}", v),
 			IntDecimal(v) => write!(f, "int {}", v),
 			IntHex(v) => write!(f, "hex int {}", v),

@@ -2,6 +2,7 @@
 pub enum Type {
   Unknown,
   Var(usize),
+  Bool,
   Int,
   Float,
   Regex,
@@ -16,7 +17,13 @@ impl Type {
     match &self {
       Type::Var(n) => var == *n,
 
-      Type::Nothing | Type::Int | Type::Float | Type::String | Type::Regex | Type::Unknown => false,
+      Type::Nothing
+      | Type::Bool
+      | Type::Int
+      | Type::Float
+      | Type::String
+      | Type::Regex
+      | Type::Unknown => false,
 
       Type::Tuple(element_types) => {
         for element_types in element_types {
@@ -54,6 +61,7 @@ impl std::fmt::Display for Type {
 
     match self {
       Type::Unknown => write!(f, "?"),
+      Type::Bool => write!(f, "bool"),
       Type::Int => write!(f, "int"),
       Type::Float => write!(f, "float"),
       Type::String => write!(f, "string"),

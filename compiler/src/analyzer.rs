@@ -47,7 +47,7 @@ impl<'compiler> Analyzer<'compiler> {
       self.decorate_with_inferred_types(ast, &substitution);
       println!("");
 
-      // println!("annotated: {:#?}", ast);
+      println!("annotated: {:#?}", ast);
     }
   }
 
@@ -184,28 +184,27 @@ impl<'compiler> Analyzer<'compiler> {
       }
 
       ExprKind::Literal(literal) => match &mut literal.kind {
-        LiteralKind::Str(..) => {
-          expr.ty = Type::String;
-        }
-
-        LiteralKind::FloatDecimal(..) => {
-          expr.ty = Type::Float;
-        }
-
+        LiteralKind::Bool(..) => expr.ty = Type::Bool,
+        LiteralKind::Str(..) => expr.ty = Type::String,
+        LiteralKind::FloatDecimal(..) => expr.ty = Type::Float,
         LiteralKind::IntDecimal(..)
         | LiteralKind::IntHex(..)
         | LiteralKind::IntBinary(..)
-        | LiteralKind::IntOctal(..) => {
-          expr.ty = Type::Int;
-        }
+        | LiteralKind::IntOctal(..) => expr.ty = Type::Int,
       },
 
-      ExprKind::Regex(..) => {
-        expr.ty = Type::Regex;
-      }
+      ExprKind::Regex(..) => expr.ty = Type::Regex,
 
-      ExprKind::EmptyTuple => {
-        expr.ty = Type::Nothing;
+      ExprKind::EmptyTuple => expr.ty = Type::Nothing,
+
+      ExprKind::Interpolation(parts) => {
+        for part in parts {
+          self.constrain_expr(part, constraints);
+          // each part must have type string
+          constraints.push(eq_constraint(part.ty.clone(), Type::String).at(part.span));
+        }
+
+        expr.ty = Type::String;
       }
 
       ExprKind::Grouping(inner) => {
@@ -234,7 +233,7 @@ impl<'compiler> Analyzer<'compiler> {
         self.constrain_expr(left, constraints);
         self.constrain_expr(right, constraints);
 
-        match op.kind {
+        match &op.kind {
           Operator::Addition
           | Operator::SubtractionOrNegation
           | Operator::Multiplication
@@ -245,8 +244,15 @@ impl<'compiler> Analyzer<'compiler> {
             constraints.push(eq_constraint(right.ty.clone(), Type::Int).at(right.span));
           }
 
-          _ => {
+          Operator::LogicalAnd | Operator::LogicalOr => {
+            expr.ty = Type::Bool;
+            constraints.push(eq_constraint(left.ty.clone(), Type::Bool).at(left.span));
+            constraints.push(eq_constraint(right.ty.clone(), Type::Bool).at(right.span));
+          }
+
+          other => {
             // todo :----)
+            println!("found unhandled binary op: {}", other)
           }
         }
       }
@@ -366,6 +372,7 @@ impl<'compiler> Analyzer<'compiler> {
       // same types, and both are "leaf" nodes; nothing to add to the solution
       Eq(Type::Int, Type::Int, _)
       | Eq(Type::Float, Type::Float, _)
+      | Eq(Type::Bool, Type::Bool, _)
       | Eq(Type::String, Type::String, _)
       | Eq(Type::Regex, Type::Regex, _)
       | Eq(Type::Nothing, Type::Nothing, _)

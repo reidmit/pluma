@@ -265,6 +265,25 @@ impl<'a> Parser<'a> {
 		})
 	}
 
+	fn parse_bool(&mut self) -> Option<ExprNode> {
+		let (start, end, value) = match &self.current_token {
+			Some(Token::BoolTrue(start, end)) => (*start, *end, true),
+			Some(Token::BoolFalse(start, end)) => (*start, *end, false),
+			_ => unreachable!(),
+		};
+
+		self.advance();
+
+		Some(ExprNode {
+			span: (start, end),
+			ty: Type::Unknown,
+			kind: ExprKind::Literal(LiteralNode {
+				span: (start, end),
+				kind: LiteralKind::Bool(value),
+			}),
+		})
+	}
+
 	fn parse_expression(&mut self) -> Option<ExprNode> {
 		self.parse_expression_with_binding_power(0)
 	}
@@ -276,6 +295,8 @@ impl<'a> Parser<'a> {
 			Some(Token::LeftBracket(..)) => self.parse_list(),
 			Some(Token::Backtick(..)) => self.parse_regular_expression(),
 			Some(Token::StringLiteral(..)) => self.parse_string(),
+			Some(Token::BoolTrue(..)) => self.parse_bool(),
+			Some(Token::BoolFalse(..)) => self.parse_bool(),
 			Some(Token::KeywordWhen(..)) => self.parse_when_expression().map(|when_node| ExprNode {
 				span: when_node.span,
 				kind: ExprKind::When(when_node),
