@@ -7,6 +7,7 @@ use crate::expr_type::*;
 use crate::intrinsics::*;
 use crate::module::Module;
 use crate::solution_map::*;
+use crate::typing::*;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use AnalysisErrorKind::*;
@@ -19,27 +20,6 @@ pub struct Analyzer<'compiler> {
   value_scopes: Vec<HashMap<String, ValueBinding>>,
   next_placeholder_id: usize,
 }
-
-#[derive(Clone, Debug)]
-enum Type {
-  Var(usize),
-  Int,
-  String,
-  Fun(Box<Type>, Box<Type>),
-}
-
-#[derive(Clone)]
-enum TypeScheme {
-  // e.g. int or 'a or ('a, 'b)
-  Mono(Type),
-  // e.g. forall 'a 'b. ('a, 'b)
-  Poly(Vec<usize>, Type),
-}
-
-type TypeSubstitution = HashMap<usize, Type>;
-
-type TypeContext = HashMap<String, TypeScheme>;
-
 // Public interface
 impl<'compiler> Analyzer<'compiler> {
   pub fn new(diagnostics: &'compiler mut Vec<Diagnostic>) -> Self {
@@ -53,23 +33,17 @@ impl<'compiler> Analyzer<'compiler> {
   }
 
   pub fn analyze(&mut self, module: &mut Module) {
-    println!("begin analyze");
+    let initial_ctx = HashMap::new();
 
     if let Some(ast) = &mut module.ast {
       for definition in &mut ast.body {
         if let DefinitionKind::Expr(expr) = &mut definition.kind {
-          let inferred = self.run_type_inference(HashMap::new(), expr);
-          println!("{} :: {:#?}", definition.name.name, inferred)
+          let (substitution, ty) = self.infer_expr(&initial_ctx, expr);
+          let inferred_type = self.substitute_in_type(&substitution, &ty);
+          println!("{} :: {}", definition.name.name, inferred_type)
         }
       }
     }
-
-    println!("end analyze");
-  }
-
-  fn run_type_inference(&mut self, initial_ctx: TypeContext, expr: &ExprNode) -> Type {
-    let (substitution, ty) = self.infer_expr(&initial_ctx, expr);
-    self.substitute_in_type(&substitution, &ty)
   }
 
   fn infer_expr(&mut self, ctx: &TypeContext, expr: &ExprNode) -> (TypeSubstitution, Type) {
@@ -98,7 +72,7 @@ impl<'compiler> Analyzer<'compiler> {
         let (s2, arg_type) = self.infer_expr(&arg_ctx, &arg);
 
         let inferred_callee_type = self.substitute_in_type(&s2, &callee_type);
-        let expected_callee_type = Type::Fun(arg_type.into(), return_type.clone().into());
+        let expected_callee_type = Type::Fun(vec![arg_type], return_type.clone().into());
 
         let s3 = self.unify(&inferred_callee_type, &expected_callee_type);
 
@@ -109,20 +83,24 @@ impl<'compiler> Analyzer<'compiler> {
       }
 
       ExprKind::Lambda(LambdaNode { params, body, .. }) => {
-        // TODO: support multiple params + body exprs
-        let param = params.get(0).unwrap();
+        let mut lambda_ctx = ctx.clone();
+        let mut param_types = Vec::new();
+
+        for param in params {
+          let param_type = self.new_type_var();
+          param_types.push(param_type.clone());
+
+          // within this lambda scope, extend ctx to include params
+          let param_type_scheme = TypeScheme::Mono(param_type.clone());
+          lambda_ctx.insert(param.ident.name.clone(), param_type_scheme);
+        }
+
+        // TODO: support multiple body exprs
         let body = body.get(0).unwrap();
 
-        let param_type = self.new_type_var();
-        let param_type_scheme = TypeScheme::Mono(param_type.clone());
+        let (s1, body_type) = self.infer_expr(&lambda_ctx, &body);
 
-        // within this lambda scope, extend ctx to include params
-        let mut temp_ctx = ctx.clone();
-        temp_ctx.insert(param.ident.name.clone(), param_type_scheme);
-
-        let (s1, body_type) = self.infer_expr(&temp_ctx, &body);
-
-        (s1, Type::Fun(param_type.into(), body_type.into()))
+        (s1, Type::Fun(param_types, body_type.into()))
       }
 
       other => todo!("other expr kind: {:#?}", other),
@@ -137,28 +115,12 @@ impl<'compiler> Analyzer<'compiler> {
     }
   }
 
-  fn generalize(&mut self, ctx: &TypeContext, ty: &Type) -> TypeScheme {
-    let mut forall_vars = Vec::new();
-
-    // find all vars that are free in ty, but not free in ctx
-    let ctx_free_vars = self.free_type_vars_in_context(ctx);
-    for var in self.free_type_vars(ty) {
-      if !ctx_free_vars.contains(&var) {
-        forall_vars.push(var);
-      }
-    }
-
-    if forall_vars.is_empty() {
-      TypeScheme::Mono(ty.clone())
-    } else {
-      TypeScheme::Poly(forall_vars, ty.clone())
-    }
-  }
-
   fn instantiate(&mut self, scheme: &TypeScheme) -> Type {
     match scheme {
       TypeScheme::Mono(ty) => ty.clone(),
       TypeScheme::Poly(forall_vars, ty) => {
+        println!("INSTANTIATING!!!");
+
         // create a substitution that replaces all forall vars with new vars
         let mut subst = HashMap::new();
         for var in forall_vars {
@@ -175,12 +137,18 @@ impl<'compiler> Analyzer<'compiler> {
     match (t1, t2) {
       (Type::Int, Type::Int) => HashMap::new(),
       (Type::String, Type::String) => HashMap::new(),
-      (Type::Fun(arg1, ret1), Type::Fun(arg2, ret2)) => {
-        let s1 = self.unify(arg1, arg2);
+      (Type::Fun(param_types_1, return_type_1), Type::Fun(param_types_2, return_type_2)) => {
+        let mut s1 = HashMap::new();
 
-        let ret1 = self.substitute_in_type(&s1, ret1);
-        let ret2 = self.substitute_in_type(&s1, ret2);
-        let s2 = self.unify(&ret1, &ret2);
+        // TODO: assert same length
+        for i in 0..param_types_1.len() {
+          let new_subst = self.unify(&param_types_1[i], &param_types_2[i]);
+          s1 = self.compose_substitutions(&s1, &new_subst);
+        }
+
+        let return_type_1 = self.substitute_in_type(&s1, return_type_1);
+        let return_type_2 = self.substitute_in_type(&s1, return_type_2);
+        let s2 = self.unify(&return_type_1, &return_type_2);
 
         self.compose_substitutions(&s2, &s1)
       }
@@ -195,47 +163,8 @@ impl<'compiler> Analyzer<'compiler> {
         }
       },
 
-      _ => panic!("failed to unify: {:#?} and {:#?}", t1, t2),
+      _ => panic!("failed to unify: {} and {}", t1, t2),
     }
-  }
-
-  fn free_type_vars(&mut self, ty: &Type) -> HashSet<usize> {
-    match ty {
-      Type::Var(var) => HashSet::from([*var]),
-      Type::Fun(param_ty, return_ty) => {
-        let mut set = self.free_type_vars(param_ty);
-        for var in self.free_type_vars(return_ty) {
-          set.insert(var);
-        }
-        set
-      }
-      _ => HashSet::new(),
-    }
-  }
-
-  fn free_type_vars_in_scheme(&mut self, scheme: &TypeScheme) -> HashSet<usize> {
-    match scheme {
-      TypeScheme::Mono(_) => HashSet::new(),
-      TypeScheme::Poly(forall_vars, ty) => {
-        // find all free vars in ty, then remove the ones listed in forall vars
-        // (because these are not really free! they are bound by the quantifier)
-        let mut set = self.free_type_vars(ty);
-        for var in forall_vars {
-          set.remove(var);
-        }
-        set
-      }
-    }
-  }
-
-  fn free_type_vars_in_context(&mut self, ctx: &TypeContext) -> HashSet<usize> {
-    let mut set = HashSet::new();
-    for (_, scheme) in ctx {
-      for var in self.free_type_vars_in_scheme(scheme) {
-        set.insert(var);
-      }
-    }
-    set
   }
 
   fn compose_substitutions(
@@ -260,20 +189,24 @@ impl<'compiler> Analyzer<'compiler> {
 
   fn substitute_in_type(&mut self, substitution: &TypeSubstitution, ty: &Type) -> Type {
     match ty {
+      Type::Int | Type::String => ty.clone(),
+
       Type::Var(n) => match substitution.get(n) {
         Some(replacement_ty) => replacement_ty.clone(),
         _ => ty.clone(),
       },
-      Type::Fun(param_type, return_type) => {
-        let substituted_param_type = self.substitute_in_type(substitution, param_type);
+
+      Type::Fun(param_types, return_type) => {
+        let mut substituted_param_types = Vec::new();
+
+        for param_type in param_types {
+          substituted_param_types.push(self.substitute_in_type(substitution, param_type));
+        }
+
         let substituted_return_type = self.substitute_in_type(substitution, return_type);
 
-        Type::Fun(
-          substituted_param_type.into(),
-          substituted_return_type.into(),
-        )
+        Type::Fun(substituted_param_types, substituted_return_type.into())
       }
-      Type::Int | Type::String => ty.clone(),
     }
   }
 
@@ -320,6 +253,74 @@ impl<'compiler> Analyzer<'compiler> {
     let type_var = Type::Var(self.next_placeholder_id);
     self.next_placeholder_id += 1;
     type_var
+  }
+
+  #[allow(unused)] // when to call this?
+  fn generalize(&mut self, ctx: &TypeContext, ty: &Type) -> TypeScheme {
+    let mut forall_vars = Vec::new();
+
+    // find all vars that are free in ty, but not free in ctx
+    let ctx_free_vars = self.free_type_vars_in_context(ctx);
+    for var in self.free_type_vars(ty) {
+      if !ctx_free_vars.contains(&var) {
+        forall_vars.push(var);
+      }
+    }
+
+    if forall_vars.is_empty() {
+      TypeScheme::Mono(ty.clone())
+    } else {
+      TypeScheme::Poly(forall_vars, ty.clone())
+    }
+  }
+
+  fn free_type_vars(&mut self, ty: &Type) -> HashSet<usize> {
+    match ty {
+      Type::Var(var) => HashSet::from([*var]),
+
+      Type::Fun(param_types, return_type) => {
+        let mut set = HashSet::new();
+
+        for param_type in param_types {
+          for var in self.free_type_vars(param_type) {
+            set.insert(var);
+          }
+        }
+
+        for var in self.free_type_vars(return_type) {
+          set.insert(var);
+        }
+
+        set
+      }
+
+      _ => HashSet::new(),
+    }
+  }
+
+  fn free_type_vars_in_scheme(&mut self, scheme: &TypeScheme) -> HashSet<usize> {
+    match scheme {
+      TypeScheme::Mono(_) => HashSet::new(),
+      TypeScheme::Poly(forall_vars, ty) => {
+        // find all free vars in ty, then remove the ones listed in forall vars
+        // (because these are not really free! they are bound by the quantifier)
+        let mut set = self.free_type_vars(ty);
+        for var in forall_vars {
+          set.remove(var);
+        }
+        set
+      }
+    }
+  }
+
+  fn free_type_vars_in_context(&mut self, ctx: &TypeContext) -> HashSet<usize> {
+    let mut set = HashSet::new();
+    for (_, scheme) in ctx {
+      for var in self.free_type_vars_in_scheme(scheme) {
+        set.insert(var);
+      }
+    }
+    set
   }
 
   /////

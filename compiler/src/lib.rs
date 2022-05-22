@@ -12,6 +12,7 @@ mod parser;
 mod solution_map;
 mod tokenizer;
 mod tokens;
+mod typing;
 
 pub use compiler::*;
 pub use diagnostic::*;

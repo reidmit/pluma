@@ -1,3 +1,5 @@
+def wowie fun lol who cares { 2 }
+
 def identity fun x {
   x
 }
