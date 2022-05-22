@@ -39,7 +39,7 @@ impl Diagnostic {
 		}
 	}
 
-	pub fn with_pos(self, span: (usize, usize)) -> Diagnostic {
+	pub fn with_span(self, span: (usize, usize)) -> Diagnostic {
 		Diagnostic {
 			span: Some(span),
 			..self

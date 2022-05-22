@@ -1158,17 +1158,29 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_string(&mut self) -> Option<ExprNode> {
+		// There's a bit of trickiness here around start/end offsets. The token start/end
+		// refers to the "readable" portion of the token (i.e. not including any surrounding
+		// quotes). To get the full span of a basic string literal, with quotes on both sides,
+		// we'd just do (start - 1, end + 1). But string literals that appear in the middle of
+		// interpolations don't have quotes on either side, so things work a little differently.
+
 		let (start, end) = expect_token_and_advance!(self, Token::StringLiteral);
 
 		let value = read_string_with_escapes!(self, start, end);
 
+		let end = if current_token_is!(self, Token::InterpolationStart) {
+			end
+		} else {
+			end + 1
+		};
+
 		let literal = LiteralNode {
-			span: (start, end),
+			span: (start - 1, end),
 			kind: LiteralKind::Str(value),
 		};
 
 		let expr_node = ExprNode {
-			span: (start, end),
+			span: literal.span,
 			kind: ExprKind::Literal(literal),
 			ty: Type::Unknown,
 		};

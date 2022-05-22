@@ -46,7 +46,7 @@ impl Substitution {
     constraints
       .iter()
       .map(|con| match con {
-        Eq(a, b) => Eq(self.apply_to_type(a), self.apply_to_type(b)),
+        Eq(a, b, data) => Eq(self.apply_to_type(a), self.apply_to_type(b), data.clone()),
         // TODO: should we have a context arg here as well?
         // see https://github.com/igstan/linguae/blob/7e806dd121c21ed35187377fe3bd92d29d6150e6/lingua-002-hm-inference-sml/src/constraint.sml#L21
         Gen(scheme, ty) => Gen(scheme.clone(), self.apply_to_type(ty)),

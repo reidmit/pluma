@@ -37,8 +37,6 @@ impl<'compiler> Analyzer<'compiler> {
     if let Some(ast) = &mut module.ast {
       let constraints = self.constrain(ast);
 
-      println!("annotated: {:#?}", ast);
-
       for c in &constraints {
         println!("{:?}", c);
       }
@@ -48,11 +46,17 @@ impl<'compiler> Analyzer<'compiler> {
       println!("");
       self.decorate_with_inferred_types(ast, &substitution);
       println!("");
+
+      // println!("annotated: {:#?}", ast);
     }
   }
 
-  fn diagnostic(&mut self, span: (usize, usize), diag: Diagnostic) {
-    let mut diag = diag.with_pos(span);
+  fn diagnostic(&mut self, span: Option<(usize, usize)>, diag: Diagnostic) {
+    let mut diag = diag;
+
+    if let Some(span) = span {
+      diag = diag.with_span(span);
+    }
 
     if let Some(module_name) = &self.module_name {
       diag = diag.with_module(module_name.clone(), self.module_path.clone().unwrap())
@@ -62,11 +66,14 @@ impl<'compiler> Analyzer<'compiler> {
   }
 
   fn warning(&mut self, span: (usize, usize), kind: AnalysisErrorKind) {
-    self.diagnostic(span, Diagnostic::warning(AnalysisError { span, kind }));
+    self.diagnostic(
+      Some(span),
+      Diagnostic::warning(AnalysisError { span, kind }),
+    );
   }
 
   fn error(&mut self, span: (usize, usize), kind: AnalysisErrorKind) {
-    self.diagnostic(span, Diagnostic::error(AnalysisError { span, kind }));
+    self.diagnostic(Some(span), Diagnostic::error(AnalysisError { span, kind }));
   }
 
   fn add_value_binding(&mut self, name: String, ty_scheme: Scheme, span: (usize, usize)) {
@@ -134,7 +141,7 @@ impl<'compiler> Analyzer<'compiler> {
         DefinitionKind::Expr(expr) => {
           self.constrain_expr(expr, &mut constraints);
 
-          constraints.push(Constraint::Eq(definition.ty.clone(), expr.ty.clone()));
+          constraints.push(eq_constraint(definition.ty.clone(), expr.ty.clone()));
         }
 
         _ => {
@@ -207,7 +214,7 @@ impl<'compiler> Analyzer<'compiler> {
 
         self.constrain_expr(inner, constraints);
 
-        constraints.push(Eq(expr_ty, inner.ty.clone()));
+        constraints.push(eq_constraint(expr_ty, inner.ty.clone()));
       }
 
       ExprKind::Tuple(elements) => {
@@ -220,7 +227,7 @@ impl<'compiler> Analyzer<'compiler> {
           element_types.push(element.ty.clone());
         }
 
-        constraints.push(Eq(expr.ty.clone(), Type::Tuple(element_types)))
+        constraints.push(eq_constraint(expr.ty.clone(), Type::Tuple(element_types)).at(expr.span))
       }
 
       ExprKind::BinaryOperation { left, right, op } => {
@@ -233,10 +240,9 @@ impl<'compiler> Analyzer<'compiler> {
           | Operator::Multiplication
           | Operator::Division
           | Operator::Remainder => {
-            // :: `int int -> int`
             expr.ty = Type::Int;
-            constraints.push(Eq(left.ty.clone(), Type::Int));
-            constraints.push(Eq(right.ty.clone(), Type::Int));
+            constraints.push(eq_constraint(left.ty.clone(), Type::Int).at(left.span));
+            constraints.push(eq_constraint(right.ty.clone(), Type::Int).at(right.span));
           }
 
           _ => {
@@ -279,10 +285,13 @@ impl<'compiler> Analyzer<'compiler> {
 
         // we know that this lambda must be a function that takes
         // the param types and returns the return type
-        constraints.push(Eq(
-          expr.ty.clone(),
-          Type::Fun(param_types, Box::new(return_type)),
-        ));
+        constraints.push(
+          eq_constraint(
+            expr.ty.clone(),
+            Type::Fun(param_types, Box::new(return_type)),
+          )
+          .at(expr.span),
+        );
       }
 
       ExprKind::Call(CallNode { callee, args, .. }) => {
@@ -299,10 +308,13 @@ impl<'compiler> Analyzer<'compiler> {
 
         // we know that the callee should be a function that takes
         // the given arg types and returns the type of this whole expr
-        constraints.push(Eq(
-          callee.ty.clone(),
-          Type::Fun(arg_types, expr.ty.clone().into()),
-        ));
+        constraints.push(
+          eq_constraint(
+            callee.ty.clone(),
+            Type::Fun(arg_types, expr.ty.clone().into()),
+          )
+          .at(expr.span),
+        );
       }
 
       ExprKind::Let(LetNode { name, value, .. }) => {
@@ -320,7 +332,7 @@ impl<'compiler> Analyzer<'compiler> {
         constraints.push(Gen(type_scheme, value.ty.clone()));
 
         // let expressions always evaluate to ()
-        constraints.push(Eq(expr_ty, Type::Nothing));
+        constraints.push(eq_constraint(expr_ty, Type::Nothing).at(expr.span));
       }
 
       _ => {
@@ -350,50 +362,56 @@ impl<'compiler> Analyzer<'compiler> {
   fn unify_constraint(&mut self, constraint: &Constraint) -> Substitution {
     use Constraint::*;
 
-    println!("unify_constraint: {:?}", constraint);
-
-    let subst = match constraint {
+    match constraint {
       // same types, and both are "leaf" nodes; nothing to add to the solution
-      Eq(Type::Int, Type::Int)
-      | Eq(Type::Float, Type::Float)
-      | Eq(Type::String, Type::String)
-      | Eq(Type::Regex, Type::Regex)
-      | Eq(Type::Nothing, Type::Nothing)
-      | Eq(Type::Unknown, Type::Unknown) => Substitution::empty(),
+      Eq(Type::Int, Type::Int, _)
+      | Eq(Type::Float, Type::Float, _)
+      | Eq(Type::String, Type::String, _)
+      | Eq(Type::Regex, Type::Regex, _)
+      | Eq(Type::Nothing, Type::Nothing, _)
+      | Eq(Type::Unknown, Type::Unknown, _) => Substitution::empty(),
 
-      Eq(Type::Fun(param_types_1, return_type_1), Type::Fun(param_types_2, return_type_2)) => {
+      Eq(Type::Fun(param_types_1, return_type_1), Type::Fun(param_types_2, return_type_2), _) => {
         // add some new constraints to unify param & return types:
         let mut constraints = Vec::with_capacity(param_types_1.len() + 1);
 
         // todo: length check
         for i in 0..param_types_1.len() {
-          constraints.push(Eq(param_types_1[i].clone(), param_types_2[i].clone()))
+          constraints.push(eq_constraint(
+            param_types_1[i].clone(),
+            param_types_2[i].clone(),
+          ))
         }
 
-        constraints.push(Eq(*return_type_1.clone(), *return_type_2.clone()));
+        constraints.push(eq_constraint(
+          *return_type_1.clone(),
+          *return_type_2.clone(),
+        ));
 
         self.unify_constraints(&constraints)
       }
 
-      Eq(Type::Tuple(element_types_1), Type::Tuple(element_types_2)) => {
-        println!("unifying tuplesss");
+      Eq(Type::Tuple(element_types_1), Type::Tuple(element_types_2), _) => {
         // add some new constraints to unify element types:
         let mut constraints = Vec::with_capacity(element_types_2.len() + 1);
 
         // todo: length check
         for i in 0..element_types_1.len() {
-          constraints.push(Eq(element_types_1[i].clone(), element_types_2[i].clone()))
+          constraints.push(eq_constraint(
+            element_types_1[i].clone(),
+            element_types_2[i].clone(),
+          ))
         }
 
         self.unify_constraints(&constraints)
       }
 
-      Eq(Type::Var(n), t) | Eq(t, Type::Var(n)) => match t {
+      Eq(Type::Var(n), t, reason) | Eq(t, Type::Var(n), reason) => match t {
         Type::Var(n2) if n == n2 => Substitution::empty(),
         Type::Var(_) => Substitution::with_entry(*n, t.clone()),
         other => {
           if other.contains_var(*n) {
-            self.error((0, 0), RecursiveUnification { ty: other.clone() });
+            self.error(reason.span, RecursiveUnification { ty: other.clone() });
             return Substitution::empty();
           }
 
@@ -401,9 +419,9 @@ impl<'compiler> Analyzer<'compiler> {
         }
       },
 
-      Eq(a, b) => {
+      Eq(a, b, reason) => {
         self.error(
-          (0, 0),
+          reason.span,
           TypeMismatch {
             expected: b.clone(),
             found: a.clone(),
@@ -417,11 +435,7 @@ impl<'compiler> Analyzer<'compiler> {
         // ???
         todo!()
       }
-    };
-
-    println!("    subst: {:?}", subst);
-
-    subst
+    }
   }
 
   fn fill_in_placeholder(&mut self, ty: &mut Type, subst: &Substitution) {

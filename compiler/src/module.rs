@@ -69,7 +69,7 @@ impl Module {
 		for err in errors {
 			diagnostics.push(
 				Diagnostic::error(err)
-					.with_pos(err.span)
+					.with_span(err.span)
 					.with_module(self.module_name.clone(), self.module_path.to_path_buf()),
 			);
 		}
