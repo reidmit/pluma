@@ -52,9 +52,11 @@ pub fn print_diagnostics(diagnostics: Vec<Diagnostic>) {
         },
       };
 
+      // start the frame at the given span boundaries
       let mut frame_start = start;
       let mut frame_end = end;
 
+      // move the frame start back until we hit a newline
       while frame_start > 0 {
         if let Some(b'\n') = bytes.get(frame_start - 1) {
           break;
@@ -64,6 +66,7 @@ pub fn print_diagnostics(diagnostics: Vec<Diagnostic>) {
         frame_start -= 1
       }
 
+      // move the frame end forward until we hit a newline
       while let Some(byte) = bytes.get(frame_end) {
         match byte {
           b'\n' => break,

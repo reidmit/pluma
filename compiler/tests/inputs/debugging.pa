@@ -1,0 +1,5 @@
+def helloWorld fun x {
+  let result = x + 10
+  let product = result * 47
+  product + result
+}

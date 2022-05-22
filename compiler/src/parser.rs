@@ -164,7 +164,7 @@ impl<'a> Parser<'a> {
 				body.push(node);
 			}
 
-			if current_token_is!(self, Token::Semicolon) {
+			if current_token_is!(self, Token::LineBreak) {
 				self.advance();
 				self.skip_line_breaks();
 			} else {

@@ -362,12 +362,6 @@ impl<'a> Iterator for Tokenizer<'a> {
 					return Some(Pipe(start_index, self.index));
 				}
 
-				b';' => {
-					self.index += 1;
-
-					return Some(Semicolon(start_index, self.index));
-				}
-
 				b':' => {
 					self.index += 1;
 
