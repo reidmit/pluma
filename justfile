@@ -7,7 +7,7 @@ test:
   @ cargo insta test --review
 
 site:
-  @ zola -r site serve
+  @ zola -r site serve -p 7586
 
 # install all deps on macos
 install-depencies-macos:
