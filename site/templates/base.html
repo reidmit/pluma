@@ -6,9 +6,29 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>pluma</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro&family=Source+Sans+Pro:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ get_url(path="main.css") | safe }}">
 </head>
 
 <body>
+
+<nav>
+  <div>
+    <a href="/"><img class="icon" src="icons/feather.svg"/> pluma</a>
+  </div>
+
+  <ul>
+    <li><a href="/docs"><img class="icon" src="icons/docs.svg"/> docs</a></li>
+    <li><a href="/blog"><img class="icon" src="icons/blog.svg"/> blog</a></li>
+  </ul>
+</nav>
+
+<main>
 {% block content %}{% endblock %}
+</main>
+
 </body>
 </html>
