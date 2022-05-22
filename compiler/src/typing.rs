@@ -6,6 +6,9 @@ pub enum Type {
   Int,
   String,
   Fun(Vec<Type>, Box<Type>),
+
+  /// this means there was an error! e.g. unbound vars get type unknown
+  Unknown,
 }
 
 #[derive(Clone)]
@@ -30,6 +33,8 @@ impl std::fmt::Debug for Type {
 impl std::fmt::Display for Type {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
+      Type::Unknown => write!(f, "?"),
+
       Type::Int => write!(f, "int"),
 
       Type::String => write!(f, "string"),

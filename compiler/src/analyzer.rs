@@ -26,6 +26,9 @@ impl<'compiler> Analyzer<'compiler> {
   }
 
   pub fn analyze(&mut self, module: &mut Module) {
+    self.module_name = Some(module.module_name.clone());
+    self.module_path = Some(module.module_path.clone());
+
     let initial_ctx = HashMap::new();
 
     if let Some(ast) = &mut module.ast {
@@ -69,7 +72,16 @@ impl<'compiler> Analyzer<'compiler> {
           (HashMap::new(), ty)
         }
 
-        None => panic!("unbound variable {}", ident.name),
+        None => {
+          self.error(
+            ident.span,
+            NameNotBound {
+              name: ident.name.clone(),
+            },
+          );
+
+          (HashMap::new(), Type::Unknown)
+        }
       },
 
       ExprKind::Call(CallNode { callee, args, .. }) => {
@@ -99,10 +111,12 @@ impl<'compiler> Analyzer<'compiler> {
 
         for param in params {
           let param_type = self.new_type_var();
+
           param_types.push(param_type.clone());
 
-          // within this lambda scope, extend ctx to include params
           let param_type_scheme = TypeScheme::Mono(param_type.clone());
+
+          // within this lambda scope, extend ctx to include params
           lambda_ctx.insert(param.ident.name.clone(), param_type_scheme);
         }
 
@@ -170,7 +184,8 @@ impl<'compiler> Analyzer<'compiler> {
         Type::Var(var2) if var == var2 => HashMap::new(),
         _ => {
           if self.free_type_vars(ty).contains(var) {
-            panic!("occurs check failed! recursive??")
+            self.error((0, 0), RecursiveUnification { ty: ty.clone() });
+            return HashMap::new();
           }
 
           let mut subst = HashMap::new();
@@ -179,7 +194,17 @@ impl<'compiler> Analyzer<'compiler> {
         }
       },
 
-      _ => panic!("failed to unify: {} and {}", t1, t2),
+      _ => {
+        self.error(
+          (0, 0), // todo: real span
+          TypeMismatch {
+            expected: t1.clone(),
+            found: t2.clone(),
+          },
+        );
+
+        HashMap::new()
+      }
     }
   }
 
@@ -205,8 +230,6 @@ impl<'compiler> Analyzer<'compiler> {
 
   fn substitute_in_type(&mut self, substitution: &TypeSubstitution, ty: &Type) -> Type {
     match ty {
-      Type::Int | Type::String => ty.clone(),
-
       Type::Var(n) => match substitution.get(n) {
         Some(replacement_ty) => replacement_ty.clone(),
         _ => ty.clone(),
@@ -223,6 +246,8 @@ impl<'compiler> Analyzer<'compiler> {
 
         Type::Fun(substituted_param_types, substituted_return_type.into())
       }
+
+      _ => ty.clone(),
     }
   }
 

@@ -12,6 +12,7 @@ pub enum AnalysisErrorKind {
 	NameNotBound { name: String },
 	UnusedBinding { name: String },
 	TypeMismatch { expected: Type, found: Type },
+	RecursiveUnification { ty: Type },
 }
 
 impl fmt::Display for AnalysisError {
@@ -30,6 +31,8 @@ impl fmt::Display for AnalysisError {
 				"Type mismatch: expected `{}`, but found `{}`.",
 				expected, found
 			),
+
+			RecursiveUnification { ty } => write!(f, "Failed to unify recursive type `{}`.", ty),
 		}
 	}
 }
