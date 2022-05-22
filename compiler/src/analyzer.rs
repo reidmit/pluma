@@ -13,7 +13,7 @@ pub struct Analyzer<'compiler> {
   module_path: Option<PathBuf>,
   diagnostics: &'compiler mut Vec<Diagnostic>,
   value_scopes: Vec<HashMap<String, ValueBinding>>,
-  next_placeholder_id: usize,
+  next_type_var_id: usize,
 }
 
 impl<'compiler> Analyzer<'compiler> {
@@ -23,7 +23,7 @@ impl<'compiler> Analyzer<'compiler> {
       module_path: None,
       diagnostics,
       value_scopes: Vec::new(),
-      next_placeholder_id: 0,
+      next_type_var_id: 0,
     }
   }
 
@@ -35,10 +35,6 @@ impl<'compiler> Analyzer<'compiler> {
     self.enter_scope();
 
     if let Some(ast) = &mut module.ast {
-      // self.annotate_with_placeholders(ast);
-
-      println!("ast: {:#?}", ast);
-
       let constraints = self.constrain(ast);
 
       println!("annotated: {:#?}", ast);
@@ -49,8 +45,9 @@ impl<'compiler> Analyzer<'compiler> {
 
       let substitution = self.unify_constraints(&constraints);
 
-      println!("=========");
+      println!("");
       self.decorate_with_inferred_types(ast, &substitution);
+      println!("");
     }
   }
 
@@ -104,7 +101,7 @@ impl<'compiler> Analyzer<'compiler> {
   pub fn leave_scope(&mut self) {
     if let Some(exited_level) = self.value_scopes.pop() {
       for (name, binding) in exited_level {
-        if binding.ref_count == 0 {
+        if binding.ref_count == 0 && !name.starts_with("_") {
           self.warning(binding.span, UnusedBinding { name });
         }
       }
@@ -152,51 +149,62 @@ impl<'compiler> Analyzer<'compiler> {
   fn constrain_expr(&mut self, expr: &mut ExprNode, constraints: &mut Vec<TypeConstraint>) {
     use TypeConstraint::*;
 
-    let expr_ty = self.new_type_var();
-
-    expr.ty = expr_ty.clone();
-
     match &mut expr.kind {
       ExprKind::Identifier(ident) => {
         if let Some(binding) = self.get_value_binding(&ident.name) {
-          match &binding.ty_scheme {
-            TypeScheme::Forall(_, ty) => constraints.push(Eq(expr_ty, ty.clone())),
-            TypeScheme::Var(var) => constraints.push(Inst(*var, expr_ty)),
-          }
-        } else {
-          self.error(
-            ident.span,
-            NameNotBound {
-              name: ident.name.clone(),
-            },
-          );
+          return match &binding.ty_scheme {
+            TypeScheme::Forall(_, ty) => {
+              expr.ty = ty.clone();
+            }
+            TypeScheme::Var(var) => {
+              // not sure about all this...
+              let var = *var;
+              let expr_ty = self.new_type_var();
+              expr.ty = expr_ty.clone();
+              constraints.push(Inst(var, expr_ty))
+            }
+          };
+        };
 
-          constraints.push(Eq(expr_ty, Type::Unknown));
-        }
+        self.error(
+          ident.span,
+          NameNotBound {
+            name: ident.name.clone(),
+          },
+        );
+
+        expr.ty = Type::Unknown;
       }
 
       ExprKind::Literal(literal) => match &mut literal.kind {
         LiteralKind::Str(..) => {
-          constraints.push(Eq(expr_ty, Type::String));
+          expr.ty = Type::String;
         }
 
         LiteralKind::FloatDecimal(..) => {
-          constraints.push(Eq(expr_ty, Type::Float));
+          expr.ty = Type::Float;
         }
 
         LiteralKind::IntDecimal(..)
         | LiteralKind::IntHex(..)
         | LiteralKind::IntBinary(..)
         | LiteralKind::IntOctal(..) => {
-          constraints.push(Eq(expr_ty, Type::Int));
+          expr.ty = Type::Int;
         }
       },
 
       ExprKind::Regex(..) => {
-        constraints.push(Eq(expr_ty, Type::Regex));
+        expr.ty = Type::Regex;
+      }
+
+      ExprKind::EmptyTuple => {
+        expr.ty = Type::Nothing;
       }
 
       ExprKind::Grouping(inner) => {
+        let expr_ty = self.new_type_var();
+        expr.ty = expr_ty.clone();
+
         self.constrain_expr(inner, constraints);
 
         constraints.push(Eq(expr_ty, inner.ty.clone()));
@@ -208,10 +216,10 @@ impl<'compiler> Analyzer<'compiler> {
 
         match op.kind {
           Operator::Addition => {
+            expr.ty = Type::Int;
             // todo: floats?
             constraints.push(Eq(left.ty.clone(), Type::Int));
             constraints.push(Eq(right.ty.clone(), Type::Int));
-            constraints.push(Eq(expr_ty.clone(), Type::Int));
           }
           _ => {
             // todo :----)
@@ -220,22 +228,27 @@ impl<'compiler> Analyzer<'compiler> {
       }
 
       ExprKind::Lambda(LambdaNode { params, body, .. }) => {
+        let expr_ty = self.new_type_var();
+        expr.ty = expr_ty.clone();
+
         let mut param_types = Vec::new();
 
         self.enter_scope();
 
-        // TODO: lambdas with 0 params?
+        if params.is_empty() {
+          param_types.push(Type::Nothing)
+        } else {
+          for param in params {
+            param.ty = self.new_type_var();
 
-        for param in params {
-          param.ty = self.new_type_var();
+            param_types.push(param.ty.clone());
 
-          param_types.push(param.ty.clone());
-
-          self.add_value_binding(
-            param.ident.name.clone(),
-            TypeScheme::Forall(vec![], param.ty.clone()),
-            param.ident.span,
-          )
+            self.add_value_binding(
+              param.ident.name.clone(),
+              TypeScheme::Forall(vec![], param.ty.clone()),
+              param.ident.span,
+            )
+          }
         }
 
         let mut return_type = Type::Nothing;
@@ -253,6 +266,9 @@ impl<'compiler> Analyzer<'compiler> {
       }
 
       ExprKind::Call(CallNode { callee, args, .. }) => {
+        let expr_ty = self.new_type_var();
+        expr.ty = expr_ty.clone();
+
         self.constrain_expr(callee, constraints);
 
         let mut arg_types = Vec::new();
@@ -268,6 +284,9 @@ impl<'compiler> Analyzer<'compiler> {
       }
 
       ExprKind::Let(LetNode { name, value, .. }) => {
+        let expr_ty = self.new_type_var();
+        expr.ty = expr_ty.clone();
+
         // visit the value (expression after the `=`), and collect constraints:
         self.constrain_expr(value, constraints);
 
@@ -282,6 +301,20 @@ impl<'compiler> Analyzer<'compiler> {
         constraints.push(Eq(expr_ty, Type::Nothing));
       }
 
+      ExprKind::Tuple(elements) => {
+        let expr_ty = self.new_type_var();
+        expr.ty = expr_ty.clone();
+
+        let mut element_types = Vec::new();
+
+        for element in elements {
+          self.constrain_expr(element, constraints);
+          element_types.push(element.ty.clone());
+        }
+
+        constraints.push(Eq(expr_ty, Type::Tuple(element_types)))
+      }
+
       _ => {
         // todo :---)
       }
@@ -293,32 +326,56 @@ impl<'compiler> Analyzer<'compiler> {
       return TypeSubstitution::empty();
     }
 
-    let solutions_for_head = self.unify_constraint(&constraints[0]);
-    let new_tail_constraints = solutions_for_head.apply_to_constraints(&constraints[1..]);
-    let solutions_for_tail = self.unify_constraints(&new_tail_constraints);
-    solutions_for_head.compose(solutions_for_tail)
+    // first, unify the first one and get any substitutions
+    let subst_first = self.unify_constraint(&constraints[0]);
+
+    // then, apply those substitutions to the remaining constraints
+    let rest = subst_first.apply_to_constraints(&constraints[1..]);
+
+    // and recursively unify the remaining (substituted) constraints
+    let subst_rest = self.unify_constraints(&rest);
+
+    // finally, return all the collected merged substitutions together
+    subst_first.compose(subst_rest)
   }
 
   fn unify_constraint(&mut self, constraint: &TypeConstraint) -> TypeSubstitution {
     use TypeConstraint::*;
 
-    match constraint {
+    println!("unify_constraint: {:?}", constraint);
+
+    let subst = match constraint {
       // same types, and both are "leaf" nodes; nothing to add to the solution
       Eq(Type::Int, Type::Int)
       | Eq(Type::Float, Type::Float)
       | Eq(Type::String, Type::String)
       | Eq(Type::Regex, Type::Regex)
-      | Eq(Type::Nothing, Type::Nothing) => TypeSubstitution::empty(),
+      | Eq(Type::Nothing, Type::Nothing)
+      | Eq(Type::Unknown, Type::Unknown) => TypeSubstitution::empty(),
 
       Eq(Type::Fun(param_types_1, return_type_1), Type::Fun(param_types_2, return_type_2)) => {
         // add some new constraints to unify param & return types:
         let mut constraints = Vec::with_capacity(param_types_1.len() + 1);
 
+        // todo: length check
         for i in 0..param_types_1.len() {
           constraints.push(Eq(param_types_1[i].clone(), param_types_2[i].clone()))
         }
 
         constraints.push(Eq(*return_type_1.clone(), *return_type_2.clone()));
+
+        self.unify_constraints(&constraints)
+      }
+
+      Eq(Type::Tuple(element_types_1), Type::Tuple(element_types_2)) => {
+        println!("unifying tuplesss");
+        // add some new constraints to unify element types:
+        let mut constraints = Vec::with_capacity(element_types_2.len() + 1);
+
+        // todo: length check
+        for i in 0..element_types_1.len() {
+          constraints.push(Eq(element_types_1[i].clone(), element_types_2[i].clone()))
+        }
 
         self.unify_constraints(&constraints)
       }
@@ -352,7 +409,11 @@ impl<'compiler> Analyzer<'compiler> {
         // ???
         todo!()
       }
-    }
+    };
+
+    println!("    subst: {:?}", subst);
+
+    subst
   }
 
   fn fill_in_placeholder(&mut self, ty: &mut Type, subst: &TypeSubstitution) {
@@ -398,6 +459,12 @@ impl<'compiler> Analyzer<'compiler> {
         self.fill_in_placeholder(&mut callee.ty, subst);
 
         for expr in args {
+          self.fill_in_placeholder(&mut expr.ty, subst);
+        }
+      }
+
+      ExprKind::Tuple(elements) => {
+        for expr in elements {
           self.fill_in_placeholder(&mut expr.ty, subst);
         }
       }
@@ -567,14 +634,14 @@ impl<'compiler> Analyzer<'compiler> {
   // }
 
   fn new_type_scheme_var(&mut self) -> TypeScheme {
-    let type_var = TypeScheme::Var(self.next_placeholder_id);
-    self.next_placeholder_id += 1;
+    let type_var = TypeScheme::Var(self.next_type_var_id);
+    self.next_type_var_id += 1;
     type_var
   }
 
   fn new_type_var(&mut self) -> Type {
-    let type_var = Type::Var(self.next_placeholder_id);
-    self.next_placeholder_id += 1;
+    let type_var = Type::Var(self.next_type_var_id);
+    self.next_type_var_id += 1;
     type_var
   }
 

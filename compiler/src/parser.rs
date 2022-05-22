@@ -125,17 +125,19 @@ impl<'a> Parser<'a> {
 	}
 
 	fn skip_line_breaks(&mut self) {
-		match &self.current_token {
-			Some(
-				Token::LineBreak(..)
-				| Token::LineBreakWithIndentIncrease(..)
-				| Token::LineBreakWithIndentDecrease(..),
-			) => {
-				self.line_breaks.push(self.current_token_span());
-				self.advance();
-			}
+		loop {
+			match &self.current_token {
+				Some(
+					Token::LineBreak(..)
+					| Token::LineBreakWithIndentIncrease(..)
+					| Token::LineBreakWithIndentDecrease(..),
+				) => {
+					self.line_breaks.push(self.current_token_span());
+					self.advance();
+				}
 
-			_ => {}
+				_ => break,
+			}
 		}
 	}
 

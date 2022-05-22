@@ -9,6 +9,7 @@ pub enum Type {
   Regex,
   String,
   Nothing,
+  Tuple(Vec<Type>),
   Fun(Vec<Type>, Box<Type>),
 }
 
@@ -19,6 +20,16 @@ impl Type {
 
       Type::Nothing | Type::Int | Type::Float | Type::String | Type::Regex | Type::Unknown => false,
 
+      Type::Tuple(element_types) => {
+        for element_types in element_types {
+          if element_types.contains_var(var) {
+            return true;
+          }
+        }
+
+        false
+      }
+
       Type::Fun(param_types, return_type) => {
         for param_type in param_types {
           if param_type.contains_var(var) {
@@ -26,7 +37,7 @@ impl Type {
           }
         }
 
-        return return_type.contains_var(var);
+        return_type.contains_var(var)
       }
 
       _ => false, // TODO: ??
@@ -35,10 +46,16 @@ impl Type {
 }
 
 #[derive(Clone)]
-#[cfg_attr(debug_assertions, derive(Debug))]
 pub enum TypeScheme {
   Var(usize),
   Forall(Vec<usize>, Type),
+}
+
+#[cfg(debug_assertions)]
+impl std::fmt::Debug for Type {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self)
+  }
 }
 
 #[derive(Clone)]
@@ -51,6 +68,15 @@ pub enum TypeConstraint {
 
 impl std::fmt::Display for Type {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    let maybe_add_parens = |t: &Type| {
+      let s = format!("{}", t);
+      if s.contains(" ") {
+        format!("({})", s)
+      } else {
+        s
+      }
+    };
+
     match self {
       Type::Unknown => write!(f, "?"),
       Type::Int => write!(f, "int"),
@@ -64,17 +90,20 @@ impl std::fmt::Display for Type {
         "{} -> {}",
         params
           .iter()
-          .map(|p| {
-            let s = format!("{}", p);
-            if s.contains(" ") {
-              format!("({})", s)
-            } else {
-              s
-            }
-          })
+          .map(maybe_add_parens)
           .collect::<Vec<String>>()
           .join(" "),
         ret
+      ),
+
+      Type::Tuple(elements) => write!(
+        f,
+        "({})",
+        elements
+          .iter()
+          .map(maybe_add_parens)
+          .collect::<Vec<String>>()
+          .join(", "),
       ),
 
       Type::Var(var) => {
@@ -92,14 +121,33 @@ impl std::fmt::Display for Type {
 }
 
 #[cfg(debug_assertions)]
-impl std::fmt::Debug for Type {
+impl std::fmt::Debug for TypeScheme {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}", self)
+    match self {
+      TypeScheme::Var(var) => write!(f, "{}", Type::Var(*var)),
+      TypeScheme::Forall(vars, ty) => write!(
+        f,
+        "forall{} . {}",
+        vars
+          .iter()
+          .map(|v| format!(" {}", v))
+          .collect::<Vec<String>>()
+          .join(""),
+        ty
+      ),
+    }
   }
 }
 
 pub struct TypeSubstitution {
   pub solutions: HashMap<usize, Type>,
+}
+
+#[cfg(debug_assertions)]
+impl std::fmt::Debug for TypeSubstitution {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{:?}", self.solutions)
+  }
 }
 
 impl TypeSubstitution {
@@ -122,8 +170,15 @@ impl TypeSubstitution {
       }
 
       Type::Fun(param_types, return_type) => Type::Fun(
-        param_types.iter().map(|p| self.apply_to_type(p)).collect(),
+        param_types.iter().map(|t| self.apply_to_type(t)).collect(),
         self.apply_to_type(return_type).into(),
+      ),
+
+      Type::Tuple(element_types) => Type::Tuple(
+        element_types
+          .iter()
+          .map(|t| self.apply_to_type(t))
+          .collect(),
       ),
 
       other => (*other).clone(),

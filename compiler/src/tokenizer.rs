@@ -291,11 +291,6 @@ impl<'a> Iterator for Tokenizer<'a> {
 					return Some(Question(start_index, self.index));
 				}
 
-				b'_' if (self.index >= self.length - 1 || self.source[self.index + 1] != b'_') => {
-					self.index += 1;
-					return Some(Underscore(start_index, self.index));
-				}
-
 				b'!' => {
 					self.index += 1;
 
@@ -412,6 +407,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 
 					let comment = read_string!(self, start_index + 1, self.index);
 
+					println!("READ COMMENT: `{}`", comment);
 					self.comments.insert(self.line, comment);
 				}
 
@@ -423,6 +419,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 					let value = &self.source[start_index..self.index];
 
 					let constructor = match value {
+						b"_" => Underscore,
 						b"alias" => KeywordAlias,
 						b"def" => KeywordDef,
 						b"enum" => KeywordEnum,

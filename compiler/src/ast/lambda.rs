@@ -25,6 +25,6 @@ impl std::fmt::Debug for LambdaNode {
 #[cfg(debug_assertions)]
 impl std::fmt::Debug for LambdaParamNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{:#?} :: {}", self.ident, "todo")
+		write!(f, "{:#?} :: {}", self.ident, self.ty)
 	}
 }
