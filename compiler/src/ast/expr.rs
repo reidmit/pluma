@@ -1,10 +1,8 @@
 use super::*;
-use crate::expr_type::*;
 
 pub struct ExprNode {
 	pub span: Span,
 	pub kind: ExprKind,
-	pub inferred_type: ExprType,
 }
 
 pub enum ExprKind {
@@ -39,7 +37,7 @@ impl std::fmt::Debug for ExprNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct(&format!(
 			"expr({}-{}) :: {}",
-			self.span.0, self.span.1, self.inferred_type
+			self.span.0, self.span.1, "todo"
 		))
 		.field("kind", &self.kind)
 		.finish()

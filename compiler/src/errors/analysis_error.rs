@@ -1,4 +1,4 @@
-use crate::expr_type::*;
+use crate::typing::*;
 use std::fmt;
 
 #[cfg_attr(debug_assertions, derive(Debug))]
@@ -11,7 +11,7 @@ pub struct AnalysisError {
 pub enum AnalysisErrorKind {
 	NameNotBound { name: String },
 	UnusedBinding { name: String },
-	TypeMismatch { expected: ExprType, found: ExprType },
+	TypeMismatch { expected: Type, found: Type },
 }
 
 impl fmt::Display for AnalysisError {

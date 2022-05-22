@@ -1,5 +1,4 @@
 use super::*;
-use crate::expr_type::*;
 
 pub struct LambdaNode {
 	pub span: Span,
@@ -9,7 +8,6 @@ pub struct LambdaNode {
 
 pub struct LambdaParamNode {
 	pub ident: IdentifierNode,
-	pub inferred_type: ExprType,
 }
 
 #[cfg(debug_assertions)]
@@ -25,6 +23,6 @@ impl std::fmt::Debug for LambdaNode {
 #[cfg(debug_assertions)]
 impl std::fmt::Debug for LambdaParamNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{:#?} :: {}", self.ident, self.inferred_type)
+		write!(f, "{:#?} :: {}", self.ident, "todo")
 	}
 }

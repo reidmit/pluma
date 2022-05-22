@@ -1,5 +1,4 @@
 use super::*;
-use crate::expr_type::*;
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub struct PatternNode {
@@ -60,7 +59,6 @@ impl PatternNode {
         let callee = ExprNode {
           span: ident.span,
           kind: ExprKind::Identifier(ident),
-          inferred_type: ExprType::Unknown,
         };
 
         let arg_expr = arg.to_expr();
@@ -80,7 +78,6 @@ impl PatternNode {
     ExprNode {
       span,
       kind: expr_kind,
-      inferred_type: ExprType::Unknown,
     }
   }
 }

@@ -1,15 +1,10 @@
 mod analyzer;
 mod ast;
-mod binding;
 mod compiler;
-mod constraint;
 mod diagnostic;
 mod errors;
-mod expr_type;
-mod intrinsics;
 mod module;
 mod parser;
-mod solution_map;
 mod tokenizer;
 mod tokens;
 mod typing;

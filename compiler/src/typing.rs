@@ -20,6 +20,13 @@ pub type TypeSubstitution = HashMap<usize, Type>;
 
 pub type TypeContext = HashMap<String, TypeScheme>;
 
+#[cfg(debug_assertions)]
+impl std::fmt::Debug for Type {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self)
+  }
+}
+
 impl std::fmt::Display for Type {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
@@ -29,10 +36,17 @@ impl std::fmt::Display for Type {
 
       Type::Fun(params, ret) => write!(
         f,
-        "({} -> {})",
+        "{} -> {}",
         params
           .iter()
-          .map(|p| format!("{}", p))
+          .map(|p| {
+            let s = format!("{}", p);
+            if s.contains(" ") {
+              format!("({})", s)
+            } else {
+              s
+            }
+          })
           .collect::<Vec<String>>()
           .join(" "),
         ret
