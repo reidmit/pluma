@@ -1,8 +1,10 @@
 use super::*;
+use crate::typing::*;
 
 pub struct ExprNode {
 	pub span: Span,
 	pub kind: ExprKind,
+	pub ty: Type,
 }
 
 pub enum ExprKind {
@@ -37,7 +39,7 @@ impl std::fmt::Debug for ExprNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct(&format!(
 			"expr({}-{}) :: {}",
-			self.span.0, self.span.1, "todo"
+			self.span.0, self.span.1, self.ty
 		))
 		.field("kind", &self.kind)
 		.finish()

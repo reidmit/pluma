@@ -1,5 +1,6 @@
 mod analyzer;
 mod ast;
+mod binding;
 mod compiler;
 mod diagnostic;
 mod errors;

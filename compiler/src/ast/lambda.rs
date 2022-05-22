@@ -1,4 +1,5 @@
 use super::*;
+use crate::typing::*;
 
 pub struct LambdaNode {
 	pub span: Span,
@@ -8,6 +9,7 @@ pub struct LambdaNode {
 
 pub struct LambdaParamNode {
 	pub ident: IdentifierNode,
+	pub ty: Type,
 }
 
 #[cfg(debug_assertions)]

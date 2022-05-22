@@ -1,9 +1,7 @@
-def wowie fun lol who cares { 2 }
-
-def identity fun x {
-  x 1
+def hello fun x {
+  x + 1
 }
 
-def num (fun x { x }) 1
+def wow  "2"
 
-def str (fun x { x }) "hi"
+def num hello 2

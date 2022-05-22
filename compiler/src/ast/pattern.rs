@@ -1,4 +1,5 @@
 use super::*;
+use crate::typing::*;
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub struct PatternNode {
@@ -59,6 +60,7 @@ impl PatternNode {
         let callee = ExprNode {
           span: ident.span,
           kind: ExprKind::Identifier(ident),
+          ty: Type::Unknown,
         };
 
         let arg_expr = arg.to_expr();
@@ -78,6 +80,7 @@ impl PatternNode {
     ExprNode {
       span,
       kind: expr_kind,
+      ty: Type::Unknown,
     }
   }
 }

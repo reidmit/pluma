@@ -20,7 +20,7 @@ fn main() {
 
   match compiler.check() {
     Ok(_) => {
-      println!("Check succeeded without errors!");
+      // println!("Check succeeded without errors!");
     }
 
     Err(diagnostics) => {
