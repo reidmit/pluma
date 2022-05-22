@@ -8,7 +8,7 @@ mod module;
 mod parser;
 mod tokenizer;
 mod tokens;
-mod typing;
+mod types;
 
 pub use compiler::*;
 pub use diagnostic::*;

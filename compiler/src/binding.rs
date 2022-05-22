@@ -1,9 +1,9 @@
-use crate::typing::*;
+use crate::types::*;
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone)]
 pub struct ValueBinding {
-  pub ty_scheme: TypeScheme,
+  pub ty_scheme: Scheme,
   pub ref_count: usize,
   pub span: (usize, usize),
 }

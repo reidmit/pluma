@@ -1,5 +1,5 @@
 use super::*;
-use crate::typing::*;
+use crate::types::*;
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub struct PatternNode {

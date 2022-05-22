@@ -1,4 +1,4 @@
-use crate::typing::*;
+use crate::types::*;
 use std::fmt;
 
 #[cfg_attr(debug_assertions, derive(Debug))]

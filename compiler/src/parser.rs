@@ -2,7 +2,7 @@ use crate::ast::*;
 use crate::errors::*;
 use crate::tokenizer::Tokenizer;
 use crate::tokens::Token;
-use crate::typing::*;
+use crate::types::*;
 use std::collections::HashMap;
 
 macro_rules! current_token_is {

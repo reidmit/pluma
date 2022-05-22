@@ -1,3 +1,7 @@
 def ftup fun _z {
   (1, "hello", (_z + 2))
 }
+
+def lol fun a b {
+  a + "wow"
+}

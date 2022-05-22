@@ -1,5 +1,5 @@
 use super::*;
-use crate::typing::*;
+use crate::types::*;
 
 pub struct DefinitionNode {
 	pub span: Span,
