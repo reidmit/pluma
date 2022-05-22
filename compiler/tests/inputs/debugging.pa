@@ -1,5 +1,7 @@
-def helloWorld fun x {
-  let result = x + 10
-  let product = result * 47
-  product + result
+def identity fun x {
+  x
 }
+
+def num (fun x { x }) 1
+
+def str (fun x { x }) "hi"
