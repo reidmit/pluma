@@ -163,6 +163,7 @@ impl<'compiler> Analyzer<'compiler> {
             Scheme::Forall(_, ty) => {
               expr.ty = ty.clone();
             }
+
             Scheme::Var(var) => {
               // not sure about all this...
               let var = *var;
@@ -324,8 +325,7 @@ impl<'compiler> Analyzer<'compiler> {
       }
 
       ExprKind::Let(LetNode { name, value, .. }) => {
-        let expr_ty = self.new_type_var();
-        expr.ty = expr_ty.clone();
+        println!("FOUND A LET!");
 
         // visit the value (expression after the `=`), and collect constraints:
         self.constrain_expr(value, constraints);
@@ -338,7 +338,7 @@ impl<'compiler> Analyzer<'compiler> {
         constraints.push(Gen(type_scheme, value.ty.clone()));
 
         // let expressions always evaluate to ()
-        constraints.push(eq_constraint(expr_ty, Type::Nothing).at(expr.span));
+        expr.ty = Type::Nothing;
       }
 
       _ => {
@@ -438,9 +438,11 @@ impl<'compiler> Analyzer<'compiler> {
         Substitution::empty()
       }
 
-      _ => {
+      omg => {
         // ???
-        todo!()
+        println!("what is this? {:#?}", omg);
+        // todo!()
+        Substitution::empty()
       }
     }
   }

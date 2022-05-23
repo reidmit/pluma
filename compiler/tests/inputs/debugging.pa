@@ -1,3 +1,5 @@
-def lol fun {
-  true && false + 1
+def main fun {
+  let identity = fun x { x }
+  identity 1
+  identity "reid"
 }
