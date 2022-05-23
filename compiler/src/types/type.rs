@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 #[derive(Clone)]
 pub enum Type {
   Unknown,
@@ -45,6 +47,34 @@ impl Type {
         return_type.contains_var(var)
       }
     }
+  }
+
+  pub fn free_vars(&self) -> HashSet<usize> {
+    let mut vars = HashSet::new();
+
+    match &self {
+      Type::Var(n) => {
+        vars.insert(*n);
+      }
+
+      Type::Tuple(element_types) => {
+        for element_type in element_types {
+          vars.extend(element_type.free_vars());
+        }
+      }
+
+      Type::Fun(param_types, return_type) => {
+        for param_type in param_types {
+          vars.extend(param_type.free_vars())
+        }
+
+        vars.extend(return_type.free_vars())
+      }
+
+      _ => {}
+    }
+
+    vars
   }
 }
 

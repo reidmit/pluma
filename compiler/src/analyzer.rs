@@ -4,7 +4,7 @@ use crate::diagnostic::*;
 use crate::errors::*;
 use crate::module::Module;
 use crate::types::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use AnalysisErrorKind::*;
 
@@ -31,23 +31,12 @@ impl<'compiler> Analyzer<'compiler> {
     self.module_name = Some(module.module_name.clone());
     self.module_path = Some(module.module_path.clone());
 
-    // initialize top-level scope
     self.enter_scope();
 
     if let Some(ast) = &mut module.ast {
       let constraints = self.constrain(ast);
-
-      for c in &constraints {
-        println!("{:?}", c);
-      }
-
-      let substitution = self.unify_constraints(&constraints);
-
-      println!("");
-      self.decorate_with_inferred_types(ast, &substitution);
-      println!("");
-
-      println!("annotated: {:#?}", ast);
+      let substitution = self.unify(&constraints);
+      self.annotate(ast, &substitution);
     }
   }
 
@@ -325,8 +314,6 @@ impl<'compiler> Analyzer<'compiler> {
       }
 
       ExprKind::Let(LetNode { name, value, .. }) => {
-        println!("FOUND A LET!");
-
         // visit the value (expression after the `=`), and collect constraints:
         self.constrain_expr(value, constraints);
 
@@ -347,25 +334,47 @@ impl<'compiler> Analyzer<'compiler> {
     }
   }
 
-  fn unify_constraints(&mut self, constraints: &[Constraint]) -> Substitution {
+  fn unify(&mut self, constraints: &[Constraint]) -> Substitution {
+    // split eq constraints out from others, so we can handle them in two passes
+    let mut eq_constraints = Vec::new();
+    let mut other_constraints = Vec::new();
+    for constraint in constraints {
+      if let Constraint::Eq(..) = constraint {
+        eq_constraints.push(constraint.clone())
+      } else {
+        other_constraints.push(constraint.clone())
+      }
+    }
+
+    // first pass handles eq constraints
+    let subst1 = self.unify_eq_constraints(&eq_constraints);
+    let other_constraints = subst1.apply_to_constraints(&other_constraints);
+
+    // next pass handles gen/inst constraints
+    let subst2 = self.unify_gen_inst_constraints(&other_constraints);
+
+    subst1.compose(subst2)
+  }
+
+  fn unify_eq_constraints(&mut self, constraints: &[Constraint]) -> Substitution {
     if constraints.is_empty() {
       return Substitution::empty();
     }
 
     // first, unify the first one and get any substitutions
-    let subst_first = self.unify_constraint(&constraints[0]);
+    let subst_first = self.unify_eq_constraint(&constraints[0]);
 
     // then, apply those substitutions to the remaining constraints
     let rest = subst_first.apply_to_constraints(&constraints[1..]);
 
     // and recursively unify the remaining (substituted) constraints
-    let subst_rest = self.unify_constraints(&rest);
+    let subst_rest = self.unify(&rest);
 
     // finally, return all the collected merged substitutions together
     subst_first.compose(subst_rest)
   }
 
-  fn unify_constraint(&mut self, constraint: &Constraint) -> Substitution {
+  fn unify_eq_constraint(&mut self, constraint: &Constraint) -> Substitution {
     use Constraint::*;
 
     match constraint {
@@ -395,7 +404,7 @@ impl<'compiler> Analyzer<'compiler> {
           *return_type_2.clone(),
         ));
 
-        self.unify_constraints(&constraints)
+        self.unify(&constraints)
       }
 
       Eq(Type::Tuple(element_types_1), Type::Tuple(element_types_2), _) => {
@@ -410,7 +419,7 @@ impl<'compiler> Analyzer<'compiler> {
           ))
         }
 
-        self.unify_constraints(&constraints)
+        self.unify(&constraints)
       }
 
       Eq(Type::Var(n), t, reason) | Eq(t, Type::Var(n), reason) => match t {
@@ -438,12 +447,42 @@ impl<'compiler> Analyzer<'compiler> {
         Substitution::empty()
       }
 
-      omg => {
-        // ???
-        println!("what is this? {:#?}", omg);
-        // todo!()
-        Substitution::empty()
+      _ => {
+        unreachable!("should only have eq constraints in here")
       }
+    }
+  }
+
+  fn unify_gen_inst_constraints(&mut self, constraints: &[Constraint]) -> Substitution {
+    if constraints.is_empty() {
+      return Substitution::empty();
+    }
+
+    match &constraints[0] {
+      Constraint::Gen(scheme, ty) => {
+        let mut inst_constraints_for_gen = Vec::new();
+        let mut other_constraints = Vec::new();
+        for constraint in &constraints[1..] {
+          match (constraint, scheme) {
+            (Constraint::Inst(var1, ..), Scheme::Var(var2, ..)) if *var1 == *var2 => {
+              inst_constraints_for_gen.push(constraint.clone())
+            }
+            _ => other_constraints.push(constraint.clone()),
+          }
+        }
+
+        let new_eq_constraints = self.instantiate_constraints(&inst_constraints_for_gen, &ty);
+
+        let subst = self.unify_eq_constraints(&new_eq_constraints);
+
+        let other_constraints = subst.apply_to_constraints(&other_constraints);
+
+        let subst2 = self.unify_gen_inst_constraints(&other_constraints);
+
+        subst.compose(subst2)
+      }
+
+      _ => unreachable!("should have a Gen first"),
     }
   }
 
@@ -455,48 +494,52 @@ impl<'compiler> Analyzer<'compiler> {
     }
   }
 
-  fn decorate_with_inferred_types(&mut self, module: &mut ModuleNode, subst: &Substitution) {
+  fn annotate(&mut self, module: &mut ModuleNode, subst: &Substitution) {
     for definition in &mut module.body {
-      self.decorate_definition(definition, subst)
+      self.annotate_definition(definition, subst)
     }
   }
 
-  fn decorate_definition(&mut self, definition: &mut DefinitionNode, subst: &Substitution) {
+  fn annotate_definition(&mut self, definition: &mut DefinitionNode, subst: &Substitution) {
     self.fill_in_placeholder(&mut definition.ty, subst);
 
     println!("{} :: {}", definition.name.name, definition.ty);
 
     match &mut definition.kind {
-      DefinitionKind::Expr(expr) => self.decorate_expr(expr, subst),
+      DefinitionKind::Expr(expr) => self.annotate_expr(expr, subst),
       _ => { /* todo */ }
     }
   }
 
-  fn decorate_expr(&mut self, expr: &mut ExprNode, subst: &Substitution) {
+  fn annotate_expr(&mut self, expr: &mut ExprNode, subst: &Substitution) {
     self.fill_in_placeholder(&mut expr.ty, subst);
 
     match &mut expr.kind {
+      ExprKind::Let(LetNode { value, .. }) => {
+        self.annotate_expr(value, subst);
+      }
+
       ExprKind::Lambda(LambdaNode { params, body, .. }) => {
         for param in params {
           self.fill_in_placeholder(&mut param.ty, subst);
         }
 
         for expr in body {
-          self.fill_in_placeholder(&mut expr.ty, subst);
+          self.annotate_expr(expr, subst);
         }
       }
 
       ExprKind::Call(CallNode { callee, args, .. }) => {
         self.fill_in_placeholder(&mut callee.ty, subst);
 
-        for expr in args {
-          self.fill_in_placeholder(&mut expr.ty, subst);
+        for arg in args {
+          self.annotate_expr(arg, subst);
         }
       }
 
       ExprKind::Tuple(elements) => {
-        for expr in elements {
-          self.fill_in_placeholder(&mut expr.ty, subst);
+        for element in elements {
+          self.annotate_expr(element, subst);
         }
       }
 
@@ -504,165 +547,56 @@ impl<'compiler> Analyzer<'compiler> {
     }
   }
 
-  // fn unify(&mut self, constraints: &[Constraint]) -> Substitution {
-  //   let mut eq_constraints = Vec::new();
-  //   let mut other_constraints = Vec::new();
+  fn instantiate_constraints(&mut self, constraints: &[Constraint], ty: &Type) -> Vec<Constraint> {
+    let mut new_constraints = Vec::new();
 
-  //   for constraint in constraints {
-  //     if let Constraint::Eq(..) = constraint {
-  //       eq_constraints.push(constraint.clone())
-  //     } else {
-  //       other_constraints.push(constraint.clone())
-  //     }
-  //   }
+    let scheme = self.generalize_type(ty);
 
-  //   let subst1 = self.unify_eq(&eq_constraints);
-  //   let other_constraints = self.substitute_constraints(&other_constraints, &subst1);
-  //   let subst2 = self.unify_gen_inst(&other_constraints);
+    for constraint in constraints {
+      if let Constraint::Inst(_, ty) = constraint {
+        let instantiated_ty = self.instantiate_scheme(&scheme);
+        new_constraints.push(eq_constraint(ty.clone(), instantiated_ty));
+      } else {
+        unreachable!("should only have inst constraints here");
+      }
+    }
 
-  //   self.compose_substitutions(&subst1, &subst2)
-  // }
+    new_constraints
+  }
 
-  // fn unify_eq(&mut self, constraints: &[Constraint]) -> Substitution {
-  //   if constraints.is_empty() {
-  //     return HashMap::new();
-  //   }
+  fn instantiate_scheme(&mut self, scheme: &Scheme) -> Type {
+    match scheme {
+      Scheme::Var(_) => unreachable!("shouldn't be instantiating a scheme var"),
+      Scheme::Forall(vars, ty) => {
+        // generate a new fresh type var for each of the forall vars
+        let mut subst = Substitution::empty();
+        for var in vars {
+          subst.solutions.insert(*var, self.new_type_var());
+        }
 
-  //   match constraints.get(0).unwrap() {
-  //     Constraint::Eq(ty1, ty2) => match (ty1, ty2) {
-  //       (Type::Int, Type::Int) => self.unify_eq(&constraints[1..]),
-  //       (Type::Float, Type::Float) => self.unify_eq(&constraints[1..]),
-  //       (Type::String, Type::String) => self.unify_eq(&constraints[1..]),
-  //       (Type::Regex, Type::Regex) => self.unify_eq(&constraints[1..]),
-  //       (Type::Unknown, Type::Unknown) => self.unify_eq(&constraints[1..]),
-  //       (Type::Nothing, Type::Nothing) => self.unify_eq(&constraints[1..]),
+        // and then apply that substitution in ty
+        subst.apply_to_type(ty)
+      }
+    }
+  }
 
-  //       (Type::Var(var), ty) | (ty, Type::Var(var)) => match ty {
-  //         Type::Var(var2) if var == var2 => self.unify_eq(&constraints[1..]),
-  //         _ => {
-  //           if self.free_type_vars(ty).contains(var) {
-  //             self.error((0, 0), RecursiveUnification { ty: ty.clone() });
-  //             return self.unify_eq(&constraints[1..]);
-  //           }
+  fn generalize_type(&self, ty: &Type) -> Scheme {
+    let mut vars = HashSet::new();
 
-  //           let mut new_subst = HashMap::new();
-  //           new_subst.insert(*var, ty.clone());
+    // add all free vars in ty
+    for var in ty.free_vars() {
+      vars.insert(var);
+    }
 
-  //           let rest_constraints = &self.substitute_constraints(&constraints[1..], &new_subst);
-  //           let rest_constraints = &self.unify_eq(rest_constraints);
-  //           self.compose_substitutions(&new_subst, rest_constraints)
-  //         }
-  //       },
+    // remove all free vars in context
+    for (_, binding) in self.value_scopes.last().unwrap() {
+      for var in binding.ty_scheme.free_vars() {
+        vars.remove(&var);
+      }
+    }
 
-  //       (Type::Fun(params_1, return_1), Type::Fun(params_2, return_2)) => {
-  //         let mut new_constraints = Vec::new();
-
-  //         // TODO: ensure same # of params in both
-
-  //         // to unify functions, we generate some new constraints to make sure each
-  //         // param and return type match, then continue with the rest of the constraints
-
-  //         for i in 0..params_1.len() {
-  //           new_constraints.push(Constraint::Eq(params_1[i].clone(), params_2[i].clone()));
-  //         }
-
-  //         new_constraints.push(Constraint::Eq(*return_1.clone(), *return_2.clone()));
-
-  //         for existing_constraint in constraints {
-  //           new_constraints.push(existing_constraint.clone())
-  //         }
-
-  //         self.unify_eq(&new_constraints)
-  //       }
-
-  //       (t1, t2) => panic!("failed to unify {} and {}", t1, t2),
-  //     },
-
-  //     _ => unreachable!(),
-  //   }
-  // }
-
-  // fn unify_gen_inst(&mut self, constraints: &Vec<Constraint>) -> Substitution {
-  //   if constraints.is_empty() {
-  //     return HashMap::new();
-  //   }
-
-  //   match constraints.get(0).unwrap() {
-  //     Constraint::Gen(scheme, ty) => {
-  //       let mut inst_constraints = Vec::new();
-  //       let mut other_constraints = Vec::new();
-
-  //       for constraint in &constraints[1..] {
-  //         match (constraint, scheme) {
-  //           // hmm, will the vars ever match?
-  //           (Constraint::Inst(var1, ..), Scheme::Var(var2, ..)) if var1 == var2 => {
-  //             inst_constraints.push(constraint.clone())
-  //           }
-  //           _ => other_constraints.push(constraint.clone()),
-  //         }
-  //       }
-
-  //       let new_eq_constraints = self.instantiate_constraints(&inst_constraints, ty);
-  //       let subst = self.unify_eq(&new_eq_constraints);
-  //       let other_constraints = self.substitute_constraints(&other_constraints, &subst);
-
-  //       let subst2 = &self.unify_gen_inst(&other_constraints);
-  //       self.compose_substitutions(&subst, subst2)
-  //     }
-
-  //     _ => unreachable!("should have a Gen first"),
-  //   }
-  // }
-
-  // fn instantiate_constraints(
-  //   &mut self,
-  //   constraints: &[Constraint],
-  //   ty: &Type,
-  // ) -> Vec<Constraint> {
-  //   let mut new_constraints = Vec::new();
-
-  //   let scheme = self.generalize(ty);
-
-  //   for constraint in constraints {
-  //     if let Constraint::Inst(_, ty) = constraint {
-  //       let inst_ty = self.instantiate_scheme(&scheme);
-  //       new_constraints.push(Constraint::Eq(ty.clone(), inst_ty));
-  //     } else {
-  //       unreachable!("should only have Insts here");
-  //     }
-  //   }
-
-  //   new_constraints
-  // }
-
-  // fn substitute_constraints(
-  //   &mut self,
-  //   constraints: &[Constraint],
-  //   subst: &Substitution,
-  // ) -> Vec<Constraint> {
-  //   let mut new_constraints = Vec::new();
-
-  //   for constraint in constraints {
-  //     match constraint {
-  //       Constraint::Eq(ty1, ty2) => new_constraints.push(Constraint::Eq(
-  //         self.substitute_in_type(subst, &ty1),
-  //         self.substitute_in_type(subst, &ty2),
-  //       )),
-  //       // TODO: should we have a context arg here as well?
-  //       // see https://github.com/igstan/linguae/blob/7e806dd121c21ed35187377fe3bd92d29d6150e6/lingua-002-hm-inference-sml/src/constraint.sml#L21
-  //       Constraint::Gen(scheme, ty) => new_constraints.push(Constraint::Gen(
-  //         scheme.clone(),
-  //         self.substitute_in_type(subst, &ty),
-  //       )),
-  //       Constraint::Inst(var, ty) => new_constraints.push(Constraint::Inst(
-  //         *var,
-  //         self.substitute_in_type(subst, &ty),
-  //       )),
-  //     }
-  //   }
-
-  //   new_constraints
-  // }
+    Scheme::Forall(Vec::from_iter(vars), ty.clone())
+  }
 
   fn new_type_scheme_var(&mut self) -> Scheme {
     let type_var = Scheme::Var(self.next_type_var_id);

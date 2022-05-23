@@ -4,11 +4,11 @@ expression: result
 ---
 Ok(
     Some(
-        module(0-27) [
-            def(0-27) :: t0 {
+        module(0-28) [
+            def(0-28) :: string {
                 name: ident(4-14) `helloWorld`,
-                kind: expr(16-27) :: t1 {
-                    kind: literal(16-27) string "hello-world",
+                kind: expr(15-28) :: string {
+                    kind: literal(15-28) string "hello-world",
                 },
             },
         ],
