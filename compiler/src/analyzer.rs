@@ -34,11 +34,11 @@ impl<'compiler> Analyzer<'compiler> {
     self.enter_scope();
 
     if let Some(ast) = &mut module.ast {
-      println!("freshly-parsed: {:#?}", ast);
       let constraints = self.constrain(ast);
       let substitution = self.unify(&constraints);
-      println!("substitution: {:#?}", substitution);
+      // println!("substitution: {:#?}", substitution);
       self.annotate(ast, &substitution);
+      // println!("annotated: {:#?}", ast);
     }
   }
 
@@ -470,7 +470,7 @@ impl<'compiler> Analyzer<'compiler> {
       | Eq(Type::PartialTuple(index, element_type), Type::Tuple(element_types), reason) => {
         // tuples and partial tuples can be unified in a manner that's less strict than
         // unifying two tuples: the tuple must only match the partial tuple at the given index
-        println!("trying to unify: {:#?}", constraint);
+
         if index > &element_types.len() {
           self.error(
             reason.span,
@@ -483,15 +483,13 @@ impl<'compiler> Analyzer<'compiler> {
           return Substitution::empty();
         }
 
-        // add new constraints to unify element types:
         let mut constraints = Vec::with_capacity(1);
 
+        // tuple at index should have same type as this whole expr
         constraints.push(eq_constraint(
           element_types[*index].clone(),
           *element_type.clone(),
         ));
-
-        println!("new consts: {:#?}", constraints);
 
         self.unify(&constraints)
       }

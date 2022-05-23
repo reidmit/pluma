@@ -20,8 +20,20 @@ impl Substitution {
 
   pub fn apply_to_type(&self, ty: &Type) -> Type {
     match ty {
-      Type::Var(var) if self.solutions.contains_key(var) => {
-        self.solutions.get(var).unwrap().clone()
+      Type::Unknown
+      | Type::Nothing
+      | Type::Bool
+      | Type::Int
+      | Type::Float
+      | Type::String
+      | Type::Regex => ty.clone(),
+
+      Type::Var(var) => {
+        if self.solutions.contains_key(var) {
+          self.solutions.get(var).unwrap().clone()
+        } else {
+          ty.clone()
+        }
       }
 
       Type::Fun(param_types, return_type) => Type::Fun(
@@ -39,8 +51,6 @@ impl Substitution {
           .map(|t| self.apply_to_type(t))
           .collect(),
       ),
-
-      other => (*other).clone(),
     }
   }
 

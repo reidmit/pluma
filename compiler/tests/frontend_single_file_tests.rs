@@ -42,3 +42,8 @@ fn identity_fun() {
 fn let_polymorphism() {
   snapshot_test!("tests/inputs/letPolymorphism.pa");
 }
+
+#[test]
+fn tuples() {
+  snapshot_test!("tests/inputs/tuples.pa");
+}

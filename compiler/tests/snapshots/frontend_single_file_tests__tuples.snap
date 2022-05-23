@@ -1,0 +1,53 @@
+---
+source: compiler/tests/frontend_single_file_tests.rs
+expression: result
+---
+Ok(
+    Some(
+        module(0-72) [
+            def(0-72) :: () -> int {
+                name: ident(4-8) `main`,
+                kind: expr(9-72) :: () -> int {
+                    kind: lambda(9-72) {
+                        params: [],
+                        body: [
+                            expr(17-51) :: () {
+                                kind: let(17-51) {
+                                    name: ident(21-31) `superTuple`,
+                                    value: expr(34-51) :: (int, string, bool) {
+                                        kind: tuple [
+                                            expr(35-36) :: int {
+                                                kind: literal(35-36) int 2,
+                                            },
+                                            expr(38-44) :: string {
+                                                kind: literal(38-44) string "blue",
+                                            },
+                                            expr(46-50) :: bool {
+                                                kind: literal(46-50) bool true,
+                                            },
+                                        ],
+                                    },
+                                },
+                            },
+                            expr(54-70) :: int {
+                                kind: binary op(67-68) `+` {
+                                    left: expr(54-66) :: int {
+                                        kind: element-access {
+                                            receiver: expr(54-64) :: (0: int, ...) {
+                                                kind: ident(54-64) `superTuple`,
+                                            },
+                                            index: 0,
+                                        },
+                                    },
+                                    right: expr(69-70) :: int {
+                                        kind: literal(69-70) int 1,
+                                    },
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+)
