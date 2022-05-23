@@ -14,6 +14,7 @@ pub enum AnalysisErrorKind {
 	TypeMismatch { expected: Type, found: Type },
 	RecursiveUnification { ty: Type },
 	ParamCountMismatch { expected: usize, found: usize },
+	TupleSizeMismatch { expected: usize, found: usize },
 }
 
 impl fmt::Display for AnalysisError {
@@ -37,7 +38,13 @@ impl fmt::Display for AnalysisError {
 
 			ParamCountMismatch { expected, found } => write!(
 				f,
-				"Incorrect number of parameters for function: expected {}, but found {}.",
+				"Parameter count mismatch: expected {}, but found {}.",
+				expected, found
+			),
+
+			TupleSizeMismatch { expected, found } => write!(
+				f,
+				"Tuple size mismatch: expected {}, but found {}.",
 				expected, found
 			),
 		}

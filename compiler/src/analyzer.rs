@@ -407,7 +407,6 @@ impl<'compiler> Analyzer<'compiler> {
         // add some new constraints to unify param & return types:
         let mut constraints = Vec::with_capacity(param_types_1.len() + 1);
 
-        // todo: length check
         for i in 0..param_types_1.len() {
           constraints.push(eq_constraint(
             param_types_1[i].clone(),
@@ -423,11 +422,22 @@ impl<'compiler> Analyzer<'compiler> {
         self.unify(&constraints)
       }
 
-      Eq(Type::Tuple(element_types_1), Type::Tuple(element_types_2), _) => {
+      Eq(Type::Tuple(element_types_1), Type::Tuple(element_types_2), reason) => {
+        if element_types_1.len() != element_types_2.len() {
+          self.error(
+            reason.span,
+            TupleSizeMismatch {
+              expected: element_types_2.len(),
+              found: element_types_1.len(),
+            },
+          );
+
+          return Substitution::empty();
+        }
+
         // add some new constraints to unify element types:
         let mut constraints = Vec::with_capacity(element_types_2.len() + 1);
 
-        // todo: length check
         for i in 0..element_types_1.len() {
           constraints.push(eq_constraint(
             element_types_1[i].clone(),
