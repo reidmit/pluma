@@ -29,6 +29,10 @@ impl Substitution {
         self.apply_to_type(return_type).into(),
       ),
 
+      Type::PartialTuple(index, element_type) => {
+        Type::PartialTuple(*index, self.apply_to_type(element_type).into())
+      }
+
       Type::Tuple(element_types) => Type::Tuple(
         element_types
           .iter()

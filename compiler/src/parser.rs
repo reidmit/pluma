@@ -416,6 +416,13 @@ impl<'a> Parser<'a> {
 						expect_token_and_advance!(self, Token::RightBracket);
 					}
 
+					if let Operator::FieldAccess = operator {
+						// another special case: element/field access nodes look a little
+						// different to make analysis easier
+						lhs_expr = self.make_element_or_field_access(lhs_expr, rhs_expr)?;
+						continue;
+					}
+
 					lhs_expr = ExprNode {
 						span: (lhs_expr.span.0, rhs_expr.span.1),
 						kind: ExprKind::BinaryOperation {
@@ -437,6 +444,43 @@ impl<'a> Parser<'a> {
 		}
 
 		Some(lhs_expr)
+	}
+
+	fn make_element_or_field_access(
+		&mut self,
+		lhs_expr: ExprNode,
+		rhs_expr: ExprNode,
+	) -> Option<ExprNode> {
+		match rhs_expr.kind {
+			ExprKind::Literal(LiteralNode {
+				kind: LiteralKind::IntDecimal(index),
+				..
+			}) => Some(ExprNode {
+				span: (lhs_expr.span.0, rhs_expr.span.1),
+				ty: Type::Unknown,
+				kind: ExprKind::ElementAccess {
+					receiver: lhs_expr.into(),
+					index,
+				},
+			}),
+
+			ExprKind::Identifier(ident) => Some(ExprNode {
+				span: (lhs_expr.span.0, rhs_expr.span.1),
+				ty: Type::Unknown,
+				kind: ExprKind::FieldAccess {
+					receiver: lhs_expr.into(),
+					field: ident,
+				},
+			}),
+
+			_ => {
+				self.error::<ExprNode>(ParseError {
+					span: rhs_expr.span,
+					kind: ParseErrorKind::InvalidExpressionAfterDot,
+				});
+				None
+			}
+		}
 	}
 
 	fn parse_identifier(&mut self) -> Option<IdentifierNode> {

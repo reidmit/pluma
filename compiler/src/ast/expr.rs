@@ -17,18 +17,33 @@ pub enum ExprKind {
 		op: Operator,
 		right: Box<ExprNode>,
 	},
+
+	/// e.g. `someTuple.0` or `(0, 1, 2).1`
+	ElementAccess {
+		receiver: Box<ExprNode>,
+		index: usize,
+	},
+
+	/// e.g. `someRecord.field` or `{name: "reid"}.name`
+	FieldAccess {
+		receiver: Box<ExprNode>,
+		field: IdentifierNode,
+	},
+
 	Lambda(LambdaNode),
 	Call(CallNode),
 	EmptyTuple,
 	Grouping(Box<ExprNode>),
 	Identifier(IdentifierNode),
-	If(IfNode),
 	Interpolation(Vec<ExprNode>),
 	Let(LetNode),
-	List(Vec<ExprNode>),
 	Literal(LiteralNode),
 	Record(Vec<(IdentifierNode, ExprNode)>),
+
+	// the below are not fully implemented yet!
+	List(Vec<ExprNode>),
 	Regex(RegexNode),
+	If(IfNode),
 	Tuple(Vec<ExprNode>),
 	When(WhenNode),
 	While(WhileNode),
@@ -57,51 +72,79 @@ impl std::fmt::Debug for ExprKind {
 				.field("left", left)
 				.field("right", right)
 				.finish(),
+
 			UnaryOperation { op, right } => {
 				write!(f, "unary {} {:#?}", op, right)
 			}
+
+			ElementAccess { receiver, index } => f
+				.debug_struct("element-access")
+				.field("receiver", receiver)
+				.field("index", index)
+				.finish(),
+
+			FieldAccess { receiver, field } => f
+				.debug_struct("field-access")
+				.field("receiver", receiver)
+				.field("field", field)
+				.finish(),
+
 			Lambda(lambda) => {
 				write!(f, "{:#?}", lambda)
 			}
+
 			Call(call) => {
 				write!(f, "{:#?}", call)
 			}
+
 			EmptyTuple => {
 				write!(f, "()")
 			}
+
 			Grouping(inner) => {
 				write!(f, "{:#?}", inner)
 			}
+
 			Identifier(ident) => {
 				write!(f, "{:#?}", ident)
 			}
+
 			If(if_node) => {
 				write!(f, "{:#?}", if_node)
 			}
+
 			Interpolation(parts) => {
 				write!(f, "interpolation {:#?}", parts)
 			}
+
 			Let(let_node) => {
 				write!(f, "{:#?}", let_node)
 			}
+
 			List(elements) => {
 				write!(f, "{:#?}", elements)
 			}
+
 			Literal(literal) => {
 				write!(f, "{:#?}", literal)
 			}
+
 			Record(fields) => {
 				write!(f, "record {:#?}", fields)
 			}
+
 			Regex(regex) => {
 				write!(f, "{:#?}", regex)
 			}
+
 			Tuple(entries) => {
 				write!(f, "tuple {:#?}", entries)
 			}
+
 			When(when_node) => {
 				write!(f, "{:#?}", when_node)
 			}
+
 			While(while_node) => {
 				write!(f, "{:#?}", while_node)
 			}

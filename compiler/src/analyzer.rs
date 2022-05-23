@@ -34,8 +34,10 @@ impl<'compiler> Analyzer<'compiler> {
     self.enter_scope();
 
     if let Some(ast) = &mut module.ast {
+      println!("freshly-parsed: {:#?}", ast);
       let constraints = self.constrain(ast);
       let substitution = self.unify(&constraints);
+      println!("substitution: {:#?}", substitution);
       self.annotate(ast, &substitution);
     }
   }
@@ -240,6 +242,8 @@ impl<'compiler> Analyzer<'compiler> {
             constraints.push(eq_constraint(right.ty.clone(), Type::Bool).at(right.span));
           }
 
+          Operator::FieldAccess => unreachable!("handled separately"),
+
           other => {
             // todo :----)
             println!("found unhandled binary op: {}", other)
@@ -326,6 +330,20 @@ impl<'compiler> Analyzer<'compiler> {
 
         // let expressions always evaluate to ()
         expr.ty = Type::Nothing;
+      }
+
+      ExprKind::ElementAccess { receiver, index } => {
+        // this expr gets a fresh type var
+        expr.ty = self.new_type_var();
+
+        self.constrain_expr(receiver, constraints);
+
+        // we know that receiver is a "partial tuple": at given index, it
+        // must have an
+        constraints.push(eq_constraint(
+          receiver.ty.clone(),
+          Type::PartialTuple(*index, expr.ty.clone().into()),
+        ))
       }
 
       _ => {
@@ -448,6 +466,36 @@ impl<'compiler> Analyzer<'compiler> {
         self.unify(&constraints)
       }
 
+      Eq(Type::Tuple(element_types), Type::PartialTuple(index, element_type), reason)
+      | Eq(Type::PartialTuple(index, element_type), Type::Tuple(element_types), reason) => {
+        // tuples and partial tuples can be unified in a manner that's less strict than
+        // unifying two tuples: the tuple must only match the partial tuple at the given index
+        println!("trying to unify: {:#?}", constraint);
+        if index > &element_types.len() {
+          self.error(
+            reason.span,
+            TupleIndexNotPresent {
+              index: *index,
+              ty: Type::Tuple(element_types.clone()),
+            },
+          );
+
+          return Substitution::empty();
+        }
+
+        // add new constraints to unify element types:
+        let mut constraints = Vec::with_capacity(1);
+
+        constraints.push(eq_constraint(
+          element_types[*index].clone(),
+          *element_type.clone(),
+        ));
+
+        println!("new consts: {:#?}", constraints);
+
+        self.unify(&constraints)
+      }
+
       Eq(Type::Var(n), t, reason) | Eq(t, Type::Var(n), reason) => match t {
         Type::Var(n2) if n == n2 => Substitution::empty(),
         Type::Var(_) => Substitution::with_entry(*n, t.clone()),
@@ -564,6 +612,15 @@ impl<'compiler> Analyzer<'compiler> {
         for element in elements {
           self.annotate_expr(element, subst);
         }
+      }
+
+      ExprKind::ElementAccess { receiver, .. } => {
+        self.annotate_expr(receiver, subst);
+      }
+
+      ExprKind::BinaryOperation { left, right, .. } => {
+        self.annotate_expr(left, subst);
+        self.annotate_expr(right, subst);
       }
 
       _ => {}

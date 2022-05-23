@@ -19,6 +19,7 @@ pub enum ParseErrorKind {
 	InvalidHexDigit,
 	InvalidOctalDigit,
 	InvalidRegularExpressionCountModifier,
+	InvalidExpressionAfterDot,
 	MissingReturnType,
 	OverflowingIntegerLiteral,
 	UnclosedInterpolation,
@@ -44,6 +45,10 @@ impl fmt::Display for ParseError {
 			InvalidRegularExpressionCountModifier => {
 				write!(f, "Invalid regular expression count modifier.")
 			}
+			InvalidExpressionAfterDot => write!(
+				f,
+				"Invalid expression after `.`: expected either an integer or a field name."
+			),
 			MissingReturnType => write!(
 				f,
 				"Missing return type after '->' in function type expression"

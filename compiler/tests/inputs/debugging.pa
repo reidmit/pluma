@@ -1,4 +1,4 @@
 def main fun {
   let toupe = (2, "blue", true)
-  toupe.1
+  toupe.2 + 1
 }

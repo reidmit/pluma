@@ -15,6 +15,7 @@ pub enum AnalysisErrorKind {
 	RecursiveUnification { ty: Type },
 	ParamCountMismatch { expected: usize, found: usize },
 	TupleSizeMismatch { expected: usize, found: usize },
+	TupleIndexNotPresent { index: usize, ty: Type },
 }
 
 impl fmt::Display for AnalysisError {
@@ -46,6 +47,12 @@ impl fmt::Display for AnalysisError {
 				f,
 				"Tuple size mismatch: expected {}, but found {}.",
 				expected, found
+			),
+
+			TupleIndexNotPresent { ty, index } => write!(
+				f,
+				"Element {} does not exist in tuple of type `{}`.",
+				index, ty
 			),
 		}
 	}

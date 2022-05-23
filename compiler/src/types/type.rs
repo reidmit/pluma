@@ -11,6 +11,7 @@ pub enum Type {
   String,
   Nothing,
   Tuple(Vec<Type>),
+  PartialTuple(usize, Box<Type>),
   Fun(Vec<Type>, Box<Type>),
 }
 
@@ -26,6 +27,8 @@ impl Type {
       | Type::String
       | Type::Regex
       | Type::Unknown => false,
+
+      Type::PartialTuple(_, element_type) => element_type.contains_var(var),
 
       Type::Tuple(element_types) => {
         for element_types in element_types {
@@ -52,9 +55,23 @@ impl Type {
   pub fn free_vars(&self) -> HashSet<usize> {
     let mut vars = HashSet::new();
 
-    match &self {
+    match self {
+      Type::Unknown
+      | Type::Bool
+      | Type::Int
+      | Type::Float
+      | Type::Regex
+      | Type::String
+      | Type::Nothing => {
+        // no vars to add
+      }
+
       Type::Var(n) => {
         vars.insert(*n);
+      }
+
+      Type::PartialTuple(_, element_type) => {
+        vars.extend(element_type.free_vars());
       }
 
       Type::Tuple(element_types) => {
@@ -70,8 +87,6 @@ impl Type {
 
         vars.extend(return_type.free_vars())
       }
-
-      _ => {}
     }
 
     vars
@@ -108,6 +123,10 @@ impl std::fmt::Display for Type {
           .join(" "),
         ret
       ),
+
+      Type::PartialTuple(index, element) => {
+        write!(f, "({}: {}, ...)", index, element)
+      }
 
       Type::Tuple(elements) => write!(
         f,
