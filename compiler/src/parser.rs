@@ -95,25 +95,14 @@ impl<'a> Parser<'a> {
 			}
 		}
 
-		if let Some(extra_token) = self.current_token {
-			self.error::<ModuleNode>(ParseError {
-				span: self.current_token_span(),
-				kind: ParseErrorKind::UnexpectedTokenExpectedEOF {
-					actual: extra_token,
-				},
-			});
-		}
-
 		let start = body.first().map_or(0, |node| node.span.0);
 		let end = body.last().map_or(0, |node| node.span.1);
 
-		let module_node = ModuleNode {
-			span: (start, end),
-			body,
-		};
-
 		(
-			module_node,
+			ModuleNode {
+				span: (start, end),
+				body,
+			},
 			self.tokenizer.comments.clone(),
 			self.errors.clone(),
 		)
@@ -679,10 +668,9 @@ impl<'a> Parser<'a> {
 		let (end, value) = match self.parse_expression() {
 			Some(node) => (node.span.1, node),
 			_ => {
-				return self.error(ParseError {
-					span: self.current_token_span(),
-					kind: ParseErrorKind::MissingRightHandSideOfAssignment,
-				})
+				// if we failed to parse this expression, we've already reported
+				// an error about it, so just return nothing here
+				return None;
 			}
 		};
 

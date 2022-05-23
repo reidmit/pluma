@@ -1,5 +1,4 @@
 def main fun {
-  let identity = fun x { x }
-  identity "reid"
-  identity 1
+  let toupe = (1, "hey", true)
+  (4, 5, 6)
 }

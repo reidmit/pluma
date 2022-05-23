@@ -19,14 +19,12 @@ pub enum ParseErrorKind {
 	InvalidHexDigit,
 	InvalidOctalDigit,
 	InvalidRegularExpressionCountModifier,
-	MissingRightHandSideOfAssignment,
 	MissingReturnType,
 	OverflowingIntegerLiteral,
 	UnclosedInterpolation,
 	UnclosedString,
 	UnexpectedEOF { expected: Token },
 	UnexpectedToken { actual: Token, expected: Token },
-	UnexpectedTokenExpectedEOF { actual: Token },
 }
 
 impl fmt::Display for ParseError {
@@ -46,20 +44,16 @@ impl fmt::Display for ParseError {
 			InvalidRegularExpressionCountModifier => {
 				write!(f, "Invalid regular expression count modifier.")
 			}
-			MissingRightHandSideOfAssignment => write!(f, "MissingRightHandSideOfAssignment"),
 			MissingReturnType => write!(
 				f,
 				"Missing return type after '->' in function type expression"
 			),
-			OverflowingIntegerLiteral => write!(f, "OverflowingIntegerLiteral"),
+			OverflowingIntegerLiteral => write!(f, "Overflowing integer literal."),
 			UnclosedInterpolation => write!(f, "Unclosed string interpolation."),
 			UnclosedString => write!(f, "Unclosed string."),
 			UnexpectedEOF { expected } => write!(f, "Unexpected end of file. Expected {}.", expected),
 			UnexpectedToken { actual, expected } => {
 				write!(f, "Unexpected token ({}). Expected {}.", actual, expected)
-			}
-			UnexpectedTokenExpectedEOF { actual } => {
-				write!(f, "Unexpected token ({}). Expected end of file.", actual)
 			}
 		}
 	}
