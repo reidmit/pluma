@@ -498,11 +498,8 @@ impl<'compiler> Analyzer<'compiler> {
         }
 
         let new_eq_constraints = self.instantiate_constraints(&inst_constraints_for_gen, &ty);
-
         let subst = self.unify_eq_constraints(&new_eq_constraints);
-
         let other_constraints = subst.apply_to_constraints(&other_constraints);
-
         let subst2 = self.unify_gen_inst_constraints(&other_constraints);
 
         subst.compose(subst2)
@@ -556,7 +553,7 @@ impl<'compiler> Analyzer<'compiler> {
       }
 
       ExprKind::Call(CallNode { callee, args, .. }) => {
-        self.fill_in_placeholder(&mut callee.ty, subst);
+        self.annotate_expr(callee, subst);
 
         for arg in args {
           self.annotate_expr(arg, subst);
@@ -616,6 +613,7 @@ impl<'compiler> Analyzer<'compiler> {
 
     // remove all free vars in context
     for (_, binding) in self.value_scopes.last().unwrap() {
+      // todo: all scope levels?
       for var in binding.ty_scheme.free_vars() {
         vars.remove(&var);
       }

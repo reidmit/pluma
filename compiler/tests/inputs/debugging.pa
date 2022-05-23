@@ -1,4 +1,4 @@
 def main fun {
-  let toupe = fun x y { x + y }
-  toupe 1
+  let toupe = (2, "blue", true)
+  toupe.1
 }
