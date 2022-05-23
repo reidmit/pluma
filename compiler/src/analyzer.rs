@@ -387,7 +387,23 @@ impl<'compiler> Analyzer<'compiler> {
       | Eq(Type::Nothing, Type::Nothing, _)
       | Eq(Type::Unknown, Type::Unknown, _) => Substitution::empty(),
 
-      Eq(Type::Fun(param_types_1, return_type_1), Type::Fun(param_types_2, return_type_2), _) => {
+      Eq(
+        Type::Fun(param_types_1, return_type_1),
+        Type::Fun(param_types_2, return_type_2),
+        reason,
+      ) => {
+        if param_types_1.len() != param_types_2.len() {
+          self.error(
+            reason.span,
+            ParamCountMismatch {
+              expected: param_types_2.len(),
+              found: param_types_1.len(),
+            },
+          );
+
+          return Substitution::empty();
+        }
+
         // add some new constraints to unify param & return types:
         let mut constraints = Vec::with_capacity(param_types_1.len() + 1);
 

@@ -13,6 +13,7 @@ pub enum AnalysisErrorKind {
 	UnusedBinding { name: String },
 	TypeMismatch { expected: Type, found: Type },
 	RecursiveUnification { ty: Type },
+	ParamCountMismatch { expected: usize, found: usize },
 }
 
 impl fmt::Display for AnalysisError {
@@ -33,6 +34,12 @@ impl fmt::Display for AnalysisError {
 			),
 
 			RecursiveUnification { ty } => write!(f, "Failed to unify recursive type `{}`.", ty),
+
+			ParamCountMismatch { expected, found } => write!(
+				f,
+				"Incorrect number of parameters for function: expected {}, but found {}.",
+				expected, found
+			),
 		}
 	}
 }
