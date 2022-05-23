@@ -1,0 +1,5 @@
+def main fun {
+  let identity = fun x { x }
+  identity "wow"
+  identity 47
+}

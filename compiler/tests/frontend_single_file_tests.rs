@@ -37,3 +37,8 @@ fn hello_world() {
 fn identity_fun() {
   snapshot_test!("tests/inputs/identity.pa");
 }
+
+#[test]
+fn let_polymorphism() {
+  snapshot_test!("tests/inputs/letPolymorphism.pa");
+}

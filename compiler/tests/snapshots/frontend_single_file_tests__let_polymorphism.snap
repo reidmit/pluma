@@ -1,0 +1,61 @@
+---
+source: compiler/tests/frontend_single_file_tests.rs
+expression: result
+---
+Ok(
+    Some(
+        module(0-76) [
+            def(0-76) :: () -> int {
+                name: ident(4-8) `main`,
+                kind: expr(9-76) :: () -> int {
+                    kind: lambda(9-76) {
+                        params: [],
+                        body: [
+                            expr(17-43) :: () {
+                                kind: let(17-43) {
+                                    name: ident(21-29) `identity`,
+                                    value: expr(32-43) :: t3 -> t3 {
+                                        kind: lambda(32-43) {
+                                            params: [
+                                                ident(36-37) `x` :: t3,
+                                            ],
+                                            body: [
+                                                expr(40-41) :: t3 {
+                                                    kind: ident(40-41) `x`,
+                                                },
+                                            ],
+                                        },
+                                    },
+                                },
+                            },
+                            expr(46-60) :: string {
+                                kind: call(46-60) {
+                                    callee: expr(46-54) :: string -> string {
+                                        kind: ident(46-54) `identity`,
+                                    },
+                                    args: [
+                                        expr(55-60) :: string {
+                                            kind: literal(55-60) string "wow",
+                                        },
+                                    ],
+                                },
+                            },
+                            expr(63-74) :: int {
+                                kind: call(63-74) {
+                                    callee: expr(63-71) :: int -> int {
+                                        kind: ident(63-71) `identity`,
+                                    },
+                                    args: [
+                                        expr(72-74) :: int {
+                                            kind: literal(72-74) int 47,
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+)
