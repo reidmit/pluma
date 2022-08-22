@@ -17,6 +17,8 @@ pub struct Analyzer<'compiler> {
 }
 
 impl<'compiler> Analyzer<'compiler> {
+  /// Creates a new `Analyzer`. Takes a mutable list of diagnostics
+  /// to which any analyis errors/warnings will be appended.
   pub fn new(diagnostics: &'compiler mut Vec<Diagnostic>) -> Self {
     Self {
       module_name: None,
@@ -27,18 +29,26 @@ impl<'compiler> Analyzer<'compiler> {
     }
   }
 
+  /// Runs analysis over a parsed module. The AST will be annotated
+  /// with inferred types (hence the mutability).
   pub fn analyze(&mut self, module: &mut Module) {
     self.module_name = Some(module.module_name.clone());
     self.module_path = Some(module.module_path.clone());
 
     self.enter_scope();
 
+    // the three basic phases of analysis!
     if let Some(ast) = &mut module.ast {
+      // 1. generate constraints based on AST (and also fill in any
+      //    types we can infer without constraints, like for literals)
       let constraints = self.constrain(ast);
+
+      // 2. find a solution that unifies all the constraints
       let substitution = self.unify(&constraints);
-      // println!("substitution: {:#?}", substitution);
+
+      // 3. apply the solution to the AST, filling in type variables
+      //    that we generated in phase 1
       self.annotate(ast, &substitution);
-      // println!("annotated: {:#?}", ast);
     }
   }
 
@@ -80,7 +90,7 @@ impl<'compiler> Analyzer<'compiler> {
     );
   }
 
-  pub fn get_value_binding(&mut self, name: &String) -> Option<&ValueBinding> {
+  fn get_value_binding(&mut self, name: &String) -> Option<&ValueBinding> {
     for level in self.value_scopes.iter_mut().rev() {
       if let Some(binding) = level.get_mut(name) {
         binding.ref_count += 1;
@@ -96,7 +106,7 @@ impl<'compiler> Analyzer<'compiler> {
     self.value_scopes.push(HashMap::new());
   }
 
-  pub fn leave_scope(&mut self) {
+  fn leave_scope(&mut self) {
     if let Some(exited_level) = self.value_scopes.pop() {
       for (name, binding) in exited_level {
         if binding.ref_count == 0 && !name.starts_with("_") {
@@ -109,7 +119,7 @@ impl<'compiler> Analyzer<'compiler> {
   fn constrain(&mut self, module: &mut ModuleNode) -> Vec<Constraint> {
     let mut constraints = Vec::new();
 
-    // we first do a shallow pass to annotate all top-level defs and add them to the scope,
+    // first, do a shallow pass to annotate all top-level defs and add them to the scope,
     // so that they can be referenced anywhere within the bodies of other defs
     for definition in &mut module.body {
       definition.ty = self.new_type_var();
@@ -148,6 +158,22 @@ impl<'compiler> Analyzer<'compiler> {
     use Constraint::*;
 
     match &mut expr.kind {
+      // For each of these, we don't bother introducing a new type var and generating
+      // a constraint that the var is eq to the known concrete type. We could do that
+      // (the algorithm would handle it fine), but assigning the concrete type directly
+      // is nicer to look at and saves a couple steps.
+      ExprKind::EmptyTuple => expr.ty = Type::Nothing,
+      ExprKind::Regex(..) => expr.ty = Type::Regex,
+      ExprKind::Literal(literal) => match &mut literal.kind {
+        LiteralKind::Bool(..) => expr.ty = Type::Bool,
+        LiteralKind::String(..) => expr.ty = Type::String,
+        LiteralKind::FloatDecimal(..) => expr.ty = Type::Float,
+        LiteralKind::IntDecimal(..)
+        | LiteralKind::IntHex(..)
+        | LiteralKind::IntBinary(..)
+        | LiteralKind::IntOctal(..) => expr.ty = Type::Int,
+      },
+
       ExprKind::Identifier(ident) => {
         if let Some(binding) = self.get_value_binding(&ident.name) {
           return match &binding.ty_scheme {
@@ -156,7 +182,6 @@ impl<'compiler> Analyzer<'compiler> {
             }
 
             Scheme::Var(var) => {
-              // not sure about all this...
               let var = *var;
               let expr_ty = self.new_type_var();
               expr.ty = expr_ty.clone();
@@ -175,23 +200,10 @@ impl<'compiler> Analyzer<'compiler> {
         expr.ty = Type::Unknown;
       }
 
-      ExprKind::Literal(literal) => match &mut literal.kind {
-        LiteralKind::Bool(..) => expr.ty = Type::Bool,
-        LiteralKind::Str(..) => expr.ty = Type::String,
-        LiteralKind::FloatDecimal(..) => expr.ty = Type::Float,
-        LiteralKind::IntDecimal(..)
-        | LiteralKind::IntHex(..)
-        | LiteralKind::IntBinary(..)
-        | LiteralKind::IntOctal(..) => expr.ty = Type::Int,
-      },
-
-      ExprKind::Regex(..) => expr.ty = Type::Regex,
-
-      ExprKind::EmptyTuple => expr.ty = Type::Nothing,
-
       ExprKind::Interpolation(parts) => {
         for part in parts {
           self.constrain_expr(part, constraints);
+
           // each part must have type string
           constraints.push(eq_constraint(part.ty.clone(), Type::String).at(part.span));
         }
@@ -519,9 +531,7 @@ impl<'compiler> Analyzer<'compiler> {
         Substitution::empty()
       }
 
-      _ => {
-        unreachable!("should only have eq constraints in here")
-      }
+      _ => unreachable!("should only have eq constraints in here"),
     }
   }
 
@@ -565,18 +575,14 @@ impl<'compiler> Analyzer<'compiler> {
 
   fn annotate(&mut self, module: &mut ModuleNode, subst: &Substitution) {
     for definition in &mut module.body {
-      self.annotate_definition(definition, subst)
-    }
-  }
+      self.fill_in_placeholder(&mut definition.ty, subst);
 
-  fn annotate_definition(&mut self, definition: &mut DefinitionNode, subst: &Substitution) {
-    self.fill_in_placeholder(&mut definition.ty, subst);
+      println!("{} :: {}", definition.name.name, definition.ty);
 
-    println!("{} :: {}", definition.name.name, definition.ty);
-
-    match &mut definition.kind {
-      DefinitionKind::Expr(expr) => self.annotate_expr(expr, subst),
-      _ => { /* todo */ }
+      match &mut definition.kind {
+        DefinitionKind::Expr(expr) => self.annotate_expr(expr, subst),
+        _ => { /* todo */ }
+      }
     }
   }
 

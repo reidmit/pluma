@@ -20,6 +20,7 @@ pub enum ParseErrorKind {
 	InvalidOctalDigit,
 	InvalidRegularExpressionCountModifier,
 	InvalidExpressionAfterDot,
+	InvalidDefBody,
 	MissingReturnType,
 	OverflowingIntegerLiteral,
 	UnclosedInterpolation,
@@ -48,6 +49,10 @@ impl fmt::Display for ParseError {
 			InvalidExpressionAfterDot => write!(
 				f,
 				"Invalid expression after `.`: expected either an integer or a field name."
+			),
+			InvalidDefBody => write!(
+				f,
+				"Invalid body in `def` statement: expected either an expression or a type."
 			),
 			MissingReturnType => write!(
 				f,

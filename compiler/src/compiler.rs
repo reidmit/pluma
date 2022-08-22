@@ -37,6 +37,8 @@ impl Compiler {
 		let mut analyzer = Analyzer::new(&mut self.diagnostics);
 		analyzer.analyze(module);
 
+		println!("module: {:#?}", module);
+
 		if !self.diagnostics.is_empty() {
 			Err(self.diagnostics.to_vec())
 		} else {

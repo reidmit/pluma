@@ -21,7 +21,7 @@ pub enum PatternKind {
   Underscore,
   // e.g. if val is 1 { ... }
   Literal(LiteralNode),
-  // e.g. if name is "${first} ${last}" { ... }
+  // e.g. if name is "$(first) $(last)" { ... }
   Interpolation(Vec<ExprNode>),
 }
 

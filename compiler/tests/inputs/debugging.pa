@@ -1,4 +1,3 @@
-def main fun {
-  let toupe = (2, "blue", true)
-  toupe.0 + 1
+def main = fun {
+  let p = / "a" "b" "c"+ /
 }

@@ -3,8 +3,8 @@ use crate::types::*;
 
 pub struct ExprNode {
 	pub span: Span,
-	pub kind: ExprKind,
 	pub ty: Type,
+	pub kind: ExprKind,
 }
 
 pub enum ExprKind {
@@ -13,6 +13,7 @@ pub enum ExprKind {
 		left: Box<ExprNode>,
 		right: Box<ExprNode>,
 	},
+
 	UnaryOperation {
 		op: Operator,
 		right: Box<ExprNode>,
@@ -39,12 +40,12 @@ pub enum ExprKind {
 	Let(LetNode),
 	Literal(LiteralNode),
 	Record(Vec<(IdentifierNode, ExprNode)>),
+	Tuple(Vec<ExprNode>),
+	Regex(RegexNode),
 
 	// the below are not fully implemented yet!
 	List(Vec<ExprNode>),
-	Regex(RegexNode),
 	If(IfNode),
-	Tuple(Vec<ExprNode>),
 	When(WhenNode),
 	While(WhileNode),
 }

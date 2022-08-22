@@ -12,7 +12,7 @@ pub enum LiteralKind {
 	IntOctal(usize),
 	IntHex(usize),
 	IntBinary(usize),
-	Str(String),
+	String(String),
 }
 
 #[cfg(debug_assertions)]
@@ -38,7 +38,7 @@ impl std::fmt::Debug for LiteralKind {
 			IntHex(v) => write!(f, "hex int {}", v),
 			IntOctal(v) => write!(f, "octal int {}", v),
 			IntBinary(v) => write!(f, "binary int {}", v),
-			Str(v) => write!(f, "string \"{}\"", v),
+			String(v) => write!(f, "string \"{}\"", v),
 		}
 	}
 }

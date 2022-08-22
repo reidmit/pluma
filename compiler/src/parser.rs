@@ -1195,7 +1195,7 @@ impl<'a> Parser<'a> {
 				})
 			}
 
-			_ => {
+			Some(token) if token.can_start_expression() => {
 				let value = self.parse_expression()?;
 
 				self.skip_line_breaks();
@@ -1207,6 +1207,11 @@ impl<'a> Parser<'a> {
 					ty: Type::Unknown,
 				})
 			}
+
+			_ => self.error(ParseError {
+				span: self.current_token_span(),
+				kind: ParseErrorKind::InvalidDefBody,
+			}),
 		}
 	}
 
@@ -1229,7 +1234,7 @@ impl<'a> Parser<'a> {
 
 		let literal = LiteralNode {
 			span: (start - 1, end),
-			kind: LiteralKind::Str(value),
+			kind: LiteralKind::String(value),
 		};
 
 		let expr_node = ExprNode {
@@ -1262,7 +1267,7 @@ impl<'a> Parser<'a> {
 					span: (start, end),
 					kind: ExprKind::Literal(LiteralNode {
 						span: (start, end),
-						kind: LiteralKind::Str(value),
+						kind: LiteralKind::String(value),
 					}),
 					ty: Type::Unknown,
 				});
