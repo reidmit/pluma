@@ -58,7 +58,7 @@ pub enum Token {
 	/// `==` token
 	DoubleEqual(usize, usize),
 
-	/// `/` token
+	/// `//` token
 	DoubleForwardSlash(usize, usize),
 
 	/// `<<` token
@@ -282,7 +282,7 @@ impl Token {
 		match self {
 			Identifier(..) | KeywordFun(..) | KeywordIf(..) | KeywordWhen(..) | DecimalDigits(..)
 			| HexDigits(..) | BinaryDigits(..) | OctalDigits(..) | LeftParen(..) | LeftBracket(..)
-			| Backtick(..) | StringLiteral(..) | BoolTrue(..) | BoolFalse(..) => true,
+			| ForwardSlash(..) | StringLiteral(..) | BoolTrue(..) | BoolFalse(..) => true,
 			_ => false,
 		}
 	}

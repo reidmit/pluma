@@ -282,7 +282,7 @@ impl<'a> Parser<'a> {
 			Some(Token::LeftParen(..)) => self.parse_parenthetical(),
 			Some(Token::LeftBrace(..)) => self.parse_record(),
 			Some(Token::LeftBracket(..)) => self.parse_list(),
-			Some(Token::Backtick(..)) => self.parse_regular_expression(),
+			Some(Token::ForwardSlash(..)) => self.parse_regular_expression(),
 			Some(Token::StringLiteral(..)) => self.parse_string(),
 			Some(Token::BoolTrue(..)) => self.parse_bool(),
 			Some(Token::BoolFalse(..)) => self.parse_bool(),
@@ -886,7 +886,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_regular_expression(&mut self) -> Option<ExprNode> {
-		let (start, _) = expect_token_and_advance!(self, Token::Backtick);
+		let (start, _) = expect_token_and_advance!(self, Token::ForwardSlash);
 
 		self.skip_line_breaks();
 
@@ -894,7 +894,7 @@ impl<'a> Parser<'a> {
 
 		self.skip_line_breaks();
 
-		let (_, end) = expect_token_and_advance!(self, Token::Backtick);
+		let (_, end) = expect_token_and_advance!(self, Token::ForwardSlash);
 
 		let regex = match maybe_reg_expr_node {
 			Some(expr) => expr,
@@ -1162,8 +1162,11 @@ impl<'a> Parser<'a> {
 			None => return None,
 		};
 
+		let start = other_parts.first().unwrap().span.0;
+		let end = other_parts.last().unwrap().span.1;
+
 		Some(RegexNode {
-			span: (0, 0), // TODO!
+			span: (start, end),
 			kind: RegexKind::Sequence(other_parts),
 		})
 	}

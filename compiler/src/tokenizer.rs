@@ -180,9 +180,20 @@ impl<'a> Iterator for Tokenizer<'a> {
 					let indentation_start = self.index;
 					let mut indentation_size = 0;
 
-					while self.index < self.length && is_indentation_char(self.source[self.index]) {
-						self.index += 1;
-						indentation_size += 1;
+					loop {
+						while self.index < self.length && is_indentation_char(self.source[self.index]) {
+							self.index += 1;
+							indentation_size += 1;
+						}
+
+						if self.index < self.length && self.source[self.index] == b'\n' {
+							// special case to skip empty lines (or lines with only indent chars)
+							self.index += 1;
+							self.line += 1;
+							indentation_size = 0;
+						} else {
+							break;
+						}
 					}
 
 					if self.indent_level == indentation_size {
@@ -407,7 +418,6 @@ impl<'a> Iterator for Tokenizer<'a> {
 
 					let comment = read_string!(self, start_index + 1, self.index);
 
-					println!("READ COMMENT: `{}`", comment);
 					self.comments.insert(self.line, comment);
 				}
 
