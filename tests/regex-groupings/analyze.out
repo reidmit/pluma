@@ -1,0 +1,24 @@
+Module {
+    module_name: "main",
+    module_path: "/Users/reid/projects/pencil/tests/regex-groupings/main.pa",
+    ast: Some(
+        module(0-47) [
+            def(0-47) :: regex {
+                name: ident(4-7) `alt`,
+                kind: expr(8-47) :: regex {
+                    kind: regex(13-40) sequence [
+                        regex(13-14) literal "a",
+                        regex(16-17) regex(18-35) alternation [
+                            regex(18-19) literal "b",
+                            regex(24-25) literal "c",
+                            regex(34-35) literal "d",
+                        ],
+                        regex(39-40) literal "e",
+                    ],
+                },
+            },
+        ],
+    ),
+    comments: {},
+    line_break_starts: [],
+}

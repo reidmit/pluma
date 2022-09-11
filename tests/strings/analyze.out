@@ -1,0 +1,43 @@
+Module {
+    module_name: "main",
+    module_path: "/Users/reid/projects/pencil/tests/strings/main.pa",
+    ast: Some(
+        module(0-96) [
+            def(0-16) :: string {
+                name: ident(4-10) `simple`,
+                kind: expr(11-16) :: string {
+                    kind: literal(11-16) string "hey",
+                },
+            },
+            def(18-62) :: string {
+                name: ident(22-31) `multiline`,
+                kind: expr(32-62) :: string {
+                    kind: literal(32-62) string "one
+                    
+                    two
+                    
+                          three
+                          ",
+                },
+            },
+            def(64-96) :: string {
+                name: ident(68-80) `interpolated`,
+                kind: expr(82-96) :: string {
+                    kind: interpolation [
+                        expr(81-86) :: string {
+                            kind: literal(81-86) string "wow ",
+                        },
+                        expr(88-94) :: t0 {
+                            kind: ident(88-94) `simple`,
+                        },
+                        expr(95-96) :: string {
+                            kind: literal(95-96) string "!",
+                        },
+                    ],
+                },
+            },
+        ],
+    ),
+    comments: {},
+    line_break_starts: [],
+}
