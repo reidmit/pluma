@@ -1,0 +1,29 @@
+Module {
+    module_name: "main",
+    module_path: "/Users/reid/projects/pencil/tests/regex/main.pa",
+    ast: Some(
+        module(0-63) [
+            def(0-24) :: regex {
+                name: ident(4-6) `r1`,
+                kind: expr(7-24) :: regex {
+                    kind: regex(9-22) sequence [
+                        regex(9-14) literal "hello",
+                        regex(17-22) literal "world",
+                    ],
+                },
+            },
+            def(26-63) :: regex {
+                name: ident(30-32) `r2`,
+                kind: expr(33-63) :: regex {
+                    kind: regex(38-61) sequence [
+                        regex(38-43) exactly 1 (regex(38-39) literal "a"),
+                        regex(47-54) between 2 and 7 (regex(47-48) literal "b"),
+                        regex(58-61) one-or-more (regex(58-59) literal "c"),
+                    ],
+                },
+            },
+        ],
+    ),
+    comments: {},
+    line_break_starts: [],
+}

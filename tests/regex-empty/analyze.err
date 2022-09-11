@@ -1,0 +1,5 @@
+Error: Empty regular expression.
+
+> 2| def r-empty /  /
+                 ^^^^
+tests/regex-empty/main.pa:2:13
