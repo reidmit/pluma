@@ -4,6 +4,10 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
+pub fn print_error<E: std::fmt::Display>(message: E) {
+  print_diagnostics(vec![Diagnostic::error(message)])
+}
+
 pub fn print_diagnostics(diagnostics: Vec<Diagnostic>) {
   let mut first = true;
   let mut module_bytes = HashMap::<PathBuf, Vec<u8>>::new();

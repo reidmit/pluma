@@ -605,9 +605,9 @@ fn is_identifier_char(byte: u8) -> bool {
 	match byte {
 		_ if byte.is_ascii_whitespace() => false,
 		_ if byte.is_ascii_control() => false,
-		b':' | b'|' | b'.' | b'*' | b'\\' | b'/' | b'+' | b'-' | b'=' | b'<' | b'>' | b'~' | b'!'
-		| b'%' | b'&' | b'@' | b'^' | b'?' | b'"' | b'#' | b'$' | b'\'' | b'(' | b')' | b',' | b';'
-		| b'`' | b'[' | b']' | b'{' | b'}' => false,
+		b':' | b'|' | b'.' | b'*' | b'\\' | b'/' | b'+' | b'=' | b'<' | b'>' | b'~' | b'!' | b'%'
+		| b'&' | b'@' | b'^' | b'?' | b'"' | b'#' | b'$' | b'\'' | b'(' | b')' | b',' | b';' | b'`'
+		| b'[' | b']' | b'{' | b'}' => false,
 		_ => true,
 	}
 }

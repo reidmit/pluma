@@ -1,0 +1,16 @@
+Module {
+    module_name: "main",
+    module_path: "/Users/reid/projects/pencil/tests/hello-world/main.pa",
+    ast: Some(
+        module(0-31) [
+            def(0-31) :: string {
+                name: ident(4-15) `hello-world`,
+                kind: expr(16-31) :: string {
+                    kind: literal(16-31) string "hello, world!",
+                },
+            },
+        ],
+    ),
+    comments: {},
+    line_break_starts: [],
+}

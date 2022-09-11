@@ -27,7 +27,7 @@ impl Compiler {
 		})
 	}
 
-	pub fn check(&mut self) -> Result<(), Vec<Diagnostic>> {
+	pub fn check(&mut self) -> Result<&Module, Vec<Diagnostic>> {
 		self.parse_module(
 			self.entry_module_name.clone(),
 			to_module_path(self.root_dir.clone(), self.entry_module_name.clone()),
@@ -37,12 +37,10 @@ impl Compiler {
 		let mut analyzer = Analyzer::new(&mut self.diagnostics);
 		analyzer.analyze(module);
 
-		println!("module: {:#?}", module);
-
 		if !self.diagnostics.is_empty() {
 			Err(self.diagnostics.to_vec())
 		} else {
-			Ok(())
+			Ok(module)
 		}
 	}
 

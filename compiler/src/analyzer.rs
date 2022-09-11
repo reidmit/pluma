@@ -577,8 +577,6 @@ impl<'compiler> Analyzer<'compiler> {
     for definition in &mut module.body {
       self.fill_in_placeholder(&mut definition.ty, subst);
 
-      println!("{} :: {}", definition.name.name, definition.ty);
-
       match &mut definition.kind {
         DefinitionKind::Expr(expr) => self.annotate_expr(expr, subst),
         _ => { /* todo */ }
