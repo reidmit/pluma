@@ -49,12 +49,12 @@ let record-across-lines = {
 ## functions
 
 ```
-let add-one = fun (x) {
+let add-one = fun x {
   x + 1
 }
 
-let print-each = fun (list) {
-  each list fun (item) {
+let print-each = fun list {
+  each list fun item {
     print (to-string item)
   }
 }
@@ -76,8 +76,8 @@ can be values or types
 ```
 def name "reid"
 
-def greet fun (name) {
-  print "hello, ${name}!"
+def greet fun name {
+  print "hello, $(name)!"
 }
 ```
 
@@ -128,11 +128,11 @@ if some-value is 47 {
 }
 
 if some-animal is dog name {
-  print "it's a dog called ${name}"
+  print "it's a dog called $(name)"
 }
 
 if result is ok value {
-  print "success! got ${value}"
+  print "success! got $(value)"
 }
 ```
 
@@ -154,9 +154,9 @@ when some-value is 47 {
 }
 
 when result is ok value {
-  print "success! got ${value}"
+  print "success! got $(value)"
 } is error message {
-  print "failed: ${message}"
+  print "failed: $(message)"
 }
 ```
 
@@ -171,6 +171,6 @@ while some-value is true {
 
 let iterator = iterate names
 while (get-next iterator) is some name {
-  print "name: ${name}"
+  print "name: $(name)"
 }
 ```
