@@ -1,9 +1,7 @@
----
-source: compiler/tests/frontend_single_file_tests.rs
-expression: result
----
-Ok(
-    Some(
+Module {
+    module_name: "main",
+    module_path: "/Users/reid/projects/pencil/tests/tuples/main.pa",
+    ast: Some(
         module(0-72) [
             def(0-72) :: () -> int {
                 name: ident(4-8) `main`,
@@ -50,4 +48,6 @@ Ok(
             },
         ],
     ),
-)
+    comments: {},
+    line_break_starts: [],
+}

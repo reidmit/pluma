@@ -1,9 +1,7 @@
----
-source: compiler/tests/frontend_single_file_tests.rs
-expression: result
----
-Ok(
-    Some(
+Module {
+    module_name: "main",
+    module_path: "/Users/reid/projects/pencil/tests/let-polymorphism/main.pa",
+    ast: Some(
         module(0-76) [
             def(0-76) :: () -> int {
                 name: ident(4-8) `main`,
@@ -58,4 +56,6 @@ Ok(
             },
         ],
     ),
-)
+    comments: {},
+    line_break_starts: [],
+}

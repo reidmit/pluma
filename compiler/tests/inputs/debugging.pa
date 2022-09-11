@@ -1,4 +1,0 @@
-def main fun {
-  let p = /"a" "b" "c"+/
-  123
-}
