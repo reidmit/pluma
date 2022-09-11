@@ -616,6 +616,12 @@ impl<'compiler> Analyzer<'compiler> {
         }
       }
 
+      ExprKind::Interpolation(parts) => {
+        for part in parts {
+          self.annotate_expr(part, subst);
+        }
+      }
+
       ExprKind::ElementAccess { receiver, .. } => {
         self.annotate_expr(receiver, subst);
       }

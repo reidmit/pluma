@@ -139,14 +139,13 @@ impl std::fmt::Display for Type {
       ),
 
       Type::Var(var) => {
-        write!(f, "t{}", var)
         // attempt to convert the numeric var into an ascii letter, but
         // if it's >= 26, just go with t0, t1, ...
-        // if *var >= 26 {
-        //   return write!(f, "'t{}", var - 26);
-        // }
+        if *var >= 26 {
+          return write!(f, "'t{}", var - 26);
+        }
 
-        // write!(f, "'{}", char::from_u32((*var as u32) + 97).unwrap())
+        write!(f, "'{}", char::from_u32((*var as u32) + 97).unwrap())
       }
     }
   }

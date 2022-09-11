@@ -26,7 +26,7 @@ module `main` (tests/strings/main.pa) {
                         expr(81-86) :: string {
                             kind: literal(81-86) string "wow ",
                         },
-                        expr(88-94) :: t0 {
+                        expr(88-94) :: string {
                             kind: ident(88-94) `simple`,
                         },
                         expr(95-96) :: string {
