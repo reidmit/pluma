@@ -1,6 +1,5 @@
-Module {
-    module_name: "main",
-    module_path: "/Users/reid/projects/pencil/tests/regex/main.pa",
+module `main` (tests/regex/main.pa) {
+    comments: {},
     ast: Some(
         module(0-63) [
             def(0-24) :: regex {
@@ -24,6 +23,4 @@ Module {
             },
         ],
     ),
-    comments: {},
-    line_break_starts: [],
 }

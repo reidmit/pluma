@@ -1,6 +1,5 @@
-Module {
-    module_name: "main",
-    module_path: "/Users/reid/projects/pencil/tests/strings/main.pa",
+module `main` (tests/strings/main.pa) {
+    comments: {},
     ast: Some(
         module(0-96) [
             def(0-16) :: string {
@@ -38,6 +37,4 @@ Module {
             },
         ],
     ),
-    comments: {},
-    line_break_starts: [],
 }

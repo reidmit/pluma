@@ -1,9 +1,6 @@
-Module {
-    module_name: "main",
-    module_path: "/Users/reid/projects/pencil/tests/empty/main.pa",
+module `main` (tests/empty/main.pa) {
+    comments: {},
     ast: Some(
         module(0-0) [],
     ),
-    comments: {},
-    line_break_starts: [],
 }

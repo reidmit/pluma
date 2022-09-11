@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
-#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct Module {
 	pub module_name: String,
 	pub module_path: PathBuf,
@@ -73,5 +72,25 @@ impl Module {
 					.with_module(self.module_name.clone(), self.module_path.to_path_buf()),
 			);
 		}
+	}
+}
+
+#[cfg(debug_assertions)]
+impl std::fmt::Debug for Module {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let short_module_path = self
+			.module_path
+			.strip_prefix(std::env::current_dir().unwrap())
+			.unwrap()
+			.to_str()
+			.unwrap();
+
+		f.debug_struct(&format!(
+			"module `{}` ({})",
+			self.module_name, short_module_path
+		))
+		.field("comments", &self.comments)
+		.field("ast", &self.ast)
+		.finish()
 	}
 }

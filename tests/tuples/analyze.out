@@ -1,6 +1,5 @@
-Module {
-    module_name: "main",
-    module_path: "/Users/reid/projects/pencil/tests/tuples/main.pa",
+module `main` (tests/tuples/main.pa) {
+    comments: {},
     ast: Some(
         module(0-72) [
             def(0-72) :: () -> int {
@@ -48,6 +47,4 @@ Module {
             },
         ],
     ),
-    comments: {},
-    line_break_starts: [],
 }

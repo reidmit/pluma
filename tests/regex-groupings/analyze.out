@@ -1,6 +1,5 @@
-Module {
-    module_name: "main",
-    module_path: "/Users/reid/projects/pencil/tests/regex-groupings/main.pa",
+module `main` (tests/regex-groupings/main.pa) {
+    comments: {},
     ast: Some(
         module(0-47) [
             def(0-47) :: regex {
@@ -19,6 +18,4 @@ Module {
             },
         ],
     ),
-    comments: {},
-    line_break_starts: [],
 }
