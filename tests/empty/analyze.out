@@ -1,0 +1,9 @@
+Module {
+    module_name: "main",
+    module_path: "/Users/reid/projects/pencil/tests/empty/main.pa",
+    ast: Some(
+        module(0-0) [],
+    ),
+    comments: {},
+    line_break_starts: [],
+}
