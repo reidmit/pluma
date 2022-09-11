@@ -64,7 +64,7 @@ let print-each = fun (list) {
 
 ```
 let name = "reid"
-let message = "hello ${name}"
+let message = "hello $(name)"
 ```
 
 ## definitions
@@ -74,9 +74,9 @@ only allowed at top level
 can be values or types
 
 ```
-def name = "reid"
+def name "reid"
 
-def greet = fun (name) {
+def greet fun (name) {
   print "hello, ${name}!"
 }
 ```
@@ -84,29 +84,29 @@ def greet = fun (name) {
 ## alias types
 
 ```
-def person = alias {
+def person alias {
   name: string
   age: int
 }
 
-def number-list = alias list int
+def number-list alias list int
 ```
 
 ## enum types
 
 ```
-def color = enum {
+def color enum {
   red
   green
   blue
 }
 
-def tree = enum {
+def tree enum {
   empty
   node int tree tree
 }
 
-def bool = enum {
+def bool enum {
   true
   false
 }
