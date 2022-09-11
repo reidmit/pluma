@@ -4,17 +4,6 @@ mod printing;
 use compiler::*;
 use printing::*;
 
-const HELP_TEXT: &str = "pluma v0.0.0
-
-Compiler & toolchain for the Pluma programming language
-
-COMMANDS:
-  run <path>     execute a module directly
-  build <path>   compile a module into an executable
-  analyze        parse, type-check & dump info about a module
-  help           print this help text
-";
-
 fn main() {
   match std::env::args().nth(1) {
     Some(arg) => match &arg[..] {
@@ -56,18 +45,34 @@ fn main() {
       }
 
       "help" => {
-        eprint!("{}", HELP_TEXT);
+        print_help();
       }
 
       other => {
         print_error(format!("Unrecognized command: `{}`\n", other));
-        eprint!("{}", HELP_TEXT);
+        print_help();
         std::process::exit(1);
       }
     },
 
     None => {
-      eprint!("{}", HELP_TEXT);
+      print_help();
     }
   }
+}
+
+fn print_help() {
+  eprintln!(
+    "{} v{}
+
+Compiler & toolchain for the {} programming language
+
+COMMANDS:
+  run <path>     execute a module directly
+  build <path>   compile a module into an executable
+  analyze        parse, type-check & dump info about a module
+  help           print this help text
+",
+    BINARY_NAME, VERSION, LANGUAGE_NAME
+  )
 }
