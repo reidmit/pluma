@@ -16,6 +16,7 @@ pub enum AnalysisErrorKind {
 	ParamCountMismatch { expected: usize, found: usize },
 	TupleSizeMismatch { expected: usize, found: usize },
 	TupleIndexNotPresent { index: usize, ty: Type },
+	RecordFieldNotPresent { field: String, ty: Type },
 }
 
 impl fmt::Display for AnalysisError {
@@ -45,7 +46,7 @@ impl fmt::Display for AnalysisError {
 
 			TupleSizeMismatch { expected, found } => write!(
 				f,
-				"Tuple size mismatch: expected {}, but found {}.",
+				"Tuple size mismatch: expected {} elements, but found {}.",
 				expected, found
 			),
 
@@ -53,6 +54,12 @@ impl fmt::Display for AnalysisError {
 				f,
 				"Element {} does not exist in tuple of type `{}`.",
 				index, ty
+			),
+
+			RecordFieldNotPresent { ty, field } => write!(
+				f,
+				"Field {} does not exist in record of type `{}`.",
+				field, ty
 			),
 		}
 	}

@@ -282,7 +282,7 @@ impl Token {
 		match self {
 			Identifier(..) | KeywordFun(..) | KeywordIf(..) | KeywordWhen(..) | DecimalDigits(..)
 			| HexDigits(..) | BinaryDigits(..) | OctalDigits(..) | LeftParen(..) | LeftBracket(..)
-			| ForwardSlash(..) | StringLiteral(..) | BoolTrue(..) | BoolFalse(..) => true,
+			| LeftBrace(..) | ForwardSlash(..) | StringLiteral(..) | BoolTrue(..) | BoolFalse(..) => true,
 			_ => false,
 		}
 	}

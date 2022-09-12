@@ -45,10 +45,21 @@ impl Substitution {
         Type::PartialTuple(*index, self.apply_to_type(element_type).into())
       }
 
+      Type::PartialRecord(field_name, field_type) => {
+        Type::PartialRecord(field_name.clone(), self.apply_to_type(field_type).into())
+      }
+
       Type::Tuple(element_types) => Type::Tuple(
         element_types
           .iter()
           .map(|t| self.apply_to_type(t))
+          .collect(),
+      ),
+
+      Type::Record(field_types) => Type::Record(
+        field_types
+          .iter()
+          .map(|(name, t)| (name.clone(), self.apply_to_type(t)))
           .collect(),
       ),
     }

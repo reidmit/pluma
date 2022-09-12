@@ -48,6 +48,10 @@ fn main() {
         print_help();
       }
 
+      "version" => {
+        println!("v{}", VERSION)
+      }
+
       other => {
         print_error(format!("Unrecognized command: `{}`\n", other));
         print_help();
@@ -71,6 +75,7 @@ COMMANDS:
   run <path>     execute a module directly
   build <path>   compile a module into an executable
   analyze        parse, type-check & dump info about a module
+  version        print compiler version
   help           print this help text
 ",
     BINARY_NAME, VERSION, LANGUAGE_NAME

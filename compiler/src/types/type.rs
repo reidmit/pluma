@@ -12,6 +12,8 @@ pub enum Type {
   Nothing,
   Tuple(Vec<Type>),
   PartialTuple(usize, Box<Type>),
+  Record(Vec<(String, Type)>),
+  PartialRecord(String, Box<Type>),
   Fun(Vec<Type>, Box<Type>),
 }
 
@@ -30,9 +32,21 @@ impl Type {
 
       Type::PartialTuple(_, element_type) => element_type.contains_var(var),
 
+      Type::PartialRecord(_, field_type) => field_type.contains_var(var),
+
       Type::Tuple(element_types) => {
-        for element_types in element_types {
-          if element_types.contains_var(var) {
+        for element_type in element_types {
+          if element_type.contains_var(var) {
+            return true;
+          }
+        }
+
+        false
+      }
+
+      Type::Record(field_types) => {
+        for (_, field_type) in field_types {
+          if field_type.contains_var(var) {
             return true;
           }
         }
@@ -74,9 +88,19 @@ impl Type {
         vars.extend(element_type.free_vars());
       }
 
+      Type::PartialRecord(_, field_type) => {
+        vars.extend(field_type.free_vars());
+      }
+
       Type::Tuple(element_types) => {
         for element_type in element_types {
           vars.extend(element_type.free_vars());
+        }
+      }
+
+      Type::Record(field_types) => {
+        for (_, field_type) in field_types {
+          vars.extend(field_type.free_vars());
         }
       }
 
@@ -128,12 +152,26 @@ impl std::fmt::Display for Type {
         write!(f, "({}: {}, ...)", index, element)
       }
 
+      Type::PartialRecord(field_name, field_type) => {
+        write!(f, "{{{}: {}, ...}}", field_name, field_type)
+      }
+
       Type::Tuple(elements) => write!(
         f,
         "({})",
         elements
           .iter()
           .map(maybe_add_parens)
+          .collect::<Vec<String>>()
+          .join(", "),
+      ),
+
+      Type::Record(fields) => write!(
+        f,
+        "{{{}}}",
+        fields
+          .iter()
+          .map(|(field_name, field_type)| format!("{}: {}", field_name, field_type))
           .collect::<Vec<String>>()
           .join(", "),
       ),
