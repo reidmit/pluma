@@ -1,5 +1,5 @@
 Error: Field `namee` does not exist in record of type `{name: string, age: int}`.
 
-> 1| def me {
-     
-tests/record-misspelled-field/main.pa:1:1
+> 7|   me.namee
+       ^^^^^^^^
+tests/record-misspelled-field/main.pa:7:3

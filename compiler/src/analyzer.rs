@@ -369,10 +369,13 @@ impl<'compiler> Analyzer<'compiler> {
 
 				// we know that receiver is a "partial tuple": at given index, it
 				// must have a value of the type of this expr
-				constraints.push(eq_constraint(
-					receiver.ty.clone(),
-					Type::PartialTuple(*index, expr.ty.clone().into()),
-				))
+				constraints.push(
+					eq_constraint(
+						receiver.ty.clone(),
+						Type::PartialTuple(*index, expr.ty.clone().into()),
+					)
+					.at(expr.span),
+				)
 			}
 
 			ExprKind::FieldAccess { receiver, field } => {
@@ -383,10 +386,13 @@ impl<'compiler> Analyzer<'compiler> {
 
 				// we know that receiver is a "partial record": at given field name, it
 				// must have a value of the type of this expr
-				constraints.push(eq_constraint(
-					receiver.ty.clone(),
-					Type::PartialRecord(field.name.clone(), expr.ty.clone().into()),
-				))
+				constraints.push(
+					eq_constraint(
+						receiver.ty.clone(),
+						Type::PartialRecord(field.name.clone(), expr.ty.clone().into()),
+					)
+					.at(expr.span),
+				)
 			}
 
 			_ => {
