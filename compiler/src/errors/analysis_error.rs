@@ -58,7 +58,7 @@ impl fmt::Display for AnalysisError {
 
 			RecordFieldNotPresent { ty, field } => write!(
 				f,
-				"Field {} does not exist in record of type `{}`.",
+				"Field `{}` does not exist in record of type `{}`.",
 				field, ty
 			),
 		}
