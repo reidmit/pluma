@@ -5,79 +5,79 @@ use compiler::*;
 use printing::*;
 
 fn main() {
-  match std::env::args().nth(1) {
-    Some(arg) => match &arg[..] {
-      "run" => {
-        todo!()
-      }
+	match std::env::args().nth(1) {
+		Some(arg) => match &arg[..] {
+			"run" => {
+				todo!()
+			}
 
-      "build" => {
-        todo!()
-      }
+			"build" => {
+				todo!()
+			}
 
-      "analyze" => {
-        let entry_path = match std::env::args().nth(2) {
-          Some(path) => path,
-          None => {
-            print_error("No module path given. Expected another argument.");
-            std::process::exit(1);
-          }
-        };
+			"analyze" => {
+				let entry_path = match std::env::args().nth(2) {
+					Some(path) => path,
+					None => {
+						print_error("No module path given. Expected another argument.");
+						std::process::exit(1);
+					}
+				};
 
-        let mut compiler = match Compiler::from_entry_path(entry_path) {
-          Ok(c) => c,
-          Err(diagnostics) => {
-            print_diagnostics(diagnostics);
-            std::process::exit(1);
-          }
-        };
+				let mut compiler = match Compiler::from_entry_path(entry_path) {
+					Ok(c) => c,
+					Err(diagnostics) => {
+						print_diagnostics(diagnostics);
+						std::process::exit(1);
+					}
+				};
 
-        match compiler.check() {
-          Ok(module) => {
-            println!("{:#?}", module);
-          }
+				match compiler.check() {
+					Ok(module) => {
+						println!("{:#?}", module);
+					}
 
-          Err(diagnostics) => {
-            print_diagnostics(diagnostics);
-            std::process::exit(1);
-          }
-        }
-      }
+					Err(diagnostics) => {
+						print_diagnostics(diagnostics);
+						std::process::exit(1);
+					}
+				}
+			}
 
-      "help" => {
-        print_help();
-      }
+			"help" => {
+				print_help();
+			}
 
-      "version" => {
-        println!("v{}", VERSION)
-      }
+			"version" => {
+				println!("v{}", VERSION)
+			}
 
-      other => {
-        print_error(format!("Unrecognized command: `{}`\n", other));
-        print_help();
-        std::process::exit(1);
-      }
-    },
+			other => {
+				print_error(format!("Unrecognized command: `{}`\n", other));
+				print_help();
+				std::process::exit(1);
+			}
+		},
 
-    None => {
-      print_help();
-    }
-  }
+		None => {
+			print_help();
+		}
+	}
 }
 
 fn print_help() {
-  eprintln!(
-    "{} v{}
+	eprintln!(
+		"{} v{}
 
 Compiler & toolchain for the {} programming language
 
 COMMANDS:
-  run <path>     execute a module directly
-  build <path>   compile a module into an executable
-  analyze        parse, type-check & dump info about a module
-  version        print compiler version
-  help           print this help text
+  run <path>       execute a module directly
+  build <path>     compile a module into an executable
+  analyze <path>   parse, type-check & dump info about a module
+  version          print compiler version info
+  help             print this help text
 ",
-    BINARY_NAME, VERSION, LANGUAGE_NAME
-  )
+		BINARY_NAME, VERSION, LANGUAGE_NAME
+	)
 }

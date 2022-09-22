@@ -286,21 +286,25 @@ impl<'a> Parser<'a> {
 			Some(Token::StringLiteral(..)) => self.parse_string(),
 			Some(Token::BoolTrue(..)) => self.parse_bool(),
 			Some(Token::BoolFalse(..)) => self.parse_bool(),
-			Some(Token::KeywordWhen(..)) => self.parse_when_expression().map(|when_node| ExprNode {
-				span: when_node.span,
-				kind: ExprKind::When(when_node),
-				ty: Type::Unknown,
-			}),
+			Some(Token::KeywordWhen(..)) => {
+				self.parse_when_expression().map(|when_node| ExprNode {
+					span: when_node.span,
+					kind: ExprKind::When(when_node),
+					ty: Type::Unknown,
+				})
+			}
 			Some(Token::KeywordIf(..)) => self.parse_if_expression().map(|when_node| ExprNode {
 				span: when_node.span,
 				kind: ExprKind::If(when_node),
 				ty: Type::Unknown,
 			}),
-			Some(Token::KeywordWhile(..)) => self.parse_while_expression().map(|while_node| ExprNode {
-				span: while_node.span,
-				kind: ExprKind::While(while_node),
-				ty: Type::Unknown,
-			}),
+			Some(Token::KeywordWhile(..)) => {
+				self.parse_while_expression().map(|while_node| ExprNode {
+					span: while_node.span,
+					kind: ExprKind::While(while_node),
+					ty: Type::Unknown,
+				})
+			}
 			Some(Token::KeywordLet(..)) => self.parse_let_expression().map(|node| ExprNode {
 				span: node.span,
 				kind: ExprKind::Let(node),
@@ -677,22 +681,26 @@ impl<'a> Parser<'a> {
 				})
 			}
 
-			Some(Token::StringLiteral(..)) => self.parse_string().map(|expr_node| match expr_node.kind {
-				ExprKind::Literal(literal) => PatternNode {
-					span: literal.span,
-					kind: PatternKind::Literal(literal),
-				},
-				ExprKind::Interpolation(parts) => PatternNode {
-					span: expr_node.span,
-					kind: PatternKind::Interpolation(parts),
-				},
-				_ => unreachable!(),
-			}),
+			Some(Token::StringLiteral(..)) => {
+				self.parse_string().map(|expr_node| match expr_node.kind {
+					ExprKind::Literal(literal) => PatternNode {
+						span: literal.span,
+						kind: PatternKind::Literal(literal),
+					},
+					ExprKind::Interpolation(parts) => PatternNode {
+						span: expr_node.span,
+						kind: PatternKind::Interpolation(parts),
+					},
+					_ => unreachable!(),
+				})
+			}
 
-			Some(Token::DecimalDigits(..)) => self.parse_decimal_number().map(|lit_node| PatternNode {
-				span: lit_node.span,
-				kind: PatternKind::Literal(lit_node),
-			}),
+			Some(Token::DecimalDigits(..)) => {
+				self.parse_decimal_number().map(|lit_node| PatternNode {
+					span: lit_node.span,
+					kind: PatternKind::Literal(lit_node),
+				})
+			}
 
 			// TODO: other kinds of digits here
 			_ => None,
@@ -1319,10 +1327,12 @@ impl<'a> Parser<'a> {
 
 	fn parse_type_expression(&mut self) -> Option<TypeExprNode> {
 		match self.current_token {
-			Some(Token::Identifier(..)) => self.parse_type_identifier().map(|type_id| TypeExprNode {
-				span: type_id.span,
-				kind: TypeExprKind::Single(type_id),
-			}),
+			Some(Token::Identifier(..)) => {
+				self.parse_type_identifier().map(|type_id| TypeExprNode {
+					span: type_id.span,
+					kind: TypeExprKind::Single(type_id),
+				})
+			}
 			Some(Token::LeftParen(..)) => self.parse_type_parenthetical(),
 			Some(Token::LeftBrace(..)) => self.parse_type_record(),
 			Some(Token::KeywordFun(..)) => self.parse_type_lambda(),

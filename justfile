@@ -1,6 +1,6 @@
-# run on a single file path
-run path:
-  @ cargo run --quiet {{path}}
+# run 'analyze' on a single file path
+analyze path:
+  @ cargo run --quiet -- analyze {{path}}
 
 # run all tests
 test:
