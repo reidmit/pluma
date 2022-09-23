@@ -1,0 +1,56 @@
+module `main` (tests/def-polymorphism/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0-73) [
+            def(0-24) :: 'f -> 'f {
+                name: ident(4-12) `identity`,
+                kind: expr(13-24) :: 'f -> 'f {
+                    kind: lambda(13-24) {
+                        params: [
+                            ident(17-18) `x` :: 'f,
+                        ],
+                        body: [
+                            expr(21-22) :: 'f {
+                                kind: ident(21-22) `x`,
+                            },
+                        ],
+                    },
+                },
+            },
+            def(26-73) :: () -> int {
+                name: ident(30-34) `main`,
+                kind: expr(35-73) :: () -> int {
+                    kind: lambda(35-73) {
+                        params: [],
+                        body: [
+                            expr(43-57) :: string {
+                                kind: call(43-57) {
+                                    callee: expr(43-51) :: string -> string {
+                                        kind: ident(43-51) `identity`,
+                                    },
+                                    args: [
+                                        expr(52-57) :: string {
+                                            kind: literal(52-57) string "wow",
+                                        },
+                                    ],
+                                },
+                            },
+                            expr(60-71) :: int {
+                                kind: call(60-71) {
+                                    callee: expr(60-68) :: int -> int {
+                                        kind: ident(60-68) `identity`,
+                                    },
+                                    args: [
+                                        expr(69-71) :: int {
+                                            kind: literal(69-71) int 47,
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

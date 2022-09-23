@@ -2,15 +2,15 @@ module `main` (tests/identity/main.pa) {
     comments: {},
     ast: Some(
         module(0-47) [
-            def(0-26) :: int -> int {
+            def(0-26) :: 'f -> 'f {
                 name: ident(4-12) `identity`,
-                kind: expr(13-26) :: int -> int {
+                kind: expr(13-26) :: 'f -> 'f {
                     kind: lambda(13-26) {
                         params: [
-                            ident(17-18) `x` :: int,
+                            ident(17-18) `x` :: 'f,
                         ],
                         body: [
-                            expr(23-24) :: int {
+                            expr(23-24) :: 'f {
                                 kind: ident(23-24) `x`,
                             },
                         ],

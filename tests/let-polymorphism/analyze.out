@@ -11,13 +11,13 @@ module `main` (tests/let-polymorphism/main.pa) {
                             expr(17-43) :: () {
                                 kind: let(17-43) {
                                     name: ident(21-29) `identity`,
-                                    value: expr(32-43) :: 'd -> 'd {
+                                    value: expr(32-43) :: 'e -> 'e {
                                         kind: lambda(32-43) {
                                             params: [
-                                                ident(36-37) `x` :: 'd,
+                                                ident(36-37) `x` :: 'e,
                                             ],
                                             body: [
-                                                expr(40-41) :: 'd {
+                                                expr(40-41) :: 'e {
                                                     kind: ident(40-41) `x`,
                                                 },
                                             ],

@@ -2,17 +2,17 @@ module `main` (tests/partial-records/main.pa) {
     comments: {},
     ast: Some(
         module(0-138) [
-            def(0-35) :: ({name: string, ...}) -> string {
+            def(0-35) :: ({name: 'i, ...}) -> 'i {
                 name: ident(4-12) `get-name`,
-                kind: expr(13-35) :: ({name: string, ...}) -> string {
+                kind: expr(13-35) :: ({name: 'i, ...}) -> 'i {
                     kind: lambda(13-35) {
                         params: [
-                            ident(17-20) `rec` :: {name: string, ...},
+                            ident(17-20) `rec` :: {name: 'i, ...},
                         ],
                         body: [
-                            expr(25-33) :: string {
+                            expr(25-33) :: 'i {
                                 kind: field-access {
-                                    receiver: expr(25-28) :: {name: string, ...} {
+                                    receiver: expr(25-28) :: {name: 'i, ...} {
                                         kind: ident(25-28) `rec`,
                                     },
                                     field: ident(29-33) `name`,
@@ -53,7 +53,7 @@ module `main` (tests/partial-records/main.pa) {
                                         kind: ident(95-103) `get-name`,
                                     },
                                     args: [
-                                        expr(104-110) :: {name: string, age: int} {
+                                        expr(104-110) :: {name: string, ...} {
                                             kind: ident(104-110) `person`,
                                         },
                                     ],
@@ -61,7 +61,7 @@ module `main` (tests/partial-records/main.pa) {
                             },
                             expr(114-136) :: string {
                                 kind: call(114-136) {
-                                    callee: expr(114-122) :: ({name: string, ...}) -> string {
+                                    callee: expr(114-122) :: ({name: string}) -> string {
                                         kind: ident(114-122) `get-name`,
                                     },
                                     args: [

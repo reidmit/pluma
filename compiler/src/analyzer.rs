@@ -119,6 +119,7 @@ impl<'compiler> Analyzer<'compiler> {
 
 	fn constrain(&mut self, module: &mut ModuleNode) -> Vec<Constraint> {
 		let mut constraints = Vec::new();
+		let mut schemes = Vec::new();
 
 		// first, do a shallow pass to annotate all top-level defs and add them to the scope,
 		// so that they can be referenced anywhere within the bodies of other defs
@@ -126,11 +127,20 @@ impl<'compiler> Analyzer<'compiler> {
 			definition.ty = self.new_type_var();
 
 			match &mut definition.kind {
-				DefinitionKind::Expr(_) => self.add_value_binding(
-					definition.name.name.clone(),
-					Scheme::Forall(vec![], definition.ty.clone()),
-					definition.name.span,
-				),
+				DefinitionKind::Expr(_) => {
+					// Similar to lets, we generate a new type scheme for the definition body.
+					// This allows defs to be polymorphic (e.g. `def identity fun x { x }`) -
+					// these can be instantiated later into concrete types when used.
+					let type_scheme = self.new_type_scheme_var();
+
+					self.add_value_binding(
+						definition.name.name.clone(),
+						type_scheme.clone(),
+						definition.name.span,
+					);
+
+					schemes.push(type_scheme);
+				}
 				_ => {
 					// todo :---)
 				}
@@ -138,18 +148,23 @@ impl<'compiler> Analyzer<'compiler> {
 		}
 
 		// then, we go through and generate constraints from the defs
+		let mut scheme_index = 0;
+
 		for definition in &mut module.body {
 			match &mut definition.kind {
 				DefinitionKind::Expr(expr) => {
 					self.constrain_expr(expr, &mut constraints);
 
-					constraints.push(eq_constraint(definition.ty.clone(), expr.ty.clone()));
+					let scheme = schemes.get(scheme_index).unwrap().clone();
+					constraints.push(Constraint::Gen(scheme, expr.ty.clone()))
 				}
 
 				_ => {
 					// todo :---)
 				}
 			}
+
+			scheme_index += 1;
 		}
 
 		constraints
@@ -693,7 +708,15 @@ impl<'compiler> Analyzer<'compiler> {
 			self.fill_in_placeholder(&mut definition.ty, subst);
 
 			match &mut definition.kind {
-				DefinitionKind::Expr(expr) => self.annotate_expr(expr, subst),
+				DefinitionKind::Expr(expr) => {
+					self.annotate_expr(expr, subst);
+
+					// is this hacky? In the case of def-polymorphism, we do this to assign
+					// the def the same type as its value (which might be polymorphic)
+					if let Type::Var(_) = &definition.ty {
+						definition.ty = expr.ty.clone()
+					}
+				}
 				_ => { /* todo */ }
 			}
 		}
