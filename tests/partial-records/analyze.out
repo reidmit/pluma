@@ -1,0 +1,87 @@
+module `main` (tests/partial-records/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0-138) [
+            def(0-35) :: ({name: string, ...}) -> string {
+                name: ident(4-12) `get-name`,
+                kind: expr(13-35) :: ({name: string, ...}) -> string {
+                    kind: lambda(13-35) {
+                        params: [
+                            ident(17-20) `rec` :: {name: string, ...},
+                        ],
+                        body: [
+                            expr(25-33) :: string {
+                                kind: field-access {
+                                    receiver: expr(25-28) :: {name: string, ...} {
+                                        kind: ident(25-28) `rec`,
+                                    },
+                                    field: ident(29-33) `name`,
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+            def(37-76) :: {name: string, age: int} {
+                name: ident(41-47) `person`,
+                kind: expr(48-76) :: {name: string, age: int} {
+                    kind: record [
+                        (
+                            ident(52-56) `name`,
+                            expr(58-64) :: string {
+                                kind: literal(58-64) string "reid",
+                            },
+                        ),
+                        (
+                            ident(67-70) `age`,
+                            expr(72-74) :: int {
+                                kind: literal(72-74) int 28,
+                            },
+                        ),
+                    ],
+                },
+            },
+            def(78-138) :: () -> string {
+                name: ident(82-86) `main`,
+                kind: expr(87-138) :: () -> string {
+                    kind: lambda(87-138) {
+                        params: [],
+                        body: [
+                            expr(95-110) :: string {
+                                kind: call(95-110) {
+                                    callee: expr(95-103) :: ({name: string, ...}) -> string {
+                                        kind: ident(95-103) `get-name`,
+                                    },
+                                    args: [
+                                        expr(104-110) :: {name: string, age: int} {
+                                            kind: ident(104-110) `person`,
+                                        },
+                                    ],
+                                },
+                            },
+                            expr(114-136) :: string {
+                                kind: call(114-136) {
+                                    callee: expr(114-122) :: ({name: string, ...}) -> string {
+                                        kind: ident(114-122) `get-name`,
+                                    },
+                                    args: [
+                                        expr(123-136) :: {name: string} {
+                                            kind: record [
+                                                (
+                                                    ident(124-128) `name`,
+                                                    expr(130-135) :: string {
+                                                        kind: literal(130-135) string "lol",
+                                                    },
+                                                ),
+                                            ],
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

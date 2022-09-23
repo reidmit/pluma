@@ -1,0 +1,14 @@
+def get-name fun rec {
+  rec.name
+}
+
+def person {
+  name: "reid"
+  age: 28
+}
+
+def main fun {
+  get-name person
+
+  get-name {name: "lol"}
+}
