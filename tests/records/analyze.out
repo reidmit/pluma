@@ -50,7 +50,7 @@ module `main` (tests/records/main.pa) {
                                 kind: binary op(96-97) `+` {
                                     left: expr(89-95) :: int {
                                         kind: field-access {
-                                            receiver: expr(89-91) :: {name: string, age: int} {
+                                            receiver: expr(89-91) :: {age: int, ...} {
                                                 kind: ident(89-91) `me`,
                                             },
                                             field: ident(92-95) `age`,
@@ -58,7 +58,7 @@ module `main` (tests/records/main.pa) {
                                     },
                                     right: expr(98-108) :: int {
                                         kind: field-access {
-                                            receiver: expr(98-104) :: {one: int, two: int} {
+                                            receiver: expr(98-104) :: {two: int, ...} {
                                                 kind: ident(98-104) `inline`,
                                             },
                                             field: ident(105-108) `two`,
