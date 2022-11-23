@@ -1,0 +1,71 @@
+module `main` (tests/local-functions/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0-71) [
+            def(0-71) :: () -> int {
+                name: ident(4-8) `main`,
+                kind: expr(9-71) :: () -> int {
+                    kind: lambda(9-71) {
+                        params: [],
+                        body: [
+                            expr(17-50) :: () {
+                                kind: let(17-50) {
+                                    name: ident(21-24) `add`,
+                                    value: expr(27-50) :: int int -> int {
+                                        kind: lambda(27-50) {
+                                            params: [
+                                                ident(31-32) `x` :: int,
+                                                ident(33-34) `y` :: int,
+                                            ],
+                                            body: [
+                                                expr(41-46) :: int {
+                                                    kind: binary op(43-44) `+` {
+                                                        left: expr(41-42) :: int {
+                                                            kind: ident(41-42) `x`,
+                                                        },
+                                                        right: expr(45-46) :: int {
+                                                            kind: ident(45-46) `y`,
+                                                        },
+                                                    },
+                                                },
+                                            ],
+                                        },
+                                    },
+                                },
+                            },
+                            expr(54-69) :: int {
+                                kind: call(54-69) {
+                                    callee: expr(54-57) :: int int -> int {
+                                        kind: ident(54-57) `add`,
+                                    },
+                                    args: [
+                                        expr(58-67) :: int {
+                                            kind: expr(59-66) :: int {
+                                                kind: call(59-66) {
+                                                    callee: expr(59-62) :: int int -> int {
+                                                        kind: ident(59-62) `add`,
+                                                    },
+                                                    args: [
+                                                        expr(63-64) :: int {
+                                                            kind: literal(63-64) int 1,
+                                                        },
+                                                        expr(65-66) :: int {
+                                                            kind: literal(65-66) int 2,
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        },
+                                        expr(68-69) :: int {
+                                            kind: literal(68-69) int 3,
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

@@ -38,12 +38,15 @@ let list-across-lines = [
 
 ## records
 
+keyed by identifiers, no dynamic keys
+
 ```
 let some-record = {name: "reid", age: 28}
 let record-across-lines = {
   name: "reid"
   age: 28
 }
+print some-record.name
 ```
 
 ## functions

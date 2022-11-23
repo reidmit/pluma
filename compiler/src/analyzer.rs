@@ -779,7 +779,19 @@ impl<'compiler> Analyzer<'compiler> {
 				self.annotate_expr(right, subst);
 			}
 
-			_ => {}
+			ExprKind::Grouping(inner) => {
+				self.annotate_expr(inner, subst);
+			}
+
+			ExprKind::Identifier(_) => {
+				// nothing to annotate!
+			}
+
+			ExprKind::Literal(_) => {
+				// nothing to annotate!
+			}
+
+			other => todo!("analyze expr kind: {:?}", other),
 		}
 	}
 
