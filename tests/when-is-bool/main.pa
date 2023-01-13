@@ -1,0 +1,9 @@
+def main fun {
+  let x = true
+
+  when x is false {
+    "no"
+  } is _ {
+    "yes"
+  }
+}

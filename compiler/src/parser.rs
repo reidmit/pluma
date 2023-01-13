@@ -547,6 +547,8 @@ impl<'a> Parser<'a> {
 
 			let case_body = self.parse_body_expressions()?;
 
+			self.skip_line_breaks();
+
 			let (_, case_end) = expect_token_and_advance!(self, Token::RightBrace);
 
 			self.skip_line_breaks();
@@ -693,6 +695,18 @@ impl<'a> Parser<'a> {
 					},
 					_ => unreachable!(),
 				})
+			}
+
+			Some(Token::BoolFalse(..) | Token::BoolTrue(..)) => {
+				let expr_node = self.parse_bool()?;
+				if let ExprKind::Literal(lit_node) = expr_node.kind {
+					Some(PatternNode {
+						span: expr_node.span,
+						kind: PatternKind::Literal(lit_node),
+					})
+				} else {
+					None
+				}
 			}
 
 			Some(Token::DecimalDigits(..)) => {

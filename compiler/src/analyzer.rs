@@ -246,8 +246,7 @@ impl<'compiler> Analyzer<'compiler> {
 					element_types.push(element.ty.clone());
 				}
 
-				constraints
-					.push(eq_constraint(expr.ty.clone(), Type::Tuple(element_types)).at(expr.span))
+				constraints.push(eq_constraint(expr.ty.clone(), Type::Tuple(element_types)).at(expr.span))
 			}
 
 			ExprKind::Record(fields) => {
@@ -260,8 +259,7 @@ impl<'compiler> Analyzer<'compiler> {
 					field_types.push((field_name.name.clone(), field_value.ty.clone()));
 				}
 
-				constraints
-					.push(eq_constraint(expr.ty.clone(), Type::Record(field_types)).at(expr.span))
+				constraints.push(eq_constraint(expr.ty.clone(), Type::Record(field_types)).at(expr.span))
 			}
 
 			ExprKind::BinaryOperation { left, right, op } => {
@@ -282,8 +280,7 @@ impl<'compiler> Analyzer<'compiler> {
 					Operator::LogicalAnd | Operator::LogicalOr => {
 						expr.ty = Type::Bool;
 						constraints.push(eq_constraint(left.ty.clone(), Type::Bool).at(left.span));
-						constraints
-							.push(eq_constraint(right.ty.clone(), Type::Bool).at(right.span));
+						constraints.push(eq_constraint(right.ty.clone(), Type::Bool).at(right.span));
 					}
 
 					Operator::FieldAccess => unreachable!("handled separately"),
@@ -682,8 +679,7 @@ impl<'compiler> Analyzer<'compiler> {
 					}
 				}
 
-				let new_eq_constraints =
-					self.instantiate_constraints(&inst_constraints_for_gen, &ty);
+				let new_eq_constraints = self.instantiate_constraints(&inst_constraints_for_gen, &ty);
 				let subst = self.unify_eq_constraints(&new_eq_constraints);
 				let other_constraints = subst.apply_to_constraints(&other_constraints);
 				let subst2 = self.unify_gen_inst_constraints(&other_constraints);
@@ -791,15 +787,15 @@ impl<'compiler> Analyzer<'compiler> {
 				// nothing to annotate!
 			}
 
+			ExprKind::Regex(_) => {
+				// nothing to annotate?
+			}
+
 			other => todo!("analyze expr kind: {:?}", other),
 		}
 	}
 
-	fn instantiate_constraints(
-		&mut self,
-		constraints: &[Constraint],
-		ty: &Type,
-	) -> Vec<Constraint> {
+	fn instantiate_constraints(&mut self, constraints: &[Constraint], ty: &Type) -> Vec<Constraint> {
 		let mut new_constraints = Vec::new();
 
 		let scheme = self.generalize_type(ty);
