@@ -2,14 +2,6 @@
 analyze path:
   @ cargo run --quiet -- analyze {{path}}
 
-# run all tests
-test:
-  @ python3 scripts/run-tests.py
-
-# run tests matching filter
-test-only filter:
-  @ python3 scripts/run-tests.py {{filter}}
-
 # generate or overwrite .err and .out files for a given test
 test-write $path_to_write:
   #!/usr/bin/env zsh

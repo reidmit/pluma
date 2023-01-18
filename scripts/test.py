@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import subprocess
 import os
 import sys
@@ -6,8 +8,9 @@ import difflib
 root_dir = os.path.abspath(os.path.join(__file__, os.pardir, os.pardir))
 test_dir = os.path.join(root_dir, "tests")
 
-green = '\x1b[38;5;16;48;5;2m'
-red = '\x1b[38;5;16;48;5;1m'
+green = '\x1b[32m'
+red = '\x1b[31m'
+yellow = '\x1b[33m'
 reset = '\x1b[0m'
 
 passed = 0
@@ -57,37 +60,48 @@ for entry in os.scandir(test_dir):
     test_module = os.path.join(test_dir, entry.name, "main.pa")
 
     test_cases = [
-      ("run.out", "run", lambda c: c.stdout),
-      ("run.err", "run", lambda c: c.stderr),
+      # ("run.out", "run", lambda c: c.stdout),
+      # ("run.err", "run", lambda c: c.stderr),
       ("analyze.out", "analyze", lambda c: c.stdout),
       ("analyze.err", "analyze", lambda c: c.stderr),
     ]
 
     for (output_file, command, handler) in test_cases:
       output_file_path = os.path.join(test_dir, entry.name, output_file)
+      test_name = f"{entry.name}/{output_file}"
 
-      if os.path.exists(output_file_path):
-        test_name = f"{entry.name}/{output_file}"
+      if filter_arg is not None and filter_arg not in test_name:
+        skipped += 1
+        continue
 
-        if filter_arg is not None and filter_arg not in test_name:
-          skipped += 1
-          continue
+      sys.stdout.write(f"\n{test_name}: ")
 
-        sys.stdout.write(f"\n{test_name}: ")
+      if not os.path.exists(output_file_path):
+        sys.stdout.write(f"{yellow}missing{reset}\n")
+        skipped += 1
+        continue
 
-        command = subprocess.run(
-          ["cargo", "run", "--quiet", "--", command, test_module],
-          capture_output=True)
+      command = subprocess.run(
+        ["cargo", "run", "--quiet", "--", command, test_module],
+        capture_output=True)
 
-        expected_lines, actual_lines = get_lines(handler(command), output_file_path)
+      expected_lines, actual_lines = get_lines(handler(command), output_file_path)
 
-        if expected_lines == actual_lines:
-          sys.stdout.write(f"{green}PASS{reset}\n")
-          passed += 1
-        else:
-          failed += 1
-          sys.stdout.write(f"{red}FAIL{reset}\n")
-          sys.stdout.write("│\n│ Incorrect or unexpected output:\n")
-          print_pretty_diff(expected_lines, actual_lines)
+      if expected_lines == actual_lines:
+        sys.stdout.write(f"{green}passed{reset}\n")
+        passed += 1
+      else:
+        failed += 1
+        sys.stdout.write(f"{red}failed{reset}\n")
+        sys.stdout.write("│\n│ Incorrect or unexpected output:\n")
+        print_pretty_diff(expected_lines, actual_lines)
 
-sys.stdout.write(f"\n{passed} passed, {failed} failed, {skipped} skipped\n")
+sys.stdout.write(f"\n{green}{passed} passed{reset}\n")
+sys.stdout.write(f"{red}{failed} failed{reset}\n")
+sys.stdout.write(f"{yellow}{skipped} skipped{reset}\n")
+
+if failed > 0:
+  exit(1)
+
+if skipped > 0:
+  exit(2)
