@@ -1,86 +1,96 @@
 use super::*;
 use crate::types::*;
 
-#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct PatternNode {
-  pub span: Span,
-  pub kind: PatternKind,
+	pub span: Span,
+	pub kind: PatternKind,
 }
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub enum PatternKind {
-  // e.g. if val is x { ... }
-  Identifier(IdentifierNode),
-  // e.g. if val is enum-variant _ { ... }
-  Constructor(IdentifierNode, Box<PatternNode>),
-  // e.g. if val is (a, b) { ... }
-  Tuple(Vec<PatternNode>),
-  // e.g. if val is {a: 1, b: 2} { ... }
-  Record(Vec<(IdentifierNode, PatternNode)>),
-  // e.g. if val is _ { ... }
-  Underscore,
-  // e.g. if val is 1 { ... }
-  Literal(LiteralNode),
-  // e.g. if name is "$(first) $(last)" { ... }
-  Interpolation(Vec<ExprNode>),
+	// e.g. if val is x { ... }
+	Identifier(IdentifierNode),
+	// e.g. if val is enum-variant _ { ... }
+	Constructor(IdentifierNode, Box<PatternNode>),
+	// e.g. if val is (a, b) { ... }
+	Tuple(Vec<PatternNode>),
+	// e.g. if val is {a: 1, b: 2} { ... }
+	Record(Vec<(IdentifierNode, PatternNode)>),
+	// e.g. if val is _ { ... }
+	Underscore,
+	// e.g. if val is 1 { ... }
+	Literal(LiteralNode),
+	// e.g. if name is "$(first) $(last)" { ... }
+	Interpolation(Vec<ExprNode>),
 }
 
 impl PatternNode {
-  pub fn to_expr(self) -> ExprNode {
-    let span = self.span;
+	pub fn to_expr(self) -> ExprNode {
+		let span = self.span;
 
-    let expr_kind = match self.kind {
-      PatternKind::Identifier(ident) => ExprKind::Identifier(ident),
+		let expr_kind = match self.kind {
+			PatternKind::Identifier(ident) => ExprKind::Identifier(ident),
 
-      PatternKind::Literal(literal) => ExprKind::Literal(literal),
+			PatternKind::Literal(literal) => ExprKind::Literal(literal),
 
-      PatternKind::Interpolation(parts) => ExprKind::Interpolation(parts),
+			PatternKind::Interpolation(parts) => ExprKind::Interpolation(parts),
 
-      PatternKind::Tuple(entry_patterns) => {
-        let mut entries = Vec::new();
+			PatternKind::Tuple(entry_patterns) => {
+				let mut entries = Vec::new();
 
-        for pat in entry_patterns {
-          entries.push(pat.to_expr())
-        }
+				for pat in entry_patterns {
+					entries.push(pat.to_expr())
+				}
 
-        ExprKind::Tuple(entries)
-      }
+				ExprKind::Tuple(entries)
+			}
 
-      PatternKind::Record(entry_patterns) => {
-        let mut entries = Vec::new();
+			PatternKind::Record(entry_patterns) => {
+				let mut entries = Vec::new();
 
-        for (label, pat) in entry_patterns {
-          entries.push((label, pat.to_expr()))
-        }
+				for (label, pat) in entry_patterns {
+					entries.push((label, pat.to_expr()))
+				}
 
-        ExprKind::Record(entries)
-      }
+				ExprKind::Record(entries)
+			}
 
-      PatternKind::Constructor(ident, arg) => {
-        let callee = ExprNode {
-          span: ident.span,
-          kind: ExprKind::Identifier(ident),
-          ty: Type::Unknown,
-        };
+			PatternKind::Constructor(ident, arg) => {
+				let callee = ExprNode {
+					span: ident.span,
+					kind: ExprKind::Identifier(ident),
+					ty: Type::Unknown,
+				};
 
-        let arg_expr = arg.to_expr();
+				let arg_expr = arg.to_expr();
 
-        let call = CallNode {
-          span,
-          callee: Box::new(callee),
-          args: vec![arg_expr],
-        };
+				let call = CallNode {
+					span,
+					callee: Box::new(callee),
+					args: vec![arg_expr],
+				};
 
-        ExprKind::Call(call)
-      }
+				ExprKind::Call(call)
+			}
 
-      _other => todo!("other expr kind in pattern"),
-    };
+			_other => todo!("other expr kind in pattern"),
+		};
 
-    ExprNode {
-      span,
-      kind: expr_kind,
-      ty: Type::Unknown,
-    }
-  }
+		ExprNode {
+			span,
+			kind: expr_kind,
+			ty: Type::Unknown,
+		}
+	}
+}
+
+#[cfg(debug_assertions)]
+impl std::fmt::Debug for PatternNode {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(
+			f,
+			"pattern({}-{}) {:#?}",
+			self.span.0, self.span.1, self.kind
+		)
+	}
 }

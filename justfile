@@ -20,6 +20,9 @@ test-write $path_to_write:
 site:
   @ zola -r site serve -p 7586
 
+test:
+  @ python3 scripts/test.py
+
 # install all deps on macos
 install-depencies-macos:
   brew install zola

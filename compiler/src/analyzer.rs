@@ -775,6 +775,21 @@ impl<'compiler> Analyzer<'compiler> {
 				self.annotate_expr(right, subst);
 			}
 
+			ExprKind::When(WhenNode { subject, .. }) => {
+				self.annotate_expr(subject, subst);
+				// TODO: do we need to annotate case patterns?
+			}
+
+			ExprKind::If(IfNode { subject, .. }) => {
+				self.annotate_expr(subject, subst);
+				// TODO: do we need to annotate pattern?
+			}
+
+			ExprKind::While(WhileNode { subject, .. }) => {
+				self.annotate_expr(subject, subst);
+				// TODO: do we need to annotate pattern?
+			}
+
 			ExprKind::Grouping(inner) => {
 				self.annotate_expr(inner, subst);
 			}
