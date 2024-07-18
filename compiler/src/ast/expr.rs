@@ -31,7 +31,7 @@ pub enum ExprKind {
 		field: IdentifierNode,
 	},
 
-	Lambda(LambdaNode),
+	Fun(FunNode),
 	Call(CallNode),
 	EmptyTuple,
 	Grouping(Box<ExprNode>),
@@ -90,8 +90,8 @@ impl std::fmt::Debug for ExprKind {
 				.field("field", field)
 				.finish(),
 
-			Lambda(lambda) => {
-				write!(f, "{:#?}", lambda)
+			Fun(fun) => {
+				write!(f, "{:#?}", fun)
 			}
 
 			Call(call) => {

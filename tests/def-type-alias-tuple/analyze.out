@@ -1,0 +1,14 @@
+module `main` (tests/def-type-alias-tuple/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0-31) [
+            def(0-31) :: 'a {
+                name: ident(4-14) `coordinate`,
+                kind: alias type(21-31) :: tuple-type [
+                    type(22-25) :: type-ident(22-25) `int`,
+                    type(27-30) :: type-ident(27-30) `int`,
+                ],
+            },
+        ],
+    ),
+}

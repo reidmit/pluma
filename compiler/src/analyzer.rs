@@ -14,6 +14,7 @@ pub struct Analyzer<'compiler> {
 	module_path: Option<PathBuf>,
 	diagnostics: &'compiler mut Vec<Diagnostic>,
 	value_scopes: Vec<HashMap<String, ValueBinding>>,
+	type_scope: HashMap<String, TypeBinding>,
 	next_type_var_id: usize,
 }
 
@@ -26,6 +27,7 @@ impl<'compiler> Analyzer<'compiler> {
 			module_path: None,
 			diagnostics,
 			value_scopes: Vec::new(),
+			type_scope: HashMap::new(),
 			next_type_var_id: 0,
 		}
 	}
@@ -35,6 +37,13 @@ impl<'compiler> Analyzer<'compiler> {
 	pub fn analyze(&mut self, module: &mut Module) {
 		self.module_name = Some(module.module_name.clone());
 		self.module_path = Some(module.module_path.clone());
+
+		// TODO: We're adding the builtin types here, but there must be a better way
+		self.add_type_binding("int".into(), Type::Int, (0, 0));
+		self.add_type_binding("bool".into(), Type::Bool, (0, 0));
+		self.add_type_binding("string".into(), Type::String, (0, 0));
+		self.add_type_binding("regex".into(), Type::Regex, (0, 0));
+		self.add_type_binding("float".into(), Type::Float, (0, 0));
 
 		self.enter_scope();
 
@@ -117,9 +126,31 @@ impl<'compiler> Analyzer<'compiler> {
 		}
 	}
 
+	fn add_type_binding(&mut self, name: String, ty: Type, span: (usize, usize)) {
+		self.type_scope.insert(
+			name,
+			TypeBinding {
+				ty,
+				ref_count: 0,
+				span,
+			},
+		);
+	}
+
+	fn get_type_binding(&mut self, name: &String) -> Option<&TypeBinding> {
+		if let Some(binding) = self.type_scope.get_mut(name) {
+			binding.ref_count += 1;
+
+			return Some(binding);
+		}
+
+		None
+	}
+
 	fn constrain(&mut self, module: &mut ModuleNode) -> Vec<Constraint> {
 		let mut constraints = Vec::new();
 		let mut schemes = Vec::new();
+		let mut type_def_vars = Vec::new();
 
 		// first, do a shallow pass to annotate all top-level defs and add them to the scope,
 		// so that they can be referenced anywhere within the bodies of other defs
@@ -141,14 +172,24 @@ impl<'compiler> Analyzer<'compiler> {
 
 					schemes.push(type_scheme);
 				}
-				_ => {
-					// todo :---)
+
+				DefinitionKind::Alias(_) => {
+					let type_var = self.new_type_var();
+
+					self.add_type_binding(
+						definition.name.name.clone(),
+						type_var.clone(),
+						definition.name.span,
+					);
+
+					type_def_vars.push(type_var);
 				}
 			}
 		}
 
 		// then, we go through and generate constraints from the defs
 		let mut scheme_index = 0;
+		let mut type_def_index = 0;
 
 		for definition in &mut module.body {
 			match &mut definition.kind {
@@ -156,18 +197,64 @@ impl<'compiler> Analyzer<'compiler> {
 					self.constrain_expr(expr, &mut constraints);
 
 					let scheme = schemes.get(scheme_index).unwrap().clone();
-					constraints.push(Constraint::Gen(scheme, expr.ty.clone()))
+					constraints.push(Constraint::Gen(scheme, expr.ty.clone()));
+					scheme_index += 1;
 				}
 
-				_ => {
-					// todo :---)
+				DefinitionKind::Alias(type_expr) => {
+					let ty = self.type_expr_to_type(type_expr, &mut constraints);
+					let type_var = type_def_vars.get(type_def_index).unwrap().clone();
+					constraints.push(eq_constraint(type_var, ty.clone()));
+					type_def_index += 1;
 				}
 			}
-
-			scheme_index += 1;
 		}
 
 		constraints
+	}
+
+	fn type_expr_to_type(
+		&mut self,
+		type_expr: &TypeExprNode,
+		constraints: &mut Vec<Constraint>,
+	) -> Type {
+		match &type_expr.kind {
+			TypeExprKind::EmptyTuple => Type::Nothing,
+			TypeExprKind::Grouping(inner) => self.type_expr_to_type(inner, constraints),
+			TypeExprKind::Tuple(entries) => Type::Tuple(
+				entries
+					.into_iter()
+					.map(|e| self.type_expr_to_type(e, constraints))
+					.collect(),
+			),
+			TypeExprKind::Record(fields) => Type::Record(
+				fields
+					.into_iter()
+					.map(|(name, f)| (name.name.clone(), self.type_expr_to_type(f, constraints)))
+					.collect(),
+			),
+			TypeExprKind::Func(params, ret) => Type::Fun(
+				params
+					.into_iter()
+					.map(|p| self.type_expr_to_type(p, constraints))
+					.collect(),
+				self.type_expr_to_type(ret, constraints).into(),
+			),
+			TypeExprKind::Single(type_ident) => {
+				if let Some(binding) = self.get_type_binding(&type_ident.name) {
+					return binding.ty.clone();
+				}
+
+				self.error(
+					type_ident.span,
+					NameNotBound {
+						name: type_ident.name.clone(),
+					},
+				);
+
+				Type::Unknown
+			}
+		}
 	}
 
 	fn constrain_expr(&mut self, expr: &mut ExprNode, constraints: &mut Vec<Constraint>) {
@@ -292,7 +379,7 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 			}
 
-			ExprKind::Lambda(LambdaNode { params, body, .. }) => {
+			ExprKind::Fun(FunNode { params, body, .. }) => {
 				expr.ty = self.new_type_var();
 
 				let mut param_types = Vec::new();
@@ -726,7 +813,7 @@ impl<'compiler> Analyzer<'compiler> {
 				self.annotate_expr(value, subst);
 			}
 
-			ExprKind::Lambda(LambdaNode { params, body, .. }) => {
+			ExprKind::Fun(FunNode { params, body, .. }) => {
 				for param in params {
 					self.fill_in_placeholder(&mut param.ty, subst);
 				}

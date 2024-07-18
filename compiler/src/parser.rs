@@ -166,7 +166,7 @@ impl<'a> Parser<'a> {
 		Some(body)
 	}
 
-	fn parse_lambda(&mut self) -> Option<LambdaNode> {
+	fn parse_fun(&mut self) -> Option<FunNode> {
 		let (start, _) = expect_token_and_advance!(self, Token::KeywordFun);
 
 		let mut params = Vec::new();
@@ -175,7 +175,7 @@ impl<'a> Parser<'a> {
 		while current_token_is!(self, Token::Identifier) {
 			let ident = self.parse_identifier()?;
 
-			params.push(LambdaParamNode {
+			params.push(FunParamNode {
 				ident,
 				ty: Type::Unknown,
 			});
@@ -189,7 +189,7 @@ impl<'a> Parser<'a> {
 
 		let (_, end) = expect_token_and_advance!(self, Token::RightBrace);
 
-		Some(LambdaNode {
+		Some(FunNode {
 			span: (start, end),
 			params,
 			body,
@@ -306,9 +306,9 @@ impl<'a> Parser<'a> {
 				kind: ExprKind::Let(node),
 				ty: Type::Unknown,
 			}),
-			Some(Token::KeywordFun(..)) => self.parse_lambda().map(|lambda| ExprNode {
-				span: lambda.span,
-				kind: ExprKind::Lambda(lambda),
+			Some(Token::KeywordFun(..)) => self.parse_fun().map(|fun| ExprNode {
+				span: fun.span,
+				kind: ExprKind::Fun(fun),
 				ty: Type::Unknown,
 			}),
 			Some(Token::Identifier(..)) => self.parse_identifier().map(|ident| ExprNode {
@@ -1339,12 +1339,12 @@ impl<'a> Parser<'a> {
 			}),
 			Some(Token::LeftParen(..)) => self.parse_type_parenthetical(),
 			Some(Token::LeftBrace(..)) => self.parse_type_record(),
-			Some(Token::KeywordFun(..)) => self.parse_type_lambda(),
+			Some(Token::KeywordFun(..)) => self.parse_type_fun(),
 			_ => None,
 		}
 	}
 
-	fn parse_type_lambda(&mut self) -> Option<TypeExprNode> {
+	fn parse_type_fun(&mut self) -> Option<TypeExprNode> {
 		let (start, _) = expect_token_and_advance!(self, Token::KeywordFun);
 
 		self.skip_line_breaks();

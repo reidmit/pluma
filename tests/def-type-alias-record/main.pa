@@ -1,0 +1,10 @@
+def person alias {
+  name: string
+  age: int
+}
+
+def get-name fun p {
+  p.name
+}
+
+def main fun {}

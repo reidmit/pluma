@@ -1,0 +1,20 @@
+module `main` (tests/def-type-alias-record/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0-46) [
+            def(0-46) :: 'a {
+                name: ident(4-10) `person`,
+                kind: alias type(17-46) record-type [
+                    (
+                        ident(21-25) `name`,
+                        type(27-33) type-ident(27-33) `string`,
+                    ),
+                    (
+                        ident(36-39) `age`,
+                        type(41-44) type-ident(41-44) `int`,
+                    ),
+                ],
+            },
+        ],
+    ),
+}
