@@ -2,10 +2,10 @@ module `main` (tests/def-polymorphism/main.pa) {
     comments: {},
     ast: Some(
         module(0-73) [
-            def(0-24) :: 'f -> 'f {
+            def(0-24) :: () {
                 name: ident(4-12) `identity`,
                 kind: expr(13-24) :: 'f -> 'f {
-                    kind: lambda(13-24) {
+                    kind: fun(13-24) {
                         params: [
                             ident(17-18) `x` :: 'f,
                         ],
@@ -17,10 +17,10 @@ module `main` (tests/def-polymorphism/main.pa) {
                     },
                 },
             },
-            def(26-73) :: () -> int {
+            def(26-73) :: () {
                 name: ident(30-34) `main`,
                 kind: expr(35-73) :: () -> int {
-                    kind: lambda(35-73) {
+                    kind: fun(35-73) {
                         params: [],
                         body: [
                             expr(43-57) :: string {

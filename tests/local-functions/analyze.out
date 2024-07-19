@@ -2,17 +2,17 @@ module `main` (tests/local-functions/main.pa) {
     comments: {},
     ast: Some(
         module(0-71) [
-            def(0-71) :: () -> int {
+            def(0-71) :: () {
                 name: ident(4-8) `main`,
                 kind: expr(9-71) :: () -> int {
-                    kind: lambda(9-71) {
+                    kind: fun(9-71) {
                         params: [],
                         body: [
                             expr(17-50) :: () {
                                 kind: let(17-50) {
                                     name: ident(21-24) `add`,
                                     value: expr(27-50) :: int int -> int {
-                                        kind: lambda(27-50) {
+                                        kind: fun(27-50) {
                                             params: [
                                                 ident(31-32) `x` :: int,
                                                 ident(33-34) `y` :: int,

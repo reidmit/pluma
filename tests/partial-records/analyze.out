@@ -2,10 +2,10 @@ module `main` (tests/partial-records/main.pa) {
     comments: {},
     ast: Some(
         module(0-138) [
-            def(0-35) :: ({name: 'i, ...}) -> 'i {
+            def(0-35) :: () {
                 name: ident(4-12) `get-name`,
                 kind: expr(13-35) :: ({name: 'i, ...}) -> 'i {
-                    kind: lambda(13-35) {
+                    kind: fun(13-35) {
                         params: [
                             ident(17-20) `rec` :: {name: 'i, ...},
                         ],
@@ -22,7 +22,7 @@ module `main` (tests/partial-records/main.pa) {
                     },
                 },
             },
-            def(37-76) :: {name: string, age: int} {
+            def(37-76) :: () {
                 name: ident(41-47) `person`,
                 kind: expr(48-76) :: {name: string, age: int} {
                     kind: record [
@@ -41,10 +41,10 @@ module `main` (tests/partial-records/main.pa) {
                     ],
                 },
             },
-            def(78-138) :: () -> string {
+            def(78-138) :: () {
                 name: ident(82-86) `main`,
                 kind: expr(87-138) :: () -> string {
-                    kind: lambda(87-138) {
+                    kind: fun(87-138) {
                         params: [],
                         body: [
                             expr(95-110) :: string {

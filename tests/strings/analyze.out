@@ -2,13 +2,13 @@ module `main` (tests/strings/main.pa) {
     comments: {},
     ast: Some(
         module(0-96) [
-            def(0-16) :: string {
+            def(0-16) :: () {
                 name: ident(4-10) `simple`,
                 kind: expr(11-16) :: string {
                     kind: literal(11-16) string "hey",
                 },
             },
-            def(18-62) :: string {
+            def(18-62) :: () {
                 name: ident(22-31) `multiline`,
                 kind: expr(32-62) :: string {
                     kind: literal(32-62) string "one
@@ -19,7 +19,7 @@ module `main` (tests/strings/main.pa) {
                           ",
                 },
             },
-            def(64-96) :: string {
+            def(64-96) :: () {
                 name: ident(68-80) `interpolated`,
                 kind: expr(82-96) :: string {
                     kind: interpolation [

@@ -2,10 +2,10 @@ module `main` (tests/partial-record-polymorphism/main.pa) {
     comments: {},
     ast: Some(
         module(0-102) [
-            def(0-35) :: ({name: 'g, ...}) -> 'g {
+            def(0-35) :: () {
                 name: ident(4-12) `get-name`,
                 kind: expr(13-35) :: ({name: 'g, ...}) -> 'g {
-                    kind: lambda(13-35) {
+                    kind: fun(13-35) {
                         params: [
                             ident(17-20) `rec` :: {name: 'g, ...},
                         ],
@@ -22,10 +22,10 @@ module `main` (tests/partial-record-polymorphism/main.pa) {
                     },
                 },
             },
-            def(37-102) :: () -> string {
+            def(37-102) :: () {
                 name: ident(41-45) `main`,
                 kind: expr(46-102) :: () -> string {
-                    kind: lambda(46-102) {
+                    kind: fun(46-102) {
                         params: [],
                         body: [
                             expr(54-74) :: int {

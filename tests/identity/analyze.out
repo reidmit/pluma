@@ -2,10 +2,10 @@ module `main` (tests/identity/main.pa) {
     comments: {},
     ast: Some(
         module(0-47) [
-            def(0-26) :: 'f -> 'f {
+            def(0-26) :: () {
                 name: ident(4-12) `identity`,
                 kind: expr(13-26) :: 'f -> 'f {
-                    kind: lambda(13-26) {
+                    kind: fun(13-26) {
                         params: [
                             ident(17-18) `x` :: 'f,
                         ],
@@ -17,7 +17,7 @@ module `main` (tests/identity/main.pa) {
                     },
                 },
             },
-            def(28-47) :: int {
+            def(28-47) :: () {
                 name: ident(32-35) `num`,
                 kind: expr(36-47) :: int {
                     kind: call(36-47) {

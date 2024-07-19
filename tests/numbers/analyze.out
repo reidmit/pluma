@@ -2,31 +2,31 @@ module `main` (tests/numbers/main.pa) {
     comments: {},
     ast: Some(
         module(0-116) [
-            def(0-17) :: int {
+            def(0-17) :: () {
                 name: ident(4-14) `an-integer`,
                 kind: expr(15-17) :: int {
                     kind: literal(15-17) int 47,
                 },
             },
-            def(19-37) :: float {
+            def(19-37) :: () {
                 name: ident(23-30) `a-float`,
                 kind: expr(31-37) :: float {
                     kind: literal(31-37) float 47.123,
                 },
             },
-            def(39-63) :: int {
+            def(39-63) :: () {
                 name: ident(43-57) `binary-integer`,
                 kind: expr(58-63) :: int {
                     kind: literal(58-63) binary int 5,
                 },
             },
-            def(65-88) :: int {
+            def(65-88) :: () {
                 name: ident(69-82) `octal-integer`,
                 kind: expr(83-88) :: int {
                     kind: literal(83-88) octal int 493,
                 },
             },
-            def(90-116) :: int {
+            def(90-116) :: () {
                 name: ident(94-105) `hex-integer`,
                 kind: expr(106-116) :: int {
                     kind: literal(106-116) hex int 3735928559,

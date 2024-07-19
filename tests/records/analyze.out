@@ -2,7 +2,7 @@ module `main` (tests/records/main.pa) {
     comments: {},
     ast: Some(
         module(0-110) [
-            def(0-35) :: {name: string, age: int} {
+            def(0-35) :: () {
                 name: ident(4-6) `me`,
                 kind: expr(7-35) :: {name: string, age: int} {
                     kind: record [
@@ -21,7 +21,7 @@ module `main` (tests/records/main.pa) {
                     ],
                 },
             },
-            def(37-64) :: {one: int, two: int} {
+            def(37-64) :: () {
                 name: ident(41-47) `inline`,
                 kind: expr(48-64) :: {one: int, two: int} {
                     kind: record [
@@ -40,10 +40,10 @@ module `main` (tests/records/main.pa) {
                     ],
                 },
             },
-            def(66-110) :: () -> int {
+            def(66-110) :: () {
                 name: ident(70-80) `get-result`,
                 kind: expr(81-110) :: () -> int {
-                    kind: lambda(81-110) {
+                    kind: fun(81-110) {
                         params: [],
                         body: [
                             expr(89-108) :: int {

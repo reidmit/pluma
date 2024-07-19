@@ -2,7 +2,7 @@ module `main` (tests/regex/main.pa) {
     comments: {},
     ast: Some(
         module(0-63) [
-            def(0-24) :: regex {
+            def(0-24) :: () {
                 name: ident(4-6) `r1`,
                 kind: expr(7-24) :: regex {
                     kind: regex(9-22) sequence [
@@ -11,7 +11,7 @@ module `main` (tests/regex/main.pa) {
                     ],
                 },
             },
-            def(26-63) :: regex {
+            def(26-63) :: () {
                 name: ident(30-32) `r2`,
                 kind: expr(33-63) :: regex {
                     kind: regex(38-61) sequence [

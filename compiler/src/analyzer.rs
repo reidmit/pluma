@@ -174,15 +174,23 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 
 				DefinitionKind::Alias(_) => {
+					// Add a type binding for the type defined here...
 					let type_var = self.new_type_var();
-
 					self.add_type_binding(
 						definition.name.name.clone(),
 						type_var.clone(),
 						definition.name.span,
 					);
-
 					type_def_vars.push(type_var);
+
+					// And also a value binding for the constructor function!
+					let type_scheme = self.new_type_scheme_var();
+					self.add_value_binding(
+						definition.name.name.clone(),
+						type_scheme.clone(),
+						definition.name.span,
+					);
+					schemes.push(type_scheme);
 				}
 			}
 		}
@@ -204,8 +212,13 @@ impl<'compiler> Analyzer<'compiler> {
 				DefinitionKind::Alias(type_expr) => {
 					let ty = self.type_expr_to_type(type_expr, &mut constraints);
 					let type_var = type_def_vars.get(type_def_index).unwrap().clone();
-					constraints.push(eq_constraint(type_var, ty.clone()));
+					constraints.push(eq_constraint(type_var.clone(), ty.clone()));
 					type_def_index += 1;
+
+					let scheme = schemes.get(scheme_index).unwrap().clone();
+					let constructor_type = Type::Fun(vec![ty.clone()], type_var.clone().into());
+					constraints.push(Constraint::Gen(scheme, constructor_type));
+					scheme_index += 1;
 				}
 			}
 		}
@@ -241,8 +254,17 @@ impl<'compiler> Analyzer<'compiler> {
 				self.type_expr_to_type(ret, constraints).into(),
 			),
 			TypeExprKind::Single(type_ident) => {
-				if let Some(binding) = self.get_type_binding(&type_ident.name) {
-					return binding.ty.clone();
+				match &type_ident.name[..] {
+					"string" => return Type::String,
+					"int" => return Type::Int,
+					"float" => return Type::Float,
+					"bool" => return Type::Bool,
+					"regex" => return Type::Regex,
+					_ => {
+						if let Some(binding) = self.get_type_binding(&type_ident.name) {
+							return binding.ty.clone();
+						}
+					}
 				}
 
 				self.error(
@@ -790,17 +812,15 @@ impl<'compiler> Analyzer<'compiler> {
 		for definition in &mut module.body {
 			self.fill_in_placeholder(&mut definition.ty, subst);
 
+			// The def itself is a statement with no type:
+			definition.ty = Type::Nothing;
+
 			match &mut definition.kind {
 				DefinitionKind::Expr(expr) => {
+					// But when defining exprs, we must annotate within the def value:
 					self.annotate_expr(expr, subst);
-
-					// is this hacky? In the case of def-polymorphism, we do this to assign
-					// the def the same type as its value (which might be polymorphic)
-					if let Type::Var(_) = &definition.ty {
-						definition.ty = expr.ty.clone()
-					}
 				}
-				_ => { /* todo */ }
+				_ => { /* nothing to do for other def kinds */ }
 			}
 		}
 	}

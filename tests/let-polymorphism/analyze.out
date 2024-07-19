@@ -2,17 +2,17 @@ module `main` (tests/let-polymorphism/main.pa) {
     comments: {},
     ast: Some(
         module(0-76) [
-            def(0-76) :: () -> int {
+            def(0-76) :: () {
                 name: ident(4-8) `main`,
                 kind: expr(9-76) :: () -> int {
-                    kind: lambda(9-76) {
+                    kind: fun(9-76) {
                         params: [],
                         body: [
                             expr(17-43) :: () {
                                 kind: let(17-43) {
                                     name: ident(21-29) `identity`,
                                     value: expr(32-43) :: 'e -> 'e {
-                                        kind: lambda(32-43) {
+                                        kind: fun(32-43) {
                                             params: [
                                                 ident(36-37) `x` :: 'e,
                                             ],

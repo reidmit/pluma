@@ -2,10 +2,10 @@ module `main` (tests/tuples/main.pa) {
     comments: {},
     ast: Some(
         module(0-72) [
-            def(0-72) :: () -> int {
+            def(0-72) :: () {
                 name: ident(4-8) `main`,
                 kind: expr(9-72) :: () -> int {
-                    kind: lambda(9-72) {
+                    kind: fun(9-72) {
                         params: [],
                         body: [
                             expr(17-51) :: () {

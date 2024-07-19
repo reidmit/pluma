@@ -2,7 +2,7 @@ module `main` (tests/regex-groupings/main.pa) {
     comments: {},
     ast: Some(
         module(0-47) [
-            def(0-47) :: regex {
+            def(0-47) :: () {
                 name: ident(4-7) `alt`,
                 kind: expr(8-47) :: regex {
                     kind: regex(13-40) sequence [
