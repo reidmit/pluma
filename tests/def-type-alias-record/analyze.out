@@ -1,8 +1,8 @@
 module `main` (tests/def-type-alias-record/main.pa) {
     comments: {},
     ast: Some(
-        module(0-46) [
-            def(0-46) :: 'a {
+        module(0-156) [
+            def(0-46) :: () {
                 name: ident(4-10) `person`,
                 kind: alias type(17-46) record-type [
                     (
@@ -14,6 +14,78 @@ module `main` (tests/def-type-alias-record/main.pa) {
                         type(41-44) type-ident(41-44) `int`,
                     ),
                 ],
+            },
+            def(48-79) :: () {
+                name: ident(52-60) `get-name`,
+                kind: expr(61-79) :: ({name: 'j, ...}) -> 'j {
+                    kind: fun(61-79) {
+                        params: [
+                            ident(65-66) `p` :: {name: 'j, ...},
+                        ],
+                        body: [
+                            expr(71-77) :: 'j {
+                                kind: field-access {
+                                    receiver: expr(71-72) :: {name: 'j, ...} {
+                                        kind: ident(71-72) `p`,
+                                    },
+                                    field: ident(73-77) `name`,
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+            def(81-156) :: () {
+                name: ident(85-89) `main`,
+                kind: expr(90-156) :: () -> string {
+                    kind: fun(90-156) {
+                        params: [],
+                        body: [
+                            expr(98-139) :: () {
+                                kind: let(98-139) {
+                                    name: ident(102-104) `me`,
+                                    value: expr(107-139) :: {name: string, age: int} {
+                                        kind: call(107-139) {
+                                            callee: expr(107-113) :: ({name: string, age: int}) -> {name: string, age: int} {
+                                                kind: ident(107-113) `person`,
+                                            },
+                                            args: [
+                                                expr(114-139) :: {name: string, age: int} {
+                                                    kind: record [
+                                                        (
+                                                            ident(116-120) `name`,
+                                                            expr(122-128) :: string {
+                                                                kind: literal(122-128) string "reid",
+                                                            },
+                                                        ),
+                                                        (
+                                                            ident(130-133) `age`,
+                                                            expr(135-137) :: int {
+                                                                kind: literal(135-137) int 30,
+                                                            },
+                                                        ),
+                                                    ],
+                                                },
+                                            ],
+                                        },
+                                    },
+                                },
+                            },
+                            expr(143-154) :: string {
+                                kind: call(143-154) {
+                                    callee: expr(143-151) :: ({name: string, ...}) -> string {
+                                        kind: ident(143-151) `get-name`,
+                                    },
+                                    args: [
+                                        expr(152-154) :: {name: string, ...} {
+                                            kind: ident(152-154) `me`,
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
             },
         ],
     ),
