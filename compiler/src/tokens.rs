@@ -204,6 +204,20 @@ pub enum Token {
 }
 
 impl Token {
+	pub fn length(&self) -> usize {
+		let (start, end) = self.get_span();
+		end - start
+	}
+
+	pub fn is_line_break(&self) -> bool {
+		match self {
+			Token::LineBreak(..)
+			| Token::LineBreakWithIndentIncrease(..)
+			| Token::LineBreakWithIndentDecrease(..) => true,
+			_ => false,
+		}
+	}
+
 	pub fn get_span(&self) -> (usize, usize) {
 		use Token::*;
 

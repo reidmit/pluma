@@ -47,7 +47,15 @@ export async function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     client.onNotification("window/logMessage", (data: LogMessageParams) => {
-      log.appendLine("Logged from server: " + JSON.stringify(data));
+      const prefix = {
+        [MessageType.Error]: "[server:error] ",
+        [MessageType.Warning]: "[server:warning] ",
+        [MessageType.Info]: "[server:info] ",
+        [MessageType.Log]: "[server:log] ",
+        [MessageType.Debug]: "[server:debug] ",
+      };
+
+      log.appendLine(prefix[data.type] + data.message);
     })
   );
 

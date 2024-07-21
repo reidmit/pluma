@@ -12,6 +12,8 @@ mod types;
 
 pub use compiler::*;
 pub use diagnostic::*;
+pub use tokenizer::*;
+pub use tokens::Token;
 
 pub const VERSION: &str = "0.1.0";
 pub const BINARY_NAME: &str = "pluma";

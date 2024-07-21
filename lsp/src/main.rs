@@ -1,4 +1,5 @@
 use dashmap::DashMap;
+use semantic_tokens::collect_semantic_tokens;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
@@ -18,10 +19,7 @@ impl LanguageServer for Backend {
 			server_info: None,
 			offset_encoding: None,
 			capabilities: ServerCapabilities {
-				inlay_hint_provider: None,
 				text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
-				completion_provider: None,
-				execute_command_provider: None,
 				workspace: None,
 				semantic_tokens_provider: Some(
 					SemanticTokensServerCapabilities::SemanticTokensRegistrationOptions(
@@ -48,9 +46,6 @@ impl LanguageServer for Backend {
 						},
 					),
 				),
-				// definition_provider: Some(OneOf::Left(true)),
-				// references_provider: Some(OneOf::Left(true)),
-				// rename_provider: Some(OneOf::Left(true)),
 				..ServerCapabilities::default()
 			},
 		})
@@ -112,96 +107,29 @@ impl LanguageServer for Backend {
 			.log_message(MessageType::LOG, "semantic_token_full")
 			.await;
 
-		// let semantic_tokens = || -> Option<Vec<SemanticToken>> {
-		// 	let mut im_complete_tokens = self.semantic_token_map.get_mut(&uri)?;
-		// 	let rope = self.document_map.get(&uri)?;
-		// 	let ast = self.ast_map.get(&uri)?;
-		// 	let extends_tokens = semantic_token_from_ast(&ast);
-		// 	im_complete_tokens.extend(extends_tokens);
-		// 	im_complete_tokens.sort_by(|a, b| a.start.cmp(&b.start));
-		// 	let mut pre_line = 0;
-		// 	let mut pre_start = 0;
-		// 	let semantic_tokens = im_complete_tokens
-		// 		.iter()
-		// 		.filter_map(|token| {
-		// 			let line = rope.try_byte_to_line(token.start).ok()? as u32;
-		// 			let first = rope.try_line_to_char(line as usize).ok()? as u32;
-		// 			let start = rope.try_byte_to_char(token.start).ok()? as u32 - first;
-		// 			let delta_line = line - pre_line;
-		// 			let delta_start = if delta_line == 0 {
-		// 				start - pre_start
-		// 			} else {
-		// 				start
-		// 			};
-		// 			let ret = Some(SemanticToken {
-		// 				delta_line,
-		// 				delta_start,
-		// 				length: token.length as u32,
-		// 				token_type: token.token_type as u32,
-		// 				token_modifiers_bitset: 0,
-		// 			});
-		// 			pre_line = line;
-		// 			pre_start = start;
-		// 			ret
-		// 		})
-		// 		.collect::<Vec<_>>();
-		// 	Some(semantic_tokens)
-		// }();
+		let text = match self.document_map.get(&uri) {
+			Some(text) => text.clone(),
+			None => return Ok(None),
+		};
 
-		// if let Some(semantic_token) = semantic_tokens {
-		// 	return Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
-		// 		result_id: None,
-		// 		data: semantic_token,
-		// 	})));
-		// }
+		let tokens = collect_semantic_tokens(&text.into_bytes());
+
+		if let Some(semantic_tokens) = tokens {
+			for t in &semantic_tokens {
+				self
+					.client
+					.log_message(MessageType::LOG, format!("{:#?}", t))
+					.await
+			}
+
+			return Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
+				result_id: None,
+				data: semantic_tokens,
+			})));
+		}
 
 		Ok(None)
 	}
-
-	// async fn semantic_tokens_range(
-	// 	&self,
-	// 	params: SemanticTokensRangeParams,
-	// ) -> Result<Option<SemanticTokensRangeResult>> {
-	// 	let uri = params.text_document.uri.to_string();
-	// 	let semantic_tokens = || -> Option<Vec<SemanticToken>> {
-	// 		let im_complete_tokens = self.semantic_token_map.get(&uri)?;
-	// 		let rope = self.document_map.get(&uri)?;
-	// 		let mut pre_line = 0;
-	// 		let mut pre_start = 0;
-	// 		let semantic_tokens = im_complete_tokens
-	// 			.iter()
-	// 			.filter_map(|token| {
-	// 				let line = rope.try_byte_to_line(token.start).ok()? as u32;
-	// 				let first = rope.try_line_to_char(line as usize).ok()? as u32;
-	// 				let start = rope.try_byte_to_char(token.start).ok()? as u32 - first;
-	// 				let ret = Some(SemanticToken {
-	// 					delta_line: line - pre_line,
-	// 					delta_start: if start >= pre_start {
-	// 						start - pre_start
-	// 					} else {
-	// 						start
-	// 					},
-	// 					length: token.length as u32,
-	// 					token_type: token.token_type as u32,
-	// 					token_modifiers_bitset: 0,
-	// 				});
-	// 				pre_line = line;
-	// 				pre_start = start;
-	// 				ret
-	// 			})
-	// 			.collect::<Vec<_>>();
-	// 		Some(semantic_tokens)
-	// 	}();
-
-	// 	if let Some(semantic_token) = semantic_tokens {
-	// 		return Ok(Some(SemanticTokensRangeResult::Tokens(SemanticTokens {
-	// 			result_id: None,
-	// 			data: semantic_token,
-	// 		})));
-	// 	}
-
-	// 	Ok(None)
-	// }
 }
 
 impl Backend {
@@ -209,8 +137,6 @@ impl Backend {
 		self
 			.document_map
 			.insert(params.uri.to_string(), params.text.clone());
-
-		// let c = compiler::
 	}
 }
 
