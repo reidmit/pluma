@@ -1,0 +1,52 @@
+{
+  "name": "pluma-language-client",
+  "publisher": "reidmit",
+  "version": "0.0.1",
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "language-server",
+    "pluma-lsp",
+    "pluma"
+  ],
+  "repository": {
+    "url": "https://github.com/reidmit/pluma"
+  },
+  "main": "./dist/extension.js",
+  "engines": {
+    "vscode": "^1.22.0"
+  },
+  "activationEvents": [
+    "onLanguage:pluma"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "extension.helloWorld",
+        "title": "Hello World"
+      }
+    ],
+    "languages": [
+      {
+        "id": "pluma",
+        "aliases": [
+          "Pluma",
+          "pluma"
+        ],
+        "extensions": [
+          ".pa"
+        ]
+      }
+    ]
+  },
+  "dependencies": {
+    "vscode-languageclient": "9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.11",
+    "@types/vscode": "1.91.0",
+    "esbuild": "^0.23.0",
+    "typescript": "5.5.3"
+  }
+}

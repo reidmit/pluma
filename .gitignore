@@ -3,3 +3,5 @@
 /Cargo.lock
 /scratch
 /site/public
+dist
+node_modules

@@ -9,11 +9,7 @@
       "request": "launch",
       "name": "Debug 'debugging' example",
       "cargo": {
-        "args": [
-          "build",
-          "--example=debugging",
-          "--package=pencil"
-        ],
+        "args": ["build", "--example=debugging", "--package=pencil"],
         "filter": {
           "name": "debugging",
           "kind": "example"

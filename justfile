@@ -23,6 +23,18 @@ site:
 test:
   @ python3 scripts/test.py
 
+# build & run the vscode extension in a new window for local testing
+vs-extension:
+  cargo build --bin pluma-language-server
+  rm -rf vsix/dist
+  vsix/node_modules/.bin/esbuild vsix/src/extension.ts \
+    --outdir=vsix/dist \
+    --sourcemap \
+    --platform=node \
+    --format=cjs
+  SERVER_PATH=$(pwd)/target/debug/pluma-language-server \
+    code --extensionDevelopmentPath=$(pwd)/vsix ./tests
+
 # install all deps on macos
 install-depencies-macos:
   brew install zola

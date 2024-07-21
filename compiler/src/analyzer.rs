@@ -913,7 +913,11 @@ impl<'compiler> Analyzer<'compiler> {
 				// nothing to annotate?
 			}
 
-			other => todo!("analyze expr kind: {:?}", other),
+			other => {
+				if cfg!(debug_assertions) {
+					todo!("analyze expr kind: {:?}", other);
+				}
+			}
 		}
 	}
 
