@@ -1,9 +1,20 @@
 use super::*;
+use crate::location::Range;
 
-#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct IfNode {
-  pub span: Span,
-  pub subject: Box<ExprNode>,
-  pub pattern: PatternNode,
-  pub body: Vec<ExprNode>,
+	pub range: Range,
+	pub subject: Box<ExprNode>,
+	pub pattern: PatternNode,
+	pub body: Vec<ExprNode>,
+}
+
+#[cfg(debug_assertions)]
+impl std::fmt::Debug for IfNode {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(
+			f,
+			"if({:#?}) {:#?} {:#?} {:#?}",
+			self.range, self.subject, self.pattern, self.body
+		)
+	}
 }

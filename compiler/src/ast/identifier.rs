@@ -1,14 +1,14 @@
-use super::*;
+use crate::location::Range;
 
 #[derive(Clone)]
 pub struct IdentifierNode {
 	pub name: String,
-	pub span: Span,
+	pub range: Range,
 }
 
 #[cfg(debug_assertions)]
 impl std::fmt::Debug for IdentifierNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "ident({}-{}) `{}`", self.span.0, self.span.1, self.name)
+		write!(f, "ident({:#?}) `{}`", self.range, self.name)
 	}
 }

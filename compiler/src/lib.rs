@@ -4,6 +4,7 @@ mod binding;
 mod compiler;
 mod diagnostic;
 mod errors;
+mod location;
 mod module;
 mod parser;
 mod tokenizer;

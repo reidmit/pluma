@@ -1,9 +1,9 @@
-use crate::types::*;
+use crate::{location::Range, types::*};
 use std::fmt;
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub struct AnalysisError {
-	pub span: (usize, usize),
+	pub range: Range,
 	pub kind: AnalysisErrorKind,
 }
 

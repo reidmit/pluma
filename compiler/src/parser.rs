@@ -1,5 +1,7 @@
 use crate::ast::*;
 use crate::errors::*;
+use crate::location::Point;
+use crate::location::Range;
 use crate::tokenizer::Tokenizer;
 use crate::tokens::Token;
 use crate::types::*;
@@ -19,11 +21,16 @@ macro_rules! expect_token_and_advance {
 		match $self.current_token {
 			Some($tokType(start, end)) => {
 				$self.advance();
-				(start, end)
+				let start_point = $self.offset_to_point(start);
+				let end_point = $self.offset_to_point(end);
+				(start_point, end_point)
 			}
 			Some(tok) => {
+				let (start, end) = tok.get_span();
+				let start_point = $self.offset_to_point(start);
+				let end_point = $self.offset_to_point(end);
 				return $self.error(ParseError {
-					span: tok.get_span(),
+					range: Range::between(start_point, end_point),
 					kind: ParseErrorKind::UnexpectedToken {
 						actual: tok,
 						expected: $tokType(0, 0),
@@ -32,7 +39,7 @@ macro_rules! expect_token_and_advance {
 			}
 			None => {
 				return $self.error(ParseError {
-					span: ($self.source.len(), $self.source.len()),
+					range: Range::collapsed($self.current_line, 0),
 					kind: ParseErrorKind::UnexpectedEOF {
 						expected: $tokType(0, 0),
 					},
@@ -43,8 +50,8 @@ macro_rules! expect_token_and_advance {
 }
 
 macro_rules! read_string {
-	($self:ident, $start:expr, $end:expr) => {
-		String::from_utf8($self.source[$start..$end].to_vec()).expect("not utf-8")
+	($self:ident, $start_offset:expr, $end_offset:expr) => {
+		String::from_utf8($self.source[$start_offset..$end_offset].to_vec()).expect("not utf-8")
 	};
 }
 
@@ -65,7 +72,8 @@ pub struct Parser<'a> {
 	errors: Vec<ParseError>,
 	current_token: Option<Token>,
 	prev_token: Option<Token>,
-	line_breaks: Vec<Span>,
+	current_line: usize,
+	line_start_offsets: HashMap<usize, usize>,
 }
 
 impl<'a> Parser<'a> {
@@ -76,7 +84,8 @@ impl<'a> Parser<'a> {
 			errors: Vec::new(),
 			current_token: None,
 			prev_token: None,
-			line_breaks: Vec::new(),
+			current_line: 0,
+			line_start_offsets: HashMap::from_iter(vec![(0, 0)]),
 		};
 	}
 
@@ -95,12 +104,12 @@ impl<'a> Parser<'a> {
 			}
 		}
 
-		let start = body.first().map_or(0, |node| node.span.0);
-		let end = body.last().map_or(0, |node| node.span.1);
+		let start = body.first().map_or(Point::zero(), |node| node.range.start);
+		let end = body.last().map_or(Point::zero(), |node| node.range.end);
 
 		(
 			ModuleNode {
-				span: (start, end),
+				range: Range::between(start, end),
 				body,
 			},
 			self.tokenizer.comments.clone(),
@@ -116,15 +125,16 @@ impl<'a> Parser<'a> {
 	fn skip_line_breaks(&mut self) {
 		loop {
 			match &self.current_token {
-				Some(
-					Token::LineBreak(..)
-					| Token::LineBreakWithIndentIncrease(..)
-					| Token::LineBreakWithIndentDecrease(..),
-				) => {
-					self.line_breaks.push(self.current_token_span());
+				Some(Token::LineBreak(.., end_offset)) => {
+					println!("current token: {:#?}", self.current_token);
+					self.current_line += 1;
+					self
+						.line_start_offsets
+						.insert(self.current_line, *end_offset);
 					self.advance();
 				}
-
+				Some(Token::Indent(..)) => self.advance(),
+				Some(Token::Outdent(..)) => self.advance(),
 				_ => break,
 			}
 		}
@@ -140,6 +150,35 @@ impl<'a> Parser<'a> {
 		}
 	}
 
+	fn current_token_points(&self) -> (Point, Point) {
+		let (start_offset, end_offset) = self.current_token_span();
+		(
+			self.offset_to_point(start_offset),
+			self.offset_to_point(end_offset),
+		)
+	}
+
+	fn offset_to_point(&self, offset: usize) -> Point {
+		Point::at(
+			self.current_line,
+			offset - self.line_start_offsets.get(&self.current_line).unwrap(),
+		)
+	}
+
+	fn point_to_offset(&self, point: Point) -> usize {
+		let line_start_offset = self.line_start_offsets.get(&point.line).unwrap();
+		line_start_offset + point.col
+	}
+
+	fn span_to_single_line_range(&self, start: usize, end: usize) -> Range {
+		let current_line_start = self.line_start_offsets.get(&self.current_line).unwrap();
+		Range::within_line(
+			self.current_line,
+			start - current_line_start,
+			end - current_line_start,
+		)
+	}
+
 	fn error<A>(&mut self, err: ParseError) -> Option<A> {
 		self.errors.push(err);
 		None
@@ -153,11 +192,6 @@ impl<'a> Parser<'a> {
 
 			if let Some(node) = self.parse_expression() {
 				body.push(node);
-			}
-
-			if current_token_is!(self, Token::LineBreak) {
-				self.advance();
-				self.skip_line_breaks();
 			} else {
 				break;
 			}
@@ -190,7 +224,7 @@ impl<'a> Parser<'a> {
 		let (_, end) = expect_token_and_advance!(self, Token::RightBrace);
 
 		Some(FunNode {
-			span: (start, end),
+			range: Range::between(start, end),
 			params,
 			body,
 		})
@@ -203,54 +237,60 @@ impl<'a> Parser<'a> {
 			self.advance();
 
 			let (_, end) = expect_token_and_advance!(self, Token::DecimalDigits);
+			let (start_offset, end_offset) = (self.point_to_offset(start), self.point_to_offset(end));
 
-			let str_value = read_string!(self, start, end);
+			let str_value = read_string!(self, start_offset, end_offset);
 			let float_value = str_value.parse::<f64>().unwrap();
 
 			return Some(LiteralNode {
 				kind: LiteralKind::FloatDecimal(float_value),
-				span: (start, end),
+				range: Range::between(start, end),
 			});
 		}
 
-		let value = self.parse_numeric_literal(start, end, 10);
+		let (start_offset, end_offset) = (self.point_to_offset(start), self.point_to_offset(end));
+
+		let value = self.parse_numeric_literal(start_offset, end_offset, 10);
 
 		Some(LiteralNode {
 			kind: LiteralKind::IntDecimal(value),
-			span: (start, end),
+			range: Range::between(start, end),
 		})
 	}
 
 	fn parse_binary_number(&mut self) -> Option<LiteralNode> {
 		let (start, end) = expect_token_and_advance!(self, Token::BinaryDigits);
+		let (start_offset, end_offset) = (self.point_to_offset(start), self.point_to_offset(end));
 
-		let value = self.parse_numeric_literal(start + 2, end, 2);
+		let value = self.parse_numeric_literal(start_offset + 2, end_offset, 2);
 
 		Some(LiteralNode {
 			kind: LiteralKind::IntBinary(value),
-			span: (start, end),
+			range: Range::between(start, end),
 		})
 	}
 
 	fn parse_octal_number(&mut self) -> Option<LiteralNode> {
 		let (start, end) = expect_token_and_advance!(self, Token::OctalDigits);
+		let (start_offset, end_offset) = (self.point_to_offset(start), self.point_to_offset(end));
 
-		let value = self.parse_numeric_literal(start + 2, end, 8);
+		let value = self.parse_numeric_literal(start_offset + 2, end_offset, 8);
 
 		Some(LiteralNode {
 			kind: LiteralKind::IntOctal(value),
-			span: (start, end),
+			range: Range::between(start, end),
 		})
 	}
 
 	fn parse_hex_number(&mut self) -> Option<LiteralNode> {
 		let (start, end) = expect_token_and_advance!(self, Token::HexDigits);
+		let (start_offset, end_offset) = (self.point_to_offset(start), self.point_to_offset(end));
 
-		let value = self.parse_numeric_literal(start + 2, end, 16);
+		let value = self.parse_numeric_literal(start_offset + 2, end_offset, 16);
 
 		Some(LiteralNode {
 			kind: LiteralKind::IntHex(value),
-			span: (start, end),
+			range: Range::between(start, end),
 		})
 	}
 
@@ -264,10 +304,10 @@ impl<'a> Parser<'a> {
 		self.advance();
 
 		Some(ExprNode {
-			span: (start, end),
+			range: self.span_to_single_line_range(start, end),
 			ty: Type::Unknown,
 			kind: ExprKind::Literal(LiteralNode {
-				span: (start, end),
+				range: self.span_to_single_line_range(start, end),
 				kind: LiteralKind::Bool(value),
 			}),
 		})
@@ -287,52 +327,52 @@ impl<'a> Parser<'a> {
 			Some(Token::BoolTrue(..)) => self.parse_bool(),
 			Some(Token::BoolFalse(..)) => self.parse_bool(),
 			Some(Token::KeywordWhen(..)) => self.parse_when_expression().map(|when_node| ExprNode {
-				span: when_node.span,
+				range: when_node.range,
 				kind: ExprKind::When(when_node),
 				ty: Type::Unknown,
 			}),
-			Some(Token::KeywordIf(..)) => self.parse_if_expression().map(|when_node| ExprNode {
-				span: when_node.span,
-				kind: ExprKind::If(when_node),
+			Some(Token::KeywordIf(..)) => self.parse_if_expression().map(|if_node| ExprNode {
+				range: if_node.range,
+				kind: ExprKind::If(if_node),
 				ty: Type::Unknown,
 			}),
 			Some(Token::KeywordWhile(..)) => self.parse_while_expression().map(|while_node| ExprNode {
-				span: while_node.span,
+				range: while_node.range,
 				kind: ExprKind::While(while_node),
 				ty: Type::Unknown,
 			}),
-			Some(Token::KeywordLet(..)) => self.parse_let_expression().map(|node| ExprNode {
-				span: node.span,
-				kind: ExprKind::Let(node),
+			Some(Token::KeywordLet(..)) => self.parse_let_expression().map(|let_node| ExprNode {
+				range: let_node.range,
+				kind: ExprKind::Let(let_node),
 				ty: Type::Unknown,
 			}),
-			Some(Token::KeywordFun(..)) => self.parse_fun().map(|fun| ExprNode {
-				span: fun.span,
-				kind: ExprKind::Fun(fun),
+			Some(Token::KeywordFun(..)) => self.parse_fun().map(|fun_node| ExprNode {
+				range: fun_node.range,
+				kind: ExprKind::Fun(fun_node),
 				ty: Type::Unknown,
 			}),
 			Some(Token::Identifier(..)) => self.parse_identifier().map(|ident| ExprNode {
-				span: ident.span,
+				range: ident.range,
 				kind: ExprKind::Identifier(ident),
 				ty: Type::Unknown,
 			}),
 			Some(Token::DecimalDigits(..)) => self.parse_decimal_number().map(|literal| ExprNode {
-				span: literal.span,
+				range: literal.range,
 				kind: ExprKind::Literal(literal),
 				ty: Type::Unknown,
 			}),
 			Some(Token::BinaryDigits(..)) => self.parse_binary_number().map(|literal| ExprNode {
-				span: literal.span,
+				range: literal.range,
 				kind: ExprKind::Literal(literal),
 				ty: Type::Unknown,
 			}),
 			Some(Token::OctalDigits(..)) => self.parse_octal_number().map(|literal| ExprNode {
-				span: literal.span,
+				range: literal.range,
 				kind: ExprKind::Literal(literal),
 				ty: Type::Unknown,
 			}),
 			Some(Token::HexDigits(..)) => self.parse_hex_number().map(|literal| ExprNode {
-				span: literal.span,
+				range: literal.range,
 				kind: ExprKind::Literal(literal),
 				ty: Type::Unknown,
 			}),
@@ -341,13 +381,15 @@ impl<'a> Parser<'a> {
 				let operator = Operator::from_token(t).unwrap();
 				self.advance();
 
+				let start_point = self.offset_to_point(start);
+
 				// make sure to parse the expression following the operator with
 				// the correct binding power:
 				let (_, right_bp) = operator.prefix_binding_power();
 				let rhs_expr = self.parse_expression_with_binding_power(right_bp)?;
 
 				Some(ExprNode {
-					span: (start, start),
+					range: Range::between(start_point, rhs_expr.range.end),
 					kind: ExprKind::UnaryOperation {
 						op: operator,
 						right: Box::new(rhs_expr),
@@ -359,9 +401,7 @@ impl<'a> Parser<'a> {
 		}?;
 
 		loop {
-			if current_token_is!(self, Token::LineBreak)
-				|| current_token_is!(self, Token::LineBreakWithIndentDecrease)
-			{
+			if current_token_is!(self, Token::LineBreak) || current_token_is!(self, Token::Outdent) {
 				break;
 			}
 
@@ -391,20 +431,22 @@ impl<'a> Parser<'a> {
 						args.push(arg_expr);
 					}
 
-					let start = lhs_expr.span.0;
-					let end = args.last().expect("at least one arg").span.1;
+					let range = Range::between(
+						lhs_expr.range.start,
+						args.last().expect("at least one arg").range.end,
+					);
 
 					lhs_expr = ExprNode {
-						span: (start, end),
+						range,
 						kind: ExprKind::Call(CallNode {
-							span: (start, end),
+							range,
 							callee: Box::new(lhs_expr),
 							args,
 						}),
 						ty: Type::Unknown,
 					};
 				} else {
-					let op_pos = self.current_token_span();
+					let op_pos = self.current_token_points();
 
 					// advance past the operator token
 					self.advance();
@@ -424,10 +466,10 @@ impl<'a> Parser<'a> {
 					}
 
 					lhs_expr = ExprNode {
-						span: (lhs_expr.span.0, rhs_expr.span.1),
+						range: Range::between(lhs_expr.range.start, rhs_expr.range.end),
 						kind: ExprKind::BinaryOperation {
 							op: OperatorNode {
-								span: op_pos,
+								range: Range::between(op_pos.0, op_pos.1),
 								kind: operator,
 							},
 							left: Box::new(lhs_expr),
@@ -456,7 +498,7 @@ impl<'a> Parser<'a> {
 				kind: LiteralKind::IntDecimal(index),
 				..
 			}) => Some(ExprNode {
-				span: (lhs_expr.span.0, rhs_expr.span.1),
+				range: Range::between(lhs_expr.range.start, rhs_expr.range.end),
 				ty: Type::Unknown,
 				kind: ExprKind::ElementAccess {
 					receiver: lhs_expr.into(),
@@ -465,7 +507,7 @@ impl<'a> Parser<'a> {
 			}),
 
 			ExprKind::Identifier(ident) => Some(ExprNode {
-				span: (lhs_expr.span.0, rhs_expr.span.1),
+				range: Range::between(lhs_expr.range.start, rhs_expr.range.end),
 				ty: Type::Unknown,
 				kind: ExprKind::FieldAccess {
 					receiver: lhs_expr.into(),
@@ -475,7 +517,7 @@ impl<'a> Parser<'a> {
 
 			_ => {
 				self.error::<ExprNode>(ParseError {
-					span: rhs_expr.span,
+					range: rhs_expr.range,
 					kind: ParseErrorKind::InvalidExpressionAfterDot,
 				});
 				None
@@ -495,7 +537,7 @@ impl<'a> Parser<'a> {
 		let name = read_string!(self, start, end);
 
 		Some(IdentifierNode {
-			span: (start, end),
+			range: self.span_to_single_line_range(start, end),
 			name,
 		})
 	}
@@ -516,7 +558,7 @@ impl<'a> Parser<'a> {
 		let (_, end) = expect_token_and_advance!(self, Token::RightBrace);
 
 		Some(IfNode {
-			span: (start, end),
+			range: Range::between(start, end),
 			subject: Box::new(condition),
 			pattern,
 			body,
@@ -533,7 +575,7 @@ impl<'a> Parser<'a> {
 		let mut cases = Vec::new();
 
 		while current_token_is!(self, Token::KeywordIs) {
-			let case_start = self.current_token_span().0;
+			let case_start = self.offset_to_point(self.current_token_span().0);
 
 			self.advance();
 
@@ -550,17 +592,17 @@ impl<'a> Parser<'a> {
 			self.skip_line_breaks();
 
 			cases.push(CaseNode {
-				span: (case_start, case_end),
+				range: Range::between(case_start, case_end),
 				pattern: case_pattern,
 				body: case_body,
 			})
 		}
 
 		// TODO: error if 0 cases
-		let end = cases.last().expect("> 0 cases").span.1;
+		let end = cases.last().expect("> 0 cases").range.end;
 
 		Some(WhenNode {
-			span: (start, end),
+			range: Range::between(start, end),
 			subject: Box::new(subject),
 			cases,
 		})
@@ -582,7 +624,7 @@ impl<'a> Parser<'a> {
 		let (_, end) = expect_token_and_advance!(self, Token::RightBrace);
 
 		Some(WhileNode {
-			span: (start, end),
+			range: Range::between(start, end),
 			subject: Box::new(subject),
 			pattern,
 			body,
@@ -597,18 +639,20 @@ impl<'a> Parser<'a> {
 				// TODO: handle constructors with multiple args
 				if let Some(arg_pattern) = self.parse_pattern() {
 					return Some(PatternNode {
-						span: (id_node.span.0, arg_pattern.span.1),
+						range: Range::between(id_node.range.start, arg_pattern.range.end),
 						kind: PatternKind::Constructor(id_node, Box::new(arg_pattern)),
 					});
 				}
 
 				Some(PatternNode {
-					span: id_node.span,
+					range: id_node.range,
 					kind: PatternKind::Identifier(id_node),
 				})
 			}
 
-			Some(Token::LeftParen(start, _)) => {
+			Some(Token::LeftParen(start_offset, _)) => {
+				let start = self.offset_to_point(start_offset);
+
 				self.advance();
 
 				let mut entries = Vec::new();
@@ -633,12 +677,14 @@ impl<'a> Parser<'a> {
 				let (_, end) = expect_token_and_advance!(self, Token::RightParen);
 
 				Some(PatternNode {
-					span: (start, end),
+					range: Range::between(start, end),
 					kind: PatternKind::Tuple(entries),
 				})
 			}
 
-			Some(Token::LeftBrace(start, _)) => {
+			Some(Token::LeftBrace(start_offset, _)) => {
+				let start = self.offset_to_point(start_offset);
+
 				self.advance();
 
 				let mut entries = Vec::new();
@@ -665,7 +711,7 @@ impl<'a> Parser<'a> {
 				let (_, end) = expect_token_and_advance!(self, Token::RightBrace);
 
 				Some(PatternNode {
-					span: (start, end),
+					range: Range::between(start, end),
 					kind: PatternKind::Record(entries),
 				})
 			}
@@ -674,18 +720,18 @@ impl<'a> Parser<'a> {
 				self.advance();
 
 				Some(PatternNode {
-					span: (start, end),
+					range: self.span_to_single_line_range(start, end),
 					kind: PatternKind::Underscore,
 				})
 			}
 
 			Some(Token::StringLiteral(..)) => self.parse_string().map(|expr_node| match expr_node.kind {
 				ExprKind::Literal(literal) => PatternNode {
-					span: literal.span,
+					range: literal.range,
 					kind: PatternKind::Literal(literal),
 				},
 				ExprKind::Interpolation(parts) => PatternNode {
-					span: expr_node.span,
+					range: expr_node.range,
 					kind: PatternKind::Interpolation(parts),
 				},
 				_ => unreachable!(),
@@ -695,7 +741,7 @@ impl<'a> Parser<'a> {
 				let expr_node = self.parse_bool()?;
 				if let ExprKind::Literal(lit_node) = expr_node.kind {
 					Some(PatternNode {
-						span: expr_node.span,
+						range: expr_node.range,
 						kind: PatternKind::Literal(lit_node),
 					})
 				} else {
@@ -704,7 +750,7 @@ impl<'a> Parser<'a> {
 			}
 
 			Some(Token::DecimalDigits(..)) => self.parse_decimal_number().map(|lit_node| PatternNode {
-				span: lit_node.span,
+				range: lit_node.range,
 				kind: PatternKind::Literal(lit_node),
 			}),
 
@@ -724,7 +770,7 @@ impl<'a> Parser<'a> {
 		expect_token_and_advance!(self, Token::Equal);
 
 		let (end, value) = match self.parse_expression() {
-			Some(node) => (node.span.1, node),
+			Some(node) => (node.range.end, node),
 			_ => {
 				// if we failed to parse this expression, we've already reported
 				// an error about it, so just return nothing here
@@ -733,7 +779,7 @@ impl<'a> Parser<'a> {
 		};
 
 		Some(LetNode {
-			span: (start, end),
+			range: Range::between(start, end),
 			name,
 			value: Box::new(value),
 		})
@@ -762,17 +808,22 @@ impl<'a> Parser<'a> {
 		let (_, end) = expect_token_and_advance!(self, Token::RightBracket);
 
 		Some(ExprNode {
-			span: (start, end),
+			range: Range::between(start, end),
 			kind: ExprKind::List(elements),
 			ty: Type::Unknown,
 		})
 	}
 
-	fn parse_numeric_literal(&mut self, start: usize, end: usize, radix: usize) -> usize {
+	fn parse_numeric_literal(
+		&mut self,
+		start_offset: usize,
+		end_offset: usize,
+		radix: usize,
+	) -> usize {
 		let mut result: usize = 0;
 		let mut i: usize = 1;
 
-		for byte in self.source[start..end].iter().rev() {
+		for byte in self.source[start_offset..end_offset].iter().rev() {
 			let byte_value = match byte {
 				b'0'..=b'9' => byte - 48,
 				b'A'..=b'F' => byte - 55,
@@ -784,7 +835,10 @@ impl<'a> Parser<'a> {
 				result = next_result;
 			} else {
 				self.error::<LiteralNode>(ParseError {
-					span: (start, end),
+					range: Range::between(
+						self.offset_to_point(start_offset),
+						self.offset_to_point(end_offset),
+					),
 					kind: ParseErrorKind::OverflowingIntegerLiteral,
 				});
 				return 0;
@@ -794,7 +848,10 @@ impl<'a> Parser<'a> {
 				i = next_i;
 			} else {
 				self.error::<LiteralNode>(ParseError {
-					span: (start, end),
+					range: Range::between(
+						self.offset_to_point(start_offset),
+						self.offset_to_point(end_offset),
+					),
 					kind: ParseErrorKind::OverflowingIntegerLiteral,
 				});
 				return 0;
@@ -835,7 +892,7 @@ impl<'a> Parser<'a> {
 		let (_, record_end) = expect_token_and_advance!(self, Token::RightBrace);
 
 		Some(ExprNode {
-			span: (record_start, record_end),
+			range: Range::between(record_start, record_end),
 			kind: ExprKind::Record(entries),
 			ty: Type::Unknown,
 		})
@@ -874,7 +931,7 @@ impl<'a> Parser<'a> {
 
 		if entries.is_empty() {
 			return Some(ExprNode {
-				span: (paren_start, paren_end),
+				range: Range::between(paren_start, paren_end),
 				kind: ExprKind::EmptyTuple,
 				ty: Type::Unknown,
 			});
@@ -884,7 +941,7 @@ impl<'a> Parser<'a> {
 			// If only one expression was found, it's a grouping
 			if let Some(first_expr) = entries.pop() {
 				return Some(ExprNode {
-					span: (paren_start, paren_end),
+					range: Range::between(paren_start, paren_end),
 					kind: ExprKind::Grouping(Box::new(first_expr)),
 					ty: Type::Unknown,
 				});
@@ -893,7 +950,7 @@ impl<'a> Parser<'a> {
 
 		// Otherwise, it's a tuple with multiple entries:
 		Some(ExprNode {
-			span: (paren_start, paren_end),
+			range: Range::between(paren_start, paren_end),
 			kind: ExprKind::Tuple(entries),
 			ty: Type::Unknown,
 		})
@@ -914,14 +971,14 @@ impl<'a> Parser<'a> {
 			Some(expr) => expr,
 			None => {
 				return self.error(ParseError {
-					span: (start, end),
+					range: Range::between(start, end),
 					kind: ParseErrorKind::EmptyRegularExpression,
 				})
 			}
 		};
 
 		Some(ExprNode {
-			span: (start, end),
+			range: Range::between(start, end),
 			kind: ExprKind::Regex(regex),
 			ty: Type::Unknown,
 		})
@@ -966,11 +1023,11 @@ impl<'a> Parser<'a> {
 
 		other_terms.insert(0, first_term.unwrap());
 
-		let start = other_terms.first().unwrap().span.0;
-		let end = other_terms.last().unwrap().span.1;
+		let start = other_terms.first().unwrap().range.start;
+		let end = other_terms.last().unwrap().range.end;
 
 		Some(RegexNode {
-			span: (start, end),
+			range: Range::between(start, end),
 			kind: RegexKind::Alternation(other_terms),
 		})
 	}
@@ -983,54 +1040,63 @@ impl<'a> Parser<'a> {
 			self.skip_line_breaks();
 
 			let part = match self.current_token {
-				Some(Token::Identifier(start, end)) => {
+				Some(Token::Identifier(start_offset, end_offset)) => {
 					self.advance();
 
-					let name = read_string!(self, start, end);
+					let name = read_string!(self, start_offset, end_offset);
 
 					RegexNode {
-						span: (start, end),
+						range: self.span_to_single_line_range(start_offset, end_offset),
 						kind: RegexKind::CharacterClass(name),
 					}
 				}
 
-				Some(Token::StringLiteral(start, end)) => {
+				Some(Token::StringLiteral(start_offset, end_offset)) => {
 					self.advance();
 
-					let value = read_string_with_escapes!(self, start, end);
+					let value = read_string_with_escapes!(self, start_offset, end_offset);
 
 					RegexNode {
-						span: (start, end),
+						range: self.span_to_single_line_range(start_offset, end_offset),
 						kind: RegexKind::Literal(value),
 					}
 				}
 
-				Some(Token::LeftParen(start, end)) => {
+				Some(Token::LeftParen(start_offset, end_offset)) => {
+					let start = self.offset_to_point(start_offset);
+
 					self.advance();
 
 					let expr = match self.parse_regular_expression_body() {
 						Some(expr) => expr,
 						None => {
 							return self.error(ParseError {
-								span: (start, end),
+								range: self.span_to_single_line_range(start_offset, end_offset),
 								kind: ParseErrorKind::EmptyRegularExpressionGroup,
 							})
 						}
 					};
 
-					expect_token_and_advance!(self, Token::RightParen);
+					let (_, end) = expect_token_and_advance!(self, Token::RightParen);
 
 					RegexNode {
-						span: (start, end),
+						range: Range::between(start, end),
 						kind: RegexKind::Grouping(Box::new(expr)),
 					}
 				}
 
-				Some(Token::LeftAngle(start, end)) => {
+				Some(Token::LeftAngle(start_offset, end_offset)) => {
+					let start = self.offset_to_point(start_offset);
+					let end = self.offset_to_point(end_offset);
+
 					self.advance();
 
-					let name_span = expect_token_and_advance!(self, Token::Identifier);
-					let name = read_string!(self, name_span.0, name_span.1);
+					let (name_start, name_end) = expect_token_and_advance!(self, Token::Identifier);
+					let name = read_string!(
+						self,
+						self.point_to_offset(name_start),
+						self.point_to_offset(name_end)
+					);
 
 					expect_token_and_advance!(self, Token::Colon);
 
@@ -1038,7 +1104,7 @@ impl<'a> Parser<'a> {
 						Some(expr) => expr,
 						None => {
 							return self.error(ParseError {
-								span: (start, end),
+								range: Range::between(start, end),
 								kind: ParseErrorKind::EmptyRegularExpressionGroup,
 							})
 						}
@@ -1047,7 +1113,7 @@ impl<'a> Parser<'a> {
 					expect_token_and_advance!(self, Token::RightAngle);
 
 					RegexNode {
-						span: (start, end),
+						range: Range::between(start, end),
 						kind: RegexKind::NamedCapture(name, Box::new(expr)),
 					}
 				}
@@ -1056,29 +1122,29 @@ impl<'a> Parser<'a> {
 			};
 
 			let modified_part = match self.current_token {
-				Some(Token::Star(_, end)) => {
+				Some(Token::Star(_, end_offset)) => {
 					self.advance();
 
 					RegexNode {
-						span: (part.span.0, end),
+						range: Range::between(part.range.start, self.offset_to_point(end_offset)),
 						kind: RegexKind::ZeroOrMore(Box::new(part)),
 					}
 				}
 
-				Some(Token::Plus(_, end)) => {
+				Some(Token::Plus(_, end_offset)) => {
 					self.advance();
 
 					RegexNode {
-						span: (part.span.0, end),
+						range: Range::between(part.range.start, self.offset_to_point(end_offset)),
 						kind: RegexKind::OneOrMore(Box::new(part)),
 					}
 				}
 
-				Some(Token::Question(_, end)) => {
+				Some(Token::Question(_, end_offset)) => {
 					self.advance();
 
 					RegexNode {
-						span: (part.span.0, end),
+						range: Range::between(part.range.start, self.offset_to_point(end_offset)),
 						kind: RegexKind::OneOrZero(Box::new(part)),
 					}
 				}
@@ -1114,37 +1180,37 @@ impl<'a> Parser<'a> {
 
 					match (min_count, max_count, has_comma) {
 						(Some(min), None, true) => RegexNode {
-							span: (part.span.0, end),
+							range: Range::between(part.range.start, end),
 							kind: RegexKind::AtLeastCount(Box::new(part), min),
 						},
 
 						(None, Some(max), true) => RegexNode {
-							span: (part.span.0, end),
+							range: Range::between(part.range.start, end),
 							kind: RegexKind::AtMostCount(Box::new(part), max),
 						},
 
 						(Some(min), None, false) => RegexNode {
-							span: (part.span.0, end),
+							range: Range::between(part.range.start, end),
 							kind: RegexKind::ExactCount(Box::new(part), min),
 						},
 
 						(Some(min), Some(max), true) => {
 							if min > max {
 								self.error::<RegexNode>(ParseError {
-									span: (part.span.0, end),
+									range: Range::between(part.range.start, end),
 									kind: ParseErrorKind::InvalidRegularExpressionCountModifier,
 								});
 							}
 
 							RegexNode {
-								span: (part.span.0, end),
+								range: Range::between(part.range.start, end),
 								kind: RegexKind::RangeCount(Box::new(part), min, max),
 							}
 						}
 
 						_ => {
 							return self.error(ParseError {
-								span: (part.span.0, end),
+								range: Range::between(part.range.start, end),
 								kind: ParseErrorKind::EmptyRegularExpressionCount,
 							})
 						}
@@ -1176,20 +1242,20 @@ impl<'a> Parser<'a> {
 			None => return None,
 		};
 
-		let start = other_parts.first().unwrap().span.0;
-		let end = other_parts.last().unwrap().span.1;
+		let start = other_parts.first().unwrap().range.start;
+		let end = other_parts.last().unwrap().range.end;
 
 		Some(RegexNode {
-			span: (start, end),
+			range: Range::between(start, end),
 			kind: RegexKind::Sequence(other_parts),
 		})
 	}
 
 	fn parse_definition(&mut self) -> Option<DefinitionNode> {
 		let start = match self.current_token {
-			Some(Token::KeywordDef(start, _)) => {
+			Some(Token::KeywordDef(start_offset, _)) => {
 				self.advance();
-				start
+				self.offset_to_point(start_offset)
 			}
 			_ => return None,
 		};
@@ -1206,7 +1272,7 @@ impl<'a> Parser<'a> {
 
 				Some(DefinitionNode {
 					name,
-					span: (start, type_expr.span.1),
+					range: Range::between(start, type_expr.range.end),
 					kind: DefinitionKind::Alias(type_expr),
 					ty: Type::Unknown,
 				})
@@ -1219,14 +1285,14 @@ impl<'a> Parser<'a> {
 
 				Some(DefinitionNode {
 					name,
-					span: (start, value.span.1),
+					range: Range::between(start, value.range.end),
 					kind: DefinitionKind::Expr(value),
 					ty: Type::Unknown,
 				})
 			}
 
 			_ => self.error(ParseError {
-				span: self.current_token_span(),
+				range: Range::between(start, self.current_token_points().1),
 				kind: ParseErrorKind::InvalidDefBody,
 			}),
 		}
@@ -1240,26 +1306,30 @@ impl<'a> Parser<'a> {
 		// interpolations don't have quotes on either side, so things work a little differently.
 
 		let (start, end) = expect_token_and_advance!(self, Token::StringLiteral);
+		let (start_offset, end_offset) = (self.point_to_offset(start), self.point_to_offset(end));
 
-		let value = read_string_with_escapes!(self, start, end);
+		let value = read_string_with_escapes!(self, start_offset, end_offset);
 
 		let end = if current_token_is!(self, Token::InterpolationStart) {
 			end
 		} else {
-			end + 1
+			Point::at(end.line, end.col + 1)
 		};
 
 		let literal = LiteralNode {
-			span: (start - 1, end),
+			range: Range::between(start, end), // TODO off-by-one?
 			kind: LiteralKind::String(value),
 		};
 
 		let expr_node = ExprNode {
-			span: literal.span,
+			range: literal.range,
 			kind: ExprKind::Literal(literal),
 			ty: Type::Unknown,
 		};
 
+		// If we have an interpolation-start after this, we need to collect all
+		// the parts and return an interpolation expression, not just a literal
+		// expression for the part we already found.
 		if current_token_is!(self, Token::InterpolationStart) {
 			let mut parts = vec![expr_node];
 			let mut interpolation_end = end;
@@ -1276,14 +1346,18 @@ impl<'a> Parser<'a> {
 
 				let (start, end) = expect_token_and_advance!(self, Token::StringLiteral);
 
+				let (start_offset, end_offset) = (self.point_to_offset(start), self.point_to_offset(end));
+
+				let part_range = Range::between(start, end);
+
 				interpolation_end = end;
 
-				let value = read_string_with_escapes!(self, start, end);
+				let value = read_string_with_escapes!(self, start_offset, end_offset);
 
 				parts.push(ExprNode {
-					span: (start, end),
+					range: part_range,
 					kind: ExprKind::Literal(LiteralNode {
-						span: (start, end),
+						range: part_range,
 						kind: LiteralKind::String(value),
 					}),
 					ty: Type::Unknown,
@@ -1291,7 +1365,7 @@ impl<'a> Parser<'a> {
 			}
 
 			return Some(ExprNode {
-				span: (start, interpolation_end),
+				range: Range::between(start, interpolation_end),
 				kind: ExprKind::Interpolation(parts),
 				ty: Type::Unknown,
 			});
@@ -1303,7 +1377,9 @@ impl<'a> Parser<'a> {
 	fn parse_type_identifier(&mut self) -> Option<TypeIdentifierNode> {
 		let (start, mut end) = expect_token_and_advance!(self, Token::Identifier);
 
-		let name = read_string!(self, start, end);
+		let (start_offset, end_offset) = (self.point_to_offset(start), self.point_to_offset(end));
+
+		let name = read_string!(self, start_offset, end_offset);
 
 		let mut generics = Vec::new();
 
@@ -1325,7 +1401,7 @@ impl<'a> Parser<'a> {
 		}
 
 		Some(TypeIdentifierNode {
-			span: (start, end),
+			range: Range::between(start, end),
 			name,
 			generics,
 		})
@@ -1334,7 +1410,7 @@ impl<'a> Parser<'a> {
 	fn parse_type_expression(&mut self) -> Option<TypeExprNode> {
 		match self.current_token {
 			Some(Token::Identifier(..)) => self.parse_type_identifier().map(|type_id| TypeExprNode {
-				span: type_id.span,
+				range: type_id.range,
 				kind: TypeExprKind::Single(type_id),
 			}),
 			Some(Token::LeftParen(..)) => self.parse_type_parenthetical(),
@@ -1355,13 +1431,13 @@ impl<'a> Parser<'a> {
 			param_types.push(type_expr);
 		}
 
-		expect_token_and_advance!(self, Token::Arrow);
+		let (_, end) = expect_token_and_advance!(self, Token::Arrow);
 
 		let return_type = match self.parse_type_expression() {
 			Some(type_expr) => Box::new(type_expr),
 			_ => {
 				return self.error(ParseError {
-					span: self.current_token_span(),
+					range: Range::between(start, end),
 					kind: ParseErrorKind::MissingReturnType,
 				})
 			}
@@ -1370,7 +1446,7 @@ impl<'a> Parser<'a> {
 		let (_, end) = expect_token_and_advance!(self, Token::RightBrace);
 
 		Some(TypeExprNode {
-			span: (start, end),
+			range: Range::between(start, end),
 			kind: TypeExprKind::Func(param_types, return_type),
 		})
 	}
@@ -1406,7 +1482,7 @@ impl<'a> Parser<'a> {
 		let (_, record_end) = expect_token_and_advance!(self, Token::RightBrace);
 
 		Some(TypeExprNode {
-			span: (record_start, record_end),
+			range: Range::between(record_start, record_end),
 			kind: TypeExprKind::Record(entries),
 		})
 	}
@@ -1439,7 +1515,7 @@ impl<'a> Parser<'a> {
 
 		if entries.is_empty() {
 			return Some(TypeExprNode {
-				span: (start, end),
+				range: Range::between(start, end),
 				kind: TypeExprKind::EmptyTuple,
 			});
 		}
@@ -1447,14 +1523,14 @@ impl<'a> Parser<'a> {
 		if entries.len() == 1 {
 			if let Some(first_entry) = entries.pop() {
 				return Some(TypeExprNode {
-					span: (start, end),
+					range: Range::between(start, end),
 					kind: TypeExprKind::Grouping(Box::new(first_entry)),
 				});
 			}
 		}
 
 		Some(TypeExprNode {
-			span: (start, end),
+			range: Range::between(start, end),
 			kind: TypeExprKind::Tuple(entries),
 		})
 	}

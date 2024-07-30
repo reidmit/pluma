@@ -1,8 +1,8 @@
 use super::*;
-use crate::types::*;
+use crate::{location::Range, types::*};
 
 pub struct DefinitionNode {
-	pub span: Span,
+	pub range: Range,
 	pub name: IdentifierNode,
 	pub kind: DefinitionKind,
 	pub ty: Type,
@@ -16,13 +16,10 @@ pub enum DefinitionKind {
 #[cfg(debug_assertions)]
 impl std::fmt::Debug for DefinitionNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct(&format!(
-			"def({}-{}) :: {}",
-			self.span.0, self.span.1, self.ty
-		))
-		.field("name", &self.name)
-		.field("kind", &self.kind)
-		.finish()
+		f.debug_struct(&format!("def({:#?}) :: {}", self.range, self.ty))
+			.field("name", &self.name)
+			.field("kind", &self.kind)
+			.finish()
 	}
 }
 

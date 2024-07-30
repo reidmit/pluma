@@ -2,6 +2,7 @@ use crate::ast::*;
 use crate::binding::*;
 use crate::diagnostic::*;
 use crate::errors::*;
+use crate::location::Range;
 use crate::module::Module;
 use crate::types::*;
 use std::collections::{HashMap, HashSet};
@@ -39,11 +40,11 @@ impl<'compiler> Analyzer<'compiler> {
 		self.module_path = Some(module.module_path.clone());
 
 		// TODO: We're adding the builtin types here, but there must be a better way
-		self.add_type_binding("int".into(), Type::Int, (0, 0));
-		self.add_type_binding("bool".into(), Type::Bool, (0, 0));
-		self.add_type_binding("string".into(), Type::String, (0, 0));
-		self.add_type_binding("regex".into(), Type::Regex, (0, 0));
-		self.add_type_binding("float".into(), Type::Float, (0, 0));
+		self.add_type_binding("int".into(), Type::Int, Range::collapsed(0, 0));
+		self.add_type_binding("bool".into(), Type::Bool, Range::collapsed(0, 0));
+		self.add_type_binding("string".into(), Type::String, Range::collapsed(0, 0));
+		self.add_type_binding("regex".into(), Type::Regex, Range::collapsed(0, 0));
+		self.add_type_binding("float".into(), Type::Float, Range::collapsed(0, 0));
 
 		self.enter_scope();
 
@@ -62,11 +63,11 @@ impl<'compiler> Analyzer<'compiler> {
 		}
 	}
 
-	fn diagnostic(&mut self, span: Option<(usize, usize)>, diag: Diagnostic) {
+	fn diagnostic(&mut self, range: Option<Range>, diag: Diagnostic) {
 		let mut diag = diag;
 
-		if let Some(span) = span {
-			diag = diag.with_span(span);
+		if let Some(range) = range {
+			diag = diag.with_span(range);
 		}
 
 		if let Some(module_name) = &self.module_name {
@@ -76,18 +77,21 @@ impl<'compiler> Analyzer<'compiler> {
 		self.diagnostics.push(diag)
 	}
 
-	fn warning(&mut self, span: (usize, usize), kind: AnalysisErrorKind) {
+	fn warning(&mut self, range: Range, kind: AnalysisErrorKind) {
 		self.diagnostic(
-			Some(span),
-			Diagnostic::warning(AnalysisError { span, kind }),
+			Some(range),
+			Diagnostic::warning(AnalysisError { range, kind }),
 		);
 	}
 
-	fn error(&mut self, span: (usize, usize), kind: AnalysisErrorKind) {
-		self.diagnostic(Some(span), Diagnostic::error(AnalysisError { span, kind }));
+	fn error(&mut self, range: Range, kind: AnalysisErrorKind) {
+		self.diagnostic(
+			Some(range),
+			Diagnostic::error(AnalysisError { range, kind }),
+		);
 	}
 
-	fn add_value_binding(&mut self, name: String, ty_scheme: Scheme, span: (usize, usize)) {
+	fn add_value_binding(&mut self, name: String, ty_scheme: Scheme, range: Range) {
 		let current_level = self.value_scopes.last_mut().expect("no current scope");
 
 		current_level.insert(
@@ -95,7 +99,7 @@ impl<'compiler> Analyzer<'compiler> {
 			ValueBinding {
 				ty_scheme,
 				ref_count: 0,
-				span,
+				range,
 			},
 		);
 	}
@@ -120,19 +124,19 @@ impl<'compiler> Analyzer<'compiler> {
 		if let Some(exited_level) = self.value_scopes.pop() {
 			for (name, binding) in exited_level {
 				if binding.ref_count == 0 && !name.starts_with("_") {
-					self.warning(binding.span, UnusedBinding { name });
+					self.warning(binding.range, UnusedBinding { name });
 				}
 			}
 		}
 	}
 
-	fn add_type_binding(&mut self, name: String, ty: Type, span: (usize, usize)) {
+	fn add_type_binding(&mut self, name: String, ty: Type, range: Range) {
 		self.type_scope.insert(
 			name,
 			TypeBinding {
 				ty,
 				ref_count: 0,
-				span,
+				range,
 			},
 		);
 	}
@@ -167,7 +171,7 @@ impl<'compiler> Analyzer<'compiler> {
 					self.add_value_binding(
 						definition.name.name.clone(),
 						type_scheme.clone(),
-						definition.name.span,
+						definition.name.range,
 					);
 
 					schemes.push(type_scheme);
@@ -179,7 +183,7 @@ impl<'compiler> Analyzer<'compiler> {
 					self.add_type_binding(
 						definition.name.name.clone(),
 						type_var.clone(),
-						definition.name.span,
+						definition.name.range,
 					);
 					type_def_vars.push(type_var);
 
@@ -188,7 +192,7 @@ impl<'compiler> Analyzer<'compiler> {
 					self.add_value_binding(
 						definition.name.name.clone(),
 						type_scheme.clone(),
-						definition.name.span,
+						definition.name.range,
 					);
 					schemes.push(type_scheme);
 				}
@@ -268,7 +272,7 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 
 				self.error(
-					type_ident.span,
+					type_ident.range,
 					NameNotBound {
 						name: type_ident.name.clone(),
 					},
@@ -316,7 +320,7 @@ impl<'compiler> Analyzer<'compiler> {
 				};
 
 				self.error(
-					ident.span,
+					ident.range,
 					NameNotBound {
 						name: ident.name.clone(),
 					},
@@ -330,7 +334,7 @@ impl<'compiler> Analyzer<'compiler> {
 					self.constrain_expr(part, constraints);
 
 					// each part must have type string
-					constraints.push(eq_constraint(part.ty.clone(), Type::String).at(part.span));
+					constraints.push(eq_constraint(part.ty.clone(), Type::String).at(part.range));
 				}
 
 				expr.ty = Type::String;
@@ -355,7 +359,7 @@ impl<'compiler> Analyzer<'compiler> {
 					element_types.push(element.ty.clone());
 				}
 
-				constraints.push(eq_constraint(expr.ty.clone(), Type::Tuple(element_types)).at(expr.span))
+				constraints.push(eq_constraint(expr.ty.clone(), Type::Tuple(element_types)).at(expr.range))
 			}
 
 			ExprKind::Record(fields) => {
@@ -368,7 +372,7 @@ impl<'compiler> Analyzer<'compiler> {
 					field_types.push((field_name.name.clone(), field_value.ty.clone()));
 				}
 
-				constraints.push(eq_constraint(expr.ty.clone(), Type::Record(field_types)).at(expr.span))
+				constraints.push(eq_constraint(expr.ty.clone(), Type::Record(field_types)).at(expr.range))
 			}
 
 			ExprKind::BinaryOperation { left, right, op } => {
@@ -382,14 +386,14 @@ impl<'compiler> Analyzer<'compiler> {
 					| Operator::Division
 					| Operator::Remainder => {
 						expr.ty = Type::Int;
-						constraints.push(eq_constraint(left.ty.clone(), Type::Int).at(left.span));
-						constraints.push(eq_constraint(right.ty.clone(), Type::Int).at(right.span));
+						constraints.push(eq_constraint(left.ty.clone(), Type::Int).at(left.range));
+						constraints.push(eq_constraint(right.ty.clone(), Type::Int).at(right.range));
 					}
 
 					Operator::LogicalAnd | Operator::LogicalOr => {
 						expr.ty = Type::Bool;
-						constraints.push(eq_constraint(left.ty.clone(), Type::Bool).at(left.span));
-						constraints.push(eq_constraint(right.ty.clone(), Type::Bool).at(right.span));
+						constraints.push(eq_constraint(left.ty.clone(), Type::Bool).at(left.range));
+						constraints.push(eq_constraint(right.ty.clone(), Type::Bool).at(right.range));
 					}
 
 					Operator::FieldAccess => unreachable!("handled separately"),
@@ -419,7 +423,7 @@ impl<'compiler> Analyzer<'compiler> {
 						self.add_value_binding(
 							param.ident.name.clone(),
 							Scheme::Forall(vec![], param.ty.clone()),
-							param.ident.span,
+							param.ident.range,
 						)
 					}
 				}
@@ -440,7 +444,7 @@ impl<'compiler> Analyzer<'compiler> {
 						expr.ty.clone(),
 						Type::Fun(param_types, Box::new(return_type)),
 					)
-					.at(expr.span),
+					.at(expr.range),
 				);
 			}
 
@@ -463,7 +467,7 @@ impl<'compiler> Analyzer<'compiler> {
 						callee.ty.clone(),
 						Type::Fun(arg_types, expr.ty.clone().into()),
 					)
-					.at(expr.span),
+					.at(expr.range),
 				);
 			}
 
@@ -473,7 +477,7 @@ impl<'compiler> Analyzer<'compiler> {
 
 				// add a new type scheme to the context with a new var:
 				let type_scheme = self.new_type_scheme_var();
-				self.add_value_binding(name.name.clone(), type_scheme.clone(), name.span);
+				self.add_value_binding(name.name.clone(), type_scheme.clone(), name.range);
 
 				// not sure what this is doing...?
 				constraints.push(Gen(type_scheme, value.ty.clone()));
@@ -495,7 +499,7 @@ impl<'compiler> Analyzer<'compiler> {
 						receiver.ty.clone(),
 						Type::PartialTuple(*index, expr.ty.clone().into()),
 					)
-					.at(expr.span),
+					.at(expr.range),
 				)
 			}
 
@@ -512,7 +516,7 @@ impl<'compiler> Analyzer<'compiler> {
 						receiver.ty.clone(),
 						Type::PartialRecord(field.name.clone(), expr.ty.clone().into()),
 					)
-					.at(expr.span),
+					.at(expr.range),
 				)
 			}
 
@@ -582,7 +586,7 @@ impl<'compiler> Analyzer<'compiler> {
 			) => {
 				if param_types_1.len() != param_types_2.len() {
 					self.error(
-						reason.span,
+						reason.range,
 						ParamCountMismatch {
 							expected: param_types_2.len(),
 							found: param_types_1.len(),
@@ -617,7 +621,7 @@ impl<'compiler> Analyzer<'compiler> {
 
 				if element_types_1.len() != element_types_2.len() {
 					self.error(
-						reason.span,
+						reason.range,
 						TupleSizeMismatch {
 							expected: element_types_2.len(),
 							found: element_types_1.len(),
@@ -647,7 +651,7 @@ impl<'compiler> Analyzer<'compiler> {
 
 				if index > &element_types.len() {
 					self.error(
-						reason.span,
+						reason.range,
 						TupleIndexNotPresent {
 							index: *index,
 							ty: Type::Tuple(element_types.clone()),
@@ -694,7 +698,7 @@ impl<'compiler> Analyzer<'compiler> {
 						errors = true;
 
 						self.error(
-							reason.span,
+							reason.range,
 							RecordFieldNotPresent {
 								field: field_name.clone(),
 								ty: Type::Record(field_types_1.clone()),
@@ -730,7 +734,7 @@ impl<'compiler> Analyzer<'compiler> {
 					return self.unify(&constraints);
 				} else {
 					self.error(
-						reason.span,
+						reason.range,
 						RecordFieldNotPresent {
 							field: field_name.clone(),
 							ty: Type::Record(field_types.clone()),
@@ -746,7 +750,7 @@ impl<'compiler> Analyzer<'compiler> {
 				Type::Var(_) => Substitution::with_entry(*n, t.clone()),
 				other => {
 					if other.contains_var(*n) {
-						self.error(reason.span, RecursiveUnification { ty: other.clone() });
+						self.error(reason.range, RecursiveUnification { ty: other.clone() });
 						return Substitution::empty();
 					}
 
@@ -756,7 +760,7 @@ impl<'compiler> Analyzer<'compiler> {
 
 			Eq(a, b, reason) => {
 				self.error(
-					reason.span,
+					reason.range,
 					TypeMismatch {
 						expected: b.clone(),
 						found: a.clone(),

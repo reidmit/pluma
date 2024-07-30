@@ -1,8 +1,8 @@
-use super::*;
+use crate::location::*;
 
 pub struct LiteralNode {
-	pub span: Span,
 	pub kind: LiteralKind,
+	pub range: Range,
 }
 
 pub enum LiteralKind {
@@ -18,11 +18,7 @@ pub enum LiteralKind {
 #[cfg(debug_assertions)]
 impl std::fmt::Debug for LiteralNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(
-			f,
-			"literal({}-{}) {:#?}",
-			self.span.0, self.span.1, self.kind
-		)
+		write!(f, "literal({:#?}) {:#?}", self.range, self.kind)
 	}
 }
 

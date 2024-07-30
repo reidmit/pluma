@@ -31,5 +31,3 @@ pub use self::regex::*;
 pub use self::type_expr::*;
 pub use self::type_identifier::*;
 pub use self::when::*;
-
-pub type Span = (usize, usize);

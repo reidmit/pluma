@@ -1,7 +1,8 @@
 use super::*;
+use crate::location::Range;
 
 pub struct TypeExprNode {
-	pub span: Span,
+	pub range: Range,
 	pub kind: TypeExprKind,
 }
 
@@ -23,11 +24,8 @@ pub enum TypeExprKind {
 #[cfg(debug_assertions)]
 impl std::fmt::Debug for TypeExprNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct(&format!(
-			"type({}-{}) {:#?}",
-			self.span.0, self.span.1, self.kind
-		))
-		.finish()
+		f.debug_struct(&format!("type({:#?}) {:#?}", self.range, self.kind))
+			.finish()
 	}
 }
 

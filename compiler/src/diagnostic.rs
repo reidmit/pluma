@@ -1,3 +1,4 @@
+use crate::location::Range;
 use std::fmt;
 use std::path::PathBuf;
 
@@ -6,7 +7,8 @@ use std::path::PathBuf;
 pub struct Diagnostic {
 	pub kind: DiagnosticKind,
 	pub message: String,
-	pub span: Option<(usize, usize)>,
+	pub span: Option<(usize, usize)>, // TODO remove this
+	pub range: Option<Range>,
 	pub module_name: Option<String>,
 	pub module_path: Option<PathBuf>,
 }
@@ -24,6 +26,7 @@ impl Diagnostic {
 			kind: DiagnosticKind::Error,
 			message: format!("{}", err),
 			span: None,
+			range: None,
 			module_name: None,
 			module_path: None,
 		}
@@ -34,14 +37,22 @@ impl Diagnostic {
 			kind: DiagnosticKind::Warning,
 			message: format!("{}", warning),
 			span: None,
+			range: None,
 			module_name: None,
 			module_path: None,
 		}
 	}
 
-	pub fn with_span(self, span: (usize, usize)) -> Diagnostic {
+	pub fn with_span(self, range: Range) -> Diagnostic {
 		Diagnostic {
-			span: Some(span),
+			range: Some(range),
+			..self
+		}
+	}
+
+	pub fn with_range(self, range: Range) -> Diagnostic {
+		Diagnostic {
+			range: Some(range),
 			..self
 		}
 	}

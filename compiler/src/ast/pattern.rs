@@ -1,8 +1,8 @@
 use super::*;
-use crate::types::*;
+use crate::{location::Range, types::*};
 
 pub struct PatternNode {
-	pub span: Span,
+	pub range: Range,
 	pub kind: PatternKind,
 }
 
@@ -26,7 +26,7 @@ pub enum PatternKind {
 
 impl PatternNode {
 	pub fn to_expr(self) -> ExprNode {
-		let span = self.span;
+		let range = self.range;
 
 		let expr_kind = match self.kind {
 			PatternKind::Identifier(ident) => ExprKind::Identifier(ident),
@@ -57,7 +57,7 @@ impl PatternNode {
 
 			PatternKind::Constructor(ident, arg) => {
 				let callee = ExprNode {
-					span: ident.span,
+					range: ident.range,
 					kind: ExprKind::Identifier(ident),
 					ty: Type::Unknown,
 				};
@@ -65,7 +65,7 @@ impl PatternNode {
 				let arg_expr = arg.to_expr();
 
 				let call = CallNode {
-					span,
+					range: Range::between(callee.range.start, arg_expr.range.end),
 					callee: Box::new(callee),
 					args: vec![arg_expr],
 				};
@@ -77,9 +77,9 @@ impl PatternNode {
 		};
 
 		ExprNode {
-			span,
 			kind: expr_kind,
 			ty: Type::Unknown,
+			range,
 		}
 	}
 }
@@ -87,10 +87,6 @@ impl PatternNode {
 #[cfg(debug_assertions)]
 impl std::fmt::Debug for PatternNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(
-			f,
-			"pattern({}-{}) {:#?}",
-			self.span.0, self.span.1, self.kind
-		)
+		write!(f, "pattern({:#?}) {:#?}", self.range, self.kind)
 	}
 }

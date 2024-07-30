@@ -91,6 +91,9 @@ pub enum Token {
 	/// e.g. `hello` or `hello-world`
 	Identifier(usize, usize),
 
+	/// an increase in indentation level
+	Indent(usize, usize),
+
 	/// e.g. `}` in `"hello ${name}"`
 	InterpolationEnd(usize, usize),
 
@@ -156,6 +159,9 @@ pub enum Token {
 
 	/// e.g. `0o755`
 	OctalDigits(usize, usize),
+
+	/// a decrease in indentation level
+	Outdent(usize, usize),
 
 	/// e.g. `path/to/some/module`
 	Path(usize, usize),
@@ -250,6 +256,7 @@ impl Token {
 			| ForwardSlash(start, end)
 			| HexDigits(start, end)
 			| Identifier(start, end)
+			| Indent(start, end)
 			| InterpolationEnd(start, end)
 			| InterpolationStart(start, end)
 			| KeywordAlias(start, end)
@@ -272,6 +279,7 @@ impl Token {
 			| LineBreakWithIndentIncrease(start, end)
 			| Minus(start, end)
 			| OctalDigits(start, end)
+			| Outdent(start, end)
 			| Path(start, end)
 			| Percent(start, end)
 			| Pipe(start, end)
@@ -335,6 +343,7 @@ impl fmt::Display for Token {
 			&ForwardSlash(..) => "a '/'",
 			&HexDigits(..) => "hex digits (e.g. 0xf4c3)",
 			&Identifier(..) => "an identifier",
+			&Indent(..) => "an indent",
 			&InterpolationEnd(..) => "a ')'",
 			&InterpolationStart(..) => "a '$('",
 			&KeywordAlias(..) => "keyword `alias`",
@@ -357,6 +366,7 @@ impl fmt::Display for Token {
 			&LineBreakWithIndentIncrease(..) => "an increase in indent level",
 			&Minus(..) => "a '-'",
 			&OctalDigits(..) => "octal digits (e.g. 0o755)",
+			&Outdent(..) => "an outdent",
 			&Path(..) => "a path to a module or imported identifier (e.g. 'path/to/module')",
 			&Percent(..) => "a '%'",
 			&Pipe(..) => "a '|'",

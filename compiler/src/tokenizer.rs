@@ -1,4 +1,5 @@
 use crate::errors::{ParseError, ParseErrorKind::*};
+use crate::location::Range;
 use crate::tokens::{Token, Token::*};
 use std::collections::HashMap;
 
@@ -14,6 +15,7 @@ pub struct Tokenizer<'a> {
 	length: usize,
 	index: usize,
 	line: usize,
+	line_start_offset: usize,
 	expect_import_path: bool,
 	string_stack: Vec<usize>,
 	interpolation_stack: Vec<usize>,
@@ -31,7 +33,8 @@ impl<'a> Tokenizer<'a> {
 			source,
 			length,
 			index: 0,
-			line: 1,
+			line: 0,
+			line_start_offset: 0,
 			expect_import_path: false,
 			string_stack: Vec::new(),
 			interpolation_stack: Vec::new(),
@@ -41,6 +44,14 @@ impl<'a> Tokenizer<'a> {
 			next_token: None,
 			indent_level: 0,
 		};
+	}
+
+	fn span_to_single_line_range(&self, start: usize, end: usize) -> Range {
+		Range::within_line(
+			self.line,
+			start - self.line_start_offset,
+			end - self.line_start_offset,
+		)
 	}
 }
 
@@ -176,40 +187,55 @@ impl<'a> Iterator for Tokenizer<'a> {
 				b'\n' => {
 					self.index += 1;
 					self.line += 1;
+					self.line_start_offset = self.index;
 
-					let indentation_start = self.index;
 					let mut indentation_size = 0;
-
-					loop {
-						while self.index < self.length && is_indentation_char(self.source[self.index]) {
-							self.index += 1;
-							indentation_size += 1;
-						}
-
-						if self.index < self.length && self.source[self.index] == b'\n' {
-							// special case to skip empty lines (or lines with only indent chars)
-							self.index += 1;
-							self.line += 1;
-							indentation_size = 0;
-						} else {
-							break;
-						}
+					while self.index < self.length && is_indentation_char(self.source[self.index]) {
+						self.index += 1;
+						indentation_size += 1;
 					}
 
-					if self.indent_level == indentation_size {
-						// no change in indentation
-						return Some(LineBreak(start_index, self.index));
+					if self.indent_level < indentation_size {
+						self.next_token = Some(Indent(self.line_start_offset, self.index))
+					} else if self.indent_level > indentation_size {
+						self.next_token = Some(Outdent(self.line_start_offset, self.index))
 					}
-
-					let is_increase = self.indent_level < indentation_size;
 
 					self.indent_level = indentation_size;
 
-					return Some(if is_increase {
-						LineBreakWithIndentIncrease(indentation_start, self.index)
-					} else {
-						LineBreakWithIndentDecrease(indentation_start, self.index)
-					});
+					// loop {
+					// 	while self.index < self.length && is_indentation_char(self.source[self.index]) {
+					// 		self.index += 1;
+					// 		indentation_size += 1;
+					// 	}
+
+					// 	if self.index < self.length && self.source[self.index] == b'\n' {
+					// 		// special case to skip empty lines (or lines with only indent chars)
+					// 		self.index += 1;
+					// 		self.line += 1;
+					// 		self.line_start_offset = self.index;
+					// 		indentation_size = 0;
+					// 	} else {
+					// 		break;
+					// 	}
+					// }
+
+					// if self.indent_level == indentation_size {
+					// 	// no change in indentation
+					// 	return Some(LineBreak(self.line_start_offset, self.index));
+					// }
+
+					// let is_increase = self.indent_level < indentation_size;
+
+					// self.indent_level = indentation_size;
+
+					// return Some(if is_increase {
+					// 	LineBreakWithIndentIncrease(self.line_start_offset, self.index)
+					// } else {
+					// 	LineBreakWithIndentDecrease(self.line_start_offset, self.index)
+					// });
+
+					return Some(LineBreak(start_index, start_index + 1));
 				}
 
 				b'(' => {
@@ -472,7 +498,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 										}
 
 										self.errors.push(ParseError {
-											span: (error_start, self.index),
+											range: Range::within_line(self.line, error_start, self.index),
 											kind: InvalidBinaryDigit,
 										});
 
@@ -498,7 +524,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 										}
 
 										self.errors.push(ParseError {
-											span: (error_start, self.index),
+											range: self.span_to_single_line_range(error_start, self.index),
 											kind: InvalidHexDigit,
 										});
 
@@ -524,7 +550,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 										}
 
 										self.errors.push(ParseError {
-											span: (error_start, self.index),
+											range: self.span_to_single_line_range(error_start, self.index),
 											kind: InvalidOctalDigit,
 										});
 
@@ -550,7 +576,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 							}
 
 							self.errors.push(ParseError {
-								span: (error_start, self.index),
+								range: self.span_to_single_line_range(error_start, self.index),
 								kind: InvalidDecimalDigit,
 							});
 
@@ -574,7 +600,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 			let start_index = self.interpolation_stack.pop().unwrap();
 
 			self.errors.push(ParseError {
-				span: (start_index, self.index),
+				range: self.span_to_single_line_range(start_index, self.index),
 				kind: UnclosedInterpolation,
 			});
 		}
@@ -583,7 +609,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 			let start_index = self.string_stack.pop().unwrap();
 
 			self.errors.push(ParseError {
-				span: (start_index, start_index + 1),
+				range: self.span_to_single_line_range(start_index, start_index + 1),
 				kind: UnclosedString,
 			});
 		}

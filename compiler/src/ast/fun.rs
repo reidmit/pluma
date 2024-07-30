@@ -1,8 +1,9 @@
 use super::*;
+use crate::location::Range;
 use crate::types::*;
 
 pub struct FunNode {
-	pub span: Span,
+	pub range: Range,
 	pub params: Vec<FunParamNode>,
 	pub body: Vec<ExprNode>,
 }
@@ -15,7 +16,7 @@ pub struct FunParamNode {
 #[cfg(debug_assertions)]
 impl std::fmt::Debug for FunNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct(&format!("fun({}-{})", self.span.0, self.span.1,))
+		f.debug_struct(&format!("fun({:#?})", self.range))
 			.field("params", &self.params)
 			.field("body", &self.body)
 			.finish()

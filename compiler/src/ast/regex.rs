@@ -1,7 +1,7 @@
-use super::*;
+use crate::location::Range;
 
 pub struct RegexNode {
-	pub span: Span,
+	pub range: Range,
 	pub kind: RegexKind,
 }
 
@@ -24,11 +24,8 @@ pub enum RegexKind {
 #[cfg(debug_assertions)]
 impl std::fmt::Debug for RegexNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct(&format!(
-			"regex({}-{}) {:#?}",
-			self.span.0, self.span.1, self.kind
-		))
-		.finish()
+		f.debug_struct(&format!("regex({:#?}) {:#?}", self.range, self.kind))
+			.finish()
 	}
 }
 

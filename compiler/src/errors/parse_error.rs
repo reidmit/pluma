@@ -1,10 +1,10 @@
-use crate::tokens::Token;
+use crate::{location::Range, tokens::Token};
 use std::fmt;
 
 #[derive(Copy, Clone)]
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub struct ParseError {
-	pub span: (usize, usize),
+	pub range: Range,
 	pub kind: ParseErrorKind,
 }
 

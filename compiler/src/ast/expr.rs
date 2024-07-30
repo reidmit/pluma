@@ -1,10 +1,11 @@
 use super::*;
+use crate::location::*;
 use crate::types::*;
 
 pub struct ExprNode {
-	pub span: Span,
 	pub ty: Type,
 	pub kind: ExprKind,
+	pub range: Range,
 }
 
 pub enum ExprKind {
@@ -53,12 +54,9 @@ pub enum ExprKind {
 #[cfg(debug_assertions)]
 impl std::fmt::Debug for ExprNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct(&format!(
-			"expr({}-{}) :: {}",
-			self.span.0, self.span.1, self.ty
-		))
-		.field("kind", &self.kind)
-		.finish()
+		f.debug_struct(&format!("expr({:#?}) :: {}", self.range, self.ty))
+			.field("kind", &self.kind)
+			.finish()
 	}
 }
 

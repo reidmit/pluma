@@ -1,7 +1,8 @@
 use super::*;
+use crate::location::Range;
 
 pub struct TypeIdentifierNode {
-	pub span: Span,
+	pub range: Range,
 	pub name: String,
 	pub generics: Vec<TypeExprNode>,
 }
@@ -9,10 +10,6 @@ pub struct TypeIdentifierNode {
 #[cfg(debug_assertions)]
 impl std::fmt::Debug for TypeIdentifierNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(
-			f,
-			"type-ident({}-{}) `{}`",
-			self.span.0, self.span.1, self.name
-		)
+		write!(f, "type-ident({:#?}) `{}`", self.range, self.name)
 	}
 }

@@ -39,20 +39,6 @@ impl Module {
 		self.ast.is_some()
 	}
 
-	pub fn get_line_for_span(&self, span: Span) -> usize {
-		let mut line = 1;
-
-		for break_start in &self.line_break_starts {
-			if break_start >= &span.0 && break_start <= &span.1 {
-				return line;
-			}
-
-			line += 1
-		}
-
-		line
-	}
-
 	pub fn get_comment_for_line(&self, line: usize) -> Option<&String> {
 		self.comments.get(&line)
 	}
@@ -68,7 +54,7 @@ impl Module {
 		for err in errors {
 			diagnostics.push(
 				Diagnostic::error(err)
-					.with_span(err.span)
+					.with_range(err.range)
 					.with_module(self.module_name.clone(), self.module_path.to_path_buf()),
 			);
 		}

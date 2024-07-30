@@ -1,6 +1,6 @@
 # run 'analyze' on a single file path
 analyze path:
-  @ cargo run --quiet -- analyze {{path}}
+  @ cargo run --bin cli --quiet -- analyze {{path}}
 
 # generate or overwrite .err and .out files for a given test
 test-write $path_to_write:

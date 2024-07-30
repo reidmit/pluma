@@ -1,13 +1,14 @@
 use super::*;
+use crate::location::Range;
 
 pub struct WhenNode {
-	pub span: Span,
+	pub range: Range,
 	pub subject: Box<ExprNode>,
 	pub cases: Vec<CaseNode>,
 }
 
 pub struct CaseNode {
-	pub span: Span,
+	pub range: Range,
 	pub pattern: PatternNode,
 	pub body: Vec<ExprNode>,
 }
@@ -15,7 +16,7 @@ pub struct CaseNode {
 #[cfg(debug_assertions)]
 impl std::fmt::Debug for WhenNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "when({}-{}) {:#?}", self.span.0, self.span.1, self.cases)
+		write!(f, "when({:#?}) {:#?}", self.range, self.cases)
 	}
 }
 
@@ -24,8 +25,8 @@ impl std::fmt::Debug for CaseNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(
 			f,
-			"case({}-{}) {:#?} {:#?}",
-			self.span.0, self.span.1, self.pattern, self.body
+			"case({:#?}) is {:#?} {:#?}",
+			self.range, self.pattern, self.body
 		)
 	}
 }
