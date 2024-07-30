@@ -7,7 +7,6 @@ use std::path::PathBuf;
 pub struct Diagnostic {
 	pub kind: DiagnosticKind,
 	pub message: String,
-	pub span: Option<(usize, usize)>, // TODO remove this
 	pub range: Option<Range>,
 	pub module_name: Option<String>,
 	pub module_path: Option<PathBuf>,
@@ -25,7 +24,6 @@ impl Diagnostic {
 		Diagnostic {
 			kind: DiagnosticKind::Error,
 			message: format!("{}", err),
-			span: None,
 			range: None,
 			module_name: None,
 			module_path: None,
@@ -36,7 +34,6 @@ impl Diagnostic {
 		Diagnostic {
 			kind: DiagnosticKind::Warning,
 			message: format!("{}", warning),
-			span: None,
 			range: None,
 			module_name: None,
 			module_path: None,

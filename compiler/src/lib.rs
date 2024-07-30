@@ -13,6 +13,7 @@ mod types;
 
 pub use compiler::*;
 pub use diagnostic::*;
+pub use location::*;
 pub use tokenizer::*;
 pub use tokens::Token;
 

@@ -1,7 +1,7 @@
 use crate::colors;
 use compiler::*;
-use std::collections::HashMap;
-use std::fs;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
 pub fn print_error<E: std::fmt::Display>(message: E) {
@@ -10,7 +10,6 @@ pub fn print_error<E: std::fmt::Display>(message: E) {
 
 pub fn print_diagnostics(diagnostics: Vec<Diagnostic>) {
 	let mut first = true;
-	let mut module_bytes = HashMap::<PathBuf, Vec<u8>>::new();
 
 	for diagnostic in diagnostics {
 		if !first {
@@ -42,81 +41,54 @@ pub fn print_diagnostics(diagnostics: Vec<Diagnostic>) {
 				.to_path_buf();
 		}
 
-		if let Some((start, end)) = diagnostic.span {
-			let mut col_index = 0;
+		if let Some(Range { start, end }) = diagnostic.range {
+			let file = File::open(&module_path).unwrap();
 
-			let bytes = match module_bytes.get(&module_path) {
-				Some(bytes) => bytes,
-				None => match fs::read(&module_path) {
-					Ok(bytes) => {
-						module_bytes.insert(module_path.clone(), bytes);
-						module_bytes.get(&module_path).unwrap()
-					}
-					_ => unreachable!(),
-				},
-			};
+			let mut relevant_lines: Vec<(usize, String)> = Vec::new();
 
-			// start the frame at the given span boundaries
-			let mut frame_start = start;
-			let mut frame_end = end;
-
-			// move the frame start back until we hit a newline
-			while frame_start > 0 {
-				if let Some(b'\n') = bytes.get(frame_start - 1) {
+			let mut current_line = 0;
+			for text in BufReader::new(file).lines().flatten() {
+				if current_line >= start.line && current_line <= end.line {
+					relevant_lines.push((current_line, text.replace("\t", " ")));
+				} else if current_line > end.line {
 					break;
 				}
 
-				col_index += 1;
-				frame_start -= 1
+				current_line += 1;
 			}
 
-			// move the frame end forward until we hit a newline
-			while let Some(byte) = bytes.get(frame_end) {
-				match byte {
-					b'\n' => break,
-					_ => frame_end += 1,
+			for (line_index, text) in relevant_lines {
+				eprintln!(
+					"\n{} {} {}",
+					if is_error {
+						colors::bold_red(">")
+					} else {
+						colors::bold_yellow(">")
+					},
+					// add 1 for user-friendly display:
+					colors::bold_dim(format!("{}|", line_index + 1).as_str()),
+					text
+				);
+
+				if line_index == start.line && line_index == end.line {
+					let up_arrows = "^".repeat(end.col - start.col).to_string();
+
+					// calculate left padding for left arrow/line number/indent:
+					let prefix_width = 4 + line_index.to_string().len();
+
+					eprintln!(
+						"{}{}",
+						" ".repeat(prefix_width + start.col),
+						if is_error {
+							colors::bold_red(&up_arrows)
+						} else {
+							colors::bold_yellow(&up_arrows)
+						}
+					);
+				} else if line_index == end.line && line_index != start.line {
+					eprintln!("");
 				}
 			}
-
-			let frame = String::from_utf8(bytes[frame_start..frame_end].to_vec())
-				.unwrap()
-				.replace("\t", " ")
-				.replace("\n", " ");
-
-			let mut line = 1;
-
-			frame_start = start;
-			while frame_start > 0 {
-				if let Some(b'\n') = bytes.get(frame_start - 1) {
-					line += 1;
-				}
-
-				frame_start -= 1;
-			}
-
-			eprintln!(
-				"\n{} {} {}",
-				if is_error {
-					colors::bold_red(">")
-				} else {
-					colors::bold_yellow(">")
-				},
-				colors::bold_dim(format!("{}|", line).as_str()),
-				frame
-			);
-
-			let prefix_width = 4 + line.to_string().len();
-			let up_arrows = "^".repeat(end - start).to_string();
-
-			eprintln!(
-				"{}{}",
-				" ".repeat(prefix_width + col_index),
-				if is_error {
-					colors::bold_red(&up_arrows)
-				} else {
-					colors::bold_yellow(&up_arrows)
-				}
-			);
 
 			eprintln!(
 				"{}",
@@ -124,8 +96,8 @@ pub fn print_diagnostics(diagnostics: Vec<Diagnostic>) {
 					format!(
 						"{}:{}:{}",
 						module_path.to_str().unwrap(),
-						line,
-						col_index + 1
+						start.line + 1, // add 1 for user-friendly display
+						start.col + 1   // add 1 for user-friendly display
 					)
 					.as_str()
 				)

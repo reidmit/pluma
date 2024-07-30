@@ -126,7 +126,6 @@ impl<'a> Parser<'a> {
 		loop {
 			match &self.current_token {
 				Some(Token::LineBreak(.., end_offset)) => {
-					println!("current token: {:#?}", self.current_token);
 					self.current_line += 1;
 					self
 						.line_start_offsets
