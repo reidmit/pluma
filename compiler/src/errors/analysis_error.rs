@@ -1,9 +1,8 @@
-use crate::{location::Range, types::*};
+use crate::types::*;
 use std::fmt;
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub struct AnalysisError {
-	pub range: Range,
 	pub kind: AnalysisErrorKind,
 }
 
@@ -61,12 +60,6 @@ impl fmt::Display for AnalysisError {
 				"Field `{}` does not exist in record of type `{}`.",
 				field, ty
 			),
-		}?;
-
-		writeln!(
-			f,
-			"\n\nat {}:{}-{}:{}",
-			self.range.start.line, self.range.start.col, self.range.end.line, self.range.end.col
-		)
+		}
 	}
 }

@@ -78,17 +78,11 @@ impl<'compiler> Analyzer<'compiler> {
 	}
 
 	fn warning(&mut self, range: Range, kind: AnalysisErrorKind) {
-		self.diagnostic(
-			Some(range),
-			Diagnostic::warning(AnalysisError { range, kind }),
-		);
+		self.diagnostic(Some(range), Diagnostic::warning(AnalysisError { kind }));
 	}
 
 	fn error(&mut self, range: Range, kind: AnalysisErrorKind) {
-		self.diagnostic(
-			Some(range),
-			Diagnostic::error(AnalysisError { range, kind }),
-		);
+		self.diagnostic(Some(range), Diagnostic::error(AnalysisError { kind }));
 	}
 
 	fn add_value_binding(&mut self, name: String, ty_scheme: Scheme, range: Range) {
