@@ -1,32 +1,32 @@
 module `main` (tests/identity/main.pa) {
     comments: {},
     ast: Some(
-        module(0-47) [
-            def(0-26) :: () {
-                name: ident(4-12) `identity`,
-                kind: expr(13-26) :: 'f -> 'f {
-                    kind: fun(13-26) {
+        module(0:0-4:19) [
+            def(0:0-2:1) :: () {
+                name: ident(0:4-0:12) `identity`,
+                kind: expr(0:13-2:1) :: 'f -> 'f {
+                    kind: fun(0:13-2:1) {
                         params: [
-                            ident(17-18) `x` :: 'f,
+                            ident(0:17-0:18) `x` :: 'f,
                         ],
                         body: [
-                            expr(23-24) :: 'f {
-                                kind: ident(23-24) `x`,
+                            expr(1:2-1:3) :: 'f {
+                                kind: ident(1:2-1:3) `x`,
                             },
                         ],
                     },
                 },
             },
-            def(28-47) :: () {
-                name: ident(32-35) `num`,
-                kind: expr(36-47) :: int {
-                    kind: call(36-47) {
-                        callee: expr(36-44) :: int -> int {
-                            kind: ident(36-44) `identity`,
+            def(4:0-4:19) :: () {
+                name: ident(4:4-4:7) `num`,
+                kind: expr(4:8-4:19) :: int {
+                    kind: call(4:8-4:19) {
+                        callee: expr(4:8-4:16) :: int -> int {
+                            kind: ident(4:8-4:16) `identity`,
                         },
                         args: [
-                            expr(45-47) :: int {
-                                kind: literal(45-47) int 47,
+                            expr(4:17-4:19) :: int {
+                                kind: literal(4:17-4:19) int 47,
                             },
                         ],
                     },

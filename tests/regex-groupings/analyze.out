@@ -1,18 +1,18 @@
 module `main` (tests/regex-groupings/main.pa) {
     comments: {},
     ast: Some(
-        module(0-47) [
-            def(0-47) :: () {
-                name: ident(4-7) `alt`,
-                kind: expr(8-47) :: regex {
-                    kind: regex(13-40) sequence [
-                        regex(13-14) literal "a",
-                        regex(16-17) regex(18-35) alternation [
-                            regex(18-19) literal "b",
-                            regex(24-25) literal "c",
-                            regex(34-35) literal "d",
+        module(0:0-3:5) [
+            def(0:0-3:5) :: () {
+                name: ident(0:4-0:7) `alt`,
+                kind: expr(0:8-3:5) :: regex {
+                    kind: regex(1:3-2:11) sequence [
+                        regex(1:3-1:4) literal "a",
+                        regex(1:6-2:8) regex(1:8-2:6) alternation [
+                            regex(1:8-1:9) literal "b",
+                            regex(1:14-1:15) literal "c",
+                            regex(2:5-2:6) literal "d",
                         ],
-                        regex(39-40) literal "e",
+                        regex(2:10-2:11) literal "e",
                     ],
                 },
             },

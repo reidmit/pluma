@@ -1,43 +1,43 @@
 module `main` (tests/tuples/main.pa) {
     comments: {},
     ast: Some(
-        module(0-72) [
-            def(0-72) :: () {
-                name: ident(4-8) `main`,
-                kind: expr(9-72) :: () -> int {
-                    kind: fun(9-72) {
+        module(0:0-3:1) [
+            def(0:0-3:1) :: () {
+                name: ident(0:4-0:8) `main`,
+                kind: expr(0:9-3:1) :: () -> int {
+                    kind: fun(0:9-3:1) {
                         params: [],
                         body: [
-                            expr(17-51) :: () {
-                                kind: let(17-51) {
-                                    name: ident(21-31) `superTuple`,
-                                    value: expr(34-51) :: (int, string, bool) {
+                            expr(1:2-1:36) :: () {
+                                kind: let(1:2-1:36) {
+                                    name: ident(1:6-1:16) `superTuple`,
+                                    value: expr(1:19-1:36) :: (int, string, bool) {
                                         kind: tuple [
-                                            expr(35-36) :: int {
-                                                kind: literal(35-36) int 2,
+                                            expr(1:20-1:21) :: int {
+                                                kind: literal(1:20-1:21) int 2,
                                             },
-                                            expr(38-44) :: string {
-                                                kind: literal(38-44) string "blue",
+                                            expr(1:24-1:29) :: string {
+                                                kind: literal(1:24-1:29) string "blue",
                                             },
-                                            expr(46-50) :: bool {
-                                                kind: literal(46-50) bool true,
+                                            expr(1:31-1:35) :: bool {
+                                                kind: literal(1:31-1:35) bool true,
                                             },
                                         ],
                                     },
                                 },
                             },
-                            expr(54-70) :: int {
-                                kind: binary op(67-68) `+` {
-                                    left: expr(54-66) :: int {
+                            expr(2:2-2:18) :: int {
+                                kind: binary op(2:15-2:16) `+` {
+                                    left: expr(2:2-2:14) :: int {
                                         kind: element-access {
-                                            receiver: expr(54-64) :: (0: int, ...) {
-                                                kind: ident(54-64) `superTuple`,
+                                            receiver: expr(2:2-2:12) :: (0: int, ...) {
+                                                kind: ident(2:2-2:12) `superTuple`,
                                             },
                                             index: 0,
                                         },
                                     },
-                                    right: expr(69-70) :: int {
-                                        kind: literal(69-70) int 1,
+                                    right: expr(2:17-2:18) :: int {
+                                        kind: literal(2:17-2:18) int 1,
                                     },
                                 },
                             },

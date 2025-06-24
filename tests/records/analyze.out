@@ -1,67 +1,67 @@
 module `main` (tests/records/main.pa) {
     comments: {},
     ast: Some(
-        module(0-110) [
-            def(0-35) :: () {
-                name: ident(4-6) `me`,
-                kind: expr(7-35) :: {name: string, age: int} {
+        module(0:0-9:1) [
+            def(0:0-3:1) :: () {
+                name: ident(0:4-0:6) `me`,
+                kind: expr(0:7-3:1) :: {name: string, age: int} {
                     kind: record [
                         (
-                            ident(11-15) `name`,
-                            expr(17-23) :: string {
-                                kind: literal(17-23) string "reid",
+                            ident(1:2-1:6) `name`,
+                            expr(1:9-1:14) :: string {
+                                kind: literal(1:9-1:14) string "reid",
                             },
                         ),
                         (
-                            ident(26-29) `age`,
-                            expr(31-33) :: int {
-                                kind: literal(31-33) int 28,
+                            ident(2:2-2:5) `age`,
+                            expr(2:7-2:9) :: int {
+                                kind: literal(2:7-2:9) int 28,
                             },
                         ),
                     ],
                 },
             },
-            def(37-64) :: () {
-                name: ident(41-47) `inline`,
-                kind: expr(48-64) :: {one: int, two: int} {
+            def(5:0-5:27) :: () {
+                name: ident(5:4-5:10) `inline`,
+                kind: expr(5:11-5:27) :: {one: int, two: int} {
                     kind: record [
                         (
-                            ident(49-52) `one`,
-                            expr(54-55) :: int {
-                                kind: literal(54-55) int 1,
+                            ident(5:12-5:15) `one`,
+                            expr(5:17-5:18) :: int {
+                                kind: literal(5:17-5:18) int 1,
                             },
                         ),
                         (
-                            ident(57-60) `two`,
-                            expr(62-63) :: int {
-                                kind: literal(62-63) int 2,
+                            ident(5:20-5:23) `two`,
+                            expr(5:25-5:26) :: int {
+                                kind: literal(5:25-5:26) int 2,
                             },
                         ),
                     ],
                 },
             },
-            def(66-110) :: () {
-                name: ident(70-80) `get-result`,
-                kind: expr(81-110) :: () -> int {
-                    kind: fun(81-110) {
+            def(7:0-9:1) :: () {
+                name: ident(7:4-7:14) `get-result`,
+                kind: expr(7:15-9:1) :: () -> int {
+                    kind: fun(7:15-9:1) {
                         params: [],
                         body: [
-                            expr(89-108) :: int {
-                                kind: binary op(96-97) `+` {
-                                    left: expr(89-95) :: int {
+                            expr(8:2-8:21) :: int {
+                                kind: binary op(8:9-8:10) `+` {
+                                    left: expr(8:2-8:8) :: int {
                                         kind: field-access {
-                                            receiver: expr(89-91) :: {age: int, ...} {
-                                                kind: ident(89-91) `me`,
+                                            receiver: expr(8:2-8:4) :: {age: int, ...} {
+                                                kind: ident(8:2-8:4) `me`,
                                             },
-                                            field: ident(92-95) `age`,
+                                            field: ident(8:5-8:8) `age`,
                                         },
                                     },
-                                    right: expr(98-108) :: int {
+                                    right: expr(8:11-8:21) :: int {
                                         kind: field-access {
-                                            receiver: expr(98-104) :: {two: int, ...} {
-                                                kind: ident(98-104) `inline`,
+                                            receiver: expr(8:11-8:17) :: {two: int, ...} {
+                                                kind: ident(8:11-8:17) `inline`,
                                             },
-                                            field: ident(105-108) `two`,
+                                            field: ident(8:18-8:21) `two`,
                                         },
                                     },
                                 },

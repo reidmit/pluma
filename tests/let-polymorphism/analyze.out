@@ -1,50 +1,50 @@
 module `main` (tests/let-polymorphism/main.pa) {
     comments: {},
     ast: Some(
-        module(0-76) [
-            def(0-76) :: () {
-                name: ident(4-8) `main`,
-                kind: expr(9-76) :: () -> int {
-                    kind: fun(9-76) {
+        module(0:0-4:1) [
+            def(0:0-4:1) :: () {
+                name: ident(0:4-0:8) `main`,
+                kind: expr(0:9-4:1) :: () -> int {
+                    kind: fun(0:9-4:1) {
                         params: [],
                         body: [
-                            expr(17-43) :: () {
-                                kind: let(17-43) {
-                                    name: ident(21-29) `identity`,
-                                    value: expr(32-43) :: 'e -> 'e {
-                                        kind: fun(32-43) {
+                            expr(1:2-1:28) :: () {
+                                kind: let(1:2-1:28) {
+                                    name: ident(1:6-1:14) `identity`,
+                                    value: expr(1:17-1:28) :: 'e -> 'e {
+                                        kind: fun(1:17-1:28) {
                                             params: [
-                                                ident(36-37) `x` :: 'e,
+                                                ident(1:21-1:22) `x` :: 'e,
                                             ],
                                             body: [
-                                                expr(40-41) :: 'e {
-                                                    kind: ident(40-41) `x`,
+                                                expr(1:25-1:26) :: 'e {
+                                                    kind: ident(1:25-1:26) `x`,
                                                 },
                                             ],
                                         },
                                     },
                                 },
                             },
-                            expr(46-60) :: string {
-                                kind: call(46-60) {
-                                    callee: expr(46-54) :: string -> string {
-                                        kind: ident(46-54) `identity`,
+                            expr(2:2-2:16) :: string {
+                                kind: call(2:2-2:16) {
+                                    callee: expr(2:2-2:10) :: string -> string {
+                                        kind: ident(2:2-2:10) `identity`,
                                     },
                                     args: [
-                                        expr(55-60) :: string {
-                                            kind: literal(55-60) string "wow",
+                                        expr(2:12-2:16) :: string {
+                                            kind: literal(2:12-2:16) string "wow",
                                         },
                                     ],
                                 },
                             },
-                            expr(63-74) :: int {
-                                kind: call(63-74) {
-                                    callee: expr(63-71) :: int -> int {
-                                        kind: ident(63-71) `identity`,
+                            expr(3:2-3:13) :: int {
+                                kind: call(3:2-3:13) {
+                                    callee: expr(3:2-3:10) :: int -> int {
+                                        kind: ident(3:2-3:10) `identity`,
                                     },
                                     args: [
-                                        expr(72-74) :: int {
-                                            kind: literal(72-74) int 47,
+                                        expr(3:11-3:13) :: int {
+                                            kind: literal(3:11-3:13) int 47,
                                         },
                                     ],
                                 },

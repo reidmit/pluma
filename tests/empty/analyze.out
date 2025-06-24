@@ -1,6 +1,6 @@
 module `main` (tests/empty/main.pa) {
     comments: {},
     ast: Some(
-        module(0-0) [],
+        module(0:0-0:0) [],
     ),
 }
