@@ -1,0 +1,8 @@
+Warning: Name `x` is never used.
+
+at 1:6-1:7
+
+
+> 2|   let x = 47
+           ^
+tests/unused-binding/main.pa:2:7

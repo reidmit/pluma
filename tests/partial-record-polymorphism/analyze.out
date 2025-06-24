@@ -1,45 +1,45 @@
 module `main` (tests/partial-record-polymorphism/main.pa) {
     comments: {},
     ast: Some(
-        module(0-102) [
-            def(0-35) :: () {
-                name: ident(4-12) `get-name`,
-                kind: expr(13-35) :: ({name: 'g, ...}) -> 'g {
-                    kind: fun(13-35) {
+        module(0:0-8:1) [
+            def(0:0-2:1) :: () {
+                name: ident(0:4-0:12) `get-name`,
+                kind: expr(0:13-2:1) :: ({name: 'g, ...}) -> 'g {
+                    kind: fun(0:13-2:1) {
                         params: [
-                            ident(17-20) `rec` :: {name: 'g, ...},
+                            ident(0:17-0:20) `rec` :: {name: 'g, ...},
                         ],
                         body: [
-                            expr(25-33) :: 'g {
+                            expr(1:2-1:10) :: 'g {
                                 kind: field-access {
-                                    receiver: expr(25-28) :: {name: 'g, ...} {
-                                        kind: ident(25-28) `rec`,
+                                    receiver: expr(1:2-1:5) :: {name: 'g, ...} {
+                                        kind: ident(1:2-1:5) `rec`,
                                     },
-                                    field: ident(29-33) `name`,
+                                    field: ident(1:6-1:10) `name`,
                                 },
                             },
                         ],
                     },
                 },
             },
-            def(37-102) :: () {
-                name: ident(41-45) `main`,
-                kind: expr(46-102) :: () -> string {
-                    kind: fun(46-102) {
+            def(4:0-8:1) :: () {
+                name: ident(4:4-4:8) `main`,
+                kind: expr(4:9-8:1) :: () -> string {
+                    kind: fun(4:9-8:1) {
                         params: [],
                         body: [
-                            expr(54-74) :: int {
-                                kind: call(54-74) {
-                                    callee: expr(54-62) :: ({name: int}) -> int {
-                                        kind: ident(54-62) `get-name`,
+                            expr(5:2-5:22) :: int {
+                                kind: call(5:2-5:22) {
+                                    callee: expr(5:2-5:10) :: ({name: int}) -> int {
+                                        kind: ident(5:2-5:10) `get-name`,
                                     },
                                     args: [
-                                        expr(63-74) :: {name: int} {
+                                        expr(5:11-5:22) :: {name: int} {
                                             kind: record [
                                                 (
-                                                    ident(64-68) `name`,
-                                                    expr(70-73) :: int {
-                                                        kind: literal(70-73) int 123,
+                                                    ident(5:12-5:16) `name`,
+                                                    expr(5:18-5:21) :: int {
+                                                        kind: literal(5:18-5:21) int 123,
                                                     },
                                                 ),
                                             ],
@@ -47,18 +47,18 @@ module `main` (tests/partial-record-polymorphism/main.pa) {
                                     ],
                                 },
                             },
-                            expr(78-100) :: string {
-                                kind: call(78-100) {
-                                    callee: expr(78-86) :: ({name: string}) -> string {
-                                        kind: ident(78-86) `get-name`,
+                            expr(7:2-7:24) :: string {
+                                kind: call(7:2-7:24) {
+                                    callee: expr(7:2-7:10) :: ({name: string}) -> string {
+                                        kind: ident(7:2-7:10) `get-name`,
                                     },
                                     args: [
-                                        expr(87-100) :: {name: string} {
+                                        expr(7:11-7:24) :: {name: string} {
                                             kind: record [
                                                 (
-                                                    ident(88-92) `name`,
-                                                    expr(94-99) :: string {
-                                                        kind: literal(94-99) string "lol",
+                                                    ident(7:12-7:16) `name`,
+                                                    expr(7:19-7:23) :: string {
+                                                        kind: literal(7:19-7:23) string "lol",
                                                     },
                                                 ),
                                             ],

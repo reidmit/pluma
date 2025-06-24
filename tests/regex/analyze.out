@@ -1,23 +1,23 @@
 module `main` (tests/regex/main.pa) {
     comments: {},
     ast: Some(
-        module(0-63) [
-            def(0-24) :: () {
-                name: ident(4-6) `r1`,
-                kind: expr(7-24) :: regex {
-                    kind: regex(9-22) sequence [
-                        regex(9-14) literal "hello",
-                        regex(17-22) literal "world",
+        module(0:0-6:1) [
+            def(0:0-0:24) :: () {
+                name: ident(0:4-0:6) `r1`,
+                kind: expr(0:7-0:24) :: regex {
+                    kind: regex(0:9-0:22) sequence [
+                        regex(0:9-0:14) literal "hello",
+                        regex(0:17-0:22) literal "world",
                     ],
                 },
             },
-            def(26-63) :: () {
-                name: ident(30-32) `r2`,
-                kind: expr(33-63) :: regex {
-                    kind: regex(38-61) sequence [
-                        regex(38-43) exactly 1 (regex(38-39) literal "a"),
-                        regex(47-54) between 2 and 7 (regex(47-48) literal "b"),
-                        regex(58-61) one-or-more (regex(58-59) literal "c"),
+            def(2:0-6:1) :: () {
+                name: ident(2:4-2:6) `r2`,
+                kind: expr(2:7-6:1) :: regex {
+                    kind: regex(3:3-5:6) sequence [
+                        regex(3:3-3:8) exactly 1 (regex(3:3-3:4) literal "a"),
+                        regex(4:3-4:10) between 2 and 7 (regex(4:3-4:4) literal "b"),
+                        regex(5:3-5:6) one-or-more (regex(5:3-5:4) literal "c"),
                     ],
                 },
             },
