@@ -7,11 +7,11 @@ test-write $path_to_write:
   #!/usr/bin/env zsh
   if [[ ${path_to_write[-8,-1]} == "/analyze" ]]; then
     test_name=${path_to_write%/analyze}
-    cargo run -q -- analyze "tests/$test_name" > "tests/$test_name/analyze.out" 2> "tests/$test_name/analyze.err" || true
+    cargo run --bin cli --quiet -- analyze "tests/$test_name" > "tests/$test_name/analyze.out" 2> "tests/$test_name/analyze.err" || true
     echo "wrote tests/$test_name/analyze.out and tests/$test_name/analyze.err"
   elif [[ ${path_to_write[-4,-1]} == "/run" ]]; then
     test_name=${path_to_write%/run}
-    cargo run -q -- run "tests/$test_name" > "tests/$test_name/run.out" 2> "tests/$test_name/run.err" || true
+    cargo run --bin cli --quiet -- run "tests/$test_name" > "tests/$test_name/run.out" 2> "tests/$test_name/run.err" || true
     echo "wrote tests/$test_name/run.out and tests/$test_name/run.err"
   else
     echo "invalid arg; provide a path like test-name/analyze or test-name/run"

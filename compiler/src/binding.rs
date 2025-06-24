@@ -13,5 +13,5 @@ pub struct ValueBinding {
 pub struct TypeBinding {
 	pub ty: Type,
 	pub ref_count: usize,
-	pub range: Range,
+	pub _range: Range,
 }

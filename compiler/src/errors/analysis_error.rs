@@ -61,6 +61,12 @@ impl fmt::Display for AnalysisError {
 				"Field `{}` does not exist in record of type `{}`.",
 				field, ty
 			),
-		}
+		}?;
+
+		writeln!(
+			f,
+			"\n\nat {}:{}-{}:{}",
+			self.range.start.line, self.range.start.col, self.range.end.line, self.range.end.col
+		)
 	}
 }

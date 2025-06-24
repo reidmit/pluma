@@ -136,7 +136,7 @@ impl<'compiler> Analyzer<'compiler> {
 			TypeBinding {
 				ty,
 				ref_count: 0,
-				range,
+				_range: range,
 			},
 		);
 	}

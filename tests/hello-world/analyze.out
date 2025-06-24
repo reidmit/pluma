@@ -1,11 +1,11 @@
 module `main` (tests/hello-world/main.pa) {
     comments: {},
     ast: Some(
-        module(0-31) [
-            def(0-31) :: () {
-                name: ident(4-15) `hello-world`,
-                kind: expr(16-31) :: string {
-                    kind: literal(16-31) string "hello, world!",
+        module(0:0-0:31) [
+            def(0:0-0:31) :: () {
+                name: ident(0:4-0:15) `hello-world`,
+                kind: expr(0:17-0:31) :: string {
+                    kind: literal(0:17-0:31) string "hello, world!",
                 },
             },
         ],
