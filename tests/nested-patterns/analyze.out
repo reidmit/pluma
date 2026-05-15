@@ -1,0 +1,135 @@
+module `main` (tests/nested-patterns/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-26:1) [
+            def(0:0-3:1) :: () {
+                name: ident(0:4-0:8) `tree`,
+                kind: enum(0:14-3:1) [
+                    variant(1:2-1:7) {
+                        name: ident(1:2-1:7) `empty`,
+                        params: None,
+                    },
+                    variant(2:2-2:20) {
+                        name: ident(2:2-2:6) `node`,
+                        params: Some(
+                            [
+                                type(2:7-2:10) type-ident(2:7-2:10) `int`,
+                                type(2:11-2:15) type-ident(2:11-2:15) `tree`,
+                                type(2:16-2:20) type-ident(2:16-2:20) `tree`,
+                            ],
+                        ),
+                    },
+                ],
+            },
+            def(5:0-8:1) :: () {
+                name: ident(5:4-5:9) `maybe`,
+                kind: enum(5:15-8:1) [
+                    variant(6:2-6:6) {
+                        name: ident(6:2-6:6) `none`,
+                        params: None,
+                    },
+                    variant(7:2-7:11) {
+                        name: ident(7:2-7:6) `some`,
+                        params: Some(
+                            [
+                                type(7:7-7:11) type-ident(7:7-7:11) `tree`,
+                            ],
+                        ),
+                    },
+                ],
+            },
+            def(10:0-14:1) :: () {
+                name: ident(10:4-10:17) `root-of-maybe`,
+                kind: expr(10:18-14:1) :: maybe -> () {
+                    kind: fun(10:18-14:1) {
+                        params: [
+                            ident(10:22-10:23) `m` :: maybe,
+                        ],
+                        body: [
+                            expr(11:2-13:3) :: () {
+                                kind: if(11:2-13:3) expr(11:5-11:6) :: maybe {
+                                    kind: ident(11:5-11:6) `m`,
+                                } pattern(11:10-11:30) Constructor(
+                                    ident(11:10-11:14) `some`,
+                                    [
+                                        pattern(11:16-11:30) Constructor(
+                                            ident(11:16-11:20) `node`,
+                                            [
+                                                pattern(11:21-11:24) Identifier(
+                                                    ident(11:21-11:24) `val`,
+                                                ),
+                                                pattern(11:25-11:27) Identifier(
+                                                    ident(11:25-11:27) `_l`,
+                                                ),
+                                                pattern(11:28-11:30) Identifier(
+                                                    ident(11:28-11:30) `_r`,
+                                                ),
+                                            ],
+                                        ),
+                                    ],
+                                ) [
+                                    expr(12:4-12:7) :: int {
+                                        kind: ident(12:4-12:7) `val`,
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
+            def(16:0-20:1) :: () {
+                name: ident(16:4-16:21) `tuple-destructure`,
+                kind: expr(16:22-20:1) :: (('m, 'n)) -> () {
+                    kind: fun(16:22-20:1) {
+                        params: [
+                            ident(16:26-16:27) `t` :: ('m, 'n),
+                        ],
+                        body: [
+                            expr(17:2-19:3) :: () {
+                                kind: if(17:2-19:3) expr(17:5-17:6) :: ('m, 'n) {
+                                    kind: ident(17:5-17:6) `t`,
+                                } pattern(17:10-17:17) Tuple(
+                                    [
+                                        pattern(17:11-17:12) Identifier(
+                                            ident(17:11-17:12) `a`,
+                                        ),
+                                        pattern(17:14-17:16) Identifier(
+                                            ident(17:14-17:16) `_b`,
+                                        ),
+                                    ],
+                                ) [
+                                    expr(18:4-18:5) :: 'm {
+                                        kind: ident(18:4-18:5) `a`,
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
+            def(22:0-26:1) :: () {
+                name: ident(22:4-22:12) `grouping`,
+                kind: expr(22:13-26:1) :: tree -> () {
+                    kind: fun(22:13-26:1) {
+                        params: [
+                            ident(22:17-22:18) `t` :: tree,
+                        ],
+                        body: [
+                            expr(23:2-25:3) :: () {
+                                kind: if(23:2-25:3) expr(23:5-23:6) :: tree {
+                                    kind: ident(23:5-23:6) `t`,
+                                } pattern(23:11-23:16) Identifier(
+                                    ident(23:11-23:16) `empty`,
+                                ) [
+                                    expr(24:4-24:5) :: int {
+                                        kind: literal(24:4-24:5) int 0,
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

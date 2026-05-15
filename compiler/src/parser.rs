@@ -654,37 +654,7 @@ impl<'a> Parser<'a> {
 				})
 			}
 
-			Some(Token::LeftParen(start_offset, _)) => {
-				let start = self.offset_to_point(start_offset);
-
-				self.advance();
-
-				let mut entries = Vec::new();
-
-				while let Some(pattern) = self.parse_pattern() {
-					entries.push(pattern);
-
-					match self.current_token {
-						Some(Token::Comma(..)) => {
-							self.advance();
-							self.skip_line_breaks();
-						}
-						Some(Token::LineBreak(..)) => {
-							self.skip_line_breaks();
-						}
-						_ => break,
-					}
-				}
-
-				self.skip_line_breaks();
-
-				let (_, end) = expect_token_and_advance!(self, Token::RightParen);
-
-				Some(PatternNode {
-					range: Range::between(start, end),
-					kind: PatternKind::Tuple(entries),
-				})
-			}
+			Some(Token::LeftParen(..)) => self.parse_paren_pattern(),
 
 			Some(Token::LeftBrace(start_offset, _)) => {
 				let start = self.offset_to_point(start_offset);
@@ -763,6 +733,62 @@ impl<'a> Parser<'a> {
 		}
 	}
 
+	// Parse `(...)` in pattern position. A single inner pattern with no comma is
+	// treated as grouping (returned directly); otherwise it's a Tuple pattern.
+	fn parse_paren_pattern(&mut self) -> Option<PatternNode> {
+		let start_offset = match self.current_token {
+			Some(Token::LeftParen(s, _)) => s,
+			_ => return None,
+		};
+		let start = self.offset_to_point(start_offset);
+
+		self.advance();
+		self.skip_line_breaks();
+
+		// `()` — empty tuple pattern
+		if matches!(self.current_token, Some(Token::RightParen(..))) {
+			let (_, end) = expect_token_and_advance!(self, Token::RightParen);
+			return Some(PatternNode {
+				range: Range::between(start, end),
+				kind: PatternKind::Tuple(vec![]),
+			});
+		}
+
+		let first = self.parse_pattern()?;
+		self.skip_line_breaks();
+
+		match self.current_token {
+			Some(Token::Comma(..)) => {
+				self.advance();
+				self.skip_line_breaks();
+
+				let mut entries = vec![first];
+				while let Some(p) = self.parse_pattern() {
+					entries.push(p);
+					match self.current_token {
+						Some(Token::Comma(..)) => {
+							self.advance();
+							self.skip_line_breaks();
+						}
+						_ => break,
+					}
+				}
+
+				self.skip_line_breaks();
+				let (_, end) = expect_token_and_advance!(self, Token::RightParen);
+
+				Some(PatternNode {
+					range: Range::between(start, end),
+					kind: PatternKind::Tuple(entries),
+				})
+			}
+			_ => {
+				expect_token_and_advance!(self, Token::RightParen);
+				Some(first)
+			}
+		}
+	}
+
 	// A sub-pattern that does not itself try to consume constructor arguments,
 	// used when parsing the args of a Constructor pattern. Without this, every
 	// arg ident would greedily try to become its own Constructor.
@@ -775,6 +801,11 @@ impl<'a> Parser<'a> {
 					kind: PatternKind::Identifier(id_node),
 				})
 			}
+
+			// Parens let nested constructor patterns appear as constructor args:
+			// `some (node val l r)` becomes Constructor(some, [Constructor(node, [...])])
+			// rather than the flat Constructor(some, [node, val, l, r]).
+			Some(Token::LeftParen(..)) => self.parse_paren_pattern(),
 
 			Some(Token::Underscore(start, end)) => {
 				self.advance();
