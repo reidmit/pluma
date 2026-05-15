@@ -461,6 +461,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 						b"false" => BoolFalse,
 
 						b"alias" => KeywordAlias,
+						b"as" => KeywordAs,
 						b"def" => KeywordDef,
 						b"enum" => KeywordEnum,
 						b"fun" => KeywordFun,

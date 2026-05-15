@@ -1,0 +1,4 @@
+use a.b.utils
+use c.d.utils
+
+def first utils.value

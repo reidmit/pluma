@@ -1,0 +1,32 @@
+module `main` (tests/multi-module-alias/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-4:23) [
+            use(0:0-0:13) `a.b.utils`,
+            use(1:0-1:23) `c.d.utils` as `utils2`,
+        ] [
+            def(3:0-3:21) :: () {
+                name: ident(3:4-3:9) `first`,
+                kind: expr(3:10-3:21) :: int {
+                    kind: field-access {
+                        receiver: expr(3:10-3:15) :: ? {
+                            kind: ident(3:10-3:15) `utils`,
+                        },
+                        field: ident(3:16-3:21) `value`,
+                    },
+                },
+            },
+            def(4:0-4:23) :: () {
+                name: ident(4:4-4:10) `second`,
+                kind: expr(4:11-4:23) :: string {
+                    kind: field-access {
+                        receiver: expr(4:11-4:17) :: ? {
+                            kind: ident(4:11-4:17) `utils2`,
+                        },
+                        field: ident(4:18-4:23) `value`,
+                    },
+                },
+            },
+        ],
+    ),
+}

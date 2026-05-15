@@ -103,6 +103,9 @@ pub enum Token {
 	/// `alias` keyword
 	KeywordAlias(usize, usize),
 
+	/// `as` keyword (import alias)
+	KeywordAs(usize, usize),
+
 	/// `def` keyword
 	KeywordDef(usize, usize),
 
@@ -263,6 +266,7 @@ impl Token {
 			| InterpolationEnd(start, end)
 			| InterpolationStart(start, end)
 			| KeywordAlias(start, end)
+			| KeywordAs(start, end)
 			| KeywordDef(start, end)
 			| KeywordEnum(start, end)
 			| KeywordFun(start, end)
@@ -351,6 +355,7 @@ impl fmt::Display for Token {
 			&InterpolationEnd(..) => "a ')'",
 			&InterpolationStart(..) => "a '$('",
 			&KeywordAlias(..) => "keyword `alias`",
+			&KeywordAs(..) => "keyword `as`",
 			&KeywordDef(..) => "keyword `def`",
 			&KeywordEnum(..) => "keyword `enum`",
 			&KeywordFun(..) => "keyword `fun`",

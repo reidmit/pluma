@@ -79,10 +79,11 @@ impl Compiler {
 			self.modules.insert(module_name.to_string(), module);
 		}
 
-		// Collect (fully-qualified-name, namespace-binding) for each import.
-		// Namespace-binding is the last dotted segment, e.g. `use sub.utils`
-		// binds the local name `utils`.
-		let imports: Vec<(String, String)> = self
+		// Collect (fully-qualified-name, local-namespace-name, alias-range) for
+		// each import. Local namespace name is the alias if present, otherwise
+		// the last dotted segment — so `use sub.utils` binds `utils` and
+		// `use sub.utils as u` binds `u`.
+		let imports: Vec<(String, String, Range)> = self
 			.modules
 			.get(module_name)
 			.and_then(|m| m.ast.as_ref())
@@ -90,19 +91,37 @@ impl Compiler {
 				ast
 					.uses
 					.iter()
-					.map(|u| (u.module_name(), u.last_segment().name.clone()))
+					.map(|u| {
+						let local = u.local_name();
+						(u.module_name(), local.name.clone(), local.range)
+					})
 					.collect()
 			})
 			.unwrap_or_default();
 
+		// Check for two imports binding the same local name. The second one wins
+		// silently otherwise.
+		let mut seen: HashMap<String, Range> = HashMap::new();
+		for (_, local_name, range) in &imports {
+			if let Some(_prev) = seen.insert(local_name.clone(), *range) {
+				self.diagnostics.push(
+					Diagnostic::error(format!(
+						"Duplicate import name `{}`. Add an `as` alias to disambiguate.",
+						local_name
+					))
+					.with_range(*range),
+				);
+			}
+		}
+
 		// Recursively load each dependency.
-		for (full_name, _) in &imports {
+		for (full_name, _, _) in &imports {
 			self.load_module(full_name, visiting);
 		}
 
 		// Build the imports map for the analyzer (local name -> exports table).
 		let mut imports_map: HashMap<String, HashMap<String, Type>> = HashMap::new();
-		for (full_name, local_name) in imports {
+		for (full_name, local_name, _) in imports {
 			if let Some(exports) = self.exports_cache.get(&full_name) {
 				imports_map.insert(local_name, exports.clone());
 			}

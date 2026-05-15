@@ -151,11 +151,22 @@ impl<'a> Parser<'a> {
 			path.push(self.parse_identifier()?);
 		}
 
-		let end = path.last().unwrap().range.end;
+		let alias = if matches!(self.current_token, Some(Token::KeywordAs(..))) {
+			self.advance();
+			Some(self.parse_identifier()?)
+		} else {
+			None
+		};
+
+		let end = alias
+			.as_ref()
+			.map(|a| a.range.end)
+			.unwrap_or_else(|| path.last().unwrap().range.end);
 
 		Some(UseNode {
 			range: Range::between(start, end),
 			path,
+			alias,
 		})
 	}
 

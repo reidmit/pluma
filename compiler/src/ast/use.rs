@@ -5,6 +5,9 @@ pub struct UseNode {
 	pub range: Range,
 	// dotted module path; e.g. `use sub.utils` produces [sub, utils]
 	pub path: Vec<IdentifierNode>,
+	// optional `as <ident>` alias; if None, the local name is the last
+	// path segment.
+	pub alias: Option<IdentifierNode>,
 }
 
 impl UseNode {
@@ -12,14 +15,24 @@ impl UseNode {
 		self.path.iter().map(|p| p.name.clone()).collect::<Vec<_>>().join(".")
 	}
 
-	pub fn last_segment(&self) -> &IdentifierNode {
-		self.path.last().expect("use path must have at least one segment")
+	pub fn local_name(&self) -> &IdentifierNode {
+		self
+			.alias
+			.as_ref()
+			.unwrap_or_else(|| self.path.last().expect("use path must have at least one segment"))
 	}
 }
 
 #[cfg(debug_assertions)]
 impl std::fmt::Debug for UseNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "use({:#?}) `{}`", self.range, self.module_name())
+		match &self.alias {
+			Some(alias) => write!(
+				f,
+				"use({:#?}) `{}` as `{}`",
+				self.range, self.module_name(), alias.name
+			),
+			None => write!(f, "use({:#?}) `{}`", self.range, self.module_name()),
+		}
 	}
 }
