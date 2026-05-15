@@ -1,5 +1,5 @@
 use super::*;
-use crate::{location::Range, types::*};
+use crate::location::Range;
 
 pub struct PatternNode {
 	pub range: Range,
@@ -10,8 +10,8 @@ pub struct PatternNode {
 pub enum PatternKind {
 	// e.g. if val is x { ... }
 	Identifier(IdentifierNode),
-	// e.g. if val is enum-variant _ { ... }
-	Constructor(IdentifierNode, Box<PatternNode>),
+	// e.g. if val is enum-variant a b { ... }
+	Constructor(IdentifierNode, Vec<PatternNode>),
 	// e.g. if val is (a, b) { ... }
 	Tuple(Vec<PatternNode>),
 	// e.g. if val is {a: 1, b: 2} { ... }
@@ -22,66 +22,6 @@ pub enum PatternKind {
 	Literal(LiteralNode),
 	// e.g. if name is "$(first) $(last)" { ... }
 	Interpolation(Vec<ExprNode>),
-}
-
-impl PatternNode {
-	pub fn to_expr(self) -> ExprNode {
-		let range = self.range;
-
-		let expr_kind = match self.kind {
-			PatternKind::Identifier(ident) => ExprKind::Identifier(ident),
-
-			PatternKind::Literal(literal) => ExprKind::Literal(literal),
-
-			PatternKind::Interpolation(parts) => ExprKind::Interpolation(parts),
-
-			PatternKind::Tuple(entry_patterns) => {
-				let mut entries = Vec::new();
-
-				for pat in entry_patterns {
-					entries.push(pat.to_expr())
-				}
-
-				ExprKind::Tuple(entries)
-			}
-
-			PatternKind::Record(entry_patterns) => {
-				let mut entries = Vec::new();
-
-				for (label, pat) in entry_patterns {
-					entries.push((label, pat.to_expr()))
-				}
-
-				ExprKind::Record(entries)
-			}
-
-			PatternKind::Constructor(ident, arg) => {
-				let callee = ExprNode {
-					range: ident.range,
-					kind: ExprKind::Identifier(ident),
-					ty: Type::Unknown,
-				};
-
-				let arg_expr = arg.to_expr();
-
-				let call = CallNode {
-					range: Range::between(callee.range.start, arg_expr.range.end),
-					callee: Box::new(callee),
-					args: vec![arg_expr],
-				};
-
-				ExprKind::Call(call)
-			}
-
-			_other => todo!("other expr kind in pattern"),
-		};
-
-		ExprNode {
-			kind: expr_kind,
-			ty: Type::Unknown,
-			range,
-		}
-	}
 }
 
 #[cfg(debug_assertions)]

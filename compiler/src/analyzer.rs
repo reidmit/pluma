@@ -582,10 +582,176 @@ impl<'compiler> Analyzer<'compiler> {
 				)
 			}
 
+			ExprKind::If(IfNode { subject, pattern, body, .. }) => {
+				self.constrain_expr(subject, constraints);
+
+				self.enter_scope();
+				self.constrain_pattern(pattern, subject.ty.clone(), constraints);
+				for body_expr in body.iter_mut() {
+					self.constrain_expr(body_expr, constraints);
+				}
+				self.leave_scope();
+
+				// single-armed if always evaluates to nothing
+				expr.ty = Type::Nothing;
+			}
+
+			ExprKind::While(WhileNode { subject, pattern, body, .. }) => {
+				self.constrain_expr(subject, constraints);
+
+				self.enter_scope();
+				self.constrain_pattern(pattern, subject.ty.clone(), constraints);
+				for body_expr in body.iter_mut() {
+					self.constrain_expr(body_expr, constraints);
+				}
+				self.leave_scope();
+
+				expr.ty = Type::Nothing;
+			}
+
+			ExprKind::When(WhenNode { subject, cases, .. }) => {
+				self.constrain_expr(subject, constraints);
+				expr.ty = self.new_type_var();
+
+				for case in cases.iter_mut() {
+					self.enter_scope();
+					self.constrain_pattern(&mut case.pattern, subject.ty.clone(), constraints);
+
+					let mut case_ty = Type::Nothing;
+					for body_expr in case.body.iter_mut() {
+						self.constrain_expr(body_expr, constraints);
+						case_ty = body_expr.ty.clone();
+					}
+					self.leave_scope();
+
+					constraints.push(eq_constraint(expr.ty.clone(), case_ty).at(case.range));
+				}
+			}
+
 			_ => {
 				// todo :---)
 			}
 		}
+	}
+
+	fn constrain_pattern(
+		&mut self,
+		pattern: &mut PatternNode,
+		subject_ty: Type,
+		constraints: &mut Vec<Constraint>,
+	) {
+		match &mut pattern.kind {
+			PatternKind::Underscore => {}
+
+			PatternKind::Literal(literal) => {
+				let lit_ty = match &literal.kind {
+					LiteralKind::Bool(..) => Type::Bool,
+					LiteralKind::String(..) => Type::String,
+					LiteralKind::FloatDecimal(..) => Type::Float,
+					LiteralKind::IntDecimal(..)
+					| LiteralKind::IntHex(..)
+					| LiteralKind::IntBinary(..)
+					| LiteralKind::IntOctal(..) => Type::Int,
+				};
+				constraints.push(eq_constraint(subject_ty, lit_ty).at(pattern.range));
+			}
+
+			PatternKind::Identifier(ident) => {
+				// If this name matches a nullary variant of some enum, treat it as
+				// a variant match rather than a binding.
+				if let Some((enum_name, params)) = self.find_variant(&ident.name) {
+					if params.is_empty() {
+						constraints
+							.push(eq_constraint(subject_ty, Type::Enum(enum_name)).at(pattern.range));
+						return;
+					}
+				}
+
+				self.add_value_binding(
+					ident.name.clone(),
+					Scheme::Forall(vec![], subject_ty),
+					ident.range,
+				);
+			}
+
+			PatternKind::Constructor(name, args) => {
+				let variant = self.find_variant(&name.name);
+				match variant {
+					Some((enum_name, params)) => {
+						constraints.push(
+							eq_constraint(subject_ty, Type::Enum(enum_name)).at(pattern.range),
+						);
+
+						if args.len() != params.len() {
+							self.error(
+								pattern.range,
+								ParamCountMismatch {
+									expected: params.len(),
+									found: args.len(),
+								},
+							);
+							return;
+						}
+
+						for (arg, param_ty) in args.iter_mut().zip(params.into_iter()) {
+							self.constrain_pattern(arg, param_ty, constraints);
+						}
+					}
+					None => {
+						self.error(
+							name.range,
+							NameNotBound {
+								name: name.name.clone(),
+							},
+						);
+					}
+				}
+			}
+
+			PatternKind::Tuple(entries) => {
+				let mut entry_types = Vec::new();
+				for _ in entries.iter() {
+					entry_types.push(self.new_type_var());
+				}
+				constraints.push(
+					eq_constraint(subject_ty, Type::Tuple(entry_types.clone())).at(pattern.range),
+				);
+				for (entry, entry_ty) in entries.iter_mut().zip(entry_types.into_iter()) {
+					self.constrain_pattern(entry, entry_ty, constraints);
+				}
+			}
+
+			PatternKind::Record(fields) => {
+				// Use PartialRecord per field so the subject can be a record with
+				// at least these fields.
+				for (field_name, field_pattern) in fields.iter_mut() {
+					let field_ty = self.new_type_var();
+					constraints.push(
+						eq_constraint(
+							subject_ty.clone(),
+							Type::PartialRecord(field_name.name.clone(), field_ty.clone().into()),
+						)
+						.at(field_pattern.range),
+					);
+					self.constrain_pattern(field_pattern, field_ty, constraints);
+				}
+			}
+
+			PatternKind::Interpolation(_) => {
+				// TODO: interpolation patterns
+			}
+		}
+	}
+
+	fn find_variant(&self, name: &str) -> Option<(String, Vec<Type>)> {
+		for (enum_name, variants) in &self.enum_defs {
+			for (variant_name, params) in variants {
+				if variant_name == name {
+					return Some((enum_name.clone(), params.clone()));
+				}
+			}
+		}
+		None
 	}
 
 	fn unify(&mut self, constraints: &[Constraint]) -> Substitution {
@@ -952,19 +1118,27 @@ impl<'compiler> Analyzer<'compiler> {
 				self.annotate_expr(right, subst);
 			}
 
-			ExprKind::When(WhenNode { subject, .. }) => {
+			ExprKind::When(WhenNode { subject, cases, .. }) => {
 				self.annotate_expr(subject, subst);
-				// TODO: do we need to annotate case patterns?
+				for case in cases.iter_mut() {
+					for body_expr in case.body.iter_mut() {
+						self.annotate_expr(body_expr, subst);
+					}
+				}
 			}
 
-			ExprKind::If(IfNode { subject, .. }) => {
+			ExprKind::If(IfNode { subject, body, .. }) => {
 				self.annotate_expr(subject, subst);
-				// TODO: do we need to annotate pattern?
+				for body_expr in body.iter_mut() {
+					self.annotate_expr(body_expr, subst);
+				}
 			}
 
-			ExprKind::While(WhileNode { subject, .. }) => {
+			ExprKind::While(WhileNode { subject, body, .. }) => {
 				self.annotate_expr(subject, subst);
-				// TODO: do we need to annotate pattern?
+				for body_expr in body.iter_mut() {
+					self.annotate_expr(body_expr, subst);
+				}
 			}
 
 			ExprKind::Grouping(inner) => {

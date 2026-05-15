@@ -635,11 +635,16 @@ impl<'a> Parser<'a> {
 			Some(Token::Identifier(..)) => {
 				let id_node = self.parse_identifier().unwrap();
 
-				// TODO: handle constructors with multiple args
-				if let Some(arg_pattern) = self.parse_pattern() {
+				let mut args = Vec::new();
+				while let Some(arg) = self.parse_pattern_atom() {
+					args.push(arg);
+				}
+
+				if !args.is_empty() {
+					let end = args.last().unwrap().range.end;
 					return Some(PatternNode {
-						range: Range::between(id_node.range.start, arg_pattern.range.end),
-						kind: PatternKind::Constructor(id_node, Box::new(arg_pattern)),
+						range: Range::between(id_node.range.start, end),
+						kind: PatternKind::Constructor(id_node, args),
 					});
 				}
 
@@ -754,6 +759,60 @@ impl<'a> Parser<'a> {
 			}),
 
 			// TODO: other kinds of digits here
+			_ => None,
+		}
+	}
+
+	// A sub-pattern that does not itself try to consume constructor arguments,
+	// used when parsing the args of a Constructor pattern. Without this, every
+	// arg ident would greedily try to become its own Constructor.
+	fn parse_pattern_atom(&mut self) -> Option<PatternNode> {
+		match self.current_token {
+			Some(Token::Identifier(..)) => {
+				let id_node = self.parse_identifier().unwrap();
+				Some(PatternNode {
+					range: id_node.range,
+					kind: PatternKind::Identifier(id_node),
+				})
+			}
+
+			Some(Token::Underscore(start, end)) => {
+				self.advance();
+				Some(PatternNode {
+					range: self.span_to_single_line_range(start, end),
+					kind: PatternKind::Underscore,
+				})
+			}
+
+			Some(Token::DecimalDigits(..)) => self.parse_decimal_number().map(|lit_node| PatternNode {
+				range: lit_node.range,
+				kind: PatternKind::Literal(lit_node),
+			}),
+
+			Some(Token::BoolFalse(..) | Token::BoolTrue(..)) => {
+				let expr_node = self.parse_bool()?;
+				if let ExprKind::Literal(lit_node) = expr_node.kind {
+					Some(PatternNode {
+						range: expr_node.range,
+						kind: PatternKind::Literal(lit_node),
+					})
+				} else {
+					None
+				}
+			}
+
+			Some(Token::StringLiteral(..)) => self.parse_string().map(|expr_node| match expr_node.kind {
+				ExprKind::Literal(literal) => PatternNode {
+					range: literal.range,
+					kind: PatternKind::Literal(literal),
+				},
+				ExprKind::Interpolation(parts) => PatternNode {
+					range: expr_node.range,
+					kind: PatternKind::Interpolation(parts),
+				},
+				_ => unreachable!(),
+			}),
+
 			_ => None,
 		}
 	}
