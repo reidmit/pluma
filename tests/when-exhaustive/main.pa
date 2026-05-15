@@ -1,0 +1,34 @@
+def tree enum {
+  empty
+  node int tree tree
+}
+
+def by-all-variants fun t {
+  when t is empty {
+    0
+  } is node val _l _r {
+    val
+  }
+}
+
+def by-wildcard fun t {
+  when t is empty {
+    0
+  } is _ {
+    1
+  }
+}
+
+def by-binding-catchall fun t {
+  when t is _something {
+    0
+  }
+}
+
+def bool-both fun b {
+  when b is true {
+    0
+  } is false {
+    1
+  }
+}

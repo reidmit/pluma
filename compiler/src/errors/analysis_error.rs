@@ -17,6 +17,7 @@ pub enum AnalysisErrorKind {
 	TupleIndexNotPresent { index: usize, ty: Type },
 	RecordFieldNotPresent { field: String, ty: Type },
 	EnumVariantNotPresent { variant: String, ty: Type },
+	WhenNotExhaustive { missing: Vec<String> },
 }
 
 impl fmt::Display for AnalysisError {
@@ -67,6 +68,15 @@ impl fmt::Display for AnalysisError {
 				"Variant `{}` does not exist in enum of type `{}`.",
 				variant, ty
 			),
+
+			WhenNotExhaustive { missing } => {
+				let formatted = missing
+					.iter()
+					.map(|n| format!("`{}`", n))
+					.collect::<Vec<_>>()
+					.join(", ");
+				write!(f, "Non-exhaustive `when`: missing case for {}.", formatted)
+			}
 		}
 	}
 }

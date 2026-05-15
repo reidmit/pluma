@@ -743,6 +743,71 @@ impl<'compiler> Analyzer<'compiler> {
 		}
 	}
 
+	fn check_when_exhaustive(&mut self, subject_ty: &Type, cases: &[CaseNode], range: Range) {
+		let required: Vec<String> = match subject_ty {
+			Type::Bool => vec!["true".into(), "false".into()],
+			Type::Enum(name) => match self.enum_defs.get(name) {
+				Some(variants) => variants.iter().map(|(n, _)| n.clone()).collect(),
+				None => return,
+			},
+			// Other subject types are an "open universe" (e.g. int, string,
+			// records, tuples) — exhaustiveness in that case relies entirely
+			// on having a catch-all, which we detect inline below.
+			_ => Vec::new(),
+		};
+
+		let mut covered = std::collections::HashSet::new();
+
+		for case in cases {
+			match &case.pattern.kind {
+				PatternKind::Underscore => return,
+
+				PatternKind::Identifier(ident) => {
+					// A bare ident either names a nullary variant (covers just that
+					// variant) or is a binding (catch-all that covers everything).
+					match self.find_variant(&ident.name) {
+						Some((_, params)) if params.is_empty() => {
+							covered.insert(ident.name.clone());
+						}
+						_ => return,
+					}
+				}
+
+				PatternKind::Constructor(name, args) => {
+					// Only count the variant as fully covered if every arg is itself a
+					// catch-all sub-pattern. A literal or nested constructor pulls in
+					// just a slice of the value space, so we conservatively skip.
+					let all_catch = args.iter().all(|arg| match &arg.kind {
+						PatternKind::Underscore => true,
+						PatternKind::Identifier(ident) => self
+							.find_variant(&ident.name)
+							.map_or(true, |(_, p)| !p.is_empty()),
+						_ => false,
+					});
+					if all_catch {
+						covered.insert(name.name.clone());
+					}
+				}
+
+				PatternKind::Literal(lit) => {
+					if matches!(subject_ty, Type::Bool) {
+						if let LiteralKind::Bool(b) = &lit.kind {
+							covered.insert(if *b { "true".into() } else { "false".into() });
+						}
+					}
+				}
+
+				_ => {}
+			}
+		}
+
+		let missing: Vec<String> = required.into_iter().filter(|v| !covered.contains(v)).collect();
+
+		if !missing.is_empty() {
+			self.error(range, WhenNotExhaustive { missing });
+		}
+	}
+
 	fn find_variant(&self, name: &str) -> Option<(String, Vec<Type>)> {
 		for (enum_name, variants) in &self.enum_defs {
 			for (variant_name, params) in variants {
@@ -1063,6 +1128,7 @@ impl<'compiler> Analyzer<'compiler> {
 
 	fn annotate_expr(&mut self, expr: &mut ExprNode, subst: &Substitution) {
 		self.fill_in_placeholder(&mut expr.ty, subst);
+		let expr_range = expr.range;
 
 		match &mut expr.kind {
 			ExprKind::Let(LetNode { value, .. }) => {
@@ -1120,6 +1186,8 @@ impl<'compiler> Analyzer<'compiler> {
 
 			ExprKind::When(WhenNode { subject, cases, .. }) => {
 				self.annotate_expr(subject, subst);
+				let subject_ty = subject.ty.clone();
+				self.check_when_exhaustive(&subject_ty, cases, expr_range);
 				for case in cases.iter_mut() {
 					for body_expr in case.body.iter_mut() {
 						self.annotate_expr(body_expr, subst);

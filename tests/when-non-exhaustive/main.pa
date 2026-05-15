@@ -1,0 +1,24 @@
+def tree enum {
+  empty
+  node int tree tree
+}
+
+def missing-variant fun t {
+  when t is empty {
+    0
+  }
+}
+
+def partial-constructor fun t {
+  when t is empty {
+    0
+  } is node 0 _l _r {
+    1
+  }
+}
+
+def missing-bool-case fun b {
+  when b is true {
+    0
+  }
+}
