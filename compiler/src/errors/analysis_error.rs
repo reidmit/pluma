@@ -16,6 +16,7 @@ pub enum AnalysisErrorKind {
 	TupleSizeMismatch { expected: usize, found: usize },
 	TupleIndexNotPresent { index: usize, ty: Type },
 	RecordFieldNotPresent { field: String, ty: Type },
+	EnumVariantNotPresent { variant: String, ty: Type },
 }
 
 impl fmt::Display for AnalysisError {
@@ -59,6 +60,12 @@ impl fmt::Display for AnalysisError {
 				f,
 				"Field `{}` does not exist in record of type `{}`.",
 				field, ty
+			),
+
+			EnumVariantNotPresent { ty, variant } => write!(
+				f,
+				"Variant `{}` does not exist in enum of type `{}`.",
+				variant, ty
 			),
 		}
 	}

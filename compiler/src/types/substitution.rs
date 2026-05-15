@@ -36,16 +36,7 @@ impl Substitution {
 				}
 			}
 
-			Type::Enum(name, variants) => Type::Enum(
-				name.clone(),
-				variants
-					.iter()
-					.map(|(variant_name, data_type)| {
-						let new_data_type = data_type.as_ref().map(|t| self.apply_to_type(t));
-						(variant_name.clone(), new_data_type)
-					})
-					.collect(),
-			),
+			Type::Enum(name) => Type::Enum(name.clone()),
 
 			Type::Fun(param_types, return_type) => Type::Fun(
 				param_types.iter().map(|t| self.apply_to_type(t)).collect(),

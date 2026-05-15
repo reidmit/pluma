@@ -1570,8 +1570,25 @@ impl<'a> Parser<'a> {
 		})
 	}
 
+	fn parse_enum_variant_name(&mut self) -> Option<IdentifierNode> {
+		let (start, end) = match self.current_token {
+			Some(Token::Identifier(start, end))
+			| Some(Token::BoolTrue(start, end))
+			| Some(Token::BoolFalse(start, end)) => (start, end),
+			_ => return None,
+		};
+
+		self.advance();
+		let name = read_string!(self, start, end);
+
+		Some(IdentifierNode {
+			range: self.span_to_single_line_range(start, end),
+			name,
+		})
+	}
+
 	fn parse_enum_variant(&mut self) -> Option<EnumVariantNode> {
-		let name = self.parse_identifier()?;
+		let name = self.parse_enum_variant_name()?;
 
 		if current_token_is!(self, Token::LineBreak) {
 			self.skip_line_breaks();
@@ -1590,7 +1607,12 @@ impl<'a> Parser<'a> {
 
 			match self.current_token {
 				Some(Token::Comma(..)) => self.advance(),
-				_ => break,
+				Some(Token::LineBreak(..))
+				| Some(Token::LineBreakWithIndentDecrease(..))
+				| Some(Token::LineBreakWithIndentIncrease(..))
+				| Some(Token::RightBrace(..))
+				| None => break,
+				_ => {}
 			}
 		}
 

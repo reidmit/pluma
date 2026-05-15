@@ -1,1 +1,5 @@
-def color enum
+def color enum {
+  red
+  green
+  blue
+}

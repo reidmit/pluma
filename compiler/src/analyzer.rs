@@ -16,6 +16,7 @@ pub struct Analyzer<'compiler> {
 	diagnostics: &'compiler mut Vec<Diagnostic>,
 	value_scopes: Vec<HashMap<String, ValueBinding>>,
 	type_scope: HashMap<String, TypeBinding>,
+	enum_defs: HashMap<String, Vec<(String, Vec<Type>)>>,
 	next_type_var_id: usize,
 }
 
@@ -29,6 +30,7 @@ impl<'compiler> Analyzer<'compiler> {
 			diagnostics,
 			value_scopes: Vec::new(),
 			type_scope: HashMap::new(),
+			enum_defs: HashMap::new(),
 			next_type_var_id: 0,
 		}
 	}
@@ -192,23 +194,14 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 
 				DefinitionKind::Enum(_) => {
-					// Add a type binding for the enum type defined here...
-					let type_var = self.new_type_var();
+					// Enums are nominal: bind the enum type directly. No value binding —
+					// the bare name isn't a value, it's only used as a namespace for
+					// variant access (e.g. `color.red`), which is resolved via enum_defs.
 					self.add_type_binding(
 						definition.name.name.clone(),
-						type_var.clone(),
+						Type::Enum(definition.name.name.clone()),
 						definition.name.range,
 					);
-					type_def_vars.push(type_var);
-
-					// And also value bindings for each constructor function!
-					let type_scheme = self.new_type_scheme_var();
-					self.add_value_binding(
-						definition.name.name.clone(),
-						type_scheme.clone(),
-						definition.name.range,
-					);
-					schemes.push(type_scheme);
 				}
 			}
 		}
@@ -240,28 +233,27 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 
 				DefinitionKind::Enum(enum_node) => {
-					// let variants: Vec<(String, Option<Type>)> = enum_node
-					// 	.variants
-					// 	.iter()
-					// 	.map(|variant| {
-					// 		let params = variant.params.as_ref().map(|params| {
-					// 			params
-					// 				.iter()
-					// 				.map(|p| self.type_expr_to_type(p, &mut constraints))
-					// 				.collect()
-					// 		});
-					// 		(variant.name.name.clone(), params)
-					// 	})
-					// 	.collect();
+					let variants: Vec<(String, Vec<Type>)> = enum_node
+						.variants
+						.iter()
+						.map(|variant| {
+							let params = variant
+								.params
+								.as_ref()
+								.map(|params| {
+									params
+										.iter()
+										.map(|p| self.type_expr_to_type(p, &mut constraints))
+										.collect()
+								})
+								.unwrap_or_default();
+							(variant.name.name.clone(), params)
+						})
+						.collect();
 
-					// let enum_type = Type::Enum(definition.name.name.clone(), variants);
-					// let type_var = type_def_vars.get(type_def_index).unwrap().clone();
-					// constraints.push(eq_constraint(type_var.clone(), enum_type));
-					// type_def_index += 1;
-
-					// let scheme = schemes.get(scheme_index).unwrap().clone();
-					// constraints.push(Constraint::Gen(scheme, type_var.clone()));
-					// scheme_index += 1;
+					self
+						.enum_defs
+						.insert(definition.name.name.clone(), variants);
 				}
 			}
 		}
@@ -543,6 +535,37 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 
 			ExprKind::FieldAccess { receiver, field } => {
+				// Variant access: `EnumName.variant`. If the receiver is a bare ident
+				// that names a known enum, resolve the variant directly rather than
+				// treating this as record field access.
+				if let ExprKind::Identifier(ident) = &receiver.kind {
+					if let Some(variants) = self.enum_defs.get(&ident.name).cloned() {
+						let enum_ty = Type::Enum(ident.name.clone());
+						receiver.ty = enum_ty.clone();
+
+						match variants.iter().find(|(n, _)| n == &field.name) {
+							Some((_, params)) if params.is_empty() => {
+								expr.ty = enum_ty;
+							}
+							Some((_, params)) => {
+								expr.ty = Type::Fun(params.clone(), enum_ty.into());
+							}
+							None => {
+								self.error(
+									field.range,
+									EnumVariantNotPresent {
+										variant: field.name.clone(),
+										ty: enum_ty,
+									},
+								);
+								expr.ty = Type::Unknown;
+							}
+						}
+
+						return;
+					}
+				}
+
 				// this expr gets a fresh type var
 				expr.ty = self.new_type_var();
 
@@ -782,6 +805,10 @@ impl<'compiler> Analyzer<'compiler> {
 
 					return Substitution::empty();
 				}
+			}
+
+			Eq(Type::Enum(name_1), Type::Enum(name_2), _) if name_1 == name_2 => {
+				Substitution::empty()
 			}
 
 			Eq(Type::Var(n), t, reason) | Eq(t, Type::Var(n), reason) => match t {

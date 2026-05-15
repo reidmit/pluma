@@ -3,3 +3,5 @@ def color enum {
   green
   blue
 }
+
+def my-color color.red

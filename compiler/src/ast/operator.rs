@@ -72,7 +72,8 @@ impl Operator {
 			Addition | SubtractionOrNegation => Some((60, 61)),
 			Multiplication | Division | Remainder => Some((70, 71)),
 			Exponentiation => Some((81, 80)),
-			FunctionCall | FieldAccess | IndexAccess => Some((90, 91)),
+			FunctionCall => Some((90, 91)),
+			FieldAccess | IndexAccess => Some((100, 101)),
 			_ => None,
 		}
 	}

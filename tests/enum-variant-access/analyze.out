@@ -1,0 +1,35 @@
+module `main` (tests/enum-variant-access/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-6:22) [
+            def(0:0-4:1) :: () {
+                name: ident(0:4-0:9) `color`,
+                kind: enum(0:15-4:1) [
+                    variant(1:2-1:5) {
+                        name: ident(1:2-1:5) `red`,
+                        params: None,
+                    },
+                    variant(2:2-2:7) {
+                        name: ident(2:2-2:7) `green`,
+                        params: None,
+                    },
+                    variant(3:2-3:6) {
+                        name: ident(3:2-3:6) `blue`,
+                        params: None,
+                    },
+                ],
+            },
+            def(6:0-6:22) :: () {
+                name: ident(6:4-6:12) `my-color`,
+                kind: expr(6:13-6:22) :: color {
+                    kind: field-access {
+                        receiver: expr(6:13-6:18) :: color {
+                            kind: ident(6:13-6:18) `color`,
+                        },
+                        field: ident(6:19-6:22) `red`,
+                    },
+                },
+            },
+        ],
+    ),
+}
