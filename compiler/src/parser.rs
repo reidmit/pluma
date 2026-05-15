@@ -1536,7 +1536,28 @@ impl<'a> Parser<'a> {
 
 		let (start_offset, end_offset) = (self.point_to_offset(start), self.point_to_offset(end));
 
-		let name = read_string!(self, start_offset, end_offset);
+		let first_name = read_string!(self, start_offset, end_offset);
+
+		// Optional `module.TypeName` prefix. Dot in type position has no
+		// other meaning, so when we see one we eagerly consume and expect an
+		// identifier on the other side.
+		let (module, name) = if matches!(self.current_token, Some(Token::Dot(..))) {
+			let module_ident = IdentifierNode {
+				range: Range::between(start, end),
+				name: first_name,
+			};
+			self.advance();
+			let (type_start, type_end) = expect_token_and_advance!(self, Token::Identifier);
+			let (so, eo) = (
+				self.point_to_offset(type_start),
+				self.point_to_offset(type_end),
+			);
+			let type_name = read_string!(self, so, eo);
+			end = type_end;
+			(Some(module_ident), type_name)
+		} else {
+			(None, first_name)
+		};
 
 		let mut generics = Vec::new();
 
@@ -1559,6 +1580,7 @@ impl<'a> Parser<'a> {
 
 		Some(TypeIdentifierNode {
 			range: Range::between(start, end),
+			module,
 			name,
 			generics,
 		})

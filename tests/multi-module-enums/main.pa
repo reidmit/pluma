@@ -1,0 +1,13 @@
+use colors
+
+def favorite colors.color.red
+
+def describe fun c {
+  when c is red {
+    "red"
+  } is green {
+    "green"
+  } is blue {
+    "blue"
+  }
+}

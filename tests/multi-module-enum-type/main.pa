@@ -1,0 +1,11 @@
+use colors
+
+def themed alias {
+  primary: colors.color
+  secondary: colors.color
+}
+
+def default-theme themed {
+  primary: colors.color.red
+  secondary: colors.color.blue
+}

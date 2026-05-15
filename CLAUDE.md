@@ -40,9 +40,11 @@ When changing analyzer/parser output, regenerate snapshots with `just test-write
 
 ## Compiler architecture
 
-`Compiler` (in `compiler/src/compiler.rs`) is the orchestration entry point. It owns a `HashMap<String, Module>`, a `HashMap<String, HashMap<String, Type>>` of cached module exports, and a `Vec<Diagnostic>`. It exposes `tokenize()` and `check()`. There is no `build()`/`run()` backend yet — `check()` runs through parsing + type analysis and returns the typed entry `Module`.
+`Compiler` (in `compiler/src/compiler.rs`) is the orchestration entry point. It owns a `HashMap<String, Module>`, a `HashMap<String, ModuleExports>` cache (see below), and a `Vec<Diagnostic>`. It exposes `tokenize()` and `check()`. There is no `build()`/`run()` backend yet — `check()` runs through parsing + type analysis and returns the typed entry `Module`.
 
-`check()` does a DFS load (`load_module`): for each module, it parses, then recursively loads anything in its `uses`, then analyzes the module itself (so dependencies are always analyzed first). A `visiting` set catches import cycles and reports them as a `Diagnostic`. After analysis, the module's `exports: Option<HashMap<String, Type>>` is populated from each top-level value def's inferred type and cached for any later importer.
+`check()` does a DFS load (`load_module`): for each module, it parses, then recursively loads anything in its `uses`, then analyzes the module itself (so dependencies are always analyzed first). A `visiting` set catches import cycles and reports them as a `Diagnostic`. After analysis, the module's `exports: Option<ModuleExports>` is populated from its top-level defs and cached for any later importer.
+
+`ModuleExports` (in `module.rs`) is a three-way map: `values` for top-level value defs (and alias constructor functions), `aliases` for alias type defs (name → resolved type), `enums` for enum type defs (name → ordered list of variants). The analyzer's `set_imports` takes both this and a parallel local-name → fully-qualified-module-name map so qualified enum types can be reconstructed at use sites.
 
 Pipeline within a single module:
 
@@ -59,13 +61,14 @@ Errors flow through a single `Vec<Diagnostic>` threaded by reference through tok
 
 ## Type system notes
 
-- **Enums are nominal.** `Type::Enum(String)` carries only the enum's name; structural variant info (`Vec<(variant_name, params)>`) lives in `Analyzer::enum_defs`. This is what lets `def tree enum { node int tree tree }` type-check — without it, recursive enum types hit the occurs check.
-- **`FieldAccess` is overloaded** in `constrain_expr`. The handler checks, in order: imported-module namespace lookup, enum variant access, then falls back to a `PartialRecord` constraint for actual record fields.
-- **Variant patterns disambiguate by subject type.** `resolve_variant_pattern` looks up a name in the subject's enum when the subject type is concrete; otherwise it does a global lookup across `enum_defs` and reports `AmbiguousVariant` if more than one enum has that name. Two helpers split the work: `find_variant_in_enum` and `find_variant_globally`.
+- **Enums are nominal, with module-qualified identity.** `Type::Enum(String)` carries a fully-qualified name `<defining-module>.<enum-name>` (e.g. `colors.color`). Structural variant info lives in `Analyzer::enum_defs`, keyed by that same qualified name. Both locally-defined enums and imported ones live in `enum_defs` under their qualified keys, so variant resolution is uniform. `Type`'s `Display` strips up to the last dot, so snapshots and error messages still render bare names (`color`).
+- **`FieldAccess` is overloaded** in `constrain_expr`. The handler checks, in order: chained `module.enum.variant` (cross-module variant access), imported-module namespace lookup (`module.value`), local enum variant access (`enum.variant` via the type_scope binding's qualified name), then falls back to a `PartialRecord` constraint for actual record fields.
+- **`module.TypeName` in type positions.** `TypeIdentifierNode` carries an optional `module: Option<IdentifierNode>` prefix populated by `parse_type_identifier`. `Analyzer::type_expr_to_type` resolves it against the importer's `imports` map (checking exported enums first, then aliases) and produces the qualified `Type::Enum` or the resolved alias type.
+- **Variant patterns disambiguate by subject type.** `resolve_variant_pattern` looks up a name in the subject's enum when the subject type is concrete; otherwise it does a global lookup across `enum_defs` and reports `AmbiguousVariant` if more than one enum has that name. The global pool includes imported enums too, so bare variant patterns can match imported enums when the subject type is known.
 - **`when` is exhaustiveness-checked** in `annotate_expr` (post-substitution, so the subject type is known). `Type::Bool` and `Type::Enum` are checked structurally; other subject types currently rely on a `_` catch-all and are otherwise skipped.
 - **`let` bindings with concrete-typed values bind monomorphically** (`Scheme::Forall(vec![], ty)`) rather than going through Gen/Inst. Lets the value's resolved type (e.g. `Type::Enum(color)`) be visible at constraint-gen time for downstream pattern resolution. Polymorphic values still take the Gen/Inst path.
 - **Cross-module values are instantiated per use** via `Analyzer::instantiate`, which walks the imported type and replaces every free `Type::Var` with a fresh one. Gives per-call-site polymorphism for imported functions.
-- **The unifier has an `Enum ~ Enum` case** that succeeds iff the names match — there's no structural comparison. `Module`'s `Debug` impl prints comments through a `BTreeMap` so the test snapshot output is stable.
+- **The unifier has an `Enum ~ Enum` case** that succeeds iff the qualified names match. `Module`'s `Debug` impl prints comments through a `BTreeMap` so the test snapshot output is stable.
 
 ## Conventions
 

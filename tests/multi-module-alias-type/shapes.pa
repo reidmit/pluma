@@ -1,0 +1,4 @@
+def point alias {
+  x: int
+  y: int
+}

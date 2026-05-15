@@ -3,7 +3,7 @@ use crate::binding::*;
 use crate::diagnostic::*;
 use crate::errors::*;
 use crate::location::Range;
-use crate::module::Module;
+use crate::module::{Module, ModuleExports};
 use crate::types::*;
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
@@ -22,10 +22,17 @@ pub struct Analyzer<'compiler> {
 	diagnostics: &'compiler mut Vec<Diagnostic>,
 	value_scopes: Vec<HashMap<String, ValueBinding>>,
 	type_scope: HashMap<String, TypeBinding>,
+	// Enum definitions visible during analysis, keyed by the *qualified*
+	// enum name (`<defining-module>.<enum-name>`). Both locally-defined
+	// enums and imported ones are stored here under that qualified key so
+	// that `Type::Enum(qualified-name)` lookups work uniformly.
 	enum_defs: HashMap<String, Vec<(String, Vec<Type>)>>,
 	// Imports: local namespace name (e.g. `math` from `use math` or `utils`
-	// from `use sub.utils`) -> that module's exported value defs.
-	imports: HashMap<String, HashMap<String, Type>>,
+	// from `use sub.utils`) -> that module's full exports.
+	imports: HashMap<String, ModuleExports>,
+	// The fully-qualified name of each imported module, keyed by the local
+	// namespace name. `use a.b.utils as u` produces `u -> a.b.utils`.
+	import_qualified: HashMap<String, String>,
 	next_type_var_id: usize,
 }
 
@@ -41,6 +48,7 @@ impl<'compiler> Analyzer<'compiler> {
 			type_scope: HashMap::new(),
 			enum_defs: HashMap::new(),
 			imports: HashMap::new(),
+			import_qualified: HashMap::new(),
 			next_type_var_id: 0,
 		}
 	}
@@ -58,10 +66,36 @@ impl<'compiler> Analyzer<'compiler> {
 		self.add_type_binding("regex".into(), Type::Regex, Range::collapsed(0, 0));
 		self.add_type_binding("float".into(), Type::Float, Range::collapsed(0, 0));
 
+		// Seed enum_defs with imported enums under their canonical
+		// `<defining-module>.<enum-name>` keys, so variant resolution and
+		// exhaustiveness checks can see them.
+		let imported_enums: Vec<(String, String, Vec<(String, Vec<Type>)>)> = self
+			.imports
+			.iter()
+			.flat_map(|(local_name, exports)| {
+				let qualified_module = self
+					.import_qualified
+					.get(local_name)
+					.cloned()
+					.unwrap_or_else(|| local_name.clone());
+				exports.enums.iter().map(move |(enum_name, variants)| {
+					(
+						qualified_module.clone(),
+						enum_name.clone(),
+						variants.clone(),
+					)
+				})
+			})
+			.collect();
+		for (qualified_module, enum_name, variants) in imported_enums {
+			let qualified = format!("{}.{}", qualified_module, enum_name);
+			self.enum_defs.insert(qualified, variants);
+		}
+
 		self.enter_scope();
 
 		// the three basic phases of analysis!
-		if let Some(ast) = &mut module.ast {
+		let substitution = if let Some(ast) = &mut module.ast {
 			// 1. generate constraints based on AST (and also fill in any
 			//    types we can infer without constraints, like for literals)
 			let constraints = self.constrain(ast);
@@ -72,23 +106,65 @@ impl<'compiler> Analyzer<'compiler> {
 			// 3. apply the solution to the AST, filling in type variables
 			//    that we generated in phase 1
 			self.annotate(ast, &substitution);
-		}
 
-		// Build the module's exports map. Only top-level value defs are
-		// exposed; types (Alias / Enum) aren't cross-module-accessible yet.
-		let mut exports = HashMap::new();
+			Some(substitution)
+		} else {
+			None
+		};
+
+		// Build the module's exports. Values come from the inferred types of
+		// each top-level expr def. Aliases are resolved by applying the
+		// substitution to the alias's type binding. Enums are pulled from
+		// enum_defs by qualified name and re-keyed by bare name.
+		let mut exports = ModuleExports::default();
 		if let Some(ast) = &module.ast {
 			for def in &ast.body {
-				if let DefinitionKind::Expr(expr) = &def.kind {
-					exports.insert(def.name.name.clone(), expr.ty.clone());
+				match &def.kind {
+					DefinitionKind::Expr(expr) => {
+						exports
+							.values
+							.insert(def.name.name.clone(), expr.ty.clone());
+					}
+					DefinitionKind::Alias(_) => {
+						// Alias types are exported both as types (for use in
+						// type positions like `module.alias-name`) and as
+						// constructor functions (for use in value positions
+						// like `module.alias-name { ... }`).
+						if let Some(binding) = self.type_scope.get(&def.name.name) {
+							let resolved = match &substitution {
+								Some(s) => s.apply_to_type(&binding.ty),
+								None => binding.ty.clone(),
+							};
+							exports
+								.aliases
+								.insert(def.name.name.clone(), resolved.clone());
+							exports.values.insert(
+								def.name.name.clone(),
+								Type::Fun(vec![resolved.clone()], Box::new(resolved)),
+							);
+						}
+					}
+					DefinitionKind::Enum(_) => {
+						let qualified = format!("{}.{}", module.module_name, def.name.name);
+						if let Some(variants) = self.enum_defs.get(&qualified) {
+							exports
+								.enums
+								.insert(def.name.name.clone(), variants.clone());
+						}
+					}
 				}
 			}
 		}
 		module.exports = Some(exports);
 	}
 
-	pub fn set_imports(&mut self, imports: HashMap<String, HashMap<String, Type>>) {
+	pub fn set_imports(
+		&mut self,
+		imports: HashMap<String, ModuleExports>,
+		import_qualified: HashMap<String, String>,
+	) {
 		self.imports = imports;
+		self.import_qualified = import_qualified;
 	}
 
 	fn diagnostic(&mut self, range: Option<Range>, diag: Diagnostic) {
@@ -223,9 +299,16 @@ impl<'compiler> Analyzer<'compiler> {
 					// Enums are nominal: bind the enum type directly. No value binding —
 					// the bare name isn't a value, it's only used as a namespace for
 					// variant access (e.g. `color.red`), which is resolved via enum_defs.
+					// The canonical type name is qualified with the defining module so
+					// same-named enums from different modules don't unify.
+					let qualified = format!(
+						"{}.{}",
+						self.module_name.as_ref().unwrap(),
+						definition.name.name
+					);
 					self.add_type_binding(
 						definition.name.name.clone(),
-						Type::Enum(definition.name.name.clone()),
+						Type::Enum(qualified),
 						definition.name.range,
 					);
 				}
@@ -277,9 +360,12 @@ impl<'compiler> Analyzer<'compiler> {
 						})
 						.collect();
 
-					self
-						.enum_defs
-						.insert(definition.name.name.clone(), variants);
+					let qualified = format!(
+						"{}.{}",
+						self.module_name.as_ref().unwrap(),
+						definition.name.name
+					);
+					self.enum_defs.insert(qualified, variants);
 				}
 			}
 		}
@@ -315,6 +401,41 @@ impl<'compiler> Analyzer<'compiler> {
 				self.type_expr_to_type(ret, constraints).into(),
 			),
 			TypeExprKind::Single(type_ident) => {
+				// `module.TypeName`: look up the type in the named import.
+				if let Some(module) = &type_ident.module {
+					if let Some(exports) = self.imports.get(&module.name).cloned() {
+						if let Some(variants) = exports.enums.get(&type_ident.name).cloned() {
+							let _ = variants; // consumed for membership only
+							let qualified_module = self
+								.import_qualified
+								.get(&module.name)
+								.cloned()
+								.unwrap_or_else(|| module.name.clone());
+							return Type::Enum(format!("{}.{}", qualified_module, type_ident.name));
+						}
+
+						if let Some(alias_ty) = exports.aliases.get(&type_ident.name) {
+							return alias_ty.clone();
+						}
+
+						self.error(
+							type_ident.range,
+							NameNotBound {
+								name: format!("{}.{}", module.name, type_ident.name),
+							},
+						);
+						return Type::Unknown;
+					}
+
+					self.error(
+						module.range,
+						NameNotBound {
+							name: module.name.clone(),
+						},
+					);
+					return Type::Unknown;
+				}
+
 				match &type_ident.name[..] {
 					"string" => return Type::String,
 					"int" => return Type::Int,
@@ -571,12 +692,61 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 
 			ExprKind::FieldAccess { receiver, field } => {
+				// Cross-module variant access: `module.enum-name.variant`.
+				// Match the chained-FieldAccess shape so we resolve before the
+				// inner receiver gets recursed into as a regular field access.
+				if let ExprKind::FieldAccess {
+					receiver: outer_recv,
+					field: enum_field,
+				} = &receiver.kind
+				{
+					if let ExprKind::Identifier(module_ident) = &outer_recv.kind {
+						if let Some(exports) = self.imports.get(&module_ident.name).cloned() {
+							if let Some(variants) = exports.enums.get(&enum_field.name).cloned() {
+								let qualified_module = self
+									.import_qualified
+									.get(&module_ident.name)
+									.cloned()
+									.unwrap_or_else(|| module_ident.name.clone());
+								let enum_ty = Type::Enum(format!("{}.{}", qualified_module, enum_field.name));
+								receiver.ty = enum_ty.clone();
+								if let ExprKind::FieldAccess {
+									receiver: inner, ..
+								} = &mut receiver.kind
+								{
+									inner.ty = Type::Unknown;
+								}
+
+								match variants.iter().find(|(n, _)| n == &field.name) {
+									Some((_, params)) if params.is_empty() => {
+										expr.ty = enum_ty;
+									}
+									Some((_, params)) => {
+										expr.ty = Type::Fun(params.clone(), enum_ty.into());
+									}
+									None => {
+										self.error(
+											field.range,
+											EnumVariantNotPresent {
+												variant: field.name.clone(),
+												ty: enum_ty,
+											},
+										);
+										expr.ty = Type::Unknown;
+									}
+								}
+								return;
+							}
+						}
+					}
+				}
+
 				// Module namespace access: `module-name.def`. If the receiver
 				// is a bare ident that matches an imported module, look up
-				// the field in that module's exports.
+				// the field in that module's exported values.
 				if let ExprKind::Identifier(ident) = &receiver.kind {
 					if let Some(exports) = self.imports.get(&ident.name).cloned() {
-						match exports.get(&field.name) {
+						match exports.values.get(&field.name) {
 							Some(ty) => {
 								receiver.ty = Type::Unknown;
 								expr.ty = self.instantiate(ty);
@@ -595,34 +765,43 @@ impl<'compiler> Analyzer<'compiler> {
 					}
 				}
 
-				// Variant access: `EnumName.variant`. If the receiver is a bare ident
-				// that names a known enum, resolve the variant directly rather than
-				// treating this as record field access.
+				// Local variant access: `EnumName.variant`. The receiver is a
+				// bare ident that resolves (via type_scope) to a known enum.
 				if let ExprKind::Identifier(ident) = &receiver.kind {
-					if let Some(variants) = self.enum_defs.get(&ident.name).cloned() {
-						let enum_ty = Type::Enum(ident.name.clone());
-						receiver.ty = enum_ty.clone();
-
-						match variants.iter().find(|(n, _)| n == &field.name) {
-							Some((_, params)) if params.is_empty() => {
-								expr.ty = enum_ty;
-							}
-							Some((_, params)) => {
-								expr.ty = Type::Fun(params.clone(), enum_ty.into());
-							}
-							None => {
-								self.error(
-									field.range,
-									EnumVariantNotPresent {
-										variant: field.name.clone(),
-										ty: enum_ty,
-									},
-								);
-								expr.ty = Type::Unknown;
-							}
+					let qualified_enum = self.type_scope.get(&ident.name).and_then(|binding| {
+						if let Type::Enum(name) = &binding.ty {
+							Some(name.clone())
+						} else {
+							None
 						}
+					});
 
-						return;
+					if let Some(qualified) = qualified_enum {
+						if let Some(variants) = self.enum_defs.get(&qualified).cloned() {
+							let enum_ty = Type::Enum(qualified);
+							receiver.ty = enum_ty.clone();
+
+							match variants.iter().find(|(n, _)| n == &field.name) {
+								Some((_, params)) if params.is_empty() => {
+									expr.ty = enum_ty;
+								}
+								Some((_, params)) => {
+									expr.ty = Type::Fun(params.clone(), enum_ty.into());
+								}
+								None => {
+									self.error(
+										field.range,
+										EnumVariantNotPresent {
+											variant: field.name.clone(),
+											ty: enum_ty,
+										},
+									);
+									expr.ty = Type::Unknown;
+								}
+							}
+
+							return;
+						}
 					}
 				}
 
@@ -642,7 +821,12 @@ impl<'compiler> Analyzer<'compiler> {
 				)
 			}
 
-			ExprKind::If(IfNode { subject, pattern, body, .. }) => {
+			ExprKind::If(IfNode {
+				subject,
+				pattern,
+				body,
+				..
+			}) => {
 				self.constrain_expr(subject, constraints);
 
 				self.enter_scope();
@@ -656,7 +840,12 @@ impl<'compiler> Analyzer<'compiler> {
 				expr.ty = Type::Nothing;
 			}
 
-			ExprKind::While(WhileNode { subject, pattern, body, .. }) => {
+			ExprKind::While(WhileNode {
+				subject,
+				pattern,
+				body,
+				..
+			}) => {
 				self.constrain_expr(subject, constraints);
 
 				self.enter_scope();
@@ -721,8 +910,7 @@ impl<'compiler> Analyzer<'compiler> {
 				// type to disambiguate; otherwise require global uniqueness.
 				match self.resolve_variant_pattern(ident, &subject_ty, /* nullary_only */ true) {
 					VariantResolution::Found(enum_name, _) => {
-						constraints
-							.push(eq_constraint(subject_ty, Type::Enum(enum_name)).at(pattern.range));
+						constraints.push(eq_constraint(subject_ty, Type::Enum(enum_name)).at(pattern.range));
 					}
 					VariantResolution::Ambiguous => {
 						// error already reported
@@ -740,9 +928,7 @@ impl<'compiler> Analyzer<'compiler> {
 			PatternKind::Constructor(name, args) => {
 				match self.resolve_variant_pattern(name, &subject_ty, /* nullary_only */ false) {
 					VariantResolution::Found(enum_name, params) => {
-						constraints.push(
-							eq_constraint(subject_ty, Type::Enum(enum_name)).at(pattern.range),
-						);
+						constraints.push(eq_constraint(subject_ty, Type::Enum(enum_name)).at(pattern.range));
 
 						if args.len() != params.len() {
 							self.error(
@@ -778,9 +964,8 @@ impl<'compiler> Analyzer<'compiler> {
 				for _ in entries.iter() {
 					entry_types.push(self.new_type_var());
 				}
-				constraints.push(
-					eq_constraint(subject_ty, Type::Tuple(entry_types.clone())).at(pattern.range),
-				);
+				constraints
+					.push(eq_constraint(subject_ty, Type::Tuple(entry_types.clone())).at(pattern.range));
 				for (entry, entry_ty) in entries.iter_mut().zip(entry_types.into_iter()) {
 					self.constrain_pattern(entry, entry_ty, constraints);
 				}
@@ -877,7 +1062,10 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 		}
 
-		let missing: Vec<String> = required.into_iter().filter(|v| !covered.contains(v)).collect();
+		let missing: Vec<String> = required
+			.into_iter()
+			.filter(|v| !covered.contains(v))
+			.collect();
 
 		if !missing.is_empty() {
 			self.error(range, WhenNotExhaustive { missing });
@@ -937,7 +1125,15 @@ impl<'compiler> Analyzer<'compiler> {
 						VariantResolution::Found(enum_name, params)
 					}
 					_ => {
-						let mut enums: Vec<String> = candidates.into_iter().map(|(n, _)| n).collect();
+						let mut enums: Vec<String> = candidates
+							.into_iter()
+							.map(|(n, _)| {
+								// Display the bare enum name; the qualifier is
+								// internal-only and would be redundant when both
+								// candidates share the same defining module.
+								n.rsplit_once('.').map(|(_, b)| b.to_string()).unwrap_or(n)
+							})
+							.collect();
 						enums.sort();
 						self.error(
 							name.range,
@@ -1172,9 +1368,7 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 			}
 
-			Eq(Type::Enum(name_1), Type::Enum(name_2), _) if name_1 == name_2 => {
-				Substitution::empty()
-			}
+			Eq(Type::Enum(name_1), Type::Enum(name_2), _) if name_1 == name_2 => Substitution::empty(),
 
 			Eq(Type::Var(n), t, reason) | Eq(t, Type::Var(n), reason) => match t {
 				Type::Var(n2) if n == n2 => Substitution::empty(),
@@ -1451,12 +1645,18 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 			}
 			Type::Fun(params, ret) => Type::Fun(
-				params.iter().map(|t| self.instantiate_with(t, mapping)).collect(),
+				params
+					.iter()
+					.map(|t| self.instantiate_with(t, mapping))
+					.collect(),
 				Box::new(self.instantiate_with(ret, mapping)),
 			),
-			Type::Tuple(elems) => {
-				Type::Tuple(elems.iter().map(|t| self.instantiate_with(t, mapping)).collect())
-			}
+			Type::Tuple(elems) => Type::Tuple(
+				elems
+					.iter()
+					.map(|t| self.instantiate_with(t, mapping))
+					.collect(),
+			),
 			Type::Record(fields) => Type::Record(
 				fields
 					.iter()
@@ -1475,10 +1675,9 @@ impl<'compiler> Analyzer<'compiler> {
 				name.clone(),
 				Box::new(self.instantiate_with(inner, mapping)),
 			),
-			Type::PartialTuple(index, inner) => Type::PartialTuple(
-				*index,
-				Box::new(self.instantiate_with(inner, mapping)),
-			),
+			Type::PartialTuple(index, inner) => {
+				Type::PartialTuple(*index, Box::new(self.instantiate_with(inner, mapping)))
+			}
 		}
 	}
 }

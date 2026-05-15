@@ -138,7 +138,24 @@ def value utils.something
 def alt utils2.something
 ```
 
-imports are cycle-checked. only top-level value defs cross modules (enums and aliases are not yet exported across modules).
+values, enums, and aliases all cross module boundaries.
+
+```
+use shapes
+use colors
+
+def themed alias {
+  primary: colors.color
+  shape: shapes.circle
+}
+
+def my-favorite colors.color.red
+```
+
+- in type positions: `module.type-name` refers to an imported enum or alias.
+- in value positions: `module.enum-name.variant` accesses a variant; `module.alias-name` is the alias constructor.
+
+imports are cycle-checked.
 
 ## if expressions
 

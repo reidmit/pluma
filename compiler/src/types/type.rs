@@ -142,7 +142,13 @@ impl std::fmt::Display for Type {
 			Type::Regex => write!(f, "regex"),
 			Type::Nothing => write!(f, "()"),
 
-			Type::Enum(name) => write!(f, "{}", name),
+			Type::Enum(name) => {
+				// Internally enum names are fully-qualified
+				// (`<defining-module>.<enum-name>`). For display, show just
+				// the bare enum name.
+				let bare = name.rsplit_once('.').map(|(_, n)| n).unwrap_or(name);
+				write!(f, "{}", bare)
+			}
 
 			Type::Fun(params, ret) => write!(
 				f,

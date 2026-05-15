@@ -16,7 +16,7 @@ match expressions w/ patterns
 
 imports of other modules (`use`)
 
-`use a.b.module` resolves dotted paths against the root dir. `use ... as alias` for local renaming. Cross-module value access via `module.name` with per-use polymorphism. Cycle detection.
+`use a.b.module` resolves dotted paths against the root dir. `use ... as alias` for local renaming. Cross-module access for values, enums, and aliases via `module.name` (and `module.enum.variant` for variants), with per-use polymorphism. Cycle detection.
 
 ## phase 2
 

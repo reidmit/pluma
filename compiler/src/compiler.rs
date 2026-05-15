@@ -2,7 +2,6 @@ use crate::analyzer::*;
 use crate::diagnostic::*;
 use crate::errors::*;
 use crate::module::*;
-use crate::types::Type;
 use crate::*;
 use std::collections::{HashMap, HashSet};
 use std::env;
@@ -14,9 +13,9 @@ pub struct Compiler {
 	pub entry_module_name: String,
 	pub modules: HashMap<String, Module>,
 	diagnostics: Vec<Diagnostic>,
-	// Per fully-qualified module name, the value-typed top-level defs that
-	// other modules see when they `use` it.
-	exports_cache: HashMap<String, HashMap<String, Type>>,
+	// Per fully-qualified module name, the top-level defs (values, aliases,
+	// enums) other modules see when they `use` it.
+	exports_cache: HashMap<String, ModuleExports>,
 }
 
 impl Compiler {
@@ -119,18 +118,22 @@ impl Compiler {
 			self.load_module(full_name, visiting);
 		}
 
-		// Build the imports map for the analyzer (local name -> exports table).
-		let mut imports_map: HashMap<String, HashMap<String, Type>> = HashMap::new();
+		// Build the imports map for the analyzer (local name -> exports table),
+		// plus a parallel local-name -> fully-qualified-module-name map so
+		// qualified enum type names can be reconstructed at use sites.
+		let mut imports_map: HashMap<String, ModuleExports> = HashMap::new();
+		let mut import_qualified: HashMap<String, String> = HashMap::new();
 		for (full_name, local_name, _) in imports {
 			if let Some(exports) = self.exports_cache.get(&full_name) {
-				imports_map.insert(local_name, exports.clone());
+				imports_map.insert(local_name.clone(), exports.clone());
+				import_qualified.insert(local_name, full_name);
 			}
 		}
 
 		// Analyze this module.
 		let module = self.modules.get_mut(module_name).unwrap();
 		let mut analyzer = Analyzer::new(&mut self.diagnostics);
-		analyzer.set_imports(imports_map);
+		analyzer.set_imports(imports_map, import_qualified);
 		analyzer.analyze(module);
 
 		// Cache its exports for any later importer.

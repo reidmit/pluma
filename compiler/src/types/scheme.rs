@@ -33,7 +33,8 @@ impl std::fmt::Debug for Scheme {
 			Scheme::Forall(vars, ty) => write!(
 				f,
 				"forall{} . {}",
-				vars.iter()
+				vars
+					.iter()
 					.map(|v| format!(" {}", v))
 					.collect::<Vec<String>>()
 					.join(""),

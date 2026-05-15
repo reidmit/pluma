@@ -12,14 +12,21 @@ pub struct UseNode {
 
 impl UseNode {
 	pub fn module_name(&self) -> String {
-		self.path.iter().map(|p| p.name.clone()).collect::<Vec<_>>().join(".")
+		self
+			.path
+			.iter()
+			.map(|p| p.name.clone())
+			.collect::<Vec<_>>()
+			.join(".")
 	}
 
 	pub fn local_name(&self) -> &IdentifierNode {
-		self
-			.alias
-			.as_ref()
-			.unwrap_or_else(|| self.path.last().expect("use path must have at least one segment"))
+		self.alias.as_ref().unwrap_or_else(|| {
+			self
+				.path
+				.last()
+				.expect("use path must have at least one segment")
+		})
 	}
 }
 
@@ -30,7 +37,9 @@ impl std::fmt::Debug for UseNode {
 			Some(alias) => write!(
 				f,
 				"use({:#?}) `{}` as `{}`",
-				self.range, self.module_name(), alias.name
+				self.range,
+				self.module_name(),
+				alias.name
 			),
 			None => write!(f, "use({:#?}) `{}`", self.range, self.module_name()),
 		}

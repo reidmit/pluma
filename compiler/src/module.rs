@@ -8,15 +8,33 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
+// What a module exposes to anyone that `use`s it. Populated by the Analyzer
+// after type inference.
+//
+// `values` are top-level value defs (including alias constructor functions).
+// `aliases` are alias type defs (name -> the resolved underlying type).
+// `enums` are enum type defs (name -> ordered list of variants).
+//
+// Types inside this struct carry the defining module's bare enum names (e.g.
+// `Type::Enum("color")`); the importing analyzer qualifies them with the
+// defining module's fully-qualified name when pulling them in.
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, Default)]
+pub struct ModuleExports {
+	pub values: HashMap<String, Type>,
+	pub aliases: HashMap<String, Type>,
+	pub enums: HashMap<String, Vec<(String, Vec<Type>)>>,
+}
+
 pub struct Module {
 	pub module_name: String,
 	pub module_path: PathBuf,
 	pub ast: Option<ModuleNode>,
 	pub comments: HashMap<usize, String>,
 	pub line_break_starts: Vec<usize>,
-	// Top-level value definitions exposed to importing modules. Populated by
-	// the Analyzer at the end of analysis. `None` means not yet analyzed.
-	pub exports: Option<HashMap<String, Type>>,
+	// Top-level definitions exposed to importing modules. `None` means not
+	// yet analyzed.
+	pub exports: Option<ModuleExports>,
 }
 
 impl Module {
