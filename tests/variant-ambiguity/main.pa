@@ -1,0 +1,17 @@
+def color enum {
+  red
+  green
+}
+
+def fruit enum {
+  red
+  apple
+}
+
+# `red` is ambiguous when the subject's enum type isn't known
+# (here `c` is a fresh type var until the pattern resolves it).
+def check fun c {
+  if c is red {
+    0
+  }
+}

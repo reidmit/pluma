@@ -89,11 +89,15 @@ impl std::fmt::Debug for Module {
 			.to_str()
 			.unwrap();
 
+		let mut sorted_comments: Vec<_> = self.comments.iter().collect();
+		sorted_comments.sort_by_key(|(line, _)| *line);
+		let sorted_comments: std::collections::BTreeMap<_, _> = sorted_comments.into_iter().collect();
+
 		f.debug_struct(&format!(
 			"module `{}` ({})",
 			self.module_name, short_module_path
 		))
-		.field("comments", &self.comments)
+		.field("comments", &sorted_comments)
 		.field("ast", &self.ast)
 		.finish()
 	}

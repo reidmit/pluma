@@ -1,0 +1,74 @@
+module `main` (tests/variant-disambiguated/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-14:1) [
+            def(0:0-3:1) :: () {
+                name: ident(0:4-0:9) `color`,
+                kind: enum(0:15-3:1) [
+                    variant(1:2-1:5) {
+                        name: ident(1:2-1:5) `red`,
+                        params: None,
+                    },
+                    variant(2:2-2:7) {
+                        name: ident(2:2-2:7) `green`,
+                        params: None,
+                    },
+                ],
+            },
+            def(5:0-8:1) :: () {
+                name: ident(5:4-5:9) `fruit`,
+                kind: enum(5:15-8:1) [
+                    variant(6:2-6:5) {
+                        name: ident(6:2-6:5) `red`,
+                        params: None,
+                    },
+                    variant(7:2-7:7) {
+                        name: ident(7:2-7:7) `apple`,
+                        params: None,
+                    },
+                ],
+            },
+            def(10:0-14:1) :: () {
+                name: ident(10:4-10:10) `is-red`,
+                kind: expr(10:11-14:1) :: () -> int {
+                    kind: fun(10:11-14:1) {
+                        params: [],
+                        body: [
+                            expr(11:2-11:19) :: () {
+                                kind: let(11:2-11:19) {
+                                    name: ident(11:6-11:7) `x`,
+                                    value: expr(11:10-11:19) :: color {
+                                        kind: field-access {
+                                            receiver: expr(11:10-11:15) :: color {
+                                                kind: ident(11:10-11:15) `color`,
+                                            },
+                                            field: ident(11:16-11:19) `red`,
+                                        },
+                                    },
+                                },
+                            },
+                            expr(13:2-13:36) :: int {
+                                kind: when(13:2-13:36) [
+                                    case(13:9-13:21) is pattern(13:12-13:15) Identifier(
+                                        ident(13:12-13:15) `red`,
+                                    ) [
+                                        expr(13:18-13:19) :: int {
+                                            kind: literal(13:18-13:19) int 0,
+                                        },
+                                    ],
+                                    case(13:22-13:36) is pattern(13:25-13:30) Identifier(
+                                        ident(13:25-13:30) `green`,
+                                    ) [
+                                        expr(13:33-13:34) :: int {
+                                            kind: literal(13:33-13:34) int 1,
+                                        },
+                                    ],
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

@@ -18,6 +18,7 @@ pub enum AnalysisErrorKind {
 	RecordFieldNotPresent { field: String, ty: Type },
 	EnumVariantNotPresent { variant: String, ty: Type },
 	WhenNotExhaustive { missing: Vec<String> },
+	AmbiguousVariant { name: String, enums: Vec<String> },
 }
 
 impl fmt::Display for AnalysisError {
@@ -76,6 +77,19 @@ impl fmt::Display for AnalysisError {
 					.collect::<Vec<_>>()
 					.join(", ");
 				write!(f, "Non-exhaustive `when`: missing case for {}.", formatted)
+			}
+
+			AmbiguousVariant { name, enums } => {
+				let formatted = enums
+					.iter()
+					.map(|n| format!("`{}`", n))
+					.collect::<Vec<_>>()
+					.join(" or ");
+				write!(
+					f,
+					"Variant `{}` is ambiguous: it could refer to {}.",
+					name, formatted
+				)
 			}
 		}
 	}

@@ -1,0 +1,15 @@
+def color enum {
+  red
+  green
+}
+
+def fruit enum {
+  red
+  apple
+}
+
+def is-red fun {
+  let x = color.red
+
+  when x is red { 0 } is green { 1 }
+}

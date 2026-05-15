@@ -10,6 +10,12 @@ use std::iter::FromIterator;
 use std::path::PathBuf;
 use AnalysisErrorKind::*;
 
+enum VariantResolution {
+	Found(String, Vec<Type>),
+	NotFound,
+	Ambiguous,
+}
+
 pub struct Analyzer<'compiler> {
 	module_name: Option<String>,
 	module_path: Option<PathBuf>,
@@ -507,11 +513,21 @@ impl<'compiler> Analyzer<'compiler> {
 				self.constrain_expr(value, constraints);
 
 				// add a new type scheme to the context with a new var:
-				let type_scheme = self.new_type_scheme_var();
-				self.add_value_binding(name.name.clone(), type_scheme.clone(), name.range);
-
-				// not sure what this is doing...?
-				constraints.push(Gen(type_scheme, value.ty.clone()));
+				// If the value's type is already fully concrete (no free type vars),
+				// bind monomorphically so subsequent uses see the resolved type at
+				// constraint-gen time. Otherwise defer via Gen/Inst so the binding
+				// can be polymorphic.
+				if value.ty.free_vars().is_empty() {
+					self.add_value_binding(
+						name.name.clone(),
+						Scheme::Forall(vec![], value.ty.clone()),
+						name.range,
+					);
+				} else {
+					let type_scheme = self.new_type_scheme_var();
+					self.add_value_binding(name.name.clone(), type_scheme.clone(), name.range);
+					constraints.push(Gen(type_scheme, value.ty.clone()));
+				}
 
 				// let expressions always evaluate to ()
 				expr.ty = Type::Nothing;
@@ -657,27 +673,29 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 
 			PatternKind::Identifier(ident) => {
-				// If this name matches a nullary variant of some enum, treat it as
-				// a variant match rather than a binding.
-				if let Some((enum_name, params)) = self.find_variant(&ident.name) {
-					if params.is_empty() {
+				// A bare ident might be a nullary variant match. Use the subject
+				// type to disambiguate; otherwise require global uniqueness.
+				match self.resolve_variant_pattern(ident, &subject_ty, /* nullary_only */ true) {
+					VariantResolution::Found(enum_name, _) => {
 						constraints
 							.push(eq_constraint(subject_ty, Type::Enum(enum_name)).at(pattern.range));
-						return;
+					}
+					VariantResolution::Ambiguous => {
+						// error already reported
+					}
+					VariantResolution::NotFound => {
+						self.add_value_binding(
+							ident.name.clone(),
+							Scheme::Forall(vec![], subject_ty),
+							ident.range,
+						);
 					}
 				}
-
-				self.add_value_binding(
-					ident.name.clone(),
-					Scheme::Forall(vec![], subject_ty),
-					ident.range,
-				);
 			}
 
 			PatternKind::Constructor(name, args) => {
-				let variant = self.find_variant(&name.name);
-				match variant {
-					Some((enum_name, params)) => {
+				match self.resolve_variant_pattern(name, &subject_ty, /* nullary_only */ false) {
+					VariantResolution::Found(enum_name, params) => {
 						constraints.push(
 							eq_constraint(subject_ty, Type::Enum(enum_name)).at(pattern.range),
 						);
@@ -697,7 +715,10 @@ impl<'compiler> Analyzer<'compiler> {
 							self.constrain_pattern(arg, param_ty, constraints);
 						}
 					}
-					None => {
+					VariantResolution::Ambiguous => {
+						// error already reported
+					}
+					VariantResolution::NotFound => {
 						self.error(
 							name.range,
 							NameNotBound {
@@ -763,13 +784,18 @@ impl<'compiler> Analyzer<'compiler> {
 				PatternKind::Underscore => return,
 
 				PatternKind::Identifier(ident) => {
-					// A bare ident either names a nullary variant (covers just that
-					// variant) or is a binding (catch-all that covers everything).
-					match self.find_variant(&ident.name) {
-						Some((_, params)) if params.is_empty() => {
-							covered.insert(ident.name.clone());
-						}
-						_ => return,
+					// A bare ident either names a nullary variant of the subject enum
+					// (covers just that variant) or is a binding (catch-all).
+					let is_nullary_variant = match subject_ty {
+						Type::Enum(enum_name) => self
+							.find_variant_in_enum(enum_name, &ident.name)
+							.map_or(false, |p| p.is_empty()),
+						_ => false,
+					};
+					if is_nullary_variant {
+						covered.insert(ident.name.clone());
+					} else {
+						return;
 					}
 				}
 
@@ -779,9 +805,15 @@ impl<'compiler> Analyzer<'compiler> {
 					// just a slice of the value space, so we conservatively skip.
 					let all_catch = args.iter().all(|arg| match &arg.kind {
 						PatternKind::Underscore => true,
-						PatternKind::Identifier(ident) => self
-							.find_variant(&ident.name)
-							.map_or(true, |(_, p)| !p.is_empty()),
+						PatternKind::Identifier(ident) => {
+							// Treat as binding (catch-all) unless we know it's a nullary
+							// variant somewhere. Conservative — counts variants from any
+							// enum as non-catch-all.
+							self
+								.find_variant_globally(&ident.name)
+								.iter()
+								.all(|(_, p)| !p.is_empty())
+						}
 						_ => false,
 					});
 					if all_catch {
@@ -808,15 +840,73 @@ impl<'compiler> Analyzer<'compiler> {
 		}
 	}
 
-	fn find_variant(&self, name: &str) -> Option<(String, Vec<Type>)> {
+	fn find_variant_in_enum(&self, enum_name: &str, variant_name: &str) -> Option<Vec<Type>> {
+		self
+			.enum_defs
+			.get(enum_name)?
+			.iter()
+			.find(|(n, _)| n == variant_name)
+			.map(|(_, params)| params.clone())
+	}
+
+	fn find_variant_globally(&self, name: &str) -> Vec<(String, Vec<Type>)> {
+		let mut results = Vec::new();
 		for (enum_name, variants) in &self.enum_defs {
 			for (variant_name, params) in variants {
 				if variant_name == name {
-					return Some((enum_name.clone(), params.clone()));
+					results.push((enum_name.clone(), params.clone()));
 				}
 			}
 		}
-		None
+		results
+	}
+
+	// Resolve a variant name in pattern position. Uses the subject type to
+	// disambiguate when known; otherwise falls back to a global lookup and
+	// reports an ambiguity error if more than one enum matches.
+	fn resolve_variant_pattern(
+		&mut self,
+		name: &IdentifierNode,
+		subject_ty: &Type,
+		nullary_only: bool,
+	) -> VariantResolution {
+		match subject_ty {
+			Type::Enum(enum_name) => match self.find_variant_in_enum(enum_name, &name.name) {
+				Some(params) => {
+					if nullary_only && !params.is_empty() {
+						return VariantResolution::NotFound;
+					}
+					VariantResolution::Found(enum_name.clone(), params)
+				}
+				None => VariantResolution::NotFound,
+			},
+
+			_ => {
+				let mut candidates = self.find_variant_globally(&name.name);
+				if nullary_only {
+					candidates.retain(|(_, p)| p.is_empty());
+				}
+				match candidates.len() {
+					0 => VariantResolution::NotFound,
+					1 => {
+						let (enum_name, params) = candidates.into_iter().next().unwrap();
+						VariantResolution::Found(enum_name, params)
+					}
+					_ => {
+						let mut enums: Vec<String> = candidates.into_iter().map(|(n, _)| n).collect();
+						enums.sort();
+						self.error(
+							name.range,
+							AmbiguousVariant {
+								name: name.name.clone(),
+								enums,
+							},
+						);
+						VariantResolution::Ambiguous
+					}
+				}
+			}
+		}
 	}
 
 	fn unify(&mut self, constraints: &[Constraint]) -> Substitution {

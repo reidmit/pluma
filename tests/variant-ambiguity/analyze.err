@@ -1,0 +1,5 @@
+Error: Variant `red` is ambiguous: it could refer to `color` or `fruit`.
+
+> 14|   if c is red {
+                ^^^
+tests/variant-ambiguity/main.pa:14:11
