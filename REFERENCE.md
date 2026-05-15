@@ -97,6 +97,8 @@ def number-list alias list int
 
 ## enum types
 
+enums are nominal: two enums with the same shape are distinct, and references within an enum's body (e.g. `tree` inside `tree`'s `node` variant) are allowed.
+
 ```
 def color enum {
   red
@@ -114,6 +116,29 @@ def bool enum {
   false
 }
 ```
+
+variants are accessed by qualifying with the enum name. zero-arg variants are values of the enum type; payload variants are constructor functions.
+
+```
+let c = color.red                          # c : color
+let t = tree.node 1 tree.empty tree.empty
+```
+
+## module imports
+
+`use` at the top of a module brings another module in as a namespace. dotted paths resolve relative to the project root.
+
+```
+use math
+use sub.utils
+use other.utils as utils2   # avoids collision with `sub.utils` above
+
+def four math.add 2 2
+def value utils.something
+def alt utils2.something
+```
+
+imports are cycle-checked. only top-level value defs cross modules (enums and aliases are not yet exported across modules).
 
 ## if expressions
 
