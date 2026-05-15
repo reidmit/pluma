@@ -1,5 +1,6 @@
 mod call;
 mod definition;
+mod r#enum;
 mod expr;
 mod fun;
 mod identifier;
@@ -24,6 +25,7 @@ pub use self::literal::*;
 pub use self::module::*;
 pub use self::operator::*;
 pub use self::pattern::*;
+pub use self::r#enum::*;
 pub use self::r#if::*;
 pub use self::r#let::*;
 pub use self::r#while::*;

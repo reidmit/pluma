@@ -1,0 +1,19 @@
+def color enum {
+  red
+  green
+  blue
+}
+
+def tree enum {
+  empty
+  node int tree tree
+}
+
+def bool enum {
+  true
+  false
+}
+
+let my-color = color.red
+let my-tree = tree.empty
+let my-bool = bool.true

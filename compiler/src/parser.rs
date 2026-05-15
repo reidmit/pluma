@@ -1277,6 +1277,21 @@ impl<'a> Parser<'a> {
 				})
 			}
 
+			Some(Token::KeywordEnum(..)) => {
+				self.advance();
+
+				let enum_node = self.parse_enum()?;
+
+				self.skip_line_breaks();
+
+				Some(DefinitionNode {
+					name,
+					range: Range::between(start, enum_node.range.end),
+					kind: DefinitionKind::Enum(enum_node),
+					ty: Type::Unknown,
+				})
+			}
+
 			Some(token) if token.can_start_expression() => {
 				let value = self.parse_expression()?;
 
@@ -1531,6 +1546,64 @@ impl<'a> Parser<'a> {
 		Some(TypeExprNode {
 			range: Range::between(start, end),
 			kind: TypeExprKind::Tuple(entries),
+		})
+	}
+
+	fn parse_enum(&mut self) -> Option<EnumNode> {
+		let (brace_start, _) = expect_token_and_advance!(self, Token::LeftBrace);
+
+		self.skip_line_breaks();
+
+		let mut variants = Vec::new();
+
+		while let Some(variant) = self.parse_enum_variant() {
+			variants.push(variant);
+
+			self.skip_line_breaks();
+		}
+
+		let (_, brace_end) = expect_token_and_advance!(self, Token::RightBrace);
+
+		Some(EnumNode {
+			range: Range::between(brace_start, brace_end),
+			variants,
+		})
+	}
+
+	fn parse_enum_variant(&mut self) -> Option<EnumVariantNode> {
+		let name = self.parse_identifier()?;
+
+		if current_token_is!(self, Token::LineBreak) {
+			self.skip_line_breaks();
+
+			return Some(EnumVariantNode {
+				range: Range::between(name.range.start, name.range.end),
+				name,
+				params: None,
+			});
+		}
+
+		let mut params = Vec::new();
+
+		while let Some(type_node) = self.parse_type_expression() {
+			params.push(type_node);
+
+			match self.current_token {
+				Some(Token::Comma(..)) => self.advance(),
+				_ => break,
+			}
+		}
+
+		let end = params.last().map(|p| p.range.end).unwrap_or(name.range.end);
+
+		Some(EnumVariantNode {
+			range: Range::between(name.range.start, end),
+			name,
+			params: if params.is_empty() {
+				None
+			} else {
+				Some(params)
+			},
 		})
 	}
 }

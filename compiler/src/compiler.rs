@@ -27,6 +27,17 @@ impl Compiler {
 		})
 	}
 
+	pub fn tokenize(&mut self) -> Result<Vec<Token>, Vec<Diagnostic>> {
+		let mut entry_module = Module::new(
+			self.entry_module_name.clone(),
+			to_module_path(self.root_dir.clone(), self.entry_module_name.clone()),
+		);
+
+		let tokens = entry_module.tokenize(&mut self.diagnostics);
+
+		Ok(tokens)
+	}
+
 	pub fn check(&mut self) -> Result<&Module, Vec<Diagnostic>> {
 		self.parse_module(
 			self.entry_module_name.clone(),

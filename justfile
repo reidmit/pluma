@@ -1,3 +1,7 @@
+# run 'tokenize' on a single file path
+tokenize path:
+  @ cargo run --bin cli --quiet -- tokenize {{path}}
+
 # run 'analyze' on a single file path
 analyze path:
   @ cargo run --bin cli --quiet -- analyze {{path}}

@@ -11,6 +11,7 @@ pub struct DefinitionNode {
 pub enum DefinitionKind {
 	Expr(ExprNode),
 	Alias(TypeExprNode),
+	Enum(EnumNode),
 }
 
 #[cfg(debug_assertions)]
@@ -29,6 +30,7 @@ impl std::fmt::Debug for DefinitionKind {
 		match &self {
 			DefinitionKind::Expr(expr) => write!(f, "{:#?}", expr),
 			DefinitionKind::Alias(ty_expr) => write!(f, "alias {:#?}", ty_expr),
+			DefinitionKind::Enum(enum_node) => write!(f, "{:#?}", enum_node),
 		}
 	}
 }

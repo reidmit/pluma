@@ -2,6 +2,7 @@ use crate::ast::*;
 use crate::diagnostic::*;
 use crate::parser::*;
 use crate::tokenizer::*;
+use crate::Token;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
@@ -22,6 +23,23 @@ impl Module {
 			ast: None,
 			comments: HashMap::new(),
 			line_break_starts: Vec::new(),
+		}
+	}
+
+	pub fn tokenize(&mut self, diagnostics: &mut Vec<Diagnostic>) -> Vec<Token> {
+		match fs::read(&self.module_path) {
+			Ok(bytes) => {
+				let tokenizer = Tokenizer::from_source(&bytes);
+				let tokens = tokenizer.collect();
+				tokens
+			}
+			Err(err) => {
+				diagnostics.push(
+					Diagnostic::error(err)
+						.with_module(self.module_name.clone(), self.module_path.to_path_buf()),
+				);
+				Vec::new()
+			}
 		}
 	}
 

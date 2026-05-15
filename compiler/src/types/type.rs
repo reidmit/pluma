@@ -15,6 +15,7 @@ pub enum Type {
 	Record(Vec<(String, Type)>),
 	PartialRecord(String, Box<Type>),
 	Fun(Vec<Type>, Box<Type>),
+	Enum(String, Vec<(String, Option<Type>)>),
 }
 
 impl Type {
@@ -33,6 +34,17 @@ impl Type {
 			Type::PartialTuple(_, element_type) => element_type.contains_var(var),
 
 			Type::PartialRecord(_, field_type) => field_type.contains_var(var),
+
+			Type::Enum(_, variants) => {
+				for (_, data_type) in variants {
+					if let Some(data_type) = data_type {
+						if data_type.contains_var(var) {
+							return true;
+						}
+					}
+				}
+				false
+			}
 
 			Type::Tuple(element_types) => {
 				for element_type in element_types {
@@ -92,6 +104,14 @@ impl Type {
 				vars.extend(field_type.free_vars());
 			}
 
+			Type::Enum(_, variants) => {
+				for (_, data_type) in variants {
+					if let Some(data_type) = data_type {
+						vars.extend(data_type.free_vars());
+					}
+				}
+			}
+
 			Type::Tuple(element_types) => {
 				for element_type in element_types {
 					vars.extend(element_type.free_vars());
@@ -136,6 +156,24 @@ impl std::fmt::Display for Type {
 			Type::String => write!(f, "string"),
 			Type::Regex => write!(f, "regex"),
 			Type::Nothing => write!(f, "()"),
+
+			Type::Enum(name, variants) => {
+				write!(f, "{}", name)?;
+				if !variants.is_empty() {
+					write!(f, " {{")?;
+					for (i, (variant_name, data_type)) in variants.iter().enumerate() {
+						if i > 0 {
+							write!(f, " ")?;
+						}
+						write!(f, "{}", variant_name)?;
+						if let Some(data_type) = data_type {
+							write!(f, " {}", data_type)?;
+						}
+					}
+					write!(f, "}}")?;
+				}
+				Ok(())
+			}
 
 			Type::Fun(params, ret) => write!(
 				f,

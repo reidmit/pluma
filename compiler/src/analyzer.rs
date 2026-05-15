@@ -190,6 +190,26 @@ impl<'compiler> Analyzer<'compiler> {
 					);
 					schemes.push(type_scheme);
 				}
+
+				DefinitionKind::Enum(_) => {
+					// Add a type binding for the enum type defined here...
+					let type_var = self.new_type_var();
+					self.add_type_binding(
+						definition.name.name.clone(),
+						type_var.clone(),
+						definition.name.range,
+					);
+					type_def_vars.push(type_var);
+
+					// And also value bindings for each constructor function!
+					let type_scheme = self.new_type_scheme_var();
+					self.add_value_binding(
+						definition.name.name.clone(),
+						type_scheme.clone(),
+						definition.name.range,
+					);
+					schemes.push(type_scheme);
+				}
 			}
 		}
 
@@ -217,6 +237,31 @@ impl<'compiler> Analyzer<'compiler> {
 					let constructor_type = Type::Fun(vec![ty.clone()], type_var.clone().into());
 					constraints.push(Constraint::Gen(scheme, constructor_type));
 					scheme_index += 1;
+				}
+
+				DefinitionKind::Enum(enum_node) => {
+					// let variants: Vec<(String, Option<Type>)> = enum_node
+					// 	.variants
+					// 	.iter()
+					// 	.map(|variant| {
+					// 		let params = variant.params.as_ref().map(|params| {
+					// 			params
+					// 				.iter()
+					// 				.map(|p| self.type_expr_to_type(p, &mut constraints))
+					// 				.collect()
+					// 		});
+					// 		(variant.name.name.clone(), params)
+					// 	})
+					// 	.collect();
+
+					// let enum_type = Type::Enum(definition.name.name.clone(), variants);
+					// let type_var = type_def_vars.get(type_def_index).unwrap().clone();
+					// constraints.push(eq_constraint(type_var.clone(), enum_type));
+					// type_def_index += 1;
+
+					// let scheme = schemes.get(scheme_index).unwrap().clone();
+					// constraints.push(Constraint::Gen(scheme, type_var.clone()));
+					// scheme_index += 1;
 				}
 			}
 		}
