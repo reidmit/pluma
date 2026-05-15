@@ -1,0 +1,11 @@
+def add fun x y {
+  x + y
+}
+
+def double fun n {
+  n + n
+}
+
+def identity fun x {
+  x
+}

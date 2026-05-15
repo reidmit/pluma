@@ -2,8 +2,9 @@ use crate::analyzer::*;
 use crate::diagnostic::*;
 use crate::errors::*;
 use crate::module::*;
+use crate::types::Type;
 use crate::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::path::{Path, PathBuf};
 
@@ -13,6 +14,9 @@ pub struct Compiler {
 	pub entry_module_name: String,
 	pub modules: HashMap<String, Module>,
 	diagnostics: Vec<Diagnostic>,
+	// Per fully-qualified module name, the value-typed top-level defs that
+	// other modules see when they `use` it.
+	exports_cache: HashMap<String, HashMap<String, Type>>,
 }
 
 impl Compiler {
@@ -24,13 +28,14 @@ impl Compiler {
 			entry_module_name,
 			modules: HashMap::new(),
 			diagnostics: Vec::new(),
+			exports_cache: HashMap::new(),
 		})
 	}
 
 	pub fn tokenize(&mut self) -> Result<Vec<Token>, Vec<Diagnostic>> {
 		let mut entry_module = Module::new(
 			self.entry_module_name.clone(),
-			to_module_path(self.root_dir.clone(), self.entry_module_name.clone()),
+			to_module_path(&self.root_dir, &self.entry_module_name),
 		);
 
 		let tokens = entry_module.tokenize(&mut self.diagnostics);
@@ -39,32 +44,82 @@ impl Compiler {
 	}
 
 	pub fn check(&mut self) -> Result<&Module, Vec<Diagnostic>> {
-		self.parse_module(
-			self.entry_module_name.clone(),
-			to_module_path(self.root_dir.clone(), self.entry_module_name.clone()),
-		);
-
-		let module = self.modules.get_mut(&self.entry_module_name).unwrap();
-		let mut analyzer = Analyzer::new(&mut self.diagnostics);
-		analyzer.analyze(module);
+		let entry = self.entry_module_name.clone();
+		let mut visiting = HashSet::new();
+		self.load_module(&entry, &mut visiting);
 
 		if !self.diagnostics.is_empty() {
 			Err(self.diagnostics.to_vec())
 		} else {
-			Ok(module)
+			Ok(self.modules.get(&entry).unwrap())
 		}
 	}
 
-	fn parse_module(&mut self, module_name: String, module_path: PathBuf) {
-		if self.modules.contains_key(&module_name) {
+	// DFS-loads `module_name` and its imports, then analyzes it. Each module
+	// is analyzed once, after its dependencies. Detects import cycles via
+	// `visiting`.
+	fn load_module(&mut self, module_name: &str, visiting: &mut HashSet<String>) {
+		if self.exports_cache.contains_key(module_name) {
 			return;
-		};
+		}
 
-		let mut new_module = Module::new(module_name.clone(), module_path.to_owned());
+		if !visiting.insert(module_name.to_string()) {
+			self.diagnostics.push(Diagnostic::error(format!(
+				"Cyclic import detected involving module `{}`.",
+				module_name
+			)));
+			return;
+		}
 
-		new_module.parse(&mut self.diagnostics);
+		// Parse if not already.
+		if !self.modules.contains_key(module_name) {
+			let path = to_module_path(&self.root_dir, module_name);
+			let mut module = Module::new(module_name.to_string(), path);
+			module.parse(&mut self.diagnostics);
+			self.modules.insert(module_name.to_string(), module);
+		}
 
-		self.modules.insert(module_name.clone(), new_module);
+		// Collect (fully-qualified-name, namespace-binding) for each import.
+		// Namespace-binding is the last dotted segment, e.g. `use sub.utils`
+		// binds the local name `utils`.
+		let imports: Vec<(String, String)> = self
+			.modules
+			.get(module_name)
+			.and_then(|m| m.ast.as_ref())
+			.map(|ast| {
+				ast
+					.uses
+					.iter()
+					.map(|u| (u.module_name(), u.last_segment().name.clone()))
+					.collect()
+			})
+			.unwrap_or_default();
+
+		// Recursively load each dependency.
+		for (full_name, _) in &imports {
+			self.load_module(full_name, visiting);
+		}
+
+		// Build the imports map for the analyzer (local name -> exports table).
+		let mut imports_map: HashMap<String, HashMap<String, Type>> = HashMap::new();
+		for (full_name, local_name) in imports {
+			if let Some(exports) = self.exports_cache.get(&full_name) {
+				imports_map.insert(local_name, exports.clone());
+			}
+		}
+
+		// Analyze this module.
+		let module = self.modules.get_mut(module_name).unwrap();
+		let mut analyzer = Analyzer::new(&mut self.diagnostics);
+		analyzer.set_imports(imports_map);
+		analyzer.analyze(module);
+
+		// Cache its exports for any later importer.
+		if let Some(exports) = module.exports.clone() {
+			self.exports_cache.insert(module_name.to_string(), exports);
+		}
+
+		visiting.remove(module_name);
 	}
 }
 
@@ -75,8 +130,13 @@ fn resolve_entry(entry_path: String) -> Result<(PathBuf, String), Vec<Diagnostic
 	}
 }
 
-fn to_module_path(root_dir: PathBuf, module_name: String) -> PathBuf {
-	root_dir.join(module_name).with_extension(FILE_EXTENSION)
+fn to_module_path(root_dir: &Path, module_name: &str) -> PathBuf {
+	let mut path = root_dir.to_path_buf();
+	for segment in module_name.split('.') {
+		path.push(segment);
+	}
+	path.set_extension(FILE_EXTENSION);
+	path
 }
 
 fn get_root_dir_and_module_name(entry_path: String) -> Result<(PathBuf, String), UsageError> {

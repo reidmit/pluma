@@ -124,6 +124,9 @@ pub enum Token {
 	/// `let` keyword
 	KeywordLet(usize, usize),
 
+	/// `use` keyword (module import)
+	KeywordUse(usize, usize),
+
 	/// `when` keyword
 	KeywordWhen(usize, usize),
 
@@ -267,6 +270,7 @@ impl Token {
 			| KeywordIn(start, end)
 			| KeywordIs(start, end)
 			| KeywordLet(start, end)
+			| KeywordUse(start, end)
 			| KeywordWhile(start, end)
 			| KeywordWhen(start, end)
 			| LeftAngle(start, end)
@@ -354,6 +358,7 @@ impl fmt::Display for Token {
 			&KeywordIn(..) => "keyword `in`",
 			&KeywordIs(..) => "keyword `is`",
 			&KeywordLet(..) => "keyword `let`",
+			&KeywordUse(..) => "keyword `use`",
 			&KeywordWhile(..) => "keyword `while`",
 			&KeywordWhen(..) => "keyword `when`",
 			&LeftAngle(..) => "a '<'",

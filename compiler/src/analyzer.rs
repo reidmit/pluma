@@ -23,6 +23,9 @@ pub struct Analyzer<'compiler> {
 	value_scopes: Vec<HashMap<String, ValueBinding>>,
 	type_scope: HashMap<String, TypeBinding>,
 	enum_defs: HashMap<String, Vec<(String, Vec<Type>)>>,
+	// Imports: local namespace name (e.g. `math` from `use math` or `utils`
+	// from `use sub.utils`) -> that module's exported value defs.
+	imports: HashMap<String, HashMap<String, Type>>,
 	next_type_var_id: usize,
 }
 
@@ -37,6 +40,7 @@ impl<'compiler> Analyzer<'compiler> {
 			value_scopes: Vec::new(),
 			type_scope: HashMap::new(),
 			enum_defs: HashMap::new(),
+			imports: HashMap::new(),
 			next_type_var_id: 0,
 		}
 	}
@@ -69,6 +73,22 @@ impl<'compiler> Analyzer<'compiler> {
 			//    that we generated in phase 1
 			self.annotate(ast, &substitution);
 		}
+
+		// Build the module's exports map. Only top-level value defs are
+		// exposed; types (Alias / Enum) aren't cross-module-accessible yet.
+		let mut exports = HashMap::new();
+		if let Some(ast) = &module.ast {
+			for def in &ast.body {
+				if let DefinitionKind::Expr(expr) = &def.kind {
+					exports.insert(def.name.name.clone(), expr.ty.clone());
+				}
+			}
+		}
+		module.exports = Some(exports);
+	}
+
+	pub fn set_imports(&mut self, imports: HashMap<String, HashMap<String, Type>>) {
+		self.imports = imports;
 	}
 
 	fn diagnostic(&mut self, range: Option<Range>, diag: Diagnostic) {
@@ -551,6 +571,30 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 
 			ExprKind::FieldAccess { receiver, field } => {
+				// Module namespace access: `module-name.def`. If the receiver
+				// is a bare ident that matches an imported module, look up
+				// the field in that module's exports.
+				if let ExprKind::Identifier(ident) = &receiver.kind {
+					if let Some(exports) = self.imports.get(&ident.name).cloned() {
+						match exports.get(&field.name) {
+							Some(ty) => {
+								receiver.ty = Type::Unknown;
+								expr.ty = self.instantiate(ty);
+							}
+							None => {
+								self.error(
+									field.range,
+									NameNotBound {
+										name: format!("{}.{}", ident.name, field.name),
+									},
+								);
+								expr.ty = Type::Unknown;
+							}
+						}
+						return;
+					}
+				}
+
 				// Variant access: `EnumName.variant`. If the receiver is a bare ident
 				// that names a known enum, resolve the variant directly rather than
 				// treating this as record field access.
@@ -1385,5 +1429,56 @@ impl<'compiler> Analyzer<'compiler> {
 		let type_var = Type::Var(self.next_type_var_id);
 		self.next_type_var_id += 1;
 		type_var
+	}
+
+	// Produce a fresh copy of `ty` with every free Var consistently replaced
+	// by a new type var. Used when reaching across modules to a value whose
+	// type may contain free vars (i.e. is polymorphic).
+	fn instantiate(&mut self, ty: &Type) -> Type {
+		let mut mapping: HashMap<usize, Type> = HashMap::new();
+		self.instantiate_with(ty, &mut mapping)
+	}
+
+	fn instantiate_with(&mut self, ty: &Type, mapping: &mut HashMap<usize, Type>) -> Type {
+		match ty {
+			Type::Var(n) => {
+				if let Some(replacement) = mapping.get(n) {
+					replacement.clone()
+				} else {
+					let fresh = self.new_type_var();
+					mapping.insert(*n, fresh.clone());
+					fresh
+				}
+			}
+			Type::Fun(params, ret) => Type::Fun(
+				params.iter().map(|t| self.instantiate_with(t, mapping)).collect(),
+				Box::new(self.instantiate_with(ret, mapping)),
+			),
+			Type::Tuple(elems) => {
+				Type::Tuple(elems.iter().map(|t| self.instantiate_with(t, mapping)).collect())
+			}
+			Type::Record(fields) => Type::Record(
+				fields
+					.iter()
+					.map(|(n, t)| (n.clone(), self.instantiate_with(t, mapping)))
+					.collect(),
+			),
+			Type::Enum(..)
+			| Type::Bool
+			| Type::Int
+			| Type::Float
+			| Type::String
+			| Type::Regex
+			| Type::Unknown
+			| Type::Nothing => ty.clone(),
+			Type::PartialRecord(name, inner) => Type::PartialRecord(
+				name.clone(),
+				Box::new(self.instantiate_with(inner, mapping)),
+			),
+			Type::PartialTuple(index, inner) => Type::PartialTuple(
+				*index,
+				Box::new(self.instantiate_with(inner, mapping)),
+			),
+		}
 	}
 }

@@ -2,6 +2,7 @@ use crate::ast::*;
 use crate::diagnostic::*;
 use crate::parser::*;
 use crate::tokenizer::*;
+use crate::types::*;
 use crate::Token;
 use std::collections::HashMap;
 use std::fs;
@@ -13,6 +14,9 @@ pub struct Module {
 	pub ast: Option<ModuleNode>,
 	pub comments: HashMap<usize, String>,
 	pub line_break_starts: Vec<usize>,
+	// Top-level value definitions exposed to importing modules. Populated by
+	// the Analyzer at the end of analysis. `None` means not yet analyzed.
+	pub exports: Option<HashMap<String, Type>>,
 }
 
 impl Module {
@@ -23,6 +27,7 @@ impl Module {
 			ast: None,
 			comments: HashMap::new(),
 			line_break_starts: Vec::new(),
+			exports: None,
 		}
 	}
 

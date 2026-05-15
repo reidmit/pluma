@@ -1,0 +1,92 @@
+module `main` (tests/multi-module/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-7:30) [
+            use(0:0-0:8) `math`,
+        ] [
+            def(2:0-2:21) :: () {
+                name: ident(2:4-2:8) `four`,
+                kind: expr(2:9-2:21) :: int {
+                    kind: call(2:9-2:21) {
+                        callee: expr(2:9-2:17) :: int int -> int {
+                            kind: field-access {
+                                receiver: expr(2:9-2:13) :: ? {
+                                    kind: ident(2:9-2:13) `math`,
+                                },
+                                field: ident(2:14-2:17) `add`,
+                            },
+                        },
+                        args: [
+                            expr(2:18-2:19) :: int {
+                                kind: literal(2:18-2:19) int 2,
+                            },
+                            expr(2:20-2:21) :: int {
+                                kind: literal(2:20-2:21) int 2,
+                            },
+                        ],
+                    },
+                },
+            },
+            def(4:0-4:23) :: () {
+                name: ident(4:4-4:9) `eight`,
+                kind: expr(4:10-4:23) :: int {
+                    kind: call(4:10-4:23) {
+                        callee: expr(4:10-4:21) :: int -> int {
+                            kind: field-access {
+                                receiver: expr(4:10-4:14) :: ? {
+                                    kind: ident(4:10-4:14) `math`,
+                                },
+                                field: ident(4:15-4:21) `double`,
+                            },
+                        },
+                        args: [
+                            expr(4:22-4:23) :: int {
+                                kind: literal(4:22-4:23) int 4,
+                            },
+                        ],
+                    },
+                },
+            },
+            def(6:0-6:23) :: () {
+                name: ident(6:4-6:7) `num`,
+                kind: expr(6:8-6:23) :: int {
+                    kind: call(6:8-6:23) {
+                        callee: expr(6:8-6:21) :: 'l -> 'l {
+                            kind: field-access {
+                                receiver: expr(6:8-6:12) :: ? {
+                                    kind: ident(6:8-6:12) `math`,
+                                },
+                                field: ident(6:13-6:21) `identity`,
+                            },
+                        },
+                        args: [
+                            expr(6:22-6:23) :: int {
+                                kind: literal(6:22-6:23) int 7,
+                            },
+                        ],
+                    },
+                },
+            },
+            def(7:0-7:30) :: () {
+                name: ident(7:4-7:8) `text`,
+                kind: expr(7:9-7:30) :: string {
+                    kind: call(7:9-7:30) {
+                        callee: expr(7:9-7:22) :: 'n -> 'n {
+                            kind: field-access {
+                                receiver: expr(7:9-7:13) :: ? {
+                                    kind: ident(7:9-7:13) `math`,
+                                },
+                                field: ident(7:14-7:22) `identity`,
+                            },
+                        },
+                        args: [
+                            expr(7:24-7:30) :: string {
+                                kind: literal(7:24-7:30) string "hello",
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

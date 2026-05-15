@@ -13,6 +13,7 @@ mod pattern;
 mod regex;
 mod type_expr;
 mod type_identifier;
+mod r#use;
 mod when;
 mod r#while;
 
@@ -30,6 +31,7 @@ pub use self::r#if::*;
 pub use self::r#let::*;
 pub use self::r#while::*;
 pub use self::regex::*;
+pub use self::r#use::*;
 pub use self::type_expr::*;
 pub use self::type_identifier::*;
 pub use self::when::*;

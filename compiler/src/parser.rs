@@ -90,10 +90,24 @@ impl<'a> Parser<'a> {
 	}
 
 	pub fn parse_module(&mut self) -> (ModuleNode, HashMap<usize, String>, Vec<ParseError>) {
+		let mut uses = Vec::new();
 		let mut body = Vec::new();
 
 		// Read the first token
 		self.advance();
+
+		// `use` declarations must come first; once we see a `def` we stop
+		// looking for them.
+		loop {
+			self.skip_line_breaks();
+			match self.current_token {
+				Some(Token::KeywordUse(..)) => match self.parse_use() {
+					Some(u) => uses.push(u),
+					None => break,
+				},
+				_ => break,
+			}
+		}
 
 		loop {
 			self.skip_line_breaks();
@@ -104,17 +118,45 @@ impl<'a> Parser<'a> {
 			}
 		}
 
-		let start = body.first().map_or(Point::zero(), |node| node.range.start);
-		let end = body.last().map_or(Point::zero(), |node| node.range.end);
+		let start = uses
+			.first()
+			.map(|u| u.range.start)
+			.or_else(|| body.first().map(|d| d.range.start))
+			.unwrap_or_else(Point::zero);
+		let end = body
+			.last()
+			.map(|d| d.range.end)
+			.or_else(|| uses.last().map(|u| u.range.end))
+			.unwrap_or_else(Point::zero);
 
 		(
 			ModuleNode {
 				range: Range::between(start, end),
+				uses,
 				body,
 			},
 			self.tokenizer.comments.clone(),
 			self.errors.clone(),
 		)
+	}
+
+	fn parse_use(&mut self) -> Option<UseNode> {
+		let (start, _) = expect_token_and_advance!(self, Token::KeywordUse);
+
+		let mut path = Vec::new();
+		path.push(self.parse_identifier()?);
+
+		while matches!(self.current_token, Some(Token::Dot(..))) {
+			self.advance();
+			path.push(self.parse_identifier()?);
+		}
+
+		let end = path.last().unwrap().range.end;
+
+		Some(UseNode {
+			range: Range::between(start, end),
+			path,
+		})
 	}
 
 	fn advance(&mut self) {
