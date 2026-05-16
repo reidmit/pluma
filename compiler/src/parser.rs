@@ -483,9 +483,17 @@ impl<'a> Parser<'a> {
 						args.push(arg_expr);
 					}
 
+					// We entered FunctionCall because `can_start_expression`
+					// said the next token could begin one, but couldn't actually
+					// parse an arg — give up and let the outer parser report a
+					// useful error on whatever's there.
+					if args.is_empty() {
+						break;
+					}
+
 					let range = Range::between(
 						lhs_expr.range.start,
-						args.last().expect("at least one arg").range.end,
+						args.last().unwrap().range.end,
 					);
 
 					lhs_expr = ExprNode {
