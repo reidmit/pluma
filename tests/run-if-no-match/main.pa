@@ -1,0 +1,9 @@
+def main fun {
+  if 47 is 47 {
+    print "matched"
+  }
+  if 47 is 99 {
+    print "should never print"
+  }
+  print "after"
+}

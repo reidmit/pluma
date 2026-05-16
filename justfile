@@ -6,6 +6,10 @@ tokenize path:
 analyze path:
   @ cargo run --bin cli --quiet -- analyze {{path}}
 
+# run a module via the tree-walking interpreter
+run path:
+  @ cargo run --bin cli --quiet -- run {{path}}
+
 # generate or overwrite .err and .out files for a given test
 test-write $path_to_write:
   #!/usr/bin/env zsh

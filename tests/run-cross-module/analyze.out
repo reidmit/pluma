@@ -1,0 +1,132 @@
+module `main` (tests/run-cross-module/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-16:1) [
+            use(0:0-0:10) `colors`,
+            use(1:0-1:8) `math`,
+        ] [
+            def(3:0-11:1) :: nothing {
+                name: ident(3:4-3:11) `name-of`,
+                kind: expr(3:12-11:1) :: color -> string {
+                    kind: fun(3:12-11:1) {
+                        params: [
+                            ident(3:16-3:17) `c` :: color,
+                        ],
+                        body: [
+                            expr(4:2-10:3) :: string {
+                                kind: when(4:2-10:3) [
+                                    case(4:9-6:3) is pattern(4:12-4:15) Identifier(
+                                        ident(4:12-4:15) `red`,
+                                    ) [
+                                        expr(5:5-5:9) :: string {
+                                            kind: literal(5:5-5:9) string "red",
+                                        },
+                                    ],
+                                    case(6:4-8:3) is pattern(6:7-6:12) Identifier(
+                                        ident(6:7-6:12) `green`,
+                                    ) [
+                                        expr(7:5-7:11) :: string {
+                                            kind: literal(7:5-7:11) string "green",
+                                        },
+                                    ],
+                                    case(8:4-10:3) is pattern(8:7-8:11) Identifier(
+                                        ident(8:7-8:11) `blue`,
+                                    ) [
+                                        expr(9:5-9:10) :: string {
+                                            kind: literal(9:5-9:10) string "blue",
+                                        },
+                                    ],
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
+            def(13:0-16:1) :: nothing {
+                name: ident(13:4-13:8) `main`,
+                kind: expr(13:9-16:1) :: nothing -> nothing {
+                    kind: fun(13:9-16:1) {
+                        params: [],
+                        body: [
+                            expr(14:2-14:34) :: nothing {
+                                kind: call(14:2-14:34) {
+                                    callee: expr(14:2-14:7) :: string -> nothing {
+                                        kind: ident(14:2-14:7) `print`,
+                                    },
+                                    args: [
+                                        expr(14:8-14:34) :: string {
+                                            kind: expr(14:9-14:33) :: string {
+                                                kind: call(14:9-14:33) {
+                                                    callee: expr(14:9-14:18) :: int -> string {
+                                                        kind: ident(14:9-14:18) `to-string`,
+                                                    },
+                                                    args: [
+                                                        expr(14:19-14:33) :: int {
+                                                            kind: expr(14:20-14:32) :: int {
+                                                                kind: call(14:20-14:32) {
+                                                                    callee: expr(14:20-14:28) :: int int -> int {
+                                                                        kind: field-access {
+                                                                            receiver: expr(14:20-14:24) :: ? {
+                                                                                kind: ident(14:20-14:24) `math`,
+                                                                            },
+                                                                            field: ident(14:25-14:28) `add`,
+                                                                        },
+                                                                    },
+                                                                    args: [
+                                                                        expr(14:29-14:30) :: int {
+                                                                            kind: literal(14:29-14:30) int 2,
+                                                                        },
+                                                                        expr(14:31-14:32) :: int {
+                                                                            kind: literal(14:31-14:32) int 3,
+                                                                        },
+                                                                    ],
+                                                                },
+                                                            },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                            expr(15:2-15:36) :: nothing {
+                                kind: call(15:2-15:36) {
+                                    callee: expr(15:2-15:7) :: string -> nothing {
+                                        kind: ident(15:2-15:7) `print`,
+                                    },
+                                    args: [
+                                        expr(15:8-15:36) :: string {
+                                            kind: expr(15:9-15:35) :: string {
+                                                kind: call(15:9-15:35) {
+                                                    callee: expr(15:9-15:16) :: color -> string {
+                                                        kind: ident(15:9-15:16) `name-of`,
+                                                    },
+                                                    args: [
+                                                        expr(15:17-15:35) :: color {
+                                                            kind: field-access {
+                                                                receiver: expr(15:17-15:29) :: color {
+                                                                    kind: field-access {
+                                                                        receiver: expr(15:17-15:23) :: ? {
+                                                                            kind: ident(15:17-15:23) `colors`,
+                                                                        },
+                                                                        field: ident(15:24-15:29) `color`,
+                                                                    },
+                                                                },
+                                                                field: ident(15:30-15:35) `green`,
+                                                            },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

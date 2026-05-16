@@ -63,8 +63,8 @@ for entry in os.scandir(test_dir):
         test_module = os.path.join(test_dir, entry.name, "main.pa")
 
         test_cases = [
-            # ("run.out", "run", lambda c: c.stdout),
-            # ("run.err", "run", lambda c: c.stderr),
+            ("run.out", "run", lambda c: c.stdout),
+            ("run.err", "run", lambda c: c.stderr),
             ("analyze.out", "analyze", lambda c: c.stdout),
             ("analyze.err", "analyze", lambda c: c.stderr),
         ]
@@ -106,6 +106,3 @@ sys.stdout.write(f"{yellow}{skipped} skipped{reset}\n")
 
 if failed > 0:
     exit(1)
-
-if skipped > 0:
-    exit(2)

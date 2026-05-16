@@ -1,0 +1,69 @@
+module `main` (tests/run-if-no-match/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-8:1) [
+            def(0:0-8:1) :: nothing {
+                name: ident(0:4-0:8) `main`,
+                kind: expr(0:9-8:1) :: nothing -> nothing {
+                    kind: fun(0:9-8:1) {
+                        params: [],
+                        body: [
+                            expr(1:2-3:3) :: nothing {
+                                kind: if(1:2-3:3) expr(1:5-1:7) :: int {
+                                    kind: literal(1:5-1:7) int 47,
+                                } pattern(1:11-1:13) Literal(
+                                    literal(1:11-1:13) int 47,
+                                ) [
+                                    expr(2:4-2:19) :: nothing {
+                                        kind: call(2:4-2:19) {
+                                            callee: expr(2:4-2:9) :: string -> nothing {
+                                                kind: ident(2:4-2:9) `print`,
+                                            },
+                                            args: [
+                                                expr(2:11-2:19) :: string {
+                                                    kind: literal(2:11-2:19) string "matched",
+                                                },
+                                            ],
+                                        },
+                                    },
+                                ],
+                            },
+                            expr(4:2-6:3) :: nothing {
+                                kind: if(4:2-6:3) expr(4:5-4:7) :: int {
+                                    kind: literal(4:5-4:7) int 47,
+                                } pattern(4:11-4:13) Literal(
+                                    literal(4:11-4:13) int 99,
+                                ) [
+                                    expr(5:4-5:30) :: nothing {
+                                        kind: call(5:4-5:30) {
+                                            callee: expr(5:4-5:9) :: string -> nothing {
+                                                kind: ident(5:4-5:9) `print`,
+                                            },
+                                            args: [
+                                                expr(5:11-5:30) :: string {
+                                                    kind: literal(5:11-5:30) string "should never print",
+                                                },
+                                            ],
+                                        },
+                                    },
+                                ],
+                            },
+                            expr(7:2-7:15) :: nothing {
+                                kind: call(7:2-7:15) {
+                                    callee: expr(7:2-7:7) :: string -> nothing {
+                                        kind: ident(7:2-7:7) `print`,
+                                    },
+                                    args: [
+                                        expr(7:9-7:15) :: string {
+                                            kind: literal(7:9-7:15) string "after",
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

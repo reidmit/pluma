@@ -1,0 +1,21 @@
+def color enum {
+  red
+  green
+  blue
+}
+
+def name-of fun c {
+  when c is red {
+    "red"
+  } is green {
+    "green"
+  } is blue {
+    "blue"
+  }
+}
+
+def main fun {
+  print (name-of color.red)
+  print (name-of color.green)
+  print (name-of color.blue)
+}

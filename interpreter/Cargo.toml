@@ -1,9 +1,10 @@
 [package]
-name = "cli"
+name = "interpreter"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+doctest = false
+
 [dependencies]
-atty = "0.2.13"
 compiler = { path = "../compiler" }
-interpreter = { path = "../interpreter" }

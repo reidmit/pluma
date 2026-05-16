@@ -8,7 +8,32 @@ fn main() {
 	match std::env::args().nth(1) {
 		Some(arg) => match &arg[..] {
 			"run" => {
-				todo!()
+				let entry_path = match std::env::args().nth(2) {
+					Some(path) => path,
+					None => {
+						print_error("No module path given. Expected another argument.");
+						std::process::exit(1);
+					}
+				};
+
+				let mut compiler = match Compiler::from_entry_path(entry_path) {
+					Ok(c) => c,
+					Err(diagnostics) => {
+						print_diagnostics(diagnostics);
+						std::process::exit(1);
+					}
+				};
+
+				if let Err(diagnostics) = compiler.check() {
+					print_diagnostics(diagnostics);
+					std::process::exit(1);
+				}
+
+				let interp = interpreter::Interpreter::new(&compiler);
+				if let Err(err) = interp.run() {
+					print_error(format!("Runtime error: {}", err.message));
+					std::process::exit(1);
+				}
 			}
 
 			"build" => {

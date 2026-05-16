@@ -1,0 +1,150 @@
+module `main` (tests/run-closures/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-11:1) [
+            def(0:0-4:1) :: nothing {
+                name: ident(0:4-0:14) `make-adder`,
+                kind: expr(0:15-4:1) :: int -> int -> int {
+                    kind: fun(0:15-4:1) {
+                        params: [
+                            ident(0:19-0:20) `x` :: int,
+                        ],
+                        body: [
+                            expr(1:2-3:3) :: int -> int {
+                                kind: fun(1:2-3:3) {
+                                    params: [
+                                        ident(1:6-1:7) `y` :: int,
+                                    ],
+                                    body: [
+                                        expr(2:4-2:9) :: int {
+                                            kind: binary op(2:6-2:7) `+` {
+                                                left: expr(2:4-2:5) :: int {
+                                                    kind: ident(2:4-2:5) `x`,
+                                                },
+                                                right: expr(2:8-2:9) :: int {
+                                                    kind: ident(2:8-2:9) `y`,
+                                                },
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+            def(6:0-11:1) :: nothing {
+                name: ident(6:4-6:8) `main`,
+                kind: expr(6:9-11:1) :: nothing -> nothing {
+                    kind: fun(6:9-11:1) {
+                        params: [],
+                        body: [
+                            expr(7:2-7:25) :: nothing {
+                                kind: let(7:2-7:25) {
+                                    name: ident(7:6-7:10) `add5`,
+                                    value: expr(7:13-7:25) :: int -> int {
+                                        kind: call(7:13-7:25) {
+                                            callee: expr(7:13-7:23) :: int -> int -> int {
+                                                kind: ident(7:13-7:23) `make-adder`,
+                                            },
+                                            args: [
+                                                expr(7:24-7:25) :: int {
+                                                    kind: literal(7:24-7:25) int 5,
+                                                },
+                                            ],
+                                        },
+                                    },
+                                },
+                            },
+                            expr(8:2-8:29) :: nothing {
+                                kind: let(8:2-8:29) {
+                                    name: ident(8:6-8:12) `add100`,
+                                    value: expr(8:15-8:29) :: int -> int {
+                                        kind: call(8:15-8:29) {
+                                            callee: expr(8:15-8:25) :: int -> int -> int {
+                                                kind: ident(8:15-8:25) `make-adder`,
+                                            },
+                                            args: [
+                                                expr(8:26-8:29) :: int {
+                                                    kind: literal(8:26-8:29) int 100,
+                                                },
+                                            ],
+                                        },
+                                    },
+                                },
+                            },
+                            expr(9:2-9:28) :: nothing {
+                                kind: call(9:2-9:28) {
+                                    callee: expr(9:2-9:7) :: string -> nothing {
+                                        kind: ident(9:2-9:7) `print`,
+                                    },
+                                    args: [
+                                        expr(9:8-9:28) :: string {
+                                            kind: expr(9:9-9:27) :: string {
+                                                kind: call(9:9-9:27) {
+                                                    callee: expr(9:9-9:18) :: int -> string {
+                                                        kind: ident(9:9-9:18) `to-string`,
+                                                    },
+                                                    args: [
+                                                        expr(9:19-9:27) :: int {
+                                                            kind: expr(9:20-9:26) :: int {
+                                                                kind: call(9:20-9:26) {
+                                                                    callee: expr(9:20-9:24) :: int -> int {
+                                                                        kind: ident(9:20-9:24) `add5`,
+                                                                    },
+                                                                    args: [
+                                                                        expr(9:25-9:26) :: int {
+                                                                            kind: literal(9:25-9:26) int 3,
+                                                                        },
+                                                                    ],
+                                                                },
+                                                            },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                            expr(10:2-10:31) :: nothing {
+                                kind: call(10:2-10:31) {
+                                    callee: expr(10:2-10:7) :: string -> nothing {
+                                        kind: ident(10:2-10:7) `print`,
+                                    },
+                                    args: [
+                                        expr(10:8-10:31) :: string {
+                                            kind: expr(10:9-10:30) :: string {
+                                                kind: call(10:9-10:30) {
+                                                    callee: expr(10:9-10:18) :: int -> string {
+                                                        kind: ident(10:9-10:18) `to-string`,
+                                                    },
+                                                    args: [
+                                                        expr(10:19-10:30) :: int {
+                                                            kind: expr(10:20-10:29) :: int {
+                                                                kind: call(10:20-10:29) {
+                                                                    callee: expr(10:20-10:26) :: int -> int {
+                                                                        kind: ident(10:20-10:26) `add100`,
+                                                                    },
+                                                                    args: [
+                                                                        expr(10:27-10:29) :: int {
+                                                                            kind: literal(10:27-10:29) int 23,
+                                                                        },
+                                                                    ],
+                                                                },
+                                                            },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}
