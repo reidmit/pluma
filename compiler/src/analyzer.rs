@@ -1448,11 +1448,22 @@ impl<'compiler> Analyzer<'compiler> {
 			return Substitution::empty();
 		}
 
-		match &constraints[0] {
+		// Find any Gen to process. Self-recursive defs produce Insts (from the
+		// recursive lookup) before the Gen (which is pushed after the body is
+		// constrained), so we can't assume constraints[0] is the Gen.
+		let gen_idx = constraints
+			.iter()
+			.position(|c| matches!(c, Constraint::Gen(..)))
+			.expect("expected at least one Gen constraint");
+
+		match &constraints[gen_idx] {
 			Constraint::Gen(scheme, ty) => {
 				let mut inst_constraints_for_gen = Vec::new();
 				let mut other_constraints = Vec::new();
-				for constraint in &constraints[1..] {
+				for (i, constraint) in constraints.iter().enumerate() {
+					if i == gen_idx {
+						continue;
+					}
 					match (constraint, scheme) {
 						(Constraint::Inst(var1, ..), Scheme::Var(var2, ..)) if *var1 == *var2 => {
 							inst_constraints_for_gen.push(constraint.clone())
@@ -1469,7 +1480,7 @@ impl<'compiler> Analyzer<'compiler> {
 				subst.compose(subst2)
 			}
 
-			_ => unreachable!("should have a gen first"),
+			_ => unreachable!(),
 		}
 	}
 
