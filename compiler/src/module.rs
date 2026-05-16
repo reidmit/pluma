@@ -105,12 +105,16 @@ impl Module {
 #[cfg(debug_assertions)]
 impl std::fmt::Debug for Module {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		let short_module_path = self
-			.module_path
-			.strip_prefix(std::env::current_dir().unwrap())
-			.unwrap()
+		// Trim the cwd off for readability when possible; fall back to the
+		// full path if the module isn't under cwd (e.g. when integration
+		// tests run from a different working directory).
+		let cwd = std::env::current_dir().ok();
+		let short_module_path = cwd
+			.as_ref()
+			.and_then(|cwd| self.module_path.strip_prefix(cwd).ok())
+			.unwrap_or(&self.module_path)
 			.to_str()
-			.unwrap();
+			.unwrap_or("<invalid utf-8 path>");
 
 		let mut sorted_comments: Vec<_> = self.comments.iter().collect();
 		sorted_comments.sort_by_key(|(line, _)| *line);
