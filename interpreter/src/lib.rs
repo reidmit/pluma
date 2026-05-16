@@ -3,5 +3,5 @@ mod eval;
 mod interpreter;
 mod value;
 
-pub use interpreter::{Interpreter, RuntimeError};
+pub use interpreter::{Interpreter, RuntimeError, StdoutSink};
 pub use value::Value;

@@ -1,20 +1,25 @@
-use crate::interpreter::RuntimeError;
+use crate::interpreter::{Interpreter, RuntimeError};
 use crate::value::{Builtin, Value};
 use compiler::Range;
 use std::rc::Rc;
 
 pub fn call<'ast>(
+	interp: &Interpreter<'ast>,
 	b: Builtin,
 	args: Vec<Value<'ast>>,
 	call_range: Range,
 ) -> Result<Value<'ast>, RuntimeError> {
 	match b {
-		Builtin::Print => print(args, call_range),
+		Builtin::Print => print(interp, args, call_range),
 		Builtin::ToString => to_string(args, call_range),
 	}
 }
 
-fn print<'ast>(args: Vec<Value<'ast>>, call_range: Range) -> Result<Value<'ast>, RuntimeError> {
+fn print<'ast>(
+	interp: &Interpreter<'ast>,
+	args: Vec<Value<'ast>>,
+	call_range: Range,
+) -> Result<Value<'ast>, RuntimeError> {
 	if args.len() != 1 {
 		return Err(RuntimeError::new(format!(
 			"`print` takes 1 argument, got {}",
@@ -24,7 +29,7 @@ fn print<'ast>(args: Vec<Value<'ast>>, call_range: Range) -> Result<Value<'ast>,
 	}
 	match &args[0] {
 		Value::String(s) => {
-			println!("{}", s);
+			interp.stdout.write_line(s);
 			Ok(Value::Nothing)
 		}
 		_ => Err(RuntimeError::new("`print` expected a string").at(call_range)),

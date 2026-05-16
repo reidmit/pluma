@@ -5,6 +5,26 @@ use compiler::ast::{DefinitionKind, ExprNode, ModuleNode};
 use compiler::{Compiler, Range};
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
+
+// Where `print` writes. Defaults to process stdout; tests swap in a buffer.
+pub enum StdoutSink {
+	Real,
+	Buffer(Rc<RefCell<Vec<u8>>>),
+}
+
+impl StdoutSink {
+	pub fn write_line(&self, s: &str) {
+		match self {
+			StdoutSink::Real => println!("{}", s),
+			StdoutSink::Buffer(buf) => {
+				let mut b = buf.borrow_mut();
+				b.extend_from_slice(s.as_bytes());
+				b.push(b'\n');
+			}
+		}
+	}
+}
 
 pub struct RuntimeError {
 	pub message: String,
@@ -86,6 +106,7 @@ impl<'ast> ModuleTops<'ast> {
 pub struct Interpreter<'ast> {
 	pub module_tops: HashMap<String, ModuleTops<'ast>>,
 	pub entry_module: String,
+	pub stdout: StdoutSink,
 }
 
 impl<'ast> Interpreter<'ast> {
@@ -99,7 +120,13 @@ impl<'ast> Interpreter<'ast> {
 		Self {
 			module_tops,
 			entry_module: compiler.entry_module_name.clone(),
+			stdout: StdoutSink::Real,
 		}
+	}
+
+	pub fn with_stdout(mut self, sink: StdoutSink) -> Self {
+		self.stdout = sink;
+		self
 	}
 
 	// Resolve a top-level def by name in the given module. Forces evaluation
@@ -220,7 +247,7 @@ pub fn apply<'ast>(
 			env.leave_scope();
 			Ok(last)
 		}
-		Value::Builtin(b) => builtin::call(b, args, call_range),
+		Value::Builtin(b) => builtin::call(interp, b, args, call_range),
 		Value::VariantCtor {
 			qualified_enum,
 			variant,
