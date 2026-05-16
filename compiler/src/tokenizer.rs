@@ -19,6 +19,11 @@ pub struct Tokenizer<'a> {
 	expect_import_path: bool,
 	string_stack: Vec<usize>,
 	interpolation_stack: Vec<usize>,
+	// Per active interpolation, the depth of unmatched `(` inside the
+	// interpolation's expression. Lets the tokenizer tell apart `)` that
+	// closes a nested grouping like `(1 + 2)` from `)` that ends the
+	// interpolation itself.
+	interpolation_paren_depth: Vec<usize>,
 	brace_depth: i32,
 	errors: Vec<ParseError>,
 	next_token: Option<Token>,
@@ -38,6 +43,7 @@ impl<'a> Tokenizer<'a> {
 			expect_import_path: false,
 			string_stack: Vec::new(),
 			interpolation_stack: Vec::new(),
+			interpolation_paren_depth: Vec::new(),
 			brace_depth: 0,
 			comments: HashMap::new(),
 			errors: Vec::new(),
@@ -123,6 +129,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 					let interpolation_start_end_index = self.index + 2;
 
 					self.interpolation_stack.push(self.index);
+					self.interpolation_paren_depth.push(0);
 					self.index += 2;
 
 					self.next_token = Some(InterpolationStart(
@@ -134,19 +141,27 @@ impl<'a> Iterator for Tokenizer<'a> {
 				}
 
 				if self.interpolation_stack.len() > 0 && byte == b')' {
-					// We must be at the end of an interpolation, so make a token for it and
-					// fix the index on the last string in the string stack so that it starts
-					// here. Decrease the interpolation stack.
-					let start_index = self.index;
-					let end_index = self.index + 1;
+					let depth = self.interpolation_paren_depth.last_mut().unwrap();
+					if *depth > 0 {
+						// `)` closes a nested grouping inside the interpolation's
+						// expression; let the general RightParen handler emit it.
+						*depth -= 1;
+					} else {
+						// `)` ends the interpolation itself. Fix the string stack
+						// so the next string-literal portion starts here, and pop
+						// our paren-depth bookkeeping.
+						let start_index = self.index;
+						let end_index = self.index + 1;
 
-					self.string_stack.pop();
-					self.string_stack.push(self.index);
+						self.string_stack.pop();
+						self.string_stack.push(self.index);
 
-					self.interpolation_stack.pop();
-					self.index += 1;
+						self.interpolation_stack.pop();
+						self.interpolation_paren_depth.pop();
+						self.index += 1;
 
-					return Some(InterpolationEnd(start_index, end_index));
+						return Some(InterpolationEnd(start_index, end_index));
+					}
 				}
 
 				if self.string_stack.len() > self.interpolation_stack.len() {
@@ -239,6 +254,9 @@ impl<'a> Iterator for Tokenizer<'a> {
 				}
 
 				b'(' => {
+					if let Some(depth) = self.interpolation_paren_depth.last_mut() {
+						*depth += 1;
+					}
 					self.index += 1;
 					return Some(LeftParen(start_index, self.index));
 				}
