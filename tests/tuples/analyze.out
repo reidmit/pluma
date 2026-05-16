@@ -2,13 +2,13 @@ module `main` (tests/tuples/main.pa) {
     comments: {},
     ast: Some(
         module(0:0-3:1) [
-            def(0:0-3:1) :: () {
+            def(0:0-3:1) :: nothing {
                 name: ident(0:4-0:8) `main`,
-                kind: expr(0:9-3:1) :: () -> int {
+                kind: expr(0:9-3:1) :: nothing -> int {
                     kind: fun(0:9-3:1) {
                         params: [],
                         body: [
-                            expr(1:2-1:36) :: () {
+                            expr(1:2-1:36) :: nothing {
                                 kind: let(1:2-1:36) {
                                     name: ident(1:6-1:16) `superTuple`,
                                     value: expr(1:19-1:36) :: (int, string, bool) {

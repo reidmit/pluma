@@ -2,13 +2,13 @@ module `main` (tests/when-is-bool/main.pa) {
     comments: {},
     ast: Some(
         module(0:0-8:1) [
-            def(0:0-8:1) :: () {
+            def(0:0-8:1) :: nothing {
                 name: ident(0:4-0:8) `main`,
-                kind: expr(0:9-8:1) :: () -> string {
+                kind: expr(0:9-8:1) :: nothing -> string {
                     kind: fun(0:9-8:1) {
                         params: [],
                         body: [
-                            expr(1:2-1:14) :: () {
+                            expr(1:2-1:14) :: nothing {
                                 kind: let(1:2-1:14) {
                                     name: ident(1:6-1:7) `x`,
                                     value: expr(1:10-1:14) :: bool {

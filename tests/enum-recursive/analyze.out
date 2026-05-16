@@ -2,7 +2,7 @@ module `main` (tests/enum-recursive/main.pa) {
     comments: {},
     ast: Some(
         module(0:0-7:46) [
-            def(0:0-3:1) :: () {
+            def(0:0-3:1) :: nothing {
                 name: ident(0:4-0:8) `tree`,
                 kind: enum(0:14-3:1) [
                     variant(1:2-1:7) {
@@ -21,7 +21,7 @@ module `main` (tests/enum-recursive/main.pa) {
                     },
                 ],
             },
-            def(5:0-5:16) :: () {
+            def(5:0-5:16) :: nothing {
                 name: ident(5:4-5:5) `t`,
                 kind: expr(5:6-5:16) :: tree {
                     kind: field-access {
@@ -32,7 +32,7 @@ module `main` (tests/enum-recursive/main.pa) {
                     },
                 },
             },
-            def(6:0-6:23) :: () {
+            def(6:0-6:23) :: nothing {
                 name: ident(6:4-6:13) `make-node`,
                 kind: expr(6:14-6:23) :: int tree tree -> tree {
                     kind: field-access {
@@ -43,7 +43,7 @@ module `main` (tests/enum-recursive/main.pa) {
                     },
                 },
             },
-            def(7:0-7:46) :: () {
+            def(7:0-7:46) :: nothing {
                 name: ident(7:4-7:12) `big-tree`,
                 kind: expr(7:13-7:46) :: tree {
                     kind: call(7:13-7:46) {

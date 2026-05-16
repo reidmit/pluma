@@ -5,7 +5,7 @@ module `main` (tests/multi-module-alias/main.pa) {
             use(0:0-0:13) `a.b.utils`,
             use(1:0-1:23) `c.d.utils` as `utils2`,
         ] [
-            def(3:0-3:21) :: () {
+            def(3:0-3:21) :: nothing {
                 name: ident(3:4-3:9) `first`,
                 kind: expr(3:10-3:21) :: int {
                     kind: field-access {
@@ -16,7 +16,7 @@ module `main` (tests/multi-module-alias/main.pa) {
                     },
                 },
             },
-            def(4:0-4:23) :: () {
+            def(4:0-4:23) :: nothing {
                 name: ident(4:4-4:10) `second`,
                 kind: expr(4:11-4:23) :: string {
                     kind: field-access {

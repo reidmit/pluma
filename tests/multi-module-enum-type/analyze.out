@@ -4,7 +4,7 @@ module `main` (tests/multi-module-enum-type/main.pa) {
         module(0:0-10:1) [
             use(0:0-0:10) `colors`,
         ] [
-            def(2:0-5:1) :: () {
+            def(2:0-5:1) :: nothing {
                 name: ident(2:4-2:10) `themed`,
                 kind: alias type(2:17-5:1) record-type [
                     (
@@ -17,7 +17,7 @@ module `main` (tests/multi-module-enum-type/main.pa) {
                     ),
                 ],
             },
-            def(7:0-10:1) :: () {
+            def(7:0-10:1) :: nothing {
                 name: ident(7:4-7:17) `default-theme`,
                 kind: expr(7:18-10:1) :: {primary: color, secondary: color} {
                     kind: call(7:18-10:1) {

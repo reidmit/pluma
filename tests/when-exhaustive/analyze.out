@@ -2,7 +2,7 @@ module `main` (tests/when-exhaustive/main.pa) {
     comments: {},
     ast: Some(
         module(0:0-33:1) [
-            def(0:0-3:1) :: () {
+            def(0:0-3:1) :: nothing {
                 name: ident(0:4-0:8) `tree`,
                 kind: enum(0:14-3:1) [
                     variant(1:2-1:7) {
@@ -21,7 +21,7 @@ module `main` (tests/when-exhaustive/main.pa) {
                     },
                 ],
             },
-            def(5:0-11:1) :: () {
+            def(5:0-11:1) :: nothing {
                 name: ident(5:4-5:19) `by-all-variants`,
                 kind: expr(5:20-11:1) :: tree -> int {
                     kind: fun(5:20-11:1) {
@@ -62,7 +62,7 @@ module `main` (tests/when-exhaustive/main.pa) {
                     },
                 },
             },
-            def(13:0-19:1) :: () {
+            def(13:0-19:1) :: nothing {
                 name: ident(13:4-13:15) `by-wildcard`,
                 kind: expr(13:16-19:1) :: tree -> int {
                     kind: fun(13:16-19:1) {
@@ -90,12 +90,12 @@ module `main` (tests/when-exhaustive/main.pa) {
                     },
                 },
             },
-            def(21:0-25:1) :: () {
+            def(21:0-25:1) :: nothing {
                 name: ident(21:4-21:23) `by-binding-catchall`,
-                kind: expr(21:24-25:1) :: 'q -> int {
+                kind: expr(21:24-25:1) :: 'r -> int {
                     kind: fun(21:24-25:1) {
                         params: [
-                            ident(21:28-21:29) `t` :: 'q,
+                            ident(21:28-21:29) `t` :: 'r,
                         ],
                         body: [
                             expr(22:2-24:3) :: int {
@@ -113,7 +113,7 @@ module `main` (tests/when-exhaustive/main.pa) {
                     },
                 },
             },
-            def(27:0-33:1) :: () {
+            def(27:0-33:1) :: nothing {
                 name: ident(27:4-27:13) `bool-both`,
                 kind: expr(27:14-33:1) :: bool -> int {
                     kind: fun(27:14-33:1) {

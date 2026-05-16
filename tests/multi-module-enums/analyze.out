@@ -4,7 +4,7 @@ module `main` (tests/multi-module-enums/main.pa) {
         module(0:0-12:1) [
             use(0:0-0:10) `colors`,
         ] [
-            def(2:0-2:29) :: () {
+            def(2:0-2:29) :: nothing {
                 name: ident(2:4-2:12) `favorite`,
                 kind: expr(2:13-2:29) :: color {
                     kind: field-access {
@@ -20,7 +20,7 @@ module `main` (tests/multi-module-enums/main.pa) {
                     },
                 },
             },
-            def(4:0-12:1) :: () {
+            def(4:0-12:1) :: nothing {
                 name: ident(4:4-4:12) `describe`,
                 kind: expr(4:13-12:1) :: color -> string {
                     kind: fun(4:13-12:1) {

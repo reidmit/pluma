@@ -2,7 +2,7 @@ module `main` (tests/variant-disambiguated/main.pa) {
     comments: {},
     ast: Some(
         module(0:0-14:1) [
-            def(0:0-3:1) :: () {
+            def(0:0-3:1) :: nothing {
                 name: ident(0:4-0:9) `color`,
                 kind: enum(0:15-3:1) [
                     variant(1:2-1:5) {
@@ -15,7 +15,7 @@ module `main` (tests/variant-disambiguated/main.pa) {
                     },
                 ],
             },
-            def(5:0-8:1) :: () {
+            def(5:0-8:1) :: nothing {
                 name: ident(5:4-5:9) `fruit`,
                 kind: enum(5:15-8:1) [
                     variant(6:2-6:5) {
@@ -28,13 +28,13 @@ module `main` (tests/variant-disambiguated/main.pa) {
                     },
                 ],
             },
-            def(10:0-14:1) :: () {
+            def(10:0-14:1) :: nothing {
                 name: ident(10:4-10:10) `is-red`,
-                kind: expr(10:11-14:1) :: () -> int {
+                kind: expr(10:11-14:1) :: nothing -> int {
                     kind: fun(10:11-14:1) {
                         params: [],
                         body: [
-                            expr(11:2-11:19) :: () {
+                            expr(11:2-11:19) :: nothing {
                                 kind: let(11:2-11:19) {
                                     name: ident(11:6-11:7) `x`,
                                     value: expr(11:10-11:19) :: color {

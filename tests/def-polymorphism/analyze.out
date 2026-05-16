@@ -2,24 +2,24 @@ module `main` (tests/def-polymorphism/main.pa) {
     comments: {},
     ast: Some(
         module(0:0-5:1) [
-            def(0:0-0:24) :: () {
+            def(0:0-0:24) :: nothing {
                 name: ident(0:4-0:12) `identity`,
-                kind: expr(0:13-0:24) :: 'f -> 'f {
+                kind: expr(0:13-0:24) :: 'g -> 'g {
                     kind: fun(0:13-0:24) {
                         params: [
-                            ident(0:17-0:18) `x` :: 'f,
+                            ident(0:17-0:18) `x` :: 'g,
                         ],
                         body: [
-                            expr(0:21-0:22) :: 'f {
+                            expr(0:21-0:22) :: 'g {
                                 kind: ident(0:21-0:22) `x`,
                             },
                         ],
                     },
                 },
             },
-            def(2:0-5:1) :: () {
+            def(2:0-5:1) :: nothing {
                 name: ident(2:4-2:8) `main`,
-                kind: expr(2:9-5:1) :: () -> int {
+                kind: expr(2:9-5:1) :: nothing -> int {
                     kind: fun(2:9-5:1) {
                         params: [],
                         body: [

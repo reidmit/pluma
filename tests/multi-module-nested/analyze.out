@@ -4,7 +4,7 @@ module `main` (tests/multi-module-nested/main.pa) {
         module(0:0-3:29) [
             use(0:0-0:13) `sub.utils`,
         ] [
-            def(2:0-2:22) :: () {
+            def(2:0-2:22) :: nothing {
                 name: ident(2:4-2:9) `value`,
                 kind: expr(2:10-2:22) :: int {
                     kind: field-access {
@@ -15,11 +15,11 @@ module `main` (tests/multi-module-nested/main.pa) {
                     },
                 },
             },
-            def(3:0-3:29) :: () {
+            def(3:0-3:29) :: nothing {
                 name: ident(3:4-3:11) `doubled`,
                 kind: expr(3:12-3:29) :: int {
                     kind: call(3:12-3:29) {
-                        callee: expr(3:12-3:26) :: 'f -> 'f {
+                        callee: expr(3:12-3:26) :: 'g -> 'g {
                             kind: field-access {
                                 receiver: expr(3:12-3:17) :: ? {
                                     kind: ident(3:12-3:17) `utils`,

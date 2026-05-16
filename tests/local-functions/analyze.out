@@ -2,13 +2,13 @@ module `main` (tests/local-functions/main.pa) {
     comments: {},
     ast: Some(
         module(0:0-6:1) [
-            def(0:0-6:1) :: () {
+            def(0:0-6:1) :: nothing {
                 name: ident(0:4-0:8) `main`,
-                kind: expr(0:9-6:1) :: () -> int {
+                kind: expr(0:9-6:1) :: nothing -> int {
                     kind: fun(0:9-6:1) {
                         params: [],
                         body: [
-                            expr(1:2-3:3) :: () {
+                            expr(1:2-3:3) :: nothing {
                                 kind: let(1:2-3:3) {
                                     name: ident(1:6-1:9) `add`,
                                     value: expr(1:12-3:3) :: int int -> int {

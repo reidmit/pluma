@@ -65,6 +65,7 @@ impl<'compiler> Analyzer<'compiler> {
 		self.add_type_binding("string".into(), Type::String, Range::collapsed(0, 0));
 		self.add_type_binding("regex".into(), Type::Regex, Range::collapsed(0, 0));
 		self.add_type_binding("float".into(), Type::Float, Range::collapsed(0, 0));
+		self.add_type_binding("nothing".into(), Type::Nothing, Range::collapsed(0, 0));
 
 		// Seed enum_defs with imported enums under their canonical
 		// `<defining-module>.<enum-name>` keys, so variant resolution and
@@ -93,6 +94,34 @@ impl<'compiler> Analyzer<'compiler> {
 		}
 
 		self.enter_scope();
+
+		// Prelude: builtin values visible in every module.
+		// `print: string -> nothing` — write a line to stdout.
+		self.add_value_binding(
+			"print".into(),
+			Scheme::Forall(
+				vec![],
+				Type::Fun(vec![Type::String], Box::new(Type::Nothing)),
+			),
+			Range::collapsed(0, 0),
+		);
+		// `to-string: forall a. a -> string` — render any value as a string.
+		// This is the documented wart: the interpreter dispatches on the
+		// runtime tag, so this is the one function whose polymorphism the
+		// type system can't otherwise express. Revisit when generics land.
+		let to_string_var = self.next_type_var_id;
+		self.next_type_var_id += 1;
+		self.add_value_binding(
+			"to-string".into(),
+			Scheme::Forall(
+				vec![to_string_var],
+				Type::Fun(
+					vec![Type::Var(to_string_var)],
+					Box::new(Type::String),
+				),
+			),
+			Range::collapsed(0, 0),
+		);
 
 		// the three basic phases of analysis!
 		let substitution = if let Some(ast) = &mut module.ast {
@@ -442,6 +471,7 @@ impl<'compiler> Analyzer<'compiler> {
 					"float" => return Type::Float,
 					"bool" => return Type::Bool,
 					"regex" => return Type::Regex,
+					"nothing" => return Type::Nothing,
 					_ => {
 						if let Some(binding) = self.get_type_binding(&type_ident.name) {
 							return binding.ty.clone();
@@ -483,13 +513,27 @@ impl<'compiler> Analyzer<'compiler> {
 
 			ExprKind::Identifier(ident) => {
 				if let Some(binding) = self.get_value_binding(&ident.name) {
-					return match &binding.ty_scheme {
-						Scheme::Forall(_, ty) => {
-							expr.ty = ty.clone();
+					let ty_scheme = binding.ty_scheme.clone();
+					return match ty_scheme {
+						Scheme::Forall(vars, ty) => {
+							if vars.is_empty() {
+								expr.ty = ty;
+							} else {
+								// Polymorphic scheme (currently only prelude
+								// builtins like `to-string`). Freshen the
+								// quantified vars per use site, and link via a
+								// fresh expr-level var so post-unification
+								// substitution reaches into the type
+								// (fill_in_placeholder only resolves top-level
+								// vars, not vars nested inside e.g. Fun).
+								let instantiated = self.instantiate_scheme(&Scheme::Forall(vars, ty));
+								let expr_ty = self.new_type_var();
+								expr.ty = expr_ty.clone();
+								constraints.push(eq_constraint(expr_ty, instantiated));
+							}
 						}
 
 						Scheme::Var(var) => {
-							let var = *var;
 							let expr_ty = self.new_type_var();
 							expr.ty = expr_ty.clone();
 							constraints.push(Inst(var, expr_ty))
@@ -1551,6 +1595,10 @@ impl<'compiler> Analyzer<'compiler> {
 
 			ExprKind::Regex(_) => {
 				// nothing to annotate?
+			}
+
+			ExprKind::EmptyTuple => {
+				// type is set during constrain; nothing to do here
 			}
 
 			other => {

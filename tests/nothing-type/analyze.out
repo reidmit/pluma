@@ -1,0 +1,30 @@
+module `main` (tests/nothing-type/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-2:22) [
+            def(0:0-0:11) :: nothing {
+                name: ident(0:4-0:8) `unit`,
+                kind: expr(0:9-0:11) :: nothing {
+                    kind: (),
+                },
+            },
+            def(1:0-1:24) :: nothing {
+                name: ident(1:4-1:13) `make-unit`,
+                kind: expr(1:14-1:24) :: nothing -> nothing {
+                    kind: fun(1:14-1:24) {
+                        params: [],
+                        body: [
+                            expr(1:20-1:22) :: nothing {
+                                kind: (),
+                            },
+                        ],
+                    },
+                },
+            },
+            def(2:0-2:22) :: nothing {
+                name: ident(2:4-2:8) `void`,
+                kind: alias type(2:15-2:22) type-ident(2:15-2:22) `nothing`,
+            },
+        ],
+    ),
+}

@@ -4,7 +4,7 @@ module `main` (tests/multi-module-alias-type/main.pa) {
         module(0:0-8:24) [
             use(0:0-0:10) `shapes`,
         ] [
-            def(2:0-2:36) :: () {
+            def(2:0-2:36) :: nothing {
                 name: ident(2:4-2:10) `origin`,
                 kind: expr(2:11-2:36) :: {x: int, y: int} {
                     kind: call(2:11-2:36) {
@@ -37,17 +37,17 @@ module `main` (tests/multi-module-alias-type/main.pa) {
                     },
                 },
             },
-            def(4:0-6:1) :: () {
+            def(4:0-6:1) :: nothing {
                 name: ident(4:4-4:8) `x-of`,
-                kind: expr(4:9-6:1) :: ({x: 'k, ...}) -> 'k {
+                kind: expr(4:9-6:1) :: ({x: 'l, ...}) -> 'l {
                     kind: fun(4:9-6:1) {
                         params: [
-                            ident(4:13-4:14) `p` :: {x: 'k, ...},
+                            ident(4:13-4:14) `p` :: {x: 'l, ...},
                         ],
                         body: [
-                            expr(5:2-5:5) :: 'k {
+                            expr(5:2-5:5) :: 'l {
                                 kind: field-access {
-                                    receiver: expr(5:2-5:3) :: {x: 'k, ...} {
+                                    receiver: expr(5:2-5:3) :: {x: 'l, ...} {
                                         kind: ident(5:2-5:3) `p`,
                                     },
                                     field: ident(5:4-5:5) `x`,
@@ -57,7 +57,7 @@ module `main` (tests/multi-module-alias-type/main.pa) {
                     },
                 },
             },
-            def(8:0-8:24) :: () {
+            def(8:0-8:24) :: nothing {
                 name: ident(8:4-8:12) `origin-x`,
                 kind: expr(8:13-8:24) :: int {
                     kind: call(8:13-8:24) {

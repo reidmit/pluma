@@ -140,7 +140,7 @@ impl std::fmt::Display for Type {
 			Type::Float => write!(f, "float"),
 			Type::String => write!(f, "string"),
 			Type::Regex => write!(f, "regex"),
-			Type::Nothing => write!(f, "()"),
+			Type::Nothing => write!(f, "nothing"),
 
 			Type::Enum(name) => {
 				// Internally enum names are fully-qualified

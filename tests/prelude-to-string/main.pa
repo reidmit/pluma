@@ -1,0 +1,3 @@
+def num-as-string to-string 42
+def bool-as-string to-string true
+def string-as-string to-string "hi"

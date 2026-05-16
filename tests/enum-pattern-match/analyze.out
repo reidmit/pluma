@@ -2,7 +2,7 @@ module `main` (tests/enum-pattern-match/main.pa) {
     comments: {},
     ast: Some(
         module(0:0-11:1) [
-            def(0:0-3:1) :: () {
+            def(0:0-3:1) :: nothing {
                 name: ident(0:4-0:8) `tree`,
                 kind: enum(0:14-3:1) [
                     variant(1:2-1:7) {
@@ -21,7 +21,7 @@ module `main` (tests/enum-pattern-match/main.pa) {
                     },
                 ],
             },
-            def(5:0-11:1) :: () {
+            def(5:0-11:1) :: nothing {
                 name: ident(5:4-5:17) `value-at-root`,
                 kind: expr(5:18-11:1) :: tree -> int {
                     kind: fun(5:18-11:1) {

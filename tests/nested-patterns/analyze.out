@@ -2,7 +2,7 @@ module `main` (tests/nested-patterns/main.pa) {
     comments: {},
     ast: Some(
         module(0:0-26:1) [
-            def(0:0-3:1) :: () {
+            def(0:0-3:1) :: nothing {
                 name: ident(0:4-0:8) `tree`,
                 kind: enum(0:14-3:1) [
                     variant(1:2-1:7) {
@@ -21,7 +21,7 @@ module `main` (tests/nested-patterns/main.pa) {
                     },
                 ],
             },
-            def(5:0-8:1) :: () {
+            def(5:0-8:1) :: nothing {
                 name: ident(5:4-5:9) `maybe`,
                 kind: enum(5:15-8:1) [
                     variant(6:2-6:6) {
@@ -38,15 +38,15 @@ module `main` (tests/nested-patterns/main.pa) {
                     },
                 ],
             },
-            def(10:0-14:1) :: () {
+            def(10:0-14:1) :: nothing {
                 name: ident(10:4-10:17) `root-of-maybe`,
-                kind: expr(10:18-14:1) :: maybe -> () {
+                kind: expr(10:18-14:1) :: maybe -> nothing {
                     kind: fun(10:18-14:1) {
                         params: [
                             ident(10:22-10:23) `m` :: maybe,
                         ],
                         body: [
-                            expr(11:2-13:3) :: () {
+                            expr(11:2-13:3) :: nothing {
                                 kind: if(11:2-13:3) expr(11:5-11:6) :: maybe {
                                     kind: ident(11:5-11:6) `m`,
                                 } pattern(11:10-11:30) Constructor(
@@ -77,16 +77,16 @@ module `main` (tests/nested-patterns/main.pa) {
                     },
                 },
             },
-            def(16:0-20:1) :: () {
+            def(16:0-20:1) :: nothing {
                 name: ident(16:4-16:21) `tuple-destructure`,
-                kind: expr(16:22-20:1) :: (('m, 'n)) -> () {
+                kind: expr(16:22-20:1) :: (('n, 'o)) -> nothing {
                     kind: fun(16:22-20:1) {
                         params: [
-                            ident(16:26-16:27) `t` :: ('m, 'n),
+                            ident(16:26-16:27) `t` :: ('n, 'o),
                         ],
                         body: [
-                            expr(17:2-19:3) :: () {
-                                kind: if(17:2-19:3) expr(17:5-17:6) :: ('m, 'n) {
+                            expr(17:2-19:3) :: nothing {
+                                kind: if(17:2-19:3) expr(17:5-17:6) :: ('n, 'o) {
                                     kind: ident(17:5-17:6) `t`,
                                 } pattern(17:10-17:17) Tuple(
                                     [
@@ -98,7 +98,7 @@ module `main` (tests/nested-patterns/main.pa) {
                                         ),
                                     ],
                                 ) [
-                                    expr(18:4-18:5) :: 'm {
+                                    expr(18:4-18:5) :: 'n {
                                         kind: ident(18:4-18:5) `a`,
                                     },
                                 ],
@@ -107,15 +107,15 @@ module `main` (tests/nested-patterns/main.pa) {
                     },
                 },
             },
-            def(22:0-26:1) :: () {
+            def(22:0-26:1) :: nothing {
                 name: ident(22:4-22:12) `grouping`,
-                kind: expr(22:13-26:1) :: tree -> () {
+                kind: expr(22:13-26:1) :: tree -> nothing {
                     kind: fun(22:13-26:1) {
                         params: [
                             ident(22:17-22:18) `t` :: tree,
                         ],
                         body: [
-                            expr(23:2-25:3) :: () {
+                            expr(23:2-25:3) :: nothing {
                                 kind: if(23:2-25:3) expr(23:5-23:6) :: tree {
                                     kind: ident(23:5-23:6) `t`,
                                 } pattern(23:11-23:16) Identifier(

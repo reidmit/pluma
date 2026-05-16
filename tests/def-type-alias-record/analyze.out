@@ -2,7 +2,7 @@ module `main` (tests/def-type-alias-record/main.pa) {
     comments: {},
     ast: Some(
         module(0:0-13:1) [
-            def(0:0-3:1) :: () {
+            def(0:0-3:1) :: nothing {
                 name: ident(0:4-0:10) `person`,
                 kind: alias type(0:17-3:1) record-type [
                     (
@@ -15,17 +15,17 @@ module `main` (tests/def-type-alias-record/main.pa) {
                     ),
                 ],
             },
-            def(5:0-7:1) :: () {
+            def(5:0-7:1) :: nothing {
                 name: ident(5:4-5:12) `get-name`,
-                kind: expr(5:13-7:1) :: ({name: 'j, ...}) -> 'j {
+                kind: expr(5:13-7:1) :: ({name: 'k, ...}) -> 'k {
                     kind: fun(5:13-7:1) {
                         params: [
-                            ident(5:17-5:18) `p` :: {name: 'j, ...},
+                            ident(5:17-5:18) `p` :: {name: 'k, ...},
                         ],
                         body: [
-                            expr(6:2-6:8) :: 'j {
+                            expr(6:2-6:8) :: 'k {
                                 kind: field-access {
-                                    receiver: expr(6:2-6:3) :: {name: 'j, ...} {
+                                    receiver: expr(6:2-6:3) :: {name: 'k, ...} {
                                         kind: ident(6:2-6:3) `p`,
                                     },
                                     field: ident(6:4-6:8) `name`,
@@ -35,13 +35,13 @@ module `main` (tests/def-type-alias-record/main.pa) {
                     },
                 },
             },
-            def(9:0-13:1) :: () {
+            def(9:0-13:1) :: nothing {
                 name: ident(9:4-9:8) `main`,
-                kind: expr(9:9-13:1) :: () -> string {
+                kind: expr(9:9-13:1) :: nothing -> string {
                     kind: fun(9:9-13:1) {
                         params: [],
                         body: [
-                            expr(10:2-10:43) :: () {
+                            expr(10:2-10:43) :: nothing {
                                 kind: let(10:2-10:43) {
                                     name: ident(10:6-10:8) `me`,
                                     value: expr(10:11-10:43) :: {name: string, age: int} {
