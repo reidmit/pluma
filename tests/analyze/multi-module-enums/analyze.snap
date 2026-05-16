@@ -1,0 +1,66 @@
+---
+source: pluma-tests/tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/multi-module-enums/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-12:1) [
+            use(0:0-0:10) `colors`,
+        ] [
+            def(2:0-2:29) :: nothing {
+                name: ident(2:4-2:12) `favorite`,
+                kind: expr(2:13-2:29) :: color {
+                    kind: field-access {
+                        receiver: expr(2:13-2:25) :: color {
+                            kind: field-access {
+                                receiver: expr(2:13-2:19) :: ? {
+                                    kind: ident(2:13-2:19) `colors`,
+                                },
+                                field: ident(2:20-2:25) `color`,
+                            },
+                        },
+                        field: ident(2:26-2:29) `red`,
+                    },
+                },
+            },
+            def(4:0-12:1) :: nothing {
+                name: ident(4:4-4:12) `describe`,
+                kind: expr(4:13-12:1) :: color -> string {
+                    kind: fun(4:13-12:1) {
+                        params: [
+                            ident(4:17-4:18) `c` :: color,
+                        ],
+                        body: [
+                            expr(5:2-11:3) :: string {
+                                kind: when(5:2-11:3) [
+                                    case(5:9-7:3) is pattern(5:12-5:15) Identifier(
+                                        ident(5:12-5:15) `red`,
+                                    ) [
+                                        expr(6:5-6:9) :: string {
+                                            kind: literal(6:5-6:9) string "red",
+                                        },
+                                    ],
+                                    case(7:4-9:3) is pattern(7:7-7:12) Identifier(
+                                        ident(7:7-7:12) `green`,
+                                    ) [
+                                        expr(8:5-8:11) :: string {
+                                            kind: literal(8:5-8:11) string "green",
+                                        },
+                                    ],
+                                    case(9:4-11:3) is pattern(9:7-9:11) Identifier(
+                                        ident(9:7-9:11) `blue`,
+                                    ) [
+                                        expr(10:5-10:10) :: string {
+                                            kind: literal(10:5-10:10) string "blue",
+                                        },
+                                    ],
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

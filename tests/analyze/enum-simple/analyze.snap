@@ -1,0 +1,28 @@
+---
+source: pluma-tests/tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/enum-simple/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-4:1) [
+            def(0:0-4:1) :: nothing {
+                name: ident(0:4-0:9) `color`,
+                kind: enum(0:15-4:1) [
+                    variant(1:2-1:5) {
+                        name: ident(1:2-1:5) `red`,
+                        params: None,
+                    },
+                    variant(2:2-2:7) {
+                        name: ident(2:2-2:7) `green`,
+                        params: None,
+                    },
+                    variant(3:2-3:6) {
+                        name: ident(3:2-3:6) `blue`,
+                        params: None,
+                    },
+                ],
+            },
+        ],
+    ),
+}

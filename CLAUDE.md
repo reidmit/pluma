@@ -8,35 +8,43 @@ This repo (named `pencil` on disk) implements **Pluma**, a small statically-type
 
 ## Workspace layout
 
-Cargo workspace with three crates (see `Cargo.toml`):
+Cargo workspace (see `Cargo.toml`):
 
-- `compiler/` — the language frontend: tokenizer, parser, analyzer, types, diagnostics. The crate's public surface (`lib.rs`) re-exports `Compiler`, `Diagnostic`, `Tokenizer`, `Token`, and module-name/version constants. Internals (`ast`, `analyzer`, `parser`, `types`, etc.) are private modules.
-- `cli/` — thin command dispatcher around `Compiler` (`tokenize`, `analyze`; `run` and `build` are `todo!()`).
+- `compiler/` — the language frontend: tokenizer, parser, analyzer, types, diagnostics. The crate's public surface (`lib.rs`) re-exports `Compiler`, `Diagnostic`, `Module`/`ModuleExports`, `Tokenizer`, `Token`, and module-name/version constants; `ast` and `types` are `pub mod` (used by the interpreter). Other modules (`analyzer`, `parser`, etc.) are private.
+- `interpreter/` — tree-walking interpreter over the typed AST. `Interpreter::new(&compiler).run()` executes a program by calling its entry module's `main` def. `print` writes through a configurable `StdoutSink` (process stdout by default; tests inject a `Buffer` sink).
+- `cli/` — command dispatcher. `run` (interpreter), `tokenize`, `analyze` are wired; `build` is `todo!()`. `tokenize` and `analyze` are debug-build only (they dump Debug-format output of types whose Debug is gated on `debug_assertions`).
 - `lsp/` — language server, packaged for VS Code via the extension in `vsix/`.
+- `pluma-tests/` — integration tests (snapshot-based) for the analyzer and interpreter. See "Testing" below.
 
 ## Common commands
 
 The project uses `just` (run `brew install just` if missing). Run `cargo build` directly for general compilation; use the recipes below for project-specific workflows.
 
 ```
-just tokenize <path>       # cargo run --bin cli -- tokenize <path>
-just analyze <path>        # cargo run --bin cli -- analyze <path>
-just test                  # run snapshot tests via scripts/test.py
-just test-write <name>/analyze   # regenerate analyze.out + analyze.err for a test
-just test-write <name>/run       # regenerate run.out + run.err (currently disabled in runner)
+just tokenize <path>       # cargo run --bin cli -- tokenize <path>          (debug only)
+just analyze <path>        # cargo run --bin cli -- analyze <path>           (debug only)
+just run <path>            # cargo run --bin cli -- run <path>
+just build-release         # cargo build --release --bin cli
+just test                  # cargo test -p pluma-tests
+just test-write            # INSTA_UPDATE=always cargo test -p pluma-tests   (accept all snapshot changes)
 just vs-extension          # build LSP + extension, launch VS Code dev host pointed at ./tests
 just site                  # serve site/ via zola on port 7586
 ```
 
-The `just test` recipe doesn't accept a filter — to run a subset, invoke `python3 scripts/test.py <substring>` directly.
+For interactive snapshot review (preferred over `just test-write`), use `cargo insta review`. Filter tests with the normal `cargo test` filter syntax: `cargo test -p pluma-tests hello`.
 
 The CLI accepts either a file path (with or without `.pa`) or a directory containing `main.pa` — see `get_root_dir_and_module_name` in `compiler/src/compiler.rs`.
 
 ## Testing
 
-Snapshot tests live under `tests/<test-name>/main.pa` with paired `analyze.out` / `analyze.err` (and optionally `run.out` / `run.err`) capturing expected stdout/stderr. `scripts/test.py` shells out to `cargo run --bin cli -- analyze <module>` per test and prints a colored diff on mismatch. A test missing an expected output file is reported as `skipped`, not failed.
+Fixtures live under `tests/analyze/<name>/main.pa` (and optionally additional `.pa` files for multi-module cases) and `tests/run/<name>/main.pa`. Each fixture has an `analyze.snap` or `run.snap` next to its `main.pa` — an insta snapshot file with a 3-line YAML header followed by the captured output.
 
-When changing analyzer/parser output, regenerate snapshots with `just test-write <name>/analyze` — don't hand-edit `.out`/`.err` files. The `run.*` test cases are commented out in `scripts/test.py` because the CLI's `run` subcommand is unimplemented.
+- **`tests/analyze/`** fixtures run the compiler frontend in-process and snapshot `{:#?}` of the typed `Module` (or formatted diagnostics on failure).
+- **`tests/run/`** fixtures compile, then call `Interpreter::run()` with a `StdoutSink::Buffer`, and snapshot a combined `status / stdout / stderr` block.
+
+Both harnesses live in `pluma-tests/tests/{analyze,run}.rs`. `datatest-stable` generates one `#[test]` per fixture by scanning the directory for `main.pa`. Tests set cwd to the workspace root so the `Module` Debug impl renders paths as `tests/analyze/<name>/main.pa` (portable across checkouts).
+
+When changing analyzer/parser output or interpreter behavior, regenerate snapshots with `cargo insta review` (interactive accept/reject) or `just test-write` (accept all). Don't hand-edit `.snap` files. To add a new test, create the fixture directory + `main.pa`, run `just test-write`, and review the generated snapshot.
 
 ## Compiler architecture
 

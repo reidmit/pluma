@@ -1,5 +1,0 @@
-Warning: Name `x` is never used.
-
-> 2|   let x = 47
-           ^
-tests/unused-binding/main.pa:2:7

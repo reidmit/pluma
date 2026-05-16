@@ -1,0 +1,12 @@
+---
+source: pluma-tests/tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+red
+green
+blue
+== stderr ==
+

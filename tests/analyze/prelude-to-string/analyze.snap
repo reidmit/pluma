@@ -1,0 +1,56 @@
+---
+source: pluma-tests/tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/prelude-to-string/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-2:35) [
+            def(0:0-0:30) :: nothing {
+                name: ident(0:4-0:17) `num-as-string`,
+                kind: expr(0:18-0:30) :: string {
+                    kind: call(0:18-0:30) {
+                        callee: expr(0:18-0:27) :: int -> string {
+                            kind: ident(0:18-0:27) `to-string`,
+                        },
+                        args: [
+                            expr(0:28-0:30) :: int {
+                                kind: literal(0:28-0:30) int 42,
+                            },
+                        ],
+                    },
+                },
+            },
+            def(1:0-1:33) :: nothing {
+                name: ident(1:4-1:18) `bool-as-string`,
+                kind: expr(1:19-1:33) :: string {
+                    kind: call(1:19-1:33) {
+                        callee: expr(1:19-1:28) :: bool -> string {
+                            kind: ident(1:19-1:28) `to-string`,
+                        },
+                        args: [
+                            expr(1:29-1:33) :: bool {
+                                kind: literal(1:29-1:33) bool true,
+                            },
+                        ],
+                    },
+                },
+            },
+            def(2:0-2:35) :: nothing {
+                name: ident(2:4-2:20) `string-as-string`,
+                kind: expr(2:21-2:35) :: string {
+                    kind: call(2:21-2:35) {
+                        callee: expr(2:21-2:30) :: string -> string {
+                            kind: ident(2:21-2:30) `to-string`,
+                        },
+                        args: [
+                            expr(2:32-2:35) :: string {
+                                kind: literal(2:32-2:35) string "hi",
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

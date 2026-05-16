@@ -1,0 +1,26 @@
+---
+source: pluma-tests/tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/prelude-print/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-0:34) [
+            def(0:0-0:34) :: nothing {
+                name: ident(0:4-0:12) `greeting`,
+                kind: expr(0:13-0:34) :: nothing {
+                    kind: call(0:13-0:34) {
+                        callee: expr(0:13-0:18) :: string -> nothing {
+                            kind: ident(0:13-0:18) `print`,
+                        },
+                        args: [
+                            expr(0:20-0:34) :: string {
+                                kind: literal(0:20-0:34) string "hello, world!",
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

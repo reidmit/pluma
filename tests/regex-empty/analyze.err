@@ -1,9 +1,0 @@
-Error: Empty regular expression.
-
-> 2| def r-empty /
-
-> 3| 
-
-> 4| /
-
-tests/regex-empty/main.pa:2:13

@@ -1,0 +1,21 @@
+[package]
+name = "pluma-tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+compiler = { path = "../compiler" }
+interpreter = { path = "../interpreter" }
+
+[dev-dependencies]
+datatest-stable = "0.2"
+insta = "1"
+
+[[test]]
+name = "analyze"
+harness = false
+
+[[test]]
+name = "run"
+harness = false

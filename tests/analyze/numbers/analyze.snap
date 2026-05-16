@@ -1,0 +1,41 @@
+---
+source: pluma-tests/tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/numbers/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-8:26) [
+            def(0:0-0:17) :: nothing {
+                name: ident(0:4-0:14) `an-integer`,
+                kind: expr(0:15-0:17) :: int {
+                    kind: literal(0:15-0:17) int 47,
+                },
+            },
+            def(2:0-2:18) :: nothing {
+                name: ident(2:4-2:11) `a-float`,
+                kind: expr(2:12-2:18) :: float {
+                    kind: literal(2:12-2:18) float 47.123,
+                },
+            },
+            def(4:0-4:24) :: nothing {
+                name: ident(4:4-4:18) `binary-integer`,
+                kind: expr(4:19-4:24) :: int {
+                    kind: literal(4:19-4:24) binary int 5,
+                },
+            },
+            def(6:0-6:23) :: nothing {
+                name: ident(6:4-6:17) `octal-integer`,
+                kind: expr(6:18-6:23) :: int {
+                    kind: literal(6:18-6:23) octal int 493,
+                },
+            },
+            def(8:0-8:26) :: nothing {
+                name: ident(8:4-8:15) `hex-integer`,
+                kind: expr(8:16-8:26) :: int {
+                    kind: literal(8:16-8:26) hex int 3735928559,
+                },
+            },
+        ],
+    ),
+}

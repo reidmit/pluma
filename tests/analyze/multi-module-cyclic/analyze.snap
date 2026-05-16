@@ -1,0 +1,6 @@
+---
+source: pluma-tests/tests/analyze.rs
+expression: output
+---
+error: Cyclic import detected involving module `main`.
+

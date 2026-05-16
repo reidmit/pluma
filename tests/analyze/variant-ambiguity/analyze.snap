@@ -1,0 +1,6 @@
+---
+source: pluma-tests/tests/analyze.rs
+expression: output
+---
+error: Variant `red` is ambiguous: it could refer to `color` or `fruit`.
+

@@ -1,0 +1,41 @@
+---
+source: pluma-tests/tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/identity/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-4:19) [
+            def(0:0-2:1) :: nothing {
+                name: ident(0:4-0:12) `identity`,
+                kind: expr(0:13-2:1) :: 'g -> 'g {
+                    kind: fun(0:13-2:1) {
+                        params: [
+                            ident(0:17-0:18) `x` :: 'g,
+                        ],
+                        body: [
+                            expr(1:2-1:3) :: 'g {
+                                kind: ident(1:2-1:3) `x`,
+                            },
+                        ],
+                    },
+                },
+            },
+            def(4:0-4:19) :: nothing {
+                name: ident(4:4-4:7) `num`,
+                kind: expr(4:8-4:19) :: int {
+                    kind: call(4:8-4:19) {
+                        callee: expr(4:8-4:16) :: int -> int {
+                            kind: ident(4:8-4:16) `identity`,
+                        },
+                        args: [
+                            expr(4:17-4:19) :: int {
+                                kind: literal(4:17-4:19) int 47,
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

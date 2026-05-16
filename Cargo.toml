@@ -5,4 +5,5 @@ members = [
   "compiler",
   "interpreter",
   "lsp",
+  "pluma-tests",
 ]

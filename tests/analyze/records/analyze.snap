@@ -1,0 +1,79 @@
+---
+source: pluma-tests/tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/records/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-9:1) [
+            def(0:0-3:1) :: nothing {
+                name: ident(0:4-0:6) `me`,
+                kind: expr(0:7-3:1) :: {name: string, age: int} {
+                    kind: record [
+                        (
+                            ident(1:2-1:6) `name`,
+                            expr(1:9-1:14) :: string {
+                                kind: literal(1:9-1:14) string "reid",
+                            },
+                        ),
+                        (
+                            ident(2:2-2:5) `age`,
+                            expr(2:7-2:9) :: int {
+                                kind: literal(2:7-2:9) int 28,
+                            },
+                        ),
+                    ],
+                },
+            },
+            def(5:0-5:27) :: nothing {
+                name: ident(5:4-5:10) `inline`,
+                kind: expr(5:11-5:27) :: {one: int, two: int} {
+                    kind: record [
+                        (
+                            ident(5:12-5:15) `one`,
+                            expr(5:17-5:18) :: int {
+                                kind: literal(5:17-5:18) int 1,
+                            },
+                        ),
+                        (
+                            ident(5:20-5:23) `two`,
+                            expr(5:25-5:26) :: int {
+                                kind: literal(5:25-5:26) int 2,
+                            },
+                        ),
+                    ],
+                },
+            },
+            def(7:0-9:1) :: nothing {
+                name: ident(7:4-7:14) `get-result`,
+                kind: expr(7:15-9:1) :: nothing -> int {
+                    kind: fun(7:15-9:1) {
+                        params: [],
+                        body: [
+                            expr(8:2-8:21) :: int {
+                                kind: binary op(8:9-8:10) `+` {
+                                    left: expr(8:2-8:8) :: int {
+                                        kind: field-access {
+                                            receiver: expr(8:2-8:4) :: {age: int, ...} {
+                                                kind: ident(8:2-8:4) `me`,
+                                            },
+                                            field: ident(8:5-8:8) `age`,
+                                        },
+                                    },
+                                    right: expr(8:11-8:21) :: int {
+                                        kind: field-access {
+                                            receiver: expr(8:11-8:17) :: {two: int, ...} {
+                                                kind: ident(8:11-8:17) `inline`,
+                                            },
+                                            field: ident(8:18-8:21) `two`,
+                                        },
+                                    },
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

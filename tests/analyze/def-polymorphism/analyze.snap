@@ -1,0 +1,60 @@
+---
+source: pluma-tests/tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/def-polymorphism/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-5:1) [
+            def(0:0-0:24) :: nothing {
+                name: ident(0:4-0:12) `identity`,
+                kind: expr(0:13-0:24) :: 'g -> 'g {
+                    kind: fun(0:13-0:24) {
+                        params: [
+                            ident(0:17-0:18) `x` :: 'g,
+                        ],
+                        body: [
+                            expr(0:21-0:22) :: 'g {
+                                kind: ident(0:21-0:22) `x`,
+                            },
+                        ],
+                    },
+                },
+            },
+            def(2:0-5:1) :: nothing {
+                name: ident(2:4-2:8) `main`,
+                kind: expr(2:9-5:1) :: nothing -> int {
+                    kind: fun(2:9-5:1) {
+                        params: [],
+                        body: [
+                            expr(3:2-3:16) :: string {
+                                kind: call(3:2-3:16) {
+                                    callee: expr(3:2-3:10) :: string -> string {
+                                        kind: ident(3:2-3:10) `identity`,
+                                    },
+                                    args: [
+                                        expr(3:12-3:16) :: string {
+                                            kind: literal(3:12-3:16) string "wow",
+                                        },
+                                    ],
+                                },
+                            },
+                            expr(4:2-4:13) :: int {
+                                kind: call(4:2-4:13) {
+                                    callee: expr(4:2-4:10) :: int -> int {
+                                        kind: ident(4:2-4:10) `identity`,
+                                    },
+                                    args: [
+                                        expr(4:11-4:13) :: int {
+                                            kind: literal(4:11-4:13) int 47,
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

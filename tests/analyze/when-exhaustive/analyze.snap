@@ -1,0 +1,152 @@
+---
+source: pluma-tests/tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/when-exhaustive/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-33:1) [
+            def(0:0-3:1) :: nothing {
+                name: ident(0:4-0:8) `tree`,
+                kind: enum(0:14-3:1) [
+                    variant(1:2-1:7) {
+                        name: ident(1:2-1:7) `empty`,
+                        params: None,
+                    },
+                    variant(2:2-2:20) {
+                        name: ident(2:2-2:6) `node`,
+                        params: Some(
+                            [
+                                type(2:7-2:10) type-ident(2:7-2:10) `int`,
+                                type(2:11-2:15) type-ident(2:11-2:15) `tree`,
+                                type(2:16-2:20) type-ident(2:16-2:20) `tree`,
+                            ],
+                        ),
+                    },
+                ],
+            },
+            def(5:0-11:1) :: nothing {
+                name: ident(5:4-5:19) `by-all-variants`,
+                kind: expr(5:20-11:1) :: tree -> int {
+                    kind: fun(5:20-11:1) {
+                        params: [
+                            ident(5:24-5:25) `t` :: tree,
+                        ],
+                        body: [
+                            expr(6:2-10:3) :: int {
+                                kind: when(6:2-10:3) [
+                                    case(6:9-8:3) is pattern(6:12-6:17) Identifier(
+                                        ident(6:12-6:17) `empty`,
+                                    ) [
+                                        expr(7:4-7:5) :: int {
+                                            kind: literal(7:4-7:5) int 0,
+                                        },
+                                    ],
+                                    case(8:4-10:3) is pattern(8:7-8:21) Constructor(
+                                        ident(8:7-8:11) `node`,
+                                        [
+                                            pattern(8:12-8:15) Identifier(
+                                                ident(8:12-8:15) `val`,
+                                            ),
+                                            pattern(8:16-8:18) Identifier(
+                                                ident(8:16-8:18) `_l`,
+                                            ),
+                                            pattern(8:19-8:21) Identifier(
+                                                ident(8:19-8:21) `_r`,
+                                            ),
+                                        ],
+                                    ) [
+                                        expr(9:4-9:7) :: int {
+                                            kind: ident(9:4-9:7) `val`,
+                                        },
+                                    ],
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
+            def(13:0-19:1) :: nothing {
+                name: ident(13:4-13:15) `by-wildcard`,
+                kind: expr(13:16-19:1) :: tree -> int {
+                    kind: fun(13:16-19:1) {
+                        params: [
+                            ident(13:20-13:21) `t` :: tree,
+                        ],
+                        body: [
+                            expr(14:2-18:3) :: int {
+                                kind: when(14:2-18:3) [
+                                    case(14:9-16:3) is pattern(14:12-14:17) Identifier(
+                                        ident(14:12-14:17) `empty`,
+                                    ) [
+                                        expr(15:4-15:5) :: int {
+                                            kind: literal(15:4-15:5) int 0,
+                                        },
+                                    ],
+                                    case(16:4-18:3) is pattern(16:7-16:8) Underscore [
+                                        expr(17:4-17:5) :: int {
+                                            kind: literal(17:4-17:5) int 1,
+                                        },
+                                    ],
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
+            def(21:0-25:1) :: nothing {
+                name: ident(21:4-21:23) `by-binding-catchall`,
+                kind: expr(21:24-25:1) :: 'r -> int {
+                    kind: fun(21:24-25:1) {
+                        params: [
+                            ident(21:28-21:29) `t` :: 'r,
+                        ],
+                        body: [
+                            expr(22:2-24:3) :: int {
+                                kind: when(22:2-24:3) [
+                                    case(22:9-24:3) is pattern(22:12-22:22) Identifier(
+                                        ident(22:12-22:22) `_something`,
+                                    ) [
+                                        expr(23:4-23:5) :: int {
+                                            kind: literal(23:4-23:5) int 0,
+                                        },
+                                    ],
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
+            def(27:0-33:1) :: nothing {
+                name: ident(27:4-27:13) `bool-both`,
+                kind: expr(27:14-33:1) :: bool -> int {
+                    kind: fun(27:14-33:1) {
+                        params: [
+                            ident(27:18-27:19) `b` :: bool,
+                        ],
+                        body: [
+                            expr(28:2-32:3) :: int {
+                                kind: when(28:2-32:3) [
+                                    case(28:9-30:3) is pattern(28:12-28:16) Literal(
+                                        literal(28:12-28:16) bool true,
+                                    ) [
+                                        expr(29:4-29:5) :: int {
+                                            kind: literal(29:4-29:5) int 0,
+                                        },
+                                    ],
+                                    case(30:4-32:3) is pattern(30:7-30:12) Literal(
+                                        literal(30:7-30:12) bool false,
+                                    ) [
+                                        expr(31:4-31:5) :: int {
+                                            kind: literal(31:4-31:5) int 1,
+                                        },
+                                    ],
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

@@ -1,0 +1,10 @@
+---
+source: pluma-tests/tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/empty/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-0:0) [],
+    ),
+}

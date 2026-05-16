@@ -1,0 +1,8 @@
+---
+source: pluma-tests/tests/analyze.rs
+expression: output
+---
+error: Non-exhaustive `when`: missing case for `node`.
+error: Non-exhaustive `when`: missing case for `node`.
+error: Non-exhaustive `when`: missing case for `false`.
+

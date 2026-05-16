@@ -1,0 +1,17 @@
+---
+source: pluma-tests/tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/hello-world/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-0:31) [
+            def(0:0-0:31) :: nothing {
+                name: ident(0:4-0:15) `hello-world`,
+                kind: expr(0:17-0:31) :: string {
+                    kind: literal(0:17-0:31) string "hello, world!",
+                },
+            },
+        ],
+    ),
+}
