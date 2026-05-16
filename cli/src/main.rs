@@ -40,6 +40,7 @@ fn main() {
 				todo!()
 			}
 
+			#[cfg(debug_assertions)]
 			"tokenize" => {
 				let entry_path = match std::env::args().nth(2) {
 					Some(path) => path,
@@ -60,7 +61,7 @@ fn main() {
 				match compiler.tokenize() {
 					Ok(tokens) => {
 						for token in tokens {
-							print_token(&token);
+							println!("{:?}", token);
 						}
 					}
 
@@ -71,6 +72,7 @@ fn main() {
 				}
 			}
 
+			#[cfg(debug_assertions)]
 			"analyze" => {
 				let entry_path = match std::env::args().nth(2) {
 					Some(path) => path,
@@ -90,7 +92,7 @@ fn main() {
 
 				match compiler.check() {
 					Ok(module) => {
-						print_module(module);
+						println!("{:#?}", module);
 					}
 
 					Err(diagnostics) => {
@@ -122,31 +124,11 @@ fn main() {
 }
 
 // `tokenize` and `analyze` dump Debug-formatted output, which the codebase
-// (deliberately) only derives in debug builds. Gate the dumpers accordingly;
-// in release we surface a clear error rather than printing nothing.
+// (deliberately) only derives in debug builds. The commands themselves are
+// excluded from release builds — both as match arms above and in the help
+// text below.
 
 #[cfg(debug_assertions)]
-fn print_token(token: &Token) {
-	println!("{:?}", token);
-}
-
-#[cfg(not(debug_assertions))]
-fn print_token(_: &Token) {
-	print_error("`tokenize` requires a debug build (Debug impls are gated on debug_assertions).");
-	std::process::exit(1);
-}
-
-#[cfg(debug_assertions)]
-fn print_module(module: &Module) {
-	println!("{:#?}", module);
-}
-
-#[cfg(not(debug_assertions))]
-fn print_module(_: &Module) {
-	print_error("`analyze` requires a debug build (Debug impls are gated on debug_assertions).");
-	std::process::exit(1);
-}
-
 fn print_help() {
 	eprintln!(
 		"{} v{}
@@ -156,7 +138,25 @@ Compiler & toolchain for the {} programming language
 COMMANDS:
   run <path>       execute a module directly
   build <path>     compile a module into an executable
+  tokenize <path>  dump the token stream for a module
   analyze <path>   parse, type-check & dump info about a module
+  version          print compiler version info
+  help             print this help text
+",
+		BINARY_NAME, VERSION, LANGUAGE_NAME
+	)
+}
+
+#[cfg(not(debug_assertions))]
+fn print_help() {
+	eprintln!(
+		"{} v{}
+
+Compiler & toolchain for the {} programming language
+
+COMMANDS:
+  run <path>       execute a module directly
+  build <path>     compile a module into an executable
   version          print compiler version info
   help             print this help text
 ",
