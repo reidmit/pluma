@@ -10,6 +10,10 @@ analyze path:
 run path:
   @ cargo run --bin cli --quiet -- run {{path}}
 
+# build the cli in release mode; produces target/release/cli
+build-release:
+  @ cargo build --release --bin cli
+
 # generate or overwrite .err and .out files for a given test
 test-write $path_to_write:
   #!/usr/bin/env zsh
