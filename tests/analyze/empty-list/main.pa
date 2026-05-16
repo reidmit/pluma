@@ -1,0 +1,4 @@
+def empty []
+def ints [1, 2, 3]
+def strings ["a", "b", "c"]
+def nested [[1, 2], [3, 4]]

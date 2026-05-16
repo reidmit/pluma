@@ -1,0 +1,20 @@
+def fn-list enum {
+  empty
+  cons (fun int -> int) fn-list
+}
+
+def apply-each fun lst x {
+  when lst is empty {
+    0
+  } is cons f rest {
+    (f x) + (apply-each rest x)
+  }
+}
+
+def main fun {
+  let inc = fun n { n + 1 }
+  let double = fun n { n * 2 }
+  let triple = fun n { n * 3 }
+  let fs = fn-list.cons inc (fn-list.cons double (fn-list.cons triple fn-list.empty))
+  print (to-string (apply-each fs 10))
+}

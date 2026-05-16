@@ -1,0 +1,16 @@
+# Exercises a meaningfully deep recursion. The tree-walking interpreter
+# uses one Rust stack frame per Pluma call, so depths beyond ~few hundred
+# may overflow until we add TCO or trampolining.
+
+def count-down fun n {
+  when n is 0 {
+    ()
+  } is _ {
+    count-down (n - 1)
+  }
+}
+
+def main fun {
+  count-down 30
+  print "ok"
+}

@@ -1,0 +1,10 @@
+def outer fun {
+  let f = fun n {
+    when n is 0 {
+      0
+    } is _ {
+      f (n - 1)
+    }
+  }
+  f 5
+}

@@ -1,0 +1,96 @@
+---
+source: pluma-tests/tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/polymorphic-id-many-uses/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-5:26) [
+            def(0:0-0:18) :: nothing {
+                name: ident(0:4-0:6) `id`,
+                kind: expr(0:7-0:18) :: 'm -> 'm {
+                    kind: fun(0:7-0:18) {
+                        params: [
+                            ident(0:11-0:12) `x` :: 'm,
+                        ],
+                        body: [
+                            expr(0:15-0:16) :: 'm {
+                                kind: ident(0:15-0:16) `x`,
+                            },
+                        ],
+                    },
+                },
+            },
+            def(2:0-2:11) :: nothing {
+                name: ident(2:4-2:5) `i`,
+                kind: expr(2:6-2:11) :: int {
+                    kind: call(2:6-2:11) {
+                        callee: expr(2:6-2:8) :: int -> int {
+                            kind: ident(2:6-2:8) `id`,
+                        },
+                        args: [
+                            expr(2:9-2:11) :: int {
+                                kind: literal(2:9-2:11) int 47,
+                            },
+                        ],
+                    },
+                },
+            },
+            def(3:0-3:16) :: nothing {
+                name: ident(3:4-3:5) `s`,
+                kind: expr(3:6-3:16) :: string {
+                    kind: call(3:6-3:16) {
+                        callee: expr(3:6-3:8) :: string -> string {
+                            kind: ident(3:6-3:8) `id`,
+                        },
+                        args: [
+                            expr(3:10-3:16) :: string {
+                                kind: literal(3:10-3:16) string "hello",
+                            },
+                        ],
+                    },
+                },
+            },
+            def(4:0-4:13) :: nothing {
+                name: ident(4:4-4:5) `b`,
+                kind: expr(4:6-4:13) :: bool {
+                    kind: call(4:6-4:13) {
+                        callee: expr(4:6-4:8) :: bool -> bool {
+                            kind: ident(4:6-4:8) `id`,
+                        },
+                        args: [
+                            expr(4:9-4:13) :: bool {
+                                kind: literal(4:9-4:13) bool true,
+                            },
+                        ],
+                    },
+                },
+            },
+            def(5:0-5:26) :: nothing {
+                name: ident(5:4-5:5) `t`,
+                kind: expr(5:6-5:26) :: (int, string, bool) {
+                    kind: call(5:6-5:26) {
+                        callee: expr(5:6-5:8) :: ((int, string, bool)) -> (int, string, bool) {
+                            kind: ident(5:6-5:8) `id`,
+                        },
+                        args: [
+                            expr(5:9-5:26) :: (int, string, bool) {
+                                kind: tuple [
+                                    expr(5:10-5:11) :: int {
+                                        kind: literal(5:10-5:11) int 1,
+                                    },
+                                    expr(5:14-5:18) :: string {
+                                        kind: literal(5:14-5:18) string "two",
+                                    },
+                                    expr(5:20-5:25) :: bool {
+                                        kind: literal(5:20-5:25) bool false,
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

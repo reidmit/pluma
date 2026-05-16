@@ -5,7 +5,9 @@ expression: combined
 == status ==
 ok
 == stdout ==
-8
-30
+-5
+-5
+5
+-5
 == stderr ==
 

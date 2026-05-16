@@ -1,0 +1,18 @@
+def color enum {
+  red
+  green
+  blue
+}
+
+def shape enum {
+  circle int
+  square int
+}
+
+def main fun {
+  let c = color.red
+  print (to-string c)
+  let make-square = shape.square
+  let s = make-square 5
+  print (to-string s)
+}

@@ -5,7 +5,7 @@ expression: combined
 == status ==
 ok
 == stdout ==
-8
-30
+color.red
+shape.square 5
 == stderr ==
 

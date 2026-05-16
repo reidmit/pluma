@@ -1,0 +1,12 @@
+def tree enum {
+  empty
+  node int tree tree
+}
+
+def bad fun t {
+  when t is empty {
+    0
+  } is node x {
+    x
+  }
+}

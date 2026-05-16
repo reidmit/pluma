@@ -1,0 +1,8 @@
+---
+source: pluma-tests/tests/analyze.rs
+expression: output
+---
+error: Parameter count mismatch: expected 3, but found 1.
+error: Name `x` is not defined.
+error: Type mismatch: expected `?`, but found `int`.
+
