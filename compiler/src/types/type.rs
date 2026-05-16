@@ -16,6 +16,7 @@ pub enum Type {
 	PartialRecord(String, Box<Type>),
 	Fun(Vec<Type>, Box<Type>),
 	Enum(String),
+	List(Box<Type>),
 }
 
 impl Type {
@@ -36,6 +37,8 @@ impl Type {
 			Type::PartialRecord(_, field_type) => field_type.contains_var(var),
 
 			Type::Enum(_) => false,
+
+			Type::List(element_type) => element_type.contains_var(var),
 
 			Type::Tuple(element_types) => {
 				for element_type in element_types {
@@ -96,6 +99,10 @@ impl Type {
 			}
 
 			Type::Enum(_) => {}
+
+			Type::List(element_type) => {
+				vars.extend(element_type.free_vars());
+			}
 
 			Type::Tuple(element_types) => {
 				for element_type in element_types {
@@ -188,6 +195,8 @@ impl std::fmt::Display for Type {
 					.collect::<Vec<String>>()
 					.join(", "),
 			),
+
+			Type::List(element_type) => write!(f, "list {}", maybe_add_parens(element_type)),
 
 			Type::Var(var) => {
 				// return write!(f, "'t{}", var); // temporary, i think

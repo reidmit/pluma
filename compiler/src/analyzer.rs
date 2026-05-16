@@ -584,6 +584,24 @@ impl<'compiler> Analyzer<'compiler> {
 				constraints.push(eq_constraint(expr.ty.clone(), Type::Tuple(element_types)).at(expr.range))
 			}
 
+			ExprKind::List(elements) => {
+				// All elements must share a type. Empty list gets a fresh
+				// element-type var so the overall type is `list 'a`. The expr
+				// type is itself a fresh Var equated to `list elem_ty` so the
+				// post-unification substitution can resolve it (fill_in_placeholder
+				// only descends into top-level Vars).
+				expr.ty = self.new_type_var();
+				let element_type = self.new_type_var();
+				for element in elements {
+					self.constrain_expr(element, constraints);
+					constraints
+						.push(eq_constraint(element.ty.clone(), element_type.clone()).at(element.range));
+				}
+				constraints.push(
+					eq_constraint(expr.ty.clone(), Type::List(Box::new(element_type))).at(expr.range),
+				);
+			}
+
 			ExprKind::Record(fields) => {
 				expr.ty = self.new_type_var();
 
@@ -595,6 +613,23 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 
 				constraints.push(eq_constraint(expr.ty.clone(), Type::Record(field_types)).at(expr.range))
+			}
+
+			ExprKind::UnaryOperation { op, right } => {
+				self.constrain_expr(right, constraints);
+				match op {
+					Operator::SubtractionOrNegation => {
+						expr.ty = Type::Int;
+						constraints.push(eq_constraint(right.ty.clone(), Type::Int).at(right.range));
+					}
+					Operator::LogicalNot => {
+						expr.ty = Type::Bool;
+						constraints.push(eq_constraint(right.ty.clone(), Type::Bool).at(right.range));
+					}
+					_ => {
+						// Other prefix ops not supported yet.
+					}
+				}
 			}
 
 			ExprKind::BinaryOperation { left, right, op } => {
@@ -1281,6 +1316,10 @@ impl<'compiler> Analyzer<'compiler> {
 				self.unify(&constraints)
 			}
 
+			Eq(Type::List(a), Type::List(b), _) => {
+				self.unify(&[eq_constraint((**a).clone(), (**b).clone())])
+			}
+
 			Eq(Type::Tuple(element_types_1), Type::Tuple(element_types_2), reason) => {
 				// tuples can only be unified if they have the same number of elements, with
 				// the same types, in the same order. That is: type `(int, string)` is not
@@ -1542,6 +1581,12 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 			}
 
+			ExprKind::List(elements) => {
+				for element in elements {
+					self.annotate_expr(element, subst);
+				}
+			}
+
 			ExprKind::Record(fields) => {
 				for (_, field_value) in fields {
 					self.annotate_expr(field_value, subst);
@@ -1560,6 +1605,10 @@ impl<'compiler> Analyzer<'compiler> {
 
 			ExprKind::FieldAccess { receiver, .. } => {
 				self.annotate_expr(receiver, subst);
+			}
+
+			ExprKind::UnaryOperation { right, .. } => {
+				self.annotate_expr(right, subst);
 			}
 
 			ExprKind::BinaryOperation { left, right, .. } => {
@@ -1737,6 +1786,9 @@ impl<'compiler> Analyzer<'compiler> {
 			),
 			Type::PartialTuple(index, inner) => {
 				Type::PartialTuple(*index, Box::new(self.instantiate_with(inner, mapping)))
+			}
+			Type::List(element_type) => {
+				Type::List(Box::new(self.instantiate_with(element_type, mapping)))
 			}
 		}
 	}

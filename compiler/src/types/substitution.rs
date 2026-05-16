@@ -64,6 +64,8 @@ impl Substitution {
 					.map(|(name, t)| (name.clone(), self.apply_to_type(t)))
 					.collect(),
 			),
+
+			Type::List(element_type) => Type::List(self.apply_to_type(element_type).into()),
 		}
 	}
 

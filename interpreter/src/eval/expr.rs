@@ -261,11 +261,34 @@ pub fn eval_expr<'ast>(
 
 		ExprKind::Regex(node) => Ok(Value::Regex(node)),
 
+		ExprKind::UnaryOperation { op, right } => {
+			let v = eval_expr(interp, env, current_module, right)?;
+			eval_unary(op, v, expr.range)
+		}
+
 		// Not implemented yet.
-		ExprKind::UnaryOperation { .. } | ExprKind::ElementAccess { .. } => Err(
+		ExprKind::ElementAccess { .. } => Err(
 			RuntimeError::new("interpreter does not yet handle this expression form")
 				.at(expr.range),
 		),
+	}
+}
+
+fn eval_unary<'ast>(
+	op: &Operator,
+	value: Value<'ast>,
+	range: compiler::Range,
+) -> Result<Value<'ast>, RuntimeError> {
+	match (op, &value) {
+		(Operator::SubtractionOrNegation, Value::Int(n)) => Ok(Value::Int(-*n)),
+		(Operator::SubtractionOrNegation, _) => {
+			Err(RuntimeError::new("unary `-` expects an int").at(range))
+		}
+		(Operator::LogicalNot, Value::Bool(b)) => Ok(Value::Bool(!*b)),
+		(Operator::LogicalNot, _) => {
+			Err(RuntimeError::new("unary `!` expects a bool").at(range))
+		}
+		_ => Err(RuntimeError::new("unary operator not implemented").at(range)),
 	}
 }
 
