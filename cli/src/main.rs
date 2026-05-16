@@ -60,7 +60,7 @@ fn main() {
 				match compiler.tokenize() {
 					Ok(tokens) => {
 						for token in tokens {
-							println!("{:?}", token);
+							print_token(&token);
 						}
 					}
 
@@ -90,7 +90,7 @@ fn main() {
 
 				match compiler.check() {
 					Ok(module) => {
-						println!("{:#?}", module);
+						print_module(module);
 					}
 
 					Err(diagnostics) => {
@@ -119,6 +119,32 @@ fn main() {
 			print_help();
 		}
 	}
+}
+
+// `tokenize` and `analyze` dump Debug-formatted output, which the codebase
+// (deliberately) only derives in debug builds. Gate the dumpers accordingly;
+// in release we surface a clear error rather than printing nothing.
+
+#[cfg(debug_assertions)]
+fn print_token(token: &Token) {
+	println!("{:?}", token);
+}
+
+#[cfg(not(debug_assertions))]
+fn print_token(_: &Token) {
+	print_error("`tokenize` requires a debug build (Debug impls are gated on debug_assertions).");
+	std::process::exit(1);
+}
+
+#[cfg(debug_assertions)]
+fn print_module(module: &Module) {
+	println!("{:#?}", module);
+}
+
+#[cfg(not(debug_assertions))]
+fn print_module(_: &Module) {
+	print_error("`analyze` requires a debug build (Debug impls are gated on debug_assertions).");
+	std::process::exit(1);
 }
 
 fn print_help() {

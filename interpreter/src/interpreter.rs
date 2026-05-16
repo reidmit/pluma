@@ -6,7 +6,6 @@ use compiler::{Compiler, Range};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-#[derive(Debug)]
 pub struct RuntimeError {
 	pub message: String,
 	pub range: Option<Range>,

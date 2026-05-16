@@ -1612,11 +1612,12 @@ impl<'compiler> Analyzer<'compiler> {
 				// type is set during constrain; nothing to do here
 			}
 
+			#[cfg(debug_assertions)]
 			other => {
-				if cfg!(debug_assertions) {
-					todo!("analyze expr kind: {:?}", other);
-				}
+				todo!("analyze expr kind: {:?}", other);
 			}
+			#[cfg(not(debug_assertions))]
+			_ => {}
 		}
 	}
 
