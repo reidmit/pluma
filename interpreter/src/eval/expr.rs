@@ -374,10 +374,67 @@ fn eval_binary<'ast>(
 		LogicalOr => bool_op(&left, &right)
 			.map(|(a, b)| Value::Bool(a || b))
 			.ok_or_else(|| RuntimeError::new("expected bools for `||`").at(range)),
+		Equality => Ok(Value::Bool(values_eq(&left, &right))),
+		Inequality => Ok(Value::Bool(!values_eq(&left, &right))),
+		LessThan => int_op(&left, &right)
+			.map(|(a, b)| Value::Bool(a < b))
+			.ok_or_else(|| RuntimeError::new("expected ints for `<`").at(range)),
+		LessThanEquals => int_op(&left, &right)
+			.map(|(a, b)| Value::Bool(a <= b))
+			.ok_or_else(|| RuntimeError::new("expected ints for `<=`").at(range)),
+		GreaterThan => int_op(&left, &right)
+			.map(|(a, b)| Value::Bool(a > b))
+			.ok_or_else(|| RuntimeError::new("expected ints for `>`").at(range)),
+		GreaterThanEquals => int_op(&left, &right)
+			.map(|(a, b)| Value::Bool(a >= b))
+			.ok_or_else(|| RuntimeError::new("expected ints for `>=`").at(range)),
 		other => Err(RuntimeError::new(format!(
 			"binary operator `{}` not yet implemented",
 			other
 		))
 		.at(range)),
+	}
+}
+
+// Structural equality. The type system enforces same type on both sides for
+// `==`, so we only need to compare like with like. Closures, builtins, and
+// constructors compare as unequal (no meaningful identity).
+fn values_eq<'ast>(a: &Value<'ast>, b: &Value<'ast>) -> bool {
+	match (a, b) {
+		(Value::Int(x), Value::Int(y)) => x == y,
+		(Value::Float(x), Value::Float(y)) => x == y,
+		(Value::Bool(x), Value::Bool(y)) => x == y,
+		(Value::String(x), Value::String(y)) => x == y,
+		(Value::Nothing, Value::Nothing) => true,
+		(Value::Tuple(xs), Value::Tuple(ys)) => {
+			xs.len() == ys.len() && xs.iter().zip(ys.iter()).all(|(a, b)| values_eq(a, b))
+		}
+		(Value::List(xs), Value::List(ys)) => {
+			xs.len() == ys.len() && xs.iter().zip(ys.iter()).all(|(a, b)| values_eq(a, b))
+		}
+		(Value::Record(xs), Value::Record(ys)) => {
+			xs.len() == ys.len()
+				&& xs
+					.iter()
+					.all(|(k, v)| ys.get(k).map_or(false, |yv| values_eq(v, yv)))
+		}
+		(
+			Value::Variant {
+				qualified_enum: ae,
+				variant: av,
+				payload: ap,
+			},
+			Value::Variant {
+				qualified_enum: be,
+				variant: bv,
+				payload: bp,
+			},
+		) => {
+			ae == be
+				&& av == bv
+				&& ap.len() == bp.len()
+				&& ap.iter().zip(bp.iter()).all(|(a, b)| values_eq(a, b))
+		}
+		_ => false,
 	}
 }

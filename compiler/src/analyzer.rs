@@ -653,11 +653,30 @@ impl<'compiler> Analyzer<'compiler> {
 						constraints.push(eq_constraint(right.ty.clone(), Type::Bool).at(right.range));
 					}
 
+					// `==`/`!=` are polymorphic but require both sides to match.
+					// Result type is bool either way.
+					Operator::Equality | Operator::Inequality => {
+						expr.ty = Type::Bool;
+						constraints.push(
+							eq_constraint(left.ty.clone(), right.ty.clone()).at(expr.range),
+						);
+					}
+
+					// Ordering: ints only for now. (Adding floats/strings is a
+					// later refinement; rejecting non-int loudly is fine.)
+					Operator::LessThan
+					| Operator::LessThanEquals
+					| Operator::GreaterThan
+					| Operator::GreaterThanEquals => {
+						expr.ty = Type::Bool;
+						constraints.push(eq_constraint(left.ty.clone(), Type::Int).at(left.range));
+						constraints.push(eq_constraint(right.ty.clone(), Type::Int).at(right.range));
+					}
+
 					Operator::FieldAccess => unreachable!("handled separately"),
 
-					other => {
-						// todo :----)
-						println!("found unhandled binary op: {}", other)
+					_ => {
+						// Other binary ops not supported yet.
 					}
 				}
 			}
@@ -954,10 +973,6 @@ impl<'compiler> Analyzer<'compiler> {
 
 					constraints.push(eq_constraint(expr.ty.clone(), case_ty).at(case.range));
 				}
-			}
-
-			_ => {
-				// todo :---)
 			}
 		}
 	}
@@ -1660,13 +1675,6 @@ impl<'compiler> Analyzer<'compiler> {
 			ExprKind::EmptyTuple => {
 				// type is set during constrain; nothing to do here
 			}
-
-			#[cfg(debug_assertions)]
-			other => {
-				todo!("analyze expr kind: {:?}", other);
-			}
-			#[cfg(not(debug_assertions))]
-			_ => {}
 		}
 	}
 
