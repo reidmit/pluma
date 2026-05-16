@@ -1,0 +1,22 @@
+def is-even fun n {
+  when n is 0 {
+    true
+  } is _ {
+    is-odd (n - 1)
+  }
+}
+
+def is-odd fun n {
+  when n is 0 {
+    false
+  } is _ {
+    is-even (n - 1)
+  }
+}
+
+def main fun {
+  print (to-string (is-even 0))
+  print (to-string (is-even 4))
+  print (to-string (is-even 7))
+  print (to-string (is-odd 3))
+}

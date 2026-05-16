@@ -1,0 +1,10 @@
+def add fun a b {
+  a + b
+}
+
+def add5 add 5
+
+def main fun {
+  print (to-string (add5 3))
+  print (to-string (add 10 20))
+}

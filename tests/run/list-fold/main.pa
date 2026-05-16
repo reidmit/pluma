@@ -1,0 +1,27 @@
+def int-list enum {
+  empty
+  cons int int-list
+}
+
+def sum fun lst {
+  when lst is empty {
+    0
+  } is cons head tail {
+    head + (sum tail)
+  }
+}
+
+def length fun lst {
+  when lst is empty {
+    0
+  } is cons _ tail {
+    1 + (length tail)
+  }
+}
+
+def main fun {
+  let ls = int-list.cons 1 (int-list.cons 2 (int-list.cons 3 int-list.empty))
+  print (to-string (sum ls))
+  print (to-string (length ls))
+  print (to-string (sum int-list.empty))
+}

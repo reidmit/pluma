@@ -1,0 +1,10 @@
+---
+source: pluma-tests/tests/run.rs
+expression: combined
+---
+== status ==
+compile error
+== stdout ==
+== stderr ==
+error: Parameter count mismatch: expected 2, but found 1.
+

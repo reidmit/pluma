@@ -1,0 +1,72 @@
+---
+source: pluma-tests/tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/closure-escape/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-7:23) [
+            def(0:0-4:1) :: nothing {
+                name: ident(0:4-0:14) `make-adder`,
+                kind: expr(0:15-4:1) :: int -> int -> int {
+                    kind: fun(0:15-4:1) {
+                        params: [
+                            ident(0:19-0:20) `x` :: int,
+                        ],
+                        body: [
+                            expr(1:2-3:3) :: int -> int {
+                                kind: fun(1:2-3:3) {
+                                    params: [
+                                        ident(1:6-1:7) `y` :: int,
+                                    ],
+                                    body: [
+                                        expr(2:4-2:9) :: int {
+                                            kind: binary op(2:6-2:7) `+` {
+                                                left: expr(2:4-2:5) :: int {
+                                                    kind: ident(2:4-2:5) `x`,
+                                                },
+                                                right: expr(2:8-2:9) :: int {
+                                                    kind: ident(2:8-2:9) `y`,
+                                                },
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+            def(6:0-6:21) :: nothing {
+                name: ident(6:4-6:8) `add5`,
+                kind: expr(6:9-6:21) :: int -> int {
+                    kind: call(6:9-6:21) {
+                        callee: expr(6:9-6:19) :: int -> int -> int {
+                            kind: ident(6:9-6:19) `make-adder`,
+                        },
+                        args: [
+                            expr(6:20-6:21) :: int {
+                                kind: literal(6:20-6:21) int 5,
+                            },
+                        ],
+                    },
+                },
+            },
+            def(7:0-7:23) :: nothing {
+                name: ident(7:4-7:9) `add10`,
+                kind: expr(7:10-7:23) :: int -> int {
+                    kind: call(7:10-7:23) {
+                        callee: expr(7:10-7:20) :: int -> int -> int {
+                            kind: ident(7:10-7:20) `make-adder`,
+                        },
+                        args: [
+                            expr(7:21-7:23) :: int {
+                                kind: literal(7:21-7:23) int 10,
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

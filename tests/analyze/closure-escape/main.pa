@@ -1,0 +1,8 @@
+def make-adder fun x {
+  fun y {
+    x + y
+  }
+}
+
+def add5 make-adder 5
+def add10 make-adder 10

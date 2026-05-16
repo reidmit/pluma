@@ -1,0 +1,13 @@
+def fact fun n {
+  when n is 0 {
+    1
+  } is _ {
+    n * (fact (n - 1))
+  }
+}
+
+def main fun {
+  print (to-string (fact 0))
+  print (to-string (fact 5))
+  print (to-string (fact 10))
+}

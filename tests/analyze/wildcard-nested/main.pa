@@ -1,0 +1,12 @@
+def tree enum {
+  empty
+  node int tree tree
+}
+
+def has-anything fun t {
+  when t is empty {
+    false
+  } is node _ _ _ {
+    true
+  }
+}

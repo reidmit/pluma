@@ -1,0 +1,65 @@
+---
+source: pluma-tests/tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/wildcard-nested/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-11:1) [
+            def(0:0-3:1) :: nothing {
+                name: ident(0:4-0:8) `tree`,
+                kind: enum(0:14-3:1) [
+                    variant(1:2-1:7) {
+                        name: ident(1:2-1:7) `empty`,
+                        params: None,
+                    },
+                    variant(2:2-2:20) {
+                        name: ident(2:2-2:6) `node`,
+                        params: Some(
+                            [
+                                type(2:7-2:10) type-ident(2:7-2:10) `int`,
+                                type(2:11-2:15) type-ident(2:11-2:15) `tree`,
+                                type(2:16-2:20) type-ident(2:16-2:20) `tree`,
+                            ],
+                        ),
+                    },
+                ],
+            },
+            def(5:0-11:1) :: nothing {
+                name: ident(5:4-5:16) `has-anything`,
+                kind: expr(5:17-11:1) :: tree -> bool {
+                    kind: fun(5:17-11:1) {
+                        params: [
+                            ident(5:21-5:22) `t` :: tree,
+                        ],
+                        body: [
+                            expr(6:2-10:3) :: bool {
+                                kind: when(6:2-10:3) [
+                                    case(6:9-8:3) is pattern(6:12-6:17) Identifier(
+                                        ident(6:12-6:17) `empty`,
+                                    ) [
+                                        expr(7:4-7:9) :: bool {
+                                            kind: literal(7:4-7:9) bool false,
+                                        },
+                                    ],
+                                    case(8:4-10:3) is pattern(8:7-8:17) Constructor(
+                                        ident(8:7-8:11) `node`,
+                                        [
+                                            pattern(8:12-8:13) Underscore,
+                                            pattern(8:14-8:15) Underscore,
+                                            pattern(8:16-8:17) Underscore,
+                                        ],
+                                    ) [
+                                        expr(9:4-9:8) :: bool {
+                                            kind: literal(9:4-9:8) bool true,
+                                        },
+                                    ],
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

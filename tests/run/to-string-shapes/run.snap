@@ -1,0 +1,18 @@
+---
+source: pluma-tests/tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+()
+42
+3.14
+true
+hello
+(1, 2, three)
+{age: 28, name: reid}
+color.red
+shape.rect 3 4
+== stderr ==
+

@@ -1,0 +1,8 @@
+def main fun {
+  let n = 42
+  print "the answer is $(to-string n)"
+  print "$(to-string (1 + 2)) is three"
+  let name = "reid"
+  let age = 28
+  print "$(name) is $(to-string age) years old"
+}
