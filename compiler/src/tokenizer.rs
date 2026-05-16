@@ -105,7 +105,16 @@ impl<'a> Iterator for Tokenizer<'a> {
 				}
 
 				if byte == b'"' {
-					let is_escaped = self.index > 0 && self.source[self.index - 1] == b'\\';
+					// `\"` is an escaped quote, `\\"` is an escaped backslash
+					// followed by a string-terminating quote. Count consecutive
+					// backslashes — odd count means the quote is escaped.
+					let mut backslashes = 0;
+					let mut i = self.index;
+					while i > 0 && self.source[i - 1] == b'\\' {
+						backslashes += 1;
+						i -= 1;
+					}
+					let is_escaped = backslashes % 2 == 1;
 
 					if !is_escaped {
 						// Here, the " must indicate the end of a string literal section. Pop from

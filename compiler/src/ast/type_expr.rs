@@ -9,7 +9,7 @@ pub struct TypeExprNode {
 pub enum TypeExprKind {
 	// e.g. string or dict<int, string>
 	Single(TypeIdentifierNode),
-	// e.g. fn string int -> bool
+	// e.g. fun string int -> bool
 	Func(Vec<TypeExprNode>, Box<TypeExprNode>),
 	// e.g. (string, bool)
 	Tuple(Vec<TypeExprNode>),
@@ -17,7 +17,7 @@ pub enum TypeExprKind {
 	Record(Vec<(IdentifierNode, TypeExprNode)>),
 	// e.g. ()
 	EmptyTuple,
-	// e.g. (string) or (fn string -> bool)
+	// e.g. (string) or (fun string -> bool)
 	Grouping(Box<TypeExprNode>),
 }
 

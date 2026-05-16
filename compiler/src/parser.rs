@@ -1622,10 +1622,10 @@ impl<'a> Parser<'a> {
 			}
 		};
 
-		let (_, end) = expect_token_and_advance!(self, Token::RightBrace);
+		let range_end = return_type.range.end;
 
 		Some(TypeExprNode {
-			range: Range::between(start, end),
+			range: Range::between(start, range_end),
 			kind: TypeExprKind::Func(param_types, return_type),
 		})
 	}
