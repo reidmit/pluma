@@ -259,7 +259,10 @@ pub fn eval_expr<'ast>(
 			Ok(Value::List(Rc::new(values)))
 		}
 
-		ExprKind::Regex(node) => Ok(Value::Regex(node)),
+		ExprKind::Regex(node) => match crate::eval::regex::compile(node) {
+			Ok(re) => Ok(Value::Regex(Rc::new(re))),
+			Err(msg) => Err(RuntimeError::new(msg).at(expr.range)),
+		},
 
 		ExprKind::UnaryOperation { op, right } => {
 			let v = eval_expr(interp, env, current_module, right)?;

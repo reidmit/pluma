@@ -12,6 +12,7 @@ pub fn call<'ast>(
 	match b {
 		Builtin::Print => print(interp, args, call_range),
 		Builtin::ToString => to_string(args, call_range),
+		Builtin::Matches => matches(args, call_range),
 	}
 }
 
@@ -49,4 +50,21 @@ fn to_string<'ast>(
 	}
 	let rendered = format!("{}", args[0]);
 	Ok(Value::String(Rc::new(rendered)))
+}
+
+fn matches<'ast>(
+	args: Vec<Value<'ast>>,
+	call_range: Range,
+) -> Result<Value<'ast>, RuntimeError> {
+	if args.len() != 2 {
+		return Err(RuntimeError::new(format!(
+			"`matches` takes 2 arguments (regex, string), got {}",
+			args.len()
+		))
+		.at(call_range));
+	}
+	match (&args[0], &args[1]) {
+		(Value::Regex(re), Value::String(s)) => Ok(Value::Bool(re.is_match(s))),
+		_ => Err(RuntimeError::new("`matches` expects (regex, string)").at(call_range)),
+	}
 }

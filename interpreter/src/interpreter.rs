@@ -179,6 +179,7 @@ impl<'ast> Interpreter<'ast> {
 		let mut env = Environment::new();
 		env.define("print".into(), Value::Builtin(Builtin::Print));
 		env.define("to-string".into(), Value::Builtin(Builtin::ToString));
+		env.define("matches".into(), Value::Builtin(Builtin::Matches));
 		env
 	}
 

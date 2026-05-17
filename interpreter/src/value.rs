@@ -1,5 +1,5 @@
 use crate::env::Environment;
-use compiler::ast::{ExprNode, RegexNode};
+use compiler::ast::ExprNode;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -40,15 +40,16 @@ pub enum Value<'ast> {
 		variant: String,
 		arity: usize,
 	},
+	Regex(Rc<regex::Regex>),
 	// Opaque — no regex operations are exposed yet, so we just hold the AST
 	// node. When operations land we'll compile it.
-	Regex(&'ast RegexNode),
 }
 
 #[derive(Clone, Copy)]
 pub enum Builtin {
 	Print,
 	ToString,
+	Matches,
 }
 
 impl<'ast> Clone for Value<'ast> {
@@ -83,7 +84,7 @@ impl<'ast> Clone for Value<'ast> {
 				defining_module: defining_module.clone(),
 			},
 			Value::Builtin(b) => Value::Builtin(*b),
-			Value::Regex(r) => Value::Regex(r),
+			Value::Regex(r) => Value::Regex(r.clone()),
 			Value::VariantCtor {
 				qualified_enum,
 				variant,
@@ -162,7 +163,7 @@ impl<'ast> std::fmt::Display for Value<'ast> {
 			}
 			Value::Closure { .. } => write!(f, "<closure>"),
 			Value::Builtin(_) => write!(f, "<builtin>"),
-			Value::Regex(_) => write!(f, "<regex>"),
+			Value::Regex(r) => write!(f, "<regex {}>", r.as_str()),
 			Value::VariantCtor { qualified_enum, variant, .. } => {
 				let bare = qualified_enum.rsplit_once('.').map(|(_, n)| n).unwrap_or(qualified_enum);
 				write!(f, "<ctor {}.{}>", bare, variant)

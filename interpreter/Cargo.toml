@@ -8,3 +8,4 @@ doctest = false
 
 [dependencies]
 compiler = { path = "../compiler" }
+regex = "1"
