@@ -19,6 +19,7 @@ pub enum AnalysisErrorKind {
 	EnumVariantNotPresent { variant: String, ty: Type },
 	WhenNotExhaustive { missing: Vec<String> },
 	AmbiguousVariant { name: String, enums: Vec<String> },
+	DuplicateDefinition { name: String },
 }
 
 impl fmt::Display for AnalysisError {
@@ -91,6 +92,8 @@ impl fmt::Display for AnalysisError {
 					name, formatted
 				)
 			}
+
+			DuplicateDefinition { name } => write!(f, "Duplicate top-level definition `{}`.", name),
 		}
 	}
 }

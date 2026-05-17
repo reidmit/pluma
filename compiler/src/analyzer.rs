@@ -285,8 +285,22 @@ impl<'compiler> Analyzer<'compiler> {
 
 		// first, do a shallow pass to annotate all top-level defs and add them to the scope,
 		// so that they can be referenced anywhere within the bodies of other defs
+		let mut seen_names: HashMap<String, Range> = HashMap::new();
 		for definition in &mut module.body {
 			definition.ty = self.new_type_var();
+
+			// Top-level redefinition is an error. Locals can shadow via let,
+			// but two `def`s with the same name at module top level is almost
+			// certainly a mistake.
+			if let Some(_prev_range) = seen_names.insert(definition.name.name.clone(), definition.name.range)
+			{
+				self.error(
+					definition.name.range,
+					DuplicateDefinition {
+						name: definition.name.name.clone(),
+					},
+				);
+			}
 
 			match &mut definition.kind {
 				DefinitionKind::Expr(_) => {
