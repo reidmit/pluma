@@ -402,7 +402,7 @@ fn eval_binary<'ast>(
 // Structural equality. The type system enforces same type on both sides for
 // `==`, so we only need to compare like with like. Closures, builtins, and
 // constructors compare as unequal (no meaningful identity).
-fn values_eq<'ast>(a: &Value<'ast>, b: &Value<'ast>) -> bool {
+pub(crate) fn values_eq<'ast>(a: &Value<'ast>, b: &Value<'ast>) -> bool {
 	match (a, b) {
 		(Value::Int(x), Value::Int(y)) => x == y,
 		(Value::Float(x), Value::Float(y)) => x == y,

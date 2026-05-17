@@ -50,6 +50,15 @@ pub enum Builtin {
 	Print,
 	ToString,
 	Matches,
+	ListLength,
+	ListIsEmpty,
+	ListReverse,
+	ListConcat,
+	ListContains,
+	ListMap,
+	ListFilter,
+	ListFold,
+	ListEach,
 }
 
 impl<'ast> Clone for Value<'ast> {
