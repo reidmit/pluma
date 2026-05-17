@@ -1,0 +1,24 @@
+# `print` returns its argument unchanged, so you can wrap it inline.
+
+def color enum {
+  red
+  green
+}
+
+def main fun {
+  # binding via print
+  let x = print 42
+  print "doubled: $(to-string (x * 2))"
+
+  # inline in a call argument
+  let added = (print 3) + (print 4)
+  print "sum: $(to-string added)"
+
+  # works on any type (compiler magic, same as to-string)
+  let c = print color.red
+  when c is red {
+    print "it was red"
+  } is green {
+    print "it was green"
+  }
+}

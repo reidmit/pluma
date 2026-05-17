@@ -1,0 +1,16 @@
+---
+source: pluma-tests/tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+42
+doubled: 84
+3
+4
+sum: 7
+color.red
+it was red
+== stderr ==
+

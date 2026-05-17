@@ -4,5 +4,5 @@ expression: output
 ---
 error: Could not read module `core.does-not-exist`: No such file or directory (os error 2)
 error: Name `core` is not defined.
-error: Type mismatch: expected `{does-not-exist: 'd, ...}`, but found `?`.
+error: Type mismatch: expected `{does-not-exist: 'e, ...}`, but found `?`.
 

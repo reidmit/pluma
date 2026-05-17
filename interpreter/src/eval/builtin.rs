@@ -28,13 +28,9 @@ fn print<'ast>(
 		))
 		.at(call_range));
 	}
-	match &args[0] {
-		Value::String(s) => {
-			interp.stdout.write_line(s);
-			Ok(Value::Nothing)
-		}
-		_ => Err(RuntimeError::new("`print` expected a string").at(call_range)),
-	}
+	let arg = args.into_iter().next().unwrap();
+	interp.stdout.write_line(&format!("{}", arg));
+	Ok(arg)
 }
 
 fn to_string<'ast>(

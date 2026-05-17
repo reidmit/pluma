@@ -55,7 +55,7 @@ module `main` (tests/analyze/multi-module/main.pa) {
                 name: ident(6:4-6:7) `num`,
                 kind: expr(6:8-6:23) :: int {
                     kind: call(6:8-6:23) {
-                        callee: expr(6:8-6:21) :: 'm -> 'm {
+                        callee: expr(6:8-6:21) :: 'n -> 'n {
                             kind: field-access {
                                 receiver: expr(6:8-6:12) :: ? {
                                     kind: ident(6:8-6:12) `math`,
@@ -75,7 +75,7 @@ module `main` (tests/analyze/multi-module/main.pa) {
                 name: ident(7:4-7:8) `text`,
                 kind: expr(7:9-7:30) :: string {
                     kind: call(7:9-7:30) {
-                        callee: expr(7:9-7:22) :: 'o -> 'o {
+                        callee: expr(7:9-7:22) :: 'p -> 'p {
                             kind: field-access {
                                 receiver: expr(7:9-7:13) :: ? {
                                     kind: ident(7:9-7:13) `math`,

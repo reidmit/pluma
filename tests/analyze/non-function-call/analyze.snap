@@ -2,5 +2,5 @@
 source: pluma-tests/tests/analyze.rs
 expression: output
 ---
-error: Type mismatch: expected `int`, but found `int -> 'f`.
+error: Type mismatch: expected `int`, but found `int -> 'g`.
 

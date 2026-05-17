@@ -3,5 +3,5 @@ source: pluma-tests/tests/analyze.rs
 expression: output
 ---
 error: Name `f` is not defined.
-error: Type mismatch: expected `int -> 'h`, but found `?`.
+error: Type mismatch: expected `int -> 'i`, but found `?`.
 

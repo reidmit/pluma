@@ -96,19 +96,26 @@ impl<'compiler> Analyzer<'compiler> {
 		self.enter_scope();
 
 		// Prelude: builtin values visible in every module.
-		// `print: string -> nothing` — write a line to stdout.
+		// `print: forall a. a -> a` — write the value to stdout (rendered via
+		// the same Display the interpreter uses for to-string) and return it
+		// unchanged, so `let x = print y` works.
+		let print_var = self.next_type_var_id;
+		self.next_type_var_id += 1;
 		self.add_value_binding(
 			"print".into(),
 			Scheme::Forall(
-				vec![],
-				Type::Fun(vec![Type::String], Box::new(Type::Nothing)),
+				vec![print_var],
+				Type::Fun(
+					vec![Type::Var(print_var)],
+					Box::new(Type::Var(print_var)),
+				),
 			),
 			Range::collapsed(0, 0),
 		);
 		// `to-string: forall a. a -> string` — render any value as a string.
-		// This is the documented wart: the interpreter dispatches on the
-		// runtime tag, so this is the one function whose polymorphism the
-		// type system can't otherwise express. Revisit when generics land.
+		// Like `print`, dispatches on the runtime tag — the one function whose
+		// polymorphism the type system can't otherwise express. Revisit when
+		// generics land.
 		let to_string_var = self.next_type_var_id;
 		self.next_type_var_id += 1;
 		self.add_value_binding(
