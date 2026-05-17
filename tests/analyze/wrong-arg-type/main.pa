@@ -1,0 +1,5 @@
+def double fun n {
+  n + n
+}
+
+def bad double "hello"

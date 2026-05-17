@@ -1,0 +1,6 @@
+---
+source: pluma-tests/tests/analyze.rs
+expression: output
+---
+error: Parameter count mismatch: expected 1, but found 2.
+

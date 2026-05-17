@@ -1,0 +1,67 @@
+---
+source: pluma-tests/tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/alias-chain/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-7:20) [
+            def(0:0-0:20) :: nothing {
+                name: ident(0:4-0:10) `my-int`,
+                kind: alias type(0:17-0:20) type-ident(0:17-0:20) `int`,
+            },
+            def(1:0-1:24) :: nothing {
+                name: ident(1:4-1:11) `my-int2`,
+                kind: alias type(1:18-1:24) type-ident(1:18-1:24) `my-int`,
+            },
+            def(3:0-3:25) :: nothing {
+                name: ident(3:4-3:8) `pair`,
+                kind: alias type(3:15-3:25) tuple-type [
+                    type(3:16-3:19) type-ident(3:16-3:19) `int`,
+                    type(3:21-3:24) type-ident(3:21-3:24) `int`,
+                ],
+            },
+            def(4:0-4:22) :: nothing {
+                name: ident(4:4-4:11) `my-pair`,
+                kind: alias type(4:18-4:22) type-ident(4:18-4:22) `pair`,
+            },
+            def(6:0-6:14) :: nothing {
+                name: ident(6:4-6:5) `x`,
+                kind: expr(6:6-6:14) :: int {
+                    kind: call(6:6-6:14) {
+                        callee: expr(6:6-6:12) :: int -> int {
+                            kind: ident(6:6-6:12) `my-int`,
+                        },
+                        args: [
+                            expr(6:13-6:14) :: int {
+                                kind: literal(6:13-6:14) int 5,
+                            },
+                        ],
+                    },
+                },
+            },
+            def(7:0-7:20) :: nothing {
+                name: ident(7:4-7:5) `p`,
+                kind: expr(7:6-7:20) :: (int, int) {
+                    kind: call(7:6-7:20) {
+                        callee: expr(7:6-7:13) :: ((int, int)) -> (int, int) {
+                            kind: ident(7:6-7:13) `my-pair`,
+                        },
+                        args: [
+                            expr(7:14-7:20) :: (int, int) {
+                                kind: tuple [
+                                    expr(7:15-7:16) :: int {
+                                        kind: literal(7:15-7:16) int 1,
+                                    },
+                                    expr(7:18-7:19) :: int {
+                                        kind: literal(7:18-7:19) int 2,
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}
