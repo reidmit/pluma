@@ -1,0 +1,9 @@
+use core.list
+
+def main fun {
+  print (to-string (list.reverse [1, 2, 3, 4]))
+  print (to-string (list.reverse []))
+  print (to-string (list.concat [1, 2] [3, 4, 5]))
+  print (to-string (list.concat [] [1, 2]))
+  print (to-string (list.concat [1, 2] []))
+}

@@ -1,0 +1,12 @@
+use core.list
+
+# A small pipeline: take numbers 1..5, square them, keep odd squares, sum.
+
+def main fun {
+  let xs = [1, 2, 3, 4, 5]
+  let squared = list.map xs fun n { n * n }
+  let odd-squared = list.filter squared fun n { (n % 2) == 1 }
+  let total = list.fold odd-squared 0 fun acc n { acc + n }
+  print (to-string total)
+  # squared = [1, 4, 9, 16, 25], odd = [1, 9, 25], sum = 35
+}

@@ -1,27 +1,19 @@
-def int-list enum {
-  empty
-  cons int int-list
-}
-
-def sum fun lst {
-  when lst is empty {
-    0
-  } is cons head tail {
-    head + (sum tail)
-  }
-}
-
-def length fun lst {
-  when lst is empty {
-    0
-  } is cons _ tail {
-    1 + (length tail)
-  }
-}
+use core.list
 
 def main fun {
-  let ls = int-list.cons 1 (int-list.cons 2 (int-list.cons 3 int-list.empty))
-  print (to-string (sum ls))
-  print (to-string (length ls))
-  print (to-string (sum int-list.empty))
+  let xs = [1, 2, 3, 4, 5]
+  let total = list.fold xs 0 fun acc n { acc + n }
+  print (to-string total)
+
+  let product = list.fold xs 1 fun acc n { acc * n }
+  print (to-string product)
+
+  let max = list.fold xs 0 fun acc n {
+    when (n > acc) is true { n } is false { acc }
+  }
+  print (to-string max)
+
+  # build a string from a list
+  let joined = list.fold ["a", "b", "c"] "" fun acc s { "$(acc)$(s)" }
+  print joined
 }

@@ -1,0 +1,8 @@
+use core.list
+
+def main fun {
+  print (to-string (list.length [1, 2, 3]))
+  print (to-string (list.length []))
+  print (to-string (list.is-empty []))
+  print (to-string (list.is-empty [1]))
+}
