@@ -44,7 +44,10 @@ impl Operator {
 			Token::ForwardSlash(..) => Some(Operator::Division),
 			Token::LeftAngle(..) => Some(Operator::LessThan),
 			Token::LeftAngleEqual(..) => Some(Operator::LessThanEquals),
-			Token::LeftBracket(..) => Some(Operator::IndexAccess),
+			// `[` is intentionally not parsed as an infix operator: `f [x]`
+			// reads as a function call with a list-literal argument. If/when
+			// real indexing comes back, design it with explicit syntax (e.g.
+			// no whitespace between subject and `[`).
 			Token::Minus(..) => Some(Operator::SubtractionOrNegation),
 			Token::Percent(..) => Some(Operator::Remainder),
 			Token::Pipe(..) => Some(Operator::Chain),
