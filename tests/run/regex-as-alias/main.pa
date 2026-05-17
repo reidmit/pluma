@@ -1,0 +1,8 @@
+use core.regex as re
+
+def is-yes /"yes"/
+
+def main fun {
+  print (to-string (re.matches is-yes "yes!"))
+  print (to-string (re.matches is-yes "no thanks"))
+}

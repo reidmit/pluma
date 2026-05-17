@@ -1,16 +1,18 @@
+use core.regex
+
 def two-to-four-a /"a"{2,4}/
 def at-least-one-b /"b"+/
 def optional-c /"c"?/
 
 def main fun {
-  print (to-string (matches two-to-four-a "a"))
-  print (to-string (matches two-to-four-a "aa"))
-  print (to-string (matches two-to-four-a "aaaa"))
+  print (to-string (regex.matches two-to-four-a "a"))
+  print (to-string (regex.matches two-to-four-a "aa"))
+  print (to-string (regex.matches two-to-four-a "aaaa"))
 
-  print (to-string (matches at-least-one-b ""))
-  print (to-string (matches at-least-one-b "b"))
-  print (to-string (matches at-least-one-b "bbb"))
+  print (to-string (regex.matches at-least-one-b ""))
+  print (to-string (regex.matches at-least-one-b "b"))
+  print (to-string (regex.matches at-least-one-b "bbb"))
 
-  print (to-string (matches optional-c ""))
-  print (to-string (matches optional-c "c"))
+  print (to-string (regex.matches optional-c ""))
+  print (to-string (regex.matches optional-c "c"))
 }
