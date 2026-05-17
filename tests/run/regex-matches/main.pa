@@ -1,0 +1,8 @@
+def hello /"hello"/
+
+def main fun {
+  print (to-string (matches hello "hello, world!"))
+  print (to-string (matches hello "goodbye, world!"))
+  print (to-string (matches hello "hello"))
+  print (to-string (matches hello ""))
+}
