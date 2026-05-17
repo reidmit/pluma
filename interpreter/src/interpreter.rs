@@ -62,6 +62,9 @@ pub struct ModuleTops<'ast> {
 	// local import name -> fully-qualified module name. `use a.b.c` binds
 	// `c -> "a.b.c"`; `use a.b.c as x` binds `x -> "a.b.c"`.
 	pub imports: HashMap<String, String>,
+	// Pre-built runtime values for native (stdlib) modules. Empty for
+	// user-parsed modules. Looked up before falling through to `slots`.
+	pub native_values: HashMap<String, Value<'ast>>,
 }
 
 impl<'ast> ModuleTops<'ast> {
@@ -95,11 +98,21 @@ impl<'ast> ModuleTops<'ast> {
 			slots,
 			enums,
 			imports,
+			native_values: HashMap::new(),
+		}
+	}
+
+	pub fn from_natives(values: HashMap<String, Value<'ast>>) -> Self {
+		Self {
+			slots: HashMap::new(),
+			enums: HashMap::new(),
+			imports: HashMap::new(),
+			native_values: values,
 		}
 	}
 
 	pub fn has_def(&self, name: &str) -> bool {
-		self.slots.contains_key(name)
+		self.slots.contains_key(name) || self.native_values.contains_key(name)
 	}
 }
 
@@ -129,6 +142,13 @@ impl<'ast> Interpreter<'ast> {
 		self
 	}
 
+	// Register a native (stdlib) module's runtime values. Must be called
+	// before `run()`. Mirrors `Compiler::register_native_module` on the
+	// types side.
+	pub fn register_native_module(&mut self, name: String, values: HashMap<String, Value<'ast>>) {
+		self.module_tops.insert(name, ModuleTops::from_natives(values));
+	}
+
 	// Resolve a top-level def by name in the given module. Forces evaluation
 	// (memoized) on first access.
 	pub fn force_top(
@@ -139,6 +159,10 @@ impl<'ast> Interpreter<'ast> {
 		let tops = self.module_tops.get(module_name).ok_or_else(|| {
 			RuntimeError::new(format!("unknown module `{}`", module_name))
 		})?;
+		// Native stdlib values short-circuit lazy evaluation.
+		if let Some(v) = tops.native_values.get(def_name) {
+			return Ok(v.clone());
+		}
 		let slot_cell = tops.slots.get(def_name).ok_or_else(|| {
 			RuntimeError::new(format!("`{}.{}` is not defined", module_name, def_name))
 		})?;
@@ -179,7 +203,6 @@ impl<'ast> Interpreter<'ast> {
 		let mut env = Environment::new();
 		env.define("print".into(), Value::Builtin(Builtin::Print));
 		env.define("to-string".into(), Value::Builtin(Builtin::ToString));
-		env.define("matches".into(), Value::Builtin(Builtin::Matches));
 		env
 	}
 

@@ -24,12 +24,15 @@ fn main() {
 					}
 				};
 
+				interpreter::stdlib::register_compiler(&mut compiler);
+
 				if let Err(diagnostics) = compiler.check() {
 					print_diagnostics(diagnostics);
 					std::process::exit(1);
 				}
 
-				let interp = interpreter::Interpreter::new(&compiler);
+				let mut interp = interpreter::Interpreter::new(&compiler);
+				interpreter::stdlib::register_runtime(&mut interp);
 				if let Err(err) = interp.run() {
 					print_error(format!("Runtime error: {}", err.message));
 					std::process::exit(1);
@@ -89,6 +92,8 @@ fn main() {
 						std::process::exit(1);
 					}
 				};
+
+				interpreter::stdlib::register_compiler(&mut compiler);
 
 				match compiler.check() {
 					Ok(module) => {

@@ -70,8 +70,11 @@ impl Module {
 		match fs::read(&self.module_path) {
 			Ok(bytes) => self.build_ast(bytes, diagnostics),
 			Err(err) => diagnostics.push(
-				Diagnostic::error(err)
-					.with_module(self.module_name.clone(), self.module_path.to_path_buf()),
+				Diagnostic::error(format!(
+					"Could not read module `{}`: {}",
+					self.module_name, err
+				))
+				.with_module(self.module_name.clone(), self.module_path.to_path_buf()),
 			),
 		}
 	}

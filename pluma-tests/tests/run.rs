@@ -24,8 +24,11 @@ fn run_fixture(path: &Path) -> datatest_stable::Result<()> {
 	let result = (|| -> Result<(), RunError> {
 		let mut compiler = Compiler::from_entry_path(relative.to_str().unwrap().to_string())
 			.map_err(RunError::Diagnostics)?;
+		interpreter::stdlib::register_compiler(&mut compiler);
 		compiler.check().map_err(RunError::Diagnostics)?;
-		let interp = Interpreter::new(&compiler).with_stdout(StdoutSink::Buffer(stdout_buf.clone()));
+		let mut interp =
+			Interpreter::new(&compiler).with_stdout(StdoutSink::Buffer(stdout_buf.clone()));
+		interpreter::stdlib::register_runtime(&mut interp);
 		interp.run().map_err(|e| RunError::Runtime(e.message))?;
 		Ok(())
 	})();

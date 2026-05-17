@@ -105,18 +105,6 @@ impl<'compiler> Analyzer<'compiler> {
 			),
 			Range::collapsed(0, 0),
 		);
-		// `matches: regex -> string -> bool` — does the regex match the string?
-		self.add_value_binding(
-			"matches".into(),
-			Scheme::Forall(
-				vec![],
-				Type::Fun(
-					vec![Type::Regex, Type::String],
-					Box::new(Type::Bool),
-				),
-			),
-			Range::collapsed(0, 0),
-		);
 		// `to-string: forall a. a -> string` — render any value as a string.
 		// This is the documented wart: the interpreter dispatches on the
 		// runtime tag, so this is the one function whose polymorphism the

@@ -16,6 +16,9 @@ pub struct Compiler {
 	// Per fully-qualified module name, the top-level defs (values, aliases,
 	// enums) other modules see when they `use` it.
 	exports_cache: HashMap<String, ModuleExports>,
+	// Pre-registered native modules (stdlib). Resolved without parsing any
+	// `.pa` file — the compiler hands the analyzer their exports directly.
+	pub native_modules: HashMap<String, ModuleExports>,
 }
 
 impl Compiler {
@@ -28,7 +31,15 @@ impl Compiler {
 			modules: HashMap::new(),
 			diagnostics: Vec::new(),
 			exports_cache: HashMap::new(),
+			native_modules: HashMap::new(),
 		})
+	}
+
+	// Register a stdlib module (e.g. `core.regex`) so its exports are visible
+	// to any user module that does `use <name>`. Must be called before
+	// `check()`. The runtime values come from the interpreter side.
+	pub fn register_native_module(&mut self, name: String, exports: ModuleExports) {
+		self.native_modules.insert(name, exports);
 	}
 
 	pub fn tokenize(&mut self) -> Result<Vec<Token>, Vec<Diagnostic>> {
@@ -59,6 +70,13 @@ impl Compiler {
 	// `visiting`.
 	fn load_module(&mut self, module_name: &str, visiting: &mut HashSet<String>) {
 		if self.exports_cache.contains_key(module_name) {
+			return;
+		}
+
+		// Native stdlib modules: pull pre-registered exports into the cache
+		// and skip parse/analyze entirely.
+		if let Some(exports) = self.native_modules.get(module_name).cloned() {
+			self.exports_cache.insert(module_name.to_string(), exports);
 			return;
 		}
 
