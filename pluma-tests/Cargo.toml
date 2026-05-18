@@ -5,8 +5,10 @@ edition = "2021"
 publish = false
 
 [dependencies]
+codegen = { path = "../codegen" }
 compiler = { path = "../compiler" }
 interpreter = { path = "../interpreter" }
+vm = { path = "../vm" }
 
 [dev-dependencies]
 datatest-stable = "0.2"

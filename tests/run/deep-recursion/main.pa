@@ -1,6 +1,5 @@
-# Exercises a meaningfully deep recursion. The tree-walking interpreter
-# uses one Rust stack frame per Pluma call, so depths beyond ~few hundred
-# may overflow until we add TCO or trampolining.
+# Tail-call-style recursion through the bytecode VM. Frames live on the
+# heap, so this is bounded only by memory rather than the Rust call stack.
 
 def count-down fun n {
   when n is 0 {
@@ -11,6 +10,6 @@ def count-down fun n {
 }
 
 def main fun {
-  count-down 30
+  count-down 5000
   print "ok"
 }

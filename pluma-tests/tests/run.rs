@@ -1,9 +1,9 @@
 // One #[test] per `tests/run/<name>/main.pa` fixture. Compiles + runs the
-// fixture in-process, capturing `print` output through the interpreter's
-// configurable StdoutSink. Snapshot lives in `run.snap` next to the fixture.
+// fixture in-process via the bytecode VM, capturing `print` output through
+// the VM's configurable StdoutSink. Snapshot lives in `run.snap` next to the
+// fixture.
 
 use compiler::{Compiler, Diagnostic};
-use interpreter::{Interpreter, StdoutSink};
 use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
@@ -24,12 +24,12 @@ fn run_fixture(path: &Path) -> datatest_stable::Result<()> {
 	let result = (|| -> Result<(), RunError> {
 		let mut compiler = Compiler::from_entry_path(relative.to_str().unwrap().to_string())
 			.map_err(RunError::Diagnostics)?;
-		interpreter::stdlib::register_compiler(&mut compiler);
+		vm::stdlib::register_compiler(&mut compiler);
 		compiler.check().map_err(RunError::Diagnostics)?;
-		let mut interp =
-			Interpreter::new(&compiler).with_stdout(StdoutSink::Buffer(stdout_buf.clone()));
-		interpreter::stdlib::register_runtime(&mut interp);
-		interp.run().map_err(|e| RunError::Runtime(e.message))?;
+		let program = codegen::compile(&compiler).map_err(RunError::Runtime)?;
+		let mut vm_instance =
+			vm::VM::new(program).with_stdout(vm::StdoutSink::Buffer(stdout_buf.clone()));
+		vm_instance.run().map_err(|e| RunError::Runtime(e.message))?;
 		Ok(())
 	})();
 
