@@ -22,15 +22,10 @@ revisit when profiling shows it matters.
 
 ## Stack layout
 
-- **Per-frame `Vec<Value>` for locals.** Each call allocates a small Vec
-  sized to the function's slot count. Push/pop on Return.
-  *Future:* a unified value stack with `base_offset` per frame avoids the
-  allocation. Lua does this. ~30-50% faster on call-heavy benchmarks but
-  bookkeeping is fiddly.
-
-- **Separate operand stack and frame stack.** Standard design — operand
-  stack holds intermediates, frame stack tracks call state. Easy to reason
-  about. The unified-stack alternative folds them together for less indirection.
+- ~~Per-frame `Vec<Value>` for locals.~~ **Done.** Unified stack with
+  `base + slot` indexing now. Frames just hold offsets. Benchmark wins
+  in the 15-24% range on call-heavy code (fib, record-access, sum-list).
+  Tail-recursive code didn't improve (no frame allocations to save).
 
 ## Bytecode
 
