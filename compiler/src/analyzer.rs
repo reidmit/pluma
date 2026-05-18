@@ -640,8 +640,18 @@ impl<'compiler> Analyzer<'compiler> {
 				self.constrain_expr(right, constraints);
 				match op {
 					Operator::SubtractionOrNegation => {
-						expr.ty = Type::Int;
-						constraints.push(eq_constraint(right.ty.clone(), Type::Int).at(right.range));
+						// int or float based on the operand. If the operand is
+						// already known to be Float, the result is Float;
+						// otherwise default to Int (which forces unification).
+						// Mixed-type uses produce a regular type-mismatch
+						// diagnostic via the eq_constraint.
+						let ty = if matches!(right.ty, Type::Float) {
+							Type::Float
+						} else {
+							Type::Int
+						};
+						expr.ty = ty.clone();
+						constraints.push(eq_constraint(right.ty.clone(), ty).at(right.range));
 					}
 					Operator::LogicalNot => {
 						expr.ty = Type::Bool;
@@ -663,9 +673,18 @@ impl<'compiler> Analyzer<'compiler> {
 					| Operator::Multiplication
 					| Operator::Division
 					| Operator::Remainder => {
-						expr.ty = Type::Int;
-						constraints.push(eq_constraint(left.ty.clone(), Type::Int).at(left.range));
-						constraints.push(eq_constraint(right.ty.clone(), Type::Int).at(right.range));
+						// int or float based on the operand types. If either
+						// side is concretely Float, both sides + result are
+						// Float; otherwise default to Int. This means
+						// polymorphic-numeric functions (`fun a b { a + b }`)
+						// resolve to int-only — users write a per-type
+						// function for float.
+						let is_float =
+							matches!(left.ty, Type::Float) || matches!(right.ty, Type::Float);
+						let ty = if is_float { Type::Float } else { Type::Int };
+						expr.ty = ty.clone();
+						constraints.push(eq_constraint(left.ty.clone(), ty.clone()).at(left.range));
+						constraints.push(eq_constraint(right.ty.clone(), ty).at(right.range));
 					}
 
 					Operator::LogicalAnd | Operator::LogicalOr => {
@@ -683,15 +702,18 @@ impl<'compiler> Analyzer<'compiler> {
 						);
 					}
 
-					// Ordering: ints only for now. (Adding floats/strings is a
-					// later refinement; rejecting non-int loudly is fine.)
+					// Ordering: int or float, same dispatch as arithmetic
+					// (default to Int when both sides are unknown).
 					Operator::LessThan
 					| Operator::LessThanEquals
 					| Operator::GreaterThan
 					| Operator::GreaterThanEquals => {
 						expr.ty = Type::Bool;
-						constraints.push(eq_constraint(left.ty.clone(), Type::Int).at(left.range));
-						constraints.push(eq_constraint(right.ty.clone(), Type::Int).at(right.range));
+						let is_float =
+							matches!(left.ty, Type::Float) || matches!(right.ty, Type::Float);
+						let ty = if is_float { Type::Float } else { Type::Int };
+						constraints.push(eq_constraint(left.ty.clone(), ty.clone()).at(left.range));
+						constraints.push(eq_constraint(right.ty.clone(), ty).at(right.range));
 					}
 
 					Operator::FieldAccess => unreachable!("handled separately"),

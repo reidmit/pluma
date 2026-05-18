@@ -29,6 +29,10 @@ pub fn call<'ast>(
 		Builtin::ListFilter => list_filter(interp, args, call_range),
 		Builtin::ListFold => list_fold(interp, args, call_range),
 		Builtin::ListEach => list_each(interp, args, call_range),
+		Builtin::MathToFloat => math_to_float(args, call_range),
+		Builtin::MathToInt => math_to_int(args, call_range),
+		Builtin::MathSqrt => math_sqrt(args, call_range),
+		Builtin::MathAbs => math_abs(args, call_range),
 	}
 }
 
@@ -269,4 +273,58 @@ fn list_each<'ast>(
 		)?;
 	}
 	Ok(Value::Nothing)
+}
+
+fn math_to_float<'ast>(
+	args: Vec<Value<'ast>>,
+	call_range: Range,
+) -> Result<Value<'ast>, RuntimeError> {
+	if args.len() != 1 {
+		return Err(RuntimeError::new("`to-float` takes 1 argument").at(call_range));
+	}
+	match &args[0] {
+		Value::Int(n) => Ok(Value::Float(*n as f64)),
+		_ => Err(RuntimeError::new("`to-float` expected an int").at(call_range)),
+	}
+}
+
+fn math_to_int<'ast>(
+	args: Vec<Value<'ast>>,
+	call_range: Range,
+) -> Result<Value<'ast>, RuntimeError> {
+	if args.len() != 1 {
+		return Err(RuntimeError::new("`to-int` takes 1 argument").at(call_range));
+	}
+	// Truncates toward zero, matching Rust's `as i64` semantics. NaN and
+	// out-of-range floats saturate (Rust 1.45+ behavior).
+	match &args[0] {
+		Value::Float(n) => Ok(Value::Int(*n as i64)),
+		_ => Err(RuntimeError::new("`to-int` expected a float").at(call_range)),
+	}
+}
+
+fn math_sqrt<'ast>(
+	args: Vec<Value<'ast>>,
+	call_range: Range,
+) -> Result<Value<'ast>, RuntimeError> {
+	if args.len() != 1 {
+		return Err(RuntimeError::new("`sqrt` takes 1 argument").at(call_range));
+	}
+	match &args[0] {
+		Value::Float(n) => Ok(Value::Float(n.sqrt())),
+		_ => Err(RuntimeError::new("`sqrt` expected a float").at(call_range)),
+	}
+}
+
+fn math_abs<'ast>(
+	args: Vec<Value<'ast>>,
+	call_range: Range,
+) -> Result<Value<'ast>, RuntimeError> {
+	if args.len() != 1 {
+		return Err(RuntimeError::new("`abs` takes 1 argument").at(call_range));
+	}
+	match &args[0] {
+		Value::Int(n) => Ok(Value::Int(n.wrapping_abs())),
+		_ => Err(RuntimeError::new("`abs` expected an int").at(call_range)),
+	}
 }

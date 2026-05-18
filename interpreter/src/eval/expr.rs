@@ -284,8 +284,9 @@ fn eval_unary<'ast>(
 ) -> Result<Value<'ast>, RuntimeError> {
 	match (op, &value) {
 		(Operator::SubtractionOrNegation, Value::Int(n)) => Ok(Value::Int(-*n)),
+		(Operator::SubtractionOrNegation, Value::Float(n)) => Ok(Value::Float(-*n)),
 		(Operator::SubtractionOrNegation, _) => {
-			Err(RuntimeError::new("unary `-` expects an int").at(range))
+			Err(RuntimeError::new("unary `-` expects a number").at(range))
 		}
 		(Operator::LogicalNot, Value::Bool(b)) => Ok(Value::Bool(!*b)),
 		(Operator::LogicalNot, _) => {
@@ -336,41 +337,51 @@ fn eval_binary<'ast>(
 	range: compiler::Range,
 ) -> Result<Value<'ast>, RuntimeError> {
 	use Operator::*;
-	let int_op =
-		|l: &Value<'ast>, r: &Value<'ast>| match (l, r) {
-			(Value::Int(a), Value::Int(b)) => Some((*a, *b)),
-			_ => None,
-		};
+	// Numeric dispatch: (Int, Int) and (Float, Float) both route through here;
+	// the analyzer already rejected mixed-type pairs.
+	macro_rules! numeric_arith {
+		($op:tt, $name:literal, $int_op:expr) => {{
+			match (&left, &right) {
+				(Value::Int(a), Value::Int(b)) => Ok(Value::Int($int_op(*a, *b))),
+				(Value::Float(a), Value::Float(b)) => Ok(Value::Float(a $op b)),
+				_ => Err(RuntimeError::new(concat!("expected numeric for `", $name, "`")).at(range)),
+			}
+		}};
+	}
+	macro_rules! numeric_cmp {
+		($op:tt, $name:literal) => {{
+			match (&left, &right) {
+				(Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a $op b)),
+				(Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a $op b)),
+				_ => Err(RuntimeError::new(concat!("expected numeric for `", $name, "`")).at(range)),
+			}
+		}};
+	}
 	let bool_op = |l: &Value<'ast>, r: &Value<'ast>| match (l, r) {
 		(Value::Bool(a), Value::Bool(b)) => Some((*a, *b)),
 		_ => None,
 	};
 	match op {
-		Addition => int_op(&left, &right)
-			.map(|(a, b)| Value::Int(a.wrapping_add(b)))
-			.ok_or_else(|| RuntimeError::new("expected ints for `+`").at(range)),
-		SubtractionOrNegation => int_op(&left, &right)
-			.map(|(a, b)| Value::Int(a.wrapping_sub(b)))
-			.ok_or_else(|| RuntimeError::new("expected ints for `-`").at(range)),
-		Multiplication => int_op(&left, &right)
-			.map(|(a, b)| Value::Int(a.wrapping_mul(b)))
-			.ok_or_else(|| RuntimeError::new("expected ints for `*`").at(range)),
-		Division => {
-			let (a, b) = int_op(&left, &right)
-				.ok_or_else(|| RuntimeError::new("expected ints for `/`").at(range))?;
-			if b == 0 {
-				return Err(RuntimeError::new("division by zero").at(range));
+		Addition => numeric_arith!(+, "+", i64::wrapping_add),
+		SubtractionOrNegation => numeric_arith!(-, "-", i64::wrapping_sub),
+		Multiplication => numeric_arith!(*, "*", i64::wrapping_mul),
+		Division => match (&left, &right) {
+			(Value::Int(_), Value::Int(b)) if *b == 0 => {
+				Err(RuntimeError::new("division by zero").at(range))
 			}
-			Ok(Value::Int(a / b))
-		}
-		Remainder => {
-			let (a, b) = int_op(&left, &right)
-				.ok_or_else(|| RuntimeError::new("expected ints for `%`").at(range))?;
-			if b == 0 {
-				return Err(RuntimeError::new("division by zero").at(range));
+			(Value::Int(a), Value::Int(b)) => Ok(Value::Int(a / b)),
+			// Float div by zero produces ±Inf/NaN per IEEE — no error.
+			(Value::Float(a), Value::Float(b)) => Ok(Value::Float(a / b)),
+			_ => Err(RuntimeError::new("expected numeric for `/`").at(range)),
+		},
+		Remainder => match (&left, &right) {
+			(Value::Int(_), Value::Int(b)) if *b == 0 => {
+				Err(RuntimeError::new("division by zero").at(range))
 			}
-			Ok(Value::Int(a % b))
-		}
+			(Value::Int(a), Value::Int(b)) => Ok(Value::Int(a % b)),
+			(Value::Float(a), Value::Float(b)) => Ok(Value::Float(a % b)),
+			_ => Err(RuntimeError::new("expected numeric for `%`").at(range)),
+		},
 		LogicalAnd => bool_op(&left, &right)
 			.map(|(a, b)| Value::Bool(a && b))
 			.ok_or_else(|| RuntimeError::new("expected bools for `&&`").at(range)),
@@ -379,18 +390,10 @@ fn eval_binary<'ast>(
 			.ok_or_else(|| RuntimeError::new("expected bools for `||`").at(range)),
 		Equality => Ok(Value::Bool(values_eq(&left, &right))),
 		Inequality => Ok(Value::Bool(!values_eq(&left, &right))),
-		LessThan => int_op(&left, &right)
-			.map(|(a, b)| Value::Bool(a < b))
-			.ok_or_else(|| RuntimeError::new("expected ints for `<`").at(range)),
-		LessThanEquals => int_op(&left, &right)
-			.map(|(a, b)| Value::Bool(a <= b))
-			.ok_or_else(|| RuntimeError::new("expected ints for `<=`").at(range)),
-		GreaterThan => int_op(&left, &right)
-			.map(|(a, b)| Value::Bool(a > b))
-			.ok_or_else(|| RuntimeError::new("expected ints for `>`").at(range)),
-		GreaterThanEquals => int_op(&left, &right)
-			.map(|(a, b)| Value::Bool(a >= b))
-			.ok_or_else(|| RuntimeError::new("expected ints for `>=`").at(range)),
+		LessThan => numeric_cmp!(<, "<"),
+		LessThanEquals => numeric_cmp!(<=, "<="),
+		GreaterThan => numeric_cmp!(>, ">"),
+		GreaterThanEquals => numeric_cmp!(>=, ">="),
 		other => Err(RuntimeError::new(format!(
 			"binary operator `{}` not yet implemented",
 			other

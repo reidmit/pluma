@@ -59,6 +59,10 @@ pub enum Builtin {
 	ListFilter,
 	ListFold,
 	ListEach,
+	MathToFloat,
+	MathToInt,
+	MathSqrt,
+	MathAbs,
 }
 
 impl<'ast> Clone for Value<'ast> {
