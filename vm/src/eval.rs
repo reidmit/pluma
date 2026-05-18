@@ -3,9 +3,24 @@
 // CallBuiltin / Closure-of-Builtin and the cross-call `invoke` helper.
 
 use crate::builtin::Builtin;
-use crate::value::{values_eq, Value};
+use crate::value::{values_eq, Value, VariantData};
 use crate::vm::{RuntimeError, VM};
 use std::rc::Rc;
+
+// Construct a prelude `option` value. `Some(payload)` for `Some(v)`, `None`
+// for absent. Used by list builtins that may return no result (head, tail,
+// find).
+fn option_value(payload: Option<Value>) -> Value {
+	let (variant, payload) = match payload {
+		Some(v) => ("some", vec![v]),
+		None => ("none", vec![]),
+	};
+	Value::Variant(Rc::new(VariantData {
+		qualified_enum: Rc::new("__prelude__.option".to_string()),
+		variant: Rc::new(variant.to_string()),
+		payload,
+	}))
+}
 
 // Arities and arg types of every builtin are statically enforced by the
 // analyzer against the signatures in `stdlib.rs`. The asserts and
@@ -133,6 +148,98 @@ pub fn call_builtin(vm: &mut VM, b: Builtin, args: Vec<Value>) -> Result<Value, 
 				invoke(vm, fn_arg.clone(), vec![x.clone()])?;
 			}
 			Ok(Value::Nothing)
+		}
+		ListHead => {
+			let xs = expect_list(&args, "head");
+			Ok(option_value(xs.first().cloned()))
+		}
+		ListTail => {
+			let xs = expect_list(&args, "tail");
+			Ok(if xs.is_empty() {
+				option_value(None)
+			} else {
+				option_value(Some(Value::List(Rc::new(xs[1..].to_vec()))))
+			})
+		}
+		ListTake => {
+			debug_assert_eq!(args.len(), 2, "`take` arity");
+			let xs = match &args[0] {
+				Value::List(xs) => xs.clone(),
+				_ => unreachable!("`take`: expected list"),
+			};
+			let n = match &args[1] {
+				Value::Int(n) => (*n).max(0) as usize,
+				_ => unreachable!("`take`: expected int"),
+			};
+			let n = n.min(xs.len());
+			Ok(Value::List(Rc::new(xs[..n].to_vec())))
+		}
+		ListDrop => {
+			debug_assert_eq!(args.len(), 2, "`drop` arity");
+			let xs = match &args[0] {
+				Value::List(xs) => xs.clone(),
+				_ => unreachable!("`drop`: expected list"),
+			};
+			let n = match &args[1] {
+				Value::Int(n) => (*n).max(0) as usize,
+				_ => unreachable!("`drop`: expected int"),
+			};
+			let n = n.min(xs.len());
+			Ok(Value::List(Rc::new(xs[n..].to_vec())))
+		}
+		ListFind => {
+			debug_assert_eq!(args.len(), 2, "`find` arity");
+			let mut it = args.into_iter();
+			let list_arg = it.next().unwrap();
+			let fn_arg = it.next().unwrap();
+			let xs = match list_arg {
+				Value::List(xs) => xs,
+				_ => unreachable!("`find`: expected list"),
+			};
+			for x in xs.iter() {
+				match invoke(vm, fn_arg.clone(), vec![x.clone()])? {
+					Value::Bool(true) => return Ok(option_value(Some(x.clone()))),
+					Value::Bool(false) => {}
+					_ => unreachable!("`find`: predicate must return bool"),
+				}
+			}
+			Ok(option_value(None))
+		}
+		ListAny => {
+			debug_assert_eq!(args.len(), 2, "`any` arity");
+			let mut it = args.into_iter();
+			let list_arg = it.next().unwrap();
+			let fn_arg = it.next().unwrap();
+			let xs = match list_arg {
+				Value::List(xs) => xs,
+				_ => unreachable!("`any`: expected list"),
+			};
+			for x in xs.iter() {
+				match invoke(vm, fn_arg.clone(), vec![x.clone()])? {
+					Value::Bool(true) => return Ok(Value::Bool(true)),
+					Value::Bool(false) => {}
+					_ => unreachable!("`any`: predicate must return bool"),
+				}
+			}
+			Ok(Value::Bool(false))
+		}
+		ListAll => {
+			debug_assert_eq!(args.len(), 2, "`all` arity");
+			let mut it = args.into_iter();
+			let list_arg = it.next().unwrap();
+			let fn_arg = it.next().unwrap();
+			let xs = match list_arg {
+				Value::List(xs) => xs,
+				_ => unreachable!("`all`: expected list"),
+			};
+			for x in xs.iter() {
+				match invoke(vm, fn_arg.clone(), vec![x.clone()])? {
+					Value::Bool(false) => return Ok(Value::Bool(false)),
+					Value::Bool(true) => {}
+					_ => unreachable!("`all`: predicate must return bool"),
+				}
+			}
+			Ok(Value::Bool(true))
 		}
 		MathToFloat => {
 			debug_assert_eq!(args.len(), 1, "`to-float` arity");

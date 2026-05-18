@@ -55,6 +55,9 @@ fn list_module() -> NativeModule {
 	let b = || Type::Var(1);
 	let list_a = || Type::List(Box::new(a()));
 	let list_b = || Type::List(Box::new(b()));
+	let option_a = || Type::Enum("__prelude__.option".to_string(), vec![a()]);
+	let option_list_a = || Type::Enum("__prelude__.option".to_string(), vec![list_a()]);
+	let pred_a = || Type::Fun(vec![a()], Box::new(Type::Bool));
 
 	NativeModule {
 		name: "core.list",
@@ -95,7 +98,7 @@ fn list_module() -> NativeModule {
 			NativeDef {
 				name: "filter",
 				ty: Type::Fun(
-					vec![list_a(), Type::Fun(vec![a()], Box::new(Type::Bool))],
+					vec![list_a(), pred_a()],
 					Box::new(list_a()),
 				),
 				builtin: Builtin::ListFilter,
@@ -115,6 +118,41 @@ fn list_module() -> NativeModule {
 					Box::new(Type::Nothing),
 				),
 				builtin: Builtin::ListEach,
+			},
+			NativeDef {
+				name: "head",
+				ty: Type::Fun(vec![list_a()], Box::new(option_a())),
+				builtin: Builtin::ListHead,
+			},
+			NativeDef {
+				name: "tail",
+				ty: Type::Fun(vec![list_a()], Box::new(option_list_a())),
+				builtin: Builtin::ListTail,
+			},
+			NativeDef {
+				name: "take",
+				ty: Type::Fun(vec![list_a(), Type::Int], Box::new(list_a())),
+				builtin: Builtin::ListTake,
+			},
+			NativeDef {
+				name: "drop",
+				ty: Type::Fun(vec![list_a(), Type::Int], Box::new(list_a())),
+				builtin: Builtin::ListDrop,
+			},
+			NativeDef {
+				name: "find",
+				ty: Type::Fun(vec![list_a(), pred_a()], Box::new(option_a())),
+				builtin: Builtin::ListFind,
+			},
+			NativeDef {
+				name: "any",
+				ty: Type::Fun(vec![list_a(), pred_a()], Box::new(Type::Bool)),
+				builtin: Builtin::ListAny,
+			},
+			NativeDef {
+				name: "all",
+				ty: Type::Fun(vec![list_a(), pred_a()], Box::new(Type::Bool)),
+				builtin: Builtin::ListAll,
 			},
 		],
 	}
