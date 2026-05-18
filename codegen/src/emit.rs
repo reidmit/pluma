@@ -36,7 +36,8 @@ pub fn compile(compiler: &compiler::Compiler) -> Result<Program, String> {
 		vec![("ok".to_string(), 1), ("err".to_string(), 1)],
 	);
 
-	// Native modules: each def's value is a pre-evaluated Builtin.
+	// Native modules: each def's value is a pre-evaluated Builtin, each
+	// constant's is its concrete Value.
 	for module in native_modules() {
 		for def in &module.defs {
 			cg.add_evaluated_global(
@@ -44,6 +45,9 @@ pub fn compile(compiler: &compiler::Compiler) -> Result<Program, String> {
 				def.name,
 				Value::Builtin(def.builtin),
 			);
+		}
+		for c in module.constants {
+			cg.add_evaluated_global(module.name, c.name, c.value);
 		}
 	}
 

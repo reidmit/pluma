@@ -3,6 +3,7 @@
 // global slots).
 
 use crate::builtin::Builtin;
+use crate::value::Value;
 use compiler::types::Type;
 use compiler::ModuleExports;
 use std::collections::HashMap;
@@ -10,6 +11,10 @@ use std::collections::HashMap;
 pub struct NativeModule {
 	pub name: &'static str,
 	pub defs: Vec<NativeDef>,
+	// Pre-evaluated constants — values, not functions. Loaded as globals
+	// the same way functions are, but registered with a concrete Value
+	// instead of a Builtin tag so `math.pi` evaluates without a call.
+	pub constants: Vec<NativeConstant>,
 }
 
 pub struct NativeDef {
@@ -18,17 +23,26 @@ pub struct NativeDef {
 	pub builtin: Builtin,
 }
 
+pub struct NativeConstant {
+	pub name: &'static str,
+	pub ty: Type,
+	pub value: Value,
+}
+
 pub fn native_modules() -> Vec<NativeModule> {
 	vec![regex_module(), list_module(), math_module(), string_module()]
 }
 
 pub fn register_compiler(compiler: &mut compiler::Compiler) {
 	for module in native_modules() {
-		let values: HashMap<String, Type> = module
+		let mut values: HashMap<String, Type> = module
 			.defs
 			.into_iter()
 			.map(|d| (d.name.to_string(), d.ty))
 			.collect();
+		for c in module.constants {
+			values.insert(c.name.to_string(), c.ty);
+		}
 		compiler.register_native_module(
 			module.name.to_string(),
 			ModuleExports {
@@ -47,6 +61,7 @@ fn regex_module() -> NativeModule {
 			ty: Type::Fun(vec![Type::Regex, Type::String], Box::new(Type::Bool)),
 			builtin: Builtin::Matches,
 		}],
+		constants: vec![],
 	}
 }
 
@@ -155,6 +170,7 @@ fn list_module() -> NativeModule {
 				builtin: Builtin::ListAll,
 			},
 		],
+		constants: vec![],
 	}
 }
 
@@ -227,10 +243,13 @@ fn string_module() -> NativeModule {
 				builtin: Builtin::StringReplace,
 			},
 		],
+		constants: vec![],
 	}
 }
 
 fn math_module() -> NativeModule {
+	let float_to_float = || Type::Fun(vec![Type::Float], Box::new(Type::Float));
+	let float_to_int = || Type::Fun(vec![Type::Float], Box::new(Type::Int));
 	NativeModule {
 		name: "core.math",
 		defs: vec![
@@ -246,13 +265,75 @@ fn math_module() -> NativeModule {
 			},
 			NativeDef {
 				name: "sqrt",
-				ty: Type::Fun(vec![Type::Float], Box::new(Type::Float)),
+				ty: float_to_float(),
 				builtin: Builtin::MathSqrt,
 			},
 			NativeDef {
 				name: "abs",
 				ty: Type::Fun(vec![Type::Int], Box::new(Type::Int)),
 				builtin: Builtin::MathAbs,
+			},
+			NativeDef {
+				name: "floor",
+				ty: float_to_int(),
+				builtin: Builtin::MathFloor,
+			},
+			NativeDef {
+				name: "ceil",
+				ty: float_to_int(),
+				builtin: Builtin::MathCeil,
+			},
+			NativeDef {
+				name: "round",
+				ty: float_to_int(),
+				builtin: Builtin::MathRound,
+			},
+			NativeDef {
+				name: "log",
+				ty: float_to_float(),
+				builtin: Builtin::MathLog,
+			},
+			NativeDef {
+				name: "log10",
+				ty: float_to_float(),
+				builtin: Builtin::MathLog10,
+			},
+			NativeDef {
+				name: "log2",
+				ty: float_to_float(),
+				builtin: Builtin::MathLog2,
+			},
+			NativeDef {
+				name: "exp",
+				ty: float_to_float(),
+				builtin: Builtin::MathExp,
+			},
+			NativeDef {
+				name: "sin",
+				ty: float_to_float(),
+				builtin: Builtin::MathSin,
+			},
+			NativeDef {
+				name: "cos",
+				ty: float_to_float(),
+				builtin: Builtin::MathCos,
+			},
+			NativeDef {
+				name: "tan",
+				ty: float_to_float(),
+				builtin: Builtin::MathTan,
+			},
+		],
+		constants: vec![
+			NativeConstant {
+				name: "pi",
+				ty: Type::Float,
+				value: Value::Float(std::f64::consts::PI),
+			},
+			NativeConstant {
+				name: "e",
+				ty: Type::Float,
+				value: Value::Float(std::f64::consts::E),
 			},
 		],
 	}

@@ -269,6 +269,16 @@ pub fn call_builtin(vm: &mut VM, b: Builtin, args: Vec<Value>) -> Result<Value, 
 				_ => unreachable!("`abs`: expected int"),
 			}
 		}
+		MathFloor => Ok(Value::Int(expect_float(&args, "floor").floor() as i64)),
+		MathCeil => Ok(Value::Int(expect_float(&args, "ceil").ceil() as i64)),
+		MathRound => Ok(Value::Int(expect_float(&args, "round").round() as i64)),
+		MathLog => Ok(Value::Float(expect_float(&args, "log").ln())),
+		MathLog10 => Ok(Value::Float(expect_float(&args, "log10").log10())),
+		MathLog2 => Ok(Value::Float(expect_float(&args, "log2").log2())),
+		MathExp => Ok(Value::Float(expect_float(&args, "exp").exp())),
+		MathSin => Ok(Value::Float(expect_float(&args, "sin").sin())),
+		MathCos => Ok(Value::Float(expect_float(&args, "cos").cos())),
+		MathTan => Ok(Value::Float(expect_float(&args, "tan").tan())),
 		StringLength => {
 			let s = expect_string(&args, "length");
 			Ok(Value::Int(s.chars().count() as i64))
@@ -384,6 +394,14 @@ fn expect_string<'a>(args: &'a [Value], name: &str) -> &'a Rc<String> {
 	match &args[0] {
 		Value::String(s) => s,
 		_ => unreachable!("`{}`: expected string", name),
+	}
+}
+
+fn expect_float(args: &[Value], name: &str) -> f64 {
+	debug_assert_eq!(args.len(), 1, "`{}` arity", name);
+	match &args[0] {
+		Value::Float(n) => *n,
+		_ => unreachable!("`{}`: expected float", name),
 	}
 }
 
