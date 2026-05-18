@@ -5,7 +5,7 @@ use crate::location::Range;
 use crate::tokenizer::Tokenizer;
 use crate::tokens::Token;
 use crate::types::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 macro_rules! current_token_is {
 	($self:ident, $tokType:path) => {
@@ -72,6 +72,11 @@ pub struct Parser<'a> {
 	errors: Vec<ParseError>,
 	current_token: Option<Token>,
 	prev_token: Option<Token>,
+	// Tokens pulled from the tokenizer ahead of where the parser is sitting,
+	// populated by `peek_past_breaks` and drained by `advance`. Lets us look
+	// past line-break tokens to decide whether an infix operator continues
+	// the current expression, without committing to consuming the breaks.
+	lookahead: VecDeque<Token>,
 	current_line: usize,
 	line_start_offsets: HashMap<usize, usize>,
 }
@@ -84,6 +89,7 @@ impl<'a> Parser<'a> {
 			errors: Vec::new(),
 			current_token: None,
 			prev_token: None,
+			lookahead: VecDeque::new(),
 			current_line: 0,
 			line_start_offsets: HashMap::from_iter(vec![(0, 0)]),
 		};
@@ -172,7 +178,46 @@ impl<'a> Parser<'a> {
 
 	fn advance(&mut self) {
 		self.prev_token = self.current_token;
-		self.current_token = self.tokenizer.next();
+		self.current_token = self.lookahead.pop_front().or_else(|| self.tokenizer.next());
+	}
+
+	// Look past any line-break-ish tokens (LineBreak/Indent/Outdent) starting
+	// from `current_token` and return the first non-break token, without
+	// consuming anything. Pulled tokens are buffered so a subsequent
+	// `advance` / `skip_line_breaks` still sees them.
+	fn peek_past_breaks(&mut self) -> Option<Token> {
+		let is_break = |t: &Token| {
+			matches!(
+				t,
+				Token::LineBreak(..) | Token::Indent(..) | Token::Outdent(..)
+			)
+		};
+
+		// `current_token` itself counts as the first slot to inspect; if it's
+		// already non-break we don't need to look further.
+		if let Some(t) = self.current_token {
+			if !is_break(&t) {
+				return Some(t);
+			}
+		}
+
+		for t in self.lookahead.iter() {
+			if !is_break(t) {
+				return Some(*t);
+			}
+		}
+
+		loop {
+			match self.tokenizer.next() {
+				Some(t) => {
+					self.lookahead.push_back(t);
+					if !is_break(&t) {
+						return Some(t);
+					}
+				}
+				None => return None,
+			}
+		}
 	}
 
 	fn skip_line_breaks(&mut self) {
@@ -453,8 +498,19 @@ impl<'a> Parser<'a> {
 		}?;
 
 		loop {
-			if current_token_is!(self, Token::LineBreak) || current_token_is!(self, Token::Outdent) {
-				break;
+			// Line breaks normally terminate an expression, but if the next
+			// non-break token is an infix operator we let it continue across
+			// the break (so `x\n  | f` parses like `x | f`). We don't extend
+			// this to FunctionCall — `foo\nbar` must stay as two statements,
+			// not `foo bar`.
+			if matches!(
+				self.current_token,
+				Some(Token::LineBreak(..) | Token::Indent(..) | Token::Outdent(..))
+			) {
+				match self.peek_past_breaks().and_then(Operator::from_token) {
+					Some(_) => self.skip_line_breaks(),
+					None => break,
+				}
 			}
 
 			let operator = match self.current_token {
