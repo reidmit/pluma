@@ -15,34 +15,7 @@ fn main() {
 						std::process::exit(1);
 					}
 				};
-
-				let mut compiler = match Compiler::from_entry_path(entry_path) {
-					Ok(c) => c,
-					Err(diagnostics) => {
-						print_diagnostics(diagnostics);
-						std::process::exit(1);
-					}
-				};
-
-				vm::stdlib::register_compiler(&mut compiler);
-
-				if let Err(diagnostics) = compiler.check() {
-					print_diagnostics(diagnostics);
-					std::process::exit(1);
-				}
-
-				let program = match codegen::compile(&compiler) {
-					Ok(p) => p,
-					Err(msg) => {
-						print_error(format!("codegen error: {}", msg));
-						std::process::exit(1);
-					}
-				};
-				let mut vm_instance = vm::VM::new(program);
-				if let Err(err) = vm_instance.run() {
-					print_error(format!("Runtime error: {}", err.message));
-					std::process::exit(1);
-				}
+				run(entry_path);
 			}
 
 			"build" => {
@@ -121,16 +94,46 @@ fn main() {
 				println!("v{}", VERSION)
 			}
 
-			other => {
-				print_error(format!("Unrecognized command: `{}`\n", other));
-				print_help();
-				std::process::exit(1);
+			// Anything else is treated as a path to run, so `cli foo.pa`
+			// works as shorthand for `cli run foo.pa`.
+			_ => {
+				run(arg);
 			}
 		},
 
 		None => {
 			print_help();
 		}
+	}
+}
+
+fn run(entry_path: String) {
+	let mut compiler = match Compiler::from_entry_path(entry_path) {
+		Ok(c) => c,
+		Err(diagnostics) => {
+			print_diagnostics(diagnostics);
+			std::process::exit(1);
+		}
+	};
+
+	vm::stdlib::register_compiler(&mut compiler);
+
+	if let Err(diagnostics) = compiler.check() {
+		print_diagnostics(diagnostics);
+		std::process::exit(1);
+	}
+
+	let program = match codegen::compile(&compiler) {
+		Ok(p) => p,
+		Err(msg) => {
+			print_error(format!("codegen error: {}", msg));
+			std::process::exit(1);
+		}
+	};
+	let mut vm_instance = vm::VM::new(program);
+	if let Err(err) = vm_instance.run() {
+		print_error(format!("Runtime error: {}", err.message));
+		std::process::exit(1);
 	}
 }
 
@@ -147,7 +150,7 @@ fn print_help() {
 Compiler & toolchain for the {} programming language
 
 COMMANDS:
-  run <path>       execute a module directly
+  [run] <path>     execute a module directly (the `run` keyword is optional)
   build <path>     compile a module into an executable
   tokenize <path>  dump the token stream for a module
   analyze <path>   parse, type-check & dump info about a module
@@ -166,7 +169,7 @@ fn print_help() {
 Compiler & toolchain for the {} programming language
 
 COMMANDS:
-  run <path>       execute a module directly
+  [run] <path>     execute a module directly (the `run` keyword is optional)
   build <path>     compile a module into an executable
   version          print compiler version info
   help             print this help text
