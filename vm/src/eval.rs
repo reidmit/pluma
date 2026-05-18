@@ -400,6 +400,22 @@ pub fn call_builtin(vm: &mut VM, b: Builtin, args: Vec<Value>) -> Result<Value, 
 			vm.stderr.write(&format!("{}", arg));
 			Ok(arg)
 		}
+		IoRead => {
+			// Called as `read ()` — lone arg is `nothing`.
+			debug_assert_eq!(args.len(), 1, "`read` arity");
+			Ok(match vm.stdin.read_line() {
+				Ok(Some(line)) => result_ok(Value::String(Rc::new(line))),
+				Ok(None) => result_err(Value::String(Rc::new("EOF".to_string()))),
+				Err(e) => result_err(Value::String(Rc::new(e.to_string()))),
+			})
+		}
+		IoReadAll => {
+			debug_assert_eq!(args.len(), 1, "`read-all` arity");
+			Ok(match vm.stdin.read_all() {
+				Ok(s) => result_ok(Value::String(Rc::new(s))),
+				Err(e) => result_err(Value::String(Rc::new(e.to_string()))),
+			})
+		}
 		IoReadFile => {
 			let path = expect_string(&args, "read-file");
 			Ok(match std::fs::read_to_string(path.as_str()) {

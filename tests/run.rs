@@ -25,6 +25,10 @@ fn run_fixture(path: &Path) -> datatest_stable::Result<()> {
 
 	let stdout_buf = Rc::new(RefCell::new(Vec::<u8>::new()));
 	let stderr_buf = Rc::new(RefCell::new(Vec::<u8>::new()));
+	// If a fixture has stdin.txt next to main.pa, feed its bytes as the
+	// program's stdin. Otherwise stdin is empty (any read returns EOF).
+	let stdin_bytes = std::fs::read(fixture_dir.join("stdin.txt")).unwrap_or_default();
+	let stdin_buf = Rc::new(RefCell::new(stdin_bytes));
 	let result = (|| -> Result<(), RunError> {
 		let mut compiler = Compiler::from_entry_path(relative.to_str().unwrap().to_string())
 			.map_err(RunError::Diagnostics)?;
@@ -33,7 +37,8 @@ fn run_fixture(path: &Path) -> datatest_stable::Result<()> {
 		let program = codegen::compile(&compiler).map_err(RunError::Runtime)?;
 		let mut vm_instance = vm::VM::new(program)
 			.with_stdout(vm::OutputSink::Buffer(stdout_buf.clone()))
-			.with_stderr(vm::OutputSink::Buffer(stderr_buf.clone()));
+			.with_stderr(vm::OutputSink::Buffer(stderr_buf.clone()))
+			.with_stdin(vm::InputSource::Buffer(stdin_buf.clone()));
 		vm_instance
 			.run()
 			.map_err(|e| RunError::Runtime(e.message))?;

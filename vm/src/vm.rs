@@ -26,6 +26,65 @@ impl RuntimeError {
 	}
 }
 
+pub enum InputSource {
+	Stdin,
+	// Bytes that haven't been read yet; reads drain from the front.
+	Buffer(Rc<RefCell<Vec<u8>>>),
+}
+
+impl InputSource {
+	// Read up to and including the next '\n'. Returns the line *without*
+	// the trailing newline (and without a preceding '\r' if it was \r\n).
+	// Returns Ok(None) on EOF.
+	pub fn read_line(&self) -> std::io::Result<Option<String>> {
+		match self {
+			InputSource::Stdin => {
+				let mut buf = String::new();
+				let n = std::io::stdin().read_line(&mut buf)?;
+				if n == 0 {
+					return Ok(None);
+				}
+				if buf.ends_with('\n') {
+					buf.pop();
+				}
+				if buf.ends_with('\r') {
+					buf.pop();
+				}
+				Ok(Some(buf))
+			}
+			InputSource::Buffer(b) => {
+				let mut buf = b.borrow_mut();
+				if buf.is_empty() {
+					return Ok(None);
+				}
+				let mut line_bytes: Vec<u8> = match buf.iter().position(|&c| c == b'\n') {
+					Some(nl) => buf.drain(..=nl).take(nl).collect(),
+					None => std::mem::take(&mut *buf),
+				};
+				if line_bytes.last() == Some(&b'\r') {
+					line_bytes.pop();
+				}
+				Ok(Some(String::from_utf8_lossy(&line_bytes).to_string()))
+			}
+		}
+	}
+
+	pub fn read_all(&self) -> std::io::Result<String> {
+		use std::io::Read;
+		match self {
+			InputSource::Stdin => {
+				let mut s = String::new();
+				std::io::stdin().read_to_string(&mut s)?;
+				Ok(s)
+			}
+			InputSource::Buffer(b) => {
+				let bytes = std::mem::take(&mut *b.borrow_mut());
+				Ok(String::from_utf8_lossy(&bytes).to_string())
+			}
+		}
+	}
+}
+
 pub enum OutputSink {
 	Stdout,
 	Stderr,
@@ -86,6 +145,7 @@ pub struct VM {
 	pub program: Program,
 	pub stdout: OutputSink,
 	pub stderr: OutputSink,
+	pub stdin: InputSource,
 	pub(crate) stack: Vec<Value>,
 	pub(crate) frames: Vec<Frame>,
 	// Opt-in opcode-frequency profiling. Set to Some(empty map) before
@@ -99,6 +159,7 @@ impl VM {
 			program,
 			stdout: OutputSink::Stdout,
 			stderr: OutputSink::Stderr,
+			stdin: InputSource::Stdin,
 			stack: Vec::with_capacity(256),
 			frames: Vec::with_capacity(64),
 			profile: None,
@@ -112,6 +173,11 @@ impl VM {
 
 	pub fn with_stderr(mut self, sink: OutputSink) -> Self {
 		self.stderr = sink;
+		self
+	}
+
+	pub fn with_stdin(mut self, source: InputSource) -> Self {
+		self.stdin = source;
 		self
 	}
 

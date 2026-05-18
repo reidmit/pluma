@@ -290,6 +290,16 @@ fn io_module() -> NativeModule {
 				builtin: Builtin::IoWriteErr,
 			},
 			NativeDef {
+				name: "read",
+				ty: Type::Fun(vec![Type::Nothing], Box::new(result_str_str())),
+				builtin: Builtin::IoRead,
+			},
+			NativeDef {
+				name: "read-all",
+				ty: Type::Fun(vec![Type::Nothing], Box::new(result_str_str())),
+				builtin: Builtin::IoReadAll,
+			},
+			NativeDef {
 				name: "read-file",
 				ty: Type::Fun(vec![Type::String], Box::new(result_str_str())),
 				builtin: Builtin::IoReadFile,

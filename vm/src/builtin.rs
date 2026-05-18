@@ -51,6 +51,8 @@ pub enum Builtin {
 	IoPrintErr,
 	IoWrite,
 	IoWriteErr,
+	IoRead,
+	IoReadAll,
 	IoReadFile,
 	IoWriteFile,
 	IoFileExists,

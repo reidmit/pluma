@@ -1,0 +1,14 @@
+use core.io
+use core.string
+
+def main fun {
+	when (io.read-all ()) is ok contents {
+		# write so we don't append our own newline — we want to see
+		# exactly what was on stdin
+		io.write contents
+		io.print ""
+		print (to-string (string.length contents))
+	} is err msg {
+		print "err: $(msg)"
+	}
+}
