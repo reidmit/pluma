@@ -97,7 +97,7 @@ impl<'compiler> Analyzer<'compiler> {
 
 		// Prelude: builtin values visible in every module.
 		// `print: forall a. a -> a` — write the value to stdout (rendered via
-		// the same Display the interpreter uses for to-string) and return it
+		// the same Display the VM uses for to-string) and return it
 		// unchanged, so `let x = print y` works.
 		let print_var = self.next_type_var_id;
 		self.next_type_var_id += 1;

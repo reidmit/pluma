@@ -7,5 +7,4 @@ edition = "2021"
 atty = "0.2.13"
 codegen = { path = "../codegen" }
 compiler = { path = "../compiler" }
-interpreter = { path = "../interpreter" }
 vm = { path = "../vm" }

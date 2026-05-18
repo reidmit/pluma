@@ -37,7 +37,8 @@ impl Compiler {
 
 	// Register a stdlib module (e.g. `core.regex`) so its exports are visible
 	// to any user module that does `use <name>`. Must be called before
-	// `check()`. The runtime values come from the interpreter side.
+	// `check()`. The runtime values come from the VM side
+	// (`vm::stdlib::register_compiler`).
 	pub fn register_native_module(&mut self, name: String, exports: ModuleExports) {
 		self.native_modules.insert(name, exports);
 	}

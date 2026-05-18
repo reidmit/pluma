@@ -10,11 +10,13 @@ This repo (named `pencil` on disk) implements **Pluma**, a small statically-type
 
 Cargo workspace (see `Cargo.toml`):
 
-- `compiler/` — the language frontend: tokenizer, parser, analyzer, types, diagnostics. The crate's public surface (`lib.rs`) re-exports `Compiler`, `Diagnostic`, `Module`/`ModuleExports`, `Tokenizer`, `Token`, and module-name/version constants; `ast` and `types` are `pub mod` (used by the interpreter). Other modules (`analyzer`, `parser`, etc.) are private.
-- `interpreter/` — tree-walking interpreter over the typed AST. `Interpreter::new(&compiler).run()` executes a program by calling its entry module's `main` def. `print` writes through a configurable `StdoutSink` (process stdout by default; tests inject a `Buffer` sink).
-- `cli/` — command dispatcher. `run` (interpreter), `tokenize`, `analyze` are wired; `build` is `todo!()`. `tokenize` and `analyze` are debug-build only (they dump Debug-format output of types whose Debug is gated on `debug_assertions`).
+- `compiler/` — the language frontend: tokenizer, parser, analyzer, types, diagnostics. The crate's public surface (`lib.rs`) re-exports `Compiler`, `Diagnostic`, `Module`/`ModuleExports`, `Tokenizer`, `Token`, and module-name/version constants; `ast` and `types` are `pub mod` (consumed by codegen). Other modules (`analyzer`, `parser`, etc.) are private.
+- `codegen/` — lowers the typed AST into VM bytecode. `codegen::compile(&compiler)` returns a `vm::Program` ready to execute.
+- `vm/` — bytecode VM that executes the compiled program. `VM::new(program).run()` is the entry point. `print` writes through a configurable `StdoutSink` (process stdout by default; tests inject a `Buffer` sink). `vm::stdlib::register_compiler` seeds the analyzer with the native module types (`core.regex`, `core.list`, `core.math`).
+- `cli/` — command dispatcher. `run`, `tokenize`, `analyze` are wired; `build` is `todo!()`. `tokenize` and `analyze` are debug-build only (they dump Debug-format output of types whose Debug is gated on `debug_assertions`).
 - `lsp/` — language server, packaged for VS Code via the extension in `vsix/`.
-- `pluma-tests/` — integration tests (snapshot-based) for the analyzer and interpreter. See "Testing" below.
+- `pluma-tests/` — integration tests (snapshot-based) for the analyzer and the VM. See "Testing" below.
+- `bench/` — microbench runner that times each `benchmarks/programs/<name>/main.pa` through the VM.
 
 ## Common commands
 
@@ -40,15 +42,15 @@ The CLI accepts either a file path (with or without `.pa`) or a directory contai
 Fixtures live under `tests/analyze/<name>/main.pa` (and optionally additional `.pa` files for multi-module cases) and `tests/run/<name>/main.pa`. Each fixture has an `analyze.snap` or `run.snap` next to its `main.pa` — an insta snapshot file with a 3-line YAML header followed by the captured output.
 
 - **`tests/analyze/`** fixtures run the compiler frontend in-process and snapshot `{:#?}` of the typed `Module` (or formatted diagnostics on failure).
-- **`tests/run/`** fixtures compile, then call `Interpreter::run()` with a `StdoutSink::Buffer`, and snapshot a combined `status / stdout / stderr` block.
+- **`tests/run/`** fixtures compile, lower to bytecode via `codegen::compile`, then call `vm::VM::run()` with a `vm::StdoutSink::Buffer`, and snapshot a combined `status / stdout / stderr` block.
 
 Both harnesses live in `pluma-tests/tests/{analyze,run}.rs`. `datatest-stable` generates one `#[test]` per fixture by scanning the directory for `main.pa`. Tests set cwd to the workspace root so the `Module` Debug impl renders paths as `tests/analyze/<name>/main.pa` (portable across checkouts).
 
-When changing analyzer/parser output or interpreter behavior, regenerate snapshots with `cargo insta review` (interactive accept/reject) or `just test-write` (accept all). Don't hand-edit `.snap` files. To add a new test, create the fixture directory + `main.pa`, run `just test-write`, and review the generated snapshot.
+When changing analyzer/parser output or VM behavior, regenerate snapshots with `cargo insta review` (interactive accept/reject) or `just test-write` (accept all). Don't hand-edit `.snap` files. To add a new test, create the fixture directory + `main.pa`, run `just test-write`, and review the generated snapshot.
 
 ## Compiler architecture
 
-`Compiler` (in `compiler/src/compiler.rs`) is the orchestration entry point. It owns a `HashMap<String, Module>`, a `HashMap<String, ModuleExports>` cache (see below), and a `Vec<Diagnostic>`. It exposes `tokenize()` and `check()`. There is no `build()`/`run()` backend yet — `check()` runs through parsing + type analysis and returns the typed entry `Module`.
+`Compiler` (in `compiler/src/compiler.rs`) is the orchestration entry point. It owns a `HashMap<String, Module>`, a `HashMap<String, ModuleExports>` cache (see below), and a `Vec<Diagnostic>`. It exposes `tokenize()` and `check()`. `check()` runs through parsing + type analysis and returns the typed entry `Module`; the bytecode/run pipeline lives downstream in the `codegen` and `vm` crates.
 
 `check()` does a DFS load (`load_module`): for each module, it parses, then recursively loads anything in its `uses`, then analyzes the module itself (so dependencies are always analyzed first). A `visiting` set catches import cycles and reports them as a `Diagnostic`. After analysis, the module's `exports: Option<ModuleExports>` is populated from its top-level defs and cached for any later importer.
 

@@ -1,12 +1,10 @@
 // Microbench runner. For each program under benchmarks/programs/<name>/main.pa,
-// runs it through both backends (VM and interpreter), wall-clocks each, and
-// prints a comparison.
+// runs it through the VM, wall-clocks it, and prints the average time.
 //
 // Usage:
 //   cargo run -p bench --release
 //
-// Output captured-but-discarded so we measure execution, not stdout I/O. The
-// interpreter is skipped for programs that would overflow its stack.
+// Output captured-but-discarded so we measure execution, not stdout I/O.
 
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
@@ -42,12 +40,8 @@ fn main() {
 		.collect();
 	benchmarks.sort_by_key(|e| e.file_name());
 
-	println!(
-		"benchmark            iters   vm (avg)        interp (avg)    speedup"
-	);
-	println!(
-		"-------------------  ------  --------------  --------------  -------"
-	);
+	println!("benchmark            iters   vm (avg)");
+	println!("-------------------  ------  --------------");
 
 	for entry in benchmarks {
 		let name = entry.file_name().to_string_lossy().to_string();
@@ -56,26 +50,13 @@ fn main() {
 			continue;
 		}
 
-		let path_a = main_pa.clone();
-		let path_b = main_pa.clone();
-		let vm_time = time_runs(iterations, move || run_via_vm(&path_a));
-		let interp_time = time_runs(iterations, move || run_via_interp(&path_b));
+		let path = main_pa.clone();
+		let vm_time = time_runs(iterations, move || run_via_vm(&path));
 
 		print!("{:<21}{:>4}    ", name, iterations);
 		match vm_time {
-			Some(d) => print!("{:>12}  ", format_duration(d)),
-			None => print!("{:>12}  ", "ERROR"),
-		}
-		match interp_time {
-			Some(d) => print!("{:>12}  ", format_duration(d)),
-			None => print!("{:>12}  ", "n/a"),
-		}
-		match (vm_time, interp_time) {
-			(Some(vm), Some(interp)) => {
-				let ratio = interp.as_secs_f64() / vm.as_secs_f64();
-				println!("{:>5.2}x", ratio);
-			}
-			_ => println!(""),
+			Some(d) => println!("{:>12}", format_duration(d)),
+			None => println!("{:>12}", "ERROR"),
 		}
 	}
 }
@@ -84,10 +65,9 @@ fn time_runs<F>(iterations: usize, f: F) -> Option<Duration>
 where
 	F: Fn() -> Result<(), String> + Send + Sync + 'static + Clone,
 {
-	// Run on a thread with a big stack so the interpreter doesn't overflow
-	// on deep-but-fine recursion benchmarks. The VM is unaffected, but it's
-	// simpler to use the same harness for both. Anything that still
-	// overflows reports as None and is shown as ERROR/OVERFLOW.
+	// Run on a dedicated thread with a big stack so deep-but-fine recursion
+	// benchmarks don't overflow. The VM itself doesn't need it, but it's
+	// cheap insurance for whatever else we throw at it.
 	let inner = move || {
 		if f().is_err() {
 			return None;
@@ -153,16 +133,4 @@ fn profile_one(path: &Path) {
 		println!("{:<19}{:>10}  {:>5.1}%", name, n, pct);
 	}
 	println!("{:<19}{:>10}", "TOTAL", total);
-}
-
-fn run_via_interp(path: &PathBuf) -> Result<(), String> {
-	let mut compiler = compiler::Compiler::from_entry_path(path.to_str().unwrap().to_string())
-		.map_err(|d| format!("compile: {:?} diagnostics", d.len()))?;
-	interpreter::stdlib::register_compiler(&mut compiler);
-	compiler.check().map_err(|d| format!("check: {:?} diagnostics", d.len()))?;
-	let buf = Rc::new(RefCell::new(Vec::<u8>::new()));
-	let mut interp = interpreter::Interpreter::new(&compiler)
-		.with_stdout(interpreter::StdoutSink::Buffer(buf));
-	interpreter::stdlib::register_runtime(&mut interp);
-	interp.run().map(|_| ()).map_err(|e| e.message)
 }

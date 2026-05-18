@@ -23,7 +23,7 @@ fn analyze_fixture(path: &Path) -> datatest_stable::Result<()> {
 
 	let result = (|| -> Result<String, Vec<Diagnostic>> {
 		let mut compiler = Compiler::from_entry_path(relative.to_str().unwrap().to_string())?;
-		interpreter::stdlib::register_compiler(&mut compiler);
+		vm::stdlib::register_compiler(&mut compiler);
 		let module = compiler.check()?;
 		Ok(format!("{:#?}", module))
 	})();
