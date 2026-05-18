@@ -8,16 +8,17 @@ use std::path::Path;
 
 datatest_stable::harness!(
 	analyze_fixture,
-	concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/analyze"),
+	concat!(env!("CARGO_MANIFEST_DIR"), "/analyze"),
 	r"main\.pa$"
 );
 
 fn analyze_fixture(path: &Path) -> datatest_stable::Result<()> {
 	let fixture_dir = path.parent().unwrap();
+	// This crate lives at <workspace>/tests/, so the workspace root is one
+	// level up. Anchoring cwd here lets Module's Debug impl trim it off the
+	// rendered path (`tests/analyze/<name>/main.pa`). Idempotent (all tests
+	// use the same value), so the shared cwd doesn't race.
 	let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-	// Anchor cwd at the workspace root so Module's Debug impl trims it off
-	// the rendered path. Idempotent (all tests use the same value) so the
-	// shared cwd doesn't race.
 	let _ = std::env::set_current_dir(workspace);
 	let relative = path.strip_prefix(workspace).unwrap_or(path);
 

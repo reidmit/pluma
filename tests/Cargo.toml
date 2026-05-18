@@ -1,5 +1,5 @@
 [package]
-name = "pluma-tests"
+name = "tests"
 version = "0.1.0"
 edition = "2021"
 publish = false
@@ -15,8 +15,10 @@ insta = "1"
 
 [[test]]
 name = "analyze"
+path = "analyze.rs"
 harness = false
 
 [[test]]
 name = "run"
+path = "run.rs"
 harness = false

@@ -6,6 +6,6 @@ members = [
   "codegen",
   "compiler",
   "lsp",
-  "pluma-tests",
+  "tests",
   "vm",
 ]

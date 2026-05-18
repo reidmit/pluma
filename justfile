@@ -20,11 +20,11 @@ build-release:
 
 # run the snapshot test suite (analyze + run fixtures under tests/)
 test:
-  @ cargo test -p pluma-tests
+  @ cargo test -p tests
 
 # regenerate snapshots for any failing tests (use `cargo insta review` for interactive)
 test-write:
-  @ INSTA_UPDATE=always cargo test -p pluma-tests
+  @ INSTA_UPDATE=always cargo test -p tests
 
 site:
   @ zola -r site serve -p 7586

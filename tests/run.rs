@@ -10,12 +10,15 @@ use std::rc::Rc;
 
 datatest_stable::harness!(
 	run_fixture,
-	concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/run"),
+	concat!(env!("CARGO_MANIFEST_DIR"), "/run"),
 	r"main\.pa$"
 );
 
 fn run_fixture(path: &Path) -> datatest_stable::Result<()> {
 	let fixture_dir = path.parent().unwrap();
+	// See the analogous comment in analyze.rs: anchor cwd at the workspace
+	// root (one level up from this crate) so portable relative paths show
+	// up in fixture output.
 	let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
 	let _ = std::env::set_current_dir(workspace);
 	let relative = path.strip_prefix(workspace).unwrap_or(path);
