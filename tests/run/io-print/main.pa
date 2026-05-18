@@ -1,0 +1,22 @@
+use core.io
+
+def main fun {
+	# print* adds a trailing newline; write* doesn't
+	io.print "stdout line"
+	io.print-err "stderr line"
+
+	# build a line piece-by-piece on stdout, then terminate it
+	io.write "no"
+	io.write "-"
+	io.write "newline"
+	io.print ""
+
+	# same on stderr
+	io.write-err "err"
+	io.write-err "-"
+	io.write-err "raw"
+	io.print-err ""
+
+	# both write/print return their arg, like the prelude `print`
+	"piped" | io.print | io.print-err
+}

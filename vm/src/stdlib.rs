@@ -35,6 +35,7 @@ pub fn native_modules() -> Vec<NativeModule> {
 		list_module(),
 		math_module(),
 		string_module(),
+		io_module(),
 	]
 }
 
@@ -243,6 +244,83 @@ fn string_module() -> NativeModule {
 					Box::new(Type::String),
 				),
 				builtin: Builtin::StringReplace,
+			},
+		],
+		constants: vec![],
+	}
+}
+
+fn io_module() -> NativeModule {
+	let a = || Type::Var(0);
+	let result_unit_str = || {
+		Type::Enum(
+			"__prelude__.result".to_string(),
+			vec![Type::Nothing, Type::String],
+		)
+	};
+	let result_str_str = || {
+		Type::Enum(
+			"__prelude__.result".to_string(),
+			vec![Type::String, Type::String],
+		)
+	};
+	let option_str = || Type::Enum("__prelude__.option".to_string(), vec![Type::String]);
+
+	NativeModule {
+		name: "core.io",
+		defs: vec![
+			NativeDef {
+				name: "print",
+				ty: Type::Fun(vec![a()], Box::new(a())),
+				builtin: Builtin::IoPrint,
+			},
+			NativeDef {
+				name: "print-err",
+				ty: Type::Fun(vec![a()], Box::new(a())),
+				builtin: Builtin::IoPrintErr,
+			},
+			NativeDef {
+				name: "write",
+				ty: Type::Fun(vec![a()], Box::new(a())),
+				builtin: Builtin::IoWrite,
+			},
+			NativeDef {
+				name: "write-err",
+				ty: Type::Fun(vec![a()], Box::new(a())),
+				builtin: Builtin::IoWriteErr,
+			},
+			NativeDef {
+				name: "read-file",
+				ty: Type::Fun(vec![Type::String], Box::new(result_str_str())),
+				builtin: Builtin::IoReadFile,
+			},
+			NativeDef {
+				name: "write-file",
+				ty: Type::Fun(
+					vec![Type::String, Type::String],
+					Box::new(result_unit_str()),
+				),
+				builtin: Builtin::IoWriteFile,
+			},
+			NativeDef {
+				name: "file-exists",
+				ty: Type::Fun(vec![Type::String], Box::new(Type::Bool)),
+				builtin: Builtin::IoFileExists,
+			},
+			NativeDef {
+				name: "args",
+				ty: Type::Fun(vec![Type::Nothing], Box::new(Type::List(Box::new(Type::String)))),
+				builtin: Builtin::IoArgs,
+			},
+			NativeDef {
+				name: "env",
+				ty: Type::Fun(vec![Type::String], Box::new(option_str())),
+				builtin: Builtin::IoEnv,
+			},
+			NativeDef {
+				name: "exit",
+				ty: Type::Fun(vec![Type::Int], Box::new(a())),
+				builtin: Builtin::IoExit,
 			},
 		],
 		constants: vec![],

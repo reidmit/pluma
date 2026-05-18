@@ -1,0 +1,14 @@
+use core.io
+
+def main fun {
+	let missing = "target/pluma-this-file-does-not-exist.txt"
+
+	# discard the OS-specific error message; just verify the err branch fires
+	when (io.read-file missing) is ok _ {
+		print "unexpected ok"
+	} is err _ {
+		print "got err"
+	}
+
+	print (io.file-exists missing)
+}

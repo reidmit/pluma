@@ -109,7 +109,7 @@ fn run_via_vm(path: &PathBuf) -> Result<(), String> {
 		.map_err(|d| format!("check: {:?} diagnostics", d.len()))?;
 	let program = codegen::compile(&compiler).map_err(|e| format!("codegen: {}", e))?;
 	let buf = Rc::new(RefCell::new(Vec::<u8>::new()));
-	let mut vm_instance = vm::VM::new(program).with_stdout(vm::StdoutSink::Buffer(buf));
+	let mut vm_instance = vm::VM::new(program).with_stdout(vm::OutputSink::Buffer(buf));
 	vm_instance.run().map(|_| ()).map_err(|e| e.message)
 }
 
@@ -120,7 +120,7 @@ fn profile_one(path: &Path) {
 	compiler.check().unwrap_or_else(|_| panic!("check error"));
 	let program = codegen::compile(&compiler).expect("codegen error");
 	let buf = Rc::new(RefCell::new(Vec::<u8>::new()));
-	let mut vm_instance = vm::VM::new(program).with_stdout(vm::StdoutSink::Buffer(buf));
+	let mut vm_instance = vm::VM::new(program).with_stdout(vm::OutputSink::Buffer(buf));
 	vm_instance.profile = Some(std::collections::HashMap::new());
 	vm_instance
 		.run()

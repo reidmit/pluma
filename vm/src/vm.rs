@@ -26,19 +26,38 @@ impl RuntimeError {
 	}
 }
 
-pub enum StdoutSink {
-	Real,
+pub enum OutputSink {
+	Stdout,
+	Stderr,
 	Buffer(Rc<RefCell<Vec<u8>>>),
 }
 
-impl StdoutSink {
+impl OutputSink {
 	pub fn write_line(&self, s: &str) {
 		match self {
-			StdoutSink::Real => println!("{}", s),
-			StdoutSink::Buffer(buf) => {
+			OutputSink::Stdout => println!("{}", s),
+			OutputSink::Stderr => eprintln!("{}", s),
+			OutputSink::Buffer(buf) => {
 				let mut b = buf.borrow_mut();
 				b.extend_from_slice(s.as_bytes());
 				b.push(b'\n');
+			}
+		}
+	}
+
+	pub fn write(&self, s: &str) {
+		use std::io::Write;
+		match self {
+			OutputSink::Stdout => {
+				print!("{}", s);
+				let _ = std::io::stdout().flush();
+			}
+			OutputSink::Stderr => {
+				eprint!("{}", s);
+				let _ = std::io::stderr().flush();
+			}
+			OutputSink::Buffer(buf) => {
+				buf.borrow_mut().extend_from_slice(s.as_bytes());
 			}
 		}
 	}
@@ -65,7 +84,8 @@ pub(crate) struct Frame {
 
 pub struct VM {
 	pub program: Program,
-	pub stdout: StdoutSink,
+	pub stdout: OutputSink,
+	pub stderr: OutputSink,
 	pub(crate) stack: Vec<Value>,
 	pub(crate) frames: Vec<Frame>,
 	// Opt-in opcode-frequency profiling. Set to Some(empty map) before
@@ -77,15 +97,21 @@ impl VM {
 	pub fn new(program: Program) -> Self {
 		Self {
 			program,
-			stdout: StdoutSink::Real,
+			stdout: OutputSink::Stdout,
+			stderr: OutputSink::Stderr,
 			stack: Vec::with_capacity(256),
 			frames: Vec::with_capacity(64),
 			profile: None,
 		}
 	}
 
-	pub fn with_stdout(mut self, sink: StdoutSink) -> Self {
+	pub fn with_stdout(mut self, sink: OutputSink) -> Self {
 		self.stdout = sink;
+		self
+	}
+
+	pub fn with_stderr(mut self, sink: OutputSink) -> Self {
+		self.stderr = sink;
 		self
 	}
 

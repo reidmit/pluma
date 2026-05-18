@@ -376,7 +376,96 @@ pub fn call_builtin(vm: &mut VM, b: Builtin, args: Vec<Value>) -> Result<Value, 
 				_ => unreachable!("`replace`: expected (string, string, string)"),
 			}
 		}
+		IoPrint => {
+			debug_assert_eq!(args.len(), 1, "`io.print` arity");
+			let arg = args.into_iter().next().unwrap();
+			vm.stdout.write_line(&format!("{}", arg));
+			Ok(arg)
+		}
+		IoPrintErr => {
+			debug_assert_eq!(args.len(), 1, "`print-err` arity");
+			let arg = args.into_iter().next().unwrap();
+			vm.stderr.write_line(&format!("{}", arg));
+			Ok(arg)
+		}
+		IoWrite => {
+			debug_assert_eq!(args.len(), 1, "`io.write` arity");
+			let arg = args.into_iter().next().unwrap();
+			vm.stdout.write(&format!("{}", arg));
+			Ok(arg)
+		}
+		IoWriteErr => {
+			debug_assert_eq!(args.len(), 1, "`write-err` arity");
+			let arg = args.into_iter().next().unwrap();
+			vm.stderr.write(&format!("{}", arg));
+			Ok(arg)
+		}
+		IoReadFile => {
+			let path = expect_string(&args, "read-file");
+			Ok(match std::fs::read_to_string(path.as_str()) {
+				Ok(contents) => result_ok(Value::String(Rc::new(contents))),
+				Err(e) => result_err(Value::String(Rc::new(e.to_string()))),
+			})
+		}
+		IoWriteFile => {
+			debug_assert_eq!(args.len(), 2, "`write-file` arity");
+			let (path, contents) = match (&args[0], &args[1]) {
+				(Value::String(p), Value::String(c)) => (p, c),
+				_ => unreachable!("`write-file`: expected (string, string)"),
+			};
+			Ok(match std::fs::write(path.as_str(), contents.as_bytes()) {
+				Ok(()) => result_ok(Value::Nothing),
+				Err(e) => result_err(Value::String(Rc::new(e.to_string()))),
+			})
+		}
+		IoFileExists => {
+			let path = expect_string(&args, "file-exists");
+			Ok(Value::Bool(std::path::Path::new(path.as_str()).exists()))
+		}
+		IoArgs => {
+			// Called as `args ()` — the lone arg is the `nothing` unit.
+			debug_assert_eq!(args.len(), 1, "`args` arity");
+			// Skip argv[0] (the program path itself).
+			let args_list: Vec<Value> = std::env::args()
+				.skip(1)
+				.map(|a| Value::String(Rc::new(a)))
+				.collect();
+			Ok(Value::List(Rc::new(args_list)))
+		}
+		IoEnv => {
+			let name = expect_string(&args, "env");
+			Ok(option_value(
+				std::env::var(name.as_str())
+					.ok()
+					.map(|v| Value::String(Rc::new(v))),
+			))
+		}
+		IoExit => {
+			debug_assert_eq!(args.len(), 1, "`exit` arity");
+			let code = match &args[0] {
+				Value::Int(n) => *n as i32,
+				_ => unreachable!("`exit`: expected int"),
+			};
+			std::process::exit(code);
+		}
 	}
+}
+
+// Construct a prelude `result` value. Mirrors option_value but for ok/err.
+fn result_ok(payload: Value) -> Value {
+	Value::Variant(Rc::new(VariantData {
+		qualified_enum: Rc::new("__prelude__.result".to_string()),
+		variant: Rc::new("ok".to_string()),
+		payload: vec![payload],
+	}))
+}
+
+fn result_err(payload: Value) -> Value {
+	Value::Variant(Rc::new(VariantData {
+		qualified_enum: Rc::new("__prelude__.result".to_string()),
+		variant: Rc::new("err".to_string()),
+		payload: vec![payload],
+	}))
 }
 
 fn expect_list<'a>(args: &'a [Value], name: &str) -> &'a Rc<Vec<Value>> {
