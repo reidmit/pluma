@@ -1,0 +1,7 @@
+---
+source: pluma-tests/tests/analyze.rs
+expression: output
+---
+error: Type mismatch: expected `float`, but found `int`.
+error: Type mismatch: expected `float`, but found `int`.
+

@@ -1,0 +1,16 @@
+use core.math
+
+def main fun {
+  print (to-string (math.to-float 5))
+  print (to-string (math.to-float 0))
+  print (to-string (math.to-int 3.7))
+  print (to-string (math.to-int (-3.7)))
+  print (to-string (math.sqrt 16.0))
+  print (to-string (math.sqrt 2.0))
+  print (to-string (math.abs (-7)))
+  print (to-string (math.abs 7))
+
+  # roundtrip
+  let x = math.to-int (math.sqrt (math.to-float 25))
+  print (to-string x)
+}
