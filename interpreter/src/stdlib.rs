@@ -31,7 +31,7 @@ pub struct NativeDef {
 }
 
 fn modules() -> Vec<NativeModule> {
-	vec![regex_module(), list_module()]
+	vec![regex_module(), list_module(), math_module()]
 }
 
 pub fn register_compiler(compiler: &mut Compiler) {
@@ -70,6 +70,34 @@ fn regex_module() -> NativeModule {
 			ty: Type::Fun(vec![Type::Regex, Type::String], Box::new(Type::Bool)),
 			builtin: Builtin::Matches,
 		}],
+	}
+}
+
+fn math_module() -> NativeModule {
+	NativeModule {
+		name: "core.math",
+		defs: vec![
+			NativeDef {
+				name: "to-float",
+				ty: Type::Fun(vec![Type::Int], Box::new(Type::Float)),
+				builtin: Builtin::MathToFloat,
+			},
+			NativeDef {
+				name: "to-int",
+				ty: Type::Fun(vec![Type::Float], Box::new(Type::Int)),
+				builtin: Builtin::MathToInt,
+			},
+			NativeDef {
+				name: "sqrt",
+				ty: Type::Fun(vec![Type::Float], Box::new(Type::Float)),
+				builtin: Builtin::MathSqrt,
+			},
+			NativeDef {
+				name: "abs",
+				ty: Type::Fun(vec![Type::Int], Box::new(Type::Int)),
+				builtin: Builtin::MathAbs,
+			},
+		],
 	}
 }
 
