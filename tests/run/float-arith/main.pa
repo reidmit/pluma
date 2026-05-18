@@ -1,12 +1,12 @@
 def main fun {
-  print (to-string (1.5 + 2.5))
-  print (to-string (10.0 - 3.5))
-  print (to-string (2.0 * 3.5))
-  print (to-string (7.0 / 2.0))
-  print (to-string (7.5 % 3.0))
-  print (to-string (-3.14))
+  print (1.5 + 2.5)
+  print (10.0 - 3.5)
+  print (2.0 * 3.5)
+  print (7.0 / 2.0)
+  print (7.5 % 3.0)
+  print (-3.14)
 
   # float div by zero -> IEEE inf/nan, not a runtime error
-  print (to-string (1.0 / 0.0))
-  print (to-string (0.0 / 0.0))
+  print (1.0 / 0.0)
+  print (0.0 / 0.0)
 }

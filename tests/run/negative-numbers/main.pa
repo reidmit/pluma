@@ -1,6 +1,6 @@
 def main fun {
-  print (to-string (0 - 5))
-  print (to-string (-5))
-  print (to-string (-5 + 10))
-  print (to-string (- 5))
+  print (0 - 5)
+  print (-5)
+  print (-5 + 10)
+  print (- 5)
 }

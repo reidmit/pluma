@@ -12,6 +12,6 @@ def name-of fun c {
 }
 
 def main fun {
-  print (to-string (math.add 2 3))
+  print (math.add 2 3)
   print (name-of colors.color.green)
 }

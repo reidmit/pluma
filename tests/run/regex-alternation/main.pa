@@ -5,11 +5,11 @@ def yes-or-no /"yes" | "no"/
 def label-then-color /"color: " ("red" | "green" | "blue")/
 
 def main fun {
-  print (to-string (regex.matches yes-or-no "yes"))
-  print (to-string (regex.matches yes-or-no "no"))
-  print (to-string (regex.matches yes-or-no "maybe"))
+  print (regex.matches yes-or-no "yes")
+  print (regex.matches yes-or-no "no")
+  print (regex.matches yes-or-no "maybe")
 
-  print (to-string (regex.matches label-then-color "color: red"))
-  print (to-string (regex.matches label-then-color "color: blue"))
-  print (to-string (regex.matches label-then-color "color: purple"))
+  print (regex.matches label-then-color "color: red")
+  print (regex.matches label-then-color "color: blue")
+  print (regex.matches label-then-color "color: purple")
 }

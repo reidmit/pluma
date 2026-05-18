@@ -7,7 +7,7 @@ def fact fun n {
 }
 
 def main fun {
-  print (to-string (fact 0))
-  print (to-string (fact 5))
-  print (to-string (fact 10))
+  print (fact 0)
+  print (fact 5)
+  print (fact 10)
 }

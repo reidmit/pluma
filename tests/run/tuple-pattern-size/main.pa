@@ -1,17 +1,17 @@
 def main fun {
   let two-tuple = (1, 2)
   when two-tuple is (a, b) {
-    print (to-string (a + b))
+    print (a + b)
   }
 
   let three-tuple = (1, 2, 3)
   when three-tuple is (a, b, c) {
-    print (to-string (a + b + c))
+    print (a + b + c)
   }
 
   # nested
   let nested = ((1, 2), 3)
   when nested is ((a, b), c) {
-    print (to-string (a + b + c))
+    print (a + b + c)
   }
 }

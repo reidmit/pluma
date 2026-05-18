@@ -3,15 +3,15 @@ use core.list
 def main fun {
   let xs = [1, 2, 3, 4, 5]
   let total = list.fold xs 0 fun acc n { acc + n }
-  print (to-string total)
+  print total
 
   let product = list.fold xs 1 fun acc n { acc * n }
-  print (to-string product)
+  print product
 
   let max = list.fold xs 0 fun acc n {
     when (n > acc) is true { n } is false { acc }
   }
-  print (to-string max)
+  print max
 
   # build a string from a list
   let joined = list.fold ["a", "b", "c"] "" fun acc s { "$(acc)$(s)" }

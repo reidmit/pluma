@@ -21,7 +21,7 @@ def unwrap fun r {
 }
 
 def main fun {
-  print (to-string (unwrap (result.ok (option.some 42))))
-  print (to-string (unwrap (result.ok option.none)))
-  print (to-string (unwrap (result.err "oops")))
+  print (unwrap (result.ok (option.some 42)))
+  print (unwrap (result.ok option.none))
+  print (unwrap (result.err "oops"))
 }

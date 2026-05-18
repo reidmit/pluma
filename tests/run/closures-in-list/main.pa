@@ -16,5 +16,5 @@ def main fun {
   let double = fun n { n * 2 }
   let triple = fun n { n * 3 }
   let fs = fn-list.cons inc (fn-list.cons double (fn-list.cons triple fn-list.empty))
-  print (to-string (apply-each fs 10))
+  print (apply-each fs 10)
 }

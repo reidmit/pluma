@@ -1,18 +1,18 @@
 def main fun {
-  print (to-string (1 == 1))
-  print (to-string (1 == 2))
-  print (to-string (1 != 2))
-  print (to-string (1 < 2))
-  print (to-string (2 < 2))
-  print (to-string (2 <= 2))
-  print (to-string (3 > 2))
-  print (to-string (3 >= 3))
+  print (1 == 1)
+  print (1 == 2)
+  print (1 != 2)
+  print (1 < 2)
+  print (2 < 2)
+  print (2 <= 2)
+  print (3 > 2)
+  print (3 >= 3)
 
   if (5 > 3) is true {
     print "five > three"
   }
 
   let in-range = fun n { (n >= 1) && (n <= 10) }
-  print (to-string (in-range 5))
-  print (to-string (in-range 20))
+  print (in-range 5)
+  print (in-range 20)
 }

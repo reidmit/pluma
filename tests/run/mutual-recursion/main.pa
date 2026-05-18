@@ -15,8 +15,8 @@ def is-odd fun n {
 }
 
 def main fun {
-  print (to-string (is-even 0))
-  print (to-string (is-even 4))
-  print (to-string (is-even 7))
-  print (to-string (is-odd 3))
+  print (is-even 0)
+  print (is-even 4)
+  print (is-even 7)
+  print (is-odd 3)
 }

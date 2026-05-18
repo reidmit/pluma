@@ -6,29 +6,29 @@ def color enum {
 
 def main fun {
   # primitives
-  print (to-string ("hello" == "hello"))
-  print (to-string ("hello" == "world"))
-  print (to-string (true == true))
-  print (to-string (true == false))
+  print ("hello" == "hello")
+  print ("hello" == "world")
+  print (true == true)
+  print (true == false)
 
   # nothing
-  print (to-string (() == ()))
+  print (() == ())
 
   # tuples (structural)
-  print (to-string ((1, "a") == (1, "a")))
-  print (to-string ((1, "a") == (1, "b")))
+  print ((1, "a") == (1, "a"))
+  print ((1, "a") == (1, "b"))
 
   # records (field order doesn't matter)
-  print (to-string ({x: 1, y: 2} == {x: 1, y: 2}))
-  print (to-string ({y: 2, x: 1} == {x: 1, y: 2}))
-  print (to-string ({x: 1, y: 2} == {x: 1, y: 3}))
+  print ({x: 1, y: 2} == {x: 1, y: 2})
+  print ({y: 2, x: 1} == {x: 1, y: 2})
+  print ({x: 1, y: 2} == {x: 1, y: 3})
 
   # enum variants
-  print (to-string (color.red == color.red))
-  print (to-string (color.red == color.blue))
+  print (color.red == color.red)
+  print (color.red == color.blue)
 
   # lists
-  print (to-string ([1, 2, 3] == [1, 2, 3]))
-  print (to-string ([1, 2, 3] == [1, 2]))
-  print (to-string ([1, 2, 3] == [1, 2, 4]))
+  print ([1, 2, 3] == [1, 2, 3])
+  print ([1, 2, 3] == [1, 2])
+  print ([1, 2, 3] == [1, 2, 4])
 }

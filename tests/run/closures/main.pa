@@ -7,6 +7,6 @@ def make-adder fun x {
 def main fun {
   let add5 = make-adder 5
   let add100 = make-adder 100
-  print (to-string (add5 3))
-  print (to-string (add100 23))
+  print (add5 3)
+  print (add100 23)
 }

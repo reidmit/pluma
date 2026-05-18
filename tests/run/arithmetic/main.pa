@@ -1,7 +1,7 @@
 def main fun {
-  print (to-string (1 + 2))
-  print (to-string (10 - 3))
-  print (to-string (6 * 7))
-  print (to-string (100 / 4))
-  print (to-string (17 % 5))
+  print (1 + 2)
+  print (10 - 3)
+  print (6 * 7)
+  print (100 / 4)
+  print (17 % 5)
 }

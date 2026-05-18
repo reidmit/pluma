@@ -15,5 +15,5 @@ def main fun {
   let l = tree.node 1 tree.empty tree.empty
   let r = tree.node 3 tree.empty tree.empty
   let t = tree.node 2 l r
-  print (to-string (sum t))
+  print (sum t)
 }

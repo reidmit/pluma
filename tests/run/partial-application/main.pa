@@ -8,6 +8,6 @@ def add fun a b {
 def add5 fun y { add 5 y }
 
 def main fun {
-  print (to-string (add5 3))
-  print (to-string (add 10 20))
+  print (add5 3)
+  print (add 10 20)
 }

@@ -5,14 +5,14 @@ def at-least-one-b /"b"+/
 def optional-c /"c"?/
 
 def main fun {
-  print (to-string (regex.matches two-to-four-a "a"))
-  print (to-string (regex.matches two-to-four-a "aa"))
-  print (to-string (regex.matches two-to-four-a "aaaa"))
+  print (regex.matches two-to-four-a "a")
+  print (regex.matches two-to-four-a "aa")
+  print (regex.matches two-to-four-a "aaaa")
 
-  print (to-string (regex.matches at-least-one-b ""))
-  print (to-string (regex.matches at-least-one-b "b"))
-  print (to-string (regex.matches at-least-one-b "bbb"))
+  print (regex.matches at-least-one-b "")
+  print (regex.matches at-least-one-b "b")
+  print (regex.matches at-least-one-b "bbb")
 
-  print (to-string (regex.matches optional-c ""))
-  print (to-string (regex.matches optional-c "c"))
+  print (regex.matches optional-c "")
+  print (regex.matches optional-c "c")
 }

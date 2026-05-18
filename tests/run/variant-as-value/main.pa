@@ -11,8 +11,8 @@ def shape enum {
 
 def main fun {
   let c = color.red
-  print (to-string c)
+  print c
   let make-square = shape.square
   let s = make-square 5
-  print (to-string s)
+  print s
 }
