@@ -313,9 +313,22 @@ fn io_module() -> NativeModule {
 				builtin: Builtin::IoWriteFile,
 			},
 			NativeDef {
+				name: "append-file",
+				ty: Type::Fun(
+					vec![Type::String, Type::String],
+					Box::new(result_unit_str()),
+				),
+				builtin: Builtin::IoAppendFile,
+			},
+			NativeDef {
 				name: "file-exists",
 				ty: Type::Fun(vec![Type::String], Box::new(Type::Bool)),
 				builtin: Builtin::IoFileExists,
+			},
+			NativeDef {
+				name: "delete-file",
+				ty: Type::Fun(vec![Type::String], Box::new(result_unit_str())),
+				builtin: Builtin::IoDeleteFile,
 			},
 			NativeDef {
 				name: "args",

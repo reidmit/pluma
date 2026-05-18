@@ -434,9 +434,33 @@ pub fn call_builtin(vm: &mut VM, b: Builtin, args: Vec<Value>) -> Result<Value, 
 				Err(e) => result_err(Value::String(Rc::new(e.to_string()))),
 			})
 		}
+		IoAppendFile => {
+			debug_assert_eq!(args.len(), 2, "`append-file` arity");
+			let (path, contents) = match (&args[0], &args[1]) {
+				(Value::String(p), Value::String(c)) => (p, c),
+				_ => unreachable!("`append-file`: expected (string, string)"),
+			};
+			use std::io::Write;
+			let result = std::fs::OpenOptions::new()
+				.create(true)
+				.append(true)
+				.open(path.as_str())
+				.and_then(|mut f| f.write_all(contents.as_bytes()));
+			Ok(match result {
+				Ok(()) => result_ok(Value::Nothing),
+				Err(e) => result_err(Value::String(Rc::new(e.to_string()))),
+			})
+		}
 		IoFileExists => {
 			let path = expect_string(&args, "file-exists");
 			Ok(Value::Bool(std::path::Path::new(path.as_str()).exists()))
+		}
+		IoDeleteFile => {
+			let path = expect_string(&args, "delete-file");
+			Ok(match std::fs::remove_file(path.as_str()) {
+				Ok(()) => result_ok(Value::Nothing),
+				Err(e) => result_err(Value::String(Rc::new(e.to_string()))),
+			})
 		}
 		IoArgs => {
 			// Called as `args ()` — the lone arg is the `nothing` unit.

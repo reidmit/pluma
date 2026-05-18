@@ -1,0 +1,36 @@
+use core.io
+
+def show-result fun r {
+	when r is ok _ {
+		print "ok"
+	} is err _ {
+		# OS error messages aren't portable — just signal err
+		print "err"
+	}
+}
+
+def main fun {
+	let path = "target/pluma-io-append-delete.txt"
+
+	# ensure known starting state: write empty (creates or truncates)
+	show-result (io.write-file path "")
+
+	# append three lines
+	show-result (io.append-file path "one\n")
+	show-result (io.append-file path "two\n")
+	show-result (io.append-file path "three\n")
+
+	# read it back
+	when (io.read-file path) is ok contents {
+		io.write contents
+	} is err msg {
+		print "read err: $(msg)"
+	}
+
+	# delete it
+	show-result (io.delete-file path)
+	print (io.file-exists path)
+
+	# deleting again should err
+	show-result (io.delete-file path)
+}
