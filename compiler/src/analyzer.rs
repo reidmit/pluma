@@ -125,7 +125,10 @@ impl<'compiler> Analyzer<'compiler> {
 				.variants
 				.into_iter()
 				.map(|(n, params)| {
-					let rebound = params.into_iter().map(|p| rebind.apply_to_type(&p)).collect();
+					let rebound = params
+						.into_iter()
+						.map(|p| rebind.apply_to_type(&p))
+						.collect();
 					(n, rebound)
 				})
 				.collect();
@@ -157,10 +160,7 @@ impl<'compiler> Analyzer<'compiler> {
 			"print".into(),
 			Scheme::Forall(
 				vec![print_var],
-				Type::Fun(
-					vec![Type::Var(print_var)],
-					Box::new(Type::Var(print_var)),
-				),
+				Type::Fun(vec![Type::Var(print_var)], Box::new(Type::Var(print_var))),
 			),
 			Range::collapsed(0, 0),
 		);
@@ -174,10 +174,7 @@ impl<'compiler> Analyzer<'compiler> {
 			"to-string".into(),
 			Scheme::Forall(
 				vec![to_string_var],
-				Type::Fun(
-					vec![Type::Var(to_string_var)],
-					Box::new(Type::String),
-				),
+				Type::Fun(vec![Type::Var(to_string_var)], Box::new(Type::String)),
 			),
 			Range::collapsed(0, 0),
 		);
@@ -194,10 +191,7 @@ impl<'compiler> Analyzer<'compiler> {
 		self.register_prelude_enum(
 			"result",
 			2,
-			vec![
-				("ok", vec![Type::Var(0)]),
-				("err", vec![Type::Var(1)]),
-			],
+			vec![("ok", vec![Type::Var(0)]), ("err", vec![Type::Var(1)])],
 		);
 
 		// the three basic phases of analysis!
@@ -401,7 +395,8 @@ impl<'compiler> Analyzer<'compiler> {
 			// Top-level redefinition is an error. Locals can shadow via let,
 			// but two `def`s with the same name at module top level is almost
 			// certainly a mistake.
-			if let Some(_prev_range) = seen_names.insert(definition.name.name.clone(), definition.name.range)
+			if let Some(_prev_range) =
+				seen_names.insert(definition.name.name.clone(), definition.name.range)
 			{
 				self.error(
 					definition.name.range,
@@ -470,10 +465,7 @@ impl<'compiler> Analyzer<'compiler> {
 							id
 						})
 						.collect();
-					let param_var_types: Vec<Type> = param_var_ids
-						.iter()
-						.map(|id| Type::Var(*id))
-						.collect();
+					let param_var_types: Vec<Type> = param_var_ids.iter().map(|id| Type::Var(*id)).collect();
 
 					self.add_type_binding(
 						definition.name.name.clone(),
@@ -668,11 +660,7 @@ impl<'compiler> Analyzer<'compiler> {
 								.get(&qualified)
 								.map(|d| d.param_vars.len())
 								.unwrap_or(0);
-							let args = self.resolve_enum_args(
-								type_ident,
-								expected,
-								constraints,
-							);
+							let args = self.resolve_enum_args(type_ident, expected, constraints);
 							return Type::Enum(qualified, args);
 						}
 
@@ -715,11 +703,7 @@ impl<'compiler> Analyzer<'compiler> {
 							let binding_ty = binding.ty.clone();
 							if let Type::Enum(qualified, template_args) = binding_ty {
 								let expected = template_args.len();
-								let args = self.resolve_enum_args(
-									type_ident,
-									expected,
-									constraints,
-								);
+								let args = self.resolve_enum_args(type_ident, expected, constraints);
 								return Type::Enum(qualified, args);
 							}
 							return binding_ty;
@@ -881,9 +865,8 @@ impl<'compiler> Analyzer<'compiler> {
 					constraints
 						.push(eq_constraint(element.ty.clone(), element_type.clone()).at(element.range));
 				}
-				constraints.push(
-					eq_constraint(expr.ty.clone(), Type::List(Box::new(element_type))).at(expr.range),
-				);
+				constraints
+					.push(eq_constraint(expr.ty.clone(), Type::List(Box::new(element_type))).at(expr.range));
 			}
 
 			ExprKind::Record(fields) => {
@@ -982,8 +965,7 @@ impl<'compiler> Analyzer<'compiler> {
 						// polymorphic-numeric functions (`fun a b { a + b }`)
 						// resolve to int-only — users write a per-type
 						// function for float.
-						let is_float =
-							matches!(left.ty, Type::Float) || matches!(right.ty, Type::Float);
+						let is_float = matches!(left.ty, Type::Float) || matches!(right.ty, Type::Float);
 						let ty = if is_float { Type::Float } else { Type::Int };
 						expr.ty = ty.clone();
 						constraints.push(eq_constraint(left.ty.clone(), ty.clone()).at(left.range));
@@ -1000,9 +982,7 @@ impl<'compiler> Analyzer<'compiler> {
 					// Result type is bool either way.
 					Operator::Equality | Operator::Inequality => {
 						expr.ty = Type::Bool;
-						constraints.push(
-							eq_constraint(left.ty.clone(), right.ty.clone()).at(expr.range),
-						);
+						constraints.push(eq_constraint(left.ty.clone(), right.ty.clone()).at(expr.range));
 					}
 
 					// Ordering: int or float, same dispatch as arithmetic
@@ -1012,8 +992,7 @@ impl<'compiler> Analyzer<'compiler> {
 					| Operator::GreaterThan
 					| Operator::GreaterThanEquals => {
 						expr.ty = Type::Bool;
-						let is_float =
-							matches!(left.ty, Type::Float) || matches!(right.ty, Type::Float);
+						let is_float = matches!(left.ty, Type::Float) || matches!(right.ty, Type::Float);
 						let ty = if is_float { Type::Float } else { Type::Int };
 						constraints.push(eq_constraint(left.ty.clone(), ty.clone()).at(left.range));
 						constraints.push(eq_constraint(right.ty.clone(), ty).at(right.range));
@@ -1154,8 +1133,8 @@ impl<'compiler> Analyzer<'compiler> {
 									.unwrap_or_else(|| module_ident.name.clone());
 								let qualified = format!("{}.{}", qualified_module, enum_field.name);
 								if let Some(enum_def) = self.enum_defs.get(&qualified).cloned() {
-									let (enum_ty, variant_params, variant_found) = self
-										.instantiate_variant(&qualified, &field.name, &enum_def);
+									let (enum_ty, variant_params, variant_found) =
+										self.instantiate_variant(&qualified, &field.name, &enum_def);
 									receiver.ty = enum_ty.clone();
 									if let ExprKind::FieldAccess {
 										receiver: inner, ..
@@ -1226,8 +1205,8 @@ impl<'compiler> Analyzer<'compiler> {
 
 					if let Some(qualified) = qualified_enum {
 						if let Some(enum_def) = self.enum_defs.get(&qualified).cloned() {
-							let (enum_ty, variant_params, variant_found) = self
-								.instantiate_variant(&qualified, &field.name, &enum_def);
+							let (enum_ty, variant_params, variant_found) =
+								self.instantiate_variant(&qualified, &field.name, &enum_def);
 							receiver.ty = enum_ty.clone();
 
 							match variant_found {
@@ -1401,10 +1380,7 @@ impl<'compiler> Analyzer<'compiler> {
 							.map(|d| d.param_vars.clone())
 							.unwrap_or_default();
 						let subst = Substitution {
-							solutions: param_vars
-								.into_iter()
-								.zip(enum_args.into_iter())
-								.collect(),
+							solutions: param_vars.into_iter().zip(enum_args.into_iter()).collect(),
 						};
 						for (arg, param_ty) in args.iter_mut().zip(params.into_iter()) {
 							self.constrain_pattern(arg, subst.apply_to_type(&param_ty), constraints);
@@ -2153,10 +2129,7 @@ impl<'compiler> Analyzer<'compiler> {
 	// Pick a single (enum, variant) from a list of matches by precedence:
 	// local-module enums shadow everything; if no local match, a single
 	// non-local match wins; otherwise return None (caller reports ambiguity).
-	fn disambiguate_variant_matches(
-		&self,
-		matches: &[(String, String)],
-	) -> Option<(String, String)> {
+	fn disambiguate_variant_matches(&self, matches: &[(String, String)]) -> Option<(String, String)> {
 		if matches.len() == 1 {
 			return Some(matches[0].clone());
 		}
@@ -2204,7 +2177,10 @@ impl<'compiler> Analyzer<'compiler> {
 		let bound_variants: Vec<(String, Vec<Type>)> = variants
 			.into_iter()
 			.map(|(n, params)| {
-				let mapped = params.into_iter().map(|p| rebind.apply_to_type(&p)).collect();
+				let mapped = params
+					.into_iter()
+					.map(|p| rebind.apply_to_type(&p))
+					.collect();
 				(n.to_string(), mapped)
 			})
 			.collect();
@@ -2316,7 +2292,10 @@ impl<'compiler> Analyzer<'compiler> {
 			),
 			Type::Enum(name, args) => Type::Enum(
 				name.clone(),
-				args.iter().map(|t| self.instantiate_with(t, mapping)).collect(),
+				args
+					.iter()
+					.map(|t| self.instantiate_with(t, mapping))
+					.collect(),
 			),
 			Type::Bool
 			| Type::Int

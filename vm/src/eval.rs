@@ -320,9 +320,7 @@ pub fn call_builtin(vm: &mut VM, b: Builtin, args: Vec<Value>) -> Result<Value, 
 		StringEndsWith => {
 			debug_assert_eq!(args.len(), 2, "`ends-with` arity");
 			match (&args[0], &args[1]) {
-				(Value::String(s), Value::String(suffix)) => {
-					Ok(Value::Bool(s.ends_with(suffix.as_str())))
-				}
+				(Value::String(s), Value::String(suffix)) => Ok(Value::Bool(s.ends_with(suffix.as_str()))),
 				_ => unreachable!("`ends-with`: expected (string, string)"),
 			}
 		}
@@ -372,9 +370,9 @@ pub fn call_builtin(vm: &mut VM, b: Builtin, args: Vec<Value>) -> Result<Value, 
 		StringReplace => {
 			debug_assert_eq!(args.len(), 3, "`replace` arity");
 			match (&args[0], &args[1], &args[2]) {
-				(Value::String(s), Value::String(from), Value::String(to)) => Ok(Value::String(
-					Rc::new(s.replace(from.as_str(), to.as_str())),
-				)),
+				(Value::String(s), Value::String(from), Value::String(to)) => Ok(Value::String(Rc::new(
+					s.replace(from.as_str(), to.as_str()),
+				))),
 				_ => unreachable!("`replace`: expected (string, string, string)"),
 			}
 		}

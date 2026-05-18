@@ -6,7 +6,7 @@
 // globals; closures capture their free vars explicitly.
 
 use compiler::ast::{
-	CallNode, DefinitionKind, ExprKind, ExprNode, FunNode, IfNode, IdentifierNode, LetNode,
+	CallNode, DefinitionKind, ExprKind, ExprNode, FunNode, IdentifierNode, IfNode, LetNode,
 	LiteralKind, ModuleNode, Operator, PatternKind, PatternNode, RegexKind, RegexNode, WhenNode,
 	WhileNode,
 };
@@ -22,7 +22,11 @@ pub fn compile(compiler: &compiler::Compiler) -> Result<Program, String> {
 
 	// Prelude: `print` and `to-string` as globals 0 and 1, pre-evaluated.
 	cg.add_evaluated_global("__prelude__", "print", Value::Builtin(Builtin::Print));
-	cg.add_evaluated_global("__prelude__", "to-string", Value::Builtin(Builtin::ToString));
+	cg.add_evaluated_global(
+		"__prelude__",
+		"to-string",
+		Value::Builtin(Builtin::ToString),
+	);
 
 	// Prelude enums: `option` and `result`. enum_variants tracks `(name, arity)`
 	// per qualified enum so the bare-variant resolution path can build
@@ -40,11 +44,7 @@ pub fn compile(compiler: &compiler::Compiler) -> Result<Program, String> {
 	// constant's is its concrete Value.
 	for module in native_modules() {
 		for def in &module.defs {
-			cg.add_evaluated_global(
-				module.name,
-				def.name,
-				Value::Builtin(def.builtin),
-			);
+			cg.add_evaluated_global(module.name, def.name, Value::Builtin(def.builtin));
 		}
 		for c in module.constants {
 			cg.add_evaluated_global(module.name, c.name, c.value);
@@ -88,12 +88,9 @@ pub fn compile(compiler: &compiler::Compiler) -> Result<Program, String> {
 	}
 
 	// Build the entry function: load main, call it with (), return.
-	let main_global = cg.lookup_global(&compiler.entry_module_name, "main").ok_or_else(|| {
-		format!(
-			"module `{}` has no `main` def",
-			compiler.entry_module_name
-		)
-	})?;
+	let main_global = cg
+		.lookup_global(&compiler.entry_module_name, "main")
+		.ok_or_else(|| format!("module `{}` has no `main` def", compiler.entry_module_name))?;
 	let entry_idx = cg.emit_entry_function(main_global);
 	cg.program.entry = entry_idx;
 
@@ -165,7 +162,10 @@ impl CodeGen {
 			return idx;
 		}
 		let idx = self.program.globals.len() as u32;
-		self.program.globals.push(vm::program::GlobalSlot::Pending(0));
+		self
+			.program
+			.globals
+			.push(vm::program::GlobalSlot::Pending(0));
 		self.global_lookup.insert(key.clone(), idx);
 		self.program.global_by_name.insert(key, idx);
 		idx
@@ -193,10 +193,7 @@ impl CodeGen {
 		// (Already collected into self.enum_variants; flush into program for
 		// the VM to use at runtime if needed.)
 		for (k, v) in &self.enum_variants {
-			self
-				.program
-				.enum_variants
-				.insert(k.clone(), v.clone());
+			self.program.enum_variants.insert(k.clone(), v.clone());
 		}
 
 		for def in &ast.body {
@@ -220,8 +217,7 @@ impl CodeGen {
 						.expect("global slot reserved in pass 1");
 					let alias_fn_idx = self.emit_alias_constructor(&def.name.name);
 					// The "thunk" returns a closure over alias_fn_idx with no captures.
-					let thunk_idx =
-						self.emit_alias_thunk(&def.name.name, alias_fn_idx);
+					let thunk_idx = self.emit_alias_thunk(&def.name.name, alias_fn_idx);
 					self.set_global_thunk(global_idx, thunk_idx);
 				}
 				DefinitionKind::Enum(_) => {
@@ -247,7 +243,15 @@ impl CodeGen {
 	) -> Result<u32, String> {
 		let mut fb = FunctionBuilder::new(name.to_string(), 0);
 		let mut scope = Scope::new();
-		emit_expr(self, current_module, imports, &mut fb, &mut scope, expr, true)?;
+		emit_expr(
+			self,
+			current_module,
+			imports,
+			&mut fb,
+			&mut scope,
+			expr,
+			true,
+		)?;
 		fb.emit(Instruction::Return, expr.range);
 		Ok(self.add_function(fb))
 	}
@@ -331,8 +335,7 @@ impl FunctionBuilder {
 
 	fn patch_jump(&mut self, idx: u32, target: u32) {
 		match &mut self.body[idx as usize] {
-			Instruction::Jump(o)
-			| Instruction::JumpIfFalse(o) => *o = target,
+			Instruction::Jump(o) | Instruction::JumpIfFalse(o) => *o = target,
 			Instruction::MatchInt(_, o)
 			| Instruction::MatchFloat(_, o)
 			| Instruction::MatchString(_, o)
@@ -527,11 +530,7 @@ fn resolve_identifier(
 	for (qualified, variants) in &cg.enum_variants {
 		for (variant, arity) in variants {
 			if variant == name {
-				let resolved = Resolution::BareVariant(
-					qualified.clone(),
-					variant.clone(),
-					*arity,
-				);
+				let resolved = Resolution::BareVariant(qualified.clone(), variant.clone(), *arity);
 				if qualified.starts_with(&local_prefix) {
 					local_match = Some(resolved);
 				} else if other_match.is_none() {
@@ -552,7 +551,16 @@ fn emit_expr(
 	expr: &ExprNode,
 	tail: bool,
 ) -> Result<(), String> {
-	emit_expr_with_parents(cg, current_module, imports, fb, scope, &mut Vec::new(), expr, tail)
+	emit_expr_with_parents(
+		cg,
+		current_module,
+		imports,
+		fb,
+		scope,
+		&mut Vec::new(),
+		expr,
+		tail,
+	)
 }
 
 // `tail` is true when the expression's result is about to be Return'd directly
@@ -575,7 +583,16 @@ fn emit_expr_with_parents(
 			fb.emit(Instruction::LoadNothing, range);
 		}
 		ExprKind::Identifier(ident) => {
-			emit_identifier(cg, current_module, imports, fb, scope, parent_scopes, ident, range)?;
+			emit_identifier(
+				cg,
+				current_module,
+				imports,
+				fb,
+				scope,
+				parent_scopes,
+				ident,
+				range,
+			)?;
 		}
 		ExprKind::Grouping(inner) => emit_expr_with_parents(
 			cg,
@@ -669,7 +686,17 @@ fn emit_expr_with_parents(
 			fb.emit(Instruction::Interpolate(parts.len() as u16), range);
 		}
 		ExprKind::Fun(FunNode { params, body, .. }) => {
-			emit_fun(cg, current_module, imports, fb, scope, parent_scopes, params, body, range)?;
+			emit_fun(
+				cg,
+				current_module,
+				imports,
+				fb,
+				scope,
+				parent_scopes,
+				params,
+				body,
+				range,
+			)?;
 		}
 		ExprKind::Call(CallNode { callee, args, .. }) => {
 			emit_call(
@@ -707,14 +734,35 @@ fn emit_expr_with_parents(
 					_ => (right.as_ref(), &[][..]),
 				};
 				emit_expr_with_parents(
-					cg, current_module, imports, fb, scope, parent_scopes, callee, false,
+					cg,
+					current_module,
+					imports,
+					fb,
+					scope,
+					parent_scopes,
+					callee,
+					false,
 				)?;
 				emit_expr_with_parents(
-					cg, current_module, imports, fb, scope, parent_scopes, left, false,
+					cg,
+					current_module,
+					imports,
+					fb,
+					scope,
+					parent_scopes,
+					left,
+					false,
 				)?;
 				for a in extra_args {
 					emit_expr_with_parents(
-						cg, current_module, imports, fb, scope, parent_scopes, a, false,
+						cg,
+						current_module,
+						imports,
+						fb,
+						scope,
+						parent_scopes,
+						a,
+						false,
 					)?;
 				}
 				let arg_count = (extra_args.len() + 1) as u16;
@@ -728,14 +776,27 @@ fn emit_expr_with_parents(
 			}
 
 			emit_expr_with_parents(
-				cg, current_module, imports, fb, scope, parent_scopes, left, false,
+				cg,
+				current_module,
+				imports,
+				fb,
+				scope,
+				parent_scopes,
+				left,
+				false,
 			)?;
 			emit_expr_with_parents(
-				cg, current_module, imports, fb, scope, parent_scopes, right, false,
+				cg,
+				current_module,
+				imports,
+				fb,
+				scope,
+				parent_scopes,
+				right,
+				false,
 			)?;
-			let is_float =
-				matches!(left.ty, compiler::types::Type::Float)
-					|| matches!(right.ty, compiler::types::Type::Float);
+			let is_float = matches!(left.ty, compiler::types::Type::Float)
+				|| matches!(right.ty, compiler::types::Type::Float);
 			let instr = match (&op.kind, is_float) {
 				(Operator::Addition, false) => Instruction::AddInt,
 				(Operator::Addition, true) => Instruction::AddFloat,
@@ -763,7 +824,14 @@ fn emit_expr_with_parents(
 		}
 		ExprKind::UnaryOperation { op, right } => {
 			emit_expr_with_parents(
-				cg, current_module, imports, fb, scope, parent_scopes, right, false,
+				cg,
+				current_module,
+				imports,
+				fb,
+				scope,
+				parent_scopes,
+				right,
+				false,
 			)?;
 			let is_float = matches!(right.ty, compiler::types::Type::Float);
 			let instr = match (op, is_float) {
@@ -776,10 +844,12 @@ fn emit_expr_with_parents(
 		}
 		ExprKind::Regex(node) => {
 			let pattern = regex_pattern(node);
-			let compiled = regex::Regex::new(&pattern)
-				.map_err(|e| format!("codegen: invalid regex: {}", e))?;
+			let compiled =
+				regex::Regex::new(&pattern).map_err(|e| format!("codegen: invalid regex: {}", e))?;
 			let idx = cg.program.regex_patterns.len() as u32;
-			cg.program.regex_patterns.push(Rc::new(RegexData { compiled }));
+			cg.program
+				.regex_patterns
+				.push(Rc::new(RegexData { compiled }));
 			fb.emit(Instruction::LoadRegex(idx), range);
 		}
 		ExprKind::If(IfNode {
@@ -879,10 +949,8 @@ fn emit_identifier(
 	ident: &IdentifierNode,
 	range: Range,
 ) -> Result<(), String> {
-	let mut parent_refs: Vec<&mut Scope> = parent_scopes
-		.iter()
-		.map(|p| unsafe { &mut **p })
-		.collect();
+	let mut parent_refs: Vec<&mut Scope> =
+		parent_scopes.iter().map(|p| unsafe { &mut **p }).collect();
 	let res = resolve_identifier(
 		cg,
 		current_module,
@@ -1006,11 +1074,25 @@ fn emit_call(
 	tail: bool,
 ) -> Result<(), String> {
 	emit_expr_with_parents(
-		cg, current_module, imports, fb, scope, parent_scopes, callee, false,
+		cg,
+		current_module,
+		imports,
+		fb,
+		scope,
+		parent_scopes,
+		callee,
+		false,
 	)?;
 	for a in args {
 		emit_expr_with_parents(
-			cg, current_module, imports, fb, scope, parent_scopes, a, false,
+			cg,
+			current_module,
+			imports,
+			fb,
+			scope,
+			parent_scopes,
+			a,
+			false,
 		)?;
 	}
 	let instr = if tail {
@@ -1044,14 +1126,7 @@ fn emit_field_access(
 				let qualified_enum = format!("{}.{}", qualified_module, enum_field.name);
 				if let Some(variants) = cg.enum_variants.get(&qualified_enum).cloned() {
 					if let Some((_, arity)) = variants.iter().find(|(n, _)| n == &field.name) {
-						return emit_variant_construction(
-							cg,
-							fb,
-							&qualified_enum,
-							&field.name,
-							*arity,
-							range,
-						);
+						return emit_variant_construction(cg, fb, &qualified_enum, &field.name, *arity, range);
 					}
 				}
 			}
@@ -1077,21 +1152,21 @@ fn emit_field_access(
 		let qualified_enum = format!("{}.{}", current_module, ident.name);
 		if let Some(variants) = cg.enum_variants.get(&qualified_enum).cloned() {
 			if let Some((_, arity)) = variants.iter().find(|(n, _)| n == &field.name) {
-				return emit_variant_construction(
-					cg,
-					fb,
-					&qualified_enum,
-					&field.name,
-					*arity,
-					range,
-				);
+				return emit_variant_construction(cg, fb, &qualified_enum, &field.name, *arity, range);
 			}
 		}
 	}
 
 	// 4. Record field access.
 	emit_expr_with_parents(
-		cg, current_module, imports, fb, scope, parent_scopes, receiver, false,
+		cg,
+		current_module,
+		imports,
+		fb,
+		scope,
+		parent_scopes,
+		receiver,
+		false,
 	)?;
 	let name_idx = cg.intern(&field.name);
 	fb.emit(Instruction::GetField(name_idx), range);
@@ -1146,14 +1221,28 @@ fn emit_if(
 	// to nothing — so the body's expressions are never in tail position
 	// (their values get popped).
 	emit_expr_with_parents(
-		cg, current_module, imports, fb, scope, parent_scopes, subject, false,
+		cg,
+		current_module,
+		imports,
+		fb,
+		scope,
+		parent_scopes,
+		subject,
+		false,
 	)?;
 	let subject_ty = subject.ty.clone();
 	scope.enter();
 	let fail_idx = emit_pattern(cg, fb, scope, &subject_ty, pattern)?;
 	for e in body {
 		emit_expr_with_parents(
-			cg, current_module, imports, fb, scope, parent_scopes, e, false,
+			cg,
+			current_module,
+			imports,
+			fb,
+			scope,
+			parent_scopes,
+			e,
+			false,
 		)?;
 		fb.emit(Instruction::Pop, e.range);
 	}
@@ -1182,7 +1271,14 @@ fn emit_when(
 	tail: bool,
 ) -> Result<(), String> {
 	emit_expr_with_parents(
-		cg, current_module, imports, fb, scope, parent_scopes, subject, false,
+		cg,
+		current_module,
+		imports,
+		fb,
+		scope,
+		parent_scopes,
+		subject,
+		false,
 	)?;
 	let subject_ty = subject.ty.clone();
 	// For each case: dup the subject, attempt match, if fail jump to next.
@@ -1285,14 +1381,28 @@ fn emit_while(
 	//   push Nothing
 	let loop_top = fb.here();
 	emit_expr_with_parents(
-		cg, current_module, imports, fb, scope, parent_scopes, subject, false,
+		cg,
+		current_module,
+		imports,
+		fb,
+		scope,
+		parent_scopes,
+		subject,
+		false,
 	)?;
 	let subject_ty = subject.ty.clone();
 	scope.enter();
 	let fail_idx = emit_pattern(cg, fb, scope, &subject_ty, pattern)?;
 	for e in body {
 		emit_expr_with_parents(
-			cg, current_module, imports, fb, scope, parent_scopes, e, false,
+			cg,
+			current_module,
+			imports,
+			fb,
+			scope,
+			parent_scopes,
+			e,
+			false,
 		)?;
 		fb.emit(Instruction::Pop, e.range);
 	}
@@ -1375,9 +1485,7 @@ fn emit_pattern(
 				LiteralKind::IntDecimal(n)
 				| LiteralKind::IntHex(n)
 				| LiteralKind::IntOctal(n)
-				| LiteralKind::IntBinary(n) => {
-					fb.emit(Instruction::MatchInt(*n as i64, 0), range)
-				}
+				| LiteralKind::IntBinary(n) => fb.emit(Instruction::MatchInt(*n as i64, 0), range),
 			};
 			fails.push(jmp);
 		}
@@ -1452,7 +1560,12 @@ fn collect_enum_defs(
 			let variants: Vec<(String, usize)> = enum_node
 				.variants
 				.iter()
-				.map(|v| (v.name.name.clone(), v.params.as_ref().map_or(0, |p| p.len())))
+				.map(|v| {
+					(
+						v.name.name.clone(),
+						v.params.as_ref().map_or(0, |p| p.len()),
+					)
+				})
 				.collect();
 			out.insert(qualified, variants);
 		}

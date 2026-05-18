@@ -104,7 +104,9 @@ fn run_via_vm(path: &PathBuf) -> Result<(), String> {
 	let mut compiler = compiler::Compiler::from_entry_path(path.to_str().unwrap().to_string())
 		.map_err(|d| format!("compile: {:?} diagnostics", d.len()))?;
 	vm::stdlib::register_compiler(&mut compiler);
-	compiler.check().map_err(|d| format!("check: {:?} diagnostics", d.len()))?;
+	compiler
+		.check()
+		.map_err(|d| format!("check: {:?} diagnostics", d.len()))?;
 	let program = codegen::compile(&compiler).map_err(|e| format!("codegen: {}", e))?;
 	let buf = Rc::new(RefCell::new(Vec::<u8>::new()));
 	let mut vm_instance = vm::VM::new(program).with_stdout(vm::StdoutSink::Buffer(buf));

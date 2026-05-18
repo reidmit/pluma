@@ -30,7 +30,12 @@ pub struct NativeConstant {
 }
 
 pub fn native_modules() -> Vec<NativeModule> {
-	vec![regex_module(), list_module(), math_module(), string_module()]
+	vec![
+		regex_module(),
+		list_module(),
+		math_module(),
+		string_module(),
+	]
 }
 
 pub fn register_compiler(compiler: &mut compiler::Compiler) {
@@ -112,10 +117,7 @@ fn list_module() -> NativeModule {
 			},
 			NativeDef {
 				name: "filter",
-				ty: Type::Fun(
-					vec![list_a(), pred_a()],
-					Box::new(list_a()),
-				),
+				ty: Type::Fun(vec![list_a(), pred_a()], Box::new(list_a())),
 				builtin: Builtin::ListFilter,
 			},
 			NativeDef {

@@ -153,7 +153,8 @@ pub fn values_eq(a: &Value, b: &Value) -> bool {
 			a.qualified_enum == b.qualified_enum
 				&& a.variant == b.variant
 				&& a.payload.len() == b.payload.len()
-				&& a.payload
+				&& a
+					.payload
 					.iter()
 					.zip(b.payload.iter())
 					.all(|(a, b)| values_eq(a, b))

@@ -32,7 +32,9 @@ fn run_fixture(path: &Path) -> datatest_stable::Result<()> {
 		let program = codegen::compile(&compiler).map_err(RunError::Runtime)?;
 		let mut vm_instance =
 			vm::VM::new(program).with_stdout(vm::StdoutSink::Buffer(stdout_buf.clone()));
-		vm_instance.run().map_err(|e| RunError::Runtime(e.message))?;
+		vm_instance
+			.run()
+			.map_err(|e| RunError::Runtime(e.message))?;
 		Ok(())
 	})();
 

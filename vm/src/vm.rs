@@ -112,10 +112,7 @@ impl VM {
 		forcing_global: Option<u32>,
 	) -> Result<(), RuntimeError> {
 		let func = &self.program.functions[fn_idx as usize];
-		let args = if func.param_count == 0
-			&& args.len() == 1
-			&& matches!(args[0], Value::Nothing)
-		{
+		let args = if func.param_count == 0 && args.len() == 1 && matches!(args[0], Value::Nothing) {
 			Vec::new()
 		} else {
 			args
@@ -190,9 +187,11 @@ impl VM {
 				self.stack.pop();
 			}
 			Instruction::Dup => {
-				let top = self.stack.last().cloned().ok_or_else(|| {
-					RuntimeError::new("VM: Dup on empty stack").at(self.current_range())
-				})?;
+				let top = self
+					.stack
+					.last()
+					.cloned()
+					.ok_or_else(|| RuntimeError::new("VM: Dup on empty stack").at(self.current_range()))?;
 				self.stack.push(top);
 			}
 			Instruction::LoadConst(idx) => {
@@ -232,8 +231,7 @@ impl VM {
 					Value::Bool(false) => self.frames[frame_idx].ip = off as usize,
 					Value::Bool(true) => {}
 					_ => {
-						return Err(RuntimeError::new("VM: JumpIfFalse with non-bool")
-							.at(self.current_range()))
+						return Err(RuntimeError::new("VM: JumpIfFalse with non-bool").at(self.current_range()))
 					}
 				}
 			}
@@ -264,8 +262,7 @@ impl VM {
 				// any unused intermediates, and the callee slot below).
 				self.stack.truncate(popped.prev_top);
 				if let Some(global_idx) = popped.forcing_global {
-					self.program.globals[global_idx as usize] =
-						GlobalSlot::Evaluated(ret.clone());
+					self.program.globals[global_idx as usize] = GlobalSlot::Evaluated(ret.clone());
 				}
 				self.stack.push(ret);
 			}
@@ -282,9 +279,11 @@ impl VM {
 			Instruction::MakeList(arity) => {
 				let mut elems = Vec::with_capacity(arity as usize);
 				for _ in 0..arity {
-					elems.push(self.stack.pop().ok_or_else(|| {
-						RuntimeError::new("VM: MakeList underflow").at(self.current_range())
-					})?);
+					elems.push(
+						self.stack.pop().ok_or_else(|| {
+							RuntimeError::new("VM: MakeList underflow").at(self.current_range())
+						})?,
+					);
 				}
 				elems.reverse();
 				self.stack.push(Value::List(Rc::new(elems)));
@@ -350,11 +349,10 @@ impl VM {
 						}
 					},
 					_ => {
-						return Err(RuntimeError::new(format!(
-							"field access `.{}` on non-record value",
-							name
-						))
-						.at(self.current_range()))
+						return Err(
+							RuntimeError::new(format!("field access `.{}` on non-record value", name))
+								.at(self.current_range()),
+						)
 					}
 				}
 			}
@@ -379,14 +377,12 @@ impl VM {
 				}
 				self.stack.push(Value::String(Rc::new(out)));
 			}
-			Instruction::MatchInt(n, on_fail) => self.match_literal(
-				on_fail,
-				|v| matches!(v, Value::Int(x) if *x == n),
-			)?,
-			Instruction::MatchFloat(n, on_fail) => self.match_literal(
-				on_fail,
-				|v| matches!(v, Value::Float(x) if *x == n),
-			)?,
+			Instruction::MatchInt(n, on_fail) => {
+				self.match_literal(on_fail, |v| matches!(v, Value::Int(x) if *x == n))?
+			}
+			Instruction::MatchFloat(n, on_fail) => {
+				self.match_literal(on_fail, |v| matches!(v, Value::Float(x) if *x == n))?
+			}
 			Instruction::MatchString(idx, on_fail) => {
 				let needle = self.program.constants[idx as usize].clone();
 				self.match_literal(on_fail, |v| match v {
@@ -406,9 +402,10 @@ impl VM {
 				on_fail,
 			} => self.match_variant(variant, arity, on_fail)?,
 			Instruction::MatchTuple { arity, on_fail } => self.match_tuple(arity, on_fail)?,
-			Instruction::MatchRecord { fields_idx, on_fail } => {
-				self.match_record(fields_idx, on_fail)?
-			}
+			Instruction::MatchRecord {
+				fields_idx,
+				on_fail,
+			} => self.match_record(fields_idx, on_fail)?,
 			// Arithmetic, comparison, and unary ops are inlined here (rather
 			// than dispatched through helper functions) so the hot loop
 			// avoids a function call + a second match on `instr` per
@@ -567,10 +564,7 @@ impl VM {
 				let l = self.stack.pop().unwrap();
 				match (l, r) {
 					(Value::Bool(a), Value::Bool(b)) => self.stack.push(Value::Bool(a && b)),
-					_ => {
-						return Err(RuntimeError::new("expected bools for `&&`")
-							.at(self.current_range()))
-					}
+					_ => return Err(RuntimeError::new("expected bools for `&&`").at(self.current_range())),
 				}
 			}
 			Instruction::LogicalOr => {
@@ -578,20 +572,14 @@ impl VM {
 				let l = self.stack.pop().unwrap();
 				match (l, r) {
 					(Value::Bool(a), Value::Bool(b)) => self.stack.push(Value::Bool(a || b)),
-					_ => {
-						return Err(RuntimeError::new("expected bools for `||`")
-							.at(self.current_range()))
-					}
+					_ => return Err(RuntimeError::new("expected bools for `||`").at(self.current_range())),
 				}
 			}
 			Instruction::LogicalNot => {
 				let v = self.stack.pop().unwrap();
 				match v {
 					Value::Bool(b) => self.stack.push(Value::Bool(!b)),
-					_ => {
-						return Err(RuntimeError::new("expected bool for `!`")
-							.at(self.current_range()))
-					}
+					_ => return Err(RuntimeError::new("expected bool for `!`").at(self.current_range())),
 				}
 			}
 			Instruction::CallBuiltin(b, arity) => {
@@ -602,8 +590,7 @@ impl VM {
 					})?);
 				}
 				args.reverse();
-				let result = eval::call_builtin(self, b, args)
-					.map_err(|e| e.at(self.current_range()))?;
+				let result = eval::call_builtin(self, b, args).map_err(|e| e.at(self.current_range()))?;
 				self.stack.push(result);
 			}
 		}
@@ -614,9 +601,10 @@ impl VM {
 	where
 		F: FnOnce(&Value) -> bool,
 	{
-		let subj = self.stack.pop().ok_or_else(|| {
-			RuntimeError::new("VM: match on empty stack").at(self.current_range())
-		})?;
+		let subj = self
+			.stack
+			.pop()
+			.ok_or_else(|| RuntimeError::new("VM: match on empty stack").at(self.current_range()))?;
 		if !pred(&subj) {
 			let frame_idx = self.frames.len() - 1;
 			self.frames[frame_idx].ip = on_fail as usize;
@@ -636,8 +624,7 @@ impl VM {
 		let variant_name = self.program.constants[variant_idx as usize].clone();
 		match subj {
 			Value::Variant(v)
-				if v.variant.as_ref() == variant_name.as_ref()
-					&& v.payload.len() == arity as usize =>
+				if v.variant.as_ref() == variant_name.as_ref() && v.payload.len() == arity as usize =>
 			{
 				for elem in v.payload.iter() {
 					self.stack.push(elem.clone());
@@ -654,9 +641,10 @@ impl VM {
 	}
 
 	fn match_tuple(&mut self, arity: u16, on_fail: u32) -> Result<(), RuntimeError> {
-		let subj = self.stack.pop().ok_or_else(|| {
-			RuntimeError::new("VM: MatchTuple on empty stack").at(self.current_range())
-		})?;
+		let subj = self
+			.stack
+			.pop()
+			.ok_or_else(|| RuntimeError::new("VM: MatchTuple on empty stack").at(self.current_range()))?;
 		match subj {
 			Value::Tuple(elems) if elems.len() == arity as usize => {
 				for elem in elems.iter() {
@@ -714,11 +702,10 @@ impl VM {
 				self.stack.push(v.clone());
 				Ok(())
 			}
-			GlobalSlot::Evaluating => Err(RuntimeError::new(format!(
-				"cycle detected while evaluating global #{}",
-				idx
-			))
-			.at(self.current_range())),
+			GlobalSlot::Evaluating => Err(
+				RuntimeError::new(format!("cycle detected while evaluating global #{}", idx))
+					.at(self.current_range()),
+			),
 			GlobalSlot::Pending(fn_idx) => {
 				let fn_idx = *fn_idx;
 				self.program.globals[idx as usize] = GlobalSlot::Evaluating;
@@ -757,17 +744,21 @@ impl VM {
 				let func = &self.program.functions[fn_idx as usize];
 				// Normalize zero-arg-with-Nothing: drop the Nothing arg.
 				let mut effective_arity = arity;
-				if func.param_count == 0 && arity == 1 && matches!(self.stack[stack_len - 1], Value::Nothing) {
+				if func.param_count == 0
+					&& arity == 1
+					&& matches!(self.stack[stack_len - 1], Value::Nothing)
+				{
 					self.stack.pop();
 					effective_arity = 0;
 				}
 				if effective_arity != func.param_count as usize {
-					return Err(RuntimeError::new(format!(
-						"arity mismatch: expected {} args, got {}",
-						func.param_count,
-						effective_arity
-					))
-					.at(self.current_range()));
+					return Err(
+						RuntimeError::new(format!(
+							"arity mismatch: expected {} args, got {}",
+							func.param_count, effective_arity
+						))
+						.at(self.current_range()),
+					);
 				}
 				let slot_count = func.slot_count as usize;
 				if tail {
@@ -818,24 +809,25 @@ impl VM {
 				let args_start = stack_len - arity;
 				let args: Vec<Value> = self.stack.drain(args_start..).collect();
 				self.stack.pop(); // callee
-				let result = eval::call_builtin(self, b, args)
-					.map_err(|e| e.at(self.current_range()))?;
+				let result = eval::call_builtin(self, b, args).map_err(|e| e.at(self.current_range()))?;
 				self.stack.push(result);
 				Ok(())
 			}
 			Value::VariantCtor(c) => {
 				if arity != c.arity {
-					return Err(RuntimeError::new(format!(
-						"variant `{}.{}` takes {} arg(s), got {}",
-						c.qualified_enum
-							.rsplit_once('.')
-							.map(|(_, n)| n)
-							.unwrap_or(&c.qualified_enum),
-						c.variant,
-						c.arity,
-						arity
-					))
-					.at(self.current_range()));
+					return Err(
+						RuntimeError::new(format!(
+							"variant `{}.{}` takes {} arg(s), got {}",
+							c.qualified_enum
+								.rsplit_once('.')
+								.map(|(_, n)| n)
+								.unwrap_or(&c.qualified_enum),
+							c.variant,
+							c.arity,
+							arity
+						))
+						.at(self.current_range()),
+					);
 				}
 				let args_start = stack_len - arity;
 				let payload: Vec<Value> = self.stack.drain(args_start..).collect();
