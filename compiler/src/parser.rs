@@ -473,9 +473,14 @@ impl<'a> Parser<'a> {
 				kind: ExprKind::Literal(literal),
 				ty: Type::Unknown,
 			}),
-			Some(t @ Token::Minus(start, ..) | t @ Token::Bang(start, ..)) => {
+			Some(
+				t @ Token::Minus(start, ..) | t @ Token::UnaryMinus(start, ..) | t @ Token::Bang(start, ..),
+			) => {
 				// these are prefix unary operators!
-				let operator = Operator::from_token(t).unwrap();
+				let operator = match t {
+					Token::UnaryMinus(..) => Operator::SubtractionOrNegation,
+					_ => Operator::from_token(t).unwrap(),
+				};
 				self.advance();
 
 				let start_point = self.offset_to_point(start);
@@ -547,10 +552,7 @@ impl<'a> Parser<'a> {
 						break;
 					}
 
-					let range = Range::between(
-						lhs_expr.range.start,
-						args.last().unwrap().range.end,
-					);
+					let range = Range::between(lhs_expr.range.start, args.last().unwrap().range.end);
 
 					lhs_expr = ExprNode {
 						range,
@@ -1663,10 +1665,7 @@ impl<'a> Parser<'a> {
 		while matches!(
 			self.current_token,
 			Some(
-				Token::Identifier(..)
-					| Token::LeftParen(..)
-					| Token::LeftBrace(..)
-					| Token::KeywordFun(..)
+				Token::Identifier(..) | Token::LeftParen(..) | Token::LeftBrace(..) | Token::KeywordFun(..)
 			)
 		) {
 			let arg = self.parse_type_expression()?;

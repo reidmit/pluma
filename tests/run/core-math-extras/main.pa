@@ -3,12 +3,12 @@ use core.math
 def main fun {
   # rounding (float -> int)
   print (math.floor 2.7)
-  print (math.floor (-1.3))
+  print (math.floor -1.3)
   print (math.ceil 2.1)
-  print (math.ceil (-1.7))
+  print (math.ceil -1.7)
   print (math.round 2.4)
   print (math.round 2.5)
-  print (math.round (-2.5))
+  print (math.round -2.5)
 
   # exponential
   print (math.exp 0.0)

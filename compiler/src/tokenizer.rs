@@ -315,9 +315,21 @@ impl<'a> Iterator for Tokenizer<'a> {
 				b'-' => {
 					self.index += 1;
 
-					if self.source[self.index] == b'>' {
+					if self.index < self.length && self.source[self.index] == b'>' {
 						self.index += 1;
 						return Some(Arrow(start_index, self.index));
+					}
+
+					// Whitespace-asymmetry rule: when `-` is preceded by
+					// whitespace and immediately followed by a non-whitespace
+					// char (e.g. `f -x`), emit UnaryMinus so the parser treats
+					// it as a prefix on a new arg rather than infix subtract.
+					// `a-b`, `a - b`, and `(-x)` all stay as plain Minus.
+					let preceded_by_ws = start_index == 0 || is_ws_byte(self.source[start_index - 1]);
+					let followed_by_non_ws = self.index < self.length && !is_ws_byte(self.source[self.index]);
+
+					if preceded_by_ws && followed_by_non_ws {
+						return Some(UnaryMinus(start_index, self.index));
 					}
 
 					return Some(Minus(start_index, self.index));
@@ -680,6 +692,10 @@ fn is_indentation_char(byte: u8) -> bool {
 		b' ' => true,
 		_ => false,
 	}
+}
+
+fn is_ws_byte(byte: u8) -> bool {
+	matches!(byte, b' ' | b'\t' | b'\r' | b'\n')
 }
 
 fn is_path_char(byte: u8) -> bool {

@@ -160,8 +160,14 @@ pub enum Token {
 	/// an increase in indentation level
 	LineBreakWithIndentIncrease(usize, usize),
 
-	/// `-` token
+	/// `-` token in binary or unambiguous-prefix position (e.g. `a - b`,
+	/// `a-b`, `(-x)`). Acts as either infix subtract or prefix negate.
 	Minus(usize, usize),
+
+	/// `-` token in `[whitespace]-[non-whitespace]` position (e.g. `f -x`).
+	/// Only valid as prefix negate, never as infix subtraction — lets
+	/// `f -x` parse as `f(-x)` instead of `f - x`.
+	UnaryMinus(usize, usize),
 
 	/// e.g. `0o755`
 	OctalDigits(usize, usize),
@@ -286,6 +292,7 @@ impl Token {
 			| LineBreakWithIndentDecrease(start, end)
 			| LineBreakWithIndentIncrease(start, end)
 			| Minus(start, end)
+			| UnaryMinus(start, end)
 			| OctalDigits(start, end)
 			| Outdent(start, end)
 			| Path(start, end)
@@ -312,7 +319,8 @@ impl Token {
 		match self {
 			Identifier(..) | KeywordFun(..) | KeywordIf(..) | KeywordWhen(..) | DecimalDigits(..)
 			| HexDigits(..) | BinaryDigits(..) | OctalDigits(..) | LeftParen(..) | LeftBracket(..)
-			| LeftBrace(..) | ForwardSlash(..) | StringLiteral(..) | BoolTrue(..) | BoolFalse(..) => true,
+			| LeftBrace(..) | ForwardSlash(..) | StringLiteral(..) | BoolTrue(..) | BoolFalse(..)
+			| UnaryMinus(..) => true,
 			_ => false,
 		}
 	}
@@ -375,6 +383,7 @@ impl fmt::Display for Token {
 			&LineBreakWithIndentDecrease(..) => "a decrease in indent level",
 			&LineBreakWithIndentIncrease(..) => "an increase in indent level",
 			&Minus(..) => "a '-'",
+			&UnaryMinus(..) => "a '-' (prefix)",
 			&OctalDigits(..) => "octal digits (e.g. 0o755)",
 			&Outdent(..) => "an outdent",
 			&Path(..) => "a path to a module or imported identifier (e.g. 'path/to/module')",
