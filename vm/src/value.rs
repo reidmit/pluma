@@ -38,7 +38,9 @@ pub struct VariantData {
 
 pub struct ClosureData {
 	pub fn_idx: usize,
-	pub captures: Vec<Value>,
+	// Rc-shared so cloning a closure (which happens on every Call) is just a
+	// refcount bump rather than a fresh Vec allocation.
+	pub captures: Rc<Vec<Value>>,
 }
 
 pub struct VariantCtorData {

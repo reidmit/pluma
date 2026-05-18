@@ -44,10 +44,19 @@ impl StdoutSink {
 	}
 }
 
+// Frames index into the shared `VM::stack` via `base` rather than carrying
+// their own Vec of locals. Saves an allocation per Call. `prev_top` is the
+// stack length at the moment this frame's setup began — on Return we
+// truncate back to it, which discards both the locals and the slot
+// occupied by the callee (which sits at `base - 1` for normal calls). For
+// the entry frame and for builtin-invoked frames there's no callee on the
+// stack, and `prev_top == base`.
 pub(crate) struct Frame {
 	pub fn_idx: u32,
 	pub ip: usize,
-	pub locals: Vec<Value>,
+	pub base: usize,
+	pub slot_count: u16,
+	pub prev_top: usize,
 	pub captures: Rc<Vec<Value>>,
 	// If this frame is forcing a global, the index to write the result to
 	// on Return.
@@ -82,7 +91,7 @@ impl VM {
 
 	pub fn run(&mut self) -> Result<Value, RuntimeError> {
 		let entry = self.program.entry;
-		self.push_frame(entry, Rc::new(Vec::new()), Vec::new(), None)?;
+		self.push_frame_with_args(entry, Rc::new(Vec::new()), Vec::new(), None)?;
 		self.run_until_frame_depth(0)?;
 		self
 			.stack
@@ -90,7 +99,12 @@ impl VM {
 			.ok_or_else(|| RuntimeError::new("VM exited with empty stack"))
 	}
 
-	pub(crate) fn push_frame(
+	// Push a frame whose args are passed as a Vec (no callee on the stack
+	// beforehand). Used by the top-level entry, lazy global thunks, and the
+	// builtin-invoked closures path. For dispatch-loop calls, see do_call:
+	// it leaves the callee + args on the stack and pushes the frame
+	// in-place.
+	pub(crate) fn push_frame_with_args(
 		&mut self,
 		fn_idx: u32,
 		captures: Rc<Vec<Value>>,
@@ -113,13 +127,17 @@ impl VM {
 				args.len()
 			)));
 		}
-		let mut locals = Vec::with_capacity(func.slot_count as usize);
-		locals.extend(args);
-		locals.resize(func.slot_count as usize, Value::Nothing);
+		let prev_top = self.stack.len();
+		let base = prev_top;
+		let slot_count = func.slot_count as usize;
+		self.stack.extend(args);
+		self.stack.resize(base + slot_count, Value::Nothing);
 		self.frames.push(Frame {
 			fn_idx,
 			ip: 0,
-			locals,
+			base,
+			slot_count: slot_count as u16,
+			prev_top,
 			captures,
 			forcing_global,
 		});
@@ -186,14 +204,15 @@ impl VM {
 			Instruction::LoadBool(b) => self.stack.push(Value::Bool(b)),
 			Instruction::LoadNothing => self.stack.push(Value::Nothing),
 			Instruction::LoadLocal(slot) => {
-				let v = self.frames[frame_idx].locals[slot as usize].clone();
+				let v = self.stack[self.frames[frame_idx].base + slot as usize].clone();
 				self.stack.push(v);
 			}
 			Instruction::StoreLocal(slot) => {
 				let v = self.stack.pop().ok_or_else(|| {
 					RuntimeError::new("VM: StoreLocal on empty stack").at(self.current_range())
 				})?;
-				self.frames[frame_idx].locals[slot as usize] = v;
+				let base = self.frames[frame_idx].base;
+				self.stack[base + slot as usize] = v;
 			}
 			Instruction::LoadCapture(idx) => {
 				let v = self.frames[frame_idx].captures[idx as usize].clone();
@@ -231,7 +250,7 @@ impl VM {
 				captures.reverse();
 				self.stack.push(Value::Closure(Rc::new(ClosureData {
 					fn_idx: fn_idx as usize,
-					captures,
+					captures: Rc::new(captures),
 				})));
 			}
 			Instruction::Call(arity) => self.do_call(arity, false)?,
@@ -241,6 +260,9 @@ impl VM {
 					RuntimeError::new("VM: Return with empty stack").at(self.current_range())
 				})?;
 				let popped = self.frames.pop().unwrap();
+				// Drop everything from this frame's setup onward (locals,
+				// any unused intermediates, and the callee slot below).
+				self.stack.truncate(popped.prev_top);
 				if let Some(global_idx) = popped.forcing_global {
 					self.program.globals[global_idx as usize] =
 						GlobalSlot::Evaluated(ret.clone());
@@ -705,7 +727,7 @@ impl VM {
 				// it onto the stack — which is exactly what LoadGlobal
 				// wants. Run nested until the thunk completes.
 				let depth = self.frames.len();
-				self.push_frame(fn_idx, Rc::new(Vec::new()), Vec::new(), Some(idx))?;
+				self.push_frame_with_args(fn_idx, Rc::new(Vec::new()), Vec::new(), Some(idx))?;
 				self.run_until_frame_depth(depth)?;
 				Ok(())
 			}
@@ -713,60 +735,96 @@ impl VM {
 	}
 
 	fn do_call(&mut self, arity: u16, tail: bool) -> Result<(), RuntimeError> {
-		let mut args = Vec::with_capacity(arity as usize);
-		for _ in 0..arity {
-			args.push(self.stack.pop().ok_or_else(|| {
-				RuntimeError::new("VM: Call underflow").at(self.current_range())
-			})?);
+		// Stack layout coming in: [..., callee, arg0, ..., argN-1].
+		// For Closure calls we leave the callee + args in place; the new
+		// frame's locals start at the args' position. The callee sits at
+		// `prev_top` and gets dropped on Return via truncate(prev_top).
+		// For Builtin / VariantCtor we don't push a frame, so we pop the
+		// args + callee like before.
+		let arity = arity as usize;
+		let stack_len = self.stack.len();
+		if stack_len < arity + 1 {
+			return Err(RuntimeError::new("VM: Call underflow").at(self.current_range()));
 		}
-		args.reverse();
-		let callee = self.stack.pop().ok_or_else(|| {
-			RuntimeError::new("VM: Call with empty stack").at(self.current_range())
-		})?;
+		let callee_idx = stack_len - arity - 1;
+		// Clone the callee value out of the stack. Keeping the slot
+		// occupied (rather than removing it) avoids an O(arity) shift.
+		let callee = self.stack[callee_idx].clone();
 		match callee {
 			Value::Closure(c) => {
 				let fn_idx = c.fn_idx as u32;
-				let captures = Rc::new(c.captures.clone());
+				let captures = Rc::clone(&c.captures);
+				let func = &self.program.functions[fn_idx as usize];
+				// Normalize zero-arg-with-Nothing: drop the Nothing arg.
+				let mut effective_arity = arity;
+				if func.param_count == 0 && arity == 1 && matches!(self.stack[stack_len - 1], Value::Nothing) {
+					self.stack.pop();
+					effective_arity = 0;
+				}
+				if effective_arity != func.param_count as usize {
+					return Err(RuntimeError::new(format!(
+						"arity mismatch: expected {} args, got {}",
+						func.param_count,
+						effective_arity
+					))
+					.at(self.current_range()));
+				}
+				let slot_count = func.slot_count as usize;
 				if tail {
-					let frame_idx = self.frames.len() - 1;
-					let func = &self.program.functions[fn_idx as usize];
-					let args = if func.param_count == 0
-						&& args.len() == 1
-						&& matches!(args[0], Value::Nothing)
-					{
-						Vec::new()
-					} else {
-						args
-					};
-					if args.len() != func.param_count as usize {
-						return Err(RuntimeError::new(format!(
-							"arity mismatch: expected {} args, got {}",
-							func.param_count,
-							args.len()
-						))
-						.at(self.current_range()));
+					// Replace current frame in-place. Move new args down
+					// to the current frame's slot range.
+					let curr = self.frames.last().unwrap();
+					let prev_top = curr.prev_top;
+					let new_base = prev_top + 1;
+					let stack_len = self.stack.len();
+					// Move args from [stack_len - effective_arity .. stack_len]
+					// to [new_base .. new_base + effective_arity]. Source and
+					// destination can't overlap in practice because the new
+					// args sit above the current frame's locals.
+					for i in 0..effective_arity {
+						let v = self.stack[stack_len - effective_arity + i].clone();
+						self.stack[new_base + i] = v;
 					}
-					let slot_count = func.slot_count as usize;
-					let frame = &mut self.frames[frame_idx];
+					self.stack.truncate(new_base + effective_arity);
+					self.stack.resize(new_base + slot_count, Value::Nothing);
+					let frame = self.frames.last_mut().unwrap();
 					frame.fn_idx = fn_idx;
 					frame.ip = 0;
 					frame.captures = captures;
-					frame.locals.clear();
-					frame.locals.extend(args);
-					frame.locals.resize(slot_count, Value::Nothing);
+					frame.base = new_base;
+					frame.slot_count = slot_count as u16;
+					// prev_top stays the same.
 					Ok(())
 				} else {
-					self.push_frame(fn_idx, captures, args, None)
+					// Push a new frame using the callee + args already on
+					// the stack. The callee at callee_idx becomes the
+					// frame's prev_top; the args become the first locals.
+					let base = callee_idx + 1;
+					self.stack.resize(base + slot_count, Value::Nothing);
+					self.frames.push(Frame {
+						fn_idx,
+						ip: 0,
+						base,
+						slot_count: slot_count as u16,
+						prev_top: callee_idx,
+						captures,
+						forcing_global: None,
+					});
+					Ok(())
 				}
 			}
 			Value::Builtin(b) => {
-				let result =
-					eval::call_builtin(self, b, args).map_err(|e| e.at(self.current_range()))?;
+				// Pop args + callee off the stack and call the handler.
+				let args_start = stack_len - arity;
+				let args: Vec<Value> = self.stack.drain(args_start..).collect();
+				self.stack.pop(); // callee
+				let result = eval::call_builtin(self, b, args)
+					.map_err(|e| e.at(self.current_range()))?;
 				self.stack.push(result);
 				Ok(())
 			}
 			Value::VariantCtor(c) => {
-				if args.len() != c.arity {
+				if arity != c.arity {
 					return Err(RuntimeError::new(format!(
 						"variant `{}.{}` takes {} arg(s), got {}",
 						c.qualified_enum
@@ -775,14 +833,17 @@ impl VM {
 							.unwrap_or(&c.qualified_enum),
 						c.variant,
 						c.arity,
-						args.len()
+						arity
 					))
 					.at(self.current_range()));
 				}
+				let args_start = stack_len - arity;
+				let payload: Vec<Value> = self.stack.drain(args_start..).collect();
+				self.stack.pop(); // callee
 				self.stack.push(Value::Variant(Rc::new(VariantData {
 					qualified_enum: c.qualified_enum.clone(),
 					variant: c.variant.clone(),
-					payload: args,
+					payload,
 				})));
 				Ok(())
 			}
