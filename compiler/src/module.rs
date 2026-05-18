@@ -13,17 +13,28 @@ use std::path::PathBuf;
 //
 // `values` are top-level value defs (including alias constructor functions).
 // `aliases` are alias type defs (name -> the resolved underlying type).
-// `enums` are enum type defs (name -> ordered list of variants).
+// `enums` are enum type defs (name -> exported enum signature).
 //
 // Types inside this struct carry the defining module's bare enum names (e.g.
-// `Type::Enum("color")`); the importing analyzer qualifies them with the
+// `Type::Enum("color", _)`); the importing analyzer qualifies them with the
 // defining module's fully-qualified name when pulling them in.
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone, Default)]
 pub struct ModuleExports {
 	pub values: HashMap<String, Type>,
 	pub aliases: HashMap<String, Type>,
-	pub enums: HashMap<String, Vec<(String, Vec<Type>)>>,
+	pub enums: HashMap<String, EnumExport>,
+}
+
+// A generic enum's signature, exported across module boundaries. Variant
+// params reference type vars by *canonical* ids `0..param_count-1`. The
+// importing analyzer mints fresh local vars and substitutes the canonical
+// ids before storing into its own `enum_defs`.
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone)]
+pub struct EnumExport {
+	pub param_count: usize,
+	pub variants: Vec<(String, Vec<Type>)>,
 }
 
 pub struct Module {

@@ -1,5 +1,5 @@
 ---
-source: pluma-tests/tests/analyze.rs
+source: tests/analyze.rs
 expression: output
 ---
 module `main` (tests/analyze/identity/main.pa) {
@@ -8,13 +8,13 @@ module `main` (tests/analyze/identity/main.pa) {
         module(0:0-4:19) [
             def(0:0-2:1) :: nothing {
                 name: ident(0:4-0:12) `identity`,
-                kind: expr(0:13-2:1) :: 'h -> 'h {
+                kind: expr(0:13-2:1) :: 'k -> 'k {
                     kind: fun(0:13-2:1) {
                         params: [
-                            ident(0:17-0:18) `x` :: 'h,
+                            ident(0:17-0:18) `x` :: 'k,
                         ],
                         body: [
-                            expr(1:2-1:3) :: 'h {
+                            expr(1:2-1:3) :: 'k {
                                 kind: ident(1:2-1:3) `x`,
                             },
                         ],

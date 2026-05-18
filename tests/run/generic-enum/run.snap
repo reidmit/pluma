@@ -1,0 +1,14 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+1
+one
+42
+right-only
+nothing
+== stderr ==
+

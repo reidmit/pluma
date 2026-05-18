@@ -1,5 +1,5 @@
 ---
-source: pluma-tests/tests/analyze.rs
+source: tests/analyze.rs
 expression: output
 ---
 module `main` (tests/analyze/partial-records/main.pa) {
@@ -8,15 +8,15 @@ module `main` (tests/analyze/partial-records/main.pa) {
         module(0:0-13:1) [
             def(0:0-2:1) :: nothing {
                 name: ident(0:4-0:12) `get-name`,
-                kind: expr(0:13-2:1) :: ({name: 'k, ...}) -> 'k {
+                kind: expr(0:13-2:1) :: ({name: 'n, ...}) -> 'n {
                     kind: fun(0:13-2:1) {
                         params: [
-                            ident(0:17-0:20) `rec` :: {name: 'k, ...},
+                            ident(0:17-0:20) `rec` :: {name: 'n, ...},
                         ],
                         body: [
-                            expr(1:2-1:10) :: 'k {
+                            expr(1:2-1:10) :: 'n {
                                 kind: field-access {
-                                    receiver: expr(1:2-1:5) :: {name: 'k, ...} {
+                                    receiver: expr(1:2-1:5) :: {name: 'n, ...} {
                                         kind: ident(1:2-1:5) `rec`,
                                     },
                                     field: ident(1:6-1:10) `name`,

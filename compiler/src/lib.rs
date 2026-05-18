@@ -14,7 +14,7 @@ pub mod types;
 pub use compiler::*;
 pub use diagnostic::*;
 pub use location::*;
-pub use module::{Module, ModuleExports};
+pub use module::{EnumExport, Module, ModuleExports};
 pub use tokenizer::*;
 pub use tokens::Token;
 

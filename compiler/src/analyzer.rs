@@ -3,7 +3,7 @@ use crate::binding::*;
 use crate::diagnostic::*;
 use crate::errors::*;
 use crate::location::Range;
-use crate::module::{Module, ModuleExports};
+use crate::module::{EnumExport, Module, ModuleExports};
 use crate::types::*;
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
@@ -16,6 +16,17 @@ enum VariantResolution {
 	Ambiguous,
 }
 
+// Resolved enum definition. `param_vars` are the type-var ids minted when
+// the enum was declared (one per declared param); variant params may reference
+// them by `Type::Var(id)`. To use the enum at a call site, mint fresh vars
+// and substitute the `param_vars` for them — same pattern as `instantiate_with`.
+#[derive(Clone)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+pub struct EnumDef {
+	pub param_vars: Vec<usize>,
+	pub variants: Vec<(String, Vec<Type>)>,
+}
+
 pub struct Analyzer<'compiler> {
 	module_name: Option<String>,
 	module_path: Option<PathBuf>,
@@ -25,8 +36,13 @@ pub struct Analyzer<'compiler> {
 	// Enum definitions visible during analysis, keyed by the *qualified*
 	// enum name (`<defining-module>.<enum-name>`). Both locally-defined
 	// enums and imported ones are stored here under that qualified key so
-	// that `Type::Enum(qualified-name)` lookups work uniformly.
-	enum_defs: HashMap<String, Vec<(String, Vec<Type>)>>,
+	// that `Type::Enum(qualified-name, _)` lookups work uniformly.
+	enum_defs: HashMap<String, EnumDef>,
+	// Reverse map: bare variant name -> list of (qualified-enum, variant-name)
+	// pairs. Lets `some 5` (no enum prefix) resolve to its enum's variant
+	// constructor, with an `AmbiguousVariant` error if the name appears in
+	// more than one enum.
+	variant_constructors: HashMap<String, Vec<(String, String)>>,
 	// Imports: local namespace name (e.g. `math` from `use math` or `utils`
 	// from `use sub.utils`) -> that module's full exports.
 	imports: HashMap<String, ModuleExports>,
@@ -47,6 +63,7 @@ impl<'compiler> Analyzer<'compiler> {
 			value_scopes: Vec::new(),
 			type_scope: HashMap::new(),
 			enum_defs: HashMap::new(),
+			variant_constructors: HashMap::new(),
 			imports: HashMap::new(),
 			import_qualified: HashMap::new(),
 			next_type_var_id: 0,
@@ -69,8 +86,10 @@ impl<'compiler> Analyzer<'compiler> {
 
 		// Seed enum_defs with imported enums under their canonical
 		// `<defining-module>.<enum-name>` keys, so variant resolution and
-		// exhaustiveness checks can see them.
-		let imported_enums: Vec<(String, String, Vec<(String, Vec<Type>)>)> = self
+		// exhaustiveness checks can see them. Exported variant params reference
+		// canonical Var ids `0..param_count-1`; we mint fresh local vars and
+		// substitute so the imported enum lives in our own var namespace.
+		let imported_enums: Vec<(String, String, EnumExport)> = self
 			.imports
 			.iter()
 			.flat_map(|(local_name, exports)| {
@@ -79,18 +98,51 @@ impl<'compiler> Analyzer<'compiler> {
 					.get(local_name)
 					.cloned()
 					.unwrap_or_else(|| local_name.clone());
-				exports.enums.iter().map(move |(enum_name, variants)| {
+				exports.enums.iter().map(move |(enum_name, enum_export)| {
 					(
 						qualified_module.clone(),
 						enum_name.clone(),
-						variants.clone(),
+						enum_export.clone(),
 					)
 				})
 			})
 			.collect();
-		for (qualified_module, enum_name, variants) in imported_enums {
+		for (qualified_module, enum_name, enum_export) in imported_enums {
 			let qualified = format!("{}.{}", qualified_module, enum_name);
-			self.enum_defs.insert(qualified, variants);
+			let fresh_param_vars: Vec<usize> = (0..enum_export.param_count)
+				.map(|_| {
+					let id = self.next_type_var_id;
+					self.next_type_var_id += 1;
+					id
+				})
+				.collect();
+			let rebind = Substitution {
+				solutions: (0..enum_export.param_count)
+					.map(|i| (i, Type::Var(fresh_param_vars[i])))
+					.collect(),
+			};
+			let variants: Vec<(String, Vec<Type>)> = enum_export
+				.variants
+				.into_iter()
+				.map(|(n, params)| {
+					let rebound = params.into_iter().map(|p| rebind.apply_to_type(&p)).collect();
+					(n, rebound)
+				})
+				.collect();
+			for (variant_name, _) in &variants {
+				self
+					.variant_constructors
+					.entry(variant_name.clone())
+					.or_default()
+					.push((qualified.clone(), variant_name.clone()));
+			}
+			self.enum_defs.insert(
+				qualified,
+				EnumDef {
+					param_vars: fresh_param_vars,
+					variants,
+				},
+			);
 		}
 
 		self.enter_scope();
@@ -128,6 +180,24 @@ impl<'compiler> Analyzer<'compiler> {
 				),
 			),
 			Range::collapsed(0, 0),
+		);
+
+		// Prelude enums: `option` and `result`. Same machinery as a
+		// user-defined generic enum, just seeded here so every module sees
+		// them — including the bare-variant constructors (`some`, `none`,
+		// `ok`, `err`).
+		self.register_prelude_enum(
+			"option",
+			1,
+			vec![("some", vec![Type::Var(0)]), ("none", vec![])],
+		);
+		self.register_prelude_enum(
+			"result",
+			2,
+			vec![
+				("ok", vec![Type::Var(0)]),
+				("err", vec![Type::Var(1)]),
+			],
 		);
 
 		// the three basic phases of analysis!
@@ -182,10 +252,37 @@ impl<'compiler> Analyzer<'compiler> {
 					}
 					DefinitionKind::Enum(_) => {
 						let qualified = format!("{}.{}", module.module_name, def.name.name);
-						if let Some(variants) = self.enum_defs.get(&qualified) {
-							exports
-								.enums
-								.insert(def.name.name.clone(), variants.clone());
+						if let Some(enum_def) = self.enum_defs.get(&qualified) {
+							// Canonicalize variant params: local fresh vars (e.g.
+							// 42, 43) get rewritten to Var(0), Var(1), ... so
+							// importers see a stable, var-namespace-independent
+							// signature.
+							let canonicalize = Substitution {
+								solutions: enum_def
+									.param_vars
+									.iter()
+									.enumerate()
+									.map(|(i, local)| (*local, Type::Var(i)))
+									.collect(),
+							};
+							let canonical_variants: Vec<(String, Vec<Type>)> = enum_def
+								.variants
+								.iter()
+								.map(|(n, params)| {
+									let mapped = params
+										.iter()
+										.map(|p| canonicalize.apply_to_type(p))
+										.collect();
+									(n.clone(), mapped)
+								})
+								.collect();
+							exports.enums.insert(
+								def.name.name.clone(),
+								EnumExport {
+									param_count: enum_def.param_vars.len(),
+									variants: canonical_variants,
+								},
+							);
 						}
 					}
 				}
@@ -289,6 +386,11 @@ impl<'compiler> Analyzer<'compiler> {
 		let mut constraints = Vec::new();
 		let mut schemes = Vec::new();
 		let mut type_def_vars = Vec::new();
+		// Per-enum-def: the type-var ids minted for its declared params.
+		// Set during the first pass and consumed in the second pass when we
+		// resolve variant param types (the params need the vars in scope so
+		// references like `some a` map to the right var).
+		let mut enum_param_vars: HashMap<String, Vec<usize>> = HashMap::new();
 
 		// first, do a shallow pass to annotate all top-level defs and add them to the scope,
 		// so that they can be referenced anywhere within the bodies of other defs
@@ -345,7 +447,7 @@ impl<'compiler> Analyzer<'compiler> {
 					schemes.push(type_scheme);
 				}
 
-				DefinitionKind::Enum(_) => {
+				DefinitionKind::Enum(enum_node) => {
 					// Enums are nominal: bind the enum type directly. No value binding —
 					// the bare name isn't a value, it's only used as a namespace for
 					// variant access (e.g. `color.red`), which is resolved via enum_defs.
@@ -356,11 +458,29 @@ impl<'compiler> Analyzer<'compiler> {
 						self.module_name.as_ref().unwrap(),
 						definition.name.name
 					);
+
+					// Mint one fresh type var per declared param. The binding's
+					// type carries these vars as its args — a template that any
+					// future use of the bare name (in a type position) will
+					// substitute against.
+					let param_var_ids: Vec<usize> = (0..enum_node.params.len())
+						.map(|_| {
+							let id = self.next_type_var_id;
+							self.next_type_var_id += 1;
+							id
+						})
+						.collect();
+					let param_var_types: Vec<Type> = param_var_ids
+						.iter()
+						.map(|id| Type::Var(*id))
+						.collect();
+
 					self.add_type_binding(
 						definition.name.name.clone(),
-						Type::Enum(qualified),
+						Type::Enum(qualified.clone(), param_var_types),
 						definition.name.range,
 					);
+					enum_param_vars.insert(qualified, param_var_ids);
 				}
 			}
 		}
@@ -392,6 +512,34 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 
 				DefinitionKind::Enum(enum_node) => {
+					let qualified = format!(
+						"{}.{}",
+						self.module_name.as_ref().unwrap(),
+						definition.name.name
+					);
+					let param_var_ids = enum_param_vars.remove(&qualified).unwrap_or_default();
+
+					// Push each declared param name into the type scope as a
+					// `Type::Var` so variant param positions like `some a`
+					// resolve to the right var. Saved bindings are restored
+					// after.
+					let saved: Vec<(String, Option<TypeBinding>)> = enum_node
+						.params
+						.iter()
+						.zip(param_var_ids.iter())
+						.map(|(param_ident, var_id)| {
+							let prev = self.type_scope.insert(
+								param_ident.name.clone(),
+								TypeBinding {
+									ty: Type::Var(*var_id),
+									ref_count: 0,
+									_range: param_ident.range,
+								},
+							);
+							(param_ident.name.clone(), prev)
+						})
+						.collect();
+
 					let variants: Vec<(String, Vec<Type>)> = enum_node
 						.variants
 						.iter()
@@ -410,17 +558,69 @@ impl<'compiler> Analyzer<'compiler> {
 						})
 						.collect();
 
-					let qualified = format!(
-						"{}.{}",
-						self.module_name.as_ref().unwrap(),
-						definition.name.name
+					for (name, prev) in saved {
+						match prev {
+							Some(prev) => {
+								self.type_scope.insert(name, prev);
+							}
+							None => {
+								self.type_scope.remove(&name);
+							}
+						}
+					}
+
+					for (variant_name, _) in &variants {
+						self
+							.variant_constructors
+							.entry(variant_name.clone())
+							.or_default()
+							.push((qualified.clone(), variant_name.clone()));
+					}
+					self.enum_defs.insert(
+						qualified,
+						EnumDef {
+							param_vars: param_var_ids,
+							variants,
+						},
 					);
-					self.enum_defs.insert(qualified, variants);
 				}
 			}
 		}
 
 		constraints
+	}
+
+	// Build the type-arg vector for an enum reference in a type position.
+	// User-provided generics are resolved positionally; missing trailing
+	// args are filled with fresh type vars so a bare `option` parses as a
+	// polymorphic enum that inference can pin down. Excess generics are an
+	// arity-mismatch error.
+	fn resolve_enum_args(
+		&mut self,
+		type_ident: &TypeIdentifierNode,
+		expected: usize,
+		constraints: &mut Vec<Constraint>,
+	) -> Vec<Type> {
+		let provided = type_ident.generics.len();
+		if provided > expected {
+			self.error(
+				type_ident.range,
+				ParamCountMismatch {
+					expected,
+					found: provided,
+				},
+			);
+			return vec![Type::Unknown; expected];
+		}
+		let mut args = Vec::with_capacity(expected);
+		for i in 0..expected {
+			if i < provided {
+				args.push(self.type_expr_to_type(&type_ident.generics[i], constraints));
+			} else {
+				args.push(self.new_type_var());
+			}
+		}
+		args
 	}
 
 	fn type_expr_to_type(
@@ -454,14 +654,26 @@ impl<'compiler> Analyzer<'compiler> {
 				// `module.TypeName`: look up the type in the named import.
 				if let Some(module) = &type_ident.module {
 					if let Some(exports) = self.imports.get(&module.name).cloned() {
-						if let Some(variants) = exports.enums.get(&type_ident.name).cloned() {
-							let _ = variants; // consumed for membership only
+						if exports.enums.contains_key(&type_ident.name) {
 							let qualified_module = self
 								.import_qualified
 								.get(&module.name)
 								.cloned()
 								.unwrap_or_else(|| module.name.clone());
-							return Type::Enum(format!("{}.{}", qualified_module, type_ident.name));
+							let qualified = format!("{}.{}", qualified_module, type_ident.name);
+							// Cross-module generic enums: param count comes from
+							// the imported `enum_defs` (populated during import).
+							let expected = self
+								.enum_defs
+								.get(&qualified)
+								.map(|d| d.param_vars.len())
+								.unwrap_or(0);
+							let args = self.resolve_enum_args(
+								type_ident,
+								expected,
+								constraints,
+							);
+							return Type::Enum(qualified, args);
 						}
 
 						if let Some(alias_ty) = exports.aliases.get(&type_ident.name) {
@@ -495,7 +707,22 @@ impl<'compiler> Analyzer<'compiler> {
 					"nothing" => return Type::Nothing,
 					_ => {
 						if let Some(binding) = self.get_type_binding(&type_ident.name) {
-							return binding.ty.clone();
+							// For generic enums, the binding holds a template like
+							// `Type::Enum(qualified, [Var(p_0), Var(p_1)])`. Each
+							// use site builds its own enum type with user-provided
+							// generics (or fresh vars if none), so different uses
+							// don't accidentally unify through the shared template.
+							let binding_ty = binding.ty.clone();
+							if let Type::Enum(qualified, template_args) = binding_ty {
+								let expected = template_args.len();
+								let args = self.resolve_enum_args(
+									type_ident,
+									expected,
+									constraints,
+								);
+								return Type::Enum(qualified, args);
+							}
+							return binding_ty;
 						}
 					}
 				}
@@ -561,6 +788,42 @@ impl<'compiler> Analyzer<'compiler> {
 						}
 					};
 				};
+
+				// Bare variant constructor: `some 5` instead of `option.some 5`.
+				// Look up the bare name in variant_constructors; resolve uniquely
+				// or report ambiguity. Local-module variants shadow imported/
+				// prelude ones with the same name.
+				if let Some(matches) = self.variant_constructors.get(&ident.name).cloned() {
+					let resolved = self.disambiguate_variant_matches(&matches);
+					match resolved {
+						Some((qualified_enum, variant_name)) => {
+							if let Some(enum_def) = self.enum_defs.get(&qualified_enum).cloned() {
+								let (enum_ty, variant_params, found) =
+									self.instantiate_variant(&qualified_enum, &variant_name, &enum_def);
+								if found.is_some() {
+									if variant_params.is_empty() {
+										expr.ty = enum_ty;
+									} else {
+										expr.ty = Type::Fun(variant_params, enum_ty.into());
+									}
+									return;
+								}
+							}
+						}
+						None => {
+							let enums = matches.iter().map(|(q, _)| q.clone()).collect();
+							self.error(
+								ident.range,
+								AmbiguousVariant {
+									name: ident.name.clone(),
+									enums,
+								},
+							);
+							expr.ty = Type::Unknown;
+							return;
+						}
+					}
+				}
 
 				self.error(
 					ident.range,
@@ -883,40 +1146,44 @@ impl<'compiler> Analyzer<'compiler> {
 				{
 					if let ExprKind::Identifier(module_ident) = &outer_recv.kind {
 						if let Some(exports) = self.imports.get(&module_ident.name).cloned() {
-							if let Some(variants) = exports.enums.get(&enum_field.name).cloned() {
+							if exports.enums.contains_key(&enum_field.name) {
 								let qualified_module = self
 									.import_qualified
 									.get(&module_ident.name)
 									.cloned()
 									.unwrap_or_else(|| module_ident.name.clone());
-								let enum_ty = Type::Enum(format!("{}.{}", qualified_module, enum_field.name));
-								receiver.ty = enum_ty.clone();
-								if let ExprKind::FieldAccess {
-									receiver: inner, ..
-								} = &mut receiver.kind
-								{
-									inner.ty = Type::Unknown;
-								}
+								let qualified = format!("{}.{}", qualified_module, enum_field.name);
+								if let Some(enum_def) = self.enum_defs.get(&qualified).cloned() {
+									let (enum_ty, variant_params, variant_found) = self
+										.instantiate_variant(&qualified, &field.name, &enum_def);
+									receiver.ty = enum_ty.clone();
+									if let ExprKind::FieldAccess {
+										receiver: inner, ..
+									} = &mut receiver.kind
+									{
+										inner.ty = Type::Unknown;
+									}
 
-								match variants.iter().find(|(n, _)| n == &field.name) {
-									Some((_, params)) if params.is_empty() => {
-										expr.ty = enum_ty;
+									match variant_found {
+										Some(_) if variant_params.is_empty() => {
+											expr.ty = enum_ty;
+										}
+										Some(_) => {
+											expr.ty = Type::Fun(variant_params, enum_ty.into());
+										}
+										None => {
+											self.error(
+												field.range,
+												EnumVariantNotPresent {
+													variant: field.name.clone(),
+													ty: enum_ty,
+												},
+											);
+											expr.ty = Type::Unknown;
+										}
 									}
-									Some((_, params)) => {
-										expr.ty = Type::Fun(params.clone(), enum_ty.into());
-									}
-									None => {
-										self.error(
-											field.range,
-											EnumVariantNotPresent {
-												variant: field.name.clone(),
-												ty: enum_ty,
-											},
-										);
-										expr.ty = Type::Unknown;
-									}
+									return;
 								}
-								return;
 							}
 						}
 					}
@@ -950,7 +1217,7 @@ impl<'compiler> Analyzer<'compiler> {
 				// bare ident that resolves (via type_scope) to a known enum.
 				if let ExprKind::Identifier(ident) = &receiver.kind {
 					let qualified_enum = self.type_scope.get(&ident.name).and_then(|binding| {
-						if let Type::Enum(name) = &binding.ty {
+						if let Type::Enum(name, _) = &binding.ty {
 							Some(name.clone())
 						} else {
 							None
@@ -958,16 +1225,17 @@ impl<'compiler> Analyzer<'compiler> {
 					});
 
 					if let Some(qualified) = qualified_enum {
-						if let Some(variants) = self.enum_defs.get(&qualified).cloned() {
-							let enum_ty = Type::Enum(qualified);
+						if let Some(enum_def) = self.enum_defs.get(&qualified).cloned() {
+							let (enum_ty, variant_params, variant_found) = self
+								.instantiate_variant(&qualified, &field.name, &enum_def);
 							receiver.ty = enum_ty.clone();
 
-							match variants.iter().find(|(n, _)| n == &field.name) {
-								Some((_, params)) if params.is_empty() => {
+							match variant_found {
+								Some(_) if variant_params.is_empty() => {
 									expr.ty = enum_ty;
 								}
-								Some((_, params)) => {
-									expr.ty = Type::Fun(params.clone(), enum_ty.into());
+								Some(_) => {
+									expr.ty = Type::Fun(variant_params, enum_ty.into());
 								}
 								None => {
 									self.error(
@@ -1087,7 +1355,8 @@ impl<'compiler> Analyzer<'compiler> {
 				// type to disambiguate; otherwise require global uniqueness.
 				match self.resolve_variant_pattern(ident, &subject_ty, /* nullary_only */ true) {
 					VariantResolution::Found(enum_name, _) => {
-						constraints.push(eq_constraint(subject_ty, Type::Enum(enum_name)).at(pattern.range));
+						let enum_ty = self.resolve_subject_enum_type(&subject_ty, &enum_name);
+						constraints.push(eq_constraint(subject_ty, enum_ty).at(pattern.range));
 					}
 					VariantResolution::Ambiguous => {
 						// error already reported
@@ -1105,7 +1374,12 @@ impl<'compiler> Analyzer<'compiler> {
 			PatternKind::Constructor(name, args) => {
 				match self.resolve_variant_pattern(name, &subject_ty, /* nullary_only */ false) {
 					VariantResolution::Found(enum_name, params) => {
-						constraints.push(eq_constraint(subject_ty, Type::Enum(enum_name)).at(pattern.range));
+						let enum_ty = self.resolve_subject_enum_type(&subject_ty, &enum_name);
+						let enum_args = match &enum_ty {
+							Type::Enum(_, args) => args.clone(),
+							_ => Vec::new(),
+						};
+						constraints.push(eq_constraint(subject_ty, enum_ty).at(pattern.range));
 
 						if args.len() != params.len() {
 							self.error(
@@ -1118,8 +1392,22 @@ impl<'compiler> Analyzer<'compiler> {
 							return;
 						}
 
+						// Substitute the enum's param vars with the subject's
+						// concrete args before recursing — `some x` against
+						// `option int` should bind `x: int`, not `x: Var(a)`.
+						let param_vars = self
+							.enum_defs
+							.get(&enum_name)
+							.map(|d| d.param_vars.clone())
+							.unwrap_or_default();
+						let subst = Substitution {
+							solutions: param_vars
+								.into_iter()
+								.zip(enum_args.into_iter())
+								.collect(),
+						};
 						for (arg, param_ty) in args.iter_mut().zip(params.into_iter()) {
-							self.constrain_pattern(arg, param_ty, constraints);
+							self.constrain_pattern(arg, subst.apply_to_type(&param_ty), constraints);
 						}
 					}
 					VariantResolution::Ambiguous => {
@@ -1173,8 +1461,8 @@ impl<'compiler> Analyzer<'compiler> {
 	fn check_when_exhaustive(&mut self, subject_ty: &Type, cases: &[CaseNode], range: Range) {
 		let required: Vec<String> = match subject_ty {
 			Type::Bool => vec!["true".into(), "false".into()],
-			Type::Enum(name) => match self.enum_defs.get(name) {
-				Some(variants) => variants.iter().map(|(n, _)| n.clone()).collect(),
+			Type::Enum(name, _) => match self.enum_defs.get(name) {
+				Some(enum_def) => enum_def.variants.iter().map(|(n, _)| n.clone()).collect(),
 				None => return,
 			},
 			// Other subject types are an "open universe" (e.g. int, string,
@@ -1193,7 +1481,7 @@ impl<'compiler> Analyzer<'compiler> {
 					// A bare ident either names a nullary variant of the subject enum
 					// (covers just that variant) or is a binding (catch-all).
 					let is_nullary_variant = match subject_ty {
-						Type::Enum(enum_name) => self
+						Type::Enum(enum_name, _) => self
 							.find_variant_in_enum(enum_name, &ident.name)
 							.map_or(false, |p| p.is_empty()),
 						_ => false,
@@ -1253,6 +1541,7 @@ impl<'compiler> Analyzer<'compiler> {
 		self
 			.enum_defs
 			.get(enum_name)?
+			.variants
 			.iter()
 			.find(|(n, _)| n == variant_name)
 			.map(|(_, params)| params.clone())
@@ -1260,8 +1549,8 @@ impl<'compiler> Analyzer<'compiler> {
 
 	fn find_variant_globally(&self, name: &str) -> Vec<(String, Vec<Type>)> {
 		let mut results = Vec::new();
-		for (enum_name, variants) in &self.enum_defs {
-			for (variant_name, params) in variants {
+		for (enum_name, enum_def) in &self.enum_defs {
+			for (variant_name, params) in &enum_def.variants {
 				if variant_name == name {
 					results.push((enum_name.clone(), params.clone()));
 				}
@@ -1280,7 +1569,7 @@ impl<'compiler> Analyzer<'compiler> {
 		nullary_only: bool,
 	) -> VariantResolution {
 		match subject_ty {
-			Type::Enum(enum_name) => match self.find_variant_in_enum(enum_name, &name.name) {
+			Type::Enum(enum_name, _) => match self.find_variant_in_enum(enum_name, &name.name) {
 				Some(params) => {
 					if nullary_only && !params.is_empty() {
 						return VariantResolution::NotFound;
@@ -1295,8 +1584,25 @@ impl<'compiler> Analyzer<'compiler> {
 				if nullary_only {
 					candidates.retain(|(_, p)| p.is_empty());
 				}
+				if candidates.is_empty() {
+					return VariantResolution::NotFound;
+				}
+				// Local-module enums shadow imported/prelude ones (mirrors
+				// `disambiguate_variant_matches` in expression position).
+				if candidates.len() > 1 {
+					if let Some(module_name) = &self.module_name {
+						let prefix = format!("{}.", module_name);
+						let local: Vec<_> = candidates
+							.iter()
+							.filter(|(q, _)| q.starts_with(&prefix))
+							.cloned()
+							.collect();
+						if local.len() == 1 {
+							candidates = local;
+						}
+					}
+				}
 				match candidates.len() {
-					0 => VariantResolution::NotFound,
 					1 => {
 						let (enum_name, params) = candidates.into_iter().next().unwrap();
 						VariantResolution::Found(enum_name, params)
@@ -1549,7 +1855,18 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 			}
 
-			Eq(Type::Enum(name_1), Type::Enum(name_2), _) if name_1 == name_2 => Substitution::empty(),
+			Eq(Type::Enum(name_1, args_1), Type::Enum(name_2, args_2), _) if name_1 == name_2 => {
+				// Names match. Unify the type-arg lists pairwise. Arity
+				// mismatches at this point are an internal bug — the analyzer
+				// should have caught them at the type_expr_to_type level.
+				debug_assert_eq!(args_1.len(), args_2.len());
+				let constraints: Vec<Constraint> = args_1
+					.iter()
+					.zip(args_2.iter())
+					.map(|(a, b)| eq_constraint(a.clone(), b.clone()))
+					.collect();
+				self.unify(&constraints)
+			}
 
 			Eq(Type::Var(n), t, reason) | Eq(t, Type::Var(n), reason) => match t {
 				Type::Var(n2) if n == n2 => Substitution::empty(),
@@ -1833,6 +2150,140 @@ impl<'compiler> Analyzer<'compiler> {
 		self.instantiate_with(ty, &mut mapping)
 	}
 
+	// Pick a single (enum, variant) from a list of matches by precedence:
+	// local-module enums shadow everything; if no local match, a single
+	// non-local match wins; otherwise return None (caller reports ambiguity).
+	fn disambiguate_variant_matches(
+		&self,
+		matches: &[(String, String)],
+	) -> Option<(String, String)> {
+		if matches.len() == 1 {
+			return Some(matches[0].clone());
+		}
+		if let Some(module_name) = &self.module_name {
+			let prefix = format!("{}.", module_name);
+			let local: Vec<&(String, String)> = matches
+				.iter()
+				.filter(|(q, _)| q.starts_with(&prefix))
+				.collect();
+			if local.len() == 1 {
+				return Some(local[0].clone());
+			}
+			if local.len() > 1 {
+				return None;
+			}
+		}
+		None
+	}
+
+	// Seed a prelude enum into `enum_defs`, the type scope, and the variant
+	// constructor table. `variants` use canonical `Type::Var(i)` for `i` in
+	// `0..param_count`, matching the `EnumExport` convention so the rebinding
+	// logic that handles cross-module imports also works here.
+	fn register_prelude_enum(
+		&mut self,
+		name: &str,
+		param_count: usize,
+		variants: Vec<(&str, Vec<Type>)>,
+	) {
+		let qualified = format!("__prelude__.{}", name);
+		let fresh_vars: Vec<usize> = (0..param_count)
+			.map(|_| {
+				let id = self.next_type_var_id;
+				self.next_type_var_id += 1;
+				id
+			})
+			.collect();
+		let rebind = Substitution {
+			solutions: fresh_vars
+				.iter()
+				.enumerate()
+				.map(|(i, v)| (i, Type::Var(*v)))
+				.collect(),
+		};
+		let bound_variants: Vec<(String, Vec<Type>)> = variants
+			.into_iter()
+			.map(|(n, params)| {
+				let mapped = params.into_iter().map(|p| rebind.apply_to_type(&p)).collect();
+				(n.to_string(), mapped)
+			})
+			.collect();
+		for (variant_name, _) in &bound_variants {
+			self
+				.variant_constructors
+				.entry(variant_name.clone())
+				.or_default()
+				.push((qualified.clone(), variant_name.clone()));
+		}
+		let template_args = fresh_vars.iter().map(|v| Type::Var(*v)).collect();
+		self.add_type_binding(
+			name.to_string(),
+			Type::Enum(qualified.clone(), template_args),
+			Range::collapsed(0, 0),
+		);
+		self.enum_defs.insert(
+			qualified,
+			EnumDef {
+				param_vars: fresh_vars,
+				variants: bound_variants,
+			},
+		);
+	}
+
+	// Build the enum type for a variant pattern: if the subject is already
+	// `Type::Enum(name, args)` for the expected enum, reuse the subject's
+	// args so pattern bindings see the concrete inner type. Otherwise mint
+	// fresh vars per declared param so unification can pin them down.
+	fn resolve_subject_enum_type(&mut self, subject_ty: &Type, expected_enum: &str) -> Type {
+		if let Type::Enum(name, args) = subject_ty {
+			if name == expected_enum {
+				return Type::Enum(name.clone(), args.clone());
+			}
+		}
+		let arity = self
+			.enum_defs
+			.get(expected_enum)
+			.map(|d| d.param_vars.len())
+			.unwrap_or(0);
+		let args = (0..arity).map(|_| self.new_type_var()).collect();
+		Type::Enum(expected_enum.to_string(), args)
+	}
+
+	// Resolve a variant lookup on an enum, minting fresh type vars for the
+	// enum's params at this use site (so each `option.some` call sees its
+	// own `a`). Returns the instantiated enum type (with fresh arg vars),
+	// the variant's params (with the same substitution applied), and whether
+	// the variant was found.
+	fn instantiate_variant(
+		&mut self,
+		qualified_enum: &str,
+		variant_name: &str,
+		enum_def: &EnumDef,
+	) -> (Type, Vec<Type>, Option<()>) {
+		let mut mapping: HashMap<usize, Type> = HashMap::new();
+		let fresh_args: Vec<Type> = enum_def
+			.param_vars
+			.iter()
+			.map(|p| {
+				let fresh = self.new_type_var();
+				mapping.insert(*p, fresh.clone());
+				fresh
+			})
+			.collect();
+		let enum_ty = Type::Enum(qualified_enum.to_string(), fresh_args);
+
+		match enum_def.variants.iter().find(|(n, _)| n == variant_name) {
+			Some((_, params)) => {
+				let instantiated = params
+					.iter()
+					.map(|p| self.instantiate_with(p, &mut mapping))
+					.collect();
+				(enum_ty, instantiated, Some(()))
+			}
+			None => (enum_ty, vec![], None),
+		}
+	}
+
 	fn instantiate_with(&mut self, ty: &Type, mapping: &mut HashMap<usize, Type>) -> Type {
 		match ty {
 			Type::Var(n) => {
@@ -1863,8 +2314,11 @@ impl<'compiler> Analyzer<'compiler> {
 					.map(|(n, t)| (n.clone(), self.instantiate_with(t, mapping)))
 					.collect(),
 			),
-			Type::Enum(..)
-			| Type::Bool
+			Type::Enum(name, args) => Type::Enum(
+				name.clone(),
+				args.iter().map(|t| self.instantiate_with(t, mapping)).collect(),
+			),
+			Type::Bool
 			| Type::Int
 			| Type::Float
 			| Type::String

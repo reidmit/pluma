@@ -1,5 +1,5 @@
 ---
-source: pluma-tests/tests/analyze.rs
+source: tests/analyze.rs
 expression: output
 ---
 module `main` (tests/analyze/polymorphic-id-many-uses/main.pa) {
@@ -8,13 +8,13 @@ module `main` (tests/analyze/polymorphic-id-many-uses/main.pa) {
         module(0:0-5:26) [
             def(0:0-0:18) :: nothing {
                 name: ident(0:4-0:6) `id`,
-                kind: expr(0:7-0:18) :: 'n -> 'n {
+                kind: expr(0:7-0:18) :: 'q -> 'q {
                     kind: fun(0:7-0:18) {
                         params: [
-                            ident(0:11-0:12) `x` :: 'n,
+                            ident(0:11-0:12) `x` :: 'q,
                         ],
                         body: [
-                            expr(0:15-0:16) :: 'n {
+                            expr(0:15-0:16) :: 'q {
                                 kind: ident(0:15-0:16) `x`,
                             },
                         ],

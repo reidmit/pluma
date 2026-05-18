@@ -705,7 +705,12 @@ impl<'a> Parser<'a> {
 
 			let (_, case_end) = expect_token_and_advance!(self, Token::RightBrace);
 
-			self.skip_line_breaks();
+			// Only consume trailing breaks if another `is` case follows. Without
+			// this, breaks after the final `}` get eaten and whatever comes next
+			// (e.g. another `when` statement) gets parsed as a function-call arg.
+			if matches!(self.peek_past_breaks(), Some(Token::KeywordIs(..))) {
+				self.skip_line_breaks();
+			}
 
 			cases.push(CaseNode {
 				range: Range::between(case_start, case_end),
@@ -1472,7 +1477,7 @@ impl<'a> Parser<'a> {
 			Some(Token::KeywordAlias(..)) => {
 				self.advance();
 
-				let type_expr = self.parse_type_expression()?;
+				let type_expr = self.parse_type_expression_with_generics()?;
 
 				self.skip_line_breaks();
 
@@ -1623,30 +1628,56 @@ impl<'a> Parser<'a> {
 			(None, first_name)
 		};
 
-		let mut generics = Vec::new();
-
-		if current_token_is!(self, Token::LeftAngle) {
-			self.advance();
-
-			while let Some(type_node) = self.parse_type_expression() {
-				generics.push(type_node);
-
-				match self.current_token {
-					Some(Token::Comma(..)) => self.advance(),
-					_ => break,
-				}
-			}
-
-			let (_, angle_end) = expect_token_and_advance!(self, Token::RightAngle);
-
-			end = angle_end;
-		}
-
+		// Generics are space-separated in single-type contexts (alias
+		// bodies, function return types, record field types, tuple
+		// elements). They're applied in `parse_type_expression_with_generics`,
+		// not here — `parse_type_identifier` always produces a bare ident
+		// with no generics. Multi-arg contexts (function params, variant
+		// params) call `parse_type_expression` directly, so adjacent type
+		// atoms read as separate params; parens are required around a
+		// generic-applied type there.
 		Some(TypeIdentifierNode {
 			range: Range::between(start, end),
 			module,
 			name,
-			generics,
+			generics: Vec::new(),
+		})
+	}
+
+	// Parse a single-type context (alias body, function return, record field,
+	// tuple element). Greedily consumes adjacent type atoms as generic args on
+	// the head identifier — `result int string` parses as `result<int, string>`.
+	// Each generic arg is itself a non-greedy atom; to nest, use parens
+	// (`list (option int)` for `list<option<int>>`).
+	fn parse_type_expression_with_generics(&mut self) -> Option<TypeExprNode> {
+		let head = self.parse_type_expression()?;
+		let head_start = head.range.start;
+
+		// Only TypeIdentifier-shaped heads can take generics.
+		let mut ident = match head.kind {
+			TypeExprKind::Single(ident) => ident,
+			_ => return Some(head),
+		};
+
+		let mut end = ident.range.end;
+		while matches!(
+			self.current_token,
+			Some(
+				Token::Identifier(..)
+					| Token::LeftParen(..)
+					| Token::LeftBrace(..)
+					| Token::KeywordFun(..)
+			)
+		) {
+			let arg = self.parse_type_expression()?;
+			end = arg.range.end;
+			ident.generics.push(arg);
+		}
+
+		ident.range = Range::between(ident.range.start, end);
+		Some(TypeExprNode {
+			range: Range::between(head_start, end),
+			kind: TypeExprKind::Single(ident),
 		})
 	}
 
@@ -1676,7 +1707,7 @@ impl<'a> Parser<'a> {
 
 		let (_, end) = expect_token_and_advance!(self, Token::Arrow);
 
-		let return_type = match self.parse_type_expression() {
+		let return_type = match self.parse_type_expression_with_generics() {
 			Some(type_expr) => Box::new(type_expr),
 			_ => {
 				return self.error(ParseError {
@@ -1704,7 +1735,7 @@ impl<'a> Parser<'a> {
 		while let Some(field_name) = self.parse_identifier() {
 			expect_token_and_advance!(self, Token::Colon);
 
-			let field_type = self.parse_type_expression()?;
+			let field_type = self.parse_type_expression_with_generics()?;
 
 			entries.push((field_name, field_type));
 
@@ -1737,7 +1768,7 @@ impl<'a> Parser<'a> {
 
 		let mut entries = Vec::new();
 
-		while let Some(type_node) = self.parse_type_expression() {
+		while let Some(type_node) = self.parse_type_expression_with_generics() {
 			entries.push(type_node);
 
 			match self.current_token {
@@ -1779,6 +1810,14 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_enum(&mut self) -> Option<EnumNode> {
+		// Optional space-separated type params between `enum` and `{`:
+		// `def opt enum a { some a; none }`. Bare identifiers only — the
+		// `{` ends the param list.
+		let mut params = Vec::new();
+		while current_token_is!(self, Token::Identifier) {
+			params.push(self.parse_identifier()?);
+		}
+
 		let (brace_start, _) = expect_token_and_advance!(self, Token::LeftBrace);
 
 		self.skip_line_breaks();
@@ -1795,6 +1834,7 @@ impl<'a> Parser<'a> {
 
 		Some(EnumNode {
 			range: Range::between(brace_start, brace_end),
+			params,
 			variants,
 		})
 	}

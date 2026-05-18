@@ -24,6 +24,18 @@ pub fn compile(compiler: &compiler::Compiler) -> Result<Program, String> {
 	cg.add_evaluated_global("__prelude__", "print", Value::Builtin(Builtin::Print));
 	cg.add_evaluated_global("__prelude__", "to-string", Value::Builtin(Builtin::ToString));
 
+	// Prelude enums: `option` and `result`. enum_variants tracks `(name, arity)`
+	// per qualified enum so the bare-variant resolution path can build
+	// MakeVariant/MakeVariantCtor instructions for `some 5`, `ok x`, etc.
+	cg.enum_variants.insert(
+		"__prelude__.option".to_string(),
+		vec![("some".to_string(), 1), ("none".to_string(), 0)],
+	);
+	cg.enum_variants.insert(
+		"__prelude__.result".to_string(),
+		vec![("ok".to_string(), 1), ("err".to_string(), 1)],
+	);
+
 	// Native modules: each def's value is a pre-evaluated Builtin.
 	for module in native_modules() {
 		for def in &module.defs {
@@ -423,6 +435,10 @@ enum Resolution {
 	EnumName(String),
 	// `imported_module` — same idea, namespace.
 	Imported(String),
+	// A bare variant constructor reference (`some 5` / `none`) — qualified
+	// enum + variant name + arity. Resolved when no value binding matches
+	// and the variant name is unique across known enums.
+	BareVariant(String, String, usize),
 }
 
 fn resolve_identifier(
@@ -498,7 +514,29 @@ fn resolve_identifier(
 	if cg.enum_variants.contains_key(&qualified_enum) {
 		return Some(Resolution::EnumName(qualified_enum));
 	}
-	None
+	// A bare variant constructor — `some` instead of `option.some`. Local-
+	// module enums take precedence over imported/prelude variants with the
+	// same name (mirrors the analyzer's `disambiguate_variant_matches`).
+	let local_prefix = format!("{}.", current_module);
+	let mut local_match = None;
+	let mut other_match = None;
+	for (qualified, variants) in &cg.enum_variants {
+		for (variant, arity) in variants {
+			if variant == name {
+				let resolved = Resolution::BareVariant(
+					qualified.clone(),
+					variant.clone(),
+					*arity,
+				);
+				if qualified.starts_with(&local_prefix) {
+					local_match = Some(resolved);
+				} else if other_match.is_none() {
+					other_match = Some(resolved);
+				}
+			}
+		}
+	}
+	local_match.or(other_match)
 }
 
 fn emit_expr(
@@ -859,6 +897,9 @@ fn emit_identifier(
 		}
 		Resolution::Global(idx) => {
 			fb.emit(Instruction::LoadGlobal(idx), range);
+		}
+		Resolution::BareVariant(qualified_enum, variant_name, arity) => {
+			emit_variant_construction(cg, fb, &qualified_enum, &variant_name, arity, range)?;
 		}
 		Resolution::EnumName(_) | Resolution::Imported(_) => {
 			return Err(format!(
@@ -1287,7 +1328,7 @@ fn emit_pattern(
 		}
 		PatternKind::Identifier(ident) => {
 			// Disambiguate against nullary variant of the subject's enum.
-			let is_variant_match = if let compiler::types::Type::Enum(qualified) = subject_ty {
+			let is_variant_match = if let compiler::types::Type::Enum(qualified, _) = subject_ty {
 				cg.enum_variants
 					.get(qualified)
 					.map(|vs| vs.iter().any(|(n, arity)| n == &ident.name && *arity == 0))

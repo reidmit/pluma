@@ -1,5 +1,5 @@
 ---
-source: pluma-tests/tests/analyze.rs
+source: tests/analyze.rs
 expression: output
 ---
 module `main` (tests/analyze/multi-module-nested/main.pa) {
@@ -23,7 +23,7 @@ module `main` (tests/analyze/multi-module-nested/main.pa) {
                 name: ident(3:4-3:11) `doubled`,
                 kind: expr(3:12-3:29) :: int {
                     kind: call(3:12-3:29) {
-                        callee: expr(3:12-3:26) :: 'h -> 'h {
+                        callee: expr(3:12-3:26) :: 'k -> 'k {
                             kind: field-access {
                                 receiver: expr(3:12-3:17) :: ? {
                                     kind: ident(3:12-3:17) `utils`,

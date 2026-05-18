@@ -1,0 +1,14 @@
+def box enum a {
+  empty
+  one a
+  two a a
+}
+
+def main fun {
+  let a = box.one 5
+  let b = box.empty
+  let c = two "x" "y"
+  print a
+  print b
+  print c
+}

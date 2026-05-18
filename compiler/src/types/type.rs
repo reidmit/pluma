@@ -15,7 +15,10 @@ pub enum Type {
 	Record(Vec<(String, Type)>),
 	PartialRecord(String, Box<Type>),
 	Fun(Vec<Type>, Box<Type>),
-	Enum(String),
+	// `Enum(qualified-name, type-args)`. `type-args` is empty for monomorphic
+	// enums and matches the enum's declared param arity for generic ones.
+	// Unification matches on both: names must agree AND args unify pairwise.
+	Enum(String, Vec<Type>),
 	List(Box<Type>),
 }
 
@@ -36,7 +39,7 @@ impl Type {
 
 			Type::PartialRecord(_, field_type) => field_type.contains_var(var),
 
-			Type::Enum(_) => false,
+			Type::Enum(_, args) => args.iter().any(|t| t.contains_var(var)),
 
 			Type::List(element_type) => element_type.contains_var(var),
 
@@ -98,7 +101,11 @@ impl Type {
 				vars.extend(field_type.free_vars());
 			}
 
-			Type::Enum(_) => {}
+			Type::Enum(_, args) => {
+				for arg in args {
+					vars.extend(arg.free_vars());
+				}
+			}
 
 			Type::List(element_type) => {
 				vars.extend(element_type.free_vars());
@@ -149,12 +156,26 @@ impl std::fmt::Display for Type {
 			Type::Regex => write!(f, "regex"),
 			Type::Nothing => write!(f, "nothing"),
 
-			Type::Enum(name) => {
+			Type::Enum(name, args) => {
 				// Internally enum names are fully-qualified
 				// (`<defining-module>.<enum-name>`). For display, show just
-				// the bare enum name.
+				// the bare enum name, with space-separated type args
+				// (matching `list int` style).
 				let bare = name.rsplit_once('.').map(|(_, n)| n).unwrap_or(name);
-				write!(f, "{}", bare)
+				if args.is_empty() {
+					write!(f, "{}", bare)
+				} else {
+					write!(
+						f,
+						"{} {}",
+						bare,
+						args
+							.iter()
+							.map(maybe_add_parens)
+							.collect::<Vec<String>>()
+							.join(" "),
+					)
+				}
 			}
 
 			Type::Fun(params, ret) => write!(

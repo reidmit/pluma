@@ -1,5 +1,5 @@
 ---
-source: pluma-tests/tests/analyze.rs
+source: tests/analyze.rs
 expression: output
 ---
 module `main` (tests/analyze/multi-module-alias-type/main.pa) {
@@ -43,15 +43,15 @@ module `main` (tests/analyze/multi-module-alias-type/main.pa) {
             },
             def(4:0-6:1) :: nothing {
                 name: ident(4:4-4:8) `x-of`,
-                kind: expr(4:9-6:1) :: ({x: 'm, ...}) -> 'm {
+                kind: expr(4:9-6:1) :: ({x: 'p, ...}) -> 'p {
                     kind: fun(4:9-6:1) {
                         params: [
-                            ident(4:13-4:14) `p` :: {x: 'm, ...},
+                            ident(4:13-4:14) `p` :: {x: 'p, ...},
                         ],
                         body: [
-                            expr(5:2-5:5) :: 'm {
+                            expr(5:2-5:5) :: 'p {
                                 kind: field-access {
-                                    receiver: expr(5:2-5:3) :: {x: 'm, ...} {
+                                    receiver: expr(5:2-5:3) :: {x: 'p, ...} {
                                         kind: ident(5:2-5:3) `p`,
                                     },
                                     field: ident(5:4-5:5) `x`,

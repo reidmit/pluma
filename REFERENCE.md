@@ -124,6 +124,60 @@ let c = color.red                          # c : color
 let t = tree.node 1 tree.empty tree.empty
 ```
 
+bare variant names also work when unambiguous (`red` instead of `color.red`). if two enums in scope share a variant name, the local-module enum wins; if both are non-local, you get an `AmbiguousVariant` error and need to qualify.
+
+### generic enums
+
+enums can take type parameters, listed space-separated after `enum`. variants reference them by name.
+
+```
+def option enum a {
+  some a
+  none
+}
+
+def result enum a b {
+  ok a
+  err b
+}
+
+def pair enum a b {
+  both a b
+  left a
+  right b
+}
+```
+
+instantiate with space-separated type args in any type position (alias bodies, record fields, etc.):
+
+```
+def maybe-int alias option int
+
+def named-list alias {
+  name: string
+  items: list (option int)
+}
+```
+
+multi-arg type contexts (variant params) are non-greedy — wrap generic applications in parens there: `def container enum a { holds (option a) }`.
+
+### prelude enums
+
+`option` and `result` are seeded into every module. no `use` needed; their variants (`some`, `none`, `ok`, `err`) work bare:
+
+```
+let n = some 5             # n : option int
+let nothing = none         # nothing : option a
+let outcome = ok 42        # outcome : result int b
+let oops = err "boom"      # oops : result a string
+
+when outcome is ok v {
+  print v
+} is err msg {
+  print msg
+}
+```
+
 ## module imports
 
 `use` at the top of a module brings another module in as a namespace. dotted paths resolve relative to the project root.

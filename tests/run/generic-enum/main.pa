@@ -1,0 +1,47 @@
+# Generic enum declared with space-separated type params, used at multiple
+# instantiations.
+
+def pair enum a b {
+  both a b
+  left a
+  right b
+  neither
+}
+
+def main fun {
+  let p1 = pair.both 1 "one"
+  when p1 is both a b {
+    print a
+    print b
+  } is left _ {
+    print "left"
+    print "x"
+  } is right _ {
+    print "right"
+    print "x"
+  } is neither {
+    print "neither"
+    print "x"
+  }
+
+  let p2 = pair.left 42
+  when p2 is left a {
+    print a
+  } is _ {
+    print 0
+  }
+
+  let p3 = pair.right "right-only"
+  when p3 is right b {
+    print b
+  } is _ {
+    print "fallback"
+  }
+
+  let p4 = neither
+  when p4 is neither {
+    print "nothing"
+  } is _ {
+    print "something"
+  }
+}

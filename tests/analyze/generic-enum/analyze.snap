@@ -1,0 +1,138 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/generic-enum/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-13:1) [
+            def(0:0-4:1) :: nothing {
+                name: ident(0:4-0:7) `box`,
+                kind: enum(0:15-4:1) <a> [
+                    variant(1:2-1:7) {
+                        name: ident(1:2-1:7) `empty`,
+                        params: None,
+                    },
+                    variant(2:2-2:7) {
+                        name: ident(2:2-2:5) `one`,
+                        params: Some(
+                            [
+                                type(2:6-2:7) type-ident(2:6-2:7) `a`,
+                            ],
+                        ),
+                    },
+                    variant(3:2-3:9) {
+                        name: ident(3:2-3:5) `two`,
+                        params: Some(
+                            [
+                                type(3:6-3:7) type-ident(3:6-3:7) `a`,
+                                type(3:8-3:9) type-ident(3:8-3:9) `a`,
+                            ],
+                        ),
+                    },
+                ],
+            },
+            def(6:0-13:1) :: nothing {
+                name: ident(6:4-6:8) `main`,
+                kind: expr(6:9-13:1) :: nothing -> box string {
+                    kind: fun(6:9-13:1) {
+                        params: [],
+                        body: [
+                            expr(7:2-7:19) :: nothing {
+                                kind: let(7:2-7:19) {
+                                    name: ident(7:6-7:7) `a`,
+                                    value: expr(7:10-7:19) :: box int {
+                                        kind: call(7:10-7:19) {
+                                            callee: expr(7:10-7:17) :: 'l -> box 'l {
+                                                kind: field-access {
+                                                    receiver: expr(7:10-7:13) :: box 'l {
+                                                        kind: ident(7:10-7:13) `box`,
+                                                    },
+                                                    field: ident(7:14-7:17) `one`,
+                                                },
+                                            },
+                                            args: [
+                                                expr(7:18-7:19) :: int {
+                                                    kind: literal(7:18-7:19) int 5,
+                                                },
+                                            ],
+                                        },
+                                    },
+                                },
+                            },
+                            expr(8:2-8:19) :: nothing {
+                                kind: let(8:2-8:19) {
+                                    name: ident(8:6-8:7) `b`,
+                                    value: expr(8:10-8:19) :: box 'n {
+                                        kind: field-access {
+                                            receiver: expr(8:10-8:13) :: box 'n {
+                                                kind: ident(8:10-8:13) `box`,
+                                            },
+                                            field: ident(8:14-8:19) `empty`,
+                                        },
+                                    },
+                                },
+                            },
+                            expr(9:2-9:21) :: nothing {
+                                kind: let(9:2-9:21) {
+                                    name: ident(9:6-9:7) `c`,
+                                    value: expr(9:10-9:21) :: box string {
+                                        kind: call(9:10-9:21) {
+                                            callee: expr(9:10-9:13) :: 'q 'q -> box 'q {
+                                                kind: ident(9:10-9:13) `two`,
+                                            },
+                                            args: [
+                                                expr(9:15-9:17) :: string {
+                                                    kind: literal(9:15-9:17) string "x",
+                                                },
+                                                expr(9:19-9:21) :: string {
+                                                    kind: literal(9:19-9:21) string "y",
+                                                },
+                                            ],
+                                        },
+                                    },
+                                },
+                            },
+                            expr(10:2-10:9) :: box int {
+                                kind: call(10:2-10:9) {
+                                    callee: expr(10:2-10:7) :: (box int) -> box int {
+                                        kind: ident(10:2-10:7) `print`,
+                                    },
+                                    args: [
+                                        expr(10:8-10:9) :: box int {
+                                            kind: ident(10:8-10:9) `a`,
+                                        },
+                                    ],
+                                },
+                            },
+                            expr(11:2-11:9) :: box 't4 {
+                                kind: call(11:2-11:9) {
+                                    callee: expr(11:2-11:7) :: (box 't4) -> box 't4 {
+                                        kind: ident(11:2-11:7) `print`,
+                                    },
+                                    args: [
+                                        expr(11:8-11:9) :: box 't4 {
+                                            kind: ident(11:8-11:9) `b`,
+                                        },
+                                    ],
+                                },
+                            },
+                            expr(12:2-12:9) :: box string {
+                                kind: call(12:2-12:9) {
+                                    callee: expr(12:2-12:7) :: (box string) -> box string {
+                                        kind: ident(12:2-12:7) `print`,
+                                    },
+                                    args: [
+                                        expr(12:8-12:9) :: box string {
+                                            kind: ident(12:8-12:9) `c`,
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

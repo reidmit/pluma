@@ -1,7 +1,7 @@
 ---
-source: pluma-tests/tests/analyze.rs
+source: tests/analyze.rs
 expression: output
 ---
 error: Name `f` is not defined.
-error: Type mismatch: expected `int -> 'i`, but found `?`.
+error: Type mismatch: expected `int -> 'l`, but found `?`.
 

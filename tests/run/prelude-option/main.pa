@@ -1,0 +1,46 @@
+# `option` and `result` are always in scope — no `use` needed.
+# Their variants (`some`, `none`, `ok`, `err`) work bare or qualified.
+
+def main fun {
+  # bare constructors
+  let a = some 5
+  let b = none
+  let c = some "hello"
+
+  when a is some n {
+    print n
+  } is none {
+    print 0
+  }
+
+  when b is some n {
+    print n
+  } is none {
+    print "missing"
+  }
+
+  when c is some s {
+    print s
+  } is none {
+    print "missing"
+  }
+
+  # pipeline-friendly
+  42 | some | print
+
+  # result with bare ok/err
+  let r = ok 1
+  let e = err "boom"
+
+  when r is ok v {
+    print v
+  } is err m {
+    print m
+  }
+
+  when e is ok v {
+    print v
+  } is err m {
+    print m
+  }
+}
