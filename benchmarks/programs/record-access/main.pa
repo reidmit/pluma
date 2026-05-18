@@ -1,0 +1,17 @@
+# Repeated record field access.
+
+def get-x fun r {
+  when r is {x: v} { v }
+}
+
+def loop fun n acc {
+  when n is 0 {
+    acc
+  } is _ {
+    loop (n - 1) (acc + (get-x {x: n, y: 99, z: "filler"}))
+  }
+}
+
+def main fun {
+  print (to-string (loop 10000 0))
+}

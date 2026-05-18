@@ -6,9 +6,13 @@ tokenize path:
 analyze path:
   @ cargo run --bin cli --quiet -- analyze {{path}}
 
-# run a module via the tree-walking interpreter
+# run a module (defaults to the bytecode VM; `--mode=interp` for the tree walker)
 run path:
   @ cargo run --bin cli --quiet -- run {{path}}
+
+# run the benchmark suite (VM vs interpreter on benchmarks/programs/*)
+bench:
+  @ cargo run --release -p bench --quiet
 
 # build the cli in release mode; produces target/release/cli
 build-release:

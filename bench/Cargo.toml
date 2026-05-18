@@ -1,0 +1,15 @@
+[package]
+name = "bench"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "bench"
+path = "src/main.rs"
+
+[dependencies]
+codegen = { path = "../codegen" }
+compiler = { path = "../compiler" }
+interpreter = { path = "../interpreter" }
+vm = { path = "../vm" }
