@@ -1,0 +1,26 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+42
+-7
+5
+0
+err
+err
+err
+err
+err
+3.14
+-2.5
+0.0
+100.0
+42.0
+err
+err
+100
+== stderr ==
+

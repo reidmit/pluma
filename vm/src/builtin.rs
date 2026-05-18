@@ -47,6 +47,8 @@ pub enum Builtin {
 	StringJoin,
 	StringSplit,
 	StringReplace,
+	StringToInt,
+	StringToFloat,
 	IoPrint,
 	IoPrintErr,
 	IoWrite,

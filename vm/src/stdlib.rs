@@ -245,6 +245,28 @@ fn string_module() -> NativeModule {
 				),
 				builtin: Builtin::StringReplace,
 			},
+			NativeDef {
+				name: "to-int",
+				ty: Type::Fun(
+					vec![Type::String],
+					Box::new(Type::Enum(
+						"__prelude__.result".to_string(),
+						vec![Type::Int, Type::String],
+					)),
+				),
+				builtin: Builtin::StringToInt,
+			},
+			NativeDef {
+				name: "to-float",
+				ty: Type::Fun(
+					vec![Type::String],
+					Box::new(Type::Enum(
+						"__prelude__.result".to_string(),
+						vec![Type::Float, Type::String],
+					)),
+				),
+				builtin: Builtin::StringToFloat,
+			},
 		],
 		constants: vec![],
 	}

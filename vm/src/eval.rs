@@ -376,6 +376,20 @@ pub fn call_builtin(vm: &mut VM, b: Builtin, args: Vec<Value>) -> Result<Value, 
 				_ => unreachable!("`replace`: expected (string, string, string)"),
 			}
 		}
+		StringToInt => {
+			let s = expect_string(&args, "to-int");
+			Ok(match s.parse::<i64>() {
+				Ok(n) => result_ok(Value::Int(n)),
+				Err(e) => result_err(Value::String(Rc::new(e.to_string()))),
+			})
+		}
+		StringToFloat => {
+			let s = expect_string(&args, "to-float");
+			Ok(match s.parse::<f64>() {
+				Ok(n) => result_ok(Value::Float(n)),
+				Err(e) => result_err(Value::String(Rc::new(e.to_string()))),
+			})
+		}
 		IoPrint => {
 			debug_assert_eq!(args.len(), 1, "`io.print` arity");
 			let arg = args.into_iter().next().unwrap();
