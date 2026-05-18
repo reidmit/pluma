@@ -19,7 +19,7 @@ pub struct NativeDef {
 }
 
 pub fn native_modules() -> Vec<NativeModule> {
-	vec![regex_module(), list_module(), math_module()]
+	vec![regex_module(), list_module(), math_module(), string_module()]
 }
 
 pub fn register_compiler(compiler: &mut compiler::Compiler) {
@@ -115,6 +115,78 @@ fn list_module() -> NativeModule {
 					Box::new(Type::Nothing),
 				),
 				builtin: Builtin::ListEach,
+			},
+		],
+	}
+}
+
+fn string_module() -> NativeModule {
+	let str_to_str = || Type::Fun(vec![Type::String], Box::new(Type::String));
+	let str_to_int = || Type::Fun(vec![Type::String], Box::new(Type::Int));
+	let str_to_bool = || Type::Fun(vec![Type::String], Box::new(Type::Bool));
+	let two_str_to_bool = || Type::Fun(vec![Type::String, Type::String], Box::new(Type::Bool));
+	let list_str = || Type::List(Box::new(Type::String));
+
+	NativeModule {
+		name: "core.string",
+		defs: vec![
+			NativeDef {
+				name: "length",
+				ty: str_to_int(),
+				builtin: Builtin::StringLength,
+			},
+			NativeDef {
+				name: "is-empty",
+				ty: str_to_bool(),
+				builtin: Builtin::StringIsEmpty,
+			},
+			NativeDef {
+				name: "to-upper",
+				ty: str_to_str(),
+				builtin: Builtin::StringToUpper,
+			},
+			NativeDef {
+				name: "to-lower",
+				ty: str_to_str(),
+				builtin: Builtin::StringToLower,
+			},
+			NativeDef {
+				name: "trim",
+				ty: str_to_str(),
+				builtin: Builtin::StringTrim,
+			},
+			NativeDef {
+				name: "contains",
+				ty: two_str_to_bool(),
+				builtin: Builtin::StringContains,
+			},
+			NativeDef {
+				name: "starts-with",
+				ty: two_str_to_bool(),
+				builtin: Builtin::StringStartsWith,
+			},
+			NativeDef {
+				name: "ends-with",
+				ty: two_str_to_bool(),
+				builtin: Builtin::StringEndsWith,
+			},
+			NativeDef {
+				name: "join",
+				ty: Type::Fun(vec![list_str(), Type::String], Box::new(Type::String)),
+				builtin: Builtin::StringJoin,
+			},
+			NativeDef {
+				name: "split",
+				ty: Type::Fun(vec![Type::String, Type::String], Box::new(list_str())),
+				builtin: Builtin::StringSplit,
+			},
+			NativeDef {
+				name: "replace",
+				ty: Type::Fun(
+					vec![Type::String, Type::String, Type::String],
+					Box::new(Type::String),
+				),
+				builtin: Builtin::StringReplace,
 			},
 		],
 	}

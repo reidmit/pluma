@@ -1,0 +1,25 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+5
+0
+true
+false
+HELLO, WORLD!
+hello, world!
+spaced
+true
+false
+true
+true
+a,b,c
+[a, b, c]
+[a, b, c]
+hello there
+1:2:3
+== stderr ==
+

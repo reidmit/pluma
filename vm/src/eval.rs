@@ -162,6 +162,105 @@ pub fn call_builtin(vm: &mut VM, b: Builtin, args: Vec<Value>) -> Result<Value, 
 				_ => unreachable!("`abs`: expected int"),
 			}
 		}
+		StringLength => {
+			let s = expect_string(&args, "length");
+			Ok(Value::Int(s.chars().count() as i64))
+		}
+		StringIsEmpty => {
+			let s = expect_string(&args, "is-empty");
+			Ok(Value::Bool(s.is_empty()))
+		}
+		StringToUpper => {
+			let s = expect_string(&args, "to-upper");
+			Ok(Value::String(Rc::new(s.to_uppercase())))
+		}
+		StringToLower => {
+			let s = expect_string(&args, "to-lower");
+			Ok(Value::String(Rc::new(s.to_lowercase())))
+		}
+		StringTrim => {
+			let s = expect_string(&args, "trim");
+			Ok(Value::String(Rc::new(s.trim().to_string())))
+		}
+		StringContains => {
+			debug_assert_eq!(args.len(), 2, "`contains` arity");
+			match (&args[0], &args[1]) {
+				(Value::String(haystack), Value::String(needle)) => {
+					Ok(Value::Bool(haystack.contains(needle.as_str())))
+				}
+				_ => unreachable!("string `contains`: expected (string, string)"),
+			}
+		}
+		StringStartsWith => {
+			debug_assert_eq!(args.len(), 2, "`starts-with` arity");
+			match (&args[0], &args[1]) {
+				(Value::String(s), Value::String(prefix)) => {
+					Ok(Value::Bool(s.starts_with(prefix.as_str())))
+				}
+				_ => unreachable!("`starts-with`: expected (string, string)"),
+			}
+		}
+		StringEndsWith => {
+			debug_assert_eq!(args.len(), 2, "`ends-with` arity");
+			match (&args[0], &args[1]) {
+				(Value::String(s), Value::String(suffix)) => {
+					Ok(Value::Bool(s.ends_with(suffix.as_str())))
+				}
+				_ => unreachable!("`ends-with`: expected (string, string)"),
+			}
+		}
+		StringJoin => {
+			debug_assert_eq!(args.len(), 2, "`join` arity");
+			let xs = match &args[0] {
+				Value::List(xs) => xs,
+				_ => unreachable!("`join`: expected list"),
+			};
+			let sep = match &args[1] {
+				Value::String(s) => s,
+				_ => unreachable!("`join`: expected string separator"),
+			};
+			let parts: Vec<&str> = xs
+				.iter()
+				.map(|v| match v {
+					Value::String(s) => s.as_str(),
+					_ => unreachable!("`join`: list element must be string"),
+				})
+				.collect();
+			Ok(Value::String(Rc::new(parts.join(sep.as_str()))))
+		}
+		StringSplit => {
+			debug_assert_eq!(args.len(), 2, "`split` arity");
+			let s = match &args[0] {
+				Value::String(s) => s,
+				_ => unreachable!("`split`: expected string"),
+			};
+			let sep = match &args[1] {
+				Value::String(s) => s,
+				_ => unreachable!("`split`: expected string separator"),
+			};
+			// Empty separator: split into individual characters (Rust's
+			// default behavior wraps with empty leading/trailing entries,
+			// which is surprising for users).
+			let parts: Vec<Value> = if sep.is_empty() {
+				s.chars()
+					.map(|c| Value::String(Rc::new(c.to_string())))
+					.collect()
+			} else {
+				s.split(sep.as_str())
+					.map(|part| Value::String(Rc::new(part.to_string())))
+					.collect()
+			};
+			Ok(Value::List(Rc::new(parts)))
+		}
+		StringReplace => {
+			debug_assert_eq!(args.len(), 3, "`replace` arity");
+			match (&args[0], &args[1], &args[2]) {
+				(Value::String(s), Value::String(from), Value::String(to)) => Ok(Value::String(
+					Rc::new(s.replace(from.as_str(), to.as_str())),
+				)),
+				_ => unreachable!("`replace`: expected (string, string, string)"),
+			}
+		}
 	}
 }
 
@@ -170,6 +269,14 @@ fn expect_list<'a>(args: &'a [Value], name: &str) -> &'a Rc<Vec<Value>> {
 	match &args[0] {
 		Value::List(xs) => xs,
 		_ => unreachable!("`{}`: expected list", name),
+	}
+}
+
+fn expect_string<'a>(args: &'a [Value], name: &str) -> &'a Rc<String> {
+	debug_assert_eq!(args.len(), 1, "`{}` arity", name);
+	match &args[0] {
+		Value::String(s) => s,
+		_ => unreachable!("`{}`: expected string", name),
 	}
 }
 
