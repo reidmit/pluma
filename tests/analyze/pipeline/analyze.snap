@@ -1,0 +1,80 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/pipeline/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-4:1) [
+            use(0:0-0:13) `core.list`,
+        ] [
+            def(2:0-4:1) :: nothing {
+                name: ident(2:4-2:8) `main`,
+                kind: expr(2:9-4:1) :: nothing -> list int {
+                    kind: fun(2:9-4:1) {
+                        params: [],
+                        body: [
+                            expr(3:2-3:49) :: list int {
+                                kind: binary op(3:42-3:43) `|` {
+                                    left: expr(3:2-3:41) :: list int {
+                                        kind: binary op(3:12-3:13) `|` {
+                                            left: expr(3:2-3:11) :: list int {
+                                                kind: [
+                                                    expr(3:3-3:4) :: int {
+                                                        kind: literal(3:3-3:4) int 1,
+                                                    },
+                                                    expr(3:6-3:7) :: int {
+                                                        kind: literal(3:6-3:7) int 2,
+                                                    },
+                                                    expr(3:9-3:10) :: int {
+                                                        kind: literal(3:9-3:10) int 3,
+                                                    },
+                                                ],
+                                            },
+                                            right: expr(3:14-3:41) :: list int {
+                                                kind: call(3:14-3:41) {
+                                                    callee: expr(3:14-3:25) :: (list 'j) ('j -> bool) -> list 'j {
+                                                        kind: field-access {
+                                                            receiver: expr(3:14-3:18) :: ? {
+                                                                kind: ident(3:14-3:18) `list`,
+                                                            },
+                                                            field: ident(3:19-3:25) `filter`,
+                                                        },
+                                                    },
+                                                    args: [
+                                                        expr(3:26-3:41) :: int -> bool {
+                                                            kind: fun(3:26-3:41) {
+                                                                params: [
+                                                                    ident(3:30-3:31) `n` :: int,
+                                                                ],
+                                                                body: [
+                                                                    expr(3:34-3:39) :: bool {
+                                                                        kind: binary op(3:36-3:37) `>` {
+                                                                            left: expr(3:34-3:35) :: int {
+                                                                                kind: ident(3:34-3:35) `n`,
+                                                                            },
+                                                                            right: expr(3:38-3:39) :: int {
+                                                                                kind: literal(3:38-3:39) int 1,
+                                                                            },
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        },
+                                    },
+                                    right: expr(3:44-3:49) :: (list int) -> list int {
+                                        kind: ident(3:44-3:49) `print`,
+                                    },
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

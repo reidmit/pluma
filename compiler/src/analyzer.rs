@@ -664,6 +664,46 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 
 			ExprKind::BinaryOperation { left, right, op } => {
+				// `x | f a b` pipes `x` as the first arg of the RHS call: `f x a b`.
+				// We don't visit `right` as a normal expression because its standalone
+				// type (a Call's return type with the wrong arity) would conflict with
+				// the prepended-arg signature we want.
+				if let Operator::Chain = op.kind {
+					expr.ty = self.new_type_var();
+					self.constrain_expr(left, constraints);
+
+					match &mut right.kind {
+						ExprKind::Call(CallNode { callee, args, .. }) => {
+							self.constrain_expr(callee, constraints);
+							let mut arg_types = vec![left.ty.clone()];
+							for arg in args.iter_mut() {
+								self.constrain_expr(arg, constraints);
+								arg_types.push(arg.ty.clone());
+							}
+							constraints.push(
+								eq_constraint(
+									callee.ty.clone(),
+									Type::Fun(arg_types, expr.ty.clone().into()),
+								)
+								.at(expr.range),
+							);
+							right.ty = expr.ty.clone();
+						}
+						_ => {
+							self.constrain_expr(right, constraints);
+							constraints.push(
+								eq_constraint(
+									right.ty.clone(),
+									Type::Fun(vec![left.ty.clone()], expr.ty.clone().into()),
+								)
+								.at(expr.range),
+							);
+						}
+					}
+
+					return;
+				}
+
 				self.constrain_expr(left, constraints);
 				self.constrain_expr(right, constraints);
 

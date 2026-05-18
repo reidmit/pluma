@@ -1,0 +1,19 @@
+use core.list
+
+def double fun n {
+  n * 2
+}
+
+def main fun {
+  # bare callee (no extra args): `x | f` => `f x`
+  5 | double | print
+
+  # callee with extra args: pipes LHS as first arg
+  [1, 2, 3, 4, 5] | list.filter fun n { n > 2 } | list.map fun n { n * 10 } | print
+
+  # single-arg stdlib functions
+  [1, 2, 3] | list.length | print
+
+  # chains terminating in print (which returns its arg)
+  "hello" | print | print
+}

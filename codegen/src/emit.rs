@@ -657,6 +657,34 @@ fn emit_expr_with_parents(
 			)?;
 		}
 		ExprKind::BinaryOperation { op, left, right } => {
+			// `x | f a b` lowers to a call `f x a b` — emit callee, then `x`
+			// as the first arg, then the rest of the RHS call's args.
+			if let Operator::Chain = op.kind {
+				let (callee, extra_args) = match &right.kind {
+					ExprKind::Call(CallNode { callee, args, .. }) => (callee.as_ref(), args.as_slice()),
+					_ => (right.as_ref(), &[][..]),
+				};
+				emit_expr_with_parents(
+					cg, current_module, imports, fb, scope, parent_scopes, callee, false,
+				)?;
+				emit_expr_with_parents(
+					cg, current_module, imports, fb, scope, parent_scopes, left, false,
+				)?;
+				for a in extra_args {
+					emit_expr_with_parents(
+						cg, current_module, imports, fb, scope, parent_scopes, a, false,
+					)?;
+				}
+				let arg_count = (extra_args.len() + 1) as u16;
+				let instr = if tail {
+					Instruction::TailCall(arg_count)
+				} else {
+					Instruction::Call(arg_count)
+				};
+				fb.emit(instr, range);
+				return Ok(());
+			}
+
 			emit_expr_with_parents(
 				cg, current_module, imports, fb, scope, parent_scopes, left, false,
 			)?;
