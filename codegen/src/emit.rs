@@ -106,6 +106,7 @@ impl CodeGen {
 				constants: Vec::new(),
 				regex_patterns: Vec::new(),
 				globals: Vec::new(),
+				field_lists: Vec::new(),
 				global_by_name: HashMap::new(),
 				enum_variants: HashMap::new(),
 				entry: 0,
@@ -123,6 +124,15 @@ impl CodeGen {
 		let idx = self.program.constants.len() as u32;
 		self.program.constants.push(Rc::new(s.to_string()));
 		self.const_lookup.insert(s.to_string(), idx);
+		idx
+	}
+
+	fn intern_field_list(&mut self, fields: Vec<u32>) -> u32 {
+		// No dedup for now — record shapes are rarely repeated, and the
+		// lookup cost would offset the savings. Revisit if profiling shows
+		// many duplicate lists.
+		let idx = self.program.field_lists.len() as u32;
+		self.program.field_lists.push(fields);
 		idx
 	}
 
@@ -598,12 +608,8 @@ fn emit_expr_with_parents(
 				)?;
 				field_idxs.push(cg.intern(&field_name.name));
 			}
-			fb.emit(
-				Instruction::MakeRecord {
-					fields: field_idxs,
-				},
-				range,
-			);
+			let fields_idx = cg.intern_field_list(field_idxs);
+			fb.emit(Instruction::MakeRecord(fields_idx), range);
 		}
 		ExprKind::Interpolation(parts) => {
 			for part in parts {
@@ -1321,9 +1327,10 @@ fn emit_pattern(
 		}
 		PatternKind::Record(fields) => {
 			let field_idxs: Vec<u32> = fields.iter().map(|(n, _)| cg.intern(&n.name)).collect();
+			let fields_idx = cg.intern_field_list(field_idxs);
 			let jmp = fb.emit(
 				Instruction::MatchRecord {
-					fields: field_idxs,
+					fields_idx,
 					on_fail: 0,
 				},
 				range,

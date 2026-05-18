@@ -18,8 +18,11 @@ pub type ConstIdx = u32;
 pub type GlobalIdx = u32;
 pub type FuncIdx = u32;
 pub type Offset = u32;
+// Index into Program::field_lists — used by Make/MatchRecord so the
+// instruction itself stays Copy-sized.
+pub type FieldListIdx = u32;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum Instruction {
 	// Stack manipulation
 	Pop,
@@ -54,10 +57,9 @@ pub enum Instruction {
 	// Aggregates
 	MakeTuple(u16),
 	MakeList(u16),
-	MakeRecord {
-		// Indices into constants pool, each a field name.
-		fields: Vec<ConstIdx>,
-	},
+	// Field names live in Program::field_lists indexed by the FieldListIdx
+	// here. Keeps the instruction Copy.
+	MakeRecord(FieldListIdx),
 	MakeVariant {
 		qualified: ConstIdx,
 		variant: ConstIdx,
@@ -111,9 +113,10 @@ pub enum Instruction {
 	},
 	// MatchRecord: subject must be a Record containing all the named
 	// fields; the corresponding values are pushed onto the stack in the
-	// order the patterns appear (last on top).
+	// order the patterns appear (last on top). Field names live in
+	// Program::field_lists.
 	MatchRecord {
-		fields: Vec<ConstIdx>,
+		fields_idx: FieldListIdx,
 		on_fail: Offset,
 	},
 

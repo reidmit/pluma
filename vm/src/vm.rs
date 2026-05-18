@@ -59,6 +59,9 @@ pub struct VM {
 	pub stdout: StdoutSink,
 	pub(crate) stack: Vec<Value>,
 	pub(crate) frames: Vec<Frame>,
+	// Opt-in opcode-frequency profiling. Set to Some(empty map) before
+	// run() to enable; read back after for a count of each opcode.
+	pub profile: Option<std::collections::HashMap<&'static str, u64>>,
 }
 
 impl VM {
@@ -68,6 +71,7 @@ impl VM {
 			stdout: StdoutSink::Real,
 			stack: Vec::with_capacity(256),
 			frames: Vec::with_capacity(64),
+			profile: None,
 		}
 	}
 
@@ -152,8 +156,16 @@ impl VM {
 					.at(self.current_range()),
 			);
 		}
-		let instr = func.body[self.frames[frame_idx].ip].clone();
+		// `Instruction` is `Copy`, so reading it out by value here is a
+		// trivial register-sized move (no allocator, no refcount bumps).
+		// This is the hot path: the dispatch loop fires once per executed
+		// instruction.
+		let instr = func.body[self.frames[frame_idx].ip];
 		self.frames[frame_idx].ip += 1;
+
+		if let Some(p) = &mut self.profile {
+			*p.entry(opcode_name(&instr)).or_insert(0) += 1;
+		}
 
 		match instr {
 			Instruction::Pop => {
@@ -255,13 +267,18 @@ impl VM {
 				elems.reverse();
 				self.stack.push(Value::List(Rc::new(elems)));
 			}
-			Instruction::MakeRecord { fields } => {
-				let mut map = std::collections::HashMap::with_capacity(fields.len());
-				for name_idx in fields.iter().rev() {
+			Instruction::MakeRecord(fields_idx) => {
+				// Take the field list by value via clone of the indices. The
+				// indices are cheap (u32s) and we avoid borrowing
+				// `self.program.field_lists` across stack mutations.
+				let len = self.program.field_lists[fields_idx as usize].len();
+				let mut map = std::collections::HashMap::with_capacity(len);
+				for i in (0..len).rev() {
 					let v = self.stack.pop().ok_or_else(|| {
 						RuntimeError::new("VM: MakeRecord underflow").at(self.current_range())
 					})?;
-					let name = self.program.constants[*name_idx as usize].clone();
+					let name_idx = self.program.field_lists[fields_idx as usize][i];
+					let name = self.program.constants[name_idx as usize].clone();
 					map.insert((*name).clone(), v);
 				}
 				self.stack.push(Value::Record(Rc::new(map)));
@@ -367,34 +384,151 @@ impl VM {
 				on_fail,
 			} => self.match_variant(variant, arity, on_fail)?,
 			Instruction::MatchTuple { arity, on_fail } => self.match_tuple(arity, on_fail)?,
-			Instruction::MatchRecord { fields, on_fail } => {
-				self.match_record(&fields, on_fail)?
+			Instruction::MatchRecord { fields_idx, on_fail } => {
+				self.match_record(fields_idx, on_fail)?
 			}
-			Instruction::AddInt
-			| Instruction::AddFloat
-			| Instruction::SubInt
-			| Instruction::SubFloat
-			| Instruction::MulInt
-			| Instruction::MulFloat
-			| Instruction::DivInt
-			| Instruction::DivFloat
-			| Instruction::RemInt
-			| Instruction::RemFloat => {
+			// Arithmetic, comparison, and unary ops are inlined here (rather
+			// than dispatched through helper functions) so the hot loop
+			// avoids a function call + a second match on `instr` per
+			// instruction. Mismatched value tags are kept as runtime errors
+			// even though the analyzer already type-checks operands —
+			// defensive, and the unreachable-branches optimize away in
+			// release.
+			Instruction::AddInt => {
 				let r = self.stack.pop().unwrap();
 				let l = self.stack.pop().unwrap();
-				let out = eval::binary(&instr, l, r).map_err(|e| e.at(self.current_range()))?;
-				self.stack.push(out);
+				match (l, r) {
+					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Int(a.wrapping_add(b))),
+					_ => return Err(RuntimeError::new("AddInt: expected ints").at(self.current_range())),
+				}
 			}
-			Instruction::NegInt | Instruction::NegFloat => {
+			Instruction::AddFloat => {
+				let r = self.stack.pop().unwrap();
+				let l = self.stack.pop().unwrap();
+				match (l, r) {
+					(Value::Float(a), Value::Float(b)) => self.stack.push(Value::Float(a + b)),
+					_ => return Err(RuntimeError::new("AddFloat: expected floats").at(self.current_range())),
+				}
+			}
+			Instruction::SubInt => {
+				let r = self.stack.pop().unwrap();
+				let l = self.stack.pop().unwrap();
+				match (l, r) {
+					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Int(a.wrapping_sub(b))),
+					_ => return Err(RuntimeError::new("SubInt: expected ints").at(self.current_range())),
+				}
+			}
+			Instruction::SubFloat => {
+				let r = self.stack.pop().unwrap();
+				let l = self.stack.pop().unwrap();
+				match (l, r) {
+					(Value::Float(a), Value::Float(b)) => self.stack.push(Value::Float(a - b)),
+					_ => return Err(RuntimeError::new("SubFloat: expected floats").at(self.current_range())),
+				}
+			}
+			Instruction::MulInt => {
+				let r = self.stack.pop().unwrap();
+				let l = self.stack.pop().unwrap();
+				match (l, r) {
+					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Int(a.wrapping_mul(b))),
+					_ => return Err(RuntimeError::new("MulInt: expected ints").at(self.current_range())),
+				}
+			}
+			Instruction::MulFloat => {
+				let r = self.stack.pop().unwrap();
+				let l = self.stack.pop().unwrap();
+				match (l, r) {
+					(Value::Float(a), Value::Float(b)) => self.stack.push(Value::Float(a * b)),
+					_ => return Err(RuntimeError::new("MulFloat: expected floats").at(self.current_range())),
+				}
+			}
+			Instruction::DivInt => {
+				let r = self.stack.pop().unwrap();
+				let l = self.stack.pop().unwrap();
+				match (l, r) {
+					(Value::Int(_), Value::Int(0)) => {
+						return Err(RuntimeError::new("division by zero").at(self.current_range()))
+					}
+					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Int(a / b)),
+					_ => return Err(RuntimeError::new("DivInt: expected ints").at(self.current_range())),
+				}
+			}
+			Instruction::DivFloat => {
+				let r = self.stack.pop().unwrap();
+				let l = self.stack.pop().unwrap();
+				match (l, r) {
+					(Value::Float(a), Value::Float(b)) => self.stack.push(Value::Float(a / b)),
+					_ => return Err(RuntimeError::new("DivFloat: expected floats").at(self.current_range())),
+				}
+			}
+			Instruction::RemInt => {
+				let r = self.stack.pop().unwrap();
+				let l = self.stack.pop().unwrap();
+				match (l, r) {
+					(Value::Int(_), Value::Int(0)) => {
+						return Err(RuntimeError::new("division by zero").at(self.current_range()))
+					}
+					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Int(a % b)),
+					_ => return Err(RuntimeError::new("RemInt: expected ints").at(self.current_range())),
+				}
+			}
+			Instruction::RemFloat => {
+				let r = self.stack.pop().unwrap();
+				let l = self.stack.pop().unwrap();
+				match (l, r) {
+					(Value::Float(a), Value::Float(b)) => self.stack.push(Value::Float(a % b)),
+					_ => return Err(RuntimeError::new("RemFloat: expected floats").at(self.current_range())),
+				}
+			}
+			Instruction::NegInt => {
 				let v = self.stack.pop().unwrap();
-				let out = eval::unary(&instr, v).map_err(|e| e.at(self.current_range()))?;
-				self.stack.push(out);
+				match v {
+					Value::Int(n) => self.stack.push(Value::Int(n.wrapping_neg())),
+					_ => return Err(RuntimeError::new("NegInt: expected int").at(self.current_range())),
+				}
 			}
-			Instruction::Lt | Instruction::Lte | Instruction::Gt | Instruction::Gte => {
+			Instruction::NegFloat => {
+				let v = self.stack.pop().unwrap();
+				match v {
+					Value::Float(n) => self.stack.push(Value::Float(-n)),
+					_ => return Err(RuntimeError::new("NegFloat: expected float").at(self.current_range())),
+				}
+			}
+			Instruction::Lt => {
 				let r = self.stack.pop().unwrap();
 				let l = self.stack.pop().unwrap();
-				let out = eval::compare(&instr, l, r).map_err(|e| e.at(self.current_range()))?;
-				self.stack.push(out);
+				match (l, r) {
+					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Bool(a < b)),
+					(Value::Float(a), Value::Float(b)) => self.stack.push(Value::Bool(a < b)),
+					_ => return Err(RuntimeError::new("Lt: expected numbers").at(self.current_range())),
+				}
+			}
+			Instruction::Lte => {
+				let r = self.stack.pop().unwrap();
+				let l = self.stack.pop().unwrap();
+				match (l, r) {
+					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Bool(a <= b)),
+					(Value::Float(a), Value::Float(b)) => self.stack.push(Value::Bool(a <= b)),
+					_ => return Err(RuntimeError::new("Lte: expected numbers").at(self.current_range())),
+				}
+			}
+			Instruction::Gt => {
+				let r = self.stack.pop().unwrap();
+				let l = self.stack.pop().unwrap();
+				match (l, r) {
+					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Bool(a > b)),
+					(Value::Float(a), Value::Float(b)) => self.stack.push(Value::Bool(a > b)),
+					_ => return Err(RuntimeError::new("Gt: expected numbers").at(self.current_range())),
+				}
+			}
+			Instruction::Gte => {
+				let r = self.stack.pop().unwrap();
+				let l = self.stack.pop().unwrap();
+				match (l, r) {
+					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Bool(a >= b)),
+					(Value::Float(a), Value::Float(b)) => self.stack.push(Value::Bool(a >= b)),
+					_ => return Err(RuntimeError::new("Gte: expected numbers").at(self.current_range())),
+				}
 			}
 			Instruction::Eq => {
 				let r = self.stack.pop().unwrap();
@@ -515,16 +649,18 @@ impl VM {
 		Ok(())
 	}
 
-	fn match_record(&mut self, fields: &[u32], on_fail: u32) -> Result<(), RuntimeError> {
+	fn match_record(&mut self, fields_idx: u32, on_fail: u32) -> Result<(), RuntimeError> {
 		let subj = self.stack.pop().ok_or_else(|| {
 			RuntimeError::new("VM: MatchRecord on empty stack").at(self.current_range())
 		})?;
+		let len = self.program.field_lists[fields_idx as usize].len();
 		match subj {
 			Value::Record(record) => {
-				let mut values = Vec::with_capacity(fields.len());
+				let mut values = Vec::with_capacity(len);
 				let mut ok = true;
-				for name_idx in fields {
-					let name = &self.program.constants[*name_idx as usize];
+				for i in 0..len {
+					let name_idx = self.program.field_lists[fields_idx as usize][i];
+					let name = &self.program.constants[name_idx as usize];
 					match record.get(name.as_str()) {
 						Some(v) => values.push(v.clone()),
 						None => {
@@ -662,5 +798,66 @@ impl VM {
 	}
 	pub(crate) fn pop_stack(&mut self) -> Option<Value> {
 		self.stack.pop()
+	}
+}
+
+fn opcode_name(i: &Instruction) -> &'static str {
+	use Instruction::*;
+	match i {
+		Pop => "Pop",
+		Dup => "Dup",
+		LoadConst(_) => "LoadConst",
+		LoadInt(_) => "LoadInt",
+		LoadFloat(_) => "LoadFloat",
+		LoadBool(_) => "LoadBool",
+		LoadNothing => "LoadNothing",
+		LoadLocal(_) => "LoadLocal",
+		StoreLocal(_) => "StoreLocal",
+		LoadCapture(_) => "LoadCapture",
+		LoadGlobal(_) => "LoadGlobal",
+		Jump(_) => "Jump",
+		JumpIfFalse(_) => "JumpIfFalse",
+		MakeClosure { .. } => "MakeClosure",
+		Call(_) => "Call",
+		TailCall(_) => "TailCall",
+		Return => "Return",
+		MakeTuple(_) => "MakeTuple",
+		MakeList(_) => "MakeList",
+		MakeRecord { .. } => "MakeRecord",
+		MakeVariant { .. } => "MakeVariant",
+		MakeVariantCtor { .. } => "MakeVariantCtor",
+		GetField(_) => "GetField",
+		LoadRegex(_) => "LoadRegex",
+		Interpolate(_) => "Interpolate",
+		MatchInt(_, _) => "MatchInt",
+		MatchFloat(_, _) => "MatchFloat",
+		MatchString(_, _) => "MatchString",
+		MatchBool(_, _) => "MatchBool",
+		MatchNothing(_) => "MatchNothing",
+		MatchVariant { .. } => "MatchVariant",
+		MatchTuple { .. } => "MatchTuple",
+		MatchRecord { .. } => "MatchRecord",
+		AddInt => "AddInt",
+		AddFloat => "AddFloat",
+		SubInt => "SubInt",
+		SubFloat => "SubFloat",
+		MulInt => "MulInt",
+		MulFloat => "MulFloat",
+		DivInt => "DivInt",
+		DivFloat => "DivFloat",
+		RemInt => "RemInt",
+		RemFloat => "RemFloat",
+		NegInt => "NegInt",
+		NegFloat => "NegFloat",
+		Lt => "Lt",
+		Lte => "Lte",
+		Gt => "Gt",
+		Gte => "Gte",
+		Eq => "Eq",
+		Neq => "Neq",
+		LogicalAnd => "LogicalAnd",
+		LogicalOr => "LogicalOr",
+		LogicalNot => "LogicalNot",
+		CallBuiltin(_, _) => "CallBuiltin",
 	}
 }

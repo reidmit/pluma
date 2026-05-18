@@ -1,89 +1,11 @@
-// Operator and builtin evaluation, factored out of the dispatch loop. The
-// dispatch loop pops the operands and pushes the result; these functions
-// just compute.
+// Builtin evaluation. Operator handlers are inlined directly in the VM
+// dispatch loop now; what's left here is just the builtin-call path used by
+// CallBuiltin / Closure-of-Builtin and the cross-call `invoke` helper.
 
 use crate::builtin::Builtin;
-use crate::instruction::Instruction;
 use crate::value::{values_eq, Value};
 use crate::vm::{RuntimeError, VM};
 use std::rc::Rc;
-
-pub fn binary(instr: &Instruction, l: Value, r: Value) -> Result<Value, RuntimeError> {
-	use Instruction::*;
-	match instr {
-		AddInt => match (&l, &r) {
-			(Value::Int(a), Value::Int(b)) => Ok(Value::Int(a.wrapping_add(*b))),
-			_ => Err(RuntimeError::new("AddInt: expected ints")),
-		},
-		AddFloat => match (&l, &r) {
-			(Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
-			_ => Err(RuntimeError::new("AddFloat: expected floats")),
-		},
-		SubInt => match (&l, &r) {
-			(Value::Int(a), Value::Int(b)) => Ok(Value::Int(a.wrapping_sub(*b))),
-			_ => Err(RuntimeError::new("SubInt: expected ints")),
-		},
-		SubFloat => match (&l, &r) {
-			(Value::Float(a), Value::Float(b)) => Ok(Value::Float(a - b)),
-			_ => Err(RuntimeError::new("SubFloat: expected floats")),
-		},
-		MulInt => match (&l, &r) {
-			(Value::Int(a), Value::Int(b)) => Ok(Value::Int(a.wrapping_mul(*b))),
-			_ => Err(RuntimeError::new("MulInt: expected ints")),
-		},
-		MulFloat => match (&l, &r) {
-			(Value::Float(a), Value::Float(b)) => Ok(Value::Float(a * b)),
-			_ => Err(RuntimeError::new("MulFloat: expected floats")),
-		},
-		DivInt => match (&l, &r) {
-			(Value::Int(_), Value::Int(0)) => Err(RuntimeError::new("division by zero")),
-			(Value::Int(a), Value::Int(b)) => Ok(Value::Int(a / b)),
-			_ => Err(RuntimeError::new("DivInt: expected ints")),
-		},
-		DivFloat => match (&l, &r) {
-			(Value::Float(a), Value::Float(b)) => Ok(Value::Float(a / b)),
-			_ => Err(RuntimeError::new("DivFloat: expected floats")),
-		},
-		RemInt => match (&l, &r) {
-			(Value::Int(_), Value::Int(0)) => Err(RuntimeError::new("division by zero")),
-			(Value::Int(a), Value::Int(b)) => Ok(Value::Int(a % b)),
-			_ => Err(RuntimeError::new("RemInt: expected ints")),
-		},
-		RemFloat => match (&l, &r) {
-			(Value::Float(a), Value::Float(b)) => Ok(Value::Float(a % b)),
-			_ => Err(RuntimeError::new("RemFloat: expected floats")),
-		},
-		_ => unreachable!("binary called with non-binary op"),
-	}
-}
-
-pub fn unary(instr: &Instruction, v: Value) -> Result<Value, RuntimeError> {
-	use Instruction::*;
-	match (instr, v) {
-		(NegInt, Value::Int(n)) => Ok(Value::Int(n.wrapping_neg())),
-		(NegFloat, Value::Float(n)) => Ok(Value::Float(-n)),
-		(NegInt, _) => Err(RuntimeError::new("NegInt: expected int")),
-		(NegFloat, _) => Err(RuntimeError::new("NegFloat: expected float")),
-		_ => unreachable!("unary called with non-unary op"),
-	}
-}
-
-pub fn compare(instr: &Instruction, l: Value, r: Value) -> Result<Value, RuntimeError> {
-	use Instruction::*;
-	let ord = match (&l, &r) {
-		(Value::Int(a), Value::Int(b)) => a.cmp(b),
-		(Value::Float(a), Value::Float(b)) => a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal),
-		_ => return Err(RuntimeError::new("ordering compare: expected numbers")),
-	};
-	let result = match instr {
-		Lt => ord == std::cmp::Ordering::Less,
-		Lte => ord != std::cmp::Ordering::Greater,
-		Gt => ord == std::cmp::Ordering::Greater,
-		Gte => ord != std::cmp::Ordering::Less,
-		_ => unreachable!("compare called with non-compare op"),
-	};
-	Ok(Value::Bool(result))
-}
 
 // Arities and arg types of every builtin are statically enforced by the
 // analyzer against the signatures in `stdlib.rs`. The asserts and

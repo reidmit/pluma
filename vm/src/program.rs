@@ -20,6 +20,10 @@ pub struct Program {
 	pub constants: Vec<Rc<String>>,
 	pub regex_patterns: Vec<Rc<crate::value::RegexData>>,
 	pub globals: Vec<GlobalSlot>,
+	// Record-shape field name lists, indexed by FieldListIdx. Moves the
+	// only Vec-carrying field out of `Instruction` so the instruction
+	// stream stays Copy-sized.
+	pub field_lists: Vec<Vec<u32>>,
 	// (module_name, def_name) -> GlobalIdx. Used by both codegen (during
 	// emission) and the VM (for resolution by name when needed).
 	pub global_by_name: std::collections::HashMap<(String, String), u32>,

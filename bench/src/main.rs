@@ -18,6 +18,18 @@ fn main() {
 	let programs_dir = workspace.join("benchmarks/programs");
 	std::env::set_current_dir(workspace).ok();
 
+	// `cargo run -p bench -- --profile <name>` dumps opcode counts for one
+	// benchmark and exits, instead of running the timing comparison.
+	let mut args = std::env::args().skip(1);
+	if let Some(arg) = args.next() {
+		if arg == "--profile" {
+			let name = args.next().expect("--profile takes a benchmark name");
+			let main_pa = programs_dir.join(&name).join("main.pa");
+			profile_one(&main_pa);
+			return;
+		}
+	}
+
 	let iterations = std::env::var("BENCH_ITERS")
 		.ok()
 		.and_then(|s| s.parse::<usize>().ok())
@@ -117,6 +129,30 @@ fn run_via_vm(path: &PathBuf) -> Result<(), String> {
 	let buf = Rc::new(RefCell::new(Vec::<u8>::new()));
 	let mut vm_instance = vm::VM::new(program).with_stdout(vm::StdoutSink::Buffer(buf));
 	vm_instance.run().map(|_| ()).map_err(|e| e.message)
+}
+
+fn profile_one(path: &Path) {
+	let mut compiler = compiler::Compiler::from_entry_path(path.to_str().unwrap().to_string())
+		.unwrap_or_else(|_| panic!("compile error"));
+	vm::stdlib::register_compiler(&mut compiler);
+	compiler.check().unwrap_or_else(|_| panic!("check error"));
+	let program = codegen::compile(&compiler).expect("codegen error");
+	let buf = Rc::new(RefCell::new(Vec::<u8>::new()));
+	let mut vm_instance = vm::VM::new(program).with_stdout(vm::StdoutSink::Buffer(buf));
+	vm_instance.profile = Some(std::collections::HashMap::new());
+	vm_instance
+		.run()
+		.unwrap_or_else(|e| panic!("run error: {}", e.message));
+	let mut counts: Vec<_> = vm_instance.profile.unwrap().into_iter().collect();
+	counts.sort_by(|a, b| b.1.cmp(&a.1));
+	let total: u64 = counts.iter().map(|(_, n)| n).sum();
+	println!("opcode             count       pct");
+	println!("-----------------  ----------  -----");
+	for (name, n) in &counts {
+		let pct = (*n as f64 / total as f64) * 100.0;
+		println!("{:<19}{:>10}  {:>5.1}%", name, n, pct);
+	}
+	println!("{:<19}{:>10}", "TOTAL", total);
 }
 
 fn run_via_interp(path: &PathBuf) -> Result<(), String> {
