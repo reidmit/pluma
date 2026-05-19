@@ -1,5 +1,5 @@
 use core.list
 
-def main fun {
+def main = fun {
   [1, 2, 3] | list.filter fun n { n > 1 } | print
 }

@@ -7,8 +7,8 @@ module `main` (tests/analyze/generic-enum/main.pa) {
     ast: Some(
         module(0:0-13:1) [
             def(0:0-4:1) :: nothing {
-                name: ident(0:4-0:7) `box`,
-                kind: enum(0:15-4:1) <a> [
+                name: ident(0:5-0:8) `box`,
+                kind: enum(0:11-4:1) <a> [
                     variant(1:2-1:7) {
                         name: ident(1:2-1:7) `empty`,
                         params: None,
@@ -34,8 +34,8 @@ module `main` (tests/analyze/generic-enum/main.pa) {
             },
             def(6:0-13:1) :: nothing {
                 name: ident(6:4-6:8) `main`,
-                kind: expr(6:9-13:1) :: nothing -> box string {
-                    kind: fun(6:9-13:1) {
+                kind: expr(6:11-13:1) :: nothing -> box string {
+                    kind: fun(6:11-13:1) {
                         params: [],
                         body: [
                             expr(7:2-7:19) :: nothing {

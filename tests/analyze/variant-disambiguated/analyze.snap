@@ -1,5 +1,5 @@
 ---
-source: pluma-tests/tests/analyze.rs
+source: tests/analyze.rs
 expression: output
 ---
 module `main` (tests/analyze/variant-disambiguated/main.pa) {
@@ -7,8 +7,8 @@ module `main` (tests/analyze/variant-disambiguated/main.pa) {
     ast: Some(
         module(0:0-14:1) [
             def(0:0-3:1) :: nothing {
-                name: ident(0:4-0:9) `color`,
-                kind: enum(0:15-3:1) [
+                name: ident(0:5-0:10) `color`,
+                kind: enum(0:11-3:1) [
                     variant(1:2-1:5) {
                         name: ident(1:2-1:5) `red`,
                         params: None,
@@ -20,8 +20,8 @@ module `main` (tests/analyze/variant-disambiguated/main.pa) {
                 ],
             },
             def(5:0-8:1) :: nothing {
-                name: ident(5:4-5:9) `fruit`,
-                kind: enum(5:15-8:1) [
+                name: ident(5:5-5:10) `fruit`,
+                kind: enum(5:11-8:1) [
                     variant(6:2-6:5) {
                         name: ident(6:2-6:5) `red`,
                         params: None,
@@ -34,8 +34,8 @@ module `main` (tests/analyze/variant-disambiguated/main.pa) {
             },
             def(10:0-14:1) :: nothing {
                 name: ident(10:4-10:10) `is-red`,
-                kind: expr(10:11-14:1) :: nothing -> int {
-                    kind: fun(10:11-14:1) {
+                kind: expr(10:13-14:1) :: nothing -> int {
+                    kind: fun(10:13-14:1) {
                         params: [],
                         body: [
                             expr(11:2-11:19) :: nothing {

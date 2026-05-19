@@ -8,8 +8,8 @@ module `main` (tests/analyze/let-polymorphism/main.pa) {
         module(0:0-4:1) [
             def(0:0-4:1) :: nothing {
                 name: ident(0:4-0:8) `main`,
-                kind: expr(0:9-4:1) :: nothing -> int {
-                    kind: fun(0:9-4:1) {
+                kind: expr(0:11-4:1) :: nothing -> int {
+                    kind: fun(0:11-4:1) {
                         params: [],
                         body: [
                             expr(1:2-1:28) :: nothing {

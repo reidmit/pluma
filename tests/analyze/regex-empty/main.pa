@@ -1,4 +1,4 @@
 # this is not valid!
-def r-empty /
+def r-empty = /
 
 /

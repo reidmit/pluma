@@ -1,4 +1,4 @@
 use sub.utils
 
-def value utils.answer
-def doubled utils.identity 42
+def value = utils.answer
+def doubled = utils.identity 42

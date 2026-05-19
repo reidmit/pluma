@@ -1,6 +1,6 @@
 use core.map
 
-def main fun {
+def main = fun {
 	let a = map.from-entries [("x", 1), ("y", 2)]
 	let b = map.from-entries [("y", 22), ("z", 3)]
 	# merge is right-wins on overlapping keys; left keys keep their slot

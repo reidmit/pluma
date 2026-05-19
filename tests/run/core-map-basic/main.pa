@@ -1,6 +1,6 @@
 use core.map
 
-def main fun {
+def main = fun {
 	let m = map.empty ()
 	print (map.size m)
 	let m = map.insert m "a" 1

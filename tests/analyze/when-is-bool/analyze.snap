@@ -1,5 +1,5 @@
 ---
-source: pluma-tests/tests/analyze.rs
+source: tests/analyze.rs
 expression: output
 ---
 module `main` (tests/analyze/when-is-bool/main.pa) {
@@ -8,8 +8,8 @@ module `main` (tests/analyze/when-is-bool/main.pa) {
         module(0:0-8:1) [
             def(0:0-8:1) :: nothing {
                 name: ident(0:4-0:8) `main`,
-                kind: expr(0:9-8:1) :: nothing -> string {
-                    kind: fun(0:9-8:1) {
+                kind: expr(0:11-8:1) :: nothing -> string {
+                    kind: fun(0:11-8:1) {
                         params: [],
                         body: [
                             expr(1:2-1:14) :: nothing {

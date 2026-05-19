@@ -1,5 +1,5 @@
 ---
-source: pluma-tests/tests/analyze.rs
+source: tests/analyze.rs
 expression: output
 ---
 module `main` (tests/analyze/enum-simple/main.pa) {
@@ -7,8 +7,8 @@ module `main` (tests/analyze/enum-simple/main.pa) {
     ast: Some(
         module(0:0-4:1) [
             def(0:0-4:1) :: nothing {
-                name: ident(0:4-0:9) `color`,
-                kind: enum(0:15-4:1) [
+                name: ident(0:5-0:10) `color`,
+                kind: enum(0:11-4:1) [
                     variant(1:2-1:5) {
                         name: ident(1:2-1:5) `red`,
                         params: None,

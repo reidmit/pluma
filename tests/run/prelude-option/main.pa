@@ -1,7 +1,7 @@
 # `option` and `result` are always in scope — no `use` needed.
 # Their variants (`some`, `none`, `ok`, `err`) work bare or qualified.
 
-def main fun {
+def main = fun {
   # bare constructors
   let a = some 5
   let b = none

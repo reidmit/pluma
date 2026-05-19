@@ -1,1 +1,1 @@
-def bad 1 == "hello"
+def bad = 1 == "hello"

@@ -1,6 +1,6 @@
 use core.math
 
-def main fun {
+def main = fun {
   print (math.to-float 5)
   print (math.to-float 0)
   print (math.to-int 3.7)

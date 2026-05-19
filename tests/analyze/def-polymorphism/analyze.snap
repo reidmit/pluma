@@ -6,16 +6,16 @@ module `main` (tests/analyze/def-polymorphism/main.pa) {
     comments: {},
     ast: Some(
         module(0:0-5:1) [
-            def(0:0-0:24) :: nothing {
+            def(0:0-0:26) :: nothing {
                 name: ident(0:4-0:12) `identity`,
-                kind: expr(0:13-0:24) :: 't -> 't {
-                    kind: fun(0:13-0:24) {
+                kind: expr(0:15-0:26) :: 't -> 't {
+                    kind: fun(0:15-0:26) {
                         params: [
-                            ident(0:17-0:18) `x` :: 't,
+                            ident(0:19-0:20) `x` :: 't,
                         ],
                         body: [
-                            expr(0:21-0:22) :: 't {
-                                kind: ident(0:21-0:22) `x`,
+                            expr(0:23-0:24) :: 't {
+                                kind: ident(0:23-0:24) `x`,
                             },
                         ],
                     },
@@ -23,8 +23,8 @@ module `main` (tests/analyze/def-polymorphism/main.pa) {
             },
             def(2:0-5:1) :: nothing {
                 name: ident(2:4-2:8) `main`,
-                kind: expr(2:9-5:1) :: nothing -> int {
-                    kind: fun(2:9-5:1) {
+                kind: expr(2:11-5:1) :: nothing -> int {
+                    kind: fun(2:11-5:1) {
                         params: [],
                         body: [
                             expr(3:2-3:16) :: string {

@@ -1,6 +1,6 @@
 use core.io
 
-def main fun {
+def main = fun {
 	let path = "target/pluma-io-test-roundtrip.txt"
 
 	when (io.write-file path "hello from pluma") is ok _ {

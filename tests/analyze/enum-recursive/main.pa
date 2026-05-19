@@ -1,8 +1,8 @@
-def tree enum {
+enum tree {
   empty
   node int tree tree
 }
 
-def t tree.empty
-def make-node tree.node
-def big-tree tree.node 1 tree.empty tree.empty
+def t = tree.empty
+def make-node = tree.node
+def big-tree = tree.node 1 tree.empty tree.empty

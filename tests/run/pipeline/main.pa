@@ -1,10 +1,10 @@
 use core.list
 
-def double fun n {
+def double = fun n {
   n * 2
 }
 
-def main fun {
+def main = fun {
   # bare callee (no extra args): `x | f` => `f x`
   5 | double | print
 

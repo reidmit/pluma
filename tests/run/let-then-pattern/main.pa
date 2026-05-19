@@ -1,4 +1,4 @@
-def main fun {
+def main = fun {
   let x = 1
   let y = 2
   let z = 3

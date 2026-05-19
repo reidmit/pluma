@@ -5,34 +5,34 @@ expression: output
 module `main` (tests/analyze/multi-module-alias-type/main.pa) {
     comments: {},
     ast: Some(
-        module(0:0-8:24) [
+        module(0:0-8:26) [
             use(0:0-0:10) `shapes`,
         ] [
-            def(2:0-2:36) :: nothing {
+            def(2:0-2:38) :: nothing {
                 name: ident(2:4-2:10) `origin`,
-                kind: expr(2:11-2:36) :: {x: int, y: int} {
-                    kind: call(2:11-2:36) {
-                        callee: expr(2:11-2:23) :: ({x: int, y: int}) -> {x: int, y: int} {
+                kind: expr(2:13-2:38) :: {x: int, y: int} {
+                    kind: call(2:13-2:38) {
+                        callee: expr(2:13-2:25) :: ({x: int, y: int}) -> {x: int, y: int} {
                             kind: field-access {
-                                receiver: expr(2:11-2:17) :: ? {
-                                    kind: ident(2:11-2:17) `shapes`,
+                                receiver: expr(2:13-2:19) :: ? {
+                                    kind: ident(2:13-2:19) `shapes`,
                                 },
-                                field: ident(2:18-2:23) `point`,
+                                field: ident(2:20-2:25) `point`,
                             },
                         },
                         args: [
-                            expr(2:24-2:36) :: {x: int, y: int} {
+                            expr(2:26-2:38) :: {x: int, y: int} {
                                 kind: record [
                                     (
-                                        ident(2:25-2:26) `x`,
-                                        expr(2:28-2:29) :: int {
-                                            kind: literal(2:28-2:29) int 0,
+                                        ident(2:27-2:28) `x`,
+                                        expr(2:30-2:31) :: int {
+                                            kind: literal(2:30-2:31) int 0,
                                         },
                                     ),
                                     (
-                                        ident(2:31-2:32) `y`,
-                                        expr(2:34-2:35) :: int {
-                                            kind: literal(2:34-2:35) int 0,
+                                        ident(2:33-2:34) `y`,
+                                        expr(2:36-2:37) :: int {
+                                            kind: literal(2:36-2:37) int 0,
                                         },
                                     ),
                                 ],
@@ -43,10 +43,10 @@ module `main` (tests/analyze/multi-module-alias-type/main.pa) {
             },
             def(4:0-6:1) :: nothing {
                 name: ident(4:4-4:8) `x-of`,
-                kind: expr(4:9-6:1) :: ({x: 'y, ...}) -> 'y {
-                    kind: fun(4:9-6:1) {
+                kind: expr(4:11-6:1) :: ({x: 'y, ...}) -> 'y {
+                    kind: fun(4:11-6:1) {
                         params: [
-                            ident(4:13-4:14) `p` :: {x: 'y, ...},
+                            ident(4:15-4:16) `p` :: {x: 'y, ...},
                         ],
                         body: [
                             expr(5:2-5:5) :: 'y {
@@ -61,16 +61,16 @@ module `main` (tests/analyze/multi-module-alias-type/main.pa) {
                     },
                 },
             },
-            def(8:0-8:24) :: nothing {
+            def(8:0-8:26) :: nothing {
                 name: ident(8:4-8:12) `origin-x`,
-                kind: expr(8:13-8:24) :: int {
-                    kind: call(8:13-8:24) {
-                        callee: expr(8:13-8:17) :: ({x: int, y: int}) -> int {
-                            kind: ident(8:13-8:17) `x-of`,
+                kind: expr(8:15-8:26) :: int {
+                    kind: call(8:15-8:26) {
+                        callee: expr(8:15-8:19) :: ({x: int, y: int}) -> int {
+                            kind: ident(8:15-8:19) `x-of`,
                         },
                         args: [
-                            expr(8:18-8:24) :: {x: int, y: int} {
-                                kind: ident(8:18-8:24) `origin`,
+                            expr(8:20-8:26) :: {x: int, y: int} {
+                                kind: ident(8:20-8:26) `origin`,
                             },
                         ],
                     },

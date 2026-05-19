@@ -1,4 +1,4 @@
-def is-even fun n {
+def is-even = fun n {
   when n is 0 {
     true
   } is _ {
@@ -6,7 +6,7 @@ def is-even fun n {
   }
 }
 
-def is-odd fun n {
+def is-odd = fun n {
   when n is 0 {
     false
   } is _ {
@@ -14,7 +14,7 @@ def is-odd fun n {
   }
 }
 
-def main fun {
+def main = fun {
   print (is-even 0)
   print (is-even 4)
   print (is-even 7)

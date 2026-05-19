@@ -1,15 +1,15 @@
-def color enum {
+enum color {
   red
   green
   blue
 }
 
-def shape enum {
+enum shape {
   circle int
   rect int int
 }
 
-def main fun {
+def main = fun {
   print (to-string ())
   print (to-string 42)
   print (to-string 3.14)

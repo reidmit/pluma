@@ -1,4 +1,4 @@
-def bool enum {
+enum bool {
   true
   false
 }

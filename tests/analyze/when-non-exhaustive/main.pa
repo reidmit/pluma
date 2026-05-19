@@ -1,15 +1,15 @@
-def tree enum {
+enum tree {
   empty
   node int tree tree
 }
 
-def missing-variant fun t {
+def missing-variant = fun t {
   when t is empty {
     0
   }
 }
 
-def partial-constructor fun t {
+def partial-constructor = fun t {
   when t is empty {
     0
   } is node 0 _l _r {
@@ -17,7 +17,7 @@ def partial-constructor fun t {
   }
 }
 
-def missing-bool-case fun b {
+def missing-bool-case = fun b {
   when b is true {
     0
   }

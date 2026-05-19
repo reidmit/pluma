@@ -7,8 +7,8 @@ module `main` (tests/analyze/nested-patterns/main.pa) {
     ast: Some(
         module(0:0-26:1) [
             def(0:0-3:1) :: nothing {
-                name: ident(0:4-0:8) `tree`,
-                kind: enum(0:14-3:1) [
+                name: ident(0:5-0:9) `tree`,
+                kind: enum(0:10-3:1) [
                     variant(1:2-1:7) {
                         name: ident(1:2-1:7) `empty`,
                         params: None,
@@ -26,8 +26,8 @@ module `main` (tests/analyze/nested-patterns/main.pa) {
                 ],
             },
             def(5:0-8:1) :: nothing {
-                name: ident(5:4-5:9) `maybe`,
-                kind: enum(5:15-8:1) [
+                name: ident(5:5-5:10) `maybe`,
+                kind: enum(5:11-8:1) [
                     variant(6:2-6:6) {
                         name: ident(6:2-6:6) `none`,
                         params: None,
@@ -44,10 +44,10 @@ module `main` (tests/analyze/nested-patterns/main.pa) {
             },
             def(10:0-14:1) :: nothing {
                 name: ident(10:4-10:17) `root-of-maybe`,
-                kind: expr(10:18-14:1) :: maybe -> nothing {
-                    kind: fun(10:18-14:1) {
+                kind: expr(10:20-14:1) :: maybe -> nothing {
+                    kind: fun(10:20-14:1) {
                         params: [
-                            ident(10:22-10:23) `m` :: maybe,
+                            ident(10:24-10:25) `m` :: maybe,
                         ],
                         body: [
                             expr(11:2-13:3) :: nothing {
@@ -83,10 +83,10 @@ module `main` (tests/analyze/nested-patterns/main.pa) {
             },
             def(16:0-20:1) :: nothing {
                 name: ident(16:4-16:21) `tuple-destructure`,
-                kind: expr(16:22-20:1) :: (('t0, 't1)) -> nothing {
-                    kind: fun(16:22-20:1) {
+                kind: expr(16:24-20:1) :: (('t0, 't1)) -> nothing {
+                    kind: fun(16:24-20:1) {
                         params: [
-                            ident(16:26-16:27) `t` :: ('t0, 't1),
+                            ident(16:28-16:29) `t` :: ('t0, 't1),
                         ],
                         body: [
                             expr(17:2-19:3) :: nothing {
@@ -113,10 +113,10 @@ module `main` (tests/analyze/nested-patterns/main.pa) {
             },
             def(22:0-26:1) :: nothing {
                 name: ident(22:4-22:12) `grouping`,
-                kind: expr(22:13-26:1) :: tree -> nothing {
-                    kind: fun(22:13-26:1) {
+                kind: expr(22:15-26:1) :: tree -> nothing {
+                    kind: fun(22:15-26:1) {
                         params: [
-                            ident(22:17-22:18) `t` :: tree,
+                            ident(22:19-22:20) `t` :: tree,
                         ],
                         body: [
                             expr(23:2-25:3) :: nothing {

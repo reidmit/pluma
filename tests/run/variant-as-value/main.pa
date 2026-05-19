@@ -1,15 +1,15 @@
-def color enum {
+enum color {
   red
   green
   blue
 }
 
-def shape enum {
+enum shape {
   circle int
   square int
 }
 
-def main fun {
+def main = fun {
   let c = color.red
   print c
   let make-square = shape.square

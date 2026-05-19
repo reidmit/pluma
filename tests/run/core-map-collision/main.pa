@@ -2,17 +2,17 @@ use core.map
 
 # All variants hash to the same int — every key lands in the same
 # bucket, so insert / lookup / remove must walk the collision chain.
-def color enum {
+enum color {
 	red
 	green
 	blue
 }
 
 for hash on color {
-	def hash fun _c { 42 }
+	def hash = fun _c { 42 }
 }
 
-def main fun {
+def main = fun {
 	let m = map.empty ()
 	let m = map.insert m red "r"
 	let m = map.insert m green "g"

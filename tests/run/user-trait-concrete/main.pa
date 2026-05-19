@@ -1,19 +1,19 @@
-def showable trait a {
-	show fun a -> string
+trait showable a {
+	show :: fun a -> string
 }
 
 for showable on int {
-	def show fun x { to-string x }
+	def show = fun x { to-string x }
 }
 
 for showable on bool {
-	def show fun b {
+	def show = fun b {
 		when b is true { "yes" }
 		is false { "no" }
 	}
 }
 
-def main fun {
+def main = fun {
 	print (showable.show 42)
 	print (showable.show true)
 }

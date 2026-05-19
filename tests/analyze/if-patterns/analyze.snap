@@ -7,8 +7,8 @@ module `main` (tests/analyze/if-patterns/main.pa) {
     ast: Some(
         module(0:0-33:1) [
             def(0:0-3:1) :: nothing {
-                name: ident(0:4-0:8) `tree`,
-                kind: enum(0:14-3:1) [
+                name: ident(0:5-0:9) `tree`,
+                kind: enum(0:10-3:1) [
                     variant(1:2-1:7) {
                         name: ident(1:2-1:7) `empty`,
                         params: None,
@@ -27,10 +27,10 @@ module `main` (tests/analyze/if-patterns/main.pa) {
             },
             def(5:0-9:1) :: nothing {
                 name: ident(5:4-5:17) `match-nullary`,
-                kind: expr(5:18-9:1) :: tree -> nothing {
-                    kind: fun(5:18-9:1) {
+                kind: expr(5:20-9:1) :: tree -> nothing {
+                    kind: fun(5:20-9:1) {
                         params: [
-                            ident(5:22-5:23) `t` :: tree,
+                            ident(5:24-5:25) `t` :: tree,
                         ],
                         body: [
                             expr(6:2-8:3) :: nothing {
@@ -50,10 +50,10 @@ module `main` (tests/analyze/if-patterns/main.pa) {
             },
             def(11:0-15:1) :: nothing {
                 name: ident(11:4-11:21) `match-constructor`,
-                kind: expr(11:22-15:1) :: tree -> nothing {
-                    kind: fun(11:22-15:1) {
+                kind: expr(11:24-15:1) :: tree -> nothing {
+                    kind: fun(11:24-15:1) {
                         params: [
-                            ident(11:26-11:27) `t` :: tree,
+                            ident(11:28-11:29) `t` :: tree,
                         ],
                         body: [
                             expr(12:2-14:3) :: nothing {
@@ -84,10 +84,10 @@ module `main` (tests/analyze/if-patterns/main.pa) {
             },
             def(17:0-21:1) :: nothing {
                 name: ident(17:4-17:17) `match-literal`,
-                kind: expr(17:18-21:1) :: int -> nothing {
-                    kind: fun(17:18-21:1) {
+                kind: expr(17:20-21:1) :: int -> nothing {
+                    kind: fun(17:20-21:1) {
                         params: [
-                            ident(17:22-17:23) `n` :: int,
+                            ident(17:24-17:25) `n` :: int,
                         ],
                         body: [
                             expr(18:2-20:3) :: nothing {
@@ -107,10 +107,10 @@ module `main` (tests/analyze/if-patterns/main.pa) {
             },
             def(23:0-27:1) :: nothing {
                 name: ident(23:4-23:18) `match-wildcard`,
-                kind: expr(23:19-27:1) :: 't6 -> nothing {
-                    kind: fun(23:19-27:1) {
+                kind: expr(23:21-27:1) :: 't6 -> nothing {
+                    kind: fun(23:21-27:1) {
                         params: [
-                            ident(23:23-23:24) `t` :: 't6,
+                            ident(23:25-23:26) `t` :: 't6,
                         ],
                         body: [
                             expr(24:2-26:3) :: nothing {
@@ -128,10 +128,10 @@ module `main` (tests/analyze/if-patterns/main.pa) {
             },
             def(29:0-33:1) :: nothing {
                 name: ident(29:4-29:17) `match-binding`,
-                kind: expr(29:18-33:1) :: 't8 -> nothing {
-                    kind: fun(29:18-33:1) {
+                kind: expr(29:20-33:1) :: 't8 -> nothing {
+                    kind: fun(29:20-33:1) {
                         params: [
-                            ident(29:22-29:23) `t` :: 't8,
+                            ident(29:24-29:25) `t` :: 't8,
                         ],
                         body: [
                             expr(30:2-32:3) :: nothing {

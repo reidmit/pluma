@@ -1,6 +1,6 @@
 use core.list
 
-def main fun {
+def main = fun {
   # head / tail return option
   when list.head [1, 2, 3] is some x {
     print x

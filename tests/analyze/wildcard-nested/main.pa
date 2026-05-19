@@ -1,9 +1,9 @@
-def tree enum {
+enum tree {
   empty
   node int tree tree
 }
 
-def has-anything fun t {
+def has-anything = fun t {
   when t is empty {
     false
   } is node _ _ _ {

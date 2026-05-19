@@ -92,46 +92,61 @@ let message = "hello $(name)"
 
 ## definitions
 
-only allowed at top level
-
-can be values or types
+`def` binds a name to a value at the top level. `=` separates the name from the expression — same as `let` does locally.
 
 ```
-def name "reid"
+def name = "reid"
 
-def greet fun name {
+def greet = fun name {
   print "hello, $(name)!"
 }
+
+def main = fun {
+  greet name
+}
 ```
+
+The right-hand side is any expression — string, int, record, function literal, function call. `def` is value-only; type definitions use their own keywords (`alias`, `enum`, `trait`).
+
+## type annotations
+
+`::` annotates a name with its type. Used inside `alias` bodies (record-style types) and `trait` method signatures. Distinct from `:` so the two roles never collide:
+
+| operator | role | example |
+| - | - | - |
+| `:`  | field name → value (record literals, patterns) | `{name: "reid"}` |
+| `::` | name has type X (annotations) | `name :: string` |
 
 ## alias types
 
 ```
-def person alias {
-  name: string
-  age: int
+alias person {
+  name :: string
+  age  :: int
 }
 
-def number-list alias list int
+alias number-list list int
 ```
+
+The first form is a record-type alias (fields use `::`). The second is a bare type expression alias.
 
 ## enum types
 
 enums are nominal: two enums with the same shape are distinct, and references within an enum's body (e.g. `tree` inside `tree`'s `node` variant) are allowed.
 
 ```
-def color enum {
+enum color {
   red
   green
   blue
 }
 
-def tree enum {
+enum tree {
   empty
   node int tree tree
 }
 
-def bool enum {
+enum bool {
   true
   false
 }
@@ -148,20 +163,20 @@ bare variant names also work when unambiguous (`red` instead of `color.red`). if
 
 ### generic enums
 
-enums can take type parameters, listed space-separated after `enum`. variants reference them by name.
+enums can take type parameters, listed space-separated after the name. variants reference them by name.
 
 ```
-def option enum a {
+enum option a {
   some a
   none
 }
 
-def result enum a b {
+enum result a b {
   ok a
   err b
 }
 
-def pair enum a b {
+enum pair a b {
   both a b
   left a
   right b
@@ -171,15 +186,15 @@ def pair enum a b {
 instantiate with space-separated type args in any type position (alias bodies, record fields, etc.):
 
 ```
-def maybe-int alias option int
+alias maybe-int option int
 
-def named-list alias {
-  name: string
-  items: list (option int)
+alias named-list {
+  name  :: string
+  items :: list (option int)
 }
 ```
 
-multi-arg type contexts (variant params) are non-greedy — wrap generic applications in parens there: `def container enum a { holds (option a) }`.
+multi-arg type contexts (variant params) are non-greedy — wrap generic applications in parens there: `enum container a { holds (option a) }`.
 
 ### prelude enums
 
@@ -200,21 +215,32 @@ when outcome is ok v {
 
 ## traits
 
-a `trait` declares a set of method signatures over a type parameter. `for trait on type` declares an instance — the implementation for a particular type.
+a `trait` declares a set of method signatures over a type parameter. method signatures use `::` (the type-annotation operator). `for trait on type` declares an instance — the implementation for a particular type.
 
 ```
-def showable trait a {
-  show fun a -> string
+trait showable a {
+  show :: fun a -> string
 }
 
 for showable on int {
-  def show fun x { to-string x }
+  def show = fun x { to-string x }
 }
 
 for showable on bool {
-  def show fun b {
+  def show = fun b {
     when b is true { "yes" } else { "no" }
   }
+}
+```
+
+a trait method that has a fallback body uses `def` inside the trait body (same shape as a real def):
+
+```
+trait greeter a {
+  name  :: fun a -> string
+  greet :: fun a -> string
+
+  def greet = fun x { "hello, $(name x)" }
 }
 ```
 
@@ -243,7 +269,7 @@ instances can carry constraints with `where`:
 
 ```
 for ord on (option a) where (ord a) {
-  def compare fun x y {
+  def compare = fun x y {
     when x is some xv {
       when y is some yv { compare xv yv }  # bare — dispatches on `a`
       is none { gt }
@@ -265,9 +291,9 @@ use math
 use sub.utils
 use other.utils as utils2   # avoids collision with `sub.utils` above
 
-def four math.add 2 2
-def value utils.something
-def alt utils2.something
+def four = math.add 2 2
+def value = utils.something
+def alt = utils2.something
 ```
 
 values, enums, and aliases all cross module boundaries.
@@ -276,12 +302,12 @@ values, enums, and aliases all cross module boundaries.
 use shapes
 use colors
 
-def themed alias {
-  primary: colors.color
-  shape: shapes.circle
+alias themed {
+  primary :: colors.color
+  shape   :: shapes.circle
 }
 
-def my-favorite colors.color.red
+def my-favorite = red
 ```
 
 - in type positions: `module.type-name` refers to an imported enum or alias.

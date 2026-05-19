@@ -1,4 +1,4 @@
-def classify fun s {
+def classify = fun s {
   when s is "yes" {
     "affirmative"
   } is "no" {
@@ -8,7 +8,7 @@ def classify fun s {
   }
 }
 
-def main fun {
+def main = fun {
   print (classify "yes")
   print (classify "no")
   print (classify "maybe")

@@ -1,4 +1,4 @@
-def main fun {
+def main = fun {
 	# Hash deterministic per-type: int hashes to itself, bool to 0/1.
 	print (hash.hash 42)
 	print (hash.hash true)

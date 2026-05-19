@@ -1,1 +1,1 @@
-def value "hello"
+def value = "hello"

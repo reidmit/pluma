@@ -1,16 +1,16 @@
-def get-name fun person {
+def get-name = fun person {
   when person is {name: n} {
     n
   }
 }
 
-def get-age fun person {
+def get-age = fun person {
   when person is {age: a} {
     a
   }
 }
 
-def main fun {
+def main = fun {
   let reid = {name: "reid", age: 28}
   print (get-name reid)
   print (get-age reid)

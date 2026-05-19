@@ -1,10 +1,10 @@
-def simple "hey"
+def simple = "hey"
 
-def multiline "one
+def multiline = "one
 
 two
 
       three
       "
 
-def interpolated "wow $(simple)!"
+def interpolated = "wow $(simple)!"

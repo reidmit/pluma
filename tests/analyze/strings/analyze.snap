@@ -1,21 +1,21 @@
 ---
-source: pluma-tests/tests/analyze.rs
+source: tests/analyze.rs
 expression: output
 ---
 module `main` (tests/analyze/strings/main.pa) {
     comments: {},
     ast: Some(
-        module(0:0-4:32) [
-            def(0:0-0:16) :: nothing {
+        module(0:0-4:34) [
+            def(0:0-0:18) :: nothing {
                 name: ident(0:4-0:10) `simple`,
-                kind: expr(0:12-0:16) :: string {
-                    kind: literal(0:12-0:16) string "hey",
+                kind: expr(0:14-0:18) :: string {
+                    kind: literal(0:14-0:18) string "hey",
                 },
             },
-            def(2:0-2:44) :: nothing {
+            def(2:0-2:46) :: nothing {
                 name: ident(2:4-2:13) `multiline`,
-                kind: expr(2:15-2:44) :: string {
-                    kind: literal(2:15-2:44) string "one
+                kind: expr(2:17-2:46) :: string {
+                    kind: literal(2:17-2:46) string "one
                     
                     two
                     
@@ -23,18 +23,18 @@ module `main` (tests/analyze/strings/main.pa) {
                           ",
                 },
             },
-            def(4:0-4:32) :: nothing {
+            def(4:0-4:34) :: nothing {
                 name: ident(4:4-4:16) `interpolated`,
-                kind: expr(4:18-4:32) :: string {
+                kind: expr(4:20-4:34) :: string {
                     kind: interpolation [
-                        expr(4:18-4:22) :: string {
-                            kind: literal(4:18-4:22) string "wow ",
+                        expr(4:20-4:24) :: string {
+                            kind: literal(4:20-4:24) string "wow ",
                         },
-                        expr(4:24-4:30) :: string {
-                            kind: ident(4:24-4:30) `simple`,
+                        expr(4:26-4:32) :: string {
+                            kind: ident(4:26-4:32) `simple`,
                         },
-                        expr(4:31-4:32) :: string {
-                            kind: literal(4:31-4:32) string "!",
+                        expr(4:33-4:34) :: string {
+                            kind: literal(4:33-4:34) string "!",
                         },
                     ],
                 },

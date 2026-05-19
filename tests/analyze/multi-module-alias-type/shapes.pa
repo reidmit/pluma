@@ -1,4 +1,4 @@
-def point alias {
-  x: int
-  y: int
+alias point {
+  x :: int
+  y :: int
 }

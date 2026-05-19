@@ -8,8 +8,8 @@ module `main` (tests/analyze/local-functions/main.pa) {
         module(0:0-6:1) [
             def(0:0-6:1) :: nothing {
                 name: ident(0:4-0:8) `main`,
-                kind: expr(0:9-6:1) :: nothing -> int {
-                    kind: fun(0:9-6:1) {
+                kind: expr(0:11-6:1) :: nothing -> int {
+                    kind: fun(0:11-6:1) {
                         params: [],
                         body: [
                             expr(1:2-3:3) :: nothing {

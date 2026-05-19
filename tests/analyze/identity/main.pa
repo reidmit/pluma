@@ -1,5 +1,5 @@
-def identity fun x {
+def identity = fun x {
   x
 }
 
-def num identity 47
+def num = identity 47

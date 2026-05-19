@@ -1,6 +1,6 @@
-def identity fun x { x }
+def identity = fun x { x }
 
-def main fun {
+def main = fun {
   identity "wow"
   identity 47
 }

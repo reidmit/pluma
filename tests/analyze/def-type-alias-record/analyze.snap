@@ -7,24 +7,24 @@ module `main` (tests/analyze/def-type-alias-record/main.pa) {
     ast: Some(
         module(0:0-13:1) [
             def(0:0-3:1) :: nothing {
-                name: ident(0:4-0:10) `person`,
-                kind: alias type(0:17-3:1) record-type [
+                name: ident(0:6-0:12) `person`,
+                kind: alias type(0:13-3:1) record-type [
                     (
                         ident(1:2-1:6) `name`,
-                        type(1:8-1:14) type-ident(1:8-1:14) `string`,
+                        type(1:10-1:16) type-ident(1:10-1:16) `string`,
                     ),
                     (
                         ident(2:2-2:5) `age`,
-                        type(2:7-2:10) type-ident(2:7-2:10) `int`,
+                        type(2:9-2:12) type-ident(2:9-2:12) `int`,
                     ),
                 ],
             },
             def(5:0-7:1) :: nothing {
                 name: ident(5:4-5:12) `get-name`,
-                kind: expr(5:13-7:1) :: ({name: 'x, ...}) -> 'x {
-                    kind: fun(5:13-7:1) {
+                kind: expr(5:15-7:1) :: ({name: 'x, ...}) -> 'x {
+                    kind: fun(5:15-7:1) {
                         params: [
-                            ident(5:17-5:18) `p` :: {name: 'x, ...},
+                            ident(5:19-5:20) `p` :: {name: 'x, ...},
                         ],
                         body: [
                             expr(6:2-6:8) :: 'x {
@@ -41,8 +41,8 @@ module `main` (tests/analyze/def-type-alias-record/main.pa) {
             },
             def(9:0-13:1) :: nothing {
                 name: ident(9:4-9:8) `main`,
-                kind: expr(9:9-13:1) :: nothing -> string {
-                    kind: fun(9:9-13:1) {
+                kind: expr(9:11-13:1) :: nothing -> string {
+                    kind: fun(9:11-13:1) {
                         params: [],
                         body: [
                             expr(10:2-10:43) :: nothing {

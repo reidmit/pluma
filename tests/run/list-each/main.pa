@@ -1,6 +1,6 @@
 use core.list
 
-def main fun {
+def main = fun {
   list.each [1, 2, 3] fun n {
     print (n * 10)
   }

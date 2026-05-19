@@ -1,8 +1,8 @@
-def my-int alias int
-def my-int2 alias my-int
+alias my-int int
+alias my-int2 my-int
 
-def pair alias (int, int)
-def my-pair alias pair
+alias pair (int, int)
+alias my-pair pair
 
-def x my-int 5
-def p my-pair (1, 2)
+def x = my-int 5
+def p = my-pair (1, 2)

@@ -1,13 +1,13 @@
 # Pluma functions are not curried; `def add5 add 5` would fail because
 # `add` requires both args at once. Wrap in a closure to partially apply.
 
-def add fun a b {
+def add = fun a b {
   a + b
 }
 
-def add5 fun y { add 5 y }
+def add5 = fun y { add 5 y }
 
-def main fun {
+def main = fun {
   print (add5 3)
   print (add 10 20)
 }

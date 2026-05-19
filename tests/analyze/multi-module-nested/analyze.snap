@@ -5,35 +5,35 @@ expression: output
 module `main` (tests/analyze/multi-module-nested/main.pa) {
     comments: {},
     ast: Some(
-        module(0:0-3:29) [
+        module(0:0-3:31) [
             use(0:0-0:13) `sub.utils`,
         ] [
-            def(2:0-2:22) :: nothing {
+            def(2:0-2:24) :: nothing {
                 name: ident(2:4-2:9) `value`,
-                kind: expr(2:10-2:22) :: int {
+                kind: expr(2:12-2:24) :: int {
                     kind: field-access {
-                        receiver: expr(2:10-2:15) :: ? {
-                            kind: ident(2:10-2:15) `utils`,
+                        receiver: expr(2:12-2:17) :: ? {
+                            kind: ident(2:12-2:17) `utils`,
                         },
-                        field: ident(2:16-2:22) `answer`,
+                        field: ident(2:18-2:24) `answer`,
                     },
                 },
             },
-            def(3:0-3:29) :: nothing {
+            def(3:0-3:31) :: nothing {
                 name: ident(3:4-3:11) `doubled`,
-                kind: expr(3:12-3:29) :: int {
-                    kind: call(3:12-3:29) {
-                        callee: expr(3:12-3:26) :: 't -> 't {
+                kind: expr(3:14-3:31) :: int {
+                    kind: call(3:14-3:31) {
+                        callee: expr(3:14-3:28) :: 't -> 't {
                             kind: field-access {
-                                receiver: expr(3:12-3:17) :: ? {
-                                    kind: ident(3:12-3:17) `utils`,
+                                receiver: expr(3:14-3:19) :: ? {
+                                    kind: ident(3:14-3:19) `utils`,
                                 },
-                                field: ident(3:18-3:26) `identity`,
+                                field: ident(3:20-3:28) `identity`,
                             },
                         },
                         args: [
-                            expr(3:27-3:29) :: int {
-                                kind: literal(3:27-3:29) int 42,
+                            expr(3:29-3:31) :: int {
+                                kind: literal(3:29-3:31) int 42,
                             },
                         ],
                     },

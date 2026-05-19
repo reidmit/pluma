@@ -1,13 +1,13 @@
-def person alias {
-  name: string
-  age: int
+alias person {
+  name :: string
+  age :: int
 }
 
-def get-name fun p {
+def get-name = fun p {
   p.name
 }
 
-def main fun {
+def main = fun {
   let me = person { name: "reid", age: 30 }
 
   get-name me

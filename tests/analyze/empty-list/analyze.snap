@@ -5,66 +5,66 @@ expression: output
 module `main` (tests/analyze/empty-list/main.pa) {
     comments: {},
     ast: Some(
-        module(0:0-3:27) [
-            def(0:0-0:12) :: nothing {
+        module(0:0-3:29) [
+            def(0:0-0:14) :: nothing {
                 name: ident(0:4-0:9) `empty`,
-                kind: expr(0:10-0:12) :: list 'x {
+                kind: expr(0:12-0:14) :: list 'x {
                     kind: [],
                 },
             },
-            def(1:0-1:18) :: nothing {
+            def(1:0-1:20) :: nothing {
                 name: ident(1:4-1:8) `ints`,
-                kind: expr(1:9-1:18) :: list int {
+                kind: expr(1:11-1:20) :: list int {
                     kind: [
-                        expr(1:10-1:11) :: int {
-                            kind: literal(1:10-1:11) int 1,
+                        expr(1:12-1:13) :: int {
+                            kind: literal(1:12-1:13) int 1,
                         },
-                        expr(1:13-1:14) :: int {
-                            kind: literal(1:13-1:14) int 2,
+                        expr(1:15-1:16) :: int {
+                            kind: literal(1:15-1:16) int 2,
                         },
-                        expr(1:16-1:17) :: int {
-                            kind: literal(1:16-1:17) int 3,
+                        expr(1:18-1:19) :: int {
+                            kind: literal(1:18-1:19) int 3,
                         },
                     ],
                 },
             },
-            def(2:0-2:27) :: nothing {
+            def(2:0-2:29) :: nothing {
                 name: ident(2:4-2:11) `strings`,
-                kind: expr(2:12-2:27) :: list string {
+                kind: expr(2:14-2:29) :: list string {
                     kind: [
-                        expr(2:14-2:16) :: string {
-                            kind: literal(2:14-2:16) string "a",
+                        expr(2:16-2:18) :: string {
+                            kind: literal(2:16-2:18) string "a",
                         },
-                        expr(2:19-2:21) :: string {
-                            kind: literal(2:19-2:21) string "b",
+                        expr(2:21-2:23) :: string {
+                            kind: literal(2:21-2:23) string "b",
                         },
-                        expr(2:24-2:26) :: string {
-                            kind: literal(2:24-2:26) string "c",
+                        expr(2:26-2:28) :: string {
+                            kind: literal(2:26-2:28) string "c",
                         },
                     ],
                 },
             },
-            def(3:0-3:27) :: nothing {
+            def(3:0-3:29) :: nothing {
                 name: ident(3:4-3:10) `nested`,
-                kind: expr(3:11-3:27) :: list (list int) {
+                kind: expr(3:13-3:29) :: list (list int) {
                     kind: [
-                        expr(3:12-3:18) :: list int {
+                        expr(3:14-3:20) :: list int {
                             kind: [
-                                expr(3:13-3:14) :: int {
-                                    kind: literal(3:13-3:14) int 1,
+                                expr(3:15-3:16) :: int {
+                                    kind: literal(3:15-3:16) int 1,
                                 },
-                                expr(3:16-3:17) :: int {
-                                    kind: literal(3:16-3:17) int 2,
+                                expr(3:18-3:19) :: int {
+                                    kind: literal(3:18-3:19) int 2,
                                 },
                             ],
                         },
-                        expr(3:20-3:26) :: list int {
+                        expr(3:22-3:28) :: list int {
                             kind: [
-                                expr(3:21-3:22) :: int {
-                                    kind: literal(3:21-3:22) int 3,
+                                expr(3:23-3:24) :: int {
+                                    kind: literal(3:23-3:24) int 3,
                                 },
-                                expr(3:24-3:25) :: int {
-                                    kind: literal(3:24-3:25) int 4,
+                                expr(3:26-3:27) :: int {
+                                    kind: literal(3:26-3:27) int 4,
                                 },
                             ],
                         },

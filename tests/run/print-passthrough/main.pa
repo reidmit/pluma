@@ -1,11 +1,11 @@
 # `print` returns its argument unchanged, so you can wrap it inline.
 
-def color enum {
+enum color {
   red
   green
 }
 
-def main fun {
+def main = fun {
   # binding via print
   let x = print 42
   print "doubled: $(to-string (x * 2))"

@@ -1,5 +1,5 @@
-def double fun n {
+def double = fun n {
   n + n
 }
 
-def bad double "hello"
+def bad = double "hello"

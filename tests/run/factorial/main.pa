@@ -1,4 +1,4 @@
-def fact fun n {
+def fact = fun n {
   when n is 0 {
     1
   } is _ {
@@ -6,7 +6,7 @@ def fact fun n {
   }
 }
 
-def main fun {
+def main = fun {
   print (fact 0)
   print (fact 5)
   print (fact 10)

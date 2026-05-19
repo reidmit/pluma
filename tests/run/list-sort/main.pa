@@ -1,6 +1,6 @@
 use core.list
 
-def main fun {
+def main = fun {
 	# `list.sort` takes a comparator returning an `ordering` variant.
 	# `ord.compare` is itself such a function — pass it directly as a
 	# higher-order arg.

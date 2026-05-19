@@ -1,6 +1,6 @@
-def neg fun x { 0 - x }
+def neg = fun x { 0 - x }
 
-def main fun {
+def main = fun {
 	let a = 10
 
 	# `f -x` (space-no-space) parses as `f(-x)`, not `f - x`

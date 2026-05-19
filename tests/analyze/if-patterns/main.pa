@@ -1,33 +1,33 @@
-def tree enum {
+enum tree {
   empty
   node int tree tree
 }
 
-def match-nullary fun t {
+def match-nullary = fun t {
   if t is empty {
     0
   }
 }
 
-def match-constructor fun t {
+def match-constructor = fun t {
   if t is node val _l _r {
     val
   }
 }
 
-def match-literal fun n {
+def match-literal = fun n {
   if n is 47 {
     "yes"
   }
 }
 
-def match-wildcard fun t {
+def match-wildcard = fun t {
   if t is _ {
     0
   }
 }
 
-def match-binding fun t {
+def match-binding = fun t {
   if t is renamed {
     renamed
   }

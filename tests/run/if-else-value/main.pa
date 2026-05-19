@@ -1,7 +1,7 @@
 # `if X is P { ... } else { ... }` as a value expression: both branches must
 # agree on type. Used here as a function's tail and as a sub-expression.
 
-def clamp fun n lo hi {
+def clamp = fun n lo hi {
   if (n < lo) is true {
     lo
   } else {
@@ -9,7 +9,7 @@ def clamp fun n lo hi {
   }
 }
 
-def main fun {
+def main = fun {
   print (clamp 5 0 10)
   print (clamp (0 - 3) 0 10)
   print (clamp 15 0 10)

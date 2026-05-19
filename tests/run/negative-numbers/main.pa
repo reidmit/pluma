@@ -1,4 +1,4 @@
-def main fun {
+def main = fun {
   print (0 - 5)
   print (-5)
   print (-5 + 10)

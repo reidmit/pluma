@@ -10,8 +10,8 @@ module `main` (tests/analyze/pipeline/main.pa) {
         ] [
             def(2:0-4:1) :: nothing {
                 name: ident(2:4-2:8) `main`,
-                kind: expr(2:9-4:1) :: nothing -> list int {
-                    kind: fun(2:9-4:1) {
+                kind: expr(2:11-4:1) :: nothing -> list int {
+                    kind: fun(2:11-4:1) {
                         params: [],
                         body: [
                             expr(3:2-3:49) :: list int {

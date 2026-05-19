@@ -1,5 +1,5 @@
 ---
-source: pluma-tests/tests/analyze.rs
+source: tests/analyze.rs
 expression: output
 ---
 module `main` (tests/analyze/enum-pattern-match/main.pa) {
@@ -7,8 +7,8 @@ module `main` (tests/analyze/enum-pattern-match/main.pa) {
     ast: Some(
         module(0:0-11:1) [
             def(0:0-3:1) :: nothing {
-                name: ident(0:4-0:8) `tree`,
-                kind: enum(0:14-3:1) [
+                name: ident(0:5-0:9) `tree`,
+                kind: enum(0:10-3:1) [
                     variant(1:2-1:7) {
                         name: ident(1:2-1:7) `empty`,
                         params: None,
@@ -27,10 +27,10 @@ module `main` (tests/analyze/enum-pattern-match/main.pa) {
             },
             def(5:0-11:1) :: nothing {
                 name: ident(5:4-5:17) `value-at-root`,
-                kind: expr(5:18-11:1) :: tree -> int {
-                    kind: fun(5:18-11:1) {
+                kind: expr(5:20-11:1) :: tree -> int {
+                    kind: fun(5:20-11:1) {
                         params: [
-                            ident(5:22-5:23) `t` :: tree,
+                            ident(5:24-5:25) `t` :: tree,
                         ],
                         body: [
                             expr(6:2-10:3) :: int {

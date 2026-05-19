@@ -1,11 +1,11 @@
-def add fun x y {
+def add = fun x y {
   x + y
 }
 
-def double fun n {
+def double = fun n {
   n + n
 }
 
-def identity fun x {
+def identity = fun x {
   x
 }

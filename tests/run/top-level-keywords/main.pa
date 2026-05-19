@@ -1,0 +1,44 @@
+# Exercises every top-level keyword shape:
+#   def NAME = EXPR        — value (incl. function values)
+#   enum NAME { ... }      — enum type
+#   alias NAME ...         — alias type (record body uses ::)
+#   trait NAME PARAM { ... } — trait declaration (sigs use ::)
+#   for TRAIT on TYPE { ... } — instance declaration
+
+enum shape {
+  circle int
+  rect int int
+}
+
+alias person {
+  name :: string
+  age  :: int
+}
+
+trait describable a {
+  describe :: fun a -> string
+}
+
+for describable on shape {
+  def describe = fun s {
+    when s is circle r { "circle radius $(to-string r)" }
+    is rect w h { "rect $(to-string w) x $(to-string h)" }
+  }
+}
+
+for describable on int {
+  def describe = fun n { "the number $(to-string n)" }
+}
+
+def reid = { name: "reid", age: 30 }
+
+def main = fun {
+  print reid.name
+
+  print (describe (shape.circle 5))
+  print (describe (shape.rect 3 4))
+  print (describe 42)
+
+  # bare trait method works because `describable` is in scope
+  print (describable.describe (shape.circle 7))   # qualified form still legal
+}

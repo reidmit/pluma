@@ -1,4 +1,4 @@
-def main fun {
+def main = fun {
   let x = true
 
   when x is false {

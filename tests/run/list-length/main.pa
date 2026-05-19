@@ -1,6 +1,6 @@
 use core.list
 
-def main fun {
+def main = fun {
   print (list.length [1, 2, 3])
   print (list.length [])
   print (list.is-empty [])

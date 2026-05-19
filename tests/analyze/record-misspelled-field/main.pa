@@ -1,8 +1,8 @@
-def me {
+def me = {
   name: "reid"
   age: 28
 }
 
-def get-result fun {
+def get-result = fun {
   me.namee
 }

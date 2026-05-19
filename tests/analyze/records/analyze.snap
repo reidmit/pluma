@@ -1,5 +1,5 @@
 ---
-source: pluma-tests/tests/analyze.rs
+source: tests/analyze.rs
 expression: output
 ---
 module `main` (tests/analyze/records/main.pa) {
@@ -8,7 +8,7 @@ module `main` (tests/analyze/records/main.pa) {
         module(0:0-9:1) [
             def(0:0-3:1) :: nothing {
                 name: ident(0:4-0:6) `me`,
-                kind: expr(0:7-3:1) :: {name: string, age: int} {
+                kind: expr(0:9-3:1) :: {name: string, age: int} {
                     kind: record [
                         (
                             ident(1:2-1:6) `name`,
@@ -25,20 +25,20 @@ module `main` (tests/analyze/records/main.pa) {
                     ],
                 },
             },
-            def(5:0-5:27) :: nothing {
+            def(5:0-5:29) :: nothing {
                 name: ident(5:4-5:10) `inline`,
-                kind: expr(5:11-5:27) :: {one: int, two: int} {
+                kind: expr(5:13-5:29) :: {one: int, two: int} {
                     kind: record [
                         (
-                            ident(5:12-5:15) `one`,
-                            expr(5:17-5:18) :: int {
-                                kind: literal(5:17-5:18) int 1,
+                            ident(5:14-5:17) `one`,
+                            expr(5:19-5:20) :: int {
+                                kind: literal(5:19-5:20) int 1,
                             },
                         ),
                         (
-                            ident(5:20-5:23) `two`,
-                            expr(5:25-5:26) :: int {
-                                kind: literal(5:25-5:26) int 2,
+                            ident(5:22-5:25) `two`,
+                            expr(5:27-5:28) :: int {
+                                kind: literal(5:27-5:28) int 2,
                             },
                         ),
                     ],
@@ -46,8 +46,8 @@ module `main` (tests/analyze/records/main.pa) {
             },
             def(7:0-9:1) :: nothing {
                 name: ident(7:4-7:14) `get-result`,
-                kind: expr(7:15-9:1) :: nothing -> int {
-                    kind: fun(7:15-9:1) {
+                kind: expr(7:17-9:1) :: nothing -> int {
+                    kind: fun(7:17-9:1) {
                         params: [],
                         body: [
                             expr(8:2-8:21) :: int {

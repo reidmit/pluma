@@ -1,8 +1,8 @@
 use core.regex
 
-def hello /"hello"/
+def hello = /"hello"/
 
-def main fun {
+def main = fun {
   print (regex.matches hello "hello, world!")
   print (regex.matches hello "goodbye, world!")
   print (regex.matches hello "hello")

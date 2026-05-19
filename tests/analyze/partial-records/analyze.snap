@@ -8,10 +8,10 @@ module `main` (tests/analyze/partial-records/main.pa) {
         module(0:0-13:1) [
             def(0:0-2:1) :: nothing {
                 name: ident(0:4-0:12) `get-name`,
-                kind: expr(0:13-2:1) :: ({name: 'w, ...}) -> 'w {
-                    kind: fun(0:13-2:1) {
+                kind: expr(0:15-2:1) :: ({name: 'w, ...}) -> 'w {
+                    kind: fun(0:15-2:1) {
                         params: [
-                            ident(0:17-0:20) `rec` :: {name: 'w, ...},
+                            ident(0:19-0:22) `rec` :: {name: 'w, ...},
                         ],
                         body: [
                             expr(1:2-1:10) :: 'w {
@@ -28,7 +28,7 @@ module `main` (tests/analyze/partial-records/main.pa) {
             },
             def(4:0-7:1) :: nothing {
                 name: ident(4:4-4:10) `person`,
-                kind: expr(4:11-7:1) :: {name: string, age: int} {
+                kind: expr(4:13-7:1) :: {name: string, age: int} {
                     kind: record [
                         (
                             ident(5:2-5:6) `name`,
@@ -47,8 +47,8 @@ module `main` (tests/analyze/partial-records/main.pa) {
             },
             def(9:0-13:1) :: nothing {
                 name: ident(9:4-9:8) `main`,
-                kind: expr(9:9-13:1) :: nothing -> string {
-                    kind: fun(9:9-13:1) {
+                kind: expr(9:11-13:1) :: nothing -> string {
+                    kind: fun(9:11-13:1) {
                         params: [],
                         body: [
                             expr(10:2-10:17) :: string {

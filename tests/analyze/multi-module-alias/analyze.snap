@@ -1,33 +1,33 @@
 ---
-source: pluma-tests/tests/analyze.rs
+source: tests/analyze.rs
 expression: output
 ---
 module `main` (tests/analyze/multi-module-alias/main.pa) {
     comments: {},
     ast: Some(
-        module(0:0-4:23) [
+        module(0:0-4:25) [
             use(0:0-0:13) `a.b.utils`,
             use(1:0-1:23) `c.d.utils` as `utils2`,
         ] [
-            def(3:0-3:21) :: nothing {
+            def(3:0-3:23) :: nothing {
                 name: ident(3:4-3:9) `first`,
-                kind: expr(3:10-3:21) :: int {
+                kind: expr(3:12-3:23) :: int {
                     kind: field-access {
-                        receiver: expr(3:10-3:15) :: ? {
-                            kind: ident(3:10-3:15) `utils`,
+                        receiver: expr(3:12-3:17) :: ? {
+                            kind: ident(3:12-3:17) `utils`,
                         },
-                        field: ident(3:16-3:21) `value`,
+                        field: ident(3:18-3:23) `value`,
                     },
                 },
             },
-            def(4:0-4:23) :: nothing {
+            def(4:0-4:25) :: nothing {
                 name: ident(4:4-4:10) `second`,
-                kind: expr(4:11-4:23) :: string {
+                kind: expr(4:13-4:25) :: string {
                     kind: field-access {
-                        receiver: expr(4:11-4:17) :: ? {
-                            kind: ident(4:11-4:17) `utils2`,
+                        receiver: expr(4:13-4:19) :: ? {
+                            kind: ident(4:13-4:19) `utils2`,
                         },
-                        field: ident(4:18-4:23) `value`,
+                        field: ident(4:20-4:25) `value`,
                     },
                 },
             },

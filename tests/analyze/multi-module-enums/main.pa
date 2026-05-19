@@ -1,8 +1,8 @@
 use colors
 
-def favorite colors.color.red
+def favorite = colors.color.red
 
-def describe fun c {
+def describe = fun c {
   when c is red {
     "red"
   } is green {

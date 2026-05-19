@@ -1,6 +1,6 @@
 use core.io
 
-def main fun {
+def main = fun {
 	let missing = "target/pluma-this-file-does-not-exist.txt"
 
 	# discard the OS-specific error message; just verify the err branch fires

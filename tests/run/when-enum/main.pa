@@ -1,10 +1,10 @@
-def color enum {
+enum color {
   red
   green
   blue
 }
 
-def name-of fun c {
+def name-of = fun c {
   when c is red {
     "red"
   } is green {
@@ -14,7 +14,7 @@ def name-of fun c {
   }
 }
 
-def main fun {
+def main = fun {
   print (name-of color.red)
   print (name-of color.green)
   print (name-of color.blue)

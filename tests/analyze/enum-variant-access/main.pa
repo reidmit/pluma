@@ -1,7 +1,7 @@
-def color enum {
+enum color {
   red
   green
   blue
 }
 
-def my-color color.red
+def my-color = color.red

@@ -1,23 +1,23 @@
 ---
-source: pluma-tests/tests/analyze.rs
+source: tests/analyze.rs
 expression: output
 ---
 module `main` (tests/analyze/regex/main.pa) {
     comments: {},
     ast: Some(
         module(0:0-6:1) [
-            def(0:0-0:24) :: nothing {
+            def(0:0-0:26) :: nothing {
                 name: ident(0:4-0:6) `r1`,
-                kind: expr(0:7-0:24) :: regex {
-                    kind: regex(0:9-0:22) sequence [
-                        regex(0:9-0:14) literal "hello",
-                        regex(0:17-0:22) literal "world",
+                kind: expr(0:9-0:26) :: regex {
+                    kind: regex(0:11-0:24) sequence [
+                        regex(0:11-0:16) literal "hello",
+                        regex(0:19-0:24) literal "world",
                     ],
                 },
             },
             def(2:0-6:1) :: nothing {
                 name: ident(2:4-2:6) `r2`,
-                kind: expr(2:7-6:1) :: regex {
+                kind: expr(2:9-6:1) :: regex {
                     kind: regex(3:3-5:6) sequence [
                         regex(3:3-3:8) exactly 1 (regex(3:3-3:4) literal "a"),
                         regex(4:3-4:10) between 2 and 7 (regex(4:3-4:4) literal "b"),

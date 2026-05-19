@@ -1,14 +1,14 @@
 ---
-source: pluma-tests/tests/analyze.rs
+source: tests/analyze.rs
 expression: output
 ---
 module `main` (tests/analyze/enum-variant-access/main.pa) {
     comments: {},
     ast: Some(
-        module(0:0-6:22) [
+        module(0:0-6:24) [
             def(0:0-4:1) :: nothing {
-                name: ident(0:4-0:9) `color`,
-                kind: enum(0:15-4:1) [
+                name: ident(0:5-0:10) `color`,
+                kind: enum(0:11-4:1) [
                     variant(1:2-1:5) {
                         name: ident(1:2-1:5) `red`,
                         params: None,
@@ -23,14 +23,14 @@ module `main` (tests/analyze/enum-variant-access/main.pa) {
                     },
                 ],
             },
-            def(6:0-6:22) :: nothing {
+            def(6:0-6:24) :: nothing {
                 name: ident(6:4-6:12) `my-color`,
-                kind: expr(6:13-6:22) :: color {
+                kind: expr(6:15-6:24) :: color {
                     kind: field-access {
-                        receiver: expr(6:13-6:18) :: color {
-                            kind: ident(6:13-6:18) `color`,
+                        receiver: expr(6:15-6:20) :: color {
+                            kind: ident(6:15-6:20) `color`,
                         },
-                        field: ident(6:19-6:22) `red`,
+                        field: ident(6:21-6:24) `red`,
                     },
                 },
             },

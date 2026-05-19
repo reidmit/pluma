@@ -1,14 +1,14 @@
-def color enum {
+enum color {
   red
   green
 }
 
-def fruit enum {
+enum fruit {
   red
   apple
 }
 
-def is-red fun {
+def is-red = fun {
   let x = color.red
 
   when x is red { 0 } is green { 1 }

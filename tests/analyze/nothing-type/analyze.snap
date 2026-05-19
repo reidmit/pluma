@@ -1,33 +1,33 @@
 ---
-source: pluma-tests/tests/analyze.rs
+source: tests/analyze.rs
 expression: output
 ---
 module `main` (tests/analyze/nothing-type/main.pa) {
     comments: {},
     ast: Some(
-        module(0:0-2:22) [
-            def(0:0-0:11) :: nothing {
+        module(0:0-2:18) [
+            def(0:0-0:13) :: nothing {
                 name: ident(0:4-0:8) `unit`,
-                kind: expr(0:9-0:11) :: nothing {
+                kind: expr(0:11-0:13) :: nothing {
                     kind: (),
                 },
             },
-            def(1:0-1:24) :: nothing {
+            def(1:0-1:26) :: nothing {
                 name: ident(1:4-1:13) `make-unit`,
-                kind: expr(1:14-1:24) :: nothing -> nothing {
-                    kind: fun(1:14-1:24) {
+                kind: expr(1:16-1:26) :: nothing -> nothing {
+                    kind: fun(1:16-1:26) {
                         params: [],
                         body: [
-                            expr(1:20-1:22) :: nothing {
+                            expr(1:22-1:24) :: nothing {
                                 kind: (),
                             },
                         ],
                     },
                 },
             },
-            def(2:0-2:22) :: nothing {
-                name: ident(2:4-2:8) `void`,
-                kind: alias type(2:15-2:22) type-ident(2:15-2:22) `nothing`,
+            def(2:0-2:18) :: nothing {
+                name: ident(2:6-2:10) `void`,
+                kind: alias type(2:11-2:18) type-ident(2:11-2:18) `nothing`,
             },
         ],
     ),

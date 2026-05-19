@@ -1,14 +1,14 @@
 # Generic enum declared with space-separated type params, used at multiple
 # instantiations.
 
-def pair enum a b {
+enum pair a b {
   both a b
   left a
   right b
   neither
 }
 
-def main fun {
+def main = fun {
   let p1 = pair.both 1 "one"
   when p1 is both a b {
     print a

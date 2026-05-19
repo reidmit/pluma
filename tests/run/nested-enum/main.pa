@@ -1,14 +1,14 @@
-def option enum {
+enum option {
   some int
   none
 }
 
-def result enum {
+enum result {
   ok option
   err string
 }
 
-def unwrap fun r {
+def unwrap = fun r {
   when r is ok inner {
     when inner is some x {
       x
@@ -20,7 +20,7 @@ def unwrap fun r {
   }
 }
 
-def main fun {
+def main = fun {
   print (unwrap (result.ok (option.some 42)))
   print (unwrap (result.ok option.none))
   print (unwrap (result.err "oops"))

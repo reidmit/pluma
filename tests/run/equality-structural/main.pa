@@ -1,10 +1,10 @@
-def color enum {
+enum color {
   red
   green
   blue
 }
 
-def main fun {
+def main = fun {
   # primitives
   print ("hello" == "hello")
   print ("hello" == "world")

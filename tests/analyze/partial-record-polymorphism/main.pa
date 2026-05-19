@@ -1,8 +1,8 @@
-def get-name fun rec {
+def get-name = fun rec {
   rec.name
 }
 
-def main fun {
+def main = fun {
   get-name {name: 123}
 
   get-name {name: "lol"}

@@ -1,6 +1,6 @@
 use core.io
 
-def main fun {
+def main = fun {
 	# print* adds a trailing newline; write* doesn't
 	io.print "stdout line"
 	io.print-err "stderr line"

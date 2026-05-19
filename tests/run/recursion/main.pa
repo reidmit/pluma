@@ -1,9 +1,9 @@
-def tree enum {
+enum tree {
   empty
   node int tree tree
 }
 
-def sum fun t {
+def sum = fun t {
   when t is empty {
     0
   } is node val l r {
@@ -11,7 +11,7 @@ def sum fun t {
   }
 }
 
-def main fun {
+def main = fun {
   let l = tree.node 1 tree.empty tree.empty
   let r = tree.node 3 tree.empty tree.empty
   let t = tree.node 2 l r

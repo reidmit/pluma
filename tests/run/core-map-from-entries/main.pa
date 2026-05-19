@@ -1,6 +1,6 @@
 use core.map
 
-def main fun {
+def main = fun {
 	# from-entries materializes a map from a list of (k, v) tuples.
 	# Duplicate keys are right-wins.
 	let m = map.from-entries [("a", 1), ("b", 2), ("a", 99), ("c", 3)]

@@ -1,4 +1,4 @@
-def bad fun n {
+def bad = fun n {
   when n is "five" {
     1
   } is _ {
@@ -6,4 +6,4 @@ def bad fun n {
   }
 }
 
-def x bad 47
+def x = bad 47

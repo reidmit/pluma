@@ -1,6 +1,6 @@
 use core.io
 
-def show-result fun r {
+def show-result = fun r {
 	when r is ok _ {
 		print "ok"
 	} is err _ {
@@ -9,7 +9,7 @@ def show-result fun r {
 	}
 }
 
-def main fun {
+def main = fun {
 	let path = "target/pluma-io-append-delete.txt"
 
 	# ensure known starting state: write empty (creates or truncates)

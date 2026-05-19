@@ -7,23 +7,23 @@ module `main` (tests/analyze/trait-numeric-scaffold/main.pa) {
     ast: Some(
         module(0:0-8:1) [
             def(0:0-3:1) :: nothing {
-                name: ident(0:4-0:14) `my-numeric`,
-                kind: trait(0:23-3:1) {
-                    param: ident(0:21-0:22) `a`,
+                name: ident(0:6-0:16) `my-numeric`,
+                kind: trait(0:19-3:1) {
+                    param: ident(0:17-0:18) `a`,
                     methods: [
-                        method(1:1-1:17) {
+                        method(1:1-1:20) {
                             name: ident(1:1-1:4) `add`,
-                            signature: type(1:5-1:17) fun-type [
-                                type(1:9-1:10) type-ident(1:9-1:10) `a`,
-                                type(1:11-1:12) type-ident(1:11-1:12) `a`,
-                            ] -> type(1:16-1:17) type-ident(1:16-1:17) `a`,
+                            signature: type(1:8-1:20) fun-type [
+                                type(1:12-1:13) type-ident(1:12-1:13) `a`,
+                                type(1:14-1:15) type-ident(1:14-1:15) `a`,
+                            ] -> type(1:19-1:20) type-ident(1:19-1:20) `a`,
                             default: None,
                         },
-                        method(2:1-2:18) {
+                        method(2:1-2:21) {
                             name: ident(2:1-2:7) `negate`,
-                            signature: type(2:8-2:18) fun-type [
-                                type(2:12-2:13) type-ident(2:12-2:13) `a`,
-                            ] -> type(2:17-2:18) type-ident(2:17-2:18) `a`,
+                            signature: type(2:11-2:21) fun-type [
+                                type(2:15-2:16) type-ident(2:15-2:16) `a`,
+                            ] -> type(2:20-2:21) type-ident(2:20-2:21) `a`,
                             default: None,
                         },
                     ],
@@ -35,32 +35,32 @@ module `main` (tests/analyze/trait-numeric-scaffold/main.pa) {
                     trait: ident(5:4-5:14) `my-numeric`,
                     head: type(5:18-5:21) type-ident(5:18-5:21) `int`,
                     methods: [
-                        def(6:1-6:23) :: nothing {
+                        def(6:1-6:25) :: nothing {
                             name: ident(6:5-6:8) `add`,
-                            kind: expr(6:9-6:23) :: int int -> int {
-                                kind: fun(6:9-6:23) {
+                            kind: expr(6:11-6:25) :: int int -> int {
+                                kind: fun(6:11-6:25) {
                                     params: [
-                                        ident(6:13-6:14) `x` :: int,
-                                        ident(6:15-6:17) `_y` :: int,
+                                        ident(6:15-6:16) `x` :: int,
+                                        ident(6:17-6:19) `_y` :: int,
                                     ],
                                     body: [
-                                        expr(6:20-6:21) :: int {
-                                            kind: ident(6:20-6:21) `x`,
+                                        expr(6:22-6:23) :: int {
+                                            kind: ident(6:22-6:23) `x`,
                                         },
                                     ],
                                 },
                             },
                         },
-                        def(7:1-7:23) :: nothing {
+                        def(7:1-7:25) :: nothing {
                             name: ident(7:5-7:11) `negate`,
-                            kind: expr(7:12-7:23) :: int -> int {
-                                kind: fun(7:12-7:23) {
+                            kind: expr(7:14-7:25) :: int -> int {
+                                kind: fun(7:14-7:25) {
                                     params: [
-                                        ident(7:16-7:17) `x` :: int,
+                                        ident(7:18-7:19) `x` :: int,
                                     ],
                                     body: [
-                                        expr(7:20-7:21) :: int {
-                                            kind: ident(7:20-7:21) `x`,
+                                        expr(7:22-7:23) :: int {
+                                            kind: ident(7:22-7:23) `x`,
                                         },
                                     ],
                                 },

@@ -1,10 +1,10 @@
-def swap fun pair {
+def swap = fun pair {
   when pair is (a, b) {
     (b, a)
   }
 }
 
-def main fun {
+def main = fun {
   let result = swap (1, 2)
   when result is (a, b) {
     print a

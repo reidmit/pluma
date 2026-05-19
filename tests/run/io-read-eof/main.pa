@@ -1,7 +1,7 @@
 use core.io
 
 # no stdin.txt for this fixture, so stdin is empty — first read returns err
-def main fun {
+def main = fun {
 	when (io.read ()) is ok _ {
 		print "unexpected ok"
 	} is err msg {

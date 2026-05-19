@@ -1,6 +1,6 @@
 use core.list
 
-def main fun {
+def main = fun {
   let xs = [1, 2, 3, 4, 5]
   let total = list.fold xs 0 fun acc n { acc + n }
   print total

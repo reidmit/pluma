@@ -1,5 +1,5 @@
 ---
-source: pluma-tests/tests/analyze.rs
+source: tests/analyze.rs
 expression: output
 ---
 module `main` (tests/analyze/tuples/main.pa) {
@@ -8,8 +8,8 @@ module `main` (tests/analyze/tuples/main.pa) {
         module(0:0-3:1) [
             def(0:0-3:1) :: nothing {
                 name: ident(0:4-0:8) `main`,
-                kind: expr(0:9-3:1) :: nothing -> int {
-                    kind: fun(0:9-3:1) {
+                kind: expr(0:11-3:1) :: nothing -> int {
+                    kind: fun(0:11-3:1) {
                         params: [],
                         body: [
                             expr(1:2-1:36) :: nothing {

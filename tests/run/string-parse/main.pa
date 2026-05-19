@@ -1,6 +1,6 @@
 use core.string
 
-def show-int fun r {
+def show-int = fun r {
 	when r is ok n {
 		print (to-string n)
 	} is err _ {
@@ -8,7 +8,7 @@ def show-int fun r {
 	}
 }
 
-def show-float fun r {
+def show-float = fun r {
 	when r is ok n {
 		print (to-string n)
 	} is err _ {
@@ -16,7 +16,7 @@ def show-float fun r {
 	}
 }
 
-def main fun {
+def main = fun {
 	# int — happy paths
 	show-int (string.to-int "42")
 	show-int (string.to-int "-7")

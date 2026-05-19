@@ -2,12 +2,12 @@ use core.map
 
 # `foo` has no `hash` instance, so using it as a map key must fail
 # the `where (hash k)` constraint on `map.insert`.
-def foo enum {
+enum foo {
 	a
 	b
 }
 
-def main fun {
+def main = fun {
 	let m = map.empty ()
 	let m = map.insert m a 1
 	print m

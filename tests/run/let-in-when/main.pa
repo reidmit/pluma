@@ -1,4 +1,4 @@
-def main fun {
+def main = fun {
   when 5 is 5 {
     let doubled = 5 * 2
     print (to-string doubled)

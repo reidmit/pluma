@@ -1,5 +1,5 @@
-def add fun a b {
+def add = fun a b {
   a + b
 }
 
-def bad add 1
+def bad = add 1

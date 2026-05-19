@@ -1,4 +1,4 @@
-def main fun {
+def main = fun {
   print "tab:\there"
   print "newline:\nhere"
   print "quote: \"quoted\""

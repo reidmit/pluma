@@ -1,10 +1,10 @@
-def make-adder fun x {
+def make-adder = fun x {
   fun y {
     x + y
   }
 }
 
-def main fun {
+def main = fun {
   let add5 = make-adder 5
   let add100 = make-adder 100
   print (add5 3)

@@ -1,26 +1,26 @@
-def tree enum {
+enum tree {
   empty
   node int tree tree
 }
 
-def maybe enum {
+enum maybe {
   none
   some tree
 }
 
-def root-of-maybe fun m {
+def root-of-maybe = fun m {
   if m is some (node val _l _r) {
     val
   }
 }
 
-def tuple-destructure fun t {
+def tuple-destructure = fun t {
   if t is (a, _b) {
     a
   }
 }
 
-def grouping fun t {
+def grouping = fun t {
   if t is (empty) {
     0
   }

@@ -1,6 +1,6 @@
 use core.math
 
-def main fun {
+def main = fun {
   # rounding (float -> int)
   print (math.floor 2.7)
   print (math.floor -1.3)

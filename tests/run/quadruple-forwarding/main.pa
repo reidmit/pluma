@@ -1,8 +1,8 @@
-def double fun x { x + x }
+def double = fun x { x + x }
 
-def quadruple fun x { double (double x) }
+def quadruple = fun x { double (double x) }
 
-def main fun {
+def main = fun {
 	print (quadruple 5)
 	print (quadruple 1.5)
 }

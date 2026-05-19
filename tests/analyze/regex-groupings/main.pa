@@ -1,4 +1,4 @@
-def alt /
+def alt = /
   "a" ("b" | "c" |
     "d") "e"
     /

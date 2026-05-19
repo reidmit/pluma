@@ -1,9 +1,9 @@
-def fn-list enum {
+enum fn-list {
   empty
   cons (fun int -> int) fn-list
 }
 
-def apply-each fun lst x {
+def apply-each = fun lst x {
   when lst is empty {
     0
   } is cons f rest {
@@ -11,7 +11,7 @@ def apply-each fun lst x {
   }
 }
 
-def main fun {
+def main = fun {
   let inc = fun n { n + 1 }
   let double = fun n { n * 2 }
   let triple = fun n { n * 3 }

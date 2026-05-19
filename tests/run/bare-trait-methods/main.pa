@@ -1,13 +1,13 @@
 # Trait methods are reachable under their bare names — `hash 42` instead of
 # `hash.hash 42`. The qualified form is still legal as an escape hatch.
 
-def describe fun ord-result {
+def describe = fun ord-result {
   when ord-result is lt { "less" }
   is eq { "equal" }
   is gt { "greater" }
 }
 
-def main fun {
+def main = fun {
   # prelude `hash` trait
   print (hash 42)
   print (hash "hello")

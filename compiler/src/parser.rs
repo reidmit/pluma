@@ -1550,13 +1550,62 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_definition(&mut self) -> Option<DefinitionNode> {
-		// Instance: `for TRAIT on TYPE { defs }`. Starts with `for`, not `def`.
+		// Instance: `for TRAIT on TYPE { defs }`.
 		if let Some(Token::KeywordFor(start_offset, _)) = self.current_token {
 			let start = self.offset_to_point(start_offset);
 			self.advance();
 			return self.parse_instance_after_for(start);
 		}
 
+		// `enum NAME [PARAMS] { variants }` — top-level enum type.
+		if let Some(Token::KeywordEnum(start_offset, _)) = self.current_token {
+			let start = self.offset_to_point(start_offset);
+			self.advance();
+			let name = self.parse_identifier()?;
+			let enum_node = self.parse_enum()?;
+			self.skip_line_breaks();
+			return Some(DefinitionNode {
+				name,
+				range: Range::between(start, enum_node.range.end),
+				kind: DefinitionKind::Enum(enum_node),
+				ty: Type::Unknown,
+				dict_param_count: 0,
+			});
+		}
+
+		// `alias NAME TYPE_EXPR` — top-level alias type.
+		if let Some(Token::KeywordAlias(start_offset, _)) = self.current_token {
+			let start = self.offset_to_point(start_offset);
+			self.advance();
+			let name = self.parse_identifier()?;
+			let type_expr = self.parse_type_expression_with_generics()?;
+			self.skip_line_breaks();
+			return Some(DefinitionNode {
+				name,
+				range: Range::between(start, type_expr.range.end),
+				kind: DefinitionKind::Alias(type_expr),
+				ty: Type::Unknown,
+				dict_param_count: 0,
+			});
+		}
+
+		// `trait NAME PARAM { methods }` — top-level trait declaration.
+		if let Some(Token::KeywordTrait(start_offset, _)) = self.current_token {
+			let start = self.offset_to_point(start_offset);
+			self.advance();
+			let name = self.parse_identifier()?;
+			let trait_node = self.parse_trait()?;
+			self.skip_line_breaks();
+			return Some(DefinitionNode {
+				name,
+				range: Range::between(start, trait_node.range.end),
+				kind: DefinitionKind::Trait(trait_node),
+				ty: Type::Unknown,
+				dict_param_count: 0,
+			});
+		}
+
+		// `def NAME = EXPR` — value binding.
 		let start = match self.current_token {
 			Some(Token::KeywordDef(start_offset, _)) => {
 				self.advance();
@@ -1567,87 +1616,32 @@ impl<'a> Parser<'a> {
 
 		let name = self.parse_identifier()?;
 
-		match self.current_token {
-			Some(Token::KeywordAlias(..)) => {
-				self.advance();
+		expect_token_and_advance!(self, Token::Equal);
 
-				let type_expr = self.parse_type_expression_with_generics()?;
+		let value = self.parse_expression()?;
 
-				self.skip_line_breaks();
+		self.skip_line_breaks();
 
-				Some(DefinitionNode {
-					name,
-					range: Range::between(start, type_expr.range.end),
-					kind: DefinitionKind::Alias(type_expr),
-					ty: Type::Unknown,
-					dict_param_count: 0,
-				})
-			}
-
-			Some(Token::KeywordEnum(..)) => {
-				self.advance();
-
-				let enum_node = self.parse_enum()?;
-
-				self.skip_line_breaks();
-
-				Some(DefinitionNode {
-					name,
-					range: Range::between(start, enum_node.range.end),
-					kind: DefinitionKind::Enum(enum_node),
-					ty: Type::Unknown,
-					dict_param_count: 0,
-				})
-			}
-
-			Some(Token::KeywordTrait(..)) => {
-				self.advance();
-
-				let trait_node = self.parse_trait()?;
-
-				self.skip_line_breaks();
-
-				Some(DefinitionNode {
-					name,
-					range: Range::between(start, trait_node.range.end),
-					kind: DefinitionKind::Trait(trait_node),
-					ty: Type::Unknown,
-					dict_param_count: 0,
-				})
-			}
-
-			Some(token) if token.can_start_expression() => {
-				let value = self.parse_expression()?;
-
-				self.skip_line_breaks();
-
-				Some(DefinitionNode {
-					name,
-					range: Range::between(start, value.range.end),
-					kind: DefinitionKind::Expr(value),
-					ty: Type::Unknown,
-					dict_param_count: 0,
-				})
-			}
-
-			_ => self.error(ParseError {
-				range: Range::between(start, self.current_token_points().1),
-				kind: ParseErrorKind::InvalidDefBody,
-			}),
-		}
+		Some(DefinitionNode {
+			name,
+			range: Range::between(start, value.range.end),
+			kind: DefinitionKind::Expr(value),
+			ty: Type::Unknown,
+			dict_param_count: 0,
+		})
 	}
 
-	// Trait body: `def NAME trait PARAM { method-sigs / defaults }`. The
-	// `def NAME trait` prefix has already been consumed by the caller.
+	// Trait body: `trait NAME PARAM { method-sigs / defaults }`. The
+	// `trait NAME` prefix has already been consumed by the caller.
 	//
-	// Method signature: `METHOD_NAME TYPE_EXPR`. The type expression is
-	// usually a `fun ... -> ...`, but parsing accepts any type expression —
+	// Method signature: `METHOD_NAME :: TYPE_EXPR`. The type expression is
+	// usually a function type, but parsing accepts any type expression —
 	// the analyzer rejects non-function signatures later.
 	//
-	// Default body: `default METHOD_NAME fun ARGS { BODY }`. Stored as an
-	// `ExprNode` (a `Fun` expression) on the matching method.
+	// Default body: `def METHOD_NAME = EXPR`. Stored as an `ExprNode` on
+	// the matching method.
 	fn parse_trait(&mut self) -> Option<TraitNode> {
-		// Required single type parameter (`a` in `def numeric trait a { ... }`).
+		// Required single type parameter (`a` in `trait numeric a { ... }`).
 		let param = self.parse_identifier()?;
 
 		let (brace_start, _) = expect_token_and_advance!(self, Token::LeftBrace);
@@ -1659,13 +1653,14 @@ impl<'a> Parser<'a> {
 		loop {
 			self.skip_line_breaks();
 
-			// `default METHOD fun ... { ... }`: attach the body to a previously
+			// `def METHOD = EXPR`: attach a default body to a previously
 			// declared signature with the same name.
-			if let Some(Token::KeywordDefault(start_offset, _)) = self.current_token {
+			if let Some(Token::KeywordDef(start_offset, _)) = self.current_token {
 				let default_start = self.offset_to_point(start_offset);
 				self.advance();
 
 				let method_name = self.parse_identifier()?;
+				expect_token_and_advance!(self, Token::Equal);
 				let body = self.parse_expression()?;
 
 				// Find the matching signature; default without a signature is
@@ -1687,9 +1682,10 @@ impl<'a> Parser<'a> {
 				continue;
 			}
 
-			// Method signature: `NAME TYPE_EXPR`.
+			// Method signature: `NAME :: TYPE_EXPR`.
 			if matches!(self.current_token, Some(Token::Identifier(..))) {
 				let method_name = self.parse_identifier()?;
+				expect_token_and_advance!(self, Token::DoubleColon);
 				let signature = self.parse_type_expression_with_generics()?;
 
 				methods.push(TraitMethodNode {
@@ -2013,7 +2009,7 @@ impl<'a> Parser<'a> {
 		let mut entries = Vec::new();
 
 		while let Some(field_name) = self.parse_identifier() {
-			expect_token_and_advance!(self, Token::Colon);
+			expect_token_and_advance!(self, Token::DoubleColon);
 
 			let field_type = self.parse_type_expression_with_generics()?;
 

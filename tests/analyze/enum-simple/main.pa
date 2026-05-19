@@ -1,4 +1,4 @@
-def color enum {
+enum color {
   red
   green
   blue

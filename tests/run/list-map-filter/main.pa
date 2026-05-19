@@ -1,6 +1,6 @@
 use core.list
 
-def main fun {
+def main = fun {
   let xs = [1, 2, 3, 4, 5]
   print (list.map xs fun n { n * n })
   print (list.filter xs fun n { (n % 2) == 0 })

@@ -1,7 +1,7 @@
 use core.io
 use core.string
 
-def main fun {
+def main = fun {
 	when (io.read-all ()) is ok contents {
 		# write so we don't append our own newline — we want to see
 		# exactly what was on stdin

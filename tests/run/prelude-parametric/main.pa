@@ -1,10 +1,10 @@
-def describe fun result {
+def describe = fun result {
 	when result is lt { "less" }
 	is eq { "equal" }
 	is gt { "greater" }
 }
 
-def main fun {
+def main = fun {
 	# Parametric `ord` on `option a` is declared in the baked-in prelude
 	# (compiler/src/prelude.pa). User modules see it without importing.
 	let a = some 1

@@ -1,9 +1,9 @@
-def my-numeric trait a {
-	add fun a a -> a
-	negate fun a -> a
+trait my-numeric a {
+	add :: fun a a -> a
+	negate :: fun a -> a
 }
 
 for my-numeric on int {
-	def add fun x _y { x }
-	def negate fun x { x }
+	def add = fun x _y { x }
+	def negate = fun x { x }
 }

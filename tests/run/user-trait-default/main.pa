@@ -1,20 +1,20 @@
-def greeter trait a {
-	name fun a -> string
-	greet fun a -> string
+trait greeter a {
+	name :: fun a -> string
+	greet :: fun a -> string
 
-	default greet fun x { "hello, $(greeter.name x)" }
+	def greet = fun x { "hello, $(greeter.name x)" }
 }
 
 for greeter on int {
-	def name fun _x { "the number" }
+	def name = fun _x { "the number" }
 }
 
 for greeter on bool {
-	def name fun _x { "a flag" }
-	def greet fun b { "explicit: $(greeter.name b)" }
+	def name = fun _x { "a flag" }
+	def greet = fun b { "explicit: $(greeter.name b)" }
 }
 
-def main fun {
+def main = fun {
 	print (greeter.greet 7)
 	print (greeter.greet true)
 }

@@ -1,4 +1,4 @@
-def outer fun {
+def outer = fun {
   let f = fun n {
     when n is 0 {
       0

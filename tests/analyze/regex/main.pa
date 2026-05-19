@@ -1,6 +1,6 @@
-def r1 /"hello" "world"/
+def r1 = /"hello" "world"/
 
-def r2 /
+def r2 = /
   "a"{1}
   "b"{2,7}
   "c"+

@@ -1,4 +1,4 @@
-def fib fun n {
+def fib = fun n {
   when n is 0 {
     0
   } is 1 {
@@ -8,7 +8,7 @@ def fib fun n {
   }
 }
 
-def main fun {
+def main = fun {
   print (fib 0)
   print (fib 1)
   print (fib 10)

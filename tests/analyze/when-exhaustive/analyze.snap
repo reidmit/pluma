@@ -7,8 +7,8 @@ module `main` (tests/analyze/when-exhaustive/main.pa) {
     ast: Some(
         module(0:0-33:1) [
             def(0:0-3:1) :: nothing {
-                name: ident(0:4-0:8) `tree`,
-                kind: enum(0:14-3:1) [
+                name: ident(0:5-0:9) `tree`,
+                kind: enum(0:10-3:1) [
                     variant(1:2-1:7) {
                         name: ident(1:2-1:7) `empty`,
                         params: None,
@@ -27,10 +27,10 @@ module `main` (tests/analyze/when-exhaustive/main.pa) {
             },
             def(5:0-11:1) :: nothing {
                 name: ident(5:4-5:19) `by-all-variants`,
-                kind: expr(5:20-11:1) :: tree -> int {
-                    kind: fun(5:20-11:1) {
+                kind: expr(5:22-11:1) :: tree -> int {
+                    kind: fun(5:22-11:1) {
                         params: [
-                            ident(5:24-5:25) `t` :: tree,
+                            ident(5:26-5:27) `t` :: tree,
                         ],
                         body: [
                             expr(6:2-10:3) :: int {
@@ -68,10 +68,10 @@ module `main` (tests/analyze/when-exhaustive/main.pa) {
             },
             def(13:0-19:1) :: nothing {
                 name: ident(13:4-13:15) `by-wildcard`,
-                kind: expr(13:16-19:1) :: tree -> int {
-                    kind: fun(13:16-19:1) {
+                kind: expr(13:18-19:1) :: tree -> int {
+                    kind: fun(13:18-19:1) {
                         params: [
-                            ident(13:20-13:21) `t` :: tree,
+                            ident(13:22-13:23) `t` :: tree,
                         ],
                         body: [
                             expr(14:2-18:3) :: int {
@@ -96,10 +96,10 @@ module `main` (tests/analyze/when-exhaustive/main.pa) {
             },
             def(21:0-25:1) :: nothing {
                 name: ident(21:4-21:23) `by-binding-catchall`,
-                kind: expr(21:24-25:1) :: 't4 -> int {
-                    kind: fun(21:24-25:1) {
+                kind: expr(21:26-25:1) :: 't4 -> int {
+                    kind: fun(21:26-25:1) {
                         params: [
-                            ident(21:28-21:29) `t` :: 't4,
+                            ident(21:30-21:31) `t` :: 't4,
                         ],
                         body: [
                             expr(22:2-24:3) :: int {
@@ -119,10 +119,10 @@ module `main` (tests/analyze/when-exhaustive/main.pa) {
             },
             def(27:0-33:1) :: nothing {
                 name: ident(27:4-27:13) `bool-both`,
-                kind: expr(27:14-33:1) :: bool -> int {
-                    kind: fun(27:14-33:1) {
+                kind: expr(27:16-33:1) :: bool -> int {
+                    kind: fun(27:16-33:1) {
                         params: [
-                            ident(27:18-27:19) `b` :: bool,
+                            ident(27:20-27:21) `b` :: bool,
                         ],
                         body: [
                             expr(28:2-32:3) :: int {

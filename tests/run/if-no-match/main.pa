@@ -1,4 +1,4 @@
-def main fun {
+def main = fun {
   if 47 is 47 {
     print "matched"
   }

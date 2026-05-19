@@ -1,6 +1,6 @@
 # `else` works on pattern-matching `if` too — it's the "no match" branch.
 
-def describe fun opt {
+def describe = fun opt {
   if opt is some n {
     "got $(to-string n)"
   } else {
@@ -8,7 +8,7 @@ def describe fun opt {
   }
 }
 
-def main fun {
+def main = fun {
   print (describe (some 42))
   print (describe none)
 

@@ -1,3 +1,3 @@
 use other
 
-def x other.thing
+def x = other.thing

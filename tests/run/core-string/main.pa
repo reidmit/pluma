@@ -1,6 +1,6 @@
 use core.string
 
-def main fun {
+def main = fun {
   print (string.length "hello")
   print (string.length "")
   print (string.is-empty "")
