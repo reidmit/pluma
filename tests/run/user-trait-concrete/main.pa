@@ -2,11 +2,11 @@ trait showable a {
 	show :: fun a -> string
 }
 
-for showable on int {
+implement showable int {
 	def show = fun x { to-string x }
 }
 
-for showable on bool {
+implement showable bool {
 	def show = fun b {
 		when b is true { "yes" }
 		is false { "no" }

@@ -8,7 +8,7 @@ enum color {
 	blue
 }
 
-for hash on color {
+implement hash color {
 	def hash = fun _c { 42 }
 }
 

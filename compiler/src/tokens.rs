@@ -115,11 +115,11 @@ pub enum Token {
 	/// `enum` keyword
 	KeywordEnum(usize, usize),
 
-	/// `for` keyword (instance declaration)
-	KeywordFor(usize, usize),
-
 	/// `fun` keyword
 	KeywordFun(usize, usize),
+
+	/// `implement` keyword (instance declaration: `implement TRAIT TYPE { ... }`)
+	KeywordImplement(usize, usize),
 
 	/// `if` keyword
 	KeywordIf(usize, usize),
@@ -132,9 +132,6 @@ pub enum Token {
 
 	/// `let` keyword
 	KeywordLet(usize, usize),
-
-	/// `on` keyword (instance head; `for trait on type`)
-	KeywordOn(usize, usize),
 
 	/// `trait` keyword
 	KeywordTrait(usize, usize),
@@ -291,13 +288,12 @@ impl Token {
 			| KeywordDef(start, end)
 			| KeywordElse(start, end)
 			| KeywordEnum(start, end)
-			| KeywordFor(start, end)
 			| KeywordFun(start, end)
 			| KeywordIf(start, end)
+			| KeywordImplement(start, end)
 			| KeywordIn(start, end)
 			| KeywordIs(start, end)
 			| KeywordLet(start, end)
-			| KeywordOn(start, end)
 			| KeywordTrait(start, end)
 			| KeywordUse(start, end)
 			| KeywordWhile(start, end)
@@ -387,13 +383,12 @@ impl fmt::Display for Token {
 			&KeywordDef(..) => "keyword `def`",
 			&KeywordElse(..) => "keyword `else`",
 			&KeywordEnum(..) => "keyword `enum`",
-			&KeywordFor(..) => "keyword `for`",
 			&KeywordFun(..) => "keyword `fun`",
 			&KeywordIf(..) => "keyword `if`",
+			&KeywordImplement(..) => "keyword `implement`",
 			&KeywordIn(..) => "keyword `in`",
 			&KeywordIs(..) => "keyword `is`",
 			&KeywordLet(..) => "keyword `let`",
-			&KeywordOn(..) => "keyword `on`",
 			&KeywordTrait(..) => "keyword `trait`",
 			&KeywordUse(..) => "keyword `use`",
 			&KeywordWhile(..) => "keyword `while`",

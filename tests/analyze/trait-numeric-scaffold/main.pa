@@ -3,7 +3,7 @@ trait my-numeric a {
 	negate :: fun a -> a
 }
 
-for my-numeric on int {
+implement my-numeric int {
 	def add = fun x _y { x }
 	def negate = fun x { x }
 }

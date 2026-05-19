@@ -215,18 +215,18 @@ when outcome is ok v {
 
 ## traits
 
-a `trait` declares a set of method signatures over a type parameter. method signatures use `::` (the type-annotation operator). `for trait on type` declares an instance — the implementation for a particular type.
+a `trait` declares a set of method signatures over a type parameter. method signatures use `::` (the type-annotation operator). `implement TRAIT TYPE { ... }` declares an instance — the implementation for a particular type.
 
 ```
 trait showable a {
   show :: fun a -> string
 }
 
-for showable on int {
+implement showable int {
   def show = fun x { to-string x }
 }
 
-for showable on bool {
+implement showable bool {
   def show = fun b {
     when b is true { "yes" } else { "no" }
   }
@@ -268,7 +268,7 @@ so `compare 1 2`, `hash "key"`, `add 1.5 2.5` all just work.
 instances can carry constraints with `where`:
 
 ```
-for ord on (option a) where (ord a) {
+implement ord (option a) where (ord a) {
   def compare = fun x y {
     when x is some xv {
       when y is some yv { compare xv yv }  # bare — dispatches on `a`

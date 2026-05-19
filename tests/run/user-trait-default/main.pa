@@ -5,11 +5,11 @@ trait greeter a {
 	def greet = fun x { "hello, $(greeter.name x)" }
 }
 
-for greeter on int {
+implement greeter int {
 	def name = fun _x { "the number" }
 }
 
-for greeter on bool {
+implement greeter bool {
 	def name = fun _x { "a flag" }
 	def greet = fun b { "explicit: $(greeter.name b)" }
 }

@@ -1550,11 +1550,11 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_definition(&mut self) -> Option<DefinitionNode> {
-		// Instance: `for TRAIT on TYPE { defs }`.
-		if let Some(Token::KeywordFor(start_offset, _)) = self.current_token {
+		// Instance: `implement TRAIT TYPE [where ...] { defs }`.
+		if let Some(Token::KeywordImplement(start_offset, _)) = self.current_token {
 			let start = self.offset_to_point(start_offset);
 			self.advance();
-			return self.parse_instance_after_for(start);
+			return self.parse_instance_after_implement(start);
 		}
 
 		// `enum NAME [PARAMS] { variants }` — top-level enum type.
@@ -1711,12 +1711,11 @@ impl<'a> Parser<'a> {
 		})
 	}
 
-	// Instance body: `for TRAIT on TYPE { defs }`. The `for` keyword has
-	// already been consumed by the caller (which captured its start point).
-	fn parse_instance_after_for(&mut self, start: Point) -> Option<DefinitionNode> {
+	// Instance body: `implement TRAIT TYPE [where ...] { defs }`. The
+	// `implement` keyword has already been consumed by the caller (which
+	// captured its start point).
+	fn parse_instance_after_implement(&mut self, start: Point) -> Option<DefinitionNode> {
 		let trait_name = self.parse_identifier()?;
-
-		expect_token_and_advance!(self, Token::KeywordOn);
 
 		// Head is a type expression so phase 3 can accept `(option a)` without
 		// changing this slot's shape. Phase 1 only takes simple type names.

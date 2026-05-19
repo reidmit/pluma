@@ -19,14 +19,14 @@ trait describable a {
   describe :: fun a -> string
 }
 
-for describable on shape {
+implement describable shape {
   def describe = fun s {
     when s is circle r { "circle radius $(to-string r)" }
     is rect w h { "rect $(to-string w) x $(to-string h)" }
   }
 }
 
-for describable on int {
+implement describable int {
   def describe = fun n { "the number $(to-string n)" }
 }
 
