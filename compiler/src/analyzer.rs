@@ -3938,9 +3938,7 @@ impl<'compiler> Analyzer<'compiler> {
 				Box::new(self.instantiate_with(key_type, mapping)),
 				Box::new(self.instantiate_with(value_type, mapping)),
 			),
-			Type::Ref(inner_type) => {
-				Type::Ref(Box::new(self.instantiate_with(inner_type, mapping)))
-			}
+			Type::Ref(inner_type) => Type::Ref(Box::new(self.instantiate_with(inner_type, mapping))),
 		}
 	}
 }

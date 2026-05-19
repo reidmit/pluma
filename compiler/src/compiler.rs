@@ -186,7 +186,8 @@ impl Compiler {
 				continue;
 			}
 			if let Some(exports) = self.native_modules.get(*full_name).cloned() {
-				self.exports_cache
+				self
+					.exports_cache
 					.entry(full_name.to_string())
 					.or_insert_with(|| exports.clone());
 				imports_map.insert(local_name.to_string(), exports);
