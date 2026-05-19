@@ -1,0 +1,4 @@
+# Previously parsed silently to nothing, then yielded a misleading
+# "no main def" diagnostic at analysis time. Should now report a clean
+# "expected an identifier" diagnostic at the offending keyword.
+def alias = 0

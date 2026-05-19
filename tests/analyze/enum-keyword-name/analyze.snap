@@ -1,0 +1,6 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: Unexpected token (keyword `let`). Expected an identifier.
+

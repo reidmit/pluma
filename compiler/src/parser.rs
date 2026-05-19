@@ -150,16 +150,16 @@ impl<'a> Parser<'a> {
 		let (start, _) = expect_token_and_advance!(self, Token::KeywordUse);
 
 		let mut path = Vec::new();
-		path.push(self.parse_identifier()?);
+		path.push(self.expect_identifier()?);
 
 		while matches!(self.current_token, Some(Token::Dot(..))) {
 			self.advance();
-			path.push(self.parse_identifier()?);
+			path.push(self.expect_identifier()?);
 		}
 
 		let alias = if matches!(self.current_token, Some(Token::KeywordAs(..))) {
 			self.advance();
-			Some(self.parse_identifier()?)
+			Some(self.expect_identifier()?)
 		} else {
 			None
 		};
@@ -693,6 +693,35 @@ impl<'a> Parser<'a> {
 		})
 	}
 
+	// Like `parse_identifier`, but reports a diagnostic and returns `None`
+	// if the current token isn't an identifier. Use at sites where an
+	// identifier is required (`def NAME`, `let NAME`, function params,
+	// etc.). Use `parse_identifier` only when the absence of an identifier
+	// is a legitimate signal to try something else.
+	fn expect_identifier(&mut self) -> Option<IdentifierNode> {
+		match self.parse_identifier() {
+			Some(node) => Some(node),
+			None => match self.current_token {
+				Some(tok) => {
+					let (s, e) = tok.get_span();
+					self.error(ParseError {
+						range: Range::between(self.offset_to_point(s), self.offset_to_point(e)),
+						kind: ParseErrorKind::UnexpectedToken {
+							actual: tok,
+							expected: Token::Identifier(0, 0),
+						},
+					})
+				}
+				None => self.error(ParseError {
+					range: Range::collapsed(self.current_line, 0),
+					kind: ParseErrorKind::UnexpectedEOF {
+						expected: Token::Identifier(0, 0),
+					},
+				}),
+			},
+		}
+	}
+
 	fn parse_if_expression(&mut self) -> Option<IfNode> {
 		let (start, _) = expect_token_and_advance!(self, Token::KeywordIf);
 
@@ -1048,29 +1077,7 @@ impl<'a> Parser<'a> {
 	fn parse_let_expression(&mut self) -> Option<LetNode> {
 		let (start, _) = expect_token_and_advance!(self, Token::KeywordLet);
 
-		let name = match self.parse_identifier() {
-			Some(node) => node,
-			None => match self.current_token {
-				Some(tok) => {
-					let (s, e) = tok.get_span();
-					return self.error(ParseError {
-						range: Range::between(self.offset_to_point(s), self.offset_to_point(e)),
-						kind: ParseErrorKind::UnexpectedToken {
-							actual: tok,
-							expected: Token::Identifier(0, 0),
-						},
-					});
-				}
-				None => {
-					return self.error(ParseError {
-						range: Range::collapsed(self.current_line, 0),
-						kind: ParseErrorKind::UnexpectedEOF {
-							expected: Token::Identifier(0, 0),
-						},
-					});
-				}
-			},
-		};
+		let name = self.expect_identifier()?;
 
 		expect_token_and_advance!(self, Token::Equal);
 
@@ -1580,7 +1587,7 @@ impl<'a> Parser<'a> {
 		if let Some(Token::KeywordEnum(start_offset, _)) = self.current_token {
 			let start = self.offset_to_point(start_offset);
 			self.advance();
-			let name = self.parse_identifier()?;
+			let name = self.expect_identifier()?;
 			let enum_node = self.parse_enum()?;
 			self.skip_line_breaks();
 			return Some(DefinitionNode {
@@ -1596,7 +1603,7 @@ impl<'a> Parser<'a> {
 		if let Some(Token::KeywordAlias(start_offset, _)) = self.current_token {
 			let start = self.offset_to_point(start_offset);
 			self.advance();
-			let name = self.parse_identifier()?;
+			let name = self.expect_identifier()?;
 			let type_expr = self.parse_type_expression_with_generics()?;
 			self.skip_line_breaks();
 			return Some(DefinitionNode {
@@ -1612,7 +1619,7 @@ impl<'a> Parser<'a> {
 		if let Some(Token::KeywordTrait(start_offset, _)) = self.current_token {
 			let start = self.offset_to_point(start_offset);
 			self.advance();
-			let name = self.parse_identifier()?;
+			let name = self.expect_identifier()?;
 			let trait_node = self.parse_trait()?;
 			self.skip_line_breaks();
 			return Some(DefinitionNode {
@@ -1633,7 +1640,7 @@ impl<'a> Parser<'a> {
 			_ => return None,
 		};
 
-		let name = self.parse_identifier()?;
+		let name = self.expect_identifier()?;
 
 		expect_token_and_advance!(self, Token::Equal);
 
@@ -1661,7 +1668,7 @@ impl<'a> Parser<'a> {
 	// the matching method.
 	fn parse_trait(&mut self) -> Option<TraitNode> {
 		// Required single type parameter (`a` in `trait numeric a { ... }`).
-		let param = self.parse_identifier()?;
+		let param = self.expect_identifier()?;
 
 		let (brace_start, _) = expect_token_and_advance!(self, Token::LeftBrace);
 
@@ -1678,7 +1685,7 @@ impl<'a> Parser<'a> {
 				let default_start = self.offset_to_point(start_offset);
 				self.advance();
 
-				let method_name = self.parse_identifier()?;
+				let method_name = self.expect_identifier()?;
 				expect_token_and_advance!(self, Token::Equal);
 				let body = self.parse_expression()?;
 
@@ -1734,7 +1741,7 @@ impl<'a> Parser<'a> {
 	// `implement` keyword has already been consumed by the caller (which
 	// captured its start point).
 	fn parse_instance_after_implement(&mut self, start: Point) -> Option<DefinitionNode> {
-		let trait_name = self.parse_identifier()?;
+		let trait_name = self.expect_identifier()?;
 
 		// Head is a type expression so phase 3 can accept `(option a)` without
 		// changing this slot's shape. Phase 1 only takes simple type names.
@@ -1751,8 +1758,8 @@ impl<'a> Parser<'a> {
 			let mut constraints = Vec::new();
 			loop {
 				let c_start = self.current_token_points().0;
-				let c_trait_name = self.parse_identifier()?;
-				let c_param = self.parse_identifier()?;
+				let c_trait_name = self.expect_identifier()?;
+				let c_param = self.expect_identifier()?;
 				constraints.push(InstanceConstraintNode {
 					range: Range::between(c_start, c_param.range.end),
 					trait_name: c_trait_name,

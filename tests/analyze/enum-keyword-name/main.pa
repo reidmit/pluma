@@ -1,0 +1,6 @@
+# Previously swallowed: `enum KEYWORD ...` returned None from
+# parse_definition without reporting. Now reports an "expected an
+# identifier" diagnostic at the offending keyword.
+enum let { a; b }
+
+def main = fun { 0 }
