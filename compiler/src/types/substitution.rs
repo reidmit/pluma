@@ -69,6 +69,11 @@ impl Substitution {
 			),
 
 			Type::List(element_type) => Type::List(self.apply_to_type(element_type).into()),
+
+			Type::Map(key_type, value_type) => Type::Map(
+				self.apply_to_type(key_type).into(),
+				self.apply_to_type(value_type).into(),
+			),
 		}
 	}
 

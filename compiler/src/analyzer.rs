@@ -160,6 +160,7 @@ fn match_types(
 			.zip(args_b.iter())
 			.all(|(p, t)| match_types(p, t, mapping)),
 		(List(a), List(b)) => match_types(a, b, mapping),
+		(Map(ka, va), Map(kb, vb)) => match_types(ka, kb, mapping) && match_types(va, vb, mapping),
 		(Tuple(a), Tuple(b)) if a.len() == b.len() => a
 			.iter()
 			.zip(b.iter())
@@ -285,6 +286,7 @@ pub fn type_defining_module(ty: &Type) -> Option<String> {
 				.unwrap_or_else(|| "__prelude__".into()),
 		),
 		Type::List(_) => Some("__prelude__".into()),
+		Type::Map(_, _) => Some("__prelude__".into()),
 		_ => None,
 	}
 }
@@ -303,6 +305,7 @@ pub fn type_to_head_key(ty: &Type) -> Option<String> {
 		Type::Nothing => Some("nothing".into()),
 		Type::Enum(name, _) => Some(name.clone()),
 		Type::List(_) => Some("__list__".into()),
+		Type::Map(_, _) => Some("__map__".into()),
 		_ => None,
 	}
 }
@@ -1503,6 +1506,19 @@ impl<'compiler> Analyzer<'compiler> {
 					"bool" => return Type::Bool,
 					"regex" => return Type::Regex,
 					"nothing" => return Type::Nothing,
+					"list" => {
+						// `list a` — one type parameter; missing args become fresh vars
+						// so a bare `list` parses as a polymorphic list.
+						let args = self.resolve_enum_args(type_ident, 1, constraints);
+						return Type::List(Box::new(args.into_iter().next().unwrap()));
+					}
+					"map" => {
+						let args = self.resolve_enum_args(type_ident, 2, constraints);
+						let mut iter = args.into_iter();
+						let k = iter.next().unwrap();
+						let v = iter.next().unwrap();
+						return Type::Map(Box::new(k), Box::new(v));
+					}
 					_ => {
 						if let Some(binding) = self.get_type_binding(&type_ident.name) {
 							// For generic enums, the binding holds a template like
@@ -2643,6 +2659,11 @@ impl<'compiler> Analyzer<'compiler> {
 				self.unify(&[eq_constraint((**a).clone(), (**b).clone())])
 			}
 
+			Eq(Type::Map(k1, v1), Type::Map(k2, v2), _) => self.unify(&[
+				eq_constraint((**k1).clone(), (**k2).clone()),
+				eq_constraint((**v1).clone(), (**v2).clone()),
+			]),
+
 			Eq(Type::Tuple(element_types_1), Type::Tuple(element_types_2), reason) => {
 				// tuples can only be unified if they have the same number of elements, with
 				// the same types, in the same order. That is: type `(int, string)` is not
@@ -3774,6 +3795,10 @@ impl<'compiler> Analyzer<'compiler> {
 			Type::List(element_type) => {
 				Type::List(Box::new(self.instantiate_with(element_type, mapping)))
 			}
+			Type::Map(key_type, value_type) => Type::Map(
+				Box::new(self.instantiate_with(key_type, mapping)),
+				Box::new(self.instantiate_with(value_type, mapping)),
+			),
 		}
 	}
 }

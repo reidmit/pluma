@@ -1,0 +1,12 @@
+use core.map
+
+def main fun {
+	let m = map.empty ()
+	let m = map.insert m "alice" 30
+	let m = map.insert m "bob" 25
+	let m = map.insert m "carol" 28
+	# keys/values/entries iterate in insertion order.
+	print (map.keys m)
+	print (map.values m)
+	print (map.entries m)
+}

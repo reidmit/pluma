@@ -33,6 +33,101 @@ pub enum Value {
 	// instances) or per-call (parametric instances; phase 3). The VM never
 	// inspects a Dict directly — only `GetDictField` reads from one.
 	Dict(Rc<Vec<Value>>),
+	// An immutable, insertion-ordered hash map. Keys live in `entries` in
+	// the order they were first inserted; `buckets` indexes them by the
+	// caller-supplied hash so lookup is O(1) average. All mutations (insert
+	// / remove) return a fresh `MapData`; Rc-sharing keeps that cheap.
+	Map(Rc<MapData>),
+}
+
+pub struct MapData {
+	// Insertion-ordered (key, value) pairs. Cleared and rebuilt on
+	// `remove`; appended on `insert` of a new key; mutated in place when
+	// replacing an existing key's value.
+	pub entries: Vec<(Value, Value)>,
+	// Hash → indices into `entries`. Collisions chain by walking the Vec
+	// and checking `values_eq` on the keys.
+	pub buckets: HashMap<i64, Vec<usize>>,
+}
+
+impl MapData {
+	pub fn new() -> Self {
+		Self {
+			entries: Vec::new(),
+			buckets: HashMap::new(),
+		}
+	}
+
+	// Returns the index in `entries` of the entry whose key equals `key`
+	// at hash `h`, or None if no such entry exists.
+	pub fn find_index(&self, h: i64, key: &Value) -> Option<usize> {
+		let chain = self.buckets.get(&h)?;
+		for &idx in chain {
+			if values_eq(&self.entries[idx].0, key) {
+				return Some(idx);
+			}
+		}
+		None
+	}
+
+	// Insert (or replace) without mutating self. Returns a fresh MapData.
+	pub fn inserted(&self, h: i64, key: Value, value: Value) -> Self {
+		let mut entries = self.entries.clone();
+		let mut buckets = self.buckets.clone();
+		if let Some(idx) = self.find_index(h, &key) {
+			entries[idx] = (key, value);
+		} else {
+			let idx = entries.len();
+			entries.push((key, value));
+			buckets.entry(h).or_insert_with(Vec::new).push(idx);
+		}
+		Self { entries, buckets }
+	}
+
+	// Remove without mutating self. Returns a fresh MapData with the entry
+	// gone and indices renumbered to stay dense.
+	pub fn removed(&self, h: i64, key: &Value) -> Self {
+		match self.find_index(h, key) {
+			None => self.clone(),
+			Some(removed_idx) => {
+				let mut entries = Vec::with_capacity(self.entries.len() - 1);
+				for (i, e) in self.entries.iter().enumerate() {
+					if i != removed_idx {
+						entries.push(e.clone());
+					}
+				}
+				// Rebuild the bucket index against the renumbered entries.
+				let mut buckets: HashMap<i64, Vec<usize>> = HashMap::new();
+				for (h2, idxs) in &self.buckets {
+					let mapped: Vec<usize> = idxs
+						.iter()
+						.filter_map(|&i| {
+							if i == removed_idx {
+								None
+							} else if i > removed_idx {
+								Some(i - 1)
+							} else {
+								Some(i)
+							}
+						})
+						.collect();
+					if !mapped.is_empty() {
+						buckets.insert(*h2, mapped);
+					}
+				}
+				Self { entries, buckets }
+			}
+		}
+	}
+}
+
+impl Clone for MapData {
+	fn clone(&self) -> Self {
+		Self {
+			entries: self.entries.clone(),
+			buckets: self.buckets.clone(),
+		}
+	}
 }
 
 pub struct VariantData {
@@ -129,6 +224,16 @@ impl std::fmt::Display for Value {
 				write!(f, "<ctor {}.{}>", bare, c.variant)
 			}
 			Value::Dict(_) => write!(f, "<dict>"),
+			Value::Map(m) => {
+				write!(f, "{{")?;
+				for (i, (k, v)) in m.entries.iter().enumerate() {
+					if i > 0 {
+						write!(f, ", ")?;
+					}
+					write!(f, "{}: {}", k, v)?;
+				}
+				write!(f, "}}")
+			}
 		}
 	}
 }
@@ -164,6 +269,28 @@ pub fn values_eq(a: &Value, b: &Value) -> bool {
 					.iter()
 					.zip(b.payload.iter())
 					.all(|(a, b)| values_eq(a, b))
+		}
+		// Map equality is structural and order-independent: same key/value
+		// set in either order is the same map. We walk one side and look
+		// each key up in the other via its hash bucket.
+		(Value::Map(a), Value::Map(b)) => {
+			if a.entries.len() != b.entries.len() {
+				return false;
+			}
+			for (h, idxs) in &a.buckets {
+				for &i in idxs {
+					let (k, v) = &a.entries[i];
+					match b.find_index(*h, k) {
+						Some(j) => {
+							if !values_eq(v, &b.entries[j].1) {
+								return false;
+							}
+						}
+						None => return false,
+					}
+				}
+			}
+			true
 		}
 		_ => false,
 	}

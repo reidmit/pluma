@@ -1,0 +1,7 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: No instance of trait `hash` for type `foo`.
+error: No instance of trait `hash` for type `foo`.
+

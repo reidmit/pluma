@@ -90,4 +90,21 @@ pub enum Builtin {
 	IoArgs,
 	IoEnv,
 	IoExit,
+	// Map builtins. Those constrained by `where (hash k)` receive the
+	// hash dict as their first arg; the implementation pulls slot 0 of
+	// the dict and invokes it on the key to compute its hash.
+	MapEmpty,
+	MapInsert,
+	MapLookup,
+	MapRemove,
+	MapContainsKey,
+	MapSize,
+	MapKeys,
+	MapValues,
+	MapEntries,
+	MapFromEntries,
+	MapMerge,
+	MapMap,
+	MapFilter,
+	MapFold,
 }

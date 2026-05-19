@@ -1,0 +1,17 @@
+use core.map
+
+def main fun {
+	let m = map.empty ()
+	let m = map.insert m "a" 10
+	let m = map.insert m "b" 20
+	let m = map.insert m "c" 30
+	# fold sums values; iteration order is insertion order.
+	let total = map.fold m 0 fun acc _k v { acc + v }
+	print total
+	# map applies a function over values; keys are preserved.
+	let doubled = map.map m fun n { n * 2 }
+	print (map.entries doubled)
+	# filter drops entries whose predicate returns false.
+	let kept = map.filter m fun _k v { v > 15 }
+	print (map.entries kept)
+}

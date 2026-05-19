@@ -36,6 +36,26 @@ let list-across-lines = [
 ]
 ```
 
+## maps
+
+immutable, insertion-ordered hash maps. there's no map literal syntax — construct one through `core.map`:
+
+```
+use core.map
+
+let m = map.empty ()
+let m = map.insert m "alice" 30
+let m = map.insert m "bob" 25
+
+when (map.lookup m "alice") is some n { print n } is none { print 0 }
+```
+
+the key type must have a `hash` instance — `int`, `float`, `string`, `bool`, `option a`, and `result a b` are all wired up out of the box; user enums and records get a hash instance the moment they declare one with `for hash on ...`. operations that need to bucket a key (`insert`, `lookup`, `remove`, `contains-key`, `from-entries`, `merge`) carry a `where (hash k)` constraint and resolve the dictionary automatically at the call site.
+
+iteration (`keys`, `values`, `entries`, `fold`, `map`, `filter`) is in insertion order. `from-entries` and `merge` are right-wins on duplicate keys. `==` on maps is structural and order-independent.
+
+see `core.map` for the full surface: `empty`, `insert`, `lookup`, `remove`, `contains-key`, `size`, `keys`, `values`, `entries`, `from-entries`, `merge`, `map`, `filter`, `fold`.
+
 ## records
 
 keyed by identifiers, no dynamic keys

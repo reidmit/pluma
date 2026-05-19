@@ -20,6 +20,10 @@ pub enum Type {
 	// Unification matches on both: names must agree AND args unify pairwise.
 	Enum(String, Vec<Type>),
 	List(Box<Type>),
+	// `Map(key, value)`. A hash-backed associative table; keys must have a
+	// `hash` instance, but that constraint lives on the operations in
+	// `core.map`, not on the type itself.
+	Map(Box<Type>, Box<Type>),
 }
 
 impl Type {
@@ -42,6 +46,8 @@ impl Type {
 			Type::Enum(_, args) => args.iter().any(|t| t.contains_var(var)),
 
 			Type::List(element_type) => element_type.contains_var(var),
+
+			Type::Map(key_type, value_type) => key_type.contains_var(var) || value_type.contains_var(var),
 
 			Type::Tuple(element_types) => {
 				for element_type in element_types {
@@ -109,6 +115,11 @@ impl Type {
 
 			Type::List(element_type) => {
 				vars.extend(element_type.free_vars());
+			}
+
+			Type::Map(key_type, value_type) => {
+				vars.extend(key_type.free_vars());
+				vars.extend(value_type.free_vars());
 			}
 
 			Type::Tuple(element_types) => {
@@ -218,6 +229,13 @@ impl std::fmt::Display for Type {
 			),
 
 			Type::List(element_type) => write!(f, "list {}", maybe_add_parens(element_type)),
+
+			Type::Map(key_type, value_type) => write!(
+				f,
+				"map {} {}",
+				maybe_add_parens(key_type),
+				maybe_add_parens(value_type),
+			),
 
 			Type::Var(var) => {
 				// return write!(f, "'t{}", var); // temporary, i think
