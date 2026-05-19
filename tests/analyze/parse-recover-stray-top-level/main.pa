@@ -1,0 +1,5 @@
+# Top-level recovery: a stray token at the top level reports an
+# "expected a top-level definition" error and the following def still
+# parses cleanly.
+123
+def main = 0

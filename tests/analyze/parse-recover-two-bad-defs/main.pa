@@ -1,0 +1,4 @@
+# Top-level recovery: errors in two consecutive defs are both reported,
+# each pointing at the offending keyword in its own def.
+def alias = 0
+def trait = 1

@@ -1,0 +1,5 @@
+# Top-level recovery: an error in the first def shouldn't suppress
+# parsing of subsequent defs. The analyzer error on `unknown_name` is
+# what proves the second def reached typechecking.
+def alias = 0
+def main = unknown_name

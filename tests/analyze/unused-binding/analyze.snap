@@ -1,6 +1,8 @@
 ---
-source: pluma-tests/tests/analyze.rs
+source: tests/analyze.rs
 expression: output
 ---
 warning: Name `x` is never used.
+> 2 |   let x = 47
+            ^
 

@@ -3,4 +3,6 @@ source: tests/analyze.rs
 expression: output
 ---
 error: Unexpected token (keyword `let`). Expected an identifier.
+> 4 | enum let { a; b }
+           ^^^
 

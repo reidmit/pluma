@@ -1,8 +1,16 @@
 ---
-source: pluma-tests/tests/analyze.rs
+source: tests/analyze.rs
 expression: output
 ---
 error: Parameter count mismatch: expected 3, but found 1.
+> 9 |   } is node x {
+             ^^^^^^
+
 error: Name `x` is not defined.
+> 10 |     x
+           ^
+
 error: Type mismatch: expected `?`, but found `int`.
+> 9 |   } is node x {
+          ^^^^^^^^^^^
 

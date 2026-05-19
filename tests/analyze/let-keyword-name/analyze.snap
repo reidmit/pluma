@@ -3,5 +3,10 @@ source: tests/analyze.rs
 expression: output
 ---
 error: Unexpected token (keyword `alias`). Expected an identifier.
+> 4 | 	let alias = 0
+           ^^^^^
+
 error: Unexpected token (keyword `alias`). Expected a '}'.
+> 4 | 	let alias = 0
+           ^^^^^
 

@@ -27,6 +27,7 @@ pub enum ParseErrorKind {
 	UnclosedString,
 	UnexpectedEOF { expected: Token },
 	UnexpectedToken { actual: Token, expected: Token },
+	UnexpectedTopLevelToken { actual: Token },
 }
 
 impl fmt::Display for ParseError {
@@ -64,6 +65,13 @@ impl fmt::Display for ParseError {
 			UnexpectedEOF { expected } => write!(f, "Unexpected end of file. Expected {}.", expected),
 			UnexpectedToken { actual, expected } => {
 				write!(f, "Unexpected token ({}). Expected {}.", actual, expected)
+			}
+			UnexpectedTopLevelToken { actual } => {
+				write!(
+					f,
+					"Unexpected token ({}). Expected a top-level definition (`def`, `enum`, `alias`, `trait`, or `implement`).",
+					actual
+				)
 			}
 		}
 	}

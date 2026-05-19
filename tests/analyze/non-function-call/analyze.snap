@@ -3,4 +3,6 @@ source: tests/analyze.rs
 expression: output
 ---
 error: Type mismatch: expected `int`, but found `int -> 's`.
+> 1 | def x = 42
+      ^
 

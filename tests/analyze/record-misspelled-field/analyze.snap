@@ -1,6 +1,8 @@
 ---
-source: pluma-tests/tests/analyze.rs
+source: tests/analyze.rs
 expression: output
 ---
 error: Field `namee` does not exist in record of type `{name: string, age: int}`.
+> 1 | def me = {
+      ^
 

@@ -3,6 +3,10 @@ source: tests/analyze.rs
 expression: output
 ---
 error: Unexpected token (keyword `alias`). Expected an identifier.
-> 4 | def alias = 0
+> 3 | def alias = 0
+          ^^^^^
+
+error: Unexpected token (keyword `trait`). Expected an identifier.
+> 4 | def trait = 1
           ^^^^^
 

@@ -3,4 +3,6 @@ source: tests/analyze.rs
 expression: output
 ---
 error: No instance of trait `numeric` for type `string`.
+> 2 |   n + n
+        ^^^^^
 

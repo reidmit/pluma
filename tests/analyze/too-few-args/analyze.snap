@@ -1,6 +1,8 @@
 ---
-source: pluma-tests/tests/analyze.rs
+source: tests/analyze.rs
 expression: output
 ---
 error: Parameter count mismatch: expected 2, but found 1.
+> 1 | def add = fun a b {
+      ^
 

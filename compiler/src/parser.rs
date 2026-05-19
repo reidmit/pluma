@@ -103,13 +103,15 @@ impl<'a> Parser<'a> {
 		self.advance();
 
 		// `use` declarations must come first; once we see a `def` we stop
-		// looking for them.
+		// looking for them. On error inside a `use`, sync past the
+		// malformed declaration so the next one (or the first def) still
+		// gets parsed cleanly without a cascade.
 		loop {
 			self.skip_line_breaks();
 			match self.current_token {
 				Some(Token::KeywordUse(..)) => match self.parse_use() {
 					Some(u) => uses.push(u),
-					None => break,
+					None => self.synchronize_to_top_level(),
 				},
 				_ => break,
 			}
@@ -118,9 +120,26 @@ impl<'a> Parser<'a> {
 		loop {
 			self.skip_line_breaks();
 
+			let Some(tok) = self.current_token else { break };
+
+			// Stray non-keyword at the top level — report and sync past it
+			// so the next definition still gets parsed.
+			if !Self::is_top_level_start(tok) {
+				let (s, e) = tok.get_span();
+				let _: Option<()> = self.error(ParseError {
+					range: Range::between(self.offset_to_point(s), self.offset_to_point(e)),
+					kind: ParseErrorKind::UnexpectedTopLevelToken { actual: tok },
+				});
+				self.synchronize_to_top_level();
+				continue;
+			}
+
 			match self.parse_definition() {
 				Some(definition) => body.push(definition),
-				_ => break,
+				// A top-level definition errored partway through. The
+				// inner parser already reported the diagnostic; sync past
+				// the stale state so subsequent definitions still parse.
+				None => self.synchronize_to_top_level(),
 			}
 		}
 
@@ -279,6 +298,49 @@ impl<'a> Parser<'a> {
 	fn error<A>(&mut self, err: ParseError) -> Option<A> {
 		self.errors.push(err);
 		None
+	}
+
+	fn is_top_level_start(tok: Token) -> bool {
+		matches!(
+			tok,
+			Token::KeywordDef(..)
+				| Token::KeywordEnum(..)
+				| Token::KeywordAlias(..)
+				| Token::KeywordTrait(..)
+				| Token::KeywordImplement(..)
+		)
+	}
+
+	// Panic-mode recovery at the top-level boundary. Skip tokens until we
+	// land on the start of the next definition, tracking brace depth so we
+	// don't stop at a `def` inside a partially-consumed trait/implement
+	// body. The first token is always skipped past so the caller's failing
+	// position can't pin us in place.
+	fn synchronize_to_top_level(&mut self) {
+		let mut brace_depth: i32 = 0;
+		let mut just_started = true;
+
+		loop {
+			match self.current_token {
+				None => return,
+				Some(tok) if !just_started && brace_depth <= 0 && Self::is_top_level_start(tok) => {
+					return;
+				}
+				Some(Token::LeftBrace(..)) => {
+					brace_depth += 1;
+					self.advance();
+				}
+				Some(Token::RightBrace(..)) => {
+					brace_depth -= 1;
+					self.advance();
+				}
+				Some(Token::LineBreak(..)) | Some(Token::Indent(..)) | Some(Token::Outdent(..)) => {
+					self.skip_line_breaks();
+				}
+				_ => self.advance(),
+			}
+			just_started = false;
+		}
 	}
 
 	fn parse_body_expressions(&mut self) -> Option<Vec<ExprNode>> {

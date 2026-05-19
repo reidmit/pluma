@@ -6,3 +6,7 @@ error: Unexpected token (keyword `alias`). Expected an identifier.
 > 4 | def alias = 0
           ^^^^^
 
+error: Name `unknown_name` is not defined.
+> 5 | def main = unknown_name
+                 ^^^^^^^^^^^^
+
