@@ -1,0 +1,5 @@
+# Used to panic with `todo!()` in the parser. Should now report a clean
+# "expected an identifier" diagnostic.
+def main = fun {
+	let alias = 0
+}

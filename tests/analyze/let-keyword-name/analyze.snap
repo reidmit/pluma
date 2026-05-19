@@ -1,0 +1,7 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: Unexpected token (keyword `alias`). Expected an identifier.
+error: Unexpected token (keyword `alias`). Expected a '}'.
+

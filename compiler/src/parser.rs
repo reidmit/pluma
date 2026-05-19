@@ -1050,7 +1050,26 @@ impl<'a> Parser<'a> {
 
 		let name = match self.parse_identifier() {
 			Some(node) => node,
-			_ => todo!(),
+			None => match self.current_token {
+				Some(tok) => {
+					let (s, e) = tok.get_span();
+					return self.error(ParseError {
+						range: Range::between(self.offset_to_point(s), self.offset_to_point(e)),
+						kind: ParseErrorKind::UnexpectedToken {
+							actual: tok,
+							expected: Token::Identifier(0, 0),
+						},
+					});
+				}
+				None => {
+					return self.error(ParseError {
+						range: Range::collapsed(self.current_line, 0),
+						kind: ParseErrorKind::UnexpectedEOF {
+							expected: Token::Identifier(0, 0),
+						},
+					});
+				}
+			},
 		};
 
 		expect_token_and_advance!(self, Token::Equal);
