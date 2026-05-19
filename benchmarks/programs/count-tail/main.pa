@@ -1,11 +1,15 @@
 # Tail-recursive countdown. With TCO, frame count stays bounded.
 
-def count fun n {
-  when n is 0 { "done" } is _ { count (n - 1) }
+def count = fun n {
+	when n is 0 {
+		"done"
+	} else {
+		count (n - 1)
+	}
 }
 
-def main fun {
-  # 5000 is past the interpreter's default stack limit; the VM handles
-  # this in O(1) frames thanks to TCO.
-  print (count 5000)
+def main = fun {
+	# 5000 is past the interpreter's default stack limit; the VM handles
+	# this in O(1) frames thanks to TCO.
+	print (count 5000)
 }

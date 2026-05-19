@@ -1,6 +1,11 @@
-def id = fun x { x }
+def id = fun x {
+	x
+}
 
 def i = id 47
+
 def s = id "hello"
+
 def b = id true
+
 def t = id (1, "two", false)

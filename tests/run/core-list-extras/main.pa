@@ -1,59 +1,56 @@
 use core.list
 
 def main = fun {
-  # head / tail return option
-  when list.head [1, 2, 3] is some x {
-    print x
-  } is none {
-    print 0
-  }
-  when list.head [] is some x {
-    print x
-  } is none {
-    print 0
-  }
+	# head / tail return option
+	when list.head [1, 2, 3] is some x {
+		print x
+	} is none {
+		print 0
+	}
+	when list.head [] is some x {
+		print x
+	} is none {
+		print 0
+	}
 
-  when list.tail [1, 2, 3] is some rest {
-    print rest
-  } is none {
-    print []
-  }
-  let empty-tail = list.tail []
-  when empty-tail is some _ {
-    print "got something"
-  } is none {
-    print "empty"
-  }
+	when list.tail [1, 2, 3] is some rest {
+		print rest
+	} is none {
+		print []
+	}
+	let empty-tail = list.tail []
+	when empty-tail is some _ {
+		print "got something"
+	} is none {
+		print "empty"
+	}
 
-  # take / drop
-  print (list.take [1, 2, 3, 4, 5] 3)
-  print (list.take [1, 2, 3] 10)
-  print (list.take [1, 2, 3] 0)
-  print (list.drop [1, 2, 3, 4, 5] 2)
-  print (list.drop [1, 2, 3] 10)
+	# take / drop
+	print (list.take [1, 2, 3, 4, 5] 3)
+	print (list.take [1, 2, 3] 10)
+	print (list.take [1, 2, 3] 0)
+	print (list.drop [1, 2, 3, 4, 5] 2)
+	print (list.drop [1, 2, 3] 10)
 
-  # find — returns option
-  when list.find [1, 2, 3, 4] fun n { n > 2 } is some x {
-    print x
-  } is none {
-    print 0
-  }
-  when list.find [1, 2, 3] fun n { n > 100 } is some x {
-    print x
-  } is none {
-    print 0
-  }
+	# find — returns option
+	when list.find [1, 2, 3, 4] fun n { n > 2 } is some x {
+		print x
+	} is none {
+		print 0
+	}
+	when list.find [1, 2, 3] fun n { n > 100 } is some x {
+		print x
+	} is none {
+		print 0
+	}
 
-  # any / all
-  print (list.any [1, 2, 3] fun n { n > 2 })
-  print (list.any [1, 2, 3] fun n { n > 100 })
-  print (list.all [1, 2, 3] fun n { n > 0 })
-  print (list.all [1, 2, 3] fun n { n > 1 })
-  print (list.all [] fun n { n > 0 })
+	# any / all
+	print (list.any [1, 2, 3] fun n { n > 2 })
+	print (list.any [1, 2, 3] fun n { n > 100 })
+	print (list.all [1, 2, 3] fun n { n > 0 })
+	print (list.all [1, 2, 3] fun n { n > 1 })
+	print (list.all [] fun n { n > 0 })
 
-  # pipeline chaining
-  [1, 2, 3, 4, 5]
-    | list.filter fun n { n > 1 }
-    | list.take 2
-    | print
+	# pipeline chaining
+	[1, 2, 3, 4, 5] | list.filter fun n { n > 1 } | list.take 2 | print
 }

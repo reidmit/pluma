@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo build *)",
+      "Bash(cargo run *)",
+      "Bash(just test *)",
+      "Bash(just test-write *)",
+      "Bash(python3 scripts/test.py)",
+      "Bash(grep -E \"passed$|failed$\")",
+      "Bash(just analyze *)",
+      "Bash(cargo fmt *)",
+      "Bash(cargo test *)",
+      "Bash(cargo check *)",
+      "Bash(INSTA_UPDATE=always cargo test -p tests keyword)"
+    ]
+  }
+}

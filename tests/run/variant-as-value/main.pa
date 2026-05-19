@@ -1,18 +1,18 @@
 enum color {
-  red
-  green
-  blue
+	red
+	green
+	blue
 }
 
 enum shape {
-  circle int
-  square int
+	circle int
+	square int
 }
 
 def main = fun {
-  let c = color.red
-  print c
-  let make-square = shape.square
-  let s = make-square 5
-  print s
+	let c = color.red
+	print c
+	let make-square = shape.square
+	let s = make-square 5
+	print s
 }

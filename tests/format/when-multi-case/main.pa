@@ -1,0 +1,9 @@
+def describe = fun n {
+	when n is 0 {
+		"zero"
+	} is 1 {
+		"one"
+	} else {
+		"many"
+	}
+}

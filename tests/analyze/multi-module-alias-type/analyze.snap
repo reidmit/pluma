@@ -49,12 +49,12 @@ module `main` (tests/analyze/multi-module-alias-type/main.pa) {
                             ident(4:15-4:16) `p` :: {x: 'y, ...},
                         ],
                         body: [
-                            expr(5:2-5:5) :: 'y {
+                            expr(5:1-5:4) :: 'y {
                                 kind: field-access {
-                                    receiver: expr(5:2-5:3) :: {x: 'y, ...} {
-                                        kind: ident(5:2-5:3) `p`,
+                                    receiver: expr(5:1-5:2) :: {x: 'y, ...} {
+                                        kind: ident(5:1-5:2) `p`,
                                     },
-                                    field: ident(5:4-5:5) `x`,
+                                    field: ident(5:3-5:4) `x`,
                                 },
                             },
                         ],

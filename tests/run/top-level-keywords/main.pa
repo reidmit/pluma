@@ -6,39 +6,44 @@
 #   for TRAIT on TYPE { ... } — instance declaration
 
 enum shape {
-  circle int
-  rect int int
+	circle int
+	rect int int
 }
 
-alias person {
-  name :: string
-  age  :: int
-}
+alias person {name :: string, age :: int}
 
 trait describable a {
-  describe :: fun a -> string
+	describe :: fun a -> string
 }
 
 implement describable shape {
-  def describe = fun s {
-    when s is circle r { "circle radius $(to-string r)" }
-    is rect w h { "rect $(to-string w) x $(to-string h)" }
-  }
+	def describe = fun s {
+		when s is circle r {
+			"circle radius $(to-string r)"
+		} is rect w h {
+			"rect $(to-string w) x $(to-string h)"
+		}
+	}
 }
 
 implement describable int {
-  def describe = fun n { "the number $(to-string n)" }
+	def describe = fun n {
+		"the number $(to-string n)"
+	}
 }
 
-def reid = { name: "reid", age: 30 }
+def reid = {name: "reid", age: 30}
 
 def main = fun {
-  print reid.name
+	print reid.name
 
-  print (describe (shape.circle 5))
-  print (describe (shape.rect 3 4))
-  print (describe 42)
+	print (describe (shape.circle 5))
+	print (describe (shape.rect 3 4))
+	print (describe 42)
 
-  # bare trait method works because `describable` is in scope
-  print (describable.describe (shape.circle 7))   # qualified form still legal
+	# bare trait method works because `describable` is in scope
+	print (describable.describe (shape.circle 7))
 }
+
+# qualified form still legal
+

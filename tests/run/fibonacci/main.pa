@@ -1,15 +1,15 @@
 def fib = fun n {
-  when n is 0 {
-    0
-  } is 1 {
-    1
-  } is _ {
-    (fib (n - 1)) + (fib (n - 2))
-  }
+	when n is 0 {
+		0
+	} is 1 {
+		1
+	} else {
+		(fib (n - 1)) + (fib (n - 2))
+	}
 }
 
 def main = fun {
-  print (fib 0)
-  print (fib 1)
-  print (fib 10)
+	print (fib 0)
+	print (fib 1)
+	print (fib 10)
 }

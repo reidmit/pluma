@@ -32,27 +32,27 @@ module `main` (tests/analyze/multi-module-enums/main.pa) {
                             ident(4:19-4:20) `c` :: color,
                         ],
                         body: [
-                            expr(5:2-11:3) :: string {
-                                kind: when(5:2-11:3) [
-                                    case(5:9-7:3) is pattern(5:12-5:15) Identifier(
-                                        ident(5:12-5:15) `red`,
+                            expr(5:1-11:2) :: string {
+                                kind: when(5:1-11:2) [
+                                    case(5:8-7:2) is pattern(5:11-5:14) Identifier(
+                                        ident(5:11-5:14) `red`,
                                     ) [
-                                        expr(6:5-6:9) :: string {
-                                            kind: literal(6:5-6:9) string "red",
+                                        expr(6:3-6:7) :: string {
+                                            kind: literal(6:3-6:7) string "red",
                                         },
                                     ],
-                                    case(7:4-9:3) is pattern(7:7-7:12) Identifier(
-                                        ident(7:7-7:12) `green`,
+                                    case(7:3-9:2) is pattern(7:6-7:11) Identifier(
+                                        ident(7:6-7:11) `green`,
                                     ) [
-                                        expr(8:5-8:11) :: string {
-                                            kind: literal(8:5-8:11) string "green",
+                                        expr(8:3-8:9) :: string {
+                                            kind: literal(8:3-8:9) string "green",
                                         },
                                     ],
-                                    case(9:4-11:3) is pattern(9:7-9:11) Identifier(
-                                        ident(9:7-9:11) `blue`,
+                                    case(9:3-11:2) is pattern(9:6-9:10) Identifier(
+                                        ident(9:6-9:10) `blue`,
                                     ) [
-                                        expr(10:5-10:10) :: string {
-                                            kind: literal(10:5-10:10) string "blue",
+                                        expr(10:3-10:8) :: string {
+                                            kind: literal(10:3-10:8) string "blue",
                                         },
                                     ],
                                 ],

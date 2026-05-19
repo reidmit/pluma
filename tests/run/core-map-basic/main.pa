@@ -7,10 +7,16 @@ def main = fun {
 	let m = map.insert m "b" 2
 	let m = map.insert m "c" 3
 	print (map.size m)
+
 	# Replace an existing key — size stays the same, value updates.
 	let m = map.insert m "b" 22
 	print (map.size m)
-	when (map.lookup m "b") is some n { print n } is none { print -1 }
+	when (map.lookup m "b") is some n {
+		print n
+	} is none {
+		print -1
+	}
+
 	# Remove and confirm.
 	let m = map.remove m "a"
 	print (map.contains-key m "a")

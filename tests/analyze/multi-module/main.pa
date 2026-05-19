@@ -5,4 +5,5 @@ def four = math.add 2 2
 def eight = math.double 4
 
 def num = math.identity 7
+
 def text = math.identity "hello"

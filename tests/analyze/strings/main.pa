@@ -1,10 +1,5 @@
 def simple = "hey"
 
-def multiline = "one
-
-two
-
-      three
-      "
+def multiline = "one\n\ntwo\n\n      three\n      "
 
 def interpolated = "wow $(simple)!"

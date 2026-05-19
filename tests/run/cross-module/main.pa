@@ -2,16 +2,16 @@ use colors
 use math
 
 def name-of = fun c {
-  when c is red {
-    "red"
-  } is green {
-    "green"
-  } is blue {
-    "blue"
-  }
+	when c is red {
+		"red"
+	} is green {
+		"green"
+	} is blue {
+		"blue"
+	}
 }
 
 def main = fun {
-  print (math.add 2 3)
-  print (name-of colors.color.green)
+	print (math.add 2 3)
+	print (name-of colors.color.green)
 }

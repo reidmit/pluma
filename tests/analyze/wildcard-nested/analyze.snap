@@ -9,17 +9,17 @@ module `main` (tests/analyze/wildcard-nested/main.pa) {
             def(0:0-3:1) :: nothing {
                 name: ident(0:5-0:9) `tree`,
                 kind: enum(0:10-3:1) [
-                    variant(1:2-1:7) {
-                        name: ident(1:2-1:7) `empty`,
+                    variant(1:1-1:6) {
+                        name: ident(1:1-1:6) `empty`,
                         params: None,
                     },
-                    variant(2:2-2:20) {
-                        name: ident(2:2-2:6) `node`,
+                    variant(2:1-2:19) {
+                        name: ident(2:1-2:5) `node`,
                         params: Some(
                             [
-                                type(2:7-2:10) type-ident(2:7-2:10) `int`,
-                                type(2:11-2:15) type-ident(2:11-2:15) `tree`,
-                                type(2:16-2:20) type-ident(2:16-2:20) `tree`,
+                                type(2:6-2:9) type-ident(2:6-2:9) `int`,
+                                type(2:10-2:14) type-ident(2:10-2:14) `tree`,
+                                type(2:15-2:19) type-ident(2:15-2:19) `tree`,
                             ],
                         ),
                     },
@@ -33,25 +33,25 @@ module `main` (tests/analyze/wildcard-nested/main.pa) {
                             ident(5:23-5:24) `t` :: tree,
                         ],
                         body: [
-                            expr(6:2-10:3) :: bool {
-                                kind: when(6:2-10:3) [
-                                    case(6:9-8:3) is pattern(6:12-6:17) Identifier(
-                                        ident(6:12-6:17) `empty`,
+                            expr(6:1-10:2) :: bool {
+                                kind: when(6:1-10:2) [
+                                    case(6:8-8:2) is pattern(6:11-6:16) Identifier(
+                                        ident(6:11-6:16) `empty`,
                                     ) [
-                                        expr(7:4-7:9) :: bool {
-                                            kind: literal(7:4-7:9) bool false,
+                                        expr(7:2-7:7) :: bool {
+                                            kind: literal(7:2-7:7) bool false,
                                         },
                                     ],
-                                    case(8:4-10:3) is pattern(8:7-8:17) Constructor(
-                                        ident(8:7-8:11) `node`,
+                                    case(8:3-10:2) is pattern(8:6-8:16) Constructor(
+                                        ident(8:6-8:10) `node`,
                                         [
-                                            pattern(8:12-8:13) Underscore,
-                                            pattern(8:14-8:15) Underscore,
-                                            pattern(8:16-8:17) Underscore,
+                                            pattern(8:11-8:12) Underscore,
+                                            pattern(8:13-8:14) Underscore,
+                                            pattern(8:15-8:16) Underscore,
                                         ],
                                     ) [
-                                        expr(9:4-9:8) :: bool {
-                                            kind: literal(9:4-9:8) bool true,
+                                        expr(9:2-9:6) :: bool {
+                                            kind: literal(9:2-9:6) bool true,
                                         },
                                     ],
                                 ],

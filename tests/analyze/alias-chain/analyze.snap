@@ -5,56 +5,56 @@ expression: output
 module `main` (tests/analyze/alias-chain/main.pa) {
     comments: {},
     ast: Some(
-        module(0:0-7:22) [
+        module(0:0-10:22) [
             def(0:0-0:16) :: nothing {
                 name: ident(0:6-0:12) `my-int`,
                 kind: alias type(0:13-0:16) type-ident(0:13-0:16) `int`,
             },
-            def(1:0-1:20) :: nothing {
-                name: ident(1:6-1:13) `my-int2`,
-                kind: alias type(1:14-1:20) type-ident(1:14-1:20) `my-int`,
+            def(2:0-2:20) :: nothing {
+                name: ident(2:6-2:13) `my-int2`,
+                kind: alias type(2:14-2:20) type-ident(2:14-2:20) `my-int`,
             },
-            def(3:0-3:21) :: nothing {
-                name: ident(3:6-3:10) `pair`,
-                kind: alias type(3:11-3:21) tuple-type [
-                    type(3:12-3:15) type-ident(3:12-3:15) `int`,
-                    type(3:17-3:20) type-ident(3:17-3:20) `int`,
+            def(4:0-4:21) :: nothing {
+                name: ident(4:6-4:10) `pair`,
+                kind: alias type(4:11-4:21) tuple-type [
+                    type(4:12-4:15) type-ident(4:12-4:15) `int`,
+                    type(4:17-4:20) type-ident(4:17-4:20) `int`,
                 ],
             },
-            def(4:0-4:18) :: nothing {
-                name: ident(4:6-4:13) `my-pair`,
-                kind: alias type(4:14-4:18) type-ident(4:14-4:18) `pair`,
+            def(6:0-6:18) :: nothing {
+                name: ident(6:6-6:13) `my-pair`,
+                kind: alias type(6:14-6:18) type-ident(6:14-6:18) `pair`,
             },
-            def(6:0-6:16) :: nothing {
-                name: ident(6:4-6:5) `x`,
-                kind: expr(6:8-6:16) :: int {
-                    kind: call(6:8-6:16) {
-                        callee: expr(6:8-6:14) :: int -> int {
-                            kind: ident(6:8-6:14) `my-int`,
+            def(8:0-8:16) :: nothing {
+                name: ident(8:4-8:5) `x`,
+                kind: expr(8:8-8:16) :: int {
+                    kind: call(8:8-8:16) {
+                        callee: expr(8:8-8:14) :: int -> int {
+                            kind: ident(8:8-8:14) `my-int`,
                         },
                         args: [
-                            expr(6:15-6:16) :: int {
-                                kind: literal(6:15-6:16) int 5,
+                            expr(8:15-8:16) :: int {
+                                kind: literal(8:15-8:16) int 5,
                             },
                         ],
                     },
                 },
             },
-            def(7:0-7:22) :: nothing {
-                name: ident(7:4-7:5) `p`,
-                kind: expr(7:8-7:22) :: (int, int) {
-                    kind: call(7:8-7:22) {
-                        callee: expr(7:8-7:15) :: ((int, int)) -> (int, int) {
-                            kind: ident(7:8-7:15) `my-pair`,
+            def(10:0-10:22) :: nothing {
+                name: ident(10:4-10:5) `p`,
+                kind: expr(10:8-10:22) :: (int, int) {
+                    kind: call(10:8-10:22) {
+                        callee: expr(10:8-10:15) :: ((int, int)) -> (int, int) {
+                            kind: ident(10:8-10:15) `my-pair`,
                         },
                         args: [
-                            expr(7:16-7:22) :: (int, int) {
+                            expr(10:16-10:22) :: (int, int) {
                                 kind: tuple [
-                                    expr(7:17-7:18) :: int {
-                                        kind: literal(7:17-7:18) int 1,
+                                    expr(10:17-10:18) :: int {
+                                        kind: literal(10:17-10:18) int 1,
                                     },
-                                    expr(7:20-7:21) :: int {
-                                        kind: literal(7:20-7:21) int 2,
+                                    expr(10:20-10:21) :: int {
+                                        kind: literal(10:20-10:21) int 2,
                                     },
                                 ],
                             },

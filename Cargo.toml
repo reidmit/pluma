@@ -5,6 +5,7 @@ members = [
   "cli",
   "codegen",
   "compiler",
+  "formatter",
   "lsp",
   "tests",
   "vm",

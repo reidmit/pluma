@@ -35,12 +35,17 @@ enum ordering {
 implement ord (option a) where (ord a) {
 	def compare = fun x y {
 		when x is some xv {
-			when y is some yv { compare xv yv }
-			is none { gt }
-		}
-		is none {
-			when y is some _v { lt }
-			is none { eq }
+			when y is some yv {
+				compare xv yv
+			} is none {
+				gt
+			}
+		} is none {
+			when y is some _v {
+				lt
+			} is none {
+				eq
+			}
 		}
 	}
 }
@@ -48,26 +53,37 @@ implement ord (option a) where (ord a) {
 implement ord (result a b) where (ord a, ord b) {
 	def compare = fun x y {
 		when x is ok xv {
-			when y is ok yv { compare xv yv }
-			is err _e { lt }
-		}
-		is err xe {
-			when y is err ye { compare xe ye }
-			is ok _v { gt }
+			when y is ok yv {
+				compare xv yv
+			} is err _e {
+				lt
+			}
+		} is err xe {
+			when y is err ye {
+				compare xe ye
+			} is ok _v {
+				gt
+			}
 		}
 	}
 }
 
 implement hash (option a) where (hash a) {
 	def hash = fun o {
-		when o is some v { hash v }
-		is none { 0 }
+		when o is some v {
+			hash v
+		} is none {
+			0
+		}
 	}
 }
 
 implement hash (result a b) where (hash a, hash b) {
 	def hash = fun r {
-		when r is ok v { hash v }
-		is err e { hash e }
+		when r is ok v {
+			hash v
+		} is err e {
+			hash e
+		}
 	}
 }

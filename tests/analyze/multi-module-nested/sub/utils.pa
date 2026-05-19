@@ -1,5 +1,5 @@
 def answer = 42
 
 def identity = fun x {
-  x
+	x
 }

@@ -3,6 +3,6 @@ source: tests/analyze.rs
 expression: output
 ---
 error: Variant `red` is ambiguous: it could refer to `color` or `fruit`.
-> 14 |   if c is red {
-                 ^^^
+> 14 | 	if c is red {
+                ^^^
 

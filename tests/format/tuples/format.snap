@@ -1,0 +1,12 @@
+---
+source: tests/format.rs
+expression: once
+---
+def empty = ()
+
+def pair = (1, "hello")
+
+def triple = (true, 42, "ok")
+
+def nested = ((1, 2), (3, 4))
+

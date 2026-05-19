@@ -5,61 +5,61 @@ expression: output
 module `main` (tests/analyze/multi-module-enum-type/main.pa) {
     comments: {},
     ast: Some(
-        module(0:0-10:1) [
+        module(0:0-4:84) [
             use(0:0-0:10) `colors`,
         ] [
-            def(2:0-5:1) :: nothing {
+            def(2:0-2:65) :: nothing {
                 name: ident(2:6-2:12) `themed`,
-                kind: alias type(2:13-5:1) record-type [
+                kind: alias type(2:13-2:65) record-type [
                     (
-                        ident(3:2-3:9) `primary`,
-                        type(3:13-3:25) type-ident(3:13-3:25) `colors.color`,
+                        ident(2:14-2:21) `primary`,
+                        type(2:25-2:37) type-ident(2:25-2:37) `colors.color`,
                     ),
                     (
-                        ident(4:2-4:11) `secondary`,
-                        type(4:15-4:27) type-ident(4:15-4:27) `colors.color`,
+                        ident(2:39-2:48) `secondary`,
+                        type(2:52-2:64) type-ident(2:52-2:64) `colors.color`,
                     ),
                 ],
             },
-            def(7:0-10:1) :: nothing {
-                name: ident(7:4-7:17) `default-theme`,
-                kind: expr(7:20-10:1) :: {primary: color, secondary: color} {
-                    kind: call(7:20-10:1) {
-                        callee: expr(7:20-7:26) :: ({primary: color, secondary: color}) -> {primary: color, secondary: color} {
-                            kind: ident(7:20-7:26) `themed`,
+            def(4:0-4:84) :: nothing {
+                name: ident(4:4-4:17) `default-theme`,
+                kind: expr(4:20-4:84) :: {primary: color, secondary: color} {
+                    kind: call(4:20-4:84) {
+                        callee: expr(4:20-4:26) :: ({primary: color, secondary: color}) -> {primary: color, secondary: color} {
+                            kind: ident(4:20-4:26) `themed`,
                         },
                         args: [
-                            expr(7:27-10:1) :: {primary: color, secondary: color} {
+                            expr(4:27-4:84) :: {primary: color, secondary: color} {
                                 kind: record [
                                     (
-                                        ident(8:2-8:9) `primary`,
-                                        expr(8:11-8:27) :: color {
+                                        ident(4:28-4:35) `primary`,
+                                        expr(4:37-4:53) :: color {
                                             kind: field-access {
-                                                receiver: expr(8:11-8:23) :: color {
+                                                receiver: expr(4:37-4:49) :: color {
                                                     kind: field-access {
-                                                        receiver: expr(8:11-8:17) :: ? {
-                                                            kind: ident(8:11-8:17) `colors`,
+                                                        receiver: expr(4:37-4:43) :: ? {
+                                                            kind: ident(4:37-4:43) `colors`,
                                                         },
-                                                        field: ident(8:18-8:23) `color`,
+                                                        field: ident(4:44-4:49) `color`,
                                                     },
                                                 },
-                                                field: ident(8:24-8:27) `red`,
+                                                field: ident(4:50-4:53) `red`,
                                             },
                                         },
                                     ),
                                     (
-                                        ident(9:2-9:11) `secondary`,
-                                        expr(9:13-9:30) :: color {
+                                        ident(4:55-4:64) `secondary`,
+                                        expr(4:66-4:83) :: color {
                                             kind: field-access {
-                                                receiver: expr(9:13-9:25) :: color {
+                                                receiver: expr(4:66-4:78) :: color {
                                                     kind: field-access {
-                                                        receiver: expr(9:13-9:19) :: ? {
-                                                            kind: ident(9:13-9:19) `colors`,
+                                                        receiver: expr(4:66-4:72) :: ? {
+                                                            kind: ident(4:66-4:72) `colors`,
                                                         },
-                                                        field: ident(9:20-9:25) `color`,
+                                                        field: ident(4:73-4:78) `color`,
                                                     },
                                                 },
-                                                field: ident(9:26-9:30) `blue`,
+                                                field: ident(4:79-4:83) `blue`,
                                             },
                                         },
                                     ),

@@ -1,8 +1,5 @@
-def me = {
-  name: "reid"
-  age: 28
-}
+def me = {name: "reid", age: 28}
 
 def get-result = fun {
-  me.namee
+	me.namee
 }

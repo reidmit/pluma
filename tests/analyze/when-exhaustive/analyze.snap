@@ -9,17 +9,17 @@ module `main` (tests/analyze/when-exhaustive/main.pa) {
             def(0:0-3:1) :: nothing {
                 name: ident(0:5-0:9) `tree`,
                 kind: enum(0:10-3:1) [
-                    variant(1:2-1:7) {
-                        name: ident(1:2-1:7) `empty`,
+                    variant(1:1-1:6) {
+                        name: ident(1:1-1:6) `empty`,
                         params: None,
                     },
-                    variant(2:2-2:20) {
-                        name: ident(2:2-2:6) `node`,
+                    variant(2:1-2:19) {
+                        name: ident(2:1-2:5) `node`,
                         params: Some(
                             [
-                                type(2:7-2:10) type-ident(2:7-2:10) `int`,
-                                type(2:11-2:15) type-ident(2:11-2:15) `tree`,
-                                type(2:16-2:20) type-ident(2:16-2:20) `tree`,
+                                type(2:6-2:9) type-ident(2:6-2:9) `int`,
+                                type(2:10-2:14) type-ident(2:10-2:14) `tree`,
+                                type(2:15-2:19) type-ident(2:15-2:19) `tree`,
                             ],
                         ),
                     },
@@ -33,31 +33,31 @@ module `main` (tests/analyze/when-exhaustive/main.pa) {
                             ident(5:26-5:27) `t` :: tree,
                         ],
                         body: [
-                            expr(6:2-10:3) :: int {
-                                kind: when(6:2-10:3) [
-                                    case(6:9-8:3) is pattern(6:12-6:17) Identifier(
-                                        ident(6:12-6:17) `empty`,
+                            expr(6:1-10:2) :: int {
+                                kind: when(6:1-10:2) [
+                                    case(6:8-8:2) is pattern(6:11-6:16) Identifier(
+                                        ident(6:11-6:16) `empty`,
                                     ) [
-                                        expr(7:4-7:5) :: int {
-                                            kind: literal(7:4-7:5) int 0,
+                                        expr(7:2-7:3) :: int {
+                                            kind: literal(7:2-7:3) int 0,
                                         },
                                     ],
-                                    case(8:4-10:3) is pattern(8:7-8:21) Constructor(
-                                        ident(8:7-8:11) `node`,
+                                    case(8:3-10:2) is pattern(8:6-8:20) Constructor(
+                                        ident(8:6-8:10) `node`,
                                         [
-                                            pattern(8:12-8:15) Identifier(
-                                                ident(8:12-8:15) `val`,
+                                            pattern(8:11-8:14) Identifier(
+                                                ident(8:11-8:14) `val`,
                                             ),
-                                            pattern(8:16-8:18) Identifier(
-                                                ident(8:16-8:18) `_l`,
+                                            pattern(8:15-8:17) Identifier(
+                                                ident(8:15-8:17) `_l`,
                                             ),
-                                            pattern(8:19-8:21) Identifier(
-                                                ident(8:19-8:21) `_r`,
+                                            pattern(8:18-8:20) Identifier(
+                                                ident(8:18-8:20) `_r`,
                                             ),
                                         ],
                                     ) [
-                                        expr(9:4-9:7) :: int {
-                                            kind: ident(9:4-9:7) `val`,
+                                        expr(9:2-9:5) :: int {
+                                            kind: ident(9:2-9:5) `val`,
                                         },
                                     ],
                                 ],
@@ -74,18 +74,18 @@ module `main` (tests/analyze/when-exhaustive/main.pa) {
                             ident(13:22-13:23) `t` :: tree,
                         ],
                         body: [
-                            expr(14:2-18:3) :: int {
-                                kind: when(14:2-18:3) [
-                                    case(14:9-16:3) is pattern(14:12-14:17) Identifier(
-                                        ident(14:12-14:17) `empty`,
+                            expr(14:1-18:2) :: int {
+                                kind: when(14:1-18:2) [
+                                    case(14:8-16:2) is pattern(14:11-14:16) Identifier(
+                                        ident(14:11-14:16) `empty`,
                                     ) [
-                                        expr(15:4-15:5) :: int {
-                                            kind: literal(15:4-15:5) int 0,
+                                        expr(15:2-15:3) :: int {
+                                            kind: literal(15:2-15:3) int 0,
                                         },
                                     ],
-                                    case(16:4-18:3) is pattern(16:7-16:8) Underscore [
-                                        expr(17:4-17:5) :: int {
-                                            kind: literal(17:4-17:5) int 1,
+                                    case(16:3-18:2) is pattern(16:3-16:7) Underscore [
+                                        expr(17:2-17:3) :: int {
+                                            kind: literal(17:2-17:3) int 1,
                                         },
                                     ],
                                 ],
@@ -102,13 +102,13 @@ module `main` (tests/analyze/when-exhaustive/main.pa) {
                             ident(21:30-21:31) `t` :: 't4,
                         ],
                         body: [
-                            expr(22:2-24:3) :: int {
-                                kind: when(22:2-24:3) [
-                                    case(22:9-24:3) is pattern(22:12-22:22) Identifier(
-                                        ident(22:12-22:22) `_something`,
+                            expr(22:1-24:2) :: int {
+                                kind: when(22:1-24:2) [
+                                    case(22:8-24:2) is pattern(22:11-22:21) Identifier(
+                                        ident(22:11-22:21) `_something`,
                                     ) [
-                                        expr(23:4-23:5) :: int {
-                                            kind: literal(23:4-23:5) int 0,
+                                        expr(23:2-23:3) :: int {
+                                            kind: literal(23:2-23:3) int 0,
                                         },
                                     ],
                                 ],
@@ -125,20 +125,20 @@ module `main` (tests/analyze/when-exhaustive/main.pa) {
                             ident(27:20-27:21) `b` :: bool,
                         ],
                         body: [
-                            expr(28:2-32:3) :: int {
-                                kind: when(28:2-32:3) [
-                                    case(28:9-30:3) is pattern(28:12-28:16) Literal(
-                                        literal(28:12-28:16) bool true,
+                            expr(28:1-32:2) :: int {
+                                kind: when(28:1-32:2) [
+                                    case(28:8-30:2) is pattern(28:11-28:15) Literal(
+                                        literal(28:11-28:15) bool true,
                                     ) [
-                                        expr(29:4-29:5) :: int {
-                                            kind: literal(29:4-29:5) int 0,
+                                        expr(29:2-29:3) :: int {
+                                            kind: literal(29:2-29:3) int 0,
                                         },
                                     ],
-                                    case(30:4-32:3) is pattern(30:7-30:12) Literal(
-                                        literal(30:7-30:12) bool false,
+                                    case(30:3-32:2) is pattern(30:6-30:11) Literal(
+                                        literal(30:6-30:11) bool false,
                                     ) [
-                                        expr(31:4-31:5) :: int {
-                                            kind: literal(31:4-31:5) int 1,
+                                        expr(31:2-31:3) :: int {
+                                            kind: literal(31:2-31:3) int 1,
                                         },
                                     ],
                                 ],

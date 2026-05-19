@@ -3,14 +3,14 @@ source: tests/analyze.rs
 expression: output
 ---
 error: Non-exhaustive `when`: missing case for `node`.
-> 7 |   when t is empty {
-        ^^^^^^^^^^^^^^^^^
+> 7 | 	when t is empty {
+       ^^^^^^^^^^^^^^^^^
 
 error: Non-exhaustive `when`: missing case for `node`.
-> 13 |   when t is empty {
-         ^^^^^^^^^^^^^^^^^
+> 13 | 	when t is empty {
+        ^^^^^^^^^^^^^^^^^
 
 error: Non-exhaustive `when`: missing case for `false`.
-> 21 |   when b is true {
-         ^^^^^^^^^^^^^^^^
+> 21 | 	when b is true {
+        ^^^^^^^^^^^^^^^^
 

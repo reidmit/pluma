@@ -1,22 +1,22 @@
 def is-even = fun n {
-  when n is 0 {
-    true
-  } is _ {
-    is-odd (n - 1)
-  }
+	when n is 0 {
+		true
+	} else {
+		is-odd (n - 1)
+	}
 }
 
 def is-odd = fun n {
-  when n is 0 {
-    false
-  } is _ {
-    is-even (n - 1)
-  }
+	when n is 0 {
+		false
+	} else {
+		is-even (n - 1)
+	}
 }
 
 def main = fun {
-  print (is-even 0)
-  print (is-even 4)
-  print (is-even 7)
-  print (is-odd 3)
+	print (is-even 0)
+	print (is-even 4)
+	print (is-even 7)
+	print (is-odd 3)
 }

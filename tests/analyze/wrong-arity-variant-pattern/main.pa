@@ -1,12 +1,12 @@
 enum tree {
-  empty
-  node int tree tree
+	empty
+	node int tree tree
 }
 
 def bad = fun t {
-  when t is empty {
-    0
-  } is node x {
-    x
-  }
+	when t is empty {
+		0
+	} is node x {
+		x
+	}
 }

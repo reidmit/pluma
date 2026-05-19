@@ -1,0 +1,15 @@
+---
+source: tests/format.rs
+expression: once
+---
+enum color {
+	red
+	green
+	blue
+}
+
+enum tree a {
+	empty
+	node a tree tree
+}
+

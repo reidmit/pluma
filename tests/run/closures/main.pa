@@ -1,12 +1,10 @@
 def make-adder = fun x {
-  fun y {
-    x + y
-  }
+	fun y { x + y }
 }
 
 def main = fun {
-  let add5 = make-adder 5
-  let add100 = make-adder 100
-  print (add5 3)
-  print (add100 23)
+	let add5 = make-adder 5
+	let add100 = make-adder 100
+	print (add5 3)
+	print (add100 23)
 }

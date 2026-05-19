@@ -1,30 +1,30 @@
 use core.math
 
 def main = fun {
-  # rounding (float -> int)
-  print (math.floor 2.7)
-  print (math.floor -1.3)
-  print (math.ceil 2.1)
-  print (math.ceil -1.7)
-  print (math.round 2.4)
-  print (math.round 2.5)
-  print (math.round -2.5)
+	# rounding (float -> int)
+	print (math.floor 2.7)
+	print (math.floor -1.3)
+	print (math.ceil 2.1)
+	print (math.ceil -1.7)
+	print (math.round 2.4)
+	print (math.round 2.5)
+	print (math.round -2.5)
 
-  # exponential
-  print (math.exp 0.0)
-  print (math.exp 1.0)
+	# exponential
+	print (math.exp 0.0)
+	print (math.exp 1.0)
 
-  # logs — round trip via to-int for stable output
-  print (math.to-int (math.log math.e))
-  print (math.to-int (math.log10 100.0))
-  print (math.to-int (math.log2 8.0))
+	# logs — round trip via to-int for stable output
+	print (math.to-int (math.log math.e))
+	print (math.to-int (math.log10 100.0))
+	print (math.to-int (math.log2 8.0))
 
-  # trig — sin/cos at 0
-  print (math.sin 0.0)
-  print (math.cos 0.0)
-  print (math.tan 0.0)
+	# trig — sin/cos at 0
+	print (math.sin 0.0)
+	print (math.cos 0.0)
+	print (math.tan 0.0)
 
-  # constants
-  print (math.round (math.pi * 100.0))
-  print (math.round (math.e * 100.0))
+	# constants
+	print (math.round (math.pi * 100.0))
+	print (math.round (math.e * 100.0))
 }

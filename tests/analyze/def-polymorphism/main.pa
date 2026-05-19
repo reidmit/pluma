@@ -1,6 +1,8 @@
-def identity = fun x { x }
+def identity = fun x {
+	x
+}
 
 def main = fun {
-  identity "wow"
-  identity 47
+	identity "wow"
+	identity 47
 }

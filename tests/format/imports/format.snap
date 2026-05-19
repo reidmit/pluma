@@ -1,0 +1,11 @@
+---
+source: tests/format.rs
+expression: once
+---
+use core.list
+use core.regex as re
+
+def main = fun {
+	print "ok"
+}
+

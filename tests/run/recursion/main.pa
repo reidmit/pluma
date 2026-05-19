@@ -1,19 +1,19 @@
 enum tree {
-  empty
-  node int tree tree
+	empty
+	node int tree tree
 }
 
 def sum = fun t {
-  when t is empty {
-    0
-  } is node val l r {
-    val + (sum l) + (sum r)
-  }
+	when t is empty {
+		0
+	} is node val l r {
+		val + (sum l) + (sum r)
+	}
 }
 
 def main = fun {
-  let l = tree.node 1 tree.empty tree.empty
-  let r = tree.node 3 tree.empty tree.empty
-  let t = tree.node 2 l r
-  print (sum t)
+	let l = tree.node 1 tree.empty tree.empty
+	let r = tree.node 3 tree.empty tree.empty
+	let t = tree.node 2 l r
+	print (sum t)
 }

@@ -1,8 +1,11 @@
 alias my-int int
+
 alias my-int2 my-int
 
 alias pair (int, int)
+
 alias my-pair pair
 
 def x = my-int 5
+
 def p = my-pair (1, 2)

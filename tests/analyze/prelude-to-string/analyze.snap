@@ -5,7 +5,7 @@ expression: output
 module `main` (tests/analyze/prelude-to-string/main.pa) {
     comments: {},
     ast: Some(
-        module(0:0-2:37) [
+        module(0:0-4:37) [
             def(0:0-0:32) :: nothing {
                 name: ident(0:4-0:17) `num-as-string`,
                 kind: expr(0:20-0:32) :: string {
@@ -21,31 +21,31 @@ module `main` (tests/analyze/prelude-to-string/main.pa) {
                     },
                 },
             },
-            def(1:0-1:35) :: nothing {
-                name: ident(1:4-1:18) `bool-as-string`,
-                kind: expr(1:21-1:35) :: string {
-                    kind: call(1:21-1:35) {
-                        callee: expr(1:21-1:30) :: bool -> string {
-                            kind: ident(1:21-1:30) `to-string`,
+            def(2:0-2:35) :: nothing {
+                name: ident(2:4-2:18) `bool-as-string`,
+                kind: expr(2:21-2:35) :: string {
+                    kind: call(2:21-2:35) {
+                        callee: expr(2:21-2:30) :: bool -> string {
+                            kind: ident(2:21-2:30) `to-string`,
                         },
                         args: [
-                            expr(1:31-1:35) :: bool {
-                                kind: literal(1:31-1:35) bool true,
+                            expr(2:31-2:35) :: bool {
+                                kind: literal(2:31-2:35) bool true,
                             },
                         ],
                     },
                 },
             },
-            def(2:0-2:37) :: nothing {
-                name: ident(2:4-2:20) `string-as-string`,
-                kind: expr(2:23-2:37) :: string {
-                    kind: call(2:23-2:37) {
-                        callee: expr(2:23-2:32) :: string -> string {
-                            kind: ident(2:23-2:32) `to-string`,
+            def(4:0-4:37) :: nothing {
+                name: ident(4:4-4:20) `string-as-string`,
+                kind: expr(4:23-4:37) :: string {
+                    kind: call(4:23-4:37) {
+                        callee: expr(4:23-4:32) :: string -> string {
+                            kind: ident(4:23-4:32) `to-string`,
                         },
                         args: [
-                            expr(2:34-2:37) :: string {
-                                kind: literal(2:34-2:37) string "hi",
+                            expr(4:34-4:37) :: string {
+                                kind: literal(4:34-4:37) string "hi",
                             },
                         ],
                     },

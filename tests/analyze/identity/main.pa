@@ -1,5 +1,5 @@
 def identity = fun x {
-  x
+	x
 }
 
 def num = identity 47

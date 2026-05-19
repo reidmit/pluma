@@ -1,0 +1,5 @@
+def main = fun {
+	let name = "world"
+	print "hello, $(name)!"
+	print "got $(to-string 42) items"
+}

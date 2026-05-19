@@ -9,17 +9,17 @@ module `main` (tests/analyze/if-patterns/main.pa) {
             def(0:0-3:1) :: nothing {
                 name: ident(0:5-0:9) `tree`,
                 kind: enum(0:10-3:1) [
-                    variant(1:2-1:7) {
-                        name: ident(1:2-1:7) `empty`,
+                    variant(1:1-1:6) {
+                        name: ident(1:1-1:6) `empty`,
                         params: None,
                     },
-                    variant(2:2-2:20) {
-                        name: ident(2:2-2:6) `node`,
+                    variant(2:1-2:19) {
+                        name: ident(2:1-2:5) `node`,
                         params: Some(
                             [
-                                type(2:7-2:10) type-ident(2:7-2:10) `int`,
-                                type(2:11-2:15) type-ident(2:11-2:15) `tree`,
-                                type(2:16-2:20) type-ident(2:16-2:20) `tree`,
+                                type(2:6-2:9) type-ident(2:6-2:9) `int`,
+                                type(2:10-2:14) type-ident(2:10-2:14) `tree`,
+                                type(2:15-2:19) type-ident(2:15-2:19) `tree`,
                             ],
                         ),
                     },
@@ -33,14 +33,14 @@ module `main` (tests/analyze/if-patterns/main.pa) {
                             ident(5:24-5:25) `t` :: tree,
                         ],
                         body: [
-                            expr(6:2-8:3) :: nothing {
-                                kind: if(6:2-8:3) expr(6:5-6:6) :: tree {
-                                    kind: ident(6:5-6:6) `t`,
-                                } pattern(6:10-6:15) Identifier(
-                                    ident(6:10-6:15) `empty`,
+                            expr(6:1-8:2) :: nothing {
+                                kind: if(6:1-8:2) expr(6:4-6:5) :: tree {
+                                    kind: ident(6:4-6:5) `t`,
+                                } pattern(6:9-6:14) Identifier(
+                                    ident(6:9-6:14) `empty`,
                                 ) [
-                                    expr(7:4-7:5) :: int {
-                                        kind: literal(7:4-7:5) int 0,
+                                    expr(7:2-7:3) :: int {
+                                        kind: literal(7:2-7:3) int 0,
                                     },
                                 ],
                             },
@@ -56,25 +56,25 @@ module `main` (tests/analyze/if-patterns/main.pa) {
                             ident(11:28-11:29) `t` :: tree,
                         ],
                         body: [
-                            expr(12:2-14:3) :: nothing {
-                                kind: if(12:2-14:3) expr(12:5-12:6) :: tree {
-                                    kind: ident(12:5-12:6) `t`,
-                                } pattern(12:10-12:24) Constructor(
-                                    ident(12:10-12:14) `node`,
+                            expr(12:1-14:2) :: nothing {
+                                kind: if(12:1-14:2) expr(12:4-12:5) :: tree {
+                                    kind: ident(12:4-12:5) `t`,
+                                } pattern(12:9-12:23) Constructor(
+                                    ident(12:9-12:13) `node`,
                                     [
-                                        pattern(12:15-12:18) Identifier(
-                                            ident(12:15-12:18) `val`,
+                                        pattern(12:14-12:17) Identifier(
+                                            ident(12:14-12:17) `val`,
                                         ),
-                                        pattern(12:19-12:21) Identifier(
-                                            ident(12:19-12:21) `_l`,
+                                        pattern(12:18-12:20) Identifier(
+                                            ident(12:18-12:20) `_l`,
                                         ),
-                                        pattern(12:22-12:24) Identifier(
-                                            ident(12:22-12:24) `_r`,
+                                        pattern(12:21-12:23) Identifier(
+                                            ident(12:21-12:23) `_r`,
                                         ),
                                     ],
                                 ) [
-                                    expr(13:4-13:7) :: int {
-                                        kind: ident(13:4-13:7) `val`,
+                                    expr(13:2-13:5) :: int {
+                                        kind: ident(13:2-13:5) `val`,
                                     },
                                 ],
                             },
@@ -90,14 +90,14 @@ module `main` (tests/analyze/if-patterns/main.pa) {
                             ident(17:24-17:25) `n` :: int,
                         ],
                         body: [
-                            expr(18:2-20:3) :: nothing {
-                                kind: if(18:2-20:3) expr(18:5-18:6) :: int {
-                                    kind: ident(18:5-18:6) `n`,
-                                } pattern(18:10-18:12) Literal(
-                                    literal(18:10-18:12) int 47,
+                            expr(18:1-20:2) :: nothing {
+                                kind: if(18:1-20:2) expr(18:4-18:5) :: int {
+                                    kind: ident(18:4-18:5) `n`,
+                                } pattern(18:9-18:11) Literal(
+                                    literal(18:9-18:11) int 47,
                                 ) [
-                                    expr(19:5-19:9) :: string {
-                                        kind: literal(19:5-19:9) string "yes",
+                                    expr(19:3-19:7) :: string {
+                                        kind: literal(19:3-19:7) string "yes",
                                     },
                                 ],
                             },
@@ -113,12 +113,12 @@ module `main` (tests/analyze/if-patterns/main.pa) {
                             ident(23:25-23:26) `t` :: 't6,
                         ],
                         body: [
-                            expr(24:2-26:3) :: nothing {
-                                kind: if(24:2-26:3) expr(24:5-24:6) :: 't6 {
-                                    kind: ident(24:5-24:6) `t`,
-                                } pattern(24:10-24:11) Underscore [
-                                    expr(25:4-25:5) :: int {
-                                        kind: literal(25:4-25:5) int 0,
+                            expr(24:1-26:2) :: nothing {
+                                kind: if(24:1-26:2) expr(24:4-24:5) :: 't6 {
+                                    kind: ident(24:4-24:5) `t`,
+                                } pattern(24:9-24:10) Underscore [
+                                    expr(25:2-25:3) :: int {
+                                        kind: literal(25:2-25:3) int 0,
                                     },
                                 ],
                             },
@@ -134,14 +134,14 @@ module `main` (tests/analyze/if-patterns/main.pa) {
                             ident(29:24-29:25) `t` :: 't8,
                         ],
                         body: [
-                            expr(30:2-32:3) :: nothing {
-                                kind: if(30:2-32:3) expr(30:5-30:6) :: 't8 {
-                                    kind: ident(30:5-30:6) `t`,
-                                } pattern(30:10-30:17) Identifier(
-                                    ident(30:10-30:17) `renamed`,
+                            expr(30:1-32:2) :: nothing {
+                                kind: if(30:1-32:2) expr(30:4-30:5) :: 't8 {
+                                    kind: ident(30:4-30:5) `t`,
+                                } pattern(30:9-30:16) Identifier(
+                                    ident(30:9-30:16) `renamed`,
                                 ) [
-                                    expr(31:4-31:11) :: 't8 {
-                                        kind: ident(31:4-31:11) `renamed`,
+                                    expr(31:2-31:9) :: 't8 {
+                                        kind: ident(31:2-31:9) `renamed`,
                                     },
                                 ],
                             },

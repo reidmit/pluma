@@ -2,18 +2,18 @@
 
 use core.list
 
-def range fun n {
-  when n is 0 {
-    []
-  } is _ {
-    list.concat (range (n - 1)) [n]
-  }
+def range = fun n {
+	when n is 0 {
+		[]
+	} else {
+		list.concat (range (n - 1)) [n]
+	}
 }
 
-def main fun {
-  let nums = range 200
-  let squared = list.map nums fun x { x * x }
-  let evens = list.filter squared fun x { (x % 2) == 0 }
-  let total = list.fold evens 0 fun acc x { acc + x }
-  print (to-string total)
+def main = fun {
+	let nums = range 200
+	let squared = list.map nums fun x { x * x }
+	let evens = list.filter squared fun x { (x % 2) == 0 }
+	let total = list.fold evens 0 fun acc x { acc + x }
+	print (to-string total)
 }

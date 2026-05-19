@@ -42,7 +42,15 @@ pub fn print_diagnostics(diagnostics: Vec<Diagnostic>) {
 		}
 
 		if let Some(Range { start, end }) = diagnostic.range {
-			let file = File::open(&module_path).unwrap();
+			let file = match File::open(&module_path) {
+				Ok(f) => f,
+				Err(_) => {
+					// No source on disk (synthetic path, e.g. stdin via the
+					// formatter). Skip the excerpt + caret block; the message
+					// alone is enough to communicate the failure.
+					continue;
+				}
+			};
 
 			let mut relevant_lines: Vec<(usize, String)> = Vec::new();
 

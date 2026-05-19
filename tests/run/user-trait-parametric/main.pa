@@ -3,13 +3,18 @@ trait showable a {
 }
 
 implement showable int {
-	def show = fun x { to-string x }
+	def show = fun x {
+		to-string x
+	}
 }
 
 implement showable (option a) where (showable a) {
 	def show = fun o {
-		when o is some v { "some $(showable.show v)" }
-		is none { "none" }
+		when o is some v {
+			"some $(showable.show v)"
+		} is none {
+			"none"
+		}
 	}
 }
 

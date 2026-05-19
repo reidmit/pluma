@@ -5,85 +5,85 @@ expression: output
 module `main` (tests/analyze/polymorphic-id-many-uses/main.pa) {
     comments: {},
     ast: Some(
-        module(0:0-5:28) [
-            def(0:0-0:20) :: nothing {
+        module(0:0-10:28) [
+            def(0:0-2:1) :: nothing {
                 name: ident(0:4-0:6) `id`,
-                kind: expr(0:9-0:20) :: 'z -> 'z {
-                    kind: fun(0:9-0:20) {
+                kind: expr(0:9-2:1) :: 'z -> 'z {
+                    kind: fun(0:9-2:1) {
                         params: [
                             ident(0:13-0:14) `x` :: 'z,
                         ],
                         body: [
-                            expr(0:17-0:18) :: 'z {
-                                kind: ident(0:17-0:18) `x`,
+                            expr(1:1-1:2) :: 'z {
+                                kind: ident(1:1-1:2) `x`,
                             },
                         ],
                     },
                 },
             },
-            def(2:0-2:13) :: nothing {
-                name: ident(2:4-2:5) `i`,
-                kind: expr(2:8-2:13) :: int {
-                    kind: call(2:8-2:13) {
-                        callee: expr(2:8-2:10) :: int -> int {
-                            kind: ident(2:8-2:10) `id`,
-                        },
-                        args: [
-                            expr(2:11-2:13) :: int {
-                                kind: literal(2:11-2:13) int 47,
-                            },
-                        ],
-                    },
-                },
-            },
-            def(3:0-3:18) :: nothing {
-                name: ident(3:4-3:5) `s`,
-                kind: expr(3:8-3:18) :: string {
-                    kind: call(3:8-3:18) {
-                        callee: expr(3:8-3:10) :: string -> string {
-                            kind: ident(3:8-3:10) `id`,
-                        },
-                        args: [
-                            expr(3:12-3:18) :: string {
-                                kind: literal(3:12-3:18) string "hello",
-                            },
-                        ],
-                    },
-                },
-            },
-            def(4:0-4:15) :: nothing {
-                name: ident(4:4-4:5) `b`,
-                kind: expr(4:8-4:15) :: bool {
-                    kind: call(4:8-4:15) {
-                        callee: expr(4:8-4:10) :: bool -> bool {
+            def(4:0-4:13) :: nothing {
+                name: ident(4:4-4:5) `i`,
+                kind: expr(4:8-4:13) :: int {
+                    kind: call(4:8-4:13) {
+                        callee: expr(4:8-4:10) :: int -> int {
                             kind: ident(4:8-4:10) `id`,
                         },
                         args: [
-                            expr(4:11-4:15) :: bool {
-                                kind: literal(4:11-4:15) bool true,
+                            expr(4:11-4:13) :: int {
+                                kind: literal(4:11-4:13) int 47,
                             },
                         ],
                     },
                 },
             },
-            def(5:0-5:28) :: nothing {
-                name: ident(5:4-5:5) `t`,
-                kind: expr(5:8-5:28) :: (int, string, bool) {
-                    kind: call(5:8-5:28) {
-                        callee: expr(5:8-5:10) :: ((int, string, bool)) -> (int, string, bool) {
-                            kind: ident(5:8-5:10) `id`,
+            def(6:0-6:18) :: nothing {
+                name: ident(6:4-6:5) `s`,
+                kind: expr(6:8-6:18) :: string {
+                    kind: call(6:8-6:18) {
+                        callee: expr(6:8-6:10) :: string -> string {
+                            kind: ident(6:8-6:10) `id`,
                         },
                         args: [
-                            expr(5:11-5:28) :: (int, string, bool) {
+                            expr(6:12-6:18) :: string {
+                                kind: literal(6:12-6:18) string "hello",
+                            },
+                        ],
+                    },
+                },
+            },
+            def(8:0-8:15) :: nothing {
+                name: ident(8:4-8:5) `b`,
+                kind: expr(8:8-8:15) :: bool {
+                    kind: call(8:8-8:15) {
+                        callee: expr(8:8-8:10) :: bool -> bool {
+                            kind: ident(8:8-8:10) `id`,
+                        },
+                        args: [
+                            expr(8:11-8:15) :: bool {
+                                kind: literal(8:11-8:15) bool true,
+                            },
+                        ],
+                    },
+                },
+            },
+            def(10:0-10:28) :: nothing {
+                name: ident(10:4-10:5) `t`,
+                kind: expr(10:8-10:28) :: (int, string, bool) {
+                    kind: call(10:8-10:28) {
+                        callee: expr(10:8-10:10) :: ((int, string, bool)) -> (int, string, bool) {
+                            kind: ident(10:8-10:10) `id`,
+                        },
+                        args: [
+                            expr(10:11-10:28) :: (int, string, bool) {
                                 kind: tuple [
-                                    expr(5:12-5:13) :: int {
-                                        kind: literal(5:12-5:13) int 1,
+                                    expr(10:12-10:13) :: int {
+                                        kind: literal(10:12-10:13) int 1,
                                     },
-                                    expr(5:16-5:20) :: string {
-                                        kind: literal(5:16-5:20) string "two",
+                                    expr(10:16-10:20) :: string {
+                                        kind: literal(10:16-10:20) string "two",
                                     },
-                                    expr(5:22-5:27) :: bool {
-                                        kind: literal(5:22-5:27) bool false,
+                                    expr(10:22-10:27) :: bool {
+                                        kind: literal(10:22-10:27) bool false,
                                     },
                                 ],
                             },

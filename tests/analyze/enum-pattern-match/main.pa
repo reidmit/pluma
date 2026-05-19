@@ -1,12 +1,12 @@
 enum tree {
-  empty
-  node int tree tree
+	empty
+	node int tree tree
 }
 
 def value-at-root = fun t {
-  when t is empty {
-    0
-  } is node val _l _r {
-    val
-  }
+	when t is empty {
+		0
+	} is node val _l _r {
+		val
+	}
 }

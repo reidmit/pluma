@@ -1,14 +1,11 @@
-alias person {
-  name :: string
-  age :: int
-}
+alias person {name :: string, age :: int}
 
 def get-name = fun p {
-  p.name
+	p.name
 }
 
 def main = fun {
-  let me = person { name: "reid", age: 30 }
+	let me = person {name: "reid", age: 30}
 
-  get-name me
+	get-name me
 }

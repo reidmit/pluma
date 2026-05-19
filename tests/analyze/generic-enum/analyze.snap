@@ -9,24 +9,24 @@ module `main` (tests/analyze/generic-enum/main.pa) {
             def(0:0-4:1) :: nothing {
                 name: ident(0:5-0:8) `box`,
                 kind: enum(0:11-4:1) <a> [
-                    variant(1:2-1:7) {
-                        name: ident(1:2-1:7) `empty`,
+                    variant(1:1-1:6) {
+                        name: ident(1:1-1:6) `empty`,
                         params: None,
                     },
-                    variant(2:2-2:7) {
-                        name: ident(2:2-2:5) `one`,
+                    variant(2:1-2:6) {
+                        name: ident(2:1-2:4) `one`,
                         params: Some(
                             [
-                                type(2:6-2:7) type-ident(2:6-2:7) `a`,
+                                type(2:5-2:6) type-ident(2:5-2:6) `a`,
                             ],
                         ),
                     },
-                    variant(3:2-3:9) {
-                        name: ident(3:2-3:5) `two`,
+                    variant(3:1-3:8) {
+                        name: ident(3:1-3:4) `two`,
                         params: Some(
                             [
-                                type(3:6-3:7) type-ident(3:6-3:7) `a`,
-                                type(3:8-3:9) type-ident(3:8-3:9) `a`,
+                                type(3:5-3:6) type-ident(3:5-3:6) `a`,
+                                type(3:7-3:8) type-ident(3:7-3:8) `a`,
                             ],
                         ),
                     },
@@ -38,93 +38,93 @@ module `main` (tests/analyze/generic-enum/main.pa) {
                     kind: fun(6:11-13:1) {
                         params: [],
                         body: [
-                            expr(7:2-7:19) :: nothing {
-                                kind: let(7:2-7:19) {
-                                    name: ident(7:6-7:7) `a`,
-                                    value: expr(7:10-7:19) :: box int {
-                                        kind: call(7:10-7:19) {
-                                            callee: expr(7:10-7:17) :: 'u -> box 'u {
+                            expr(7:1-7:18) :: nothing {
+                                kind: let(7:1-7:18) {
+                                    name: ident(7:5-7:6) `a`,
+                                    value: expr(7:9-7:18) :: box int {
+                                        kind: call(7:9-7:18) {
+                                            callee: expr(7:9-7:16) :: 'u -> box 'u {
                                                 kind: field-access {
-                                                    receiver: expr(7:10-7:13) :: box 'u {
-                                                        kind: ident(7:10-7:13) `box`,
+                                                    receiver: expr(7:9-7:12) :: box 'u {
+                                                        kind: ident(7:9-7:12) `box`,
                                                     },
-                                                    field: ident(7:14-7:17) `one`,
+                                                    field: ident(7:13-7:16) `one`,
                                                 },
                                             },
                                             args: [
-                                                expr(7:18-7:19) :: int {
-                                                    kind: literal(7:18-7:19) int 5,
+                                                expr(7:17-7:18) :: int {
+                                                    kind: literal(7:17-7:18) int 5,
                                                 },
                                             ],
                                         },
                                     },
                                 },
                             },
-                            expr(8:2-8:19) :: nothing {
-                                kind: let(8:2-8:19) {
-                                    name: ident(8:6-8:7) `b`,
-                                    value: expr(8:10-8:19) :: box 'w {
+                            expr(8:1-8:18) :: nothing {
+                                kind: let(8:1-8:18) {
+                                    name: ident(8:5-8:6) `b`,
+                                    value: expr(8:9-8:18) :: box 'w {
                                         kind: field-access {
-                                            receiver: expr(8:10-8:13) :: box 'w {
-                                                kind: ident(8:10-8:13) `box`,
+                                            receiver: expr(8:9-8:12) :: box 'w {
+                                                kind: ident(8:9-8:12) `box`,
                                             },
-                                            field: ident(8:14-8:19) `empty`,
+                                            field: ident(8:13-8:18) `empty`,
                                         },
                                     },
                                 },
                             },
-                            expr(9:2-9:21) :: nothing {
-                                kind: let(9:2-9:21) {
-                                    name: ident(9:6-9:7) `c`,
-                                    value: expr(9:10-9:21) :: box string {
-                                        kind: call(9:10-9:21) {
-                                            callee: expr(9:10-9:13) :: 'z 'z -> box 'z {
-                                                kind: ident(9:10-9:13) `two`,
+                            expr(9:1-9:20) :: nothing {
+                                kind: let(9:1-9:20) {
+                                    name: ident(9:5-9:6) `c`,
+                                    value: expr(9:9-9:20) :: box string {
+                                        kind: call(9:9-9:20) {
+                                            callee: expr(9:9-9:12) :: 'z 'z -> box 'z {
+                                                kind: ident(9:9-9:12) `two`,
                                             },
                                             args: [
-                                                expr(9:15-9:17) :: string {
-                                                    kind: literal(9:15-9:17) string "x",
+                                                expr(9:14-9:16) :: string {
+                                                    kind: literal(9:14-9:16) string "x",
                                                 },
-                                                expr(9:19-9:21) :: string {
-                                                    kind: literal(9:19-9:21) string "y",
+                                                expr(9:18-9:20) :: string {
+                                                    kind: literal(9:18-9:20) string "y",
                                                 },
                                             ],
                                         },
                                     },
                                 },
                             },
-                            expr(10:2-10:9) :: box int {
-                                kind: call(10:2-10:9) {
-                                    callee: expr(10:2-10:7) :: (box int) -> box int {
-                                        kind: ident(10:2-10:7) `print`,
+                            expr(10:1-10:8) :: box int {
+                                kind: call(10:1-10:8) {
+                                    callee: expr(10:1-10:6) :: (box int) -> box int {
+                                        kind: ident(10:1-10:6) `print`,
                                     },
                                     args: [
-                                        expr(10:8-10:9) :: box int {
-                                            kind: ident(10:8-10:9) `a`,
+                                        expr(10:7-10:8) :: box int {
+                                            kind: ident(10:7-10:8) `a`,
                                         },
                                     ],
                                 },
                             },
-                            expr(11:2-11:9) :: box 't13 {
-                                kind: call(11:2-11:9) {
-                                    callee: expr(11:2-11:7) :: (box 't13) -> box 't13 {
-                                        kind: ident(11:2-11:7) `print`,
+                            expr(11:1-11:8) :: box 't13 {
+                                kind: call(11:1-11:8) {
+                                    callee: expr(11:1-11:6) :: (box 't13) -> box 't13 {
+                                        kind: ident(11:1-11:6) `print`,
                                     },
                                     args: [
-                                        expr(11:8-11:9) :: box 't13 {
-                                            kind: ident(11:8-11:9) `b`,
+                                        expr(11:7-11:8) :: box 't13 {
+                                            kind: ident(11:7-11:8) `b`,
                                         },
                                     ],
                                 },
                             },
-                            expr(12:2-12:9) :: box string {
-                                kind: call(12:2-12:9) {
-                                    callee: expr(12:2-12:7) :: (box string) -> box string {
-                                        kind: ident(12:2-12:7) `print`,
+                            expr(12:1-12:8) :: box string {
+                                kind: call(12:1-12:8) {
+                                    callee: expr(12:1-12:6) :: (box string) -> box string {
+                                        kind: ident(12:1-12:6) `print`,
                                     },
                                     args: [
-                                        expr(12:8-12:9) :: box string {
-                                            kind: ident(12:8-12:9) `c`,
+                                        expr(12:7-12:8) :: box string {
+                                            kind: ident(12:7-12:8) `c`,
                                         },
                                     ],
                                 },

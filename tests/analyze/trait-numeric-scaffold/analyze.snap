@@ -5,7 +5,7 @@ expression: output
 module `main` (tests/analyze/trait-numeric-scaffold/main.pa) {
     comments: {},
     ast: Some(
-        module(0:0-8:1) [
+        module(0:0-12:1) [
             def(0:0-3:1) :: nothing {
                 name: ident(0:6-0:16) `my-numeric`,
                 kind: trait(0:19-3:1) {
@@ -29,38 +29,38 @@ module `main` (tests/analyze/trait-numeric-scaffold/main.pa) {
                     ],
                 },
             },
-            def(5:0-8:1) :: nothing {
+            def(5:0-12:1) :: nothing {
                 name: ident(5:10-5:20) `my-numeric@instance@5:21`,
-                kind: instance(5:0-8:1) {
+                kind: instance(5:0-12:1) {
                     trait: ident(5:10-5:20) `my-numeric`,
                     head: type(5:21-5:24) type-ident(5:21-5:24) `int`,
                     methods: [
-                        def(6:1-6:25) :: nothing {
+                        def(6:1-8:2) :: nothing {
                             name: ident(6:5-6:8) `add`,
-                            kind: expr(6:11-6:25) :: int int -> int {
-                                kind: fun(6:11-6:25) {
+                            kind: expr(6:11-8:2) :: int int -> int {
+                                kind: fun(6:11-8:2) {
                                     params: [
                                         ident(6:15-6:16) `x` :: int,
                                         ident(6:17-6:19) `_y` :: int,
                                     ],
                                     body: [
-                                        expr(6:22-6:23) :: int {
-                                            kind: ident(6:22-6:23) `x`,
+                                        expr(7:2-7:3) :: int {
+                                            kind: ident(7:2-7:3) `x`,
                                         },
                                     ],
                                 },
                             },
                         },
-                        def(7:1-7:25) :: nothing {
-                            name: ident(7:5-7:11) `negate`,
-                            kind: expr(7:14-7:25) :: int -> int {
-                                kind: fun(7:14-7:25) {
+                        def(9:1-11:2) :: nothing {
+                            name: ident(9:5-9:11) `negate`,
+                            kind: expr(9:14-11:2) :: int -> int {
+                                kind: fun(9:14-11:2) {
                                     params: [
-                                        ident(7:18-7:19) `x` :: int,
+                                        ident(9:18-9:19) `x` :: int,
                                     ],
                                     body: [
-                                        expr(7:22-7:23) :: int {
-                                            kind: ident(7:22-7:23) `x`,
+                                        expr(10:2-10:3) :: int {
+                                            kind: ident(10:2-10:3) `x`,
                                         },
                                     ],
                                 },

@@ -1,15 +1,15 @@
 def classify = fun s {
-  when s is "yes" {
-    "affirmative"
-  } is "no" {
-    "negative"
-  } is _ {
-    "unknown"
-  }
+	when s is "yes" {
+		"affirmative"
+	} is "no" {
+		"negative"
+	} else {
+		"unknown"
+	}
 }
 
 def main = fun {
-  print (classify "yes")
-  print (classify "no")
-  print (classify "maybe")
+	print (classify "yes")
+	print (classify "no")
+	print (classify "maybe")
 }

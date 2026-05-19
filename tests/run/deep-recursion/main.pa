@@ -2,14 +2,14 @@
 # heap, so this is bounded only by memory rather than the Rust call stack.
 
 def count-down = fun n {
-  when n is 0 {
-    ()
-  } is _ {
-    count-down (n - 1)
-  }
+	when n is 0 {
+		()
+	} else {
+		count-down (n - 1)
+	}
 }
 
 def main = fun {
-  count-down 5000
-  print "ok"
+	count-down 5000
+	print "ok"
 }

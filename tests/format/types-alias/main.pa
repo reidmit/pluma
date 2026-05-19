@@ -1,0 +1,5 @@
+alias number-list list int
+
+alias person {name :: string, age :: int}
+
+alias adder fun int int -> int

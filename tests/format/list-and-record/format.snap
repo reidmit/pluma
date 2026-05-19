@@ -1,0 +1,12 @@
+---
+source: tests/format.rs
+expression: once
+---
+def short-list = [1, 2, 3, 4, 5]
+
+def long-list = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "iota"]
+
+def small-record = {name: "reid", age: 28}
+
+def wide-record = {first-name: "reid", last-name: "mitchell", role: "engineer", team: "platform"}
+

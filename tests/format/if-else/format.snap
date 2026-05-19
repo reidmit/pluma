@@ -1,0 +1,13 @@
+---
+source: tests/format.rs
+expression: once
+---
+def main = fun {
+	let r = ok 42
+	if r is ok value {
+		print "got $(to-string value)"
+	} else {
+		print "no value"
+	}
+}
+

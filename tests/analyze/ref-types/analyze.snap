@@ -9,7 +9,7 @@ module `main` (tests/analyze/ref-types/main.pa) {
         2: " `ref.set` / `ref.update` return `nothing`.",
     },
     ast: Some(
-        module(4:0-23:1) [
+        module(4:0-24:1) [
             def(4:0-4:24) :: nothing {
                 name: ident(4:4-4:12) `int-cell`,
                 kind: expr(4:15-4:24) :: ref int {
@@ -30,45 +30,45 @@ module `main` (tests/analyze/ref-types/main.pa) {
                     },
                 },
             },
-            def(5:0-5:27) :: nothing {
-                name: ident(5:4-5:12) `str-cell`,
-                kind: expr(5:15-5:27) :: ref string {
-                    kind: call(5:15-5:27) {
-                        callee: expr(5:15-5:22) :: 't6 -> ref 't6 {
+            def(6:0-6:27) :: nothing {
+                name: ident(6:4-6:12) `str-cell`,
+                kind: expr(6:15-6:27) :: ref string {
+                    kind: call(6:15-6:27) {
+                        callee: expr(6:15-6:22) :: 't6 -> ref 't6 {
                             kind: field-access {
-                                receiver: expr(5:15-5:18) :: ? {
-                                    kind: ident(5:15-5:18) `ref`,
+                                receiver: expr(6:15-6:18) :: ? {
+                                    kind: ident(6:15-6:18) `ref`,
                                 },
-                                field: ident(5:19-5:22) `new`,
+                                field: ident(6:19-6:22) `new`,
                             },
                         },
                         args: [
-                            expr(5:24-5:27) :: string {
-                                kind: literal(5:24-5:27) string "hi",
+                            expr(6:24-6:27) :: string {
+                                kind: literal(6:24-6:27) string "hi",
                             },
                         ],
                     },
                 },
             },
-            def(7:0-9:1) :: nothing {
-                name: ident(7:4-7:12) `read-int`,
-                kind: expr(7:15-9:1) :: nothing -> int {
-                    kind: fun(7:15-9:1) {
+            def(8:0-10:1) :: nothing {
+                name: ident(8:4-8:12) `read-int`,
+                kind: expr(8:15-10:1) :: nothing -> int {
+                    kind: fun(8:15-10:1) {
                         params: [],
                         body: [
-                            expr(8:1-8:17) :: int {
-                                kind: call(8:1-8:17) {
-                                    callee: expr(8:1-8:8) :: (ref 't9) -> 't9 {
+                            expr(9:1-9:17) :: int {
+                                kind: call(9:1-9:17) {
+                                    callee: expr(9:1-9:8) :: (ref 't9) -> 't9 {
                                         kind: field-access {
-                                            receiver: expr(8:1-8:4) :: ? {
-                                                kind: ident(8:1-8:4) `ref`,
+                                            receiver: expr(9:1-9:4) :: ? {
+                                                kind: ident(9:1-9:4) `ref`,
                                             },
-                                            field: ident(8:5-8:8) `get`,
+                                            field: ident(9:5-9:8) `get`,
                                         },
                                     },
                                     args: [
-                                        expr(8:9-8:17) :: ref int {
-                                            kind: ident(8:9-8:17) `int-cell`,
+                                        expr(9:9-9:17) :: ref int {
+                                            kind: ident(9:9-9:17) `int-cell`,
                                         },
                                     ],
                                 },
@@ -77,28 +77,28 @@ module `main` (tests/analyze/ref-types/main.pa) {
                     },
                 },
             },
-            def(11:0-13:1) :: nothing {
-                name: ident(11:4-11:13) `write-int`,
-                kind: expr(11:16-13:1) :: nothing -> nothing {
-                    kind: fun(11:16-13:1) {
+            def(12:0-14:1) :: nothing {
+                name: ident(12:4-12:13) `write-int`,
+                kind: expr(12:16-14:1) :: nothing -> nothing {
+                    kind: fun(12:16-14:1) {
                         params: [],
                         body: [
-                            expr(12:1-12:19) :: nothing {
-                                kind: call(12:1-12:19) {
-                                    callee: expr(12:1-12:8) :: (ref 't13) 't13 -> nothing {
+                            expr(13:1-13:19) :: nothing {
+                                kind: call(13:1-13:19) {
+                                    callee: expr(13:1-13:8) :: (ref 't13) 't13 -> nothing {
                                         kind: field-access {
-                                            receiver: expr(12:1-12:4) :: ? {
-                                                kind: ident(12:1-12:4) `ref`,
+                                            receiver: expr(13:1-13:4) :: ? {
+                                                kind: ident(13:1-13:4) `ref`,
                                             },
-                                            field: ident(12:5-12:8) `set`,
+                                            field: ident(13:5-13:8) `set`,
                                         },
                                     },
                                     args: [
-                                        expr(12:9-12:17) :: ref int {
-                                            kind: ident(12:9-12:17) `int-cell`,
+                                        expr(13:9-13:17) :: ref int {
+                                            kind: ident(13:9-13:17) `int-cell`,
                                         },
-                                        expr(12:18-12:19) :: int {
-                                            kind: literal(12:18-12:19) int 5,
+                                        expr(13:18-13:19) :: int {
+                                            kind: literal(13:18-13:19) int 5,
                                         },
                                     ],
                                 },
@@ -107,39 +107,39 @@ module `main` (tests/analyze/ref-types/main.pa) {
                     },
                 },
             },
-            def(15:0-17:1) :: nothing {
-                name: ident(15:4-15:12) `bump-int`,
-                kind: expr(15:15-17:1) :: nothing -> nothing {
-                    kind: fun(15:15-17:1) {
+            def(16:0-18:1) :: nothing {
+                name: ident(16:4-16:12) `bump-int`,
+                kind: expr(16:15-18:1) :: nothing -> nothing {
+                    kind: fun(16:15-18:1) {
                         params: [],
                         body: [
-                            expr(16:1-16:36) :: nothing {
-                                kind: call(16:1-16:36) {
-                                    callee: expr(16:1-16:11) :: (ref 't17) ('t17 -> 't17) -> nothing {
+                            expr(17:1-17:36) :: nothing {
+                                kind: call(17:1-17:36) {
+                                    callee: expr(17:1-17:11) :: (ref 't17) ('t17 -> 't17) -> nothing {
                                         kind: field-access {
-                                            receiver: expr(16:1-16:4) :: ? {
-                                                kind: ident(16:1-16:4) `ref`,
+                                            receiver: expr(17:1-17:4) :: ? {
+                                                kind: ident(17:1-17:4) `ref`,
                                             },
-                                            field: ident(16:5-16:11) `update`,
+                                            field: ident(17:5-17:11) `update`,
                                         },
                                     },
                                     args: [
-                                        expr(16:12-16:20) :: ref int {
-                                            kind: ident(16:12-16:20) `int-cell`,
+                                        expr(17:12-17:20) :: ref int {
+                                            kind: ident(17:12-17:20) `int-cell`,
                                         },
-                                        expr(16:21-16:36) :: int -> int {
-                                            kind: fun(16:21-16:36) {
+                                        expr(17:21-17:36) :: int -> int {
+                                            kind: fun(17:21-17:36) {
                                                 params: [
-                                                    ident(16:25-16:26) `n` :: int,
+                                                    ident(17:25-17:26) `n` :: int,
                                                 ],
                                                 body: [
-                                                    expr(16:29-16:34) :: int {
-                                                        kind: binary op(16:31-16:32) `+` {
-                                                            left: expr(16:29-16:30) :: int {
-                                                                kind: ident(16:29-16:30) `n`,
+                                                    expr(17:29-17:34) :: int {
+                                                        kind: binary op(17:31-17:32) `+` {
+                                                            left: expr(17:29-17:30) :: int {
+                                                                kind: ident(17:29-17:30) `n`,
                                                             },
-                                                            right: expr(16:33-16:34) :: int {
-                                                                kind: literal(16:33-16:34) int 1,
+                                                            right: expr(17:33-17:34) :: int {
+                                                                kind: literal(17:33-17:34) int 1,
                                                             },
                                                         },
                                                     },
@@ -153,29 +153,29 @@ module `main` (tests/analyze/ref-types/main.pa) {
                     },
                 },
             },
-            def(19:0-19:21) :: nothing {
-                name: ident(19:6-19:13) `counter`,
-                kind: alias type(19:14-19:21) type-ident(19:14-19:21) `ref`,
+            def(20:0-20:21) :: nothing {
+                name: ident(20:6-20:13) `counter`,
+                kind: alias type(20:14-20:21) type-ident(20:14-20:21) `ref`,
             },
-            def(21:0-23:1) :: nothing {
-                name: ident(21:4-21:16) `make-counter`,
-                kind: expr(21:19-23:1) :: nothing -> ref int {
-                    kind: fun(21:19-23:1) {
+            def(22:0-24:1) :: nothing {
+                name: ident(22:4-22:16) `make-counter`,
+                kind: expr(22:19-24:1) :: nothing -> ref int {
+                    kind: fun(22:19-24:1) {
                         params: [],
                         body: [
-                            expr(22:1-22:10) :: ref int {
-                                kind: call(22:1-22:10) {
-                                    callee: expr(22:1-22:8) :: 't24 -> ref 't24 {
+                            expr(23:1-23:10) :: ref int {
+                                kind: call(23:1-23:10) {
+                                    callee: expr(23:1-23:8) :: 't24 -> ref 't24 {
                                         kind: field-access {
-                                            receiver: expr(22:1-22:4) :: ? {
-                                                kind: ident(22:1-22:4) `ref`,
+                                            receiver: expr(23:1-23:4) :: ? {
+                                                kind: ident(23:1-23:4) `ref`,
                                             },
-                                            field: ident(22:5-22:8) `new`,
+                                            field: ident(23:5-23:8) `new`,
                                         },
                                     },
                                     args: [
-                                        expr(22:9-22:10) :: int {
-                                            kind: literal(22:9-22:10) int 0,
+                                        expr(23:9-23:10) :: int {
+                                            kind: literal(23:9-23:10) int 0,
                                         },
                                     ],
                                 },

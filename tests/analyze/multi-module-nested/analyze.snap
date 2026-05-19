@@ -5,7 +5,7 @@ expression: output
 module `main` (tests/analyze/multi-module-nested/main.pa) {
     comments: {},
     ast: Some(
-        module(0:0-3:31) [
+        module(0:0-4:31) [
             use(0:0-0:13) `sub.utils`,
         ] [
             def(2:0-2:24) :: nothing {
@@ -19,21 +19,21 @@ module `main` (tests/analyze/multi-module-nested/main.pa) {
                     },
                 },
             },
-            def(3:0-3:31) :: nothing {
-                name: ident(3:4-3:11) `doubled`,
-                kind: expr(3:14-3:31) :: int {
-                    kind: call(3:14-3:31) {
-                        callee: expr(3:14-3:28) :: 't -> 't {
+            def(4:0-4:31) :: nothing {
+                name: ident(4:4-4:11) `doubled`,
+                kind: expr(4:14-4:31) :: int {
+                    kind: call(4:14-4:31) {
+                        callee: expr(4:14-4:28) :: 't -> 't {
                             kind: field-access {
-                                receiver: expr(3:14-3:19) :: ? {
-                                    kind: ident(3:14-3:19) `utils`,
+                                receiver: expr(4:14-4:19) :: ? {
+                                    kind: ident(4:14-4:19) `utils`,
                                 },
-                                field: ident(3:20-3:28) `identity`,
+                                field: ident(4:20-4:28) `identity`,
                             },
                         },
                         args: [
-                            expr(3:29-3:31) :: int {
-                                kind: literal(3:29-3:31) int 42,
+                            expr(4:29-4:31) :: int {
+                                kind: literal(4:29-4:31) int 42,
                             },
                         ],
                     },

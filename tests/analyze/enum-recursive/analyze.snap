@@ -5,21 +5,21 @@ expression: output
 module `main` (tests/analyze/enum-recursive/main.pa) {
     comments: {},
     ast: Some(
-        module(0:0-7:48) [
+        module(0:0-9:48) [
             def(0:0-3:1) :: nothing {
                 name: ident(0:5-0:9) `tree`,
                 kind: enum(0:10-3:1) [
-                    variant(1:2-1:7) {
-                        name: ident(1:2-1:7) `empty`,
+                    variant(1:1-1:6) {
+                        name: ident(1:1-1:6) `empty`,
                         params: None,
                     },
-                    variant(2:2-2:20) {
-                        name: ident(2:2-2:6) `node`,
+                    variant(2:1-2:19) {
+                        name: ident(2:1-2:5) `node`,
                         params: Some(
                             [
-                                type(2:7-2:10) type-ident(2:7-2:10) `int`,
-                                type(2:11-2:15) type-ident(2:11-2:15) `tree`,
-                                type(2:16-2:20) type-ident(2:16-2:20) `tree`,
+                                type(2:6-2:9) type-ident(2:6-2:9) `int`,
+                                type(2:10-2:14) type-ident(2:10-2:14) `tree`,
+                                type(2:15-2:19) type-ident(2:15-2:19) `tree`,
                             ],
                         ),
                     },
@@ -36,47 +36,47 @@ module `main` (tests/analyze/enum-recursive/main.pa) {
                     },
                 },
             },
-            def(6:0-6:25) :: nothing {
-                name: ident(6:4-6:13) `make-node`,
-                kind: expr(6:16-6:25) :: int tree tree -> tree {
+            def(7:0-7:25) :: nothing {
+                name: ident(7:4-7:13) `make-node`,
+                kind: expr(7:16-7:25) :: int tree tree -> tree {
                     kind: field-access {
-                        receiver: expr(6:16-6:20) :: tree {
-                            kind: ident(6:16-6:20) `tree`,
+                        receiver: expr(7:16-7:20) :: tree {
+                            kind: ident(7:16-7:20) `tree`,
                         },
-                        field: ident(6:21-6:25) `node`,
+                        field: ident(7:21-7:25) `node`,
                     },
                 },
             },
-            def(7:0-7:48) :: nothing {
-                name: ident(7:4-7:12) `big-tree`,
-                kind: expr(7:15-7:48) :: tree {
-                    kind: call(7:15-7:48) {
-                        callee: expr(7:15-7:24) :: int tree tree -> tree {
+            def(9:0-9:48) :: nothing {
+                name: ident(9:4-9:12) `big-tree`,
+                kind: expr(9:15-9:48) :: tree {
+                    kind: call(9:15-9:48) {
+                        callee: expr(9:15-9:24) :: int tree tree -> tree {
                             kind: field-access {
-                                receiver: expr(7:15-7:19) :: tree {
-                                    kind: ident(7:15-7:19) `tree`,
+                                receiver: expr(9:15-9:19) :: tree {
+                                    kind: ident(9:15-9:19) `tree`,
                                 },
-                                field: ident(7:20-7:24) `node`,
+                                field: ident(9:20-9:24) `node`,
                             },
                         },
                         args: [
-                            expr(7:25-7:26) :: int {
-                                kind: literal(7:25-7:26) int 1,
+                            expr(9:25-9:26) :: int {
+                                kind: literal(9:25-9:26) int 1,
                             },
-                            expr(7:27-7:37) :: tree {
+                            expr(9:27-9:37) :: tree {
                                 kind: field-access {
-                                    receiver: expr(7:27-7:31) :: tree {
-                                        kind: ident(7:27-7:31) `tree`,
+                                    receiver: expr(9:27-9:31) :: tree {
+                                        kind: ident(9:27-9:31) `tree`,
                                     },
-                                    field: ident(7:32-7:37) `empty`,
+                                    field: ident(9:32-9:37) `empty`,
                                 },
                             },
-                            expr(7:38-7:48) :: tree {
+                            expr(9:38-9:48) :: tree {
                                 kind: field-access {
-                                    receiver: expr(7:38-7:42) :: tree {
-                                        kind: ident(7:38-7:42) `tree`,
+                                    receiver: expr(9:38-9:42) :: tree {
+                                        kind: ident(9:38-9:42) `tree`,
                                     },
-                                    field: ident(7:43-7:48) `empty`,
+                                    field: ident(9:43-9:48) `empty`,
                                 },
                             },
                         ],

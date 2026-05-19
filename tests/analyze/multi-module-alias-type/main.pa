@@ -3,7 +3,7 @@ use shapes
 def origin = shapes.point {x: 0, y: 0}
 
 def x-of = fun p {
-  p.x
+	p.x
 }
 
 def origin-x = x-of origin

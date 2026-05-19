@@ -5,48 +5,48 @@ expression: output
 module `main` (tests/analyze/def-polymorphism/main.pa) {
     comments: {},
     ast: Some(
-        module(0:0-5:1) [
-            def(0:0-0:26) :: nothing {
+        module(0:0-7:1) [
+            def(0:0-2:1) :: nothing {
                 name: ident(0:4-0:12) `identity`,
-                kind: expr(0:15-0:26) :: 't -> 't {
-                    kind: fun(0:15-0:26) {
+                kind: expr(0:15-2:1) :: 't -> 't {
+                    kind: fun(0:15-2:1) {
                         params: [
                             ident(0:19-0:20) `x` :: 't,
                         ],
                         body: [
-                            expr(0:23-0:24) :: 't {
-                                kind: ident(0:23-0:24) `x`,
+                            expr(1:1-1:2) :: 't {
+                                kind: ident(1:1-1:2) `x`,
                             },
                         ],
                     },
                 },
             },
-            def(2:0-5:1) :: nothing {
-                name: ident(2:4-2:8) `main`,
-                kind: expr(2:11-5:1) :: nothing -> int {
-                    kind: fun(2:11-5:1) {
+            def(4:0-7:1) :: nothing {
+                name: ident(4:4-4:8) `main`,
+                kind: expr(4:11-7:1) :: nothing -> int {
+                    kind: fun(4:11-7:1) {
                         params: [],
                         body: [
-                            expr(3:2-3:16) :: string {
-                                kind: call(3:2-3:16) {
-                                    callee: expr(3:2-3:10) :: string -> string {
-                                        kind: ident(3:2-3:10) `identity`,
+                            expr(5:1-5:15) :: string {
+                                kind: call(5:1-5:15) {
+                                    callee: expr(5:1-5:9) :: string -> string {
+                                        kind: ident(5:1-5:9) `identity`,
                                     },
                                     args: [
-                                        expr(3:12-3:16) :: string {
-                                            kind: literal(3:12-3:16) string "wow",
+                                        expr(5:11-5:15) :: string {
+                                            kind: literal(5:11-5:15) string "wow",
                                         },
                                     ],
                                 },
                             },
-                            expr(4:2-4:13) :: int {
-                                kind: call(4:2-4:13) {
-                                    callee: expr(4:2-4:10) :: int -> int {
-                                        kind: ident(4:2-4:10) `identity`,
+                            expr(6:1-6:12) :: int {
+                                kind: call(6:1-6:12) {
+                                    callee: expr(6:1-6:9) :: int -> int {
+                                        kind: ident(6:1-6:9) `identity`,
                                     },
                                     args: [
-                                        expr(4:11-4:13) :: int {
-                                            kind: literal(4:11-4:13) int 47,
+                                        expr(6:10-6:12) :: int {
+                                            kind: literal(6:10-6:12) int 47,
                                         },
                                     ],
                                 },

@@ -1,2 +1,3 @@
 def bad-add = 1 + 2.0
+
 def bad-cmp = 1 < 2.0

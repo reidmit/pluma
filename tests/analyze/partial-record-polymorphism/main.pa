@@ -1,9 +1,9 @@
 def get-name = fun rec {
-  rec.name
+	rec.name
 }
 
 def main = fun {
-  get-name {name: 123}
+	get-name {name: 123}
 
-  get-name {name: "lol"}
+	get-name {name: "lol"}
 }

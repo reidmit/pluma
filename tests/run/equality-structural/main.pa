@@ -1,34 +1,34 @@
 enum color {
-  red
-  green
-  blue
+	red
+	green
+	blue
 }
 
 def main = fun {
-  # primitives
-  print ("hello" == "hello")
-  print ("hello" == "world")
-  print (true == true)
-  print (true == false)
+	# primitives
+	print ("hello" == "hello")
+	print ("hello" == "world")
+	print (true == true)
+	print (true == false)
 
-  # nothing
-  print (() == ())
+	# nothing
+	print (() == ())
 
-  # tuples (structural)
-  print ((1, "a") == (1, "a"))
-  print ((1, "a") == (1, "b"))
+	# tuples (structural)
+	print ((1, "a") == (1, "a"))
+	print ((1, "a") == (1, "b"))
 
-  # records (field order doesn't matter)
-  print ({x: 1, y: 2} == {x: 1, y: 2})
-  print ({y: 2, x: 1} == {x: 1, y: 2})
-  print ({x: 1, y: 2} == {x: 1, y: 3})
+	# records (field order doesn't matter)
+	print ({x: 1, y: 2} == {x: 1, y: 2})
+	print ({y: 2, x: 1} == {x: 1, y: 2})
+	print ({x: 1, y: 2} == {x: 1, y: 3})
 
-  # enum variants
-  print (color.red == color.red)
-  print (color.red == color.blue)
+	# enum variants
+	print (color.red == color.red)
+	print (color.red == color.blue)
 
-  # lists
-  print ([1, 2, 3] == [1, 2, 3])
-  print ([1, 2, 3] == [1, 2])
-  print ([1, 2, 3] == [1, 2, 4])
+	# lists
+	print ([1, 2, 3] == [1, 2, 3])
+	print ([1, 2, 3] == [1, 2])
+	print ([1, 2, 3] == [1, 2, 4])
 }

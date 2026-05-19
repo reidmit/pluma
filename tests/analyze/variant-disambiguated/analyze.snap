@@ -5,16 +5,16 @@ expression: output
 module `main` (tests/analyze/variant-disambiguated/main.pa) {
     comments: {},
     ast: Some(
-        module(0:0-14:1) [
+        module(0:0-18:1) [
             def(0:0-3:1) :: nothing {
                 name: ident(0:5-0:10) `color`,
                 kind: enum(0:11-3:1) [
-                    variant(1:2-1:5) {
-                        name: ident(1:2-1:5) `red`,
+                    variant(1:1-1:4) {
+                        name: ident(1:1-1:4) `red`,
                         params: None,
                     },
-                    variant(2:2-2:7) {
-                        name: ident(2:2-2:7) `green`,
+                    variant(2:1-2:6) {
+                        name: ident(2:1-2:6) `green`,
                         params: None,
                     },
                 ],
@@ -22,49 +22,49 @@ module `main` (tests/analyze/variant-disambiguated/main.pa) {
             def(5:0-8:1) :: nothing {
                 name: ident(5:5-5:10) `fruit`,
                 kind: enum(5:11-8:1) [
-                    variant(6:2-6:5) {
-                        name: ident(6:2-6:5) `red`,
+                    variant(6:1-6:4) {
+                        name: ident(6:1-6:4) `red`,
                         params: None,
                     },
-                    variant(7:2-7:7) {
-                        name: ident(7:2-7:7) `apple`,
+                    variant(7:1-7:6) {
+                        name: ident(7:1-7:6) `apple`,
                         params: None,
                     },
                 ],
             },
-            def(10:0-14:1) :: nothing {
+            def(10:0-18:1) :: nothing {
                 name: ident(10:4-10:10) `is-red`,
-                kind: expr(10:13-14:1) :: nothing -> int {
-                    kind: fun(10:13-14:1) {
+                kind: expr(10:13-18:1) :: nothing -> int {
+                    kind: fun(10:13-18:1) {
                         params: [],
                         body: [
-                            expr(11:2-11:19) :: nothing {
-                                kind: let(11:2-11:19) {
-                                    name: ident(11:6-11:7) `x`,
-                                    value: expr(11:10-11:19) :: color {
+                            expr(11:1-11:18) :: nothing {
+                                kind: let(11:1-11:18) {
+                                    name: ident(11:5-11:6) `x`,
+                                    value: expr(11:9-11:18) :: color {
                                         kind: field-access {
-                                            receiver: expr(11:10-11:15) :: color {
-                                                kind: ident(11:10-11:15) `color`,
+                                            receiver: expr(11:9-11:14) :: color {
+                                                kind: ident(11:9-11:14) `color`,
                                             },
-                                            field: ident(11:16-11:19) `red`,
+                                            field: ident(11:15-11:18) `red`,
                                         },
                                     },
                                 },
                             },
-                            expr(13:2-13:36) :: int {
-                                kind: when(13:2-13:36) [
-                                    case(13:9-13:21) is pattern(13:12-13:15) Identifier(
-                                        ident(13:12-13:15) `red`,
+                            expr(13:1-17:2) :: int {
+                                kind: when(13:1-17:2) [
+                                    case(13:8-15:2) is pattern(13:11-13:14) Identifier(
+                                        ident(13:11-13:14) `red`,
                                     ) [
-                                        expr(13:18-13:19) :: int {
-                                            kind: literal(13:18-13:19) int 0,
+                                        expr(14:2-14:3) :: int {
+                                            kind: literal(14:2-14:3) int 0,
                                         },
                                     ],
-                                    case(13:22-13:36) is pattern(13:25-13:30) Identifier(
-                                        ident(13:25-13:30) `green`,
+                                    case(15:3-17:2) is pattern(15:6-15:11) Identifier(
+                                        ident(15:6-15:11) `green`,
                                     ) [
-                                        expr(13:33-13:34) :: int {
-                                            kind: literal(13:33-13:34) int 1,
+                                        expr(16:2-16:3) :: int {
+                                            kind: literal(16:2-16:3) int 1,
                                         },
                                     ],
                                 ],

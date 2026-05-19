@@ -5,67 +5,67 @@ expression: output
 module `main` (tests/analyze/def-type-alias-record/main.pa) {
     comments: {},
     ast: Some(
-        module(0:0-13:1) [
-            def(0:0-3:1) :: nothing {
+        module(0:0-10:1) [
+            def(0:0-0:41) :: nothing {
                 name: ident(0:6-0:12) `person`,
-                kind: alias type(0:13-3:1) record-type [
+                kind: alias type(0:13-0:41) record-type [
                     (
-                        ident(1:2-1:6) `name`,
-                        type(1:10-1:16) type-ident(1:10-1:16) `string`,
+                        ident(0:14-0:18) `name`,
+                        type(0:22-0:28) type-ident(0:22-0:28) `string`,
                     ),
                     (
-                        ident(2:2-2:5) `age`,
-                        type(2:9-2:12) type-ident(2:9-2:12) `int`,
+                        ident(0:30-0:33) `age`,
+                        type(0:37-0:40) type-ident(0:37-0:40) `int`,
                     ),
                 ],
             },
-            def(5:0-7:1) :: nothing {
-                name: ident(5:4-5:12) `get-name`,
-                kind: expr(5:15-7:1) :: ({name: 'x, ...}) -> 'x {
-                    kind: fun(5:15-7:1) {
+            def(2:0-4:1) :: nothing {
+                name: ident(2:4-2:12) `get-name`,
+                kind: expr(2:15-4:1) :: ({name: 'x, ...}) -> 'x {
+                    kind: fun(2:15-4:1) {
                         params: [
-                            ident(5:19-5:20) `p` :: {name: 'x, ...},
+                            ident(2:19-2:20) `p` :: {name: 'x, ...},
                         ],
                         body: [
-                            expr(6:2-6:8) :: 'x {
+                            expr(3:1-3:7) :: 'x {
                                 kind: field-access {
-                                    receiver: expr(6:2-6:3) :: {name: 'x, ...} {
-                                        kind: ident(6:2-6:3) `p`,
+                                    receiver: expr(3:1-3:2) :: {name: 'x, ...} {
+                                        kind: ident(3:1-3:2) `p`,
                                     },
-                                    field: ident(6:4-6:8) `name`,
+                                    field: ident(3:3-3:7) `name`,
                                 },
                             },
                         ],
                     },
                 },
             },
-            def(9:0-13:1) :: nothing {
-                name: ident(9:4-9:8) `main`,
-                kind: expr(9:11-13:1) :: nothing -> string {
-                    kind: fun(9:11-13:1) {
+            def(6:0-10:1) :: nothing {
+                name: ident(6:4-6:8) `main`,
+                kind: expr(6:11-10:1) :: nothing -> string {
+                    kind: fun(6:11-10:1) {
                         params: [],
                         body: [
-                            expr(10:2-10:43) :: nothing {
-                                kind: let(10:2-10:43) {
-                                    name: ident(10:6-10:8) `me`,
-                                    value: expr(10:11-10:43) :: {name: string, age: int} {
-                                        kind: call(10:11-10:43) {
-                                            callee: expr(10:11-10:17) :: ({name: string, age: int}) -> {name: string, age: int} {
-                                                kind: ident(10:11-10:17) `person`,
+                            expr(7:1-7:40) :: nothing {
+                                kind: let(7:1-7:40) {
+                                    name: ident(7:5-7:7) `me`,
+                                    value: expr(7:10-7:40) :: {name: string, age: int} {
+                                        kind: call(7:10-7:40) {
+                                            callee: expr(7:10-7:16) :: ({name: string, age: int}) -> {name: string, age: int} {
+                                                kind: ident(7:10-7:16) `person`,
                                             },
                                             args: [
-                                                expr(10:18-10:43) :: {name: string, age: int} {
+                                                expr(7:17-7:40) :: {name: string, age: int} {
                                                     kind: record [
                                                         (
-                                                            ident(10:20-10:24) `name`,
-                                                            expr(10:27-10:32) :: string {
-                                                                kind: literal(10:27-10:32) string "reid",
+                                                            ident(7:18-7:22) `name`,
+                                                            expr(7:25-7:30) :: string {
+                                                                kind: literal(7:25-7:30) string "reid",
                                                             },
                                                         ),
                                                         (
-                                                            ident(10:34-10:37) `age`,
-                                                            expr(10:39-10:41) :: int {
-                                                                kind: literal(10:39-10:41) int 30,
+                                                            ident(7:32-7:35) `age`,
+                                                            expr(7:37-7:39) :: int {
+                                                                kind: literal(7:37-7:39) int 30,
                                                             },
                                                         ),
                                                     ],
@@ -75,14 +75,14 @@ module `main` (tests/analyze/def-type-alias-record/main.pa) {
                                     },
                                 },
                             },
-                            expr(12:2-12:13) :: string {
-                                kind: call(12:2-12:13) {
-                                    callee: expr(12:2-12:10) :: ({name: string, ...}) -> string {
-                                        kind: ident(12:2-12:10) `get-name`,
+                            expr(9:1-9:12) :: string {
+                                kind: call(9:1-9:12) {
+                                    callee: expr(9:1-9:9) :: ({name: string, ...}) -> string {
+                                        kind: ident(9:1-9:9) `get-name`,
                                     },
                                     args: [
-                                        expr(12:11-12:13) :: {name: string, ...} {
-                                            kind: ident(12:11-12:13) `me`,
+                                        expr(9:10-9:12) :: {name: string, ...} {
+                                            kind: ident(9:10-9:12) `me`,
                                         },
                                     ],
                                 },

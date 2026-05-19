@@ -7,6 +7,7 @@ publish = false
 [dependencies]
 codegen = { path = "../codegen" }
 compiler = { path = "../compiler" }
+formatter = { path = "../formatter" }
 vm = { path = "../vm" }
 
 [dev-dependencies]
@@ -16,6 +17,11 @@ insta = "1"
 [[test]]
 name = "analyze"
 path = "analyze.rs"
+harness = false
+
+[[test]]
+name = "format"
+path = "format.rs"
 harness = false
 
 [[test]]

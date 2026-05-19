@@ -5,67 +5,67 @@ expression: output
 module `main` (tests/analyze/records/main.pa) {
     comments: {},
     ast: Some(
-        module(0:0-9:1) [
-            def(0:0-3:1) :: nothing {
+        module(0:0-6:1) [
+            def(0:0-0:32) :: nothing {
                 name: ident(0:4-0:6) `me`,
-                kind: expr(0:9-3:1) :: {name: string, age: int} {
+                kind: expr(0:9-0:32) :: {name: string, age: int} {
                     kind: record [
                         (
-                            ident(1:2-1:6) `name`,
-                            expr(1:9-1:14) :: string {
-                                kind: literal(1:9-1:14) string "reid",
+                            ident(0:10-0:14) `name`,
+                            expr(0:17-0:22) :: string {
+                                kind: literal(0:17-0:22) string "reid",
                             },
                         ),
                         (
-                            ident(2:2-2:5) `age`,
-                            expr(2:7-2:9) :: int {
-                                kind: literal(2:7-2:9) int 28,
+                            ident(0:24-0:27) `age`,
+                            expr(0:29-0:31) :: int {
+                                kind: literal(0:29-0:31) int 28,
                             },
                         ),
                     ],
                 },
             },
-            def(5:0-5:29) :: nothing {
-                name: ident(5:4-5:10) `inline`,
-                kind: expr(5:13-5:29) :: {one: int, two: int} {
+            def(2:0-2:29) :: nothing {
+                name: ident(2:4-2:10) `inline`,
+                kind: expr(2:13-2:29) :: {one: int, two: int} {
                     kind: record [
                         (
-                            ident(5:14-5:17) `one`,
-                            expr(5:19-5:20) :: int {
-                                kind: literal(5:19-5:20) int 1,
+                            ident(2:14-2:17) `one`,
+                            expr(2:19-2:20) :: int {
+                                kind: literal(2:19-2:20) int 1,
                             },
                         ),
                         (
-                            ident(5:22-5:25) `two`,
-                            expr(5:27-5:28) :: int {
-                                kind: literal(5:27-5:28) int 2,
+                            ident(2:22-2:25) `two`,
+                            expr(2:27-2:28) :: int {
+                                kind: literal(2:27-2:28) int 2,
                             },
                         ),
                     ],
                 },
             },
-            def(7:0-9:1) :: nothing {
-                name: ident(7:4-7:14) `get-result`,
-                kind: expr(7:17-9:1) :: nothing -> int {
-                    kind: fun(7:17-9:1) {
+            def(4:0-6:1) :: nothing {
+                name: ident(4:4-4:14) `get-result`,
+                kind: expr(4:17-6:1) :: nothing -> int {
+                    kind: fun(4:17-6:1) {
                         params: [],
                         body: [
-                            expr(8:2-8:21) :: int {
-                                kind: binary op(8:9-8:10) `+` {
-                                    left: expr(8:2-8:8) :: int {
+                            expr(5:1-5:20) :: int {
+                                kind: binary op(5:8-5:9) `+` {
+                                    left: expr(5:1-5:7) :: int {
                                         kind: field-access {
-                                            receiver: expr(8:2-8:4) :: {age: int, ...} {
-                                                kind: ident(8:2-8:4) `me`,
+                                            receiver: expr(5:1-5:3) :: {age: int, ...} {
+                                                kind: ident(5:1-5:3) `me`,
                                             },
-                                            field: ident(8:5-8:8) `age`,
+                                            field: ident(5:4-5:7) `age`,
                                         },
                                     },
-                                    right: expr(8:11-8:21) :: int {
+                                    right: expr(5:10-5:20) :: int {
                                         kind: field-access {
-                                            receiver: expr(8:11-8:17) :: {two: int, ...} {
-                                                kind: ident(8:11-8:17) `inline`,
+                                            receiver: expr(5:10-5:16) :: {two: int, ...} {
+                                                kind: ident(5:10-5:16) `inline`,
                                             },
-                                            field: ident(8:18-8:21) `two`,
+                                            field: ident(5:17-5:20) `two`,
                                         },
                                     },
                                 },

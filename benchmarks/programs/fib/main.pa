@@ -1,11 +1,15 @@
 # Naive recursive fibonacci. Stresses non-tail recursion.
 
-def fib fun n {
-  when n is 0 { 0 }
-  is 1 { 1 }
-  is _ { (fib (n - 1)) + (fib (n - 2)) }
+def fib = fun n {
+	when n is 0 {
+		0
+	} is 1 {
+		1
+	} else {
+		(fib (n - 1)) + (fib (n - 2))
+	}
 }
 
-def main fun {
-  print (to-string (fib 24))
+def main = fun {
+	print (to-string (fib 24))
 }

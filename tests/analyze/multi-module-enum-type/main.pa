@@ -1,11 +1,5 @@
 use colors
 
-alias themed {
-  primary :: colors.color
-  secondary :: colors.color
-}
+alias themed {primary :: colors.color, secondary :: colors.color}
 
-def default-theme = themed {
-  primary: colors.color.red
-  secondary: colors.color.blue
-}
+def default-theme = themed {primary: colors.color.red, secondary: colors.color.blue}

@@ -10,6 +10,14 @@ analyze path:
 run path:
   @ cargo run --bin cli --quiet -- run {{path}}
 
+# format one or more .pa files in place (or `-` for stdin → stdout)
+format +paths:
+  @ cargo run --bin cli --quiet -- format {{paths}}
+
+# verify that .pa files in the tree are already in canonical format
+format-check:
+  @ cargo run --bin cli --quiet -- format --check $(find tests/run tests/analyze compiler/src/prelude.pa -name "*.pa")
+
 # run the benchmark suite (VM on benchmarks/programs/*)
 bench:
   @ cargo run --release -p bench --quiet

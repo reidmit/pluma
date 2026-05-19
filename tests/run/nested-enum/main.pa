@@ -1,27 +1,27 @@
 enum option {
-  some int
-  none
+	some int
+	none
 }
 
 enum result {
-  ok option
-  err string
+	ok option
+	err string
 }
 
 def unwrap = fun r {
-  when r is ok inner {
-    when inner is some x {
-      x
-    } is none {
-      0
-    }
-  } is err _msg {
-    0 - 1
-  }
+	when r is ok inner {
+		when inner is some x {
+			x
+		} is none {
+			0
+		}
+	} is err _msg {
+		0 - 1
+	}
 }
 
 def main = fun {
-  print (unwrap (result.ok (option.some 42)))
-  print (unwrap (result.ok option.none))
-  print (unwrap (result.err "oops"))
+	print (unwrap (result.ok (option.some 42)))
+	print (unwrap (result.ok option.none))
+	print (unwrap (result.err "oops"))
 }

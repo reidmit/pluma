@@ -1,10 +1,7 @@
-def me = {
-  name: "reid"
-  age: 28
-}
+def me = {name: "reid", age: 28}
 
 def inline = {one: 1, two: 2}
 
 def get-result = fun {
-  me.age + inline.two
+	me.age + inline.two
 }

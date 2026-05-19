@@ -1,0 +1,10 @@
+enum color {
+	red
+	green
+	blue
+}
+
+enum tree a {
+	empty
+	node a tree tree
+}

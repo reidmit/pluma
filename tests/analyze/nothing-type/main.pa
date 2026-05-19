@@ -1,3 +1,7 @@
 def unit = ()
-def make-unit = fun { () }
+
+def make-unit = fun {
+	()
+}
+
 alias void nothing

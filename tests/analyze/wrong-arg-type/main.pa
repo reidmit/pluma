@@ -1,5 +1,5 @@
 def double = fun n {
-  n + n
+	n + n
 }
 
 def bad = double "hello"

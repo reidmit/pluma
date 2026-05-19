@@ -1,17 +1,22 @@
 trait greeter a {
 	name :: fun a -> string
 	greet :: fun a -> string
-
 	def greet = fun x { "hello, $(greeter.name x)" }
 }
 
 implement greeter int {
-	def name = fun _x { "the number" }
+	def name = fun _x {
+		"the number"
+	}
 }
 
 implement greeter bool {
-	def name = fun _x { "a flag" }
-	def greet = fun b { "explicit: $(greeter.name b)" }
+	def name = fun _x {
+		"a flag"
+	}
+	def greet = fun b {
+		"explicit: $(greeter.name b)"
+	}
 }
 
 def main = fun {

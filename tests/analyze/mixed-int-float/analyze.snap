@@ -7,6 +7,6 @@ error: Type mismatch: expected `int`, but found `float`.
                         ^^^
 
 error: Type mismatch: expected `int`, but found `float`.
-> 2 | def bad-cmp = 1 < 2.0
+> 3 | def bad-cmp = 1 < 2.0
                         ^^^
 

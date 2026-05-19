@@ -1,4 +1,4 @@
 def main = fun {
-  let superTuple = (2, "blue", true)
-  superTuple.0 + 1
+	let superTuple = (2, "blue", true)
+	superTuple.0 + 1
 }

@@ -1,14 +1,11 @@
 def get-name = fun rec {
-  rec.name
+	rec.name
 }
 
-def person = {
-  name: "reid"
-  age: 28
-}
+def person = {name: "reid", age: 28}
 
 def main = fun {
-  get-name person
+	get-name person
 
-  get-name {name: "lol"}
+	get-name {name: "lol"}
 }

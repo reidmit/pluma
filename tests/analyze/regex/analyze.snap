@@ -5,7 +5,7 @@ expression: output
 module `main` (tests/analyze/regex/main.pa) {
     comments: {},
     ast: Some(
-        module(0:0-6:1) [
+        module(0:0-2:31) [
             def(0:0-0:26) :: nothing {
                 name: ident(0:4-0:6) `r1`,
                 kind: expr(0:9-0:26) :: regex {
@@ -15,13 +15,13 @@ module `main` (tests/analyze/regex/main.pa) {
                     ],
                 },
             },
-            def(2:0-6:1) :: nothing {
+            def(2:0-2:31) :: nothing {
                 name: ident(2:4-2:6) `r2`,
-                kind: expr(2:9-6:1) :: regex {
-                    kind: regex(3:3-5:6) sequence [
-                        regex(3:3-3:8) exactly 1 (regex(3:3-3:4) literal "a"),
-                        regex(4:3-4:10) between 2 and 7 (regex(4:3-4:4) literal "b"),
-                        regex(5:3-5:6) one-or-more (regex(5:3-5:4) literal "c"),
+                kind: expr(2:9-2:31) :: regex {
+                    kind: regex(2:11-2:30) sequence [
+                        regex(2:11-2:16) exactly 1 (regex(2:11-2:12) literal "a"),
+                        regex(2:18-2:25) between 2 and 7 (regex(2:18-2:19) literal "b"),
+                        regex(2:27-2:30) one-or-more (regex(2:27-2:28) literal "c"),
                     ],
                 },
             },

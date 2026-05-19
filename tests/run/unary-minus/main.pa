@@ -1,18 +1,30 @@
-def neg = fun x { 0 - x }
+def neg = fun x {
+	0 - x
+}
 
 def main = fun {
 	let a = 10
 
 	# `f -x` (space-no-space) parses as `f(-x)`, not `f - x`
-	print (neg -3)        # call neg with arg -3 -> 3
-	print (neg -a)        # call neg with arg -a -> 10
+	print (neg -3)
+	# call neg with arg -3 -> 3
+	print (neg -a)
+
+	# call neg with arg -a -> 10
 
 	# `a - b` (space-space) stays binary subtraction
-	print (a - 3)         # 7
+	print (a - 3)
+
+	# 7
 
 	# `(-x)` (no space-no space) is prefix in expression-start position
-	print (-a)            # -10
+	print (-a)
+
+	# -10
 
 	# in arg position with parens, both shapes still work
-	print (neg (-4))      # 4
+	print (neg (-4))
 }
+
+# 4
+

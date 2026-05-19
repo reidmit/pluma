@@ -1,7 +1,11 @@
 def describe = fun result {
-	when result is lt { "less" }
-	is eq { "equal" }
-	is gt { "greater" }
+	when result is lt {
+		"less"
+	} is eq {
+		"equal"
+	} is gt {
+		"greater"
+	}
 }
 
 def main = fun {

@@ -3,6 +3,7 @@
 # `ref.set` / `ref.update` return `nothing`.
 
 def int-cell = ref.new 0
+
 def str-cell = ref.new "hi"
 
 def read-int = fun {

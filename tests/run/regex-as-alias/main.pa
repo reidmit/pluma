@@ -3,6 +3,6 @@ use core.regex as re
 def is-yes = /"yes"/
 
 def main = fun {
-  print (re.matches is-yes "yes!")
-  print (re.matches is-yes "no thanks")
+	print (re.matches is-yes "yes!")
+	print (re.matches is-yes "no thanks")
 }

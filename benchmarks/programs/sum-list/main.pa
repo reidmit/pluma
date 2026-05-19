@@ -1,22 +1,26 @@
 # Build a long cons-list and fold-sum it.
 
-def int-list enum {
-  empty
-  cons int int-list
+enum int-list {
+	empty
+	cons int int-list
 }
 
-def make-list fun n {
-  when n is 0 {
-    int-list.empty
-  } is _ {
-    int-list.cons n (make-list (n - 1))
-  }
+def make-list = fun n {
+	when n is 0 {
+		int-list.empty
+	} else {
+		int-list.cons n (make-list (n - 1))
+	}
 }
 
-def sum fun xs {
-  when xs is empty { 0 } is cons head tail { head + (sum tail) }
+def sum = fun xs {
+	when xs is empty {
+		0
+	} is cons head tail {
+		head + (sum tail)
+	}
 }
 
-def main fun {
-  print (to-string (sum (make-list 1000)))
+def main = fun {
+	print (to-string (sum (make-list 1000)))
 }

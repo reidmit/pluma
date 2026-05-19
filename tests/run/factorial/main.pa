@@ -1,13 +1,13 @@
 def fact = fun n {
-  when n is 0 {
-    1
-  } is _ {
-    n * (fact (n - 1))
-  }
+	when n is 0 {
+		1
+	} else {
+		n * (fact (n - 1))
+	}
 }
 
 def main = fun {
-  print (fact 0)
-  print (fact 5)
-  print (fact 10)
+	print (fact 0)
+	print (fact 5)
+	print (fact 10)
 }

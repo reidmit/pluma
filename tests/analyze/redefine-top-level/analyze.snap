@@ -3,5 +3,6 @@ source: tests/analyze.rs
 expression: output
 ---
 error: Duplicate top-level definition `x`.
-> 2 | def x = 2
+> 3 | def x = 2
           ^
+

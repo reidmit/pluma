@@ -1,0 +1,24 @@
+---
+source: tests/format.rs
+expression: once
+---
+# top-of-file note
+# spanning two lines
+
+# leading comment for color
+enum color {
+	# a primary
+	red
+	# another primary
+	green
+	blue
+}
+
+def main = fun {
+	# explain the next print
+	print "ok"
+
+	# explain the next
+	print "done"
+}
+

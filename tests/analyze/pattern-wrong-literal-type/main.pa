@@ -1,9 +1,9 @@
 def bad = fun n {
-  when n is "five" {
-    1
-  } is _ {
-    0
-  }
+	when n is "five" {
+		1
+	} else {
+		0
+	}
 }
 
 def x = bad 47

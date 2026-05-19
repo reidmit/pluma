@@ -5,7 +5,7 @@ expression: output
 module `main` (tests/analyze/multi-module/main.pa) {
     comments: {},
     ast: Some(
-        module(0:0-7:32) [
+        module(0:0-8:32) [
             use(0:0-0:8) `math`,
         ] [
             def(2:0-2:23) :: nothing {
@@ -77,21 +77,21 @@ module `main` (tests/analyze/multi-module/main.pa) {
                     },
                 },
             },
-            def(7:0-7:32) :: nothing {
-                name: ident(7:4-7:8) `text`,
-                kind: expr(7:11-7:32) :: string {
-                    kind: call(7:11-7:32) {
-                        callee: expr(7:11-7:24) :: 't3 -> 't3 {
+            def(8:0-8:32) :: nothing {
+                name: ident(8:4-8:8) `text`,
+                kind: expr(8:11-8:32) :: string {
+                    kind: call(8:11-8:32) {
+                        callee: expr(8:11-8:24) :: 't3 -> 't3 {
                             kind: field-access {
-                                receiver: expr(7:11-7:15) :: ? {
-                                    kind: ident(7:11-7:15) `math`,
+                                receiver: expr(8:11-8:15) :: ? {
+                                    kind: ident(8:11-8:15) `math`,
                                 },
-                                field: ident(7:16-7:24) `identity`,
+                                field: ident(8:16-8:24) `identity`,
                             },
                         },
                         args: [
-                            expr(7:26-7:32) :: string {
-                                kind: literal(7:26-7:32) string "hello",
+                            expr(8:26-8:32) :: string {
+                                kind: literal(8:26-8:32) string "hello",
                             },
                         ],
                     },

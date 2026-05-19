@@ -1,7 +1,11 @@
 def describe = fun result {
-	when result is lt { "less" }
-	is eq { "equal" }
-	is gt { "greater" }
+	when result is lt {
+		"less"
+	} is eq {
+		"equal"
+	} is gt {
+		"greater"
+	}
 }
 
 def main = fun {
@@ -9,18 +13,27 @@ def main = fun {
 	# (compiler/src/prelude.pa). User modules see it without importing.
 	let a = some 1
 	let b = some 2
-	print (describe (ord.compare a b))     # less
-	print (describe (ord.compare a a))     # equal
+	print (describe (ord.compare a b))
+
+	# less
+	print (describe (ord.compare a a))
+
+	# equal
 
 	# Nested chain — `ord` on `option (option int)` recurses through two
 	# parametric ord-on-option instantiations and bottoms out at the
 	# concrete `ord on int`.
 	let p = some (some 1)
 	let q = some (some 5)
-	print (describe (ord.compare p q))     # less
+	print (describe (ord.compare p q))
+
+	# less
 
 	# Parametric `hash` on `option a` is the same shape.
 	let h1 = hash.hash (some 42)
 	let h2 = hash.hash (some 42)
-	print (h1 == h2)                       # true
+	print (h1 == h2)
 }
+
+# true
+

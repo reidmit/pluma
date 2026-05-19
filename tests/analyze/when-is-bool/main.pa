@@ -1,9 +1,9 @@
 def main = fun {
-  let x = true
+	let x = true
 
-  when x is false {
-    "no"
-  } is _ {
-    "yes"
-  }
+	when x is false {
+		"no"
+	} else {
+		"yes"
+	}
 }
