@@ -21,15 +21,15 @@ module `main` (tests/analyze/def-type-alias-record/main.pa) {
             },
             def(5:0-7:1) :: nothing {
                 name: ident(5:4-5:12) `get-name`,
-                kind: expr(5:13-7:1) :: ({name: 'o, ...}) -> 'o {
+                kind: expr(5:13-7:1) :: ({name: 'x, ...}) -> 'x {
                     kind: fun(5:13-7:1) {
                         params: [
-                            ident(5:17-5:18) `p` :: {name: 'o, ...},
+                            ident(5:17-5:18) `p` :: {name: 'x, ...},
                         ],
                         body: [
-                            expr(6:2-6:8) :: 'o {
+                            expr(6:2-6:8) :: 'x {
                                 kind: field-access {
-                                    receiver: expr(6:2-6:3) :: {name: 'o, ...} {
+                                    receiver: expr(6:2-6:3) :: {name: 'x, ...} {
                                         kind: ident(6:2-6:3) `p`,
                                     },
                                     field: ident(6:4-6:8) `name`,

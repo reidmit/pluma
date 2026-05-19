@@ -15,13 +15,13 @@ module `main` (tests/analyze/let-polymorphism/main.pa) {
                             expr(1:2-1:28) :: nothing {
                                 kind: let(1:2-1:28) {
                                     name: ident(1:6-1:14) `identity`,
-                                    value: expr(1:17-1:28) :: 'j -> 'j {
+                                    value: expr(1:17-1:28) :: 's -> 's {
                                         kind: fun(1:17-1:28) {
                                             params: [
-                                                ident(1:21-1:22) `x` :: 'j,
+                                                ident(1:21-1:22) `x` :: 's,
                                             ],
                                             body: [
-                                                expr(1:25-1:26) :: 'j {
+                                                expr(1:25-1:26) :: 's {
                                                     kind: ident(1:25-1:26) `x`,
                                                 },
                                             ],

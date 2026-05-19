@@ -50,6 +50,261 @@ pub struct Analyzer<'compiler> {
 	// namespace name. `use a.b.utils as u` produces `u -> a.b.utils`.
 	import_qualified: HashMap<String, String>,
 	next_type_var_id: usize,
+	// Typeclass declarations visible during analysis. Phase 2 seeds
+	// `numeric` here directly from the prelude.
+	traits: HashMap<String, TraitDecl>,
+	// Typeclass instances. Keyed by `(trait_name, head_key)` for fast
+	// lookup during discharge. `head_key` is a stable string for the
+	// instance's head type (e.g. `"int"`, `"float"`).
+	instances: HashMap<(String, String), InstanceDecl>,
+	// Fresh class constraints minted during Gen/Inst processing (one set
+	// per Inst-against-Gen match). Picked up by `analyze` for discharge.
+	fresh_class_constraints: Vec<ClassConstraint>,
+	// Per-def class constraints from resolve_forwarded — one entry per
+	// dict param of the def's scheme. Used to build cross-module
+	// `value_constraints` exports so importing modules can stitch in
+	// dict args at call sites.
+	def_value_constraints: HashMap<String, Vec<crate::module::ValueConstraintExport>>,
+	// Prelude exports passed in by the compiler. Seeded into this
+	// analyzer's enum / variant / instance tables during `analyze()` so
+	// the user module sees prelude types and instances without needing
+	// an explicit `use __prelude__`.
+	prelude_exports: Option<ModuleExports>,
+}
+
+// Analyzer-side view of a trait declaration. Method types reference the
+// trait's `param_var`; each use site instantiates with a fresh var.
+// `defaults` holds the AST template for each method that has a `default`
+// body — instances missing those methods clone the template into their
+// own method list before constraining. (The field is currently only
+// populated for diagnostic / introspection use; the actual cloning is
+// done from the trait's `TraitNode` AST in `constrain`'s pre-pass.)
+#[allow(dead_code)]
+pub struct TraitDecl {
+	pub param_var: usize,
+	pub method_order: Vec<String>,
+	pub method_types: HashMap<String, Type>,
+	pub defaults: HashMap<String, ExprNode>,
+	// Module that declared this trait. Used by the orphan-rule check to
+	// reject `for T on U` declared in a module that owns neither T nor U.
+	// Prelude traits use `"__prelude__"`.
+	pub defining_module: String,
+}
+
+// Analyzer-side view of an instance.
+//
+// Concrete instances have empty `param_vars` and `where_clauses`. The
+// `head_type` is a concrete `Type` (e.g. `Type::Int`).
+//
+// Parametric instances have non-empty `param_vars` and may have
+// `where_clauses`. The `head_type` contains those param vars as
+// `Type::Var(_)`. Discharge unifies a class constraint's `ty` against
+// `head_type`, applies the substitution to the `where_clauses`, and
+// recursively discharges them — building an `InstanceChain` for codegen.
+#[allow(dead_code)]
+pub struct InstanceDecl {
+	pub trait_name: String,
+	pub head_type: Type,
+	pub param_vars: Vec<usize>,
+	pub where_clauses: Vec<(String, usize)>,
+	pub instance_slot_name: String,
+}
+
+// First-seen slot allocation: returns the existing slot index for
+// `(trait, var)` in `slot_order`, or appends a new one and returns its
+// index. Used by the forwarded-resolution pass to map each dispatch
+// tyvar to a stable dict-param slot.
+fn lookup_or_alloc_slot(
+	slot_order: &mut Vec<(String, usize)>,
+	trait_name: &str,
+	var: usize,
+) -> u16 {
+	if let Some(idx) = slot_order
+		.iter()
+		.position(|(t, v)| t == trait_name && *v == var)
+	{
+		idx as u16
+	} else {
+		slot_order.push((trait_name.to_string(), var));
+		(slot_order.len() - 1) as u16
+	}
+}
+
+// One-way type matching: tries to bind each `Type::Var` in `pattern` to
+// the corresponding subterm in `target`. Used by discharge to match a
+// class constraint's type against a parametric instance's head type.
+// Returns `Some(mapping)` on success, `None` on mismatch.
+fn match_types(
+	pattern: &Type,
+	target: &Type,
+	mapping: &mut std::collections::HashMap<usize, Type>,
+) -> bool {
+	use Type::*;
+	match (pattern, target) {
+		(Var(v), t) => {
+			if let Some(existing) = mapping.get(v) {
+				type_keys_match(existing, t)
+			} else {
+				mapping.insert(*v, t.clone());
+				true
+			}
+		}
+		(Int, Int)
+		| (Float, Float)
+		| (Bool, Bool)
+		| (String, String)
+		| (Regex, Regex)
+		| (Nothing, Nothing) => true,
+		(Enum(a, args_a), Enum(b, args_b)) if a == b && args_a.len() == args_b.len() => args_a
+			.iter()
+			.zip(args_b.iter())
+			.all(|(p, t)| match_types(p, t, mapping)),
+		(List(a), List(b)) => match_types(a, b, mapping),
+		(Tuple(a), Tuple(b)) if a.len() == b.len() => a
+			.iter()
+			.zip(b.iter())
+			.all(|(p, t)| match_types(p, t, mapping)),
+		(Fun(p_params, p_ret), Fun(t_params, t_ret)) if p_params.len() == t_params.len() => {
+			let params_match = p_params
+				.iter()
+				.zip(t_params.iter())
+				.all(|(p, t)| match_types(p, t, mapping));
+			params_match && match_types(p_ret, t_ret, mapping)
+		}
+		_ => false,
+	}
+}
+
+// Structural equality on types used for class constraint deduplication.
+// Only the cases actually used in dispatch (Var, primitives, Enum) — we
+// don't currently support parametric instances at the scheme level, so
+// other type shapes don't appear.
+fn type_keys_match(a: &Type, b: &Type) -> bool {
+	match (a, b) {
+		(Type::Var(x), Type::Var(y)) => x == y,
+		(Type::Int, Type::Int)
+		| (Type::Float, Type::Float)
+		| (Type::Bool, Type::Bool)
+		| (Type::String, Type::String)
+		| (Type::Regex, Type::Regex)
+		| (Type::Nothing, Type::Nothing) => true,
+		(Type::Enum(a, _), Type::Enum(b, _)) => a == b,
+		_ => false,
+	}
+}
+
+// Walk an expression tree collecting every dispatch cell it contains
+// (both `trait_dispatch` on ExprNodes and `dict_args` on CallNodes).
+// Used by the forwarded-resolution pass to scan a def's body.
+fn collect_dispatch_cells(expr: &ExprNode, cells: &mut Vec<DispatchCell>) {
+	if let Some(cell) = &expr.trait_dispatch {
+		cells.push(cell.clone());
+	}
+	match &expr.kind {
+		ExprKind::Call(CallNode {
+			callee,
+			args,
+			dict_args,
+			..
+		}) => {
+			collect_dispatch_cells(callee, cells);
+			for c in dict_args {
+				cells.push(c.clone());
+			}
+			for a in args {
+				collect_dispatch_cells(a, cells);
+			}
+		}
+		ExprKind::Fun(FunNode { body, .. }) => {
+			for e in body {
+				collect_dispatch_cells(e, cells);
+			}
+		}
+		ExprKind::Let(LetNode { value, .. }) => {
+			collect_dispatch_cells(value, cells);
+		}
+		ExprKind::BinaryOperation { left, right, .. } => {
+			collect_dispatch_cells(left, cells);
+			collect_dispatch_cells(right, cells);
+		}
+		ExprKind::UnaryOperation { right, .. } => {
+			collect_dispatch_cells(right, cells);
+		}
+		ExprKind::FieldAccess { receiver, .. } | ExprKind::ElementAccess { receiver, .. } => {
+			collect_dispatch_cells(receiver, cells);
+		}
+		ExprKind::Grouping(inner) => collect_dispatch_cells(inner, cells),
+		ExprKind::Tuple(es) | ExprKind::List(es) | ExprKind::Interpolation(es) => {
+			for e in es {
+				collect_dispatch_cells(e, cells);
+			}
+		}
+		ExprKind::Record(fields) => {
+			for (_, e) in fields {
+				collect_dispatch_cells(e, cells);
+			}
+		}
+		ExprKind::If(IfNode { subject, body, .. }) => {
+			collect_dispatch_cells(subject, cells);
+			for e in body {
+				collect_dispatch_cells(e, cells);
+			}
+		}
+		ExprKind::While(WhileNode { subject, body, .. }) => {
+			collect_dispatch_cells(subject, cells);
+			for e in body {
+				collect_dispatch_cells(e, cells);
+			}
+		}
+		ExprKind::When(WhenNode { subject, cases, .. }) => {
+			collect_dispatch_cells(subject, cells);
+			for case in cases {
+				for e in &case.body {
+					collect_dispatch_cells(e, cells);
+				}
+			}
+		}
+		ExprKind::Identifier(_) | ExprKind::Literal(_) | ExprKind::Regex(_) | ExprKind::EmptyTuple => {}
+	}
+}
+
+// The module that owns a type's outer constructor. For primitives and
+// prelude-defined enums this is `"__prelude__"`. For user-defined enums
+// it's the module prefix of the qualified name. Used by the orphan-rule
+// check to decide whether an instance declaration is allowed in the
+// current module.
+pub fn type_defining_module(ty: &Type) -> Option<String> {
+	match ty {
+		Type::Int | Type::Float | Type::Bool | Type::String | Type::Regex | Type::Nothing => {
+			Some("__prelude__".into())
+		}
+		Type::Enum(name, _) => Some(
+			name
+				.rsplit_once('.')
+				.map(|(m, _)| m.to_string())
+				.unwrap_or_else(|| "__prelude__".into()),
+		),
+		Type::List(_) => Some("__prelude__".into()),
+		_ => None,
+	}
+}
+
+// Stable key for instance lookup. Concrete primitives map to their own
+// names; enums use their qualified name. Phase 3 will need to extend
+// this for parametric heads, but for phase 2 we only see fully concrete
+// dispatch types.
+pub fn type_to_head_key(ty: &Type) -> Option<String> {
+	match ty {
+		Type::Int => Some("int".into()),
+		Type::Float => Some("float".into()),
+		Type::Bool => Some("bool".into()),
+		Type::String => Some("string".into()),
+		Type::Regex => Some("regex".into()),
+		Type::Nothing => Some("nothing".into()),
+		Type::Enum(name, _) => Some(name.clone()),
+		Type::List(_) => Some("__list__".into()),
+		_ => None,
+	}
 }
 
 impl<'compiler> Analyzer<'compiler> {
@@ -67,6 +322,11 @@ impl<'compiler> Analyzer<'compiler> {
 			imports: HashMap::new(),
 			import_qualified: HashMap::new(),
 			next_type_var_id: 0,
+			traits: HashMap::new(),
+			instances: HashMap::new(),
+			fresh_class_constraints: Vec::new(),
+			def_value_constraints: HashMap::new(),
+			prelude_exports: None,
 		}
 	}
 
@@ -160,6 +420,7 @@ impl<'compiler> Analyzer<'compiler> {
 			"print".into(),
 			Scheme::Forall(
 				vec![print_var],
+				vec![],
 				Type::Fun(vec![Type::Var(print_var)], Box::new(Type::Var(print_var))),
 			),
 			Range::collapsed(0, 0),
@@ -174,38 +435,84 @@ impl<'compiler> Analyzer<'compiler> {
 			"to-string".into(),
 			Scheme::Forall(
 				vec![to_string_var],
+				vec![],
 				Type::Fun(vec![Type::Var(to_string_var)], Box::new(Type::String)),
 			),
 			Range::collapsed(0, 0),
 		);
 
-		// Prelude enums: `option` and `result`. Same machinery as a
-		// user-defined generic enum, just seeded here so every module sees
-		// them — including the bare-variant constructors (`some`, `none`,
-		// `ok`, `err`).
-		self.register_prelude_enum(
-			"option",
-			1,
-			vec![("some", vec![Type::Var(0)]), ("none", vec![])],
-		);
-		self.register_prelude_enum(
-			"result",
-			2,
-			vec![("ok", vec![Type::Var(0)]), ("err", vec![Type::Var(1)])],
-		);
+		// Implicit prelude import. Every user module sees `__prelude__`'s
+		// enums (option, result, ordering) and their variant
+		// constructors. The prelude module itself doesn't get this — it
+		// declares those enums in its own body.
+		if let Some(prelude) = self.prelude_exports.clone() {
+			self.seed_imported_enums("__prelude__", &prelude.enums, true);
+		}
 
-		// the three basic phases of analysis!
+		// Prelude trait + instances: `numeric` on `int` and `float`. Seeded
+		// directly (skipping the user-facing trait/instance defs) so every
+		// module sees the trait + can dispatch on int/float arithmetic
+		// from the start.
+		self.register_prelude_numeric_trait();
+		// `ord` trait: `compare fun (a, a) -> ordering`. Concrete instances
+		// on int, float, string. Parametric `ord` on `option a` / `list a`
+		// added below once the prelude enum types are registered.
+		self.register_prelude_ord_trait();
+		// `hash` trait: `hash fun a -> int`. Concrete instances on int,
+		// float, string, bool. Unblocks generic `core.map` over those
+		// primitive key types.
+		self.register_prelude_hash_trait();
+
+		// the four basic phases of analysis!
 		let substitution = if let Some(ast) = &mut module.ast {
 			// 1. generate constraints based on AST (and also fill in any
 			//    types we can infer without constraints, like for literals)
 			let constraints = self.constrain(ast);
 
-			// 2. find a solution that unifies all the constraints
+			// 2. find a solution that unifies all the constraints. Class
+			//    constraints flow with the rest so generalize_with_constraints
+			//    sees them; they're collected for discharge afterwards.
+			//    Inst-instantiated fresh class constraints get stashed on
+			//    the analyzer and merged below.
 			let substitution = self.unify(&constraints);
 
-			// 3. apply the solution to the AST, filling in type variables
+			// 3. gather all class constraints — originals from constrain
+			//    plus the fresh ones minted during Gen/Inst processing —
+			//    apply the substitution, and run discharge. Discharge
+			//    resolves concrete dispatches into `Resolved::Global` and
+			//    leaves remaining variables alone.
+			let mut class_constraints: Vec<ClassConstraint> = constraints
+				.iter()
+				.filter_map(|c| match c {
+					Constraint::Class(c) => Some(ClassConstraint {
+						name: c.name.clone(),
+						ty: substitution.apply_to_type(&c.ty),
+						reason: c.reason.clone(),
+						dispatch_cell: c.dispatch_cell.clone(),
+					}),
+					_ => None,
+				})
+				.collect();
+			for c in std::mem::take(&mut self.fresh_class_constraints) {
+				class_constraints.push(ClassConstraint {
+					name: c.name,
+					ty: substitution.apply_to_type(&c.ty),
+					reason: c.reason,
+					dispatch_cell: c.dispatch_cell,
+				});
+			}
+			self.discharge(&class_constraints);
+
+			// 4. apply the solution to the AST, filling in type variables
 			//    that we generated in phase 1
 			self.annotate(ast, &substitution);
+
+			// 5. resolve Forwarded dispatches per top-level def. After
+			//    discharge, cells with concrete dispatch types are set to
+			//    Global; cells whose dispatch type is still a Var get
+			//    Forwarded(slot) here, where `slot` is the index of the
+			//    matching class constraint in the def's scheme.
+			self.resolve_forwarded_dispatches(ast, &substitution);
 
 			Some(substitution)
 		} else {
@@ -224,6 +531,11 @@ impl<'compiler> Analyzer<'compiler> {
 						exports
 							.values
 							.insert(def.name.name.clone(), expr.ty.clone());
+						if let Some(cs) = self.def_value_constraints.get(&def.name.name) {
+							exports
+								.value_constraints
+								.insert(def.name.name.clone(), cs.clone());
+						}
 					}
 					DefinitionKind::Alias(_) => {
 						// Alias types are exported both as types (for use in
@@ -279,9 +591,57 @@ impl<'compiler> Analyzer<'compiler> {
 							);
 						}
 					}
+					// Trait/Instance: phase 1 only stubs out parsing. Exports for
+					// traits and instances will be wired up alongside the
+					// constraint-generation work in phase 2.
+					DefinitionKind::Trait(_) | DefinitionKind::Instance(_) => {}
 				}
 			}
 		}
+
+		// Export every registered instance whose slot lives in this module.
+		// Param tyvars get canonicalized to `Var(0..K-1)` so importers can
+		// freshen them into their own namespace.
+		let module_prefix = format!("{}.", module.module_name);
+		for inst in self.instances.values() {
+			if !inst.instance_slot_name.starts_with(&module_prefix) {
+				continue;
+			}
+			let param_count = inst.param_vars.len();
+			let (head_type, where_clauses) = if param_count == 0 {
+				(
+					inst.head_type.clone(),
+					inst
+						.where_clauses
+						.iter()
+						.map(|(t, v)| (t.clone(), *v))
+						.collect(),
+				)
+			} else {
+				let mut subst = Substitution::empty();
+				for (i, var) in inst.param_vars.iter().enumerate() {
+					subst.solutions.insert(*var, Type::Var(i));
+				}
+				let head = subst.apply_to_type(&inst.head_type);
+				let wcs: Vec<(String, usize)> = inst
+					.where_clauses
+					.iter()
+					.map(|(t, v)| {
+						let idx = inst.param_vars.iter().position(|p| p == v).unwrap_or(0);
+						(t.clone(), idx)
+					})
+					.collect();
+				(head, wcs)
+			};
+			exports.instances.push(crate::module::InstanceExport {
+				trait_name: inst.trait_name.clone(),
+				head_type,
+				param_count,
+				where_clauses,
+				instance_slot_name: inst.instance_slot_name.clone(),
+			});
+		}
+
 		module.exports = Some(exports);
 	}
 
@@ -292,6 +652,67 @@ impl<'compiler> Analyzer<'compiler> {
 	) {
 		self.imports = imports;
 		self.import_qualified = import_qualified;
+	}
+
+	// Make `__prelude__`'s exports implicitly available in this module.
+	// The analyzer seeds enums, variant constructors, and instances
+	// from these during `analyze()`. Set by the compiler for every user
+	// module; left `None` when analyzing the prelude itself.
+	pub fn set_prelude_exports(&mut self, exports: ModuleExports) {
+		self.prelude_exports = Some(exports);
+	}
+
+	// Seed instances from a list of exports. Used for prelude instances
+	// that are implicitly available in every module — the compiler passes
+	// `__prelude__`'s `ModuleExports.instances` here. Param tyvars in
+	// each export are canonical (0..param_count-1); we mint fresh ids per
+	// instance and substitute through `head_type` and `where_clauses`.
+	pub fn add_imported_instances(&mut self, exports: &[crate::module::InstanceExport]) {
+		for export in exports {
+			let head_key = match type_to_head_key(&export.head_type) {
+				Some(k) => k,
+				None => continue,
+			};
+			if self
+				.instances
+				.contains_key(&(export.trait_name.clone(), head_key.clone()))
+			{
+				// Already seeded (e.g. by `register_prelude_*`) — skip.
+				continue;
+			}
+			// Mint fresh tyvars to replace the canonical 0..param_count-1.
+			let fresh: Vec<usize> = (0..export.param_count)
+				.map(|_| {
+					let id = self.next_type_var_id;
+					self.next_type_var_id += 1;
+					id
+				})
+				.collect();
+			let head_type = if export.param_count == 0 {
+				export.head_type.clone()
+			} else {
+				let mut subst = Substitution::empty();
+				for (i, f) in fresh.iter().enumerate() {
+					subst.solutions.insert(i, Type::Var(*f));
+				}
+				subst.apply_to_type(&export.head_type)
+			};
+			let where_clauses: Vec<(String, usize)> = export
+				.where_clauses
+				.iter()
+				.map(|(t, idx)| (t.clone(), fresh[*idx]))
+				.collect();
+			self.instances.insert(
+				(export.trait_name.clone(), head_key),
+				InstanceDecl {
+					trait_name: export.trait_name.clone(),
+					head_type,
+					param_vars: fresh,
+					where_clauses,
+					instance_slot_name: export.instance_slot_name.clone(),
+				},
+			);
+		}
 	}
 
 	fn diagnostic(&mut self, range: Option<Range>, diag: Diagnostic) {
@@ -386,6 +807,55 @@ impl<'compiler> Analyzer<'compiler> {
 		// references like `some a` map to the right var).
 		let mut enum_param_vars: HashMap<String, Vec<usize>> = HashMap::new();
 
+		// Pre-pass: fill in default methods on instances. For each trait,
+		// collect a map of `method_name → default ExprNode`. Then for each
+		// instance, for every method present in the trait's defaults but
+		// not in the instance, clone the default into the instance's
+		// methods list. This keeps the rest of analysis trait-aware in only
+		// one place (the trait registration step) — once filled in,
+		// instance methods look like ordinary user-written methods.
+		let mut trait_defaults: HashMap<String, HashMap<String, ExprNode>> = HashMap::new();
+		for def in &module.body {
+			if let DefinitionKind::Trait(trait_node) = &def.kind {
+				let mut defaults = HashMap::new();
+				for m in &trait_node.methods {
+					if let Some(default_expr) = &m.default {
+						defaults.insert(m.name.name.clone(), default_expr.clone());
+					}
+				}
+				if !defaults.is_empty() {
+					trait_defaults.insert(def.name.name.clone(), defaults);
+				}
+			}
+		}
+		for def in &mut module.body {
+			if let DefinitionKind::Instance(instance_node) = &mut def.kind {
+				let defaults = match trait_defaults.get(&instance_node.trait_name.name) {
+					Some(d) => d,
+					None => continue,
+				};
+				let present: std::collections::HashSet<String> = instance_node
+					.methods
+					.iter()
+					.map(|m| m.name.name.clone())
+					.collect();
+				for (method_name, default_expr) in defaults {
+					if !present.contains(method_name) {
+						instance_node.methods.push(DefinitionNode {
+							name: IdentifierNode {
+								range: instance_node.range,
+								name: method_name.clone(),
+							},
+							range: instance_node.range,
+							kind: DefinitionKind::Expr(default_expr.clone()),
+							ty: Type::Unknown,
+							dict_param_count: 0,
+						});
+					}
+				}
+			}
+		}
+
 		// first, do a shallow pass to annotate all top-level defs and add them to the scope,
 		// so that they can be referenced anywhere within the bodies of other defs
 		let mut seen_names: HashMap<String, Range> = HashMap::new();
@@ -473,6 +943,226 @@ impl<'compiler> Analyzer<'compiler> {
 						definition.name.range,
 					);
 					enum_param_vars.insert(qualified, param_var_ids);
+				}
+
+				DefinitionKind::Trait(trait_node) => {
+					// Mint a fresh tyvar for the trait's param (`a`), bind it
+					// in the type scope so method signatures can reference it,
+					// resolve each signature to a concrete `Type`, and register
+					// the trait in `self.traits`. Method types reference the
+					// param tyvar via `Type::Var(param_var)`, the same shape
+					// the prelude `numeric` trait uses.
+					let param_var = self.next_type_var_id;
+					self.next_type_var_id += 1;
+
+					let prev = self.type_scope.insert(
+						trait_node.param.name.clone(),
+						TypeBinding {
+							ty: Type::Var(param_var),
+							ref_count: 0,
+							_range: trait_node.param.range,
+						},
+					);
+
+					let mut method_order = Vec::new();
+					let mut method_types = HashMap::new();
+					let mut defaults: HashMap<String, ExprNode> = HashMap::new();
+					for m in &trait_node.methods {
+						let ty = self.type_expr_to_type(&m.signature, &mut constraints);
+						method_order.push(m.name.name.clone());
+						method_types.insert(m.name.name.clone(), ty);
+						if let Some(default_expr) = &m.default {
+							defaults.insert(m.name.name.clone(), default_expr.clone());
+						}
+					}
+
+					match prev {
+						Some(b) => {
+							self.type_scope.insert(trait_node.param.name.clone(), b);
+						}
+						None => {
+							self.type_scope.remove(&trait_node.param.name);
+						}
+					}
+
+					self.traits.insert(
+						definition.name.name.clone(),
+						TraitDecl {
+							param_var,
+							method_order,
+							method_types,
+							defaults,
+							defining_module: self.module_name.clone().unwrap_or_default(),
+						},
+					);
+				}
+
+				DefinitionKind::Instance(instance_node) => {
+					// Collect parametric type-param names from the where
+					// clause. Each `where (trait_name param)` entry names a
+					// type var that's bound in both the head and the methods.
+					// Parametric instances also exist *without* a where
+					// clause (e.g. `for noop on (option a) { ... }`); we
+					// detect those by scanning the head for identifiers not
+					// in the current type scope (rare; mostly users use
+					// `where`).
+					let mut param_names: Vec<String> = Vec::new();
+					for c in &instance_node.where_clause {
+						if !param_names.contains(&c.param.name) {
+							param_names.push(c.param.name.clone());
+						}
+					}
+
+					// Bind each param name to a fresh tyvar in the type scope
+					// while we resolve the head + where clauses. Save
+					// previous bindings to restore afterwards.
+					let mut saved: Vec<(String, Option<TypeBinding>)> = Vec::new();
+					let mut param_vars: Vec<usize> = Vec::new();
+					for name in &param_names {
+						let var = self.next_type_var_id;
+						self.next_type_var_id += 1;
+						param_vars.push(var);
+						let prev = self.type_scope.insert(
+							name.clone(),
+							TypeBinding {
+								ty: Type::Var(var),
+								ref_count: 0,
+								_range: instance_node.head.range,
+							},
+						);
+						saved.push((name.clone(), prev));
+					}
+
+					let head_ty = self.type_expr_to_type(&instance_node.head, &mut constraints);
+					let head_key = match type_to_head_key(&head_ty) {
+						Some(k) => k,
+						None => {
+							self.error(
+								instance_node.head.range,
+								AnalysisErrorKind::UnsupportedInstanceHead {
+									head: head_ty.clone(),
+								},
+							);
+							// Restore scope before continuing.
+							for (n, prev) in saved {
+								match prev {
+									Some(b) => {
+										self.type_scope.insert(n, b);
+									}
+									None => {
+										self.type_scope.remove(&n);
+									}
+								}
+							}
+							continue;
+						}
+					};
+
+					// Resolve the where clauses to (trait_name, tyvar) pairs.
+					let where_clauses: Vec<(String, usize)> = instance_node
+						.where_clause
+						.iter()
+						.filter_map(|c| {
+							let idx = param_names.iter().position(|n| n == &c.param.name)?;
+							Some((c.trait_name.name.clone(), param_vars[idx]))
+						})
+						.collect();
+
+					// Restore the type scope — the param names should only be
+					// visible inside the instance.
+					for (n, prev) in saved {
+						match prev {
+							Some(b) => {
+								self.type_scope.insert(n, b);
+							}
+							None => {
+								self.type_scope.remove(&n);
+							}
+						}
+					}
+
+					let trait_name = instance_node.trait_name.name.clone();
+					let module = self.module_name.clone().unwrap_or_default();
+					let slot_name = format!("{}.{}@{}", module, trait_name, head_key);
+					instance_node.instance_slot_name = slot_name.clone();
+
+					// Orphan rule: the instance must live in the module that
+					// declared either the trait or the head type's outer
+					// constructor. Without this, two modules could declare
+					// conflicting instances on a third module's type.
+					let trait_module = self
+						.traits
+						.get(&trait_name)
+						.map(|t| t.defining_module.clone());
+					let head_module = type_defining_module(&head_ty);
+					let orphan_ok =
+						trait_module.as_deref() == Some(&module) || head_module.as_deref() == Some(&module);
+					if !orphan_ok && trait_module.is_some() {
+						self.error(
+							instance_node.range,
+							AnalysisErrorKind::OrphanInstance {
+								trait_name: trait_name.clone(),
+								head: head_ty.clone(),
+							},
+						);
+					}
+
+					let canonical_method_order = self
+						.traits
+						.get(&trait_name)
+						.map(|t| t.method_order.clone())
+						.unwrap_or_default();
+
+					// Completeness check: every method the trait declares
+					// must either be provided by the instance or have been
+					// filled in by the default-method pre-pass.
+					let provided: std::collections::HashSet<String> = instance_node
+						.methods
+						.iter()
+						.map(|m| m.name.name.clone())
+						.collect();
+					for expected in &canonical_method_order {
+						if !provided.contains(expected) {
+							self.error(
+								instance_node.range,
+								AnalysisErrorKind::IncompleteInstance {
+									trait_name: trait_name.clone(),
+									method: expected.clone(),
+								},
+							);
+						}
+					}
+
+					instance_node.canonical_method_order = canonical_method_order;
+
+					// Overlap check: refuse to register a second instance with
+					// the same (trait, head_key). The hashmap key uses the
+					// outer type constructor name, so this catches both
+					// `for T on int` + `for T on int` and `for T on (option
+					// a)` + `for T on (option b)` (both keyed `option`).
+					if self
+						.instances
+						.contains_key(&(trait_name.clone(), head_key.clone()))
+					{
+						self.error(
+							instance_node.range,
+							AnalysisErrorKind::OverlappingInstance {
+								trait_name: trait_name.clone(),
+								head: head_ty.clone(),
+							},
+						);
+					} else {
+						self.instances.insert(
+							(trait_name.clone(), head_key),
+							InstanceDecl {
+								trait_name,
+								head_type: head_ty,
+								param_vars,
+								where_clauses,
+								instance_slot_name: slot_name,
+							},
+						);
+					}
 				}
 			}
 		}
@@ -575,6 +1265,126 @@ impl<'compiler> Analyzer<'compiler> {
 							variants,
 						},
 					);
+				}
+
+				// Trait declarations are processed in pass 1 (above) — no
+				// body-level constraint generation needed here.
+				DefinitionKind::Trait(_) => {}
+
+				DefinitionKind::Instance(instance_node) => {
+					// Constrain each method body and verify its type matches
+					// the trait's expected method type with the trait param
+					// substituted by the instance's head type. For parametric
+					// instances, bind each `where`-clause tyvar by name so
+					// `(option a)` resolves to the same `Type::Var` we
+					// allocated in pass 1.
+					let trait_name = instance_node.trait_name.name.clone();
+					let inst_decl = self.instances.get(&(
+						trait_name.clone(),
+						instance_node
+							.instance_slot_name
+							.rsplit_once('@')
+							.map(|(_, h)| h.to_string())
+							.unwrap_or_default(),
+					));
+					let (instance_param_vars, instance_param_names): (Vec<usize>, Vec<String>) =
+						match inst_decl {
+							Some(d) => {
+								// Pair each `where` clause's `param` identifier with
+								// the matching tyvar; if there are param vars but
+								// no where clauses (rare), bind by position.
+								let names: Vec<String> = if !instance_node.where_clause.is_empty() {
+									instance_node
+										.where_clause
+										.iter()
+										.map(|c| c.param.name.clone())
+										.collect()
+								} else {
+									Vec::new()
+								};
+								(d.param_vars.clone(), names)
+							}
+							None => (Vec::new(), Vec::new()),
+						};
+
+					let mut saved: Vec<(String, Option<TypeBinding>)> = Vec::new();
+					for (name, var) in instance_param_names.iter().zip(instance_param_vars.iter()) {
+						let prev = self.type_scope.insert(
+							name.clone(),
+							TypeBinding {
+								ty: Type::Var(*var),
+								ref_count: 0,
+								_range: instance_node.head.range,
+							},
+						);
+						saved.push((name.clone(), prev));
+					}
+
+					let head_ty = self.type_expr_to_type(&instance_node.head, &mut constraints);
+
+					let (param_var, method_types): (usize, HashMap<String, Type>) =
+						match self.traits.get(&trait_name) {
+							Some(t) => (t.param_var, t.method_types.clone()),
+							None => {
+								self.error(
+									instance_node.trait_name.range,
+									AnalysisErrorKind::NameNotBound { name: trait_name },
+								);
+								// Restore scope before continuing.
+								for (n, prev) in saved {
+									match prev {
+										Some(b) => {
+											self.type_scope.insert(n, b);
+										}
+										None => {
+											self.type_scope.remove(&n);
+										}
+									}
+								}
+								continue;
+							}
+						};
+
+					for method in &mut instance_node.methods {
+						let expected = match method_types.get(&method.name.name) {
+							Some(t) => t,
+							None => {
+								self.error(
+									method.name.range,
+									AnalysisErrorKind::NameNotBound {
+										name: format!("{}.{}", instance_node.trait_name.name, method.name.name),
+									},
+								);
+								continue;
+							}
+						};
+
+						// Substitute the trait param tyvar with the head type
+						// in the expected method signature, then unify against
+						// the method body's inferred type.
+						let mut sub = Substitution::empty();
+						sub.solutions.insert(param_var, head_ty.clone());
+						let expected_substituted = sub.apply_to_type(expected);
+
+						if let DefinitionKind::Expr(expr) = &mut method.kind {
+							self.constrain_expr(expr, &mut constraints);
+							constraints
+								.push(eq_constraint(expr.ty.clone(), expected_substituted).at(method.range));
+						}
+					}
+
+					// Restore the type scope — param names should only be
+					// visible inside the instance body.
+					for (n, prev) in saved {
+						match prev {
+							Some(b) => {
+								self.type_scope.insert(n, b);
+							}
+							None => {
+								self.type_scope.remove(&n);
+							}
+						}
+					}
 				}
 			}
 		}
@@ -747,8 +1557,8 @@ impl<'compiler> Analyzer<'compiler> {
 				if let Some(binding) = self.get_value_binding(&ident.name) {
 					let ty_scheme = binding.ty_scheme.clone();
 					return match ty_scheme {
-						Scheme::Forall(vars, ty) => {
-							if vars.is_empty() {
+						Scheme::Forall(vars, class_constraints, ty) => {
+							if vars.is_empty() && class_constraints.is_empty() {
 								expr.ty = ty;
 							} else {
 								// Polymorphic scheme (currently only prelude
@@ -758,7 +1568,8 @@ impl<'compiler> Analyzer<'compiler> {
 								// substitution reaches into the type
 								// (fill_in_placeholder only resolves top-level
 								// vars, not vars nested inside e.g. Fun).
-								let instantiated = self.instantiate_scheme(&Scheme::Forall(vars, ty));
+								let instantiated =
+									self.instantiate_scheme(&Scheme::Forall(vars, class_constraints, ty));
 								let expr_ty = self.new_type_var();
 								expr.ty = expr_ty.clone();
 								constraints.push(eq_constraint(expr_ty, instantiated));
@@ -768,7 +1579,13 @@ impl<'compiler> Analyzer<'compiler> {
 						Scheme::Var(var) => {
 							let expr_ty = self.new_type_var();
 							expr.ty = expr_ty.clone();
-							constraints.push(Inst(var, expr_ty))
+							// Create a fresh sink for any class constraints
+							// the matched scheme may carry — Gen processing
+							// will push their cells in here, and the
+							// surrounding Call reads them as dict_args.
+							let sink = crate::ast::new_dispatch_sink();
+							expr.dispatch_sink = Some(sink.clone());
+							constraints.push(Inst(var, expr_ty, sink));
 						}
 					};
 				};
@@ -886,18 +1703,14 @@ impl<'compiler> Analyzer<'compiler> {
 				self.constrain_expr(right, constraints);
 				match op {
 					Operator::SubtractionOrNegation => {
-						// int or float based on the operand. If the operand is
-						// already known to be Float, the result is Float;
-						// otherwise default to Int (which forces unification).
-						// Mixed-type uses produce a regular type-mismatch
-						// diagnostic via the eq_constraint.
-						let ty = if matches!(right.ty, Type::Float) {
-							Type::Float
-						} else {
-							Type::Int
-						};
-						expr.ty = ty.clone();
-						constraints.push(eq_constraint(right.ty.clone(), ty).at(right.range));
+						// Unary `-` desugars to the `numeric.negate` trait method:
+						// fresh tyvar α for the dispatch type; constrain operand
+						// and result to α; emit a Class constraint that picks
+						// the int/float instance once unification resolves α.
+						let alpha = self.new_type_var();
+						expr.ty = alpha.clone();
+						constraints.push(eq_constraint(right.ty.clone(), alpha.clone()).at(right.range));
+						self.emit_numeric_dispatch(expr, "negate", &alpha, constraints);
 					}
 					Operator::LogicalNot => {
 						expr.ty = Type::Bool;
@@ -957,14 +1770,32 @@ impl<'compiler> Analyzer<'compiler> {
 					Operator::Addition
 					| Operator::SubtractionOrNegation
 					| Operator::Multiplication
-					| Operator::Division
-					| Operator::Remainder => {
-						// int or float based on the operand types. If either
-						// side is concretely Float, both sides + result are
-						// Float; otherwise default to Int. This means
-						// polymorphic-numeric functions (`fun a b { a + b }`)
-						// resolve to int-only — users write a per-type
-						// function for float.
+					| Operator::Division => {
+						// Arithmetic operators desugar to `numeric.*` trait
+						// method dispatch. Fresh tyvar α for the dispatch type;
+						// constrain both sides + result to α; emit a Class
+						// constraint that picks int/float once unification
+						// resolves α. Stays polymorphic if α survives:
+						// `def double fun x { x + x }` becomes
+						// `forall a. Numeric a => a -> a`.
+						let alpha = self.new_type_var();
+						expr.ty = alpha.clone();
+						constraints.push(eq_constraint(left.ty.clone(), alpha.clone()).at(left.range));
+						constraints.push(eq_constraint(right.ty.clone(), alpha.clone()).at(right.range));
+						let method = match op.kind {
+							Operator::Addition => "add",
+							Operator::SubtractionOrNegation => "sub",
+							Operator::Multiplication => "mul",
+							Operator::Division => "div",
+							_ => unreachable!(),
+						};
+						self.emit_numeric_dispatch(expr, method, &alpha, constraints);
+					}
+
+					Operator::Remainder => {
+						// `%` stays int-only for now — the plan defers it to a
+						// future `integral` trait. Keep the legacy heuristic so
+						// existing remainder uses still resolve.
 						let is_float = matches!(left.ty, Type::Float) || matches!(right.ty, Type::Float);
 						let ty = if is_float { Type::Float } else { Type::Int };
 						expr.ty = ty.clone();
@@ -985,17 +1816,23 @@ impl<'compiler> Analyzer<'compiler> {
 						constraints.push(eq_constraint(left.ty.clone(), right.ty.clone()).at(expr.range));
 					}
 
-					// Ordering: int or float, same dispatch as arithmetic
-					// (default to Int when both sides are unknown).
+					// Ordering desugars to `ord.compare` plus a comparison
+					// with one of the `ordering` variants:
+					//   `a < b`  -> `ord.compare a b == lt`
+					//   `a > b`  -> `ord.compare a b == gt`
+					//   `a <= b` -> `ord.compare a b != gt`
+					//   `a >= b` -> `ord.compare a b != lt`
+					// The analyzer just sets up the trait dispatch on the
+					// BinaryOp expression; codegen emits the variant-eq tail.
 					Operator::LessThan
 					| Operator::LessThanEquals
 					| Operator::GreaterThan
 					| Operator::GreaterThanEquals => {
+						let alpha = self.new_type_var();
 						expr.ty = Type::Bool;
-						let is_float = matches!(left.ty, Type::Float) || matches!(right.ty, Type::Float);
-						let ty = if is_float { Type::Float } else { Type::Int };
-						constraints.push(eq_constraint(left.ty.clone(), ty.clone()).at(left.range));
-						constraints.push(eq_constraint(right.ty.clone(), ty).at(right.range));
+						constraints.push(eq_constraint(left.ty.clone(), alpha.clone()).at(left.range));
+						constraints.push(eq_constraint(right.ty.clone(), alpha.clone()).at(right.range));
+						self.emit_ord_dispatch(expr, &alpha, constraints);
 					}
 
 					Operator::FieldAccess => unreachable!("handled separately"),
@@ -1023,7 +1860,7 @@ impl<'compiler> Analyzer<'compiler> {
 
 						self.add_value_binding(
 							param.ident.name.clone(),
-							Scheme::Forall(vec![], param.ty.clone()),
+							Scheme::Forall(vec![], vec![], param.ty.clone()),
 							param.ident.range,
 						)
 					}
@@ -1049,10 +1886,29 @@ impl<'compiler> Analyzer<'compiler> {
 				);
 			}
 
-			ExprKind::Call(CallNode { callee, args, .. }) => {
+			ExprKind::Call(CallNode {
+				callee,
+				args,
+				dict_args,
+				..
+			}) => {
 				expr.ty = self.new_type_var();
 
 				self.constrain_expr(callee, constraints);
+
+				// If the callee is a polymorphic constrained value reference,
+				// its `dispatch_sink` will be populated by Gen/Inst processing
+				// during unify. We capture the sink here so codegen can read
+				// dict_args from it after analysis finishes. (The cells in
+				// the sink may not be filled until unify runs — we hold the
+				// Rc so we still see them when annotate / codegen runs.)
+				if let Some(sink) = callee.dispatch_sink.clone() {
+					// `dict_args` will be hydrated from `sink` at annotate
+					// time. Stash the sink on the callee — annotate reads
+					// it back. We leave `dict_args` empty here.
+					let _ = sink;
+					let _ = &dict_args; // (populated during annotate)
+				}
 
 				let mut arg_types = Vec::new();
 
@@ -1084,7 +1940,7 @@ impl<'compiler> Analyzer<'compiler> {
 				if value.ty.free_vars().is_empty() {
 					self.add_value_binding(
 						name.name.clone(),
-						Scheme::Forall(vec![], value.ty.clone()),
+						Scheme::Forall(vec![], vec![], value.ty.clone()),
 						name.range,
 					);
 				} else {
@@ -1176,7 +2032,33 @@ impl<'compiler> Analyzer<'compiler> {
 						match exports.values.get(&field.name) {
 							Some(ty) => {
 								receiver.ty = Type::Unknown;
-								expr.ty = self.instantiate(ty);
+								// Freshen the value's type *and* its class
+								// constraints together so they share fresh
+								// tyvars. Each constraint becomes a fresh
+								// Class constraint with a fresh dispatch
+								// cell; the cell ends up in the surrounding
+								// Call's dict_args via the dispatch_sink.
+								let mut mapping: HashMap<usize, Type> = HashMap::new();
+								let fresh_ty = self.instantiate_with(ty, &mut mapping);
+								expr.ty = fresh_ty;
+								if let Some(constraints_export) = exports.value_constraints.get(&field.name) {
+									let sink = crate::ast::new_dispatch_sink();
+									for vc in constraints_export {
+										let fresh_var = self.instantiate_with(&vc.dispatch_var, &mut mapping);
+										let cell =
+											crate::ast::new_dispatch(vc.trait_name.clone(), None, fresh_var.clone());
+										sink.borrow_mut().push(cell.clone());
+										let class = ClassConstraint {
+											name: vc.trait_name.clone(),
+											ty: fresh_var,
+											reason: ConstraintReason { range: expr.range },
+											dispatch_cell: cell,
+										};
+										self.fresh_class_constraints.push(class.clone());
+										constraints.push(Constraint::Class(class));
+									}
+									expr.dispatch_sink = Some(sink);
+								}
 							}
 							None => {
 								self.error(
@@ -1189,6 +2071,67 @@ impl<'compiler> Analyzer<'compiler> {
 							}
 						}
 						return;
+					}
+				}
+
+				// Trait method access: `trait-name.method`. The receiver is
+				// a bare ident that matches a registered typeclass. Resolve
+				// the method, instantiate its type with a fresh dispatch
+				// var, and emit a Class constraint linked via a shared
+				// dispatch cell. The expression's value at runtime is the
+				// method extracted from the right instance dictionary —
+				// codegen reads the cell to know which dict to load.
+				if let ExprKind::Identifier(ident) = &receiver.kind {
+					if let Some(trait_decl) = self.traits.get(&ident.name) {
+						let trait_name = ident.name.clone();
+						let param_var = trait_decl.param_var;
+						let method_idx = trait_decl
+							.method_order
+							.iter()
+							.position(|m| m == &field.name);
+						let method_type = trait_decl.method_types.get(&field.name).cloned();
+
+						match (method_idx, method_type) {
+							(Some(idx), Some(method_ty)) => {
+								// Instantiate: replace the trait's param_var
+								// (and any other free vars, defensively) with
+								// fresh vars at this use site.
+								let mut mapping: HashMap<usize, Type> = HashMap::new();
+								let dispatch_var = self.new_type_var();
+								mapping.insert(param_var, dispatch_var.clone());
+								let instantiated = self.instantiate_with(&method_ty, &mut mapping);
+
+								receiver.ty = Type::Unknown;
+								expr.ty = instantiated;
+
+								// Set up the shared dispatch cell + Class
+								// constraint. The cell is the back-edge from
+								// constraint solving to the AST.
+								let cell =
+									crate::ast::new_dispatch(trait_name.clone(), Some(idx), dispatch_var.clone());
+								expr.trait_dispatch = Some(cell.clone());
+								constraints.push(Constraint::Class(ClassConstraint {
+									name: trait_name,
+									ty: dispatch_var,
+									reason: ConstraintReason { range: expr.range },
+									dispatch_cell: cell,
+								}));
+								return;
+							}
+							_ => {
+								// Trait exists but method doesn't — emit an
+								// error and fall through to fresh-var
+								// recovery.
+								self.error(
+									field.range,
+									NameNotBound {
+										name: format!("{}.{}", ident.name, field.name),
+									},
+								);
+								expr.ty = Type::Unknown;
+								return;
+							}
+						}
 					}
 				}
 
@@ -1343,7 +2286,7 @@ impl<'compiler> Analyzer<'compiler> {
 					VariantResolution::NotFound => {
 						self.add_value_binding(
 							ident.name.clone(),
-							Scheme::Forall(vec![], subject_ty),
+							Scheme::Forall(vec![], vec![], subject_ty),
 							ident.range,
 						);
 					}
@@ -1881,29 +2824,60 @@ impl<'compiler> Analyzer<'compiler> {
 		// Find any Gen to process. Self-recursive defs produce Insts (from the
 		// recursive lookup) before the Gen (which is pushed after the body is
 		// constrained), so we can't assume constraints[0] is the Gen.
-		let gen_idx = constraints
+		// If only Class (and other non-Gen) constraints remain, we're done at
+		// this level — those get picked up by discharge after unify returns.
+		let gen_idx = match constraints
 			.iter()
 			.position(|c| matches!(c, Constraint::Gen(..)))
-			.expect("expected at least one Gen constraint");
+		{
+			Some(idx) => idx,
+			None => return Substitution::empty(),
+		};
 
 		match &constraints[gen_idx] {
 			Constraint::Gen(scheme, ty) => {
 				let mut inst_constraints_for_gen = Vec::new();
+				let mut class_pool: Vec<ClassConstraint> = Vec::new();
 				let mut other_constraints = Vec::new();
 				for (i, constraint) in constraints.iter().enumerate() {
 					if i == gen_idx {
 						continue;
 					}
-					match (constraint, scheme) {
-						(Constraint::Inst(var1, ..), Scheme::Var(var2, ..)) if *var1 == *var2 => {
-							inst_constraints_for_gen.push(constraint.clone())
+					match constraint {
+						Constraint::Inst(var1, ..) => match scheme {
+							Scheme::Var(var2) if *var1 == *var2 => {
+								inst_constraints_for_gen.push(constraint.clone());
+							}
+							_ => other_constraints.push(constraint.clone()),
+						},
+						Constraint::Class(c) => {
+							class_pool.push(c.clone());
+							other_constraints.push(constraint.clone());
 						}
 						_ => other_constraints.push(constraint.clone()),
 					}
 				}
 
-				let new_eq_constraints = self.instantiate_constraints(&inst_constraints_for_gen, &ty);
-				let subst = self.unify_eq_constraints(&new_eq_constraints);
+				// For each Inst against this scheme, instantiate the scheme
+				// (Eq + fresh Class constraints) and push fresh dispatch
+				// cells into the originating Call's sink. We feed the new
+				// constraints back into unify so any class constraints they
+				// generate flow with the rest.
+				let new_constraints =
+					self.instantiate_constraints(&inst_constraints_for_gen, &ty, &class_pool);
+				// Split: Eq go to subst solving immediately; new Class
+				// constraints get appended to other_constraints so they
+				// survive into discharge.
+				let mut new_eq = Vec::new();
+				for c in new_constraints {
+					match c {
+						Constraint::Eq(..) => new_eq.push(c),
+						Constraint::Class(_) => other_constraints.push(c),
+						_ => unreachable!("instantiate_constraints only emits Eq and Class"),
+					}
+				}
+
+				let subst = self.unify_eq_constraints(&new_eq);
 				let other_constraints = subst.apply_to_constraints(&other_constraints);
 				let subst2 = self.unify_gen_inst_constraints(&other_constraints);
 
@@ -1922,6 +2896,90 @@ impl<'compiler> Analyzer<'compiler> {
 		}
 	}
 
+	// Walk the class constraint set after unification. For each
+	// `Class name ty`:
+	//   - concrete `ty` + matching instance → write `Resolved::Global(slot)`
+	//     into the shared dispatch cell so codegen knows which dict to load.
+	//   - concrete `ty` + no instance → diagnostic.
+	//   - `ty` still a type var → leave the constraint alone. Generalization
+	//     will push it into the surrounding scheme, or (if it escapes any
+	//     enclosing def boundary) phase 4 will flag the ambiguity.
+	fn discharge(&mut self, class_constraints: &[ClassConstraint]) {
+		for c in class_constraints {
+			// Skip unresolved tyvar dispatches — those flow into
+			// generalization and become part of the enclosing scheme.
+			if matches!(c.ty, Type::Var(_)) {
+				continue;
+			}
+
+			match self.try_resolve_dispatch(&c.name, &c.ty) {
+				Some(resolved) => {
+					c.dispatch_cell.borrow_mut().resolved = Some(resolved);
+				}
+				None => {
+					// If the dispatch type contains any free type variables
+					// the problem is ambiguity, not a missing instance —
+					// e.g. `showable.show none` where `none : option ?`.
+					// Tell the user to annotate.
+					if !c.ty.free_vars().is_empty() {
+						self.error(
+							c.reason.range,
+							AnalysisErrorKind::AmbiguousTraitMethod {
+								trait_name: c.name.clone(),
+								ty: c.ty.clone(),
+							},
+						);
+					} else {
+						self.error(
+							c.reason.range,
+							AnalysisErrorKind::NoInstance {
+								trait_name: c.name.clone(),
+								ty: c.ty.clone(),
+							},
+						);
+					}
+				}
+			}
+		}
+	}
+
+	// Recursively resolve a `(trait, ty)` dispatch to a `Resolved`. Returns
+	// `None` if no instance matches. Concrete instances → `Global`.
+	// Parametric instances → `InstanceChain` with each `where`-clause
+	// constraint resolved against the unifying substitution.
+	fn try_resolve_dispatch(&self, trait_name: &str, ty: &Type) -> Option<Resolved> {
+		let head_key = type_to_head_key(ty)?;
+		let inst = self.instances.get(&(trait_name.to_string(), head_key))?;
+
+		if inst.param_vars.is_empty() {
+			// Concrete instance — must match `ty` exactly.
+			if !type_keys_match(&inst.head_type, ty) {
+				return None;
+			}
+			return Some(Resolved::Global(inst.instance_slot_name.clone()));
+		}
+
+		// Parametric: match the instance head against `ty` to bind the
+		// instance's param tyvars to concrete subterms, then recursively
+		// resolve each `where`-clause constraint.
+		let mut mapping: std::collections::HashMap<usize, Type> = std::collections::HashMap::new();
+		if !match_types(&inst.head_type, ty, &mut mapping) {
+			return None;
+		}
+
+		let mut inner: Vec<Resolved> = Vec::new();
+		for (wc_trait, wc_var) in &inst.where_clauses {
+			let wc_ty = mapping.get(wc_var).cloned()?;
+			let inner_resolved = self.try_resolve_dispatch(wc_trait, &wc_ty)?;
+			inner.push(inner_resolved);
+		}
+
+		Some(Resolved::InstanceChain {
+			ctor_slot: inst.instance_slot_name.clone(),
+			inner,
+		})
+	}
+
 	fn annotate(&mut self, module: &mut ModuleNode, subst: &Substitution) {
 		for definition in &mut module.body {
 			self.fill_in_placeholder(&mut definition.ty, subst);
@@ -1933,6 +2991,17 @@ impl<'compiler> Analyzer<'compiler> {
 				DefinitionKind::Expr(expr) => {
 					// But when defining exprs, we must annotate within the def value:
 					self.annotate_expr(expr, subst);
+				}
+				DefinitionKind::Instance(instance_node) => {
+					// Annotate each method body the same way regular defs are
+					// annotated — the body's tyvars get substituted out.
+					for method in &mut instance_node.methods {
+						self.fill_in_placeholder(&mut method.ty, subst);
+						method.ty = Type::Nothing;
+						if let DefinitionKind::Expr(expr) = &mut method.kind {
+							self.annotate_expr(expr, subst);
+						}
+					}
 				}
 				_ => { /* nothing to do for other def kinds */ }
 			}
@@ -1958,8 +3027,20 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 			}
 
-			ExprKind::Call(CallNode { callee, args, .. }) => {
+			ExprKind::Call(CallNode {
+				callee,
+				args,
+				dict_args,
+				..
+			}) => {
 				self.annotate_expr(callee, subst);
+
+				// Drain any cells the callee's dispatch sink collected during
+				// Gen/Inst processing — these are the dicts this call needs
+				// to prepend to its args at runtime.
+				if let Some(sink) = callee.dispatch_sink.take() {
+					dict_args.extend(sink.borrow().iter().cloned());
+				}
 
 				for arg in args {
 					self.annotate_expr(arg, subst);
@@ -2054,15 +3135,44 @@ impl<'compiler> Analyzer<'compiler> {
 		}
 	}
 
-	fn instantiate_constraints(&mut self, constraints: &[Constraint], ty: &Type) -> Vec<Constraint> {
+	// Process each Inst against the scheme produced by Gen for `ty`. For
+	// each: freshen the scheme's type into a new Eq constraint, freshen the
+	// scheme's class constraints with new dispatch cells, and push the
+	// fresh cells into the Inst's sink so the surrounding Call can read
+	// them as `dict_args`. The new Eq + Class constraints are appended to
+	// the constraint stream the unifier is processing.
+	fn instantiate_constraints(
+		&mut self,
+		constraints: &[Constraint],
+		ty: &Type,
+		class_pool: &[ClassConstraint],
+	) -> Vec<Constraint> {
 		let mut new_constraints = Vec::new();
 
-		let scheme = self.generalize_type(ty);
+		let scheme = self.generalize_with_constraints(ty, class_pool);
 
 		for constraint in constraints {
-			if let Constraint::Inst(_, ty) = constraint {
-				let instantiated_ty = self.instantiate_scheme(&scheme);
+			if let Constraint::Inst(_, ty, sink) = constraint {
+				let (instantiated_ty, fresh_class_constraints) =
+					self.instantiate_scheme_with_constraints(&scheme);
 				new_constraints.push(eq_constraint(ty.clone(), instantiated_ty));
+
+				// Each fresh class constraint comes with a fresh dispatch
+				// cell — record them in the sink so the originating Call
+				// can read them into its `dict_args`. We also stash a copy
+				// of each fresh constraint on the analyzer so discharge
+				// picks them up after unify finishes.
+				{
+					let mut sink_borrow = sink.borrow_mut();
+					for c in &fresh_class_constraints {
+						sink_borrow.push(c.dispatch_cell.clone());
+					}
+				}
+
+				for c in fresh_class_constraints {
+					self.fresh_class_constraints.push(c.clone());
+					new_constraints.push(Constraint::Class(c));
+				}
 			} else {
 				unreachable!("should only have inst constraints here");
 			}
@@ -2071,39 +3181,82 @@ impl<'compiler> Analyzer<'compiler> {
 		new_constraints
 	}
 
+	// Build the scheme that a given def's `ty` generalizes to, partitioning
+	// class constraints from `class_pool` into "kept" (over the def's free
+	// vars) vs. "passed through" (left in the surrounding context). The
+	// `class_pool` here is whatever class constraints are still live at
+	// the moment of generalization.
+	fn generalize_with_constraints(&self, ty: &Type, class_pool: &[ClassConstraint]) -> Scheme {
+		let mut free_vars: HashSet<usize> = HashSet::from_iter(ty.free_vars());
+		// Free vars in the surrounding env aren't part of this scheme.
+		for (_, binding) in self.value_scopes.last().unwrap() {
+			for var in binding.ty_scheme.free_vars() {
+				free_vars.remove(&var);
+			}
+		}
+		// Class constraints whose ty mentions at least one of `free_vars`
+		// belong to this scheme. Dedupe by `(trait, ty)` so multiple sites
+		// over the same dispatch type collapse to one scheme slot —
+		// matching `resolve_forwarded_dispatches`' slot allocation.
+		let mut kept: Vec<ClassConstraint> = Vec::new();
+		for c in class_pool {
+			if !c.ty.free_vars().iter().any(|v| free_vars.contains(v)) {
+				continue;
+			}
+			let already = kept
+				.iter()
+				.any(|k| k.name == c.name && type_keys_match(&k.ty, &c.ty));
+			if !already {
+				kept.push(c.clone());
+			}
+		}
+		Scheme::Forall(Vec::from_iter(free_vars), kept, ty.clone())
+	}
+
 	fn instantiate_scheme(&mut self, scheme: &Scheme) -> Type {
+		let (ty, _fresh_constraints) = self.instantiate_scheme_with_constraints(scheme);
+		// Callers in non-Inst contexts (e.g. cross-module value lookup) call
+		// this; for now we drop the fresh constraints there. Phase 3's
+		// parametric instances may need to start tracking them too.
+		ty
+	}
+
+	fn instantiate_scheme_with_constraints(
+		&mut self,
+		scheme: &Scheme,
+	) -> (Type, Vec<ClassConstraint>) {
 		match scheme {
 			Scheme::Var(_) => unreachable!("shouldn't be instantiating a scheme var"),
-			Scheme::Forall(vars, ty) => {
+			Scheme::Forall(vars, class_constraints, ty) => {
 				// generate a new fresh type var for each of the forall vars
 				let mut subst = Substitution::empty();
 				for var in vars {
 					subst.solutions.insert(*var, self.new_type_var());
 				}
 
-				// and then apply that substitution in ty
-				subst.apply_to_type(ty)
+				// and then apply that substitution in ty and the constraints
+				let fresh_ty = subst.apply_to_type(ty);
+				let fresh_constraints = class_constraints
+					.iter()
+					.map(|c| {
+						let fresh_ty = subst.apply_to_type(&c.ty);
+						ClassConstraint {
+							name: c.name.clone(),
+							ty: fresh_ty.clone(),
+							reason: c.reason.clone(),
+							// Each instantiation produces a *fresh* dispatch cell
+							// that represents "the caller passing a dict" — NOT
+							// the original method-extraction site. `method_idx`
+							// is always None for these (the callee's own cells
+							// do the method extraction once they receive the
+							// dict).
+							dispatch_cell: crate::ast::new_dispatch(c.name.clone(), None, fresh_ty),
+						}
+					})
+					.collect();
+				(fresh_ty, fresh_constraints)
 			}
 		}
-	}
-
-	fn generalize_type(&self, ty: &Type) -> Scheme {
-		let mut vars = HashSet::new();
-
-		// add all free vars in ty
-		for var in ty.free_vars() {
-			vars.insert(var);
-		}
-
-		// remove all free vars in context
-		for (_, binding) in self.value_scopes.last().unwrap() {
-			// todo: all scope levels?
-			for var in binding.ty_scheme.free_vars() {
-				vars.remove(&var);
-			}
-		}
-
-		Scheme::Forall(Vec::from_iter(vars), ty.clone())
 	}
 
 	fn new_type_scheme_var(&mut self) -> Scheme {
@@ -2116,14 +3269,6 @@ impl<'compiler> Analyzer<'compiler> {
 		let type_var = Type::Var(self.next_type_var_id);
 		self.next_type_var_id += 1;
 		type_var
-	}
-
-	// Produce a fresh copy of `ty` with every free Var consistently replaced
-	// by a new type var. Used when reaching across modules to a value whose
-	// type may contain free vars (i.e. is polymorphic).
-	fn instantiate(&mut self, ty: &Type) -> Type {
-		let mut mapping: HashMap<usize, Type> = HashMap::new();
-		self.instantiate_with(ty, &mut mapping)
 	}
 
 	// Pick a single (enum, variant) from a list of matches by precedence:
@@ -2149,61 +3294,376 @@ impl<'compiler> Analyzer<'compiler> {
 		None
 	}
 
-	// Seed a prelude enum into `enum_defs`, the type scope, and the variant
-	// constructor table. `variants` use canonical `Type::Var(i)` for `i` in
-	// `0..param_count`, matching the `EnumExport` convention so the rebinding
-	// logic that handles cross-module imports also works here.
-	fn register_prelude_enum(
+	// Seed enums from a module's exports. Mints fresh local tyvars for
+	// each enum's canonical-`Var(0..N-1)` params and substitutes through
+	// the variant payload types. Always populates `enum_defs` and
+	// `variant_constructors`; when `add_to_type_scope` is set, also adds
+	// the bare enum name to `type_scope` so `option`/`ordering`/etc. can
+	// be referenced unqualified (used for the implicit prelude import).
+	fn seed_imported_enums(
 		&mut self,
-		name: &str,
-		param_count: usize,
-		variants: Vec<(&str, Vec<Type>)>,
+		qualified_module: &str,
+		enums: &HashMap<String, EnumExport>,
+		add_to_type_scope: bool,
 	) {
-		let qualified = format!("__prelude__.{}", name);
-		let fresh_vars: Vec<usize> = (0..param_count)
-			.map(|_| {
-				let id = self.next_type_var_id;
-				self.next_type_var_id += 1;
-				id
-			})
-			.collect();
-		let rebind = Substitution {
-			solutions: fresh_vars
+		for (enum_name, enum_export) in enums {
+			let qualified = format!("{}.{}", qualified_module, enum_name);
+			let fresh_param_vars: Vec<usize> = (0..enum_export.param_count)
+				.map(|_| {
+					let id = self.next_type_var_id;
+					self.next_type_var_id += 1;
+					id
+				})
+				.collect();
+			let rebind = Substitution {
+				solutions: (0..enum_export.param_count)
+					.map(|i| (i, Type::Var(fresh_param_vars[i])))
+					.collect(),
+			};
+			let variants: Vec<(String, Vec<Type>)> = enum_export
+				.variants
 				.iter()
-				.enumerate()
-				.map(|(i, v)| (i, Type::Var(*v)))
-				.collect(),
-		};
-		let bound_variants: Vec<(String, Vec<Type>)> = variants
-			.into_iter()
-			.map(|(n, params)| {
-				let mapped = params
-					.into_iter()
-					.map(|p| rebind.apply_to_type(&p))
-					.collect();
-				(n.to_string(), mapped)
-			})
-			.collect();
-		for (variant_name, _) in &bound_variants {
-			self
-				.variant_constructors
-				.entry(variant_name.clone())
-				.or_default()
-				.push((qualified.clone(), variant_name.clone()));
+				.map(|(n, params)| {
+					let rebound = params.iter().map(|p| rebind.apply_to_type(p)).collect();
+					(n.clone(), rebound)
+				})
+				.collect();
+			for (variant_name, _) in &variants {
+				self
+					.variant_constructors
+					.entry(variant_name.clone())
+					.or_default()
+					.push((qualified.clone(), variant_name.clone()));
+			}
+			if add_to_type_scope {
+				let template_args: Vec<Type> = fresh_param_vars.iter().map(|v| Type::Var(*v)).collect();
+				self.add_type_binding(
+					enum_name.clone(),
+					Type::Enum(qualified.clone(), template_args),
+					Range::collapsed(0, 0),
+				);
+			}
+			self.enum_defs.insert(
+				qualified,
+				EnumDef {
+					param_vars: fresh_param_vars,
+					variants,
+				},
+			);
 		}
-		let template_args = fresh_vars.iter().map(|v| Type::Var(*v)).collect();
-		self.add_type_binding(
-			name.to_string(),
-			Type::Enum(qualified.clone(), template_args),
-			Range::collapsed(0, 0),
-		);
-		self.enum_defs.insert(
-			qualified,
-			EnumDef {
-				param_vars: fresh_vars,
-				variants: bound_variants,
+	}
+
+	// Pass 5 of analysis. After discharge, every concrete-typed dispatch
+	// is already resolved. What's left are Forwarded dispatches — those
+	// whose dispatch type is a tyvar bound by the enclosing top-level
+	// def's generalized scheme. For each such def:
+	//   - collect every dispatch cell in its body (trait_dispatch on each
+	//     ExprNode + each Call's dict_args).
+	//   - for each cell, apply `subst` to its `dispatch_var`; if the
+	//     result is a Var, register that var as a dict-param slot.
+	//   - allocate slot indices in first-seen order and write
+	//     `Resolved::Forwarded(slot)` into each unresolved cell.
+	//   - stash the slot count on `def.dict_param_count` so codegen knows
+	//     how many hidden leading params to prepend.
+	fn resolve_forwarded_dispatches(&mut self, module: &mut ModuleNode, subst: &Substitution) {
+		for def in &mut module.body {
+			match &mut def.kind {
+				DefinitionKind::Expr(body_expr) => {
+					// Collect every dispatch cell living in this def's body.
+					let mut cells: Vec<DispatchCell> = Vec::new();
+					collect_dispatch_cells(body_expr, &mut cells);
+
+					// First-seen ordering of (trait, var_id) → slot index.
+					// Lets callers and codegen agree on the dict-param layout
+					// without any explicit signature carried around.
+					let mut slot_order: Vec<(String, usize)> = Vec::new();
+
+					for cell in &cells {
+						let mut borrow = cell.borrow_mut();
+						if borrow.resolved.is_some() {
+							continue;
+						}
+						let resolved_ty = subst.apply_to_type(&borrow.dispatch_var);
+						if let Type::Var(v) = resolved_ty {
+							let slot = lookup_or_alloc_slot(&mut slot_order, &borrow.trait_name, v);
+							borrow.resolved = Some(Resolved::Forwarded(slot));
+						}
+						// Cells whose dispatch type is concrete but unresolved have
+						// already been errored on by `discharge`. Don't double-report.
+					}
+
+					def.dict_param_count = slot_order.len() as u16;
+					if !slot_order.is_empty() {
+						let exports: Vec<crate::module::ValueConstraintExport> = slot_order
+							.iter()
+							.map(|(trait_name, var)| crate::module::ValueConstraintExport {
+								trait_name: trait_name.clone(),
+								dispatch_var: Type::Var(*var),
+							})
+							.collect();
+						self
+							.def_value_constraints
+							.insert(def.name.name.clone(), exports);
+					}
+				}
+
+				DefinitionKind::Instance(_) => {
+					// Slot ordering for parametric instances is fixed by the
+					// declaration order of the `where` clauses. Look up the
+					// registered InstanceDecl (its `where_clauses` carry the
+					// canonical tyvars) and use them as the slot order.
+					let slot_order = self.instance_slot_order_for(def);
+
+					if let DefinitionKind::Instance(instance_node) = &mut def.kind {
+						for method in &mut instance_node.methods {
+							if let DefinitionKind::Expr(body) = &mut method.kind {
+								let mut cells: Vec<DispatchCell> = Vec::new();
+								collect_dispatch_cells(body, &mut cells);
+								for cell in &cells {
+									let mut borrow = cell.borrow_mut();
+									if borrow.resolved.is_some() {
+										continue;
+									}
+									let resolved_ty = subst.apply_to_type(&borrow.dispatch_var);
+									if let Type::Var(v) = resolved_ty {
+										if let Some(slot) = slot_order
+											.iter()
+											.position(|(t, sv)| t == &borrow.trait_name && *sv == v)
+										{
+											borrow.resolved = Some(Resolved::Forwarded(slot as u16));
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+
+				_ => {}
+			}
+		}
+	}
+
+	// Look up the slot order for an instance def. Splits the borrow chain
+	// from `resolve_forwarded_dispatches` so the loop can keep its
+	// `&mut def.kind` while we read `self.instances`.
+	fn instance_slot_order_for(&self, def: &DefinitionNode) -> Vec<(String, usize)> {
+		if let DefinitionKind::Instance(instance_node) = &def.kind {
+			let trait_name = &instance_node.trait_name.name;
+			// Recompute head key from the instance's slot name suffix; the
+			// slot was `<module>.<trait>@<head_key>` by construction.
+			let head_key = instance_node
+				.instance_slot_name
+				.rsplit_once('@')
+				.map(|(_, h)| h.to_string())
+				.unwrap_or_default();
+			if let Some(inst) = self.instances.get(&(trait_name.clone(), head_key.clone())) {
+				return inst
+					.where_clauses
+					.iter()
+					.map(|(t, v)| (t.clone(), *v))
+					.collect();
+			}
+		}
+		Vec::new()
+	}
+
+	// Shared helper: attach a numeric-trait dispatch cell to `expr` and
+	// emit the corresponding Class constraint. Used by the operator-
+	// desugaring branches (BinaryOperation arithmetic + UnaryOperation
+	// negation). The dispatch type is whatever `alpha` resolves to after
+	// unification — discharge picks the right int/float instance.
+	fn emit_numeric_dispatch(
+		&self,
+		expr: &mut ExprNode,
+		method_name: &str,
+		alpha: &Type,
+		constraints: &mut Vec<Constraint>,
+	) {
+		let trait_decl = self
+			.traits
+			.get("numeric")
+			.expect("numeric trait must be registered in the prelude");
+		let method_idx = trait_decl
+			.method_order
+			.iter()
+			.position(|m| m == method_name)
+			.expect("numeric method must be present");
+		let cell = crate::ast::new_dispatch("numeric".into(), Some(method_idx), alpha.clone());
+		expr.trait_dispatch = Some(cell.clone());
+		constraints.push(Constraint::Class(ClassConstraint {
+			name: "numeric".into(),
+			ty: alpha.clone(),
+			reason: ConstraintReason { range: expr.range },
+			dispatch_cell: cell,
+		}));
+	}
+
+	// Shared helper: attach an ord-trait `compare` dispatch cell to `expr`
+	// and emit the corresponding Class constraint. Used by the ordering
+	// operator desugaring (`<`, `>`, `<=`, `>=`).
+	fn emit_ord_dispatch(
+		&self,
+		expr: &mut ExprNode,
+		alpha: &Type,
+		constraints: &mut Vec<Constraint>,
+	) {
+		let cell = crate::ast::new_dispatch("ord".into(), Some(0), alpha.clone());
+		expr.trait_dispatch = Some(cell.clone());
+		constraints.push(Constraint::Class(ClassConstraint {
+			name: "ord".into(),
+			ty: alpha.clone(),
+			reason: ConstraintReason { range: expr.range },
+			dispatch_cell: cell,
+		}));
+	}
+
+	// Register the prelude `numeric` trait + `for numeric on int` and
+	// `for numeric on float` instances. Method types reference the trait's
+	// fresh `param_var` so each call-site instantiation can substitute the
+	// dispatch type uniformly.
+	fn register_prelude_numeric_trait(&mut self) {
+		let param_var = self.next_type_var_id;
+		self.next_type_var_id += 1;
+		let a = Type::Var(param_var);
+
+		let binary = Type::Fun(vec![a.clone(), a.clone()], Box::new(a.clone()));
+		let unary = Type::Fun(vec![a.clone()], Box::new(a.clone()));
+
+		let method_order = vec![
+			"add".to_string(),
+			"sub".to_string(),
+			"mul".to_string(),
+			"div".to_string(),
+			"negate".to_string(),
+		];
+		let mut method_types: HashMap<String, Type> = HashMap::new();
+		method_types.insert("add".into(), binary.clone());
+		method_types.insert("sub".into(), binary.clone());
+		method_types.insert("mul".into(), binary.clone());
+		method_types.insert("div".into(), binary.clone());
+		method_types.insert("negate".into(), unary);
+
+		self.traits.insert(
+			"numeric".into(),
+			TraitDecl {
+				param_var,
+				method_order,
+				method_types,
+				defaults: HashMap::new(),
+				defining_module: "__prelude__".into(),
 			},
 		);
+
+		self.instances.insert(
+			("numeric".into(), "int".into()),
+			InstanceDecl {
+				trait_name: "numeric".into(),
+				head_type: Type::Int,
+				param_vars: vec![],
+				where_clauses: vec![],
+				instance_slot_name: "__prelude__.numeric@int".into(),
+			},
+		);
+		self.instances.insert(
+			("numeric".into(), "float".into()),
+			InstanceDecl {
+				trait_name: "numeric".into(),
+				head_type: Type::Float,
+				param_vars: vec![],
+				where_clauses: vec![],
+				instance_slot_name: "__prelude__.numeric@float".into(),
+			},
+		);
+	}
+
+	// Register the prelude `ord` trait + concrete instances on int, float,
+	// and string. `compare`'s return type references the `ordering` prelude
+	// enum we registered just above this call.
+	fn register_prelude_ord_trait(&mut self) {
+		let param_var = self.next_type_var_id;
+		self.next_type_var_id += 1;
+		let a = Type::Var(param_var);
+
+		let ordering_ty = Type::Enum("__prelude__.ordering".into(), vec![]);
+		let compare_ty = Type::Fun(vec![a.clone(), a.clone()], Box::new(ordering_ty));
+
+		let method_order = vec!["compare".to_string()];
+		let mut method_types: HashMap<String, Type> = HashMap::new();
+		method_types.insert("compare".into(), compare_ty);
+
+		self.traits.insert(
+			"ord".into(),
+			TraitDecl {
+				param_var,
+				method_order,
+				method_types,
+				defaults: HashMap::new(),
+				defining_module: "__prelude__".into(),
+			},
+		);
+
+		for (head_key, head_type) in [
+			("int", Type::Int),
+			("float", Type::Float),
+			("string", Type::String),
+		] {
+			self.instances.insert(
+				("ord".into(), head_key.into()),
+				InstanceDecl {
+					trait_name: "ord".into(),
+					head_type,
+					param_vars: vec![],
+					where_clauses: vec![],
+					instance_slot_name: format!("__prelude__.ord@{}", head_key),
+				},
+			);
+		}
+	}
+
+	// Register the prelude `hash` trait + concrete instances on int,
+	// float, string, bool. Output type is `int` — the analyzer doesn't
+	// know about the hash algorithm; runtime semantics are in the
+	// corresponding `*Hash` VM builtins.
+	fn register_prelude_hash_trait(&mut self) {
+		let param_var = self.next_type_var_id;
+		self.next_type_var_id += 1;
+		let a = Type::Var(param_var);
+
+		let hash_ty = Type::Fun(vec![a], Box::new(Type::Int));
+
+		let method_order = vec!["hash".to_string()];
+		let mut method_types: HashMap<String, Type> = HashMap::new();
+		method_types.insert("hash".into(), hash_ty);
+
+		self.traits.insert(
+			"hash".into(),
+			TraitDecl {
+				param_var,
+				method_order,
+				method_types,
+				defaults: HashMap::new(),
+				defining_module: "__prelude__".into(),
+			},
+		);
+
+		for (head_key, head_type) in [
+			("int", Type::Int),
+			("float", Type::Float),
+			("string", Type::String),
+			("bool", Type::Bool),
+		] {
+			self.instances.insert(
+				("hash".into(), head_key.into()),
+				InstanceDecl {
+					trait_name: "hash".into(),
+					head_type,
+					param_vars: vec![],
+					where_clauses: vec![],
+					instance_slot_name: format!("__prelude__.hash@{}", head_key),
+				},
+			);
+		}
 	}
 
 	// Build the enum type for a variant pattern: if the subject is already

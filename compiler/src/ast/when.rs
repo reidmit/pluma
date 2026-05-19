@@ -1,12 +1,14 @@
 use super::*;
 use crate::location::Range;
 
+#[derive(Clone)]
 pub struct WhenNode {
 	pub range: Range,
 	pub subject: Box<ExprNode>,
 	pub cases: Vec<CaseNode>,
 }
 
+#[derive(Clone)]
 pub struct CaseNode {
 	pub range: Range,
 	pub pattern: PatternNode,

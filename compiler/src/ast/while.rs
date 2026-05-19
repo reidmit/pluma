@@ -1,6 +1,7 @@
 use super::*;
 use crate::location::Range;
 
+#[derive(Clone)]
 pub struct WhileNode {
 	pub range: Range,
 	pub subject: Box<ExprNode>,

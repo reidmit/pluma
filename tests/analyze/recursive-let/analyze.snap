@@ -3,5 +3,5 @@ source: tests/analyze.rs
 expression: output
 ---
 error: Name `f` is not defined.
-error: Type mismatch: expected `int -> 'l`, but found `?`.
+error: Type mismatch: expected `int -> 'u`, but found `?`.
 

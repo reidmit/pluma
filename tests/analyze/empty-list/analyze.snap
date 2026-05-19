@@ -8,7 +8,7 @@ module `main` (tests/analyze/empty-list/main.pa) {
         module(0:0-3:27) [
             def(0:0-0:12) :: nothing {
                 name: ident(0:4-0:9) `empty`,
-                kind: expr(0:10-0:12) :: list 'o {
+                kind: expr(0:10-0:12) :: list 'x {
                     kind: [],
                 },
             },

@@ -1,10 +1,12 @@
 use crate::location::Range;
 
+#[derive(Clone)]
 pub struct RegexNode {
 	pub range: Range,
 	pub kind: RegexKind,
 }
 
+#[derive(Clone)]
 pub enum RegexKind {
 	Literal(String),
 	CharacterClass(String),

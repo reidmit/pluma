@@ -28,17 +28,74 @@ pub fn compile(compiler: &compiler::Compiler) -> Result<Program, String> {
 		Value::Builtin(Builtin::ToString),
 	);
 
-	// Prelude enums: `option` and `result`. enum_variants tracks `(name, arity)`
-	// per qualified enum so the bare-variant resolution path can build
-	// MakeVariant/MakeVariantCtor instructions for `some 5`, `ok x`, etc.
-	cg.enum_variants.insert(
-		"__prelude__.option".to_string(),
-		vec![("some".to_string(), 1), ("none".to_string(), 0)],
+	// Prelude trait instance dictionaries. Each instance is a positional
+	// array of method values keyed by trait declaration order (`numeric`
+	// is `add, sub, mul, div, negate`). Codegen reads these globals when
+	// a class-constraint discharge resolves to `Resolved::Global(name)`.
+	cg.add_evaluated_global(
+		"__prelude__",
+		"numeric@int",
+		Value::Dict(Rc::new(vec![
+			Value::Builtin(Builtin::IntAdd),
+			Value::Builtin(Builtin::IntSub),
+			Value::Builtin(Builtin::IntMul),
+			Value::Builtin(Builtin::IntDiv),
+			Value::Builtin(Builtin::IntNegate),
+		])),
 	);
-	cg.enum_variants.insert(
-		"__prelude__.result".to_string(),
-		vec![("ok".to_string(), 1), ("err".to_string(), 1)],
+	cg.add_evaluated_global(
+		"__prelude__",
+		"numeric@float",
+		Value::Dict(Rc::new(vec![
+			Value::Builtin(Builtin::FloatAdd),
+			Value::Builtin(Builtin::FloatSub),
+			Value::Builtin(Builtin::FloatMul),
+			Value::Builtin(Builtin::FloatDiv),
+			Value::Builtin(Builtin::FloatNegate),
+		])),
 	);
+	// `ord` trait: one method (`compare`), three concrete instances.
+	cg.add_evaluated_global(
+		"__prelude__",
+		"ord@int",
+		Value::Dict(Rc::new(vec![Value::Builtin(Builtin::IntCompare)])),
+	);
+	cg.add_evaluated_global(
+		"__prelude__",
+		"ord@float",
+		Value::Dict(Rc::new(vec![Value::Builtin(Builtin::FloatCompare)])),
+	);
+	cg.add_evaluated_global(
+		"__prelude__",
+		"ord@string",
+		Value::Dict(Rc::new(vec![Value::Builtin(Builtin::StringCompare)])),
+	);
+	// `hash` trait: one method (`hash`), four concrete instances.
+	cg.add_evaluated_global(
+		"__prelude__",
+		"hash@int",
+		Value::Dict(Rc::new(vec![Value::Builtin(Builtin::IntHash)])),
+	);
+	cg.add_evaluated_global(
+		"__prelude__",
+		"hash@float",
+		Value::Dict(Rc::new(vec![Value::Builtin(Builtin::FloatHash)])),
+	);
+	cg.add_evaluated_global(
+		"__prelude__",
+		"hash@string",
+		Value::Dict(Rc::new(vec![Value::Builtin(Builtin::StringHash)])),
+	);
+	cg.add_evaluated_global(
+		"__prelude__",
+		"hash@bool",
+		Value::Dict(Rc::new(vec![Value::Builtin(Builtin::BoolHash)])),
+	);
+
+	// Prelude enums (`option`, `result`, `ordering`) are declared in
+	// `compiler/src/prelude.pa` — `collect_enum_defs` (below) picks them
+	// up from the prelude module's AST the same way it does any other
+	// module's enums.
 
 	// Native modules: each def's value is a pre-evaluated Builtin, each
 	// constant's is its concrete Value.
@@ -71,6 +128,20 @@ pub fn compile(compiler: &compiler::Compiler) -> Result<Program, String> {
 					}
 					DefinitionKind::Enum(_) => {
 						// Enums aren't values; nothing to allocate as a global.
+					}
+					DefinitionKind::Trait(_) => {
+						// Trait declarations are types, not values — nothing
+						// to allocate.
+					}
+					DefinitionKind::Instance(instance_node) => {
+						// Each concrete instance gets one global slot holding
+						// its `Value::Dict` of methods. The slot name was
+						// chosen by the analyzer (`<module>.<trait>@<head>`).
+						let (module, name) = match instance_node.instance_slot_name.rsplit_once('.') {
+							Some((m, n)) => (m, n),
+							None => continue,
+						};
+						cg.reserve_global(module, name);
 					}
 				}
 			}
@@ -202,12 +273,24 @@ impl CodeGen {
 					let global_idx = self
 						.lookup_global(module_name, &def.name.name)
 						.expect("global slot reserved in pass 1");
-					let fn_idx = self.compile_thunk(
-						module_name,
-						&imports,
-						&format!("{}.{}", module_name, def.name.name),
-						expr,
-					)?;
+					let fn_idx = if def.dict_param_count > 0 {
+						// Constrained def: emit a thunk whose body is a Fun
+						// with K extra leading dict params at slots 0..K-1.
+						self.compile_constrained_thunk(
+							module_name,
+							&imports,
+							&format!("{}.{}", module_name, def.name.name),
+							expr,
+							def.dict_param_count,
+						)?
+					} else {
+						self.compile_thunk(
+							module_name,
+							&imports,
+							&format!("{}.{}", module_name, def.name.name),
+							expr,
+						)?
+					};
 					self.set_global_thunk(global_idx, fn_idx);
 				}
 				DefinitionKind::Alias(_) => {
@@ -225,10 +308,104 @@ impl CodeGen {
 					// MakeVariant or MakeVariantCtor based on their variant
 					// shape, looked up via self.enum_variants.
 				}
+				DefinitionKind::Trait(_) => {
+					// Trait declarations are types, not values.
+				}
+				DefinitionKind::Instance(instance_node) => {
+					self.compile_instance(module_name, &imports, instance_node)?;
+				}
 			}
 		}
 
 		Ok(())
+	}
+
+	// A thunk for a def with class constraints. The def body must be a Fun
+	// expression (constraints only quantify functions). The compiled
+	// function takes K hidden dict params at slots 0..K-1 followed by the
+	// user-facing params at K..K+N-1. The thunk builds and returns a
+	// closure over this function.
+	fn compile_constrained_thunk(
+		&mut self,
+		current_module: &str,
+		imports: &HashMap<String, String>,
+		name: &str,
+		expr: &ExprNode,
+		dict_param_count: u16,
+	) -> Result<u32, String> {
+		// Constraints only make sense on function defs. If the body isn't a
+		// Fun, refuse — Phase 4 may diagnose this earlier; for now, fail
+		// loudly so we don't generate broken bytecode.
+		let (user_params, body, body_range) = match &expr.kind {
+			ExprKind::Fun(FunNode {
+				params,
+				body,
+				range,
+				..
+			}) => (params, body, *range),
+			_ => {
+				return Err(format!(
+					"codegen: constrained def `{}` must have a function body",
+					name
+				))
+			}
+		};
+
+		let total_arity = dict_param_count + user_params.len() as u16;
+		let mut inner_fb = FunctionBuilder::new(name.to_string(), total_arity);
+		let mut inner_scope = Scope::new();
+		// Register synthetic dict locals at slots 0..K-1 under
+		// `__dict_<n>__` names so nested closures' `Forwarded(n)` cells
+		// resolve through the normal scope/capture machinery.
+		for n in 0..dict_param_count {
+			inner_scope.define_local(&synthetic_dict_name(n), n);
+		}
+		// User-facing params live at slots K..K+N-1.
+		for (i, p) in user_params.iter().enumerate() {
+			inner_scope.define_local(&p.ident.name, dict_param_count + i as u16);
+		}
+
+		let mut parent_scopes: Vec<*mut Scope> = Vec::new();
+		let res = (|| -> Result<(), String> {
+			if body.is_empty() {
+				inner_fb.emit(Instruction::LoadNothing, body_range);
+			} else {
+				for (i, e) in body.iter().enumerate() {
+					let is_last = i == body.len() - 1;
+					emit_expr_with_parents(
+						self,
+						current_module,
+						imports,
+						&mut inner_fb,
+						&mut inner_scope,
+						&mut parent_scopes,
+						e,
+						is_last,
+					)?;
+					if !is_last {
+						inner_fb.emit(Instruction::Pop, e.range);
+					}
+				}
+			}
+			inner_fb.emit(Instruction::Return, body_range);
+			Ok(())
+		})();
+		res?;
+		inner_fb.capture_count = 0;
+		let inner_fn_idx = self.add_function(inner_fb);
+
+		// Thunk: build a closure of `inner_fn_idx` (no captures) and
+		// return it as the global's value.
+		let mut thunk_fb = FunctionBuilder::new(format!("{}@thunk", name), 0);
+		thunk_fb.emit(
+			Instruction::MakeClosure {
+				fn_idx: inner_fn_idx,
+				num_captures: 0,
+			},
+			body_range,
+		);
+		thunk_fb.emit(Instruction::Return, body_range);
+		Ok(self.add_function(thunk_fb))
 	}
 
 	// A thunk function: zero arity, no captures, body is `expr` compiled
@@ -254,6 +431,169 @@ impl CodeGen {
 		)?;
 		fb.emit(Instruction::Return, expr.range);
 		Ok(self.add_function(fb))
+	}
+
+	// Compile a user instance — concrete (no inner dicts) or parametric
+	// (instance constructor takes inner dicts as args).
+	//
+	// **Concrete** (`instance.where_clause` empty): each method is a
+	// 0-arity thunk returning its closure; a builder thunk Call()s each,
+	// then `MakeDict`s the results. Global slot holds the resulting Dict.
+	//
+	// **Parametric** (`instance.where_clause` non-empty): build a single
+	// constructor function of arity K = where_clause.len(). Inside, the
+	// inner dicts are bound at slots 0..K-1 under synthetic
+	// `__dict_<n>__` names, and each method is emitted as a *nested*
+	// `Fun` so it captures whatever inner dicts it actually uses. The
+	// global slot holds a closure of this constructor; call sites with
+	// `Resolved::InstanceChain` call it with the inner dicts to receive
+	// a fresh `Value::Dict`.
+	fn compile_instance(
+		&mut self,
+		module_name: &str,
+		imports: &HashMap<String, String>,
+		instance: &compiler::ast::InstanceNode,
+	) -> Result<(), String> {
+		let (module, slot_name) = match instance.instance_slot_name.rsplit_once('.') {
+			Some(p) => p,
+			None => {
+				return Err(format!(
+					"codegen: malformed instance slot name `{}`",
+					instance.instance_slot_name
+				))
+			}
+		};
+		let global_idx = self
+			.lookup_global(module, slot_name)
+			.expect("instance global slot reserved in pass 1");
+
+		if instance.where_clause.is_empty() {
+			// Concrete: each method is its own 0-arity thunk; the dict
+			// builder Call()s them and bundles the results.
+			let mut method_fn_indices: HashMap<String, u32> = HashMap::new();
+			for method in &instance.methods {
+				let expr = match &method.kind {
+					DefinitionKind::Expr(e) => e,
+					_ => continue,
+				};
+				let qualified = format!("{}.{}#{}", module, slot_name, method.name.name);
+				let fn_idx = self.compile_thunk(module_name, imports, &qualified, expr)?;
+				method_fn_indices.insert(method.name.name.clone(), fn_idx);
+			}
+
+			let thunk_name = format!("{}@dict-builder", instance.instance_slot_name);
+			let mut thunk_fb = FunctionBuilder::new(thunk_name, 0);
+			for method_name in &instance.canonical_method_order {
+				let fn_idx = match method_fn_indices.get(method_name) {
+					Some(idx) => *idx,
+					None => {
+						return Err(format!(
+							"codegen: instance `{}` is missing method `{}`",
+							instance.instance_slot_name, method_name
+						))
+					}
+				};
+				thunk_fb.emit(
+					Instruction::MakeClosure {
+						fn_idx,
+						num_captures: 0,
+					},
+					instance.range,
+				);
+				thunk_fb.emit(Instruction::Call(0), instance.range);
+			}
+			thunk_fb.emit(
+				Instruction::MakeDict(instance.canonical_method_order.len() as u16),
+				instance.range,
+			);
+			thunk_fb.emit(Instruction::Return, instance.range);
+			let thunk_idx = self.add_function(thunk_fb);
+			self.set_global_thunk(global_idx, thunk_idx);
+			return Ok(());
+		}
+
+		// Parametric: build the instance constructor function.
+		let where_count = instance.where_clause.len() as u16;
+		let ctor_name = format!("{}@ctor", instance.instance_slot_name);
+		let mut ctor_fb = FunctionBuilder::new(ctor_name, where_count);
+		let mut ctor_scope = Scope::new();
+		for n in 0..where_count {
+			ctor_scope.define_local(&synthetic_dict_name(n), n);
+		}
+
+		// Index methods by name so we can emit them in canonical order.
+		let mut methods_by_name: HashMap<&str, &ExprNode> = HashMap::new();
+		for method in &instance.methods {
+			if let DefinitionKind::Expr(e) = &method.kind {
+				methods_by_name.insert(method.name.name.as_str(), e);
+			}
+		}
+
+		let mut parent_scopes: Vec<*mut Scope> = Vec::new();
+		for method_name in &instance.canonical_method_order {
+			let method_expr = match methods_by_name.get(method_name.as_str()) {
+				Some(e) => *e,
+				None => {
+					return Err(format!(
+						"codegen: instance `{}` is missing method `{}`",
+						instance.instance_slot_name, method_name
+					))
+				}
+			};
+			// Method bodies are Fun expressions. Emit each as a nested
+			// closure inside the constructor — the existing capture path
+			// hoists references to the synthetic dict locals
+			// automatically.
+			let (params, body, range) = match &method_expr.kind {
+				ExprKind::Fun(FunNode {
+					params,
+					body,
+					range,
+					..
+				}) => (params.as_slice(), body.as_slice(), *range),
+				_ => {
+					return Err(format!(
+						"codegen: method `{}` on instance `{}` is not a function",
+						method_name, instance.instance_slot_name
+					))
+				}
+			};
+			emit_fun(
+				self,
+				module_name,
+				imports,
+				&mut ctor_fb,
+				&mut ctor_scope,
+				&mut parent_scopes,
+				params,
+				body,
+				range,
+			)?;
+		}
+		ctor_fb.emit(
+			Instruction::MakeDict(instance.canonical_method_order.len() as u16),
+			instance.range,
+		);
+		ctor_fb.emit(Instruction::Return, instance.range);
+		let ctor_idx = self.add_function(ctor_fb);
+
+		// Wrap the constructor in a 0-arity thunk that returns a closure of
+		// it. The global slot then holds the closure, ready to be called
+		// with the inner dicts at `InstanceChain` call sites.
+		let mut builder_fb =
+			FunctionBuilder::new(format!("{}@builder", instance.instance_slot_name), 0);
+		builder_fb.emit(
+			Instruction::MakeClosure {
+				fn_idx: ctor_idx,
+				num_captures: 0,
+			},
+			instance.range,
+		);
+		builder_fb.emit(Instruction::Return, instance.range);
+		let builder_idx = self.add_function(builder_fb);
+		self.set_global_thunk(global_idx, builder_idx);
+
+		Ok(())
 	}
 
 	fn emit_alias_constructor(&mut self, alias_name: &str) -> u32 {
@@ -698,7 +1038,12 @@ fn emit_expr_with_parents(
 				range,
 			)?;
 		}
-		ExprKind::Call(CallNode { callee, args, .. }) => {
+		ExprKind::Call(CallNode {
+			callee,
+			args,
+			dict_args,
+			..
+		}) => {
 			emit_call(
 				cg,
 				current_module,
@@ -708,24 +1053,90 @@ fn emit_expr_with_parents(
 				parent_scopes,
 				callee,
 				args,
+				dict_args,
 				range,
 				tail,
 			)?;
 		}
 		ExprKind::FieldAccess { receiver, field } => {
-			emit_field_access(
-				cg,
-				current_module,
-				imports,
-				fb,
-				scope,
-				parent_scopes,
-				receiver,
-				field,
-				range,
-			)?;
+			// Trait method reference: `numeric.add` is a value. Skip the
+			// regular field-access lowering (records / enum variants /
+			// modules) and emit the dispatch load directly.
+			if let Some(cell) = &expr.trait_dispatch {
+				emit_dispatch_load(cg, fb, scope, parent_scopes, cell, range)?;
+			} else {
+				emit_field_access(
+					cg,
+					current_module,
+					imports,
+					fb,
+					scope,
+					parent_scopes,
+					receiver,
+					field,
+					range,
+				)?;
+			}
 		}
 		ExprKind::BinaryOperation { op, left, right } => {
+			// Trait-dispatched binary operators. Two shapes:
+			//   - Arithmetic (`+ - * /`): result is the dispatch's return value.
+			//   - Ordering (`< <= > >=`): result is `compare(left, right) {==,!=}
+			//     <variant>`, so codegen pushes the matching `ordering`
+			//     variant after the `Call(2)` and emits an `Eq`/`Neq`.
+			if let Some(cell) = &expr.trait_dispatch {
+				emit_dispatch_load(cg, fb, scope, parent_scopes, cell, range)?;
+				emit_expr_with_parents(
+					cg,
+					current_module,
+					imports,
+					fb,
+					scope,
+					parent_scopes,
+					left,
+					false,
+				)?;
+				emit_expr_with_parents(
+					cg,
+					current_module,
+					imports,
+					fb,
+					scope,
+					parent_scopes,
+					right,
+					false,
+				)?;
+				fb.emit(Instruction::Call(2), range);
+
+				// Tail for ordering ops: push the comparison variant and
+				// emit Eq/Neq.
+				match &op.kind {
+					Operator::LessThan
+					| Operator::LessThanEquals
+					| Operator::GreaterThan
+					| Operator::GreaterThanEquals => {
+						let (variant, use_neq) = match op.kind {
+							Operator::LessThan => ("lt", false),
+							Operator::GreaterThan => ("gt", false),
+							Operator::LessThanEquals => ("gt", true),
+							Operator::GreaterThanEquals => ("lt", true),
+							_ => unreachable!(),
+						};
+						emit_variant_construction(cg, fb, "__prelude__.ordering", variant, 0, range)?;
+						fb.emit(
+							if use_neq {
+								Instruction::Neq
+							} else {
+								Instruction::Eq
+							},
+							range,
+						);
+					}
+					_ => {}
+				}
+				return Ok(());
+			}
+
 			// `x | f a b` lowers to a call `f x a b` — emit callee, then `x`
 			// as the first arg, then the rest of the RHS call's args.
 			if let Operator::Chain = op.kind {
@@ -823,6 +1234,24 @@ fn emit_expr_with_parents(
 			fb.emit(instr, range);
 		}
 		ExprKind::UnaryOperation { op, right } => {
+			// Same trait-dispatch shape as BinaryOp: a unary `-` resolves
+			// via `numeric.negate`. Load the dict, pull method 4 (negate),
+			// eval operand, Call(1).
+			if let Some(cell) = &expr.trait_dispatch {
+				emit_dispatch_load(cg, fb, scope, parent_scopes, cell, range)?;
+				emit_expr_with_parents(
+					cg,
+					current_module,
+					imports,
+					fb,
+					scope,
+					parent_scopes,
+					right,
+					false,
+				)?;
+				fb.emit(Instruction::Call(1), range);
+				return Ok(());
+			}
 			emit_expr_with_parents(
 				cg,
 				current_module,
@@ -833,11 +1262,8 @@ fn emit_expr_with_parents(
 				right,
 				false,
 			)?;
-			let is_float = matches!(right.ty, compiler::types::Type::Float);
-			let instr = match (op, is_float) {
-				(Operator::SubtractionOrNegation, false) => Instruction::NegInt,
-				(Operator::SubtractionOrNegation, true) => Instruction::NegFloat,
-				(Operator::LogicalNot, _) => Instruction::LogicalNot,
+			let instr = match op {
+				Operator::LogicalNot => Instruction::LogicalNot,
 				_ => return Err(format!("codegen: unhandled unary op {}", op)),
 			};
 			fb.emit(instr, range);
@@ -1070,6 +1496,7 @@ fn emit_call(
 	parent_scopes: &mut Vec<*mut Scope>,
 	callee: &ExprNode,
 	args: &[ExprNode],
+	dict_args: &[compiler::ast::DispatchCell],
 	range: Range,
 	tail: bool,
 ) -> Result<(), String> {
@@ -1083,6 +1510,12 @@ fn emit_call(
 		callee,
 		false,
 	)?;
+	// Hidden dict args are emitted between callee and user args. The
+	// callee's compiled function expects them at slot 0..K-1 (K =
+	// dict_args.len()) and the user args at slot K..K+arity-1.
+	for cell in dict_args {
+		emit_dispatch_load(cg, fb, scope, parent_scopes, cell, range)?;
+	}
 	for a in args {
 		emit_expr_with_parents(
 			cg,
@@ -1095,12 +1528,209 @@ fn emit_call(
 			false,
 		)?;
 	}
+	let total_arity = (dict_args.len() + args.len()) as u16;
 	let instr = if tail {
-		Instruction::TailCall(args.len() as u16)
+		Instruction::TailCall(total_arity)
 	} else {
-		Instruction::Call(args.len() as u16)
+		Instruction::Call(total_arity)
 	};
 	fb.emit(instr, range);
+	Ok(())
+}
+
+// Emit instructions to load a dispatch dictionary onto the stack,
+// resolving according to the cell's `Resolved` value. `Global(name)`
+// reads from the named prelude/instance global; `Forwarded(slot)`
+// reads the synthetic dict local `__dict_<slot>__`, which the
+// constrained-def thunk defines at slot `slot`. Using the same scope
+// resolution path as named identifiers means inner closures
+// automatically capture the dict — no special closure path needed.
+fn emit_dispatch_load(
+	cg: &mut CodeGen,
+	fb: &mut FunctionBuilder,
+	scope: &mut Scope,
+	parent_scopes: &mut Vec<*mut Scope>,
+	cell: &compiler::ast::DispatchCell,
+	range: Range,
+) -> Result<(), String> {
+	use compiler::ast::Resolved;
+	let borrow = cell.borrow();
+	match &borrow.resolved {
+		Some(Resolved::Global(slot_name)) => {
+			let (module, name) = match slot_name.rsplit_once('.') {
+				Some((m, n)) => (m, n),
+				None => {
+					return Err(format!(
+						"codegen: malformed instance slot name `{}`",
+						slot_name
+					))
+				}
+			};
+			let global_idx = cg.lookup_global(module, name).ok_or_else(|| {
+				format!(
+					"codegen: instance slot `{}` not registered as a global",
+					slot_name
+				)
+			})?;
+			fb.emit(Instruction::LoadGlobal(global_idx), range);
+		}
+		Some(Resolved::Forwarded(slot)) => {
+			// Look up the synthetic dict name in the scope chain. The
+			// resolver handles the cross-Fun case by adding a closure
+			// capture — so a Forwarded dispatch in a nested lambda
+			// automatically captures the outer fn's dict.
+			let name = synthetic_dict_name(*slot);
+			let mut parent_refs: Vec<&mut Scope> =
+				parent_scopes.iter().map(|p| unsafe { &mut **p }).collect();
+			let res = resolve_identifier(
+				cg,
+				"",
+				&HashMap::new(),
+				scope,
+				parent_refs.as_mut_slice(),
+				&name,
+			)
+			.ok_or_else(|| {
+				format!(
+					"codegen: dispatch slot `{}` not found in any enclosing constrained def",
+					name
+				)
+			})?;
+			match res {
+				Resolution::Local(s) => {
+					fb.emit(Instruction::LoadLocal(s), range);
+				}
+				Resolution::Capture(idx) => {
+					fb.emit(Instruction::LoadCapture(idx), range);
+				}
+				_ => {
+					return Err(format!(
+						"codegen: dispatch slot `{}` resolved to an unexpected source",
+						name
+					));
+				}
+			}
+		}
+		Some(Resolved::InstanceChain { ctor_slot, inner }) => {
+			let (module, name) = match ctor_slot.rsplit_once('.') {
+				Some((m, n)) => (m, n),
+				None => return Err(format!("codegen: malformed ctor slot name `{}`", ctor_slot)),
+			};
+			let global_idx = cg.lookup_global(module, name).ok_or_else(|| {
+				format!(
+					"codegen: ctor slot `{}` not registered as a global",
+					ctor_slot
+				)
+			})?;
+			// Load the constructor (a closure), push each inner dict,
+			// then call to materialize the parametric dict. We borrow
+			// `cell` for the resolve; cloning what we need above lets us
+			// drop the borrow before recursing on inner cells, each of
+			// which `borrow_mut`s its own cell.
+			let inner_cloned: Vec<Resolved> = inner.clone();
+			drop(borrow);
+			fb.emit(Instruction::LoadGlobal(global_idx), range);
+			for r in &inner_cloned {
+				emit_resolved_load(cg, fb, scope, parent_scopes, r, range)?;
+			}
+			fb.emit(Instruction::Call(inner_cloned.len() as u16), range);
+			// Re-borrow for the optional GetDictField pass-through.
+			let borrow = cell.borrow();
+			if let Some(idx) = borrow.method_idx {
+				fb.emit(Instruction::GetDictField(idx as u16), range);
+			}
+			return Ok(());
+		}
+		None => {
+			return Err(format!(
+				"codegen: dispatch cell for trait `{}` is unresolved",
+				borrow.trait_name
+			));
+		}
+	}
+	// Extract the specific method from the dict, if this is a method-
+	// dispatch site (`method_idx = Some`). Call-forwarding sites
+	// (`method_idx = None`) push the whole dict, and the callee's
+	// codegen does the method extraction itself via its own cells.
+	if let Some(idx) = borrow.method_idx {
+		fb.emit(Instruction::GetDictField(idx as u16), range);
+	}
+	Ok(())
+}
+
+fn synthetic_dict_name(slot: u16) -> String {
+	format!("__dict_{}__", slot)
+}
+
+// Emit the load for a `Resolved` value that came from a parametric
+// `InstanceChain`'s inner list — no method extraction, just push the
+// dict onto the stack.
+fn emit_resolved_load(
+	cg: &mut CodeGen,
+	fb: &mut FunctionBuilder,
+	scope: &mut Scope,
+	parent_scopes: &mut Vec<*mut Scope>,
+	r: &compiler::ast::Resolved,
+	range: Range,
+) -> Result<(), String> {
+	use compiler::ast::Resolved;
+	match r {
+		Resolved::Global(slot_name) => {
+			let (module, name) = match slot_name.rsplit_once('.') {
+				Some((m, n)) => (m, n),
+				None => return Err(format!("codegen: malformed slot name `{}`", slot_name)),
+			};
+			let global_idx = cg
+				.lookup_global(module, name)
+				.ok_or_else(|| format!("codegen: slot `{}` not registered as a global", slot_name))?;
+			fb.emit(Instruction::LoadGlobal(global_idx), range);
+		}
+		Resolved::Forwarded(slot) => {
+			let name = synthetic_dict_name(*slot);
+			let mut parent_refs: Vec<&mut Scope> =
+				parent_scopes.iter().map(|p| unsafe { &mut **p }).collect();
+			let res = resolve_identifier(
+				cg,
+				"",
+				&HashMap::new(),
+				scope,
+				parent_refs.as_mut_slice(),
+				&name,
+			)
+			.ok_or_else(|| format!("codegen: dispatch slot `{}` not found", name))?;
+			match res {
+				Resolution::Local(s) => {
+					fb.emit(Instruction::LoadLocal(s), range);
+				}
+				Resolution::Capture(idx) => {
+					fb.emit(Instruction::LoadCapture(idx), range);
+				}
+				_ => {
+					return Err(format!(
+						"codegen: dispatch slot `{}` resolved to an unexpected source",
+						name
+					));
+				}
+			}
+		}
+		Resolved::InstanceChain { ctor_slot, inner } => {
+			let (module, name) = match ctor_slot.rsplit_once('.') {
+				Some((m, n)) => (m, n),
+				None => return Err(format!("codegen: malformed ctor slot name `{}`", ctor_slot)),
+			};
+			let global_idx = cg.lookup_global(module, name).ok_or_else(|| {
+				format!(
+					"codegen: ctor slot `{}` not registered as a global",
+					ctor_slot
+				)
+			})?;
+			fb.emit(Instruction::LoadGlobal(global_idx), range);
+			for r in inner {
+				emit_resolved_load(cg, fb, scope, parent_scopes, r, range)?;
+			}
+			fb.emit(Instruction::Call(inner.len() as u16), range);
+		}
+	}
 	Ok(())
 }
 

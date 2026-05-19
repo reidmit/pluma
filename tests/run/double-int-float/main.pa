@@ -1,0 +1,6 @@
+def double fun x { x + x }
+
+def main fun {
+	print (double 5)
+	print (double 3.14)
+}

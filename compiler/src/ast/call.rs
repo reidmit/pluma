@@ -1,19 +1,112 @@
 use crate::location::Range;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use super::*;
 
+#[derive(Clone)]
 pub struct CallNode {
 	pub range: Range,
 	pub callee: Box<ExprNode>,
 	pub args: Vec<ExprNode>,
+	// Dictionary args to prepend before user args at this call. Populated
+	// when the callee is a polymorphic constrained value (e.g. calling
+	// `double` whose scheme is `forall a. Numeric a => a -> a`). Each cell
+	// is shared with a Class constraint, mutated by the discharge pass.
+	pub dict_args: Vec<DispatchCell>,
+}
+
+#[derive(Clone)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+pub enum Resolved {
+	// Concrete instance: load the named global slot, which holds the
+	// pre-built `Value::Dict`.
+	Global(String),
+	// Polymorphic forwarding: the dict comes from the enclosing function's
+	// own dict parameter (`param_idx` is the local slot index).
+	Forwarded(u16),
+	// Phase 3: parametric instance applied to inner dispatches.
+	// `ctor_slot` is the named global slot holding the instance
+	// constructor (a closure that takes N inner dicts and returns a
+	// `Value::Dict`). `inner` gives one resolution per `where`-clause
+	// constraint, evaluated in declaration order.
+	InstanceChain {
+		ctor_slot: String,
+		inner: Vec<Resolved>,
+	},
+}
+
+// Typeclass dispatch metadata for an AST site. Shared between the AST
+// (which carries the cell) and the corresponding `Class` constraint
+// (which holds the same cell). Discharge / generalization writes
+// `resolved` through the cell; codegen reads it back via the AST.
+pub struct Dispatch {
+	pub trait_name: String,
+	// `Some(idx)` for a *trait method dispatch* — the site's value is the
+	// method at this index in the trait's declaration order. `None` for a
+	// *call forwarding dispatch* — the site just needs a dict, not a
+	// specific method.
+	pub method_idx: Option<usize>,
+	// The tyvar that, under the final substitution, gives the dispatch
+	// type at this site. Used by the forwarded-dispatch resolver: if the
+	// substituted type is a Var matching the enclosing function's bound
+	// tyvar, the dispatch is `Forwarded` to that function's dict param.
+	// Type::Unknown until set during constrain (when the constraint is
+	// emitted).
+	pub dispatch_var: crate::types::Type,
+	pub resolved: Option<Resolved>,
+}
+
+pub type DispatchCell = Rc<RefCell<Dispatch>>;
+
+pub fn new_dispatch(
+	trait_name: String,
+	method_idx: Option<usize>,
+	dispatch_var: crate::types::Type,
+) -> DispatchCell {
+	Rc::new(RefCell::new(Dispatch {
+		trait_name,
+		method_idx,
+		dispatch_var,
+		resolved: None,
+	}))
+}
+
+// Shared collection of dispatch cells, populated during Gen/Inst
+// processing. Used to bridge from a polymorphic value reference (an
+// Identifier ExprNode) up to the enclosing CallNode that needs to thread
+// dicts as hidden leading args. Conceptually: "the cells this Inst will
+// create when matched against its Gen."
+pub type DispatchSink = Rc<RefCell<Vec<DispatchCell>>>;
+
+pub fn new_dispatch_sink() -> DispatchSink {
+	Rc::new(RefCell::new(Vec::new()))
 }
 
 #[cfg(debug_assertions)]
 impl std::fmt::Debug for CallNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct(&format!("call({:#?})", self.range))
-			.field("callee", &self.callee)
-			.field("args", &self.args)
-			.finish()
+		let mut d = f.debug_struct(&format!("call({:#?})", self.range));
+		d.field("callee", &self.callee).field("args", &self.args);
+		if !self.dict_args.is_empty() {
+			let dicts: Vec<_> = self
+				.dict_args
+				.iter()
+				.map(|c| format!("{:?}", c.borrow().resolved))
+				.collect();
+			d.field("dict_args", &dicts);
+		}
+		d.finish()
+	}
+}
+
+#[cfg(debug_assertions)]
+impl std::fmt::Debug for Dispatch {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(
+			f,
+			"dispatch({}.{:?} -> {:?})",
+			self.trait_name, self.method_idx, self.resolved
+		)
 	}
 }

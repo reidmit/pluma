@@ -1,0 +1,11 @@
+def main fun {
+	# Hash deterministic per-type: int hashes to itself, bool to 0/1.
+	print (hash.hash 42)
+	print (hash.hash true)
+	print (hash.hash false)
+
+	# Same input → same hash.
+	let h1 = hash.hash "hello"
+	let h2 = hash.hash "hello"
+	print (h1 == h2)
+}

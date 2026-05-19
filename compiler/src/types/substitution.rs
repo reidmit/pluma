@@ -82,7 +82,14 @@ impl Substitution {
 				// TODO: should we have a context arg here as well?
 				// see https://github.com/igstan/linguae/blob/7e806dd121c21ed35187377fe3bd92d29d6150e6/lingua-002-hm-inference-sml/src/constraint.sml#L21
 				Gen(scheme, ty) => Gen(scheme.clone(), self.apply_to_type(ty)),
-				Inst(var, ty) => Inst(*var, self.apply_to_type(ty)),
+				Inst(var, ty, sink) => Inst(*var, self.apply_to_type(ty), sink.clone()),
+				Class(c) => Class(ClassConstraint {
+					name: c.name.clone(),
+					ty: self.apply_to_type(&c.ty),
+					reason: c.reason.clone(),
+					// The cell is shared with the AST — clone keeps the Rc.
+					dispatch_cell: c.dispatch_cell.clone(),
+				}),
 			})
 			.collect()
 	}

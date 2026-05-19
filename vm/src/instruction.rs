@@ -67,6 +67,20 @@ pub enum Instruction {
 	},
 	GetField(ConstIdx),
 
+	// Typeclass dispatch: pop a Value::Dict and push the method at the given
+	// field index. Method index is the position the method was declared in
+	// its trait body (e.g. for `numeric { add, sub, mul, div, negate }`, add
+	// is 0). Compiled after `LoadGlobal(instance_slot)` or `LoadLocal(...)`
+	// that puts the dict on top of the stack.
+	GetDictField(u16),
+
+	// Build a `Value::Dict` of the given size from the top N stack values.
+	// Used when codegen builds an instance dictionary of method closures at
+	// first use (concrete user instances) or via an instance-constructor
+	// function (parametric instances). Methods are popped in declaration
+	// order — the topmost stack value becomes the last dict entry.
+	MakeDict(u16),
+
 	// Variant constructor (for partial application of `enum.variant` where
 	// the variant has payload). When called via Call, the resulting variant
 	// is built.

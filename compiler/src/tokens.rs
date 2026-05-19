@@ -109,8 +109,14 @@ pub enum Token {
 	/// `def` keyword
 	KeywordDef(usize, usize),
 
+	/// `default` keyword (default method body inside a trait body)
+	KeywordDefault(usize, usize),
+
 	/// `enum` keyword
 	KeywordEnum(usize, usize),
+
+	/// `for` keyword (instance declaration)
+	KeywordFor(usize, usize),
 
 	/// `fun` keyword
 	KeywordFun(usize, usize),
@@ -127,11 +133,20 @@ pub enum Token {
 	/// `let` keyword
 	KeywordLet(usize, usize),
 
+	/// `on` keyword (instance head; `for trait on type`)
+	KeywordOn(usize, usize),
+
+	/// `trait` keyword
+	KeywordTrait(usize, usize),
+
 	/// `use` keyword (module import)
 	KeywordUse(usize, usize),
 
 	/// `when` keyword
 	KeywordWhen(usize, usize),
+
+	/// `where` keyword (instance constraints)
+	KeywordWhere(usize, usize),
 
 	/// `while` keyword
 	KeywordWhile(usize, usize),
@@ -274,15 +289,20 @@ impl Token {
 			| KeywordAlias(start, end)
 			| KeywordAs(start, end)
 			| KeywordDef(start, end)
+			| KeywordDefault(start, end)
 			| KeywordEnum(start, end)
+			| KeywordFor(start, end)
 			| KeywordFun(start, end)
 			| KeywordIf(start, end)
 			| KeywordIn(start, end)
 			| KeywordIs(start, end)
 			| KeywordLet(start, end)
+			| KeywordOn(start, end)
+			| KeywordTrait(start, end)
 			| KeywordUse(start, end)
 			| KeywordWhile(start, end)
 			| KeywordWhen(start, end)
+			| KeywordWhere(start, end)
 			| LeftAngle(start, end)
 			| LeftAngleEqual(start, end)
 			| LeftBrace(start, end)
@@ -365,15 +385,20 @@ impl fmt::Display for Token {
 			&KeywordAlias(..) => "keyword `alias`",
 			&KeywordAs(..) => "keyword `as`",
 			&KeywordDef(..) => "keyword `def`",
+			&KeywordDefault(..) => "keyword `default`",
 			&KeywordEnum(..) => "keyword `enum`",
+			&KeywordFor(..) => "keyword `for`",
 			&KeywordFun(..) => "keyword `fun`",
 			&KeywordIf(..) => "keyword `if`",
 			&KeywordIn(..) => "keyword `in`",
 			&KeywordIs(..) => "keyword `is`",
 			&KeywordLet(..) => "keyword `let`",
+			&KeywordOn(..) => "keyword `on`",
+			&KeywordTrait(..) => "keyword `trait`",
 			&KeywordUse(..) => "keyword `use`",
 			&KeywordWhile(..) => "keyword `while`",
 			&KeywordWhen(..) => "keyword `when`",
+			&KeywordWhere(..) => "keyword `where`",
 			&LeftAngle(..) => "a '<'",
 			&LeftAngleEqual(..) => "a '<='",
 			&LeftBrace(..) => "a '{'",

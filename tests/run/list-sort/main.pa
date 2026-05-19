@@ -1,0 +1,17 @@
+use core.list
+
+def main fun {
+	# `list.sort` takes a comparator returning an `ordering` variant.
+	# `ord.compare` is itself such a function — pass it directly as a
+	# higher-order arg.
+	let xs = [3, 1, 4, 1, 5, 9, 2, 6]
+	list.each (list.sort xs ord.compare) print
+
+	# Works on strings too via the prelude `ord on string` instance.
+	let words = ["banana", "apple", "cherry"]
+	list.each (list.sort words ord.compare) print
+
+	# Reverse-order via a closure that swaps args.
+	let descending = list.sort xs fun a b { ord.compare b a }
+	list.each descending print
+}

@@ -448,6 +448,45 @@ impl VM {
 					}
 				}
 			}
+			Instruction::GetDictField(idx) => {
+				let v = self.stack.pop().ok_or_else(|| {
+					RuntimeError::new("VM: GetDictField on empty stack").at(self.current_range())
+				})?;
+				match v {
+					Value::Dict(methods) => {
+						let m = methods.get(idx as usize).ok_or_else(|| {
+							RuntimeError::new(format!(
+								"VM: GetDictField index {} out of range (dict size {})",
+								idx,
+								methods.len()
+							))
+							.at(self.current_range())
+						})?;
+						self.stack.push(m.clone());
+					}
+					_ => {
+						return Err(
+							RuntimeError::new("VM: GetDictField on non-dict value").at(self.current_range()),
+						)
+					}
+				}
+			}
+			Instruction::MakeDict(size) => {
+				let n = size as usize;
+				if self.stack.len() < n {
+					return Err(
+						RuntimeError::new(format!(
+							"VM: MakeDict({}) underflow (stack has {} values)",
+							n,
+							self.stack.len()
+						))
+						.at(self.current_range()),
+					);
+				}
+				let start = self.stack.len() - n;
+				let methods: Vec<Value> = self.stack.drain(start..).collect();
+				self.stack.push(Value::Dict(Rc::new(methods)));
+			}
 			Instruction::LoadRegex(idx) => {
 				let r = self.program.regex_patterns[idx as usize].clone();
 				self.stack.push(Value::Regex(r));
@@ -972,6 +1011,8 @@ fn opcode_name(i: &Instruction) -> &'static str {
 		MakeVariant { .. } => "MakeVariant",
 		MakeVariantCtor { .. } => "MakeVariantCtor",
 		GetField(_) => "GetField",
+		GetDictField(_) => "GetDictField",
+		MakeDict(_) => "MakeDict",
 		LoadRegex(_) => "LoadRegex",
 		Interpolate(_) => "Interpolate",
 		MatchInt(_, _) => "MatchInt",

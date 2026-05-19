@@ -1,6 +1,7 @@
 use super::*;
 use crate::location::Range;
 
+#[derive(Clone)]
 pub struct LetNode {
 	pub range: Range,
 	pub name: IdentifierNode,

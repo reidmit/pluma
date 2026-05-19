@@ -20,6 +20,12 @@ pub enum AnalysisErrorKind {
 	WhenNotExhaustive { missing: Vec<String> },
 	AmbiguousVariant { name: String, enums: Vec<String> },
 	DuplicateDefinition { name: String },
+	NoInstance { trait_name: String, ty: Type },
+	UnsupportedInstanceHead { head: Type },
+	IncompleteInstance { trait_name: String, method: String },
+	AmbiguousTraitMethod { trait_name: String, ty: Type },
+	OverlappingInstance { trait_name: String, head: Type },
+	OrphanInstance { trait_name: String, head: Type },
 }
 
 impl fmt::Display for AnalysisError {
@@ -94,6 +100,42 @@ impl fmt::Display for AnalysisError {
 			}
 
 			DuplicateDefinition { name } => write!(f, "Duplicate top-level definition `{}`.", name),
+
+			NoInstance { trait_name, ty } => write!(
+				f,
+				"No instance of trait `{}` for type `{}`.",
+				trait_name, ty
+			),
+
+			UnsupportedInstanceHead { head } => write!(
+				f,
+				"Instance head `{}` is not supported. Use a concrete type or a generic type constructor.",
+				head
+			),
+
+			IncompleteInstance { trait_name, method } => write!(
+				f,
+				"Instance for trait `{}` is missing method `{}`.",
+				trait_name, method
+			),
+
+			AmbiguousTraitMethod { trait_name, ty } => write!(
+				f,
+				"Cannot resolve trait `{}` dispatch on type `{}`: the type contains unbound type variables. Add a type annotation to disambiguate.",
+				trait_name, ty
+			),
+
+			OverlappingInstance { trait_name, head } => write!(
+				f,
+				"Overlapping instance: another instance of trait `{}` for head `{}` is already declared.",
+				trait_name, head
+			),
+
+			OrphanInstance { trait_name, head } => write!(
+				f,
+				"Orphan instance: `for {} on {}` must be declared in the module that defines either the trait or the type.",
+				trait_name, head
+			),
 		}
 	}
 }

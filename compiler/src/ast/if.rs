@@ -1,6 +1,7 @@
 use super::*;
 use crate::location::Range;
 
+#[derive(Clone)]
 pub struct IfNode {
 	pub range: Range,
 	pub subject: Box<ExprNode>,

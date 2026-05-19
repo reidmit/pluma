@@ -2,12 +2,14 @@ use super::*;
 use crate::location::Range;
 use crate::types::*;
 
+#[derive(Clone)]
 pub struct FunNode {
 	pub range: Range,
 	pub params: Vec<FunParamNode>,
 	pub body: Vec<ExprNode>,
 }
 
+#[derive(Clone)]
 pub struct FunParamNode {
 	pub ident: IdentifierNode,
 	pub ty: Type,

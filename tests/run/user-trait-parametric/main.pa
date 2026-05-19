@@ -1,0 +1,20 @@
+def showable trait a {
+	show fun a -> string
+}
+
+for showable on int {
+	def show fun x { to-string x }
+}
+
+for showable on (option a) where (showable a) {
+	def show fun o {
+		when o is some v { "some $(showable.show v)" }
+		is none { "none" }
+	}
+}
+
+def main fun {
+	print (showable.show 42)
+	print (showable.show (some 7))
+	print (showable.show (some (some 99)))
+}

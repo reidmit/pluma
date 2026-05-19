@@ -1,5 +1,5 @@
 ---
-source: pluma-tests/tests/analyze.rs
+source: tests/analyze.rs
 expression: output
 ---
 module `main` (tests/analyze/closure-escape/main.pa) {
@@ -8,24 +8,24 @@ module `main` (tests/analyze/closure-escape/main.pa) {
         module(0:0-7:23) [
             def(0:0-4:1) :: nothing {
                 name: ident(0:4-0:14) `make-adder`,
-                kind: expr(0:15-4:1) :: int -> int -> int {
+                kind: expr(0:15-4:1) :: 'y -> 'y -> 'y {
                     kind: fun(0:15-4:1) {
                         params: [
-                            ident(0:19-0:20) `x` :: int,
+                            ident(0:19-0:20) `x` :: 'y,
                         ],
                         body: [
-                            expr(1:2-3:3) :: int -> int {
+                            expr(1:2-3:3) :: 'y -> 'y {
                                 kind: fun(1:2-3:3) {
                                     params: [
-                                        ident(1:6-1:7) `y` :: int,
+                                        ident(1:6-1:7) `y` :: 'y,
                                     ],
                                     body: [
-                                        expr(2:4-2:9) :: int {
+                                        expr(2:4-2:9) :: 'y {
                                             kind: binary op(2:6-2:7) `+` {
-                                                left: expr(2:4-2:5) :: int {
+                                                left: expr(2:4-2:5) :: 'y {
                                                     kind: ident(2:4-2:5) `x`,
                                                 },
-                                                right: expr(2:8-2:9) :: int {
+                                                right: expr(2:8-2:9) :: 'y {
                                                     kind: ident(2:8-2:9) `y`,
                                                 },
                                             },
@@ -49,6 +49,9 @@ module `main` (tests/analyze/closure-escape/main.pa) {
                                 kind: literal(6:20-6:21) int 5,
                             },
                         ],
+                        dict_args: [
+                            "Some(Global(\"__prelude__.numeric@int\"))",
+                        ],
                     },
                 },
             },
@@ -63,6 +66,9 @@ module `main` (tests/analyze/closure-escape/main.pa) {
                             expr(7:21-7:23) :: int {
                                 kind: literal(7:21-7:23) int 10,
                             },
+                        ],
+                        dict_args: [
+                            "Some(Global(\"__prelude__.numeric@int\"))",
                         ],
                     },
                 },

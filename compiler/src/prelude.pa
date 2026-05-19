@@ -1,0 +1,73 @@
+# Pluma prelude. Baked into the compiler binary via `include_str!` and
+# parsed + analyzed as the synthetic `__prelude__` module before any
+# user module loads.
+#
+# Currently in here:
+#   - the standard nominal enums (option, result, ordering) that the
+#     language assumes are always in scope
+#   - parametric typeclass instances on `option a` / `result a b` that
+#     compose with the concrete instances on primitive types
+#
+# Things still seeded in Rust (`compiler/src/analyzer.rs`):
+#   - the `numeric` / `ord` / `hash` trait declarations and their
+#     concrete instances on primitive types. These can't live here
+#     because the instance method bodies dispatch to hidden VM builtins
+#     (IntAdd, IntCompare, IntHash, ...) that aren't exposed as
+#     user-callable names.
+#   - the `print` and `to-string` builtins.
+
+def option enum a {
+	some a
+	none
+}
+
+def result enum a b {
+	ok a
+	err b
+}
+
+def ordering enum {
+	lt
+	eq
+	gt
+}
+
+for ord on (option a) where (ord a) {
+	def compare fun x y {
+		when x is some xv {
+			when y is some yv { ord.compare xv yv }
+			is none { gt }
+		}
+		is none {
+			when y is some _v { lt }
+			is none { eq }
+		}
+	}
+}
+
+for ord on (result a b) where (ord a, ord b) {
+	def compare fun x y {
+		when x is ok xv {
+			when y is ok yv { ord.compare xv yv }
+			is err _e { lt }
+		}
+		is err xe {
+			when y is err ye { ord.compare xe ye }
+			is ok _v { gt }
+		}
+	}
+}
+
+for hash on (option a) where (hash a) {
+	def hash fun o {
+		when o is some v { hash.hash v }
+		is none { 0 }
+	}
+}
+
+for hash on (result a b) where (hash a, hash b) {
+	def hash fun r {
+		when r is ok v { hash.hash v }
+		is err e { hash.hash e }
+	}
+}

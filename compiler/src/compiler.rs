@@ -55,6 +55,10 @@ impl Compiler {
 	}
 
 	pub fn check(&mut self) -> Result<&Module, Vec<Diagnostic>> {
+		// Load + analyze the baked-in `__prelude__` module before anything
+		// else. Its exported instances are implicitly visible to every
+		// user module's analyzer.
+		self.load_prelude();
 		let entry = self.entry_module_name.clone();
 		let mut visiting = HashSet::new();
 		self.load_module(&entry, &mut visiting);
@@ -63,6 +67,25 @@ impl Compiler {
 			Err(self.diagnostics.to_vec())
 		} else {
 			Ok(self.modules.get(&entry).unwrap())
+		}
+	}
+
+	// Parse + analyze the synthetic prelude module. The source is baked
+	// into the compiler binary so the language doesn't depend on a
+	// stdlib install directory.
+	fn load_prelude(&mut self) {
+		const PRELUDE_SOURCE: &str = include_str!("prelude.pa");
+		const NAME: &str = "__prelude__";
+		let mut module = Module::new(NAME.to_string(), PathBuf::from("<prelude>"));
+		module.parse_from_bytes(PRELUDE_SOURCE.as_bytes().to_vec(), &mut self.diagnostics);
+		self.modules.insert(NAME.to_string(), module);
+		// Analyze in isolation — prelude has no imports.
+		let module = self.modules.get_mut(NAME).unwrap();
+		let mut analyzer = Analyzer::new(&mut self.diagnostics);
+		analyzer.set_imports(HashMap::new(), HashMap::new());
+		analyzer.analyze(module);
+		if let Some(exports) = module.exports.clone() {
+			self.exports_cache.insert(NAME.to_string(), exports);
 		}
 	}
 
@@ -149,10 +172,18 @@ impl Compiler {
 			}
 		}
 
-		// Analyze this module.
+		// Analyze this module. The prelude's exports (enums, variant
+		// constructors, instances) are implicitly available — pass them
+		// in alongside explicit imports so name resolution + discharge
+		// can use them.
+		let prelude_exports = self.exports_cache.get("__prelude__").cloned();
 		let module = self.modules.get_mut(module_name).unwrap();
 		let mut analyzer = Analyzer::new(&mut self.diagnostics);
 		analyzer.set_imports(imports_map, import_qualified);
+		if let Some(exports) = prelude_exports {
+			analyzer.add_imported_instances(&exports.instances);
+			analyzer.set_prelude_exports(exports);
+		}
 		analyzer.analyze(module);
 
 		// Cache its exports for any later importer.

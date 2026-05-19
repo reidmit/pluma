@@ -7,6 +7,21 @@ use crate::value::{values_eq, Value, VariantData};
 use crate::vm::{RuntimeError, VM};
 use std::rc::Rc;
 
+// Construct a prelude `ordering` variant from a `std::cmp::Ordering`.
+// Used by the `ord` trait's int/float/string `compare` builtins.
+fn ordering_variant(o: std::cmp::Ordering) -> Value {
+	let variant = match o {
+		std::cmp::Ordering::Less => "lt",
+		std::cmp::Ordering::Equal => "eq",
+		std::cmp::Ordering::Greater => "gt",
+	};
+	Value::Variant(Rc::new(VariantData {
+		qualified_enum: Rc::new("__prelude__.ordering".to_string()),
+		variant: Rc::new(variant.to_string()),
+		payload: vec![],
+	}))
+}
+
 // Construct a prelude `option` value. `Some(payload)` for `Some(v)`, `None`
 // for absent. Used by list builtins that may return no result (head, tail,
 // find).
@@ -46,6 +61,84 @@ pub fn call_builtin(vm: &mut VM, b: Builtin, args: Vec<Value>) -> Result<Value, 
 				_ => unreachable!("`matches` expects (regex, string)"),
 			}
 		}
+		IntAdd => match (&args[0], &args[1]) {
+			(Value::Int(a), Value::Int(b)) => Ok(Value::Int(a.wrapping_add(*b))),
+			_ => unreachable!("IntAdd expects (int, int)"),
+		},
+		IntSub => match (&args[0], &args[1]) {
+			(Value::Int(a), Value::Int(b)) => Ok(Value::Int(a.wrapping_sub(*b))),
+			_ => unreachable!("IntSub expects (int, int)"),
+		},
+		IntMul => match (&args[0], &args[1]) {
+			(Value::Int(a), Value::Int(b)) => Ok(Value::Int(a.wrapping_mul(*b))),
+			_ => unreachable!("IntMul expects (int, int)"),
+		},
+		IntDiv => match (&args[0], &args[1]) {
+			(Value::Int(_), Value::Int(0)) => Err(RuntimeError::new("integer division by zero")),
+			(Value::Int(a), Value::Int(b)) => Ok(Value::Int(a.wrapping_div(*b))),
+			_ => unreachable!("IntDiv expects (int, int)"),
+		},
+		IntNegate => match &args[0] {
+			Value::Int(a) => Ok(Value::Int(a.wrapping_neg())),
+			_ => unreachable!("IntNegate expects int"),
+		},
+		FloatAdd => match (&args[0], &args[1]) {
+			(Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
+			_ => unreachable!("FloatAdd expects (float, float)"),
+		},
+		FloatSub => match (&args[0], &args[1]) {
+			(Value::Float(a), Value::Float(b)) => Ok(Value::Float(a - b)),
+			_ => unreachable!("FloatSub expects (float, float)"),
+		},
+		FloatMul => match (&args[0], &args[1]) {
+			(Value::Float(a), Value::Float(b)) => Ok(Value::Float(a * b)),
+			_ => unreachable!("FloatMul expects (float, float)"),
+		},
+		FloatDiv => match (&args[0], &args[1]) {
+			(Value::Float(a), Value::Float(b)) => Ok(Value::Float(a / b)),
+			_ => unreachable!("FloatDiv expects (float, float)"),
+		},
+		FloatNegate => match &args[0] {
+			Value::Float(a) => Ok(Value::Float(-a)),
+			_ => unreachable!("FloatNegate expects float"),
+		},
+		IntCompare => match (&args[0], &args[1]) {
+			(Value::Int(a), Value::Int(b)) => Ok(ordering_variant(a.cmp(b))),
+			_ => unreachable!("IntCompare expects (int, int)"),
+		},
+		FloatCompare => match (&args[0], &args[1]) {
+			(Value::Float(a), Value::Float(b)) => Ok(ordering_variant(
+				a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal),
+			)),
+			_ => unreachable!("FloatCompare expects (float, float)"),
+		},
+		StringCompare => match (&args[0], &args[1]) {
+			(Value::String(a), Value::String(b)) => Ok(ordering_variant(a.as_str().cmp(b.as_str()))),
+			_ => unreachable!("StringCompare expects (string, string)"),
+		},
+		IntHash => match &args[0] {
+			Value::Int(n) => Ok(Value::Int(*n)),
+			_ => unreachable!("IntHash expects int"),
+		},
+		FloatHash => match &args[0] {
+			// Reinterpret the float's bit pattern as i64. Stable across runs
+			// for the same value; collisions only on bit-equal floats.
+			Value::Float(f) => Ok(Value::Int(f.to_bits() as i64)),
+			_ => unreachable!("FloatHash expects float"),
+		},
+		StringHash => match &args[0] {
+			Value::String(s) => {
+				use std::hash::{Hash, Hasher};
+				let mut h = std::collections::hash_map::DefaultHasher::new();
+				s.as_str().hash(&mut h);
+				Ok(Value::Int(h.finish() as i64))
+			}
+			_ => unreachable!("StringHash expects string"),
+		},
+		BoolHash => match &args[0] {
+			Value::Bool(b) => Ok(Value::Int(if *b { 1 } else { 0 })),
+			_ => unreachable!("BoolHash expects bool"),
+		},
 		ListLength => {
 			let xs = expect_list(&args, "length");
 			Ok(Value::Int(xs.len() as i64))
@@ -240,6 +333,57 @@ pub fn call_builtin(vm: &mut VM, b: Builtin, args: Vec<Value>) -> Result<Value, 
 				}
 			}
 			Ok(Value::Bool(true))
+		}
+		ListSort => {
+			debug_assert_eq!(args.len(), 2, "`sort` arity");
+			let mut it = args.into_iter();
+			let list_arg = it.next().unwrap();
+			let cmp_fn = it.next().unwrap();
+			let xs = match list_arg {
+				Value::List(xs) => xs,
+				_ => unreachable!("`sort`: expected list"),
+			};
+			// Pull into a Vec we own so we can sort. The comparator returns
+			// an `ordering` variant; we map it to `std::cmp::Ordering`.
+			let mut out: Vec<Value> = xs.iter().cloned().collect();
+			// Track the first error from the comparator so we can return
+			// it after the (in-progress) sort completes. `sort_by` needs an
+			// infallible `Ord` so we treat errors as `Equal` and bubble.
+			let mut err: Option<RuntimeError> = None;
+			out.sort_by(|a, b| {
+				if err.is_some() {
+					return std::cmp::Ordering::Equal;
+				}
+				match invoke(vm, cmp_fn.clone(), vec![a.clone(), b.clone()]) {
+					Ok(Value::Variant(v)) => match v.variant.as_str() {
+						"lt" => std::cmp::Ordering::Less,
+						"eq" => std::cmp::Ordering::Equal,
+						"gt" => std::cmp::Ordering::Greater,
+						other => {
+							err = Some(RuntimeError::new(format!(
+								"`sort`: comparator returned `{}`; expected `lt`, `eq`, or `gt`",
+								other
+							)));
+							std::cmp::Ordering::Equal
+						}
+					},
+					Ok(other) => {
+						err = Some(RuntimeError::new(format!(
+							"`sort`: comparator returned `{}`; expected an `ordering` variant",
+							other
+						)));
+						std::cmp::Ordering::Equal
+					}
+					Err(e) => {
+						err = Some(e);
+						std::cmp::Ordering::Equal
+					}
+				}
+			});
+			if let Some(e) = err {
+				return Err(e);
+			}
+			Ok(Value::List(Rc::new(out)))
 		}
 		MathToFloat => {
 			debug_assert_eq!(args.len(), 1, "`to-float` arity");

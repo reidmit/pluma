@@ -43,9 +43,9 @@ module `main` (tests/analyze/generic-enum/main.pa) {
                                     name: ident(7:6-7:7) `a`,
                                     value: expr(7:10-7:19) :: box int {
                                         kind: call(7:10-7:19) {
-                                            callee: expr(7:10-7:17) :: 'l -> box 'l {
+                                            callee: expr(7:10-7:17) :: 'u -> box 'u {
                                                 kind: field-access {
-                                                    receiver: expr(7:10-7:13) :: box 'l {
+                                                    receiver: expr(7:10-7:13) :: box 'u {
                                                         kind: ident(7:10-7:13) `box`,
                                                     },
                                                     field: ident(7:14-7:17) `one`,
@@ -63,9 +63,9 @@ module `main` (tests/analyze/generic-enum/main.pa) {
                             expr(8:2-8:19) :: nothing {
                                 kind: let(8:2-8:19) {
                                     name: ident(8:6-8:7) `b`,
-                                    value: expr(8:10-8:19) :: box 'n {
+                                    value: expr(8:10-8:19) :: box 'w {
                                         kind: field-access {
-                                            receiver: expr(8:10-8:13) :: box 'n {
+                                            receiver: expr(8:10-8:13) :: box 'w {
                                                 kind: ident(8:10-8:13) `box`,
                                             },
                                             field: ident(8:14-8:19) `empty`,
@@ -78,7 +78,7 @@ module `main` (tests/analyze/generic-enum/main.pa) {
                                     name: ident(9:6-9:7) `c`,
                                     value: expr(9:10-9:21) :: box string {
                                         kind: call(9:10-9:21) {
-                                            callee: expr(9:10-9:13) :: 'q 'q -> box 'q {
+                                            callee: expr(9:10-9:13) :: 'z 'z -> box 'z {
                                                 kind: ident(9:10-9:13) `two`,
                                             },
                                             args: [
@@ -105,13 +105,13 @@ module `main` (tests/analyze/generic-enum/main.pa) {
                                     ],
                                 },
                             },
-                            expr(11:2-11:9) :: box 't4 {
+                            expr(11:2-11:9) :: box 't13 {
                                 kind: call(11:2-11:9) {
-                                    callee: expr(11:2-11:7) :: (box 't4) -> box 't4 {
+                                    callee: expr(11:2-11:7) :: (box 't13) -> box 't13 {
                                         kind: ident(11:2-11:7) `print`,
                                     },
                                     args: [
-                                        expr(11:8-11:9) :: box 't4 {
+                                        expr(11:8-11:9) :: box 't13 {
                                             kind: ident(11:8-11:9) `b`,
                                         },
                                     ],

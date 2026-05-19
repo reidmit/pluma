@@ -24,6 +24,37 @@ pub struct ModuleExports {
 	pub values: HashMap<String, Type>,
 	pub aliases: HashMap<String, Type>,
 	pub enums: HashMap<String, EnumExport>,
+	// Class constraints attached to constrained values. The `dispatch_var`
+	// shares its tyvar ids with the corresponding entry in `values`; on
+	// import both are freshened together so the constraint over the value
+	// flows into the importing module's constraint set.
+	pub value_constraints: HashMap<String, Vec<ValueConstraintExport>>,
+	// Typeclass instances declared in this module. Importers seed these
+	// into their own analyzer at init so they can discharge constraints
+	// against them. Param-tyvar ids inside `head_type` and `where_clauses`
+	// are canonical (0..param_count-1); the importer mints fresh ids
+	// before inserting into its local registry.
+	pub instances: Vec<InstanceExport>,
+}
+
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone)]
+pub struct ValueConstraintExport {
+	pub trait_name: String,
+	pub dispatch_var: Type,
+}
+
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone)]
+pub struct InstanceExport {
+	pub trait_name: String,
+	// Concrete `Type` for concrete instances; for parametric instances,
+	// contains `Type::Var(i)` placeholders for `i in 0..param_count`.
+	pub head_type: Type,
+	pub param_count: usize,
+	// `(trait_name, canonical_var_idx)` for each `where`-clause constraint.
+	pub where_clauses: Vec<(String, usize)>,
+	pub instance_slot_name: String,
 }
 
 // A generic enum's signature, exported across module boundaries. Variant
@@ -88,6 +119,13 @@ impl Module {
 				.with_module(self.module_name.clone(), self.module_path.to_path_buf()),
 			),
 		}
+	}
+
+	// Parse directly from in-memory source bytes. Used for the prelude
+	// module (baked into the compiler binary) and any other synthetic
+	// module that doesn't live on disk.
+	pub fn parse_from_bytes(&mut self, bytes: Vec<u8>, diagnostics: &mut Vec<Diagnostic>) {
+		self.build_ast(bytes, diagnostics);
 	}
 
 	pub fn did_parse(&self) -> bool {

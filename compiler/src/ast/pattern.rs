@@ -1,11 +1,13 @@
 use super::*;
 use crate::location::Range;
 
+#[derive(Clone)]
 pub struct PatternNode {
 	pub range: Range,
 	pub kind: PatternKind,
 }
 
+#[derive(Clone)]
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub enum PatternKind {
 	// e.g. if val is x { ... }

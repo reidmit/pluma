@@ -28,6 +28,11 @@ pub enum Value {
 	Builtin(Builtin),
 	Regex(Rc<RegexData>),
 	VariantCtor(Rc<VariantCtorData>),
+	// A typeclass dictionary: a positional array of method values, indexed by
+	// trait declaration order. Built per-instance at program load (concrete
+	// instances) or per-call (parametric instances; phase 3). The VM never
+	// inspects a Dict directly — only `GetDictField` reads from one.
+	Dict(Rc<Vec<Value>>),
 }
 
 pub struct VariantData {
@@ -123,6 +128,7 @@ impl std::fmt::Display for Value {
 					.unwrap_or(&c.qualified_enum);
 				write!(f, "<ctor {}.{}>", bare, c.variant)
 			}
+			Value::Dict(_) => write!(f, "<dict>"),
 		}
 	}
 }

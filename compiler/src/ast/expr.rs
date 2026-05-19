@@ -2,12 +2,25 @@ use super::*;
 use crate::location::*;
 use crate::types::*;
 
+#[derive(Clone)]
 pub struct ExprNode {
 	pub ty: Type,
 	pub kind: ExprKind,
 	pub range: Range,
+	// `Some(cell)` when this expression's VALUE is a typeclass method
+	// dispatch (e.g. the `numeric.add` FieldAccess, a `BinaryOperation`
+	// `a + b`, or a `UnaryOperation` `-a`). Cell is shared with the
+	// matching `Class` constraint; discharge fills it in.
+	pub trait_dispatch: Option<DispatchCell>,
+	// Set on an Identifier ExprNode that references a polymorphic
+	// constrained value (e.g. `double` whose scheme is
+	// `forall a. Numeric a => a -> a`). Holds the dispatch cells the
+	// surrounding Call should consume into its `dict_args`. Each cell
+	// is filled in by Gen/Inst processing in `unify`.
+	pub dispatch_sink: Option<DispatchSink>,
 }
 
+#[derive(Clone)]
 pub enum ExprKind {
 	BinaryOperation {
 		op: OperatorNode,

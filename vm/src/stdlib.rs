@@ -172,6 +172,23 @@ fn list_module() -> NativeModule {
 				ty: Type::Fun(vec![list_a(), pred_a()], Box::new(Type::Bool)),
 				builtin: Builtin::ListAll,
 			},
+			NativeDef {
+				// `sort xs cmp` — `cmp` returns one of the `ordering`
+				// variants (lt/eq/gt). Pair with `ord.compare` to sort
+				// any list whose elements have an `ord` instance.
+				name: "sort",
+				ty: Type::Fun(
+					vec![
+						list_a(),
+						Type::Fun(
+							vec![a(), a()],
+							Box::new(Type::Enum("__prelude__.ordering".to_string(), vec![])),
+						),
+					],
+					Box::new(list_a()),
+				),
+				builtin: Builtin::ListSort,
+			},
 		],
 		constants: vec![],
 	}
@@ -354,7 +371,10 @@ fn io_module() -> NativeModule {
 			},
 			NativeDef {
 				name: "args",
-				ty: Type::Fun(vec![Type::Nothing], Box::new(Type::List(Box::new(Type::String)))),
+				ty: Type::Fun(
+					vec![Type::Nothing],
+					Box::new(Type::List(Box::new(Type::String))),
+				),
 				builtin: Builtin::IoArgs,
 			},
 			NativeDef {

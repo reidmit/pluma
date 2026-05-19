@@ -33,7 +33,7 @@ module `main` (tests/analyze/pipeline/main.pa) {
                                             },
                                             right: expr(3:14-3:41) :: list int {
                                                 kind: call(3:14-3:41) {
-                                                    callee: expr(3:14-3:25) :: (list 'm) ('m -> bool) -> list 'm {
+                                                    callee: expr(3:14-3:25) :: (list 'v) ('v -> bool) -> list 'v {
                                                         kind: field-access {
                                                             receiver: expr(3:14-3:18) :: ? {
                                                                 kind: ident(3:14-3:18) `list`,

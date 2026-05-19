@@ -8,13 +8,13 @@ module `main` (tests/analyze/def-polymorphism/main.pa) {
         module(0:0-5:1) [
             def(0:0-0:24) :: nothing {
                 name: ident(0:4-0:12) `identity`,
-                kind: expr(0:13-0:24) :: 'k -> 'k {
+                kind: expr(0:13-0:24) :: 't -> 't {
                     kind: fun(0:13-0:24) {
                         params: [
-                            ident(0:17-0:18) `x` :: 'k,
+                            ident(0:17-0:18) `x` :: 't,
                         ],
                         body: [
-                            expr(0:21-0:22) :: 'k {
+                            expr(0:21-0:22) :: 't {
                                 kind: ident(0:21-0:22) `x`,
                             },
                         ],

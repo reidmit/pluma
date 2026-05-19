@@ -403,6 +403,8 @@ impl<'a> Parser<'a> {
 		Some(ExprNode {
 			range: self.span_to_single_line_range(start, end),
 			ty: Type::Unknown,
+			trait_dispatch: None,
+			dispatch_sink: None,
 			kind: ExprKind::Literal(LiteralNode {
 				range: self.span_to_single_line_range(start, end),
 				kind: LiteralKind::Bool(value),
@@ -427,51 +429,71 @@ impl<'a> Parser<'a> {
 				range: when_node.range,
 				kind: ExprKind::When(when_node),
 				ty: Type::Unknown,
+				trait_dispatch: None,
+				dispatch_sink: None,
 			}),
 			Some(Token::KeywordIf(..)) => self.parse_if_expression().map(|if_node| ExprNode {
 				range: if_node.range,
 				kind: ExprKind::If(if_node),
 				ty: Type::Unknown,
+				trait_dispatch: None,
+				dispatch_sink: None,
 			}),
 			Some(Token::KeywordWhile(..)) => self.parse_while_expression().map(|while_node| ExprNode {
 				range: while_node.range,
 				kind: ExprKind::While(while_node),
 				ty: Type::Unknown,
+				trait_dispatch: None,
+				dispatch_sink: None,
 			}),
 			Some(Token::KeywordLet(..)) => self.parse_let_expression().map(|let_node| ExprNode {
 				range: let_node.range,
 				kind: ExprKind::Let(let_node),
 				ty: Type::Unknown,
+				trait_dispatch: None,
+				dispatch_sink: None,
 			}),
 			Some(Token::KeywordFun(..)) => self.parse_fun().map(|fun_node| ExprNode {
 				range: fun_node.range,
 				kind: ExprKind::Fun(fun_node),
 				ty: Type::Unknown,
+				trait_dispatch: None,
+				dispatch_sink: None,
 			}),
 			Some(Token::Identifier(..)) => self.parse_identifier().map(|ident| ExprNode {
 				range: ident.range,
 				kind: ExprKind::Identifier(ident),
 				ty: Type::Unknown,
+				trait_dispatch: None,
+				dispatch_sink: None,
 			}),
 			Some(Token::DecimalDigits(..)) => self.parse_decimal_number().map(|literal| ExprNode {
 				range: literal.range,
 				kind: ExprKind::Literal(literal),
 				ty: Type::Unknown,
+				trait_dispatch: None,
+				dispatch_sink: None,
 			}),
 			Some(Token::BinaryDigits(..)) => self.parse_binary_number().map(|literal| ExprNode {
 				range: literal.range,
 				kind: ExprKind::Literal(literal),
 				ty: Type::Unknown,
+				trait_dispatch: None,
+				dispatch_sink: None,
 			}),
 			Some(Token::OctalDigits(..)) => self.parse_octal_number().map(|literal| ExprNode {
 				range: literal.range,
 				kind: ExprKind::Literal(literal),
 				ty: Type::Unknown,
+				trait_dispatch: None,
+				dispatch_sink: None,
 			}),
 			Some(Token::HexDigits(..)) => self.parse_hex_number().map(|literal| ExprNode {
 				range: literal.range,
 				kind: ExprKind::Literal(literal),
 				ty: Type::Unknown,
+				trait_dispatch: None,
+				dispatch_sink: None,
 			}),
 			Some(
 				t @ Token::Minus(start, ..) | t @ Token::UnaryMinus(start, ..) | t @ Token::Bang(start, ..),
@@ -497,6 +519,8 @@ impl<'a> Parser<'a> {
 						right: Box::new(rhs_expr),
 					},
 					ty: Type::Unknown,
+					trait_dispatch: None,
+					dispatch_sink: None,
 				})
 			}
 			_ => None,
@@ -560,8 +584,11 @@ impl<'a> Parser<'a> {
 							range,
 							callee: Box::new(lhs_expr),
 							args,
+							dict_args: Vec::new(),
 						}),
 						ty: Type::Unknown,
+						trait_dispatch: None,
+						dispatch_sink: None,
 					};
 				} else {
 					let op_pos = self.current_token_points();
@@ -594,6 +621,8 @@ impl<'a> Parser<'a> {
 							right: Box::new(rhs_expr),
 						},
 						ty: Type::Unknown,
+						trait_dispatch: None,
+						dispatch_sink: None,
 					};
 				}
 
@@ -618,6 +647,8 @@ impl<'a> Parser<'a> {
 			}) => Some(ExprNode {
 				range: Range::between(lhs_expr.range.start, rhs_expr.range.end),
 				ty: Type::Unknown,
+				trait_dispatch: None,
+				dispatch_sink: None,
 				kind: ExprKind::ElementAccess {
 					receiver: lhs_expr.into(),
 					index,
@@ -627,6 +658,8 @@ impl<'a> Parser<'a> {
 			ExprKind::Identifier(ident) => Some(ExprNode {
 				range: Range::between(lhs_expr.range.start, rhs_expr.range.end),
 				ty: Type::Unknown,
+				trait_dispatch: None,
+				dispatch_sink: None,
 				kind: ExprKind::FieldAccess {
 					receiver: lhs_expr.into(),
 					field: ident,
@@ -1024,6 +1057,8 @@ impl<'a> Parser<'a> {
 			range: Range::between(start, end),
 			kind: ExprKind::List(elements),
 			ty: Type::Unknown,
+			trait_dispatch: None,
+			dispatch_sink: None,
 		})
 	}
 
@@ -1108,6 +1143,8 @@ impl<'a> Parser<'a> {
 			range: Range::between(record_start, record_end),
 			kind: ExprKind::Record(entries),
 			ty: Type::Unknown,
+			trait_dispatch: None,
+			dispatch_sink: None,
 		})
 	}
 
@@ -1147,6 +1184,8 @@ impl<'a> Parser<'a> {
 				range: Range::between(paren_start, paren_end),
 				kind: ExprKind::EmptyTuple,
 				ty: Type::Unknown,
+				trait_dispatch: None,
+				dispatch_sink: None,
 			});
 		}
 
@@ -1157,6 +1196,8 @@ impl<'a> Parser<'a> {
 					range: Range::between(paren_start, paren_end),
 					kind: ExprKind::Grouping(Box::new(first_expr)),
 					ty: Type::Unknown,
+					trait_dispatch: None,
+					dispatch_sink: None,
 				});
 			}
 		}
@@ -1166,6 +1207,8 @@ impl<'a> Parser<'a> {
 			range: Range::between(paren_start, paren_end),
 			kind: ExprKind::Tuple(entries),
 			ty: Type::Unknown,
+			trait_dispatch: None,
+			dispatch_sink: None,
 		})
 	}
 
@@ -1194,6 +1237,8 @@ impl<'a> Parser<'a> {
 			range: Range::between(start, end),
 			kind: ExprKind::Regex(regex),
 			ty: Type::Unknown,
+			trait_dispatch: None,
+			dispatch_sink: None,
 		})
 	}
 
@@ -1465,6 +1510,13 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_definition(&mut self) -> Option<DefinitionNode> {
+		// Instance: `for TRAIT on TYPE { defs }`. Starts with `for`, not `def`.
+		if let Some(Token::KeywordFor(start_offset, _)) = self.current_token {
+			let start = self.offset_to_point(start_offset);
+			self.advance();
+			return self.parse_instance_after_for(start);
+		}
+
 		let start = match self.current_token {
 			Some(Token::KeywordDef(start_offset, _)) => {
 				self.advance();
@@ -1488,6 +1540,7 @@ impl<'a> Parser<'a> {
 					range: Range::between(start, type_expr.range.end),
 					kind: DefinitionKind::Alias(type_expr),
 					ty: Type::Unknown,
+					dict_param_count: 0,
 				})
 			}
 
@@ -1503,6 +1556,23 @@ impl<'a> Parser<'a> {
 					range: Range::between(start, enum_node.range.end),
 					kind: DefinitionKind::Enum(enum_node),
 					ty: Type::Unknown,
+					dict_param_count: 0,
+				})
+			}
+
+			Some(Token::KeywordTrait(..)) => {
+				self.advance();
+
+				let trait_node = self.parse_trait()?;
+
+				self.skip_line_breaks();
+
+				Some(DefinitionNode {
+					name,
+					range: Range::between(start, trait_node.range.end),
+					kind: DefinitionKind::Trait(trait_node),
+					ty: Type::Unknown,
+					dict_param_count: 0,
 				})
 			}
 
@@ -1516,6 +1586,7 @@ impl<'a> Parser<'a> {
 					range: Range::between(start, value.range.end),
 					kind: DefinitionKind::Expr(value),
 					ty: Type::Unknown,
+					dict_param_count: 0,
 				})
 			}
 
@@ -1524,6 +1595,170 @@ impl<'a> Parser<'a> {
 				kind: ParseErrorKind::InvalidDefBody,
 			}),
 		}
+	}
+
+	// Trait body: `def NAME trait PARAM { method-sigs / defaults }`. The
+	// `def NAME trait` prefix has already been consumed by the caller.
+	//
+	// Method signature: `METHOD_NAME TYPE_EXPR`. The type expression is
+	// usually a `fun ... -> ...`, but parsing accepts any type expression —
+	// the analyzer rejects non-function signatures later.
+	//
+	// Default body: `default METHOD_NAME fun ARGS { BODY }`. Stored as an
+	// `ExprNode` (a `Fun` expression) on the matching method.
+	fn parse_trait(&mut self) -> Option<TraitNode> {
+		// Required single type parameter (`a` in `def numeric trait a { ... }`).
+		let param = self.parse_identifier()?;
+
+		let (brace_start, _) = expect_token_and_advance!(self, Token::LeftBrace);
+
+		self.skip_line_breaks();
+
+		let mut methods: Vec<TraitMethodNode> = Vec::new();
+
+		loop {
+			self.skip_line_breaks();
+
+			// `default METHOD fun ... { ... }`: attach the body to a previously
+			// declared signature with the same name.
+			if let Some(Token::KeywordDefault(start_offset, _)) = self.current_token {
+				let default_start = self.offset_to_point(start_offset);
+				self.advance();
+
+				let method_name = self.parse_identifier()?;
+				let body = self.parse_expression()?;
+
+				// Find the matching signature; default without a signature is
+				// a parse error.
+				match methods.iter_mut().find(|m| m.name.name == method_name.name) {
+					Some(m) => {
+						m.range = Range::between(m.range.start, body.range.end);
+						m.default = Some(body);
+					}
+					None => {
+						return self.error(ParseError {
+							range: Range::between(default_start, method_name.range.end),
+							kind: ParseErrorKind::InvalidDefBody,
+						});
+					}
+				}
+
+				self.skip_line_breaks();
+				continue;
+			}
+
+			// Method signature: `NAME TYPE_EXPR`.
+			if matches!(self.current_token, Some(Token::Identifier(..))) {
+				let method_name = self.parse_identifier()?;
+				let signature = self.parse_type_expression_with_generics()?;
+
+				methods.push(TraitMethodNode {
+					range: Range::between(method_name.range.start, signature.range.end),
+					name: method_name,
+					signature,
+					default: None,
+				});
+
+				self.skip_line_breaks();
+				continue;
+			}
+
+			break;
+		}
+
+		let (_, brace_end) = expect_token_and_advance!(self, Token::RightBrace);
+
+		Some(TraitNode {
+			range: Range::between(brace_start, brace_end),
+			param,
+			methods,
+		})
+	}
+
+	// Instance body: `for TRAIT on TYPE { defs }`. The `for` keyword has
+	// already been consumed by the caller (which captured its start point).
+	fn parse_instance_after_for(&mut self, start: Point) -> Option<DefinitionNode> {
+		let trait_name = self.parse_identifier()?;
+
+		expect_token_and_advance!(self, Token::KeywordOn);
+
+		// Head is a type expression so phase 3 can accept `(option a)` without
+		// changing this slot's shape. Phase 1 only takes simple type names.
+		// Use the non-greedy variant so the `{` that starts the body isn't
+		// mistaken for a record-type generic arg.
+		let head = self.parse_type_expression()?;
+
+		// Optional `where (constraint, constraint, ...)` clause.
+		let where_clause = if matches!(self.current_token, Some(Token::KeywordWhere(..))) {
+			self.advance();
+			expect_token_and_advance!(self, Token::LeftParen);
+			self.skip_line_breaks();
+
+			let mut constraints = Vec::new();
+			loop {
+				let c_start = self.current_token_points().0;
+				let c_trait_name = self.parse_identifier()?;
+				let c_param = self.parse_identifier()?;
+				constraints.push(InstanceConstraintNode {
+					range: Range::between(c_start, c_param.range.end),
+					trait_name: c_trait_name,
+					param: c_param,
+				});
+				match self.current_token {
+					Some(Token::Comma(..)) => {
+						self.advance();
+						self.skip_line_breaks();
+					}
+					_ => break,
+				}
+			}
+			expect_token_and_advance!(self, Token::RightParen);
+			constraints
+		} else {
+			Vec::new()
+		};
+
+		let (_, _) = expect_token_and_advance!(self, Token::LeftBrace);
+		self.skip_line_breaks();
+
+		let mut methods: Vec<DefinitionNode> = Vec::new();
+		while matches!(self.current_token, Some(Token::KeywordDef(..))) {
+			let def = self.parse_definition()?;
+			methods.push(def);
+			self.skip_line_breaks();
+		}
+
+		let (_, brace_end) = expect_token_and_advance!(self, Token::RightBrace);
+		self.skip_line_breaks();
+
+		let instance_range = Range::between(start, brace_end);
+		// Synthetic "name" for the def node — never appears in user code, but
+		// the surrounding DefinitionNode requires one. Include the head's
+		// span so two instances of the same trait don't collide in the
+		// analyzer's duplicate-name check.
+		let synthesized_name = IdentifierNode {
+			range: trait_name.range,
+			name: format!(
+				"{}@instance@{}:{}",
+				trait_name.name, head.range.start.line, head.range.start.col
+			),
+		};
+
+		Some(DefinitionNode {
+			name: synthesized_name,
+			range: instance_range,
+			kind: DefinitionKind::Instance(InstanceNode {
+				range: instance_range,
+				trait_name,
+				head,
+				where_clause,
+				methods,
+				instance_slot_name: String::new(),
+				canonical_method_order: Vec::new(),
+			}),
+			ty: Type::Unknown,
+			dict_param_count: 0,
+		})
 	}
 
 	fn parse_string(&mut self) -> Option<ExprNode> {
@@ -1553,6 +1788,8 @@ impl<'a> Parser<'a> {
 			range: literal.range,
 			kind: ExprKind::Literal(literal),
 			ty: Type::Unknown,
+			trait_dispatch: None,
+			dispatch_sink: None,
 		};
 
 		// If we have an interpolation-start after this, we need to collect all
@@ -1589,6 +1826,8 @@ impl<'a> Parser<'a> {
 						kind: LiteralKind::String(value),
 					}),
 					ty: Type::Unknown,
+					trait_dispatch: None,
+					dispatch_sink: None,
 				});
 			}
 
@@ -1596,6 +1835,8 @@ impl<'a> Parser<'a> {
 				range: Range::between(start, interpolation_end),
 				kind: ExprKind::Interpolation(parts),
 				ty: Type::Unknown,
+				trait_dispatch: None,
+				dispatch_sink: None,
 			});
 		}
 

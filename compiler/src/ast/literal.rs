@@ -1,10 +1,12 @@
 use crate::location::*;
 
+#[derive(Clone)]
 pub struct LiteralNode {
 	pub kind: LiteralKind,
 	pub range: Range,
 }
 
+#[derive(Clone)]
 pub enum LiteralKind {
 	Bool(bool),
 	FloatDecimal(f64),

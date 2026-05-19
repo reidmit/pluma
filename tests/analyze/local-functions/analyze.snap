@@ -1,5 +1,5 @@
 ---
-source: pluma-tests/tests/analyze.rs
+source: tests/analyze.rs
 expression: output
 ---
 module `main` (tests/analyze/local-functions/main.pa) {
@@ -15,19 +15,19 @@ module `main` (tests/analyze/local-functions/main.pa) {
                             expr(1:2-3:3) :: nothing {
                                 kind: let(1:2-3:3) {
                                     name: ident(1:6-1:9) `add`,
-                                    value: expr(1:12-3:3) :: int int -> int {
+                                    value: expr(1:12-3:3) :: 'u 'u -> 'u {
                                         kind: fun(1:12-3:3) {
                                             params: [
-                                                ident(1:16-1:17) `x` :: int,
-                                                ident(1:18-1:19) `y` :: int,
+                                                ident(1:16-1:17) `x` :: 'u,
+                                                ident(1:18-1:19) `y` :: 'u,
                                             ],
                                             body: [
-                                                expr(2:4-2:9) :: int {
+                                                expr(2:4-2:9) :: 'u {
                                                     kind: binary op(2:6-2:7) `+` {
-                                                        left: expr(2:4-2:5) :: int {
+                                                        left: expr(2:4-2:5) :: 'u {
                                                             kind: ident(2:4-2:5) `x`,
                                                         },
-                                                        right: expr(2:8-2:9) :: int {
+                                                        right: expr(2:8-2:9) :: 'u {
                                                             kind: ident(2:8-2:9) `y`,
                                                         },
                                                     },
@@ -57,12 +57,18 @@ module `main` (tests/analyze/local-functions/main.pa) {
                                                             kind: literal(5:13-5:14) int 2,
                                                         },
                                                     ],
+                                                    dict_args: [
+                                                        "Some(Global(\"__prelude__.numeric@int\"))",
+                                                    ],
                                                 },
                                             },
                                         },
                                         expr(5:16-5:17) :: int {
                                             kind: literal(5:16-5:17) int 3,
                                         },
+                                    ],
+                                    dict_args: [
+                                        "Some(Global(\"__prelude__.numeric@int\"))",
                                     ],
                                 },
                             },

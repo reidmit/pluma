@@ -6,6 +6,32 @@ pub enum Builtin {
 	Print,
 	ToString,
 	Matches,
+	// Numeric trait method bodies. Hidden — users always go through the
+	// trait method (`numeric.add` etc.). Live inside per-instance
+	// `Value::Dict`s built by codegen at program load.
+	IntAdd,
+	IntSub,
+	IntMul,
+	IntDiv,
+	IntNegate,
+	FloatAdd,
+	FloatSub,
+	FloatMul,
+	FloatDiv,
+	FloatNegate,
+	// `ord` trait method bodies. Each returns one of the
+	// `__prelude__.ordering` variants (`lt`, `eq`, `gt`).
+	IntCompare,
+	FloatCompare,
+	StringCompare,
+	// `hash` trait method bodies. Each returns an int. The actual hash
+	// algorithm is intentionally simple — these aren't cryptographic, just
+	// good enough for hash-map bucketing. Future cleanups may switch to a
+	// faster non-stdlib hasher.
+	IntHash,
+	FloatHash,
+	StringHash,
+	BoolHash,
 	ListLength,
 	ListIsEmpty,
 	ListReverse,
@@ -22,6 +48,7 @@ pub enum Builtin {
 	ListFind,
 	ListAny,
 	ListAll,
+	ListSort,
 	MathToFloat,
 	MathToInt,
 	MathSqrt,

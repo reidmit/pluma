@@ -96,10 +96,10 @@ module `main` (tests/analyze/when-exhaustive/main.pa) {
             },
             def(21:0-25:1) :: nothing {
                 name: ident(21:4-21:23) `by-binding-catchall`,
-                kind: expr(21:24-25:1) :: 'v -> int {
+                kind: expr(21:24-25:1) :: 't4 -> int {
                     kind: fun(21:24-25:1) {
                         params: [
-                            ident(21:28-21:29) `t` :: 'v,
+                            ident(21:28-21:29) `t` :: 't4,
                         ],
                         body: [
                             expr(22:2-24:3) :: int {

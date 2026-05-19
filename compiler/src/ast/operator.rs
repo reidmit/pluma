@@ -1,5 +1,6 @@
 use crate::{location::Range, tokens::Token};
 
+#[derive(Clone)]
 pub struct OperatorNode {
 	pub range: Range,
 	pub kind: Operator,

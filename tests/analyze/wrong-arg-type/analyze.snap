@@ -1,6 +1,6 @@
 ---
-source: pluma-tests/tests/analyze.rs
+source: tests/analyze.rs
 expression: output
 ---
-error: Type mismatch: expected `int`, but found `string`.
+error: No instance of trait `numeric` for type `string`.
 
