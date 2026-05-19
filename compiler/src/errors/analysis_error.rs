@@ -19,6 +19,7 @@ pub enum AnalysisErrorKind {
 	EnumVariantNotPresent { variant: String, ty: Type },
 	WhenNotExhaustive { missing: Vec<String> },
 	AmbiguousVariant { name: String, enums: Vec<String> },
+	AmbiguousBareMethod { name: String, traits: Vec<String> },
 	DuplicateDefinition { name: String },
 	NoInstance { trait_name: String, ty: Type },
 	UnsupportedInstanceHead { head: Type },
@@ -95,6 +96,19 @@ impl fmt::Display for AnalysisError {
 				write!(
 					f,
 					"Variant `{}` is ambiguous: it could refer to {}.",
+					name, formatted
+				)
+			}
+
+			AmbiguousBareMethod { name, traits } => {
+				let formatted = traits
+					.iter()
+					.map(|t| format!("`{}.{}`", t, name))
+					.collect::<Vec<_>>()
+					.join(" or ");
+				write!(
+					f,
+					"Method `{}` is ambiguous: qualify it as {}.",
 					name, formatted
 				)
 			}

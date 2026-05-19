@@ -923,16 +923,23 @@ fn emit_expr_with_parents(
 			fb.emit(Instruction::LoadNothing, range);
 		}
 		ExprKind::Identifier(ident) => {
-			emit_identifier(
-				cg,
-				current_module,
-				imports,
-				fb,
-				scope,
-				parent_scopes,
-				ident,
-				range,
-			)?;
+			// Bare trait method reference: `hash 42` instead of `hash.hash 42`.
+			// The analyzer already attached the dispatch cell — emit a
+			// dispatch load and skip the regular identifier resolution.
+			if let Some(cell) = &expr.trait_dispatch {
+				emit_dispatch_load(cg, fb, scope, parent_scopes, cell, range)?;
+			} else {
+				emit_identifier(
+					cg,
+					current_module,
+					imports,
+					fb,
+					scope,
+					parent_scopes,
+					ident,
+					range,
+				)?;
+			}
 		}
 		ExprKind::Grouping(inner) => emit_expr_with_parents(
 			cg,

@@ -198,6 +198,64 @@ when outcome is ok v {
 }
 ```
 
+## traits
+
+a `trait` declares a set of method signatures over a type parameter. `for trait on type` declares an instance — the implementation for a particular type.
+
+```
+def showable trait a {
+  show fun a -> string
+}
+
+for showable on int {
+  def show fun x { to-string x }
+}
+
+for showable on bool {
+  def show fun b {
+    when b is true { "yes" } else { "no" }
+  }
+}
+```
+
+trait methods are reachable under their **bare names** in the module that declares the trait, and in any module that has the trait in scope:
+
+```
+print (show 42)           # int instance
+print (show true)         # bool instance
+```
+
+dispatch is by argument type — the compiler picks the instance from the call site's types. local `def`s (and bare enum variants) shadow trait methods with the same name. when two in-scope traits export the same method name, you get an ambiguity error and must qualify:
+
+```
+print (showable.show 42)  # explicit form, always legal
+```
+
+the prelude ships three traits visible in every module:
+
+- `numeric` — `add`, `sub`, `mul`, `div`, `negate` (instances on `int`, `float`)
+- `ord` — `compare` (instances on `int`, `float`, `string`; parametric on `option a`, `result a b`)
+- `hash` — `hash` (instances on `int`, `float`, `string`, `bool`; parametric on `option a`, `result a b`)
+
+so `compare 1 2`, `hash "key"`, `add 1.5 2.5` all just work.
+
+instances can carry constraints with `where`:
+
+```
+for ord on (option a) where (ord a) {
+  def compare fun x y {
+    when x is some xv {
+      when y is some yv { compare xv yv }  # bare — dispatches on `a`
+      is none { gt }
+    }
+    is none {
+      when y is some _v { lt }
+      is none { eq }
+    }
+  }
+}
+```
+
 ## module imports
 
 `use` at the top of a module brings another module in as a namespace. dotted paths resolve relative to the project root.

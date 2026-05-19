@@ -1652,6 +1652,48 @@ impl<'compiler> Analyzer<'compiler> {
 					}
 				}
 
+				// Bare trait method: `hash 42` instead of `hash.hash 42`.
+				// Find all in-scope traits where the bare name is a method;
+				// disambiguate by preferring module-local traits. Local
+				// `def`s / variants shadow these (checked earlier).
+				let method_matches: Vec<(String, usize, Type, usize)> = self
+					.traits
+					.iter()
+					.filter_map(|(trait_name, decl)| {
+						let idx = decl.method_order.iter().position(|m| m == &ident.name)?;
+						let method_ty = decl.method_types.get(&ident.name)?.clone();
+						Some((trait_name.clone(), idx, method_ty, decl.param_var))
+					})
+					.collect();
+
+				if !method_matches.is_empty() {
+					match self.disambiguate_bare_method_matches(&method_matches) {
+						Some((trait_name, method_idx, method_ty, param_var)) => {
+							self.emit_trait_method_dispatch(
+								trait_name,
+								method_idx,
+								&method_ty,
+								param_var,
+								expr,
+								constraints,
+							);
+							return;
+						}
+						None => {
+							let traits = method_matches.iter().map(|(t, ..)| t.clone()).collect();
+							self.error(
+								ident.range,
+								AmbiguousBareMethod {
+									name: ident.name.clone(),
+									traits,
+								},
+							);
+							expr.ty = Type::Unknown;
+							return;
+						}
+					}
+				}
+
 				self.error(
 					ident.range,
 					NameNotBound {
@@ -2102,11 +2144,10 @@ impl<'compiler> Analyzer<'compiler> {
 
 				// Trait method access: `trait-name.method`. The receiver is
 				// a bare ident that matches a registered typeclass. Resolve
-				// the method, instantiate its type with a fresh dispatch
-				// var, and emit a Class constraint linked via a shared
-				// dispatch cell. The expression's value at runtime is the
-				// method extracted from the right instance dictionary —
-				// codegen reads the cell to know which dict to load.
+				// the method via `emit_trait_method_dispatch`, which sets up
+				// the shared dispatch cell + Class constraint. The bare-name
+				// form (`method` without a trait prefix) is handled
+				// alongside identifier resolution.
 				if let ExprKind::Identifier(ident) = &receiver.kind {
 					if let Some(trait_decl) = self.traits.get(&ident.name) {
 						let trait_name = ident.name.clone();
@@ -2119,35 +2160,18 @@ impl<'compiler> Analyzer<'compiler> {
 
 						match (method_idx, method_type) {
 							(Some(idx), Some(method_ty)) => {
-								// Instantiate: replace the trait's param_var
-								// (and any other free vars, defensively) with
-								// fresh vars at this use site.
-								let mut mapping: HashMap<usize, Type> = HashMap::new();
-								let dispatch_var = self.new_type_var();
-								mapping.insert(param_var, dispatch_var.clone());
-								let instantiated = self.instantiate_with(&method_ty, &mut mapping);
-
 								receiver.ty = Type::Unknown;
-								expr.ty = instantiated;
-
-								// Set up the shared dispatch cell + Class
-								// constraint. The cell is the back-edge from
-								// constraint solving to the AST.
-								let cell =
-									crate::ast::new_dispatch(trait_name.clone(), Some(idx), dispatch_var.clone());
-								expr.trait_dispatch = Some(cell.clone());
-								constraints.push(Constraint::Class(ClassConstraint {
-									name: trait_name,
-									ty: dispatch_var,
-									reason: ConstraintReason { range: expr.range },
-									dispatch_cell: cell,
-								}));
+								self.emit_trait_method_dispatch(
+									trait_name,
+									idx,
+									&method_ty,
+									param_var,
+									expr,
+									constraints,
+								);
 								return;
 							}
 							_ => {
-								// Trait exists but method doesn't — emit an
-								// error and fall through to fresh-var
-								// recovery.
 								self.error(
 									field.range,
 									NameNotBound {
@@ -3329,6 +3353,71 @@ impl<'compiler> Analyzer<'compiler> {
 		let type_var = Type::Var(self.next_type_var_id);
 		self.next_type_var_id += 1;
 		type_var
+	}
+
+	// Lower a trait-method reference (either `trait.method` or bare
+	// `method`) to a typed expression with a dispatch cell + Class
+	// constraint. Caller has already picked the trait + method.
+	fn emit_trait_method_dispatch(
+		&mut self,
+		trait_name: String,
+		method_idx: usize,
+		method_type: &Type,
+		param_var: usize,
+		expr: &mut ExprNode,
+		constraints: &mut Vec<Constraint>,
+	) {
+		// Instantiate: replace the trait's param_var (and any other free
+		// vars, defensively) with fresh vars at this use site.
+		let mut mapping: HashMap<usize, Type> = HashMap::new();
+		let dispatch_var = self.new_type_var();
+		mapping.insert(param_var, dispatch_var.clone());
+		let instantiated = self.instantiate_with(method_type, &mut mapping);
+
+		expr.ty = instantiated;
+		// Set up the shared dispatch cell + Class constraint. The cell is
+		// the back-edge from constraint solving to the AST so codegen
+		// knows which dict to load.
+		let cell = crate::ast::new_dispatch(trait_name.clone(), Some(method_idx), dispatch_var.clone());
+		expr.trait_dispatch = Some(cell.clone());
+		constraints.push(Constraint::Class(ClassConstraint {
+			name: trait_name,
+			ty: dispatch_var,
+			reason: ConstraintReason { range: expr.range },
+			dispatch_cell: cell,
+		}));
+	}
+
+	// Pick a single (trait, method_idx, method_type, param_var) from a list
+	// of matches by precedence: local-module traits shadow everything; if
+	// no local match, a single non-local match wins; otherwise return None
+	// (caller reports ambiguity).
+	fn disambiguate_bare_method_matches(
+		&self,
+		matches: &[(String, usize, Type, usize)],
+	) -> Option<(String, usize, Type, usize)> {
+		if matches.len() == 1 {
+			return Some(matches[0].clone());
+		}
+		if let Some(module_name) = &self.module_name {
+			let local: Vec<&(String, usize, Type, usize)> = matches
+				.iter()
+				.filter(|m| {
+					self
+						.traits
+						.get(&m.0)
+						.map(|d| &d.defining_module == module_name)
+						.unwrap_or(false)
+				})
+				.collect();
+			if local.len() == 1 {
+				return Some(local[0].clone());
+			}
+			if local.len() > 1 {
+				return None;
+			}
+		}
+		None
 	}
 
 	// Pick a single (enum, variant) from a list of matches by precedence:

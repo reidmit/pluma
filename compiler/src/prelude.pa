@@ -35,7 +35,7 @@ def ordering enum {
 for ord on (option a) where (ord a) {
 	def compare fun x y {
 		when x is some xv {
-			when y is some yv { ord.compare xv yv }
+			when y is some yv { compare xv yv }
 			is none { gt }
 		}
 		is none {
@@ -48,11 +48,11 @@ for ord on (option a) where (ord a) {
 for ord on (result a b) where (ord a, ord b) {
 	def compare fun x y {
 		when x is ok xv {
-			when y is ok yv { ord.compare xv yv }
+			when y is ok yv { compare xv yv }
 			is err _e { lt }
 		}
 		is err xe {
-			when y is err ye { ord.compare xe ye }
+			when y is err ye { compare xe ye }
 			is ok _v { gt }
 		}
 	}
@@ -60,14 +60,14 @@ for ord on (result a b) where (ord a, ord b) {
 
 for hash on (option a) where (hash a) {
 	def hash fun o {
-		when o is some v { hash.hash v }
+		when o is some v { hash v }
 		is none { 0 }
 	}
 }
 
 for hash on (result a b) where (hash a, hash b) {
 	def hash fun r {
-		when r is ok v { hash.hash v }
-		is err e { hash.hash e }
+		when r is ok v { hash v }
+		is err e { hash e }
 	}
 }

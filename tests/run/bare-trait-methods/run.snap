@@ -1,0 +1,23 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+42
+-2290212989580898599
+1
+true
+less
+greater
+equal
+3
+7
+-7
+less
+7
+42
+ordering.lt
+== stderr ==
+
