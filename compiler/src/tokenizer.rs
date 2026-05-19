@@ -503,6 +503,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 						b"as" => KeywordAs,
 						b"def" => KeywordDef,
 						b"default" => KeywordDefault,
+						b"else" => KeywordElse,
 						b"enum" => KeywordEnum,
 						b"for" => KeywordFor,
 						b"fun" => KeywordFun,

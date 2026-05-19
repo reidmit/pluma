@@ -706,13 +706,27 @@ impl<'a> Parser<'a> {
 
 		let body = self.parse_body_expressions()?;
 
-		let (_, end) = expect_token_and_advance!(self, Token::RightBrace);
+		let (_, mut end) = expect_token_and_advance!(self, Token::RightBrace);
+
+		// Optional `else { ... }`, allowing line breaks between `}` and `else`.
+		let else_body = if matches!(self.peek_past_breaks(), Some(Token::KeywordElse(..))) {
+			self.skip_line_breaks();
+			self.advance();
+			expect_token_and_advance!(self, Token::LeftBrace);
+			let else_body = self.parse_body_expressions()?;
+			let (_, else_end) = expect_token_and_advance!(self, Token::RightBrace);
+			end = else_end;
+			Some(else_body)
+		} else {
+			None
+		};
 
 		Some(IfNode {
 			range: Range::between(start, end),
 			subject: Box::new(condition),
 			pattern,
 			body,
+			else_body,
 		})
 	}
 
@@ -725,12 +739,30 @@ impl<'a> Parser<'a> {
 
 		let mut cases = Vec::new();
 
-		while current_token_is!(self, Token::KeywordIs) {
+		loop {
 			let case_start = self.offset_to_point(self.current_token_span().0);
 
-			self.advance();
-
-			let case_pattern = self.parse_pattern()?;
+			// `else { body }` is sugar for `is _ { body }`. Once we see it,
+			// the case list ends — no more `is` arms can follow.
+			let (case_pattern, is_else) = match self.current_token {
+				Some(Token::KeywordIs(..)) => {
+					self.advance();
+					(self.parse_pattern()?, false)
+				}
+				Some(Token::KeywordElse(start, end)) => {
+					self.advance();
+					let p_start = self.offset_to_point(start);
+					let p_end = self.offset_to_point(end);
+					(
+						PatternNode {
+							range: Range::between(p_start, p_end),
+							kind: PatternKind::Underscore,
+						},
+						true,
+					)
+				}
+				_ => break,
+			};
 
 			expect_token_and_advance!(self, Token::LeftBrace);
 
@@ -740,18 +772,26 @@ impl<'a> Parser<'a> {
 
 			let (_, case_end) = expect_token_and_advance!(self, Token::RightBrace);
 
-			// Only consume trailing breaks if another `is` case follows. Without
-			// this, breaks after the final `}` get eaten and whatever comes next
-			// (e.g. another `when` statement) gets parsed as a function-call arg.
-			if matches!(self.peek_past_breaks(), Some(Token::KeywordIs(..))) {
-				self.skip_line_breaks();
-			}
-
 			cases.push(CaseNode {
 				range: Range::between(case_start, case_end),
 				pattern: case_pattern,
 				body: case_body,
-			})
+			});
+
+			if is_else {
+				break;
+			}
+
+			// Only consume trailing breaks if another `is`/`else` case follows.
+			// Without this, breaks after the final `}` get eaten and whatever
+			// comes next (e.g. another `when` statement) gets parsed as a
+			// function-call arg.
+			if matches!(
+				self.peek_past_breaks(),
+				Some(Token::KeywordIs(..)) | Some(Token::KeywordElse(..))
+			) {
+				self.skip_line_breaks();
+			}
 		}
 
 		// TODO: error if 0 cases

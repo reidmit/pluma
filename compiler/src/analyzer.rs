@@ -245,10 +245,20 @@ fn collect_dispatch_cells(expr: &ExprNode, cells: &mut Vec<DispatchCell>) {
 				collect_dispatch_cells(e, cells);
 			}
 		}
-		ExprKind::If(IfNode { subject, body, .. }) => {
+		ExprKind::If(IfNode {
+			subject,
+			body,
+			else_body,
+			..
+		}) => {
 			collect_dispatch_cells(subject, cells);
 			for e in body {
 				collect_dispatch_cells(e, cells);
+			}
+			if let Some(else_body) = else_body {
+				for e in else_body {
+					collect_dispatch_cells(e, cells);
+				}
 			}
 		}
 		ExprKind::While(WhileNode { subject, body, .. }) => {
@@ -2212,19 +2222,38 @@ impl<'compiler> Analyzer<'compiler> {
 				subject,
 				pattern,
 				body,
+				else_body,
 				..
 			}) => {
 				self.constrain_expr(subject, constraints);
 
 				self.enter_scope();
 				self.constrain_pattern(pattern, subject.ty.clone(), constraints);
+				let mut body_ty = Type::Nothing;
 				for body_expr in body.iter_mut() {
 					self.constrain_expr(body_expr, constraints);
+					body_ty = body_expr.ty.clone();
 				}
 				self.leave_scope();
 
-				// single-armed if always evaluates to nothing
-				expr.ty = Type::Nothing;
+				match else_body {
+					Some(else_body) => {
+						// With `else`, the if is a value expression: both branch
+						// types must agree, and the if takes that type.
+						let mut else_ty = Type::Nothing;
+						for else_expr in else_body.iter_mut() {
+							self.constrain_expr(else_expr, constraints);
+							else_ty = else_expr.ty.clone();
+						}
+						expr.ty = self.new_type_var();
+						constraints.push(eq_constraint(expr.ty.clone(), body_ty).at(expr.range));
+						constraints.push(eq_constraint(expr.ty.clone(), else_ty).at(expr.range));
+					}
+					None => {
+						// Single-armed if always evaluates to nothing.
+						expr.ty = Type::Nothing;
+					}
+				}
 			}
 
 			ExprKind::While(WhileNode {
@@ -3120,10 +3149,20 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 			}
 
-			ExprKind::If(IfNode { subject, body, .. }) => {
+			ExprKind::If(IfNode {
+				subject,
+				body,
+				else_body,
+				..
+			}) => {
 				self.annotate_expr(subject, subst);
 				for body_expr in body.iter_mut() {
 					self.annotate_expr(body_expr, subst);
+				}
+				if let Some(else_body) = else_body {
+					for else_expr in else_body.iter_mut() {
+						self.annotate_expr(else_expr, subst);
+					}
 				}
 			}
 

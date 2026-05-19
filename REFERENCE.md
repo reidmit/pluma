@@ -233,13 +233,14 @@ imports are cycle-checked.
 
 ## if expressions
 
-single-armed pattern matching
+single-armed pattern matching with an optional `else` arm
 
 not limited to booleans!
 
 for multiple cases, use when
 
-always evaluates to `nothing`
+without `else` it evaluates to `nothing`; with `else` it evaluates to the
+common type of both branches
 
 ```
 if some-value is 47 {
@@ -250,16 +251,22 @@ if some-animal is dog name {
   print "it's a dog called $(name)"
 }
 
+# `else` runs when the pattern doesn't match
 if result is ok value {
   print "success! got $(value)"
+} else {
+  print "something went wrong"
 }
+
+# used as a value
+let label = if n is some v { "got $(to-string v)" } else { "none" }
 ```
 
 ## when expressions
 
 must be exhaustive! all cases must be covered
 
-can use `is _` as a catch-all, "else" case
+`else` is the catch-all branch (equivalent to `is _`); use whichever reads better
 
 evaluates to value of first matching case
 
@@ -268,7 +275,7 @@ all cases must have the same type
 ```
 when some-value is 47 {
   print "ok cool"
-} is _ {
+} else {
   print "it's something else"
 }
 

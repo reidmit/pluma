@@ -1,0 +1,20 @@
+# `if X is P { ... } else { ... }` as a value expression: both branches must
+# agree on type. Used here as a function's tail and as a sub-expression.
+
+def clamp fun n lo hi {
+  if (n < lo) is true {
+    lo
+  } else {
+    if (n > hi) is true { hi } else { n }
+  }
+}
+
+def main fun {
+  print (clamp 5 0 10)
+  print (clamp (0 - 3) 0 10)
+  print (clamp 15 0 10)
+
+  # As a sub-expression inside arithmetic
+  let bonus = if (3 > 1) is true { 100 } else { 0 }
+  print (bonus + 1)
+}

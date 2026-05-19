@@ -1282,6 +1282,7 @@ fn emit_expr_with_parents(
 			subject,
 			pattern,
 			body,
+			else_body,
 			..
 		}) => {
 			emit_if(
@@ -1294,7 +1295,9 @@ fn emit_expr_with_parents(
 				subject,
 				pattern,
 				body,
+				else_body.as_deref(),
 				range,
+				tail,
 			)?;
 		}
 		ExprKind::When(WhenNode { subject, cases, .. }) => {
@@ -1845,11 +1848,15 @@ fn emit_if(
 	subject: &ExprNode,
 	pattern: &PatternNode,
 	body: &[ExprNode],
+	else_body: Option<&[ExprNode]>,
 	range: Range,
+	tail: bool,
 ) -> Result<(), String> {
 	// `if X is P { body }` — match, run body, else skip. Always evaluates
-	// to nothing — so the body's expressions are never in tail position
-	// (their values get popped).
+	// to nothing if there's no else — so the body's expressions are never
+	// in tail position (their values get popped). With `else`, the if is
+	// a value expression: each branch's last expression stays on the
+	// stack and the if takes that type.
 	emit_expr_with_parents(
 		cg,
 		current_module,
@@ -1863,28 +1870,65 @@ fn emit_if(
 	let subject_ty = subject.ty.clone();
 	scope.enter();
 	let fail_idx = emit_pattern(cg, fb, scope, &subject_ty, pattern)?;
-	for e in body {
-		emit_expr_with_parents(
-			cg,
-			current_module,
-			imports,
-			fb,
-			scope,
-			parent_scopes,
-			e,
-			false,
-		)?;
-		fb.emit(Instruction::Pop, e.range);
+	let has_else = else_body.is_some();
+	if body.is_empty() && has_else {
+		fb.emit(Instruction::LoadNothing, range);
+	} else {
+		for (i, e) in body.iter().enumerate() {
+			let is_last = i == body.len() - 1;
+			emit_expr_with_parents(
+				cg,
+				current_module,
+				imports,
+				fb,
+				scope,
+				parent_scopes,
+				e,
+				is_last && has_else && tail,
+			)?;
+			// Without `else`, every body value is discarded. With `else`,
+			// the last value is the if's result and stays on the stack.
+			if !(is_last && has_else) {
+				fb.emit(Instruction::Pop, e.range);
+			}
+		}
 	}
 	let end_jump = fb.emit(Instruction::Jump(0), range);
 	let fail_target = fb.here();
 	for fi in fail_idx {
 		fb.patch_jump(fi, fail_target);
 	}
+	match else_body {
+		Some(else_body) => {
+			if else_body.is_empty() {
+				fb.emit(Instruction::LoadNothing, range);
+			} else {
+				for (i, e) in else_body.iter().enumerate() {
+					let is_last = i == else_body.len() - 1;
+					emit_expr_with_parents(
+						cg,
+						current_module,
+						imports,
+						fb,
+						scope,
+						parent_scopes,
+						e,
+						is_last && tail,
+					)?;
+					if !is_last {
+						fb.emit(Instruction::Pop, e.range);
+					}
+				}
+			}
+		}
+		None => {}
+	}
 	let end = fb.here();
 	fb.patch_jump(end_jump, end);
 	scope.leave();
-	fb.emit(Instruction::LoadNothing, range);
+	if !has_else {
+		fb.emit(Instruction::LoadNothing, range);
+	}
 	Ok(())
 }
 

@@ -112,6 +112,9 @@ pub enum Token {
 	/// `default` keyword (default method body inside a trait body)
 	KeywordDefault(usize, usize),
 
+	/// `else` keyword (catch-all branch on `if` / `when`)
+	KeywordElse(usize, usize),
+
 	/// `enum` keyword
 	KeywordEnum(usize, usize),
 
@@ -290,6 +293,7 @@ impl Token {
 			| KeywordAs(start, end)
 			| KeywordDef(start, end)
 			| KeywordDefault(start, end)
+			| KeywordElse(start, end)
 			| KeywordEnum(start, end)
 			| KeywordFor(start, end)
 			| KeywordFun(start, end)
@@ -386,6 +390,7 @@ impl fmt::Display for Token {
 			&KeywordAs(..) => "keyword `as`",
 			&KeywordDef(..) => "keyword `def`",
 			&KeywordDefault(..) => "keyword `default`",
+			&KeywordElse(..) => "keyword `else`",
 			&KeywordEnum(..) => "keyword `enum`",
 			&KeywordFor(..) => "keyword `for`",
 			&KeywordFun(..) => "keyword `fun`",
