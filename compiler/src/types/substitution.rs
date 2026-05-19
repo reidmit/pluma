@@ -74,6 +74,8 @@ impl Substitution {
 				self.apply_to_type(key_type).into(),
 				self.apply_to_type(value_type).into(),
 			),
+
+			Type::Ref(inner_type) => Type::Ref(self.apply_to_type(inner_type).into()),
 		}
 	}
 

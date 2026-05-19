@@ -1,0 +1,25 @@
+# `ref` is auto-imported in every module — no `use core.ref` needed.
+
+def bump = fun r {
+	ref.update r fun n { n + 1 }
+}
+
+def main = fun {
+	let counter = ref.new 0
+	bump counter
+	bump counter
+	bump counter
+	print (ref.get counter)
+
+	# `set` overwrites; sharing the same cell makes writes visible
+	# through either binding.
+	let shared = counter
+	ref.set shared 100
+	print (ref.get counter)
+
+	# Reference identity: same cell compares equal, distinct cells with
+	# the same contents do not.
+	print (counter == shared)
+	let other = ref.new 100
+	print (counter == other)
+}

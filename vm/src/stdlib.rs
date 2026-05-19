@@ -48,6 +48,7 @@ pub fn native_modules() -> Vec<NativeModule> {
 		string_module(),
 		io_module(),
 		map_module(),
+		ref_module(),
 	]
 }
 
@@ -564,6 +565,47 @@ fn math_module() -> NativeModule {
 				value: Value::Float(std::f64::consts::E),
 			},
 		],
+	}
+}
+
+fn ref_module() -> NativeModule {
+	let a = || Type::Var(0);
+	let ref_a = || Type::Ref(Box::new(a()));
+	NativeModule {
+		name: "core.ref",
+		defs: vec![
+			NativeDef {
+				name: "new",
+				ty: Type::Fun(vec![a()], Box::new(ref_a())),
+				builtin: Builtin::RefNew,
+				constraints: vec![],
+			},
+			NativeDef {
+				name: "get",
+				ty: Type::Fun(vec![ref_a()], Box::new(a())),
+				builtin: Builtin::RefGet,
+				constraints: vec![],
+			},
+			NativeDef {
+				name: "set",
+				ty: Type::Fun(vec![ref_a(), a()], Box::new(Type::Nothing)),
+				builtin: Builtin::RefSet,
+				constraints: vec![],
+			},
+			NativeDef {
+				// `update r f` — read, apply f, write back. Returns nothing
+				// so call sites don't try to chain on the new value; ask
+				// `get` if you need it.
+				name: "update",
+				ty: Type::Fun(
+					vec![ref_a(), Type::Fun(vec![a()], Box::new(a()))],
+					Box::new(Type::Nothing),
+				),
+				builtin: Builtin::RefUpdate,
+				constraints: vec![],
+			},
+		],
+		constants: vec![],
 	}
 }
 

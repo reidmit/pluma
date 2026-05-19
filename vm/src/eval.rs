@@ -5,6 +5,7 @@
 use crate::builtin::Builtin;
 use crate::value::{values_eq, MapData, Value, VariantData};
 use crate::vm::{RuntimeError, VM};
+use std::cell::RefCell;
 use std::rc::Rc;
 
 // Construct a prelude `ordering` variant from a `std::cmp::Ordering`.
@@ -812,6 +813,40 @@ pub fn call_builtin(vm: &mut VM, b: Builtin, args: Vec<Value>) -> Result<Value, 
 				buckets: new_buckets,
 			})))
 		}
+		RefNew => {
+			debug_assert_eq!(args.len(), 1, "`ref.new` arity");
+			let inner = args.into_iter().next().unwrap();
+			Ok(Value::Ref(Rc::new(RefCell::new(inner))))
+		}
+		RefGet => {
+			debug_assert_eq!(args.len(), 1, "`ref.get` arity");
+			let cell = expect_ref(&args[0], "get");
+			Ok(cell.borrow().clone())
+		}
+		RefSet => {
+			debug_assert_eq!(args.len(), 2, "`ref.set` arity");
+			let mut it = args.into_iter();
+			let r = it.next().unwrap();
+			let v = it.next().unwrap();
+			let cell = expect_ref_owned(r, "set");
+			*cell.borrow_mut() = v;
+			Ok(Value::Nothing)
+		}
+		RefUpdate => {
+			// `update r f` — read once, apply, write back. We release the
+			// borrow before calling `f` so user code holding the same ref
+			// can read it freely; only the final write reborrows.
+			debug_assert_eq!(args.len(), 2, "`ref.update` arity");
+			let mut it = args.into_iter();
+			let r = it.next().unwrap();
+			let fn_arg = it.next().unwrap();
+			let cell = expect_ref_owned(r, "update");
+			let current = cell.borrow().clone();
+			let next = invoke(vm, fn_arg, vec![current])?;
+			*cell.borrow_mut() = next;
+			Ok(Value::Nothing)
+		}
+
 		MapFold => {
 			// args = [m, init, fn]. fn : b -> k -> v -> b.
 			debug_assert_eq!(args.len(), 3, "`map.fold` arity");
@@ -843,6 +878,20 @@ fn call_hash(vm: &mut VM, dict: &Value, key: &Value) -> Result<i64, RuntimeError
 	match invoke(vm, hash_fn, vec![key.clone()])? {
 		Value::Int(h) => Ok(h),
 		_ => unreachable!("hash dict: hash method returned non-int"),
+	}
+}
+
+fn expect_ref<'a>(v: &'a Value, name: &str) -> &'a Rc<RefCell<Value>> {
+	match v {
+		Value::Ref(cell) => cell,
+		_ => unreachable!("`ref.{}`: expected ref", name),
+	}
+}
+
+fn expect_ref_owned(v: Value, name: &str) -> Rc<RefCell<Value>> {
+	match v {
+		Value::Ref(cell) => cell,
+		_ => unreachable!("`ref.{}`: expected ref", name),
 	}
 }
 

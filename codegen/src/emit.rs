@@ -254,11 +254,18 @@ impl CodeGen {
 
 	fn compile_module(&mut self, module_name: &str, ast: &ModuleNode) -> Result<(), String> {
 		// Build the module's imports map (local_name -> qualified_module).
-		let imports: HashMap<String, String> = ast
+		// Mirrors the analyzer's view: explicit `use` declarations, plus
+		// any auto-imported native modules that the user didn't shadow.
+		let mut imports: HashMap<String, String> = ast
 			.uses
 			.iter()
 			.map(|u| (u.local_name().name.clone(), u.module_name()))
 			.collect();
+		for (full_name, local_name) in compiler::AUTO_IMPORTS {
+			imports
+				.entry(local_name.to_string())
+				.or_insert_with(|| full_name.to_string());
+		}
 
 		// Stash enum_variants from this module's enum defs into the Program.
 		// (Already collected into self.enum_variants; flush into program for

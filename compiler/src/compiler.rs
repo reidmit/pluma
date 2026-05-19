@@ -7,6 +7,11 @@ use std::collections::{HashMap, HashSet};
 use std::env;
 use std::path::{Path, PathBuf};
 
+// Native modules every user module sees without an explicit `use`. The
+// local name is what user code references it as. Codegen reads the same
+// list to mirror the analyzer's view of what's in scope.
+pub const AUTO_IMPORTS: &[(&str, &str)] = &[("core.ref", "ref")];
+
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub struct Compiler {
 	pub root_dir: PathBuf,
@@ -169,6 +174,23 @@ impl Compiler {
 			if let Some(exports) = self.exports_cache.get(&full_name) {
 				imports_map.insert(local_name.clone(), exports.clone());
 				import_qualified.insert(local_name, full_name);
+			}
+		}
+
+		// Auto-imported modules: bound under a bare name in every user
+		// module without an explicit `use`. Currently just `core.ref` →
+		// `ref` so mutable cells are reachable without ceremony. User
+		// code can shadow by binding `ref` to something else via `use`.
+		for (full_name, local_name) in AUTO_IMPORTS {
+			if imports_map.contains_key(*local_name) {
+				continue;
+			}
+			if let Some(exports) = self.native_modules.get(*full_name).cloned() {
+				self.exports_cache
+					.entry(full_name.to_string())
+					.or_insert_with(|| exports.clone());
+				imports_map.insert(local_name.to_string(), exports);
+				import_qualified.insert(local_name.to_string(), full_name.to_string());
 			}
 		}
 

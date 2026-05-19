@@ -107,4 +107,12 @@ pub enum Builtin {
 	MapMap,
 	MapFilter,
 	MapFold,
+	// Mutable-cell builtins (`core.ref`). `new` allocates a fresh
+	// `Rc<RefCell<Value>>`; `get`/`set`/`update` operate on the cell in
+	// place. Identity is preserved across reads — calling `get` on the
+	// same ref twice returns the same cell-backed value.
+	RefNew,
+	RefGet,
+	RefSet,
+	RefUpdate,
 }

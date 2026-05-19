@@ -1,0 +1,189 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/ref-types/main.pa) {
+    comments: {
+        0: " Type-level inference checks for `ref`. `ref.new` returns `ref a` with",
+        1: " `a` resolved from the argument; `ref.get` returns the inner type;",
+        2: " `ref.set` / `ref.update` return `nothing`.",
+    },
+    ast: Some(
+        module(4:0-23:1) [
+            def(4:0-4:24) :: nothing {
+                name: ident(4:4-4:12) `int-cell`,
+                kind: expr(4:15-4:24) :: ref int {
+                    kind: call(4:15-4:24) {
+                        callee: expr(4:15-4:22) :: 't4 -> ref 't4 {
+                            kind: field-access {
+                                receiver: expr(4:15-4:18) :: ? {
+                                    kind: ident(4:15-4:18) `ref`,
+                                },
+                                field: ident(4:19-4:22) `new`,
+                            },
+                        },
+                        args: [
+                            expr(4:23-4:24) :: int {
+                                kind: literal(4:23-4:24) int 0,
+                            },
+                        ],
+                    },
+                },
+            },
+            def(5:0-5:27) :: nothing {
+                name: ident(5:4-5:12) `str-cell`,
+                kind: expr(5:15-5:27) :: ref string {
+                    kind: call(5:15-5:27) {
+                        callee: expr(5:15-5:22) :: 't6 -> ref 't6 {
+                            kind: field-access {
+                                receiver: expr(5:15-5:18) :: ? {
+                                    kind: ident(5:15-5:18) `ref`,
+                                },
+                                field: ident(5:19-5:22) `new`,
+                            },
+                        },
+                        args: [
+                            expr(5:24-5:27) :: string {
+                                kind: literal(5:24-5:27) string "hi",
+                            },
+                        ],
+                    },
+                },
+            },
+            def(7:0-9:1) :: nothing {
+                name: ident(7:4-7:12) `read-int`,
+                kind: expr(7:15-9:1) :: nothing -> int {
+                    kind: fun(7:15-9:1) {
+                        params: [],
+                        body: [
+                            expr(8:1-8:17) :: int {
+                                kind: call(8:1-8:17) {
+                                    callee: expr(8:1-8:8) :: (ref 't9) -> 't9 {
+                                        kind: field-access {
+                                            receiver: expr(8:1-8:4) :: ? {
+                                                kind: ident(8:1-8:4) `ref`,
+                                            },
+                                            field: ident(8:5-8:8) `get`,
+                                        },
+                                    },
+                                    args: [
+                                        expr(8:9-8:17) :: ref int {
+                                            kind: ident(8:9-8:17) `int-cell`,
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+            def(11:0-13:1) :: nothing {
+                name: ident(11:4-11:13) `write-int`,
+                kind: expr(11:16-13:1) :: nothing -> nothing {
+                    kind: fun(11:16-13:1) {
+                        params: [],
+                        body: [
+                            expr(12:1-12:19) :: nothing {
+                                kind: call(12:1-12:19) {
+                                    callee: expr(12:1-12:8) :: (ref 't13) 't13 -> nothing {
+                                        kind: field-access {
+                                            receiver: expr(12:1-12:4) :: ? {
+                                                kind: ident(12:1-12:4) `ref`,
+                                            },
+                                            field: ident(12:5-12:8) `set`,
+                                        },
+                                    },
+                                    args: [
+                                        expr(12:9-12:17) :: ref int {
+                                            kind: ident(12:9-12:17) `int-cell`,
+                                        },
+                                        expr(12:18-12:19) :: int {
+                                            kind: literal(12:18-12:19) int 5,
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+            def(15:0-17:1) :: nothing {
+                name: ident(15:4-15:12) `bump-int`,
+                kind: expr(15:15-17:1) :: nothing -> nothing {
+                    kind: fun(15:15-17:1) {
+                        params: [],
+                        body: [
+                            expr(16:1-16:36) :: nothing {
+                                kind: call(16:1-16:36) {
+                                    callee: expr(16:1-16:11) :: (ref 't17) ('t17 -> 't17) -> nothing {
+                                        kind: field-access {
+                                            receiver: expr(16:1-16:4) :: ? {
+                                                kind: ident(16:1-16:4) `ref`,
+                                            },
+                                            field: ident(16:5-16:11) `update`,
+                                        },
+                                    },
+                                    args: [
+                                        expr(16:12-16:20) :: ref int {
+                                            kind: ident(16:12-16:20) `int-cell`,
+                                        },
+                                        expr(16:21-16:36) :: int -> int {
+                                            kind: fun(16:21-16:36) {
+                                                params: [
+                                                    ident(16:25-16:26) `n` :: int,
+                                                ],
+                                                body: [
+                                                    expr(16:29-16:34) :: int {
+                                                        kind: binary op(16:31-16:32) `+` {
+                                                            left: expr(16:29-16:30) :: int {
+                                                                kind: ident(16:29-16:30) `n`,
+                                                            },
+                                                            right: expr(16:33-16:34) :: int {
+                                                                kind: literal(16:33-16:34) int 1,
+                                                            },
+                                                        },
+                                                    },
+                                                ],
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+            def(19:0-19:21) :: nothing {
+                name: ident(19:6-19:13) `counter`,
+                kind: alias type(19:14-19:21) type-ident(19:14-19:21) `ref`,
+            },
+            def(21:0-23:1) :: nothing {
+                name: ident(21:4-21:16) `make-counter`,
+                kind: expr(21:19-23:1) :: nothing -> ref int {
+                    kind: fun(21:19-23:1) {
+                        params: [],
+                        body: [
+                            expr(22:1-22:10) :: ref int {
+                                kind: call(22:1-22:10) {
+                                    callee: expr(22:1-22:8) :: 't24 -> ref 't24 {
+                                        kind: field-access {
+                                            receiver: expr(22:1-22:4) :: ? {
+                                                kind: ident(22:1-22:4) `ref`,
+                                            },
+                                            field: ident(22:5-22:8) `new`,
+                                        },
+                                    },
+                                    args: [
+                                        expr(22:9-22:10) :: int {
+                                            kind: literal(22:9-22:10) int 0,
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

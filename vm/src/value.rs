@@ -10,6 +10,7 @@
 // unsafe code. See PERF-NOTES for the eventual NaN-boxing direction.
 
 use crate::builtin::Builtin;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -38,6 +39,10 @@ pub enum Value {
 	// caller-supplied hash so lookup is O(1) average. All mutations (insert
 	// / remove) return a fresh `MapData`; Rc-sharing keeps that cheap.
 	Map(Rc<MapData>),
+	// A mutable cell. Identity-based: two `Ref` values are equal iff they
+	// point to the same underlying cell. Aliasing is intentional — passing
+	// a ref to a function lets that function observe and mutate the cell.
+	Ref(Rc<RefCell<Value>>),
 }
 
 pub struct MapData {
@@ -234,6 +239,7 @@ impl std::fmt::Display for Value {
 				}
 				write!(f, "}}")
 			}
+			Value::Ref(cell) => write!(f, "ref {}", cell.borrow()),
 		}
 	}
 }
@@ -273,6 +279,10 @@ pub fn values_eq(a: &Value, b: &Value) -> bool {
 		// Map equality is structural and order-independent: same key/value
 		// set in either order is the same map. We walk one side and look
 		// each key up in the other via its hash bucket.
+		// Refs use reference identity, not structural equality: two cells
+		// holding 5 are distinct, but a cell compared with itself is always
+		// equal regardless of contents.
+		(Value::Ref(a), Value::Ref(b)) => Rc::ptr_eq(a, b),
 		(Value::Map(a), Value::Map(b)) => {
 			if a.entries.len() != b.entries.len() {
 				return false;

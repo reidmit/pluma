@@ -24,6 +24,10 @@ pub enum Type {
 	// `hash` instance, but that constraint lives on the operations in
 	// `core.map`, not on the type itself.
 	Map(Box<Type>, Box<Type>),
+	// `Ref(inner)`. A mutable cell holding a value of type `inner`. Created
+	// via `ref.new`, read/written through `core.ref` operations. Equality
+	// on refs is reference identity, not structural.
+	Ref(Box<Type>),
 }
 
 impl Type {
@@ -48,6 +52,8 @@ impl Type {
 			Type::List(element_type) => element_type.contains_var(var),
 
 			Type::Map(key_type, value_type) => key_type.contains_var(var) || value_type.contains_var(var),
+
+			Type::Ref(inner_type) => inner_type.contains_var(var),
 
 			Type::Tuple(element_types) => {
 				for element_type in element_types {
@@ -120,6 +126,10 @@ impl Type {
 			Type::Map(key_type, value_type) => {
 				vars.extend(key_type.free_vars());
 				vars.extend(value_type.free_vars());
+			}
+
+			Type::Ref(inner_type) => {
+				vars.extend(inner_type.free_vars());
 			}
 
 			Type::Tuple(element_types) => {
@@ -236,6 +246,8 @@ impl std::fmt::Display for Type {
 				maybe_add_parens(key_type),
 				maybe_add_parens(value_type),
 			),
+
+			Type::Ref(inner_type) => write!(f, "ref {}", maybe_add_parens(inner_type)),
 
 			Type::Var(var) => {
 				// return write!(f, "'t{}", var); // temporary, i think

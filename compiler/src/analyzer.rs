@@ -161,6 +161,7 @@ fn match_types(
 			.all(|(p, t)| match_types(p, t, mapping)),
 		(List(a), List(b)) => match_types(a, b, mapping),
 		(Map(ka, va), Map(kb, vb)) => match_types(ka, kb, mapping) && match_types(va, vb, mapping),
+		(Ref(a), Ref(b)) => match_types(a, b, mapping),
 		(Tuple(a), Tuple(b)) if a.len() == b.len() => a
 			.iter()
 			.zip(b.iter())
@@ -297,6 +298,7 @@ pub fn type_defining_module(ty: &Type) -> Option<String> {
 		),
 		Type::List(_) => Some("__prelude__".into()),
 		Type::Map(_, _) => Some("__prelude__".into()),
+		Type::Ref(_) => Some("__prelude__".into()),
 		_ => None,
 	}
 }
@@ -316,6 +318,7 @@ pub fn type_to_head_key(ty: &Type) -> Option<String> {
 		Type::Enum(name, _) => Some(name.clone()),
 		Type::List(_) => Some("__list__".into()),
 		Type::Map(_, _) => Some("__map__".into()),
+		Type::Ref(_) => Some("__ref__".into()),
 		_ => None,
 	}
 }
@@ -1529,6 +1532,10 @@ impl<'compiler> Analyzer<'compiler> {
 						let v = iter.next().unwrap();
 						return Type::Map(Box::new(k), Box::new(v));
 					}
+					"ref" => {
+						let args = self.resolve_enum_args(type_ident, 1, constraints);
+						return Type::Ref(Box::new(args.into_iter().next().unwrap()));
+					}
 					_ => {
 						if let Some(binding) = self.get_type_binding(&type_ident.name) {
 							// For generic enums, the binding holds a template like
@@ -2709,6 +2716,10 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 
 			Eq(Type::List(a), Type::List(b), _) => {
+				self.unify(&[eq_constraint((**a).clone(), (**b).clone())])
+			}
+
+			Eq(Type::Ref(a), Type::Ref(b), _) => {
 				self.unify(&[eq_constraint((**a).clone(), (**b).clone())])
 			}
 
@@ -3927,6 +3938,9 @@ impl<'compiler> Analyzer<'compiler> {
 				Box::new(self.instantiate_with(key_type, mapping)),
 				Box::new(self.instantiate_with(value_type, mapping)),
 			),
+			Type::Ref(inner_type) => {
+				Type::Ref(Box::new(self.instantiate_with(inner_type, mapping)))
+			}
 		}
 	}
 }

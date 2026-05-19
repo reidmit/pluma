@@ -56,6 +56,63 @@ iteration (`keys`, `values`, `entries`, `fold`, `map`, `filter`) is in insertion
 
 see `core.map` for the full surface: `empty`, `insert`, `lookup`, `remove`, `contains-key`, `size`, `keys`, `values`, `entries`, `from-entries`, `merge`, `map`, `filter`, `fold`.
 
+## refs
+
+a `ref` is a mutable cell. it's the language's only mutation primitive — everything else is immutable. the `ref` module is auto-imported in every module; you don't write `use core.ref`.
+
+```
+let counter = ref.new 0
+ref.update counter fun n { n + 1 }    # most common form
+ref.set counter 100                   # explicit write
+print (ref.get counter)               # explicit read
+```
+
+`ref.new x` returns `ref a` (where `a` is the type of `x`). `ref.get`, `ref.set`, and `ref.update` operate on the cell:
+
+- `ref.new :: a -> ref a`
+- `ref.get :: ref a -> a`
+- `ref.set :: ref a -> a -> nothing`
+- `ref.update :: ref a -> (a -> a) -> nothing`
+
+`ref.set` and `ref.update` both return `nothing` — mutation is a statement, not an expression. if you want the new value, call `ref.get` after.
+
+equality on refs is **reference identity**: two refs are equal iff they point to the same underlying cell. two distinct cells holding the same value are not equal.
+
+```
+let a = ref.new 5
+let b = a            # same cell
+let c = ref.new 5    # distinct cell
+
+print (a == b)       # true
+print (a == c)       # false
+```
+
+passing a ref to a function lets that function observe and mutate the cell. this is the intended escape hatch: functions that mutate their arguments must take refs, so the type signature makes the effect visible.
+
+```
+def bump = fun r {
+	ref.update r fun n { n + 1 }
+}
+
+def main = fun {
+	let counter = ref.new 0
+	bump counter
+	bump counter
+	print (ref.get counter)    # 2
+}
+```
+
+`ref` works in any type position — alias bodies, record fields, function signatures.
+
+```
+alias counter ref int
+
+alias session {
+	id    :: string
+	hits  :: ref int
+}
+```
+
 ## records
 
 keyed by identifiers, no dynamic keys
@@ -219,7 +276,7 @@ a `trait` declares a set of method signatures over a type parameter. method sign
 
 ```
 trait showable a {
-  show :: fun a -> string
+  show :: a -> string
 }
 
 implement showable int {
@@ -237,8 +294,8 @@ a trait method that has a fallback body uses `def` inside the trait body (same s
 
 ```
 trait greeter a {
-  name  :: fun a -> string
-  greet :: fun a -> string
+  name  :: a -> string
+  greet :: a -> string
 
   def greet = fun x { "hello, $(name x)" }
 }

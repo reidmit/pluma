@@ -1,0 +1,24 @@
+# Type-level inference checks for `ref`. `ref.new` returns `ref a` with
+# `a` resolved from the argument; `ref.get` returns the inner type;
+# `ref.set` / `ref.update` return `nothing`.
+
+def int-cell = ref.new 0
+def str-cell = ref.new "hi"
+
+def read-int = fun {
+	ref.get int-cell
+}
+
+def write-int = fun {
+	ref.set int-cell 5
+}
+
+def bump-int = fun {
+	ref.update int-cell fun n { n + 1 }
+}
+
+alias counter ref int
+
+def make-counter = fun {
+	ref.new 0
+}
