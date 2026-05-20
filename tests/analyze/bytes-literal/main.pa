@@ -1,0 +1,3 @@
+def hello = 'hello'
+def png-header = '\x89PNG\r\n\x1a\n'
+def empty = ''

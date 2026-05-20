@@ -7,6 +7,15 @@ use crate::tokens::Token;
 use crate::types::*;
 use std::collections::{HashMap, VecDeque};
 
+fn hex_digit(byte: u8) -> Option<u8> {
+	match byte {
+		b'0'..=b'9' => Some(byte - b'0'),
+		b'a'..=b'f' => Some(byte - b'a' + 10),
+		b'A'..=b'F' => Some(byte - b'A' + 10),
+		_ => None,
+	}
+}
+
 macro_rules! current_token_is {
 	($self:ident, $tokType:path) => {
 		match $self.current_token {
@@ -485,6 +494,7 @@ impl<'a> Parser<'a> {
 			Some(Token::LeftBracket(..)) => self.parse_list(),
 			Some(Token::ForwardSlash(..)) => self.parse_regular_expression(),
 			Some(Token::StringLiteral(..)) => self.parse_string(),
+			Some(Token::BytesLiteral(..)) => self.parse_bytes(),
 			Some(Token::BoolTrue(..)) => self.parse_bool(),
 			Some(Token::BoolFalse(..)) => self.parse_bool(),
 			Some(Token::KeywordWhen(..)) => self.parse_when_expression().map(|when_node| ExprNode {
@@ -969,6 +979,14 @@ impl<'a> Parser<'a> {
 				_ => unreachable!(),
 			}),
 
+			Some(Token::BytesLiteral(..)) => self.parse_bytes().map(|expr_node| match expr_node.kind {
+				ExprKind::Literal(literal) => PatternNode {
+					range: literal.range,
+					kind: PatternKind::Literal(literal),
+				},
+				_ => unreachable!(),
+			}),
+
 			Some(Token::BoolFalse(..) | Token::BoolTrue(..)) => {
 				let expr_node = self.parse_bool()?;
 				if let ExprKind::Literal(lit_node) = expr_node.kind {
@@ -1260,6 +1278,14 @@ impl<'a> Parser<'a> {
 				ExprKind::Interpolation(parts) => PatternNode {
 					range: expr_node.range,
 					kind: PatternKind::Interpolation(parts),
+				},
+				_ => unreachable!(),
+			}),
+
+			Some(Token::BytesLiteral(..)) => self.parse_bytes().map(|expr_node| match expr_node.kind {
+				ExprKind::Literal(literal) => PatternNode {
+					range: literal.range,
+					kind: PatternKind::Literal(literal),
 				},
 				_ => unreachable!(),
 			}),
@@ -2106,6 +2132,91 @@ impl<'a> Parser<'a> {
 		}
 
 		Some(expr_node)
+	}
+
+	// Bytes literals: `'...'`. No interpolation, no nesting. Escapes
+	// recognized: \\, \', \0, \t, \r, \n, \xNN. Non-ASCII source bytes
+	// pass through unchanged (the source file's UTF-8 encoding is what
+	// lands in the literal).
+	fn parse_bytes(&mut self) -> Option<ExprNode> {
+		let (start, end) = expect_token_and_advance!(self, Token::BytesLiteral);
+		let (start_offset, end_offset) = (self.point_to_offset(start), self.point_to_offset(end));
+
+		let mut bytes: Vec<u8> = Vec::with_capacity(end_offset - start_offset);
+		let mut i = start_offset;
+		while i < end_offset {
+			let b = self.source[i];
+			if b != b'\\' {
+				bytes.push(b);
+				i += 1;
+				continue;
+			}
+			// `\` always pairs with the next byte; the tokenizer would have
+			// terminated the literal otherwise. Read the escape kind.
+			if i + 1 >= end_offset {
+				// Trailing backslash. Shouldn't reach here given the
+				// tokenizer's escape handling, but be safe.
+				return self.error(ParseError {
+					range: self.span_to_single_line_range(i, end_offset),
+					kind: ParseErrorKind::InvalidBytesEscape,
+				});
+			}
+			let esc = self.source[i + 1];
+			match esc {
+				b'\\' => bytes.push(b'\\'),
+				b'\'' => bytes.push(b'\''),
+				b'0' => bytes.push(0),
+				b't' => bytes.push(b'\t'),
+				b'r' => bytes.push(b'\r'),
+				b'n' => bytes.push(b'\n'),
+				b'x' => {
+					if i + 3 >= end_offset {
+						return self.error(ParseError {
+							range: self.span_to_single_line_range(i, end_offset),
+							kind: ParseErrorKind::InvalidHexEscape,
+						});
+					}
+					let hi = hex_digit(self.source[i + 2]);
+					let lo = hex_digit(self.source[i + 3]);
+					match (hi, lo) {
+						(Some(h), Some(l)) => bytes.push((h << 4) | l),
+						_ => {
+							return self.error(ParseError {
+								range: self.span_to_single_line_range(i, i + 4),
+								kind: ParseErrorKind::InvalidHexEscape,
+							});
+						}
+					}
+					i += 4;
+					continue;
+				}
+				_ => {
+					return self.error(ParseError {
+						range: self.span_to_single_line_range(i, i + 2),
+						kind: ParseErrorKind::InvalidBytesEscape,
+					});
+				}
+			}
+			i += 2;
+		}
+
+		// The token spans the inner content only (between the quotes).
+		// Extend by one column on each side so the range covers both
+		// quotes, matching how string literal ranges work.
+		let range_start = Point::at(start.line, start.col.saturating_sub(1));
+		let range_end = Point::at(end.line, end.col + 1);
+		let range = Range::between(range_start, range_end);
+
+		Some(ExprNode {
+			range,
+			ty: Type::Unknown,
+			trait_dispatch: None,
+			dispatch_sink: None,
+			kind: ExprKind::Literal(LiteralNode {
+				range,
+				kind: LiteralKind::Bytes(bytes),
+			}),
+		})
 	}
 
 	fn parse_type_identifier(&mut self) -> Option<TypeIdentifierNode> {

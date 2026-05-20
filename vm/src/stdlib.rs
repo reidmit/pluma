@@ -46,6 +46,7 @@ pub fn native_modules() -> Vec<NativeModule> {
 		list_module(),
 		math_module(),
 		string_module(),
+		bytes_module(),
 		io_module(),
 		map_module(),
 		ref_module(),
@@ -340,6 +341,136 @@ fn string_module() -> NativeModule {
 				builtin: Builtin::StringToFloat,
 				constraints: vec![],
 			},
+			NativeDef {
+				name: "to-bytes",
+				ty: Type::Fun(vec![Type::String], Box::new(Type::Bytes)),
+				builtin: Builtin::StringToBytes,
+				constraints: vec![],
+			},
+		],
+		constants: vec![],
+	}
+}
+
+fn bytes_module() -> NativeModule {
+	let bytes_to_bytes = || Type::Fun(vec![Type::Bytes], Box::new(Type::Bytes));
+	let bytes_to_int = || Type::Fun(vec![Type::Bytes], Box::new(Type::Int));
+	let bytes_to_bool = || Type::Fun(vec![Type::Bytes], Box::new(Type::Bool));
+	let two_bytes_to_bool = || Type::Fun(vec![Type::Bytes, Type::Bytes], Box::new(Type::Bool));
+	let list_bytes = || Type::List(Box::new(Type::Bytes));
+	let option_int = || Type::Enum("__prelude__.option".to_string(), vec![Type::Int]);
+	let result_bytes_str = || {
+		Type::Enum(
+			"__prelude__.result".to_string(),
+			vec![Type::Bytes, Type::String],
+		)
+	};
+	let result_str_str = || {
+		Type::Enum(
+			"__prelude__.result".to_string(),
+			vec![Type::String, Type::String],
+		)
+	};
+
+	NativeModule {
+		name: "core.bytes",
+		defs: vec![
+			NativeDef {
+				name: "length",
+				ty: bytes_to_int(),
+				builtin: Builtin::BytesLength,
+				constraints: vec![],
+			},
+			NativeDef {
+				name: "is-empty",
+				ty: bytes_to_bool(),
+				builtin: Builtin::BytesIsEmpty,
+				constraints: vec![],
+			},
+			NativeDef {
+				name: "at",
+				ty: Type::Fun(vec![Type::Bytes, Type::Int], Box::new(option_int())),
+				builtin: Builtin::BytesAt,
+				constraints: vec![],
+			},
+			NativeDef {
+				name: "concat",
+				ty: Type::Fun(vec![Type::Bytes, Type::Bytes], Box::new(Type::Bytes)),
+				builtin: Builtin::BytesConcat,
+				constraints: vec![],
+			},
+			NativeDef {
+				name: "slice",
+				ty: Type::Fun(
+					vec![Type::Bytes, Type::Int, Type::Int],
+					Box::new(Type::Bytes),
+				),
+				builtin: Builtin::BytesSlice,
+				constraints: vec![],
+			},
+			NativeDef {
+				name: "contains",
+				ty: two_bytes_to_bool(),
+				builtin: Builtin::BytesContains,
+				constraints: vec![],
+			},
+			NativeDef {
+				name: "starts-with",
+				ty: two_bytes_to_bool(),
+				builtin: Builtin::BytesStartsWith,
+				constraints: vec![],
+			},
+			NativeDef {
+				name: "ends-with",
+				ty: two_bytes_to_bool(),
+				builtin: Builtin::BytesEndsWith,
+				constraints: vec![],
+			},
+			NativeDef {
+				name: "repeat",
+				ty: Type::Fun(vec![Type::Bytes, Type::Int], Box::new(Type::Bytes)),
+				builtin: Builtin::BytesRepeat,
+				constraints: vec![],
+			},
+			NativeDef {
+				name: "reverse",
+				ty: bytes_to_bytes(),
+				builtin: Builtin::BytesReverse,
+				constraints: vec![],
+			},
+			NativeDef {
+				name: "to-list",
+				ty: Type::Fun(vec![Type::Bytes], Box::new(Type::List(Box::new(Type::Int)))),
+				builtin: Builtin::BytesToList,
+				constraints: vec![],
+			},
+			NativeDef {
+				name: "from-list",
+				ty: Type::Fun(
+					vec![Type::List(Box::new(Type::Int))],
+					Box::new(result_bytes_str()),
+				),
+				builtin: Builtin::BytesFromList,
+				constraints: vec![],
+			},
+			NativeDef {
+				name: "join",
+				ty: Type::Fun(vec![list_bytes(), Type::Bytes], Box::new(Type::Bytes)),
+				builtin: Builtin::BytesJoin,
+				constraints: vec![],
+			},
+			NativeDef {
+				name: "split",
+				ty: Type::Fun(vec![Type::Bytes, Type::Bytes], Box::new(list_bytes())),
+				builtin: Builtin::BytesSplit,
+				constraints: vec![],
+			},
+			NativeDef {
+				name: "to-string",
+				ty: Type::Fun(vec![Type::Bytes], Box::new(result_str_str())),
+				builtin: Builtin::BytesToString,
+				constraints: vec![],
+			},
 		],
 		constants: vec![],
 	}
@@ -455,6 +586,60 @@ fn io_module() -> NativeModule {
 				name: "exit",
 				ty: Type::Fun(vec![Type::Int], Box::new(a())),
 				builtin: Builtin::IoExit,
+				constraints: vec![],
+			},
+			NativeDef {
+				name: "read-all-bytes",
+				ty: Type::Fun(
+					vec![Type::Nothing],
+					Box::new(Type::Enum(
+						"__prelude__.result".to_string(),
+						vec![Type::Bytes, Type::String],
+					)),
+				),
+				builtin: Builtin::IoReadAllBytes,
+				constraints: vec![],
+			},
+			NativeDef {
+				name: "read-file-bytes",
+				ty: Type::Fun(
+					vec![Type::String],
+					Box::new(Type::Enum(
+						"__prelude__.result".to_string(),
+						vec![Type::Bytes, Type::String],
+					)),
+				),
+				builtin: Builtin::IoReadFileBytes,
+				constraints: vec![],
+			},
+			NativeDef {
+				name: "write-file-bytes",
+				ty: Type::Fun(
+					vec![Type::String, Type::Bytes],
+					Box::new(result_unit_str()),
+				),
+				builtin: Builtin::IoWriteFileBytes,
+				constraints: vec![],
+			},
+			NativeDef {
+				name: "append-file-bytes",
+				ty: Type::Fun(
+					vec![Type::String, Type::Bytes],
+					Box::new(result_unit_str()),
+				),
+				builtin: Builtin::IoAppendFileBytes,
+				constraints: vec![],
+			},
+			NativeDef {
+				name: "write-bytes",
+				ty: Type::Fun(vec![Type::Bytes], Box::new(Type::Bytes)),
+				builtin: Builtin::IoWriteBytes,
+				constraints: vec![],
+			},
+			NativeDef {
+				name: "write-err-bytes",
+				ty: Type::Fun(vec![Type::Bytes], Box::new(Type::Bytes)),
+				builtin: Builtin::IoWriteErrBytes,
 				constraints: vec![],
 			},
 		],

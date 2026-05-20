@@ -83,6 +83,20 @@ impl InputSource {
 			}
 		}
 	}
+
+	// Drain the source as raw bytes. Used by `io.read-all-bytes`: skips the
+	// UTF-8 decode that `read_all` does so binary stdin survives intact.
+	pub fn read_all_bytes(&self) -> std::io::Result<Vec<u8>> {
+		use std::io::Read;
+		match self {
+			InputSource::Stdin => {
+				let mut buf = Vec::new();
+				std::io::stdin().read_to_end(&mut buf)?;
+				Ok(buf)
+			}
+			InputSource::Buffer(b) => Ok(std::mem::take(&mut *b.borrow_mut())),
+		}
+	}
 }
 
 pub enum OutputSink {
@@ -117,6 +131,26 @@ impl OutputSink {
 			}
 			OutputSink::Buffer(buf) => {
 				buf.borrow_mut().extend_from_slice(s.as_bytes());
+			}
+		}
+	}
+
+	// Raw byte write — no Display formatting, no trailing newline. Used by
+	// `io.write-bytes` / `io.write-err-bytes` so callers can emit binary
+	// data without going through UTF-8.
+	pub fn write_bytes(&self, b: &[u8]) {
+		use std::io::Write;
+		match self {
+			OutputSink::Stdout => {
+				let _ = std::io::stdout().write_all(b);
+				let _ = std::io::stdout().flush();
+			}
+			OutputSink::Stderr => {
+				let _ = std::io::stderr().write_all(b);
+				let _ = std::io::stderr().flush();
+			}
+			OutputSink::Buffer(buf) => {
+				buf.borrow_mut().extend_from_slice(b);
 			}
 		}
 	}
@@ -289,6 +323,10 @@ impl VM {
 			Instruction::LoadConst(idx) => {
 				let s = self.program.constants[idx as usize].clone();
 				self.stack.push(Value::String(s));
+			}
+			Instruction::LoadBytes(idx) => {
+				let b = self.program.bytes_constants[idx as usize].clone();
+				self.stack.push(Value::Bytes(b));
 			}
 			Instruction::LoadInt(n) => self.stack.push(Value::Int(n)),
 			Instruction::LoadFloat(n) => self.stack.push(Value::Float(n)),
@@ -518,6 +556,13 @@ impl VM {
 				let needle = self.program.constants[idx as usize].clone();
 				self.match_literal(on_fail, |v| match v {
 					Value::String(s) => s.as_ref() == needle.as_ref(),
+					_ => false,
+				})?
+			}
+			Instruction::MatchBytes(idx, on_fail) => {
+				let needle = self.program.bytes_constants[idx as usize].clone();
+				self.match_literal(on_fail, |v| match v {
+					Value::Bytes(b) => b.as_ref() == needle.as_ref(),
 					_ => false,
 				})?
 			}
@@ -1058,6 +1103,7 @@ fn opcode_name(i: &Instruction) -> &'static str {
 		Pop => "Pop",
 		Dup => "Dup",
 		LoadConst(_) => "LoadConst",
+		LoadBytes(_) => "LoadBytes",
 		LoadInt(_) => "LoadInt",
 		LoadFloat(_) => "LoadFloat",
 		LoadBool(_) => "LoadBool",
@@ -1085,6 +1131,7 @@ fn opcode_name(i: &Instruction) -> &'static str {
 		MatchInt(_, _) => "MatchInt",
 		MatchFloat(_, _) => "MatchFloat",
 		MatchString(_, _) => "MatchString",
+		MatchBytes(_, _) => "MatchBytes",
 		MatchBool(_, _) => "MatchBool",
 		MatchNothing(_) => "MatchNothing",
 		MatchVariant { .. } => "MatchVariant",

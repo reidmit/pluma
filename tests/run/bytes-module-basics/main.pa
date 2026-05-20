@@ -1,0 +1,20 @@
+use core.bytes
+
+def main = fun {
+	let b = 'hello'
+	print (bytes.length b)
+	print (bytes.is-empty b)
+	print (bytes.is-empty '')
+
+	when (bytes.at b 0) is some n { print n } is none { print -1 }
+	when (bytes.at b 4) is some n { print n } is none { print -1 }
+	when (bytes.at b 99) is some n { print n } is none { print -1 }
+
+	print (bytes.concat 'foo' 'bar')
+	print (bytes.slice b 1 4)
+	print (bytes.slice b 0 99)
+	print (bytes.slice b 3 1)
+	print (bytes.repeat 'ab' 3)
+	print (bytes.reverse 'abcde')
+	print (bytes.to-list 'A\x01\xff')
+}

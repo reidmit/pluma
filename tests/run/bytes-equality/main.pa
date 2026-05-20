@@ -1,0 +1,6 @@
+def main = fun {
+	print ('abc' == 'abc')
+	print ('abc' == 'abd')
+	print ('\x00\x01' == '\x00\x01')
+	print ('' == '')
+}

@@ -1,0 +1,5 @@
+def main = fun {
+	print 'hello'
+	print ''
+	print '\x89PNG\r\n\x1a\n'
+}

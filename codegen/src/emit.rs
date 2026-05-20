@@ -70,6 +70,11 @@ pub fn compile(compiler: &compiler::Compiler) -> Result<Program, String> {
 		"ord@string",
 		Value::Dict(Rc::new(vec![Value::Builtin(Builtin::StringCompare)])),
 	);
+	cg.add_evaluated_global(
+		"__prelude__",
+		"ord@bytes",
+		Value::Dict(Rc::new(vec![Value::Builtin(Builtin::BytesCompare)])),
+	);
 	// `hash` trait: one method (`hash`), four concrete instances.
 	cg.add_evaluated_global(
 		"__prelude__",
@@ -85,6 +90,11 @@ pub fn compile(compiler: &compiler::Compiler) -> Result<Program, String> {
 		"__prelude__",
 		"hash@string",
 		Value::Dict(Rc::new(vec![Value::Builtin(Builtin::StringHash)])),
+	);
+	cg.add_evaluated_global(
+		"__prelude__",
+		"hash@bytes",
+		Value::Dict(Rc::new(vec![Value::Builtin(Builtin::BytesHash)])),
 	);
 	cg.add_evaluated_global(
 		"__prelude__",
@@ -176,6 +186,9 @@ struct CodeGen {
 	program: Program,
 	// Constants pool dedup.
 	const_lookup: HashMap<String, u32>,
+	// Bytes pool dedup. Keyed by the raw byte sequence; identical literals
+	// share an entry.
+	bytes_lookup: HashMap<Vec<u8>, u32>,
 	// (module, def_name) -> GlobalIdx
 	global_lookup: HashMap<(String, String), u32>,
 	// Per-module enums: qualified_enum -> [(variant_name, arity)]
@@ -188,6 +201,7 @@ impl CodeGen {
 			program: Program {
 				functions: Vec::new(),
 				constants: Vec::new(),
+				bytes_constants: Vec::new(),
 				regex_patterns: Vec::new(),
 				globals: Vec::new(),
 				field_lists: Vec::new(),
@@ -196,6 +210,7 @@ impl CodeGen {
 				entry: 0,
 			},
 			const_lookup: HashMap::new(),
+			bytes_lookup: HashMap::new(),
 			global_lookup: HashMap::new(),
 			enum_variants: HashMap::new(),
 		}
@@ -208,6 +223,16 @@ impl CodeGen {
 		let idx = self.program.constants.len() as u32;
 		self.program.constants.push(Rc::new(s.to_string()));
 		self.const_lookup.insert(s.to_string(), idx);
+		idx
+	}
+
+	fn intern_bytes(&mut self, b: &[u8]) -> u32 {
+		if let Some(&idx) = self.bytes_lookup.get(b) {
+			return idx;
+		}
+		let idx = self.program.bytes_constants.len() as u32;
+		self.program.bytes_constants.push(Rc::new(b.to_vec()));
+		self.bytes_lookup.insert(b.to_vec(), idx);
 		idx
 	}
 
@@ -686,6 +711,7 @@ impl FunctionBuilder {
 			Instruction::MatchInt(_, o)
 			| Instruction::MatchFloat(_, o)
 			| Instruction::MatchString(_, o)
+			| Instruction::MatchBytes(_, o)
 			| Instruction::MatchBool(_, o)
 			| Instruction::MatchNothing(o)
 			| Instruction::MatchVariant { on_fail: o, .. }
@@ -1458,6 +1484,10 @@ fn emit_literal_with_cg(
 		LiteralKind::String(s) => {
 			let idx = cg.intern(s);
 			fb.emit(Instruction::LoadConst(idx), range);
+		}
+		LiteralKind::Bytes(b) => {
+			let idx = cg.intern_bytes(b);
+			fb.emit(Instruction::LoadBytes(idx), range);
 		}
 		LiteralKind::FloatDecimal(f) => {
 			fb.emit(Instruction::LoadFloat(*f), range);
@@ -2259,6 +2289,10 @@ fn emit_pattern(
 				LiteralKind::String(s) => {
 					let idx = cg.intern(s);
 					fb.emit(Instruction::MatchString(idx, 0), range)
+				}
+				LiteralKind::Bytes(b) => {
+					let idx = cg.intern_bytes(b);
+					fb.emit(Instruction::MatchBytes(idx, 0), range)
 				}
 				LiteralKind::FloatDecimal(f) => fb.emit(Instruction::MatchFloat(*f, 0), range),
 				LiteralKind::IntDecimal(n)

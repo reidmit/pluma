@@ -535,6 +535,195 @@ pub fn call_builtin(vm: &mut VM, b: Builtin, args: Vec<Value>) -> Result<Value, 
 				Err(e) => result_err(Value::String(Rc::new(e.to_string()))),
 			})
 		}
+		StringToBytes => {
+			let s = expect_string(&args, "to-bytes");
+			Ok(Value::Bytes(Rc::new(s.as_bytes().to_vec())))
+		}
+		BytesLength => {
+			let b = expect_bytes(&args, "length");
+			Ok(Value::Int(b.len() as i64))
+		}
+		BytesIsEmpty => {
+			let b = expect_bytes(&args, "is-empty");
+			Ok(Value::Bool(b.is_empty()))
+		}
+		BytesAt => {
+			debug_assert_eq!(args.len(), 2, "`bytes.at` arity");
+			match (&args[0], &args[1]) {
+				(Value::Bytes(b), Value::Int(i)) => Ok(option_value(
+					usize::try_from(*i)
+						.ok()
+						.and_then(|idx| b.get(idx).copied())
+						.map(|byte| Value::Int(byte as i64)),
+				)),
+				_ => unreachable!("`bytes.at`: expected (bytes, int)"),
+			}
+		}
+		BytesConcat => {
+			debug_assert_eq!(args.len(), 2, "`bytes.concat` arity");
+			match (&args[0], &args[1]) {
+				(Value::Bytes(a), Value::Bytes(b)) => {
+					let mut out = Vec::with_capacity(a.len() + b.len());
+					out.extend_from_slice(a);
+					out.extend_from_slice(b);
+					Ok(Value::Bytes(Rc::new(out)))
+				}
+				_ => unreachable!("`bytes.concat`: expected (bytes, bytes)"),
+			}
+		}
+		BytesSlice => {
+			debug_assert_eq!(args.len(), 3, "`bytes.slice` arity");
+			match (&args[0], &args[1], &args[2]) {
+				(Value::Bytes(b), Value::Int(start), Value::Int(end)) => {
+					// Negative or beyond-the-end indices clamp to bounds.
+					// Order is preserved: end < start collapses to empty.
+					let len = b.len();
+					let s = (*start).max(0) as usize;
+					let s = s.min(len);
+					let e = (*end).max(0) as usize;
+					let e = e.min(len).max(s);
+					Ok(Value::Bytes(Rc::new(b[s..e].to_vec())))
+				}
+				_ => unreachable!("`bytes.slice`: expected (bytes, int, int)"),
+			}
+		}
+		BytesContains => {
+			debug_assert_eq!(args.len(), 2, "`bytes.contains` arity");
+			match (&args[0], &args[1]) {
+				(Value::Bytes(haystack), Value::Bytes(needle)) => {
+					Ok(Value::Bool(bytes_contains(haystack, needle)))
+				}
+				_ => unreachable!("`bytes.contains`: expected (bytes, bytes)"),
+			}
+		}
+		BytesStartsWith => {
+			debug_assert_eq!(args.len(), 2, "`bytes.starts-with` arity");
+			match (&args[0], &args[1]) {
+				(Value::Bytes(b), Value::Bytes(prefix)) => Ok(Value::Bool(b.starts_with(prefix))),
+				_ => unreachable!("`bytes.starts-with`: expected (bytes, bytes)"),
+			}
+		}
+		BytesEndsWith => {
+			debug_assert_eq!(args.len(), 2, "`bytes.ends-with` arity");
+			match (&args[0], &args[1]) {
+				(Value::Bytes(b), Value::Bytes(suffix)) => Ok(Value::Bool(b.ends_with(suffix))),
+				_ => unreachable!("`bytes.ends-with`: expected (bytes, bytes)"),
+			}
+		}
+		BytesRepeat => {
+			debug_assert_eq!(args.len(), 2, "`bytes.repeat` arity");
+			match (&args[0], &args[1]) {
+				(Value::Bytes(b), Value::Int(n)) => {
+					let n = (*n).max(0) as usize;
+					let mut out = Vec::with_capacity(b.len() * n);
+					for _ in 0..n {
+						out.extend_from_slice(b);
+					}
+					Ok(Value::Bytes(Rc::new(out)))
+				}
+				_ => unreachable!("`bytes.repeat`: expected (bytes, int)"),
+			}
+		}
+		BytesReverse => {
+			let b = expect_bytes(&args, "reverse");
+			let mut out = b.as_ref().clone();
+			out.reverse();
+			Ok(Value::Bytes(Rc::new(out)))
+		}
+		BytesToList => {
+			let b = expect_bytes(&args, "to-list");
+			let xs: Vec<Value> = b.iter().map(|&byte| Value::Int(byte as i64)).collect();
+			Ok(Value::List(Rc::new(xs)))
+		}
+		BytesFromList => {
+			let xs = expect_list(&args, "from-list");
+			let mut out = Vec::with_capacity(xs.len());
+			for v in xs.iter() {
+				match v {
+					Value::Int(n) => {
+						if *n < 0 || *n > 255 {
+							return Ok(result_err(Value::String(Rc::new(format!(
+								"byte out of range (0..256): {}",
+								n
+							)))));
+						}
+						out.push(*n as u8);
+					}
+					_ => unreachable!("`bytes.from-list`: list element must be int"),
+				}
+			}
+			Ok(result_ok(Value::Bytes(Rc::new(out))))
+		}
+		BytesJoin => {
+			debug_assert_eq!(args.len(), 2, "`bytes.join` arity");
+			let xs = match &args[0] {
+				Value::List(xs) => xs,
+				_ => unreachable!("`bytes.join`: expected list"),
+			};
+			let sep = match &args[1] {
+				Value::Bytes(s) => s,
+				_ => unreachable!("`bytes.join`: expected bytes separator"),
+			};
+			let parts: Vec<&[u8]> = xs
+				.iter()
+				.map(|v| match v {
+					Value::Bytes(b) => b.as_slice(),
+					_ => unreachable!("`bytes.join`: list element must be bytes"),
+				})
+				.collect();
+			let mut out = Vec::new();
+			for (i, p) in parts.iter().enumerate() {
+				if i > 0 {
+					out.extend_from_slice(sep);
+				}
+				out.extend_from_slice(p);
+			}
+			Ok(Value::Bytes(Rc::new(out)))
+		}
+		BytesSplit => {
+			debug_assert_eq!(args.len(), 2, "`bytes.split` arity");
+			let b = match &args[0] {
+				Value::Bytes(b) => b,
+				_ => unreachable!("`bytes.split`: expected bytes"),
+			};
+			let sep = match &args[1] {
+				Value::Bytes(s) => s,
+				_ => unreachable!("`bytes.split`: expected bytes separator"),
+			};
+			let parts: Vec<Value> = if sep.is_empty() {
+				// Empty separator: split into single-byte chunks. Parallel
+				// to `string.split s ""`.
+				b.iter()
+					.map(|&byte| Value::Bytes(Rc::new(vec![byte])))
+					.collect()
+			} else {
+				bytes_split(b, sep)
+					.into_iter()
+					.map(|chunk| Value::Bytes(Rc::new(chunk)))
+					.collect()
+			};
+			Ok(Value::List(Rc::new(parts)))
+		}
+		BytesToString => {
+			let b = expect_bytes(&args, "to-string");
+			match std::str::from_utf8(b) {
+				Ok(s) => Ok(result_ok(Value::String(Rc::new(s.to_string())))),
+				Err(e) => Ok(result_err(Value::String(Rc::new(e.to_string())))),
+			}
+		}
+		BytesCompare => match (&args[0], &args[1]) {
+			(Value::Bytes(a), Value::Bytes(b)) => Ok(ordering_variant(a.as_slice().cmp(b.as_slice()))),
+			_ => unreachable!("BytesCompare expects (bytes, bytes)"),
+		},
+		BytesHash => match &args[0] {
+			Value::Bytes(b) => {
+				use std::hash::{Hash, Hasher};
+				let mut h = std::collections::hash_map::DefaultHasher::new();
+				b.as_slice().hash(&mut h);
+				Ok(Value::Int(h.finish() as i64))
+			}
+			_ => unreachable!("BytesHash expects bytes"),
+		},
 		IoPrint => {
 			debug_assert_eq!(args.len(), 1, "`io.print` arity");
 			let arg = args.into_iter().next().unwrap();
@@ -646,6 +835,69 @@ pub fn call_builtin(vm: &mut VM, b: Builtin, args: Vec<Value>) -> Result<Value, 
 				_ => unreachable!("`exit`: expected int"),
 			};
 			std::process::exit(code);
+		}
+
+		IoReadAllBytes => {
+			// `read-all-bytes ()` — drains stdin without UTF-8 decoding.
+			debug_assert_eq!(args.len(), 1, "`read-all-bytes` arity");
+			Ok(match vm.stdin.read_all_bytes() {
+				Ok(b) => result_ok(Value::Bytes(Rc::new(b))),
+				Err(e) => result_err(Value::String(Rc::new(e.to_string()))),
+			})
+		}
+		IoReadFileBytes => {
+			let path = expect_string(&args, "read-file-bytes");
+			Ok(match std::fs::read(path.as_str()) {
+				Ok(b) => result_ok(Value::Bytes(Rc::new(b))),
+				Err(e) => result_err(Value::String(Rc::new(e.to_string()))),
+			})
+		}
+		IoWriteFileBytes => {
+			debug_assert_eq!(args.len(), 2, "`write-file-bytes` arity");
+			let (path, contents) = match (&args[0], &args[1]) {
+				(Value::String(p), Value::Bytes(c)) => (p, c),
+				_ => unreachable!("`write-file-bytes`: expected (string, bytes)"),
+			};
+			Ok(match std::fs::write(path.as_str(), contents.as_slice()) {
+				Ok(()) => result_ok(Value::Nothing),
+				Err(e) => result_err(Value::String(Rc::new(e.to_string()))),
+			})
+		}
+		IoAppendFileBytes => {
+			debug_assert_eq!(args.len(), 2, "`append-file-bytes` arity");
+			let (path, contents) = match (&args[0], &args[1]) {
+				(Value::String(p), Value::Bytes(c)) => (p, c),
+				_ => unreachable!("`append-file-bytes`: expected (string, bytes)"),
+			};
+			use std::io::Write;
+			let result = std::fs::OpenOptions::new()
+				.create(true)
+				.append(true)
+				.open(path.as_str())
+				.and_then(|mut f| f.write_all(contents.as_slice()));
+			Ok(match result {
+				Ok(()) => result_ok(Value::Nothing),
+				Err(e) => result_err(Value::String(Rc::new(e.to_string()))),
+			})
+		}
+		IoWriteBytes => {
+			// Raw byte write to stdout — no newline, no Display formatting.
+			debug_assert_eq!(args.len(), 1, "`write-bytes` arity");
+			let arg = args.into_iter().next().unwrap();
+			match &arg {
+				Value::Bytes(b) => vm.stdout.write_bytes(b),
+				_ => unreachable!("`write-bytes`: expected bytes"),
+			}
+			Ok(arg)
+		}
+		IoWriteErrBytes => {
+			debug_assert_eq!(args.len(), 1, "`write-err-bytes` arity");
+			let arg = args.into_iter().next().unwrap();
+			match &arg {
+				Value::Bytes(b) => vm.stderr.write_bytes(b),
+				_ => unreachable!("`write-err-bytes`: expected bytes"),
+			}
+			Ok(arg)
 		}
 
 		MapEmpty => {
@@ -940,6 +1192,44 @@ fn expect_string<'a>(args: &'a [Value], name: &str) -> &'a Rc<String> {
 		Value::String(s) => s,
 		_ => unreachable!("`{}`: expected string", name),
 	}
+}
+
+fn expect_bytes<'a>(args: &'a [Value], name: &str) -> &'a Rc<Vec<u8>> {
+	debug_assert_eq!(args.len(), 1, "`{}` arity", name);
+	match &args[0] {
+		Value::Bytes(b) => b,
+		_ => unreachable!("`{}`: expected bytes", name),
+	}
+}
+
+fn bytes_contains(haystack: &[u8], needle: &[u8]) -> bool {
+	if needle.is_empty() {
+		return true;
+	}
+	if needle.len() > haystack.len() {
+		return false;
+	}
+	haystack.windows(needle.len()).any(|w| w == needle)
+}
+
+// Split `b` on every occurrence of `sep`. Mirrors how Rust's
+// str::split behaves on non-empty separators, and how `string.split`
+// works for the string side. `sep.is_empty()` is handled by the caller.
+fn bytes_split(b: &[u8], sep: &[u8]) -> Vec<Vec<u8>> {
+	let mut out = Vec::new();
+	let mut start = 0;
+	let mut i = 0;
+	while i + sep.len() <= b.len() {
+		if &b[i..i + sep.len()] == sep {
+			out.push(b[start..i].to_vec());
+			i += sep.len();
+			start = i;
+		} else {
+			i += 1;
+		}
+	}
+	out.push(b[start..].to_vec());
+	out
 }
 
 fn expect_float(args: &[Value], name: &str) -> f64 {

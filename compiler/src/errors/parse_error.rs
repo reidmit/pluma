@@ -25,6 +25,8 @@ pub enum ParseErrorKind {
 	OverflowingIntegerLiteral,
 	UnclosedInterpolation,
 	UnclosedString,
+	InvalidBytesEscape,
+	InvalidHexEscape,
 	UnexpectedEOF { expected: Token },
 	UnexpectedToken { actual: Token, expected: Token },
 	UnexpectedTopLevelToken { actual: Token },
@@ -62,6 +64,14 @@ impl fmt::Display for ParseError {
 			OverflowingIntegerLiteral => write!(f, "Overflowing integer literal."),
 			UnclosedInterpolation => write!(f, "Unclosed string interpolation."),
 			UnclosedString => write!(f, "Unclosed string."),
+			InvalidBytesEscape => write!(
+				f,
+				"Invalid escape sequence in bytes literal. Valid escapes are \\\\, \\', \\0, \\t, \\r, \\n, and \\xNN."
+			),
+			InvalidHexEscape => write!(
+				f,
+				"Invalid \\x escape in bytes literal: expected two hex digits."
+			),
 			UnexpectedEOF { expected } => write!(f, "Unexpected end of file. Expected {}.", expected),
 			UnexpectedToken { actual, expected } => {
 				write!(f, "Unexpected token ({}). Expected {}.", actual, expected)

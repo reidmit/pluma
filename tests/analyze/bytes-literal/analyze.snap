@@ -1,0 +1,29 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/bytes-literal/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-2:14) [
+            def(0:0-0:19) :: nothing {
+                name: ident(0:4-0:9) `hello`,
+                kind: expr(0:12-0:19) :: bytes {
+                    kind: literal(0:12-0:19) bytes 'hello',
+                },
+            },
+            def(1:0-1:36) :: nothing {
+                name: ident(1:4-1:14) `png-header`,
+                kind: expr(1:17-1:36) :: bytes {
+                    kind: literal(1:17-1:36) bytes '\x89PNG\x0d\x0a\x1a\x0a',
+                },
+            },
+            def(2:0-2:14) :: nothing {
+                name: ident(2:4-2:9) `empty`,
+                kind: expr(2:12-2:14) :: bytes {
+                    kind: literal(2:12-2:14) bytes '',
+                },
+            },
+        ],
+    ),
+}

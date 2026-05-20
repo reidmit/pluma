@@ -384,6 +384,7 @@ impl<'a> Formatter<'a> {
 			LiteralKind::IntBinary(n) => text(format!("0b{:b}", n)),
 			LiteralKind::FloatDecimal(f) => text(format_float(*f)),
 			LiteralKind::String(s) => text(format!("\"{}\"", escape_string(s))),
+			LiteralKind::Bytes(b) => text(format!("'{}'", escape_bytes(b))),
 		}
 	}
 
@@ -842,6 +843,22 @@ fn escape_string(s: &str) -> String {
 			'\r' => out.push_str("\\r"),
 			'\n' => out.push_str("\\n"),
 			_ => out.push(c),
+		}
+	}
+	out
+}
+
+fn escape_bytes(b: &[u8]) -> String {
+	let mut out = String::with_capacity(b.len());
+	for &byte in b {
+		match byte {
+			b'\\' => out.push_str("\\\\"),
+			b'\'' => out.push_str("\\'"),
+			b'\t' => out.push_str("\\t"),
+			b'\r' => out.push_str("\\r"),
+			b'\n' => out.push_str("\\n"),
+			0x20..=0x7e => out.push(byte as char),
+			_ => out.push_str(&format!("\\x{:02x}", byte)),
 		}
 	}
 	out

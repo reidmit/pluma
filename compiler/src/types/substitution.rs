@@ -51,6 +51,7 @@ impl Substitution {
 			| Type::Int
 			| Type::Float
 			| Type::String
+			| Type::Bytes
 			| Type::Regex => ty.clone(),
 
 			Type::Var(var) => {

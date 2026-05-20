@@ -226,6 +226,9 @@ pub enum Token {
 	/// e.g. `"hello"`
 	StringLiteral(usize, usize),
 
+	/// e.g. `'\x89PNG'`. Span covers the inner bytes only, like StringLiteral.
+	BytesLiteral(usize, usize),
+
 	/// `~` token
 	Tilde(usize, usize),
 
@@ -327,6 +330,7 @@ impl Token {
 			| RightParen(start, end)
 			| Star(start, end)
 			| StringLiteral(start, end)
+			| BytesLiteral(start, end)
 			| Tilde(start, end)
 			| Underscore(start, end)
 			| Unexpected(_, start, end) => (*start, *end),
@@ -339,8 +343,8 @@ impl Token {
 		match self {
 			Identifier(..) | KeywordFun(..) | KeywordIf(..) | KeywordWhen(..) | DecimalDigits(..)
 			| HexDigits(..) | BinaryDigits(..) | OctalDigits(..) | LeftParen(..) | LeftBracket(..)
-			| LeftBrace(..) | ForwardSlash(..) | StringLiteral(..) | BoolTrue(..) | BoolFalse(..)
-			| UnaryMinus(..) => true,
+			| LeftBrace(..) | ForwardSlash(..) | StringLiteral(..) | BytesLiteral(..) | BoolTrue(..)
+			| BoolFalse(..) | UnaryMinus(..) => true,
 			_ => false,
 		}
 	}
@@ -423,6 +427,7 @@ impl fmt::Display for Token {
 			&RightParen(..) => "a ')'",
 			&Star(..) => "a '*'",
 			&StringLiteral(..) => "a string",
+			&BytesLiteral(..) => "a bytes literal",
 			&Tilde(..) => "a '~'",
 			&Underscore(..) => "a '_'",
 			&Unexpected(c, ..) => return write!(f, "'{}'", String::from_utf8_lossy(&[c])),

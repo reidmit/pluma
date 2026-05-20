@@ -1,0 +1,18 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+['a', 'b', 'c']
+['a', 'b', '', 'c']
+['abc']
+['']
+['a', 'b', 'c']
+'a,b,c'
+'only'
+''
+'a\x00b'
+== stderr ==
+

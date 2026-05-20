@@ -1,0 +1,14 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+'tab:\x09here'
+'quote: \'in here\''
+'backslash: \\'
+'null: \x00 done'
+'hex: ABC'
+== stderr ==
+

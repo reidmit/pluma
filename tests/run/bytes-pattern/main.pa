@@ -1,0 +1,11 @@
+def classify = fun b {
+	when b is 'GET' { "get" }
+	is 'POST' { "post" }
+	else { "other" }
+}
+
+def main = fun {
+	print (classify 'GET')
+	print (classify 'POST')
+	print (classify 'PUT')
+}

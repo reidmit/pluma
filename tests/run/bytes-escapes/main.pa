@@ -1,0 +1,7 @@
+def main = fun {
+	print 'tab:\there'
+	print 'quote: \'in here\''
+	print 'backslash: \\'
+	print 'null: \x00 done'
+	print 'hex: \x41\x42\x43'
+}

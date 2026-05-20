@@ -21,6 +21,10 @@ pub enum Value {
 	Int(i64),
 	Float(f64),
 	String(Rc<String>),
+	// Bytes are an immutable, arbitrary-content byte sequence — no UTF-8
+	// invariant. Distinct from String at the type level: explicit
+	// `string.to-bytes` / `bytes.to-string` is the only bridge.
+	Bytes(Rc<Vec<u8>>),
 	Tuple(Rc<Vec<Value>>),
 	List(Rc<Vec<Value>>),
 	Record(Rc<HashMap<String, Value>>),
@@ -171,6 +175,22 @@ impl std::fmt::Display for Value {
 				}
 			}
 			Value::String(s) => write!(f, "{}", s),
+			Value::Bytes(b) => {
+				// Render bytes in the same single-quote literal form they're
+				// written in source: printable ASCII inline, everything else
+				// (including '\'' and '\\') as \xNN. Round-trips to a
+				// parseable bytes literal.
+				write!(f, "'")?;
+				for &byte in b.iter() {
+					match byte {
+						b'\\' => write!(f, "\\\\")?,
+						b'\'' => write!(f, "\\'")?,
+						0x20..=0x7e => write!(f, "{}", byte as char)?,
+						_ => write!(f, "\\x{:02x}", byte)?,
+					}
+				}
+				write!(f, "'")
+			}
 			Value::Bool(b) => write!(f, "{}", b),
 			Value::Nothing => write!(f, "()"),
 			Value::Tuple(elems) => {
@@ -253,6 +273,7 @@ pub fn values_eq(a: &Value, b: &Value) -> bool {
 		(Value::Float(x), Value::Float(y)) => x == y,
 		(Value::Bool(x), Value::Bool(y)) => x == y,
 		(Value::String(x), Value::String(y)) => x == y,
+		(Value::Bytes(x), Value::Bytes(y)) => x == y,
 		(Value::Nothing, Value::Nothing) => true,
 		(Value::Tuple(xs), Value::Tuple(ys)) => {
 			xs.len() == ys.len() && xs.iter().zip(ys.iter()).all(|(a, b)| values_eq(a, b))

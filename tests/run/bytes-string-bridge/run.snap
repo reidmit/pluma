@@ -1,0 +1,14 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+'hello'
+'caf\xc3\xa9'
+hello
+bad utf8
+round-trip
+== stderr ==
+

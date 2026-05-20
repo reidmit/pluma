@@ -9,6 +9,7 @@ pub enum Type {
 	Float,
 	Regex,
 	String,
+	Bytes,
 	Nothing,
 	Tuple(Vec<Type>),
 	PartialTuple(usize, Box<Type>),
@@ -45,6 +46,7 @@ impl Type {
 			| Type::Int
 			| Type::Float
 			| Type::String
+			| Type::Bytes
 			| Type::Regex
 			| Type::Unknown => false,
 
@@ -100,6 +102,7 @@ impl Type {
 			| Type::Float
 			| Type::Regex
 			| Type::String
+			| Type::Bytes
 			| Type::Nothing => {
 				// no vars to add
 			}
@@ -167,6 +170,7 @@ impl Type {
 			| Type::Float
 			| Type::Regex
 			| Type::String
+			| Type::Bytes
 			| Type::Nothing
 			| Type::Var(_) => {}
 
@@ -236,6 +240,7 @@ impl std::fmt::Display for Type {
 			Type::Int => write!(f, "int"),
 			Type::Float => write!(f, "float"),
 			Type::String => write!(f, "string"),
+			Type::Bytes => write!(f, "bytes"),
 			Type::Regex => write!(f, "regex"),
 			Type::Nothing => write!(f, "nothing"),
 

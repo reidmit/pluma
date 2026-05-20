@@ -188,6 +188,7 @@ fn type_keys_match(a: &Type, b: &Type) -> bool {
 		| (Type::Float, Type::Float)
 		| (Type::Bool, Type::Bool)
 		| (Type::String, Type::String)
+		| (Type::Bytes, Type::Bytes)
 		| (Type::Regex, Type::Regex)
 		| (Type::Nothing, Type::Nothing) => true,
 		(Type::Enum(a, _), Type::Enum(b, _)) => a == b,
@@ -291,9 +292,13 @@ fn collect_dispatch_cells(expr: &ExprNode, cells: &mut Vec<DispatchCell>) {
 // current module.
 pub fn type_defining_module(ty: &Type) -> Option<String> {
 	match ty {
-		Type::Int | Type::Float | Type::Bool | Type::String | Type::Regex | Type::Nothing => {
-			Some("__prelude__".into())
-		}
+		Type::Int
+		| Type::Float
+		| Type::Bool
+		| Type::String
+		| Type::Bytes
+		| Type::Regex
+		| Type::Nothing => Some("__prelude__".into()),
 		Type::Enum(name, _) => Some(
 			name
 				.rsplit_once('.')
@@ -317,6 +322,7 @@ pub fn type_to_head_key(ty: &Type) -> Option<String> {
 		Type::Float => Some("float".into()),
 		Type::Bool => Some("bool".into()),
 		Type::String => Some("string".into()),
+		Type::Bytes => Some("bytes".into()),
 		Type::Regex => Some("regex".into()),
 		Type::Nothing => Some("nothing".into()),
 		Type::Enum(name, _) => Some(name.clone()),
@@ -360,6 +366,7 @@ impl<'compiler> Analyzer<'compiler> {
 		self.add_type_binding("int".into(), Type::Int, Range::collapsed(0, 0));
 		self.add_type_binding("bool".into(), Type::Bool, Range::collapsed(0, 0));
 		self.add_type_binding("string".into(), Type::String, Range::collapsed(0, 0));
+		self.add_type_binding("bytes".into(), Type::Bytes, Range::collapsed(0, 0));
 		self.add_type_binding("regex".into(), Type::Regex, Range::collapsed(0, 0));
 		self.add_type_binding("float".into(), Type::Float, Range::collapsed(0, 0));
 		self.add_type_binding("nothing".into(), Type::Nothing, Range::collapsed(0, 0));
@@ -1523,6 +1530,7 @@ impl<'compiler> Analyzer<'compiler> {
 
 				match &type_ident.name[..] {
 					"string" => return Type::String,
+					"bytes" => return Type::Bytes,
 					"int" => return Type::Int,
 					"float" => return Type::Float,
 					"bool" => return Type::Bool,
@@ -1588,6 +1596,7 @@ impl<'compiler> Analyzer<'compiler> {
 			ExprKind::Literal(literal) => match &mut literal.kind {
 				LiteralKind::Bool(..) => expr.ty = Type::Bool,
 				LiteralKind::String(..) => expr.ty = Type::String,
+				LiteralKind::Bytes(..) => expr.ty = Type::Bytes,
 				LiteralKind::FloatDecimal(..) => expr.ty = Type::Float,
 				LiteralKind::IntDecimal(..)
 				| LiteralKind::IntHex(..)
@@ -2474,6 +2483,7 @@ impl<'compiler> Analyzer<'compiler> {
 				let lit_ty = match &literal.kind {
 					LiteralKind::Bool(..) => Type::Bool,
 					LiteralKind::String(..) => Type::String,
+					LiteralKind::Bytes(..) => Type::Bytes,
 					LiteralKind::FloatDecimal(..) => Type::Float,
 					LiteralKind::IntDecimal(..)
 					| LiteralKind::IntHex(..)
@@ -2970,6 +2980,7 @@ impl<'compiler> Analyzer<'compiler> {
 			| Eq(Type::Float, Type::Float, _)
 			| Eq(Type::Bool, Type::Bool, _)
 			| Eq(Type::String, Type::String, _)
+			| Eq(Type::Bytes, Type::Bytes, _)
 			| Eq(Type::Regex, Type::Regex, _)
 			| Eq(Type::Nothing, Type::Nothing, _)
 			| Eq(Type::Unknown, Type::Unknown, _) => Substitution::empty(),
@@ -4193,6 +4204,7 @@ impl<'compiler> Analyzer<'compiler> {
 			("int", Type::Int),
 			("float", Type::Float),
 			("string", Type::String),
+			("bytes", Type::Bytes),
 		] {
 			self.instances.insert(
 				("ord".into(), head_key.into()),
@@ -4237,6 +4249,7 @@ impl<'compiler> Analyzer<'compiler> {
 			("int", Type::Int),
 			("float", Type::Float),
 			("string", Type::String),
+			("bytes", Type::Bytes),
 			("bool", Type::Bool),
 		] {
 			self.instances.insert(
@@ -4348,6 +4361,7 @@ impl<'compiler> Analyzer<'compiler> {
 			| Type::Int
 			| Type::Float
 			| Type::String
+			| Type::Bytes
 			| Type::Regex
 			| Type::Unknown
 			| Type::Nothing => ty.clone(),

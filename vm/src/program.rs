@@ -18,6 +18,10 @@ use std::rc::Rc;
 pub struct Program {
 	pub functions: Vec<Function>,
 	pub constants: Vec<Rc<String>>,
+	// Bytes-literal constants, indexed by BytesIdx (separate from `constants`
+	// because bytes have no UTF-8 invariant and never share storage with
+	// strings).
+	pub bytes_constants: Vec<Rc<Vec<u8>>>,
 	pub regex_patterns: Vec<Rc<crate::value::RegexData>>,
 	pub globals: Vec<GlobalSlot>,
 	// Record-shape field name lists, indexed by FieldListIdx. Moves the

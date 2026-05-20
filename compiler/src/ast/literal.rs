@@ -15,6 +15,7 @@ pub enum LiteralKind {
 	IntHex(usize),
 	IntBinary(usize),
 	String(String),
+	Bytes(Vec<u8>),
 }
 
 #[cfg(debug_assertions)]
@@ -37,6 +38,18 @@ impl std::fmt::Debug for LiteralKind {
 			IntOctal(v) => write!(f, "octal int {}", v),
 			IntBinary(v) => write!(f, "binary int {}", v),
 			String(v) => write!(f, "string \"{}\"", v),
+			Bytes(b) => {
+				write!(f, "bytes '")?;
+				for &byte in b.iter() {
+					match byte {
+						b'\\' => write!(f, "\\\\")?,
+						b'\'' => write!(f, "\\'")?,
+						0x20..=0x7e => write!(f, "{}", byte as char)?,
+						_ => write!(f, "\\x{:02x}", byte)?,
+					}
+				}
+				write!(f, "'")
+			}
 		}
 	}
 }

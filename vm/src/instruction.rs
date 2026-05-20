@@ -15,6 +15,7 @@ use crate::builtin::Builtin;
 pub type SlotIdx = u16;
 pub type CaptureIdx = u16;
 pub type ConstIdx = u32;
+pub type BytesIdx = u32;
 pub type GlobalIdx = u32;
 pub type FuncIdx = u32;
 pub type Offset = u32;
@@ -30,6 +31,7 @@ pub enum Instruction {
 
 	// Constants and immediates
 	LoadConst(ConstIdx),
+	LoadBytes(BytesIdx),
 	LoadInt(i64),
 	LoadFloat(f64),
 	LoadBool(bool),
@@ -108,6 +110,7 @@ pub enum Instruction {
 	MatchInt(i64, Offset),
 	MatchFloat(f64, Offset),
 	MatchString(ConstIdx, Offset),
+	MatchBytes(BytesIdx, Offset),
 	MatchBool(bool, Offset),
 	MatchNothing(Offset),
 	// MatchVariant: subject must be a Variant with the given bare variant

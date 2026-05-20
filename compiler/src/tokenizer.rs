@@ -185,6 +185,36 @@ impl<'a> Iterator for Tokenizer<'a> {
 				// so continue to collect tokens as we would outside of a string.
 			}
 
+			// Bytes literals: `'...'`. No interpolation, no nesting; just scan
+			// to the closing quote, treating `\\` and `\'` as escapes that
+			// consume both bytes (so `'\''` is a one-byte bytes literal, not
+			// an empty one followed by a stray quote).
+			if byte == b'\'' {
+				let content_start = self.index + 1;
+				let mut i = content_start;
+				while i < self.length {
+					let b = self.source[i];
+					if b == b'\\' && i + 1 < self.length {
+						// Skip the escaped byte. Validation of which escapes
+						// are legal happens in the parser; the tokenizer just
+						// needs to not terminate on `\'` or `\\`.
+						i += 2;
+						continue;
+					}
+					if b == b'\'' {
+						let end = i;
+						self.index = i + 1;
+						return Some(BytesLiteral(content_start, end));
+					}
+					i += 1;
+				}
+				// Unterminated literal: consume to EOF so we don't loop
+				// forever, and emit what we have. The parser will surface
+				// the lack of a closing quote.
+				self.index = self.length;
+				return Some(BytesLiteral(content_start, self.length));
+			}
+
 			if self.expect_import_path && is_path_char(byte) {
 				let mut path_byte = byte;
 
