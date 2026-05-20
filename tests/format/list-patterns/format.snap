@@ -1,0 +1,29 @@
+---
+source: tests/format.rs
+expression: once
+---
+def sum-list = fun xs {
+	when xs is [] {
+		0
+	} is [n, ...rest] {
+		n + sum-list rest
+	}
+}
+
+def show = fun xs {
+	when xs is [] {
+		"none"
+	} is [_] {
+		"one"
+	} is [a, b, ...] {
+		"pair-plus"
+	} else {
+		"hmm"
+	}
+}
+
+def main = fun {
+	print (to-string (sum-list [1, 2, 3]))
+	print (show [42, 43])
+}
+

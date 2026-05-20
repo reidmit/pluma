@@ -27,6 +27,8 @@ pub enum AnalysisErrorKind {
 	AmbiguousTraitMethod { trait_name: String, ty: Type },
 	OverlappingInstance { trait_name: String, head: Type },
 	OrphanInstance { trait_name: String, head: Type },
+	RefutablePatternInLet,
+	NamedRecordRestNotSupported,
 }
 
 impl fmt::Display for AnalysisError {
@@ -149,6 +151,16 @@ impl fmt::Display for AnalysisError {
 				f,
 				"Orphan instance: `for {} on {}` must be declared in the module that defines either the trait or the type.",
 				trait_name, head
+			),
+
+			RefutablePatternInLet => write!(
+				f,
+				"This pattern can fail to match. `let` bindings require an irrefutable pattern (identifier, wildcard, tuple, or record). Use `if` or `when` to handle the cases."
+			),
+
+			NamedRecordRestNotSupported => write!(
+				f,
+				"Named record rest (`...name`) isn't supported yet. Use a bare `...` to allow extra fields without binding them."
 			),
 		}
 	}

@@ -535,8 +535,14 @@ impl VM {
 			Instruction::MatchTuple { arity, on_fail } => self.match_tuple(arity, on_fail)?,
 			Instruction::MatchRecord {
 				fields_idx,
+				exact,
 				on_fail,
-			} => self.match_record(fields_idx, on_fail)?,
+			} => self.match_record(fields_idx, exact, on_fail)?,
+			Instruction::MatchList {
+				arity,
+				has_rest,
+				on_fail,
+			} => self.match_list(arity, has_rest, on_fail)?,
 			// Arithmetic, comparison, and unary ops are inlined here (rather
 			// than dispatched through helper functions) so the hot loop
 			// avoids a function call + a second match on `instr` per
@@ -790,13 +796,23 @@ impl VM {
 		Ok(())
 	}
 
-	fn match_record(&mut self, fields_idx: u32, on_fail: u32) -> Result<(), RuntimeError> {
+	fn match_record(
+		&mut self,
+		fields_idx: u32,
+		exact: bool,
+		on_fail: u32,
+	) -> Result<(), RuntimeError> {
 		let subj = self.stack.pop().ok_or_else(|| {
 			RuntimeError::new("VM: MatchRecord on empty stack").at(self.current_range())
 		})?;
 		let len = self.program.field_lists[fields_idx as usize].len();
 		match subj {
 			Value::Record(record) => {
+				if exact && record.len() != len {
+					let frame_idx = self.frames.len() - 1;
+					self.frames[frame_idx].ip = on_fail as usize;
+					return Ok(());
+				}
 				let mut values = Vec::with_capacity(len);
 				let mut ok = true;
 				for i in 0..len {
@@ -817,6 +833,37 @@ impl VM {
 				} else {
 					let frame_idx = self.frames.len() - 1;
 					self.frames[frame_idx].ip = on_fail as usize;
+				}
+			}
+			_ => {
+				let frame_idx = self.frames.len() - 1;
+				self.frames[frame_idx].ip = on_fail as usize;
+			}
+		}
+		Ok(())
+	}
+
+	fn match_list(&mut self, arity: u16, has_rest: bool, on_fail: u32) -> Result<(), RuntimeError> {
+		let subj = self
+			.stack
+			.pop()
+			.ok_or_else(|| RuntimeError::new("VM: MatchList on empty stack").at(self.current_range()))?;
+		let arity = arity as usize;
+		match subj {
+			Value::List(elems) => {
+				let len = elems.len();
+				let length_ok = if has_rest { len >= arity } else { len == arity };
+				if !length_ok {
+					let frame_idx = self.frames.len() - 1;
+					self.frames[frame_idx].ip = on_fail as usize;
+					return Ok(());
+				}
+				for i in 0..arity {
+					self.stack.push(elems[i].clone());
+				}
+				if has_rest {
+					let tail: Vec<Value> = elems[arity..].to_vec();
+					self.stack.push(Value::List(std::rc::Rc::new(tail)));
 				}
 			}
 			_ => {
@@ -1023,6 +1070,7 @@ fn opcode_name(i: &Instruction) -> &'static str {
 		MatchVariant { .. } => "MatchVariant",
 		MatchTuple { .. } => "MatchTuple",
 		MatchRecord { .. } => "MatchRecord",
+		MatchList { .. } => "MatchList",
 		AddInt => "AddInt",
 		AddFloat => "AddFloat",
 		SubInt => "SubInt",

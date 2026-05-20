@@ -3,6 +3,6 @@ source: tests/analyze.rs
 expression: output
 ---
 error: Parameter count mismatch: expected 1, but found 2.
-> 1 | def double = fun n {
-      ^
+> 5 | def bad = double 1 2
+                ^^^^^^
 

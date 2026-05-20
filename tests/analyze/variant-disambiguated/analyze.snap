@@ -40,7 +40,9 @@ module `main` (tests/analyze/variant-disambiguated/main.pa) {
                         body: [
                             expr(11:1-11:18) :: nothing {
                                 kind: let(11:1-11:18) {
-                                    name: ident(11:5-11:6) `x`,
+                                    pattern: pattern(11:5-11:6) Identifier(
+                                        ident(11:5-11:6) `x`,
+                                    ),
                                     value: expr(11:9-11:18) :: color {
                                         kind: field-access {
                                             receiver: expr(11:9-11:14) :: color {

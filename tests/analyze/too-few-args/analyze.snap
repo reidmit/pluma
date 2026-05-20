@@ -3,6 +3,6 @@ source: tests/analyze.rs
 expression: output
 ---
 error: Parameter count mismatch: expected 2, but found 1.
-> 1 | def add = fun a b {
-      ^
+> 5 | def bad = add 1
+                ^^^
 

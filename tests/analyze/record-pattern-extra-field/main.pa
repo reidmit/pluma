@@ -1,0 +1,15 @@
+# Without `...`, a record pattern requires an exact field match. Passing
+# a record with extra fields is a type error — use `{name: n, ...}` for
+# open matching.
+
+def show-name = fun p {
+	when p is {name: n} {
+		print n
+	}
+}
+
+def main = fun {
+	# `show-name`'s pattern is closed, inferred as `{name: string}`.
+	# This value has an extra field — should fail to type-check.
+	show-name {name: "reid", age: 28}
+}

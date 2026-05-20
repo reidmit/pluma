@@ -944,24 +944,47 @@ impl<'a> Parser<'a> {
 
 			Some(Token::LeftParen(..)) => self.parse_paren_pattern(),
 
+			Some(Token::LeftBracket(..)) => self.parse_list_pattern(),
+
 			Some(Token::LeftBrace(start_offset, _)) => {
 				let start = self.offset_to_point(start_offset);
 
 				self.advance();
+				self.skip_line_breaks();
 
-				let mut entries = Vec::new();
+				let mut fields = Vec::new();
+				let mut rest: Option<RecordRestPattern> = None;
+
+				// Allow `...` at the start: `{...}` or `{...rest}`. Matches
+				// any record (any-or-empty field set).
+				if let Some(Token::TripleDot(..)) = self.current_token {
+					rest = Some(self.parse_record_rest_pattern()?);
+					self.skip_line_breaks();
+					let (_, end) = expect_token_and_advance!(self, Token::RightBrace);
+					return Some(PatternNode {
+						range: Range::between(start, end),
+						kind: PatternKind::Record { fields, rest },
+					});
+				}
 
 				while let Some(field_name) = self.parse_identifier() {
 					expect_token_and_advance!(self, Token::Colon);
 
 					let field_pattern = self.parse_pattern()?;
 
-					entries.push((field_name, field_pattern));
+					fields.push((field_name, field_pattern));
 
 					match self.current_token {
 						Some(Token::Comma(..)) => {
 							self.advance();
 							self.skip_line_breaks();
+							// Trailing `, ...` (or `, ...rest`) makes this an
+							// open match.
+							if let Some(Token::TripleDot(..)) = self.current_token {
+								rest = Some(self.parse_record_rest_pattern()?);
+								self.skip_line_breaks();
+								break;
+							}
 						}
 						Some(Token::LineBreak(..)) => {
 							self.skip_line_breaks();
@@ -974,7 +997,7 @@ impl<'a> Parser<'a> {
 
 				Some(PatternNode {
 					range: Range::between(start, end),
-					kind: PatternKind::Record(entries),
+					kind: PatternKind::Record { fields, rest },
 				})
 			}
 
@@ -1077,6 +1100,101 @@ impl<'a> Parser<'a> {
 		}
 	}
 
+	// Parse `[` ... `]` in pattern position. Supports:
+	//   []                  — empty list
+	//   [a, b, c]           — exact length
+	//   [a, b, ...]         — at least 2 elements, no rest binding
+	//   [a, b, ...rest]     — at least 2 elements, bind tail as `list a`
+	//   [...]               — any list (no items)
+	//   [...rest]           — any list, bind whole thing as the rest
+	fn parse_list_pattern(&mut self) -> Option<PatternNode> {
+		let (start, _) = expect_token_and_advance!(self, Token::LeftBracket);
+		self.skip_line_breaks();
+
+		let mut items = Vec::new();
+		let mut rest: Option<ListRestPattern> = None;
+
+		// Allow `...` at the very start: `[...rest]` or `[...]`.
+		if let Some(Token::TripleDot(..)) = self.current_token {
+			rest = Some(self.parse_list_rest_pattern()?);
+			self.skip_line_breaks();
+			let (_, end) = expect_token_and_advance!(self, Token::RightBracket);
+			return Some(PatternNode {
+				range: Range::between(start, end),
+				kind: PatternKind::List { items, rest },
+			});
+		}
+
+		// Empty list `[]`.
+		if let Some(Token::RightBracket(..)) = self.current_token {
+			let (_, end) = expect_token_and_advance!(self, Token::RightBracket);
+			return Some(PatternNode {
+				range: Range::between(start, end),
+				kind: PatternKind::List { items, rest },
+			});
+		}
+
+		loop {
+			let item = self.parse_pattern()?;
+			items.push(item);
+			self.skip_line_breaks();
+
+			match self.current_token {
+				Some(Token::Comma(..)) => {
+					self.advance();
+					self.skip_line_breaks();
+					// After a comma, the next thing might be a `...rest` —
+					// it can only appear in the trailing position.
+					if let Some(Token::TripleDot(..)) = self.current_token {
+						rest = Some(self.parse_list_rest_pattern()?);
+						self.skip_line_breaks();
+						break;
+					}
+				}
+				_ => break,
+			}
+		}
+
+		let (_, end) = expect_token_and_advance!(self, Token::RightBracket);
+		Some(PatternNode {
+			range: Range::between(start, end),
+			kind: PatternKind::List { items, rest },
+		})
+	}
+
+	fn parse_list_rest_pattern(&mut self) -> Option<ListRestPattern> {
+		let (start, dot_end) = expect_token_and_advance!(self, Token::TripleDot);
+		// Optional identifier directly after `...`.
+		if let Some(Token::Identifier(..)) = self.current_token {
+			let ident = self.parse_identifier()?;
+			let range = Range::between(start, ident.range.end);
+			return Some(ListRestPattern {
+				range,
+				binding: Some(ident),
+			});
+		}
+		Some(ListRestPattern {
+			range: Range::between(start, dot_end),
+			binding: None,
+		})
+	}
+
+	fn parse_record_rest_pattern(&mut self) -> Option<RecordRestPattern> {
+		let (start, dot_end) = expect_token_and_advance!(self, Token::TripleDot);
+		if let Some(Token::Identifier(..)) = self.current_token {
+			let ident = self.parse_identifier()?;
+			let range = Range::between(start, ident.range.end);
+			return Some(RecordRestPattern {
+				range,
+				binding: Some(ident),
+			});
+		}
+		Some(RecordRestPattern {
+			range: Range::between(start, dot_end),
+			binding: None,
+		})
+	}
+
 	// A sub-pattern that does not itself try to consume constructor arguments,
 	// used when parsing the args of a Constructor pattern. Without this, every
 	// arg ident would greedily try to become its own Constructor.
@@ -1094,6 +1212,8 @@ impl<'a> Parser<'a> {
 			// `some (node val l r)` becomes Constructor(some, [Constructor(node, [...])])
 			// rather than the flat Constructor(some, [node, val, l, r]).
 			Some(Token::LeftParen(..)) => self.parse_paren_pattern(),
+
+			Some(Token::LeftBracket(..)) => self.parse_list_pattern(),
 
 			Some(Token::Underscore(start, end)) => {
 				self.advance();
@@ -1139,7 +1259,17 @@ impl<'a> Parser<'a> {
 	fn parse_let_expression(&mut self) -> Option<LetNode> {
 		let (start, _) = expect_token_and_advance!(self, Token::KeywordLet);
 
-		let name = self.expect_identifier()?;
+		let pattern = match self.parse_pattern() {
+			Some(p) => p,
+			None => {
+				// Surface the same "expected an identifier" diagnostic users
+				// got before destructuring patterns landed — most of the
+				// time the LHS is just an identifier, and that's the most
+				// likely thing they got wrong.
+				self.expect_identifier()?;
+				return None;
+			}
+		};
 
 		expect_token_and_advance!(self, Token::Equal);
 
@@ -1154,7 +1284,7 @@ impl<'a> Parser<'a> {
 
 		Some(LetNode {
 			range: Range::between(start, end),
-			name,
+			pattern,
 			value: Box::new(value),
 		})
 	}

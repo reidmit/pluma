@@ -55,6 +55,9 @@ pub enum Token {
 	/// `..` token
 	DoubleDot(usize, usize),
 
+	/// `...` token (rest pattern in list patterns)
+	TripleDot(usize, usize),
+
 	/// `==` token
 	DoubleEqual(usize, usize),
 
@@ -268,6 +271,7 @@ impl Token {
 			| DoubleAnd(start, end)
 			| DoubleColon(start, end)
 			| DoubleDot(start, end)
+			| TripleDot(start, end)
 			| DoubleEqual(start, end)
 			| DoubleForwardSlash(start, end)
 			| DoubleLeftAngle(start, end)
@@ -362,6 +366,7 @@ impl fmt::Display for Token {
 			&Dot(..) => "a '.'",
 			&DoubleAnd(..) => "a '&&'",
 			&DoubleDot(..) => "a '..'",
+			&TripleDot(..) => "a '...'",
 			&DoubleColon(..) => "a '::'",
 			&DoubleEqual(..) => "a '=='",
 			&DoubleForwardSlash(..) => "a '//'",

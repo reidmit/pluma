@@ -14,7 +14,9 @@ module `main` (tests/analyze/tuples/main.pa) {
                         body: [
                             expr(1:1-1:35) :: nothing {
                                 kind: let(1:1-1:35) {
-                                    name: ident(1:5-1:15) `superTuple`,
+                                    pattern: pattern(1:5-1:15) Identifier(
+                                        ident(1:5-1:15) `superTuple`,
+                                    ),
                                     value: expr(1:18-1:35) :: (int, string, bool) {
                                         kind: tuple [
                                             expr(1:19-1:20) :: int {

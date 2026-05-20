@@ -690,7 +690,8 @@ impl FunctionBuilder {
 			| Instruction::MatchNothing(o)
 			| Instruction::MatchVariant { on_fail: o, .. }
 			| Instruction::MatchTuple { on_fail: o, .. }
-			| Instruction::MatchRecord { on_fail: o, .. } => *o = target,
+			| Instruction::MatchRecord { on_fail: o, .. }
+			| Instruction::MatchList { on_fail: o, .. } => *o = target,
 			other => panic!("patch_jump: not a jump-like instruction: {:?}", other),
 		}
 	}
@@ -958,7 +959,7 @@ fn emit_expr_with_parents(
 			inner,
 			tail,
 		)?,
-		ExprKind::Let(LetNode { name, value, .. }) => {
+		ExprKind::Let(LetNode { pattern, value, .. }) => {
 			// Value is stored into the local; the `let` expression's own
 			// result is Nothing — so the value is never in tail position.
 			emit_expr_with_parents(
@@ -971,9 +972,26 @@ fn emit_expr_with_parents(
 				value,
 				false,
 			)?;
-			let slot = fb.alloc_slot();
-			fb.emit(Instruction::StoreLocal(slot), range);
-			scope.define_local(&name.name, slot);
+			match &pattern.kind {
+				PatternKind::Identifier(ident) => {
+					let slot = fb.alloc_slot();
+					fb.emit(Instruction::StoreLocal(slot), range);
+					scope.define_local(&ident.name, slot);
+				}
+				_ => {
+					// Reuse the pattern matcher used by `if`/`when`/`while`.
+					// The analyzer guarantees an irrefutable pattern here, so
+					// the returned fail jumps are unreachable at runtime — we
+					// patch them to the let's exit (where LoadNothing runs)
+					// to keep the bytecode well-formed.
+					let subject_ty = value.ty.clone();
+					let fail_idx = emit_pattern(cg, fb, scope, &subject_ty, pattern)?;
+					let exit_target = fb.here();
+					for fi in fail_idx {
+						fb.patch_jump(fi, exit_target);
+					}
+				}
+			}
 			fb.emit(Instruction::LoadNothing, range);
 		}
 		ExprKind::Tuple(elems) => {
@@ -2189,26 +2207,39 @@ fn emit_pattern(
 			// Tuple elements were pushed onto the stack last-on-top.
 			// Sub-patterns match in source order, which corresponds to
 			// reverse stack order.
-			for sub in elems.iter().rev() {
-				let sub_fails = emit_pattern(cg, fb, scope, &compiler::types::Type::Unknown, sub)?;
-				fails.extend(sub_fails);
-			}
+			emit_sub_patterns_with_cleanup(
+				cg,
+				fb,
+				scope,
+				elems.iter().rev(),
+				elems.len(),
+				range,
+				&mut fails,
+			)?;
 		}
-		PatternKind::Record(fields) => {
+		PatternKind::Record { fields, rest } => {
 			let field_idxs: Vec<u32> = fields.iter().map(|(n, _)| cg.intern(&n.name)).collect();
 			let fields_idx = cg.intern_field_list(field_idxs);
+			let exact = rest.is_none();
 			let jmp = fb.emit(
 				Instruction::MatchRecord {
 					fields_idx,
+					exact,
 					on_fail: 0,
 				},
 				range,
 			);
 			fails.push(jmp);
-			for (_, sub) in fields.iter().rev() {
-				let sub_fails = emit_pattern(cg, fb, scope, &compiler::types::Type::Unknown, sub)?;
-				fails.extend(sub_fails);
-			}
+			let n = fields.len();
+			emit_sub_patterns_with_cleanup(
+				cg,
+				fb,
+				scope,
+				fields.iter().rev().map(|(_, p)| p),
+				n,
+				range,
+				&mut fails,
+			)?;
 		}
 		PatternKind::Constructor(variant_name, sub_patterns) => {
 			let v_idx = cg.intern(&variant_name.name);
@@ -2221,16 +2252,109 @@ fn emit_pattern(
 				range,
 			);
 			fails.push(jmp);
-			for sub in sub_patterns.iter().rev() {
-				let sub_fails = emit_pattern(cg, fb, scope, &compiler::types::Type::Unknown, sub)?;
-				fails.extend(sub_fails);
-			}
+			emit_sub_patterns_with_cleanup(
+				cg,
+				fb,
+				scope,
+				sub_patterns.iter().rev(),
+				sub_patterns.len(),
+				range,
+				&mut fails,
+			)?;
 		}
+		PatternKind::List { items, rest } => {
+			let arity = items.len() as u16;
+			let has_rest = rest.is_some();
+			let jmp = fb.emit(
+				Instruction::MatchList {
+					arity,
+					has_rest,
+					on_fail: 0,
+				},
+				range,
+			);
+			fails.push(jmp);
+			// Stack discipline on success: items[0..arity] in order (last
+			// item on top), and if has_rest, the tail list on top of that.
+			// Sub-patterns are consumed in reverse stack order, so handle
+			// rest first (if present), then items in reverse.
+			if let Some(rp) = rest {
+				match &rp.binding {
+					Some(ident) => {
+						let slot = fb.alloc_slot();
+						fb.emit(Instruction::StoreLocal(slot), rp.range);
+						scope.define_local(&ident.name, slot);
+					}
+					None => {
+						fb.emit(Instruction::Pop, rp.range);
+					}
+				}
+			}
+			emit_sub_patterns_with_cleanup(
+				cg,
+				fb,
+				scope,
+				items.iter().rev(),
+				items.len(),
+				range,
+				&mut fails,
+			)?;
+		}
+
 		PatternKind::Interpolation(_) => {
 			return Err("codegen: string-interpolation patterns not implemented".into());
 		}
 	}
 	Ok(fails)
+}
+
+// Emit sub-patterns for a container pattern (Tuple/Record/Constructor/List),
+// inserting per-sub trampolines that drain any orphaned payload items off
+// the stack before jumping to the outer fail target.
+//
+// Background: a container match instruction (MatchTuple/MatchList/...) pushes
+// its payload values onto the stack last-on-top. Sub-patterns are emitted in
+// reverse so each consumes the value at the top. When sub-pattern k fails,
+// the payload values for sub-patterns 0..k haven't been consumed yet — they
+// would be orphans on the stack visible to the caller's fail handler. Each
+// sub_fail jump is rewritten to land on a small "Pop N times; Jump" stub.
+//
+// `subs` yields sub-patterns in match (i.e. reverse) order. `total` is the
+// number of sub-patterns (so we can compute orphan count per index).
+fn emit_sub_patterns_with_cleanup<'a, I>(
+	cg: &mut CodeGen,
+	fb: &mut FunctionBuilder,
+	scope: &mut Scope,
+	subs: I,
+	total: usize,
+	range: Range,
+	fails: &mut Vec<u32>,
+) -> Result<(), String>
+where
+	I: IntoIterator<Item = &'a PatternNode>,
+{
+	for (rev_idx, sub) in subs.into_iter().enumerate() {
+		let orphans = total - 1 - rev_idx;
+		let sub_fails = emit_pattern(cg, fb, scope, &compiler::types::Type::Unknown, sub)?;
+		if sub_fails.is_empty() || orphans == 0 {
+			fails.extend(sub_fails);
+			continue;
+		}
+		// Skip the trampoline on the normal-flow (success) path.
+		let skip = fb.emit(Instruction::Jump(0), range);
+		let tramp_start = fb.here();
+		for sf in &sub_fails {
+			fb.patch_jump(*sf, tramp_start);
+		}
+		for _ in 0..orphans {
+			fb.emit(Instruction::Pop, range);
+		}
+		let final_jump = fb.emit(Instruction::Jump(0), range);
+		fails.push(final_jump);
+		let after = fb.here();
+		fb.patch_jump(skip, after);
+	}
+	Ok(())
 }
 
 // --------------------------------------------------------------------------

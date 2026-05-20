@@ -1,33 +1,71 @@
-# pencil
+# pluma
 
-## phase 1 (done)
+a small statically-typed functional language. source files use the `.pa` extension; the CLI binary is `pluma`.
 
-no generics, no mutation, no let-binding-patterns
+```
+def main = fun {
+	print "hello, world"
+}
+```
 
-basic types (int, float, string, bool, regex), tuples, records, functions, string interpolation, top-level `def`s, alias types, enum types (nominal, with payload variants and recursion).
+## taste
 
-## phase 1.25 (done)
+```
+enum tree {
+	empty
+	node int tree tree
+}
 
-match expressions w/ patterns
+def sum = fun t {
+	when t is empty { 0 }
+	is node n l r { n + sum l + sum r }
+}
 
-`if` / `when` / `while` pattern matching: literal, identifier, wildcard, constructor (multi-arg + nested via parens), tuple, record patterns. `when` exhaustiveness-checked.
+def main = fun {
+	let t = node 1 (node 2 empty empty) (node 3 empty empty)
+	print (sum t)
+}
+```
 
-## phase 1.5 (done)
+typeclasses with dictionary-passing dispatch:
 
-imports of other modules (`use`)
+```
+trait showable a {
+	show :: a -> string
+}
 
-`use a.b.module` resolves dotted paths against the root dir. `use ... as alias` for local renaming. Cross-module access for values, enums, and aliases via `module.name` (and `module.enum.variant` for variants), with per-use polymorphism. Cycle detection.
+implement showable int {
+	def show = fun x { to-string x }
+}
 
-## phase 2
+implement showable bool {
+	def show = fun b { when b is true { "yes" } else { "no" } }
+}
 
-- generics?
-- **numeric polymorphism.** `+`, `-`, `*`, `/`, `%`, `<`, `<=`, `>`, `>=` dispatch on the operand types (Int if unknown, Float if either operand is concretely Float). That works for direct uses like `1.5 + 2.5`, but `fun a b { a + b }` resolves to `int -> int -> int` because both params start as fresh type vars and the default kicks in. A genuine polymorphic-numeric function would need a type-class or trait-like constraint ("a must be Numeric") that the type system doesn't have. For now, users write a per-type function (`add-int`, `add-float`) if they need both.
+def main = fun {
+	print (show 42)
+	print (show true)
+}
+```
 
-## phase 3
+generic enums with parametric instances:
 
-- mutability?
+```
+enum option a {
+	some a
+	none
+}
 
-## phase 4
+implement ord (option a) where (ord a) {
+	def compare = fun x y {
+		when x is some xv {
+			when y is some yv { compare xv yv } is none { gt }
+		}
+		is none {
+			when y is some _v { lt } is none { eq }
+		}
+	}
+}
+```
 
-- destructuring patterns in let bindings?
-- destructuring patterns in lambda args?
+see [`REFERENCE.md`](REFERENCE.md) for the full language.

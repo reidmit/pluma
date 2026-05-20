@@ -40,7 +40,9 @@ module `main` (tests/analyze/generic-enum/main.pa) {
                         body: [
                             expr(7:1-7:18) :: nothing {
                                 kind: let(7:1-7:18) {
-                                    name: ident(7:5-7:6) `a`,
+                                    pattern: pattern(7:5-7:6) Identifier(
+                                        ident(7:5-7:6) `a`,
+                                    ),
                                     value: expr(7:9-7:18) :: box int {
                                         kind: call(7:9-7:18) {
                                             callee: expr(7:9-7:16) :: 'u -> box 'u {
@@ -62,7 +64,9 @@ module `main` (tests/analyze/generic-enum/main.pa) {
                             },
                             expr(8:1-8:18) :: nothing {
                                 kind: let(8:1-8:18) {
-                                    name: ident(8:5-8:6) `b`,
+                                    pattern: pattern(8:5-8:6) Identifier(
+                                        ident(8:5-8:6) `b`,
+                                    ),
                                     value: expr(8:9-8:18) :: box 'w {
                                         kind: field-access {
                                             receiver: expr(8:9-8:12) :: box 'w {
@@ -75,7 +79,9 @@ module `main` (tests/analyze/generic-enum/main.pa) {
                             },
                             expr(9:1-9:20) :: nothing {
                                 kind: let(9:1-9:20) {
-                                    name: ident(9:5-9:6) `c`,
+                                    pattern: pattern(9:5-9:6) Identifier(
+                                        ident(9:5-9:6) `c`,
+                                    ),
                                     value: expr(9:9-9:20) :: box string {
                                         kind: call(9:9-9:20) {
                                             callee: expr(9:9-9:12) :: 'z 'z -> box 'z {

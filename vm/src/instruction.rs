@@ -126,11 +126,23 @@ pub enum Instruction {
 		on_fail: Offset,
 	},
 	// MatchRecord: subject must be a Record containing all the named
-	// fields; the corresponding values are pushed onto the stack in the
-	// order the patterns appear (last on top). Field names live in
-	// Program::field_lists.
+	// fields. If `exact` is true, the record must have only those fields
+	// (no extras); otherwise extras are permitted. The corresponding
+	// values are pushed onto the stack in the order the patterns appear
+	// (last on top). Field names live in Program::field_lists.
 	MatchRecord {
 		fields_idx: FieldListIdx,
+		exact: bool,
+		on_fail: Offset,
+	},
+	// MatchList: subject must be a List. If has_rest is false, the list
+	// must have exactly `arity` elements; all are pushed in order (last on
+	// top). If has_rest is true, the list must have at least `arity`
+	// elements; the first `arity` are pushed in order, then the remainder
+	// list is pushed on top as a fresh Value::List.
+	MatchList {
+		arity: u16,
+		has_rest: bool,
 		on_fail: Offset,
 	},
 

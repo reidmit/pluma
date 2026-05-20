@@ -1,0 +1,13 @@
+# `when` on a list is exhaustive iff both `[]` and `[_, ...]` are covered
+# (or an `else` / catch-all is present).
+
+def head-or-zero = fun xs {
+	# Missing the empty case.
+	when xs is [n, ...] {
+		n
+	}
+}
+
+def main = fun {
+	print (to-string (head-or-zero [1, 2, 3]))
+}

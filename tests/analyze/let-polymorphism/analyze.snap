@@ -14,7 +14,9 @@ module `main` (tests/analyze/let-polymorphism/main.pa) {
                         body: [
                             expr(1:1-1:27) :: nothing {
                                 kind: let(1:1-1:27) {
-                                    name: ident(1:5-1:13) `identity`,
+                                    pattern: pattern(1:5-1:13) Identifier(
+                                        ident(1:5-1:13) `identity`,
+                                    ),
                                     value: expr(1:16-1:27) :: 's -> 's {
                                         kind: fun(1:16-1:27) {
                                             params: [

@@ -119,7 +119,13 @@ fn walk_expr(expr: &ExprNode, hits: &mut Vec<HoverHit>) {
 			}
 		}
 		ExprKind::Let(l) => {
-			record(hits, l.name.range, l.value.ty.clone());
+			// Only top-level identifier patterns get a direct hover hit (the
+			// whole pattern's type is the value's type). For destructured
+			// patterns, hover info for the inner bindings shows up at use
+			// sites instead.
+			if let PatternKind::Identifier(id) = &l.pattern.kind {
+				record(hits, id.range, l.value.ty.clone());
+			}
 			walk_expr(&l.value, hits);
 		}
 		ExprKind::Record(fields) => {

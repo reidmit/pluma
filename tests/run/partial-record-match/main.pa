@@ -1,5 +1,5 @@
 def get-name = fun r {
-	when r is {name: n} {
+	when r is {name: n, ...} {
 		n
 	}
 }

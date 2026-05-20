@@ -14,7 +14,9 @@ module `main` (tests/analyze/when-is-bool/main.pa) {
                         body: [
                             expr(1:1-1:13) :: nothing {
                                 kind: let(1:1-1:13) {
-                                    name: ident(1:5-1:6) `x`,
+                                    pattern: pattern(1:5-1:6) Identifier(
+                                        ident(1:5-1:6) `x`,
+                                    ),
                                     value: expr(1:9-1:13) :: bool {
                                         kind: literal(1:9-1:13) bool true,
                                     },

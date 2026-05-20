@@ -1,0 +1,8 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: Field `age` does not exist in record of type `{name: 't3}`.
+> 14 | 	show-name {name: "reid", age: 28}
+        ^^^^^^^^^
+

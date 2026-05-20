@@ -1,0 +1,27 @@
+# Basic list patterns: empty, exact-length, and rest-capturing.
+
+def head-or-zero = fun xs {
+	when xs is [] {
+		0
+	} is [n, ...] {
+		n
+	}
+}
+
+def length = fun xs {
+	when xs is [] {
+		0
+	} is [_, ...rest] {
+		1 + length rest
+	}
+}
+
+def main = fun {
+	print (to-string (head-or-zero []))
+	print (to-string (head-or-zero [10]))
+	print (to-string (head-or-zero [10, 20, 30]))
+
+	print (to-string (length []))
+	print (to-string (length [1]))
+	print (to-string (length [1, 2, 3, 4, 5]))
+}

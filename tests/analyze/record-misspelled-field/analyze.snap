@@ -3,6 +3,6 @@ source: tests/analyze.rs
 expression: output
 ---
 error: Field `namee` does not exist in record of type `{name: string, age: int}`.
-> 1 | def me = {name: "reid", age: 28}
-      ^
+> 4 | 	me.namee
+       ^^
 

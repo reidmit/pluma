@@ -1,0 +1,16 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: This pattern can fail to match. `let` bindings require an irrefutable pattern (identifier, wildcard, tuple, or record). Use `if` or `when` to handle the cases.
+> 6 | 	let some x = some 5
+           ^^^^^^
+
+error: Name `x` is not defined.
+> 7 | 	print (to-string x)
+                        ^
+
+error: This pattern can fail to match. `let` bindings require an irrefutable pattern (identifier, wildcard, tuple, or record). Use `if` or `when` to handle the cases.
+> 10 | 	let 1 = 1
+            ^
+

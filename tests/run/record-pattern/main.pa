@@ -1,11 +1,11 @@
 def get-name = fun person {
-	when person is {name: n} {
+	when person is {name: n, ...} {
 		n
 	}
 }
 
 def get-age = fun person {
-	when person is {age: a} {
+	when person is {age: a, ...} {
 		a
 	}
 }

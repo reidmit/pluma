@@ -1,0 +1,21 @@
+# Exact-length list patterns + literal element patterns.
+
+def describe = fun xs {
+	when xs is [] {
+		"empty"
+	} is [1, 2] {
+		"one-then-two"
+	} is [_, _] {
+		"pair"
+	} else {
+		"many"
+	}
+}
+
+def main = fun {
+	print (describe [])
+	print (describe [1, 2])
+	print (describe [3, 4])
+	print (describe [1])
+	print (describe [1, 2, 3])
+}

@@ -1,0 +1,11 @@
+# Named record rest (`...rest`) isn't supported yet — only anonymous `...`.
+
+def show-name = fun p {
+	when p is {name: n, ...rest} {
+		print n
+	}
+}
+
+def main = fun {
+	show-name {name: "reid", age: 28}
+}

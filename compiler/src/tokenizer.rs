@@ -405,6 +405,10 @@ impl<'a> Iterator for Tokenizer<'a> {
 
 					if self.source[self.index] == b'.' {
 						self.index += 1;
+						if self.source[self.index] == b'.' {
+							self.index += 1;
+							return Some(TripleDot(start_index, self.index));
+						}
 						return Some(DoubleDot(start_index, self.index));
 					}
 

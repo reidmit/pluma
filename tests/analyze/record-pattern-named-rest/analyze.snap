@@ -1,0 +1,8 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: Named record rest (`...name`) isn't supported yet. Use a bare `...` to allow extra fields without binding them.
+> 4 | 	when p is {name: n, ...rest} {
+                           ^^^^^^^
+

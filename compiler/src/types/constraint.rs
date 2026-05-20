@@ -11,7 +11,7 @@ pub enum Constraint {
 	// are minted; the cells of the fresh class constraints are pushed
 	// into `dispatch_sink` so the surrounding Call can read them as its
 	// `dict_args`.
-	Inst(usize, Type, DispatchSink),
+	Inst(usize, Type, DispatchSink, Range),
 	// `Class { name, ty, reason }` asserts that `ty` is an instance of the
 	// typeclass named `name`. Emitted by `constrain` when resolving trait
 	// methods; processed by `discharge` after `unify`.

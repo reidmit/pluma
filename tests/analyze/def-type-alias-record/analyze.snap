@@ -47,7 +47,9 @@ module `main` (tests/analyze/def-type-alias-record/main.pa) {
                         body: [
                             expr(7:1-7:40) :: nothing {
                                 kind: let(7:1-7:40) {
-                                    name: ident(7:5-7:7) `me`,
+                                    pattern: pattern(7:5-7:7) Identifier(
+                                        ident(7:5-7:7) `me`,
+                                    ),
                                     value: expr(7:10-7:40) :: {name: string, age: int} {
                                         kind: call(7:10-7:40) {
                                             callee: expr(7:10-7:16) :: ({name: string, age: int}) -> {name: string, age: int} {

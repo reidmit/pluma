@@ -463,7 +463,7 @@ impl<'a> Formatter<'a> {
 	fn format_let(&self, l: &LetNode) -> Doc {
 		concat(vec![
 			text("let "),
-			text(l.name.name.clone()),
+			self.format_pattern(&l.pattern),
 			text(" = "),
 			self.format_expr(&l.value),
 		])
@@ -691,11 +691,8 @@ impl<'a> Formatter<'a> {
 				let docs: Vec<Doc> = items.iter().map(|p| self.format_pattern(p)).collect();
 				bracketed("(", ")", docs)
 			}
-			PatternKind::Record(fields) => {
-				if fields.is_empty() {
-					return text("{}");
-				}
-				let docs: Vec<Doc> = fields
+			PatternKind::Record { fields, rest } => {
+				let mut docs: Vec<Doc> = fields
 					.iter()
 					.map(|(name, pat)| {
 						concat(vec![
@@ -705,7 +702,31 @@ impl<'a> Formatter<'a> {
 						])
 					})
 					.collect();
+				if let Some(rp) = rest {
+					let rest_text = match &rp.binding {
+						Some(ident) => format!("...{}", ident.name),
+						None => "...".into(),
+					};
+					docs.push(text(rest_text));
+				}
+				if docs.is_empty() {
+					return text("{}");
+				}
 				bracketed_collection("{", "}", docs)
+			}
+			PatternKind::List { items, rest } => {
+				let mut docs: Vec<Doc> = items.iter().map(|p| self.format_pattern(p)).collect();
+				if let Some(rp) = rest {
+					let rest_text = match &rp.binding {
+						Some(ident) => format!("...{}", ident.name),
+						None => "...".into(),
+					};
+					docs.push(text(rest_text));
+				}
+				if docs.is_empty() {
+					return text("[]");
+				}
+				bracketed("[", "]", docs)
 			}
 			PatternKind::Interpolation(parts) => self.format_interpolation(parts),
 		}

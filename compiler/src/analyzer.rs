@@ -1618,7 +1618,7 @@ impl<'compiler> Analyzer<'compiler> {
 							// surrounding Call reads them as dict_args.
 							let sink = crate::ast::new_dispatch_sink();
 							expr.dispatch_sink = Some(sink.clone());
-							constraints.push(Inst(var, expr_ty, sink));
+							constraints.push(Inst(var, expr_ty, sink, expr.range));
 						}
 					};
 				};
@@ -2003,25 +2003,33 @@ impl<'compiler> Analyzer<'compiler> {
 				);
 			}
 
-			ExprKind::Let(LetNode { name, value, .. }) => {
+			ExprKind::Let(LetNode { pattern, value, .. }) => {
 				// visit the value (expression after the `=`), and collect constraints:
 				self.constrain_expr(value, constraints);
 
-				// add a new type scheme to the context with a new var:
-				// If the value's type is already fully concrete (no free type vars),
-				// bind monomorphically so subsequent uses see the resolved type at
-				// constraint-gen time. Otherwise defer via Gen/Inst so the binding
-				// can be polymorphic.
-				if value.ty.free_vars().is_empty() {
-					self.add_value_binding(
-						name.name.clone(),
-						Scheme::Forall(vec![], vec![], value.ty.clone()),
-						name.range,
-					);
-				} else {
-					let type_scheme = self.new_type_scheme_var();
-					self.add_value_binding(name.name.clone(), type_scheme.clone(), name.range);
-					constraints.push(Gen(type_scheme, value.ty.clone()));
+				match &mut pattern.kind {
+					PatternKind::Identifier(name) => {
+						// Top-level identifier binding. Preserve mono-vs-poly: if the
+						// value's type is fully concrete, bind monomorphically so
+						// subsequent uses see the resolved type at constraint-gen
+						// time; otherwise defer via Gen/Inst so the binding can be
+						// polymorphic.
+						if value.ty.free_vars().is_empty() {
+							self.add_value_binding(
+								name.name.clone(),
+								Scheme::Forall(vec![], vec![], value.ty.clone()),
+								name.range,
+							);
+						} else {
+							let type_scheme = self.new_type_scheme_var();
+							self.add_value_binding(name.name.clone(), type_scheme.clone(), name.range);
+							constraints.push(Gen(type_scheme, value.ty.clone()));
+						}
+					}
+					_ => {
+						let subject_ty = value.ty.clone();
+						self.constrain_let_pattern(pattern, subject_ty, constraints);
+					}
 				}
 
 				// let expressions always evaluate to ()
@@ -2326,6 +2334,109 @@ impl<'compiler> Analyzer<'compiler> {
 		}
 	}
 
+	// Constrain a `let`-binding pattern, which must be irrefutable. Mirrors
+	// the shape of `constrain_pattern` for the irrefutable cases (Identifier,
+	// Underscore, Tuple, Record) but skips variant-name resolution so a bare
+	// ident always binds (e.g. `let (a, b) = ...` never tries to read `a` as
+	// a nullary variant). Refutable patterns (Constructor, Literal,
+	// Interpolation) are rejected with a diagnostic.
+	fn constrain_let_pattern(
+		&mut self,
+		pattern: &mut PatternNode,
+		subject_ty: Type,
+		constraints: &mut Vec<Constraint>,
+	) {
+		match &mut pattern.kind {
+			PatternKind::Underscore => {}
+
+			PatternKind::Identifier(ident) => {
+				self.add_value_binding(
+					ident.name.clone(),
+					Scheme::Forall(vec![], vec![], subject_ty),
+					ident.range,
+				);
+			}
+
+			PatternKind::Tuple(entries) => {
+				let mut entry_types = Vec::new();
+				for _ in entries.iter() {
+					entry_types.push(self.new_type_var());
+				}
+				constraints
+					.push(eq_constraint(subject_ty, Type::Tuple(entry_types.clone())).at(pattern.range));
+				for (entry, entry_ty) in entries.iter_mut().zip(entry_types.into_iter()) {
+					self.constrain_let_pattern(entry, entry_ty, constraints);
+				}
+			}
+
+			PatternKind::Record { fields, rest } => {
+				if let Some(rp) = rest.as_ref() {
+					if rp.binding.is_some() {
+						self.error(rp.range, NamedRecordRestNotSupported);
+					}
+				}
+				// Without `...`: require an exact match on the field set
+				// (subject must be `Record([...])`). With `...`: subject may
+				// have extra fields (push a `PartialRecord` constraint per
+				// listed field).
+				if rest.is_none() {
+					let mut field_types = Vec::with_capacity(fields.len());
+					let mut child_tys = Vec::with_capacity(fields.len());
+					for (field_name, _) in fields.iter() {
+						let ty = self.new_type_var();
+						field_types.push((field_name.name.clone(), ty.clone()));
+						child_tys.push(ty);
+					}
+					constraints
+						.push(eq_constraint(subject_ty.clone(), Type::Record(field_types)).at(pattern.range));
+					for ((_, field_pattern), child_ty) in fields.iter_mut().zip(child_tys.into_iter()) {
+						self.constrain_let_pattern(field_pattern, child_ty, constraints);
+					}
+				} else {
+					for (field_name, field_pattern) in fields.iter_mut() {
+						let field_ty = self.new_type_var();
+						constraints.push(
+							eq_constraint(
+								subject_ty.clone(),
+								Type::PartialRecord(field_name.name.clone(), field_ty.clone().into()),
+							)
+							.at(field_pattern.range),
+						);
+						self.constrain_let_pattern(field_pattern, field_ty, constraints);
+					}
+				}
+			}
+
+			PatternKind::List { items, rest } => {
+				// List patterns can fail at runtime (the length might not
+				// match), so they're refutable in `let` — except for
+				// `[...]` or `[...rest]` with no required items, which
+				// always matches.
+				let always_succeeds = items.is_empty() && rest.is_some();
+				if !always_succeeds {
+					self.error(pattern.range, RefutablePatternInLet);
+					return;
+				}
+				let elem_ty = self.new_type_var();
+				constraints
+					.push(eq_constraint(subject_ty.clone(), Type::List(Box::new(elem_ty))).at(pattern.range));
+				if let Some(rp) = rest {
+					if let Some(name) = &rp.binding {
+						self.add_value_binding(
+							name.name.clone(),
+							Scheme::Forall(vec![], vec![], subject_ty),
+							name.range,
+						);
+					}
+				}
+			}
+
+			PatternKind::Constructor(..) | PatternKind::Literal(..) | PatternKind::Interpolation(..) => {
+				self.error(pattern.range, RefutablePatternInLet);
+			}
+		}
+	}
+
 	fn constrain_pattern(
 		&mut self,
 		pattern: &mut PatternNode,
@@ -2431,19 +2542,63 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 			}
 
-			PatternKind::Record(fields) => {
-				// Use PartialRecord per field so the subject can be a record with
-				// at least these fields.
-				for (field_name, field_pattern) in fields.iter_mut() {
-					let field_ty = self.new_type_var();
-					constraints.push(
-						eq_constraint(
-							subject_ty.clone(),
-							Type::PartialRecord(field_name.name.clone(), field_ty.clone().into()),
-						)
-						.at(field_pattern.range),
-					);
-					self.constrain_pattern(field_pattern, field_ty, constraints);
+			PatternKind::Record { fields, rest } => {
+				if let Some(rp) = rest.as_ref() {
+					if rp.binding.is_some() {
+						self.error(rp.range, NamedRecordRestNotSupported);
+					}
+				}
+				// Without `...`: closed-record match — subject must have
+				// exactly the listed fields. With `...`: open match — push
+				// `PartialRecord` per field so extras are allowed.
+				if rest.is_none() {
+					let mut field_types = Vec::with_capacity(fields.len());
+					let mut child_tys = Vec::with_capacity(fields.len());
+					for (field_name, _) in fields.iter() {
+						let ty = self.new_type_var();
+						field_types.push((field_name.name.clone(), ty.clone()));
+						child_tys.push(ty);
+					}
+					constraints
+						.push(eq_constraint(subject_ty.clone(), Type::Record(field_types)).at(pattern.range));
+					for ((_, field_pattern), child_ty) in fields.iter_mut().zip(child_tys.into_iter()) {
+						self.constrain_pattern(field_pattern, child_ty, constraints);
+					}
+				} else {
+					for (field_name, field_pattern) in fields.iter_mut() {
+						let field_ty = self.new_type_var();
+						constraints.push(
+							eq_constraint(
+								subject_ty.clone(),
+								Type::PartialRecord(field_name.name.clone(), field_ty.clone().into()),
+							)
+							.at(field_pattern.range),
+						);
+						self.constrain_pattern(field_pattern, field_ty, constraints);
+					}
+				}
+			}
+
+			PatternKind::List { items, rest } => {
+				// Subject must be `list a` for some element type `a`. Each
+				// item pattern matches against `a`. A named rest binding
+				// captures the remainder as `list a`.
+				let elem_ty = self.new_type_var();
+				constraints.push(
+					eq_constraint(subject_ty.clone(), Type::List(Box::new(elem_ty.clone())))
+						.at(pattern.range),
+				);
+				for item in items.iter_mut() {
+					self.constrain_pattern(item, elem_ty.clone(), constraints);
+				}
+				if let Some(rp) = rest {
+					if let Some(name) = &rp.binding {
+						self.add_value_binding(
+							name.name.clone(),
+							Scheme::Forall(vec![], vec![], Type::List(Box::new(elem_ty))),
+							name.range,
+						);
+					}
 				}
 			}
 
@@ -2454,6 +2609,10 @@ impl<'compiler> Analyzer<'compiler> {
 	}
 
 	fn check_when_exhaustive(&mut self, subject_ty: &Type, cases: &[CaseNode], range: Range) {
+		if matches!(subject_ty, Type::List(_)) {
+			return self.check_when_list_exhaustive(cases, range);
+		}
+
 		let required: Vec<String> = match subject_ty {
 			Type::Bool => vec!["true".into(), "false".into()],
 			Type::Enum(name, _) => match self.enum_defs.get(name) {
@@ -2527,6 +2686,69 @@ impl<'compiler> Analyzer<'compiler> {
 			.filter(|v| !covered.contains(v))
 			.collect();
 
+		if !missing.is_empty() {
+			self.error(range, WhenNotExhaustive { missing });
+		}
+	}
+
+	// Exhaustiveness for `when` over `list a`. The value space is split in
+	// two: the empty list, and any non-empty list. A `when` is exhaustive
+	// iff both halves are covered (or there's an outer catch-all).
+	//
+	// What counts:
+	// - `_` or a bare ident (non-variant): covers everything.
+	// - `[]` (List { items: [], rest: None }): covers empty.
+	// - `[...]` / `[...rest]` (List { items: [], rest: Some }): covers
+	//   both halves at once — any-length match.
+	// - `[head, ...]` / `[head, ...rest]` where `head` is a catch-all
+	//   sub-pattern: covers non-empty.
+	//
+	// Patterns like `[a]` or `[a, b, ...]` cover only specific lengths; we
+	// don't try to combine multiple of those into "everything ≥ 1". A
+	// catch-all is required for the remaining cases.
+	fn check_when_list_exhaustive(&mut self, cases: &[CaseNode], range: Range) {
+		let mut covers_empty = false;
+		let mut covers_non_empty = false;
+
+		for case in cases {
+			match &case.pattern.kind {
+				PatternKind::Underscore => return,
+				PatternKind::Identifier(_) => return,
+				PatternKind::List { items, rest } => {
+					match (items.is_empty(), rest.is_some()) {
+						(true, false) => covers_empty = true,
+						(true, true) => return, // `[...]` covers everything
+						(false, true) => {
+							// `[head_0, ..., head_n, ...rest]` covers non-empty
+							// only when every required head is itself a catch-all.
+							// An ident that names a nullary variant somewhere is
+							// not a catch-all (it matches that variant only).
+							let all_catch = items.iter().all(|it| match &it.kind {
+								PatternKind::Underscore => true,
+								PatternKind::Identifier(ident) => self
+									.find_variant_globally(&ident.name)
+									.iter()
+									.all(|(_, p)| !p.is_empty()),
+								_ => false,
+							});
+							if all_catch {
+								covers_non_empty = true;
+							}
+						}
+						(false, false) => {}
+					}
+				}
+				_ => {}
+			}
+		}
+
+		let mut missing = Vec::new();
+		if !covers_empty {
+			missing.push("[]".into());
+		}
+		if !covers_non_empty {
+			missing.push("[_, ...]".into());
+		}
 		if !missing.is_empty() {
 			self.error(range, WhenNotExhaustive { missing });
 		}
@@ -2697,20 +2919,19 @@ impl<'compiler> Analyzer<'compiler> {
 					return Substitution::empty();
 				}
 
-				// add some new constraints to unify param & return types:
+				// add some new constraints to unify param & return types.
+				// Propagate the outer range so any sub-error reports at the
+				// call site (or wherever this Fun~Fun was emitted).
 				let mut constraints = Vec::with_capacity(param_types_1.len() + 1);
 
 				for i in 0..param_types_1.len() {
-					constraints.push(eq_constraint(
-						param_types_1[i].clone(),
-						param_types_2[i].clone(),
-					))
+					constraints.push(
+						eq_constraint(param_types_1[i].clone(), param_types_2[i].clone()).at(reason.range),
+					);
 				}
 
-				constraints.push(eq_constraint(
-					*return_type_1.clone(),
-					*return_type_2.clone(),
-				));
+				constraints
+					.push(eq_constraint(*return_type_1.clone(), *return_type_2.clone()).at(reason.range));
 
 				self.unify(&constraints)
 			}
@@ -2787,12 +3008,13 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 
 			Eq(Type::Record(field_types_1), Type::Record(field_types_2), reason) => {
-				// records can be unified if they have all the same field names, and the same
-				// types at each field name, but order does not matter
-				// NOTE: actually, maybe it's fine if {name: string, age: int} is given when
-				// we wanted {age: int} ? todo later?
+				// Records unify iff they have the same field set (order
+				// doesn't matter) and matching types at each field. Extras
+				// on either side are an error — for "I just need this
+				// field, anything else is fine", write a `{name, ...}`
+				// pattern (which lowers to `PartialRecord`) or access the
+				// field directly (`r.name`, also `PartialRecord`-backed).
 
-				// add some new constraints to unify field types:
 				let mut constraints = Vec::with_capacity(field_types_2.len());
 
 				let expected_fields: HashMap<&String, usize> =
@@ -2802,20 +3024,37 @@ impl<'compiler> Analyzer<'compiler> {
 
 				let mut errors = false;
 
-				for (field_name, expected_index) in expected_fields {
-					if let Some(actual_index) = actual_fields.get(field_name) {
-						constraints.push(eq_constraint(
-							field_types_1[*actual_index].1.clone(),
-							field_types_2[expected_index].1.clone(),
-						))
+				for (field_name, expected_index) in &expected_fields {
+					if let Some(actual_index) = actual_fields.get(*field_name) {
+						constraints.push(
+							eq_constraint(
+								field_types_1[*actual_index].1.clone(),
+								field_types_2[*expected_index].1.clone(),
+							)
+							.at(reason.range),
+						);
 					} else {
 						errors = true;
-
 						self.error(
 							reason.range,
 							RecordFieldNotPresent {
-								field: field_name.clone(),
+								field: (*field_name).clone(),
 								ty: Type::Record(field_types_1.clone()),
+							},
+						)
+					}
+				}
+
+				// Catch extras on the actual side too — these would have
+				// been silently accepted under the old directional rule.
+				for (field_name, _) in &actual_fields {
+					if !expected_fields.contains_key(*field_name) {
+						errors = true;
+						self.error(
+							reason.range,
+							RecordFieldNotPresent {
+								field: (*field_name).clone(),
+								ty: Type::Record(field_types_2.clone()),
 							},
 						)
 					}
@@ -2856,6 +3095,25 @@ impl<'compiler> Analyzer<'compiler> {
 					);
 
 					return Substitution::empty();
+				}
+			}
+
+			Eq(Type::PartialRecord(name_1, ty_1), Type::PartialRecord(name_2, ty_2), _reason) => {
+				if name_1 == name_2 {
+					// Same field: unify its type.
+					self.unify(&[eq_constraint(*ty_1.clone(), *ty_2.clone())])
+				} else {
+					// Different fields: both constraints describe a record
+					// with at least these fields. The underlying type must
+					// satisfy both, but `PartialRecord` only carries one
+					// field. Accept here without further substitution — when
+					// the underlying record is concretized elsewhere, each
+					// `PartialRecord` constraint resolves against it via the
+					// `Record ~ PartialRecord` rule. In the rare case the
+					// record never becomes concrete, we lose the second
+					// field as an inferred constraint — acceptable looseness
+					// for now.
+					Substitution::empty()
 				}
 			}
 
@@ -3247,10 +3505,10 @@ impl<'compiler> Analyzer<'compiler> {
 		let scheme = self.generalize_with_constraints(ty, class_pool);
 
 		for constraint in constraints {
-			if let Constraint::Inst(_, ty, sink) = constraint {
+			if let Constraint::Inst(_, ty, sink, range) = constraint {
 				let (instantiated_ty, fresh_class_constraints) =
 					self.instantiate_scheme_with_constraints(&scheme);
-				new_constraints.push(eq_constraint(ty.clone(), instantiated_ty));
+				new_constraints.push(eq_constraint(ty.clone(), instantiated_ty).at(*range));
 
 				// Each fresh class constraint comes with a fresh dispatch
 				// cell — record them in the sink so the originating Call

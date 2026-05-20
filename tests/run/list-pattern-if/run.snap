@@ -1,0 +1,10 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+compile error
+== stdout ==
+== stderr ==
+warning: Name `rest` is never used.
+

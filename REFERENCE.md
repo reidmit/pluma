@@ -165,6 +165,34 @@ def main = fun {
 
 The right-hand side is any expression — string, int, record, function literal, function call. `def` is value-only; type definitions use their own keywords (`alias`, `enum`, `trait`).
 
+## let destructuring
+
+a `let` binding accepts any irrefutable pattern on the left — identifier, wildcard, tuple, record, and nestings of those. the same shapes used in `if` / `when` / `while`, restricted to patterns that always match.
+
+```
+let (a, b) = (1, 2)
+let (lo, _, hi) = (0, 50, 100)
+
+let p = {name: "reid", age: 28}
+let {name: n, age: a} = p
+
+# nested
+let ((x, y), z) = ((10, 20), 30)
+let {label: lbl, coords: (cx, cy)} = {label: "origin", coords: (0, 0)}
+```
+
+refutable patterns (constructor, literal, string-interpolation) aren't allowed — those can fail to match, which would leave bindings undefined. use `if` or `when` for those cases:
+
+```
+# rejected: `some` can fail (the value might be `none`)
+# let some x = maybe-value
+
+# instead:
+if maybe-value is some x {
+  print (to-string x)
+}
+```
+
 ## type annotations
 
 `::` annotates a name with its type. Used inside `alias` bodies (record-style types) and `trait` method signatures. Distinct from `:` so the two roles never collide:
@@ -441,3 +469,82 @@ while (get-next iterator) is some name {
   print "name: $(name)"
 }
 ```
+
+## record patterns
+
+record patterns destructure records in `when` / `if` / `while` / `let`. by default they require an **exact** match on the field set; add `, ...` to allow extras (and skip them).
+
+```
+let {name: n, age: a} = {name: "reid", age: 28}   # exact: types must match
+let {name: n, ...} = {name: "alice", age: 30}     # open: extras ignored
+
+when person is {name: n, role: r} { ... }         # exact `{name, role}` only
+when person is {name: n, ...} { ... }             # any record with a `name`
+```
+
+- `{a: x, b: y}` — closed: subject must be exactly `{a: T, b: U}`.
+- `{a: x, b: y, ...}` — open: subject may carry extra fields.
+- `{}` — closed empty: matches only the empty record `{}`.
+- `{...}` — open empty: matches any record.
+
+field shorthand (`{a, b}` for `{a: a, b: b}`) isn't supported yet.
+
+since the type system fully describes the field set, a closed pattern that matches the subject's type is exhaustive without `else`:
+
+```
+def midpoint = fun pt {
+  when pt is {x: xv, y: yv} {              # only one possible shape
+    (xv + yv) / 2
+  }
+}
+```
+
+if you want flexibility at function boundaries, prefer the open form (`{name: n, ...}`) — that's analogous to how `[head, ...]` opts into "more elements allowed."
+
+## list patterns
+
+list patterns destructure `list a` in `when` / `if` / `while` (and the always-matches forms work in `let`).
+
+```
+when items is [] {
+  "empty"
+} is [n, ...rest] {
+  "$(to-string n) and $(to-string (size rest)) more"
+}
+```
+
+- `[]` — matches the empty list.
+- `[a, b, c]` — matches a list of exactly three elements. Element patterns can be anything (literals, identifiers, wildcards, nested patterns).
+- `[a, b, ...]` — matches any list with at least two elements; doesn't capture the tail.
+- `[a, b, ...rest]` — same, but binds the remaining elements as `list a`.
+- `[...rest]` and `[...]` — match any list; only the second binds.
+
+elements use the same sub-pattern syntax as other patterns:
+
+```
+when xs is [(x, y), ...] { print "first pair: $(to-string x), $(to-string y)" }
+when xs is [some n, ...] { print "first slot has $(to-string n)" }
+when xs is [0, _, ...]   { print "starts with zero" }
+```
+
+`when` on a `list a` is exhaustive when both halves are covered — typically `[]` plus a pattern like `[_, ...]` that catches every non-empty case:
+
+```
+def length = fun xs {
+  when xs is [] {
+    0
+  } is [_, ...rest] {
+    1 + length rest
+  }
+}
+```
+
+an `else` branch also covers everything, as usual.
+
+list patterns in `let` work only when they always match — i.e. `[...]` or `[...rest]` with no required elements:
+
+```
+let [...everything] = items   # binds `everything` to all of `items`
+```
+
+use `when` / `if` for any pattern that can fail.

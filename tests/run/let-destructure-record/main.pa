@@ -1,0 +1,29 @@
+# Record destructuring in `let` bindings.
+
+alias person {
+	name :: string
+	age  :: int
+}
+
+def main = fun {
+	let p = {name: "reid", age: 28}
+	let {name: n, age: a} = p
+	print n
+	print (to-string a)
+
+	# pick a subset of fields
+	let {name: just-name, ...} = p
+	print just-name
+
+	# nested record-in-tuple
+	let (lhs, {name: rn, ...}) = (1, p)
+	print (to-string lhs)
+	print rn
+
+	# nested tuple-in-record (pair as a field)
+	let pt = {label: "origin", coords: (0, 0)}
+	let {label: lbl, coords: (cx, cy)} = pt
+	print lbl
+	print (to-string cx)
+	print (to-string cy)
+}

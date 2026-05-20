@@ -1,0 +1,11 @@
+# Refutable patterns are rejected in `let` — they can fail to match,
+# which would leave bindings undefined at runtime. Use `if` or `when`.
+
+def main = fun {
+	# Constructor pattern: refutable (the value might be `none`).
+	let some x = some 5
+	print (to-string x)
+
+	# Literal pattern: refutable.
+	let 1 = 1
+}

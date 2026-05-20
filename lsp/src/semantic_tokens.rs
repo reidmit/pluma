@@ -388,12 +388,17 @@ impl AstWalker {
 				}
 			}
 			ExprKind::Let(l) => {
-				let kind = if let ExprKind::Fun(_) = &l.value.kind {
-					FUNCTION
-				} else {
-					VARIABLE
-				};
-				emit(out, &l.name.range, kind, l.name.name.len());
+				match &l.pattern.kind {
+					PatternKind::Identifier(id) => {
+						let kind = if let ExprKind::Fun(_) = &l.value.kind {
+							FUNCTION
+						} else {
+							VARIABLE
+						};
+						emit(out, &id.range, kind, id.name.len());
+					}
+					_ => self.walk_pattern(&l.pattern, out),
+				}
 				self.walk_expr(&l.value, out);
 			}
 			ExprKind::Record(fields) => {
@@ -463,10 +468,25 @@ impl AstWalker {
 					self.walk_pattern(ip, out);
 				}
 			}
-			PatternKind::Record(fields) => {
+			PatternKind::Record { fields, rest } => {
 				for (name, sub) in fields {
 					emit(out, &name.range, PROPERTY, name.name.len());
 					self.walk_pattern(sub, out);
+				}
+				if let Some(rp) = rest {
+					if let Some(name) = &rp.binding {
+						emit(out, &name.range, VARIABLE, name.name.len());
+					}
+				}
+			}
+			PatternKind::List { items, rest } => {
+				for ip in items {
+					self.walk_pattern(ip, out);
+				}
+				if let Some(rp) = rest {
+					if let Some(name) = &rp.binding {
+						emit(out, &name.range, VARIABLE, name.name.len());
+					}
 				}
 			}
 			PatternKind::Underscore | PatternKind::Literal(_) => {}
