@@ -550,7 +550,7 @@ when person is {name: n, ...} { ... }             # any record with a `name`
 - `{...}` — open empty: matches any record.
 - `{...rest}` — captures the whole record as `rest`.
 
-field shorthand (`{a, b}` for `{a: a, b: b}`) isn't supported yet.
+field shorthand: `{a, b}` is sugar for `{a: a, b: b}` — in a literal the value comes from the in-scope `a`/`b`; in a pattern it binds the field value to a variable of the same name. Mix and match freely (`{role, team, level: 1}`, `when p is {name, role: r, ...}`).
 
 ```
 def split-out-name = fun p {

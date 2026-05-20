@@ -1096,9 +1096,17 @@ impl<'a> Parser<'a> {
 		}
 
 		while let Some(field_name) = self.parse_identifier() {
-			expect_token_and_advance!(self, Token::Colon);
-
-			let field_pattern = self.parse_pattern()?;
+			// Field shorthand: `{a, b}` desugars to `{a: a, b: b}`. The
+			// sub-pattern is an identifier pattern binding the same name.
+			let field_pattern = if matches!(self.current_token, Some(Token::Colon(..))) {
+				self.advance();
+				self.parse_pattern()?
+			} else {
+				PatternNode {
+					range: field_name.range,
+					kind: PatternKind::Identifier(field_name.clone()),
+				}
+			};
 
 			fields.push((field_name, field_pattern));
 
@@ -1413,9 +1421,21 @@ impl<'a> Parser<'a> {
 		let mut entries = Vec::new();
 
 		while let Some(field_name) = self.parse_identifier() {
-			expect_token_and_advance!(self, Token::Colon);
-
-			let field_value = self.parse_expression()?;
+			// Field shorthand: `{a, b}` desugars to `{a: a, b: b}`. The
+			// value is the same identifier resolved from the surrounding
+			// scope.
+			let field_value = if matches!(self.current_token, Some(Token::Colon(..))) {
+				self.advance();
+				self.parse_expression()?
+			} else {
+				ExprNode {
+					range: field_name.range,
+					kind: ExprKind::Identifier(field_name.clone()),
+					ty: Type::Unknown,
+					trait_dispatch: None,
+					dispatch_sink: None,
+				}
+			};
 
 			entries.push((field_name, field_value));
 

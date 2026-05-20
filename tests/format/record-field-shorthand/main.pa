@@ -1,0 +1,19 @@
+def make-pair = fun a b {
+	{a: a, b: b}
+}
+
+def upgrade = fun name age role {
+	{name: name, age: age, role: role, level: 1}
+}
+
+def split = fun p {
+	when p is {name: name, role: role, ...} {
+		(name, role)
+	}
+}
+
+def label = fun pt {
+	when pt is {x: x, y: y} {
+		(x, y)
+	}
+}

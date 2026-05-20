@@ -506,6 +506,13 @@ impl<'a> Formatter<'a> {
 		let docs: Vec<Doc> = fields
 			.iter()
 			.map(|(name, value)| {
+				// Field shorthand: render `{a: a}` as `{a}` when the value
+				// is just an identifier with the same name.
+				if let ExprKind::Identifier(ident) = &value.kind {
+					if ident.name == name.name {
+						return text(name.name.clone());
+					}
+				}
 				concat(vec![
 					text(name.name.clone()),
 					text(": "),
@@ -709,6 +716,14 @@ impl<'a> Formatter<'a> {
 				let mut docs: Vec<Doc> = fields
 					.iter()
 					.map(|(name, pat)| {
+						// Field shorthand: render `{a: a}` as `{a}` when
+						// the sub-pattern is an identifier-bind of the
+						// same name.
+						if let PatternKind::Identifier(ident) = &pat.kind {
+							if ident.name == name.name {
+								return text(name.name.clone());
+							}
+						}
 						concat(vec![
 							text(name.name.clone()),
 							text(": "),

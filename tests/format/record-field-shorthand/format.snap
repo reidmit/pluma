@@ -1,0 +1,24 @@
+---
+source: tests/format.rs
+expression: once
+---
+def make-pair = fun a b {
+	{a, b}
+}
+
+def upgrade = fun name age role {
+	{name, age, role, level: 1}
+}
+
+def split = fun p {
+	when p is {name, role, ...} {
+		(name, role)
+	}
+}
+
+def label = fun pt {
+	when pt is {x, y} {
+		(x, y)
+	}
+}
+
