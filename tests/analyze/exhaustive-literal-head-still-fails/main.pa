@@ -1,0 +1,33 @@
+# Regression boundary: the recursive catch-all check should NOT promote
+# patterns whose innards include a literal. `some 0` covers only the
+# `some 0` value, not the `some` variant.
+
+def show-literal = fun opt {
+	when opt is some 0 {
+		"zero"
+	} is none {
+		"none"
+	}
+}
+
+# Same idea for lists: `[0, ...]` shouldn't be enough.
+def starts-with-zero = fun xs {
+	when xs is [] {
+		"empty"
+	} is [0, ...] {
+		"zero-led"
+	}
+}
+
+# And for record-typed subjects: a literal sub-pattern is still refutable.
+def is-zero-coded = fun r {
+	when r is {code: 0, ...} {
+		"zero"
+	}
+}
+
+def main = fun {
+	print (show-literal (some 1))
+	print (starts-with-zero [1])
+	print (is-zero-coded {code: 1})
+}

@@ -1,0 +1,8 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: Field `a` is listed more than once in this record pattern.
+> 6 | 	let {a: x, a: y} = {a: 1}
+                  ^
+

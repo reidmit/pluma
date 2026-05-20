@@ -1,0 +1,263 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/exhaustive-nested-variant/main.pa) {
+    comments: {
+        0: " A constructor-pattern arm with a nested all-binding tuple/record",
+        1: " payload is itself a catch-all of that variant — exhaustiveness should",
+        2: " accept these without an `else`.",
+    },
+    ast: Some(
+        module(4:0-23:1) [
+            def(4:0-10:1) :: nothing {
+                name: ident(4:4-4:13) `show-pair`,
+                kind: expr(4:16-10:1) :: (option (('y, 'z))) -> string {
+                    kind: fun(4:16-10:1) {
+                        params: [
+                            ident(4:20-4:23) `opt` :: option (('y, 'z)),
+                        ],
+                        body: [
+                            expr(5:1-9:2) :: string {
+                                kind: when(5:1-9:2) [
+                                    case(5:10-7:2) is pattern(5:13-5:24) Constructor(
+                                        ident(5:13-5:17) `some`,
+                                        [
+                                            pattern(5:18-5:24) Tuple(
+                                                [
+                                                    pattern(5:19-5:20) Identifier(
+                                                        ident(5:19-5:20) `a`,
+                                                    ),
+                                                    pattern(5:22-5:23) Identifier(
+                                                        ident(5:22-5:23) `b`,
+                                                    ),
+                                                ],
+                                            ),
+                                        ],
+                                    ) [
+                                        expr(6:3-6:32) :: string {
+                                            kind: interpolation [
+                                                expr(6:3-6:3) :: string {
+                                                    kind: literal(6:3-6:3) string "",
+                                                },
+                                                expr(6:5-6:16) :: string {
+                                                    kind: call(6:5-6:16) {
+                                                        callee: expr(6:5-6:14) :: 'y -> string {
+                                                            kind: ident(6:5-6:14) `to-string`,
+                                                        },
+                                                        args: [
+                                                            expr(6:15-6:16) :: 'y {
+                                                                kind: ident(6:15-6:16) `a`,
+                                                            },
+                                                        ],
+                                                    },
+                                                },
+                                                expr(6:17-6:18) :: string {
+                                                    kind: literal(6:17-6:18) string ",",
+                                                },
+                                                expr(6:20-6:31) :: string {
+                                                    kind: call(6:20-6:31) {
+                                                        callee: expr(6:20-6:29) :: 'z -> string {
+                                                            kind: ident(6:20-6:29) `to-string`,
+                                                        },
+                                                        args: [
+                                                            expr(6:30-6:31) :: 'z {
+                                                                kind: ident(6:30-6:31) `b`,
+                                                            },
+                                                        ],
+                                                    },
+                                                },
+                                                expr(6:32-6:32) :: string {
+                                                    kind: literal(6:32-6:32) string "",
+                                                },
+                                            ],
+                                        },
+                                    ],
+                                    case(7:3-9:2) is pattern(7:6-7:10) Identifier(
+                                        ident(7:6-7:10) `none`,
+                                    ) [
+                                        expr(8:3-8:8) :: string {
+                                            kind: literal(8:3-8:8) string "none",
+                                        },
+                                    ],
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
+            def(12:0-18:1) :: nothing {
+                name: ident(12:4-12:15) `show-record`,
+                kind: expr(12:18-18:1) :: (option ({age: 't12, name: string})) -> string {
+                    kind: fun(12:18-18:1) {
+                        params: [
+                            ident(12:22-12:25) `opt` :: option ({age: 't12, name: string}),
+                        ],
+                        body: [
+                            expr(13:1-17:2) :: string {
+                                kind: when(13:1-17:2) [
+                                    case(13:10-15:2) is pattern(13:13-13:36) Constructor(
+                                        ident(13:13-13:17) `some`,
+                                        [
+                                            pattern(13:19-13:36) Record {
+                                                fields: [
+                                                    (
+                                                        ident(13:20-13:24) `name`,
+                                                        pattern(13:26-13:27) Identifier(
+                                                            ident(13:26-13:27) `n`,
+                                                        ),
+                                                    ),
+                                                    (
+                                                        ident(13:29-13:32) `age`,
+                                                        pattern(13:34-13:35) Identifier(
+                                                            ident(13:34-13:35) `a`,
+                                                        ),
+                                                    ),
+                                                ],
+                                                rest: None,
+                                            },
+                                        ],
+                                    ) [
+                                        expr(14:3-14:23) :: string {
+                                            kind: interpolation [
+                                                expr(14:3-14:3) :: string {
+                                                    kind: literal(14:3-14:3) string "",
+                                                },
+                                                expr(14:5-14:6) :: string {
+                                                    kind: ident(14:5-14:6) `n`,
+                                                },
+                                                expr(14:7-14:9) :: string {
+                                                    kind: literal(14:7-14:9) string ": ",
+                                                },
+                                                expr(14:11-14:22) :: string {
+                                                    kind: call(14:11-14:22) {
+                                                        callee: expr(14:11-14:20) :: 't12 -> string {
+                                                            kind: ident(14:11-14:20) `to-string`,
+                                                        },
+                                                        args: [
+                                                            expr(14:21-14:22) :: 't12 {
+                                                                kind: ident(14:21-14:22) `a`,
+                                                            },
+                                                        ],
+                                                    },
+                                                },
+                                                expr(14:23-14:23) :: string {
+                                                    kind: literal(14:23-14:23) string "",
+                                                },
+                                            ],
+                                        },
+                                    ],
+                                    case(15:3-17:2) is pattern(15:6-15:10) Identifier(
+                                        ident(15:6-15:10) `none`,
+                                    ) [
+                                        expr(16:3-16:8) :: string {
+                                            kind: literal(16:3-16:8) string "none",
+                                        },
+                                    ],
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
+            def(20:0-23:1) :: nothing {
+                name: ident(20:4-20:8) `main`,
+                kind: expr(20:11-23:1) :: nothing -> string {
+                    kind: fun(20:11-23:1) {
+                        params: [],
+                        body: [
+                            expr(21:1-21:32) :: string {
+                                kind: call(21:1-21:32) {
+                                    callee: expr(21:1-21:6) :: string -> string {
+                                        kind: ident(21:1-21:6) `print`,
+                                    },
+                                    args: [
+                                        expr(21:7-21:32) :: string {
+                                            kind: expr(21:8-21:31) :: string {
+                                                kind: call(21:8-21:31) {
+                                                    callee: expr(21:8-21:17) :: (option ((int, int))) -> string {
+                                                        kind: ident(21:8-21:17) `show-pair`,
+                                                    },
+                                                    args: [
+                                                        expr(21:18-21:31) :: option ((int, int)) {
+                                                            kind: expr(21:19-21:30) :: option ((int, int)) {
+                                                                kind: call(21:19-21:30) {
+                                                                    callee: expr(21:19-21:23) :: 't26 -> option 't26 {
+                                                                        kind: ident(21:19-21:23) `some`,
+                                                                    },
+                                                                    args: [
+                                                                        expr(21:24-21:30) :: (int, int) {
+                                                                            kind: tuple [
+                                                                                expr(21:25-21:26) :: int {
+                                                                                    kind: literal(21:25-21:26) int 1,
+                                                                                },
+                                                                                expr(21:28-21:29) :: int {
+                                                                                    kind: literal(21:28-21:29) int 2,
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    ],
+                                                                },
+                                                            },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                            expr(22:1-22:47) :: string {
+                                kind: call(22:1-22:47) {
+                                    callee: expr(22:1-22:6) :: string -> string {
+                                        kind: ident(22:1-22:6) `print`,
+                                    },
+                                    args: [
+                                        expr(22:7-22:47) :: string {
+                                            kind: expr(22:8-22:46) :: string {
+                                                kind: call(22:8-22:46) {
+                                                    callee: expr(22:8-22:19) :: (option ({age: int, name: string})) -> string {
+                                                        kind: ident(22:8-22:19) `show-record`,
+                                                    },
+                                                    args: [
+                                                        expr(22:20-22:46) :: option ({age: int, name: string}) {
+                                                            kind: expr(22:21-22:45) :: option ({age: int, name: string}) {
+                                                                kind: call(22:21-22:45) {
+                                                                    callee: expr(22:21-22:25) :: 't36 -> option 't36 {
+                                                                        kind: ident(22:21-22:25) `some`,
+                                                                    },
+                                                                    args: [
+                                                                        expr(22:26-22:45) :: {age: int, name: string} {
+                                                                            kind: record [
+                                                                                (
+                                                                                    ident(22:27-22:31) `name`,
+                                                                                    expr(22:34-22:36) :: string {
+                                                                                        kind: literal(22:34-22:36) string "a",
+                                                                                    },
+                                                                                ),
+                                                                                (
+                                                                                    ident(22:38-22:41) `age`,
+                                                                                    expr(22:43-22:44) :: int {
+                                                                                        kind: literal(22:43-22:44) int 1,
+                                                                                    },
+                                                                                ),
+                                                                            ],
+                                                                        },
+                                                                    ],
+                                                                },
+                                                            },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

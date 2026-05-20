@@ -1,0 +1,24 @@
+# A constructor-pattern arm with a nested all-binding tuple/record
+# payload is itself a catch-all of that variant — exhaustiveness should
+# accept these without an `else`.
+
+def show-pair = fun opt {
+	when opt is some (a, b) {
+		"$(to-string a),$(to-string b)"
+	} is none {
+		"none"
+	}
+}
+
+def show-record = fun opt {
+	when opt is some ({name: n, age: a}) {
+		"$(n): $(to-string a)"
+	} is none {
+		"none"
+	}
+}
+
+def main = fun {
+	print (show-pair (some (1, 2)))
+	print (show-record (some {name: "a", age: 1}))
+}

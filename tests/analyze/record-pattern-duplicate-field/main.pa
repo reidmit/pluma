@@ -1,0 +1,9 @@
+# Duplicate field names in a record pattern are a static error.
+# Without the check, the duplicate causes the runtime match to fail
+# silently — the bound names are left as the VM's default (nothing).
+
+def main = fun {
+	let {a: x, a: y} = {a: 1}
+	print (to-string x)
+	print (to-string y)
+}

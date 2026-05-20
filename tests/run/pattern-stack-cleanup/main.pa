@@ -1,0 +1,47 @@
+# When a sub-pattern in a container fails partway through, the earlier
+# sub-matches must not leak items onto the stack. This exercises that
+# path for tuples, records, and lists by forcing the first `when` arm
+# to fail on a later sub-pattern.
+
+def describe-pair = fun pair {
+	when pair is (1, 99) {
+		"impossible"
+	} is (1, b) {
+		"second was $(to-string b)"
+	} else {
+		"other"
+	}
+}
+
+def describe-rec = fun r {
+	when r is {a: 1, b: 99, c: _} {
+		"impossible"
+	} is {a: 1, b: bv, c: cv} {
+		"b=$(to-string bv), c=$(to-string cv)"
+	} else {
+		"other"
+	}
+}
+
+def describe-list = fun xs {
+	when xs is [1, 99, _] {
+		"impossible"
+	} is [1, b, c] {
+		"$(to-string b),$(to-string c)"
+	} else {
+		"other"
+	}
+}
+
+def main = fun {
+	# Each test goes through a failing arm before hitting the right one.
+	# A stack-discipline regression would corrupt the next call.
+	print (describe-pair (1, 2))
+	print (describe-pair (3, 4))
+
+	print (describe-rec {a: 1, b: 2, c: 3})
+	print (describe-rec {a: 9, b: 0, c: 0})
+
+	print (describe-list [1, 2, 3])
+	print (describe-list [4, 5, 6])
+}

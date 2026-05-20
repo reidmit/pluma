@@ -1,0 +1,39 @@
+# Recursive list traversal via `[head, ...tail]` rest binding. Confirms
+# that the rest binding inferrs as `list a` and recursion works.
+
+def sum = fun xs {
+	when xs is [] {
+		0
+	} is [n, ...rest] {
+		n + (sum rest)
+	}
+}
+
+def length = fun xs {
+	when xs is [] {
+		0
+	} is [_, ...rest] {
+		1 + (length rest)
+	}
+}
+
+# Tuple lists: rest preserves the element type
+def sum-pairs = fun pairs {
+	when pairs is [] {
+		0
+	} is [(a, b), ...rest] {
+		a + b + (sum-pairs rest)
+	}
+}
+
+def main = fun {
+	print (to-string (sum []))
+	print (to-string (sum [1]))
+	print (to-string (sum [1, 2, 3, 4, 5]))
+
+	print (to-string (length []))
+	print (to-string (length [10, 20]))
+
+	print (to-string (sum-pairs []))
+	print (to-string (sum-pairs [(1, 2), (3, 4), (5, 6)]))
+}

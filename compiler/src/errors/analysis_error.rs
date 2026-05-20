@@ -28,6 +28,7 @@ pub enum AnalysisErrorKind {
 	OverlappingInstance { trait_name: String, head: Type },
 	OrphanInstance { trait_name: String, head: Type },
 	RefutablePatternInLet,
+	DuplicateRecordPatternField { field: String },
 }
 
 impl fmt::Display for AnalysisError {
@@ -155,6 +156,12 @@ impl fmt::Display for AnalysisError {
 			RefutablePatternInLet => write!(
 				f,
 				"This pattern can fail to match. `let` bindings require an irrefutable pattern (identifier, wildcard, tuple, or record). Use `if` or `when` to handle the cases."
+			),
+
+			DuplicateRecordPatternField { field } => write!(
+				f,
+				"Field `{}` is listed more than once in this record pattern.",
+				field
 			),
 		}
 	}

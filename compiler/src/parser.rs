@@ -946,60 +946,7 @@ impl<'a> Parser<'a> {
 
 			Some(Token::LeftBracket(..)) => self.parse_list_pattern(),
 
-			Some(Token::LeftBrace(start_offset, _)) => {
-				let start = self.offset_to_point(start_offset);
-
-				self.advance();
-				self.skip_line_breaks();
-
-				let mut fields = Vec::new();
-				let mut rest: Option<RecordRestPattern> = None;
-
-				// Allow `...` at the start: `{...}` or `{...rest}`. Matches
-				// any record (any-or-empty field set).
-				if let Some(Token::TripleDot(..)) = self.current_token {
-					rest = Some(self.parse_record_rest_pattern()?);
-					self.skip_line_breaks();
-					let (_, end) = expect_token_and_advance!(self, Token::RightBrace);
-					return Some(PatternNode {
-						range: Range::between(start, end),
-						kind: PatternKind::Record { fields, rest },
-					});
-				}
-
-				while let Some(field_name) = self.parse_identifier() {
-					expect_token_and_advance!(self, Token::Colon);
-
-					let field_pattern = self.parse_pattern()?;
-
-					fields.push((field_name, field_pattern));
-
-					match self.current_token {
-						Some(Token::Comma(..)) => {
-							self.advance();
-							self.skip_line_breaks();
-							// Trailing `, ...` (or `, ...rest`) makes this an
-							// open match.
-							if let Some(Token::TripleDot(..)) = self.current_token {
-								rest = Some(self.parse_record_rest_pattern()?);
-								self.skip_line_breaks();
-								break;
-							}
-						}
-						Some(Token::LineBreak(..)) => {
-							self.skip_line_breaks();
-						}
-						_ => break,
-					}
-				}
-
-				let (_, end) = expect_token_and_advance!(self, Token::RightBrace);
-
-				Some(PatternNode {
-					range: Range::between(start, end),
-					kind: PatternKind::Record { fields, rest },
-				})
-			}
+			Some(Token::LeftBrace(..)) => self.parse_record_pattern(),
 
 			Some(Token::Underscore(start, end)) => {
 				self.advance();
@@ -1098,6 +1045,67 @@ impl<'a> Parser<'a> {
 				Some(first)
 			}
 		}
+	}
+
+	// Parse `{` ... `}` in pattern position. Supports:
+	//   {}                  — closed empty record
+	//   {a: p, b: q}        — closed: subject must have exactly these fields
+	//   {a: p, ...}         — open, no rest binding
+	//   {a: p, ...rest}     — open, bind the remaining fields as `rest`
+	//   {...}               — open empty
+	//   {...rest}           — open empty, bind whole record as `rest`
+	fn parse_record_pattern(&mut self) -> Option<PatternNode> {
+		let (start_offset, _) = match self.current_token {
+			Some(Token::LeftBrace(s, e)) => (s, e),
+			_ => return None,
+		};
+		let start = self.offset_to_point(start_offset);
+
+		self.advance();
+		self.skip_line_breaks();
+
+		let mut fields = Vec::new();
+		let mut rest: Option<RecordRestPattern> = None;
+
+		if let Some(Token::TripleDot(..)) = self.current_token {
+			rest = Some(self.parse_record_rest_pattern()?);
+			self.skip_line_breaks();
+			let (_, end) = expect_token_and_advance!(self, Token::RightBrace);
+			return Some(PatternNode {
+				range: Range::between(start, end),
+				kind: PatternKind::Record { fields, rest },
+			});
+		}
+
+		while let Some(field_name) = self.parse_identifier() {
+			expect_token_and_advance!(self, Token::Colon);
+
+			let field_pattern = self.parse_pattern()?;
+
+			fields.push((field_name, field_pattern));
+
+			match self.current_token {
+				Some(Token::Comma(..)) => {
+					self.advance();
+					self.skip_line_breaks();
+					if let Some(Token::TripleDot(..)) = self.current_token {
+						rest = Some(self.parse_record_rest_pattern()?);
+						self.skip_line_breaks();
+						break;
+					}
+				}
+				Some(Token::LineBreak(..)) => {
+					self.skip_line_breaks();
+				}
+				_ => break,
+			}
+		}
+
+		let (_, end) = expect_token_and_advance!(self, Token::RightBrace);
+		Some(PatternNode {
+			range: Range::between(start, end),
+			kind: PatternKind::Record { fields, rest },
+		})
 	}
 
 	// Parse `[` ... `]` in pattern position. Supports:
@@ -1215,6 +1223,10 @@ impl<'a> Parser<'a> {
 
 			Some(Token::LeftBracket(..)) => self.parse_list_pattern(),
 
+			// Not LeftBrace: a `{` that immediately follows a constructor head
+			// (`some {a: x}`) is ambiguous with the case body's `{`, so record
+			// patterns in that position must be wrapped in parens
+			// (`some ({a: x})`). The paren branch above handles that.
 			Some(Token::Underscore(start, end)) => {
 				self.advance();
 				Some(PatternNode {

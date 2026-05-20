@@ -2380,6 +2380,7 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 
 			PatternKind::Record { fields, rest } => {
+				report_duplicate_record_pattern_fields(self, fields);
 				// Build per-field fresh type vars first.
 				let mut field_types = Vec::with_capacity(fields.len());
 				let mut child_tys = Vec::with_capacity(fields.len());
@@ -2552,6 +2553,7 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 
 			PatternKind::Record { fields, rest } => {
+				report_duplicate_record_pattern_fields(self, fields);
 				let mut field_types = Vec::with_capacity(fields.len());
 				let mut child_tys = Vec::with_capacity(fields.len());
 				for (field_name, _) in fields.iter() {
@@ -2653,22 +2655,12 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 
 				PatternKind::Constructor(name, args) => {
-					// Only count the variant as fully covered if every arg is itself a
-					// catch-all sub-pattern. A literal or nested constructor pulls in
-					// just a slice of the value space, so we conservatively skip.
-					let all_catch = args.iter().all(|arg| match &arg.kind {
-						PatternKind::Underscore => true,
-						PatternKind::Identifier(ident) => {
-							// Treat as binding (catch-all) unless we know it's a nullary
-							// variant somewhere. Conservative — counts variants from any
-							// enum as non-catch-all.
-							self
-								.find_variant_globally(&ident.name)
-								.iter()
-								.all(|(_, p)| !p.is_empty())
-						}
-						_ => false,
-					});
+					// Only count the variant as fully covered if every arg is
+					// itself a catch-all sub-pattern (recursively — a tuple
+					// payload like `some (x, y)` counts iff the tuple itself
+					// is all-binding). A literal or nested constructor pulls
+					// in just a slice of the value space, so we skip.
+					let all_catch = args.iter().all(|arg| self.pattern_is_catch_all(arg));
 					if all_catch {
 						covered.insert(name.name.clone());
 					}
@@ -2725,17 +2717,10 @@ impl<'compiler> Analyzer<'compiler> {
 						(true, true) => return, // `[...]` covers everything
 						(false, true) => {
 							// `[head_0, ..., head_n, ...rest]` covers non-empty
-							// only when every required head is itself a catch-all.
-							// An ident that names a nullary variant somewhere is
-							// not a catch-all (it matches that variant only).
-							let all_catch = items.iter().all(|it| match &it.kind {
-								PatternKind::Underscore => true,
-								PatternKind::Identifier(ident) => self
-									.find_variant_globally(&ident.name)
-									.iter()
-									.all(|(_, p)| !p.is_empty()),
-								_ => false,
-							});
+							// only when every required head is itself a catch-all
+							// (recursively — `[(a, b), ...]` qualifies because the
+							// tuple head is all-binding).
+							let all_catch = items.iter().all(|it| self.pattern_is_catch_all(it));
 							if all_catch {
 								covers_non_empty = true;
 							}
@@ -2775,16 +2760,10 @@ impl<'compiler> Analyzer<'compiler> {
 				PatternKind::Identifier(_) => return,
 				PatternKind::Record { fields, .. } => {
 					// All listed-field sub-patterns must themselves be
-					// catch-alls (Underscore or non-variant Identifier). The
-					// `rest` part (if any) carries no failure condition.
-					let all_catch = fields.iter().all(|(_, sub)| match &sub.kind {
-						PatternKind::Underscore => true,
-						PatternKind::Identifier(ident) => self
-							.find_variant_globally(&ident.name)
-							.iter()
-							.all(|(_, p)| !p.is_empty()),
-						_ => false,
-					});
+					// catch-alls (recursively — `{point: (x, y), ...}` covers
+					// the whole record because the tuple field is all-binding).
+					// The `rest` part (if any) carries no failure condition.
+					let all_catch = fields.iter().all(|(_, sub)| self.pattern_is_catch_all(sub));
 					if all_catch {
 						return;
 					}
@@ -2820,6 +2799,38 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 		}
 		results
+	}
+
+	// A "catch-all" pattern covers every value of its statically-known type —
+	// the analyzer uses this to decide whether a `when` arm is exhaustive on
+	// its own (no `else` needed). Composed patterns (tuple/record/list/
+	// constructor) need to recurse: `some (x, y)` covers `some` only if the
+	// inner tuple covers every payload, which it does iff both subs are
+	// themselves catch-alls.
+	//
+	// Special cases:
+	// - A bare identifier matching a known nullary variant only covers that
+	//   variant, not its enum — so we treat it as non-catch-all.
+	// - A list pattern is a catch-all only when it's a pure rest (`[...]` or
+	//   `[...rest]`): any length, no required elements.
+	// - Constructor patterns only ever cover their named variant, never the
+	//   whole enum.
+	fn pattern_is_catch_all(&self, pattern: &PatternNode) -> bool {
+		match &pattern.kind {
+			PatternKind::Underscore => true,
+			PatternKind::Identifier(ident) => self
+				.find_variant_globally(&ident.name)
+				.iter()
+				.all(|(_, p)| !p.is_empty()),
+			PatternKind::Tuple(entries) => entries.iter().all(|e| self.pattern_is_catch_all(e)),
+			PatternKind::Record { fields, .. } => {
+				fields.iter().all(|(_, p)| self.pattern_is_catch_all(p))
+			}
+			PatternKind::List { items, rest } => items.is_empty() && rest.is_some(),
+			PatternKind::Constructor(..) | PatternKind::Literal(..) | PatternKind::Interpolation(..) => {
+				false
+			}
+		}
 	}
 
 	// Resolve a variant name in pattern position. Uses the subject type to
@@ -4330,6 +4341,27 @@ impl<'compiler> Analyzer<'compiler> {
 				Box::new(self.instantiate_with(value_type, mapping)),
 			),
 			Type::Ref(inner_type) => Type::Ref(Box::new(self.instantiate_with(inner_type, mapping))),
+		}
+	}
+}
+
+// Free function so both `constrain_pattern` and `constrain_let_pattern` can
+// reuse it without fighting borrow-checker rules around mutably borrowing
+// `self` and `fields` simultaneously. Reports the second and subsequent
+// occurrences — the first one is the canonical site.
+fn report_duplicate_record_pattern_fields(
+	analyzer: &mut Analyzer,
+	fields: &[(IdentifierNode, PatternNode)],
+) {
+	let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+	for (name, _) in fields {
+		if !seen.insert(name.name.as_str()) {
+			analyzer.error(
+				name.range,
+				AnalysisErrorKind::DuplicateRecordPatternField {
+					field: name.name.clone(),
+				},
+			);
 		}
 	}
 }

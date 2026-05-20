@@ -1,0 +1,228 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/exhaustive-nested-list/main.pa) {
+    comments: {
+        0: " `[head, ...]` with a structural-but-all-binding head covers the",
+        1: " non-empty case for exhaustiveness — same logic as for variants.",
+    },
+    ast: Some(
+        module(3:0-22:1) [
+            def(3:0-9:1) :: nothing {
+                name: ident(3:4-3:14) `first-pair`,
+                kind: expr(3:17-9:1) :: (list (('z, 't0))) -> string {
+                    kind: fun(3:17-9:1) {
+                        params: [
+                            ident(3:21-3:23) `xs` :: list (('z, 't0)),
+                        ],
+                        body: [
+                            expr(4:1-8:2) :: string {
+                                kind: when(4:1-8:2) [
+                                    case(4:9-6:2) is pattern(4:12-4:14) List {
+                                        items: [],
+                                        rest: None,
+                                    } [
+                                        expr(5:3-5:9) :: string {
+                                            kind: literal(5:3-5:9) string "empty",
+                                        },
+                                    ],
+                                    case(6:3-8:2) is pattern(6:6-6:19) List {
+                                        items: [
+                                            pattern(6:7-6:13) Tuple(
+                                                [
+                                                    pattern(6:8-6:9) Identifier(
+                                                        ident(6:8-6:9) `a`,
+                                                    ),
+                                                    pattern(6:11-6:12) Identifier(
+                                                        ident(6:11-6:12) `b`,
+                                                    ),
+                                                ],
+                                            ),
+                                        ],
+                                        rest: Some(
+                                            ListRestPattern {
+                                                range: 6:15-6:18,
+                                                binding: None,
+                                            },
+                                        ),
+                                    } [
+                                        expr(7:3-7:32) :: string {
+                                            kind: interpolation [
+                                                expr(7:3-7:3) :: string {
+                                                    kind: literal(7:3-7:3) string "",
+                                                },
+                                                expr(7:5-7:16) :: string {
+                                                    kind: call(7:5-7:16) {
+                                                        callee: expr(7:5-7:14) :: 'z -> string {
+                                                            kind: ident(7:5-7:14) `to-string`,
+                                                        },
+                                                        args: [
+                                                            expr(7:15-7:16) :: 'z {
+                                                                kind: ident(7:15-7:16) `a`,
+                                                            },
+                                                        ],
+                                                    },
+                                                },
+                                                expr(7:17-7:18) :: string {
+                                                    kind: literal(7:17-7:18) string ",",
+                                                },
+                                                expr(7:20-7:31) :: string {
+                                                    kind: call(7:20-7:31) {
+                                                        callee: expr(7:20-7:29) :: 't0 -> string {
+                                                            kind: ident(7:20-7:29) `to-string`,
+                                                        },
+                                                        args: [
+                                                            expr(7:30-7:31) :: 't0 {
+                                                                kind: ident(7:30-7:31) `b`,
+                                                            },
+                                                        ],
+                                                    },
+                                                },
+                                                expr(7:32-7:32) :: string {
+                                                    kind: literal(7:32-7:32) string "",
+                                                },
+                                            ],
+                                        },
+                                    ],
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
+            def(11:0-17:1) :: nothing {
+                name: ident(11:4-11:14) `first-name`,
+                kind: expr(11:17-17:1) :: (list ({name: string, ...})) -> string {
+                    kind: fun(11:17-17:1) {
+                        params: [
+                            ident(11:21-11:23) `rs` :: list ({name: string, ...}),
+                        ],
+                        body: [
+                            expr(12:1-16:2) :: string {
+                                kind: when(12:1-16:2) [
+                                    case(12:9-14:2) is pattern(12:12-12:14) List {
+                                        items: [],
+                                        rest: None,
+                                    } [
+                                        expr(13:3-13:9) :: string {
+                                            kind: literal(13:3-13:9) string "empty",
+                                        },
+                                    ],
+                                    case(14:3-16:2) is pattern(14:6-14:27) List {
+                                        items: [
+                                            pattern(14:7-14:21) Record {
+                                                fields: [
+                                                    (
+                                                        ident(14:8-14:12) `name`,
+                                                        pattern(14:14-14:15) Identifier(
+                                                            ident(14:14-14:15) `n`,
+                                                        ),
+                                                    ),
+                                                ],
+                                                rest: Some(
+                                                    RecordRestPattern {
+                                                        range: 14:17-14:20,
+                                                        binding: None,
+                                                    },
+                                                ),
+                                            },
+                                        ],
+                                        rest: Some(
+                                            ListRestPattern {
+                                                range: 14:23-14:26,
+                                                binding: None,
+                                            },
+                                        ),
+                                    } [
+                                        expr(15:2-15:3) :: string {
+                                            kind: ident(15:2-15:3) `n`,
+                                        },
+                                    ],
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
+            def(19:0-22:1) :: nothing {
+                name: ident(19:4-19:8) `main`,
+                kind: expr(19:11-22:1) :: nothing -> string {
+                    kind: fun(19:11-22:1) {
+                        params: [],
+                        body: [
+                            expr(20:1-20:28) :: string {
+                                kind: call(20:1-20:28) {
+                                    callee: expr(20:1-20:6) :: string -> string {
+                                        kind: ident(20:1-20:6) `print`,
+                                    },
+                                    args: [
+                                        expr(20:7-20:28) :: string {
+                                            kind: expr(20:8-20:27) :: string {
+                                                kind: call(20:8-20:27) {
+                                                    callee: expr(20:8-20:18) :: (list ((int, int))) -> string {
+                                                        kind: ident(20:8-20:18) `first-pair`,
+                                                    },
+                                                    args: [
+                                                        expr(20:19-20:27) :: list ((int, int)) {
+                                                            kind: [
+                                                                expr(20:20-20:26) :: (int, int) {
+                                                                    kind: tuple [
+                                                                        expr(20:21-20:22) :: int {
+                                                                            kind: literal(20:21-20:22) int 1,
+                                                                        },
+                                                                        expr(20:24-20:25) :: int {
+                                                                            kind: literal(20:24-20:25) int 2,
+                                                                        },
+                                                                    ],
+                                                                },
+                                                            ],
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                            expr(21:1-21:36) :: string {
+                                kind: call(21:1-21:36) {
+                                    callee: expr(21:1-21:6) :: string -> string {
+                                        kind: ident(21:1-21:6) `print`,
+                                    },
+                                    args: [
+                                        expr(21:7-21:36) :: string {
+                                            kind: expr(21:8-21:35) :: string {
+                                                kind: call(21:8-21:35) {
+                                                    callee: expr(21:8-21:18) :: (list ({name: string})) -> string {
+                                                        kind: ident(21:8-21:18) `first-name`,
+                                                    },
+                                                    args: [
+                                                        expr(21:19-21:35) :: list ({name: string}) {
+                                                            kind: [
+                                                                expr(21:20-21:34) :: {name: string} {
+                                                                    kind: record [
+                                                                        (
+                                                                            ident(21:21-21:25) `name`,
+                                                                            expr(21:28-21:33) :: string {
+                                                                                kind: literal(21:28-21:33) string "reid",
+                                                                            },
+                                                                        ),
+                                                                    ],
+                                                                },
+                                                            ],
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

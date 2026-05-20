@@ -1,0 +1,16 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: Non-exhaustive `when`: missing case for `some`.
+> 6 | 	when opt is some 0 {
+       ^^^^^^^^^^^^^^^^^^^^
+
+error: Non-exhaustive `when`: missing case for `[_, ...]`.
+> 15 | 	when xs is [] {
+        ^^^^^^^^^^^^^^^
+
+error: Non-exhaustive `when`: missing case for `else`.
+> 24 | 	when r is {code: 0, ...} {
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+

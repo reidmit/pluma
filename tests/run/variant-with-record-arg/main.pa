@@ -1,0 +1,28 @@
+# A constructor-pattern argument that is itself a record pattern needs
+# to be parenthesized (`some ({a: x})`) to disambiguate from the case
+# body's `{`. Exhaustiveness recognizes the all-binding record as a
+# catch-all of the variant.
+
+alias person {
+	name  :: string
+	score :: int
+}
+
+enum entry {
+	missing
+	found person
+}
+
+def describe = fun e {
+	when e is found ({name: n, score: s}) {
+		"$(n): $(to-string s)"
+	} is missing {
+		"absent"
+	}
+}
+
+def main = fun {
+	print (describe (found {name: "reid", score: 90}))
+	print (describe (found {name: "alice", score: 80}))
+	print (describe missing)
+}

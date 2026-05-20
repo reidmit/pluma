@@ -1,0 +1,23 @@
+# `[head, ...]` with a structural-but-all-binding head covers the
+# non-empty case for exhaustiveness — same logic as for variants.
+
+def first-pair = fun xs {
+	when xs is [] {
+		"empty"
+	} is [(a, b), ...] {
+		"$(to-string a),$(to-string b)"
+	}
+}
+
+def first-name = fun rs {
+	when rs is [] {
+		"empty"
+	} is [{name: n, ...}, ...] {
+		n
+	}
+}
+
+def main = fun {
+	print (first-pair [(1, 2)])
+	print (first-name [{name: "reid"}])
+}
