@@ -18,10 +18,6 @@ fn main() {
 				run(entry_path);
 			}
 
-			"build" => {
-				todo!()
-			}
-
 			"format" => {
 				let rest: Vec<String> = std::env::args().skip(2).collect();
 				format_command(rest);
@@ -235,7 +231,6 @@ Compiler & toolchain for the {} programming language
 
 COMMANDS:
   [run] <path>     execute a module directly (the `run` keyword is optional)
-  build <path>     compile a module into an executable
   format <path>... canonicalize formatting; pass `-` for stdin, `--check` to dry-run
   tokenize <path>  dump the token stream for a module
   analyze <path>   parse, type-check & dump info about a module
@@ -255,7 +250,6 @@ Compiler & toolchain for the {} programming language
 
 COMMANDS:
   [run] <path>     execute a module directly (the `run` keyword is optional)
-  build <path>     compile a module into an executable
   format <path>... canonicalize formatting; pass `-` for stdin, `--check` to dry-run
   version          print compiler version info
   help             print this help text
