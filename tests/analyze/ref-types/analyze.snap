@@ -15,12 +15,7 @@ module `main` (tests/analyze/ref-types/main.pa) {
                 kind: expr(4:15-4:24) :: ref int {
                     kind: call(4:15-4:24) {
                         callee: expr(4:15-4:22) :: 't4 -> ref 't4 {
-                            kind: field-access {
-                                receiver: expr(4:15-4:18) :: ? {
-                                    kind: ident(4:15-4:18) `ref`,
-                                },
-                                field: ident(4:19-4:22) `new`,
-                            },
+                            kind: namespace-access `ref.new`,
                         },
                         args: [
                             expr(4:23-4:24) :: int {
@@ -35,12 +30,7 @@ module `main` (tests/analyze/ref-types/main.pa) {
                 kind: expr(6:15-6:27) :: ref string {
                     kind: call(6:15-6:27) {
                         callee: expr(6:15-6:22) :: 't6 -> ref 't6 {
-                            kind: field-access {
-                                receiver: expr(6:15-6:18) :: ? {
-                                    kind: ident(6:15-6:18) `ref`,
-                                },
-                                field: ident(6:19-6:22) `new`,
-                            },
+                            kind: namespace-access `ref.new`,
                         },
                         args: [
                             expr(6:24-6:27) :: string {
@@ -59,12 +49,7 @@ module `main` (tests/analyze/ref-types/main.pa) {
                             expr(9:1-9:17) :: int {
                                 kind: call(9:1-9:17) {
                                     callee: expr(9:1-9:8) :: (ref 't9) -> 't9 {
-                                        kind: field-access {
-                                            receiver: expr(9:1-9:4) :: ? {
-                                                kind: ident(9:1-9:4) `ref`,
-                                            },
-                                            field: ident(9:5-9:8) `get`,
-                                        },
+                                        kind: namespace-access `ref.get`,
                                     },
                                     args: [
                                         expr(9:9-9:17) :: ref int {
@@ -86,12 +71,7 @@ module `main` (tests/analyze/ref-types/main.pa) {
                             expr(13:1-13:19) :: nothing {
                                 kind: call(13:1-13:19) {
                                     callee: expr(13:1-13:8) :: (ref 't13) 't13 -> nothing {
-                                        kind: field-access {
-                                            receiver: expr(13:1-13:4) :: ? {
-                                                kind: ident(13:1-13:4) `ref`,
-                                            },
-                                            field: ident(13:5-13:8) `set`,
-                                        },
+                                        kind: namespace-access `ref.set`,
                                     },
                                     args: [
                                         expr(13:9-13:17) :: ref int {
@@ -116,12 +96,7 @@ module `main` (tests/analyze/ref-types/main.pa) {
                             expr(17:1-17:36) :: nothing {
                                 kind: call(17:1-17:36) {
                                     callee: expr(17:1-17:11) :: (ref 't17) ('t17 -> 't17) -> nothing {
-                                        kind: field-access {
-                                            receiver: expr(17:1-17:4) :: ? {
-                                                kind: ident(17:1-17:4) `ref`,
-                                            },
-                                            field: ident(17:5-17:11) `update`,
-                                        },
+                                        kind: namespace-access `ref.update`,
                                     },
                                     args: [
                                         expr(17:12-17:20) :: ref int {
@@ -166,12 +141,7 @@ module `main` (tests/analyze/ref-types/main.pa) {
                             expr(23:1-23:10) :: ref int {
                                 kind: call(23:1-23:10) {
                                     callee: expr(23:1-23:8) :: 't24 -> ref 't24 {
-                                        kind: field-access {
-                                            receiver: expr(23:1-23:4) :: ? {
-                                                kind: ident(23:1-23:4) `ref`,
-                                            },
-                                            field: ident(23:5-23:8) `new`,
-                                        },
+                                        kind: namespace-access `ref.new`,
                                     },
                                     args: [
                                         expr(23:9-23:10) :: int {

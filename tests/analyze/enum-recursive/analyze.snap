@@ -28,23 +28,13 @@ module `main` (tests/analyze/enum-recursive/main.pa) {
             def(5:0-5:18) :: nothing {
                 name: ident(5:4-5:5) `t`,
                 kind: expr(5:8-5:18) :: tree {
-                    kind: field-access {
-                        receiver: expr(5:8-5:12) :: tree {
-                            kind: ident(5:8-5:12) `tree`,
-                        },
-                        field: ident(5:13-5:18) `empty`,
-                    },
+                    kind: namespace-access `tree.empty`,
                 },
             },
             def(7:0-7:25) :: nothing {
                 name: ident(7:4-7:13) `make-node`,
                 kind: expr(7:16-7:25) :: int tree tree -> tree {
-                    kind: field-access {
-                        receiver: expr(7:16-7:20) :: tree {
-                            kind: ident(7:16-7:20) `tree`,
-                        },
-                        field: ident(7:21-7:25) `node`,
-                    },
+                    kind: namespace-access `tree.node`,
                 },
             },
             def(9:0-9:48) :: nothing {
@@ -52,32 +42,17 @@ module `main` (tests/analyze/enum-recursive/main.pa) {
                 kind: expr(9:15-9:48) :: tree {
                     kind: call(9:15-9:48) {
                         callee: expr(9:15-9:24) :: int tree tree -> tree {
-                            kind: field-access {
-                                receiver: expr(9:15-9:19) :: tree {
-                                    kind: ident(9:15-9:19) `tree`,
-                                },
-                                field: ident(9:20-9:24) `node`,
-                            },
+                            kind: namespace-access `tree.node`,
                         },
                         args: [
                             expr(9:25-9:26) :: int {
                                 kind: literal(9:25-9:26) int 1,
                             },
                             expr(9:27-9:37) :: tree {
-                                kind: field-access {
-                                    receiver: expr(9:27-9:31) :: tree {
-                                        kind: ident(9:27-9:31) `tree`,
-                                    },
-                                    field: ident(9:32-9:37) `empty`,
-                                },
+                                kind: namespace-access `tree.empty`,
                             },
                             expr(9:38-9:48) :: tree {
-                                kind: field-access {
-                                    receiver: expr(9:38-9:42) :: tree {
-                                        kind: ident(9:38-9:42) `tree`,
-                                    },
-                                    field: ident(9:43-9:48) `empty`,
-                                },
+                                kind: namespace-access `tree.empty`,
                             },
                         ],
                     },

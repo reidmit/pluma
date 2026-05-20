@@ -34,12 +34,7 @@ module `main` (tests/analyze/pipeline/main.pa) {
                                             right: expr(3:13-3:40) :: list int {
                                                 kind: call(3:13-3:40) {
                                                     callee: expr(3:13-3:24) :: (list 'v) ('v -> bool) -> list 'v {
-                                                        kind: field-access {
-                                                            receiver: expr(3:13-3:17) :: ? {
-                                                                kind: ident(3:13-3:17) `list`,
-                                                            },
-                                                            field: ident(3:18-3:24) `filter`,
-                                                        },
+                                                        kind: namespace-access `list.filter`,
                                                     },
                                                     args: [
                                                         expr(3:25-3:40) :: int -> bool {

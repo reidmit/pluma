@@ -1368,8 +1368,81 @@ fn emit_expr_with_parents(
 		ExprKind::ElementAccess { .. } => {
 			return Err("codegen: ElementAccess not implemented".into());
 		}
+		ExprKind::NamespaceAccess(path) => {
+			// Trait method reference (e.g. `numeric.add`): dispatch cell was
+			// attached during analysis, same as for a FieldAccess-shaped
+			// trait method. Load the dict; skip the path-based lowering.
+			if let Some(cell) = &expr.trait_dispatch {
+				emit_dispatch_load(cg, fb, scope, parent_scopes, cell, range)?;
+			} else {
+				emit_namespace_access(cg, current_module, imports, fb, path, range)?;
+			}
+		}
 	}
 	Ok(())
+}
+
+// Codegen for a NamespaceAccess path. The analyzer rewrites three input
+// shapes into this node: `module.value` (2 segs, type is the freshened
+// imported value type), `EnumName.variant` (2 segs, type is the enum or a
+// ctor fn), and `module.EnumName.variant` (3 segs, same).
+//
+// Trait-method paths (`trait.method`) are also produced by the analyzer but
+// are handled before reaching here — they carry a `trait_dispatch` cell on
+// the expr and use `emit_dispatch_load` instead.
+fn emit_namespace_access(
+	cg: &mut CodeGen,
+	current_module: &str,
+	imports: &HashMap<String, String>,
+	fb: &mut FunctionBuilder,
+	path: &[IdentifierNode],
+	range: Range,
+) -> Result<(), String> {
+	match path {
+		// `module.EnumName.variant`: cross-module enum variant constructor.
+		[module_ident, enum_ident, variant_ident] => {
+			let qualified_module = imports.get(&module_ident.name).ok_or_else(|| {
+				format!("codegen: namespace `{}` is not an imported module", module_ident.name)
+			})?;
+			let qualified_enum = format!("{}.{}", qualified_module, enum_ident.name);
+			let variants = cg
+				.enum_variants
+				.get(&qualified_enum)
+				.cloned()
+				.ok_or_else(|| format!("codegen: enum `{}` not found", qualified_enum))?;
+			let (_, arity) = variants
+				.iter()
+				.find(|(n, _)| n == &variant_ident.name)
+				.ok_or_else(|| {
+					format!("codegen: variant `{}` not in `{}`", variant_ident.name, qualified_enum)
+				})?;
+			emit_variant_construction(cg, fb, &qualified_enum, &variant_ident.name, *arity, range)
+		}
+		// 2-segment paths: either `module.value` or `EnumName.variant`.
+		[head, tail] => {
+			if let Some(qualified_module) = imports.get(&head.name).cloned() {
+				if let Some(global_idx) = cg.lookup_global(&qualified_module, &tail.name) {
+					fb.emit(Instruction::LoadGlobal(global_idx), range);
+					return Ok(());
+				}
+				return Err(format!("codegen: `{}.{}` is not defined", head.name, tail.name));
+			}
+			let qualified_enum = format!("{}.{}", current_module, head.name);
+			if let Some(variants) = cg.enum_variants.get(&qualified_enum).cloned() {
+				if let Some((_, arity)) = variants.iter().find(|(n, _)| n == &tail.name) {
+					return emit_variant_construction(cg, fb, &qualified_enum, &tail.name, *arity, range);
+				}
+			}
+			Err(format!(
+				"codegen: namespace `{}` is neither an imported module nor a local enum",
+				head.name
+			))
+		}
+		_ => Err(format!(
+			"codegen: NamespaceAccess with {} segments — expected 2 or 3",
+			path.len()
+		)),
+	}
 }
 
 fn emit_literal_with_cg(

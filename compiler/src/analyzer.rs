@@ -276,7 +276,11 @@ fn collect_dispatch_cells(expr: &ExprNode, cells: &mut Vec<DispatchCell>) {
 				}
 			}
 		}
-		ExprKind::Identifier(_) | ExprKind::Literal(_) | ExprKind::Regex(_) | ExprKind::EmptyTuple => {}
+		ExprKind::Identifier(_)
+		| ExprKind::Literal(_)
+		| ExprKind::Regex(_)
+		| ExprKind::EmptyTuple
+		| ExprKind::NamespaceAccess(_) => {}
 	}
 }
 
@@ -2059,7 +2063,18 @@ impl<'compiler> Analyzer<'compiler> {
 				)
 			}
 
-			ExprKind::FieldAccess { receiver, field } => {
+			ExprKind::FieldAccess { .. } => {
+				// Take ownership of the FieldAccess contents so we can freely
+				// reshape `expr.kind` into `NamespaceAccess` below without
+				// fighting the borrow checker. If none of the namespace
+				// cases apply, we put the FieldAccess back for the record
+				// field-access fallback.
+				let (mut receiver, field) =
+					match std::mem::replace(&mut expr.kind, ExprKind::EmptyTuple) {
+						ExprKind::FieldAccess { receiver, field } => (receiver, field),
+						_ => unreachable!(),
+					};
+
 				// Cross-module variant access: `module.enum-name.variant`.
 				// Match the chained-FieldAccess shape so we resolve before the
 				// inner receiver gets recursed into as a regular field access.
@@ -2080,13 +2095,8 @@ impl<'compiler> Analyzer<'compiler> {
 								if let Some(enum_def) = self.enum_defs.get(&qualified).cloned() {
 									let (enum_ty, variant_params, variant_found) =
 										self.instantiate_variant(&qualified, &field.name, &enum_def);
-									receiver.ty = enum_ty.clone();
-									if let ExprKind::FieldAccess {
-										receiver: inner, ..
-									} = &mut receiver.kind
-									{
-										inner.ty = Type::Unknown;
-									}
+									let path = vec![module_ident.clone(), enum_field.clone(), field.clone()];
+									expr.kind = ExprKind::NamespaceAccess(path);
 
 									match variant_found {
 										Some(_) if variant_params.is_empty() => {
@@ -2120,7 +2130,7 @@ impl<'compiler> Analyzer<'compiler> {
 					if let Some(exports) = self.imports.get(&ident.name).cloned() {
 						match exports.values.get(&field.name) {
 							Some(ty) => {
-								receiver.ty = Type::Unknown;
+								expr.kind = ExprKind::NamespaceAccess(vec![ident.clone(), field.clone()]);
 								// Freshen the value's type *and* its class
 								// constraints together so they share fresh
 								// tyvars. Each constraint becomes a fresh
@@ -2181,7 +2191,7 @@ impl<'compiler> Analyzer<'compiler> {
 
 						match (method_idx, method_type) {
 							(Some(idx), Some(method_ty)) => {
-								receiver.ty = Type::Unknown;
+								expr.kind = ExprKind::NamespaceAccess(vec![ident.clone(), field.clone()]);
 								self.emit_trait_method_dispatch(
 									trait_name,
 									idx,
@@ -2221,7 +2231,7 @@ impl<'compiler> Analyzer<'compiler> {
 						if let Some(enum_def) = self.enum_defs.get(&qualified).cloned() {
 							let (enum_ty, variant_params, variant_found) =
 								self.instantiate_variant(&qualified, &field.name, &enum_def);
-							receiver.ty = enum_ty.clone();
+							expr.kind = ExprKind::NamespaceAccess(vec![ident.clone(), field.clone()]);
 
 							match variant_found {
 								Some(_) if variant_params.is_empty() => {
@@ -2247,16 +2257,13 @@ impl<'compiler> Analyzer<'compiler> {
 					}
 				}
 
-				// this expr gets a fresh type var
+				// None of the namespace cases applied — this is a real record
+				// field access. Put the FieldAccess back together so later
+				// passes (annotate_expr, codegen) still see the right shape,
+				// and emit the row-polymorphic record constraint.
 				expr.ty = self.new_type_var();
+				self.constrain_expr(&mut receiver, constraints);
 
-				self.constrain_expr(receiver, constraints);
-
-				// Receiver must be a record with at least this field. Use a
-				// fresh row variable for the unknown tail — row polymorphism
-				// lets `r.name + r.email` infer "has at least name AND
-				// email, plus possibly more" instead of losing one field
-				// to substitution.
 				let rid = self.new_row_var();
 				constraints.push(
 					eq_constraint(
@@ -2264,7 +2271,9 @@ impl<'compiler> Analyzer<'compiler> {
 						Type::Record(vec![(field.name.clone(), expr.ty.clone())], Some(rid)),
 					)
 					.at(expr.range),
-				)
+				);
+
+				expr.kind = ExprKind::FieldAccess { receiver, field };
 			}
 
 			ExprKind::If(IfNode {
@@ -2340,6 +2349,12 @@ impl<'compiler> Analyzer<'compiler> {
 
 					constraints.push(eq_constraint(expr.ty.clone(), case_ty).at(case.range));
 				}
+			}
+
+			ExprKind::NamespaceAccess(_) => {
+				// constrain only ever produces NamespaceAccess from a
+				// FieldAccess receiver — it should never see one as input.
+				unreachable!("NamespaceAccess fed back into constrain_expr");
 			}
 		}
 	}
@@ -3599,6 +3614,12 @@ impl<'compiler> Analyzer<'compiler> {
 
 			ExprKind::EmptyTuple => {
 				// type is set during constrain; nothing to do here
+			}
+
+			ExprKind::NamespaceAccess(_) => {
+				// path segments aren't typed (they're namespace names, not
+				// values); the expr's own ty + dispatch metadata, set during
+				// constrain, are all that needs annotating.
 			}
 		}
 	}

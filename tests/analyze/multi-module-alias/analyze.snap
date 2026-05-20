@@ -12,23 +12,13 @@ module `main` (tests/analyze/multi-module-alias/main.pa) {
             def(3:0-3:23) :: nothing {
                 name: ident(3:4-3:9) `first`,
                 kind: expr(3:12-3:23) :: int {
-                    kind: field-access {
-                        receiver: expr(3:12-3:17) :: ? {
-                            kind: ident(3:12-3:17) `utils`,
-                        },
-                        field: ident(3:18-3:23) `value`,
-                    },
+                    kind: namespace-access `utils.value`,
                 },
             },
             def(5:0-5:25) :: nothing {
                 name: ident(5:4-5:10) `second`,
                 kind: expr(5:13-5:25) :: string {
-                    kind: field-access {
-                        receiver: expr(5:13-5:19) :: ? {
-                            kind: ident(5:13-5:19) `utils2`,
-                        },
-                        field: ident(5:20-5:25) `value`,
-                    },
+                    kind: namespace-access `utils2.value`,
                 },
             },
         ],

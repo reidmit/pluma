@@ -26,12 +26,7 @@ module `main` (tests/analyze/enum-variant-access/main.pa) {
             def(6:0-6:24) :: nothing {
                 name: ident(6:4-6:12) `my-color`,
                 kind: expr(6:15-6:24) :: color {
-                    kind: field-access {
-                        receiver: expr(6:15-6:20) :: color {
-                            kind: ident(6:15-6:20) `color`,
-                        },
-                        field: ident(6:21-6:24) `red`,
-                    },
+                    kind: namespace-access `color.red`,
                 },
             },
         ],

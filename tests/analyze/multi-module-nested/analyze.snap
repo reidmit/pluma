@@ -11,12 +11,7 @@ module `main` (tests/analyze/multi-module-nested/main.pa) {
             def(2:0-2:24) :: nothing {
                 name: ident(2:4-2:9) `value`,
                 kind: expr(2:12-2:24) :: int {
-                    kind: field-access {
-                        receiver: expr(2:12-2:17) :: ? {
-                            kind: ident(2:12-2:17) `utils`,
-                        },
-                        field: ident(2:18-2:24) `answer`,
-                    },
+                    kind: namespace-access `utils.answer`,
                 },
             },
             def(4:0-4:31) :: nothing {
@@ -24,12 +19,7 @@ module `main` (tests/analyze/multi-module-nested/main.pa) {
                 kind: expr(4:14-4:31) :: int {
                     kind: call(4:14-4:31) {
                         callee: expr(4:14-4:28) :: 't -> 't {
-                            kind: field-access {
-                                receiver: expr(4:14-4:19) :: ? {
-                                    kind: ident(4:14-4:19) `utils`,
-                                },
-                                field: ident(4:20-4:28) `identity`,
-                            },
+                            kind: namespace-access `utils.identity`,
                         },
                         args: [
                             expr(4:29-4:31) :: int {

@@ -347,6 +347,19 @@ impl<'a> Formatter<'a> {
 				text("."),
 				text(field.name.clone()),
 			]),
+			NamespaceAccess(path) => {
+				// The formatter runs on parser output, which never produces
+				// NamespaceAccess (the analyzer creates it). Handle it for
+				// completeness so analyzed ASTs can also round-trip.
+				let mut parts: Vec<Doc> = Vec::new();
+				for (i, segment) in path.iter().enumerate() {
+					if i > 0 {
+						parts.push(text("."));
+					}
+					parts.push(text(segment.name.clone()));
+				}
+				concat(parts)
+			}
 			Fun(fun) => self.format_fun(fun),
 			Call(call) => self.format_call(call),
 			Let(l) => self.format_let(l),

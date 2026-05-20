@@ -11,17 +11,7 @@ module `main` (tests/analyze/multi-module-enums/main.pa) {
             def(2:0-2:31) :: nothing {
                 name: ident(2:4-2:12) `favorite`,
                 kind: expr(2:15-2:31) :: color {
-                    kind: field-access {
-                        receiver: expr(2:15-2:27) :: color {
-                            kind: field-access {
-                                receiver: expr(2:15-2:21) :: ? {
-                                    kind: ident(2:15-2:21) `colors`,
-                                },
-                                field: ident(2:22-2:27) `color`,
-                            },
-                        },
-                        field: ident(2:28-2:31) `red`,
-                    },
+                    kind: namespace-access `colors.color.red`,
                 },
             },
             def(4:0-12:1) :: nothing {

@@ -13,12 +13,7 @@ module `main` (tests/analyze/multi-module-alias-type/main.pa) {
                 kind: expr(2:13-2:38) :: {x: int, y: int} {
                     kind: call(2:13-2:38) {
                         callee: expr(2:13-2:25) :: ({x: int, y: int}) -> {x: int, y: int} {
-                            kind: field-access {
-                                receiver: expr(2:13-2:19) :: ? {
-                                    kind: ident(2:13-2:19) `shapes`,
-                                },
-                                field: ident(2:20-2:25) `point`,
-                            },
+                            kind: namespace-access `shapes.point`,
                         },
                         args: [
                             expr(2:26-2:38) :: {x: int, y: int} {

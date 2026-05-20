@@ -45,6 +45,16 @@ pub enum ExprKind {
 		field: IdentifierNode,
 	},
 
+	/// A namespace path like `math.add`, `numeric.add`, `EnumName.variant`,
+	/// or `module.EnumName.variant`. The parser produces these as nested
+	/// `FieldAccess` exprs; the analyzer rewrites them once it identifies
+	/// the receiver as a namespace (imported module / trait / enum-type)
+	/// rather than a value. The path has 2 or 3 segments. The expr's `ty`
+	/// plus `trait_dispatch` / `dispatch_sink` carry the resolved info that
+	/// codegen needs to choose between global-load, trait-dispatch-load,
+	/// and variant-constructor lowerings.
+	NamespaceAccess(Vec<IdentifierNode>),
+
 	Fun(FunNode),
 	Call(CallNode),
 	EmptyTuple,
@@ -100,6 +110,15 @@ impl std::fmt::Debug for ExprKind {
 				.field("receiver", receiver)
 				.field("field", field)
 				.finish(),
+
+			NamespaceAccess(path) => {
+				let joined = path
+					.iter()
+					.map(|p| p.name.clone())
+					.collect::<Vec<_>>()
+					.join(".");
+				write!(f, "namespace-access `{}`", joined)
+			}
 
 			Fun(fun) => {
 				write!(f, "{:#?}", fun)

@@ -34,33 +34,13 @@ module `main` (tests/analyze/multi-module-enum-type/main.pa) {
                                     (
                                         ident(4:28-4:35) `primary`,
                                         expr(4:37-4:53) :: color {
-                                            kind: field-access {
-                                                receiver: expr(4:37-4:49) :: color {
-                                                    kind: field-access {
-                                                        receiver: expr(4:37-4:43) :: ? {
-                                                            kind: ident(4:37-4:43) `colors`,
-                                                        },
-                                                        field: ident(4:44-4:49) `color`,
-                                                    },
-                                                },
-                                                field: ident(4:50-4:53) `red`,
-                                            },
+                                            kind: namespace-access `colors.color.red`,
                                         },
                                     ),
                                     (
                                         ident(4:55-4:64) `secondary`,
                                         expr(4:66-4:83) :: color {
-                                            kind: field-access {
-                                                receiver: expr(4:66-4:78) :: color {
-                                                    kind: field-access {
-                                                        receiver: expr(4:66-4:72) :: ? {
-                                                            kind: ident(4:66-4:72) `colors`,
-                                                        },
-                                                        field: ident(4:73-4:78) `color`,
-                                                    },
-                                                },
-                                                field: ident(4:79-4:83) `blue`,
-                                            },
+                                            kind: namespace-access `colors.color.blue`,
                                         },
                                     ),
                                 ],

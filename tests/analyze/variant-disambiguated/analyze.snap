@@ -44,12 +44,7 @@ module `main` (tests/analyze/variant-disambiguated/main.pa) {
                                         ident(11:5-11:6) `x`,
                                     ),
                                     value: expr(11:9-11:18) :: color {
-                                        kind: field-access {
-                                            receiver: expr(11:9-11:14) :: color {
-                                                kind: ident(11:9-11:14) `color`,
-                                            },
-                                            field: ident(11:15-11:18) `red`,
-                                        },
+                                        kind: namespace-access `color.red`,
                                     },
                                 },
                             },

@@ -158,6 +158,10 @@ fn walk_expr(expr: &ExprNode, hits: &mut Vec<HoverHit>) {
 				walk_expr(e, hits);
 			}
 		}
+		ExprKind::NamespaceAccess(_) => {
+			// The whole-expr hover hit (recorded above) carries the resolved
+			// type. The path segments aren't values, so nothing else to walk.
+		}
 	}
 }
 
