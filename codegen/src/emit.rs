@@ -2221,15 +2221,30 @@ fn emit_pattern(
 			let field_idxs: Vec<u32> = fields.iter().map(|(n, _)| cg.intern(&n.name)).collect();
 			let fields_idx = cg.intern_field_list(field_idxs);
 			let exact = rest.is_none();
+			let with_rest = matches!(
+				rest,
+				Some(rp) if rp.binding.is_some()
+			);
 			let jmp = fb.emit(
 				Instruction::MatchRecord {
 					fields_idx,
 					exact,
+					with_rest,
 					on_fail: 0,
 				},
 				range,
 			);
 			fails.push(jmp);
+			// When `with_rest` is true, the rest record sits on top of the
+			// named field values. Consume it first (bind the named rest
+			// ident), then process the named fields in reverse.
+			if with_rest {
+				let rp = rest.as_ref().unwrap();
+				let ident = rp.binding.as_ref().unwrap();
+				let slot = fb.alloc_slot();
+				fb.emit(Instruction::StoreLocal(slot), rp.range);
+				scope.define_local(&ident.name, slot);
+			}
 			let n = fields.len();
 			emit_sub_patterns_with_cleanup(
 				cg,

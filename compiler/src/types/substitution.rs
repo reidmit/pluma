@@ -1,21 +1,46 @@
 use crate::types::*;
 use std::collections::HashMap;
 
+// A solution for a row variable: "the row var stands for these extra fields,
+// with this tail." A `None` tail means "and nothing else" (closed extension);
+// `Some(rid)` means the row variable's tail is itself another row variable
+// (typically introduced by unifying two open records).
+#[derive(Clone, Debug)]
+pub struct RowSolution {
+	pub fields: Vec<(String, Type)>,
+	pub tail: Option<usize>,
+}
+
 pub struct Substitution {
 	pub solutions: HashMap<usize, Type>,
+	// Solutions for row variables — distinct namespace from `solutions`.
+	pub row_solutions: HashMap<usize, RowSolution>,
 }
 
 impl Substitution {
 	pub fn empty() -> Self {
 		Self {
 			solutions: HashMap::new(),
+			row_solutions: HashMap::new(),
 		}
 	}
 
 	pub fn with_entry(key: usize, value: Type) -> Self {
 		let mut solutions = HashMap::with_capacity(1);
 		solutions.insert(key, value);
-		Self { solutions }
+		Self {
+			solutions,
+			row_solutions: HashMap::new(),
+		}
+	}
+
+	pub fn with_row_entry(key: usize, value: RowSolution) -> Self {
+		let mut row_solutions = HashMap::with_capacity(1);
+		row_solutions.insert(key, value);
+		Self {
+			solutions: HashMap::new(),
+			row_solutions,
+		}
 	}
 
 	pub fn apply_to_type(&self, ty: &Type) -> Type {
@@ -50,10 +75,6 @@ impl Substitution {
 				Type::PartialTuple(*index, self.apply_to_type(element_type).into())
 			}
 
-			Type::PartialRecord(field_name, field_type) => {
-				Type::PartialRecord(field_name.clone(), self.apply_to_type(field_type).into())
-			}
-
 			Type::Tuple(element_types) => Type::Tuple(
 				element_types
 					.iter()
@@ -61,12 +82,29 @@ impl Substitution {
 					.collect(),
 			),
 
-			Type::Record(field_types) => Type::Record(
-				field_types
+			Type::Record(field_types, tail) => {
+				// Substitute through each field's type.
+				let mut new_fields: Vec<(String, Type)> = field_types
 					.iter()
 					.map(|(name, t)| (name.clone(), self.apply_to_type(t)))
-					.collect(),
-			),
+					.collect();
+				// Resolve the tail. Walk row solutions transitively — each
+				// step may merge in more fields and replace the tail with
+				// another row var (or finally close it with `None`).
+				let mut current_tail = *tail;
+				while let Some(rid) = current_tail {
+					match self.row_solutions.get(&rid) {
+						Some(sol) => {
+							for (n, t) in &sol.fields {
+								new_fields.push((n.clone(), self.apply_to_type(t)));
+							}
+							current_tail = sol.tail;
+						}
+						None => break,
+					}
+				}
+				Type::Record(new_fields, current_tail)
+			}
 
 			Type::List(element_type) => Type::List(self.apply_to_type(element_type).into()),
 
@@ -114,8 +152,54 @@ impl Substitution {
 			merged_solutions.insert(*k, v.clone());
 		}
 
+		// Row solutions compose the same way: apply the new substitution to
+		// existing row entries' field types and tail (chase through), then
+		// add the new entries.
+		let mut merged_rows: HashMap<usize, RowSolution> = HashMap::new();
+		for (k, v) in &self.row_solutions {
+			let new_fields: Vec<(String, Type)> = v
+				.fields
+				.iter()
+				.map(|(n, t)| (n.clone(), other.apply_to_type(t)))
+				.collect();
+			// Chase the tail through `other`'s row solutions one step, in
+			// case `other` resolves this tail further. The apply_to_type
+			// path above already handles transitive chasing for full types;
+			// here we just need to peek one step for the bare tail id.
+			let new_tail = match v.tail {
+				Some(t) if other.row_solutions.contains_key(&t) => {
+					// Inline `other`'s resolution by composing fields.
+					let other_sol = other.row_solutions.get(&t).unwrap();
+					let mut combined = new_fields.clone();
+					for (n, t) in &other_sol.fields {
+						combined.push((n.clone(), other.apply_to_type(t)));
+					}
+					merged_rows.insert(
+						*k,
+						RowSolution {
+							fields: combined,
+							tail: other_sol.tail,
+						},
+					);
+					continue;
+				}
+				other => other,
+			};
+			merged_rows.insert(
+				*k,
+				RowSolution {
+					fields: new_fields,
+					tail: new_tail,
+				},
+			);
+		}
+		for (k, v) in &other.row_solutions {
+			merged_rows.entry(*k).or_insert_with(|| v.clone());
+		}
+
 		Substitution {
 			solutions: merged_solutions,
+			row_solutions: merged_rows,
 		}
 	}
 }
@@ -123,6 +207,10 @@ impl Substitution {
 #[cfg(debug_assertions)]
 impl std::fmt::Debug for Substitution {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{:?}", self.solutions)
+		write!(
+			f,
+			"types={:?} rows={:?}",
+			self.solutions, self.row_solutions
+		)
 	}
 }

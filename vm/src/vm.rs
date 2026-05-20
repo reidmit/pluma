@@ -536,8 +536,9 @@ impl VM {
 			Instruction::MatchRecord {
 				fields_idx,
 				exact,
+				with_rest,
 				on_fail,
-			} => self.match_record(fields_idx, exact, on_fail)?,
+			} => self.match_record(fields_idx, exact, with_rest, on_fail)?,
 			Instruction::MatchList {
 				arity,
 				has_rest,
@@ -800,6 +801,7 @@ impl VM {
 		&mut self,
 		fields_idx: u32,
 		exact: bool,
+		with_rest: bool,
 		on_fail: u32,
 	) -> Result<(), RuntimeError> {
 		let subj = self.stack.pop().ok_or_else(|| {
@@ -814,12 +816,17 @@ impl VM {
 					return Ok(());
 				}
 				let mut values = Vec::with_capacity(len);
+				let mut matched_names: std::collections::HashSet<&str> =
+					std::collections::HashSet::with_capacity(len);
 				let mut ok = true;
 				for i in 0..len {
 					let name_idx = self.program.field_lists[fields_idx as usize][i];
 					let name = &self.program.constants[name_idx as usize];
 					match record.get(name.as_str()) {
-						Some(v) => values.push(v.clone()),
+						Some(v) => {
+							values.push(v.clone());
+							matched_names.insert(name.as_str());
+						}
 						None => {
 							ok = false;
 							break;
@@ -829,6 +836,19 @@ impl VM {
 				if ok {
 					for v in values {
 						self.stack.push(v);
+					}
+					if with_rest {
+						// Build the rest: the input record minus the
+						// matched fields. Heap-allocates a new HashMap,
+						// then wraps in Rc.
+						let mut rest: std::collections::HashMap<String, Value> =
+							std::collections::HashMap::with_capacity(record.len().saturating_sub(len));
+						for (k, v) in record.iter() {
+							if !matched_names.contains(k.as_str()) {
+								rest.insert(k.clone(), v.clone());
+							}
+						}
+						self.stack.push(Value::Record(std::rc::Rc::new(rest)));
 					}
 				} else {
 					let frame_idx = self.frames.len() - 1;

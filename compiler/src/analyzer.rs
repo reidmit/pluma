@@ -396,6 +396,7 @@ impl<'compiler> Analyzer<'compiler> {
 				solutions: (0..enum_export.param_count)
 					.map(|i| (i, Type::Var(fresh_param_vars[i])))
 					.collect(),
+				row_solutions: HashMap::new(),
 			};
 			let variants: Vec<(String, Vec<Type>)> = enum_export
 				.variants
@@ -437,6 +438,7 @@ impl<'compiler> Analyzer<'compiler> {
 			Scheme::Forall(
 				vec![print_var],
 				vec![],
+				vec![],
 				Type::Fun(vec![Type::Var(print_var)], Box::new(Type::Var(print_var))),
 			),
 			Range::collapsed(0, 0),
@@ -451,6 +453,7 @@ impl<'compiler> Analyzer<'compiler> {
 			"to-string".into(),
 			Scheme::Forall(
 				vec![to_string_var],
+				vec![],
 				vec![],
 				Type::Fun(vec![Type::Var(to_string_var)], Box::new(Type::String)),
 			),
@@ -586,6 +589,7 @@ impl<'compiler> Analyzer<'compiler> {
 									.enumerate()
 									.map(|(i, local)| (*local, Type::Var(i)))
 									.collect(),
+								row_solutions: HashMap::new(),
 							};
 							let canonical_variants: Vec<(String, Vec<Type>)> = enum_def
 								.variants
@@ -1460,6 +1464,7 @@ impl<'compiler> Analyzer<'compiler> {
 					.into_iter()
 					.map(|(name, f)| (name.name.clone(), self.type_expr_to_type(f, constraints)))
 					.collect(),
+				None,
 			),
 			TypeExprKind::Func(params, ret) => Type::Fun(
 				params
@@ -1590,8 +1595,8 @@ impl<'compiler> Analyzer<'compiler> {
 				if let Some(binding) = self.get_value_binding(&ident.name) {
 					let ty_scheme = binding.ty_scheme.clone();
 					return match ty_scheme {
-						Scheme::Forall(vars, class_constraints, ty) => {
-							if vars.is_empty() && class_constraints.is_empty() {
+						Scheme::Forall(vars, row_vars, class_constraints, ty) => {
+							if vars.is_empty() && row_vars.is_empty() && class_constraints.is_empty() {
 								expr.ty = ty;
 							} else {
 								// Polymorphic scheme (currently only prelude
@@ -1602,7 +1607,7 @@ impl<'compiler> Analyzer<'compiler> {
 								// (fill_in_placeholder only resolves top-level
 								// vars, not vars nested inside e.g. Fun).
 								let instantiated =
-									self.instantiate_scheme(&Scheme::Forall(vars, class_constraints, ty));
+									self.instantiate_scheme(&Scheme::Forall(vars, row_vars, class_constraints, ty));
 								let expr_ty = self.new_type_var();
 								expr.ty = expr_ty.clone();
 								constraints.push(eq_constraint(expr_ty, instantiated));
@@ -1771,7 +1776,8 @@ impl<'compiler> Analyzer<'compiler> {
 					field_types.push((field_name.name.clone(), field_value.ty.clone()));
 				}
 
-				constraints.push(eq_constraint(expr.ty.clone(), Type::Record(field_types)).at(expr.range))
+				constraints
+					.push(eq_constraint(expr.ty.clone(), Type::Record(field_types, None)).at(expr.range))
 			}
 
 			ExprKind::UnaryOperation { op, right } => {
@@ -1935,7 +1941,7 @@ impl<'compiler> Analyzer<'compiler> {
 
 						self.add_value_binding(
 							param.ident.name.clone(),
-							Scheme::Forall(vec![], vec![], param.ty.clone()),
+							Scheme::Forall(vec![], vec![], vec![], param.ty.clone()),
 							param.ident.range,
 						)
 					}
@@ -2017,7 +2023,7 @@ impl<'compiler> Analyzer<'compiler> {
 						if value.ty.free_vars().is_empty() {
 							self.add_value_binding(
 								name.name.clone(),
-								Scheme::Forall(vec![], vec![], value.ty.clone()),
+								Scheme::Forall(vec![], vec![], vec![], value.ty.clone()),
 								name.range,
 							);
 						} else {
@@ -2246,12 +2252,16 @@ impl<'compiler> Analyzer<'compiler> {
 
 				self.constrain_expr(receiver, constraints);
 
-				// we know that receiver is a "partial record": at given field name, it
-				// must have a value of the type of this expr
+				// Receiver must be a record with at least this field. Use a
+				// fresh row variable for the unknown tail — row polymorphism
+				// lets `r.name + r.email` infer "has at least name AND
+				// email, plus possibly more" instead of losing one field
+				// to substitution.
+				let rid = self.new_row_var();
 				constraints.push(
 					eq_constraint(
 						receiver.ty.clone(),
-						Type::PartialRecord(field.name.clone(), expr.ty.clone().into()),
+						Type::Record(vec![(field.name.clone(), expr.ty.clone())], Some(rid)),
 					)
 					.at(expr.range),
 				)
@@ -2352,7 +2362,7 @@ impl<'compiler> Analyzer<'compiler> {
 			PatternKind::Identifier(ident) => {
 				self.add_value_binding(
 					ident.name.clone(),
-					Scheme::Forall(vec![], vec![], subject_ty),
+					Scheme::Forall(vec![], vec![], vec![], subject_ty),
 					ident.range,
 				);
 			}
@@ -2370,40 +2380,38 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 
 			PatternKind::Record { fields, rest } => {
-				if let Some(rp) = rest.as_ref() {
-					if rp.binding.is_some() {
-						self.error(rp.range, NamedRecordRestNotSupported);
-					}
+				// Build per-field fresh type vars first.
+				let mut field_types = Vec::with_capacity(fields.len());
+				let mut child_tys = Vec::with_capacity(fields.len());
+				for (field_name, _) in fields.iter() {
+					let ty = self.new_type_var();
+					field_types.push((field_name.name.clone(), ty.clone()));
+					child_tys.push(ty);
 				}
-				// Without `...`: require an exact match on the field set
-				// (subject must be `Record([...])`). With `...`: subject may
-				// have extra fields (push a `PartialRecord` constraint per
-				// listed field).
-				if rest.is_none() {
-					let mut field_types = Vec::with_capacity(fields.len());
-					let mut child_tys = Vec::with_capacity(fields.len());
-					for (field_name, _) in fields.iter() {
-						let ty = self.new_type_var();
-						field_types.push((field_name.name.clone(), ty.clone()));
-						child_tys.push(ty);
+				// No `...` → closed record. `...` → open record sharing a
+				// fresh row variable; if the rest is named, bind it to a
+				// record with no known fields and the same row variable, so
+				// unification with a concrete subject resolves the rest to
+				// "the leftover fields".
+				let tail = match rest {
+					None => None,
+					Some(rp) => {
+						let rid = self.new_row_var();
+						if let Some(name) = &rp.binding {
+							self.add_value_binding(
+								name.name.clone(),
+								Scheme::Forall(vec![], vec![], vec![], Type::Record(vec![], Some(rid))),
+								name.range,
+							);
+						}
+						Some(rid)
 					}
-					constraints
-						.push(eq_constraint(subject_ty.clone(), Type::Record(field_types)).at(pattern.range));
-					for ((_, field_pattern), child_ty) in fields.iter_mut().zip(child_tys.into_iter()) {
-						self.constrain_let_pattern(field_pattern, child_ty, constraints);
-					}
-				} else {
-					for (field_name, field_pattern) in fields.iter_mut() {
-						let field_ty = self.new_type_var();
-						constraints.push(
-							eq_constraint(
-								subject_ty.clone(),
-								Type::PartialRecord(field_name.name.clone(), field_ty.clone().into()),
-							)
-							.at(field_pattern.range),
-						);
-						self.constrain_let_pattern(field_pattern, field_ty, constraints);
-					}
+				};
+				constraints.push(
+					eq_constraint(subject_ty.clone(), Type::Record(field_types, tail)).at(pattern.range),
+				);
+				for ((_, field_pattern), child_ty) in fields.iter_mut().zip(child_tys.into_iter()) {
+					self.constrain_let_pattern(field_pattern, child_ty, constraints);
 				}
 			}
 
@@ -2424,7 +2432,7 @@ impl<'compiler> Analyzer<'compiler> {
 					if let Some(name) = &rp.binding {
 						self.add_value_binding(
 							name.name.clone(),
-							Scheme::Forall(vec![], vec![], subject_ty),
+							Scheme::Forall(vec![], vec![], vec![], subject_ty),
 							name.range,
 						);
 					}
@@ -2473,7 +2481,7 @@ impl<'compiler> Analyzer<'compiler> {
 					VariantResolution::NotFound => {
 						self.add_value_binding(
 							ident.name.clone(),
-							Scheme::Forall(vec![], vec![], subject_ty),
+							Scheme::Forall(vec![], vec![], vec![], subject_ty),
 							ident.range,
 						);
 					}
@@ -2511,6 +2519,7 @@ impl<'compiler> Analyzer<'compiler> {
 							.unwrap_or_default();
 						let subst = Substitution {
 							solutions: param_vars.into_iter().zip(enum_args.into_iter()).collect(),
+							row_solutions: HashMap::new(),
 						};
 						for (arg, param_ty) in args.iter_mut().zip(params.into_iter()) {
 							self.constrain_pattern(arg, subst.apply_to_type(&param_ty), constraints);
@@ -2543,39 +2552,32 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 
 			PatternKind::Record { fields, rest } => {
-				if let Some(rp) = rest.as_ref() {
-					if rp.binding.is_some() {
-						self.error(rp.range, NamedRecordRestNotSupported);
-					}
+				let mut field_types = Vec::with_capacity(fields.len());
+				let mut child_tys = Vec::with_capacity(fields.len());
+				for (field_name, _) in fields.iter() {
+					let ty = self.new_type_var();
+					field_types.push((field_name.name.clone(), ty.clone()));
+					child_tys.push(ty);
 				}
-				// Without `...`: closed-record match — subject must have
-				// exactly the listed fields. With `...`: open match — push
-				// `PartialRecord` per field so extras are allowed.
-				if rest.is_none() {
-					let mut field_types = Vec::with_capacity(fields.len());
-					let mut child_tys = Vec::with_capacity(fields.len());
-					for (field_name, _) in fields.iter() {
-						let ty = self.new_type_var();
-						field_types.push((field_name.name.clone(), ty.clone()));
-						child_tys.push(ty);
+				let tail = match rest {
+					None => None,
+					Some(rp) => {
+						let rid = self.new_row_var();
+						if let Some(name) = &rp.binding {
+							self.add_value_binding(
+								name.name.clone(),
+								Scheme::Forall(vec![], vec![], vec![], Type::Record(vec![], Some(rid))),
+								name.range,
+							);
+						}
+						Some(rid)
 					}
-					constraints
-						.push(eq_constraint(subject_ty.clone(), Type::Record(field_types)).at(pattern.range));
-					for ((_, field_pattern), child_ty) in fields.iter_mut().zip(child_tys.into_iter()) {
-						self.constrain_pattern(field_pattern, child_ty, constraints);
-					}
-				} else {
-					for (field_name, field_pattern) in fields.iter_mut() {
-						let field_ty = self.new_type_var();
-						constraints.push(
-							eq_constraint(
-								subject_ty.clone(),
-								Type::PartialRecord(field_name.name.clone(), field_ty.clone().into()),
-							)
-							.at(field_pattern.range),
-						);
-						self.constrain_pattern(field_pattern, field_ty, constraints);
-					}
+				};
+				constraints.push(
+					eq_constraint(subject_ty.clone(), Type::Record(field_types, tail)).at(pattern.range),
+				);
+				for ((_, field_pattern), child_ty) in fields.iter_mut().zip(child_tys.into_iter()) {
+					self.constrain_pattern(field_pattern, child_ty, constraints);
 				}
 			}
 
@@ -2595,7 +2597,7 @@ impl<'compiler> Analyzer<'compiler> {
 					if let Some(name) = &rp.binding {
 						self.add_value_binding(
 							name.name.clone(),
-							Scheme::Forall(vec![], vec![], Type::List(Box::new(elem_ty))),
+							Scheme::Forall(vec![], vec![], vec![], Type::List(Box::new(elem_ty))),
 							name.range,
 						);
 					}
@@ -2611,6 +2613,9 @@ impl<'compiler> Analyzer<'compiler> {
 	fn check_when_exhaustive(&mut self, subject_ty: &Type, cases: &[CaseNode], range: Range) {
 		if matches!(subject_ty, Type::List(_)) {
 			return self.check_when_list_exhaustive(cases, range);
+		}
+		if matches!(subject_ty, Type::Record(_, _)) {
+			return self.check_when_record_exhaustive(cases, range);
 		}
 
 		let required: Vec<String> = match subject_ty {
@@ -2752,6 +2757,47 @@ impl<'compiler> Analyzer<'compiler> {
 		if !missing.is_empty() {
 			self.error(range, WhenNotExhaustive { missing });
 		}
+	}
+
+	// Exhaustiveness for `when` over a record-typed subject. Records have a
+	// single value shape (whatever the type says), so one record pattern
+	// whose sub-patterns are all catch-alls (binding identifier or `_`)
+	// covers everything — `when r is {a: n, ...rest} { ... }` doesn't need
+	// `else`. A pattern with a literal or constructor sub-pattern can
+	// fail and isn't enough on its own.
+	fn check_when_record_exhaustive(&mut self, cases: &[CaseNode], range: Range) {
+		for case in cases {
+			match &case.pattern.kind {
+				PatternKind::Underscore => return,
+				// Bare identifier binds the whole subject. Record subjects
+				// don't have nullary-variant ambiguity (those only apply
+				// for enum subjects), so this is always a catch-all here.
+				PatternKind::Identifier(_) => return,
+				PatternKind::Record { fields, .. } => {
+					// All listed-field sub-patterns must themselves be
+					// catch-alls (Underscore or non-variant Identifier). The
+					// `rest` part (if any) carries no failure condition.
+					let all_catch = fields.iter().all(|(_, sub)| match &sub.kind {
+						PatternKind::Underscore => true,
+						PatternKind::Identifier(ident) => self
+							.find_variant_globally(&ident.name)
+							.iter()
+							.all(|(_, p)| !p.is_empty()),
+						_ => false,
+					});
+					if all_catch {
+						return;
+					}
+				}
+				_ => {}
+			}
+		}
+		self.error(
+			range,
+			WhenNotExhaustive {
+				missing: vec!["else".into()],
+			},
+		);
 	}
 
 	fn find_variant_in_enum(&self, enum_name: &str, variant_name: &str) -> Option<Vec<Type>> {
@@ -3007,114 +3053,8 @@ impl<'compiler> Analyzer<'compiler> {
 				self.unify(&constraints)
 			}
 
-			Eq(Type::Record(field_types_1), Type::Record(field_types_2), reason) => {
-				// Records unify iff they have the same field set (order
-				// doesn't matter) and matching types at each field. Extras
-				// on either side are an error — for "I just need this
-				// field, anything else is fine", write a `{name, ...}`
-				// pattern (which lowers to `PartialRecord`) or access the
-				// field directly (`r.name`, also `PartialRecord`-backed).
-
-				let mut constraints = Vec::with_capacity(field_types_2.len());
-
-				let expected_fields: HashMap<&String, usize> =
-					HashMap::from_iter(field_types_2.iter().enumerate().map(|(i, (k, _))| (k, i)));
-				let actual_fields: HashMap<&String, usize> =
-					HashMap::from_iter(field_types_1.iter().enumerate().map(|(i, (k, _))| (k, i)));
-
-				let mut errors = false;
-
-				for (field_name, expected_index) in &expected_fields {
-					if let Some(actual_index) = actual_fields.get(*field_name) {
-						constraints.push(
-							eq_constraint(
-								field_types_1[*actual_index].1.clone(),
-								field_types_2[*expected_index].1.clone(),
-							)
-							.at(reason.range),
-						);
-					} else {
-						errors = true;
-						self.error(
-							reason.range,
-							RecordFieldNotPresent {
-								field: (*field_name).clone(),
-								ty: Type::Record(field_types_1.clone()),
-							},
-						)
-					}
-				}
-
-				// Catch extras on the actual side too — these would have
-				// been silently accepted under the old directional rule.
-				for (field_name, _) in &actual_fields {
-					if !expected_fields.contains_key(*field_name) {
-						errors = true;
-						self.error(
-							reason.range,
-							RecordFieldNotPresent {
-								field: (*field_name).clone(),
-								ty: Type::Record(field_types_2.clone()),
-							},
-						)
-					}
-				}
-
-				if errors {
-					return Substitution::empty();
-				}
-
-				self.unify(&constraints)
-			}
-
-			Eq(Type::Record(field_types), Type::PartialRecord(field_name, field_type), reason)
-			| Eq(Type::PartialRecord(field_name, field_type), Type::Record(field_types), reason) => {
-				// records and partial records can be unified as long as the record has the field
-				// referenced by the partial record and the fields have the same type
-
-				let fields_with_indices: HashMap<&String, usize> =
-					HashMap::from_iter(field_types.iter().enumerate().map(|(i, (k, _))| (k, i)));
-
-				if let Some(field_index) = fields_with_indices.get(field_name) {
-					let mut constraints = Vec::with_capacity(1);
-
-					// record at field should have same type as the one in the partial record
-					constraints.push(eq_constraint(
-						field_types[*field_index].1.clone(),
-						*field_type.clone(),
-					));
-
-					return self.unify(&constraints);
-				} else {
-					self.error(
-						reason.range,
-						RecordFieldNotPresent {
-							field: field_name.clone(),
-							ty: Type::Record(field_types.clone()),
-						},
-					);
-
-					return Substitution::empty();
-				}
-			}
-
-			Eq(Type::PartialRecord(name_1, ty_1), Type::PartialRecord(name_2, ty_2), _reason) => {
-				if name_1 == name_2 {
-					// Same field: unify its type.
-					self.unify(&[eq_constraint(*ty_1.clone(), *ty_2.clone())])
-				} else {
-					// Different fields: both constraints describe a record
-					// with at least these fields. The underlying type must
-					// satisfy both, but `PartialRecord` only carries one
-					// field. Accept here without further substitution — when
-					// the underlying record is concretized elsewhere, each
-					// `PartialRecord` constraint resolves against it via the
-					// `Record ~ PartialRecord` rule. In the rare case the
-					// record never becomes concrete, we lose the second
-					// field as an inferred constraint — acceptable looseness
-					// for now.
-					Substitution::empty()
-				}
+			Eq(Type::Record(fields_1, tail_1), Type::Record(fields_2, tail_2), reason) => {
+				self.unify_records(fields_1, tail_1, fields_2, tail_2, reason)
 			}
 
 			Eq(Type::Enum(name_1, args_1), Type::Enum(name_2, args_2), _) if name_1 == name_2 => {
@@ -3156,6 +3096,170 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 
 			_ => unreachable!("should only have eq constraints in here"),
+		}
+	}
+
+	// Row-polymorphic record unification. Four cases by (tail_1, tail_2):
+	//
+	//   (None, None)         — both closed: field sets must be equal
+	//   (None, Some(r))      — r binds to "the fields f1 has that f2 doesn't"
+	//                          (with tail None — i.e. closed); f2's fields
+	//                          must all be in f1
+	//   (Some(r), None)      — symmetric
+	//   (Some(r1), Some(r2)) — fresh row var t; r1 binds to (only_f2 + t),
+	//                          r2 binds to (only_f1 + t); shared fields
+	//                          unify pairwise. If r1 == r2, only_f1 and
+	//                          only_f2 must both be empty.
+	fn unify_records(
+		&mut self,
+		fields_1: &Vec<(String, Type)>,
+		tail_1: &Option<usize>,
+		fields_2: &Vec<(String, Type)>,
+		tail_2: &Option<usize>,
+		reason: &ConstraintReason,
+	) -> Substitution {
+		use std::collections::HashMap;
+		let map_1: HashMap<&String, usize> =
+			HashMap::from_iter(fields_1.iter().enumerate().map(|(i, (k, _))| (k, i)));
+		let map_2: HashMap<&String, usize> =
+			HashMap::from_iter(fields_2.iter().enumerate().map(|(i, (k, _))| (k, i)));
+
+		// Common fields → unify types pairwise.
+		let mut shared_constraints: Vec<Constraint> = Vec::new();
+		for (name, i1) in &map_1 {
+			if let Some(i2) = map_2.get(*name) {
+				shared_constraints
+					.push(eq_constraint(fields_1[*i1].1.clone(), fields_2[*i2].1.clone()).at(reason.range));
+			}
+		}
+
+		// Sets of "only on left" and "only on right" fields.
+		let only_1: Vec<(String, Type)> = fields_1
+			.iter()
+			.filter(|(n, _)| !map_2.contains_key(n))
+			.cloned()
+			.collect();
+		let only_2: Vec<(String, Type)> = fields_2
+			.iter()
+			.filter(|(n, _)| !map_1.contains_key(n))
+			.cloned()
+			.collect();
+
+		match (*tail_1, *tail_2) {
+			(None, None) => {
+				let mut ok = true;
+				for (n, _) in &only_1 {
+					ok = false;
+					self.error(
+						reason.range,
+						RecordFieldNotPresent {
+							field: n.clone(),
+							ty: Type::Record(fields_2.clone(), None),
+						},
+					);
+				}
+				for (n, _) in &only_2 {
+					ok = false;
+					self.error(
+						reason.range,
+						RecordFieldNotPresent {
+							field: n.clone(),
+							ty: Type::Record(fields_1.clone(), None),
+						},
+					);
+				}
+				if !ok {
+					return Substitution::empty();
+				}
+				self.unify(&shared_constraints)
+			}
+
+			(None, Some(r2)) => {
+				// Left is closed; right's row var must absorb left's extras.
+				// Right's listed fields must all be present in left (else
+				// closed-left can't have them).
+				let mut ok = true;
+				for (n, _) in &only_2 {
+					ok = false;
+					self.error(
+						reason.range,
+						RecordFieldNotPresent {
+							field: n.clone(),
+							ty: Type::Record(fields_1.clone(), None),
+						},
+					);
+				}
+				if !ok {
+					return Substitution::empty();
+				}
+				let subst = self.unify(&shared_constraints);
+				let row_solution = RowSolution {
+					fields: only_1,
+					tail: None,
+				};
+				subst.compose(Substitution::with_row_entry(r2, row_solution))
+			}
+
+			(Some(r1), None) => {
+				let mut ok = true;
+				for (n, _) in &only_1 {
+					ok = false;
+					self.error(
+						reason.range,
+						RecordFieldNotPresent {
+							field: n.clone(),
+							ty: Type::Record(fields_2.clone(), None),
+						},
+					);
+				}
+				if !ok {
+					return Substitution::empty();
+				}
+				let subst = self.unify(&shared_constraints);
+				let row_solution = RowSolution {
+					fields: only_2,
+					tail: None,
+				};
+				subst.compose(Substitution::with_row_entry(r1, row_solution))
+			}
+
+			(Some(r1), Some(r2)) => {
+				if r1 == r2 {
+					// Same row variable on both sides: only consistent if
+					// neither side claims unique fields.
+					if !only_1.is_empty() || !only_2.is_empty() {
+						self.error(
+							reason.range,
+							TypeMismatch {
+								expected: Type::Record(fields_2.clone(), Some(r2)),
+								found: Type::Record(fields_1.clone(), Some(r1)),
+							},
+						);
+						return Substitution::empty();
+					}
+					return self.unify(&shared_constraints);
+				}
+				// Introduce a fresh row var that captures the unknown tail
+				// shared between the two sides. Each side binds its row
+				// var to (the other side's unique fields) + fresh.
+				let fresh = self.new_row_var();
+				let mut subst = self.unify(&shared_constraints);
+				subst = subst.compose(Substitution::with_row_entry(
+					r1,
+					RowSolution {
+						fields: only_2,
+						tail: Some(fresh),
+					},
+				));
+				subst = subst.compose(Substitution::with_row_entry(
+					r2,
+					RowSolution {
+						fields: only_1,
+						tail: Some(fresh),
+					},
+				));
+				subst
+			}
 		}
 	}
 
@@ -3563,7 +3667,18 @@ impl<'compiler> Analyzer<'compiler> {
 				kept.push(c.clone());
 			}
 		}
-		Scheme::Forall(Vec::from_iter(free_vars), kept, ty.clone())
+		let mut free_row_vars: HashSet<usize> = ty.free_row_vars();
+		for (_, binding) in self.value_scopes.last().unwrap() {
+			for rv in binding.ty_scheme.free_row_vars() {
+				free_row_vars.remove(&rv);
+			}
+		}
+		Scheme::Forall(
+			Vec::from_iter(free_vars),
+			Vec::from_iter(free_row_vars),
+			kept,
+			ty.clone(),
+		)
 	}
 
 	fn instantiate_scheme(&mut self, scheme: &Scheme) -> Type {
@@ -3580,11 +3695,22 @@ impl<'compiler> Analyzer<'compiler> {
 	) -> (Type, Vec<ClassConstraint>) {
 		match scheme {
 			Scheme::Var(_) => unreachable!("shouldn't be instantiating a scheme var"),
-			Scheme::Forall(vars, class_constraints, ty) => {
-				// generate a new fresh type var for each of the forall vars
+			Scheme::Forall(vars, row_vars, class_constraints, ty) => {
+				// generate a new fresh type var for each of the forall vars,
+				// and a fresh row var for each quantified row var
 				let mut subst = Substitution::empty();
 				for var in vars {
 					subst.solutions.insert(*var, self.new_type_var());
+				}
+				for rv in row_vars {
+					let fresh = self.new_row_var();
+					subst.row_solutions.insert(
+						*rv,
+						RowSolution {
+							fields: vec![],
+							tail: Some(fresh),
+						},
+					);
 				}
 
 				// and then apply that substitution in ty and the constraints
@@ -3622,6 +3748,15 @@ impl<'compiler> Analyzer<'compiler> {
 		let type_var = Type::Var(self.next_type_var_id);
 		self.next_type_var_id += 1;
 		type_var
+	}
+
+	// Row variables share the same counter as type variables; the two
+	// spaces are kept distinct by where the id is *used* (type-var position
+	// vs. record-tail position) and which substitution map binds it.
+	fn new_row_var(&mut self) -> usize {
+		let id = self.next_type_var_id;
+		self.next_type_var_id += 1;
+		id
 	}
 
 	// Lower a trait-method reference (either `trait.method` or bare
@@ -3737,6 +3872,7 @@ impl<'compiler> Analyzer<'compiler> {
 				solutions: (0..enum_export.param_count)
 					.map(|i| (i, Type::Var(fresh_param_vars[i])))
 					.collect(),
+				row_solutions: HashMap::new(),
 			};
 			let variants: Vec<(String, Vec<Type>)> = enum_export
 				.variants
@@ -4162,11 +4298,12 @@ impl<'compiler> Analyzer<'compiler> {
 					.map(|t| self.instantiate_with(t, mapping))
 					.collect(),
 			),
-			Type::Record(fields) => Type::Record(
+			Type::Record(fields, tail) => Type::Record(
 				fields
 					.iter()
 					.map(|(n, t)| (n.clone(), self.instantiate_with(t, mapping)))
 					.collect(),
+				*tail,
 			),
 			Type::Enum(name, args) => Type::Enum(
 				name.clone(),
@@ -4182,10 +4319,6 @@ impl<'compiler> Analyzer<'compiler> {
 			| Type::Regex
 			| Type::Unknown
 			| Type::Nothing => ty.clone(),
-			Type::PartialRecord(name, inner) => Type::PartialRecord(
-				name.clone(),
-				Box::new(self.instantiate_with(inner, mapping)),
-			),
 			Type::PartialTuple(index, inner) => {
 				Type::PartialTuple(*index, Box::new(self.instantiate_with(inner, mapping)))
 			}

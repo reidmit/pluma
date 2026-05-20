@@ -1,11 +1,15 @@
-# Named record rest (`...rest`) isn't supported yet — only anonymous `...`.
+# With row polymorphism, `{name: n, ...rest}` binds `rest` to a record
+# carrying whatever fields remain after `name` is matched.
 
-def show-name = fun p {
+def split-out-name = fun p {
 	when p is {name: n, ...rest} {
-		print n
+		(n, rest)
 	}
 }
 
 def main = fun {
-	show-name {name: "reid", age: 28}
+	# input has {name, age, role}; rest infers to {age, role}.
+	let (the-name, the-rest) = split-out-name {name: "reid", age: 28, role: "engineer"}
+	print the-name
+	print the-rest.role
 }

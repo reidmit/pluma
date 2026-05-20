@@ -50,13 +50,13 @@ module `main` (tests/analyze/def-type-alias-record/main.pa) {
                                     pattern: pattern(7:5-7:7) Identifier(
                                         ident(7:5-7:7) `me`,
                                     ),
-                                    value: expr(7:10-7:40) :: {name: string, age: int} {
+                                    value: expr(7:10-7:40) :: {age: int, name: string} {
                                         kind: call(7:10-7:40) {
-                                            callee: expr(7:10-7:16) :: ({name: string, age: int}) -> {name: string, age: int} {
+                                            callee: expr(7:10-7:16) :: ({age: int, name: string}) -> {age: int, name: string} {
                                                 kind: ident(7:10-7:16) `person`,
                                             },
                                             args: [
-                                                expr(7:17-7:40) :: {name: string, age: int} {
+                                                expr(7:17-7:40) :: {age: int, name: string} {
                                                     kind: record [
                                                         (
                                                             ident(7:18-7:22) `name`,
@@ -79,11 +79,11 @@ module `main` (tests/analyze/def-type-alias-record/main.pa) {
                             },
                             expr(9:1-9:12) :: string {
                                 kind: call(9:1-9:12) {
-                                    callee: expr(9:1-9:9) :: ({name: string, ...}) -> string {
+                                    callee: expr(9:1-9:9) :: ({age: int, name: string}) -> string {
                                         kind: ident(9:1-9:9) `get-name`,
                                     },
                                     args: [
-                                        expr(9:10-9:12) :: {name: string, ...} {
+                                        expr(9:10-9:12) :: {age: int, name: string} {
                                             kind: ident(9:10-9:12) `me`,
                                         },
                                     ],

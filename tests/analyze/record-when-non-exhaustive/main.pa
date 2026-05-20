@@ -1,0 +1,14 @@
+# A record pattern with a literal sub-pattern can fail at runtime — the
+# value's `code` field might not be 0. So `when` needs an `else` (or a
+# catch-all pattern) to cover the other cases.
+
+def describe = fun r {
+	when r is {code: 0, ...} {
+		"zero"
+	}
+}
+
+def main = fun {
+	print (describe {code: 0})
+	print (describe {code: 42})
+}

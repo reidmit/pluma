@@ -28,7 +28,6 @@ pub enum AnalysisErrorKind {
 	OverlappingInstance { trait_name: String, head: Type },
 	OrphanInstance { trait_name: String, head: Type },
 	RefutablePatternInLet,
-	NamedRecordRestNotSupported,
 }
 
 impl fmt::Display for AnalysisError {
@@ -156,11 +155,6 @@ impl fmt::Display for AnalysisError {
 			RefutablePatternInLet => write!(
 				f,
 				"This pattern can fail to match. `let` bindings require an irrefutable pattern (identifier, wildcard, tuple, or record). Use `if` or `when` to handle the cases."
-			),
-
-			NamedRecordRestNotSupported => write!(
-				f,
-				"Named record rest (`...name`) isn't supported yet. Use a bare `...` to allow extra fields without binding them."
 			),
 		}
 	}

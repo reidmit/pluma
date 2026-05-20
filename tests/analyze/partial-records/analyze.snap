@@ -28,7 +28,7 @@ module `main` (tests/analyze/partial-records/main.pa) {
             },
             def(4:0-4:36) :: nothing {
                 name: ident(4:4-4:10) `person`,
-                kind: expr(4:13-4:36) :: {name: string, age: int} {
+                kind: expr(4:13-4:36) :: {age: int, name: string} {
                     kind: record [
                         (
                             ident(4:14-4:18) `name`,
@@ -53,11 +53,11 @@ module `main` (tests/analyze/partial-records/main.pa) {
                         body: [
                             expr(7:1-7:16) :: string {
                                 kind: call(7:1-7:16) {
-                                    callee: expr(7:1-7:9) :: ({name: string, ...}) -> string {
+                                    callee: expr(7:1-7:9) :: ({age: int, name: string}) -> string {
                                         kind: ident(7:1-7:9) `get-name`,
                                     },
                                     args: [
-                                        expr(7:10-7:16) :: {name: string, ...} {
+                                        expr(7:10-7:16) :: {age: int, name: string} {
                                             kind: ident(7:10-7:16) `person`,
                                         },
                                     ],

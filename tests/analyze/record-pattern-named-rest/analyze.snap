@@ -2,7 +2,143 @@
 source: tests/analyze.rs
 expression: output
 ---
-error: Named record rest (`...name`) isn't supported yet. Use a bare `...` to allow extra fields without binding them.
-> 4 | 	when p is {name: n, ...rest} {
-                           ^^^^^^^
-
+module `main` (tests/analyze/record-pattern-named-rest/main.pa) {
+    comments: {
+        0: " With row polymorphism, `{name: n, ...rest}` binds `rest` to a record",
+        1: " carrying whatever fields remain after `name` is matched.",
+        10: " input has {name, age, role}; rest infers to {age, role}.",
+    },
+    ast: Some(
+        module(3:0-14:1) [
+            def(3:0-7:1) :: nothing {
+                name: ident(3:4-3:18) `split-out-name`,
+                kind: expr(3:21-7:1) :: ({name: 'v, ...}) -> ('v, {...}) {
+                    kind: fun(3:21-7:1) {
+                        params: [
+                            ident(3:25-3:26) `p` :: {name: 'v, ...},
+                        ],
+                        body: [
+                            expr(4:1-6:2) :: ('v, {...}) {
+                                kind: when(4:1-6:2) [
+                                    case(4:8-6:2) is pattern(4:11-4:29) Record {
+                                        fields: [
+                                            (
+                                                ident(4:12-4:16) `name`,
+                                                pattern(4:18-4:19) Identifier(
+                                                    ident(4:18-4:19) `n`,
+                                                ),
+                                            ),
+                                        ],
+                                        rest: Some(
+                                            RecordRestPattern {
+                                                range: 4:21-4:28,
+                                                binding: Some(
+                                                    ident(4:24-4:28) `rest`,
+                                                ),
+                                            },
+                                        ),
+                                    } [
+                                        expr(5:2-5:11) :: ('v, {...}) {
+                                            kind: tuple [
+                                                expr(5:3-5:4) :: 'v {
+                                                    kind: ident(5:3-5:4) `n`,
+                                                },
+                                                expr(5:6-5:10) :: {...} {
+                                                    kind: ident(5:6-5:10) `rest`,
+                                                },
+                                            ],
+                                        },
+                                    ],
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
+            def(9:0-14:1) :: nothing {
+                name: ident(9:4-9:8) `main`,
+                kind: expr(9:11-14:1) :: nothing -> string {
+                    kind: fun(9:11-14:1) {
+                        params: [],
+                        body: [
+                            expr(11:1-11:84) :: nothing {
+                                kind: let(11:1-11:84) {
+                                    pattern: pattern(11:5-11:25) Tuple(
+                                        [
+                                            pattern(11:6-11:14) Identifier(
+                                                ident(11:6-11:14) `the-name`,
+                                            ),
+                                            pattern(11:16-11:24) Identifier(
+                                                ident(11:16-11:24) `the-rest`,
+                                            ),
+                                        ],
+                                    ),
+                                    value: expr(11:28-11:84) :: (string, ({age: int, role: string})) {
+                                        kind: call(11:28-11:84) {
+                                            callee: expr(11:28-11:42) :: ({age: int, name: string, role: string}) -> (string, ({age: int, role: string})) {
+                                                kind: ident(11:28-11:42) `split-out-name`,
+                                            },
+                                            args: [
+                                                expr(11:43-11:84) :: {age: int, name: string, role: string} {
+                                                    kind: record [
+                                                        (
+                                                            ident(11:44-11:48) `name`,
+                                                            expr(11:51-11:56) :: string {
+                                                                kind: literal(11:51-11:56) string "reid",
+                                                            },
+                                                        ),
+                                                        (
+                                                            ident(11:58-11:61) `age`,
+                                                            expr(11:63-11:65) :: int {
+                                                                kind: literal(11:63-11:65) int 28,
+                                                            },
+                                                        ),
+                                                        (
+                                                            ident(11:67-11:71) `role`,
+                                                            expr(11:74-11:83) :: string {
+                                                                kind: literal(11:74-11:83) string "engineer",
+                                                            },
+                                                        ),
+                                                    ],
+                                                },
+                                            ],
+                                        },
+                                    },
+                                },
+                            },
+                            expr(12:1-12:15) :: string {
+                                kind: call(12:1-12:15) {
+                                    callee: expr(12:1-12:6) :: string -> string {
+                                        kind: ident(12:1-12:6) `print`,
+                                    },
+                                    args: [
+                                        expr(12:7-12:15) :: string {
+                                            kind: ident(12:7-12:15) `the-name`,
+                                        },
+                                    ],
+                                },
+                            },
+                            expr(13:1-13:20) :: string {
+                                kind: call(13:1-13:20) {
+                                    callee: expr(13:1-13:6) :: string -> string {
+                                        kind: ident(13:1-13:6) `print`,
+                                    },
+                                    args: [
+                                        expr(13:7-13:20) :: string {
+                                            kind: field-access {
+                                                receiver: expr(13:7-13:15) :: {age: int, role: string} {
+                                                    kind: ident(13:7-13:15) `the-rest`,
+                                                },
+                                                field: ident(13:16-13:20) `role`,
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

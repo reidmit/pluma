@@ -12,8 +12,13 @@ pub enum Type {
 	Nothing,
 	Tuple(Vec<Type>),
 	PartialTuple(usize, Box<Type>),
-	Record(Vec<(String, Type)>),
-	PartialRecord(String, Box<Type>),
+	// `Record(fields, tail)`. `tail = None` is a closed record (exactly these
+	// fields). `tail = Some(rid)` is an open record with row variable `rid`
+	// standing in for whatever additional fields the subject may carry. Field
+	// access, `{a, ...}` patterns, and `{a, ...rest}` patterns all produce
+	// open records — row polymorphism lets us track "has at least these"
+	// without picking specific extras.
+	Record(Vec<(String, Type)>, Option<usize>),
 	Fun(Vec<Type>, Box<Type>),
 	// `Enum(qualified-name, type-args)`. `type-args` is empty for monomorphic
 	// enums and matches the enum's declared param arity for generic ones.
@@ -45,8 +50,6 @@ impl Type {
 
 			Type::PartialTuple(_, element_type) => element_type.contains_var(var),
 
-			Type::PartialRecord(_, field_type) => field_type.contains_var(var),
-
 			Type::Enum(_, args) => args.iter().any(|t| t.contains_var(var)),
 
 			Type::List(element_type) => element_type.contains_var(var),
@@ -65,7 +68,7 @@ impl Type {
 				false
 			}
 
-			Type::Record(field_types) => {
+			Type::Record(field_types, _tail) => {
 				for (_, field_type) in field_types {
 					if field_type.contains_var(var) {
 						return true;
@@ -109,10 +112,6 @@ impl Type {
 				vars.extend(element_type.free_vars());
 			}
 
-			Type::PartialRecord(_, field_type) => {
-				vars.extend(field_type.free_vars());
-			}
-
 			Type::Enum(_, args) => {
 				for arg in args {
 					vars.extend(arg.free_vars());
@@ -138,7 +137,7 @@ impl Type {
 				}
 			}
 
-			Type::Record(field_types) => {
+			Type::Record(field_types, _tail) => {
 				for (_, field_type) in field_types {
 					vars.extend(field_type.free_vars());
 				}
@@ -153,6 +152,69 @@ impl Type {
 			}
 		}
 
+		vars
+	}
+
+	// Row variables that appear in this type — distinct from `free_vars`,
+	// which tracks type variables. Generalization quantifies over both
+	// kinds; the unifier substitutes them through separate maps.
+	pub fn free_row_vars(&self) -> HashSet<usize> {
+		let mut vars = HashSet::new();
+		match self {
+			Type::Unknown
+			| Type::Bool
+			| Type::Int
+			| Type::Float
+			| Type::Regex
+			| Type::String
+			| Type::Nothing
+			| Type::Var(_) => {}
+
+			Type::PartialTuple(_, element_type) => {
+				vars.extend(element_type.free_row_vars());
+			}
+
+			Type::Enum(_, args) => {
+				for arg in args {
+					vars.extend(arg.free_row_vars());
+				}
+			}
+
+			Type::List(element_type) => {
+				vars.extend(element_type.free_row_vars());
+			}
+
+			Type::Map(key_type, value_type) => {
+				vars.extend(key_type.free_row_vars());
+				vars.extend(value_type.free_row_vars());
+			}
+
+			Type::Ref(inner_type) => {
+				vars.extend(inner_type.free_row_vars());
+			}
+
+			Type::Tuple(element_types) => {
+				for element_type in element_types {
+					vars.extend(element_type.free_row_vars());
+				}
+			}
+
+			Type::Record(field_types, tail) => {
+				for (_, field_type) in field_types {
+					vars.extend(field_type.free_row_vars());
+				}
+				if let Some(rid) = tail {
+					vars.insert(*rid);
+				}
+			}
+
+			Type::Fun(param_types, return_type) => {
+				for param_type in param_types {
+					vars.extend(param_type.free_row_vars());
+				}
+				vars.extend(return_type.free_row_vars());
+			}
+		}
 		vars
 	}
 }
@@ -214,10 +276,6 @@ impl std::fmt::Display for Type {
 				write!(f, "({}: {}, ...)", index, element)
 			}
 
-			Type::PartialRecord(field_name, field_type) => {
-				write!(f, "{{{}: {}, ...}}", field_name, field_type)
-			}
-
 			Type::Tuple(elements) => write!(
 				f,
 				"({})",
@@ -228,15 +286,34 @@ impl std::fmt::Display for Type {
 					.join(", "),
 			),
 
-			Type::Record(fields) => write!(
-				f,
-				"{{{}}}",
-				fields
+			Type::Record(fields, tail) => {
+				// Sort fields alphabetically for stable display. Substitution
+				// can merge fields from different sources in an order that
+				// depends on solve order, which would otherwise make
+				// diagnostics non-deterministic.
+				let mut sorted: Vec<&(String, Type)> = fields.iter().collect();
+				sorted.sort_by(|a, b| a.0.cmp(&b.0));
+				let field_str = sorted
 					.iter()
 					.map(|(field_name, field_type)| format!("{}: {}", field_name, field_type))
 					.collect::<Vec<String>>()
-					.join(", "),
-			),
+					.join(", ");
+				match tail {
+					None => write!(f, "{{{}}}", field_str),
+					Some(_rid) => {
+						// Row var id is internal state — most types only have
+						// one row var visible at a time, so the bare `...`
+						// reads better than `...ρ7`. Diagnostics that need to
+						// distinguish multiple rows in the same type can
+						// upgrade this later.
+						if fields.is_empty() {
+							write!(f, "{{...}}")
+						} else {
+							write!(f, "{{{}, ...}}", field_str)
+						}
+					}
+				}
+			}
 
 			Type::List(element_type) => write!(f, "list {}", maybe_add_parens(element_type)),
 

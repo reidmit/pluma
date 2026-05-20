@@ -8,7 +8,7 @@ module `main` (tests/analyze/records/main.pa) {
         module(0:0-6:1) [
             def(0:0-0:32) :: nothing {
                 name: ident(0:4-0:6) `me`,
-                kind: expr(0:9-0:32) :: {name: string, age: int} {
+                kind: expr(0:9-0:32) :: {age: int, name: string} {
                     kind: record [
                         (
                             ident(0:10-0:14) `name`,
@@ -54,7 +54,7 @@ module `main` (tests/analyze/records/main.pa) {
                                 kind: binary op(5:8-5:9) `+` {
                                     left: expr(5:1-5:7) :: int {
                                         kind: field-access {
-                                            receiver: expr(5:1-5:3) :: {age: int, ...} {
+                                            receiver: expr(5:1-5:3) :: {age: int, name: string} {
                                                 kind: ident(5:1-5:3) `me`,
                                             },
                                             field: ident(5:4-5:7) `age`,
@@ -62,7 +62,7 @@ module `main` (tests/analyze/records/main.pa) {
                                     },
                                     right: expr(5:10-5:20) :: int {
                                         kind: field-access {
-                                            receiver: expr(5:10-5:16) :: {two: int, ...} {
+                                            receiver: expr(5:10-5:16) :: {one: int, two: int} {
                                                 kind: ident(5:10-5:16) `inline`,
                                             },
                                             field: ident(5:17-5:20) `two`,

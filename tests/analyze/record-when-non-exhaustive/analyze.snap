@@ -1,0 +1,8 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: Non-exhaustive `when`: missing case for `else`.
+> 6 | 	when r is {code: 0, ...} {
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+

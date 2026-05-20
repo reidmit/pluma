@@ -2,7 +2,7 @@
 source: tests/analyze.rs
 expression: output
 ---
-error: Field `namee` does not exist in record of type `{name: string, age: int}`.
+error: Field `namee` does not exist in record of type `{age: int, name: string}`.
 > 4 | 	me.namee
        ^^
 

@@ -127,12 +127,15 @@ pub enum Instruction {
 	},
 	// MatchRecord: subject must be a Record containing all the named
 	// fields. If `exact` is true, the record must have only those fields
-	// (no extras); otherwise extras are permitted. The corresponding
-	// values are pushed onto the stack in the order the patterns appear
-	// (last on top). Field names live in Program::field_lists.
+	// (no extras). If `with_rest` is true, after pushing the named field
+	// values onto the stack a fresh Record containing the input's other
+	// fields is pushed on top (used by `{a, ...rest}` patterns). `exact`
+	// and `with_rest` are mutually exclusive at the codegen level.
+	// Field names live in Program::field_lists.
 	MatchRecord {
 		fields_idx: FieldListIdx,
 		exact: bool,
+		with_rest: bool,
 		on_fail: Offset,
 	},
 	// MatchList: subject must be a List. If has_rest is false, the list

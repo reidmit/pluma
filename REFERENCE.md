@@ -483,19 +483,50 @@ when person is {name: n, ...} { ... }             # any record with a `name`
 ```
 
 - `{a: x, b: y}` — closed: subject must be exactly `{a: T, b: U}`.
-- `{a: x, b: y, ...}` — open: subject may carry extra fields.
+- `{a: x, b: y, ...}` — open: subject may carry extra fields (ignored).
+- `{a: x, ...rest}` — open: `rest` binds to a record containing whichever
+  fields the subject has beyond `a`.
 - `{}` — closed empty: matches only the empty record `{}`.
 - `{...}` — open empty: matches any record.
+- `{...rest}` — captures the whole record as `rest`.
 
 field shorthand (`{a, b}` for `{a: a, b: b}`) isn't supported yet.
 
-since the type system fully describes the field set, a closed pattern that matches the subject's type is exhaustive without `else`:
+```
+def split-out-name = fun p {
+  when p is {name: n, ...rest} {
+    (n, rest)        # rest carries every field of `p` except `name`
+  }
+}
+
+def main = fun {
+  let (n, r) = split-out-name {name: "reid", age: 28, role: "engineer"}
+  print n           # reid
+  print r.role      # engineer (r : {age: int, role: string})
+}
+```
+
+records are **row-polymorphic**: a function destructuring a few fields stays
+generic over the others. `fun p { p.name }` is typed `{name: a, ...} -> a`,
+so it accepts any record with a `name` field.
+
+a record pattern whose sub-patterns are all bindings (`_` or an identifier) covers every value of the subject's type, so `when` doesn't need an `else`:
 
 ```
 def midpoint = fun pt {
-  when pt is {x: xv, y: yv} {              # only one possible shape
+  when pt is {x: xv, y: yv} {              # binding-only sub-patterns
     (xv + yv) / 2
   }
+}
+```
+
+a sub-pattern that can fail (literal, constructor, list, …) makes the arm refutable, and `when` then requires an `else` or catch-all:
+
+```
+when r is {code: 0, ...} {                 # literal 0 can fail
+  "zero"
+} else {
+  "other"
 }
 ```
 
