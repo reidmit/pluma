@@ -1,15 +1,25 @@
+use compiler::{Diagnostic as PlumaDiagnostic, DiagnosticKind};
 use dashmap::DashMap;
+use hover::HoverHit;
 use semantic_tokens::collect_semantic_tokens;
+use std::sync::Arc;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
+mod analysis;
+mod hover;
 mod semantic_tokens;
 
-#[derive(Debug)]
 struct Backend {
 	client: Client,
 	document_map: DashMap<String, String>,
+	// Per-URI hover index, rebuilt on each successful analysis. We can't
+	// store the analyzed `Module` directly: it carries `Rc<RefCell<_>>`
+	// dispatch cells, which aren't `Send` — DashMap values need to be.
+	// The hover index is a precomputed `Vec<HoverHit>` of Send-only data
+	// (`Range` + `Type`), which is what hover actually needs anyway.
+	hover_map: DashMap<String, Arc<Vec<HoverHit>>>,
 }
 
 #[tower_lsp::async_trait]
@@ -46,6 +56,8 @@ impl LanguageServer for Backend {
 						},
 					),
 				),
+				document_formatting_provider: Some(OneOf::Left(true)),
+				hover_provider: Some(HoverProviderCapability::Simple(true)),
 				..ServerCapabilities::default()
 			},
 		})
@@ -56,11 +68,7 @@ impl LanguageServer for Backend {
 	}
 
 	async fn did_open(&self, params: DidOpenTextDocumentParams) {
-		self
-			.client
-			.log_message(MessageType::INFO, "file opened!")
-			.await;
-
+		let uri = params.text_document.uri.clone();
 		self
 			.on_document_change(TextDocumentItem {
 				language_id: "pluma".into(),
@@ -68,10 +76,12 @@ impl LanguageServer for Backend {
 				text: params.text_document.text,
 				version: params.text_document.version,
 			})
-			.await
+			.await;
+		self.refresh_analysis(uri).await;
 	}
 
 	async fn did_change(&self, mut params: DidChangeTextDocumentParams) {
+		let uri = params.text_document.uri.clone();
 		self
 			.on_document_change(TextDocumentItem {
 				language_id: "pluma".into(),
@@ -79,20 +89,21 @@ impl LanguageServer for Backend {
 				text: std::mem::take(&mut params.content_changes[0].text),
 				version: params.text_document.version,
 			})
-			.await
-	}
-
-	async fn did_save(&self, _: DidSaveTextDocumentParams) {
-		self
-			.client
-			.log_message(MessageType::INFO, "file saved!")
 			.await;
+		self.refresh_analysis(uri).await;
 	}
 
-	async fn did_close(&self, _: DidCloseTextDocumentParams) {
+	async fn did_save(&self, _: DidSaveTextDocumentParams) {}
+
+	async fn did_close(&self, params: DidCloseTextDocumentParams) {
+		let uri_str = params.text_document.uri.to_string();
+		self.document_map.remove(&uri_str);
+		self.hover_map.remove(&uri_str);
+		// Clear diagnostics for the closed file so VS Code doesn't leave
+		// stale squiggles in the problems panel.
 		self
 			.client
-			.log_message(MessageType::INFO, "file closed!")
+			.publish_diagnostics(params.text_document.uri, vec![], None)
 			.await;
 	}
 
@@ -101,34 +112,71 @@ impl LanguageServer for Backend {
 		params: SemanticTokensParams,
 	) -> Result<Option<SemanticTokensResult>> {
 		let uri = params.text_document.uri.to_string();
+		let text = match self.document_map.get(&uri) {
+			Some(text) => text.clone(),
+			None => return Ok(None),
+		};
 
-		self
-			.client
-			.log_message(MessageType::LOG, "semantic_token_full")
-			.await;
+		let semantic_tokens = collect_semantic_tokens(&text.into_bytes());
+
+		Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
+			result_id: None,
+			data: semantic_tokens,
+		})))
+	}
+
+	async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
+		let uri = params.text_document.uri.to_string();
 
 		let text = match self.document_map.get(&uri) {
 			Some(text) => text.clone(),
 			None => return Ok(None),
 		};
 
-		let tokens = collect_semantic_tokens(&text.into_bytes());
-
-		if let Some(semantic_tokens) = tokens {
-			for t in &semantic_tokens {
-				self
-					.client
-					.log_message(MessageType::LOG, format!("{:#?}", t))
-					.await
+		let formatted = match formatter::format_source(text.as_bytes()) {
+			Ok(s) => s,
+			Err(_) => {
+				// Parse errors block formatting — surface them via diagnostics
+				// later; for now, signal "no edits" so VS Code doesn't replace
+				// the user's text with a partial format.
+				return Ok(None);
 			}
+		};
 
-			return Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
-				result_id: None,
-				data: semantic_tokens,
-			})));
+		if formatted == text {
+			return Ok(Some(vec![]));
 		}
 
-		Ok(None)
+		Ok(Some(vec![TextEdit {
+			range: full_document_range(&text),
+			new_text: formatted,
+		}]))
+	}
+
+	async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
+		let uri = params
+			.text_document_position_params
+			.text_document
+			.uri
+			.to_string();
+		let pos = params.text_document_position_params.position;
+
+		let hits = match self.hover_map.get(&uri) {
+			Some(h) => h.clone(),
+			None => return Ok(None),
+		};
+
+		let Some(hit) = hover::lookup(&hits, pos.line, pos.character) else {
+			return Ok(None);
+		};
+
+		Ok(Some(Hover {
+			contents: HoverContents::Markup(MarkupContent {
+				kind: MarkupKind::Markdown,
+				value: format!("```pluma\n{}\n```", hit.ty),
+			}),
+			range: Some(pluma_range_to_lsp(&hit.range)),
+		}))
 	}
 }
 
@@ -137,6 +185,124 @@ impl Backend {
 		self
 			.document_map
 			.insert(params.uri.to_string(), params.text.clone());
+	}
+
+	// Run the analyzer against the current in-memory text, cache the
+	// resulting hover index, and publish any diagnostics back to the
+	// client.
+	async fn refresh_analysis(&self, uri: Url) {
+		let uri_str = uri.to_string();
+		let Some(text) = self.document_map.get(&uri_str).map(|s| s.clone()) else {
+			return;
+		};
+		let Ok(path) = uri.to_file_path() else {
+			return;
+		};
+
+		// Run analysis in a sync block and consume `AnalysisResult` fully
+		// before any await — `Module` carries `Rc<RefCell<_>>` dispatch
+		// cells, so it isn't `Send` and can't be held across the publish
+		// await. We extract everything we need (the hover index + a
+		// pre-converted LSP diagnostic list) into Send-only values.
+		let lsp_diags: Vec<Diagnostic> = {
+			let result = analysis::analyze_document(&path, text.into_bytes());
+
+			let module_name = result.module.as_ref().map(|m| m.module_name.clone());
+			if let Some(module) = result.module.as_ref() {
+				self
+					.hover_map
+					.insert(uri_str.clone(), Arc::new(hover::build_index(module)));
+			}
+
+			result
+				.diagnostics
+				.iter()
+				.filter(|d| diagnostic_belongs_to(d, module_name.as_deref()))
+				.map(pluma_diagnostic_to_lsp)
+				.collect()
+		};
+
+		self.client.publish_diagnostics(uri, lsp_diags, None).await;
+	}
+}
+
+fn diagnostic_belongs_to(d: &PlumaDiagnostic, module_name: Option<&str>) -> bool {
+	match (&d.module_name, module_name) {
+		(Some(diag_mod), Some(active_mod)) => diag_mod == active_mod,
+		// Diagnostics without a module (e.g. top-level "no such file")
+		// flow back to whatever module the user is currently editing.
+		(None, _) => true,
+		_ => false,
+	}
+}
+
+fn pluma_diagnostic_to_lsp(d: &PlumaDiagnostic) -> Diagnostic {
+	let severity = match d.kind {
+		DiagnosticKind::Error => DiagnosticSeverity::ERROR,
+		DiagnosticKind::Warning => DiagnosticSeverity::WARNING,
+	};
+	let range = d
+		.range
+		.map(|r| pluma_range_to_lsp(&r))
+		.unwrap_or_else(|| Range {
+			start: Position {
+				line: 0,
+				character: 0,
+			},
+			end: Position {
+				line: 0,
+				character: 0,
+			},
+		});
+	Diagnostic {
+		range,
+		severity: Some(severity),
+		code: None,
+		code_description: None,
+		source: Some("pluma".to_string()),
+		message: d.message.clone(),
+		related_information: None,
+		tags: None,
+		data: None,
+	}
+}
+
+fn pluma_range_to_lsp(r: &compiler::Range) -> Range {
+	Range {
+		start: Position {
+			line: r.start.line as u32,
+			character: r.start.col as u32,
+		},
+		end: Position {
+			line: r.end.line as u32,
+			character: r.end.col as u32,
+		},
+	}
+}
+
+// LSP positions are in UTF-16 code units. For Pluma source — overwhelmingly
+// ASCII — chars and code units match for everything outside string/comment
+// content; over-estimating the end column is fine since LSP clients clamp it.
+fn full_document_range(text: &str) -> Range {
+	let mut last_line = 0u32;
+	let mut last_col = 0u32;
+	for ch in text.chars() {
+		if ch == '\n' {
+			last_line += 1;
+			last_col = 0;
+		} else {
+			last_col += ch.len_utf16() as u32;
+		}
+	}
+	Range {
+		start: Position {
+			line: 0,
+			character: 0,
+		},
+		end: Position {
+			line: last_line,
+			character: last_col,
+		},
 	}
 }
 
@@ -148,6 +314,7 @@ async fn main() {
 	let (service, socket) = LspService::build(|client| Backend {
 		client,
 		document_map: DashMap::new(),
+		hover_map: DashMap::new(),
 	})
 	.finish();
 

@@ -47,10 +47,7 @@ fn list_short_inline() {
 #[test]
 fn enum_block() {
 	let out = fmt("enum color { red\n  green\n  blue\n}\n");
-	assert_eq!(
-		out,
-		"enum color {\n\tred\n\tgreen\n\tblue\n}\n"
-	);
+	assert_eq!(out, "enum color {\n\tred\n\tgreen\n\tblue\n}\n");
 }
 
 #[test]

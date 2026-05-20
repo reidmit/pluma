@@ -48,6 +48,17 @@ impl Compiler {
 		self.native_modules.insert(name, exports);
 	}
 
+	// Pre-parse a module from in-memory bytes and insert it into the
+	// module cache. A later `check()` call sees this module as already
+	// parsed and skips the disk read for it. Lets editor/LSP integrations
+	// analyze unsaved changes without writing to disk.
+	pub fn set_module_source(&mut self, module_name: String, source: Vec<u8>) {
+		let path = to_module_path(&self.root_dir, &module_name);
+		let mut module = Module::new(module_name.clone(), path);
+		module.parse_from_bytes(source, &mut self.diagnostics);
+		self.modules.insert(module_name, module);
+	}
+
 	pub fn tokenize(&mut self) -> Result<Vec<Token>, Vec<Diagnostic>> {
 		let mut entry_module = Module::new(
 			self.entry_module_name.clone(),

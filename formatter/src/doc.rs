@@ -301,7 +301,13 @@ mod tests {
 
 	#[test]
 	fn if_flat_swaps_per_mode() {
-		let mk = || group(concat(vec![text("a"), if_flat(text(", "), line()), text("b")]));
+		let mk = || {
+			group(concat(vec![
+				text("a"),
+				if_flat(text(", "), line()),
+				text("b"),
+			]))
+		};
 		assert_eq!(render(&mk(), 80), "a, b");
 		assert_eq!(render(&mk(), 2), "a\nb");
 	}

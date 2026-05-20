@@ -399,12 +399,7 @@ impl<'a> Formatter<'a> {
 		}
 
 		let body_parts = self.format_statements(&fun.body);
-		concat(vec![
-			concat(head),
-			nest(body_parts),
-			hardline(),
-			text("}"),
-		])
+		concat(vec![concat(head), nest(body_parts), hardline(), text("}")])
 	}
 
 	// Lay out a sequence of statements (fun body, if/when/while body), each
@@ -557,14 +552,8 @@ impl<'a> Formatter<'a> {
 			OneOrMore(inner) => concat(vec![self.format_regex(inner), text("+")]),
 			OneOrZero(inner) => concat(vec![self.format_regex(inner), text("?")]),
 			ExactCount(inner, n) => concat(vec![self.format_regex(inner), text(format!("{{{}}}", n))]),
-			AtLeastCount(inner, n) => concat(vec![
-				self.format_regex(inner),
-				text(format!("{{{},}}", n)),
-			]),
-			AtMostCount(inner, n) => concat(vec![
-				self.format_regex(inner),
-				text(format!("{{,{}}}", n)),
-			]),
+			AtLeastCount(inner, n) => concat(vec![self.format_regex(inner), text(format!("{{{},}}", n))]),
+			AtMostCount(inner, n) => concat(vec![self.format_regex(inner), text(format!("{{,{}}}", n))]),
 			RangeCount(inner, min, max) => concat(vec![
 				self.format_regex(inner),
 				text(format!("{{{},{}}}", min, max)),
@@ -625,8 +614,7 @@ impl<'a> Formatter<'a> {
 		let mut parts: Vec<Doc> = vec![text("when "), self.format_expr(&w.subject)];
 		let last_index = w.cases.len().saturating_sub(1);
 		for (i, case) in w.cases.iter().enumerate() {
-			let is_else =
-				i == last_index && matches!(case.pattern.kind, PatternKind::Underscore);
+			let is_else = i == last_index && matches!(case.pattern.kind, PatternKind::Underscore);
 
 			if i == 0 {
 				parts.push(text(" "));

@@ -142,8 +142,8 @@ impl<'a> Iterator for Tokenizer<'a> {
 					self.index += 2;
 
 					self.next_token = Some(InterpolationStart(
-						interpolation_start_end_index,
 						interpolation_start_start_index,
+						interpolation_start_end_index,
 					));
 
 					return Some(StringLiteral(string_start_index, string_end_index));

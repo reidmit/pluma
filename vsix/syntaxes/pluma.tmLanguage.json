@@ -1,0 +1,284 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "Pluma",
+	"scopeName": "source.pluma",
+	"fileTypes": ["pa"],
+	"patterns": [
+		{ "include": "#comments" },
+		{ "include": "#strings" },
+		{ "include": "#regex" },
+		{ "include": "#numbers" },
+		{ "include": "#use-declaration" },
+		{ "include": "#enum-declaration" },
+		{ "include": "#alias-declaration" },
+		{ "include": "#trait-declaration" },
+		{ "include": "#implement-declaration" },
+		{ "include": "#def-declaration" },
+		{ "include": "#let-binding" },
+		{ "include": "#type-annotation" },
+		{ "include": "#keywords" },
+		{ "include": "#constants" },
+		{ "include": "#builtin-types" },
+		{ "include": "#operators" },
+		{ "include": "#identifiers" }
+	],
+	"repository": {
+		"comments": {
+			"patterns": [
+				{
+					"name": "comment.line.number-sign.pluma",
+					"begin": "#",
+					"end": "$",
+					"beginCaptures": {
+						"0": { "name": "punctuation.definition.comment.pluma" }
+					}
+				}
+			]
+		},
+		"strings": {
+			"name": "string.quoted.double.pluma",
+			"begin": "\"",
+			"end": "\"",
+			"beginCaptures": {
+				"0": { "name": "punctuation.definition.string.begin.pluma" }
+			},
+			"endCaptures": {
+				"0": { "name": "punctuation.definition.string.end.pluma" }
+			},
+			"patterns": [
+				{
+					"name": "constant.character.escape.pluma",
+					"match": "\\\\."
+				},
+				{
+					"name": "meta.embedded.line.interpolation.pluma",
+					"begin": "\\$\\(",
+					"end": "\\)",
+					"beginCaptures": {
+						"0": { "name": "punctuation.section.interpolation.begin.pluma" }
+					},
+					"endCaptures": {
+						"0": { "name": "punctuation.section.interpolation.end.pluma" }
+					},
+					"patterns": [
+						{ "include": "$self" }
+					]
+				}
+			]
+		},
+		"regex": {
+			"name": "string.regexp.pluma",
+			"begin": "(?<![A-Za-z0-9_\\-])/\\s",
+			"end": "\\s/",
+			"beginCaptures": {
+				"0": { "name": "punctuation.definition.regex.begin.pluma" }
+			},
+			"endCaptures": {
+				"0": { "name": "punctuation.definition.regex.end.pluma" }
+			},
+			"patterns": [
+				{
+					"name": "string.quoted.double.pluma",
+					"begin": "\"",
+					"end": "\"",
+					"patterns": [
+						{ "name": "constant.character.escape.pluma", "match": "\\\\." }
+					]
+				},
+				{
+					"name": "keyword.operator.regex.pluma",
+					"match": "[|?*+(){}]"
+				},
+				{
+					"name": "constant.numeric.regex.pluma",
+					"match": "\\d+"
+				}
+			]
+		},
+		"numbers": {
+			"patterns": [
+				{
+					"name": "constant.numeric.hex.pluma",
+					"match": "\\b0x[0-9A-Fa-f]+\\b"
+				},
+				{
+					"name": "constant.numeric.octal.pluma",
+					"match": "\\b0o[0-7]+\\b"
+				},
+				{
+					"name": "constant.numeric.binary.pluma",
+					"match": "\\b0b[01]+\\b"
+				},
+				{
+					"name": "constant.numeric.float.pluma",
+					"match": "\\b\\d+\\.\\d+\\b"
+				},
+				{
+					"name": "constant.numeric.decimal.pluma",
+					"match": "\\b\\d+\\b"
+				}
+			]
+		},
+		"use-declaration": {
+			"match": "\\b(use)\\s+([A-Za-z_][A-Za-z0-9_\\-]*(?:\\.[A-Za-z_][A-Za-z0-9_\\-]*)*)(?:\\s+(as)\\s+([A-Za-z_][A-Za-z0-9_\\-]*))?",
+			"captures": {
+				"1": { "name": "keyword.control.import.pluma" },
+				"2": { "name": "entity.name.namespace.pluma" },
+				"3": { "name": "keyword.control.import.pluma" },
+				"4": { "name": "entity.name.namespace.pluma" }
+			}
+		},
+		"enum-declaration": {
+			"match": "\\b(enum)\\s+([A-Za-z_][A-Za-z0-9_\\-]*)",
+			"captures": {
+				"1": { "name": "keyword.declaration.enum.pluma" },
+				"2": { "name": "entity.name.type.enum.pluma" }
+			}
+		},
+		"alias-declaration": {
+			"match": "\\b(alias)\\s+([A-Za-z_][A-Za-z0-9_\\-]*)",
+			"captures": {
+				"1": { "name": "keyword.declaration.alias.pluma" },
+				"2": { "name": "entity.name.type.alias.pluma" }
+			}
+		},
+		"trait-declaration": {
+			"match": "\\b(trait)\\s+([A-Za-z_][A-Za-z0-9_\\-]*)",
+			"captures": {
+				"1": { "name": "keyword.declaration.trait.pluma" },
+				"2": { "name": "entity.name.type.interface.pluma" }
+			}
+		},
+		"implement-declaration": {
+			"match": "\\b(implement)\\s+([A-Za-z_][A-Za-z0-9_\\-]*)\\s+([A-Za-z_][A-Za-z0-9_\\-]*)",
+			"captures": {
+				"1": { "name": "keyword.declaration.implement.pluma" },
+				"2": { "name": "entity.name.type.interface.pluma" },
+				"3": { "name": "entity.name.type.pluma" }
+			}
+		},
+		"def-declaration": {
+			"match": "\\b(def)\\s+([A-Za-z_][A-Za-z0-9_\\-]*)",
+			"captures": {
+				"1": { "name": "keyword.declaration.def.pluma" },
+				"2": { "name": "entity.name.function.pluma" }
+			}
+		},
+		"let-binding": {
+			"match": "\\b(let)\\s+([A-Za-z_][A-Za-z0-9_\\-]*)",
+			"captures": {
+				"1": { "name": "keyword.declaration.let.pluma" },
+				"2": { "name": "variable.other.binding.pluma" }
+			}
+		},
+		"type-annotation": {
+			"begin": "::",
+			"end": "(?=$|[,)}\\]])",
+			"beginCaptures": {
+				"0": { "name": "keyword.operator.type-annotation.pluma" }
+			},
+			"patterns": [
+				{ "include": "#builtin-types" },
+				{
+					"match": "\\b([A-Za-z_][A-Za-z0-9_\\-]*)\\.([A-Za-z_][A-Za-z0-9_\\-]*)",
+					"captures": {
+						"1": { "name": "entity.name.namespace.pluma" },
+						"2": { "name": "entity.name.type.pluma" }
+					}
+				},
+				{
+					"name": "entity.name.type.pluma",
+					"match": "\\b[A-Za-z_][A-Za-z0-9_\\-]*\\b"
+				},
+				{ "include": "#operators" }
+			]
+		},
+		"keywords": {
+			"patterns": [
+				{
+					"name": "keyword.control.pluma",
+					"match": "\\b(if|else|when|while|is|in)\\b"
+				},
+				{
+					"name": "keyword.declaration.pluma",
+					"match": "\\b(def|let|alias|enum|trait|implement|where|use|as|fun)\\b"
+				}
+			]
+		},
+		"constants": {
+			"patterns": [
+				{
+					"name": "constant.language.boolean.pluma",
+					"match": "\\b(true|false)\\b"
+				}
+			]
+		},
+		"builtin-types": {
+			"patterns": [
+				{
+					"name": "support.type.primitive.pluma",
+					"match": "\\b(int|float|string|bool|regex|nothing)\\b"
+				},
+				{
+					"name": "support.type.builtin.pluma",
+					"match": "\\b(list|option|result|pair|ref|map)\\b"
+				}
+			]
+		},
+		"operators": {
+			"patterns": [
+				{
+					"name": "keyword.operator.arrow.pluma",
+					"match": "->"
+				},
+				{
+					"name": "keyword.operator.comparison.pluma",
+					"match": "==|!=|<=|>=|<|>"
+				},
+				{
+					"name": "keyword.operator.logical.pluma",
+					"match": "&&|\\|\\||!"
+				},
+				{
+					"name": "keyword.operator.coalesce.pluma",
+					"match": "\\?\\?"
+				},
+				{
+					"name": "keyword.operator.range.pluma",
+					"match": "\\.\\."
+				},
+				{
+					"name": "keyword.operator.pipe.pluma",
+					"match": "\\|"
+				},
+				{
+					"name": "keyword.operator.exponent.pluma",
+					"match": "\\*\\*"
+				},
+				{
+					"name": "keyword.operator.arithmetic.pluma",
+					"match": "[+\\-*/%]"
+				},
+				{
+					"name": "keyword.operator.assignment.pluma",
+					"match": "="
+				}
+			]
+		},
+		"identifiers": {
+			"patterns": [
+				{
+					"match": "\\b([A-Za-z_][A-Za-z0-9_\\-]*)\\.([A-Za-z_][A-Za-z0-9_\\-]*)",
+					"captures": {
+						"1": { "name": "entity.name.namespace.pluma" },
+						"2": { "name": "variable.other.property.pluma" }
+					}
+				},
+				{
+					"name": "variable.other.pluma",
+					"match": "\\b[A-Za-z_][A-Za-z0-9_\\-]*\\b"
+				}
+			]
+		}
+	}
+}

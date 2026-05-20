@@ -38,6 +38,13 @@
           ".pa"
         ]
       }
+    ],
+    "grammars": [
+      {
+        "language": "pluma",
+        "scopeName": "source.pluma",
+        "path": "./syntaxes/pluma.tmLanguage.json"
+      }
     ]
   },
   "dependencies": {
