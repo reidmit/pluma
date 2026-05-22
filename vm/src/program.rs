@@ -40,6 +40,9 @@ pub struct Program {
 
 pub struct Function {
 	pub name: String, // for diagnostics/Display
+	// Module the function was emitted from. Used by `debug` to print a
+	// `<module>:<line>` header. Empty for the synthetic `__entry__` thunk.
+	pub module: String,
 	pub param_count: u16,
 	pub slot_count: u16, // total locals (params + lets)
 	pub capture_count: u16,

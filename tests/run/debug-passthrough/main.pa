@@ -1,4 +1,5 @@
-# `print` returns its argument unchanged, so you can wrap it inline.
+# `debug` returns its argument unchanged after printing a `<module>:<line>`
+# header, so you can drop it into a pipeline without breaking it.
 
 enum color {
 	red
@@ -6,16 +7,16 @@ enum color {
 }
 
 def main = fun {
-	# binding via print
-	let x = print 42
+	# binding via debug
+	let x = debug 42
 	print "doubled: $(to-string (x * 2))"
 
 	# inline in a call argument
-	let added = (print 3) + (print 4)
+	let added = (debug 3) + (debug 4)
 	print "sum: $(to-string added)"
 
 	# works on any type (compiler magic, same as to-string)
-	let c = print color.red
+	let c = debug color.red
 	when c is red {
 		print "it was red"
 	} is green {

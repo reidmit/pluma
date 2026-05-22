@@ -1085,6 +1085,19 @@ impl VM {
 	pub(crate) fn pop_stack(&mut self) -> Option<Value> {
 		self.stack.pop()
 	}
+	// (module, 1-indexed line) of the call instruction that dispatched the
+	// currently running builtin. Used by `debug` to print a call-site header.
+	pub(crate) fn current_call_site(&self) -> (String, usize) {
+		if let Some(frame) = self.frames.last() {
+			let func = &self.program.functions[frame.fn_idx as usize];
+			let ip = frame.ip.saturating_sub(1);
+			if ip < func.source_ranges.len() {
+				let line = func.source_ranges[ip].start.line + 1;
+				return (func.module.clone(), line);
+			}
+		}
+		(String::new(), 0)
+	}
 }
 
 fn opcode_name(i: &Instruction) -> &'static str {

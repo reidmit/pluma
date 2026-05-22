@@ -50,6 +50,13 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			debug_assert_eq!(args.len(), 1, "`print` arity");
 			let arg = args.into_iter().next().unwrap();
 			vm.stdout.write_line(&format!("{}", arg));
+			Ok(Value::Nothing)
+		}
+		"debug" => {
+			debug_assert_eq!(args.len(), 1, "`debug` arity");
+			let arg = args.into_iter().next().unwrap();
+			let (module, line) = vm.current_call_site();
+			vm.stdout.write_line(&format!("[{}:{}] {}", module, line, arg));
 			Ok(arg)
 		}
 		"to-string" => {

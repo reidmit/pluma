@@ -14,7 +14,7 @@
 #     because the instance method bodies dispatch to hidden VM builtins
 #     (IntAdd, IntCompare, IntHash, ...) that aren't exposed as
 #     user-callable names.
-#   - the `print` and `to-string` builtins.
+#   - the `print`, `debug`, and `to-string` builtins.
 
 enum option a {
 	some a

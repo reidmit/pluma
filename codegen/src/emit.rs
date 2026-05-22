@@ -21,8 +21,9 @@ use vm::{
 pub fn compile(compiler: &compiler::Compiler) -> Result<Program, String> {
 	let mut cg = CodeGen::new();
 
-	// Prelude: `print` and `to-string` as globals 0 and 1, pre-evaluated.
+	// Prelude: `print`, `debug`, and `to-string` as pre-evaluated globals.
 	cg.add_evaluated_global("__prelude__", "print", Value::Builtin(Rc::from("print")));
+	cg.add_evaluated_global("__prelude__", "debug", Value::Builtin(Rc::from("debug")));
 	cg.add_evaluated_global(
 		"__prelude__",
 		"to-string",
@@ -347,9 +348,9 @@ impl CodeGen {
 					let global_idx = self
 						.lookup_global(module_name, &def.name.name)
 						.expect("global slot reserved in pass 1");
-					let alias_fn_idx = self.emit_alias_constructor(&def.name.name);
+					let alias_fn_idx = self.emit_alias_constructor(module_name, &def.name.name);
 					// The "thunk" returns a closure over alias_fn_idx with no captures.
-					let thunk_idx = self.emit_alias_thunk(&def.name.name, alias_fn_idx);
+					let thunk_idx = self.emit_alias_thunk(module_name, &def.name.name, alias_fn_idx);
 					self.set_global_thunk(global_idx, thunk_idx);
 				}
 				DefinitionKind::Enum(_) => {
@@ -401,7 +402,7 @@ impl CodeGen {
 		};
 
 		let total_arity = dict_param_count + user_params.len() as u16;
-		let mut inner_fb = FunctionBuilder::new(name.to_string(), total_arity);
+		let mut inner_fb = FunctionBuilder::new(name.to_string(), current_module.to_string(), total_arity);
 		let mut inner_scope = Scope::new();
 		// Register synthetic dict locals at slots 0..K-1 under
 		// `__dict_<n>__` names so nested closures' `Forwarded(n)` cells
@@ -445,7 +446,7 @@ impl CodeGen {
 
 		// Thunk: build a closure of `inner_fn_idx` (no captures) and
 		// return it as the global's value.
-		let mut thunk_fb = FunctionBuilder::new(format!("{}@thunk", name), 0);
+		let mut thunk_fb = FunctionBuilder::new(format!("{}@thunk", name), current_module.to_string(), 0);
 		thunk_fb.emit(
 			Instruction::MakeClosure {
 				fn_idx: inner_fn_idx,
@@ -467,7 +468,7 @@ impl CodeGen {
 		name: &str,
 		expr: &ExprNode,
 	) -> Result<u32, String> {
-		let mut fb = FunctionBuilder::new(name.to_string(), 0);
+		let mut fb = FunctionBuilder::new(name.to_string(), current_module.to_string(), 0);
 		let mut scope = Scope::new();
 		emit_expr(
 			self,
@@ -531,7 +532,7 @@ impl CodeGen {
 			}
 
 			let thunk_name = format!("{}@dict-builder", instance.instance_slot_name);
-			let mut thunk_fb = FunctionBuilder::new(thunk_name, 0);
+			let mut thunk_fb = FunctionBuilder::new(thunk_name, module_name.to_string(), 0);
 			for method_name in &instance.canonical_method_order {
 				let fn_idx = match method_fn_indices.get(method_name) {
 					Some(idx) => *idx,
@@ -564,7 +565,7 @@ impl CodeGen {
 		// Parametric: build the instance constructor function.
 		let where_count = instance.where_clause.len() as u16;
 		let ctor_name = format!("{}@ctor", instance.instance_slot_name);
-		let mut ctor_fb = FunctionBuilder::new(ctor_name, where_count);
+		let mut ctor_fb = FunctionBuilder::new(ctor_name, module_name.to_string(), where_count);
 		let mut ctor_scope = Scope::new();
 		for n in 0..where_count {
 			ctor_scope.define_local(&synthetic_dict_name(n), n);
@@ -630,7 +631,7 @@ impl CodeGen {
 		// it. The global slot then holds the closure, ready to be called
 		// with the inner dicts at `InstanceChain` call sites.
 		let mut builder_fb =
-			FunctionBuilder::new(format!("{}@builder", instance.instance_slot_name), 0);
+			FunctionBuilder::new(format!("{}@builder", instance.instance_slot_name), module_name.to_string(), 0);
 		builder_fb.emit(
 			Instruction::MakeClosure {
 				fn_idx: ctor_idx,
@@ -645,16 +646,16 @@ impl CodeGen {
 		Ok(())
 	}
 
-	fn emit_alias_constructor(&mut self, alias_name: &str) -> u32 {
-		let mut fb = FunctionBuilder::new(format!("alias-ctor:{}", alias_name), 1);
+	fn emit_alias_constructor(&mut self, module: &str, alias_name: &str) -> u32 {
+		let mut fb = FunctionBuilder::new(format!("alias-ctor:{}", alias_name), module.to_string(), 1);
 		fb.slot_count = 1;
 		fb.emit(Instruction::LoadLocal(0), Range::collapsed(0, 0));
 		fb.emit(Instruction::Return, Range::collapsed(0, 0));
 		self.add_function(fb)
 	}
 
-	fn emit_alias_thunk(&mut self, alias_name: &str, alias_fn_idx: u32) -> u32 {
-		let mut fb = FunctionBuilder::new(format!("alias-thunk:{}", alias_name), 0);
+	fn emit_alias_thunk(&mut self, module: &str, alias_name: &str, alias_fn_idx: u32) -> u32 {
+		let mut fb = FunctionBuilder::new(format!("alias-thunk:{}", alias_name), module.to_string(), 0);
 		fb.emit(
 			Instruction::MakeClosure {
 				fn_idx: alias_fn_idx,
@@ -667,7 +668,7 @@ impl CodeGen {
 	}
 
 	fn emit_entry_function(&mut self, main_global: u32) -> u32 {
-		let mut fb = FunctionBuilder::new("__entry__".into(), 0);
+		let mut fb = FunctionBuilder::new("__entry__".into(), String::new(), 0);
 		fb.emit(Instruction::LoadGlobal(main_global), Range::collapsed(0, 0));
 		fb.emit(Instruction::LoadNothing, Range::collapsed(0, 0));
 		// Tail-call so main runs in our frame rather than nested under it.
@@ -680,6 +681,7 @@ impl CodeGen {
 		let idx = self.program.functions.len() as u32;
 		self.program.functions.push(Function {
 			name: fb.name,
+			module: fb.module,
 			param_count: fb.param_count,
 			slot_count: fb.slot_count,
 			capture_count: fb.capture_count,
@@ -696,6 +698,7 @@ impl CodeGen {
 
 struct FunctionBuilder {
 	name: String,
+	module: String,
 	param_count: u16,
 	slot_count: u16,
 	capture_count: u16,
@@ -704,9 +707,10 @@ struct FunctionBuilder {
 }
 
 impl FunctionBuilder {
-	fn new(name: String, param_count: u16) -> Self {
+	fn new(name: String, module: String, param_count: u16) -> Self {
 		Self {
 			name,
+			module,
 			param_count,
 			slot_count: param_count,
 			capture_count: 0,
@@ -1607,6 +1611,7 @@ fn emit_fun(
 	}
 	let mut inner_fb = FunctionBuilder::new(
 		format!("fun@{}:{}", range.start.line, range.start.col),
+		current_module.to_string(),
 		params.len() as u16,
 	);
 

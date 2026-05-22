@@ -14,7 +14,7 @@ module `main` (tests/analyze/ref-types/main.pa) {
                 name: ident(4:4-4:12) `int-cell`,
                 kind: expr(4:15-4:24) :: ref int {
                     kind: call(4:15-4:24) {
-                        callee: expr(4:15-4:22) :: 't4 -> ref 't4 {
+                        callee: expr(4:15-4:22) :: 't5 -> ref 't5 {
                             kind: namespace-access `ref.new`,
                         },
                         args: [
@@ -29,7 +29,7 @@ module `main` (tests/analyze/ref-types/main.pa) {
                 name: ident(6:4-6:12) `str-cell`,
                 kind: expr(6:15-6:27) :: ref string {
                     kind: call(6:15-6:27) {
-                        callee: expr(6:15-6:22) :: 't6 -> ref 't6 {
+                        callee: expr(6:15-6:22) :: 't7 -> ref 't7 {
                             kind: namespace-access `ref.new`,
                         },
                         args: [
@@ -48,7 +48,7 @@ module `main` (tests/analyze/ref-types/main.pa) {
                         body: [
                             expr(9:1-9:17) :: int {
                                 kind: call(9:1-9:17) {
-                                    callee: expr(9:1-9:8) :: (ref 't9) -> 't9 {
+                                    callee: expr(9:1-9:8) :: (ref 't10) -> 't10 {
                                         kind: namespace-access `ref.get`,
                                     },
                                     args: [
@@ -70,7 +70,7 @@ module `main` (tests/analyze/ref-types/main.pa) {
                         body: [
                             expr(13:1-13:19) :: nothing {
                                 kind: call(13:1-13:19) {
-                                    callee: expr(13:1-13:8) :: (ref 't13) 't13 -> nothing {
+                                    callee: expr(13:1-13:8) :: (ref 't14) 't14 -> nothing {
                                         kind: namespace-access `ref.set`,
                                     },
                                     args: [
@@ -95,7 +95,7 @@ module `main` (tests/analyze/ref-types/main.pa) {
                         body: [
                             expr(17:1-17:36) :: nothing {
                                 kind: call(17:1-17:36) {
-                                    callee: expr(17:1-17:11) :: (ref 't17) ('t17 -> 't17) -> nothing {
+                                    callee: expr(17:1-17:11) :: (ref 't18) ('t18 -> 't18) -> nothing {
                                         kind: namespace-access `ref.update`,
                                     },
                                     args: [
@@ -140,7 +140,7 @@ module `main` (tests/analyze/ref-types/main.pa) {
                         body: [
                             expr(23:1-23:10) :: ref int {
                                 kind: call(23:1-23:10) {
-                                    callee: expr(23:1-23:8) :: 't24 -> ref 't24 {
+                                    callee: expr(23:1-23:8) :: 't25 -> ref 't25 {
                                         kind: namespace-access `ref.new`,
                                     },
                                     args: [

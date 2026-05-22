@@ -6,7 +6,7 @@ error: Name `f` is not defined.
 > 6 | 			f (n - 1)
          ^
 
-error: Type mismatch: expected `int -> 'u`, but found `?`.
+error: Type mismatch: expected `int -> 'v`, but found `?`.
 > 6 | 			f (n - 1)
          ^^^^^^^^^
 

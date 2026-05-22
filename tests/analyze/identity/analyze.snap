@@ -8,13 +8,13 @@ module `main` (tests/analyze/identity/main.pa) {
         module(0:0-4:21) [
             def(0:0-2:1) :: nothing {
                 name: ident(0:4-0:12) `identity`,
-                kind: expr(0:15-2:1) :: 't -> 't {
+                kind: expr(0:15-2:1) :: 'u -> 'u {
                     kind: fun(0:15-2:1) {
                         params: [
-                            ident(0:19-0:20) `x` :: 't,
+                            ident(0:19-0:20) `x` :: 'u,
                         ],
                         body: [
-                            expr(1:1-1:2) :: 't {
+                            expr(1:1-1:2) :: 'u {
                                 kind: ident(1:1-1:2) `x`,
                             },
                         ],

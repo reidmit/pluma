@@ -21,6 +21,6 @@ def main = fun {
 	# single-arg stdlib functions
 	[1, 2, 3] | list.length | print
 
-	# chains terminating in print (which returns its arg)
-	"hello" | print | print
+	# chains terminating in print
+	"hello" | print
 }

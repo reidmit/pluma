@@ -8,9 +8,9 @@ module `main` (tests/analyze/prelude-print/main.pa) {
         module(0:0-0:36) [
             def(0:0-0:36) :: nothing {
                 name: ident(0:4-0:12) `greeting`,
-                kind: expr(0:15-0:36) :: string {
+                kind: expr(0:15-0:36) :: nothing {
                     kind: call(0:15-0:36) {
-                        callee: expr(0:15-0:20) :: string -> string {
+                        callee: expr(0:15-0:20) :: string -> nothing {
                             kind: ident(0:15-0:20) `print`,
                         },
                         args: [

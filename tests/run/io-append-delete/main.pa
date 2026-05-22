@@ -22,7 +22,7 @@ def main = fun {
 
 	# read it back
 	when (io.read-file path) is ok contents {
-		io.write contents
+		let _ = io.write contents
 	} is err msg {
 		print "read err: $(msg)"
 	}

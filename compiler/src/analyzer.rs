@@ -446,9 +446,8 @@ impl<'compiler> Analyzer<'compiler> {
 		self.enter_scope();
 
 		// Prelude: builtin values visible in every module.
-		// `print: forall a. a -> a` — write the value to stdout (rendered via
-		// the same Display the VM uses for to-string) and return it
-		// unchanged, so `let x = print y` works.
+		// `print: forall a. a -> nothing` — write the value to stdout
+		// (rendered via the same Display the VM uses for to-string).
 		let print_var = self.next_type_var_id;
 		self.next_type_var_id += 1;
 		self.add_value_binding(
@@ -457,7 +456,22 @@ impl<'compiler> Analyzer<'compiler> {
 				vec![print_var],
 				vec![],
 				vec![],
-				Type::Fun(vec![Type::Var(print_var)], Box::new(Type::Var(print_var))),
+				Type::Fun(vec![Type::Var(print_var)], Box::new(Type::Nothing)),
+			),
+			Range::collapsed(0, 0),
+		);
+		// `debug: forall a. a -> a` — like `print`, but prints a
+		// `<module>:<line>` header above the value and returns it unchanged
+		// so it can be dropped into a pipeline without breaking it.
+		let debug_var = self.next_type_var_id;
+		self.next_type_var_id += 1;
+		self.add_value_binding(
+			"debug".into(),
+			Scheme::Forall(
+				vec![debug_var],
+				vec![],
+				vec![],
+				Type::Fun(vec![Type::Var(debug_var)], Box::new(Type::Var(debug_var))),
 			),
 			Range::collapsed(0, 0),
 		);
