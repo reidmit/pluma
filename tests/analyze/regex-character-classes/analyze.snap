@@ -1,0 +1,36 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/regex-character-classes/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-4:31) [
+            def(0:0-0:21) :: nothing {
+                name: ident(0:4-0:10) `digits`,
+                kind: expr(0:13-0:21) :: regex {
+                    kind: regex(0:14-0:20) one-or-more (regex(0:14-0:19) class digit),
+                },
+            },
+            def(2:0-2:40) :: nothing {
+                name: ident(2:4-2:9) `mixed`,
+                kind: expr(2:12-2:40) :: regex {
+                    kind: regex(2:13-2:39) sequence [
+                        regex(2:13-2:19) class letter,
+                        regex(2:20-2:34) zero-or-more (regex(2:20-2:33) regex(2:21-2:31) alternation [
+                            regex(2:21-2:26) class digit,
+                            regex(2:30-2:31) literal "-",
+                        ]),
+                        regex(2:35-2:39) class word,
+                    ],
+                },
+            },
+            def(4:0-4:31) :: nothing {
+                name: ident(4:4-4:15) `maybe-space`,
+                kind: expr(4:18-4:31) :: regex {
+                    kind: regex(4:19-4:30) one-or-zero (regex(4:19-4:29) class whitespace),
+                },
+            },
+        ],
+    ),
+}

@@ -10,6 +10,7 @@ pub struct RegexNode {
 pub enum RegexKind {
 	Literal(String),
 	CharacterClass(String),
+	Anchor(RegexAnchor),
 	OneOrMore(Box<RegexNode>),
 	ZeroOrMore(Box<RegexNode>),
 	OneOrZero(Box<RegexNode>),
@@ -21,6 +22,13 @@ pub enum RegexKind {
 	Sequence(Vec<RegexNode>),
 	Alternation(Vec<RegexNode>),
 	NamedCapture(String, Box<RegexNode>),
+}
+
+#[derive(Copy, Clone)]
+pub enum RegexAnchor {
+	Start,
+	End,
+	Boundary,
 }
 
 #[cfg(debug_assertions)]
@@ -40,6 +48,12 @@ impl std::fmt::Debug for RegexKind {
 			Literal(lit) => write!(f, "literal {:?}", lit),
 
 			CharacterClass(cls) => write!(f, "class {}", cls),
+
+			Anchor(a) => write!(f, "anchor {}", match a {
+				RegexAnchor::Start => "start",
+				RegexAnchor::End => "end",
+				RegexAnchor::Boundary => "boundary",
+			}),
 
 			OneOrMore(inner) => write!(f, "one-or-more ({:#?})", inner),
 

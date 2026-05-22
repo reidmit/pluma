@@ -580,6 +580,11 @@ impl<'a> Formatter<'a> {
 		match &r.kind {
 			Literal(s) => text(format!("\"{}\"", escape_string(s))),
 			CharacterClass(name) => text(name.clone()),
+			Anchor(a) => text(match a {
+				RegexAnchor::Start => "^",
+				RegexAnchor::End => "$",
+				RegexAnchor::Boundary => "%",
+			}.to_string()),
 			Sequence(parts) => {
 				let docs: Vec<Doc> = parts.iter().map(|p| self.format_regex(p)).collect();
 				join(text(" "), docs)

@@ -31,6 +31,9 @@ pub enum Token {
 	/// `false` (bool constructor)
 	BoolFalse(usize, usize),
 
+	/// `^` token
+	Caret(usize, usize),
+
 	/// `:` token
 	Colon(usize, usize),
 
@@ -45,6 +48,10 @@ pub enum Token {
 
 	/// `.` token
 	Dot(usize, usize),
+
+	/// `$` token (only emitted when not followed by `(`; `$(...)` opens an
+	/// `InterpolationStart` instead)
+	Dollar(usize, usize),
 
 	/// `&&` token
 	DoubleAnd(usize, usize),
@@ -277,10 +284,12 @@ impl Token {
 			| BinaryDigits(start, end)
 			| BoolTrue(start, end)
 			| BoolFalse(start, end)
+			| Caret(start, end)
 			| Colon(start, end)
 			| Comma(start, end)
 			| Comment(start, end)
 			| DecimalDigits(start, end)
+			| Dollar(start, end)
 			| Dot(start, end)
 			| DoubleAnd(start, end)
 			| DoubleColon(start, end)
@@ -376,10 +385,12 @@ impl fmt::Display for Token {
 			&BinaryDigits(..) => "binary digits (e.g. 0b101)",
 			&BoolFalse(..) => "`false`",
 			&BoolTrue(..) => "`true`",
+			&Caret(..) => "a '^'",
 			&Colon(..) => "a ':'",
 			&Comma(..) => "a ','",
 			&Comment(..) => "a comment",
 			&DecimalDigits(..) => "decimal digits (e.g. 47)",
+			&Dollar(..) => "a '$'",
 			&Dot(..) => "a '.'",
 			&DoubleAnd(..) => "a '&&'",
 			&DoubleDot(..) => "a '..'",

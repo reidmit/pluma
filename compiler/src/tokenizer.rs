@@ -342,6 +342,20 @@ impl<'a> Iterator for Tokenizer<'a> {
 					return Some(Percent(start_index, self.index));
 				}
 
+				b'^' => {
+					self.index += 1;
+					return Some(Caret(start_index, self.index));
+				}
+
+				// `$` outside a string literal. Inside a string the `$(` form is
+				// already consumed above as InterpolationStart; only the bare
+				// glyph reaches this branch (currently used as the end-anchor
+				// in regex literals).
+				b'$' => {
+					self.index += 1;
+					return Some(Dollar(start_index, self.index));
+				}
+
 				b'-' => {
 					self.index += 1;
 

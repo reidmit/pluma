@@ -1,0 +1,5 @@
+def exact-yes = /^ "yes" $/
+
+def word-cat = /% "cat" %/
+
+def all-digits = /^ digit+ $/

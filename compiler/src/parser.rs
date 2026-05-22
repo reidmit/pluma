@@ -1667,16 +1667,40 @@ impl<'a> Parser<'a> {
 		loop {
 			self.skip_line_breaks();
 
-			let part = match self.current_token {
+			let (part, part_is_anchor) = match self.current_token {
+				Some(Token::Caret(start_offset, end_offset)) => {
+					self.advance();
+					(RegexNode {
+						range: self.span_to_single_line_range(start_offset, end_offset),
+						kind: RegexKind::Anchor(RegexAnchor::Start),
+					}, true)
+				}
+
+				Some(Token::Dollar(start_offset, end_offset)) => {
+					self.advance();
+					(RegexNode {
+						range: self.span_to_single_line_range(start_offset, end_offset),
+						kind: RegexKind::Anchor(RegexAnchor::End),
+					}, true)
+				}
+
+				Some(Token::Percent(start_offset, end_offset)) => {
+					self.advance();
+					(RegexNode {
+						range: self.span_to_single_line_range(start_offset, end_offset),
+						kind: RegexKind::Anchor(RegexAnchor::Boundary),
+					}, true)
+				}
+
 				Some(Token::Identifier(start_offset, end_offset)) => {
 					self.advance();
 
 					let name = read_string!(self, start_offset, end_offset);
 
-					RegexNode {
+					(RegexNode {
 						range: self.span_to_single_line_range(start_offset, end_offset),
 						kind: RegexKind::CharacterClass(name),
-					}
+					}, false)
 				}
 
 				Some(Token::StringLiteral(start_offset, end_offset)) => {
@@ -1684,10 +1708,10 @@ impl<'a> Parser<'a> {
 
 					let value = read_string_with_escapes!(self, start_offset, end_offset);
 
-					RegexNode {
+					(RegexNode {
 						range: self.span_to_single_line_range(start_offset, end_offset),
 						kind: RegexKind::Literal(value),
-					}
+					}, false)
 				}
 
 				Some(Token::LeftParen(start_offset, end_offset)) => {
@@ -1707,10 +1731,10 @@ impl<'a> Parser<'a> {
 
 					let (_, end) = expect_token_and_advance!(self, Token::RightParen);
 
-					RegexNode {
+					(RegexNode {
 						range: Range::between(start, end),
 						kind: RegexKind::Grouping(Box::new(expr)),
-					}
+					}, false)
 				}
 
 				Some(Token::LeftAngle(start_offset, end_offset)) => {
@@ -1740,14 +1764,38 @@ impl<'a> Parser<'a> {
 
 					expect_token_and_advance!(self, Token::RightAngle);
 
-					RegexNode {
+					(RegexNode {
 						range: Range::between(start, end),
 						kind: RegexKind::NamedCapture(name, Box::new(expr)),
-					}
+					}, false)
 				}
 
 				_ => break,
 			};
+
+			// Anchors are zero-width, so quantifying them doesn't make sense.
+			// Surface that as a parse error rather than passing through to a
+			// confusing error from the underlying regex engine.
+			if part_is_anchor {
+				if let Some(Token::Star(..) | Token::Plus(..) | Token::Question(..) | Token::LeftBrace(..)) =
+					self.current_token
+				{
+					let (q_start, q_end) = self.current_token_span();
+					self.error::<RegexNode>(ParseError {
+						range: self.span_to_single_line_range(q_start, q_end),
+						kind: ParseErrorKind::QuantifierOnRegexAnchor,
+					});
+					self.advance();
+				}
+
+				self.skip_line_breaks();
+				if first_part.is_none() {
+					first_part = Some(part);
+				} else {
+					other_parts.push(part);
+				}
+				continue;
+			}
 
 			let modified_part = match self.current_token {
 				Some(Token::Star(_, end_offset)) => {

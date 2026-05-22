@@ -7,7 +7,8 @@
 
 use compiler::ast::{
 	CallNode, DefinitionKind, ExprKind, ExprNode, FunNode, IdentifierNode, IfNode, LetNode,
-	LiteralKind, ModuleNode, Operator, PatternKind, PatternNode, RegexKind, RegexNode, WhenNode,
+	LiteralKind, ModuleNode, Operator, PatternKind, PatternNode, RegexAnchor, RegexKind, RegexNode,
+	WhenNode,
 	WhileNode,
 };
 use compiler::Range;
@@ -2549,7 +2550,22 @@ fn collect_enum_defs(
 fn regex_pattern(node: &RegexNode) -> String {
 	match &node.kind {
 		RegexKind::Literal(s) => regex::escape(s),
-		RegexKind::CharacterClass(c) => format!("[{}]", c),
+		RegexKind::CharacterClass(c) => match c.as_str() {
+			"any" => ".".to_string(),
+			"digit" => "[0-9]".to_string(),
+			"letter" => "[A-Za-z]".to_string(),
+			"whitespace" => "[ \\t\\n\\r]".to_string(),
+			"word" => "[A-Za-z0-9_]".to_string(),
+			// Analyzer rejects unknown names, so this is unreachable in
+			// practice. Fall through to a literal that can't possibly
+			// match so a buggy build at least fails closed.
+			_ => "[^\\s\\S]".to_string(),
+		},
+		RegexKind::Anchor(a) => match a {
+			RegexAnchor::Start => "^".to_string(),
+			RegexAnchor::End => "$".to_string(),
+			RegexAnchor::Boundary => "\\b".to_string(),
+		},
 		RegexKind::OneOrMore(inner) => format!("(?:{})+", regex_pattern(inner)),
 		RegexKind::ZeroOrMore(inner) => format!("(?:{})*", regex_pattern(inner)),
 		RegexKind::OneOrZero(inner) => format!("(?:{})?", regex_pattern(inner)),

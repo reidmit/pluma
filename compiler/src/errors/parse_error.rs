@@ -19,6 +19,7 @@ pub enum ParseErrorKind {
 	InvalidHexDigit,
 	InvalidOctalDigit,
 	InvalidRegularExpressionCountModifier,
+	QuantifierOnRegexAnchor,
 	InvalidExpressionAfterDot,
 	InvalidDefBody,
 	MissingReturnType,
@@ -50,6 +51,10 @@ impl fmt::Display for ParseError {
 			InvalidRegularExpressionCountModifier => {
 				write!(f, "Invalid regular expression count modifier.")
 			}
+			QuantifierOnRegexAnchor => write!(
+				f,
+				"A quantifier cannot be applied to an anchor (`^`, `$`, or `%`)."
+			),
 			InvalidExpressionAfterDot => write!(
 				f,
 				"Invalid expression after `.`: expected either an integer or a field name."

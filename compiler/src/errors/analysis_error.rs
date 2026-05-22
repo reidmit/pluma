@@ -35,6 +35,7 @@ pub enum AnalysisErrorKind {
 	TryUnsupportedPattern,
 	BuiltinRequiresAnnotation,
 	BuiltinMustBeTopLevelRhs,
+	UnknownRegexCharacterClass { name: String },
 }
 
 impl fmt::Display for AnalysisError {
@@ -199,6 +200,12 @@ impl fmt::Display for AnalysisError {
 			BuiltinMustBeTopLevelRhs => write!(
 				f,
 				"`built-in` may only appear as the immediate right-hand side of a top-level `def`."
+			),
+
+			UnknownRegexCharacterClass { name } => write!(
+				f,
+				"Unknown character class `{}` in regular expression. Known classes: `any`, `digit`, `letter`, `whitespace`, `word`.",
+				name
 			),
 		}
 	}

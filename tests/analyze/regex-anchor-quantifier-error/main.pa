@@ -1,0 +1,5 @@
+def bad-start = /^+ "x"/
+
+def bad-end = /"x" $?/
+
+def bad-boundary = /% * "y"/

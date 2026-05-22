@@ -1,0 +1,13 @@
+use core.regex
+
+# Named captures compile to `(?P<name>...)`. We currently expose only
+# `regex.matches`, so this fixture pins the matching behavior — the
+# capture itself is structural for the codegen.
+def coord = /"(" <x: digit+> "," <y: digit+> ")"/
+
+def main = fun {
+	print (regex.matches coord "(3,7)")
+	print (regex.matches coord "(12,99)")
+	print (regex.matches coord "(a,b)")
+	print (regex.matches coord "(3,)")
+}

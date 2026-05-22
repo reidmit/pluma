@@ -801,6 +801,35 @@ impl<'compiler> Analyzer<'compiler> {
 		self.diagnostic(Some(range), Diagnostic::error(AnalysisError { kind }));
 	}
 
+	fn check_regex_character_classes(&mut self, node: &RegexNode) {
+		use RegexKind::*;
+		match &node.kind {
+			CharacterClass(name) => {
+				if !is_known_regex_character_class(name) {
+					self.error(
+						node.range,
+						AnalysisErrorKind::UnknownRegexCharacterClass { name: name.clone() },
+					);
+				}
+			}
+			Literal(_) | Anchor(_) => {}
+			OneOrMore(inner)
+			| ZeroOrMore(inner)
+			| OneOrZero(inner)
+			| AtLeastCount(inner, _)
+			| AtMostCount(inner, _)
+			| ExactCount(inner, _)
+			| RangeCount(inner, _, _)
+			| Grouping(inner)
+			| NamedCapture(_, inner) => self.check_regex_character_classes(inner),
+			Sequence(parts) | Alternation(parts) => {
+				for p in parts {
+					self.check_regex_character_classes(p);
+				}
+			}
+		}
+	}
+
 	fn add_value_binding(&mut self, name: String, ty_scheme: Scheme, range: Range) {
 		let current_level = self.value_scopes.last_mut().expect("no current scope");
 
@@ -1744,7 +1773,10 @@ impl<'compiler> Analyzer<'compiler> {
 			// (the algorithm would handle it fine), but assigning the concrete type directly
 			// is nicer to look at and saves a couple steps.
 			ExprKind::EmptyTuple => expr.ty = Type::Nothing,
-			ExprKind::Regex(..) => expr.ty = Type::Regex,
+			ExprKind::Regex(node) => {
+				self.check_regex_character_classes(node);
+				expr.ty = Type::Regex;
+			}
 			ExprKind::Literal(literal) => match &mut literal.kind {
 				LiteralKind::Bool(..) => expr.ty = Type::Bool,
 				LiteralKind::String(..) => expr.ty = Type::String,
@@ -5043,6 +5075,10 @@ impl<'compiler> Analyzer<'compiler> {
 // reuse it without fighting borrow-checker rules around mutably borrowing
 // `self` and `fields` simultaneously. Reports the second and subsequent
 // occurrences — the first one is the canonical site.
+fn is_known_regex_character_class(name: &str) -> bool {
+	matches!(name, "any" | "digit" | "letter" | "whitespace" | "word")
+}
+
 fn report_duplicate_record_pattern_fields(
 	analyzer: &mut Analyzer,
 	fields: &[(IdentifierNode, PatternNode)],
