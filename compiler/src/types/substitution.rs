@@ -5,7 +5,8 @@ use std::collections::HashMap;
 // with this tail." A `None` tail means "and nothing else" (closed extension);
 // `Some(rid)` means the row variable's tail is itself another row variable
 // (typically introduced by unifying two open records).
-#[derive(Clone, Debug)]
+#[derive(Clone)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct RowSolution {
 	pub fields: Vec<(String, Type)>,
 	pub tail: Option<usize>,
