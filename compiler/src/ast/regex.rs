@@ -49,11 +49,15 @@ impl std::fmt::Debug for RegexKind {
 
 			CharacterClass(cls) => write!(f, "class {}", cls),
 
-			Anchor(a) => write!(f, "anchor {}", match a {
-				RegexAnchor::Start => "start",
-				RegexAnchor::End => "end",
-				RegexAnchor::Boundary => "boundary",
-			}),
+			Anchor(a) => write!(
+				f,
+				"anchor {}",
+				match a {
+					RegexAnchor::Start => "start",
+					RegexAnchor::End => "end",
+					RegexAnchor::Boundary => "boundary",
+				}
+			),
 
 			OneOrMore(inner) => write!(f, "one-or-more ({:#?})", inner),
 
