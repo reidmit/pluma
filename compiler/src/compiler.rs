@@ -10,7 +10,16 @@ use std::path::{Path, PathBuf};
 // Native modules every user module sees without an explicit `use`. The
 // local name is what user code references it as. Codegen reads the same
 // list to mirror the analyzer's view of what's in scope.
-pub const AUTO_IMPORTS: &[(&str, &str)] = &[("core.ref", "ref")];
+//
+// `option` and `result` share their local name with the prelude enums of
+// the same name (intentional — `option.then` resolves to the module's
+// `then`, `option.some` falls through to the enum's `some`). The
+// FieldAccess dispatch in the analyzer handles the overlap.
+pub const AUTO_IMPORTS: &[(&str, &str)] = &[
+	("core.ref", "ref"),
+	("core.option", "option"),
+	("core.result", "result"),
+];
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub struct Compiler {

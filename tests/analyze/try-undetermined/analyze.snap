@@ -1,0 +1,8 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: `try`'s right-hand side has an undetermined type. Add a type annotation to its source so the carrier (option / result / task) can be selected.
+> 6 | 	try y = f x
+       ^^^^^^^^^^^
+

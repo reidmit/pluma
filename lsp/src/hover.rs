@@ -162,6 +162,18 @@ fn walk_expr(expr: &ExprNode, hits: &mut Vec<HoverHit>) {
 			// The whole-expr hover hit (recorded above) carries the resolved
 			// type. The path segments aren't values, so nothing else to walk.
 		}
+		ExprKind::Try(t) => {
+			// Mirror let's pattern handling: record a hit on the pattern
+			// identifier (typed as the carrier's payload), then walk the
+			// RHS and the rest of the body.
+			if let PatternKind::Identifier(id) = &t.pattern.kind {
+				record(hits, id.range, t.pattern_ty.clone());
+			}
+			walk_expr(&t.value, hits);
+			for e in &t.rest {
+				walk_expr(e, hits);
+			}
+		}
 	}
 }
 

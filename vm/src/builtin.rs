@@ -139,4 +139,10 @@ pub enum Builtin {
 	RefGet,
 	RefSet,
 	RefUpdate,
+	// `then`-chaining builtins for the prelude's option/result enums.
+	// `option.then` invokes the continuation on `some`'s payload and
+	// passes `none` through; `result.then` does the same for `ok` and
+	// passes `err` through. The `try` syntax form desugars to these.
+	OptionThen,
+	ResultThen,
 }

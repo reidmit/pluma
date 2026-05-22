@@ -277,6 +277,12 @@ fn collect_dispatch_cells(expr: &ExprNode, cells: &mut Vec<DispatchCell>) {
 				}
 			}
 		}
+		ExprKind::Try(TryNode { value, rest, .. }) => {
+			collect_dispatch_cells(value, cells);
+			for e in rest {
+				collect_dispatch_cells(e, cells);
+			}
+		}
 		ExprKind::Identifier(_)
 		| ExprKind::Literal(_)
 		| ExprKind::Regex(_)
@@ -505,6 +511,32 @@ impl<'compiler> Analyzer<'compiler> {
 			//    Inst-instantiated fresh class constraints get stashed on
 			//    the analyzer and merged below.
 			let substitution = self.unify(&constraints);
+
+			// 2b. type-directed dispatch + rewrite for `try`. Walks the AST,
+			//     reads each `try`'s RHS head constructor (substituted), and
+			//     rewrites it into a `<carrier>.then` call. May emit
+			//     additional linking constraints; if so, re-unify with them
+			//     appended so the new tyvars resolve before annotate.
+			//
+			//     We iterate to a fixed point because dispatching one `try`
+			//     can pin the return type of an enclosing def, which then
+			//     unlocks dispatch for `try`s in callers. Stuck `try`s
+			//     (whose RHS stays a free tyvar) are flagged after the loop
+			//     by `report_unresolved_try_nodes`.
+			let mut substitution = substitution;
+			let mut accumulated_constraints = constraints.clone();
+			loop {
+				let mut extra_constraints = Vec::new();
+				let dispatched_any =
+					self.dispatch_try_nodes(ast, &substitution, &mut extra_constraints);
+				if !dispatched_any {
+					break;
+				}
+				accumulated_constraints.extend(extra_constraints);
+				substitution = self.unify(&accumulated_constraints);
+			}
+			self.report_unresolved_try_nodes(ast, &substitution);
+			let constraints = accumulated_constraints;
 
 			// 3. gather all class constraints — originals from constrain
 			//    plus the fresh ones minted during Gen/Inst processing —
@@ -2022,6 +2054,36 @@ impl<'compiler> Analyzer<'compiler> {
 				);
 			}
 
+			ExprKind::Try(TryNode {
+				pattern,
+				value,
+				rest,
+				pattern_ty,
+				..
+			}) => {
+				// First-pass constrain for `try`. We constrain the value and
+				// the rest (in a scope where `pattern` binds to a fresh `α`),
+				// but we DO NOT yet link `α` to the value's payload type or
+				// `expr.ty` to a carrier-wrapped shape — that depends on the
+				// RHS's inferred head constructor, which isn't known until
+				// after unify. The post-unify `dispatch_try_nodes` pass
+				// reads the head, picks a carrier, rewrites this node into
+				// a `<carrier>.then` call, and emits the remaining linking
+				// constraints (which are then re-unified).
+				expr.ty = self.new_type_var();
+
+				self.constrain_expr(value, constraints);
+
+				self.enter_scope();
+				let alpha = self.new_type_var();
+				*pattern_ty = alpha.clone();
+				self.constrain_let_pattern(pattern, alpha.clone(), constraints);
+				for r in rest.iter_mut() {
+					self.constrain_expr(r, constraints);
+				}
+				self.leave_scope();
+			}
+
 			ExprKind::Let(LetNode { pattern, value, .. }) => {
 				// visit the value (expression after the `=`), and collect constraints:
 				self.constrain_expr(value, constraints);
@@ -2134,7 +2196,11 @@ impl<'compiler> Analyzer<'compiler> {
 
 				// Module namespace access: `module-name.def`. If the receiver
 				// is a bare ident that matches an imported module, look up
-				// the field in that module's exported values.
+				// the field in that module's exported values. If the module
+				// doesn't have the field and the same ident is also a known
+				// enum (e.g. the auto-imported `option` module overlapping
+				// with the prelude `option` enum), fall through to the local
+				// variant-access case below.
 				if let ExprKind::Identifier(ident) = &receiver.kind {
 					if let Some(exports) = self.imports.get(&ident.name).cloned() {
 						match exports.values.get(&field.name) {
@@ -2167,18 +2233,29 @@ impl<'compiler> Analyzer<'compiler> {
 									}
 									expr.dispatch_sink = Some(sink);
 								}
+								return;
 							}
 							None => {
-								self.error(
-									field.range,
-									NameNotBound {
-										name: format!("{}.{}", ident.name, field.name),
-									},
-								);
-								expr.ty = Type::Unknown;
+								let is_local_enum = self
+									.type_scope
+									.get(&ident.name)
+									.map(|b| matches!(b.ty, Type::Enum(_, _)))
+									.unwrap_or(false);
+								if !is_local_enum {
+									self.error(
+										field.range,
+										NameNotBound {
+											name: format!("{}.{}", ident.name, field.name),
+										},
+									);
+									expr.ty = Type::Unknown;
+									return;
+								}
+								// Fall through: the local-variant case below
+								// will resolve `field` against the enum and
+								// emit a precise diagnostic on miss.
 							}
 						}
-						return;
 					}
 				}
 
@@ -3464,6 +3541,438 @@ impl<'compiler> Analyzer<'compiler> {
 		})
 	}
 
+	// Walk the AST and rewrite each `try` expression whose RHS head
+	// constructor is resolved into the equivalent `<carrier>.then` call,
+	// emitting linking constraints into `new_constraints`. `try`s whose
+	// RHS is still an unresolved tyvar are LEFT IN PLACE so a subsequent
+	// iteration (after re-unifying against the new constraints) can take
+	// another pass. Returns `true` if at least one node was rewritten.
+	fn dispatch_try_nodes(
+		&mut self,
+		module: &mut ModuleNode,
+		subst: &Substitution,
+		new_constraints: &mut Vec<Constraint>,
+	) -> bool {
+		let mut dispatched_any = false;
+		for definition in &mut module.body {
+			match &mut definition.kind {
+				DefinitionKind::Expr(expr) => {
+					self.dispatch_try_in_expr(expr, subst, new_constraints, &mut dispatched_any);
+				}
+				DefinitionKind::Instance(instance_node) => {
+					for method in &mut instance_node.methods {
+						if let DefinitionKind::Expr(expr) = &mut method.kind {
+							self.dispatch_try_in_expr(expr, subst, new_constraints, &mut dispatched_any);
+						}
+					}
+				}
+				_ => {}
+			}
+		}
+		dispatched_any
+	}
+
+	// Walk the AST after the dispatch fixpoint and emit diagnostics for
+	// any `try` nodes that never got resolved (their RHS type stayed an
+	// unbound tyvar). Each remaining node also has its expr.ty set to
+	// `Type::Unknown` so codegen doesn't trip over it (codegen errors on
+	// any `try` node it sees, since the contract is "analyzer rewrites
+	// every try").
+	fn report_unresolved_try_nodes(&mut self, module: &mut ModuleNode, subst: &Substitution) {
+		for definition in &mut module.body {
+			match &mut definition.kind {
+				DefinitionKind::Expr(expr) => {
+					self.report_unresolved_try_in_expr(expr, subst);
+				}
+				DefinitionKind::Instance(instance_node) => {
+					for method in &mut instance_node.methods {
+						if let DefinitionKind::Expr(expr) = &mut method.kind {
+							self.report_unresolved_try_in_expr(expr, subst);
+						}
+					}
+				}
+				_ => {}
+			}
+		}
+	}
+
+	fn report_unresolved_try_in_expr(&mut self, expr: &mut ExprNode, subst: &Substitution) {
+		match &mut expr.kind {
+			ExprKind::Fun(FunNode { body, .. }) => {
+				for e in body.iter_mut() {
+					self.report_unresolved_try_in_expr(e, subst);
+				}
+			}
+			ExprKind::Call(CallNode { callee, args, .. }) => {
+				self.report_unresolved_try_in_expr(callee, subst);
+				for a in args.iter_mut() {
+					self.report_unresolved_try_in_expr(a, subst);
+				}
+			}
+			ExprKind::Let(LetNode { value, .. }) => {
+				self.report_unresolved_try_in_expr(value, subst);
+			}
+			ExprKind::Tuple(es) | ExprKind::List(es) | ExprKind::Interpolation(es) => {
+				for e in es.iter_mut() {
+					self.report_unresolved_try_in_expr(e, subst);
+				}
+			}
+			ExprKind::Record(fields) => {
+				for (_, v) in fields.iter_mut() {
+					self.report_unresolved_try_in_expr(v, subst);
+				}
+			}
+			ExprKind::ElementAccess { receiver, .. }
+			| ExprKind::FieldAccess { receiver, .. } => {
+				self.report_unresolved_try_in_expr(receiver, subst);
+			}
+			ExprKind::UnaryOperation { right, .. } => {
+				self.report_unresolved_try_in_expr(right, subst);
+			}
+			ExprKind::BinaryOperation { left, right, .. } => {
+				self.report_unresolved_try_in_expr(left, subst);
+				self.report_unresolved_try_in_expr(right, subst);
+			}
+			ExprKind::If(IfNode {
+				subject,
+				body,
+				else_body,
+				..
+			}) => {
+				self.report_unresolved_try_in_expr(subject, subst);
+				for e in body.iter_mut() {
+					self.report_unresolved_try_in_expr(e, subst);
+				}
+				if let Some(else_body) = else_body {
+					for e in else_body.iter_mut() {
+						self.report_unresolved_try_in_expr(e, subst);
+					}
+				}
+			}
+			ExprKind::When(WhenNode { subject, cases, .. }) => {
+				self.report_unresolved_try_in_expr(subject, subst);
+				for c in cases.iter_mut() {
+					for e in c.body.iter_mut() {
+						self.report_unresolved_try_in_expr(e, subst);
+					}
+				}
+			}
+			ExprKind::While(WhileNode { subject, body, .. }) => {
+				self.report_unresolved_try_in_expr(subject, subst);
+				for e in body.iter_mut() {
+					self.report_unresolved_try_in_expr(e, subst);
+				}
+			}
+			ExprKind::Grouping(inner) => {
+				self.report_unresolved_try_in_expr(inner, subst);
+			}
+			ExprKind::Try(TryNode {
+				range, value, rest, ..
+			}) => {
+				let try_range = *range;
+				let resolved = subst.apply_to_type(&value.ty);
+				// Walk children first in case they have un-rewritten trys
+				// of their own.
+				self.report_unresolved_try_in_expr(value, subst);
+				for e in rest.iter_mut() {
+					self.report_unresolved_try_in_expr(e, subst);
+				}
+				match resolved {
+					Type::Var(_) => {
+						self.error(try_range, AnalysisErrorKind::TryRhsUndetermined);
+					}
+					_ => {
+						// Should be impossible — dispatch loop should have
+						// handled any non-Var head. Report as unsupported
+						// carrier so the user sees the actual type.
+						self.error(
+							try_range,
+							AnalysisErrorKind::TryUnsupportedCarrier { ty: resolved },
+						);
+					}
+				}
+				expr.ty = Type::Unknown;
+			}
+			ExprKind::Identifier(_)
+			| ExprKind::Literal(_)
+			| ExprKind::Regex(_)
+			| ExprKind::EmptyTuple
+			| ExprKind::NamespaceAccess(_) => {}
+		}
+	}
+
+	fn dispatch_try_in_expr(
+		&mut self,
+		expr: &mut ExprNode,
+		subst: &Substitution,
+		new_constraints: &mut Vec<Constraint>,
+		dispatched_any: &mut bool,
+	) {
+		// Walk children first so nested `try`s are rewritten bottom-up.
+		// For Try, we recurse into its own children below before rewriting
+		// this node.
+		match &mut expr.kind {
+			ExprKind::Fun(FunNode { body, .. }) => {
+				for e in body.iter_mut() {
+					self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any);
+				}
+			}
+			ExprKind::Call(CallNode { callee, args, .. }) => {
+				self.dispatch_try_in_expr(callee, subst, new_constraints, dispatched_any);
+				for a in args.iter_mut() {
+					self.dispatch_try_in_expr(a, subst, new_constraints, dispatched_any);
+				}
+			}
+			ExprKind::Let(LetNode { value, .. }) => {
+				self.dispatch_try_in_expr(value, subst, new_constraints, dispatched_any);
+			}
+			ExprKind::Tuple(es) | ExprKind::List(es) | ExprKind::Interpolation(es) => {
+				for e in es.iter_mut() {
+					self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any);
+				}
+			}
+			ExprKind::Record(fields) => {
+				for (_, v) in fields.iter_mut() {
+					self.dispatch_try_in_expr(v, subst, new_constraints, dispatched_any);
+				}
+			}
+			ExprKind::ElementAccess { receiver, .. }
+			| ExprKind::FieldAccess { receiver, .. } => {
+				self.dispatch_try_in_expr(receiver, subst, new_constraints, dispatched_any);
+			}
+			ExprKind::UnaryOperation { right, .. } => {
+				self.dispatch_try_in_expr(right, subst, new_constraints, dispatched_any);
+			}
+			ExprKind::BinaryOperation { left, right, .. } => {
+				self.dispatch_try_in_expr(left, subst, new_constraints, dispatched_any);
+				self.dispatch_try_in_expr(right, subst, new_constraints, dispatched_any);
+			}
+			ExprKind::If(IfNode {
+				subject,
+				body,
+				else_body,
+				..
+			}) => {
+				self.dispatch_try_in_expr(subject, subst, new_constraints, dispatched_any);
+				for e in body.iter_mut() {
+					self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any);
+				}
+				if let Some(else_body) = else_body {
+					for e in else_body.iter_mut() {
+						self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any);
+					}
+				}
+			}
+			ExprKind::When(WhenNode { subject, cases, .. }) => {
+				self.dispatch_try_in_expr(subject, subst, new_constraints, dispatched_any);
+				for c in cases.iter_mut() {
+					for e in c.body.iter_mut() {
+						self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any);
+					}
+				}
+			}
+			ExprKind::While(WhileNode { subject, body, .. }) => {
+				self.dispatch_try_in_expr(subject, subst, new_constraints, dispatched_any);
+				for e in body.iter_mut() {
+					self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any);
+				}
+			}
+			ExprKind::Grouping(inner) => {
+				self.dispatch_try_in_expr(inner, subst, new_constraints, dispatched_any);
+			}
+			ExprKind::Try(TryNode { value, rest, .. }) => {
+				// Recurse into THIS try's children first (so nested trys
+				// in `value` or `rest` get rewritten before we touch the
+				// outer node). Borrow re-acquired after the recursion.
+				self.dispatch_try_in_expr(value, subst, new_constraints, dispatched_any);
+				for e in rest.iter_mut() {
+					self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any);
+				}
+				if self.do_try_dispatch(expr, subst, new_constraints) {
+					*dispatched_any = true;
+				}
+			}
+			ExprKind::Identifier(_)
+			| ExprKind::Literal(_)
+			| ExprKind::Regex(_)
+			| ExprKind::EmptyTuple
+			| ExprKind::NamespaceAccess(_) => {}
+		}
+	}
+
+	// Perform the actual rewrite of one Try expression. `expr.kind` must
+	// be `Try(_)` on entry. Returns `true` if the rewrite succeeded (now
+	// `Call`), `false` if the RHS type isn't pinned yet (`expr.kind` is
+	// left as `Try` for a later iteration). Diagnosable failures (empty
+	// body, unsupported pattern, unsupported carrier) report and rewrite
+	// to `EmptyTuple` with `Type::Unknown` — still counted as "handled"
+	// so the loop terminates.
+	fn do_try_dispatch(
+		&mut self,
+		expr: &mut ExprNode,
+		subst: &Substitution,
+		new_constraints: &mut Vec<Constraint>,
+	) -> bool {
+		use AnalysisErrorKind::*;
+
+		// Peek the resolved value type without consuming the Try yet —
+		// if it's still a free tyvar, we leave the Try in place so a
+		// later iteration (after more constraints get added by other
+		// dispatches and re-unify) can revisit it.
+		let value_ty_clone = match &expr.kind {
+			ExprKind::Try(t) => t.value.ty.clone(),
+			_ => unreachable!("do_try_dispatch called on non-Try expr"),
+		};
+		let resolved_value_ty = subst.apply_to_type(&value_ty_clone);
+		if matches!(resolved_value_ty, Type::Var(_)) {
+			return false;
+		}
+
+		let try_node = match std::mem::replace(&mut expr.kind, ExprKind::EmptyTuple) {
+			ExprKind::Try(t) => t,
+			_ => unreachable!("do_try_dispatch called on non-Try expr"),
+		};
+
+		let TryNode {
+			range: try_range,
+			pattern,
+			value,
+			rest,
+			pattern_ty,
+		} = try_node;
+
+		if rest.is_empty() {
+			self.error(try_range, TryEmptyBody);
+			expr.ty = Type::Unknown;
+			return true;
+		}
+
+		// Recognized carriers: option (1 arg), result (2 args). task is
+		// reserved for the post-async phase. Anything else is a user
+		// error.
+		let (carrier_module_name, payload_ty, err_ty): (&'static str, Type, Option<Type>) =
+			match &resolved_value_ty {
+				Type::Enum(name, args) if name == "__prelude__.option" && args.len() == 1 => {
+					("option", args[0].clone(), None)
+				}
+				Type::Enum(name, args) if name == "__prelude__.result" && args.len() == 2 => {
+					("result", args[0].clone(), Some(args[1].clone()))
+				}
+				_ => {
+					self.error(
+						try_range,
+						TryUnsupportedCarrier {
+							ty: resolved_value_ty.clone(),
+						},
+					);
+					expr.ty = Type::Unknown;
+					return true;
+				}
+			};
+
+		// Pull a fun-param ident out of the LHS pattern. Identifier or
+		// wildcard for now; richer patterns can desugar via an inner
+		// `let` once that's needed.
+		let param_ident = match &pattern.kind {
+			PatternKind::Identifier(id) => id.clone(),
+			PatternKind::Underscore => IdentifierNode {
+				name: "_".to_string(),
+				range: pattern.range,
+			},
+			_ => {
+				self.error(try_range, TryUnsupportedPattern);
+				expr.ty = Type::Unknown;
+				return true;
+			}
+		};
+
+		// Build constraints to link the existing tyvars with the
+		// carrier-specific shape.
+		//
+		// 1. pattern_ty (the α the analyzer bound the LHS to during
+		//    constrain) must equal the carrier's payload type.
+		new_constraints
+			.push(eq_constraint(pattern_ty.clone(), payload_ty.clone()).at(try_range));
+
+		// 2. The continuation's tail expression must itself be
+		//    carrier-wrapped (with the same err type, for result).
+		let body_payload = self.new_type_var();
+		let carrier_qualified = format!("__prelude__.{}", carrier_module_name);
+		let expected_body_ty = match &err_ty {
+			None => Type::Enum(carrier_qualified.clone(), vec![body_payload.clone()]),
+			Some(e) => Type::Enum(
+				carrier_qualified.clone(),
+				vec![body_payload.clone(), e.clone()],
+			),
+		};
+		let last_idx = rest.len() - 1;
+		let body_last_ty = rest[last_idx].ty.clone();
+		new_constraints
+			.push(eq_constraint(body_last_ty.clone(), expected_body_ty.clone()).at(try_range));
+
+		// 3. The whole `try` expression (now the synthesized Call) has
+		//    that same carrier-wrapped type.
+		new_constraints.push(eq_constraint(expr.ty.clone(), expected_body_ty.clone()).at(try_range));
+
+		// Build the synthesized Fun (continuation closure).
+		let body_end = rest.last().unwrap().range.end;
+		let fun_range = Range::between(pattern.range.start, body_end);
+		let fun_param_ty = pattern_ty.clone();
+		let fun_node = FunNode {
+			range: fun_range,
+			params: vec![FunParamNode {
+				ident: param_ident,
+				ty: fun_param_ty.clone(),
+			}],
+			body: rest,
+		};
+		let fun_expr_ty = self.new_type_var();
+		// Tie the synthesized Fun's type to Fun([pattern_ty], body_last_ty).
+		new_constraints.push(
+			eq_constraint(
+				fun_expr_ty.clone(),
+				Type::Fun(vec![fun_param_ty], Box::new(body_last_ty)),
+			)
+			.at(try_range),
+		);
+		let fun_expr = ExprNode {
+			range: fun_range,
+			kind: ExprKind::Fun(fun_node),
+			ty: fun_expr_ty,
+			trait_dispatch: None,
+			dispatch_sink: None,
+		};
+
+		// Build the callee — a NamespaceAccess(["<carrier>", "then"]).
+		let module_ident = IdentifierNode {
+			name: carrier_module_name.to_string(),
+			range: try_range,
+		};
+		let method_ident = IdentifierNode {
+			name: "then".to_string(),
+			range: try_range,
+		};
+		let callee = ExprNode {
+			range: try_range,
+			kind: ExprKind::NamespaceAccess(vec![module_ident, method_ident]),
+			// `then`'s type doesn't strictly need to be set — codegen for
+			// NamespaceAccess looks up the global by name. Annotate will
+			// fill the placeholder if anything reads it.
+			ty: self.new_type_var(),
+			trait_dispatch: None,
+			dispatch_sink: None,
+		};
+
+		expr.kind = ExprKind::Call(CallNode {
+			range: try_range,
+			callee: Box::new(callee),
+			args: vec![*value, fun_expr],
+			dict_args: Vec::new(),
+		});
+
+		true
+	}
+
 	fn annotate(&mut self, module: &mut ModuleNode, subst: &Substitution) {
 		for definition in &mut module.body {
 			self.fill_in_placeholder(&mut definition.ty, subst);
@@ -3631,6 +4140,19 @@ impl<'compiler> Analyzer<'compiler> {
 				// path segments aren't typed (they're namespace names, not
 				// values); the expr's own ty + dispatch metadata, set during
 				// constrain, are all that needs annotating.
+			}
+
+			ExprKind::Try(TryNode { value, rest, .. }) => {
+				// Normally `constrain_expr` rewrites a `Try` into a `Call`
+				// once the RHS's head constructor is known, so annotate
+				// sees the rewritten form. If dispatch failed (the RHS
+				// type couldn't be resolved, or it wasn't a known carrier)
+				// we still walk the original sub-trees so partial info is
+				// at least filled in.
+				self.annotate_expr(value, subst);
+				for e in rest.iter_mut() {
+					self.annotate_expr(e, subst);
+				}
 			}
 		}
 	}

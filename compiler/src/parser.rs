@@ -358,6 +358,17 @@ impl<'a> Parser<'a> {
 		loop {
 			self.skip_line_breaks();
 
+			// `try Pattern = Expr` is a body-only form. It absorbs every
+			// remaining expression of the surrounding block into its `rest`
+			// field — at analyze time the rest becomes the continuation
+			// closure passed to `<carrier>.then`. Once parsed, no more
+			// siblings can follow at this level.
+			if current_token_is!(self, Token::KeywordTry) {
+				let try_expr = self.parse_try_with_rest()?;
+				body.push(try_expr);
+				break;
+			}
+
 			if let Some(node) = self.parse_expression() {
 				body.push(node);
 			} else {
@@ -366,6 +377,48 @@ impl<'a> Parser<'a> {
 		}
 
 		Some(body)
+	}
+
+	// Parse `try Pattern = Expr` and collect everything after it (through
+	// the end of the current block) into `rest`. Nested `try`s in `rest`
+	// are handled by recursing through `parse_body_expressions`.
+	fn parse_try_with_rest(&mut self) -> Option<ExprNode> {
+		let (start, _) = expect_token_and_advance!(self, Token::KeywordTry);
+
+		let pattern = match self.parse_pattern() {
+			Some(p) => p,
+			None => {
+				self.expect_identifier()?;
+				return None;
+			}
+		};
+
+		expect_token_and_advance!(self, Token::Equal);
+
+		let value = self.parse_expression()?;
+
+		let rest = self.parse_body_expressions()?;
+
+		let end = rest
+			.last()
+			.map(|e| e.range.end)
+			.unwrap_or(value.range.end);
+
+		let range = Range::between(start, end);
+
+		Some(ExprNode {
+			range,
+			kind: ExprKind::Try(TryNode {
+				range,
+				pattern,
+				value: Box::new(value),
+				rest,
+				pattern_ty: Type::Unknown,
+			}),
+			ty: Type::Unknown,
+			trait_dispatch: None,
+			dispatch_sink: None,
+		})
 	}
 
 	fn parse_fun(&mut self) -> Option<FunNode> {

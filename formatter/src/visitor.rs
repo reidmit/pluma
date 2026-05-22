@@ -363,6 +363,7 @@ impl<'a> Formatter<'a> {
 			Fun(fun) => self.format_fun(fun),
 			Call(call) => self.format_call(call),
 			Let(l) => self.format_let(l),
+			Try(t) => self.format_try(t),
 			Tuple(items) => self.format_tuple(items),
 			List(items) => self.format_list(items),
 			Record(fields) => self.format_record(fields),
@@ -481,6 +482,24 @@ impl<'a> Formatter<'a> {
 			text(" = "),
 			self.format_expr(&l.value),
 		])
+	}
+
+	// `try` mirrors `let`'s shape: `try Pattern = Expr`. The continuation
+	// (`rest`) is rendered as inline siblings — at the source level a try
+	// has no braces around what follows, just subsequent expressions in
+	// the enclosing block.
+	fn format_try(&self, t: &TryNode) -> Doc {
+		let mut parts: Vec<Doc> = vec![
+			text("try "),
+			self.format_pattern(&t.pattern),
+			text(" = "),
+			self.format_expr(&t.value),
+		];
+		for e in &t.rest {
+			parts.push(hardline());
+			parts.push(self.format_expr(e));
+		}
+		concat(parts)
 	}
 
 	fn format_tuple(&self, items: &[ExprNode]) -> Doc {

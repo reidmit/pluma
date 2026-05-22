@@ -1,0 +1,8 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: `try` only works on `option`, `result`, or `task`; this right-hand side has type `int`.
+> 5 | 	try x = 5
+       ^^^^^^^^^
+

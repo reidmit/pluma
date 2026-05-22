@@ -1099,6 +1099,45 @@ pub fn call_builtin(vm: &mut VM, b: Builtin, args: Vec<Value>) -> Result<Value, 
 			Ok(Value::Nothing)
 		}
 
+		OptionThen => {
+			// `option.then o f` — invoke `f` on `some`'s payload; pass
+			// `none` through unchanged.
+			debug_assert_eq!(args.len(), 2, "`option.then` arity");
+			let mut it = args.into_iter();
+			let o = it.next().unwrap();
+			let fn_arg = it.next().unwrap();
+			match o {
+				Value::Variant(v) => match v.variant.as_str() {
+					"some" => {
+						debug_assert_eq!(v.payload.len(), 1, "`some` payload arity");
+						invoke(vm, fn_arg, vec![v.payload[0].clone()])
+					}
+					"none" => Ok(Value::Variant(v)),
+					other => unreachable!("`option.then`: unexpected option variant `{}`", other),
+				},
+				_ => unreachable!("`option.then`: expected option variant"),
+			}
+		}
+		ResultThen => {
+			// `result.then r f` — invoke `f` on `ok`'s payload; pass `err`
+			// through unchanged.
+			debug_assert_eq!(args.len(), 2, "`result.then` arity");
+			let mut it = args.into_iter();
+			let r = it.next().unwrap();
+			let fn_arg = it.next().unwrap();
+			match r {
+				Value::Variant(v) => match v.variant.as_str() {
+					"ok" => {
+						debug_assert_eq!(v.payload.len(), 1, "`ok` payload arity");
+						invoke(vm, fn_arg, vec![v.payload[0].clone()])
+					}
+					"err" => Ok(Value::Variant(v)),
+					other => unreachable!("`result.then`: unexpected result variant `{}`", other),
+				},
+				_ => unreachable!("`result.then`: expected result variant"),
+			}
+		}
+
 		MapFold => {
 			// args = [m, init, fn]. fn : b -> k -> v -> b.
 			debug_assert_eq!(args.len(), 3, "`map.fold` arity");

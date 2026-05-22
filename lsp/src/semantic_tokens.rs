@@ -445,6 +445,18 @@ impl AstWalker {
 				// which only produces FieldAccess; NamespaceAccess is created later
 				// by the analyzer.
 			}
+			ExprKind::Try(t) => {
+				match &t.pattern.kind {
+					PatternKind::Identifier(id) => {
+						emit(out, &id.range, VARIABLE, id.name.len());
+					}
+					_ => self.walk_pattern(&t.pattern, out),
+				}
+				self.walk_expr(&t.value, out);
+				for e in &t.rest {
+					self.walk_expr(e, out);
+				}
+			}
 		}
 	}
 

@@ -29,6 +29,10 @@ pub enum AnalysisErrorKind {
 	OrphanInstance { trait_name: String, head: Type },
 	RefutablePatternInLet,
 	DuplicateRecordPatternField { field: String },
+	TryRhsUndetermined,
+	TryUnsupportedCarrier { ty: Type },
+	TryEmptyBody,
+	TryUnsupportedPattern,
 }
 
 impl fmt::Display for AnalysisError {
@@ -162,6 +166,27 @@ impl fmt::Display for AnalysisError {
 				f,
 				"Field `{}` is listed more than once in this record pattern.",
 				field
+			),
+
+			TryRhsUndetermined => write!(
+				f,
+				"`try`'s right-hand side has an undetermined type. Add a type annotation to its source so the carrier (option / result / task) can be selected."
+			),
+
+			TryUnsupportedCarrier { ty } => write!(
+				f,
+				"`try` only works on `option`, `result`, or `task`; this right-hand side has type `{}`.",
+				ty
+			),
+
+			TryEmptyBody => write!(
+				f,
+				"`try` needs a continuation — at least one expression must follow it in the surrounding block."
+			),
+
+			TryUnsupportedPattern => write!(
+				f,
+				"`try` currently only supports an identifier or `_` pattern on the left-hand side. Bind to a name and destructure with `let` on the next line."
 			),
 		}
 	}

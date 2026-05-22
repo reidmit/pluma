@@ -50,6 +50,8 @@ pub fn native_modules() -> Vec<NativeModule> {
 		io_module(),
 		map_module(),
 		ref_module(),
+		option_module(),
+		result_module(),
 	]
 }
 
@@ -750,6 +752,54 @@ fn math_module() -> NativeModule {
 				value: Value::Float(std::f64::consts::E),
 			},
 		],
+	}
+}
+
+fn option_module() -> NativeModule {
+	// `then o f` — chains over option. On `some v`, calls `f v` (which must
+	// return another option, possibly with a different payload type); on
+	// `none`, short-circuits with `none`. The `try` syntax desugars to this.
+	let a = || Type::Var(0);
+	let b = || Type::Var(1);
+	let option_a = || Type::Enum("__prelude__.option".to_string(), vec![a()]);
+	let option_b = || Type::Enum("__prelude__.option".to_string(), vec![b()]);
+	NativeModule {
+		name: "core.option",
+		defs: vec![NativeDef {
+			name: "then",
+			ty: Type::Fun(
+				vec![option_a(), Type::Fun(vec![a()], Box::new(option_b()))],
+				Box::new(option_b()),
+			),
+			builtin: Builtin::OptionThen,
+			constraints: vec![],
+		}],
+		constants: vec![],
+	}
+}
+
+fn result_module() -> NativeModule {
+	// `then r f` — chains over result. On `ok v`, calls `f v` (which must
+	// return another result whose err type matches the input's); on
+	// `err e`, short-circuits with the same `err`. Both arms share the
+	// err type by signature.
+	let a = || Type::Var(0);
+	let b = || Type::Var(1);
+	let e = || Type::Var(2);
+	let result_ae = || Type::Enum("__prelude__.result".to_string(), vec![a(), e()]);
+	let result_be = || Type::Enum("__prelude__.result".to_string(), vec![b(), e()]);
+	NativeModule {
+		name: "core.result",
+		defs: vec![NativeDef {
+			name: "then",
+			ty: Type::Fun(
+				vec![result_ae(), Type::Fun(vec![a()], Box::new(result_be()))],
+				Box::new(result_be()),
+			),
+			builtin: Builtin::ResultThen,
+			constraints: vec![],
+		}],
+		constants: vec![],
 	}
 }
 

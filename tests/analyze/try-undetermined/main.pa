@@ -1,0 +1,8 @@
+# The RHS of `try` is a call to a function whose return type is
+# polymorphic in a way that's never pinned by context. The analyzer
+# can't pick a carrier and reports the undetermined-RHS diagnostic.
+
+def helper = fun f x {
+	try y = f x
+	ok y
+}

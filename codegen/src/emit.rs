@@ -1394,6 +1394,13 @@ fn emit_expr_with_parents(
 		ExprKind::ElementAccess { .. } => {
 			return Err("codegen: ElementAccess not implemented".into());
 		}
+		ExprKind::Try(_) => {
+			// The analyzer must rewrite every `try` into a `<carrier>.then`
+			// call before codegen. Seeing one here means dispatch never
+			// fired — either the RHS type couldn't be resolved or the
+			// post-unify pass missed this node.
+			return Err("codegen: `try` was not rewritten by the analyzer".into());
+		}
 		ExprKind::NamespaceAccess(path) => {
 			// Trait method reference (e.g. `numeric.add`): dispatch cell was
 			// attached during analysis, same as for a FieldAccess-shaped
@@ -1445,13 +1452,17 @@ fn emit_namespace_access(
 			emit_variant_construction(cg, fb, &qualified_enum, &variant_ident.name, *arity, range)
 		}
 		// 2-segment paths: either `module.value` or `EnumName.variant`.
+		// `head` may match both an imported module *and* a local-module
+		// enum (e.g. the auto-imported `option` module overlaps with the
+		// prelude `option` enum). The analyzer's FieldAccess dispatch
+		// resolves the overlap; here we mirror it — module value first,
+		// then enum variant.
 		[head, tail] => {
 			if let Some(qualified_module) = imports.get(&head.name).cloned() {
 				if let Some(global_idx) = cg.lookup_global(&qualified_module, &tail.name) {
 					fb.emit(Instruction::LoadGlobal(global_idx), range);
 					return Ok(());
 				}
-				return Err(format!("codegen: `{}.{}` is not defined", head.name, tail.name));
 			}
 			let qualified_enum = format!("{}.{}", current_module, head.name);
 			if let Some(variants) = cg.enum_variants.get(&qualified_enum).cloned() {
@@ -1459,10 +1470,14 @@ fn emit_namespace_access(
 					return emit_variant_construction(cg, fb, &qualified_enum, &tail.name, *arity, range);
 				}
 			}
-			Err(format!(
-				"codegen: namespace `{}` is neither an imported module nor a local enum",
-				head.name
-			))
+			if imports.get(&head.name).is_some() {
+				Err(format!("codegen: `{}.{}` is not defined", head.name, tail.name))
+			} else {
+				Err(format!(
+					"codegen: namespace `{}` is neither an imported module nor a local enum",
+					head.name
+				))
+			}
 		}
 		_ => Err(format!(
 			"codegen: NamespaceAccess with {} segments — expected 2 or 3",

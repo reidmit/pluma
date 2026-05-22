@@ -1,0 +1,7 @@
+# `try` against a non-carrier type. `5` is just an `int`, not an
+# `option`/`result`/`task`, so `try` has nothing to dispatch on.
+
+def go = fun {
+	try x = 5
+	ok x
+}

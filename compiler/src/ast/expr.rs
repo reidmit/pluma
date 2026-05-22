@@ -66,6 +66,12 @@ pub enum ExprKind {
 	Record(Vec<(IdentifierNode, ExprNode)>),
 	Tuple(Vec<ExprNode>),
 	Regex(RegexNode),
+	/// `try Pattern = Expr ; rest...`. The analyzer peeks the RHS's
+	/// inferred head constructor and rewrites this into a
+	/// `<carrier>.then` call wrapping `rest` as a continuation. Always
+	/// produced by `parse_body_expressions` — never appears at
+	/// expression position in source.
+	Try(TryNode),
 
 	// the below are not fully implemented yet!
 	List(Vec<ExprNode>),
@@ -170,6 +176,10 @@ impl std::fmt::Debug for ExprKind {
 
 			Tuple(entries) => {
 				write!(f, "tuple {:#?}", entries)
+			}
+
+			Try(try_node) => {
+				write!(f, "{:#?}", try_node)
 			}
 
 			When(when_node) => {

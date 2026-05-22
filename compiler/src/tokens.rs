@@ -139,6 +139,12 @@ pub enum Token {
 	/// `trait` keyword
 	KeywordTrait(usize, usize),
 
+	/// `try` keyword (sequential-bind form: `try x = expr ; rest`).
+	/// Dispatches at analyze time based on the inferred head constructor
+	/// of `expr` — option, result, or task — and rewrites to a
+	/// `<carrier>.then` call wrapping the remaining block items.
+	KeywordTry(usize, usize),
+
 	/// `use` keyword (module import)
 	KeywordUse(usize, usize),
 
@@ -302,6 +308,7 @@ impl Token {
 			| KeywordIs(start, end)
 			| KeywordLet(start, end)
 			| KeywordTrait(start, end)
+			| KeywordTry(start, end)
 			| KeywordUse(start, end)
 			| KeywordWhile(start, end)
 			| KeywordWhen(start, end)
@@ -399,6 +406,7 @@ impl fmt::Display for Token {
 			&KeywordIs(..) => "keyword `is`",
 			&KeywordLet(..) => "keyword `let`",
 			&KeywordTrait(..) => "keyword `trait`",
+			&KeywordTry(..) => "keyword `try`",
 			&KeywordUse(..) => "keyword `use`",
 			&KeywordWhile(..) => "keyword `while`",
 			&KeywordWhen(..) => "keyword `when`",
