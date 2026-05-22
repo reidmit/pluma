@@ -68,4 +68,4 @@ implement ord (option a) where (ord a) {
 }
 ```
 
-see [`REFERENCE.md`](REFERENCE.md) for the full language.
+see the docs site under [`site/content/docs/`](site/content/docs/) for the full language reference.

@@ -168,7 +168,7 @@ pub struct RegexData {
 	pub compiled: regex::Regex,
 }
 
-// Display drives `to-string`. Stays consistent with REFERENCE.md spellings.
+// Display drives `to-string`. Stays consistent with the language reference (docs site).
 impl std::fmt::Display for Value {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {

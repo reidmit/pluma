@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-This repo (named `pencil` on disk) implements **Pluma**, a small statically-typed functional language. The CLI binary is named `pluma`, source files use the `.pa` extension. The language is documented in `REFERENCE.md`; rough roadmap phases live in `README.md`.
+This repo (named `pencil` on disk) implements **Pluma**, a small statically-typed functional language. The CLI binary is named `pluma`, source files use the `.pa` extension. The language is documented under `site/content/docs/` (the zola-built docs site); rough roadmap phases live in `README.md`.
 
 ## Workspace layout
 
