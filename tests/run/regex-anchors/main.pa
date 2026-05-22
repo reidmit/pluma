@@ -1,25 +1,25 @@
 use core.regex
 
 # `^` — start anchor
-def starts-with-hello = /^ "hello"/
+def starts-with-hello = `^ "hello"`
 
 # `$` — end anchor
-def is-pa-file = /"." "pa" $/
+def is-pa-file = `"." "pa" $`
 
 # `^` and `$` together — exact match
-def exactly-yes = /^ "yes" $/
+def exactly-yes = `^ "yes" $`
 
 # Anchors with classes and quantifiers
-def all-digits = /^ digit+ $/
+def all-digits = `^ digit+ $`
 
 # Alternation framed by anchors
-def http-verb = /^ ("GET" | "POST" | "PUT" | "DELETE") $/
+def http-verb = `^ ("GET" | "POST" | "PUT" | "DELETE") $`
 
 # `%` — word boundary, both sides
-def word-cat = /% "cat" %/
+def word-cat = `% "cat" %`
 
 # Boundary with a class — does any word start with a digit?
-def word-starts-with-digit = /% digit/
+def word-starts-with-digit = `% digit`
 
 def main = fun {
 	# ^ at start of string

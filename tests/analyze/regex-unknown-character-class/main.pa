@@ -1,1 +1,1 @@
-def bad = /digit | bogus | letter/
+def bad = `digit | bogus | letter`

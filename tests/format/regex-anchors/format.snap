@@ -2,11 +2,11 @@
 source: tests/format.rs
 expression: once
 ---
-def exact-yes = /^ "yes" $/
+def exact-yes = `^ "yes" $`
 
-def word-cat = /% "cat" %/
+def word-cat = `% "cat" %`
 
-def starts-with-digit = /^ digit+/
+def starts-with-digit = `^ digit+`
 
-def url-ish = /^ "http" "s"? "://" word+ $/
+def url-ish = `^ "http" "s"? "://" word+ $`
 

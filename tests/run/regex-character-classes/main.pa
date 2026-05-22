@@ -1,11 +1,11 @@
 use core.regex
 
-def one-digit = /digit/
-def two-digits = /digit digit/
-def one-letter = /letter/
-def one-word-char = /word/
-def one-space = /whitespace/
-def anything = /any/
+def one-digit = `digit`
+def two-digits = `digit digit`
+def one-letter = `letter`
+def one-word-char = `word`
+def one-space = `whitespace`
+def anything = `any`
 
 def main = fun {
 	# `digit` matches a single ASCII digit

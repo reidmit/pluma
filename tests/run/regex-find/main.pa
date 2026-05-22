@@ -1,0 +1,46 @@
+use core.regex as re
+use core.map
+use core.list
+
+def coord = `"(" <x: digit+> "," <y: digit+> ")"`
+def word-re = `letter+`
+
+def show-x-y = fun m {
+	when map.lookup m.groups "x" is some s { print s } is none { print "no x" }
+	when map.lookup m.groups "y" is some s { print s } is none { print "no y" }
+}
+
+def main = fun {
+	# find: first match, with start/end offsets and captured groups.
+	when re.find coord "data: (3,7) and more" is some m {
+		print m.text
+		print m.start
+		print m.end
+		show-x-y m
+	} is none {
+		print "no match"
+	}
+
+	# find on a miss.
+	when re.find coord "no coordinates here" is some _m {
+		print "unexpected match"
+	} is none {
+		print "no match"
+	}
+
+	# find-all: every non-overlapping match.
+	let all = re.find-all coord "(1,2) and (3,4) and (5,6)"
+	print (to-string (list.length all))
+	list.each all fun m {
+		print m.text
+	}
+
+	# find-all on a pattern with no captures still returns matches —
+	# `groups` is just empty.
+	let words = re.find-all word-re "one two three"
+	print (to-string (list.length words))
+	list.each words fun m {
+		print m.text
+		print (to-string (map.size m.groups))
+	}
+}

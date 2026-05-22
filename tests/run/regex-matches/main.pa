@@ -1,6 +1,6 @@
 use core.regex
 
-def hello = /"hello"/
+def hello = `"hello"`
 
 def main = fun {
 	print (regex.matches hello "hello, world!")

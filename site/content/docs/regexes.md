@@ -7,37 +7,37 @@ weight = 3
 Pluma's regex syntax is intentionally different from the dense punctuation of PCRE-style regexes. Patterns are built by composing *atoms* — string literals, named character classes, and anchors — with *combinators* for sequencing, alternation, grouping, and repetition. Whitespace between atoms is meaningless, so you can lay a pattern out across multiple lines like ordinary code.
 
 ```
-let phone = /
+let phone = `
     ^
     "(" digit{3} ")"
     " "
     digit{3} "-" digit{4}
     $
-/
+`
 ```
 
-The result is a value of the primitive type `regex`, which can only be tested against a string via `regex.matches`.
+The result is a value of the primitive type `regex`, which can only be tested or extracted from via the operations in `core.regex`.
 
 ## The literal
 
-Regex literals are delimited by forward slashes:
+Regex literals are delimited by backticks:
 
 ```
-let hello = /"hello"/
-let yes-or-no = /"yes" | "no"/
+let hello = `"hello"`
+let yes-or-no = `"yes" | "no"`
 ```
 
-An empty regex (`//` with no body) is a parse error.
+An empty regex (`` `` `` with no body) is a parse error. The delimiter changed from `/…/` to `` `…` `` so that regex literals can sit unambiguously in function-argument position without colliding with division — `re.split `digit+` "abc 1 def"` parses cleanly.
 
 ## Atoms: string literals
 
 Unlike most regex flavors, the building block of a Pluma regex is a **string literal** — not a single character. Anything that would be a string in source code is also a valid regex atom.
 
 ```
-/"hello"/                       # matches the exact 6 characters
-/"color: " "red"/               # two atoms, concatenated
-/"\t\n"/                        # escapes work — matches tab+newline
-/"reid's "/                     # punctuation needs no escaping inside ""
+`"hello"`                       # matches the exact 6 characters
+`"color: " "red"`               # two atoms, concatenated
+`"\t\n"`                        # escapes work — matches tab+newline
+`"reid's "`                     # punctuation needs no escaping inside ""
 ```
 
 Because every literal is wrapped in quotes, regex metacharacters never need to be escaped at the regex level — escapes only apply to the *contents* of the string. There are no PCRE-style bracket character classes or `\d`-style shorthands; named atoms (next section) cover the common ones.
@@ -57,11 +57,11 @@ For matching "any character of some kind," Pluma uses **named atoms** instead of
 Each name is **one character wide** and composes with all the combinators below.
 
 ```
-/digit/                         # one digit anywhere in the input
-/letter+/                       # one or more letters
-/word{3,}/                      # three or more word characters
-/digit "-" digit/               # mixed with literal atoms
-/letter (digit | "-")*/         # mixed with alternation in a group
+`digit`                         # one digit anywhere in the input
+`letter+`                       # one or more letters
+`word{3,}`                      # three or more word characters
+`digit "-" digit`               # mixed with literal atoms
+`letter (digit | "-")*`         # mixed with alternation in a group
 ```
 
 Bare identifiers inside a regex that aren't on the table above are a compile error — there's no fallback to "treat the letters as a custom set" the way `[abc]` would in PCRE.
@@ -71,14 +71,14 @@ Bare identifiers inside a regex that aren't on the table above are a compile err
 Two atoms written one after another match in sequence. Whitespace between them is purely cosmetic — including line breaks. The following three definitions are identical:
 
 ```
-let a = /"hello" "world"/
+let a = `"hello" "world"`
 
-let b = /"hello"   "world"/
+let b = `"hello"   "world"`
 
-let c = /
+let c = `
     "hello"
     "world"
-/
+`
 ```
 
 This is the main reason to reach for Pluma's regex over a string-based pattern: complex regexes can be laid out vertically, one atom per line, and remain readable.
@@ -88,11 +88,11 @@ This is the main reason to reach for Pluma's regex over a string-based pattern: 
 `|` tries the left side first, then the right. At the top level it splits the whole pattern; inside a group it splits within the group.
 
 ```
-let yes-or-no = /"yes" | "no"/
+let yes-or-no = `"yes" | "no"`
 
-let primary-color = /"red" | "green" | "blue"/
+let primary-color = `"red" | "green" | "blue"`
 
-let labeled = /"color: " ("red" | "green" | "blue")/
+let labeled = `"color: " ("red" | "green" | "blue")`
 ```
 
 ## Grouping: `(…)`
@@ -100,8 +100,8 @@ let labeled = /"color: " ("red" | "green" | "blue")/
 Parentheses group sub-patterns so quantifiers and alternation apply to the whole group. Groups are **non-capturing** — they only affect parsing, not the output of a match.
 
 ```
-/("ab")+/                       # one-or-more of the sequence "ab"
-/"x" ("y" | "z")? "w"/          # optional alternation in the middle
+`("ab")+`                       # one-or-more of the sequence "ab"
+`"x" ("y" | "z")? "w"`          # optional alternation in the middle
 ```
 
 Empty groups (`()`) are a parse error.
@@ -111,15 +111,15 @@ Empty groups (`()`) are a parse error.
 To capture a sub-pattern by name, use the angle-bracket form:
 
 ```
-let timestamp = /
+let timestamp = `
     <year:  "2024" | "2025" | "2026">
     "-"
     <month: "01" | "02" | "03" | "04" | "05" | "06"
            | "07" | "08" | "09" | "10" | "11" | "12">
-/
+`
 ```
 
-Capture names must be identifiers. Captures are how you'll extract structure from a match once richer match APIs land — for now (see [the API](#the-regex-type-and-core-regex) below) only boolean matching is exposed, so captures parse and compile but aren't yet readable from user code.
+Capture names must be identifiers. Captured substrings are surfaced through the match record returned by `core.regex.find` / `find-all`, and via the `${name}` syntax in replacement strings — see [the API](#the-regex-type-and-core-regex) below.
 
 ## Quantifiers
 
@@ -138,13 +138,13 @@ Quantifiers apply to the atom or group immediately to their left.
 Examples:
 
 ```
-let two-to-four-a    = /"a"{2,4}/
-let at-least-one-b   = /"b"+/
-let optional-c       = /"c"?/
-let any-many-spaces  = /" "*/
-let exact-three      = /"!"{3}/
+let two-to-four-a    = `"a"{2,4}`
+let at-least-one-b   = `"b"+`
+let optional-c       = `"c"?`
+let any-many-spaces  = `" "*`
+let exact-three      = `"!"{3}`
 
-let opt-prefix = /("yes, " | "no, ")? "thanks"/   # optional alternation group
+let opt-prefix = `("yes, " | "no, ")? "thanks"`   # optional alternation group
 ```
 
 `{n,m}` with `n > m` is rejected at parse time.
@@ -160,13 +160,13 @@ Anchors are **zero-width** atoms — they don't consume any input, they assert a
 | `%` | A word boundary (the position between a `word` character and a non-`word` character, including the very start and end of the input) |
 
 ```
-/^ "hello"/                     # input must start with "hello"
-/".pa" $/                       # input must end with ".pa"
-/^ "yes" $/                     # input must be exactly "yes"
-/^ digit+ $/                    # input must be only digits
+`^ "hello"`                     # input must start with "hello"
+`".pa" $`                       # input must end with ".pa"
+`^ "yes" $`                     # input must be exactly "yes"
+`^ digit+ $`                    # input must be only digits
 
-/% "cat" %/                     # match "cat" as a whole word — not "category"
-/% digit/                       # any word that starts with a digit
+`% "cat" %`                     # match "cat" as a whole word — not "category"
+`% digit`                       # any word that starts with a digit
 ```
 
 A quantifier on an anchor (`^?`, `$*`, `%+`, etc.) is a parse error — repeating a position assertion doesn't make sense.
@@ -175,46 +175,80 @@ The `%` mnemonic: a line separating two dots, like a boundary between two words.
 
 ## The `regex` type and `core.regex`
 
-The literal `/…/` produces a value of the primitive type `regex`. Compilation happens once, at the regex's definition site — the value carries the compiled matcher.
+The literal `` `…` `` produces a value of the primitive type `regex`. Compilation happens once, at the regex's definition site — the value carries the compiled matcher.
 
-The standard library exposes a single operation today:
-
-```
-use core.regex
-
-regex.matches :: fun regex string -> bool
-```
-
-Worked example:
+The standard library:
 
 ```
 use core.regex
 
-def hello = /"hello"/
+regex.matches        :: fun regex string -> bool
+regex.find           :: fun regex string -> option regex.match
+regex.find-all       :: fun regex string -> list regex.match
+regex.named-capture  :: fun regex string string -> option string
+regex.replace        :: fun regex string string -> string
+regex.replace-first  :: fun regex string string -> string
+regex.split          :: fun regex string -> list string
+```
+
+Every match surfaces as a `regex.match` record:
+
+```
+alias regex.match {
+    text   :: string,                 # the matched substring
+    start  :: int,                    # byte offset, inclusive
+    end    :: int,                    # byte offset, exclusive
+    groups :: map string string,      # named captures that fired
+}
+```
+
+A named group that's in the pattern but didn't match in this instance — e.g. on the losing side of an alternation — is simply absent from `groups` rather than mapped to the empty string.
+
+Worked example — boolean matching:
+
+```
+use core.regex
+
+def hello = `"hello"`
 
 def main = fun {
     print (regex.matches hello "hello, world!")    # true
     print (regex.matches hello "goodbye, world!")  # false
-    print (regex.matches hello "hello")            # true
-    print (regex.matches hello "")                 # false
 }
 ```
 
-You can also bind the module to a shorter name:
+Worked example — extracting structure:
+
+```
+use core.regex as re
+use core.map
+
+def pair = `<key: letter+> "=" <val: digit+>`
+
+def main = fun {
+    when re.find pair "size=42 and more" is some m {
+        print m.text                              # size=42
+        when map.lookup m.groups "key" is some k { print k }  # size
+        when map.lookup m.groups "val" is some v { print v }  # 42
+    } is none {
+        print "no match"
+    }
+}
+```
+
+Replacement strings support `${name}` to interpolate a named capture; `$$` is a literal `$`. Splits discard the matched text:
 
 ```
 use core.regex as re
 
-def is-yes = /"yes"/
-
 def main = fun {
-    print (re.matches is-yes "yes!")               # true
-    print (re.matches is-yes "no thanks")          # false
+    print (re.replace `digit+` "n=42 m=7" "X")         # n=X m=X
+    print (re.split `whitespace+` "  one two\tthree")  # ["", "one", "two", "three"]
 }
 ```
 
 {% note() %}
-`regex.matches` tests whether the regex matches *anywhere* in the input — there's no implicit anchoring. Use the [anchors](#anchors) `^` and `$` to pin the match to the start or end of the string.
+`regex.matches` and `regex.find` look for the regex *anywhere* in the input — there's no implicit anchoring. Use the [anchors](#anchors) `^` and `$` to pin the match to the start or end of the string.
 {% end %}
 
 ## How it differs from PCRE

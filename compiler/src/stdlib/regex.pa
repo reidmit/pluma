@@ -1,5 +1,47 @@
-# Compiled regular expressions, written with `/.../` literals. The
-# `regex` type is a primitive; values can only be tested against
-# strings via `matches`.
+# Operations on compiled regular expressions. Regexes are written with
+# backtick literals (`` `...` ``) — see the language reference for the
+# pattern syntax. `start`/`end` offsets here are byte indices into the
+# searched string.
 
+# A single match. `text` is the matched substring; `start`/`end` are
+# byte offsets into the original input. `groups` maps the names of
+# capturing groups in the pattern (written `<name: ...>`) to the
+# substrings they captured. A named group that didn't fire — e.g.
+# because it was on the losing side of an alternation — is absent
+# from the map rather than mapped to the empty string.
+alias match {
+	text :: string,
+	start :: int,
+	end :: int,
+	groups :: map string string,
+}
+
+# True iff the regex matches anywhere in the input.
 def matches :: fun regex string -> bool = built-in "regex-matches"
+
+# First match, scanning left to right. `none` if the regex doesn't
+# match anywhere.
+def find :: fun regex string -> option match = built-in "regex-find"
+
+# Every non-overlapping match, left to right. Empty list if the regex
+# doesn't match.
+def find-all :: fun regex string -> list match = built-in "regex-find-all"
+
+# Convenience: look up a named capture from the first match. `none` if
+# the regex didn't match or has no capture by that name. Equivalent to
+# `find re s |> opt.map .groups |> opt.then (fun g { map.lookup g name })`
+# but skips building the intermediate match record.
+def named-capture :: fun regex string string -> option string = built-in "regex-named-capture"
+
+# Replace every match with `replacement`. Inside `replacement`,
+# `${name}` interpolates the matching named group; `$$` is a literal
+# `$`. Unrecognized `$` references are dropped.
+def replace :: fun regex string string -> string = built-in "regex-replace"
+
+# Replace only the first match. Same replacement syntax as `replace`.
+def replace-first :: fun regex string string -> string = built-in "regex-replace-first"
+
+# Split the input at every match. The matched text is discarded.
+# Adjacent matches (or a match at the start/end) produce empty-string
+# entries, mirroring `string.split`.
+def split :: fun regex string -> list string = built-in "regex-split"

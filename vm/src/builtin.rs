@@ -63,6 +63,76 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				_ => unreachable!("`matches` expects (regex, string)"),
 			}
 		}
+		"regex-find" => {
+			debug_assert_eq!(args.len(), 2, "`find` arity");
+			match (&args[0], &args[1]) {
+				(Value::Regex(re), Value::String(s)) => match re.compiled.captures(s) {
+					Some(caps) => Ok(option_value(Some(regex_match_record(&re.compiled, &caps)))),
+					None => Ok(option_value(None)),
+				},
+				_ => unreachable!("`find` expects (regex, string)"),
+			}
+		}
+		"regex-find-all" => {
+			debug_assert_eq!(args.len(), 2, "`find-all` arity");
+			match (&args[0], &args[1]) {
+				(Value::Regex(re), Value::String(s)) => {
+					let xs: Vec<Value> = re
+						.compiled
+						.captures_iter(s)
+						.map(|caps| regex_match_record(&re.compiled, &caps))
+						.collect();
+					Ok(Value::List(Rc::new(xs)))
+				}
+				_ => unreachable!("`find-all` expects (regex, string)"),
+			}
+		}
+		"regex-named-capture" => {
+			debug_assert_eq!(args.len(), 3, "`named-capture` arity");
+			match (&args[0], &args[1], &args[2]) {
+				(Value::Regex(re), Value::String(s), Value::String(name)) => {
+					let payload = re
+						.compiled
+						.captures(s)
+						.and_then(|c| c.name(name).map(|m| m.as_str().to_string()))
+						.map(|s| Value::String(Rc::new(s)));
+					Ok(option_value(payload))
+				}
+				_ => unreachable!("`named-capture` expects (regex, string, string)"),
+			}
+		}
+		"regex-replace" => {
+			debug_assert_eq!(args.len(), 3, "`replace` arity");
+			match (&args[0], &args[1], &args[2]) {
+				(Value::Regex(re), Value::String(s), Value::String(rep)) => Ok(Value::String(
+					Rc::new(re.compiled.replace_all(s, rep.as_str()).into_owned()),
+				)),
+				_ => unreachable!("`replace` expects (regex, string, string)"),
+			}
+		}
+		"regex-replace-first" => {
+			debug_assert_eq!(args.len(), 3, "`replace-first` arity");
+			match (&args[0], &args[1], &args[2]) {
+				(Value::Regex(re), Value::String(s), Value::String(rep)) => Ok(Value::String(
+					Rc::new(re.compiled.replace(s, rep.as_str()).into_owned()),
+				)),
+				_ => unreachable!("`replace-first` expects (regex, string, string)"),
+			}
+		}
+		"regex-split" => {
+			debug_assert_eq!(args.len(), 2, "`split` arity");
+			match (&args[0], &args[1]) {
+				(Value::Regex(re), Value::String(s)) => {
+					let xs: Vec<Value> = re
+						.compiled
+						.split(s)
+						.map(|piece| Value::String(Rc::new(piece.to_string())))
+						.collect();
+					Ok(Value::List(Rc::new(xs)))
+				}
+				_ => unreachable!("`split` expects (regex, string)"),
+			}
+		}
 		"int-add" => match (&args[0], &args[1]) {
 			(Value::Int(a), Value::Int(b)) => Ok(Value::Int(a.wrapping_add(*b))),
 			_ => unreachable!("`int-add` expects (int, int)"),
@@ -1306,6 +1376,34 @@ fn expect_float(args: &[Value], name: &str) -> f64 {
 		Value::Float(n) => *n,
 		_ => unreachable!("`{}`: expected float", name),
 	}
+}
+
+// Build a `core.regex.match` record from a single Captures. The full
+// match goes into `text`/`start`/`end`; every named group that fired
+// is added to `groups`. Groups that exist in the pattern but didn't
+// match (e.g. losing side of an alternation) are simply absent.
+fn regex_match_record(re: &regex::Regex, caps: &regex::Captures) -> Value {
+	let m = caps.get(0).expect("captures always have group 0");
+	let mut groups = MapData::new();
+	for name in re.capture_names().flatten() {
+		if let Some(g) = caps.name(name) {
+			let h = hash_string(name);
+			groups = groups.inserted(
+				h,
+				Value::String(Rc::new(name.to_string())),
+				Value::String(Rc::new(g.as_str().to_string())),
+			);
+		}
+	}
+	let mut fields = HashMap::with_capacity(4);
+	fields.insert(
+		"text".to_string(),
+		Value::String(Rc::new(m.as_str().to_string())),
+	);
+	fields.insert("start".to_string(), Value::Int(m.start() as i64));
+	fields.insert("end".to_string(), Value::Int(m.end() as i64));
+	fields.insert("groups".to_string(), Value::Map(Rc::new(groups)));
+	Value::Record(Rc::new(fields))
 }
 
 // Hash a string using the same hasher as the `string-hash` builtin —

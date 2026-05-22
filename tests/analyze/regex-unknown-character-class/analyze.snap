@@ -3,6 +3,6 @@ source: tests/analyze.rs
 expression: output
 ---
 error: Unknown character class `bogus` in regular expression. Known classes: `any`, `digit`, `letter`, `whitespace`, `word`.
-> 1 | def bad = /digit | bogus | letter/
+> 1 | def bad = `digit | bogus | letter`
                          ^^^^^
 

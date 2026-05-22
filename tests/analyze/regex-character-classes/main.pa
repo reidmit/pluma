@@ -1,5 +1,5 @@
-def digits = /digit+/
+def digits = `digit+`
 
-def mixed = /letter (digit | "-")* word/
+def mixed = `letter (digit | "-")* word`
 
-def maybe-space = /whitespace?/
+def maybe-space = `whitespace?`

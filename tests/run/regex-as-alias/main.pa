@@ -1,6 +1,6 @@
 use core.regex as re
 
-def is-yes = /"yes"/
+def is-yes = `"yes"`
 
 def main = fun {
 	print (re.matches is-yes "yes!")

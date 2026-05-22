@@ -572,7 +572,7 @@ impl<'a> Formatter<'a> {
 	}
 
 	fn format_regex_literal(&self, r: &RegexNode) -> Doc {
-		concat(vec![text("/"), self.format_regex(r), text("/")])
+		concat(vec![text("`"), self.format_regex(r), text("`")])
 	}
 
 	fn format_regex(&self, r: &RegexNode) -> Doc {

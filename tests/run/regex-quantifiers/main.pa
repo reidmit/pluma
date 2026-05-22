@@ -1,10 +1,10 @@
 use core.regex
 
-def two-to-four-a = /"a"{2,4}/
+def two-to-four-a = `"a"{2,4}`
 
-def at-least-one-b = /"b"+/
+def at-least-one-b = `"b"+`
 
-def optional-c = /"c"?/
+def optional-c = `"c"?`
 
 def main = fun {
 	print (regex.matches two-to-four-a "a")

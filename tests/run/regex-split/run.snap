@@ -1,0 +1,13 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+[, alpha, beta, gamma, delta, ]
+[, a, b, ]
+[no commas here]
+[abc ,  def ,  ghi]
+== stderr ==
+

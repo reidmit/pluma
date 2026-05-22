@@ -365,7 +365,7 @@ impl Token {
 		match self {
 			Identifier(..) | KeywordBuiltin(..) | KeywordFun(..) | KeywordIf(..) | KeywordWhen(..)
 			| DecimalDigits(..) | HexDigits(..) | BinaryDigits(..) | OctalDigits(..) | LeftParen(..)
-			| LeftBracket(..) | LeftBrace(..) | ForwardSlash(..) | StringLiteral(..)
+			| LeftBracket(..) | LeftBrace(..) | Backtick(..) | StringLiteral(..)
 			| BytesLiteral(..) | BoolTrue(..) | BoolFalse(..) | UnaryMinus(..) => true,
 			_ => false,
 		}

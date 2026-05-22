@@ -3,14 +3,14 @@ source: tests/analyze.rs
 expression: output
 ---
 error: A quantifier cannot be applied to an anchor (`^`, `$`, or `%`).
-> 1 | def bad-start = /^+ "x"/
+> 1 | def bad-start = `^+ "x"`
                         ^
 
 error: A quantifier cannot be applied to an anchor (`^`, `$`, or `%`).
-> 3 | def bad-end = /"x" $?/
+> 3 | def bad-end = `"x" $?`
                           ^
 
 error: A quantifier cannot be applied to an anchor (`^`, `$`, or `%`).
-> 5 | def bad-boundary = /% * "y"/
+> 5 | def bad-boundary = `% * "y"`
                             ^
 

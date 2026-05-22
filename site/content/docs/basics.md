@@ -27,7 +27,7 @@ Any expression can appear inside `$(…)`. The result is converted to text via t
 ## Regex literals
 
 ```
-let some-regex = / "a" ("b" | "c") "d" /
+let some-regex = ` "a" ("b" | "c") "d" `
 ```
 
 See [Regexes](@/docs/regexes.md) for the full syntax.

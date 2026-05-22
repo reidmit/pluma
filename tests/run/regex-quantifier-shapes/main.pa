@@ -1,16 +1,16 @@
 use core.regex
 
 # `{n}` — exactly n
-def three-a = /"a"{3}/
+def three-a = `"a"{3}`
 
 # `{n,}` — at least n (note the trailing comma)
-def at-least-two-a = /"a"{2,}/
+def at-least-two-a = `"a"{2,}`
 
 # `{,n}` — at most n
-def up-to-three-a = /"a"{,3}/
+def up-to-three-a = `"a"{,3}`
 
 # `*` — zero or more
-def any-a = /"a"*/
+def any-a = `"a"*`
 
 def main = fun {
 	# Exact: only "aaa" matches when there's nothing else around it.
