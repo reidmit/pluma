@@ -11,6 +11,11 @@ pub struct DefinitionNode {
 	// in the def's generalized scheme. Set during the forwarded-dispatch
 	// resolution pass.
 	pub dict_param_count: u16,
+	// Top-level type annotation: `def name :: TYPE = expr`. Only
+	// populated on value defs (`DefinitionKind::Expr`). The annotation
+	// is the contract — analysis emits a constraint unifying the body's
+	// inferred type with the annotated type.
+	pub type_annotation: Option<TypeExprNode>,
 }
 
 pub enum DefinitionKind {

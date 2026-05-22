@@ -27,6 +27,7 @@ pub enum ParseErrorKind {
 	UnclosedString,
 	InvalidBytesEscape,
 	InvalidHexEscape,
+	BuiltinExpectsPlainString,
 	UnexpectedEOF { expected: Token },
 	UnexpectedToken { actual: Token, expected: Token },
 	UnexpectedTopLevelToken { actual: Token },
@@ -71,6 +72,10 @@ impl fmt::Display for ParseError {
 			InvalidHexEscape => write!(
 				f,
 				"Invalid \\x escape in bytes literal: expected two hex digits."
+			),
+			BuiltinExpectsPlainString => write!(
+				f,
+				"`built-in` requires a plain string literal naming the builtin tag."
 			),
 			UnexpectedEOF { expected } => write!(f, "Unexpected end of file. Expected {}.", expected),
 			UnexpectedToken { actual, expected } => {

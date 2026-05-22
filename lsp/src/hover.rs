@@ -97,7 +97,11 @@ fn walk_expr(expr: &ExprNode, hits: &mut Vec<HoverHit>) {
 	record(hits, expr.range, expr.ty.clone());
 
 	match &expr.kind {
-		ExprKind::Identifier(_) | ExprKind::Literal(_) | ExprKind::Regex(_) | ExprKind::EmptyTuple => {}
+		ExprKind::Identifier(_)
+		| ExprKind::Literal(_)
+		| ExprKind::Regex(_)
+		| ExprKind::EmptyTuple
+		| ExprKind::Builtin(_) => {}
 		ExprKind::BinaryOperation { left, right, .. } => {
 			walk_expr(left, hits);
 			walk_expr(right, hits);

@@ -287,6 +287,7 @@ fn collect_dispatch_cells(expr: &ExprNode, cells: &mut Vec<DispatchCell>) {
 		| ExprKind::Literal(_)
 		| ExprKind::Regex(_)
 		| ExprKind::EmptyTuple
+		| ExprKind::Builtin(_)
 		| ExprKind::NamespaceAccess(_) => {}
 	}
 }
@@ -913,6 +914,7 @@ impl<'compiler> Analyzer<'compiler> {
 							kind: DefinitionKind::Expr(default_expr.clone()),
 							ty: Type::Unknown,
 							dict_param_count: 0,
+							type_annotation: None,
 						});
 					}
 				}
@@ -1235,9 +1237,39 @@ impl<'compiler> Analyzer<'compiler> {
 		let mut type_def_index = 0;
 
 		for definition in &mut module.body {
+			// Top-level type annotation, if any. Resolved before constraining
+			// the body so the annotation contributes to the constraint set
+			// alongside the body's inferred type. The Gen step generalizes
+			// over the free type vars introduced by the annotation.
+			let annotated_ty = match &definition.type_annotation {
+				Some(annotation) => Some(self.resolve_annotation(annotation, &mut constraints)),
+				None => None,
+			};
+
 			match &mut definition.kind {
 				DefinitionKind::Expr(expr) => {
-					self.constrain_expr(expr, &mut constraints);
+					// `built-in "tag"` as the immediate def RHS: the
+					// annotation is the contract; skip the general
+					// constrain_expr path so we don't emit a
+					// `BuiltinMustBeTopLevelRhs` diagnostic for this
+					// legitimate use.
+					if matches!(expr.kind, ExprKind::Builtin(_)) {
+						match &annotated_ty {
+							Some(ty) => {
+								expr.ty = ty.clone();
+							}
+							None => {
+								self.error(expr.range, BuiltinRequiresAnnotation);
+								expr.ty = self.new_type_var();
+							}
+						}
+					} else {
+						self.constrain_expr(expr, &mut constraints);
+
+						if let Some(annotated_ty) = annotated_ty {
+							constraints.push(eq_constraint(expr.ty.clone(), annotated_ty));
+						}
+					}
 
 					let scheme = schemes.get(scheme_index).unwrap().clone();
 					constraints.push(Constraint::Gen(scheme, expr.ty.clone()));
@@ -1486,6 +1518,94 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 		}
 		args
+	}
+
+	// Walk a type expression and collect identifiers that aren't already
+	// bound in the type scope and aren't builtin type names — those are
+	// the free type-variable names in a polymorphic annotation like
+	// `fun (list a) -> a`. Order is preserved; duplicates are skipped.
+	fn collect_free_type_idents(&self, type_expr: &TypeExprNode, out: &mut Vec<String>) {
+		match &type_expr.kind {
+			TypeExprKind::EmptyTuple => {}
+			TypeExprKind::Grouping(inner) => self.collect_free_type_idents(inner, out),
+			TypeExprKind::Tuple(entries) => {
+				for e in entries {
+					self.collect_free_type_idents(e, out);
+				}
+			}
+			TypeExprKind::Record(fields) => {
+				for (_, f) in fields {
+					self.collect_free_type_idents(f, out);
+				}
+			}
+			TypeExprKind::Func(params, ret) => {
+				for p in params {
+					self.collect_free_type_idents(p, out);
+				}
+				self.collect_free_type_idents(ret, out);
+			}
+			TypeExprKind::Single(type_ident) => {
+				let is_builtin = matches!(
+					type_ident.name.as_str(),
+					"string"
+						| "bytes" | "int" | "float"
+						| "bool" | "regex" | "nothing"
+						| "list" | "map" | "ref"
+				);
+				if type_ident.module.is_none()
+					&& !is_builtin
+					&& !self.type_scope.contains_key(&type_ident.name)
+					&& !out.contains(&type_ident.name)
+				{
+					out.push(type_ident.name.clone());
+				}
+				for g in &type_ident.generics {
+					self.collect_free_type_idents(g, out);
+				}
+			}
+		}
+	}
+
+	// Resolve a type annotation in a way that lets unbound identifiers act
+	// as polymorphic type variables. Mints a fresh type var per free name,
+	// inserts it into the type scope, resolves the annotation, then restores
+	// the previous bindings. Returns the resolved type.
+	fn resolve_annotation(
+		&mut self,
+		type_expr: &TypeExprNode,
+		constraints: &mut Vec<Constraint>,
+	) -> Type {
+		let mut free_names = Vec::new();
+		self.collect_free_type_idents(type_expr, &mut free_names);
+
+		let mut saved: Vec<(String, Option<TypeBinding>)> = Vec::with_capacity(free_names.len());
+		for name in &free_names {
+			let var = self.new_type_var();
+			let prev = self.type_scope.insert(
+				name.clone(),
+				TypeBinding {
+					ty: var,
+					ref_count: 0,
+					_range: type_expr.range,
+				},
+			);
+			saved.push((name.clone(), prev));
+		}
+
+		let ty = self.type_expr_to_type(type_expr, constraints);
+
+		for (name, prev) in saved {
+			match prev {
+				Some(prev) => {
+					self.type_scope.insert(name, prev);
+				}
+				None => {
+					self.type_scope.remove(&name);
+				}
+			}
+		}
+
+		ty
 	}
 
 	fn type_expr_to_type(
@@ -2441,6 +2561,16 @@ impl<'compiler> Analyzer<'compiler> {
 				// constrain only ever produces NamespaceAccess from a
 				// FieldAccess receiver — it should never see one as input.
 				unreachable!("NamespaceAccess fed back into constrain_expr");
+			}
+
+			ExprKind::Builtin(_) => {
+				// `built-in` is only legal as the immediate RHS of a
+				// type-annotated top-level def, which is handled
+				// up in the value-def loop above. Anywhere else is a
+				// misuse — diagnose and give it a fresh tyvar so the
+				// rest of unification can proceed.
+				self.error(expr.range, BuiltinMustBeTopLevelRhs);
+				expr.ty = self.new_type_var();
 			}
 		}
 	}
@@ -3697,6 +3827,7 @@ impl<'compiler> Analyzer<'compiler> {
 			| ExprKind::Literal(_)
 			| ExprKind::Regex(_)
 			| ExprKind::EmptyTuple
+			| ExprKind::Builtin(_)
 			| ExprKind::NamespaceAccess(_) => {}
 		}
 	}
@@ -3796,6 +3927,7 @@ impl<'compiler> Analyzer<'compiler> {
 			| ExprKind::Literal(_)
 			| ExprKind::Regex(_)
 			| ExprKind::EmptyTuple
+			| ExprKind::Builtin(_)
 			| ExprKind::NamespaceAccess(_) => {}
 		}
 	}
@@ -4153,6 +4285,11 @@ impl<'compiler> Analyzer<'compiler> {
 				for e in rest.iter_mut() {
 					self.annotate_expr(e, subst);
 				}
+			}
+
+			ExprKind::Builtin(_) => {
+				// Type was set directly from the surrounding def's
+				// annotation; nothing to fill in.
 			}
 		}
 	}

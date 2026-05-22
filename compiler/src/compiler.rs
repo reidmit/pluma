@@ -2,6 +2,7 @@ use crate::analyzer::*;
 use crate::diagnostic::*;
 use crate::errors::*;
 use crate::module::*;
+use crate::stdlib::lookup_stdlib_source;
 use crate::*;
 use std::collections::{HashMap, HashSet};
 use std::env;
@@ -122,11 +123,20 @@ impl Compiler {
 			return;
 		}
 
-		// Native stdlib modules: pull pre-registered exports into the cache
-		// and skip parse/analyze entirely.
-		if let Some(exports) = self.native_modules.get(module_name).cloned() {
-			self.exports_cache.insert(module_name.to_string(), exports);
-			return;
+		// Baked-in stdlib `.pa` source: parse + analyze like a user module
+		// but pull bytes from the in-memory registry. Takes precedence over
+		// any same-named pre-registered native module — once a stdlib
+		// module is expressed in Pluma, the Rust side stops shipping its
+		// type table.
+		let stdlib_source = lookup_stdlib_source(module_name);
+
+		if stdlib_source.is_none() {
+			// Native stdlib modules: pull pre-registered exports into the cache
+			// and skip parse/analyze entirely.
+			if let Some(exports) = self.native_modules.get(module_name).cloned() {
+				self.exports_cache.insert(module_name.to_string(), exports);
+				return;
+			}
 		}
 
 		if !visiting.insert(module_name.to_string()) {
@@ -139,10 +149,19 @@ impl Compiler {
 
 		// Parse if not already.
 		if !self.modules.contains_key(module_name) {
-			let path = to_module_path(&self.root_dir, module_name);
-			let mut module = Module::new(module_name.to_string(), path);
-			module.parse(&mut self.diagnostics);
-			self.modules.insert(module_name.to_string(), module);
+			if let Some(source) = stdlib_source {
+				let mut module = Module::new(
+					module_name.to_string(),
+					PathBuf::from(format!("<stdlib:{}>", module_name)),
+				);
+				module.parse_from_bytes(source.as_bytes().to_vec(), &mut self.diagnostics);
+				self.modules.insert(module_name.to_string(), module);
+			} else {
+				let path = to_module_path(&self.root_dir, module_name);
+				let mut module = Module::new(module_name.to_string(), path);
+				module.parse(&mut self.diagnostics);
+				self.modules.insert(module_name.to_string(), module);
+			}
 		}
 
 		// Collect (fully-qualified-name, local-namespace-name, alias-range) for
@@ -198,20 +217,27 @@ impl Compiler {
 		}
 
 		// Auto-imported modules: bound under a bare name in every user
-		// module without an explicit `use`. Currently just `core.ref` →
-		// `ref` so mutable cells are reachable without ceremony. User
-		// code can shadow by binding `ref` to something else via `use`.
-		for (full_name, local_name) in AUTO_IMPORTS {
-			if imports_map.contains_key(*local_name) {
-				continue;
-			}
-			if let Some(exports) = self.native_modules.get(*full_name).cloned() {
-				self
-					.exports_cache
-					.entry(full_name.to_string())
-					.or_insert_with(|| exports.clone());
-				imports_map.insert(local_name.to_string(), exports);
-				import_qualified.insert(local_name.to_string(), full_name.to_string());
+		// module without an explicit `use`. Currently `core.ref` →
+		// `ref`, `core.option` → `option`, `core.result` → `result`.
+		// User code can shadow by binding the local name to something
+		// else via `use`. Exports come from either a baked `.pa` source
+		// (loaded via `load_module` into `exports_cache`) or from a
+		// pre-registered native module. Auto-imports don't apply when
+		// loading an auto-imported module itself — they'd otherwise
+		// form a cycle among themselves (loading `core.option` would
+		// recurse into loading `core.ref` etc. while `core.option` is
+		// still on the visiting stack).
+		let is_auto_imported_module = AUTO_IMPORTS.iter().any(|(n, _)| *n == module_name);
+		if !is_auto_imported_module {
+			for (full_name, local_name) in AUTO_IMPORTS {
+				if imports_map.contains_key(*local_name) {
+					continue;
+				}
+				self.load_module(full_name, visiting);
+				if let Some(exports) = self.exports_cache.get(*full_name).cloned() {
+					imports_map.insert(local_name.to_string(), exports);
+					import_qualified.insert(local_name.to_string(), full_name.to_string());
+				}
 			}
 		}
 

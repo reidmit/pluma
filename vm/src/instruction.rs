@@ -10,8 +10,6 @@
 //   record field names, etc.)
 // - Jumps are absolute instruction offsets within the current function.
 
-use crate::builtin::Builtin;
-
 pub type SlotIdx = u16;
 pub type CaptureIdx = u16;
 pub type ConstIdx = u32;
@@ -178,8 +176,4 @@ pub enum Instruction {
 	LogicalAnd,
 	LogicalOr,
 	LogicalNot,
-
-	// Builtin invocation. The builtin's handler reads `arity` operands off
-	// the stack.
-	CallBuiltin(Builtin, u16),
 }

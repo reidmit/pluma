@@ -7,6 +7,7 @@ mod errors;
 mod location;
 mod module;
 mod parser;
+mod stdlib;
 mod tokenizer;
 mod tokens;
 pub mod types;

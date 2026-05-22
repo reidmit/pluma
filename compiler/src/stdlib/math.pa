@@ -1,0 +1,52 @@
+# Numeric primitives. Trig and log functions take floats; `to-int`
+# truncates toward zero.
+
+# `pi` and `e` are hard-coded as float literals that parse exactly
+# to the corresponding `std::f64::consts` values — see math.rs in
+# the standard library reference.
+def pi :: float = 3.141592653589793
+def e  :: float = 2.718281828459045
+
+# Promote an `int` to `float`. Loses no precision for magnitudes
+# under 2^53.
+def to-float :: fun int -> float = built-in "math-to-float"
+
+# Truncate a `float` to `int`. Round toward zero; equivalent to
+# `floor` for positive numbers and `ceil` for negative.
+def to-int :: fun float -> int = built-in "math-to-int"
+
+# Square root. NaN for negatives.
+def sqrt :: fun float -> float = built-in "math-sqrt"
+
+# Absolute value of an int.
+def abs :: fun int -> int = built-in "math-abs"
+
+# Largest int less than or equal to the argument.
+def floor :: fun float -> int = built-in "math-floor"
+
+# Smallest int greater than or equal to the argument.
+def ceil :: fun float -> int = built-in "math-ceil"
+
+# Round to the nearest int, half-away-from-zero.
+def round :: fun float -> int = built-in "math-round"
+
+# Natural logarithm (base e).
+def log :: fun float -> float = built-in "math-log"
+
+# Logarithm base 10.
+def log10 :: fun float -> float = built-in "math-log10"
+
+# Logarithm base 2.
+def log2 :: fun float -> float = built-in "math-log2"
+
+# e raised to the argument.
+def exp :: fun float -> float = built-in "math-exp"
+
+# Sine (argument in radians).
+def sin :: fun float -> float = built-in "math-sin"
+
+# Cosine (argument in radians).
+def cos :: fun float -> float = built-in "math-cos"
+
+# Tangent (argument in radians).
+def tan :: fun float -> float = built-in "math-tan"

@@ -14,18 +14,18 @@ use compiler::Range;
 use std::collections::HashMap;
 use std::rc::Rc;
 use vm::{
-	native_modules, Builtin, Function, GlobalIdx, Instruction, Program, RegexData, SlotIdx, Value,
+	native_modules, Function, GlobalIdx, Instruction, Program, RegexData, SlotIdx, Value,
 };
 
 pub fn compile(compiler: &compiler::Compiler) -> Result<Program, String> {
 	let mut cg = CodeGen::new();
 
 	// Prelude: `print` and `to-string` as globals 0 and 1, pre-evaluated.
-	cg.add_evaluated_global("__prelude__", "print", Value::Builtin(Builtin::Print));
+	cg.add_evaluated_global("__prelude__", "print", Value::Builtin(Rc::from("print")));
 	cg.add_evaluated_global(
 		"__prelude__",
 		"to-string",
-		Value::Builtin(Builtin::ToString),
+		Value::Builtin(Rc::from("to-string")),
 	);
 
 	// Prelude trait instance dictionaries. Each instance is a positional
@@ -36,70 +36,70 @@ pub fn compile(compiler: &compiler::Compiler) -> Result<Program, String> {
 		"__prelude__",
 		"numeric@int",
 		Value::Dict(Rc::new(vec![
-			Value::Builtin(Builtin::IntAdd),
-			Value::Builtin(Builtin::IntSub),
-			Value::Builtin(Builtin::IntMul),
-			Value::Builtin(Builtin::IntDiv),
-			Value::Builtin(Builtin::IntNegate),
+			Value::Builtin(Rc::from("int-add")),
+			Value::Builtin(Rc::from("int-sub")),
+			Value::Builtin(Rc::from("int-mul")),
+			Value::Builtin(Rc::from("int-div")),
+			Value::Builtin(Rc::from("int-negate")),
 		])),
 	);
 	cg.add_evaluated_global(
 		"__prelude__",
 		"numeric@float",
 		Value::Dict(Rc::new(vec![
-			Value::Builtin(Builtin::FloatAdd),
-			Value::Builtin(Builtin::FloatSub),
-			Value::Builtin(Builtin::FloatMul),
-			Value::Builtin(Builtin::FloatDiv),
-			Value::Builtin(Builtin::FloatNegate),
+			Value::Builtin(Rc::from("float-add")),
+			Value::Builtin(Rc::from("float-sub")),
+			Value::Builtin(Rc::from("float-mul")),
+			Value::Builtin(Rc::from("float-div")),
+			Value::Builtin(Rc::from("float-negate")),
 		])),
 	);
 	// `ord` trait: one method (`compare`), three concrete instances.
 	cg.add_evaluated_global(
 		"__prelude__",
 		"ord@int",
-		Value::Dict(Rc::new(vec![Value::Builtin(Builtin::IntCompare)])),
+		Value::Dict(Rc::new(vec![Value::Builtin(Rc::from("int-compare"))])),
 	);
 	cg.add_evaluated_global(
 		"__prelude__",
 		"ord@float",
-		Value::Dict(Rc::new(vec![Value::Builtin(Builtin::FloatCompare)])),
+		Value::Dict(Rc::new(vec![Value::Builtin(Rc::from("float-compare"))])),
 	);
 	cg.add_evaluated_global(
 		"__prelude__",
 		"ord@string",
-		Value::Dict(Rc::new(vec![Value::Builtin(Builtin::StringCompare)])),
+		Value::Dict(Rc::new(vec![Value::Builtin(Rc::from("string-compare"))])),
 	);
 	cg.add_evaluated_global(
 		"__prelude__",
 		"ord@bytes",
-		Value::Dict(Rc::new(vec![Value::Builtin(Builtin::BytesCompare)])),
+		Value::Dict(Rc::new(vec![Value::Builtin(Rc::from("bytes-compare"))])),
 	);
 	// `hash` trait: one method (`hash`), four concrete instances.
 	cg.add_evaluated_global(
 		"__prelude__",
 		"hash@int",
-		Value::Dict(Rc::new(vec![Value::Builtin(Builtin::IntHash)])),
+		Value::Dict(Rc::new(vec![Value::Builtin(Rc::from("int-hash"))])),
 	);
 	cg.add_evaluated_global(
 		"__prelude__",
 		"hash@float",
-		Value::Dict(Rc::new(vec![Value::Builtin(Builtin::FloatHash)])),
+		Value::Dict(Rc::new(vec![Value::Builtin(Rc::from("float-hash"))])),
 	);
 	cg.add_evaluated_global(
 		"__prelude__",
 		"hash@string",
-		Value::Dict(Rc::new(vec![Value::Builtin(Builtin::StringHash)])),
+		Value::Dict(Rc::new(vec![Value::Builtin(Rc::from("string-hash"))])),
 	);
 	cg.add_evaluated_global(
 		"__prelude__",
 		"hash@bytes",
-		Value::Dict(Rc::new(vec![Value::Builtin(Builtin::BytesHash)])),
+		Value::Dict(Rc::new(vec![Value::Builtin(Rc::from("bytes-hash"))])),
 	);
 	cg.add_evaluated_global(
 		"__prelude__",
 		"hash@bool",
-		Value::Dict(Rc::new(vec![Value::Builtin(Builtin::BoolHash)])),
+		Value::Dict(Rc::new(vec![Value::Builtin(Rc::from("bool-hash"))])),
 	);
 
 	// Prelude enums (`option`, `result`, `ordering`) are declared in
@@ -111,7 +111,11 @@ pub fn compile(compiler: &compiler::Compiler) -> Result<Program, String> {
 	// constant's is its concrete Value.
 	for module in native_modules() {
 		for def in &module.defs {
-			cg.add_evaluated_global(module.name, def.name, Value::Builtin(def.builtin));
+			cg.add_evaluated_global(
+				module.name,
+				def.name,
+				Value::Builtin(Rc::from(def.builtin_tag)),
+			);
 		}
 		for c in module.constants {
 			cg.add_evaluated_global(module.name, c.name, c.value);
@@ -305,6 +309,18 @@ impl CodeGen {
 					let global_idx = self
 						.lookup_global(module_name, &def.name.name)
 						.expect("global slot reserved in pass 1");
+					// `built-in "tag"` as the RHS: stash the tag and drop a
+					// `Value::Builtin` straight into the global slot — no
+					// thunk, no function. Validity isn't checked here;
+					// `built-in` is internal to the stdlib and builtin.rs's
+					// fallthrough arm produces a runtime error if a tag
+					// has no matching handler.
+					if let ExprKind::Builtin(tag) = &expr.kind {
+						self.program.globals[global_idx as usize] = vm::program::GlobalSlot::Evaluated(
+							Value::Builtin(Rc::from(tag.as_str())),
+						);
+						continue;
+					}
 					let fn_idx = if def.dict_param_count > 0 {
 						// Constrained def: emit a thunk whose body is a Fun
 						// with K extra leading dict params at slots 0..K-1.
@@ -1410,6 +1426,15 @@ fn emit_expr_with_parents(
 			} else {
 				emit_namespace_access(cg, current_module, imports, fb, path, range)?;
 			}
+		}
+		ExprKind::Builtin(_) => {
+			// `built-in` only appears at the immediate RHS of a top-level
+			// def, which `compile_module` special-cases (storing the
+			// builtin into the global slot directly). Reaching here means
+			// the analyzer let one through somewhere it shouldn't have.
+			return Err(
+				"codegen: `built-in` may only appear as the immediate RHS of a top-level def".into(),
+			);
 		}
 	}
 	Ok(())

@@ -1,0 +1,5 @@
+# Compiled regular expressions, written with `/.../` literals. The
+# `regex` type is a primitive; values can only be tested against
+# strings via `matches`.
+
+def matches :: fun regex string -> bool = built-in "regex-matches"

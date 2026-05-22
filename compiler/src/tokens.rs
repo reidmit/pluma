@@ -109,6 +109,11 @@ pub enum Token {
 	/// `as` keyword (import alias)
 	KeywordAs(usize, usize),
 
+	/// `built-in` keyword. Marker for the RHS of a top-level def whose
+	/// implementation lives in Rust; the string literal that follows
+	/// names the entry in the tag table (`built-in "list-length"`).
+	KeywordBuiltin(usize, usize),
+
 	/// `def` keyword
 	KeywordDef(usize, usize),
 
@@ -298,6 +303,7 @@ impl Token {
 			| InterpolationStart(start, end)
 			| KeywordAlias(start, end)
 			| KeywordAs(start, end)
+			| KeywordBuiltin(start, end)
 			| KeywordDef(start, end)
 			| KeywordElse(start, end)
 			| KeywordEnum(start, end)
@@ -348,10 +354,10 @@ impl Token {
 		use Token::*;
 
 		match self {
-			Identifier(..) | KeywordFun(..) | KeywordIf(..) | KeywordWhen(..) | DecimalDigits(..)
-			| HexDigits(..) | BinaryDigits(..) | OctalDigits(..) | LeftParen(..) | LeftBracket(..)
-			| LeftBrace(..) | ForwardSlash(..) | StringLiteral(..) | BytesLiteral(..) | BoolTrue(..)
-			| BoolFalse(..) | UnaryMinus(..) => true,
+			Identifier(..) | KeywordBuiltin(..) | KeywordFun(..) | KeywordIf(..) | KeywordWhen(..)
+			| DecimalDigits(..) | HexDigits(..) | BinaryDigits(..) | OctalDigits(..) | LeftParen(..)
+			| LeftBracket(..) | LeftBrace(..) | ForwardSlash(..) | StringLiteral(..)
+			| BytesLiteral(..) | BoolTrue(..) | BoolFalse(..) | UnaryMinus(..) => true,
 			_ => false,
 		}
 	}
@@ -396,6 +402,7 @@ impl fmt::Display for Token {
 			&InterpolationStart(..) => "a '$('",
 			&KeywordAlias(..) => "keyword `alias`",
 			&KeywordAs(..) => "keyword `as`",
+			&KeywordBuiltin(..) => "keyword `built-in`",
 			&KeywordDef(..) => "keyword `def`",
 			&KeywordElse(..) => "keyword `else`",
 			&KeywordEnum(..) => "keyword `enum`",

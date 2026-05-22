@@ -1,0 +1,7 @@
+def head-or :: fun (list a) a -> a = fun xs default {
+	when xs is [] {
+		default
+	} is [first, ...] {
+		first
+	}
+}

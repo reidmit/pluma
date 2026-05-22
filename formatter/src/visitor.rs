@@ -372,6 +372,7 @@ impl<'a> Formatter<'a> {
 			If(i) => self.format_if(i),
 			When(w) => self.format_when(w),
 			While(w) => self.format_while(w),
+			Builtin(tag) => concat(vec![text("built-in \""), text(tag.clone()), text("\"")]),
 		}
 	}
 

@@ -1,0 +1,49 @@
+# Operations on UTF-8 strings. Length and slicing are byte-oriented
+# for now (revisit when `core.unicode` lands).
+
+# Number of bytes in the string.
+def length :: fun string -> int = built-in "string-length"
+
+# True if the string has zero bytes. Expressible in pure Pluma.
+def is-empty :: fun string -> bool = fun s { length s == 0 }
+
+# ASCII uppercase. Non-ASCII characters pass through unchanged.
+def to-upper :: fun string -> string = built-in "string-to-upper"
+
+# ASCII lowercase. Non-ASCII characters pass through unchanged.
+def to-lower :: fun string -> string = built-in "string-to-lower"
+
+# Returns the string with leading and trailing ASCII whitespace
+# removed.
+def trim :: fun string -> string = built-in "string-trim"
+
+# True iff `needle` occurs anywhere in `haystack`.
+def contains :: fun string string -> bool = built-in "string-contains"
+
+# True iff `haystack` begins with `prefix`.
+def starts-with :: fun string string -> bool = built-in "string-starts-with"
+
+# True iff `haystack` ends with `suffix`.
+def ends-with :: fun string string -> bool = built-in "string-ends-with"
+
+# Concatenate the elements of a list of strings with `separator`
+# between each pair.
+def join :: fun (list string) string -> string = built-in "string-join"
+
+# Split a string on every occurrence of `separator`. Adjacent
+# separators produce empty-string entries.
+def split :: fun string string -> list string = built-in "string-split"
+
+# Replace every occurrence of `pattern` in `s` with `replacement`.
+def replace :: fun string string string -> string = built-in "string-replace"
+
+# Parse the string as an `int`. Returns `ok n` on success, `err msg`
+# on parse failure.
+def to-int :: fun string -> result int string = built-in "string-to-int"
+
+# Parse the string as a `float`. Returns `ok n` on success, `err msg`
+# on parse failure.
+def to-float :: fun string -> result float string = built-in "string-to-float"
+
+# Underlying UTF-8 bytes.
+def to-bytes :: fun string -> bytes = built-in "string-to-bytes"

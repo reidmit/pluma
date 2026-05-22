@@ -457,6 +457,10 @@ impl AstWalker {
 					self.walk_expr(e, out);
 				}
 			}
+			ExprKind::Builtin(_) => {
+				// `built-in "tag"`: lexer already tagged the keyword and the
+				// string literal.
+			}
 		}
 	}
 

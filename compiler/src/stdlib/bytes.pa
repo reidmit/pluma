@@ -1,0 +1,38 @@
+# Operations on byte sequences. Distinct from `string` — `bytes` may
+# contain arbitrary octets (binary file content, network frames,
+# non-UTF-8 input). Use `string.to-bytes` / `bytes.to-string` to
+# convert when needed.
+
+def length :: fun bytes -> int = built-in "bytes-length"
+
+# True if the bytes sequence has zero bytes. Pure-Pluma.
+def is-empty :: fun bytes -> bool = fun b { length b == 0 }
+
+# Byte at the given index, wrapped in `some`. `none` if out of
+# bounds. Each byte is returned as an int in 0..255.
+def at :: fun bytes int -> option int = built-in "bytes-at"
+
+def concat :: fun bytes bytes -> bytes = built-in "bytes-concat"
+
+# Slice `bytes` from index `start` (inclusive) to `end` (exclusive).
+# Out-of-range indices clamp to the bounds rather than panicking.
+def slice :: fun bytes int int -> bytes = built-in "bytes-slice"
+
+def contains :: fun bytes bytes -> bool = built-in "bytes-contains"
+def starts-with :: fun bytes bytes -> bool = built-in "bytes-starts-with"
+def ends-with :: fun bytes bytes -> bool = built-in "bytes-ends-with"
+
+def repeat :: fun bytes int -> bytes = built-in "bytes-repeat"
+def reverse :: fun bytes -> bytes = built-in "bytes-reverse"
+
+def to-list :: fun bytes -> list int = built-in "bytes-to-list"
+
+# Build bytes from a list of ints. Each must fit in a byte (0..255);
+# returns `err` otherwise.
+def from-list :: fun (list int) -> result bytes string = built-in "bytes-from-list"
+
+def join :: fun (list bytes) bytes -> bytes = built-in "bytes-join"
+def split :: fun bytes bytes -> list bytes = built-in "bytes-split"
+
+# Decode as UTF-8. Returns `err` if the bytes aren't valid UTF-8.
+def to-string :: fun bytes -> result string string = built-in "bytes-to-string"

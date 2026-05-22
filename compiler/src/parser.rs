@@ -585,6 +585,7 @@ impl<'a> Parser<'a> {
 				trait_dispatch: None,
 				dispatch_sink: None,
 			}),
+			Some(Token::KeywordBuiltin(..)) => self.parse_builtin(),
 			Some(Token::Identifier(..)) => self.parse_identifier().map(|ident| ExprNode {
 				range: ident.range,
 				kind: ExprKind::Identifier(ident),
@@ -1899,6 +1900,7 @@ impl<'a> Parser<'a> {
 				kind: DefinitionKind::Enum(enum_node),
 				ty: Type::Unknown,
 				dict_param_count: 0,
+				type_annotation: None,
 			});
 		}
 
@@ -1915,6 +1917,7 @@ impl<'a> Parser<'a> {
 				kind: DefinitionKind::Alias(type_expr),
 				ty: Type::Unknown,
 				dict_param_count: 0,
+				type_annotation: None,
 			});
 		}
 
@@ -1931,10 +1934,13 @@ impl<'a> Parser<'a> {
 				kind: DefinitionKind::Trait(trait_node),
 				ty: Type::Unknown,
 				dict_param_count: 0,
+				type_annotation: None,
 			});
 		}
 
-		// `def NAME = EXPR` — value binding.
+		// `def NAME [:: TYPE] = EXPR` — value binding. The optional
+		// `:: TYPE` annotation is the contract; the analyzer unifies
+		// the inferred body type with the annotated type.
 		let start = match self.current_token {
 			Some(Token::KeywordDef(start_offset, _)) => {
 				self.advance();
@@ -1945,7 +1951,22 @@ impl<'a> Parser<'a> {
 
 		let name = self.expect_identifier()?;
 
+		let type_annotation = if matches!(self.current_token, Some(Token::DoubleColon(..))) {
+			self.advance();
+			self.skip_line_breaks();
+			Some(self.parse_type_expression_with_generics()?)
+		} else {
+			None
+		};
+
+		self.skip_line_breaks();
+
 		expect_token_and_advance!(self, Token::Equal);
+
+		// Allow the RHS to wrap to the next line — long signatures
+		// (especially with `built-in "..."` tails) read more clearly
+		// when the body starts on a fresh, indented line.
+		self.skip_line_breaks();
 
 		let value = self.parse_expression()?;
 
@@ -1957,6 +1978,7 @@ impl<'a> Parser<'a> {
 			kind: DefinitionKind::Expr(value),
 			ty: Type::Unknown,
 			dict_param_count: 0,
+			type_annotation,
 		})
 	}
 
@@ -2120,8 +2142,42 @@ impl<'a> Parser<'a> {
 				instance_slot_name: String::new(),
 				canonical_method_order: Vec::new(),
 			}),
+			type_annotation: None,
 			ty: Type::Unknown,
 			dict_param_count: 0,
+		})
+	}
+
+	// `built-in "tag"`. The string literal must be plain (no
+	// interpolation, no escapes that change content). The analyzer
+	// requires this to appear as the immediate RHS of a type-annotated
+	// top-level def; legality at that level is checked there.
+	fn parse_builtin(&mut self) -> Option<ExprNode> {
+		let (start, _) = expect_token_and_advance!(self, Token::KeywordBuiltin);
+		let string_expr = self.parse_string()?;
+		let tag = match &string_expr.kind {
+			ExprKind::Literal(literal) => match &literal.kind {
+				LiteralKind::String(value) => value.clone(),
+				_ => {
+					return self.error(ParseError {
+						range: string_expr.range,
+						kind: ParseErrorKind::BuiltinExpectsPlainString,
+					});
+				}
+			},
+			_ => {
+				return self.error(ParseError {
+					range: string_expr.range,
+					kind: ParseErrorKind::BuiltinExpectsPlainString,
+				});
+			}
+		};
+		Some(ExprNode {
+			range: Range::between(start, string_expr.range.end),
+			kind: ExprKind::Builtin(tag),
+			ty: Type::Unknown,
+			trait_dispatch: None,
+			dispatch_sink: None,
 		})
 	}
 

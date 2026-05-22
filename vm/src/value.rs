@@ -1,15 +1,16 @@
-// Value: the runtime representation of all Pluma values. Sized for compactness
-// — every variant fits in 16 bytes (8-byte payload + 1-byte tag, padded to 16).
+// Value: the runtime representation of all Pluma values. Compound payloads
+// live behind `Rc` so cloning a Value is a refcount bump. Pluma is immutable,
+// so Rc-sharing is always safe — no copy-on-write needed.
 //
-// Compound values (tuples, lists, records, closures, etc.) live behind `Rc`
-// so cloning a Value is a refcount bump. Pluma is immutable, so the
-// Rc-sharing is always safe — no copy-on-write needed.
+// Variant sizes: every payload is one machine word (`Rc<T>`, `i64`, `f64`)
+// except `Builtin`, whose `Rc<str>` is a two-word fat pointer (data + length).
+// The resulting enum is 24 bytes — slightly larger than the prior 16-byte
+// invariant, in exchange for runtime tags being plain strings.
 //
 // Numeric tag dispatch is the hot path in the eval loop; using a plain enum
 // (vs. NaN-boxing or pointer-tagging) keeps this fast on stable Rust without
 // unsafe code. See PERF-NOTES for the eventual NaN-boxing direction.
 
-use crate::builtin::Builtin;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -30,7 +31,12 @@ pub enum Value {
 	Record(Rc<HashMap<String, Value>>),
 	Variant(Rc<VariantData>),
 	Closure(Rc<ClosureData>),
-	Builtin(Builtin),
+	// A primitive call dispatched by tag. The tag names an entry in
+	// `builtin::call_builtin`'s match — an unknown tag is a runtime
+	// error, reached only if a `built-in "..."` in stdlib `.pa` source
+	// names a handler builtin.rs doesn't implement. `Rc<str>` keeps the
+	// tag owned (no leak) and cheap to clone.
+	Builtin(Rc<str>),
 	Regex(Rc<RegexData>),
 	VariantCtor(Rc<VariantCtorData>),
 	// A typeclass dictionary: a positional array of method values, indexed by

@@ -1,0 +1,8 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: `built-in` requires a type annotation on the enclosing `def` (`def name :: <type> = built-in "tag"`).
+> 1 | def length = built-in "list-length"
+                   ^^^^^^^^^^^^^^^^^^^^^^
+

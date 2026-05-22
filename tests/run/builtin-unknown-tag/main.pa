@@ -1,0 +1,5 @@
+def whatever :: fun nothing -> nothing = built-in "no-such-tag"
+
+def main = fun {
+	whatever ()
+}

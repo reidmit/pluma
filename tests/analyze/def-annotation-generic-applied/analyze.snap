@@ -1,0 +1,53 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/def-annotation-generic-applied/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-6:1) [
+            def(0:0-6:1) :: nothing {
+                name: ident(0:4-0:11) `head-or`,
+                kind: expr(0:37-6:1) :: (list 'q) 'q -> 'q {
+                    kind: fun(0:37-6:1) {
+                        params: [
+                            ident(0:41-0:43) `xs` :: list 'q,
+                            ident(0:44-0:51) `default` :: 'q,
+                        ],
+                        body: [
+                            expr(1:1-5:2) :: 'q {
+                                kind: when(1:1-5:2) [
+                                    case(1:9-3:2) is pattern(1:12-1:14) List {
+                                        items: [],
+                                        rest: None,
+                                    } [
+                                        expr(2:2-2:9) :: 'q {
+                                            kind: ident(2:2-2:9) `default`,
+                                        },
+                                    ],
+                                    case(3:3-5:2) is pattern(3:6-3:18) List {
+                                        items: [
+                                            pattern(3:7-3:12) Identifier(
+                                                ident(3:7-3:12) `first`,
+                                            ),
+                                        ],
+                                        rest: Some(
+                                            ListRestPattern {
+                                                range: 3:14-3:17,
+                                                binding: None,
+                                            },
+                                        ),
+                                    } [
+                                        expr(4:2-4:7) :: 'q {
+                                            kind: ident(4:2-4:7) `first`,
+                                        },
+                                    ],
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

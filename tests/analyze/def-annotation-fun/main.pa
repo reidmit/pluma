@@ -1,0 +1,1 @@
+def add :: fun int int -> int = fun x y { x + y }

@@ -1,0 +1,4 @@
+# Chaining over `option`. The `then` continuation runs only on
+# `some`; `none` short-circuits. The `try` syntax desugars to this.
+
+def then :: fun (option a) (fun a -> option b) -> option b = built-in "option-then"

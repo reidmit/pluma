@@ -1,0 +1,5 @@
+# Chaining over `result`. The `then` continuation runs on `ok`'s
+# payload and must return another `result` with the same `err`
+# type; `err` short-circuits.
+
+def then :: fun (result a e) (fun a -> result b e) -> result b e = built-in "result-then"

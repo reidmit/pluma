@@ -1,0 +1,67 @@
+# Operations on lists. Every list is homogeneous — `list a` for some
+# element type `a`. Lookups that may fail return `option`; bulk-
+# transform operations preserve order.
+
+# Returns the number of elements in the list.
+def length :: fun (list a) -> int = built-in "list-length"
+
+# True if the list has zero elements. Expressible in pure Pluma over
+# `length`; no builtin needed.
+def is-empty :: fun (list a) -> bool = fun xs { length xs == 0 }
+
+# Returns a new list with the elements in reverse order.
+def reverse :: fun (list a) -> list a = built-in "list-reverse"
+
+# Returns a new list containing the elements of the first followed by
+# those of the second. Allocates.
+def concat :: fun (list a) (list a) -> list a = built-in "list-concat"
+
+# True iff some element of the list equals `target`. Uses the
+# language's structural equality.
+def contains :: fun (list a) a -> bool = built-in "list-contains"
+
+# Applies `f` to each element, building a new list. The element type
+# may change between input and output.
+def map :: fun (list a) (fun a -> b) -> list b = built-in "list-map"
+
+# Returns a new list containing only the elements for which `pred`
+# returns true.
+def filter :: fun (list a) (fun a -> bool) -> list a = built-in "list-filter"
+
+# Left fold: `fold xs init f` reduces the list by applying
+# `f acc element` left-to-right, threading `acc` (starting at `init`)
+# through.
+def fold :: fun (list a) b (fun b a -> b) -> b = built-in "list-fold"
+
+# Applies `f` to each element for side effects. Returns `nothing` —
+# use `map` if you want the results.
+def each :: fun (list a) (fun a -> b) -> nothing = built-in "list-each"
+
+# First element wrapped in `some`, or `none` for the empty list.
+def head :: fun (list a) -> option a = built-in "list-head"
+
+# All but the first element, wrapped in `some`. `none` for the empty
+# list. (The tail of a single-element list is `some []`.)
+def tail :: fun (list a) -> option (list a) = built-in "list-tail"
+
+# First `n` elements. If the list is shorter, returns the whole list.
+def take :: fun (list a) int -> list a = built-in "list-take"
+
+# Everything except the first `n` elements. Empty if `n >=` length.
+def drop :: fun (list a) int -> list a = built-in "list-drop"
+
+# First element matching `pred`, wrapped in `some`; `none` if no
+# element matches.
+def find :: fun (list a) (fun a -> bool) -> option a = built-in "list-find"
+
+# True if `pred` returns true for at least one element.
+def any :: fun (list a) (fun a -> bool) -> bool = built-in "list-any"
+
+# True if `pred` returns true for every element (vacuously true for
+# the empty list).
+def all :: fun (list a) (fun a -> bool) -> bool = built-in "list-all"
+
+# Returns a new list with the elements sorted by `cmp`. Pair with
+# `ord.compare` to sort any list whose elements have an `ord`
+# instance.
+def sort :: fun (list a) (fun a a -> ordering) -> list a = built-in "list-sort"

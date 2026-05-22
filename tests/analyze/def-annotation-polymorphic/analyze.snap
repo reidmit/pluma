@@ -1,0 +1,56 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/def-annotation-polymorphic/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-3:18) [
+            def(0:0-0:34) :: nothing {
+                name: ident(0:4-0:6) `id`,
+                kind: expr(0:23-0:34) :: 'u -> 'u {
+                    kind: fun(0:23-0:34) {
+                        params: [
+                            ident(0:27-0:28) `x` :: 'u,
+                        ],
+                        body: [
+                            expr(0:31-0:32) :: 'u {
+                                kind: ident(0:31-0:32) `x`,
+                            },
+                        ],
+                    },
+                },
+            },
+            def(2:0-2:12) :: nothing {
+                name: ident(2:4-2:5) `i`,
+                kind: expr(2:8-2:12) :: int {
+                    kind: call(2:8-2:12) {
+                        callee: expr(2:8-2:10) :: int -> int {
+                            kind: ident(2:8-2:10) `id`,
+                        },
+                        args: [
+                            expr(2:11-2:12) :: int {
+                                kind: literal(2:11-2:12) int 5,
+                            },
+                        ],
+                    },
+                },
+            },
+            def(3:0-3:18) :: nothing {
+                name: ident(3:4-3:5) `s`,
+                kind: expr(3:8-3:18) :: string {
+                    kind: call(3:8-3:18) {
+                        callee: expr(3:8-3:10) :: string -> string {
+                            kind: ident(3:8-3:10) `id`,
+                        },
+                        args: [
+                            expr(3:12-3:18) :: string {
+                                kind: literal(3:12-3:18) string "hello",
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

@@ -1,0 +1,57 @@
+# Standard I/O, file I/O, environment access, and process control.
+# Operations that talk to the OS return `result _ string`; the err
+# arm carries an OS-provided message.
+
+# Write `value` to stdout with a trailing newline; return `value`
+# unchanged. Polymorphic over any printable value.
+def print :: fun a -> a = built-in "io-print"
+
+# Like `print` but to stderr.
+def print-err :: fun a -> a = built-in "io-print-err"
+
+# Like `print` but without the trailing newline.
+def write :: fun a -> a = built-in "io-write"
+
+# Like `print-err` but without the trailing newline.
+def write-err :: fun a -> a = built-in "io-write-err"
+
+# Read one line from stdin (without the newline). `err "EOF"` at end
+# of input.
+def read :: fun nothing -> result string string = built-in "io-read"
+
+# Read all of stdin to a single string. `err` on read error.
+def read-all :: fun nothing -> result string string = built-in "io-read-all"
+
+# Read the entire contents of a file as a string.
+def read-file :: fun string -> result string string = built-in "io-read-file"
+
+# Replace the file's contents with `data`. Creates the file if it
+# doesn't exist.
+def write-file :: fun string string -> result nothing string = built-in "io-write-file"
+
+# Append `data` to the file. Creates the file if it doesn't exist.
+def append-file :: fun string string -> result nothing string = built-in "io-append-file"
+
+# True iff the path exists as a file (not a directory).
+def file-exists :: fun string -> bool = built-in "io-file-exists"
+
+# Delete a file. `err` if the file doesn't exist.
+def delete-file :: fun string -> result nothing string = built-in "io-delete-file"
+
+# Command-line arguments. First element is the program name.
+def args :: fun nothing -> list string = built-in "io-args"
+
+# Environment variable lookup. `none` if not set.
+def env :: fun string -> option string = built-in "io-env"
+
+# Terminate the program with the given exit code. Polymorphic return
+# type so it can be used in any expression position.
+def exit :: fun int -> a = built-in "io-exit"
+
+# Bytes variants of the above.
+def read-all-bytes :: fun nothing -> result bytes string = built-in "io-read-all-bytes"
+def read-file-bytes :: fun string -> result bytes string = built-in "io-read-file-bytes"
+def write-file-bytes :: fun string bytes -> result nothing string = built-in "io-write-file-bytes"
+def append-file-bytes :: fun string bytes -> result nothing string = built-in "io-append-file-bytes"
+def write-bytes :: fun bytes -> bytes = built-in "io-write-bytes"
+def write-err-bytes :: fun bytes -> bytes = built-in "io-write-err-bytes"

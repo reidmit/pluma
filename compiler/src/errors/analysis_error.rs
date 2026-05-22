@@ -33,6 +33,8 @@ pub enum AnalysisErrorKind {
 	TryUnsupportedCarrier { ty: Type },
 	TryEmptyBody,
 	TryUnsupportedPattern,
+	BuiltinRequiresAnnotation,
+	BuiltinMustBeTopLevelRhs,
 }
 
 impl fmt::Display for AnalysisError {
@@ -187,6 +189,16 @@ impl fmt::Display for AnalysisError {
 			TryUnsupportedPattern => write!(
 				f,
 				"`try` currently only supports an identifier or `_` pattern on the left-hand side. Bind to a name and destructure with `let` on the next line."
+			),
+
+			BuiltinRequiresAnnotation => write!(
+				f,
+				"`built-in` requires a type annotation on the enclosing `def` (`def name :: <type> = built-in \"tag\"`)."
+			),
+
+			BuiltinMustBeTopLevelRhs => write!(
+				f,
+				"`built-in` may only appear as the immediate right-hand side of a top-level `def`."
 			),
 		}
 	}

@@ -1,0 +1,4 @@
+def id :: fun a -> a = fun x { x }
+
+def i = id 5
+def s = id "hello"

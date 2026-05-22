@@ -1,0 +1,12 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: `built-in` may only appear as the immediate right-hand side of a top-level `def`.
+> 2 | 	built-in "list-length"
+       ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: Name `xs` is never used.
+> 1 | def length :: fun (list a) -> int = fun xs {
+                                              ^^
+

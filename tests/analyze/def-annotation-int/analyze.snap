@@ -1,0 +1,17 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/def-annotation-int/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-0:16) [
+            def(0:0-0:16) :: nothing {
+                name: ident(0:4-0:5) `x`,
+                kind: expr(0:15-0:16) :: int {
+                    kind: literal(0:15-0:16) int 0,
+                },
+            },
+        ],
+    ),
+}

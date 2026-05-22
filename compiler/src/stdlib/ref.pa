@@ -1,0 +1,18 @@
+# Mutable cells. `ref a` holds a single value of type `a` that can
+# be read, written, or updated in place. Cells are heap-allocated
+# and share identity across calls — calling `get` on the same ref
+# twice returns the same underlying value.
+
+# Allocate a new cell holding `initial`.
+def new :: fun a -> ref a = built-in "ref-new"
+
+# Read the current value out of a cell.
+def get :: fun (ref a) -> a = built-in "ref-get"
+
+# Replace the cell's value. Returns `nothing` — chain a `get` if you
+# need the new value.
+def set :: fun (ref a) a -> nothing = built-in "ref-set"
+
+# Read, apply `f`, write back. Returns `nothing` — same reason as
+# `set`.
+def update :: fun (ref a) (fun a -> a) -> nothing = built-in "ref-update"

@@ -73,6 +73,13 @@ pub enum ExprKind {
 	/// expression position in source.
 	Try(TryNode),
 
+	/// `built-in "tag"`. Legal only as the immediate RHS of a
+	/// type-annotated top-level def. The tag is resolved against a
+	/// codegen-side table mapping strings to `Builtin` enum variants;
+	/// the def's global slot is populated directly with the looked-up
+	/// `Value::Builtin`, skipping the thunk path.
+	Builtin(String),
+
 	// the below are not fully implemented yet!
 	List(Vec<ExprNode>),
 	If(IfNode),
@@ -180,6 +187,10 @@ impl std::fmt::Debug for ExprKind {
 
 			Try(try_node) => {
 				write!(f, "{:#?}", try_node)
+			}
+
+			Builtin(tag) => {
+				write!(f, "built-in {:?}", tag)
 			}
 
 			When(when_node) => {

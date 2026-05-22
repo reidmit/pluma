@@ -1,0 +1,8 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: Type mismatch: expected `int`, but found `string`.
+> 1 | def x :: int = "hello"
+      ^
+

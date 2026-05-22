@@ -1,0 +1,10 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+runtime error
+== stdout ==
+== stderr ==
+unknown builtin `no-such-tag`
+

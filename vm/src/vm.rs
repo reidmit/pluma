@@ -1,6 +1,6 @@
 // The VM dispatch loop.
 
-use crate::eval;
+use crate::builtin;
 use crate::instruction::Instruction;
 use crate::program::{Function, GlobalSlot, Program};
 use crate::value::{values_eq, ClosureData, Value, VariantCtorData, VariantData};
@@ -765,17 +765,6 @@ impl VM {
 					_ => return Err(RuntimeError::new("expected bool for `!`").at(self.current_range())),
 				}
 			}
-			Instruction::CallBuiltin(b, arity) => {
-				let mut args = Vec::with_capacity(arity as usize);
-				for _ in 0..arity {
-					args.push(self.stack.pop().ok_or_else(|| {
-						RuntimeError::new("VM: CallBuiltin underflow").at(self.current_range())
-					})?);
-				}
-				args.reverse();
-				let result = eval::call_builtin(self, b, args).map_err(|e| e.at(self.current_range()))?;
-				self.stack.push(result);
-			}
 		}
 		Ok(())
 	}
@@ -1052,7 +1041,8 @@ impl VM {
 				let args_start = stack_len - arity;
 				let args: Vec<Value> = self.stack.drain(args_start..).collect();
 				self.stack.pop(); // callee
-				let result = eval::call_builtin(self, b, args).map_err(|e| e.at(self.current_range()))?;
+				let result =
+					builtin::call_builtin(self, b.as_ref(), args).map_err(|e| e.at(self.current_range()))?;
 				self.stack.push(result);
 				Ok(())
 			}
@@ -1087,7 +1077,7 @@ impl VM {
 	}
 }
 
-// Tiny helpers used by eval::invoke (so VM internals stay private).
+// Tiny helpers used by builtin::invoke (so VM internals stay private).
 impl VM {
 	pub(crate) fn frames_len(&self) -> usize {
 		self.frames.len()
@@ -1159,6 +1149,5 @@ fn opcode_name(i: &Instruction) -> &'static str {
 		LogicalAnd => "LogicalAnd",
 		LogicalOr => "LogicalOr",
 		LogicalNot => "LogicalNot",
-		CallBuiltin(_, _) => "CallBuiltin",
 	}
 }
