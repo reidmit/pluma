@@ -16,6 +16,7 @@ pub fn stdlib_sources() -> &'static [(&'static str, &'static str)] {
 		("core.ref", include_str!("stdlib/ref.pa")),
 		("core.option", include_str!("stdlib/option.pa")),
 		("core.result", include_str!("stdlib/result.pa")),
+		("core.json", include_str!("stdlib/json.pa")),
 	]
 }
 

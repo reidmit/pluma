@@ -1,0 +1,22 @@
+use core.json
+
+# Parse a handful of primitives, then a small object. Verifies the
+# int/float split and stringify round-trip preserves insertion order.
+
+def show = fun s {
+	when json.parse s is ok v {
+		print (json.stringify v)
+	} is err _e {
+		print "parse failed"
+	}
+}
+
+def main = fun {
+	show "null"
+	show "true"
+	show "42"
+	show "3.14"
+	show "\"hi\""
+	show "[1, 2, 3]"
+	show "{\"a\": 1, \"b\": [true, null]}"
+}

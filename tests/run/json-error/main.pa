@@ -1,0 +1,21 @@
+use core.json
+
+# Malformed input — error record carries 1-indexed line/col plus a
+# message borrowed from serde_json.
+
+def main = fun {
+	when json.parse "{bad json" is ok _v {
+		print "should not happen"
+	} is err e {
+		print e.message
+		print e.line
+		print e.col
+	}
+
+	# Trailing garbage past a valid value also errors.
+	when json.parse "42 extra" is ok _v {
+		print "should not happen"
+	} is err e {
+		print e.line
+	}
+}

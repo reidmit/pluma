@@ -9,3 +9,4 @@ doctest = false
 [dependencies]
 compiler = { path = "../compiler" }
 regex = "1"
+serde_json = { version = "1", features = ["preserve_order"] }

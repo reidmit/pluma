@@ -1,0 +1,16 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+null
+true
+42
+3.14
+"hi"
+[1,2,3]
+{"a":1,"b":[true,null]}
+== stderr ==
+

@@ -1,0 +1,17 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+{
+  "name": "ada",
+  "scores": [
+    10,
+    20
+  ],
+  "on": true
+}
+== stderr ==
+

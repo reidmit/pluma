@@ -1,0 +1,84 @@
+# JSON parsing and rendering. `parse` is total — it returns `result`
+# rather than throwing. Walker helpers return `option`, composable with
+# `try` for nested lookups.
+#
+# Numbers split into `int` / `float`. JSON spec doesn't distinguish
+# the two, but Pluma already does, and folding into float would lose
+# precision on large integers.
+
+use core.map
+use core.math
+
+# Parsed JSON value. Recursive; objects are insertion-ordered maps.
+enum value {
+	null
+	bool   bool
+	int    int
+	float  float
+	string string
+	array  (list value)
+	object (map string value)
+}
+
+# Parse error. `line` and `col` are 1-indexed; `message` is borrowed
+# from the underlying parser.
+alias error {line :: int, col :: int, message :: string}
+
+# Parse a JSON string. Total — never throws.
+def parse :: fun string -> result value error = built-in "json-parse"
+
+# Render to a compact, single-line JSON string. Object keys appear in
+# their map's insertion order.
+def stringify :: fun value -> string = built-in "json-stringify"
+
+# Render with 2-space indent and one element per line.
+def stringify-pretty :: fun value -> string = built-in "json-stringify-pretty"
+
+# True iff the value is `null`.
+def is-null :: fun value -> bool = fun v {
+	when v is null { true } is _ { false }
+}
+
+# Field lookup on an object. `none` for non-objects or missing keys.
+def get-field :: fun value string -> option value = fun v key {
+	when v is object o { map.lookup o key } is _ { none }
+}
+
+# Pull an `int` out of a value. `none` if the value isn't `value.int`.
+def get-int :: fun value -> option int = fun v {
+	when v is int n { some n } is _ { none }
+}
+
+# Pull a `float` out of a value. Strict — `value.int` returns `none`;
+# use `get-number` if you want either kind of number.
+def get-float :: fun value -> option float = fun v {
+	when v is float x { some x } is _ { none }
+}
+
+# Pull any numeric value out, promoting `value.int` to `float`. Lossy
+# for ints whose magnitude exceeds 2^53.
+def get-number :: fun value -> option float = fun v {
+	when v is float x { some x }
+	is int n { some (math.to-float n) }
+	is _ { none }
+}
+
+# Pull a `bool` out of a value.
+def get-bool :: fun value -> option bool = fun v {
+	when v is bool b { some b } is _ { none }
+}
+
+# Pull a `string` out of a value.
+def get-string :: fun value -> option string = fun v {
+	when v is string s { some s } is _ { none }
+}
+
+# Pull a `list value` out of a value.
+def get-array :: fun value -> option (list value) = fun v {
+	when v is array xs { some xs } is _ { none }
+}
+
+# Pull a `map string value` out of a value.
+def get-object :: fun value -> option (map string value) = fun v {
+	when v is object o { some o } is _ { none }
+}
