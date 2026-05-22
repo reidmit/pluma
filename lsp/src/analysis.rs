@@ -36,7 +36,7 @@ pub fn analyze_document(path: &Path, source: Vec<u8>) -> AnalysisResult {
 
 	vm::stdlib::register_compiler(&mut compiler);
 
-	let entry_name = compiler.entry_module_name.clone();
+	let entry_name = compiler.entry_modules.first().cloned().unwrap_or_default();
 	compiler.set_module_source(entry_name.clone(), source);
 
 	let diagnostics = compiler.check().err().unwrap_or_default();

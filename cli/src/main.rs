@@ -23,6 +23,11 @@ fn main() {
 				format_command(rest);
 			}
 
+			"test" => {
+				let filters: Vec<String> = std::env::args().skip(2).collect();
+				test_command(filters);
+			}
+
 			#[cfg(debug_assertions)]
 			"tokenize" => {
 				let entry_path = match std::env::args().nth(2) {
@@ -75,16 +80,13 @@ fn main() {
 
 				vm::stdlib::register_compiler(&mut compiler);
 
-				match compiler.check() {
-					Ok(module) => {
-						println!("{:#?}", module);
-					}
-
-					Err(diagnostics) => {
-						print_diagnostics(diagnostics);
-						std::process::exit(1);
-					}
+				if let Err(diagnostics) = compiler.check() {
+					print_diagnostics(diagnostics);
+					std::process::exit(1);
 				}
+				let entry_name = compiler.entry_modules.first().cloned().unwrap_or_default();
+				let module = compiler.modules.get(&entry_name).unwrap();
+				println!("{:#?}", module);
 			}
 
 			"help" => {
@@ -108,7 +110,200 @@ fn main() {
 	}
 }
 
+fn test_command(filters: Vec<String>) {
+	let cwd = match std::env::current_dir() {
+		Ok(p) => p,
+		Err(err) => {
+			print_error(format!("Could not determine current directory: {}", err));
+			std::process::exit(1);
+		}
+	};
+
+	// Walk cwd recursively, collecting every `*.test.pa` file. The discovered
+	// module names are paths relative to cwd, with `/` flipped to `.` and the
+	// `.pa` extension stripped — so `foo/bar.test.pa` becomes `foo.bar.test`.
+	let mut test_modules = discover_test_modules(&cwd);
+	test_modules.sort();
+
+	if !filters.is_empty() {
+		test_modules.retain(|name| filters.iter().any(|f| name.contains(f)));
+	}
+
+	if test_modules.is_empty() {
+		if filters.is_empty() {
+			eprintln!(
+				"no test files found (looked for *.test.pa under {})",
+				cwd.display()
+			);
+		} else {
+			eprintln!("no test files match {:?}", filters);
+		}
+		return;
+	}
+
+	let count = test_modules.len();
+	let module_word = if count == 1 { "module" } else { "modules" };
+	if filters.is_empty() {
+		println!(
+			"running {} test {} in {}",
+			count,
+			module_word,
+			cwd.display()
+		);
+	} else {
+		let quoted: Vec<String> = filters.iter().map(|f| format!("'{}'", f)).collect();
+		let joined = match quoted.len() {
+			1 => quoted[0].clone(),
+			_ => {
+				let (last, rest) = quoted.split_last().unwrap();
+				format!("{} or {}", rest.join(", "), last)
+			}
+		};
+		println!(
+			"running {} test {} matching {} in {}",
+			count,
+			module_word,
+			joined,
+			cwd.display()
+		);
+	}
+	println!();
+
+	let mut compiler = Compiler::for_root_dir(cwd.clone());
+	for name in &test_modules {
+		compiler.add_entry_module(name.clone());
+	}
+
+	vm::stdlib::register_compiler(&mut compiler);
+
+	if let Err(diagnostics) = compiler.check() {
+		print_diagnostics(diagnostics);
+		std::process::exit(1);
+	}
+
+	let program = match codegen::compile(&compiler) {
+		Ok(p) => p,
+		Err(msg) => {
+			print_error(format!("codegen error: {}", msg));
+			std::process::exit(1);
+		}
+	};
+
+	if program.tests.is_empty() {
+		eprintln!("no tests found");
+		return;
+	}
+
+	// Codegen iterates a HashMap, so tests come out in non-deterministic
+	// module order. Sort by module name (stably) so the user sees the same
+	// groupings across runs; within-module test order is source order from
+	// codegen's AST walk and is preserved by the stable sort.
+	let mut tests: Vec<(String, String, u32)> = program.tests.clone();
+	tests.sort_by(|a, b| a.0.cmp(&b.0));
+	let mut vm_instance = vm::VM::new(program);
+
+	let total = tests.len();
+	let mut passed = 0usize;
+	let mut failed = 0usize;
+
+	let mut current_module: Option<String> = None;
+	for (module_name, test_name, global_idx) in tests {
+		if current_module.as_deref() != Some(module_name.as_str()) {
+			if current_module.is_some() {
+				println!();
+			}
+			// Strip the redundant `.test` suffix every test module name
+			// carries (e.g. `util.list-helpers.test` → `util.list-helpers`).
+			let display = module_name.strip_suffix(".test").unwrap_or(&module_name);
+			println!("{}", colors::bold(display));
+			current_module = Some(module_name);
+		}
+		match vm_instance.call_test(global_idx) {
+			Ok(_) => {
+				println!("  {} {}", colors::bold_green("✓"), test_name);
+				passed += 1;
+			}
+			Err(err) => {
+				println!("  {} {}", colors::bold_red("✗"), test_name);
+				if let (Some(module), Some(range)) = (&err.module, err.range) {
+					let path = compiler::to_module_path(&cwd, module);
+					let display_path = path.strip_prefix(&cwd).unwrap_or(&path);
+					// Convert 0-indexed Range points to 1-indexed line/col so
+					// the output is editor-friendly (most editors and the
+					// "Cmd+click in terminal" convention expect 1-indexed).
+					println!(
+						"      {}:{}:{}",
+						display_path.display(),
+						range.start.line + 1,
+						range.start.col + 1,
+					);
+				}
+				println!("      {}", err.message);
+				failed += 1;
+			}
+		}
+	}
+
+	println!();
+	let summary = format!("{} of {} passed", passed, total);
+	if failed == 0 {
+		println!("{}", colors::bold_green(&summary));
+	} else {
+		println!("{}", colors::bold_red(&summary));
+		std::process::exit(1);
+	}
+}
+
+// Recursively find every `*.test.pa` file under `root` and return its module
+// name (path relative to `root`, with `/` → `.` and `.pa` stripped). Hidden
+// directories (anything starting with `.`) are skipped — `.git`, `.cargo`,
+// etc. shouldn't be scanned.
+fn discover_test_modules(root: &std::path::Path) -> Vec<String> {
+	fn walk(dir: &std::path::Path, root: &std::path::Path, out: &mut Vec<String>) {
+		let entries = match std::fs::read_dir(dir) {
+			Ok(e) => e,
+			Err(_) => return,
+		};
+		for entry in entries.flatten() {
+			let path = entry.path();
+			let name = match path.file_name().and_then(|n| n.to_str()) {
+				Some(n) => n,
+				None => continue,
+			};
+			if name.starts_with('.') {
+				continue;
+			}
+			let file_type = match entry.file_type() {
+				Ok(t) => t,
+				Err(_) => continue,
+			};
+			if file_type.is_dir() {
+				walk(&path, root, out);
+			} else if file_type.is_file() && name.ends_with(".test.pa") {
+				if let Ok(rel) = path.strip_prefix(root) {
+					let rel_str = rel.to_string_lossy();
+					let stem = rel_str.strip_suffix(".pa").unwrap_or(&rel_str);
+					let module_name = stem.replace(std::path::MAIN_SEPARATOR, ".");
+					out.push(module_name);
+				}
+			}
+		}
+	}
+
+	let mut out = Vec::new();
+	walk(root, root, &mut out);
+	out
+}
+
 fn run(entry_path: String) {
+	if entry_path.ends_with(".test.pa") || entry_path.ends_with(".test") {
+		print_error(format!(
+			"`{}` is a test module. Use `pluma test` to run tests.",
+			entry_path
+		));
+		std::process::exit(1);
+	}
+
 	let mut compiler = match Compiler::from_entry_path(entry_path) {
 		Ok(c) => c,
 		Err(diagnostics) => {
@@ -232,6 +427,8 @@ Compiler & toolchain for the {} programming language
 COMMANDS:
   [run] <path>     execute a module directly (the `run` keyword is optional)
   format <path>... canonicalize formatting; pass `-` for stdin, `--check` to dry-run
+  test [filter]... discover and run tests from `*.test.pa` files under cwd
+                   (filters substring-match against module names)
   tokenize <path>  dump the token stream for a module
   analyze <path>   parse, type-check & dump info about a module
   version          print compiler version info
@@ -251,6 +448,8 @@ Compiler & toolchain for the {} programming language
 COMMANDS:
   [run] <path>     execute a module directly (the `run` keyword is optional)
   format <path>... canonicalize formatting; pass `-` for stdin, `--check` to dry-run
+  test [filter]... discover and run tests from `*.test.pa` files under cwd
+                   (filters substring-match against module names)
   version          print compiler version info
   help             print this help text
 ",

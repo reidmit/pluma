@@ -160,6 +160,22 @@ impl<'a> Formatter<'a> {
 			DefinitionKind::Enum(en) => self.format_enum(&def.name.name, en),
 			DefinitionKind::Trait(tr) => self.format_trait(&def.name.name, tr),
 			DefinitionKind::Instance(inst) => self.format_instance(inst),
+			DefinitionKind::Test { description, body } => {
+				let header = concat(vec![
+					text("test "),
+					text(format!("{:?}", description)),
+					text(" {"),
+				]);
+				if body.is_empty() {
+					return concat(vec![header, text("}")]);
+				}
+				concat(vec![
+					header,
+					nest(self.format_statements(body)),
+					hardline(),
+					text("}"),
+				])
+			}
 		}
 	}
 
@@ -580,11 +596,14 @@ impl<'a> Formatter<'a> {
 		match &r.kind {
 			Literal(s) => text(format!("\"{}\"", escape_string(s))),
 			CharacterClass(name) => text(name.clone()),
-			Anchor(a) => text(match a {
-				RegexAnchor::Start => "^",
-				RegexAnchor::End => "$",
-				RegexAnchor::Boundary => "%",
-			}.to_string()),
+			Anchor(a) => text(
+				match a {
+					RegexAnchor::Start => "^",
+					RegexAnchor::End => "$",
+					RegexAnchor::Boundary => "%",
+				}
+				.to_string(),
+			),
 			Sequence(parts) => {
 				let docs: Vec<Doc> = parts.iter().map(|p| self.format_regex(p)).collect();
 				join(text(" "), docs)

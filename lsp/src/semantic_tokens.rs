@@ -116,8 +116,8 @@ fn lexer_kind(t: &Token) -> Option<u32> {
 		BoolTrue(..) | BoolFalse(..) => KEYWORD,
 		KeywordAlias(..) | KeywordAs(..) | KeywordDef(..) | KeywordElse(..) | KeywordEnum(..)
 		| KeywordFun(..) | KeywordIf(..) | KeywordImplement(..) | KeywordIn(..) | KeywordIs(..)
-		| KeywordLet(..) | KeywordTrait(..) | KeywordUse(..) | KeywordWhen(..) | KeywordWhere(..)
-		| KeywordWhile(..) => KEYWORD,
+		| KeywordLet(..) | KeywordTest(..) | KeywordTrait(..) | KeywordUse(..) | KeywordWhen(..)
+		| KeywordWhere(..) | KeywordWhile(..) => KEYWORD,
 		Arrow(..)
 		| Bang(..)
 		| BangEqual(..)
@@ -312,6 +312,11 @@ impl AstWalker {
 				}
 				for method in &inst.methods {
 					self.walk_def(method, out);
+				}
+			}
+			DefinitionKind::Test { body, .. } => {
+				for stmt in body {
+					self.walk_expr(stmt, out);
 				}
 			}
 		}

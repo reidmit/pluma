@@ -1,0 +1,17 @@
+# Runtime assertions for use inside `test "..." { ... }` blocks.
+# Each assertion that fails raises a runtime error captured by the
+# `pluma test` runner and reported as a test failure. Outside of a
+# test, the same error terminates the program with a non-zero exit.
+
+# Fail unless `value` is `true`.
+def is-true :: fun bool -> nothing = built-in "assert-is-true"
+
+# Fail unless `value` is `false`.
+def is-false :: fun bool -> nothing = built-in "assert-is-false"
+
+# Fail unless the two values are structurally equal. Polymorphic over
+# any pair of values of the same type.
+def equals :: fun a a -> nothing = built-in "assert-equals"
+
+# Fail if the two values are structurally equal.
+def not-equals :: fun a a -> nothing = built-in "assert-not-equals"

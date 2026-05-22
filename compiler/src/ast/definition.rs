@@ -24,6 +24,15 @@ pub enum DefinitionKind {
 	Enum(EnumNode),
 	Trait(TraitNode),
 	Instance(InstanceNode),
+	// `test "description" { body }` — a top-level test block. The
+	// description is the human-readable name shown by `pluma test`.
+	// The body is a statement list (like a fun body); its final
+	// expression's type must be `nothing`. Tests do not register a
+	// value binding in the module's scope.
+	Test {
+		description: String,
+		body: Vec<ExprNode>,
+	},
 }
 
 #[cfg(debug_assertions)]
@@ -45,6 +54,9 @@ impl std::fmt::Debug for DefinitionKind {
 			DefinitionKind::Enum(enum_node) => write!(f, "{:#?}", enum_node),
 			DefinitionKind::Trait(trait_node) => write!(f, "{:#?}", trait_node),
 			DefinitionKind::Instance(inst_node) => write!(f, "{:#?}", inst_node),
+			DefinitionKind::Test { description, body } => {
+				write!(f, "test {:?} {:#?}", description, body)
+			}
 		}
 	}
 }

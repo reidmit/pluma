@@ -1,0 +1,45 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+module `main.test` (tests/analyze/test-form-basic/main.test.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-3:1) [
+            def(0:0-3:1) :: nothing {
+                name: ident(0:0-0:13) `__test`,
+                kind: test "trivial" [
+                    expr(1:1-1:14) :: nothing {
+                        kind: let(1:1-1:14) {
+                            pattern: pattern(1:5-1:6) Identifier(
+                                ident(1:5-1:6) `x`,
+                            ),
+                            value: expr(1:9-1:14) :: int {
+                                kind: binary op(1:11-1:12) `+` {
+                                    left: expr(1:9-1:10) :: int {
+                                        kind: literal(1:9-1:10) int 1,
+                                    },
+                                    right: expr(1:13-1:14) :: int {
+                                        kind: literal(1:13-1:14) int 2,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    expr(2:1-2:17) :: nothing {
+                        kind: call(2:1-2:17) {
+                            callee: expr(2:1-2:6) :: string -> nothing {
+                                kind: ident(2:1-2:6) `print`,
+                            },
+                            args: [
+                                expr(2:8-2:17) :: string {
+                                    kind: literal(2:8-2:17) string "computed",
+                                },
+                            ],
+                        },
+                    },
+                ],
+            },
+        ],
+    ),
+}

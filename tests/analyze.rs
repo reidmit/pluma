@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 datatest_stable::harness!(
 	analyze_fixture,
 	concat!(env!("CARGO_MANIFEST_DIR"), "/analyze"),
-	r"main\.pa$"
+	r"main(\.test)?\.pa$"
 );
 
 fn analyze_fixture(path: &Path) -> datatest_stable::Result<()> {
@@ -26,7 +26,9 @@ fn analyze_fixture(path: &Path) -> datatest_stable::Result<()> {
 	let result = (|| -> Result<String, Vec<Diagnostic>> {
 		let mut compiler = Compiler::from_entry_path(relative.to_str().unwrap().to_string())?;
 		vm::stdlib::register_compiler(&mut compiler);
-		let module = compiler.check()?;
+		compiler.check()?;
+		let entry_name = compiler.entry_modules.first().cloned().unwrap_or_default();
+		let module = compiler.modules.get(&entry_name).unwrap();
 		Ok(format!("{:#?}", module))
 	})();
 

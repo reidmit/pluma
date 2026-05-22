@@ -1,0 +1,4 @@
+test "trivial" {
+	let x = 1 + 2
+	print "computed"
+}

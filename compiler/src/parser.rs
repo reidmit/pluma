@@ -178,11 +178,11 @@ impl<'a> Parser<'a> {
 		let (start, _) = expect_token_and_advance!(self, Token::KeywordUse);
 
 		let mut path = Vec::new();
-		path.push(self.expect_identifier()?);
+		path.push(self.expect_use_path_segment()?);
 
 		while matches!(self.current_token, Some(Token::Dot(..))) {
 			self.advance();
-			path.push(self.expect_identifier()?);
+			path.push(self.expect_use_path_segment()?);
 		}
 
 		let alias = if matches!(self.current_token, Some(Token::KeywordAs(..))) {
@@ -316,6 +316,7 @@ impl<'a> Parser<'a> {
 				| Token::KeywordEnum(..)
 				| Token::KeywordAlias(..)
 				| Token::KeywordTrait(..)
+				| Token::KeywordTest(..)
 				| Token::KeywordImplement(..)
 		)
 	}
@@ -399,10 +400,7 @@ impl<'a> Parser<'a> {
 
 		let rest = self.parse_body_expressions()?;
 
-		let end = rest
-			.last()
-			.map(|e| e.range.end)
-			.unwrap_or(value.range.end);
+		let end = rest.last().map(|e| e.range.end).unwrap_or(value.range.end);
 
 		let range = Range::between(start, end);
 
@@ -846,6 +844,20 @@ impl<'a> Parser<'a> {
 				}),
 			},
 		}
+	}
+
+	// `use` paths allow `test` as a segment so `*.test.pa` files (whose
+	// module names end in `.test`) can be imported by other test files.
+	// Outside of use-paths, `test` remains a reserved keyword.
+	fn expect_use_path_segment(&mut self) -> Option<IdentifierNode> {
+		if let Some(Token::KeywordTest(s, e)) = self.current_token {
+			self.advance();
+			return Some(IdentifierNode {
+				range: Range::between(self.offset_to_point(s), self.offset_to_point(e)),
+				name: "test".to_string(),
+			});
+		}
+		self.expect_identifier()
 	}
 
 	fn parse_if_expression(&mut self) -> Option<IfNode> {
@@ -1670,26 +1682,35 @@ impl<'a> Parser<'a> {
 			let (part, part_is_anchor) = match self.current_token {
 				Some(Token::Caret(start_offset, end_offset)) => {
 					self.advance();
-					(RegexNode {
-						range: self.span_to_single_line_range(start_offset, end_offset),
-						kind: RegexKind::Anchor(RegexAnchor::Start),
-					}, true)
+					(
+						RegexNode {
+							range: self.span_to_single_line_range(start_offset, end_offset),
+							kind: RegexKind::Anchor(RegexAnchor::Start),
+						},
+						true,
+					)
 				}
 
 				Some(Token::Dollar(start_offset, end_offset)) => {
 					self.advance();
-					(RegexNode {
-						range: self.span_to_single_line_range(start_offset, end_offset),
-						kind: RegexKind::Anchor(RegexAnchor::End),
-					}, true)
+					(
+						RegexNode {
+							range: self.span_to_single_line_range(start_offset, end_offset),
+							kind: RegexKind::Anchor(RegexAnchor::End),
+						},
+						true,
+					)
 				}
 
 				Some(Token::Percent(start_offset, end_offset)) => {
 					self.advance();
-					(RegexNode {
-						range: self.span_to_single_line_range(start_offset, end_offset),
-						kind: RegexKind::Anchor(RegexAnchor::Boundary),
-					}, true)
+					(
+						RegexNode {
+							range: self.span_to_single_line_range(start_offset, end_offset),
+							kind: RegexKind::Anchor(RegexAnchor::Boundary),
+						},
+						true,
+					)
 				}
 
 				Some(Token::Identifier(start_offset, end_offset)) => {
@@ -1697,10 +1718,13 @@ impl<'a> Parser<'a> {
 
 					let name = read_string!(self, start_offset, end_offset);
 
-					(RegexNode {
-						range: self.span_to_single_line_range(start_offset, end_offset),
-						kind: RegexKind::CharacterClass(name),
-					}, false)
+					(
+						RegexNode {
+							range: self.span_to_single_line_range(start_offset, end_offset),
+							kind: RegexKind::CharacterClass(name),
+						},
+						false,
+					)
 				}
 
 				Some(Token::StringLiteral(start_offset, end_offset)) => {
@@ -1708,10 +1732,13 @@ impl<'a> Parser<'a> {
 
 					let value = read_string_with_escapes!(self, start_offset, end_offset);
 
-					(RegexNode {
-						range: self.span_to_single_line_range(start_offset, end_offset),
-						kind: RegexKind::Literal(value),
-					}, false)
+					(
+						RegexNode {
+							range: self.span_to_single_line_range(start_offset, end_offset),
+							kind: RegexKind::Literal(value),
+						},
+						false,
+					)
 				}
 
 				Some(Token::LeftParen(start_offset, end_offset)) => {
@@ -1731,10 +1758,13 @@ impl<'a> Parser<'a> {
 
 					let (_, end) = expect_token_and_advance!(self, Token::RightParen);
 
-					(RegexNode {
-						range: Range::between(start, end),
-						kind: RegexKind::Grouping(Box::new(expr)),
-					}, false)
+					(
+						RegexNode {
+							range: Range::between(start, end),
+							kind: RegexKind::Grouping(Box::new(expr)),
+						},
+						false,
+					)
 				}
 
 				Some(Token::LeftAngle(start_offset, end_offset)) => {
@@ -1764,10 +1794,13 @@ impl<'a> Parser<'a> {
 
 					expect_token_and_advance!(self, Token::RightAngle);
 
-					(RegexNode {
-						range: Range::between(start, end),
-						kind: RegexKind::NamedCapture(name, Box::new(expr)),
-					}, false)
+					(
+						RegexNode {
+							range: Range::between(start, end),
+							kind: RegexKind::NamedCapture(name, Box::new(expr)),
+						},
+						false,
+					)
 				}
 
 				_ => break,
@@ -1777,8 +1810,9 @@ impl<'a> Parser<'a> {
 			// Surface that as a parse error rather than passing through to a
 			// confusing error from the underlying regex engine.
 			if part_is_anchor {
-				if let Some(Token::Star(..) | Token::Plus(..) | Token::Question(..) | Token::LeftBrace(..)) =
-					self.current_token
+				if let Some(
+					Token::Star(..) | Token::Plus(..) | Token::Question(..) | Token::LeftBrace(..),
+				) = self.current_token
 				{
 					let (q_start, q_end) = self.current_token_span();
 					self.error::<RegexNode>(ParseError {
@@ -1964,6 +1998,50 @@ impl<'a> Parser<'a> {
 				range: Range::between(start, type_expr.range.end),
 				kind: DefinitionKind::Alias(type_expr),
 				ty: Type::Unknown,
+				dict_param_count: 0,
+				type_annotation: None,
+			});
+		}
+
+		// `test "description" { body }` — a top-level test block. The
+		// description is the human-readable name shown by `pluma test`;
+		// the body is a statement list whose final expression must
+		// produce `nothing`.
+		if let Some(Token::KeywordTest(start_offset, _)) = self.current_token {
+			let start = self.offset_to_point(start_offset);
+			self.advance();
+			self.skip_line_breaks();
+			let (desc_start_pt, desc_end_pt) = match self.current_token {
+				Some(Token::StringLiteral(s, e)) => (self.offset_to_point(s), self.offset_to_point(e)),
+				_ => {
+					expect_token_and_advance!(self, Token::StringLiteral);
+					unreachable!();
+				}
+			};
+			let (desc_s, desc_e) = (
+				self.point_to_offset(desc_start_pt),
+				self.point_to_offset(desc_end_pt),
+			);
+			let description = read_string_with_escapes!(self, desc_s, desc_e);
+			self.advance();
+			self.skip_line_breaks();
+			expect_token_and_advance!(self, Token::LeftBrace);
+			let body = self.parse_body_expressions()?;
+			self.skip_line_breaks();
+			let (_, end) = expect_token_and_advance!(self, Token::RightBrace);
+			self.skip_line_breaks();
+			// Synthetic identifier so DefinitionNode invariants still hold;
+			// the analyzer & codegen identify tests by DefinitionKind::Test
+			// and never look at this name.
+			let name = IdentifierNode {
+				range: Range::between(start, desc_end_pt),
+				name: "__test".to_string(),
+			};
+			return Some(DefinitionNode {
+				name,
+				range: Range::between(start, end),
+				kind: DefinitionKind::Test { description, body },
+				ty: Type::Nothing,
 				dict_param_count: 0,
 				type_annotation: None,
 			});

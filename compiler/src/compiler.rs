@@ -25,7 +25,11 @@ pub const AUTO_IMPORTS: &[(&str, &str)] = &[
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub struct Compiler {
 	pub root_dir: PathBuf,
-	pub entry_module_name: String,
+	// Modules to load as roots of the import graph. `pluma run` has exactly
+	// one (the file the user asked to execute); `pluma test` has one per
+	// discovered `*.test.pa` file. Codegen, LSP, etc. that previously read a
+	// single entry module name read `entry_modules[0]` instead.
+	pub entry_modules: Vec<String>,
 	pub modules: HashMap<String, Module>,
 	diagnostics: Vec<Diagnostic>,
 	// Per fully-qualified module name, the top-level defs (values, aliases,
@@ -42,12 +46,31 @@ impl Compiler {
 
 		Ok(Compiler {
 			root_dir,
-			entry_module_name,
+			entry_modules: vec![entry_module_name],
 			modules: HashMap::new(),
 			diagnostics: Vec::new(),
 			exports_cache: HashMap::new(),
 			native_modules: HashMap::new(),
 		})
+	}
+
+	// Construct a compiler rooted at `root_dir` with no entry modules. The
+	// caller registers each entry module via `add_entry_module` — used by
+	// `pluma test`, which discovers `*.test.pa` files itself and feeds them
+	// in as roots rather than relying on a single `main.pa`.
+	pub fn for_root_dir(root_dir: PathBuf) -> Self {
+		Compiler {
+			root_dir,
+			entry_modules: Vec::new(),
+			modules: HashMap::new(),
+			diagnostics: Vec::new(),
+			exports_cache: HashMap::new(),
+			native_modules: HashMap::new(),
+		}
+	}
+
+	pub fn add_entry_module(&mut self, module_name: String) {
+		self.entry_modules.push(module_name);
 	}
 
 	// Register a stdlib module (e.g. `core.regex`) so its exports are visible
@@ -70,29 +93,32 @@ impl Compiler {
 	}
 
 	pub fn tokenize(&mut self) -> Result<Vec<Token>, Vec<Diagnostic>> {
-		let mut entry_module = Module::new(
-			self.entry_module_name.clone(),
-			to_module_path(&self.root_dir, &self.entry_module_name),
-		);
+		let entry = self
+			.entry_modules
+			.first()
+			.cloned()
+			.expect("tokenize() called with no entry modules");
+		let mut entry_module = Module::new(entry.clone(), to_module_path(&self.root_dir, &entry));
 
 		let tokens = entry_module.tokenize(&mut self.diagnostics);
 
 		Ok(tokens)
 	}
 
-	pub fn check(&mut self) -> Result<&Module, Vec<Diagnostic>> {
+	pub fn check(&mut self) -> Result<(), Vec<Diagnostic>> {
 		// Load + analyze the baked-in `__prelude__` module before anything
 		// else. Its exported instances are implicitly visible to every
 		// user module's analyzer.
 		self.load_prelude();
-		let entry = self.entry_module_name.clone();
 		let mut visiting = HashSet::new();
-		self.load_module(&entry, &mut visiting);
+		for entry in self.entry_modules.clone() {
+			self.load_module(&entry, &mut visiting);
+		}
 
 		if !self.diagnostics.is_empty() {
 			Err(self.diagnostics.to_vec())
 		} else {
-			Ok(self.modules.get(&entry).unwrap())
+			Ok(())
 		}
 	}
 
@@ -199,8 +225,35 @@ impl Compiler {
 			}
 		}
 
-		// Recursively load each dependency.
+		// Test modules (name ends in `.test`) are only importable by other
+		// test modules. Production code shouldn't depend on test-only files.
+		let importer_is_test = module_name.ends_with(".test");
+		let importer_path = self.modules.get(module_name).map(|m| m.module_path.clone());
+		let mut rejected_imports: HashSet<String> = HashSet::new();
+		for (full_name, _, range) in &imports {
+			if full_name.ends_with(".test") && !importer_is_test {
+				let mut diag = Diagnostic::error(format!(
+					"Cannot import test module `{}` from a non-test module. \
+					Only `.test` modules may `use` other `.test` modules.",
+					full_name
+				))
+				.with_range(*range);
+				if let Some(path) = importer_path.clone() {
+					diag = diag.with_module(module_name.to_string(), path);
+				}
+				self.diagnostics.push(diag);
+				rejected_imports.insert(full_name.clone());
+			}
+		}
+
+		// Recursively load each dependency that wasn't rejected above.
+		// Loading rejected imports anyway would produce confusing cascade
+		// errors (e.g. "value X not found in import") in addition to the
+		// real cause.
 		for (full_name, _, _) in &imports {
+			if rejected_imports.contains(full_name) {
+				continue;
+			}
 			self.load_module(full_name, visiting);
 		}
 
@@ -210,6 +263,9 @@ impl Compiler {
 		let mut imports_map: HashMap<String, ModuleExports> = HashMap::new();
 		let mut import_qualified: HashMap<String, String> = HashMap::new();
 		for (full_name, local_name, _) in imports {
+			if rejected_imports.contains(&full_name) {
+				continue;
+			}
 			if let Some(exports) = self.exports_cache.get(&full_name) {
 				imports_map.insert(local_name.clone(), exports.clone());
 				import_qualified.insert(local_name, full_name);
@@ -271,12 +327,22 @@ fn resolve_entry(entry_path: String) -> Result<(PathBuf, String), Vec<Diagnostic
 	}
 }
 
-fn to_module_path(root_dir: &Path, module_name: &str) -> PathBuf {
+pub fn to_module_path(root_dir: &Path, module_name: &str) -> PathBuf {
 	let mut path = root_dir.to_path_buf();
-	for segment in module_name.split('.') {
-		path.push(segment);
+	// Test modules live in `<segments>.test.pa` files. Their module name keeps
+	// the `.test` suffix (e.g. `foo.bar.test`), so we peel that off before
+	// turning intermediate dots into path separators.
+	if let Some(stem) = module_name.strip_suffix(".test") {
+		for segment in stem.split('.') {
+			path.push(segment);
+		}
+		path.set_extension(format!("test.{}", FILE_EXTENSION));
+	} else {
+		for segment in module_name.split('.') {
+			path.push(segment);
+		}
+		path.set_extension(FILE_EXTENSION);
 	}
-	path.set_extension(FILE_EXTENSION);
 	path
 }
 

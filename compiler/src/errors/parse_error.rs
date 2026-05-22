@@ -89,7 +89,7 @@ impl fmt::Display for ParseError {
 			UnexpectedTopLevelToken { actual } => {
 				write!(
 					f,
-					"Unexpected token ({}). Expected a top-level definition (`def`, `enum`, `alias`, `trait`, or `implement`).",
+					"Unexpected token ({}). Expected a top-level definition (`def`, `enum`, `alias`, `trait`, `test`, or `implement`).",
 					actual
 				)
 			}

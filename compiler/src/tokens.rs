@@ -148,6 +148,9 @@ pub enum Token {
 	/// `let` keyword
 	KeywordLet(usize, usize),
 
+	/// `test` keyword (top-level test form: `test "name" { body }`).
+	KeywordTest(usize, usize),
+
 	/// `trait` keyword
 	KeywordTrait(usize, usize),
 
@@ -322,6 +325,7 @@ impl Token {
 			| KeywordIn(start, end)
 			| KeywordIs(start, end)
 			| KeywordLet(start, end)
+			| KeywordTest(start, end)
 			| KeywordTrait(start, end)
 			| KeywordTry(start, end)
 			| KeywordUse(start, end)
@@ -365,8 +369,8 @@ impl Token {
 		match self {
 			Identifier(..) | KeywordBuiltin(..) | KeywordFun(..) | KeywordIf(..) | KeywordWhen(..)
 			| DecimalDigits(..) | HexDigits(..) | BinaryDigits(..) | OctalDigits(..) | LeftParen(..)
-			| LeftBracket(..) | LeftBrace(..) | Backtick(..) | StringLiteral(..)
-			| BytesLiteral(..) | BoolTrue(..) | BoolFalse(..) | UnaryMinus(..) => true,
+			| LeftBracket(..) | LeftBrace(..) | Backtick(..) | StringLiteral(..) | BytesLiteral(..)
+			| BoolTrue(..) | BoolFalse(..) | UnaryMinus(..) => true,
 			_ => false,
 		}
 	}
@@ -423,6 +427,7 @@ impl fmt::Display for Token {
 			&KeywordIn(..) => "keyword `in`",
 			&KeywordIs(..) => "keyword `is`",
 			&KeywordLet(..) => "keyword `let`",
+			&KeywordTest(..) => "keyword `test`",
 			&KeywordTrait(..) => "keyword `trait`",
 			&KeywordTry(..) => "keyword `try`",
 			&KeywordUse(..) => "keyword `use`",

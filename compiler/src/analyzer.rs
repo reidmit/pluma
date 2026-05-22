@@ -542,8 +542,7 @@ impl<'compiler> Analyzer<'compiler> {
 			let mut accumulated_constraints = constraints.clone();
 			loop {
 				let mut extra_constraints = Vec::new();
-				let dispatched_any =
-					self.dispatch_try_nodes(ast, &substitution, &mut extra_constraints);
+				let dispatched_any = self.dispatch_try_nodes(ast, &substitution, &mut extra_constraints);
 				if !dispatched_any {
 					break;
 				}
@@ -673,6 +672,8 @@ impl<'compiler> Analyzer<'compiler> {
 					// traits and instances will be wired up alongside the
 					// constraint-generation work in phase 2.
 					DefinitionKind::Trait(_) | DefinitionKind::Instance(_) => {}
+					// Tests are not exposed as importable values.
+					DefinitionKind::Test { .. } => {}
 				}
 			}
 		}
@@ -972,16 +973,19 @@ impl<'compiler> Analyzer<'compiler> {
 
 			// Top-level redefinition is an error. Locals can shadow via let,
 			// but two `def`s with the same name at module top level is almost
-			// certainly a mistake.
-			if let Some(_prev_range) =
-				seen_names.insert(definition.name.name.clone(), definition.name.range)
-			{
-				self.error(
-					definition.name.range,
-					DuplicateDefinition {
-						name: definition.name.name.clone(),
-					},
-				);
+			// certainly a mistake. Tests carry a synthetic placeholder name
+			// and don't compete in the user-facing namespace, so skip them.
+			if !matches!(definition.kind, DefinitionKind::Test { .. }) {
+				if let Some(_prev_range) =
+					seen_names.insert(definition.name.name.clone(), definition.name.range)
+				{
+					self.error(
+						definition.name.range,
+						DuplicateDefinition {
+							name: definition.name.name.clone(),
+						},
+					);
+				}
 			}
 
 			match &mut definition.kind {
@@ -1103,6 +1107,23 @@ impl<'compiler> Analyzer<'compiler> {
 							defining_module: self.module_name.clone().unwrap_or_default(),
 						},
 					);
+				}
+
+				DefinitionKind::Test { .. } => {
+					// Tests don't bind anything in the value scope and their
+					// body's type is fixed (`nothing`). All work happens in
+					// the constraint-generation pass below.
+					//
+					// `test` blocks are only allowed in test modules (files
+					// named `*.test.pa`, module name ending in `.test`).
+					let in_test_module = self
+						.module_name
+						.as_deref()
+						.map(|n| n.ends_with(".test"))
+						.unwrap_or(false);
+					if !in_test_module {
+						self.error(definition.range, TestBlockOutsideTestModule);
+					}
 				}
 
 				DefinitionKind::Instance(instance_node) => {
@@ -1409,6 +1430,18 @@ impl<'compiler> Analyzer<'compiler> {
 				// body-level constraint generation needed here.
 				DefinitionKind::Trait(_) => {}
 
+				DefinitionKind::Test { body, .. } => {
+					// Each statement in the body is constrained. The final
+					// expression's type must unify with `nothing` — tests
+					// don't return a meaningful value.
+					for stmt in body.iter_mut() {
+						self.constrain_expr(stmt, &mut constraints);
+					}
+					if let Some(last) = body.last() {
+						constraints.push(eq_constraint(last.ty.clone(), Type::Nothing).at(last.range));
+					}
+				}
+
 				DefinitionKind::Instance(instance_node) => {
 					// Constrain each method body and verify its type matches
 					// the trait's expected method type with the trait param
@@ -1588,13 +1621,18 @@ impl<'compiler> Analyzer<'compiler> {
 				self.collect_free_type_idents(ret, out);
 			}
 			TypeExprKind::Single(type_ident) => {
-				let is_builtin = matches!(
-					type_ident.name.as_str(),
-					"string"
-						| "bytes" | "int" | "float"
-						| "bool" | "regex" | "nothing"
-						| "list" | "map" | "ref"
-				);
+				let is_builtin =
+					matches!(
+						type_ident.name.as_str(),
+						"string"
+							| "bytes"
+							| "int" | "float"
+							| "bool"
+							| "regex"
+							| "nothing"
+							| "list"
+							| "map" | "ref"
+					);
 				if type_ident.module.is_none()
 					&& !is_builtin
 					&& !self.type_scope.contains_key(&type_ident.name)
@@ -2306,11 +2344,10 @@ impl<'compiler> Analyzer<'compiler> {
 				// fighting the borrow checker. If none of the namespace
 				// cases apply, we put the FieldAccess back for the record
 				// field-access fallback.
-				let (mut receiver, field) =
-					match std::mem::replace(&mut expr.kind, ExprKind::EmptyTuple) {
-						ExprKind::FieldAccess { receiver, field } => (receiver, field),
-						_ => unreachable!(),
-					};
+				let (mut receiver, field) = match std::mem::replace(&mut expr.kind, ExprKind::EmptyTuple) {
+					ExprKind::FieldAccess { receiver, field } => (receiver, field),
+					_ => unreachable!(),
+				};
 
 				// Cross-module variant access: `module.enum-name.variant`.
 				// Match the chained-FieldAccess shape so we resolve before the
@@ -3742,6 +3779,11 @@ impl<'compiler> Analyzer<'compiler> {
 						}
 					}
 				}
+				DefinitionKind::Test { body, .. } => {
+					for stmt in body.iter_mut() {
+						self.dispatch_try_in_expr(stmt, subst, new_constraints, &mut dispatched_any);
+					}
+				}
 				_ => {}
 			}
 		}
@@ -3765,6 +3807,11 @@ impl<'compiler> Analyzer<'compiler> {
 						if let DefinitionKind::Expr(expr) = &mut method.kind {
 							self.report_unresolved_try_in_expr(expr, subst);
 						}
+					}
+				}
+				DefinitionKind::Test { body, .. } => {
+					for stmt in body.iter_mut() {
+						self.report_unresolved_try_in_expr(stmt, subst);
 					}
 				}
 				_ => {}
@@ -3798,8 +3845,7 @@ impl<'compiler> Analyzer<'compiler> {
 					self.report_unresolved_try_in_expr(v, subst);
 				}
 			}
-			ExprKind::ElementAccess { receiver, .. }
-			| ExprKind::FieldAccess { receiver, .. } => {
+			ExprKind::ElementAccess { receiver, .. } | ExprKind::FieldAccess { receiver, .. } => {
 				self.report_unresolved_try_in_expr(receiver, subst);
 			}
 			ExprKind::UnaryOperation { right, .. } => {
@@ -3913,8 +3959,7 @@ impl<'compiler> Analyzer<'compiler> {
 					self.dispatch_try_in_expr(v, subst, new_constraints, dispatched_any);
 				}
 			}
-			ExprKind::ElementAccess { receiver, .. }
-			| ExprKind::FieldAccess { receiver, .. } => {
+			ExprKind::ElementAccess { receiver, .. } | ExprKind::FieldAccess { receiver, .. } => {
 				self.dispatch_try_in_expr(receiver, subst, new_constraints, dispatched_any);
 			}
 			ExprKind::UnaryOperation { right, .. } => {
@@ -4069,8 +4114,7 @@ impl<'compiler> Analyzer<'compiler> {
 		//
 		// 1. pattern_ty (the α the analyzer bound the LHS to during
 		//    constrain) must equal the carrier's payload type.
-		new_constraints
-			.push(eq_constraint(pattern_ty.clone(), payload_ty.clone()).at(try_range));
+		new_constraints.push(eq_constraint(pattern_ty.clone(), payload_ty.clone()).at(try_range));
 
 		// 2. The continuation's tail expression must itself be
 		//    carrier-wrapped (with the same err type, for result).
@@ -4172,6 +4216,11 @@ impl<'compiler> Analyzer<'compiler> {
 						if let DefinitionKind::Expr(expr) = &mut method.kind {
 							self.annotate_expr(expr, subst);
 						}
+					}
+				}
+				DefinitionKind::Test { body, .. } => {
+					for stmt in body.iter_mut() {
+						self.annotate_expr(stmt, subst);
 					}
 				}
 				_ => { /* nothing to do for other def kinds */ }

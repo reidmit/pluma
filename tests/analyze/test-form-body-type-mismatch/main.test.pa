@@ -1,0 +1,4 @@
+test "must return nothing" {
+	let x = 1 + 2
+	x
+}

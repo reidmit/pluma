@@ -11,6 +11,11 @@ use std::rc::Rc;
 pub struct RuntimeError {
 	pub message: String,
 	pub range: Option<Range>,
+	// Fully-qualified module name where the error was raised. Set alongside
+	// `range` by the dispatcher when a builtin returns an error. The CLI uses
+	// it to resolve a source path for the failure (paired with `range` to
+	// render `file:line:col`).
+	pub module: Option<String>,
 }
 
 impl RuntimeError {
@@ -18,10 +23,15 @@ impl RuntimeError {
 		Self {
 			message: message.into(),
 			range: None,
+			module: None,
 		}
 	}
 	pub fn at(mut self, range: Range) -> Self {
 		self.range = Some(range);
+		self
+	}
+	pub fn in_module(mut self, module: impl Into<String>) -> Self {
+		self.module = Some(module.into());
 		self
 	}
 }
@@ -225,6 +235,35 @@ impl VM {
 			.ok_or_else(|| RuntimeError::new("VM exited with empty stack"))
 	}
 
+	// Invoke a top-level `test` block by its global index. Forces the
+	// global (which holds the test's zero-arity closure), then drives
+	// the closure to completion. Any `RuntimeError` raised by the body
+	// — including assertion failures — bubbles up and is the runner's
+	// signal that the test failed.
+	pub fn call_test(&mut self, global_idx: u32) -> Result<Value, RuntimeError> {
+		self.load_global(global_idx)?;
+		let closure_val = self
+			.stack
+			.pop()
+			.ok_or_else(|| RuntimeError::new("VM: test global produced no value"))?;
+		let closure = match closure_val {
+			Value::Closure(c) => c,
+			_ => return Err(RuntimeError::new("VM: test global is not a closure")),
+		};
+		let depth = self.frames.len();
+		self.push_frame_with_args(
+			closure.fn_idx as u32,
+			Rc::clone(&closure.captures),
+			Vec::new(),
+			None,
+		)?;
+		self.run_until_frame_depth(depth)?;
+		self
+			.stack
+			.pop()
+			.ok_or_else(|| RuntimeError::new("VM: test exited with empty stack"))
+	}
+
 	// Push a frame whose args are passed as a Vec (no callee on the stack
 	// beforehand). Used by the top-level entry, lazy global thunks, and the
 	// builtin-invoked closures path. For dispatch-loop calls, see do_call:
@@ -276,6 +315,18 @@ impl VM {
 			}
 		}
 		Range::collapsed(0, 0)
+	}
+
+	// Fully-qualified module name of the function on top of the call stack.
+	// Empty for the synthetic `__entry__` thunk, which has no source module.
+	fn current_module(&self) -> Option<String> {
+		let frame = self.frames.last()?;
+		let func = &self.program.functions[frame.fn_idx as usize];
+		if func.module.is_empty() {
+			None
+		} else {
+			Some(func.module.clone())
+		}
 	}
 
 	// Run until self.frames.len() == target_depth. Used both for the
@@ -1041,8 +1092,15 @@ impl VM {
 				let args_start = stack_len - arity;
 				let args: Vec<Value> = self.stack.drain(args_start..).collect();
 				self.stack.pop(); // callee
-				let result =
-					builtin::call_builtin(self, b.as_ref(), args).map_err(|e| e.at(self.current_range()))?;
+				let range = self.current_range();
+				let module = self.current_module();
+				let result = builtin::call_builtin(self, b.as_ref(), args).map_err(|e| {
+					let mut e = e.at(range);
+					if let Some(m) = module {
+						e = e.in_module(m);
+					}
+					e
+				})?;
 				self.stack.push(result);
 				Ok(())
 			}

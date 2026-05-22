@@ -36,6 +36,11 @@ pub struct Program {
 	// identifier patterns against the subject's actual variant set.
 	pub enum_variants: std::collections::HashMap<String, Vec<(String, usize)>>,
 	pub entry: u32,
+	// One entry per `test "..." { ... }` block found in the compiled program.
+	// `(module_name, description, global_idx)` — the global holds a
+	// zero-arity closure the runner invokes once per test. Module name lets
+	// `pluma test` group results by test module.
+	pub tests: Vec<(String, String, u32)>,
 }
 
 pub struct Function {

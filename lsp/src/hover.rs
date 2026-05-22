@@ -90,6 +90,11 @@ fn walk_def(def: &DefinitionNode, hits: &mut Vec<HoverHit>) {
 				walk_def(method, hits);
 			}
 		}
+		DefinitionKind::Test { body, .. } => {
+			for stmt in body {
+				walk_expr(stmt, hits);
+			}
+		}
 	}
 }
 

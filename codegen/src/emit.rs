@@ -8,15 +8,12 @@
 use compiler::ast::{
 	CallNode, DefinitionKind, ExprKind, ExprNode, FunNode, IdentifierNode, IfNode, LetNode,
 	LiteralKind, ModuleNode, Operator, PatternKind, PatternNode, RegexAnchor, RegexKind, RegexNode,
-	WhenNode,
-	WhileNode,
+	WhenNode, WhileNode,
 };
 use compiler::Range;
 use std::collections::HashMap;
 use std::rc::Rc;
-use vm::{
-	native_modules, Function, GlobalIdx, Instruction, Program, RegexData, SlotIdx, Value,
-};
+use vm::{native_modules, Function, GlobalIdx, Instruction, Program, RegexData, SlotIdx, Value};
 
 pub fn compile(compiler: &compiler::Compiler) -> Result<Program, String> {
 	let mut cg = CodeGen::new();
@@ -159,6 +156,10 @@ pub fn compile(compiler: &compiler::Compiler) -> Result<Program, String> {
 						};
 						cg.reserve_global(module, name);
 					}
+					DefinitionKind::Test { .. } => {
+						// Test slots are assigned in pass 2 with unique
+						// per-module names so the order matches the AST.
+					}
 				}
 			}
 		}
@@ -175,10 +176,19 @@ pub fn compile(compiler: &compiler::Compiler) -> Result<Program, String> {
 	}
 
 	// Build the entry function: load main, call it with (), return.
-	let main_global = cg
-		.lookup_global(&compiler.entry_module_name, "main")
-		.ok_or_else(|| format!("module `{}` has no `main` def", compiler.entry_module_name))?;
-	let entry_idx = cg.emit_entry_function(main_global);
+	// If there's no `main` but the program defines tests, emit a no-op
+	// entry — `pluma test` skips invoking it and goes straight to the
+	// test list, and `pluma run` of a test-only file errors clearly.
+	let primary_entry = compiler.entry_modules.first();
+	let main_global = primary_entry.and_then(|name| cg.lookup_global(name, "main"));
+	let entry_idx = match main_global {
+		Some(idx) => cg.emit_entry_function(idx),
+		None if !cg.program.tests.is_empty() => cg.emit_noop_entry_function(),
+		None => {
+			let name = primary_entry.map(String::as_str).unwrap_or("<none>");
+			return Err(format!("module `{}` has no `main` def", name));
+		}
+	};
 	cg.program.entry = entry_idx;
 
 	Ok(cg.program)
@@ -214,6 +224,7 @@ impl CodeGen {
 				global_by_name: HashMap::new(),
 				enum_variants: HashMap::new(),
 				entry: 0,
+				tests: Vec::new(),
 			},
 			const_lookup: HashMap::new(),
 			bytes_lookup: HashMap::new(),
@@ -318,9 +329,8 @@ impl CodeGen {
 					// fallthrough arm produces a runtime error if a tag
 					// has no matching handler.
 					if let ExprKind::Builtin(tag) = &expr.kind {
-						self.program.globals[global_idx as usize] = vm::program::GlobalSlot::Evaluated(
-							Value::Builtin(Rc::from(tag.as_str())),
-						);
+						self.program.globals[global_idx as usize] =
+							vm::program::GlobalSlot::Evaluated(Value::Builtin(Rc::from(tag.as_str())));
 						continue;
 					}
 					let fn_idx = if def.dict_param_count > 0 {
@@ -364,6 +374,34 @@ impl CodeGen {
 				DefinitionKind::Instance(instance_node) => {
 					self.compile_instance(module_name, &imports, instance_node)?;
 				}
+				DefinitionKind::Test { description, body } => {
+					// Wrap the body in a synthetic `fun nothing -> nothing`
+					// so the existing thunk pipeline can lower it. The
+					// global slot ends up holding a `Closure` value that
+					// the runner invokes with zero args.
+					let test_idx = self.program.tests.len();
+					let slot_name = format!("__test_{}", test_idx);
+					let global_idx = self.reserve_global(module_name, &slot_name);
+					let fun_range = body.first().map(|e| e.range).unwrap_or(def.range);
+					let fun_expr = ExprNode {
+						range: fun_range,
+						kind: ExprKind::Fun(FunNode {
+							range: fun_range,
+							params: Vec::new(),
+							body: body.clone(),
+						}),
+						ty: compiler::types::Type::Fun(Vec::new(), Box::new(compiler::types::Type::Nothing)),
+						trait_dispatch: None,
+						dispatch_sink: None,
+					};
+					let fn_name = format!("{}.{}", module_name, slot_name);
+					let thunk_idx = self.compile_thunk(module_name, &imports, &fn_name, &fun_expr)?;
+					self.set_global_thunk(global_idx, thunk_idx);
+					self
+						.program
+						.tests
+						.push((module_name.to_string(), description.clone(), global_idx));
+				}
 			}
 		}
 
@@ -402,7 +440,8 @@ impl CodeGen {
 		};
 
 		let total_arity = dict_param_count + user_params.len() as u16;
-		let mut inner_fb = FunctionBuilder::new(name.to_string(), current_module.to_string(), total_arity);
+		let mut inner_fb =
+			FunctionBuilder::new(name.to_string(), current_module.to_string(), total_arity);
 		let mut inner_scope = Scope::new();
 		// Register synthetic dict locals at slots 0..K-1 under
 		// `__dict_<n>__` names so nested closures' `Forwarded(n)` cells
@@ -446,7 +485,8 @@ impl CodeGen {
 
 		// Thunk: build a closure of `inner_fn_idx` (no captures) and
 		// return it as the global's value.
-		let mut thunk_fb = FunctionBuilder::new(format!("{}@thunk", name), current_module.to_string(), 0);
+		let mut thunk_fb =
+			FunctionBuilder::new(format!("{}@thunk", name), current_module.to_string(), 0);
 		thunk_fb.emit(
 			Instruction::MakeClosure {
 				fn_idx: inner_fn_idx,
@@ -630,8 +670,11 @@ impl CodeGen {
 		// Wrap the constructor in a 0-arity thunk that returns a closure of
 		// it. The global slot then holds the closure, ready to be called
 		// with the inner dicts at `InstanceChain` call sites.
-		let mut builder_fb =
-			FunctionBuilder::new(format!("{}@builder", instance.instance_slot_name), module_name.to_string(), 0);
+		let mut builder_fb = FunctionBuilder::new(
+			format!("{}@builder", instance.instance_slot_name),
+			module_name.to_string(),
+			0,
+		);
 		builder_fb.emit(
 			Instruction::MakeClosure {
 				fn_idx: ctor_idx,
@@ -673,6 +716,16 @@ impl CodeGen {
 		fb.emit(Instruction::LoadNothing, Range::collapsed(0, 0));
 		// Tail-call so main runs in our frame rather than nested under it.
 		fb.emit(Instruction::TailCall(1), Range::collapsed(0, 0));
+		fb.emit(Instruction::Return, Range::collapsed(0, 0));
+		self.add_function(fb)
+	}
+
+	// Entry function used for test-only programs: push `nothing` and
+	// return. The VM's `run()` path can still complete; the test runner
+	// then drives each test directly via `call_test`.
+	fn emit_noop_entry_function(&mut self) -> u32 {
+		let mut fb = FunctionBuilder::new("__entry__".into(), String::new(), 0);
+		fb.emit(Instruction::LoadNothing, Range::collapsed(0, 0));
 		fb.emit(Instruction::Return, Range::collapsed(0, 0));
 		self.add_function(fb)
 	}
@@ -1465,7 +1518,10 @@ fn emit_namespace_access(
 		// `module.EnumName.variant`: cross-module enum variant constructor.
 		[module_ident, enum_ident, variant_ident] => {
 			let qualified_module = imports.get(&module_ident.name).ok_or_else(|| {
-				format!("codegen: namespace `{}` is not an imported module", module_ident.name)
+				format!(
+					"codegen: namespace `{}` is not an imported module",
+					module_ident.name
+				)
 			})?;
 			let qualified_enum = format!("{}.{}", qualified_module, enum_ident.name);
 			let variants = cg
@@ -1477,7 +1533,10 @@ fn emit_namespace_access(
 				.iter()
 				.find(|(n, _)| n == &variant_ident.name)
 				.ok_or_else(|| {
-					format!("codegen: variant `{}` not in `{}`", variant_ident.name, qualified_enum)
+					format!(
+						"codegen: variant `{}` not in `{}`",
+						variant_ident.name, qualified_enum
+					)
 				})?;
 			emit_variant_construction(cg, fb, &qualified_enum, &variant_ident.name, *arity, range)
 		}
@@ -1501,7 +1560,10 @@ fn emit_namespace_access(
 				}
 			}
 			if imports.get(&head.name).is_some() {
-				Err(format!("codegen: `{}.{}` is not defined", head.name, tail.name))
+				Err(format!(
+					"codegen: `{}.{}` is not defined",
+					head.name, tail.name
+				))
 			} else {
 				Err(format!(
 					"codegen: namespace `{}` is neither an imported module nor a local enum",

@@ -56,7 +56,8 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			debug_assert_eq!(args.len(), 1, "`debug` arity");
 			let arg = args.into_iter().next().unwrap();
 			let (module, line) = vm.current_call_site();
-			vm.stdout.write_line(&format!("[{}:{}] {}", module, line, arg));
+			vm.stdout
+				.write_line(&format!("[{}:{}] {}", module, line, arg));
 			Ok(arg)
 		}
 		"to-string" => {
@@ -111,18 +112,18 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 		"regex-replace" => {
 			debug_assert_eq!(args.len(), 3, "`replace` arity");
 			match (&args[0], &args[1], &args[2]) {
-				(Value::Regex(re), Value::String(s), Value::String(rep)) => Ok(Value::String(
-					Rc::new(re.compiled.replace_all(s, rep.as_str()).into_owned()),
-				)),
+				(Value::Regex(re), Value::String(s), Value::String(rep)) => Ok(Value::String(Rc::new(
+					re.compiled.replace_all(s, rep.as_str()).into_owned(),
+				))),
 				_ => unreachable!("`replace` expects (regex, string, string)"),
 			}
 		}
 		"regex-replace-first" => {
 			debug_assert_eq!(args.len(), 3, "`replace-first` arity");
 			match (&args[0], &args[1], &args[2]) {
-				(Value::Regex(re), Value::String(s), Value::String(rep)) => Ok(Value::String(
-					Rc::new(re.compiled.replace(s, rep.as_str()).into_owned()),
-				)),
+				(Value::Regex(re), Value::String(s), Value::String(rep)) => Ok(Value::String(Rc::new(
+					re.compiled.replace(s, rep.as_str()).into_owned(),
+				))),
 				_ => unreachable!("`replace-first` expects (regex, string, string)"),
 			}
 		}
@@ -1217,29 +1218,33 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 		}
 
 		"json-parse" => {
-				debug_assert_eq!(args.len(), 1, "`json.parse` arity");
-				let s = expect_string(&args, "parse");
-				match serde_json::from_str::<serde_json::Value>(s.as_str()) {
-					Ok(j) => Ok(result_ok(json_to_pluma(j))),
-					Err(e) => Ok(result_err(json_error_record(e.line(), e.column(), &e.to_string()))),
-				}
+			debug_assert_eq!(args.len(), 1, "`json.parse` arity");
+			let s = expect_string(&args, "parse");
+			match serde_json::from_str::<serde_json::Value>(s.as_str()) {
+				Ok(j) => Ok(result_ok(json_to_pluma(j))),
+				Err(e) => Ok(result_err(json_error_record(
+					e.line(),
+					e.column(),
+					&e.to_string(),
+				))),
 			}
-			"json-stringify" => {
-				debug_assert_eq!(args.len(), 1, "`json.stringify` arity");
-				let j = pluma_to_json(&args[0]);
-				Ok(Value::String(Rc::new(
-					serde_json::to_string(&j).unwrap_or_default(),
-				)))
-			}
-			"json-stringify-pretty" => {
-				debug_assert_eq!(args.len(), 1, "`json.stringify-pretty` arity");
-				let j = pluma_to_json(&args[0]);
-				Ok(Value::String(Rc::new(
-					serde_json::to_string_pretty(&j).unwrap_or_default(),
-				)))
-			}
+		}
+		"json-stringify" => {
+			debug_assert_eq!(args.len(), 1, "`json.stringify` arity");
+			let j = pluma_to_json(&args[0]);
+			Ok(Value::String(Rc::new(
+				serde_json::to_string(&j).unwrap_or_default(),
+			)))
+		}
+		"json-stringify-pretty" => {
+			debug_assert_eq!(args.len(), 1, "`json.stringify-pretty` arity");
+			let j = pluma_to_json(&args[0]);
+			Ok(Value::String(Rc::new(
+				serde_json::to_string_pretty(&j).unwrap_or_default(),
+			)))
+		}
 
-			"map-fold" => {
+		"map-fold" => {
 			// args = [m, init, fn]. fn : b -> k -> v -> b.
 			debug_assert_eq!(args.len(), 3, "`map.fold` arity");
 			let mut it = args.into_iter();
@@ -1251,6 +1256,49 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				acc = invoke(vm, fn_arg.clone(), vec![acc, k.clone(), v.clone()])?;
 			}
 			Ok(acc)
+		}
+
+		"assert-is-true" => {
+			debug_assert_eq!(args.len(), 1, "`assert.is-true` arity");
+			match &args[0] {
+				Value::Bool(true) => Ok(Value::Nothing),
+				Value::Bool(false) => Err(RuntimeError::new(
+					"assertion failed: expected `true`, got `false`",
+				)),
+				_ => unreachable!("`assert.is-true` expects bool"),
+			}
+		}
+		"assert-is-false" => {
+			debug_assert_eq!(args.len(), 1, "`assert.is-false` arity");
+			match &args[0] {
+				Value::Bool(false) => Ok(Value::Nothing),
+				Value::Bool(true) => Err(RuntimeError::new(
+					"assertion failed: expected `false`, got `true`",
+				)),
+				_ => unreachable!("`assert.is-false` expects bool"),
+			}
+		}
+		"assert-equals" => {
+			debug_assert_eq!(args.len(), 2, "`assert.equals` arity");
+			if values_eq(&args[0], &args[1]) {
+				Ok(Value::Nothing)
+			} else {
+				Err(RuntimeError::new(format!(
+					"assertion failed: expected {} == {}",
+					args[0], args[1]
+				)))
+			}
+		}
+		"assert-not-equals" => {
+			debug_assert_eq!(args.len(), 2, "`assert.not-equals` arity");
+			if !values_eq(&args[0], &args[1]) {
+				Ok(Value::Nothing)
+			} else {
+				Err(RuntimeError::new(format!(
+					"assertion failed: expected {} != {}",
+					args[0], args[1]
+				)))
+			}
 		}
 
 		// An unknown tag means a stdlib `.pa` source named a `built-in
@@ -1510,9 +1558,7 @@ fn pluma_to_json(v: &Value) -> serde_json::Value {
 			_ => unreachable!("`json.value.string`: expected single string payload"),
 		},
 		"array" => match &var.payload[..] {
-			[Value::List(xs)] => {
-				serde_json::Value::Array(xs.iter().map(pluma_to_json).collect())
-			}
+			[Value::List(xs)] => serde_json::Value::Array(xs.iter().map(pluma_to_json).collect()),
 			_ => unreachable!("`json.value.array`: expected single list payload"),
 		},
 		"object" => match &var.payload[..] {

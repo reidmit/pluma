@@ -2,7 +2,7 @@
 source: tests/analyze.rs
 expression: output
 ---
-error: Unexpected token (decimal digits (e.g. 47)). Expected a top-level definition (`def`, `enum`, `alias`, `trait`, or `implement`).
+error: Unexpected token (decimal digits (e.g. 47)). Expected a top-level definition (`def`, `enum`, `alias`, `trait`, `test`, or `implement`).
 > 4 | 123
       ^^^
 
