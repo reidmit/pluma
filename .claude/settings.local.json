@@ -11,7 +11,8 @@
       "Bash(cargo fmt *)",
       "Bash(cargo test *)",
       "Bash(cargo check *)",
-      "Bash(INSTA_UPDATE=always cargo test -p tests keyword)"
+      "Bash(INSTA_UPDATE=always cargo test *)",
+      "Bash(target/release/cli test *)"
     ]
   }
 }
