@@ -1351,6 +1351,7 @@ fn emit_expr_with_parents(
 				(Operator::Division, true) => Instruction::DivFloat,
 				(Operator::Remainder, false) => Instruction::RemInt,
 				(Operator::Remainder, true) => Instruction::RemFloat,
+				(Operator::Concat, _) => Instruction::ConcatString,
 				(Operator::LogicalAnd, _) => Instruction::LogicalAnd,
 				(Operator::LogicalOr, _) => Instruction::LogicalOr,
 				(Operator::Equality, _) => Instruction::Eq,

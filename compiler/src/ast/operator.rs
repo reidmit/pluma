@@ -10,6 +10,7 @@ pub struct OperatorNode {
 pub enum Operator {
 	Addition,
 	Chain,
+	Concat,
 	Division,
 	Equality,
 	Exponentiation,
@@ -40,6 +41,7 @@ impl Operator {
 			Token::DoubleDot(..) => Some(Operator::Range),
 			Token::DoubleEqual(..) => Some(Operator::Equality),
 			Token::DoublePipe(..) => Some(Operator::LogicalOr),
+			Token::DoublePlus(..) => Some(Operator::Concat),
 			Token::DoubleQuestion(..) => Some(Operator::NullCoalescing),
 			Token::DoubleStar(..) => Some(Operator::Exponentiation),
 			Token::ForwardSlash(..) => Some(Operator::Division),
@@ -74,6 +76,10 @@ impl Operator {
 			Equality | Inequality => Some((40, 41)),
 			LessThan | LessThanEquals | GreaterThan | GreaterThanEquals => Some((50, 51)),
 			Addition | SubtractionOrNegation => Some((60, 61)),
+			// `++` (string concat) binds like addition: left-associative and
+			// tighter than comparisons, so `a ++ b == c ++ d` groups as
+			// `(a ++ b) == (c ++ d)`.
+			Concat => Some((60, 61)),
 			Multiplication | Division | Remainder => Some((70, 71)),
 			Exponentiation => Some((81, 80)),
 			FunctionCall => Some((90, 91)),
@@ -108,6 +114,7 @@ impl std::fmt::Display for Operator {
 		match &self {
 			Addition => write!(f, "+"),
 			Chain => write!(f, "|"),
+			Concat => write!(f, "++"),
 			Division => write!(f, "/"),
 			Equality => write!(f, "=="),
 			Exponentiation => write!(f, "**"),

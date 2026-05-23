@@ -747,6 +747,23 @@ impl VM {
 					_ => return Err(RuntimeError::new("NegFloat: expected float").at(self.current_range())),
 				}
 			}
+			Instruction::ConcatString => {
+				let r = self.stack.pop().unwrap();
+				let l = self.stack.pop().unwrap();
+				match (l, r) {
+					(Value::String(a), Value::String(b)) => {
+						let mut s = String::with_capacity(a.len() + b.len());
+						s.push_str(&a);
+						s.push_str(&b);
+						self.stack.push(Value::String(Rc::new(s)));
+					}
+					_ => {
+						return Err(
+							RuntimeError::new("ConcatString: expected strings").at(self.current_range()),
+						)
+					}
+				}
+			}
 			Instruction::Lt => {
 				let r = self.stack.pop().unwrap();
 				let l = self.stack.pop().unwrap();
@@ -1211,6 +1228,7 @@ fn opcode_name(i: &Instruction) -> &'static str {
 		RemFloat => "RemFloat",
 		NegInt => "NegInt",
 		NegFloat => "NegFloat",
+		ConcatString => "ConcatString",
 		Lt => "Lt",
 		Lte => "Lte",
 		Gt => "Gt",

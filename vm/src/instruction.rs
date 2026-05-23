@@ -166,6 +166,9 @@ pub enum Instruction {
 	NegInt,
 	NegFloat,
 
+	// String concatenation (`++`): pops two strings, pushes their join.
+	ConcatString,
+
 	Lt,
 	Lte,
 	Gt,

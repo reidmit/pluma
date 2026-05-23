@@ -1,0 +1,7 @@
+def main = fun {
+	print ("foo" ++ "bar")
+	let name = "world"
+	print ("hello, " ++ name ++ "!")
+	print ("" ++ "edge" ++ "")
+	print (to-string ("a" ++ "b" == "ab"))
+}

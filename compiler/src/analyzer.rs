@@ -2139,6 +2139,15 @@ impl<'compiler> Analyzer<'compiler> {
 						constraints.push(eq_constraint(right.ty.clone(), Type::Bool).at(right.range));
 					}
 
+					// `++` concatenates two strings into a string. No trait
+					// dispatch — both sides are pinned to `string` and codegen
+					// lowers it to a single `ConcatString` instruction.
+					Operator::Concat => {
+						expr.ty = Type::String;
+						constraints.push(eq_constraint(left.ty.clone(), Type::String).at(left.range));
+						constraints.push(eq_constraint(right.ty.clone(), Type::String).at(right.range));
+					}
+
 					// `==`/`!=` are polymorphic but require both sides to match.
 					// Result type is bool either way.
 					Operator::Equality | Operator::Inequality => {
