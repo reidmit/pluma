@@ -18,6 +18,7 @@ pub fn stdlib_sources() -> &'static [(&'static str, &'static str)] {
 		("core.result", include_str!("stdlib/result.pa")),
 		("core.json", include_str!("stdlib/json.pa")),
 		("core.assert", include_str!("stdlib/assert.pa")),
+		("core.package", include_str!("stdlib/package.pa")),
 	]
 }
 

@@ -24,8 +24,8 @@ fn main() {
 			}
 
 			"test" => {
-				let filters: Vec<String> = std::env::args().skip(2).collect();
-				test_command(filters);
+				let args: Vec<String> = std::env::args().skip(2).collect();
+				test_command(args);
 			}
 
 			#[cfg(debug_assertions)]
@@ -110,7 +110,7 @@ fn main() {
 	}
 }
 
-fn test_command(filters: Vec<String>) {
+fn test_command(args: Vec<String>) {
 	let cwd = match std::env::current_dir() {
 		Ok(p) => p,
 		Err(err) => {
@@ -119,10 +119,71 @@ fn test_command(filters: Vec<String>) {
 		}
 	};
 
-	// Walk cwd recursively, collecting every `*.test.pa` file. The discovered
-	// module names are paths relative to cwd, with `/` flipped to `.` and the
-	// `.pa` extension stripped — so `foo/bar.test.pa` becomes `foo.bar.test`.
-	let mut test_modules = discover_test_modules(&cwd);
+	// Arg parsing: at most one positional (the starting directory) plus
+	// any number of `-f <name>` filters. No positional means start at cwd.
+	let mut positional: Option<String> = None;
+	let mut filters: Vec<String> = Vec::new();
+	let mut iter = args.into_iter();
+	while let Some(a) = iter.next() {
+		match a.as_str() {
+			"-f" => match iter.next() {
+				Some(v) => filters.push(v),
+				None => {
+					print_error("`-f` requires a filter argument");
+					std::process::exit(1);
+				}
+			},
+			s if s.starts_with('-') => {
+				print_error(format!("unknown flag `{}`", s));
+				std::process::exit(1);
+			}
+			_ => {
+				if positional.is_some() {
+					print_error("`pluma test` takes at most one directory argument");
+					std::process::exit(1);
+				}
+				positional = Some(a);
+			}
+		}
+	}
+
+	let start_dir: std::path::PathBuf = match positional {
+		Some(arg) => {
+			let p = std::path::Path::new(&arg);
+			if !p.is_dir() {
+				print_error(format!("`{}` is not a directory", arg));
+				std::process::exit(1);
+			}
+			match p.canonicalize() {
+				Ok(d) => d,
+				Err(err) => {
+					print_error(format!("Could not resolve `{}`: {}", arg, err));
+					std::process::exit(1);
+				}
+			}
+		}
+		None => cwd,
+	};
+
+	// `pluma test` requires a package root — the marker tells the runner
+	// which subtree counts as "the project" and gives every `*.test.pa`
+	// module a stable name to resolve `use` paths against. Without one,
+	// any non-trivial test layout silently mis-resolves siblings.
+	let root_dir = match compiler::find_project_root(&start_dir) {
+		Some(p) => p,
+		None => {
+			print_error(
+				"no package root found (no pluma.pa in any parent directory). \
+				Create a `pluma.pa` at your project root.",
+			);
+			std::process::exit(1);
+		}
+	};
+
+	// Module names below are paths relative to the package root, with `/`
+	// flipped to `.` and the `.pa` extension stripped — so
+	// `<root>/foo/bar.test.pa` becomes `foo.bar.test`.
+	let mut test_modules = discover_test_modules(&root_dir);
 	test_modules.sort();
 
 	if !filters.is_empty() {
@@ -133,7 +194,7 @@ fn test_command(filters: Vec<String>) {
 		if filters.is_empty() {
 			eprintln!(
 				"no test files found (looked for *.test.pa under {})",
-				cwd.display()
+				root_dir.display()
 			);
 		} else {
 			eprintln!("no test files match {:?}", filters);
@@ -148,7 +209,7 @@ fn test_command(filters: Vec<String>) {
 			"running {} test {} in {}",
 			count,
 			module_word,
-			cwd.display()
+			root_dir.display()
 		);
 	} else {
 		let quoted: Vec<String> = filters.iter().map(|f| format!("'{}'", f)).collect();
@@ -164,12 +225,16 @@ fn test_command(filters: Vec<String>) {
 			count,
 			module_word,
 			joined,
-			cwd.display()
+			root_dir.display()
 		);
 	}
 	println!();
 
-	let mut compiler = Compiler::for_root_dir(cwd.clone());
+	let mut compiler = Compiler::for_root_dir(root_dir.clone());
+	// Add the project marker as an entry so the analyzer type-checks
+	// `def package` against `core.package.info` (catches mistakes in the
+	// config even when no test code references it).
+	compiler.add_entry_module(compiler::PROJECT_MARKER_MODULE.to_string());
 	for name in &test_modules {
 		compiler.add_entry_module(name.clone());
 	}
@@ -226,8 +291,8 @@ fn test_command(filters: Vec<String>) {
 			Err(err) => {
 				println!("  {} {}", colors::bold_red("✗"), test_name);
 				if let (Some(module), Some(range)) = (&err.module, err.range) {
-					let path = compiler::to_module_path(&cwd, module);
-					let display_path = path.strip_prefix(&cwd).unwrap_or(&path);
+					let path = compiler::to_module_path(&root_dir, module);
+					let display_path = path.strip_prefix(&root_dir).unwrap_or(&path);
 					// Convert 0-indexed Range points to 1-indexed line/col so
 					// the output is editor-friendly (most editors and the
 					// "Cmd+click in terminal" convention expect 1-indexed).
@@ -427,8 +492,11 @@ Compiler & toolchain for the {} programming language
 COMMANDS:
   [run] <path>     execute a module directly (the `run` keyword is optional)
   format <path>... canonicalize formatting; pass `-` for stdin, `--check` to dry-run
-  test [filter]... discover and run tests from `*.test.pa` files under cwd
-                   (filters substring-match against module names)
+  test [dir] [-f name]...
+                   discover and run tests from `*.test.pa` files under the
+                   nearest `pluma.pa`. Pass a directory to start the walk-up
+                   from somewhere other than cwd. `-f name` (repeatable)
+                   filters to modules whose name contains `name`.
   tokenize <path>  dump the token stream for a module
   analyze <path>   parse, type-check & dump info about a module
   version          print compiler version info
@@ -448,8 +516,11 @@ Compiler & toolchain for the {} programming language
 COMMANDS:
   [run] <path>     execute a module directly (the `run` keyword is optional)
   format <path>... canonicalize formatting; pass `-` for stdin, `--check` to dry-run
-  test [filter]... discover and run tests from `*.test.pa` files under cwd
-                   (filters substring-match against module names)
+  test [dir] [-f name]...
+                   discover and run tests from `*.test.pa` files under the
+                   nearest `pluma.pa`. Pass a directory to start the walk-up
+                   from somewhere other than cwd. `-f name` (repeatable)
+                   filters to modules whose name contains `name`.
   version          print compiler version info
   help             print this help text
 ",

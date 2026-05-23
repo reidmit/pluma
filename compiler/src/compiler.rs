@@ -227,17 +227,30 @@ impl Compiler {
 
 		// Test modules (name ends in `.test`) are only importable by other
 		// test modules. Production code shouldn't depend on test-only files.
+		// The project marker (`pluma.pa`) is config, not a library — it's
+		// never importable by anything else. See PACKAGES.md.
 		let importer_is_test = module_name.ends_with(".test");
 		let importer_path = self.modules.get(module_name).map(|m| m.module_path.clone());
 		let mut rejected_imports: HashSet<String> = HashSet::new();
 		for (full_name, _, range) in &imports {
-			if full_name.ends_with(".test") && !importer_is_test {
-				let mut diag = Diagnostic::error(format!(
+			let reject_reason = if full_name.ends_with(".test") && !importer_is_test {
+				Some(format!(
 					"Cannot import test module `{}` from a non-test module. \
 					Only `.test` modules may `use` other `.test` modules.",
 					full_name
 				))
-				.with_range(*range);
+			} else if full_name == PROJECT_MARKER_MODULE && module_name != PROJECT_MARKER_MODULE {
+				Some(format!(
+					"Cannot `use {}` — the project marker file is config, not \
+					a library. Project metadata is one-directional: the CLI reads \
+					it, runtime code never depends on it.",
+					full_name
+				))
+			} else {
+				None
+			};
+			if let Some(message) = reject_reason {
+				let mut diag = Diagnostic::error(message).with_range(*range);
 				if let Some(path) = importer_path.clone() {
 					diag = diag.with_module(module_name.to_string(), path);
 				}
@@ -327,6 +340,32 @@ fn resolve_entry(entry_path: String) -> Result<(PathBuf, String), Vec<Diagnostic
 	}
 }
 
+// Name of the file marking a Pluma package root. See PACKAGES.md.
+pub const PROJECT_MARKER_FILE: &str = "pluma.pa";
+
+// Module name of the project marker, used to identify it in import-rejection
+// checks and special analyzer rules.
+pub const PROJECT_MARKER_MODULE: &str = "pluma";
+
+// Walk upward from `start` looking for a directory containing
+// `pluma.pa`. Returns the first directory that has one. None means no
+// marker was found anywhere on the path to the filesystem root.
+pub fn find_project_root(start: &Path) -> Option<PathBuf> {
+	let mut dir = if start.is_dir() {
+		start.to_path_buf()
+	} else {
+		start.parent()?.to_path_buf()
+	};
+	loop {
+		if dir.join(PROJECT_MARKER_FILE).is_file() {
+			return Some(dir);
+		}
+		if !dir.pop() {
+			return None;
+		}
+	}
+}
+
 pub fn to_module_path(root_dir: &Path, module_name: &str) -> PathBuf {
 	let mut path = root_dir.to_path_buf();
 	// Test modules live in `<segments>.test.pa` files. Their module name keeps
@@ -359,10 +398,29 @@ fn get_root_dir_and_module_name(entry_path: String) -> Result<(PathBuf, String),
 	}
 
 	match joined_path.canonicalize() {
-		Ok(abs_path) => Ok((
-			abs_path.parent().unwrap().to_path_buf(),
-			abs_path.file_stem().unwrap().to_str().unwrap().to_owned(),
-		)),
+		Ok(abs_path) => {
+			let entry_dir = abs_path.parent().unwrap().to_path_buf();
+			// Walk up from the entry file's directory looking for `pluma.pa`.
+			// If found, the package root anchors module-name resolution and the
+			// entry becomes a dotted path relative to it (e.g. `auth.login`).
+			// Otherwise fall back to the legacy rule — entry file's directory
+			// is the root, entry module is the file stem.
+			let (root_dir, module_name) = match find_project_root(&entry_dir) {
+				Some(root) => {
+					let rel = abs_path.strip_prefix(&root).unwrap_or(&abs_path);
+					let stem_path = rel.with_extension("");
+					let module_name = stem_path
+						.to_string_lossy()
+						.replace(std::path::MAIN_SEPARATOR, ".");
+					(root, module_name)
+				}
+				None => (
+					entry_dir,
+					abs_path.file_stem().unwrap().to_str().unwrap().to_owned(),
+				),
+			};
+			Ok((root_dir, module_name))
+		}
 
 		Err(_) => {
 			if found_dir {
