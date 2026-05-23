@@ -1,10 +1,6 @@
 use core.bytes
 use core.assert
 
-# `[]` with no other context has no inferable element type; pin one
-# down with a module-level def for tests that operate on empty lists.
-def empty-ints :: list int = []
-
 # --- length / is-empty ---
 
 test "length of empty bytes" {
@@ -137,7 +133,7 @@ test "to-list extracts byte values" {
 }
 
 test "to-list of empty is empty" {
-	assert.equals (bytes.to-list '') empty-ints
+	assert.equals (bytes.to-list '') []
 }
 
 test "from-list builds bytes" {
@@ -146,7 +142,7 @@ test "from-list builds bytes" {
 }
 
 test "from-list of empty is empty bytes" {
-	when bytes.from-list empty-ints is ok b { assert.equals b '' }
+	when bytes.from-list [] is ok b { assert.equals b '' }
 	is err _msg { assert.is-true false }
 }
 
