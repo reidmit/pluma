@@ -6,6 +6,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This repo (named `pencil` on disk) implements **Pluma**, a small statically-typed functional language. The CLI binary is named `pluma`, source files use the `.pa` extension. The language is documented under `site/content/docs/` (the zola-built docs site); rough roadmap phases live in `README.md`.
 
+## Pluma syntax — common gotchas
+
+When writing `.pa` code, these are the traps that don't match other languages' intuitions. When in doubt, mirror a fixture in `tests/run/`.
+
+- **Zero-arg calls use `()`, not `{}`.** `do-it ()`, `map.empty ()`, `io.read ()`, `random.int ()`. `{}` is a block expression — `do-it {}` parses as calling `do-it` with a block, which is a type error.
+- **Pluma is uncurried.** `add 5` is an arity error, not partial application. To partially apply, wrap: `fun y { add 5 y }`.
+- **Function literals: args bare before the brace.** `fun x { x + 1 }`, `fun x y { x + y }`. Zero-arg form is `fun { ... }`. Top-level functions: `def name = fun args { body }`.
+- **Single-arg calls take no parens.** `print x`, `fact 5`, `to-string n`. Parens are only for grouping a sub-expression: `print (fact 5)`, `print (1 + 2)`.
+- **Refutable `if`: `if subj is pat { ... } else { ... }`.** The `else` branch is the no-match case. Example: `if r is ok v { v } else { 0 }`.
+- **`when` chains multiple `is` branches.** `when c is red { "r" } is green { "g" } is blue { "b" }`. No commas; only the first arm has the subject (`when c is …`), subsequent arms start with bare `is`.
+- **Type annotations use `:: TYPE`.** Top-level: `def length :: fun (list a) -> int = built-in "list-length"`. Local: `let xs :: list int = []`. Parens wrap compound type args inside a `fun` signature (`fun (list a) -> int`, `fun (option int) -> int`).
+- **Float operators carry a trailing dot:** `+.`, `-.`, `*.`, `/.`, `%.`. Integer ops have no dot and operate only on `int`. `++` is string concat. `??` is option coalesce.
+- **String interpolation: `"$(expr)"`.** Non-string values need explicit `to-string`: `"n = $(to-string n)"`. A bare string variable interpolates directly: `"hi $(name)"`.
+- **Enums.** Declare with newline-separated variants; payload follows the variant name:
+  ```
+  enum option a {
+      some a
+      none
+  }
+  ```
+  Construct as `option.some 42` or bare `some 42` when the type is clear. Match by bare variant: `when x is some n { ... } is none { ... }`.
+- **`def` is top-level; `let` is local.** Top-level bindings can't use `let`, and `let` patterns must be irrefutable (use `if`/`when` for `some`/`ok`/etc.).
+- **`use core.foo` for stdlib imports.** Available modules include `core.list`, `core.map`, `core.bytes`, `core.string`, `core.math`, `core.assert`, `core.hex`, `core.base64`, `core.random`, `core.uuid`. `ref` is auto-imported — don't `use core.ref`.
+
+For unfamiliar stdlib calls, `grep tests/run/*/main.pa` for a working example rather than guessing.
+
 ## Workspace layout
 
 Cargo workspace (see `Cargo.toml`):
