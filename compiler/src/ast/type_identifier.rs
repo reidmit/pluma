@@ -1,6 +1,7 @@
 use super::*;
 use crate::location::Range;
 
+#[derive(Clone)]
 pub struct TypeIdentifierNode {
 	pub range: Range,
 	// Optional module namespace prefix: `Some(ident)` for `module.TypeName`,

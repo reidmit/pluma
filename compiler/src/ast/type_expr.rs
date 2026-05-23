@@ -1,11 +1,13 @@
 use super::*;
 use crate::location::Range;
 
+#[derive(Clone)]
 pub struct TypeExprNode {
 	pub range: Range,
 	pub kind: TypeExprKind,
 }
 
+#[derive(Clone)]
 pub enum TypeExprKind {
 	// e.g. string or dict<int, string>
 	Single(TypeIdentifierNode),

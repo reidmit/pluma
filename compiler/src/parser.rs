@@ -1383,6 +1383,18 @@ impl<'a> Parser<'a> {
 			}
 		};
 
+		// `:: TYPE` annotation — same shape as the top-level def form.
+		// Only meaningful on identifier patterns; the analyzer enforces
+		// that and surfaces a diagnostic if it appears alongside a
+		// destructuring pattern.
+		let type_annotation = if matches!(self.current_token, Some(Token::DoubleColon(..))) {
+			self.advance();
+			self.skip_line_breaks();
+			Some(self.parse_type_expression_with_generics()?)
+		} else {
+			None
+		};
+
 		expect_token_and_advance!(self, Token::Equal);
 
 		let (end, value) = match self.parse_expression() {
@@ -1398,6 +1410,7 @@ impl<'a> Parser<'a> {
 			range: Range::between(start, end),
 			pattern,
 			value: Box::new(value),
+			type_annotation,
 		})
 	}
 

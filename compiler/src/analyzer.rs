@@ -2288,9 +2288,23 @@ impl<'compiler> Analyzer<'compiler> {
 				self.leave_scope();
 			}
 
-			ExprKind::Let(LetNode { pattern, value, .. }) => {
+			ExprKind::Let(LetNode {
+				pattern,
+				value,
+				type_annotation,
+				..
+			}) => {
 				// visit the value (expression after the `=`), and collect constraints:
 				self.constrain_expr(value, constraints);
+
+				// `:: TYPE` annotation — same shape as the top-level def
+				// form. Resolve in the value's current scope (free names
+				// in the annotation introduce fresh type vars) and unify
+				// with the bound expression's inferred type.
+				if let Some(annotation) = type_annotation {
+					let annotated_ty = self.resolve_annotation(annotation, constraints);
+					constraints.push(eq_constraint(value.ty.clone(), annotated_ty).at(annotation.range));
+				}
 
 				match &mut pattern.kind {
 					PatternKind::Identifier(name) => {

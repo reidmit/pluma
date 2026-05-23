@@ -1,12 +1,6 @@
 use core.list
 use core.assert
 
-# `list.sort` dispatches on `ord a`, so the empty-list sort case needs
-# a concrete element type — codegen can't pick an `ord` dictionary
-# from a free type var. Other empty-list calls infer fine from the
-# surrounding args.
-def empty-ints :: list int = []
-
 # --- length / is-empty ---
 
 test "length of empty list" {
@@ -216,5 +210,9 @@ test "sort descending via swapped comparator" {
 }
 
 test "sort empty is empty" {
-	assert.equals (list.sort empty-ints ord.compare) empty-ints
+	# `list.sort` dispatches on `ord a`, so the empty-list case needs
+	# a concrete element type — codegen can't pick an `ord` dictionary
+	# from a free type var.
+	let empty :: list int = []
+	assert.equals (list.sort empty ord.compare) empty
 }

@@ -1,0 +1,26 @@
+# `let name :: TYPE = value` — same `:: TYPE` annotation slot as
+# top-level `def`. Lets a binding pin an otherwise-ambiguous type
+# without lifting the value out to module scope.
+
+use core.list
+
+def main = fun {
+	# The empty list's element type isn't constrained by anything else
+	# in this expression; the annotation tells the analyzer to treat
+	# `xs` as `list int` so `list.sort xs ord.compare` can resolve its
+	# `ord int` dictionary at codegen.
+	let xs :: list int = []
+	print (list.length xs)
+	print (list.sort xs ord.compare)
+
+	# The annotation also works when the value's type is already
+	# concrete — it just adds an extra unification with no effect.
+	let ys :: list int = [3, 1, 2]
+	print (list.sort ys ord.compare)
+
+	# Free names in the annotation become fresh type vars, so this
+	# annotation polymorphic in `a` is fine; the value's type drives
+	# the unification.
+	let zs :: list a = ["a", "b"]
+	print zs
+}
