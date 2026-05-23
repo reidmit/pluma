@@ -1,0 +1,82 @@
+use core.result as res
+use core.assert
+
+# Helpers. `checked` returns ok for positives, err for non-positives.
+def checked = fun n {
+	if n > 0 is true { ok n } else { err "non-positive" }
+}
+
+def doubled = fun n { ok (n * 2) }
+
+# `err "..."` on its own has unknown `ok` type; pin to `result int
+# string` so the assertions below have something concrete to unify
+# against.
+def bad-boom :: result int string = err "boom"
+def bad-skip :: result int string = err "skip"
+def bad-early :: result int string = err "early"
+
+# --- then on `ok` ---
+
+test "then on ok runs the continuation" {
+	when res.then (ok 3) doubled is ok n { assert.equals n 6 }
+	is err _e { assert.is-true false }
+}
+
+test "then can change the ok type" {
+	when res.then (ok 5) fun n { ok (to-string n) } is ok s { assert.equals s "5" }
+	is err _e { assert.is-true false }
+}
+
+test "then can flip ok into err" {
+	when res.then (ok -3) checked is ok _n { assert.is-true false }
+	is err e { assert.equals e "non-positive" }
+}
+
+# --- then on `err` ---
+
+test "then on err stays err" {
+	when res.then bad-boom doubled is ok _n { assert.is-true false }
+	is err e { assert.equals e "boom" }
+}
+
+test "then on err does not call the continuation" {
+	let counter = ref.new 0
+	let bump-and-double = fun n {
+		ref.update counter fun c { c + 1 }
+		ok (n * 2)
+	}
+	when res.then bad-skip bump-and-double is ok _n { assert.is-true false }
+	is err e { assert.equals e "skip" }
+	assert.equals (ref.get counter) 0
+}
+
+# --- chained then ---
+
+test "two-step then composes" {
+	let r = res.then (ok 4) fun n {
+		res.then (checked n) doubled
+	}
+	when r is ok n { assert.equals n 8 }
+	is err _e { assert.is-true false }
+}
+
+def try-pipe = fun {
+	try x = ok 4
+	try y = checked x
+	ok (y * 2)
+}
+
+def try-pipe-err = fun {
+	try _x = bad-early
+	ok 42
+}
+
+test "try desugars to then on ok" {
+	when try-pipe () is ok n { assert.equals n 8 }
+	is err _e { assert.is-true false }
+}
+
+test "try short-circuits on err" {
+	when try-pipe-err () is ok _n { assert.is-true false }
+	is err e { assert.equals e "early" }
+}

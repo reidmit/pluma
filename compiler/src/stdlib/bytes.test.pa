@@ -1,0 +1,199 @@
+use core.bytes
+use core.assert
+
+# `[]` with no other context has no inferable element type; pin one
+# down with a module-level def for tests that operate on empty lists.
+def empty-ints :: list int = []
+
+# --- length / is-empty ---
+
+test "length of empty bytes" {
+	assert.equals (bytes.length '') 0
+}
+
+test "length counts bytes" {
+	assert.equals (bytes.length 'hello') 5
+	assert.equals (bytes.length '\x00\xff') 2
+}
+
+test "is-empty on empty bytes" {
+	assert.is-true (bytes.is-empty '')
+}
+
+test "is-empty on non-empty bytes" {
+	assert.is-false (bytes.is-empty 'x')
+}
+
+# --- at ---
+
+test "at returns some byte in range" {
+	when bytes.at 'hello' 0 is some n { assert.equals n 104 }
+	is none { assert.is-true false }
+}
+
+test "at returns some at last index" {
+	when bytes.at 'hello' 4 is some n { assert.equals n 111 }
+	is none { assert.is-true false }
+}
+
+test "at returns none past the end" {
+	when bytes.at 'hello' 99 is some _n { assert.is-true false }
+	is none { assert.is-true true }
+}
+
+test "at returns none on empty input" {
+	when bytes.at '' 0 is some _n { assert.is-true false }
+	is none { assert.is-true true }
+}
+
+# --- concat ---
+
+test "concat joins two bytes" {
+	assert.equals (bytes.concat 'foo' 'bar') 'foobar'
+}
+
+test "concat with empty left" {
+	assert.equals (bytes.concat '' 'bar') 'bar'
+}
+
+test "concat with empty right" {
+	assert.equals (bytes.concat 'foo' '') 'foo'
+}
+
+# --- slice ---
+
+test "slice returns the substring" {
+	assert.equals (bytes.slice 'hello' 1 4) 'ell'
+}
+
+test "slice clamps oversize end" {
+	assert.equals (bytes.slice 'hello' 0 99) 'hello'
+}
+
+test "slice with start past end is empty" {
+	assert.equals (bytes.slice 'hello' 3 1) ''
+}
+
+test "slice zero-length is empty" {
+	assert.equals (bytes.slice 'hello' 2 2) ''
+}
+
+# --- contains / starts-with / ends-with ---
+
+test "contains finds a sub-sequence" {
+	assert.is-true (bytes.contains 'hello world' 'world')
+}
+
+test "contains misses a non-sub-sequence" {
+	assert.is-false (bytes.contains 'hello' 'xyz')
+}
+
+test "contains empty needle is true" {
+	assert.is-true (bytes.contains 'anything' '')
+}
+
+test "starts-with a prefix" {
+	assert.is-true (bytes.starts-with '\x89PNG' '\x89')
+}
+
+test "starts-with a non-prefix" {
+	assert.is-false (bytes.starts-with 'PNG' '\x89')
+}
+
+test "ends-with a suffix" {
+	assert.is-true (bytes.ends-with 'hello\n' '\n')
+}
+
+test "ends-with a non-suffix" {
+	assert.is-false (bytes.ends-with 'hello' '\n')
+}
+
+# --- repeat / reverse ---
+
+test "repeat duplicates the input" {
+	assert.equals (bytes.repeat 'ab' 3) 'ababab'
+}
+
+test "repeat zero times is empty" {
+	assert.equals (bytes.repeat 'ab' 0) ''
+}
+
+test "repeat once is the input" {
+	assert.equals (bytes.repeat 'ab' 1) 'ab'
+}
+
+test "reverse flips byte order" {
+	assert.equals (bytes.reverse 'abcde') 'edcba'
+}
+
+test "reverse of empty is empty" {
+	assert.equals (bytes.reverse '') ''
+}
+
+# --- to-list / from-list ---
+
+test "to-list extracts byte values" {
+	assert.equals (bytes.to-list 'ABC') [65, 66, 67]
+}
+
+test "to-list of empty is empty" {
+	assert.equals (bytes.to-list '') empty-ints
+}
+
+test "from-list builds bytes" {
+	when bytes.from-list [65, 66, 67] is ok b { assert.equals b 'ABC' }
+	is err _msg { assert.is-true false }
+}
+
+test "from-list of empty is empty bytes" {
+	when bytes.from-list empty-ints is ok b { assert.equals b '' }
+	is err _msg { assert.is-true false }
+}
+
+test "from-list fails on out-of-range high" {
+	when bytes.from-list [256] is ok _b { assert.is-true false }
+	is err _msg { assert.is-true true }
+}
+
+test "from-list fails on negative" {
+	when bytes.from-list [-1] is ok _b { assert.is-true false }
+	is err _msg { assert.is-true true }
+}
+
+# --- join / split ---
+
+test "join with comma separator" {
+	assert.equals (bytes.join ['a', 'b', 'c'] ',') 'a,b,c'
+}
+
+test "join with null separator" {
+	assert.equals (bytes.join ['a', 'b'] '\x00') 'a\x00b'
+}
+
+test "join of singleton omits separator" {
+	assert.equals (bytes.join ['only'] ',') 'only'
+}
+
+test "split on a comma" {
+	assert.equals (bytes.split 'a,b,c' ',') ['a', 'b', 'c']
+}
+
+test "split with adjacent separators" {
+	assert.equals (bytes.split 'a,b,,c' ',') ['a', 'b', '', 'c']
+}
+
+test "split with no match is single-element" {
+	assert.equals (bytes.split 'abc' ',') ['abc']
+}
+
+# --- to-string ---
+
+test "to-string decodes valid UTF-8" {
+	when bytes.to-string 'hello' is ok s { assert.equals s "hello" }
+	is err _msg { assert.is-true false }
+}
+
+test "to-string fails on invalid UTF-8" {
+	when bytes.to-string '\xff\xfe' is ok _s { assert.is-true false }
+	is err _msg { assert.is-true true }
+}

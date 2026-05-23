@@ -1,0 +1,121 @@
+use core.regex as re
+use core.list
+use core.map
+use core.assert
+
+# --- matches ---
+
+test "matches finds a substring" {
+	assert.is-true (re.matches `"hello"` "hello, world!")
+}
+
+test "matches on non-match" {
+	assert.is-false (re.matches `"hello"` "goodbye!")
+}
+
+test "matches on empty input" {
+	assert.is-false (re.matches `"hello"` "")
+}
+
+test "matches anchored pattern" {
+	assert.is-true (re.matches `^ "ab" $` "ab")
+	assert.is-false (re.matches `^ "ab" $` "ab ")
+}
+
+# --- find ---
+
+test "find returns the first match" {
+	when re.find `digit+` "abc 123 def" is some m {
+		assert.equals m.text "123"
+		assert.equals m.start 4
+		assert.equals m.end 7
+	}
+	is none { assert.is-true false }
+}
+
+test "find on no match is none" {
+	when re.find `digit+` "no digits" is some _m { assert.is-true false }
+	is none { assert.is-true true }
+}
+
+test "find populates named captures" {
+	when re.find `<x: digit+> "," <y: digit+>` "(3,7)" is some m {
+		when map.lookup m.groups "x" is some s { assert.equals s "3" }
+		is none { assert.is-true false }
+		when map.lookup m.groups "y" is some s { assert.equals s "7" }
+		is none { assert.is-true false }
+	}
+	is none { assert.is-true false }
+}
+
+# --- find-all ---
+
+test "find-all returns every match" {
+	let ms = re.find-all `digit+` "a 1 b 22 c 333"
+	assert.equals (list.length ms) 3
+	assert.equals (list.map ms fun m { m.text }) ["1", "22", "333"]
+}
+
+test "find-all on no match is empty" {
+	let ms = re.find-all `digit+` "no numbers"
+	assert.equals (list.length ms) 0
+}
+
+# --- named-capture ---
+
+test "named-capture returns some on a hit" {
+	when re.named-capture `<k: letter+> "=" <v: digit+>` "size=42" "v" is some s {
+		assert.equals s "42"
+	}
+	is none { assert.is-true false }
+}
+
+test "named-capture returns none for an unknown name" {
+	when re.named-capture `<k: letter+> "=" <v: digit+>` "size=42" "nope" is some _s {
+		assert.is-true false
+	}
+	is none { assert.is-true true }
+}
+
+test "named-capture returns none on no match" {
+	when re.named-capture `<k: letter+> "=" <v: digit+>` "no equals here" "k" is some _s {
+		assert.is-true false
+	}
+	is none { assert.is-true true }
+}
+
+# --- replace / replace-first ---
+
+test "replace substitutes every match" {
+	assert.equals (re.replace `digit+` "a1b22c333" "N") "aNbNcN"
+}
+
+test "replace uses named-capture interpolation" {
+	assert.equals (re.replace `<x: digit+> "," <y: digit+>` "(1,2) (3,4)" "[${x}-${y}]") "([1-2]) ([3-4])"
+}
+
+test "replace with no match passes through" {
+	assert.equals (re.replace `digit+` "no nums" "N") "no nums"
+}
+
+test "replace-first only replaces the leftmost" {
+	assert.equals (re.replace-first `digit+` "1 2 3" "N") "N 2 3"
+}
+
+test "replace-first with no match passes through" {
+	assert.equals (re.replace-first `digit+` "no nums" "N") "no nums"
+}
+
+# --- split ---
+
+test "split on a delimiter" {
+	assert.equals (re.split `","` "a,b,c") ["a", "b", "c"]
+}
+
+test "split collapses whitespace" {
+	assert.equals (re.split `whitespace+` "  a   b\tc  ") ["", "a", "b", "c", ""]
+}
+
+test "split with no match returns the whole input" {
+	assert.equals (re.split `","` "abc") ["abc"]
+}

@@ -1,0 +1,189 @@
+use core.string
+use core.bytes
+use core.assert
+
+# --- length / is-empty ---
+
+test "length of empty string" {
+	assert.equals (string.length "") 0
+}
+
+test "length counts bytes" {
+	assert.equals (string.length "hello") 5
+	assert.equals (string.length "a b c") 5
+}
+
+test "is-empty on empty string" {
+	assert.is-true (string.is-empty "")
+}
+
+test "is-empty on non-empty string" {
+	assert.is-false (string.is-empty "x")
+}
+
+# --- to-upper / to-lower ---
+
+test "to-upper uppercases ASCII" {
+	assert.equals (string.to-upper "hello") "HELLO"
+}
+
+test "to-upper leaves digits and punctuation alone" {
+	assert.equals (string.to-upper "hi, 123!") "HI, 123!"
+}
+
+test "to-lower lowercases ASCII" {
+	assert.equals (string.to-lower "HELLO") "hello"
+}
+
+test "to-lower on already-lower is unchanged" {
+	assert.equals (string.to-lower "hello") "hello"
+}
+
+# --- trim ---
+
+test "trim strips both ends" {
+	assert.equals (string.trim "  hello  ") "hello"
+}
+
+test "trim leaves inner whitespace alone" {
+	assert.equals (string.trim "  a b c  ") "a b c"
+}
+
+test "trim of all whitespace is empty" {
+	assert.equals (string.trim "   ") ""
+}
+
+test "trim of empty is empty" {
+	assert.equals (string.trim "") ""
+}
+
+# --- contains / starts-with / ends-with ---
+
+test "contains a substring" {
+	assert.is-true (string.contains "abcdef" "cde")
+}
+
+test "contains misses a non-substring" {
+	assert.is-false (string.contains "abcdef" "xyz")
+}
+
+test "contains empty needle is true" {
+	assert.is-true (string.contains "abc" "")
+}
+
+test "starts-with a prefix" {
+	assert.is-true (string.starts-with "hello world" "hello")
+}
+
+test "starts-with a non-prefix" {
+	assert.is-false (string.starts-with "hello world" "world")
+}
+
+test "starts-with empty is true" {
+	assert.is-true (string.starts-with "abc" "")
+}
+
+test "ends-with a suffix" {
+	assert.is-true (string.ends-with "hello world" "world")
+}
+
+test "ends-with a non-suffix" {
+	assert.is-false (string.ends-with "hello world" "hello")
+}
+
+test "ends-with empty is true" {
+	assert.is-true (string.ends-with "abc" "")
+}
+
+# --- join / split ---
+
+test "join with comma" {
+	assert.equals (string.join ["a", "b", "c"] ",") "a,b,c"
+}
+
+test "join with empty separator" {
+	assert.equals (string.join ["a", "b", "c"] "") "abc"
+}
+
+test "join of singleton omits separator" {
+	assert.equals (string.join ["only"] ",") "only"
+}
+
+test "join of empty list is empty" {
+	assert.equals (string.join [] ",") ""
+}
+
+test "split on comma" {
+	assert.equals (string.split "a,b,c" ",") ["a", "b", "c"]
+}
+
+test "split with adjacent separators" {
+	assert.equals (string.split "a,,b" ",") ["a", "", "b"]
+}
+
+test "split with no occurrences is single element" {
+	assert.equals (string.split "abc" ",") ["abc"]
+}
+
+test "split-then-join round-trip" {
+	assert.equals (string.join (string.split "a-b-c" "-") "-") "a-b-c"
+}
+
+# --- replace ---
+
+test "replace every occurrence" {
+	assert.equals (string.replace "a-b-c" "-" "_") "a_b_c"
+}
+
+test "replace with empty replacement" {
+	assert.equals (string.replace "abc-def" "-" "") "abcdef"
+}
+
+test "replace with no match passes through" {
+	assert.equals (string.replace "abc" "x" "y") "abc"
+}
+
+# --- to-int / to-float ---
+
+test "to-int parses an integer" {
+	when string.to-int "42" is ok n { assert.equals n 42 }
+	is err _msg { assert.is-true false }
+}
+
+test "to-int parses a negative integer" {
+	when string.to-int "-7" is ok n { assert.equals n -7 }
+	is err _msg { assert.is-true false }
+}
+
+test "to-int fails on non-numeric input" {
+	when string.to-int "hello" is ok _n { assert.is-true false }
+	is err _msg { assert.is-true true }
+}
+
+test "to-int fails on a float" {
+	when string.to-int "3.14" is ok _n { assert.is-true false }
+	is err _msg { assert.is-true true }
+}
+
+test "to-float parses a float" {
+	when string.to-float "3.14" is ok x { assert.equals x 3.14 }
+	is err _msg { assert.is-true false }
+}
+
+test "to-float parses an integer literal" {
+	when string.to-float "42" is ok x { assert.equals x 42.0 }
+	is err _msg { assert.is-true false }
+}
+
+test "to-float fails on non-numeric input" {
+	when string.to-float "hello" is ok _x { assert.is-true false }
+	is err _msg { assert.is-true true }
+}
+
+# --- to-bytes ---
+
+test "to-bytes round-trips through bytes.to-string" {
+	let b = string.to-bytes "hello"
+	when bytes.to-string b is ok s { assert.equals s "hello" }
+	is err _msg { assert.is-true false }
+}
