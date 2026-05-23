@@ -527,11 +527,17 @@ impl<'a> Formatter<'a> {
 		bracketed("(", ")", docs)
 	}
 
-	fn format_list(&self, items: &[ExprNode]) -> Doc {
+	fn format_list(&self, items: &[ListItem]) -> Doc {
 		if items.is_empty() {
 			return text("[]");
 		}
-		let docs: Vec<Doc> = items.iter().map(|e| self.format_expr(e)).collect();
+		let docs: Vec<Doc> = items
+			.iter()
+			.map(|item| match item {
+				ListItem::Item(e) => self.format_expr(e),
+				ListItem::Spread(e) => concat(vec![text("..."), self.format_expr(e)]),
+			})
+			.collect();
 		bracketed_collection("[", "]", docs)
 	}
 

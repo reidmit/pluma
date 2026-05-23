@@ -1,0 +1,72 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/list-spread/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-6:35) [
+            def(0:0-0:18) :: nothing {
+                name: ident(0:4-0:6) `xs`,
+                kind: expr(0:9-0:18) :: list int {
+                    kind: [
+                        expr(0:10-0:11) :: int {
+                            kind: literal(0:10-0:11) int 1,
+                        },
+                        expr(0:13-0:14) :: int {
+                            kind: literal(0:13-0:14) int 2,
+                        },
+                        expr(0:16-0:17) :: int {
+                            kind: literal(0:16-0:17) int 3,
+                        },
+                    ],
+                },
+            },
+            def(2:0-2:26) :: nothing {
+                name: ident(2:4-2:13) `with-head`,
+                kind: expr(2:16-2:26) :: list int {
+                    kind: [
+                        expr(2:17-2:18) :: int {
+                            kind: literal(2:17-2:18) int 0,
+                        },
+                        ...expr(2:23-2:25) :: list int {
+                            kind: ident(2:23-2:25) `xs`,
+                        },
+                    ],
+                },
+            },
+            def(4:0-4:27) :: nothing {
+                name: ident(4:4-4:10) `joined`,
+                kind: expr(4:13-4:27) :: list int {
+                    kind: [
+                        ...expr(4:17-4:19) :: list int {
+                            kind: ident(4:17-4:19) `xs`,
+                        },
+                        ...expr(4:24-4:26) :: list int {
+                            kind: ident(4:24-4:26) `xs`,
+                        },
+                    ],
+                },
+            },
+            def(6:0-6:35) :: nothing {
+                name: ident(6:4-6:12) `interior`,
+                kind: expr(6:15-6:35) :: list int {
+                    kind: [
+                        expr(6:16-6:17) :: int {
+                            kind: literal(6:16-6:17) int 0,
+                        },
+                        ...expr(6:22-6:24) :: list int {
+                            kind: ident(6:22-6:24) `xs`,
+                        },
+                        expr(6:26-6:27) :: int {
+                            kind: literal(6:26-6:27) int 9,
+                        },
+                        ...expr(6:32-6:34) :: list int {
+                            kind: ident(6:32-6:34) `xs`,
+                        },
+                    ],
+                },
+            },
+        ],
+    ),
+}

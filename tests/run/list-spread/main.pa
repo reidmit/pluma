@@ -1,0 +1,24 @@
+use core.list
+
+def main = fun {
+	let xs = [2, 3, 4]
+	let ys = [10, 11]
+
+	# spread after a leading element
+	print [1, ...xs]
+	# spread before a trailing element
+	print [...xs, 5]
+	# only spreads
+	print [...xs, ...ys]
+	# interior and multiple spreads with literals between
+	print [0, ...xs, 5, ...ys, 99]
+	# a lone spread copies the list
+	print [...xs]
+	# spread of a list expression, not just a binding
+	print [...list.reverse xs, 0]
+	# no-spread lists still work
+	print [1, 2, 3]
+	# spreading an empty list is a no-op
+	let empty :: list int = []
+	print [1, ...empty, 2]
+}

@@ -1421,8 +1421,36 @@ impl<'a> Parser<'a> {
 
 		let mut elements = Vec::new();
 
-		while let Some(expr) = self.parse_expression() {
-			elements.push(expr);
+		loop {
+			// A leading `...` makes this element a spread (must be a list).
+			// Unlike list *patterns*, spreads may appear at any position and
+			// any number of times.
+			let spread = if let Some(Token::TripleDot(span_start, span_end)) = self.current_token {
+				self.advance();
+				Some((span_start, span_end))
+			} else {
+				None
+			};
+
+			let Some(expr) = self.parse_expression() else {
+				if let Some((span_start, span_end)) = spread {
+					// `...` with nothing after it (e.g. `[...]` or `[1, ...]`).
+					self.error::<ExprNode>(ParseError {
+						range: Range::between(
+							self.offset_to_point(span_start),
+							self.offset_to_point(span_end),
+						),
+						kind: ParseErrorKind::ExpectedExpressionAfterSpread,
+					});
+				}
+				break;
+			};
+
+			elements.push(if spread.is_some() {
+				ListItem::Spread(expr)
+			} else {
+				ListItem::Item(expr)
+			});
 
 			if current_token_is!(self, Token::Comma) {
 				self.advance();

@@ -48,9 +48,9 @@ Homogeneous, variable-size containers.
 let some-list = [1, 3, 0, 10]
 
 let list-across-lines = [
-    "one"
-    "two"
-    "three"
+    "one",
+    "two",
+    "three",
 ]
 ```
 

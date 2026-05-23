@@ -57,6 +57,9 @@ pub enum Instruction {
 	// Aggregates
 	MakeTuple(u16),
 	MakeList(u16),
+	// Pops N lists and concatenates them (in push order) into one list.
+	// Emitted for list literals containing `...spread` elements.
+	ConcatLists(u16),
 	// Field names live in Program::field_lists indexed by the FieldListIdx
 	// here. Keeps the instruction Copy.
 	MakeRecord(FieldListIdx),

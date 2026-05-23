@@ -1,0 +1,7 @@
+def xs = [1, 2, 3]
+
+def with-head = [0, ...xs]
+
+def joined = [...xs, ...xs]
+
+def interior = [0, ...xs, 9, ...xs]

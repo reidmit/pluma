@@ -1,0 +1,8 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: Type mismatch: expected `list int`, but found `int`.
+> 1 | def bad = [1, ...2]
+                       ^
+

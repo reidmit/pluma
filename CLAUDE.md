@@ -18,6 +18,7 @@ When writing `.pa` code, these are the traps that don't match other languages' i
 - **`when` chains multiple `is` branches.** `when c is red { "r" } is green { "g" } is blue { "b" }`. No commas; only the first arm has the subject (`when c is …`), subsequent arms start with bare `is`.
 - **Type annotations use `:: TYPE`.** Top-level: `def length :: fun (list a) -> int = built-in "list-length"`. Local: `let xs :: list int = []`. Parens wrap compound type args inside a `fun` signature (`fun (list a) -> int`, `fun (option int) -> int`).
 - **Float operators carry a trailing dot:** `+.`, `-.`, `*.`, `/.`, `%.`. Integer ops have no dot and operate only on `int`. `++` is string concat. `??` is option coalesce.
+- **List literals support `...` spread.** `[1, ...xs, 2, ...ys]` — a `...expr` element splices in another list (its element type must match). Spreads can appear at any position, any number of times; prefer this over `list.concat [head] tail`. Note the asymmetry with list *patterns*, where `...rest` is single and trailing-only (`[head, ...tail]`).
 - **String interpolation: `"$(expr)"`.** Non-string values need explicit `to-string`: `"n = $(to-string n)"`. A bare string variable interpolates directly: `"hi $(name)"`.
 - **Enums.** Declare with newline-separated variants; payload follows the variant name:
   ```

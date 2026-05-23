@@ -237,9 +237,14 @@ fn collect_dispatch_cells(expr: &ExprNode, cells: &mut Vec<DispatchCell>) {
 			collect_dispatch_cells(receiver, cells);
 		}
 		ExprKind::Grouping(inner) => collect_dispatch_cells(inner, cells),
-		ExprKind::Tuple(es) | ExprKind::List(es) | ExprKind::Interpolation(es) => {
+		ExprKind::Tuple(es) | ExprKind::Interpolation(es) => {
 			for e in es {
 				collect_dispatch_cells(e, cells);
+			}
+		}
+		ExprKind::List(items) => {
+			for item in items {
+				collect_dispatch_cells(item.expr(), cells);
 			}
 		}
 		ExprKind::Record(fields) => {
@@ -1998,18 +2003,25 @@ impl<'compiler> Analyzer<'compiler> {
 				constraints.push(eq_constraint(expr.ty.clone(), Type::Tuple(element_types)).at(expr.range))
 			}
 
-			ExprKind::List(elements) => {
+			ExprKind::List(items) => {
 				// All elements must share a type. Empty list gets a fresh
 				// element-type var so the overall type is `list 'a`. The expr
 				// type is itself a fresh Var equated to `list elem_ty` so the
 				// post-unification substitution can resolve it (fill_in_placeholder
-				// only descends into top-level Vars).
+				// only descends into top-level Vars). A plain item has the
+				// element type; a `...spread` is itself a `list element_ty`.
 				expr.ty = self.new_type_var();
 				let element_type = self.new_type_var();
-				for element in elements {
-					self.constrain_expr(element, constraints);
-					constraints
-						.push(eq_constraint(element.ty.clone(), element_type.clone()).at(element.range));
+				for item in items {
+					let is_spread = item.is_spread();
+					let inner = item.expr_mut();
+					self.constrain_expr(inner, constraints);
+					let expected = if is_spread {
+						Type::List(Box::new(element_type.clone()))
+					} else {
+						element_type.clone()
+					};
+					constraints.push(eq_constraint(inner.ty.clone(), expected).at(inner.range));
 				}
 				constraints
 					.push(eq_constraint(expr.ty.clone(), Type::List(Box::new(element_type))).at(expr.range));
@@ -3858,9 +3870,14 @@ impl<'compiler> Analyzer<'compiler> {
 			ExprKind::Let(LetNode { value, .. }) => {
 				self.report_unresolved_try_in_expr(value, subst);
 			}
-			ExprKind::Tuple(es) | ExprKind::List(es) | ExprKind::Interpolation(es) => {
+			ExprKind::Tuple(es) | ExprKind::Interpolation(es) => {
 				for e in es.iter_mut() {
 					self.report_unresolved_try_in_expr(e, subst);
+				}
+			}
+			ExprKind::List(items) => {
+				for item in items.iter_mut() {
+					self.report_unresolved_try_in_expr(item.expr_mut(), subst);
 				}
 			}
 			ExprKind::Record(fields) => {
@@ -3972,9 +3989,14 @@ impl<'compiler> Analyzer<'compiler> {
 			ExprKind::Let(LetNode { value, .. }) => {
 				self.dispatch_try_in_expr(value, subst, new_constraints, dispatched_any);
 			}
-			ExprKind::Tuple(es) | ExprKind::List(es) | ExprKind::Interpolation(es) => {
+			ExprKind::Tuple(es) | ExprKind::Interpolation(es) => {
 				for e in es.iter_mut() {
 					self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any);
+				}
+			}
+			ExprKind::List(items) => {
+				for item in items.iter_mut() {
+					self.dispatch_try_in_expr(item.expr_mut(), subst, new_constraints, dispatched_any);
 				}
 			}
 			ExprKind::Record(fields) => {
@@ -4296,9 +4318,9 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 			}
 
-			ExprKind::List(elements) => {
-				for element in elements {
-					self.annotate_expr(element, subst);
+			ExprKind::List(items) => {
+				for item in items {
+					self.annotate_expr(item.expr_mut(), subst);
 				}
 			}
 

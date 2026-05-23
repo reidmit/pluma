@@ -6,7 +6,7 @@
 // globals; closures capture their free vars explicitly.
 
 use compiler::ast::{
-	CallNode, DefinitionKind, ExprKind, ExprNode, FunNode, IdentifierNode, IfNode, LetNode,
+	CallNode, DefinitionKind, ExprKind, ExprNode, FunNode, IdentifierNode, IfNode, LetNode, ListItem,
 	LiteralKind, ModuleNode, Operator, PatternKind, PatternNode, RegexAnchor, RegexKind, RegexNode,
 	WhenNode, WhileNode,
 };
@@ -1109,8 +1109,24 @@ fn emit_expr_with_parents(
 			}
 			fb.emit(Instruction::MakeTuple(elems.len() as u16), range);
 		}
-		ExprKind::List(elems) => {
-			for e in elems {
+		ExprKind::List(items) => {
+			if !items.iter().any(|it| it.is_spread()) {
+				// Common case, no spreads: identical lowering to before.
+				for item in items {
+					emit_expr_with_parents(
+						cg,
+						current_module,
+						imports,
+						fb,
+						scope,
+						parent_scopes,
+						item.expr(),
+						false,
+					)?;
+				}
+				fb.emit(Instruction::MakeList(items.len() as u16), range);
+			} else if items.len() == 1 {
+				// `[...xs]` — the spread is already the whole list.
 				emit_expr_with_parents(
 					cg,
 					current_module,
@@ -1118,11 +1134,56 @@ fn emit_expr_with_parents(
 					fb,
 					scope,
 					parent_scopes,
-					e,
+					items[0].expr(),
 					false,
 				)?;
+			} else {
+				// Build each segment as a list, then concatenate them. A run of
+				// consecutive plain items collapses into one `MakeList`; each
+				// spread expr is itself a list and forms its own segment.
+				let mut segments: u16 = 0;
+				let mut run: u16 = 0;
+				for item in items {
+					match item {
+						ListItem::Item(e) => {
+							emit_expr_with_parents(
+								cg,
+								current_module,
+								imports,
+								fb,
+								scope,
+								parent_scopes,
+								e,
+								false,
+							)?;
+							run += 1;
+						}
+						ListItem::Spread(e) => {
+							if run > 0 {
+								fb.emit(Instruction::MakeList(run), range);
+								segments += 1;
+								run = 0;
+							}
+							emit_expr_with_parents(
+								cg,
+								current_module,
+								imports,
+								fb,
+								scope,
+								parent_scopes,
+								e,
+								false,
+							)?;
+							segments += 1;
+						}
+					}
+				}
+				if run > 0 {
+					fb.emit(Instruction::MakeList(run), range);
+					segments += 1;
+				}
+				fb.emit(Instruction::ConcatLists(segments), range);
 			}
-			fb.emit(Instruction::MakeList(elems.len() as u16), range);
 		}
 		ExprKind::Record(fields) => {
 			let mut field_idxs = Vec::with_capacity(fields.len());

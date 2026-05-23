@@ -412,9 +412,14 @@ impl AstWalker {
 					self.walk_expr(value, out);
 				}
 			}
-			ExprKind::Tuple(elements) | ExprKind::List(elements) => {
+			ExprKind::Tuple(elements) => {
 				for el in elements {
 					self.walk_expr(el, out);
+				}
+			}
+			ExprKind::List(items) => {
+				for item in items {
+					self.walk_expr(item.expr(), out);
 				}
 			}
 			ExprKind::If(i) => {

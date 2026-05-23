@@ -81,10 +81,53 @@ pub enum ExprKind {
 	Builtin(String),
 
 	// the below are not fully implemented yet!
-	List(Vec<ExprNode>),
+	// e.g. `[1, ...xs, 2]`. A plain element is `ListItem::Item`; a `...e`
+	// spread (which must itself be a `list`) is `ListItem::Spread`. Spreads
+	// may appear at any position, any number of times.
+	List(Vec<ListItem>),
 	If(IfNode),
 	When(WhenNode),
 	While(WhileNode),
+}
+
+/// One entry in a list literal: either a single element or a spliced
+/// sub-list. Both carry an `ExprNode`; only the typing and lowering differ.
+#[derive(Clone)]
+pub enum ListItem {
+	/// A single element: `x` in `[x]`.
+	Item(ExprNode),
+	/// A spliced sub-list: `...xs` in `[...xs]`. The expr must be a `list`.
+	Spread(ExprNode),
+}
+
+impl ListItem {
+	pub fn expr(&self) -> &ExprNode {
+		match self {
+			ListItem::Item(e) | ListItem::Spread(e) => e,
+		}
+	}
+
+	pub fn expr_mut(&mut self) -> &mut ExprNode {
+		match self {
+			ListItem::Item(e) | ListItem::Spread(e) => e,
+		}
+	}
+
+	pub fn is_spread(&self) -> bool {
+		matches!(self, ListItem::Spread(_))
+	}
+}
+
+#[cfg(debug_assertions)]
+impl std::fmt::Debug for ListItem {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		// `Item` forwards to the inner expr so spread-free list snapshots
+		// render exactly as they did before this variant existed.
+		match self {
+			ListItem::Item(e) => write!(f, "{:#?}", e),
+			ListItem::Spread(e) => write!(f, "...{:#?}", e),
+		}
+	}
 }
 
 #[cfg(debug_assertions)]

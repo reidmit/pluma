@@ -469,6 +469,29 @@ impl VM {
 				elems.reverse();
 				self.stack.push(Value::List(Rc::new(elems)));
 			}
+			Instruction::ConcatLists(count) => {
+				// Pop `count` lists (top is the last segment), then splice them
+				// back-to-front so the result preserves source order.
+				let mut segments: Vec<Rc<Vec<Value>>> = Vec::with_capacity(count as usize);
+				for _ in 0..count {
+					match self.stack.pop() {
+						Some(Value::List(xs)) => segments.push(xs),
+						Some(_) => {
+							return Err(RuntimeError::new("ConcatLists: expected lists").at(self.current_range()))
+						}
+						None => {
+							return Err(RuntimeError::new("VM: ConcatLists underflow").at(self.current_range()))
+						}
+					}
+				}
+				segments.reverse();
+				let total: usize = segments.iter().map(|xs| xs.len()).sum();
+				let mut out: Vec<Value> = Vec::with_capacity(total);
+				for xs in segments {
+					out.extend(xs.iter().cloned());
+				}
+				self.stack.push(Value::List(Rc::new(out)));
+			}
 			Instruction::MakeRecord(fields_idx) => {
 				// Take the field list by value via clone of the indices. The
 				// indices are cheap (u32s) and we avoid borrowing
@@ -1198,6 +1221,7 @@ fn opcode_name(i: &Instruction) -> &'static str {
 		Return => "Return",
 		MakeTuple(_) => "MakeTuple",
 		MakeList(_) => "MakeList",
+		ConcatLists(_) => "ConcatLists",
 		MakeRecord { .. } => "MakeRecord",
 		MakeVariant { .. } => "MakeVariant",
 		MakeVariantCtor { .. } => "MakeVariantCtor",
