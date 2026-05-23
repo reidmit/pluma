@@ -15,3 +15,15 @@ def equals :: fun a a -> nothing = built-in "assert-equals"
 
 # Fail if the two values are structurally equal.
 def not-equals :: fun a a -> nothing = built-in "assert-not-equals"
+
+# Fail unless the given `option` is `some _`.
+def is-some :: fun (option a) -> nothing = built-in "assert-is-some"
+
+# Fail unless the given `option` is `none`.
+def is-none :: fun (option a) -> nothing = built-in "assert-is-none"
+
+# Fail unless the given `result` is `ok _`.
+def is-ok :: fun (result a e) -> nothing = built-in "assert-is-ok"
+
+# Fail unless the given `result` is `err _`.
+def is-err :: fun (result a e) -> nothing = built-in "assert-is-err"

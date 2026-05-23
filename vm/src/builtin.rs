@@ -1300,6 +1300,49 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				)))
 			}
 		}
+		"assert-is-some" => {
+			debug_assert_eq!(args.len(), 1, "`assert.is-some` arity");
+			match &args[0] {
+				Value::Variant(v) if v.variant.as_str() == "some" => Ok(Value::Nothing),
+				Value::Variant(v) if v.variant.as_str() == "none" => Err(RuntimeError::new(
+					"assertion failed: expected `some _`, got `none`",
+				)),
+				_ => unreachable!("`assert.is-some` expects option"),
+			}
+		}
+		"assert-is-none" => {
+			debug_assert_eq!(args.len(), 1, "`assert.is-none` arity");
+			match &args[0] {
+				Value::Variant(v) if v.variant.as_str() == "none" => Ok(Value::Nothing),
+				Value::Variant(v) if v.variant.as_str() == "some" => Err(RuntimeError::new(format!(
+					"assertion failed: expected `none`, got `{}`",
+					args[0]
+				))),
+				_ => unreachable!("`assert.is-none` expects option"),
+			}
+		}
+		"assert-is-ok" => {
+			debug_assert_eq!(args.len(), 1, "`assert.is-ok` arity");
+			match &args[0] {
+				Value::Variant(v) if v.variant.as_str() == "ok" => Ok(Value::Nothing),
+				Value::Variant(v) if v.variant.as_str() == "err" => Err(RuntimeError::new(format!(
+					"assertion failed: expected `ok _`, got `{}`",
+					args[0]
+				))),
+				_ => unreachable!("`assert.is-ok` expects result"),
+			}
+		}
+		"assert-is-err" => {
+			debug_assert_eq!(args.len(), 1, "`assert.is-err` arity");
+			match &args[0] {
+				Value::Variant(v) if v.variant.as_str() == "err" => Ok(Value::Nothing),
+				Value::Variant(v) if v.variant.as_str() == "ok" => Err(RuntimeError::new(format!(
+					"assertion failed: expected `err _`, got `{}`",
+					args[0]
+				))),
+				_ => unreachable!("`assert.is-err` expects result"),
+			}
+		}
 
 		// An unknown tag means a stdlib `.pa` source named a `built-in
 		// "..."` that no arm here implements. Codegen doesn't pre-check
