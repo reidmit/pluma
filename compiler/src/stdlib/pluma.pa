@@ -1,16 +1,10 @@
-use core.package as p
+use core.package
 
-# Treats `compiler/src/stdlib/` as a Pluma package so `pluma test`
-# from this directory can discover the `*.test.pa` files that exercise
-# stdlib modules (math.test.pa, etc.). This config file is not shipped
-# with stdlib sources — it lives alongside them only to scope local
-# test runs.
-
-def package :: p.info = {
-	name: "stdlib-tests",
-	version: "0.1.0",
+def package :: package.info = {
+	name: "core",
+	version: "0.0.1",
 	authors: [],
-	description: "Pluma tests for stdlib modules colocated with their sources.",
+	description: "Pluma standard library",
 	license: "",
 	repository: "",
 	dependencies: [],
