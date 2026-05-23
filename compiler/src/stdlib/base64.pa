@@ -1,0 +1,20 @@
+# Base64 encoding and decoding. Two variants:
+# - `encode` / `decode` use the standard alphabet (`+`, `/`) with `=`
+#   padding. Suitable for MIME, OpenSSL, most APIs.
+# - `url-encode` / `url-decode` use the URL-safe alphabet (`-`, `_`)
+#   with no padding. Suitable for JWTs, query strings, file paths.
+#
+# Decoders accept input with or without trailing padding and reject
+# any character outside the chosen alphabet (including whitespace).
+
+# Encode `bytes` with the standard alphabet, including `=` padding.
+def encode :: fun bytes -> string = built-in "base64-encode"
+
+# Decode a standard-alphabet base64 string. Padding is optional.
+def decode :: fun string -> result bytes string = built-in "base64-decode"
+
+# Encode `bytes` with the URL-safe alphabet and no padding.
+def url-encode :: fun bytes -> string = built-in "base64-url-encode"
+
+# Decode a URL-safe base64 string. Padding is optional.
+def url-decode :: fun string -> result bytes string = built-in "base64-url-decode"

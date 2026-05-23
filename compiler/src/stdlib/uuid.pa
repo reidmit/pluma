@@ -1,0 +1,21 @@
+# UUID generation and parsing. UUIDs are represented as their
+# canonical lowercase hyphenated string form (e.g.
+# `"550e8400-e29b-41d4-a716-446655440000"`) — no opaque type, so
+# normal string operations apply.
+
+# Generate a v4 (random) UUID. Cryptographically secure; suitable for
+# tokens, session ids, anything where unpredictability matters.
+def v4 :: fun nothing -> string = built-in "uuid-v4"
+
+# Generate a v7 (timestamp-ordered) UUID. Newer than v4 — sortable by
+# creation time, which makes them well-suited as database primary
+# keys. Still random enough to be unguessable.
+def v7 :: fun nothing -> string = built-in "uuid-v7"
+
+# Parse a UUID and return its canonical form. Accepts uppercase,
+# lowercase, with or without surrounding braces or `urn:uuid:` prefix.
+# `err` on any malformed input.
+def parse :: fun string -> result string string = built-in "uuid-parse"
+
+# True iff `s` parses as a UUID.
+def is-valid :: fun string -> bool = built-in "uuid-is-valid"

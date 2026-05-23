@@ -1,0 +1,24 @@
+# Random number generation backed by the OS entropy source.
+# Suitable for cryptographic use (passwords, tokens, UUIDs).
+#
+# Seedable PRNGs (for reproducible output in tests/simulations) are
+# not yet exposed — they need an opaque-handle type to carry RNG state
+# across calls. They will arrive once that design lands.
+
+# Random int in [0, 2^63). Each call draws fresh entropy.
+def int :: fun nothing -> int = built-in "random-int"
+
+# Random float in [0, 1).
+def float :: fun nothing -> float = built-in "random-float"
+
+# `n` random bytes. Returns `err` if `n` is negative.
+def bytes :: fun int -> result bytes string = built-in "random-bytes"
+
+# Random int in [low, high). `err` if low >= high.
+def int-range :: fun int int -> result int string = built-in "random-int-range"
+
+# Random bool — true with probability 0.5.
+def bool :: fun nothing -> bool = built-in "random-bool"
+
+# Pick one element of the list at random. `none` if the list is empty.
+def choice :: fun (list a) -> option a = built-in "random-choice"

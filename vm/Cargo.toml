@@ -8,5 +8,8 @@ doctest = false
 
 [dependencies]
 compiler = { path = "../compiler" }
+base64 = "0.22"
+rand = "0.9"
 regex = "1"
 serde_json = { version = "1", features = ["preserve_order"] }
+uuid = { version = "1", features = ["v4", "v7"] }

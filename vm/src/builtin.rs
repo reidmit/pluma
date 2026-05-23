@@ -1343,6 +1343,145 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				_ => unreachable!("`assert.is-err` expects result"),
 			}
 		}
+		"hex-encode" => {
+			let b = expect_bytes(&args, "hex.encode");
+			let mut out = String::with_capacity(b.len() * 2);
+			for &byte in b.iter() {
+				out.push(hex_digit(byte >> 4));
+				out.push(hex_digit(byte & 0x0f));
+			}
+			Ok(Value::String(Rc::new(out)))
+		}
+		"uuid-v4" => {
+			debug_assert_eq!(args.len(), 1, "`uuid.v4` arity");
+			Ok(Value::String(Rc::new(uuid::Uuid::new_v4().to_string())))
+		}
+		"uuid-v7" => {
+			debug_assert_eq!(args.len(), 1, "`uuid.v7` arity");
+			Ok(Value::String(Rc::new(uuid::Uuid::now_v7().to_string())))
+		}
+		"uuid-parse" => {
+			let s = expect_string(&args, "uuid.parse");
+			match uuid::Uuid::try_parse(s) {
+				Ok(u) => Ok(result_ok(Value::String(Rc::new(u.to_string())))),
+				Err(e) => Ok(result_err(Value::String(Rc::new(e.to_string())))),
+			}
+		}
+		"uuid-is-valid" => {
+			let s = expect_string(&args, "uuid.is-valid");
+			Ok(Value::Bool(uuid::Uuid::try_parse(s).is_ok()))
+		}
+		"random-int" => {
+			use rand::Rng as _;
+			debug_assert_eq!(args.len(), 1, "`random.int` arity");
+			Ok(Value::Int(rand::rng().random_range(0..i64::MAX)))
+		}
+		"random-float" => {
+			use rand::Rng as _;
+			debug_assert_eq!(args.len(), 1, "`random.float` arity");
+			Ok(Value::Float(rand::rng().random::<f64>()))
+		}
+		"random-bytes" => {
+			use rand::RngCore as _;
+			debug_assert_eq!(args.len(), 1, "`random.bytes` arity");
+			match &args[0] {
+				Value::Int(n) if *n < 0 => Ok(result_err(Value::String(Rc::new(format!(
+					"random.bytes: negative length: {}",
+					n
+				))))),
+				Value::Int(n) => {
+					let mut buf = vec![0u8; *n as usize];
+					rand::rng().fill_bytes(&mut buf);
+					Ok(result_ok(Value::Bytes(Rc::new(buf))))
+				}
+				_ => unreachable!("`random.bytes`: expected int"),
+			}
+		}
+		"random-int-range" => {
+			use rand::Rng as _;
+			debug_assert_eq!(args.len(), 2, "`random.int-range` arity");
+			match (&args[0], &args[1]) {
+				(Value::Int(lo), Value::Int(hi)) if *lo >= *hi => Ok(result_err(Value::String(Rc::new(
+					format!("random.int-range: low ({}) >= high ({})", lo, hi),
+				)))),
+				(Value::Int(lo), Value::Int(hi)) => {
+					Ok(result_ok(Value::Int(rand::rng().random_range(*lo..*hi))))
+				}
+				_ => unreachable!("`random.int-range`: expected (int, int)"),
+			}
+		}
+		"random-bool" => {
+			use rand::Rng as _;
+			debug_assert_eq!(args.len(), 1, "`random.bool` arity");
+			Ok(Value::Bool(rand::rng().random::<bool>()))
+		}
+		"random-choice" => {
+			use rand::seq::IndexedRandom as _;
+			let xs = expect_list(&args, "random.choice");
+			Ok(option_value(xs.choose(&mut rand::rng()).cloned()))
+		}
+		"base64-encode" => {
+			use base64::Engine as _;
+			let b = expect_bytes(&args, "base64.encode");
+			Ok(Value::String(Rc::new(
+				base64::engine::general_purpose::STANDARD.encode(b.as_slice()),
+			)))
+		}
+		"base64-decode" => {
+			use base64::Engine as _;
+			let s = expect_string(&args, "base64.decode");
+			match base64::engine::general_purpose::STANDARD_NO_PAD.decode(s.trim_end_matches('=')) {
+				Ok(out) => Ok(result_ok(Value::Bytes(Rc::new(out)))),
+				Err(e) => Ok(result_err(Value::String(Rc::new(e.to_string())))),
+			}
+		}
+		"base64-url-encode" => {
+			use base64::Engine as _;
+			let b = expect_bytes(&args, "base64.url-encode");
+			Ok(Value::String(Rc::new(
+				base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(b.as_slice()),
+			)))
+		}
+		"base64-url-decode" => {
+			use base64::Engine as _;
+			let s = expect_string(&args, "base64.url-decode");
+			match base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(s.trim_end_matches('=')) {
+				Ok(out) => Ok(result_ok(Value::Bytes(Rc::new(out)))),
+				Err(e) => Ok(result_err(Value::String(Rc::new(e.to_string())))),
+			}
+		}
+		"hex-decode" => {
+			let s = expect_string(&args, "hex.decode");
+			if s.len() % 2 != 0 {
+				return Ok(result_err(Value::String(Rc::new(
+					"hex string has odd length".to_string(),
+				))));
+			}
+			let bytes = s.as_bytes();
+			let mut out = Vec::with_capacity(bytes.len() / 2);
+			for chunk in bytes.chunks(2) {
+				let hi = match hex_value(chunk[0]) {
+					Some(v) => v,
+					None => {
+						return Ok(result_err(Value::String(Rc::new(format!(
+							"invalid hex digit: {:?}",
+							chunk[0] as char
+						)))))
+					}
+				};
+				let lo = match hex_value(chunk[1]) {
+					Some(v) => v,
+					None => {
+						return Ok(result_err(Value::String(Rc::new(format!(
+							"invalid hex digit: {:?}",
+							chunk[1] as char
+						)))))
+					}
+				};
+				out.push((hi << 4) | lo);
+			}
+			Ok(result_ok(Value::Bytes(Rc::new(out))))
+		}
 
 		// An unknown tag means a stdlib `.pa` source named a `built-in
 		// "..."` that no arm here implements. Codegen doesn't pre-check
@@ -1435,6 +1574,23 @@ fn expect_bytes<'a>(args: &'a [Value], name: &str) -> &'a Rc<Vec<u8>> {
 	match &args[0] {
 		Value::Bytes(b) => b,
 		_ => unreachable!("`{}`: expected bytes", name),
+	}
+}
+
+fn hex_digit(nibble: u8) -> char {
+	match nibble {
+		0..=9 => (b'0' + nibble) as char,
+		10..=15 => (b'a' + (nibble - 10)) as char,
+		_ => unreachable!("hex_digit: nibble out of range"),
+	}
+}
+
+fn hex_value(byte: u8) -> Option<u8> {
+	match byte {
+		b'0'..=b'9' => Some(byte - b'0'),
+		b'a'..=b'f' => Some(byte - b'a' + 10),
+		b'A'..=b'F' => Some(byte - b'A' + 10),
+		_ => None,
 	}
 }
 

@@ -19,6 +19,10 @@ pub fn stdlib_sources() -> &'static [(&'static str, &'static str)] {
 		("core.json", include_str!("stdlib/json.pa")),
 		("core.assert", include_str!("stdlib/assert.pa")),
 		("core.package", include_str!("stdlib/package.pa")),
+		("core.hex", include_str!("stdlib/hex.pa")),
+		("core.base64", include_str!("stdlib/base64.pa")),
+		("core.random", include_str!("stdlib/random.pa")),
+		("core.uuid", include_str!("stdlib/uuid.pa")),
 	]
 }
 
