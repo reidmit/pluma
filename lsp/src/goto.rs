@@ -200,6 +200,13 @@ fn resolve_cross_module(uses: &[UseNode], current: &Path, q: &QualifiedRef) -> O
 	})
 }
 
+/// Load and parse an imported module by its fully-qualified name, relative to
+/// `current` (the importing file). Exposed so hover can read a module's own
+/// top-level doc comment without re-deriving the stdlib/disk resolution order.
+pub fn imported_module(module_name: &str, current: &Path) -> Option<Module> {
+	load_imported_module(module_name, current).map(|(m, _)| m)
+}
+
 // Load and parse an imported module. Baked-in stdlib source takes precedence
 // over a same-named file on disk, matching the compiler's own load order.
 // Returns `None` for a module with no source we can find.
