@@ -52,12 +52,6 @@ def decode = fun bs {
 	} is err _ { "" }
 }
 
-# Drop the first `n` bytes of a string and return the rest.
-def drop-prefix = fun s n {
-	let b = string.to-bytes s
-	when (bytes.to-string (bytes.slice b n (bytes.length b))) is ok r { r } is err _ { "" }
-}
-
 # ---------------------------------------------------------------------
 # Inline parsing (over `list int`)
 # ---------------------------------------------------------------------
@@ -222,8 +216,8 @@ def take-fence = fun lines {
 }
 
 def strip-quote = fun l {
-	if (string.starts-with l "> ") is true { drop-prefix l 2 }
-	else if (string.starts-with l ">") is true { drop-prefix l 1 }
+	if (string.starts-with l "> ") is true { string.drop l 2 }
+	else if (string.starts-with l ">") is true { string.drop l 1 }
 	else { l }
 }
 
@@ -246,7 +240,7 @@ def take-bullets = fun lines {
 	} is [l, ...rest] {
 		if (bullet-item l) is true {
 			let (more, after) = take-bullets rest
-			([parse-inline (drop-prefix l 2), ...more], after)
+			([parse-inline (string.drop l 2), ...more], after)
 		} else {
 			([], lines)
 		}
@@ -260,7 +254,7 @@ def take-ordered = fun lines {
 		if (ordered-item l) is true {
 			let d = count-digits (string.to-bytes l) 0
 			let (more, after) = take-ordered rest
-			([parse-inline (drop-prefix l (d + 2)), ...more], after)
+			([parse-inline (string.drop l (d + 2)), ...more], after)
 		} else {
 			([], lines)
 		}
@@ -292,9 +286,9 @@ def parse-blocks = fun lines {
 			parse-blocks rest
 		} else if (heading-level line > 0) is true {
 			let lvl = heading-level line
-			[heading lvl (parse-inline (drop-prefix line (lvl + 1))), ...(parse-blocks rest)]
+			[heading lvl (parse-inline (string.drop line (lvl + 1))), ...(parse-blocks rest)]
 		} else if (string.starts-with line "```") is true {
-			let lang = string.trim (drop-prefix line 3)
+			let lang = string.trim (string.drop line 3)
 			let (code-lines, after) = take-fence rest
 			[code-block lang (string.join code-lines "\n"), ...(parse-blocks after)]
 		} else if (is-hr line) is true {

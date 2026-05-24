@@ -523,6 +523,42 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			let s = expect_string(&args, "trim");
 			Ok(Value::String(Rc::new(s.trim().to_string())))
 		}
+		"string-char-at" => {
+			debug_assert_eq!(args.len(), 2, "`char-at` arity");
+			let (s, i) = match (&args[0], &args[1]) {
+				(Value::String(s), Value::Int(i)) => (s, *i),
+				_ => unreachable!("`char-at`: expected (string, int)"),
+			};
+			// Index by Unicode scalar value, matching `length`. Out of
+			// bounds (including negative) yields `none`.
+			let ch = if i < 0 {
+				None
+			} else {
+				s.chars().nth(i as usize)
+			};
+			Ok(option_value(
+				ch.map(|c| Value::String(Rc::new(c.to_string()))),
+			))
+		}
+		"string-slice" => {
+			debug_assert_eq!(args.len(), 3, "`slice` arity");
+			let (s, start, end) = match (&args[0], &args[1], &args[2]) {
+				(Value::String(s), Value::Int(a), Value::Int(b)) => (s, *a, *b),
+				_ => unreachable!("`slice`: expected (string, int, int)"),
+			};
+			// Character (not byte) indices, matching `length`. Out-of-range
+			// indices clamp to the bounds rather than erroring, like
+			// `bytes.slice`.
+			let total = s.chars().count() as i64;
+			let lo = start.clamp(0, total) as usize;
+			let hi = end.clamp(0, total) as usize;
+			let result: String = if lo >= hi {
+				String::new()
+			} else {
+				s.chars().skip(lo).take(hi - lo).collect()
+			};
+			Ok(Value::String(Rc::new(result)))
+		}
 		"string-contains" => {
 			debug_assert_eq!(args.len(), 2, "`contains` arity");
 			match (&args[0], &args[1]) {

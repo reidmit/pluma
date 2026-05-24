@@ -10,19 +10,15 @@
 use core.io
 use core.list
 use core.string
-use core.bytes
 use markdown
 use page
 
 # nth element of `args`, or `default` if the list is shorter than n+1.
 def arg-or = fun args n default { (list.head (list.drop args n)) ?? default }
 
-# Drop a trailing 3-byte extension (e.g. ".md"). The caller has already
-# filtered to ".md" names, so this just trims the last three bytes.
-def strip-ext = fun name {
-	let b = string.to-bytes name
-	when (bytes.to-string (bytes.slice b 0 ((bytes.length b) - 3))) is ok s { s } is err _ { name }
-}
+# Drop a trailing 3-character extension (e.g. ".md"). The caller has
+# already filtered to ".md" names, so this just trims the last three.
+def strip-ext = fun name { string.slice name 0 ((string.length name) - 3) }
 
 # Build a single page: read, parse front-matter, render, wrap, write.
 def build-page = fun content-dir out-dir name {

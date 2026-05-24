@@ -1,11 +1,25 @@
-# Operations on UTF-8 strings. Length and slicing are byte-oriented
-# for now (revisit when `core.unicode` lands).
+# Operations on UTF-8 strings. Indices and lengths are by Unicode
+# scalar value ("character"), not bytes — reach for `core.bytes` when
+# you need byte-level access.
 
-# Number of bytes in the string.
+# Number of characters (Unicode scalar values) in the string.
 def length :: fun string -> int = built-in "string-length"
 
-# True if the string has zero bytes. Expressible in pure Pluma.
+# True if the string has zero characters. Expressible in pure Pluma.
 def is-empty :: fun string -> bool = fun s { length s == 0 }
+
+# The character at index `i` (0-based), as a one-character string
+# wrapped in `some`; `none` if `i` is out of bounds.
+def char-at :: fun string int -> option string = built-in "string-char-at"
+
+# Substring from character index `start` (inclusive) to `end`
+# (exclusive). Out-of-range indices clamp to the bounds rather than
+# erroring, so `slice s 0 (length s)` is always the whole string.
+def slice :: fun string int int -> string = built-in "string-slice"
+
+# Drop the first `n` characters, returning the rest. `drop s n` is
+# `slice s n (length s)`.
+def drop :: fun string int -> string = fun s n { slice s n (length s) }
 
 # ASCII uppercase. Non-ASCII characters pass through unchanged.
 def to-upper :: fun string -> string = built-in "string-to-upper"

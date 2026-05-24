@@ -8,9 +8,11 @@ test "length of empty string" {
 	assert.equals (string.length "") 0
 }
 
-test "length counts bytes" {
+test "length counts characters" {
 	assert.equals (string.length "hello") 5
 	assert.equals (string.length "a b c") 5
+	# "é" is two UTF-8 bytes but one character.
+	assert.equals (string.length "héllo") 5
 }
 
 test "is-empty on empty string" {
@@ -19,6 +21,42 @@ test "is-empty on empty string" {
 
 test "is-empty on non-empty string" {
 	assert.is-false (string.is-empty "x")
+}
+
+# --- slice / drop / char-at ---
+
+test "slice takes a character range" {
+	assert.equals (string.slice "hello world" 0 5) "hello"
+	assert.equals (string.slice "hello world" 6 11) "world"
+}
+
+test "slice clamps out-of-range indices" {
+	assert.equals (string.slice "hi" 0 100) "hi"
+	assert.equals (string.slice "hi" 5 10) ""
+	assert.equals (string.slice "hi" 1 0) ""
+}
+
+test "slice respects character boundaries" {
+	# Two-byte "é" is one character: slicing never splits it.
+	assert.equals (string.slice "héllo" 0 2) "hé"
+	assert.equals (string.slice "héllo" 1 2) "é"
+}
+
+test "drop removes leading characters" {
+	assert.equals (string.drop "hello world" 6) "world"
+	assert.equals (string.drop "hi" 0) "hi"
+	assert.equals (string.drop "hi" 9) ""
+	assert.equals (string.drop "héllo" 1) "éllo"
+}
+
+test "char-at returns the character at an index" {
+	when string.char-at "hello" 1 is some c { assert.equals c "e" } is none { assert.is-true false }
+	when string.char-at "héllo" 1 is some c { assert.equals c "é" } is none { assert.is-true false }
+}
+
+test "char-at is none out of bounds" {
+	assert.is-none (string.char-at "hi" 5)
+	assert.is-none (string.char-at "hi" -1)
 }
 
 # --- to-upper / to-lower ---
