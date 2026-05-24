@@ -1,0 +1,150 @@
+# The calculator's numeric tower.
+#
+# Every value the calculator computes is a `num` — either an integer
+# or a float. Pluma's prelude `numeric` trait overloads `+ - * / %`
+# over each underlying type, but it deliberately does NOT mix them:
+# `2 + 3.5` is a type error, because the compiler can't pick one
+# `numeric` instance for two different types.
+#
+# A pocket calculator blurs that line — you can add 2 and 3.5 and get
+# 5.5. So this module owns the *promotion* rules the trait won't do
+# for us: an operation on an int and a float promotes the int and
+# yields a float; two ints stay an int, until a division (or a
+# fractional power) forces a float.
+
+use core.math
+
+enum num {
+	int-val int
+	float-val float
+}
+
+# Coerce to float — used on the promote-both-to-float path.
+def as-float = fun n {
+	when n is int-val i {
+		math.to-float i
+	} is float-val f {
+		f
+	}
+}
+
+# The multiplicative identity matching `n`'s underlying type, so that
+# `int ^ k` stays an int while `float ^ k` stays a float.
+def one-like = fun n {
+	when n is int-val _i {
+		int-val 1
+	} is float-val _f {
+		float-val 1.0
+	}
+}
+
+# True when both operands are zero — for guarding division.
+def is-zero = fun n {
+	when n is int-val i {
+		i == 0
+	} is float-val f {
+		f == 0.0
+	}
+}
+
+# Combine two nums under a binary op. Two ints take the `int-op` path
+# and stay an int; if either side is a float, both are promoted and
+# the result goes through `float-op`.
+def lift = fun a b int-op float-op {
+	when a is int-val x {
+		when b is int-val y {
+			int-op x y
+		} is float-val y {
+			float-op (math.to-float x) y
+		}
+	} is float-val x {
+		when b is int-val y {
+			float-op x (math.to-float y)
+		} is float-val y {
+			float-op x y
+		}
+	}
+}
+
+def num-add = fun a b {
+	lift a b (fun x y { int-val (x + y) }) (fun x y { float-val (x + y) })
+}
+
+def num-sub = fun a b {
+	lift a b (fun x y { int-val (x - y) }) (fun x y { float-val (x - y) })
+}
+
+def num-mul = fun a b {
+	lift a b (fun x y { int-val (x * y) }) (fun x y { float-val (x * y) })
+}
+
+# Modulo keeps the tower too, but it can't ride `lift`: `%` isn't one
+# of the `numeric` trait methods (which are add/sub/mul/div/negate), so
+# it won't resolve against `lift`'s abstract operand type. We spell the
+# four promotion cases out instead. (`%` is still overloaded over a
+# *concrete* int or float, which is all we need here.)
+def num-mod = fun a b {
+	when a is int-val x {
+		when b is int-val y {
+			int-val (x % y)
+		} is float-val y {
+			float-val ((math.to-float x) % y)
+		}
+	} is float-val x {
+		when b is int-val y {
+			float-val (x % (math.to-float y))
+		} is float-val y {
+			float-val (x % y)
+		}
+	}
+}
+
+# Division is always true division — `7 / 2` is `3.5`, not `3`. The
+# integer-flooring `/` would surprise at a calculator prompt, so we
+# promote to float unconditionally.
+def num-div = fun a b {
+	float-val ((as-float a) / (as-float b))
+}
+
+def num-neg = fun a {
+	when a is int-val x {
+		int-val (negate x)
+	} is float-val x {
+		float-val (negate x)
+	}
+}
+
+# Exponentiation, which Pluma itself has no operator for — the
+# calculator adds it. An integer exponent multiplies exactly and
+# preserves the base's type (so `2 ^ 10` is the int `1024`); a
+# negative exponent or a float exponent forces a float result.
+def num-pow = fun base exp {
+	when exp is int-val e {
+		if (e < 0) is true {
+			num-div (int-val 1) (ipow base (negate e))
+		} else {
+			ipow base e
+		}
+	} is float-val ef {
+		float-val (math.exp (ef * (math.log (as-float base))))
+	}
+}
+
+# `base ^ e` for a non-negative int `e`, by repeated multiplication.
+def ipow = fun base e {
+	if (e <= 0) is true {
+		one-like base
+	} else {
+		num-mul base (ipow base (e - 1))
+	}
+}
+
+# Render a result for display. `to-string` is the prelude's, which
+# prints floats with a trailing `.0` so the type stays visible.
+def num-to-string = fun n {
+	when n is int-val i {
+		to-string i
+	} is float-val f {
+		to-string f
+	}
+}

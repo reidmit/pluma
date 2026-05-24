@@ -1,0 +1,133 @@
+# calc — an interactive expression calculator.
+#
+#   pluma run examples/calc
+#
+# Reads one expression per line from stdin and prints its value, in a
+# loop, until end of input (Ctrl-D). Variables persist across lines:
+#
+#   > x = 3 * (4 + 1)
+#   = 15
+#   > sqrt(x) + 1
+#   = 4.872983346207417
+#   > x * y
+#   error: undefined name 'y'
+#
+# The session state — the name→value map — lives in a single `ref`,
+# so an assignment mutates it in place and later lines see it. A parse
+# or eval error is reported and the loop simply continues, so one bad
+# line never ends the session.
+
+use core.io
+use core.list
+use core.map
+use core.math
+use core.string
+use value
+use parser
+use eval
+
+def main = fun {
+	let env = ref.new (seed-env ())
+	let _ = io.print "calc — type an expression, or :help. Ctrl-D to quit."
+	repl env
+}
+
+# Pre-populate the constants `pi` and `e` as ordinary variables, so
+# they can be used (or even shadowed) like any other name.
+def seed-env = fun {
+	let m = map.empty ()
+	let m = map.insert m "pi" (float-val math.pi)
+	let m = map.insert m "e" (float-val math.e)
+	m
+}
+
+# The read-eval-print loop. A `> ` prompt precedes each read (and
+# flushes, since it has no newline); `io.read` yields `err` at end of
+# input, where we close the dangling prompt with a newline and stop.
+def repl = fun env {
+	let _ = io.write "> "
+	when (io.read ()) is err _e {
+		io.print ""
+	} is ok line {
+		let _ = handle env (string.trim line)
+		repl env
+	}
+}
+
+def handle = fun env line {
+	if (line == "") is true {
+		()
+	} else if (string.starts-with line ":") is true {
+		run-command env line
+	} else {
+		run-line env line
+	}
+}
+
+# ---------------------------------------------------------------------
+# Meta-commands (anything starting with `:`)
+# ---------------------------------------------------------------------
+
+def run-command = fun env cmd {
+	if ((cmd == ":q") || (cmd == ":quit")) is true {
+		io.exit 0
+	} else if (cmd == ":help") is true {
+		print-help ()
+	} else if (cmd == ":vars") is true {
+		print-vars env
+	} else {
+		io.print "unknown command '$(cmd)' — try :help"
+	}
+}
+
+def print-help = fun {
+	let _ = io.print "operators:  + - * / %  ^ (power)   ( ) for grouping"
+	let _ = io.print "unary:      sqrt sin cos tan ln log log2 exp abs floor ceil round int float"
+	let _ = io.print "binary:     pow(b,e)  max(a,b)  min(a,b)  log(x,base)"
+	let _ = io.print "assign:     name = expr      (constants pi, e are predefined)"
+	io.print "commands:   :vars  :help  :q"
+}
+
+# Show every bound variable. `map.entries` preserves insertion order,
+# so the predefined `pi` and `e` come first, then user variables in the
+# order they were assigned.
+def print-vars = fun env {
+	let entries = map.entries (ref.get env)
+	list.each entries (fun ent {
+		let (k, v) = ent
+		io.print "$(k) = $(value.num-to-string v)"
+	})
+}
+
+# ---------------------------------------------------------------------
+# Expression lines
+# ---------------------------------------------------------------------
+
+def run-line = fun env line {
+	when (parser.parse line) is err m {
+		io.print "error: $(m)"
+	} is ok st {
+		when st is assign name e {
+			run-assign env name e
+		} is bare e {
+			run-bare env e
+		}
+	}
+}
+
+def run-assign = fun env name e {
+	when (eval.eval env e) is ok v {
+		let _ = ref.set env (map.insert (ref.get env) name v)
+		io.print "= $(value.num-to-string v)"
+	} is err m {
+		io.print "error: $(m)"
+	}
+}
+
+def run-bare = fun env e {
+	when (eval.eval env e) is ok v {
+		io.print "= $(value.num-to-string v)"
+	} is err m {
+		io.print "error: $(m)"
+	}
+}

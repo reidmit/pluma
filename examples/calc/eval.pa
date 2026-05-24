@@ -1,0 +1,190 @@
+# Evaluator: walk an `expr` against the variable environment.
+#
+# The environment is a `ref (map string num)` — a single mutable cell
+# holding the name→value map. `eval` only reads it; the REPL driver in
+# main.pa is what writes assignments back. Threading the ref (rather
+# than the map) means a future feature that mutates mid-expression
+# wouldn't change this signature.
+#
+# Everything returns `result num string`, so the first undefined name,
+# divide-by-zero, or unknown function short-circuits with a message.
+
+use core.list
+use core.map
+use core.math
+use value
+use parser
+
+def eval = fun env e {
+	when e is lit n {
+		ok n
+	} is var name {
+		when (map.lookup (ref.get env) name) is some v {
+			ok v
+		} is none {
+			err "undefined name '$(name)'"
+		}
+	} is neg inner {
+		when (eval env inner) is ok v {
+			ok (value.num-neg v)
+		} is err m {
+			err m
+		}
+	} is bin op l r {
+		when (eval env l) is ok lv {
+			when (eval env r) is ok rv {
+				apply-op op lv rv
+			} is err m {
+				err m
+			}
+		} is err m {
+			err m
+		}
+	} is call name args {
+		eval-call env name args
+	}
+}
+
+# Dispatch a binary operator to the tower. Division and modulo guard
+# against a zero divisor before delegating.
+def apply-op = fun op a b {
+	if (op == "+") is true {
+		ok (value.num-add a b)
+	} else if (op == "-") is true {
+		ok (value.num-sub a b)
+	} else if (op == "*") is true {
+		ok (value.num-mul a b)
+	} else if (op == "/") is true {
+		if (value.is-zero b) is true {
+			err "division by zero"
+		} else {
+			ok (value.num-div a b)
+		}
+	} else if (op == "%") is true {
+		if (value.is-zero b) is true {
+			err "modulo by zero"
+		} else {
+			ok (value.num-mod a b)
+		}
+	} else if (op == "^") is true {
+		ok (value.num-pow a b)
+	} else {
+		err "unknown operator '$(op)'"
+	}
+}
+
+# ---------------------------------------------------------------------
+# Function calls
+# ---------------------------------------------------------------------
+
+def eval-call = fun env name args {
+	when (eval-args env args []) is ok vals {
+		apply-fn name vals
+	} is err m {
+		err m
+	}
+}
+
+# Evaluate every argument left to right, collecting the values (or the
+# first error).
+def eval-args = fun env args acc {
+	when args is [] {
+		ok (list.reverse acc)
+	} is [a, ...rest] {
+		when (eval env a) is ok v {
+			eval-args env rest [v, ...acc]
+		} is err m {
+			err m
+		}
+	}
+}
+
+# Resolve a function by name and arity. `log` is overloaded: one
+# argument is base-10, two arguments is log-base-y.
+def apply-fn = fun name vals {
+	when vals is [x] {
+		apply-unary name x
+	} is [x, y] {
+		apply-binary name x y
+	} else {
+		err "$(name): unknown function or wrong number of arguments"
+	}
+}
+
+def apply-unary = fun name x {
+	if (name == "sqrt") is true {
+		ok (float-val (math.sqrt (value.as-float x)))
+	} else if (name == "sin") is true {
+		ok (float-val (math.sin (value.as-float x)))
+	} else if (name == "cos") is true {
+		ok (float-val (math.cos (value.as-float x)))
+	} else if (name == "tan") is true {
+		ok (float-val (math.tan (value.as-float x)))
+	} else if (name == "ln") is true {
+		ok (float-val (math.log (value.as-float x)))
+	} else if (name == "log") is true {
+		ok (float-val (math.log10 (value.as-float x)))
+	} else if (name == "log2") is true {
+		ok (float-val (math.log2 (value.as-float x)))
+	} else if (name == "exp") is true {
+		ok (float-val (math.exp (value.as-float x)))
+	} else if (name == "abs") is true {
+		ok (num-abs x)
+	} else if (name == "floor") is true {
+		ok (int-val (math.floor (value.as-float x)))
+	} else if (name == "ceil") is true {
+		ok (int-val (math.ceil (value.as-float x)))
+	} else if (name == "round") is true {
+		ok (int-val (math.round (value.as-float x)))
+	} else if (name == "int") is true {
+		ok (int-val (math.to-int (value.as-float x)))
+	} else if (name == "float") is true {
+		ok (float-val (value.as-float x))
+	} else {
+		err "$(name): unknown function or wrong number of arguments"
+	}
+}
+
+def apply-binary = fun name x y {
+	if (name == "pow") is true {
+		ok (value.num-pow x y)
+	} else if (name == "max") is true {
+		ok (num-max x y)
+	} else if (name == "min") is true {
+		ok (num-min x y)
+	} else if (name == "log") is true {
+		ok (float-val ((math.log (value.as-float x)) / (math.log (value.as-float y))))
+	} else {
+		err "$(name): unknown function or wrong number of arguments"
+	}
+}
+
+# Tower-aware helpers the math module doesn't cover directly: `math.abs`
+# is int-only, and max/min should keep the winning operand's own type.
+def num-abs = fun n {
+	when n is int-val i {
+		int-val (math.abs i)
+	} is float-val f {
+		if (f < 0.0) is true {
+			float-val (negate f)
+		} else {
+			float-val f
+		}
+	}
+}
+
+def num-max = fun a b {
+	if ((value.as-float a) < (value.as-float b)) is true {
+		b
+	} else {
+		a
+	}
+}
+
+def num-min = fun a b {
+	if ((value.as-float a) < (value.as-float b)) is true {
+		a
+	} else {
+		b
+	}
+}
