@@ -149,8 +149,15 @@ fn record_name(hits: &mut Vec<HoverHit>, range: Range, ty: Type, doc: Option<Str
 }
 
 fn walk_def(def: &DefinitionNode, hits: &mut Vec<HoverHit>, doc: Option<String>) {
-	// Def name itself: show the def's full type, plus its doc comment.
-	record_name(hits, def.name.range, def.ty.clone(), doc);
+	// Def name itself: show its type, plus its doc comment. For value defs
+	// the body expr carries the real inferred type — `def.ty` is left an
+	// unconstrained var by the analyzer and resolves to `nothing`, so use
+	// the body's type instead (e.g. `int -> int`, not `nothing`).
+	let name_ty = match &def.kind {
+		DefinitionKind::Expr(expr) => expr.ty.clone(),
+		_ => def.ty.clone(),
+	};
+	record_name(hits, def.name.range, name_ty, doc);
 
 	match &def.kind {
 		DefinitionKind::Expr(expr) => walk_expr(expr, hits),
