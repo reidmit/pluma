@@ -6,16 +6,24 @@ programs (scripts, web services, data-munging, tests, dev tools) can
 be written without reaching for third-party packages.
 
 This is the *master list*, not a commitment to ship everything at
-once. We prune and prioritize against it. Companion docs:
+once. We prune and prioritize against it.
 
-- [STDLIB.md](STDLIB.md) — *how* stdlib modules are written:
-  `.pa` files, `built-in "tag"` expressions, `Builtin` enum, codegen
-  plumbing. Read this first if you're going to implement anything
-  here.
-- [ASYNC.md](ASYNC.md) — `task a`, structured concurrency. Several
-  modules below depend on it.
-- [THENABLE.md](THENABLE.md) — `try` chaining; relevant to how the
-  fallible APIs in these modules are designed.
+The stdlib-authoring mechanism this all relies on — `.pa` source files
+with `built-in "tag"` expressions backed by the `Builtin` enum — has
+shipped; the modules already under `compiler/src/stdlib/*.pa` are the
+pattern to copy. `try` chaining (relevant to the fallible APIs below)
+has also shipped for `option`/`result`. The one remaining companion
+plan is [ASYNC.md](ASYNC.md) — `task a` and structured concurrency, not
+yet built; several modules below depend on it.
+
+**Shipped so far:** `core.list`, `core.string`, `core.math`,
+`core.bytes`, `core.regex`, `core.io`, `core.ref`, `core.option`,
+`core.result`, `core.map`, `core.json`, `core.base64`, `core.hex`,
+`core.uuid`, `core.random`, `core.assert`, plus the `test "..." { }`
+form + `pluma test` runner and the `pluma.pa`/`core.package` project
+system. The big still-missing clusters: scripting (`fs`/`process`/`env`/
+`glob`/`term`), data formats (`csv`/`toml`/`url`), `sqlite`, `html`/`xml`,
+`time`, and everything under Tier 3 (waits for async).
 
 Read top-to-bottom for the catalog; jump to "Sequencing" to decide
 what to build next.
@@ -31,9 +39,9 @@ Concrete capabilities this unlocks:
 - **One canonical option per domain.** Every JSON parser, every
   HTTP client, every test framework is the official one. No
   ecosystem fragmentation when there's no ecosystem yet.
-- **Doc/LSP discoverability.** Per STDLIB.md, every stdlib def
-  carries a doc comment visible in hover and "go to definition"
-  lands on readable `.pa` source.
+- **Doc/LSP discoverability.** Every stdlib def carries a doc comment
+  visible in hover and "go to definition" lands on readable `.pa`
+  source.
 - **Fast iteration on the language itself.** When we have JSON,
   HTTP, SQLite, tests, and a logger in the box, we can build real
   apps in Pluma — which surfaces real language pain points faster
@@ -62,7 +70,8 @@ Worth nailing down once and reusing.
 
 The default implementation pattern: established Rust crate → thin
 Rust wrapper exposing operations as `Builtin` enum variants → `.pa`
-surface using `built-in "tag"` per STDLIB.md.
+surface using `built-in "tag"` (see the existing
+`compiler/src/stdlib/*.pa` modules).
 
 Crate-selection guidelines:
 
@@ -600,11 +609,12 @@ work.
 
 ### Tier 0 — prerequisites
 
-1. **STDLIB.md Phase 1–3** (type annotations, `built-in` expr,
-   stdlib `.pa` loader). Until these land, every module below is
-   blocked on infrastructure work.
+1. ~~**Stdlib `.pa` infrastructure** (type annotations, `built-in`
+   expr, stdlib `.pa` loader).~~ **Shipped.** Modules are now authored
+   as `.pa` files under `compiler/src/stdlib/`.
 2. **Opaque-handle design note.** Short follow-up. Unblocks any
-   module that holds non-decomposable state.
+   module that holds non-decomposable state (sqlite connections, DOM
+   trees, etc.). Still outstanding.
 
 ### Tier 1 — no further blockers (build any time)
 
@@ -648,15 +658,14 @@ thrown away.
 
 ### Suggested first push
 
-If we're prioritizing demo-ability:
+If we're prioritizing demo-ability (JSON, unit testing, and `assert`
+have already shipped):
 
-1. JSON, fs, process, env, glob, term — together this makes Pluma
-   a credible scripting language.
-2. Unit testing — second, because once it lands every other module
-   gets cheaper to develop.
-3. SQLite — turns Pluma into a real "small app" language.
-4. HTML — unlocks scraping demos.
-5. Logging, debug, assert, panic — quality-of-life.
+1. `fs`, `process`, `env`, `glob`, `term` — together this makes Pluma
+   a credible scripting language. The biggest remaining gap.
+2. SQLite — turns Pluma into a real "small app" language.
+3. HTML — unlocks scraping demos.
+4. Logging, debug, panic — quality-of-life.
 
 Everything else comes after.
 
@@ -684,7 +693,6 @@ Everything else comes after.
 - **Namespace tier.** Stay flat under `core.*`, or split
   `core.*` (essentials) vs `std.*` (rest)? Defer until surface
   area starts hurting.
-- **Doc-comment plumbing.** Per STDLIB.md, doc comments above
-  defs aren't yet attached to their defs in the typed AST. The
-  LSP work to surface them as hovers is shared between this doc
-  and STDLIB.md; whoever needs it first wires it up.
+- **Doc-comment plumbing.** Whether doc comments above defs are
+  attached to their defs in the typed AST and surfaced as LSP hovers —
+  wire it up if it's not already done.

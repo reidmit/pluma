@@ -1,8 +1,6 @@
 # Types used by `pluma.pa` project files. The CLI walks up from the
 # current directory looking for a `pluma.pa` that exports
 # `def package :: package.info = { ... }`.
-#
-# See PACKAGES.md at the repo root for the full design.
 
 # How another package is resolved. Most users will only ever need
 # `simple` (a registry version string).

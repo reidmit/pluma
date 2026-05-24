@@ -228,7 +228,7 @@ impl Compiler {
 		// Test modules (name ends in `.test`) are only importable by other
 		// test modules. Production code shouldn't depend on test-only files.
 		// The project marker (`pluma.pa`) is config, not a library — it's
-		// never importable by anything else. See PACKAGES.md.
+		// never importable by anything else.
 		let importer_is_test = module_name.ends_with(".test");
 		let importer_path = self.modules.get(module_name).map(|m| m.module_path.clone());
 		let mut rejected_imports: HashSet<String> = HashSet::new();
@@ -340,7 +340,7 @@ fn resolve_entry(entry_path: String) -> Result<(PathBuf, String), Vec<Diagnostic
 	}
 }
 
-// Name of the file marking a Pluma package root. See PACKAGES.md.
+// Name of the file marking a Pluma package root.
 pub const PROJECT_MARKER_FILE: &str = "pluma.pa";
 
 // Module name of the project marker, used to identify it in import-rejection

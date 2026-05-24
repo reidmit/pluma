@@ -2,10 +2,15 @@
 
 Design and implementation plan for Pluma's concurrency story: the
 `task a` type, structured concurrency via `scope`/`spawn`, cooperative
-cancellation, and `with` blocks for resource cleanup. Builds on the
-trait + HKT machinery in [THENABLE.md](THENABLE.md) — `task` becomes a
-`thenable`, so the `try` syntax that works for `result` and `option`
-works unchanged for async.
+cancellation, and `with` blocks for resource cleanup. **None of this is
+implemented yet — this is the design of record for unbuilt work.**
+
+It builds on the `try` chaining mechanism, which already ships for
+`result` and `option`. `try` is a built-in form that dispatches over a
+fixed carrier set; `task` becomes a third carrier (add a `task.then`
+and a dispatch-table row), so the `try` syntax works unchanged for
+async. There is no `thenable` typeclass — that was an earlier design
+that was dropped in favor of the built-in form.
 
 Read top-to-bottom for the design; jump to "Implementation phases" to
 execute.
@@ -62,10 +67,10 @@ Tasks are *cold* by default — creating a task value doesn't start it.
 A task starts when it's awaited via `try`/`then`, when it's spawned
 into a scope, or when explicitly started via `task.start`.
 
-### `for thenable on task`
+### `try` over `task`
 
-`task` is an instance of `thenable`, so the existing `try` syntax
-works:
+`task` becomes a third `try` carrier alongside `result` and `option`,
+so the existing `try` syntax works:
 
 ```pluma
 def fetch-dashboard fun user-id {
@@ -517,12 +522,13 @@ initializes. For scripts that *want* async, ergonomics matter:
 - [ ] Add `task.sleep` (uses host timer) as the smoke-test I/O op
 - [ ] Test fixtures: `task.return 5`, sequential sleep chain
 
-### Phase 2 — `for thenable on task`
+### Phase 2 — `try` over `task`
 
-Depends on THENABLE.md Phases 1-3 landing first.
+The `try` mechanism this builds on has already shipped for
+`option`/`result`.
 
-- [ ] Declare `for thenable on task` in prelude, dispatching to the
-      runtime's bind primitive
+- [ ] Add `task.then` (dispatching to the runtime's bind primitive)
+      and a `task` row to the analyzer's `try` dispatch table
 - [ ] `try` over task values works
 - [ ] Test fixtures: `try` chains on tasks, error propagation,
       mixing-carriers rejection (task + result)
@@ -592,11 +598,13 @@ Depends on a WASM codegen target existing (separate design doc).
 
 ## Open questions
 
-1. **`task.return` vs `pure`.**
-   `thenable` may grow a `pure` method (see THENABLE.md open question
-   #1). If it does, `pure` becomes the carrier-polymorphic
-   wrap-a-value; `task.return` becomes a task-specific alias.
-   Decide as part of the THENABLE.md `pure` decision.
+1. **`task.return` naming.**
+   `task.return x` lifts a value into the task carrier (the analogue of
+   `ok`/`some`). Whether to keep it task-specific or unify all three
+   carriers under one carrier-polymorphic wrap-a-value name is open;
+   since `try` is a built-in form rather than a typeclass, a shared
+   `pure` would itself need built-in dispatch. Lean: keep
+   `task.return` task-specific.
 
 2. **Eager vs lazy task creation.**
    Above we said tasks are *cold* — creating a task value doesn't

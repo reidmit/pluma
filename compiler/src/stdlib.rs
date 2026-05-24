@@ -2,8 +2,8 @@
 // source-text)`. Loaded via `include_str!` so the language doesn't
 // depend on an external stdlib directory — `cargo build` is enough.
 //
-// New modules are migrated from `vm/src/stdlib.rs`'s `native_modules`
-// over time; see STDLIB.md for the design and Phase 4 sequencing.
+// New modules are added as `.pa` files here, each def linked to a Rust
+// implementation via a `built-in "tag"` expression.
 
 pub fn stdlib_sources() -> &'static [(&'static str, &'static str)] {
 	&[
