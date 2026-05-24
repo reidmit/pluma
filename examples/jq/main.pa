@@ -1,0 +1,50 @@
+# jq-lite: navigate a JSON document with a path expression.
+#
+#   pluma run examples/jq <path> [file.json]
+#
+# Reads JSON from the given file (or stdin if the file is omitted),
+# applies the path, and pretty-prints each value the path selects.
+#
+#   pluma run examples/jq '.team'          examples/jq/team.json
+#   pluma run examples/jq '.users[0].name' examples/jq/team.json
+#   pluma run examples/jq '.users[].name'  examples/jq/team.json
+#   echo '{"a":[1,2,3]}' | pluma run examples/jq '.a[-1]'
+
+use core.io
+use core.json
+use core.list
+use core.string
+use query
+
+def main = fun {
+	let args = io.args ()
+	when (list.head args) is none {
+		print "usage: pluma run examples/jq <path> [file.json]"
+	} is some path-expr {
+		let rest = list.drop args 1
+		let source = when (list.head rest) is some file {
+			io.read-file file
+		} is none {
+			io.read-all ()
+		}
+		when source is ok text {
+			run path-expr text
+		} is err msg {
+			print "read error: $(msg)"
+		}
+	}
+}
+
+# Parse, navigate, and print. Errors at each stage report distinctly.
+def run = fun path-expr text {
+	when (json.parse text) is err e {
+		print "json error (line $(to-string e.line), col $(to-string e.col)): $(e.message)"
+	} is ok doc {
+		when (query.parse-path path-expr) is err msg {
+			print "path error: $(msg)"
+		} is ok steps {
+			let results = query.eval-path steps doc
+			list.each results (fun v { print (json.stringify-pretty v) })
+		}
+	}
+}

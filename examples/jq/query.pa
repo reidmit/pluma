@@ -1,0 +1,159 @@
+# Path-expression parsing and evaluation for the jq-lite tool.
+#
+# A path is a sequence of steps over a JSON document, jq-style:
+#
+#   .            identity (the whole document)
+#   .field       object field
+#   .a.b.c       chained fields
+#   .a[0]  [0]   array index (negative counts from the end)
+#   .a["k"] ["k"]  quoted field, for keys with dots or spaces
+#   .a[]  []     iterate: every array element / object value
+#
+# Evaluation is stream-based, like jq: each step maps the current
+# stream of values to a new one. `[]` is the only step that can grow
+# the stream; a missing field or out-of-range index drops the value
+# silently, so a path that matches nothing yields no output.
+
+use core.json
+use core.list
+use core.map
+use core.string
+
+# One navigation step.
+enum step {
+	field string
+	index int
+	iterate
+}
+
+# ---------------------------------------------------------------------
+# Parsing: string -> list step
+# ---------------------------------------------------------------------
+
+# End index of the run of characters from `i` for which `pred` holds.
+def span = fun s i pred {
+	when (string.char-at s i) is some c {
+		if (pred c) is true {
+			span s (i + 1) pred
+		} else {
+			i
+		}
+	} is none {
+		i
+	}
+}
+
+# Characters that continue a bare field name (anything but `.`/`[`/`]`).
+def ident-char = fun c {
+	(c != ".") && (c != "[") && (c != "]")
+}
+
+# Parse a path expression into a list of steps, or an error message.
+def parse-path = fun s {
+	parse-steps s 0 []
+}
+
+def parse-steps = fun s i acc {
+	when (string.char-at s i) is none {
+		ok (list.reverse acc)
+	} is some c {
+		if (c == ".") is true {
+			# A bare `.` (identity, or the dot before a `[`) adds no step.
+			let j = span s (i + 1) ident-char
+			if (j == (i + 1)) is true {
+				parse-steps s (i + 1) acc
+			} else {
+				parse-steps s j [field (string.slice s (i + 1) j), ...acc]
+			}
+		} else if (c == "[") is true {
+			let j = span s (i + 1) (fun ch { ch != "]" })
+			if (j >= string.length s) is true {
+				err "unterminated '[' in path"
+			} else {
+				when (parse-bracket (string.slice s (i + 1) j)) is ok st {
+					parse-steps s (j + 1) [st, ...acc]
+				} is err msg {
+					err msg
+				}
+			}
+		} else {
+			err "unexpected '$(c)' at position $(to-string i)"
+		}
+	}
+}
+
+# Classify the text between a `[` and its `]`.
+def parse-bracket = fun inner {
+	let t = string.trim inner
+	if (t == "") is true {
+		ok iterate
+	} else if (string.starts-with t "\"") is true {
+		if ((string.ends-with t "\"") && (string.length t >= 2)) is true {
+			ok (field (string.slice t 1 ((string.length t) - 1)))
+		} else {
+			err "unterminated string key: [$(inner)]"
+		}
+	} else {
+		when (string.to-int t) is ok n {
+			ok (index n)
+		} is err _ {
+			err "invalid index: [$(inner)]"
+		}
+	}
+}
+
+# ---------------------------------------------------------------------
+# Evaluation: a stream of values, narrowed step by step
+# ---------------------------------------------------------------------
+
+# Apply a single step to every value in the stream.
+def step-eval = fun stream st {
+	when st is field name {
+		list.fold stream [] (fun acc v {
+			when (json.get-field v name) is some r {
+				[...acc, r]
+			} is none {
+				acc
+			}
+		})
+	} is index n {
+		list.fold stream [] (fun acc v {
+			when (json.get-array v) is some xs {
+				let len = list.length xs
+				let idx = if (n < 0) is true {
+					len + n
+				} else {
+					n
+				}
+				if (idx < 0) is true {
+					acc
+				} else {
+					when (list.head (list.drop xs idx)) is some r {
+						[...acc, r]
+					} is none {
+						acc
+					}
+				}
+			} is none {
+				acc
+			}
+		})
+	} is iterate {
+		list.fold stream [] (fun acc v {
+			when (json.get-array v) is some xs {
+				[...acc, ...xs]
+			} is none {
+				when (json.get-object v) is some o {
+					[...acc, ...(map.values o)]
+				} is none {
+					acc
+				}
+			}
+		})
+	}
+}
+
+# Evaluate a whole path against a document, yielding the result stream.
+def eval-path = fun steps doc {
+	list.fold steps [doc] step-eval
+}

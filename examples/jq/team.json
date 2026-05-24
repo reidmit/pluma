@@ -1,0 +1,11 @@
+{
+  "team": "platform",
+  "active": true,
+  "headcount": 3,
+  "users": [
+    {"name": "Ada", "age": 36, "roles": ["admin", "dev"]},
+    {"name": "Linus", "age": 54, "roles": ["dev"]},
+    {"name": "Grace", "age": 41, "roles": ["admin", "ops"]}
+  ],
+  "config": {"timeout": 30, "retries": 3}
+}
