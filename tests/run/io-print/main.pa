@@ -16,7 +16,4 @@ def main = fun {
 	io.write-err "-"
 	io.write-err "raw"
 	io.print-err ""
-
-	# both write/print return their arg, like the prelude `print`
-	"piped" | io.print | io.print-err
 }

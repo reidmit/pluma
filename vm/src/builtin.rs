@@ -843,25 +843,25 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			debug_assert_eq!(args.len(), 1, "`io.print` arity");
 			let arg = args.into_iter().next().unwrap();
 			vm.stdout.write_line(&format!("{}", arg));
-			Ok(arg)
+			Ok(Value::Nothing)
 		}
 		"io-print-err" => {
 			debug_assert_eq!(args.len(), 1, "`print-err` arity");
 			let arg = args.into_iter().next().unwrap();
 			vm.stderr.write_line(&format!("{}", arg));
-			Ok(arg)
+			Ok(Value::Nothing)
 		}
 		"io-write" => {
 			debug_assert_eq!(args.len(), 1, "`io.write` arity");
 			let arg = args.into_iter().next().unwrap();
 			vm.stdout.write(&format!("{}", arg));
-			Ok(arg)
+			Ok(Value::Nothing)
 		}
 		"io-write-err" => {
 			debug_assert_eq!(args.len(), 1, "`write-err` arity");
 			let arg = args.into_iter().next().unwrap();
 			vm.stderr.write(&format!("{}", arg));
-			Ok(arg)
+			Ok(Value::Nothing)
 		}
 		"io-read" => {
 			// Called as `read ()` — lone arg is `nothing`.
@@ -1050,7 +1050,7 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				Value::Bytes(b) => vm.stdout.write_bytes(b),
 				_ => unreachable!("`write-bytes`: expected bytes"),
 			}
-			Ok(arg)
+			Ok(Value::Nothing)
 		}
 		"io-write-err-bytes" => {
 			debug_assert_eq!(args.len(), 1, "`write-err-bytes` arity");
@@ -1059,7 +1059,7 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				Value::Bytes(b) => vm.stderr.write_bytes(b),
 				_ => unreachable!("`write-err-bytes`: expected bytes"),
 			}
-			Ok(arg)
+			Ok(Value::Nothing)
 		}
 
 		"map-empty" => {

@@ -2,18 +2,19 @@
 # Operations that talk to the OS return `result _ string`; the err
 # arm carries an OS-provided message.
 
-# Write `value` to stdout with a trailing newline; return `value`
-# unchanged. Polymorphic over any printable value.
-def print :: fun a -> a = built-in "io-print"
+# Write `value` to stdout with a trailing newline. Polymorphic over any
+# printable value. Returns `nothing`, like the prelude `print`; reach
+# for `debug` if you want a value-returning probe to drop into a pipeline.
+def print :: fun a -> nothing = built-in "io-print"
 
 # Like `print` but to stderr.
-def print-err :: fun a -> a = built-in "io-print-err"
+def print-err :: fun a -> nothing = built-in "io-print-err"
 
 # Like `print` but without the trailing newline.
-def write :: fun a -> a = built-in "io-write"
+def write :: fun a -> nothing = built-in "io-write"
 
 # Like `print-err` but without the trailing newline.
-def write-err :: fun a -> a = built-in "io-write-err"
+def write-err :: fun a -> nothing = built-in "io-write-err"
 
 # Read one line from stdin (without the newline). `err "EOF"` at end
 # of input.
@@ -66,5 +67,5 @@ def read-all-bytes :: fun nothing -> result bytes string = built-in "io-read-all
 def read-file-bytes :: fun string -> result bytes string = built-in "io-read-file-bytes"
 def write-file-bytes :: fun string bytes -> result nothing string = built-in "io-write-file-bytes"
 def append-file-bytes :: fun string bytes -> result nothing string = built-in "io-append-file-bytes"
-def write-bytes :: fun bytes -> bytes = built-in "io-write-bytes"
-def write-err-bytes :: fun bytes -> bytes = built-in "io-write-err-bytes"
+def write-bytes :: fun bytes -> nothing = built-in "io-write-bytes"
+def write-err-bytes :: fun bytes -> nothing = built-in "io-write-err-bytes"

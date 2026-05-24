@@ -7,9 +7,7 @@ ok
 == stdout ==
 stdout line
 no-newline
-piped
 == stderr ==
 stderr line
 err-raw
-piped
 
