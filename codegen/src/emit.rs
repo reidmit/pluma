@@ -1036,6 +1036,22 @@ fn emit_expr_with_parents(
 			// dispatch load and skip the regular identifier resolution.
 			if let Some(cell) = &expr.trait_dispatch {
 				emit_dispatch_load(cg, fb, scope, parent_scopes, cell, range)?;
+			} else if let Some(cells) = undrained_dispatch_cells(expr) {
+				// A constrained function referenced as a first-class value
+				// (not a direct callee, so its dict sink was never drained
+				// into a Call's dict_args). Wrap it so the dicts are
+				// prepended — see `emit_constrained_value_ref`.
+				emit_constrained_value_ref(
+					cg,
+					current_module,
+					imports,
+					fb,
+					scope,
+					parent_scopes,
+					expr,
+					&cells,
+					range,
+				)?;
 			} else {
 				emit_identifier(
 					cg,
@@ -1543,6 +1559,21 @@ fn emit_expr_with_parents(
 			// trait method. Load the dict; skip the path-based lowering.
 			if let Some(cell) = &expr.trait_dispatch {
 				emit_dispatch_load(cg, fb, scope, parent_scopes, cell, range)?;
+			} else if let Some(cells) = undrained_dispatch_cells(expr) {
+				// Cross-module constrained value (e.g. `mod.step`) used as a
+				// first-class value rather than a direct callee. Same fix as
+				// the bare-identifier case.
+				emit_constrained_value_ref(
+					cg,
+					current_module,
+					imports,
+					fb,
+					scope,
+					parent_scopes,
+					expr,
+					&cells,
+					range,
+				)?;
 			} else {
 				emit_namespace_access(cg, current_module, imports, fb, path, range)?;
 			}
@@ -1714,6 +1745,159 @@ fn emit_identifier(
 		}
 	}
 	Ok(())
+}
+
+// If `expr` carries a non-empty, undrained dispatch sink, return its cells.
+// A Call drains its callee's sink into the Call's `dict_args` during
+// analysis (`annotate_expr`), so a sink that survives to codegen means the
+// reference is in *value* position — passed as an argument, returned, or
+// bound — rather than directly applied. Those are exactly the references
+// that need their dictionaries pre-applied (`emit_constrained_value_ref`).
+// An empty sink (an unconstrained def referenced as a value) is treated as
+// absent so it lowers as a plain reference.
+fn undrained_dispatch_cells(expr: &ExprNode) -> Option<Vec<compiler::ast::DispatchCell>> {
+	let sink = expr.dispatch_sink.as_ref()?;
+	let cells = sink.borrow();
+	if cells.is_empty() {
+		None
+	} else {
+		Some(cells.iter().cloned().collect())
+	}
+}
+
+// Emit a constrained function referenced as a first-class value.
+//
+// A top-level def that uses a trait method over a still-polymorphic
+// parameter compiles to a function with K hidden leading dict params
+// (slots 0..K-1) before its N user params (`compile_constrained_thunk`).
+// At a *call* the surrounding Call supplies those dicts as `dict_args`, so
+// the arity lines up. But when the def is referenced as a value (passed to
+// `list.fold`, stored, returned), nothing supplies the dicts, and the later
+// call — which only knows the user-visible arity N — calls it with N args
+// against a K+N-arity function, tripping the VM's arity check.
+//
+// Fix: emit a wrapper closure of arity N that captures the K resolved dicts
+// and forwards to the underlying function with the dicts prepended. The
+// resulting value's runtime arity matches its user-visible type, so it can
+// flow through any higher-order function unchanged.
+fn emit_constrained_value_ref(
+	cg: &mut CodeGen,
+	current_module: &str,
+	imports: &HashMap<String, String>,
+	fb: &mut FunctionBuilder,
+	scope: &mut Scope,
+	parent_scopes: &mut Vec<*mut Scope>,
+	expr: &ExprNode,
+	cells: &[compiler::ast::DispatchCell],
+	range: Range,
+) -> Result<(), String> {
+	let k = cells.len() as u16;
+	// User-visible arity comes from the reference's function type. Trait
+	// constraints only quantify functions, so this is always a `Fun`.
+	let n = match &expr.ty {
+		compiler::types::Type::Fun(params, _) => params.len() as u16,
+		other => {
+			return Err(format!(
+				"codegen: constrained value reference has non-function type `{}`",
+				other
+			))
+		}
+	};
+	// The underlying K+N-arity function. Both reference shapes that carry a
+	// dispatch sink (bare identifier, cross-module `module.value`) resolve to
+	// a global slot.
+	let global_idx =
+		resolve_constrained_ref_global(cg, current_module, imports, scope, parent_scopes, expr)?;
+
+	// Wrapper: arity N, K captures (the dicts). Body re-pushes the underlying
+	// function, the captured dicts, then its own params, and tail-calls with
+	// the full K+N arity.
+	let mut wrapper = FunctionBuilder::new(
+		format!("partial@{}", global_idx),
+		current_module.to_string(),
+		n,
+	);
+	wrapper.emit(Instruction::LoadGlobal(global_idx), range);
+	for i in 0..k {
+		wrapper.emit(Instruction::LoadCapture(i), range);
+	}
+	for i in 0..n {
+		wrapper.emit(Instruction::LoadLocal(i), range);
+	}
+	wrapper.emit(Instruction::TailCall(k + n), range);
+	wrapper.emit(Instruction::Return, range);
+	wrapper.capture_count = k;
+	let wrapper_idx = cg.add_function(wrapper);
+
+	// Outer site: load each resolved dict (using the surrounding scope, so
+	// `Forwarded` dicts capture the enclosing def's dict params), then build
+	// the wrapper closure capturing them.
+	for cell in cells {
+		emit_dispatch_load(cg, fb, scope, parent_scopes, cell, range)?;
+	}
+	fb.emit(
+		Instruction::MakeClosure {
+			fn_idx: wrapper_idx,
+			num_captures: k,
+		},
+		range,
+	);
+	Ok(())
+}
+
+// Resolve the global slot of a constrained value reference (a bare
+// identifier or an imported `module.value` namespace access). Used by
+// `emit_constrained_value_ref` to bake the load into the wrapper.
+fn resolve_constrained_ref_global(
+	cg: &CodeGen,
+	current_module: &str,
+	imports: &HashMap<String, String>,
+	scope: &mut Scope,
+	parent_scopes: &mut Vec<*mut Scope>,
+	expr: &ExprNode,
+) -> Result<GlobalIdx, String> {
+	match &expr.kind {
+		ExprKind::Identifier(ident) => {
+			let mut parent_refs: Vec<&mut Scope> =
+				parent_scopes.iter().map(|p| unsafe { &mut **p }).collect();
+			match resolve_identifier(
+				cg,
+				current_module,
+				imports,
+				scope,
+				parent_refs.as_mut_slice(),
+				&ident.name,
+			) {
+				Some(Resolution::Global(idx)) => Ok(idx),
+				_ => Err(format!(
+					"codegen: constrained value `{}` did not resolve to a global",
+					ident.name
+				)),
+			}
+		}
+		ExprKind::NamespaceAccess(path) => match path.as_slice() {
+			[head, tail] => {
+				let qualified_module = imports.get(&head.name).ok_or_else(|| {
+					format!(
+						"codegen: namespace `{}` is not an imported module",
+						head.name
+					)
+				})?;
+				cg.lookup_global(qualified_module, &tail.name)
+					.ok_or_else(|| {
+						format!(
+							"codegen: constrained value `{}.{}` is not a global",
+							head.name, tail.name
+						)
+					})
+			}
+			_ => Err(format!(
+				"codegen: constrained value reference has a {}-segment namespace path",
+				path.len()
+			)),
+		},
+		_ => Err("codegen: constrained value reference is neither identifier nor namespace".into()),
+	}
 }
 
 fn emit_fun(

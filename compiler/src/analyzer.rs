@@ -203,6 +203,16 @@ fn collect_dispatch_cells(expr: &ExprNode, cells: &mut Vec<DispatchCell>) {
 	if let Some(cell) = &expr.trait_dispatch {
 		cells.push(cell.clone());
 	}
+	// A constrained value referenced in value position (not a direct callee)
+	// keeps its dict cells in an undrained sink — a Call would have drained
+	// the callee's sink into its `dict_args` during annotate, which runs
+	// before this pass. Those surviving cells still need Forwarded
+	// resolution when the reference sits inside a polymorphic def.
+	if let Some(sink) = &expr.dispatch_sink {
+		for cell in sink.borrow().iter() {
+			cells.push(cell.clone());
+		}
+	}
 	match &expr.kind {
 		ExprKind::Call(CallNode {
 			callee,
