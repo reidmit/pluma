@@ -1,0 +1,21 @@
+---
+source: tests/format.rs
+expression: once
+---
+use core.list
+
+# A call whose last argument is a multi-line `fun` block must keep the
+# `(fun ...` attached to the call: Pluma application is newline-terminated,
+# so breaking the argument onto its own line would change the parse.
+def sum-plus-one = fun xs {
+	list.fold xs 0 (fun acc x {
+		let y = x + 1
+		acc + y
+	})
+}
+
+# Nested: the inner call's lambda also stays attached.
+def doubled-evens = fun xs {
+	list.map (list.filter xs (fun x { x % 2 == 0 })) (fun x { x * 2 })
+}
+

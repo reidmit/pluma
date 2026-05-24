@@ -482,14 +482,18 @@ impl<'a> Formatter<'a> {
 	}
 
 	fn format_call(&self, call: &CallNode) -> Doc {
-		// Calls are whitespace-separated callee + args. We keep them flat
-		// when they fit, otherwise wrap each argument onto its own line at
-		// the same indent + 1 level.
+		// Calls are whitespace-separated callee + args. Pluma application is
+		// newline-terminated — a call ends at the first newline that isn't
+		// inside an open bracket — so we must NOT break a call across lines:
+		// args are always joined by a single space. An argument may still be
+		// internally multi-line (a `fun` block, a multi-line list/record),
+		// but those line breaks live inside the argument's own brackets.
 		let mut parts: Vec<Doc> = vec![self.format_expr(&call.callee)];
 		for arg in &call.args {
-			parts.push(group(nest(concat(vec![line(), self.format_expr(arg)]))));
+			parts.push(text(" "));
+			parts.push(self.format_expr(arg));
 		}
-		group(concat(parts))
+		concat(parts)
 	}
 
 	fn format_let(&self, l: &LetNode) -> Doc {
