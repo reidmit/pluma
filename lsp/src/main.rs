@@ -31,30 +31,23 @@ impl LanguageServer for Backend {
 			capabilities: ServerCapabilities {
 				text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
 				workspace: None,
+				// Plain options, not RegistrationOptions: the latter carries a
+				// `document_selector` keyed on the LSP languageId, which differs
+				// per editor (VS Code sends "pluma", Zed sends "Pluma"). A
+				// mismatched selector silently suppresses all token requests —
+				// which is why highlighting worked in VS Code but not Zed. The
+				// plain options have no selector, so the client requests tokens
+				// for whatever documents it routes to this server.
 				semantic_tokens_provider: Some(
-					SemanticTokensServerCapabilities::SemanticTokensRegistrationOptions(
-						SemanticTokensRegistrationOptions {
-							text_document_registration_options: {
-								TextDocumentRegistrationOptions {
-									document_selector: Some(vec![DocumentFilter {
-										language: Some("pluma".to_string()),
-										scheme: Some("file".to_string()),
-										pattern: None,
-									}]),
-								}
-							},
-							semantic_tokens_options: SemanticTokensOptions {
-								work_done_progress_options: WorkDoneProgressOptions::default(),
-								legend: SemanticTokensLegend {
-									token_types: semantic_tokens::TOKEN_TYPES.into(),
-									token_modifiers: vec![],
-								},
-								range: Some(false),
-								full: Some(SemanticTokensFullOptions::Bool(true)),
-							},
-							static_registration_options: StaticRegistrationOptions::default(),
+					SemanticTokensServerCapabilities::SemanticTokensOptions(SemanticTokensOptions {
+						work_done_progress_options: WorkDoneProgressOptions::default(),
+						legend: SemanticTokensLegend {
+							token_types: semantic_tokens::TOKEN_TYPES.into(),
+							token_modifiers: vec![],
 						},
-					),
+						range: Some(false),
+						full: Some(SemanticTokensFullOptions::Bool(true)),
+					}),
 				),
 				document_formatting_provider: Some(OneOf::Left(true)),
 				hover_provider: Some(HoverProviderCapability::Simple(true)),
