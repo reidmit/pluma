@@ -42,7 +42,7 @@ Cargo workspace (see `Cargo.toml`):
 - `codegen/` — lowers the typed AST into VM bytecode. `codegen::compile(&compiler)` returns a `vm::Program` ready to execute.
 - `vm/` — bytecode VM that executes the compiled program. `VM::new(program).run()` is the entry point. `print` writes through a configurable `StdoutSink` (process stdout by default; tests inject a `Buffer` sink). `vm::stdlib::register_compiler` seeds the analyzer with the native module types (`core.regex`, `core.list`, `core.math`).
 - `cli/` — command dispatcher. `run`, `format`, `tokenize`, `analyze` are wired. `tokenize` and `analyze` are debug-build only (they dump Debug-format output of types whose Debug is gated on `debug_assertions`).
-- `lsp/` — language server, packaged for VS Code via the extension in `vsix/`.
+- `lsp/` — language server, packaged for VS Code via the extension in `vsix/` and for Zed via the extension in `zed/`. Both editor extensions are thin clients that just launch `pluma-language-server`; all features (diagnostics, hover, formatting, highlighting via semantic tokens) live in the LSP so they're shared. The `zed/` crate ships no Tree-sitter grammar and is a standalone (non-workspace) cdylib built for `wasm32-wasip1`.
 - `tests/` — integration tests (snapshot-based) for the analyzer and the VM. The Cargo package is also named `tests`. Harness files live at the crate root (`tests/analyze.rs`, `tests/run.rs`) next to the fixture directories (`tests/analyze/`, `tests/run/`). See "Testing" below.
 - `bench/` — microbench runner that times each `benchmarks/programs/<name>/main.pa` through the VM.
 

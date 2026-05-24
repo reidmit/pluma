@@ -1,0 +1,16 @@
+id = "pluma"
+name = "Pluma"
+description = "Pluma language support, powered entirely by the Pluma language server."
+version = "0.0.1"
+schema_version = 1
+authors = ["Reid Mitchell <reidmitchell@mac.com>"]
+repository = "https://github.com/reidmit/pluma"
+
+# No `[grammars]` table: Pluma ships no Tree-sitter grammar. All editor
+# features — diagnostics, hover, formatting, and syntax highlighting (via LSP
+# semantic tokens) — come from the language server, so they stay shared across
+# every editor rather than reimplemented per-editor.
+
+[language_servers.pluma]
+name = "Pluma Language Server"
+languages = ["Pluma"]

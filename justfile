@@ -49,6 +49,13 @@ vs-extension:
   SERVER_PATH=$(pwd)/target/debug/pluma-language-server \
     code --extensionDevelopmentPath=$(pwd)/vsix ./tests
 
+# build the language server + zed extension wasm; then install the dev
+# extension from Zed (cmd palette -> "zed: install dev extension" -> ./zed)
+zed-extension:
+  cargo build --bin pluma-language-server
+  cd zed && cargo build --release --target wasm32-wasip1
+  @ echo "Built. In Zed run 'zed: install dev extension' -> $(pwd)/zed (see zed/README.md for settings)."
+
 # install all deps on macos
 install-depencies-macos:
   brew install zola

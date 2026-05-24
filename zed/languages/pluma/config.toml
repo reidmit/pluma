@@ -1,0 +1,16 @@
+name = "Pluma"
+# No `grammar` key: highlighting is driven by the language server's semantic
+# tokens, not Tree-sitter. See this extension's README for the one-line
+# `semantic_tokens` setting that turns it on.
+path_suffixes = ["pa"]
+line_comments = ["# "]
+tab_size = 4
+hard_tabs = true
+autoclose_before = ",)]}"
+
+brackets = [
+	{ start = "{", end = "}", close = true, newline = true },
+	{ start = "[", end = "]", close = true, newline = true },
+	{ start = "(", end = ")", close = true, newline = false },
+	{ start = "\"", end = "\"", close = true, newline = false },
+]

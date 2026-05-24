@@ -1,0 +1,17 @@
+[package]
+name = "zed_pluma"
+version = "0.0.1"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+zed_extension_api = "0.7.0"
+
+# Standalone workspace: this crate compiles to wasm32-wasip1 against
+# `zed_extension_api`, so it must stay out of the main Cargo workspace (whose
+# crates build for the host and depend on the compiler/vm). The empty table
+# detaches it from the parent workspace discovered up the directory tree.
+[workspace]
