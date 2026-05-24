@@ -8,8 +8,10 @@ use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
 mod analysis;
+mod goto;
 mod hover;
 mod semantic_tokens;
+mod symbols;
 
 struct Backend {
 	client: Client,
@@ -51,6 +53,8 @@ impl LanguageServer for Backend {
 				),
 				document_formatting_provider: Some(OneOf::Left(true)),
 				hover_provider: Some(HoverProviderCapability::Simple(true)),
+				definition_provider: Some(OneOf::Left(true)),
+				document_symbol_provider: Some(OneOf::Left(true)),
 				..ServerCapabilities::default()
 			},
 		})
@@ -170,6 +174,41 @@ impl LanguageServer for Backend {
 			}),
 			range: Some(pluma_range_to_lsp(&hit.range)),
 		}))
+	}
+
+	async fn goto_definition(
+		&self,
+		params: GotoDefinitionParams,
+	) -> Result<Option<GotoDefinitionResponse>> {
+		let uri = params.text_document_position_params.text_document.uri;
+		let pos = params.text_document_position_params.position;
+
+		let text = match self.document_map.get(&uri.to_string()) {
+			Some(text) => text.clone(),
+			None => return Ok(None),
+		};
+
+		let Some(range) = goto::goto_definition(text.as_bytes(), pos.line, pos.character) else {
+			return Ok(None);
+		};
+
+		Ok(Some(GotoDefinitionResponse::Scalar(Location {
+			uri,
+			range: pluma_range_to_lsp(&range),
+		})))
+	}
+
+	async fn document_symbol(
+		&self,
+		params: DocumentSymbolParams,
+	) -> Result<Option<DocumentSymbolResponse>> {
+		let text = match self.document_map.get(&params.text_document.uri.to_string()) {
+			Some(text) => text.clone(),
+			None => return Ok(None),
+		};
+
+		let symbols = symbols::document_symbols(text.as_bytes());
+		Ok(Some(DocumentSymbolResponse::Nested(symbols)))
 	}
 }
 
