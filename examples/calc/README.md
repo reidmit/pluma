@@ -30,11 +30,11 @@ error: undefined name 'r'
 > area = pi * r ^ 2
 = 12.566370614359172
 > :vars
-pi = 3.141592653589793
-e = 2.718281828459045
-x = 15
-r = 2
 area = 12.566370614359172
+e = 2.718281828459045
+pi = 3.141592653589793
+r = 2
+x = 15
 ```
 
 Each line is prompted with `> `; an evaluation result is printed with a
@@ -63,8 +63,8 @@ yields a float.
 `log` is overloaded by arity: one argument is base-10, two is log-base-y.
 
 **Variables** persist across lines (`name = expr`); `pi` and `e` are
-predefined. **Commands:** `:vars` lists bindings, `:help` prints a
-cheat-sheet, `:q` quits.
+predefined. **Commands:** `:vars` lists bindings (sorted by name), `:help`
+prints a cheat-sheet, `:q` quits.
 
 ## Layout
 

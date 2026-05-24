@@ -88,15 +88,22 @@ def print-help = fun {
 	io.print "commands:   :vars  :help  :q"
 }
 
-# Show every bound variable. `map.entries` preserves insertion order,
-# so the predefined `pi` and `e` come first, then user variables in the
-# order they were assigned.
+# Show every bound variable, sorted by name. `by-name` is polymorphic and
+# leans on the `ord` trait via `compare`, yet we pass it to `list.sort` by
+# bare name — codegen prepends its trait dictionary at the reference.
 def print-vars = fun env {
 	let entries = map.entries (ref.get env)
-	list.each entries (fun ent {
+	list.each (list.sort entries by-name) (fun ent {
 		let (k, v) = ent
 		io.print "$(k) = $(value.num-to-string v)"
 	})
+}
+
+# Order two (name, value) entries alphabetically by their variable name.
+def by-name = fun a b {
+	let (ka, _va) = a
+	let (kb, _vb) = b
+	compare ka kb
 }
 
 # ---------------------------------------------------------------------
