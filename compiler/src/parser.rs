@@ -206,7 +206,25 @@ impl<'a> Parser<'a> {
 
 	fn advance(&mut self) {
 		self.prev_token = self.current_token;
-		self.current_token = self.lookahead.pop_front().or_else(|| self.tokenizer.next());
+		self.current_token = self
+			.lookahead
+			.pop_front()
+			.or_else(|| self.next_significant_token());
+	}
+
+	// Pull the next token from the tokenizer, skipping comments. The parser
+	// treats comments as trivia — like line breaks — and never sees them in the
+	// token stream. This is the single point where comments are filtered, so
+	// the grammar productions don't have to. (Their text/spans are still
+	// recorded by the tokenizer: `comments` for the formatter, `Token::Comment`
+	// for the LSP's highlighting pass.)
+	fn next_significant_token(&mut self) -> Option<Token> {
+		loop {
+			match self.tokenizer.next() {
+				Some(Token::Comment(..)) => continue,
+				other => return other,
+			}
+		}
 	}
 
 	// Look past any line-break-ish tokens (LineBreak/Indent/Outdent) starting
@@ -236,7 +254,7 @@ impl<'a> Parser<'a> {
 		}
 
 		loop {
-			match self.tokenizer.next() {
+			match self.next_significant_token() {
 				Some(t) => {
 					self.lookahead.push_back(t);
 					if !is_break(&t) {

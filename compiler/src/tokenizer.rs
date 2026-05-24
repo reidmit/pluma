@@ -10,6 +10,10 @@ macro_rules! read_string {
 }
 
 pub struct Tokenizer<'a> {
+	// Comment text keyed by line. Comments are also emitted as `Token::Comment`
+	// from `next()`; this parallel index keeps line→text lookup cheap for the
+	// formatter and the module's Debug rendering (the tokenizer is the only
+	// place with accurate line info, since downstream lookahead skews it).
 	pub comments: HashMap<usize, String>,
 	source: &'a Vec<u8>,
 	length: usize,
@@ -530,8 +534,12 @@ impl<'a> Iterator for Tokenizer<'a> {
 					}
 
 					let comment = read_string!(self, start_index + 1, self.index);
-
 					self.comments.insert(self.line, comment);
+
+					// Emit the comment as a token (span includes the `#`).
+					// Consumers that don't care about comments — i.e. the parser —
+					// skip them as trivia, just like line breaks.
+					return Some(Comment(start_index, self.index));
 				}
 
 				_ if is_identifier_start_char(byte) => {

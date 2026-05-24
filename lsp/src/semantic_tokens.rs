@@ -693,4 +693,25 @@ mod tests {
 			toks
 		);
 	}
+
+	#[test]
+	fn comments_are_highlighted() {
+		// Full-line comment and a trailing comment after code. The range
+		// spans the `#` through end of line (the `#` is included).
+		let src = "# a full-line comment\ndef x = 1 # trailing\n";
+		let toks = classify(src);
+		assert!(
+			toks.contains(&(0, 0, 21, COMMENT)),
+			"full-line comment: {:?}",
+			toks
+		);
+		assert!(
+			toks.contains(&(1, 10, 10, COMMENT)),
+			"trailing comment: {:?}",
+			toks
+		);
+		// The code before the trailing comment still classifies normally.
+		assert!(toks.contains(&(1, 0, 3, KEYWORD)), "def kw");
+		assert!(toks.contains(&(1, 8, 1, NUMBER)), "1 literal");
+	}
 }
