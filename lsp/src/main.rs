@@ -40,8 +40,8 @@ impl LanguageServer for Backend {
 				// which is why highlighting worked in VS Code but not Zed. The
 				// plain options have no selector, so the client requests tokens
 				// for whatever documents it routes to this server.
-				semantic_tokens_provider: Some(
-					SemanticTokensServerCapabilities::SemanticTokensOptions(SemanticTokensOptions {
+				semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
+					SemanticTokensOptions {
 						work_done_progress_options: WorkDoneProgressOptions::default(),
 						legend: SemanticTokensLegend {
 							token_types: semantic_tokens::TOKEN_TYPES.into(),
@@ -49,8 +49,8 @@ impl LanguageServer for Backend {
 						},
 						range: Some(false),
 						full: Some(SemanticTokensFullOptions::Bool(true)),
-					}),
-				),
+					},
+				)),
 				document_formatting_provider: Some(OneOf::Left(true)),
 				hover_provider: Some(HoverProviderCapability::Simple(true)),
 				definition_provider: Some(OneOf::Left(true)),
@@ -167,12 +167,19 @@ impl LanguageServer for Backend {
 			return Ok(None);
 		};
 
+		// The doc resolves through the usage to its definition, so it needs the
+		// source text; the direct hit's own doc (def name) is the fallback.
+		let doc = match self.document_map.get(&uri).map(|t| t.clone()) {
+			Some(text) => hover::doc_for_hover(&hits, text.as_bytes(), pos.line, pos.character),
+			None => hit.doc.clone(),
+		};
+
 		// Type in a code fence; the doc comment (if any) as prose below a rule.
 		let mut value = String::new();
 		if !matches!(hit.ty, compiler::types::Type::Unknown) {
 			value.push_str(&format!("```pluma\n{}\n```", hit.ty));
 		}
-		if let Some(doc) = &hit.doc {
+		if let Some(doc) = &doc {
 			if !value.is_empty() {
 				value.push_str("\n\n---\n\n");
 			}

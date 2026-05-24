@@ -79,6 +79,29 @@ pub fn lookup(hits: &[HoverHit], line: u32, character: u32) -> Option<&HoverHit>
 		.min_by_key(|h| range_size(&h.range))
 }
 
+// The doc comment to show on hover at a position. Docs live on the def
+// name's hit, so hovering the def shows it directly. At a *usage*, we
+// resolve the identifier to its definition (via goto's scope-aware
+// resolution) and borrow that def's doc — so a usage of `helper` shows
+// `helper`'s doc, while a local that shadows a top-level def correctly
+// shows nothing.
+pub fn doc_for_hover(
+	hits: &[HoverHit],
+	source: &[u8],
+	line: u32,
+	character: u32,
+) -> Option<String> {
+	if let Some(hit) = lookup(hits, line, character) {
+		if hit.doc.is_some() {
+			return hit.doc.clone();
+		}
+	}
+	let target = crate::goto::goto_definition(source, line, character)?;
+	lookup(hits, target.start.line as u32, target.start.col as u32)?
+		.doc
+		.clone()
+}
+
 fn range_size(r: &Range) -> usize {
 	// Lines weighted heavily so a multi-line range never beats a
 	// single-line one that contains the same point.
@@ -278,6 +301,15 @@ mod tests {
 		lookup(&hits, line, character).and_then(|h| h.doc.clone())
 	}
 
+	// The doc shown on hover, resolving usages through to their definition.
+	fn hover_doc_at(src: &str, line: u32, character: u32) -> Option<String> {
+		let mut module = Module::new("<test>".to_string(), PathBuf::new());
+		let mut diags: Vec<compiler::Diagnostic> = Vec::new();
+		module.parse_from_bytes(src.as_bytes().to_vec(), &mut diags);
+		let hits = build_index(&module);
+		doc_for_hover(&hits, src.as_bytes(), line, character)
+	}
+
 	#[test]
 	fn contiguous_block_above_def() {
 		let src = "# greet someone\n# politely\ndef greet = fun name { name }\n";
@@ -312,5 +344,23 @@ mod tests {
 	fn no_comment_means_no_doc() {
 		let src = "def x = 1\n";
 		assert_eq!(doc_at(src, 0, 4), None);
+	}
+
+	#[test]
+	fn doc_shows_at_usage() {
+		let src = "# greet someone\ndef greet = fun { 1 }\ndef main = fun {\n\tgreet ()\n}\n";
+		// Hovering the `greet` call on line 3 (col 1, after the tab) surfaces
+		// greet's doc, resolved through the usage.
+		assert_eq!(hover_doc_at(src, 3, 1), Some("greet someone".to_string()));
+	}
+
+	#[test]
+	fn shadowing_local_shows_no_doc() {
+		// A param `x` shadows top-level `def x` (which has a doc). Hovering the
+		// param usage must not borrow the top-level def's doc.
+		let src = "# the global x\ndef x = 1\ndef f = fun x {\n\tx\n}\n";
+		assert_eq!(hover_doc_at(src, 3, 1), None);
+		// But hovering the top-level def name still shows its doc.
+		assert_eq!(hover_doc_at(src, 1, 4), Some("the global x".to_string()));
 	}
 }
