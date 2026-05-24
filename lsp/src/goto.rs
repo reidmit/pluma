@@ -251,12 +251,23 @@ fn stdlib_cache_path(module_name: &str) -> Option<PathBuf> {
 		}
 		// Versioned dir already isolates compiler versions; write once.
 		if !path.exists() {
-			std::fs::write(&path, source).ok()?;
+			write_readonly(&path, source).ok()?;
 		}
 	}
 
 	let path = to_module_path(&root, module_name);
 	path.is_file().then_some(path)
+}
+
+// Write a file and mark it read-only: the materialized stdlib is a view of
+// the compiler's inlined source, not something to edit (edits wouldn't feed
+// back). Deletion still works — on Unix it depends on the parent dir, and a
+// version bump writes a fresh tree elsewhere.
+fn write_readonly(path: &Path, contents: &str) -> std::io::Result<()> {
+	std::fs::write(path, contents)?;
+	let mut perms = std::fs::metadata(path)?.permissions();
+	perms.set_readonly(true);
+	std::fs::set_permissions(path, perms)
 }
 
 // The OS user cache directory: `$XDG_CACHE_HOME`, else the platform default.
