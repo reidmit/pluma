@@ -1,68 +1,107 @@
-# Standard I/O, file I/O, environment access, and process control.
-# Operations that talk to the OS return `result _ string`; the err
-# arm carries an OS-provided message.
+# Talking to the outside world: printing, reading input, files,
+# directories, environment variables, and the command line.
+#
+# Anything that touches the operating system can fail -- a file might
+# not exist, a directory might not be readable -- so those operations
+# hand back a `result`, with a message from the OS on the `err` side.
+# Printing and reading the standard streams effectively never fail, so
+# they return their values directly.
 
-# Write `value` to stdout with a trailing newline. Polymorphic over any
-# printable value. Returns `nothing`, like the prelude `print`; reach
-# for `debug` if you want a value-returning probe to drop into a pipeline.
+# Prints `value` to standard output, followed by a newline. Works on any
+# value, not just strings -- numbers, lists, options, and so on all
+# print sensibly. Returns `nothing`.
+#
+#     io.print "hello"     # writes: hello
+#     io.print [1, 2, 3]   # writes: [1, 2, 3]
 def print :: fun a -> nothing = built-in "io-print"
 
-# Like `print` but to stderr.
+# Like `print`, but writes to standard error -- the stream meant for
+# diagnostics and log messages, kept separate from a program's real
+# output.
 def print-err :: fun a -> nothing = built-in "io-print-err"
 
-# Like `print` but without the trailing newline.
+# Like `print`, but with no trailing newline, so the next output picks
+# up right where this one left off. Handy for prompts.
+#
+#     io.write "Name: "   # leaves the cursor on the same line
 def write :: fun a -> nothing = built-in "io-write"
 
-# Like `print-err` but without the trailing newline.
+# Like `write` (no trailing newline), but to standard error.
 def write-err :: fun a -> nothing = built-in "io-write-err"
 
-# Read one line from stdin (without the newline). `err "EOF"` at end
-# of input.
+# Reads one line from standard input, without its trailing newline.
+# `ok line` normally; `err "EOF"` once the input is exhausted.
+#
+#     try line = io.read ()   # read what the user types, a line at a time
 def read :: fun nothing -> result string string = built-in "io-read"
 
-# Read all of stdin to a single string. `err` on read error.
+# Reads all of standard input into a single string, up to end of input.
+# `err` on a read error. Good for filter-style programs fed by a pipe:
+# `some-command | your-program`.
 def read-all :: fun nothing -> result string string = built-in "io-read-all"
 
-# Read the entire contents of a file as a string.
+# Reads an entire file into a string. `ok contents` if it worked, or
+# `err message` if the file is missing or can't be read.
+#
+#     io.read-file "notes.txt"   # ok "...the file's text..." or err
 def read-file :: fun string -> result string string = built-in "io-read-file"
 
-# Replace the file's contents with `data`. Creates the file if it
-# doesn't exist.
+# Writes `data` to a file, replacing whatever was there before. Creates
+# the file if it doesn't exist. `ok nothing` on success, `err` on
+# failure.
+#
+#     io.write-file "out.txt" "hello"
 def write-file :: fun string string -> result nothing string = built-in "io-write-file"
 
-# Append `data` to the file. Creates the file if it doesn't exist.
+# Adds `data` to the end of a file, keeping the existing contents.
+# Creates the file if it doesn't exist.
 def append-file :: fun string string -> result nothing string = built-in "io-append-file"
 
-# True iff the path exists as a file (not a directory).
+# True when the path exists and is a file (not a directory).
+#
+#     io.file-exists "out.txt"   # true or false
 def file-exists :: fun string -> bool = built-in "io-file-exists"
 
-# Delete a file. `err` if the file doesn't exist.
+# Deletes a file. `err` if it isn't there.
 def delete-file :: fun string -> result nothing string = built-in "io-delete-file"
 
-# True iff the path exists as a directory.
+# True when the path exists and is a directory.
 def is-dir :: fun string -> bool = built-in "io-is-dir"
 
-# List the entries of a directory. Returns entry names only (not full
-# paths), sorted; hidden dotfiles are included. `err` if the path
-# isn't a readable directory.
+# Lists the entries in a directory -- just the names, not full paths,
+# sorted, with hidden dotfiles included. `err` if the path isn't a
+# directory you can read.
+#
+#     io.read-dir "."   # ok ["README.md", "src", ...] or err
 def read-dir :: fun string -> result (list string) string = built-in "io-read-dir"
 
-# Create a directory and any missing parents (like `mkdir -p`).
-# Succeeds silently if it already exists.
+# Creates a directory, along with any parent directories that don't
+# exist yet (like `mkdir -p`). Quietly succeeds if it's already there.
 def make-dir :: fun string -> result nothing string = built-in "io-make-dir"
 
-# The program's command-line arguments, in order. The interpreter and
-# script path are not included — `pluma run app.pa a b` yields `[a, b]`.
+# The command-line arguments your program was run with, in order. The
+# `pluma` command and the script path are left out -- running
+# `pluma run app.pa hello 42` gives `["hello", "42"]`.
 def args :: fun nothing -> list string = built-in "io-args"
 
-# Environment variable lookup. `none` if not set.
+# Looks up an environment variable. `some value` if it's set, `none` if
+# not.
+#
+#     io.env "HOME"             # some "/Users/you" -- whatever it's set to
+#     io.env "NOT_SET_ANYWHERE" # => none
 def env :: fun string -> option string = built-in "io-env"
 
-# Terminate the program with the given exit code. Polymorphic return
-# type so it can be used in any expression position.
+# Stops the program right away with the given exit code (0 means
+# success; anything else signals an error). It never returns, so it
+# fits anywhere a value is expected.
+#
+#     io.exit 1   # quit now, reporting failure
 def exit :: fun int -> a = built-in "io-exit"
 
-# Bytes variants of the above.
+# Byte-oriented versions of the operations above, for binary data: they
+# read and write `bytes` instead of `string`, so they make no assumption
+# that the content is text. Reach for these with images, compressed
+# files, or anything that isn't UTF-8.
 def read-all-bytes :: fun nothing -> result bytes string = built-in "io-read-all-bytes"
 def read-file-bytes :: fun string -> result bytes string = built-in "io-read-file-bytes"
 def write-file-bytes :: fun string bytes -> result nothing string = built-in "io-write-file-bytes"

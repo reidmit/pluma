@@ -1,24 +1,45 @@
-# Random number generation backed by the OS entropy source.
-# Suitable for cryptographic use (passwords, tokens, UUIDs).
+# Random numbers, drawn from the operating system's secure source of
+# randomness. That makes them safe even where unpredictability really
+# matters -- passwords, tokens, session ids. Every call returns a fresh,
+# independent result.
 #
-# Seedable PRNGs (for reproducible output in tests/simulations) are
-# not yet exposed — they need an opaque-handle type to carry RNG state
-# across calls. They will arrive once that design lands.
+# (A seedable generator -- the kind that replays the same "random"
+# sequence every run, handy for tests and simulations -- isn't available
+# yet, but is planned.)
 
-# Random int in [0, 2^63). Each call draws fresh entropy.
+# A random whole number from 0 up to (but not including) 2^63. Draws
+# fresh randomness each call.
+#
+#     random.int ()   # a different large number every time
 def int :: fun nothing -> int = built-in "random-int"
 
-# Random float in [0, 1).
+# A random decimal from 0 up to (but not including) 1.
+#
+#     random.float ()   # e.g. 0.42 one call, 0.917 the next
 def float :: fun nothing -> float = built-in "random-float"
 
-# `n` random bytes. Returns `err` if `n` is negative.
+# `n` random bytes, wrapped in `ok`. `err` if `n` is negative. Good for
+# generating a key or a salt.
+#
+#     random.bytes 16   # => ok (16 random bytes)
+#     random.bytes -1   # => err "random.bytes: negative length: -1"
 def bytes :: fun int -> result bytes string = built-in "random-bytes"
 
-# Random int in [low, high). `err` if low >= high.
+# A random whole number from `low` up to (but not including) `high`,
+# wrapped in `ok`. `err` if `low` isn't below `high`.
+#
+#     random.int-range 1 7   # => ok n, where n is 1 through 6 (a die roll)
+#     random.int-range 5 5   # => err "random.int-range: low (5) >= high (5)"
 def int-range :: fun int int -> result int string = built-in "random-int-range"
 
-# Random bool — true with probability 0.5.
+# A random `true` or `false`, each with a 50% chance -- a coin flip.
+#
+#     random.bool ()   # true about half the time
 def bool :: fun nothing -> bool = built-in "random-bool"
 
-# Pick one element of the list at random. `none` if the list is empty.
+# Picks one element of the list at random, wrapped in `some`. `none` if
+# the list is empty (there's nothing to pick).
+#
+#     random.choice ["heads", "tails"]   # => some "heads" or some "tails"
+#     random.choice []                   # => none
 def choice :: fun (list a) -> option a = built-in "random-choice"

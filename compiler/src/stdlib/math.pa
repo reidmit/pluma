@@ -1,52 +1,99 @@
-# Numeric primitives. Trig and log functions take floats; `to-int`
-# truncates toward zero.
+# Numbers and the usual math you reach for: rounding, square roots,
+# logarithms, and trigonometry. The trig and log functions all work on
+# `float`s.
+#
+# Pluma keeps whole numbers (`int`) and decimals (`float`) separate and
+# won't quietly mix them, so `to-float` and `to-int` are here for when
+# you need to cross between the two.
 
-# `pi` and `e` are hard-coded as float literals that parse exactly
-# to the corresponding `std::f64::consts` values — see math.rs in
-# the standard library reference.
+# The constant pi, 3.14159..., as a float.
+#
+#     math.pi   # => 3.141592653589793
 def pi :: float = 3.141592653589793
+
+# Euler's number e, 2.71828..., the base of the natural logarithm.
+#
+#     math.e   # => 2.718281828459045
 def e  :: float = 2.718281828459045
 
-# Promote an `int` to `float`. Loses no precision for magnitudes
-# under 2^53.
+# Turns a whole number into a decimal. Exact for any int you're likely
+# to use (up to about 9 quadrillion).
+#
+#     math.to-float 3   # => 3.0
 def to-float :: fun int -> float = built-in "math-to-float"
 
-# Truncate a `float` to `int`. Round toward zero; equivalent to
-# `floor` for positive numbers and `ceil` for negative.
+# Chops the fractional part off a decimal, rounding toward zero. So 2.9
+# becomes 2, not 3 -- use `round` if you want the nearest whole number.
+#
+#     math.to-int 3.9    # => 3
+#     math.to-int -3.9   # => -3
 def to-int :: fun float -> int = built-in "math-to-int"
 
-# Square root. NaN for negatives.
+# Square root. Gives `nan` ("not a number") for a negative input.
+#
+#     math.sqrt 9.0   # => 3.0
+#     math.sqrt 2.0   # => 1.4142135623730951
 def sqrt :: fun float -> float = built-in "math-sqrt"
 
-# Absolute value of an int.
+# Absolute value -- the distance from zero, always positive. Works on
+# ints.
+#
+#     math.abs -5   # => 5
+#     math.abs 5    # => 5
 def abs :: fun int -> int = built-in "math-abs"
 
-# Largest int less than or equal to the argument.
+# Rounds down to the nearest whole number (toward negative infinity),
+# returning an int.
+#
+#     math.floor 3.7    # => 3
+#     math.floor -3.2   # => -4
 def floor :: fun float -> int = built-in "math-floor"
 
-# Smallest int greater than or equal to the argument.
+# Rounds up to the nearest whole number (toward positive infinity),
+# returning an int.
+#
+#     math.ceil 3.2    # => 4
+#     math.ceil -3.7   # => -3
 def ceil :: fun float -> int = built-in "math-ceil"
 
-# Round to the nearest int, half-away-from-zero.
+# Rounds to the nearest whole number, with exact halves going away from
+# zero (2.5 becomes 3, -2.5 becomes -3).
+#
+#     math.round 2.4   # => 2
+#     math.round 2.5   # => 3
 def round :: fun float -> int = built-in "math-round"
 
-# Natural logarithm (base e).
+# Natural logarithm (base e) -- the inverse of `exp`.
+#
+#     math.log math.e   # => 1.0
 def log :: fun float -> float = built-in "math-log"
 
-# Logarithm base 10.
+# Logarithm base 10. `log10 1000.0` asks "10 to what power is 1000?"
+#
+#     math.log10 1000.0   # => 3.0
 def log10 :: fun float -> float = built-in "math-log10"
 
-# Logarithm base 2.
+# Logarithm base 2. `log2 8.0` asks "2 to what power is 8?"
+#
+#     math.log2 8.0   # => 3.0
 def log2 :: fun float -> float = built-in "math-log2"
 
-# e raised to the argument.
+# e raised to the given power -- the inverse of `log`.
+#
+#     math.exp 0.0   # => 1.0
 def exp :: fun float -> float = built-in "math-exp"
 
-# Sine (argument in radians).
+# Sine of an angle measured in radians.
+#
+#     math.sin 0.0   # => 0.0
 def sin :: fun float -> float = built-in "math-sin"
 
-# Cosine (argument in radians).
+# Cosine of an angle measured in radians.
+#
+#     math.cos 0.0   # => 1.0
 def cos :: fun float -> float = built-in "math-cos"
 
-# Tangent (argument in radians).
+# Tangent of an angle measured in radians.
+#
+#     math.tan 0.0   # => 0.0
 def tan :: fun float -> float = built-in "math-tan"

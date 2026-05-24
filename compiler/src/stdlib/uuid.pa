@@ -1,21 +1,35 @@
-# UUID generation and parsing. UUIDs are represented as their
-# canonical lowercase hyphenated string form (e.g.
-# `"550e8400-e29b-41d4-a716-446655440000"`) — no opaque type, so
-# normal string operations apply.
+# Making and checking UUIDs -- the 128-bit identifiers that look like
+# "550e8400-e29b-41d4-a716-446655440000". Pluma represents them as plain
+# lowercase, hyphenated strings, so every `core.string` operation works
+# on them too; there's no special UUID type to learn.
 
-# Generate a v4 (random) UUID. Cryptographically secure; suitable for
-# tokens, session ids, anything where unpredictability matters.
+# Generates a random (version 4) UUID. Unpredictable, which makes it a
+# good fit for tokens, session ids, or any id that shouldn't be
+# guessable.
+#
+#     uuid.v4 ()   # e.g. "f47ac10b-58cc-4372-a567-0e02b2c3d479"
 def v4 :: fun nothing -> string = built-in "uuid-v4"
 
-# Generate a v7 (timestamp-ordered) UUID. Newer than v4 — sortable by
-# creation time, which makes them well-suited as database primary
-# keys. Still random enough to be unguessable.
+# Generates a timestamp-ordered (version 7) UUID. Still random enough to
+# be unguessable, but newer ids sort after older ones -- which makes
+# them well-behaved as database keys, where ordered inserts are faster.
+#
+#     uuid.v7 ()   # e.g. "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
 def v7 :: fun nothing -> string = built-in "uuid-v7"
 
-# Parse a UUID and return its canonical form. Accepts uppercase,
-# lowercase, with or without surrounding braces or `urn:uuid:` prefix.
-# `err` on any malformed input.
+# Checks that `s` is a UUID and returns it in canonical form (lowercase
+# and hyphenated). Forgiving about input: uppercase, surrounding braces,
+# and a "urn:uuid:" prefix are all accepted. `err` on anything that
+# isn't a UUID.
+#
+#     uuid.parse "550E8400-E29B-41D4-A716-446655440000"
+#     # => ok "550e8400-e29b-41d4-a716-446655440000"
+#     uuid.parse "not-a-uuid"   # => err "failed to parse a UUID"
 def parse :: fun string -> result string string = built-in "uuid-parse"
 
-# True iff `s` parses as a UUID.
+# True when `s` parses as a UUID. Use this for a plain yes/no check when
+# you don't need the cleaned-up form.
+#
+#     uuid.is-valid "550e8400-e29b-41d4-a716-446655440000"   # => true
+#     uuid.is-valid "nope"                                   # => false
 def is-valid :: fun string -> bool = built-in "uuid-is-valid"

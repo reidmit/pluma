@@ -1,9 +1,23 @@
-# Types used by `pluma.pa` project files. The CLI walks up from the
-# current directory looking for a `pluma.pa` that exports
+# The types behind a project's `pluma.pa` file. Every Pluma project has
+# one at its root that declares the project's name, version, and
+# dependencies. The CLI finds it by looking for a top-level
 # `def package :: package.info = { ... }`.
+#
+# You don't usually name these types directly -- you just fill in a
+# `package.info` record -- but here's what goes in one.
 
-# How another package is resolved. Most users will only ever need
-# `simple` (a registry version string).
+# Where a dependency comes from. Most projects only ever need `simple`,
+# which pins a version from the package registry. The rest cover a
+# dependency with extra features switched on, one pulled straight from a
+# git repository, or one living in a folder on your machine.
+#
+# Each entry in a project's `dependencies` list pairs a name with one of
+# these:
+#
+#     ("json",  package.dep.simple "1.2.0")
+#     ("ui",    package.dep.full {version: "2.0.0", features: ["icons"]})
+#     ("lib",   package.dep.git {url: "https://github.com/you/lib", branch: "main"})
+#     ("local", package.dep.path "../my-other-project")
 enum dep {
 	simple string
 	full   ({version :: string, features :: list string})
@@ -11,11 +25,23 @@ enum dep {
 	path   string
 }
 
-# Top-level package metadata. `name` and `version` are required;
-# every other field has a sensible default and may be omitted.
+# A project's metadata, as it appears in `pluma.pa`. Fill in every
+# field: `name` and `version` are the ones that matter most, and the
+# others can be empty strings or empty lists when you have nothing to
+# put in them yet.
 #
-# Adding fields here is non-breaking. Removing or renaming them is
-# breaking, so we do it deliberately.
+#     def package :: package.info = {
+#         name: "my-app",
+#         version: "0.1.0",
+#         authors: ["you@example.com"],
+#         description: "a small app",
+#         license: "MIT",
+#         repository: "",
+#         dependencies: [("core", package.dep.simple "1.0.0")],
+#     }
+#
+# Adding a field here is a safe change; removing or renaming one is not,
+# so it's done deliberately.
 alias info {
 	name         :: string,
 	version      :: string,

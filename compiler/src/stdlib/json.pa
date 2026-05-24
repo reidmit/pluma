@@ -1,15 +1,21 @@
-# JSON parsing and rendering. `parse` is total — it returns `result`
-# rather than throwing. Walker helpers return `option`, composable with
-# `try` for nested lookups.
+# Reading and writing JSON. `parse` turns JSON text into a `value` you
+# can pick apart; `stringify` turns a `value` back into text. Parsing
+# never crashes -- it hands back a `result`, so malformed input is just
+# an `err` you handle like any other.
 #
-# Numbers split into `int` / `float`. JSON spec doesn't distinguish
-# the two, but Pluma already does, and folding into float would lose
-# precision on large integers.
+# A JSON number can be a whole number or a decimal, and Pluma keeps the
+# two apart (`value.int` vs `value.float`) instead of forcing everything
+# to a float, which would lose precision on large whole numbers. The
+# `get-number` helper smooths over the distinction when you don't care.
 
 use core.map
 use core.math
 
-# Parsed JSON value. Recursive; objects are insertion-ordered maps.
+# A parsed JSON value. JSON has a handful of shapes -- null, a boolean,
+# a number, a string, an array, or an object -- and a `value` is exactly
+# one of them. `parse` produces these, and the `get-*` helpers below
+# pull a plain Pluma value back out. You can also build one directly:
+# `json.value.string "hi"`, `json.value.array [...]`, and so on.
 enum value {
 	null
 	bool   bool
@@ -20,65 +26,120 @@ enum value {
 	object (map string value)
 }
 
-# Parse error. `line` and `col` are 1-indexed; `message` is borrowed
-# from the underlying parser.
+# What `parse` returns when the text isn't valid JSON. `line` and `col`
+# point at the spot where parsing gave up (both counting from 1), and
+# `message` says what went wrong.
 alias error {line :: int, col :: int, message :: string}
 
-# Parse a JSON string. Total — never throws.
+# Parses JSON text into a `value`. Returns `ok v` on success, or, on
+# malformed input, `err {line, col, message}` pointing at the problem.
+# Never crashes.
+#
+#     json.parse "42"   # => ok (value.int 42)
+#     json.parse "{ oops"
+#     # => err {line: 1, col: 3, message: "key must be a string at line 1 column 3"}
 def parse :: fun string -> result value error = built-in "json-parse"
 
-# Render to a compact, single-line JSON string. Object keys appear in
-# their map's insertion order.
+# Renders a `value` back to compact JSON text -- no extra spaces,
+# everything on one line. Object keys come out in the order they went
+# in.
+#
+#     json.stringify (json.value.array [json.value.int 1, json.value.int 2])
+#     # => "[1,2]"
 def stringify :: fun value -> string = built-in "json-stringify"
 
-# Render with 2-space indent and one element per line.
+# Like `stringify`, but laid out for people to read: a 2-space indent
+# and one item per line. Good for config files or debug output.
+#
+#     json.stringify-pretty (json.value.array [json.value.int 1, json.value.int 2])
+#
+# produces the string:
+#
+#     [
+#       1,
+#       2
+#     ]
 def stringify-pretty :: fun value -> string = built-in "json-stringify-pretty"
 
-# True iff the value is `null`.
+# True when the value is JSON `null`.
+#
+#     json.is-null json.value.null      # => true
+#     json.is-null (json.value.int 0)   # => false
 def is-null :: fun value -> bool = fun v {
 	when v is null { true } is _ { false }
 }
 
-# Field lookup on an object. `none` for non-objects or missing keys.
+# Looks up a key on a JSON object, handing back its value in `some`.
+# `none` if the value isn't an object, or the key isn't present.
+#
+#     try doc = json.parse "{\"name\": \"Ada\"}"
+#     json.get-field doc "name"   # => some (value.string "Ada")
+#     json.get-field doc "age"    # => none
 def get-field :: fun value string -> option value = fun v key {
 	when v is object o { map.lookup o key } is _ { none }
 }
 
-# Pull an `int` out of a value. `none` if the value isn't `value.int`.
+# Pulls a whole number out of a value. `some n` if the value is a JSON
+# integer, `none` for anything else (a float included).
+#
+#     json.get-int (json.value.int 42)       # => some 42
+#     json.get-int (json.value.string "x")   # => none
 def get-int :: fun value -> option int = fun v {
 	when v is int n { some n } is _ { none }
 }
 
-# Pull a `float` out of a value. Strict — `value.int` returns `none`;
-# use `get-number` if you want either kind of number.
+# Pulls a decimal number out. Strict: a JSON integer gives `none` here
+# -- use `get-number` if you'll take either kind of number.
+#
+#     json.get-float (json.value.float 3.5)   # => some 3.5
+#     json.get-float (json.value.int 3)        # => none
 def get-float :: fun value -> option float = fun v {
 	when v is float x { some x } is _ { none }
 }
 
-# Pull any numeric value out, promoting `value.int` to `float`. Lossy
-# for ints whose magnitude exceeds 2^53.
+# Pulls any number out, turning a JSON integer into a float so you don't
+# have to check which kind it was. Slightly lossy for whole numbers
+# bigger than about 9 quadrillion (2^53).
+#
+#     json.get-number (json.value.int 42)      # => some 42.0
+#     json.get-number (json.value.float 3.5)   # => some 3.5
 def get-number :: fun value -> option float = fun v {
 	when v is float x { some x }
 	is int n { some (math.to-float n) }
 	is _ { none }
 }
 
-# Pull a `bool` out of a value.
+# Pulls a boolean out of a value.
+#
+#     json.get-bool (json.value.bool true)   # => some true
+#     json.get-bool (json.value.int 1)        # => none
 def get-bool :: fun value -> option bool = fun v {
 	when v is bool b { some b } is _ { none }
 }
 
-# Pull a `string` out of a value.
+# Pulls a string out of a value.
+#
+#     json.get-string (json.value.string "hi")   # => some "hi"
+#     json.get-string (json.value.int 1)           # => none
 def get-string :: fun value -> option string = fun v {
 	when v is string s { some s } is _ { none }
 }
 
-# Pull a `list value` out of a value.
+# Pulls the contents of a JSON array out as a `list value`. `none` if
+# the value isn't an array.
+#
+#     json.get-array (json.value.array [json.value.int 1, json.value.int 2])
+#     # => some [value.int 1, value.int 2]
 def get-array :: fun value -> option (list value) = fun v {
 	when v is array xs { some xs } is _ { none }
 }
 
-# Pull a `map string value` out of a value.
+# Pulls the contents of a JSON object out as a `map string value`,
+# which you can walk with `core.map`. `none` if the value isn't an
+# object.
+#
+#     try doc = json.parse "{\"a\": 1}"
+#     json.get-object doc   # => some {a: value.int 1}
 def get-object :: fun value -> option (map string value) = fun v {
 	when v is object o { some o } is _ { none }
 }

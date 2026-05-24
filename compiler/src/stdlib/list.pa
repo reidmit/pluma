@@ -1,67 +1,162 @@
-# Operations on lists. Every list is homogeneous — `list a` for some
-# element type `a`. Lookups that may fail return `option`; bulk-
-# transform operations preserve order.
+# Lists: ordered collections where every element has the same
+# type. `list a` is read "a list of `a`s" -- `list int` is a list
+# of whole numbers, `list string` a list of strings, and so on.
+# You write one with square brackets: `[1, 2, 3]`.
+#
+# Lists never change in place. Everything here that "adds",
+# "removes", or "sorts" actually hands you back a brand-new list
+# and leaves the original alone.
+#
+# Some of these functions take a *predicate*: a small function you
+# pass in that looks at one element and answers true or false
+# (`fun n { n > 0 }`). Others take a transform (`fun n { n * 2 }`).
+# Writing a function inline like that is the normal way to tell a
+# list operation what to do.
+#
+# When a lookup might come up empty -- asking for the first
+# element of a list that could be empty, say -- you get back an
+# `option` (see `core.option`) rather than a crash: `some value`
+# if it found something, `none` if it didn't.
 
-# Returns the number of elements in the list.
+# Returns how many elements are in the list.
+#
+#     list.length [10, 20, 30]   # => 3
+#     list.length []             # => 0
 def length :: fun (list a) -> int = built-in "list-length"
 
-# True if the list has zero elements. Expressible in pure Pluma over
-# `length`; no builtin needed.
+# True when the list has no elements at all. Just a shorthand for
+# checking whether `length` is zero.
+#
+#     list.is-empty []    # => true
+#     list.is-empty [1]   # => false
 def is-empty :: fun (list a) -> bool = fun xs { length xs == 0 }
 
-# Returns a new list with the elements in reverse order.
+# Returns a new list with the elements in the opposite order.
+#
+#     list.reverse [1, 2, 3]   # => [3, 2, 1]
 def reverse :: fun (list a) -> list a = built-in "list-reverse"
 
-# Returns a new list containing the elements of the first followed by
-# those of the second. Allocates.
+# Joins two lists end to end into a new one: every element of the
+# first, then every element of the second.
+#
+#     list.concat [1, 2] [3, 4]   # => [1, 2, 3, 4]
+#
+# When you're building a list inline, the `...` spread does the
+# same thing and reads more cleanly: `[...xs, ...ys]`.
 def concat :: fun (list a) (list a) -> list a = built-in "list-concat"
 
-# True iff some element of the list equals `target`. Uses the
-# language's structural equality.
+# True when `target` shows up somewhere in the list. Elements are
+# compared by value, so `[1, 2, 3]` contains `2`, and a list of
+# strings contains a string when one of them spells the same.
+#
+#     list.contains [1, 2, 3] 2    # => true
+#     list.contains [1, 2, 3] 99   # => false
 def contains :: fun (list a) a -> bool = built-in "list-contains"
 
-# Applies `f` to each element, building a new list. The element type
-# may change between input and output.
+# Runs `f` on every element and collects the results into a new
+# list, keeping the order. The results can be a different type
+# than you started with -- run a list of numbers through a
+# function that returns strings and you get a list of strings.
+#
+#     list.map [1, 2, 3] (fun n { n * 2 })   # => [2, 4, 6]
+#     list.map [1, 2, 3] to-string           # => ["1", "2", "3"]
 def map :: fun (list a) (fun a -> b) -> list b = built-in "list-map"
 
-# Returns a new list containing only the elements for which `pred`
-# returns true.
+# Keeps only the elements that `pred` returns true for, dropping
+# the rest. Order is preserved.
+#
+#     list.filter [1, 2, 3, 4] (fun n { n % 2 == 0 })   # => [2, 4]
 def filter :: fun (list a) (fun a -> bool) -> list a = built-in "list-filter"
 
-# Left fold: `fold xs init f` reduces the list by applying
-# `f acc element` left-to-right, threading `acc` (starting at `init`)
-# through.
+# Boils the whole list down to a single value by combining the
+# elements one at a time, left to right.
+#
+# You hand it three things: the list, a starting value, and a
+# function `f acc element`. Pluma walks the list front to back,
+# and at each element calls `f` with the running total so far (the
+# "accumulator") and that element; whatever `f` returns becomes
+# the new running total. When the elements run out, the final
+# total is the answer.
+#
+# Summing a list starts the total at 0 and adds each element:
+#
+#     list.fold [1, 2, 3, 4] 0 (fun acc n { acc + n })   # => 10
+#
+# The accumulator can be any type, not just a number -- start with
+# "" and you can glue the elements together into a string.
 def fold :: fun (list a) b (fun b a -> b) -> b = built-in "list-fold"
 
-# Applies `f` to each element for side effects. Returns `nothing` —
-# use `map` if you want the results.
+# Runs `f` on every element just for the side effects -- printing
+# each one, say -- and returns `nothing`. If you actually want the
+# results `f` produces, reach for `map` instead.
+#
+#     list.each ["a", "b"] (fun s { io.print s })
+#     # prints a, then b on separate lines
 def each :: fun (list a) (fun a -> b) -> nothing = built-in "list-each"
 
-# First element wrapped in `some`, or `none` for the empty list.
+# Returns the first element, wrapped in `some`. An empty list has
+# no first element, so you get `none`.
+#
+#     list.head [1, 2, 3]   # => some 1
+#     list.head []          # => none
 def head :: fun (list a) -> option a = built-in "list-head"
 
-# All but the first element, wrapped in `some`. `none` for the empty
-# list. (The tail of a single-element list is `some []`.)
+# Returns everything except the first element, wrapped in `some`;
+# `none` for an empty list. Note that the tail of a one-element
+# list is `some []` -- an empty list, not `none`.
+#
+#     list.tail [1, 2, 3]   # => some [2, 3]
+#     list.tail [1]         # => some []
+#     list.tail []          # => none
 def tail :: fun (list a) -> option (list a) = built-in "list-tail"
 
-# First `n` elements. If the list is shorter, returns the whole list.
+# Returns a new list with just the first `n` elements. If the list
+# is shorter than `n`, you get the whole thing back.
+#
+#     list.take [1, 2, 3, 4, 5] 3   # => [1, 2, 3]
+#     list.take [1, 2] 5            # => [1, 2]
 def take :: fun (list a) int -> list a = built-in "list-take"
 
-# Everything except the first `n` elements. Empty if `n >=` length.
+# Returns a new list with the first `n` elements removed. If `n`
+# is at least as long as the list, you get an empty list.
+#
+#     list.drop [1, 2, 3, 4, 5] 2   # => [3, 4, 5]
+#     list.drop [1, 2] 5            # => []
 def drop :: fun (list a) int -> list a = built-in "list-drop"
 
-# First element matching `pred`, wrapped in `some`; `none` if no
-# element matches.
+# Returns the first element that `pred` returns true for, wrapped
+# in `some`. If nothing matches, `none`.
+#
+#     list.find [1, 2, 3, 4] (fun n { n > 2 })     # => some 3
+#     list.find [1, 2, 3] (fun n { n > 100 })      # => none
 def find :: fun (list a) (fun a -> bool) -> option a = built-in "list-find"
 
-# True if `pred` returns true for at least one element.
+# True when at least one element passes `pred`. Stops as soon as
+# it finds one.
+#
+#     list.any [1, 2, 3] (fun n { n > 2 })     # => true
+#     list.any [1, 2, 3] (fun n { n > 100 })   # => false
 def any :: fun (list a) (fun a -> bool) -> bool = built-in "list-any"
 
-# True if `pred` returns true for every element (vacuously true for
-# the empty list).
+# True when every element passes `pred`. An empty list counts as
+# true -- there's nothing in it to fail the test.
+#
+#     list.all [2, 4, 6] (fun n { n % 2 == 0 })   # => true
+#     list.all [1, 2, 3] (fun n { n > 1 })        # => false
 def all :: fun (list a) (fun a -> bool) -> bool = built-in "list-all"
 
-# Returns a new list with the elements sorted by `cmp`. Pair with
-# `ord.compare` to sort any list whose elements have an `ord`
-# instance.
+# Returns a new list with the elements in sorted order. You choose
+# the order with a compare function `cmp a b` that reports whether
+# `a` belongs before `b`, after it, or in the same place.
+#
+# Usually you don't have to write one. `ord.compare` already knows
+# how to order the built-in types -- numbers smallest-first,
+# strings alphabetically -- so just hand it in:
+#
+#     list.sort [3, 1, 4, 1, 5] ord.compare   # => [1, 1, 3, 4, 5]
+#
+# To sort the other way, swap the two arguments in your own
+# compare function:
+#
+#     list.sort [3, 1, 2] (fun a b { ord.compare b a })   # => [3, 2, 1]
 def sort :: fun (list a) (fun a a -> ordering) -> list a = built-in "list-sort"

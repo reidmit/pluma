@@ -1,14 +1,40 @@
-# Chaining over `result`. The `then` continuation runs on `ok`'s
-# payload and must return another `result` with the same `err`
-# type; `err` short-circuits.
+# Tools for working with results -- chaining steps that might fail, and
+# recovering when one does.
+#
+# The `result` type itself (`ok` and `err`) is built in and always
+# available, so you don't need this module just to make or match a
+# result -- see the prelude. Import it (`use core.result`) for the
+# helpers below.
 
+# Chains a follow-up step onto a result. `then r f` runs `f` on the
+# value inside an `ok`, and `f` returns another result. If `r` is
+# already `err`, `f` is skipped and that same error passes straight
+# through. So a run of steps that each might fail stops at the first
+# failure and carries its error out.
+#
+#     result.then (ok 4) (fun n { ok (n * 2) })        # => ok 8
+#     result.then (err "bad") (fun n { ok (n * 2) })   # => err "bad"
+#
+# As with options, `try` is the readable way to write such a chain:
+#
+#     try text = io.read-file path   # stop with the err if it fails
+#     ok (string.length text)        # otherwise carry on
 def then :: fun (result a e) (fun a -> result b e) -> result b e = built-in "result-then"
 
-# Recover from a failed `result`: returns the `ok` payload, or runs
-# `fallback` on `err` (the error value is discarded). `fallback` is a
-# thunk, evaluated only when needed. The `??` operator desugars to this
-# — the recovering dual of `then` (where `then` propagates `err`,
-# `or-else` discharges it).
+# Returns the value inside an `ok`, or falls back to whatever `fallback`
+# produces when the result is an `err`. The error value is discarded; if
+# you need it, match on the result yourself instead. The fallback takes
+# no arguments and only runs on `err`.
+#
+# This is what `??` does on a result, so you'll usually write the
+# operator:
+#
+#     (string.to-int s) ?? 0   # the number, or 0 if it won't parse
+#
+# Spelled out the long way:
+#
+#     result.or-else (ok 7) (fun { 0 })         # => 7
+#     result.or-else (err "nope") (fun { 0 })   # => 0
 def or-else :: fun (result a e) (fun nothing -> a) -> a = fun r fallback {
 	when r is ok v { v } is err _ { fallback () }
 }

@@ -1,18 +1,36 @@
-# Mutable cells. `ref a` holds a single value of type `a` that can
-# be read, written, or updated in place. Cells are heap-allocated
-# and share identity across calls — calling `get` on the same ref
-# twice returns the same underlying value.
+# Mutable cells. Most values in Pluma never change once created, which
+# keeps code easy to follow. A `ref a` is the deliberate exception: a
+# little box holding one value of type `a` that you can read, overwrite,
+# or update in place. Reach for one when you genuinely need state that
+# outlives a single expression -- a running counter, a cache you fill as
+# you go.
+#
+# `ref` is always available; you don't need to import it.
 
-# Allocate a new cell holding `initial`.
+# Makes a new cell holding `initial`.
+#
+#     let count = ref.new 0
 def new :: fun a -> ref a = built-in "ref-new"
 
-# Read the current value out of a cell.
+# Reads the current value out of a cell.
+#
+#     let count = ref.new 7
+#     ref.get count   # => 7
 def get :: fun (ref a) -> a = built-in "ref-get"
 
-# Replace the cell's value. Returns `nothing` — chain a `get` if you
-# need the new value.
+# Overwrites the cell's value. Returns `nothing` -- read it back with
+# `get` if you want to see the new value.
+#
+#     let count = ref.new 0
+#     ref.set count 5
+#     ref.get count   # => 5
 def set :: fun (ref a) a -> nothing = built-in "ref-set"
 
-# Read, apply `f`, write back. Returns `nothing` — same reason as
-# `set`.
+# Reads the value, runs `f` on it, and writes the result back -- a
+# read-modify-write in a single step. Returns `nothing`; read it back
+# with `get` if you want the new value.
+#
+#     let count = ref.new 10
+#     ref.update count (fun n { n + 1 })
+#     ref.get count   # => 11
 def update :: fun (ref a) (fun a -> a) -> nothing = built-in "ref-update"

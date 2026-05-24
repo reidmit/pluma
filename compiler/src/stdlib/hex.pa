@@ -1,11 +1,16 @@
-# Hex (base16) encoding and decoding of `bytes`. Output is always
-# lowercase; the decoder accepts both cases.
+# Hex (base-16) encoding for `bytes`: turning raw bytes into a text
+# string of hex digits, and back again. Each byte becomes exactly two
+# digits, so the text is always twice as long as the bytes it came from.
+# Output is lowercase; the decoder accepts either case.
 
-# Encode `bytes` as a lowercase hex string. Each byte becomes exactly
-# two hex digits, so `length (encode b) == bytes.length b * 2`.
+# Encodes bytes as a lowercase hex string -- two digits per byte.
+#
+#     hex.encode 'hello'   # => "68656c6c6f"
 def encode :: fun bytes -> string = built-in "hex-encode"
 
-# Decode a hex string back to `bytes`. The input must have an even
-# length and contain only `0..9`, `a..f`, `A..F`; any other character
-# (including whitespace and `0x` prefixes) gives `err`.
+# Decodes a hex string back into bytes. The input must have an even
+# number of digits and contain only 0-9 and a-f (either case); anything
+# else -- a stray space, a "0x" prefix, an odd length -- gives `err`.
+#
+#     hex.decode "68656c6c6f"   # => ok 'hello'
 def decode :: fun string -> result bytes string = built-in "hex-decode"

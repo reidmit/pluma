@@ -1,20 +1,34 @@
-# Base64 encoding and decoding. Two variants:
-# - `encode` / `decode` use the standard alphabet (`+`, `/`) with `=`
-#   padding. Suitable for MIME, OpenSSL, most APIs.
-# - `url-encode` / `url-decode` use the URL-safe alphabet (`-`, `_`)
-#   with no padding. Suitable for JWTs, query strings, file paths.
+# Base64 encoding for `bytes`: packing raw bytes into a text string made
+# of letters, digits, and a couple of symbols, so binary data can ride
+# safely through things that only handle text -- email, JSON, URLs.
 #
-# Decoders accept input with or without trailing padding and reject
-# any character outside the chosen alphabet (including whitespace).
+# There are two flavors:
+#   - `encode` / `decode` use the standard alphabet (with `+` and `/`)
+#     and `=` padding. This is what most APIs, email, and OpenSSL expect.
+#   - `url-encode` / `url-decode` use the URL-safe alphabet (`-` and `_`
+#     in place of `+` and `/`) with no padding, so the result is safe to
+#     drop straight into a URL or a filename. JWTs use this form.
+#
+# Both decoders accept input with or without the trailing `=` padding,
+# and reject any character outside the chosen alphabet.
 
-# Encode `bytes` with the standard alphabet, including `=` padding.
+# Encodes bytes with the standard alphabet, including `=` padding.
+#
+#     base64.encode 'hello'   # => "aGVsbG8="
 def encode :: fun bytes -> string = built-in "base64-encode"
 
-# Decode a standard-alphabet base64 string. Padding is optional.
+# Decodes a standard-alphabet base64 string back into bytes. The
+# trailing padding is optional.
+#
+#     base64.decode "aGVsbG8="   # => ok 'hello'
 def decode :: fun string -> result bytes string = built-in "base64-decode"
 
-# Encode `bytes` with the URL-safe alphabet and no padding.
+# Encodes bytes with the URL-safe alphabet and no padding.
+#
+#     base64.url-encode 'hello'   # => "aGVsbG8"
 def url-encode :: fun bytes -> string = built-in "base64-url-encode"
 
-# Decode a URL-safe base64 string. Padding is optional.
+# Decodes a URL-safe base64 string back into bytes. Padding is optional.
+#
+#     base64.url-decode "aGVsbG8"   # => ok 'hello'
 def url-decode :: fun string -> result bytes string = built-in "base64-url-decode"

@@ -1,63 +1,121 @@
-# Operations on UTF-8 strings. Indices and lengths are by Unicode
-# scalar value ("character"), not bytes — reach for `core.bytes` when
-# you need byte-level access.
+# Working with text. A `string` is a piece of Unicode text -- letters,
+# digits, punctuation, emoji, anything. Positions and lengths count
+# *characters* (Unicode scalar values), not bytes, so an accented letter
+# or an emoji counts as one character even though it takes several bytes
+# to store. When you need the raw bytes instead, use `to-bytes` (or
+# reach for `core.bytes`).
+#
+# Strings never change in place: every function here returns a new
+# string and leaves the original alone.
 
-# Number of characters (Unicode scalar values) in the string.
+# How many characters are in the string.
+#
+#     string.length "hello"   # => 5
+#     string.length ""        # => 0
 def length :: fun string -> int = built-in "string-length"
 
-# True if the string has zero characters. Expressible in pure Pluma.
+# True when the string has no characters at all.
+#
+#     string.is-empty ""    # => true
+#     string.is-empty "x"   # => false
 def is-empty :: fun string -> bool = fun s { length s == 0 }
 
-# The character at index `i` (0-based), as a one-character string
-# wrapped in `some`; `none` if `i` is out of bounds.
+# The character at position `i`, counting from 0, as a one-character
+# string wrapped in `some`. `none` if `i` is past the end.
+#
+#     string.char-at "hello" 1    # => some "e"
+#     string.char-at "hello" 99   # => none
 def char-at :: fun string int -> option string = built-in "string-char-at"
 
-# Substring from character index `start` (inclusive) to `end`
-# (exclusive). Out-of-range indices clamp to the bounds rather than
-# erroring, so `slice s 0 (length s)` is always the whole string.
+# The slice of the string from character `start` (counted in) up to
+# `end` (counted out) -- so `slice s 0 3` is the first three characters.
+# Positions past either end are pulled back to that end instead of
+# erroring, so `slice s 0 (string.length s)` is always the whole string.
+#
+#     string.slice "hello" 1 4   # => "ell"
+#     string.slice "hello" 0 2   # => "he"
 def slice :: fun string int int -> string = built-in "string-slice"
 
-# Drop the first `n` characters, returning the rest. `drop s n` is
-# `slice s n (length s)`.
+# Drops the first `n` characters and returns the rest. The same as
+# `slice s n (string.length s)`.
+#
+#     string.drop "hello" 2   # => "llo"
 def drop :: fun string int -> string = fun s n { slice s n (length s) }
 
-# ASCII uppercase. Non-ASCII characters pass through unchanged.
+# Uppercases the ASCII letters a-z. Everything else is left as-is.
+#
+#     string.to-upper "Hello, World"   # => "HELLO, WORLD"
 def to-upper :: fun string -> string = built-in "string-to-upper"
 
-# ASCII lowercase. Non-ASCII characters pass through unchanged.
+# Lowercases the ASCII letters A-Z. Everything else is left as-is.
+#
+#     string.to-lower "Hello, World"   # => "hello, world"
 def to-lower :: fun string -> string = built-in "string-to-lower"
 
-# Returns the string with leading and trailing ASCII whitespace
-# removed.
+# Removes whitespace (spaces, tabs, newlines) from both ends, leaving
+# the inside untouched.
+#
+#     string.trim "  hi there  "   # => "hi there"
 def trim :: fun string -> string = built-in "string-trim"
 
-# True iff `needle` occurs anywhere in `haystack`.
+# True when `needle` appears somewhere inside `haystack`.
+#
+#     string.contains "hello world" "o w"   # => true
+#     string.contains "hello" "z"           # => false
 def contains :: fun string string -> bool = built-in "string-contains"
 
-# True iff `haystack` begins with `prefix`.
+# True when `haystack` begins with `prefix`.
+#
+#     string.starts-with "hello" "he"   # => true
+#     string.starts-with "hello" "lo"   # => false
 def starts-with :: fun string string -> bool = built-in "string-starts-with"
 
-# True iff `haystack` ends with `suffix`.
+# True when `haystack` ends with `suffix`.
+#
+#     string.ends-with "hello" "lo"   # => true
+#     string.ends-with "hello" "he"   # => false
 def ends-with :: fun string string -> bool = built-in "string-ends-with"
 
-# Concatenate the elements of a list of strings with `separator`
-# between each pair.
+# Glues a list of strings into one, dropping `separator` between each
+# pair. The reverse of `split`.
+#
+#     string.join ["a", "b", "c"] ", "   # => "a, b, c"
+#     string.join ["a", "b", "c"] ""     # => "abc"
 def join :: fun (list string) string -> string = built-in "string-join"
 
-# Split a string on every occurrence of `separator`. Adjacent
-# separators produce empty-string entries.
+# Breaks a string into a list of pieces, splitting at every occurrence
+# of `separator`. Two separators in a row leave an empty string between
+# them.
+#
+#     string.split "a,b,c" ","   # => ["a", "b", "c"]
+#     string.split "a,,b" ","    # => ["a", "", "b"]
 def split :: fun string string -> list string = built-in "string-split"
 
-# Replace every occurrence of `pattern` in `s` with `replacement`.
+# Replaces every occurrence of `pattern` with `replacement`.
+#
+#     string.replace "a-b-c" "-" "+"   # => "a+b+c"
+#     string.replace "hello" "l" "L"   # => "heLLo"
 def replace :: fun string string string -> string = built-in "string-replace"
 
-# Parse the string as an `int`. Returns `ok n` on success, `err msg`
-# on parse failure.
+# Parses the string as a whole number. `ok n` if it's a valid integer,
+# `err message` if not.
+#
+#     string.to-int "42"    # => ok 42
+#     string.to-int "-7"    # => ok -7
+#     string.to-int "3.5"   # => err "invalid digit found in string"
 def to-int :: fun string -> result int string = built-in "string-to-int"
 
-# Parse the string as a `float`. Returns `ok n` on success, `err msg`
-# on parse failure.
+# Parses the string as a decimal number. `ok x` on success, `err
+# message` if it isn't a number.
+#
+#     string.to-float "3.14"   # => ok 3.14
+#     string.to-float "nope"   # => err "invalid float literal"
 def to-float :: fun string -> result float string = built-in "string-to-float"
 
-# Underlying UTF-8 bytes.
+# The string's raw bytes, in UTF-8. Pair with `bytes.to-string` to go
+# back. Handy for seeing the character/byte split: an accented letter is
+# one character but more than one byte.
+#
+#     string.length "café"                     # => 4
+#     bytes.length (string.to-bytes "café")    # => 5
 def to-bytes :: fun string -> bytes = built-in "string-to-bytes"

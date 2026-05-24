@@ -1,29 +1,52 @@
-# Runtime assertions for use inside `test "..." { ... }` blocks.
-# Each assertion that fails raises a runtime error captured by the
-# `pluma test` runner and reported as a test failure. Outside of a
-# test, the same error terminates the program with a non-zero exit.
+# Checks for use inside tests. Pluma has a built-in test runner: write a
+# `test "name" { ... }` block, run `pluma test`, and inside each block
+# call these to state what you expect. If a check fails, the runner
+# marks that test as failed and shows what went wrong; a test passes
+# when every check in it holds. (Outside a test, a failed check stops
+# the program.)
 
-# Fail unless `value` is `true`.
+# Passes when `value` is `true`, fails otherwise.
+#
+#     test "two and two" {
+#         assert.is-true (2 + 2 == 4)
+#     }
 def is-true :: fun bool -> nothing = built-in "assert-is-true"
 
-# Fail unless `value` is `false`.
+# Passes when `value` is `false`.
+#
+#     assert.is-false (string.is-empty "x")
 def is-false :: fun bool -> nothing = built-in "assert-is-false"
 
-# Fail unless the two values are structurally equal. Polymorphic over
-# any pair of values of the same type.
+# Passes when the two values are equal, compared deeply by value. This
+# is the everyday workhorse: compute something, then check it against
+# what you expected.
+#
+#     assert.equals (1 + 1) 2
+#     assert.equals (string.to-upper "hi") "HI"
 def equals :: fun a a -> nothing = built-in "assert-equals"
 
-# Fail if the two values are structurally equal.
+# Passes when the two values are *not* equal.
+#
+#     assert.not-equals "cat" "dog"
 def not-equals :: fun a a -> nothing = built-in "assert-not-equals"
 
-# Fail unless the given `option` is `some _`.
+# Passes when the option holds a value (`some _`). Doesn't look at what
+# the value is.
+#
+#     assert.is-some (list.head [1, 2, 3])
 def is-some :: fun (option a) -> nothing = built-in "assert-is-some"
 
-# Fail unless the given `option` is `none`.
+# Passes when the option is `none`.
+#
+#     assert.is-none (list.head [])
 def is-none :: fun (option a) -> nothing = built-in "assert-is-none"
 
-# Fail unless the given `result` is `ok _`.
+# Passes when the result is a success (`ok _`).
+#
+#     assert.is-ok (string.to-int "42")
 def is-ok :: fun (result a e) -> nothing = built-in "assert-is-ok"
 
-# Fail unless the given `result` is `err _`.
+# Passes when the result is a failure (`err _`).
+#
+#     assert.is-err (string.to-int "nope")
 def is-err :: fun (result a e) -> nothing = built-in "assert-is-err"

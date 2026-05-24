@@ -1,12 +1,41 @@
-# Chaining over `option`. The `then` continuation runs only on
-# `some`; `none` short-circuits. The `try` syntax desugars to this.
+# Tools for working with options -- chaining steps that might come up
+# empty, and supplying fallbacks when one does.
+#
+# The `option` type itself (`some` and `none`) is built in and always
+# available, so you don't need this module just to make or match an
+# option -- see the prelude. Import it (`use core.option`) for the
+# helpers below.
 
+# Chains a follow-up step onto an option. `then opt f` runs `f` on the
+# value inside `opt` when it's `some`, and `f` returns another option.
+# If `opt` is already `none`, `f` is skipped and the whole thing is
+# `none`. So you can line up several steps that each might come up
+# empty, and the first `none` stops the rest.
+#
+#     option.then (some 4) (fun n { some (n * 2) })   # => some 8
+#     option.then none (fun n { some (n * 2) })       # => none
+#
+# Most of the time you'll reach for `try` instead, which reads top to
+# bottom rather than nesting:
+#
+#     try first = list.head xs   # bail out with none if xs is empty
+#     some (first * 2)           # otherwise carry on with the value
 def then :: fun (option a) (fun a -> option b) -> option b = built-in "option-then"
 
-# Recover from a missing `option`: returns the `some` payload, or runs
-# `fallback` on `none`. `fallback` is a thunk, evaluated only when
-# needed. The `??` operator desugars to this — the recovering dual of
-# `then` (where `then` propagates `none`, `or-else` discharges it).
+# Returns the value inside a `some`, or falls back to whatever
+# `fallback` produces when the option is `none`. The fallback is a
+# function taking no arguments, and it only runs when it's actually
+# needed.
+#
+# This is exactly what the `??` operator does, so you'll usually write
+# the operator and skip calling this directly:
+#
+#     (list.head xs) ?? 0   # the first element, or 0 if xs is empty
+#
+# Spelled out the long way:
+#
+#     option.or-else (some 7) (fun { 0 })   # => 7
+#     option.or-else none (fun { 0 })       # => 0
 def or-else :: fun (option a) (fun nothing -> a) -> a = fun o fallback {
 	when o is some v { v } is none { fallback () }
 }

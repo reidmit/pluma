@@ -1,36 +1,71 @@
-# Pluma prelude. Baked into the compiler binary via `include_str!` and
-# parsed + analyzed as the synthetic `__prelude__` module before any
-# user module loads.
+# The prelude: the handful of types and behaviors that are always in
+# scope. You never `use` this module -- everything in it is available in
+# every Pluma program automatically.
 #
-# Currently in here:
-#   - the standard nominal enums (option, result, ordering) that the
-#     language assumes are always in scope
-#   - parametric typeclass instances on `option a` / `result a b` that
-#     compose with the concrete instances on primitive types
+# It defines the three enums the language leans on everywhere -- `option`
+# (a value that might be missing), `result` (an action that might fail),
+# and `ordering` (how two things compare) -- plus the rules that let
+# options and results be compared, sorted, and used as map keys.
 #
-# Things still seeded in Rust (`compiler/src/analyzer.rs`):
-#   - the `numeric` / `ord` / `hash` trait declarations and their
-#     concrete instances on primitive types. These can't live here
-#     because the instance method bodies dispatch to hidden VM builtins
-#     (IntAdd, IntCompare, IntHash, ...) that aren't exposed as
-#     user-callable names.
-#   - the `print`, `debug`, and `to-string` builtins.
+# (Note for contributors: this file is baked into the compiler and
+# analyzed before any user code. The `numeric` / `ord` / `hash` traits
+# and the `print` / `to-string` builtins are seeded separately in the
+# compiler, since their bodies call straight into the VM.)
 
+# A value that might be there, or might not. `some x` holds a value;
+# `none` holds nothing. It's how Pluma says "this could be missing"
+# without a null that blows up when you forget to check for it -- the
+# type makes you handle the empty case.
+#
+# Lookups hand you an option: `list.head` on a possibly-empty list,
+# `map.lookup` for a key that might not be there.
+#
+#     when list.head xs is some first { use first } is none { "empty" }
+#
+# To pull the value out with a fallback for `none`, use `??`:
+#
+#     list.head xs ?? 0   # the first element, or 0 if xs is empty
 enum option a {
 	some a
 	none
 }
 
+# The outcome of something that can fail. `ok x` is success carrying a
+# value; `err e` is failure carrying an error (often a message saying
+# what went wrong). Like `option`, it makes the failure case impossible
+# to ignore by accident.
+#
+# Parsing and I/O return results: `string.to-int` on text that might not
+# be a number, `io.read-file` on a path that might not exist.
+#
+#     when string.to-int s is ok n { n } is err msg { io.print msg }
+#
+#     string.to-int "42"     # => ok 42
+#     string.to-int "nope"   # => err "invalid digit found in string"
 enum result a b {
 	ok a
 	err b
 }
 
+# The answer to "how do these two compare?" -- `lt` (the first is
+# smaller), `eq` (they're equal), or `gt` (the first is bigger). Compare
+# functions return one of these, and `list.sort` uses them to decide the
+# order.
+#
+#     ord.compare 1 2   # => lt
+#     ord.compare 5 5   # => eq
+#     ord.compare 9 3   # => gt
 enum ordering {
 	lt
 	eq
 	gt
 }
+
+# The rules below teach `option` and `result` how to compare and hash,
+# so that anything built out of them can be sorted or used as a map key
+# whenever the values they wrap can. An option compares by its contents,
+# with `none` sorting before any `some`; a result likewise, with `ok`
+# before any `err`.
 
 implement ord (option a) where (ord a) {
 	def compare = fun x y {
