@@ -1,21 +1,31 @@
 use compiler::ast::*;
-use compiler::{Diagnostic, Module, Range};
+use compiler::{find_project_root, to_module_path, Diagnostic, Module, Range};
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 // Go-to-definition, resolved from parser output alone — the same model as
 // `semantic_tokens`. We deliberately skip the full analyzer: it needs the
 // project's imports resolved from disk and produces a `!Send` `Module`,
-// whereas the syntactic structure is enough to resolve definitions *within
-// a single file* (the overwhelming majority of jumps). Cross-module value
-// references resolve to the `use` statement that brought the namespace in,
-// which still answers "where did this come from?".
+// whereas the syntactic structure is enough to resolve definitions.
 //
-// Resolution is two halves: collect every binding (with the source region
-// it's visible in) and every reference, then for the reference under the
-// cursor pick the binding with the matching name whose scope contains the
-// cursor, preferring the innermost (smallest) scope so shadowing resolves
-// correctly.
+// Same-file resolution is two halves: collect every binding (with the
+// source region it's visible in) and every reference, then for the
+// reference under the cursor pick the binding with the matching name whose
+// scope contains the cursor, preferring the innermost (smallest) scope so
+// shadowing resolves correctly.
+//
+// Cross-module: a `module.symbol` access (or a `use` path) resolves the
+// imported module to a file on disk, parses it, and finds the top-level
+// def there. stdlib/native modules have no project file, so those simply
+// don't resolve.
+
+/// Where a definition lives.
+pub enum Target {
+	/// In the file under the cursor.
+	Here(Range),
+	/// In another module's file.
+	OtherFile { path: PathBuf, range: Range },
+}
 
 /// What a reference resolves against. A bare value identifier may actually
 /// name a (payload-less) enum variant, so `Value` falls back to the variant
@@ -34,6 +44,19 @@ struct Reference {
 	kind: RefKind,
 }
 
+// A `module.symbol` access: the receiver names an imported namespace, the
+// field/type names a top-level def in that module. Resolved by loading the
+// imported module's file.
+struct QualifiedRef {
+	range: Range,
+	// Local namespace name (the receiver), e.g. `colors` in `colors.color`.
+	namespace: String,
+	// The symbol named after the dot.
+	name: String,
+	// True in type position (`module.Type`), so we prefer a type def.
+	is_type: bool,
+}
+
 struct Binding {
 	name: String,
 	// Where to jump: the identifier's own range.
@@ -44,19 +67,47 @@ struct Binding {
 }
 
 /// Resolve the definition site for whatever identifier sits under the
-/// cursor. Returns the definition's range within the same file, or `None`
-/// if there's no identifier there or it doesn't resolve locally.
-pub fn goto_definition(source: &[u8], line: u32, character: u32) -> Option<Range> {
+/// cursor. `path` is the document's own file path, used to locate imported
+/// modules' files for cross-module jumps.
+pub fn goto_definition(source: &[u8], path: &Path, line: u32, character: u32) -> Option<Target> {
 	let mut module = Module::new("<lsp>".to_string(), PathBuf::new());
 	let mut diagnostics: Vec<Diagnostic> = Vec::new();
 	module.parse_from_bytes(source.to_vec(), &mut diagnostics);
 	let ast = module.ast.as_ref()?;
 
+	let line = line as usize;
+	let character = character as usize;
+
+	// A `use` path/alias under the cursor jumps to the imported module file.
+	for u in &ast.uses {
+		let on_path = u
+			.path
+			.iter()
+			.any(|seg| contains(&seg.range, line, character));
+		let on_alias = u
+			.alias
+			.as_ref()
+			.is_some_and(|a| contains(&a.range, line, character));
+		if on_path || on_alias {
+			return load_module_file(&u.module_name(), path).map(|(p, _)| Target::OtherFile {
+				path: p,
+				range: Range::collapsed(0, 0),
+			});
+		}
+	}
+
 	let mut r = Resolver::new(ast);
 	r.walk_module(ast);
 
-	let line = line as usize;
-	let character = character as usize;
+	// A `module.symbol` access under the cursor resolves into the other file.
+	if let Some(q) = r
+		.qualified
+		.iter()
+		.filter(|q| contains(&q.range, line, character))
+		.min_by_key(|q| range_size(&q.range))
+	{
+		return resolve_cross_module(&ast.uses, path, q);
+	}
 
 	// The reference under the cursor: smallest range that contains it.
 	let reference = r
@@ -65,18 +116,18 @@ pub fn goto_definition(source: &[u8], line: u32, character: u32) -> Option<Range
 		.filter(|rf| contains(&rf.range, line, character))
 		.min_by_key(|rf| range_size(&rf.range))?;
 
-	let table = match reference.kind {
+	let range = match reference.kind {
 		RefKind::Value => {
 			// Values shadow into variants: a payload-less variant used as a
 			// value (`none`) parses as a plain identifier.
-			return resolve(&r.values, &reference.name, line, character)
-				.or_else(|| resolve(&r.variants, &reference.name, line, character));
+			resolve(&r.values, &reference.name, line, character)
+				.or_else(|| resolve(&r.variants, &reference.name, line, character))
 		}
-		RefKind::Type => &r.types,
-		RefKind::Variant => &r.variants,
-		RefKind::Namespace => &r.namespaces,
+		RefKind::Type => resolve(&r.types, &reference.name, line, character),
+		RefKind::Variant => resolve(&r.variants, &reference.name, line, character),
+		RefKind::Namespace => resolve(&r.namespaces, &reference.name, line, character),
 	};
-	resolve(table, &reference.name, line, character)
+	range.map(Target::Here)
 }
 
 fn resolve(table: &[Binding], name: &str, line: usize, character: usize) -> Option<Range> {
@@ -85,6 +136,62 @@ fn resolve(table: &[Binding], name: &str, line: usize, character: usize) -> Opti
 		.filter(|b| b.name == name && scope_contains(&b.scope, line, character))
 		.min_by_key(|b| scope_size(&b.scope))
 		.map(|b| b.def_range)
+}
+
+// Map a local namespace name to its imported module via the `use` list,
+// load that module's file, and find the top-level def named by the access.
+fn resolve_cross_module(uses: &[UseNode], current: &Path, q: &QualifiedRef) -> Option<Target> {
+	let full_name = uses
+		.iter()
+		.find(|u| u.local_name().name == q.namespace)
+		.map(|u| u.module_name())?;
+
+	let (path, module) = load_module_file(&full_name, current)?;
+	let ast = module.ast.as_ref()?;
+	let range = find_top_level_def(ast, &q.name, q.is_type)?;
+	Some(Target::OtherFile { path, range })
+}
+
+// Resolve a module name to its project file and parse it. Returns `None`
+// for modules with no on-disk file (stdlib/native, or a path that doesn't
+// exist).
+fn load_module_file(module_name: &str, current: &Path) -> Option<(PathBuf, Module)> {
+	// Project root is the nearest `pluma.pa` marker; for a loose file with no
+	// project, fall back to the file's own directory (mirrors the CLI's
+	// single-file behavior).
+	let root = find_project_root(current).or_else(|| current.parent().map(|p| p.to_path_buf()))?;
+	let path = to_module_path(&root, module_name);
+	let bytes = std::fs::read(&path).ok()?;
+
+	let mut module = Module::new(module_name.to_string(), path.clone());
+	let mut diagnostics: Vec<Diagnostic> = Vec::new();
+	module.parse_from_bytes(bytes, &mut diagnostics);
+	module.ast.as_ref()?;
+	Some((path, module))
+}
+
+// Find a top-level def by name. When `prefer_type`, a type def (enum / alias
+// / trait) wins over a value of the same name; otherwise a value wins. Falls
+// back to any def with the name so e.g. `module.color` (an enum referenced in
+// value position) still resolves.
+fn find_top_level_def(ast: &ModuleNode, name: &str, prefer_type: bool) -> Option<Range> {
+	let mut preferred: Option<Range> = None;
+	let mut fallback: Option<Range> = None;
+	for def in &ast.body {
+		if def.name.name != name {
+			continue;
+		}
+		let is_type = matches!(
+			def.kind,
+			DefinitionKind::Alias(_) | DefinitionKind::Enum(_) | DefinitionKind::Trait(_)
+		);
+		if is_type == prefer_type {
+			preferred.get_or_insert(def.name.range);
+		} else {
+			fallback.get_or_insert(def.name.range);
+		}
+	}
+	preferred.or(fallback)
 }
 
 // -- collection -----------------------------------------------------------
@@ -102,6 +209,7 @@ struct Resolver {
 	variants: Vec<Binding>,
 	namespaces: Vec<Binding>,
 	refs: Vec<Reference>,
+	qualified: Vec<QualifiedRef>,
 }
 
 impl Resolver {
@@ -129,6 +237,7 @@ impl Resolver {
 			variants: Vec::new(),
 			namespaces: Vec::new(),
 			refs: Vec::new(),
+			qualified: Vec::new(),
 		}
 	}
 
@@ -266,9 +375,15 @@ impl Resolver {
 			ExprKind::FieldAccess { receiver, field } => {
 				match &receiver.kind {
 					ExprKind::Identifier(id) if self.module_names.contains(&id.name) => {
-						// `module.value`: the namespace resolves to its import;
-						// the field lives in another file, so leave it.
+						// `module.value`: the namespace resolves to its import; the
+						// field resolves cross-module into the other file.
 						self.reference(id, RefKind::Namespace);
+						self.qualified.push(QualifiedRef {
+							range: field.range,
+							namespace: id.name.clone(),
+							name: field.name.clone(),
+							is_type: false,
+						});
 					}
 					ExprKind::Identifier(id) if self.enum_names.contains(&id.name) => {
 						// `enum.variant`: receiver is the enum type, field the variant.
@@ -437,9 +552,17 @@ impl Resolver {
 			TypeExprKind::Single(id) => {
 				match &id.module {
 					Some(module) => {
-						// `module.Type`: the prefix is a namespace; the type
-						// itself lives in the other module.
+						// `module.Type`: the prefix is a namespace; the type name
+						// resolves cross-module. The name sits right after the dot,
+						// past the module prefix.
 						self.reference(module, RefKind::Namespace);
+						let name_col = module.range.end.col + 1;
+						self.qualified.push(QualifiedRef {
+							range: Range::within_line(module.range.end.line, name_col, name_col + id.name.len()),
+							namespace: module.name.clone(),
+							name: id.name.clone(),
+							is_type: true,
+						});
 					}
 					None => {
 						// `id.range` covers the whole name; emit a type reference
@@ -525,10 +648,26 @@ fn scope_size(scope: &Option<Range>) -> usize {
 mod tests {
 	use super::*;
 
-	// Resolve at (line, col) and return the definition as
-	// (start_line, start_col) for compact assertions.
+	// Resolve a same-file definition at (line, col), returned as
+	// (start_line, start_col). Non-`Here` targets count as no match.
 	fn goto(src: &str, line: u32, col: u32) -> Option<(usize, usize)> {
-		goto_definition(src.as_bytes(), line, col).map(|r| (r.start.line, r.start.col))
+		match goto_definition(src.as_bytes(), &PathBuf::new(), line, col) {
+			Some(Target::Here(r)) => Some((r.start.line, r.start.col)),
+			_ => None,
+		}
+	}
+
+	// Lay down a throwaway project (a `pluma.pa` marker + the given files)
+	// under the temp dir, keyed by `name` so parallel tests don't collide.
+	fn temp_project(name: &str, files: &[(&str, &str)]) -> PathBuf {
+		let dir = std::env::temp_dir().join(format!("pluma-goto-{}-{}", name, std::process::id()));
+		let _ = std::fs::remove_dir_all(&dir);
+		std::fs::create_dir_all(&dir).unwrap();
+		std::fs::write(dir.join("pluma.pa"), "").unwrap();
+		for (file, contents) in files {
+			std::fs::write(dir.join(file), contents).unwrap();
+		}
+		dir
 	}
 
 	#[test]
@@ -602,5 +741,81 @@ mod tests {
 		// Whitespace / punctuation resolves to nothing.
 		let src2 = "def x = 1\n";
 		assert_eq!(goto(src2, 0, 3), None);
+	}
+
+	#[test]
+	fn cross_module_value_jumps_into_other_file() {
+		let dir = temp_project(
+			"value",
+			&[(
+				"colors.pa",
+				"enum color {\n\tred\n}\ndef helper = fun { 1 }\n",
+			)],
+		);
+		let main = "use colors\n\ndef x = colors.helper ()\n";
+		let main_path = dir.join("main.pa");
+		// `helper` in `colors.helper` is at line 2, col 16.
+		match goto_definition(main.as_bytes(), &main_path, 2, 16) {
+			Some(Target::OtherFile { path, range }) => {
+				assert!(path.ends_with("colors.pa"), "path: {:?}", path);
+				// `def helper` is on line 3, col 4.
+				assert_eq!((range.start.line, range.start.col), (3, 4));
+			}
+			other => panic!("expected OtherFile, got {}", target_kind(&other)),
+		}
+		let _ = std::fs::remove_dir_all(&dir);
+	}
+
+	#[test]
+	fn cross_module_type_jumps_into_other_file() {
+		let dir = temp_project("type", &[("colors.pa", "enum color {\n\tred\n}\n")]);
+		let main = "use colors\n\nalias t colors.color\n";
+		let main_path = dir.join("main.pa");
+		// `color` in `colors.color` (type position) is at line 2, col 16.
+		match goto_definition(main.as_bytes(), &main_path, 2, 16) {
+			Some(Target::OtherFile { path, range }) => {
+				assert!(path.ends_with("colors.pa"), "path: {:?}", path);
+				// `enum color` is on line 0, col 5.
+				assert_eq!((range.start.line, range.start.col), (0, 5));
+			}
+			other => panic!("expected OtherFile, got {}", target_kind(&other)),
+		}
+		let _ = std::fs::remove_dir_all(&dir);
+	}
+
+	#[test]
+	fn use_path_jumps_to_module_file() {
+		let dir = temp_project("usepath", &[("colors.pa", "enum color {\n\tred\n}\n")]);
+		let main = "use colors\n\ndef x = 1\n";
+		let main_path = dir.join("main.pa");
+		// `colors` in the `use` path is at line 0, col 4-9.
+		match goto_definition(main.as_bytes(), &main_path, 0, 5) {
+			Some(Target::OtherFile { path, range }) => {
+				assert!(path.ends_with("colors.pa"), "path: {:?}", path);
+				assert_eq!((range.start.line, range.start.col), (0, 0));
+			}
+			other => panic!("expected OtherFile, got {}", target_kind(&other)),
+		}
+		let _ = std::fs::remove_dir_all(&dir);
+	}
+
+	#[test]
+	fn cross_module_missing_file_resolves_to_nothing() {
+		// stdlib/native modules (and any module with no project file) have no
+		// file to open, so qualified access into them resolves to nothing.
+		let dir = temp_project("missing", &[]);
+		let main = "use core.math\n\ndef x = math.pi\n";
+		let main_path = dir.join("main.pa");
+		// `pi` in `math.pi` is at line 2, col 13.
+		assert!(goto_definition(main.as_bytes(), &main_path, 2, 13).is_none());
+		let _ = std::fs::remove_dir_all(&dir);
+	}
+
+	fn target_kind(t: &Option<Target>) -> &'static str {
+		match t {
+			None => "None",
+			Some(Target::Here(_)) => "Here",
+			Some(Target::OtherFile { .. }) => "OtherFile",
+		}
 	}
 }

@@ -168,10 +168,21 @@ impl LanguageServer for Backend {
 		};
 
 		// The doc resolves through the usage to its definition, so it needs the
-		// source text; the direct hit's own doc (def name) is the fallback.
-		let doc = match self.document_map.get(&uri).map(|t| t.clone()) {
-			Some(text) => hover::doc_for_hover(&hits, text.as_bytes(), pos.line, pos.character),
-			None => hit.doc.clone(),
+		// source text and path; the direct hit's own doc (def name) is the
+		// fallback.
+		let doc = match (
+			self.document_map.get(&uri).map(|t| t.clone()),
+			params
+				.text_document_position_params
+				.text_document
+				.uri
+				.to_file_path()
+				.ok(),
+		) {
+			(Some(text), Some(path)) => {
+				hover::doc_for_hover(&hits, text.as_bytes(), &path, pos.line, pos.character)
+			}
+			_ => hit.doc.clone(),
 		};
 
 		// Type in a code fence; the doc comment (if any) as prose below a rule.
@@ -209,15 +220,28 @@ impl LanguageServer for Backend {
 			Some(text) => text.clone(),
 			None => return Ok(None),
 		};
+		// A non-file URI can't anchor cross-module lookups; same-file
+		// resolution still works with an empty path.
+		let path = uri.to_file_path().unwrap_or_default();
 
-		let Some(range) = goto::goto_definition(text.as_bytes(), pos.line, pos.character) else {
-			return Ok(None);
+		let location = match goto::goto_definition(text.as_bytes(), &path, pos.line, pos.character) {
+			Some(goto::Target::Here(range)) => Location {
+				uri,
+				range: pluma_range_to_lsp(&range),
+			},
+			Some(goto::Target::OtherFile { path, range }) => {
+				let Ok(target_uri) = Url::from_file_path(&path) else {
+					return Ok(None);
+				};
+				Location {
+					uri: target_uri,
+					range: pluma_range_to_lsp(&range),
+				}
+			}
+			None => return Ok(None),
 		};
 
-		Ok(Some(GotoDefinitionResponse::Scalar(Location {
-			uri,
-			range: pluma_range_to_lsp(&range),
-		})))
+		Ok(Some(GotoDefinitionResponse::Scalar(location)))
 	}
 
 	async fn document_symbol(

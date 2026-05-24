@@ -88,6 +88,7 @@ pub fn lookup(hits: &[HoverHit], line: u32, character: u32) -> Option<&HoverHit>
 pub fn doc_for_hover(
 	hits: &[HoverHit],
 	source: &[u8],
+	path: &std::path::Path,
 	line: u32,
 	character: u32,
 ) -> Option<String> {
@@ -96,8 +97,15 @@ pub fn doc_for_hover(
 			return hit.doc.clone();
 		}
 	}
-	let target = crate::goto::goto_definition(source, line, character)?;
-	lookup(hits, target.start.line as u32, target.start.col as u32)?
+	// Only same-file definitions have docs in this file's index; a
+	// cross-module jump would need the other file's index, which we don't
+	// build here.
+	let crate::goto::Target::Here(range) =
+		crate::goto::goto_definition(source, path, line, character)?
+	else {
+		return None;
+	};
+	lookup(hits, range.start.line as u32, range.start.col as u32)?
 		.doc
 		.clone()
 }
@@ -314,7 +322,8 @@ mod tests {
 		let mut diags: Vec<compiler::Diagnostic> = Vec::new();
 		module.parse_from_bytes(src.as_bytes().to_vec(), &mut diags);
 		let hits = build_index(&module);
-		doc_for_hover(&hits, src.as_bytes(), line, character)
+		// Same-file resolution doesn't touch the path; any path works here.
+		doc_for_hover(&hits, src.as_bytes(), &PathBuf::new(), line, character)
 	}
 
 	#[test]
