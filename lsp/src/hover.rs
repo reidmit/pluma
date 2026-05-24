@@ -97,17 +97,27 @@ pub fn doc_for_hover(
 			return hit.doc.clone();
 		}
 	}
-	// Only same-file definitions have docs in this file's index; a
-	// cross-module jump would need the other file's index, which we don't
-	// build here.
-	let crate::goto::Target::Here(range) =
-		crate::goto::goto_definition(source, path, line, character)?
-	else {
-		return None;
-	};
-	lookup(hits, range.start.line as u32, range.start.col as u32)?
-		.doc
-		.clone()
+	match crate::goto::resolve(source, path, line, character)? {
+		// Same-file: the doc lives on this file's index, at the def's name.
+		crate::goto::Resolved::Here(range) => {
+			lookup(hits, range.start.line as u32, range.start.col as u32)?
+				.doc
+				.clone()
+		}
+		// Cross-module (incl. stdlib): read the doc straight from the target
+		// module's parsed source.
+		crate::goto::Resolved::OtherModule { module, range, .. } => doc_for_def(&module, range),
+	}
+}
+
+// The doc comment of the top-level def whose name is at `name_range`.
+pub fn doc_for_def(module: &Module, name_range: Range) -> Option<String> {
+	let ast = module.ast.as_ref()?;
+	let def = ast.body.iter().find(|d| {
+		d.name.range.start.line == name_range.start.line
+			&& d.name.range.start.col == name_range.start.col
+	})?;
+	doc_comment_for(module, def.range.start.line)
 }
 
 fn range_size(r: &Range) -> usize {
@@ -378,5 +388,14 @@ mod tests {
 		assert_eq!(hover_doc_at(src, 3, 1), None);
 		// But hovering the top-level def name still shows its doc.
 		assert_eq!(hover_doc_at(src, 1, 4), Some("the global x".to_string()));
+	}
+
+	#[test]
+	fn stdlib_symbol_shows_its_doc() {
+		// `list.reverse` pulls its doc from the baked `core.list` source.
+		let src = "use core.list\n\ndef x = list.reverse [1]\n";
+		// `reverse` is at line 2, col 13.
+		let doc = hover_doc_at(src, 2, 15).expect("expected a doc for list.reverse");
+		assert!(doc.contains("opposite order"), "unexpected doc: {:?}", doc);
 	}
 }

@@ -19,12 +19,36 @@ use std::path::{Path, PathBuf};
 // def there. stdlib/native modules have no project file, so those simply
 // don't resolve.
 
-/// Where a definition lives.
+/// Where a definition lives, as a navigable file location (the goto result).
 pub enum Target {
 	/// In the file under the cursor.
 	Here(Range),
 	/// In another module's file.
 	OtherFile { path: PathBuf, range: Range },
+}
+
+/// The raw resolution, before turning a cross-module hit into a navigable
+/// file. Hover reuses this to read a definition's doc without materializing
+/// anything to disk.
+pub enum Resolved {
+	Here(Range),
+	OtherModule {
+		// The parsed target module (for reading docs).
+		module: Module,
+		// The def's name range within it.
+		range: Range,
+		// How to produce a navigable file for it.
+		location: ModuleLocation,
+	},
+}
+
+/// Where an imported module's source lives.
+pub enum ModuleLocation {
+	/// A user module: a real file on disk.
+	Disk(PathBuf),
+	/// A baked-in stdlib module (source inlined in the compiler binary),
+	/// named e.g. `core.list`. Materialized to a cache file on demand.
+	Stdlib(String),
 }
 
 /// What a reference resolves against. A bare value identifier may actually
@@ -66,10 +90,29 @@ struct Binding {
 	scope: Option<Range>,
 }
 
-/// Resolve the definition site for whatever identifier sits under the
-/// cursor. `path` is the document's own file path, used to locate imported
-/// modules' files for cross-module jumps.
+/// Resolve the identifier under the cursor to a navigable definition. `path`
+/// is the document's own file path, used to locate imported modules. For a
+/// stdlib module the source is materialized to a cache file so the editor
+/// has something to open.
 pub fn goto_definition(source: &[u8], path: &Path, line: u32, character: u32) -> Option<Target> {
+	match resolve(source, path, line, character)? {
+		Resolved::Here(range) => Some(Target::Here(range)),
+		Resolved::OtherModule {
+			range, location, ..
+		} => {
+			let file = match location {
+				ModuleLocation::Disk(p) => p,
+				ModuleLocation::Stdlib(name) => stdlib_cache_path(&name)?,
+			};
+			Some(Target::OtherFile { path: file, range })
+		}
+	}
+}
+
+/// Resolve the identifier under the cursor, without materializing anything.
+/// Returns the parsed target module for cross-module hits so callers can
+/// read docs from it.
+pub fn resolve(source: &[u8], path: &Path, line: u32, character: u32) -> Option<Resolved> {
 	let mut module = Module::new("<lsp>".to_string(), PathBuf::new());
 	let mut diagnostics: Vec<Diagnostic> = Vec::new();
 	module.parse_from_bytes(source.to_vec(), &mut diagnostics);
@@ -78,7 +121,7 @@ pub fn goto_definition(source: &[u8], path: &Path, line: u32, character: u32) ->
 	let line = line as usize;
 	let character = character as usize;
 
-	// A `use` path/alias under the cursor jumps to the imported module file.
+	// A `use` path/alias under the cursor jumps to the imported module.
 	for u in &ast.uses {
 		let on_path = u
 			.path
@@ -89,9 +132,11 @@ pub fn goto_definition(source: &[u8], path: &Path, line: u32, character: u32) ->
 			.as_ref()
 			.is_some_and(|a| contains(&a.range, line, character));
 		if on_path || on_alias {
-			return load_module_file(&u.module_name(), path).map(|(p, _)| Target::OtherFile {
-				path: p,
+			let (module, location) = load_imported_module(&u.module_name(), path)?;
+			return Some(Resolved::OtherModule {
+				module,
 				range: Range::collapsed(0, 0),
+				location,
 			});
 		}
 	}
@@ -99,7 +144,7 @@ pub fn goto_definition(source: &[u8], path: &Path, line: u32, character: u32) ->
 	let mut r = Resolver::new(ast);
 	r.walk_module(ast);
 
-	// A `module.symbol` access under the cursor resolves into the other file.
+	// A `module.symbol` access under the cursor resolves into the other module.
 	if let Some(q) = r
 		.qualified
 		.iter()
@@ -120,17 +165,17 @@ pub fn goto_definition(source: &[u8], path: &Path, line: u32, character: u32) ->
 		RefKind::Value => {
 			// Values shadow into variants: a payload-less variant used as a
 			// value (`none`) parses as a plain identifier.
-			resolve(&r.values, &reference.name, line, character)
-				.or_else(|| resolve(&r.variants, &reference.name, line, character))
+			resolve_binding(&r.values, &reference.name, line, character)
+				.or_else(|| resolve_binding(&r.variants, &reference.name, line, character))
 		}
-		RefKind::Type => resolve(&r.types, &reference.name, line, character),
-		RefKind::Variant => resolve(&r.variants, &reference.name, line, character),
-		RefKind::Namespace => resolve(&r.namespaces, &reference.name, line, character),
+		RefKind::Type => resolve_binding(&r.types, &reference.name, line, character),
+		RefKind::Variant => resolve_binding(&r.variants, &reference.name, line, character),
+		RefKind::Namespace => resolve_binding(&r.namespaces, &reference.name, line, character),
 	};
-	range.map(Target::Here)
+	range.map(Resolved::Here)
 }
 
-fn resolve(table: &[Binding], name: &str, line: usize, character: usize) -> Option<Range> {
+fn resolve_binding(table: &[Binding], name: &str, line: usize, character: usize) -> Option<Range> {
 	table
 		.iter()
 		.filter(|b| b.name == name && scope_contains(&b.scope, line, character))
@@ -138,36 +183,94 @@ fn resolve(table: &[Binding], name: &str, line: usize, character: usize) -> Opti
 		.map(|b| b.def_range)
 }
 
-// Map a local namespace name to its imported module via the `use` list,
-// load that module's file, and find the top-level def named by the access.
-fn resolve_cross_module(uses: &[UseNode], current: &Path, q: &QualifiedRef) -> Option<Target> {
+// Map a local namespace name to its imported module via the `use` list, load
+// that module, and find the top-level def named by the access.
+fn resolve_cross_module(uses: &[UseNode], current: &Path, q: &QualifiedRef) -> Option<Resolved> {
 	let full_name = uses
 		.iter()
 		.find(|u| u.local_name().name == q.namespace)
 		.map(|u| u.module_name())?;
 
-	let (path, module) = load_module_file(&full_name, current)?;
-	let ast = module.ast.as_ref()?;
-	let range = find_top_level_def(ast, &q.name, q.is_type)?;
-	Some(Target::OtherFile { path, range })
+	let (module, location) = load_imported_module(&full_name, current)?;
+	let range = find_top_level_def(module.ast.as_ref()?, &q.name, q.is_type)?;
+	Some(Resolved::OtherModule {
+		module,
+		range,
+		location,
+	})
 }
 
-// Resolve a module name to its project file and parse it. Returns `None`
-// for modules with no on-disk file (stdlib/native, or a path that doesn't
-// exist).
-fn load_module_file(module_name: &str, current: &Path) -> Option<(PathBuf, Module)> {
-	// Project root is the nearest `pluma.pa` marker; for a loose file with no
-	// project, fall back to the file's own directory (mirrors the CLI's
-	// single-file behavior).
+// Load and parse an imported module. Baked-in stdlib source takes precedence
+// over a same-named file on disk, matching the compiler's own load order.
+// Returns `None` for a module with no source we can find.
+fn load_imported_module(module_name: &str, current: &Path) -> Option<(Module, ModuleLocation)> {
+	let mut diagnostics: Vec<Diagnostic> = Vec::new();
+
+	if let Some(source) = compiler::lookup_stdlib_source(module_name) {
+		let mut module = Module::new(
+			module_name.to_string(),
+			PathBuf::from(format!("<stdlib:{}>", module_name)),
+		);
+		module.parse_from_bytes(source.as_bytes().to_vec(), &mut diagnostics);
+		module.ast.as_ref()?;
+		return Some((module, ModuleLocation::Stdlib(module_name.to_string())));
+	}
+
+	// User module: resolve its file relative to the project root (nearest
+	// `pluma.pa`), falling back to the current file's directory.
 	let root = find_project_root(current).or_else(|| current.parent().map(|p| p.to_path_buf()))?;
 	let path = to_module_path(&root, module_name);
 	let bytes = std::fs::read(&path).ok()?;
-
 	let mut module = Module::new(module_name.to_string(), path.clone());
-	let mut diagnostics: Vec<Diagnostic> = Vec::new();
 	module.parse_from_bytes(bytes, &mut diagnostics);
 	module.ast.as_ref()?;
-	Some((path, module))
+	Some((module, ModuleLocation::Disk(path)))
+}
+
+// -- stdlib materialization -----------------------------------------------
+
+// Write the inlined stdlib tree to a versioned cache directory (once) and
+// return the file path for one module. The whole tree plus a `pluma.pa`
+// marker is written so intra-stdlib `use`s resolve and the opened file
+// analyzes cleanly. Versioning the path means a newer compiler refreshes it.
+fn stdlib_cache_path(module_name: &str) -> Option<PathBuf> {
+	let root = cache_base()?
+		.join("pluma")
+		.join(compiler::VERSION)
+		.join("stdlib");
+
+	std::fs::create_dir_all(&root).ok()?;
+	let marker = root.join(compiler::PROJECT_MARKER_FILE);
+	if !marker.exists() {
+		std::fs::write(&marker, "").ok()?;
+	}
+	for (name, source) in compiler::stdlib_sources() {
+		let path = to_module_path(&root, name);
+		if let Some(parent) = path.parent() {
+			std::fs::create_dir_all(parent).ok()?;
+		}
+		// Versioned dir already isolates compiler versions; write once.
+		if !path.exists() {
+			std::fs::write(&path, source).ok()?;
+		}
+	}
+
+	let path = to_module_path(&root, module_name);
+	path.is_file().then_some(path)
+}
+
+// The OS user cache directory: `$XDG_CACHE_HOME`, else the platform default.
+fn cache_base() -> Option<PathBuf> {
+	if let Some(xdg) = std::env::var_os("XDG_CACHE_HOME") {
+		return Some(PathBuf::from(xdg));
+	}
+	#[cfg(target_os = "macos")]
+	let base = std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Library/Caches"));
+	#[cfg(target_os = "windows")]
+	let base = std::env::var_os("LOCALAPPDATA").map(PathBuf::from);
+	#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+	let base = std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache"));
+	base
 }
 
 // Find a top-level def by name. When `prefer_type`, a type def (enum / alias
@@ -800,15 +903,63 @@ mod tests {
 	}
 
 	#[test]
-	fn cross_module_missing_file_resolves_to_nothing() {
-		// stdlib/native modules (and any module with no project file) have no
-		// file to open, so qualified access into them resolves to nothing.
-		let dir = temp_project("missing", &[]);
-		let main = "use core.math\n\ndef x = math.pi\n";
+	fn unknown_module_resolves_to_nothing() {
+		// A module that's neither stdlib nor an on-disk file can't resolve.
+		let dir = temp_project("unknown", &[]);
+		let main = "use whatever\n\ndef x = whatever.foo ()\n";
 		let main_path = dir.join("main.pa");
-		// `pi` in `math.pi` is at line 2, col 13.
-		assert!(goto_definition(main.as_bytes(), &main_path, 2, 13).is_none());
+		// `foo` in `whatever.foo` is at line 2, col 17.
+		assert!(goto_definition(main.as_bytes(), &main_path, 2, 17).is_none());
 		let _ = std::fs::remove_dir_all(&dir);
+	}
+
+	#[test]
+	fn stdlib_value_resolves_to_baked_module() {
+		// `list.reverse` resolves into the baked `core.list` source — no file
+		// on disk, no materialization (resolve is pure).
+		let main = "use core.list\n\ndef x = list.reverse [1]\n";
+		// `reverse` in `list.reverse` is at line 2, col 13.
+		match resolve(main.as_bytes(), &PathBuf::from("/proj/main.pa"), 2, 15) {
+			Some(Resolved::OtherModule {
+				location: ModuleLocation::Stdlib(name),
+				module,
+				range,
+			}) => {
+				assert_eq!(name, "core.list");
+				// `def reverse` is on line 37 of list.pa (0-indexed 36)... assert
+				// it lands on a def whose name is `reverse`.
+				let def = module
+					.ast
+					.as_ref()
+					.unwrap()
+					.body
+					.iter()
+					.find(|d| d.name.range.start.line == range.start.line)
+					.unwrap();
+				assert_eq!(def.name.name, "reverse");
+			}
+			other => panic!("expected stdlib OtherModule, got {}", resolved_kind(&other)),
+		}
+	}
+
+	#[test]
+	fn stdlib_goto_materializes_to_cache() {
+		// Point the cache at a writable temp dir, then jump into a stdlib
+		// symbol and confirm the source was written there.
+		let cache = std::env::temp_dir().join(format!("pluma-cache-{}", std::process::id()));
+		let _ = std::fs::remove_dir_all(&cache);
+		std::env::set_var("XDG_CACHE_HOME", &cache);
+
+		let main = "use core.list\n\ndef x = list.reverse [1]\n";
+		match goto_definition(main.as_bytes(), &PathBuf::from("/proj/main.pa"), 2, 15) {
+			Some(Target::OtherFile { path, .. }) => {
+				assert!(path.ends_with("core/list.pa"), "path: {:?}", path);
+				assert!(path.is_file(), "materialized file should exist");
+			}
+			other => panic!("expected OtherFile into cache, got {}", target_kind(&other)),
+		}
+		std::env::remove_var("XDG_CACHE_HOME");
+		let _ = std::fs::remove_dir_all(&cache);
 	}
 
 	fn target_kind(t: &Option<Target>) -> &'static str {
@@ -816,6 +967,14 @@ mod tests {
 			None => "None",
 			Some(Target::Here(_)) => "Here",
 			Some(Target::OtherFile { .. }) => "OtherFile",
+		}
+	}
+
+	fn resolved_kind(t: &Option<Resolved>) -> &'static str {
+		match t {
+			None => "None",
+			Some(Resolved::Here(_)) => "Here",
+			Some(Resolved::OtherModule { .. }) => "OtherModule",
 		}
 	}
 }

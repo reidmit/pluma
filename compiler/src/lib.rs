@@ -16,6 +16,7 @@ pub use compiler::*;
 pub use diagnostic::*;
 pub use location::*;
 pub use module::{EnumExport, Module, ModuleExports, ValueConstraintExport};
+pub use stdlib::{lookup_stdlib_source, stdlib_sources};
 pub use tokenizer::*;
 pub use tokens::Token;
 
