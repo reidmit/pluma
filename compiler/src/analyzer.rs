@@ -2188,6 +2188,20 @@ impl<'compiler> Analyzer<'compiler> {
 
 					Operator::FieldAccess => unreachable!("handled separately"),
 
+					// `lhs ?? default` unwraps an option/result to a bare value,
+					// substituting `default` on the empty/error arm. The carrier
+					// (option vs result) can't be known until unification, so —
+					// like `try` — we only set up the carrier-independent facts
+					// here: the result type, the default's type, and the
+					// unwrapped payload all coincide. The post-unify dispatch
+					// pass reads the resolved LHS and rewrites this node into a
+					// `<carrier>.or-else` call.
+					Operator::NullCoalescing => {
+						let alpha = self.new_type_var();
+						expr.ty = alpha.clone();
+						constraints.push(eq_constraint(right.ty.clone(), alpha).at(right.range));
+					}
+
 					_ => {
 						// Other binary ops not supported yet.
 					}
@@ -3891,9 +3905,15 @@ impl<'compiler> Analyzer<'compiler> {
 			ExprKind::UnaryOperation { right, .. } => {
 				self.report_unresolved_try_in_expr(right, subst);
 			}
-			ExprKind::BinaryOperation { left, right, .. } => {
+			ExprKind::BinaryOperation { left, right, op } => {
 				self.report_unresolved_try_in_expr(left, subst);
 				self.report_unresolved_try_in_expr(right, subst);
+				// A `??` still shaped as a BinaryOperation here was never
+				// dispatched ⇒ its LHS type stayed an unbound tyvar.
+				if matches!(op.kind, Operator::NullCoalescing) {
+					self.error(expr.range, AnalysisErrorKind::CoalesceLhsUndetermined);
+					expr.ty = Type::Unknown;
+				}
 			}
 			ExprKind::If(IfNode {
 				subject,
@@ -4010,9 +4030,15 @@ impl<'compiler> Analyzer<'compiler> {
 			ExprKind::UnaryOperation { right, .. } => {
 				self.dispatch_try_in_expr(right, subst, new_constraints, dispatched_any);
 			}
-			ExprKind::BinaryOperation { left, right, .. } => {
+			ExprKind::BinaryOperation { left, right, op } => {
 				self.dispatch_try_in_expr(left, subst, new_constraints, dispatched_any);
 				self.dispatch_try_in_expr(right, subst, new_constraints, dispatched_any);
+				// `??` dispatches like `try`: once the LHS type is pinned, this
+				// node is rewritten into a `<carrier>.or-else` call.
+				let is_coalesce = matches!(op.kind, Operator::NullCoalescing);
+				if is_coalesce && self.do_coalesce_dispatch(expr, subst, new_constraints) {
+					*dispatched_any = true;
+				}
 			}
 			ExprKind::If(IfNode {
 				subject,
@@ -4234,6 +4260,120 @@ impl<'compiler> Analyzer<'compiler> {
 			range: try_range,
 			callee: Box::new(callee),
 			args: vec![*value, fun_expr],
+			dict_args: Vec::new(),
+		});
+
+		true
+	}
+
+	// Rewrite one `??` BinaryOperation. The dual of `do_try_dispatch`:
+	// `try` propagates failure via `<carrier>.then` (keeps the monad); `??`
+	// recovers from failure via `<carrier>.or-else` (leaves the monad with a
+	// bare value). `expr.kind` must be a `NullCoalescing` BinaryOperation on
+	// entry. Returns `true` once handled (rewritten to a `Call`, or reported
+	// and stubbed to `EmptyTuple`), `false` if the LHS type isn't pinned yet.
+	fn do_coalesce_dispatch(
+		&mut self,
+		expr: &mut ExprNode,
+		subst: &Substitution,
+		new_constraints: &mut Vec<Constraint>,
+	) -> bool {
+		use AnalysisErrorKind::*;
+
+		let coalesce_range = expr.range;
+
+		// Peek the resolved LHS type; leave the node in place for a later
+		// iteration if it's still a free tyvar.
+		let left_ty = match &expr.kind {
+			ExprKind::BinaryOperation { left, .. } => left.ty.clone(),
+			_ => unreachable!("do_coalesce_dispatch called on non-BinaryOperation"),
+		};
+		let resolved_left = subst.apply_to_type(&left_ty);
+		if matches!(resolved_left, Type::Var(_)) {
+			return false;
+		}
+
+		// Take the node apart up front (like `do_try_dispatch`) so every
+		// "handled" path — success or error — leaves `expr.kind` as something
+		// other than a `??` BinaryOperation. Otherwise the dispatch fixpoint
+		// would revisit this node forever.
+		let (left, right) = match std::mem::replace(&mut expr.kind, ExprKind::EmptyTuple) {
+			ExprKind::BinaryOperation { left, right, .. } => (left, right),
+			_ => unreachable!("do_coalesce_dispatch called on non-BinaryOperation"),
+		};
+
+		// Recognized carriers mirror `try`: option (1 arg), result (2 args).
+		let (carrier_module_name, payload_ty): (&'static str, Type) = match &resolved_left {
+			Type::Enum(name, args) if name == "__prelude__.option" && args.len() == 1 => {
+				("option", args[0].clone())
+			}
+			Type::Enum(name, args) if name == "__prelude__.result" && args.len() == 2 => {
+				("result", args[0].clone())
+			}
+			_ => {
+				self.error(
+					coalesce_range,
+					CoalesceUnsupportedCarrier {
+						ty: resolved_left.clone(),
+					},
+				);
+				expr.ty = Type::Unknown;
+				return true;
+			}
+		};
+
+		// The unwrapped payload, the default's type (`right.ty`, already tied
+		// to `expr.ty` during constrain), and the whole expression's type all
+		// coincide. A mismatch (e.g. `option int ?? "s"`) surfaces here.
+		new_constraints.push(eq_constraint(payload_ty, expr.ty.clone()).at(coalesce_range));
+
+		// Wrap the default in a thunk so it's evaluated only on the failure
+		// arm: `fun { default }` has type `fun nothing -> a`. This makes `??`
+		// short-circuit, the dual of `then`'s lazy continuation.
+		let right_range = right.range;
+		let right_ty = right.ty.clone();
+		let thunk_ty = self.new_type_var();
+		new_constraints.push(
+			eq_constraint(
+				thunk_ty.clone(),
+				Type::Fun(vec![Type::Nothing], Box::new(right_ty)),
+			)
+			.at(coalesce_range),
+		);
+		let thunk = ExprNode {
+			range: right_range,
+			kind: ExprKind::Fun(FunNode {
+				range: right_range,
+				params: vec![],
+				body: vec![*right],
+			}),
+			ty: thunk_ty,
+			trait_dispatch: None,
+			dispatch_sink: None,
+		};
+
+		// Callee: NamespaceAccess(["<carrier>", "or-else"]). Resolved by name
+		// in codegen, like the `try` rewrite's `then`.
+		let module_ident = IdentifierNode {
+			name: carrier_module_name.to_string(),
+			range: coalesce_range,
+		};
+		let method_ident = IdentifierNode {
+			name: "or-else".to_string(),
+			range: coalesce_range,
+		};
+		let callee = ExprNode {
+			range: coalesce_range,
+			kind: ExprKind::NamespaceAccess(vec![module_ident, method_ident]),
+			ty: self.new_type_var(),
+			trait_dispatch: None,
+			dispatch_sink: None,
+		};
+
+		expr.kind = ExprKind::Call(CallNode {
+			range: coalesce_range,
+			callee: Box::new(callee),
+			args: vec![*left, thunk],
 			dict_args: Vec::new(),
 		});
 

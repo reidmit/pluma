@@ -71,7 +71,11 @@ impl Operator {
 		match &self {
 			Chain => Some((0, 1)),
 			Range => Some((10, 11)),
-			LogicalOr | NullCoalescing => Some((20, 21)),
+			LogicalOr => Some((20, 21)),
+			// `??` is right-associative so `a ?? b ?? c` groups as
+			// `a ?? (b ?? c)` — the only grouping that type-checks when each
+			// `??` unwraps its left operand to a bare value.
+			NullCoalescing => Some((21, 20)),
 			LogicalAnd => Some((30, 31)),
 			Equality | Inequality => Some((40, 41)),
 			LessThan | LessThanEquals | GreaterThan | GreaterThanEquals => Some((50, 51)),

@@ -1,0 +1,8 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: `??` only works on `option` or `result`; this left-hand side has type `int`.
+> 5 | 	5 ?? 0
+       ^^^^^^
+

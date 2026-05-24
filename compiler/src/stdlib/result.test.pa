@@ -80,3 +80,28 @@ test "try short-circuits on err" {
 	when try-pipe-err () is ok _n { assert.is-true false }
 	is err e { assert.equals e "early" }
 }
+
+# --- or-else (the recovering dual of then; `??` desugars to it) ---
+
+test "or-else on ok returns the payload" {
+	assert.equals (res.or-else (ok 7) fun { 0 }) 7
+}
+
+test "or-else on err runs the fallback (error discarded)" {
+	assert.equals (res.or-else bad-boom fun { 99 }) 99
+}
+
+test "or-else does not evaluate the fallback on ok" {
+	let counter = ref.new 0
+	let fallback = fun {
+		ref.update counter fun c { c + 1 }
+		0
+	}
+	assert.equals (res.or-else (ok 9) fallback) 9
+	assert.equals (ref.get counter) 0
+}
+
+test "?? desugars to or-else on result" {
+	assert.equals ((ok 5) ?? 0) 5
+	assert.equals (bad-boom ?? 0) 0
+}

@@ -75,3 +75,28 @@ test "try short-circuits on none" {
 	when try-pipe-none () is some _n { assert.is-true false }
 	is none { assert.is-true true }
 }
+
+# --- or-else (the recovering dual of then; `??` desugars to it) ---
+
+test "or-else on some returns the payload" {
+	assert.equals (opt.or-else (some 7) fun { 0 }) 7
+}
+
+test "or-else on none runs the fallback" {
+	assert.equals (opt.or-else none fun { 42 }) 42
+}
+
+test "or-else does not evaluate the fallback on some" {
+	let counter = ref.new 0
+	let fallback = fun {
+		ref.update counter fun c { c + 1 }
+		0
+	}
+	assert.equals (opt.or-else (some 9) fallback) 9
+	assert.equals (ref.get counter) 0
+}
+
+test "?? desugars to or-else on option" {
+	assert.equals (some 5 ?? 0) 5
+	assert.equals (none ?? 0) 0
+}

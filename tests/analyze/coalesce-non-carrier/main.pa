@@ -1,0 +1,6 @@
+# `??` against a non-carrier type. `5` is an `int`, not an
+# `option`/`result`, so there's nothing to coalesce.
+
+def go = fun {
+	5 ?? 0
+}

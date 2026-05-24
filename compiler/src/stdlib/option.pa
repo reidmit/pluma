@@ -2,3 +2,11 @@
 # `some`; `none` short-circuits. The `try` syntax desugars to this.
 
 def then :: fun (option a) (fun a -> option b) -> option b = built-in "option-then"
+
+# Recover from a missing `option`: returns the `some` payload, or runs
+# `fallback` on `none`. `fallback` is a thunk, evaluated only when
+# needed. The `??` operator desugars to this — the recovering dual of
+# `then` (where `then` propagates `none`, `or-else` discharges it).
+def or-else :: fun (option a) (fun nothing -> a) -> a = fun o fallback {
+	when o is some v { v } is none { fallback () }
+}

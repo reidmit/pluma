@@ -3,3 +3,12 @@
 # type; `err` short-circuits.
 
 def then :: fun (result a e) (fun a -> result b e) -> result b e = built-in "result-then"
+
+# Recover from a failed `result`: returns the `ok` payload, or runs
+# `fallback` on `err` (the error value is discarded). `fallback` is a
+# thunk, evaluated only when needed. The `??` operator desugars to this
+# — the recovering dual of `then` (where `then` propagates `err`,
+# `or-else` discharges it).
+def or-else :: fun (result a e) (fun nothing -> a) -> a = fun r fallback {
+	when r is ok v { v } is err _ { fallback () }
+}

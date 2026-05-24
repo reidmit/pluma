@@ -1,0 +1,28 @@
+# `??` is right-associative, so `a ?? b ?? c` groups as `a ?? (b ?? c)`
+# and the first non-empty option wins. The default is lazy — evaluated
+# only on the failure arm.
+
+use core.map
+
+# Records whether it ran, so we can prove laziness.
+def loud = fun {
+	print "  (evaluated fallback)"
+	0 - 1
+}
+
+def main = fun {
+	# right-associative chain: first `some` short-circuits
+	print (none ?? none ?? some 3 ?? 0)
+	print (none ?? none ?? none ?? 99)
+
+	# the real motivating use: lookup with a default
+	let m = map.insert (map.insert (map.empty ()) "a" 1) "b" 2
+	print (map.lookup m "a" ?? 0)
+	print (map.lookup m "missing" ?? 0)
+
+	# laziness: the `some` arm must not evaluate the fallback
+	print "expect value, no fallback line:"
+	print (some 42 ?? loud ())
+	print "expect fallback line, then -1:"
+	print (none ?? loud ())
+}

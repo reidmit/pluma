@@ -33,6 +33,8 @@ pub enum AnalysisErrorKind {
 	TryUnsupportedCarrier { ty: Type },
 	TryEmptyBody,
 	TryUnsupportedPattern,
+	CoalesceLhsUndetermined,
+	CoalesceUnsupportedCarrier { ty: Type },
 	BuiltinRequiresAnnotation,
 	BuiltinMustBeTopLevelRhs,
 	UnknownRegexCharacterClass { name: String },
@@ -191,6 +193,17 @@ impl fmt::Display for AnalysisError {
 			TryUnsupportedPattern => write!(
 				f,
 				"`try` currently only supports an identifier or `_` pattern on the left-hand side. Bind to a name and destructure with `let` on the next line."
+			),
+
+			CoalesceLhsUndetermined => write!(
+				f,
+				"`??`'s left-hand side has an undetermined type. Add a type annotation so the carrier (option / result) can be selected."
+			),
+
+			CoalesceUnsupportedCarrier { ty } => write!(
+				f,
+				"`??` only works on `option` or `result`; this left-hand side has type `{}`.",
+				ty
 			),
 
 			BuiltinRequiresAnnotation => write!(
