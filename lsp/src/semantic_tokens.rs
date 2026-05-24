@@ -83,7 +83,22 @@ fn collect_from_lexer(source: &Vec<u8>, out: &mut Vec<Abs>) {
 					continue;
 				}
 
-				let (start, end) = tok.get_span();
+				let (mut start, mut end) = tok.get_span();
+				// The tokenizer's StringLiteral span covers only the content
+				// between the quotes. Absorb the delimiting `"` on each side so
+				// editors that rely solely on semantic tokens (e.g. Zed, which
+				// ships no grammar) highlight the quotes too. Interpolation
+				// splits a string into pieces bounded by `$(`/`)`, so only take
+				// a neighbor that's actually a quote — the opening quote belongs
+				// to the first piece, the closing quote to the last.
+				if matches!(tok, Token::StringLiteral(..)) {
+					if start > line_start && source[start - 1] == b'"' {
+						start -= 1;
+					}
+					if end < source.len() && source[end] == b'"' {
+						end += 1;
+					}
+				}
 				// Defensive guard against malformed token spans — a crashing
 				// LSP gives a much worse experience than a missed highlight.
 				if start < line_start || end < start {
@@ -680,16 +695,42 @@ mod tests {
 	}
 
 	#[test]
-	fn strings_cover_content() {
-		// Tokenizer's StringLiteral span covers content between quotes,
-		// not the quotes themselves. TextMate handles the surrounding
-		// quotes — the semantic-token overlay just needs to mark the
-		// content's role so it composes well visually.
+	fn strings_include_quotes() {
+		// The tokenizer's StringLiteral span covers only the content between
+		// the quotes; the lexer pass extends it to include the delimiting `"`
+		// so grammar-less editors (Zed) highlight the quotes too. `"hello"`
+		// starts at col 8 and is 7 chars wide including both quotes.
 		let src = "def s = \"hello\"\n";
 		let toks = classify(src);
 		assert!(
-			toks.contains(&(0, 9, 5, STRING)),
-			"hello content: {:?}",
+			toks.contains(&(0, 8, 7, STRING)),
+			"quoted string: {:?}",
+			toks
+		);
+	}
+
+	#[test]
+	fn interpolated_string_quotes_attach_to_ends() {
+		// `"hi $(name)"`: the opening quote joins the leading piece and the
+		// closing quote the trailing piece; the `$(` / `)` stay OPERATOR and
+		// `name` stays a VARIABLE. The interior pieces must not swallow a quote.
+		let src = "def s = \"hi $(name)\"\n";
+		let toks = classify(src);
+		// Leading piece `"hi ` — opening quote (col 8) + `hi ` = 4 chars.
+		assert!(
+			toks.contains(&(0, 8, 4, STRING)),
+			"leading piece: {:?}",
+			toks
+		);
+		// Trailing piece — just the closing quote, 1 char.
+		assert!(
+			toks.contains(&(0, 19, 1, STRING)),
+			"closing quote: {:?}",
+			toks
+		);
+		assert!(
+			toks.contains(&(0, 14, 4, VARIABLE)),
+			"name in interp: {:?}",
 			toks
 		);
 	}
