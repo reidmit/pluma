@@ -658,12 +658,27 @@ impl<'a> Formatter<'a> {
 			nest(self.format_statements(&i.body)),
 			hardline(),
 		];
-		if let Some(else_body) = &i.else_body {
-			parts.push(text("} else {"));
-			parts.push(nest(self.format_statements(else_body)));
-			parts.push(hardline());
+		match &i.else_body {
+			// `else if ...`: the chained `if` is the sole else expression. Render
+			// it inline as `} else if ...` (the nested call emits its own closing
+			// `}`), mirroring the parser so chains stay flat instead of nesting.
+			Some(else_body) => {
+				if let [ExprNode {
+					kind: ExprKind::If(inner),
+					..
+				}] = else_body.as_slice()
+				{
+					parts.push(text("} else "));
+					parts.push(self.format_if(inner));
+				} else {
+					parts.push(text("} else {"));
+					parts.push(nest(self.format_statements(else_body)));
+					parts.push(hardline());
+					parts.push(text("}"));
+				}
+			}
+			None => parts.push(text("}")),
 		}
-		parts.push(text("}"));
 		concat(parts)
 	}
 

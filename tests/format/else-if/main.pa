@@ -1,0 +1,15 @@
+def classify = fun n {
+	if (n < 0) is true {
+		"negative"
+	} else {
+		if (n == 0) is true {
+			"zero"
+		} else {
+			if (n < 10) is true {
+				"small"
+			} else {
+				"large"
+			}
+		}
+	}
+}

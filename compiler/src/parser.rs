@@ -875,15 +875,31 @@ impl<'a> Parser<'a> {
 
 		let (_, mut end) = expect_token_and_advance!(self, Token::RightBrace);
 
-		// Optional `else { ... }`, allowing line breaks between `}` and `else`.
+		// Optional `else { ... }` or `else if ...`, allowing line breaks between
+		// `}` and `else`.
 		let else_body = if matches!(self.peek_past_breaks(), Some(Token::KeywordElse(..))) {
 			self.skip_line_breaks();
 			self.advance();
-			expect_token_and_advance!(self, Token::LeftBrace);
-			let else_body = self.parse_body_expressions()?;
-			let (_, else_end) = expect_token_and_advance!(self, Token::RightBrace);
-			end = else_end;
-			Some(else_body)
+			if matches!(self.current_token, Some(Token::KeywordIf(..))) {
+				// `else if ...` — the chained `if` is the sole else expression,
+				// parsed without braces so chains stay flat rather than nesting a
+				// fresh `else { if ... }` block (and its closing brace) per arm.
+				let if_node = self.parse_if_expression()?;
+				end = if_node.range.end;
+				Some(vec![ExprNode {
+					range: if_node.range,
+					kind: ExprKind::If(if_node),
+					ty: Type::Unknown,
+					trait_dispatch: None,
+					dispatch_sink: None,
+				}])
+			} else {
+				expect_token_and_advance!(self, Token::LeftBrace);
+				let else_body = self.parse_body_expressions()?;
+				let (_, else_end) = expect_token_and_advance!(self, Token::RightBrace);
+				end = else_end;
+				Some(else_body)
+			}
 		} else {
 			None
 		};
