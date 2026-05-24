@@ -190,6 +190,10 @@ pub struct VM {
 	pub stdout: OutputSink,
 	pub stderr: OutputSink,
 	pub stdin: InputSource,
+	// The program's command-line arguments, in order, with the interpreter
+	// and script path already stripped by the CLI. Surfaced through the
+	// `io.args` builtin; empty unless seeded via `with_args`.
+	pub args: Vec<String>,
 	pub(crate) stack: Vec<Value>,
 	pub(crate) frames: Vec<Frame>,
 	// Opt-in opcode-frequency profiling. Set to Some(empty map) before
@@ -204,6 +208,7 @@ impl VM {
 			stdout: OutputSink::Stdout,
 			stderr: OutputSink::Stderr,
 			stdin: InputSource::Stdin,
+			args: Vec::new(),
 			stack: Vec::with_capacity(256),
 			frames: Vec::with_capacity(64),
 			profile: None,
@@ -222,6 +227,11 @@ impl VM {
 
 	pub fn with_stdin(mut self, source: InputSource) -> Self {
 		self.stdin = source;
+		self
+	}
+
+	pub fn with_args(mut self, args: Vec<String>) -> Self {
+		self.args = args;
 		self
 	}
 

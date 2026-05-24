@@ -1,0 +1,23 @@
+use core.io
+
+# `make-dir` creates nested parents (mkdir -p), is idempotent, and the
+# created directory is usable for file I/O. Writes live under `target/`
+# (gitignored); the created dirs are harmless to leave between runs.
+
+def main = fun {
+	let d = "target/pluma-mkdir-test/nested/deep"
+
+	when (io.make-dir d) is ok _ { print "made" } is err msg { print "err: $(msg)" }
+	print (io.is-dir d)
+	print (io.is-dir "target/pluma-mkdir-test")
+
+	# Idempotent: making an existing path again still succeeds.
+	when (io.make-dir d) is ok _ { print "again ok" } is err msg { print "again err: $(msg)" }
+
+	# The new directory is usable.
+	let f = d ++ "/hello.txt"
+	let _ = io.write-file f "hi"
+	when (io.read-file f) is ok s { print s } is err msg { print "read err: $(msg)" }
+	let _ = io.delete-file f
+	print "done"
+}

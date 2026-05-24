@@ -889,13 +889,60 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				Err(e) => result_err(Value::String(Rc::new(e.to_string()))),
 			})
 		}
+		"io-is-dir" => {
+			let path = expect_string(&args, "is-dir");
+			Ok(Value::Bool(std::path::Path::new(path.as_str()).is_dir()))
+		}
+		"io-make-dir" => {
+			// Creates the directory and any missing parents (mkdir -p).
+			// Succeeds silently if it already exists.
+			let path = expect_string(&args, "make-dir");
+			Ok(match std::fs::create_dir_all(path.as_str()) {
+				Ok(()) => result_ok(Value::Nothing),
+				Err(e) => result_err(Value::String(Rc::new(e.to_string()))),
+			})
+		}
+		"io-read-dir" => {
+			// Entry names only (not full paths), sorted for deterministic
+			// builds. Hidden dotfiles are included.
+			let path = expect_string(&args, "read-dir");
+			Ok(match std::fs::read_dir(path.as_str()) {
+				Ok(entries) => {
+					let mut names: Vec<String> = Vec::new();
+					let mut read_err: Option<String> = None;
+					for entry in entries {
+						match entry {
+							Ok(e) => names.push(e.file_name().to_string_lossy().into_owned()),
+							Err(e) => {
+								read_err = Some(e.to_string());
+								break;
+							}
+						}
+					}
+					match read_err {
+						Some(msg) => result_err(Value::String(Rc::new(msg))),
+						None => {
+							names.sort();
+							let list: Vec<Value> = names
+								.into_iter()
+								.map(|n| Value::String(Rc::new(n)))
+								.collect();
+							result_ok(Value::List(Rc::new(list)))
+						}
+					}
+				}
+				Err(e) => result_err(Value::String(Rc::new(e.to_string()))),
+			})
+		}
 		"io-args" => {
 			// Called as `args ()` — the lone arg is the `nothing` unit.
 			debug_assert_eq!(args.len(), 1, "`args` arity");
-			// Skip argv[0] (the program path itself).
-			let args_list: Vec<Value> = std::env::args()
-				.skip(1)
-				.map(|a| Value::String(Rc::new(a)))
+			// `vm.args` is already stripped of the interpreter and script
+			// path by the CLI, so this is exactly the program's own arguments.
+			let args_list: Vec<Value> = vm
+				.args
+				.iter()
+				.map(|a| Value::String(Rc::new(a.clone())))
 				.collect();
 			Ok(Value::List(Rc::new(args_list)))
 		}

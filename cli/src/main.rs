@@ -15,7 +15,10 @@ fn main() {
 						std::process::exit(1);
 					}
 				};
-				run(entry_path);
+				// Everything after the script path is the program's own argv,
+				// surfaced through `io.args`.
+				let program_args: Vec<String> = std::env::args().skip(3).collect();
+				run(entry_path, program_args);
 			}
 
 			"format" => {
@@ -98,9 +101,11 @@ fn main() {
 			}
 
 			// Anything else is treated as a path to run, so `cli foo.pa`
-			// works as shorthand for `cli run foo.pa`.
+			// works as shorthand for `cli run foo.pa`. Here the path is
+			// argv[1], so the program's own args start at argv[2].
 			_ => {
-				run(arg);
+				let program_args: Vec<String> = std::env::args().skip(2).collect();
+				run(arg, program_args);
 			}
 		},
 
@@ -360,7 +365,7 @@ fn discover_test_modules(root: &std::path::Path) -> Vec<String> {
 	out
 }
 
-fn run(entry_path: String) {
+fn run(entry_path: String, program_args: Vec<String>) {
 	if entry_path.ends_with(".test.pa") || entry_path.ends_with(".test") {
 		print_error(format!(
 			"`{}` is a test module. Use `pluma test` to run tests.",
@@ -391,7 +396,7 @@ fn run(entry_path: String) {
 			std::process::exit(1);
 		}
 	};
-	let mut vm_instance = vm::VM::new(program);
+	let mut vm_instance = vm::VM::new(program).with_args(program_args);
 	if let Err(err) = vm_instance.run() {
 		print_error(format!("Runtime error: {}", err.message));
 		std::process::exit(1);

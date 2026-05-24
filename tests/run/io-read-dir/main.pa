@@ -1,0 +1,36 @@
+use core.io
+use core.list
+use core.string
+
+# Write a couple of temp files into `target/`, list the directory back
+# (filtered to our prefix so other build artifacts don't perturb the
+# snapshot), then clean up. Also exercises `is-dir` and the err path.
+
+def mine = fun name { string.starts-with name "pluma-rdtest-" }
+
+def main = fun {
+	let a = "target/pluma-rdtest-1.txt"
+	let b = "target/pluma-rdtest-2.txt"
+	let _w1 = io.write-file a "one"
+	let _w2 = io.write-file b "two"
+
+	print (io.is-dir "target")
+	print (io.is-dir a)
+
+	when (io.read-dir "target") is ok entries {
+		let ours = list.filter entries mine
+		let _ = list.each ours (fun e { print e })
+	} is err msg {
+		print "read-dir err: $(msg)"
+	}
+
+	when (io.read-dir "target/no-such-dir-xyz") is ok _ {
+		print "unexpected ok"
+	} is err _ {
+		print "err on missing dir"
+	}
+
+	let _d1 = io.delete-file a
+	let _d2 = io.delete-file b
+	print "done"
+}

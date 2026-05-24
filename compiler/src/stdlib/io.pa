@@ -38,7 +38,20 @@ def file-exists :: fun string -> bool = built-in "io-file-exists"
 # Delete a file. `err` if the file doesn't exist.
 def delete-file :: fun string -> result nothing string = built-in "io-delete-file"
 
-# Command-line arguments. First element is the program name.
+# True iff the path exists as a directory.
+def is-dir :: fun string -> bool = built-in "io-is-dir"
+
+# List the entries of a directory. Returns entry names only (not full
+# paths), sorted; hidden dotfiles are included. `err` if the path
+# isn't a readable directory.
+def read-dir :: fun string -> result (list string) string = built-in "io-read-dir"
+
+# Create a directory and any missing parents (like `mkdir -p`).
+# Succeeds silently if it already exists.
+def make-dir :: fun string -> result nothing string = built-in "io-make-dir"
+
+# The program's command-line arguments, in order. The interpreter and
+# script path are not included — `pluma run app.pa a b` yields `[a, b]`.
 def args :: fun nothing -> list string = built-in "io-args"
 
 # Environment variable lookup. `none` if not set.
