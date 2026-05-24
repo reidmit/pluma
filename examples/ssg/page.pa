@@ -1,0 +1,99 @@
+# Front-matter parsing and the HTML page template.
+#
+# A document may begin with a `---`-delimited header of `key: value`
+# lines; everything after the closing `---` is the Markdown body.
+
+use core.string
+use core.list
+use core.map
+
+# Split a document into its metadata map and Markdown body. With no
+# header, the metadata is empty and the body is the whole input.
+def parse-doc = fun content {
+	let lines = string.split content "\n"
+	when lines is [first, ...rest] {
+		if (string.trim first == "---") is true {
+			let (meta-lines, body-lines) = split-header rest
+			(parse-meta meta-lines, string.join body-lines "\n")
+		} else {
+			(map.empty (), content)
+		}
+	} is [] {
+		(map.empty (), content)
+	}
+}
+
+# Consume header lines up to the closing `---`, returning
+# `(header-lines, body-lines)`.
+def split-header = fun lines {
+	when lines is [] {
+		([], [])
+	} is [l, ...rest] {
+		if (string.trim l == "---") is true {
+			([], rest)
+		} else {
+			let (header, body) = split-header rest
+			([l, ...header], body)
+		}
+	}
+}
+
+def parse-meta = fun lines { list.fold lines (map.empty ()) add-meta-line }
+
+# Parse one `key: value` line into the map. Lines without a colon are
+# ignored. The value may itself contain colons (e.g. a URL or time).
+def add-meta-line = fun m line {
+	when (string.split line ":") is [k, v, ...rest] {
+		map.insert m (string.trim k) (string.trim (string.join [v, ...rest] ":"))
+	} else {
+		m
+	}
+}
+
+# Look up a metadata key, falling back to `default` when absent.
+def meta-get = fun m key default { map.lookup m key ?? default }
+
+# ---------------------------------------------------------------------
+# Template
+# ---------------------------------------------------------------------
+
+def styles = "
+:root { --fg: #1a1a1a; --muted: #6b7280; --accent: #2563eb; --bg: #fdfdfc; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 17px/1.65 -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, sans-serif; }
+main { max-width: 42rem; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+h1, h2, h3 { line-height: 1.25; margin: 2rem 0 0.75rem; }
+h1 { font-size: 2rem; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code { background: #f0f0ef; padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.9em; }
+pre { background: #1e1e2e; color: #e6e6e6; padding: 1rem 1.25rem; border-radius: 8px; overflow-x: auto; }
+pre code { background: none; padding: 0; color: inherit; }
+blockquote { margin: 1.5rem 0; padding: 0.25rem 1.25rem; border-left: 3px solid var(--accent);
+  color: var(--muted); }
+hr { border: none; border-top: 1px solid #e5e5e5; margin: 2.5rem 0; }
+footer { max-width: 42rem; margin: 0 auto; padding: 2rem 1.5rem; color: var(--muted);
+  font-size: 0.85rem; border-top: 1px solid #eee; }
+ul, ol { padding-left: 1.4rem; }
+"
+
+# Wrap a rendered HTML fragment in a full document with `title`.
+def page = fun title body {
+	"<!DOCTYPE html>
+<html lang=\"en\">
+<head>
+<meta charset=\"utf-8\">
+<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
+<title>$(title)</title>
+<style>$(styles)</style>
+</head>
+<body>
+<main>
+$(body)
+</main>
+<footer>built with pluma</footer>
+</body>
+</html>
+"
+}

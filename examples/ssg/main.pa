@@ -1,0 +1,77 @@
+# A static site generator, written in Pluma.
+#
+#   pluma run examples/ssg [content-dir] [output-dir]
+#
+# Reads every `*.md` file in the content directory, splits off any
+# front-matter, converts the Markdown body to HTML, wraps it in a
+# styled page template, and writes the result to the output directory.
+# An index page linking every document is generated too.
+
+use core.io
+use core.list
+use core.string
+use core.bytes
+use markdown
+use page
+
+# nth element of `args`, or `default` if the list is shorter than n+1.
+def arg-or = fun args n default { (list.head (list.drop args n)) ?? default }
+
+# Drop a trailing 3-byte extension (e.g. ".md"). The caller has already
+# filtered to ".md" names, so this just trims the last three bytes.
+def strip-ext = fun name {
+	let b = string.to-bytes name
+	when (bytes.to-string (bytes.slice b 0 ((bytes.length b) - 3))) is ok s { s } is err _ { name }
+}
+
+# Build a single page: read, parse front-matter, render, wrap, write.
+def build-page = fun content-dir out-dir name {
+	when (io.read-file (content-dir ++ "/" ++ name)) is ok src {
+		let (meta, body) = page.parse-doc src
+		let title = page.meta-get meta "title" (strip-ext name)
+		let html = page.page title (markdown.render body)
+		let out-name = (strip-ext name) ++ ".html"
+		when (io.write-file (out-dir ++ "/" ++ out-name) html) is ok _ {
+			print "  $(name) -> $(out-name)"
+		} is err msg {
+			print "  write error ($(out-name)): $(msg)"
+		}
+	} is err msg {
+		print "  read error ($(name)): $(msg)"
+	}
+}
+
+# Write an index.html linking each generated page.
+def build-index = fun out-dir md-files {
+	let items = string.join (list.map md-files (fun n {
+		let stem = strip-ext n
+		"<li><a href=\"$(stem).html\">$(stem)</a></li>"
+	})) "\n"
+	let body = "<h1>Index</h1>\n<ul>\n$(items)\n</ul>"
+	when (io.write-file (out-dir ++ "/index.html") (page.page "Index" body)) is ok _ {
+		print "  index.html"
+	} is err msg {
+		print "  index write error: $(msg)"
+	}
+}
+
+def main = fun {
+	let args = io.args ()
+	let content-dir = arg-or args 0 "examples/ssg/content"
+	let out-dir = arg-or args 1 "examples/ssg/public"
+
+	when (io.make-dir out-dir) is ok _ {
+		print "building $(content-dir) -> $(out-dir)/"
+	} is err msg {
+		print "warning: could not create $(out-dir): $(msg)"
+	}
+
+	when (io.read-dir content-dir) is ok entries {
+		let md-files = list.filter entries (fun n { string.ends-with n ".md" })
+		let _ = list.each md-files (fun name { build-page content-dir out-dir name })
+		let _ = build-index out-dir md-files
+		print "done: $(to-string (list.length md-files)) page(s)"
+	} is err msg {
+		print "error: cannot read $(content-dir): $(msg)"
+	}
+}
