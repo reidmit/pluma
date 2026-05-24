@@ -167,10 +167,25 @@ impl LanguageServer for Backend {
 			return Ok(None);
 		};
 
+		// Type in a code fence; the doc comment (if any) as prose below a rule.
+		let mut value = String::new();
+		if !matches!(hit.ty, compiler::types::Type::Unknown) {
+			value.push_str(&format!("```pluma\n{}\n```", hit.ty));
+		}
+		if let Some(doc) = &hit.doc {
+			if !value.is_empty() {
+				value.push_str("\n\n---\n\n");
+			}
+			value.push_str(doc);
+		}
+		if value.is_empty() {
+			return Ok(None);
+		}
+
 		Ok(Some(Hover {
 			contents: HoverContents::Markup(MarkupContent {
 				kind: MarkupKind::Markdown,
-				value: format!("```pluma\n{}\n```", hit.ty),
+				value,
 			}),
 			range: Some(pluma_range_to_lsp(&hit.range)),
 		}))

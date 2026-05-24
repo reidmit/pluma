@@ -4,21 +4,70 @@ use compiler::{Module, Range};
 
 // A precomputed lookup entry: "if the cursor lands inside this range,
 // show this type". Built eagerly at analysis time so the lookup itself
-// is just a linear scan over Send-only data.
+// is just a linear scan over Send-only data. `doc` carries the doc-comment
+// block for a top-level def name (rendered below the type on hover).
 #[derive(Clone)]
 pub struct HoverHit {
 	pub range: Range,
 	pub ty: Type,
+	pub doc: Option<String>,
 }
 
 pub fn build_index(module: &Module) -> Vec<HoverHit> {
 	let mut hits = Vec::new();
 	if let Some(ast) = module.ast.as_ref() {
 		for def in &ast.body {
-			walk_def(def, &mut hits);
+			let doc = doc_comment_for(module, def.range.start.line);
+			walk_def(def, &mut hits, doc);
 		}
 	}
 	hits
+}
+
+// The doc comment for a top-level def: the contiguous run of full-line
+// comments directly above it. We bound the search at the previous
+// top-level item's end line so a trailing comment on the line above
+// (e.g. `def prev = 1 # note`) is never mistaken for this def's doc.
+fn doc_comment_for(module: &Module, def_start_line: usize) -> Option<String> {
+	let ast = module.ast.as_ref()?;
+
+	let mut floor: isize = -1;
+	for u in &ast.uses {
+		if u.range.end.line < def_start_line {
+			floor = floor.max(u.range.end.line as isize);
+		}
+	}
+	for d in &ast.body {
+		if d.range.end.line < def_start_line {
+			floor = floor.max(d.range.end.line as isize);
+		}
+	}
+
+	// Walk upward from the line just above the def, collecting comments
+	// until a non-comment line (or the previous item) stops the run.
+	let mut lines: Vec<String> = Vec::new();
+	let mut line = def_start_line as isize - 1;
+	while line > floor {
+		let Some(text) = module.comments.get(&(line as usize)) else {
+			break;
+		};
+		// Comment text is everything after `#`; drop the conventional
+		// single leading space so `# foo` renders as `foo`.
+		lines.push(
+			text
+				.strip_prefix(' ')
+				.unwrap_or(text)
+				.trim_end()
+				.to_string(),
+		);
+		line -= 1;
+	}
+
+	if lines.is_empty() {
+		return None;
+	}
+	lines.reverse();
+	Some(lines.join("\n"))
 }
 
 pub fn lookup(hits: &[HoverHit], line: u32, character: u32) -> Option<&HoverHit> {
@@ -59,12 +108,26 @@ fn record(hits: &mut Vec<HoverHit>, range: Range, ty: Type) {
 	if matches!(ty, Type::Unknown) {
 		return;
 	}
-	hits.push(HoverHit { range, ty });
+	hits.push(HoverHit {
+		range,
+		ty,
+		doc: None,
+	});
 }
 
-fn walk_def(def: &DefinitionNode, hits: &mut Vec<HoverHit>) {
-	// Def name itself: show the def's full type.
-	record(hits, def.name.range, def.ty.clone());
+// Record a def name's hit, carrying its doc comment. Unlike `record`, this
+// keeps the hit even when the type is unknown (e.g. analysis failed
+// upstream) so the doc still shows.
+fn record_name(hits: &mut Vec<HoverHit>, range: Range, ty: Type, doc: Option<String>) {
+	if doc.is_none() && matches!(ty, Type::Unknown) {
+		return;
+	}
+	hits.push(HoverHit { range, ty, doc });
+}
+
+fn walk_def(def: &DefinitionNode, hits: &mut Vec<HoverHit>, doc: Option<String>) {
+	// Def name itself: show the def's full type, plus its doc comment.
+	record_name(hits, def.name.range, def.ty.clone(), doc);
 
 	match &def.kind {
 		DefinitionKind::Expr(expr) => walk_expr(expr, hits),
@@ -87,7 +150,7 @@ fn walk_def(def: &DefinitionNode, hits: &mut Vec<HoverHit>) {
 		}
 		DefinitionKind::Instance(inst) => {
 			for method in &inst.methods {
-				walk_def(method, hits);
+				walk_def(method, hits, None);
 			}
 		}
 		DefinitionKind::Test { body, .. } => {
@@ -197,5 +260,57 @@ fn walk_fun(f: &FunNode, hits: &mut Vec<HoverHit>) {
 	}
 	for e in &f.body {
 		walk_expr(e, hits);
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::path::PathBuf;
+
+	// Build the hover index from parser output alone (no analyzer; types
+	// come back Unknown, which is fine — these tests only check docs).
+	fn doc_at(src: &str, line: u32, character: u32) -> Option<String> {
+		let mut module = Module::new("<test>".to_string(), PathBuf::new());
+		let mut diags: Vec<compiler::Diagnostic> = Vec::new();
+		module.parse_from_bytes(src.as_bytes().to_vec(), &mut diags);
+		let hits = build_index(&module);
+		lookup(&hits, line, character).and_then(|h| h.doc.clone())
+	}
+
+	#[test]
+	fn contiguous_block_above_def() {
+		let src = "# greet someone\n# politely\ndef greet = fun name { name }\n";
+		// Hover the def name `greet` (line 2, col 4).
+		assert_eq!(
+			doc_at(src, 2, 4),
+			Some("greet someone\npolitely".to_string())
+		);
+	}
+
+	#[test]
+	fn single_leading_space_stripped() {
+		let src = "#no space\ndef x = 1\n";
+		assert_eq!(doc_at(src, 1, 4), Some("no space".to_string()));
+	}
+
+	#[test]
+	fn blank_line_breaks_adjacency() {
+		// A blank line between the comment and the def means it's not a doc.
+		let src = "# not a doc\n\ndef x = 1\n";
+		assert_eq!(doc_at(src, 2, 4), None);
+	}
+
+	#[test]
+	fn trailing_comment_on_prev_def_not_captured() {
+		// The comment is a trailing comment on `a`'s line, not a doc for `b`.
+		let src = "def a = 1 # trailing\ndef b = 2\n";
+		assert_eq!(doc_at(src, 1, 4), None);
+	}
+
+	#[test]
+	fn no_comment_means_no_doc() {
+		let src = "def x = 1\n";
+		assert_eq!(doc_at(src, 0, 4), None);
 	}
 }
