@@ -49,7 +49,7 @@ enum parsed a {
 # ---------------------------------------------------------------------
 
 def parse = fun src {
-	when (lexer.tokenize src) is err e {
+	when lexer.tokenize src is err e {
 		err e
 	} is ok toks {
 		parse-stmt toks
@@ -60,8 +60,8 @@ def parse = fun src {
 # other shape is a bare expression — including `pi` or `x` on its own.
 def parse-stmt = fun toks {
 	when toks is [t-name name, t-op eqtok, ...rest] {
-		if (eqtok == "=") is true {
-			finish (fun e { assign name e }) (parse-expr rest)
+		if eqtok == "=" is true {
+			finish fun e { assign name e } (parse-expr rest)
 		} else {
 			finish-bare toks
 		}
@@ -71,7 +71,7 @@ def parse-stmt = fun toks {
 }
 
 def finish-bare = fun toks {
-	finish (fun e { bare e }) (parse-expr toks)
+	finish fun e { bare e } (parse-expr toks)
 }
 
 # Wrap a parsed expression in `build`, but only if it consumed every
@@ -94,7 +94,7 @@ def finish = fun build result {
 # ---------------------------------------------------------------------
 
 def parse-expr = fun toks {
-	when (parse-term toks) is ok-at left rest {
+	when parse-term toks is ok-at left rest {
 		expr-rest left rest
 	} is perr m {
 		perr m
@@ -103,8 +103,8 @@ def parse-expr = fun toks {
 
 def expr-rest = fun left toks {
 	when toks is [t-op op, ...rest] {
-		if ((op == "+") || (op == "-")) is true {
-			when (parse-term rest) is ok-at right rest2 {
+		if op == "+" || op == "-" is true {
+			when parse-term rest is ok-at right rest2 {
 				expr-rest (bin op left right) rest2
 			} is perr m {
 				perr m
@@ -118,7 +118,7 @@ def expr-rest = fun left toks {
 }
 
 def parse-term = fun toks {
-	when (parse-power toks) is ok-at left rest {
+	when parse-power toks is ok-at left rest {
 		term-rest left rest
 	} is perr m {
 		perr m
@@ -127,8 +127,8 @@ def parse-term = fun toks {
 
 def term-rest = fun left toks {
 	when toks is [t-op op, ...rest] {
-		if ((op == "*") || (op == "/") || (op == "%")) is true {
-			when (parse-power rest) is ok-at right rest2 {
+		if op == "*" || op == "/" || op == "%" is true {
+			when parse-power rest is ok-at right rest2 {
 				term-rest (bin op left right) rest2
 			} is perr m {
 				perr m
@@ -144,10 +144,10 @@ def term-rest = fun left toks {
 # `^` binds tighter than `* /` and is right-associative, so the
 # exponent recurses back into `parse-power` rather than looping.
 def parse-power = fun toks {
-	when (parse-unary toks) is ok-at base rest {
+	when parse-unary toks is ok-at base rest {
 		when rest is [t-op op, ...rest2] {
-			if (op == "^") is true {
-				when (parse-power rest2) is ok-at exp rest3 {
+			if op == "^" is true {
+				when parse-power rest2 is ok-at exp rest3 {
 					ok-at (bin "^" base exp) rest3
 				} is perr m {
 					perr m
@@ -165,13 +165,13 @@ def parse-power = fun toks {
 
 def parse-unary = fun toks {
 	when toks is [t-op op, ...rest] {
-		if (op == "-") is true {
-			when (parse-unary rest) is ok-at e rest2 {
+		if op == "-" is true {
+			when parse-unary rest is ok-at e rest2 {
 				ok-at (neg e) rest2
 			} is perr m {
 				perr m
 			}
-		} else if (op == "+") is true {
+		} else if op == "+" is true {
 			parse-unary rest
 		} else {
 			parse-atom toks
@@ -191,7 +191,7 @@ def parse-atom = fun toks {
 			ok-at (lit n) rest
 		} is t-name name {
 			when rest is [t-op p, ...rest2] {
-				if (p == "(") is true {
+				if p == "(" is true {
 					parse-call name rest2
 				} else {
 					ok-at (var name) rest
@@ -200,7 +200,7 @@ def parse-atom = fun toks {
 				ok-at (var name) rest
 			}
 		} is t-op p {
-			if (p == "(") is true {
+			if p == "(" is true {
 				parse-paren rest
 			} else {
 				perr "unexpected operator '$(p)'"
@@ -211,9 +211,9 @@ def parse-atom = fun toks {
 
 # Just consumed `(`: parse the inner expression and require a `)`.
 def parse-paren = fun toks {
-	when (parse-expr toks) is ok-at e rest {
+	when parse-expr toks is ok-at e rest {
 		when rest is [t-op q, ...rest2] {
-			if (q == ")") is true {
+			if q == ")" is true {
 				ok-at e rest2
 			} else {
 				perr "expected ')'"
@@ -230,7 +230,7 @@ def parse-paren = fun toks {
 # the closing `)`. Handles the empty list (`now()`-style) up front.
 def parse-call = fun name toks {
 	when toks is [t-op p, ...rest] {
-		if (p == ")") is true {
+		if p == ")" is true {
 			ok-at (call name []) rest
 		} else {
 			parse-args name toks []
@@ -241,11 +241,11 @@ def parse-call = fun name toks {
 }
 
 def parse-args = fun name toks acc {
-	when (parse-expr toks) is ok-at arg rest {
+	when parse-expr toks is ok-at arg rest {
 		when rest is [t-op p, ...rest2] {
-			if (p == ",") is true {
+			if p == "," is true {
 				parse-args name rest2 [arg, ...acc]
-			} else if (p == ")") is true {
+			} else if p == ")" is true {
 				ok-at (call name (list.reverse [arg, ...acc])) rest2
 			} else {
 				perr "expected ',' or ')' in arguments"

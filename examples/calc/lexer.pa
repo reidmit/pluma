@@ -27,7 +27,7 @@ def is-name-start = fun c {
 }
 
 def is-name-char = fun c {
-	(is-name-start c) || (is-digit c)
+	is-name-start c || is-digit c
 }
 
 def is-op = fun c {
@@ -36,8 +36,8 @@ def is-op = fun c {
 
 # End index of the run of characters from `i` for which `pred` holds.
 def span = fun s i pred {
-	when (string.char-at s i) is some c {
-		if (pred c) is true {
+	when string.char-at s i is some c {
+		if pred c is true {
 			span s (i + 1) pred
 		} else {
 			i
@@ -49,7 +49,7 @@ def span = fun s i pred {
 
 # Does the character at `i` (if any) hold `pred`?
 def char-is = fun s i pred {
-	when (string.char-at s i) is some c {
+	when string.char-at s i is some c {
 		pred c
 	} is none {
 		false
@@ -63,16 +63,16 @@ def tokenize = fun src {
 
 # Main loop: dispatch on the next character. `acc` is built in reverse.
 def scan = fun s i acc {
-	when (string.char-at s i) is none {
+	when string.char-at s i is none {
 		ok (list.reverse acc)
 	} is some c {
-		if (c == " ") is true {
+		if c == " " is true {
 			scan s (i + 1) acc
-		} else if (is-digit c) is true {
+		} else if is-digit c is true {
 			lex-number s i acc
-		} else if (is-name-start c) is true {
+		} else if is-name-start c is true {
 			lex-name s i acc
-		} else if (is-op c) is true {
+		} else if is-op c is true {
 			scan s (i + 1) [t-op c, ...acc]
 		} else {
 			err "unexpected character '$(c)' at column $(to-string (i + 1))"
@@ -85,17 +85,17 @@ def scan = fun s i acc {
 # as `3` then `.` (which is then a lex error, since `.` is no operator).
 def lex-number = fun s i acc {
 	let j = span s i is-digit
-	if ((char-is s j (fun c { c == "." })) && (char-is s (j + 1) is-digit)) is true {
+	if char-is s j fun c { c == "." } && char-is s (j + 1) is-digit is true {
 		let k = span s (j + 1) is-digit
 		let text = string.slice s i k
-		when (string.to-float text) is ok f {
+		when string.to-float text is ok f {
 			scan s k [t-num (float-val f), ...acc]
 		} is err _e {
 			err "bad number '$(text)'"
 		}
 	} else {
 		let text = string.slice s i j
-		when (string.to-int text) is ok n {
+		when string.to-int text is ok n {
 			scan s j [t-num (int-val n), ...acc]
 		} is err _e {
 			err "bad number '$(text)'"

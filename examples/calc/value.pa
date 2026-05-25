@@ -67,15 +67,15 @@ def lift = fun a b int-op float-op {
 }
 
 def num-add = fun a b {
-	lift a b (fun x y { int-val (x + y) }) (fun x y { float-val (x + y) })
+	lift a b fun x y { int-val (x + y) } fun x y { float-val (x + y) }
 }
 
 def num-sub = fun a b {
-	lift a b (fun x y { int-val (x - y) }) (fun x y { float-val (x - y) })
+	lift a b fun x y { int-val (x - y) } fun x y { float-val (x - y) }
 }
 
 def num-mul = fun a b {
-	lift a b (fun x y { int-val (x * y) }) (fun x y { float-val (x * y) })
+	lift a b fun x y { int-val (x * y) } fun x y { float-val (x * y) }
 }
 
 # Modulo keeps the tower too, but it can't ride `lift`: `%` isn't one
@@ -88,11 +88,11 @@ def num-mod = fun a b {
 		when b is int-val y {
 			int-val (x % y)
 		} is float-val y {
-			float-val ((math.to-float x) % y)
+			float-val (math.to-float x % y)
 		}
 	} is float-val x {
 		when b is int-val y {
-			float-val (x % (math.to-float y))
+			float-val (x % math.to-float y)
 		} is float-val y {
 			float-val (x % y)
 		}
@@ -103,7 +103,7 @@ def num-mod = fun a b {
 # integer-flooring `/` would surprise at a calculator prompt, so we
 # promote to float unconditionally.
 def num-div = fun a b {
-	float-val ((as-float a) / (as-float b))
+	float-val (as-float a / as-float b)
 }
 
 def num-neg = fun a {
@@ -120,19 +120,19 @@ def num-neg = fun a {
 # negative exponent or a float exponent forces a float result.
 def num-pow = fun base exp {
 	when exp is int-val e {
-		if (e < 0) is true {
+		if e < 0 is true {
 			num-div (int-val 1) (ipow base (negate e))
 		} else {
 			ipow base e
 		}
 	} is float-val ef {
-		float-val (math.exp (ef * (math.log (as-float base))))
+		float-val (math.exp (ef * math.log (as-float base)))
 	}
 }
 
 # `base ^ e` for a non-negative int `e`, by repeated multiplication.
 def ipow = fun base e {
-	if (e <= 0) is true {
+	if e <= 0 is true {
 		one-like base
 	} else {
 		num-mul base (ipow base (e - 1))

@@ -43,13 +43,21 @@ enum block {
 # A string as a list of byte values. Markdown's structural markers are
 # all ASCII, so scanning bytes is safe even with multi-byte UTF-8 text
 # (continuation bytes are always >= 128 and never collide with markers).
-def to-ints = fun s { bytes.to-list (string.to-bytes s) }
+def to-ints = fun s {
+	bytes.to-list (string.to-bytes s)
+}
 
 # Decode a list of byte values back to a string (lossy on bad UTF-8).
 def decode = fun bs {
-	when (bytes.from-list bs) is ok b {
-		when (bytes.to-string b) is ok s { s } is err _ { "" }
-	} is err _ { "" }
+	when bytes.from-list bs is ok b {
+		when bytes.to-string b is ok s {
+			s
+		} is err _ {
+			""
+		}
+	} is err _ {
+		""
+	}
 }
 
 # ---------------------------------------------------------------------
@@ -62,12 +70,14 @@ def break1 = fun bs d {
 	when bs is [] {
 		none
 	} is [c, ...rest] {
-		if (c == d) is true {
+		if c == d is true {
 			some ([], rest)
 		} else {
-			when (break1 rest d) is some (before, after) {
+			when break1 rest d is some (before, after) {
 				some ([c, ...before], after)
-			} is none { none }
+			} is none {
+				none
+			}
 		}
 	}
 }
@@ -75,12 +85,14 @@ def break1 = fun bs d {
 # Like `break1`, but for a two-byte delimiter `d1 d2` (e.g. `**`).
 def break2 = fun bs d1 d2 {
 	when bs is [c, e, ...rest] {
-		if ((c == d1) && (e == d2)) is true {
+		if c == d1 && e == d2 is true {
 			some ([], rest)
 		} else {
-			when (break2 [e, ...rest] d1 d2) is some (before, after) {
+			when break2 [e, ...rest] d1 d2 is some (before, after) {
 				some ([c, ...before], after)
-			} is none { none }
+			} is none {
+				none
+			}
 		}
 	} is [_, ...] {
 		none
@@ -106,35 +118,52 @@ def inline-loop = fun bs acc {
 	} is [c, ...rest] {
 		when c is 96 {
 			# `code` — literal, no inner parsing.
-			when (break1 rest 96) is some (inside, after) {
-				flush-text acc [code-span (decode inside), ...(inline-loop after [])]
-			} is none { inline-loop rest [c, ...acc] }
+			when break1 rest 96 is some (inside, after) {
+				flush-text acc [code-span (decode inside), ...inline-loop after []]
+			} is none {
+				inline-loop rest [c, ...acc]
+			}
 		} is 42 {
 			# `*emph*` or `**strong**`.
 			when rest is [n, ...rest2] {
-				if (n == 42) is true {
-					when (break2 rest2 42 42) is some (inside, after) {
-						flush-text acc [strong (inline-loop inside []), ...(inline-loop after [])]
-					} is none { inline-loop rest [c, ...acc] }
+				if n == 42 is true {
+					when break2 rest2 42 42 is some (inside, after) {
+						flush-text acc [strong (inline-loop inside []), ...inline-loop after []]
+					} is none {
+						inline-loop rest [c, ...acc]
+					}
 				} else {
-					when (break1 rest 42) is some (inside, after) {
-						flush-text acc [emph (inline-loop inside []), ...(inline-loop after [])]
-					} is none { inline-loop rest [c, ...acc] }
+					when break1 rest 42 is some (inside, after) {
+						flush-text acc [emph (inline-loop inside []), ...inline-loop after []]
+					} is none {
+						inline-loop rest [c, ...acc]
+					}
 				}
 			} is [] {
 				flush-text [c, ...acc] []
 			}
 		} is 91 {
 			# `[text](url)`.
-			when (break1 rest 93) is some (txt, after-rb) {
+			when break1 rest 93 is some (txt, after-rb) {
 				when after-rb is [lp, ...after-lp] {
-					if (lp == 40) is true {
-						when (break1 after-lp 41) is some (url, after-rp) {
-							flush-text acc [link (decode txt) (decode url), ...(inline-loop after-rp [])]
-						} is none { inline-loop rest [c, ...acc] }
-					} else { inline-loop rest [c, ...acc] }
-				} is [] { inline-loop rest [c, ...acc] }
-			} is none { inline-loop rest [c, ...acc] }
+					if lp == 40 is true {
+						when break1 after-lp 41 is some (url, after-rp) {
+							flush-text acc [
+								link (decode txt) (decode url)
+								...inline-loop after-rp []
+							]
+						} is none {
+							inline-loop rest [c, ...acc]
+						}
+					} else {
+						inline-loop rest [c, ...acc]
+					}
+				} is [] {
+					inline-loop rest [c, ...acc]
+				}
+			} is none {
+				inline-loop rest [c, ...acc]
+			}
 		} else {
 			inline-loop rest [c, ...acc]
 		}
@@ -142,7 +171,9 @@ def inline-loop = fun bs acc {
 }
 
 # Parse a single line/run of text into inline spans.
-def parse-inline = fun s { inline-loop (to-ints s) [] }
+def parse-inline = fun s {
+	inline-loop (to-ints s) []
+}
 
 # ---------------------------------------------------------------------
 # Block classification helpers
@@ -150,51 +181,64 @@ def parse-inline = fun s { inline-loop (to-ints s) [] }
 
 # Heading level 1..6, or 0 if `line` is not an ATX heading.
 def heading-level = fun line {
-	if (string.starts-with line "###### ") is true { 6 }
-	else if (string.starts-with line "##### ") is true { 5 }
-	else if (string.starts-with line "#### ") is true { 4 }
-	else if (string.starts-with line "### ") is true { 3 }
-	else if (string.starts-with line "## ") is true { 2 }
-	else if (string.starts-with line "# ") is true { 1 }
-	else { 0 }
+	if string.starts-with line "###### " is true {
+		6
+	} else if string.starts-with line "##### " is true {
+		5
+	} else if string.starts-with line "#### " is true {
+		4
+	} else if string.starts-with line "### " is true {
+		3
+	} else if string.starts-with line "## " is true {
+		2
+	} else if string.starts-with line "# " is true {
+		1
+	} else {
+		0
+	}
 }
 
 def bullet-item = fun l {
-	(string.starts-with l "- ") || (string.starts-with l "* ") || (string.starts-with l "+ ")
+	string.starts-with l "- " || string.starts-with l "* " || string.starts-with l "+ "
 }
 
 # Count leading ASCII-digit bytes starting at index `i`.
 def count-digits = fun b i {
-	when (bytes.at b i) is some c {
-		if ((c >= 48) && (c <= 57)) is true { count-digits b (i + 1) } else { i }
-	} is none { i }
+	when bytes.at b i is some c {
+		if c >= 48 && c <= 57 is true {
+			count-digits b (i + 1)
+		} else {
+			i
+		}
+	} is none {
+		i
+	}
 }
 
 def byte-eq = fun b i v {
-	when (bytes.at b i) is some c { c == v } is none { false }
+	when bytes.at b i is some c {
+		c == v
+	} is none {
+		false
+	}
 }
 
 # True for an ordered-list line like `1. item` / `12. item`.
 def ordered-item = fun l {
 	let b = string.to-bytes l
 	let d = count-digits b 0
-	(d >= 1) && (byte-eq b d 46) && (byte-eq b (d + 1) 32)
+	d >= 1 && byte-eq b d 46 && byte-eq b (d + 1) 32
 }
 
 def is-hr = fun line {
 	let t = string.trim line
-	(t == "---") || (t == "***") || (t == "___") || (t == "- - -") || (t == "* * *")
+	t == "---" || t == "***" || t == "___" || t == "- - -" || t == "* * *"
 }
 
 # True if `l` begins a non-paragraph block (used to terminate a
 # paragraph run).
 def special-starter = fun l {
-	(heading-level l > 0)
-		|| (string.starts-with l "```")
-		|| (string.starts-with l ">")
-		|| (bullet-item l)
-		|| (ordered-item l)
-		|| (is-hr l)
+	heading-level l > 0 || string.starts-with l "```" || string.starts-with l ">" || bullet-item l || ordered-item l || is-hr l
 }
 
 # ---------------------------------------------------------------------
@@ -206,7 +250,7 @@ def take-fence = fun lines {
 	when lines is [] {
 		([], [])
 	} is [l, ...rest] {
-		if (string.trim l == "```") is true {
+		if string.trim l == "```" is true {
 			([], rest)
 		} else {
 			let (more, after) = take-fence rest
@@ -216,16 +260,20 @@ def take-fence = fun lines {
 }
 
 def strip-quote = fun l {
-	if (string.starts-with l "> ") is true { string.drop l 2 }
-	else if (string.starts-with l ">") is true { string.drop l 1 }
-	else { l }
+	if string.starts-with l "> " is true {
+		string.drop l 2
+	} else if string.starts-with l ">" is true {
+		string.drop l 1
+	} else {
+		l
+	}
 }
 
 def take-quote = fun lines {
 	when lines is [] {
 		([], [])
 	} is [l, ...rest] {
-		if (string.starts-with l ">") is true {
+		if string.starts-with l ">" is true {
 			let (more, after) = take-quote rest
 			([strip-quote l, ...more], after)
 		} else {
@@ -238,7 +286,7 @@ def take-bullets = fun lines {
 	when lines is [] {
 		([], [])
 	} is [l, ...rest] {
-		if (bullet-item l) is true {
+		if bullet-item l is true {
 			let (more, after) = take-bullets rest
 			([parse-inline (string.drop l 2), ...more], after)
 		} else {
@@ -251,7 +299,7 @@ def take-ordered = fun lines {
 	when lines is [] {
 		([], [])
 	} is [l, ...rest] {
-		if (ordered-item l) is true {
+		if ordered-item l is true {
 			let d = count-digits (string.to-bytes l) 0
 			let (more, after) = take-ordered rest
 			([parse-inline (string.drop l (d + 2)), ...more], after)
@@ -265,7 +313,7 @@ def take-para = fun lines {
 	when lines is [] {
 		([], [])
 	} is [l, ...rest] {
-		if ((string.trim l == "") || (special-starter l)) is true {
+		if string.trim l == "" || special-starter l is true {
 			([], lines)
 		} else {
 			let (more, after) = take-para rest
@@ -282,29 +330,29 @@ def parse-blocks = fun lines {
 	when lines is [] {
 		[]
 	} is [line, ...rest] {
-		if (string.trim line == "") is true {
+		if string.trim line == "" is true {
 			parse-blocks rest
-		} else if (heading-level line > 0) is true {
+		} else if heading-level line > 0 is true {
 			let lvl = heading-level line
-			[heading lvl (parse-inline (string.drop line (lvl + 1))), ...(parse-blocks rest)]
-		} else if (string.starts-with line "```") is true {
+			[heading lvl (parse-inline (string.drop line (lvl + 1))), ...parse-blocks rest]
+		} else if string.starts-with line "```" is true {
 			let lang = string.trim (string.drop line 3)
 			let (code-lines, after) = take-fence rest
-			[code-block lang (string.join code-lines "\n"), ...(parse-blocks after)]
-		} else if (is-hr line) is true {
-			[thematic-break, ...(parse-blocks rest)]
-		} else if (string.starts-with line ">") is true {
+			[code-block lang (string.join code-lines "\n"), ...parse-blocks after]
+		} else if is-hr line is true {
+			[thematic-break, ...parse-blocks rest]
+		} else if string.starts-with line ">" is true {
 			let (q-lines, after) = take-quote lines
-			[block-quote (parse-inline (string.join q-lines " ")), ...(parse-blocks after)]
-		} else if (bullet-item line) is true {
+			[block-quote (parse-inline (string.join q-lines " ")), ...parse-blocks after]
+		} else if bullet-item line is true {
 			let (items, after) = take-bullets lines
-			[bullet-list items, ...(parse-blocks after)]
-		} else if (ordered-item line) is true {
+			[bullet-list items, ...parse-blocks after]
+		} else if ordered-item line is true {
 			let (items, after) = take-ordered lines
-			[ordered-list items, ...(parse-blocks after)]
+			[ordered-list items, ...parse-blocks after]
 		} else {
 			let (p-lines, after) = take-para lines
-			[paragraph (parse-inline (string.join p-lines " ")), ...(parse-blocks after)]
+			[paragraph (parse-inline (string.join p-lines " ")), ...parse-blocks after]
 		}
 	}
 }
@@ -324,40 +372,54 @@ def render-inline = fun x {
 	when x is text s {
 		escape-html s
 	} is strong inner {
-		"<strong>" ++ (render-inlines inner) ++ "</strong>"
+		"<strong>" ++ render-inlines inner ++ "</strong>"
 	} is emph inner {
-		"<em>" ++ (render-inlines inner) ++ "</em>"
+		"<em>" ++ render-inlines inner ++ "</em>"
 	} is code-span s {
-		"<code>" ++ (escape-html s) ++ "</code>"
+		"<code>" ++ escape-html s ++ "</code>"
 	} is link txt url {
-		"<a href=\"" ++ (escape-html url) ++ "\">" ++ (escape-html txt) ++ "</a>"
+		"<a href=\"" ++ escape-html url ++ "\">" ++ escape-html txt ++ "</a>"
 	}
 }
 
-def render-inlines = fun xs { string.join (list.map xs render-inline) "" }
+def render-inlines = fun xs {
+	string.join (list.map xs render-inline) ""
+}
 
 def render-items = fun items {
-	string.join (list.map items (fun it { "<li>" ++ (render-inlines it) ++ "</li>" })) ""
+	string.join (list.map items fun it { "<li>" ++ render-inlines it ++ "</li>" }) ""
 }
 
 def heading-tag = fun level {
-	when level is 1 { "h1" } is 2 { "h2" } is 3 { "h3" } is 4 { "h4" } is 5 { "h5" } else { "h6" }
+	when level is 1 {
+		"h1"
+	} is 2 {
+		"h2"
+	} is 3 {
+		"h3"
+	} is 4 {
+		"h4"
+	} is 5 {
+		"h5"
+	} else {
+		"h6"
+	}
 }
 
 def render-block = fun b {
 	when b is heading lvl inlines {
 		let tag = heading-tag lvl
-		"<" ++ tag ++ ">" ++ (render-inlines inlines) ++ "</" ++ tag ++ ">"
+		"<" ++ tag ++ ">" ++ render-inlines inlines ++ "</" ++ tag ++ ">"
 	} is paragraph inlines {
-		"<p>" ++ (render-inlines inlines) ++ "</p>"
+		"<p>" ++ render-inlines inlines ++ "</p>"
 	} is code-block _lang code {
-		"<pre><code>" ++ (escape-html code) ++ "</code></pre>"
+		"<pre><code>" ++ escape-html code ++ "</code></pre>"
 	} is bullet-list items {
-		"<ul>" ++ (render-items items) ++ "</ul>"
+		"<ul>" ++ render-items items ++ "</ul>"
 	} is ordered-list items {
-		"<ol>" ++ (render-items items) ++ "</ol>"
+		"<ol>" ++ render-items items ++ "</ol>"
 	} is block-quote inlines {
-		"<blockquote>" ++ (render-inlines inlines) ++ "</blockquote>"
+		"<blockquote>" ++ render-inlines inlines ++ "</blockquote>"
 	} is thematic-break {
 		"<hr>"
 	}

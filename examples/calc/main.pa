@@ -46,7 +46,7 @@ def seed-env = fun {
 # input, where we close the dangling prompt with a newline and stop.
 def repl = fun env {
 	let _ = io.write "> "
-	when (io.read ()) is err _e {
+	when io.read () is err _e {
 		io.print ""
 	} is ok line {
 		let _ = handle env (string.trim line)
@@ -55,9 +55,9 @@ def repl = fun env {
 }
 
 def handle = fun env line {
-	if (line == "") is true {
+	if line == "" is true {
 		()
-	} else if (string.starts-with line ":") is true {
+	} else if string.starts-with line ":" is true {
 		run-command env line
 	} else {
 		run-line env line
@@ -69,11 +69,11 @@ def handle = fun env line {
 # ---------------------------------------------------------------------
 
 def run-command = fun env cmd {
-	if ((cmd == ":q") || (cmd == ":quit")) is true {
+	if cmd == ":q" || cmd == ":quit" is true {
 		io.exit 0
-	} else if (cmd == ":help") is true {
+	} else if cmd == ":help" is true {
 		print-help ()
-	} else if (cmd == ":vars") is true {
+	} else if cmd == ":vars" is true {
 		print-vars env
 	} else {
 		io.print "unknown command '$(cmd)' — try :help"
@@ -93,10 +93,10 @@ def print-help = fun {
 # bare name — codegen prepends its trait dictionary at the reference.
 def print-vars = fun env {
 	let entries = dict.entries (ref.get env)
-	list.each (list.sort entries by-name) (fun ent {
+	list.each (list.sort entries by-name) fun ent {
 		let (k, v) = ent
 		io.print "$(k) = $(value.num-to-string v)"
-	})
+	}
 }
 
 # Order two (name, value) entries alphabetically by their variable name.
@@ -111,7 +111,7 @@ def by-name = fun a b {
 # ---------------------------------------------------------------------
 
 def run-line = fun env line {
-	when (parser.parse line) is err m {
+	when parser.parse line is err m {
 		io.print "error: $(m)"
 	} is ok st {
 		when st is assign name e {
@@ -123,7 +123,7 @@ def run-line = fun env line {
 }
 
 def run-assign = fun env name e {
-	when (eval.eval env e) is ok v {
+	when eval.eval env e is ok v {
 		let _ = ref.set env (dict.insert (ref.get env) name v)
 		io.print "= $(value.num-to-string v)"
 	} is err m {
@@ -132,7 +132,7 @@ def run-assign = fun env name e {
 }
 
 def run-bare = fun env e {
-	when (eval.eval env e) is ok v {
+	when eval.eval env e is ok v {
 		io.print "= $(value.num-to-string v)"
 	} is err m {
 		io.print "error: $(m)"
