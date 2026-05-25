@@ -491,9 +491,27 @@ impl<'a> Formatter<'a> {
 		let mut parts: Vec<Doc> = vec![self.format_expr(&call.callee)];
 		for arg in &call.args {
 			parts.push(text(" "));
-			parts.push(self.format_expr(arg));
+			parts.push(self.format_arg(arg));
 		}
 		concat(parts)
+	}
+
+	// Format a call argument, dropping parens that wrap a `fun` literal. A
+	// lambda in argument position is delimited by its own `{...}` body, so the
+	// parser reads `f (fun x { x })` and `f fun x { x }` identically — the
+	// parens are pure noise in the common HOF-callback pattern
+	// (`list.map xs (fun x { ... })`). We peel through nested groupings so
+	// `((fun ...))` collapses too, but only when a `fun` sits at the core;
+	// otherwise the argument is formatted verbatim (its parens may matter).
+	fn format_arg(&self, arg: &ExprNode) -> Doc {
+		let mut core = arg;
+		while let ExprKind::Grouping(inner) = &core.kind {
+			core = inner;
+		}
+		if matches!(core.kind, ExprKind::Fun(_)) {
+			return self.format_expr(core);
+		}
+		self.format_expr(arg)
 	}
 
 	fn format_let(&self, l: &LetNode) -> Doc {

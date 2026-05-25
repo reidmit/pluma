@@ -1,8 +1,9 @@
 use core.list
 
-# A call whose last argument is a multi-line `fun` block must keep the
-# `(fun ...` attached to the call: Pluma application is newline-terminated,
-# so breaking the argument onto its own line would change the parse.
+# A `fun` literal in argument position needs no wrapping parens: its `{...}`
+# body delimits where the lambda ends, so the formatter strips them. The
+# multi-line body stays attached to the call (Pluma application is
+# newline-terminated; the body's line breaks live inside its own braces).
 def sum-plus-one = fun xs {
 	list.fold xs 0 (fun acc x {
 		let y = x + 1
@@ -10,7 +11,8 @@ def sum-plus-one = fun xs {
 	})
 }
 
-# Nested: the inner call's lambda also stays attached.
+# Nested: parens are stripped around each `fun`, but the parens around the
+# inner `list.filter` call — itself an argument to `list.map` — are kept.
 def doubled-evens = fun xs {
 	list.map (list.filter xs (fun x { x % 2 == 0 })) (fun x {
 		x * 2
