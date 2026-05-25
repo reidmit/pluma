@@ -1,0 +1,19 @@
+---
+source: tests/format.rs
+expression: once
+---
+# Type annotations are part of a binding's contract, so the formatter
+# must re-emit them. Covers the top-level `def name :: TYPE = value`
+# form, a `def name :: TYPE where (...) = value` constrained signature,
+# and the local `let name :: TYPE = value` form.
+def length :: fun (list a) -> int = built-in "list-length"
+
+def find :: fun (list a) a -> int where (eq a) = built-in "list-find"
+
+def main = fun {
+	let xs :: list int = []
+	let n :: int = 1 + 2
+	print (length xs)
+	print n
+}
+

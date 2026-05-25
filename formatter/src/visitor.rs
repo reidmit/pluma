@@ -144,12 +144,21 @@ impl<'a> Formatter<'a> {
 					ExprKind::Fun(fun) => self.format_fun_block(fun),
 					_ => self.format_expr(expr),
 				};
-				concat(vec![
-					text("def "),
-					text(def.name.name.clone()),
-					text(" = "),
-					value_doc,
-				])
+				// `def NAME [:: TYPE] [where (...)] = value`. The annotation
+				// and `where` clause are the def's contract — they must be
+				// re-emitted or the formatter would silently drop the program's
+				// declared type.
+				let mut parts: Vec<Doc> = vec![text("def "), text(def.name.name.clone())];
+				if let Some(ty) = &def.type_annotation {
+					parts.push(text(" :: "));
+					parts.push(self.format_type_expr(ty));
+				}
+				if !def.where_clause.is_empty() {
+					parts.push(self.format_where_clause(&def.where_clause));
+				}
+				parts.push(text(" = "));
+				parts.push(value_doc);
+				concat(parts)
 			}
 			DefinitionKind::Alias(ty) => concat(vec![
 				text("alias "),
@@ -294,20 +303,7 @@ impl<'a> Formatter<'a> {
 			self.format_type_expr(&inst.head),
 		];
 		if !inst.where_clause.is_empty() {
-			header.push(text(" where ("));
-			let constraints: Vec<Doc> = inst
-				.where_clause
-				.iter()
-				.map(|c| {
-					concat(vec![
-						text(c.trait_name.name.clone()),
-						text(" "),
-						text(c.param.name.clone()),
-					])
-				})
-				.collect();
-			header.push(join(text(", "), constraints));
-			header.push(text(")"));
+			header.push(self.format_where_clause(&inst.where_clause));
 		}
 		header.push(text(" {"));
 
@@ -332,6 +328,23 @@ impl<'a> Formatter<'a> {
 			hardline(),
 			text("}"),
 		])
+	}
+
+	// `where (trait param, trait param, ...)` — shared by instance heads
+	// (`implement TRAIT TYPE where (...)`) and top-level def signatures
+	// (`def name :: TYPE where (...) = ...`). Emits a leading space.
+	fn format_where_clause(&self, constraints: &[InstanceConstraintNode]) -> Doc {
+		let docs: Vec<Doc> = constraints
+			.iter()
+			.map(|c| {
+				concat(vec![
+					text(c.trait_name.name.clone()),
+					text(" "),
+					text(c.param.name.clone()),
+				])
+			})
+			.collect();
+		concat(vec![text(" where ("), join(text(", "), docs), text(")")])
 	}
 
 	// --- expressions --------------------------------------------------
@@ -550,12 +563,14 @@ impl<'a> Formatter<'a> {
 	}
 
 	fn format_let(&self, l: &LetNode) -> Doc {
-		concat(vec![
-			text("let "),
-			self.format_pattern(&l.pattern),
-			text(" = "),
-			self.format_expr(&l.value),
-		])
+		let mut parts: Vec<Doc> = vec![text("let "), self.format_pattern(&l.pattern)];
+		if let Some(ty) = &l.type_annotation {
+			parts.push(text(" :: "));
+			parts.push(self.format_type_expr(ty));
+		}
+		parts.push(text(" = "));
+		parts.push(self.format_expr(&l.value));
+		concat(parts)
 	}
 
 	// `try` mirrors `let`'s shape: `try Pattern = Expr`. The continuation
