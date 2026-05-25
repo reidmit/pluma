@@ -8,7 +8,7 @@ weight = 9
 
 A `trait` declares a set of method signatures over a type parameter. Method signatures use `::` (the type-annotation operator).
 
-```
+```pluma
 trait showable a {
     show :: a -> string
 }
@@ -18,7 +18,7 @@ trait showable a {
 
 `implement TRAIT TYPE { … }` declares an instance — the implementation for a particular type.
 
-```
+```pluma
 implement showable int {
     def show = fun x { to-string x }
 }
@@ -34,7 +34,7 @@ implement showable bool {
 
 A trait method that has a fallback body uses `def` inside the trait body (same shape as a real def):
 
-```
+```pluma
 trait greeter a {
     name  :: a -> string
     greet :: a -> string
@@ -47,14 +47,14 @@ trait greeter a {
 
 Trait methods are reachable under their **bare names** in the module that declares the trait, and in any module that has the trait in scope:
 
-```
+```pluma
 print (show 42)           # int instance
 print (show true)         # bool instance
 ```
 
 Dispatch is by argument type — the compiler picks the instance from the call site's types. Local `def`s (and bare enum variants) shadow trait methods with the same name. When two in-scope traits export the same method name, you get an ambiguity error and must qualify:
 
-```
+```pluma
 print (showable.show 42)  # explicit form, always legal
 ```
 
@@ -74,7 +74,7 @@ So `compare 1 2`, `hash "key"`, `add 1.5 2.5` all just work.
 
 Instances can carry constraints with `where`:
 
-```
+```pluma
 implement ord (option a) where (ord a) {
     def compare = fun x y {
         when x is some xv {

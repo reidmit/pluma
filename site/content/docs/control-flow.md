@@ -10,7 +10,7 @@ Single-armed pattern matching with an optional `else` arm. Not limited to boolea
 
 Without `else`, an `if` evaluates to `nothing`; with `else`, it evaluates to the common type of both branches.
 
-```
+```pluma
 if some-value is 47 {
     print "ok cool"
 }
@@ -34,7 +34,7 @@ let label = if n is some v { "got $(to-string v)" } else { "none" }
 
 Must be exhaustive — all cases must be covered. `else` is the catch-all branch (equivalent to `is _`); use whichever reads better. Evaluates to the value of the first matching case; all cases must have the same type.
 
-```
+```pluma
 when some-value is 47 {
     print "ok cool"
 } else {
@@ -54,7 +54,7 @@ Exhaustiveness is checked structurally for `bool` and enum subjects; other subje
 
 Pattern-matching loop. Runs the body as long as the subject matches.
 
-```
+```pluma
 while some-value is true {
     print "ya"
 }

@@ -6,7 +6,7 @@ weight = 1
 
 ## Primitive literals
 
-```
+```pluma
 let some-int    = 10
 let some-float  = 1.23
 let some-string = "hello"
@@ -17,7 +17,7 @@ Integers and floats are distinct types with distinct operators (see [Operators](
 
 ## String interpolation
 
-```
+```pluma
 let name = "reid"
 let message = "hello $(name)"
 ```
@@ -26,7 +26,7 @@ Any expression can appear inside `$(…)`. The result is converted to text via t
 
 ## Regex literals
 
-```
+```pluma
 let some-regex = ` "a" ("b" | "c") "d" `
 ```
 
@@ -36,7 +36,7 @@ See [Regexes](@/docs/regexes.md) for the full syntax.
 
 Heterogeneous, fixed-size containers.
 
-```
+```pluma
 let some-tuple = (1, "reid", true)
 ```
 
@@ -44,7 +44,7 @@ let some-tuple = (1, "reid", true)
 
 Homogeneous, variable-size containers.
 
-```
+```pluma
 let some-list = [1, 3, 0, 10]
 
 let list-across-lines = [
@@ -58,7 +58,7 @@ let list-across-lines = [
 
 Immutable, insertion-ordered hash dicts (key/value tables). There's no dict literal syntax — construct one through `core.dict`:
 
-```
+```pluma
 use core.dict
 
 let m = dict.empty ()
@@ -78,7 +78,7 @@ See `core.dict` for the full surface: `empty`, `insert`, `lookup`, `remove`, `co
 
 A `ref` is a mutable cell. It's the language's only mutation primitive — everything else is immutable. The `ref` module is auto-imported in every module; you don't write `use core.ref`.
 
-```
+```pluma
 let counter = ref.new 0
 ref.update counter fun n { n + 1 }    # most common form
 ref.set counter 100                   # explicit write
@@ -96,7 +96,7 @@ Signatures:
 
 Equality on refs is **reference identity**: two refs are equal iff they point to the same underlying cell.
 
-```
+```pluma
 let a = ref.new 5
 let b = a            # same cell
 let c = ref.new 5    # distinct cell
@@ -107,7 +107,7 @@ print (a == c)       # false
 
 Passing a ref to a function lets that function observe and mutate the cell. This is the intended escape hatch: functions that mutate their arguments must take refs, so the type signature makes the effect visible.
 
-```
+```pluma
 def bump = fun r {
     ref.update r fun n { n + 1 }
 }
@@ -122,7 +122,7 @@ def main = fun {
 
 `ref` works in any type position — alias bodies, record fields, function signatures.
 
-```
+```pluma
 alias counter ref int
 
 alias session {
@@ -135,7 +135,7 @@ alias session {
 
 Keyed by identifiers, no dynamic keys.
 
-```
+```pluma
 let some-record = {name: "reid", age: 28}
 
 let record-across-lines = {
@@ -152,7 +152,7 @@ Records are **row-polymorphic**: a function destructuring a few fields stays gen
 
 ## Functions
 
-```
+```pluma
 let add-one = fun x {
     x + 1
 }
@@ -167,7 +167,7 @@ let print-each = fun list {
 {% note() %}
 **Pluma is uncurried.** `add 5` is an arity error, not partial application. To partially apply, wrap explicitly:
 
-```
+```pluma
 let add-five = fun y { add 5 y }
 ```
 {% end %}

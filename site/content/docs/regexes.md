@@ -6,7 +6,7 @@ weight = 3
 
 Pluma's regex syntax is intentionally different from the dense punctuation of PCRE-style regexes. Patterns are built by composing *atoms* — string literals, named character classes, and anchors — with *combinators* for sequencing, alternation, grouping, and repetition. Whitespace between atoms is meaningless, so you can lay a pattern out across multiple lines like ordinary code.
 
-```
+```pluma
 let phone = `
     ^
     "(" digit{3} ")"
@@ -22,7 +22,7 @@ The result is a value of the primitive type `regex`, which can only be tested or
 
 Regex literals are delimited by backticks:
 
-```
+```pluma
 let hello = `"hello"`
 let yes-or-no = `"yes" | "no"`
 ```
@@ -33,7 +33,7 @@ An empty regex (`` `` `` with no body) is a parse error. The delimiter changed f
 
 Unlike most regex flavors, the building block of a Pluma regex is a **string literal** — not a single character. Anything that would be a string in source code is also a valid regex atom.
 
-```
+```pluma
 `"hello"`                       # matches the exact 6 characters
 `"color: " "red"`               # two atoms, concatenated
 `"\t\n"`                        # escapes work — matches tab+newline
@@ -56,7 +56,7 @@ For matching "any character of some kind," Pluma uses **named atoms** instead of
 
 Each name is **one character wide** and composes with all the combinators below.
 
-```
+```pluma
 `digit`                         # one digit anywhere in the input
 `letter+`                       # one or more letters
 `word{3,}`                      # three or more word characters
@@ -70,7 +70,7 @@ Bare identifiers inside a regex that aren't on the table above are a compile err
 
 Two atoms written one after another match in sequence. Whitespace between them is purely cosmetic — including line breaks. The following three definitions are identical:
 
-```
+```pluma
 let a = `"hello" "world"`
 
 let b = `"hello"   "world"`
@@ -87,7 +87,7 @@ This is the main reason to reach for Pluma's regex over a string-based pattern: 
 
 `|` tries the left side first, then the right. At the top level it splits the whole pattern; inside a group it splits within the group.
 
-```
+```pluma
 let yes-or-no = `"yes" | "no"`
 
 let primary-color = `"red" | "green" | "blue"`
@@ -99,7 +99,7 @@ let labeled = `"color: " ("red" | "green" | "blue")`
 
 Parentheses group sub-patterns so quantifiers and alternation apply to the whole group. Groups are **non-capturing** — they only affect parsing, not the output of a match.
 
-```
+```pluma
 `("ab")+`                       # one-or-more of the sequence "ab"
 `"x" ("y" | "z")? "w"`          # optional alternation in the middle
 ```
@@ -110,7 +110,7 @@ Empty groups (`()`) are a parse error.
 
 To capture a sub-pattern by name, use the angle-bracket form:
 
-```
+```pluma
 let timestamp = `
     <year:  "2024" | "2025" | "2026">
     "-"
@@ -137,7 +137,7 @@ Quantifiers apply to the atom or group immediately to their left.
 
 Examples:
 
-```
+```pluma
 let two-to-four-a    = `"a"{2,4}`
 let at-least-one-b   = `"b"+`
 let optional-c       = `"c"?`
@@ -159,7 +159,7 @@ Anchors are **zero-width** atoms — they don't consume any input, they assert a
 | `$` | The end of the input |
 | `%` | A word boundary (the position between a `word` character and a non-`word` character, including the very start and end of the input) |
 
-```
+```pluma
 `^ "hello"`                     # input must start with "hello"
 `".pa" $`                       # input must end with ".pa"
 `^ "yes" $`                     # input must be exactly "yes"
@@ -179,7 +179,7 @@ The literal `` `…` `` produces a value of the primitive type `regex`. Compilat
 
 The standard library:
 
-```
+```pluma
 use core.regex
 
 regex.matches        :: fun regex string -> bool
@@ -193,7 +193,7 @@ regex.split          :: fun regex string -> list string
 
 Every match surfaces as a `regex.match` record:
 
-```
+```pluma
 alias regex.match {
     text   :: string,                 # the matched substring
     start  :: int,                    # byte offset, inclusive
@@ -206,7 +206,7 @@ A named group that's in the pattern but didn't match in this instance — e.g. o
 
 Worked example — boolean matching:
 
-```
+```pluma
 use core.regex
 
 def hello = `"hello"`
@@ -219,7 +219,7 @@ def main = fun {
 
 Worked example — extracting structure:
 
-```
+```pluma
 use core.regex as re
 use core.dict
 
@@ -238,7 +238,7 @@ def main = fun {
 
 Replacement strings support `${name}` to interpolate a named capture; `$$` is a literal `$`. Splits discard the matched text:
 
-```
+```pluma
 use core.regex as re
 
 def main = fun {

@@ -6,7 +6,7 @@ weight = 2
 
 Use `bytes` for binary data, wire formats, hashes, and anything else that isn't necessarily text. Literal syntax uses single quotes:
 
-```
+```pluma
 let greeting    = 'hello'
 let png-header  = '\x89PNG\r\n\x1a\n'
 let empty-bytes = ''
@@ -27,7 +27,7 @@ Bytes literals support `\\`, `\'`, `\0`, `\t`, `\r`, `\n`, and `\xNN` (two hex d
 
 `'…'` patterns work in `when` / `if` / `while`:
 
-```
+```pluma
 when method is 'GET' { ... }
 is 'POST' { ... }
 ```
@@ -36,7 +36,7 @@ is 'POST' { ... }
 
 A parallel surface to `core.string`:
 
-```
+```pluma
 use core.bytes
 
 bytes.length b              # int — byte count
@@ -63,7 +63,7 @@ bytes.split b sep           # empty sep splits into single-byte chunks
 
 Byte-side I/O lives in `core.io`:
 
-```
+```pluma
 io.read-file-bytes path        # result bytes string — survives non-UTF-8 contents
 io.write-file-bytes path bytes # result nothing string
 io.append-file-bytes path bytes

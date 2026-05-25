@@ -10,7 +10,7 @@ Pluma is an immutable-by-default functional language with Hindley–Milner type 
 
 ## At a glance
 
-```
+```pluma
 def main = fun {
     let nums = [1, 2, 3, 4]
     let doubled = map nums fun n { n * 2 }

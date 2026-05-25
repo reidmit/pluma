@@ -8,7 +8,7 @@ weight = 6
 
 `def` binds a name to a value at the top level. `=` separates the name from the expression — same as `let` does locally.
 
-```
+```pluma
 def name = "reid"
 
 def greet = fun name {
@@ -24,7 +24,7 @@ The right-hand side is any expression — string, int, record, function literal,
 
 ## Local `let`
 
-```
+```pluma
 let x = 10
 let greeting = "hello, world"
 let doubled = fun n { n * 2 }
@@ -34,7 +34,7 @@ let doubled = fun n { n * 2 }
 
 A `let` binding accepts any **irrefutable** pattern on the left — identifier, wildcard, tuple, record, and nestings of those. The same shapes used in `if`/`when`/`while`, restricted to patterns that always match.
 
-```
+```pluma
 let (a, b) = (1, 2)
 let (lo, _, hi) = (0, 50, 100)
 
@@ -48,7 +48,7 @@ let {label: lbl, coords: (cx, cy)} = {label: "origin", coords: (0, 0)}
 
 Refutable patterns (constructor, literal, string-interpolation) aren't allowed — those can fail to match, which would leave bindings undefined. Use `if` or `when` for those cases:
 
-```
+```pluma
 # rejected: `some` can fail (the value might be `none`)
 # let some x = maybe-value
 
@@ -75,7 +75,7 @@ See [Patterns](@/docs/patterns.md) for the full pattern grammar.
 
 The general shape is `def name :: TYPE = expr`. For function types, the form is `fun T1 T2 -> R`, with parens around compound argument types.
 
-```
+```pluma
 def pi :: float = 3.14159
 
 def add :: fun int int -> int =

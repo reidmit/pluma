@@ -1,0 +1,230 @@
+%YAML 1.2
+---
+# Sublime Text syntax for Pluma (.pa). Consumed by Sublime Text and by the
+# docs site's syntect highlighter (see site/config.toml). It is a hand port of
+# vsix/syntaxes/pluma.tmLanguage.json — keep the two in sync; the real syntax
+# lives in compiler/src/tokenizer.rs. Regression-tested against tests/run/*
+# (see the sublime-grammar test invoked by `just test-grammar`).
+name: Pluma
+file_extensions:
+  - pa
+scope: source.pluma
+
+variables:
+  # An identifier: kebab-case, so hyphens are part of the word.
+  ident: '[A-Za-z_][A-Za-z0-9_-]*'
+  # Word boundaries that respect kebab-case (a bare \b would pick `is` out of
+  # `this-is-it`). `kb`/`ka` guard keywords; `nb` guards numbers (a leading
+  # hyphen there is a unary minus, not part of the digit run).
+  kb: '(?<![A-Za-z0-9_-])'
+  ka: '(?![A-Za-z0-9_-])'
+  nb: '(?<![A-Za-z0-9_])'
+  # Builtin types must not swallow a namespace like `dict.empty` or `string.x`.
+  ka_type: '(?![A-Za-z0-9_.-])'
+
+contexts:
+  main:
+    - include: comments
+    - include: strings
+    - include: bytes
+    - include: regex
+    - include: numbers
+    - include: use-declaration
+    - include: enum-declaration
+    - include: alias-declaration
+    - include: trait-declaration
+    - include: implement-declaration
+    - include: def-declaration
+    - include: let-binding
+    - include: type-annotation
+    - include: keywords
+    - include: constants
+    - include: builtin-types
+    - include: operators
+    - include: identifiers
+
+  comments:
+    - match: '#'
+      scope: punctuation.definition.comment.pluma
+      push:
+        - meta_scope: comment.line.number-sign.pluma
+        - match: '$'
+          pop: true
+
+  strings:
+    - match: '"'
+      scope: punctuation.definition.string.begin.pluma
+      push:
+        - meta_scope: string.quoted.double.pluma
+        - match: '"'
+          scope: punctuation.definition.string.end.pluma
+          pop: true
+        - match: '\\.'
+          scope: constant.character.escape.pluma
+        - match: '\$\('
+          scope: punctuation.section.interpolation.begin.pluma
+          push:
+            - meta_scope: meta.interpolation.pluma
+            - match: '\)'
+              scope: punctuation.section.interpolation.end.pluma
+              pop: true
+            - include: main
+
+  bytes:
+    - match: "'"
+      scope: punctuation.definition.string.begin.pluma
+      push:
+        - meta_scope: string.quoted.single.pluma
+        - match: "'"
+          scope: punctuation.definition.string.end.pluma
+          pop: true
+        - match: '\\(x[0-9A-Fa-f]{2}|.)'
+          scope: constant.character.escape.pluma
+
+  regex:
+    - match: '`'
+      scope: punctuation.definition.regex.begin.pluma
+      push:
+        - meta_scope: string.regexp.pluma
+        - match: '`'
+          scope: punctuation.definition.regex.end.pluma
+          pop: true
+        - match: '"'
+          push:
+            - meta_scope: string.quoted.double.pluma
+            - match: '"'
+              pop: true
+            - match: '\\.'
+              scope: constant.character.escape.pluma
+        - match: '{{kb}}(digit|letter|word|whitespace|any){{ka}}'
+          scope: support.constant.character-class.regex.pluma
+        - match: '[$%^]'
+          scope: keyword.control.anchor.regex.pluma
+        - match: '[|?*+(){}]'
+          scope: keyword.operator.regex.pluma
+        - match: '\d+'
+          scope: constant.numeric.regex.pluma
+
+  numbers:
+    - match: '{{nb}}0[xX][0-9A-Fa-f][0-9A-Fa-f_]*'
+      scope: constant.numeric.hex.pluma
+    - match: '{{nb}}0[oO][0-7][0-7_]*'
+      scope: constant.numeric.octal.pluma
+    - match: '{{nb}}0[bB][01][01_]*'
+      scope: constant.numeric.binary.pluma
+    - match: '{{nb}}[0-9][0-9_]*\.[0-9][0-9_]*'
+      scope: constant.numeric.float.pluma
+    - match: '{{nb}}[0-9][0-9_]*'
+      scope: constant.numeric.decimal.pluma
+
+  use-declaration:
+    - match: '{{kb}}(use)\s+({{ident}}(?:\.{{ident}})*)(?:\s+(as)\s+({{ident}}))?'
+      captures:
+        1: keyword.control.import.pluma
+        2: entity.name.namespace.pluma
+        3: keyword.control.import.pluma
+        4: entity.name.namespace.pluma
+
+  enum-declaration:
+    - match: '{{kb}}(enum)\s+({{ident}})'
+      captures:
+        1: keyword.declaration.enum.pluma
+        2: entity.name.type.enum.pluma
+
+  alias-declaration:
+    - match: '{{kb}}(alias)\s+({{ident}})'
+      captures:
+        1: keyword.declaration.alias.pluma
+        2: entity.name.type.alias.pluma
+
+  trait-declaration:
+    - match: '{{kb}}(trait)\s+({{ident}})'
+      captures:
+        1: keyword.declaration.trait.pluma
+        2: entity.name.type.interface.pluma
+
+  implement-declaration:
+    - match: '{{kb}}(implement)\s+({{ident}})\s+({{ident}})'
+      captures:
+        1: keyword.declaration.implement.pluma
+        2: entity.name.type.interface.pluma
+        3: entity.name.type.pluma
+
+  def-declaration:
+    - match: '{{kb}}(def)\s+({{ident}})'
+      captures:
+        1: keyword.declaration.def.pluma
+        2: entity.name.function.pluma
+
+  let-binding:
+    - match: '{{kb}}(let)\s+({{ident}})'
+      captures:
+        1: keyword.declaration.let.pluma
+        2: variable.other.binding.pluma
+
+  type-annotation:
+    - match: '::'
+      scope: keyword.operator.type-annotation.pluma
+      push:
+        - meta_content_scope: meta.type-annotation.pluma
+        - match: '(?=$|=|[,)}\]])'
+          pop: true
+        - include: builtin-types
+        - include: keywords
+        - match: '\b({{ident}})\.({{ident}})'
+          captures:
+            1: entity.name.namespace.pluma
+            2: entity.name.type.pluma
+        - match: '\b{{ident}}\b'
+          scope: entity.name.type.pluma
+        - include: operators
+
+  keywords:
+    - match: '{{kb}}(if|else|when|while|is|in|try){{ka}}'
+      scope: keyword.control.pluma
+    - match: '{{kb}}(def|let|alias|enum|trait|implement|where|use|as|fun|test){{ka}}'
+      scope: keyword.declaration.pluma
+    - match: '{{kb}}built-in{{ka}}'
+      scope: keyword.other.builtin.pluma
+
+  constants:
+    - match: '{{kb}}(true|false){{ka}}'
+      scope: constant.language.boolean.pluma
+
+  builtin-types:
+    - match: '{{kb}}(int|float|string|bool|regex|bytes|nothing){{ka_type}}'
+      scope: support.type.primitive.pluma
+    - match: '{{kb}}(list|option|result|pair|ref|dict){{ka_type}}'
+      scope: support.type.builtin.pluma
+
+  operators:
+    - match: '->'
+      scope: keyword.operator.arrow.pluma
+    - match: '==|!=|<=|>=|<|>'
+      scope: keyword.operator.comparison.pluma
+    - match: '&&|\|\||!'
+      scope: keyword.operator.logical.pluma
+    - match: '\?\?'
+      scope: keyword.operator.coalesce.pluma
+    - match: '\+\+'
+      scope: keyword.operator.concat.pluma
+    - match: '\.\.\.'
+      scope: keyword.operator.spread.pluma
+    - match: '\.\.'
+      scope: keyword.operator.range.pluma
+    - match: '\|'
+      scope: keyword.operator.pipe.pluma
+    - match: '\*\*'
+      scope: keyword.operator.exponent.pluma
+    - match: '[+\-*/%]'
+      scope: keyword.operator.arithmetic.pluma
+    - match: '='
+      scope: keyword.operator.assignment.pluma
+
+  identifiers:
+    - match: '\b({{ident}})\.({{ident}})'
+      captures:
+        1: entity.name.namespace.pluma
+        2: variable.other.property.pluma
+    - match: '\b{{ident}}\b'
+      scope: variable.other.pluma

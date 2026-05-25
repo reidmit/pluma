@@ -12,7 +12,7 @@ An **irrefutable** pattern always matches: identifiers, wildcards, tuples, recor
 
 Record patterns destructure records. By default they require an **exact** match on the field set; add `, ...` to allow extras.
 
-```
+```pluma
 let {name: n, age: a} = {name: "reid", age: 28}   # exact: types must match
 let {name: n, ...} = {name: "alice", age: 30}     # open: extras ignored
 
@@ -31,7 +31,7 @@ when person is {name: n, ...} { ... }             # any record with a `name`
 
 **Field shorthand.** `{a, b}` is sugar for `{a: a, b: b}` — in a pattern it binds the field value to a variable of the same name. Mix freely:
 
-```
+```pluma
 when p is {name, role: r, ...} { ... }
 ```
 
@@ -41,7 +41,7 @@ when p is {name, role: r, ...} { ... }
 
 A record pattern whose sub-patterns are all bindings covers every value of the subject's type, so `when` doesn't need an `else`:
 
-```
+```pluma
 def midpoint = fun pt {
     when pt is {x: xv, y: yv} {              # binding-only sub-patterns
         (xv + yv) / 2
@@ -51,7 +51,7 @@ def midpoint = fun pt {
 
 A sub-pattern that can fail (literal, constructor, list, …) makes the arm refutable, and `when` then requires an `else`:
 
-```
+```pluma
 when r is {code: 0, ...} {                   # literal 0 can fail
     "zero"
 } else {
@@ -63,7 +63,7 @@ At function boundaries, prefer the open form (`{name: n, ...}`) — analogous to
 
 ### Nested destructuring
 
-```
+```pluma
 def split-out-name = fun p {
     when p is {name: n, ...rest} {
         (n, rest)        # rest carries every field of `p` except `name`
@@ -81,7 +81,7 @@ def main = fun {
 
 List patterns destructure `list a` in `when`/`if`/`while`; the always-matches forms also work in `let`.
 
-```
+```pluma
 when items is [] {
     "empty"
 } is [n, ...rest] {
@@ -99,7 +99,7 @@ when items is [] {
 
 Elements use the full sub-pattern syntax:
 
-```
+```pluma
 when xs is [(x, y), ...] { print "first pair: $(to-string x), $(to-string y)" }
 when xs is [some n, ...] { print "first slot has $(to-string n)" }
 when xs is [0, _, ...]   { print "starts with zero" }
@@ -109,7 +109,7 @@ when xs is [0, _, ...]   { print "starts with zero" }
 
 `when` on a `list a` is exhaustive when both halves are covered — typically `[]` plus a pattern like `[_, ...]`:
 
-```
+```pluma
 def length = fun xs {
     when xs is [] {
         0
@@ -125,7 +125,7 @@ An `else` branch also covers everything, as usual.
 
 Only when they always match — i.e. `[...]` or `[...rest]` with no required elements:
 
-```
+```pluma
 let [...everything] = items   # binds `everything` to all of `items`
 ```
 

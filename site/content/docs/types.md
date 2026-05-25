@@ -8,7 +8,7 @@ weight = 8
 
 An `alias` introduces a named type. Two forms:
 
-```
+```pluma
 alias person {
     name :: string
     age  :: int
@@ -23,7 +23,7 @@ The first form is a record-type alias (fields use `::`). The second is a bare ty
 
 Enums are **nominal**: two enums with the same shape are distinct, and references within an enum's body (e.g., `tree` inside `tree`'s `node` variant) are allowed.
 
-```
+```pluma
 enum color {
     red
     green
@@ -43,7 +43,7 @@ enum bool {
 
 Variants are accessed by qualifying with the enum name. Zero-arg variants are values of the enum type; payload variants are constructor functions.
 
-```
+```pluma
 let c = color.red                          # c : color
 let t = tree.node 1 tree.empty tree.empty
 ```
@@ -54,7 +54,7 @@ Bare variant names also work when unambiguous (`red` instead of `color.red`). If
 
 Enums can take type parameters, listed space-separated after the name. Variants reference them by name.
 
-```
+```pluma
 enum option a {
     some a
     none
@@ -74,7 +74,7 @@ enum pair a b {
 
 Instantiate with space-separated type arguments in any type position:
 
-```
+```pluma
 alias maybe-int option int
 
 alias named-list {
@@ -85,7 +85,7 @@ alias named-list {
 
 Multi-arg type contexts (variant params) are non-greedy — wrap generic applications in parens there:
 
-```
+```pluma
 enum container a { holds (option a) }
 ```
 
@@ -93,7 +93,7 @@ enum container a { holds (option a) }
 
 `option` and `result` are seeded into every module. No `use` needed; their variants (`some`, `none`, `ok`, `err`) work bare:
 
-```
+```pluma
 let n = some 5             # n : option int
 let nothing = none         # nothing : option a
 let outcome = ok 42        # outcome : result int b
@@ -114,14 +114,14 @@ Enums carry a fully-qualified name internally (`<defining-module>.<enum-name>`).
 
 Records are **row-polymorphic** and structural — there's no nominal record type. A function that destructures a few fields stays generic over the others:
 
-```
+```pluma
 # `fun p { p.name }` is typed `{name: a, ...} -> a`
 def name-of = fun p { p.name }
 ```
 
 To name a record shape, use an `alias`:
 
-```
+```pluma
 alias point {
     x :: float
     y :: float

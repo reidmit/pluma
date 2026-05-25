@@ -8,7 +8,7 @@ weight = 10
 
 `use` at the top of a module brings another module in as a namespace. Dotted paths resolve relative to the project root.
 
-```
+```pluma
 use math
 use sub.utils
 use other.utils as utils2   # avoids collision with `sub.utils` above
@@ -22,7 +22,7 @@ def alt = utils2.something
 
 Values, enums, and aliases all cross module boundaries.
 
-```
+```pluma
 use shapes
 use colors
 
@@ -45,7 +45,7 @@ def my-favorite = red
 
 Variants of imported enums can be used bare when the subject type is known or when there's no ambiguity. When two enums in scope (one local, one imported, or two imported) share a variant name, the local-module enum wins; if both are non-local, you'll get an `AmbiguousVariant` error and need to qualify:
 
-```
+```pluma
 let c :: colors.color = colors.color.red
 ```
 

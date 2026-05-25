@@ -10,7 +10,11 @@ build_search_index = true
 [markdown]
 # Whether to do syntax highlighting
 # Theme can be customised by setting the `highlight_theme` variable to a theme supported by Zola
-highlight_code = false
+highlight_code = true
+
+# Load the Pluma syntax (site/syntaxes/pluma.sublime-syntax) so ```pluma blocks
+# in the docs get highlighted. Paths are relative to this site root.
+extra_syntaxes_and_themes = ["syntaxes"]
 
 [extra]
 # Put all your custom variables here
