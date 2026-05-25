@@ -61,9 +61,7 @@
 					"endCaptures": {
 						"0": { "name": "punctuation.section.interpolation.end.pluma" }
 					},
-					"patterns": [
-						{ "include": "$self" }
-					]
+					"patterns": [{ "include": "$self" }]
 				}
 			]
 		},
