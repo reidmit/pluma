@@ -10,7 +10,7 @@ This repo (named `pencil` on disk) implements **Pluma**, a small statically-type
 
 When writing `.pa` code, these are the traps that don't match other languages' intuitions. When in doubt, mirror a fixture in `tests/run/`.
 
-- **Zero-arg calls use `()`, not `{}`.** `do-it ()`, `map.empty ()`, `io.read ()`, `random.int ()`. `{}` is a block expression — `do-it {}` parses as calling `do-it` with a block, which is a type error.
+- **Zero-arg calls use `()`, not `{}`.** `do-it ()`, `dict.empty ()`, `io.read ()`, `random.int ()`. `{}` is a block expression — `do-it {}` parses as calling `do-it` with a block, which is a type error.
 - **Pluma is uncurried.** `add 5` is an arity error, not partial application. To partially apply, wrap: `fun y { add 5 y }`.
 - **Function literals: args bare before the brace.** `fun x { x + 1 }`, `fun x y { x + y }`. Zero-arg form is `fun { ... }`. Top-level functions: `def name = fun args { body }`.
 - **Single-arg calls take no parens.** `print x`, `fact 5`, `to-string n`. Parens are only for grouping a sub-expression: `print (fact 5)`, `print (1 + 2)`.
@@ -18,7 +18,7 @@ When writing `.pa` code, these are the traps that don't match other languages' i
 - **`when` chains multiple `is` branches.** `when c is red { "r" } is green { "g" } is blue { "b" }`. No commas; only the first arm has the subject (`when c is …`), subsequent arms start with bare `is`.
 - **Type annotations use `:: TYPE`.** Top-level: `def length :: fun (list a) -> int = built-in "list-length"`. Local: `let xs :: list int = []`. Parens wrap compound type args inside a `fun` signature (`fun (list a) -> int`, `fun (option int) -> int`).
 - **Arithmetic operators `+ - * / %` are overloaded over int and float** via the `numeric` trait (and a heuristic for `%`); there are no dotted float operators. Both operands must be the same type — `2 + 3.5` is a type error (no implicit int/float promotion). `<` `>` `<=` `>=` dispatch through `ord`; `== !=` are structural. `++` is string concat.
-- **`??` unwraps an `option`/`result`** to a bare value, else its right-hand default: `opt ?? fallback`, `(map.lookup m k) ?? 0`. Lazy (the default is only evaluated on `none`/`err`) and right-associative, so `a ?? b ?? c` chains. It's the recovering dual of `try` (which propagates the failure): `??` desugars to `option.or-else`/`result.or-else`, exactly as `try` desugars to `.then`. For `result`, the `err` value is discarded.
+- **`??` unwraps an `option`/`result`** to a bare value, else its right-hand default: `opt ?? fallback`, `(dict.lookup m k) ?? 0`. Lazy (the default is only evaluated on `none`/`err`) and right-associative, so `a ?? b ?? c` chains. It's the recovering dual of `try` (which propagates the failure): `??` desugars to `option.or-else`/`result.or-else`, exactly as `try` desugars to `.then`. For `result`, the `err` value is discarded.
 - **List literals support `...` spread.** `[1, ...xs, 2, ...ys]` — a `...expr` element splices in another list (its element type must match). Spreads can appear at any position, any number of times; prefer this over `list.concat [head] tail`. Note the asymmetry with list *patterns*, where `...rest` is single and trailing-only (`[head, ...tail]`).
 - **String interpolation: `"$(expr)"`.** Non-string values need explicit `to-string`: `"n = $(to-string n)"`. A bare string variable interpolates directly: `"hi $(name)"`.
 - **Enums.** Declare with newline-separated variants; payload follows the variant name:
@@ -30,7 +30,7 @@ When writing `.pa` code, these are the traps that don't match other languages' i
   ```
   Construct as `option.some 42` or bare `some 42` when the type is clear. Match by bare variant: `when x is some n { ... } is none { ... }`.
 - **`def` is top-level; `let` is local.** Top-level bindings can't use `let`, and `let` patterns must be irrefutable (use `if`/`when` for `some`/`ok`/etc.).
-- **`use core.foo` for stdlib imports.** Available modules include `core.list`, `core.map`, `core.bytes`, `core.string`, `core.math`, `core.assert`, `core.hex`, `core.base64`, `core.random`, `core.uuid`. `ref` is auto-imported — don't `use core.ref`.
+- **`use core.foo` for stdlib imports.** Available modules include `core.list`, `core.dict`, `core.bytes`, `core.string`, `core.math`, `core.assert`, `core.hex`, `core.base64`, `core.random`, `core.uuid`. `ref` is auto-imported — don't `use core.ref`.
 
 For unfamiliar stdlib calls, `grep tests/run/*/main.pa` for a working example rather than guessing.
 
@@ -40,7 +40,7 @@ Cargo workspace (see `Cargo.toml`):
 
 - `compiler/` — the language frontend: tokenizer, parser, analyzer, types, diagnostics. The crate's public surface (`lib.rs`) re-exports `Compiler`, `Diagnostic`, `Module`/`ModuleExports`, `Tokenizer`, `Token`, and module-name/version constants; `ast` and `types` are `pub mod` (consumed by codegen). Other modules (`analyzer`, `parser`, etc.) are private.
 - `codegen/` — lowers the typed AST into VM bytecode. `codegen::compile(&compiler)` returns a `vm::Program` ready to execute.
-- `vm/` — bytecode VM that executes the compiled program. `VM::new(program).run()` is the entry point. `print` writes through a configurable `StdoutSink` (process stdout by default; tests inject a `Buffer` sink). `vm::stdlib::register_compiler` seeds the analyzer with the native module types (`core.regex`, `core.list`, `core.math`).
+- `vm/` — bytecode VM that executes the compiled program. `VM::new(program).run()` is the entry point. `print` writes through a configurable `StdoutSink` (process stdout by default; tests inject a `Buffer` sink). `vm::stdlib::register_compiler` seeds the analyzer with any Rust-defined native module types — currently none, since every stdlib module (including `core.dict`) is a `.pa` source; the mechanism remains for any future module whose signature the `.pa` surface can't express.
 - `cli/` — command dispatcher. `run`, `format`, `tokenize`, `analyze` are wired. `tokenize` and `analyze` are debug-build only (they dump Debug-format output of types whose Debug is gated on `debug_assertions`).
 - `lsp/` — language server, packaged for VS Code via the extension in `vsix/` and for Zed via the extension in `zed/`. Both editor extensions are thin clients that just launch `pluma-language-server`; all features (diagnostics, hover, formatting, highlighting via semantic tokens) live in the LSP so they're shared. The `zed/` crate ships no Tree-sitter grammar and is a standalone (non-workspace) cdylib built for `wasm32-wasip1`.
 - `tests/` — integration tests (snapshot-based) for the analyzer and the VM. The Cargo package is also named `tests`. Harness files live at the crate root (`tests/analyze.rs`, `tests/run.rs`) next to the fixture directories (`tests/analyze/`, `tests/run/`). See "Testing" below.

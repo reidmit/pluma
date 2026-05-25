@@ -5,9 +5,9 @@
 
 use core.string
 use core.list
-use core.map
+use core.dict
 
-# Split a document into its metadata map and Markdown body. With no
+# Split a document into its metadata dict and Markdown body. With no
 # header, the metadata is empty and the body is the whole input.
 def parse-doc = fun content {
 	let lines = string.split content "\n"
@@ -16,10 +16,10 @@ def parse-doc = fun content {
 			let (meta-lines, body-lines) = split-header rest
 			(parse-meta meta-lines, string.join body-lines "\n")
 		} else {
-			(map.empty (), content)
+			(dict.empty (), content)
 		}
 	} is [] {
-		(map.empty (), content)
+		(dict.empty (), content)
 	}
 }
 
@@ -38,20 +38,20 @@ def split-header = fun lines {
 	}
 }
 
-def parse-meta = fun lines { list.fold lines (map.empty ()) add-meta-line }
+def parse-meta = fun lines { list.fold lines (dict.empty ()) add-meta-line }
 
-# Parse one `key: value` line into the map. Lines without a colon are
+# Parse one `key: value` line into the dict. Lines without a colon are
 # ignored. The value may itself contain colons (e.g. a URL or time).
 def add-meta-line = fun m line {
 	when (string.split line ":") is [k, v, ...rest] {
-		map.insert m (string.trim k) (string.trim (string.join [v, ...rest] ":"))
+		dict.insert m (string.trim k) (string.trim (string.join [v, ...rest] ":"))
 	} else {
 		m
 	}
 }
 
 # Look up a metadata key, falling back to `default` when absent.
-def meta-get = fun m key default { map.lookup m key ?? default }
+def meta-get = fun m key default { dict.lookup m key ?? default }
 
 # ---------------------------------------------------------------------
 # Template

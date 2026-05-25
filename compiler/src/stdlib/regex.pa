@@ -21,12 +21,12 @@
 # and `end` mark where it sat (as byte offsets). `groups` maps each named
 # capture in the pattern to the text it grabbed. A named group that never
 # fired -- because it was on the unused side of an "or", say -- is simply
-# left out of the map rather than mapped to "".
+# left out of the dict rather than mapped to "".
 alias match {
 	text :: string,
 	start :: int,
 	end :: int,
-	groups :: map string string,
+	groups :: dict string string,
 }
 
 # True when the regex matches anywhere in the input. Use this when you

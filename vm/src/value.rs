@@ -39,23 +39,25 @@ pub enum Value {
 	Builtin(Rc<str>),
 	Regex(Rc<RegexData>),
 	VariantCtor(Rc<VariantCtorData>),
-	// A typeclass dictionary: a positional array of method values, indexed by
-	// trait declaration order. Built per-instance at program load (concrete
-	// instances) or per-call (parametric instances; phase 3). The VM never
-	// inspects a Dict directly — only `GetDictField` reads from one.
-	Dict(Rc<Vec<Value>>),
-	// An immutable, insertion-ordered hash map. Keys live in `entries` in
-	// the order they were first inserted; `buckets` indexes them by the
-	// caller-supplied hash so lookup is O(1) average. All mutations (insert
-	// / remove) return a fresh `MapData`; Rc-sharing keeps that cheap.
-	Map(Rc<MapData>),
+	// A typeclass method dictionary: a positional array of method values,
+	// indexed by trait declaration order. Built per-instance at program load
+	// (concrete instances) or per-call (parametric instances; phase 3). The VM
+	// never inspects a method dict directly — only `GetDictField` reads from
+	// one. Distinct from `Dict` below, which is the user-facing `core.dict`.
+	MethodDict(Rc<Vec<Value>>),
+	// The user-facing `core.dict`: an immutable, insertion-ordered key/value
+	// table. Keys live in `entries` in the order they were first inserted;
+	// `buckets` indexes them by the caller-supplied hash so lookup is O(1)
+	// average. All mutations (insert / remove) return a fresh `DictData`;
+	// Rc-sharing keeps that cheap.
+	Dict(Rc<DictData>),
 	// A mutable cell. Identity-based: two `Ref` values are equal iff they
 	// point to the same underlying cell. Aliasing is intentional — passing
 	// a ref to a function lets that function observe and mutate the cell.
 	Ref(Rc<RefCell<Value>>),
 }
 
-pub struct MapData {
+pub struct DictData {
 	// Insertion-ordered (key, value) pairs. Cleared and rebuilt on
 	// `remove`; appended on `insert` of a new key; mutated in place when
 	// replacing an existing key's value.
@@ -65,7 +67,7 @@ pub struct MapData {
 	pub buckets: HashMap<i64, Vec<usize>>,
 }
 
-impl MapData {
+impl DictData {
 	pub fn new() -> Self {
 		Self {
 			entries: Vec::new(),
@@ -85,7 +87,7 @@ impl MapData {
 		None
 	}
 
-	// Insert (or replace) without mutating self. Returns a fresh MapData.
+	// Insert (or replace) without mutating self. Returns a fresh DictData.
 	pub fn inserted(&self, h: i64, key: Value, value: Value) -> Self {
 		let mut entries = self.entries.clone();
 		let mut buckets = self.buckets.clone();
@@ -99,7 +101,7 @@ impl MapData {
 		Self { entries, buckets }
 	}
 
-	// Remove without mutating self. Returns a fresh MapData with the entry
+	// Remove without mutating self. Returns a fresh DictData with the entry
 	// gone and indices renumbered to stay dense.
 	pub fn removed(&self, h: i64, key: &Value) -> Self {
 		match self.find_index(h, key) {
@@ -136,7 +138,7 @@ impl MapData {
 	}
 }
 
-impl Clone for MapData {
+impl Clone for DictData {
 	fn clone(&self) -> Self {
 		Self {
 			entries: self.entries.clone(),
@@ -254,8 +256,8 @@ impl std::fmt::Display for Value {
 					.unwrap_or(&c.qualified_enum);
 				write!(f, "<ctor {}.{}>", bare, c.variant)
 			}
-			Value::Dict(_) => write!(f, "<dict>"),
-			Value::Map(m) => {
+			Value::MethodDict(_) => write!(f, "<dict>"),
+			Value::Dict(m) => {
 				write!(f, "{{")?;
 				for (i, (k, v)) in m.entries.iter().enumerate() {
 					if i > 0 {
@@ -303,14 +305,14 @@ pub fn values_eq(a: &Value, b: &Value) -> bool {
 					.zip(b.payload.iter())
 					.all(|(a, b)| values_eq(a, b))
 		}
-		// Map equality is structural and order-independent: same key/value
-		// set in either order is the same map. We walk one side and look
+		// Dict equality is structural and order-independent: same key/value
+		// set in either order is the same dict. We walk one side and look
 		// each key up in the other via its hash bucket.
 		// Refs use reference identity, not structural equality: two cells
 		// holding 5 are distinct, but a cell compared with itself is always
 		// equal regardless of contents.
 		(Value::Ref(a), Value::Ref(b)) => Rc::ptr_eq(a, b),
-		(Value::Map(a), Value::Map(b)) => {
+		(Value::Dict(a), Value::Dict(b)) => {
 			if a.entries.len() != b.entries.len() {
 				return false;
 			}

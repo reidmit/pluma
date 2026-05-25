@@ -575,7 +575,7 @@ impl VM {
 					RuntimeError::new("VM: GetDictField on empty stack").at(self.current_range())
 				})?;
 				match v {
-					Value::Dict(methods) => {
+					Value::MethodDict(methods) => {
 						let m = methods.get(idx as usize).ok_or_else(|| {
 							RuntimeError::new(format!(
 								"VM: GetDictField index {} out of range (dict size {})",
@@ -607,7 +607,7 @@ impl VM {
 				}
 				let start = self.stack.len() - n;
 				let methods: Vec<Value> = self.stack.drain(start..).collect();
-				self.stack.push(Value::Dict(Rc::new(methods)));
+				self.stack.push(Value::MethodDict(Rc::new(methods)));
 			}
 			Instruction::LoadRegex(idx) => {
 				let r = self.program.regex_patterns[idx as usize].clone();

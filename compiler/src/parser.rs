@@ -2058,6 +2058,7 @@ impl<'a> Parser<'a> {
 				ty: Type::Unknown,
 				dict_param_count: 0,
 				type_annotation: None,
+				where_clause: Vec::new(),
 			});
 		}
 
@@ -2075,6 +2076,7 @@ impl<'a> Parser<'a> {
 				ty: Type::Unknown,
 				dict_param_count: 0,
 				type_annotation: None,
+				where_clause: Vec::new(),
 			});
 		}
 
@@ -2119,6 +2121,7 @@ impl<'a> Parser<'a> {
 				ty: Type::Nothing,
 				dict_param_count: 0,
 				type_annotation: None,
+				where_clause: Vec::new(),
 			});
 		}
 
@@ -2136,6 +2139,7 @@ impl<'a> Parser<'a> {
 				ty: Type::Unknown,
 				dict_param_count: 0,
 				type_annotation: None,
+				where_clause: Vec::new(),
 			});
 		}
 
@@ -2162,6 +2166,11 @@ impl<'a> Parser<'a> {
 
 		self.skip_line_breaks();
 
+		// Optional `where (trait param, ...)` clause on the signature.
+		let where_clause = self.parse_where_clause()?;
+
+		self.skip_line_breaks();
+
 		expect_token_and_advance!(self, Token::Equal);
 
 		// Allow the RHS to wrap to the next line — long signatures
@@ -2180,6 +2189,7 @@ impl<'a> Parser<'a> {
 			ty: Type::Unknown,
 			dict_param_count: 0,
 			type_annotation,
+			where_clause,
 		})
 	}
 
@@ -2263,6 +2273,40 @@ impl<'a> Parser<'a> {
 		})
 	}
 
+	// Optional `where (TRAIT PARAM, TRAIT PARAM, ...)` clause. Returns an
+	// empty vec when no `where` keyword is present. Shared by instance
+	// heads (`implement TRAIT TYPE where (...)`) and top-level def
+	// signatures (`def name :: TYPE where (...) = ...`).
+	fn parse_where_clause(&mut self) -> Option<Vec<InstanceConstraintNode>> {
+		if !matches!(self.current_token, Some(Token::KeywordWhere(..))) {
+			return Some(Vec::new());
+		}
+		self.advance();
+		expect_token_and_advance!(self, Token::LeftParen);
+		self.skip_line_breaks();
+
+		let mut constraints = Vec::new();
+		loop {
+			let c_start = self.current_token_points().0;
+			let c_trait_name = self.expect_identifier()?;
+			let c_param = self.expect_identifier()?;
+			constraints.push(InstanceConstraintNode {
+				range: Range::between(c_start, c_param.range.end),
+				trait_name: c_trait_name,
+				param: c_param,
+			});
+			match self.current_token {
+				Some(Token::Comma(..)) => {
+					self.advance();
+					self.skip_line_breaks();
+				}
+				_ => break,
+			}
+		}
+		expect_token_and_advance!(self, Token::RightParen);
+		Some(constraints)
+	}
+
 	// Instance body: `implement TRAIT TYPE [where ...] { defs }`. The
 	// `implement` keyword has already been consumed by the caller (which
 	// captured its start point).
@@ -2276,34 +2320,7 @@ impl<'a> Parser<'a> {
 		let head = self.parse_type_expression()?;
 
 		// Optional `where (constraint, constraint, ...)` clause.
-		let where_clause = if matches!(self.current_token, Some(Token::KeywordWhere(..))) {
-			self.advance();
-			expect_token_and_advance!(self, Token::LeftParen);
-			self.skip_line_breaks();
-
-			let mut constraints = Vec::new();
-			loop {
-				let c_start = self.current_token_points().0;
-				let c_trait_name = self.expect_identifier()?;
-				let c_param = self.expect_identifier()?;
-				constraints.push(InstanceConstraintNode {
-					range: Range::between(c_start, c_param.range.end),
-					trait_name: c_trait_name,
-					param: c_param,
-				});
-				match self.current_token {
-					Some(Token::Comma(..)) => {
-						self.advance();
-						self.skip_line_breaks();
-					}
-					_ => break,
-				}
-			}
-			expect_token_and_advance!(self, Token::RightParen);
-			constraints
-		} else {
-			Vec::new()
-		};
+		let where_clause = self.parse_where_clause()?;
 
 		let (_, _) = expect_token_and_advance!(self, Token::LeftBrace);
 		self.skip_line_breaks();
@@ -2344,6 +2361,7 @@ impl<'a> Parser<'a> {
 				canonical_method_order: Vec::new(),
 			}),
 			type_annotation: None,
+			where_clause: Vec::new(),
 			ty: Type::Unknown,
 			dict_param_count: 0,
 		})

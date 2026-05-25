@@ -4,7 +4,7 @@
 // comparison, etc.) are inlined into the VM dispatch loop instead; this
 // file is only the named-builtin path plus the cross-call `invoke` helper.
 
-use crate::value::{values_eq, MapData, Value, VariantData};
+use crate::value::{values_eq, DictData, Value, VariantData};
 use crate::vm::{RuntimeError, VM};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -1062,76 +1062,76 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			Ok(Value::Nothing)
 		}
 
-		"map-empty" => {
-			debug_assert_eq!(args.len(), 1, "`map.empty` arity");
+		"dict-empty" => {
+			debug_assert_eq!(args.len(), 1, "`dict.empty` arity");
 			// Called as `empty ()`; the arg is the `nothing` unit.
-			Ok(Value::Map(Rc::new(MapData::new())))
+			Ok(Value::Dict(Rc::new(DictData::new())))
 		}
-		"map-insert" => {
+		"dict-insert" => {
 			// args = [hash_dict, m, k, v]
-			debug_assert_eq!(args.len(), 4, "`map.insert` arity");
+			debug_assert_eq!(args.len(), 4, "`dict.insert` arity");
 			let mut it = args.into_iter();
 			let hash_dict = it.next().unwrap();
 			let m_arg = it.next().unwrap();
 			let k = it.next().unwrap();
 			let v = it.next().unwrap();
 			let h = call_hash(vm, &hash_dict, &k)?;
-			let m = expect_map_owned(m_arg, "insert");
-			Ok(Value::Map(Rc::new(m.inserted(h, k, v))))
+			let m = expect_dict_owned(m_arg, "insert");
+			Ok(Value::Dict(Rc::new(m.inserted(h, k, v))))
 		}
-		"map-lookup" => {
+		"dict-lookup" => {
 			// args = [hash_dict, m, k]
-			debug_assert_eq!(args.len(), 3, "`map.lookup` arity");
+			debug_assert_eq!(args.len(), 3, "`dict.lookup` arity");
 			let mut it = args.into_iter();
 			let hash_dict = it.next().unwrap();
 			let m_arg = it.next().unwrap();
 			let k = it.next().unwrap();
 			let h = call_hash(vm, &hash_dict, &k)?;
-			let m = expect_map_ref(&m_arg, "lookup");
+			let m = expect_dict_ref(&m_arg, "lookup");
 			Ok(option_value(
 				m.find_index(h, &k).map(|i| m.entries[i].1.clone()),
 			))
 		}
-		"map-remove" => {
-			debug_assert_eq!(args.len(), 3, "`map.remove` arity");
+		"dict-remove" => {
+			debug_assert_eq!(args.len(), 3, "`dict.remove` arity");
 			let mut it = args.into_iter();
 			let hash_dict = it.next().unwrap();
 			let m_arg = it.next().unwrap();
 			let k = it.next().unwrap();
 			let h = call_hash(vm, &hash_dict, &k)?;
-			let m = expect_map_owned(m_arg, "remove");
-			Ok(Value::Map(Rc::new(m.removed(h, &k))))
+			let m = expect_dict_owned(m_arg, "remove");
+			Ok(Value::Dict(Rc::new(m.removed(h, &k))))
 		}
-		"map-contains-key" => {
-			debug_assert_eq!(args.len(), 3, "`map.contains-key` arity");
+		"dict-contains-key" => {
+			debug_assert_eq!(args.len(), 3, "`dict.contains-key` arity");
 			let mut it = args.into_iter();
 			let hash_dict = it.next().unwrap();
 			let m_arg = it.next().unwrap();
 			let k = it.next().unwrap();
 			let h = call_hash(vm, &hash_dict, &k)?;
-			let m = expect_map_ref(&m_arg, "contains-key");
+			let m = expect_dict_ref(&m_arg, "contains-key");
 			Ok(Value::Bool(m.find_index(h, &k).is_some()))
 		}
-		"map-size" => {
-			debug_assert_eq!(args.len(), 1, "`map.size` arity");
-			let m = expect_map_ref(&args[0], "size");
+		"dict-size" => {
+			debug_assert_eq!(args.len(), 1, "`dict.size` arity");
+			let m = expect_dict_ref(&args[0], "size");
 			Ok(Value::Int(m.entries.len() as i64))
 		}
-		"map-keys" => {
-			debug_assert_eq!(args.len(), 1, "`map.keys` arity");
-			let m = expect_map_ref(&args[0], "keys");
+		"dict-keys" => {
+			debug_assert_eq!(args.len(), 1, "`dict.keys` arity");
+			let m = expect_dict_ref(&args[0], "keys");
 			let keys: Vec<Value> = m.entries.iter().map(|(k, _)| k.clone()).collect();
 			Ok(Value::List(Rc::new(keys)))
 		}
-		"map-values" => {
-			debug_assert_eq!(args.len(), 1, "`map.values` arity");
-			let m = expect_map_ref(&args[0], "values");
+		"dict-values" => {
+			debug_assert_eq!(args.len(), 1, "`dict.values` arity");
+			let m = expect_dict_ref(&args[0], "values");
 			let vs: Vec<Value> = m.entries.iter().map(|(_, v)| v.clone()).collect();
 			Ok(Value::List(Rc::new(vs)))
 		}
-		"map-entries" => {
-			debug_assert_eq!(args.len(), 1, "`map.entries` arity");
-			let m = expect_map_ref(&args[0], "entries");
+		"dict-entries" => {
+			debug_assert_eq!(args.len(), 1, "`dict.entries` arity");
+			let m = expect_dict_ref(&args[0], "entries");
 			let es: Vec<Value> = m
 				.entries
 				.iter()
@@ -1139,9 +1139,9 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				.collect();
 			Ok(Value::List(Rc::new(es)))
 		}
-		"map-from-entries" => {
+		"dict-from-entries" => {
 			// args = [hash_dict, list]
-			debug_assert_eq!(args.len(), 2, "`map.from-entries` arity");
+			debug_assert_eq!(args.len(), 2, "`dict.from-entries` arity");
 			let mut it = args.into_iter();
 			let hash_dict = it.next().unwrap();
 			let list_arg = it.next().unwrap();
@@ -1149,7 +1149,7 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				Value::List(xs) => xs,
 				_ => unreachable!("`from-entries`: expected list"),
 			};
-			let mut data = MapData::new();
+			let mut data = DictData::new();
 			for entry in xs.iter() {
 				let (k, v) = match entry {
 					Value::Tuple(t) if t.len() == 2 => (t[0].clone(), t[1].clone()),
@@ -1158,49 +1158,49 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				let h = call_hash(vm, &hash_dict, &k)?;
 				data = data.inserted(h, k, v);
 			}
-			Ok(Value::Map(Rc::new(data)))
+			Ok(Value::Dict(Rc::new(data)))
 		}
-		"map-merge" => {
+		"dict-merge" => {
 			// args = [hash_dict, left, right]; right-wins on conflicts.
-			debug_assert_eq!(args.len(), 3, "`map.merge` arity");
+			debug_assert_eq!(args.len(), 3, "`dict.merge` arity");
 			let mut it = args.into_iter();
 			let hash_dict = it.next().unwrap();
 			let left_arg = it.next().unwrap();
 			let right_arg = it.next().unwrap();
-			let left = expect_map_ref(&left_arg, "merge").clone();
-			let right = expect_map_ref(&right_arg, "merge");
+			let left = expect_dict_ref(&left_arg, "merge").clone();
+			let right = expect_dict_ref(&right_arg, "merge");
 			let mut data = left;
 			for (k, v) in right.entries.iter() {
 				let h = call_hash(vm, &hash_dict, k)?;
 				data = data.inserted(h, k.clone(), v.clone());
 			}
-			Ok(Value::Map(Rc::new(data)))
+			Ok(Value::Dict(Rc::new(data)))
 		}
-		"map-map" => {
+		"dict-map" => {
 			// args = [m, fn]. fn : v -> w (key set is preserved, no rehash).
-			debug_assert_eq!(args.len(), 2, "`map.map` arity");
+			debug_assert_eq!(args.len(), 2, "`dict.map` arity");
 			let mut it = args.into_iter();
 			let m_arg = it.next().unwrap();
 			let fn_arg = it.next().unwrap();
-			let m = expect_map_owned(m_arg, "map");
+			let m = expect_dict_owned(m_arg, "map");
 			let mut entries = Vec::with_capacity(m.entries.len());
 			for (k, v) in m.entries.iter() {
 				let new_v = invoke(vm, fn_arg.clone(), vec![v.clone()])?;
 				entries.push((k.clone(), new_v));
 			}
-			Ok(Value::Map(Rc::new(MapData {
+			Ok(Value::Dict(Rc::new(DictData {
 				entries,
 				buckets: m.buckets.clone(),
 			})))
 		}
-		"map-filter" => {
+		"dict-filter" => {
 			// args = [m, fn]. fn : k -> v -> bool. Predicate-passes keep
 			// their slot; rebuild bucket indices over the surviving rows.
-			debug_assert_eq!(args.len(), 2, "`map.filter` arity");
+			debug_assert_eq!(args.len(), 2, "`dict.filter` arity");
 			let mut it = args.into_iter();
 			let m_arg = it.next().unwrap();
 			let fn_arg = it.next().unwrap();
-			let m = expect_map_owned(m_arg, "filter");
+			let m = expect_dict_owned(m_arg, "filter");
 			let mut new_entries: Vec<(Value, Value)> = Vec::new();
 			let mut index_map: Vec<Option<usize>> = Vec::with_capacity(m.entries.len());
 			for (k, v) in m.entries.iter() {
@@ -1211,7 +1211,7 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 						new_entries.push((k.clone(), v.clone()));
 					}
 					Value::Bool(false) => index_map.push(None),
-					_ => unreachable!("`map.filter`: predicate must return bool"),
+					_ => unreachable!("`dict.filter`: predicate must return bool"),
 				}
 			}
 			let mut new_buckets: std::collections::HashMap<i64, Vec<usize>> =
@@ -1222,7 +1222,7 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 					new_buckets.insert(*h, mapped);
 				}
 			}
-			Ok(Value::Map(Rc::new(MapData {
+			Ok(Value::Dict(Rc::new(DictData {
 				entries: new_entries,
 				buckets: new_buckets,
 			})))
@@ -1327,14 +1327,14 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			)))
 		}
 
-		"map-fold" => {
+		"dict-fold" => {
 			// args = [m, init, fn]. fn : b -> k -> v -> b.
-			debug_assert_eq!(args.len(), 3, "`map.fold` arity");
+			debug_assert_eq!(args.len(), 3, "`dict.fold` arity");
 			let mut it = args.into_iter();
 			let m_arg = it.next().unwrap();
 			let mut acc = it.next().unwrap();
 			let fn_arg = it.next().unwrap();
-			let m = expect_map_ref(&m_arg, "fold").clone();
+			let m = expect_dict_ref(&m_arg, "fold").clone();
 			for (k, v) in m.entries.iter() {
 				acc = invoke(vm, fn_arg.clone(), vec![acc, k.clone(), v.clone()])?;
 			}
@@ -1574,12 +1574,12 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 }
 
 // Pull the hash function (slot 0) out of a hash dict and invoke it on
-// `key`, returning the resulting int hash. Used by every Map operation
-// that needs to bucket by key.
+// `key`, returning the resulting int hash. Used by every `core.dict`
+// operation that needs to bucket by key.
 fn call_hash(vm: &mut VM, dict: &Value, key: &Value) -> Result<i64, RuntimeError> {
 	let methods = match dict {
-		Value::Dict(d) => d,
-		_ => unreachable!("hash dict: expected Dict"),
+		Value::MethodDict(d) => d,
+		_ => unreachable!("hash dict: expected method dict"),
 	};
 	let hash_fn = methods
 		.get(0)
@@ -1605,17 +1605,17 @@ fn expect_ref_owned(v: Value, name: &str) -> Rc<RefCell<Value>> {
 	}
 }
 
-fn expect_map_ref<'a>(v: &'a Value, name: &str) -> &'a MapData {
+fn expect_dict_ref<'a>(v: &'a Value, name: &str) -> &'a DictData {
 	match v {
-		Value::Map(m) => m,
-		_ => unreachable!("`map.{}`: expected map", name),
+		Value::Dict(m) => m,
+		_ => unreachable!("`dict.{}`: expected dict", name),
 	}
 }
 
-fn expect_map_owned(v: Value, name: &str) -> MapData {
+fn expect_dict_owned(v: Value, name: &str) -> DictData {
 	match v {
-		Value::Map(m) => (*m).clone(),
-		_ => unreachable!("`map.{}`: expected map", name),
+		Value::Dict(m) => (*m).clone(),
+		_ => unreachable!("`dict.{}`: expected dict", name),
 	}
 }
 
@@ -1721,7 +1721,7 @@ fn expect_float(args: &[Value], name: &str) -> f64 {
 // match (e.g. losing side of an alternation) are simply absent.
 fn regex_match_record(re: &regex::Regex, caps: &regex::Captures) -> Value {
 	let m = caps.get(0).expect("captures always have group 0");
-	let mut groups = MapData::new();
+	let mut groups = DictData::new();
 	for name in re.capture_names().flatten() {
 		if let Some(g) = caps.name(name) {
 			let h = hash_string(name);
@@ -1739,12 +1739,12 @@ fn regex_match_record(re: &regex::Regex, caps: &regex::Captures) -> Value {
 	);
 	fields.insert("start".to_string(), Value::Int(m.start() as i64));
 	fields.insert("end".to_string(), Value::Int(m.end() as i64));
-	fields.insert("groups".to_string(), Value::Map(Rc::new(groups)));
+	fields.insert("groups".to_string(), Value::Dict(Rc::new(groups)));
 	Value::Record(Rc::new(fields))
 }
 
 // Hash a string using the same hasher as the `string-hash` builtin —
-// keeps json-built maps interoperable with `core.map` lookups.
+// keeps json-built dicts interoperable with `core.dict` lookups.
 fn hash_string(s: &str) -> i64 {
 	use std::hash::{Hash, Hasher};
 	let mut h = std::collections::hash_map::DefaultHasher::new();
@@ -1798,14 +1798,14 @@ fn json_to_pluma(j: serde_json::Value) -> Value {
 			json_variant("array", vec![Value::List(Rc::new(items))])
 		}
 		serde_json::Value::Object(obj) => {
-			let mut data = MapData::new();
+			let mut data = DictData::new();
 			// `preserve_order` keeps these in source order.
 			for (k, v) in obj.into_iter() {
 				let h = hash_string(&k);
 				let key = Value::String(Rc::new(k));
 				data = data.inserted(h, key, json_to_pluma(v));
 			}
-			json_variant("object", vec![Value::Map(Rc::new(data))])
+			json_variant("object", vec![Value::Dict(Rc::new(data))])
 		}
 	}
 }
@@ -1844,7 +1844,7 @@ fn pluma_to_json(v: &Value) -> serde_json::Value {
 			_ => unreachable!("`json.value.array`: expected single list payload"),
 		},
 		"object" => match &var.payload[..] {
-			[Value::Map(m)] => {
+			[Value::Dict(m)] => {
 				let mut obj = serde_json::Map::new();
 				for (k, v) in m.entries.iter() {
 					let key = match k {
@@ -1855,7 +1855,7 @@ fn pluma_to_json(v: &Value) -> serde_json::Value {
 				}
 				serde_json::Value::Object(obj)
 			}
-			_ => unreachable!("`json.value.object`: expected single map payload"),
+			_ => unreachable!("`json.value.object`: expected single dict payload"),
 		},
 		other => unreachable!("`json.stringify`: unexpected variant `{}`", other),
 	}

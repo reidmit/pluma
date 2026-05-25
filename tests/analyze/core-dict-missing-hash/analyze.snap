@@ -3,10 +3,10 @@ source: tests/analyze.rs
 expression: output
 ---
 error: No instance of trait `hash` for type `foo`.
-> 12 | 	let m = map.insert m a 1
-                ^^^^^^^^^^
+> 12 | 	let m = dict.insert m a 1
+                ^^^^^^^^^^^
 
 error: No instance of trait `hash` for type `foo`.
-> 12 | 	let m = map.insert m a 1
-                ^^^^^^^^^^
+> 12 | 	let m = dict.insert m a 1
+                ^^^^^^^^^^^
 

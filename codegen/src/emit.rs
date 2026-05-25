@@ -34,7 +34,7 @@ pub fn compile(compiler: &compiler::Compiler) -> Result<Program, String> {
 	cg.add_evaluated_global(
 		"__prelude__",
 		"numeric@int",
-		Value::Dict(Rc::new(vec![
+		Value::MethodDict(Rc::new(vec![
 			Value::Builtin(Rc::from("int-add")),
 			Value::Builtin(Rc::from("int-sub")),
 			Value::Builtin(Rc::from("int-mul")),
@@ -45,7 +45,7 @@ pub fn compile(compiler: &compiler::Compiler) -> Result<Program, String> {
 	cg.add_evaluated_global(
 		"__prelude__",
 		"numeric@float",
-		Value::Dict(Rc::new(vec![
+		Value::MethodDict(Rc::new(vec![
 			Value::Builtin(Rc::from("float-add")),
 			Value::Builtin(Rc::from("float-sub")),
 			Value::Builtin(Rc::from("float-mul")),
@@ -57,48 +57,48 @@ pub fn compile(compiler: &compiler::Compiler) -> Result<Program, String> {
 	cg.add_evaluated_global(
 		"__prelude__",
 		"ord@int",
-		Value::Dict(Rc::new(vec![Value::Builtin(Rc::from("int-compare"))])),
+		Value::MethodDict(Rc::new(vec![Value::Builtin(Rc::from("int-compare"))])),
 	);
 	cg.add_evaluated_global(
 		"__prelude__",
 		"ord@float",
-		Value::Dict(Rc::new(vec![Value::Builtin(Rc::from("float-compare"))])),
+		Value::MethodDict(Rc::new(vec![Value::Builtin(Rc::from("float-compare"))])),
 	);
 	cg.add_evaluated_global(
 		"__prelude__",
 		"ord@string",
-		Value::Dict(Rc::new(vec![Value::Builtin(Rc::from("string-compare"))])),
+		Value::MethodDict(Rc::new(vec![Value::Builtin(Rc::from("string-compare"))])),
 	);
 	cg.add_evaluated_global(
 		"__prelude__",
 		"ord@bytes",
-		Value::Dict(Rc::new(vec![Value::Builtin(Rc::from("bytes-compare"))])),
+		Value::MethodDict(Rc::new(vec![Value::Builtin(Rc::from("bytes-compare"))])),
 	);
 	// `hash` trait: one method (`hash`), four concrete instances.
 	cg.add_evaluated_global(
 		"__prelude__",
 		"hash@int",
-		Value::Dict(Rc::new(vec![Value::Builtin(Rc::from("int-hash"))])),
+		Value::MethodDict(Rc::new(vec![Value::Builtin(Rc::from("int-hash"))])),
 	);
 	cg.add_evaluated_global(
 		"__prelude__",
 		"hash@float",
-		Value::Dict(Rc::new(vec![Value::Builtin(Rc::from("float-hash"))])),
+		Value::MethodDict(Rc::new(vec![Value::Builtin(Rc::from("float-hash"))])),
 	);
 	cg.add_evaluated_global(
 		"__prelude__",
 		"hash@string",
-		Value::Dict(Rc::new(vec![Value::Builtin(Rc::from("string-hash"))])),
+		Value::MethodDict(Rc::new(vec![Value::Builtin(Rc::from("string-hash"))])),
 	);
 	cg.add_evaluated_global(
 		"__prelude__",
 		"hash@bytes",
-		Value::Dict(Rc::new(vec![Value::Builtin(Rc::from("bytes-hash"))])),
+		Value::MethodDict(Rc::new(vec![Value::Builtin(Rc::from("bytes-hash"))])),
 	);
 	cg.add_evaluated_global(
 		"__prelude__",
 		"hash@bool",
-		Value::Dict(Rc::new(vec![Value::Builtin(Rc::from("bool-hash"))])),
+		Value::MethodDict(Rc::new(vec![Value::Builtin(Rc::from("bool-hash"))])),
 	);
 
 	// Prelude enums (`option`, `result`, `ordering`) are declared in
@@ -148,7 +148,7 @@ pub fn compile(compiler: &compiler::Compiler) -> Result<Program, String> {
 					}
 					DefinitionKind::Instance(instance_node) => {
 						// Each concrete instance gets one global slot holding
-						// its `Value::Dict` of methods. The slot name was
+						// its `Value::MethodDict` of methods. The slot name was
 						// chosen by the analyzer (`<module>.<trait>@<head>`).
 						let (module, name) = match instance_node.instance_slot_name.rsplit_once('.') {
 							Some((m, n)) => (m, n),
@@ -537,7 +537,7 @@ impl CodeGen {
 	// `Fun` so it captures whatever inner dicts it actually uses. The
 	// global slot holds a closure of this constructor; call sites with
 	// `Resolved::InstanceChain` call it with the inner dicts to receive
-	// a fresh `Value::Dict`.
+	// a fresh `Value::MethodDict`.
 	fn compile_instance(
 		&mut self,
 		module_name: &str,

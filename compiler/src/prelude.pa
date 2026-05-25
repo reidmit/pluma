@@ -5,7 +5,7 @@
 # It defines the three enums the language leans on everywhere -- `option`
 # (a value that might be missing), `result` (an action that might fail),
 # and `ordering` (how two things compare) -- plus the rules that let
-# options and results be compared, sorted, and used as map keys.
+# options and results be compared, sorted, and used as dict keys.
 #
 # (Note for contributors: this file is baked into the compiler and
 # analyzed before any user code. The `numeric` / `ord` / `hash` traits
@@ -18,7 +18,7 @@
 # type makes you handle the empty case.
 #
 # Lookups hand you an option: `list.head` on a possibly-empty list,
-# `map.lookup` for a key that might not be there.
+# `dict.lookup` for a key that might not be there.
 #
 #     when list.head xs is some first { use first } is none { "empty" }
 #
@@ -62,7 +62,7 @@ enum ordering {
 }
 
 # The rules below teach `option` and `result` how to compare and hash,
-# so that anything built out of them can be sorted or used as a map key
+# so that anything built out of them can be sorted or used as a dict key
 # whenever the values they wrap can. An option compares by its contents,
 # with `none` sorting before any `some`; a result likewise, with `ok`
 # before any `err`.

@@ -1,0 +1,25 @@
+use core.dict
+
+def main = fun {
+	let m = dict.empty ()
+	print (dict.size m)
+	let m = dict.insert m "a" 1
+	let m = dict.insert m "b" 2
+	let m = dict.insert m "c" 3
+	print (dict.size m)
+
+	# Replace an existing key — size stays the same, value updates.
+	let m = dict.insert m "b" 22
+	print (dict.size m)
+	when (dict.lookup m "b") is some n {
+		print n
+	} is none {
+		print -1
+	}
+
+	# Remove and confirm.
+	let m = dict.remove m "a"
+	print (dict.contains-key m "a")
+	print (dict.contains-key m "b")
+	print (dict.size m)
+}

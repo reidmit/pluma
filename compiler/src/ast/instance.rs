@@ -24,7 +24,7 @@ pub struct InstanceNode {
 	// `Resolved::Global` references.
 	pub instance_slot_name: String,
 	// The method names in the trait's declaration order — instances may
-	// declare methods in any order, but codegen builds the `Value::Dict`
+	// declare methods in any order, but codegen builds the `Value::MethodDict`
 	// in this canonical order.
 	pub canonical_method_order: Vec<String>,
 }

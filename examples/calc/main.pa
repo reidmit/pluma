@@ -12,14 +12,14 @@
 #   > x * y
 #   error: undefined name 'y'
 #
-# The session state — the name→value map — lives in a single `ref`,
+# The session state — the name→value dict — lives in a single `ref`,
 # so an assignment mutates it in place and later lines see it. A parse
 # or eval error is reported and the loop simply continues, so one bad
 # line never ends the session.
 
 use core.io
 use core.list
-use core.map
+use core.dict
 use core.math
 use core.string
 use value
@@ -35,9 +35,9 @@ def main = fun {
 # Pre-populate the constants `pi` and `e` as ordinary variables, so
 # they can be used (or even shadowed) like any other name.
 def seed-env = fun {
-	let m = map.empty ()
-	let m = map.insert m "pi" (float-val math.pi)
-	let m = map.insert m "e" (float-val math.e)
+	let m = dict.empty ()
+	let m = dict.insert m "pi" (float-val math.pi)
+	let m = dict.insert m "e" (float-val math.e)
 	m
 }
 
@@ -92,7 +92,7 @@ def print-help = fun {
 # leans on the `ord` trait via `compare`, yet we pass it to `list.sort` by
 # bare name — codegen prepends its trait dictionary at the reference.
 def print-vars = fun env {
-	let entries = map.entries (ref.get env)
+	let entries = dict.entries (ref.get env)
 	list.each (list.sort entries by-name) (fun ent {
 		let (k, v) = ent
 		io.print "$(k) = $(value.num-to-string v)"
@@ -124,7 +124,7 @@ def run-line = fun env line {
 
 def run-assign = fun env name e {
 	when (eval.eval env e) is ok v {
-		let _ = ref.set env (map.insert (ref.get env) name v)
+		let _ = ref.set env (dict.insert (ref.get env) name v)
 		io.print "= $(value.num-to-string v)"
 	} is err m {
 		io.print "error: $(m)"

@@ -1,6 +1,6 @@
 use core.regex as re
 use core.list
-use core.map
+use core.dict
 use core.assert
 
 # --- matches ---
@@ -40,9 +40,9 @@ test "find on no match is none" {
 
 test "find populates named captures" {
 	when re.find `<x: digit+> "," <y: digit+>` "(3,7)" is some m {
-		when map.lookup m.groups "x" is some s { assert.equals s "3" }
+		when dict.lookup m.groups "x" is some s { assert.equals s "3" }
 		is none { assert.is-true false }
-		when map.lookup m.groups "y" is some s { assert.equals s "7" }
+		when dict.lookup m.groups "y" is some s { assert.equals s "7" }
 		is none { assert.is-true false }
 	}
 	is none { assert.is-true false }

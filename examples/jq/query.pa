@@ -16,7 +16,7 @@
 
 use core.json
 use core.list
-use core.map
+use core.dict
 use core.string
 
 # One navigation step.
@@ -144,7 +144,7 @@ def step-eval = fun stream st {
 				[...acc, ...xs]
 			} is none {
 				when (json.get-object v) is some o {
-					[...acc, ...(map.values o)]
+					[...acc, ...(dict.values o)]
 				} is none {
 					acc
 				}

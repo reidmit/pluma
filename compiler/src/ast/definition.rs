@@ -16,6 +16,13 @@ pub struct DefinitionNode {
 	// is the contract — analysis emits a constraint unifying the body's
 	// inferred type with the annotated type.
 	pub type_annotation: Option<TypeExprNode>,
+	// Class constraints declared with a `where (trait param, ...)` clause
+	// on the def's signature: `def name :: TYPE where (hash k) = expr`.
+	// Each `param` must be a free type variable of the annotation. The
+	// analyzer turns these into exported `value_constraints` so call sites
+	// thread a dictionary, exactly like the auto-discovered forwarded
+	// dispatches. Empty for the common unconstrained case.
+	pub where_clause: Vec<InstanceConstraintNode>,
 }
 
 pub enum DefinitionKind {

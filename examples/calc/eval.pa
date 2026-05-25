@@ -1,16 +1,16 @@
 # Evaluator: walk an `expr` against the variable environment.
 #
-# The environment is a `ref (map string num)` — a single mutable cell
-# holding the name→value map. `eval` only reads it; the REPL driver in
+# The environment is a `ref (dict string num)` — a single mutable cell
+# holding the name→value dict. `eval` only reads it; the REPL driver in
 # main.pa is what writes assignments back. Threading the ref (rather
-# than the map) means a future feature that mutates mid-expression
+# than the dict) means a future feature that mutates mid-expression
 # wouldn't change this signature.
 #
 # Everything returns `result num string`, so the first undefined name,
 # divide-by-zero, or unknown function short-circuits with a message.
 
 use core.list
-use core.map
+use core.dict
 use core.math
 use value
 use parser
@@ -19,7 +19,7 @@ def eval = fun env e {
 	when e is lit n {
 		ok n
 	} is var name {
-		when (map.lookup (ref.get env) name) is some v {
+		when (dict.lookup (ref.get env) name) is some v {
 			ok v
 		} is none {
 			err "undefined name '$(name)'"

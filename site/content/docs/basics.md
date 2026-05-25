@@ -54,25 +54,25 @@ let list-across-lines = [
 ]
 ```
 
-## Maps
+## Dicts
 
-Immutable, insertion-ordered hash maps. There's no map literal syntax — construct one through `core.map`:
+Immutable, insertion-ordered hash dicts (key/value tables). There's no dict literal syntax — construct one through `core.dict`:
 
 ```
-use core.map
+use core.dict
 
-let m = map.empty ()
-let m = map.insert m "alice" 30
-let m = map.insert m "bob" 25
+let m = dict.empty ()
+let m = dict.insert m "alice" 30
+let m = dict.insert m "bob" 25
 
-when (map.lookup m "alice") is some n { print n } is none { print 0 }
+when (dict.lookup m "alice") is some n { print n } is none { print 0 }
 ```
 
 The key type must have a `hash` instance. `int`, `float`, `string`, `bool`, `option a`, and `result a b` are all wired up out of the box; user enums and records get a hash instance the moment they declare one with `for hash on …`. Operations that need to bucket a key (`insert`, `lookup`, `remove`, `contains-key`, `from-entries`, `merge`) carry a `where (hash k)` constraint and resolve the dictionary automatically at the call site.
 
-Iteration (`keys`, `values`, `entries`, `fold`, `map`, `filter`) is in insertion order. `from-entries` and `merge` are right-wins on duplicate keys. `==` on maps is structural and order-independent. `size` returns the entry count.
+Iteration (`keys`, `values`, `entries`, `fold`, `map`, `filter`) is in insertion order. `from-entries` and `merge` are right-wins on duplicate keys. `==` on dicts is structural and order-independent. `size` returns the entry count.
 
-See `core.map` for the full surface: `empty`, `insert`, `lookup`, `remove`, `contains-key`, `size`, `keys`, `values`, `entries`, `from-entries`, `merge`, `map`, `filter`, `fold`.
+See `core.dict` for the full surface: `empty`, `insert`, `lookup`, `remove`, `contains-key`, `size`, `keys`, `values`, `entries`, `from-entries`, `merge`, `map`, `filter`, `fold`.
 
 ## Refs
 

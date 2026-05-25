@@ -18,7 +18,7 @@ yet built; several modules below depend on it.
 
 **Shipped so far:** `core.list`, `core.string`, `core.math`,
 `core.bytes`, `core.regex`, `core.io`, `core.ref`, `core.option`,
-`core.result`, `core.map`, `core.json`, `core.base64`, `core.hex`,
+`core.result`, `core.dict`, `core.json`, `core.base64`, `core.hex`,
 `core.uuid`, `core.random`, `core.assert`, plus the `test "..." { }`
 form + `pluma test` runner and the `pluma.pa`/`core.package` project
 system. The big still-missing clusters: scripting (`fs`/`process`/`env`/
@@ -160,7 +160,7 @@ enum json.value {
     float  float      # parsed as float otherwise
     string string
     array  (list json.value)
-    object (map string json.value)
+    object (dict string json.value)
 }
 
 # Total — never throws.
@@ -393,7 +393,7 @@ test "list.length on empty is zero" {
 }
 
 test "json round-trip" {
-    let v = json.object (map.from-entries [("x", json.int 1)])
+    let v = json.object (dict.from-entries [("x", json.int 1)])
     let s = json.stringify v
     assert.equals (json.parse s) (ok v)
 }
@@ -512,11 +512,11 @@ variants both exposed. Seedable PRNG state is an opaque handle.
 **`core.crypto`** — symmetric/asymmetric encryption. `ring` or
 `age` (high-level format). Defer to v2; not v1.
 
-### Collections beyond `list`/`map`
+### Collections beyond `list`/`dict`
 
-**`core.set`** — hash set on the same machinery as `map`.
+**`core.set`** — hash set on the same machinery as `dict`.
 
-**`core.tree-map`**, **`core.tree-set`** — sorted-by-key. BTreeMap
+**`core.tree-dict`**, **`core.tree-set`** — sorted-by-key. BTreeMap
 under the hood. Useful when iteration order matters.
 
 **`core.deque`** — `VecDeque`-backed.
@@ -628,7 +628,7 @@ opaque state beyond simple wrappers.
 - `core.hash`, `core.hmac`, `core.uuid`
 - `core.random` (sync API)
 - `core.regex` extensions
-- `core.set`, `core.tree-map`, `core.deque`, `core.heap`
+- `core.set`, `core.tree-dict`, `core.deque`, `core.heap`
 - `core.unicode`
 - `core.bigint`
 - `core.gzip`, `core.zip`, `core.tar`

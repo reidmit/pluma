@@ -20,7 +20,7 @@ pub struct CallNode {
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub enum Resolved {
 	// Concrete instance: load the named global slot, which holds the
-	// pre-built `Value::Dict`.
+	// pre-built `Value::MethodDict`.
 	Global(String),
 	// Polymorphic forwarding: the dict comes from the enclosing function's
 	// own dict parameter (`param_idx` is the local slot index).
@@ -28,7 +28,7 @@ pub enum Resolved {
 	// Phase 3: parametric instance applied to inner dispatches.
 	// `ctor_slot` is the named global slot holding the instance
 	// constructor (a closure that takes N inner dicts and returns a
-	// `Value::Dict`). `inner` gives one resolution per `where`-clause
+	// `Value::MethodDict`). `inner` gives one resolution per `where`-clause
 	// constraint, evaluated in declaration order.
 	InstanceChain {
 		ctor_slot: String,

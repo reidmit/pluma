@@ -2,7 +2,7 @@
 # and the first non-empty option wins. The default is lazy — evaluated
 # only on the failure arm.
 
-use core.map
+use core.dict
 
 # Records whether it ran, so we can prove laziness.
 def loud = fun {
@@ -16,9 +16,9 @@ def main = fun {
 	print (none ?? none ?? none ?? 99)
 
 	# the real motivating use: lookup with a default
-	let m = map.insert (map.insert (map.empty ()) "a" 1) "b" 2
-	print (map.lookup m "a" ?? 0)
-	print (map.lookup m "missing" ?? 0)
+	let m = dict.insert (dict.insert (dict.empty ()) "a" 1) "b" 2
+	print (dict.lookup m "a" ?? 0)
+	print (dict.lookup m "missing" ?? 0)
 
 	# laziness: the `some` arm must not evaluate the fallback
 	print "expect value, no fallback line:"

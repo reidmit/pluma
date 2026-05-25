@@ -198,7 +198,7 @@ alias regex.match {
     text   :: string,                 # the matched substring
     start  :: int,                    # byte offset, inclusive
     end    :: int,                    # byte offset, exclusive
-    groups :: map string string,      # named captures that fired
+    groups :: dict string string,     # named captures that fired
 }
 ```
 
@@ -221,15 +221,15 @@ Worked example — extracting structure:
 
 ```
 use core.regex as re
-use core.map
+use core.dict
 
 def pair = `<key: letter+> "=" <val: digit+>`
 
 def main = fun {
     when re.find pair "size=42 and more" is some m {
         print m.text                              # size=42
-        when map.lookup m.groups "key" is some k { print k }  # size
-        when map.lookup m.groups "val" is some v { print v }  # 42
+        when dict.lookup m.groups "key" is some k { print k }  # size
+        when dict.lookup m.groups "val" is some v { print v }  # 42
     } is none {
         print "no match"
     }

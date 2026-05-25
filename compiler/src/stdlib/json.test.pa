@@ -1,6 +1,6 @@
 use core.json
 use core.list
-use core.map
+use core.dict
 use core.assert
 
 # --- parse: primitives ---
@@ -80,7 +80,7 @@ test "parse array of ints" {
 
 test "parse empty object" {
 	when json.parse "{}" is ok v {
-		when json.get-object v is some o { assert.equals (map.size o) 0 }
+		when json.get-object v is some o { assert.equals (dict.size o) 0 }
 		is none { assert.is-true false }
 	}
 	is err _e { assert.is-true false }

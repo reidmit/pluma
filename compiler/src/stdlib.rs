@@ -9,6 +9,7 @@ pub fn stdlib_sources() -> &'static [(&'static str, &'static str)] {
 	&[
 		("core.regex", include_str!("stdlib/regex.pa")),
 		("core.list", include_str!("stdlib/list.pa")),
+		("core.dict", include_str!("stdlib/dict.pa")),
 		("core.string", include_str!("stdlib/string.pa")),
 		("core.math", include_str!("stdlib/math.pa")),
 		("core.bytes", include_str!("stdlib/bytes.pa")),

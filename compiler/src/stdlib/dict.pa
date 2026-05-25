@@ -1,0 +1,131 @@
+# Dictionaries: a collection of key/value pairs you can look things up
+# in by key. `dict k v` is read "a dict from `k` to `v`" -- `dict string
+# int` maps strings to whole numbers, `dict int bool` maps numbers to
+# true/false, and so on.
+#
+# Unlike a list, a dict finds a value by its key rather than its
+# position, and each key appears at most once. Inserting a key that's
+# already there replaces the old value.
+#
+# Keys can be any type that knows how to `hash` itself -- the built-in
+# types (`int`, `float`, `string`, `bytes`, `bool`) all do, and your own
+# enums can by `implement`ing the `hash` trait. The functions that look a
+# key up (`insert`, `lookup`, `remove`, `contains-key`, `from-entries`,
+# `merge`) carry a `where (hash k)` constraint that says so.
+#
+# Dicts never change in place. Everything here that "inserts", "removes",
+# or "merges" hands you back a brand-new dict and leaves the original
+# alone.
+#
+# Dicts remember the order keys were first inserted, so `keys`, `values`,
+# `entries`, `map`, `filter`, and `fold` all walk the pairs in that
+# insertion order.
+
+# An empty dict with no entries. The starting point you build up from
+# with `insert`.
+#
+#     dict.empty ()   # => an empty dict
+def empty :: fun nothing -> dict k v = built-in "dict-empty"
+
+# Returns a new dict with `key` set to `value`. If the key was already
+# present its value is replaced; otherwise the pair is added at the end.
+#
+#     let d = dict.insert (dict.empty ()) "x" 1
+#     dict.insert d "y" 2   # => {x: 1, y: 2}
+#     dict.insert d "x" 9   # => {x: 9}  (replaced, not added)
+def insert :: fun (dict k v) k v -> dict k v where (hash k) = built-in "dict-insert"
+
+# Looks up `key`, returning `some value` if it's present and `none` if
+# it isn't. Pair it with `??` to supply a fallback: `(dict.lookup d k) ??
+# 0`.
+#
+#     let d = dict.insert (dict.empty ()) "x" 1
+#     dict.lookup d "x"   # => some 1
+#     dict.lookup d "y"   # => none
+def lookup :: fun (dict k v) k -> option v where (hash k) = built-in "dict-lookup"
+
+# Returns a new dict with `key` (and its value) removed. Removing a key
+# that isn't there just hands back an equivalent dict.
+#
+#     let d = dict.insert (dict.empty ()) "x" 1
+#     dict.remove d "x"   # => {}
+#     dict.remove d "y"   # => {x: 1}
+def remove :: fun (dict k v) k -> dict k v where (hash k) = built-in "dict-remove"
+
+# True when `key` has a value in the dict, false otherwise. Same answer
+# as checking whether `lookup` returned `some`, when you don't need the
+# value itself.
+#
+#     let d = dict.insert (dict.empty ()) "x" 1
+#     dict.contains-key d "x"   # => true
+#     dict.contains-key d "y"   # => false
+def contains-key :: fun (dict k v) k -> bool where (hash k) = built-in "dict-contains-key"
+
+# Returns how many key/value pairs are in the dict.
+#
+#     dict.size (dict.empty ())                          # => 0
+#     dict.size (dict.insert (dict.empty ()) "x" 1)      # => 1
+def size :: fun (dict k v) -> int = built-in "dict-size"
+
+# Returns all the keys as a list, in insertion order.
+#
+#     let d = dict.insert (dict.insert (dict.empty ()) "x" 1) "y" 2
+#     dict.keys d   # => ["x", "y"]
+def keys :: fun (dict k v) -> list k = built-in "dict-keys"
+
+# Returns all the values as a list, in the insertion order of their
+# keys.
+#
+#     let d = dict.insert (dict.insert (dict.empty ()) "x" 1) "y" 2
+#     dict.values d   # => [1, 2]
+def values :: fun (dict k v) -> list v = built-in "dict-values"
+
+# Returns every pair as a list of `(key, value)` tuples, in insertion
+# order. The inverse of `from-entries`.
+#
+#     let d = dict.insert (dict.insert (dict.empty ()) "x" 1) "y" 2
+#     dict.entries d   # => [("x", 1), ("y", 2)]
+def entries :: fun (dict k v) -> list (k, v) = built-in "dict-entries"
+
+# Builds a dict from a list of `(key, value)` tuples. Later pairs win
+# when a key appears more than once. The inverse of `entries`.
+#
+#     dict.from-entries [("x", 1), ("y", 2)]   # => {x: 1, y: 2}
+def from-entries :: fun (list (k, v)) -> dict k v where (hash k) = built-in "dict-from-entries"
+
+# Combines two dicts into one. When the same key is in both, the value
+# from the second dict (`right`) wins.
+#
+#     let a = dict.insert (dict.empty ()) "x" 1
+#     let b = dict.insert (dict.empty ()) "y" 2
+#     dict.merge a b   # => {x: 1, y: 2}
+def merge :: fun (dict k v) (dict k v) -> dict k v where (hash k) = built-in "dict-merge"
+
+# Runs `f` on every value and collects the results into a new dict,
+# keeping the same keys. The result values can be a different type than
+# you started with.
+#
+#     let d = dict.insert (dict.empty ()) "x" 1
+#     dict.map d (fun v { v + 10 })   # => {x: 11}
+def map :: fun (dict k v) (fun v -> w) -> dict k w = built-in "dict-map"
+
+# Keeps only the pairs that `pred` returns true for, dropping the rest.
+# The predicate receives both the key and the value.
+#
+#     let d = dict.from-entries [("x", 1), ("y", 2), ("z", 3)]
+#     dict.filter d (fun k v { v > 1 })   # => {y: 2, z: 3}
+def filter :: fun (dict k v) (fun k v -> bool) -> dict k v = built-in "dict-filter"
+
+# Boils the whole dict down to a single value by combining the pairs one
+# at a time, in insertion order.
+#
+# You hand it three things: the dict, a starting value, and a function
+# `f acc key value`. Pluma walks the pairs and at each one calls `f` with
+# the running total so far, the key, and the value; whatever `f` returns
+# becomes the new running total.
+#
+# Summing all the values starts the total at 0:
+#
+#     let d = dict.from-entries [("x", 1), ("y", 2)]
+#     dict.fold d 0 (fun acc k v { acc + v })   # => 3
+def fold :: fun (dict k v) b (fun b k v -> b) -> b = built-in "dict-fold"

@@ -1,0 +1,14 @@
+use core.dict
+
+# `foo` has no `hash` instance, so using it as a dict key must fail
+# the `where (hash k)` constraint on `dict.insert`.
+enum foo {
+	a
+	b
+}
+
+def main = fun {
+	let m = dict.empty ()
+	let m = dict.insert m a 1
+	print m
+}

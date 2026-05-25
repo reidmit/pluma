@@ -65,6 +65,12 @@ pub struct Analyzer<'compiler> {
 	// `value_constraints` exports so importing modules can stitch in
 	// dict args at call sites.
 	def_value_constraints: HashMap<String, Vec<crate::module::ValueConstraintExport>>,
+	// Explicit `where (trait param, ...)` constraints declared on a def's
+	// signature, keyed by def name. Each entry pairs a trait name with the
+	// annotation tyvar its `param` resolved to (pre-substitution). Merged
+	// into `def_value_constraints` after solving — this is how a `built-in`
+	// body with no dispatch cells still exports a dict-threading contract.
+	def_where_clauses: HashMap<String, Vec<(String, usize)>>,
 	// Prelude exports passed in by the compiler. Seeded into this
 	// analyzer's enum / variant / instance tables during `analyze()` so
 	// the user module sees prelude types and instances without needing
@@ -160,7 +166,7 @@ fn match_types(
 			.zip(args_b.iter())
 			.all(|(p, t)| match_types(p, t, mapping)),
 		(List(a), List(b)) => match_types(a, b, mapping),
-		(Map(ka, va), Map(kb, vb)) => match_types(ka, kb, mapping) && match_types(va, vb, mapping),
+		(Dict(ka, va), Dict(kb, vb)) => match_types(ka, kb, mapping) && match_types(va, vb, mapping),
 		(Ref(a), Ref(b)) => match_types(a, b, mapping),
 		(Tuple(a), Tuple(b)) if a.len() == b.len() => a
 			.iter()
@@ -328,7 +334,7 @@ pub fn type_defining_module(ty: &Type) -> Option<String> {
 				.unwrap_or_else(|| "__prelude__".into()),
 		),
 		Type::List(_) => Some("__prelude__".into()),
-		Type::Map(_, _) => Some("__prelude__".into()),
+		Type::Dict(_, _) => Some("__prelude__".into()),
 		Type::Ref(_) => Some("__prelude__".into()),
 		_ => None,
 	}
@@ -349,7 +355,7 @@ pub fn type_to_head_key(ty: &Type) -> Option<String> {
 		Type::Nothing => Some("nothing".into()),
 		Type::Enum(name, _) => Some(name.clone()),
 		Type::List(_) => Some("__list__".into()),
-		Type::Map(_, _) => Some("__map__".into()),
+		Type::Dict(_, _) => Some("__dict__".into()),
 		Type::Ref(_) => Some("__ref__".into()),
 		_ => None,
 	}
@@ -374,6 +380,7 @@ impl<'compiler> Analyzer<'compiler> {
 			instances: HashMap::new(),
 			fresh_class_constraints: Vec::new(),
 			def_value_constraints: HashMap::new(),
+			def_where_clauses: HashMap::new(),
 			prelude_exports: None,
 		}
 	}
@@ -525,7 +532,7 @@ impl<'compiler> Analyzer<'compiler> {
 		// added below once the prelude enum types are registered.
 		self.register_prelude_ord_trait();
 		// `hash` trait: `hash fun a -> int`. Concrete instances on int,
-		// float, string, bool. Unblocks generic `core.map` over those
+		// float, string, bool. Unblocks generic `core.dict` over those
 		// primitive key types.
 		self.register_prelude_hash_trait();
 
@@ -974,6 +981,7 @@ impl<'compiler> Analyzer<'compiler> {
 							ty: Type::Unknown,
 							dict_param_count: 0,
 							type_annotation: None,
+							where_clause: Vec::new(),
 						});
 					}
 				}
@@ -1320,10 +1328,39 @@ impl<'compiler> Analyzer<'compiler> {
 			// the body so the annotation contributes to the constraint set
 			// alongside the body's inferred type. The Gen step generalizes
 			// over the free type vars introduced by the annotation.
-			let annotated_ty = match &definition.type_annotation {
-				Some(annotation) => Some(self.resolve_annotation(annotation, &mut constraints)),
-				None => None,
+			let (annotated_ty, annotation_vars) = match &definition.type_annotation {
+				Some(annotation) => {
+					let (ty, vars) = self.resolve_annotation(annotation, &mut constraints);
+					(Some(ty), vars)
+				}
+				None => (None, HashMap::new()),
 			};
+
+			// Explicit `where (trait param, ...)` constraints on the
+			// signature. Bind each `param` to the tyvar the annotation
+			// introduced for it and stash the pair; after solving, these
+			// become `value_constraints` exports (see
+			// `resolve_forwarded_dispatches`). A `param` that names no free
+			// type variable of the annotation is an error.
+			if !definition.where_clause.is_empty() {
+				let mut recorded: Vec<(String, usize)> = Vec::new();
+				for constraint in &definition.where_clause {
+					match annotation_vars.get(&constraint.param.name) {
+						Some(&var_id) => recorded.push((constraint.trait_name.name.clone(), var_id)),
+						None => self.error(
+							constraint.param.range,
+							WhereClauseParamNotInSignature {
+								param: constraint.param.name.clone(),
+							},
+						),
+					}
+				}
+				if !recorded.is_empty() {
+					self
+						.def_where_clauses
+						.insert(definition.name.name.clone(), recorded);
+				}
+			}
 
 			match &mut definition.kind {
 				DefinitionKind::Expr(expr) => {
@@ -1646,7 +1683,7 @@ impl<'compiler> Analyzer<'compiler> {
 							| "regex"
 							| "nothing"
 							| "list"
-							| "map" | "ref"
+							| "dict" | "ref"
 					);
 				if type_ident.module.is_none()
 					&& !is_builtin
@@ -1665,18 +1702,24 @@ impl<'compiler> Analyzer<'compiler> {
 	// Resolve a type annotation in a way that lets unbound identifiers act
 	// as polymorphic type variables. Mints a fresh type var per free name,
 	// inserts it into the type scope, resolves the annotation, then restores
-	// the previous bindings. Returns the resolved type.
+	// the previous bindings. Returns the resolved type plus the free-name →
+	// minted-var-id map, so a `where` clause can bind its params to the same
+	// tyvars the signature introduced.
 	fn resolve_annotation(
 		&mut self,
 		type_expr: &TypeExprNode,
 		constraints: &mut Vec<Constraint>,
-	) -> Type {
+	) -> (Type, HashMap<String, usize>) {
 		let mut free_names = Vec::new();
 		self.collect_free_type_idents(type_expr, &mut free_names);
 
 		let mut saved: Vec<(String, Option<TypeBinding>)> = Vec::with_capacity(free_names.len());
+		let mut var_ids: HashMap<String, usize> = HashMap::with_capacity(free_names.len());
 		for name in &free_names {
 			let var = self.new_type_var();
+			if let Type::Var(id) = var {
+				var_ids.insert(name.clone(), id);
+			}
 			let prev = self.type_scope.insert(
 				name.clone(),
 				TypeBinding {
@@ -1701,7 +1744,7 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 		}
 
-		ty
+		(ty, var_ids)
 	}
 
 	fn type_expr_to_type(
@@ -1790,12 +1833,12 @@ impl<'compiler> Analyzer<'compiler> {
 						let args = self.resolve_enum_args(type_ident, 1, constraints);
 						return Type::List(Box::new(args.into_iter().next().unwrap()));
 					}
-					"map" => {
+					"dict" => {
 						let args = self.resolve_enum_args(type_ident, 2, constraints);
 						let mut iter = args.into_iter();
 						let k = iter.next().unwrap();
 						let v = iter.next().unwrap();
-						return Type::Map(Box::new(k), Box::new(v));
+						return Type::Dict(Box::new(k), Box::new(v));
 					}
 					"ref" => {
 						let args = self.resolve_enum_args(type_ident, 1, constraints);
@@ -2347,7 +2390,7 @@ impl<'compiler> Analyzer<'compiler> {
 				// in the annotation introduce fresh type vars) and unify
 				// with the bound expression's inferred type.
 				if let Some(annotation) = type_annotation {
-					let annotated_ty = self.resolve_annotation(annotation, constraints);
+					let (annotated_ty, _) = self.resolve_annotation(annotation, constraints);
 					constraints.push(eq_constraint(value.ty.clone(), annotated_ty).at(annotation.range));
 				}
 
@@ -3376,7 +3419,7 @@ impl<'compiler> Analyzer<'compiler> {
 				self.unify(&[eq_constraint((**a).clone(), (**b).clone())])
 			}
 
-			Eq(Type::Map(k1, v1), Type::Map(k2, v2), _) => self.unify(&[
+			Eq(Type::Dict(k1, v1), Type::Dict(k2, v2), _) => self.unify(&[
 				eq_constraint((**k1).clone(), (**k2).clone()),
 				eq_constraint((**v1).clone(), (**v2).clone()),
 			]),
@@ -4938,6 +4981,19 @@ impl<'compiler> Analyzer<'compiler> {
 						// already been errored on by `discharge`. Don't double-report.
 					}
 
+					// Merge in explicit `where (...)` constraints declared on
+					// this def's signature. A `built-in` body carries no
+					// dispatch cells, so this is the only source of dict params
+					// for such defs; for an ordinary body it tops up the cells'
+					// slots (de-duplicated by trait + var).
+					if let Some(wcs) = self.def_where_clauses.get(&def.name.name) {
+						for (trait_name, var_id) in wcs {
+							if let Type::Var(v) = subst.apply_to_type(&Type::Var(*var_id)) {
+								lookup_or_alloc_slot(&mut slot_order, trait_name, v);
+							}
+						}
+					}
+
 					def.dict_param_count = slot_order.len() as u16;
 					if !slot_order.is_empty() {
 						let exports: Vec<crate::module::ValueConstraintExport> = slot_order
@@ -5320,7 +5376,7 @@ impl<'compiler> Analyzer<'compiler> {
 			Type::List(element_type) => {
 				Type::List(Box::new(self.instantiate_with(element_type, mapping)))
 			}
-			Type::Map(key_type, value_type) => Type::Map(
+			Type::Dict(key_type, value_type) => Type::Dict(
 				Box::new(self.instantiate_with(key_type, mapping)),
 				Box::new(self.instantiate_with(value_type, mapping)),
 			),

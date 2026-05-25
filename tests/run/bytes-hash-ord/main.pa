@@ -1,14 +1,14 @@
-use core.map
+use core.dict
 
 def main = fun {
-	# bytes as map keys — exercises hash bytes
-	let m = map.empty ()
-	let m = map.insert m 'GET' 1
-	let m = map.insert m 'POST' 2
-	let m = map.insert m 'PUT' 3
-	when (map.lookup m 'POST') is some v { print v } is none { print -1 }
-	when (map.lookup m 'GET') is some v { print v } is none { print -1 }
-	when (map.lookup m 'DELETE') is some v { print v } is none { print -1 }
+	# bytes as dict keys — exercises hash bytes
+	let m = dict.empty ()
+	let m = dict.insert m 'GET' 1
+	let m = dict.insert m 'POST' 2
+	let m = dict.insert m 'PUT' 3
+	when (dict.lookup m 'POST') is some v { print v } is none { print -1 }
+	when (dict.lookup m 'GET') is some v { print v } is none { print -1 }
+	when (dict.lookup m 'DELETE') is some v { print v } is none { print -1 }
 
 	# ord bytes — exercise compare
 	print (compare 'abc' 'abd')

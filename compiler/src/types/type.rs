@@ -26,10 +26,10 @@ pub enum Type {
 	// Unification matches on both: names must agree AND args unify pairwise.
 	Enum(String, Vec<Type>),
 	List(Box<Type>),
-	// `Map(key, value)`. A hash-backed associative table; keys must have a
+	// `Dict(key, value)`. A hash-backed associative table; keys must have a
 	// `hash` instance, but that constraint lives on the operations in
-	// `core.map`, not on the type itself.
-	Map(Box<Type>, Box<Type>),
+	// `core.dict`, not on the type itself.
+	Dict(Box<Type>, Box<Type>),
 	// `Ref(inner)`. A mutable cell holding a value of type `inner`. Created
 	// via `ref.new`, read/written through `core.ref` operations. Equality
 	// on refs is reference identity, not structural.
@@ -56,7 +56,7 @@ impl Type {
 
 			Type::List(element_type) => element_type.contains_var(var),
 
-			Type::Map(key_type, value_type) => key_type.contains_var(var) || value_type.contains_var(var),
+			Type::Dict(key_type, value_type) => key_type.contains_var(var) || value_type.contains_var(var),
 
 			Type::Ref(inner_type) => inner_type.contains_var(var),
 
@@ -125,7 +125,7 @@ impl Type {
 				vars.extend(element_type.free_vars());
 			}
 
-			Type::Map(key_type, value_type) => {
+			Type::Dict(key_type, value_type) => {
 				vars.extend(key_type.free_vars());
 				vars.extend(value_type.free_vars());
 			}
@@ -188,7 +188,7 @@ impl Type {
 				vars.extend(element_type.free_row_vars());
 			}
 
-			Type::Map(key_type, value_type) => {
+			Type::Dict(key_type, value_type) => {
 				vars.extend(key_type.free_row_vars());
 				vars.extend(value_type.free_row_vars());
 			}
@@ -322,9 +322,9 @@ impl std::fmt::Display for Type {
 
 			Type::List(element_type) => write!(f, "list {}", maybe_add_parens(element_type)),
 
-			Type::Map(key_type, value_type) => write!(
+			Type::Dict(key_type, value_type) => write!(
 				f,
-				"map {} {}",
+				"dict {} {}",
 				maybe_add_parens(key_type),
 				maybe_add_parens(value_type),
 			),

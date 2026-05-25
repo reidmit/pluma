@@ -8,7 +8,7 @@
 # to a float, which would lose precision on large whole numbers. The
 # `get-number` helper smooths over the distinction when you don't care.
 
-use core.map
+use core.dict
 use core.math
 
 # A parsed JSON value. JSON has a handful of shapes -- null, a boolean,
@@ -23,7 +23,7 @@ enum value {
 	float  float
 	string string
 	array  (list value)
-	object (map string value)
+	object (dict string value)
 }
 
 # What `parse` returns when the text isn't valid JSON. `line` and `col`
@@ -76,7 +76,7 @@ def is-null :: fun value -> bool = fun v {
 #     json.get-field doc "name"   # => some (value.string "Ada")
 #     json.get-field doc "age"    # => none
 def get-field :: fun value string -> option value = fun v key {
-	when v is object o { map.lookup o key } is _ { none }
+	when v is object o { dict.lookup o key } is _ { none }
 }
 
 # Pulls a whole number out of a value. `some n` if the value is a JSON
@@ -134,12 +134,12 @@ def get-array :: fun value -> option (list value) = fun v {
 	when v is array xs { some xs } is _ { none }
 }
 
-# Pulls the contents of a JSON object out as a `map string value`,
-# which you can walk with `core.map`. `none` if the value isn't an
+# Pulls the contents of a JSON object out as a `dict string value`,
+# which you can walk with `core.dict`. `none` if the value isn't an
 # object.
 #
 #     try doc = json.parse "{\"a\": 1}"
 #     json.get-object doc   # => some {a: value.int 1}
-def get-object :: fun value -> option (map string value) = fun v {
+def get-object :: fun value -> option (dict string value) = fun v {
 	when v is object o { some o } is _ { none }
 }

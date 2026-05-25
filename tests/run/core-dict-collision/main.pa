@@ -1,4 +1,4 @@
-use core.map
+use core.dict
 
 # All variants hash to the same int — every key lands in the same
 # bucket, so insert / lookup / remove must walk the collision chain.
@@ -15,37 +15,37 @@ implement hash color {
 }
 
 def main = fun {
-	let m = map.empty ()
-	let m = map.insert m red "r"
-	let m = map.insert m green "g"
-	let m = map.insert m blue "b"
-	print (map.size m)
-	when (map.lookup m red) is some s {
+	let m = dict.empty ()
+	let m = dict.insert m red "r"
+	let m = dict.insert m green "g"
+	let m = dict.insert m blue "b"
+	print (dict.size m)
+	when (dict.lookup m red) is some s {
 		print s
 	} is none {
 		print "?"
 	}
-	when (map.lookup m green) is some s {
+	when (dict.lookup m green) is some s {
 		print s
 	} is none {
 		print "?"
 	}
-	when (map.lookup m blue) is some s {
+	when (dict.lookup m blue) is some s {
 		print s
 	} is none {
 		print "?"
 	}
 
 	# Remove the middle entry; the others must still resolve.
-	let m = map.remove m green
-	print (map.size m)
-	print (map.contains-key m green)
-	when (map.lookup m red) is some s {
+	let m = dict.remove m green
+	print (dict.size m)
+	print (dict.contains-key m green)
+	when (dict.lookup m red) is some s {
 		print s
 	} is none {
 		print "?"
 	}
-	when (map.lookup m blue) is some s {
+	when (dict.lookup m blue) is some s {
 		print s
 	} is none {
 		print "?"
