@@ -841,7 +841,7 @@ impl<'a> Formatter<'a> {
 				let mut parts: Vec<Doc> = vec![text(name.name.clone())];
 				for a in args {
 					parts.push(text(" "));
-					parts.push(self.format_pattern(a));
+					parts.push(self.format_pattern_arg(a));
 				}
 				concat(parts)
 			}
@@ -895,6 +895,22 @@ impl<'a> Formatter<'a> {
 				bracketed("[", "]", docs)
 			}
 			PatternKind::Interpolation(parts) => self.format_interpolation(parts),
+		}
+	}
+
+	// Format a pattern in constructor-argument position. The parser only
+	// accepts "atoms" there (`Parser::parse_pattern_atom`): a record pattern
+	// or a nested constructor-with-args isn't one, so it must be wrapped in
+	// parens — `found ({name: n})`, `some (node l r)` — or the formatted
+	// output would silently change meaning or fail to reparse (a bare `{`
+	// reads as the match body; a bare nested constructor's args flatten into
+	// the outer constructor's arg list). Lists, tuples (their own parens),
+	// literals, identifiers and `_` are all atoms and need no wrapping.
+	fn format_pattern_arg(&self, p: &PatternNode) -> Doc {
+		if pattern_needs_parens_as_arg(p) {
+			concat(vec![text("("), self.format_pattern(p), text(")")])
+		} else {
+			self.format_pattern(p)
 		}
 	}
 
@@ -974,6 +990,19 @@ fn expr_prec(e: &ExprNode) -> u8 {
 		Let(_) | Try(_) => 0,
 		_ => u8::MAX,
 	}
+}
+
+// Whether a pattern needs wrapping parens when it appears as a constructor
+// argument (mirrors `Parser::parse_pattern_atom`). Records aren't accepted
+// bare in that position, and a nested constructor (which always carries
+// args — a zero-arg variant parses as an `Identifier`) would otherwise
+// flatten into the outer constructor's arg list. Everything else — lists,
+// tuples, literals, identifiers, `_`, interpolations — is already an atom.
+fn pattern_needs_parens_as_arg(p: &PatternNode) -> bool {
+	matches!(
+		&p.kind,
+		PatternKind::Record { .. } | PatternKind::Constructor(..)
+	)
 }
 
 // Binding-power level of an infix operator (see `operator.rs`). Same-level

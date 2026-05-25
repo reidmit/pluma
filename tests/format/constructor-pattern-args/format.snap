@@ -1,0 +1,27 @@
+---
+source: tests/format.rs
+expression: once
+---
+# Constructor-pattern arguments must be parenthesized when they're a record
+# pattern or a nested constructor (otherwise the `{` reads as the match body,
+# or the nested constructor's args flatten into the outer one). Lists, tuples,
+# literals, identifiers and `_` are atoms and need no parens — and redundant
+# parens around those are stripped.
+def f = fun e {
+	when e is rec ({name: n, score: s}) {
+		n
+	} is nested (cons x y) {
+		x
+	} is deep (wrap (some v)) {
+		v
+	} is in-list [a, b] {
+		a
+	} is in-tuple (a, b) {
+		a
+	} is atoms x _ 0 {
+		x
+	} else {
+		0
+	}
+}
+
