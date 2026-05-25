@@ -24,6 +24,7 @@ pub fn stdlib_sources() -> &'static [(&'static str, &'static str)] {
 		("core.base64", include_str!("stdlib/base64.pa")),
 		("core.random", include_str!("stdlib/random.pa")),
 		("core.uuid", include_str!("stdlib/uuid.pa")),
+		("core.time", include_str!("stdlib/time.pa")),
 	]
 }
 

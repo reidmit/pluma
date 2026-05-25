@@ -1,0 +1,32 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+2026-05-25T14:30:00Z
+2026-05-25 14:30:00
+Monday, May 25 2026
+2026/5/25 wd=1
+48h in 2 days
+3000ms in 3s
+plus 90 min: 2026-05-25T16:00:00Z
+minus 1 day: 2026-05-24T14:30:00Z
+diff: 24h
+jan31 +1mo: 2024-02-29T00:00:00Z
+jan31 +1yr: 2025-01-31T00:00:00Z
+before: true
+after:  false
+eq:     true
+min: 2026-05-25T13:30:00Z
+max: 2026-05-25T14:30:00Z
+compare: lt
+unix: 1779719400
+from-unix: 2026-05-25T14:30:00Z
+parsed: 2026-05-25T14:30:00Z
+parsed-date: 2026-05-25T00:00:00Z
+time: could not parse `not a time` as ISO 8601
+time: invalid date/time: parameter 'day' for `2026-02` is invalid, must be in range `1..=28`
+== stderr ==
+

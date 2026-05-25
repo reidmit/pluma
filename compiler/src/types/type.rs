@@ -8,6 +8,13 @@ pub enum Type {
 	Int,
 	Float,
 	Regex,
+	// An opaque point on the wall clock (UTC), backed by an i64 nanosecond
+	// count since the Unix epoch. Produced and consumed only by `core.time`
+	// builtins; the surface language can't peek at the raw count.
+	Instant,
+	// An opaque signed time span, backed by an i64 nanosecond count. Also
+	// owned by `core.time`.
+	Duration,
 	String,
 	Bytes,
 	Nothing,
@@ -48,6 +55,8 @@ impl Type {
 			| Type::String
 			| Type::Bytes
 			| Type::Regex
+			| Type::Instant
+			| Type::Duration
 			| Type::Unknown => false,
 
 			Type::PartialTuple(_, element_type) => element_type.contains_var(var),
@@ -56,7 +65,9 @@ impl Type {
 
 			Type::List(element_type) => element_type.contains_var(var),
 
-			Type::Dict(key_type, value_type) => key_type.contains_var(var) || value_type.contains_var(var),
+			Type::Dict(key_type, value_type) => {
+				key_type.contains_var(var) || value_type.contains_var(var)
+			}
 
 			Type::Ref(inner_type) => inner_type.contains_var(var),
 
@@ -101,6 +112,8 @@ impl Type {
 			| Type::Int
 			| Type::Float
 			| Type::Regex
+			| Type::Instant
+			| Type::Duration
 			| Type::String
 			| Type::Bytes
 			| Type::Nothing => {
@@ -169,6 +182,8 @@ impl Type {
 			| Type::Int
 			| Type::Float
 			| Type::Regex
+			| Type::Instant
+			| Type::Duration
 			| Type::String
 			| Type::Bytes
 			| Type::Nothing
@@ -242,6 +257,8 @@ impl std::fmt::Display for Type {
 			Type::String => write!(f, "string"),
 			Type::Bytes => write!(f, "bytes"),
 			Type::Regex => write!(f, "regex"),
+			Type::Instant => write!(f, "instant"),
+			Type::Duration => write!(f, "duration"),
 			Type::Nothing => write!(f, "nothing"),
 
 			Type::Enum(name, args) => {

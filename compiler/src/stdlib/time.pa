@@ -1,0 +1,345 @@
+# Working with time: reading the clock, measuring how long something took,
+# and pulling apart or formatting calendar dates.
+#
+# Two opaque types carry time around. An `instant` is a single point on the
+# wall clock -- the kind of thing `now` hands back, and what you compare,
+# format, or stash in a log line. A `duration` is a length of time -- "three
+# days", "500 milliseconds" -- with no particular start. You build durations
+# with the unit helpers (`time.days 3`, `time.millis 500`) rather than from a
+# bare number, so there's never any doubt about which unit you meant.
+#
+# Instants are stored as nanoseconds since the Unix epoch (1970-01-01 UTC).
+# To look at the calendar fields -- year, month, day, and so on -- explode an
+# instant into `parts` with `time.parts`; to go the other way, build one with
+# `time.date`, `time.date-time`, or `time.from-parts`, each of which validates
+# the components and hands back a `result`.
+#
+# Everything here works in UTC. Named time zones and local-time conversion
+# aren't available yet.
+
+# A calendar date broken into its pieces, as seen in UTC. You get one from
+# `time.parts`; `weekday` runs 1 (Monday) through 7 (Sunday). `nanosecond` is
+# the sub-second part, 0 through 999,999,999.
+#
+# When you hand a `parts` back to `time.from-parts`, only the first seven
+# fields are read -- `weekday` is recomputed, so its value on input is
+# ignored.
+alias parts {
+	year :: int,
+	month :: int,
+	day :: int,
+	hour :: int,
+	minute :: int,
+	second :: int,
+	nanosecond :: int,
+	weekday :: int,
+}
+
+# --- the clock -----------------------------------------------------------
+
+# The current moment, read from the system's wall clock (UTC).
+#
+#     time.now ()   # e.g. 2026-05-25T14:30:00Z
+def now :: fun nothing -> instant = built-in "time-now"
+
+# A reading from a steady, always-forward clock, as a `duration` measured
+# from some fixed (but unspecified) point. Unlike `now`, it never jumps
+# backwards when the system clock is adjusted, so it's the right tool for
+# timing how long work takes: read it before and after, then subtract.
+#
+#     let t0 = time.monotonic ()
+#     do-the-work ()
+#     let elapsed = time.duration-diff (time.monotonic ()) t0
+def monotonic :: fun nothing -> duration = built-in "time-monotonic"
+
+# Pauses the program for the given duration. A zero or negative duration
+# returns immediately.
+#
+#     time.sleep (time.seconds 2)   # wait two seconds
+def sleep :: fun duration -> nothing = built-in "time-sleep"
+
+# --- building instants ---------------------------------------------------
+
+# Builds an instant from full UTC calendar components: year, month, day,
+# hour, minute, second, and sub-second nanoseconds. `err` if the components
+# don't name a real moment (month 13, April 31, hour 24, ...).
+#
+#     time.make 2026 5 25 14 30 0 0   # => ok 2026-05-25T14:30:00Z
+#     time.make 2026 2 30 0 0 0 0     # => err "time: invalid date/time: ..."
+def make :: fun int int int int int int int -> result instant string = built-in "time-make"
+
+# A date at midnight UTC. `err` on an impossible date.
+#
+#     time.date 2026 5 25   # => ok 2026-05-25T00:00:00Z
+def date :: fun int int int -> result instant string = fun y m d {
+	make y m d 0 0 0 0
+}
+
+# A date and time of day (to the second) in UTC. `err` on impossible values.
+#
+#     time.date-time 2026 5 25 14 30 0   # => ok 2026-05-25T14:30:00Z
+def date-time :: fun int int int int int int -> result instant string = fun y m d h mi s {
+	make y m d h mi s 0
+}
+
+# Rebuilds an instant from a `parts` record (as produced by `time.to-parts`),
+# validating it. The inverse of `time.to-parts`; `weekday` is ignored on the
+# way in (it's recomputed from the date).
+#
+#     let p = time.to-parts t
+#     when time.from-parts p is ok t2 { ... } is err msg { ... }   # t2 == t
+def from-parts :: fun parts -> result instant string = fun p {
+	make p.year p.month p.day p.hour p.minute p.second p.nanosecond
+}
+
+# The instant `secs` seconds after the Unix epoch.
+#
+#     time.from-unix 1748182200   # => 2025-05-25T14:30:00Z
+def from-unix :: fun int -> instant = fun secs {
+	from-unix-nanos (secs * 1000000000)
+}
+
+# The instant `ms` milliseconds after the Unix epoch.
+def from-unix-millis :: fun int -> instant = fun ms {
+	from-unix-nanos (ms * 1000000)
+}
+
+# The instant `ns` nanoseconds after the Unix epoch. The most precise
+# constructor, and the one the others are built on.
+def from-unix-nanos :: fun int -> instant = built-in "time-from-unix-nanos"
+
+# --- reading instants ----------------------------------------------------
+
+# Explodes an instant into its UTC calendar fields (see `parts`).
+#
+#     let p = time.to-parts (time.now ())
+#     io.print "year is $(to-string p.year)"
+def to-parts :: fun instant -> parts = built-in "time-parts"
+
+# The day of the week for an instant, 1 (Monday) through 7 (Sunday), in UTC.
+def weekday :: fun instant -> int = fun t {
+	(to-parts t).weekday
+}
+
+# Whole seconds between the Unix epoch and `t` (truncated toward the epoch).
+def to-unix :: fun instant -> int = fun t {
+	(to-unix-nanos t) / 1000000000
+}
+
+# Whole milliseconds since the Unix epoch (truncated).
+def to-unix-millis :: fun instant -> int = fun t {
+	(to-unix-nanos t) / 1000000
+}
+
+# Nanoseconds since the Unix epoch -- the instant's exact internal value.
+def to-unix-nanos :: fun instant -> int = built-in "time-to-unix-nanos"
+
+# --- formatting and parsing ----------------------------------------------
+
+# Renders an instant in UTC using a strftime-style format string. Common
+# directives: `%Y` year, `%m` month, `%d` day, `%H` hour (24h), `%M` minute,
+# `%S` second, `%A`/`%a` weekday name, `%B`/`%b` month name, `%j` day of year,
+# `%p` AM/PM, `%%` a literal percent.
+#
+#     time.format t "%Y-%m-%d %H:%M:%S"   # "2026-05-25 14:30:00"
+#     time.format t "%A, %B %d"           # "Monday, May 25"
+def format :: fun instant string -> string = built-in "time-format"
+
+# An instant as an ISO 8601 / RFC 3339 string in UTC -- the same form it
+# prints in. Round-trips with `time.parse-iso`.
+#
+#     time.to-iso t   # "2026-05-25T14:30:00Z"
+def to-iso :: fun instant -> string = fun t {
+	to-string t
+}
+
+# Parses an ISO 8601 / RFC 3339 string into an instant. Forgiving about how
+# much is present: a full timestamp, a zoneless date-and-time (read as UTC),
+# or a bare date (midnight UTC) all work. `err` on anything else.
+#
+#     time.parse-iso "2026-05-25T14:30:00Z"   # => ok ...
+#     time.parse-iso "2026-05-25"             # => ok 2026-05-25T00:00:00Z
+#     time.parse-iso "nope"                   # => err "time: could not parse ..."
+def parse-iso :: fun string -> result instant string = built-in "time-parse-iso"
+
+# Parses a string against an explicit strftime-style format (same directives
+# as `time.format`). Components not covered by the format default to a UTC
+# date/time. `err` if the input doesn't match.
+#
+#     time.parse "%Y-%m-%d" "2026-05-25"   # => ok 2026-05-25T00:00:00Z
+def parse :: fun string string -> result instant string = built-in "time-parse"
+
+# --- durations -----------------------------------------------------------
+
+# A duration of `n` nanoseconds -- the finest-grained unit, and the one the
+# others build on.
+def nanos :: fun int -> duration = built-in "time-duration-of-nanos"
+
+# A duration of `n` microseconds.
+def micros :: fun int -> duration = fun n {
+	nanos (n * 1000)
+}
+
+# A duration of `n` milliseconds.
+def millis :: fun int -> duration = fun n {
+	nanos (n * 1000000)
+}
+
+# A duration of `n` seconds.
+def seconds :: fun int -> duration = fun n {
+	nanos (n * 1000000000)
+}
+
+# A duration of `n` minutes.
+def minutes :: fun int -> duration = fun n {
+	nanos (n * 60000000000)
+}
+
+# A duration of `n` hours.
+def hours :: fun int -> duration = fun n {
+	nanos (n * 3600000000000)
+}
+
+# A duration of `n` days (each exactly 24 hours).
+def days :: fun int -> duration = fun n {
+	nanos (n * 86400000000000)
+}
+
+# A duration's length in nanoseconds -- its exact internal value.
+def as-nanos :: fun duration -> int = built-in "time-duration-as-nanos"
+
+# A duration in whole microseconds (truncated).
+def as-micros :: fun duration -> int = fun d {
+	(as-nanos d) / 1000
+}
+
+# A duration in whole milliseconds (truncated).
+def as-millis :: fun duration -> int = fun d {
+	(as-nanos d) / 1000000
+}
+
+# A duration in whole seconds (truncated).
+def as-seconds :: fun duration -> int = fun d {
+	(as-nanos d) / 1000000000
+}
+
+# A duration in whole minutes (truncated).
+def as-minutes :: fun duration -> int = fun d {
+	(as-nanos d) / 60000000000
+}
+
+# A duration in whole hours (truncated).
+def as-hours :: fun duration -> int = fun d {
+	(as-nanos d) / 3600000000000
+}
+
+# A duration in whole days (truncated).
+def as-days :: fun duration -> int = fun d {
+	(as-nanos d) / 86400000000000
+}
+
+# Adds two durations.
+def duration-add :: fun duration duration -> duration = fun a b {
+	nanos ((as-nanos a) + (as-nanos b))
+}
+
+# Subtracts the second duration from the first (can go negative).
+def duration-diff :: fun duration duration -> duration = fun a b {
+	nanos ((as-nanos a) - (as-nanos b))
+}
+
+# Multiplies a duration by a whole number.
+def scale :: fun duration int -> duration = fun d n {
+	nanos ((as-nanos d) * n)
+}
+
+# Flips the sign of a duration.
+def negate :: fun duration -> duration = fun d {
+	nanos (0 - (as-nanos d))
+}
+
+# --- shifting instants ---------------------------------------------------
+
+# The instant `d` later than `t`.
+#
+#     time.add (time.now ()) (time.days 7)   # one week from now
+def add :: fun instant duration -> instant = fun t d {
+	from-unix-nanos ((to-unix-nanos t) + (as-nanos d))
+}
+
+# The instant `d` earlier than `t`.
+def subtract :: fun instant duration -> instant = fun t d {
+	from-unix-nanos ((to-unix-nanos t) - (as-nanos d))
+}
+
+# How much time separates two instants, as a duration (`a - b`). Negative
+# when `a` is earlier than `b`.
+#
+#     time.as-millis (time.diff finish start)   # elapsed, in ms
+def diff :: fun instant instant -> duration = fun a b {
+	nanos ((to-unix-nanos a) - (to-unix-nanos b))
+}
+
+# `t` shifted by a whole number of days (each exactly 24 hours). Negative
+# `n` goes backwards.
+def add-days :: fun instant int -> instant = fun t n {
+	add t (days n)
+}
+
+# `t` shifted by a whole number of hours.
+def add-hours :: fun instant int -> instant = fun t n {
+	add t (hours n)
+}
+
+# `t` shifted by a whole number of minutes.
+def add-minutes :: fun instant int -> instant = fun t n {
+	add t (minutes n)
+}
+
+# `t` shifted by a whole number of seconds.
+def add-seconds :: fun instant int -> instant = fun t n {
+	add t (seconds n)
+}
+
+# `t` shifted by whole calendar months, clamping the day to the end of the
+# target month (Jan 31 plus one month is Feb 28, or 29 in a leap year).
+# Distinct from adding a duration of days. `err` only on overflow.
+#
+#     time.add-months t 3    # three months on
+#     time.add-months t -1   # one month back
+def add-months :: fun instant int -> result instant string = built-in "time-add-months"
+
+# `t` shifted by whole calendar years (Feb 29 clamps to Feb 28 in a non-leap
+# target year). `err` only on overflow.
+def add-years :: fun instant int -> result instant string = built-in "time-add-years"
+
+# --- comparing instants --------------------------------------------------
+
+# True when `a` is strictly earlier than `b`. (Instants also support `==`
+# directly for equality.)
+def before :: fun instant instant -> bool = fun a b {
+	(to-unix-nanos a) < (to-unix-nanos b)
+}
+
+# True when `a` is strictly later than `b`.
+def after :: fun instant instant -> bool = fun a b {
+	(to-unix-nanos a) > (to-unix-nanos b)
+}
+
+# Orders two instants: `lt` if `a` is earlier, `gt` if later, `eq` if the
+# same moment. Suitable for `list.sort`.
+def compare :: fun instant instant -> ordering = fun a b {
+	let x = to-unix-nanos a
+	let y = to-unix-nanos b
+	if (x < y) is true { lt } else if (x > y) is true { gt } else { eq }
+}
+
+# The earlier of two instants.
+def min :: fun instant instant -> instant = fun a b {
+	if (before a b) is true { a } else { b }
+}
+
+# The later of two instants.
+def max :: fun instant instant -> instant = fun a b {
+	if (after a b) is true { a } else { b }
+}

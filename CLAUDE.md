@@ -30,7 +30,7 @@ When writing `.pa` code, these are the traps that don't match other languages' i
   ```
   Construct as `option.some 42` or bare `some 42` when the type is clear. Match by bare variant: `when x is some n { ... } is none { ... }`.
 - **`def` is top-level; `let` is local.** Top-level bindings can't use `let`, and `let` patterns must be irrefutable (use `if`/`when` for `some`/`ok`/etc.).
-- **`use core.foo` for stdlib imports.** Available modules include `core.list`, `core.dict`, `core.bytes`, `core.string`, `core.math`, `core.assert`, `core.hex`, `core.base64`, `core.random`, `core.uuid`. `ref` is auto-imported — don't `use core.ref`.
+- **`use core.foo` for stdlib imports.** Available modules include `core.list`, `core.dict`, `core.bytes`, `core.string`, `core.math`, `core.assert`, `core.hex`, `core.base64`, `core.random`, `core.uuid`, `core.time`. `ref` is auto-imported — don't `use core.ref`.
 
 For unfamiliar stdlib calls, `grep tests/run/*/main.pa` for a working example rather than guessing.
 

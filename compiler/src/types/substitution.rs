@@ -53,7 +53,9 @@ impl Substitution {
 			| Type::Float
 			| Type::String
 			| Type::Bytes
-			| Type::Regex => ty.clone(),
+			| Type::Regex
+			| Type::Instant
+			| Type::Duration => ty.clone(),
 
 			Type::Var(var) => {
 				if self.solutions.contains_key(var) {

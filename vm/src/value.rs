@@ -38,6 +38,12 @@ pub enum Value {
 	// tag owned (no leak) and cheap to clone.
 	Builtin(Rc<str>),
 	Regex(Rc<RegexData>),
+	// An opaque wall-clock instant: nanoseconds since the Unix epoch (UTC),
+	// signed. The surface type is `instant` (a `core.time` primitive); the
+	// VM only ever produces these from `core.time` builtins.
+	Instant(i64),
+	// An opaque time span in nanoseconds, signed. Surface type `duration`.
+	Duration(i64),
 	VariantCtor(Rc<VariantCtorData>),
 	// A typeclass method dictionary: a positional array of method values,
 	// indexed by trait declaration order. Built per-instance at program load
@@ -248,6 +254,21 @@ impl std::fmt::Display for Value {
 			Value::Closure(_) => write!(f, "<closure>"),
 			Value::Builtin(_) => write!(f, "<builtin>"),
 			Value::Regex(r) => write!(f, "<regex {}>", r.compiled.as_str()),
+			// Wall-clock instants print as RFC 3339 in UTC (e.g.
+			// `2026-05-25T14:30:00Z`); durations print in jiff's "friendly"
+			// form (e.g. `2d`, `1h 30m`, `500ms`).
+			Value::Instant(nanos) => match jiff::Timestamp::from_nanosecond(*nanos as i128) {
+				Ok(ts) => write!(f, "{}", ts),
+				Err(_) => write!(f, "<instant {}ns>", nanos),
+			},
+			Value::Duration(nanos) => {
+				let sd = jiff::SignedDuration::from_nanos(*nanos);
+				write!(
+					f,
+					"{}",
+					jiff::fmt::friendly::SpanPrinter::new().duration_to_string(&sd)
+				)
+			}
 			Value::VariantCtor(c) => {
 				let bare = c
 					.qualified_enum
@@ -282,6 +303,8 @@ pub fn values_eq(a: &Value, b: &Value) -> bool {
 		(Value::Bool(x), Value::Bool(y)) => x == y,
 		(Value::String(x), Value::String(y)) => x == y,
 		(Value::Bytes(x), Value::Bytes(y)) => x == y,
+		(Value::Instant(x), Value::Instant(y)) => x == y,
+		(Value::Duration(x), Value::Duration(y)) => x == y,
 		(Value::Nothing, Value::Nothing) => true,
 		(Value::Tuple(xs), Value::Tuple(ys)) => {
 			xs.len() == ys.len() && xs.iter().zip(ys.iter()).all(|(a, b)| values_eq(a, b))

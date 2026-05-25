@@ -160,6 +160,8 @@ fn match_types(
 		| (Bool, Bool)
 		| (String, String)
 		| (Regex, Regex)
+		| (Instant, Instant)
+		| (Duration, Duration)
 		| (Nothing, Nothing) => true,
 		(Enum(a, args_a), Enum(b, args_b)) if a == b && args_a.len() == args_b.len() => args_a
 			.iter()
@@ -196,6 +198,8 @@ fn type_keys_match(a: &Type, b: &Type) -> bool {
 		| (Type::String, Type::String)
 		| (Type::Bytes, Type::Bytes)
 		| (Type::Regex, Type::Regex)
+		| (Type::Instant, Type::Instant)
+		| (Type::Duration, Type::Duration)
 		| (Type::Nothing, Type::Nothing) => true,
 		(Type::Enum(a, _), Type::Enum(b, _)) => a == b,
 		_ => false,
@@ -326,6 +330,8 @@ pub fn type_defining_module(ty: &Type) -> Option<String> {
 		| Type::String
 		| Type::Bytes
 		| Type::Regex
+		| Type::Instant
+		| Type::Duration
 		| Type::Nothing => Some("__prelude__".into()),
 		Type::Enum(name, _) => Some(
 			name
@@ -352,6 +358,8 @@ pub fn type_to_head_key(ty: &Type) -> Option<String> {
 		Type::String => Some("string".into()),
 		Type::Bytes => Some("bytes".into()),
 		Type::Regex => Some("regex".into()),
+		Type::Instant => Some("instant".into()),
+		Type::Duration => Some("duration".into()),
 		Type::Nothing => Some("nothing".into()),
 		Type::Enum(name, _) => Some(name.clone()),
 		Type::List(_) => Some("__list__".into()),
@@ -397,6 +405,8 @@ impl<'compiler> Analyzer<'compiler> {
 		self.add_type_binding("string".into(), Type::String, Range::collapsed(0, 0));
 		self.add_type_binding("bytes".into(), Type::Bytes, Range::collapsed(0, 0));
 		self.add_type_binding("regex".into(), Type::Regex, Range::collapsed(0, 0));
+		self.add_type_binding("instant".into(), Type::Instant, Range::collapsed(0, 0));
+		self.add_type_binding("duration".into(), Type::Duration, Range::collapsed(0, 0));
 		self.add_type_binding("float".into(), Type::Float, Range::collapsed(0, 0));
 		self.add_type_binding("nothing".into(), Type::Nothing, Range::collapsed(0, 0));
 
@@ -1673,18 +1683,21 @@ impl<'compiler> Analyzer<'compiler> {
 				self.collect_free_type_idents(ret, out);
 			}
 			TypeExprKind::Single(type_ident) => {
-				let is_builtin =
-					matches!(
-						type_ident.name.as_str(),
-						"string"
-							| "bytes"
-							| "int" | "float"
-							| "bool"
-							| "regex"
-							| "nothing"
-							| "list"
-							| "dict" | "ref"
-					);
+				let is_builtin = matches!(
+					type_ident.name.as_str(),
+					"string"
+						| "bytes"
+						| "int"
+						| "float"
+						| "bool"
+						| "regex"
+						| "instant"
+						| "duration"
+						| "nothing"
+						| "list"
+						| "dict"
+						| "ref"
+				);
 				if type_ident.module.is_none()
 					&& !is_builtin
 					&& !self.type_scope.contains_key(&type_ident.name)
@@ -1826,6 +1839,8 @@ impl<'compiler> Analyzer<'compiler> {
 					"float" => return Type::Float,
 					"bool" => return Type::Bool,
 					"regex" => return Type::Regex,
+					"instant" => return Type::Instant,
+					"duration" => return Type::Duration,
 					"nothing" => return Type::Nothing,
 					"list" => {
 						// `list a` — one type parameter; missing args become fresh vars
@@ -3374,6 +3389,8 @@ impl<'compiler> Analyzer<'compiler> {
 			| Eq(Type::String, Type::String, _)
 			| Eq(Type::Bytes, Type::Bytes, _)
 			| Eq(Type::Regex, Type::Regex, _)
+			| Eq(Type::Instant, Type::Instant, _)
+			| Eq(Type::Duration, Type::Duration, _)
 			| Eq(Type::Nothing, Type::Nothing, _)
 			| Eq(Type::Unknown, Type::Unknown, _) => Substitution::empty(),
 
@@ -5368,6 +5385,8 @@ impl<'compiler> Analyzer<'compiler> {
 			| Type::String
 			| Type::Bytes
 			| Type::Regex
+			| Type::Instant
+			| Type::Duration
 			| Type::Unknown
 			| Type::Nothing => ty.clone(),
 			Type::PartialTuple(index, inner) => {
