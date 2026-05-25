@@ -6,6 +6,7 @@
 	"patterns": [
 		{ "include": "#comments" },
 		{ "include": "#strings" },
+		{ "include": "#bytes" },
 		{ "include": "#regex" },
 		{ "include": "#numbers" },
 		{ "include": "#use-declaration" },
@@ -66,10 +67,27 @@
 				}
 			]
 		},
+		"bytes": {
+			"name": "string.quoted.single.pluma",
+			"begin": "'",
+			"end": "'",
+			"beginCaptures": {
+				"0": { "name": "punctuation.definition.string.begin.pluma" }
+			},
+			"endCaptures": {
+				"0": { "name": "punctuation.definition.string.end.pluma" }
+			},
+			"patterns": [
+				{
+					"name": "constant.character.escape.pluma",
+					"match": "\\\\(x[0-9A-Fa-f]{2}|.)"
+				}
+			]
+		},
 		"regex": {
 			"name": "string.regexp.pluma",
-			"begin": "(?<![A-Za-z0-9_\\-])/\\s",
-			"end": "\\s/",
+			"begin": "`",
+			"end": "`",
 			"beginCaptures": {
 				"0": { "name": "punctuation.definition.regex.begin.pluma" }
 			},
@@ -86,6 +104,14 @@
 					]
 				},
 				{
+					"name": "support.constant.character-class.regex.pluma",
+					"match": "(?<![A-Za-z0-9_-])(digit|letter|word|whitespace|any)(?![A-Za-z0-9_-])"
+				},
+				{
+					"name": "keyword.control.anchor.regex.pluma",
+					"match": "[$%^]"
+				},
+				{
 					"name": "keyword.operator.regex.pluma",
 					"match": "[|?*+(){}]"
 				},
@@ -99,28 +125,28 @@
 			"patterns": [
 				{
 					"name": "constant.numeric.hex.pluma",
-					"match": "\\b0x[0-9A-Fa-f]+\\b"
+					"match": "(?<![A-Za-z0-9_])0[xX][0-9A-Fa-f][0-9A-Fa-f_]*"
 				},
 				{
 					"name": "constant.numeric.octal.pluma",
-					"match": "\\b0o[0-7]+\\b"
+					"match": "(?<![A-Za-z0-9_])0[oO][0-7][0-7_]*"
 				},
 				{
 					"name": "constant.numeric.binary.pluma",
-					"match": "\\b0b[01]+\\b"
+					"match": "(?<![A-Za-z0-9_])0[bB][01][01_]*"
 				},
 				{
 					"name": "constant.numeric.float.pluma",
-					"match": "\\b\\d+\\.\\d+\\b"
+					"match": "(?<![A-Za-z0-9_])[0-9][0-9_]*\\.[0-9][0-9_]*"
 				},
 				{
 					"name": "constant.numeric.decimal.pluma",
-					"match": "\\b\\d+\\b"
+					"match": "(?<![A-Za-z0-9_])[0-9][0-9_]*"
 				}
 			]
 		},
 		"use-declaration": {
-			"match": "\\b(use)\\s+([A-Za-z_][A-Za-z0-9_\\-]*(?:\\.[A-Za-z_][A-Za-z0-9_\\-]*)*)(?:\\s+(as)\\s+([A-Za-z_][A-Za-z0-9_\\-]*))?",
+			"match": "(?<![A-Za-z0-9_-])(use)\\s+([A-Za-z_][A-Za-z0-9_-]*(?:\\.[A-Za-z_][A-Za-z0-9_-]*)*)(?:\\s+(as)\\s+([A-Za-z_][A-Za-z0-9_-]*))?",
 			"captures": {
 				"1": { "name": "keyword.control.import.pluma" },
 				"2": { "name": "entity.name.namespace.pluma" },
@@ -129,28 +155,28 @@
 			}
 		},
 		"enum-declaration": {
-			"match": "\\b(enum)\\s+([A-Za-z_][A-Za-z0-9_\\-]*)",
+			"match": "(?<![A-Za-z0-9_-])(enum)\\s+([A-Za-z_][A-Za-z0-9_-]*)",
 			"captures": {
 				"1": { "name": "keyword.declaration.enum.pluma" },
 				"2": { "name": "entity.name.type.enum.pluma" }
 			}
 		},
 		"alias-declaration": {
-			"match": "\\b(alias)\\s+([A-Za-z_][A-Za-z0-9_\\-]*)",
+			"match": "(?<![A-Za-z0-9_-])(alias)\\s+([A-Za-z_][A-Za-z0-9_-]*)",
 			"captures": {
 				"1": { "name": "keyword.declaration.alias.pluma" },
 				"2": { "name": "entity.name.type.alias.pluma" }
 			}
 		},
 		"trait-declaration": {
-			"match": "\\b(trait)\\s+([A-Za-z_][A-Za-z0-9_\\-]*)",
+			"match": "(?<![A-Za-z0-9_-])(trait)\\s+([A-Za-z_][A-Za-z0-9_-]*)",
 			"captures": {
 				"1": { "name": "keyword.declaration.trait.pluma" },
 				"2": { "name": "entity.name.type.interface.pluma" }
 			}
 		},
 		"implement-declaration": {
-			"match": "\\b(implement)\\s+([A-Za-z_][A-Za-z0-9_\\-]*)\\s+([A-Za-z_][A-Za-z0-9_\\-]*)",
+			"match": "(?<![A-Za-z0-9_-])(implement)\\s+([A-Za-z_][A-Za-z0-9_-]*)\\s+([A-Za-z_][A-Za-z0-9_-]*)",
 			"captures": {
 				"1": { "name": "keyword.declaration.implement.pluma" },
 				"2": { "name": "entity.name.type.interface.pluma" },
@@ -158,14 +184,14 @@
 			}
 		},
 		"def-declaration": {
-			"match": "\\b(def)\\s+([A-Za-z_][A-Za-z0-9_\\-]*)",
+			"match": "(?<![A-Za-z0-9_-])(def)\\s+([A-Za-z_][A-Za-z0-9_-]*)",
 			"captures": {
 				"1": { "name": "keyword.declaration.def.pluma" },
 				"2": { "name": "entity.name.function.pluma" }
 			}
 		},
 		"let-binding": {
-			"match": "\\b(let)\\s+([A-Za-z_][A-Za-z0-9_\\-]*)",
+			"match": "(?<![A-Za-z0-9_-])(let)\\s+([A-Za-z_][A-Za-z0-9_-]*)",
 			"captures": {
 				"1": { "name": "keyword.declaration.let.pluma" },
 				"2": { "name": "variable.other.binding.pluma" }
@@ -173,14 +199,15 @@
 		},
 		"type-annotation": {
 			"begin": "::",
-			"end": "(?=$|[,)}\\]])",
+			"end": "(?=$|=|[,)}\\]])",
 			"beginCaptures": {
 				"0": { "name": "keyword.operator.type-annotation.pluma" }
 			},
 			"patterns": [
 				{ "include": "#builtin-types" },
+				{ "include": "#keywords" },
 				{
-					"match": "\\b([A-Za-z_][A-Za-z0-9_\\-]*)\\.([A-Za-z_][A-Za-z0-9_\\-]*)",
+					"match": "\\b([A-Za-z_][A-Za-z0-9_-]*)\\.([A-Za-z_][A-Za-z0-9_-]*)",
 					"captures": {
 						"1": { "name": "entity.name.namespace.pluma" },
 						"2": { "name": "entity.name.type.pluma" }
@@ -188,7 +215,7 @@
 				},
 				{
 					"name": "entity.name.type.pluma",
-					"match": "\\b[A-Za-z_][A-Za-z0-9_\\-]*\\b"
+					"match": "\\b[A-Za-z_][A-Za-z0-9_-]*\\b"
 				},
 				{ "include": "#operators" }
 			]
@@ -197,11 +224,15 @@
 			"patterns": [
 				{
 					"name": "keyword.control.pluma",
-					"match": "\\b(if|else|when|while|is|in)\\b"
+					"match": "(?<![A-Za-z0-9_-])(if|else|when|while|is|in|try)(?![A-Za-z0-9_-])"
 				},
 				{
 					"name": "keyword.declaration.pluma",
-					"match": "\\b(def|let|alias|enum|trait|implement|where|use|as|fun)\\b"
+					"match": "(?<![A-Za-z0-9_-])(def|let|alias|enum|trait|implement|where|use|as|fun|test)(?![A-Za-z0-9_-])"
+				},
+				{
+					"name": "keyword.other.builtin.pluma",
+					"match": "(?<![A-Za-z0-9_-])built-in(?![A-Za-z0-9_-])"
 				}
 			]
 		},
@@ -209,7 +240,7 @@
 			"patterns": [
 				{
 					"name": "constant.language.boolean.pluma",
-					"match": "\\b(true|false)\\b"
+					"match": "(?<![A-Za-z0-9_-])(true|false)(?![A-Za-z0-9_-])"
 				}
 			]
 		},
@@ -217,11 +248,11 @@
 			"patterns": [
 				{
 					"name": "support.type.primitive.pluma",
-					"match": "\\b(int|float|string|bool|regex|nothing)\\b"
+					"match": "(?<![A-Za-z0-9_-])(int|float|string|bool|regex|bytes|nothing)(?![A-Za-z0-9_.-])"
 				},
 				{
 					"name": "support.type.builtin.pluma",
-					"match": "\\b(list|option|result|pair|ref|map)\\b"
+					"match": "(?<![A-Za-z0-9_-])(list|option|result|pair|ref|dict)(?![A-Za-z0-9_.-])"
 				}
 			]
 		},
@@ -242,6 +273,14 @@
 				{
 					"name": "keyword.operator.coalesce.pluma",
 					"match": "\\?\\?"
+				},
+				{
+					"name": "keyword.operator.concat.pluma",
+					"match": "\\+\\+"
+				},
+				{
+					"name": "keyword.operator.spread.pluma",
+					"match": "\\.\\.\\."
 				},
 				{
 					"name": "keyword.operator.range.pluma",
@@ -268,7 +307,7 @@
 		"identifiers": {
 			"patterns": [
 				{
-					"match": "\\b([A-Za-z_][A-Za-z0-9_\\-]*)\\.([A-Za-z_][A-Za-z0-9_\\-]*)",
+					"match": "\\b([A-Za-z_][A-Za-z0-9_-]*)\\.([A-Za-z_][A-Za-z0-9_-]*)",
 					"captures": {
 						"1": { "name": "entity.name.namespace.pluma" },
 						"2": { "name": "variable.other.property.pluma" }
@@ -276,7 +315,7 @@
 				},
 				{
 					"name": "variable.other.pluma",
-					"match": "\\b[A-Za-z_][A-Za-z0-9_\\-]*\\b"
+					"match": "\\b[A-Za-z_][A-Za-z0-9_-]*\\b"
 				}
 			]
 		}
