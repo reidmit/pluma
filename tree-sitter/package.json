@@ -1,0 +1,15 @@
+{
+  "name": "tree-sitter-pluma",
+  "version": "0.0.1",
+  "description": "Tree-sitter grammar for the Pluma language",
+  "repository": "https://github.com/reidmit/pluma",
+  "license": "MIT",
+  "main": "bindings/node",
+  "scripts": {
+    "generate": "tree-sitter generate",
+    "test": "tree-sitter test"
+  },
+  "devDependencies": {
+    "tree-sitter-cli": "^0.24.0"
+  }
+}

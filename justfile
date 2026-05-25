@@ -34,9 +34,11 @@ test:
 test-write:
   @ INSTA_UPDATE=always cargo test -p tests
 
-# run the TextMate grammar regression tests (vsix/syntaxes/pluma.tmLanguage.json)
+# run the editor-grammar regression tests: TextMate (vsix/) + Tree-sitter
+# (tree-sitter/: corpus tests + parse every tests/run fixture)
 test-grammar:
   @ cd vsix && npm test
+  @ cd tree-sitter && ./node_modules/.bin/tree-sitter test && ./script/test.sh
 
 site:
   @ zola -r site serve -p 7586

@@ -1,0 +1,183 @@
+==================
+definition with kebab-case and a call
+==================
+
+def to-string-twice = fun x {
+	print x
+	print x
+}
+
+---
+
+(source_file
+  (definition
+    (identifier)
+    (function
+      (identifier)
+      (block
+        (call
+          (identifier)
+          (identifier))
+        (call
+          (identifier)
+          (identifier))))))
+
+==================
+operator precedence
+==================
+
+def r = 1 + 2 * 3 ?? 0
+
+---
+
+(source_file
+  (definition
+    (identifier)
+    (binary_expression
+      (binary_expression
+        (integer)
+        (binary_expression
+          (integer)
+          (integer)))
+      (integer))))
+
+==================
+if / else if / else
+==================
+
+def f = fun n {
+	if n is 0 { "zero" }
+	else if n is 1 { "one" }
+	else { "many" }
+}
+
+---
+
+(source_file
+  (definition
+    (identifier)
+    (function
+      (identifier)
+      (block
+        (if_expression
+          (identifier)
+          (integer)
+          (block
+            (string))
+          (else_clause
+            (if_expression
+              (identifier)
+              (integer)
+              (block
+                (string))
+              (else_clause
+                (block
+                  (string))))))))))
+
+==================
+when with patterns
+==================
+
+def f = fun xs {
+	when xs is [] { 0 }
+	is [h, ...t] { h }
+	else { -1 }
+}
+
+---
+
+(source_file
+  (definition
+    (identifier)
+    (function
+      (identifier)
+      (block
+        (when_expression
+          (identifier)
+          (when_case
+            (list_pattern)
+            (block
+              (integer)))
+          (when_case
+            (list_pattern
+              (identifier)
+              (rest_pattern
+                (identifier)))
+            (block
+              (identifier)))
+          (when_else
+            (block
+              (unary_expression
+                (integer)))))))))
+
+==================
+enum, alias, record type
+==================
+
+enum color {
+	red
+	green
+	blue
+}
+
+alias person {
+	name :: string
+	age :: int
+}
+
+---
+
+(source_file
+  (enum_declaration
+    (identifier)
+    (enum_body
+      (enum_variant
+        (identifier))
+      (enum_variant
+        (identifier))
+      (enum_variant
+        (identifier))))
+  (alias_declaration
+    (identifier)
+    (record_type
+      (record_type_field
+        (identifier)
+        (type_identifier
+          (identifier)))
+      (record_type_field
+        (identifier)
+        (type_identifier
+          (identifier))))))
+
+==================
+regex with named capture and string interpolation
+==================
+
+def coord = `"(" <x: digit+> "," <y: digit+> ")"`
+def greet = fun name { "hi $(name)!" }
+
+---
+
+(source_file
+  (definition
+    (identifier)
+    (regex
+      (regex_string)
+      (regex_named_capture
+        (identifier)
+        (regex_class)
+        (regex_operator))
+      (regex_string)
+      (regex_named_capture
+        (identifier)
+        (regex_class)
+        (regex_operator))
+      (regex_string)))
+  (definition
+    (identifier)
+    (function
+      (identifier)
+      (block
+        (string
+          (interpolation
+            (identifier)))))))
