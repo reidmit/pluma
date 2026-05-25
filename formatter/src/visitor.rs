@@ -336,30 +336,76 @@ impl<'a> Formatter<'a> {
 
 	// --- expressions --------------------------------------------------
 
+	// Format an expression in a lowest-binding-power context: statement
+	// position, or anywhere a child is delimited by its own brackets (list
+	// elements, record/tuple fields, interpolation holes, if/when subjects and
+	// bodies, let/try values). At `min_prec` 0 nothing is ever wrapped, so all
+	// redundant parens are dropped. Precedence-sensitive positions (operator
+	// operands, call callee/args, access receivers) call `fmt` directly.
 	fn format_expr(&self, e: &ExprNode) -> Doc {
+		self.fmt(e, 0)
+	}
+
+	// Format `e` where the surrounding parser context requires an operand
+	// binding at least as tightly as `min_prec`. We re-derive parentheses
+	// purely from precedence rather than echoing source parens: a source
+	// `Grouping` is transparent (recurse through it), and we re-insert parens
+	// iff `e`'s top-level operator binds looser than the context needs. This
+	// removes every redundant paren while preserving the parse — `min_prec`
+	// mirrors the `min_bp` the parser would use at this position (see
+	// `Operator::infix_binding_power` and the call/access arms below).
+	fn fmt(&self, e: &ExprNode, min_prec: u8) -> Doc {
+		if let ExprKind::Grouping(inner) = &e.kind {
+			return self.fmt(inner, min_prec);
+		}
+		let doc = self.render_expr(e);
+		if expr_prec(e) < min_prec {
+			concat(vec![text("("), doc, text(")")])
+		} else {
+			doc
+		}
+	}
+
+	// Render `e`'s own syntax, recursing into children at the binding power
+	// each child position demands. Never wraps `e` itself in parens — that's
+	// `fmt`'s job, based on the caller's context. `Grouping` is unreachable
+	// here (peeled in `fmt`); handled defensively as a passthrough.
+	fn render_expr(&self, e: &ExprNode) -> Doc {
 		use ExprKind::*;
 		match &e.kind {
 			Literal(lit) => self.format_literal(lit),
 			Identifier(ident) => text(ident.name.clone()),
 			EmptyTuple => text("()"),
-			Grouping(inner) => concat(vec![text("("), self.format_expr(inner), text(")")]),
-			BinaryOperation { op, left, right } => concat(vec![
-				self.format_expr(left),
-				text(" "),
-				text(format!("{}", op.kind)),
-				text(" "),
-				self.format_expr(right),
-			]),
-			UnaryOperation { op, right } => {
-				concat(vec![text(format!("{}", op)), self.format_expr(right)])
+			Grouping(inner) => self.fmt(inner, 0),
+			BinaryOperation { op, left, right } => {
+				let p = op_prec(&op.kind);
+				// Right-associative ops want their *left* child to bind one
+				// step tighter (so `(a ?? b) ?? c` keeps parens); left-assoc
+				// ops want their *right* child tighter (so `a - (b - c)` does).
+				let (left_mp, right_mp) = if is_right_assoc(&op.kind) {
+					(p + 1, p)
+				} else {
+					(p, p + 1)
+				};
+				concat(vec![
+					self.fmt(left, left_mp),
+					text(" "),
+					text(format!("{}", op.kind)),
+					text(" "),
+					self.fmt(right, right_mp),
+				])
 			}
+			UnaryOperation { op, right } => concat(vec![
+				text(format!("{}", op)),
+				self.fmt(right, prefix_prec(op)),
+			]),
 			ElementAccess { receiver, index } => concat(vec![
-				self.format_expr(receiver),
+				self.fmt(receiver, 100),
 				text("."),
 				text(index.to_string()),
 			]),
 			FieldAccess { receiver, field } => concat(vec![
-				self.format_expr(receiver),
+				self.fmt(receiver, 100),
 				text("."),
 				text(field.name.clone()),
 			]),
@@ -488,30 +534,19 @@ impl<'a> Formatter<'a> {
 		// args are always joined by a single space. An argument may still be
 		// internally multi-line (a `fun` block, a multi-line list/record),
 		// but those line breaks live inside the argument's own brackets.
-		let mut parts: Vec<Doc> = vec![self.format_expr(&call.callee)];
+		// The callee binds at function-call precedence (90); each argument is
+		// parsed at 91 (call's right binding power), so an argument keeps its
+		// parens iff its top operator binds looser than 91 — i.e. anything but
+		// a field/element access or a self-delimiting primary. A `fun`/`if`/
+		// `when`/`while` literal is such a primary, so its wrapping parens drop
+		// (`list.map xs (fun x { ... })` → `list.map xs fun x { ... }`); a
+		// nested call or operator expression keeps them (`f (g x)`, `f (a + b)`).
+		let mut parts: Vec<Doc> = vec![self.fmt(&call.callee, 90)];
 		for arg in &call.args {
 			parts.push(text(" "));
-			parts.push(self.format_arg(arg));
+			parts.push(self.fmt(arg, 91));
 		}
 		concat(parts)
-	}
-
-	// Format a call argument, dropping parens that wrap a `fun` literal. A
-	// lambda in argument position is delimited by its own `{...}` body, so the
-	// parser reads `f (fun x { x })` and `f fun x { x }` identically — the
-	// parens are pure noise in the common HOF-callback pattern
-	// (`list.map xs (fun x { ... })`). We peel through nested groupings so
-	// `((fun ...))` collapses too, but only when a `fun` sits at the core;
-	// otherwise the argument is formatted verbatim (its parens may matter).
-	fn format_arg(&self, arg: &ExprNode) -> Doc {
-		let mut core = arg;
-		while let ExprKind::Grouping(inner) = &core.kind {
-			core = inner;
-		}
-		if matches!(core.kind, ExprKind::Fun(_)) {
-			return self.format_expr(core);
-		}
-		self.format_expr(arg)
 	}
 
 	fn format_let(&self, l: &LetNode) -> Doc {
@@ -902,6 +937,63 @@ impl<'a> Formatter<'a> {
 			parts.push(self.format_type_expr(g));
 		}
 		concat(parts)
+	}
+}
+
+// The precedence (binding power) of an expression's top-level operator,
+// mirroring `Operator::infix_binding_power` / `prefix_binding_power`. An
+// expression can appear unparenthesized in a context requiring `min_prec`
+// iff `expr_prec(e) >= min_prec`. Self-delimiting primaries (literals,
+// identifiers, `fun`/`if`/`when`/`while`, lists/records/tuples, interpolations,
+// regexes, ...) bind maximally tight — they never need parens. `let`/`try`
+// are the exception: they bind their RHS greedily and aren't brace-delimited,
+// so they're only safe bare at statement position (precedence 0).
+fn expr_prec(e: &ExprNode) -> u8 {
+	use ExprKind::*;
+	match &e.kind {
+		Grouping(inner) => expr_prec(inner),
+		BinaryOperation { op, .. } => op_prec(&op.kind),
+		UnaryOperation { op, .. } => prefix_prec(op),
+		Call(_) => 90,
+		FieldAccess { .. } | ElementAccess { .. } => 100,
+		Let(_) | Try(_) => 0,
+		_ => u8::MAX,
+	}
+}
+
+// Binding-power level of an infix operator (see `operator.rs`). Same-level
+// operators share a number; associativity is applied by the caller.
+fn op_prec(op: &Operator) -> u8 {
+	use Operator::*;
+	match op {
+		Chain => 0,
+		Range => 10,
+		LogicalOr => 20,
+		NullCoalescing => 21,
+		LogicalAnd => 30,
+		Equality | Inequality => 40,
+		LessThan | LessThanEquals | GreaterThan | GreaterThanEquals => 50,
+		Addition | SubtractionOrNegation | Concat => 60,
+		Multiplication | Division | Remainder => 70,
+		Exponentiation => 80,
+		LogicalNot => 35,
+		FunctionCall => 90,
+		FieldAccess | IndexAccess => 100,
+	}
+}
+
+// `**` and `??` are the only right-associative operators.
+fn is_right_assoc(op: &Operator) -> bool {
+	matches!(op, Operator::Exponentiation | Operator::NullCoalescing)
+}
+
+// Binding power of a prefix operator's operand. Only `-` (negation) is
+// reachable in practice; `!` never parses as a prefix today but is mapped
+// for completeness.
+fn prefix_prec(op: &Operator) -> u8 {
+	match op {
+		Operator::LogicalNot => 35,
+		_ => 75,
 	}
 }
 

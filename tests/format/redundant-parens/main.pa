@@ -1,0 +1,46 @@
+# The formatter re-derives parentheses from operator precedence: redundant
+# parens are dropped, load-bearing ones are kept. Each `def` below pairs a
+# "needs parens" case with the matching "redundant" case.
+def arithmetic = fun a b c {
+	let needed = (a + b) * c
+	let redundant = a + (b * c)
+	let left-assoc = (a - b) - c
+	let right-needs = a - (b - c)
+	let chained = ((a + b) + c) + a
+	let mul-over-add = a * (b + c) * a
+	redundant
+}
+
+# Unary minus binds tighter than `* / %` but looser than calls and access.
+def unary = fun a b f {
+	let neg-sum = -(a + b)
+	let neg-prod = -(a * b)
+	let neg-then-mul = (-a) * b
+	let neg-call = -(f a)
+	neg-sum
+}
+
+# Comparison / equality / logical, plus right-associative `??`.
+def logic = fun a b c d m {
+	let cmp-eq = (a < b) == (c < d)
+	let and-of-cmp = (a < b) && (c < d)
+	let or-binds-looser = (a && b) || c
+	let and-over-or = a && (b || c)
+	let coalesce-chain = (a ?? b) ?? c
+	let coalesce-right = a ?? (b ?? c)
+	let coalesce-call = (lookup m a) ?? b
+	cmp-eq
+}
+
+# Calls keep parens around argument sub-expressions and nested calls, but a
+# `fun`/literal argument is self-delimiting, and access chains are tight.
+def calls = fun f g x xs r {
+	let nested-call = f (g x)
+	let arg-expr = f (a + b)
+	let lambda-arg = list.map xs (fun n { n * 2 })
+	let access-of-call = (f x).field
+	let deep = print ((((x))))
+	let concat-left = ("a" ++ "b") ++ "c"
+	let concat-right = "a" ++ ("b" ++ "c")
+	nested-call
+}
