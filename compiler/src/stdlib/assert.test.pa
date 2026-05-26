@@ -1,3 +1,4 @@
+use core.testing
 use core.assert
 
 # `none` and bare `err "..."` need pinning so the assertion sees a
@@ -6,36 +7,28 @@ def n :: option int = none
 
 def bad :: result int string = err "boom"
 
-# --- is-some / is-none ---
+def tests :: testing.suite = fun t {
+	# --- is-some / is-none ---
 
-test "is-some passes on some" {
-	assert.is-some (some 7)
-}
+	t.case "is-some passes on some" fun { assert.is-some (some 7) }
 
-test "is-some passes on some with non-int payload" {
-	assert.is-some (some "hello")
-}
+	t.case "is-some passes on some with non-int payload" fun { assert.is-some (some "hello") }
 
-test "is-none passes on none" {
-	assert.is-none n
-}
+	t.case "is-none passes on none" fun { assert.is-none n }
 
-# --- is-ok / is-err ---
+	# --- is-ok / is-err ---
 
-test "is-ok passes on ok" {
-	assert.is-ok (ok 42)
-}
+	t.case "is-ok passes on ok" fun { assert.is-ok (ok 42) }
 
-test "is-ok passes on ok with non-int payload" {
-	let r :: result string int = ok "hi"
-	assert.is-ok r
-}
+	t.case "is-ok passes on ok with non-int payload" fun {
+		let r :: result string int = ok "hi"
+		assert.is-ok r
+	}
 
-test "is-err passes on err" {
-	assert.is-err bad
-}
+	t.case "is-err passes on err" fun { assert.is-err bad }
 
-test "is-err passes on err with non-string error" {
-	let r :: result int int = err 7
-	assert.is-err r
+	t.case "is-err passes on err with non-string error" fun {
+		let r :: result int int = err 7
+		assert.is-err r
+	}
 }

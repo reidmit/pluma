@@ -1,134 +1,125 @@
+use core.testing
 use core.base64
 use core.assert
 
-# --- standard encode ---
+def tests :: testing.suite = fun t {
+	# --- standard encode ---
 
-test "encode of empty bytes" {
-	assert.equals (base64.encode '') ""
-}
+	t.case "encode of empty bytes" fun { assert.equals (base64.encode '') "" }
 
-test "encode pads three bytes" {
-	assert.equals (base64.encode 'foo') "Zm9v"
-}
+	t.case "encode pads three bytes" fun { assert.equals (base64.encode 'foo') "Zm9v" }
 
-test "encode pads one trailing byte" {
-	assert.equals (base64.encode 'f') "Zg=="
-}
+	t.case "encode pads one trailing byte" fun { assert.equals (base64.encode 'f') "Zg==" }
 
-test "encode pads two trailing bytes" {
-	assert.equals (base64.encode 'fo') "Zm8="
-}
+	t.case "encode pads two trailing bytes" fun { assert.equals (base64.encode 'fo') "Zm8=" }
 
-test "encode handles high bytes" {
-	assert.equals (base64.encode '\xff\xfe\xfd') "//79"
-}
+	t.case "encode handles high bytes" fun { assert.equals (base64.encode '\xff\xfe\xfd') "//79" }
 
-# --- standard decode ---
+	# --- standard decode ---
 
-test "decode of empty string" {
-	when base64.decode "" is ok b {
-		assert.equals b ''
-	} is err _msg {
-		assert.is-true false
+	t.case "decode of empty string" fun {
+		when base64.decode "" is ok b {
+			assert.equals b ''
+		} is err _msg {
+			assert.is-true false
+		}
 	}
-}
 
-test "decode with full padding" {
-	when base64.decode "Zg==" is ok b {
-		assert.equals b 'f'
-	} is err _msg {
-		assert.is-true false
+	t.case "decode with full padding" fun {
+		when base64.decode "Zg==" is ok b {
+			assert.equals b 'f'
+		} is err _msg {
+			assert.is-true false
+		}
 	}
-}
 
-test "decode without padding" {
-	when base64.decode "Zg" is ok b {
-		assert.equals b 'f'
-	} is err _msg {
-		assert.is-true false
+	t.case "decode without padding" fun {
+		when base64.decode "Zg" is ok b {
+			assert.equals b 'f'
+		} is err _msg {
+			assert.is-true false
+		}
 	}
-}
 
-test "decode standard alphabet" {
-	when base64.decode "//79" is ok b {
-		assert.equals b '\xff\xfe\xfd'
-	} is err _msg {
-		assert.is-true false
+	t.case "decode standard alphabet" fun {
+		when base64.decode "//79" is ok b {
+			assert.equals b '\xff\xfe\xfd'
+		} is err _msg {
+			assert.is-true false
+		}
 	}
-}
 
-test "decode rejects URL-safe alphabet" {
-	when base64.decode "__79" is ok _b {
-		assert.is-true false
-	} is err _msg {
-		assert.is-true true
+	t.case "decode rejects URL-safe alphabet" fun {
+		when base64.decode "__79" is ok _b {
+			assert.is-true false
+		} is err _msg {
+			assert.is-true true
+		}
 	}
-}
 
-test "decode rejects whitespace" {
-	when base64.decode "Zm 9v" is ok _b {
-		assert.is-true false
-	} is err _msg {
-		assert.is-true true
+	t.case "decode rejects whitespace" fun {
+		when base64.decode "Zm 9v" is ok _b {
+			assert.is-true false
+		} is err _msg {
+			assert.is-true true
+		}
 	}
-}
 
-# --- url-safe variants ---
+	# --- url-safe variants ---
 
-test "url-encode has no padding" {
-	assert.equals (base64.url-encode 'f') "Zg"
-}
+	t.case "url-encode has no padding" fun { assert.equals (base64.url-encode 'f') "Zg" }
 
-test "url-encode uses dash and underscore" {
-	assert.equals (base64.url-encode '\xff\xfe\xfd') "__79"
-}
-
-test "url-decode of empty string" {
-	when base64.url-decode "" is ok b {
-		assert.equals b ''
-	} is err _msg {
-		assert.is-true false
+	t.case "url-encode uses dash and underscore" fun {
+		assert.equals (base64.url-encode '\xff\xfe\xfd') "__79"
 	}
-}
 
-test "url-decode URL-safe alphabet" {
-	when base64.url-decode "__79" is ok b {
-		assert.equals b '\xff\xfe\xfd'
-	} is err _msg {
-		assert.is-true false
+	t.case "url-decode of empty string" fun {
+		when base64.url-decode "" is ok b {
+			assert.equals b ''
+		} is err _msg {
+			assert.is-true false
+		}
 	}
-}
 
-test "url-decode tolerates padding" {
-	when base64.url-decode "Zg==" is ok b {
-		assert.equals b 'f'
-	} is err _msg {
-		assert.is-true false
+	t.case "url-decode URL-safe alphabet" fun {
+		when base64.url-decode "__79" is ok b {
+			assert.equals b '\xff\xfe\xfd'
+		} is err _msg {
+			assert.is-true false
+		}
 	}
-}
 
-test "url-decode rejects standard alphabet" {
-	when base64.url-decode "//79" is ok _b {
-		assert.is-true false
-	} is err _msg {
-		assert.is-true true
+	t.case "url-decode tolerates padding" fun {
+		when base64.url-decode "Zg==" is ok b {
+			assert.equals b 'f'
+		} is err _msg {
+			assert.is-true false
+		}
 	}
-}
 
-# --- round-trip ---
-
-test "encode then decode standard" {
-	when base64.decode (base64.encode '\x00\x01\x02\xfd\xfe\xff') is ok b {
-		assert.equals b '\x00\x01\x02\xfd\xfe\xff'
-	} is err _msg {
-		assert.is-true false
+	t.case "url-decode rejects standard alphabet" fun {
+		when base64.url-decode "//79" is ok _b {
+			assert.is-true false
+		} is err _msg {
+			assert.is-true true
+		}
 	}
-}
 
-test "encode then decode url-safe" {
-	when base64.url-decode (base64.url-encode '\x00\x01\x02\xfd\xfe\xff') is ok b {
-		assert.equals b '\x00\x01\x02\xfd\xfe\xff'
-	} is err _msg {
-		assert.is-true false
+	# --- round-trip ---
+
+	t.case "encode then decode standard" fun {
+		when base64.decode (base64.encode '\x00\x01\x02\xfd\xfe\xff') is ok b {
+			assert.equals b '\x00\x01\x02\xfd\xfe\xff'
+		} is err _msg {
+			assert.is-true false
+		}
+	}
+
+	t.case "encode then decode url-safe" fun {
+		when base64.url-decode (base64.url-encode '\x00\x01\x02\xfd\xfe\xff') is ok b {
+			assert.equals b '\x00\x01\x02\xfd\xfe\xff'
+		} is err _msg {
+			assert.is-true false
+		}
 	}
 }

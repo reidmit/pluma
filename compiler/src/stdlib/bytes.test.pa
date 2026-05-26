@@ -1,225 +1,182 @@
+use core.testing
 use core.bytes
 use core.assert
 
-# --- length / is-empty ---
+def tests :: testing.suite = fun t {
+	# --- length / is-empty ---
 
-test "length of empty bytes" {
-	assert.equals (bytes.length '') 0
-}
+	t.case "length of empty bytes" fun { assert.equals (bytes.length '') 0 }
 
-test "length counts bytes" {
-	assert.equals (bytes.length 'hello') 5
-	assert.equals (bytes.length '\x00\xff') 2
-}
-
-test "is-empty on empty bytes" {
-	assert.is-true (bytes.is-empty '')
-}
-
-test "is-empty on non-empty bytes" {
-	assert.is-false (bytes.is-empty 'x')
-}
-
-# --- at ---
-
-test "at returns some byte in range" {
-	when bytes.at 'hello' 0 is some n {
-		assert.equals n 104
-	} is none {
-		assert.is-true false
+	t.case "length counts bytes" fun {
+		assert.all [
+			assert.equals (bytes.length 'hello') 5,
+			assert.equals (bytes.length '\x00\xff') 2,
+		]
 	}
-}
 
-test "at returns some at last index" {
-	when bytes.at 'hello' 4 is some n {
-		assert.equals n 111
-	} is none {
-		assert.is-true false
+	t.case "is-empty on empty bytes" fun { assert.is-true (bytes.is-empty '') }
+
+	t.case "is-empty on non-empty bytes" fun { assert.is-false (bytes.is-empty 'x') }
+
+	# --- at ---
+
+	t.case "at returns some byte in range" fun {
+		when bytes.at 'hello' 0 is some n {
+			assert.equals n 104
+		} is none {
+			assert.is-true false
+		}
 	}
-}
 
-test "at returns none past the end" {
-	when bytes.at 'hello' 99 is some _n {
-		assert.is-true false
-	} is none {
-		assert.is-true true
+	t.case "at returns some at last index" fun {
+		when bytes.at 'hello' 4 is some n {
+			assert.equals n 111
+		} is none {
+			assert.is-true false
+		}
 	}
-}
 
-test "at returns none on empty input" {
-	when bytes.at '' 0 is some _n {
-		assert.is-true false
-	} is none {
-		assert.is-true true
+	t.case "at returns none past the end" fun {
+		when bytes.at 'hello' 99 is some _n {
+			assert.is-true false
+		} is none {
+			assert.is-true true
+		}
 	}
-}
 
-# --- concat ---
-
-test "concat joins two bytes" {
-	assert.equals (bytes.concat 'foo' 'bar') 'foobar'
-}
-
-test "concat with empty left" {
-	assert.equals (bytes.concat '' 'bar') 'bar'
-}
-
-test "concat with empty right" {
-	assert.equals (bytes.concat 'foo' '') 'foo'
-}
-
-# --- slice ---
-
-test "slice returns the substring" {
-	assert.equals (bytes.slice 'hello' 1 4) 'ell'
-}
-
-test "slice clamps oversize end" {
-	assert.equals (bytes.slice 'hello' 0 99) 'hello'
-}
-
-test "slice with start past end is empty" {
-	assert.equals (bytes.slice 'hello' 3 1) ''
-}
-
-test "slice zero-length is empty" {
-	assert.equals (bytes.slice 'hello' 2 2) ''
-}
-
-# --- contains / starts-with / ends-with ---
-
-test "contains finds a sub-sequence" {
-	assert.is-true (bytes.contains 'hello world' 'world')
-}
-
-test "contains misses a non-sub-sequence" {
-	assert.is-false (bytes.contains 'hello' 'xyz')
-}
-
-test "contains empty needle is true" {
-	assert.is-true (bytes.contains 'anything' '')
-}
-
-test "starts-with a prefix" {
-	assert.is-true (bytes.starts-with '\x89PNG' '\x89')
-}
-
-test "starts-with a non-prefix" {
-	assert.is-false (bytes.starts-with 'PNG' '\x89')
-}
-
-test "ends-with a suffix" {
-	assert.is-true (bytes.ends-with 'hello\n' '\n')
-}
-
-test "ends-with a non-suffix" {
-	assert.is-false (bytes.ends-with 'hello' '\n')
-}
-
-# --- repeat / reverse ---
-
-test "repeat duplicates the input" {
-	assert.equals (bytes.repeat 'ab' 3) 'ababab'
-}
-
-test "repeat zero times is empty" {
-	assert.equals (bytes.repeat 'ab' 0) ''
-}
-
-test "repeat once is the input" {
-	assert.equals (bytes.repeat 'ab' 1) 'ab'
-}
-
-test "reverse flips byte order" {
-	assert.equals (bytes.reverse 'abcde') 'edcba'
-}
-
-test "reverse of empty is empty" {
-	assert.equals (bytes.reverse '') ''
-}
-
-# --- to-list / from-list ---
-
-test "to-list extracts byte values" {
-	assert.equals (bytes.to-list 'ABC') [65, 66, 67]
-}
-
-test "to-list of empty is empty" {
-	assert.equals (bytes.to-list '') []
-}
-
-test "from-list builds bytes" {
-	when bytes.from-list [65, 66, 67] is ok b {
-		assert.equals b 'ABC'
-	} is err _msg {
-		assert.is-true false
+	t.case "at returns none on empty input" fun {
+		when bytes.at '' 0 is some _n {
+			assert.is-true false
+		} is none {
+			assert.is-true true
+		}
 	}
-}
 
-test "from-list of empty is empty bytes" {
-	when bytes.from-list [] is ok b {
-		assert.equals b ''
-	} is err _msg {
-		assert.is-true false
+	# --- concat ---
+
+	t.case "concat joins two bytes" fun { assert.equals (bytes.concat 'foo' 'bar') 'foobar' }
+
+	t.case "concat with empty left" fun { assert.equals (bytes.concat '' 'bar') 'bar' }
+
+	t.case "concat with empty right" fun { assert.equals (bytes.concat 'foo' '') 'foo' }
+
+	# --- slice ---
+
+	t.case "slice returns the substring" fun { assert.equals (bytes.slice 'hello' 1 4) 'ell' }
+
+	t.case "slice clamps oversize end" fun { assert.equals (bytes.slice 'hello' 0 99) 'hello' }
+
+	t.case "slice with start past end is empty" fun { assert.equals (bytes.slice 'hello' 3 1) '' }
+
+	t.case "slice zero-length is empty" fun { assert.equals (bytes.slice 'hello' 2 2) '' }
+
+	# --- contains / starts-with / ends-with ---
+
+	t.case "contains finds a sub-sequence" fun {
+		assert.is-true (bytes.contains 'hello world' 'world')
 	}
-}
 
-test "from-list fails on out-of-range high" {
-	when bytes.from-list [256] is ok _b {
-		assert.is-true false
-	} is err _msg {
-		assert.is-true true
+	t.case "contains misses a non-sub-sequence" fun {
+		assert.is-false (bytes.contains 'hello' 'xyz')
 	}
-}
 
-test "from-list fails on negative" {
-	when bytes.from-list [-1] is ok _b {
-		assert.is-true false
-	} is err _msg {
-		assert.is-true true
+	t.case "contains empty needle is true" fun { assert.is-true (bytes.contains 'anything' '') }
+
+	t.case "starts-with a prefix" fun { assert.is-true (bytes.starts-with '\x89PNG' '\x89') }
+
+	t.case "starts-with a non-prefix" fun { assert.is-false (bytes.starts-with 'PNG' '\x89') }
+
+	t.case "ends-with a suffix" fun { assert.is-true (bytes.ends-with 'hello\n' '\n') }
+
+	t.case "ends-with a non-suffix" fun { assert.is-false (bytes.ends-with 'hello' '\n') }
+
+	# --- repeat / reverse ---
+
+	t.case "repeat duplicates the input" fun { assert.equals (bytes.repeat 'ab' 3) 'ababab' }
+
+	t.case "repeat zero times is empty" fun { assert.equals (bytes.repeat 'ab' 0) '' }
+
+	t.case "repeat once is the input" fun { assert.equals (bytes.repeat 'ab' 1) 'ab' }
+
+	t.case "reverse flips byte order" fun { assert.equals (bytes.reverse 'abcde') 'edcba' }
+
+	t.case "reverse of empty is empty" fun { assert.equals (bytes.reverse '') '' }
+
+	# --- to-list / from-list ---
+
+	t.case "to-list extracts byte values" fun { assert.equals (bytes.to-list 'ABC') [65, 66, 67] }
+
+	t.case "to-list of empty is empty" fun { assert.equals (bytes.to-list '') [] }
+
+	t.case "from-list builds bytes" fun {
+		when bytes.from-list [65, 66, 67] is ok b {
+			assert.equals b 'ABC'
+		} is err _msg {
+			assert.is-true false
+		}
 	}
-}
 
-# --- join / split ---
-
-test "join with comma separator" {
-	assert.equals (bytes.join ['a', 'b', 'c'] ',') 'a,b,c'
-}
-
-test "join with null separator" {
-	assert.equals (bytes.join ['a', 'b'] '\x00') 'a\x00b'
-}
-
-test "join of singleton omits separator" {
-	assert.equals (bytes.join ['only'] ',') 'only'
-}
-
-test "split on a comma" {
-	assert.equals (bytes.split 'a,b,c' ',') ['a', 'b', 'c']
-}
-
-test "split with adjacent separators" {
-	assert.equals (bytes.split 'a,b,,c' ',') ['a', 'b', '', 'c']
-}
-
-test "split with no match is single-element" {
-	assert.equals (bytes.split 'abc' ',') ['abc']
-}
-
-# --- to-string ---
-
-test "to-string decodes valid UTF-8" {
-	when bytes.to-string 'hello' is ok s {
-		assert.equals s "hello"
-	} is err _msg {
-		assert.is-true false
+	t.case "from-list of empty is empty bytes" fun {
+		when bytes.from-list [] is ok b {
+			assert.equals b ''
+		} is err _msg {
+			assert.is-true false
+		}
 	}
-}
 
-test "to-string fails on invalid UTF-8" {
-	when bytes.to-string '\xff\xfe' is ok _s {
-		assert.is-true false
-	} is err _msg {
-		assert.is-true true
+	t.case "from-list fails on out-of-range high" fun {
+		when bytes.from-list [256] is ok _b {
+			assert.is-true false
+		} is err _msg {
+			assert.is-true true
+		}
+	}
+
+	t.case "from-list fails on negative" fun {
+		when bytes.from-list [-1] is ok _b {
+			assert.is-true false
+		} is err _msg {
+			assert.is-true true
+		}
+	}
+
+	# --- join / split ---
+
+	t.case "join with comma separator" fun {
+		assert.equals (bytes.join ['a', 'b', 'c'] ',') 'a,b,c'
+	}
+
+	t.case "join with null separator" fun { assert.equals (bytes.join ['a', 'b'] '\x00') 'a\x00b' }
+
+	t.case "join of singleton omits separator" fun {
+		assert.equals (bytes.join ['only'] ',') 'only'
+	}
+
+	t.case "split on a comma" fun { assert.equals (bytes.split 'a,b,c' ',') ['a', 'b', 'c'] }
+
+	t.case "split with adjacent separators" fun {
+		assert.equals (bytes.split 'a,b,,c' ',') ['a', 'b', '', 'c']
+	}
+
+	t.case "split with no match is single-element" fun {
+		assert.equals (bytes.split 'abc' ',') ['abc']
+	}
+
+	# --- to-string ---
+
+	t.case "to-string decodes valid UTF-8" fun {
+		when bytes.to-string 'hello' is ok s {
+			assert.equals s "hello"
+		} is err _msg {
+			assert.is-true false
+		}
+	}
+
+	t.case "to-string fails on invalid UTF-8" fun {
+		when bytes.to-string '\xff\xfe' is ok _s {
+			assert.is-true false
+		} is err _msg {
+			assert.is-true true
+		}
 	}
 }

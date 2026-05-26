@@ -18,6 +18,11 @@ format +paths:
 format-check:
   @ cargo run --bin cli --quiet -- format --check $(find tests/run tests/analyze compiler/src/prelude.pa -name "*.pa")
 
+# format the baked-in stdlib + prelude .pa sources in place (modules,
+# their *.test.pa suites, prelude, and the stdlib package marker)
+format-stdlib:
+  @ cargo run --bin cli --quiet -- format $(find compiler/src/stdlib compiler/src/prelude.pa -name "*.pa")
+
 # run the benchmark suite (VM on benchmarks/programs/*)
 bench:
   @ cargo run --release -p bench --quiet
@@ -33,6 +38,11 @@ test:
 # regenerate snapshots for any failing tests (use `cargo insta review` for interactive)
 test-write:
   @ INSTA_UPDATE=always cargo test -p tests
+
+# run the stdlib's own Pluma test suite (compiler/src/stdlib/*.test.pa)
+# through `pluma test` — exercises the stdlib and the `core.testing` runner.
+test-stdlib:
+  @ cargo run --bin cli --quiet -- test compiler/src/stdlib
 
 # run the editor-grammar regression tests: TextMate (vsix/) + Tree-sitter
 # (tree-sitter/: corpus tests + parse every tests/run fixture)

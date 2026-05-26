@@ -1,259 +1,236 @@
+use core.testing
 use core.string
 use core.bytes
 use core.assert
 
-# --- length / is-empty ---
+def tests :: testing.suite = fun t {
+	# --- length / is-empty ---
 
-test "length of empty string" {
-	assert.equals (string.length "") 0
-}
+	t.case "length of empty string" fun { assert.equals (string.length "") 0 }
 
-test "length counts characters" {
-	assert.equals (string.length "hello") 5
-	assert.equals (string.length "a b c") 5
+	t.case "length counts characters" fun {
+		assert.all [
+			assert.equals (string.length "hello") 5,
+			assert.equals (string.length "a b c") 5,
+			assert.equals (string.length "héllo") 5,
+		]
+	}
 	# "é" is two UTF-8 bytes but one character.
-	assert.equals (string.length "héllo") 5
-}
 
-test "is-empty on empty string" {
-	assert.is-true (string.is-empty "")
-}
+	t.case "is-empty on empty string" fun { assert.is-true (string.is-empty "") }
 
-test "is-empty on non-empty string" {
-	assert.is-false (string.is-empty "x")
-}
+	t.case "is-empty on non-empty string" fun { assert.is-false (string.is-empty "x") }
 
-# --- slice / drop / char-at ---
+	# --- slice / drop / char-at ---
 
-test "slice takes a character range" {
-	assert.equals (string.slice "hello world" 0 5) "hello"
-	assert.equals (string.slice "hello world" 6 11) "world"
-}
-
-test "slice clamps out-of-range indices" {
-	assert.equals (string.slice "hi" 0 100) "hi"
-	assert.equals (string.slice "hi" 5 10) ""
-	assert.equals (string.slice "hi" 1 0) ""
-}
-
-test "slice respects character boundaries" {
-	# Two-byte "é" is one character: slicing never splits it.
-	assert.equals (string.slice "héllo" 0 2) "hé"
-	assert.equals (string.slice "héllo" 1 2) "é"
-}
-
-test "drop removes leading characters" {
-	assert.equals (string.drop "hello world" 6) "world"
-	assert.equals (string.drop "hi" 0) "hi"
-	assert.equals (string.drop "hi" 9) ""
-	assert.equals (string.drop "héllo" 1) "éllo"
-}
-
-test "char-at returns the character at an index" {
-	when string.char-at "hello" 1 is some c {
-		assert.equals c "e"
-	} is none {
-		assert.is-true false
+	t.case "slice takes a character range" fun {
+		assert.all [
+			assert.equals (string.slice "hello world" 0 5) "hello",
+			assert.equals (string.slice "hello world" 6 11) "world",
+		]
 	}
-	when string.char-at "héllo" 1 is some c {
-		assert.equals c "é"
-	} is none {
-		assert.is-true false
+
+	t.case "slice clamps out-of-range indices" fun {
+		assert.all [
+			assert.equals (string.slice "hi" 0 100) "hi",
+			assert.equals (string.slice "hi" 5 10) "",
+			assert.equals (string.slice "hi" 1 0) "",
+		]
 	}
-}
 
-test "char-at is none out of bounds" {
-	assert.is-none (string.char-at "hi" 5)
-	assert.is-none (string.char-at "hi" (-1))
-}
-
-# --- to-upper / to-lower ---
-
-test "to-upper uppercases ASCII" {
-	assert.equals (string.to-upper "hello") "HELLO"
-}
-
-test "to-upper leaves digits and punctuation alone" {
-	assert.equals (string.to-upper "hi, 123!") "HI, 123!"
-}
-
-test "to-lower lowercases ASCII" {
-	assert.equals (string.to-lower "HELLO") "hello"
-}
-
-test "to-lower on already-lower is unchanged" {
-	assert.equals (string.to-lower "hello") "hello"
-}
-
-# --- trim ---
-
-test "trim strips both ends" {
-	assert.equals (string.trim "  hello  ") "hello"
-}
-
-test "trim leaves inner whitespace alone" {
-	assert.equals (string.trim "  a b c  ") "a b c"
-}
-
-test "trim of all whitespace is empty" {
-	assert.equals (string.trim "   ") ""
-}
-
-test "trim of empty is empty" {
-	assert.equals (string.trim "") ""
-}
-
-# --- contains / starts-with / ends-with ---
-
-test "contains a substring" {
-	assert.is-true (string.contains "abcdef" "cde")
-}
-
-test "contains misses a non-substring" {
-	assert.is-false (string.contains "abcdef" "xyz")
-}
-
-test "contains empty needle is true" {
-	assert.is-true (string.contains "abc" "")
-}
-
-test "starts-with a prefix" {
-	assert.is-true (string.starts-with "hello world" "hello")
-}
-
-test "starts-with a non-prefix" {
-	assert.is-false (string.starts-with "hello world" "world")
-}
-
-test "starts-with empty is true" {
-	assert.is-true (string.starts-with "abc" "")
-}
-
-test "ends-with a suffix" {
-	assert.is-true (string.ends-with "hello world" "world")
-}
-
-test "ends-with a non-suffix" {
-	assert.is-false (string.ends-with "hello world" "hello")
-}
-
-test "ends-with empty is true" {
-	assert.is-true (string.ends-with "abc" "")
-}
-
-# --- join / split ---
-
-test "join with comma" {
-	assert.equals (string.join ["a", "b", "c"] ",") "a,b,c"
-}
-
-test "join with empty separator" {
-	assert.equals (string.join ["a", "b", "c"] "") "abc"
-}
-
-test "join of singleton omits separator" {
-	assert.equals (string.join ["only"] ",") "only"
-}
-
-test "join of empty list is empty" {
-	assert.equals (string.join [] ",") ""
-}
-
-test "split on comma" {
-	assert.equals (string.split "a,b,c" ",") ["a", "b", "c"]
-}
-
-test "split with adjacent separators" {
-	assert.equals (string.split "a,,b" ",") ["a", "", "b"]
-}
-
-test "split with no occurrences is single element" {
-	assert.equals (string.split "abc" ",") ["abc"]
-}
-
-test "split-then-join round-trip" {
-	assert.equals (string.join (string.split "a-b-c" "-") "-") "a-b-c"
-}
-
-# --- replace ---
-
-test "replace every occurrence" {
-	assert.equals (string.replace "a-b-c" "-" "_") "a_b_c"
-}
-
-test "replace with empty replacement" {
-	assert.equals (string.replace "abc-def" "-" "") "abcdef"
-}
-
-test "replace with no match passes through" {
-	assert.equals (string.replace "abc" "x" "y") "abc"
-}
-
-# --- to-int / to-float ---
-
-test "to-int parses an integer" {
-	when string.to-int "42" is ok n {
-		assert.equals n 42
-	} is err _msg {
-		assert.is-true false
+	t.case "slice respects character boundaries" fun {
+		# Two-byte "é" is one character: slicing never splits it.
+		assert.all [
+			assert.equals (string.slice "héllo" 0 2) "hé",
+			assert.equals (string.slice "héllo" 1 2) "é",
+		]
 	}
-}
 
-test "to-int parses a negative integer" {
-	when string.to-int "-7" is ok n {
-		assert.equals n (-7)
-	} is err _msg {
-		assert.is-true false
+	t.case "drop removes leading characters" fun {
+		assert.all [
+			assert.equals (string.drop "hello world" 6) "world",
+			assert.equals (string.drop "hi" 0) "hi",
+			assert.equals (string.drop "hi" 9) "",
+			assert.equals (string.drop "héllo" 1) "éllo",
+		]
 	}
-}
 
-test "to-int fails on non-numeric input" {
-	when string.to-int "hello" is ok _n {
-		assert.is-true false
-	} is err _msg {
-		assert.is-true true
+	t.case "char-at returns the character at an index" fun {
+		assert.all [
+			when string.char-at "hello" 1 is some c {
+				assert.equals c "e"
+			} is none {
+				assert.is-true false
+			},
+			when string.char-at "héllo" 1 is some c {
+				assert.equals c "é"
+			} is none {
+				assert.is-true false
+			},
+		]
 	}
-}
 
-test "to-int fails on a float" {
-	when string.to-int "3.14" is ok _n {
-		assert.is-true false
-	} is err _msg {
-		assert.is-true true
+	t.case "char-at is none out of bounds" fun {
+		assert.all [
+			assert.is-none (string.char-at "hi" 5),
+			assert.is-none (string.char-at "hi" (-1)),
+		]
 	}
-}
 
-test "to-float parses a float" {
-	when string.to-float "3.14" is ok x {
-		assert.equals x 3.14
-	} is err _msg {
-		assert.is-true false
+	# --- to-upper / to-lower ---
+
+	t.case "to-upper uppercases ASCII" fun { assert.equals (string.to-upper "hello") "HELLO" }
+
+	t.case "to-upper leaves digits and punctuation alone" fun {
+		assert.equals (string.to-upper "hi, 123!") "HI, 123!"
 	}
-}
 
-test "to-float parses an integer literal" {
-	when string.to-float "42" is ok x {
-		assert.equals x 42.0
-	} is err _msg {
-		assert.is-true false
+	t.case "to-lower lowercases ASCII" fun { assert.equals (string.to-lower "HELLO") "hello" }
+
+	t.case "to-lower on already-lower is unchanged" fun {
+		assert.equals (string.to-lower "hello") "hello"
 	}
-}
 
-test "to-float fails on non-numeric input" {
-	when string.to-float "hello" is ok _x {
-		assert.is-true false
-	} is err _msg {
-		assert.is-true true
+	# --- trim ---
+
+	t.case "trim strips both ends" fun { assert.equals (string.trim "  hello  ") "hello" }
+
+	t.case "trim leaves inner whitespace alone" fun {
+		assert.equals (string.trim "  a b c  ") "a b c"
 	}
-}
 
-# --- to-bytes ---
+	t.case "trim of all whitespace is empty" fun { assert.equals (string.trim "   ") "" }
 
-test "to-bytes round-trips through bytes.to-string" {
-	let b = string.to-bytes "hello"
-	when bytes.to-string b is ok s {
-		assert.equals s "hello"
-	} is err _msg {
-		assert.is-true false
+	t.case "trim of empty is empty" fun { assert.equals (string.trim "") "" }
+
+	# --- contains / starts-with / ends-with ---
+
+	t.case "contains a substring" fun { assert.is-true (string.contains "abcdef" "cde") }
+
+	t.case "contains misses a non-substring" fun {
+		assert.is-false (string.contains "abcdef" "xyz")
+	}
+
+	t.case "contains empty needle is true" fun { assert.is-true (string.contains "abc" "") }
+
+	t.case "starts-with a prefix" fun { assert.is-true (string.starts-with "hello world" "hello") }
+
+	t.case "starts-with a non-prefix" fun {
+		assert.is-false (string.starts-with "hello world" "world")
+	}
+
+	t.case "starts-with empty is true" fun { assert.is-true (string.starts-with "abc" "") }
+
+	t.case "ends-with a suffix" fun { assert.is-true (string.ends-with "hello world" "world") }
+
+	t.case "ends-with a non-suffix" fun { assert.is-false (string.ends-with "hello world" "hello") }
+
+	t.case "ends-with empty is true" fun { assert.is-true (string.ends-with "abc" "") }
+
+	# --- join / split ---
+
+	t.case "join with comma" fun { assert.equals (string.join ["a", "b", "c"] ",") "a,b,c" }
+
+	t.case "join with empty separator" fun { assert.equals (string.join ["a", "b", "c"] "") "abc" }
+
+	t.case "join of singleton omits separator" fun {
+		assert.equals (string.join ["only"] ",") "only"
+	}
+
+	t.case "join of empty list is empty" fun { assert.equals (string.join [] ",") "" }
+
+	t.case "split on comma" fun { assert.equals (string.split "a,b,c" ",") ["a", "b", "c"] }
+
+	t.case "split with adjacent separators" fun {
+		assert.equals (string.split "a,,b" ",") ["a", "", "b"]
+	}
+
+	t.case "split with no occurrences is single element" fun {
+		assert.equals (string.split "abc" ",") ["abc"]
+	}
+
+	t.case "split-then-join round-trip" fun {
+		assert.equals (string.join (string.split "a-b-c" "-") "-") "a-b-c"
+	}
+
+	# --- replace ---
+
+	t.case "replace every occurrence" fun { assert.equals (string.replace "a-b-c" "-" "_") "a_b_c" }
+
+	t.case "replace with empty replacement" fun {
+		assert.equals (string.replace "abc-def" "-" "") "abcdef"
+	}
+
+	t.case "replace with no match passes through" fun {
+		assert.equals (string.replace "abc" "x" "y") "abc"
+	}
+
+	# --- to-int / to-float ---
+
+	t.case "to-int parses an integer" fun {
+		when string.to-int "42" is ok n {
+			assert.equals n 42
+		} is err _msg {
+			assert.is-true false
+		}
+	}
+
+	t.case "to-int parses a negative integer" fun {
+		when string.to-int "-7" is ok n {
+			assert.equals n (-7)
+		} is err _msg {
+			assert.is-true false
+		}
+	}
+
+	t.case "to-int fails on non-numeric input" fun {
+		when string.to-int "hello" is ok _n {
+			assert.is-true false
+		} is err _msg {
+			assert.is-true true
+		}
+	}
+
+	t.case "to-int fails on a float" fun {
+		when string.to-int "3.14" is ok _n {
+			assert.is-true false
+		} is err _msg {
+			assert.is-true true
+		}
+	}
+
+	t.case "to-float parses a float" fun {
+		when string.to-float "3.14" is ok x {
+			assert.equals x 3.14
+		} is err _msg {
+			assert.is-true false
+		}
+	}
+
+	t.case "to-float parses an integer literal" fun {
+		when string.to-float "42" is ok x {
+			assert.equals x 42.0
+		} is err _msg {
+			assert.is-true false
+		}
+	}
+
+	t.case "to-float fails on non-numeric input" fun {
+		when string.to-float "hello" is ok _x {
+			assert.is-true false
+		} is err _msg {
+			assert.is-true true
+		}
+	}
+
+	# --- to-bytes ---
+
+	t.case "to-bytes round-trips through bytes.to-string" fun {
+		let b = string.to-bytes "hello"
+		when bytes.to-string b is ok s {
+			assert.equals s "hello"
+		} is err _msg {
+			assert.is-true false
+		}
 	}
 }

@@ -1,142 +1,139 @@
+use core.testing
 use core.uuid
 use core.string
 use core.bytes
 use core.assert
 
-# UUIDs are 36 characters: `xxxxxxxx-xxxx-Vxxx-yxxx-xxxxxxxxxxxx`
-# where V is the version digit at byte 14.
+def tests :: testing.suite = fun t {
+	# UUIDs are 36 characters: `xxxxxxxx-xxxx-Vxxx-yxxx-xxxxxxxxxxxx`
+	# where V is the version digit at byte 14.
 
-# --- v4 ---
+	# --- v4 ---
 
-test "v4 has canonical length" {
-	assert.equals (string.length (uuid.v4 ())) 36
-}
+	t.case "v4 has canonical length" fun { assert.equals (string.length (uuid.v4 ())) 36 }
 
-test "v4 version nibble is 4" {
-	let u = uuid.v4 ()
-	when bytes.at (string.to-bytes u) 14 is some n {
-		assert.equals n 52
-	} is none {
-		assert.is-true false
+	t.case "v4 version nibble is 4" fun {
+		let u = uuid.v4 ()
+		when bytes.at (string.to-bytes u) 14 is some n {
+			assert.equals n 52
+		} is none {
+			assert.is-true false
+		}
 	}
-}
 
-test "v4 produces different values" {
-	let a = uuid.v4 ()
-	let b = uuid.v4 ()
-	assert.is-false (a == b)
-}
-
-test "v4 round-trips through parse" {
-	let u = uuid.v4 ()
-	when uuid.parse u is ok v {
-		assert.equals v u
-	} is err _msg {
-		assert.is-true false
+	t.case "v4 produces different values" fun {
+		let a = uuid.v4 ()
+		let b = uuid.v4 ()
+		assert.is-false (a == b)
 	}
-}
 
-# --- v7 ---
-
-test "v7 has canonical length" {
-	assert.equals (string.length (uuid.v7 ())) 36
-}
-
-test "v7 version nibble is 7" {
-	let u = uuid.v7 ()
-	when bytes.at (string.to-bytes u) 14 is some n {
-		assert.equals n 55
-	} is none {
-		assert.is-true false
+	t.case "v4 round-trips through parse" fun {
+		let u = uuid.v4 ()
+		when uuid.parse u is ok v {
+			assert.equals v u
+		} is err _msg {
+			assert.is-true false
+		}
 	}
-}
 
-test "v7 round-trips through parse" {
-	let u = uuid.v7 ()
-	when uuid.parse u is ok v {
-		assert.equals v u
-	} is err _msg {
-		assert.is-true false
+	# --- v7 ---
+
+	t.case "v7 has canonical length" fun { assert.equals (string.length (uuid.v7 ())) 36 }
+
+	t.case "v7 version nibble is 7" fun {
+		let u = uuid.v7 ()
+		when bytes.at (string.to-bytes u) 14 is some n {
+			assert.equals n 55
+		} is none {
+			assert.is-true false
+		}
 	}
-}
 
-# --- parse ---
-
-test "parse accepts canonical form" {
-	when uuid.parse "550e8400-e29b-41d4-a716-446655440000" is ok v {
-		assert.equals v "550e8400-e29b-41d4-a716-446655440000"
-	} is err _msg {
-		assert.is-true false
+	t.case "v7 round-trips through parse" fun {
+		let u = uuid.v7 ()
+		when uuid.parse u is ok v {
+			assert.equals v u
+		} is err _msg {
+			assert.is-true false
+		}
 	}
-}
 
-test "parse normalizes uppercase" {
-	when uuid.parse "550E8400-E29B-41D4-A716-446655440000" is ok v {
-		assert.equals v "550e8400-e29b-41d4-a716-446655440000"
-	} is err _msg {
-		assert.is-true false
+	# --- parse ---
+
+	t.case "parse accepts canonical form" fun {
+		when uuid.parse "550e8400-e29b-41d4-a716-446655440000" is ok v {
+			assert.equals v "550e8400-e29b-41d4-a716-446655440000"
+		} is err _msg {
+			assert.is-true false
+		}
 	}
-}
 
-test "parse accepts braced form" {
-	when uuid.parse "{550e8400-e29b-41d4-a716-446655440000}" is ok v {
-		assert.equals v "550e8400-e29b-41d4-a716-446655440000"
-	} is err _msg {
-		assert.is-true false
+	t.case "parse normalizes uppercase" fun {
+		when uuid.parse "550E8400-E29B-41D4-A716-446655440000" is ok v {
+			assert.equals v "550e8400-e29b-41d4-a716-446655440000"
+		} is err _msg {
+			assert.is-true false
+		}
 	}
-}
 
-test "parse accepts urn form" {
-	when uuid.parse "urn:uuid:550e8400-e29b-41d4-a716-446655440000" is ok v {
-		assert.equals v "550e8400-e29b-41d4-a716-446655440000"
-	} is err _msg {
-		assert.is-true false
+	t.case "parse accepts braced form" fun {
+		when uuid.parse "{550e8400-e29b-41d4-a716-446655440000}" is ok v {
+			assert.equals v "550e8400-e29b-41d4-a716-446655440000"
+		} is err _msg {
+			assert.is-true false
+		}
 	}
-}
 
-test "parse rejects too short" {
-	when uuid.parse "550e8400" is ok _v {
-		assert.is-true false
-	} is err _msg {
-		assert.is-true true
+	t.case "parse accepts urn form" fun {
+		when uuid.parse "urn:uuid:550e8400-e29b-41d4-a716-446655440000" is ok v {
+			assert.equals v "550e8400-e29b-41d4-a716-446655440000"
+		} is err _msg {
+			assert.is-true false
+		}
 	}
-}
 
-test "parse rejects empty" {
-	when uuid.parse "" is ok _v {
-		assert.is-true false
-	} is err _msg {
-		assert.is-true true
+	t.case "parse rejects too short" fun {
+		when uuid.parse "550e8400" is ok _v {
+			assert.is-true false
+		} is err _msg {
+			assert.is-true true
+		}
 	}
-}
 
-test "parse rejects garbage" {
-	when uuid.parse "not-a-uuid-at-all-really" is ok _v {
-		assert.is-true false
-	} is err _msg {
-		assert.is-true true
+	t.case "parse rejects empty" fun {
+		when uuid.parse "" is ok _v {
+			assert.is-true false
+		} is err _msg {
+			assert.is-true true
+		}
 	}
-}
 
-# --- is-valid ---
+	t.case "parse rejects garbage" fun {
+		when uuid.parse "not-a-uuid-at-all-really" is ok _v {
+			assert.is-true false
+		} is err _msg {
+			assert.is-true true
+		}
+	}
 
-test "is-valid for canonical UUID" {
-	assert.is-true (uuid.is-valid "550e8400-e29b-41d4-a716-446655440000")
-}
+	# --- is-valid ---
 
-test "is-valid for uppercase UUID" {
-	assert.is-true (uuid.is-valid "550E8400-E29B-41D4-A716-446655440000")
-}
+	t.case "is-valid for canonical UUID" fun {
+		assert.is-true (uuid.is-valid "550e8400-e29b-41d4-a716-446655440000")
+	}
 
-test "is-valid rejects malformed" {
-	assert.is-false (uuid.is-valid "not-a-uuid")
-}
+	t.case "is-valid for uppercase UUID" fun {
+		assert.is-true (uuid.is-valid "550E8400-E29B-41D4-A716-446655440000")
+	}
 
-test "is-valid rejects empty" {
-	assert.is-false (uuid.is-valid "")
-}
+	t.case "is-valid rejects malformed" fun { assert.is-false (uuid.is-valid "not-a-uuid") }
 
-test "is-valid agrees with parse" {
-	assert.is-true (uuid.is-valid (uuid.v4 ()))
-	assert.is-true (uuid.is-valid (uuid.v7 ()))
+	t.case "is-valid rejects empty" fun { assert.is-false (uuid.is-valid "") }
+
+	t.case "is-valid agrees with parse" fun {
+		assert.all [
+			assert.is-true (uuid.is-valid (uuid.v4 ())),
+			assert.is-true (uuid.is-valid (uuid.v7 ())),
+		]
+	}
 }

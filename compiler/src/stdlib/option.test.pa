@@ -1,3 +1,4 @@
+use core.testing
 use core.option as opt
 use core.assert
 
@@ -15,67 +16,6 @@ def doubled = fun n {
 	some (n * 2)
 }
 
-# --- then on `some` ---
-
-test "then on some runs the continuation" {
-	when opt.then (some 3) doubled is some n {
-		assert.equals n 6
-	} is none {
-		assert.is-true false
-	}
-}
-
-test "then can change the inner type" {
-	when opt.then (some 5) fun n { some (to-string n) } is some s {
-		assert.equals s "5"
-	} is none {
-		assert.is-true false
-	}
-}
-
-test "then can short-circuit a some into a none" {
-	when opt.then (some (-3)) positive is some _n {
-		assert.is-true false
-	} is none {
-		assert.is-true true
-	}
-}
-
-# --- then on `none` ---
-
-test "then on none stays none" {
-	when opt.then none doubled is some _n {
-		assert.is-true false
-	} is none {
-		assert.is-true true
-	}
-}
-
-test "then on none does not call the continuation" {
-	let counter = ref.new 0
-	let bump-and-double = fun n {
-		ref.update counter fun c { c + 1 }
-		some (n * 2)
-	}
-	when opt.then none bump-and-double is some _n {
-		assert.is-true false
-	} is none {
-		assert.is-true true
-	}
-	assert.equals (ref.get counter) 0
-}
-
-# --- chained then ---
-
-test "two-step then composes" {
-	let r = opt.then (some 4) fun n { opt.then (positive n) doubled }
-	when r is some n {
-		assert.equals n 8
-	} is none {
-		assert.is-true false
-	}
-}
-
 # `try x = expr` desugars to opt.then, so the two should agree.
 def try-pipe = fun {
 	try x = some 4
@@ -88,43 +28,109 @@ def try-pipe-none = fun {
 	some (x + 1)
 }
 
-test "try desugars to then on some" {
-	when try-pipe () is some n {
-		assert.equals n 8
-	} is none {
-		assert.is-true false
+def tests :: testing.suite = fun t {
+	# --- then on `some` ---
+
+	t.case "then on some runs the continuation" fun {
+		when opt.then (some 3) doubled is some n {
+			assert.equals n 6
+		} is none {
+			assert.is-true false
+		}
 	}
-}
 
-test "try short-circuits on none" {
-	when try-pipe-none () is some _n {
-		assert.is-true false
-	} is none {
-		assert.is-true true
+	t.case "then can change the inner type" fun {
+		when opt.then (some 5) fun n { some (to-string n) } is some s {
+			assert.equals s "5"
+		} is none {
+			assert.is-true false
+		}
 	}
-}
 
-# --- or-else (the recovering dual of then; `??` desugars to it) ---
-
-test "or-else on some returns the payload" {
-	assert.equals (opt.or-else (some 7) fun { 0 }) 7
-}
-
-test "or-else on none runs the fallback" {
-	assert.equals (opt.or-else none fun { 42 }) 42
-}
-
-test "or-else does not evaluate the fallback on some" {
-	let counter = ref.new 0
-	let fallback = fun {
-		ref.update counter fun c { c + 1 }
-		0
+	t.case "then can short-circuit a some into a none" fun {
+		when opt.then (some (-3)) positive is some _n {
+			assert.is-true false
+		} is none {
+			assert.is-true true
+		}
 	}
-	assert.equals (opt.or-else (some 9) fallback) 9
-	assert.equals (ref.get counter) 0
-}
 
-test "?? desugars to or-else on option" {
-	assert.equals (some 5 ?? 0) 5
-	assert.equals (none ?? 0) 0
+	# --- then on `none` ---
+
+	t.case "then on none stays none" fun {
+		when opt.then none doubled is some _n {
+			assert.is-true false
+		} is none {
+			assert.is-true true
+		}
+	}
+
+	t.case "then on none does not call the continuation" fun {
+		let counter = ref.new 0
+		let bump-and-double = fun n {
+			ref.update counter fun c { c + 1 }
+			some (n * 2)
+		}
+		assert.all [
+			when opt.then none bump-and-double is some _n {
+				assert.is-true false
+			} is none {
+				assert.is-true true
+			},
+			assert.equals (ref.get counter) 0,
+		]
+	}
+
+	# --- chained then ---
+
+	t.case "two-step then composes" fun {
+		let r = opt.then (some 4) fun n { opt.then (positive n) doubled }
+		when r is some n {
+			assert.equals n 8
+		} is none {
+			assert.is-true false
+		}
+	}
+
+	t.case "try desugars to then on some" fun {
+		when try-pipe () is some n {
+			assert.equals n 8
+		} is none {
+			assert.is-true false
+		}
+	}
+
+	t.case "try short-circuits on none" fun {
+		when try-pipe-none () is some _n {
+			assert.is-true false
+		} is none {
+			assert.is-true true
+		}
+	}
+
+	# --- or-else (the recovering dual of then; `??` desugars to it) ---
+
+	t.case "or-else on some returns the payload" fun {
+		assert.equals (opt.or-else (some 7) fun { 0 }) 7
+	}
+
+	t.case "or-else on none runs the fallback" fun {
+		assert.equals (opt.or-else none fun { 42 }) 42
+	}
+
+	t.case "or-else does not evaluate the fallback on some" fun {
+		let counter = ref.new 0
+		let fallback = fun {
+			ref.update counter fun c { c + 1 }
+			0
+		}
+		assert.all [
+			assert.equals (opt.or-else (some 9) fallback) 9,
+			assert.equals (ref.get counter) 0,
+		]
+	}
+
+	t.case "?? desugars to or-else on option" fun {
+		assert.all [assert.equals (some 5 ?? 0) 5, assert.equals (none ?? 0) 0]
+	}
 }

@@ -1,70 +1,73 @@
+use core.testing
 use core.assert
 
 # `ref` is auto-imported in every module — no `use core.ref` needed.
 
-# --- new / get ---
+def tests :: testing.suite = fun t {
+	# --- new / get ---
 
-test "new + get round-trips an int" {
-	let r = ref.new 42
-	assert.equals (ref.get r) 42
-}
+	t.case "new + get round-trips an int" fun {
+		let r = ref.new 42
+		assert.equals (ref.get r) 42
+	}
 
-test "new + get round-trips a string" {
-	let r = ref.new "hello"
-	assert.equals (ref.get r) "hello"
-}
+	t.case "new + get round-trips a string" fun {
+		let r = ref.new "hello"
+		assert.equals (ref.get r) "hello"
+	}
 
-test "new + get round-trips a list" {
-	let r = ref.new [1, 2, 3]
-	assert.equals (ref.get r) [1, 2, 3]
-}
+	t.case "new + get round-trips a list" fun {
+		let r = ref.new [1, 2, 3]
+		assert.equals (ref.get r) [1, 2, 3]
+	}
 
-# --- set ---
+	# --- set ---
 
-test "set overwrites the cell" {
-	let r = ref.new 1
-	ref.set r 99
-	assert.equals (ref.get r) 99
-}
+	t.case "set overwrites the cell" fun {
+		let r = ref.new 1
+		ref.set r 99
+		assert.equals (ref.get r) 99
+	}
 
-test "set is visible through a shared binding" {
-	let r = ref.new 0
-	let shared = r
-	ref.set shared 100
-	assert.equals (ref.get r) 100
-}
+	t.case "set is visible through a shared binding" fun {
+		let r = ref.new 0
+		let shared = r
+		ref.set shared 100
+		assert.equals (ref.get r) 100
+	}
 
-# --- update ---
+	# --- update ---
 
-test "update reads, applies fn, writes" {
-	let r = ref.new 10
-	ref.update r fun n { n + 5 }
-	assert.equals (ref.get r) 15
-}
+	t.case "update reads, applies fn, writes" fun {
+		let r = ref.new 10
+		ref.update r fun n { n + 5 }
+		assert.equals (ref.get r) 15
+	}
 
-test "update can be called multiple times" {
-	let r = ref.new 0
-	ref.update r fun n { n + 1 }
-	ref.update r fun n { n + 1 }
-	ref.update r fun n { n + 1 }
-	assert.equals (ref.get r) 3
-}
+	t.case "update can be called multiple times" fun {
+		let r = ref.new 0
+		ref.update r fun n { n + 1 }
+		ref.update r fun n { n + 1 }
+		ref.update r fun n { n + 1 }
+		assert.equals (ref.get r) 3
+	}
 
-# --- identity ---
+	# --- identity ---
 
-test "same cell compares equal to itself" {
-	let r = ref.new 42
-	assert.equals r r
-}
+	t.case "same cell compares equal to itself" fun {
+		let r = ref.new 42
+		assert.equals r r
+	}
 
-test "aliased cells compare equal" {
-	let r = ref.new 42
-	let shared = r
-	assert.equals r shared
-}
+	t.case "aliased cells compare equal" fun {
+		let r = ref.new 42
+		let shared = r
+		assert.equals r shared
+	}
 
-test "distinct cells with the same contents are not equal" {
-	let a = ref.new 100
-	let b = ref.new 100
-	assert.not-equals a b
+	t.case "distinct cells with the same contents are not equal" fun {
+		let a = ref.new 100
+		let b = ref.new 100
+		assert.not-equals a b
+	}
 }
