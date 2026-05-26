@@ -706,8 +706,19 @@ impl<'a> Parser<'a> {
 					// and they may take any number of args, so we handle all that here
 					let mut args = Vec::new();
 
-					while let Some(arg_expr) = self.parse_expression_with_binding_power(right_bp) {
-						args.push(arg_expr);
+					loop {
+						// A plain `Minus` following a complete operand is binary
+						// subtraction, not a negated argument: stop collecting args
+						// so `f a - b` reads as `(f a) - b` (the infix loop picks the
+						// `-` up). `UnaryMinus` — the whitespace-asymmetric `f -x`
+						// form the tokenizer emits — still begins a negated argument.
+						if matches!(self.current_token, Some(Token::Minus(..))) {
+							break;
+						}
+						match self.parse_expression_with_binding_power(right_bp) {
+							Some(arg_expr) => args.push(arg_expr),
+							None => break,
+						}
 					}
 
 					// We entered FunctionCall because `can_start_expression`
