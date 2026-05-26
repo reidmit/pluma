@@ -178,11 +178,11 @@ impl<'a> Parser<'a> {
 		let (start, _) = expect_token_and_advance!(self, Token::KeywordUse);
 
 		let mut path = Vec::new();
-		path.push(self.expect_use_path_segment()?);
+		path.push(self.expect_identifier()?);
 
 		while matches!(self.current_token, Some(Token::Dot(..))) {
 			self.advance();
-			path.push(self.expect_use_path_segment()?);
+			path.push(self.expect_identifier()?);
 		}
 
 		let alias = if matches!(self.current_token, Some(Token::KeywordAs(..))) {
@@ -334,7 +334,6 @@ impl<'a> Parser<'a> {
 				| Token::KeywordEnum(..)
 				| Token::KeywordAlias(..)
 				| Token::KeywordTrait(..)
-				| Token::KeywordTest(..)
 				| Token::KeywordImplement(..)
 		)
 	}
@@ -873,20 +872,6 @@ impl<'a> Parser<'a> {
 				}),
 			},
 		}
-	}
-
-	// `use` paths allow `test` as a segment so `*.test.pa` files (whose
-	// module names end in `.test`) can be imported by other test files.
-	// Outside of use-paths, `test` remains a reserved keyword.
-	fn expect_use_path_segment(&mut self) -> Option<IdentifierNode> {
-		if let Some(Token::KeywordTest(s, e)) = self.current_token {
-			self.advance();
-			return Some(IdentifierNode {
-				range: Range::between(self.offset_to_point(s), self.offset_to_point(e)),
-				name: "test".to_string(),
-			});
-		}
-		self.expect_identifier()
 	}
 
 	fn parse_if_expression(&mut self) -> Option<IfNode> {
@@ -2085,51 +2070,6 @@ impl<'a> Parser<'a> {
 				range: Range::between(start, type_expr.range.end),
 				kind: DefinitionKind::Alias(type_expr),
 				ty: Type::Unknown,
-				dict_param_count: 0,
-				type_annotation: None,
-				where_clause: Vec::new(),
-			});
-		}
-
-		// `test "description" { body }` — a top-level test block. The
-		// description is the human-readable name shown by `pluma test`;
-		// the body is a statement list whose final expression must
-		// produce `nothing`.
-		if let Some(Token::KeywordTest(start_offset, _)) = self.current_token {
-			let start = self.offset_to_point(start_offset);
-			self.advance();
-			self.skip_line_breaks();
-			let (desc_start_pt, desc_end_pt) = match self.current_token {
-				Some(Token::StringLiteral(s, e)) => (self.offset_to_point(s), self.offset_to_point(e)),
-				_ => {
-					expect_token_and_advance!(self, Token::StringLiteral);
-					unreachable!();
-				}
-			};
-			let (desc_s, desc_e) = (
-				self.point_to_offset(desc_start_pt),
-				self.point_to_offset(desc_end_pt),
-			);
-			let description = read_string_with_escapes!(self, desc_s, desc_e);
-			self.advance();
-			self.skip_line_breaks();
-			expect_token_and_advance!(self, Token::LeftBrace);
-			let body = self.parse_body_expressions()?;
-			self.skip_line_breaks();
-			let (_, end) = expect_token_and_advance!(self, Token::RightBrace);
-			self.skip_line_breaks();
-			// Synthetic identifier so DefinitionNode invariants still hold;
-			// the analyzer & codegen identify tests by DefinitionKind::Test
-			// and never look at this name.
-			let name = IdentifierNode {
-				range: Range::between(start, desc_end_pt),
-				name: "__test".to_string(),
-			};
-			return Some(DefinitionNode {
-				name,
-				range: Range::between(start, end),
-				kind: DefinitionKind::Test { description, body },
-				ty: Type::Nothing,
 				dict_param_count: 0,
 				type_annotation: None,
 				where_clause: Vec::new(),

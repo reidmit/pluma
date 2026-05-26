@@ -568,7 +568,6 @@ impl<'a> Iterator for Tokenizer<'a> {
 						b"is" => KeywordIs,
 						b"let" => KeywordLet,
 						b"try" => KeywordTry,
-						b"test" => KeywordTest,
 						b"trait" => KeywordTrait,
 						b"use" => KeywordUse,
 						b"when" => KeywordWhen,

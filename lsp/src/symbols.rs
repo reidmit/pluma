@@ -97,8 +97,6 @@ fn def_symbol(d: &DefinitionNode) -> Option<DocumentSymbol> {
 				Some(children),
 			))
 		}
-		// Tests register no value binding and aren't a useful outline entry.
-		DefinitionKind::Test { .. } => None,
 	}
 }
 

@@ -30,7 +30,8 @@ When writing `.pa` code, these are the traps that don't match other languages' i
   ```
   Construct as `option.some 42` or bare `some 42` when the type is clear. Match by bare variant: `when x is some n { ... } is none { ... }`.
 - **`def` is top-level; `let` is local.** Top-level bindings can't use `let`, and `let` patterns must be irrefutable (use `if`/`when` for `some`/`ok`/etc.).
-- **`use core.foo` for stdlib imports.** Available modules include `core.list`, `core.dict`, `core.bytes`, `core.string`, `core.math`, `core.assert`, `core.hex`, `core.base64`, `core.random`, `core.uuid`, `core.time`. `ref` is auto-imported — don't `use core.ref`.
+- **`use core.foo` for stdlib imports.** Available modules include `core.list`, `core.dict`, `core.bytes`, `core.string`, `core.math`, `core.assert`, `core.testing`, `core.hex`, `core.base64`, `core.random`, `core.uuid`, `core.time`. `ref` is auto-imported — don't `use core.ref`.
+- **Tests are a library, not syntax.** There is no `test` keyword. A `*.test.pa` file exports `def tests :: testing.suite = fun t { ... }` and registers cases with `t.case "name" (fun { ... })` (also `t.group`/`t.skip`/`t.focus`/`t.todo`). A case body returns a `result`: `core.assert` checks (`assert.equals`, `assert.is-true`, …) each return `ok ()`/`err msg`, and `assert.all [..]` combines several. `pluma test` discovers the files and runs them. See `compiler/src/stdlib/*.test.pa` for examples.
 
 For unfamiliar stdlib calls, `grep tests/run/*/main.pa` for a working example rather than guessing.
 

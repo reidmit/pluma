@@ -468,11 +468,6 @@ impl Resolver {
 					self.walk_def(method);
 				}
 			}
-			DefinitionKind::Test { body, .. } => {
-				for stmt in body {
-					self.walk_expr(stmt, None);
-				}
-			}
 		}
 	}
 

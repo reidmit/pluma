@@ -156,10 +156,6 @@ pub fn compile(compiler: &compiler::Compiler) -> Result<Program, String> {
 						};
 						cg.reserve_global(module, name);
 					}
-					DefinitionKind::Test { .. } => {
-						// Test slots are assigned in pass 2 with unique
-						// per-module names so the order matches the AST.
-					}
 				}
 			}
 		}
@@ -175,15 +171,25 @@ pub fn compile(compiler: &compiler::Compiler) -> Result<Program, String> {
 		}
 	}
 
+	// Discover test suites: every entry module that exports `def tests`
+	// (a `core.testing` suite). `pluma test` runs these; the runner also
+	// needs `core.testing.new` to build the registrar it threads in.
+	for module_name in &compiler.entry_modules {
+		if let Some(idx) = cg.lookup_global(module_name, "tests") {
+			cg.program.test_suites.push((module_name.clone(), idx));
+		}
+	}
+	cg.program.test_new = cg.lookup_global("core.testing", "new");
+
 	// Build the entry function: load main, call it with (), return.
-	// If there's no `main` but the program defines tests, emit a no-op
-	// entry — `pluma test` skips invoking it and goes straight to the
-	// test list, and `pluma run` of a test-only file errors clearly.
+	// If there's no `main` but the program defines test suites, emit a
+	// no-op entry — `pluma test` skips invoking it and goes straight to
+	// the suites, and `pluma run` of a test-only file errors clearly.
 	let primary_entry = compiler.entry_modules.first();
 	let main_global = primary_entry.and_then(|name| cg.lookup_global(name, "main"));
 	let entry_idx = match main_global {
 		Some(idx) => cg.emit_entry_function(idx),
-		None if !cg.program.tests.is_empty() => cg.emit_noop_entry_function(),
+		None if !cg.program.test_suites.is_empty() => cg.emit_noop_entry_function(),
 		None => {
 			let name = primary_entry.map(String::as_str).unwrap_or("<none>");
 			return Err(format!("module `{}` has no `main` def", name));
@@ -224,7 +230,8 @@ impl CodeGen {
 				global_by_name: HashMap::new(),
 				enum_variants: HashMap::new(),
 				entry: 0,
-				tests: Vec::new(),
+				test_suites: Vec::new(),
+				test_new: None,
 			},
 			const_lookup: HashMap::new(),
 			bytes_lookup: HashMap::new(),
@@ -373,34 +380,6 @@ impl CodeGen {
 				}
 				DefinitionKind::Instance(instance_node) => {
 					self.compile_instance(module_name, &imports, instance_node)?;
-				}
-				DefinitionKind::Test { description, body } => {
-					// Wrap the body in a synthetic `fun nothing -> nothing`
-					// so the existing thunk pipeline can lower it. The
-					// global slot ends up holding a `Closure` value that
-					// the runner invokes with zero args.
-					let test_idx = self.program.tests.len();
-					let slot_name = format!("__test_{}", test_idx);
-					let global_idx = self.reserve_global(module_name, &slot_name);
-					let fun_range = body.first().map(|e| e.range).unwrap_or(def.range);
-					let fun_expr = ExprNode {
-						range: fun_range,
-						kind: ExprKind::Fun(FunNode {
-							range: fun_range,
-							params: Vec::new(),
-							body: body.clone(),
-						}),
-						ty: compiler::types::Type::Fun(Vec::new(), Box::new(compiler::types::Type::Nothing)),
-						trait_dispatch: None,
-						dispatch_sink: None,
-					};
-					let fn_name = format!("{}.{}", module_name, slot_name);
-					let thunk_idx = self.compile_thunk(module_name, &imports, &fn_name, &fun_expr)?;
-					self.set_global_thunk(global_idx, thunk_idx);
-					self
-						.program
-						.tests
-						.push((module_name.to_string(), description.clone(), global_idx));
 				}
 			}
 		}

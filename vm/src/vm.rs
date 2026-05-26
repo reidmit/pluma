@@ -275,33 +275,41 @@ impl VM {
 		Ok(value)
 	}
 
-	// Invoke a top-level `test` block by its global index. Forces the
-	// global (which holds the test's zero-arity closure), then drives
-	// the closure to completion. Any `RuntimeError` raised by the body
-	// — including assertion failures — bubbles up and is the runner's
-	// signal that the test failed.
-	pub fn call_test(&mut self, global_idx: u32) -> Result<Value, RuntimeError> {
+	// Force a top-level global to its value, evaluating its thunk on first
+	// access. Public so external runners can resolve a specific def by its
+	// global index — e.g. `pluma test` fetching a module's `tests` suite or
+	// `core.testing.new`.
+	pub fn force_global(&mut self, global_idx: u32) -> Result<Value, RuntimeError> {
 		self.load_global(global_idx)?;
-		let closure_val = self
-			.stack
-			.pop()
-			.ok_or_else(|| RuntimeError::new("VM: test global produced no value"))?;
-		let closure = match closure_val {
-			Value::Closure(c) => c,
-			_ => return Err(RuntimeError::new("VM: test global is not a closure")),
-		};
-		let depth = self.frames.len();
-		self.push_frame_with_args(
-			closure.fn_idx as u32,
-			Rc::clone(&closure.captures),
-			Vec::new(),
-			None,
-		)?;
-		self.run_until_frame_depth(depth)?;
 		self
-			.stack
-			.pop()
-			.ok_or_else(|| RuntimeError::new("VM: test exited with empty stack"))
+			.pop_stack()
+			.ok_or_else(|| RuntimeError::new("VM: global produced no value"))
+	}
+
+	// Call a callable value (closure / builtin / variant constructor) with
+	// `args` and return its result. Mirrors the internal `invoke` path that
+	// builtins use, exposed so external runners can drive Pluma functions.
+	// A `RuntimeError` from the body bubbles up — the runner's signal that a
+	// test crashed (as opposed to a returned `err` result, which is a normal
+	// assertion failure).
+	pub fn call_function(&mut self, callee: Value, args: Vec<Value>) -> Result<Value, RuntimeError> {
+		match callee {
+			Value::Closure(c) => {
+				let depth = self.frames.len();
+				self.push_frame_with_args(c.fn_idx as u32, Rc::clone(&c.captures), args, None)?;
+				self.run_until_frame_depth(depth)?;
+				self
+					.pop_stack()
+					.ok_or_else(|| RuntimeError::new("VM: call returned with empty stack"))
+			}
+			Value::Builtin(b) => crate::builtin::call_builtin(self, b.as_ref(), args),
+			Value::VariantCtor(c) => Ok(Value::Variant(Rc::new(crate::value::VariantData {
+				qualified_enum: c.qualified_enum.clone(),
+				variant: c.variant.clone(),
+				payload: args,
+			}))),
+			_ => Err(RuntimeError::new("VM: value is not callable")),
+		}
 	}
 
 	// Push a frame whose args are passed as a Vec (no callee on the stack

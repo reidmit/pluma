@@ -148,9 +148,6 @@ pub enum Token {
 	/// `let` keyword
 	KeywordLet(usize, usize),
 
-	/// `test` keyword (top-level test form: `test "name" { body }`).
-	KeywordTest(usize, usize),
-
 	/// `trait` keyword
 	KeywordTrait(usize, usize),
 
@@ -325,7 +322,6 @@ impl Token {
 			| KeywordIn(start, end)
 			| KeywordIs(start, end)
 			| KeywordLet(start, end)
-			| KeywordTest(start, end)
 			| KeywordTrait(start, end)
 			| KeywordTry(start, end)
 			| KeywordUse(start, end)
@@ -427,7 +423,6 @@ impl fmt::Display for Token {
 			&KeywordIn(..) => "keyword `in`",
 			&KeywordIs(..) => "keyword `is`",
 			&KeywordLet(..) => "keyword `let`",
-			&KeywordTest(..) => "keyword `test`",
 			&KeywordTrait(..) => "keyword `trait`",
 			&KeywordTry(..) => "keyword `try`",
 			&KeywordUse(..) => "keyword `use`",

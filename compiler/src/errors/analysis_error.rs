@@ -38,7 +38,6 @@ pub enum AnalysisErrorKind {
 	BuiltinRequiresAnnotation,
 	BuiltinMustBeTopLevelRhs,
 	UnknownRegexCharacterClass { name: String },
-	TestBlockOutsideTestModule,
 	WhereClauseParamNotInSignature { param: String },
 }
 
@@ -221,11 +220,6 @@ impl fmt::Display for AnalysisError {
 				f,
 				"Unknown character class `{}` in regular expression. Known classes: `any`, `digit`, `letter`, `whitespace`, `word`.",
 				name
-			),
-
-			TestBlockOutsideTestModule => write!(
-				f,
-				"`test` blocks can only appear in test modules. Move this block into a file named `*.test.pa` (typically colocated with the module under test)."
 			),
 
 			WhereClauseParamNotInSignature { param } => write!(

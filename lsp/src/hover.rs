@@ -266,11 +266,6 @@ fn walk_def(def: &DefinitionNode, hits: &mut Vec<HoverHit>, doc: Option<String>)
 				walk_def(method, hits, None);
 			}
 		}
-		DefinitionKind::Test { body, .. } => {
-			for stmt in body {
-				walk_expr(stmt, hits);
-			}
-		}
 	}
 }
 

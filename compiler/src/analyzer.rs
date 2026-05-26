@@ -704,8 +704,6 @@ impl<'compiler> Analyzer<'compiler> {
 					// traits and instances will be wired up alongside the
 					// constraint-generation work in phase 2.
 					DefinitionKind::Trait(_) | DefinitionKind::Instance(_) => {}
-					// Tests are not exposed as importable values.
-					DefinitionKind::Test { .. } => {}
 				}
 			}
 		}
@@ -1006,19 +1004,16 @@ impl<'compiler> Analyzer<'compiler> {
 
 			// Top-level redefinition is an error. Locals can shadow via let,
 			// but two `def`s with the same name at module top level is almost
-			// certainly a mistake. Tests carry a synthetic placeholder name
-			// and don't compete in the user-facing namespace, so skip them.
-			if !matches!(definition.kind, DefinitionKind::Test { .. }) {
-				if let Some(_prev_range) =
-					seen_names.insert(definition.name.name.clone(), definition.name.range)
-				{
-					self.error(
-						definition.name.range,
-						DuplicateDefinition {
-							name: definition.name.name.clone(),
-						},
-					);
-				}
+			// certainly a mistake.
+			if let Some(_prev_range) =
+				seen_names.insert(definition.name.name.clone(), definition.name.range)
+			{
+				self.error(
+					definition.name.range,
+					DuplicateDefinition {
+						name: definition.name.name.clone(),
+					},
+				);
 			}
 
 			match &mut definition.kind {
@@ -1140,23 +1135,6 @@ impl<'compiler> Analyzer<'compiler> {
 							defining_module: self.module_name.clone().unwrap_or_default(),
 						},
 					);
-				}
-
-				DefinitionKind::Test { .. } => {
-					// Tests don't bind anything in the value scope and their
-					// body's type is fixed (`nothing`). All work happens in
-					// the constraint-generation pass below.
-					//
-					// `test` blocks are only allowed in test modules (files
-					// named `*.test.pa`, module name ending in `.test`).
-					let in_test_module = self
-						.module_name
-						.as_deref()
-						.map(|n| n.ends_with(".test"))
-						.unwrap_or(false);
-					if !in_test_module {
-						self.error(definition.range, TestBlockOutsideTestModule);
-					}
 				}
 
 				DefinitionKind::Instance(instance_node) => {
@@ -1491,18 +1469,6 @@ impl<'compiler> Analyzer<'compiler> {
 				// Trait declarations are processed in pass 1 (above) — no
 				// body-level constraint generation needed here.
 				DefinitionKind::Trait(_) => {}
-
-				DefinitionKind::Test { body, .. } => {
-					// Each statement in the body is constrained. The final
-					// expression's type must unify with `nothing` — tests
-					// don't return a meaningful value.
-					for stmt in body.iter_mut() {
-						self.constrain_expr(stmt, &mut constraints);
-					}
-					if let Some(last) = body.last() {
-						constraints.push(eq_constraint(last.ty.clone(), Type::Nothing).at(last.range));
-					}
-				}
 
 				DefinitionKind::Instance(instance_node) => {
 					// Constrain each method body and verify its type matches
@@ -3898,11 +3864,6 @@ impl<'compiler> Analyzer<'compiler> {
 						}
 					}
 				}
-				DefinitionKind::Test { body, .. } => {
-					for stmt in body.iter_mut() {
-						self.dispatch_try_in_expr(stmt, subst, new_constraints, &mut dispatched_any);
-					}
-				}
 				_ => {}
 			}
 		}
@@ -3926,11 +3887,6 @@ impl<'compiler> Analyzer<'compiler> {
 						if let DefinitionKind::Expr(expr) = &mut method.kind {
 							self.report_unresolved_try_in_expr(expr, subst);
 						}
-					}
-				}
-				DefinitionKind::Test { body, .. } => {
-					for stmt in body.iter_mut() {
-						self.report_unresolved_try_in_expr(stmt, subst);
 					}
 				}
 				_ => {}
@@ -4471,11 +4427,6 @@ impl<'compiler> Analyzer<'compiler> {
 						if let DefinitionKind::Expr(expr) = &mut method.kind {
 							self.annotate_expr(expr, subst);
 						}
-					}
-				}
-				DefinitionKind::Test { body, .. } => {
-					for stmt in body.iter_mut() {
-						self.annotate_expr(stmt, subst);
 					}
 				}
 				_ => { /* nothing to do for other def kinds */ }

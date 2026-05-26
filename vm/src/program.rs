@@ -36,11 +36,16 @@ pub struct Program {
 	// identifier patterns against the subject's actual variant set.
 	pub enum_variants: std::collections::HashMap<String, Vec<(String, usize)>>,
 	pub entry: u32,
-	// One entry per `test "..." { ... }` block found in the compiled program.
-	// `(module_name, description, global_idx)` — the global holds a
-	// zero-arity closure the runner invokes once per test. Module name lets
-	// `pluma test` group results by test module.
-	pub tests: Vec<(String, String, u32)>,
+	// Test suites found in the entry modules: `(module_name, global_idx)`
+	// where the global holds that module's `tests` value — a `core.testing`
+	// suite, i.e. a `fun registrar -> nothing`. `pluma test` calls each with
+	// a fresh registrar, drains the registered cases, and runs them. Module
+	// name lets the runner group results.
+	pub test_suites: Vec<(String, u32)>,
+	// Global index of `core.testing.new` (the registrar builder), set when
+	// that module is loaded. The runner calls it once per suite to get a
+	// fresh registrar to thread in.
+	pub test_new: Option<u32>,
 }
 
 pub struct Function {

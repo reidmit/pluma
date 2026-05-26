@@ -1,8 +1,0 @@
----
-source: tests/analyze.rs
-expression: output
----
-error: Type mismatch: expected `int`, but found `nothing`.
-> 3 | 	x
-       ^
-

@@ -259,68 +259,232 @@ fn test_command(args: Vec<String>) {
 		}
 	};
 
-	if program.tests.is_empty() {
-		eprintln!("no tests found");
+	if program.test_suites.is_empty() {
+		eprintln!("no tests found (expected a `def tests :: testing.suite` in a *.test.pa file)");
 		return;
 	}
 
-	// Codegen iterates a HashMap, so tests come out in non-deterministic
-	// module order. Sort by module name (stably) so the user sees the same
-	// groupings across runs; within-module test order is source order from
-	// codegen's AST walk and is preserved by the stable sort.
-	let mut tests: Vec<(String, String, u32)> = program.tests.clone();
-	tests.sort_by(|a, b| a.0.cmp(&b.0));
+	// `core.testing.new` builds the registrar the runner threads into each
+	// suite. It's compiled whenever a suite is (a suite's type names it).
+	let new_idx = match program.test_new {
+		Some(idx) => idx,
+		None => {
+			print_error("internal error: `core.testing.new` was not compiled");
+			std::process::exit(1);
+		}
+	};
+
+	// Codegen iterates a HashMap, so suites come out in non-deterministic
+	// module order. Sort by module name so the output is stable across runs.
+	let mut suites: Vec<(String, u32)> = program.test_suites.clone();
+	suites.sort_by(|a, b| a.0.cmp(&b.0));
 	let mut vm_instance = vm::VM::new(program);
 
-	let total = tests.len();
 	let mut passed = 0usize;
 	let mut failed = 0usize;
+	let mut skipped = 0usize;
+	let mut todo_count = 0usize;
 
-	let mut current_module: Option<String> = None;
-	for (module_name, test_name, global_idx) in tests {
-		if current_module.as_deref() != Some(module_name.as_str()) {
-			if current_module.is_some() {
-				println!();
-			}
-			// Strip the redundant `.test` suffix every test module name
-			// carries (e.g. `util.list-helpers.test` → `util.list-helpers`).
-			let display = module_name.strip_suffix(".test").unwrap_or(&module_name);
-			println!("{}", colors::bold(display));
-			current_module = Some(module_name);
+	for (i, (module_name, suite_idx)) in suites.iter().enumerate() {
+		if i > 0 {
+			println!();
 		}
-		match vm_instance.call_test(global_idx) {
-			Ok(_) => {
-				println!("  {} {}", colors::bold_green("✓"), test_name);
-				passed += 1;
-			}
+		// Strip the redundant `.test` suffix every test module name carries
+		// (e.g. `util.list-helpers.test` → `util.list-helpers`).
+		let display = module_name.strip_suffix(".test").unwrap_or(module_name);
+		println!("{}", colors::bold(display));
+
+		// Build a fresh registrar, run the suite to register its cases, then
+		// drain the flat list of entries.
+		let entries = match run_suite(&mut vm_instance, new_idx, *suite_idx) {
+			Ok(entries) => entries,
 			Err(err) => {
-				println!("  {} {}", colors::bold_red("✗"), test_name);
-				if let (Some(module), Some(range)) = (&err.module, err.range) {
-					let path = compiler::to_module_path(&root_dir, module);
-					let display_path = path.strip_prefix(&root_dir).unwrap_or(&path);
-					// Convert 0-indexed Range points to 1-indexed line/col so
-					// the output is editor-friendly (most editors and the
-					// "Cmd+click in terminal" convention expect 1-indexed).
-					println!(
-						"      {}:{}:{}",
-						display_path.display(),
-						range.start.line + 1,
-						range.start.col + 1,
-					);
-				}
-				println!("      {}", err.message);
+				println!("  {} failed to load suite: {}", colors::bold_red("✗"), err.message);
 				failed += 1;
+				continue;
+			}
+		};
+
+		// Focus: if any case is focused, only focused cases run.
+		let any_focused = entries
+			.iter()
+			.any(|e| field_variant(e, "status").as_deref() == Some("focused"));
+
+		let mut printed_path: Vec<String> = Vec::new();
+		for entry in &entries {
+			let name = field_string(entry, "name").unwrap_or_default();
+			let path = field_string_list(entry, "path");
+			let status = field_variant(entry, "status").unwrap_or_else(|| "normal".to_string());
+			print_group_headers(&mut printed_path, &path);
+			let indent = "  ".repeat(path.len() + 1);
+
+			let should_run = match status.as_str() {
+				"pending" => {
+					println!("{}{} {} {}", indent, colors::bold_yellow("○"), name, colors::dim("(todo)"));
+					todo_count += 1;
+					false
+				}
+				"skipped" => {
+					println!("{}{} {} {}", indent, colors::dim("-"), name, colors::dim("(skipped)"));
+					skipped += 1;
+					false
+				}
+				"focused" => true,
+				_ => {
+					if any_focused {
+						println!("{}{} {} {}", indent, colors::dim("-"), name, colors::dim("(not focused)"));
+						skipped += 1;
+						false
+					} else {
+						true
+					}
+				}
+			};
+
+			if !should_run {
+				continue;
+			}
+
+			let body = match field(entry, "body") {
+				Some(b) => b,
+				None => continue,
+			};
+			match vm_instance.call_function(body, vec![vm::Value::Nothing]) {
+				// `ok ()` — the case passed.
+				Ok(result) if variant_of(&result).as_deref() == Some("ok") => {
+					println!("{}{} {}", indent, colors::bold_green("✓"), name);
+					passed += 1;
+				}
+				// `err message` — one or more assertions failed.
+				Ok(result) => {
+					println!("{}{} {}", indent, colors::bold_red("✗"), name);
+					let msg = variant_payload_string(&result).unwrap_or_default();
+					for line in msg.lines() {
+						println!("{}    {}", indent, line);
+					}
+					failed += 1;
+				}
+				// A genuine runtime error (e.g. `io.fail`, div-by-zero) — the
+				// case crashed rather than producing a result.
+				Err(err) => {
+					println!("{}{} {} {}", indent, colors::bold_red("✗"), name, colors::dim("(errored)"));
+					if let (Some(module), Some(range)) = (&err.module, err.range) {
+						let p = compiler::to_module_path(&root_dir, module);
+						let display_path = p.strip_prefix(&root_dir).unwrap_or(&p);
+						// 0-indexed Range → 1-indexed line/col for editor links.
+						println!(
+							"{}    {}:{}:{}",
+							indent,
+							display_path.display(),
+							range.start.line + 1,
+							range.start.col + 1,
+						);
+					}
+					println!("{}    {}", indent, err.message);
+					failed += 1;
+				}
 			}
 		}
 	}
 
 	println!();
-	let summary = format!("{} of {} passed", passed, total);
+	let total = passed + failed;
+	let mut summary = format!("{} of {} passed", passed, total);
+	if skipped > 0 {
+		summary.push_str(&format!(", {} skipped", skipped));
+	}
+	if todo_count > 0 {
+		summary.push_str(&format!(", {} todo", todo_count));
+	}
 	if failed == 0 {
 		println!("{}", colors::bold_green(&summary));
 	} else {
 		println!("{}", colors::bold_red(&summary));
 		std::process::exit(1);
+	}
+}
+
+// Build a fresh registrar (via `core.testing.new`), run `suite` to register
+// its cases into it, then drain and return the flat entry list. Errors here
+// mean the suite's registration code itself crashed.
+fn run_suite(
+	vm: &mut vm::VM,
+	new_idx: u32,
+	suite_idx: u32,
+) -> Result<Vec<vm::Value>, vm::RuntimeError> {
+	let new_fn = vm.force_global(new_idx)?;
+	let registrar = vm.call_function(new_fn, vec![vm::Value::Nothing])?;
+	let suite_fn = vm.force_global(suite_idx)?;
+	vm.call_function(suite_fn, vec![registrar.clone()])?;
+	let drain = field(&registrar, "drain")
+		.ok_or_else(|| vm::RuntimeError::new("registrar is missing a `drain` field"))?;
+	match vm.call_function(drain, vec![vm::Value::Nothing])? {
+		vm::Value::List(xs) => Ok(xs.iter().cloned().collect()),
+		_ => Err(vm::RuntimeError::new("`drain` did not return a list")),
+	}
+}
+
+// Print group headers for any groups newly entered going from the previously
+// printed path to `path`, updating `printed` in place. Indents by depth so the
+// tree nests under the module header.
+fn print_group_headers(printed: &mut Vec<String>, path: &[String]) {
+	let common = printed
+		.iter()
+		.zip(path.iter())
+		.take_while(|(a, b)| a == b)
+		.count();
+	printed.truncate(common);
+	for seg in &path[common..] {
+		let indent = "  ".repeat(printed.len() + 1);
+		println!("{}{}", indent, colors::bold_dim(seg));
+		printed.push(seg.clone());
+	}
+}
+
+// --- small readers over the runtime `Value` tree the registrar produces ---
+
+fn field(v: &vm::Value, name: &str) -> Option<vm::Value> {
+	match v {
+		vm::Value::Record(m) => m.get(name).cloned(),
+		_ => None,
+	}
+}
+
+fn variant_of(v: &vm::Value) -> Option<String> {
+	match v {
+		vm::Value::Variant(d) => Some(d.variant.as_str().to_string()),
+		_ => None,
+	}
+}
+
+fn variant_payload_string(v: &vm::Value) -> Option<String> {
+	match v {
+		vm::Value::Variant(d) => d.payload.first().map(|p| format!("{}", p)),
+		_ => None,
+	}
+}
+
+fn field_variant(v: &vm::Value, name: &str) -> Option<String> {
+	field(v, name).as_ref().and_then(variant_of)
+}
+
+fn field_string(v: &vm::Value, name: &str) -> Option<String> {
+	match field(v, name) {
+		Some(vm::Value::String(s)) => Some(s.as_str().to_string()),
+		_ => None,
+	}
+}
+
+fn field_string_list(v: &vm::Value, name: &str) -> Vec<String> {
+	match field(v, name) {
+		Some(vm::Value::List(xs)) => xs
+			.iter()
+			.filter_map(|x| match x {
+				vm::Value::String(s) => Some(s.as_str().to_string()),
+				_ => None,
+			})
+			.collect(),
+		_ => Vec::new(),
 	}
 }
 
