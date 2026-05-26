@@ -32,7 +32,7 @@ alias parts {
 	minute :: int,
 	second :: int,
 	nanosecond :: int,
-	weekday :: int
+	weekday :: int,
 }
 
 # --- the clock -----------------------------------------------------------

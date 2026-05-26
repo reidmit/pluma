@@ -49,5 +49,5 @@ alias info {
 	description :: string,
 	license :: string,
 	repository :: string,
-	dependencies :: list (string, dep)
+	dependencies :: list (string, dep),
 }

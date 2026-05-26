@@ -226,7 +226,7 @@ test "sort strings lexicographically" {
 	assert.equals (list.sort ["banana", "apple", "cherry"] ord.compare) [
 		"apple",
 		"banana",
-		"cherry"
+		"cherry",
 	]
 }
 
