@@ -596,7 +596,9 @@ impl<'a> Formatter<'a> {
 			return text("()");
 		}
 		let docs: Vec<Doc> = items.iter().map(|e| self.format_expr(e)).collect();
-		bracketed("(", ")", docs)
+		// Tuples stay inline when they fit, but wrap (one per line, trailing
+		// comma) when too wide — same as lists and records.
+		bracketed_collection("(", ")", docs)
 	}
 
 	fn format_list(&self, items: &[ListItem]) -> Doc {
@@ -1041,8 +1043,9 @@ fn prefix_prec(op: &Operator) -> u8 {
 	}
 }
 
-// `(a, b, c)` — always inline (used for tuples, where line breaks aren't
-// idiomatic in Pluma).
+// `(a, b, c)` / `[a, b, c]` — always inline. Used for tuple and list *patterns*,
+// where line breaks aren't idiomatic. (Value literals go through
+// `bracketed_collection`, which wraps when wide.)
 fn bracketed(open: &str, close: &str, items: Vec<Doc>) -> Doc {
 	concat(vec![
 		text(open.to_string()),
@@ -1051,20 +1054,26 @@ fn bracketed(open: &str, close: &str, items: Vec<Doc>) -> Doc {
 	])
 }
 
-// `[a, b, c]` / `{a: 1, b: 2}` — flat with comma+space, or one item per line.
-// The choice is made by the surrounding Group based on width. Pluma list/record
-// literals are comma-separated in either layout (unlike newline-separated enum
-// variants), so the wrapped form keeps a comma between items — a trailing
-// newline, not a bare one, is what the parser would reject.
+// `[a, b, c]` / `{a: 1, b: 2}` / `(a, b, c)` — flat with comma+space, or one
+// item per line. The choice is made by the surrounding Group based on width.
+// Pluma list/record/tuple literals are comma-separated in either layout (unlike
+// newline-separated enum variants), so the wrapped form keeps a comma between
+// items — a bare trailing newline is what the parser would reject. When it
+// breaks across lines it also adds a trailing comma on the last item; the flat
+// form (`[a, b]`) has none.
 fn bracketed_collection(open: &str, close: &str, items: Vec<Doc>) -> Doc {
 	let sep = if_flat(text(", "), concat(vec![text(","), line()]));
 	let n = items.len();
-	let mut inner: Vec<Doc> = Vec::with_capacity(n * 2);
+	let mut inner: Vec<Doc> = Vec::with_capacity(n * 2 + 1);
 	for (i, item) in items.into_iter().enumerate() {
 		if i > 0 {
 			inner.push(sep.clone());
 		}
 		inner.push(item);
+	}
+	// Trailing comma, but only once the group has broken across lines.
+	if n > 0 {
+		inner.push(if_flat(text(""), text(",")));
 	}
 	group(concat(vec![
 		text(open.to_string()),

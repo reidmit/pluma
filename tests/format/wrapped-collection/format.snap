@@ -2,10 +2,11 @@
 source: tests/format.rs
 expression: once
 ---
-# A collection literal too wide for one line wraps one item per line — and
-# must keep its commas (Pluma list/record literals are comma-separated in
-# either layout). The format harness re-parses the output, so a dropped
-# comma here would fail the test, not just change the snapshot.
+# A collection literal too wide for one line wraps one item per line, keeps
+# its commas (Pluma list/record/tuple literals are comma-separated in either
+# layout), and gets a trailing comma on the last item. Lists, records, and
+# tuples all behave the same. The format harness re-parses the output, so a
+# dropped comma here would fail the test, not just change the snapshot.
 def wide-list = [
 	100,
 	200,
@@ -23,7 +24,7 @@ def wide-list = [
 	1400,
 	1500,
 	1600,
-	1700
+	1700,
 ]
 
 def wide-record = {
@@ -35,6 +36,21 @@ def wide-record = {
 	foxtrot: 6,
 	golf: 7,
 	hotel: 8,
-	india: 9
+	india: 9,
 }
+
+def wide-tuple = (
+	1000000,
+	2000000,
+	3000000,
+	4000000,
+	5000000,
+	6000000,
+	7000000,
+	8000000,
+	9000000,
+	10000000,
+)
+
+def short-stays-flat = [1, 2, 3]
 
