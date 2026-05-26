@@ -1,52 +1,95 @@
-# Checks for use inside tests. Pluma has a built-in test runner: write a
-# `test "name" { ... }` block, run `pluma test`, and inside each block
-# call these to state what you expect. If a check fails, the runner
-# marks that test as failed and shows what went wrong; a test passes
-# when every check in it holds. (Outside a test, a failed check stops
-# the program.)
-
-# Passes when `value` is `true`, fails otherwise.
+# Checks for use inside tests. Each check returns a `result`: `ok ()`
+# when it holds, `err message` when it doesn't. A `core.testing` case
+# body returns one of these — `pluma test` passes the case when it's `ok`
+# and reports the message when it's `err`. Combine several checks in one
+# case with `assert.all`.
 #
-#     test "two and two" {
-#         assert.is-true (2 + 2 == 4)
+#     use core.testing
+#     use core.assert
+#
+#     def tests :: testing.suite = fun t {
+#         t.case "two and two" (fun { assert.equals (2 + 2) 4 })
 #     }
-def is-true :: fun bool -> nothing = built-in "assert-is-true"
 
-# Passes when `value` is `false`.
-#
-#     assert.is-false (string.is-empty "x")
-def is-false :: fun bool -> nothing = built-in "assert-is-false"
-
-# Passes when the two values are equal, compared deeply by value. This
-# is the everyday workhorse: compute something, then check it against
-# what you expected.
+# `ok ()` when the two values are equal, compared deeply by value, else
+# `err` showing both sides. The everyday workhorse.
 #
 #     assert.equals (1 + 1) 2
 #     assert.equals (string.to-upper "hi") "HI"
-def equals :: fun a a -> nothing = built-in "assert-equals"
+def equals :: fun a a -> result nothing string = built-in "assert-equals"
 
-# Passes when the two values are *not* equal.
+# `ok ()` when the two values are *not* equal.
 #
 #     assert.not-equals "cat" "dog"
-def not-equals :: fun a a -> nothing = built-in "assert-not-equals"
+def not-equals :: fun a a -> result nothing string = built-in "assert-not-equals"
 
-# Passes when the option holds a value (`some _`). Doesn't look at what
-# the value is.
+# `ok ()` when `value` is `true`.
+def is-true :: fun bool -> result nothing string = fun value {
+	if value is true {
+		ok ()
+	} else {
+		err "expected true, got false"
+	}
+}
+
+# `ok ()` when `value` is `false`.
+def is-false :: fun bool -> result nothing string = fun value {
+	if value is false {
+		ok ()
+	} else {
+		err "expected false, got true"
+	}
+}
+
+# `ok ()` when the option holds a value (`some _`).
 #
 #     assert.is-some (list.head [1, 2, 3])
-def is-some :: fun (option a) -> nothing = built-in "assert-is-some"
+def is-some :: fun (option a) -> result nothing string = fun value {
+	if value is some _ {
+		ok ()
+	} else {
+		err "expected some, got none"
+	}
+}
 
-# Passes when the option is `none`.
-#
-#     assert.is-none (list.head [])
-def is-none :: fun (option a) -> nothing = built-in "assert-is-none"
+# `ok ()` when the option is `none`.
+def is-none :: fun (option a) -> result nothing string = fun value {
+	if value is none {
+		ok ()
+	} else {
+		err "expected none, got some"
+	}
+}
 
-# Passes when the result is a success (`ok _`).
+# `ok ()` when the result is a success (`ok _`).
 #
 #     assert.is-ok (string.to-int "42")
-def is-ok :: fun (result a e) -> nothing = built-in "assert-is-ok"
+def is-ok :: fun (result a e) -> result nothing string = fun value {
+	if value is ok _ {
+		ok ()
+	} else {
+		err "expected ok, got err"
+	}
+}
 
-# Passes when the result is a failure (`err _`).
+# `ok ()` when the result is a failure (`err _`).
+def is-err :: fun (result a e) -> result nothing string = fun value {
+	if value is err _ {
+		ok ()
+	} else {
+		err "expected err, got ok"
+	}
+}
+
+# Combine many checks into one. `ok ()` when every check is `ok`,
+# otherwise an `err` listing each failure (one per line). All the checks
+# are evaluated — assertions are pure — so a case reports every failure,
+# not just the first.
 #
-#     assert.is-err (string.to-int "nope")
-def is-err :: fun (result a e) -> nothing = built-in "assert-is-err"
+#     t.case "arithmetic" (fun {
+#         assert.all [
+#             assert.equals (2 + 3) 5,
+#             assert.equals (4 * 2) 8,
+#         ]
+#     })
+def all :: fun (list (result nothing string)) -> result nothing string = built-in "assert-all"

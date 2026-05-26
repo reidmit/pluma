@@ -1397,89 +1397,59 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			Ok(acc)
 		}
 
-		"assert-is-true" => {
-			debug_assert_eq!(args.len(), 1, "`assert.is-true` arity");
-			match &args[0] {
-				Value::Bool(true) => Ok(Value::Nothing),
-				Value::Bool(false) => Err(RuntimeError::new(
-					"assertion failed: expected `true`, got `false`",
-				)),
-				_ => unreachable!("`assert.is-true` expects bool"),
-			}
-		}
-		"assert-is-false" => {
-			debug_assert_eq!(args.len(), 1, "`assert.is-false` arity");
-			match &args[0] {
-				Value::Bool(false) => Ok(Value::Nothing),
-				Value::Bool(true) => Err(RuntimeError::new(
-					"assertion failed: expected `false`, got `true`",
-				)),
-				_ => unreachable!("`assert.is-false` expects bool"),
-			}
-		}
+		// Assertions return a `result nothing string`: `ok ()` to pass,
+		// `err message` to fail. They never abort — a case body's final
+		// result is what `pluma test` reads. (The `is-*` predicates live
+		// in `assert.pa` as pure Pluma; only the value-formatting checks
+		// and the `all` combinator need Rust.)
 		"assert-equals" => {
 			debug_assert_eq!(args.len(), 2, "`assert.equals` arity");
 			if values_eq(&args[0], &args[1]) {
-				Ok(Value::Nothing)
+				Ok(result_ok(Value::Nothing))
 			} else {
-				Err(RuntimeError::new(format!(
-					"assertion failed: expected {} == {}",
-					args[0], args[1]
-				)))
+				Ok(result_err(Value::String(Rc::new(format!(
+					"expected {}, got {}",
+					args[1], args[0]
+				)))))
 			}
 		}
 		"assert-not-equals" => {
 			debug_assert_eq!(args.len(), 2, "`assert.not-equals` arity");
 			if !values_eq(&args[0], &args[1]) {
-				Ok(Value::Nothing)
+				Ok(result_ok(Value::Nothing))
 			} else {
-				Err(RuntimeError::new(format!(
-					"assertion failed: expected {} != {}",
-					args[0], args[1]
-				)))
-			}
-		}
-		"assert-is-some" => {
-			debug_assert_eq!(args.len(), 1, "`assert.is-some` arity");
-			match &args[0] {
-				Value::Variant(v) if v.variant.as_str() == "some" => Ok(Value::Nothing),
-				Value::Variant(v) if v.variant.as_str() == "none" => Err(RuntimeError::new(
-					"assertion failed: expected `some _`, got `none`",
-				)),
-				_ => unreachable!("`assert.is-some` expects option"),
-			}
-		}
-		"assert-is-none" => {
-			debug_assert_eq!(args.len(), 1, "`assert.is-none` arity");
-			match &args[0] {
-				Value::Variant(v) if v.variant.as_str() == "none" => Ok(Value::Nothing),
-				Value::Variant(v) if v.variant.as_str() == "some" => Err(RuntimeError::new(format!(
-					"assertion failed: expected `none`, got `{}`",
+				Ok(result_err(Value::String(Rc::new(format!(
+					"expected a value other than {}",
 					args[0]
-				))),
-				_ => unreachable!("`assert.is-none` expects option"),
+				)))))
 			}
 		}
-		"assert-is-ok" => {
-			debug_assert_eq!(args.len(), 1, "`assert.is-ok` arity");
-			match &args[0] {
-				Value::Variant(v) if v.variant.as_str() == "ok" => Ok(Value::Nothing),
-				Value::Variant(v) if v.variant.as_str() == "err" => Err(RuntimeError::new(format!(
-					"assertion failed: expected `ok _`, got `{}`",
-					args[0]
-				))),
-				_ => unreachable!("`assert.is-ok` expects result"),
+		"assert-all" => {
+			debug_assert_eq!(args.len(), 1, "`assert.all` arity");
+			let checks = match &args[0] {
+				Value::List(xs) => xs,
+				_ => unreachable!("`assert.all` expects a list"),
+			};
+			let mut failures: Vec<String> = Vec::new();
+			for check in checks.iter() {
+				match check {
+					Value::Variant(v) if v.variant.as_str() == "ok" => {}
+					Value::Variant(v) if v.variant.as_str() == "err" => {
+						match v.payload.first() {
+							Some(Value::String(s)) => failures.push(s.as_str().to_string()),
+							other => failures.push(format!(
+								"{}",
+								other.cloned().unwrap_or(Value::Nothing)
+							)),
+						}
+					}
+					_ => unreachable!("`assert.all` expects a list of results"),
+				}
 			}
-		}
-		"assert-is-err" => {
-			debug_assert_eq!(args.len(), 1, "`assert.is-err` arity");
-			match &args[0] {
-				Value::Variant(v) if v.variant.as_str() == "err" => Ok(Value::Nothing),
-				Value::Variant(v) if v.variant.as_str() == "ok" => Err(RuntimeError::new(format!(
-					"assertion failed: expected `err _`, got `{}`",
-					args[0]
-				))),
-				_ => unreachable!("`assert.is-err` expects result"),
+			if failures.is_empty() {
+				Ok(result_ok(Value::Nothing))
+			} else {
+				Ok(result_err(Value::String(Rc::new(failures.join("\n")))))
 			}
 		}
 		"hex-encode" => {
