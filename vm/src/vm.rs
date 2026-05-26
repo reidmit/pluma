@@ -16,6 +16,11 @@ pub struct RuntimeError {
 	// it to resolve a source path for the failure (paired with `range` to
 	// render `file:line:col`).
 	pub module: Option<String>,
+	// True when this is a deliberate, program-controlled abort (`io.fail`,
+	// `result.expect`, `option.expect`) rather than an internal VM fault. The
+	// CLI prints the bare message for these instead of the `Runtime error:`
+	// prefix it reserves for genuine VM bugs.
+	pub is_user_abort: bool,
 }
 
 impl RuntimeError {
@@ -24,6 +29,18 @@ impl RuntimeError {
 			message: message.into(),
 			range: None,
 			module: None,
+			is_user_abort: false,
+		}
+	}
+	// A program-controlled abort: a clean message + nonzero exit, the engine
+	// behind `io.fail` and `expect`. Distinct from `new` so the CLI can tell
+	// an intended bail from a VM fault.
+	pub fn user_abort(message: impl Into<String>) -> Self {
+		Self {
+			message: message.into(),
+			range: None,
+			module: None,
+			is_user_abort: true,
 		}
 	}
 	pub fn at(mut self, range: Range) -> Self {

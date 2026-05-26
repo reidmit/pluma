@@ -38,3 +38,14 @@ def then :: fun (result a e) (fun a -> result b e) -> result b e = built-in "res
 def or-else :: fun (result a e) (fun nothing -> a) -> a = fun r fallback {
 	when r is ok v { v } is err _ { fallback () }
 }
+
+# Returns the value inside an `ok`, or stops the whole program when the
+# result is an `err`. The message you pass is written to standard error,
+# followed by the error value itself, and the program exits nonzero (via
+# `io.fail`). Reach for this in a script when there's nothing sensible to
+# do but bail -- the recovering dual is `??`, which supplies a fallback
+# instead of quitting.
+#
+#     # ok -> the contents; err -> "reading config: <the os error>" then exit
+#     io.read-file "config.toml" | result.expect "reading config"
+def expect :: fun (result a e) string -> a = built-in "result-expect"

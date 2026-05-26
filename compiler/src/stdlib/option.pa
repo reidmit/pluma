@@ -39,3 +39,13 @@ def then :: fun (option a) (fun a -> option b) -> option b = built-in "option-th
 def or-else :: fun (option a) (fun nothing -> a) -> a = fun o fallback {
 	when o is some v { v } is none { fallback () }
 }
+
+# Returns the value inside a `some`, or stops the whole program when the
+# option is `none`. The message you pass is written to standard error and
+# the program exits nonzero (via `io.fail`). Reach for this in a script
+# when an empty result leaves nothing sensible to do -- the recovering
+# dual is `??`, which supplies a fallback instead of quitting.
+#
+#     # some -> the contents; none -> "no home directory" on stderr, then exit
+#     (io.env "HOME") | option.expect "no home directory"
+def expect :: fun (option a) string -> a = built-in "option-expect"

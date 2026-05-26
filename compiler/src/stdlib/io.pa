@@ -98,6 +98,16 @@ def env :: fun string -> option string = built-in "io-env"
 #     io.exit 1   # quit now, reporting failure
 def exit :: fun int -> a = built-in "io-exit"
 
+# Stops the program with `message` written to standard error and a
+# nonzero exit code. Use it when a script hits a situation it can't
+# sensibly continue past -- a missing config file, an impossible state.
+# Like `exit`, it never returns, so it fits anywhere a value is
+# expected. This is what `result.expect` and `option.expect` call on the
+# failing arm.
+#
+#     io.fail "config.toml is missing"
+def fail :: fun string -> a = built-in "io-fail"
+
 # Byte-oriented versions of the operations above, for binary data: they
 # read and write `bytes` instead of `string`, so they make no assumption
 # that the content is text. Reach for these with images, compressed

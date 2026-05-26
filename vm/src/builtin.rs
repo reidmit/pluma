@@ -999,6 +999,15 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			std::process::exit(code);
 		}
 
+		"io-fail" => {
+			// `io.fail msg` — stop the program with `msg` on stderr and a
+			// nonzero exit. A program-controlled abort, so it surfaces as a
+			// user-abort RuntimeError rather than a VM fault.
+			debug_assert_eq!(args.len(), 1, "`fail` arity");
+			let msg = expect_string(&args, "fail");
+			Err(RuntimeError::user_abort(msg.to_string()))
+		}
+
 		"io-read-all-bytes" => {
 			// `read-all-bytes ()` — drains stdin without UTF-8 decoding.
 			debug_assert_eq!(args.len(), 1, "`read-all-bytes` arity");
@@ -1297,6 +1306,53 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 					other => unreachable!("`result.then`: unexpected result variant `{}`", other),
 				},
 				_ => unreachable!("`result.then`: expected result variant"),
+			}
+		}
+
+		"option-expect" => {
+			// `option.expect o msg` — unwrap `some`'s payload, or abort with
+			// `msg` on `none` (there's no payload to report).
+			debug_assert_eq!(args.len(), 2, "`option.expect` arity");
+			let msg = match &args[1] {
+				Value::String(s) => s.to_string(),
+				_ => unreachable!("`option.expect`: expected string message"),
+			};
+			match &args[0] {
+				Value::Variant(v) => match v.variant.as_str() {
+					"some" => {
+						debug_assert_eq!(v.payload.len(), 1, "`some` payload arity");
+						Ok(v.payload[0].clone())
+					}
+					"none" => Err(RuntimeError::user_abort(msg)),
+					other => unreachable!("`option.expect`: unexpected option variant `{}`", other),
+				},
+				_ => unreachable!("`option.expect`: expected option variant"),
+			}
+		}
+		"result-expect" => {
+			// `result.expect r msg` — unwrap `ok`'s payload, or abort with
+			// `msg` plus the rendered error on `err`.
+			debug_assert_eq!(args.len(), 2, "`result.expect` arity");
+			let msg = match &args[1] {
+				Value::String(s) => s.to_string(),
+				_ => unreachable!("`result.expect`: expected string message"),
+			};
+			match &args[0] {
+				Value::Variant(v) => match v.variant.as_str() {
+					"ok" => {
+						debug_assert_eq!(v.payload.len(), 1, "`ok` payload arity");
+						Ok(v.payload[0].clone())
+					}
+					"err" => {
+						debug_assert_eq!(v.payload.len(), 1, "`err` payload arity");
+						Err(RuntimeError::user_abort(format!(
+							"{}: {}",
+							msg, v.payload[0]
+						)))
+					}
+					other => unreachable!("`result.expect`: unexpected result variant `{}`", other),
+				},
+				_ => unreachable!("`result.expect`: expected result variant"),
 			}
 		}
 

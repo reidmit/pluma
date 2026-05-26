@@ -398,7 +398,14 @@ fn run(entry_path: String, program_args: Vec<String>) {
 	};
 	let mut vm_instance = vm::VM::new(program).with_args(program_args);
 	if let Err(err) = vm_instance.run() {
-		print_error(format!("Runtime error: {}", err.message));
+		if err.is_user_abort {
+			// A deliberate bail (`io.fail` / `expect`): the message is the
+			// program's own, so print it bare — no `Runtime error:` prefix,
+			// which we reserve for genuine VM faults.
+			eprintln!("{}", err.message);
+		} else {
+			print_error(format!("Runtime error: {}", err.message));
+		}
 		std::process::exit(1);
 	}
 }
