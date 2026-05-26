@@ -1051,10 +1051,13 @@ fn bracketed(open: &str, close: &str, items: Vec<Doc>) -> Doc {
 	])
 }
 
-// `[a, b, c]` / `{a: 1, b: 2}` — flat with comma+space, or one item per line
-// with no commas. The choice is made by the surrounding Group based on width.
+// `[a, b, c]` / `{a: 1, b: 2}` — flat with comma+space, or one item per line.
+// The choice is made by the surrounding Group based on width. Pluma list/record
+// literals are comma-separated in either layout (unlike newline-separated enum
+// variants), so the wrapped form keeps a comma between items — a trailing
+// newline, not a bare one, is what the parser would reject.
 fn bracketed_collection(open: &str, close: &str, items: Vec<Doc>) -> Doc {
-	let sep = if_flat(text(", "), line());
+	let sep = if_flat(text(", "), concat(vec![text(","), line()]));
 	let n = items.len();
 	let mut inner: Vec<Doc> = Vec::with_capacity(n * 2);
 	for (i, item) in items.into_iter().enumerate() {
