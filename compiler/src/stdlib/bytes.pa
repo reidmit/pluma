@@ -20,7 +20,9 @@ def length :: fun bytes -> int = built-in "bytes-length"
 #
 #     bytes.is-empty ''    # => true
 #     bytes.is-empty 'x'   # => false
-def is-empty :: fun bytes -> bool = fun b { length b == 0 }
+def is-empty :: fun bytes -> bool = fun b {
+	length b == 0
+}
 
 # The byte at position `i` (counting from 0), as an int in 0-255 wrapped
 # in `some`. `none` if `i` is out of range.

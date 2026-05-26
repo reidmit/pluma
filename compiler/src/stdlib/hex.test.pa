@@ -16,49 +16,73 @@ test "encode of high bytes" {
 }
 
 test "encode of single byte" {
-	assert.equals (hex.encode '\x0a') "0a"
+	assert.equals (hex.encode '\n') "0a"
 }
 
 # --- decode ---
 
 test "decode of empty string" {
-	when hex.decode "" is ok b { assert.equals b '' }
-	is err _msg { assert.is-true false }
+	when hex.decode "" is ok b {
+		assert.equals b ''
+	} is err _msg {
+		assert.is-true false
+	}
 }
 
 test "decode round-trips lowercase" {
-	when hex.decode "414243" is ok b { assert.equals b 'ABC' }
-	is err _msg { assert.is-true false }
+	when hex.decode "414243" is ok b {
+		assert.equals b 'ABC'
+	} is err _msg {
+		assert.is-true false
+	}
 }
 
 test "decode accepts uppercase" {
-	when hex.decode "FF" is ok b { assert.equals b '\xff' }
-	is err _msg { assert.is-true false }
+	when hex.decode "FF" is ok b {
+		assert.equals b '\xff'
+	} is err _msg {
+		assert.is-true false
+	}
 }
 
 test "decode accepts mixed case" {
-	when hex.decode "AbCdEf" is ok b { assert.equals b '\xab\xcd\xef' }
-	is err _msg { assert.is-true false }
+	when hex.decode "AbCdEf" is ok b {
+		assert.equals b '\xab\xcd\xef'
+	} is err _msg {
+		assert.is-true false
+	}
 }
 
 test "decode fails on odd length" {
-	when hex.decode "abc" is ok _b { assert.is-true false }
-	is err _msg { assert.is-true true }
+	when hex.decode "abc" is ok _b {
+		assert.is-true false
+	} is err _msg {
+		assert.is-true true
+	}
 }
 
 test "decode fails on non-hex digit" {
-	when hex.decode "zz" is ok _b { assert.is-true false }
-	is err _msg { assert.is-true true }
+	when hex.decode "zz" is ok _b {
+		assert.is-true false
+	} is err _msg {
+		assert.is-true true
+	}
 }
 
 test "decode rejects 0x prefix" {
-	when hex.decode "0xff" is ok _b { assert.is-true false }
-	is err _msg { assert.is-true true }
+	when hex.decode "0xff" is ok _b {
+		assert.is-true false
+	} is err _msg {
+		assert.is-true true
+	}
 }
 
 test "decode rejects whitespace" {
-	when hex.decode "ab cd" is ok _b { assert.is-true false }
-	is err _msg { assert.is-true true }
+	when hex.decode "ab cd" is ok _b {
+		assert.is-true false
+	} is err _msg {
+		assert.is-true true
+	}
 }
 
 # --- round-trip ---
@@ -66,6 +90,7 @@ test "decode rejects whitespace" {
 test "encode then decode" {
 	when hex.decode (hex.encode '\x89PNG\r\n\x1a\n') is ok b {
 		assert.equals b '\x89PNG\r\n\x1a\n'
+	} is err _msg {
+		assert.is-true false
 	}
-	is err _msg { assert.is-true false }
 }

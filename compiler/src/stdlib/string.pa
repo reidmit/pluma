@@ -18,7 +18,9 @@ def length :: fun string -> int = built-in "string-length"
 #
 #     string.is-empty ""    # => true
 #     string.is-empty "x"   # => false
-def is-empty :: fun string -> bool = fun s { length s == 0 }
+def is-empty :: fun string -> bool = fun s {
+	length s == 0
+}
 
 # The character at position `i`, counting from 0, as a one-character
 # string wrapped in `some`. `none` if `i` is past the end.
@@ -40,7 +42,9 @@ def slice :: fun string int int -> string = built-in "string-slice"
 # `slice s n (string.length s)`.
 #
 #     string.drop "hello" 2   # => "llo"
-def drop :: fun string int -> string = fun s n { slice s n (length s) }
+def drop :: fun string int -> string = fun s n {
+	slice s n (length s)
+}
 
 # Uppercases the ASCII letters a-z. Everything else is left as-is.
 #

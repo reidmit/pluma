@@ -113,8 +113,13 @@ def fail :: fun string -> a = built-in "io-fail"
 # that the content is text. Reach for these with images, compressed
 # files, or anything that isn't UTF-8.
 def read-all-bytes :: fun nothing -> result bytes string = built-in "io-read-all-bytes"
+
 def read-file-bytes :: fun string -> result bytes string = built-in "io-read-file-bytes"
+
 def write-file-bytes :: fun string bytes -> result nothing string = built-in "io-write-file-bytes"
+
 def append-file-bytes :: fun string bytes -> result nothing string = built-in "io-append-file-bytes"
+
 def write-bytes :: fun bytes -> nothing = built-in "io-write-bytes"
+
 def write-err-bytes :: fun bytes -> nothing = built-in "io-write-err-bytes"

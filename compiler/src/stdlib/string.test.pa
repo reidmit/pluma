@@ -50,13 +50,21 @@ test "drop removes leading characters" {
 }
 
 test "char-at returns the character at an index" {
-	when string.char-at "hello" 1 is some c { assert.equals c "e" } is none { assert.is-true false }
-	when string.char-at "héllo" 1 is some c { assert.equals c "é" } is none { assert.is-true false }
+	when string.char-at "hello" 1 is some c {
+		assert.equals c "e"
+	} is none {
+		assert.is-true false
+	}
+	when string.char-at "héllo" 1 is some c {
+		assert.equals c "é"
+	} is none {
+		assert.is-true false
+	}
 }
 
 test "char-at is none out of bounds" {
 	assert.is-none (string.char-at "hi" 5)
-	assert.is-none (string.char-at "hi" -1)
+	assert.is-none (string.char-at "hi" (-1))
 }
 
 # --- to-upper / to-lower ---
@@ -184,44 +192,68 @@ test "replace with no match passes through" {
 # --- to-int / to-float ---
 
 test "to-int parses an integer" {
-	when string.to-int "42" is ok n { assert.equals n 42 }
-	is err _msg { assert.is-true false }
+	when string.to-int "42" is ok n {
+		assert.equals n 42
+	} is err _msg {
+		assert.is-true false
+	}
 }
 
 test "to-int parses a negative integer" {
-	when string.to-int "-7" is ok n { assert.equals n -7 }
-	is err _msg { assert.is-true false }
+	when string.to-int "-7" is ok n {
+		assert.equals n (-7)
+	} is err _msg {
+		assert.is-true false
+	}
 }
 
 test "to-int fails on non-numeric input" {
-	when string.to-int "hello" is ok _n { assert.is-true false }
-	is err _msg { assert.is-true true }
+	when string.to-int "hello" is ok _n {
+		assert.is-true false
+	} is err _msg {
+		assert.is-true true
+	}
 }
 
 test "to-int fails on a float" {
-	when string.to-int "3.14" is ok _n { assert.is-true false }
-	is err _msg { assert.is-true true }
+	when string.to-int "3.14" is ok _n {
+		assert.is-true false
+	} is err _msg {
+		assert.is-true true
+	}
 }
 
 test "to-float parses a float" {
-	when string.to-float "3.14" is ok x { assert.equals x 3.14 }
-	is err _msg { assert.is-true false }
+	when string.to-float "3.14" is ok x {
+		assert.equals x 3.14
+	} is err _msg {
+		assert.is-true false
+	}
 }
 
 test "to-float parses an integer literal" {
-	when string.to-float "42" is ok x { assert.equals x 42.0 }
-	is err _msg { assert.is-true false }
+	when string.to-float "42" is ok x {
+		assert.equals x 42.0
+	} is err _msg {
+		assert.is-true false
+	}
 }
 
 test "to-float fails on non-numeric input" {
-	when string.to-float "hello" is ok _x { assert.is-true false }
-	is err _msg { assert.is-true true }
+	when string.to-float "hello" is ok _x {
+		assert.is-true false
+	} is err _msg {
+		assert.is-true true
+	}
 }
 
 # --- to-bytes ---
 
 test "to-bytes round-trips through bytes.to-string" {
 	let b = string.to-bytes "hello"
-	when bytes.to-string b is ok s { assert.equals s "hello" }
-	is err _msg { assert.is-true false }
+	when bytes.to-string b is ok s {
+		assert.equals s "hello"
+	} is err _msg {
+		assert.is-true false
+	}
 }

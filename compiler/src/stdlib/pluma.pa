@@ -7,5 +7,5 @@ def package :: package.info = {
 	description: "Pluma standard library",
 	license: "",
 	repository: "",
-	dependencies: [],
+	dependencies: []
 }

@@ -29,7 +29,9 @@ def length :: fun (list a) -> int = built-in "list-length"
 #
 #     list.is-empty []    # => true
 #     list.is-empty [1]   # => false
-def is-empty :: fun (list a) -> bool = fun xs { length xs == 0 }
+def is-empty :: fun (list a) -> bool = fun xs {
+	length xs == 0
+}
 
 # Returns a new list with the elements in the opposite order.
 #

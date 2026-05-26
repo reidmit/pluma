@@ -4,33 +4,51 @@ use core.assert
 # Helpers that wrap an int or return none, so `then` has something
 # to do.
 def positive = fun n {
-	if n > 0 is true { some n } else { none }
+	if n > 0 is true {
+		some n
+	} else {
+		none
+	}
 }
 
-def doubled = fun n { some (n * 2) }
+def doubled = fun n {
+	some (n * 2)
+}
 
 # --- then on `some` ---
 
 test "then on some runs the continuation" {
-	when opt.then (some 3) doubled is some n { assert.equals n 6 }
-	is none { assert.is-true false }
+	when opt.then (some 3) doubled is some n {
+		assert.equals n 6
+	} is none {
+		assert.is-true false
+	}
 }
 
 test "then can change the inner type" {
-	when opt.then (some 5) fun n { some (to-string n) } is some s { assert.equals s "5" }
-	is none { assert.is-true false }
+	when opt.then (some 5) fun n { some (to-string n) } is some s {
+		assert.equals s "5"
+	} is none {
+		assert.is-true false
+	}
 }
 
 test "then can short-circuit a some into a none" {
-	when opt.then (some -3) positive is some _n { assert.is-true false }
-	is none { assert.is-true true }
+	when opt.then (some (-3)) positive is some _n {
+		assert.is-true false
+	} is none {
+		assert.is-true true
+	}
 }
 
 # --- then on `none` ---
 
 test "then on none stays none" {
-	when opt.then none doubled is some _n { assert.is-true false }
-	is none { assert.is-true true }
+	when opt.then none doubled is some _n {
+		assert.is-true false
+	} is none {
+		assert.is-true true
+	}
 }
 
 test "then on none does not call the continuation" {
@@ -39,19 +57,23 @@ test "then on none does not call the continuation" {
 		ref.update counter fun c { c + 1 }
 		some (n * 2)
 	}
-	when opt.then none bump-and-double is some _n { assert.is-true false }
-	is none { assert.is-true true }
+	when opt.then none bump-and-double is some _n {
+		assert.is-true false
+	} is none {
+		assert.is-true true
+	}
 	assert.equals (ref.get counter) 0
 }
 
 # --- chained then ---
 
 test "two-step then composes" {
-	let r = opt.then (some 4) fun n {
-		opt.then (positive n) doubled
+	let r = opt.then (some 4) fun n { opt.then (positive n) doubled }
+	when r is some n {
+		assert.equals n 8
+	} is none {
+		assert.is-true false
 	}
-	when r is some n { assert.equals n 8 }
-	is none { assert.is-true false }
 }
 
 # `try x = expr` desugars to opt.then, so the two should agree.
@@ -67,13 +89,19 @@ def try-pipe-none = fun {
 }
 
 test "try desugars to then on some" {
-	when try-pipe () is some n { assert.equals n 8 }
-	is none { assert.is-true false }
+	when try-pipe () is some n {
+		assert.equals n 8
+	} is none {
+		assert.is-true false
+	}
 }
 
 test "try short-circuits on none" {
-	when try-pipe-none () is some _n { assert.is-true false }
-	is none { assert.is-true true }
+	when try-pipe-none () is some _n {
+		assert.is-true false
+	} is none {
+		assert.is-true true
+	}
 }
 
 # --- or-else (the recovering dual of then; `??` desugars to it) ---

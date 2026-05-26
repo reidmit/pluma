@@ -36,7 +36,11 @@ def then :: fun (result a e) (fun a -> result b e) -> result b e = built-in "res
 #     result.or-else (ok 7) (fun { 0 })         # => 7
 #     result.or-else (err "nope") (fun { 0 })   # => 0
 def or-else :: fun (result a e) (fun nothing -> a) -> a = fun r fallback {
-	when r is ok v { v } is err _ { fallback () }
+	when r is ok v {
+		v
+	} is err _ {
+		fallback ()
+	}
 }
 
 # Returns the value inside an `ok`, or stops the whole program when the

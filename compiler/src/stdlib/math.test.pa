@@ -6,13 +6,13 @@ use core.assert
 test "to-float promotes ints" {
 	assert.equals (math.to-float 0) 0.0
 	assert.equals (math.to-float 42) 42.0
-	assert.equals (math.to-float -7) -7.0
+	assert.equals (math.to-float (-7)) (-7.0)
 }
 
 test "to-int truncates toward zero" {
 	assert.equals (math.to-int 3.0) 3
 	assert.equals (math.to-int 3.9) 3
-	assert.equals (math.to-int -3.9) -3
+	assert.equals (math.to-int (-3.9)) (-3)
 	assert.equals (math.to-int 0.0) 0
 }
 
@@ -23,7 +23,7 @@ test "abs of positive is itself" {
 }
 
 test "abs of negative is positive" {
-	assert.equals (math.abs -5) 5
+	assert.equals (math.abs (-5)) 5
 }
 
 test "abs of zero is zero" {
@@ -35,20 +35,20 @@ test "abs of zero is zero" {
 test "floor rounds down" {
 	assert.equals (math.floor 3.7) 3
 	assert.equals (math.floor 3.0) 3
-	assert.equals (math.floor -3.2) -4
+	assert.equals (math.floor (-3.2)) (-4)
 }
 
 test "ceil rounds up" {
 	assert.equals (math.ceil 3.2) 4
 	assert.equals (math.ceil 3.0) 3
-	assert.equals (math.ceil -3.7) -3
+	assert.equals (math.ceil (-3.7)) (-3)
 }
 
 test "round is half-away-from-zero" {
 	assert.equals (math.round 3.4) 3
 	assert.equals (math.round 3.5) 4
-	assert.equals (math.round -3.5) -4
-	assert.equals (math.round -3.4) -3
+	assert.equals (math.round (-3.5)) (-4)
+	assert.equals (math.round (-3.4)) (-3)
 }
 
 # --- sqrt ---

@@ -22,12 +22,7 @@
 # capture in the pattern to the text it grabbed. A named group that never
 # fired -- because it was on the unused side of an "or", say -- is simply
 # left out of the dict rather than mapped to "".
-alias match {
-	text :: string,
-	start :: int,
-	end :: int,
-	groups :: dict string string,
-}
+alias match {text :: string, start :: int, end :: int, groups :: dict string string}
 
 # True when the regex matches anywhere in the input. Use this when you
 # only care whether there's a match, not where it is or what it caught.

@@ -23,23 +23,35 @@ test "is-empty on non-empty bytes" {
 # --- at ---
 
 test "at returns some byte in range" {
-	when bytes.at 'hello' 0 is some n { assert.equals n 104 }
-	is none { assert.is-true false }
+	when bytes.at 'hello' 0 is some n {
+		assert.equals n 104
+	} is none {
+		assert.is-true false
+	}
 }
 
 test "at returns some at last index" {
-	when bytes.at 'hello' 4 is some n { assert.equals n 111 }
-	is none { assert.is-true false }
+	when bytes.at 'hello' 4 is some n {
+		assert.equals n 111
+	} is none {
+		assert.is-true false
+	}
 }
 
 test "at returns none past the end" {
-	when bytes.at 'hello' 99 is some _n { assert.is-true false }
-	is none { assert.is-true true }
+	when bytes.at 'hello' 99 is some _n {
+		assert.is-true false
+	} is none {
+		assert.is-true true
+	}
 }
 
 test "at returns none on empty input" {
-	when bytes.at '' 0 is some _n { assert.is-true false }
-	is none { assert.is-true true }
+	when bytes.at '' 0 is some _n {
+		assert.is-true false
+	} is none {
+		assert.is-true true
+	}
 }
 
 # --- concat ---
@@ -137,23 +149,35 @@ test "to-list of empty is empty" {
 }
 
 test "from-list builds bytes" {
-	when bytes.from-list [65, 66, 67] is ok b { assert.equals b 'ABC' }
-	is err _msg { assert.is-true false }
+	when bytes.from-list [65, 66, 67] is ok b {
+		assert.equals b 'ABC'
+	} is err _msg {
+		assert.is-true false
+	}
 }
 
 test "from-list of empty is empty bytes" {
-	when bytes.from-list [] is ok b { assert.equals b '' }
-	is err _msg { assert.is-true false }
+	when bytes.from-list [] is ok b {
+		assert.equals b ''
+	} is err _msg {
+		assert.is-true false
+	}
 }
 
 test "from-list fails on out-of-range high" {
-	when bytes.from-list [256] is ok _b { assert.is-true false }
-	is err _msg { assert.is-true true }
+	when bytes.from-list [256] is ok _b {
+		assert.is-true false
+	} is err _msg {
+		assert.is-true true
+	}
 }
 
 test "from-list fails on negative" {
-	when bytes.from-list [-1] is ok _b { assert.is-true false }
-	is err _msg { assert.is-true true }
+	when bytes.from-list [-1] is ok _b {
+		assert.is-true false
+	} is err _msg {
+		assert.is-true true
+	}
 }
 
 # --- join / split ---
@@ -185,11 +209,17 @@ test "split with no match is single-element" {
 # --- to-string ---
 
 test "to-string decodes valid UTF-8" {
-	when bytes.to-string 'hello' is ok s { assert.equals s "hello" }
-	is err _msg { assert.is-true false }
+	when bytes.to-string 'hello' is ok s {
+		assert.equals s "hello"
+	} is err _msg {
+		assert.is-true false
+	}
 }
 
 test "to-string fails on invalid UTF-8" {
-	when bytes.to-string '\xff\xfe' is ok _s { assert.is-true false }
-	is err _msg { assert.is-true true }
+	when bytes.to-string '\xff\xfe' is ok _s {
+		assert.is-true false
+	} is err _msg {
+		assert.is-true true
+	}
 }

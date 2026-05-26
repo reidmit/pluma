@@ -3,6 +3,7 @@ use core.assert
 # `none` and bare `err "..."` need pinning so the assertion sees a
 # concrete option/result type at the call site.
 def n :: option int = none
+
 def bad :: result int string = err "boom"
 
 # --- is-some / is-none ---

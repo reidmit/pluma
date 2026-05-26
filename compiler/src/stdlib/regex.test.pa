@@ -29,23 +29,34 @@ test "find returns the first match" {
 		assert.equals m.text "123"
 		assert.equals m.start 4
 		assert.equals m.end 7
+	} is none {
+		assert.is-true false
 	}
-	is none { assert.is-true false }
 }
 
 test "find on no match is none" {
-	when re.find `digit+` "no digits" is some _m { assert.is-true false }
-	is none { assert.is-true true }
+	when re.find `digit+` "no digits" is some _m {
+		assert.is-true false
+	} is none {
+		assert.is-true true
+	}
 }
 
 test "find populates named captures" {
 	when re.find `<x: digit+> "," <y: digit+>` "(3,7)" is some m {
-		when dict.lookup m.groups "x" is some s { assert.equals s "3" }
-		is none { assert.is-true false }
-		when dict.lookup m.groups "y" is some s { assert.equals s "7" }
-		is none { assert.is-true false }
+		when dict.lookup m.groups "x" is some s {
+			assert.equals s "3"
+		} is none {
+			assert.is-true false
+		}
+		when dict.lookup m.groups "y" is some s {
+			assert.equals s "7"
+		} is none {
+			assert.is-true false
+		}
+	} is none {
+		assert.is-true false
 	}
-	is none { assert.is-true false }
 }
 
 # --- find-all ---
@@ -66,22 +77,25 @@ test "find-all on no match is empty" {
 test "named-capture returns some on a hit" {
 	when re.named-capture `<k: letter+> "=" <v: digit+>` "size=42" "v" is some s {
 		assert.equals s "42"
+	} is none {
+		assert.is-true false
 	}
-	is none { assert.is-true false }
 }
 
 test "named-capture returns none for an unknown name" {
 	when re.named-capture `<k: letter+> "=" <v: digit+>` "size=42" "nope" is some _s {
 		assert.is-true false
+	} is none {
+		assert.is-true true
 	}
-	is none { assert.is-true true }
 }
 
 test "named-capture returns none on no match" {
 	when re.named-capture `<k: letter+> "=" <v: digit+>` "no equals here" "k" is some _s {
 		assert.is-true false
+	} is none {
+		assert.is-true true
 	}
-	is none { assert.is-true true }
 }
 
 # --- replace / replace-first ---

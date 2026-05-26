@@ -24,18 +24,27 @@ test "float lies in [0, 1)" {
 # --- bytes ---
 
 test "bytes of length 0 is empty" {
-	when random.bytes 0 is ok b { assert.equals (bytes.length b) 0 }
-	is err _msg { assert.is-true false }
+	when random.bytes 0 is ok b {
+		assert.equals (bytes.length b) 0
+	} is err _msg {
+		assert.is-true false
+	}
 }
 
 test "bytes of length 16 has 16 bytes" {
-	when random.bytes 16 is ok b { assert.equals (bytes.length b) 16 }
-	is err _msg { assert.is-true false }
+	when random.bytes 16 is ok b {
+		assert.equals (bytes.length b) 16
+	} is err _msg {
+		assert.is-true false
+	}
 }
 
 test "bytes rejects negative length" {
-	when random.bytes (-1) is ok _b { assert.is-true false }
-	is err _msg { assert.is-true true }
+	when random.bytes (-1) is ok _b {
+		assert.is-true false
+	} is err _msg {
+		assert.is-true true
+	}
 }
 
 # --- int-range ---
@@ -44,23 +53,33 @@ test "int-range stays within bounds" {
 	when random.int-range 10 20 is ok n {
 		assert.is-true (n >= 10)
 		assert.is-true (n < 20)
+	} is err _msg {
+		assert.is-true false
 	}
-	is err _msg { assert.is-true false }
 }
 
 test "int-range with low == high is err" {
-	when random.int-range 5 5 is ok _n { assert.is-true false }
-	is err _msg { assert.is-true true }
+	when random.int-range 5 5 is ok _n {
+		assert.is-true false
+	} is err _msg {
+		assert.is-true true
+	}
 }
 
 test "int-range with low > high is err" {
-	when random.int-range 10 5 is ok _n { assert.is-true false }
-	is err _msg { assert.is-true true }
+	when random.int-range 10 5 is ok _n {
+		assert.is-true false
+	} is err _msg {
+		assert.is-true true
+	}
 }
 
 test "int-range with width 1 is deterministic" {
-	when random.int-range 7 8 is ok n { assert.equals n 7 }
-	is err _msg { assert.is-true false }
+	when random.int-range 7 8 is ok n {
+		assert.equals n 7
+	} is err _msg {
+		assert.is-true false
+	}
 }
 
 # --- bool ---
@@ -68,24 +87,36 @@ test "int-range with width 1 is deterministic" {
 test "bool returns a bool" {
 	let b = random.bool ()
 	# Confirms the call resolves to a bool — both arms succeed.
-	when b is true { assert.is-true true }
-	is false { assert.is-true true }
+	when b is true {
+		assert.is-true true
+	} is false {
+		assert.is-true true
+	}
 }
 
 # --- choice ---
 
 test "choice of empty list is none" {
-	when random.choice [] is some _x { assert.is-true false }
-	is none { assert.is-true true }
+	when random.choice [] is some _x {
+		assert.is-true false
+	} is none {
+		assert.is-true true
+	}
 }
 
 test "choice of singleton picks that element" {
-	when random.choice [42] is some x { assert.equals x 42 }
-	is none { assert.is-true false }
+	when random.choice [42] is some x {
+		assert.equals x 42
+	} is none {
+		assert.is-true false
+	}
 }
 
 test "choice always picks a list element" {
 	let xs = [10, 20, 30, 40]
-	when random.choice xs is some x { assert.is-true (list.contains xs x) }
-	is none { assert.is-true false }
+	when random.choice xs is some x {
+		assert.is-true (list.contains xs x)
+	} is none {
+		assert.is-true false
+	}
 }

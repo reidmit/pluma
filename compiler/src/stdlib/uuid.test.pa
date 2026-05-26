@@ -14,8 +14,11 @@ test "v4 has canonical length" {
 
 test "v4 version nibble is 4" {
 	let u = uuid.v4 ()
-	when bytes.at (string.to-bytes u) 14 is some n { assert.equals n 52 }
-	is none { assert.is-true false }
+	when bytes.at (string.to-bytes u) 14 is some n {
+		assert.equals n 52
+	} is none {
+		assert.is-true false
+	}
 }
 
 test "v4 produces different values" {
@@ -26,8 +29,11 @@ test "v4 produces different values" {
 
 test "v4 round-trips through parse" {
 	let u = uuid.v4 ()
-	when uuid.parse u is ok v { assert.equals v u }
-	is err _msg { assert.is-true false }
+	when uuid.parse u is ok v {
+		assert.equals v u
+	} is err _msg {
+		assert.is-true false
+	}
 }
 
 # --- v7 ---
@@ -38,14 +44,20 @@ test "v7 has canonical length" {
 
 test "v7 version nibble is 7" {
 	let u = uuid.v7 ()
-	when bytes.at (string.to-bytes u) 14 is some n { assert.equals n 55 }
-	is none { assert.is-true false }
+	when bytes.at (string.to-bytes u) 14 is some n {
+		assert.equals n 55
+	} is none {
+		assert.is-true false
+	}
 }
 
 test "v7 round-trips through parse" {
 	let u = uuid.v7 ()
-	when uuid.parse u is ok v { assert.equals v u }
-	is err _msg { assert.is-true false }
+	when uuid.parse u is ok v {
+		assert.equals v u
+	} is err _msg {
+		assert.is-true false
+	}
 }
 
 # --- parse ---
@@ -53,44 +65,57 @@ test "v7 round-trips through parse" {
 test "parse accepts canonical form" {
 	when uuid.parse "550e8400-e29b-41d4-a716-446655440000" is ok v {
 		assert.equals v "550e8400-e29b-41d4-a716-446655440000"
+	} is err _msg {
+		assert.is-true false
 	}
-	is err _msg { assert.is-true false }
 }
 
 test "parse normalizes uppercase" {
 	when uuid.parse "550E8400-E29B-41D4-A716-446655440000" is ok v {
 		assert.equals v "550e8400-e29b-41d4-a716-446655440000"
+	} is err _msg {
+		assert.is-true false
 	}
-	is err _msg { assert.is-true false }
 }
 
 test "parse accepts braced form" {
 	when uuid.parse "{550e8400-e29b-41d4-a716-446655440000}" is ok v {
 		assert.equals v "550e8400-e29b-41d4-a716-446655440000"
+	} is err _msg {
+		assert.is-true false
 	}
-	is err _msg { assert.is-true false }
 }
 
 test "parse accepts urn form" {
 	when uuid.parse "urn:uuid:550e8400-e29b-41d4-a716-446655440000" is ok v {
 		assert.equals v "550e8400-e29b-41d4-a716-446655440000"
+	} is err _msg {
+		assert.is-true false
 	}
-	is err _msg { assert.is-true false }
 }
 
 test "parse rejects too short" {
-	when uuid.parse "550e8400" is ok _v { assert.is-true false }
-	is err _msg { assert.is-true true }
+	when uuid.parse "550e8400" is ok _v {
+		assert.is-true false
+	} is err _msg {
+		assert.is-true true
+	}
 }
 
 test "parse rejects empty" {
-	when uuid.parse "" is ok _v { assert.is-true false }
-	is err _msg { assert.is-true true }
+	when uuid.parse "" is ok _v {
+		assert.is-true false
+	} is err _msg {
+		assert.is-true true
+	}
 }
 
 test "parse rejects garbage" {
-	when uuid.parse "not-a-uuid-at-all-really" is ok _v { assert.is-true false }
-	is err _msg { assert.is-true true }
+	when uuid.parse "not-a-uuid-at-all-really" is ok _v {
+		assert.is-true false
+	} is err _msg {
+		assert.is-true true
+	}
 }
 
 # --- is-valid ---

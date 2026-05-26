@@ -20,9 +20,9 @@
 #     ("local", package.dep.path "../my-other-project")
 enum dep {
 	simple string
-	full   ({version :: string, features :: list string})
-	git    ({url :: string, branch :: string})
-	path   string
+	full ({version :: string, features :: list string})
+	git ({url :: string, branch :: string})
+	path string
 }
 
 # A project's metadata, as it appears in `pluma.pa`. Fill in every
@@ -43,11 +43,11 @@ enum dep {
 # Adding a field here is a safe change; removing or renaming one is not,
 # so it's done deliberately.
 alias info {
-	name         :: string,
-	version      :: string,
-	authors      :: list string,
-	description  :: string,
-	license      :: string,
-	repository   :: string,
-	dependencies :: list (string, dep),
+	name :: string,
+	version :: string,
+	authors :: list string,
+	description :: string,
+	license :: string,
+	repository :: string,
+	dependencies :: list (string, dep)
 }

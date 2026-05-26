@@ -32,7 +32,7 @@ alias parts {
 	minute :: int,
 	second :: int,
 	nanosecond :: int,
-	weekday :: int,
+	weekday :: int
 }
 
 # --- the clock -----------------------------------------------------------
@@ -123,12 +123,12 @@ def weekday :: fun instant -> int = fun t {
 
 # Whole seconds between the Unix epoch and `t` (truncated toward the epoch).
 def to-unix :: fun instant -> int = fun t {
-	(to-unix-nanos t) / 1000000000
+	to-unix-nanos t / 1000000000
 }
 
 # Whole milliseconds since the Unix epoch (truncated).
 def to-unix-millis :: fun instant -> int = fun t {
-	(to-unix-nanos t) / 1000000
+	to-unix-nanos t / 1000000
 }
 
 # Nanoseconds since the Unix epoch -- the instant's exact internal value.
@@ -210,52 +210,52 @@ def as-nanos :: fun duration -> int = built-in "time-duration-as-nanos"
 
 # A duration in whole microseconds (truncated).
 def as-micros :: fun duration -> int = fun d {
-	(as-nanos d) / 1000
+	as-nanos d / 1000
 }
 
 # A duration in whole milliseconds (truncated).
 def as-millis :: fun duration -> int = fun d {
-	(as-nanos d) / 1000000
+	as-nanos d / 1000000
 }
 
 # A duration in whole seconds (truncated).
 def as-seconds :: fun duration -> int = fun d {
-	(as-nanos d) / 1000000000
+	as-nanos d / 1000000000
 }
 
 # A duration in whole minutes (truncated).
 def as-minutes :: fun duration -> int = fun d {
-	(as-nanos d) / 60000000000
+	as-nanos d / 60000000000
 }
 
 # A duration in whole hours (truncated).
 def as-hours :: fun duration -> int = fun d {
-	(as-nanos d) / 3600000000000
+	as-nanos d / 3600000000000
 }
 
 # A duration in whole days (truncated).
 def as-days :: fun duration -> int = fun d {
-	(as-nanos d) / 86400000000000
+	as-nanos d / 86400000000000
 }
 
 # Adds two durations.
 def duration-add :: fun duration duration -> duration = fun a b {
-	nanos ((as-nanos a) + (as-nanos b))
+	nanos (as-nanos a + as-nanos b)
 }
 
 # Subtracts the second duration from the first (can go negative).
 def duration-diff :: fun duration duration -> duration = fun a b {
-	nanos ((as-nanos a) - (as-nanos b))
+	nanos (as-nanos a - as-nanos b)
 }
 
 # Multiplies a duration by a whole number.
 def scale :: fun duration int -> duration = fun d n {
-	nanos ((as-nanos d) * n)
+	nanos (as-nanos d * n)
 }
 
 # Flips the sign of a duration.
 def negate :: fun duration -> duration = fun d {
-	nanos (0 - (as-nanos d))
+	nanos (0 - as-nanos d)
 }
 
 # --- shifting instants ---------------------------------------------------
@@ -264,12 +264,12 @@ def negate :: fun duration -> duration = fun d {
 #
 #     time.add (time.now ()) (time.days 7)   # one week from now
 def add :: fun instant duration -> instant = fun t d {
-	from-unix-nanos ((to-unix-nanos t) + (as-nanos d))
+	from-unix-nanos (to-unix-nanos t + as-nanos d)
 }
 
 # The instant `d` earlier than `t`.
 def subtract :: fun instant duration -> instant = fun t d {
-	from-unix-nanos ((to-unix-nanos t) - (as-nanos d))
+	from-unix-nanos (to-unix-nanos t - as-nanos d)
 }
 
 # How much time separates two instants, as a duration (`a - b`). Negative
@@ -277,7 +277,7 @@ def subtract :: fun instant duration -> instant = fun t d {
 #
 #     time.as-millis (time.diff finish start)   # elapsed, in ms
 def diff :: fun instant instant -> duration = fun a b {
-	nanos ((to-unix-nanos a) - (to-unix-nanos b))
+	nanos (to-unix-nanos a - to-unix-nanos b)
 }
 
 # `t` shifted by a whole number of days (each exactly 24 hours). Negative
@@ -318,12 +318,12 @@ def add-years :: fun instant int -> result instant string = built-in "time-add-y
 # True when `a` is strictly earlier than `b`. (Instants also support `==`
 # directly for equality.)
 def before :: fun instant instant -> bool = fun a b {
-	(to-unix-nanos a) < (to-unix-nanos b)
+	to-unix-nanos a < to-unix-nanos b
 }
 
 # True when `a` is strictly later than `b`.
 def after :: fun instant instant -> bool = fun a b {
-	(to-unix-nanos a) > (to-unix-nanos b)
+	to-unix-nanos a > to-unix-nanos b
 }
 
 # Orders two instants: `lt` if `a` is earlier, `gt` if later, `eq` if the
@@ -331,15 +331,29 @@ def after :: fun instant instant -> bool = fun a b {
 def compare :: fun instant instant -> ordering = fun a b {
 	let x = to-unix-nanos a
 	let y = to-unix-nanos b
-	if (x < y) is true { lt } else if (x > y) is true { gt } else { eq }
+	if x < y is true {
+		lt
+	} else if x > y is true {
+		gt
+	} else {
+		eq
+	}
 }
 
 # The earlier of two instants.
 def min :: fun instant instant -> instant = fun a b {
-	if (before a b) is true { a } else { b }
+	if before a b is true {
+		a
+	} else {
+		b
+	}
 }
 
 # The later of two instants.
 def max :: fun instant instant -> instant = fun a b {
-	if (after a b) is true { a } else { b }
+	if after a b is true {
+		a
+	} else {
+		b
+	}
 }

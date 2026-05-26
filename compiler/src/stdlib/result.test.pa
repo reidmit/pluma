@@ -3,40 +3,60 @@ use core.assert
 
 # Helpers. `checked` returns ok for positives, err for non-positives.
 def checked = fun n {
-	if n > 0 is true { ok n } else { err "non-positive" }
+	if n > 0 is true {
+		ok n
+	} else {
+		err "non-positive"
+	}
 }
 
-def doubled = fun n { ok (n * 2) }
+def doubled = fun n {
+	ok (n * 2)
+}
 
 # `err "..."` on its own has unknown `ok` type; pin to `result int
 # string` so the assertions below have something concrete to unify
 # against.
 def bad-boom :: result int string = err "boom"
+
 def bad-skip :: result int string = err "skip"
+
 def bad-early :: result int string = err "early"
 
 # --- then on `ok` ---
 
 test "then on ok runs the continuation" {
-	when res.then (ok 3) doubled is ok n { assert.equals n 6 }
-	is err _e { assert.is-true false }
+	when res.then (ok 3) doubled is ok n {
+		assert.equals n 6
+	} is err _e {
+		assert.is-true false
+	}
 }
 
 test "then can change the ok type" {
-	when res.then (ok 5) fun n { ok (to-string n) } is ok s { assert.equals s "5" }
-	is err _e { assert.is-true false }
+	when res.then (ok 5) fun n { ok (to-string n) } is ok s {
+		assert.equals s "5"
+	} is err _e {
+		assert.is-true false
+	}
 }
 
 test "then can flip ok into err" {
-	when res.then (ok -3) checked is ok _n { assert.is-true false }
-	is err e { assert.equals e "non-positive" }
+	when res.then (ok (-3)) checked is ok _n {
+		assert.is-true false
+	} is err e {
+		assert.equals e "non-positive"
+	}
 }
 
 # --- then on `err` ---
 
 test "then on err stays err" {
-	when res.then bad-boom doubled is ok _n { assert.is-true false }
-	is err e { assert.equals e "boom" }
+	when res.then bad-boom doubled is ok _n {
+		assert.is-true false
+	} is err e {
+		assert.equals e "boom"
+	}
 }
 
 test "then on err does not call the continuation" {
@@ -45,19 +65,23 @@ test "then on err does not call the continuation" {
 		ref.update counter fun c { c + 1 }
 		ok (n * 2)
 	}
-	when res.then bad-skip bump-and-double is ok _n { assert.is-true false }
-	is err e { assert.equals e "skip" }
+	when res.then bad-skip bump-and-double is ok _n {
+		assert.is-true false
+	} is err e {
+		assert.equals e "skip"
+	}
 	assert.equals (ref.get counter) 0
 }
 
 # --- chained then ---
 
 test "two-step then composes" {
-	let r = res.then (ok 4) fun n {
-		res.then (checked n) doubled
+	let r = res.then (ok 4) fun n { res.then (checked n) doubled }
+	when r is ok n {
+		assert.equals n 8
+	} is err _e {
+		assert.is-true false
 	}
-	when r is ok n { assert.equals n 8 }
-	is err _e { assert.is-true false }
 }
 
 def try-pipe = fun {
@@ -72,13 +96,19 @@ def try-pipe-err = fun {
 }
 
 test "try desugars to then on ok" {
-	when try-pipe () is ok n { assert.equals n 8 }
-	is err _e { assert.is-true false }
+	when try-pipe () is ok n {
+		assert.equals n 8
+	} is err _e {
+		assert.is-true false
+	}
 }
 
 test "try short-circuits on err" {
-	when try-pipe-err () is ok _n { assert.is-true false }
-	is err e { assert.equals e "early" }
+	when try-pipe-err () is ok _n {
+		assert.is-true false
+	} is err e {
+		assert.equals e "early"
+	}
 }
 
 # --- or-else (the recovering dual of then; `??` desugars to it) ---
@@ -102,6 +132,6 @@ test "or-else does not evaluate the fallback on ok" {
 }
 
 test "?? desugars to or-else on result" {
-	assert.equals ((ok 5) ?? 0) 5
+	assert.equals (ok 5 ?? 0) 5
 	assert.equals (bad-boom ?? 0) 0
 }

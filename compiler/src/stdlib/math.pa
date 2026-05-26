@@ -14,7 +14,7 @@ def pi :: float = 3.141592653589793
 # Euler's number e, 2.71828..., the base of the natural logarithm.
 #
 #     math.e   # => 2.718281828459045
-def e  :: float = 2.718281828459045
+def e :: float = 2.718281828459045
 
 # Turns a whole number into a decimal. Exact for any int you're likely
 # to use (up to about 9 quadrillion).

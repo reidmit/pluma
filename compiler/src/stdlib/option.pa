@@ -37,7 +37,11 @@ def then :: fun (option a) (fun a -> option b) -> option b = built-in "option-th
 #     option.or-else (some 7) (fun { 0 })   # => 7
 #     option.or-else none (fun { 0 })       # => 0
 def or-else :: fun (option a) (fun nothing -> a) -> a = fun o fallback {
-	when o is some v { v } is none { fallback () }
+	when o is some v {
+		v
+	} is none {
+		fallback ()
+	}
 }
 
 # Returns the value inside a `some`, or stops the whole program when the

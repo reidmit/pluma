@@ -107,28 +107,43 @@ test "fold is left-to-right" {
 # --- head / tail ---
 
 test "head of non-empty is some" {
-	when list.head [1, 2, 3] is some n { assert.equals n 1 }
-	is none { assert.is-true false }
+	when list.head [1, 2, 3] is some n {
+		assert.equals n 1
+	} is none {
+		assert.is-true false
+	}
 }
 
 test "head of empty is none" {
-	when list.head [] is some _n { assert.is-true false }
-	is none { assert.is-true true }
+	when list.head [] is some _n {
+		assert.is-true false
+	} is none {
+		assert.is-true true
+	}
 }
 
 test "tail of non-empty is some rest" {
-	when list.tail [1, 2, 3] is some rest { assert.equals rest [2, 3] }
-	is none { assert.is-true false }
+	when list.tail [1, 2, 3] is some rest {
+		assert.equals rest [2, 3]
+	} is none {
+		assert.is-true false
+	}
 }
 
 test "tail of singleton is some empty" {
-	when list.tail [1] is some rest { assert.equals rest [] }
-	is none { assert.is-true false }
+	when list.tail [1] is some rest {
+		assert.equals rest []
+	} is none {
+		assert.is-true false
+	}
 }
 
 test "tail of empty is none" {
-	when list.tail [] is some _rest { assert.is-true false }
-	is none { assert.is-true true }
+	when list.tail [] is some _rest {
+		assert.is-true false
+	} is none {
+		assert.is-true true
+	}
 }
 
 # --- take / drop ---
@@ -160,13 +175,19 @@ test "drop zero is whole list" {
 # --- find ---
 
 test "find returns first match" {
-	when list.find [1, 2, 3, 4] fun n { n > 2 } is some n { assert.equals n 3 }
-	is none { assert.is-true false }
+	when list.find [1, 2, 3, 4] fun n { n > 2 } is some n {
+		assert.equals n 3
+	} is none {
+		assert.is-true false
+	}
 }
 
 test "find on no match is none" {
-	when list.find [1, 2, 3] fun n { n > 100 } is some _n { assert.is-true false }
-	is none { assert.is-true true }
+	when list.find [1, 2, 3] fun n { n > 100 } is some _n {
+		assert.is-true false
+	} is none {
+		assert.is-true true
+	}
 }
 
 # --- any / all ---
@@ -202,7 +223,11 @@ test "sort ints ascending" {
 }
 
 test "sort strings lexicographically" {
-	assert.equals (list.sort ["banana", "apple", "cherry"] ord.compare) ["apple", "banana", "cherry"]
+	assert.equals (list.sort ["banana", "apple", "cherry"] ord.compare) [
+		"apple",
+		"banana",
+		"cherry"
+	]
 }
 
 test "sort descending via swapped comparator" {

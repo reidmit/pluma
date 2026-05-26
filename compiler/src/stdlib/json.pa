@@ -18,11 +18,11 @@ use core.math
 # `json.value.string "hi"`, `json.value.array [...]`, and so on.
 enum value {
 	null
-	bool   bool
-	int    int
-	float  float
+	bool bool
+	int int
+	float float
 	string string
-	array  (list value)
+	array (list value)
 	object (dict string value)
 }
 
@@ -66,7 +66,11 @@ def stringify-pretty :: fun value -> string = built-in "json-stringify-pretty"
 #     json.is-null json.value.null      # => true
 #     json.is-null (json.value.int 0)   # => false
 def is-null :: fun value -> bool = fun v {
-	when v is null { true } is _ { false }
+	when v is null {
+		true
+	} else {
+		false
+	}
 }
 
 # Looks up a key on a JSON object, handing back its value in `some`.
@@ -76,7 +80,11 @@ def is-null :: fun value -> bool = fun v {
 #     json.get-field doc "name"   # => some (value.string "Ada")
 #     json.get-field doc "age"    # => none
 def get-field :: fun value string -> option value = fun v key {
-	when v is object o { dict.lookup o key } is _ { none }
+	when v is object o {
+		dict.lookup o key
+	} else {
+		none
+	}
 }
 
 # Pulls a whole number out of a value. `some n` if the value is a JSON
@@ -85,7 +93,11 @@ def get-field :: fun value string -> option value = fun v key {
 #     json.get-int (json.value.int 42)       # => some 42
 #     json.get-int (json.value.string "x")   # => none
 def get-int :: fun value -> option int = fun v {
-	when v is int n { some n } is _ { none }
+	when v is int n {
+		some n
+	} else {
+		none
+	}
 }
 
 # Pulls a decimal number out. Strict: a JSON integer gives `none` here
@@ -94,7 +106,11 @@ def get-int :: fun value -> option int = fun v {
 #     json.get-float (json.value.float 3.5)   # => some 3.5
 #     json.get-float (json.value.int 3)        # => none
 def get-float :: fun value -> option float = fun v {
-	when v is float x { some x } is _ { none }
+	when v is float x {
+		some x
+	} else {
+		none
+	}
 }
 
 # Pulls any number out, turning a JSON integer into a float so you don't
@@ -104,9 +120,13 @@ def get-float :: fun value -> option float = fun v {
 #     json.get-number (json.value.int 42)      # => some 42.0
 #     json.get-number (json.value.float 3.5)   # => some 3.5
 def get-number :: fun value -> option float = fun v {
-	when v is float x { some x }
-	is int n { some (math.to-float n) }
-	is _ { none }
+	when v is float x {
+		some x
+	} is int n {
+		some (math.to-float n)
+	} else {
+		none
+	}
 }
 
 # Pulls a boolean out of a value.
@@ -114,7 +134,11 @@ def get-number :: fun value -> option float = fun v {
 #     json.get-bool (json.value.bool true)   # => some true
 #     json.get-bool (json.value.int 1)        # => none
 def get-bool :: fun value -> option bool = fun v {
-	when v is bool b { some b } is _ { none }
+	when v is bool b {
+		some b
+	} else {
+		none
+	}
 }
 
 # Pulls a string out of a value.
@@ -122,7 +146,11 @@ def get-bool :: fun value -> option bool = fun v {
 #     json.get-string (json.value.string "hi")   # => some "hi"
 #     json.get-string (json.value.int 1)           # => none
 def get-string :: fun value -> option string = fun v {
-	when v is string s { some s } is _ { none }
+	when v is string s {
+		some s
+	} else {
+		none
+	}
 }
 
 # Pulls the contents of a JSON array out as a `list value`. `none` if
@@ -131,7 +159,11 @@ def get-string :: fun value -> option string = fun v {
 #     json.get-array (json.value.array [json.value.int 1, json.value.int 2])
 #     # => some [value.int 1, value.int 2]
 def get-array :: fun value -> option (list value) = fun v {
-	when v is array xs { some xs } is _ { none }
+	when v is array xs {
+		some xs
+	} else {
+		none
+	}
 }
 
 # Pulls the contents of a JSON object out as a `dict string value`,
@@ -141,5 +173,9 @@ def get-array :: fun value -> option (list value) = fun v {
 #     try doc = json.parse "{\"a\": 1}"
 #     json.get-object doc   # => some {a: value.int 1}
 def get-object :: fun value -> option (dict string value) = fun v {
-	when v is object o { some o } is _ { none }
+	when v is object o {
+		some o
+	} else {
+		none
+	}
 }
