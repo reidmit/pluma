@@ -116,6 +116,9 @@ fn main() {
 }
 
 fn test_command(args: Vec<String>) {
+	// PLUMA_TIMING=1 prints a per-phase wall-clock breakdown to stderr.
+	let timing = std::env::var("PLUMA_TIMING").is_ok();
+	let t_start = std::time::Instant::now();
 	let cwd = match std::env::current_dir() {
 		Ok(p) => p,
 		Err(err) => {
@@ -246,10 +249,14 @@ fn test_command(args: Vec<String>) {
 
 	vm::stdlib::register_compiler(&mut compiler);
 
+	let t_setup = std::time::Instant::now();
+
 	if let Err(diagnostics) = compiler.check() {
 		print_diagnostics(diagnostics);
 		std::process::exit(1);
 	}
+
+	let t_check = std::time::Instant::now();
 
 	let program = match codegen::compile(&compiler) {
 		Ok(p) => p,
@@ -258,6 +265,8 @@ fn test_command(args: Vec<String>) {
 			std::process::exit(1);
 		}
 	};
+
+	let t_codegen = std::time::Instant::now();
 
 	if program.test_suites.is_empty() {
 		eprintln!("no tests found (expected a `def tests :: testing.suite` in a *.test.pa file)");
@@ -280,6 +289,12 @@ fn test_command(args: Vec<String>) {
 	suites.sort_by(|a, b| a.0.cmp(&b.0));
 	let mut vm_instance = vm::VM::new(program);
 
+	let t_vm_new = std::time::Instant::now();
+	// Split VM time: registering cases (running each suite body) vs actually
+	// executing the case bodies.
+	let mut register_time = std::time::Duration::ZERO;
+	let mut run_time = std::time::Duration::ZERO;
+
 	let mut passed = 0usize;
 	let mut failed = 0usize;
 	let mut skipped = 0usize;
@@ -296,6 +311,7 @@ fn test_command(args: Vec<String>) {
 
 		// Build a fresh registrar, run the suite to register its cases, then
 		// drain the flat list of entries.
+		let t_reg = std::time::Instant::now();
 		let entries = match run_suite(&mut vm_instance, new_idx, *suite_idx) {
 			Ok(entries) => entries,
 			Err(err) => {
@@ -304,6 +320,7 @@ fn test_command(args: Vec<String>) {
 				continue;
 			}
 		};
+		register_time += t_reg.elapsed();
 
 		// Focus: if any case is focused, only focused cases run.
 		let any_focused = entries
@@ -349,7 +366,10 @@ fn test_command(args: Vec<String>) {
 				Some(b) => b,
 				None => continue,
 			};
-			match vm_instance.call_function(body, vec![vm::Value::Nothing]) {
+			let t_case = std::time::Instant::now();
+			let case_result = vm_instance.call_function(body, vec![vm::Value::Nothing]);
+			run_time += t_case.elapsed();
+			match case_result {
 				// `ok ()` — the case passed.
 				Ok(result) if variant_of(&result).as_deref() == Some("ok") => {
 					println!("{}{} {}", indent, colors::bold_green("✓"), name);
@@ -396,6 +416,21 @@ fn test_command(args: Vec<String>) {
 	if todo_count > 0 {
 		summary.push_str(&format!(", {} todo", todo_count));
 	}
+	if timing {
+		let ms = |d: std::time::Duration| d.as_secs_f64() * 1000.0;
+		let t_vm_end = std::time::Instant::now();
+		eprintln!();
+		eprintln!("── timing (PLUMA_TIMING) ──────────────");
+		eprintln!("  discover+setup : {:>8.2} ms", ms(t_setup - t_start));
+		eprintln!("  check          : {:>8.2} ms", ms(t_check - t_setup));
+		eprintln!("  codegen        : {:>8.2} ms", ms(t_codegen - t_check));
+		eprintln!("  vm::new        : {:>8.2} ms", ms(t_vm_new - t_codegen));
+		eprintln!("  vm register    : {:>8.2} ms", ms(register_time));
+		eprintln!("  vm run cases   : {:>8.2} ms ({} cases)", ms(run_time), total);
+		eprintln!("  ─────────────────────────────────────");
+		eprintln!("  total in-proc  : {:>8.2} ms", ms(t_vm_end - t_start));
+	}
+
 	if failed == 0 {
 		println!("{}", colors::bold_green(&summary));
 	} else {

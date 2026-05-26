@@ -22,6 +22,13 @@ pub const AUTO_IMPORTS: &[(&str, &str)] = &[
 	("core.result", "result"),
 ];
 
+// PLUMA_TIMING=1 prints per-module parse/analyze wall-clock to stderr.
+fn timing_log(module: &str, phase: &str, dur: std::time::Duration) {
+	if std::env::var("PLUMA_TIMING").is_ok() {
+		eprintln!("  [{:>7}] {:>8.2} ms  {}", phase, dur.as_secs_f64() * 1000.0, module);
+	}
+}
+
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub struct Compiler {
 	pub root_dir: PathBuf,
@@ -135,7 +142,9 @@ impl Compiler {
 		let module = self.modules.get_mut(NAME).unwrap();
 		let mut analyzer = Analyzer::new(&mut self.diagnostics);
 		analyzer.set_imports(HashMap::new(), HashMap::new());
+		let _t = std::time::Instant::now();
 		analyzer.analyze(module);
+		timing_log(NAME, "analyze", _t.elapsed());
 		if let Some(exports) = module.exports.clone() {
 			self.exports_cache.insert(NAME.to_string(), exports);
 		}
@@ -175,6 +184,7 @@ impl Compiler {
 
 		// Parse if not already.
 		if !self.modules.contains_key(module_name) {
+			let _t = std::time::Instant::now();
 			if let Some(source) = stdlib_source {
 				let mut module = Module::new(
 					module_name.to_string(),
@@ -188,6 +198,7 @@ impl Compiler {
 				module.parse(&mut self.diagnostics);
 				self.modules.insert(module_name.to_string(), module);
 			}
+			timing_log(module_name, "parse", _t.elapsed());
 		}
 
 		// Collect (fully-qualified-name, local-namespace-name, alias-range) for
@@ -322,7 +333,9 @@ impl Compiler {
 			analyzer.add_imported_instances(&exports.instances);
 			analyzer.set_prelude_exports(exports);
 		}
+		let _t = std::time::Instant::now();
 		analyzer.analyze(module);
+		timing_log(module_name, "analyze", _t.elapsed());
 
 		// Cache its exports for any later importer.
 		if let Some(exports) = module.exports.clone() {

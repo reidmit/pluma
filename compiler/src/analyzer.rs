@@ -546,18 +546,32 @@ impl<'compiler> Analyzer<'compiler> {
 		// primitive key types.
 		self.register_prelude_hash_trait();
 
+		// PLUMA_TIMING=2 prints per-phase timing within analyze().
+		let _timing = std::env::var("PLUMA_TIMING").ok().as_deref() == Some("2");
+		let mut _t_constrain = std::time::Duration::ZERO;
+		let mut _t_unify = std::time::Duration::ZERO;
+		let mut _t_try = std::time::Duration::ZERO;
+		let mut _t_discharge = std::time::Duration::ZERO;
+		let mut _t_annotate = std::time::Duration::ZERO;
+		let mut _n_constraints = 0usize;
+
 		// the four basic phases of analysis!
 		let substitution = if let Some(ast) = &mut module.ast {
 			// 1. generate constraints based on AST (and also fill in any
 			//    types we can infer without constraints, like for literals)
+			let _c0 = std::time::Instant::now();
 			let constraints = self.constrain(ast);
+			_t_constrain = _c0.elapsed();
+			_n_constraints = constraints.len();
 
 			// 2. find a solution that unifies all the constraints. Class
 			//    constraints flow with the rest so generalize_with_constraints
 			//    sees them; they're collected for discharge afterwards.
 			//    Inst-instantiated fresh class constraints get stashed on
 			//    the analyzer and merged below.
+			let _u0 = std::time::Instant::now();
 			let substitution = self.unify(&constraints);
+			_t_unify = _u0.elapsed();
 
 			// 2b. type-directed dispatch + rewrite for `try`. Walks the AST,
 			//     reads each `try`'s RHS head constructor (substituted), and
@@ -570,6 +584,7 @@ impl<'compiler> Analyzer<'compiler> {
 			//     unlocks dispatch for `try`s in callers. Stuck `try`s
 			//     (whose RHS stays a free tyvar) are flagged after the loop
 			//     by `report_unresolved_try_nodes`.
+			let _tr0 = std::time::Instant::now();
 			let mut substitution = substitution;
 			let mut accumulated_constraints = constraints.clone();
 			loop {
@@ -583,6 +598,7 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 			self.report_unresolved_try_nodes(ast, &substitution);
 			let constraints = accumulated_constraints;
+			_t_try = _tr0.elapsed();
 
 			// 3. gather all class constraints — originals from constrain
 			//    plus the fresh ones minted during Gen/Inst processing —
@@ -609,11 +625,15 @@ impl<'compiler> Analyzer<'compiler> {
 					dispatch_cell: c.dispatch_cell,
 				});
 			}
+			let _d0 = std::time::Instant::now();
 			self.discharge(&class_constraints);
+			_t_discharge = _d0.elapsed();
 
 			// 4. apply the solution to the AST, filling in type variables
 			//    that we generated in phase 1
+			let _a0 = std::time::Instant::now();
 			self.annotate(ast, &substitution);
+			_t_annotate = _a0.elapsed();
 
 			// 5. resolve Forwarded dispatches per top-level def. After
 			//    discharge, cells with concrete dispatch types are set to
@@ -626,6 +646,20 @@ impl<'compiler> Analyzer<'compiler> {
 		} else {
 			None
 		};
+
+		if _timing {
+			let ms = |d: std::time::Duration| d.as_secs_f64() * 1000.0;
+			eprintln!(
+				"  [phases] {:<16} constrain {:>7.2}  unify {:>7.2}  try {:>7.2}  discharge {:>7.2}  annotate {:>7.2}  ({} constraints)",
+				module.module_name,
+				ms(_t_constrain),
+				ms(_t_unify),
+				ms(_t_try),
+				ms(_t_discharge),
+				ms(_t_annotate),
+				_n_constraints,
+			);
+		}
 
 		// Build the module's exports. Values come from the inferred types of
 		// each top-level expr def. Aliases are resolved by applying the
@@ -3326,226 +3360,334 @@ impl<'compiler> Analyzer<'compiler> {
 		subst1.compose(subst2)
 	}
 
+	// Solve a batch of `Eq` constraints into a most-general unifier.
+	//
+	// Implemented as a worklist over a *mutable, chained* substitution
+	// (union-find style) rather than the textbook substitution-passing
+	// recursion. The old approach re-applied each new binding to the entire
+	// remaining constraint list — and re-cloned a growing substitution map —
+	// at every step, which is O(n²) in the number of constraints and
+	// dominated analysis time on real modules. Here we instead:
+	//   * keep `bindings` (var → type) and `rows` (row var → fields) maps,
+	//   * resolve only the *head* of a type through the chain when we need to
+	//     inspect it (`resolve_head`), binding lazily,
+	//   * push the children of a structural match back onto the worklist,
+	//   * normalize the chained maps into an idempotent `Substitution` once at
+	//     the end (`deep_resolve`), so every downstream consumer
+	//     (`apply_to_type`, discharge, annotate) sees the same shape as before.
+	//
+	// Processing is depth-first (stack + reversed children), so row-variable
+	// allocation order — and therefore error order and inferred var ids —
+	// matches the previous recursive solver.
 	fn unify_eq_constraints(&mut self, constraints: &[Constraint]) -> Substitution {
-		if constraints.is_empty() {
-			return Substitution::empty();
-		}
-
-		// first, unify the first one and get any substitutions
-		let subst_first = self.unify_eq_constraint(&constraints[0]);
-
-		// then, apply those substitutions to the remaining constraints
-		let rest = subst_first.apply_to_constraints(&constraints[1..]);
-
-		// and recursively unify the remaining (substituted) constraints
-		let subst_rest = self.unify(&rest);
-
-		// finally, return all the collected merged substitutions together
-		subst_first.compose(subst_rest)
-	}
-
-	fn unify_eq_constraint(&mut self, constraint: &Constraint) -> Substitution {
 		use Constraint::*;
 
-		match constraint {
-			// same types, and both are "leaf" nodes; nothing to add to the solution
-			Eq(Type::Int, Type::Int, _)
-			| Eq(Type::Float, Type::Float, _)
-			| Eq(Type::Bool, Type::Bool, _)
-			| Eq(Type::String, Type::String, _)
-			| Eq(Type::Bytes, Type::Bytes, _)
-			| Eq(Type::Regex, Type::Regex, _)
-			| Eq(Type::Instant, Type::Instant, _)
-			| Eq(Type::Duration, Type::Duration, _)
-			| Eq(Type::Nothing, Type::Nothing, _)
-			| Eq(Type::Unknown, Type::Unknown, _) => Substitution::empty(),
+		let mut bindings: HashMap<usize, Type> = HashMap::new();
+		let mut rows: HashMap<usize, RowSolution> = HashMap::new();
 
-			Eq(
-				Type::Fun(param_types_1, return_type_1),
-				Type::Fun(param_types_2, return_type_2),
-				reason,
-			) => {
-				if param_types_1.len() != param_types_2.len() {
-					self.error(
-						reason.range,
-						ParamCountMismatch {
-							expected: param_types_2.len(),
-							found: param_types_1.len(),
-						},
-					);
-
-					return Substitution::empty();
-				}
-
-				// add some new constraints to unify param & return types.
-				// Propagate the outer range so any sub-error reports at the
-				// call site (or wherever this Fun~Fun was emitted).
-				let mut constraints = Vec::with_capacity(param_types_1.len() + 1);
-
-				for i in 0..param_types_1.len() {
-					constraints.push(
-						eq_constraint(param_types_1[i].clone(), param_types_2[i].clone()).at(reason.range),
-					);
-				}
-
-				constraints
-					.push(eq_constraint(*return_type_1.clone(), *return_type_2.clone()).at(reason.range));
-
-				self.unify(&constraints)
+		// Worklist of (lhs, rhs, range). Seeded in reverse so the first
+		// constraint is processed first (LIFO + reversed = original order).
+		let mut work: Vec<(Type, Type, Range)> = Vec::with_capacity(constraints.len());
+		for c in constraints.iter().rev() {
+			match c {
+				Eq(a, b, reason) => work.push((a.clone(), b.clone(), reason.range)),
+				_ => unreachable!("should only have eq constraints in here"),
 			}
+		}
+		// A collapsed range matches what the old solver attached to most
+		// structural children (only Fun children and record fields carried the
+		// outer range). Preserved so nested error reporting is unchanged.
+		let inner = Range::collapsed(0, 0);
 
-			Eq(Type::List(a), Type::List(b), _) => {
-				self.unify(&[eq_constraint((**a).clone(), (**b).clone())])
-			}
+		while let Some((a, b, range)) = work.pop() {
+			let a = Self::resolve_head(&bindings, a);
+			let b = Self::resolve_head(&bindings, b);
 
-			Eq(Type::Ref(a), Type::Ref(b), _) => {
-				self.unify(&[eq_constraint((**a).clone(), (**b).clone())])
-			}
+			match (&a, &b) {
+				// Leaf types: equal iff identical; nothing to bind.
+				(Type::Int, Type::Int)
+				| (Type::Float, Type::Float)
+				| (Type::Bool, Type::Bool)
+				| (Type::String, Type::String)
+				| (Type::Bytes, Type::Bytes)
+				| (Type::Regex, Type::Regex)
+				| (Type::Instant, Type::Instant)
+				| (Type::Duration, Type::Duration)
+				| (Type::Nothing, Type::Nothing)
+				| (Type::Unknown, Type::Unknown) => {}
 
-			Eq(Type::Dict(k1, v1), Type::Dict(k2, v2), _) => self.unify(&[
-				eq_constraint((**k1).clone(), (**k2).clone()),
-				eq_constraint((**v1).clone(), (**v2).clone()),
-			]),
+				// Two identical (unbound) type vars: already equal.
+				(Type::Var(n), Type::Var(m)) if n == m => {}
 
-			Eq(Type::Tuple(element_types_1), Type::Tuple(element_types_2), reason) => {
-				// tuples can only be unified if they have the same number of elements, with
-				// the same types, in the same order. That is: type `(int, string)` is not
-				// equivalent to `(string, int)`.
-
-				if element_types_1.len() != element_types_2.len() {
-					self.error(
-						reason.range,
-						TupleSizeMismatch {
-							expected: element_types_2.len(),
-							found: element_types_1.len(),
-						},
-					);
-
-					return Substitution::empty();
-				}
-
-				// add some new constraints to unify element types:
-				let mut constraints = Vec::with_capacity(element_types_2.len() + 1);
-
-				for i in 0..element_types_1.len() {
-					constraints.push(eq_constraint(
-						element_types_1[i].clone(),
-						element_types_2[i].clone(),
-					))
-				}
-
-				self.unify(&constraints)
-			}
-
-			Eq(Type::Tuple(element_types), Type::PartialTuple(index, element_type), reason)
-			| Eq(Type::PartialTuple(index, element_type), Type::Tuple(element_types), reason) => {
-				// tuples and partial tuples can be unified in a manner that's less strict than
-				// unifying two tuples: the tuple must only match the partial tuple at the given index
-
-				if index > &element_types.len() {
-					self.error(
-						reason.range,
-						TupleIndexNotPresent {
-							index: *index,
-							ty: Type::Tuple(element_types.clone()),
-						},
-					);
-
-					return Substitution::empty();
-				}
-
-				let mut constraints = Vec::with_capacity(1);
-
-				// tuple at index should have same type as this whole expr
-				constraints.push(eq_constraint(
-					element_types[*index].clone(),
-					*element_type.clone(),
-				));
-
-				self.unify(&constraints)
-			}
-
-			Eq(Type::Record(fields_1, tail_1), Type::Record(fields_2, tail_2), reason) => {
-				self.unify_records(fields_1, tail_1, fields_2, tail_2, reason)
-			}
-
-			Eq(Type::Enum(name_1, args_1), Type::Enum(name_2, args_2), _) if name_1 == name_2 => {
-				// Names match. Unify the type-arg lists pairwise. Arity
-				// mismatches at this point are an internal bug — the analyzer
-				// should have caught them at the type_expr_to_type level.
-				debug_assert_eq!(args_1.len(), args_2.len());
-				let constraints: Vec<Constraint> = args_1
-					.iter()
-					.zip(args_2.iter())
-					.map(|(a, b)| eq_constraint(a.clone(), b.clone()))
-					.collect();
-				self.unify(&constraints)
-			}
-
-			Eq(Type::Var(n), t, reason) | Eq(t, Type::Var(n), reason) => match t {
-				Type::Var(n2) if n == n2 => Substitution::empty(),
-				Type::Var(_) => Substitution::with_entry(*n, t.clone()),
-				other => {
-					if other.contains_var(*n) {
-						self.error(reason.range, RecursiveUnification { ty: other.clone() });
-						return Substitution::empty();
+				// A type var on either side binds to the other. `a` is checked
+				// first, matching the old left-biased binding.
+				(Type::Var(n), _) => {
+					if Self::occurs_in(&bindings, *n, &b) {
+						let ty = Self::deep_resolve(&bindings, &rows, &b);
+						self.error(range, RecursiveUnification { ty });
+					} else {
+						bindings.insert(*n, b.clone());
 					}
-
-					Substitution::with_entry(*n, t.clone())
 				}
-			},
+				(_, Type::Var(m)) => {
+					if Self::occurs_in(&bindings, *m, &a) {
+						let ty = Self::deep_resolve(&bindings, &rows, &a);
+						self.error(range, RecursiveUnification { ty });
+					} else {
+						bindings.insert(*m, a.clone());
+					}
+				}
 
-			Eq(a, b, reason) => {
-				self.error(
-					reason.range,
-					TypeMismatch {
-						expected: b.clone(),
-						found: a.clone(),
-					},
-				);
+				(Type::Fun(p1, r1), Type::Fun(p2, r2)) => {
+					if p1.len() != p2.len() {
+						self.error(
+							range,
+							ParamCountMismatch {
+								expected: p2.len(),
+								found: p1.len(),
+							},
+						);
+						continue;
+					}
+					// Fun children carried the outer range in the old solver.
+					// Push reversed so params resolve left-to-right, return last.
+					work.push(((**r1).clone(), (**r2).clone(), range));
+					for i in (0..p1.len()).rev() {
+						work.push((p1[i].clone(), p2[i].clone(), range));
+					}
+				}
 
-				Substitution::empty()
+				(Type::List(x), Type::List(y)) | (Type::Ref(x), Type::Ref(y)) => {
+					work.push(((**x).clone(), (**y).clone(), inner));
+				}
+
+				(Type::Dict(k1, v1), Type::Dict(k2, v2)) => {
+					work.push(((**v1).clone(), (**v2).clone(), inner));
+					work.push(((**k1).clone(), (**k2).clone(), inner));
+				}
+
+				(Type::Tuple(e1), Type::Tuple(e2)) => {
+					if e1.len() != e2.len() {
+						self.error(
+							range,
+							TupleSizeMismatch {
+								expected: e2.len(),
+								found: e1.len(),
+							},
+						);
+						continue;
+					}
+					for i in (0..e1.len()).rev() {
+						work.push((e1[i].clone(), e2[i].clone(), inner));
+					}
+				}
+
+				(Type::Tuple(elements), Type::PartialTuple(index, element))
+				| (Type::PartialTuple(index, element), Type::Tuple(elements)) => {
+					if *index > elements.len() {
+						let ty = Self::deep_resolve(&bindings, &rows, &Type::Tuple(elements.clone()));
+						self.error(range, TupleIndexNotPresent { index: *index, ty });
+						continue;
+					}
+					work.push((elements[*index].clone(), (**element).clone(), inner));
+				}
+
+				(Type::Record(..), Type::Record(..)) => {
+					// Fully resolve both records (inline known row fields,
+					// resolve field type heads) before matching, mirroring the
+					// substitution the old solver had already applied.
+					let (f1, t1) = match Self::deep_resolve(&bindings, &rows, &a) {
+						Type::Record(f, t) => (f, t),
+						_ => unreachable!(),
+					};
+					let (f2, t2) = match Self::deep_resolve(&bindings, &rows, &b) {
+						Type::Record(f, t) => (f, t),
+						_ => unreachable!(),
+					};
+					self.unify_records_worklist(&f1, t1, &f2, t2, range, &mut work, &mut rows);
+				}
+
+				(Type::Enum(n1, args1), Type::Enum(n2, args2)) if n1 == n2 => {
+					// Names match → unify the type-arg lists pairwise. An arity
+					// mismatch here is an internal bug (caught upstream).
+					debug_assert_eq!(args1.len(), args2.len());
+					for i in (0..args1.len().min(args2.len())).rev() {
+						work.push((args1[i].clone(), args2[i].clone(), inner));
+					}
+				}
+
+				// Anything else is a genuine mismatch.
+				_ => {
+					let expected = Self::deep_resolve(&bindings, &rows, &b);
+					let found = Self::deep_resolve(&bindings, &rows, &a);
+					self.error(range, TypeMismatch { expected, found });
+				}
 			}
+		}
 
-			_ => unreachable!("should only have eq constraints in here"),
+		// Normalize the chained maps into an idempotent substitution — the
+		// shape `Substitution::apply_to_type` expects (single-level var lookup,
+		// transitive row-tail chasing).
+		let mut solutions: HashMap<usize, Type> = HashMap::with_capacity(bindings.len());
+		for (k, v) in &bindings {
+			solutions.insert(*k, Self::deep_resolve(&bindings, &rows, v));
+		}
+		let mut row_solutions: HashMap<usize, RowSolution> = HashMap::with_capacity(rows.len());
+		for (k, sol) in &rows {
+			row_solutions.insert(
+				*k,
+				RowSolution {
+					fields: sol
+						.fields
+						.iter()
+						.map(|(n, t)| (n.clone(), Self::deep_resolve(&bindings, &rows, t)))
+						.collect(),
+					tail: sol.tail,
+				},
+			);
+		}
+		Substitution {
+			solutions,
+			row_solutions,
 		}
 	}
 
-	// Row-polymorphic record unification. Four cases by (tail_1, tail_2):
+	// Follow a chain of variable bindings at the *head* of a type only.
+	// Returns the first non-variable type, or an unbound variable.
+	fn resolve_head(bindings: &HashMap<usize, Type>, ty: Type) -> Type {
+		let mut cur = ty;
+		while let Type::Var(n) = cur {
+			match bindings.get(&n) {
+				Some(next) => cur = next.clone(),
+				None => return Type::Var(n),
+			}
+		}
+		cur
+	}
+
+	// Does `var` occur anywhere in `ty`, resolving variables through the
+	// current bindings? Mirrors the old (post-substitution) `contains_var`
+	// occurs check, including ignoring record tails.
+	fn occurs_in(bindings: &HashMap<usize, Type>, var: usize, ty: &Type) -> bool {
+		match Self::resolve_head(bindings, ty.clone()) {
+			Type::Var(n) => n == var,
+			Type::Fun(params, ret) => {
+				params.iter().any(|p| Self::occurs_in(bindings, var, p))
+					|| Self::occurs_in(bindings, var, &ret)
+			}
+			Type::List(e) | Type::Ref(e) => Self::occurs_in(bindings, var, &e),
+			Type::Dict(k, v) => {
+				Self::occurs_in(bindings, var, &k) || Self::occurs_in(bindings, var, &v)
+			}
+			Type::Tuple(es) | Type::Enum(_, es) => {
+				es.iter().any(|e| Self::occurs_in(bindings, var, e))
+			}
+			Type::PartialTuple(_, e) => Self::occurs_in(bindings, var, &e),
+			Type::Record(fields, _) => fields.iter().any(|(_, t)| Self::occurs_in(bindings, var, t)),
+			_ => false,
+		}
+	}
+
+	// Fully resolve a type through the chained bindings + row solutions,
+	// producing an idempotent type. Equivalent to applying the final
+	// substitution to `ty`; kept in lockstep with `Substitution::apply_to_type`.
+	fn deep_resolve(
+		bindings: &HashMap<usize, Type>,
+		rows: &HashMap<usize, RowSolution>,
+		ty: &Type,
+	) -> Type {
+		match ty {
+			Type::Var(n) => match bindings.get(n) {
+				Some(t) => Self::deep_resolve(bindings, rows, t),
+				None => Type::Var(*n),
+			},
+			Type::Unknown
+			| Type::Nothing
+			| Type::Bool
+			| Type::Int
+			| Type::Float
+			| Type::String
+			| Type::Bytes
+			| Type::Regex
+			| Type::Instant
+			| Type::Duration => ty.clone(),
+			Type::Enum(name, args) => Type::Enum(
+				name.clone(),
+				args.iter().map(|t| Self::deep_resolve(bindings, rows, t)).collect(),
+			),
+			Type::Fun(params, ret) => Type::Fun(
+				params.iter().map(|t| Self::deep_resolve(bindings, rows, t)).collect(),
+				Self::deep_resolve(bindings, rows, ret).into(),
+			),
+			Type::PartialTuple(index, element) => {
+				Type::PartialTuple(*index, Self::deep_resolve(bindings, rows, element).into())
+			}
+			Type::Tuple(elements) => {
+				Type::Tuple(elements.iter().map(|t| Self::deep_resolve(bindings, rows, t)).collect())
+			}
+			Type::List(e) => Type::List(Self::deep_resolve(bindings, rows, e).into()),
+			Type::Dict(k, v) => Type::Dict(
+				Self::deep_resolve(bindings, rows, k).into(),
+				Self::deep_resolve(bindings, rows, v).into(),
+			),
+			Type::Ref(inner) => Type::Ref(Self::deep_resolve(bindings, rows, inner).into()),
+			Type::Record(fields, tail) => {
+				let mut new_fields: Vec<(String, Type)> = fields
+					.iter()
+					.map(|(n, t)| (n.clone(), Self::deep_resolve(bindings, rows, t)))
+					.collect();
+				let mut current_tail = *tail;
+				while let Some(rid) = current_tail {
+					match rows.get(&rid) {
+						Some(sol) => {
+							for (n, t) in &sol.fields {
+								new_fields.push((n.clone(), Self::deep_resolve(bindings, rows, t)));
+							}
+							current_tail = sol.tail;
+						}
+						None => break,
+					}
+				}
+				Type::Record(new_fields, current_tail)
+			}
+		}
+	}
+
+	// Row-polymorphic record unification, worklist edition. Same four cases as
+	// the old `unify_records`, but pushes shared-field constraints onto `work`
+	// and inserts row solutions into `rows` instead of building/composing a
+	// fresh `Substitution`. Both records are already fully resolved by the
+	// caller, so their tails are `None` or an unbound row var.
 	//
 	//   (None, None)         — both closed: field sets must be equal
-	//   (None, Some(r))      — r binds to "the fields f1 has that f2 doesn't"
-	//                          (with tail None — i.e. closed); f2's fields
-	//                          must all be in f1
+	//   (None, Some(r))      — r absorbs the fields only the closed side has
 	//   (Some(r), None)      — symmetric
-	//   (Some(r1), Some(r2)) — fresh row var t; r1 binds to (only_f2 + t),
-	//                          r2 binds to (only_f1 + t); shared fields
-	//                          unify pairwise. If r1 == r2, only_f1 and
-	//                          only_f2 must both be empty.
-	fn unify_records(
+	//   (Some(r1), Some(r2)) — fresh row var t; r1 := only_2 + t, r2 := only_1 + t
+	fn unify_records_worklist(
 		&mut self,
-		fields_1: &Vec<(String, Type)>,
-		tail_1: &Option<usize>,
-		fields_2: &Vec<(String, Type)>,
-		tail_2: &Option<usize>,
-		reason: &ConstraintReason,
-	) -> Substitution {
-		use std::collections::HashMap;
+		fields_1: &[(String, Type)],
+		tail_1: Option<usize>,
+		fields_2: &[(String, Type)],
+		tail_2: Option<usize>,
+		range: Range,
+		work: &mut Vec<(Type, Type, Range)>,
+		rows: &mut HashMap<usize, RowSolution>,
+	) {
 		let map_1: HashMap<&String, usize> =
-			HashMap::from_iter(fields_1.iter().enumerate().map(|(i, (k, _))| (k, i)));
+			fields_1.iter().enumerate().map(|(i, (k, _))| (k, i)).collect();
 		let map_2: HashMap<&String, usize> =
-			HashMap::from_iter(fields_2.iter().enumerate().map(|(i, (k, _))| (k, i)));
+			fields_2.iter().enumerate().map(|(i, (k, _))| (k, i)).collect();
 
-		// Common fields → unify types pairwise.
-		let mut shared_constraints: Vec<Constraint> = Vec::new();
+		// Common fields → unify pairwise (carry the outer range, as the old
+		// solver did for shared fields).
+		let mut shared: Vec<(Type, Type)> = Vec::new();
 		for (name, i1) in &map_1 {
 			if let Some(i2) = map_2.get(*name) {
-				shared_constraints
-					.push(eq_constraint(fields_1[*i1].1.clone(), fields_2[*i2].1.clone()).at(reason.range));
+				shared.push((fields_1[*i1].1.clone(), fields_2[*i2].1.clone()));
 			}
 		}
 
-		// Sets of "only on left" and "only on right" fields.
+		// Fields unique to each side (order-preserving for stable snapshots).
 		let only_1: Vec<(String, Type)> = fields_1
 			.iter()
 			.filter(|(n, _)| !map_2.contains_key(n))
@@ -3557,59 +3699,58 @@ impl<'compiler> Analyzer<'compiler> {
 			.cloned()
 			.collect();
 
-		match (*tail_1, *tail_2) {
+		let push_shared = |work: &mut Vec<(Type, Type, Range)>| {
+			for (a, b) in &shared {
+				work.push((a.clone(), b.clone(), range));
+			}
+		};
+
+		match (tail_1, tail_2) {
 			(None, None) => {
 				let mut ok = true;
 				for (n, _) in &only_1 {
 					ok = false;
 					self.error(
-						reason.range,
+						range,
 						RecordFieldNotPresent {
 							field: n.clone(),
-							ty: Type::Record(fields_2.clone(), None),
+							ty: Type::Record(fields_2.to_vec(), None),
 						},
 					);
 				}
 				for (n, _) in &only_2 {
 					ok = false;
 					self.error(
-						reason.range,
+						range,
 						RecordFieldNotPresent {
 							field: n.clone(),
-							ty: Type::Record(fields_1.clone(), None),
+							ty: Type::Record(fields_1.to_vec(), None),
 						},
 					);
 				}
-				if !ok {
-					return Substitution::empty();
+				if ok {
+					push_shared(work);
 				}
-				self.unify(&shared_constraints)
 			}
 
 			(None, Some(r2)) => {
-				// Left is closed; right's row var must absorb left's extras.
-				// Right's listed fields must all be present in left (else
-				// closed-left can't have them).
+				// Left is closed; right's row var absorbs left's extras. Right's
+				// listed-but-not-on-left fields can't exist on a closed left.
 				let mut ok = true;
 				for (n, _) in &only_2 {
 					ok = false;
 					self.error(
-						reason.range,
+						range,
 						RecordFieldNotPresent {
 							field: n.clone(),
-							ty: Type::Record(fields_1.clone(), None),
+							ty: Type::Record(fields_1.to_vec(), None),
 						},
 					);
 				}
-				if !ok {
-					return Substitution::empty();
+				if ok {
+					push_shared(work);
+					rows.insert(r2, RowSolution { fields: only_1, tail: None });
 				}
-				let subst = self.unify(&shared_constraints);
-				let row_solution = RowSolution {
-					fields: only_1,
-					tail: None,
-				};
-				subst.compose(Substitution::with_row_entry(r2, row_solution))
 			}
 
 			(Some(r1), None) => {
@@ -3617,60 +3758,41 @@ impl<'compiler> Analyzer<'compiler> {
 				for (n, _) in &only_1 {
 					ok = false;
 					self.error(
-						reason.range,
+						range,
 						RecordFieldNotPresent {
 							field: n.clone(),
-							ty: Type::Record(fields_2.clone(), None),
+							ty: Type::Record(fields_2.to_vec(), None),
 						},
 					);
 				}
-				if !ok {
-					return Substitution::empty();
+				if ok {
+					push_shared(work);
+					rows.insert(r1, RowSolution { fields: only_2, tail: None });
 				}
-				let subst = self.unify(&shared_constraints);
-				let row_solution = RowSolution {
-					fields: only_2,
-					tail: None,
-				};
-				subst.compose(Substitution::with_row_entry(r1, row_solution))
 			}
 
 			(Some(r1), Some(r2)) => {
 				if r1 == r2 {
-					// Same row variable on both sides: only consistent if
-					// neither side claims unique fields.
+					// Same row var on both sides: consistent only if neither
+					// side claims unique fields.
 					if !only_1.is_empty() || !only_2.is_empty() {
 						self.error(
-							reason.range,
+							range,
 							TypeMismatch {
-								expected: Type::Record(fields_2.clone(), Some(r2)),
-								found: Type::Record(fields_1.clone(), Some(r1)),
+								expected: Type::Record(fields_2.to_vec(), Some(r2)),
+								found: Type::Record(fields_1.to_vec(), Some(r1)),
 							},
 						);
-						return Substitution::empty();
+						return;
 					}
-					return self.unify(&shared_constraints);
+					push_shared(work);
+					return;
 				}
-				// Introduce a fresh row var that captures the unknown tail
-				// shared between the two sides. Each side binds its row
-				// var to (the other side's unique fields) + fresh.
+				// Fresh row var captures the unknown tail shared by both sides.
 				let fresh = self.new_row_var();
-				let mut subst = self.unify(&shared_constraints);
-				subst = subst.compose(Substitution::with_row_entry(
-					r1,
-					RowSolution {
-						fields: only_2,
-						tail: Some(fresh),
-					},
-				));
-				subst = subst.compose(Substitution::with_row_entry(
-					r2,
-					RowSolution {
-						fields: only_1,
-						tail: Some(fresh),
-					},
-				));
-				subst
+				push_shared(work);
+				rows.insert(r1, RowSolution { fields: only_2, tail: Some(fresh) });
+				rows.insert(r2, RowSolution { fields: only_1, tail: Some(fresh) });
 			}
 		}
 	}
