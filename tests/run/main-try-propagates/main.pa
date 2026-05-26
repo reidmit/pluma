@@ -1,0 +1,11 @@
+# `try` in `main` now has somewhere to propagate to: a failing step
+# short-circuits the chain, `main` returns that `err`, and the program
+# exits nonzero with the error on stderr. The `print n` line never runs.
+use core.string
+
+def main = fun {
+	print "starting"
+	try n = string.to-int "abc"
+	print n
+	ok n
+}

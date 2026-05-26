@@ -256,10 +256,23 @@ impl VM {
 		let entry = self.program.entry;
 		self.push_frame_with_args(entry, Rc::new(Vec::new()), Vec::new(), None)?;
 		self.run_until_frame_depth(0)?;
-		self
+		let value = self
 			.stack
 			.pop()
-			.ok_or_else(|| RuntimeError::new("VM exited with empty stack"))
+			.ok_or_else(|| RuntimeError::new("VM exited with empty stack"))?;
+		// `main`'s return value doubles as the program's exit status when it's
+		// a `result`: an `err e` aborts with `e` on stderr and a nonzero exit
+		// — the same controlled exit `io.fail` produces, so the CLI and test
+		// harness (both of which already handle a user-abort error) treat it
+		// identically. `ok`, and any non-result return such as `nothing`, is
+		// success; the value is otherwise discarded. The check is on the
+		// runtime `err` tag, the way the `result` builtins dispatch.
+		if let Value::Variant(v) = &value {
+			if v.variant.as_str() == "err" && v.payload.len() == 1 {
+				return Err(RuntimeError::user_abort(format!("{}", v.payload[0])));
+			}
+		}
+		Ok(value)
 	}
 
 	// Invoke a top-level `test` block by its global index. Forces the

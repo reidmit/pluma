@@ -1,0 +1,11 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+runtime error
+== stdout ==
+starting
+== stderr ==
+invalid digit found in string
+

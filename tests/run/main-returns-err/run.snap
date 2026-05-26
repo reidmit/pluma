@@ -1,0 +1,11 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+runtime error
+== stdout ==
+starting work
+== stderr ==
+deploy failed: 3 of 5 hosts unreachable
+

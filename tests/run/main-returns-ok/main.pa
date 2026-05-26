@@ -1,0 +1,6 @@
+# A `main` that returns `ok` succeeds quietly: the value is discarded and
+# the program exits 0, exactly as a `main` returning `nothing` would.
+def main = fun {
+	print "working"
+	ok 0
+}
