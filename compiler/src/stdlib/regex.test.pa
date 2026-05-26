@@ -7,11 +7,17 @@ use core.assert
 def tests :: testing.suite = fun t {
 	# --- matches ---
 
-	t.case "matches finds a substring" fun { assert.is-true (re.matches `"hello"` "hello, world!") }
+	t.case "matches finds a substring" fun {
+		assert.is-true (re.matches `"hello"` "hello, world!")
+	}
 
-	t.case "matches on non-match" fun { assert.is-false (re.matches `"hello"` "goodbye!") }
+	t.case "matches on non-match" fun {
+		assert.is-false (re.matches `"hello"` "goodbye!")
+	}
 
-	t.case "matches on empty input" fun { assert.is-false (re.matches `"hello"` "") }
+	t.case "matches on empty input" fun {
+		assert.is-false (re.matches `"hello"` "")
+	}
 
 	t.case "matches anchored pattern" fun {
 		assert.all [
@@ -122,7 +128,9 @@ def tests :: testing.suite = fun t {
 
 	# --- split ---
 
-	t.case "split on a delimiter" fun { assert.equals (re.split `","` "a,b,c") ["a", "b", "c"] }
+	t.case "split on a delimiter" fun {
+		assert.equals (re.split `","` "a,b,c") ["a", "b", "c"]
+	}
 
 	t.case "split collapses whitespace" fun {
 		assert.equals (re.split `whitespace+` "  a   b\tc  ") ["", "a", "b", "c", ""]

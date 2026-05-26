@@ -5,7 +5,9 @@ use core.assert
 def tests :: testing.suite = fun t {
 	# --- length / is-empty ---
 
-	t.case "length of empty bytes" fun { assert.equals (bytes.length '') 0 }
+	t.case "length of empty bytes" fun {
+		assert.equals (bytes.length '') 0
+	}
 
 	t.case "length counts bytes" fun {
 		assert.all [
@@ -14,9 +16,13 @@ def tests :: testing.suite = fun t {
 		]
 	}
 
-	t.case "is-empty on empty bytes" fun { assert.is-true (bytes.is-empty '') }
+	t.case "is-empty on empty bytes" fun {
+		assert.is-true (bytes.is-empty '')
+	}
 
-	t.case "is-empty on non-empty bytes" fun { assert.is-false (bytes.is-empty 'x') }
+	t.case "is-empty on non-empty bytes" fun {
+		assert.is-false (bytes.is-empty 'x')
+	}
 
 	# --- at ---
 
@@ -54,21 +60,35 @@ def tests :: testing.suite = fun t {
 
 	# --- concat ---
 
-	t.case "concat joins two bytes" fun { assert.equals (bytes.concat 'foo' 'bar') 'foobar' }
+	t.case "concat joins two bytes" fun {
+		assert.equals (bytes.concat 'foo' 'bar') 'foobar'
+	}
 
-	t.case "concat with empty left" fun { assert.equals (bytes.concat '' 'bar') 'bar' }
+	t.case "concat with empty left" fun {
+		assert.equals (bytes.concat '' 'bar') 'bar'
+	}
 
-	t.case "concat with empty right" fun { assert.equals (bytes.concat 'foo' '') 'foo' }
+	t.case "concat with empty right" fun {
+		assert.equals (bytes.concat 'foo' '') 'foo'
+	}
 
 	# --- slice ---
 
-	t.case "slice returns the substring" fun { assert.equals (bytes.slice 'hello' 1 4) 'ell' }
+	t.case "slice returns the substring" fun {
+		assert.equals (bytes.slice 'hello' 1 4) 'ell'
+	}
 
-	t.case "slice clamps oversize end" fun { assert.equals (bytes.slice 'hello' 0 99) 'hello' }
+	t.case "slice clamps oversize end" fun {
+		assert.equals (bytes.slice 'hello' 0 99) 'hello'
+	}
 
-	t.case "slice with start past end is empty" fun { assert.equals (bytes.slice 'hello' 3 1) '' }
+	t.case "slice with start past end is empty" fun {
+		assert.equals (bytes.slice 'hello' 3 1) ''
+	}
 
-	t.case "slice zero-length is empty" fun { assert.equals (bytes.slice 'hello' 2 2) '' }
+	t.case "slice zero-length is empty" fun {
+		assert.equals (bytes.slice 'hello' 2 2) ''
+	}
 
 	# --- contains / starts-with / ends-with ---
 
@@ -80,33 +100,57 @@ def tests :: testing.suite = fun t {
 		assert.is-false (bytes.contains 'hello' 'xyz')
 	}
 
-	t.case "contains empty needle is true" fun { assert.is-true (bytes.contains 'anything' '') }
+	t.case "contains empty needle is true" fun {
+		assert.is-true (bytes.contains 'anything' '')
+	}
 
-	t.case "starts-with a prefix" fun { assert.is-true (bytes.starts-with '\x89PNG' '\x89') }
+	t.case "starts-with a prefix" fun {
+		assert.is-true (bytes.starts-with '\x89PNG' '\x89')
+	}
 
-	t.case "starts-with a non-prefix" fun { assert.is-false (bytes.starts-with 'PNG' '\x89') }
+	t.case "starts-with a non-prefix" fun {
+		assert.is-false (bytes.starts-with 'PNG' '\x89')
+	}
 
-	t.case "ends-with a suffix" fun { assert.is-true (bytes.ends-with 'hello\n' '\n') }
+	t.case "ends-with a suffix" fun {
+		assert.is-true (bytes.ends-with 'hello\n' '\n')
+	}
 
-	t.case "ends-with a non-suffix" fun { assert.is-false (bytes.ends-with 'hello' '\n') }
+	t.case "ends-with a non-suffix" fun {
+		assert.is-false (bytes.ends-with 'hello' '\n')
+	}
 
 	# --- repeat / reverse ---
 
-	t.case "repeat duplicates the input" fun { assert.equals (bytes.repeat 'ab' 3) 'ababab' }
+	t.case "repeat duplicates the input" fun {
+		assert.equals (bytes.repeat 'ab' 3) 'ababab'
+	}
 
-	t.case "repeat zero times is empty" fun { assert.equals (bytes.repeat 'ab' 0) '' }
+	t.case "repeat zero times is empty" fun {
+		assert.equals (bytes.repeat 'ab' 0) ''
+	}
 
-	t.case "repeat once is the input" fun { assert.equals (bytes.repeat 'ab' 1) 'ab' }
+	t.case "repeat once is the input" fun {
+		assert.equals (bytes.repeat 'ab' 1) 'ab'
+	}
 
-	t.case "reverse flips byte order" fun { assert.equals (bytes.reverse 'abcde') 'edcba' }
+	t.case "reverse flips byte order" fun {
+		assert.equals (bytes.reverse 'abcde') 'edcba'
+	}
 
-	t.case "reverse of empty is empty" fun { assert.equals (bytes.reverse '') '' }
+	t.case "reverse of empty is empty" fun {
+		assert.equals (bytes.reverse '') ''
+	}
 
 	# --- to-list / from-list ---
 
-	t.case "to-list extracts byte values" fun { assert.equals (bytes.to-list 'ABC') [65, 66, 67] }
+	t.case "to-list extracts byte values" fun {
+		assert.equals (bytes.to-list 'ABC') [65, 66, 67]
+	}
 
-	t.case "to-list of empty is empty" fun { assert.equals (bytes.to-list '') [] }
+	t.case "to-list of empty is empty" fun {
+		assert.equals (bytes.to-list '') []
+	}
 
 	t.case "from-list builds bytes" fun {
 		when bytes.from-list [65, 66, 67] is ok b {
@@ -146,13 +190,17 @@ def tests :: testing.suite = fun t {
 		assert.equals (bytes.join ['a', 'b', 'c'] ',') 'a,b,c'
 	}
 
-	t.case "join with null separator" fun { assert.equals (bytes.join ['a', 'b'] '\x00') 'a\x00b' }
+	t.case "join with null separator" fun {
+		assert.equals (bytes.join ['a', 'b'] '\x00') 'a\x00b'
+	}
 
 	t.case "join of singleton omits separator" fun {
 		assert.equals (bytes.join ['only'] ',') 'only'
 	}
 
-	t.case "split on a comma" fun { assert.equals (bytes.split 'a,b,c' ',') ['a', 'b', 'c'] }
+	t.case "split on a comma" fun {
+		assert.equals (bytes.split 'a,b,c' ',') ['a', 'b', 'c']
+	}
 
 	t.case "split with adjacent separators" fun {
 		assert.equals (bytes.split 'a,b,,c' ',') ['a', 'b', '', 'c']

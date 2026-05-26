@@ -24,11 +24,17 @@ def tests :: testing.suite = fun t {
 
 	# --- abs ---
 
-	t.case "abs of positive is itself" fun { assert.equals (math.abs 5) 5 }
+	t.case "abs of positive is itself" fun {
+		assert.equals (math.abs 5) 5
+	}
 
-	t.case "abs of negative is positive" fun { assert.equals (math.abs (-5)) 5 }
+	t.case "abs of negative is positive" fun {
+		assert.equals (math.abs (-5)) 5
+	}
 
-	t.case "abs of zero is zero" fun { assert.equals (math.abs 0) 0 }
+	t.case "abs of zero is zero" fun {
+		assert.equals (math.abs 0) 0
+	}
 
 	# --- floor / ceil / round ---
 
@@ -72,7 +78,9 @@ def tests :: testing.suite = fun t {
 	# Only boundary cases that are exact in IEEE 754. Approximate
 	# results (log 2.0, exp 1.0, etc.) skip exact-equality checks.
 
-	t.case "log 1.0 is 0.0" fun { assert.equals (math.log 1.0) 0.0 }
+	t.case "log 1.0 is 0.0" fun {
+		assert.equals (math.log 1.0) 0.0
+	}
 
 	t.case "log10 of powers of 10" fun {
 		assert.all [
@@ -90,19 +98,31 @@ def tests :: testing.suite = fun t {
 		]
 	}
 
-	t.case "exp 0.0 is 1.0" fun { assert.equals (math.exp 0.0) 1.0 }
+	t.case "exp 0.0 is 1.0" fun {
+		assert.equals (math.exp 0.0) 1.0
+	}
 
 	# --- trig ---
 
-	t.case "sin 0 is 0" fun { assert.equals (math.sin 0.0) 0.0 }
+	t.case "sin 0 is 0" fun {
+		assert.equals (math.sin 0.0) 0.0
+	}
 
-	t.case "cos 0 is 1" fun { assert.equals (math.cos 0.0) 1.0 }
+	t.case "cos 0 is 1" fun {
+		assert.equals (math.cos 0.0) 1.0
+	}
 
-	t.case "tan 0 is 0" fun { assert.equals (math.tan 0.0) 0.0 }
+	t.case "tan 0 is 0" fun {
+		assert.equals (math.tan 0.0) 0.0
+	}
 
 	# --- constants ---
 
-	t.case "pi rounds to 3" fun { assert.equals (math.round math.pi) 3 }
+	t.case "pi rounds to 3" fun {
+		assert.equals (math.round math.pi) 3
+	}
 
-	t.case "e rounds to 3" fun { assert.equals (math.round math.e) 3 }
+	t.case "e rounds to 3" fun {
+		assert.equals (math.round math.e) 3
+	}
 }

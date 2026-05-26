@@ -41,7 +41,9 @@ def logic = fun a b c d m {
 def calls = fun f g x xs r {
 	let nested-call = f (g x)
 	let arg-expr = f (a + b)
-	let lambda-arg = list.map xs fun n { n * 2 }
+	let lambda-arg = list.map xs fun n {
+		n * 2
+	}
 	let access-of-call = (f x).field
 	let deep = print x
 	let concat-left = "a" ++ "b" ++ "c"

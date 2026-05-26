@@ -63,7 +63,9 @@ def new :: fun nothing -> registrar = fun {
 	let path = ref.new []
 	let stat = ref.new normal
 
-	let push = fun e { ref.set entries [...ref.get entries, e] }
+	let push = fun e {
+		ref.set entries [...ref.get entries, e]
+	}
 
 	# Run `thunk` with `seg` pushed onto the current path, then restore.
 	let scoped = fun seg thunk {

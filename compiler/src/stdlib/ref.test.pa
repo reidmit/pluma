@@ -40,15 +40,23 @@ def tests :: testing.suite = fun t {
 
 	t.case "update reads, applies fn, writes" fun {
 		let r = ref.new 10
-		ref.update r fun n { n + 5 }
+		ref.update r fun n {
+			n + 5
+		}
 		assert.equals (ref.get r) 15
 	}
 
 	t.case "update can be called multiple times" fun {
 		let r = ref.new 0
-		ref.update r fun n { n + 1 }
-		ref.update r fun n { n + 1 }
-		ref.update r fun n { n + 1 }
+		ref.update r fun n {
+			n + 1
+		}
+		ref.update r fun n {
+			n + 1
+		}
+		ref.update r fun n {
+			n + 1
+		}
 		assert.equals (ref.get r) 3
 	}
 

@@ -5,7 +5,9 @@ use core.assert
 def tests :: testing.suite = fun t {
 	# --- length / is-empty ---
 
-	t.case "length of empty list" fun { assert.equals (list.length []) 0 }
+	t.case "length of empty list" fun {
+		assert.equals (list.length []) 0
+	}
 
 	t.case "length counts elements" fun {
 		assert.all [
@@ -14,33 +16,55 @@ def tests :: testing.suite = fun t {
 		]
 	}
 
-	t.case "is-empty on empty list" fun { assert.is-true (list.is-empty []) }
+	t.case "is-empty on empty list" fun {
+		assert.is-true (list.is-empty [])
+	}
 
-	t.case "is-empty on non-empty list" fun { assert.is-false (list.is-empty [1]) }
+	t.case "is-empty on non-empty list" fun {
+		assert.is-false (list.is-empty [1])
+	}
 
 	# --- reverse ---
 
-	t.case "reverse swaps order" fun { assert.equals (list.reverse [1, 2, 3]) [3, 2, 1] }
+	t.case "reverse swaps order" fun {
+		assert.equals (list.reverse [1, 2, 3]) [3, 2, 1]
+	}
 
-	t.case "reverse of empty is empty" fun { assert.equals (list.reverse []) [] }
+	t.case "reverse of empty is empty" fun {
+		assert.equals (list.reverse []) []
+	}
 
-	t.case "reverse of singleton is itself" fun { assert.equals (list.reverse [42]) [42] }
+	t.case "reverse of singleton is itself" fun {
+		assert.equals (list.reverse [42]) [42]
+	}
 
 	# --- concat ---
 
-	t.case "concat joins two lists" fun { assert.equals (list.concat [1, 2] [3, 4]) [1, 2, 3, 4] }
+	t.case "concat joins two lists" fun {
+		assert.equals (list.concat [1, 2] [3, 4]) [1, 2, 3, 4]
+	}
 
-	t.case "concat with empty left" fun { assert.equals (list.concat [] [1, 2]) [1, 2] }
+	t.case "concat with empty left" fun {
+		assert.equals (list.concat [] [1, 2]) [1, 2]
+	}
 
-	t.case "concat with empty right" fun { assert.equals (list.concat [1, 2] []) [1, 2] }
+	t.case "concat with empty right" fun {
+		assert.equals (list.concat [1, 2] []) [1, 2]
+	}
 
 	# --- contains ---
 
-	t.case "contains finds an element" fun { assert.is-true (list.contains [1, 2, 3] 2) }
+	t.case "contains finds an element" fun {
+		assert.is-true (list.contains [1, 2, 3] 2)
+	}
 
-	t.case "contains misses a non-element" fun { assert.is-false (list.contains [1, 2, 3] 99) }
+	t.case "contains misses a non-element" fun {
+		assert.is-false (list.contains [1, 2, 3] 99)
+	}
 
-	t.case "contains on empty is always false" fun { assert.is-false (list.contains [] 1) }
+	t.case "contains on empty is always false" fun {
+		assert.is-false (list.contains [] 1)
+	}
 
 	# --- map ---
 
@@ -52,7 +76,9 @@ def tests :: testing.suite = fun t {
 		assert.equals (list.map [1, 2, 3] to-string) ["1", "2", "3"]
 	}
 
-	t.case "map on empty is empty" fun { assert.equals (list.map [] fun n { n + 1 }) [] }
+	t.case "map on empty is empty" fun {
+		assert.equals (list.map [] fun n { n + 1 }) []
+	}
 
 	# --- filter ---
 
@@ -126,19 +152,29 @@ def tests :: testing.suite = fun t {
 
 	# --- take / drop ---
 
-	t.case "take returns the prefix" fun { assert.equals (list.take [1, 2, 3, 4, 5] 3) [1, 2, 3] }
+	t.case "take returns the prefix" fun {
+		assert.equals (list.take [1, 2, 3, 4, 5] 3) [1, 2, 3]
+	}
 
 	t.case "take more than length returns whole list" fun {
 		assert.equals (list.take [1, 2, 3] 10) [1, 2, 3]
 	}
 
-	t.case "take zero is empty" fun { assert.equals (list.take [1, 2, 3] 0) [] }
+	t.case "take zero is empty" fun {
+		assert.equals (list.take [1, 2, 3] 0) []
+	}
 
-	t.case "drop returns the suffix" fun { assert.equals (list.drop [1, 2, 3, 4, 5] 2) [3, 4, 5] }
+	t.case "drop returns the suffix" fun {
+		assert.equals (list.drop [1, 2, 3, 4, 5] 2) [3, 4, 5]
+	}
 
-	t.case "drop more than length is empty" fun { assert.equals (list.drop [1, 2, 3] 10) [] }
+	t.case "drop more than length is empty" fun {
+		assert.equals (list.drop [1, 2, 3] 10) []
+	}
 
-	t.case "drop zero is whole list" fun { assert.equals (list.drop [1, 2, 3] 0) [1, 2, 3] }
+	t.case "drop zero is whole list" fun {
+		assert.equals (list.drop [1, 2, 3] 0) [1, 2, 3]
+	}
 
 	# --- find ---
 
@@ -160,17 +196,41 @@ def tests :: testing.suite = fun t {
 
 	# --- any / all ---
 
-	t.case "any with a match" fun { assert.is-true (list.any [1, 2, 3] fun n { n > 2 }) }
+	t.case "any with a match" fun {
+		assert.is-true (list.any [1, 2, 3] fun n {
+			n > 2
+		})
+	}
 
-	t.case "any without a match" fun { assert.is-false (list.any [1, 2, 3] fun n { n > 100 }) }
+	t.case "any without a match" fun {
+		assert.is-false (list.any [1, 2, 3] fun n {
+			n > 100
+		})
+	}
 
-	t.case "any on empty is false" fun { assert.is-false (list.any [] fun n { n > 0 }) }
+	t.case "any on empty is false" fun {
+		assert.is-false (list.any [] fun n {
+			n > 0
+		})
+	}
 
-	t.case "all with every match" fun { assert.is-true (list.all [1, 2, 3] fun n { n > 0 }) }
+	t.case "all with every match" fun {
+		assert.is-true (list.all [1, 2, 3] fun n {
+			n > 0
+		})
+	}
 
-	t.case "all with one failure" fun { assert.is-false (list.all [1, 2, 3] fun n { n > 1 }) }
+	t.case "all with one failure" fun {
+		assert.is-false (list.all [1, 2, 3] fun n {
+			n > 1
+		})
+	}
 
-	t.case "all on empty is vacuously true" fun { assert.is-true (list.all [] fun n { n > 0 }) }
+	t.case "all on empty is vacuously true" fun {
+		assert.is-true (list.all [] fun n {
+			n > 0
+		})
+	}
 
 	# --- sort ---
 

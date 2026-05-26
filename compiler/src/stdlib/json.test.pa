@@ -153,11 +153,17 @@ def tests :: testing.suite = fun t {
 
 	# --- stringify ---
 
-	t.case "stringify null" fun { assert.equals (json.stringify json.value.null) "null" }
+	t.case "stringify null" fun {
+		assert.equals (json.stringify json.value.null) "null"
+	}
 
-	t.case "stringify true" fun { assert.equals (json.stringify (json.value.bool true)) "true" }
+	t.case "stringify true" fun {
+		assert.equals (json.stringify (json.value.bool true)) "true"
+	}
 
-	t.case "stringify int" fun { assert.equals (json.stringify (json.value.int 42)) "42" }
+	t.case "stringify int" fun {
+		assert.equals (json.stringify (json.value.int 42)) "42"
+	}
 
 	t.case "stringify string" fun {
 		assert.equals (json.stringify (json.value.string "hi")) "\"hi\""
@@ -173,7 +179,9 @@ def tests :: testing.suite = fun t {
 
 	# --- is-null ---
 
-	t.case "is-null on null variant" fun { assert.is-true (json.is-null json.value.null) }
+	t.case "is-null on null variant" fun {
+		assert.is-true (json.is-null json.value.null)
+	}
 
 	t.case "is-null on non-null" fun {
 		assert.all [

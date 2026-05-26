@@ -5,15 +5,25 @@ use core.assert
 def tests :: testing.suite = fun t {
 	# --- standard encode ---
 
-	t.case "encode of empty bytes" fun { assert.equals (base64.encode '') "" }
+	t.case "encode of empty bytes" fun {
+		assert.equals (base64.encode '') ""
+	}
 
-	t.case "encode pads three bytes" fun { assert.equals (base64.encode 'foo') "Zm9v" }
+	t.case "encode pads three bytes" fun {
+		assert.equals (base64.encode 'foo') "Zm9v"
+	}
 
-	t.case "encode pads one trailing byte" fun { assert.equals (base64.encode 'f') "Zg==" }
+	t.case "encode pads one trailing byte" fun {
+		assert.equals (base64.encode 'f') "Zg=="
+	}
 
-	t.case "encode pads two trailing bytes" fun { assert.equals (base64.encode 'fo') "Zm8=" }
+	t.case "encode pads two trailing bytes" fun {
+		assert.equals (base64.encode 'fo') "Zm8="
+	}
 
-	t.case "encode handles high bytes" fun { assert.equals (base64.encode '\xff\xfe\xfd') "//79" }
+	t.case "encode handles high bytes" fun {
+		assert.equals (base64.encode '\xff\xfe\xfd') "//79"
+	}
 
 	# --- standard decode ---
 
@@ -67,7 +77,9 @@ def tests :: testing.suite = fun t {
 
 	# --- url-safe variants ---
 
-	t.case "url-encode has no padding" fun { assert.equals (base64.url-encode 'f') "Zg" }
+	t.case "url-encode has no padding" fun {
+		assert.equals (base64.url-encode 'f') "Zg"
+	}
 
 	t.case "url-encode uses dash and underscore" fun {
 		assert.equals (base64.url-encode '\xff\xfe\xfd') "__79"

@@ -18,6 +18,8 @@ def sum-plus-one = fun xs {
 # Nested: parens are stripped around each `fun`, but the parens around the
 # inner `list.filter` call — itself an argument to `list.map` — are kept.
 def doubled-evens = fun xs {
-	list.map (list.filter xs fun x { x % 2 == 0 }) fun x { x * 2 }
+	list.map (list.filter xs fun x { x % 2 == 0 }) fun x {
+		x * 2
+	}
 }
 

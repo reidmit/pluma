@@ -6,7 +6,9 @@ use core.assert
 def tests :: testing.suite = fun t {
 	# --- length / is-empty ---
 
-	t.case "length of empty string" fun { assert.equals (string.length "") 0 }
+	t.case "length of empty string" fun {
+		assert.equals (string.length "") 0
+	}
 
 	t.case "length counts characters" fun {
 		assert.all [
@@ -17,9 +19,13 @@ def tests :: testing.suite = fun t {
 	}
 	# "é" is two UTF-8 bytes but one character.
 
-	t.case "is-empty on empty string" fun { assert.is-true (string.is-empty "") }
+	t.case "is-empty on empty string" fun {
+		assert.is-true (string.is-empty "")
+	}
 
-	t.case "is-empty on non-empty string" fun { assert.is-false (string.is-empty "x") }
+	t.case "is-empty on non-empty string" fun {
+		assert.is-false (string.is-empty "x")
+	}
 
 	# --- slice / drop / char-at ---
 
@@ -79,13 +85,17 @@ def tests :: testing.suite = fun t {
 
 	# --- to-upper / to-lower ---
 
-	t.case "to-upper uppercases ASCII" fun { assert.equals (string.to-upper "hello") "HELLO" }
+	t.case "to-upper uppercases ASCII" fun {
+		assert.equals (string.to-upper "hello") "HELLO"
+	}
 
 	t.case "to-upper leaves digits and punctuation alone" fun {
 		assert.equals (string.to-upper "hi, 123!") "HI, 123!"
 	}
 
-	t.case "to-lower lowercases ASCII" fun { assert.equals (string.to-lower "HELLO") "hello" }
+	t.case "to-lower lowercases ASCII" fun {
+		assert.equals (string.to-lower "HELLO") "hello"
+	}
 
 	t.case "to-lower on already-lower is unchanged" fun {
 		assert.equals (string.to-lower "hello") "hello"
@@ -93,53 +103,81 @@ def tests :: testing.suite = fun t {
 
 	# --- trim ---
 
-	t.case "trim strips both ends" fun { assert.equals (string.trim "  hello  ") "hello" }
+	t.case "trim strips both ends" fun {
+		assert.equals (string.trim "  hello  ") "hello"
+	}
 
 	t.case "trim leaves inner whitespace alone" fun {
 		assert.equals (string.trim "  a b c  ") "a b c"
 	}
 
-	t.case "trim of all whitespace is empty" fun { assert.equals (string.trim "   ") "" }
+	t.case "trim of all whitespace is empty" fun {
+		assert.equals (string.trim "   ") ""
+	}
 
-	t.case "trim of empty is empty" fun { assert.equals (string.trim "") "" }
+	t.case "trim of empty is empty" fun {
+		assert.equals (string.trim "") ""
+	}
 
 	# --- contains / starts-with / ends-with ---
 
-	t.case "contains a substring" fun { assert.is-true (string.contains "abcdef" "cde") }
+	t.case "contains a substring" fun {
+		assert.is-true (string.contains "abcdef" "cde")
+	}
 
 	t.case "contains misses a non-substring" fun {
 		assert.is-false (string.contains "abcdef" "xyz")
 	}
 
-	t.case "contains empty needle is true" fun { assert.is-true (string.contains "abc" "") }
+	t.case "contains empty needle is true" fun {
+		assert.is-true (string.contains "abc" "")
+	}
 
-	t.case "starts-with a prefix" fun { assert.is-true (string.starts-with "hello world" "hello") }
+	t.case "starts-with a prefix" fun {
+		assert.is-true (string.starts-with "hello world" "hello")
+	}
 
 	t.case "starts-with a non-prefix" fun {
 		assert.is-false (string.starts-with "hello world" "world")
 	}
 
-	t.case "starts-with empty is true" fun { assert.is-true (string.starts-with "abc" "") }
+	t.case "starts-with empty is true" fun {
+		assert.is-true (string.starts-with "abc" "")
+	}
 
-	t.case "ends-with a suffix" fun { assert.is-true (string.ends-with "hello world" "world") }
+	t.case "ends-with a suffix" fun {
+		assert.is-true (string.ends-with "hello world" "world")
+	}
 
-	t.case "ends-with a non-suffix" fun { assert.is-false (string.ends-with "hello world" "hello") }
+	t.case "ends-with a non-suffix" fun {
+		assert.is-false (string.ends-with "hello world" "hello")
+	}
 
-	t.case "ends-with empty is true" fun { assert.is-true (string.ends-with "abc" "") }
+	t.case "ends-with empty is true" fun {
+		assert.is-true (string.ends-with "abc" "")
+	}
 
 	# --- join / split ---
 
-	t.case "join with comma" fun { assert.equals (string.join ["a", "b", "c"] ",") "a,b,c" }
+	t.case "join with comma" fun {
+		assert.equals (string.join ["a", "b", "c"] ",") "a,b,c"
+	}
 
-	t.case "join with empty separator" fun { assert.equals (string.join ["a", "b", "c"] "") "abc" }
+	t.case "join with empty separator" fun {
+		assert.equals (string.join ["a", "b", "c"] "") "abc"
+	}
 
 	t.case "join of singleton omits separator" fun {
 		assert.equals (string.join ["only"] ",") "only"
 	}
 
-	t.case "join of empty list is empty" fun { assert.equals (string.join [] ",") "" }
+	t.case "join of empty list is empty" fun {
+		assert.equals (string.join [] ",") ""
+	}
 
-	t.case "split on comma" fun { assert.equals (string.split "a,b,c" ",") ["a", "b", "c"] }
+	t.case "split on comma" fun {
+		assert.equals (string.split "a,b,c" ",") ["a", "b", "c"]
+	}
 
 	t.case "split with adjacent separators" fun {
 		assert.equals (string.split "a,,b" ",") ["a", "", "b"]
@@ -155,7 +193,9 @@ def tests :: testing.suite = fun t {
 
 	# --- replace ---
 
-	t.case "replace every occurrence" fun { assert.equals (string.replace "a-b-c" "-" "_") "a_b_c" }
+	t.case "replace every occurrence" fun {
+		assert.equals (string.replace "a-b-c" "-" "_") "a_b_c"
+	}
 
 	t.case "replace with empty replacement" fun {
 		assert.equals (string.replace "abc-def" "-" "") "abcdef"

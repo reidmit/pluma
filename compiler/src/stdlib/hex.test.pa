@@ -5,13 +5,21 @@ use core.assert
 def tests :: testing.suite = fun t {
 	# --- encode ---
 
-	t.case "encode of empty bytes" fun { assert.equals (hex.encode '') "" }
+	t.case "encode of empty bytes" fun {
+		assert.equals (hex.encode '') ""
+	}
 
-	t.case "encode of ASCII bytes" fun { assert.equals (hex.encode 'ABC') "414243" }
+	t.case "encode of ASCII bytes" fun {
+		assert.equals (hex.encode 'ABC') "414243"
+	}
 
-	t.case "encode of high bytes" fun { assert.equals (hex.encode '\x00\xff\x10') "00ff10" }
+	t.case "encode of high bytes" fun {
+		assert.equals (hex.encode '\x00\xff\x10') "00ff10"
+	}
 
-	t.case "encode of single byte" fun { assert.equals (hex.encode '\n') "0a" }
+	t.case "encode of single byte" fun {
+		assert.equals (hex.encode '\n') "0a"
+	}
 
 	# --- decode ---
 

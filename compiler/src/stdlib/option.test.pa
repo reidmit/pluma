@@ -68,7 +68,9 @@ def tests :: testing.suite = fun t {
 	t.case "then on none does not call the continuation" fun {
 		let counter = ref.new 0
 		let bump-and-double = fun n {
-			ref.update counter fun c { c + 1 }
+			ref.update counter fun c {
+				c + 1
+			}
 			some (n * 2)
 		}
 		assert.all [
@@ -84,7 +86,9 @@ def tests :: testing.suite = fun t {
 	# --- chained then ---
 
 	t.case "two-step then composes" fun {
-		let r = opt.then (some 4) fun n { opt.then (positive n) doubled }
+		let r = opt.then (some 4) fun n {
+			opt.then (positive n) doubled
+		}
 		when r is some n {
 			assert.equals n 8
 		} is none {
@@ -121,7 +125,9 @@ def tests :: testing.suite = fun t {
 	t.case "or-else does not evaluate the fallback on some" fun {
 		let counter = ref.new 0
 		let fallback = fun {
-			ref.update counter fun c { c + 1 }
+			ref.update counter fun c {
+				c + 1
+			}
 			0
 		}
 		assert.all [

@@ -1,0 +1,27 @@
+use core.testing
+use core.assert
+use core.list
+
+# A `fun` literal in statement-tail position — the last argument of a call,
+# the value of a `let`, or a bare statement — always lays its body out
+# multi-line, even a single expression that would fit on one line. This is the
+# same stable vertical shape `def NAME = fun { ... }` gets, and it keeps test
+# suites readable: every `t.case "name" fun { ... }` reads as a 3-line block.
+def tests :: testing.suite = fun t {
+	t.case "is-ok passes on ok" fun { assert.is-ok (ok 42) }
+	t.group "math" fun {
+		t.case "adds" fun { assert.equals (1 + 1) 2 }
+	}
+
+	# A `let` whose value ends in a `fun` breaks the same way.
+	let inc = fun x { x + 1 }
+
+	# A trailing lambda breaks; redundant parens around it are still stripped.
+	let doubled = list.map [1, 2, 3] (fun n { n * 2 })
+
+	# A `fun` that is NOT the statement's tail stays inline: here it is an
+	# interior argument (another argument follows), so it does not break.
+	let chosen = pick (fun x { x + 1 }) fallback
+
+	assert.is-true (inc 0 == 1)
+}

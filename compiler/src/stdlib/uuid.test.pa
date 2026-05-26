@@ -10,7 +10,9 @@ def tests :: testing.suite = fun t {
 
 	# --- v4 ---
 
-	t.case "v4 has canonical length" fun { assert.equals (string.length (uuid.v4 ())) 36 }
+	t.case "v4 has canonical length" fun {
+		assert.equals (string.length (uuid.v4 ())) 36
+	}
 
 	t.case "v4 version nibble is 4" fun {
 		let u = uuid.v4 ()
@@ -38,7 +40,9 @@ def tests :: testing.suite = fun t {
 
 	# --- v7 ---
 
-	t.case "v7 has canonical length" fun { assert.equals (string.length (uuid.v7 ())) 36 }
+	t.case "v7 has canonical length" fun {
+		assert.equals (string.length (uuid.v7 ())) 36
+	}
 
 	t.case "v7 version nibble is 7" fun {
 		let u = uuid.v7 ()
@@ -126,9 +130,13 @@ def tests :: testing.suite = fun t {
 		assert.is-true (uuid.is-valid "550E8400-E29B-41D4-A716-446655440000")
 	}
 
-	t.case "is-valid rejects malformed" fun { assert.is-false (uuid.is-valid "not-a-uuid") }
+	t.case "is-valid rejects malformed" fun {
+		assert.is-false (uuid.is-valid "not-a-uuid")
+	}
 
-	t.case "is-valid rejects empty" fun { assert.is-false (uuid.is-valid "") }
+	t.case "is-valid rejects empty" fun {
+		assert.is-false (uuid.is-valid "")
+	}
 
 	t.case "is-valid agrees with parse" fun {
 		assert.all [

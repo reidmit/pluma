@@ -352,10 +352,24 @@ impl<'a> Formatter<'a> {
 	// mirrors the `min_bp` the parser would use at this position (see
 	// `Operator::infix_binding_power` and the call/access arms below).
 	fn fmt(&self, e: &ExprNode, min_prec: u8) -> Doc {
+		self.fmt_prec(e, min_prec, false)
+	}
+
+	// Like `fmt`, but `e` sits in statement-tail position: a `fun` reached
+	// along its right spine — the final argument of a call, a `let`/`try`
+	// value, or `e` itself — always lays out multi-line, even when its body
+	// would fit on one line. This is the same stable vertical shape
+	// `def NAME = fun { ... }` gets (see `format_fun_block`), so a trailing
+	// lambda like `t.case "x" fun { assert.is-ok r }` breaks across lines.
+	fn fmt_tail(&self, e: &ExprNode, min_prec: u8) -> Doc {
+		self.fmt_prec(e, min_prec, true)
+	}
+
+	fn fmt_prec(&self, e: &ExprNode, min_prec: u8, tail: bool) -> Doc {
 		if let ExprKind::Grouping(inner) = &e.kind {
-			return self.fmt(inner, min_prec);
+			return self.fmt_prec(inner, min_prec, tail);
 		}
-		let doc = self.render_expr(e);
+		let doc = self.render_expr(e, tail);
 		if expr_prec(e) < min_prec {
 			concat(vec![text("("), doc, text(")")])
 		} else {
@@ -367,7 +381,7 @@ impl<'a> Formatter<'a> {
 	// each child position demands. Never wraps `e` itself in parens — that's
 	// `fmt`'s job, based on the caller's context. `Grouping` is unreachable
 	// here (peeled in `fmt`); handled defensively as a passthrough.
-	fn render_expr(&self, e: &ExprNode) -> Doc {
+	fn render_expr(&self, e: &ExprNode, tail: bool) -> Doc {
 		use ExprKind::*;
 		match &e.kind {
 			Literal(lit) => self.format_literal(lit),
@@ -419,10 +433,16 @@ impl<'a> Formatter<'a> {
 				}
 				concat(parts)
 			}
-			Fun(fun) => self.format_fun(fun),
-			Call(call) => self.format_call(call),
-			Let(l) => self.format_let(l),
-			Try(t) => self.format_try(t),
+			Fun(fun) => {
+				if tail {
+					self.format_fun_block(fun)
+				} else {
+					self.format_fun(fun)
+				}
+			}
+			Call(call) => self.format_call(call, tail),
+			Let(l) => self.format_let(l, tail),
+			Try(t) => self.format_try(t, tail),
 			Tuple(items) => self.format_tuple(items),
 			List(items) => self.format_list(items),
 			Record(fields) => self.format_record(fields),
@@ -467,7 +487,7 @@ impl<'a> Formatter<'a> {
 			let only = &fun.body[0];
 			return group(concat(vec![
 				concat(head),
-				nest(concat(vec![line(), self.format_expr(only)])),
+				nest(concat(vec![line(), self.fmt_tail(only, 0)])),
 				line(),
 				text("}"),
 			]));
@@ -496,7 +516,7 @@ impl<'a> Formatter<'a> {
 				}
 			}
 			parts.push(self.drain_leading(expr.range.start.line));
-			parts.push(self.format_expr(expr));
+			parts.push(self.fmt_tail(expr, 0));
 			prev_end = Some(expr.range.end.line);
 		}
 		concat(parts)
@@ -524,7 +544,7 @@ impl<'a> Formatter<'a> {
 			.unwrap_or(target_line)
 	}
 
-	fn format_call(&self, call: &CallNode) -> Doc {
+	fn format_call(&self, call: &CallNode, tail: bool) -> Doc {
 		// Calls are whitespace-separated callee + args. Pluma application is
 		// newline-terminated — a call ends at the first newline that isn't
 		// inside an open bracket — so we must NOT break a call across lines:
@@ -539,21 +559,31 @@ impl<'a> Formatter<'a> {
 		// (`list.map xs (fun x { ... })` → `list.map xs fun x { ... }`); a
 		// nested call or operator expression keeps them (`f (g x)`, `f (a + b)`).
 		let mut parts: Vec<Doc> = vec![self.fmt(&call.callee, 90)];
-		for arg in &call.args {
+		let last = call.args.len().wrapping_sub(1);
+		for (i, arg) in call.args.iter().enumerate() {
 			parts.push(text(" "));
-			parts.push(self.fmt(arg, 91));
+			// Only the final argument continues the statement's tail: a `fun`
+			// there ends the line, so it breaks (`t.case "x" fun { ... }`).
+			// Earlier args are interior, so they stay inline when they fit.
+			if tail && i == last {
+				parts.push(self.fmt_tail(arg, 91));
+			} else {
+				parts.push(self.fmt(arg, 91));
+			}
 		}
 		concat(parts)
 	}
 
-	fn format_let(&self, l: &LetNode) -> Doc {
+	fn format_let(&self, l: &LetNode, tail: bool) -> Doc {
 		let mut parts: Vec<Doc> = vec![text("let "), self.format_pattern(&l.pattern)];
 		if let Some(ty) = &l.type_annotation {
 			parts.push(text(" :: "));
 			parts.push(self.format_type_expr(ty));
 		}
 		parts.push(text(" = "));
-		parts.push(self.format_expr(&l.value));
+		// The value ends the binding's line, so a `fun` there breaks just
+		// like `def NAME = fun { ... }`.
+		parts.push(self.fmt_prec(&l.value, 0, tail));
 		concat(parts)
 	}
 
@@ -561,16 +591,18 @@ impl<'a> Formatter<'a> {
 	// (`rest`) is rendered as inline siblings — at the source level a try
 	// has no braces around what follows, just subsequent expressions in
 	// the enclosing block.
-	fn format_try(&self, t: &TryNode) -> Doc {
+	fn format_try(&self, t: &TryNode, tail: bool) -> Doc {
 		let mut parts: Vec<Doc> = vec![
 			text("try "),
 			self.format_pattern(&t.pattern),
 			text(" = "),
-			self.format_expr(&t.value),
+			self.fmt_prec(&t.value, 0, tail),
 		];
+		// The continuation expressions are siblings in the enclosing block,
+		// so each is itself a statement and carries the same tail position.
 		for e in &t.rest {
 			parts.push(hardline());
-			parts.push(self.format_expr(e));
+			parts.push(self.fmt_prec(e, 0, tail));
 		}
 		concat(parts)
 	}
@@ -802,7 +834,7 @@ impl<'a> Formatter<'a> {
 			let only = &body[0];
 			return group(concat(vec![
 				text("{"),
-				nest(concat(vec![line(), self.format_expr(only)])),
+				nest(concat(vec![line(), self.fmt_tail(only, 0)])),
 				line(),
 				text("}"),
 			]));
