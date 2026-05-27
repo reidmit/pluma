@@ -1,0 +1,4 @@
+def f = fun {
+	defer print "cleanup"
+	print "body"
+}

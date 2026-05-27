@@ -222,7 +222,7 @@
 			"patterns": [
 				{
 					"name": "keyword.control.pluma",
-					"match": "(?<![A-Za-z0-9_-])(if|else|when|while|is|in|try)(?![A-Za-z0-9_-])"
+					"match": "(?<![A-Za-z0-9_-])(if|else|when|while|is|in|try|defer)(?![A-Za-z0-9_-])"
 				},
 				{
 					"name": "keyword.declaration.pluma",

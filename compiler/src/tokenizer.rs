@@ -559,6 +559,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 						b"as" => KeywordAs,
 						b"built-in" => KeywordBuiltin,
 						b"def" => KeywordDef,
+						b"defer" => KeywordDefer,
 						b"else" => KeywordElse,
 						b"enum" => KeywordEnum,
 						b"fun" => KeywordFun,

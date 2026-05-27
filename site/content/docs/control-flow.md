@@ -65,6 +65,37 @@ while (get-next iterator) is some name {
 }
 ```
 
+## `defer`
+
+`defer expr` schedules `expr` to run when the enclosing **function** exits — by any path: a normal return, or a `try` that short-circuits on failure. It's the tool for cleanup that must happen no matter how the function ends.
+
+```pluma
+def read-config = fun path {
+    let f = io.open path
+    defer io.close f       # runs on every exit below
+    try contents = io.read-all f
+    parse contents
+}
+```
+
+Even if `io.read-all` fails and the `try` propagates the error, `f` is still closed.
+
+Multiple `defer`s run last-in-first-out, so acquisition and release nest correctly across unrelated resources:
+
+```pluma
+def diff-files = fun a b {
+    let fa = io.open a
+    defer io.close fa
+    let fb = io.open b
+    defer io.close fb       # fb closes first, then fa
+    try xa = io.read-all fa
+    try xb = io.read-all fb
+    ok (compute-diff xa xb)
+}
+```
+
+A `defer` only fires if execution actually reached it: one guarded by an `if` runs only when that branch ran, and a `defer` written after a `try` is skipped when that `try` short-circuits. The deferred expression's value is discarded — `defer` itself evaluates to `nothing`.
+
 {% note() %}
 See [Patterns](@/docs/patterns.md) for the full grammar of patterns usable in `is` arms.
 {% end %}

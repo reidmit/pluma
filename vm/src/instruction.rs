@@ -55,6 +55,10 @@ pub enum Instruction {
 	Call(u16),
 	TailCall(u16),
 	Return,
+	// Pop a closure and push it onto the current frame's cleanup stack.
+	// Emitted for `defer expr` (the closure is a zero-arg thunk wrapping
+	// `expr`). The frame's cleanup stack is run LIFO when the frame Returns.
+	PushDefer,
 
 	// Aggregates
 	MakeTuple(u16),

@@ -450,6 +450,7 @@ impl<'a> Formatter<'a> {
 			}
 			Call(call) => self.format_call(call, tail),
 			Let(l) => self.format_let(l, tail),
+			Defer(inner) => concat(vec![text("defer "), self.fmt_prec(inner, 0, tail)]),
 			Try(t) => self.format_try(t, tail),
 			Tuple(items) => self.format_tuple(items),
 			List(items) => self.format_list(items),
@@ -1014,7 +1015,7 @@ fn expr_prec(e: &ExprNode) -> u8 {
 		UnaryOperation { op, .. } => prefix_prec(op),
 		Call(_) => 90,
 		FieldAccess { .. } | ElementAccess { .. } => 100,
-		Let(_) | Try(_) => 0,
+		Let(_) | Try(_) | Defer(_) => 0,
 		_ => u8::MAX,
 	}
 }

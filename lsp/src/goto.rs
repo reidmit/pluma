@@ -530,7 +530,7 @@ impl Resolver {
 					self.walk_expr(arg, scope);
 				}
 			}
-			ExprKind::Grouping(inner) => self.walk_expr(inner, scope),
+			ExprKind::Grouping(inner) | ExprKind::Defer(inner) => self.walk_expr(inner, scope),
 			ExprKind::Interpolation(parts) | ExprKind::Tuple(parts) => {
 				for p in parts {
 					self.walk_expr(p, scope);

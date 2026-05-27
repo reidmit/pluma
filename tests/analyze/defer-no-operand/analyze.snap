@@ -1,0 +1,8 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: Expected an expression after `defer`.
+> 2 | 	defer
+       ^^^^^
+

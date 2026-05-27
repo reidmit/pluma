@@ -150,6 +150,9 @@ pub enum Token {
 	/// `in` keyword
 	KeywordIn(usize, usize),
 
+	/// `defer` keyword (schedule cleanup at enclosing-function exit)
+	KeywordDefer(usize, usize),
+
 	/// `let` keyword
 	KeywordLet(usize, usize),
 
@@ -327,6 +330,7 @@ impl Token {
 			| KeywordAs(start, end)
 			| KeywordBuiltin(start, end)
 			| KeywordDef(start, end)
+			| KeywordDefer(start, end)
 			| KeywordElse(start, end)
 			| KeywordEnum(start, end)
 			| KeywordFun(start, end)
@@ -431,6 +435,7 @@ impl fmt::Display for Token {
 			&KeywordAs(..) => "keyword `as`",
 			&KeywordBuiltin(..) => "keyword `built-in`",
 			&KeywordDef(..) => "keyword `def`",
+			&KeywordDefer(..) => "keyword `defer`",
 			&KeywordElse(..) => "keyword `else`",
 			&KeywordEnum(..) => "keyword `enum`",
 			&KeywordFun(..) => "keyword `fun`",

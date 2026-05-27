@@ -33,6 +33,7 @@ pub enum ParseErrorKind {
 	InvalidHexEscape,
 	BuiltinExpectsPlainString,
 	ExpectedExpressionAfterSpread,
+	ExpectedExpressionAfterDefer,
 	UnexpectedEOF { expected: Token },
 	UnexpectedToken { actual: Token, expected: Token },
 	UnexpectedTopLevelToken { actual: Token },
@@ -100,6 +101,9 @@ impl fmt::Display for ParseError {
 				f,
 				"Expected an expression after `...` in a list literal."
 			),
+			ExpectedExpressionAfterDefer => {
+				write!(f, "Expected an expression after `defer`.")
+			}
 			UnexpectedEOF { expected } => write!(f, "Unexpected end of file. Expected {}.", expected),
 			UnexpectedToken { actual, expected } => {
 				write!(f, "Unexpected token ({}). Expected {}.", actual, expected)

@@ -693,6 +693,7 @@ impl<'a> Parser<'a> {
 				trait_dispatch: None,
 				dispatch_sink: None,
 			}),
+			Some(Token::KeywordDefer(..)) => self.parse_defer(),
 			Some(Token::KeywordFun(..)) => self.parse_fun().map(|fun_node| ExprNode {
 				range: fun_node.range,
 				kind: ExprKind::Fun(fun_node),
@@ -1517,6 +1518,29 @@ impl<'a> Parser<'a> {
 
 			_ => None,
 		}
+	}
+
+	// `defer Expr` — a body statement that schedules `Expr` to run when the
+	// enclosing function exits. Like `let`, it greedily consumes a full
+	// expression for its operand and evaluates to `nothing`.
+	fn parse_defer(&mut self) -> Option<ExprNode> {
+		let (start, end) = expect_token_and_advance!(self, Token::KeywordDefer);
+		let Some(inner) = self.parse_expression() else {
+			// `defer` with no operand (e.g. `defer` then end of block). Report
+			// rather than silently truncating the enclosing block.
+			return self.error(ParseError {
+				range: Range::between(start, end),
+				kind: ParseErrorKind::ExpectedExpressionAfterDefer,
+			});
+		};
+		let range = Range::between(start, inner.range.end);
+		Some(ExprNode {
+			range,
+			kind: ExprKind::Defer(Box::new(inner)),
+			ty: Type::Unknown,
+			trait_dispatch: None,
+			dispatch_sink: None,
+		})
 	}
 
 	fn parse_let_expression(&mut self) -> Option<LetNode> {

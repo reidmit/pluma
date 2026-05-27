@@ -200,6 +200,11 @@ pub(crate) struct Frame {
 	// If this frame is forcing a global, the index to write the result to
 	// on Return.
 	pub forcing_global: Option<u32>,
+	// Cleanup thunks scheduled by `defer`, in push order. Run LIFO on Return
+	// (see the Return handler). A frame with pending cleanups can't be reused
+	// in place by a tail call — see `do_call`. Almost always empty, so the
+	// `Vec` never allocates unless `defer` actually runs in this frame.
+	pub cleanups: Vec<Value>,
 }
 
 pub struct VM {
@@ -350,6 +355,7 @@ impl VM {
 			prev_top,
 			captures,
 			forcing_global,
+			cleanups: Vec::new(),
 		});
 		Ok(())
 	}
@@ -487,6 +493,15 @@ impl VM {
 				let ret = self.stack.pop().ok_or_else(|| {
 					RuntimeError::new("VM: Return with empty stack").at(self.current_range())
 				})?;
+				// Run any `defer`red cleanups for this frame, LIFO, before we
+				// tear it down. The frame is still on `self.frames` (its locals
+				// still on the stack) while these run — harmless, since each
+				// thunk captured what it needs by value. A thunk that itself
+				// raises propagates immediately (remaining cleanups are skipped).
+				let cleanups = std::mem::take(&mut self.frames[frame_idx].cleanups);
+				for thunk in cleanups.into_iter().rev() {
+					self.call_function(thunk, Vec::new())?;
+				}
 				let popped = self.frames.pop().unwrap();
 				// Drop everything from this frame's setup onward (locals,
 				// any unused intermediates, and the callee slot below).
@@ -495,6 +510,12 @@ impl VM {
 					self.program.globals[global_idx as usize] = GlobalSlot::Evaluated(ret.clone());
 				}
 				self.stack.push(ret);
+			}
+			Instruction::PushDefer => {
+				let thunk = self.stack.pop().ok_or_else(|| {
+					RuntimeError::new("VM: PushDefer on empty stack").at(self.current_range())
+				})?;
+				self.frames[frame_idx].cleanups.push(thunk);
 			}
 			Instruction::MakeTuple(arity) => {
 				let mut elems = Vec::with_capacity(arity as usize);
@@ -1097,6 +1118,12 @@ impl VM {
 	}
 
 	fn do_call(&mut self, arity: u16, tail: bool) -> Result<(), RuntimeError> {
+		// A frame with pending `defer` cleanups can't be reused in place by a
+		// tail call: its Return must still execute to run those cleanups. Fall
+		// back to a normal (frame-pushing) call when that's the case. Because a
+		// tail call is the last thing a frame does, every `defer` that will run
+		// has already been pushed by this point, so the check is exact.
+		let tail = tail && self.frames.last().map_or(true, |f| f.cleanups.is_empty());
 		// Stack layout coming in: [..., callee, arg0, ..., argN-1].
 		// For Closure calls we leave the callee + args in place; the new
 		// frame's locals start at the args' position. The callee sits at
@@ -1175,6 +1202,7 @@ impl VM {
 						prev_top: callee_idx,
 						captures,
 						forcing_global: None,
+						cleanups: Vec::new(),
 					});
 					Ok(())
 				}
@@ -1271,6 +1299,7 @@ fn opcode_name(i: &Instruction) -> &'static str {
 		MakeClosure { .. } => "MakeClosure",
 		Call(_) => "Call",
 		TailCall(_) => "TailCall",
+		PushDefer => "PushDefer",
 		Return => "Return",
 		MakeTuple(_) => "MakeTuple",
 		MakeList(_) => "MakeList",

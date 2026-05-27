@@ -180,7 +180,7 @@ contexts:
         - include: operators
 
   keywords:
-    - match: '{{kb}}(if|else|when|while|is|in|try){{ka}}'
+    - match: '{{kb}}(if|else|when|while|is|in|try|defer){{ka}}'
       scope: keyword.control.pluma
     - match: '{{kb}}(def|let|alias|enum|trait|implement|where|use|as|fun|test){{ka}}'
       scope: keyword.declaration.pluma

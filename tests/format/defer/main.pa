@@ -1,0 +1,5 @@
+def f = fun {
+	defer  io.close   file
+	defer release-resource pool
+	print "body"
+}

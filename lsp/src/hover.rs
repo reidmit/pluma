@@ -298,7 +298,7 @@ fn walk_expr(expr: &ExprNode, hits: &mut Vec<HoverHit>) {
 				walk_expr(arg, hits);
 			}
 		}
-		ExprKind::Grouping(inner) => walk_expr(inner, hits),
+		ExprKind::Grouping(inner) | ExprKind::Defer(inner) => walk_expr(inner, hits),
 		ExprKind::Interpolation(parts) | ExprKind::Tuple(parts) => {
 			for p in parts {
 				walk_expr(p, hits);

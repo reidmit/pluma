@@ -257,6 +257,7 @@ fn collect_dispatch_cells(expr: &ExprNode, cells: &mut Vec<DispatchCell>) {
 			collect_dispatch_cells(receiver, cells);
 		}
 		ExprKind::Grouping(inner) => collect_dispatch_cells(inner, cells),
+		ExprKind::Defer(inner) => collect_dispatch_cells(inner, cells),
 		ExprKind::Tuple(es) | ExprKind::Interpolation(es) => {
 			for e in es {
 				collect_dispatch_cells(e, cells);
@@ -2472,6 +2473,14 @@ impl<'compiler> Analyzer<'compiler> {
 				expr.ty = Type::Nothing;
 			}
 
+			ExprKind::Defer(inner) => {
+				// The deferred expression's value is discarded (it runs at
+				// function exit for its effects), so it carries no constraint
+				// beyond being internally well-typed. `defer` itself is `nothing`.
+				self.constrain_expr(inner, constraints);
+				expr.ty = Type::Nothing;
+			}
+
 			ExprKind::ElementAccess { receiver, index } => {
 				// this expr gets a fresh type var
 				expr.ty = self.new_type_var();
@@ -4195,6 +4204,9 @@ impl<'compiler> Analyzer<'compiler> {
 			ExprKind::Grouping(inner) => {
 				self.report_unresolved_try_in_expr(inner, subst);
 			}
+			ExprKind::Defer(inner) => {
+				self.report_unresolved_try_in_expr(inner, subst);
+			}
 			ExprKind::Try(TryNode {
 				range, value, rest, ..
 			}) => {
@@ -4318,6 +4330,9 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 			}
 			ExprKind::Grouping(inner) => {
+				self.dispatch_try_in_expr(inner, subst, new_constraints, dispatched_any);
+			}
+			ExprKind::Defer(inner) => {
 				self.dispatch_try_in_expr(inner, subst, new_constraints, dispatched_any);
 			}
 			ExprKind::Try(TryNode { value, rest, .. }) => {
@@ -4771,6 +4786,10 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 
 			ExprKind::Grouping(inner) => {
+				self.annotate_expr(inner, subst);
+			}
+
+			ExprKind::Defer(inner) => {
 				self.annotate_expr(inner, subst);
 			}
 

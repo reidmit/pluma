@@ -2,9 +2,13 @@
 
 Design and implementation plan for Pluma's concurrency story: the
 `task a` type, structured concurrency via `scope` / `manual scope`,
-cooperative cancellation, and `defer` for resource cleanup. **None of
-this is implemented yet — this is the design of record for unbuilt
-work.**
+cooperative cancellation, and `defer` for resource cleanup. **Almost
+none of this is implemented yet — this is the design of record for
+unbuilt work.** The lone exception is `defer`'s synchronous core
+(Phase 5): function-anchored cleanup that runs LIFO on normal return
+and on `try`-failure propagation now ships. The async-only facets of
+`defer` — cancellation cleanup, awaited (`task`-returning) cleanup, and
+`task.shielded` — still await the `task` runtime below.
 
 It builds on the `try` chaining mechanism, which already ships for
 `result` and `option`. `try` is a built-in form that dispatches over a
@@ -283,8 +287,18 @@ explicitly.
 
 **Anchoring:** `defer` is tied to the enclosing **function** body
 (Go's model), not the nearest block — the most familiar and
-predictable choice. (Block-vs-function anchoring is the one sub-detail
-to confirm at implementation time.)
+predictable choice. *Confirmed at implementation:* cleanups are
+anchored to the VM **frame**, which is exactly the function body —
+`if`/`when`/`while` blocks compile inline into the same frame, so a
+`defer` inside them still fires at function exit. The one wrinkle is
+that a `try` rewrites its continuation (everything textually after it)
+into a separate closure/frame, so a `defer` placed *after* a `try`
+rides that continuation's frame. This is invisible: the continuation's
+Return runs as part of producing the function's return value, so the
+LIFO order and the "only fires if its `defer` was reached" rule both
+hold exactly as if anchored to one flat function body. (A consequence:
+a `defer` after a `try` is skipped when that `try` short-circuits —
+which is the correct, intended behavior.)
 
 **Runtime:** `defer expr` pushes a cleanup thunk onto the task's
 cleanup stack at the point the `defer` executes; the stack is walked
@@ -671,15 +685,31 @@ The `try` mechanism this builds on has already shipped for
 
 ### Phase 5 — Resource cleanup (`defer`)
 
-Surface is **decided: `defer`** (see "`defer`").
+Surface is **decided: `defer`** (see "`defer`"). The synchronous core
+landed ahead of the rest of the async machinery — it's useful on its
+own and the runtime hook generalizes when scopes/cancellation arrive.
 
-- [ ] Parser: `DeferStmt ::= 'defer' Expr` (function-anchored)
-- [ ] Runtime: per-task cleanup stack; walk it LIFO on success, error,
-      and cancellation; cleanup is uninterruptible by default
-- [ ] `task.shielded` combinator for explicit uninterruptible regions
-- [ ] Test fixtures: cleanup-on-success, cleanup-on-error, cleanup-on-
-      cancel, heterogeneous resources, conditional acquisition,
-      async cleanup (a `defer` whose expression returns a `task`)
+- [x] Parser: `DeferStmt ::= 'defer' Expr` (function-anchored). `defer`
+      is a body statement (dispatched like `let`), evaluating to
+      `nothing`; missing operand is a parse error.
+- [x] Runtime: per-**frame** cleanup stack, walked LIFO on Return —
+      covering normal return *and* `try`-failure propagation (the
+      short-circuited `err`/`none` still flows through the frame's
+      Return). Codegen lowers `defer expr` to a zero-arg thunk
+      (`fun { expr }`) pushed via a new `PushDefer` op; the thunk
+      captures referenced locals by value at the `defer` site. A frame
+      with pending cleanups opts out of tail-call reuse at runtime (so
+      its Return actually executes); a raising cleanup propagates and
+      skips the remaining cleanups (revisit when cancellation lands).
+- [ ] Cancellation cleanup + uninterruptible-by-default — needs the
+      `task` runtime (Phases 1–4).
+- [ ] Awaited cleanup: a `defer` whose expression returns a `task`.
+- [ ] `task.shielded` combinator for explicit uninterruptible regions.
+- [x] Test fixtures: cleanup-on-success, cleanup-on-`try`-failure,
+      conditional acquisition, LIFO ordering, raising cleanup
+      (`tests/run/defer-cleanup`; `tests/analyze/defer`,
+      `tests/analyze/defer-no-operand`; `tests/format/defer`).
+- [ ] Test fixtures still pending: cleanup-on-cancel, async cleanup.
 
 ### Phase 6 — Concurrent combinators
 

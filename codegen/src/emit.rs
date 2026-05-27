@@ -1090,6 +1090,28 @@ fn emit_expr_with_parents(
 			}
 			fb.emit(Instruction::LoadNothing, range);
 		}
+		ExprKind::Defer(inner) => {
+			// Lower `defer expr` to a zero-arg cleanup thunk (`fun { expr }`)
+			// pushed onto the running frame's cleanup stack via PushDefer; the
+			// VM walks that stack LIFO at Return. The thunk captures whatever
+			// locals `expr` references by value at the point the `defer`
+			// executes — matching Go's "arguments evaluated at defer time"
+			// (immaterial in Pluma, where values are immutable). The `defer`
+			// expression itself evaluates to `nothing`.
+			emit_fun(
+				cg,
+				current_module,
+				imports,
+				fb,
+				scope,
+				parent_scopes,
+				&[],
+				std::slice::from_ref(inner.as_ref()),
+				range,
+			)?;
+			fb.emit(Instruction::PushDefer, range);
+			fb.emit(Instruction::LoadNothing, range);
+		}
 		ExprKind::Tuple(elems) => {
 			for e in elems {
 				emit_expr_with_parents(

@@ -62,6 +62,12 @@ pub enum ExprKind {
 	Identifier(IdentifierNode),
 	Interpolation(Vec<ExprNode>),
 	Let(LetNode),
+	/// `defer Expr` — schedules `Expr` to run when the enclosing function
+	/// body exits (by any path: normal return or `try`-failure propagation).
+	/// A body-statement form like `let`; its own value is `nothing`. Codegen
+	/// lowers it to a zero-arg cleanup thunk pushed onto the frame's cleanup
+	/// stack, which the VM walks LIFO at `Return`.
+	Defer(Box<ExprNode>),
 	Literal(LiteralNode),
 	Record(Vec<(IdentifierNode, ExprNode)>),
 	Tuple(Vec<ExprNode>),
@@ -206,6 +212,10 @@ impl std::fmt::Debug for ExprKind {
 
 			Let(let_node) => {
 				write!(f, "{:#?}", let_node)
+			}
+
+			Defer(inner) => {
+				write!(f, "defer {:#?}", inner)
 			}
 
 			List(elements) => {

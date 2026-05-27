@@ -1,0 +1,10 @@
+---
+source: tests/format.rs
+expression: once
+---
+def f = fun {
+	defer io.close file
+	defer release-resource pool
+	print "body"
+}
+

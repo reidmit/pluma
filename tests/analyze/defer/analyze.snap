@@ -1,0 +1,47 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/defer/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-3:1) [
+            def(0:0-3:1) :: nothing {
+                name: ident(0:4-0:5) `f`,
+                kind: expr(0:8-3:1) :: nothing -> nothing {
+                    kind: fun(0:8-3:1) {
+                        params: [],
+                        body: [
+                            expr(1:1-1:22) :: nothing {
+                                kind: defer expr(1:7-1:22) :: nothing {
+                                    kind: call(1:7-1:22) {
+                                        callee: expr(1:7-1:12) :: string -> nothing {
+                                            kind: ident(1:7-1:12) `print`,
+                                        },
+                                        args: [
+                                            expr(1:14-1:22) :: string {
+                                                kind: literal(1:14-1:22) string "cleanup",
+                                            },
+                                        ],
+                                    },
+                                },
+                            },
+                            expr(2:1-2:13) :: nothing {
+                                kind: call(2:1-2:13) {
+                                    callee: expr(2:1-2:6) :: string -> nothing {
+                                        kind: ident(2:1-2:6) `print`,
+                                    },
+                                    args: [
+                                        expr(2:8-2:13) :: string {
+                                            kind: literal(2:8-2:13) string "body",
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

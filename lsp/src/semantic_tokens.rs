@@ -396,7 +396,7 @@ impl AstWalker {
 				}
 			}
 			ExprKind::EmptyTuple => {}
-			ExprKind::Grouping(inner) => self.walk_expr(inner, out),
+			ExprKind::Grouping(inner) | ExprKind::Defer(inner) => self.walk_expr(inner, out),
 			ExprKind::Interpolation(parts) => {
 				for p in parts {
 					self.walk_expr(p, out);
