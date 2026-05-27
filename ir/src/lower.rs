@@ -21,8 +21,10 @@
 
 use crate::types::*;
 use compiler::ast::{
-	DefinitionKind, ExprKind, ExprNode, FunNode, LetNode, LiteralKind, ModuleNode, PatternKind,
+	DefinitionKind, ExprKind, ExprNode, FunNode, LetNode, LiteralKind, ModuleNode, Operator,
+	PatternKind,
 };
+use compiler::types::Type;
 use compiler::Compiler;
 use std::collections::HashMap;
 
@@ -89,7 +91,6 @@ enum Resolved {
 	/// A local or capture — usable directly as an atom.
 	Atom(Atom),
 	Global(GlobalId),
-	#[allow(dead_code)]
 	BareVariant {
 		qualified: String,
 		variant: String,
@@ -240,6 +241,12 @@ impl<'a> Lowerer<'a> {
 			ExprKind::Identifier(id) => self.lower_identifier(&id.name),
 			ExprKind::Call(call) => self.lower_call(call),
 			ExprKind::Fun(fun) => self.lower_fun(fun),
+			ExprKind::BinaryOperation { op, left, right } => {
+				self.lower_binary(expr.trait_dispatch.as_ref(), &op.kind, left, right)
+			}
+			ExprKind::UnaryOperation { op, right } => {
+				self.lower_unary(expr.trait_dispatch.as_ref(), op, right)
+			}
 			other => Err(format!("unsupported expr: {}", expr_kind_name(other))),
 		}
 	}
@@ -248,10 +255,46 @@ impl<'a> Lowerer<'a> {
 		match self.resolve(name)? {
 			Resolved::Atom(a) => Ok(a),
 			Resolved::Global(g) => Ok(self.emit_let(Rvalue::GlobalRef(g))),
-			Resolved::BareVariant { .. } => {
-				Err("bare variant construction not yet supported".to_string())
+			Resolved::BareVariant {
+				qualified,
+				variant,
+				arity,
+			} => {
+				if arity == 0 {
+					self.make_variant(&qualified, &variant, Vec::new())
+				} else {
+					// A constructor *value* (`some`, `ok`) used bare — needs
+					// MakeVariantCtor; not ported yet.
+					Err("variant constructor with payload not yet supported".to_string())
+				}
 			}
 		}
+	}
+
+	/// Construct an enum variant (looking up its tag in the enum table).
+	fn make_variant(
+		&mut self,
+		enum_name: &str,
+		variant: &str,
+		payload: Vec<Atom>,
+	) -> Result<Atom, String> {
+		let tag = self
+			.variant_tag(enum_name, variant)
+			.ok_or_else(|| format!("unknown variant `{}` of `{}`", variant, enum_name))?;
+		Ok(self.emit_let(Rvalue::MakeVariant {
+			enum_name: enum_name.to_string(),
+			tag,
+			payload,
+		}))
+	}
+
+	fn variant_tag(&self, enum_name: &str, variant: &str) -> Option<u32> {
+		self
+			.enums
+			.get(enum_name)?
+			.iter()
+			.position(|(n, _)| n == variant)
+			.map(|i| i as u32)
 	}
 
 	fn lower_call(&mut self, call: &compiler::ast::CallNode) -> Result<Atom, String> {
@@ -264,6 +307,149 @@ impl<'a> Lowerer<'a> {
 			args.push(self.lower_expr(a)?);
 		}
 		Ok(self.emit_let(Rvalue::CallClosure(callee, args)))
+	}
+
+	fn lower_binary(
+		&mut self,
+		cell: Option<&compiler::ast::DispatchCell>,
+		op: &Operator,
+		left: &ExprNode,
+		right: &ExprNode,
+	) -> Result<Atom, String> {
+		// Trait-dispatched operator: the method comes from a method dictionary
+		// (e.g. `+` is `numeric.add`). Arithmetic is `method(left, right)`;
+		// ordering (`< <= > >=`) needs an extra `compare(...) {==,!=} <variant>`
+		// tail (deferred until variant construction lands).
+		if let Some(cell) = cell {
+			match op {
+				Operator::Addition
+				| Operator::SubtractionOrNegation
+				| Operator::Multiplication
+				| Operator::Division
+				| Operator::Remainder => {
+					let method = self.lower_dispatch(cell)?;
+					let l = self.lower_expr(left)?;
+					let r = self.lower_expr(right)?;
+					return Ok(self.emit_let(Rvalue::CallClosure(method, vec![l, r])));
+				}
+				Operator::LessThan
+				| Operator::LessThanEquals
+				| Operator::GreaterThan
+				| Operator::GreaterThanEquals => {
+					// `ord.compare(left, right)` then test the resulting ordering
+					// variant: `< == lt`, `> == gt`, `<= != gt`, `>= != lt`.
+					let method = self.lower_dispatch(cell)?;
+					let l = self.lower_expr(left)?;
+					let r = self.lower_expr(right)?;
+					let cmp = self.emit_let(Rvalue::CallClosure(method, vec![l, r]));
+					let (variant, use_ne) = match op {
+						Operator::LessThan => ("lt", false),
+						Operator::GreaterThan => ("gt", false),
+						Operator::LessThanEquals => ("gt", true),
+						Operator::GreaterThanEquals => ("lt", true),
+						_ => unreachable!(),
+					};
+					let v = self.make_variant("__prelude__.ordering", variant, Vec::new())?;
+					let binop = if use_ne { BinOp::Ne } else { BinOp::Eq };
+					return Ok(self.emit_let(Rvalue::Bin(binop, cmp, v)));
+				}
+				_ => return Err("unsupported dispatched operator".to_string()),
+			}
+		}
+		// `x | f a b` pipes `x` in as `f`'s first argument.
+		if let Operator::Chain = op {
+			return self.lower_chain(left, right);
+		}
+		// Concrete, non-dispatched operator: a direct VM opcode picked by
+		// operand type. Evaluate left then right (matching `emit.rs`).
+		let is_float = matches!(left.ty, Type::Float) || matches!(right.ty, Type::Float);
+		let binop = binop_for(op, is_float).ok_or("unsupported binary operator")?;
+		let l = self.lower_expr(left)?;
+		let r = self.lower_expr(right)?;
+		Ok(self.emit_let(Rvalue::Bin(binop, l, r)))
+	}
+
+	fn lower_unary(
+		&mut self,
+		cell: Option<&compiler::ast::DispatchCell>,
+		op: &Operator,
+		right: &ExprNode,
+	) -> Result<Atom, String> {
+		// Numeric `-` (negate) is trait-dispatched (`numeric.negate`); the only
+		// direct unary op is logical `!`.
+		if let Some(cell) = cell {
+			let method = self.lower_dispatch(cell)?;
+			let r = self.lower_expr(right)?;
+			return Ok(self.emit_let(Rvalue::CallClosure(method, vec![r])));
+		}
+		match op {
+			Operator::LogicalNot => {
+				let r = self.lower_expr(right)?;
+				Ok(self.emit_let(Rvalue::Not(r)))
+			}
+			_ => Err("unsupported unary operator".to_string()),
+		}
+	}
+
+	/// Lower a resolved trait-method dispatch cell to the callable method
+	/// value. Handles concrete instances (`Resolved::Global`): load the named
+	/// dictionary global and extract the method. `Forwarded` (dict params of a
+	/// constrained def) and `InstanceChain` (parametric instances) aren't
+	/// ported yet.
+	fn lower_dispatch(&mut self, cell: &compiler::ast::DispatchCell) -> Result<Atom, String> {
+		use compiler::ast::Resolved;
+		let borrow = cell.borrow();
+		let method_idx = borrow.method_idx;
+		let gid = match &borrow.resolved {
+			Some(Resolved::Global(slot_name)) => {
+				let (module, name) = slot_name
+					.rsplit_once('.')
+					.ok_or("malformed instance slot name")?;
+				self
+					.globals
+					.lookup(module, name)
+					.ok_or("instance slot not registered as a global")?
+			}
+			Some(Resolved::Forwarded(_)) => {
+				return Err("forwarded dispatch (constrained def) not yet supported".to_string())
+			}
+			Some(Resolved::InstanceChain { .. }) => {
+				return Err("parametric instance dispatch not yet supported".to_string())
+			}
+			None => return Err("unresolved dispatch cell".to_string()),
+		};
+		drop(borrow);
+		let dict = self.emit_let(Rvalue::GlobalRef(gid));
+		match method_idx {
+			Some(idx) => Ok(self.emit_let(Rvalue::GetDictMethod(dict, idx as u32))),
+			// A call-forwarding site pushes the whole dict; operators always
+			// name a method, so this branch is unused for them.
+			None => Ok(dict),
+		}
+	}
+
+	/// `left | right` — pipe `left` in as the first argument of the call on the
+	/// right (or, if `right` isn't a call, call it with the single argument).
+	fn lower_chain(&mut self, left: &ExprNode, right: &ExprNode) -> Result<Atom, String> {
+		let (callee, extra): (&ExprNode, &[ExprNode]) = match &right.kind {
+			ExprKind::Call(c) => {
+				if !c.dict_args.is_empty() {
+					return Err("trait-constrained call in a pipe not yet supported".to_string());
+				}
+				(c.callee.as_ref(), c.args.as_slice())
+			}
+			_ => (right, &[]),
+		};
+		// Evaluate callee, then the piped value, then the remaining args
+		// (matching `emit.rs`'s ordering).
+		let callee_atom = self.lower_expr(callee)?;
+		let left_atom = self.lower_expr(left)?;
+		let mut args = Vec::with_capacity(1 + extra.len());
+		args.push(left_atom);
+		for a in extra {
+			args.push(self.lower_expr(a)?);
+		}
+		Ok(self.emit_let(Rvalue::CallClosure(callee_atom, args)))
 	}
 
 	fn lower_fun(&mut self, fun: &FunNode) -> Result<Atom, String> {
@@ -567,6 +753,34 @@ fn finish_scope(scope: FnScope) -> Function {
 		is_async: scope.is_async,
 		body: Block(scope.stmts),
 	}
+}
+
+/// Map a concrete (non-dispatched) operator to its IR `BinOp`. `is_float`
+/// selects the arithmetic opcode variant. Returns `None` for operators that
+/// aren't strict binary ops here (handled elsewhere or unsupported).
+fn binop_for(op: &Operator, is_float: bool) -> Option<BinOp> {
+	Some(match (op, is_float) {
+		(Operator::Addition, false) => BinOp::AddInt,
+		(Operator::Addition, true) => BinOp::AddFloat,
+		(Operator::SubtractionOrNegation, false) => BinOp::SubInt,
+		(Operator::SubtractionOrNegation, true) => BinOp::SubFloat,
+		(Operator::Multiplication, false) => BinOp::MulInt,
+		(Operator::Multiplication, true) => BinOp::MulFloat,
+		(Operator::Division, false) => BinOp::DivInt,
+		(Operator::Division, true) => BinOp::DivFloat,
+		(Operator::Remainder, false) => BinOp::RemInt,
+		(Operator::Remainder, true) => BinOp::RemFloat,
+		(Operator::Concat, _) => BinOp::Concat,
+		(Operator::LogicalAnd, _) => BinOp::And,
+		(Operator::LogicalOr, _) => BinOp::Or,
+		(Operator::Equality, _) => BinOp::Eq,
+		(Operator::Inequality, _) => BinOp::Ne,
+		(Operator::LessThan, _) => BinOp::Lt,
+		(Operator::LessThanEquals, _) => BinOp::Le,
+		(Operator::GreaterThan, _) => BinOp::Gt,
+		(Operator::GreaterThanEquals, _) => BinOp::Ge,
+		_ => return None,
+	})
 }
 
 fn literal_to_const(kind: &LiteralKind) -> Result<Const, String> {

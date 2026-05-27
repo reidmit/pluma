@@ -153,9 +153,11 @@ pub enum Const {
 pub enum Rvalue {
 	/// The value of an atom (a move/copy).
 	Use(Atom),
-	/// A monomorphic binary operation. The operand types are already resolved
-	/// by the analyzer, so e.g. integer vs float addition is distinct here.
+	/// A strict binary operation. The operand types are already resolved by
+	/// the analyzer, so e.g. integer vs float addition is distinct here.
 	Bin(BinOp, Atom, Atom),
+	/// Logical negation (`!`).
+	Not(Atom),
 	/// Call a statically-known target.
 	Call(Callee, Vec<Atom>),
 	/// Call through a closure value.
@@ -207,34 +209,33 @@ pub enum ListItem {
 	Spread(Atom),
 }
 
-/// Monomorphic binary operators. Provisional: the exact set is finalized
-/// during the lowering port to match the analyzer's resolved operators and the
-/// VM's typed opcodes (`AddInt`/`AddFloat`/...). Short-circuiting `&&`/`||` are
-/// intentionally absent — lowering emits them as `If`.
+/// Strict binary operators, mirroring the VM's binary opcodes. Arithmetic is
+/// split by operand type (the analyzer picks int vs float); comparison and
+/// equality are single ops (the VM implements them polymorphically over the
+/// `ord`/structural semantics). Logical `and`/`or` are strict here (both
+/// operands are evaluated) — that matches the VM's `LogicalAnd`/`LogicalOr`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinOp {
 	AddInt,
 	SubInt,
 	MulInt,
 	DivInt,
-	ModInt,
+	RemInt,
 	AddFloat,
 	SubFloat,
 	MulFloat,
 	DivFloat,
-	LtInt,
-	LeInt,
-	GtInt,
-	GeInt,
-	LtFloat,
-	LeFloat,
-	GtFloat,
-	GeFloat,
-	/// Structural equality / inequality.
-	Eq,
-	Ne,
+	RemFloat,
 	/// String concatenation (`++`).
 	Concat,
+	And,
+	Or,
+	Eq,
+	Ne,
+	Lt,
+	Le,
+	Gt,
+	Ge,
 }
 
 #[cfg(test)]

@@ -16,10 +16,19 @@ use compiler::Compiler;
 // Fixtures (under tests/run/<name>/) that `ir::lower` covers end-to-end today.
 // Grow this as coverage grows; `ir_coverage_report` (below) lists candidates.
 const IR_FIXTURES: &[&str] = &[
+	"arith-precedence",
+	"arithmetic",
+	"bytes-equality",
 	"bytes-escapes",
 	"bytes-literal",
+	"float-arith",
+	"float-compare",
 	"hello",
+	"negative-numbers",
+	"string-concat",
 	"string-with-escapes",
+	"subtract-after-call",
+	"unary-minus",
 ];
 
 struct RunResult {

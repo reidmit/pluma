@@ -17,8 +17,8 @@ use std::rc::Rc;
 
 use compiler::Range;
 use ir::{
-	Atom, Block, Callee, Const, Function as IrFunction, GlobalInit, IrProgram, PreEval, Rvalue, Stmt,
-	VarId,
+	Atom, BinOp, Block, Callee, Const, Function as IrFunction, GlobalInit, IrProgram, PreEval,
+	Rvalue, Stmt, VarId,
 };
 use vm::program::GlobalSlot;
 use vm::{Function, Instruction, Program, Value};
@@ -29,6 +29,7 @@ use vm::{Function, Instruction, Program, Value};
 /// maps to VM function index `n`; the emitter preserves that order.
 pub fn emit(program: &IrProgram) -> Result<Program, String> {
 	let mut e = Emitter::default();
+	e.enums = program.enums.clone();
 	for func in &program.functions {
 		let f = e.lower_function(func)?;
 		e.functions.push(f);
@@ -62,6 +63,9 @@ struct Emitter {
 	const_lookup: HashMap<String, u32>,
 	bytes_constants: Vec<Rc<Vec<u8>>>,
 	bytes_lookup: HashMap<Vec<u8>, u32>,
+	// qualified-enum-name -> [(variant_name, arity)], for resolving a
+	// `MakeVariant` tag back to the variant name the VM wants.
+	enums: HashMap<String, Vec<(String, usize)>>,
 }
 
 impl Emitter {
@@ -227,6 +231,45 @@ impl FnCtx {
 	) -> Result<(), String> {
 		match rv {
 			Rvalue::Use(a) => self.lower_atom(em, a, body, ranges)?,
+			Rvalue::Bin(op, a, b) => {
+				self.lower_atom(em, a, body, ranges)?;
+				self.lower_atom(em, b, body, ranges)?;
+				push(body, ranges, binop_instr(*op));
+			}
+			Rvalue::Not(a) => {
+				self.lower_atom(em, a, body, ranges)?;
+				push(body, ranges, Instruction::LogicalNot);
+			}
+			Rvalue::GetDictMethod(dict, idx) => {
+				self.lower_atom(em, dict, body, ranges)?;
+				push(body, ranges, Instruction::GetDictField(*idx as u16));
+			}
+			Rvalue::MakeVariant {
+				enum_name,
+				tag,
+				payload,
+			} => {
+				let (variant_name, _arity) = em
+					.enums
+					.get(enum_name)
+					.and_then(|vs| vs.get(*tag as usize))
+					.ok_or_else(|| format!("from_ir: unknown variant {enum_name}#{tag}"))?
+					.clone();
+				for a in payload {
+					self.lower_atom(em, a, body, ranges)?;
+				}
+				let qualified = em.intern(enum_name);
+				let variant = em.intern(&variant_name);
+				push(
+					body,
+					ranges,
+					Instruction::MakeVariant {
+						qualified,
+						variant,
+						arity: payload.len() as u16,
+					},
+				);
+			}
 			Rvalue::GlobalRef(g) => push(body, ranges, Instruction::LoadGlobal(g.0)),
 			Rvalue::MakeClosure(fid, caps) => {
 				for c in caps {
@@ -307,6 +350,30 @@ impl FnCtx {
 fn push(body: &mut Vec<Instruction>, ranges: &mut Vec<Range>, instr: Instruction) {
 	body.push(instr);
 	ranges.push(Range::collapsed(0, 0));
+}
+
+fn binop_instr(op: BinOp) -> Instruction {
+	match op {
+		BinOp::AddInt => Instruction::AddInt,
+		BinOp::SubInt => Instruction::SubInt,
+		BinOp::MulInt => Instruction::MulInt,
+		BinOp::DivInt => Instruction::DivInt,
+		BinOp::RemInt => Instruction::RemInt,
+		BinOp::AddFloat => Instruction::AddFloat,
+		BinOp::SubFloat => Instruction::SubFloat,
+		BinOp::MulFloat => Instruction::MulFloat,
+		BinOp::DivFloat => Instruction::DivFloat,
+		BinOp::RemFloat => Instruction::RemFloat,
+		BinOp::Concat => Instruction::ConcatString,
+		BinOp::And => Instruction::LogicalAnd,
+		BinOp::Or => Instruction::LogicalOr,
+		BinOp::Eq => Instruction::Eq,
+		BinOp::Ne => Instruction::Neq,
+		BinOp::Lt => Instruction::Lt,
+		BinOp::Le => Instruction::Lte,
+		BinOp::Gt => Instruction::Gt,
+		BinOp::Ge => Instruction::Gte,
+	}
 }
 
 fn lower_global(g: &GlobalInit) -> GlobalSlot {
