@@ -18,25 +18,96 @@ use compiler::Compiler;
 const IR_FIXTURES: &[&str] = &[
 	"arith-precedence",
 	"arithmetic",
+	"builtin-unknown-tag",
+	"builtin-uses-list-length",
 	"bytes-equality",
 	"bytes-escapes",
 	"bytes-literal",
+	"bytes-module-basics",
+	"bytes-module-from-list",
+	"bytes-module-search",
+	"bytes-module-split-join",
 	"bytes-pattern",
+	"bytes-string-bridge",
+	"closures-in-list",
+	"coalesce-option",
+	"coalesce-result",
 	"comparison-ops",
+	"core-list-extras",
+	"core-math-extras",
+	"core-string",
+	"deep-recursion",
+	"else-if-chain",
+	"empty-fun-body",
+	"equality-structural",
+	"expect-err",
+	"expect-none",
+	"expect-passthrough",
 	"factorial",
+	"fail-direct",
 	"fibonacci",
 	"float-arith",
 	"float-compare",
+	"generic-enum",
+	"hash-trait",
 	"hello",
+	"if-else-pattern",
 	"if-no-match",
+	"interpolation-complex",
+	"interpolation-nested-string",
+	"io-bytes-append",
+	"io-bytes-non-utf8",
+	"io-bytes-roundtrip",
+	"io-files",
+	"io-print",
+	"io-read-all",
+	"io-read-eof",
+	"io-read-lines",
+	"io-read-missing",
+	"io-write-bytes",
+	"json-basic",
+	"json-error",
+	"json-pretty",
 	"let-in-when",
+	"let-type-annotation",
+	"list-chained",
+	"list-contains",
+	"list-each",
+	"list-length",
+	"list-map-filter",
+	"list-reverse-concat",
+	"list-sort",
+	"list-spread",
+	"main-returns-err",
+	"main-returns-ok",
+	"main-try-propagates",
+	"math-builtins",
 	"mutual-recursion",
 	"negative-numbers",
+	"nested-enum",
+	"option-then-direct",
+	"ord-operators",
+	"pipeline",
+	"prelude-option",
+	"recursion",
+	"ref-basic",
+	"result-then-direct",
 	"string-concat",
 	"string-literal-pattern",
+	"string-parse",
+	"string-slice",
 	"string-with-escapes",
 	"subtract-after-call",
+	"time-basics",
+	"to-string-shapes",
+	"try-nested",
+	"try-option",
+	"try-result",
+	"try-wildcard",
 	"unary-minus",
+	"variant-as-value",
+	"when-else",
+	"when-enum",
 ];
 
 struct RunResult {
@@ -90,6 +161,7 @@ fn ir_coverage_report() {
 		.collect();
 	entries.sort();
 
+	let mut panicked = Vec::new();
 	for dir in &entries {
 		let name = dir.file_name().unwrap().to_string_lossy().to_string();
 		let Some(compiler) = compile_check(dir) else {
@@ -98,24 +170,38 @@ fn ir_coverage_report() {
 		let reference = run_program(codegen::compile(&compiler).expect("reference compile"));
 		match ir::lower(&compiler) {
 			Ok(ir_program) => {
-				let via_ir = run_program(codegen::compile_from_ir(&ir_program).expect("ir emit"));
-				if via_ir.status == reference.status && via_ir.stdout == reference.stdout {
-					matching.push(name);
-				} else {
-					diff += 1;
+				// Mis-lowered bytecode can trip a VM `unreachable!`; catch it so the
+				// report finishes and names the offender instead of crashing.
+				let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+					run_program(codegen::compile_from_ir(&ir_program).expect("ir emit"))
+				}));
+				match result {
+					Ok(via_ir) if via_ir.status == reference.status && via_ir.stdout == reference.stdout => {
+						matching.push(name)
+					}
+					Ok(_) => diff += 1,
+					Err(_) => panicked.push(name),
 				}
 			}
 			Err(_) => lower_err += 1,
 		}
 	}
 
+	let total = matching.len() as u32 + diff + lower_err + panicked.len() as u32;
 	println!(
-		"\nIR coverage: {} match / {} diff / {} lower-err  (of {} runnable fixtures)",
+		"\nIR coverage: {} match / {} diff / {} lower-err / {} PANIC  (of {} runnable fixtures)",
 		matching.len(),
 		diff,
 		lower_err,
-		matching.len() as u32 + diff + lower_err
+		panicked.len(),
+		total
 	);
+	if !panicked.is_empty() {
+		println!("PANICKING fixtures (mis-lowering bugs):");
+		for name in &panicked {
+			println!("  {name}");
+		}
+	}
 	println!("matching fixtures:");
 	for name in &matching {
 		println!("  {name}");

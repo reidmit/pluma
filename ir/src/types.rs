@@ -215,12 +215,22 @@ pub enum Rvalue {
 	/// lowering (a later pass) replaces field names with static slot indices.
 	MakeRecord(Vec<(String, Atom)>),
 	GetField(Atom, String),
-	/// Construct an enum variant.
+	/// Construct an enum variant with all its payload present.
 	MakeVariant {
 		enum_name: String,
 		tag: u32,
 		payload: Vec<Atom>,
 	},
+	/// A variant *constructor* value (for a variant with payload referenced
+	/// without all its arguments, e.g. bare `some` or `ok`). Calling it builds
+	/// the variant.
+	MakeVariantCtor {
+		enum_name: String,
+		tag: u32,
+	},
+	/// String interpolation: combine the parts (already `to-string`'d where
+	/// needed by the analyzer) into one string.
+	Interpolate(Vec<Atom>),
 	/// Read a variant's discriminant tag (for `Switch`).
 	GetTag(Atom),
 	/// Read field `index` of a variant's payload.

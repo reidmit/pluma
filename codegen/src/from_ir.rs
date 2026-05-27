@@ -9,9 +9,11 @@
 //
 // Phase 1.2, growing alongside `ir::lower`. Covers the node set the lowering
 // produces so far: literals/atoms, global refs, closures, calls, binary/unary
-// ops, dict-method dispatch, variant construction, structured control flow
-// (`If`/`Loop`/`Break`/`Continue`) and the pattern `Match`. Unsupported nodes
-// return an `Err` rather than emitting wrong bytecode, so gaps surface loudly.
+// ops, dict-method dispatch, variant construction (+ constructors), tuples,
+// records, lists (with spread), interpolation, field access, structured
+// control flow (`If`/`Loop`/`Break`/`Continue`) and the pattern `Match`.
+// Unsupported nodes return an `Err` rather than emitting wrong bytecode, so
+// gaps surface loudly.
 
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -19,7 +21,7 @@ use std::rc::Rc;
 use compiler::Range;
 use ir::{
 	Atom, BinOp, Block, Callee, Const, FieldPat, Function as IrFunction, GlobalInit, IrProgram,
-	Pattern, PreEval, Rvalue, Stmt, VarId,
+	ListItem, Pattern, PreEval, Rvalue, Stmt, VarId,
 };
 use vm::program::GlobalSlot;
 use vm::{Function, Instruction, Program, Value};
@@ -42,7 +44,7 @@ pub fn emit(program: &IrProgram) -> Result<Program, String> {
 		bytes_constants: e.bytes_constants,
 		regex_patterns: Vec::new(),
 		globals,
-		field_lists: Vec::new(),
+		field_lists: e.field_lists,
 		// Only used by codegen-time tooling / the test runner, never read by the
 		// VM at runtime. Left empty until `ir::lower` carries global names.
 		global_by_name: HashMap::new(),
@@ -64,8 +66,10 @@ struct Emitter {
 	const_lookup: HashMap<String, u32>,
 	bytes_constants: Vec<Rc<Vec<u8>>>,
 	bytes_lookup: HashMap<Vec<u8>, u32>,
+	// Record-shape field-name lists, indexed by FieldListIdx.
+	field_lists: Vec<Vec<u32>>,
 	// qualified-enum-name -> [(variant_name, arity)], for resolving a
-	// `MakeVariant` tag back to the variant name the VM wants.
+	// `MakeVariant`/`MakeVariantCtor` tag back to the variant name the VM wants.
 	enums: HashMap<String, Vec<(String, usize)>>,
 }
 
@@ -87,6 +91,12 @@ impl Emitter {
 		let idx = self.bytes_constants.len() as u32;
 		self.bytes_constants.push(Rc::new(b.to_vec()));
 		self.bytes_lookup.insert(b.to_vec(), idx);
+		idx
+	}
+
+	fn intern_field_list(&mut self, fields: Vec<u32>) -> u32 {
+		let idx = self.field_lists.len() as u32;
+		self.field_lists.push(fields);
 		idx
 	}
 
@@ -465,7 +475,105 @@ impl FnCtx {
 				}
 				push(body, ranges, Instruction::Call(args.len() as u16));
 			}
+			Rvalue::MakeVariantCtor { enum_name, tag } => {
+				let (variant_name, arity) = em
+					.enums
+					.get(enum_name)
+					.and_then(|vs| vs.get(*tag as usize))
+					.ok_or_else(|| format!("from_ir: unknown variant {enum_name}#{tag}"))?
+					.clone();
+				let qualified = em.intern(enum_name);
+				let variant = em.intern(&variant_name);
+				push(
+					body,
+					ranges,
+					Instruction::MakeVariantCtor {
+						qualified,
+						variant,
+						arity: arity as u16,
+					},
+				);
+			}
+			Rvalue::MakeTuple(elems) => {
+				for a in elems {
+					self.lower_atom(em, a, body, ranges)?;
+				}
+				push(body, ranges, Instruction::MakeTuple(elems.len() as u16));
+			}
+			Rvalue::MakeRecord(fields) => {
+				let mut idxs = Vec::with_capacity(fields.len());
+				for (name, value) in fields {
+					self.lower_atom(em, value, body, ranges)?;
+					idxs.push(em.intern(name));
+				}
+				let fields_idx = em.intern_field_list(idxs);
+				push(body, ranges, Instruction::MakeRecord(fields_idx));
+			}
+			Rvalue::MakeList(items) => self.lower_list(em, items, body, ranges)?,
+			Rvalue::GetField(receiver, name) => {
+				self.lower_atom(em, receiver, body, ranges)?;
+				let idx = em.intern(name);
+				push(body, ranges, Instruction::GetField(idx));
+			}
+			Rvalue::Interpolate(parts) => {
+				for a in parts {
+					self.lower_atom(em, a, body, ranges)?;
+				}
+				push(body, ranges, Instruction::Interpolate(parts.len() as u16));
+			}
 			other => return Err(format!("from_ir: unsupported rvalue: {other:?}")),
+		}
+		Ok(())
+	}
+
+	/// List literal lowering, mirroring `emit.rs`: a spread-free list is one
+	/// `MakeList`; a lone `[...xs]` is just `xs`; otherwise each run of plain
+	/// elements becomes a `MakeList` segment and each spread its own segment,
+	/// joined by `ConcatLists`.
+	fn lower_list(
+		&self,
+		em: &mut Emitter,
+		items: &[ListItem],
+		body: &mut Vec<Instruction>,
+		ranges: &mut Vec<Range>,
+	) -> Result<(), String> {
+		let any_spread = items.iter().any(|i| matches!(i, ListItem::Spread(_)));
+		if !any_spread {
+			for i in items {
+				if let ListItem::Elem(a) = i {
+					self.lower_atom(em, a, body, ranges)?;
+				}
+			}
+			push(body, ranges, Instruction::MakeList(items.len() as u16));
+		} else if items.len() == 1 {
+			if let ListItem::Spread(a) = &items[0] {
+				self.lower_atom(em, a, body, ranges)?;
+			}
+		} else {
+			let mut segments: u16 = 0;
+			let mut run: u16 = 0;
+			for i in items {
+				match i {
+					ListItem::Elem(a) => {
+						self.lower_atom(em, a, body, ranges)?;
+						run += 1;
+					}
+					ListItem::Spread(a) => {
+						if run > 0 {
+							push(body, ranges, Instruction::MakeList(run));
+							segments += 1;
+							run = 0;
+						}
+						self.lower_atom(em, a, body, ranges)?;
+						segments += 1;
+					}
+				}
+			}
+			if run > 0 {
+				push(body, ranges, Instruction::MakeList(run));
+				segments += 1;
+			}
+			push(body, ranges, Instruction::ConcatLists(segments));
 		}
 		Ok(())
 	}

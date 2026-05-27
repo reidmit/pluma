@@ -13,14 +13,16 @@
 // the two standalone pre-passes (enum table + global reservation); literals,
 // identifiers (local / capture / global), calls, `fun` (closure conversion),
 // `let`; operators (direct opcodes + trait dispatch via method dictionaries);
-// nullary variant construction; and control flow (`if`/`when`/`while` via a
-// pattern `Match`, supporting literal / nullary-variant / simple-payload
-// patterns). Forms not yet handled (variant constructors with payload, records,
-// tuples, lists, interpolation, trait instances, `defer`, async, ...) cause the
-// *enclosing def* to be lowered as a poison thunk (returns `nothing`) rather
-// than failing the whole program: a def whose executed paths only touch
-// supported forms runs correctly, so coverage grows fixture-by-fixture. `lower`
-// is not yet wired into `codegen` as the default.
+// control flow (`if`/`when`/`while` via a pattern `Match`); data construction
+// (variants + constructors, tuples, records, lists with spread, string
+// interpolation, field access); and namespace access (`module.value`,
+// `module.Enum.variant`) — which makes most stdlib calls work. Forms not yet
+// handled (regex, trait instances, constrained-value references, nested /
+// tuple / record / list patterns, `defer`, async, ...) cause the *enclosing
+// def* to be lowered as a poison thunk (returns `nothing`) rather than failing
+// the whole program: a def whose executed paths only touch supported forms runs
+// correctly, so coverage grows fixture-by-fixture. `lower` is not yet wired into
+// `codegen` as the default.
 
 use crate::types::*;
 use compiler::ast::{
@@ -56,6 +58,9 @@ struct Lowerer<'a> {
 	// The module currently being lowered — used to resolve same-module globals
 	// and bare variants.
 	current_module: String,
+	// Local-namespace-name -> qualified-module-name for the current module
+	// (explicit `use`s plus auto-imports), for resolving `module.value` etc.
+	imports: HashMap<String, String>,
 	// A single shared thunk for every unsupported def, built lazily.
 	poison: Option<FuncId>,
 }
@@ -130,6 +135,7 @@ impl<'a> Lowerer<'a> {
 			functions: Vec::new(),
 			scopes: Vec::new(),
 			current_module: String::new(),
+			imports: HashMap::new(),
 			poison: None,
 		}
 	}
@@ -171,6 +177,7 @@ impl<'a> Lowerer<'a> {
 
 	fn lower_module(&mut self, module: &str, ast: &ModuleNode) {
 		self.current_module = module.to_string();
+		self.imports = build_imports(ast);
 		for def in &ast.body {
 			match &def.kind {
 				DefinitionKind::Expr(expr) => {
@@ -241,8 +248,68 @@ impl<'a> Lowerer<'a> {
 		match &expr.kind {
 			ExprKind::Literal(lit) => Ok(Atom::Const(literal_to_const(&lit.kind)?)),
 			ExprKind::Grouping(inner) => self.lower_expr(inner),
-			ExprKind::Identifier(id) => self.lower_identifier(&id.name),
+			ExprKind::EmptyTuple => Ok(Atom::Const(Const::Unit)),
+			ExprKind::Identifier(id) => {
+				// A bare trait-method reference (`hash`) carries a dispatch cell.
+				if let Some(cell) = &expr.trait_dispatch {
+					return self.lower_dispatch(cell);
+				}
+				if has_undrained_dispatch(expr) {
+					return Err("constrained value reference not yet supported".to_string());
+				}
+				self.lower_identifier(&id.name)
+			}
 			ExprKind::Call(call) => self.lower_call(call),
+			ExprKind::Tuple(elems) => {
+				let mut atoms = Vec::with_capacity(elems.len());
+				for e in elems {
+					atoms.push(self.lower_expr(e)?);
+				}
+				Ok(self.emit_let(Rvalue::MakeTuple(atoms)))
+			}
+			ExprKind::List(items) => {
+				let mut ir_items = Vec::with_capacity(items.len());
+				for item in items {
+					let atom = self.lower_expr(item.expr())?;
+					ir_items.push(if item.is_spread() {
+						ListItem::Spread(atom)
+					} else {
+						ListItem::Elem(atom)
+					});
+				}
+				Ok(self.emit_let(Rvalue::MakeList(ir_items)))
+			}
+			ExprKind::Record(fields) => {
+				let mut ir_fields = Vec::with_capacity(fields.len());
+				for (name, value) in fields {
+					let atom = self.lower_expr(value)?;
+					ir_fields.push((name.name.clone(), atom));
+				}
+				Ok(self.emit_let(Rvalue::MakeRecord(ir_fields)))
+			}
+			ExprKind::Interpolation(parts) => {
+				let mut atoms = Vec::with_capacity(parts.len());
+				for p in parts {
+					atoms.push(self.lower_expr(p)?);
+				}
+				Ok(self.emit_let(Rvalue::Interpolate(atoms)))
+			}
+			ExprKind::FieldAccess { receiver, field } => {
+				// Record field access (namespace/variant shapes are
+				// `NamespaceAccess` by this point). If `receiver` is actually a
+				// namespace it won't lower as a value, poisoning the def.
+				let recv = self.lower_expr(receiver)?;
+				Ok(self.emit_let(Rvalue::GetField(recv, field.name.clone())))
+			}
+			ExprKind::NamespaceAccess(path) => {
+				if let Some(cell) = &expr.trait_dispatch {
+					return self.lower_dispatch(cell);
+				}
+				if has_undrained_dispatch(expr) {
+					return Err("constrained value reference not yet supported".to_string());
+				}
+				self.lower_namespace(path)
+			}
 			ExprKind::Fun(fun) => self.lower_fun(fun),
 			ExprKind::BinaryOperation { op, left, right } => {
 				self.lower_binary(expr.trait_dispatch.as_ref(), &op.kind, left, right)
@@ -265,15 +332,28 @@ impl<'a> Lowerer<'a> {
 				qualified,
 				variant,
 				arity,
-			} => {
-				if arity == 0 {
-					self.make_variant(&qualified, &variant, Vec::new())
-				} else {
-					// A constructor *value* (`some`, `ok`) used bare — needs
-					// MakeVariantCtor; not ported yet.
-					Err("variant constructor with payload not yet supported".to_string())
-				}
-			}
+			} => self.make_variant_ref(&qualified, &variant, arity),
+		}
+	}
+
+	/// A bare reference to a variant: a finished value for a nullary variant,
+	/// or a constructor value for one with payload.
+	fn make_variant_ref(
+		&mut self,
+		enum_name: &str,
+		variant: &str,
+		arity: usize,
+	) -> Result<Atom, String> {
+		if arity == 0 {
+			self.make_variant(enum_name, variant, Vec::new())
+		} else {
+			let tag = self
+				.variant_tag(enum_name, variant)
+				.ok_or_else(|| format!("unknown variant `{}` of `{}`", variant, enum_name))?;
+			Ok(self.emit_let(Rvalue::MakeVariantCtor {
+				enum_name: enum_name.to_string(),
+				tag,
+			}))
 		}
 	}
 
@@ -292,6 +372,60 @@ impl<'a> Lowerer<'a> {
 			tag,
 			payload,
 		}))
+	}
+
+	/// Lower a `NamespaceAccess` path: `module.value` (-> a global),
+	/// `module.Enum.variant` / `Enum.variant` (-> variant construction), or a
+	/// compiler-inserted fully-qualified `mod.name` reference.
+	fn lower_namespace(&mut self, path: &[compiler::ast::IdentifierNode]) -> Result<Atom, String> {
+		match path {
+			[module, enum_name, variant] => {
+				let qualified_module = self
+					.imports
+					.get(&module.name)
+					.ok_or_else(|| format!("`{}` is not an imported module", module.name))?
+					.clone();
+				let qualified_enum = format!("{}.{}", qualified_module, enum_name.name);
+				let arity = self.variant_arity(&qualified_enum, &variant.name)?;
+				self.make_variant_ref(&qualified_enum, &variant.name, arity)
+			}
+			[head, tail] => {
+				// A dotted head is an already-fully-qualified reference (e.g.
+				// `core.task.or-else`), resolved directly against globals.
+				if head.name.contains('.') {
+					if let Some(g) = self.globals.lookup(&head.name, &tail.name) {
+						return Ok(self.emit_let(Rvalue::GlobalRef(g)));
+					}
+					return Err(format!("`{}.{}` not found", head.name, tail.name));
+				}
+				// `module.value`.
+				if let Some(qualified_module) = self.imports.get(&head.name).cloned() {
+					if let Some(g) = self.globals.lookup(&qualified_module, &tail.name) {
+						return Ok(self.emit_let(Rvalue::GlobalRef(g)));
+					}
+				}
+				// `Enum.variant` for a local-module enum.
+				let qualified_enum = format!("{}.{}", self.current_module, head.name);
+				if self.enums.contains_key(&qualified_enum) {
+					let arity = self.variant_arity(&qualified_enum, &tail.name)?;
+					return self.make_variant_ref(&qualified_enum, &tail.name, arity);
+				}
+				Err(format!(
+					"`{}.{}` is neither an imported value nor a local variant",
+					head.name, tail.name
+				))
+			}
+			_ => Err(format!("namespace path with {} segments", path.len())),
+		}
+	}
+
+	fn variant_arity(&self, enum_name: &str, variant: &str) -> Result<usize, String> {
+		self
+			.enums
+			.get(enum_name)
+			.and_then(|vs| vs.iter().find(|(n, _)| n == variant))
+			.map(|(_, a)| *a)
+			.ok_or_else(|| format!("variant `{}` not in `{}`", variant, enum_name))
 	}
 
 	fn variant_tag(&self, enum_name: &str, variant: &str) -> Option<u32> {
@@ -948,6 +1082,34 @@ fn finish_scope(scope: FnScope) -> Function {
 		is_async: scope.is_async,
 		body: Block(scope.stmts),
 	}
+}
+
+/// Build the module's local-namespace -> qualified-module map: explicit `use`
+/// declarations plus the auto-imported modules (unless shadowed). Mirrors
+/// `codegen::emit::compile_module`.
+fn build_imports(ast: &ModuleNode) -> HashMap<String, String> {
+	let mut imports: HashMap<String, String> = ast
+		.uses
+		.iter()
+		.map(|u| (u.local_name().name.clone(), u.module_name()))
+		.collect();
+	for (full, local) in compiler::AUTO_IMPORTS {
+		imports
+			.entry(local.to_string())
+			.or_insert_with(|| full.to_string());
+	}
+	imports
+}
+
+/// True when an expression carries an undrained dispatch sink — a
+/// trait-constrained value referenced in value position (not directly called),
+/// which needs its dictionaries pre-applied. Not ported yet, so such sites
+/// poison their def. Mirrors `codegen::emit::undrained_dispatch_cells`.
+fn has_undrained_dispatch(expr: &ExprNode) -> bool {
+	expr
+		.dispatch_sink
+		.as_ref()
+		.map_or(false, |sink| !sink.borrow().is_empty())
 }
 
 /// Map a concrete (non-dispatched) operator to its IR `BinOp`. `is_float`
