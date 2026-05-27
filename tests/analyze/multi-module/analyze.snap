@@ -12,7 +12,7 @@ module `main` (tests/analyze/multi-module/main.pa) {
                 name: ident(2:4-2:8) `four`,
                 kind: expr(2:11-2:23) :: int {
                     kind: call(2:11-2:23) {
-                        callee: expr(2:11-2:19) :: 'z 'z -> 'z {
+                        callee: expr(2:11-2:19) :: 't0 't0 -> 't0 {
                             kind: namespace-access `math.add`,
                         },
                         args: [
@@ -33,7 +33,7 @@ module `main` (tests/analyze/multi-module/main.pa) {
                 name: ident(4:4-4:9) `eight`,
                 kind: expr(4:12-4:25) :: int {
                     kind: call(4:12-4:25) {
-                        callee: expr(4:12-4:23) :: 't1 -> 't1 {
+                        callee: expr(4:12-4:23) :: 't2 -> 't2 {
                             kind: namespace-access `math.double`,
                         },
                         args: [
@@ -51,7 +51,7 @@ module `main` (tests/analyze/multi-module/main.pa) {
                 name: ident(6:4-6:7) `num`,
                 kind: expr(6:10-6:25) :: int {
                     kind: call(6:10-6:25) {
-                        callee: expr(6:10-6:23) :: 't3 -> 't3 {
+                        callee: expr(6:10-6:23) :: 't4 -> 't4 {
                             kind: namespace-access `math.identity`,
                         },
                         args: [
@@ -66,7 +66,7 @@ module `main` (tests/analyze/multi-module/main.pa) {
                 name: ident(8:4-8:8) `text`,
                 kind: expr(8:11-8:32) :: string {
                     kind: call(8:11-8:32) {
-                        callee: expr(8:11-8:24) :: 't5 -> 't5 {
+                        callee: expr(8:11-8:24) :: 't6 -> 't6 {
                             kind: namespace-access `math.identity`,
                         },
                         args: [

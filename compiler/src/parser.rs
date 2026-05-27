@@ -694,6 +694,15 @@ impl<'a> Parser<'a> {
 				trait_dispatch: None,
 				dispatch_sink: None,
 			}),
+			Some(Token::KeywordScope(..)) | Some(Token::KeywordManual(..)) => {
+				self.parse_scope_expression().map(|scope_node| ExprNode {
+					range: scope_node.range,
+					kind: ExprKind::Scope(scope_node),
+					ty: Type::Unknown,
+					trait_dispatch: None,
+					dispatch_sink: None,
+				})
+			}
 			Some(Token::KeywordDefer(..)) => self.parse_defer(),
 			Some(Token::KeywordFun(..)) => self.parse_fun().map(|fun_node| ExprNode {
 				range: fun_node.range,
@@ -1129,6 +1138,42 @@ impl<'a> Parser<'a> {
 			range: Range::between(start, end),
 			subject: Box::new(subject),
 			pattern,
+			body,
+		})
+	}
+
+	// `scope (as IDENT)? { body }` or `manual scope as IDENT { body }`. The
+	// `manual` prefix (if present) is consumed first; the body parses like any
+	// block body, so `try`/`let`/`defer` work inside.
+	fn parse_scope_expression(&mut self) -> Option<ScopeNode> {
+		let manual_start = if let Some(Token::KeywordManual(s, _)) = self.current_token {
+			self.advance();
+			Some(self.offset_to_point(s))
+		} else {
+			None
+		};
+		let manual = manual_start.is_some();
+
+		let (scope_start, _) = expect_token_and_advance!(self, Token::KeywordScope);
+		let start = manual_start.unwrap_or(scope_start);
+
+		let handle = if matches!(self.current_token, Some(Token::KeywordAs(..))) {
+			self.advance();
+			Some(self.expect_identifier()?)
+		} else {
+			None
+		};
+
+		expect_token_and_advance!(self, Token::LeftBrace);
+
+		let body = self.parse_body_expressions()?;
+
+		let (_, end) = expect_token_and_advance!(self, Token::RightBrace);
+
+		Some(ScopeNode {
+			range: Range::between(start, end),
+			manual,
+			handle,
 			body,
 		})
 	}

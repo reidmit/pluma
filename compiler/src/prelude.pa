@@ -64,6 +64,24 @@ public enum result a b {
 public enum task a {
 }
 
+# The handle bound by `scope as s` (the fail-fast form) -- your control surface
+# for the tasks the scope owns. You never construct one (no surface
+# constructors); the `scope` keyword hands you one inside the block. Its
+# methods: `s.spawn t` starts a task (of *any* type -- a fail-fast scope's
+# children are heterogeneous, awaited individually via `try`), `s.cancel ()`
+# cancels the scope, and `s.cancel-after d` arms a deadline. See ASYNC.md.
+public enum scope-handle {
+}
+
+# The handle bound by `manual scope as s`. Unlike `scope-handle`, it's
+# parameterized by its children's type `a`: a manual scope's children are
+# homogeneous, because you drain their completions one at a time with `s.next
+# ()` (which yields `some (result a e)` per completion, then `none`). That's
+# what `race` / `any` / `pool` are built on. Also supports `s.spawn t`,
+# `s.cancel ()`, `s.cancel-after d`. See ASYNC.md.
+public enum manual-handle a {
+}
+
 # The answer to "how do these two compare?" -- `lt` (the first is
 # smaller), `eq` (they're equal), or `gt` (the first is bigger). Compare
 # functions return one of these, and `list.sort` uses them to decide the

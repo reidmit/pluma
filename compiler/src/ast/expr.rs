@@ -94,6 +94,12 @@ pub enum ExprKind {
 	If(IfNode),
 	When(WhenNode),
 	While(WhileNode),
+
+	/// `scope (as s)? { body }` / `manual scope as s { body }` — structured
+	/// concurrency (ASYNC.md Phase 4). The analyzer rewrites this into a call
+	/// to the hidden `task.scope-new` kernel builtin, so it never survives to
+	/// codegen.
+	Scope(ScopeNode),
 }
 
 /// One entry in a list literal: either a single element or a spliced
@@ -252,6 +258,10 @@ impl std::fmt::Debug for ExprKind {
 
 			While(while_node) => {
 				write!(f, "{:#?}", while_node)
+			}
+
+			Scope(scope_node) => {
+				write!(f, "{:#?}", scope_node)
 			}
 		}
 	}

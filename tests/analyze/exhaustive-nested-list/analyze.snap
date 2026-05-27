@@ -11,10 +11,10 @@ module `main` (tests/analyze/exhaustive-nested-list/main.pa) {
         module(3:0-22:1) [
             def(3:0-9:1) :: nothing {
                 name: ident(3:4-3:14) `first-pair`,
-                kind: expr(3:17-9:1) :: (list (('t1, 't2))) -> string {
+                kind: expr(3:17-9:1) :: (list (('t2, 't3))) -> string {
                     kind: fun(3:17-9:1) {
                         params: [
-                            ident(3:21-3:23) `xs` :: list (('t1, 't2)),
+                            ident(3:21-3:23) `xs` :: list (('t2, 't3)),
                         ],
                         body: [
                             expr(4:1-8:2) :: string {
@@ -54,11 +54,11 @@ module `main` (tests/analyze/exhaustive-nested-list/main.pa) {
                                                 },
                                                 expr(7:5-7:16) :: string {
                                                     kind: call(7:5-7:16) {
-                                                        callee: expr(7:5-7:14) :: 't1 -> string {
+                                                        callee: expr(7:5-7:14) :: 't2 -> string {
                                                             kind: ident(7:5-7:14) `to-string`,
                                                         },
                                                         args: [
-                                                            expr(7:15-7:16) :: 't1 {
+                                                            expr(7:15-7:16) :: 't2 {
                                                                 kind: ident(7:15-7:16) `a`,
                                                             },
                                                         ],
@@ -69,11 +69,11 @@ module `main` (tests/analyze/exhaustive-nested-list/main.pa) {
                                                 },
                                                 expr(7:20-7:31) :: string {
                                                     kind: call(7:20-7:31) {
-                                                        callee: expr(7:20-7:29) :: 't2 -> string {
+                                                        callee: expr(7:20-7:29) :: 't3 -> string {
                                                             kind: ident(7:20-7:29) `to-string`,
                                                         },
                                                         args: [
-                                                            expr(7:30-7:31) :: 't2 {
+                                                            expr(7:30-7:31) :: 't3 {
                                                                 kind: ident(7:30-7:31) `b`,
                                                             },
                                                         ],

@@ -460,6 +460,7 @@ impl<'a> Formatter<'a> {
 			If(i) => self.format_if(i),
 			When(w) => self.format_when(w),
 			While(w) => self.format_while(w),
+			Scope(s) => self.format_scope(s),
 			Builtin(tag) => concat(vec![text("built-in \""), text(tag.clone()), text("\"")]),
 		}
 	}
@@ -832,6 +833,21 @@ impl<'a> Formatter<'a> {
 			text(" "),
 			self.format_block(&w.body),
 		])
+	}
+
+	fn format_scope(&self, s: &ScopeNode) -> Doc {
+		let mut parts: Vec<Doc> = Vec::new();
+		if s.manual {
+			parts.push(text("manual "));
+		}
+		parts.push(text("scope"));
+		if let Some(handle) = &s.handle {
+			parts.push(text(" as "));
+			parts.push(text(handle.name.clone()));
+		}
+		parts.push(text(" "));
+		parts.push(self.format_block(&s.body));
+		concat(parts)
 	}
 
 	// A `{ ... }` block used for if/when/while branches. Lays flat when

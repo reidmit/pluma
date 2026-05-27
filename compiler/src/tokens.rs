@@ -156,6 +156,14 @@ pub enum Token {
 	/// `let` keyword
 	KeywordLet(usize, usize),
 
+	/// `scope` keyword (structured-concurrency block)
+	KeywordScope(usize, usize),
+
+	/// `manual` keyword — the prefix modifier for `manual scope` (the
+	/// non-fail-fast scope form). A reserved word; only meaningful directly
+	/// before `scope`.
+	KeywordManual(usize, usize),
+
 	/// `opaque` keyword (visibility: export an enum's type but hide its
 	/// constructors)
 	KeywordOpaque(usize, usize),
@@ -339,6 +347,8 @@ impl Token {
 			| KeywordIn(start, end)
 			| KeywordIs(start, end)
 			| KeywordLet(start, end)
+			| KeywordScope(start, end)
+			| KeywordManual(start, end)
 			| KeywordOpaque(start, end)
 			| KeywordPublic(start, end)
 			| KeywordTrait(start, end)
@@ -383,9 +393,10 @@ impl Token {
 
 		match self {
 			Identifier(..) | KeywordBuiltin(..) | KeywordFun(..) | KeywordIf(..) | KeywordWhen(..)
-			| DecimalDigits(..) | DurationLiteral(..) | HexDigits(..) | BinaryDigits(..)
-			| OctalDigits(..) | LeftParen(..) | LeftBracket(..) | LeftBrace(..) | Backtick(..)
-			| StringLiteral(..) | BytesLiteral(..) | BoolTrue(..) | BoolFalse(..) | UnaryMinus(..) => true,
+			| KeywordScope(..) | KeywordManual(..) | DecimalDigits(..) | DurationLiteral(..)
+			| HexDigits(..) | BinaryDigits(..) | OctalDigits(..) | LeftParen(..) | LeftBracket(..)
+			| LeftBrace(..) | Backtick(..) | StringLiteral(..) | BytesLiteral(..) | BoolTrue(..)
+			| BoolFalse(..) | UnaryMinus(..) => true,
 			_ => false,
 		}
 	}
@@ -444,6 +455,8 @@ impl fmt::Display for Token {
 			&KeywordIn(..) => "keyword `in`",
 			&KeywordIs(..) => "keyword `is`",
 			&KeywordLet(..) => "keyword `let`",
+			&KeywordScope(..) => "keyword `scope`",
+			&KeywordManual(..) => "keyword `manual`",
 			&KeywordOpaque(..) => "keyword `opaque`",
 			&KeywordPublic(..) => "keyword `public`",
 			&KeywordTrait(..) => "keyword `trait`",

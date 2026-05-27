@@ -585,6 +585,12 @@ impl Resolver {
 					self.walk_expr(e, inner);
 				}
 			}
+			ExprKind::Scope(s) => {
+				let inner = Some(s.range);
+				for e in &s.body {
+					self.walk_expr(e, inner);
+				}
+			}
 			ExprKind::Try(t) => {
 				let inner = Some(t.range);
 				self.bind_pattern(&t.pattern, inner);

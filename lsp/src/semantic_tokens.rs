@@ -460,6 +460,11 @@ impl AstWalker {
 					self.walk_expr(e, out);
 				}
 			}
+			ExprKind::Scope(s) => {
+				for e in &s.body {
+					self.walk_expr(e, out);
+				}
+			}
 			ExprKind::NamespaceAccess(_) => {
 				// semantic-tokens runs on parser output (see collect_semantic_tokens),
 				// which only produces FieldAccess; NamespaceAccess is created later

@@ -6,10 +6,11 @@
 // globals; closures capture their free vars explicitly.
 
 use compiler::ast::{
-	CallNode, DefinitionKind, ExprKind, ExprNode, FunNode, IdentifierNode, IfNode, LetNode, ListItem,
-	LiteralKind, ModuleNode, Operator, PatternKind, PatternNode, RegexAnchor, RegexKind, RegexNode,
-	TryNode, WhenNode, WhileNode,
+	CallNode, DefinitionKind, ExprKind, ExprNode, FunNode, FunParamNode, IdentifierNode, IfNode,
+	LetNode, ListItem, LiteralKind, ModuleNode, Operator, PatternKind, PatternNode, RegexAnchor,
+	RegexKind, RegexNode, ScopeNode, TryNode, WhenNode, WhileNode,
 };
+use compiler::types::Type;
 use compiler::Range;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -1545,6 +1546,19 @@ fn emit_expr_with_parents(
 				range,
 			)?;
 		}
+		ExprKind::Scope(node) => {
+			emit_scope(
+				cg,
+				current_module,
+				imports,
+				fb,
+				scope,
+				parent_scopes,
+				node,
+				range,
+				tail,
+			)?;
+		}
 		ExprKind::ElementAccess { .. } => {
 			return Err("codegen: ElementAccess not implemented".into());
 		}
@@ -2046,6 +2060,60 @@ fn emit_fun(
 	Ok(())
 }
 
+// Lower a `scope` block to `task.scope-new <manual> (fun handle { body })`:
+// push the kernel builtin, the manual flag, and the body-as-closure, then call.
+// The body becomes its own closure frame (so its `try`s suspend within the
+// scope's child fiber, not this one); the runtime driver creates the scope and
+// runs that closure when the resulting task is awaited. See `vm::task`.
+fn emit_scope(
+	cg: &mut CodeGen,
+	current_module: &str,
+	imports: &HashMap<String, String>,
+	fb: &mut FunctionBuilder,
+	scope: &mut Scope,
+	parent_scopes: &mut Vec<*mut Scope>,
+	node: &ScopeNode,
+	range: Range,
+	tail: bool,
+) -> Result<(), String> {
+	let g = cg
+		.lookup_global("core.task", "scope-new")
+		.ok_or("codegen: `core.task.scope-new` not found")?;
+	fb.emit(Instruction::LoadGlobal(g), range);
+	fb.emit(Instruction::LoadBool(node.manual), range);
+
+	// The body closure's parameter carries the `scope as NAME` handle name so
+	// the body's `s.*` references resolve to it; an anonymous scope gets an
+	// unreferenced synthetic parameter.
+	let handle_ident = node.handle.clone().unwrap_or_else(|| IdentifierNode {
+		name: "__scope".to_string(),
+		range,
+	});
+	let params = [FunParamNode {
+		ident: handle_ident,
+		ty: Type::Nothing,
+	}];
+	emit_fun(
+		cg,
+		current_module,
+		imports,
+		fb,
+		scope,
+		parent_scopes,
+		&params,
+		&node.body,
+		range,
+	)?;
+
+	let instr = if tail {
+		Instruction::TailCall(2)
+	} else {
+		Instruction::Call(2)
+	};
+	fb.emit(instr, range);
+	Ok(())
+}
+
 // Is this function body async-bearing — i.e. does it directly await a task?
 // True iff it contains a task-carrier `try` in its *own* frame. Crucially we
 // do NOT descend into nested `Fun`s: those are separate functions whose own
@@ -2101,6 +2169,10 @@ fn expr_is_async(expr: &ExprNode) -> bool {
 		ExprKind::While(WhileNode { subject, body, .. }) => {
 			expr_is_async(subject) || body.iter().any(expr_is_async)
 		}
+		// A `scope` block's body becomes its own closure frame (lowered in
+		// `emit_scope`), so its internal `try`s don't make *this* frame async —
+		// like a nested `Fun`. The scope expression itself just builds a task.
+		ExprKind::Scope(_) => false,
 		ExprKind::Identifier(_)
 		| ExprKind::Literal(_)
 		| ExprKind::Regex(_)

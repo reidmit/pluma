@@ -309,12 +309,77 @@ fn collect_dispatch_cells(expr: &ExprNode, cells: &mut Vec<DispatchCell>) {
 				collect_dispatch_cells(e, cells);
 			}
 		}
+		ExprKind::Scope(ScopeNode { body, .. }) => {
+			for e in body {
+				collect_dispatch_cells(e, cells);
+			}
+		}
 		ExprKind::Identifier(_)
 		| ExprKind::Literal(_)
 		| ExprKind::Regex(_)
 		| ExprKind::EmptyTuple
 		| ExprKind::Builtin(_)
 		| ExprKind::NamespaceAccess(_) => {}
+	}
+}
+
+// The prelude `scope-handle` type — bound by the fail-fast `scope as s`. A
+// variant-less prelude enum (like `task`); the runtime carries a native
+// `Value::ScopeHandle`. No type params (its children are heterogeneous).
+pub fn scope_handle_type() -> Type {
+	Type::Enum("__prelude__.scope-handle".to_string(), vec![])
+}
+
+// The prelude `manual-handle a` type — bound by `manual scope as s`. Carries
+// the homogeneous child type `a` so `s.next` can return it.
+pub fn manual_handle_type(elem: Type) -> Type {
+	Type::Enum("__prelude__.manual-handle".to_string(), vec![elem])
+}
+
+// Which kind of scope handle a binding is. They expose slightly different
+// method sets and lower to different (but runtime-identical) kernel defs.
+#[derive(Clone, Copy, PartialEq)]
+enum HandleKind {
+	Scope,
+	Manual,
+}
+
+// The ML value restriction: a `let` binding may be generalized only when its
+// RHS is a *syntactic value* — something that performs no computation and so
+// can't observe/capture an effect. Variables, literals, lambdas, namespace/
+// builtin references, and aggregates built solely from values qualify;
+// function applications (`f x`, `s.spawn t`, `ref.new x`), field/element
+// access, operators, and control flow do not.
+fn is_syntactic_value(e: &ExprNode) -> bool {
+	match &e.kind {
+		ExprKind::Fun(_)
+		| ExprKind::Literal(_)
+		| ExprKind::Regex(_)
+		| ExprKind::EmptyTuple
+		| ExprKind::Identifier(_)
+		| ExprKind::NamespaceAccess(_)
+		| ExprKind::Builtin(_) => true,
+		ExprKind::Grouping(inner) => is_syntactic_value(inner),
+		ExprKind::Tuple(es) => es.iter().all(is_syntactic_value),
+		ExprKind::List(items) => items.iter().all(|i| is_syntactic_value(i.expr())),
+		ExprKind::Record(fields) => fields.iter().all(|(_, v)| is_syntactic_value(v)),
+		_ => false,
+	}
+}
+
+// Maps a scope-handle method name + handle kind to the `core.task` kernel def
+// it lowers to. `None` if the method isn't valid on that handle (e.g. `next`
+// on a fail-fast scope), so it falls through to the normal record/error path.
+fn scope_method_def(method: &str, kind: HandleKind) -> Option<&'static str> {
+	match (kind, method) {
+		(HandleKind::Scope, "spawn") => Some("scope-spawn"),
+		(HandleKind::Scope, "cancel") => Some("scope-cancel"),
+		(HandleKind::Scope, "cancel-after") => Some("scope-cancel-after"),
+		(HandleKind::Manual, "spawn") => Some("manual-spawn"),
+		(HandleKind::Manual, "cancel") => Some("manual-cancel"),
+		(HandleKind::Manual, "cancel-after") => Some("manual-cancel-after"),
+		(HandleKind::Manual, "next") => Some("manual-next"),
+		_ => None,
 	}
 }
 
@@ -1923,8 +1988,107 @@ impl<'compiler> Analyzer<'compiler> {
 		}
 	}
 
+	// If `name` is bound (in the current scopes) to a scope handle — a
+	// monomorphic `scope-handle` or `manual-handle a` — returns which kind.
+	// `None` otherwise. (How `scope as NAME` / `manual scope as NAME` bind.)
+	fn handle_kind_of_binding(&mut self, name: &String) -> Option<HandleKind> {
+		match self.get_value_binding(name) {
+			Some(ValueBinding {
+				ty_scheme: Scheme::Forall(vars, rows, classes, Type::Enum(n, _)),
+				..
+			}) if vars.is_empty() && rows.is_empty() && classes.is_empty() => match n.as_str() {
+				"__prelude__.scope-handle" => Some(HandleKind::Scope),
+				"__prelude__.manual-handle" => Some(HandleKind::Manual),
+				_ => None,
+			},
+			_ => None,
+		}
+	}
+
+	// Rewrite a scope-handle method call `s.method args` into a call to the
+	// corresponding `task.scope-*` kernel builtin with `s` prepended:
+	// `s.spawn t` -> `task.scope-spawn s t`. No-op for anything else.
+	fn maybe_rewrite_scope_method(&mut self, expr: &mut ExprNode) {
+		// Resolve to the kernel def name iff this is `handle.method args` with a
+		// scope-handle receiver and a method valid for that handle kind.
+		let def_name: Option<&'static str> = match &expr.kind {
+			ExprKind::Call(call) => match &call.callee.kind {
+				ExprKind::FieldAccess { receiver, field } => match &receiver.kind {
+					ExprKind::Identifier(id) => self
+						.handle_kind_of_binding(&id.name)
+						.and_then(|kind| scope_method_def(&field.name, kind)),
+					_ => None,
+				},
+				_ => None,
+			},
+			_ => None,
+		};
+		let def_name = match def_name {
+			Some(d) => d,
+			None => return,
+		};
+
+		let (callee, mut args, dict_args, crange) =
+			match std::mem::replace(&mut expr.kind, ExprKind::EmptyTuple) {
+				ExprKind::Call(CallNode {
+					callee,
+					args,
+					dict_args,
+					range,
+				}) => (callee, args, dict_args, range),
+				_ => unreachable!(),
+			};
+		let (receiver, field) = match callee.kind {
+			ExprKind::FieldAccess { receiver, field } => (*receiver, field),
+			_ => unreachable!(),
+		};
+
+		// New callee: `task.<def_name>` as a field access on the auto-imported
+		// `task` namespace; the normal FieldAccess dispatch resolves it to the
+		// kernel builtin's global.
+		let new_callee = ExprNode {
+			ty: Type::Unknown,
+			range: field.range,
+			kind: ExprKind::FieldAccess {
+				receiver: Box::new(ExprNode {
+					ty: Type::Unknown,
+					range: field.range,
+					kind: ExprKind::Identifier(IdentifierNode {
+						name: "task".to_string(),
+						range: field.range,
+					}),
+					trait_dispatch: None,
+					dispatch_sink: None,
+				}),
+				field: IdentifierNode {
+					name: def_name.to_string(),
+					range: field.range,
+				},
+			},
+			trait_dispatch: None,
+			dispatch_sink: None,
+		};
+
+		let mut new_args = Vec::with_capacity(args.len() + 1);
+		new_args.push(receiver);
+		new_args.append(&mut args);
+
+		expr.kind = ExprKind::Call(CallNode {
+			range: crange,
+			callee: Box::new(new_callee),
+			args: new_args,
+			dict_args,
+		});
+	}
+
 	fn constrain_expr(&mut self, expr: &mut ExprNode, constraints: &mut Vec<Constraint>) {
 		use Constraint::*;
+
+		// `scope`-handle method calls (`s.spawn t`, `s.cancel ()`, …) rewrite
+		// into calls to the hidden `task.scope-*` kernel builtins, with the
+		// handle prepended as the first argument. Done before the main match so
+		// the rewritten call is type-checked + lowered like any other call.
+		self.maybe_rewrite_scope_method(expr);
 
 		match &mut expr.kind {
 			// For each of these, we don't bother introducing a new type var and generating
@@ -2446,12 +2610,16 @@ impl<'compiler> Analyzer<'compiler> {
 
 				match &mut pattern.kind {
 					PatternKind::Identifier(name) => {
-						// Top-level identifier binding. Preserve mono-vs-poly: if the
-						// value's type is fully concrete, bind monomorphically so
-						// subsequent uses see the resolved type at constraint-gen
-						// time; otherwise defer via Gen/Inst so the binding can be
-						// polymorphic.
-						if value.ty.free_vars().is_empty() {
+						// Mono-vs-poly. Generalize (Gen/Inst, so the binding can be
+						// polymorphic) only when BOTH the value's type still has free
+						// vars AND the RHS is a syntactic value — the ML *value
+						// restriction*. A non-value RHS (a function application like
+						// `s.spawn t`, `ref.new x`, …) binds monomorphically: its free
+						// vars are determined by the surrounding context, so quantifying
+						// them would wrongly decouple the binding from its inputs (and is
+						// unsound for effectful/aliasing results). A concrete-typed value
+						// also binds monomorphically so later uses see the resolved type.
+						if value.ty.free_vars().is_empty() || !is_syntactic_value(value) {
 							self.add_value_binding(
 								name.name.clone(),
 								Scheme::Forall(vec![], vec![], vec![], value.ty.clone()),
@@ -2479,6 +2647,62 @@ impl<'compiler> Analyzer<'compiler> {
 				// beyond being internally well-typed. `defer` itself is `nothing`.
 				self.constrain_expr(inner, constraints);
 				expr.ty = Type::Nothing;
+			}
+
+			ExprKind::Scope(_) => {
+				// Bind the handle to `scope-handle` (monomorphic) so method
+				// calls on it dispatch at constrain time, then constrain the
+				// body like a function body. The body must produce a `task a`;
+				// the whole `scope` expression has that `task a` type.
+				let (manual, handle, mut body, srange) =
+					match std::mem::replace(&mut expr.kind, ExprKind::EmptyTuple) {
+						ExprKind::Scope(ScopeNode {
+							manual,
+							handle,
+							body,
+							range,
+						}) => (manual, handle, body, range),
+						_ => unreachable!(),
+					};
+
+				expr.ty = self.new_type_var();
+
+				self.enter_scope();
+				if let Some(h) = &handle {
+					// Fail-fast `scope` binds an unparameterized `scope-handle`
+					// (heterogeneous children); `manual scope` binds a
+					// `manual-handle a` whose `a` is fixed by `s.spawn`/`s.next`.
+					let handle_ty = if manual {
+						manual_handle_type(self.new_type_var())
+					} else {
+						scope_handle_type()
+					};
+					self.add_value_binding(
+						h.name.clone(),
+						Scheme::Forall(vec![], vec![], vec![], handle_ty),
+						h.range,
+					);
+				}
+
+				let mut body_ty = Type::Nothing;
+				for e in body.iter_mut() {
+					self.constrain_expr(e, constraints);
+					body_ty = e.ty.clone();
+				}
+				self.leave_scope();
+
+				// The body must produce a task; the scope expression is that task.
+				let alpha = self.new_type_var();
+				let task_ty = Type::Enum("__prelude__.task".to_string(), vec![alpha]);
+				constraints.push(eq_constraint(body_ty, task_ty.clone()).at(srange));
+				constraints.push(eq_constraint(expr.ty.clone(), task_ty).at(srange));
+
+				expr.kind = ExprKind::Scope(ScopeNode {
+					range: srange,
+					manual,
+					handle,
+					body,
+				});
 			}
 
 			ExprKind::ElementAccess { receiver, index } => {
@@ -4201,6 +4425,11 @@ impl<'compiler> Analyzer<'compiler> {
 					self.report_unresolved_try_in_expr(e, subst);
 				}
 			}
+			ExprKind::Scope(ScopeNode { body, .. }) => {
+				for e in body.iter_mut() {
+					self.report_unresolved_try_in_expr(e, subst);
+				}
+			}
 			ExprKind::Grouping(inner) => {
 				self.report_unresolved_try_in_expr(inner, subst);
 			}
@@ -4334,6 +4563,11 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 			ExprKind::While(WhileNode { subject, body, .. }) => {
 				self.dispatch_try_in_expr(subject, subst, new_constraints, dispatched_any);
+				for e in body.iter_mut() {
+					self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any);
+				}
+			}
+			ExprKind::Scope(ScopeNode { body, .. }) => {
 				for e in body.iter_mut() {
 					self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any);
 				}
@@ -4846,6 +5080,12 @@ impl<'compiler> Analyzer<'compiler> {
 
 			ExprKind::While(WhileNode { subject, body, .. }) => {
 				self.annotate_expr(subject, subst);
+				for body_expr in body.iter_mut() {
+					self.annotate_expr(body_expr, subst);
+				}
+			}
+
+			ExprKind::Scope(ScopeNode { body, .. }) => {
 				for body_expr in body.iter_mut() {
 					self.annotate_expr(body_expr, subst);
 				}

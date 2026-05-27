@@ -17,13 +17,13 @@ module `main` (tests/analyze/let-polymorphism/main.pa) {
                                     pattern: pattern(1:5-1:13) Identifier(
                                         ident(1:5-1:13) `identity`,
                                     ),
-                                    value: expr(1:16-1:27) :: 'u -> 'u {
+                                    value: expr(1:16-1:27) :: 'v -> 'v {
                                         kind: fun(1:16-1:27) {
                                             params: [
-                                                ident(1:20-1:21) `x` :: 'u,
+                                                ident(1:20-1:21) `x` :: 'v,
                                             ],
                                             body: [
-                                                expr(1:24-1:25) :: 'u {
+                                                expr(1:24-1:25) :: 'v {
                                                     kind: ident(1:24-1:25) `x`,
                                                 },
                                             ],

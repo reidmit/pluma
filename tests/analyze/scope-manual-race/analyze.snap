@@ -1,0 +1,264 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/scope-manual-race/main.pa) {
+    comments: {
+        0: " A `manual scope`: spawn everything, drain the first completion via `s.next`,",
+        1: " then `s.cancel` the losers. Exercises manual-scope typing and the `s.next` /",
+        2: " `s.cancel` handle methods, plus `s.spawn` inside a nested closure.",
+    },
+    ast: Some(
+        module(3:0-21:1) [
+            use(3:0-3:13) `core.list`,
+        ] [
+            def(5:0-16:1) :: nothing {
+                name: ident(5:4-5:8) `race`,
+                kind: expr(5:11-16:1) :: (list (task 't46)) -> task 't46 {
+                    kind: fun(5:11-16:1) {
+                        params: [
+                            ident(5:15-5:17) `ts` :: list (task 't46),
+                        ],
+                        body: [
+                            expr(6:1-15:2) :: task 't46 {
+                                kind: scope(6:1-15:2) {
+                                    manual: true,
+                                    handle: Some(
+                                        ident(6:17-6:18) `s`,
+                                    ),
+                                    body: [
+                                        expr(7:2-7:43) :: nothing {
+                                            kind: let(7:2-7:43) {
+                                                pattern: pattern(7:6-7:7) Underscore,
+                                                value: expr(7:10-7:43) :: list (task 't46) {
+                                                    kind: call(7:10-7:43) {
+                                                        callee: expr(7:10-7:18) :: (list 't0) ('t0 -> 't1) -> list 't1 {
+                                                            kind: namespace-access `list.map`,
+                                                        },
+                                                        args: [
+                                                            expr(7:19-7:21) :: list (task 't46) {
+                                                                kind: ident(7:19-7:21) `ts`,
+                                                            },
+                                                            expr(7:22-7:43) :: (task 't46) -> task 't46 {
+                                                                kind: expr(7:23-7:42) :: (task 't46) -> task 't46 {
+                                                                    kind: fun(7:23-7:42) {
+                                                                        params: [
+                                                                            ident(7:27-7:28) `t` :: task 't46,
+                                                                        ],
+                                                                        body: [
+                                                                            expr(7:31-7:40) :: task 't46 {
+                                                                                kind: call(7:31-7:40) {
+                                                                                    callee: expr(7:33-7:38) :: (manual-handle 't6) (task 't6) -> task 't6 {
+                                                                                        kind: namespace-access `task.manual-spawn`,
+                                                                                    },
+                                                                                    args: [
+                                                                                        expr(7:31-7:32) :: manual-handle 'y {
+                                                                                            kind: ident(7:31-7:32) `s`,
+                                                                                        },
+                                                                                        expr(7:39-7:40) :: task 't46 {
+                                                                                            kind: ident(7:39-7:40) `t`,
+                                                                                        },
+                                                                                    ],
+                                                                                },
+                                                                            },
+                                                                        ],
+                                                                    },
+                                                                },
+                                                            },
+                                                        ],
+                                                    },
+                                                },
+                                            },
+                                        },
+                                        expr(8:2-14:3) :: task 't46 {
+                                            kind: try(8:2-14:3) {
+                                                pattern: pattern(8:6-8:11) Identifier(
+                                                    ident(8:6-8:11) `first`,
+                                                ),
+                                                value: expr(8:14-8:23) :: task (option (result 't46 't10)) {
+                                                    kind: call(8:14-8:23) {
+                                                        callee: expr(8:16-8:20) :: (manual-handle 't9) nothing -> task (option (result 't9 't10)) {
+                                                            kind: namespace-access `task.manual-next`,
+                                                        },
+                                                        args: [
+                                                            expr(8:14-8:15) :: manual-handle 'y {
+                                                                kind: ident(8:14-8:15) `s`,
+                                                            },
+                                                            expr(8:21-8:23) :: nothing {
+                                                                kind: (),
+                                                            },
+                                                        ],
+                                                    },
+                                                },
+                                                rest: [
+                                                    expr(9:2-9:13) :: nothing {
+                                                        kind: call(9:2-9:13) {
+                                                            callee: expr(9:4-9:10) :: (manual-handle 't13) nothing -> nothing {
+                                                                kind: namespace-access `task.manual-cancel`,
+                                                            },
+                                                            args: [
+                                                                expr(9:2-9:3) :: manual-handle 'y {
+                                                                    kind: ident(9:2-9:3) `s`,
+                                                                },
+                                                                expr(9:11-9:13) :: nothing {
+                                                                    kind: (),
+                                                                },
+                                                            ],
+                                                        },
+                                                    },
+                                                    expr(10:2-14:3) :: task 't46 {
+                                                        kind: when(10:2-14:3) [
+                                                            case(10:13-12:3) is pattern(10:16-10:22) Constructor(
+                                                                ident(10:16-10:20) `some`,
+                                                                [
+                                                                    pattern(10:21-10:22) Identifier(
+                                                                        ident(10:21-10:22) `r`,
+                                                                    ),
+                                                                ],
+                                                            ) [
+                                                                expr(11:3-11:60) :: task 't46 {
+                                                                    kind: when(11:3-11:60) [
+                                                                        case(11:10-11:35) is pattern(11:13-11:17) Constructor(
+                                                                            ident(11:13-11:15) `ok`,
+                                                                            [
+                                                                                pattern(11:16-11:17) Identifier(
+                                                                                    ident(11:16-11:17) `v`,
+                                                                                ),
+                                                                            ],
+                                                                        ) [
+                                                                            expr(11:20-11:33) :: task 't46 {
+                                                                                kind: call(11:20-11:33) {
+                                                                                    callee: expr(11:20-11:31) :: 't20 -> task 't20 {
+                                                                                        kind: namespace-access `task.return`,
+                                                                                    },
+                                                                                    args: [
+                                                                                        expr(11:32-11:33) :: 't46 {
+                                                                                            kind: ident(11:32-11:33) `v`,
+                                                                                        },
+                                                                                    ],
+                                                                                },
+                                                                            },
+                                                                        ],
+                                                                        case(11:36-11:60) is pattern(11:39-11:44) Constructor(
+                                                                            ident(11:39-11:42) `err`,
+                                                                            [
+                                                                                pattern(11:43-11:44) Identifier(
+                                                                                    ident(11:43-11:44) `e`,
+                                                                                ),
+                                                                            ],
+                                                                        ) [
+                                                                            expr(11:47-11:58) :: task 't46 {
+                                                                                kind: call(11:47-11:58) {
+                                                                                    callee: expr(11:47-11:56) :: 't24 -> task 't25 {
+                                                                                        kind: namespace-access `task.fail`,
+                                                                                    },
+                                                                                    args: [
+                                                                                        expr(11:57-11:58) :: 't10 {
+                                                                                            kind: ident(11:57-11:58) `e`,
+                                                                                        },
+                                                                                    ],
+                                                                                },
+                                                                            },
+                                                                        ],
+                                                                    ],
+                                                                },
+                                                            ],
+                                                            case(12:4-14:3) is pattern(12:7-12:11) Identifier(
+                                                                ident(12:7-12:11) `none`,
+                                                            ) [
+                                                                expr(13:3-13:26) :: task 't46 {
+                                                                    kind: call(13:3-13:26) {
+                                                                        callee: expr(13:3-13:12) :: 't28 -> task 't29 {
+                                                                            kind: namespace-access `task.fail`,
+                                                                        },
+                                                                        args: [
+                                                                            expr(13:14-13:26) :: string {
+                                                                                kind: literal(13:14-13:26) string "race: empty",
+                                                                            },
+                                                                        ],
+                                                                    },
+                                                                },
+                                                            ],
+                                                        ],
+                                                    },
+                                                ],
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+            def(18:0-21:1) :: nothing {
+                name: ident(18:4-18:8) `main`,
+                kind: expr(18:11-21:1) :: nothing -> task 't47 {
+                    kind: fun(18:11-21:1) {
+                        params: [],
+                        body: [
+                            expr(19:1-20:19) :: task 't47 {
+                                kind: try(19:1-20:19) {
+                                    pattern: pattern(19:5-19:11) Identifier(
+                                        ident(19:5-19:11) `winner`,
+                                    ),
+                                    value: expr(19:14-19:51) :: task int {
+                                        kind: call(19:14-19:51) {
+                                            callee: expr(19:14-19:18) :: (list (task int)) -> task int {
+                                                kind: ident(19:14-19:18) `race`,
+                                            },
+                                            args: [
+                                                expr(19:19-19:51) :: list (task int) {
+                                                    kind: [
+                                                        expr(19:20-19:34) :: task int {
+                                                            kind: call(19:20-19:34) {
+                                                                callee: expr(19:20-19:31) :: 't38 -> task 't38 {
+                                                                    kind: namespace-access `task.return`,
+                                                                },
+                                                                args: [
+                                                                    expr(19:32-19:34) :: int {
+                                                                        kind: literal(19:32-19:34) int 10,
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        expr(19:36-19:50) :: task int {
+                                                            kind: call(19:36-19:50) {
+                                                                callee: expr(19:36-19:47) :: 't40 -> task 't40 {
+                                                                    kind: namespace-access `task.return`,
+                                                                },
+                                                                args: [
+                                                                    expr(19:48-19:50) :: int {
+                                                                        kind: literal(19:48-19:50) int 20,
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                    ],
+                                                },
+                                            ],
+                                        },
+                                    },
+                                    rest: [
+                                        expr(20:1-20:19) :: task 't47 {
+                                            kind: call(20:1-20:19) {
+                                                callee: expr(20:1-20:12) :: 't43 -> task 't43 {
+                                                    kind: namespace-access `task.return`,
+                                                },
+                                                args: [
+                                                    expr(20:13-20:19) :: 't47 {
+                                                        kind: ident(20:13-20:19) `winner`,
+                                                    },
+                                                ],
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

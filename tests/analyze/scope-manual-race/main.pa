@@ -1,0 +1,22 @@
+# A `manual scope`: spawn everything, drain the first completion via `s.next`,
+# then `s.cancel` the losers. Exercises manual-scope typing and the `s.next` /
+# `s.cancel` handle methods, plus `s.spawn` inside a nested closure.
+use core.list
+
+def race = fun ts {
+	manual scope as s {
+		let _ = list.map ts (fun t { s.spawn t })
+		try first = s.next ()
+		s.cancel ()
+		when first is some r {
+			when r is ok v { task.return v } is err e { task.fail e }
+		} is none {
+			task.fail "race: empty"
+		}
+	}
+}
+
+def main = fun {
+	try winner = race [task.return 10, task.return 20]
+	task.return winner
+}
