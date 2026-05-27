@@ -68,6 +68,9 @@ fn compile_check(dir: &Path) -> Option<Compiler> {
 #[ignore = "coverage report; run with --ignored --nocapture"]
 fn ir_coverage_report() {
 	let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+	// Anchor cwd at the workspace root so I/O fixtures write their scratch
+	// files under the (gitignored) workspace `target/`, not next to the crate.
+	let _ = std::env::set_current_dir(workspace);
 	let run_dir = workspace.join("tests/run");
 	let mut matching = Vec::new();
 	let (mut diff, mut lower_err) = (0u32, 0u32);
