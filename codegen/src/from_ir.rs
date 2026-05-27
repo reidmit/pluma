@@ -10,8 +10,9 @@
 // Phase 1.2, growing alongside `ir::lower`. Covers the node set the lowering
 // produces so far: literals/atoms, global refs, closures, calls, binary/unary
 // ops, dict-method dispatch, variant construction (+ constructors), tuples,
-// records, lists (with spread), interpolation, field access, structured
-// control flow (`If`/`Loop`/`Break`/`Continue`) and the pattern `Match`.
+// records, lists (with spread), interpolation, field access, regex literals,
+// structured control flow (`If`/`Loop`/`Break`/`Continue`) and the pattern
+// `Match`.
 // Unsupported nodes return an `Err` rather than emitting wrong bytecode, so
 // gaps surface loudly.
 
@@ -24,7 +25,7 @@ use ir::{
 	ListItem, Pattern, PreEval, Rvalue, Stmt, VarId,
 };
 use vm::program::GlobalSlot;
-use vm::{Function, Instruction, Program, Value};
+use vm::{Function, Instruction, Program, RegexData, Value};
 
 /// Lower a complete IR program to a runnable `vm::Program`.
 ///
@@ -42,7 +43,7 @@ pub fn emit(program: &IrProgram) -> Result<Program, String> {
 		functions: e.functions,
 		constants: e.constants,
 		bytes_constants: e.bytes_constants,
-		regex_patterns: Vec::new(),
+		regex_patterns: e.regex_patterns,
 		globals,
 		field_lists: e.field_lists,
 		// Only used by codegen-time tooling / the test runner, never read by the
@@ -66,6 +67,8 @@ struct Emitter {
 	const_lookup: HashMap<String, u32>,
 	bytes_constants: Vec<Rc<Vec<u8>>>,
 	bytes_lookup: HashMap<Vec<u8>, u32>,
+	// Compiled regex literals, indexed by the LoadRegex operand.
+	regex_patterns: Vec<Rc<RegexData>>,
 	// Record-shape field-name lists, indexed by FieldListIdx.
 	field_lists: Vec<Vec<u32>>,
 	// qualified-enum-name -> [(variant_name, arity)], for resolving a
@@ -520,6 +523,13 @@ impl FnCtx {
 					self.lower_atom(em, a, body, ranges)?;
 				}
 				push(body, ranges, Instruction::Interpolate(parts.len() as u16));
+			}
+			Rvalue::Regex(pattern) => {
+				let compiled = regex::Regex::new(pattern)
+					.map_err(|e| format!("from_ir: invalid regex `{pattern}`: {e}"))?;
+				let idx = em.regex_patterns.len() as u32;
+				em.regex_patterns.push(Rc::new(RegexData { compiled }));
+				push(body, ranges, Instruction::LoadRegex(idx));
 			}
 			other => return Err(format!("from_ir: unsupported rvalue: {other:?}")),
 		}

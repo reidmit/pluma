@@ -231,6 +231,9 @@ pub enum Rvalue {
 	/// String interpolation: combine the parts (already `to-string`'d where
 	/// needed by the analyzer) into one string.
 	Interpolate(Vec<Atom>),
+	/// A regex literal, carried as its compiled pattern string (the
+	/// target-independent form — each backend feeds it to its own engine).
+	Regex(String),
 	/// Read a variant's discriminant tag (for `Switch`).
 	GetTag(Atom),
 	/// Read field `index` of a variant's payload.

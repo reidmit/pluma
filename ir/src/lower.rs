@@ -15,10 +15,10 @@
 // `let`; operators (direct opcodes + trait dispatch via method dictionaries);
 // control flow (`if`/`when`/`while` via a pattern `Match`); data construction
 // (variants + constructors, tuples, records, lists with spread, string
-// interpolation, field access); and namespace access (`module.value`,
-// `module.Enum.variant`) — which makes most stdlib calls work. Forms not yet
-// handled (regex, trait instances, constrained-value references, nested /
-// tuple / record / list patterns, `defer`, async, ...) cause the *enclosing
+// interpolation, field access, regex literals); and namespace access
+// (`module.value`, `module.Enum.variant`) — which makes most stdlib calls work.
+// Forms not yet handled (trait instances, constrained-value references, nested
+// / tuple / record / list patterns, `defer`, async, ...) cause the *enclosing
 // def* to be lowered as a poison thunk (returns `nothing`) rather than failing
 // the whole program: a def whose executed paths only touch supported forms runs
 // correctly, so coverage grows fixture-by-fixture. `lower` is not yet wired into
@@ -27,7 +27,7 @@
 use crate::types::*;
 use compiler::ast::{
 	DefinitionKind, ExprKind, ExprNode, FunNode, IfNode, LetNode, LiteralKind, ModuleNode, Operator,
-	PatternKind, PatternNode, WhenNode, WhileNode,
+	PatternKind, PatternNode, RegexAnchor, RegexKind, RegexNode, WhenNode, WhileNode,
 };
 use compiler::types::Type;
 use compiler::Compiler;
@@ -320,6 +320,7 @@ impl<'a> Lowerer<'a> {
 			ExprKind::If(n) => self.lower_if(n),
 			ExprKind::When(n) => self.lower_when(n),
 			ExprKind::While(n) => self.lower_while(n),
+			ExprKind::Regex(node) => Ok(self.emit_let(Rvalue::Regex(regex_pattern(node)))),
 			other => Err(format!("unsupported expr: {}", expr_kind_name(other))),
 		}
 	}
@@ -1081,6 +1082,46 @@ fn finish_scope(scope: FnScope) -> Function {
 		captures: scope.captures.iter().map(|c| c.var).collect(),
 		is_async: scope.is_async,
 		body: Block(scope.stmts),
+	}
+}
+
+/// Build a regex pattern string from a regex-literal AST node. Ported from
+/// `codegen::emit::regex_pattern`; the analyzer has already validated the node,
+/// so the resulting pattern compiles.
+fn regex_pattern(node: &RegexNode) -> String {
+	match &node.kind {
+		RegexKind::Literal(s) => regex::escape(s),
+		RegexKind::CharacterClass(c) => match c.as_str() {
+			"any" => ".".to_string(),
+			"digit" => "[0-9]".to_string(),
+			"letter" => "[A-Za-z]".to_string(),
+			"whitespace" => "[ \\t\\n\\r]".to_string(),
+			"word" => "[A-Za-z0-9_]".to_string(),
+			_ => "[^\\s\\S]".to_string(),
+		},
+		RegexKind::Anchor(a) => match a {
+			RegexAnchor::Start => "^".to_string(),
+			RegexAnchor::End => "$".to_string(),
+			RegexAnchor::Boundary => "\\b".to_string(),
+		},
+		RegexKind::OneOrMore(inner) => format!("(?:{})+", regex_pattern(inner)),
+		RegexKind::ZeroOrMore(inner) => format!("(?:{})*", regex_pattern(inner)),
+		RegexKind::OneOrZero(inner) => format!("(?:{})?", regex_pattern(inner)),
+		RegexKind::ExactCount(inner, n) => format!("(?:{}){{{}}}", regex_pattern(inner), n),
+		RegexKind::AtLeastCount(inner, n) => format!("(?:{}){{{},}}", regex_pattern(inner), n),
+		RegexKind::AtMostCount(inner, n) => format!("(?:{}){{0,{}}}", regex_pattern(inner), n),
+		RegexKind::RangeCount(inner, min, max) => {
+			format!("(?:{}){{{},{}}}", regex_pattern(inner), min, max)
+		}
+		RegexKind::Grouping(inner) => format!("(?:{})", regex_pattern(inner)),
+		RegexKind::Sequence(parts) => parts.iter().map(regex_pattern).collect(),
+		RegexKind::Alternation(parts) => {
+			let joined: Vec<_> = parts.iter().map(regex_pattern).collect();
+			format!("(?:{})", joined.join("|"))
+		}
+		RegexKind::NamedCapture(name, inner) => {
+			format!("(?P<{}>{})", name, regex_pattern(inner))
+		}
 	}
 }
 
