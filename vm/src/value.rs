@@ -255,20 +255,13 @@ impl std::fmt::Display for Value {
 			Value::Builtin(_) => write!(f, "<builtin>"),
 			Value::Regex(r) => write!(f, "<regex {}>", r.compiled.as_str()),
 			// Wall-clock instants print as RFC 3339 in UTC (e.g.
-			// `2026-05-25T14:30:00Z`); durations print in jiff's "friendly"
-			// form (e.g. `2d`, `1h 30m`, `500ms`).
+			// `2026-05-25T14:30:00Z`); durations print in the same form as a
+			// duration literal (e.g. `2d`, `1h30m`, `500ms`).
 			Value::Instant(nanos) => match jiff::Timestamp::from_nanosecond(*nanos as i128) {
 				Ok(ts) => write!(f, "{}", ts),
 				Err(_) => write!(f, "<instant {}ns>", nanos),
 			},
-			Value::Duration(nanos) => {
-				let sd = jiff::SignedDuration::from_nanos(*nanos);
-				write!(
-					f,
-					"{}",
-					jiff::fmt::friendly::SpanPrinter::new().duration_to_string(&sd)
-				)
-			}
+			Value::Duration(nanos) => write!(f, "{}", format_duration(*nanos)),
 			Value::VariantCtor(c) => {
 				let bare = c
 					.qualified_enum
@@ -291,6 +284,40 @@ impl std::fmt::Display for Value {
 			Value::Ref(cell) => write!(f, "ref {}", cell.borrow()),
 		}
 	}
+}
+
+// Render a duration (nanoseconds) the way a duration literal is written:
+// largest unit first, each unit at most once, no spaces, zero components
+// dropped (e.g. `90s` -> "1m30s", two days -> "2d"). Matches both the source
+// literal syntax and the formatter's rendering, so `print`ed durations read
+// back the same way they were written.
+fn format_duration(nanos: i64) -> String {
+	if nanos == 0 {
+		return "0s".to_string();
+	}
+	let (sign, mut rem): (&str, u128) = if nanos < 0 {
+		("-", (nanos as i128).unsigned_abs())
+	} else {
+		("", nanos as u128)
+	};
+	const UNITS: [(u128, &str); 7] = [
+		(86_400_000_000_000, "d"),
+		(3_600_000_000_000, "h"),
+		(60_000_000_000, "m"),
+		(1_000_000_000, "s"),
+		(1_000_000, "ms"),
+		(1_000, "us"),
+		(1, "ns"),
+	];
+	let mut out = String::from(sign);
+	for (per, name) in UNITS {
+		if rem >= per {
+			out.push_str(&(rem / per).to_string());
+			out.push_str(name);
+			rem %= per;
+		}
+	}
+	out
 }
 
 // Structural equality for `==` / `!=` / `contains`. Type system enforces same

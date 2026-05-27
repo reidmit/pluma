@@ -1,0 +1,16 @@
+def already-canonical = fun {
+	let a = 1s
+	let b = 2m20s
+	let c = 3h2m10s
+	let d = 100d
+	[a, b, c, d]
+}
+
+def normalized = fun {
+	# Non-canonical spellings are rewritten to largest-unit-first segments.
+	let a = 90s
+	let b = 1500ms
+	let c = 250ms
+	let z = 0s
+	[a, b, c, z]
+}

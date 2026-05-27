@@ -672,23 +672,40 @@ impl<'a> Iterator for Tokenizer<'a> {
 						}
 					}
 
-					while self.index < self.length && is_identifier_char(self.source[self.index]) {
-						if !self.source[self.index].is_ascii_digit() {
-							let error_start = self.index;
+					while self.index < self.length && self.source[self.index].is_ascii_digit() {
+						self.index += 1;
+					}
 
-							while self.index < self.length && !self.source[self.index].is_ascii_whitespace() {
-								self.index += 1;
-							}
-
-							self.errors.push(ParseError {
-								range: self.span_to_single_line_range(error_start, self.index),
-								kind: InvalidDecimalDigit,
-							});
-
-							continue 'main_loop;
+					// A unit letter immediately after the digits (no space) makes
+					// this a duration literal: `5s`, `2m20s`, `3h2m10s`. Consume the
+					// whole run of digits and ASCII letters; the parser splits it
+					// into `<amount><unit>` segments and validates order/range.
+					if self.index < self.length && is_duration_unit_start(self.source[self.index]) {
+						while self.index < self.length
+							&& (self.source[self.index].is_ascii_digit()
+								|| self.source[self.index].is_ascii_alphabetic())
+						{
+							self.index += 1;
 						}
 
-						self.index += 1;
+						return Some(DurationLiteral(start_index, self.index));
+					}
+
+					// Any other trailing identifier char means the digits were
+					// malformed (e.g. `12abc`).
+					if self.index < self.length && is_identifier_char(self.source[self.index]) {
+						let error_start = self.index;
+
+						while self.index < self.length && !self.source[self.index].is_ascii_whitespace() {
+							self.index += 1;
+						}
+
+						self.errors.push(ParseError {
+							range: self.span_to_single_line_range(error_start, self.index),
+							kind: InvalidDecimalDigit,
+						});
+
+						continue 'main_loop;
 					}
 
 					return Some(DecimalDigits(start_index, self.index));
@@ -741,6 +758,12 @@ fn is_identifier_char(byte: u8) -> bool {
 		| b'[' | b']' | b'{' | b'}' => false,
 		_ => true,
 	}
+}
+
+// First letter of a time unit (`ns`, `us`, `ms`, `s`, `m`, `h`, `d`). Used to
+// decide whether digits begin a duration literal rather than a plain number.
+fn is_duration_unit_start(byte: u8) -> bool {
+	matches!(byte, b'n' | b'u' | b'm' | b's' | b'h' | b'd')
 }
 
 fn is_digit(byte: u8) -> bool {

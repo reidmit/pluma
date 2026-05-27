@@ -24,6 +24,9 @@ pub enum ParseErrorKind {
 	InvalidDefBody,
 	MissingReturnType,
 	OverflowingIntegerLiteral,
+	InvalidDurationUnit,
+	DurationUnitsOutOfOrder,
+	OverflowingDurationLiteral,
 	UnclosedInterpolation,
 	UnclosedString,
 	InvalidBytesEscape,
@@ -70,6 +73,15 @@ impl fmt::Display for ParseError {
 				"Missing return type after '->' in function type expression"
 			),
 			OverflowingIntegerLiteral => write!(f, "Overflowing integer literal."),
+			InvalidDurationUnit => write!(
+				f,
+				"Invalid duration literal. Expected `<amount><unit>` segments using the units d, h, m, s, ms, us, ns (e.g. 2m20s)."
+			),
+			DurationUnitsOutOfOrder => write!(
+				f,
+				"Duration units must each appear at most once, in descending order: d, h, m, s, ms, us, ns."
+			),
+			OverflowingDurationLiteral => write!(f, "Overflowing duration literal."),
 			UnclosedInterpolation => write!(f, "Unclosed string interpolation."),
 			UnclosedString => write!(f, "Unclosed string."),
 			InvalidBytesEscape => write!(

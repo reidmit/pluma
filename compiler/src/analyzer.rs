@@ -1939,6 +1939,7 @@ impl<'compiler> Analyzer<'compiler> {
 				LiteralKind::Bool(..) => expr.ty = Type::Bool,
 				LiteralKind::String(..) => expr.ty = Type::String,
 				LiteralKind::Bytes(..) => expr.ty = Type::Bytes,
+				LiteralKind::Duration(..) => expr.ty = Type::Duration,
 				LiteralKind::FloatDecimal(..) => expr.ty = Type::Float,
 				LiteralKind::IntDecimal(..)
 				| LiteralKind::IntHex(..)
@@ -2934,6 +2935,7 @@ impl<'compiler> Analyzer<'compiler> {
 					LiteralKind::Bool(..) => Type::Bool,
 					LiteralKind::String(..) => Type::String,
 					LiteralKind::Bytes(..) => Type::Bytes,
+					LiteralKind::Duration(..) => Type::Duration,
 					LiteralKind::FloatDecimal(..) => Type::Float,
 					LiteralKind::IntDecimal(..)
 					| LiteralKind::IntHex(..)

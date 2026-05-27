@@ -1,0 +1,7 @@
+def bad-unit = 5sec
+
+def out-of-order = 20s2m
+
+def repeated-unit = 2m3m
+
+def overflow = 100000000000d

@@ -430,6 +430,7 @@ impl VM {
 			Instruction::LoadInt(n) => self.stack.push(Value::Int(n)),
 			Instruction::LoadFloat(n) => self.stack.push(Value::Float(n)),
 			Instruction::LoadBool(b) => self.stack.push(Value::Bool(b)),
+			Instruction::LoadDuration(n) => self.stack.push(Value::Duration(n)),
 			Instruction::LoadNothing => self.stack.push(Value::Nothing),
 			Instruction::LoadLocal(slot) => {
 				let v = self.stack[self.frames[frame_idx].base + slot as usize].clone();
@@ -673,6 +674,9 @@ impl VM {
 			}
 			Instruction::MatchFloat(n, on_fail) => {
 				self.match_literal(on_fail, |v| matches!(v, Value::Float(x) if *x == n))?
+			}
+			Instruction::MatchDuration(n, on_fail) => {
+				self.match_literal(on_fail, |v| matches!(v, Value::Duration(x) if *x == n))?
 			}
 			Instruction::MatchString(idx, on_fail) => {
 				let needle = self.program.constants[idx as usize].clone();
@@ -1256,6 +1260,7 @@ fn opcode_name(i: &Instruction) -> &'static str {
 		LoadInt(_) => "LoadInt",
 		LoadFloat(_) => "LoadFloat",
 		LoadBool(_) => "LoadBool",
+		LoadDuration(_) => "LoadDuration",
 		LoadNothing => "LoadNothing",
 		LoadLocal(_) => "LoadLocal",
 		StoreLocal(_) => "StoreLocal",
@@ -1280,6 +1285,7 @@ fn opcode_name(i: &Instruction) -> &'static str {
 		Interpolate(_) => "Interpolate",
 		MatchInt(_, _) => "MatchInt",
 		MatchFloat(_, _) => "MatchFloat",
+		MatchDuration(_, _) => "MatchDuration",
 		MatchString(_, _) => "MatchString",
 		MatchBytes(_, _) => "MatchBytes",
 		MatchBool(_, _) => "MatchBool",

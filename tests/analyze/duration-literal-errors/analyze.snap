@@ -1,0 +1,20 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: Invalid duration literal. Expected `<amount><unit>` segments using the units d, h, m, s, ms, us, ns (e.g. 2m20s).
+> 1 | def bad-unit = 5sec
+                     ^^^^
+
+error: Duration units must each appear at most once, in descending order: d, h, m, s, ms, us, ns.
+> 3 | def out-of-order = 20s2m
+                         ^^^^^
+
+error: Duration units must each appear at most once, in descending order: d, h, m, s, ms, us, ns.
+> 5 | def repeated-unit = 2m3m
+                          ^^^^
+
+error: Overflowing duration literal.
+> 7 | def overflow = 100000000000d
+                     ^^^^^^^^^^^^^
+

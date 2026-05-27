@@ -33,6 +33,8 @@ pub enum Instruction {
 	LoadInt(i64),
 	LoadFloat(f64),
 	LoadBool(bool),
+	// A duration constant, in nanoseconds.
+	LoadDuration(i64),
 	LoadNothing,
 
 	// Variables
@@ -110,6 +112,7 @@ pub enum Instruction {
 	// On MATCH FAILURE the subject is consumed and we jump to the offset.
 	MatchInt(i64, Offset),
 	MatchFloat(f64, Offset),
+	MatchDuration(i64, Offset),
 	MatchString(ConstIdx, Offset),
 	MatchBytes(BytesIdx, Offset),
 	MatchBool(bool, Offset),

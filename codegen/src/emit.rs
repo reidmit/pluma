@@ -763,6 +763,7 @@ impl FunctionBuilder {
 			Instruction::Jump(o) | Instruction::JumpIfFalse(o) => *o = target,
 			Instruction::MatchInt(_, o)
 			| Instruction::MatchFloat(_, o)
+			| Instruction::MatchDuration(_, o)
 			| Instruction::MatchString(_, o)
 			| Instruction::MatchBytes(_, o)
 			| Instruction::MatchBool(_, o)
@@ -1670,6 +1671,9 @@ fn emit_literal_with_cg(
 		}
 		LiteralKind::FloatDecimal(f) => {
 			fb.emit(Instruction::LoadFloat(*f), range);
+		}
+		LiteralKind::Duration(n) => {
+			fb.emit(Instruction::LoadDuration(*n), range);
 		}
 		LiteralKind::IntDecimal(n)
 		| LiteralKind::IntHex(n)
@@ -2628,6 +2632,7 @@ fn emit_pattern(
 					fb.emit(Instruction::MatchBytes(idx, 0), range)
 				}
 				LiteralKind::FloatDecimal(f) => fb.emit(Instruction::MatchFloat(*f, 0), range),
+				LiteralKind::Duration(n) => fb.emit(Instruction::MatchDuration(*n, 0), range),
 				LiteralKind::IntDecimal(n)
 				| LiteralKind::IntHex(n)
 				| LiteralKind::IntOctal(n)

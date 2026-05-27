@@ -46,6 +46,11 @@ pub enum Token {
 	/// e.g. `47`
 	DecimalDigits(usize, usize),
 
+	/// e.g. `5s`, `2m20s`, `3h2m10s` — digits immediately followed by a time
+	/// unit. The span covers the whole run; the parser splits it into
+	/// `<amount><unit>` segments and validates order/range.
+	DurationLiteral(usize, usize),
+
 	/// `.` token
 	Dot(usize, usize),
 
@@ -296,6 +301,7 @@ impl Token {
 			| Comma(start, end)
 			| Comment(start, end)
 			| DecimalDigits(start, end)
+			| DurationLiteral(start, end)
 			| Dollar(start, end)
 			| Dot(start, end)
 			| DoubleAnd(start, end)
@@ -373,9 +379,9 @@ impl Token {
 
 		match self {
 			Identifier(..) | KeywordBuiltin(..) | KeywordFun(..) | KeywordIf(..) | KeywordWhen(..)
-			| DecimalDigits(..) | HexDigits(..) | BinaryDigits(..) | OctalDigits(..) | LeftParen(..)
-			| LeftBracket(..) | LeftBrace(..) | Backtick(..) | StringLiteral(..) | BytesLiteral(..)
-			| BoolTrue(..) | BoolFalse(..) | UnaryMinus(..) => true,
+			| DecimalDigits(..) | DurationLiteral(..) | HexDigits(..) | BinaryDigits(..)
+			| OctalDigits(..) | LeftParen(..) | LeftBracket(..) | LeftBrace(..) | Backtick(..)
+			| StringLiteral(..) | BytesLiteral(..) | BoolTrue(..) | BoolFalse(..) | UnaryMinus(..) => true,
 			_ => false,
 		}
 	}
@@ -399,6 +405,7 @@ impl fmt::Display for Token {
 			&Comma(..) => "a ','",
 			&Comment(..) => "a comment",
 			&DecimalDigits(..) => "decimal digits (e.g. 47)",
+			&DurationLiteral(..) => "a duration literal (e.g. 2m20s)",
 			&Dollar(..) => "a '$'",
 			&Dot(..) => "a '.'",
 			&DoubleAnd(..) => "a '&&'",

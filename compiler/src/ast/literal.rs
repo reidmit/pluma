@@ -10,6 +10,9 @@ pub struct LiteralNode {
 pub enum LiteralKind {
 	Bool(bool),
 	FloatDecimal(f64),
+	/// A time duration, stored as a whole number of nanoseconds. Built from
+	/// unit-suffixed literals like `5s` or `2m20s`.
+	Duration(i64),
 	IntDecimal(usize),
 	IntOctal(usize),
 	IntHex(usize),
@@ -33,6 +36,7 @@ impl std::fmt::Debug for LiteralKind {
 		match &self {
 			Bool(v) => write!(f, "bool {}", v),
 			FloatDecimal(v) => write!(f, "float {}", v),
+			Duration(v) => write!(f, "duration {}ns", v),
 			IntDecimal(v) => write!(f, "int {}", v),
 			IntHex(v) => write!(f, "hex int {}", v),
 			IntOctal(v) => write!(f, "octal int {}", v),

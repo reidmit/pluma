@@ -496,6 +496,104 @@ impl<'a> Parser<'a> {
 		})
 	}
 
+	/// Parse a `DurationLiteral` token (e.g. `5s`, `2m20s`, `3h2m10s`) into a
+	/// `LiteralKind::Duration` carrying the total nanoseconds. The token text is
+	/// a run of `<amount><unit>` segments; units must each appear at most once
+	/// and in strictly descending order of magnitude (d > h > m > s > ms > us >
+	/// ns). On a malformed literal we report the first problem and yield a
+	/// zero-duration node so analysis can continue.
+	fn parse_duration_literal(&mut self) -> Option<LiteralNode> {
+		let (start, end) = expect_token_and_advance!(self, Token::DurationLiteral);
+		let range = Range::between(start, end);
+		let (start_offset, end_offset) = (self.point_to_offset(start), self.point_to_offset(end));
+		let text = read_string!(self, start_offset, end_offset);
+		let bytes = text.as_bytes();
+
+		let mut total: i64 = 0;
+		let mut prev_rank: Option<u8> = None;
+		let mut reported = false;
+		let mut i = 0;
+
+		while i < bytes.len() {
+			let mut amount: i64 = 0;
+			while i < bytes.len() && bytes[i].is_ascii_digit() {
+				match amount
+					.checked_mul(10)
+					.and_then(|a| a.checked_add((bytes[i] - b'0') as i64))
+				{
+					Some(next) => amount = next,
+					None => self.report_once(
+						&mut reported,
+						ParseErrorKind::OverflowingDurationLiteral,
+						range,
+					),
+				}
+				i += 1;
+			}
+
+			let unit_start = i;
+			while i < bytes.len() && bytes[i].is_ascii_alphabetic() {
+				i += 1;
+			}
+
+			if unit_start == i {
+				// Digits with no following unit (e.g. a trailing `5s5`).
+				self.report_once(&mut reported, ParseErrorKind::InvalidDurationUnit, range);
+				break;
+			}
+
+			let (per_unit, rank): (i64, u8) = match &text[unit_start..i] {
+				"d" => (86_400_000_000_000, 6),
+				"h" => (3_600_000_000_000, 5),
+				"m" => (60_000_000_000, 4),
+				"s" => (1_000_000_000, 3),
+				"ms" => (1_000_000, 2),
+				"us" => (1_000, 1),
+				"ns" => (1, 0),
+				_ => {
+					self.report_once(&mut reported, ParseErrorKind::InvalidDurationUnit, range);
+					break;
+				}
+			};
+
+			if prev_rank.is_some_and(|pr| rank >= pr) {
+				self.report_once(
+					&mut reported,
+					ParseErrorKind::DurationUnitsOutOfOrder,
+					range,
+				);
+			}
+			prev_rank = Some(rank);
+
+			match amount
+				.checked_mul(per_unit)
+				.and_then(|seg| total.checked_add(seg))
+			{
+				Some(next) => total = next,
+				None => self.report_once(
+					&mut reported,
+					ParseErrorKind::OverflowingDurationLiteral,
+					range,
+				),
+			}
+		}
+
+		Some(LiteralNode {
+			kind: LiteralKind::Duration(if reported { 0 } else { total }),
+			range,
+		})
+	}
+
+	/// Push a parse error unless one has already been reported for the current
+	/// construct (tracked by the caller's `reported` flag). Keeps a single
+	/// malformed literal from producing a cascade of diagnostics.
+	fn report_once(&mut self, reported: &mut bool, kind: ParseErrorKind, range: Range) {
+		if !*reported {
+			self.errors.push(ParseError { range, kind });
+			*reported = true;
+		}
+	}
+
 	fn parse_binary_number(&mut self) -> Option<LiteralNode> {
 		let (start, end) = expect_token_and_advance!(self, Token::BinaryDigits);
 		let (start_offset, end_offset) = (self.point_to_offset(start), self.point_to_offset(end));
@@ -611,6 +709,13 @@ impl<'a> Parser<'a> {
 				dispatch_sink: None,
 			}),
 			Some(Token::DecimalDigits(..)) => self.parse_decimal_number().map(|literal| ExprNode {
+				range: literal.range,
+				kind: ExprKind::Literal(literal),
+				ty: Type::Unknown,
+				trait_dispatch: None,
+				dispatch_sink: None,
+			}),
+			Some(Token::DurationLiteral(..)) => self.parse_duration_literal().map(|literal| ExprNode {
 				range: literal.range,
 				kind: ExprKind::Literal(literal),
 				ty: Type::Unknown,
@@ -1102,6 +1207,13 @@ impl<'a> Parser<'a> {
 				kind: PatternKind::Literal(lit_node),
 			}),
 
+			Some(Token::DurationLiteral(..)) => {
+				self.parse_duration_literal().map(|lit_node| PatternNode {
+					range: lit_node.range,
+					kind: PatternKind::Literal(lit_node),
+				})
+			}
+
 			// TODO: other kinds of digits here
 			_ => None,
 		}
@@ -1363,6 +1475,13 @@ impl<'a> Parser<'a> {
 				range: lit_node.range,
 				kind: PatternKind::Literal(lit_node),
 			}),
+
+			Some(Token::DurationLiteral(..)) => {
+				self.parse_duration_literal().map(|lit_node| PatternNode {
+					range: lit_node.range,
+					kind: PatternKind::Literal(lit_node),
+				})
+			}
 
 			Some(Token::BoolFalse(..) | Token::BoolTrue(..)) => {
 				let expr_node = self.parse_bool()?;

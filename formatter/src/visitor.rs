@@ -472,6 +472,7 @@ impl<'a> Formatter<'a> {
 			LiteralKind::IntOctal(n) => text(format!("0o{:o}", n)),
 			LiteralKind::IntBinary(n) => text(format!("0b{:b}", n)),
 			LiteralKind::FloatDecimal(f) => text(format_float(*f)),
+			LiteralKind::Duration(n) => text(format_duration(*n)),
 			LiteralKind::String(s) => text(format!("\"{}\"", escape_string(s))),
 			LiteralKind::Bytes(b) => text(format!("'{}'", escape_bytes(b))),
 		}
@@ -1151,4 +1152,37 @@ fn format_float(f: f64) -> String {
 	} else {
 		format!("{}.0", s)
 	}
+}
+
+// Render a duration (in nanoseconds) as canonical unit segments — largest unit
+// first, each unit at most once, zero components dropped (e.g. 90_000_000_000 ->
+// "1m30s"). This is exactly the form the parser accepts, so formatting is
+// idempotent even when the source used a non-canonical spelling like `90s`.
+fn format_duration(nanos: i64) -> String {
+	if nanos == 0 {
+		return "0s".to_string();
+	}
+	let (sign, mut rem): (&str, u128) = if nanos < 0 {
+		("-", (nanos as i128).unsigned_abs())
+	} else {
+		("", nanos as u128)
+	};
+	const UNITS: [(u128, &str); 7] = [
+		(86_400_000_000_000, "d"),
+		(3_600_000_000_000, "h"),
+		(60_000_000_000, "m"),
+		(1_000_000_000, "s"),
+		(1_000_000, "ms"),
+		(1_000, "us"),
+		(1, "ns"),
+	];
+	let mut out = String::from(sign);
+	for (per, name) in UNITS {
+		if rem >= per {
+			out.push_str(&(rem / per).to_string());
+			out.push_str(name);
+			rem %= per;
+		}
+	}
+	out
 }
