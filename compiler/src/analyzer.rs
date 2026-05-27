@@ -4926,8 +4926,17 @@ impl<'compiler> Analyzer<'compiler> {
 				// can read them into its `dict_args`. We also stash a copy
 				// of each fresh constraint on the analyzer so discharge
 				// picks them up after unify finishes.
+				//
+				// Clear first: `unify` can run more than once (the `try`
+				// dispatch fixpoint re-unifies with extra constraints), which
+				// re-instantiates this same per-call-site sink. Without the
+				// clear, each re-unify would *append* a duplicate set of dicts,
+				// and the call would be handed too many `dict_args` at runtime
+				// (an arity mismatch). The last pass's cells are the live ones —
+				// they reference the final substitution's tyvars.
 				{
 					let mut sink_borrow = sink.borrow_mut();
+					sink_borrow.clear();
 					for c in &fresh_class_constraints {
 						sink_borrow.push(c.dispatch_cell.clone());
 					}

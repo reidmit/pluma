@@ -1,0 +1,13 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+runtime error
+== stdout ==
+start
+inner cleanup
+main cleanup
+== stderr ==
+kaboom
+

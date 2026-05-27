@@ -8,7 +8,7 @@
 use compiler::ast::{
 	CallNode, DefinitionKind, ExprKind, ExprNode, FunNode, IdentifierNode, IfNode, LetNode, ListItem,
 	LiteralKind, ModuleNode, Operator, PatternKind, PatternNode, RegexAnchor, RegexKind, RegexNode,
-	WhenNode, WhileNode,
+	TryNode, WhenNode, WhileNode,
 };
 use compiler::Range;
 use std::collections::HashMap;
@@ -1548,12 +1548,64 @@ fn emit_expr_with_parents(
 		ExprKind::ElementAccess { .. } => {
 			return Err("codegen: ElementAccess not implemented".into());
 		}
-		ExprKind::Try(_) => {
-			// The analyzer must rewrite every `try` into a `<carrier>.then`
-			// call before codegen. Seeing one here means dispatch never
-			// fired — either the RHS type couldn't be resolved or the
-			// post-unify pass missed this node.
-			return Err("codegen: `try` was not rewritten by the analyzer".into());
+		ExprKind::Try(TryNode {
+			pattern,
+			value,
+			rest,
+			task_carrier,
+			..
+		}) => {
+			// option/result `try`s are rewritten into `<carrier>.then` calls by
+			// the analyzer and never reach codegen. A surviving `try` is the
+			// task carrier — and, by construction, only ever appears inside an
+			// async-bearing function, which `emit_fun` compiles to a step
+			// function. We lower it to: evaluate the awaited task, `Await`
+			// (suspend), bind the result, then emit the continuation inline —
+			// the CPS state-machine transform.
+			if !task_carrier {
+				return Err("codegen: non-task `try` was not rewritten by the analyzer".into());
+			}
+			emit_expr_with_parents(
+				cg,
+				current_module,
+				imports,
+				fb,
+				scope,
+				parent_scopes,
+				value,
+				false,
+			)?;
+			fb.emit(Instruction::Await, range);
+			match &pattern.kind {
+				PatternKind::Identifier(ident) => {
+					let slot = fb.alloc_slot();
+					fb.emit(Instruction::StoreLocal(slot), range);
+					scope.define_local(&ident.name, slot);
+				}
+				PatternKind::Underscore => {
+					fb.emit(Instruction::Pop, range);
+				}
+				// The analyzer restricts a task `try` pattern to ident/wildcard.
+				_ => return Err("codegen: unsupported `try` pattern".into()),
+			}
+			// The continuation. Its last expr is the function's tail task and
+			// inherits this `try`'s tail position.
+			for (i, e) in rest.iter().enumerate() {
+				let is_last = i == rest.len() - 1;
+				emit_expr_with_parents(
+					cg,
+					current_module,
+					imports,
+					fb,
+					scope,
+					parent_scopes,
+					e,
+					is_last && tail,
+				)?;
+				if !is_last {
+					fb.emit(Instruction::Pop, e.range);
+				}
+			}
 		}
 		ExprKind::NamespaceAccess(path) => {
 			// Trait method reference (e.g. `numeric.add`): dispatch cell was
@@ -1974,14 +2026,88 @@ fn emit_fun(
 			}
 		}
 	}
-	fb.emit(
+	// An async-bearing function (its body awaits a task via `try`) becomes a
+	// `Value::AsyncFn`: calling it builds a cold task instead of running. The
+	// emitted body bytecode is identical either way — only the `Await`
+	// suspension points (lowered in the `Try` arm) and this wrapper differ.
+	let num_captures = captures.len() as u16;
+	let instr = if body_is_async(body) {
+		Instruction::MakeAsyncClosure {
+			fn_idx: inner_fn_idx,
+			num_captures,
+		}
+	} else {
 		Instruction::MakeClosure {
 			fn_idx: inner_fn_idx,
-			num_captures: captures.len() as u16,
-		},
-		range,
-	);
+			num_captures,
+		}
+	};
+	fb.emit(instr, range);
 	Ok(())
+}
+
+// Is this function body async-bearing — i.e. does it directly await a task?
+// True iff it contains a task-carrier `try` in its *own* frame. Crucially we
+// do NOT descend into nested `Fun`s: those are separate functions whose own
+// async-ness is decided when they're emitted. Must stay exhaustive over the
+// same expression forms a `try` can hide inside (control flow, let, defer,
+// groupings) so a step function is never miscompiled as a plain closure.
+fn body_is_async(body: &[ExprNode]) -> bool {
+	body.iter().any(expr_is_async)
+}
+
+fn expr_is_async(expr: &ExprNode) -> bool {
+	match &expr.kind {
+		ExprKind::Try(TryNode {
+			task_carrier,
+			value,
+			rest,
+			..
+		}) => {
+			// A task `try` makes this frame async. (Even a non-task `try` here
+			// would be a bug, but recurse defensively into its sub-trees.)
+			*task_carrier || expr_is_async(value) || rest.iter().any(expr_is_async)
+		}
+		// Stop at function boundaries — a nested closure is its own frame.
+		ExprKind::Fun(_) => false,
+		ExprKind::Let(LetNode { value, .. }) => expr_is_async(value),
+		ExprKind::Defer(inner) | ExprKind::Grouping(inner) => expr_is_async(inner),
+		ExprKind::Call(CallNode { callee, args, .. }) => {
+			expr_is_async(callee) || args.iter().any(expr_is_async)
+		}
+		ExprKind::Tuple(es) | ExprKind::Interpolation(es) => es.iter().any(expr_is_async),
+		ExprKind::List(items) => items.iter().any(|it| expr_is_async(it.expr())),
+		ExprKind::Record(fields) => fields.iter().any(|(_, v)| expr_is_async(v)),
+		ExprKind::ElementAccess { receiver, .. } | ExprKind::FieldAccess { receiver, .. } => {
+			expr_is_async(receiver)
+		}
+		ExprKind::UnaryOperation { right, .. } => expr_is_async(right),
+		ExprKind::BinaryOperation { left, right, .. } => expr_is_async(left) || expr_is_async(right),
+		ExprKind::If(IfNode {
+			subject,
+			body,
+			else_body,
+			..
+		}) => {
+			expr_is_async(subject)
+				|| body.iter().any(expr_is_async)
+				|| else_body
+					.as_ref()
+					.map_or(false, |b| b.iter().any(expr_is_async))
+		}
+		ExprKind::When(WhenNode { subject, cases, .. }) => {
+			expr_is_async(subject) || cases.iter().any(|c| c.body.iter().any(expr_is_async))
+		}
+		ExprKind::While(WhileNode { subject, body, .. }) => {
+			expr_is_async(subject) || body.iter().any(expr_is_async)
+		}
+		ExprKind::Identifier(_)
+		| ExprKind::Literal(_)
+		| ExprKind::Regex(_)
+		| ExprKind::EmptyTuple
+		| ExprKind::Builtin(_)
+		| ExprKind::NamespaceAccess(_) => false,
+	}
 }
 
 fn emit_call(

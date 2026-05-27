@@ -61,6 +61,48 @@ pub enum Value {
 	// point to the same underlying cell. Aliasing is intentional — passing
 	// a ref to a function lets that function observe and mutate the cell.
 	Ref(Rc<RefCell<Value>>),
+	// A callable that, when applied, builds a *cold* task rather than
+	// running. Codegen emits one for any async-bearing function (a function
+	// whose body awaits a task via `try`): calling it (see `do_call`)
+	// packages the args + captures into a `Task(TaskRepr::Async{..})` recipe.
+	// This is the runtime fact that makes "calling an async function returns
+	// a cold task" — no call-site knowledge needed. See `vm::task`.
+	AsyncFn(Rc<AsyncFnData>),
+	// A cold, re-runnable asynchronous computation. Building one does
+	// nothing; the driver (`VM::run_task`) runs it when it's awaited (the
+	// `Await` op inside a step function) or returned from `main`. Awaiting
+	// the same `Task` value twice runs it twice — it's a recipe, not a
+	// cached result. See ASYNC.md and `vm::task`.
+	Task(Rc<TaskRepr>),
+}
+
+pub struct AsyncFnData {
+	// Index into `Program::functions` of the resumable step function — the
+	// async function's body lowered with `Await` suspension points.
+	pub step_fn: usize,
+	pub captures: Rc<Vec<Value>>,
+}
+
+// The shapes a `task` value can take. The leaf variants are produced by the
+// `core.task` primitives (`task.return`/`fail`/`sleep`/`yield`); `Async` is
+// produced by calling an async-bearing function. The driver in `vm::task`
+// interprets them.
+pub enum TaskRepr {
+	// `task.return v` — already finished, produces `v`.
+	Pure(Value),
+	// `task.fail e` — fails immediately with `e` (untyped error channel).
+	Fail(Value),
+	// `task.sleep d` — completes (with nothing) after `d` nanoseconds.
+	Sleep(i64),
+	// `task.yield ()` — hands the scheduler a turn, then completes.
+	Yield,
+	// A cold instance of an async function: its resumable step function plus
+	// the closure captures and the call arguments to seed the first frame.
+	Async {
+		step_fn: usize,
+		captures: Rc<Vec<Value>>,
+		args: Vec<Value>,
+	},
 }
 
 pub struct DictData {
@@ -282,6 +324,8 @@ impl std::fmt::Display for Value {
 				write!(f, "}}")
 			}
 			Value::Ref(cell) => write!(f, "ref {}", cell.borrow()),
+			Value::AsyncFn(_) => write!(f, "<async-fn>"),
+			Value::Task(_) => write!(f, "<task>"),
 		}
 	}
 }

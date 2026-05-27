@@ -2,6 +2,7 @@ mod builtin;
 mod instruction;
 pub mod program;
 pub mod stdlib;
+mod task;
 mod value;
 mod vm;
 

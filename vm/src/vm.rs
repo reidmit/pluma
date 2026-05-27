@@ -3,7 +3,9 @@
 use crate::builtin;
 use crate::instruction::Instruction;
 use crate::program::{Function, GlobalSlot, Program};
-use crate::value::{values_eq, ClosureData, Value, VariantCtorData, VariantData};
+use crate::value::{
+	values_eq, AsyncFnData, ClosureData, TaskRepr, Value, VariantCtorData, VariantData,
+};
 use compiler::Range;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -265,6 +267,16 @@ impl VM {
 			.stack
 			.pop()
 			.ok_or_else(|| RuntimeError::new("VM exited with empty stack"))?;
+		// Lazy runtime init: a purely-synchronous program returns a plain value
+		// and never touches the event loop. If `main` returned a task (it used
+		// `try`/`task.*`), drive it to completion now — this is the only place
+		// the async runtime spins up. A task failure becomes a user abort,
+		// mirroring how a returned `err` result is handled just below.
+		let value = if matches!(value, Value::Task(_)) {
+			self.run_task(value)?
+		} else {
+			value
+		};
 		// `main`'s return value doubles as the program's exit status when it's
 		// a `result`: an `err e` aborts with `e` on stderr and a nonzero exit
 		// — the same controlled exit `io.fail` produces, so the CLI and test
@@ -393,7 +405,7 @@ impl VM {
 		Ok(())
 	}
 
-	fn step(&mut self) -> Result<(), RuntimeError> {
+	pub(crate) fn step(&mut self) -> Result<(), RuntimeError> {
 		let frame_idx = self.frames.len() - 1;
 		let func: &Function = &self.program.functions[self.frames[frame_idx].fn_idx as usize];
 		if self.frames[frame_idx].ip >= func.body.len() {
@@ -486,6 +498,31 @@ impl VM {
 					fn_idx: fn_idx as usize,
 					captures: Rc::new(captures),
 				})));
+			}
+			Instruction::MakeAsyncClosure {
+				fn_idx,
+				num_captures,
+			} => {
+				let mut captures = Vec::with_capacity(num_captures as usize);
+				for _ in 0..num_captures {
+					captures.push(self.stack.pop().ok_or_else(|| {
+						RuntimeError::new("VM: MakeAsyncClosure underflow").at(self.current_range())
+					})?);
+				}
+				captures.reverse();
+				self.stack.push(Value::AsyncFn(Rc::new(AsyncFnData {
+					step_fn: fn_idx as usize,
+					captures: Rc::new(captures),
+				})));
+			}
+			Instruction::Await => {
+				// Await is intercepted by the task driver (`drive_step`) before
+				// the normal step loop ever reaches it. Seeing it here means a
+				// step function ran outside the driver — a codegen/driver bug.
+				return Err(
+					RuntimeError::new("VM: `Await` executed outside the task driver")
+						.at(self.current_range()),
+				);
 			}
 			Instruction::Call(arity) => self.do_call(arity, false)?,
 			Instruction::TailCall(arity) => self.do_call(arity, true)?,
@@ -1250,6 +1287,43 @@ impl VM {
 				})));
 				Ok(())
 			}
+			Value::AsyncFn(af) => {
+				// Calling an async function builds a *cold* task — it does NOT
+				// run. Like the Builtin/VariantCtor arms, this never pushes a
+				// frame (the `tail` flag is irrelevant); the task runs only when
+				// awaited or driven. This is what makes "calling an async fn
+				// returns a cold task" a uniform runtime fact — no call-site
+				// codegen knowledge of the callee's async-ness is needed.
+				let step_fn = af.step_fn;
+				let captures = Rc::clone(&af.captures);
+				let func = &self.program.functions[step_fn];
+				let mut effective_arity = arity;
+				if func.param_count == 0
+					&& arity == 1
+					&& matches!(self.stack[stack_len - 1], Value::Nothing)
+				{
+					self.stack.pop();
+					effective_arity = 0;
+				}
+				if effective_arity != func.param_count as usize {
+					return Err(
+						RuntimeError::new(format!(
+							"arity mismatch: expected {} args, got {}",
+							func.param_count, effective_arity
+						))
+						.at(self.current_range()),
+					);
+				}
+				let args_start = self.stack.len() - effective_arity;
+				let args: Vec<Value> = self.stack.drain(args_start..).collect();
+				self.stack.pop(); // callee
+				self.stack.push(Value::Task(Rc::new(TaskRepr::Async {
+					step_fn,
+					captures,
+					args,
+				})));
+				Ok(())
+			}
 			_ => Err(RuntimeError::new("not callable").at(self.current_range())),
 		}
 	}
@@ -1297,9 +1371,11 @@ fn opcode_name(i: &Instruction) -> &'static str {
 		Jump(_) => "Jump",
 		JumpIfFalse(_) => "JumpIfFalse",
 		MakeClosure { .. } => "MakeClosure",
+		MakeAsyncClosure { .. } => "MakeAsyncClosure",
 		Call(_) => "Call",
 		TailCall(_) => "TailCall",
 		PushDefer => "PushDefer",
+		Await => "Await",
 		Return => "Return",
 		MakeTuple(_) => "MakeTuple",
 		MakeList(_) => "MakeList",

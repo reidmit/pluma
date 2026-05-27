@@ -4,7 +4,7 @@
 // comparison, etc.) are inlined into the VM dispatch loop instead; this
 // file is only the named-builtin path plus the cross-call `invoke` helper.
 
-use crate::value::{values_eq, DictData, Value, VariantData};
+use crate::value::{values_eq, DictData, TaskRepr, Value, VariantData};
 use crate::vm::{RuntimeError, VM};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -1593,6 +1593,20 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 		// operation (unit constructors, arithmetic, comparisons) out of the
 		// box/unbox builtins below, so only genuinely-native work (the clock,
 		// calendar breakdown, formatting, parsing) lands here.
+		// --- core.task primitives. Each builds a cold `Value::Task` recipe; the
+		// driver in `vm::task` runs them. They never perform I/O or suspend
+		// here — that's the driver's job. ---
+		"task-return" => Ok(Value::Task(Rc::new(TaskRepr::Pure(
+			args.into_iter().next().unwrap_or(Value::Nothing),
+		)))),
+		"task-fail" => Ok(Value::Task(Rc::new(TaskRepr::Fail(
+			args.into_iter().next().unwrap_or(Value::Nothing),
+		)))),
+		"task-yield" => Ok(Value::Task(Rc::new(TaskRepr::Yield))),
+		"task-sleep" => {
+			let nanos = expect_duration(&args, "sleep");
+			Ok(Value::Task(Rc::new(TaskRepr::Sleep(nanos))))
+		}
 		"time-now" => {
 			debug_assert_eq!(args.len(), 1, "`now` arity");
 			Ok(Value::Instant(jiff::Timestamp::now().as_nanosecond() as i64))

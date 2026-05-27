@@ -1,0 +1,16 @@
+# A task failure propagates through `try` (the awaiting task fails too) and,
+# with nothing to recover it, aborts the program with the error on stderr.
+# Each frame's `defer` cleanups still run on the way out, inner frame first.
+def inner = fun {
+	defer print "inner cleanup"
+	try _ = task.fail "kaboom"
+	task.return 0
+}
+
+def main = fun {
+	defer print "main cleanup"
+	print "start"
+	try _ = inner ()
+	print "unreachable"
+	task.return 0
+}

@@ -52,6 +52,14 @@ pub enum Instruction {
 		fn_idx: FuncIdx,
 		num_captures: u16,
 	},
+	// Like MakeClosure, but builds a `Value::AsyncFn` instead of a
+	// `Value::Closure`. Emitted for an async-bearing function (one whose body
+	// awaits a task); `fn_idx` is its resumable step function. Calling the
+	// resulting value yields a cold `Task` rather than running it.
+	MakeAsyncClosure {
+		fn_idx: FuncIdx,
+		num_captures: u16,
+	},
 	Call(u16),
 	TailCall(u16),
 	Return,
@@ -59,6 +67,12 @@ pub enum Instruction {
 	// Emitted for `defer expr` (the closure is a zero-arg thunk wrapping
 	// `expr`). The frame's cleanup stack is run LIFO when the frame Returns.
 	PushDefer,
+	// Suspension point inside a task step function, emitted for each `try`
+	// over the task carrier. The awaited `Task` is on top of the stack; the
+	// driver (`VM::run_task`) snapshots the frame, runs the awaited task, and
+	// resumes here with its result pushed. Only ever executed inside a frame
+	// the driver pushed — never reached by the normal step loop.
+	Await,
 
 	// Aggregates
 	MakeTuple(u16),
