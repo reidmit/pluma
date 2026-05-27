@@ -1,9 +1,11 @@
 # Tools for building and combining `task`s -- asynchronous computations
 # that run on Pluma's single-threaded event loop.
 #
-# The `task` type itself is built in and always available (see the
-# prelude), and this module is auto-imported like `option`/`result`, so
-# `task.return`, `task.sleep`, and friends resolve with no `use` line.
+# The `task` type itself is built in and always available (see the prelude),
+# and the async *syntax* -- `try`/`??` over a task, the `scope` block, `defer`,
+# duration literals -- needs no import. But the named functions here all live
+# behind `use core.task`: since you can't build a task without `task.return` /
+# `task.fail`, async code imports this module anyway.
 #
 # You rarely call `task.then` by hand: inside a function that returns a
 # `task`, `try x = some-task` awaits it and reads top-to-bottom, the same
@@ -11,6 +13,7 @@
 # (`task.all`, `task.race`, `task.with-timeout`, …) compose tasks that run
 # concurrently; `scope` (a keyword) is the structured-concurrency block
 # they're built on. See ASYNC.md.
+use core.list
 
 # Lifts a plain value into a task that is already finished. `task.return
 # 5` is the task that immediately produces `5`. It's how an async function
@@ -112,3 +115,147 @@ public def manual-cancel-after :: fun (manual-handle a) duration -> nothing = bu
 # `some (ok v)` / `some (err e)` per completion, then `none` once every child
 # has been drained. The building block under `race` / `any` / `pool`.
 public def manual-next :: fun (manual-handle a) nothing -> task (option (result a e)) = built-in "scope-next"
+
+# --- concurrent combinators ----------------------------------------------
+#
+# Ordinary Pluma built on the `scope` kernel above -- no new primitives. Each
+# runs its tasks concurrently inside a scope and composes the outcomes; the
+# structural guarantee (a scope can't exit with a child still live) and
+# fail-fast cancellation come for free from the block.
+#
+# Two patterns recur. Spawning a list of tasks is `list.map ts (fun t {
+# s.spawn t })`: the lambda captures the handle `s`, so `s.spawn` dispatches,
+# and `list.map` does the iteration. Draining a manual scope needs to call
+# `s.next` in a loop, which wants recursion -- so the loop lives in a private
+# top-level driver (`drain-any` / `gather`) and the scope-handle operations are
+# handed to it as `s`-capturing closures (`fun { s.next () }`), since a handle
+# can only be used where it was bound, not passed as a plain argument.
+
+# Lifts a settled `result` back onto the task carrier: `ok v` becomes a task
+# that succeeds with `v`, `err e` one that fails with `e`. The glue between
+# `s.next` (which hands back a `result`) and the combinators that re-raise it.
+def result-to-task :: fun (result a e) -> task a = fun r {
+	when r is ok x { return x } is err e { fail e }
+}
+
+# Awaits a list of already-spawned handles in order, collecting their values.
+# Handles run concurrently regardless of the order they're awaited in -- this
+# is just the sequential back half of `all` / `settle-all`.
+def await-all :: fun (list (task a)) -> task (list a) = fun handles {
+	when handles is [] { return [] }
+	is [h, ...rest] {
+		try x = h
+		try xs = await-all rest
+		return [x, ...xs]
+	}
+}
+
+# Runs `t1` and `t2` concurrently and pairs their results. Both start at
+# `spawn`, so awaiting them in order is still parallel; if either fails, the
+# fail-fast scope cancels the other and the whole task fails.
+public def both :: fun (task a) (task b) -> task (a, b) = fun t1 t2 {
+	scope as s {
+		let h1 = s.spawn t1
+		let h2 = s.spawn t2
+		try a = h1
+		try b = h2
+		return (a, b)
+	}
+}
+
+# Runs every task in `ts` concurrently and collects their results in order.
+# Fail-fast: the first failure cancels the rest and fails the whole task.
+public def all :: fun (list (task a)) -> task (list a) = fun ts {
+	scope as s {
+		let handles = list.map ts (fun t { s.spawn t })
+		await-all handles
+	}
+}
+
+# Runs every task concurrently and collects *every* outcome as a `result` --
+# successes and failures alike. Each task is `attempt`-wrapped, so none of
+# them ever fails the scope: this always settles the full list.
+public def settle-all :: fun (list (task a)) -> task (list (result a e)) = fun ts {
+	all (list.map ts (fun t { attempt t }))
+}
+
+# Runs every task concurrently and returns the first to *settle* (succeed or
+# fail), cancelling the losers. Fails if `ts` is empty.
+public def race :: fun (list (task a)) -> task a = fun ts {
+	manual scope as s {
+		let _ = list.map ts (fun t { s.spawn t })
+		try first = s.next ()
+		s.cancel ()
+		when first is some r { result-to-task r }
+		is none { fail "race: empty" }
+	}
+}
+
+# Drives `race`'s success-seeking cousin: pull settled children via `next` and
+# return the first success, cancelling the rest; skip failures; fail if the
+# scope drains with none. The handle operations arrive as closures (see the
+# section header).
+def drain-any :: fun (fun nothing -> task (option (result a e))) (fun nothing -> nothing) -> task a = fun next cancel {
+	try got = next ()
+	when got is none { fail "any: all tasks failed" }
+	is some r {
+		when r is ok v {
+			let _ = cancel ()
+			return v
+		} is err _e { drain-any next cancel }
+	}
+}
+
+# Runs every task concurrently and returns the first to *succeed*, cancelling
+# the rest. Failures are skipped; if every task fails, this fails too.
+public def any :: fun (list (task a)) -> task a = fun ts {
+	manual scope as s {
+		let _ = list.map ts (fun t { s.spawn t })
+		drain-any (fun { s.next () }) (fun { s.cancel () })
+	}
+}
+
+# Retries `t` up to `n` attempts: cold tasks are re-runnable, so awaiting `t`
+# again runs it fresh. Returns the first success or the last failure. No scope
+# -- this is purely sequential re-running.
+public def retry :: fun int (task a) -> task a = fun n t {
+	if n <= 1 is true { t }
+	else { t ?? retry (n - 1) t }
+}
+
+# Runs `t` with a deadline: whichever of `t` and a `d`-long timer settles
+# first wins. If the timer wins, `t` is cancelled and the task fails with
+# "timeout".
+public def with-timeout :: fun duration (task a) -> task a = fun d t {
+	race [t, sleep d | then (fun _slept { fail "timeout" })]
+}
+
+# Drives `pool`: each time a child settles, re-raise a failure (fail-fast) or
+# record the value and start one more from the backlog, until the scope drains.
+# `next`/`spawn` are `s`-capturing closures; `backlog` holds the not-yet-started
+# tasks.
+def gather :: fun (fun nothing -> task (option (result a e))) (fun (task a) -> task a) (ref (list (task a))) (list a) -> task (list a) = fun next spawn backlog acc {
+	try got = next ()
+	when got is none { return (list.reverse acc) }
+	is some r {
+		try x = result-to-task r
+		when (ref.get backlog) is [head, ...rest] {
+			ref.set backlog rest
+			let _ = spawn head
+			gather next spawn backlog [x, ...acc]
+		} is [] {
+			gather next spawn backlog [x, ...acc]
+		}
+	}
+}
+
+# Bounded concurrency: runs at most `n` of `ts` at once, starting another each
+# time one finishes, and collects results in completion order. Fail-fast on
+# the first failure.
+public def pool :: fun int (list (task a)) -> task (list a) = fun n ts {
+	manual scope as s {
+		let backlog = ref.new (list.drop ts n)
+		let _ = list.map (list.take ts n) (fun t { s.spawn t })
+		gather (fun { s.next () }) (fun t { s.spawn t }) backlog []
+	}
+}

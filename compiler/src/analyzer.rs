@@ -2043,30 +2043,51 @@ impl<'compiler> Analyzer<'compiler> {
 			_ => unreachable!(),
 		};
 
-		// New callee: `task.<def_name>` as a field access on the auto-imported
-		// `task` namespace; the normal FieldAccess dispatch resolves it to the
-		// kernel builtin's global.
-		let new_callee = ExprNode {
-			ty: Type::Unknown,
-			range: field.range,
-			kind: ExprKind::FieldAccess {
-				receiver: Box::new(ExprNode {
-					ty: Type::Unknown,
-					range: field.range,
-					kind: ExprKind::Identifier(IdentifierNode {
-						name: "task".to_string(),
+		// New callee: the kernel def `<def_name>`. In a module that imports
+		// `core.task` (under whatever local name) it lives in that namespace,
+		// so emit `<local>.<def_name>` and let the normal FieldAccess dispatch
+		// resolve it to the builtin global. Inside `core.task` itself there's
+		// no such import — the def is a local top-level — so reference it bare.
+		// (This is what lets the combinators in task.pa use `s.spawn`/`s.next`
+		// on their own handles.)
+		let task_local = self
+			.import_qualified
+			.iter()
+			.find(|(_, full)| full.as_str() == "core.task")
+			.map(|(local, _)| local.clone());
+		let new_callee = match task_local {
+			Some(local) => ExprNode {
+				ty: Type::Unknown,
+				range: field.range,
+				kind: ExprKind::FieldAccess {
+					receiver: Box::new(ExprNode {
+						ty: Type::Unknown,
 						range: field.range,
+						kind: ExprKind::Identifier(IdentifierNode {
+							name: local,
+							range: field.range,
+						}),
+						trait_dispatch: None,
+						dispatch_sink: None,
 					}),
-					trait_dispatch: None,
-					dispatch_sink: None,
-				}),
-				field: IdentifierNode {
+					field: IdentifierNode {
+						name: def_name.to_string(),
+						range: field.range,
+					},
+				},
+				trait_dispatch: None,
+				dispatch_sink: None,
+			},
+			None => ExprNode {
+				ty: Type::Unknown,
+				range: field.range,
+				kind: ExprKind::Identifier(IdentifierNode {
 					name: def_name.to_string(),
 					range: field.range,
-				},
+				}),
+				trait_dispatch: None,
+				dispatch_sink: None,
 			},
-			trait_dispatch: None,
-			dispatch_sink: None,
 		};
 
 		let mut new_args = Vec::with_capacity(args.len() + 1);
@@ -4870,7 +4891,13 @@ impl<'compiler> Analyzer<'compiler> {
 				("result", args[0].clone())
 			}
 			Type::Enum(name, args) if name == "__prelude__.task" && args.len() == 1 => {
-				("task", resolved_left.clone())
+				// Fully-qualified so codegen resolves it by name regardless of
+				// imports: `core.task` isn't auto-imported, but `??` (like
+				// `try`) must work on any task value -- including inside
+				// `core.task` itself and in modules that only received a task
+				// from elsewhere. The dot marks it compiler-inserted (user
+				// namespace names are bare identifiers).
+				("core.task", resolved_left.clone())
 			}
 			_ => {
 				self.error(

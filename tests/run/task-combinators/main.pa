@@ -1,5 +1,6 @@
 # The task combinators: `map`/`then` transform, `or-else` (and `??`) recover,
 # `attempt` reifies failure into a `result`. All compose with `|`.
+use core.task
 def main = fun {
 	try a = task.return 21 | task.map (fun n { n + n })
 	print (to-string a)

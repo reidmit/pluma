@@ -773,11 +773,36 @@ See Appendix C.7 for implementations.
 - [x] `task.attempt` (reifies failure — carries the on-fail axis), plus
       `task.then` / `task.or-else` / `task.map` (the transformers) —
       builtins building `TaskRepr` nodes, interpreted by the driver.
-- [ ] `task.all`, `task.both`, `task.settle-all` (fail-fast scope)
-- [ ] `task.race`, `task.any`, `task.pool` (`manual scope` + `s.next`)
-- [ ] `task.with-timeout` (deadline'd scope), `task.retry`
-- [x] Test fixtures for the transformers (`tests/run/task-combinators`);
-      scope-level combinators pending Phase 4.
+- [x] `task.all`, `task.both`, `task.settle-all` (fail-fast scope)
+- [x] `task.race`, `task.any`, `task.pool` (`manual scope` + `s.next`)
+- [x] `task.with-timeout` (composes on `race`), `task.retry`
+- [x] Test fixtures: transformers (`tests/run/task-combinators`) and the
+      scope-level combinators (`tests/run/task-combinators-concurrent` —
+      both/all/settle-all/race/any/retry/with-timeout/pool end to end).
+
+All eight are pure Pluma in `compiler/src/stdlib/task.pa` over the Phase 4
+kernel — no new primitives. Two implementation notes that diverge from the
+C.7 sketch:
+
+- **`core.task` is no longer auto-imported.** The async *syntax* (`try`/`??`
+  over a task, `scope`, `defer`, durations) needs no import — it's
+  type-driven and lowers to fully-qualified globals — but every *named*
+  task function (`task.return`, the combinators, the `s.spawn`/`s.next`
+  kernel) lives behind `use core.task`. Since you can't build a task without
+  `task.return`, async code imports it anyway. This also un-cycles
+  `core.task`'s own `use core.list` (list no longer pulls in task), which the
+  combinators need for `list.map`/`take`/`drop`.
+- **A scope handle can only be used where it's bound, not passed as a plain
+  argument.** Method dispatch (`s.spawn`/`s.next`) resolves at constraint
+  time off the handle's concrete binding, so it works inside the `scope`
+  body and in `s`-capturing lambdas (`list.map ts (fun t { s.spawn t })`),
+  but a top-level helper taking `s` as a parameter sees only a fresh tyvar.
+  So the draining loops in `any`/`pool` live in private top-level drivers
+  (`drain-any`/`gather`) that receive the handle operations as `s`-capturing
+  closures (`fun { s.next () }`) rather than the handle itself. Lifting this
+  restriction (seed annotated handle-typed params) is a possible follow-up.
+- [ ] `task.shielded` — deferred to Phase 5 remainder (needs the
+      uninterruptible-region cancellation mechanics).
 
 ### Phase 7 — Sync wrappers and scripting polish
 

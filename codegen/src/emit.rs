@@ -1708,6 +1708,17 @@ fn emit_namespace_access(
 		// resolves the overlap; here we mirror it — module value first,
 		// then enum variant.
 		[head, tail] => {
+			// A dotted head is a compiler-inserted fully-qualified reference
+			// (e.g. `??`-over-task lowers to `core.task.or-else`), never a
+			// user namespace -- those are bare identifiers. Resolve it as a
+			// global directly, independent of the module's imports.
+			if head.name.contains('.') {
+				if let Some(global_idx) = cg.lookup_global(&head.name, &tail.name) {
+					fb.emit(Instruction::LoadGlobal(global_idx), range);
+					return Ok(());
+				}
+				return Err(format!("codegen: `{}.{}` not found", head.name, tail.name));
+			}
 			if let Some(qualified_module) = imports.get(&head.name).cloned() {
 				if let Some(global_idx) = cg.lookup_global(&qualified_module, &tail.name) {
 					fb.emit(Instruction::LoadGlobal(global_idx), range);

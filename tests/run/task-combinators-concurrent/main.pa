@@ -1,0 +1,52 @@
+# The concurrent combinators built on the scope kernel: `both`, `all`,
+# `settle-all`, `race`, `any`, `retry`, `with-timeout`, `pool`. Each runs its
+# children concurrently and composes the outcomes.
+use core.task
+
+def sleeper = fun ms n {
+	try _ = task.sleep ms
+	task.return n
+}
+
+def boom = fun ms msg {
+	try _ = task.sleep ms
+	task.fail msg
+}
+
+def main = fun {
+	# both: pair two concurrent results.
+	try p = task.both (sleeper 2ms 1) (sleeper 1ms 2)
+	when p is (a, b) { print "both $(to-string a) $(to-string b)" }
+
+	# all: collect in order, even though the first finishes last.
+	try xs = task.all [sleeper 3ms 10, sleeper 1ms 20, sleeper 2ms 30]
+	print "all $(to-string xs)"
+
+	# settle-all: every outcome, successes and failures alike.
+	try rs = task.settle-all [sleeper 1ms 5, boom 1ms "nope"]
+	print "settle $(to-string rs)"
+
+	# race: first to settle wins, losers cancelled.
+	try w = task.race [sleeper 5ms 100, sleeper 1ms 200]
+	print "race $(to-string w)"
+
+	# any: first to succeed; the early failure is skipped.
+	try y = task.any [boom 1ms "fail-fast", sleeper 3ms 42]
+	print "any $(to-string y)"
+
+	# retry: re-runs a cold failing task; here it always fails.
+	try r = task.retry 3 (boom 1ms "still-bad") ?? task.return (0 - 1)
+	print "retry $(to-string r)"
+
+	# with-timeout: work beats the timer / timer beats the work.
+	try fast = task.with-timeout 10ms (sleeper 1ms 7)
+	print "timeout-ok $(to-string fast)"
+	try slow = task.with-timeout 1ms (sleeper 10ms 9) ?? task.return (0 - 2)
+	print "timeout-hit $(to-string slow)"
+
+	# pool: bounded concurrency, results in completion order.
+	try ps = task.pool 2 [sleeper 2ms 1, sleeper 1ms 2, sleeper 3ms 3, sleeper 1ms 4]
+	print "pool $(to-string ps)"
+
+	task.return 0
+}

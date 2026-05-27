@@ -20,11 +20,14 @@ pub const AUTO_IMPORTS: &[(&str, &str)] = &[
 	("core.ref", "ref"),
 	("core.option", "option"),
 	("core.result", "result"),
-	// `task` is the third `try` carrier, so — like option/result — its
-	// module is auto-imported (`task.return`, `task.sleep`, … resolve with
-	// no `use`). The `task` local name overlaps the prelude `task` enum the
-	// same way `option`/`result` do.
-	("core.task", "task"),
+	// NB: `core.task` is deliberately *not* auto-imported. The async syntax
+	// (`try`/`??` over a task, `scope`, `defer`, duration literals) needs no
+	// import — it's type-driven and lowers to fully-qualified globals — but
+	// every *named* task function (`task.return`, `task.sleep`, `task.both`,
+	// the kernel behind `s.spawn`/`s.next`, …) lives behind `use core.task`.
+	// Since you can't build a task without `task.return`/`task.fail`, async
+	// code imports `core.task` anyway; keeping it explicit avoids pulling the
+	// whole combinator surface into every module's namespace.
 ];
 
 // PLUMA_TIMING=1 prints per-module parse/analyze wall-clock to stderr.

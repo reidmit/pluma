@@ -1,3 +1,4 @@
+use core.task
 def demo = fun {
 	scope as s {
 		let h = s.spawn work

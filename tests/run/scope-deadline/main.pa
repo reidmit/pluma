@@ -1,6 +1,7 @@
 # `s.cancel-after`: the scope self-cancels once the deadline elapses. Its child
 # is cancelled mid-sleep (its `defer` runs), and the cancelled scope surfaces a
 # recoverable failure, which `??` turns into a fallback.
+use core.task
 def guarded = fun {
 	scope as s {
 		s.cancel-after 15ms

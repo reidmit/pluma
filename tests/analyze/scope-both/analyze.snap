@@ -9,98 +9,100 @@ module `main` (tests/analyze/scope-both/main.pa) {
         2: " `s.spawn` method dispatch (lowered to the `task.scope-spawn` kernel builtin).",
     },
     ast: Some(
-        module(3:0-16:1) [
-            def(3:0-11:1) :: nothing {
-                name: ident(3:4-3:8) `both`,
-                kind: expr(3:11-11:1) :: (task 't0) (task 't2) -> task (('t0, 't2)) {
-                    kind: fun(3:11-11:1) {
+        module(3:0-17:1) [
+            use(3:0-3:13) `core.task`,
+        ] [
+            def(4:0-12:1) :: nothing {
+                name: ident(4:4-4:8) `both`,
+                kind: expr(4:11-12:1) :: (task 't0) (task 't2) -> task (('t0, 't2)) {
+                    kind: fun(4:11-12:1) {
                         params: [
-                            ident(3:15-3:17) `t1` :: task 't0,
-                            ident(3:18-3:20) `t2` :: task 't2,
+                            ident(4:15-4:17) `t1` :: task 't0,
+                            ident(4:18-4:20) `t2` :: task 't2,
                         ],
                         body: [
-                            expr(4:1-10:2) :: task (('t0, 't2)) {
-                                kind: scope(4:1-10:2) {
+                            expr(5:1-11:2) :: task (('t0, 't2)) {
+                                kind: scope(5:1-11:2) {
                                     manual: false,
                                     handle: Some(
-                                        ident(4:10-4:11) `s`,
+                                        ident(5:10-5:11) `s`,
                                     ),
                                     body: [
-                                        expr(5:2-5:21) :: nothing {
-                                            kind: let(5:2-5:21) {
-                                                pattern: pattern(5:6-5:8) Identifier(
-                                                    ident(5:6-5:8) `h1`,
-                                                ),
-                                                value: expr(5:11-5:21) :: task 't0 {
-                                                    kind: call(5:11-5:21) {
-                                                        callee: expr(5:13-5:18) :: scope-handle (task 't0) -> task 't0 {
-                                                            kind: namespace-access `task.scope-spawn`,
-                                                        },
-                                                        args: [
-                                                            expr(5:11-5:12) :: scope-handle {
-                                                                kind: ident(5:11-5:12) `s`,
-                                                            },
-                                                            expr(5:19-5:21) :: task 't0 {
-                                                                kind: ident(5:19-5:21) `t1`,
-                                                            },
-                                                        ],
-                                                    },
-                                                },
-                                            },
-                                        },
                                         expr(6:2-6:21) :: nothing {
                                             kind: let(6:2-6:21) {
                                                 pattern: pattern(6:6-6:8) Identifier(
-                                                    ident(6:6-6:8) `h2`,
+                                                    ident(6:6-6:8) `h1`,
                                                 ),
-                                                value: expr(6:11-6:21) :: task 't2 {
+                                                value: expr(6:11-6:21) :: task 't0 {
                                                     kind: call(6:11-6:21) {
-                                                        callee: expr(6:13-6:18) :: scope-handle (task 't2) -> task 't2 {
+                                                        callee: expr(6:13-6:18) :: scope-handle (task 't0) -> task 't0 {
                                                             kind: namespace-access `task.scope-spawn`,
                                                         },
                                                         args: [
                                                             expr(6:11-6:12) :: scope-handle {
                                                                 kind: ident(6:11-6:12) `s`,
                                                             },
-                                                            expr(6:19-6:21) :: task 't2 {
-                                                                kind: ident(6:19-6:21) `t2`,
+                                                            expr(6:19-6:21) :: task 't0 {
+                                                                kind: ident(6:19-6:21) `t1`,
                                                             },
                                                         ],
                                                     },
                                                 },
                                             },
                                         },
-                                        expr(7:2-9:20) :: task (('t0, 't2)) {
-                                            kind: try(7:2-9:20) {
-                                                pattern: pattern(7:6-7:7) Identifier(
-                                                    ident(7:6-7:7) `a`,
+                                        expr(7:2-7:21) :: nothing {
+                                            kind: let(7:2-7:21) {
+                                                pattern: pattern(7:6-7:8) Identifier(
+                                                    ident(7:6-7:8) `h2`,
                                                 ),
-                                                value: expr(7:10-7:12) :: task 't0 {
-                                                    kind: ident(7:10-7:12) `h1`,
+                                                value: expr(7:11-7:21) :: task 't2 {
+                                                    kind: call(7:11-7:21) {
+                                                        callee: expr(7:13-7:18) :: scope-handle (task 't2) -> task 't2 {
+                                                            kind: namespace-access `task.scope-spawn`,
+                                                        },
+                                                        args: [
+                                                            expr(7:11-7:12) :: scope-handle {
+                                                                kind: ident(7:11-7:12) `s`,
+                                                            },
+                                                            expr(7:19-7:21) :: task 't2 {
+                                                                kind: ident(7:19-7:21) `t2`,
+                                                            },
+                                                        ],
+                                                    },
+                                                },
+                                            },
+                                        },
+                                        expr(8:2-10:20) :: task (('t0, 't2)) {
+                                            kind: try(8:2-10:20) {
+                                                pattern: pattern(8:6-8:7) Identifier(
+                                                    ident(8:6-8:7) `a`,
+                                                ),
+                                                value: expr(8:10-8:12) :: task 't0 {
+                                                    kind: ident(8:10-8:12) `h1`,
                                                 },
                                                 rest: [
-                                                    expr(8:2-9:20) :: task (('t0, 't2)) {
-                                                        kind: try(8:2-9:20) {
-                                                            pattern: pattern(8:6-8:7) Identifier(
-                                                                ident(8:6-8:7) `b`,
+                                                    expr(9:2-10:20) :: task (('t0, 't2)) {
+                                                        kind: try(9:2-10:20) {
+                                                            pattern: pattern(9:6-9:7) Identifier(
+                                                                ident(9:6-9:7) `b`,
                                                             ),
-                                                            value: expr(8:10-8:12) :: task 't2 {
-                                                                kind: ident(8:10-8:12) `h2`,
+                                                            value: expr(9:10-9:12) :: task 't2 {
+                                                                kind: ident(9:10-9:12) `h2`,
                                                             },
                                                             rest: [
-                                                                expr(9:2-9:20) :: task (('t0, 't2)) {
-                                                                    kind: call(9:2-9:20) {
-                                                                        callee: expr(9:2-9:13) :: 't8 -> task 't8 {
+                                                                expr(10:2-10:20) :: task (('t0, 't2)) {
+                                                                    kind: call(10:2-10:20) {
+                                                                        callee: expr(10:2-10:13) :: 't8 -> task 't8 {
                                                                             kind: namespace-access `task.return`,
                                                                         },
                                                                         args: [
-                                                                            expr(9:14-9:20) :: ('t0, 't2) {
+                                                                            expr(10:14-10:20) :: ('t0, 't2) {
                                                                                 kind: tuple [
-                                                                                    expr(9:15-9:16) :: 't0 {
-                                                                                        kind: ident(9:15-9:16) `a`,
+                                                                                    expr(10:15-10:16) :: 't0 {
+                                                                                        kind: ident(10:15-10:16) `a`,
                                                                                     },
-                                                                                    expr(9:18-9:19) :: 't2 {
-                                                                                        kind: ident(9:18-9:19) `b`,
+                                                                                    expr(10:18-10:19) :: 't2 {
+                                                                                        kind: ident(10:18-10:19) `b`,
                                                                                     },
                                                                                 ],
                                                                             },
@@ -120,46 +122,46 @@ module `main` (tests/analyze/scope-both/main.pa) {
                     },
                 },
             },
-            def(13:0-16:1) :: nothing {
-                name: ident(13:4-13:8) `main`,
-                kind: expr(13:11-16:1) :: nothing -> task 't29 {
-                    kind: fun(13:11-16:1) {
+            def(14:0-17:1) :: nothing {
+                name: ident(14:4-14:8) `main`,
+                kind: expr(14:11-17:1) :: nothing -> task 't29 {
+                    kind: fun(14:11-17:1) {
                         params: [],
                         body: [
-                            expr(14:1-15:17) :: task 't29 {
-                                kind: try(14:1-15:17) {
-                                    pattern: pattern(14:5-14:9) Identifier(
-                                        ident(14:5-14:9) `pair`,
+                            expr(15:1-16:17) :: task 't29 {
+                                kind: try(15:1-16:17) {
+                                    pattern: pattern(15:5-15:9) Identifier(
+                                        ident(15:5-15:9) `pair`,
                                     ),
-                                    value: expr(14:12-14:48) :: task ((int, int)) {
-                                        kind: call(14:12-14:48) {
-                                            callee: expr(14:12-14:16) :: (task int) (task int) -> task ((int, int)) {
-                                                kind: ident(14:12-14:16) `both`,
+                                    value: expr(15:12-15:48) :: task ((int, int)) {
+                                        kind: call(15:12-15:48) {
+                                            callee: expr(15:12-15:16) :: (task int) (task int) -> task ((int, int)) {
+                                                kind: ident(15:12-15:16) `both`,
                                             },
                                             args: [
-                                                expr(14:17-14:32) :: task int {
-                                                    kind: expr(14:18-14:31) :: task int {
-                                                        kind: call(14:18-14:31) {
-                                                            callee: expr(14:18-14:29) :: 't17 -> task 't17 {
+                                                expr(15:17-15:32) :: task int {
+                                                    kind: expr(15:18-15:31) :: task int {
+                                                        kind: call(15:18-15:31) {
+                                                            callee: expr(15:18-15:29) :: 't17 -> task 't17 {
                                                                 kind: namespace-access `task.return`,
                                                             },
                                                             args: [
-                                                                expr(14:30-14:31) :: int {
-                                                                    kind: literal(14:30-14:31) int 1,
+                                                                expr(15:30-15:31) :: int {
+                                                                    kind: literal(15:30-15:31) int 1,
                                                                 },
                                                             ],
                                                         },
                                                     },
                                                 },
-                                                expr(14:33-14:48) :: task int {
-                                                    kind: expr(14:34-14:47) :: task int {
-                                                        kind: call(14:34-14:47) {
-                                                            callee: expr(14:34-14:45) :: 't20 -> task 't20 {
+                                                expr(15:33-15:48) :: task int {
+                                                    kind: expr(15:34-15:47) :: task int {
+                                                        kind: call(15:34-15:47) {
+                                                            callee: expr(15:34-15:45) :: 't20 -> task 't20 {
                                                                 kind: namespace-access `task.return`,
                                                             },
                                                             args: [
-                                                                expr(14:46-14:47) :: int {
-                                                                    kind: literal(14:46-14:47) int 2,
+                                                                expr(15:46-15:47) :: int {
+                                                                    kind: literal(15:46-15:47) int 2,
                                                                 },
                                                             ],
                                                         },
@@ -169,14 +171,14 @@ module `main` (tests/analyze/scope-both/main.pa) {
                                         },
                                     },
                                     rest: [
-                                        expr(15:1-15:17) :: task 't29 {
-                                            kind: call(15:1-15:17) {
-                                                callee: expr(15:1-15:12) :: 't23 -> task 't23 {
+                                        expr(16:1-16:17) :: task 't29 {
+                                            kind: call(16:1-16:17) {
+                                                callee: expr(16:1-16:12) :: 't23 -> task 't23 {
                                                     kind: namespace-access `task.return`,
                                                 },
                                                 args: [
-                                                    expr(15:13-15:17) :: 't29 {
-                                                        kind: ident(15:13-15:17) `pair`,
+                                                    expr(16:13-16:17) :: 't29 {
+                                                        kind: ident(16:13-16:17) `pair`,
                                                     },
                                                 ],
                                             },

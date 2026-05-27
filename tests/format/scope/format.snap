@@ -2,6 +2,8 @@
 source: tests/format.rs
 expression: once
 ---
+use core.task
+
 def demo = fun {
 	scope as s {
 		let h = s.spawn work
