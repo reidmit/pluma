@@ -1,0 +1,7 @@
+opaque enum token {
+	mk string
+}
+
+public def make :: fun string -> token = fun s {
+	token.mk s
+}

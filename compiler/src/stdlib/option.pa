@@ -20,7 +20,7 @@
 #
 #     try first = list.head xs   # bail out with none if xs is empty
 #     some (first * 2)           # otherwise carry on with the value
-def then :: fun (option a) (fun a -> option b) -> option b = built-in "option-then"
+public def then :: fun (option a) (fun a -> option b) -> option b = built-in "option-then"
 
 # Returns the value inside a `some`, or falls back to whatever
 # `fallback` produces when the option is `none`. The fallback is a
@@ -36,7 +36,7 @@ def then :: fun (option a) (fun a -> option b) -> option b = built-in "option-th
 #
 #     option.or-else (some 7) (fun { 0 })   # => 7
 #     option.or-else none (fun { 0 })       # => 0
-def or-else :: fun (option a) (fun nothing -> a) -> a = fun o fallback {
+public def or-else :: fun (option a) (fun nothing -> a) -> a = fun o fallback {
 	when o is some v {
 		v
 	} is none {
@@ -52,4 +52,4 @@ def or-else :: fun (option a) (fun nothing -> a) -> a = fun o fallback {
 #
 #     # some -> the contents; none -> "no home directory" on stderr, then exit
 #     (io.env "HOME") | option.expect "no home directory"
-def expect :: fun (option a) string -> a = built-in "option-expect"
+public def expect :: fun (option a) string -> a = built-in "option-expect"

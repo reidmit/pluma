@@ -20,7 +20,7 @@ use core.dict
 use core.string
 
 # One navigation step.
-enum step {
+public enum step {
 	field string
 	index int
 	iterate
@@ -31,7 +31,7 @@ enum step {
 # ---------------------------------------------------------------------
 
 # End index of the run of characters from `i` for which `pred` holds.
-def span = fun s i pred {
+public def span = fun s i pred {
 	when string.char-at s i is some c {
 		if pred c is true {
 			span s (i + 1) pred
@@ -44,16 +44,16 @@ def span = fun s i pred {
 }
 
 # Characters that continue a bare field name (anything but `.`/`[`/`]`).
-def ident-char = fun c {
+public def ident-char = fun c {
 	c != "." && c != "[" && c != "]"
 }
 
 # Parse a path expression into a list of steps, or an error message.
-def parse-path = fun s {
+public def parse-path = fun s {
 	parse-steps s 0 []
 }
 
-def parse-steps = fun s i acc {
+public def parse-steps = fun s i acc {
 	when string.char-at s i is none {
 		ok (list.reverse acc)
 	} is some c {
@@ -83,7 +83,7 @@ def parse-steps = fun s i acc {
 }
 
 # Classify the text between a `[` and its `]`.
-def parse-bracket = fun inner {
+public def parse-bracket = fun inner {
 	let t = string.trim inner
 	if t == "" is true {
 		ok iterate
@@ -107,7 +107,7 @@ def parse-bracket = fun inner {
 # ---------------------------------------------------------------------
 
 # Apply a single step to every value in the stream.
-def step-eval = fun stream st {
+public def step-eval = fun stream st {
 	when st is field name {
 		list.fold stream [] fun acc v {
 			when json.get-field v name is some r {
@@ -154,6 +154,6 @@ def step-eval = fun stream st {
 }
 
 # Evaluate a whole path against a document, yielding the result stream.
-def eval-path = fun steps doc {
+public def eval-path = fun steps doc {
 	list.fold steps [doc] step-eval
 }

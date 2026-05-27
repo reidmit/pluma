@@ -1,6 +1,6 @@
 use core.package
 
-def package :: package.info = {
+public def package :: package.info = {
 	name: "core",
 	version: "0.0.1",
 	authors: [],

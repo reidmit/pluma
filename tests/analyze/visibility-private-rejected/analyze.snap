@@ -1,0 +1,12 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: `private-fn` is private to module `lib`. Mark it `public` in that module to use it here.
+> 3 | def out = lib.private-fn 5
+                    ^^^^^^^^^^
+
+error: Type mismatch: expected `int -> 'r`, but found `?`.
+> 3 | def out = lib.private-fn 5
+                ^^^^^^^^^^^^^^^^
+

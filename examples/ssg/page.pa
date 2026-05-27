@@ -9,7 +9,7 @@ use core.dict
 
 # Split a document into its metadata dict and Markdown body. With no
 # header, the metadata is empty and the body is the whole input.
-def parse-doc = fun content {
+public def parse-doc = fun content {
 	let lines = string.split content "\n"
 	when lines is [first, ...rest] {
 		if string.trim first == "---" is true {
@@ -25,7 +25,7 @@ def parse-doc = fun content {
 
 # Consume header lines up to the closing `---`, returning
 # `(header-lines, body-lines)`.
-def split-header = fun lines {
+public def split-header = fun lines {
 	when lines is [] {
 		([], [])
 	} is [l, ...rest] {
@@ -38,13 +38,13 @@ def split-header = fun lines {
 	}
 }
 
-def parse-meta = fun lines {
+public def parse-meta = fun lines {
 	list.fold lines (dict.empty ()) add-meta-line
 }
 
 # Parse one `key: value` line into the dict. Lines without a colon are
 # ignored. The value may itself contain colons (e.g. a URL or time).
-def add-meta-line = fun m line {
+public def add-meta-line = fun m line {
 	when string.split line ":" is [k, v, ...rest] {
 		dict.insert m (string.trim k) (string.trim (string.join [v, ...rest] ":"))
 	} else {
@@ -53,7 +53,7 @@ def add-meta-line = fun m line {
 }
 
 # Look up a metadata key, falling back to `default` when absent.
-def meta-get = fun m key default {
+public def meta-get = fun m key default {
 	dict.lookup m key ?? default
 }
 
@@ -61,9 +61,9 @@ def meta-get = fun m key default {
 # Template
 # ---------------------------------------------------------------------
 
-def styles = "\n:root { --fg: #1a1a1a; --muted: #6b7280; --accent: #2563eb; --bg: #fdfdfc; }\n* { box-sizing: border-box; }\nbody { margin: 0; background: var(--bg); color: var(--fg);\n  font: 17px/1.65 -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, sans-serif; }\nmain { max-width: 42rem; margin: 0 auto; padding: 3rem 1.5rem 5rem; }\nh1, h2, h3 { line-height: 1.25; margin: 2rem 0 0.75rem; }\nh1 { font-size: 2rem; }\na { color: var(--accent); text-decoration: none; }\na:hover { text-decoration: underline; }\ncode { background: #f0f0ef; padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.9em; }\npre { background: #1e1e2e; color: #e6e6e6; padding: 1rem 1.25rem; border-radius: 8px; overflow-x: auto; }\npre code { background: none; padding: 0; color: inherit; }\nblockquote { margin: 1.5rem 0; padding: 0.25rem 1.25rem; border-left: 3px solid var(--accent);\n  color: var(--muted); }\nhr { border: none; border-top: 1px solid #e5e5e5; margin: 2.5rem 0; }\nfooter { max-width: 42rem; margin: 0 auto; padding: 2rem 1.5rem; color: var(--muted);\n  font-size: 0.85rem; border-top: 1px solid #eee; }\nul, ol { padding-left: 1.4rem; }\n"
+public def styles = "\n:root { --fg: #1a1a1a; --muted: #6b7280; --accent: #2563eb; --bg: #fdfdfc; }\n* { box-sizing: border-box; }\nbody { margin: 0; background: var(--bg); color: var(--fg);\n  font: 17px/1.65 -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, sans-serif; }\nmain { max-width: 42rem; margin: 0 auto; padding: 3rem 1.5rem 5rem; }\nh1, h2, h3 { line-height: 1.25; margin: 2rem 0 0.75rem; }\nh1 { font-size: 2rem; }\na { color: var(--accent); text-decoration: none; }\na:hover { text-decoration: underline; }\ncode { background: #f0f0ef; padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.9em; }\npre { background: #1e1e2e; color: #e6e6e6; padding: 1rem 1.25rem; border-radius: 8px; overflow-x: auto; }\npre code { background: none; padding: 0; color: inherit; }\nblockquote { margin: 1.5rem 0; padding: 0.25rem 1.25rem; border-left: 3px solid var(--accent);\n  color: var(--muted); }\nhr { border: none; border-top: 1px solid #e5e5e5; margin: 2.5rem 0; }\nfooter { max-width: 42rem; margin: 0 auto; padding: 2rem 1.5rem; color: var(--muted);\n  font-size: 0.85rem; border-top: 1px solid #eee; }\nul, ol { padding-left: 1.4rem; }\n"
 
 # Wrap a rendered HTML fragment in a full document with `title`.
-def page = fun title body {
+public def page = fun title body {
 	"<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>$(title)</title>\n<style>$(styles)</style>\n</head>\n<body>\n<main>\n$(body)\n</main>\n<footer>built with pluma</footer>\n</body>\n</html>\n"
 }

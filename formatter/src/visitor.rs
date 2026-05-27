@@ -133,7 +133,7 @@ impl<'a> Formatter<'a> {
 	// --- definitions --------------------------------------------------
 
 	fn format_definition(&self, def: &DefinitionNode) -> Doc {
-		match &def.kind {
+		let inner = match &def.kind {
 			// `def NAME = fun { ... }` always lays the body out multi-line,
 			// even when a one-expression body would otherwise fit inline.
 			// Defs read as "this is a thing" and benefit from a stable
@@ -169,6 +169,14 @@ impl<'a> Formatter<'a> {
 			DefinitionKind::Enum(en) => self.format_enum(&def.name.name, en),
 			DefinitionKind::Trait(tr) => self.format_trait(&def.name.name, tr),
 			DefinitionKind::Instance(inst) => self.format_instance(inst),
+		};
+		// Re-emit the leading visibility keyword. Dropping it would silently
+		// change a public/opaque def back to private, so this is part of
+		// lossless round-tripping.
+		match def.visibility {
+			Visibility::Private => inner,
+			Visibility::Opaque => concat(vec![text("opaque "), inner]),
+			Visibility::Public => concat(vec![text("public "), inner]),
 		}
 	}
 

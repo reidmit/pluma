@@ -1,0 +1,22 @@
+# Exercises the visibility ladder end-to-end:
+#   - `public def double` is callable from `main`.
+#   - `opaque enum counter` exports its type but hides its constructor,
+#     so `main` can name `lib.counter` yet must go through the public
+#     smart constructor / accessor below to make or read one.
+public def double = fun n {
+	n + n
+}
+
+opaque enum counter {
+	mk int
+}
+
+public def counter-of :: fun int -> counter = fun n {
+	counter.mk n
+}
+
+public def value-of :: fun counter -> int = fun c {
+	when c is mk n {
+		n
+	}
+}

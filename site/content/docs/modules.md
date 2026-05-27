@@ -18,9 +18,35 @@ def value = utils.something
 def alt = utils2.something
 ```
 
+## Visibility
+
+Top-level definitions are **private by default** — visible only inside their own module. To let another module `use` something, mark it `public`:
+
+```pluma
+public def add = fun x y { x + y }   # exported
+def helper = fun n { n + n }         # private — internal to this module
+```
+
+Reaching for a private name from another module is an error (`helper is private to module …`). Privacy is checked only when type-checking; it never changes what a program does at runtime.
+
+### Opaque types
+
+`opaque` applies to an enum and is the middle rung of the ladder: it exports the type's *name* but hides its *constructors*. Other modules can name the type and pass values around, but can't build or pattern-match one directly — so the module stays in control of every value's invariants. Expose `public` functions as the way in and out:
+
+```pluma
+opaque enum uuid {
+    bytes (list int)
+}
+
+public def parse :: fun string -> option uuid = fun s { … }   # the only way to make one
+public def to-string :: fun uuid -> string = fun u { … }      # …and to read one
+```
+
+A caller can write `def id :: ids.uuid = ids.parse raw ?? …` but `ids.uuid.bytes [...]` is rejected. There are three rungs in all — bare (private), `opaque` (type exported, constructors hidden), and `public` (everything exported). `opaque` is enum-only; `public`/`opaque` on a `def`, `alias`, `trait`, or `implement` other than `public def`/`public alias` is a parse error.
+
 ## Crossing module boundaries
 
-Values, enums, and aliases all cross module boundaries.
+Public values, enums, and aliases all cross module boundaries.
 
 ```pluma
 use shapes

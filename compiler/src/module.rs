@@ -35,6 +35,12 @@ pub struct ModuleExports {
 	// are canonical (0..param_count-1); the importer mints fresh ids
 	// before inserting into its local registry.
 	pub instances: Vec<InstanceExport>,
+	// Names of top-level defs that exist in this module but aren't visible
+	// to importers (no `public`/`opaque` keyword). Carried so importers can
+	// report a precise "`x` is private to module `y`" diagnostic instead of
+	// a bare "not found". Opaque enum *type* names are NOT listed here (the
+	// type is accessible — only its constructors are withheld).
+	pub private: std::collections::HashSet<String>,
 }
 
 #[cfg_attr(debug_assertions, derive(Debug))]

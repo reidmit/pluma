@@ -33,6 +33,7 @@ pub enum ParseErrorKind {
 	UnexpectedEOF { expected: Token },
 	UnexpectedToken { actual: Token, expected: Token },
 	UnexpectedTopLevelToken { actual: Token },
+	MisplacedVisibility { keyword: &'static str },
 }
 
 impl fmt::Display for ParseError {
@@ -97,6 +98,16 @@ impl fmt::Display for ParseError {
 					"Unexpected token ({}). Expected a top-level definition (`def`, `enum`, `alias`, `trait`, `test`, or `implement`).",
 					actual
 				)
+			}
+			MisplacedVisibility { keyword } => {
+				if keyword == "opaque" {
+					write!(f, "`opaque` can only modify a top-level `enum`.")
+				} else {
+					write!(
+						f,
+						"`public` can only modify a top-level `def`, `enum`, or `alias`."
+					)
+				}
 			}
 		}
 	}

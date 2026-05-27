@@ -148,6 +148,13 @@ pub enum Token {
 	/// `let` keyword
 	KeywordLet(usize, usize),
 
+	/// `opaque` keyword (visibility: export an enum's type but hide its
+	/// constructors)
+	KeywordOpaque(usize, usize),
+
+	/// `public` keyword (visibility: export a top-level def fully)
+	KeywordPublic(usize, usize),
+
 	/// `trait` keyword
 	KeywordTrait(usize, usize),
 
@@ -322,6 +329,8 @@ impl Token {
 			| KeywordIn(start, end)
 			| KeywordIs(start, end)
 			| KeywordLet(start, end)
+			| KeywordOpaque(start, end)
+			| KeywordPublic(start, end)
 			| KeywordTrait(start, end)
 			| KeywordTry(start, end)
 			| KeywordUse(start, end)
@@ -423,6 +432,8 @@ impl fmt::Display for Token {
 			&KeywordIn(..) => "keyword `in`",
 			&KeywordIs(..) => "keyword `is`",
 			&KeywordLet(..) => "keyword `let`",
+			&KeywordOpaque(..) => "keyword `opaque`",
+			&KeywordPublic(..) => "keyword `public`",
 			&KeywordTrait(..) => "keyword `trait`",
 			&KeywordTry(..) => "keyword `try`",
 			&KeywordUse(..) => "keyword `use`",

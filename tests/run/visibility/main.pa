@@ -1,0 +1,7 @@
+use lib
+
+def main = fun {
+	print (lib.double 21)
+	let c :: lib.counter = lib.counter-of 7
+	print (lib.value-of c)
+}

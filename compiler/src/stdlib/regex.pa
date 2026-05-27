@@ -22,14 +22,14 @@
 # capture in the pattern to the text it grabbed. A named group that never
 # fired -- because it was on the unused side of an "or", say -- is simply
 # left out of the dict rather than mapped to "".
-alias match {text :: string, start :: int, end :: int, groups :: dict string string}
+public alias match {text :: string, start :: int, end :: int, groups :: dict string string}
 
 # True when the regex matches anywhere in the input. Use this when you
 # only care whether there's a match, not where it is or what it caught.
 #
 #     regex.matches `digit+` "abc123"   # => true
 #     regex.matches `digit+` "abc"      # => false
-def matches :: fun regex string -> bool = built-in "regex-matches"
+public def matches :: fun regex string -> bool = built-in "regex-matches"
 
 # Finds the first match, scanning left to right, as a `match` record
 # wrapped in `some`. `none` if the pattern doesn't match anywhere.
@@ -37,7 +37,7 @@ def matches :: fun regex string -> bool = built-in "regex-matches"
 #     regex.find `digit+` "abc 123"
 #     # => some {text: "123", start: 4, end: 7, groups: {}}
 #     regex.find `digit+` "no digits"   # => none
-def find :: fun regex string -> option match = built-in "regex-find"
+public def find :: fun regex string -> option match = built-in "regex-find"
 
 # Finds every non-overlapping match, left to right, as a list of `match`
 # records. Empty list if nothing matches.
@@ -45,7 +45,7 @@ def find :: fun regex string -> option match = built-in "regex-find"
 #     # collect just the matched text from each match
 #     let nums = regex.find-all `digit+` "a 1 b 22 c 333"
 #     list.map nums (fun m { m.text })   # => ["1", "22", "333"]
-def find-all :: fun regex string -> list match = built-in "regex-find-all"
+public def find-all :: fun regex string -> list match = built-in "regex-find-all"
 
 # A shortcut for grabbing one named capture from the first match.
 # `some text` when the regex matches and has a group by that name,
@@ -54,7 +54,7 @@ def find-all :: fun regex string -> list match = built-in "regex-find-all"
 #
 #     regex.named-capture `<year: digit+>` "born 2026" "year"   # => some "2026"
 #     regex.named-capture `<year: digit+>` "no number" "year"   # => none
-def named-capture :: fun regex string string -> option string = built-in "regex-named-capture"
+public def named-capture :: fun regex string string -> option string = built-in "regex-named-capture"
 
 # Replaces every match with `replacement`. Inside `replacement`, drop in
 # a captured group with `${name}`, and write a literal dollar sign as
@@ -62,13 +62,13 @@ def named-capture :: fun regex string string -> option string = built-in "regex-
 #
 #     regex.replace `digit+` "a1b22c333" "N"        # => "aNbNcN"
 #     regex.replace `<n: digit+>` "x42y" "[${n}]"   # => "x[42]y"
-def replace :: fun regex string string -> string = built-in "regex-replace"
+public def replace :: fun regex string string -> string = built-in "regex-replace"
 
 # Like `replace`, but only touches the first match. Same `${name}` /
 # `$$` replacement syntax.
 #
 #     regex.replace-first `digit+` "1 2 3" "N"   # => "N 2 3"
-def replace-first :: fun regex string string -> string = built-in "regex-replace-first"
+public def replace-first :: fun regex string string -> string = built-in "regex-replace-first"
 
 # Splits the input at every match, throwing the matched text away. A
 # match at the start or end, or two in a row, leaves an empty string --
@@ -76,4 +76,4 @@ def replace-first :: fun regex string string -> string = built-in "regex-replace
 #
 #     regex.split `","` "a,b,c"             # => ["a", "b", "c"]
 #     regex.split `whitespace+` "a  b c"    # => ["a", "b", "c"]
-def split :: fun regex string -> list string = built-in "regex-split"
+public def split :: fun regex string -> list string = built-in "regex-split"

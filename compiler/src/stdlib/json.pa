@@ -16,7 +16,7 @@ use core.math
 # one of them. `parse` produces these, and the `get-*` helpers below
 # pull a plain Pluma value back out. You can also build one directly:
 # `json.value.string "hi"`, `json.value.array [...]`, and so on.
-enum value {
+public enum value {
 	null
 	bool bool
 	int int
@@ -29,7 +29,7 @@ enum value {
 # What `parse` returns when the text isn't valid JSON. `line` and `col`
 # point at the spot where parsing gave up (both counting from 1), and
 # `message` says what went wrong.
-alias error {line :: int, col :: int, message :: string}
+public alias error {line :: int, col :: int, message :: string}
 
 # Parses JSON text into a `value`. Returns `ok v` on success, or, on
 # malformed input, `err {line, col, message}` pointing at the problem.
@@ -38,7 +38,7 @@ alias error {line :: int, col :: int, message :: string}
 #     json.parse "42"   # => ok (value.int 42)
 #     json.parse "{ oops"
 #     # => err {line: 1, col: 3, message: "key must be a string at line 1 column 3"}
-def parse :: fun string -> result value error = built-in "json-parse"
+public def parse :: fun string -> result value error = built-in "json-parse"
 
 # Renders a `value` back to compact JSON text -- no extra spaces,
 # everything on one line. Object keys come out in the order they went
@@ -46,7 +46,7 @@ def parse :: fun string -> result value error = built-in "json-parse"
 #
 #     json.stringify (json.value.array [json.value.int 1, json.value.int 2])
 #     # => "[1,2]"
-def stringify :: fun value -> string = built-in "json-stringify"
+public def stringify :: fun value -> string = built-in "json-stringify"
 
 # Like `stringify`, but laid out for people to read: a 2-space indent
 # and one item per line. Good for config files or debug output.
@@ -59,13 +59,13 @@ def stringify :: fun value -> string = built-in "json-stringify"
 #       1,
 #       2
 #     ]
-def stringify-pretty :: fun value -> string = built-in "json-stringify-pretty"
+public def stringify-pretty :: fun value -> string = built-in "json-stringify-pretty"
 
 # True when the value is JSON `null`.
 #
 #     json.is-null json.value.null      # => true
 #     json.is-null (json.value.int 0)   # => false
-def is-null :: fun value -> bool = fun v {
+public def is-null :: fun value -> bool = fun v {
 	when v is null {
 		true
 	} else {
@@ -79,7 +79,7 @@ def is-null :: fun value -> bool = fun v {
 #     try doc = json.parse "{\"name\": \"Ada\"}"
 #     json.get-field doc "name"   # => some (value.string "Ada")
 #     json.get-field doc "age"    # => none
-def get-field :: fun value string -> option value = fun v key {
+public def get-field :: fun value string -> option value = fun v key {
 	when v is object o {
 		dict.lookup o key
 	} else {
@@ -92,7 +92,7 @@ def get-field :: fun value string -> option value = fun v key {
 #
 #     json.get-int (json.value.int 42)       # => some 42
 #     json.get-int (json.value.string "x")   # => none
-def get-int :: fun value -> option int = fun v {
+public def get-int :: fun value -> option int = fun v {
 	when v is int n {
 		some n
 	} else {
@@ -105,7 +105,7 @@ def get-int :: fun value -> option int = fun v {
 #
 #     json.get-float (json.value.float 3.5)   # => some 3.5
 #     json.get-float (json.value.int 3)        # => none
-def get-float :: fun value -> option float = fun v {
+public def get-float :: fun value -> option float = fun v {
 	when v is float x {
 		some x
 	} else {
@@ -119,7 +119,7 @@ def get-float :: fun value -> option float = fun v {
 #
 #     json.get-number (json.value.int 42)      # => some 42.0
 #     json.get-number (json.value.float 3.5)   # => some 3.5
-def get-number :: fun value -> option float = fun v {
+public def get-number :: fun value -> option float = fun v {
 	when v is float x {
 		some x
 	} is int n {
@@ -133,7 +133,7 @@ def get-number :: fun value -> option float = fun v {
 #
 #     json.get-bool (json.value.bool true)   # => some true
 #     json.get-bool (json.value.int 1)        # => none
-def get-bool :: fun value -> option bool = fun v {
+public def get-bool :: fun value -> option bool = fun v {
 	when v is bool b {
 		some b
 	} else {
@@ -145,7 +145,7 @@ def get-bool :: fun value -> option bool = fun v {
 #
 #     json.get-string (json.value.string "hi")   # => some "hi"
 #     json.get-string (json.value.int 1)           # => none
-def get-string :: fun value -> option string = fun v {
+public def get-string :: fun value -> option string = fun v {
 	when v is string s {
 		some s
 	} else {
@@ -158,7 +158,7 @@ def get-string :: fun value -> option string = fun v {
 #
 #     json.get-array (json.value.array [json.value.int 1, json.value.int 2])
 #     # => some [value.int 1, value.int 2]
-def get-array :: fun value -> option (list value) = fun v {
+public def get-array :: fun value -> option (list value) = fun v {
 	when v is array xs {
 		some xs
 	} else {
@@ -172,7 +172,7 @@ def get-array :: fun value -> option (list value) = fun v {
 #
 #     try doc = json.parse "{\"a\": 1}"
 #     json.get-object doc   # => some {a: value.int 1}
-def get-object :: fun value -> option (dict string value) = fun v {
+public def get-object :: fun value -> option (dict string value) = fun v {
 	when v is object o {
 		some o
 	} else {

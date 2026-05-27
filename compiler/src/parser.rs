@@ -335,6 +335,8 @@ impl<'a> Parser<'a> {
 				| Token::KeywordAlias(..)
 				| Token::KeywordTrait(..)
 				| Token::KeywordImplement(..)
+				| Token::KeywordPublic(..)
+				| Token::KeywordOpaque(..)
 		)
 	}
 
@@ -2033,6 +2035,54 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_definition(&mut self) -> Option<DefinitionNode> {
+		// Optional leading visibility modifier. `public` exports a def
+		// fully; `opaque` exports an enum's type but hides its
+		// constructors. Absent means private. The modifier's span becomes
+		// the definition's range start so the keyword is included.
+		let (visibility, modifier_span) = match self.current_token {
+			Some(Token::KeywordPublic(s, e)) => {
+				self.advance();
+				(
+					Visibility::Public,
+					Some((self.offset_to_point(s), self.offset_to_point(e))),
+				)
+			}
+			Some(Token::KeywordOpaque(s, e)) => {
+				self.advance();
+				(
+					Visibility::Opaque,
+					Some((self.offset_to_point(s), self.offset_to_point(e))),
+				)
+			}
+			_ => (Visibility::Private, None),
+		};
+		let mod_start = modifier_span.map(|(s, _)| s);
+
+		// `public`/`opaque` only modify a `def`, `enum`, or `alias`, and
+		// `opaque` only an `enum`. Reject anything else (instances, traits,
+		// a dangling modifier) up front.
+		if visibility != Visibility::Private {
+			let target_ok = match self.current_token {
+				Some(Token::KeywordEnum(..)) => true,
+				Some(Token::KeywordAlias(..)) | Some(Token::KeywordDef(..)) => {
+					visibility != Visibility::Opaque
+				}
+				_ => false,
+			};
+			if !target_ok {
+				let (start, end) = modifier_span.unwrap();
+				let keyword = if visibility == Visibility::Opaque {
+					"opaque"
+				} else {
+					"public"
+				};
+				return self.error(ParseError {
+					range: Range::between(start, end),
+					kind: ParseErrorKind::MisplacedVisibility { keyword },
+				});
+			}
+		}
+
 		// Instance: `implement TRAIT TYPE [where ...] { defs }`.
 		if let Some(Token::KeywordImplement(start_offset, _)) = self.current_token {
 			let start = self.offset_to_point(start_offset);
@@ -2042,7 +2092,7 @@ impl<'a> Parser<'a> {
 
 		// `enum NAME [PARAMS] { variants }` — top-level enum type.
 		if let Some(Token::KeywordEnum(start_offset, _)) = self.current_token {
-			let start = self.offset_to_point(start_offset);
+			let start = mod_start.unwrap_or(self.offset_to_point(start_offset));
 			self.advance();
 			let name = self.expect_identifier()?;
 			let enum_node = self.parse_enum()?;
@@ -2051,6 +2101,7 @@ impl<'a> Parser<'a> {
 				name,
 				range: Range::between(start, enum_node.range.end),
 				kind: DefinitionKind::Enum(enum_node),
+				visibility,
 				ty: Type::Unknown,
 				dict_param_count: 0,
 				type_annotation: None,
@@ -2060,7 +2111,7 @@ impl<'a> Parser<'a> {
 
 		// `alias NAME TYPE_EXPR` — top-level alias type.
 		if let Some(Token::KeywordAlias(start_offset, _)) = self.current_token {
-			let start = self.offset_to_point(start_offset);
+			let start = mod_start.unwrap_or(self.offset_to_point(start_offset));
 			self.advance();
 			let name = self.expect_identifier()?;
 			let type_expr = self.parse_type_expression_with_generics()?;
@@ -2069,6 +2120,7 @@ impl<'a> Parser<'a> {
 				name,
 				range: Range::between(start, type_expr.range.end),
 				kind: DefinitionKind::Alias(type_expr),
+				visibility,
 				ty: Type::Unknown,
 				dict_param_count: 0,
 				type_annotation: None,
@@ -2087,6 +2139,9 @@ impl<'a> Parser<'a> {
 				name,
 				range: Range::between(start, trait_node.range.end),
 				kind: DefinitionKind::Trait(trait_node),
+				// Traits aren't subject to the visibility ladder yet; the
+				// guard above guarantees `visibility` is `Private` here.
+				visibility,
 				ty: Type::Unknown,
 				dict_param_count: 0,
 				type_annotation: None,
@@ -2099,8 +2154,9 @@ impl<'a> Parser<'a> {
 		// the inferred body type with the annotated type.
 		let start = match self.current_token {
 			Some(Token::KeywordDef(start_offset, _)) => {
+				let point = mod_start.unwrap_or(self.offset_to_point(start_offset));
 				self.advance();
-				self.offset_to_point(start_offset)
+				point
 			}
 			_ => return None,
 		};
@@ -2137,6 +2193,7 @@ impl<'a> Parser<'a> {
 			name,
 			range: Range::between(start, value.range.end),
 			kind: DefinitionKind::Expr(value),
+			visibility,
 			ty: Type::Unknown,
 			dict_param_count: 0,
 			type_annotation,
@@ -2311,6 +2368,7 @@ impl<'a> Parser<'a> {
 				instance_slot_name: String::new(),
 				canonical_method_order: Vec::new(),
 			}),
+			visibility: Visibility::Private,
 			type_annotation: None,
 			where_clause: Vec::new(),
 			ty: Type::Unknown,

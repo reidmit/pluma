@@ -9,7 +9,7 @@ use core.list
 use core.string
 use value
 
-enum token {
+public enum token {
 	t-num value.num
 	t-name string
 	t-op string
@@ -18,24 +18,24 @@ enum token {
 # Character classes. There is no `char` type — `string.char-at` hands
 # back a one-character string — so we classify by membership in a
 # literal alphabet, which is concise and UTF-8-safe for ASCII.
-def is-digit = fun c {
+public def is-digit = fun c {
 	string.contains "0123456789" c
 }
 
-def is-name-start = fun c {
+public def is-name-start = fun c {
 	string.contains "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_" c
 }
 
-def is-name-char = fun c {
+public def is-name-char = fun c {
 	is-name-start c || is-digit c
 }
 
-def is-op = fun c {
+public def is-op = fun c {
 	string.contains "+-*/%^()=," c
 }
 
 # End index of the run of characters from `i` for which `pred` holds.
-def span = fun s i pred {
+public def span = fun s i pred {
 	when string.char-at s i is some c {
 		if pred c is true {
 			span s (i + 1) pred
@@ -48,7 +48,7 @@ def span = fun s i pred {
 }
 
 # Does the character at `i` (if any) hold `pred`?
-def char-is = fun s i pred {
+public def char-is = fun s i pred {
 	when string.char-at s i is some c {
 		pred c
 	} is none {
@@ -57,12 +57,12 @@ def char-is = fun s i pred {
 }
 
 # Tokenize a whole line. `err` on the first character we can't lex.
-def tokenize = fun src {
+public def tokenize = fun src {
 	scan src 0 []
 }
 
 # Main loop: dispatch on the next character. `acc` is built in reverse.
-def scan = fun s i acc {
+public def scan = fun s i acc {
 	when string.char-at s i is none {
 		ok (list.reverse acc)
 	} is some c {
@@ -83,7 +83,7 @@ def scan = fun s i acc {
 # An integer run, optionally followed by `.` and a fractional run. The
 # dot only starts a fraction when a digit follows it, so `3.foo` lexes
 # as `3` then `.` (which is then a lex error, since `.` is no operator).
-def lex-number = fun s i acc {
+public def lex-number = fun s i acc {
 	let j = span s i is-digit
 	if char-is s j fun c { c == "." } && char-is s (j + 1) is-digit is true {
 		let k = span s (j + 1) is-digit
@@ -104,7 +104,7 @@ def lex-number = fun s i acc {
 }
 
 # A name run: a variable reference or a function name.
-def lex-name = fun s i acc {
+public def lex-name = fun s i acc {
 	let j = span s i is-name-char
 	scan s j [t-name (string.slice s i j), ...acc]
 }

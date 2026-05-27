@@ -26,7 +26,7 @@ use value
 use parser
 use eval
 
-def main = fun {
+public def main = fun {
 	let env = ref.new (seed-env ())
 	let _ = io.print "calc — type an expression, or :help. Ctrl-D to quit."
 	repl env
@@ -34,7 +34,7 @@ def main = fun {
 
 # Pre-populate the constants `pi` and `e` as ordinary variables, so
 # they can be used (or even shadowed) like any other name.
-def seed-env = fun {
+public def seed-env = fun {
 	let m = dict.empty ()
 	let m = dict.insert m "pi" (float-val math.pi)
 	let m = dict.insert m "e" (float-val math.e)
@@ -44,7 +44,7 @@ def seed-env = fun {
 # The read-eval-print loop. A `> ` prompt precedes each read (and
 # flushes, since it has no newline); `io.read` yields `err` at end of
 # input, where we close the dangling prompt with a newline and stop.
-def repl = fun env {
+public def repl = fun env {
 	let _ = io.write "> "
 	when io.read () is err _e {
 		io.print ""
@@ -54,7 +54,7 @@ def repl = fun env {
 	}
 }
 
-def handle = fun env line {
+public def handle = fun env line {
 	if line == "" is true {
 		()
 	} else if string.starts-with line ":" is true {
@@ -68,7 +68,7 @@ def handle = fun env line {
 # Meta-commands (anything starting with `:`)
 # ---------------------------------------------------------------------
 
-def run-command = fun env cmd {
+public def run-command = fun env cmd {
 	if cmd == ":q" || cmd == ":quit" is true {
 		io.exit 0
 	} else if cmd == ":help" is true {
@@ -80,7 +80,7 @@ def run-command = fun env cmd {
 	}
 }
 
-def print-help = fun {
+public def print-help = fun {
 	let _ = io.print "operators:  + - * / %  ^ (power)   ( ) for grouping"
 	let _ = io.print "unary:      sqrt sin cos tan ln log log2 exp abs floor ceil round int float"
 	let _ = io.print "binary:     pow(b,e)  max(a,b)  min(a,b)  log(x,base)"
@@ -91,7 +91,7 @@ def print-help = fun {
 # Show every bound variable, sorted by name. `by-name` is polymorphic and
 # leans on the `ord` trait via `compare`, yet we pass it to `list.sort` by
 # bare name — codegen prepends its trait dictionary at the reference.
-def print-vars = fun env {
+public def print-vars = fun env {
 	let entries = dict.entries (ref.get env)
 	list.each (list.sort entries by-name) fun ent {
 		let (k, v) = ent
@@ -100,7 +100,7 @@ def print-vars = fun env {
 }
 
 # Order two (name, value) entries alphabetically by their variable name.
-def by-name = fun a b {
+public def by-name = fun a b {
 	let (ka, _va) = a
 	let (kb, _vb) = b
 	compare ka kb
@@ -110,7 +110,7 @@ def by-name = fun a b {
 # Expression lines
 # ---------------------------------------------------------------------
 
-def run-line = fun env line {
+public def run-line = fun env line {
 	when parser.parse line is err m {
 		io.print "error: $(m)"
 	} is ok st {
@@ -122,7 +122,7 @@ def run-line = fun env line {
 	}
 }
 
-def run-assign = fun env name e {
+public def run-assign = fun env name e {
 	when eval.eval env e is ok v {
 		let _ = ref.set env (dict.insert (ref.get env) name v)
 		io.print "= $(value.num-to-string v)"
@@ -131,7 +131,7 @@ def run-assign = fun env name e {
 	}
 }
 
-def run-bare = fun env e {
+public def run-bare = fun env e {
 	when eval.eval env e is ok v {
 		io.print "= $(value.num-to-string v)"
 	} is err m {

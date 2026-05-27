@@ -14,18 +14,18 @@ use markdown
 use page
 
 # nth element of `args`, or `default` if the list is shorter than n+1.
-def arg-or = fun args n default {
+public def arg-or = fun args n default {
 	list.head (list.drop args n) ?? default
 }
 
 # Drop a trailing 3-character extension (e.g. ".md"). The caller has
 # already filtered to ".md" names, so this just trims the last three.
-def strip-ext = fun name {
+public def strip-ext = fun name {
 	string.slice name 0 (string.length name - 3)
 }
 
 # Build a single page: read, parse front-matter, render, wrap, write.
-def build-page = fun content-dir out-dir name {
+public def build-page = fun content-dir out-dir name {
 	when io.read-file (content-dir ++ "/" ++ name) is ok src {
 		let (meta, body) = page.parse-doc src
 		let title = page.meta-get meta "title" (strip-ext name)
@@ -42,7 +42,7 @@ def build-page = fun content-dir out-dir name {
 }
 
 # Write an index.html linking each generated page.
-def build-index = fun out-dir md-files {
+public def build-index = fun out-dir md-files {
 	let items = string.join (list.map md-files fun n {
 		let stem = strip-ext n
 		"<li><a href=\"$(stem).html\">$(stem)</a></li>"
@@ -55,7 +55,7 @@ def build-index = fun out-dir md-files {
 	}
 }
 
-def main = fun {
+public def main = fun {
 	let args = io.args ()
 	let content-dir = arg-or args 0 "examples/ssg/content"
 	let out-dir = arg-or args 1 "examples/ssg/public"

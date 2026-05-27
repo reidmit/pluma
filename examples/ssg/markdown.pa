@@ -17,7 +17,7 @@ use core.list
 # ---------------------------------------------------------------------
 
 # Inline-level spans. `strong`/`emph` nest, so they carry sub-spans.
-enum inline {
+public enum inline {
 	text string
 	strong (list inline)
 	emph (list inline)
@@ -26,7 +26,7 @@ enum inline {
 }
 
 # Block-level elements. List items are each a run of inline spans.
-enum block {
+public enum block {
 	heading int (list inline)
 	paragraph (list inline)
 	code-block string string
@@ -43,12 +43,12 @@ enum block {
 # A string as a list of byte values. Markdown's structural markers are
 # all ASCII, so scanning bytes is safe even with multi-byte UTF-8 text
 # (continuation bytes are always >= 128 and never collide with markers).
-def to-ints = fun s {
+public def to-ints = fun s {
 	bytes.to-list (string.to-bytes s)
 }
 
 # Decode a list of byte values back to a string (lossy on bad UTF-8).
-def decode = fun bs {
+public def decode = fun bs {
 	when bytes.from-list bs is ok b {
 		when bytes.to-string b is ok s {
 			s
@@ -66,7 +66,7 @@ def decode = fun bs {
 
 # Scan for the first occurrence of byte `d`. Returns `some (before,
 # after)` split around it, or `none` if not present.
-def break1 = fun bs d {
+public def break1 = fun bs d {
 	when bs is [] {
 		none
 	} is [c, ...rest] {
@@ -83,7 +83,7 @@ def break1 = fun bs d {
 }
 
 # Like `break1`, but for a two-byte delimiter `d1 d2` (e.g. `**`).
-def break2 = fun bs d1 d2 {
+public def break2 = fun bs d1 d2 {
 	when bs is [c, e, ...rest] {
 		if c == d1 && e == d2 is true {
 			some ([], rest)
@@ -102,7 +102,7 @@ def break2 = fun bs d1 d2 {
 }
 
 # Emit the pending text run (if any) ahead of `more`.
-def flush-text = fun acc more {
+public def flush-text = fun acc more {
 	when acc is [] {
 		more
 	} else {
@@ -112,7 +112,7 @@ def flush-text = fun acc more {
 
 # The core inline scanner. `acc` accumulates the bytes of the current
 # plain-text run (reversed); markers flush it and start a span node.
-def inline-loop = fun bs acc {
+public def inline-loop = fun bs acc {
 	when bs is [] {
 		flush-text acc []
 	} is [c, ...rest] {
@@ -171,7 +171,7 @@ def inline-loop = fun bs acc {
 }
 
 # Parse a single line/run of text into inline spans.
-def parse-inline = fun s {
+public def parse-inline = fun s {
 	inline-loop (to-ints s) []
 }
 
@@ -180,7 +180,7 @@ def parse-inline = fun s {
 # ---------------------------------------------------------------------
 
 # Heading level 1..6, or 0 if `line` is not an ATX heading.
-def heading-level = fun line {
+public def heading-level = fun line {
 	if string.starts-with line "###### " is true {
 		6
 	} else if string.starts-with line "##### " is true {
@@ -198,12 +198,12 @@ def heading-level = fun line {
 	}
 }
 
-def bullet-item = fun l {
+public def bullet-item = fun l {
 	string.starts-with l "- " || string.starts-with l "* " || string.starts-with l "+ "
 }
 
 # Count leading ASCII-digit bytes starting at index `i`.
-def count-digits = fun b i {
+public def count-digits = fun b i {
 	when bytes.at b i is some c {
 		if c >= 48 && c <= 57 is true {
 			count-digits b (i + 1)
@@ -215,7 +215,7 @@ def count-digits = fun b i {
 	}
 }
 
-def byte-eq = fun b i v {
+public def byte-eq = fun b i v {
 	when bytes.at b i is some c {
 		c == v
 	} is none {
@@ -224,20 +224,20 @@ def byte-eq = fun b i v {
 }
 
 # True for an ordered-list line like `1. item` / `12. item`.
-def ordered-item = fun l {
+public def ordered-item = fun l {
 	let b = string.to-bytes l
 	let d = count-digits b 0
 	d >= 1 && byte-eq b d 46 && byte-eq b (d + 1) 32
 }
 
-def is-hr = fun line {
+public def is-hr = fun line {
 	let t = string.trim line
 	t == "---" || t == "***" || t == "___" || t == "- - -" || t == "* * *"
 }
 
 # True if `l` begins a non-paragraph block (used to terminate a
 # paragraph run).
-def special-starter = fun l {
+public def special-starter = fun l {
 	heading-level l > 0 || string.starts-with l "```" || string.starts-with l ">" || bullet-item l || ordered-item l || is-hr l
 }
 
@@ -246,7 +246,7 @@ def special-starter = fun l {
 # ---------------------------------------------------------------------
 
 # Collect code lines until the closing ``` fence.
-def take-fence = fun lines {
+public def take-fence = fun lines {
 	when lines is [] {
 		([], [])
 	} is [l, ...rest] {
@@ -259,7 +259,7 @@ def take-fence = fun lines {
 	}
 }
 
-def strip-quote = fun l {
+public def strip-quote = fun l {
 	if string.starts-with l "> " is true {
 		string.drop l 2
 	} else if string.starts-with l ">" is true {
@@ -269,7 +269,7 @@ def strip-quote = fun l {
 	}
 }
 
-def take-quote = fun lines {
+public def take-quote = fun lines {
 	when lines is [] {
 		([], [])
 	} is [l, ...rest] {
@@ -282,7 +282,7 @@ def take-quote = fun lines {
 	}
 }
 
-def take-bullets = fun lines {
+public def take-bullets = fun lines {
 	when lines is [] {
 		([], [])
 	} is [l, ...rest] {
@@ -295,7 +295,7 @@ def take-bullets = fun lines {
 	}
 }
 
-def take-ordered = fun lines {
+public def take-ordered = fun lines {
 	when lines is [] {
 		([], [])
 	} is [l, ...rest] {
@@ -309,7 +309,7 @@ def take-ordered = fun lines {
 	}
 }
 
-def take-para = fun lines {
+public def take-para = fun lines {
 	when lines is [] {
 		([], [])
 	} is [l, ...rest] {
@@ -326,7 +326,7 @@ def take-para = fun lines {
 # Block parsing
 # ---------------------------------------------------------------------
 
-def parse-blocks = fun lines {
+public def parse-blocks = fun lines {
 	when lines is [] {
 		[]
 	} is [line, ...rest] {
@@ -361,14 +361,14 @@ def parse-blocks = fun lines {
 # Rendering
 # ---------------------------------------------------------------------
 
-def escape-html = fun s {
+public def escape-html = fun s {
 	let a = string.replace s "&" "&amp;"
 	let b = string.replace a "<" "&lt;"
 	let c = string.replace b ">" "&gt;"
 	string.replace c "\"" "&quot;"
 }
 
-def render-inline = fun x {
+public def render-inline = fun x {
 	when x is text s {
 		escape-html s
 	} is strong inner {
@@ -382,15 +382,15 @@ def render-inline = fun x {
 	}
 }
 
-def render-inlines = fun xs {
+public def render-inlines = fun xs {
 	string.join (list.map xs render-inline) ""
 }
 
-def render-items = fun items {
+public def render-items = fun items {
 	string.join (list.map items fun it { "<li>" ++ render-inlines it ++ "</li>" }) ""
 }
 
-def heading-tag = fun level {
+public def heading-tag = fun level {
 	when level is 1 {
 		"h1"
 	} is 2 {
@@ -406,7 +406,7 @@ def heading-tag = fun level {
 	}
 }
 
-def render-block = fun b {
+public def render-block = fun b {
 	when b is heading lvl inlines {
 		let tag = heading-tag lvl
 		"<" ++ tag ++ ">" ++ render-inlines inlines ++ "</" ++ tag ++ ">"
@@ -426,6 +426,6 @@ def render-block = fun b {
 }
 
 # Markdown body -> HTML fragment.
-def render = fun body {
+public def render = fun body {
 	string.join (list.map (parse-blocks (string.split body "\n")) render-block) "\n"
 }

@@ -16,7 +16,7 @@ use core.list
 use core.string
 use query
 
-def main = fun {
+public def main = fun {
 	let args = io.args ()
 	when list.head args is none {
 		print "usage: pluma run examples/jq <path> [file.json]"
@@ -36,7 +36,7 @@ def main = fun {
 }
 
 # Parse, navigate, and print. Errors at each stage report distinctly.
-def run = fun path-expr text {
+public def run = fun path-expr text {
 	when json.parse text is err e {
 		print "json error (line $(to-string e.line), col $(to-string e.col)): $(e.message)"
 	} is ok doc {

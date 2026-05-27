@@ -670,21 +670,30 @@ impl<'compiler> Analyzer<'compiler> {
 			for def in &ast.body {
 				match &def.kind {
 					DefinitionKind::Expr(expr) => {
-						exports
-							.values
-							.insert(def.name.name.clone(), expr.ty.clone());
-						if let Some(cs) = self.def_value_constraints.get(&def.name.name) {
+						// Value defs are either `public` (exported) or private
+						// (the default). `opaque` is rejected on them at parse
+						// time, so only these two cases reach here.
+						if def.visibility == Visibility::Public {
 							exports
-								.value_constraints
-								.insert(def.name.name.clone(), cs.clone());
+								.values
+								.insert(def.name.name.clone(), expr.ty.clone());
+							if let Some(cs) = self.def_value_constraints.get(&def.name.name) {
+								exports
+									.value_constraints
+									.insert(def.name.name.clone(), cs.clone());
+							}
+						} else {
+							exports.private.insert(def.name.name.clone());
 						}
 					}
 					DefinitionKind::Alias(_) => {
-						// Alias types are exported both as types (for use in
-						// type positions like `module.alias-name`) and as
-						// constructor functions (for use in value positions
-						// like `module.alias-name { ... }`).
-						if let Some(binding) = self.type_scope.get(&def.name.name) {
+						if def.visibility != Visibility::Public {
+							exports.private.insert(def.name.name.clone());
+						} else if let Some(binding) = self.type_scope.get(&def.name.name) {
+							// Alias types are exported both as types (for use in
+							// type positions like `module.alias-name`) and as
+							// constructor functions (for use in value positions
+							// like `module.alias-name { ... }`).
 							let resolved = match &substitution {
 								Some(s) => s.apply_to_type(&binding.ty),
 								None => binding.ty.clone(),
@@ -699,44 +708,57 @@ impl<'compiler> Analyzer<'compiler> {
 						}
 					}
 					DefinitionKind::Enum(_) => {
-						let qualified = format!("{}.{}", module.module_name, def.name.name);
-						if let Some(enum_def) = self.enum_defs.get(&qualified) {
-							// Canonicalize variant params: local fresh vars (e.g.
-							// 42, 43) get rewritten to Var(0), Var(1), ... so
-							// importers see a stable, var-namespace-independent
-							// signature.
-							let canonicalize = Substitution {
-								solutions: enum_def
-									.param_vars
-									.iter()
-									.enumerate()
-									.map(|(i, local)| (*local, Type::Var(i)))
-									.collect(),
-								row_solutions: HashMap::new(),
-							};
-							let canonical_variants: Vec<(String, Vec<Type>)> = enum_def
-								.variants
-								.iter()
-								.map(|(n, params)| {
-									let mapped = params
+						if def.visibility == Visibility::Private {
+							exports.private.insert(def.name.name.clone());
+						} else {
+							let qualified = format!("{}.{}", module.module_name, def.name.name);
+							if let Some(enum_def) = self.enum_defs.get(&qualified) {
+								// Canonicalize variant params: local fresh vars (e.g.
+								// 42, 43) get rewritten to Var(0), Var(1), ... so
+								// importers see a stable, var-namespace-independent
+								// signature.
+								let canonicalize = Substitution {
+									solutions: enum_def
+										.param_vars
 										.iter()
-										.map(|p| canonicalize.apply_to_type(p))
-										.collect();
-									(n.clone(), mapped)
-								})
-								.collect();
-							exports.enums.insert(
-								def.name.name.clone(),
-								EnumExport {
-									param_count: enum_def.param_vars.len(),
-									variants: canonical_variants,
-								},
-							);
+										.enumerate()
+										.map(|(i, local)| (*local, Type::Var(i)))
+										.collect(),
+									row_solutions: HashMap::new(),
+								};
+								// `opaque` exports the type name but withholds its
+								// constructors: importers get an empty variant list,
+								// so they can name the type yet can't construct or
+								// pattern-match its values. `param_count` is still
+								// exported so the type takes the right arguments.
+								let variants: Vec<(String, Vec<Type>)> = if def.visibility == Visibility::Opaque {
+									Vec::new()
+								} else {
+									enum_def
+										.variants
+										.iter()
+										.map(|(n, params)| {
+											let mapped = params
+												.iter()
+												.map(|p| canonicalize.apply_to_type(p))
+												.collect();
+											(n.clone(), mapped)
+										})
+										.collect()
+								};
+								exports.enums.insert(
+									def.name.name.clone(),
+									EnumExport {
+										param_count: enum_def.param_vars.len(),
+										variants,
+									},
+								);
+							}
 						}
 					}
-					// Trait/Instance: phase 1 only stubs out parsing. Exports for
-					// traits and instances will be wired up alongside the
-					// constraint-generation work in phase 2.
+					// Trait/Instance: not subject to the visibility ladder.
+					// Instances are always exported (via the loop below);
+					// traits aren't carried through `ModuleExports` at all.
 					DefinitionKind::Trait(_) | DefinitionKind::Instance(_) => {}
 				}
 			}
@@ -1020,6 +1042,7 @@ impl<'compiler> Analyzer<'compiler> {
 							},
 							range: instance_node.range,
 							kind: DefinitionKind::Expr(default_expr.clone()),
+							visibility: Visibility::Private,
 							ty: Type::Unknown,
 							dict_param_count: 0,
 							type_annotation: None,
@@ -1814,12 +1837,22 @@ impl<'compiler> Analyzer<'compiler> {
 							return alias_ty.clone();
 						}
 
-						self.error(
-							type_ident.range,
-							NameNotBound {
-								name: format!("{}.{}", module.name, type_ident.name),
-							},
-						);
+						if exports.private.contains(&type_ident.name) {
+							self.error(
+								type_ident.range,
+								ItemPrivate {
+									name: type_ident.name.clone(),
+									module: module.name.clone(),
+								},
+							);
+						} else {
+							self.error(
+								type_ident.range,
+								NameNotBound {
+									name: format!("{}.{}", module.name, type_ident.name),
+								},
+							);
+						}
 						return Type::Unknown;
 					}
 
@@ -2562,12 +2595,22 @@ impl<'compiler> Analyzer<'compiler> {
 									.map(|b| matches!(b.ty, Type::Enum(_, _)))
 									.unwrap_or(false);
 								if !is_local_enum {
-									self.error(
-										field.range,
-										NameNotBound {
-											name: format!("{}.{}", ident.name, field.name),
-										},
-									);
+									if exports.private.contains(&field.name) {
+										self.error(
+											field.range,
+											ItemPrivate {
+												name: field.name.clone(),
+												module: ident.name.clone(),
+											},
+										);
+									} else {
+										self.error(
+											field.range,
+											NameNotBound {
+												name: format!("{}.{}", ident.name, field.name),
+											},
+										);
+									}
 									expr.ty = Type::Unknown;
 									return;
 								}

@@ -25,7 +25,7 @@
 # To pull the value out with a fallback for `none`, use `??`:
 #
 #     list.head xs ?? 0   # the first element, or 0 if xs is empty
-enum option a {
+public enum option a {
 	some a
 	none
 }
@@ -42,7 +42,7 @@ enum option a {
 #
 #     string.to-int "42"     # => ok 42
 #     string.to-int "nope"   # => err "invalid digit found in string"
-enum result a b {
+public enum result a b {
 	ok a
 	err b
 }
@@ -55,7 +55,7 @@ enum result a b {
 #     ord.compare 1 2   # => lt
 #     ord.compare 5 5   # => eq
 #     ord.compare 9 3   # => gt
-enum ordering {
+public enum ordering {
 	lt
 	eq
 	gt

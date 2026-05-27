@@ -18,7 +18,7 @@
 #     ("ui",    package.dep.full {version: "2.0.0", features: ["icons"]})
 #     ("lib",   package.dep.git {url: "https://github.com/you/lib", branch: "main"})
 #     ("local", package.dep.path "../my-other-project")
-enum dep {
+public enum dep {
 	simple string
 	full ({version :: string, features :: list string})
 	git ({url :: string, branch :: string})
@@ -42,7 +42,7 @@ enum dep {
 #
 # Adding a field here is a safe change; removing or renaming one is not,
 # so it's done deliberately.
-alias info {
+public alias info {
 	name :: string,
 	version :: string,
 	authors :: list string,

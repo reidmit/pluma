@@ -39,6 +39,7 @@ pub enum AnalysisErrorKind {
 	BuiltinMustBeTopLevelRhs,
 	UnknownRegexCharacterClass { name: String },
 	WhereClauseParamNotInSignature { param: String },
+	ItemPrivate { name: String, module: String },
 }
 
 impl fmt::Display for AnalysisError {
@@ -226,6 +227,12 @@ impl fmt::Display for AnalysisError {
 				f,
 				"`where` clause refers to type variable `{}`, which does not appear in the def's type annotation.",
 				param
+			),
+
+			ItemPrivate { name, module } => write!(
+				f,
+				"`{}` is private to module `{}`. Mark it `public` in that module to use it here.",
+				name, module
 			),
 		}
 	}

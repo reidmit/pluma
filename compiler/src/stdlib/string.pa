@@ -12,13 +12,13 @@
 #
 #     string.length "hello"   # => 5
 #     string.length ""        # => 0
-def length :: fun string -> int = built-in "string-length"
+public def length :: fun string -> int = built-in "string-length"
 
 # True when the string has no characters at all.
 #
 #     string.is-empty ""    # => true
 #     string.is-empty "x"   # => false
-def is-empty :: fun string -> bool = fun s {
+public def is-empty :: fun string -> bool = fun s {
 	length s == 0
 }
 
@@ -27,7 +27,7 @@ def is-empty :: fun string -> bool = fun s {
 #
 #     string.char-at "hello" 1    # => some "e"
 #     string.char-at "hello" 99   # => none
-def char-at :: fun string int -> option string = built-in "string-char-at"
+public def char-at :: fun string int -> option string = built-in "string-char-at"
 
 # The slice of the string from character `start` (counted in) up to
 # `end` (counted out) -- so `slice s 0 3` is the first three characters.
@@ -36,56 +36,56 @@ def char-at :: fun string int -> option string = built-in "string-char-at"
 #
 #     string.slice "hello" 1 4   # => "ell"
 #     string.slice "hello" 0 2   # => "he"
-def slice :: fun string int int -> string = built-in "string-slice"
+public def slice :: fun string int int -> string = built-in "string-slice"
 
 # Drops the first `n` characters and returns the rest. The same as
 # `slice s n (string.length s)`.
 #
 #     string.drop "hello" 2   # => "llo"
-def drop :: fun string int -> string = fun s n {
+public def drop :: fun string int -> string = fun s n {
 	slice s n (length s)
 }
 
 # Uppercases the ASCII letters a-z. Everything else is left as-is.
 #
 #     string.to-upper "Hello, World"   # => "HELLO, WORLD"
-def to-upper :: fun string -> string = built-in "string-to-upper"
+public def to-upper :: fun string -> string = built-in "string-to-upper"
 
 # Lowercases the ASCII letters A-Z. Everything else is left as-is.
 #
 #     string.to-lower "Hello, World"   # => "hello, world"
-def to-lower :: fun string -> string = built-in "string-to-lower"
+public def to-lower :: fun string -> string = built-in "string-to-lower"
 
 # Removes whitespace (spaces, tabs, newlines) from both ends, leaving
 # the inside untouched.
 #
 #     string.trim "  hi there  "   # => "hi there"
-def trim :: fun string -> string = built-in "string-trim"
+public def trim :: fun string -> string = built-in "string-trim"
 
 # True when `needle` appears somewhere inside `haystack`.
 #
 #     string.contains "hello world" "o w"   # => true
 #     string.contains "hello" "z"           # => false
-def contains :: fun string string -> bool = built-in "string-contains"
+public def contains :: fun string string -> bool = built-in "string-contains"
 
 # True when `haystack` begins with `prefix`.
 #
 #     string.starts-with "hello" "he"   # => true
 #     string.starts-with "hello" "lo"   # => false
-def starts-with :: fun string string -> bool = built-in "string-starts-with"
+public def starts-with :: fun string string -> bool = built-in "string-starts-with"
 
 # True when `haystack` ends with `suffix`.
 #
 #     string.ends-with "hello" "lo"   # => true
 #     string.ends-with "hello" "he"   # => false
-def ends-with :: fun string string -> bool = built-in "string-ends-with"
+public def ends-with :: fun string string -> bool = built-in "string-ends-with"
 
 # Glues a list of strings into one, dropping `separator` between each
 # pair. The reverse of `split`.
 #
 #     string.join ["a", "b", "c"] ", "   # => "a, b, c"
 #     string.join ["a", "b", "c"] ""     # => "abc"
-def join :: fun (list string) string -> string = built-in "string-join"
+public def join :: fun (list string) string -> string = built-in "string-join"
 
 # Breaks a string into a list of pieces, splitting at every occurrence
 # of `separator`. Two separators in a row leave an empty string between
@@ -93,13 +93,13 @@ def join :: fun (list string) string -> string = built-in "string-join"
 #
 #     string.split "a,b,c" ","   # => ["a", "b", "c"]
 #     string.split "a,,b" ","    # => ["a", "", "b"]
-def split :: fun string string -> list string = built-in "string-split"
+public def split :: fun string string -> list string = built-in "string-split"
 
 # Replaces every occurrence of `pattern` with `replacement`.
 #
 #     string.replace "a-b-c" "-" "+"   # => "a+b+c"
 #     string.replace "hello" "l" "L"   # => "heLLo"
-def replace :: fun string string string -> string = built-in "string-replace"
+public def replace :: fun string string string -> string = built-in "string-replace"
 
 # Parses the string as a whole number. `ok n` if it's a valid integer,
 # `err message` if not.
@@ -107,14 +107,14 @@ def replace :: fun string string string -> string = built-in "string-replace"
 #     string.to-int "42"    # => ok 42
 #     string.to-int "-7"    # => ok -7
 #     string.to-int "3.5"   # => err "invalid digit found in string"
-def to-int :: fun string -> result int string = built-in "string-to-int"
+public def to-int :: fun string -> result int string = built-in "string-to-int"
 
 # Parses the string as a decimal number. `ok x` on success, `err
 # message` if it isn't a number.
 #
 #     string.to-float "3.14"   # => ok 3.14
 #     string.to-float "nope"   # => err "invalid float literal"
-def to-float :: fun string -> result float string = built-in "string-to-float"
+public def to-float :: fun string -> result float string = built-in "string-to-float"
 
 # The string's raw bytes, in UTF-8. Pair with `bytes.to-string` to go
 # back. Handy for seeing the character/byte split: an accented letter is
@@ -122,4 +122,4 @@ def to-float :: fun string -> result float string = built-in "string-to-float"
 #
 #     string.length "café"                     # => 4
 #     bytes.length (string.to-bytes "café")    # => 5
-def to-bytes :: fun string -> bytes = built-in "string-to-bytes"
+public def to-bytes :: fun string -> bytes = built-in "string-to-bytes"

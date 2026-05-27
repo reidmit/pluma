@@ -1,10 +1,25 @@
 use super::*;
 use crate::{location::Range, types::*};
 
+// Whether (and how) a top-level definition is visible to modules that
+// `use` this one. Definitions are private by default; the `public` and
+// `opaque` keywords widen that. `Opaque` is only valid on enums — it
+// exports the type name while withholding its constructors, so importers
+// can name the type but can't construct or pattern-match its values.
+#[derive(Copy, Clone, PartialEq, Eq, Default)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+pub enum Visibility {
+	#[default]
+	Private,
+	Opaque,
+	Public,
+}
+
 pub struct DefinitionNode {
 	pub range: Range,
 	pub name: IdentifierNode,
 	pub kind: DefinitionKind,
+	pub visibility: Visibility,
 	pub ty: Type,
 	// Number of hidden dictionary parameters codegen prepends to this
 	// def's user-facing arity. Equal to the number of class constraints
@@ -36,7 +51,14 @@ pub enum DefinitionKind {
 #[cfg(debug_assertions)]
 impl std::fmt::Debug for DefinitionNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct(&format!("def({:#?}) :: {}", self.range, self.ty))
+		// Render the visibility keyword only when non-default, so private
+		// defs (the common case) keep their existing snapshot shape.
+		let vis = match self.visibility {
+			Visibility::Private => "",
+			Visibility::Opaque => "opaque ",
+			Visibility::Public => "public ",
+		};
+		f.debug_struct(&format!("{}def({:#?}) :: {}", vis, self.range, self.ty))
 			.field("name", &self.name)
 			.field("kind", &self.kind)
 			.finish()

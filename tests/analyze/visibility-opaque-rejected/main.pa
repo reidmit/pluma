@@ -1,0 +1,5 @@
+use lib
+
+# `token`'s constructor is hidden by `opaque`, so reaching for
+# `lib.token.mk` directly is rejected — only `lib.make` can build one.
+def t = lib.token.mk "abc"

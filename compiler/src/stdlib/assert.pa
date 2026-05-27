@@ -16,15 +16,15 @@
 #
 #     assert.equals (1 + 1) 2
 #     assert.equals (string.to-upper "hi") "HI"
-def equals :: fun a a -> result nothing string = built-in "assert-equals"
+public def equals :: fun a a -> result nothing string = built-in "assert-equals"
 
 # `ok ()` when the two values are *not* equal.
 #
 #     assert.not-equals "cat" "dog"
-def not-equals :: fun a a -> result nothing string = built-in "assert-not-equals"
+public def not-equals :: fun a a -> result nothing string = built-in "assert-not-equals"
 
 # `ok ()` when `value` is `true`.
-def is-true :: fun bool -> result nothing string = fun value {
+public def is-true :: fun bool -> result nothing string = fun value {
 	if value is true {
 		ok ()
 	} else {
@@ -33,7 +33,7 @@ def is-true :: fun bool -> result nothing string = fun value {
 }
 
 # `ok ()` when `value` is `false`.
-def is-false :: fun bool -> result nothing string = fun value {
+public def is-false :: fun bool -> result nothing string = fun value {
 	if value is false {
 		ok ()
 	} else {
@@ -44,7 +44,7 @@ def is-false :: fun bool -> result nothing string = fun value {
 # `ok ()` when the option holds a value (`some _`).
 #
 #     assert.is-some (list.head [1, 2, 3])
-def is-some :: fun (option a) -> result nothing string = fun value {
+public def is-some :: fun (option a) -> result nothing string = fun value {
 	if value is some _ {
 		ok ()
 	} else {
@@ -53,7 +53,7 @@ def is-some :: fun (option a) -> result nothing string = fun value {
 }
 
 # `ok ()` when the option is `none`.
-def is-none :: fun (option a) -> result nothing string = fun value {
+public def is-none :: fun (option a) -> result nothing string = fun value {
 	if value is none {
 		ok ()
 	} else {
@@ -64,7 +64,7 @@ def is-none :: fun (option a) -> result nothing string = fun value {
 # `ok ()` when the result is a success (`ok _`).
 #
 #     assert.is-ok (string.to-int "42")
-def is-ok :: fun (result a e) -> result nothing string = fun value {
+public def is-ok :: fun (result a e) -> result nothing string = fun value {
 	if value is ok _ {
 		ok ()
 	} else {
@@ -73,7 +73,7 @@ def is-ok :: fun (result a e) -> result nothing string = fun value {
 }
 
 # `ok ()` when the result is a failure (`err _`).
-def is-err :: fun (result a e) -> result nothing string = fun value {
+public def is-err :: fun (result a e) -> result nothing string = fun value {
 	if value is err _ {
 		ok ()
 	} else {
@@ -92,4 +92,4 @@ def is-err :: fun (result a e) -> result nothing string = fun value {
 #             assert.equals (4 * 2) 8,
 #         ]
 #     })
-def all :: fun (list (result nothing string)) -> result nothing string = built-in "assert-all"
+public def all :: fun (list (result nothing string)) -> result nothing string = built-in "assert-all"

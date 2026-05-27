@@ -14,13 +14,13 @@
 #
 #     bytes.length 'hello'       # => 5
 #     bytes.length '\x00\xff'    # => 2
-def length :: fun bytes -> int = built-in "bytes-length"
+public def length :: fun bytes -> int = built-in "bytes-length"
 
 # True when there are no bytes at all.
 #
 #     bytes.is-empty ''    # => true
 #     bytes.is-empty 'x'   # => false
-def is-empty :: fun bytes -> bool = fun b {
+public def is-empty :: fun bytes -> bool = fun b {
 	length b == 0
 }
 
@@ -29,71 +29,71 @@ def is-empty :: fun bytes -> bool = fun b {
 #
 #     bytes.at 'ABC' 0    # => some 65
 #     bytes.at 'ABC' 9    # => none
-def at :: fun bytes int -> option int = built-in "bytes-at"
+public def at :: fun bytes int -> option int = built-in "bytes-at"
 
 # Joins two byte sequences end to end into a new one.
 #
 #     bytes.concat 'foo' 'bar'   # => 'foobar'
-def concat :: fun bytes bytes -> bytes = built-in "bytes-concat"
+public def concat :: fun bytes bytes -> bytes = built-in "bytes-concat"
 
 # The slice from position `start` (counted in) up to `end` (counted
 # out). Positions past either end are pulled back to that end rather
 # than erroring.
 #
 #     bytes.slice 'hello' 1 4   # => 'ell'
-def slice :: fun bytes int int -> bytes = built-in "bytes-slice"
+public def slice :: fun bytes int int -> bytes = built-in "bytes-slice"
 
 # True when `needle` appears somewhere inside `haystack`.
 #
 #     bytes.contains 'hello world' 'world'   # => true
-def contains :: fun bytes bytes -> bool = built-in "bytes-contains"
+public def contains :: fun bytes bytes -> bool = built-in "bytes-contains"
 
 # True when the bytes begin with `prefix`. Handy for spotting a file by
 # its magic number -- a PNG starts with byte 0x89 then "PNG".
 #
 #     bytes.starts-with '\x89PNG' '\x89'   # => true
-def starts-with :: fun bytes bytes -> bool = built-in "bytes-starts-with"
+public def starts-with :: fun bytes bytes -> bool = built-in "bytes-starts-with"
 
 # True when the bytes end with `suffix`.
 #
 #     bytes.ends-with 'hello\n' '\n'   # => true
-def ends-with :: fun bytes bytes -> bool = built-in "bytes-ends-with"
+public def ends-with :: fun bytes bytes -> bool = built-in "bytes-ends-with"
 
 # Repeats the bytes `n` times, joined into one sequence.
 #
 #     bytes.repeat 'ab' 3   # => 'ababab'
-def repeat :: fun bytes int -> bytes = built-in "bytes-repeat"
+public def repeat :: fun bytes int -> bytes = built-in "bytes-repeat"
 
 # Returns the bytes in reverse order.
 #
 #     bytes.reverse 'abc'   # => 'cba'
-def reverse :: fun bytes -> bytes = built-in "bytes-reverse"
+public def reverse :: fun bytes -> bytes = built-in "bytes-reverse"
 
 # Spreads the bytes out into a list of ints, one per byte (each 0-255).
 #
 #     bytes.to-list 'AB'   # => [65, 66]
-def to-list :: fun bytes -> list int = built-in "bytes-to-list"
+public def to-list :: fun bytes -> list int = built-in "bytes-to-list"
 
 # Packs a list of ints back into bytes. Each int has to fit in a byte
 # (0-255); `err` if one doesn't.
 #
 #     bytes.from-list [72, 105]   # => ok 'Hi'
 #     bytes.from-list [256]       # => err "byte out of range (0..256): 256"
-def from-list :: fun (list int) -> result bytes string = built-in "bytes-from-list"
+public def from-list :: fun (list int) -> result bytes string = built-in "bytes-from-list"
 
 # Glues a list of byte sequences together, dropping `separator` between
 # each pair.
 #
 #     bytes.join ['a', 'b', 'c'] '-'   # => 'a-b-c'
-def join :: fun (list bytes) bytes -> bytes = built-in "bytes-join"
+public def join :: fun (list bytes) bytes -> bytes = built-in "bytes-join"
 
 # Breaks the bytes into pieces at every occurrence of `separator`.
 #
 #     bytes.split 'a,b,c' ','   # => ['a', 'b', 'c']
-def split :: fun bytes bytes -> list bytes = built-in "bytes-split"
+public def split :: fun bytes bytes -> list bytes = built-in "bytes-split"
 
 # Decodes the bytes as UTF-8 text. `ok s` on success, `err` if the bytes
 # aren't valid UTF-8.
 #
 #     bytes.to-string 'hi'   # => ok "hi"
-def to-string :: fun bytes -> result string string = built-in "bytes-to-string"
+public def to-string :: fun bytes -> result string string = built-in "bytes-to-string"

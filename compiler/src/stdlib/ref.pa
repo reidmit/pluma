@@ -10,13 +10,13 @@
 # Makes a new cell holding `initial`.
 #
 #     let count = ref.new 0
-def new :: fun a -> ref a = built-in "ref-new"
+public def new :: fun a -> ref a = built-in "ref-new"
 
 # Reads the current value out of a cell.
 #
 #     let count = ref.new 7
 #     ref.get count   # => 7
-def get :: fun (ref a) -> a = built-in "ref-get"
+public def get :: fun (ref a) -> a = built-in "ref-get"
 
 # Overwrites the cell's value. Returns `nothing` -- read it back with
 # `get` if you want to see the new value.
@@ -24,7 +24,7 @@ def get :: fun (ref a) -> a = built-in "ref-get"
 #     let count = ref.new 0
 #     ref.set count 5
 #     ref.get count   # => 5
-def set :: fun (ref a) a -> nothing = built-in "ref-set"
+public def set :: fun (ref a) a -> nothing = built-in "ref-set"
 
 # Reads the value, runs `f` on it, and writes the result back -- a
 # read-modify-write in a single step. Returns `nothing`; read it back
@@ -33,4 +33,4 @@ def set :: fun (ref a) a -> nothing = built-in "ref-set"
 #     let count = ref.new 10
 #     ref.update count (fun n { n + 1 })
 #     ref.get count   # => 11
-def update :: fun (ref a) (fun a -> a) -> nothing = built-in "ref-update"
+public def update :: fun (ref a) (fun a -> a) -> nothing = built-in "ref-update"

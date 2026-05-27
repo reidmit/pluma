@@ -1,1 +1,1 @@
-alias point {x :: int, y :: int}
+public alias point {x :: int, y :: int}

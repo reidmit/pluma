@@ -22,21 +22,21 @@
 #
 #     list.length [10, 20, 30]   # => 3
 #     list.length []             # => 0
-def length :: fun (list a) -> int = built-in "list-length"
+public def length :: fun (list a) -> int = built-in "list-length"
 
 # True when the list has no elements at all. Just a shorthand for
 # checking whether `length` is zero.
 #
 #     list.is-empty []    # => true
 #     list.is-empty [1]   # => false
-def is-empty :: fun (list a) -> bool = fun xs {
+public def is-empty :: fun (list a) -> bool = fun xs {
 	length xs == 0
 }
 
 # Returns a new list with the elements in the opposite order.
 #
 #     list.reverse [1, 2, 3]   # => [3, 2, 1]
-def reverse :: fun (list a) -> list a = built-in "list-reverse"
+public def reverse :: fun (list a) -> list a = built-in "list-reverse"
 
 # Joins two lists end to end into a new one: every element of the
 # first, then every element of the second.
@@ -45,7 +45,7 @@ def reverse :: fun (list a) -> list a = built-in "list-reverse"
 #
 # When you're building a list inline, the `...` spread does the
 # same thing and reads more cleanly: `[...xs, ...ys]`.
-def concat :: fun (list a) (list a) -> list a = built-in "list-concat"
+public def concat :: fun (list a) (list a) -> list a = built-in "list-concat"
 
 # True when `target` shows up somewhere in the list. Elements are
 # compared by value, so `[1, 2, 3]` contains `2`, and a list of
@@ -53,7 +53,7 @@ def concat :: fun (list a) (list a) -> list a = built-in "list-concat"
 #
 #     list.contains [1, 2, 3] 2    # => true
 #     list.contains [1, 2, 3] 99   # => false
-def contains :: fun (list a) a -> bool = built-in "list-contains"
+public def contains :: fun (list a) a -> bool = built-in "list-contains"
 
 # Runs `f` on every element and collects the results into a new
 # list, keeping the order. The results can be a different type
@@ -62,13 +62,13 @@ def contains :: fun (list a) a -> bool = built-in "list-contains"
 #
 #     list.map [1, 2, 3] (fun n { n * 2 })   # => [2, 4, 6]
 #     list.map [1, 2, 3] to-string           # => ["1", "2", "3"]
-def map :: fun (list a) (fun a -> b) -> list b = built-in "list-map"
+public def map :: fun (list a) (fun a -> b) -> list b = built-in "list-map"
 
 # Keeps only the elements that `pred` returns true for, dropping
 # the rest. Order is preserved.
 #
 #     list.filter [1, 2, 3, 4] (fun n { n % 2 == 0 })   # => [2, 4]
-def filter :: fun (list a) (fun a -> bool) -> list a = built-in "list-filter"
+public def filter :: fun (list a) (fun a -> bool) -> list a = built-in "list-filter"
 
 # Boils the whole list down to a single value by combining the
 # elements one at a time, left to right.
@@ -86,7 +86,7 @@ def filter :: fun (list a) (fun a -> bool) -> list a = built-in "list-filter"
 #
 # The accumulator can be any type, not just a number -- start with
 # "" and you can glue the elements together into a string.
-def fold :: fun (list a) b (fun b a -> b) -> b = built-in "list-fold"
+public def fold :: fun (list a) b (fun b a -> b) -> b = built-in "list-fold"
 
 # Runs `f` on every element just for the side effects -- printing
 # each one, say -- and returns `nothing`. If you actually want the
@@ -94,14 +94,14 @@ def fold :: fun (list a) b (fun b a -> b) -> b = built-in "list-fold"
 #
 #     list.each ["a", "b"] (fun s { io.print s })
 #     # prints a, then b on separate lines
-def each :: fun (list a) (fun a -> b) -> nothing = built-in "list-each"
+public def each :: fun (list a) (fun a -> b) -> nothing = built-in "list-each"
 
 # Returns the first element, wrapped in `some`. An empty list has
 # no first element, so you get `none`.
 #
 #     list.head [1, 2, 3]   # => some 1
 #     list.head []          # => none
-def head :: fun (list a) -> option a = built-in "list-head"
+public def head :: fun (list a) -> option a = built-in "list-head"
 
 # Returns everything except the first element, wrapped in `some`;
 # `none` for an empty list. Note that the tail of a one-element
@@ -110,42 +110,42 @@ def head :: fun (list a) -> option a = built-in "list-head"
 #     list.tail [1, 2, 3]   # => some [2, 3]
 #     list.tail [1]         # => some []
 #     list.tail []          # => none
-def tail :: fun (list a) -> option (list a) = built-in "list-tail"
+public def tail :: fun (list a) -> option (list a) = built-in "list-tail"
 
 # Returns a new list with just the first `n` elements. If the list
 # is shorter than `n`, you get the whole thing back.
 #
 #     list.take [1, 2, 3, 4, 5] 3   # => [1, 2, 3]
 #     list.take [1, 2] 5            # => [1, 2]
-def take :: fun (list a) int -> list a = built-in "list-take"
+public def take :: fun (list a) int -> list a = built-in "list-take"
 
 # Returns a new list with the first `n` elements removed. If `n`
 # is at least as long as the list, you get an empty list.
 #
 #     list.drop [1, 2, 3, 4, 5] 2   # => [3, 4, 5]
 #     list.drop [1, 2] 5            # => []
-def drop :: fun (list a) int -> list a = built-in "list-drop"
+public def drop :: fun (list a) int -> list a = built-in "list-drop"
 
 # Returns the first element that `pred` returns true for, wrapped
 # in `some`. If nothing matches, `none`.
 #
 #     list.find [1, 2, 3, 4] (fun n { n > 2 })     # => some 3
 #     list.find [1, 2, 3] (fun n { n > 100 })      # => none
-def find :: fun (list a) (fun a -> bool) -> option a = built-in "list-find"
+public def find :: fun (list a) (fun a -> bool) -> option a = built-in "list-find"
 
 # True when at least one element passes `pred`. Stops as soon as
 # it finds one.
 #
 #     list.any [1, 2, 3] (fun n { n > 2 })     # => true
 #     list.any [1, 2, 3] (fun n { n > 100 })   # => false
-def any :: fun (list a) (fun a -> bool) -> bool = built-in "list-any"
+public def any :: fun (list a) (fun a -> bool) -> bool = built-in "list-any"
 
 # True when every element passes `pred`. An empty list counts as
 # true -- there's nothing in it to fail the test.
 #
 #     list.all [2, 4, 6] (fun n { n % 2 == 0 })   # => true
 #     list.all [1, 2, 3] (fun n { n > 1 })        # => false
-def all :: fun (list a) (fun a -> bool) -> bool = built-in "list-all"
+public def all :: fun (list a) (fun a -> bool) -> bool = built-in "list-all"
 
 # Returns a new list with the elements in sorted order. You choose
 # the order with a compare function `cmp a b` that reports whether
@@ -161,4 +161,4 @@ def all :: fun (list a) (fun a -> bool) -> bool = built-in "list-all"
 # compare function:
 #
 #     list.sort [3, 1, 2] (fun a b { ord.compare b a })   # => [3, 2, 1]
-def sort :: fun (list a) (fun a a -> ordering) -> list a = built-in "list-sort"
+public def sort :: fun (list a) (fun a a -> ordering) -> list a = built-in "list-sort"

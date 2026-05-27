@@ -6,11 +6,11 @@
 # Encodes bytes as a lowercase hex string -- two digits per byte.
 #
 #     hex.encode 'hello'   # => "68656c6c6f"
-def encode :: fun bytes -> string = built-in "hex-encode"
+public def encode :: fun bytes -> string = built-in "hex-encode"
 
 # Decodes a hex string back into bytes. The input must have an even
 # number of digits and contain only 0-9 and a-f (either case); anything
 # else -- a stray space, a "0x" prefix, an odd length -- gives `err`.
 #
 #     hex.decode "68656c6c6f"   # => ok 'hello'
-def decode :: fun string -> result bytes string = built-in "hex-decode"
+public def decode :: fun string -> result bytes string = built-in "hex-decode"

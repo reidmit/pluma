@@ -1,4 +1,4 @@
-enum color {
+public enum color {
 	red
 	green
 	blue

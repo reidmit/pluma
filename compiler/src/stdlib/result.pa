@@ -19,7 +19,7 @@
 #
 #     try text = io.read-file path   # stop with the err if it fails
 #     ok (string.length text)        # otherwise carry on
-def then :: fun (result a e) (fun a -> result b e) -> result b e = built-in "result-then"
+public def then :: fun (result a e) (fun a -> result b e) -> result b e = built-in "result-then"
 
 # Returns the value inside an `ok`, or falls back to whatever `fallback`
 # produces when the result is an `err`. The error value is discarded; if
@@ -35,7 +35,7 @@ def then :: fun (result a e) (fun a -> result b e) -> result b e = built-in "res
 #
 #     result.or-else (ok 7) (fun { 0 })         # => 7
 #     result.or-else (err "nope") (fun { 0 })   # => 0
-def or-else :: fun (result a e) (fun nothing -> a) -> a = fun r fallback {
+public def or-else :: fun (result a e) (fun nothing -> a) -> a = fun r fallback {
 	when r is ok v {
 		v
 	} is err _ {
@@ -52,4 +52,4 @@ def or-else :: fun (result a e) (fun nothing -> a) -> a = fun r fallback {
 #
 #     # ok -> the contents; err -> "reading config: <the os error>" then exit
 #     io.read-file "config.toml" | result.expect "reading config"
-def expect :: fun (result a e) string -> a = built-in "result-expect"
+public def expect :: fun (result a e) string -> a = built-in "result-expect"

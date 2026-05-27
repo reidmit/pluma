@@ -13,90 +13,90 @@
 #
 #     io.print "hello"     # writes: hello
 #     io.print [1, 2, 3]   # writes: [1, 2, 3]
-def print :: fun a -> nothing = built-in "io-print"
+public def print :: fun a -> nothing = built-in "io-print"
 
 # Like `print`, but writes to standard error -- the stream meant for
 # diagnostics and log messages, kept separate from a program's real
 # output.
-def print-err :: fun a -> nothing = built-in "io-print-err"
+public def print-err :: fun a -> nothing = built-in "io-print-err"
 
 # Like `print`, but with no trailing newline, so the next output picks
 # up right where this one left off. Handy for prompts.
 #
 #     io.write "Name: "   # leaves the cursor on the same line
-def write :: fun a -> nothing = built-in "io-write"
+public def write :: fun a -> nothing = built-in "io-write"
 
 # Like `write` (no trailing newline), but to standard error.
-def write-err :: fun a -> nothing = built-in "io-write-err"
+public def write-err :: fun a -> nothing = built-in "io-write-err"
 
 # Reads one line from standard input, without its trailing newline.
 # `ok line` normally; `err "EOF"` once the input is exhausted.
 #
 #     try line = io.read ()   # read what the user types, a line at a time
-def read :: fun nothing -> result string string = built-in "io-read"
+public def read :: fun nothing -> result string string = built-in "io-read"
 
 # Reads all of standard input into a single string, up to end of input.
 # `err` on a read error. Good for filter-style programs fed by a pipe:
 # `some-command | your-program`.
-def read-all :: fun nothing -> result string string = built-in "io-read-all"
+public def read-all :: fun nothing -> result string string = built-in "io-read-all"
 
 # Reads an entire file into a string. `ok contents` if it worked, or
 # `err message` if the file is missing or can't be read.
 #
 #     io.read-file "notes.txt"   # ok "...the file's text..." or err
-def read-file :: fun string -> result string string = built-in "io-read-file"
+public def read-file :: fun string -> result string string = built-in "io-read-file"
 
 # Writes `data` to a file, replacing whatever was there before. Creates
 # the file if it doesn't exist. `ok nothing` on success, `err` on
 # failure.
 #
 #     io.write-file "out.txt" "hello"
-def write-file :: fun string string -> result nothing string = built-in "io-write-file"
+public def write-file :: fun string string -> result nothing string = built-in "io-write-file"
 
 # Adds `data` to the end of a file, keeping the existing contents.
 # Creates the file if it doesn't exist.
-def append-file :: fun string string -> result nothing string = built-in "io-append-file"
+public def append-file :: fun string string -> result nothing string = built-in "io-append-file"
 
 # True when the path exists and is a file (not a directory).
 #
 #     io.file-exists "out.txt"   # true or false
-def file-exists :: fun string -> bool = built-in "io-file-exists"
+public def file-exists :: fun string -> bool = built-in "io-file-exists"
 
 # Deletes a file. `err` if it isn't there.
-def delete-file :: fun string -> result nothing string = built-in "io-delete-file"
+public def delete-file :: fun string -> result nothing string = built-in "io-delete-file"
 
 # True when the path exists and is a directory.
-def is-dir :: fun string -> bool = built-in "io-is-dir"
+public def is-dir :: fun string -> bool = built-in "io-is-dir"
 
 # Lists the entries in a directory -- just the names, not full paths,
 # sorted, with hidden dotfiles included. `err` if the path isn't a
 # directory you can read.
 #
 #     io.read-dir "."   # ok ["README.md", "src", ...] or err
-def read-dir :: fun string -> result (list string) string = built-in "io-read-dir"
+public def read-dir :: fun string -> result (list string) string = built-in "io-read-dir"
 
 # Creates a directory, along with any parent directories that don't
 # exist yet (like `mkdir -p`). Quietly succeeds if it's already there.
-def make-dir :: fun string -> result nothing string = built-in "io-make-dir"
+public def make-dir :: fun string -> result nothing string = built-in "io-make-dir"
 
 # The command-line arguments your program was run with, in order. The
 # `pluma` command and the script path are left out -- running
 # `pluma run app.pa hello 42` gives `["hello", "42"]`.
-def args :: fun nothing -> list string = built-in "io-args"
+public def args :: fun nothing -> list string = built-in "io-args"
 
 # Looks up an environment variable. `some value` if it's set, `none` if
 # not.
 #
 #     io.env "HOME"             # some "/Users/you" -- whatever it's set to
 #     io.env "NOT_SET_ANYWHERE" # => none
-def env :: fun string -> option string = built-in "io-env"
+public def env :: fun string -> option string = built-in "io-env"
 
 # Stops the program right away with the given exit code (0 means
 # success; anything else signals an error). It never returns, so it
 # fits anywhere a value is expected.
 #
 #     io.exit 1   # quit now, reporting failure
-def exit :: fun int -> a = built-in "io-exit"
+public def exit :: fun int -> a = built-in "io-exit"
 
 # Stops the program with `message` written to standard error and a
 # nonzero exit code. Use it when a script hits a situation it can't
@@ -106,20 +106,20 @@ def exit :: fun int -> a = built-in "io-exit"
 # failing arm.
 #
 #     io.fail "config.toml is missing"
-def fail :: fun string -> a = built-in "io-fail"
+public def fail :: fun string -> a = built-in "io-fail"
 
 # Byte-oriented versions of the operations above, for binary data: they
 # read and write `bytes` instead of `string`, so they make no assumption
 # that the content is text. Reach for these with images, compressed
 # files, or anything that isn't UTF-8.
-def read-all-bytes :: fun nothing -> result bytes string = built-in "io-read-all-bytes"
+public def read-all-bytes :: fun nothing -> result bytes string = built-in "io-read-all-bytes"
 
-def read-file-bytes :: fun string -> result bytes string = built-in "io-read-file-bytes"
+public def read-file-bytes :: fun string -> result bytes string = built-in "io-read-file-bytes"
 
-def write-file-bytes :: fun string bytes -> result nothing string = built-in "io-write-file-bytes"
+public def write-file-bytes :: fun string bytes -> result nothing string = built-in "io-write-file-bytes"
 
-def append-file-bytes :: fun string bytes -> result nothing string = built-in "io-append-file-bytes"
+public def append-file-bytes :: fun string bytes -> result nothing string = built-in "io-append-file-bytes"
 
-def write-bytes :: fun bytes -> nothing = built-in "io-write-bytes"
+public def write-bytes :: fun bytes -> nothing = built-in "io-write-bytes"
 
-def write-err-bytes :: fun bytes -> nothing = built-in "io-write-err-bytes"
+public def write-err-bytes :: fun bytes -> nothing = built-in "io-write-err-bytes"

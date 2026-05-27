@@ -1,0 +1,3 @@
+use lib
+
+def out = lib.private-fn 5

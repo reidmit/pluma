@@ -15,20 +15,20 @@
 # Encodes bytes with the standard alphabet, including `=` padding.
 #
 #     base64.encode 'hello'   # => "aGVsbG8="
-def encode :: fun bytes -> string = built-in "base64-encode"
+public def encode :: fun bytes -> string = built-in "base64-encode"
 
 # Decodes a standard-alphabet base64 string back into bytes. The
 # trailing padding is optional.
 #
 #     base64.decode "aGVsbG8="   # => ok 'hello'
-def decode :: fun string -> result bytes string = built-in "base64-decode"
+public def decode :: fun string -> result bytes string = built-in "base64-decode"
 
 # Encodes bytes with the URL-safe alphabet and no padding.
 #
 #     base64.url-encode 'hello'   # => "aGVsbG8"
-def url-encode :: fun bytes -> string = built-in "base64-url-encode"
+public def url-encode :: fun bytes -> string = built-in "base64-url-encode"
 
 # Decodes a URL-safe base64 string back into bytes. Padding is optional.
 #
 #     base64.url-decode "aGVsbG8"   # => ok 'hello'
-def url-decode :: fun string -> result bytes string = built-in "base64-url-decode"
+public def url-decode :: fun string -> result bytes string = built-in "base64-url-decode"
