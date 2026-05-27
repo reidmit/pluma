@@ -49,6 +49,12 @@ pub struct Analyzer<'compiler> {
 	// The fully-qualified name of each imported module, keyed by the local
 	// namespace name. `use a.b.utils as u` produces `u -> a.b.utils`.
 	import_qualified: HashMap<String, String>,
+	// One-shot hint: the resolved parameter types of the function about to be
+	// constrained as an annotated def's RHS. The `Fun` arm consumes it to seed
+	// scope-handle params concretely (so handle methods dispatch on a param).
+	// Consumed (taken) by the first `Fun` it reaches, so nested funs don't
+	// inherit it.
+	fun_param_hints: Option<Vec<Type>>,
 	next_type_var_id: usize,
 	// Typeclass declarations visible during analysis. Phase 2 seeds
 	// `numeric` here directly from the prelude.
@@ -336,6 +342,16 @@ pub fn manual_handle_type(elem: Type) -> Type {
 	Type::Enum("__prelude__.manual-handle".to_string(), vec![elem])
 }
 
+// Is `t` one of the scope-handle types? Used to seed a function parameter
+// concretely from its signature, so `s.spawn`/`s.next` dispatch when a handle
+// arrives as a parameter (not just when bound by `scope as s`).
+fn is_handle_type(t: &Type) -> bool {
+	matches!(
+		t,
+		Type::Enum(n, _) if n == "__prelude__.scope-handle" || n == "__prelude__.manual-handle"
+	)
+}
+
 // Which kind of scope handle a binding is. They expose slightly different
 // method sets and lower to different (but runtime-identical) kernel defs.
 #[derive(Clone, Copy, PartialEq)]
@@ -449,6 +465,7 @@ impl<'compiler> Analyzer<'compiler> {
 			variant_constructors: HashMap::new(),
 			imports: HashMap::new(),
 			import_qualified: HashMap::new(),
+			fun_param_hints: None,
 			next_type_var_id: 0,
 			traits: HashMap::new(),
 			instances: HashMap::new(),
@@ -1491,7 +1508,18 @@ impl<'compiler> Analyzer<'compiler> {
 							}
 						}
 					} else {
+						// If the signature names scope-handle parameters, hint their
+						// types into the `Fun` arm so the handle is concretely typed at
+						// constraint time — that's what lets `s.spawn`/`s.next` dispatch
+						// on a handle passed *as a parameter*, not just one bound by
+						// `scope as s`. (See `maybe_rewrite_scope_method`.)
+						if let (Some(Type::Fun(params, _)), ExprKind::Fun(_)) = (&annotated_ty, &expr.kind) {
+							if params.iter().any(is_handle_type) {
+								self.fun_param_hints = Some(params.clone());
+							}
+						}
 						self.constrain_expr(expr, &mut constraints);
+						self.fun_param_hints = None;
 
 						if let Some(annotated_ty) = annotated_ty {
 							constraints.push(eq_constraint(expr.ty.clone(), annotated_ty));
@@ -2499,6 +2527,13 @@ impl<'compiler> Analyzer<'compiler> {
 			ExprKind::Fun(FunNode { params, body, .. }) => {
 				expr.ty = self.new_type_var();
 
+				// Consume any signature hint (set for an annotated def's RHS). A
+				// param whose hinted type is a scope handle is bound to that
+				// concrete type rather than a fresh var, so handle methods dispatch
+				// on it; everything else stays a fresh var (unified with the
+				// annotation as usual). Taking it means nested funs don't inherit.
+				let hints = self.fun_param_hints.take();
+
 				let mut param_types = Vec::new();
 
 				self.enter_scope();
@@ -2506,8 +2541,11 @@ impl<'compiler> Analyzer<'compiler> {
 				if params.is_empty() {
 					param_types.push(Type::Nothing)
 				} else {
-					for param in params {
-						param.ty = self.new_type_var();
+					for (i, param) in params.iter_mut().enumerate() {
+						param.ty = match hints.as_ref().and_then(|h| h.get(i)) {
+							Some(t) if is_handle_type(t) => t.clone(),
+							_ => self.new_type_var(),
+						};
 
 						param_types.push(param.ty.clone());
 

@@ -135,9 +135,9 @@ public def manual-next :: fun (manual-handle a) nothing -> task (option (result 
 # s.spawn t })`: the lambda captures the handle `s`, so `s.spawn` dispatches,
 # and `list.map` does the iteration. Draining a manual scope needs to call
 # `s.next` in a loop, which wants recursion -- so the loop lives in a private
-# top-level driver (`drain-any` / `gather`) and the scope-handle operations are
-# handed to it as `s`-capturing closures (`fun { s.next () }`), since a handle
-# can only be used where it was bound, not passed as a plain argument.
+# top-level driver (`drain-any` / `gather`) that takes the handle `s` as a
+# parameter; its signature names the param `manual-handle a`, which is what lets
+# the method calls dispatch on a handle received as an argument.
 
 # Lifts a settled `result` back onto the task carrier: `ok v` becomes a task
 # that succeeds with `v`, `err e` one that fails with `e`. The glue between
@@ -199,18 +199,17 @@ public def race :: fun (list (task a)) -> task a = fun ts {
 	}
 }
 
-# Drives `race`'s success-seeking cousin: pull settled children via `next` and
-# return the first success, cancelling the rest; skip failures; fail if the
-# scope drains with none. The handle operations arrive as closures (see the
-# section header).
-def drain-any :: fun (fun nothing -> task (option (result a e))) (fun nothing -> nothing) -> task a = fun next cancel {
-	try got = next ()
+# Drives `race`'s success-seeking cousin: pull settled children via `s.next`
+# and return the first success, cancelling the rest; skip failures; fail if the
+# scope drains with none.
+def drain-any :: fun (manual-handle a) -> task a = fun s {
+	try got = s.next ()
 	when got is none { fail "any: all tasks failed" }
 	is some r {
 		when r is ok v {
-			let _ = cancel ()
+			s.cancel ()
 			return v
-		} is err _e { drain-any next cancel }
+		} is err _e { drain-any s }
 	}
 }
 
@@ -219,7 +218,7 @@ def drain-any :: fun (fun nothing -> task (option (result a e))) (fun nothing ->
 public def any :: fun (list (task a)) -> task a = fun ts {
 	manual scope as s {
 		let _ = list.map ts (fun t { s.spawn t })
-		drain-any (fun { s.next () }) (fun { s.cancel () })
+		drain-any s
 	}
 }
 
@@ -240,19 +239,18 @@ public def with-timeout :: fun duration (task a) -> task a = fun d t {
 
 # Drives `pool`: each time a child settles, re-raise a failure (fail-fast) or
 # record the value and start one more from the backlog, until the scope drains.
-# `next`/`spawn` are `s`-capturing closures; `backlog` holds the not-yet-started
-# tasks.
-def gather :: fun (fun nothing -> task (option (result a e))) (fun (task a) -> task a) (ref (list (task a))) (list a) -> task (list a) = fun next spawn backlog acc {
-	try got = next ()
+# `backlog` holds the not-yet-started tasks.
+def gather :: fun (manual-handle a) (ref (list (task a))) (list a) -> task (list a) = fun s backlog acc {
+	try got = s.next ()
 	when got is none { return (list.reverse acc) }
 	is some r {
 		try x = result-to-task r
 		when (ref.get backlog) is [head, ...rest] {
 			ref.set backlog rest
-			let _ = spawn head
-			gather next spawn backlog [x, ...acc]
+			let _ = s.spawn head
+			gather s backlog [x, ...acc]
 		} is [] {
-			gather next spawn backlog [x, ...acc]
+			gather s backlog [x, ...acc]
 		}
 	}
 }
@@ -264,6 +262,6 @@ public def pool :: fun int (list (task a)) -> task (list a) = fun n ts {
 	manual scope as s {
 		let backlog = ref.new (list.drop ts n)
 		let _ = list.map (list.take ts n) (fun t { s.spawn t })
-		gather (fun { s.next () }) (fun t { s.spawn t }) backlog []
+		gather s backlog []
 	}
 }
