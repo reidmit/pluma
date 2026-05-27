@@ -817,19 +817,31 @@ C.7 sketch:
   (`drain-any`/`gather`) that receive the handle operations as `s`-capturing
   closures (`fun { s.next () }`) rather than the handle itself. Lifting this
   restriction (seed annotated handle-typed params) is a possible follow-up.
-- [ ] `task.shielded` — deferred to Phase 5 remainder (needs the
-      uninterruptible-region cancellation mechanics).
+- [x] `task.shielded` — shipped in M6 (see Phase 5).
 
 ### Phase 7 — Sync wrappers and scripting polish
 
-- [ ] `io.read-file-sync`, `io.write-file-sync`, `process.run-sync`
-      in `core.io`
-- [ ] Verify runtime stays uninitialized for purely-sync scripts
-- [ ] Startup-time benchmark; tune
+- [x] Synchronous file I/O already lives in `core.io` (`io.read-file` /
+      `write-file` / `append-file` / `read-dir` / `make-dir` / … and the
+      `*-bytes` variants), all returning `result … string`. No `-sync` suffix:
+      there's no async version to disambiguate from, so the plain names *are*
+      the sync API. (`-sync` names get reintroduced only if/when async I/O
+      lands.)
+- [x] Runtime stays uninitialized for purely-sync scripts — true by
+      construction: `VM::run` returns `main`'s value directly and only calls
+      `run_task` when that value is a `Value::Task` (i.e. `main` used
+      `try`/`task.*`). A script that never makes a task never touches the
+      scheduler. (See the comment at `vm/src/vm.rs` `run`.)
+- [ ] `process.run` (subprocess) — NOT built. A standalone scripting feature
+      (vendor `std::process` behind a builtin); the scripting roadmap's top
+      ask. Note: testing it deterministically under the sandbox needs care.
+- [ ] Startup-time benchmark; tune.
 
 ### Phase 8 — WASM backend (post-WASM phase 1)
 
-Depends on a WASM codegen target existing (separate design doc).
+**Blocked:** depends on a WASM codegen target existing (separate design doc) —
+there is no `wasm` backend in the workspace yet, so none of this is actionable
+until that lands.
 
 - [ ] CPS state machines compile to WasmGC structs
 - [ ] Host I/O imports — `fetch`, `setTimeout` for browser; WASI for
