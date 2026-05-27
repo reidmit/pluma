@@ -464,16 +464,25 @@ impl CodeGen {
 		let inner_fn_idx = self.add_function(inner_fb);
 
 		// Thunk: build a closure of `inner_fn_idx` (no captures) and
-		// return it as the global's value.
+		// return it as the global's value. If the body awaits, it must be an
+		// `AsyncFn` (calling it builds a cold task) just like the unconstrained
+		// path in `emit_fun` — the leading dict params ride along as ordinary
+		// args. Without this a constrained async def would run eagerly and hit
+		// `Await` outside the task driver.
 		let mut thunk_fb =
 			FunctionBuilder::new(format!("{}@thunk", name), current_module.to_string(), 0);
-		thunk_fb.emit(
+		let make_closure = if body_is_async(body) {
+			Instruction::MakeAsyncClosure {
+				fn_idx: inner_fn_idx,
+				num_captures: 0,
+			}
+		} else {
 			Instruction::MakeClosure {
 				fn_idx: inner_fn_idx,
 				num_captures: 0,
-			},
-			body_range,
-		);
+			}
+		};
+		thunk_fb.emit(make_closure, body_range);
 		thunk_fb.emit(Instruction::Return, body_range);
 		Ok(self.add_function(thunk_fb))
 	}
