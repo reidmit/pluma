@@ -232,6 +232,9 @@ pub enum Rvalue {
 	/// Read method `index` (trait declaration order) from a dictionary value,
 	/// yielding a callable.
 	GetDictMethod(Atom, u32),
+	/// Build a trait-instance method dictionary from its method values, in
+	/// trait declaration order. Produced when lowering an `instance` def.
+	MakeDict(Vec<Atom>),
 	/// Allocate a closure: a code pointer plus captured values, in
 	/// `Function::captures` order.
 	MakeClosure(FuncId, Vec<Atom>),

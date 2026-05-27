@@ -527,6 +527,12 @@ impl FnCtx {
 				self.lower_atom(em, dict, body, ranges)?;
 				push(body, ranges, Instruction::GetDictField(*idx as u16));
 			}
+			Rvalue::MakeDict(methods) => {
+				for m in methods {
+					self.lower_atom(em, m, body, ranges)?;
+				}
+				push(body, ranges, Instruction::MakeDict(methods.len() as u16));
+			}
 			Rvalue::MakeVariant {
 				enum_name,
 				tag,

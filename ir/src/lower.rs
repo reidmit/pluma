@@ -16,17 +16,21 @@
 // control flow (`if`/`when`/`while` via a pattern `Match`, with literal /
 // variant / tuple / record / list patterns, nested and with `...` rests); data
 // construction (variants + constructors, tuples, records, lists with spread,
-// string interpolation, field access, regex literals); and namespace access
-// (`module.value`, `module.Enum.variant`) — which makes most stdlib calls work.
-// Forms not yet handled (trait instances, constrained-value references,
-// destructuring `let`, string-interpolation patterns, `defer`, async, ...)
-// cause the *enclosing def* to be lowered as a poison thunk (returns `nothing`)
-// rather than failing
-// the whole program: a def whose executed paths only touch supported forms runs
-// correctly, so coverage grows fixture-by-fixture. `lower` is not yet wired into
-// `codegen` as the default.
+// string interpolation, field access, regex literals); namespace access
+// (`module.value`, `module.Enum.variant`) — which makes most stdlib calls work;
+// and the full trait-dictionary machinery: instance defs (concrete +
+// parametric), constrained defs (hidden dict params), every dispatch shape
+// (`Global` / `Forwarded` / `InstanceChain`), constrained calls (dict args), and
+// constrained-value references (dict-prepending wrappers).
+// Forms not yet handled (destructuring `let`, string-interpolation patterns,
+// `defer`, async/`Await`, ...) cause the *enclosing def* to be lowered as a
+// poison thunk (returns `nothing`) rather than failing the whole program: a def
+// whose executed paths only touch supported forms runs correctly, so coverage
+// grows fixture-by-fixture. `lower` is not yet wired into `codegen` as the
+// default.
 
 use crate::types::*;
+use compiler::ast::Resolved as DispatchTarget;
 use compiler::ast::{
 	DefinitionKind, ExprKind, ExprNode, FunNode, IfNode, LetNode, LiteralKind, ModuleNode, Operator,
 	PatternKind, PatternNode, RegexAnchor, RegexKind, RegexNode, WhenNode, WhileNode,
@@ -191,14 +195,7 @@ impl<'a> Lowerer<'a> {
 						self.poison_global(g);
 					}
 				}
-				DefinitionKind::Instance(inst) => {
-					// Trait instance dictionaries — supported later.
-					if let Some((m, n)) = inst.instance_slot_name.rsplit_once('.') {
-						if let Some(g) = self.globals.lookup(m, n) {
-							self.poison_global(g);
-						}
-					}
-				}
+				DefinitionKind::Instance(inst) => self.lower_instance(inst),
 				DefinitionKind::Enum(_) | DefinitionKind::Trait(_) => {}
 			}
 		}
@@ -216,9 +213,13 @@ impl<'a> Lowerer<'a> {
 				.set_pre_evaluated(gid, PreEval::Builtin(tag.clone()));
 			return;
 		}
-		// Trait-constrained defs (hidden dict params) — supported later.
+		// Trait-constrained def: hidden leading dict params. Lower to an inner
+		// K+N-arity function wrapped in a thunk returning its closure.
 		if dict_param_count > 0 {
-			self.poison_global(gid);
+			match self.lower_constrained_def(name, dict_param_count, expr) {
+				Ok(fid) => self.globals.set_thunk(gid, fid),
+				Err(_) => self.poison_global(gid),
+			}
 			return;
 		}
 		match self.lower_thunk(name, expr) {
@@ -244,6 +245,226 @@ impl<'a> Lowerer<'a> {
 		Ok(self.add_function(finish_scope(scope)))
 	}
 
+	// ---- trait instances / constrained defs ----------------------------
+
+	/// Lower a trait `instance` def to its method-dictionary global. Mirrors
+	/// `codegen::emit::compile_instance`; a build failure poisons the slot.
+	fn lower_instance(&mut self, instance: &compiler::ast::InstanceNode) {
+		let gid = match instance.instance_slot_name.rsplit_once('.') {
+			Some((m, n)) => self.globals.lookup(m, n),
+			None => None,
+		};
+		let Some(gid) = gid else { return };
+		match self.lower_instance_thunk(instance) {
+			Ok(fid) => self.globals.set_thunk(gid, fid),
+			Err(_) => self.poison_global(gid),
+		}
+	}
+
+	fn lower_instance_thunk(
+		&mut self,
+		instance: &compiler::ast::InstanceNode,
+	) -> Result<FuncId, String> {
+		// Index method bodies by name so they can be emitted in canonical order.
+		let mut by_name: HashMap<&str, &ExprNode> = HashMap::new();
+		for m in &instance.methods {
+			if let DefinitionKind::Expr(e) = &m.kind {
+				by_name.insert(m.name.name.as_str(), e);
+			}
+		}
+
+		if instance.where_clause.is_empty() {
+			// Concrete: a zero-arg thunk that builds the dict directly. Each
+			// method `fun` lowers to a closure with no captures.
+			let name = format!("{}@dict-builder", instance.instance_slot_name);
+			self.push_scope(name, &[]);
+			match self.build_dict_body(instance, &by_name) {
+				Ok(()) => {
+					let scope = self.scopes.pop().unwrap();
+					Ok(self.add_function(finish_scope(scope)))
+				}
+				Err(e) => {
+					self.scopes.pop();
+					Err(e)
+				}
+			}
+		} else {
+			// Parametric: a ctor of arity K (the `where`-clause dicts), with the
+			// dicts bound as synthetic locals so each method closure captures the
+			// ones it forwards to. The global is a thunk returning the ctor's
+			// closure; `InstanceChain` sites call it with the inner dicts.
+			let k = instance.where_clause.len();
+			let dict_names: Vec<String> = (0..k).map(|n| synthetic_dict_name(n as u16)).collect();
+			let dict_refs: Vec<&str> = dict_names.iter().map(String::as_str).collect();
+			let ctor_name = format!("{}@ctor", instance.instance_slot_name);
+			self.push_scope(ctor_name, &dict_refs);
+			let ctor_fid = match self.build_dict_body(instance, &by_name) {
+				Ok(()) => {
+					let scope = self.scopes.pop().unwrap();
+					self.add_function(finish_scope(scope))
+				}
+				Err(e) => {
+					self.scopes.pop();
+					return Err(e);
+				}
+			};
+			let builder_name = format!("{}@builder", instance.instance_slot_name);
+			self.push_scope(builder_name, &[]);
+			let c = self.emit_let(Rvalue::MakeClosure(ctor_fid, Vec::new()));
+			self.cur().stmts.push(Stmt::Return(c));
+			let scope = self.scopes.pop().unwrap();
+			Ok(self.add_function(finish_scope(scope)))
+		}
+	}
+
+	/// Lower each method (in canonical/trait order) into the current scope and
+	/// `Return` a `MakeDict` of the resulting method closures. For parametric
+	/// instances the methods capture the enclosing ctor's dict params via
+	/// `Forwarded` dispatch automatically.
+	fn build_dict_body(
+		&mut self,
+		instance: &compiler::ast::InstanceNode,
+		by_name: &HashMap<&str, &ExprNode>,
+	) -> Result<(), String> {
+		let mut methods = Vec::with_capacity(instance.canonical_method_order.len());
+		for method_name in &instance.canonical_method_order {
+			let expr: &ExprNode = by_name.get(method_name.as_str()).copied().ok_or_else(|| {
+				format!(
+					"instance `{}` is missing method `{}`",
+					instance.instance_slot_name, method_name
+				)
+			})?;
+			methods.push(self.lower_expr(expr)?);
+		}
+		let dict = self.emit_let(Rvalue::MakeDict(methods));
+		self.cur().stmts.push(Stmt::Return(dict));
+		Ok(())
+	}
+
+	/// Lower a trait-constrained def (one with `dict_param_count` hidden leading
+	/// dict params). The body is always a `fun`; lower it as a single inner
+	/// function of arity K+N (dicts at slots 0..K-1 under synthetic names so
+	/// `Forwarded` dispatch resolves them), wrapped in a thunk that returns its
+	/// closure. Mirrors `codegen::emit::compile_constrained_thunk`.
+	fn lower_constrained_def(
+		&mut self,
+		name: &str,
+		dict_param_count: u16,
+		expr: &ExprNode,
+	) -> Result<FuncId, String> {
+		let fun = match &expr.kind {
+			ExprKind::Fun(f) => f,
+			_ => {
+				return Err(format!(
+					"constrained def `{}` must have a function body",
+					name
+				))
+			}
+		};
+		let k = dict_param_count as usize;
+		let dict_names: Vec<String> = (0..k).map(|n| synthetic_dict_name(n as u16)).collect();
+		let mut param_names: Vec<&str> = dict_names.iter().map(String::as_str).collect();
+		param_names.extend(fun.params.iter().map(|p| p.ident.name.as_str()));
+
+		let inner_name = format!("{}.{}", self.current_module, name);
+		self.push_scope(inner_name, &param_names);
+		let inner_fid = match self.lower_body(&fun.body) {
+			Ok(atom) => {
+				self.cur().stmts.push(Stmt::Return(atom));
+				let scope = self.scopes.pop().unwrap();
+				self.add_function(finish_scope(scope))
+			}
+			Err(e) => {
+				self.scopes.pop();
+				return Err(e);
+			}
+		};
+
+		// Thunk: return a closure of the inner function (no captures).
+		let thunk_name = format!("{}.{}@thunk", self.current_module, name);
+		self.push_scope(thunk_name, &[]);
+		let c = self.emit_let(Rvalue::MakeClosure(inner_fid, Vec::new()));
+		self.cur().stmts.push(Stmt::Return(c));
+		let scope = self.scopes.pop().unwrap();
+		Ok(self.add_function(finish_scope(scope)))
+	}
+
+	/// A constrained function referenced as a first-class value: wrap it in a
+	/// closure of its user-visible arity N that captures the K resolved dicts
+	/// and forwards to the underlying global with the dicts prepended. Mirrors
+	/// `codegen::emit::emit_constrained_value_ref`.
+	fn lower_constrained_value_ref(
+		&mut self,
+		expr: &ExprNode,
+		cells: &[compiler::ast::DispatchCell],
+	) -> Result<Atom, String> {
+		let k = cells.len() as u32;
+		let n = match &expr.ty {
+			Type::Fun(params, _) => params.len() as u32,
+			_ => return Err("constrained value reference has a non-function type".to_string()),
+		};
+		let global = self.resolve_constrained_ref_global(expr)?;
+
+		// Wrapper: N params, K dict captures. Var numbering — params 0..N-1,
+		// captures N..N+K-1, then two `let`s for the load + the forwarded call.
+		let params: Vec<VarId> = (0..n).map(VarId).collect();
+		let captures: Vec<VarId> = (n..n + k).map(VarId).collect();
+		let g_var = VarId(n + k);
+		let r_var = VarId(n + k + 1);
+		let mut call_args: Vec<Atom> = captures.iter().map(|v| Atom::Var(*v)).collect();
+		call_args.extend(params.iter().map(|v| Atom::Var(*v)));
+		let wrapper = Function {
+			name: format!("{}.partial@{}", self.current_module, global.0),
+			module: self.current_module.clone(),
+			params,
+			captures,
+			is_async: false,
+			body: Block(vec![
+				Stmt::Let(g_var, Rvalue::GlobalRef(global)),
+				Stmt::Let(r_var, Rvalue::CallClosure(Atom::Var(g_var), call_args)),
+				Stmt::Return(Atom::Var(r_var)),
+			]),
+		};
+		let wrapper_fid = self.add_function(wrapper);
+
+		// Outer site: load each resolved dict (so `Forwarded` dicts capture the
+		// enclosing def's dict params), then build the wrapper closure.
+		let mut dict_atoms = Vec::with_capacity(cells.len());
+		for cell in cells {
+			dict_atoms.push(self.lower_dispatch(cell)?);
+		}
+		Ok(self.emit_let(Rvalue::MakeClosure(wrapper_fid, dict_atoms)))
+	}
+
+	/// Resolve the underlying global of a constrained value reference — a bare
+	/// identifier or an imported `module.value`.
+	fn resolve_constrained_ref_global(&mut self, expr: &ExprNode) -> Result<GlobalId, String> {
+		match &expr.kind {
+			ExprKind::Identifier(id) => match self.resolve(&id.name)? {
+				Resolved::Global(g) => Ok(g),
+				_ => Err(format!(
+					"constrained value `{}` did not resolve to a global",
+					id.name
+				)),
+			},
+			ExprKind::NamespaceAccess(path) => match path.as_slice() {
+				[head, tail] => {
+					let qualified_module = self
+						.imports
+						.get(&head.name)
+						.cloned()
+						.ok_or_else(|| format!("`{}` is not an imported module", head.name))?;
+					self
+						.globals
+						.lookup(&qualified_module, &tail.name)
+						.ok_or_else(|| format!("`{}.{}` is not a global", head.name, tail.name))
+				}
+				_ => Err("constrained value reference namespace path".to_string()),
+			},
+			_ => Err("constrained value reference is neither identifier nor namespace".to_string()),
+		}
+	}
+
 	// ---- expressions ---------------------------------------------------
 
 	fn lower_expr(&mut self, expr: &ExprNode) -> Result<Atom, String> {
@@ -256,8 +477,8 @@ impl<'a> Lowerer<'a> {
 				if let Some(cell) = &expr.trait_dispatch {
 					return self.lower_dispatch(cell);
 				}
-				if has_undrained_dispatch(expr) {
-					return Err("constrained value reference not yet supported".to_string());
+				if let Some(cells) = undrained_dispatch_cells(expr) {
+					return self.lower_constrained_value_ref(expr, &cells);
 				}
 				self.lower_identifier(&id.name)
 			}
@@ -307,8 +528,8 @@ impl<'a> Lowerer<'a> {
 				if let Some(cell) = &expr.trait_dispatch {
 					return self.lower_dispatch(cell);
 				}
-				if has_undrained_dispatch(expr) {
-					return Err("constrained value reference not yet supported".to_string());
+				if let Some(cells) = undrained_dispatch_cells(expr) {
+					return self.lower_constrained_value_ref(expr, &cells);
 				}
 				self.lower_namespace(path)
 			}
@@ -441,11 +662,14 @@ impl<'a> Lowerer<'a> {
 	}
 
 	fn lower_call(&mut self, call: &compiler::ast::CallNode) -> Result<Atom, String> {
-		if !call.dict_args.is_empty() {
-			return Err("trait-constrained call (dict args) not yet supported".to_string());
-		}
 		let callee = self.lower_expr(&call.callee)?;
-		let mut args = Vec::with_capacity(call.args.len());
+		let mut args = Vec::with_capacity(call.dict_args.len() + call.args.len());
+		// Hidden dict args precede the user args — the constrained callee
+		// expects them at slots 0..K-1. A call-forwarding cell has
+		// `method_idx == None`, so `lower_dispatch` pushes the whole dict.
+		for cell in &call.dict_args {
+			args.push(self.lower_dispatch(cell)?);
+		}
 		for a in &call.args {
 			args.push(self.lower_expr(a)?);
 		}
@@ -534,40 +758,64 @@ impl<'a> Lowerer<'a> {
 		}
 	}
 
-	/// Lower a resolved trait-method dispatch cell to the callable method
-	/// value. Handles concrete instances (`Resolved::Global`): load the named
-	/// dictionary global and extract the method. `Forwarded` (dict params of a
-	/// constrained def) and `InstanceChain` (parametric instances) aren't
-	/// ported yet.
+	/// Lower a resolved trait-method dispatch cell to its value: the dict if the
+	/// cell is call-forwarding (`method_idx == None`), or a specific method
+	/// extracted from it. Mirrors `codegen::emit::emit_dispatch_load`.
 	fn lower_dispatch(&mut self, cell: &compiler::ast::DispatchCell) -> Result<Atom, String> {
-		use compiler::ast::Resolved;
 		let borrow = cell.borrow();
 		let method_idx = borrow.method_idx;
-		let gid = match &borrow.resolved {
-			Some(Resolved::Global(slot_name)) => {
-				let (module, name) = slot_name
-					.rsplit_once('.')
-					.ok_or("malformed instance slot name")?;
-				self
-					.globals
-					.lookup(module, name)
-					.ok_or("instance slot not registered as a global")?
-			}
-			Some(Resolved::Forwarded(_)) => {
-				return Err("forwarded dispatch (constrained def) not yet supported".to_string())
-			}
-			Some(Resolved::InstanceChain { .. }) => {
-				return Err("parametric instance dispatch not yet supported".to_string())
-			}
-			None => return Err("unresolved dispatch cell".to_string()),
-		};
+		let resolved = borrow.resolved.clone().ok_or("unresolved dispatch cell")?;
 		drop(borrow);
-		let dict = self.emit_let(Rvalue::GlobalRef(gid));
+		let dict = self.lower_dict_atom(&resolved)?;
 		match method_idx {
 			Some(idx) => Ok(self.emit_let(Rvalue::GetDictMethod(dict, idx as u32))),
 			// A call-forwarding site pushes the whole dict; operators always
 			// name a method, so this branch is unused for them.
 			None => Ok(dict),
+		}
+	}
+
+	/// Load a dispatch dictionary value (no method extraction). The three
+	/// `Resolved` shapes mirror `codegen::emit::emit_resolved_load`:
+	///   * `Global` — load the named prelude/instance dict global.
+	///   * `Forwarded` — the synthetic `__dict_<slot>__` local of the enclosing
+	///     constrained def / instance ctor (captured through closures by name).
+	///   * `InstanceChain` — call a parametric instance's ctor global with its
+	///     inner dicts to materialize a fresh dict.
+	fn lower_dict_atom(&mut self, resolved: &DispatchTarget) -> Result<Atom, String> {
+		match resolved {
+			DispatchTarget::Global(slot_name) => {
+				let (module, name) = slot_name
+					.rsplit_once('.')
+					.ok_or("malformed instance slot name")?;
+				let gid = self
+					.globals
+					.lookup(module, name)
+					.ok_or("instance slot not registered as a global")?;
+				Ok(self.emit_let(Rvalue::GlobalRef(gid)))
+			}
+			DispatchTarget::Forwarded(slot) => {
+				let name = synthetic_dict_name(*slot);
+				match self.resolve(&name)? {
+					Resolved::Atom(a) => Ok(a),
+					_ => Err(format!("dispatch slot `{}` resolved to a non-local", name)),
+				}
+			}
+			DispatchTarget::InstanceChain { ctor_slot, inner } => {
+				let (module, name) = ctor_slot
+					.rsplit_once('.')
+					.ok_or("malformed ctor slot name")?;
+				let gid = self
+					.globals
+					.lookup(module, name)
+					.ok_or("ctor slot not registered as a global")?;
+				let ctor = self.emit_let(Rvalue::GlobalRef(gid));
+				let mut args = Vec::with_capacity(inner.len());
+				for r in inner {
+					args.push(self.lower_dict_atom(r)?);
+				}
+				Ok(self.emit_let(Rvalue::CallClosure(ctor, args)))
+			}
 		}
 	}
 
@@ -1178,15 +1426,26 @@ fn build_imports(ast: &ModuleNode) -> HashMap<String, String> {
 	imports
 }
 
-/// True when an expression carries an undrained dispatch sink — a
-/// trait-constrained value referenced in value position (not directly called),
-/// which needs its dictionaries pre-applied. Not ported yet, so such sites
-/// poison their def. Mirrors `codegen::emit::undrained_dispatch_cells`.
-fn has_undrained_dispatch(expr: &ExprNode) -> bool {
-	expr
-		.dispatch_sink
-		.as_ref()
-		.map_or(false, |sink| !sink.borrow().is_empty())
+/// If `expr` carries a non-empty, undrained dispatch sink, return its cells. A
+/// surviving sink means a trait-constrained value referenced in value position
+/// (passed, returned, or bound — not directly called), which needs its dicts
+/// pre-applied (`lower_constrained_value_ref`). An empty sink is treated as
+/// absent. Mirrors `codegen::emit::undrained_dispatch_cells`.
+fn undrained_dispatch_cells(expr: &ExprNode) -> Option<Vec<compiler::ast::DispatchCell>> {
+	let sink = expr.dispatch_sink.as_ref()?;
+	let cells = sink.borrow();
+	if cells.is_empty() {
+		None
+	} else {
+		Some(cells.iter().cloned().collect())
+	}
+}
+
+/// The synthetic local name a constrained def / instance ctor binds its hidden
+/// dict parameter `slot` under, so `Forwarded` dispatch resolves by name (and
+/// captures through nested closures). Mirrors `codegen::emit::synthetic_dict_name`.
+fn synthetic_dict_name(slot: u16) -> String {
+	format!("__dict_{}__", slot)
 }
 
 /// Map a concrete (non-dispatched) operator to its IR `BinOp`. `is_float`
