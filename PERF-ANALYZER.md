@@ -72,13 +72,34 @@ are from an M-series mac, release build.
   an idempotent `Substitution` once at the end (`deep_resolve`). Error sites
   deep-resolve their types so messages are unchanged. ~30× wall-clock, ~35×
   `check`, ~245× on the worst module's `unify`. Zero snapshot changes.
-- [ ] **#2 Kill the eager rewrite (cheaper, keeps structure).** Maintain one
-  accumulating substitution, shallow-resolve vars on demand instead of
-  `apply_to_constraints` over the whole tail each step.
-- [ ] **#3 `Rc<Type>` / interning.** Attack the ~65ns per-clone constant rather
-  than the n².
+- [x] **#1b Stop cloning in the eq worklist loop.** DONE — 2026-05-26 "after #1b"
+  run. `unify_eq_constraints` now matches its worklist items *by value*
+  (`match (a, b)`), so structural children are **moved** onto the worklist and a
+  bound type is **moved** into `bindings` instead of `.clone()`d; `occurs_in`
+  resolves heads by reference instead of cloning the whole subtree at each level.
+  ~10% off `unify` (5.3 → 4.7ms summed). Zero snapshot changes. **Lesson from the
+  abandoned `Vec<Option<Type>>` experiment (below): hashing on `bindings` is *not*
+  the bottleneck — cloning is.**
+- [ ] **#2 Kill the eager rewrite in gen/inst (the remaining O(n²)).**
+  `unify_gen_inst_constraints` still uses substitution-passing: per `Gen` it does
+  `apply_to_constraints` over all remaining constraints, recurses, then composes.
+  Not biting the stdlib bench (modules have ~1 top-level `Gen`; ~1.3ms total,
+  concentrated in option/result's heavy polymorphism), but it's latent O(gens·n)
+  and would hurt a module with many polymorphic top-level defs.
+- [ ] **#3 `Rc<Type>` / interning (the only remaining *big* lever).** The eq loop
+  cost is now dominated by `Type` clones that `match`-by-value can't remove
+  (`resolve_head` following chains; the final `deep_resolve` normalization) plus
+  the per-node work spread across constrain/annotate. Cheap structural sharing
+  (`Rc<Type>` or an arena) is the next real win — but it's an invasive cross-crate
+  change (codegen + vm consume `Type`), so not worth it unless a much larger
+  workload demands it.
 - [ ] **#4 `try` loop.** Re-unify only newly added constraints, or memoize,
-  instead of re-solving the full set each round.
+  instead of re-solving the full set each round. ~1ms total, option/result only.
+
+**Status: near the practical floor.** After #1 + #1b, `check` is ~14ms for 307
+cases and the cost is evenly spread (parse ~3, constrain ~3, eq-solve ~3,
+gen/inst ~1.3, try ~1, annotate ~0.6). No single hot spot remains; further gains
+need #3 (interning) and aren't justified at this scale.
 
 ## Runs log
 
@@ -140,3 +161,36 @@ longer the bottleneck — it's on par with constrain/annotate. Remaining `check`
 time is spread evenly across parse/constrain/unify/annotate.
 
 **Summary: ~588ms → ~17ms `check` (~35×); ~0.59s → ~0.02s wall (~30×).**
+
+### After #1b move-don't-clone — `main`, 2026-05-26
+
+Worklist now matches by value (move children/bound types instead of cloning);
+`occurs_in` resolves heads by reference. All 97 analyze + 22 format + 156 run +
+307 stdlib pass, **zero snapshot changes**.
+
+`unify` summed over all modules (`PLUMA_TIMING=2`, min of 6, interleaved A/B/A to
+rule out drift):
+
+| build                | unify-sum (ms) |
+|----------------------|---------------:|
+| baseline (after #1)  |           5.25 |
+| after #1b (by value) |      4.76–4.79 |
+
+~10% off `unify`. At the `check` level it's within noise (~14ms either way; the
+3ms of parse + ±0.3ms run-to-run swamps a 0.5ms unify delta), so this is a clean
+but minor win.
+
+#### Decisive experiment: it's cloning, not hashing
+
+Tried replacing the `bindings: HashMap<usize, Type>` with a flat
+`Vec<Option<Type>>` indexed by var id (var ids are dense per-module: fresh
+`Analyzer` per module, single counter). Eliminating *all* hashing on the hottest
+map moved eq-solve by only ~0.25ms — and **regressed** gen/inst badly, because
+`unify_eq_constraints` is called many times there with small, *sparse* constraint
+sets (freshly-minted high-id instantiation vars), so `vec![None; next_var]`
+re-allocates the full id span per call where a lazy-growing HashMap stays cheap.
+Reverted. Takeaway: the eq loop's cost is `Type`-tree cloning (and the per-node
+work spread across phases), not map lookups — which is why #1b (kill clones) is
+the right lever and a faster hasher / flat array is not. The remaining clones
+(`resolve_head` chasing chains, final `deep_resolve`) need structural sharing
+(#3, `Rc<Type>`) to remove, which isn't worth the cross-crate churn at this scale.

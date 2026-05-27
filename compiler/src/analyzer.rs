@@ -3403,7 +3403,11 @@ impl<'compiler> Analyzer<'compiler> {
 			let a = Self::resolve_head(&bindings, a);
 			let b = Self::resolve_head(&bindings, b);
 
-			match (&a, &b) {
+			// Match by value: `a`/`b` are owned here, so structural children are
+			// *moved* onto the worklist and a bound type is *moved* into the map.
+			// (The previous `match (&a, &b)` cloned every child and every bound
+			// type; cloning — not hashing — is the dominant cost of this loop.)
+			match (a, b) {
 				// Leaf types: equal iff identical; nothing to bind.
 				(Type::Int, Type::Int)
 				| (Type::Float, Type::Float)
@@ -3419,22 +3423,23 @@ impl<'compiler> Analyzer<'compiler> {
 				// Two identical (unbound) type vars: already equal.
 				(Type::Var(n), Type::Var(m)) if n == m => {}
 
-				// A type var on either side binds to the other. `a` is checked
-				// first, matching the old left-biased binding.
-				(Type::Var(n), _) => {
-					if Self::occurs_in(&bindings, *n, &b) {
+				// A type var on either side binds to the other. `a` (the var on
+				// the left) is checked first, matching the old left-biased
+				// binding; `(_, Var)` is the `a`-is-not-a-var case.
+				(Type::Var(n), b) => {
+					if Self::occurs_in(&bindings, n, &b) {
 						let ty = Self::deep_resolve(&bindings, &rows, &b);
 						self.error(range, RecursiveUnification { ty });
 					} else {
-						bindings.insert(*n, b.clone());
+						bindings.insert(n, b);
 					}
 				}
-				(_, Type::Var(m)) => {
-					if Self::occurs_in(&bindings, *m, &a) {
+				(a, Type::Var(m)) => {
+					if Self::occurs_in(&bindings, m, &a) {
 						let ty = Self::deep_resolve(&bindings, &rows, &a);
 						self.error(range, RecursiveUnification { ty });
 					} else {
-						bindings.insert(*m, a.clone());
+						bindings.insert(m, a);
 					}
 				}
 
@@ -3451,19 +3456,19 @@ impl<'compiler> Analyzer<'compiler> {
 					}
 					// Fun children carried the outer range in the old solver.
 					// Push reversed so params resolve left-to-right, return last.
-					work.push(((**r1).clone(), (**r2).clone(), range));
-					for i in (0..p1.len()).rev() {
-						work.push((p1[i].clone(), p2[i].clone(), range));
+					work.push((*r1, *r2, range));
+					for (x, y) in p1.into_iter().zip(p2).rev() {
+						work.push((x, y, range));
 					}
 				}
 
 				(Type::List(x), Type::List(y)) | (Type::Ref(x), Type::Ref(y)) => {
-					work.push(((**x).clone(), (**y).clone(), inner));
+					work.push((*x, *y, inner));
 				}
 
 				(Type::Dict(k1, v1), Type::Dict(k2, v2)) => {
-					work.push(((**v1).clone(), (**v2).clone(), inner));
-					work.push(((**k1).clone(), (**k2).clone(), inner));
+					work.push((*v1, *v2, inner));
+					work.push((*k1, *k2, inner));
 				}
 
 				(Type::Tuple(e1), Type::Tuple(e2)) => {
@@ -3477,22 +3482,22 @@ impl<'compiler> Analyzer<'compiler> {
 						);
 						continue;
 					}
-					for i in (0..e1.len()).rev() {
-						work.push((e1[i].clone(), e2[i].clone(), inner));
+					for (x, y) in e1.into_iter().zip(e2).rev() {
+						work.push((x, y, inner));
 					}
 				}
 
 				(Type::Tuple(elements), Type::PartialTuple(index, element))
 				| (Type::PartialTuple(index, element), Type::Tuple(elements)) => {
-					if *index > elements.len() {
-						let ty = Self::deep_resolve(&bindings, &rows, &Type::Tuple(elements.clone()));
-						self.error(range, TupleIndexNotPresent { index: *index, ty });
+					if index > elements.len() {
+						let ty = Self::deep_resolve(&bindings, &rows, &Type::Tuple(elements));
+						self.error(range, TupleIndexNotPresent { index, ty });
 						continue;
 					}
-					work.push((elements[*index].clone(), (**element).clone(), inner));
+					work.push((elements[index].clone(), *element, inner));
 				}
 
-				(Type::Record(..), Type::Record(..)) => {
+				(a @ Type::Record(..), b @ Type::Record(..)) => {
 					// Fully resolve both records (inline known row fields,
 					// resolve field type heads) before matching, mirroring the
 					// substitution the old solver had already applied.
@@ -3511,13 +3516,13 @@ impl<'compiler> Analyzer<'compiler> {
 					// Names match → unify the type-arg lists pairwise. An arity
 					// mismatch here is an internal bug (caught upstream).
 					debug_assert_eq!(args1.len(), args2.len());
-					for i in (0..args1.len().min(args2.len())).rev() {
-						work.push((args1[i].clone(), args2[i].clone(), inner));
+					for (x, y) in args1.into_iter().zip(args2).rev() {
+						work.push((x, y, inner));
 					}
 				}
 
 				// Anything else is a genuine mismatch.
-				_ => {
+				(a, b) => {
 					let expected = Self::deep_resolve(&bindings, &rows, &b);
 					let found = Self::deep_resolve(&bindings, &rows, &a);
 					self.error(range, TypeMismatch { expected, found });
@@ -3569,20 +3574,32 @@ impl<'compiler> Analyzer<'compiler> {
 	// current bindings? Mirrors the old (post-substitution) `contains_var`
 	// occurs check, including ignoring record tails.
 	fn occurs_in(bindings: &HashMap<usize, Type>, var: usize, ty: &Type) -> bool {
-		match Self::resolve_head(bindings, ty.clone()) {
-			Type::Var(n) => n == var,
+		// Resolve the head through the binding chain *by reference* — no cloning.
+		// (The old version cloned the whole subtree just to inspect its head,
+		// at every recursion level.)
+		let mut head: &Type = ty;
+		loop {
+			match head {
+				Type::Var(n) => match bindings.get(n) {
+					Some(next) => head = next,
+					None => return *n == var,
+				},
+				_ => break,
+			}
+		}
+		match head {
 			Type::Fun(params, ret) => {
 				params.iter().any(|p| Self::occurs_in(bindings, var, p))
-					|| Self::occurs_in(bindings, var, &ret)
+					|| Self::occurs_in(bindings, var, ret)
 			}
-			Type::List(e) | Type::Ref(e) => Self::occurs_in(bindings, var, &e),
+			Type::List(e) | Type::Ref(e) => Self::occurs_in(bindings, var, e),
 			Type::Dict(k, v) => {
-				Self::occurs_in(bindings, var, &k) || Self::occurs_in(bindings, var, &v)
+				Self::occurs_in(bindings, var, k) || Self::occurs_in(bindings, var, v)
 			}
 			Type::Tuple(es) | Type::Enum(_, es) => {
 				es.iter().any(|e| Self::occurs_in(bindings, var, e))
 			}
-			Type::PartialTuple(_, e) => Self::occurs_in(bindings, var, &e),
+			Type::PartialTuple(_, e) => Self::occurs_in(bindings, var, e),
 			Type::Record(fields, _) => fields.iter().any(|(_, t)| Self::occurs_in(bindings, var, t)),
 			_ => false,
 		}
