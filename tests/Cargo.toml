@@ -8,6 +8,7 @@ publish = false
 codegen = { path = "../codegen" }
 compiler = { path = "../compiler" }
 formatter = { path = "../formatter" }
+ir = { path = "../ir" }
 vm = { path = "../vm" }
 
 [dev-dependencies]
@@ -28,3 +29,7 @@ harness = false
 name = "run"
 path = "run.rs"
 harness = false
+
+[[test]]
+name = "ir_diff"
+path = "ir_diff.rs"

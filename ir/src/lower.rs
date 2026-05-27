@@ -9,40 +9,607 @@
 //   * `defer` edge insertion
 //   * async marking (`Function::is_async` + `Await`)
 //
-// Phase 1.1 ports that elaboration here, function-by-function. So far the two
-// standalone pre-passes are ported (enum-table collection + global-slot
-// reservation); the per-def expr walk is still `todo!()`, so `lower` is not
-// yet complete or wired into `codegen`.
+// Phase 1.1 ports that elaboration here, function-by-function. Ported so far:
+// the two standalone pre-passes (enum table + global reservation) and an
+// expr walk covering the "easy" forms — literals, identifiers (local /
+// capture / global), calls, `fun` (with closure conversion), and `let`. Forms
+// not yet handled (`when`, `if`, trait dispatch, variant construction, async,
+// records, ...) cause the *enclosing def* to be lowered as a poison thunk
+// (returns `nothing`) rather than failing the whole program: a def whose
+// executed paths only touch supported forms runs correctly, so coverage grows
+// fixture-by-fixture. `lower` is not yet wired into `codegen` as the default.
 
 use crate::types::*;
-use compiler::ast::DefinitionKind;
+use compiler::ast::{
+	DefinitionKind, ExprKind, ExprNode, FunNode, LetNode, LiteralKind, ModuleNode, PatternKind,
+};
 use compiler::Compiler;
 use std::collections::HashMap;
 
 /// Lower a fully-analyzed program to IR.
 ///
 /// Expects `compiler` to have completed `check()` (every module parsed and
-/// analyzed, with inferred types attached to the AST).
-///
-/// Not yet complete — see the phase plan in `IR.md`. The intended shape:
-///   1. collect the enum table from every loaded module      (pre-pass) ✓
-///   2. reserve a `GlobalId` per top-level def / alias / instance,
-///      after seeding the prelude/native pre-evaluated globals (pre-pass) ✓
-///   3. lower each def body to a `Function` (the expr walk)   — todo
-///   4. build the entry function and assemble the `IrProgram` — todo
-pub fn lower(compiler: &Compiler) -> IrProgram {
-	let enums = collect_enums(compiler);
+/// analyzed, with inferred types attached to the AST). Returns `Err` only on a
+/// structural failure (e.g. no `main`); individual defs that use not-yet-
+/// supported constructs become poison thunks rather than failing the program.
+pub fn lower(compiler: &Compiler) -> Result<IrProgram, String> {
+	Lowerer::new(compiler).run()
+}
 
-	let mut globals = GlobalTable::new();
-	seed_prelude_globals(&mut globals);
-	// Native modules currently contribute no globals — `vm::native_modules()`
-	// is empty (every stdlib module is `.pa` source). When a Rust-defined
-	// native module returns, its defs/constants are seeded here as `PreEval`
-	// (a vm-independent encoding: builtin tags + primitive constants).
-	reserve_user_globals(&mut globals, compiler);
+// --------------------------------------------------------------------------
+// The lowerer.
+// --------------------------------------------------------------------------
 
-	let _ = (&enums, &globals);
-	todo!("phase 1.1 (cont.): per-def expr walk, thunk emission, entry function")
+struct Lowerer<'a> {
+	compiler: &'a Compiler,
+	enums: HashMap<String, Vec<(String, usize)>>,
+	globals: GlobalTable,
+	functions: Vec<Function>,
+	// Active function nesting (innermost last). Pushed when descending into a
+	// `fun`, popped when its body is done.
+	scopes: Vec<FnScope>,
+	// The module currently being lowered — used to resolve same-module globals
+	// and bare variants.
+	current_module: String,
+	// A single shared thunk for every unsupported def, built lazily.
+	poison: Option<FuncId>,
+}
+
+/// Per-function lowering state.
+struct FnScope {
+	name: String,
+	module: String,
+	params: Vec<VarId>,
+	captures: Vec<CaptureInfo>,
+	// Source name -> `VarId` for in-scope params and `let`s; searched
+	// innermost-first (so a `let` shadows an earlier binding).
+	locals: Vec<(String, VarId)>,
+	next_var: u32,
+	stmts: Vec<Stmt>,
+	is_async: bool,
+}
+
+/// A free variable captured by a `fun`: the `VarId` it gets inside this
+/// function, plus how the enclosing function supplies its value.
+struct CaptureInfo {
+	name: String,
+	var: VarId,
+	src: CaptureSrc,
+}
+
+enum CaptureSrc {
+	/// A local (param or `let`) of the enclosing function.
+	ParentLocal(VarId),
+	/// A capture of the enclosing function (chained capture).
+	ParentCapture(usize),
+}
+
+/// Result of resolving a name for use at an expression site.
+enum Resolved {
+	/// A local or capture — usable directly as an atom.
+	Atom(Atom),
+	Global(GlobalId),
+	#[allow(dead_code)]
+	BareVariant {
+		qualified: String,
+		variant: String,
+		arity: usize,
+	},
+}
+
+/// Where a name resolves *within a particular scope* (the index-based form the
+/// capture-chaining recursion threads through).
+enum ScopeSlot {
+	Local(VarId),
+	Capture(usize),
+	Global(GlobalId),
+	BareVariant {
+		qualified: String,
+		variant: String,
+		arity: usize,
+	},
+}
+
+impl<'a> Lowerer<'a> {
+	fn new(compiler: &'a Compiler) -> Self {
+		let enums = collect_enums(compiler);
+		let mut globals = GlobalTable::new();
+		seed_prelude_globals(&mut globals);
+		// Native modules currently contribute no globals — `vm::native_modules()`
+		// is empty (every stdlib module is `.pa` source). When a Rust-defined
+		// native module returns, its defs/constants are seeded here as `PreEval`.
+		reserve_user_globals(&mut globals, compiler);
+		Lowerer {
+			compiler,
+			enums,
+			globals,
+			functions: Vec::new(),
+			scopes: Vec::new(),
+			current_module: String::new(),
+			poison: None,
+		}
+	}
+
+	fn run(mut self) -> Result<IrProgram, String> {
+		// Copy the `&Compiler` out so the per-module borrow is independent of
+		// `&mut self` in the loop body.
+		let compiler = self.compiler;
+		let modules: Vec<(&str, &ModuleNode)> = compiler
+			.modules
+			.iter()
+			.filter_map(|(m, data)| data.ast.as_ref().map(|ast| (m.as_str(), ast)))
+			.collect();
+		for (module, ast) in modules {
+			self.lower_module(module, ast);
+		}
+
+		let entry = self.build_entry()?;
+		let test_suites: Vec<(String, GlobalId)> = self
+			.compiler
+			.entry_modules
+			.iter()
+			.filter_map(|m| self.globals.lookup(m, "tests").map(|g| (m.clone(), g)))
+			.collect();
+
+		let functions = self.functions;
+		let enums = self.enums;
+		let globals = self.globals.finish();
+		Ok(IrProgram {
+			functions,
+			globals,
+			enums,
+			entry,
+			test_suites,
+		})
+	}
+
+	// ---- modules / defs ------------------------------------------------
+
+	fn lower_module(&mut self, module: &str, ast: &ModuleNode) {
+		self.current_module = module.to_string();
+		for def in &ast.body {
+			match &def.kind {
+				DefinitionKind::Expr(expr) => {
+					self.lower_value_def(module, &def.name.name, def.dict_param_count, expr)
+				}
+				DefinitionKind::Alias(_) => {
+					// Alias constructor (`fun x { x }`) — supported later.
+					if let Some(g) = self.globals.lookup(module, &def.name.name) {
+						self.poison_global(g);
+					}
+				}
+				DefinitionKind::Instance(inst) => {
+					// Trait instance dictionaries — supported later.
+					if let Some((m, n)) = inst.instance_slot_name.rsplit_once('.') {
+						if let Some(g) = self.globals.lookup(m, n) {
+							self.poison_global(g);
+						}
+					}
+				}
+				DefinitionKind::Enum(_) | DefinitionKind::Trait(_) => {}
+			}
+		}
+	}
+
+	fn lower_value_def(&mut self, module: &str, name: &str, dict_param_count: u16, expr: &ExprNode) {
+		let gid = match self.globals.lookup(module, name) {
+			Some(g) => g,
+			None => return,
+		};
+		// `built-in "tag"` RHS: a pre-evaluated builtin value, no thunk.
+		if let ExprKind::Builtin(tag) = &expr.kind {
+			self
+				.globals
+				.set_pre_evaluated(gid, PreEval::Builtin(tag.clone()));
+			return;
+		}
+		// Trait-constrained defs (hidden dict params) — supported later.
+		if dict_param_count > 0 {
+			self.poison_global(gid);
+			return;
+		}
+		match self.lower_thunk(name, expr) {
+			Ok(fid) => self.globals.set_thunk(gid, fid),
+			Err(_) => self.poison_global(gid),
+		}
+	}
+
+	/// A def's value thunk: a zero-arg function that evaluates `expr` and
+	/// returns it.
+	fn lower_thunk(&mut self, name: &str, expr: &ExprNode) -> Result<FuncId, String> {
+		let fn_name = format!("{}.{}@thunk", self.current_module, name);
+		self.push_scope(fn_name, &[]);
+		let atom = match self.lower_expr(expr) {
+			Ok(a) => a,
+			Err(e) => {
+				self.scopes.pop();
+				return Err(e);
+			}
+		};
+		self.cur().stmts.push(Stmt::Return(atom));
+		let scope = self.scopes.pop().unwrap();
+		Ok(self.add_function(finish_scope(scope)))
+	}
+
+	// ---- expressions ---------------------------------------------------
+
+	fn lower_expr(&mut self, expr: &ExprNode) -> Result<Atom, String> {
+		match &expr.kind {
+			ExprKind::Literal(lit) => Ok(Atom::Const(literal_to_const(&lit.kind)?)),
+			ExprKind::Grouping(inner) => self.lower_expr(inner),
+			ExprKind::Identifier(id) => self.lower_identifier(&id.name),
+			ExprKind::Call(call) => self.lower_call(call),
+			ExprKind::Fun(fun) => self.lower_fun(fun),
+			other => Err(format!("unsupported expr: {}", expr_kind_name(other))),
+		}
+	}
+
+	fn lower_identifier(&mut self, name: &str) -> Result<Atom, String> {
+		match self.resolve(name)? {
+			Resolved::Atom(a) => Ok(a),
+			Resolved::Global(g) => Ok(self.emit_let(Rvalue::GlobalRef(g))),
+			Resolved::BareVariant { .. } => {
+				Err("bare variant construction not yet supported".to_string())
+			}
+		}
+	}
+
+	fn lower_call(&mut self, call: &compiler::ast::CallNode) -> Result<Atom, String> {
+		if !call.dict_args.is_empty() {
+			return Err("trait-constrained call (dict args) not yet supported".to_string());
+		}
+		let callee = self.lower_expr(&call.callee)?;
+		let mut args = Vec::with_capacity(call.args.len());
+		for a in &call.args {
+			args.push(self.lower_expr(a)?);
+		}
+		Ok(self.emit_let(Rvalue::CallClosure(callee, args)))
+	}
+
+	fn lower_fun(&mut self, fun: &FunNode) -> Result<Atom, String> {
+		let param_names: Vec<&str> = fun.params.iter().map(|p| p.ident.name.as_str()).collect();
+		let fn_name = format!(
+			"{}.fun@{}:{}",
+			self.current_module, fun.range.start.line, fun.range.start.col
+		);
+		self.push_scope(fn_name, &param_names);
+		let atom = match self.lower_body(&fun.body) {
+			Ok(a) => a,
+			Err(e) => {
+				self.scopes.pop();
+				return Err(e);
+			}
+		};
+		self.cur().stmts.push(Stmt::Return(atom));
+		let scope = self.scopes.pop().unwrap();
+
+		// Build the closure's capture list (resolved against the now-current
+		// parent scope) before consuming `scope`.
+		let capture_atoms: Vec<Atom> = scope
+			.captures
+			.iter()
+			.map(|c| self.capture_src_atom(&c.src))
+			.collect();
+		let fid = self.add_function(finish_scope(scope));
+		Ok(self.emit_let(Rvalue::MakeClosure(fid, capture_atoms)))
+	}
+
+	/// Lower a function/`let`-block body (a sequence of statements). Returns
+	/// the value the body evaluates to (its last expression).
+	fn lower_body(&mut self, body: &[ExprNode]) -> Result<Atom, String> {
+		if body.is_empty() {
+			return Ok(Atom::Const(Const::Unit));
+		}
+		let last = body.len() - 1;
+		for (i, e) in body.iter().enumerate() {
+			if let ExprKind::Let(let_node) = &e.kind {
+				self.lower_let(let_node)?;
+				if i == last {
+					return Ok(Atom::Const(Const::Unit));
+				}
+			} else {
+				let atom = self.lower_expr(e)?;
+				if i == last {
+					return Ok(atom);
+				}
+				// Non-last expression: its effects are already emitted as
+				// `Let`-bound rvalues; the unused result atom just falls away.
+			}
+		}
+		Ok(Atom::Const(Const::Unit))
+	}
+
+	fn lower_let(&mut self, let_node: &LetNode) -> Result<(), String> {
+		match &let_node.pattern.kind {
+			PatternKind::Identifier(id) => {
+				let atom = self.lower_expr(&let_node.value)?;
+				let var = match atom {
+					Atom::Var(v) => v,
+					other => {
+						let v = self.alloc_var();
+						self.cur().stmts.push(Stmt::Let(v, Rvalue::Use(other)));
+						v
+					}
+				};
+				self.cur().locals.push((id.name.clone(), var));
+				Ok(())
+			}
+			_ => Err("refutable / destructuring `let` not yet supported".to_string()),
+		}
+	}
+
+	// ---- scopes / name resolution --------------------------------------
+
+	fn cur(&mut self) -> &mut FnScope {
+		self.scopes.last_mut().expect("a scope is active")
+	}
+
+	fn push_scope(&mut self, name: String, param_names: &[&str]) {
+		let mut scope = FnScope {
+			name,
+			module: self.current_module.clone(),
+			params: Vec::new(),
+			captures: Vec::new(),
+			locals: Vec::new(),
+			next_var: 0,
+			stmts: Vec::new(),
+			is_async: false,
+		};
+		for pn in param_names {
+			let v = VarId(scope.next_var);
+			scope.next_var += 1;
+			scope.params.push(v);
+			scope.locals.push((pn.to_string(), v));
+		}
+		self.scopes.push(scope);
+	}
+
+	fn fresh_var(&mut self, scope_idx: usize) -> VarId {
+		let s = &mut self.scopes[scope_idx];
+		let v = VarId(s.next_var);
+		s.next_var += 1;
+		v
+	}
+
+	fn alloc_var(&mut self) -> VarId {
+		let idx = self.scopes.len() - 1;
+		self.fresh_var(idx)
+	}
+
+	fn emit_let(&mut self, rv: Rvalue) -> Atom {
+		let v = self.alloc_var();
+		self.cur().stmts.push(Stmt::Let(v, rv));
+		Atom::Var(v)
+	}
+
+	fn capture_src_atom(&self, src: &CaptureSrc) -> Atom {
+		match src {
+			CaptureSrc::ParentLocal(v) => Atom::Var(*v),
+			CaptureSrc::ParentCapture(i) => {
+				Atom::Var(self.scopes.last().expect("parent scope").captures[*i].var)
+			}
+		}
+	}
+
+	fn resolve(&mut self, name: &str) -> Result<Resolved, String> {
+		let top = self.scopes.len() - 1;
+		match self.resolve_at(top, name) {
+			Some(ScopeSlot::Local(v)) => Ok(Resolved::Atom(Atom::Var(v))),
+			Some(ScopeSlot::Capture(i)) => {
+				let var = self.scopes[top].captures[i].var;
+				Ok(Resolved::Atom(Atom::Var(var)))
+			}
+			Some(ScopeSlot::Global(g)) => Ok(Resolved::Global(g)),
+			Some(ScopeSlot::BareVariant {
+				qualified,
+				variant,
+				arity,
+			}) => Ok(Resolved::BareVariant {
+				qualified,
+				variant,
+				arity,
+			}),
+			None => Err(format!("unbound identifier `{}`", name)),
+		}
+	}
+
+	/// Resolve `name` as seen from scope `scope_idx`, capturing through parents
+	/// as needed. Mirrors `codegen::emit::resolve_identifier`.
+	fn resolve_at(&mut self, scope_idx: usize, name: &str) -> Option<ScopeSlot> {
+		if let Some(v) = self.scopes[scope_idx]
+			.locals
+			.iter()
+			.rev()
+			.find(|(n, _)| n == name)
+			.map(|(_, v)| *v)
+		{
+			return Some(ScopeSlot::Local(v));
+		}
+		if let Some(i) = self.scopes[scope_idx]
+			.captures
+			.iter()
+			.position(|c| c.name == name)
+		{
+			return Some(ScopeSlot::Capture(i));
+		}
+		if scope_idx > 0 {
+			match self.resolve_at(scope_idx - 1, name) {
+				Some(ScopeSlot::Local(pv)) => {
+					return Some(self.add_capture(scope_idx, name, CaptureSrc::ParentLocal(pv)))
+				}
+				Some(ScopeSlot::Capture(pi)) => {
+					return Some(self.add_capture(scope_idx, name, CaptureSrc::ParentCapture(pi)))
+				}
+				// Globals and bare variants are loaded directly at the use site,
+				// never captured.
+				Some(other) => return Some(other),
+				None => {}
+			}
+		}
+		// Module-level: same-module global, then prelude global, then a bare
+		// variant constructor.
+		if let Some(g) = self.globals.lookup(&self.current_module, name) {
+			return Some(ScopeSlot::Global(g));
+		}
+		if let Some(g) = self.globals.lookup("__prelude__", name) {
+			return Some(ScopeSlot::Global(g));
+		}
+		self.lookup_bare_variant(name)
+	}
+
+	fn add_capture(&mut self, scope_idx: usize, name: &str, src: CaptureSrc) -> ScopeSlot {
+		let var = self.fresh_var(scope_idx);
+		let i = self.scopes[scope_idx].captures.len();
+		self.scopes[scope_idx].captures.push(CaptureInfo {
+			name: name.to_string(),
+			var,
+			src,
+		});
+		ScopeSlot::Capture(i)
+	}
+
+	fn lookup_bare_variant(&self, name: &str) -> Option<ScopeSlot> {
+		// Local-module enums win over imported/prelude variants of the same
+		// name (mirrors the analyzer's disambiguation).
+		let local_prefix = format!("{}.", self.current_module);
+		let mut local = None;
+		let mut other = None;
+		for (qualified, variants) in &self.enums {
+			for (variant, arity) in variants {
+				if variant == name {
+					let slot = ScopeSlot::BareVariant {
+						qualified: qualified.clone(),
+						variant: variant.clone(),
+						arity: *arity,
+					};
+					if qualified.starts_with(&local_prefix) {
+						local = Some(slot);
+					} else if other.is_none() {
+						other = Some(slot);
+					}
+				}
+			}
+		}
+		local.or(other)
+	}
+
+	// ---- entry / poison / function table -------------------------------
+
+	fn build_entry(&mut self) -> Result<FuncId, String> {
+		let main_module = self
+			.compiler
+			.entry_modules
+			.first()
+			.ok_or("no entry module")?
+			.clone();
+		let main = self
+			.globals
+			.lookup(&main_module, "main")
+			.ok_or_else(|| format!("module `{}` has no `main` def", main_module))?;
+		// Load `main`, call it with the unit arg, return the result.
+		let func = Function {
+			name: "__entry__".to_string(),
+			module: String::new(),
+			params: Vec::new(),
+			captures: Vec::new(),
+			is_async: false,
+			body: Block(vec![
+				Stmt::Let(VarId(0), Rvalue::GlobalRef(main)),
+				Stmt::Let(
+					VarId(1),
+					Rvalue::CallClosure(Atom::Var(VarId(0)), vec![Atom::Const(Const::Unit)]),
+				),
+				Stmt::Return(Atom::Var(VarId(1))),
+			]),
+		};
+		Ok(self.add_function(func))
+	}
+
+	/// Point a global at the shared poison thunk — used for any def whose body
+	/// uses a not-yet-supported construct. Running it returns `nothing`; a
+	/// fixture that never reaches it is unaffected, while one that does will
+	/// diverge from the reference output (flagging the gap).
+	fn poison_global(&mut self, gid: GlobalId) {
+		let fid = self.poison_fn();
+		self.globals.set_thunk(gid, fid);
+	}
+
+	fn poison_fn(&mut self) -> FuncId {
+		if let Some(f) = self.poison {
+			return f;
+		}
+		let func = Function {
+			name: "__poison__".to_string(),
+			module: String::new(),
+			params: Vec::new(),
+			captures: Vec::new(),
+			is_async: false,
+			body: Block(vec![Stmt::Return(Atom::Const(Const::Unit))]),
+		};
+		let f = self.add_function(func);
+		self.poison = Some(f);
+		f
+	}
+
+	fn add_function(&mut self, f: Function) -> FuncId {
+		let id = FuncId(self.functions.len() as u32);
+		self.functions.push(f);
+		id
+	}
+}
+
+fn finish_scope(scope: FnScope) -> Function {
+	Function {
+		name: scope.name,
+		module: scope.module,
+		params: scope.params,
+		captures: scope.captures.iter().map(|c| c.var).collect(),
+		is_async: scope.is_async,
+		body: Block(scope.stmts),
+	}
+}
+
+fn literal_to_const(kind: &LiteralKind) -> Result<Const, String> {
+	Ok(match kind {
+		LiteralKind::Bool(b) => Const::Bool(*b),
+		LiteralKind::String(s) => Const::Str(s.clone()),
+		LiteralKind::Bytes(b) => Const::Bytes(b.clone()),
+		LiteralKind::FloatDecimal(f) => Const::Float(*f),
+		LiteralKind::IntDecimal(n)
+		| LiteralKind::IntHex(n)
+		| LiteralKind::IntOctal(n)
+		| LiteralKind::IntBinary(n) => Const::Int(*n as i64),
+		LiteralKind::Duration(_) => return Err("duration literal not yet supported".to_string()),
+	})
+}
+
+fn expr_kind_name(kind: &ExprKind) -> &'static str {
+	match kind {
+		ExprKind::BinaryOperation { .. } => "binary operation",
+		ExprKind::UnaryOperation { .. } => "unary operation",
+		ExprKind::ElementAccess { .. } => "element access",
+		ExprKind::FieldAccess { .. } => "field access",
+		ExprKind::NamespaceAccess(_) => "namespace access",
+		ExprKind::Fun(_) => "fun",
+		ExprKind::Call(_) => "call",
+		ExprKind::EmptyTuple => "empty tuple",
+		ExprKind::Grouping(_) => "grouping",
+		ExprKind::Identifier(_) => "identifier",
+		ExprKind::Interpolation(_) => "interpolation",
+		ExprKind::Let(_) => "let",
+		ExprKind::Defer(_) => "defer",
+		ExprKind::Literal(_) => "literal",
+		ExprKind::Record(_) => "record",
+		ExprKind::Tuple(_) => "tuple",
+		ExprKind::Regex(_) => "regex",
+		ExprKind::Try(_) => "try",
+		ExprKind::Builtin(_) => "built-in",
+		ExprKind::List(_) => "list",
+		ExprKind::If(_) => "if",
+		ExprKind::When(_) => "when",
+		ExprKind::While(_) => "while",
+		_ => "expression",
+	}
 }
 
 // --------------------------------------------------------------------------
@@ -125,11 +692,12 @@ impl GlobalTable {
 		id
 	}
 
-	// Wired in the next 1.1 chunk: the expr walk resolves identifiers via
-	// `lookup`, records each def's thunk via `set_thunk`, and assembles the
-	// final table via `finish`.
+	/// Fill an already-reserved slot with a pre-evaluated value (e.g. a
+	/// `built-in "tag"` def).
+	fn set_pre_evaluated(&mut self, id: GlobalId, value: PreEval) {
+		self.slots[id.0 as usize] = Slot::PreEvaluated(value);
+	}
 
-	#[allow(dead_code)]
 	fn lookup(&self, module: &str, name: &str) -> Option<GlobalId> {
 		self
 			.lookup
@@ -137,12 +705,10 @@ impl GlobalTable {
 			.copied()
 	}
 
-	#[allow(dead_code)]
 	fn set_thunk(&mut self, id: GlobalId, func: FuncId) {
 		self.slots[id.0 as usize] = Slot::Thunk(func);
 	}
 
-	#[allow(dead_code)]
 	fn finish(self) -> Vec<GlobalInit> {
 		self
 			.slots
