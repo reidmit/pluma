@@ -49,7 +49,7 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
                                                                         body: [
                                                                             expr(8:31-8:40) :: task 't46 {
                                                                                 kind: call(8:31-8:40) {
-                                                                                    callee: expr(8:33-8:38) :: (manual-scope-handle 't6) (task 't6) -> task 't6 {
+                                                                                    callee: expr(8:33-8:38) :: (manual-scope-handle 't5) (task 't5) -> task 't5 {
                                                                                         kind: namespace-access `task.manual-spawn`,
                                                                                     },
                                                                                     args: [
@@ -76,9 +76,9 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
                                                 pattern: pattern(9:6-9:11) Identifier(
                                                     ident(9:6-9:11) `first`,
                                                 ),
-                                                value: expr(9:14-9:23) :: task (option (result 't46 't10)) {
+                                                value: expr(9:14-9:23) :: task (option (result 't46 't9)) {
                                                     kind: call(9:14-9:23) {
-                                                        callee: expr(9:16-9:20) :: (manual-scope-handle 't9) nothing -> task (option (result 't9 't10)) {
+                                                        callee: expr(9:16-9:20) :: (manual-scope-handle 't8) nothing -> task (option (result 't8 't9)) {
                                                             kind: namespace-access `task.manual-next`,
                                                         },
                                                         args: [
@@ -94,7 +94,7 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
                                                 rest: [
                                                     expr(10:2-10:13) :: nothing {
                                                         kind: call(10:2-10:13) {
-                                                            callee: expr(10:4-10:10) :: (manual-scope-handle 't13) nothing -> nothing {
+                                                            callee: expr(10:4-10:10) :: (manual-scope-handle 't12) nothing -> nothing {
                                                                 kind: namespace-access `task.manual-cancel`,
                                                             },
                                                             args: [
@@ -154,7 +154,7 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
                                                                                         kind: namespace-access `task.fail`,
                                                                                     },
                                                                                     args: [
-                                                                                        expr(12:57-12:58) :: 't10 {
+                                                                                        expr(12:57-12:58) :: 't9 {
                                                                                             kind: ident(12:57-12:58) `e`,
                                                                                         },
                                                                                     ],

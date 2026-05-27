@@ -14,14 +14,14 @@ module `main` (tests/analyze/scope-both/main.pa) {
         ] [
             def(4:0-12:1) :: nothing {
                 name: ident(4:4-4:8) `both`,
-                kind: expr(4:11-12:1) :: (task 't0) (task 't2) -> task (('t0, 't2)) {
+                kind: expr(4:11-12:1) :: (task 'z) (task 't1) -> task (('z, 't1)) {
                     kind: fun(4:11-12:1) {
                         params: [
-                            ident(4:15-4:17) `t1` :: task 't0,
-                            ident(4:18-4:20) `t2` :: task 't2,
+                            ident(4:15-4:17) `t1` :: task 'z,
+                            ident(4:18-4:20) `t2` :: task 't1,
                         ],
                         body: [
-                            expr(5:1-11:2) :: task (('t0, 't2)) {
+                            expr(5:1-11:2) :: task (('z, 't1)) {
                                 kind: scope(5:1-11:2) {
                                     manual: false,
                                     handle: Some(
@@ -33,16 +33,16 @@ module `main` (tests/analyze/scope-both/main.pa) {
                                                 pattern: pattern(6:6-6:8) Identifier(
                                                     ident(6:6-6:8) `h1`,
                                                 ),
-                                                value: expr(6:11-6:21) :: task 't0 {
+                                                value: expr(6:11-6:21) :: task 'z {
                                                     kind: call(6:11-6:21) {
-                                                        callee: expr(6:13-6:18) :: scope-handle (task 't0) -> task 't0 {
+                                                        callee: expr(6:13-6:18) :: scope-handle (task 'z) -> task 'z {
                                                             kind: namespace-access `task.scope-spawn`,
                                                         },
                                                         args: [
                                                             expr(6:11-6:12) :: scope-handle {
                                                                 kind: ident(6:11-6:12) `s`,
                                                             },
-                                                            expr(6:19-6:21) :: task 't0 {
+                                                            expr(6:19-6:21) :: task 'z {
                                                                 kind: ident(6:19-6:21) `t1`,
                                                             },
                                                         ],
@@ -55,16 +55,16 @@ module `main` (tests/analyze/scope-both/main.pa) {
                                                 pattern: pattern(7:6-7:8) Identifier(
                                                     ident(7:6-7:8) `h2`,
                                                 ),
-                                                value: expr(7:11-7:21) :: task 't2 {
+                                                value: expr(7:11-7:21) :: task 't1 {
                                                     kind: call(7:11-7:21) {
-                                                        callee: expr(7:13-7:18) :: scope-handle (task 't2) -> task 't2 {
+                                                        callee: expr(7:13-7:18) :: scope-handle (task 't1) -> task 't1 {
                                                             kind: namespace-access `task.scope-spawn`,
                                                         },
                                                         args: [
                                                             expr(7:11-7:12) :: scope-handle {
                                                                 kind: ident(7:11-7:12) `s`,
                                                             },
-                                                            expr(7:19-7:21) :: task 't2 {
+                                                            expr(7:19-7:21) :: task 't1 {
                                                                 kind: ident(7:19-7:21) `t2`,
                                                             },
                                                         ],
@@ -72,36 +72,36 @@ module `main` (tests/analyze/scope-both/main.pa) {
                                                 },
                                             },
                                         },
-                                        expr(8:2-10:20) :: task (('t0, 't2)) {
+                                        expr(8:2-10:20) :: task (('z, 't1)) {
                                             kind: try(8:2-10:20) {
                                                 pattern: pattern(8:6-8:7) Identifier(
                                                     ident(8:6-8:7) `a`,
                                                 ),
-                                                value: expr(8:10-8:12) :: task 't0 {
+                                                value: expr(8:10-8:12) :: task 'z {
                                                     kind: ident(8:10-8:12) `h1`,
                                                 },
                                                 rest: [
-                                                    expr(9:2-10:20) :: task (('t0, 't2)) {
+                                                    expr(9:2-10:20) :: task (('z, 't1)) {
                                                         kind: try(9:2-10:20) {
                                                             pattern: pattern(9:6-9:7) Identifier(
                                                                 ident(9:6-9:7) `b`,
                                                             ),
-                                                            value: expr(9:10-9:12) :: task 't2 {
+                                                            value: expr(9:10-9:12) :: task 't1 {
                                                                 kind: ident(9:10-9:12) `h2`,
                                                             },
                                                             rest: [
-                                                                expr(10:2-10:20) :: task (('t0, 't2)) {
+                                                                expr(10:2-10:20) :: task (('z, 't1)) {
                                                                     kind: call(10:2-10:20) {
                                                                         callee: expr(10:2-10:13) :: 't8 -> task 't8 {
                                                                             kind: namespace-access `task.return`,
                                                                         },
                                                                         args: [
-                                                                            expr(10:14-10:20) :: ('t0, 't2) {
+                                                                            expr(10:14-10:20) :: ('z, 't1) {
                                                                                 kind: tuple [
-                                                                                    expr(10:15-10:16) :: 't0 {
+                                                                                    expr(10:15-10:16) :: 'z {
                                                                                         kind: ident(10:15-10:16) `a`,
                                                                                     },
-                                                                                    expr(10:18-10:19) :: 't2 {
+                                                                                    expr(10:18-10:19) :: 't1 {
                                                                                         kind: ident(10:18-10:19) `b`,
                                                                                     },
                                                                                 ],

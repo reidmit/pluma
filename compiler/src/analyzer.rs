@@ -2033,6 +2033,73 @@ impl<'compiler> Analyzer<'compiler> {
 		}
 	}
 
+	// The structured-concurrency kernel defs (`scope-spawn`, `manual-next`, …)
+	// are private to `core.task`: they're the lowering targets of the `scope`
+	// keyword and the `s.spawn`/`s.next` handle methods, not a public API, so
+	// their signatures aren't carried in `core.task`'s exports. But a handle
+	// method rewritten to `task.scope-spawn …` still needs to type-check, so
+	// synthesize their (fixed, compiler-known) signatures here — with fresh
+	// tyvars for per-use polymorphism, mirroring how an imported value would be
+	// instantiated. `None` for anything that isn't one of these kernel defs.
+	// Codegen resolves the call via `lookup_global`, which ignores visibility,
+	// so nothing downstream needs the def to be public. Keep these in lockstep
+	// with the signatures in `compiler/src/stdlib/task.pa`.
+	fn scope_kernel_def_type(&mut self, module: &str, def_name: &str) -> Option<Type> {
+		if module != "core.task" {
+			return None;
+		}
+		let task = |a: Type| Type::Enum("__prelude__.task".to_string(), vec![a]);
+		match def_name {
+			"scope-spawn" => {
+				let a = self.new_type_var();
+				Some(Type::Fun(
+					vec![scope_handle_type(), task(a.clone())],
+					Box::new(task(a)),
+				))
+			}
+			"scope-cancel" => Some(Type::Fun(
+				vec![scope_handle_type(), Type::Nothing],
+				Box::new(Type::Nothing),
+			)),
+			"scope-cancel-after" => Some(Type::Fun(
+				vec![scope_handle_type(), Type::Duration],
+				Box::new(Type::Nothing),
+			)),
+			"manual-spawn" => {
+				let a = self.new_type_var();
+				Some(Type::Fun(
+					vec![manual_scope_handle_type(a.clone()), task(a.clone())],
+					Box::new(task(a)),
+				))
+			}
+			"manual-cancel" => {
+				let a = self.new_type_var();
+				Some(Type::Fun(
+					vec![manual_scope_handle_type(a), Type::Nothing],
+					Box::new(Type::Nothing),
+				))
+			}
+			"manual-cancel-after" => {
+				let a = self.new_type_var();
+				Some(Type::Fun(
+					vec![manual_scope_handle_type(a), Type::Duration],
+					Box::new(Type::Nothing),
+				))
+			}
+			"manual-next" => {
+				let a = self.new_type_var();
+				let e = self.new_type_var();
+				let result_ty = Type::Enum("__prelude__.result".to_string(), vec![a.clone(), e]);
+				let option_ty = Type::Enum("__prelude__.option".to_string(), vec![result_ty]);
+				Some(Type::Fun(
+					vec![manual_scope_handle_type(a), Type::Nothing],
+					Box::new(task(option_ty)),
+				))
+			}
+			_ => None,
+		}
+	}
+
 	// Rewrite a scope-handle method call `s.method args` into a call to the
 	// corresponding `task.scope-*` kernel builtin with `s` prepended:
 	// `s.spawn t` -> `task.scope-spawn s t`. No-op for anything else.
@@ -2072,40 +2139,44 @@ impl<'compiler> Analyzer<'compiler> {
 		};
 
 		// New callee: the kernel def `<def_name>`. In a module that imports
-		// `core.task` (under whatever local name) it lives in that namespace,
-		// so emit `<local>.<def_name>` and let the normal FieldAccess dispatch
-		// resolve it to the builtin global. Inside `core.task` itself there's
-		// no such import — the def is a local top-level — so reference it bare.
-		// (This is what lets the combinators in task.pa use `s.spawn`/`s.next`
-		// on their own handles.)
+		// `core.task` (under whatever local name) it lives in that namespace, so
+		// emit a `<local>.<def_name>` namespace access with its type synthesized
+		// here (the kernel defs are private to `core.task`, so they aren't in its
+		// exports and can't be resolved through imports — `scope_kernel_def_type`
+		// supplies the known signature). Synthesizing it here, rather than letting
+		// the FieldAccess resolver look it up, is precisely what keeps these defs
+		// private: a kernel name a *user* writes (`task.scope-spawn …`) still
+		// reaches the resolver and is reported private. Inside `core.task` itself
+		// there's no such import — the def is a local top-level — so reference it
+		// bare (this is what lets the combinators in task.pa use `s.spawn`/`s.next`
+		// on their own handles, and it resolves regardless of visibility).
 		let task_local = self
 			.import_qualified
 			.iter()
 			.find(|(_, full)| full.as_str() == "core.task")
 			.map(|(local, _)| local.clone());
 		let new_callee = match task_local {
-			Some(local) => ExprNode {
-				ty: Type::Unknown,
-				range: field.range,
-				kind: ExprKind::FieldAccess {
-					receiver: Box::new(ExprNode {
-						ty: Type::Unknown,
-						range: field.range,
-						kind: ExprKind::Identifier(IdentifierNode {
+			Some(local) => {
+				let ty = self
+					.scope_kernel_def_type("core.task", def_name)
+					.expect("scope_method_def name must have a kernel signature");
+				ExprNode {
+					ty,
+					range: field.range,
+					kind: ExprKind::NamespaceAccess(vec![
+						IdentifierNode {
 							name: local,
 							range: field.range,
-						}),
-						trait_dispatch: None,
-						dispatch_sink: None,
-					}),
-					field: IdentifierNode {
-						name: def_name.to_string(),
-						range: field.range,
-					},
-				},
-				trait_dispatch: None,
-				dispatch_sink: None,
-			},
+						},
+						IdentifierNode {
+							name: def_name.to_string(),
+							range: field.range,
+						},
+					]),
+					trait_dispatch: None,
+					dispatch_sink: None,
+				}
+			}
 			None => ExprNode {
 				ty: Type::Unknown,
 				range: field.range,
@@ -3094,9 +3165,15 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 
 			ExprKind::NamespaceAccess(_) => {
-				// constrain only ever produces NamespaceAccess from a
-				// FieldAccess receiver — it should never see one as input.
-				unreachable!("NamespaceAccess fed back into constrain_expr");
+				// constrain normally produces NamespaceAccess from a FieldAccess
+				// receiver and never sees one as input — except the scope-method
+				// rewrite, which emits a *pre-typed* `task.scope-*` kernel access
+				// (those defs are private, so they can't be resolved through
+				// imports — see `maybe_rewrite_scope_method`). Such a node already
+				// carries its synthesized type, so leave it. Anything else is a bug.
+				if matches!(expr.ty, Type::Unknown) {
+					unreachable!("NamespaceAccess fed back into constrain_expr");
+				}
 			}
 
 			ExprKind::Builtin(_) => {
