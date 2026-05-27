@@ -21,8 +21,8 @@ use std::rc::Rc;
 
 use compiler::Range;
 use ir::{
-	Atom, BinOp, Block, Callee, Const, FieldPat, Function as IrFunction, GlobalInit, IrProgram,
-	ListItem, Pattern, PreEval, Rvalue, Stmt, VarId,
+	Atom, BinOp, Block, Callee, Const, Function as IrFunction, GlobalInit, IrProgram, ListItem,
+	ListRest, Pattern, PreEval, RecordRest, Rvalue, Stmt, VarId,
 };
 use vm::program::GlobalSlot;
 use vm::{Function, Instruction, Program, RegexData, Value};
@@ -192,22 +192,42 @@ impl FnCtx {
 				Stmt::Loop(b) => self.assign_let_slots(b),
 				Stmt::Match { arms, .. } => {
 					for arm in arms {
-						match &arm.pattern {
-							Pattern::Bind(v) => self.assign_slot(*v),
-							Pattern::Variant { fields, .. } => {
-								for f in fields {
-									if let FieldPat::Bind(v) = f {
-										self.assign_slot(*v);
-									}
-								}
-							}
-							Pattern::Wildcard | Pattern::Literal(_) => {}
-						}
+						self.assign_pattern_slots(&arm.pattern);
 						self.assign_let_slots(&arm.body);
 					}
 				}
 				_ => {}
 			}
+		}
+	}
+
+	/// Assign slots to every variable a pattern binds, descending into nested
+	/// sub-patterns.
+	fn assign_pattern_slots(&mut self, pat: &Pattern) {
+		match pat {
+			Pattern::Bind(v) => self.assign_slot(*v),
+			Pattern::Variant { fields, .. } | Pattern::Tuple(fields) => {
+				for f in fields {
+					self.assign_pattern_slots(f);
+				}
+			}
+			Pattern::List { items, rest } => {
+				for i in items {
+					self.assign_pattern_slots(i);
+				}
+				if let Some(ListRest::Bind(v)) = rest {
+					self.assign_slot(*v);
+				}
+			}
+			Pattern::Record { fields, rest } => {
+				for (_, p) in fields {
+					self.assign_pattern_slots(p);
+				}
+				if let RecordRest::Bind(v) = rest {
+					self.assign_slot(*v);
+				}
+			}
+			Pattern::Wildcard | Pattern::Literal(_) => {}
 		}
 	}
 
@@ -371,22 +391,118 @@ impl FnCtx {
 						on_fail: 0,
 					},
 				);
-				// Payload is pushed last-on-top, so bind/pop in reverse.
-				for fp in fields.iter().rev() {
-					match fp {
-						FieldPat::Bind(var) => {
-							push(
-								body,
-								ranges,
-								Instruction::StoreLocal(self.local_slot(*var)?),
-							);
-						}
-						FieldPat::Wildcard => push(body, ranges, Instruction::Pop),
+				let mut fails = vec![jmp];
+				self.emit_sub_patterns(em, fields, body, ranges, &mut fails)?;
+				Ok(fails)
+			}
+			Pattern::Tuple(elems) => {
+				let jmp = emit_at(
+					body,
+					ranges,
+					Instruction::MatchTuple {
+						arity: elems.len() as u16,
+						on_fail: 0,
+					},
+				);
+				let mut fails = vec![jmp];
+				self.emit_sub_patterns(em, elems, body, ranges, &mut fails)?;
+				Ok(fails)
+			}
+			Pattern::List { items, rest } => {
+				let jmp = emit_at(
+					body,
+					ranges,
+					Instruction::MatchList {
+						arity: items.len() as u16,
+						has_rest: rest.is_some(),
+						on_fail: 0,
+					},
+				);
+				let mut fails = vec![jmp];
+				// The tail (if any) sits on top of the element values — consume
+				// it before matching the elements in reverse.
+				match rest {
+					Some(ListRest::Bind(v)) => {
+						push(body, ranges, Instruction::StoreLocal(self.local_slot(*v)?))
 					}
+					Some(ListRest::Anon) => push(body, ranges, Instruction::Pop),
+					None => {}
 				}
-				Ok(vec![jmp])
+				self.emit_sub_patterns(em, items, body, ranges, &mut fails)?;
+				Ok(fails)
+			}
+			Pattern::Record { fields, rest } => {
+				let idxs: Vec<u32> = fields.iter().map(|(n, _)| em.intern(n)).collect();
+				let fields_idx = em.intern_field_list(idxs);
+				let jmp = emit_at(
+					body,
+					ranges,
+					Instruction::MatchRecord {
+						fields_idx,
+						exact: matches!(rest, RecordRest::Exact),
+						with_rest: matches!(rest, RecordRest::Bind(_)),
+						on_fail: 0,
+					},
+				);
+				let mut fails = vec![jmp];
+				// With a bound rest, the rest record is on top — consume it first.
+				if let RecordRest::Bind(v) = rest {
+					push(body, ranges, Instruction::StoreLocal(self.local_slot(*v)?));
+				}
+				let sub_pats: Vec<&Pattern> = fields.iter().map(|(_, p)| p).collect();
+				self.emit_sub_patterns_refs(em, &sub_pats, body, ranges, &mut fails)?;
+				Ok(fails)
 			}
 		}
+	}
+
+	/// Emit a container's sub-patterns (matched in reverse, since payload is
+	/// pushed last-on-top), inserting cleanup trampolines: when sub-pattern `k`
+	/// fails, the still-unconsumed payloads for the earlier elements are popped
+	/// before jumping to the outer fail. Mirrors
+	/// `codegen::emit::emit_sub_patterns_with_cleanup`.
+	fn emit_sub_patterns(
+		&self,
+		em: &mut Emitter,
+		subs: &[Pattern],
+		body: &mut Vec<Instruction>,
+		ranges: &mut Vec<Range>,
+		fails: &mut Vec<u32>,
+	) -> Result<(), String> {
+		let refs: Vec<&Pattern> = subs.iter().collect();
+		self.emit_sub_patterns_refs(em, &refs, body, ranges, fails)
+	}
+
+	fn emit_sub_patterns_refs(
+		&self,
+		em: &mut Emitter,
+		subs: &[&Pattern],
+		body: &mut Vec<Instruction>,
+		ranges: &mut Vec<Range>,
+		fails: &mut Vec<u32>,
+	) -> Result<(), String> {
+		let total = subs.len();
+		for (rev_idx, sub) in subs.iter().rev().enumerate() {
+			let orphans = total - 1 - rev_idx;
+			let sub_fails = self.emit_pattern(em, sub, body, ranges)?;
+			if sub_fails.is_empty() || orphans == 0 {
+				fails.extend(sub_fails);
+				continue;
+			}
+			// Success path skips the trampoline.
+			let skip = emit_at(body, ranges, Instruction::Jump(0));
+			let tramp_start = body.len() as u32;
+			for sf in &sub_fails {
+				patch(body, *sf, tramp_start);
+			}
+			for _ in 0..orphans {
+				push(body, ranges, Instruction::Pop);
+			}
+			fails.push(emit_at(body, ranges, Instruction::Jump(0)));
+			let after = body.len() as u32;
+			patch(body, skip, after);
+		}
+		Ok(())
 	}
 
 	fn lower_rvalue(
@@ -642,7 +758,10 @@ fn patch(body: &mut [Instruction], idx: u32, target: u32) {
 		| Instruction::MatchBytes(_, o)
 		| Instruction::MatchBool(_, o)
 		| Instruction::MatchNothing(o)
-		| Instruction::MatchVariant { on_fail: o, .. } => *o = target,
+		| Instruction::MatchVariant { on_fail: o, .. }
+		| Instruction::MatchTuple { on_fail: o, .. }
+		| Instruction::MatchRecord { on_fail: o, .. }
+		| Instruction::MatchList { on_fail: o, .. } => *o = target,
 		other => panic!("from_ir patch: not a jump-like instruction: {other:?}"),
 	}
 }

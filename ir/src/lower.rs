@@ -13,13 +13,15 @@
 // the two standalone pre-passes (enum table + global reservation); literals,
 // identifiers (local / capture / global), calls, `fun` (closure conversion),
 // `let`; operators (direct opcodes + trait dispatch via method dictionaries);
-// control flow (`if`/`when`/`while` via a pattern `Match`); data construction
-// (variants + constructors, tuples, records, lists with spread, string
-// interpolation, field access, regex literals); and namespace access
+// control flow (`if`/`when`/`while` via a pattern `Match`, with literal /
+// variant / tuple / record / list patterns, nested and with `...` rests); data
+// construction (variants + constructors, tuples, records, lists with spread,
+// string interpolation, field access, regex literals); and namespace access
 // (`module.value`, `module.Enum.variant`) — which makes most stdlib calls work.
-// Forms not yet handled (trait instances, constrained-value references, nested
-// / tuple / record / list patterns, `defer`, async, ...) cause the *enclosing
-// def* to be lowered as a poison thunk (returns `nothing`) rather than failing
+// Forms not yet handled (trait instances, constrained-value references,
+// destructuring `let`, string-interpolation patterns, `defer`, async, ...)
+// cause the *enclosing def* to be lowered as a poison thunk (returns `nothing`)
+// rather than failing
 // the whole program: a def whose executed paths only touch supported forms runs
 // correctly, so coverage grows fixture-by-fixture. `lower` is not yet wired into
 // `codegen` as the default.
@@ -747,38 +749,72 @@ impl<'a> Lowerer<'a> {
 			}
 			PatternKind::Literal(lit) => Ok(Pattern::Literal(literal_to_const(&lit.kind)?)),
 			PatternKind::Constructor(variant, subs) => {
-				let mut fields = Vec::with_capacity(subs.len());
-				for sub in subs {
-					fields.push(self.lower_field_pattern(sub)?);
-				}
+				let fields = self.lower_sub_patterns(subs)?;
 				Ok(Pattern::Variant {
 					variant: variant.name.clone(),
 					fields,
 				})
 			}
-			_ => Err("tuple / record / list pattern not yet supported".to_string()),
+			PatternKind::Tuple(elems) => Ok(Pattern::Tuple(self.lower_sub_patterns(elems)?)),
+			PatternKind::List { items, rest } => {
+				let items = self.lower_sub_patterns(items)?;
+				let rest = match rest {
+					None => None,
+					Some(rp) => {
+						Some(self.lower_rest_binding(rp.binding.as_ref(), ListRest::Anon, ListRest::Bind))
+					}
+				};
+				Ok(Pattern::List { items, rest })
+			}
+			PatternKind::Record { fields, rest } => {
+				let mut ir_fields = Vec::with_capacity(fields.len());
+				for (name, p) in fields {
+					// Sub-patterns carry no known subject type (matching `emit.rs`).
+					ir_fields.push((name.name.clone(), self.lower_pattern(p, &Type::Unknown)?));
+				}
+				let rest = match rest {
+					None => RecordRest::Exact,
+					Some(rp) => {
+						self.lower_rest_binding(rp.binding.as_ref(), RecordRest::Open, RecordRest::Bind)
+					}
+				};
+				Ok(Pattern::Record {
+					fields: ir_fields,
+					rest,
+				})
+			}
+			PatternKind::Interpolation(_) => {
+				Err("string-interpolation pattern not yet supported".to_string())
+			}
 		}
 	}
 
-	/// A variant payload sub-pattern. Only simple binds and `_` are supported;
-	/// a nested pattern (or an identifier that names a nullary variant, which
-	/// would be a nested match rather than a binding) poisons the def.
-	fn lower_field_pattern(&mut self, sub: &PatternNode) -> Result<FieldPat, String> {
-		match &sub.kind {
-			PatternKind::Underscore => Ok(FieldPat::Wildcard),
-			PatternKind::Identifier(id) => {
-				let names_variant = self
-					.enums
-					.values()
-					.any(|vs| vs.iter().any(|(n, a)| n == &id.name && *a == 0));
-				if names_variant {
-					return Err("nested nullary-variant sub-pattern not yet supported".to_string());
-				}
+	/// Lower a list of sub-patterns. They carry no known subject type, so a
+	/// bare identifier is always a binding (mirrors `emit.rs`, which passes
+	/// `Type::Unknown` to sub-pattern emission).
+	fn lower_sub_patterns(&mut self, subs: &[PatternNode]) -> Result<Vec<Pattern>, String> {
+		let mut out = Vec::with_capacity(subs.len());
+		for sub in subs {
+			out.push(self.lower_pattern(sub, &Type::Unknown)?);
+		}
+		Ok(out)
+	}
+
+	/// Resolve a list/record rest binding: an anonymous `...` (no capture) or a
+	/// `...name` that binds a fresh variable.
+	fn lower_rest_binding<T>(
+		&mut self,
+		binding: Option<&compiler::ast::IdentifierNode>,
+		anon: T,
+		bind: impl FnOnce(VarId) -> T,
+	) -> T {
+		match binding {
+			None => anon,
+			Some(id) => {
 				let v = self.alloc_var();
 				self.cur().locals.push((id.name.clone(), v));
-				Ok(FieldPat::Bind(v))
+				bind(v)
 			}
-			_ => Err("nested sub-pattern not yet supported".to_string()),
 		}
 	}
 

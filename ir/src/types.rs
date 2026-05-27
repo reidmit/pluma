@@ -144,10 +144,8 @@ pub struct MatchArm {
 	pub body: Block,
 }
 
-/// A match pattern. Deliberately small for now — literals, enum variants with
-/// simple (bind/ignore) payload fields, an irrefutable binding, and the
-/// catch-all wildcard. Nested, tuple, record, and list patterns aren't lowered
-/// yet (the enclosing def is poisoned instead).
+/// A match pattern. Sub-patterns are full patterns (so nesting works); the
+/// only unsupported kind is string-interpolation patterns.
 #[derive(Debug, Clone)]
 pub enum Pattern {
 	/// Matches anything, binds nothing (`_`, or the `else` arm).
@@ -156,18 +154,44 @@ pub enum Pattern {
 	Bind(VarId),
 	/// Matches a constant by value.
 	Literal(Const),
-	/// Matches an enum variant by name; each payload field is bound or ignored.
+	/// Matches an enum variant by name; each payload field is a sub-pattern.
 	Variant {
 		variant: String,
-		fields: Vec<FieldPat>,
+		fields: Vec<Pattern>,
+	},
+	/// Matches a tuple of the given arity; elements are sub-patterns.
+	Tuple(Vec<Pattern>),
+	/// Matches a list. `items` are the leading element patterns; `rest`
+	/// captures the remainder (`None` = exact length).
+	List {
+		items: Vec<Pattern>,
+		rest: Option<ListRest>,
+	},
+	/// Matches a record carrying (at least) the named fields.
+	Record {
+		fields: Vec<(String, Pattern)>,
+		rest: RecordRest,
 	},
 }
 
-/// A variant payload sub-pattern (only simple binds/ignores so far).
+/// The `...` tail of a list pattern.
 #[derive(Debug, Clone)]
-pub enum FieldPat {
+pub enum ListRest {
+	/// `...` — matches any remainder, binds nothing.
+	Anon,
+	/// `...name` — binds the remainder as a list.
 	Bind(VarId),
-	Wildcard,
+}
+
+/// The tail behavior of a record pattern.
+#[derive(Debug, Clone)]
+pub enum RecordRest {
+	/// `{a, b}` — the record must have exactly these fields.
+	Exact,
+	/// `{a, ...}` — extra fields allowed, not captured.
+	Open,
+	/// `{a, ...rest}` — extra fields captured into `rest`.
+	Bind(VarId),
 }
 
 /// A trivially-evaluable operand: a variable or an inline constant. Atoms have
