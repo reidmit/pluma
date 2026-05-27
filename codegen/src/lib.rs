@@ -15,5 +15,7 @@
 //      the loaded value with () and returns the result.
 
 mod emit;
+pub mod from_ir;
 
 pub use emit::compile;
+pub use from_ir::emit as compile_from_ir;

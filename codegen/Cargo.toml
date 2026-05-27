@@ -9,4 +9,5 @@ doctest = false
 [dependencies]
 compiler = { path = "../compiler" }
 vm = { path = "../vm" }
+ir = { path = "../ir" }
 regex = "1"

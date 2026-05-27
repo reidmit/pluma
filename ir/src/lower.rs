@@ -231,13 +231,17 @@ fn reserve_user_globals(g: &mut GlobalTable, compiler: &Compiler) {
 mod tests {
 	use super::*;
 	use std::io::Write;
+	use std::sync::atomic::{AtomicU32, Ordering};
 
 	/// Compile a single-module source string in-process and return the
 	/// checked compiler. Writes a temp `main.pa` because `from_entry_path` is
 	/// the only constructor; the prelude/stdlib are embedded, so no cwd setup
-	/// is needed.
+	/// is needed. The temp dir is unique per call (process id + a counter) so
+	/// tests running in parallel don't clobber each other's `main.pa`.
 	fn check_source(src: &str) -> Compiler {
-		let dir = std::env::temp_dir().join(format!("ir-lower-test-{}", std::process::id()));
+		static COUNTER: AtomicU32 = AtomicU32::new(0);
+		let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+		let dir = std::env::temp_dir().join(format!("ir-lower-test-{}-{}", std::process::id(), n));
 		std::fs::create_dir_all(&dir).unwrap();
 		let path = dir.join("main.pa");
 		std::fs::File::create(&path)
