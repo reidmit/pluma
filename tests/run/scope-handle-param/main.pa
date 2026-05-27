@@ -1,5 +1,5 @@
 # A scope handle can be passed to a helper function — its signature names the
-# param `manual-handle a` / `scope-handle`, and the handle methods dispatch
+# param `manual-scope-handle a` / `scope-handle`, and the handle methods dispatch
 # there just as they do inside the `scope` body. Previously a handle could only
 # be used where it was bound.
 use core.task
@@ -10,7 +10,7 @@ def sleeper = fun ms n {
 }
 
 # Takes a *manual* handle as a parameter and drains it, summing the successes.
-def drain-sum :: fun (manual-handle int) int -> task int = fun s acc {
+def drain-sum :: fun (manual-scope-handle int) int -> task int = fun s acc {
 	try got = s.next ()
 	when got is none { task.return acc }
 	is some r {

@@ -69,17 +69,22 @@ public enum task a {
 # constructors); the `scope` keyword hands you one inside the block. Its
 # methods: `s.spawn t` starts a task (of *any* type -- a fail-fast scope's
 # children are heterogeneous, awaited individually via `try`), `s.cancel ()`
-# cancels the scope, and `s.cancel-after d` arms a deadline. See ASYNC.md.
+# cancels the scope, and `s.cancel-after d` arms a deadline. There's no
+# `s.next` here (that would need one shared child type) -- see
+# `manual-scope-handle` for the queue-style drain. See ASYNC.md.
 public enum scope-handle {
 }
 
-# The handle bound by `manual scope as s`. Unlike `scope-handle`, it's
-# parameterized by its children's type `a`: a manual scope's children are
-# homogeneous, because you drain their completions one at a time with `s.next
-# ()` (which yields `some (result a e)` per completion, then `none`). That's
-# what `race` / `any` / `pool` are built on. Also supports `s.spawn t`,
-# `s.cancel ()`, `s.cancel-after d`. See ASYNC.md.
-public enum manual-handle a {
+# The handle bound by `manual scope as s` -- same runtime object as a
+# `scope-handle`, but the type carries the children's element type `a`. That
+# parameter exists for one reason: `s.next ()` drains completions one at a time
+# (yielding `some (result a e)` per completion, then `none`), so it needs a
+# single child type to return -- which is why a manual scope's children are
+# homogeneous, where a `scope-handle`'s are heterogeneous (awaited individually,
+# so no shared type is needed). That drain is what `race` / `any` / `pool` are
+# built on. Also supports `s.spawn t`, `s.cancel ()`, `s.cancel-after d`. See
+# ASYNC.md.
+public enum manual-scope-handle a {
 }
 
 # The answer to "how do these two compare?" -- `lt` (the first is

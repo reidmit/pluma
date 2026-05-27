@@ -49,11 +49,11 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
                                                                         body: [
                                                                             expr(8:31-8:40) :: task 't46 {
                                                                                 kind: call(8:31-8:40) {
-                                                                                    callee: expr(8:33-8:38) :: (manual-handle 't6) (task 't6) -> task 't6 {
+                                                                                    callee: expr(8:33-8:38) :: (manual-scope-handle 't6) (task 't6) -> task 't6 {
                                                                                         kind: namespace-access `task.manual-spawn`,
                                                                                     },
                                                                                     args: [
-                                                                                        expr(8:31-8:32) :: manual-handle 'y {
+                                                                                        expr(8:31-8:32) :: manual-scope-handle 'y {
                                                                                             kind: ident(8:31-8:32) `s`,
                                                                                         },
                                                                                         expr(8:39-8:40) :: task 't46 {
@@ -78,11 +78,11 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
                                                 ),
                                                 value: expr(9:14-9:23) :: task (option (result 't46 't10)) {
                                                     kind: call(9:14-9:23) {
-                                                        callee: expr(9:16-9:20) :: (manual-handle 't9) nothing -> task (option (result 't9 't10)) {
+                                                        callee: expr(9:16-9:20) :: (manual-scope-handle 't9) nothing -> task (option (result 't9 't10)) {
                                                             kind: namespace-access `task.manual-next`,
                                                         },
                                                         args: [
-                                                            expr(9:14-9:15) :: manual-handle 'y {
+                                                            expr(9:14-9:15) :: manual-scope-handle 'y {
                                                                 kind: ident(9:14-9:15) `s`,
                                                             },
                                                             expr(9:21-9:23) :: nothing {
@@ -94,11 +94,11 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
                                                 rest: [
                                                     expr(10:2-10:13) :: nothing {
                                                         kind: call(10:2-10:13) {
-                                                            callee: expr(10:4-10:10) :: (manual-handle 't13) nothing -> nothing {
+                                                            callee: expr(10:4-10:10) :: (manual-scope-handle 't13) nothing -> nothing {
                                                                 kind: namespace-access `task.manual-cancel`,
                                                             },
                                                             args: [
-                                                                expr(10:2-10:3) :: manual-handle 'y {
+                                                                expr(10:2-10:3) :: manual-scope-handle 'y {
                                                                     kind: ident(10:2-10:3) `s`,
                                                                 },
                                                                 expr(10:11-10:13) :: nothing {

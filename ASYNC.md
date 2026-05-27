@@ -712,7 +712,7 @@ idle). Two implementation notes that differ from the sketch above:
 
 - **Two handle *types*, not one.** The fail-fast `scope` binds an
   unparameterized `scope-handle` (its children are heterogeneous, awaited
-  individually); `manual scope` binds a `manual-handle a` parameterized by the
+  individually); `manual scope` binds a `manual-scope-handle a` parameterized by the
   homogeneous child type, so `s.next` is type-safe (`task (option (result a
   e))`). The runtime treats both as the same `Value::ScopeHandle`; only the
   static type differs. (`task-handle` was folded into `task` — `s.spawn`

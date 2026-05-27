@@ -336,10 +336,10 @@ pub fn scope_handle_type() -> Type {
 	Type::Enum("__prelude__.scope-handle".to_string(), vec![])
 }
 
-// The prelude `manual-handle a` type — bound by `manual scope as s`. Carries
-// the homogeneous child type `a` so `s.next` can return it.
-pub fn manual_handle_type(elem: Type) -> Type {
-	Type::Enum("__prelude__.manual-handle".to_string(), vec![elem])
+// The prelude `manual-scope-handle a` type — bound by `manual scope as s`.
+// Carries the homogeneous child type `a` so `s.next` can return it.
+pub fn manual_scope_handle_type(elem: Type) -> Type {
+	Type::Enum("__prelude__.manual-scope-handle".to_string(), vec![elem])
 }
 
 // Is `t` one of the scope-handle types? Used to seed a function parameter
@@ -348,7 +348,7 @@ pub fn manual_handle_type(elem: Type) -> Type {
 fn is_handle_type(t: &Type) -> bool {
 	matches!(
 		t,
-		Type::Enum(n, _) if n == "__prelude__.scope-handle" || n == "__prelude__.manual-handle"
+		Type::Enum(n, _) if n == "__prelude__.scope-handle" || n == "__prelude__.manual-scope-handle"
 	)
 }
 
@@ -2017,7 +2017,7 @@ impl<'compiler> Analyzer<'compiler> {
 	}
 
 	// If `name` is bound (in the current scopes) to a scope handle — a
-	// monomorphic `scope-handle` or `manual-handle a` — returns which kind.
+	// monomorphic `scope-handle` or `manual-scope-handle a` — returns which kind.
 	// `None` otherwise. (How `scope as NAME` / `manual scope as NAME` bind.)
 	fn handle_kind_of_binding(&mut self, name: &String) -> Option<HandleKind> {
 		match self.get_value_binding(name) {
@@ -2026,7 +2026,7 @@ impl<'compiler> Analyzer<'compiler> {
 				..
 			}) if vars.is_empty() && rows.is_empty() && classes.is_empty() => match n.as_str() {
 				"__prelude__.scope-handle" => Some(HandleKind::Scope),
-				"__prelude__.manual-handle" => Some(HandleKind::Manual),
+				"__prelude__.manual-scope-handle" => Some(HandleKind::Manual),
 				_ => None,
 			},
 			_ => None,
@@ -2730,9 +2730,9 @@ impl<'compiler> Analyzer<'compiler> {
 				if let Some(h) = &handle {
 					// Fail-fast `scope` binds an unparameterized `scope-handle`
 					// (heterogeneous children); `manual scope` binds a
-					// `manual-handle a` whose `a` is fixed by `s.spawn`/`s.next`.
+					// `manual-scope-handle a` whose `a` is fixed by `s.spawn`/`s.next`.
 					let handle_ty = if manual {
-						manual_handle_type(self.new_type_var())
+						manual_scope_handle_type(self.new_type_var())
 					} else {
 						scope_handle_type()
 					};

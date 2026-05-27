@@ -110,19 +110,19 @@ public def scope-cancel :: fun scope-handle nothing -> nothing = built-in "scope
 # under `task.with-timeout`.
 public def scope-cancel-after :: fun scope-handle duration -> nothing = built-in "scope-cancel-after"
 
-# The `manual-handle` counterparts of the above (a `manual scope as s` binds a
-# `manual-handle a`). Their runtime behavior is identical to the `scope-*`
-# forms -- they share the same `built-in` tags -- but the handle type is
-# parameterized by the children's type `a` (manual scopes are homogeneous), so
-# `manual-next` can return that type.
-public def manual-spawn :: fun (manual-handle a) (task a) -> task a = built-in "scope-spawn"
-public def manual-cancel :: fun (manual-handle a) nothing -> nothing = built-in "scope-cancel"
-public def manual-cancel-after :: fun (manual-handle a) duration -> nothing = built-in "scope-cancel-after"
+# The `manual-scope-handle` counterparts of the above (a `manual scope as s`
+# binds a `manual-scope-handle a`). Their runtime behavior is identical to the
+# `scope-*` forms -- they share the same `built-in` tags -- but the handle type
+# is parameterized by the children's type `a` (manual scopes are homogeneous),
+# so `manual-next` can return that type.
+public def manual-spawn :: fun (manual-scope-handle a) (task a) -> task a = built-in "scope-spawn"
+public def manual-cancel :: fun (manual-scope-handle a) nothing -> nothing = built-in "scope-cancel"
+public def manual-cancel-after :: fun (manual-scope-handle a) duration -> nothing = built-in "scope-cancel-after"
 
 # (Manual scopes.) Awaits the next child of `s` to settle: a task yielding
 # `some (ok v)` / `some (err e)` per completion, then `none` once every child
 # has been drained. The building block under `race` / `any` / `pool`.
-public def manual-next :: fun (manual-handle a) nothing -> task (option (result a e)) = built-in "scope-next"
+public def manual-next :: fun (manual-scope-handle a) nothing -> task (option (result a e)) = built-in "scope-next"
 
 # --- concurrent combinators ----------------------------------------------
 #
@@ -136,7 +136,7 @@ public def manual-next :: fun (manual-handle a) nothing -> task (option (result 
 # and `list.map` does the iteration. Draining a manual scope needs to call
 # `s.next` in a loop, which wants recursion -- so the loop lives in a private
 # top-level driver (`drain-any` / `gather`) that takes the handle `s` as a
-# parameter; its signature names the param `manual-handle a`, which is what lets
+# parameter; its signature names the param `manual-scope-handle a`, which is what lets
 # the method calls dispatch on a handle received as an argument.
 
 # Lifts a settled `result` back onto the task carrier: `ok v` becomes a task
@@ -202,7 +202,7 @@ public def race :: fun (list (task a)) -> task a = fun ts {
 # Drives `race`'s success-seeking cousin: pull settled children via `s.next`
 # and return the first success, cancelling the rest; skip failures; fail if the
 # scope drains with none.
-def drain-any :: fun (manual-handle a) -> task a = fun s {
+def drain-any :: fun (manual-scope-handle a) -> task a = fun s {
 	try got = s.next ()
 	when got is none { fail "any: all tasks failed" }
 	is some r {
@@ -240,7 +240,7 @@ public def with-timeout :: fun duration (task a) -> task a = fun d t {
 # Drives `pool`: each time a child settles, re-raise a failure (fail-fast) or
 # record the value and start one more from the backlog, until the scope drains.
 # `backlog` holds the not-yet-started tasks.
-def gather :: fun (manual-handle a) (ref (list (task a))) (list a) -> task (list a) = fun s backlog acc {
+def gather :: fun (manual-scope-handle a) (ref (list (task a))) (list a) -> task (list a) = fun s backlog acc {
 	try got = s.next ()
 	when got is none { return (list.reverse acc) }
 	is some r {
