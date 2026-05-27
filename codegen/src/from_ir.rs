@@ -7,18 +7,19 @@
 // (the VM's `base + slot` locals), not in the IR — `VarId`s become stack slots,
 // captures become `LoadCapture` indices.
 //
-// Phase 1.2, growing alongside `ir::lower`. Currently covers the node subset
-// the lowering produces for the vertical slice (literals, atoms, global refs,
-// closures, calls, returns); unsupported nodes return an `Err` rather than
-// emitting wrong bytecode, so coverage gaps surface loudly.
+// Phase 1.2, growing alongside `ir::lower`. Covers the node set the lowering
+// produces so far: literals/atoms, global refs, closures, calls, binary/unary
+// ops, dict-method dispatch, variant construction, structured control flow
+// (`If`/`Loop`/`Break`/`Continue`) and the pattern `Match`. Unsupported nodes
+// return an `Err` rather than emitting wrong bytecode, so gaps surface loudly.
 
 use std::collections::HashMap;
 use std::rc::Rc;
 
 use compiler::Range;
 use ir::{
-	Atom, BinOp, Block, Callee, Const, Function as IrFunction, GlobalInit, IrProgram, PreEval,
-	Rvalue, Stmt, VarId,
+	Atom, BinOp, Block, Callee, Const, FieldPat, Function as IrFunction, GlobalInit, IrProgram,
+	Pattern, PreEval, Rvalue, Stmt, VarId,
 };
 use vm::program::GlobalSlot;
 use vm::{Function, Instruction, Program, Value};
@@ -90,7 +91,7 @@ impl Emitter {
 	}
 
 	fn lower_function(&mut self, f: &IrFunction) -> Result<Function, String> {
-		let ctx = FnCtx::new(f);
+		let mut ctx = FnCtx::new(f);
 		let mut body = Vec::new();
 		let mut ranges = Vec::new();
 		ctx.lower_block(self, &f.body, &mut body, &mut ranges)?;
@@ -119,6 +120,15 @@ enum Loc {
 struct FnCtx {
 	locs: HashMap<u32, Loc>,
 	slot_count: u16,
+	// Active loop frames (innermost last): `start` is the loop-top instruction
+	// index (for `Continue`); `breaks` collects `Break` jump indices to patch
+	// to the loop exit.
+	loops: Vec<LoopFrame>,
+}
+
+struct LoopFrame {
+	start: u32,
+	breaks: Vec<u32>,
 }
 
 impl FnCtx {
@@ -135,9 +145,18 @@ impl FnCtx {
 		let mut ctx = FnCtx {
 			locs,
 			slot_count: slot,
+			loops: Vec::new(),
 		};
 		ctx.assign_let_slots(&f.body);
 		ctx
+	}
+
+	fn assign_slot(&mut self, v: VarId) {
+		if !self.locs.contains_key(&v.0) {
+			let s = self.slot_count;
+			self.slot_count += 1;
+			self.locs.insert(v.0, Loc::Local(s));
+		}
 	}
 
 	/// Pre-assign a local slot to every `let`-bound `VarId`, descending into
@@ -146,13 +165,7 @@ impl FnCtx {
 	fn assign_let_slots(&mut self, block: &Block) {
 		for stmt in &block.0 {
 			match stmt {
-				Stmt::Let(v, _) => {
-					if !self.locs.contains_key(&v.0) {
-						let s = self.slot_count;
-						self.slot_count += 1;
-						self.locs.insert(v.0, Loc::Local(s));
-					}
-				}
+				Stmt::Let(v, _) => self.assign_slot(*v),
 				Stmt::If(_, t, e) => {
 					self.assign_let_slots(t);
 					self.assign_let_slots(e);
@@ -164,6 +177,22 @@ impl FnCtx {
 					self.assign_let_slots(default);
 				}
 				Stmt::Loop(b) => self.assign_let_slots(b),
+				Stmt::Match { arms, .. } => {
+					for arm in arms {
+						match &arm.pattern {
+							Pattern::Bind(v) => self.assign_slot(*v),
+							Pattern::Variant { fields, .. } => {
+								for f in fields {
+									if let FieldPat::Bind(v) = f {
+										self.assign_slot(*v);
+									}
+								}
+							}
+							Pattern::Wildcard | Pattern::Literal(_) => {}
+						}
+						self.assign_let_slots(&arm.body);
+					}
+				}
 				_ => {}
 			}
 		}
@@ -184,7 +213,7 @@ impl FnCtx {
 	}
 
 	fn lower_block(
-		&self,
+		&mut self,
 		em: &mut Emitter,
 		block: &Block,
 		body: &mut Vec<Instruction>,
@@ -197,7 +226,7 @@ impl FnCtx {
 	}
 
 	fn lower_stmt(
-		&self,
+		&mut self,
 		em: &mut Emitter,
 		stmt: &Stmt,
 		body: &mut Vec<Instruction>,
@@ -217,9 +246,134 @@ impl FnCtx {
 				self.lower_atom(em, atom, body, ranges)?;
 				push(body, ranges, Instruction::Return);
 			}
+			Stmt::If(cond, then_b, else_b) => {
+				self.lower_atom(em, cond, body, ranges)?;
+				let jf = emit_at(body, ranges, Instruction::JumpIfFalse(0));
+				self.lower_block(em, then_b, body, ranges)?;
+				let j_end = emit_at(body, ranges, Instruction::Jump(0));
+				let else_start = body.len() as u32;
+				patch(body, jf, else_start);
+				self.lower_block(em, else_b, body, ranges)?;
+				let end = body.len() as u32;
+				patch(body, j_end, end);
+			}
+			Stmt::Loop(b) => {
+				let start = body.len() as u32;
+				self.loops.push(LoopFrame {
+					start,
+					breaks: Vec::new(),
+				});
+				self.lower_block(em, b, body, ranges)?;
+				push(body, ranges, Instruction::Jump(start));
+				let frame = self.loops.pop().expect("loop frame");
+				let end = body.len() as u32;
+				for bj in frame.breaks {
+					patch(body, bj, end);
+				}
+			}
+			Stmt::Break => {
+				let j = emit_at(body, ranges, Instruction::Jump(0));
+				self
+					.loops
+					.last_mut()
+					.ok_or("from_ir: break outside loop")?
+					.breaks
+					.push(j);
+			}
+			Stmt::Continue => {
+				let start = self
+					.loops
+					.last()
+					.ok_or("from_ir: continue outside loop")?
+					.start;
+				push(body, ranges, Instruction::Jump(start));
+			}
+			Stmt::Match { subject, arms } => {
+				let mut end_jumps = Vec::new();
+				for arm in arms {
+					self.lower_atom(em, subject, body, ranges)?;
+					let fails = self.emit_pattern(em, &arm.pattern, body, ranges)?;
+					self.lower_block(em, &arm.body, body, ranges)?;
+					end_jumps.push(emit_at(body, ranges, Instruction::Jump(0)));
+					let next = body.len() as u32;
+					for f in fails {
+						patch(body, f, next);
+					}
+				}
+				let end = body.len() as u32;
+				for j in end_jumps {
+					patch(body, j, end);
+				}
+			}
 			other => return Err(format!("from_ir: unsupported statement: {other:?}")),
 		}
 		Ok(())
+	}
+
+	/// Emit the match test for `pattern` against the subject currently on top
+	/// of the stack. Returns the indices of any fail-jump instructions (to be
+	/// patched to the next arm). On a successful variant match the payload is
+	/// bound/popped; `Wildcard`/`Bind` always succeed (no fail jump).
+	fn emit_pattern(
+		&self,
+		em: &mut Emitter,
+		pattern: &Pattern,
+		body: &mut Vec<Instruction>,
+		ranges: &mut Vec<Range>,
+	) -> Result<Vec<u32>, String> {
+		match pattern {
+			Pattern::Wildcard => {
+				push(body, ranges, Instruction::Pop);
+				Ok(Vec::new())
+			}
+			Pattern::Bind(v) => {
+				push(body, ranges, Instruction::StoreLocal(self.local_slot(*v)?));
+				Ok(Vec::new())
+			}
+			Pattern::Literal(c) => {
+				let jmp = match c {
+					Const::Int(n) => emit_at(body, ranges, Instruction::MatchInt(*n, 0)),
+					Const::Bool(b) => emit_at(body, ranges, Instruction::MatchBool(*b, 0)),
+					Const::Float(f) => emit_at(body, ranges, Instruction::MatchFloat(*f, 0)),
+					Const::Str(s) => {
+						let idx = em.intern(s);
+						emit_at(body, ranges, Instruction::MatchString(idx, 0))
+					}
+					Const::Bytes(b) => {
+						let idx = em.intern_bytes(b);
+						emit_at(body, ranges, Instruction::MatchBytes(idx, 0))
+					}
+					Const::Unit => emit_at(body, ranges, Instruction::MatchNothing(0)),
+				};
+				Ok(vec![jmp])
+			}
+			Pattern::Variant { variant, fields } => {
+				let v = em.intern(variant);
+				let jmp = emit_at(
+					body,
+					ranges,
+					Instruction::MatchVariant {
+						variant: v,
+						arity: fields.len() as u16,
+						on_fail: 0,
+					},
+				);
+				// Payload is pushed last-on-top, so bind/pop in reverse.
+				for fp in fields.iter().rev() {
+					match fp {
+						FieldPat::Bind(var) => {
+							push(
+								body,
+								ranges,
+								Instruction::StoreLocal(self.local_slot(*var)?),
+							);
+						}
+						FieldPat::Wildcard => push(body, ranges, Instruction::Pop),
+					}
+				}
+				Ok(vec![jmp])
+			}
+		}
 	}
 
 	fn lower_rvalue(
@@ -350,6 +504,29 @@ impl FnCtx {
 fn push(body: &mut Vec<Instruction>, ranges: &mut Vec<Range>, instr: Instruction) {
 	body.push(instr);
 	ranges.push(Range::collapsed(0, 0));
+}
+
+/// Push an instruction and return its index (for later jump patching).
+fn emit_at(body: &mut Vec<Instruction>, ranges: &mut Vec<Range>, instr: Instruction) -> u32 {
+	let idx = body.len() as u32;
+	push(body, ranges, instr);
+	idx
+}
+
+/// Patch the target offset of a jump-like instruction.
+fn patch(body: &mut [Instruction], idx: u32, target: u32) {
+	match &mut body[idx as usize] {
+		Instruction::Jump(o)
+		| Instruction::JumpIfFalse(o)
+		| Instruction::MatchInt(_, o)
+		| Instruction::MatchFloat(_, o)
+		| Instruction::MatchString(_, o)
+		| Instruction::MatchBytes(_, o)
+		| Instruction::MatchBool(_, o)
+		| Instruction::MatchNothing(o)
+		| Instruction::MatchVariant { on_fail: o, .. } => *o = target,
+		other => panic!("from_ir patch: not a jump-like instruction: {other:?}"),
+	}
 }
 
 fn binop_instr(op: BinOp) -> Instruction {

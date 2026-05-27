@@ -10,19 +10,22 @@
 //   * async marking (`Function::is_async` + `Await`)
 //
 // Phase 1.1 ports that elaboration here, function-by-function. Ported so far:
-// the two standalone pre-passes (enum table + global reservation) and an
-// expr walk covering the "easy" forms — literals, identifiers (local /
-// capture / global), calls, `fun` (with closure conversion), and `let`. Forms
-// not yet handled (`when`, `if`, trait dispatch, variant construction, async,
-// records, ...) cause the *enclosing def* to be lowered as a poison thunk
-// (returns `nothing`) rather than failing the whole program: a def whose
-// executed paths only touch supported forms runs correctly, so coverage grows
-// fixture-by-fixture. `lower` is not yet wired into `codegen` as the default.
+// the two standalone pre-passes (enum table + global reservation); literals,
+// identifiers (local / capture / global), calls, `fun` (closure conversion),
+// `let`; operators (direct opcodes + trait dispatch via method dictionaries);
+// nullary variant construction; and control flow (`if`/`when`/`while` via a
+// pattern `Match`, supporting literal / nullary-variant / simple-payload
+// patterns). Forms not yet handled (variant constructors with payload, records,
+// tuples, lists, interpolation, trait instances, `defer`, async, ...) cause the
+// *enclosing def* to be lowered as a poison thunk (returns `nothing`) rather
+// than failing the whole program: a def whose executed paths only touch
+// supported forms runs correctly, so coverage grows fixture-by-fixture. `lower`
+// is not yet wired into `codegen` as the default.
 
 use crate::types::*;
 use compiler::ast::{
-	DefinitionKind, ExprKind, ExprNode, FunNode, LetNode, LiteralKind, ModuleNode, Operator,
-	PatternKind,
+	DefinitionKind, ExprKind, ExprNode, FunNode, IfNode, LetNode, LiteralKind, ModuleNode, Operator,
+	PatternKind, PatternNode, WhenNode, WhileNode,
 };
 use compiler::types::Type;
 use compiler::Compiler;
@@ -247,6 +250,9 @@ impl<'a> Lowerer<'a> {
 			ExprKind::UnaryOperation { op, right } => {
 				self.lower_unary(expr.trait_dispatch.as_ref(), op, right)
 			}
+			ExprKind::If(n) => self.lower_if(n),
+			ExprKind::When(n) => self.lower_when(n),
+			ExprKind::While(n) => self.lower_while(n),
 			other => Err(format!("unsupported expr: {}", expr_kind_name(other))),
 		}
 	}
@@ -450,6 +456,195 @@ impl<'a> Lowerer<'a> {
 			args.push(self.lower_expr(a)?);
 		}
 		Ok(self.emit_let(Rvalue::CallClosure(callee_atom, args)))
+	}
+
+	// ---- control flow ---------------------------------------------------
+
+	/// `if subject is pattern { body } [else { else_body }]`. Lowers to a
+	/// `Match`: the pattern arm, plus a wildcard `else` arm when present. The
+	/// result lives in a fresh var (defaulting to `nothing` — which is exactly
+	/// the value of an `else`-less `if`, since its body value is discarded).
+	fn lower_if(&mut self, n: &IfNode) -> Result<Atom, String> {
+		let subject = self.lower_expr(&n.subject)?;
+		let result = self.alloc_var();
+		let has_else = n.else_body.is_some();
+
+		let mark = self.cur().locals.len();
+		let pattern = self.lower_pattern(&n.pattern, &n.subject.ty)?;
+		let body = self.lower_block_of(&n.body, if has_else { Some(result) } else { None })?;
+		self.cur().locals.truncate(mark);
+		let mut arms = vec![MatchArm { pattern, body }];
+
+		if let Some(else_body) = &n.else_body {
+			let else_block = self.lower_block_of(else_body, Some(result))?;
+			arms.push(MatchArm {
+				pattern: Pattern::Wildcard,
+				body: else_block,
+			});
+		}
+		self.cur().stmts.push(Stmt::Match { subject, arms });
+		Ok(Atom::Var(result))
+	}
+
+	/// `when subject is p1 { b1 } is p2 { b2 } ...`. Each case is a match arm;
+	/// the arm bodies all write the shared result var.
+	fn lower_when(&mut self, n: &WhenNode) -> Result<Atom, String> {
+		let subject = self.lower_expr(&n.subject)?;
+		let result = self.alloc_var();
+		let mut arms = Vec::with_capacity(n.cases.len());
+		for case in &n.cases {
+			let mark = self.cur().locals.len();
+			let pattern = self.lower_pattern(&case.pattern, &n.subject.ty)?;
+			let body = self.lower_block_of(&case.body, Some(result))?;
+			self.cur().locals.truncate(mark);
+			arms.push(MatchArm { pattern, body });
+		}
+		self.cur().stmts.push(Stmt::Match { subject, arms });
+		Ok(Atom::Var(result))
+	}
+
+	/// `while subject is pattern { body }`. A `Loop` that re-evaluates the
+	/// subject each iteration and matches it: on match, run the body and
+	/// continue; otherwise break. Evaluates to `nothing`.
+	fn lower_while(&mut self, n: &WhileNode) -> Result<Atom, String> {
+		let saved = self.take_stmts();
+		let res = self.lower_while_body(n);
+		let loop_stmts = self.restore_stmts(saved);
+		res?;
+		self.cur().stmts.push(Stmt::Loop(Block(loop_stmts)));
+		Ok(Atom::Const(Const::Unit))
+	}
+
+	fn lower_while_body(&mut self, n: &WhileNode) -> Result<(), String> {
+		let subject = self.lower_expr(&n.subject)?;
+		let mark = self.cur().locals.len();
+		let pattern = self.lower_pattern(&n.pattern, &n.subject.ty)?;
+		let mut matched = self.lower_block_of(&n.body, None)?;
+		matched.0.push(Stmt::Continue);
+		self.cur().locals.truncate(mark);
+		let arms = vec![
+			MatchArm {
+				pattern,
+				body: matched,
+			},
+			MatchArm {
+				pattern: Pattern::Wildcard,
+				body: Block(vec![Stmt::Break]),
+			},
+		];
+		self.cur().stmts.push(Stmt::Match { subject, arms });
+		Ok(())
+	}
+
+	/// Lower a body (sequence of statements) into its own `Block`, redirecting
+	/// emitted statements into a fresh buffer. If `result` is `Some`, the
+	/// body's last value is assigned to it; otherwise the body runs for effects.
+	fn lower_block_of(&mut self, body: &[ExprNode], result: Option<VarId>) -> Result<Block, String> {
+		let saved = self.take_stmts();
+		let res = self.lower_stmts_into(body, result);
+		let stmts = self.restore_stmts(saved);
+		res?;
+		Ok(Block(stmts))
+	}
+
+	fn lower_stmts_into(&mut self, body: &[ExprNode], result: Option<VarId>) -> Result<(), String> {
+		let assign = |s: &mut Self, atom: Atom| {
+			if let Some(r) = result {
+				s.cur().stmts.push(Stmt::Let(r, Rvalue::Use(atom)));
+			}
+		};
+		if body.is_empty() {
+			assign(self, Atom::Const(Const::Unit));
+			return Ok(());
+		}
+		let last = body.len() - 1;
+		for (i, e) in body.iter().enumerate() {
+			if let ExprKind::Let(let_node) = &e.kind {
+				self.lower_let(let_node)?;
+				if i == last {
+					assign(self, Atom::Const(Const::Unit));
+				}
+			} else {
+				let atom = self.lower_expr(e)?;
+				if i == last {
+					assign(self, atom);
+				}
+			}
+		}
+		Ok(())
+	}
+
+	fn take_stmts(&mut self) -> Vec<Stmt> {
+		std::mem::take(&mut self.cur().stmts)
+	}
+
+	fn restore_stmts(&mut self, saved: Vec<Stmt>) -> Vec<Stmt> {
+		std::mem::replace(&mut self.cur().stmts, saved)
+	}
+
+	// ---- patterns -------------------------------------------------------
+
+	fn lower_pattern(&mut self, pat: &PatternNode, subject_ty: &Type) -> Result<Pattern, String> {
+		match &pat.kind {
+			PatternKind::Underscore => Ok(Pattern::Wildcard),
+			PatternKind::Identifier(id) => {
+				// A bare identifier is a nullary-variant match when it names one
+				// of the subject enum's nullary variants; `true`/`false` match a
+				// bool; otherwise it's an irrefutable binding.
+				if let Type::Enum(qualified, _) = subject_ty {
+					let is_variant = self
+						.enums
+						.get(qualified)
+						.map_or(false, |vs| vs.iter().any(|(n, a)| n == &id.name && *a == 0));
+					if is_variant {
+						return Ok(Pattern::Variant {
+							variant: id.name.clone(),
+							fields: Vec::new(),
+						});
+					}
+				}
+				if matches!(subject_ty, Type::Bool) && (id.name == "true" || id.name == "false") {
+					return Ok(Pattern::Literal(Const::Bool(id.name == "true")));
+				}
+				let v = self.alloc_var();
+				self.cur().locals.push((id.name.clone(), v));
+				Ok(Pattern::Bind(v))
+			}
+			PatternKind::Literal(lit) => Ok(Pattern::Literal(literal_to_const(&lit.kind)?)),
+			PatternKind::Constructor(variant, subs) => {
+				let mut fields = Vec::with_capacity(subs.len());
+				for sub in subs {
+					fields.push(self.lower_field_pattern(sub)?);
+				}
+				Ok(Pattern::Variant {
+					variant: variant.name.clone(),
+					fields,
+				})
+			}
+			_ => Err("tuple / record / list pattern not yet supported".to_string()),
+		}
+	}
+
+	/// A variant payload sub-pattern. Only simple binds and `_` are supported;
+	/// a nested pattern (or an identifier that names a nullary variant, which
+	/// would be a nested match rather than a binding) poisons the def.
+	fn lower_field_pattern(&mut self, sub: &PatternNode) -> Result<FieldPat, String> {
+		match &sub.kind {
+			PatternKind::Underscore => Ok(FieldPat::Wildcard),
+			PatternKind::Identifier(id) => {
+				let names_variant = self
+					.enums
+					.values()
+					.any(|vs| vs.iter().any(|(n, a)| n == &id.name && *a == 0));
+				if names_variant {
+					return Err("nested nullary-variant sub-pattern not yet supported".to_string());
+				}
+				let v = self.alloc_var();
+				self.cur().locals.push((id.name.clone(), v));
+				Ok(FieldPat::Bind(v))
+			}
+			_ => Err("nested sub-pattern not yet supported".to_string()),
+		}
 	}
 
 	fn lower_fun(&mut self, fun: &FunNode) -> Result<Atom, String> {

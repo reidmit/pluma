@@ -115,6 +115,16 @@ pub enum Stmt {
 		arms: Vec<(i64, Block)>,
 		default: Box<Block>,
 	},
+	/// Pattern match on `subject`: the first arm whose pattern matches runs.
+	/// Arms are tried in order; if none match, control falls through (the IR
+	/// for `when`/`if` arranges a result default of `nothing`, matching the VM).
+	/// Kept at the pattern level (rather than pre-compiled to `Switch`) so each
+	/// backend chooses its own compilation; a decision-tree IR->IR pass can
+	/// rewrite it later.
+	Match {
+		subject: Atom,
+		arms: Vec<MatchArm>,
+	},
 	/// Structured loop; exits via `Break`, iterates via `Continue`.
 	Loop(Block),
 	Break,
@@ -125,6 +135,39 @@ pub enum Stmt {
 	Discard(Rvalue),
 	/// Run a previously-scheduled `defer` cleanup. Emitted on each exit edge.
 	RunDefer(DeferId),
+}
+
+/// One arm of a `Match`: a pattern and the block to run on a match.
+#[derive(Debug, Clone)]
+pub struct MatchArm {
+	pub pattern: Pattern,
+	pub body: Block,
+}
+
+/// A match pattern. Deliberately small for now — literals, enum variants with
+/// simple (bind/ignore) payload fields, an irrefutable binding, and the
+/// catch-all wildcard. Nested, tuple, record, and list patterns aren't lowered
+/// yet (the enclosing def is poisoned instead).
+#[derive(Debug, Clone)]
+pub enum Pattern {
+	/// Matches anything, binds nothing (`_`, or the `else` arm).
+	Wildcard,
+	/// Matches anything, binds the subject to a variable.
+	Bind(VarId),
+	/// Matches a constant by value.
+	Literal(Const),
+	/// Matches an enum variant by name; each payload field is bound or ignored.
+	Variant {
+		variant: String,
+		fields: Vec<FieldPat>,
+	},
+}
+
+/// A variant payload sub-pattern (only simple binds/ignores so far).
+#[derive(Debug, Clone)]
+pub enum FieldPat {
+	Bind(VarId),
+	Wildcard,
 }
 
 /// A trivially-evaluable operand: a variable or an inline constant. Atoms have
