@@ -1,16 +1,24 @@
 # ASYNC.md
 
 Design and implementation plan for Pluma's concurrency story: the
-`task a` type, structured concurrency via `scope`/`spawn`, cooperative
-cancellation, and `with` blocks for resource cleanup. **None of this is
-implemented yet — this is the design of record for unbuilt work.**
+`task a` type, structured concurrency via `scope` / `manual scope`,
+cooperative cancellation, and `defer` for resource cleanup. **None of
+this is implemented yet — this is the design of record for unbuilt
+work.**
 
 It builds on the `try` chaining mechanism, which already ships for
 `result` and `option`. `try` is a built-in form that dispatches over a
 fixed carrier set; `task` becomes a third carrier (add a `task.then`
 and a dispatch-table row), so the `try` syntax works unchanged for
-async. There is no `thenable` typeclass — that was an earlier design
-that was dropped in favor of the built-in form.
+async — awaiting adds **no new grammar**. There is no `thenable`
+typeclass — that was an earlier design that was dropped in favor of
+the built-in form.
+
+The entire feature adds exactly **one** new grammar production — the
+`scope` block — plus the small `defer` statement for cleanup.
+Everything else (awaiting, cancellation, timeouts, the concurrent
+combinators) is the existing `try` form, methods on the scope handle,
+or auto-imported `core.task` library functions.
 
 Read top-to-bottom for the design; jump to "Implementation phases" to
 execute.
@@ -43,7 +51,7 @@ Things we deliberately do NOT include:
   None of it. Single-threaded means none of the multi-threaded
   coordination primitives exist.
 - **`async`/`await` keywords.** `task a` is a regular type; `try` over
-  it is the existing thenable sugar; suspension is the codegen's
+  it is the existing `try`-carrier sugar; suspension is the codegen's
   problem, not the surface's. No function-color marker in the
   signature beyond the return type itself.
 - **A web framework, view layer, HTTP server, or runtime-bundled
@@ -67,13 +75,43 @@ Tasks are *cold* by default — creating a task value doesn't start it.
 A task starts when it's awaited via `try`/`then`, when it's spawned
 into a scope, or when explicitly started via `task.start`.
 
+Tasks are also **re-runnable**: a `task a` is a *recipe*, not a result.
+Operationally it's a thunk — a closure that builds a *fresh*
+computation each time it's run (in the CPS model, the value is a
+factory for state-machine instances). Awaiting or spawning the same
+task value twice runs it twice — re-doing any side effects:
+
+```pluma
+let t = io.write-file path data
+try _ = t   ; writes once
+try _ = t   ; writes again — t is a recipe, not "the result"
+```
+
+This is what lets `retry`/`repeat`/polling take a plain `task` instead
+of forcing callers to wrap in a `fun { ... }` thunk. To run-once and
+share the result, opt in with `task.once :: fun (task a) -> task a`
+(the JS-Promise behaviour, made explicit). Re-runnable is the strictly
+more expressive default — you can always derive memoized from it, but
+not the reverse — and it's consistent with the other two `try`
+carriers (`option`/`result` values are likewise re-usable).
+
+**`task` vs `task-handle`.** The recipe/instance split is the key
+distinction:
+
+- A **`task a`** is the re-runnable recipe (≈ a thunk `() => work`).
+- A **`task-handle a`**, returned by `s.spawn`, is one specific
+  *running instance* (≈ a started JS promise). Awaiting a handle twice
+  yields the same cached result — the run already happened.
+
+So `retry` re-runs a *task*; within one run you await *handles*.
+
 ### `try` over `task`
 
 `task` becomes a third `try` carrier alongside `result` and `option`,
 so the existing `try` syntax works:
 
 ```pluma
-def fetch-dashboard fun user-id {
+def fetch-dashboard = fun user-id {
     try user    = http.get "/users/$(user-id)"
     try posts   = http.get "/users/$(user-id)/posts"
     try friends = http.get "/users/$(user-id)/friends"
@@ -88,147 +126,134 @@ concurrent fetches, see "Concurrent composition" below.
 ### `scope` — structured concurrency
 
 A `scope` is a region of code that owns a set of tasks. A scope can't
-exit until every task it owns has either completed or been cancelled.
-Cancelling the scope cancels every task it owns, recursively.
+exit until every task it owns has either completed or been cancelled —
+this is the *structural guarantee*, and it holds for both scope forms
+below. Cancelling the scope cancels every task it owns, recursively.
 
 ```pluma
-def fetch-all fun ids {
-    scope s {
-        let handles = list.map ids fun id {
-            s.spawn (http.get "/users/$(id)")
-        }
-        task.all handles
+def fetch-all = fun ids {
+    scope as s {
+        let handles = list.map ids (fun id { s.spawn (http.get "/users/$(id)") })
+        await-all handles
     }
     ; by the time the scope exits, every spawned task is done or cancelled
 }
 ```
 
-Inside the scope body, `s` is a scope handle. `s.spawn t` adds task
-`t` to the scope and returns a `task-handle a` you can await later.
-The scope's body itself can use `try` freely.
+Inside the scope body, `s` (bound by `scope as s`) is the scope handle.
+The handle's operations are **methods on `s`** — not free functions,
+not module calls:
 
-Sibling cancellation policy: if any spawned task fails (errors, or its
-own scope is cancelled), the parent scope cancels its other children
-by default. This is configurable per scope.
+| method | meaning |
+|---|---|
+| `s.spawn t` | start task `t` in the scope; returns a `task-handle a` (hot — already running) |
+| `s.next` | (manual scope only) await the next child to settle: `task (option (result a))` |
+| `s.cancel` | cancel this scope and all its children |
+| `s.cancel-after d` | arm a deadline — self-cancel after duration `d` |
+
+They are methods because `scope` is a keyword, so there's no `scope.`
+module namespace to hang a `scope.cancel` off of (see "Module and
+prelude structure"). The scope body itself can use `try` freely.
+
+#### Two scope forms: `scope` and `manual scope`
+
+The everyday form is **`scope`** — *fail-fast*. The building-block form
+is **`manual scope`**. They share the structural guarantee
+(exiting cancels any still-running children) and differ in exactly one
+thing:
+
+> **Does an *unobserved* mid-flight child failure trigger a prompt
+> background cancel of its siblings?** `scope`: yes. `manual scope`:
+> no — you are expected to be draining completions yourself via
+> `s.next`.
+
+- **`scope`** (fail-fast) is the safe human default. A child crashing
+  promptly cancels its siblings and the failure propagates out as the
+  scope's value. This is what 95% of hand-written scopes — and the
+  `all` / `both` combinators — want.
+- **`manual scope`** never background-cancels on failure. You
+  spawn into it, pull completions one at a time with `s.next`, and
+  decide what to do. It's the building block under `race` / `any` /
+  `pool`. A `manual scope` must bind a handle (`manual scope as s`) —
+  an anonymous one is useless, since you couldn't drain it.
+
+#### Why two forms and not a policy matrix
+
+The space of "what happens when a child finishes" is a 2×2 — on-fail ∈
+{stop, keep} × on-success ∈ {stop, wait} — and it is exactly JS's four
+combinators:
+
+| | on-fail: stop | on-fail: keep |
+|---|---|---|
+| **on-success: wait** | `all` | `allSettled` |
+| **on-success: stop** | `race` | `any` |
+
+We deliberately **do not** expose this as scope configuration, because
+the two axes live at different levels and collapse cleanly:
+
+- **The on-fail axis is a property of a *task*, not the scope.** "Keep
+  going when this fails" just means "this task doesn't fail" — reify
+  the failure into the value channel with
+  `task.attempt :: fun (task a) -> task (result a e)`. So `allSettled`
+  is just `all` of `attempt`-wrapped tasks. The whole *on-fail: keep*
+  column is one task combinator, no scope knob.
+- **The on-success axis is genuinely scope-level** — "first one wins,
+  cancel the rest" is a statement about siblings that only the scope
+  can act on — and it's precisely what `manual scope` + `s.next`
+  provide.
+
+So the matrix becomes: fail-fast `scope` (the `all` cell) + `attempt`
+(the failure axis) + `manual scope` / `s.next` (the success axis). No
+config bag.
 
 ### Cooperative cancellation
 
 A task observes cancellation at its next suspension point (any
 `try`/`then`, any explicit `task.yield`). When cancelled, the task's
-continuation is dropped and its `with` cleanups run.
+continuation is dropped and its `defer` cleanups run.
 
 Cancellation propagates *through scopes*, not through individual tasks.
 There's no `cancel-token` to thread through every function signature
 — the scope is the token, implicit in the call graph.
 
-Three things trigger cancellation:
+Four things trigger cancellation:
 
-- **Explicit:** `scope.cancel s` from inside the scope or from a parent.
-- **Sibling failure:** another task in the same scope fails (configurable).
+- **Explicit:** `s.cancel` from inside the scope, or from a parent.
+- **Sibling failure:** in a fail-fast `scope`, another child failing
+  cancels the rest (see above). A `manual scope` does *not* do this.
 - **Parent cancellation:** the parent scope is cancelled.
+- **Deadline:** the scope was armed with `s.cancel-after d` (directly,
+  or by `task.with-timeout`) and the duration elapsed.
 
 A task that's been cancelled does *not* observe an `err` value — the
 cancellation is structural, not in-band. The scope reports the
 cancellation; individual `task a` values just stop producing.
 
-### `with` blocks for resource cleanup
+A region that must survive cancellation (typically cleanup) can be run
+uninterruptibly via the `task.shielded` combinator — see "`defer`".
 
-A new statement form. `with x = acquire { body }` runs `acquire`,
-binds the result to `x`, runs `body`, and runs the resource's cleanup
-when the block exits — whether by success, error, or cancellation.
+### `defer` — resource cleanup
 
-```pluma
-def read-config fun path {
-    with f = io.open path {
-        try contents = io.read-all f
-        parse contents
-    }
-    ; f is closed here, even if read-all errored or we got cancelled
-}
-```
-
-Cleanup is dispatched through a `disposable` trait:
+**Decision: `defer`** (Go / Zig / Swift style), settled over the two
+alternatives recorded at the end of this section. `defer expr`
+schedules `expr` to run when the enclosing function body exits — by
+*any* path: normal return, failure, or cancellation.
 
 ```pluma
-def disposable trait a {
-    dispose :: fun a -> task nothing
-}
-
-for disposable on file-handle {
-    def dispose f { io.close f }
-}
-```
-
-Any type with a `disposable` instance can be used in `with`. Stdlib
-provides instances for file handles, network connections, and so on.
-Users can add their own.
-
-Multiple `with` bindings in one block nest left-to-right, with
-cleanups running in reverse order (LIFO):
-
-```pluma
-with f = io.open "a.txt"
-with g = io.open "b.txt" {
-    try a = io.read-all f
-    try b = io.read-all g
-    ok (a, b)
-}
-; cleanup order: g closes first, then f
-```
-
-### Design alternatives for resource cleanup
-
-**Status: undecided.** The `with`/`disposable` design above is Option
-A — the current sketch — but two alternatives are worth keeping in
-view. Captured here so the tradeoffs are visible when we pick. All
-three rely on the same underlying runtime hook (a per-task cleanup
-stack that gets walked on success, error, or cancellation); they
-differ only in the surface a user writes.
-
-**Option B — higher-order library helpers.** No new syntax; cleanup
-helpers are just functions built on a `runtime.defer-cleanup`
-primitive.
-
-```pluma
-; single resource — same shape as `with`, no grammar addition
-def read-config fun path {
-    io.with-file path fun f {
-        try contents = io.read-all f
-        parse contents
-    }
-}
-
-; two resources — indent staircase
-def diff-files fun (a, b) {
-    io.with-file a fun fa {
-        io.with-file b fun fb {
-            try xa = io.read-all fa
-            try xb = io.read-all fb
-            ok (compute-diff xa xb)
-        }
-    }
-}
-
-; user-defined helpers: just write a wrapper
-def with-pool fun body {
-    let p = pool.new ()
-    runtime.defer-cleanup fun { pool.drain p }
-    body p
-}
-```
-
-**Option C — `defer` statement (Go / Zig style).** One small grammar
-addition; no trait, no helpers required.
-
-```pluma
-def read-config fun path {
+def read-config = fun path {
     let f = io.open path
     defer io.close f
     try contents = io.read-all f
     parse contents
 }
+; f is closed here on every path — success, error, or cancellation
+```
 
-def diff-files fun (a, b) {
+Multiple `defer`s run in reverse order (LIFO), so acquire/release nest
+correctly even across *heterogeneous* resources:
+
+```pluma
+def diff-files = fun a b {
     let fa = io.open a
     defer io.close fa
     let fb = io.open b
@@ -237,120 +262,197 @@ def diff-files fun (a, b) {
     try xb = io.read-all fb
     ok (compute-diff xa xb)
 }
-
-; user-defined cleanup: nothing special, just defer the call
-let p = pool.new ()
-defer pool.drain p
-try x = pool.borrow p
-use x
+; cleanup order: fb closes first, then fa
 ```
 
-**Comparison:**
+`defer` shines on the cases the alternatives fumble:
 
-| Scenario | A: `with` | B: helpers | C: `defer` |
-|---|---|---|---|
-| 1 resource | clean | clean | clean |
-| N resources | flat, ordered | indent staircase | flat |
-| Pair acquire + release visually | yes | yes | weak (two adjacent lines, easy to forget the `defer`) |
-| User-defined cleanup | needs `disposable` instance | needs a wrapper helper | nothing — just `defer` the call |
-| Conditional acquire (e.g. only if `--log`) | awkward (no else story) | awkward (splits control flow) | trivial (`defer` after the `if`) |
-| Cleanup runs on cancellation | yes | yes | yes |
-| New grammar | `with` + multi-`with` block rule | none | one statement form |
-| New trait | `disposable` (method returns `task`) | none | none |
+- **Heterogeneous resources:** each gets its own `defer`, flat — no
+  indent staircase.
+- **Conditional acquisition:** a `defer` after an `if` is trivial;
+  there's no "else" puzzle.
+- **User-defined cleanup:** nothing special — `defer pool.drain p`. No
+  trait to implement, no wrapper helper to write.
 
-**Current lean: Option C (`defer`).** Smallest grammar addition, no
-new trait, wins on heterogeneous and conditional resources. The
-weakness vs. Option A is that nothing forces you to write the
-`defer` — `let f = io.open path` with no follow-up compiles fine.
-With Option A, forgetting cleanup is structurally impossible. If we
-want syntactic enforcement of cleanup, A wins; otherwise C is
-cheaper. Option B is the fallback if we don't want to add *any*
-syntax for this at all.
+If a deferred expression returns a `task` (e.g. an async `io.close`),
+the cleanup is awaited; the per-task cleanup stack runs the chain on
+the way out. Cleanup during cancellation runs **uninterruptibly** by
+default — a parent cancel won't abort an in-progress cleanup. Wrap a
+region in `task.shielded` if you need to extend that guarantee
+explicitly.
+
+**Anchoring:** `defer` is tied to the enclosing **function** body
+(Go's model), not the nearest block — the most familiar and
+predictable choice. (Block-vs-function anchoring is the one sub-detail
+to confirm at implementation time.)
+
+**Runtime:** `defer expr` pushes a cleanup thunk onto the task's
+cleanup stack at the point the `defer` executes; the stack is walked
+LIFO on success, error, and cancellation. This is the same shared
+runtime hook all three candidate surfaces would have used.
+
+#### Alternatives considered (rejected)
+
+- **`with x = acquire { body }` + a `disposable` trait.** Makes
+  forgetting cleanup structurally impossible, but costs new grammar
+  (the with-binding *plus* a multi-`with` block-nesting rule) *and* a
+  new trait, and still fumbles conditional/heterogeneous resources.
+  Rejected: too much surface for the enforcement win, and against the
+  minimal-grammar grain of the rest of this design.
+- **Library helpers over a `runtime.defer-cleanup` primitive** (e.g.
+  `io.with-file path (fun f { ... })`). Zero grammar, but produces an
+  indent staircase for multiple resources, is awkward for conditional
+  acquisition, and exposes `runtime.defer-cleanup` to users anyway.
+  Rejected: `defer` is barely more grammar and far more ergonomic.
+
+`defer` won because it's one tiny statement (no trait, no new type),
+maximally familiar, and the only option that stays flat across
+heterogeneous and conditional resources. Its sole weakness — nothing
+*forces* you to write the `defer` — is the price of not adding the
+heavier `with` machinery.
 
 ### Concurrent composition
 
-`try` chains are sequential. For concurrent composition, stdlib
-provides combinators:
+`try` chains are sequential. Concurrent composition is **library code**
+over the primitive kernel below — not new language primitives:
 
 ```pluma
 ; run two tasks in parallel, wait for both
 try (user, posts) = task.both (http.get "/users/1") (http.get "/users/1/posts")
 
 ; run N tasks in parallel
-try users = task.all (list.map ids fun id { http.get "/users/$(id)" })
+try users = task.all (list.map ids (fun id { http.get "/users/$(id)" }))
 
-; race — first to complete wins, others are cancelled
+; first to settle wins; the losers are cancelled
 try winner = task.race [primary-fetch, fallback-fetch]
 
-; timeout — cancel if it doesn't complete in time
+; bounded concurrency — at most 8 of these run at once
+try results = task.pool 8 (list.map urls (fun u { http.get u }))
+
+; timeout — a deadline'd scope; the work is actually cancelled on expiry
 try result = task.with-timeout 5.0s (http.get "/slow-endpoint")
 ```
 
-These are library code, not language primitives. They build on
-`scope`/`spawn` underneath.
+#### The primitive kernel
+
+Everything above is written in Pluma over a small kernel:
+
+- `s.spawn t` — start a task in a scope, get a hot handle
+- `try h` — await a handle (the existing `try`, reused)
+- `s.cancel` / `s.cancel-after d` — cancel now / on a deadline
+- `s.next` — drain the next completion (manual scopes)
+- two scope forms — `scope` (fail-fast) and `manual scope`
+- `task.attempt t` — reify a task's failure into `result` (carries the
+  on-fail policy axis)
+
+`all`, `both`, and `settle-all` need only `spawn` + `try` + the
+fail-fast default. `race`, `any`, `pool`, and `with-timeout` are the
+ones that need `manual scope` + `s.next` — the single primitive an
+earlier draft of this doc was missing (it claimed these were "built on
+scope/spawn", but `spawn` + await-a-specific-handle can't express
+"whichever finishes first"). Worked implementations are in Appendix
+C.7.
 
 ## Syntax — the new pieces
 
-### `scope` blocks
+### The `scope` block (the only new concurrency grammar)
 
 ```
-ScopeBlock ::= 'scope' Identifier '{' BlockBody '}'
-             | 'scope' '{' BlockBody '}'
+ScopeExpr ::= 'scope' ('as' Identifier)? Block            ; fail-fast; handle optional
+            | 'manual' 'scope' 'as' Identifier Block       ; manual; handle required
 ```
 
-The bound identifier (`s` above) is the scope handle. Bare `scope { ... }`
-is an anonymous scope — useful when you only need structured awaiting,
-not explicit spawning.
+The handle is bound with `as`, reusing the same keyword `use core.x as
+y` already uses to introduce a name — so `scope as s` reads "make a
+scope, call it `s`", consistent with the rest of Pluma. The manual form
+is spelled with a `manual` *prefix* modifier, matching the
+`public def` / `opaque enum` prefix-modifier shape Pluma already uses
+(not a trailing modifier, which Pluma has nowhere). `scope` is a
+keyword; `manual` is a *contextual* keyword (special only immediately
+before `scope`). The block is an **expression** — it evaluates to its
+body's final value and slots in anywhere `if` / `when` can; bare
+`scope { ... }` is an anonymous fail-fast scope (useful when you only
+need structured awaiting, not explicit spawning).
 
-The block's body is a regular block: `let`s, `try`s, expressions, the
-works. The whole `scope { ... }` is itself an expression that
-evaluates to the body's final value.
+That is the entire grammar addition for *concurrency*. In particular:
 
-### `with` bindings
+- **Awaiting** reuses the existing `try` (and `??`) — no new syntax.
+- **Handle operations** (`s.spawn`, `s.next`, `s.cancel`,
+  `s.cancel-after`) are method calls on the handle value, resolved by
+  its type — not grammar.
+- **`deadline` and `shield` are deliberately not grammar.** A deadline
+  is the `s.cancel-after` method (or the `task.with-timeout`
+  combinator); shielding is the `task.shielded` combinator. Both were
+  considered as scope clauses and demoted to keep the grammar to the
+  single production above.
+
+### The `defer` statement (the only new cleanup grammar)
 
 ```
-WithBinding ::= 'with' Pattern '=' Expr
+DeferStmt ::= 'defer' Expr
 ```
 
-Lives in the same place `let` does — inside a block. Like `try`, it's
-a statement form, not an expression. The block desugars by wrapping
-the remaining statements in a cleanup-on-exit construct.
+Lives where `let` does — inside a block. See "`defer`" above for
+semantics (runs on exit by any path, LIFO, function-anchored).
 
-Multiple `with`s in one block:
+### Task-level operations (stdlib, not syntax)
 
-```
-with a = ...
-with b = ...
-{ body }
-```
-
-The braces wrap the whole sequence — the `with`s share one body.
-Cleanups run in reverse order on exit.
-
-### Task-level operations
-
-These are stdlib calls, not new syntax:
+All live in the auto-imported `core.task` module (see "Module and
+prelude structure"). Carrier essentials:
 
 | operation | type |
 |---|---|
-| `task.return x` | `fun a -> task a` (lift a value into the task carrier) |
-| `task.fail err` | `fun e -> task a` (a task that fails) |
+| `task.return x` | `fun a -> task a` (lift a value into the carrier) |
+| `task.fail e` | `fun e -> task a` (a task that fails) |
 | `task.yield ()` | `fun nothing -> task nothing` (give the scheduler a turn) |
-| `task.with-timeout d t` | `fun float (task a) -> task a` |
-| `task.all ts` | `fun (list (task a)) -> task (list a)` |
-| `task.both t1 t2` | `fun (task a) (task b) -> task (a, b)` |
-| `task.race ts` | `fun (list (task a)) -> task a` |
+| `task.attempt t` | `fun (task a) -> task (result a e)` (reify failure) |
+| `task.once t` | `fun (task a) -> task a` (run at most once, cache/share the result) |
+| `task.map f t` | `fun (fun a -> b) (task a) -> task b` |
+| `task.or-else t f` | recover from failure (what `??` desugars to over `task`) |
+| `task.sleep d` | `fun duration -> task nothing` |
 | `task.start t` | `fun (task a) -> task-handle a` (eagerly start; rare) |
 
-### Disposable trait
+Concurrent combinators, all built on the kernel (see Appendix C.7):
 
-```pluma
-def disposable trait a {
-    dispose :: fun a -> task nothing
-}
-```
+| operation | type |
+|---|---|
+| `task.all ts` | `fun (list (task a)) -> task (list a)` |
+| `task.both t1 t2` | `fun (task a) (task b) -> task (a, b)` |
+| `task.settle-all ts` | `fun (list (task a)) -> task (list (result a e))` |
+| `task.race ts` | `fun (list (task a)) -> task a` |
+| `task.any ts` | `fun (list (task a)) -> task a` |
+| `task.pool n ts` | `fun int (list (task a)) -> task (list a)` |
+| `task.with-timeout d t` | `fun duration (task a) -> task a` |
+| `task.retry n t` | `fun int (task a) -> task a` |
+| `task.shielded t` | `fun (task a) -> task a` (uninterruptible) |
 
-Standard kind-`*` trait; one method. No HKT needed. Used by `with`.
+### Module and prelude structure
+
+`task` mirrors how `option` and `result` already work — two
+mechanisms, deliberately layered:
+
+- **The `task` type is prelude.** Like the `option`/`result` enums in
+  `prelude.pa`, the `task` constructor (kind `* -> *`, represented
+  natively) is always in scope. You write `task string` with no import.
+- **The `task.*` functions live in `core.task`, auto-imported.** They
+  go in `AUTO_IMPORTS` (compiler.rs) alongside `core.option` and
+  `core.result`, so `task.all` resolves with no `use core.task` — the
+  same way `option.map` works today. FieldAccess dispatch handles the
+  overlap between the prelude type and the module namespace, exactly as
+  it does for `option`.
+
+The principle: **the three `try`-carriers — `option`, `result`,
+`task` — are the auto-imported modules; everything else (`core.list`,
+`core.dict`, `core.string`, …) needs an explicit `use`.** `task` is
+auto-imported *because* it's a carrier, which also keeps scripting
+ceremony-free (async needs no import line).
+
+`scope` is a different category entirely: it's a **keyword** (grammar),
+not a value or a module. There is no `use core.scope` and no prelude
+*binding* named `scope` — the parser just knows it, like `if` / `when`
+/ `try`. Consequently the scope-handle operations can't be
+`scope.cancel`-style module calls (`scope.` is a keyword prefix); they
+are methods on the handle value.
 
 ## Runtime model
 
@@ -420,18 +522,19 @@ spawns. Tasks check this flag at every suspension point. When the
 flag is set:
 
 1. The task's state machine returns "cancelled" instead of resuming.
-2. The runtime walks the task's `with`-cleanup stack, running each
-   `dispose` call (which is itself a task — so the cleanup chain is
-   awaited).
+2. The runtime walks the task's `defer`-cleanup stack (LIFO), running
+   each deferred expression (which may itself be a task — so the
+   cleanup chain is awaited).
 3. After cleanup, the task is removed from the scope.
 4. When all tasks are removed, the scope exits.
 
 Cleanups during cancellation run on a "best effort" basis: if a
-`dispose` task itself errors, the error is logged but doesn't prevent
-other cleanups from running. If a `dispose` is *itself* cancelled
-(e.g. parent scope timeout fired while cleaning up), we make a hard
+deferred cleanup itself errors, the error is logged but doesn't prevent
+other cleanups from running. If a cleanup is *itself* cancelled (e.g.
+parent scope deadline fired while cleaning up), we make a hard
 choice — currently, cleanup is uninterruptible (cancellation defers
-until cleanup completes). Revisit if this becomes a problem.
+until cleanup completes), which is what `task.shielded` makes explicit.
+Revisit if this becomes a problem.
 
 ## Codegen: the CPS transform
 
@@ -489,8 +592,9 @@ Key design points:
 
 - **Locals become heap-allocated struct fields** for any function
   containing suspension points. Non-async functions are unaffected.
-- **`with` cleanup pushes to the cleanup stack** at the `with` site;
-  pops happen at block exit (success) or cancellation walk (failure).
+- **`defer` pushes to the cleanup stack** at the `defer` site; the
+  stack is walked LIFO on block/function exit (success) or the
+  cancellation walk (failure).
 - **Scope membership** is carried in each task's state — needed for
   the cancellation flag check.
 
@@ -513,13 +617,19 @@ initializes. For scripts that *want* async, ergonomics matter:
 
 ### Phase 1 — `task` type + runtime skeleton
 
-- [ ] Add `task` as a prelude enum constructor (kind `* -> *`,
+- [ ] Add `task` as a prelude type constructor (kind `* -> *`,
       represented natively but exposed as if a regular constructor)
-- [ ] Add `task.return`, `task.fail`, `task.yield` to prelude as
-      hidden VM builtins
+- [ ] Create `core.task` and add it to `AUTO_IMPORTS` (compiler.rs)
+      next to `core.option`/`core.result`, so `task.*` resolves with
+      no `use`
+- [ ] Add `task.return`, `task.fail`, `task.yield` as hidden VM
+      builtins exposed through `core.task`
 - [ ] Add a minimal event-loop runtime to vm/ — microtask queue, run
       loop, exit condition
 - [ ] Add `task.sleep` (uses host timer) as the smoke-test I/O op
+- [ ] Represent a `task` as a re-runnable factory (a thunk that builds
+      a fresh state-machine instance per run), not a one-shot value;
+      add `task.once` for memoized/shared runs
 - [ ] Test fixtures: `task.return 5`, sequential sleep chain
 
 ### Phase 2 — `try` over `task`
@@ -545,38 +655,41 @@ The `try` mechanism this builds on has already shipped for
 
 ### Phase 4 — Structured concurrency
 
-- [ ] Parser: `scope IDENT { body }` and `scope { body }` forms
-- [ ] AST: `ExprKind::Scope { handle: Option<IdentifierNode>, body }`
+- [ ] Parser: `scope (as IDENT)? { body }` and `manual scope as IDENT
+      { body }` (the single production; `manual` as a contextual prefix
+      keyword; handle bound with the existing `as`)
+- [ ] AST: `ExprKind::Scope { manual: bool, handle: Option<IdentifierNode>, body }`
 - [ ] Runtime: scope tree, cancel-flag, child-task tracking
-- [ ] `scope.spawn t` stdlib op, returns task-handle
-- [ ] `scope.cancel s` stdlib op
+- [ ] Handle methods on the scope value: `s.spawn t` (→ task-handle),
+      `s.cancel`, `s.cancel-after d`
+- [ ] `s.next` for manual scopes: drain the next completion
+- [ ] Fail-fast vs manual: an unobserved child failure prompt-cancels
+      siblings in `scope` but not in `manual scope`
 - [ ] Block-on-exit semantics: scope can't return until children done
-- [ ] Test fixtures: spawn-and-wait, sibling cancellation,
-      nested scopes
+- [ ] Test fixtures: spawn-and-wait, fail-fast sibling cancellation,
+      `manual scope` + `s.next` draining, deadline, nested scopes
 
-### Phase 5 — Resource cleanup
+### Phase 5 — Resource cleanup (`defer`)
 
-Surface design is undecided — see "Design alternatives for resource
-cleanup" above. The runtime side is shared across all three options.
+Surface is **decided: `defer`** (see "`defer`").
 
-- [ ] Decide between Options A (`with`/`disposable`), B (library
-      helpers), and C (`defer` statement)
-- [ ] Runtime: per-task cleanup stack; walk it on success, error, and
-      cancellation
-- [ ] Expose `defer-cleanup` primitive (load-bearing for all three
-      options)
-- [ ] Per chosen option: parser/AST/codegen for the surface form, or
-      prelude trait + instances, or library helpers
+- [ ] Parser: `DeferStmt ::= 'defer' Expr` (function-anchored)
+- [ ] Runtime: per-task cleanup stack; walk it LIFO on success, error,
+      and cancellation; cleanup is uninterruptible by default
+- [ ] `task.shielded` combinator for explicit uninterruptible regions
 - [ ] Test fixtures: cleanup-on-success, cleanup-on-error, cleanup-on-
-      cancel, nested resources, heterogeneous resources, conditional
-      acquisition
+      cancel, heterogeneous resources, conditional acquisition,
+      async cleanup (a `defer` whose expression returns a `task`)
 
 ### Phase 6 — Concurrent combinators
 
-- [ ] `task.all` — built on `scope`/`spawn`
-- [ ] `task.both`
-- [ ] `task.race`
-- [ ] `task.with-timeout`
+All in `core.task`, built on the Phase 4 kernel (`scope` / `manual
+scope` / `s.next` / `attempt`). See Appendix C.7 for implementations.
+
+- [ ] `task.attempt` (reifies failure — carries the on-fail axis)
+- [ ] `task.all`, `task.both`, `task.settle-all` (fail-fast scope)
+- [ ] `task.race`, `task.any`, `task.pool` (`manual scope` + `s.next`)
+- [ ] `task.with-timeout` (deadline'd scope), `task.retry`
 - [ ] Test fixtures for each
 
 ### Phase 7 — Sync wrappers and scripting polish
@@ -593,57 +706,70 @@ Depends on a WASM codegen target existing (separate design doc).
 - [ ] CPS state machines compile to WasmGC structs
 - [ ] Host I/O imports — `fetch`, `setTimeout` for browser; WASI for
       server
-- [ ] Same `task`/`scope`/`with` surface, different runtime under the
-      hood
+- [ ] Same `task` / `scope` / `defer` surface, different runtime under
+      the hood
 
-## Open questions
+## Resolved decisions
 
-1. **`task.return` naming.**
-   `task.return x` lifts a value into the task carrier (the analogue of
-   `ok`/`some`). Whether to keep it task-specific or unify all three
-   carriers under one carrier-polymorphic wrap-a-value name is open;
-   since `try` is a built-in form rather than a typeclass, a shared
-   `pure` would itself need built-in dispatch. Lean: keep
-   `task.return` task-specific.
+These were open and are now settled (this design round):
 
-2. **Eager vs lazy task creation.**
-   Above we said tasks are *cold* — creating a task value doesn't
-   start it; awaiting does. JS Promises are the opposite (eager). Each
-   has tradeoffs. Lazy is more honest (you control when work starts)
-   but trips people coming from JS. Decide during Phase 1; lean lazy.
+1. **Type name: `task`** (kept). `promise` rejected — it implies eager
+   semantics (a JS Promise starts on creation), which would mislead
+   given the cold/lazy lean below. `future` was runner-up (Rust's lazy
+   future is the closest semantic match) but `task` reads better with
+   the structured-concurrency vocabulary ("spawn a task into a scope").
 
-3. **Scope-exit semantics on uncancelled scopes.**
-   If `main` returns and the top-level scope has live tasks, do we
-   wait for them or cancel them? Python's `trio` waits; this leaks
-   work that the user may have forgotten. Tokio's `runtime::block_on`
-   waits for the passed future only. Lean: top-level scope cancels
-   pending tasks on `main` exit.
+2. **Eager vs lazy: lazy/cold.** Creating a `task` does nothing;
+   awaiting (`try`), spawning, or `task.start` runs it. This is what
+   makes tasks first-class plans you can store, pass, retry,
+   rate-limit, and conditionally run — things eager JS Promises can't
+   express without dropping to thunks.
 
-4. **Cancellation during cleanup.**
-   If a parent scope is cancelled while a `with`-cleanup is running,
-   we currently let cleanup finish (uninterruptible). Alternative:
-   cancel cleanup too, but provide an "uninterruptible cleanup"
-   marker. Decide during Phase 5; lean uninterruptible-by-default.
+3. **Scope policy: two named forms, no config matrix.** `scope`
+   (fail-fast) and `manual scope`, plus `task.attempt` for the
+   on-fail axis. See "Why two forms and not a policy matrix".
 
-5. **Should `scope` be implicit in `main`?**
-   `main`'s body could be wrapped in an implicit top-level scope so
-   `spawn` works without an explicit `scope { ... }`. Saves a level
-   of nesting in simple programs but adds magic. Lean: no implicit
-   scope — explicit is the convention.
+4. **Resource cleanup: `defer`** (was Option C). See "`defer`".
 
-6. **Resource cleanup surface.**
-   Three options on the table — `with`/`disposable` syntax (A),
-   library helpers over `defer-cleanup` (B), or a `defer` statement
-   (C). See "Design alternatives for resource cleanup" above. Lean
-   `defer`; the only reason to pick `with` is if we want forgetting
-   cleanup to be structurally impossible.
+5. **Timeouts are deadline'd scopes**, not races against a sleeper —
+   `s.cancel-after` / `task.with-timeout`. Deadline is the fourth
+   cancellation trigger.
 
-7. **Function color signalling.**
-   A function with `try` over `task` in its body returns `task _`.
-   The type signature tells the truth, but it's not visually obvious
-   at the use site that a call may suspend. Some languages (Kotlin,
-   Rust) mark with `suspend`/`async`. Lean: no marker; the `try` (or
-   the use of a `task`-returning value) is the visible signal.
+6. **Minimal grammar:** the whole feature adds the `scope` block
+   production plus the `defer` statement. `deadline`/`shield` are
+   methods/combinators, not grammar.
+
+7. **Function color.** A `try`-over-`task` function returns `task _`;
+   that *is* the color, spelled in the return type. For a typed FP
+   language this is a feature (an honest effect annotation), not a
+   wart — no `async`/`suspend` marker. Revisit only if it bites.
+
+8. **Re-runnable, not one-shot.** A cold `task a` is a re-runnable
+   *recipe* (operationally a thunk that builds a fresh computation each
+   run), not a one-shot consumed-on-poll value. This lets `retry`/
+   `repeat`/polling take a plain `task`, is the strictly more
+   expressive default (`task.once` opts into memoization; you can't go
+   the other way), and is consistent with the other two re-usable
+   carriers. The running instance you get from `s.spawn` is a
+   `task-handle`, which *is* one-shot (awaiting it twice yields the
+   cached result). Reconfirms the name `task` over `future`. See
+   "`task a` — the deferred-computation type".
+
+## Open questions (still undecided)
+
+A. **`task.return` naming.** Keep it task-specific vs. a
+   carrier-polymorphic `pure`. Lean: keep `task.return` (a shared
+   `pure` would need built-in dispatch, since `try` isn't a typeclass).
+
+B. **Scope-exit semantics on `main`.** If `main` returns with live
+   tasks, wait or cancel? `trio` waits (can leak forgotten work);
+   Tokio's `block_on` waits for the passed future only. Lean: top-level
+   scope cancels pending tasks on `main` exit.
+
+C. **Should `scope` be implicit in `main`?** Wrapping `main`'s body in
+   an implicit top-level scope lets `spawn` work without an explicit
+   `scope { ... }`. Saves nesting but adds magic. Lean: no — explicit
+   `scope` is the convention.
 
 ---
 
@@ -652,12 +778,12 @@ Depends on a WASM codegen target existing (separate design doc).
 ### C.1 — Sequential fetch with cleanup
 
 ```pluma
-def save-report fun (report-id, out-path) {
-    with f = io.open out-path { write: true } {
-        try report = http.get "/reports/$(report-id)"
-        try _ = io.write-string f report.body
-        ok report.id
-    }
+def save-report = fun report-id out-path {
+    let f = io.open out-path { write: true }
+    defer io.close f
+    try report = http.get "/reports/$(report-id)"
+    try _ = io.write-string f report.body
+    ok report.id
 }
 ```
 
@@ -667,7 +793,7 @@ cancels the enclosing scope mid-write, the file is still closed.
 ### C.2 — Concurrent fetches with timeout
 
 ```pluma
-def dashboard-data fun user-id {
+def dashboard-data = fun user-id {
     task.with-timeout 5.0s {
         try (user, posts, friends) = task.both3
             (http.get "/users/$(user-id)")
@@ -685,8 +811,8 @@ all three are cancelled.
 ### C.3 — Cancellable long poll
 
 ```pluma
-def watch-status fun (endpoint, on-change) {
-    scope s {
+def watch-status = fun endpoint on-change {
+    scope as s {
         let prev = ref.new none
         while true is true {
             try current = http.get endpoint
@@ -711,7 +837,7 @@ and unwinds; the loop never gets to run another iteration.
 ### C.4 — Race with fallback
 
 ```pluma
-def fetch-with-fallback fun (primary-url, fallback-url) {
+def fetch-with-fallback = fun primary-url fallback-url {
     task.race [
         http.get primary-url,
         task.sequence (task.sleep 0.5s) (http.get fallback-url),
@@ -747,16 +873,132 @@ cost only when actually used.
 
 ### C.6 — What this set validates
 
-- **Same `try` syntax across all carriers.** The thenable trait pays
-  off — async code reads like sync code modulo the `try` keyword.
+- **Same `try` syntax across all carriers.** `task` is a third `try`
+  carrier — async code reads like sync code modulo the `try` keyword.
 - **Cancellation is structural.** No `cancel-token` parameter
   threaded through every function. The scope is the token.
-- **Resources can't leak.** The cleanup mechanism (whichever surface
-  we pick) runs on every exit path including cancellation.
+- **Resources can't leak.** `defer` runs on every exit path including
+  cancellation.
 - **Concurrent composition is library code.** `task.both`,
-  `task.race`, `task.with-timeout` build on `scope`/`spawn` — no new
-  language primitives.
+  `task.race`, `task.with-timeout` build on the `scope` / `manual
+  scope` / `s.next` kernel — no new language primitives.
 - **Scripting is unaffected.** Programs that don't use async pay
   nothing for the runtime.
 - **The browser story is the same code.** Once the WASM backend
   exists, every example above runs unchanged in a browser.
+
+### C.7 — The combinators, implemented
+
+Proof that the concurrent combinators are ordinary Pluma over the
+kernel. A shared helper:
+
+```pluma
+; settled result -> task carrier
+def result-to-task = fun r {
+    when r is ok x { task.return x } is err e { task.fail e }
+}
+```
+
+**`both` / `all`** — fail-fast `scope`, spawn + await. Both tasks start
+at `spawn`, so awaiting them in order still runs them concurrently; if
+either fails, the fail-fast scope cancels the rest and propagates.
+
+```pluma
+def both = fun t1 t2 {
+    scope as s {
+        let h1 = s.spawn t1
+        let h2 = s.spawn t2
+        try a = h1
+        try b = h2
+        task.return (a, b)
+    }
+}
+
+def all = fun ts {
+    scope as s {
+        let handles = list.map ts (fun t { s.spawn t })
+        await-all handles
+    }
+}
+
+def await-all = fun handles {
+    when handles is [] { task.return [] }
+       is [h, ...rest] {
+           try x  = h
+           try xs = await-all rest
+           task.return [x, ...xs]
+       }
+}
+```
+
+**`settle-all`** — `all` of `attempt`-wrapped tasks. Nothing "fails"
+from the scope's view, so fail-fast never fires; you get every outcome.
+
+```pluma
+def settle-all = fun ts {
+    all (list.map ts (fun t { task.attempt t }))
+}
+```
+
+**`race`** — `manual scope` + `s.next`. Start everything, take the
+first to settle, cancel the losers.
+
+```pluma
+def race = fun ts {
+    manual scope as s {
+        list.map ts (fun t { s.spawn t })
+        try first = s.next
+        s.cancel
+        when first is some r { result-to-task r }
+                   is none   { task.fail "race: empty" }
+    }
+}
+```
+
+**`with-timeout`** — composes on `race`: the work versus a sleeper that
+fails. If the timer wins, the work is cancelled.
+
+```pluma
+def with-timeout = fun d t {
+    race [t, task.sleep d | task.then (fun _ { task.fail "timeout" })]
+}
+```
+
+**`retry`** — no scope at all; pure sequential re-running (works
+because tasks are cold and re-runnable — awaiting `t` again runs it
+fresh).
+
+```pluma
+def retry = fun n t {
+    if n <= 1 is true { t }
+    else { t | task.or-else (fun { retry (n - 1) t }) }
+}
+```
+
+**`pool`** — bounded concurrency: prime `n`, then refill from a backlog
+each time `s.next` reports a completion.
+
+```pluma
+def pool = fun n ts {
+    manual scope as s {
+        let backlog = ref.new (list.drop n ts)
+        list.map (list.take n ts) (fun t { s.spawn t })
+        gather s backlog []
+    }
+}
+
+def gather = fun s backlog acc {
+    try got = s.next
+    when got is none { task.return (list.reverse acc) }
+       is some r {
+           try x = result-to-task r        ; a failure here propagates out
+           when (ref.get backlog) is [next, ...rest] {
+               ref.set backlog rest
+               let _ = s.spawn next         ; a slot freed → start one more
+               gather s backlog [x, ...acc]
+           } is [] {
+               gather s backlog [x, ...acc]
+           }
+       }
+}
+```
