@@ -2,13 +2,34 @@
 
 Design and implementation plan for Pluma's concurrency story: the
 `task a` type, structured concurrency via `scope` / `manual scope`,
-cooperative cancellation, and `defer` for resource cleanup. **Almost
-none of this is implemented yet — this is the design of record for
-unbuilt work.** The lone exception is `defer`'s synchronous core
-(Phase 5): function-anchored cleanup that runs LIFO on normal return
-and on `try`-failure propagation now ships. The async-only facets of
-`defer` — cancellation cleanup, awaited (`task`-returning) cleanup, and
-`task.shielded` — still await the `task` runtime below.
+cooperative cancellation, and `defer` for resource cleanup.
+
+**Status (sequential async ships; structured concurrency does not).**
+Built and tested:
+
+- **Phases 1–3 — `task`, `try` over `task`, the CPS transform.** The
+  `task` prelude type, the auto-imported `core.task`, `try`/`??` over
+  the task carrier, and the state-machine runtime all ship. *Realization
+  note:* the CPS transform is implemented as a **resumable step
+  function** per async-bearing function plus a runtime driver (`vm::task`,
+  the activation-stack event loop), rather than as a separate codegen
+  pass emitting an explicit state-struct. The observable semantics
+  (cold/lazy, stackless suspension, re-runnable recipes) are exactly as
+  designed; the "state tag" is just the saved instruction pointer and
+  the heap-saved frame region is the locals struct. The explicit
+  state-struct codegen remains a possible later optimization.
+- **Phase 5 — `defer` synchronous core**, including across `try`
+  suspension points and up a failing await chain.
+- **Phase 6 (partial) — the task *transformers*:** `task.return` /
+  `fail` / `yield` / `sleep` / `then` / `or-else` / `attempt` / `map`.
+
+Not built yet (this doc is the design of record for them): **Phase 4**
+(`scope` / `manual scope` and the scheduler), the **scope-level
+combinators** of Phase 6 (`all` / `both` / `race` / `any` / `pool` /
+`with-timeout` — they need the `scope` kernel), the async-only facets of
+**`defer`** (cancellation cleanup, awaited `task`-returning cleanup,
+`task.shielded`), **Phase 7** (sync wrappers), and **Phase 8** (WASM).
+`task.once` (run-once memoization) is also still pending.
 
 It builds on the `try` chaining mechanism, which already ships for
 `result` and `option`. `try` is a built-in form that dispatches over a
@@ -631,41 +652,56 @@ initializes. For scripts that *want* async, ergonomics matter:
 
 ### Phase 1 — `task` type + runtime skeleton
 
-- [ ] Add `task` as a prelude type constructor (kind `* -> *`,
-      represented natively but exposed as if a regular constructor)
-- [ ] Create `core.task` and add it to `AUTO_IMPORTS` (compiler.rs)
+- [x] Add `task` as a prelude type constructor (kind `* -> *`,
+      represented natively but exposed as if a regular constructor) — a
+      variant-less prelude enum `task a`.
+- [x] Create `core.task` and add it to `AUTO_IMPORTS` (compiler.rs)
       next to `core.option`/`core.result`, so `task.*` resolves with
       no `use`
-- [ ] Add `task.return`, `task.fail`, `task.yield` as hidden VM
+- [x] Add `task.return`, `task.fail`, `task.yield` as hidden VM
       builtins exposed through `core.task`
-- [ ] Add a minimal event-loop runtime to vm/ — microtask queue, run
-      loop, exit condition
-- [ ] Add `task.sleep` (uses host timer) as the smoke-test I/O op
-- [ ] Represent a `task` as a re-runnable factory (a thunk that builds
-      a fresh state-machine instance per run), not a one-shot value;
-      add `task.once` for memoized/shared runs
-- [ ] Test fixtures: `task.return 5`, sequential sleep chain
+- [x] Add a minimal event-loop runtime to vm/ (`vm/src/task.rs`): an
+      activation-stack driver run lazily when `main` returns a task.
+      (A multi-fiber scheduler/microtask queue arrives with Phase 4.)
+- [x] Add `task.sleep` (host timer) as the smoke-test I/O op
+- [x] Represent a `task` as a re-runnable factory (a cold `TaskRepr`
+      recipe; `Async` instantiates a fresh frame per run), not a
+      one-shot value. (`task.once` for memoized runs still pending.)
+- [x] Test fixtures: `task.return`, sleep chain (`tests/run/task-*`)
 
 ### Phase 2 — `try` over `task`
 
 The `try` mechanism this builds on has already shipped for
 `option`/`result`.
 
-- [ ] Add `task.then` (dispatching to the runtime's bind primitive)
-      and a `task` row to the analyzer's `try` dispatch table
-- [ ] `try` over task values works
-- [ ] Test fixtures: `try` chains on tasks, error propagation,
-      mixing-carriers rejection (task + result)
+- [x] Add a `task` row to the analyzer's `try` dispatch table. Unlike
+      option/result, a task `try` is **not** rewritten to `task.then` —
+      it's flagged (`TryNode.task_carrier`) and left intact so codegen
+      can lower the whole chain into a state machine (that closure-tree
+      *is* the trampoline we're avoiding).
+- [x] `try` over task values works; `??` over task → `task.or-else`
+- [x] Test fixtures: `try` chains on tasks, error propagation
+      (`tests/run/task-*`), mixing-carriers rejection
+      (`tests/analyze/task-mixed-carriers`)
 
 ### Phase 3 — CPS transform at codegen
 
-- [ ] Identify async-bearing functions (use `try` over task, or call
-      one)
-- [ ] Generate state-machine struct per async-bearing function
-- [ ] Lower function body into per-state step function
-- [ ] Replace direct calls to async-bearing functions with state-
-      machine instantiation + first-step call
-- [ ] Test: deeply nested async function calls
+Realized as resumable step functions + a runtime driver (see the status
+note at the top), not an explicit state-struct codegen pass. Same
+observable semantics.
+
+- [x] Identify async-bearing functions — `body_is_async` in codegen
+      (a `try`-over-task in the function's own frame). Decided locally;
+      no whole-program contagion needed.
+- [x] Lower the body into a resumable step function: each `try` →
+      evaluate-task + `Await`, continuation emitted inline; the whole
+      frame region is heap-saved at each `Await` and restored on resume
+      (so awaits may occur mid-expression).
+- [x] Calling an async function builds a cold `Value::Task` recipe
+      (`do_call`'s `AsyncFn` arm) — the "instantiation"; the driver
+      first-steps it. No call-site knowledge of async-ness needed.
+- [x] Test: deeply nested async calls, async closures with captures,
+      defer across suspension (`tests/run/task-*`)
 
 ### Phase 4 — Structured concurrency
 
@@ -713,14 +749,18 @@ own and the runtime hook generalizes when scopes/cancellation arrive.
 
 ### Phase 6 — Concurrent combinators
 
-All in `core.task`, built on the Phase 4 kernel (`scope` / `manual
-scope` / `s.next` / `attempt`). See Appendix C.7 for implementations.
+The scope-level combinators are built on the Phase 4 kernel (`scope` /
+`manual scope` / `s.next`); the task-level transformers don't need it.
+See Appendix C.7 for implementations.
 
-- [ ] `task.attempt` (reifies failure — carries the on-fail axis)
+- [x] `task.attempt` (reifies failure — carries the on-fail axis), plus
+      `task.then` / `task.or-else` / `task.map` (the transformers) —
+      builtins building `TaskRepr` nodes, interpreted by the driver.
 - [ ] `task.all`, `task.both`, `task.settle-all` (fail-fast scope)
 - [ ] `task.race`, `task.any`, `task.pool` (`manual scope` + `s.next`)
 - [ ] `task.with-timeout` (deadline'd scope), `task.retry`
-- [ ] Test fixtures for each
+- [x] Test fixtures for the transformers (`tests/run/task-combinators`);
+      scope-level combinators pending Phase 4.
 
 ### Phase 7 — Sync wrappers and scripting polish
 
