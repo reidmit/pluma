@@ -74,6 +74,11 @@ pub enum Value {
 	// the same `Task` value twice runs it twice — it's a recipe, not a
 	// cached result. See ASYNC.md and `vm::task`.
 	Task(Rc<TaskRepr>),
+	// A live scope's handle — the value bound by `scope as s`. It's just the
+	// scheduler's id for the scope; the handle methods (`scope-spawn` etc.)
+	// read it to find the scope. Created by the driver when it starts a
+	// `TaskRepr::Scope`, never by user code. See `vm::task`.
+	ScopeHandle(usize),
 }
 
 pub struct AsyncFnData {
@@ -130,6 +135,24 @@ pub enum TaskRepr {
 		task: Box<Value>,
 		f: Value,
 	},
+	// A structured-concurrency scope (built by `scope-new`, i.e. what the
+	// `scope` keyword lowers to). When the driver runs it, it creates a fresh
+	// scope, calls `body_fn` with the scope's handle, and runs the resulting
+	// task as the scope's root — blocking the scope's completion until every
+	// child spawned into it has settled or been cancelled. `manual` selects
+	// the non-fail-fast form. See `vm::task`.
+	Scope {
+		manual: bool,
+		body_fn: Value,
+	},
+	// A hot handle to a spawned child fiber (returned by `scope-spawn`).
+	// Awaiting it waits for fiber `usize` to settle; awaiting again yields the
+	// cached result. The `usize` is the scheduler's fiber id.
+	Handle(usize),
+	// `s.next` on a manual scope (`usize` is the scope id): a task that drains
+	// the scope's next settled child — `some (ok v)` / `some (err e)`, then
+	// `none` once all children are drained.
+	Next(usize),
 }
 
 pub struct DictData {
@@ -353,6 +376,7 @@ impl std::fmt::Display for Value {
 			Value::Ref(cell) => write!(f, "ref {}", cell.borrow()),
 			Value::AsyncFn(_) => write!(f, "<async-fn>"),
 			Value::Task(_) => write!(f, "<task>"),
+			Value::ScopeHandle(_) => write!(f, "<scope>"),
 		}
 	}
 }

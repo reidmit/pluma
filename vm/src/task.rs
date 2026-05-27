@@ -1,28 +1,76 @@
-// The task driver: Pluma's async runtime.
+// The task driver: Pluma's async runtime — a cooperative single-threaded
+// scheduler over the CPS state machine from ASYNC.md.
 //
 // An async-bearing function (one whose body awaits a task via `try`) is
-// compiled to a *step function* — its body lowered with an `Await`
-// instruction at each suspension point and a heap-saved frame so it can be
-// resumed. Calling such a function builds a cold `Value::Task` recipe (see
-// `do_call`'s `AsyncFn` arm); this module *runs* one.
+// compiled to a *step function* — its body lowered with an `Await` instruction
+// at each suspension point and a heap-saved frame so it can be resumed. Calling
+// such a function builds a cold `Value::Task` recipe (see `do_call`'s `AsyncFn`
+// arm); this module *runs* them.
 //
-// The model is the CPS state machine from ASYNC.md, realized in the bytecode
-// VM: each running async function is a `TaskFrame` whose locals + live
-// operand-stack temporaries are snapshotted on the heap at each `Await`, then
-// restored and resumed (jumping straight to the saved ip — the "state tag" is
-// just the instruction pointer). Suspension never grows the Rust stack: the
-// await chain lives in `act_stack`, not in nested `call_function` calls.
+// The unit of execution is a **fiber**: one await chain (`Vec<Activation>`)
+// belonging to a scope. The scheduler interleaves ready fibers, parks those
+// waiting on a timer / another fiber's result / a scope, and drives timers when
+// nothing is ready. Suspension never grows the Rust stack: a suspended async
+// frame's locals + live temporaries live on the heap in a `TaskFrame`, and the
+// await chain lives in the fiber, not in nested `call_function` calls.
 //
-// M2 scope: a single fiber driven to completion, timers blocking the thread.
-// Concurrency, a microtask queue, and cancellation arrive with `scope` (M4);
-// awaited/cancellation cleanup with `defer` arrives in M6.
+// `scope` (the keyword) lowers to a `TaskRepr::Scope`; running one creates a
+// child scope, runs its body as the scope's root fiber, and blocks the scope's
+// completion until every spawned child has settled or been cancelled —
+// the structural guarantee. A fail-fast `scope` cancels its siblings when an
+// unobserved child fails; a `manual scope` is drained explicitly via `s.next`.
 
 use crate::value::{TaskRepr, Value, VariantData};
 use crate::vm::{Frame, VM};
 use crate::RuntimeError;
+use std::collections::VecDeque;
 use std::rc::Rc;
+use std::time::Instant;
 
-// What stepping one task frame produced before it yielded control back here.
+type Fid = usize;
+type Sid = usize;
+const ROOT_SCOPE: Sid = 0;
+const NO_AWAITER: Fid = usize::MAX;
+
+// How a fiber/scope finished. `Cancelled` is structural (out-of-band) — it's
+// never delivered to an awaiter as a value; the scope reports it.
+#[derive(Clone)]
+enum Outcome {
+	Ok(Value),
+	Err(Value),
+	Cancelled,
+}
+
+// What a fiber should do on its next turn. `Start` begins running a task value;
+// `Ok`/`Err` settle the value (or failure) of whatever the fiber awaited down
+// its activation chain.
+enum Focus {
+	Start(Value),
+	Ok(Value),
+	Err(Value),
+}
+
+// What a fiber is blocked on once it can't make synchronous progress.
+enum Wait {
+	// Re-ready immediately, behind everything else currently ready.
+	Yield,
+	// Resume after `ns` nanoseconds (a timer).
+	Sleep(i64),
+	// Resume when fiber `Fid` settles (awaiting its handle).
+	Handle(Fid),
+	// Resume when scope `Sid` produces its next child completion (`s.next`).
+	Next(Sid),
+	// Resume when scope `Sid` finishes (this fiber spawned/entered it).
+	Scope(Sid),
+}
+
+// The result of advancing a fiber one chunk.
+enum Step {
+	Done(Outcome),
+	Park(Wait),
+}
+
+// What stepping one async frame produced before it yielded control back here.
 enum StepOutcome {
 	// The step function hit an `Await`: this `Value::Task` must run, and its
 	// result (or failure) resumes the frame.
@@ -33,25 +81,30 @@ enum StepOutcome {
 	Complete(Value),
 }
 
+// One step toward advancing a fiber: feed a new focus back into the loop, park,
+// or finish.
+enum Cont {
+	Go(Focus),
+	Park(Wait),
+	Done(Outcome),
+}
+
 // A running instance of an async function: a resumable bytecode frame whose
-// state lives on the heap so it survives suspension. Distinct from the cold
-// `TaskRepr::Async` recipe — this is the started, one-shot instance (the
-// "task-handle" of ASYNC.md).
+// state lives on the heap so it survives suspension.
 struct TaskFrame {
 	step_fn: usize,
 	captures: Rc<Vec<Value>>,
 	// The frame's operand-stack region (slot locals plus any live temporaries
 	// from a partially-evaluated expression) saved at the last suspension. On
 	// first entry it's the initial locals: the call args padded to slot_count.
-	// Restored above `base` on resume — saving the *whole* region (not just
-	// the slots) is what lets an `Await` appear mid-expression, e.g.
-	// `f (if c { try x = t  ... }) y`.
+	// Saving the *whole* region (not just the slots) is what lets an `Await`
+	// appear mid-expression, e.g. `f (if c { try x = t  ... }) y`.
 	saved: Vec<Value>,
 	resume_ip: usize,
 	// `defer` cleanups accrued in this frame so far. Held here across
 	// suspension; moved into the live VM frame while stepping so PushDefer /
-	// Return see them. Run LIFO on normal completion (by the VM's Return) and
-	// on failure (by `unwind_failure`).
+	// Return see them. Run LIFO on normal completion (by the VM's Return), on
+	// failure (by the err walk), and on cancellation (by `reap_fiber`).
 	cleanups: Vec<Value>,
 }
 
@@ -69,15 +122,15 @@ impl TaskFrame {
 	}
 }
 
-// An entry in the await chain. The top is making progress; each entry below
-// is suspended waiting on the one above. `Async` frames are *resumed* with a
-// settled value; the combinator frames *transform* it (and are popped).
+// An entry in a fiber's await chain. The top is making progress; each entry
+// below is suspended waiting on the one above. `Async` frames are *resumed*
+// with a settled value; the combinator frames *transform* it (and are popped).
 enum Activation {
 	// A running async-function instance, suspended at an `Await`.
 	Async(TaskFrame),
 	// `task.then` continuation: `k : fun a -> task b`, run on success.
 	Then(Value),
-	// `task.or-else` recovery: `recover : fun nothing -> task a`, run on failure.
+	// `task.or-else` recovery: `recover : fun nothing -> task a`, on failure.
 	OrElse(Value),
 	// `task.attempt`: reify the inner outcome into `ok`/`err`.
 	Attempt,
@@ -85,150 +138,579 @@ enum Activation {
 	Map(Value),
 }
 
-// What the driver should do on the next loop turn.
-enum Next {
-	// Begin running this `Value::Task` (a leaf, a combinator, or a cold async
-	// instance).
-	Start(Value),
-	// The root task finished with this value.
-	Done(Value),
+// One cooperatively-scheduled async computation: an await chain plus its
+// bookkeeping. A fiber is either ready (queued in `Scheduler::ready`), parked
+// (waiting on a timer / handle / scope), or done.
+struct Fiber {
+	// The await chain. Empty while the fiber is queued or being pumped (it's
+	// moved out into a local during `pump`).
+	act: Vec<Activation>,
+	// The scope this fiber belongs to.
+	scope: Sid,
+	// `Some(sid)` if this fiber is scope `sid`'s root body fiber.
+	runs_scope: Option<Sid>,
+	// Fibers blocked awaiting this fiber's handle (`try h`).
+	waiters: Vec<Fid>,
+	// Settled result, once done. (Currently only read for the root.)
+	result: Option<Outcome>,
+	// What it's parked on, if parked (so cancellation can cascade into a
+	// sub-scope it was awaiting).
+	wait: Option<Wait>,
+	alive: bool,
+}
+
+// A structured-concurrency scope: owns a set of child fibers and can't finish
+// until all of them have settled or been cancelled.
+struct Scope {
+	manual: bool,
+	cancelled: bool,
+	finalized: bool,
+	// The root body fiber (set right after the scope is created).
+	body: Fid,
+	// Spawned children (via `s.spawn`).
+	children: Vec<Fid>,
+	// The fiber awaiting this scope's completion (`NO_AWAITER` for the root).
+	awaiter: Fid,
+	// The body's outcome, once it completes.
+	body_done: Option<Outcome>,
+	// A failure that fails the whole scope (fail-fast child failure, or a
+	// failing body). Takes priority over `body_done` when finalizing.
+	failure: Option<Value>,
+	// Settled children awaiting an `s.next` drain (manual scopes), FIFO.
+	completed: VecDeque<Outcome>,
+	// Fibers parked in `s.next` waiting for a completion.
+	next_waiters: VecDeque<Fid>,
+}
+
+// The scheduler state, owned by the VM for the duration of `run_task` so the
+// `scope-*` builtins (which run mid-step, inside a fiber) can reach it.
+#[derive(Default)]
+pub(crate) struct Scheduler {
+	fibers: Vec<Fiber>,
+	scopes: Vec<Scope>,
+	ready: VecDeque<(Fid, Focus)>,
+	// (wake-at ns since `start`, what to do).
+	timers: Vec<(i64, Timer)>,
+	// Scopes a `scope-cancel` builtin asked to cancel; processed (which runs
+	// `defer`s — VM code) at the top of the loop, never mid-step.
+	pending_cancels: Vec<Sid>,
+	root: Fid,
+	root_result: Option<Outcome>,
+	start: Option<Instant>,
+}
+
+enum Timer {
+	Wake(Fid),
+	Deadline(Sid),
+}
+
+impl Scheduler {
+	fn now_ns(&self) -> i64 {
+		self.start.map_or(0, |s| s.elapsed().as_nanos() as i64)
+	}
 }
 
 impl VM {
 	// Drive a cold task to completion on this thread. Returns the produced
-	// value, or `Err` (a user abort) if the task — or any sub-task it awaited
-	// — failed and nothing recovered it. Called by `run()` when `main` returns
-	// a task.
+	// value, or `Err` (a user abort) if the root task failed and nothing
+	// recovered it. Called by `run()` when `main` returns a task.
 	pub(crate) fn run_task(&mut self, root: Value) -> Result<Value, RuntimeError> {
-		let mut act: Vec<Activation> = Vec::new();
-		let mut next = Next::Start(root);
-		loop {
-			match next {
-				Next::Done(v) => return Ok(v),
-				Next::Start(task) => next = self.start_task(&mut act, task)?,
-			}
-		}
-	}
-
-	// Begin running one task value: resolve a leaf inline, push a combinator
-	// frame and descend, or instantiate + first-step an async function.
-	fn start_task(&mut self, act: &mut Vec<Activation>, task: Value) -> Result<Next, RuntimeError> {
-		let repr = match &task {
-			Value::Task(r) => Rc::clone(r),
-			// A non-task value reaching here would be a type-system violation;
-			// treat it as already produced.
-			other => return self.settle_ok(act, other.clone()),
+		self.sched = Scheduler {
+			start: Some(Instant::now()),
+			..Default::default()
 		};
-		match repr.as_ref() {
-			TaskRepr::Pure(v) => self.settle_ok(act, v.clone()),
-			TaskRepr::Yield => self.settle_ok(act, Value::Nothing),
-			TaskRepr::Sleep(ns) => {
-				if *ns > 0 {
-					std::thread::sleep(std::time::Duration::from_nanos(*ns as u64));
+		// The implicit top-level scope (id 0) and the root fiber (id 0).
+		self.sched.scopes.push(Scope {
+			manual: false,
+			cancelled: false,
+			finalized: false,
+			body: 0,
+			children: Vec::new(),
+			awaiter: NO_AWAITER,
+			body_done: None,
+			failure: None,
+			completed: VecDeque::new(),
+			next_waiters: VecDeque::new(),
+		});
+		self.sched.fibers.push(Fiber {
+			act: Vec::new(),
+			scope: ROOT_SCOPE,
+			runs_scope: None,
+			waiters: Vec::new(),
+			result: None,
+			wait: None,
+			alive: true,
+		});
+		self.sched.root = 0;
+		self.sched.ready.push_back((0, Focus::Start(root)));
+
+		loop {
+			// Run any cancellations requested by `s.cancel` during the last step.
+			while let Some(sid) = self.sched.pending_cancels.pop() {
+				self.cancel_scope(sid)?;
+			}
+			if let Some(outcome) = &self.sched.root_result {
+				return match outcome {
+					Outcome::Ok(v) => Ok(v.clone()),
+					Outcome::Err(e) => Err(RuntimeError::user_abort(format!("{}", e))),
+					Outcome::Cancelled => Ok(Value::Nothing),
+				};
+			}
+
+			if let Some((fid, focus)) = self.sched.ready.pop_front() {
+				if !self.sched.fibers[fid].alive {
+					continue; // reaped while it sat in the queue
 				}
-				self.settle_ok(act, Value::Nothing)
-			}
-			TaskRepr::Fail(e) => self.settle_err(act, e.clone()),
-			// Combinators: push a frame that intercepts the inner task's
-			// outcome, then run the inner task.
-			TaskRepr::Then { task, k } => {
-				act.push(Activation::Then(k.clone()));
-				Ok(Next::Start((**task).clone()))
-			}
-			TaskRepr::OrElse { task, recover } => {
-				act.push(Activation::OrElse(recover.clone()));
-				Ok(Next::Start((**task).clone()))
-			}
-			TaskRepr::Attempt { task } => {
-				act.push(Activation::Attempt);
-				Ok(Next::Start((**task).clone()))
-			}
-			TaskRepr::Map { task, f } => {
-				act.push(Activation::Map(f.clone()));
-				Ok(Next::Start((**task).clone()))
-			}
-			TaskRepr::Async {
-				step_fn,
-				captures,
-				args,
-			} => {
-				let mut tf = TaskFrame::new(*step_fn, Rc::clone(captures), args.clone(), self);
-				let outcome = self.drive_step(&mut tf, None)?;
-				self.after_outcome(act, tf, outcome)
+				self.sched.fibers[fid].wait = None;
+				match self.pump(fid, focus)? {
+					Step::Done(outcome) => self.fiber_completed(fid, outcome)?,
+					Step::Park(wait) => self.park(fid, wait),
+				}
+			} else if !self.sched.timers.is_empty() {
+				self.run_timers();
+			} else {
+				// Nothing ready and no timers: the root must be done (checked at
+				// the top of the next iteration), or we've quiesced.
+				if self.sched.root_result.is_none() {
+					return Err(RuntimeError::new("VM: async runtime deadlocked"));
+				}
 			}
 		}
 	}
 
-	// Fold one async step's outcome: on `Await`, keep the (suspended) frame and
-	// run the awaited sub-task; on `Complete`, the frame is gone (its Return
-	// already ran cleanups) — run its tail task in its place.
+	// Advance fiber `fid` from `focus` until it parks or completes. Its await
+	// chain is moved into a local for the duration so VM method calls (which
+	// take `&mut self`) don't conflict with it.
+	fn pump(&mut self, fid: Fid, focus: Focus) -> Result<Step, RuntimeError> {
+		let mut act = std::mem::take(&mut self.sched.fibers[fid].act);
+		let mut focus = focus;
+		loop {
+			match self.advance_one(fid, &mut act, focus)? {
+				Cont::Go(next) => focus = next,
+				Cont::Park(wait) => {
+					self.sched.fibers[fid].act = act;
+					return Ok(Step::Park(wait));
+				}
+				Cont::Done(outcome) => return Ok(Step::Done(outcome)),
+			}
+		}
+	}
+
+	// One unit of progress for a fiber: resolve a `Start`ed task, or settle a
+	// value/failure down the activation chain.
+	fn advance_one(
+		&mut self,
+		fid: Fid,
+		act: &mut Vec<Activation>,
+		focus: Focus,
+	) -> Result<Cont, RuntimeError> {
+		match focus {
+			Focus::Start(task) => {
+				let repr = match &task {
+					Value::Task(r) => Rc::clone(r),
+					// A non-task value reaching here is already produced.
+					other => return Ok(Cont::Go(Focus::Ok(other.clone()))),
+				};
+				match repr.as_ref() {
+					TaskRepr::Pure(v) => Ok(Cont::Go(Focus::Ok(v.clone()))),
+					TaskRepr::Fail(e) => Ok(Cont::Go(Focus::Err(e.clone()))),
+					TaskRepr::Yield => Ok(Cont::Park(Wait::Yield)),
+					TaskRepr::Sleep(ns) => Ok(Cont::Park(Wait::Sleep(*ns))),
+					TaskRepr::Then { task, k } => {
+						act.push(Activation::Then(k.clone()));
+						Ok(Cont::Go(Focus::Start((**task).clone())))
+					}
+					TaskRepr::OrElse { task, recover } => {
+						act.push(Activation::OrElse(recover.clone()));
+						Ok(Cont::Go(Focus::Start((**task).clone())))
+					}
+					TaskRepr::Attempt { task } => {
+						act.push(Activation::Attempt);
+						Ok(Cont::Go(Focus::Start((**task).clone())))
+					}
+					TaskRepr::Map { task, f } => {
+						act.push(Activation::Map(f.clone()));
+						Ok(Cont::Go(Focus::Start((**task).clone())))
+					}
+					TaskRepr::Async {
+						step_fn,
+						captures,
+						args,
+					} => {
+						let mut tf = TaskFrame::new(*step_fn, Rc::clone(captures), args.clone(), self);
+						let outcome = self.drive_step(&mut tf, None)?;
+						Ok(self.after_outcome(act, tf, outcome))
+					}
+					TaskRepr::Scope { manual, body_fn } => self.start_scope(fid, *manual, body_fn.clone()),
+					TaskRepr::Handle(child) => {
+						let child = *child;
+						match self.sched.fibers[child].result.clone() {
+							Some(Outcome::Ok(v)) => Ok(Cont::Go(Focus::Ok(v))),
+							Some(Outcome::Err(e)) => Ok(Cont::Go(Focus::Err(e))),
+							// A cancelled child awaited directly: treat as a no-value
+							// completion (the scope reports the cancellation).
+							Some(Outcome::Cancelled) => Ok(Cont::Go(Focus::Ok(Value::Nothing))),
+							None => Ok(Cont::Park(Wait::Handle(child))),
+						}
+					}
+					TaskRepr::Next(sid) => Ok(self.drain_next(*sid)),
+				}
+			}
+			Focus::Ok(mut v) => loop {
+				match act.pop() {
+					None => return Ok(Cont::Done(Outcome::Ok(v))),
+					Some(Activation::Async(mut tf)) => {
+						let outcome = self.drive_step(&mut tf, Some(v))?;
+						return Ok(self.after_outcome(act, tf, outcome));
+					}
+					Some(Activation::Then(k)) => {
+						let t = self.call_function(k, vec![v])?;
+						return Ok(Cont::Go(Focus::Start(t)));
+					}
+					Some(Activation::OrElse(_)) => continue,
+					Some(Activation::Attempt) => v = make_result(true, v),
+					Some(Activation::Map(f)) => v = self.call_function(f, vec![v])?,
+				}
+			},
+			Focus::Err(e) => loop {
+				match act.pop() {
+					None => return Ok(Cont::Done(Outcome::Err(e))),
+					Some(Activation::Async(tf)) => {
+						// The awaiting function fails too: run its defers, then
+						// keep propagating.
+						for thunk in tf.cleanups.into_iter().rev() {
+							self.call_function(thunk, Vec::new())?;
+						}
+						return Ok(Cont::Go(Focus::Err(e)));
+					}
+					Some(Activation::Then(_)) | Some(Activation::Map(_)) => continue,
+					Some(Activation::OrElse(recover)) => {
+						let t = self.call_function(recover, vec![Value::Nothing])?;
+						return Ok(Cont::Go(Focus::Start(t)));
+					}
+					Some(Activation::Attempt) => return Ok(Cont::Go(Focus::Ok(make_result(false, e)))),
+				}
+			},
+		}
+	}
+
+	// Fold one async step's outcome into a `Cont`: on `Await`, keep the
+	// (suspended) frame and run the awaited sub-task; on `Complete`, the frame
+	// is gone (its Return already ran cleanups) — run its tail task in its place.
 	fn after_outcome(
 		&mut self,
 		act: &mut Vec<Activation>,
 		tf: TaskFrame,
 		outcome: StepOutcome,
-	) -> Result<Next, RuntimeError> {
+	) -> Cont {
 		match outcome {
 			StepOutcome::Await(sub) => {
 				act.push(Activation::Async(tf));
-				Ok(Next::Start(sub))
+				Cont::Go(Focus::Start(sub))
 			}
-			StepOutcome::Complete(tail) => Ok(Next::Start(tail)),
+			StepOutcome::Complete(tail) => Cont::Go(Focus::Start(tail)),
 		}
 	}
 
-	// A sub-task produced `v`. Walk down the activation chain: transform through
-	// combinator frames, resume the first suspended async frame, or finish.
-	fn settle_ok(&mut self, act: &mut Vec<Activation>, mut v: Value) -> Result<Next, RuntimeError> {
-		loop {
-			match act.pop() {
-				None => return Ok(Next::Done(v)),
-				Some(Activation::Async(mut tf)) => {
-					let outcome = self.drive_step(&mut tf, Some(v))?;
-					return self.after_outcome(act, tf, outcome);
-				}
-				// `then`: feed the value to the continuation, run its task.
-				Some(Activation::Then(k)) => {
-					let t = self.call_function(k, vec![v])?;
-					return Ok(Next::Start(t));
-				}
-				// `or-else`: success passes straight through; recovery discarded.
-				Some(Activation::OrElse(_)) => continue,
-				// `attempt`: success reifies to `ok v`, then keeps settling.
-				Some(Activation::Attempt) => v = make_result(true, v),
-				// `map`: apply the pure function, then keep settling.
-				Some(Activation::Map(f)) => v = self.call_function(f, vec![v])?,
-			}
-		}
+	// Begin running a `scope` task: create the scope, build its body task by
+	// calling the body closure with the scope's handle, queue the body as the
+	// scope's root fiber, and park the current fiber until the scope finishes.
+	fn start_scope(&mut self, fid: Fid, manual: bool, body_fn: Value) -> Result<Cont, RuntimeError> {
+		let sid = self.sched.scopes.len();
+		self.sched.scopes.push(Scope {
+			manual,
+			cancelled: false,
+			finalized: false,
+			body: 0, // set below
+			children: Vec::new(),
+			awaiter: fid,
+			body_done: None,
+			failure: None,
+			completed: VecDeque::new(),
+			next_waiters: VecDeque::new(),
+		});
+
+		// Calling the (async or plain) body closure builds a cold task; it does
+		// not run yet.
+		let body_task = self.call_function(body_fn, vec![Value::ScopeHandle(sid)])?;
+
+		let bf = self.sched.fibers.len();
+		self.sched.fibers.push(Fiber {
+			act: Vec::new(),
+			scope: sid,
+			runs_scope: Some(sid),
+			waiters: Vec::new(),
+			result: None,
+			wait: None,
+			alive: true,
+		});
+		self.sched.scopes[sid].body = bf;
+		self.sched.ready.push_back((bf, Focus::Start(body_task)));
+		Ok(Cont::Park(Wait::Scope(sid)))
 	}
 
-	// A sub-task failed with `err`. Walk down: run each async frame's `defer`
-	// cleanups (LIFO) and propagate, recover at an `or-else`, or reify at an
-	// `attempt`. Reaching the bottom aborts the program.
-	fn settle_err(&mut self, act: &mut Vec<Activation>, err: Value) -> Result<Next, RuntimeError> {
-		loop {
-			match act.pop() {
-				None => return Err(RuntimeError::user_abort(format!("{}", err))),
-				Some(Activation::Async(mut tf)) => {
-					// The awaiting function fails too: run its defers, then keep
-					// propagating. (Best-effort; a cleanup that hard-errors
-					// bubbles up — refined when cancellation lands in M6.)
-					let cleanups = std::mem::take(&mut tf.cleanups);
-					for thunk in cleanups.into_iter().rev() {
-						self.call_function(thunk, Vec::new())?;
+	// `s.next`: hand back the next settled child of scope `sid`, or `none` once
+	// every child has been drained, or park until a completion arrives.
+	fn drain_next(&mut self, sid: Sid) -> Cont {
+		if let Some(outcome) = self.sched.scopes[sid].completed.pop_front() {
+			return Cont::Go(Focus::Ok(option_some(settled_result(outcome))));
+		}
+		if self.scope_children_all_done(sid) {
+			return Cont::Go(Focus::Ok(option_none()));
+		}
+		Cont::Park(Wait::Next(sid))
+	}
+
+	fn scope_children_all_done(&self, sid: Sid) -> bool {
+		self.sched.scopes[sid]
+			.children
+			.iter()
+			.all(|&c| !self.sched.fibers[c].alive)
+	}
+
+	// Register a parked fiber against what it's waiting on.
+	fn park(&mut self, fid: Fid, wait: Wait) {
+		match &wait {
+			Wait::Yield => {
+				// Re-ready behind everything currently queued.
+				self.sched.ready.push_back((fid, Focus::Ok(Value::Nothing)));
+				return;
+			}
+			Wait::Sleep(ns) => {
+				let at = self.sched.now_ns() + (*ns).max(0);
+				self.sched.timers.push((at, Timer::Wake(fid)));
+			}
+			Wait::Handle(child) => self.sched.fibers[*child].waiters.push(fid),
+			Wait::Next(sid) => self.sched.scopes[*sid].next_waiters.push_back(fid),
+			Wait::Scope(_) => {}
+		}
+		self.sched.fibers[fid].wait = Some(wait);
+	}
+
+	// Sleep until the earliest timer, then fire all due timers: wake sleeping
+	// fibers and trip scope deadlines.
+	fn run_timers(&mut self) {
+		let earliest = self.sched.timers.iter().map(|(at, _)| *at).min().unwrap();
+		let now = self.sched.now_ns();
+		if earliest > now {
+			std::thread::sleep(std::time::Duration::from_nanos((earliest - now) as u64));
+		}
+		let now = self.sched.now_ns();
+		let mut due = Vec::new();
+		let mut keep = Vec::new();
+		for (at, t) in std::mem::take(&mut self.sched.timers) {
+			if at <= now {
+				due.push(t);
+			} else {
+				keep.push((at, t));
+			}
+		}
+		self.sched.timers = keep;
+		for t in due {
+			match t {
+				Timer::Wake(fid) => {
+					if self.sched.fibers[fid].alive {
+						self.sched.fibers[fid].wait = None;
+						self.sched.ready.push_back((fid, Focus::Ok(Value::Nothing)));
 					}
 				}
-				// `then` / `map`: failure skips the success path; propagate.
-				Some(Activation::Then(_)) | Some(Activation::Map(_)) => continue,
-				// `or-else`: run the recovery thunk and run the task it returns.
-				Some(Activation::OrElse(recover)) => {
-					let t = self.call_function(recover, vec![Value::Nothing])?;
-					return Ok(Next::Start(t));
-				}
-				// `attempt`: reify the failure to `err e`, then settle as success.
-				Some(Activation::Attempt) => return self.settle_ok(act, make_result(false, err)),
+				// A deadline fires like `s.cancel`; defer the actual reaping to
+				// the loop (it runs `defer`s).
+				Timer::Deadline(sid) => self.sched.pending_cancels.push(sid),
 			}
 		}
+	}
+
+	// A fiber finished. Route its outcome: the root sets the program result; a
+	// scope body finalizes (or fails) its scope; a spawned child wakes its
+	// waiters / feeds `s.next` and may trip fail-fast.
+	fn fiber_completed(&mut self, fid: Fid, outcome: Outcome) -> Result<(), RuntimeError> {
+		self.sched.fibers[fid].alive = false;
+		self.sched.fibers[fid].result = Some(outcome.clone());
+
+		if fid == self.sched.root {
+			self.sched.root_result = Some(outcome);
+			return Ok(());
+		}
+		if let Some(sid) = self.sched.fibers[fid].runs_scope {
+			return self.on_body_done(sid, outcome);
+		}
+		let sid = self.sched.fibers[fid].scope;
+		self.on_child_done(sid, fid, outcome)
+	}
+
+	// The scope's root body finished. Record it, cancel any children that are
+	// still running (the structural guarantee), wake any idle `s.next`, then
+	// try to finalize.
+	fn on_body_done(&mut self, sid: Sid, outcome: Outcome) -> Result<(), RuntimeError> {
+		self.sched.scopes[sid].body_done = Some(outcome.clone());
+		if let Outcome::Err(e) = &outcome {
+			if !self.sched.scopes[sid].manual && self.sched.scopes[sid].failure.is_none() {
+				self.sched.scopes[sid].failure = Some(e.clone());
+			}
+		}
+		let children = self.sched.scopes[sid].children.clone();
+		for child in children {
+			if self.sched.fibers[child].alive {
+				self.reap_fiber(child)?;
+			}
+		}
+		// No more completions will arrive — release idle drainers with `none`.
+		let waiters = std::mem::take(&mut self.sched.scopes[sid].next_waiters);
+		for w in waiters {
+			self.sched.ready.push_back((w, Focus::Ok(option_none())));
+		}
+		self.try_finalize_scope(sid)
+	}
+
+	// A spawned child finished. Deliver to its awaiters, record it for `s.next`,
+	// trip fail-fast on an unobserved failure, then try to finalize.
+	fn on_child_done(&mut self, sid: Sid, fid: Fid, outcome: Outcome) -> Result<(), RuntimeError> {
+		let waiters = std::mem::take(&mut self.sched.fibers[fid].waiters);
+		let observed = !waiters.is_empty();
+		for w in waiters {
+			let focus = match &outcome {
+				Outcome::Ok(v) => Focus::Ok(v.clone()),
+				Outcome::Err(e) => Focus::Err(e.clone()),
+				Outcome::Cancelled => Focus::Ok(Value::Nothing),
+			};
+			self.sched.ready.push_back((w, focus));
+		}
+
+		// Feed `s.next`: hand straight to a parked drainer, else queue it.
+		if let Some(w) = self.sched.scopes[sid].next_waiters.pop_front() {
+			self
+				.sched
+				.ready
+				.push_back((w, Focus::Ok(option_some(settled_result(outcome.clone())))));
+		} else {
+			self.sched.scopes[sid].completed.push_back(outcome.clone());
+		}
+
+		// Fail-fast: an unobserved failure in a non-manual scope cancels it.
+		if let Outcome::Err(e) = &outcome {
+			let sc = &self.sched.scopes[sid];
+			if !observed && !sc.manual && !sc.cancelled && sc.failure.is_none() {
+				self.sched.scopes[sid].failure = Some(e.clone());
+				return self.cancel_scope(sid);
+			}
+		}
+		self.try_finalize_scope(sid)
+	}
+
+	// Cancel a scope and everything it owns: reap the body and all live
+	// children (running their `defer`s), which cascades into sub-scopes.
+	fn cancel_scope(&mut self, sid: Sid) -> Result<(), RuntimeError> {
+		if self.sched.scopes[sid].cancelled || self.sched.scopes[sid].finalized {
+			return Ok(());
+		}
+		self.sched.scopes[sid].cancelled = true;
+
+		let body = self.sched.scopes[sid].body;
+		if self.sched.fibers[body].alive {
+			self.reap_fiber(body)?;
+			if self.sched.scopes[sid].body_done.is_none() {
+				self.sched.scopes[sid].body_done = Some(Outcome::Cancelled);
+			}
+		}
+		let children = self.sched.scopes[sid].children.clone();
+		for child in children {
+			if self.sched.fibers[child].alive {
+				self.reap_fiber(child)?;
+			}
+		}
+		self.try_finalize_scope(sid)
+	}
+
+	// Abandon a parked (or queued) fiber: cascade into any sub-scope it was
+	// awaiting, run its `defer` cleanups (innermost frame first, LIFO within a
+	// frame), and mark it cancelled.
+	fn reap_fiber(&mut self, fid: Fid) -> Result<(), RuntimeError> {
+		if !self.sched.fibers[fid].alive {
+			return Ok(());
+		}
+		self.sched.fibers[fid].alive = false;
+		self.sched.fibers[fid].result = Some(Outcome::Cancelled);
+
+		if let Some(Wait::Scope(sub)) = self.sched.fibers[fid].wait.take() {
+			self.cancel_scope(sub)?;
+		}
+		let act = std::mem::take(&mut self.sched.fibers[fid].act);
+		for activation in act.into_iter().rev() {
+			if let Activation::Async(tf) = activation {
+				for thunk in tf.cleanups.into_iter().rev() {
+					self.call_function(thunk, Vec::new())?;
+				}
+			}
+		}
+		Ok(())
+	}
+
+	// Finalize a scope once its body is done and every child has settled: wake
+	// the awaiter with the scope's result (a fail-fast failure wins over the
+	// body's own value).
+	fn try_finalize_scope(&mut self, sid: Sid) -> Result<(), RuntimeError> {
+		if self.sched.scopes[sid].finalized {
+			return Ok(());
+		}
+		if self.sched.scopes[sid].body_done.is_none() || !self.scope_children_all_done(sid) {
+			return Ok(());
+		}
+		self.sched.scopes[sid].finalized = true;
+
+		let result = match &self.sched.scopes[sid].failure {
+			Some(e) => Outcome::Err(e.clone()),
+			None => self.sched.scopes[sid].body_done.clone().unwrap(),
+		};
+		let awaiter = self.sched.scopes[sid].awaiter;
+		if awaiter != NO_AWAITER && self.sched.fibers[awaiter].alive {
+			let focus = match result {
+				Outcome::Ok(v) => Focus::Ok(v),
+				Outcome::Err(e) => Focus::Err(e),
+				// The scope was cancelled (deadline / explicit `s.cancel`) with
+				// no in-band failure of its own, yet a live external awaiter is
+				// still expecting an `a`. Surface it as a recoverable failure
+				// (`??` / `try`) rather than fabricate a value of the wrong type.
+				// (A parent-cancelled scope's awaiter is itself being reaped, so
+				// this branch only fires for self-cancellation.)
+				Outcome::Cancelled => Focus::Err(cancelled_error()),
+			};
+			self.sched.fibers[awaiter].wait = None;
+			self.sched.ready.push_back((awaiter, focus));
+		}
+		Ok(())
+	}
+
+	// --- hooks for the `scope-*` builtins (run mid-step, inside a fiber) ---
+
+	// `s.spawn t`: start task `t` as a child of scope `sid`; returns the new
+	// fiber id, which the builtin wraps in a `TaskRepr::Handle`.
+	pub(crate) fn sched_spawn(&mut self, sid: Sid, task: Value) -> Fid {
+		let fid = self.sched.fibers.len();
+		self.sched.fibers.push(Fiber {
+			act: Vec::new(),
+			scope: sid,
+			runs_scope: None,
+			waiters: Vec::new(),
+			result: None,
+			wait: None,
+			alive: true,
+		});
+		self.sched.scopes[sid].children.push(fid);
+		self.sched.ready.push_back((fid, Focus::Start(task)));
+		fid
+	}
+
+	// `s.cancel`: request cancellation; the loop performs it (running `defer`s)
+	// between steps, never mid-step.
+	pub(crate) fn sched_cancel(&mut self, sid: Sid) {
+		self.sched.pending_cancels.push(sid);
+	}
+
+	// `s.cancel-after d`: arm a deadline timer on scope `sid`.
+	pub(crate) fn sched_cancel_after(&mut self, sid: Sid, ns: i64) {
+		let at = self.sched.now_ns() + ns.max(0);
+		self.sched.timers.push((at, Timer::Deadline(sid)));
 	}
 
 	// Push a VM frame backed by `tf`'s saved state, run it until it `Await`s or
@@ -298,12 +780,44 @@ impl VM {
 	}
 }
 
-// Build a prelude `result` value — `ok v` or `err v` — for `task.attempt`,
-// which reifies a task's success/failure into the value channel.
+// Build a prelude `result` — `ok v` / `err v` — for `task.attempt` and `s.next`.
 fn make_result(ok: bool, v: Value) -> Value {
 	Value::Variant(Rc::new(VariantData {
 		qualified_enum: Rc::new("__prelude__.result".to_string()),
 		variant: Rc::new(if ok { "ok" } else { "err" }.to_string()),
 		payload: vec![v],
 	}))
+}
+
+// A settled child outcome as the `result` value `s.next` yields. Cancellation
+// isn't observable in-band; surface it as `err`-free `ok nothing` is wrong, so
+// we never reach here with `Cancelled` (drained children are Ok/Err only).
+fn settled_result(outcome: Outcome) -> Value {
+	match outcome {
+		Outcome::Ok(v) => make_result(true, v),
+		Outcome::Err(e) => make_result(false, e),
+		Outcome::Cancelled => make_result(true, Value::Nothing),
+	}
+}
+
+fn option_some(v: Value) -> Value {
+	Value::Variant(Rc::new(VariantData {
+		qualified_enum: Rc::new("__prelude__.option".to_string()),
+		variant: Rc::new("some".to_string()),
+		payload: vec![v],
+	}))
+}
+
+fn option_none() -> Value {
+	Value::Variant(Rc::new(VariantData {
+		qualified_enum: Rc::new("__prelude__.option".to_string()),
+		variant: Rc::new("none".to_string()),
+		payload: Vec::new(),
+	}))
+}
+
+// The failure a self-cancelled scope (deadline / explicit `s.cancel`) hands its
+// awaiter. Recoverable via `??` / `try`.
+fn cancelled_error() -> Value {
+	Value::String(Rc::new("scope cancelled".to_string()))
 }

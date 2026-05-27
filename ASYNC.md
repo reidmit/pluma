@@ -705,19 +705,36 @@ observable semantics.
 
 ### Phase 4 — Structured concurrency
 
-- [ ] Parser: `scope (as IDENT)? { body }` and `manual scope as IDENT
-      { body }` (the single production; `manual` as a contextual prefix
-      keyword; handle bound with the existing `as`)
-- [ ] AST: `ExprKind::Scope { manual: bool, handle: Option<IdentifierNode>, body }`
-- [ ] Runtime: scope tree, cancel-flag, child-task tracking
-- [ ] Handle methods on the scope value: `s.spawn t` (→ task-handle),
-      `s.cancel`, `s.cancel-after d`
-- [ ] `s.next` for manual scopes: drain the next completion
-- [ ] Fail-fast vs manual: an unobserved child failure prompt-cancels
+Built. The runtime is a cooperative single-threaded **fiber scheduler** in
+`vm::task` (each fiber = one await chain; the scheduler interleaves ready
+fibers, parks the rest on timers / handles / scopes, and drives timers when
+idle). Two implementation notes that differ from the sketch above:
+
+- **Two handle *types*, not one.** The fail-fast `scope` binds an
+  unparameterized `scope-handle` (its children are heterogeneous, awaited
+  individually); `manual scope` binds a `manual-handle a` parameterized by the
+  homogeneous child type, so `s.next` is type-safe (`task (option (result a
+  e))`). The runtime treats both as the same `Value::ScopeHandle`; only the
+  static type differs. (`task-handle` was folded into `task` — `s.spawn`
+  returns a `task a` whose repr is a hot `Handle`.)
+- **Handle methods take explicit args.** `s.cancel ()` / `s.next ()` (the
+  zero-arg ones take `()`), uniform with `s.spawn t` / `s.cancel-after d`.
+
+- [x] Parser: `scope (as IDENT)? { body }` / `manual scope as IDENT { body }`
+      (the single production; `manual` a keyword; handle bound with `as`)
+- [x] AST: `ExprKind::Scope { manual, handle, body }`
+- [x] Runtime: scope tree, per-scope cancellation, child-fiber tracking
+- [x] Handle methods on the scope value: `s.spawn t`, `s.cancel ()`,
+      `s.cancel-after d` (lower to `task.scope-*` / `manual-*` kernel builtins)
+- [x] `s.next` for manual scopes: drain the next completion
+- [x] Fail-fast vs manual: an unobserved child failure prompt-cancels
       siblings in `scope` but not in `manual scope`
-- [ ] Block-on-exit semantics: scope can't return until children done
-- [ ] Test fixtures: spawn-and-wait, fail-fast sibling cancellation,
-      `manual scope` + `s.next` draining, deadline, nested scopes
+- [x] Block-on-exit semantics: a scope can't return until its children are
+      done or cancelled (cancellation runs their `defer`s)
+- [x] Test fixtures: spawn-and-wait + fail-fast recovery (`tests/run/scope-both`),
+      `manual scope` + `s.next` + loser cleanup (`tests/run/scope-race`),
+      deadline + cancel cleanup (`tests/run/scope-deadline`); analyze:
+      `scope-both`, `scope-manual-race`; format: `scope`
 
 ### Phase 5 — Resource cleanup (`defer`)
 

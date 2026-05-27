@@ -220,6 +220,10 @@ pub struct VM {
 	pub args: Vec<String>,
 	pub(crate) stack: Vec<Value>,
 	pub(crate) frames: Vec<Frame>,
+	// The async scheduler. Empty/idle for synchronous programs; populated by
+	// `run_task` and read by the `scope-*` builtins (which run mid-step, inside
+	// a fiber). See `vm::task`.
+	pub(crate) sched: crate::task::Scheduler,
 	// Opt-in opcode-frequency profiling. Set to Some(empty map) before
 	// run() to enable; read back after for a count of each opcode.
 	pub profile: Option<std::collections::HashMap<&'static str, u64>>,
@@ -235,6 +239,7 @@ impl VM {
 			args: Vec::new(),
 			stack: Vec::with_capacity(256),
 			frames: Vec::with_capacity(64),
+			sched: crate::task::Scheduler::default(),
 			profile: None,
 		}
 	}
@@ -325,6 +330,24 @@ impl VM {
 				variant: c.variant.clone(),
 				payload: args,
 			}))),
+			// Calling an async function builds a *cold* task — it does not run
+			// (mirrors do_call's AsyncFn arm). The scheduler runs it when the
+			// task is awaited / driven. A zero-arg async fn called with the
+			// conventional single `nothing` arg takes no params.
+			Value::AsyncFn(af) => {
+				let func = &self.program.functions[af.step_fn];
+				let args = if func.param_count == 0 && args.len() == 1 && matches!(args[0], Value::Nothing)
+				{
+					Vec::new()
+				} else {
+					args
+				};
+				Ok(Value::Task(Rc::new(TaskRepr::Async {
+					step_fn: af.step_fn,
+					captures: Rc::clone(&af.captures),
+					args,
+				})))
+			}
 			_ => Err(RuntimeError::new("VM: value is not callable")),
 		}
 	}

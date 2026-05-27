@@ -1,0 +1,23 @@
+# `s.cancel-after`: the scope self-cancels once the deadline elapses. Its child
+# is cancelled mid-sleep (its `defer` runs), and the cancelled scope surfaces a
+# recoverable failure, which `??` turns into a fallback.
+def guarded = fun {
+	scope as s {
+		s.cancel-after 15ms
+		let h = s.spawn (slow-child ())
+		try v = h
+		task.return v
+	}
+}
+
+def slow-child = fun {
+	defer print "child-cleanup-ran"
+	try _ = task.sleep 5s
+	task.return 1
+}
+
+def main = fun {
+	try v = guarded () ?? task.return 7
+	print (to-string v)
+	task.return 0
+}

@@ -1630,6 +1630,50 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			let f = it.next().unwrap_or(Value::Nothing);
 			Ok(Value::Task(Rc::new(TaskRepr::Map { task, f })))
 		}
+		// --- structured-concurrency kernel (see vm::task) ---
+		"scope-new" => {
+			// `scope-new is-manual body` — what the `scope` keyword lowers to.
+			let mut it = args.into_iter();
+			let manual = matches!(it.next(), Some(Value::Bool(true)));
+			let body_fn = it.next().unwrap_or(Value::Nothing);
+			Ok(Value::Task(Rc::new(TaskRepr::Scope { manual, body_fn })))
+		}
+		"scope-spawn" => {
+			let mut it = args.into_iter();
+			let sid = match it.next() {
+				Some(Value::ScopeHandle(s)) => s,
+				_ => return Err(RuntimeError::new("scope-spawn: expected a scope handle")),
+			};
+			let task = it.next().unwrap_or(Value::Nothing);
+			let fid = vm.sched_spawn(sid, task);
+			Ok(Value::Task(Rc::new(TaskRepr::Handle(fid))))
+		}
+		"scope-cancel" => {
+			if let Some(Value::ScopeHandle(sid)) = args.into_iter().next() {
+				vm.sched_cancel(sid);
+			}
+			Ok(Value::Nothing)
+		}
+		"scope-cancel-after" => {
+			let sid = match args.first() {
+				Some(Value::ScopeHandle(s)) => *s,
+				_ => {
+					return Err(RuntimeError::new(
+						"scope-cancel-after: expected a scope handle",
+					))
+				}
+			};
+			let ns = match args.get(1) {
+				Some(Value::Duration(n)) => *n,
+				_ => return Err(RuntimeError::new("scope-cancel-after: expected a duration")),
+			};
+			vm.sched_cancel_after(sid, ns);
+			Ok(Value::Nothing)
+		}
+		"scope-next" => match args.into_iter().next() {
+			Some(Value::ScopeHandle(sid)) => Ok(Value::Task(Rc::new(TaskRepr::Next(sid)))),
+			_ => Err(RuntimeError::new("scope-next: expected a scope handle")),
+		},
 		"time-now" => {
 			debug_assert_eq!(args.len(), 1, "`now` arity");
 			Ok(Value::Instant(jiff::Timestamp::now().as_nanosecond() as i64))
