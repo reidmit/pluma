@@ -65,7 +65,13 @@ fn module_doc_comment(module: &Module) -> Option<String> {
 	let mut lines: Vec<String> = Vec::new();
 	let mut line = 0usize;
 	while let Some(text) = module.comments.get(&line) {
-		lines.push(text.strip_prefix(' ').unwrap_or(text).trim_end().to_string());
+		lines.push(
+			text
+				.strip_prefix(' ')
+				.unwrap_or(text)
+				.trim_end()
+				.to_string(),
+		);
 		line += 1;
 	}
 
@@ -466,7 +472,11 @@ mod tests {
 		let src = "use core.list\n\ndef x = list.reverse [1]\n";
 		// `core.list` spans cols 4..13 on line 0.
 		let doc = hover_doc_at(src, 0, 8).expect("expected the module doc on the use path");
-		assert!(doc.starts_with("Lists:"), "unexpected module doc: {:?}", doc);
+		assert!(
+			doc.starts_with("Lists:"),
+			"unexpected module doc: {:?}",
+			doc
+		);
 	}
 
 	#[test]
@@ -476,7 +486,11 @@ mod tests {
 		let src = "use core.list\n\ndef x = list.reverse [1]\n";
 		// `list` receiver is at line 2, cols 8..12.
 		let doc = hover_doc_at(src, 2, 9).expect("expected the module doc on the namespace");
-		assert!(doc.starts_with("Lists:"), "unexpected module doc: {:?}", doc);
+		assert!(
+			doc.starts_with("Lists:"),
+			"unexpected module doc: {:?}",
+			doc
+		);
 	}
 
 	#[test]
@@ -498,10 +512,7 @@ mod tests {
 
 		// With a blank line, the block becomes the module doc.
 		let separated = "# the module doc\n\ndef foo = 1\n";
-		assert_eq!(
-			module_doc_of(separated),
-			Some("the module doc".to_string())
-		);
+		assert_eq!(module_doc_of(separated), Some("the module doc".to_string()));
 
 		// A file that opens with code has no module doc.
 		let no_doc = "def foo = 1\n";

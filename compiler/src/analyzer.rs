@@ -3593,14 +3593,12 @@ impl<'compiler> Analyzer<'compiler> {
 					|| Self::occurs_in(bindings, var, ret)
 			}
 			Type::List(e) | Type::Ref(e) => Self::occurs_in(bindings, var, e),
-			Type::Dict(k, v) => {
-				Self::occurs_in(bindings, var, k) || Self::occurs_in(bindings, var, v)
-			}
-			Type::Tuple(es) | Type::Enum(_, es) => {
-				es.iter().any(|e| Self::occurs_in(bindings, var, e))
-			}
+			Type::Dict(k, v) => Self::occurs_in(bindings, var, k) || Self::occurs_in(bindings, var, v),
+			Type::Tuple(es) | Type::Enum(_, es) => es.iter().any(|e| Self::occurs_in(bindings, var, e)),
 			Type::PartialTuple(_, e) => Self::occurs_in(bindings, var, e),
-			Type::Record(fields, _) => fields.iter().any(|(_, t)| Self::occurs_in(bindings, var, t)),
+			Type::Record(fields, _) => fields
+				.iter()
+				.any(|(_, t)| Self::occurs_in(bindings, var, t)),
 			_ => false,
 		}
 	}
@@ -3630,18 +3628,27 @@ impl<'compiler> Analyzer<'compiler> {
 			| Type::Duration => ty.clone(),
 			Type::Enum(name, args) => Type::Enum(
 				name.clone(),
-				args.iter().map(|t| Self::deep_resolve(bindings, rows, t)).collect(),
+				args
+					.iter()
+					.map(|t| Self::deep_resolve(bindings, rows, t))
+					.collect(),
 			),
 			Type::Fun(params, ret) => Type::Fun(
-				params.iter().map(|t| Self::deep_resolve(bindings, rows, t)).collect(),
+				params
+					.iter()
+					.map(|t| Self::deep_resolve(bindings, rows, t))
+					.collect(),
 				Self::deep_resolve(bindings, rows, ret).into(),
 			),
 			Type::PartialTuple(index, element) => {
 				Type::PartialTuple(*index, Self::deep_resolve(bindings, rows, element).into())
 			}
-			Type::Tuple(elements) => {
-				Type::Tuple(elements.iter().map(|t| Self::deep_resolve(bindings, rows, t)).collect())
-			}
+			Type::Tuple(elements) => Type::Tuple(
+				elements
+					.iter()
+					.map(|t| Self::deep_resolve(bindings, rows, t))
+					.collect(),
+			),
 			Type::List(e) => Type::List(Self::deep_resolve(bindings, rows, e).into()),
 			Type::Dict(k, v) => Type::Dict(
 				Self::deep_resolve(bindings, rows, k).into(),
@@ -3690,10 +3697,16 @@ impl<'compiler> Analyzer<'compiler> {
 		work: &mut Vec<(Type, Type, Range)>,
 		rows: &mut HashMap<usize, RowSolution>,
 	) {
-		let map_1: HashMap<&String, usize> =
-			fields_1.iter().enumerate().map(|(i, (k, _))| (k, i)).collect();
-		let map_2: HashMap<&String, usize> =
-			fields_2.iter().enumerate().map(|(i, (k, _))| (k, i)).collect();
+		let map_1: HashMap<&String, usize> = fields_1
+			.iter()
+			.enumerate()
+			.map(|(i, (k, _))| (k, i))
+			.collect();
+		let map_2: HashMap<&String, usize> = fields_2
+			.iter()
+			.enumerate()
+			.map(|(i, (k, _))| (k, i))
+			.collect();
 
 		// Common fields → unify pairwise (carry the outer range, as the old
 		// solver did for shared fields).
@@ -3766,7 +3779,13 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 				if ok {
 					push_shared(work);
-					rows.insert(r2, RowSolution { fields: only_1, tail: None });
+					rows.insert(
+						r2,
+						RowSolution {
+							fields: only_1,
+							tail: None,
+						},
+					);
 				}
 			}
 
@@ -3784,7 +3803,13 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 				if ok {
 					push_shared(work);
-					rows.insert(r1, RowSolution { fields: only_2, tail: None });
+					rows.insert(
+						r1,
+						RowSolution {
+							fields: only_2,
+							tail: None,
+						},
+					);
 				}
 			}
 
@@ -3808,8 +3833,20 @@ impl<'compiler> Analyzer<'compiler> {
 				// Fresh row var captures the unknown tail shared by both sides.
 				let fresh = self.new_row_var();
 				push_shared(work);
-				rows.insert(r1, RowSolution { fields: only_2, tail: Some(fresh) });
-				rows.insert(r2, RowSolution { fields: only_1, tail: Some(fresh) });
+				rows.insert(
+					r1,
+					RowSolution {
+						fields: only_2,
+						tail: Some(fresh),
+					},
+				);
+				rows.insert(
+					r2,
+					RowSolution {
+						fields: only_1,
+						tail: Some(fresh),
+					},
+				);
 			}
 		}
 	}

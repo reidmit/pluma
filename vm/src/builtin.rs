@@ -1434,15 +1434,10 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			for check in checks.iter() {
 				match check {
 					Value::Variant(v) if v.variant.as_str() == "ok" => {}
-					Value::Variant(v) if v.variant.as_str() == "err" => {
-						match v.payload.first() {
-							Some(Value::String(s)) => failures.push(s.as_str().to_string()),
-							other => failures.push(format!(
-								"{}",
-								other.cloned().unwrap_or(Value::Nothing)
-							)),
-						}
-					}
+					Value::Variant(v) if v.variant.as_str() == "err" => match v.payload.first() {
+						Some(Value::String(s)) => failures.push(s.as_str().to_string()),
+						other => failures.push(format!("{}", other.cloned().unwrap_or(Value::Nothing))),
+					},
 					_ => unreachable!("`assert.all` expects a list of results"),
 				}
 			}

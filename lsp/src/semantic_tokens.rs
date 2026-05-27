@@ -131,8 +131,8 @@ fn lexer_kind(t: &Token) -> Option<u32> {
 		BoolTrue(..) | BoolFalse(..) => KEYWORD,
 		KeywordAlias(..) | KeywordAs(..) | KeywordDef(..) | KeywordElse(..) | KeywordEnum(..)
 		| KeywordFun(..) | KeywordIf(..) | KeywordImplement(..) | KeywordIn(..) | KeywordIs(..)
-		| KeywordLet(..) | KeywordTrait(..) | KeywordUse(..) | KeywordWhen(..)
-		| KeywordWhere(..) | KeywordWhile(..) => KEYWORD,
+		| KeywordLet(..) | KeywordTrait(..) | KeywordUse(..) | KeywordWhen(..) | KeywordWhere(..)
+		| KeywordWhile(..) => KEYWORD,
 		Arrow(..)
 		| Bang(..)
 		| BangEqual(..)

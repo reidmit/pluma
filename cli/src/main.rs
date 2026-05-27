@@ -315,7 +315,11 @@ fn test_command(args: Vec<String>) {
 		let entries = match run_suite(&mut vm_instance, new_idx, *suite_idx) {
 			Ok(entries) => entries,
 			Err(err) => {
-				println!("  {} failed to load suite: {}", colors::bold_red("✗"), err.message);
+				println!(
+					"  {} failed to load suite: {}",
+					colors::bold_red("✗"),
+					err.message
+				);
 				failed += 1;
 				continue;
 			}
@@ -337,19 +341,37 @@ fn test_command(args: Vec<String>) {
 
 			let should_run = match status.as_str() {
 				"pending" => {
-					println!("{}{} {} {}", indent, colors::bold_yellow("○"), name, colors::dim("(todo)"));
+					println!(
+						"{}{} {} {}",
+						indent,
+						colors::bold_yellow("○"),
+						name,
+						colors::dim("(todo)")
+					);
 					todo_count += 1;
 					false
 				}
 				"skipped" => {
-					println!("{}{} {} {}", indent, colors::dim("-"), name, colors::dim("(skipped)"));
+					println!(
+						"{}{} {} {}",
+						indent,
+						colors::dim("-"),
+						name,
+						colors::dim("(skipped)")
+					);
 					skipped += 1;
 					false
 				}
 				"focused" => true,
 				_ => {
 					if any_focused {
-						println!("{}{} {} {}", indent, colors::dim("-"), name, colors::dim("(not focused)"));
+						println!(
+							"{}{} {} {}",
+							indent,
+							colors::dim("-"),
+							name,
+							colors::dim("(not focused)")
+						);
 						skipped += 1;
 						false
 					} else {
@@ -387,7 +409,13 @@ fn test_command(args: Vec<String>) {
 				// A genuine runtime error (e.g. `io.fail`, div-by-zero) — the
 				// case crashed rather than producing a result.
 				Err(err) => {
-					println!("{}{} {} {}", indent, colors::bold_red("✗"), name, colors::dim("(errored)"));
+					println!(
+						"{}{} {} {}",
+						indent,
+						colors::bold_red("✗"),
+						name,
+						colors::dim("(errored)")
+					);
 					if let (Some(module), Some(range)) = (&err.module, err.range) {
 						let p = compiler::to_module_path(&root_dir, module);
 						let display_path = p.strip_prefix(&root_dir).unwrap_or(&p);
@@ -426,7 +454,11 @@ fn test_command(args: Vec<String>) {
 		eprintln!("  codegen        : {:>8.2} ms", ms(t_codegen - t_check));
 		eprintln!("  vm::new        : {:>8.2} ms", ms(t_vm_new - t_codegen));
 		eprintln!("  vm register    : {:>8.2} ms", ms(register_time));
-		eprintln!("  vm run cases   : {:>8.2} ms ({} cases)", ms(run_time), total);
+		eprintln!(
+			"  vm run cases   : {:>8.2} ms ({} cases)",
+			ms(run_time),
+			total
+		);
 		eprintln!("  ─────────────────────────────────────");
 		eprintln!("  total in-proc  : {:>8.2} ms", ms(t_vm_end - t_start));
 	}

@@ -25,7 +25,12 @@ pub const AUTO_IMPORTS: &[(&str, &str)] = &[
 // PLUMA_TIMING=1 prints per-module parse/analyze wall-clock to stderr.
 fn timing_log(module: &str, phase: &str, dur: std::time::Duration) {
 	if std::env::var("PLUMA_TIMING").is_ok() {
-		eprintln!("  [{:>7}] {:>8.2} ms  {}", phase, dur.as_secs_f64() * 1000.0, module);
+		eprintln!(
+			"  [{:>7}] {:>8.2} ms  {}",
+			phase,
+			dur.as_secs_f64() * 1000.0,
+			module
+		);
 	}
 }
 
