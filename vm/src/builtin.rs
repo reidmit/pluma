@@ -1607,6 +1607,29 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			let nanos = expect_duration(&args, "sleep");
 			Ok(Value::Task(Rc::new(TaskRepr::Sleep(nanos))))
 		}
+		"task-then" => {
+			let mut it = args.into_iter();
+			let task = Box::new(it.next().unwrap_or(Value::Nothing));
+			let k = it.next().unwrap_or(Value::Nothing);
+			Ok(Value::Task(Rc::new(TaskRepr::Then { task, k })))
+		}
+		"task-or-else" => {
+			let mut it = args.into_iter();
+			let task = Box::new(it.next().unwrap_or(Value::Nothing));
+			let recover = it.next().unwrap_or(Value::Nothing);
+			Ok(Value::Task(Rc::new(TaskRepr::OrElse { task, recover })))
+		}
+		"task-attempt" => {
+			let task = Box::new(args.into_iter().next().unwrap_or(Value::Nothing));
+			Ok(Value::Task(Rc::new(TaskRepr::Attempt { task })))
+		}
+		"task-map" => {
+			// `task.map t f` — task-first, so `t | task.map f` works.
+			let mut it = args.into_iter();
+			let task = Box::new(it.next().unwrap_or(Value::Nothing));
+			let f = it.next().unwrap_or(Value::Nothing);
+			Ok(Value::Task(Rc::new(TaskRepr::Map { task, f })))
+		}
 		"time-now" => {
 			debug_assert_eq!(args.len(), 1, "`now` arity");
 			Ok(Value::Instant(jiff::Timestamp::now().as_nanosecond() as i64))

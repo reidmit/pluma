@@ -37,3 +37,36 @@ public def yield :: fun nothing -> task nothing = built-in "task-yield"
 # task on a timer rather than blocking the thread, so siblings keep
 # running. `try _ = task.sleep 200ms` pauses just the current task.
 public def sleep :: fun duration -> task nothing = built-in "task-sleep"
+
+# Chains a follow-up step onto a task: `then t k` runs `t`, and when it
+# succeeds runs `k` on the result (which returns the next task). If `t`
+# fails, `k` is skipped and the failure propagates. This is the explicit
+# form of what `try` does line-by-line, so reach for `try` instead unless
+# you're building a combinator:
+#
+#     try x = t
+#     k x
+public def then :: fun (task a) (fun a -> task b) -> task b = built-in "task-then"
+
+# Recovers from a failed task. `or-else t recover` runs `t`; if it succeeds,
+# its value passes through, and `recover` is never run. If `t` fails,
+# `recover` runs and *its* task is used instead. This is exactly what `??`
+# does over a task, so you'll usually write the operator:
+#
+#     fetch-primary () ?? fetch-backup ()
+public def or-else :: fun (task a) (fun nothing -> task a) -> task a = built-in "task-or-else"
+
+# Reifies a task's failure into its value. `attempt t` runs `t` and always
+# succeeds: `ok v` if `t` produced `v`, `err e` if `t` failed with `e`. This
+# is how you keep going past a failure -- a failed `attempt`ed task no longer
+# fails its scope, so `task.all (list.map ts task.attempt)` settles every
+# task instead of stopping at the first error.
+public def attempt :: fun (task a) -> task (result a e) = built-in "task-attempt"
+
+# Transforms a task's successful value with a plain function. `map t f` runs
+# `t` and applies `f` to its result; a failure passes through untouched. Note
+# the task-first argument order (like the other combinators here, and so it
+# composes with `|`):
+#
+#     http.get url | task.map parse-body
+public def map :: fun (task a) (fun a -> b) -> task b = built-in "task-map"

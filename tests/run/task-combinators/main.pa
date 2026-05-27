@@ -1,0 +1,23 @@
+# The task combinators: `map`/`then` transform, `or-else` (and `??`) recover,
+# `attempt` reifies failure into a `result`. All compose with `|`.
+def main = fun {
+	try a = task.return 21 | task.map (fun n { n + n })
+	print (to-string a)
+
+	try b = task.then (task.return 10) (fun n { task.return (n + 5) })
+	print (to-string b)
+
+	try c = task.fail "down" | task.or-else (fun { task.return 100 })
+	print (to-string c)
+
+	try d = task.fail "nope" ?? task.return 7
+	print (to-string d)
+
+	try ok-r = task.attempt (task.return 1)
+	when ok-r is ok v { print ("ok " ++ to-string v) } is err e { print ("err " ++ e) }
+
+	try err-r = task.attempt (task.fail "boom")
+	when err-r is ok v { print ("ok " ++ to-string v) } is err e { print ("err " ++ e) }
+
+	task.return 0
+}

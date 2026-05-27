@@ -17,7 +17,7 @@
 // Concurrency, a microtask queue, and cancellation arrive with `scope` (M4);
 // awaited/cancellation cleanup with `defer` arrives in M6.
 
-use crate::value::{TaskRepr, Value};
+use crate::value::{TaskRepr, Value, VariantData};
 use crate::vm::{Frame, VM};
 use crate::RuntimeError;
 use std::rc::Rc;
@@ -69,12 +69,27 @@ impl TaskFrame {
 	}
 }
 
+// An entry in the await chain. The top is making progress; each entry below
+// is suspended waiting on the one above. `Async` frames are *resumed* with a
+// settled value; the combinator frames *transform* it (and are popped).
+enum Activation {
+	// A running async-function instance, suspended at an `Await`.
+	Async(TaskFrame),
+	// `task.then` continuation: `k : fun a -> task b`, run on success.
+	Then(Value),
+	// `task.or-else` recovery: `recover : fun nothing -> task a`, run on failure.
+	OrElse(Value),
+	// `task.attempt`: reify the inner outcome into `ok`/`err`.
+	Attempt,
+	// `task.map`: apply the pure `f : fun a -> b` to a successful value.
+	Map(Value),
+}
+
 // What the driver should do on the next loop turn.
 enum Next {
-	// Begin running this `Value::Task` (a leaf or a cold async instance).
+	// Begin running this `Value::Task` (a leaf, a combinator, or a cold async
+	// instance).
 	Start(Value),
-	// Resume the top frame of `act_stack` with this awaited result.
-	Resume(Value),
 	// The root task finished with this value.
 	Done(Value),
 }
@@ -85,92 +100,135 @@ impl VM {
 	// — failed and nothing recovered it. Called by `run()` when `main` returns
 	// a task.
 	pub(crate) fn run_task(&mut self, root: Value) -> Result<Value, RuntimeError> {
-		// The await chain: the top frame is making progress; each frame below
-		// is suspended awaiting the one above it.
-		let mut act_stack: Vec<TaskFrame> = Vec::new();
+		let mut act: Vec<Activation> = Vec::new();
 		let mut next = Next::Start(root);
 		loop {
 			match next {
 				Next::Done(v) => return Ok(v),
-				Next::Start(task) => {
-					let repr = match &task {
-						Value::Task(r) => Rc::clone(r),
-						// A non-task value reaching here would be a type-system
-						// violation; treat it as already produced.
-						other => {
-							next = settle_ok(&mut act_stack, other.clone());
-							continue;
-						}
-					};
-					match repr.as_ref() {
-						TaskRepr::Pure(v) => next = settle_ok(&mut act_stack, v.clone()),
-						TaskRepr::Yield => next = settle_ok(&mut act_stack, Value::Nothing),
-						TaskRepr::Sleep(ns) => {
-							if *ns > 0 {
-								std::thread::sleep(std::time::Duration::from_nanos(*ns as u64));
-							}
-							next = settle_ok(&mut act_stack, Value::Nothing);
-						}
-						TaskRepr::Fail(e) => return self.unwind_failure(&mut act_stack, e.clone()),
-						TaskRepr::Async {
-							step_fn,
-							captures,
-							args,
-						} => {
-							let mut tf = TaskFrame::new(*step_fn, Rc::clone(captures), args.clone(), self);
-							let outcome = self.drive_step(&mut tf, None)?;
-							act_stack.push(tf);
-							next = self.after_outcome(&mut act_stack, outcome);
-						}
+				Next::Start(task) => next = self.start_task(&mut act, task)?,
+			}
+		}
+	}
+
+	// Begin running one task value: resolve a leaf inline, push a combinator
+	// frame and descend, or instantiate + first-step an async function.
+	fn start_task(&mut self, act: &mut Vec<Activation>, task: Value) -> Result<Next, RuntimeError> {
+		let repr = match &task {
+			Value::Task(r) => Rc::clone(r),
+			// A non-task value reaching here would be a type-system violation;
+			// treat it as already produced.
+			other => return self.settle_ok(act, other.clone()),
+		};
+		match repr.as_ref() {
+			TaskRepr::Pure(v) => self.settle_ok(act, v.clone()),
+			TaskRepr::Yield => self.settle_ok(act, Value::Nothing),
+			TaskRepr::Sleep(ns) => {
+				if *ns > 0 {
+					std::thread::sleep(std::time::Duration::from_nanos(*ns as u64));
+				}
+				self.settle_ok(act, Value::Nothing)
+			}
+			TaskRepr::Fail(e) => self.settle_err(act, e.clone()),
+			// Combinators: push a frame that intercepts the inner task's
+			// outcome, then run the inner task.
+			TaskRepr::Then { task, k } => {
+				act.push(Activation::Then(k.clone()));
+				Ok(Next::Start((**task).clone()))
+			}
+			TaskRepr::OrElse { task, recover } => {
+				act.push(Activation::OrElse(recover.clone()));
+				Ok(Next::Start((**task).clone()))
+			}
+			TaskRepr::Attempt { task } => {
+				act.push(Activation::Attempt);
+				Ok(Next::Start((**task).clone()))
+			}
+			TaskRepr::Map { task, f } => {
+				act.push(Activation::Map(f.clone()));
+				Ok(Next::Start((**task).clone()))
+			}
+			TaskRepr::Async {
+				step_fn,
+				captures,
+				args,
+			} => {
+				let mut tf = TaskFrame::new(*step_fn, Rc::clone(captures), args.clone(), self);
+				let outcome = self.drive_step(&mut tf, None)?;
+				self.after_outcome(act, tf, outcome)
+			}
+		}
+	}
+
+	// Fold one async step's outcome: on `Await`, keep the (suspended) frame and
+	// run the awaited sub-task; on `Complete`, the frame is gone (its Return
+	// already ran cleanups) — run its tail task in its place.
+	fn after_outcome(
+		&mut self,
+		act: &mut Vec<Activation>,
+		tf: TaskFrame,
+		outcome: StepOutcome,
+	) -> Result<Next, RuntimeError> {
+		match outcome {
+			StepOutcome::Await(sub) => {
+				act.push(Activation::Async(tf));
+				Ok(Next::Start(sub))
+			}
+			StepOutcome::Complete(tail) => Ok(Next::Start(tail)),
+		}
+	}
+
+	// A sub-task produced `v`. Walk down the activation chain: transform through
+	// combinator frames, resume the first suspended async frame, or finish.
+	fn settle_ok(&mut self, act: &mut Vec<Activation>, mut v: Value) -> Result<Next, RuntimeError> {
+		loop {
+			match act.pop() {
+				None => return Ok(Next::Done(v)),
+				Some(Activation::Async(mut tf)) => {
+					let outcome = self.drive_step(&mut tf, Some(v))?;
+					return self.after_outcome(act, tf, outcome);
+				}
+				// `then`: feed the value to the continuation, run its task.
+				Some(Activation::Then(k)) => {
+					let t = self.call_function(k, vec![v])?;
+					return Ok(Next::Start(t));
+				}
+				// `or-else`: success passes straight through; recovery discarded.
+				Some(Activation::OrElse(_)) => continue,
+				// `attempt`: success reifies to `ok v`, then keeps settling.
+				Some(Activation::Attempt) => v = make_result(true, v),
+				// `map`: apply the pure function, then keep settling.
+				Some(Activation::Map(f)) => v = self.call_function(f, vec![v])?,
+			}
+		}
+	}
+
+	// A sub-task failed with `err`. Walk down: run each async frame's `defer`
+	// cleanups (LIFO) and propagate, recover at an `or-else`, or reify at an
+	// `attempt`. Reaching the bottom aborts the program.
+	fn settle_err(&mut self, act: &mut Vec<Activation>, err: Value) -> Result<Next, RuntimeError> {
+		loop {
+			match act.pop() {
+				None => return Err(RuntimeError::user_abort(format!("{}", err))),
+				Some(Activation::Async(mut tf)) => {
+					// The awaiting function fails too: run its defers, then keep
+					// propagating. (Best-effort; a cleanup that hard-errors
+					// bubbles up — refined when cancellation lands in M6.)
+					let cleanups = std::mem::take(&mut tf.cleanups);
+					for thunk in cleanups.into_iter().rev() {
+						self.call_function(thunk, Vec::new())?;
 					}
 				}
-				Next::Resume(v) => {
-					let mut tf = act_stack
-						.pop()
-						.ok_or_else(|| RuntimeError::new("VM: task resume with empty stack"))?;
-					let outcome = self.drive_step(&mut tf, Some(v))?;
-					act_stack.push(tf);
-					next = self.after_outcome(&mut act_stack, outcome);
+				// `then` / `map`: failure skips the success path; propagate.
+				Some(Activation::Then(_)) | Some(Activation::Map(_)) => continue,
+				// `or-else`: run the recovery thunk and run the task it returns.
+				Some(Activation::OrElse(recover)) => {
+					let t = self.call_function(recover, vec![Value::Nothing])?;
+					return Ok(Next::Start(t));
 				}
+				// `attempt`: reify the failure to `err e`, then settle as success.
+				Some(Activation::Attempt) => return self.settle_ok(act, make_result(false, err)),
 			}
 		}
-	}
-
-	// Translate a step's outcome into the next driver action.
-	fn after_outcome(&mut self, act_stack: &mut Vec<TaskFrame>, outcome: StepOutcome) -> Next {
-		match outcome {
-			// Suspended: the top frame stays on `act_stack`; run the awaited
-			// sub-task next, then its result resumes the frame.
-			StepOutcome::Await(sub) => Next::Start(sub),
-			// Done: this frame's cleanups already ran (in the VM's Return).
-			// Drop it and run its tail task in its place — settling to the
-			// awaiter below, or to `Done` if it was the root.
-			StepOutcome::Complete(tail) => {
-				act_stack.pop();
-				Next::Start(tail)
-			}
-		}
-	}
-
-	// Propagate a task failure up the await chain, running each suspended
-	// frame's `defer` cleanups LIFO on the way out (matching how `try`-failure
-	// runs defers in the synchronous case). With no recovery combinators yet
-	// (M2), this always reaches the top and aborts.
-	fn unwind_failure(
-		&mut self,
-		act_stack: &mut Vec<TaskFrame>,
-		err: Value,
-	) -> Result<Value, RuntimeError> {
-		while let Some(mut tf) = act_stack.pop() {
-			let cleanups = std::mem::take(&mut tf.cleanups);
-			for thunk in cleanups.into_iter().rev() {
-				// A cleanup that itself raises a hard error propagates; a
-				// cleanup that fails softly is the caller's concern. Best-effort
-				// semantics (M6) refine this once cancellation lands.
-				self.call_function(thunk, Vec::new())?;
-			}
-		}
-		Err(RuntimeError::user_abort(format!("{}", err)))
 	}
 
 	// Push a VM frame backed by `tf`'s saved state, run it until it `Await`s or
@@ -240,12 +298,12 @@ impl VM {
 	}
 }
 
-// Settle a successful value into the await chain: resume the awaiter, or
-// finish if this was the root.
-fn settle_ok(act_stack: &mut [TaskFrame], v: Value) -> Next {
-	if act_stack.is_empty() {
-		Next::Done(v)
-	} else {
-		Next::Resume(v)
-	}
+// Build a prelude `result` value — `ok v` or `err v` — for `task.attempt`,
+// which reifies a task's success/failure into the value channel.
+fn make_result(ok: bool, v: Value) -> Value {
+	Value::Variant(Rc::new(VariantData {
+		qualified_enum: Rc::new("__prelude__.result".to_string()),
+		variant: Rc::new(if ok { "ok" } else { "err" }.to_string()),
+		payload: vec![v],
+	}))
 }

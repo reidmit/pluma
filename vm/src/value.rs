@@ -103,6 +103,33 @@ pub enum TaskRepr {
 		captures: Rc<Vec<Value>>,
 		args: Vec<Value>,
 	},
+	// Combinator nodes (built by the `task.*` builtins). The driver interprets
+	// them as activation frames that transform a sub-task's outcome.
+	//
+	// `task.then t k` — run `t`; on success feed the value to `k` (a
+	// `fun a -> task b`) and run that; on failure, propagate (skip `k`).
+	Then {
+		task: Box<Value>,
+		k: Value,
+	},
+	// `task.or-else t recover` — run `t`; on success pass the value through;
+	// on failure run `recover` (a `fun nothing -> task a`) and run its task.
+	// The recovering dual of `then`; what `??` desugars to over `task`.
+	OrElse {
+		task: Box<Value>,
+		recover: Value,
+	},
+	// `task.attempt t` — run `t`; reify the outcome into the value channel:
+	// success -> `ok v`, failure -> `err e`. The result task never fails.
+	Attempt {
+		task: Box<Value>,
+	},
+	// `task.map f t` — run `t`; apply the pure `f` (a `fun a -> b`) to its
+	// value; propagate failure unchanged.
+	Map {
+		task: Box<Value>,
+		f: Value,
+	},
 }
 
 pub struct DictData {

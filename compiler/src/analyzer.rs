@@ -4623,13 +4623,20 @@ impl<'compiler> Analyzer<'compiler> {
 			_ => unreachable!("do_coalesce_dispatch called on non-BinaryOperation"),
 		};
 
-		// Recognized carriers mirror `try`: option (1 arg), result (2 args).
+		// Recognized carriers mirror `try`: option (1 arg), result (2 args),
+		// task (1 arg). For option/result, `??` *unwraps* to the bare payload;
+		// for task it stays in the carrier (you can't synchronously unwrap a
+		// task), so the "payload" the result type takes is the whole `task a`
+		// and the fallback must itself be a `task a`.
 		let (carrier_module_name, payload_ty): (&'static str, Type) = match &resolved_left {
 			Type::Enum(name, args) if name == "__prelude__.option" && args.len() == 1 => {
 				("option", args[0].clone())
 			}
 			Type::Enum(name, args) if name == "__prelude__.result" && args.len() == 2 => {
 				("result", args[0].clone())
+			}
+			Type::Enum(name, args) if name == "__prelude__.task" && args.len() == 1 => {
+				("task", resolved_left.clone())
 			}
 			_ => {
 				self.error(

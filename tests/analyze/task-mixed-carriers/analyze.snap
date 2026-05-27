@@ -1,0 +1,8 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: Type mismatch: expected `result 't7 'w`, but found `task int`.
+> 5 | 	try x = ok 1
+       ^^^^^^^^^^^^
+
