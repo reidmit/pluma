@@ -135,6 +135,15 @@ pub enum TaskRepr {
 		task: Box<Value>,
 		f: Value,
 	},
+	// `task.shielded t` — run `t` in an uninterruptible region: the driver
+	// runs it to completion atomically (within one pump), so a concurrent
+	// cancellation can't interrupt it — it's only observed once `t` settles.
+	// For self-contained critical sections / cleanup. `t` may not await across
+	// fibers (a scope handle or `s.next`); that needs the scheduler to
+	// interleave, so it's a runtime error inside a shield.
+	Shielded {
+		task: Box<Value>,
+	},
 	// A structured-concurrency scope (built by `scope-new`, i.e. what the
 	// `scope` keyword lowers to). When the driver runs it, it creates a fresh
 	// scope, calls `body_fn` with the scope's handle, and runs the resulting

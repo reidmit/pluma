@@ -74,6 +74,14 @@ public def attempt :: fun (task a) -> task (result a e) = built-in "task-attempt
 #     http.get url | task.map parse-body
 public def map :: fun (task a) (fun a -> b) -> task b = built-in "task-map"
 
+# Runs `t` in an uninterruptible region: a concurrent cancellation (a sibling
+# failing, a deadline, an `s.cancel`) can't interrupt `t` — it runs to
+# completion and the cancellation is only observed afterward. Use it to protect
+# a critical section or cleanup that must not be torn apart partway through. A
+# shielded `t` may not await across fibers (a scope handle / `s.next` / a nested
+# `scope`); shield self-contained work.
+public def shielded :: fun (task a) -> task a = built-in "task-shielded"
+
 # --- structured-concurrency kernel ---------------------------------------
 #
 # The hidden primitives the `scope` keyword (and the concurrent combinators)

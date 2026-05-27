@@ -1630,6 +1630,10 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			let f = it.next().unwrap_or(Value::Nothing);
 			Ok(Value::Task(Rc::new(TaskRepr::Map { task, f })))
 		}
+		"task-shielded" => {
+			let task = Box::new(args.into_iter().next().unwrap_or(Value::Nothing));
+			Ok(Value::Task(Rc::new(TaskRepr::Shielded { task })))
+		}
 		// --- structured-concurrency kernel (see vm::task) ---
 		"scope-new" => {
 			// `scope-new is-manual body` — what the `scope` keyword lowers to.

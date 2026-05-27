@@ -754,15 +754,31 @@ own and the runtime hook generalizes when scopes/cancellation arrive.
       with pending cleanups opts out of tail-call reuse at runtime (so
       its Return actually executes); a raising cleanup propagates and
       skips the remaining cleanups (revisit when cancellation lands).
-- [ ] Cancellation cleanup + uninterruptible-by-default — needs the
-      `task` runtime (Phases 1–4).
-- [ ] Awaited cleanup: a `defer` whose expression returns a `task`.
-- [ ] `task.shielded` combinator for explicit uninterruptible regions.
+- [x] Cancellation cleanup — a cancelled fiber's `defer`s run LIFO during
+      reaping (`reap_fiber` in vm/src/task.rs), cascading into sub-scopes.
+      Uninterruptible-by-default holds trivially for *synchronous* cleanup:
+      cancellation is only observed between scheduler pumps, and a sync
+      cleanup runs within one pump, so nothing can tear it apart.
+- [x] `task.shielded t` — explicit uninterruptible region. The driver runs
+      `t` to completion inline within one pump (`run_shielded`), so a
+      concurrent cancellation (sibling failure / deadline / `s.cancel`) is
+      observed only *after* `t` settles. Restriction: a shielded task may not
+      await across fibers (a scope handle / `s.next` / a nested `scope`) — that
+      needs the scheduler to interleave, so it's a clean runtime error rather
+      than a deadlock. Fixture: `tests/run/task-shielded`.
+- [ ] Awaited cleanup: a `defer` whose expression returns a `task`. DEFERRED
+      — the cleanup-running sites (VM `Return`, the `Focus::Err` walk,
+      `reap_fiber`) currently `call_function` the thunk and discard its value,
+      so a task-returning cleanup wouldn't run. Driving it to completion at
+      each site is the work, but there's no consumer yet: nothing in the
+      language returns a `task` to clean up (the Phase 7 I/O wrappers are
+      *sync*). Revisit when async I/O lands.
 - [x] Test fixtures: cleanup-on-success, cleanup-on-`try`-failure,
       conditional acquisition, LIFO ordering, raising cleanup
       (`tests/run/defer-cleanup`; `tests/analyze/defer`,
       `tests/analyze/defer-no-operand`; `tests/format/defer`).
-- [ ] Test fixtures still pending: cleanup-on-cancel, async cleanup.
+      Cleanup-on-cancel: covered by `tests/run/scope-race` +
+      `tests/run/scope-deadline` (a reaped child's `defer` prints).
 
 ### Phase 6 — Concurrent combinators
 

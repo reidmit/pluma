@@ -1,0 +1,16 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+X
+A
+B
+both 7
+slow-start
+guarded-done
+guarded 99
+== stderr ==
+

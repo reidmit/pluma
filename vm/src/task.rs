@@ -341,6 +341,22 @@ impl VM {
 						let outcome = self.drive_step(&mut tf, None)?;
 						Ok(self.after_outcome(act, tf, outcome))
 					}
+					TaskRepr::Shielded { task } => {
+						// Run `task` to completion inline, in this same pump. Because
+						// the scheduler is single-threaded and only reaps fibers
+						// between pumps, nothing can cancel us until we return — the
+						// region is uninterruptible, and any pending cancellation is
+						// observed only after it settles. Feed the result back into
+						// the chain like any sub-task.
+						let outcome = self.run_shielded(fid, (**task).clone())?;
+						Ok(match outcome {
+							Outcome::Ok(v) => Cont::Go(Focus::Ok(v)),
+							Outcome::Err(e) => Cont::Go(Focus::Err(e)),
+							// run_shielded never yields a cancelled outcome (no reaping
+							// happens mid-pump), but stay total.
+							Outcome::Cancelled => Cont::Go(Focus::Err(cancelled_error())),
+						})
+					}
 					TaskRepr::Scope { manual, body_fn } => self.start_scope(fid, *manual, body_fn.clone()),
 					TaskRepr::Handle(child) => {
 						let child = *child;
@@ -409,6 +425,39 @@ impl VM {
 				Cont::Go(Focus::Start(sub))
 			}
 			StepOutcome::Complete(tail) => Cont::Go(Focus::Start(tail)),
+		}
+	}
+
+	// Drive a shielded task to completion within the current pump (so it can't
+	// be interrupted by a concurrent cancellation — see `TaskRepr::Shielded`).
+	// Reuses `advance_one` for all the chain logic on a private activation
+	// stack; the only difference from the scheduler loop is how parks are
+	// handled: `yield`/`sleep` are honored inline (a sleep blocks, which is the
+	// price of uninterruptibility), but a cross-fiber await (a scope handle,
+	// `s.next`, or a nested `scope`) can't run without the scheduler, so it's a
+	// runtime error rather than a silent deadlock.
+	fn run_shielded(&mut self, fid: Fid, task: Value) -> Result<Outcome, RuntimeError> {
+		let mut act: Vec<Activation> = Vec::new();
+		let mut focus = Focus::Start(task);
+		loop {
+			match self.advance_one(fid, &mut act, focus)? {
+				Cont::Go(next) => focus = next,
+				Cont::Done(outcome) => return Ok(outcome),
+				Cont::Park(wait) => match wait {
+					Wait::Yield => focus = Focus::Ok(Value::Nothing),
+					Wait::Sleep(ns) => {
+						if ns > 0 {
+							std::thread::sleep(std::time::Duration::from_nanos(ns as u64));
+						}
+						focus = Focus::Ok(Value::Nothing);
+					}
+					Wait::Handle(_) | Wait::Next(_) | Wait::Scope(_) => {
+						return Err(RuntimeError::new(
+							"task.shielded: a shielded task can't await across fibers (a scope handle, s.next, or a nested scope)",
+						));
+					}
+				},
+			}
 		}
 	}
 
