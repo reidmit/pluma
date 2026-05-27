@@ -33,7 +33,7 @@ module `main` (tests/analyze/pipeline/main.pa) {
                                             },
                                             right: expr(3:13-3:40) :: list int {
                                                 kind: call(3:13-3:40) {
-                                                    callee: expr(3:13-3:24) :: (list 'w) ('w -> bool) -> list 'w {
+                                                    callee: expr(3:13-3:24) :: (list 'x) ('x -> bool) -> list 'x {
                                                         kind: namespace-access `list.filter`,
                                                     },
                                                     args: [

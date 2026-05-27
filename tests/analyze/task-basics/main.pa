@@ -1,0 +1,8 @@
+# The core.task primitives and their inferred types.
+def make-num = fun { task.return 42 }
+
+def make-fail = fun { task.fail "boom" }
+
+def pause = fun { task.sleep 500ms }
+
+def give-turn = fun { task.yield () }

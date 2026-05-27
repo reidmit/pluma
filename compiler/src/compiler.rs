@@ -20,6 +20,11 @@ pub const AUTO_IMPORTS: &[(&str, &str)] = &[
 	("core.ref", "ref"),
 	("core.option", "option"),
 	("core.result", "result"),
+	// `task` is the third `try` carrier, so — like option/result — its
+	// module is auto-imported (`task.return`, `task.sleep`, … resolve with
+	// no `use`). The `task` local name overlaps the prelude `task` enum the
+	// same way `option`/`result` do.
+	("core.task", "task"),
 ];
 
 // PLUMA_TIMING=1 prints per-module parse/analyze wall-clock to stderr.

@@ -1,0 +1,101 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/task-basics/main.pa) {
+    comments: {
+        0: " The core.task primitives and their inferred types.",
+    },
+    ast: Some(
+        module(1:0-7:37) [
+            def(1:0-1:37) :: nothing {
+                name: ident(1:4-1:12) `make-num`,
+                kind: expr(1:15-1:37) :: nothing -> task int {
+                    kind: fun(1:15-1:37) {
+                        params: [],
+                        body: [
+                            expr(1:21-1:35) :: task int {
+                                kind: call(1:21-1:35) {
+                                    callee: expr(1:21-1:32) :: 't0 -> task 't0 {
+                                        kind: namespace-access `task.return`,
+                                    },
+                                    args: [
+                                        expr(1:33-1:35) :: int {
+                                            kind: literal(1:33-1:35) int 42,
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+            def(3:0-3:40) :: nothing {
+                name: ident(3:4-3:13) `make-fail`,
+                kind: expr(3:16-3:40) :: nothing -> task 't4 {
+                    kind: fun(3:16-3:40) {
+                        params: [],
+                        body: [
+                            expr(3:22-3:38) :: task 't4 {
+                                kind: call(3:22-3:38) {
+                                    callee: expr(3:22-3:31) :: 't3 -> task 't4 {
+                                        kind: namespace-access `task.fail`,
+                                    },
+                                    args: [
+                                        expr(3:33-3:38) :: string {
+                                            kind: literal(3:33-3:38) string "boom",
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+            def(5:0-5:36) :: nothing {
+                name: ident(5:4-5:9) `pause`,
+                kind: expr(5:12-5:36) :: nothing -> task nothing {
+                    kind: fun(5:12-5:36) {
+                        params: [],
+                        body: [
+                            expr(5:18-5:34) :: task nothing {
+                                kind: call(5:18-5:34) {
+                                    callee: expr(5:18-5:28) :: duration -> task nothing {
+                                        kind: namespace-access `task.sleep`,
+                                    },
+                                    args: [
+                                        expr(5:29-5:34) :: duration {
+                                            kind: literal(5:29-5:34) duration 500000000ns,
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+            def(7:0-7:37) :: nothing {
+                name: ident(7:4-7:13) `give-turn`,
+                kind: expr(7:16-7:37) :: nothing -> task nothing {
+                    kind: fun(7:16-7:37) {
+                        params: [],
+                        body: [
+                            expr(7:22-7:35) :: task nothing {
+                                kind: call(7:22-7:35) {
+                                    callee: expr(7:22-7:32) :: nothing -> task nothing {
+                                        kind: namespace-access `task.yield`,
+                                    },
+                                    args: [
+                                        expr(7:33-7:35) :: nothing {
+                                            kind: (),
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

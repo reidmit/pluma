@@ -4208,8 +4208,13 @@ impl<'compiler> Analyzer<'compiler> {
 				self.report_unresolved_try_in_expr(inner, subst);
 			}
 			ExprKind::Try(TryNode {
-				range, value, rest, ..
+				range,
+				value,
+				rest,
+				task_carrier,
+				..
 			}) => {
+				let is_task = *task_carrier;
 				let try_range = *range;
 				let resolved = subst.apply_to_type(&value.ty);
 				// Walk children first in case they have un-rewritten trys
@@ -4218,21 +4223,25 @@ impl<'compiler> Analyzer<'compiler> {
 				for e in rest.iter_mut() {
 					self.report_unresolved_try_in_expr(e, subst);
 				}
-				match resolved {
-					Type::Var(_) => {
-						self.error(try_range, AnalysisErrorKind::TryRhsUndetermined);
+				// A task `try` is intentionally left intact (codegen lowers
+				// it); it's resolved, not a failure.
+				if !is_task {
+					match resolved {
+						Type::Var(_) => {
+							self.error(try_range, AnalysisErrorKind::TryRhsUndetermined);
+						}
+						_ => {
+							// Should be impossible — dispatch loop should have
+							// handled any non-Var head. Report as unsupported
+							// carrier so the user sees the actual type.
+							self.error(
+								try_range,
+								AnalysisErrorKind::TryUnsupportedCarrier { ty: resolved },
+							);
+						}
 					}
-					_ => {
-						// Should be impossible — dispatch loop should have
-						// handled any non-Var head. Report as unsupported
-						// carrier so the user sees the actual type.
-						self.error(
-							try_range,
-							AnalysisErrorKind::TryUnsupportedCarrier { ty: resolved },
-						);
-					}
+					expr.ty = Type::Unknown;
 				}
-				expr.ty = Type::Unknown;
 			}
 			ExprKind::Identifier(_)
 			| ExprKind::Literal(_)
@@ -4384,6 +4393,55 @@ impl<'compiler> Analyzer<'compiler> {
 			return false;
 		}
 
+		// Task carrier: unlike option/result, we do NOT rewrite the `try`
+		// into a `task.then` call. Lowering a task `try`-chain to a tree of
+		// `.then` closures *is* the trampoline; for the CPS transform we
+		// keep the `Try` node intact (flag it `task_carrier`) so codegen can
+		// lay the chain out as one resumable state-machine step function.
+		// We only emit the linking constraints, then leave the node for
+		// codegen. Idempotent: once flagged, report no further progress so
+		// the dispatch fixpoint can terminate.
+		if let Type::Enum(name, args) = &resolved_value_ty {
+			if name == "__prelude__.task" && args.len() == 1 {
+				let payload_ty = args[0].clone();
+				let t = match &mut expr.kind {
+					ExprKind::Try(t) => t,
+					_ => unreachable!("do_try_dispatch called on non-Try expr"),
+				};
+				if t.task_carrier {
+					return false;
+				}
+				if t.rest.is_empty() {
+					self.error(t.range, TryEmptyBody);
+					expr.ty = Type::Unknown;
+					return true;
+				}
+				if !matches!(
+					t.pattern.kind,
+					PatternKind::Identifier(_) | PatternKind::Underscore
+				) {
+					self.error(t.range, TryUnsupportedPattern);
+					expr.ty = Type::Unknown;
+					return true;
+				}
+				let try_range = t.range;
+				let pattern_ty = t.pattern_ty.clone();
+				let last_idx = t.rest.len() - 1;
+				let body_last_ty = t.rest[last_idx].ty.clone();
+				t.task_carrier = true;
+
+				// The pattern binds the awaited task's payload; the
+				// continuation's tail and the whole `try` are themselves
+				// `task β` (the function this lives in returns a task).
+				let body_payload = self.new_type_var();
+				let task_ty = Type::Enum("__prelude__.task".to_string(), vec![body_payload]);
+				new_constraints.push(eq_constraint(pattern_ty, payload_ty).at(try_range));
+				new_constraints.push(eq_constraint(body_last_ty, task_ty.clone()).at(try_range));
+				new_constraints.push(eq_constraint(expr.ty.clone(), task_ty).at(try_range));
+				return true;
+			}
+		}
+
 		let try_node = match std::mem::replace(&mut expr.kind, ExprKind::EmptyTuple) {
 			ExprKind::Try(t) => t,
 			_ => unreachable!("do_try_dispatch called on non-Try expr"),
@@ -4395,6 +4453,7 @@ impl<'compiler> Analyzer<'compiler> {
 			value,
 			rest,
 			pattern_ty,
+			..
 		} = try_node;
 
 		if rest.is_empty() {
@@ -4815,13 +4874,18 @@ impl<'compiler> Analyzer<'compiler> {
 				// constrain, are all that needs annotating.
 			}
 
-			ExprKind::Try(TryNode { value, rest, .. }) => {
-				// Normally `constrain_expr` rewrites a `Try` into a `Call`
-				// once the RHS's head constructor is known, so annotate
-				// sees the rewritten form. If dispatch failed (the RHS
-				// type couldn't be resolved, or it wasn't a known carrier)
-				// we still walk the original sub-trees so partial info is
-				// at least filled in.
+			ExprKind::Try(TryNode {
+				value,
+				rest,
+				pattern_ty,
+				..
+			}) => {
+				// A `task`-carrier `try` survives to codegen (the CPS
+				// lowering); fill in its inferred types. (option/result trys
+				// were rewritten into `Call`s and never reach here; if one
+				// did — dispatch failed — we still walk the sub-trees so
+				// partial info is filled in.)
+				self.fill_in_placeholder(pattern_ty, subst);
 				self.annotate_expr(value, subst);
 				for e in rest.iter_mut() {
 					self.annotate_expr(e, subst);

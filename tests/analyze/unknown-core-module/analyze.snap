@@ -8,7 +8,7 @@ error: Name `core` is not defined.
 > 3 | def x = core.does-not-exist
               ^^^^
 
-error: Type mismatch: expected `{does-not-exist: 'r, ...}`, but found `?`.
+error: Type mismatch: expected `{does-not-exist: 's, ...}`, but found `?`.
 > 3 | def x = core.does-not-exist
               ^^^^^^^^^^^^^^^^^^^
 

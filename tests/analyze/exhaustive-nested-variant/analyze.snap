@@ -12,10 +12,10 @@ module `main` (tests/analyze/exhaustive-nested-variant/main.pa) {
         module(4:0-23:1) [
             def(4:0-10:1) :: nothing {
                 name: ident(4:4-4:13) `show-pair`,
-                kind: expr(4:16-10:1) :: (option (('z, 't0))) -> string {
+                kind: expr(4:16-10:1) :: (option (('t0, 't1))) -> string {
                     kind: fun(4:16-10:1) {
                         params: [
-                            ident(4:20-4:23) `opt` :: option (('z, 't0)),
+                            ident(4:20-4:23) `opt` :: option (('t0, 't1)),
                         ],
                         body: [
                             expr(5:1-9:2) :: string {
@@ -42,11 +42,11 @@ module `main` (tests/analyze/exhaustive-nested-variant/main.pa) {
                                                 },
                                                 expr(6:5-6:16) :: string {
                                                     kind: call(6:5-6:16) {
-                                                        callee: expr(6:5-6:14) :: 'z -> string {
+                                                        callee: expr(6:5-6:14) :: 't0 -> string {
                                                             kind: ident(6:5-6:14) `to-string`,
                                                         },
                                                         args: [
-                                                            expr(6:15-6:16) :: 'z {
+                                                            expr(6:15-6:16) :: 't0 {
                                                                 kind: ident(6:15-6:16) `a`,
                                                             },
                                                         ],
@@ -57,11 +57,11 @@ module `main` (tests/analyze/exhaustive-nested-variant/main.pa) {
                                                 },
                                                 expr(6:20-6:31) :: string {
                                                     kind: call(6:20-6:31) {
-                                                        callee: expr(6:20-6:29) :: 't0 -> string {
+                                                        callee: expr(6:20-6:29) :: 't1 -> string {
                                                             kind: ident(6:20-6:29) `to-string`,
                                                         },
                                                         args: [
-                                                            expr(6:30-6:31) :: 't0 {
+                                                            expr(6:30-6:31) :: 't1 {
                                                                 kind: ident(6:30-6:31) `b`,
                                                             },
                                                         ],
@@ -88,10 +88,10 @@ module `main` (tests/analyze/exhaustive-nested-variant/main.pa) {
             },
             def(12:0-18:1) :: nothing {
                 name: ident(12:4-12:15) `show-record`,
-                kind: expr(12:18-18:1) :: (option ({age: 't13, name: string})) -> string {
+                kind: expr(12:18-18:1) :: (option ({age: 't14, name: string})) -> string {
                     kind: fun(12:18-18:1) {
                         params: [
-                            ident(12:22-12:25) `opt` :: option ({age: 't13, name: string}),
+                            ident(12:22-12:25) `opt` :: option ({age: 't14, name: string}),
                         ],
                         body: [
                             expr(13:1-17:2) :: string {
@@ -131,11 +131,11 @@ module `main` (tests/analyze/exhaustive-nested-variant/main.pa) {
                                                 },
                                                 expr(14:11-14:22) :: string {
                                                     kind: call(14:11-14:22) {
-                                                        callee: expr(14:11-14:20) :: 't13 -> string {
+                                                        callee: expr(14:11-14:20) :: 't14 -> string {
                                                             kind: ident(14:11-14:20) `to-string`,
                                                         },
                                                         args: [
-                                                            expr(14:21-14:22) :: 't13 {
+                                                            expr(14:21-14:22) :: 't14 {
                                                                 kind: ident(14:21-14:22) `a`,
                                                             },
                                                         ],
@@ -182,7 +182,7 @@ module `main` (tests/analyze/exhaustive-nested-variant/main.pa) {
                                                         expr(21:18-21:31) :: option ((int, int)) {
                                                             kind: expr(21:19-21:30) :: option ((int, int)) {
                                                                 kind: call(21:19-21:30) {
-                                                                    callee: expr(21:19-21:23) :: 't27 -> option 't27 {
+                                                                    callee: expr(21:19-21:23) :: 't28 -> option 't28 {
                                                                         kind: ident(21:19-21:23) `some`,
                                                                     },
                                                                     args: [
@@ -223,7 +223,7 @@ module `main` (tests/analyze/exhaustive-nested-variant/main.pa) {
                                                         expr(22:20-22:46) :: option ({age: int, name: string}) {
                                                             kind: expr(22:21-22:45) :: option ({age: int, name: string}) {
                                                                 kind: call(22:21-22:45) {
-                                                                    callee: expr(22:21-22:25) :: 't37 -> option 't37 {
+                                                                    callee: expr(22:21-22:25) :: 't38 -> option 't38 {
                                                                         kind: ident(22:21-22:25) `some`,
                                                                     },
                                                                     args: [

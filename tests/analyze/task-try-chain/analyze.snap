@@ -1,0 +1,129 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/task-try-chain/main.pa) {
+    comments: {
+        0: " A function that awaits several tasks in sequence with `try` is itself a",
+        1: " `task`-returning function — the third `try` carrier. The `try` nodes are",
+        2: " left intact by the analyzer (task_carrier) for codegen's CPS lowering.",
+    },
+    ast: Some(
+        module(3:0-12:1) [
+            def(3:0-7:1) :: nothing {
+                name: ident(3:4-3:9) `steps`,
+                kind: expr(3:12-7:1) :: nothing -> task ((nothing, nothing)) {
+                    kind: fun(3:12-7:1) {
+                        params: [],
+                        body: [
+                            expr(4:1-6:19) :: task ((nothing, nothing)) {
+                                kind: try(4:1-6:19) {
+                                    pattern: pattern(4:5-4:6) Identifier(
+                                        ident(4:5-4:6) `a`,
+                                    ),
+                                    value: expr(4:9-4:22) :: task nothing {
+                                        kind: call(4:9-4:22) {
+                                            callee: expr(4:9-4:19) :: duration -> task nothing {
+                                                kind: namespace-access `task.sleep`,
+                                            },
+                                            args: [
+                                                expr(4:20-4:22) :: duration {
+                                                    kind: literal(4:20-4:22) duration 1000000000ns,
+                                                },
+                                            ],
+                                        },
+                                    },
+                                    rest: [
+                                        expr(5:1-6:19) :: task ((nothing, nothing)) {
+                                            kind: try(5:1-6:19) {
+                                                pattern: pattern(5:5-5:6) Identifier(
+                                                    ident(5:5-5:6) `b`,
+                                                ),
+                                                value: expr(5:9-5:22) :: task nothing {
+                                                    kind: call(5:9-5:22) {
+                                                        callee: expr(5:9-5:19) :: duration -> task nothing {
+                                                            kind: namespace-access `task.sleep`,
+                                                        },
+                                                        args: [
+                                                            expr(5:20-5:22) :: duration {
+                                                                kind: literal(5:20-5:22) duration 2000000000ns,
+                                                            },
+                                                        ],
+                                                    },
+                                                },
+                                                rest: [
+                                                    expr(6:1-6:19) :: task ((nothing, nothing)) {
+                                                        kind: call(6:1-6:19) {
+                                                            callee: expr(6:1-6:12) :: 't2 -> task 't2 {
+                                                                kind: namespace-access `task.return`,
+                                                            },
+                                                            args: [
+                                                                expr(6:13-6:19) :: (nothing, nothing) {
+                                                                    kind: tuple [
+                                                                        expr(6:14-6:15) :: nothing {
+                                                                            kind: ident(6:14-6:15) `a`,
+                                                                        },
+                                                                        expr(6:17-6:18) :: nothing {
+                                                                            kind: ident(6:17-6:18) `b`,
+                                                                        },
+                                                                    ],
+                                                                },
+                                                            ],
+                                                        },
+                                                    },
+                                                ],
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+            def(9:0-12:1) :: nothing {
+                name: ident(9:4-9:13) `use-steps`,
+                kind: expr(9:16-12:1) :: nothing -> task ((nothing, nothing)) {
+                    kind: fun(9:16-12:1) {
+                        params: [],
+                        body: [
+                            expr(10:1-11:17) :: task ((nothing, nothing)) {
+                                kind: try(10:1-11:17) {
+                                    pattern: pattern(10:5-10:9) Identifier(
+                                        ident(10:5-10:9) `pair`,
+                                    ),
+                                    value: expr(10:12-10:20) :: task ((nothing, nothing)) {
+                                        kind: call(10:12-10:20) {
+                                            callee: expr(10:12-10:17) :: nothing -> task ((nothing, nothing)) {
+                                                kind: ident(10:12-10:17) `steps`,
+                                            },
+                                            args: [
+                                                expr(10:18-10:20) :: nothing {
+                                                    kind: (),
+                                                },
+                                            ],
+                                        },
+                                    },
+                                    rest: [
+                                        expr(11:1-11:17) :: task ((nothing, nothing)) {
+                                            kind: call(11:1-11:17) {
+                                                callee: expr(11:1-11:12) :: 't10 -> task 't10 {
+                                                    kind: namespace-access `task.return`,
+                                                },
+                                                args: [
+                                                    expr(11:13-11:17) :: (nothing, nothing) {
+                                                        kind: ident(11:13-11:17) `pair`,
+                                                    },
+                                                ],
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

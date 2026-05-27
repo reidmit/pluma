@@ -8,24 +8,24 @@ module `main` (tests/analyze/closure-escape/main.pa) {
         module(0:0-6:25) [
             def(0:0-2:1) :: nothing {
                 name: ident(0:4-0:14) `make-adder`,
-                kind: expr(0:17-2:1) :: 'z -> 'z -> 'z {
+                kind: expr(0:17-2:1) :: 't0 -> 't0 -> 't0 {
                     kind: fun(0:17-2:1) {
                         params: [
-                            ident(0:21-0:22) `x` :: 'z,
+                            ident(0:21-0:22) `x` :: 't0,
                         ],
                         body: [
-                            expr(1:1-1:16) :: 'z -> 'z {
+                            expr(1:1-1:16) :: 't0 -> 't0 {
                                 kind: fun(1:1-1:16) {
                                     params: [
-                                        ident(1:5-1:6) `y` :: 'z,
+                                        ident(1:5-1:6) `y` :: 't0,
                                     ],
                                     body: [
-                                        expr(1:9-1:14) :: 'z {
+                                        expr(1:9-1:14) :: 't0 {
                                             kind: binary op(1:11-1:12) `+` {
-                                                left: expr(1:9-1:10) :: 'z {
+                                                left: expr(1:9-1:10) :: 't0 {
                                                     kind: ident(1:9-1:10) `x`,
                                                 },
-                                                right: expr(1:13-1:14) :: 'z {
+                                                right: expr(1:13-1:14) :: 't0 {
                                                     kind: ident(1:13-1:14) `y`,
                                                 },
                                             },

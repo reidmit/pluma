@@ -14,6 +14,14 @@ use crate::types::Type;
 // the first constraint-gen pass. Stored on the node so the post-unify
 // dispatch pass can link it to the resolved carrier's payload type
 // (e.g. `α := int` when the RHS is `option int`).
+//
+// `task_carrier`: the `option`/`result` carriers are rewritten away by the
+// analyzer into `<carrier>.then` calls, so a `Try` node normally never
+// survives to codegen. The `task` carrier is the exception — it is left
+// intact (with `task_carrier = true`) so codegen can lower the whole
+// `try`-chain into a resumable state machine (the CPS transform), rather
+// than into a tree of separately-allocated continuation closures. See
+// `do_try_dispatch` in the analyzer and `emit_async_*` in codegen.
 #[derive(Clone)]
 pub struct TryNode {
 	pub range: Range,
@@ -21,6 +29,7 @@ pub struct TryNode {
 	pub value: Box<ExprNode>,
 	pub rest: Vec<ExprNode>,
 	pub pattern_ty: Type,
+	pub task_carrier: bool,
 }
 
 #[cfg(debug_assertions)]

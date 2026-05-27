@@ -1,0 +1,13 @@
+# A function that awaits several tasks in sequence with `try` is itself a
+# `task`-returning function — the third `try` carrier. The `try` nodes are
+# left intact by the analyzer (task_carrier) for codegen's CPS lowering.
+def steps = fun {
+	try a = task.sleep 1s
+	try b = task.sleep 2s
+	task.return (a, b)
+}
+
+def use-steps = fun {
+	try pair = steps ()
+	task.return pair
+}

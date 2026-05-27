@@ -431,6 +431,7 @@ impl<'a> Parser<'a> {
 				value: Box::new(value),
 				rest,
 				pattern_ty: Type::Unknown,
+				task_carrier: false,
 			}),
 			ty: Type::Unknown,
 			trait_dispatch: None,

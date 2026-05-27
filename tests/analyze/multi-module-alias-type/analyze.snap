@@ -38,15 +38,15 @@ module `main` (tests/analyze/multi-module-alias-type/main.pa) {
             },
             def(4:0-6:1) :: nothing {
                 name: ident(4:4-4:8) `x-of`,
-                kind: expr(4:11-6:1) :: ({x: 'z, ...}) -> 'z {
+                kind: expr(4:11-6:1) :: ({x: 't0, ...}) -> 't0 {
                     kind: fun(4:11-6:1) {
                         params: [
-                            ident(4:15-4:16) `p` :: {x: 'z, ...},
+                            ident(4:15-4:16) `p` :: {x: 't0, ...},
                         ],
                         body: [
-                            expr(5:1-5:4) :: 'z {
+                            expr(5:1-5:4) :: 't0 {
                                 kind: field-access {
-                                    receiver: expr(5:1-5:2) :: {x: 'z, ...} {
+                                    receiver: expr(5:1-5:2) :: {x: 't0, ...} {
                                         kind: ident(5:1-5:2) `p`,
                                     },
                                     field: ident(5:3-5:4) `x`,

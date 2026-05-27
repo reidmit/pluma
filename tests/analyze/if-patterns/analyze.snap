@@ -107,14 +107,14 @@ module `main` (tests/analyze/if-patterns/main.pa) {
             },
             def(23:0-27:1) :: nothing {
                 name: ident(23:4-23:18) `match-wildcard`,
-                kind: expr(23:21-27:1) :: 't7 -> nothing {
+                kind: expr(23:21-27:1) :: 't8 -> nothing {
                     kind: fun(23:21-27:1) {
                         params: [
-                            ident(23:25-23:26) `t` :: 't7,
+                            ident(23:25-23:26) `t` :: 't8,
                         ],
                         body: [
                             expr(24:1-26:2) :: nothing {
-                                kind: if(24:1-26:2) expr(24:4-24:5) :: 't7 {
+                                kind: if(24:1-26:2) expr(24:4-24:5) :: 't8 {
                                     kind: ident(24:4-24:5) `t`,
                                 } pattern(24:9-24:10) Underscore [
                                     expr(25:2-25:3) :: int {
@@ -128,19 +128,19 @@ module `main` (tests/analyze/if-patterns/main.pa) {
             },
             def(29:0-33:1) :: nothing {
                 name: ident(29:4-29:17) `match-binding`,
-                kind: expr(29:20-33:1) :: 't9 -> nothing {
+                kind: expr(29:20-33:1) :: 't10 -> nothing {
                     kind: fun(29:20-33:1) {
                         params: [
-                            ident(29:24-29:25) `t` :: 't9,
+                            ident(29:24-29:25) `t` :: 't10,
                         ],
                         body: [
                             expr(30:1-32:2) :: nothing {
-                                kind: if(30:1-32:2) expr(30:4-30:5) :: 't9 {
+                                kind: if(30:1-32:2) expr(30:4-30:5) :: 't10 {
                                     kind: ident(30:4-30:5) `t`,
                                 } pattern(30:9-30:16) Identifier(
                                     ident(30:9-30:16) `renamed`,
                                 ) [
-                                    expr(31:2-31:9) :: 't9 {
+                                    expr(31:2-31:9) :: 't10 {
                                         kind: ident(31:2-31:9) `renamed`,
                                     },
                                 ],

@@ -2,11 +2,11 @@
 source: tests/analyze.rs
 expression: output
 ---
-error: Type mismatch: expected `option 't29`, but found `result 't28 't27`.
+error: Type mismatch: expected `option 't30`, but found `result 't29 't28`.
 > 16 | 	try first = safe-head ids  # option int — wrong carrier
         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-error: Type mismatch: expected `result 't32 string`, but found `option 't29`.
+error: Type mismatch: expected `result 't33 string`, but found `option 't30`.
 > 15 | 	try ids = lookup id     # result (list int) string
         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

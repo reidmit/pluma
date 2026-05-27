@@ -47,6 +47,23 @@ public enum result a b {
 	err b
 }
 
+# A computation that, when run, will eventually produce an `a` (or fail,
+# or be cancelled). A `task a` is *cold*: building one does nothing;
+# awaiting it with `try`, spawning it into a `scope`, or `task.start`ing
+# it runs it. Tasks are re-runnable recipes -- awaiting the same task
+# twice runs it twice -- so `task.retry`/polling can take a plain task.
+#
+# It's the third `try` carrier alongside `option` and `result`: inside a
+# function that returns a `task`, `try x = some-task` awaits it, and the
+# whole function is itself a `task`. The `task.*` helpers (in `core.task`,
+# auto-imported) build and combine them; `scope` (a keyword) runs them
+# concurrently. See ASYNC.md.
+#
+# The type has no surface constructors -- you never write `task.mk`; you
+# make one with `task.return` / `task.sleep` / an async function call.
+public enum task a {
+}
+
 # The answer to "how do these two compare?" -- `lt` (the first is
 # smaller), `eq` (they're equal), or `gt` (the first is bigger). Compare
 # functions return one of these, and `list.sort` uses them to decide the
