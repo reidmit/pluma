@@ -855,10 +855,14 @@ impl VM {
 				let r = self.stack.pop().unwrap();
 				let l = self.stack.pop().unwrap();
 				match (l, r) {
+					// Match the `int-div` builtin exactly (same message, `wrapping_div`
+					// so `i64::MIN / -1` wraps rather than panicking) — the IR backend
+					// devirtualizes a concrete `int` `/` to this opcode, and the
+					// differential harness compares it against the dispatched builtin.
 					(Value::Int(_), Value::Int(0)) => {
-						return Err(RuntimeError::new("division by zero").at(self.current_range()))
+						return Err(RuntimeError::new("integer division by zero").at(self.current_range()))
 					}
-					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Int(a / b)),
+					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Int(a.wrapping_div(b))),
 					_ => return Err(RuntimeError::new("DivInt: expected ints").at(self.current_range())),
 				}
 			}

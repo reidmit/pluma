@@ -723,6 +723,21 @@ impl<'a> Lowerer<'a> {
 				| Operator::Multiplication
 				| Operator::Division
 				| Operator::Remainder => {
+					// Devirtualize: when both operands are a concrete numeric type
+					// (`int`/`float`), the `numeric` instance is statically known, so
+					// emit the direct VM opcode (`AddInt`, `DivFloat`, …) instead of a
+					// boxed dispatch through the method dictionary. Each opcode is
+					// byte-identical to the dict's builtin method (`int-add` == `AddInt`,
+					// …; `DivInt` is aligned to `int-div` in the VM), so this is
+					// behavior-preserving — it just drops the dict load and the closure
+					// call. Polymorphic operands (a `numeric a` type variable inside a
+					// constrained def) fall through to dispatch, since their instance
+					// arrives in the hidden dict parameter at runtime.
+					if let Some(binop) = concrete_numeric_binop(op, &left.ty, &right.ty) {
+						let l = self.lower_expr(left)?;
+						let r = self.lower_expr(right)?;
+						return Ok(self.emit_let(Rvalue::Bin(binop, l, r), range));
+					}
 					let method = self.lower_dispatch(cell, range)?;
 					let l = self.lower_expr(left)?;
 					let r = self.lower_expr(right)?;
@@ -732,6 +747,17 @@ impl<'a> Lowerer<'a> {
 				| Operator::LessThanEquals
 				| Operator::GreaterThan
 				| Operator::GreaterThanEquals => {
+					// Devirtualize concrete comparisons to the direct ordering opcodes
+					// (`Lt`/`Le`/`Gt`/`Ge`), where they're behavior-identical to the
+					// `ord.compare … {==,!=} variant` dance below — dropping a dict
+					// load, a closure call, and a variant construction. See
+					// `concrete_ord_binop` for the exact safe set (all `int`
+					// comparisons; float `<`/`>` only — float `<=`/`>=` diverge on NaN).
+					if let Some(binop) = concrete_ord_binop(op, &left.ty, &right.ty) {
+						let l = self.lower_expr(left)?;
+						let r = self.lower_expr(right)?;
+						return Ok(self.emit_let(Rvalue::Bin(binop, l, r), range));
+					}
 					// `ord.compare(left, right)` then test the resulting ordering
 					// variant: `< == lt`, `> == gt`, `<= != gt`, `>= != lt`.
 					let method = self.lower_dispatch(cell, range)?;
@@ -1762,6 +1788,42 @@ fn undrained_dispatch_cells(expr: &ExprNode) -> Option<Vec<compiler::ast::Dispat
 /// captures through nested closures). Mirrors `codegen::emit::synthetic_dict_name`.
 fn synthetic_dict_name(slot: u16) -> String {
 	format!("__dict_{}__", slot)
+}
+
+/// If both operands of a `numeric`-dispatched arithmetic operator are the *same
+/// concrete* numeric type (`int` or `float`), return the direct `BinOp` so the
+/// dispatch can be devirtualized to a VM opcode. Returns `None` when either
+/// operand is still a type variable (polymorphic — keep dispatching through the
+/// runtime dict) or the two disagree (can't happen post-unification, but stays
+/// honest). `%` never reaches the dispatched path (it carries no cell), so it's
+/// already direct.
+fn concrete_numeric_binop(op: &Operator, left: &Type, right: &Type) -> Option<BinOp> {
+	let is_float = match (left, right) {
+		(Type::Int, Type::Int) => false,
+		(Type::Float, Type::Float) => true,
+		_ => return None,
+	};
+	binop_for(op, is_float)
+}
+
+/// If a `< <= > >=` comparison has concrete numeric operands and devirtualizing
+/// it to the direct `Lt`/`Le`/`Gt`/`Ge` opcode is behavior-identical to the
+/// `ord.compare … {==,!=} variant` lowering, return that opcode. The equivalence
+/// holds for every `int` comparison (total order, no NaN) and for float `<`/`>`
+/// (NaN compares `false` under both the IEEE opcode and the `compare == lt|gt`
+/// test). It does *not* hold for float `<=`/`>=`: `float-compare` maps NaN to
+/// `eq`, so `NaN <= x` is `true` via the dict path but `false` under `Lte` —
+/// those stay dispatched (`None`). Polymorphic operands also return `None`.
+fn concrete_ord_binop(op: &Operator, left: &Type, right: &Type) -> Option<BinOp> {
+	let is_float = match (left, right) {
+		(Type::Int, Type::Int) => false,
+		(Type::Float, Type::Float) => true,
+		_ => return None,
+	};
+	if is_float && matches!(op, Operator::LessThanEquals | Operator::GreaterThanEquals) {
+		return None;
+	}
+	binop_for(op, is_float)
 }
 
 /// Map a concrete (non-dispatched) operator to its IR `BinOp`. `is_float`
