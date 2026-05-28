@@ -8,4 +8,5 @@ atty = "0.2.13"
 codegen = { path = "../codegen" }
 compiler = { path = "../compiler" }
 formatter = { path = "../formatter" }
+ir = { path = "../ir" }
 vm = { path = "../vm" }

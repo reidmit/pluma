@@ -8,17 +8,27 @@ fn main() {
 	match std::env::args().nth(1) {
 		Some(arg) => match &arg[..] {
 			"run" => {
-				let entry_path = match std::env::args().nth(2) {
+				// Pull an optional leading `--backend ir|ast` (or `--backend=ir`)
+				// off the front; everything after the script path is the program's
+				// own argv, surfaced through `io.args`.
+				let raw: Vec<String> = std::env::args().skip(2).collect();
+				let (backend, rest) = match take_backend_flag(raw) {
+					Ok(pair) => pair,
+					Err(msg) => {
+						print_error(msg);
+						std::process::exit(1);
+					}
+				};
+				let mut rest = rest.into_iter();
+				let entry_path = match rest.next() {
 					Some(path) => path,
 					None => {
 						print_error("No module path given. Expected another argument.");
 						std::process::exit(1);
 					}
 				};
-				// Everything after the script path is the program's own argv,
-				// surfaced through `io.args`.
-				let program_args: Vec<String> = std::env::args().skip(3).collect();
-				run(entry_path, program_args);
+				let program_args: Vec<String> = rest.collect();
+				run(entry_path, program_args, backend);
 			}
 
 			"format" => {
@@ -102,10 +112,12 @@ fn main() {
 
 			// Anything else is treated as a path to run, so `cli foo.pa`
 			// works as shorthand for `cli run foo.pa`. Here the path is
-			// argv[1], so the program's own args start at argv[2].
+			// argv[1], so the program's own args start at argv[2]. The backend
+			// here comes only from `PLUMA_BACKEND` (no flag-stripping, so a
+			// script's own `--backend` arg is left untouched).
 			_ => {
 				let program_args: Vec<String> = std::env::args().skip(2).collect();
-				run(arg, program_args);
+				run(arg, program_args, backend_from_env());
 			}
 		},
 
@@ -113,6 +125,56 @@ fn main() {
 			print_help();
 		}
 	}
+}
+
+/// Which codegen backend `run` uses. `Ast` is the original fused
+/// AST->bytecode walk; `Ir` goes through `ir::lower` + `compile_from_ir`. The
+/// default stays `Ast` until the IR cutover; this flag lets us A/B them.
+#[derive(Clone, Copy, PartialEq)]
+enum Backend {
+	Ast,
+	Ir,
+}
+
+/// Read the default backend from `PLUMA_BACKEND` (`ir`/`ast`), defaulting to
+/// `Ast`. An unrecognized value falls back to `Ast`.
+fn backend_from_env() -> Backend {
+	match std::env::var("PLUMA_BACKEND").ok().as_deref() {
+		Some("ir") => Backend::Ir,
+		_ => Backend::Ast,
+	}
+}
+
+/// Strip an optional leading `--backend ir|ast` / `--backend=ir` from `args`,
+/// returning the chosen backend (falling back to `PLUMA_BACKEND`) and the
+/// remaining args. The flag must come before the script path.
+fn take_backend_flag(args: Vec<String>) -> Result<(Backend, Vec<String>), String> {
+	let mut iter = args.into_iter();
+	let Some(first) = iter.next() else {
+		return Ok((backend_from_env(), Vec::new()));
+	};
+	let parse = |v: &str| match v {
+		"ir" => Ok(Backend::Ir),
+		"ast" => Ok(Backend::Ast),
+		other => Err(format!(
+			"Unknown backend `{other}` (expected `ir` or `ast`)."
+		)),
+	};
+	if let Some(val) = first.strip_prefix("--backend=") {
+		let backend = parse(val)?;
+		return Ok((backend, iter.collect()));
+	}
+	if first == "--backend" {
+		let val = iter
+			.next()
+			.ok_or("`--backend` expects a value (`ir` or `ast`).")?;
+		let backend = parse(&val)?;
+		return Ok((backend, iter.collect()));
+	}
+	// No flag: put the first arg back.
+	let mut rest = vec![first];
+	rest.extend(iter);
+	Ok((backend_from_env(), rest))
 }
 
 fn test_command(args: Vec<String>) {
@@ -596,7 +658,7 @@ fn discover_test_modules(root: &std::path::Path) -> Vec<String> {
 	out
 }
 
-fn run(entry_path: String, program_args: Vec<String>) {
+fn run(entry_path: String, program_args: Vec<String>, backend: Backend) {
 	if entry_path.ends_with(".test.pa") || entry_path.ends_with(".test") {
 		print_error(format!(
 			"`{}` is a test module. Use `pluma test` to run tests.",
@@ -620,7 +682,16 @@ fn run(entry_path: String, program_args: Vec<String>) {
 		std::process::exit(1);
 	}
 
-	let program = match codegen::compile(&compiler) {
+	// `Ast` is the original fused walk; `Ir` lowers to the mid-level IR first.
+	// Both produce a `vm::Program`; the default is `Ast` until the cutover.
+	let program = match backend {
+		Backend::Ast => codegen::compile(&compiler).map_err(|e| e.to_string()),
+		Backend::Ir => match ir::lower(&compiler) {
+			Ok(p) => codegen::compile_from_ir(&p).map_err(|e| e.to_string()),
+			Err(e) => Err(format!("ir::lower: {e}")),
+		},
+	};
+	let program = match program {
 		Ok(p) => p,
 		Err(msg) => {
 			print_error(format!("codegen error: {}", msg));
@@ -733,7 +804,10 @@ fn print_help() {
 Compiler & toolchain for the {} programming language
 
 COMMANDS:
-  [run] <path>     execute a module directly (the `run` keyword is optional)
+  [run] [--backend ir|ast] <path>
+                   execute a module directly (the `run` keyword is optional).
+                   `--backend` selects the codegen path (default `ast`; also
+                   reads `PLUMA_BACKEND`)
   format <path>... canonicalize formatting; pass `-` for stdin, `--check` to dry-run
   test [dir] [-f name]...
                    discover and run tests from `*.test.pa` files under the
@@ -757,7 +831,10 @@ fn print_help() {
 Compiler & toolchain for the {} programming language
 
 COMMANDS:
-  [run] <path>     execute a module directly (the `run` keyword is optional)
+  [run] [--backend ir|ast] <path>
+                   execute a module directly (the `run` keyword is optional).
+                   `--backend` selects the codegen path (default `ast`; also
+                   reads `PLUMA_BACKEND`)
   format <path>... canonicalize formatting; pass `-` for stdin, `--check` to dry-run
   test [dir] [-f name]...
                    discover and run tests from `*.test.pa` files under the

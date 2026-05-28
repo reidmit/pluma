@@ -1,7 +1,7 @@
 # Repeated record field access.
 
 def get-x = fun r {
-	when r is {x: v} {
+	when r is {x: v, ...} {
 		v
 	}
 }
