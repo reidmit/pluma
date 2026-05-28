@@ -755,11 +755,12 @@ impl<'a> Lowerer<'a> {
 				| Operator::GreaterThan
 				| Operator::GreaterThanEquals => {
 					// Devirtualize concrete comparisons to the direct ordering opcodes
-					// (`Lt`/`Le`/`Gt`/`Ge`), where they're behavior-identical to the
-					// `ord.compare … {==,!=} variant` dance below — dropping a dict
-					// load, a closure call, and a variant construction. See
-					// `concrete_ord_binop` for the exact safe set (all `int`
-					// comparisons; float `<`/`>` only — float `<=`/`>=` diverge on NaN).
+					// (`LtI64`/`LeF64`/…), dropping a dict load, a closure call, and a
+					// variant construction. For concrete floats these are IEEE-754
+					// comparisons (NaN -> false for all four relations) — the language's
+					// defined semantics for concrete float relational operators. Generic
+					// (polymorphic) comparisons keep the `ord.compare` total order below.
+					// See `concrete_ord_binop`.
 					if let Some(binop) = concrete_ord_binop(op, &left.ty, &right.ty) {
 						let l = self.lower_expr(left)?;
 						let r = self.lower_expr(right)?;
@@ -1818,23 +1819,21 @@ fn concrete_numeric_binop(op: &Operator, left: &Type, right: &Type) -> Option<Bi
 	binop_for(op, is_float)
 }
 
-/// If a `< <= > >=` comparison has concrete numeric operands and devirtualizing
-/// it to the direct `Lt`/`Le`/`Gt`/`Ge` opcode is behavior-identical to the
-/// `ord.compare … {==,!=} variant` lowering, return that opcode. The equivalence
-/// holds for every `int` comparison (total order, no NaN) and for float `<`/`>`
-/// (NaN compares `false` under both the IEEE opcode and the `compare == lt|gt`
-/// test). It does *not* hold for float `<=`/`>=`: `float-compare` maps NaN to
-/// `eq`, so `NaN <= x` is `true` via the dict path but `false` under `Lte` —
-/// those stay dispatched (`None`). Polymorphic operands also return `None`.
+/// If a `< <= > >=` comparison has concrete numeric operands, return the direct
+/// `BinOp` (`LtI64`/`LeF64`/…) so it lowers to the VM's relational opcode rather
+/// than the `ord.compare … {==,!=} variant` desugaring. For concrete floats this
+/// is the IEEE-754 comparison — `NaN` compares `false` for all four relations —
+/// which is the language's defined semantics for concrete float relational
+/// operators (consistent with structural `==`/`!=`, also IEEE, and deliberately
+/// distinct from the total-order `ord.compare` that `list.sort` and generic `ord`
+/// code use). Polymorphic operands return `None` (keep dispatching through the
+/// runtime dict, where `ord`'s total order applies).
 fn concrete_ord_binop(op: &Operator, left: &Type, right: &Type) -> Option<BinOp> {
 	let is_float = match (left, right) {
 		(Type::Int, Type::Int) => false,
 		(Type::Float, Type::Float) => true,
 		_ => return None,
 	};
-	if is_float && matches!(op, Operator::LessThanEquals | Operator::GreaterThanEquals) {
-		return None;
-	}
 	binop_for(op, is_float)
 }
 

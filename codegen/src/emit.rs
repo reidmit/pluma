@@ -1300,6 +1300,49 @@ fn emit_expr_with_parents(
 			}
 		}
 		ExprKind::BinaryOperation { op, left, right } => {
+			// Concrete float relational operators follow IEEE-754 directly, so `NaN`
+			// compares `false` for all of `< <= > >=`. This bypasses the total-order
+			// `ord.compare … {==,!=} variant` desugaring below (which would make
+			// `NaN <= x` true, since `float-compare` maps NaN to `eq`) and matches
+			// structural `==`/`!=` (already IEEE) and the IR backend's lowering, so
+			// the two backends agree. The total order still governs `list.sort` and
+			// generic `ord` code. Only `<=`/`>=` actually differ from the `ord` path;
+			// `<`/`>` agree but go direct too, for uniformity.
+			if matches!(left.ty, compiler::types::Type::Float)
+				&& matches!(right.ty, compiler::types::Type::Float)
+			{
+				let direct = match op.kind {
+					Operator::LessThan => Some(Instruction::Lt),
+					Operator::LessThanEquals => Some(Instruction::Lte),
+					Operator::GreaterThan => Some(Instruction::Gt),
+					Operator::GreaterThanEquals => Some(Instruction::Gte),
+					_ => None,
+				};
+				if let Some(instr) = direct {
+					emit_expr_with_parents(
+						cg,
+						current_module,
+						imports,
+						fb,
+						scope,
+						parent_scopes,
+						left,
+						false,
+					)?;
+					emit_expr_with_parents(
+						cg,
+						current_module,
+						imports,
+						fb,
+						scope,
+						parent_scopes,
+						right,
+						false,
+					)?;
+					fb.emit(instr, range);
+					return Ok(());
+				}
+			}
 			// Trait-dispatched binary operators. Two shapes:
 			//   - Arithmetic (`+ - * /`): result is the dispatch's return value.
 			//   - Ordering (`< <= > >=`): result is `compare(left, right) {==,!=}

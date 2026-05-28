@@ -64,6 +64,7 @@ const IR_FIXTURES: &[&str] = &[
 	"fibonacci",
 	"float-arith",
 	"float-compare",
+	"float-nan-compare",
 	"generic-enum",
 	"hash-trait",
 	"hello",
