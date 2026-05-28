@@ -48,6 +48,7 @@ const IR_FIXTURES: &[&str] = &[
 	"core-math-extras",
 	"core-string",
 	"cross-module",
+	"debug-passthrough",
 	"deep-recursion",
 	"defer-cleanup",
 	"double-int-float",

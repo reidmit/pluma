@@ -36,8 +36,15 @@ use compiler::ast::{
 	PatternKind, PatternNode, RegexAnchor, RegexKind, RegexNode, WhenNode, WhileNode,
 };
 use compiler::types::Type;
-use compiler::Compiler;
+use compiler::{Compiler, Range};
 use std::collections::HashMap;
+
+/// A range used for stmts that have no source-level origin (entry function,
+/// poison thunk, the dict-builder / ctor / constrained-ref wrappers).
+const SYNTHETIC: Range = Range {
+	start: compiler::Point { line: 0, col: 0 },
+	end: compiler::Point { line: 0, col: 0 },
+};
 
 /// Lower a fully-analyzed program to IR.
 ///
@@ -240,7 +247,7 @@ impl<'a> Lowerer<'a> {
 				return Err(e);
 			}
 		};
-		self.cur().stmts.push(Stmt::Return(atom));
+		self.push_stmt(StmtKind::Return(atom), expr.range);
 		let scope = self.scopes.pop().unwrap();
 		Ok(self.add_function(finish_scope(scope)))
 	}
@@ -310,8 +317,8 @@ impl<'a> Lowerer<'a> {
 			};
 			let builder_name = format!("{}@builder", instance.instance_slot_name);
 			self.push_scope(builder_name, &[]);
-			let c = self.emit_let(Rvalue::MakeClosure(ctor_fid, Vec::new()));
-			self.cur().stmts.push(Stmt::Return(c));
+			let c = self.emit_let(Rvalue::MakeClosure(ctor_fid, Vec::new()), SYNTHETIC);
+			self.push_synthetic(StmtKind::Return(c));
 			let scope = self.scopes.pop().unwrap();
 			Ok(self.add_function(finish_scope(scope)))
 		}
@@ -336,8 +343,8 @@ impl<'a> Lowerer<'a> {
 			})?;
 			methods.push(self.lower_expr(expr)?);
 		}
-		let dict = self.emit_let(Rvalue::MakeDict(methods));
-		self.cur().stmts.push(Stmt::Return(dict));
+		let dict = self.emit_let(Rvalue::MakeDict(methods), SYNTHETIC);
+		self.push_synthetic(StmtKind::Return(dict));
 		Ok(())
 	}
 
@@ -368,9 +375,10 @@ impl<'a> Lowerer<'a> {
 
 		let inner_name = format!("{}.{}", self.current_module, name);
 		self.push_scope(inner_name, &param_names);
+		let body_range = fun.body.last().map(|e| e.range).unwrap_or(fun.range);
 		let inner_fid = match self.lower_body(&fun.body) {
 			Ok(atom) => {
-				self.cur().stmts.push(Stmt::Return(atom));
+				self.push_stmt(StmtKind::Return(atom), body_range);
 				let scope = self.scopes.pop().unwrap();
 				self.add_function(finish_scope(scope))
 			}
@@ -383,8 +391,8 @@ impl<'a> Lowerer<'a> {
 		// Thunk: return a closure of the inner function (no captures).
 		let thunk_name = format!("{}.{}@thunk", self.current_module, name);
 		self.push_scope(thunk_name, &[]);
-		let c = self.emit_let(Rvalue::MakeClosure(inner_fid, Vec::new()));
-		self.cur().stmts.push(Stmt::Return(c));
+		let c = self.emit_let(Rvalue::MakeClosure(inner_fid, Vec::new()), SYNTHETIC);
+		self.push_synthetic(StmtKind::Return(c));
 		let scope = self.scopes.pop().unwrap();
 		Ok(self.add_function(finish_scope(scope)))
 	}
@@ -420,9 +428,12 @@ impl<'a> Lowerer<'a> {
 			captures,
 			is_async: false,
 			body: Block(vec![
-				Stmt::Let(g_var, Rvalue::GlobalRef(global)),
-				Stmt::Let(r_var, Rvalue::CallClosure(Atom::Var(g_var), call_args)),
-				Stmt::Return(Atom::Var(r_var)),
+				Stmt::synthetic(StmtKind::Let(g_var, Rvalue::GlobalRef(global))),
+				Stmt::synthetic(StmtKind::Let(
+					r_var,
+					Rvalue::CallClosure(Atom::Var(g_var), call_args),
+				)),
+				Stmt::synthetic(StmtKind::Return(Atom::Var(r_var))),
 			]),
 		};
 		let wrapper_fid = self.add_function(wrapper);
@@ -431,9 +442,9 @@ impl<'a> Lowerer<'a> {
 		// enclosing def's dict params), then build the wrapper closure.
 		let mut dict_atoms = Vec::with_capacity(cells.len());
 		for cell in cells {
-			dict_atoms.push(self.lower_dispatch(cell)?);
+			dict_atoms.push(self.lower_dispatch(cell, expr.range)?);
 		}
-		Ok(self.emit_let(Rvalue::MakeClosure(wrapper_fid, dict_atoms)))
+		Ok(self.emit_let(Rvalue::MakeClosure(wrapper_fid, dict_atoms), expr.range))
 	}
 
 	/// Resolve the underlying global of a constrained value reference — a bare
@@ -468,6 +479,7 @@ impl<'a> Lowerer<'a> {
 	// ---- expressions ---------------------------------------------------
 
 	fn lower_expr(&mut self, expr: &ExprNode) -> Result<Atom, String> {
+		let range = expr.range;
 		match &expr.kind {
 			ExprKind::Literal(lit) => Ok(Atom::Const(literal_to_const(&lit.kind)?)),
 			ExprKind::Grouping(inner) => self.lower_expr(inner),
@@ -475,20 +487,20 @@ impl<'a> Lowerer<'a> {
 			ExprKind::Identifier(id) => {
 				// A bare trait-method reference (`hash`) carries a dispatch cell.
 				if let Some(cell) = &expr.trait_dispatch {
-					return self.lower_dispatch(cell);
+					return self.lower_dispatch(cell, range);
 				}
 				if let Some(cells) = undrained_dispatch_cells(expr) {
 					return self.lower_constrained_value_ref(expr, &cells);
 				}
-				self.lower_identifier(&id.name)
+				self.lower_identifier(&id.name, range)
 			}
-			ExprKind::Call(call) => self.lower_call(call),
+			ExprKind::Call(call) => self.lower_call(call, range),
 			ExprKind::Tuple(elems) => {
 				let mut atoms = Vec::with_capacity(elems.len());
 				for e in elems {
 					atoms.push(self.lower_expr(e)?);
 				}
-				Ok(self.emit_let(Rvalue::MakeTuple(atoms)))
+				Ok(self.emit_let(Rvalue::MakeTuple(atoms), range))
 			}
 			ExprKind::List(items) => {
 				let mut ir_items = Vec::with_capacity(items.len());
@@ -500,7 +512,7 @@ impl<'a> Lowerer<'a> {
 						ListItem::Elem(atom)
 					});
 				}
-				Ok(self.emit_let(Rvalue::MakeList(ir_items)))
+				Ok(self.emit_let(Rvalue::MakeList(ir_items), range))
 			}
 			ExprKind::Record(fields) => {
 				let mut ir_fields = Vec::with_capacity(fields.len());
@@ -508,56 +520,56 @@ impl<'a> Lowerer<'a> {
 					let atom = self.lower_expr(value)?;
 					ir_fields.push((name.name.clone(), atom));
 				}
-				Ok(self.emit_let(Rvalue::MakeRecord(ir_fields)))
+				Ok(self.emit_let(Rvalue::MakeRecord(ir_fields), range))
 			}
 			ExprKind::Interpolation(parts) => {
 				let mut atoms = Vec::with_capacity(parts.len());
 				for p in parts {
 					atoms.push(self.lower_expr(p)?);
 				}
-				Ok(self.emit_let(Rvalue::Interpolate(atoms)))
+				Ok(self.emit_let(Rvalue::Interpolate(atoms), range))
 			}
 			ExprKind::FieldAccess { receiver, field } => {
 				// Record field access (namespace/variant shapes are
 				// `NamespaceAccess` by this point). If `receiver` is actually a
 				// namespace it won't lower as a value, poisoning the def.
 				let recv = self.lower_expr(receiver)?;
-				Ok(self.emit_let(Rvalue::GetField(recv, field.name.clone())))
+				Ok(self.emit_let(Rvalue::GetField(recv, field.name.clone()), range))
 			}
 			ExprKind::NamespaceAccess(path) => {
 				if let Some(cell) = &expr.trait_dispatch {
-					return self.lower_dispatch(cell);
+					return self.lower_dispatch(cell, range);
 				}
 				if let Some(cells) = undrained_dispatch_cells(expr) {
 					return self.lower_constrained_value_ref(expr, &cells);
 				}
-				self.lower_namespace(path)
+				self.lower_namespace(path, range)
 			}
-			ExprKind::Fun(fun) => self.lower_fun(fun),
+			ExprKind::Fun(fun) => self.lower_fun(fun, range),
 			ExprKind::BinaryOperation { op, left, right } => {
-				self.lower_binary(expr.trait_dispatch.as_ref(), &op.kind, left, right)
+				self.lower_binary(expr.trait_dispatch.as_ref(), &op.kind, left, right, range)
 			}
 			ExprKind::UnaryOperation { op, right } => {
-				self.lower_unary(expr.trait_dispatch.as_ref(), op, right)
+				self.lower_unary(expr.trait_dispatch.as_ref(), op, right, range)
 			}
-			ExprKind::If(n) => self.lower_if(n),
-			ExprKind::When(n) => self.lower_when(n),
-			ExprKind::While(n) => self.lower_while(n),
-			ExprKind::Regex(node) => Ok(self.emit_let(Rvalue::Regex(regex_pattern(node)))),
-			ExprKind::Defer(inner) => self.lower_defer(inner),
+			ExprKind::If(n) => self.lower_if(n, range),
+			ExprKind::When(n) => self.lower_when(n, range),
+			ExprKind::While(n) => self.lower_while(n, range),
+			ExprKind::Regex(node) => Ok(self.emit_let(Rvalue::Regex(regex_pattern(node)), range)),
+			ExprKind::Defer(inner) => self.lower_defer(inner, range),
 			other => Err(format!("unsupported expr: {}", expr_kind_name(other))),
 		}
 	}
 
-	fn lower_identifier(&mut self, name: &str) -> Result<Atom, String> {
+	fn lower_identifier(&mut self, name: &str, range: Range) -> Result<Atom, String> {
 		match self.resolve(name)? {
 			Resolved::Atom(a) => Ok(a),
-			Resolved::Global(g) => Ok(self.emit_let(Rvalue::GlobalRef(g))),
+			Resolved::Global(g) => Ok(self.emit_let(Rvalue::GlobalRef(g), range)),
 			Resolved::BareVariant {
 				qualified,
 				variant,
 				arity,
-			} => self.make_variant_ref(&qualified, &variant, arity),
+			} => self.make_variant_ref(&qualified, &variant, arity, range),
 		}
 	}
 
@@ -568,17 +580,21 @@ impl<'a> Lowerer<'a> {
 		enum_name: &str,
 		variant: &str,
 		arity: usize,
+		range: Range,
 	) -> Result<Atom, String> {
 		if arity == 0 {
-			self.make_variant(enum_name, variant, Vec::new())
+			self.make_variant(enum_name, variant, Vec::new(), range)
 		} else {
 			let tag = self
 				.variant_tag(enum_name, variant)
 				.ok_or_else(|| format!("unknown variant `{}` of `{}`", variant, enum_name))?;
-			Ok(self.emit_let(Rvalue::MakeVariantCtor {
-				enum_name: enum_name.to_string(),
-				tag,
-			}))
+			Ok(self.emit_let(
+				Rvalue::MakeVariantCtor {
+					enum_name: enum_name.to_string(),
+					tag,
+				},
+				range,
+			))
 		}
 	}
 
@@ -588,21 +604,29 @@ impl<'a> Lowerer<'a> {
 		enum_name: &str,
 		variant: &str,
 		payload: Vec<Atom>,
+		range: Range,
 	) -> Result<Atom, String> {
 		let tag = self
 			.variant_tag(enum_name, variant)
 			.ok_or_else(|| format!("unknown variant `{}` of `{}`", variant, enum_name))?;
-		Ok(self.emit_let(Rvalue::MakeVariant {
-			enum_name: enum_name.to_string(),
-			tag,
-			payload,
-		}))
+		Ok(self.emit_let(
+			Rvalue::MakeVariant {
+				enum_name: enum_name.to_string(),
+				tag,
+				payload,
+			},
+			range,
+		))
 	}
 
 	/// Lower a `NamespaceAccess` path: `module.value` (-> a global),
 	/// `module.Enum.variant` / `Enum.variant` (-> variant construction), or a
 	/// compiler-inserted fully-qualified `mod.name` reference.
-	fn lower_namespace(&mut self, path: &[compiler::ast::IdentifierNode]) -> Result<Atom, String> {
+	fn lower_namespace(
+		&mut self,
+		path: &[compiler::ast::IdentifierNode],
+		range: Range,
+	) -> Result<Atom, String> {
 		match path {
 			[module, enum_name, variant] => {
 				let qualified_module = self
@@ -612,28 +636,28 @@ impl<'a> Lowerer<'a> {
 					.clone();
 				let qualified_enum = format!("{}.{}", qualified_module, enum_name.name);
 				let arity = self.variant_arity(&qualified_enum, &variant.name)?;
-				self.make_variant_ref(&qualified_enum, &variant.name, arity)
+				self.make_variant_ref(&qualified_enum, &variant.name, arity, range)
 			}
 			[head, tail] => {
 				// A dotted head is an already-fully-qualified reference (e.g.
 				// `core.task.or-else`), resolved directly against globals.
 				if head.name.contains('.') {
 					if let Some(g) = self.globals.lookup(&head.name, &tail.name) {
-						return Ok(self.emit_let(Rvalue::GlobalRef(g)));
+						return Ok(self.emit_let(Rvalue::GlobalRef(g), range));
 					}
 					return Err(format!("`{}.{}` not found", head.name, tail.name));
 				}
 				// `module.value`.
 				if let Some(qualified_module) = self.imports.get(&head.name).cloned() {
 					if let Some(g) = self.globals.lookup(&qualified_module, &tail.name) {
-						return Ok(self.emit_let(Rvalue::GlobalRef(g)));
+						return Ok(self.emit_let(Rvalue::GlobalRef(g), range));
 					}
 				}
 				// `Enum.variant` for a local-module enum.
 				let qualified_enum = format!("{}.{}", self.current_module, head.name);
 				if self.enums.contains_key(&qualified_enum) {
 					let arity = self.variant_arity(&qualified_enum, &tail.name)?;
-					return self.make_variant_ref(&qualified_enum, &tail.name, arity);
+					return self.make_variant_ref(&qualified_enum, &tail.name, arity, range);
 				}
 				Err(format!(
 					"`{}.{}` is neither an imported value nor a local variant",
@@ -662,19 +686,19 @@ impl<'a> Lowerer<'a> {
 			.map(|i| i as u32)
 	}
 
-	fn lower_call(&mut self, call: &compiler::ast::CallNode) -> Result<Atom, String> {
+	fn lower_call(&mut self, call: &compiler::ast::CallNode, range: Range) -> Result<Atom, String> {
 		let callee = self.lower_expr(&call.callee)?;
 		let mut args = Vec::with_capacity(call.dict_args.len() + call.args.len());
 		// Hidden dict args precede the user args — the constrained callee
 		// expects them at slots 0..K-1. A call-forwarding cell has
 		// `method_idx == None`, so `lower_dispatch` pushes the whole dict.
 		for cell in &call.dict_args {
-			args.push(self.lower_dispatch(cell)?);
+			args.push(self.lower_dispatch(cell, range)?);
 		}
 		for a in &call.args {
 			args.push(self.lower_expr(a)?);
 		}
-		Ok(self.emit_let(Rvalue::CallClosure(callee, args)))
+		Ok(self.emit_let(Rvalue::CallClosure(callee, args), range))
 	}
 
 	fn lower_binary(
@@ -683,6 +707,7 @@ impl<'a> Lowerer<'a> {
 		op: &Operator,
 		left: &ExprNode,
 		right: &ExprNode,
+		range: Range,
 	) -> Result<Atom, String> {
 		// Trait-dispatched operator: the method comes from a method dictionary
 		// (e.g. `+` is `numeric.add`). Arithmetic is `method(left, right)`;
@@ -695,10 +720,10 @@ impl<'a> Lowerer<'a> {
 				| Operator::Multiplication
 				| Operator::Division
 				| Operator::Remainder => {
-					let method = self.lower_dispatch(cell)?;
+					let method = self.lower_dispatch(cell, range)?;
 					let l = self.lower_expr(left)?;
 					let r = self.lower_expr(right)?;
-					return Ok(self.emit_let(Rvalue::CallClosure(method, vec![l, r])));
+					return Ok(self.emit_let(Rvalue::CallClosure(method, vec![l, r]), range));
 				}
 				Operator::LessThan
 				| Operator::LessThanEquals
@@ -706,10 +731,10 @@ impl<'a> Lowerer<'a> {
 				| Operator::GreaterThanEquals => {
 					// `ord.compare(left, right)` then test the resulting ordering
 					// variant: `< == lt`, `> == gt`, `<= != gt`, `>= != lt`.
-					let method = self.lower_dispatch(cell)?;
+					let method = self.lower_dispatch(cell, range)?;
 					let l = self.lower_expr(left)?;
 					let r = self.lower_expr(right)?;
-					let cmp = self.emit_let(Rvalue::CallClosure(method, vec![l, r]));
+					let cmp = self.emit_let(Rvalue::CallClosure(method, vec![l, r]), range);
 					let (variant, use_ne) = match op {
 						Operator::LessThan => ("lt", false),
 						Operator::GreaterThan => ("gt", false),
@@ -717,16 +742,16 @@ impl<'a> Lowerer<'a> {
 						Operator::GreaterThanEquals => ("lt", true),
 						_ => unreachable!(),
 					};
-					let v = self.make_variant("__prelude__.ordering", variant, Vec::new())?;
+					let v = self.make_variant("__prelude__.ordering", variant, Vec::new(), range)?;
 					let binop = if use_ne { BinOp::Ne } else { BinOp::Eq };
-					return Ok(self.emit_let(Rvalue::Bin(binop, cmp, v)));
+					return Ok(self.emit_let(Rvalue::Bin(binop, cmp, v), range));
 				}
 				_ => return Err("unsupported dispatched operator".to_string()),
 			}
 		}
 		// `x | f a b` pipes `x` in as `f`'s first argument.
 		if let Operator::Chain = op {
-			return self.lower_chain(left, right);
+			return self.lower_chain(left, right, range);
 		}
 		// Concrete, non-dispatched operator: a direct VM opcode picked by
 		// operand type. Evaluate left then right (matching `emit.rs`).
@@ -734,7 +759,7 @@ impl<'a> Lowerer<'a> {
 		let binop = binop_for(op, is_float).ok_or("unsupported binary operator")?;
 		let l = self.lower_expr(left)?;
 		let r = self.lower_expr(right)?;
-		Ok(self.emit_let(Rvalue::Bin(binop, l, r)))
+		Ok(self.emit_let(Rvalue::Bin(binop, l, r), range))
 	}
 
 	fn lower_unary(
@@ -742,18 +767,19 @@ impl<'a> Lowerer<'a> {
 		cell: Option<&compiler::ast::DispatchCell>,
 		op: &Operator,
 		right: &ExprNode,
+		range: Range,
 	) -> Result<Atom, String> {
 		// Numeric `-` (negate) is trait-dispatched (`numeric.negate`); the only
 		// direct unary op is logical `!`.
 		if let Some(cell) = cell {
-			let method = self.lower_dispatch(cell)?;
+			let method = self.lower_dispatch(cell, range)?;
 			let r = self.lower_expr(right)?;
-			return Ok(self.emit_let(Rvalue::CallClosure(method, vec![r])));
+			return Ok(self.emit_let(Rvalue::CallClosure(method, vec![r]), range));
 		}
 		match op {
 			Operator::LogicalNot => {
 				let r = self.lower_expr(right)?;
-				Ok(self.emit_let(Rvalue::Not(r)))
+				Ok(self.emit_let(Rvalue::Not(r), range))
 			}
 			_ => Err("unsupported unary operator".to_string()),
 		}
@@ -762,14 +788,18 @@ impl<'a> Lowerer<'a> {
 	/// Lower a resolved trait-method dispatch cell to its value: the dict if the
 	/// cell is call-forwarding (`method_idx == None`), or a specific method
 	/// extracted from it. Mirrors `codegen::emit::emit_dispatch_load`.
-	fn lower_dispatch(&mut self, cell: &compiler::ast::DispatchCell) -> Result<Atom, String> {
+	fn lower_dispatch(
+		&mut self,
+		cell: &compiler::ast::DispatchCell,
+		range: Range,
+	) -> Result<Atom, String> {
 		let borrow = cell.borrow();
 		let method_idx = borrow.method_idx;
 		let resolved = borrow.resolved.clone().ok_or("unresolved dispatch cell")?;
 		drop(borrow);
-		let dict = self.lower_dict_atom(&resolved)?;
+		let dict = self.lower_dict_atom(&resolved, range)?;
 		match method_idx {
-			Some(idx) => Ok(self.emit_let(Rvalue::GetDictMethod(dict, idx as u32))),
+			Some(idx) => Ok(self.emit_let(Rvalue::GetDictMethod(dict, idx as u32), range)),
 			// A call-forwarding site pushes the whole dict; operators always
 			// name a method, so this branch is unused for them.
 			None => Ok(dict),
@@ -783,7 +813,7 @@ impl<'a> Lowerer<'a> {
 	///     constrained def / instance ctor (captured through closures by name).
 	///   * `InstanceChain` — call a parametric instance's ctor global with its
 	///     inner dicts to materialize a fresh dict.
-	fn lower_dict_atom(&mut self, resolved: &DispatchTarget) -> Result<Atom, String> {
+	fn lower_dict_atom(&mut self, resolved: &DispatchTarget, range: Range) -> Result<Atom, String> {
 		match resolved {
 			DispatchTarget::Global(slot_name) => {
 				let (module, name) = slot_name
@@ -793,7 +823,7 @@ impl<'a> Lowerer<'a> {
 					.globals
 					.lookup(module, name)
 					.ok_or("instance slot not registered as a global")?;
-				Ok(self.emit_let(Rvalue::GlobalRef(gid)))
+				Ok(self.emit_let(Rvalue::GlobalRef(gid), range))
 			}
 			DispatchTarget::Forwarded(slot) => {
 				let name = synthetic_dict_name(*slot);
@@ -810,19 +840,24 @@ impl<'a> Lowerer<'a> {
 					.globals
 					.lookup(module, name)
 					.ok_or("ctor slot not registered as a global")?;
-				let ctor = self.emit_let(Rvalue::GlobalRef(gid));
+				let ctor = self.emit_let(Rvalue::GlobalRef(gid), range);
 				let mut args = Vec::with_capacity(inner.len());
 				for r in inner {
-					args.push(self.lower_dict_atom(r)?);
+					args.push(self.lower_dict_atom(r, range)?);
 				}
-				Ok(self.emit_let(Rvalue::CallClosure(ctor, args)))
+				Ok(self.emit_let(Rvalue::CallClosure(ctor, args), range))
 			}
 		}
 	}
 
 	/// `left | right` — pipe `left` in as the first argument of the call on the
 	/// right (or, if `right` isn't a call, call it with the single argument).
-	fn lower_chain(&mut self, left: &ExprNode, right: &ExprNode) -> Result<Atom, String> {
+	fn lower_chain(
+		&mut self,
+		left: &ExprNode,
+		right: &ExprNode,
+		range: Range,
+	) -> Result<Atom, String> {
 		let (callee, extra): (&ExprNode, &[ExprNode]) = match &right.kind {
 			ExprKind::Call(c) => {
 				if !c.dict_args.is_empty() {
@@ -841,7 +876,7 @@ impl<'a> Lowerer<'a> {
 		for a in extra {
 			args.push(self.lower_expr(a)?);
 		}
-		Ok(self.emit_let(Rvalue::CallClosure(callee_atom, args)))
+		Ok(self.emit_let(Rvalue::CallClosure(callee_atom, args), range))
 	}
 
 	// ---- control flow ---------------------------------------------------
@@ -850,7 +885,7 @@ impl<'a> Lowerer<'a> {
 	/// `Match`: the pattern arm, plus a wildcard `else` arm when present. The
 	/// result lives in a fresh var (defaulting to `nothing` — which is exactly
 	/// the value of an `else`-less `if`, since its body value is discarded).
-	fn lower_if(&mut self, n: &IfNode) -> Result<Atom, String> {
+	fn lower_if(&mut self, n: &IfNode, range: Range) -> Result<Atom, String> {
 		let subject = self.lower_expr(&n.subject)?;
 		let result = self.alloc_var();
 		let has_else = n.else_body.is_some();
@@ -868,13 +903,13 @@ impl<'a> Lowerer<'a> {
 				body: else_block,
 			});
 		}
-		self.cur().stmts.push(Stmt::Match { subject, arms });
+		self.push_stmt(StmtKind::Match { subject, arms }, range);
 		Ok(Atom::Var(result))
 	}
 
 	/// `when subject is p1 { b1 } is p2 { b2 } ...`. Each case is a match arm;
 	/// the arm bodies all write the shared result var.
-	fn lower_when(&mut self, n: &WhenNode) -> Result<Atom, String> {
+	fn lower_when(&mut self, n: &WhenNode, range: Range) -> Result<Atom, String> {
 		let subject = self.lower_expr(&n.subject)?;
 		let result = self.alloc_var();
 		let mut arms = Vec::with_capacity(n.cases.len());
@@ -885,28 +920,28 @@ impl<'a> Lowerer<'a> {
 			self.cur().locals.truncate(mark);
 			arms.push(MatchArm { pattern, body });
 		}
-		self.cur().stmts.push(Stmt::Match { subject, arms });
+		self.push_stmt(StmtKind::Match { subject, arms }, range);
 		Ok(Atom::Var(result))
 	}
 
 	/// `while subject is pattern { body }`. A `Loop` that re-evaluates the
 	/// subject each iteration and matches it: on match, run the body and
 	/// continue; otherwise break. Evaluates to `nothing`.
-	fn lower_while(&mut self, n: &WhileNode) -> Result<Atom, String> {
+	fn lower_while(&mut self, n: &WhileNode, range: Range) -> Result<Atom, String> {
 		let saved = self.take_stmts();
-		let res = self.lower_while_body(n);
+		let res = self.lower_while_body(n, range);
 		let loop_stmts = self.restore_stmts(saved);
 		res?;
-		self.cur().stmts.push(Stmt::Loop(Block(loop_stmts)));
+		self.push_stmt(StmtKind::Loop(Block(loop_stmts)), range);
 		Ok(Atom::Const(Const::Unit))
 	}
 
-	fn lower_while_body(&mut self, n: &WhileNode) -> Result<(), String> {
+	fn lower_while_body(&mut self, n: &WhileNode, range: Range) -> Result<(), String> {
 		let subject = self.lower_expr(&n.subject)?;
 		let mark = self.cur().locals.len();
 		let pattern = self.lower_pattern(&n.pattern, &n.subject.ty)?;
 		let mut matched = self.lower_block_of(&n.body, None)?;
-		matched.0.push(Stmt::Continue);
+		matched.0.push(Stmt::new(StmtKind::Continue, range));
 		self.cur().locals.truncate(mark);
 		let arms = vec![
 			MatchArm {
@@ -915,10 +950,10 @@ impl<'a> Lowerer<'a> {
 			},
 			MatchArm {
 				pattern: Pattern::Wildcard,
-				body: Block(vec![Stmt::Break]),
+				body: Block(vec![Stmt::new(StmtKind::Break, range)]),
 			},
 		];
-		self.cur().stmts.push(Stmt::Match { subject, arms });
+		self.push_stmt(StmtKind::Match { subject, arms }, range);
 		Ok(())
 	}
 
@@ -934,9 +969,13 @@ impl<'a> Lowerer<'a> {
 	}
 
 	fn lower_stmts_into(&mut self, body: &[ExprNode], result: Option<VarId>) -> Result<(), String> {
+		// The block's result-binding `Let` lives at the block-trailing position.
+		// Anchor it to the last expr's range (or `SYNTHETIC` for an empty body)
+		// so any error attribution / `debug` call lands on the producing line.
+		let trail_range = body.last().map(|e| e.range).unwrap_or(SYNTHETIC);
 		let assign = |s: &mut Self, atom: Atom| {
 			if let Some(r) = result {
-				s.cur().stmts.push(Stmt::Let(r, Rvalue::Use(atom)));
+				s.push_stmt(StmtKind::Let(r, Rvalue::Use(atom)), trail_range);
 			}
 		};
 		if body.is_empty() {
@@ -1067,13 +1106,14 @@ impl<'a> Lowerer<'a> {
 		}
 	}
 
-	fn lower_fun(&mut self, fun: &FunNode) -> Result<Atom, String> {
+	fn lower_fun(&mut self, fun: &FunNode, range: Range) -> Result<Atom, String> {
 		let param_names: Vec<&str> = fun.params.iter().map(|p| p.ident.name.as_str()).collect();
 		let fn_name = format!(
 			"{}.fun@{}:{}",
 			self.current_module, fun.range.start.line, fun.range.start.col
 		);
 		self.push_scope(fn_name, &param_names);
+		let body_range = fun.body.last().map(|e| e.range).unwrap_or(fun.range);
 		let atom = match self.lower_body(&fun.body) {
 			Ok(a) => a,
 			Err(e) => {
@@ -1081,7 +1121,7 @@ impl<'a> Lowerer<'a> {
 				return Err(e);
 			}
 		};
-		self.cur().stmts.push(Stmt::Return(atom));
+		self.push_stmt(StmtKind::Return(atom), body_range);
 		let scope = self.scopes.pop().unwrap();
 
 		// Build the closure's capture list (resolved against the now-current
@@ -1092,7 +1132,7 @@ impl<'a> Lowerer<'a> {
 			.map(|c| self.capture_src_atom(&c.src))
 			.collect();
 		let fid = self.add_function(finish_scope(scope));
-		Ok(self.emit_let(Rvalue::MakeClosure(fid, capture_atoms)))
+		Ok(self.emit_let(Rvalue::MakeClosure(fid, capture_atoms), range))
 	}
 
 	/// `defer expr` — build a zero-arg cleanup closure `fun { expr }` and push
@@ -1100,7 +1140,7 @@ impl<'a> Lowerer<'a> {
 	/// evaluates to `nothing`. The VM walks the stack LIFO at `Return` (and on
 	/// `try`-failure short-circuit). Mirrors `codegen::emit`'s `ExprKind::Defer`
 	/// arm.
-	fn lower_defer(&mut self, inner: &ExprNode) -> Result<Atom, String> {
+	fn lower_defer(&mut self, inner: &ExprNode, range: Range) -> Result<Atom, String> {
 		let fn_name = format!(
 			"{}.defer@{}:{}",
 			self.current_module, inner.range.start.line, inner.range.start.col
@@ -1113,7 +1153,7 @@ impl<'a> Lowerer<'a> {
 				return Err(e);
 			}
 		};
-		self.cur().stmts.push(Stmt::Return(atom));
+		self.push_stmt(StmtKind::Return(atom), inner.range);
 		let scope = self.scopes.pop().unwrap();
 		let capture_atoms: Vec<Atom> = scope
 			.captures
@@ -1121,8 +1161,8 @@ impl<'a> Lowerer<'a> {
 			.map(|c| self.capture_src_atom(&c.src))
 			.collect();
 		let fid = self.add_function(finish_scope(scope));
-		let closure = self.emit_let(Rvalue::MakeClosure(fid, capture_atoms));
-		self.cur().stmts.push(Stmt::PushDefer(closure));
+		let closure = self.emit_let(Rvalue::MakeClosure(fid, capture_atoms), range);
+		self.push_stmt(StmtKind::PushDefer(closure), range);
 		Ok(Atom::Const(Const::Unit))
 	}
 
@@ -1152,6 +1192,7 @@ impl<'a> Lowerer<'a> {
 	}
 
 	fn lower_let(&mut self, let_node: &LetNode) -> Result<(), String> {
+		let value_range = let_node.value.range;
 		match &let_node.pattern.kind {
 			PatternKind::Identifier(id) => {
 				let atom = self.lower_expr(&let_node.value)?;
@@ -1159,7 +1200,7 @@ impl<'a> Lowerer<'a> {
 					Atom::Var(v) => v,
 					other => {
 						let v = self.alloc_var();
-						self.cur().stmts.push(Stmt::Let(v, Rvalue::Use(other)));
+						self.push_stmt(StmtKind::Let(v, Rvalue::Use(other)), value_range);
 						v
 					}
 				};
@@ -1178,13 +1219,16 @@ impl<'a> Lowerer<'a> {
 				// scope for the rest of the block (no `locals` truncation).
 				let subject = self.lower_expr(&let_node.value)?;
 				let pattern = self.lower_pattern(&let_node.pattern, &let_node.value.ty)?;
-				self.cur().stmts.push(Stmt::Match {
-					subject,
-					arms: vec![MatchArm {
-						pattern,
-						body: Block(Vec::new()),
-					}],
-				});
+				self.push_stmt(
+					StmtKind::Match {
+						subject,
+						arms: vec![MatchArm {
+							pattern,
+							body: Block(Vec::new()),
+						}],
+					},
+					let_node.range,
+				);
 				Ok(())
 			}
 		}
@@ -1228,10 +1272,24 @@ impl<'a> Lowerer<'a> {
 		self.fresh_var(idx)
 	}
 
-	fn emit_let(&mut self, rv: Rvalue) -> Atom {
+	fn emit_let(&mut self, rv: Rvalue, range: Range) -> Atom {
 		let v = self.alloc_var();
-		self.cur().stmts.push(Stmt::Let(v, rv));
+		self
+			.cur()
+			.stmts
+			.push(Stmt::new(StmtKind::Let(v, rv), range));
 		Atom::Var(v)
+	}
+
+	/// Push a stmt with no source-level origin (entry/poison thunks, dict
+	/// scaffolding, internal `Use` re-bindings).
+	fn push_synthetic(&mut self, kind: StmtKind) {
+		self.cur().stmts.push(Stmt::synthetic(kind));
+	}
+
+	/// Push a stmt anchored at `range`.
+	fn push_stmt(&mut self, kind: StmtKind, range: Range) {
+		self.cur().stmts.push(Stmt::new(kind, range));
 	}
 
 	fn capture_src_atom(&self, src: &CaptureSrc) -> Atom {
@@ -1366,12 +1424,12 @@ impl<'a> Lowerer<'a> {
 			captures: Vec::new(),
 			is_async: false,
 			body: Block(vec![
-				Stmt::Let(VarId(0), Rvalue::GlobalRef(main)),
-				Stmt::Let(
+				Stmt::synthetic(StmtKind::Let(VarId(0), Rvalue::GlobalRef(main))),
+				Stmt::synthetic(StmtKind::Let(
 					VarId(1),
 					Rvalue::CallClosure(Atom::Var(VarId(0)), vec![Atom::Const(Const::Unit)]),
-				),
-				Stmt::Return(Atom::Var(VarId(1))),
+				)),
+				Stmt::synthetic(StmtKind::Return(Atom::Var(VarId(1)))),
 			]),
 		};
 		Ok(self.add_function(func))
@@ -1396,7 +1454,9 @@ impl<'a> Lowerer<'a> {
 			params: Vec::new(),
 			captures: Vec::new(),
 			is_async: false,
-			body: Block(vec![Stmt::Return(Atom::Const(Const::Unit))]),
+			body: Block(vec![Stmt::synthetic(StmtKind::Return(Atom::Const(
+				Const::Unit,
+			)))]),
 		};
 		let f = self.add_function(func);
 		self.poison = Some(f);

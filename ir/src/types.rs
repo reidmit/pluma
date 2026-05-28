@@ -5,6 +5,7 @@
 // match the sketch in `IR.md`; anything marked "provisional" is known to need
 // refinement once real lowering exercises it.
 
+use compiler::Range;
 use std::collections::HashMap;
 
 // --------------------------------------------------------------------------
@@ -102,8 +103,33 @@ pub struct Function {
 #[derive(Debug, Clone)]
 pub struct Block(pub Vec<Stmt>);
 
+/// One IR statement, plus the source range of the AST expression that produced
+/// it. Backends pin every emitted instruction to this range so the VM can
+/// attribute runtime errors and `debug` call sites to the right line. The range
+/// is `Range::collapsed(0, 0)` for synthetic stmts (entry function, poison
+/// thunk, dict-builder/ctor scaffolding) that have no source origin.
 #[derive(Debug, Clone)]
-pub enum Stmt {
+pub struct Stmt {
+	pub kind: StmtKind,
+	pub range: Range,
+}
+
+impl Stmt {
+	pub fn new(kind: StmtKind, range: Range) -> Self {
+		Self { kind, range }
+	}
+
+	/// A stmt with no source-level origin — entry/poison/dict scaffolding.
+	pub fn synthetic(kind: StmtKind) -> Self {
+		Self {
+			kind,
+			range: Range::collapsed(0, 0),
+		}
+	}
+}
+
+#[derive(Debug, Clone)]
+pub enum StmtKind {
 	/// Bind the result of an `Rvalue` to a fresh variable (ANF).
 	Let(VarId, Rvalue),
 	/// Two-way branch on a boolean atom.
@@ -339,11 +365,11 @@ mod tests {
 		let arg = VarId(0);
 		let sum = VarId(1);
 		let body = Block(vec![
-			Stmt::Let(
+			Stmt::synthetic(StmtKind::Let(
 				sum,
 				Rvalue::Bin(BinOp::AddInt, Atom::Var(arg), Atom::Const(Const::Int(1))),
-			),
-			Stmt::Return(Atom::Var(sum)),
+			)),
+			Stmt::synthetic(StmtKind::Return(Atom::Var(sum))),
 		]);
 		let f = Function {
 			name: "inc".into(),
@@ -356,8 +382,8 @@ mod tests {
 
 		assert_eq!(f.params, vec![VarId(0)]);
 		assert!(!f.is_async);
-		match &f.body.0[0] {
-			Stmt::Let(v, Rvalue::Bin(op, _, _)) => {
+		match &f.body.0[0].kind {
+			StmtKind::Let(v, Rvalue::Bin(op, _, _)) => {
 				assert_eq!(*v, VarId(1));
 				assert_eq!(*op, BinOp::AddInt);
 			}

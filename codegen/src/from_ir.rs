@@ -22,7 +22,7 @@ use std::rc::Rc;
 use compiler::Range;
 use ir::{
 	Atom, BinOp, Block, Callee, Const, Function as IrFunction, GlobalInit, IrProgram, ListItem,
-	ListRest, Pattern, PreEval, RecordRest, Rvalue, Stmt, VarId,
+	ListRest, Pattern, PreEval, RecordRest, Rvalue, Stmt, StmtKind, VarId,
 };
 use vm::program::GlobalSlot;
 use vm::{Function, Instruction, Program, RegexData, Value};
@@ -177,20 +177,20 @@ impl FnCtx {
 	/// pre-pass suffices.
 	fn assign_let_slots(&mut self, block: &Block) {
 		for stmt in &block.0 {
-			match stmt {
-				Stmt::Let(v, _) => self.assign_slot(*v),
-				Stmt::If(_, t, e) => {
+			match &stmt.kind {
+				StmtKind::Let(v, _) => self.assign_slot(*v),
+				StmtKind::If(_, t, e) => {
 					self.assign_let_slots(t);
 					self.assign_let_slots(e);
 				}
-				Stmt::Switch { arms, default, .. } => {
+				StmtKind::Switch { arms, default, .. } => {
 					for (_, b) in arms {
 						self.assign_let_slots(b);
 					}
 					self.assign_let_slots(default);
 				}
-				Stmt::Loop(b) => self.assign_let_slots(b),
-				Stmt::Match { arms, .. } => {
+				StmtKind::Loop(b) => self.assign_let_slots(b),
+				StmtKind::Match { arms, .. } => {
 					for arm in arms {
 						self.assign_pattern_slots(&arm.pattern);
 						self.assign_let_slots(&arm.body);
@@ -265,47 +265,52 @@ impl FnCtx {
 		body: &mut Vec<Instruction>,
 		ranges: &mut Vec<Range>,
 	) -> Result<(), String> {
-		match stmt {
-			Stmt::Let(v, rv) => {
-				self.lower_rvalue(em, rv, body, ranges)?;
+		// Every instruction emitted directly while lowering this stmt inherits
+		// `r` — only recursing into a nested `Block` re-derives the range from
+		// its own inner stmts. That's enough for `debug`'s call-site reporting
+		// and for runtime errors to point at the producing source line.
+		let r = stmt.range;
+		match &stmt.kind {
+			StmtKind::Let(v, rv) => {
+				self.lower_rvalue(em, rv, body, ranges, r)?;
 				let slot = self.local_slot(*v)?;
-				push(body, ranges, Instruction::StoreLocal(slot));
+				push(body, ranges, Instruction::StoreLocal(slot), r);
 			}
-			Stmt::Discard(rv) => {
-				self.lower_rvalue(em, rv, body, ranges)?;
-				push(body, ranges, Instruction::Pop);
+			StmtKind::Discard(rv) => {
+				self.lower_rvalue(em, rv, body, ranges, r)?;
+				push(body, ranges, Instruction::Pop, r);
 			}
-			Stmt::Return(atom) => {
-				self.lower_atom(em, atom, body, ranges)?;
-				push(body, ranges, Instruction::Return);
+			StmtKind::Return(atom) => {
+				self.lower_atom(em, atom, body, ranges, r)?;
+				push(body, ranges, Instruction::Return, r);
 			}
-			Stmt::If(cond, then_b, else_b) => {
-				self.lower_atom(em, cond, body, ranges)?;
-				let jf = emit_at(body, ranges, Instruction::JumpIfFalse(0));
+			StmtKind::If(cond, then_b, else_b) => {
+				self.lower_atom(em, cond, body, ranges, r)?;
+				let jf = emit_at(body, ranges, Instruction::JumpIfFalse(0), r);
 				self.lower_block(em, then_b, body, ranges)?;
-				let j_end = emit_at(body, ranges, Instruction::Jump(0));
+				let j_end = emit_at(body, ranges, Instruction::Jump(0), r);
 				let else_start = body.len() as u32;
 				patch(body, jf, else_start);
 				self.lower_block(em, else_b, body, ranges)?;
 				let end = body.len() as u32;
 				patch(body, j_end, end);
 			}
-			Stmt::Loop(b) => {
+			StmtKind::Loop(b) => {
 				let start = body.len() as u32;
 				self.loops.push(LoopFrame {
 					start,
 					breaks: Vec::new(),
 				});
 				self.lower_block(em, b, body, ranges)?;
-				push(body, ranges, Instruction::Jump(start));
+				push(body, ranges, Instruction::Jump(start), r);
 				let frame = self.loops.pop().expect("loop frame");
 				let end = body.len() as u32;
 				for bj in frame.breaks {
 					patch(body, bj, end);
 				}
 			}
-			Stmt::Break => {
-				let j = emit_at(body, ranges, Instruction::Jump(0));
+			StmtKind::Break => {
+				let j = emit_at(body, ranges, Instruction::Jump(0), r);
 				self
 					.loops
 					.last_mut()
@@ -313,25 +318,25 @@ impl FnCtx {
 					.breaks
 					.push(j);
 			}
-			Stmt::Continue => {
+			StmtKind::Continue => {
 				let start = self
 					.loops
 					.last()
 					.ok_or("from_ir: continue outside loop")?
 					.start;
-				push(body, ranges, Instruction::Jump(start));
+				push(body, ranges, Instruction::Jump(start), r);
 			}
-			Stmt::PushDefer(closure) => {
-				self.lower_atom(em, closure, body, ranges)?;
-				push(body, ranges, Instruction::PushDefer);
+			StmtKind::PushDefer(closure) => {
+				self.lower_atom(em, closure, body, ranges, r)?;
+				push(body, ranges, Instruction::PushDefer, r);
 			}
-			Stmt::Match { subject, arms } => {
+			StmtKind::Match { subject, arms } => {
 				let mut end_jumps = Vec::new();
 				for arm in arms {
-					self.lower_atom(em, subject, body, ranges)?;
-					let fails = self.emit_pattern(em, &arm.pattern, body, ranges)?;
+					self.lower_atom(em, subject, body, ranges, r)?;
+					let fails = self.emit_pattern(em, &arm.pattern, body, ranges, r)?;
 					self.lower_block(em, &arm.body, body, ranges)?;
-					end_jumps.push(emit_at(body, ranges, Instruction::Jump(0)));
+					end_jumps.push(emit_at(body, ranges, Instruction::Jump(0), r));
 					let next = body.len() as u32;
 					for f in fails {
 						patch(body, f, next);
@@ -357,31 +362,37 @@ impl FnCtx {
 		pattern: &Pattern,
 		body: &mut Vec<Instruction>,
 		ranges: &mut Vec<Range>,
+		r: Range,
 	) -> Result<Vec<u32>, String> {
 		match pattern {
 			Pattern::Wildcard => {
-				push(body, ranges, Instruction::Pop);
+				push(body, ranges, Instruction::Pop, r);
 				Ok(Vec::new())
 			}
 			Pattern::Bind(v) => {
-				push(body, ranges, Instruction::StoreLocal(self.local_slot(*v)?));
+				push(
+					body,
+					ranges,
+					Instruction::StoreLocal(self.local_slot(*v)?),
+					r,
+				);
 				Ok(Vec::new())
 			}
 			Pattern::Literal(c) => {
 				let jmp = match c {
-					Const::Int(n) => emit_at(body, ranges, Instruction::MatchInt(*n, 0)),
-					Const::Bool(b) => emit_at(body, ranges, Instruction::MatchBool(*b, 0)),
-					Const::Float(f) => emit_at(body, ranges, Instruction::MatchFloat(*f, 0)),
+					Const::Int(n) => emit_at(body, ranges, Instruction::MatchInt(*n, 0), r),
+					Const::Bool(b) => emit_at(body, ranges, Instruction::MatchBool(*b, 0), r),
+					Const::Float(f) => emit_at(body, ranges, Instruction::MatchFloat(*f, 0), r),
 					Const::Str(s) => {
 						let idx = em.intern(s);
-						emit_at(body, ranges, Instruction::MatchString(idx, 0))
+						emit_at(body, ranges, Instruction::MatchString(idx, 0), r)
 					}
 					Const::Bytes(b) => {
 						let idx = em.intern_bytes(b);
-						emit_at(body, ranges, Instruction::MatchBytes(idx, 0))
+						emit_at(body, ranges, Instruction::MatchBytes(idx, 0), r)
 					}
-					Const::Unit => emit_at(body, ranges, Instruction::MatchNothing(0)),
-					Const::Duration(n) => emit_at(body, ranges, Instruction::MatchDuration(*n, 0)),
+					Const::Unit => emit_at(body, ranges, Instruction::MatchNothing(0), r),
+					Const::Duration(n) => emit_at(body, ranges, Instruction::MatchDuration(*n, 0), r),
 				};
 				Ok(vec![jmp])
 			}
@@ -395,9 +406,10 @@ impl FnCtx {
 						arity: fields.len() as u16,
 						on_fail: 0,
 					},
+					r,
 				);
 				let mut fails = vec![jmp];
-				self.emit_sub_patterns(em, fields, body, ranges, &mut fails)?;
+				self.emit_sub_patterns(em, fields, body, ranges, &mut fails, r)?;
 				Ok(fails)
 			}
 			Pattern::Tuple(elems) => {
@@ -408,9 +420,10 @@ impl FnCtx {
 						arity: elems.len() as u16,
 						on_fail: 0,
 					},
+					r,
 				);
 				let mut fails = vec![jmp];
-				self.emit_sub_patterns(em, elems, body, ranges, &mut fails)?;
+				self.emit_sub_patterns(em, elems, body, ranges, &mut fails, r)?;
 				Ok(fails)
 			}
 			Pattern::List { items, rest } => {
@@ -422,18 +435,22 @@ impl FnCtx {
 						has_rest: rest.is_some(),
 						on_fail: 0,
 					},
+					r,
 				);
 				let mut fails = vec![jmp];
 				// The tail (if any) sits on top of the element values — consume
 				// it before matching the elements in reverse.
 				match rest {
-					Some(ListRest::Bind(v)) => {
-						push(body, ranges, Instruction::StoreLocal(self.local_slot(*v)?))
-					}
-					Some(ListRest::Anon) => push(body, ranges, Instruction::Pop),
+					Some(ListRest::Bind(v)) => push(
+						body,
+						ranges,
+						Instruction::StoreLocal(self.local_slot(*v)?),
+						r,
+					),
+					Some(ListRest::Anon) => push(body, ranges, Instruction::Pop, r),
 					None => {}
 				}
-				self.emit_sub_patterns(em, items, body, ranges, &mut fails)?;
+				self.emit_sub_patterns(em, items, body, ranges, &mut fails, r)?;
 				Ok(fails)
 			}
 			Pattern::Record { fields, rest } => {
@@ -448,14 +465,20 @@ impl FnCtx {
 						with_rest: matches!(rest, RecordRest::Bind(_)),
 						on_fail: 0,
 					},
+					r,
 				);
 				let mut fails = vec![jmp];
 				// With a bound rest, the rest record is on top — consume it first.
 				if let RecordRest::Bind(v) = rest {
-					push(body, ranges, Instruction::StoreLocal(self.local_slot(*v)?));
+					push(
+						body,
+						ranges,
+						Instruction::StoreLocal(self.local_slot(*v)?),
+						r,
+					);
 				}
 				let sub_pats: Vec<&Pattern> = fields.iter().map(|(_, p)| p).collect();
-				self.emit_sub_patterns_refs(em, &sub_pats, body, ranges, &mut fails)?;
+				self.emit_sub_patterns_refs(em, &sub_pats, body, ranges, &mut fails, r)?;
 				Ok(fails)
 			}
 		}
@@ -473,9 +496,10 @@ impl FnCtx {
 		body: &mut Vec<Instruction>,
 		ranges: &mut Vec<Range>,
 		fails: &mut Vec<u32>,
+		r: Range,
 	) -> Result<(), String> {
 		let refs: Vec<&Pattern> = subs.iter().collect();
-		self.emit_sub_patterns_refs(em, &refs, body, ranges, fails)
+		self.emit_sub_patterns_refs(em, &refs, body, ranges, fails, r)
 	}
 
 	fn emit_sub_patterns_refs(
@@ -485,25 +509,26 @@ impl FnCtx {
 		body: &mut Vec<Instruction>,
 		ranges: &mut Vec<Range>,
 		fails: &mut Vec<u32>,
+		r: Range,
 	) -> Result<(), String> {
 		let total = subs.len();
 		for (rev_idx, sub) in subs.iter().rev().enumerate() {
 			let orphans = total - 1 - rev_idx;
-			let sub_fails = self.emit_pattern(em, sub, body, ranges)?;
+			let sub_fails = self.emit_pattern(em, sub, body, ranges, r)?;
 			if sub_fails.is_empty() || orphans == 0 {
 				fails.extend(sub_fails);
 				continue;
 			}
 			// Success path skips the trampoline.
-			let skip = emit_at(body, ranges, Instruction::Jump(0));
+			let skip = emit_at(body, ranges, Instruction::Jump(0), r);
 			let tramp_start = body.len() as u32;
 			for sf in &sub_fails {
 				patch(body, *sf, tramp_start);
 			}
 			for _ in 0..orphans {
-				push(body, ranges, Instruction::Pop);
+				push(body, ranges, Instruction::Pop, r);
 			}
-			fails.push(emit_at(body, ranges, Instruction::Jump(0)));
+			fails.push(emit_at(body, ranges, Instruction::Jump(0), r));
 			let after = body.len() as u32;
 			patch(body, skip, after);
 		}
@@ -516,27 +541,28 @@ impl FnCtx {
 		rv: &Rvalue,
 		body: &mut Vec<Instruction>,
 		ranges: &mut Vec<Range>,
+		r: Range,
 	) -> Result<(), String> {
 		match rv {
-			Rvalue::Use(a) => self.lower_atom(em, a, body, ranges)?,
+			Rvalue::Use(a) => self.lower_atom(em, a, body, ranges, r)?,
 			Rvalue::Bin(op, a, b) => {
-				self.lower_atom(em, a, body, ranges)?;
-				self.lower_atom(em, b, body, ranges)?;
-				push(body, ranges, binop_instr(*op));
+				self.lower_atom(em, a, body, ranges, r)?;
+				self.lower_atom(em, b, body, ranges, r)?;
+				push(body, ranges, binop_instr(*op), r);
 			}
 			Rvalue::Not(a) => {
-				self.lower_atom(em, a, body, ranges)?;
-				push(body, ranges, Instruction::LogicalNot);
+				self.lower_atom(em, a, body, ranges, r)?;
+				push(body, ranges, Instruction::LogicalNot, r);
 			}
 			Rvalue::GetDictMethod(dict, idx) => {
-				self.lower_atom(em, dict, body, ranges)?;
-				push(body, ranges, Instruction::GetDictField(*idx as u16));
+				self.lower_atom(em, dict, body, ranges, r)?;
+				push(body, ranges, Instruction::GetDictField(*idx as u16), r);
 			}
 			Rvalue::MakeDict(methods) => {
 				for m in methods {
-					self.lower_atom(em, m, body, ranges)?;
+					self.lower_atom(em, m, body, ranges, r)?;
 				}
-				push(body, ranges, Instruction::MakeDict(methods.len() as u16));
+				push(body, ranges, Instruction::MakeDict(methods.len() as u16), r);
 			}
 			Rvalue::MakeVariant {
 				enum_name,
@@ -550,7 +576,7 @@ impl FnCtx {
 					.ok_or_else(|| format!("from_ir: unknown variant {enum_name}#{tag}"))?
 					.clone();
 				for a in payload {
-					self.lower_atom(em, a, body, ranges)?;
+					self.lower_atom(em, a, body, ranges, r)?;
 				}
 				let qualified = em.intern(enum_name);
 				let variant = em.intern(&variant_name);
@@ -562,12 +588,13 @@ impl FnCtx {
 						variant,
 						arity: payload.len() as u16,
 					},
+					r,
 				);
 			}
-			Rvalue::GlobalRef(g) => push(body, ranges, Instruction::LoadGlobal(g.0)),
+			Rvalue::GlobalRef(g) => push(body, ranges, Instruction::LoadGlobal(g.0), r),
 			Rvalue::MakeClosure(fid, caps) => {
 				for c in caps {
-					self.lower_atom(em, c, body, ranges)?;
+					self.lower_atom(em, c, body, ranges, r)?;
 				}
 				push(
 					body,
@@ -576,18 +603,19 @@ impl FnCtx {
 						fn_idx: fid.0,
 						num_captures: caps.len() as u16,
 					},
+					r,
 				);
 			}
 			Rvalue::CallClosure(callee, args) => {
-				self.lower_atom(em, callee, body, ranges)?;
+				self.lower_atom(em, callee, body, ranges, r)?;
 				for a in args {
-					self.lower_atom(em, a, body, ranges)?;
+					self.lower_atom(em, a, body, ranges, r)?;
 				}
-				push(body, ranges, Instruction::Call(args.len() as u16));
+				push(body, ranges, Instruction::Call(args.len() as u16), r);
 			}
 			Rvalue::Call(callee, args) => {
 				match callee {
-					Callee::Global(g) => push(body, ranges, Instruction::LoadGlobal(g.0)),
+					Callee::Global(g) => push(body, ranges, Instruction::LoadGlobal(g.0), r),
 					Callee::Function(f) => push(
 						body,
 						ranges,
@@ -595,15 +623,16 @@ impl FnCtx {
 							fn_idx: f.0,
 							num_captures: 0,
 						},
+						r,
 					),
 					Callee::Builtin(_) => {
 						return Err("from_ir: Callee::Builtin not yet supported".to_string())
 					}
 				}
 				for a in args {
-					self.lower_atom(em, a, body, ranges)?;
+					self.lower_atom(em, a, body, ranges, r)?;
 				}
-				push(body, ranges, Instruction::Call(args.len() as u16));
+				push(body, ranges, Instruction::Call(args.len() as u16), r);
 			}
 			Rvalue::MakeVariantCtor { enum_name, tag } => {
 				let (variant_name, arity) = em
@@ -622,41 +651,47 @@ impl FnCtx {
 						variant,
 						arity: arity as u16,
 					},
+					r,
 				);
 			}
 			Rvalue::MakeTuple(elems) => {
 				for a in elems {
-					self.lower_atom(em, a, body, ranges)?;
+					self.lower_atom(em, a, body, ranges, r)?;
 				}
-				push(body, ranges, Instruction::MakeTuple(elems.len() as u16));
+				push(body, ranges, Instruction::MakeTuple(elems.len() as u16), r);
 			}
 			Rvalue::MakeRecord(fields) => {
 				let mut idxs = Vec::with_capacity(fields.len());
 				for (name, value) in fields {
-					self.lower_atom(em, value, body, ranges)?;
+					self.lower_atom(em, value, body, ranges, r)?;
 					idxs.push(em.intern(name));
 				}
 				let fields_idx = em.intern_field_list(idxs);
-				push(body, ranges, Instruction::MakeRecord(fields_idx));
+				push(body, ranges, Instruction::MakeRecord(fields_idx), r);
 			}
-			Rvalue::MakeList(items) => self.lower_list(em, items, body, ranges)?,
+			Rvalue::MakeList(items) => self.lower_list(em, items, body, ranges, r)?,
 			Rvalue::GetField(receiver, name) => {
-				self.lower_atom(em, receiver, body, ranges)?;
+				self.lower_atom(em, receiver, body, ranges, r)?;
 				let idx = em.intern(name);
-				push(body, ranges, Instruction::GetField(idx));
+				push(body, ranges, Instruction::GetField(idx), r);
 			}
 			Rvalue::Interpolate(parts) => {
 				for a in parts {
-					self.lower_atom(em, a, body, ranges)?;
+					self.lower_atom(em, a, body, ranges, r)?;
 				}
-				push(body, ranges, Instruction::Interpolate(parts.len() as u16));
+				push(
+					body,
+					ranges,
+					Instruction::Interpolate(parts.len() as u16),
+					r,
+				);
 			}
 			Rvalue::Regex(pattern) => {
 				let compiled = regex::Regex::new(pattern)
 					.map_err(|e| format!("from_ir: invalid regex `{pattern}`: {e}"))?;
 				let idx = em.regex_patterns.len() as u32;
 				em.regex_patterns.push(Rc::new(RegexData { compiled }));
-				push(body, ranges, Instruction::LoadRegex(idx));
+				push(body, ranges, Instruction::LoadRegex(idx), r);
 			}
 			other => return Err(format!("from_ir: unsupported rvalue: {other:?}")),
 		}
@@ -673,18 +708,19 @@ impl FnCtx {
 		items: &[ListItem],
 		body: &mut Vec<Instruction>,
 		ranges: &mut Vec<Range>,
+		r: Range,
 	) -> Result<(), String> {
 		let any_spread = items.iter().any(|i| matches!(i, ListItem::Spread(_)));
 		if !any_spread {
 			for i in items {
 				if let ListItem::Elem(a) = i {
-					self.lower_atom(em, a, body, ranges)?;
+					self.lower_atom(em, a, body, ranges, r)?;
 				}
 			}
-			push(body, ranges, Instruction::MakeList(items.len() as u16));
+			push(body, ranges, Instruction::MakeList(items.len() as u16), r);
 		} else if items.len() == 1 {
 			if let ListItem::Spread(a) = &items[0] {
-				self.lower_atom(em, a, body, ranges)?;
+				self.lower_atom(em, a, body, ranges, r)?;
 			}
 		} else {
 			let mut segments: u16 = 0;
@@ -692,25 +728,25 @@ impl FnCtx {
 			for i in items {
 				match i {
 					ListItem::Elem(a) => {
-						self.lower_atom(em, a, body, ranges)?;
+						self.lower_atom(em, a, body, ranges, r)?;
 						run += 1;
 					}
 					ListItem::Spread(a) => {
 						if run > 0 {
-							push(body, ranges, Instruction::MakeList(run));
+							push(body, ranges, Instruction::MakeList(run), r);
 							segments += 1;
 							run = 0;
 						}
-						self.lower_atom(em, a, body, ranges)?;
+						self.lower_atom(em, a, body, ranges, r)?;
 						segments += 1;
 					}
 				}
 			}
 			if run > 0 {
-				push(body, ranges, Instruction::MakeList(run));
+				push(body, ranges, Instruction::MakeList(run), r);
 				segments += 1;
 			}
-			push(body, ranges, Instruction::ConcatLists(segments));
+			push(body, ranges, Instruction::ConcatLists(segments), r);
 		}
 		Ok(())
 	}
@@ -721,41 +757,47 @@ impl FnCtx {
 		atom: &Atom,
 		body: &mut Vec<Instruction>,
 		ranges: &mut Vec<Range>,
+		r: Range,
 	) -> Result<(), String> {
 		match atom {
 			Atom::Var(v) => match self.loc(*v)? {
-				Loc::Local(s) => push(body, ranges, Instruction::LoadLocal(*s)),
-				Loc::Capture(i) => push(body, ranges, Instruction::LoadCapture(*i)),
+				Loc::Local(s) => push(body, ranges, Instruction::LoadLocal(*s), r),
+				Loc::Capture(i) => push(body, ranges, Instruction::LoadCapture(*i), r),
 			},
 			Atom::Const(c) => match c {
-				Const::Unit => push(body, ranges, Instruction::LoadNothing),
-				Const::Bool(b) => push(body, ranges, Instruction::LoadBool(*b)),
-				Const::Int(n) => push(body, ranges, Instruction::LoadInt(*n)),
-				Const::Float(f) => push(body, ranges, Instruction::LoadFloat(*f)),
+				Const::Unit => push(body, ranges, Instruction::LoadNothing, r),
+				Const::Bool(b) => push(body, ranges, Instruction::LoadBool(*b), r),
+				Const::Int(n) => push(body, ranges, Instruction::LoadInt(*n), r),
+				Const::Float(f) => push(body, ranges, Instruction::LoadFloat(*f), r),
 				Const::Str(s) => {
 					let idx = em.intern(s);
-					push(body, ranges, Instruction::LoadConst(idx));
+					push(body, ranges, Instruction::LoadConst(idx), r);
 				}
 				Const::Bytes(b) => {
 					let idx = em.intern_bytes(b);
-					push(body, ranges, Instruction::LoadBytes(idx));
+					push(body, ranges, Instruction::LoadBytes(idx), r);
 				}
-				Const::Duration(n) => push(body, ranges, Instruction::LoadDuration(*n)),
+				Const::Duration(n) => push(body, ranges, Instruction::LoadDuration(*n), r),
 			},
 		}
 		Ok(())
 	}
 }
 
-fn push(body: &mut Vec<Instruction>, ranges: &mut Vec<Range>, instr: Instruction) {
+fn push(body: &mut Vec<Instruction>, ranges: &mut Vec<Range>, instr: Instruction, range: Range) {
 	body.push(instr);
-	ranges.push(Range::collapsed(0, 0));
+	ranges.push(range);
 }
 
 /// Push an instruction and return its index (for later jump patching).
-fn emit_at(body: &mut Vec<Instruction>, ranges: &mut Vec<Range>, instr: Instruction) -> u32 {
+fn emit_at(
+	body: &mut Vec<Instruction>,
+	ranges: &mut Vec<Range>,
+	instr: Instruction,
+	range: Range,
+) -> u32 {
 	let idx = body.len() as u32;
-	push(body, ranges, instr);
+	push(body, ranges, instr, range);
 	idx
 }
 
@@ -854,15 +896,15 @@ mod tests {
 			captures: vec![],
 			is_async: false,
 			body: Block(vec![
-				Stmt::Let(VarId(0), Rvalue::GlobalRef(print_g)),
-				Stmt::Let(
+				Stmt::synthetic(StmtKind::Let(VarId(0), Rvalue::GlobalRef(print_g))),
+				Stmt::synthetic(StmtKind::Let(
 					VarId(1),
 					Rvalue::CallClosure(
 						Atom::Var(VarId(0)),
 						vec![Atom::Const(Const::Str("hello, world!".into()))],
 					),
-				),
-				Stmt::Return(Atom::Var(VarId(1))),
+				)),
+				Stmt::synthetic(StmtKind::Return(Atom::Var(VarId(1)))),
 			]),
 		};
 		// F1: main's thunk -> a closure of F0 with no captures.
@@ -873,8 +915,11 @@ mod tests {
 			captures: vec![],
 			is_async: false,
 			body: Block(vec![
-				Stmt::Let(VarId(0), Rvalue::MakeClosure(ir::FuncId(0), vec![])),
-				Stmt::Return(Atom::Var(VarId(0))),
+				Stmt::synthetic(StmtKind::Let(
+					VarId(0),
+					Rvalue::MakeClosure(ir::FuncId(0), vec![]),
+				)),
+				Stmt::synthetic(StmtKind::Return(Atom::Var(VarId(0)))),
 			]),
 		};
 		// F2: entry -> load main, call with the unit arg, return.
@@ -885,12 +930,12 @@ mod tests {
 			captures: vec![],
 			is_async: false,
 			body: Block(vec![
-				Stmt::Let(VarId(0), Rvalue::GlobalRef(main_g)),
-				Stmt::Let(
+				Stmt::synthetic(StmtKind::Let(VarId(0), Rvalue::GlobalRef(main_g))),
+				Stmt::synthetic(StmtKind::Let(
 					VarId(1),
 					Rvalue::CallClosure(Atom::Var(VarId(0)), vec![Atom::Const(Const::Unit)]),
-				),
-				Stmt::Return(Atom::Var(VarId(1))),
+				)),
+				Stmt::synthetic(StmtKind::Return(Atom::Var(VarId(1)))),
 			]),
 		};
 
