@@ -23,7 +23,7 @@
 use crate::value::{TaskRepr, Value, VariantData};
 use crate::vm::{Frame, VM};
 use crate::RuntimeError;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 use std::time::Instant;
 
@@ -122,12 +122,27 @@ impl TaskFrame {
 	}
 }
 
+// A poll-style async-function instance (the `ir::cps` state machine): its poll
+// function plus the current heap state value. Advanced by *calling*
+// `poll(state, resume)` (`drive_poll`) rather than snapshotting a frame — the
+// WASM-shaped alternative to `TaskFrame`. The captures are the closure
+// environment (passed on every poll); the state carries the resume tag + the
+// vars live across each suspension.
+struct PollFrame {
+	poll_fn: usize,
+	captures: Rc<Vec<Value>>,
+	state: Value,
+}
+
 // An entry in a fiber's await chain. The top is making progress; each entry
-// below is suspended waiting on the one above. `Async` frames are *resumed*
-// with a settled value; the combinator frames *transform* it (and are popped).
+// below is suspended waiting on the one above. `Async`/`Poll` frames are
+// *resumed* with a settled value; the combinator frames *transform* it (and are
+// popped).
 enum Activation {
 	// A running async-function instance, suspended at an `Await`.
 	Async(TaskFrame),
+	// A poll-style async-function instance, suspended between polls.
+	Poll(PollFrame),
 	// `task.then` continuation: `k : fun a -> task b`, run on success.
 	Then(Value),
 	// `task.or-else` recovery: `recover : fun nothing -> task a`, on failure.
@@ -337,9 +352,22 @@ impl VM {
 						captures,
 						args,
 					} => {
-						let mut tf = TaskFrame::new(*step_fn, Rc::clone(captures), args.clone(), self);
-						let outcome = self.drive_step(&mut tf, None)?;
-						Ok(self.after_outcome(act, tf, outcome))
+						// Poll-style (`ir::cps`): advance by calling the poll fn. The
+						// initial state seeds the params as `__a{i}` (the convention the
+						// transform reads). Otherwise: the Await-style frame-snapshot path.
+						if let Some(poll_fn) = self.program.async_poll.get(*step_fn).copied().flatten() {
+							let mut pf = PollFrame {
+								poll_fn: poll_fn as usize,
+								captures: Rc::clone(captures),
+								state: initial_poll_state(args),
+							};
+							let outcome = self.drive_poll(&mut pf, Value::Nothing)?;
+							Ok(self.after_poll(act, pf, outcome))
+						} else {
+							let mut tf = TaskFrame::new(*step_fn, Rc::clone(captures), args.clone(), self);
+							let outcome = self.drive_step(&mut tf, None)?;
+							Ok(self.after_outcome(act, tf, outcome))
+						}
 					}
 					TaskRepr::Shielded { task } => {
 						// Run `task` to completion inline, in this same pump. Because
@@ -379,6 +407,10 @@ impl VM {
 						let outcome = self.drive_step(&mut tf, Some(v))?;
 						return Ok(self.after_outcome(act, tf, outcome));
 					}
+					Some(Activation::Poll(mut pf)) => {
+						let outcome = self.drive_poll(&mut pf, v)?;
+						return Ok(self.after_poll(act, pf, outcome));
+					}
 					Some(Activation::Then(k)) => {
 						let t = self.call_function(k, vec![v])?;
 						return Ok(Cont::Go(Focus::Start(t)));
@@ -397,6 +429,13 @@ impl VM {
 						for thunk in tf.cleanups.into_iter().rev() {
 							self.call_function(thunk, Vec::new())?;
 						}
+						return Ok(Cont::Go(Focus::Err(e)));
+					}
+					Some(Activation::Poll(pf)) => {
+						// The awaiting poll-style function fails too: run its `defer`
+						// cleanups (carried in the suspended state), then keep
+						// propagating — mirroring the `Async` arm above.
+						self.run_poll_defers(&pf.state)?;
 						return Ok(Cont::Go(Focus::Err(e)));
 					}
 					Some(Activation::Then(_)) | Some(Activation::Map(_)) => continue,
@@ -426,6 +465,94 @@ impl VM {
 			}
 			StepOutcome::Complete(tail) => Cont::Go(Focus::Start(tail)),
 		}
+	}
+
+	// The poll-style analogue of `after_outcome`: on `Await` keep the poll frame
+	// (with its updated state) and run the awaited sub-task; on `Complete` the
+	// machine returned `ready` — run its tail task in its place.
+	fn after_poll(&mut self, act: &mut Vec<Activation>, pf: PollFrame, outcome: StepOutcome) -> Cont {
+		match outcome {
+			StepOutcome::Await(sub) => {
+				act.push(Activation::Poll(pf));
+				Cont::Go(Focus::Start(sub))
+			}
+			StepOutcome::Complete(tail) => Cont::Go(Focus::Start(tail)),
+		}
+	}
+
+	// Advance a poll-style async frame by one step: call `poll(state, resume)`
+	// and interpret the returned `__poll` signal. `ready(v)` completes the frame
+	// (`v` is its tail task — same contract as a step fn's Return); `pending(sub,
+	// state')` suspends — `state'` becomes the frame's state and `sub` is the task
+	// to await. Unlike `drive_step`, nothing snapshots the operand stack: the poll
+	// fn runs synchronously to its return (it contains no `Await`), and all live
+	// state rides in the `state` value. This is the WASM-shaped driver — the CPS
+	// pass (`ir::cps`) generates the poll fn; `tests/cps.rs` anchors it to
+	// byte-identical behavior vs the Await-style driver.
+	//
+	// A defer-bearing poll fn returns `ready(value, defers)` — the carried list
+	// is run LIFO here (before the tail starts), mirroring the Await-style
+	// driver's cleanup run during the step fn's `Return`.
+	fn drive_poll(&mut self, pf: &mut PollFrame, resume: Value) -> Result<StepOutcome, RuntimeError> {
+		let depth = self.frames.len();
+		self.push_frame_with_args(
+			pf.poll_fn as u32,
+			Rc::clone(&pf.captures),
+			vec![pf.state.clone(), resume],
+			None,
+		)?;
+		self.run_until_frame_depth(depth)?;
+		let result = self
+			.pop_stack()
+			.ok_or_else(|| RuntimeError::new("VM: poll function returned with empty stack"))?;
+		match result {
+			Value::Variant(vd) => match vd.variant.as_str() {
+				"ready" => {
+					let value = vd.payload[0].clone();
+					if let Some(defers) = vd.payload.get(1).cloned() {
+						self.run_defer_closures(&defers)?;
+					}
+					Ok(StepOutcome::Complete(value))
+				}
+				"pending" => {
+					pf.state = vd.payload[1].clone();
+					Ok(StepOutcome::Await(vd.payload[0].clone()))
+				}
+				other => Err(RuntimeError::new(format!(
+					"VM: poll function returned an unexpected `__poll` variant `{other}`"
+				))),
+			},
+			other => Err(RuntimeError::new(format!(
+				"VM: poll function did not return a `__poll` value (got {other})"
+			))),
+		}
+	}
+
+	// Run a list of zero-arg `defer` cleanup closures LIFO (last-pushed first),
+	// for their effect. The list is in push order (the CPS pass appends), so
+	// reverse it — matching the Await-style frame's `cleanups.into_iter().rev()`.
+	fn run_defer_closures(&mut self, list: &Value) -> Result<(), RuntimeError> {
+		if let Value::List(ds) = list {
+			let ds = Rc::clone(ds);
+			for thunk in ds.iter().rev() {
+				self.call_function(thunk.clone(), Vec::new())?;
+			}
+		}
+		Ok(())
+	}
+
+	// Run the `defer` cleanups carried in a suspended poll frame's state (the
+	// `__defers` field — the name is the CPS pass's cross-crate contract; see
+	// `ir::cps`). A no-op for a defer-free poll fn (no such field). Used on the
+	// failure and cancellation paths, mirroring the Await-style frame's
+	// `tf.cleanups` runs.
+	fn run_poll_defers(&mut self, state: &Value) -> Result<(), RuntimeError> {
+		if let Value::Record(m) = state {
+			if let Some(list) = m.get("__defers").cloned() {
+				self.run_defer_closures(&list)?;
+			}
+		}
+		Ok(())
 	}
 
 	// Drive a shielded task to completion within the current pump (so it can't
@@ -686,10 +813,14 @@ impl VM {
 		}
 		let act = std::mem::take(&mut self.sched.fibers[fid].act);
 		for activation in act.into_iter().rev() {
-			if let Activation::Async(tf) = activation {
-				for thunk in tf.cleanups.into_iter().rev() {
-					self.call_function(thunk, Vec::new())?;
+			match activation {
+				Activation::Async(tf) => {
+					for thunk in tf.cleanups.into_iter().rev() {
+						self.call_function(thunk, Vec::new())?;
+					}
 				}
+				Activation::Poll(pf) => self.run_poll_defers(&pf.state)?,
+				_ => {}
 			}
 		}
 		Ok(())
@@ -827,6 +958,20 @@ impl VM {
 			self.step()?;
 		}
 	}
+}
+
+// The initial state record for a poll-style async fn: tag 0 plus the call args
+// seeded positionally as `__a0..__a{N-1}`. **Must match the field convention the
+// CPS pass reads** (`ir::cps`): the driver knows only the arg list (not IR
+// VarIds), so it keys by arg index; the transform reads param position `i` from
+// `__a{i}` in segment 0. Every later state record is built by the poll fn itself.
+fn initial_poll_state(args: &[Value]) -> Value {
+	let mut m: HashMap<String, Value> = HashMap::with_capacity(args.len() + 1);
+	m.insert("__tag".to_string(), Value::Int(0));
+	for (i, a) in args.iter().enumerate() {
+		m.insert(format!("__a{i}"), a.clone());
+	}
+	Value::Record(Rc::new(m))
 }
 
 // Build a prelude `result` — `ok v` / `err v` — for `task.attempt` and `s.next`.

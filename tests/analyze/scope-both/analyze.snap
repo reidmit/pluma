@@ -124,11 +124,11 @@ module `main` (tests/analyze/scope-both/main.pa) {
             },
             def(14:0-17:1) :: nothing {
                 name: ident(14:4-14:8) `main`,
-                kind: expr(14:11-17:1) :: nothing -> task 't29 {
+                kind: expr(14:11-17:1) :: nothing -> task 't27 {
                     kind: fun(14:11-17:1) {
                         params: [],
                         body: [
-                            expr(15:1-16:17) :: task 't29 {
+                            expr(15:1-16:17) :: task 't27 {
                                 kind: try(15:1-16:17) {
                                     pattern: pattern(15:5-15:9) Identifier(
                                         ident(15:5-15:9) `pair`,
@@ -171,13 +171,13 @@ module `main` (tests/analyze/scope-both/main.pa) {
                                         },
                                     },
                                     rest: [
-                                        expr(16:1-16:17) :: task 't29 {
+                                        expr(16:1-16:17) :: task 't27 {
                                             kind: call(16:1-16:17) {
                                                 callee: expr(16:1-16:12) :: 't23 -> task 't23 {
                                                     kind: namespace-access `task.return`,
                                                 },
                                                 args: [
-                                                    expr(16:13-16:17) :: 't29 {
+                                                    expr(16:13-16:17) :: 't27 {
                                                         kind: ident(16:13-16:17) `pair`,
                                                     },
                                                 ],

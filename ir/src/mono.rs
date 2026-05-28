@@ -180,6 +180,7 @@ mod tests {
 			params,
 			captures: vec![],
 			is_async: false,
+			poll_fn: None,
 			body: Block(body),
 			var_reprs: vec![],
 			param_reprs,

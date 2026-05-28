@@ -99,6 +99,16 @@ pub struct Function {
 	/// `MakeAsyncClosure` in the bytecode emitter; the seam for the step-2 CPS
 	/// state-machine pass.
 	pub is_async: bool,
+	/// The CPS state-machine rollout marker (`ir::cps`). `None` is the default —
+	/// an `is_async` function runs Await-style (the VM's frame-snapshot driver).
+	/// `Some(poll_fn)` means this function was rewritten to poll style: it stays
+	/// in place (still drives `MakeAsyncClosure`/`do_call`, so callers are
+	/// unchanged), but the driver advances it by calling `poll_fn` —
+	/// `poll(state, resume) -> __poll` — instead of snapshotting the frame. The
+	/// referenced `poll_fn` is an ordinary (`poll_fn: None`) 2-arg function. Only
+	/// set for functions the CPS pass fully supports; the rest stay `None` and
+	/// both drivers coexist. Inert unless the CPS pass runs.
+	pub poll_fn: Option<FuncId>,
 	pub body: Block,
 	/// Representation of every `VarId` defined in this function, indexed by
 	/// `VarId.0` (params, captures, and every `Let`/pattern-bound var). Produced
@@ -465,6 +475,7 @@ mod tests {
 			params: vec![arg],
 			captures: vec![],
 			is_async: false,
+			poll_fn: None,
 			body,
 			var_reprs: vec![],
 			param_reprs: vec![],

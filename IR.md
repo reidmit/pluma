@@ -1,9 +1,13 @@
 # IR.md — the mid-level IR between the typed AST and codegen
 
 **Status:** the IR seam and the whole Repr/unboxing track are **built and are the
-default backend**. What remains is the **async CPS state-machine pass** and the
-**WASM backend** that consumes it all. A native/Cranelift backend is explicitly
-*not* planned.
+default backend**. The **async CPS state-machine pass** is now built for **every
+control-flow shape lowering produces** — `If`/`Switch`/`Match`/`Loop`/`Break`/
+`Continue`/`Return`/`Await` plus `defer` — and validated behavior-neutral against
+a VM poll-driver. (Building loop support also drove a language change: `await`
+inside a `while` loop is now expressible — see "Async CPS" below.) What remains
+is the **WASM backend** that consumes it all. A native/Cranelift backend is
+explicitly *not* planned.
 
 This file is the design-of-record and the forward plan. For the blow-by-blow of
 what shipped (and why), see the `project_fullstack_ir_plan` memory; this doc
@@ -111,6 +115,44 @@ i64/f64/i32 with no box/unbox churn. Three pieces:
   the old all-boxed contract used by the default VM path; `from_program` makes
   `infer_reprs`/`insert_coercions`/`validate_reprs` honor each callee's signature).
 
+**Async CPS state-machine pass (done; `ir/src/cps.rs`; inert on the VM).**
+`cps_transform` rewrites each `is_async` function into poll form so suspension
+carries its live state as a value instead of the VM's frame snapshot (the
+snapshot can't port to WASM). The original function is left in place (callers
+unchanged); the pass generates a sibling `f@poll(state, resume) -> __poll` and
+sets `f.poll_fn = Some(it)`. The transform flattens the body's structured
+control flow into a CFG of basic blocks (split at each `Await`), computes
+liveness across each suspension, and emits a **flat dispatch loop** —
+`Loop { Match __tag { 0 => …, _ => … } }`, the structured encoding of a CFG and
+exactly the WASM `loop`+`br_table` shape. Each block's terminator either returns
+(`ready(v)` / `pending(sub, state')`) or sets the `pc` and falls through so the
+loop re-dispatches; only vars live across a suspension ride in the state record
+(`__v{id}`; params seeded by the driver as `__a{i}`). The VM's poll-driver
+(`vm::task::drive_poll`) advances a transformed function by *calling* its poll fn
+— both drivers share the one scheduler. **It now covers every shape lowering
+produces:**
+- **`defer`** — the live cleanup closures ride in the state as a `__defers` list
+  (a fixed field so the driver can find it), appended by each `PushDefer` and run
+  LIFO by the driver on completion (`ready(value, defers)`), failure (the
+  err-walk), and cancellation (`reap_fiber`) — mirroring the Await-style frame's
+  `cleanups`.
+- **`Loop`/`Break`/`Continue`** — a source loop becomes a CFG back-edge:
+  `Continue`/fall-out set `pc` to the loop header, `Break` to the exit. So an
+  `await` inside a `while` splits the loop into resume segments, and the liveness
+  fixpoint (already cyclic) threads the loop-carried vars across each suspension.
+  This required a **language change**: a task `try` is now type-transparent to
+  its continuation, so it can sit in a `nothing`-typed loop body — `await` inside
+  a `while` is now expressible (it used to force the body to be a task and so was
+  rejected). Soundness: a function that awaits must still return a task (its tail
+  is `task.return …`), enforced by tying the enclosing fun's tail to a task at
+  each `try`. See `analyzer.rs::do_try_dispatch` + the `dispatch_try_in_expr`
+  walk threading `enclosing_tail`.
+
+Every async fn in the corpus transforms; validated byte-identical vs the
+Await-style driver by `tests/cps.rs` (completion/failure/cancellation defers,
+nested-control-flow awaits, and `await`-in-loop with both discarded and bound
+results).
+
 ## Validation philosophy (VM-anchored)
 
 There is no WASM backend yet, so nothing *consumes* the unboxed reprs — they're
@@ -131,19 +173,12 @@ IR-track work to this contract (no speculative dead code without a VM anchor).
 
 ## Roadmap
 
-### Async CPS state-machine pass (the next prerequisite)
+### Async CPS state-machine pass — done
 
-Today async rides the VM's frame-snapshot runtime: `Function.is_async` drives
-`MakeAsyncClosure`, and `Await` suspends by snapshotting the whole frame
-(`vm/src/task.rs`). That snapshot trick **cannot port to WASM** (no access to the
-native stack). The pass: rewrite each `is_async` function + its `Await` nodes
-into an explicit state machine — a state struct holding the live vars across each
-suspension point, plus a step function with a `Switch` on the resume point.
-`is_async` + the explicit `Await` node are the growth points already in the IR.
-
-VM anchor (same principle as above): add a poll-style VM task driver so the
-state-machine output runs the existing `task-*`/`scope-*` differential harness to
-identical output before any WASM exists. Mirror a `tests/run/task-*` fixture.
+The pass now handles every control-flow shape (`defer`, loops, and all the
+acyclic forms — see "What's built"), validated VM-anchored by `tests/cps.rs`
+(the poll-driver runs the transformed corpus to byte-identical output vs the
+Await-style driver). Nothing remains here before the WASM backend consumes it.
 
 ### WASM backend (the payoff)
 

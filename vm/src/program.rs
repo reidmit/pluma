@@ -46,6 +46,13 @@ pub struct Program {
 	// that module is loaded. The runner calls it once per suite to get a
 	// fresh registrar to thread in.
 	pub test_new: Option<u32>,
+	// The async CPS rollout table (`ir::cps`), indexed by function index.
+	// `Some(poll_fn)` means function `i` was rewritten to poll style: the task
+	// driver advances it by calling `poll_fn` (`drive_poll`) rather than
+	// snapshotting its frame (`drive_step`). `None` (the default, and every
+	// entry when the CPS pass didn't run) keeps the Await-style driver. May be
+	// shorter than `functions` (treated as `None` past its end).
+	pub async_poll: Vec<Option<u32>>,
 }
 
 pub struct Function {

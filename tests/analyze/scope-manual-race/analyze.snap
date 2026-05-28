@@ -15,13 +15,13 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
         ] [
             def(6:0-17:1) :: nothing {
                 name: ident(6:4-6:8) `race`,
-                kind: expr(6:11-17:1) :: (list (task 't46)) -> task 't46 {
+                kind: expr(6:11-17:1) :: (list (task 'y)) -> task 'y {
                     kind: fun(6:11-17:1) {
                         params: [
-                            ident(6:15-6:17) `ts` :: list (task 't46),
+                            ident(6:15-6:17) `ts` :: list (task 'y),
                         ],
                         body: [
-                            expr(7:1-16:2) :: task 't46 {
+                            expr(7:1-16:2) :: task 'y {
                                 kind: scope(7:1-16:2) {
                                     manual: true,
                                     handle: Some(
@@ -31,23 +31,23 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
                                         expr(8:2-8:43) :: nothing {
                                             kind: let(8:2-8:43) {
                                                 pattern: pattern(8:6-8:7) Underscore,
-                                                value: expr(8:10-8:43) :: list (task 't46) {
+                                                value: expr(8:10-8:43) :: list (task 'y) {
                                                     kind: call(8:10-8:43) {
                                                         callee: expr(8:10-8:18) :: (list 't0) ('t0 -> 't1) -> list 't1 {
                                                             kind: namespace-access `list.map`,
                                                         },
                                                         args: [
-                                                            expr(8:19-8:21) :: list (task 't46) {
+                                                            expr(8:19-8:21) :: list (task 'y) {
                                                                 kind: ident(8:19-8:21) `ts`,
                                                             },
-                                                            expr(8:22-8:43) :: (task 't46) -> task 't46 {
-                                                                kind: expr(8:23-8:42) :: (task 't46) -> task 't46 {
+                                                            expr(8:22-8:43) :: (task 'y) -> task 'y {
+                                                                kind: expr(8:23-8:42) :: (task 'y) -> task 'y {
                                                                     kind: fun(8:23-8:42) {
                                                                         params: [
-                                                                            ident(8:27-8:28) `t` :: task 't46,
+                                                                            ident(8:27-8:28) `t` :: task 'y,
                                                                         ],
                                                                         body: [
-                                                                            expr(8:31-8:40) :: task 't46 {
+                                                                            expr(8:31-8:40) :: task 'y {
                                                                                 kind: call(8:31-8:40) {
                                                                                     callee: expr(8:33-8:38) :: (manual-scope-handle 't5) (task 't5) -> task 't5 {
                                                                                         kind: namespace-access `task.manual-spawn`,
@@ -56,7 +56,7 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
                                                                                         expr(8:31-8:32) :: manual-scope-handle 'y {
                                                                                             kind: ident(8:31-8:32) `s`,
                                                                                         },
-                                                                                        expr(8:39-8:40) :: task 't46 {
+                                                                                        expr(8:39-8:40) :: task 'y {
                                                                                             kind: ident(8:39-8:40) `t`,
                                                                                         },
                                                                                     ],
@@ -71,12 +71,12 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
                                                 },
                                             },
                                         },
-                                        expr(9:2-15:3) :: task 't46 {
+                                        expr(9:2-15:3) :: task 'y {
                                             kind: try(9:2-15:3) {
                                                 pattern: pattern(9:6-9:11) Identifier(
                                                     ident(9:6-9:11) `first`,
                                                 ),
-                                                value: expr(9:14-9:23) :: task (option (result 't46 't9)) {
+                                                value: expr(9:14-9:23) :: task (option (result 'y 't9)) {
                                                     kind: call(9:14-9:23) {
                                                         callee: expr(9:16-9:20) :: (manual-scope-handle 't8) nothing -> task (option (result 't8 't9)) {
                                                             kind: namespace-access `task.manual-next`,
@@ -107,7 +107,7 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
                                                             ],
                                                         },
                                                     },
-                                                    expr(11:2-15:3) :: task 't46 {
+                                                    expr(11:2-15:3) :: task 'y {
                                                         kind: when(11:2-15:3) [
                                                             case(11:13-13:3) is pattern(11:16-11:22) Constructor(
                                                                 ident(11:16-11:20) `some`,
@@ -117,7 +117,7 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
                                                                     ),
                                                                 ],
                                                             ) [
-                                                                expr(12:3-12:60) :: task 't46 {
+                                                                expr(12:3-12:60) :: task 'y {
                                                                     kind: when(12:3-12:60) [
                                                                         case(12:10-12:35) is pattern(12:13-12:17) Constructor(
                                                                             ident(12:13-12:15) `ok`,
@@ -127,13 +127,13 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
                                                                                 ),
                                                                             ],
                                                                         ) [
-                                                                            expr(12:20-12:33) :: task 't46 {
+                                                                            expr(12:20-12:33) :: task 'y {
                                                                                 kind: call(12:20-12:33) {
                                                                                     callee: expr(12:20-12:31) :: 't20 -> task 't20 {
                                                                                         kind: namespace-access `task.return`,
                                                                                     },
                                                                                     args: [
-                                                                                        expr(12:32-12:33) :: 't46 {
+                                                                                        expr(12:32-12:33) :: 'y {
                                                                                             kind: ident(12:32-12:33) `v`,
                                                                                         },
                                                                                     ],
@@ -148,7 +148,7 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
                                                                                 ),
                                                                             ],
                                                                         ) [
-                                                                            expr(12:47-12:58) :: task 't46 {
+                                                                            expr(12:47-12:58) :: task 'y {
                                                                                 kind: call(12:47-12:58) {
                                                                                     callee: expr(12:47-12:56) :: 't24 -> task 't25 {
                                                                                         kind: namespace-access `task.fail`,
@@ -167,7 +167,7 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
                                                             case(13:4-15:3) is pattern(13:7-13:11) Identifier(
                                                                 ident(13:7-13:11) `none`,
                                                             ) [
-                                                                expr(14:3-14:26) :: task 't46 {
+                                                                expr(14:3-14:26) :: task 'y {
                                                                     kind: call(14:3-14:26) {
                                                                         callee: expr(14:3-14:12) :: 't28 -> task 't29 {
                                                                             kind: namespace-access `task.fail`,
@@ -194,11 +194,11 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
             },
             def(19:0-22:1) :: nothing {
                 name: ident(19:4-19:8) `main`,
-                kind: expr(19:11-22:1) :: nothing -> task 't47 {
+                kind: expr(19:11-22:1) :: nothing -> task 't46 {
                     kind: fun(19:11-22:1) {
                         params: [],
                         body: [
-                            expr(20:1-21:19) :: task 't47 {
+                            expr(20:1-21:19) :: task 't46 {
                                 kind: try(20:1-21:19) {
                                     pattern: pattern(20:5-20:11) Identifier(
                                         ident(20:5-20:11) `winner`,
@@ -241,13 +241,13 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
                                         },
                                     },
                                     rest: [
-                                        expr(21:1-21:19) :: task 't47 {
+                                        expr(21:1-21:19) :: task 't46 {
                                             kind: call(21:1-21:19) {
                                                 callee: expr(21:1-21:12) :: 't43 -> task 't43 {
                                                     kind: namespace-access `task.return`,
                                                 },
                                                 args: [
-                                                    expr(21:13-21:19) :: 't47 {
+                                                    expr(21:13-21:19) :: 't46 {
                                                         kind: ident(21:13-21:19) `winner`,
                                                     },
                                                 ],

@@ -164,6 +164,8 @@ const IR_FIXTURES: &[&str] = &[
 	"task-combinators-concurrent",
 	"task-defer",
 	"task-fail",
+	"task-loop",
+	"task-loop-bind",
 	"task-shielded",
 	"task-trait-poly",
 	"task-try-chain",

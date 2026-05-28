@@ -60,6 +60,14 @@ pub fn emit(program: &IrProgram) -> Result<Program, String> {
 			.map(|(m, g)| (m.clone(), g.0))
 			.collect(),
 		test_new: program.test_new.map(|g| g.0),
+		// CPS rollout table: a poll-transformed function points the driver at its
+		// poll fn (`ir::cps`); the rest stay Await-style. All `None` unless the CPS
+		// pass ran over this IR.
+		async_poll: program
+			.functions
+			.iter()
+			.map(|f| f.poll_fn.map(|p| p.0))
+			.collect(),
 	})
 }
 
@@ -1190,6 +1198,7 @@ mod tests {
 			params: vec![],
 			captures: vec![],
 			is_async: false,
+			poll_fn: None,
 			var_reprs: vec![],
 			param_reprs: vec![],
 			ret_repr: ir::Repr::Boxed,
@@ -1212,6 +1221,7 @@ mod tests {
 			params: vec![],
 			captures: vec![],
 			is_async: false,
+			poll_fn: None,
 			var_reprs: vec![],
 			param_reprs: vec![],
 			ret_repr: ir::Repr::Boxed,
@@ -1230,6 +1240,7 @@ mod tests {
 			params: vec![],
 			captures: vec![],
 			is_async: false,
+			poll_fn: None,
 			var_reprs: vec![],
 			param_reprs: vec![],
 			ret_repr: ir::Repr::Boxed,

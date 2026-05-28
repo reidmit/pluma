@@ -233,6 +233,9 @@ impl CodeGen {
 				entry: 0,
 				test_suites: Vec::new(),
 				test_new: None,
+				// The AST backend never runs the CPS pass; all functions are
+				// Await-style.
+				async_poll: Vec::new(),
 			},
 			const_lookup: HashMap::new(),
 			bytes_lookup: HashMap::new(),

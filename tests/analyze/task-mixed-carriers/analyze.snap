@@ -6,3 +6,7 @@ error: Type mismatch: expected `result 't8 'x`, but found `task int`.
 > 6 | 	try x = ok 1
        ^^^^^^^^^^^^
 
+error: Type mismatch: expected `result 't8 'x`, but found `task 't7`.
+> 6 | 	try x = ok 1
+       ^^^^^^^^^^^^
+

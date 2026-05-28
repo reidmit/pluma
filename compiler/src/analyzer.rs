@@ -4445,12 +4445,12 @@ impl<'compiler> Analyzer<'compiler> {
 		for definition in &mut module.body {
 			match &mut definition.kind {
 				DefinitionKind::Expr(expr) => {
-					self.dispatch_try_in_expr(expr, subst, new_constraints, &mut dispatched_any);
+					self.dispatch_try_in_expr(expr, subst, new_constraints, &mut dispatched_any, None);
 				}
 				DefinitionKind::Instance(instance_node) => {
 					for method in &mut instance_node.methods {
 						if let DefinitionKind::Expr(expr) = &mut method.kind {
-							self.dispatch_try_in_expr(expr, subst, new_constraints, &mut dispatched_any);
+							self.dispatch_try_in_expr(expr, subst, new_constraints, &mut dispatched_any, None);
 						}
 					}
 				}
@@ -4623,49 +4623,93 @@ impl<'compiler> Analyzer<'compiler> {
 		subst: &Substitution,
 		new_constraints: &mut Vec<Constraint>,
 		dispatched_any: &mut bool,
+		// The tail type of the enclosing async context (a `fun` body), used to
+		// enforce that a function which awaits returns a task. `None` at the top
+		// level and inside `scope` bodies (which carry their own task constraint).
+		enclosing_tail: Option<&Type>,
 	) {
 		// Walk children first so nested `try`s are rewritten bottom-up.
 		// For Try, we recurse into its own children below before rewriting
 		// this node.
 		match &mut expr.kind {
 			ExprKind::Fun(FunNode { body, .. }) => {
+				// A `fun` is an async context: a `try` anywhere in its body ties
+				// *this* fun's tail to a task. Capture the tail type var before
+				// recursing (it stays the same var through the walk).
+				let tail = body.last().map(|e| e.ty.clone());
 				for e in body.iter_mut() {
-					self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any);
+					self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any, tail.as_ref());
 				}
 			}
 			ExprKind::Call(CallNode { callee, args, .. }) => {
-				self.dispatch_try_in_expr(callee, subst, new_constraints, dispatched_any);
+				self.dispatch_try_in_expr(
+					callee,
+					subst,
+					new_constraints,
+					dispatched_any,
+					enclosing_tail,
+				);
 				for a in args.iter_mut() {
-					self.dispatch_try_in_expr(a, subst, new_constraints, dispatched_any);
+					self.dispatch_try_in_expr(a, subst, new_constraints, dispatched_any, enclosing_tail);
 				}
 			}
 			ExprKind::Let(LetNode { value, .. }) => {
-				self.dispatch_try_in_expr(value, subst, new_constraints, dispatched_any);
+				self.dispatch_try_in_expr(
+					value,
+					subst,
+					new_constraints,
+					dispatched_any,
+					enclosing_tail,
+				);
 			}
 			ExprKind::Tuple(es) | ExprKind::Interpolation(es) => {
 				for e in es.iter_mut() {
-					self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any);
+					self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any, enclosing_tail);
 				}
 			}
 			ExprKind::List(items) => {
 				for item in items.iter_mut() {
-					self.dispatch_try_in_expr(item.expr_mut(), subst, new_constraints, dispatched_any);
+					self.dispatch_try_in_expr(
+						item.expr_mut(),
+						subst,
+						new_constraints,
+						dispatched_any,
+						enclosing_tail,
+					);
 				}
 			}
 			ExprKind::Record(fields) => {
 				for (_, v) in fields.iter_mut() {
-					self.dispatch_try_in_expr(v, subst, new_constraints, dispatched_any);
+					self.dispatch_try_in_expr(v, subst, new_constraints, dispatched_any, enclosing_tail);
 				}
 			}
 			ExprKind::ElementAccess { receiver, .. } | ExprKind::FieldAccess { receiver, .. } => {
-				self.dispatch_try_in_expr(receiver, subst, new_constraints, dispatched_any);
+				self.dispatch_try_in_expr(
+					receiver,
+					subst,
+					new_constraints,
+					dispatched_any,
+					enclosing_tail,
+				);
 			}
 			ExprKind::UnaryOperation { right, .. } => {
-				self.dispatch_try_in_expr(right, subst, new_constraints, dispatched_any);
+				self.dispatch_try_in_expr(
+					right,
+					subst,
+					new_constraints,
+					dispatched_any,
+					enclosing_tail,
+				);
 			}
 			ExprKind::BinaryOperation { left, right, op } => {
-				self.dispatch_try_in_expr(left, subst, new_constraints, dispatched_any);
-				self.dispatch_try_in_expr(right, subst, new_constraints, dispatched_any);
+				self.dispatch_try_in_expr(left, subst, new_constraints, dispatched_any, enclosing_tail);
+				self.dispatch_try_in_expr(
+					right,
+					subst,
+					new_constraints,
+					dispatched_any,
+					enclosing_tail,
+				);
 				// `??` dispatches like `try`: once the LHS type is pinned, this
 				// node is rewritten into a `<carrier>.or-else` call.
 				let is_coalesce = matches!(op.kind, Operator::NullCoalescing);
@@ -4679,50 +4723,89 @@ impl<'compiler> Analyzer<'compiler> {
 				else_body,
 				..
 			}) => {
-				self.dispatch_try_in_expr(subject, subst, new_constraints, dispatched_any);
+				self.dispatch_try_in_expr(
+					subject,
+					subst,
+					new_constraints,
+					dispatched_any,
+					enclosing_tail,
+				);
 				for e in body.iter_mut() {
-					self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any);
+					self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any, enclosing_tail);
 				}
 				if let Some(else_body) = else_body {
 					for e in else_body.iter_mut() {
-						self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any);
+						self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any, enclosing_tail);
 					}
 				}
 			}
 			ExprKind::When(WhenNode { subject, cases, .. }) => {
-				self.dispatch_try_in_expr(subject, subst, new_constraints, dispatched_any);
+				self.dispatch_try_in_expr(
+					subject,
+					subst,
+					new_constraints,
+					dispatched_any,
+					enclosing_tail,
+				);
 				for c in cases.iter_mut() {
 					for e in c.body.iter_mut() {
-						self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any);
+						self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any, enclosing_tail);
 					}
 				}
 			}
 			ExprKind::While(WhileNode { subject, body, .. }) => {
-				self.dispatch_try_in_expr(subject, subst, new_constraints, dispatched_any);
+				self.dispatch_try_in_expr(
+					subject,
+					subst,
+					new_constraints,
+					dispatched_any,
+					enclosing_tail,
+				);
 				for e in body.iter_mut() {
-					self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any);
+					self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any, enclosing_tail);
 				}
 			}
 			ExprKind::Scope(ScopeNode { body, .. }) => {
+				// A `scope` body is its own async context (its tail is already
+				// constrained to a task where the scope is typed), so a `try` inside
+				// it must not tie the *enclosing* fun's tail — pass `None`.
 				for e in body.iter_mut() {
-					self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any);
+					self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any, None);
 				}
 			}
 			ExprKind::Grouping(inner) => {
-				self.dispatch_try_in_expr(inner, subst, new_constraints, dispatched_any);
+				self.dispatch_try_in_expr(
+					inner,
+					subst,
+					new_constraints,
+					dispatched_any,
+					enclosing_tail,
+				);
 			}
 			ExprKind::Defer(inner) => {
-				self.dispatch_try_in_expr(inner, subst, new_constraints, dispatched_any);
+				self.dispatch_try_in_expr(
+					inner,
+					subst,
+					new_constraints,
+					dispatched_any,
+					enclosing_tail,
+				);
 			}
 			ExprKind::Try(TryNode { value, rest, .. }) => {
 				// Recurse into THIS try's children first (so nested trys
 				// in `value` or `rest` get rewritten before we touch the
 				// outer node). Borrow re-acquired after the recursion.
-				self.dispatch_try_in_expr(value, subst, new_constraints, dispatched_any);
+				self.dispatch_try_in_expr(
+					value,
+					subst,
+					new_constraints,
+					dispatched_any,
+					enclosing_tail,
+				);
 				for e in rest.iter_mut() {
-					self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any);
+					self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any, enclosing_tail);
 				}
-				if self.do_try_dispatch(expr, subst, new_constraints) {
+				if self.do_try_dispatch(expr, subst, new_constraints, enclosing_tail) {
 					*dispatched_any = true;
 				}
 			}
@@ -4747,6 +4830,7 @@ impl<'compiler> Analyzer<'compiler> {
 		expr: &mut ExprNode,
 		subst: &Substitution,
 		new_constraints: &mut Vec<Constraint>,
+		enclosing_tail: Option<&Type>,
 	) -> bool {
 		use AnalysisErrorKind::*;
 
@@ -4800,14 +4884,28 @@ impl<'compiler> Analyzer<'compiler> {
 				let body_last_ty = t.rest[last_idx].ty.clone();
 				t.task_carrier = true;
 
-				// The pattern binds the awaited task's payload; the
-				// continuation's tail and the whole `try` are themselves
-				// `task β` (the function this lives in returns a task).
-				let body_payload = self.new_type_var();
-				let task_ty = Type::Enum("__prelude__.task".to_string(), vec![body_payload]);
+				// The pattern binds the awaited task's payload (`await` unwraps the
+				// `task a` to its `a`). The `try` is *type-transparent* to its
+				// continuation — its value is the continuation's value — so it can
+				// sit in a statement position (e.g. a `while` body) without forcing
+				// that position to be a task. That's what makes `await`-in-loop
+				// expressible: the loop body stays `nothing`-typed, while the
+				// suspension still happens.
 				new_constraints.push(eq_constraint(pattern_ty, payload_ty).at(try_range));
-				new_constraints.push(eq_constraint(body_last_ty, task_ty.clone()).at(try_range));
-				new_constraints.push(eq_constraint(expr.ty.clone(), task_ty).at(try_range));
+				new_constraints.push(eq_constraint(expr.ty.clone(), body_last_ty).at(try_range));
+
+				// Soundness: a function that awaits must itself return a task (so its
+				// callers see the right type and it lowers to an async closure). Tie
+				// the enclosing async context's tail to a `task β`. For a tail-
+				// position `try`-chain this is automatic (its tail is `task.return`);
+				// the live case is a `try` whose continuation tail is *not* a task
+				// (e.g. forgetting `task.return`) — that still errors here, exactly as
+				// before. `scope` bodies carry their own task constraint, so the
+				// walker passes `None` inside them.
+				if let Some(tail) = enclosing_tail {
+					let task_ty = Type::Enum("__prelude__.task".to_string(), vec![self.new_type_var()]);
+					new_constraints.push(eq_constraint(tail.clone(), task_ty).at(try_range));
+				}
 				return true;
 			}
 		}

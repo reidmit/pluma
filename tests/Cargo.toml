@@ -41,3 +41,7 @@ path = "ir_repr.rs"
 [[test]]
 name = "ir_mono"
 path = "ir_mono.rs"
+
+[[test]]
+name = "cps"
+path = "cps.rs"

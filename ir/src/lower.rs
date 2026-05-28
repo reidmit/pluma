@@ -440,6 +440,7 @@ impl<'a> Lowerer<'a> {
 			params,
 			captures,
 			is_async: false,
+			poll_fn: None,
 			body: Block(vec![
 				Stmt::synthetic(StmtKind::Let(g_var, Rvalue::GlobalRef(global))),
 				Stmt::synthetic(StmtKind::Let(
@@ -1672,6 +1673,7 @@ impl<'a> Lowerer<'a> {
 					params: Vec::new(),
 					captures: Vec::new(),
 					is_async: false,
+					poll_fn: None,
 					body: Block(vec![Stmt::synthetic(StmtKind::Return(Atom::Const(
 						Const::Unit,
 					)))]),
@@ -1690,6 +1692,7 @@ impl<'a> Lowerer<'a> {
 			params: Vec::new(),
 			captures: Vec::new(),
 			is_async: false,
+			poll_fn: None,
 			body: Block(vec![
 				Stmt::synthetic(StmtKind::Let(VarId(0), Rvalue::GlobalRef(main))),
 				Stmt::synthetic(StmtKind::Let(
@@ -1724,6 +1727,7 @@ impl<'a> Lowerer<'a> {
 			params: Vec::new(),
 			captures: Vec::new(),
 			is_async: false,
+			poll_fn: None,
 			body: Block(vec![Stmt::synthetic(StmtKind::Return(Atom::Const(
 				Const::Unit,
 			)))]),
@@ -1750,6 +1754,7 @@ fn finish_scope(scope: FnScope) -> Function {
 		params: scope.params,
 		captures: scope.captures.iter().map(|c| c.var).collect(),
 		is_async: scope.is_async,
+		poll_fn: None,
 		body: Block(scope.stmts),
 		// Filled in by a single pass over all functions at the end of `run`.
 		var_reprs: Vec::new(),

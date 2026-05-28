@@ -30,6 +30,7 @@
 //     into state machines (the snapshot trick can't port to WASM).
 // The `is_async` flag and the `Await` node are the anticipated growth points.
 
+pub mod cps;
 pub mod lower;
 pub mod mono;
 pub mod repr;
