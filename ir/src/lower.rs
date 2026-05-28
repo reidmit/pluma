@@ -237,18 +237,14 @@ impl<'a> Lowerer<'a> {
 	}
 
 	/// A def's value thunk: a zero-arg function that evaluates `expr` and
-	/// returns it.
+	/// returns it. `expr` is in tail position (its value is the thunk's return).
 	fn lower_thunk(&mut self, name: &str, expr: &ExprNode) -> Result<FuncId, String> {
 		let fn_name = format!("{}.{}@thunk", self.current_module, name);
 		self.push_scope(fn_name, &[]);
-		let atom = match self.lower_expr(expr) {
-			Ok(a) => a,
-			Err(e) => {
-				self.scopes.pop();
-				return Err(e);
-			}
-		};
-		self.push_stmt(StmtKind::Return(atom), expr.range);
+		if let Err(e) = self.lower_tail(expr) {
+			self.scopes.pop();
+			return Err(e);
+		}
 		let scope = self.scopes.pop().unwrap();
 		Ok(self.add_function(finish_scope(scope)))
 	}
@@ -377,9 +373,8 @@ impl<'a> Lowerer<'a> {
 		let inner_name = format!("{}.{}", self.current_module, name);
 		self.push_scope(inner_name, &param_names);
 		let body_range = fun.body.last().map(|e| e.range).unwrap_or(fun.range);
-		let inner_fid = match self.lower_body(&fun.body) {
-			Ok(atom) => {
-				self.push_stmt(StmtKind::Return(atom), body_range);
+		let inner_fid = match self.lower_body_tail(&fun.body, body_range) {
+			Ok(()) => {
 				let scope = self.scopes.pop().unwrap();
 				self.add_function(finish_scope(scope))
 			}
@@ -1133,14 +1128,10 @@ impl<'a> Lowerer<'a> {
 	) -> Result<Atom, String> {
 		self.push_scope(fn_name, param_names);
 		let body_range = body.last().map(|e| e.range).unwrap_or(outer_range);
-		let atom = match self.lower_body(body) {
-			Ok(a) => a,
-			Err(e) => {
-				self.scopes.pop();
-				return Err(e);
-			}
-		};
-		self.push_stmt(StmtKind::Return(atom), body_range);
+		if let Err(e) = self.lower_body_tail(body, body_range) {
+			self.scopes.pop();
+			return Err(e);
+		}
 		let scope = self.scopes.pop().unwrap();
 
 		// Build the closure's capture list (resolved against the now-current
@@ -1223,7 +1214,9 @@ impl<'a> Lowerer<'a> {
 	}
 
 	/// Lower a function/`let`-block body (a sequence of statements). Returns
-	/// the value the body evaluates to (its last expression).
+	/// the value the body evaluates to (its last expression). Used where the
+	/// body's value flows *into* something (e.g. a `try` continuation), as
+	/// opposed to `lower_body_tail` which returns it directly.
 	fn lower_body(&mut self, body: &[ExprNode]) -> Result<Atom, String> {
 		if body.is_empty() {
 			return Ok(Atom::Const(Const::Unit));
@@ -1245,6 +1238,141 @@ impl<'a> Lowerer<'a> {
 			}
 		}
 		Ok(Atom::Const(Const::Unit))
+	}
+
+	// ---- tail position --------------------------------------------------
+	//
+	// A function body's last expression is in *tail position*: its value is the
+	// function's return value. Lowering it through the tail path emits the
+	// `Return` (and, for a direct call, a `TailCall`) itself, threading tail-ness
+	// into `when`/`if` arms so the recursive call sitting in an arm becomes a
+	// real tail call — mirroring `emit.rs`'s `tail: bool`. Everything that isn't
+	// a `when`/`if`/direct-call simply evaluates to an atom and `Return`s it.
+
+	/// Lower a body whose final value is the enclosing function's return,
+	/// emitting the `Return` directly. Non-final statements run for effect.
+	fn lower_body_tail(&mut self, body: &[ExprNode], body_range: Range) -> Result<(), String> {
+		if body.is_empty() {
+			self.push_stmt(StmtKind::Return(Atom::Const(Const::Unit)), body_range);
+			return Ok(());
+		}
+		let last = body.len() - 1;
+		for (i, e) in body.iter().enumerate() {
+			if i < last {
+				if let ExprKind::Let(let_node) = &e.kind {
+					self.lower_let(let_node)?;
+				} else {
+					self.lower_expr(e)?;
+				}
+			} else if let ExprKind::Let(let_node) = &e.kind {
+				// A block ending in a `let` evaluates to `nothing`.
+				self.lower_let(let_node)?;
+				self.push_stmt(StmtKind::Return(Atom::Const(Const::Unit)), body_range);
+			} else {
+				self.lower_tail(e)?;
+			}
+		}
+		Ok(())
+	}
+
+	/// Lower one expression in tail position. `when`/`if`/direct-call get tail
+	/// treatment; anything else evaluates to an atom and is `Return`ed.
+	fn lower_tail(&mut self, expr: &ExprNode) -> Result<(), String> {
+		let range = expr.range;
+		match &expr.kind {
+			ExprKind::Grouping(inner) => self.lower_tail(inner),
+			ExprKind::When(n) => self.lower_when_tail(n, range),
+			ExprKind::If(n) => self.lower_if_tail(n, range),
+			// A direct call in tail position is a tail call — but only an
+			// ordinary (non-dispatched) call; a trait-constrained call still
+			// carries `dict_args` and is handled fine by the generic path below,
+			// just without TCO (its dicts ride as leading args, same as a normal
+			// call, so it's eligible too).
+			ExprKind::Call(call) => self.lower_call_tail(call, range),
+			_ => {
+				let atom = self.lower_expr(expr)?;
+				self.push_stmt(StmtKind::Return(atom), range);
+				Ok(())
+			}
+		}
+	}
+
+	/// Lower a sub-block (a `when`/`if` arm body) in tail position into its own
+	/// `Block`, redirecting emitted statements into a fresh buffer.
+	fn lower_tail_block(&mut self, body: &[ExprNode], range: Range) -> Result<Block, String> {
+		let saved = self.take_stmts();
+		let res = self.lower_body_tail(body, range);
+		let stmts = self.restore_stmts(saved);
+		res?;
+		Ok(Block(stmts))
+	}
+
+	/// `when` in tail position: each arm `Return`s its value directly (no shared
+	/// result var). A subject that matches no arm falls through to `Return
+	/// nothing` — matching the non-tail `when`'s `nothing` default.
+	fn lower_when_tail(&mut self, n: &WhenNode, range: Range) -> Result<(), String> {
+		let subject = self.lower_expr(&n.subject)?;
+		let mut arms = Vec::with_capacity(n.cases.len());
+		for case in &n.cases {
+			let mark = self.cur().locals.len();
+			let pattern = self.lower_pattern(&case.pattern, &n.subject.ty)?;
+			let body_range = case.body.last().map(|e| e.range).unwrap_or(range);
+			let body = self.lower_tail_block(&case.body, body_range)?;
+			self.cur().locals.truncate(mark);
+			arms.push(MatchArm { pattern, body });
+		}
+		self.push_stmt(StmtKind::Match { subject, arms }, range);
+		self.push_stmt(StmtKind::Return(Atom::Const(Const::Unit)), range);
+		Ok(())
+	}
+
+	/// `if` in tail position: the matching arm (and the `else`, if present)
+	/// `Return` directly; a no-match falls through to `Return nothing`.
+	fn lower_if_tail(&mut self, n: &IfNode, range: Range) -> Result<(), String> {
+		let subject = self.lower_expr(&n.subject)?;
+		let mark = self.cur().locals.len();
+		let pattern = self.lower_pattern(&n.pattern, &n.subject.ty)?;
+		let then_range = n.body.last().map(|e| e.range).unwrap_or(range);
+		let then_block = self.lower_tail_block(&n.body, then_range)?;
+		self.cur().locals.truncate(mark);
+		let mut arms = vec![MatchArm {
+			pattern,
+			body: then_block,
+		}];
+		if let Some(else_body) = &n.else_body {
+			let else_range = else_body.last().map(|e| e.range).unwrap_or(range);
+			let else_block = self.lower_tail_block(else_body, else_range)?;
+			arms.push(MatchArm {
+				pattern: Pattern::Wildcard,
+				body: else_block,
+			});
+		}
+		self.push_stmt(StmtKind::Match { subject, arms }, range);
+		self.push_stmt(StmtKind::Return(Atom::Const(Const::Unit)), range);
+		Ok(())
+	}
+
+	/// A direct call in tail position: lower like `lower_call` but emit a
+	/// `TailCall` and `Return` its result. The trailing `Return` is dead for a
+	/// closure callee (the VM reuses the frame) and live for a
+	/// builtin/ctor/async-fn callee (which ignores the tail flag).
+	fn lower_call_tail(
+		&mut self,
+		call: &compiler::ast::CallNode,
+		range: Range,
+	) -> Result<(), String> {
+		let callee = self.lower_expr(&call.callee)?;
+		let mut args = Vec::with_capacity(call.dict_args.len() + call.args.len());
+		for cell in &call.dict_args {
+			args.push(self.lower_dispatch(cell, range)?);
+		}
+		for a in &call.args {
+			args.push(self.lower_expr(a)?);
+		}
+		let v = self.alloc_var();
+		self.push_stmt(StmtKind::Let(v, Rvalue::TailCall(callee, args)), range);
+		self.push_stmt(StmtKind::Return(Atom::Var(v)), range);
+		Ok(())
 	}
 
 	fn lower_let(&mut self, let_node: &LetNode) -> Result<(), String> {

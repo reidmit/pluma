@@ -755,6 +755,13 @@ impl FnCtx {
 				self.emit_operands(em, &ops, body, ranges, r)?;
 				push(body, ranges, Instruction::Call(args.len() as u16), r);
 			}
+			Rvalue::TailCall(callee, args) => {
+				let mut ops: Vec<&Atom> = Vec::with_capacity(1 + args.len());
+				ops.push(callee);
+				ops.extend(args.iter());
+				self.emit_operands(em, &ops, body, ranges, r)?;
+				push(body, ranges, Instruction::TailCall(args.len() as u16), r);
+			}
 			Rvalue::Call(callee, args) => {
 				// Callee is a static target (not a stack operand), so clear the
 				// model and emit the load-callee/load-args/Call sequence directly.
@@ -1008,7 +1015,7 @@ fn rvalue_atoms(rv: &Rvalue) -> Vec<&Atom> {
 		| Rvalue::GetPayload(a, _) => vec![a],
 		Rvalue::Bin(_, a, b) => vec![a, b],
 		Rvalue::Call(_, args) => args.iter().collect(),
-		Rvalue::CallClosure(c, args) => {
+		Rvalue::CallClosure(c, args) | Rvalue::TailCall(c, args) => {
 			let mut v = Vec::with_capacity(1 + args.len());
 			v.push(c);
 			v.extend(args.iter());

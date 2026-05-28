@@ -281,6 +281,13 @@ pub enum Rvalue {
 	Call(Callee, Vec<Atom>),
 	/// Call through a closure value.
 	CallClosure(Atom, Vec<Atom>),
+	/// A tail call through a closure value: the call is in tail position (its
+	/// result is the enclosing function's return value). Lowers to the VM's
+	/// `TailCall`, which reuses the current frame for a closure callee (so the
+	/// following `Return` is dead) and falls back to a plain call for
+	/// builtins/ctors/async-fns. Produced only by `lower`'s tail path; always
+	/// immediately followed by a `Return` of its result.
+	TailCall(Atom, Vec<Atom>),
 	/// Read method `index` (trait declaration order) from a dictionary value,
 	/// yielding a callable.
 	GetDictMethod(Atom, u32),
