@@ -167,13 +167,17 @@ impl<'a> Lowerer<'a> {
 			self.lower_module(module, ast);
 		}
 
-		let entry = self.build_entry()?;
 		let test_suites: Vec<(String, GlobalId)> = self
 			.compiler
 			.entry_modules
 			.iter()
 			.filter_map(|m| self.globals.lookup(m, "tests").map(|g| (m.clone(), g)))
 			.collect();
+		// A test-only program (suites but no `main`) gets a no-op entry; the
+		// test runner drives each suite directly. `core.testing.new` is the
+		// registrar it threads in — present whenever a suite is.
+		let entry = self.build_entry(!test_suites.is_empty())?;
+		let test_new = self.globals.lookup("core.testing", "new");
 
 		let functions = self.functions;
 		let enums = self.enums;
@@ -184,6 +188,7 @@ impl<'a> Lowerer<'a> {
 			enums,
 			entry,
 			test_suites,
+			test_new,
 		})
 	}
 
@@ -1589,17 +1594,32 @@ impl<'a> Lowerer<'a> {
 
 	// ---- entry / poison / function table -------------------------------
 
-	fn build_entry(&mut self) -> Result<FuncId, String> {
+	fn build_entry(&mut self, has_tests: bool) -> Result<FuncId, String> {
 		let main_module = self
 			.compiler
 			.entry_modules
 			.first()
 			.ok_or("no entry module")?
 			.clone();
-		let main = self
-			.globals
-			.lookup(&main_module, "main")
-			.ok_or_else(|| format!("module `{}` has no `main` def", main_module))?;
+		let main = match self.globals.lookup(&main_module, "main") {
+			Some(g) => g,
+			// No `main`, but `pluma test` programs are entered via a no-op (push
+			// `nothing` and return); the runner then invokes each test directly.
+			None if has_tests => {
+				let func = Function {
+					name: "__entry__".to_string(),
+					module: String::new(),
+					params: Vec::new(),
+					captures: Vec::new(),
+					is_async: false,
+					body: Block(vec![Stmt::synthetic(StmtKind::Return(Atom::Const(
+						Const::Unit,
+					)))]),
+				};
+				return Ok(self.add_function(func));
+			}
+			None => return Err(format!("module `{}` has no `main` def", main_module)),
+		};
 		// Load `main`, call it with the unit arg, return the result.
 		let func = Function {
 			name: "__entry__".to_string(),

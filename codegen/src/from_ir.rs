@@ -59,7 +59,7 @@ pub fn emit(program: &IrProgram) -> Result<Program, String> {
 			.iter()
 			.map(|(m, g)| (m.clone(), g.0))
 			.collect(),
-		test_new: None,
+		test_new: program.test_new.map(|g| g.0),
 	})
 }
 
@@ -1234,6 +1234,7 @@ mod tests {
 			enums: HashMap::new(),
 			entry: ir::FuncId(2),
 			test_suites: vec![],
+			test_new: None,
 		};
 
 		let vm_program = emit(&program).expect("emit should succeed");

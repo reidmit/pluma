@@ -48,6 +48,10 @@ pub struct IrProgram {
 	pub entry: FuncId,
 	/// `core.testing` suites discovered in entry modules: (module, global).
 	pub test_suites: Vec<(String, GlobalId)>,
+	/// `core.testing.new`'s global, when that module was compiled — the
+	/// registrar the test runner threads into each suite. `None` for programs
+	/// that don't pull in `core.testing`.
+	pub test_new: Option<GlobalId>,
 }
 
 /// How a global slot is initialized.

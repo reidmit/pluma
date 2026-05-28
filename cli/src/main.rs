@@ -127,9 +127,10 @@ fn main() {
 	}
 }
 
-/// Which codegen backend `run` uses. `Ast` is the original fused
-/// AST->bytecode walk; `Ir` goes through `ir::lower` + `compile_from_ir`. The
-/// default stays `Ast` until the IR cutover; this flag lets us A/B them.
+/// Which codegen backend `run`/`test` uses. `Ir` (the default since the
+/// cutover) goes through `ir::lower` + `compile_from_ir`; `Ast` is the original
+/// fused AST->bytecode walk, kept reachable via `--backend ast` /
+/// `PLUMA_BACKEND=ast` as a fallback and as the differential harness's oracle.
 #[derive(Clone, Copy, PartialEq)]
 enum Backend {
 	Ast,
@@ -137,11 +138,12 @@ enum Backend {
 }
 
 /// Read the default backend from `PLUMA_BACKEND` (`ir`/`ast`), defaulting to
-/// `Ast`. An unrecognized value falls back to `Ast`.
+/// `Ir`. Only an explicit `ast` opts back into the old walk; anything else
+/// (unset or unrecognized) uses `Ir`.
 fn backend_from_env() -> Backend {
 	match std::env::var("PLUMA_BACKEND").ok().as_deref() {
-		Some("ir") => Backend::Ir,
-		_ => Backend::Ast,
+		Some("ast") => Backend::Ast,
+		_ => Backend::Ir,
 	}
 }
 
@@ -320,7 +322,10 @@ fn test_command(args: Vec<String>) {
 
 	let t_check = std::time::Instant::now();
 
-	let program = match codegen::compile(&compiler) {
+	// Same backend selection as `run` (default `Ir`, `PLUMA_BACKEND=ast` opts
+	// back to the old walk); `pluma test` takes no `--backend` flag, so it reads
+	// only the env var.
+	let program = match compile_program(&compiler, backend_from_env()) {
 		Ok(p) => p,
 		Err(msg) => {
 			print_error(format!("codegen error: {}", msg));
@@ -658,6 +663,19 @@ fn discover_test_modules(root: &std::path::Path) -> Vec<String> {
 	out
 }
 
+/// Compile a checked `Compiler` to a runnable `vm::Program` via the chosen
+/// backend. `Ir` (the default) lowers to the mid-level IR first; `Ast` is the
+/// original fused walk, still reachable as a fallback.
+fn compile_program(compiler: &Compiler, backend: Backend) -> Result<vm::Program, String> {
+	match backend {
+		Backend::Ir => {
+			let program = ir::lower(compiler).map_err(|e| format!("ir::lower: {e}"))?;
+			codegen::compile_from_ir(&program).map_err(|e| e.to_string())
+		}
+		Backend::Ast => codegen::compile(compiler).map_err(|e| e.to_string()),
+	}
+}
+
 fn run(entry_path: String, program_args: Vec<String>, backend: Backend) {
 	if entry_path.ends_with(".test.pa") || entry_path.ends_with(".test") {
 		print_error(format!(
@@ -682,16 +700,7 @@ fn run(entry_path: String, program_args: Vec<String>, backend: Backend) {
 		std::process::exit(1);
 	}
 
-	// `Ast` is the original fused walk; `Ir` lowers to the mid-level IR first.
-	// Both produce a `vm::Program`; the default is `Ast` until the cutover.
-	let program = match backend {
-		Backend::Ast => codegen::compile(&compiler).map_err(|e| e.to_string()),
-		Backend::Ir => match ir::lower(&compiler) {
-			Ok(p) => codegen::compile_from_ir(&p).map_err(|e| e.to_string()),
-			Err(e) => Err(format!("ir::lower: {e}")),
-		},
-	};
-	let program = match program {
+	let program = match compile_program(&compiler, backend) {
 		Ok(p) => p,
 		Err(msg) => {
 			print_error(format!("codegen error: {}", msg));
@@ -806,7 +815,7 @@ Compiler & toolchain for the {} programming language
 COMMANDS:
   [run] [--backend ir|ast] <path>
                    execute a module directly (the `run` keyword is optional).
-                   `--backend` selects the codegen path (default `ast`; also
+                   `--backend` selects the codegen path (default `ir`; also
                    reads `PLUMA_BACKEND`)
   format <path>... canonicalize formatting; pass `-` for stdin, `--check` to dry-run
   test [dir] [-f name]...
@@ -833,7 +842,7 @@ Compiler & toolchain for the {} programming language
 COMMANDS:
   [run] [--backend ir|ast] <path>
                    execute a module directly (the `run` keyword is optional).
-                   `--backend` selects the codegen path (default `ast`; also
+                   `--backend` selects the codegen path (default `ir`; also
                    reads `PLUMA_BACKEND`)
   format <path>... canonicalize formatting; pass `-` for stdin, `--check` to dry-run
   test [dir] [-f name]...
