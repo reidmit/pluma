@@ -100,6 +100,31 @@ pub struct Function {
 	/// state-machine pass.
 	pub is_async: bool,
 	pub body: Block,
+	/// Representation of every `VarId` defined in this function, indexed by
+	/// `VarId.0` (params, captures, and every `Let`/pattern-bound var). Produced
+	/// by the step-2 Repr inference pass (`repr::infer_reprs`). Under the
+	/// uniform-boxed-first scheme every binding is `Boxed` except the results of
+	/// arithmetic/comparison/`Not` ops and primitive `Const` literals. The
+	/// bytecode emitter ignores this (the VM is uniformly boxed); the WASM backend
+	/// maps each repr to an i64/f64/i32 or GC-ref local. Empty until inference runs.
+	pub var_reprs: Vec<Repr>,
+}
+
+/// The machine representation a value takes. The bytecode VM is uniformly
+/// `Boxed` (its `Value` enum is already inline-tagged, so the distinction is
+/// invisible there); a WASM backend maps `I64`/`F64`/`I32` to native locals and
+/// `Boxed` to a GC reference. Assigned per `VarId` by `repr::infer_reprs` and
+/// bridged by the `Box`/`Unbox` rvalues the coercion pass inserts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Repr {
+	/// A heap reference / uniform `Value` — every polymorphic or compound value.
+	Boxed,
+	/// An unboxed `int`.
+	I64,
+	/// An unboxed `float`.
+	F64,
+	/// An unboxed `bool`.
+	I32,
 }
 
 /// A straight-line sequence of statements. Control flow lives in `Stmt`
@@ -338,6 +363,16 @@ pub enum Rvalue {
 	/// the existing async-closure path); rewritten into a state machine by the
 	/// step-2 CPS pass.
 	Await(Atom),
+	/// Box an unboxed value into a uniform heap `Value`. A no-op on the bytecode
+	/// VM (its `Value` is already tagged); inserted by the Repr coercion pass
+	/// where an unboxed value flows into a `Boxed` context (a `Call` argument, a
+	/// container element, a `Return`, …). The WASM backend emits the actual
+	/// i64/f64/i32 → GC-ref boxing.
+	Box(Atom),
+	/// Unbox a heap `Value` to the named primitive repr. A no-op on the bytecode
+	/// VM; inserted where a `Boxed` value feeds a repr-typed op (e.g. an `AddInt`
+	/// operand). The `Repr` is always `I64`/`F64`/`I32`, never `Boxed`.
+	Unbox(Atom, Repr),
 }
 
 /// A statically-resolved call target.
@@ -376,12 +411,24 @@ pub enum BinOp {
 	Concat,
 	And,
 	Or,
+	/// Structural equality / inequality — operands are `Boxed` (works on any
+	/// value: ints, strings, records, …; the VM compares `Value`s structurally).
 	Eq,
 	Ne,
-	Lt,
-	Le,
-	Gt,
-	Ge,
+	// Ordering comparisons, split by operand repr so the representation is
+	// explicit in the op (the VM has one polymorphic opcode per relation, but
+	// WASM needs `i64.lt`/`f64.lt`, and the coercion pass needs to know whether a
+	// boxed operand unboxes to I64 or F64). All map back to the VM's
+	// `Lt`/`Lte`/`Gt`/`Gte` opcodes. `*I64` operands are `I64`, `*F64` are `F64`;
+	// the result is always `I32` (bool).
+	LtI64,
+	LtF64,
+	LeI64,
+	LeF64,
+	GtI64,
+	GtF64,
+	GeI64,
+	GeF64,
 }
 
 #[cfg(test)]
@@ -408,6 +455,7 @@ mod tests {
 			captures: vec![],
 			is_async: false,
 			body,
+			var_reprs: vec![],
 		};
 
 		assert_eq!(f.params, vec![VarId(0)]);

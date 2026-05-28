@@ -714,6 +714,10 @@ impl FnCtx {
 		// when it can); the arm just emits the opcode afterwards.
 		match rv {
 			Rvalue::Use(a) => self.emit_operands(em, &[a], body, ranges, r)?,
+			// Repr coercions are no-ops on the VM: its `Value` is already
+			// inline-tagged, so boxing/unboxing is identity. Just load the operand
+			// (a WASM backend emits the real i64/f64/i32 <-> GC-ref conversion).
+			Rvalue::Box(a) | Rvalue::Unbox(a, _) => self.emit_operands(em, &[a], body, ranges, r)?,
 			Rvalue::Bin(op, a, b) => {
 				self.emit_operands(em, &[a, b], body, ranges, r)?;
 				push(body, ranges, binop_instr(*op), r);
@@ -1043,6 +1047,8 @@ fn rvalue_atoms(rv: &Rvalue) -> Vec<&Atom> {
 	match rv {
 		Rvalue::Use(a)
 		| Rvalue::Not(a)
+		| Rvalue::Box(a)
+		| Rvalue::Unbox(a, _)
 		| Rvalue::GetDictMethod(a, _)
 		| Rvalue::GetField(a, _)
 		| Rvalue::Await(a)
@@ -1124,10 +1130,13 @@ fn binop_instr(op: BinOp) -> Instruction {
 		BinOp::Or => Instruction::LogicalOr,
 		BinOp::Eq => Instruction::Eq,
 		BinOp::Ne => Instruction::Neq,
-		BinOp::Lt => Instruction::Lt,
-		BinOp::Le => Instruction::Lte,
-		BinOp::Gt => Instruction::Gt,
-		BinOp::Ge => Instruction::Gte,
+		// The IR splits ordering comparisons by operand repr (i64 vs f64) for the
+		// WASM backend; the VM has one polymorphic opcode per relation (it
+		// dispatches on the runtime `Value` tag), so both halves map to it.
+		BinOp::LtI64 | BinOp::LtF64 => Instruction::Lt,
+		BinOp::LeI64 | BinOp::LeF64 => Instruction::Lte,
+		BinOp::GtI64 | BinOp::GtF64 => Instruction::Gt,
+		BinOp::GeI64 | BinOp::GeF64 => Instruction::Gte,
 	}
 }
 

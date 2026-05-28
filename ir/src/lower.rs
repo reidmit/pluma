@@ -179,7 +179,13 @@ impl<'a> Lowerer<'a> {
 		let entry = self.build_entry(!test_suites.is_empty())?;
 		let test_new = self.globals.lookup("core.testing", "new");
 
-		let functions = self.functions;
+		// Annotate every function's bindings with a `Repr` (uniform-boxed except
+		// arithmetic/comparison/`Not` results and primitive literals). Inert for the
+		// bytecode VM; the WASM backend maps each repr to a native/GC-ref local.
+		let mut functions = self.functions;
+		for f in &mut functions {
+			f.var_reprs = crate::repr::infer_reprs(f);
+		}
 		let enums = self.enums;
 		let globals = self.globals.finish();
 		Ok(IrProgram {
@@ -436,6 +442,7 @@ impl<'a> Lowerer<'a> {
 				)),
 				Stmt::synthetic(StmtKind::Return(Atom::Var(r_var))),
 			]),
+			var_reprs: Vec::new(),
 		};
 		let wrapper_fid = self.add_function(wrapper);
 
@@ -1641,6 +1648,7 @@ impl<'a> Lowerer<'a> {
 					body: Block(vec![Stmt::synthetic(StmtKind::Return(Atom::Const(
 						Const::Unit,
 					)))]),
+					var_reprs: Vec::new(),
 				};
 				return Ok(self.add_function(func));
 			}
@@ -1661,6 +1669,7 @@ impl<'a> Lowerer<'a> {
 				)),
 				Stmt::synthetic(StmtKind::Return(Atom::Var(VarId(1)))),
 			]),
+			var_reprs: Vec::new(),
 		};
 		Ok(self.add_function(func))
 	}
@@ -1687,6 +1696,7 @@ impl<'a> Lowerer<'a> {
 			body: Block(vec![Stmt::synthetic(StmtKind::Return(Atom::Const(
 				Const::Unit,
 			)))]),
+			var_reprs: Vec::new(),
 		};
 		let f = self.add_function(func);
 		self.poison = Some(f);
@@ -1708,6 +1718,8 @@ fn finish_scope(scope: FnScope) -> Function {
 		captures: scope.captures.iter().map(|c| c.var).collect(),
 		is_async: scope.is_async,
 		body: Block(scope.stmts),
+		// Filled in by a single pass over all functions at the end of `run`.
+		var_reprs: Vec::new(),
 	}
 }
 
@@ -1846,10 +1858,17 @@ fn binop_for(op: &Operator, is_float: bool) -> Option<BinOp> {
 		(Operator::LogicalOr, _) => BinOp::Or,
 		(Operator::Equality, _) => BinOp::Eq,
 		(Operator::Inequality, _) => BinOp::Ne,
-		(Operator::LessThan, _) => BinOp::Lt,
-		(Operator::LessThanEquals, _) => BinOp::Le,
-		(Operator::GreaterThan, _) => BinOp::Gt,
-		(Operator::GreaterThanEquals, _) => BinOp::Ge,
+		// Ordering comparisons split by operand repr (see `BinOp`); reached only
+		// for concrete numeric operands (comparisons otherwise dispatch through
+		// `ord`), so `is_float` is authoritative.
+		(Operator::LessThan, false) => BinOp::LtI64,
+		(Operator::LessThan, true) => BinOp::LtF64,
+		(Operator::LessThanEquals, false) => BinOp::LeI64,
+		(Operator::LessThanEquals, true) => BinOp::LeF64,
+		(Operator::GreaterThan, false) => BinOp::GtI64,
+		(Operator::GreaterThan, true) => BinOp::GtF64,
+		(Operator::GreaterThanEquals, false) => BinOp::GeI64,
+		(Operator::GreaterThanEquals, true) => BinOp::GeF64,
 		_ => return None,
 	})
 }
