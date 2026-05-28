@@ -284,6 +284,35 @@ impl FnCtx {
 		Ok(())
 	}
 
+	/// Bind a matched pattern value. Normally this stores it into the binding's
+	/// slot, but when this binding is in a position where its value is the lone
+	/// top-of-stack payload (`keepable`) and it's read exactly once, the value is
+	/// left on the operand stack (pending) for its single reader to consume in
+	/// place — the same store/load-elision the let-result peephole performs. If it
+	/// isn't consumed in place it spills back to its slot at a control-flow or
+	/// block boundary, so the slot (assigned by `assign_pattern_slots`) is still
+	/// needed.
+	fn bind_var(
+		&mut self,
+		v: VarId,
+		keepable: bool,
+		body: &mut Vec<Instruction>,
+		ranges: &mut Vec<Range>,
+		r: Range,
+	) -> Result<(), String> {
+		if keepable && self.use_counts.get(&v.0).copied().unwrap_or(0) == 1 {
+			self.pending.push(v.0);
+		} else {
+			push(
+				body,
+				ranges,
+				Instruction::StoreLocal(self.local_slot(v)?),
+				r,
+			);
+		}
+		Ok(())
+	}
+
 	/// The length of the longest leading run of `ops` that already sits on the
 	/// operand stack as its top — i.e. the largest `k` where `ops[0..k]` equals
 	/// the top `k` pending values, in order. Those operands are already placed;
@@ -465,7 +494,10 @@ impl FnCtx {
 				let mut end_jumps = Vec::new();
 				for arm in arms {
 					self.lower_atom(em, subject, body, ranges, r)?;
-					let fails = self.emit_pattern(em, &arm.pattern, body, ranges, r)?;
+					// The subject is the lone value on the stack, so its match region
+					// is the top: the pattern can keep its sole top-of-stack binding
+					// pending instead of spilling it (`keepable = true`).
+					let fails = self.emit_pattern(em, &arm.pattern, body, ranges, r, true)?;
 					self.lower_block(em, &arm.body, body, ranges)?;
 					end_jumps.push(emit_at(body, ranges, Instruction::Jump(0), r));
 					let next = body.len() as u32;
@@ -488,12 +520,13 @@ impl FnCtx {
 	/// patched to the next arm). On a successful variant match the payload is
 	/// bound/popped; `Wildcard`/`Bind` always succeed (no fail jump).
 	fn emit_pattern(
-		&self,
+		&mut self,
 		em: &mut Emitter,
 		pattern: &Pattern,
 		body: &mut Vec<Instruction>,
 		ranges: &mut Vec<Range>,
 		r: Range,
+		keepable: bool,
 	) -> Result<Vec<u32>, String> {
 		match pattern {
 			Pattern::Wildcard => {
@@ -501,12 +534,7 @@ impl FnCtx {
 				Ok(Vec::new())
 			}
 			Pattern::Bind(v) => {
-				push(
-					body,
-					ranges,
-					Instruction::StoreLocal(self.local_slot(*v)?),
-					r,
-				);
+				self.bind_var(*v, keepable, body, ranges, r)?;
 				Ok(Vec::new())
 			}
 			Pattern::Literal(c) => {
@@ -540,7 +568,7 @@ impl FnCtx {
 					r,
 				);
 				let mut fails = vec![jmp];
-				self.emit_sub_patterns(em, fields, body, ranges, &mut fails, r)?;
+				self.emit_sub_patterns(em, fields, body, ranges, &mut fails, r, keepable)?;
 				Ok(fails)
 			}
 			Pattern::Tuple(elems) => {
@@ -554,7 +582,7 @@ impl FnCtx {
 					r,
 				);
 				let mut fails = vec![jmp];
-				self.emit_sub_patterns(em, elems, body, ranges, &mut fails, r)?;
+				self.emit_sub_patterns(em, elems, body, ranges, &mut fails, r, keepable)?;
 				Ok(fails)
 			}
 			Pattern::List { items, rest } => {
@@ -581,7 +609,7 @@ impl FnCtx {
 					Some(ListRest::Anon) => push(body, ranges, Instruction::Pop, r),
 					None => {}
 				}
-				self.emit_sub_patterns(em, items, body, ranges, &mut fails, r)?;
+				self.emit_sub_patterns(em, items, body, ranges, &mut fails, r, keepable)?;
 				Ok(fails)
 			}
 			Pattern::Record { fields, rest } => {
@@ -609,7 +637,7 @@ impl FnCtx {
 					);
 				}
 				let sub_pats: Vec<&Pattern> = fields.iter().map(|(_, p)| p).collect();
-				self.emit_sub_patterns_refs(em, &sub_pats, body, ranges, &mut fails, r)?;
+				self.emit_sub_patterns_refs(em, &sub_pats, body, ranges, &mut fails, r, keepable)?;
 				Ok(fails)
 			}
 		}
@@ -621,31 +649,38 @@ impl FnCtx {
 	/// before jumping to the outer fail. Mirrors
 	/// `codegen::emit::emit_sub_patterns_with_cleanup`.
 	fn emit_sub_patterns(
-		&self,
+		&mut self,
 		em: &mut Emitter,
 		subs: &[Pattern],
 		body: &mut Vec<Instruction>,
 		ranges: &mut Vec<Range>,
 		fails: &mut Vec<u32>,
 		r: Range,
+		keepable: bool,
 	) -> Result<(), String> {
 		let refs: Vec<&Pattern> = subs.iter().collect();
-		self.emit_sub_patterns_refs(em, &refs, body, ranges, fails, r)
+		self.emit_sub_patterns_refs(em, &refs, body, ranges, fails, r, keepable)
 	}
 
 	fn emit_sub_patterns_refs(
-		&self,
+		&mut self,
 		em: &mut Emitter,
 		subs: &[&Pattern],
 		body: &mut Vec<Instruction>,
 		ranges: &mut Vec<Range>,
 		fails: &mut Vec<u32>,
 		r: Range,
+		keepable: bool,
 	) -> Result<(), String> {
 		let total = subs.len();
 		for (rev_idx, sub) in subs.iter().rev().enumerate() {
 			let orphans = total - 1 - rev_idx;
-			let sub_fails = self.emit_pattern(em, sub, body, ranges, r)?;
+			// Sub-patterns are matched in reverse (the last payload is on top), so
+			// only the one processed last — the container's field 0 — ends up alone
+			// on top once the others are consumed. Only it can inherit the
+			// container's keep-on-stack eligibility.
+			let sub_keepable = keepable && rev_idx == total - 1;
+			let sub_fails = self.emit_pattern(em, sub, body, ranges, r, sub_keepable)?;
 			if sub_fails.is_empty() || orphans == 0 {
 				fails.extend(sub_fails);
 				continue;
