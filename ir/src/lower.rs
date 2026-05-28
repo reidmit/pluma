@@ -33,7 +33,8 @@ use crate::types::*;
 use compiler::ast::Resolved as DispatchTarget;
 use compiler::ast::{
 	DefinitionKind, ExprKind, ExprNode, FunNode, IfNode, LetNode, LiteralKind, ModuleNode, Operator,
-	PatternKind, PatternNode, RegexAnchor, RegexKind, RegexNode, WhenNode, WhileNode,
+	PatternKind, PatternNode, RegexAnchor, RegexKind, RegexNode, ScopeNode, TryNode, WhenNode,
+	WhileNode,
 };
 use compiler::types::Type;
 use compiler::{Compiler, Range};
@@ -557,6 +558,8 @@ impl<'a> Lowerer<'a> {
 			ExprKind::While(n) => self.lower_while(n, range),
 			ExprKind::Regex(node) => Ok(self.emit_let(Rvalue::Regex(regex_pattern(node)), range)),
 			ExprKind::Defer(inner) => self.lower_defer(inner, range),
+			ExprKind::Try(node) => self.lower_try(node, range),
+			ExprKind::Scope(node) => self.lower_scope(node, range),
 			other => Err(format!("unsupported expr: {}", expr_kind_name(other))),
 		}
 	}
@@ -1112,9 +1115,25 @@ impl<'a> Lowerer<'a> {
 			"{}.fun@{}:{}",
 			self.current_module, fun.range.start.line, fun.range.start.col
 		);
-		self.push_scope(fn_name, &param_names);
-		let body_range = fun.body.last().map(|e| e.range).unwrap_or(fun.range);
-		let atom = match self.lower_body(&fun.body) {
+		self.lower_closure(fn_name, &param_names, &fun.body, range)
+	}
+
+	/// Lower a closure body into its own `Function` and return a `MakeClosure`
+	/// atom for it. Shared by `fun` literals, `defer` thunks, and `scope` body
+	/// closures. A task `try` anywhere in the body marks the new function
+	/// `is_async` (via `lower_try`), which drives `MakeAsyncClosure` in the
+	/// emitter — mirroring `emit.rs`'s `body_is_async` decision, but observed
+	/// during lowering rather than pre-scanned.
+	fn lower_closure(
+		&mut self,
+		fn_name: String,
+		param_names: &[&str],
+		body: &[ExprNode],
+		outer_range: Range,
+	) -> Result<Atom, String> {
+		self.push_scope(fn_name, param_names);
+		let body_range = body.last().map(|e| e.range).unwrap_or(outer_range);
+		let atom = match self.lower_body(body) {
 			Ok(a) => a,
 			Err(e) => {
 				self.scopes.pop();
@@ -1132,7 +1151,7 @@ impl<'a> Lowerer<'a> {
 			.map(|c| self.capture_src_atom(&c.src))
 			.collect();
 		let fid = self.add_function(finish_scope(scope));
-		Ok(self.emit_let(Rvalue::MakeClosure(fid, capture_atoms), range))
+		Ok(self.emit_let(Rvalue::MakeClosure(fid, capture_atoms), outer_range))
 	}
 
 	/// `defer expr` — build a zero-arg cleanup closure `fun { expr }` and push
@@ -1145,25 +1164,62 @@ impl<'a> Lowerer<'a> {
 			"{}.defer@{}:{}",
 			self.current_module, inner.range.start.line, inner.range.start.col
 		);
-		self.push_scope(fn_name, &[]);
-		let atom = match self.lower_expr(inner) {
-			Ok(a) => a,
-			Err(e) => {
-				self.scopes.pop();
-				return Err(e);
-			}
-		};
-		self.push_stmt(StmtKind::Return(atom), inner.range);
-		let scope = self.scopes.pop().unwrap();
-		let capture_atoms: Vec<Atom> = scope
-			.captures
-			.iter()
-			.map(|c| self.capture_src_atom(&c.src))
-			.collect();
-		let fid = self.add_function(finish_scope(scope));
-		let closure = self.emit_let(Rvalue::MakeClosure(fid, capture_atoms), range);
+		let closure = self.lower_closure(fn_name, &[], std::slice::from_ref(inner), range)?;
 		self.push_stmt(StmtKind::PushDefer(closure), range);
 		Ok(Atom::Const(Const::Unit))
+	}
+
+	/// A task-carrier `try Pattern = value` and its continuation (`rest`). Lowers
+	/// to: evaluate the awaited task, `Await` it (suspend), bind the pattern, then
+	/// lower the continuation inline — the CPS state machine, mirroring
+	/// `emit.rs`'s `Try` arm. Sets the enclosing function `is_async` (its frame
+	/// awaits), which drives `MakeAsyncClosure`. `option`/`result` `try`s are
+	/// rewritten to `<carrier>.then` calls by the analyzer and never reach here.
+	fn lower_try(&mut self, node: &TryNode, range: Range) -> Result<Atom, String> {
+		if !node.task_carrier {
+			return Err("non-task `try` was not rewritten by the analyzer".to_string());
+		}
+		self.cur().is_async = true;
+		let task_atom = self.lower_expr(&node.value)?;
+		match &node.pattern.kind {
+			PatternKind::Identifier(id) => {
+				let v = self.alloc_var();
+				self.push_stmt(StmtKind::Let(v, Rvalue::Await(task_atom)), range);
+				self.cur().locals.push((id.name.clone(), v));
+			}
+			PatternKind::Underscore => {
+				self.push_stmt(StmtKind::Discard(Rvalue::Await(task_atom)), range);
+			}
+			// The analyzer restricts a task `try` pattern to ident/wildcard.
+			_ => return Err("unsupported task `try` pattern".to_string()),
+		}
+		// The continuation: its last expr is the chain's (and the function's)
+		// tail task. Bindings introduced above stay in scope for it.
+		self.lower_body(&node.rest)
+	}
+
+	/// `scope (as s)? { body }` / `manual scope ...` — lower to a call to the
+	/// `core.task.scope-new` kernel: `scope-new <manual> (fun handle { body })`.
+	/// The body becomes its own closure frame (so its `try`s suspend within the
+	/// scope's child fiber, not this one — that's why a `scope` doesn't make the
+	/// enclosing function async). Mirrors `emit.rs`'s `emit_scope`.
+	fn lower_scope(&mut self, node: &ScopeNode, range: Range) -> Result<Atom, String> {
+		let g = self
+			.globals
+			.lookup("core.task", "scope-new")
+			.ok_or("`core.task.scope-new` not found")?;
+		let scope_new = self.emit_let(Rvalue::GlobalRef(g), range);
+		let manual = Atom::Const(Const::Bool(node.manual));
+		// The body closure's parameter carries the `scope as NAME` handle so the
+		// body's `s.*` references resolve to it; an anonymous scope gets an
+		// unreferenced synthetic parameter.
+		let handle_name = node.handle.as_ref().map_or("__scope", |h| h.name.as_str());
+		let fn_name = format!(
+			"{}.scope@{}:{}",
+			self.current_module, range.start.line, range.start.col
+		);
+		let body = self.lower_closure(fn_name, &[handle_name], &node.body, range)?;
+		Ok(self.emit_let(Rvalue::CallClosure(scope_new, vec![manual, body]), range))
 	}
 
 	/// Lower a function/`let`-block body (a sequence of statements). Returns

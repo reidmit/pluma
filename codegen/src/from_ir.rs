@@ -34,6 +34,9 @@ use vm::{Function, Instruction, Program, RegexData, Value};
 pub fn emit(program: &IrProgram) -> Result<Program, String> {
 	let mut e = Emitter::default();
 	e.enums = program.enums.clone();
+	// `FuncId(n)` indexes `functions[n]`, so a parallel async flag table lets
+	// `MakeClosure` over an async function emit `MakeAsyncClosure` instead.
+	e.fn_is_async = program.functions.iter().map(|f| f.is_async).collect();
 	for func in &program.functions {
 		let f = e.lower_function(func)?;
 		e.functions.push(f);
@@ -74,6 +77,9 @@ struct Emitter {
 	// qualified-enum-name -> [(variant_name, arity)], for resolving a
 	// `MakeVariant`/`MakeVariantCtor` tag back to the variant name the VM wants.
 	enums: HashMap<String, Vec<(String, usize)>>,
+	// Per-`FuncId` async flag (dense, in `functions` order). A `MakeClosure`
+	// targeting an async function emits `MakeAsyncClosure` (-> `Value::AsyncFn`).
+	fn_is_async: Vec<bool>,
 }
 
 impl Emitter {
@@ -596,15 +602,27 @@ impl FnCtx {
 				for c in caps {
 					self.lower_atom(em, c, body, ranges, r)?;
 				}
-				push(
-					body,
-					ranges,
+				let num_captures = caps.len() as u16;
+				let fn_idx = fid.0;
+				// An async-bearing function (one whose body awaits a task) becomes a
+				// `Value::AsyncFn`: calling it builds a cold task instead of running.
+				let instr = if em
+					.fn_is_async
+					.get(fn_idx as usize)
+					.copied()
+					.unwrap_or(false)
+				{
+					Instruction::MakeAsyncClosure {
+						fn_idx,
+						num_captures,
+					}
+				} else {
 					Instruction::MakeClosure {
-						fn_idx: fid.0,
-						num_captures: caps.len() as u16,
-					},
-					r,
-				);
+						fn_idx,
+						num_captures,
+					}
+				};
+				push(body, ranges, instr, r);
 			}
 			Rvalue::CallClosure(callee, args) => {
 				self.lower_atom(em, callee, body, ranges, r)?;
@@ -692,6 +710,13 @@ impl FnCtx {
 				let idx = em.regex_patterns.len() as u32;
 				em.regex_patterns.push(Rc::new(RegexData { compiled }));
 				push(body, ranges, Instruction::LoadRegex(idx), r);
+			}
+			Rvalue::Await(task) => {
+				// Suspension point inside a task step function (each task-carrier
+				// `try`). Push the awaited task; the driver snapshots the frame,
+				// runs the task, and resumes here with its result on the stack.
+				self.lower_atom(em, task, body, ranges, r)?;
+				push(body, ranges, Instruction::Await, r);
 			}
 			other => return Err(format!("from_ir: unsupported rvalue: {other:?}")),
 		}
