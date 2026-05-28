@@ -31,7 +31,9 @@
 // The `is_async` flag and the `Await` node are the anticipated growth points.
 
 pub mod lower;
+pub mod mono;
 pub mod repr;
+pub mod resolve;
 pub mod types;
 
 pub use lower::lower;

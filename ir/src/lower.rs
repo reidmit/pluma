@@ -91,6 +91,12 @@ struct FnScope {
 	next_var: u32,
 	stmts: Vec<Stmt>,
 	is_async: bool,
+	// Repr of each param (parallel to `params`) and of the body's tail value.
+	// All-`Boxed` by default; `lower_closure` overwrites them from the AST types
+	// for `fun` bodies so the step-2 monomorphization pass can read each concrete
+	// function's signature. Carried into `Function` by `finish_scope`.
+	param_reprs: Vec<Repr>,
+	ret_repr: Repr,
 }
 
 /// A free variable captured by a `fun`: the `VarId` it gets inside this
@@ -184,7 +190,7 @@ impl<'a> Lowerer<'a> {
 		// bytecode VM; the WASM backend maps each repr to a native/GC-ref local.
 		let mut functions = self.functions;
 		for f in &mut functions {
-			f.var_reprs = crate::repr::infer_reprs(f);
+			f.var_reprs = crate::repr::infer_reprs(f, &crate::repr::Sigs::uniform());
 		}
 		let enums = self.enums;
 		let globals = self.globals.finish();
@@ -443,6 +449,8 @@ impl<'a> Lowerer<'a> {
 				Stmt::synthetic(StmtKind::Return(Atom::Var(r_var))),
 			]),
 			var_reprs: Vec::new(),
+			param_reprs: vec![Repr::Boxed; n as usize],
+			ret_repr: Repr::Boxed,
 		};
 		let wrapper_fid = self.add_function(wrapper);
 
@@ -1145,11 +1153,16 @@ impl<'a> Lowerer<'a> {
 
 	fn lower_fun(&mut self, fun: &FunNode, range: Range) -> Result<Atom, String> {
 		let param_names: Vec<&str> = fun.params.iter().map(|p| p.ident.name.as_str()).collect();
+		let param_reprs: Vec<Repr> = fun
+			.params
+			.iter()
+			.map(|p| crate::repr::repr_of_type(&p.ty))
+			.collect();
 		let fn_name = format!(
 			"{}.fun@{}:{}",
 			self.current_module, fun.range.start.line, fun.range.start.col
 		);
-		self.lower_closure(fn_name, &param_names, &fun.body, range)
+		self.lower_closure(fn_name, &param_names, &param_reprs, &fun.body, range)
 	}
 
 	/// Lower a closure body into its own `Function` and return a `MakeClosure`
@@ -1162,10 +1175,21 @@ impl<'a> Lowerer<'a> {
 		&mut self,
 		fn_name: String,
 		param_names: &[&str],
+		param_reprs: &[Repr],
 		body: &[ExprNode],
 		outer_range: Range,
 	) -> Result<Atom, String> {
 		self.push_scope(fn_name, param_names);
+		// Record the function's signature reprs (the projection of the AST param
+		// types and the body's tail type) so the step-2 monomorphization pass can
+		// read it. Inert on the VM; consumed only by the WASM-track passes.
+		if let Some(scope) = self.scopes.last_mut() {
+			scope.param_reprs = param_reprs.to_vec();
+			scope.ret_repr = body
+				.last()
+				.map(|e| crate::repr::repr_of_type(&e.ty))
+				.unwrap_or(Repr::Boxed);
+		}
 		let body_range = body.last().map(|e| e.range).unwrap_or(outer_range);
 		if let Err(e) = self.lower_body_tail(body, body_range) {
 			self.scopes.pop();
@@ -1194,7 +1218,7 @@ impl<'a> Lowerer<'a> {
 			"{}.defer@{}:{}",
 			self.current_module, inner.range.start.line, inner.range.start.col
 		);
-		let closure = self.lower_closure(fn_name, &[], std::slice::from_ref(inner), range)?;
+		let closure = self.lower_closure(fn_name, &[], &[], std::slice::from_ref(inner), range)?;
 		self.push_stmt(StmtKind::PushDefer(closure), range);
 		Ok(Atom::Const(Const::Unit))
 	}
@@ -1248,7 +1272,7 @@ impl<'a> Lowerer<'a> {
 			"{}.scope@{}:{}",
 			self.current_module, range.start.line, range.start.col
 		);
-		let body = self.lower_closure(fn_name, &[handle_name], &node.body, range)?;
+		let body = self.lower_closure(fn_name, &[handle_name], &[Repr::Boxed], &node.body, range)?;
 		Ok(self.emit_let(Rvalue::CallClosure(scope_new, vec![manual, body]), range))
 	}
 
@@ -1473,6 +1497,8 @@ impl<'a> Lowerer<'a> {
 			next_var: 0,
 			stmts: Vec::new(),
 			is_async: false,
+			param_reprs: vec![Repr::Boxed; param_names.len()],
+			ret_repr: Repr::Boxed,
 		};
 		for pn in param_names {
 			let v = VarId(scope.next_var);
@@ -1650,6 +1676,8 @@ impl<'a> Lowerer<'a> {
 						Const::Unit,
 					)))]),
 					var_reprs: Vec::new(),
+					param_reprs: Vec::new(),
+					ret_repr: Repr::Boxed,
 				};
 				return Ok(self.add_function(func));
 			}
@@ -1671,6 +1699,8 @@ impl<'a> Lowerer<'a> {
 				Stmt::synthetic(StmtKind::Return(Atom::Var(VarId(1)))),
 			]),
 			var_reprs: Vec::new(),
+			param_reprs: Vec::new(),
+			ret_repr: Repr::Boxed,
 		};
 		Ok(self.add_function(func))
 	}
@@ -1698,6 +1728,8 @@ impl<'a> Lowerer<'a> {
 				Const::Unit,
 			)))]),
 			var_reprs: Vec::new(),
+			param_reprs: Vec::new(),
+			ret_repr: Repr::Boxed,
 		};
 		let f = self.add_function(func);
 		self.poison = Some(f);
@@ -1721,6 +1753,8 @@ fn finish_scope(scope: FnScope) -> Function {
 		body: Block(scope.stmts),
 		// Filled in by a single pass over all functions at the end of `run`.
 		var_reprs: Vec::new(),
+		param_reprs: scope.param_reprs,
+		ret_repr: scope.ret_repr,
 	}
 }
 

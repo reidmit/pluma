@@ -37,3 +37,7 @@ path = "ir_diff.rs"
 [[test]]
 name = "ir_repr"
 path = "ir_repr.rs"
+
+[[test]]
+name = "ir_mono"
+path = "ir_mono.rs"

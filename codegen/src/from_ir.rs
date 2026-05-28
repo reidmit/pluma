@@ -1190,6 +1190,9 @@ mod tests {
 			params: vec![],
 			captures: vec![],
 			is_async: false,
+			var_reprs: vec![],
+			param_reprs: vec![],
+			ret_repr: ir::Repr::Boxed,
 			body: Block(vec![
 				Stmt::synthetic(StmtKind::Let(VarId(0), Rvalue::GlobalRef(print_g))),
 				Stmt::synthetic(StmtKind::Let(
@@ -1209,6 +1212,9 @@ mod tests {
 			params: vec![],
 			captures: vec![],
 			is_async: false,
+			var_reprs: vec![],
+			param_reprs: vec![],
+			ret_repr: ir::Repr::Boxed,
 			body: Block(vec![
 				Stmt::synthetic(StmtKind::Let(
 					VarId(0),
@@ -1224,6 +1230,9 @@ mod tests {
 			params: vec![],
 			captures: vec![],
 			is_async: false,
+			var_reprs: vec![],
+			param_reprs: vec![],
+			ret_repr: ir::Repr::Boxed,
 			body: Block(vec![
 				Stmt::synthetic(StmtKind::Let(VarId(0), Rvalue::GlobalRef(main_g))),
 				Stmt::synthetic(StmtKind::Let(

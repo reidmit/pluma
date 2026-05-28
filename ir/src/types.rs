@@ -108,6 +108,17 @@ pub struct Function {
 	/// bytecode emitter ignores this (the VM is uniformly boxed); the WASM backend
 	/// maps each repr to an i64/f64/i32 or GC-ref local. Empty until inference runs.
 	pub var_reprs: Vec<Repr>,
+	/// The representation of each formal parameter, parallel to `params`. The
+	/// projection of each param's resolved type (`repr::repr_of_type`), recorded by
+	/// lowering. All-`Boxed` (the uniform-boxed contract) until the step-2
+	/// monomorphization pass stamps eligible, non-escaping concrete functions with
+	/// their unboxed signature — at which point an `int` param reads as `I64`,
+	/// killing the entry box/unbox churn. The bytecode emitter ignores it.
+	pub param_reprs: Vec<Repr>,
+	/// The representation of the function's return value — the projection of the
+	/// body's tail type. `Boxed` until monomorphization stamps it. Drives the
+	/// `Return`-site repr requirement in the coercion pass; ignored by the VM.
+	pub ret_repr: Repr,
 }
 
 /// The machine representation a value takes. The bytecode VM is uniformly
@@ -456,6 +467,8 @@ mod tests {
 			is_async: false,
 			body,
 			var_reprs: vec![],
+			param_reprs: vec![],
+			ret_repr: Repr::Boxed,
 		};
 
 		assert_eq!(f.params, vec![VarId(0)]);

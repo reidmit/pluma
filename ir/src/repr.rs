@@ -32,6 +32,100 @@ use compiler::Range;
 use std::collections::{HashMap, HashSet};
 
 // --------------------------------------------------------------------------
+// Type -> Repr projection.
+// --------------------------------------------------------------------------
+
+/// The machine representation a value of a given resolved type takes. A total,
+/// lossy projection of `compiler::types::Type`: only the `numeric`/`bool` scalars
+/// map to an unboxed repr; everything compound or polymorphic (including an
+/// unresolved `Var`) is `Boxed`. This is the single bridge from the analyzer's
+/// types into the otherwise type-free IR — monomorphization reads param/return
+/// reprs off it without the IR ever carrying a `Type`. `Var(_) -> Boxed` is also
+/// the polymorphic fallback (a generic function stays uniformly boxed).
+///
+/// `Duration`/`Instant` are deliberately `Boxed`, not `I64`: although they're
+/// i64-backed, the VM tags them as distinct `Value::Duration`/`Value::Instant`,
+/// they're operated on via `core.time` (never the `numeric` operators, so they
+/// never reach a `Bin`), and their literals/values already repr as `Boxed`
+/// (`const_repr`). Keeping the projection consistent with that avoids a spurious
+/// box/unbox mismatch for the (rare, non-hot) duration-param case.
+pub fn repr_of_type(t: &compiler::types::Type) -> Repr {
+	use compiler::types::Type::*;
+	match t {
+		Int => Repr::I64,
+		Float => Repr::F64,
+		Bool => Repr::I32,
+		_ => Repr::Boxed,
+	}
+}
+
+// --------------------------------------------------------------------------
+// Call-signature table — the interprocedural input to the repr passes.
+// --------------------------------------------------------------------------
+
+/// Per-function calling convention: each function's param reprs and return repr,
+/// indexed by `FuncId.0`. This is what makes the coercion/validation passes
+/// *interprocedural* — at a resolved `Call(Callee::Function(fid), ..)` the caller
+/// coerces each argument to the callee's param repr and reads the result as the
+/// callee's return repr.
+///
+/// `Sigs::uniform()` is the uniform-boxed contract: every param, argument, and
+/// result is `Boxed`, and function params are *not* seeded from their recorded
+/// `param_reprs` (so the pass behaves exactly as it did before monomorphization).
+/// This is what the default VM pipeline and the `ir_repr` harness use.
+///
+/// `Sigs::from_program` reads each function's (monomorphization-filtered)
+/// `param_reprs`/`ret_repr`, so eligible concrete functions take unboxed params
+/// and callers agree. Build it *after* `mono::monomorphize` has filtered the
+/// ineligible functions back to all-`Boxed`.
+pub struct Sigs {
+	table: Vec<(Vec<Repr>, Repr)>,
+	mono: bool,
+}
+
+impl Sigs {
+	/// The uniform-boxed contract (no monomorphization).
+	pub fn uniform() -> Self {
+		Self {
+			table: Vec::new(),
+			mono: false,
+		}
+	}
+
+	/// Read every function's recorded signature into a table.
+	pub fn from_program(program: &IrProgram) -> Self {
+		let table = program
+			.functions
+			.iter()
+			.map(|f| (f.param_reprs.clone(), f.ret_repr))
+			.collect();
+		Self { table, mono: true }
+	}
+
+	fn ret(&self, fid: FuncId) -> Repr {
+		self
+			.table
+			.get(fid.0 as usize)
+			.map_or(Repr::Boxed, |(_, r)| *r)
+	}
+
+	fn param(&self, fid: FuncId, i: usize) -> Repr {
+		self
+			.table
+			.get(fid.0 as usize)
+			.and_then(|(ps, _)| ps.get(i))
+			.copied()
+			.unwrap_or(Repr::Boxed)
+	}
+
+	/// Whether function params are seeded from their recorded `param_reprs`
+	/// (mono mode) rather than forced `Boxed` (uniform mode).
+	fn seeds_params(&self) -> bool {
+		self.mono
+	}
+}
+
+// --------------------------------------------------------------------------
 // Repr of each binding (inference).
 // --------------------------------------------------------------------------
 
@@ -47,39 +141,49 @@ use std::collections::{HashMap, HashSet};
 /// single var can't take a single unboxed repr. Boxing the join keeps the
 /// arithmetic inside each arm unboxed — only the join-point `Use` boxes (the
 /// coercer turns the arm's `Let(result, Use(x))` into `Box(x)`).
-pub fn infer_reprs(f: &Function) -> Vec<Repr> {
+pub fn infer_reprs(f: &Function, sigs: &Sigs) -> Vec<Repr> {
 	let joins = find_join_vars(f);
 	let mut reprs = vec![Repr::Boxed; var_upper_bound(f)];
-	assign_block(&f.body, &mut reprs, &joins);
+	// In mono mode, eligible functions carry unboxed param reprs; seed them so an
+	// `int` param reads as `I64` and its arithmetic needs no entry unbox. (In
+	// uniform mode params stay `Boxed`.)
+	if sigs.seeds_params() {
+		for (i, p) in f.params.iter().enumerate() {
+			if let Some(r) = f.param_reprs.get(i) {
+				reprs[p.0 as usize] = *r;
+			}
+		}
+	}
+	assign_block(&f.body, &mut reprs, &joins, sigs);
 	reprs
 }
 
-fn assign_block(b: &Block, reprs: &mut Vec<Repr>, joins: &HashSet<u32>) {
+fn assign_block(b: &Block, reprs: &mut Vec<Repr>, joins: &HashSet<u32>, sigs: &Sigs) {
 	for stmt in &b.0 {
 		match &stmt.kind {
 			StmtKind::Let(v, rv) => {
 				reprs[v.0 as usize] = if joins.contains(&v.0) {
 					Repr::Boxed
 				} else {
-					result_repr(rv, reprs)
+					result_repr(rv, reprs, sigs)
 				};
 			}
 			StmtKind::If(_, t, e) => {
-				assign_block(t, reprs, joins);
-				assign_block(e, reprs, joins);
+				assign_block(t, reprs, joins, sigs);
+				assign_block(e, reprs, joins, sigs);
 			}
 			StmtKind::Switch { arms, default, .. } => {
 				for (_, b) in arms {
-					assign_block(b, reprs, joins);
+					assign_block(b, reprs, joins, sigs);
 				}
-				assign_block(default, reprs, joins);
+				assign_block(default, reprs, joins, sigs);
 			}
 			StmtKind::Match { arms, .. } => {
 				for arm in arms {
-					assign_block(&arm.body, reprs, joins);
+					assign_block(&arm.body, reprs, joins, sigs);
 				}
 			}
-			StmtKind::Loop(b) => assign_block(b, reprs, joins),
+			StmtKind::Loop(b) => assign_block(b, reprs, joins, sigs),
 			// These bind no value. Pattern-bound vars (inside `Match` arms) stay
 			// at their `Boxed` default.
 			StmtKind::Discard(_)
@@ -94,13 +198,16 @@ fn assign_block(b: &Block, reprs: &mut Vec<Repr>, joins: &HashSet<u32>) {
 
 /// The repr an rvalue's *result* takes, given the reprs already assigned to its
 /// operand vars.
-pub fn result_repr(rv: &Rvalue, reprs: &[Repr]) -> Repr {
+pub fn result_repr(rv: &Rvalue, reprs: &[Repr], sigs: &Sigs) -> Repr {
 	match rv {
 		Rvalue::Bin(op, _, _) => binop_result_repr(*op),
 		Rvalue::Not(_) => Repr::I32,
 		Rvalue::Use(a) => atom_repr(a, reprs),
 		Rvalue::Box(_) => Repr::Boxed,
 		Rvalue::Unbox(_, r) => *r,
+		// A resolved direct call reads as the callee's return repr (`Boxed` in
+		// uniform mode, or for a callee that wasn't monomorphized).
+		Rvalue::Call(Callee::Function(fid), _) => sigs.ret(*fid),
 		// Everything that yields a heap value or a polymorphic value.
 		Rvalue::Call(..)
 		| Rvalue::CallClosure(..)
@@ -175,7 +282,7 @@ fn const_repr(c: &Const) -> Repr {
 /// *requirement*, calling `f(atom, required_repr)`. `Use` is a move (its result
 /// repr is its operand's, so no coercion); `Box`/`Unbox` are coercions already;
 /// callee positions (`Call`'s `Callee`, `GlobalRef`, …) carry no atom operand.
-fn for_each_required_operand(rv: &mut Rvalue, mut f: impl FnMut(&mut Atom, Repr)) {
+fn for_each_required_operand(rv: &mut Rvalue, sigs: &Sigs, mut f: impl FnMut(&mut Atom, Repr)) {
 	match rv {
 		Rvalue::Bin(op, a, b) => {
 			let r = binop_operand_repr(*op);
@@ -187,6 +294,15 @@ fn for_each_required_operand(rv: &mut Rvalue, mut f: impl FnMut(&mut Atom, Repr)
 			f(c, Repr::Boxed);
 			for a in args {
 				f(a, Repr::Boxed);
+			}
+		}
+		// A resolved direct call: each argument must match the callee's param repr
+		// (the interprocedural contract). `Boxed` in uniform mode / for a callee
+		// that wasn't monomorphized.
+		Rvalue::Call(Callee::Function(fid), args) => {
+			let fid = *fid;
+			for (i, a) in args.iter_mut().enumerate() {
+				f(a, sigs.param(fid, i));
 			}
 		}
 		Rvalue::Call(_, args)
@@ -239,27 +355,28 @@ fn for_each_required_operand(rv: &mut Rvalue, mut f: impl FnMut(&mut Atom, Repr)
 /// splicing `Box`/`Unbox` rvalues at each mismatch. After this, `validate_reprs`
 /// holds and the function is WASM-ready. Idempotent in effect: re-running inserts
 /// nothing (every operand already matches).
-pub fn insert_coercions(f: &mut Function) {
+pub fn insert_coercions(f: &mut Function, sigs: &Sigs) {
 	let mut reprs = std::mem::take(&mut f.var_reprs);
 	if reprs.is_empty() {
-		reprs = infer_reprs(f);
+		reprs = infer_reprs(f, sigs);
 	}
 	// Make sure fresh coercion vars start past every existing var.
 	let needed = var_upper_bound(f);
 	if reprs.len() < needed {
 		reprs.resize(needed, Repr::Boxed);
 	}
-	let mut ctx = Coercer { reprs };
+	let mut ctx = Coercer { reprs, sigs };
 	let body = std::mem::replace(&mut f.body, Block(Vec::new()));
 	f.body = ctx.block(body);
 	f.var_reprs = ctx.reprs;
 }
 
-struct Coercer {
+struct Coercer<'a> {
 	reprs: Vec<Repr>,
+	sigs: &'a Sigs,
 }
 
-impl Coercer {
+impl Coercer<'_> {
 	fn fresh(&mut self, repr: Repr) -> VarId {
 		let v = VarId(self.reprs.len() as u32);
 		self.reprs.push(repr);
@@ -314,12 +431,14 @@ impl Coercer {
 					let target = self.reprs[v.0 as usize];
 					self.coerce(a, target, &mut pre, range);
 				} else {
-					for_each_required_operand(&mut rv, |a, r| self.coerce(a, r, &mut pre, range));
+					let sigs = self.sigs;
+					for_each_required_operand(&mut rv, sigs, |a, r| self.coerce(a, r, &mut pre, range));
 				}
 				StmtKind::Let(v, rv)
 			}
 			StmtKind::Discard(mut rv) => {
-				for_each_required_operand(&mut rv, |a, r| self.coerce(a, r, &mut pre, range));
+				let sigs = self.sigs;
+				for_each_required_operand(&mut rv, sigs, |a, r| self.coerce(a, r, &mut pre, range));
 				StmtKind::Discard(rv)
 			}
 			StmtKind::Return(mut a) => {
@@ -374,31 +493,31 @@ impl Coercer {
 /// its rvalue's result repr, and every operand's repr matches what its consumer
 /// requires (so a WASM emitter never sees a boxed value where it needs an i64,
 /// nor vice-versa). Run over the whole fixture corpus after `insert_coercions`.
-pub fn validate_reprs(f: &Function) -> Result<(), String> {
-	check_block(&f.body, &f.var_reprs, &f.name)
+pub fn validate_reprs(f: &Function, sigs: &Sigs) -> Result<(), String> {
+	check_block(&f.body, &f.var_reprs, &f.name, sigs)
 }
 
-fn check_block(b: &Block, reprs: &[Repr], fname: &str) -> Result<(), String> {
+fn check_block(b: &Block, reprs: &[Repr], fname: &str, sigs: &Sigs) -> Result<(), String> {
 	for stmt in &b.0 {
 		match &stmt.kind {
 			StmtKind::Let(v, rv) => {
 				let got = reprs.get(v.0 as usize).copied().unwrap_or(Repr::Boxed);
-				let want = result_repr(rv, reprs);
+				let want = result_repr(rv, reprs, sigs);
 				if got != want {
 					return Err(format!(
 						"{fname}: var {} recorded {got:?} but its rvalue produces {want:?}",
 						v.0
 					));
 				}
-				check_rvalue(rv, reprs, fname)?;
+				check_rvalue(rv, reprs, fname, sigs)?;
 			}
-			StmtKind::Discard(rv) => check_rvalue(rv, reprs, fname)?,
+			StmtKind::Discard(rv) => check_rvalue(rv, reprs, fname, sigs)?,
 			StmtKind::Return(a) => require(a, Repr::Boxed, reprs, fname, "return")?,
 			StmtKind::PushDefer(a) => require(a, Repr::Boxed, reprs, fname, "defer")?,
 			StmtKind::If(cond, t, e) => {
 				require(cond, Repr::I32, reprs, fname, "if-cond")?;
-				check_block(t, reprs, fname)?;
-				check_block(e, reprs, fname)?;
+				check_block(t, reprs, fname, sigs)?;
+				check_block(e, reprs, fname, sigs)?;
 			}
 			StmtKind::Switch {
 				scrutinee,
@@ -407,29 +526,29 @@ fn check_block(b: &Block, reprs: &[Repr], fname: &str) -> Result<(), String> {
 			} => {
 				require(scrutinee, Repr::Boxed, reprs, fname, "switch")?;
 				for (_, b) in arms {
-					check_block(b, reprs, fname)?;
+					check_block(b, reprs, fname, sigs)?;
 				}
-				check_block(default, reprs, fname)?;
+				check_block(default, reprs, fname, sigs)?;
 			}
 			StmtKind::Match { subject, arms } => {
 				require(subject, Repr::Boxed, reprs, fname, "match")?;
 				for arm in arms {
-					check_block(&arm.body, reprs, fname)?;
+					check_block(&arm.body, reprs, fname, sigs)?;
 				}
 			}
-			StmtKind::Loop(b) => check_block(b, reprs, fname)?,
+			StmtKind::Loop(b) => check_block(b, reprs, fname, sigs)?,
 			StmtKind::Break | StmtKind::Continue | StmtKind::RunDefer(_) => {}
 		}
 	}
 	Ok(())
 }
 
-fn check_rvalue(rv: &Rvalue, reprs: &[Repr], fname: &str) -> Result<(), String> {
+fn check_rvalue(rv: &Rvalue, reprs: &[Repr], fname: &str, sigs: &Sigs) -> Result<(), String> {
 	// Reuse the coercion visitor on a throwaway clone: it never mutates here, it
 	// just reports the first operand whose repr disagrees with its requirement.
 	let mut rv = rv.clone();
 	let mut err = None;
-	for_each_required_operand(&mut rv, |a, req| {
+	for_each_required_operand(&mut rv, sigs, |a, req| {
 		let actual = atom_repr(a, reprs);
 		if err.is_none() && actual != req {
 			err = Some(format!(
@@ -710,6 +829,8 @@ mod tests {
 			is_async: false,
 			body: Block(body),
 			var_reprs: vec![],
+			param_reprs: vec![],
+			ret_repr: Repr::Boxed,
 		}
 	}
 
@@ -731,7 +852,7 @@ mod tests {
 				Stmt::new(StmtKind::Return(Atom::Var(t)), syn()),
 			],
 		);
-		f.var_reprs = infer_reprs(&f);
+		f.var_reprs = infer_reprs(&f, &Sigs::uniform());
 		assert_eq!(f.var_reprs[0], Repr::Boxed); // param n
 		assert_eq!(f.var_reprs[1], Repr::I64); // n - 1
 	}
@@ -755,8 +876,8 @@ mod tests {
 				Stmt::new(StmtKind::Return(Atom::Var(t)), syn()),
 			],
 		);
-		f.var_reprs = infer_reprs(&f);
-		insert_coercions(&mut f);
+		f.var_reprs = infer_reprs(&f, &Sigs::uniform());
+		insert_coercions(&mut f, &Sigs::uniform());
 
 		// Body is now: Unbox(n)->u ; Let t = u - 1 ; Box(t)->b ; Return b.
 		let kinds: Vec<&StmtKind> = f.body.0.iter().map(|s| &s.kind).collect();
@@ -768,7 +889,7 @@ mod tests {
 		assert!(matches!(kinds[1], StmtKind::Let(v, Rvalue::Bin(BinOp::SubInt, _, _)) if *v == t));
 		assert!(matches!(kinds[2], StmtKind::Let(_, Rvalue::Box(_))));
 		assert!(matches!(kinds[3], StmtKind::Return(_)));
-		validate_reprs(&f).expect("coerced function must validate");
+		validate_reprs(&f, &Sigs::uniform()).expect("coerced function must validate");
 	}
 
 	// `fun x { x }`: polymorphic identity — everything is Boxed, so no coercions.
@@ -779,11 +900,11 @@ mod tests {
 			vec![x],
 			vec![Stmt::new(StmtKind::Return(Atom::Var(x)), syn())],
 		);
-		f.var_reprs = infer_reprs(&f);
+		f.var_reprs = infer_reprs(&f, &Sigs::uniform());
 		let before = f.body.0.len();
-		insert_coercions(&mut f);
+		insert_coercions(&mut f, &Sigs::uniform());
 		assert_eq!(f.body.0.len(), before, "no coercions expected");
-		validate_reprs(&f).expect("identity validates");
+		validate_reprs(&f, &Sigs::uniform()).expect("identity validates");
 	}
 
 	// An int comparison: operands are I64, the result is I32 (bool).
@@ -802,10 +923,10 @@ mod tests {
 				Stmt::new(StmtKind::Return(Atom::Var(r)), syn()),
 			],
 		);
-		f.var_reprs = infer_reprs(&f);
+		f.var_reprs = infer_reprs(&f, &Sigs::uniform());
 		assert_eq!(f.var_reprs[2], Repr::I32);
-		insert_coercions(&mut f);
-		validate_reprs(&f).expect("comparison validates");
+		insert_coercions(&mut f, &Sigs::uniform());
+		validate_reprs(&f, &Sigs::uniform()).expect("comparison validates");
 		// Both operands (boxed params) get unboxed to I64.
 		let unboxes = f
 			.body

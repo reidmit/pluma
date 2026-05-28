@@ -105,9 +105,10 @@ fn coercion_is_behavior_neutral_and_validates() {
 
 		// Insert Repr coercions into every function, then validate the discipline.
 		let mut coerced = uncoerced.clone();
+		let sigs = ir::repr::Sigs::uniform();
 		for f in &mut coerced.functions {
-			ir::repr::insert_coercions(f);
-			ir::repr::validate_reprs(f)
+			ir::repr::insert_coercions(f, &sigs);
+			ir::repr::validate_reprs(f, &sigs)
 				.unwrap_or_else(|e| panic!("`{name}` fn `{}` fails repr validation: {e}", f.name));
 			total_coercions += count_coercions(f);
 		}
