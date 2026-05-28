@@ -1,5 +1,6 @@
 .DS_Store
 /target
+/tests/target
 /Cargo.lock
 /scratch
 /site/public
