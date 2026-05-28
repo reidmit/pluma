@@ -1,281 +1,188 @@
-# IR.md — a shared mid-level IR between the typed AST and codegen
+# IR.md — the mid-level IR between the typed AST and codegen
 
-**Status:** planned, not started. Step 1 below is a pure, behavior-preserving
-refactor of `codegen`; step 2 (a WASM backend) is sketched at the end as the
-payoff it unlocks but is out of scope for now. A native/Cranelift backend is
-explicitly *not* planned.
+**Status:** the IR seam and the whole Repr/unboxing track are **built and are the
+default backend**. What remains is the **async CPS state-machine pass** and the
+**WASM backend** that consumes it all. A native/Cranelift backend is explicitly
+*not* planned.
 
-## Goal
-
-Introduce a target-independent **IR** that sits between the typed AST and code
-emission, and refactor the existing bytecode codegen to go
-
-```
-typed AST ──[lowering: elaboration]──▶ IR ──[bytecode emit]──▶ vm::Program
-```
-
-instead of walking the AST straight to `Instruction`s in one pass. The bytecode
-VM becomes the *first consumer* of the IR; a future WASM backend becomes a
-second consumer that reuses every lowering pass and only swaps the final emit.
-
-## Crate topology
-
-`ir` is a **new sibling crate** in the workspace (alongside `compiler`,
-`codegen`, `vm`, …; add it to the root `Cargo.toml` members). It holds the IR
-types **and** the lowering pass (typed AST → IR), so it depends on `compiler`
-(it needs the typed AST). All AST-walking helpers are private to this crate.
-
-`codegen` is re-pointed to consume the IR: it depends on `ir` + `vm` and **no
-longer on `compiler::ast`**. The emitter functions see only `ir::IrProgram`,
-never the AST — which is exactly the seam a separate crate enforces (it *can't*
-reach AST-walking helpers; they don't exist in its dependency set). The public
-`codegen::compile(&Compiler) -> vm::Program` stays as a thin orchestrator that
-calls `ir::lower(&compiler)` then emits, so `cli` is unchanged. A future `wasm`
-crate is a second sibling depending on `ir`, parallel to `codegen`.
+This file is the design-of-record and the forward plan. For the blow-by-blow of
+what shipped (and why), see the `project_fullstack_ir_plan` memory; this doc
+keeps the *current architecture* and the *unbuilt roadmap*.
 
 ```
-compiler (typed AST) ──▶ ir (lower → IR) ──┬──▶ codegen ──▶ vm::Program   (today)
-                                           └──▶ wasm    ──▶ .wasm          (step 2)
+typed AST ──[ir::lower: elaboration]──▶ IR ──┬──[codegen::from_ir]──▶ vm::Program   (today, default)
+                                             └──[wasm emit]─────────▶ .wasm          (the payoff, unbuilt)
 ```
 
-Step 1 must change **no observable behavior**: `just test` (both `tests/run` and
-`tests/analyze`) passes with zero snapshot diffs, and `bench` shows no
-meaningful regression. The bytecode may change shape; the program's
-status/stdout/stderr may not.
+The bytecode VM is the *first consumer* of the IR; the WASM backend will be a
+second consumer that reuses every lowering and IR→IR pass and only swaps the
+final emit. That reuse — closure conversion, dictionary passing, pattern
+compilation, `defer` edges, unboxing, and (once built) the CPS transform shared
+above the emit line — is the entire reason the IR exists.
 
-## Why do this (with one backend, for now)
+## Crate topology (as built)
 
-The justification isn't "three backends" — step 3 is dropped. It's two things:
+- **`ir`** — IR types (`types.rs`) + the lowering pass `lower(&Compiler) ->
+  IrProgram` (`lower.rs`) + the IR→IR passes (`repr.rs`, `resolve.rs`,
+  `mono.rs`). Depends on `compiler` (needs the typed AST). All AST-walking is
+  private to lowering; the IR itself is type-free.
+- **`codegen`** — `from_ir.rs` lowers `ir::IrProgram → vm::Program` (the live
+  default). `emit.rs` is the legacy fused AST→bytecode walk, **kept on purpose**
+  as (a) the differential harness's live oracle, (b) the `--backend ast` /
+  `PLUMA_BACKEND=ast` fallback, and (c) a stable baseline for the future WASM
+  backend. `codegen::compile` selects the backend; the default is IR.
+- **`vm`** — unchanged consumer of `vm::Program`.
+- A future **`wasm`** crate is a second sibling depending on `ir`, parallel to
+  `codegen`.
 
-1. **It's the only way a WASM backend reuses the hard parts.** Closure
-   conversion, dictionary passing, pattern-match compilation, and `defer` edge
-   insertion are non-trivial and currently fused into bytecode emission. Without
-   an IR seam, the WASM backend would reimplement all of it. With the seam, WASM
-   is "add an emitter."
-2. **It makes the deferred `PERF-NOTES` optimizations tractable.** Decision-tree
-   pattern compilation, record-slot lowering (`GetField` → `GetSlot`, no
-   hashing), and peephole/const-fold/dead-`Pop` passes are awkward on a fused
-   AST→bytecode walk and natural as IR→IR passes. These are *behavior-preserving*
-   (they change bytecode, not output), so they can land right after the refactor
-   and show up only in `bench`. The IR earns its keep for the VM alone, before
-   any WASM work.
+## The IR (as built)
 
-## Current state (what we're refactoring)
+Two commitments, both for the eventual WASM consumer:
 
-`codegen/src/emit.rs` (one file, ~3,100 lines) is a single-pass `CodeGen` that:
+- **ANF** — every intermediate is a `Let`-bound `VarId`; call args are `Atom`s.
+- **Structured control flow** — `If`/`Switch`/`Match`/`Loop`, never gotos (WASM
+  requires it; the bytecode emitter is happy with it).
 
-- runs two pre-passes over all modules: **reserve a global slot** per top-level
-  def/alias/instance, then **emit a thunk** per def;
-- walks each def body with `emit_expr_with_parents` (~670 lines), emitting
-  `Instruction`s into a `FunctionBuilder` as it goes;
-- interleaves the elaboration we want to lift out:
-  - **identifier resolution** — `resolve_identifier`, `Scope` locals/captures;
-  - **closure conversion** — `emit_fun`, explicit capture lists, `alloc_slot`;
-  - **dictionary elaboration** — `emit_dispatch_load`,
-    `emit_constrained_value_ref`, `emit_resolved_load`, `synthetic_dict_name`,
-    `undrained_dispatch_cells`; trait instances are pre-evaluated
-    `Value::MethodDict` globals named `<trait>@<head>` (`numeric@int`, …);
-  - **pattern lowering** — `emit_pattern`, `emit_sub_patterns_with_cleanup`
-    (currently naive linear match, per `PERF-NOTES`);
-  - **control flow** — `emit_if`, `emit_when`, `emit_while`;
-  - **records/variants** — `emit_field_access`, `emit_variant_construction`;
-  - **async** — `body_is_async`/`expr_is_async` mark a def async;
-    `compile_constrained_thunk` emits `MakeAsyncClosure`; awaiting relies on the
-    VM's frame-snapshot runtime (`vm/src/task.rs`).
+**Storage is the backend's job.** Lowering emits abstract `VarId`s; `from_ir`
+maps them to VM stack slots, a WASM backend would map them to locals. `captures`
+is an abstract list each backend realizes its own way.
 
-`vm::Program` is `{ functions, constants, bytes_constants, regex_patterns,
-globals, field_lists, global_by_name, enum_variants, entry, test_suites,
-test_new }`. The constants/bytes/regex/field-list pools and `global_by_name` are
-**VM-encoding details**; `enum_variants` and the global-name→id allocation are
-**target-independent**.
+The actual node set lives in `ir/src/types.rs`; the shape worth knowing here:
 
-## The IR (deliberately minimal for step 1)
+- `IrProgram { functions, globals, enums, entry, test_suites, test_new }`.
+- `Function { name, module, params, captures, is_async, body, var_reprs,
+  param_reprs, ret_repr }`. The last three are the Repr track (below).
+- `StmtKind`: `Let`, `If`, `Switch`, `Match` (pattern-level, not pre-compiled to
+  a decision tree), `Loop`/`Break`/`Continue`, `Return`, `Discard`, plus the
+  `defer` edges `RunDefer`/`PushDefer`. Every `Stmt` carries a source `Range` for
+  error attribution.
+- `Rvalue`: `Use`, `Bin`, `Not`, `Call(Callee, …)` / `CallClosure` / `TailCall`,
+  the dict machinery `GetDictMethod`/`MakeDict`, `MakeClosure`, records/variants
+  (`MakeRecord`/`GetField`/`MakeVariant`/`MakeVariantCtor`/`GetTag`/`GetPayload`),
+  `MakeList`/`MakeTuple`, `Interpolate`, `Regex`, `GlobalRef`, `Builtin`,
+  `Await`, and the Repr coercions `Box`/`Unbox`.
+- `Callee { Function(FuncId), Global(GlobalId), Builtin(String) }` — `Function`
+  is a resolved direct call (see resolution, below).
+- `BinOp`: arithmetic split by type (`AddInt`/`AddFloat`/…); `Concat`, `And`,
+  `Or`, structural `Eq`/`Ne`; and comparisons **split by operand repr**
+  (`LtI64`/`LtF64`/`LeI64`/… ×4 relations) so the op self-describes its operand
+  repr for WASM. `from_ir` maps each back to the VM's one polymorphic opcode.
 
-Two passes from the full backend-neutral vision are **explicitly deferred to
-step 2**, because the VM doesn't need them and building them now would be
-speculative:
+## What's built
 
-- **No `Repr`/unboxing.** The VM is uniformly boxed (`Value`), so the step-1 IR
-  is uniformly boxed too — every value is a heap reference. WASM is what wants
-  `int`→i64 unboxing; the `Repr` annotations + boxing-coercion pass arrive with
-  it.
-- **No CPS/state-machine transform.** Async stays exactly as today: a
-  `Function.is_async` flag drives `MakeAsyncClosure`, and awaiting rides the
-  VM's frame snapshots. The IR keeps `await` as an explicit node; step 2 adds an
-  IR→IR pass that rewrites async functions into state machines (the snapshot
-  trick can't port to WASM, but that's step 2's problem, not the IR's shape
-  today).
+**Step 1 — the seam (done; IR is default).** Lowering ports all the elaboration
+that was fused into `emit.rs`: identifier resolution, closure conversion,
+dictionary elaboration (trait constraints → dict params + `GetDictMethod`;
+instances → pre-evaluated `MethodDict` globals), pattern compilation, `defer`
+edges, async marking. Differential harness `tests/ir_diff.rs` compiles every
+fixture *both* ways and asserts identical run output. Perf reached parity then
+surpassed AST via an operand-stack peephole in `from_ir` and `TailCall` lowering.
 
-So step 1 builds the *seam* and the minimal node set that hosts the current
-elaboration — designed so the two deferred passes slot in later (the `is_async`
-flag and the `await` node are the anticipated growth points), but not built
-speculatively.
+**Devirtualization (done).** Concrete `int`/`float` `+ - * /` and `< <= > >=`
+emit direct `BinOp`s instead of dispatching through the boxed `numeric`/`ord`
+method dict. Done *in lowering* (it's type-directed and the IR is type-free, so a
+post-lowering pass would need Repr first; lowering still has `expr.ty`). IR is
+~2× faster than AST on arithmetic-heavy code as a result. (Also drove the
+language change: concrete float relations now follow IEEE-754, NaN→false.)
 
-Sketch (the `ir` crate's public surface):
+**Repr / unboxing pass (done; `ir/src/repr.rs`; inert on the VM).** The WASM
+prerequisite that makes boxing explicit. `repr_of_type` projects a `compiler`
+type to `Repr {Boxed,I64,F64,I32}` (the single bridge from types into the
+type-free IR). `infer_reprs` assigns each `VarId` a repr; `insert_coercions`
+splices `Box`/`Unbox` at repr mismatches; `validate_reprs` is the WASM-readiness
+checker. `if`/`when` **join vars take their arms' unified repr** (all arms agree
+→ that repr, else `Boxed`). All inert on the VM (`Box`/`Unbox` lower to a no-op;
+split comparisons map to the one VM opcode).
 
-```rust
-pub struct IrProgram {
-    pub functions: Vec<Function>,
-    pub globals:   Vec<GlobalInit>,                 // pre-evaluated or thunk-backed
-    pub enums:     HashMap<String, Vec<(String, usize)>>, // target-independent
-    pub entry:     FuncId,
-    pub test_suites: Vec<(String, GlobalId)>,
-}
+**Param/return monomorphization (done; inert on the VM).** Gives eligible
+concrete functions an unboxed calling convention so caller↔callee chains pass
+i64/f64/i32 with no box/unbox churn. Three pieces:
+- **Direct-call resolution** (`resolve.rs`) — the enabling pass. A top-level call
+  lowers to `CallClosure(GlobalRef(g))`, hiding the callee; when `g`'s thunk is a
+  capture-free non-async closure of `fid`, rewrite to `Call(Callee::Function(fid))`
+  and prune the dead `GlobalRef`. Makes the callee visible at the call site.
+- **Eligibility + escape analysis** (`mono.rs`) — keep an unboxed signature only
+  for a function that is a non-escaping (no surviving `GlobalRef`), concrete,
+  **self-recursive** top-level def with an unboxed param; everyone else reverts to
+  all-`Boxed`. The self-recursive + unboxed-param rule is a cheap **profitability
+  proxy**: monomorphization relocates coercions to call boundaries, so it only
+  pays when an unboxed value rides the recursion.
+- **Interprocedural Repr** — `repr.rs` is parametrized by `Sigs` (`uniform()` =
+  the old all-boxed contract used by the default VM path; `from_program` makes
+  `infer_reprs`/`insert_coercions`/`validate_reprs` honor each callee's signature).
 
-pub struct Function {
-    pub name: String, pub module: String,
-    pub params:   Vec<VarId>,
-    pub captures: Vec<VarId>,   // explicit, from closure conversion
-    pub is_async: bool,         // drives MakeAsyncClosure; step-2 CPS seam
-    pub body:     Block,
-}
+## Validation philosophy (VM-anchored)
 
-pub struct Block(pub Vec<Stmt>);
+There is no WASM backend yet, so nothing *consumes* the unboxed reprs — they're
+validated-but-unused. Every Repr/mono slice is therefore **inert on the VM by
+design** and anchored by three VM-checkable properties instead of a real
+consumer (`tests/ir_repr.rs`, `tests/ir_mono.rs`):
 
-pub enum Stmt {
-    Let(VarId, Rvalue),
-    If(Atom, Block, Block),
-    Switch { scrutinee: Atom, arms: Vec<(i64, Block)>, default: Box<Block> },
-    Loop(Block), Break, Continue,
-    Return(Atom),
-    Discard(Rvalue),            // effectful rvalue, result dropped
-    RunDefer(DeferId),          // emitted on each exit edge
-}
+1. **Behavior neutrality** — the transformed program runs to byte-identical
+   output (a bad coercion would fault and diverge).
+2. **A static validator** — `validate_reprs` proves no naked cross-repr flow
+   remains (the discipline a WASM emitter will rely on).
+3. **Non-vacuity** — the pass demonstrably does work (inserts coercions,
+   resolves calls, monomorphizes functions) and, for mono, **never increases
+   corpus-wide coercions** (the profitability invariant).
 
-pub enum Atom { Var(VarId), Int(i64), Float(f64), Bool(bool), Str(String), Unit }
+When the WASM backend lands it becomes the real oracle; until then, keep new
+IR-track work to this contract (no speculative dead code without a VM anchor).
 
-pub enum Rvalue {
-    Use(Atom),
-    Bin(BinOp, Atom, Atom),                 // existing monomorphic ops: AddInt, LtFloat, …
-    Call(Callee, Vec<Atom>),                // statically-known target
-    CallClosure(Atom, Vec<Atom>),
-    GetDictMethod(Atom, u32),               // trait-dict slot → callable
-    MakeClosure(FuncId, Vec<Atom>),
-    MakeRecord(Vec<(Field, Atom)>), GetField(Atom, Field),
-    MakeVariant(EnumId, Tag, Vec<Atom>), GetTag(Atom), GetPayload(Atom, u32),
-    MakeList(Vec<ListItem>), MakeTuple(Vec<Atom>),
-    GlobalRef(GlobalId), Builtin(BuiltinTag),
-    Await(Atom),                            // explicit; step-2 pass rewrites these
-}
-```
+## Roadmap
 
-Two commitments baked in (both matter for the eventual WASM consumer):
+### Async CPS state-machine pass (the next prerequisite)
 
-- **ANF** — every intermediate is a `Let`-bound `VarId`; call arguments are
-  atoms. Trivial to produce from a functional language, trivial to emit from.
-- **Structured control flow is preserved** (`If`/`Switch`/`Loop`, not gotos) —
-  WASM requires it, and the bytecode emitter is happy with it.
+Today async rides the VM's frame-snapshot runtime: `Function.is_async` drives
+`MakeAsyncClosure`, and `Await` suspends by snapshotting the whole frame
+(`vm/src/task.rs`). That snapshot trick **cannot port to WASM** (no access to the
+native stack). The pass: rewrite each `is_async` function + its `Await` nodes
+into an explicit state machine — a state struct holding the live vars across each
+suspension point, plus a step function with a `Switch` on the resume point.
+`is_async` + the explicit `Await` node are the growth points already in the IR.
 
-**Storage is the backend's job, not the IR's.** Lowering emits abstract
-`VarId`s; the bytecode emitter assigns them VM stack slots (`base + slot`). A
-WASM emitter would map the same `VarId`s to WASM locals. Likewise `captures` is
-an abstract list; each backend realizes it its own way.
+VM anchor (same principle as above): add a poll-style VM task driver so the
+state-machine output runs the existing `task-*`/`scope-*` differential harness to
+identical output before any WASM exists. Mirror a `tests/run/task-*` fixture.
 
-## What moves where
+### WASM backend (the payoff)
 
-**Lowering (AST → IR)** absorbs the elaboration:
+Consumes the *same* IR and reuses every pass above; adds only the emit:
 
-| Current `emit.rs` | Becomes |
-|---|---|
-| `resolve_identifier`, `Scope` | `GlobalRef` / `Atom::Var` / capture refs |
-| `emit_fun` | a `Function` + `MakeClosure` w/ explicit captures |
-| `emit_call`, `emit_dispatch_load`, `emit_constrained_*`, `emit_resolved_load` | dict params + `Call`/`CallClosure`/`GetDictMethod` |
-| `emit_if`, `emit_when`, `emit_pattern`, `emit_sub_patterns_with_cleanup` | `If`/`Switch` + `GetTag`/`GetPayload` + binding `Let`s |
-| `emit_while` | `Loop`/`Break` |
-| `emit_field_access`, `emit_variant_construction` | `GetField`, `MakeVariant` |
-| `emit_scope` | scope-kernel calls (unchanged shape) |
-| `body_is_async`, `compile_constrained_thunk` | `Function.is_async` + `Await` |
+- **Reprs are already in place** — `param_reprs`/`ret_repr`/`var_reprs` +
+  `Box`/`Unbox` + split comparison ops give the emitter i64/f64/i32 locals and
+  GC-ref boxing boundaries to read straight off. This is the work the Repr/mono
+  track front-loaded.
+- **WasmGC layout** — records/variants/closures → GC structs; `Switch` →
+  `br_table`; tail calls → `return_call`.
+- **Host glue** — stdlib builtins → imports (`JSON`, `RegExp`, `crypto`, `fetch`,
+  `setTimeout`) or linked WASM libs; DOM via a host-FFI boundary (`externref`),
+  then a pure-Pluma VDOM/`diff` + Elm-style `update`/`view` loop (`command msg` ≈
+  `task msg`, reusing the structured-concurrency runtime).
 
-**Bytecode emitter (IR → `vm::Program`)** keeps the VM-specific machinery:
-`FunctionBuilder`, `alloc_slot`, jump patching, the constants/bytes/regex/
-field-list pools, and `MakeAsyncClosure` emission (driven by `is_async`). It's a
-mechanical pass — because the IR is ANF + structured, each `Rvalue`/`Stmt` emits
-a local, fixed sequence of instructions.
+### Repr/mono follow-ons (when the WASM backend makes them measurable)
 
-**Shared up front** (target-independent): the two pre-passes that allocate
-global slots and collect `enum_variants`. These run before lowering and feed
-both it and the emitter.
+- **Profitability cost model / call-graph fixpoint** — replace the self-recursive
+  proxy with a real model so mutual recursion and unboxed pipelines also qualify
+  (and nothing that doesn't pay does).
+- **Direct-tailcall resolution** — `resolve.rs` only resolves `CallClosure`, not
+  `TailCall` (no direct-tailcall IR form yet), so tail-recursive numeric loops
+  are left ineligible. Adding it unlocks them for both the indirection skip and
+  monomorphization.
+- **Boxed unbox-call-rebox wrappers** for functions that both escape *and* want a
+  specialized signature (today: escape ⇒ stay boxed).
+- **Generic specialization** per concrete instantiation (template-style), beyond
+  the uniform-boxed generic fallback.
+- **Unbox more ops** — `Eq`/`Ne` (structural, currently boxed), `GetTag`/
+  `GetPayload` (int-ish, currently boxed); `negate` devirt (needs a unary IR
+  node).
+- Wiring `resolve_direct_calls` into the **default VM path** (a closure-
+  indirection skip) — only if `bench` justifies it; kept out today to keep the
+  default path byte-identical.
 
-## Phasing
+### Behavior-preserving VM wins (independent of WASM)
 
-Land incrementally so no branch lives long; each phase is mergeable.
-
-- **1.0 — Scaffolding.** Create the `ir` crate (workspace member, deps on
-  `compiler`) with the IR types. Extract the global-slot reservation and
-  `enum_variants` collection into it. Dead code until wired; no behavior change.
-- **1.1 — Lowering (AST → IR).** Port the elaboration from the `emit_*` walk
-  into the `ir` crate's `lower` pass, function-by-function mirroring the table
-  above. End state: `ir::lower` exists; nothing consumes it yet.
-- **1.2 — Bytecode emitter (IR → Program).** Re-point `codegen` to consume
-  `ir::IrProgram`, dropping its `compiler::ast` dependency. New mechanical pass
-  reusing `FunctionBuilder`/slots/pools. Now `vm::Program` is reachable by two
-  paths: the old fused walk and the new IR path.
-- **1.3 — Validation & cutover.** Point `codegen::compile` at the IR path,
-  delete the old walk once green (below).
-
-## Validation
-
-The acceptance gate is **zero snapshot diffs**: switch `codegen::compile` to the
-IR path and run `just test` — `tests/run` (behavior) and `tests/analyze`
-(unaffected — it's frontend-only) must be unchanged, and `bench` must not
-regress meaningfully.
-
-Stronger transitional check (optional, to gate 1.3): a differential harness that
-compiles every fixture *both* ways and runs each `Program` through the VM,
-asserting identical status/stdout/stderr. This catches drift in the
-behavior-sensitive corners — async (`tests/run/task-*`, `scope-*`), dict
-dispatch (`trait-fn-as-value`), pattern cleanup, and `defer` — before the old
-path is removed.
-
-## Risks
-
-- **Behavioral drift in edge cases** (async, dict dispatch, pattern/`defer`
-  cleanup). → Mitigated by the differential run-output harness across all
-  fixtures; these corners have dedicated `tests/run` fixtures already.
-- **Scope creep into optimization.** Zero-behavior-change is the hard line for
-  step 1; decision trees / record slots / peephole are follow-ons (next
-  section), not part of the refactor.
-- **The IR shape turning out wrong for WASM.** Accepted: the step-1 IR is
-  intentionally minimal and will grow when WASM needs `Repr` and the CPS pass.
-  The durable asset is the *seam*, not the exact node set.
-- **Long-lived branch / huge diff.** Mitigated by the 1.0→1.2 phasing: IR and
-  lowering land as (initially dead) code, the emitter lands next, cutover is the
-  small last step.
-
-## Immediately unlocked (behavior-preserving VM wins)
-
-Once the IR path is live, these `PERF-NOTES` items become IR→IR passes that
-change bytecode but not output (so they still pass `tests/run`, and show only in
-`bench`):
-
-- **decision-tree pattern compilation** (`PERF-NOTES` "Bytecode") — share
-  discriminant prefixes across `when` arms;
-- **record-slot lowering** — `GetField` by static slot index, no `HashMap`
-  hashing;
-- **peephole / const-fold / dead-`Pop`** passes over the instruction stream.
-
----
-
-## Future: Step 2 — a WASM backend (what step 1 unlocks)
-
-Out of scope here; recorded so step 1's IR is designed toward it. A WASM backend
-consumes the *same* IR and reuses every lowering pass above. It adds:
-
-- a **`Repr` + unboxing pass** (IR→IR): annotate monomorphic `int`/`float`/`bool`
-  as native i64/f64/i32, insert `Box`/`Unbox` coercions at polymorphic
-  boundaries (uniform-boxed for generics first; monomorphization later);
-- an **async state-machine pass** (IR→IR): rewrite `is_async` functions + `Await`
-  nodes into explicit state structs + a step function with a `Switch` on the
-  resume point — the portable replacement for the VM's frame-snapshot runtime,
-  which cannot port to WASM;
-- **WasmGC layout**: records/variants/closures → GC structs (the engine provides
-  GC for free), `Switch` → `br_table`, tail calls → `return_call`;
-- **host glue**: stdlib builtins → imports (`JSON`, `RegExp`, `crypto`, `fetch`,
-  `setTimeout`) or linked WASM libs; and, on top, a DOM-FFI boundary + a pure
-  Pluma VDOM/`diff` + an Elm-style `update`/`view` loop (`command msg` ≈
-  `task msg`, reusing the existing structured-concurrency runtime).
-
-The VM and WASM backends share everything above the emit line — closure
-conversion, dictionary passing, pattern compilation, `defer` edges, and (once
-added) the unboxing and state-machine passes. That sharing is the whole point of
-step 1.
+Still-open `PERF-NOTES` items that are natural IR→IR passes (change bytecode, not
+output): **decision-tree pattern compilation** (share discriminant prefixes
+across `when`/`Match` arms), **record-slot lowering** (`GetField` by static slot
+index, no hashing), and **peephole/const-fold/dead-code** passes over the IR.
