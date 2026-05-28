@@ -135,12 +135,18 @@ impl Sigs {
 /// boxed subjects/payloads). The vector is sized to cover every var the function
 /// mentions, so the coercion pass can allocate fresh vars past its end.
 ///
-/// **Join vars are forced `Boxed`.** An `if`/`when` result var is assigned the
-/// trailing value of each arm; those values can have different reprs even at one
-/// Pluma type (one arm yields `n + 1` = I64, another a boxed call result), so the
-/// single var can't take a single unboxed repr. Boxing the join keeps the
-/// arithmetic inside each arm unboxed — only the join-point `Use` boxes (the
-/// coercer turns the arm's `Let(result, Use(x))` into `Box(x)`).
+/// **Join vars take their arms' unified repr.** An `if`/`when` result var is
+/// assigned the trailing value of each arm (`Let(result, Use(x))`, once per arm).
+/// Those values can have different reprs even at one Pluma type (one arm yields
+/// `n + 1` = I64, another a boxed call result), so when they *disagree* the join
+/// must be `Boxed` (and the coercer boxes each arm's value at the join). But when
+/// every arm agrees on one repr — the common case for a concrete-typed function,
+/// e.g. `fib`'s `if n<2 {n} else {fib(n-1)+fib(n-2)}` where both arms are `I64` —
+/// the join takes *that* repr, so the value flows through unboxed and the join
+/// boxing disappears. Each join's arms are assigned within one construct's blocks,
+/// which are processed contiguously here, so a single forward pass with a `seen`
+/// set merges them; nested joins resolve inner-first naturally (an inner `if`'s
+/// arms finish before the outer arm's trailing `Use` of its result is reached).
 pub fn infer_reprs(f: &Function, sigs: &Sigs) -> Vec<Repr> {
 	let joins = find_join_vars(f);
 	let mut reprs = vec![Repr::Boxed; var_upper_bound(f)];
@@ -154,36 +160,52 @@ pub fn infer_reprs(f: &Function, sigs: &Sigs) -> Vec<Repr> {
 			}
 		}
 	}
-	assign_block(&f.body, &mut reprs, &joins, sigs);
+	let mut merged = HashSet::new();
+	assign_block(&f.body, &mut reprs, &joins, &mut merged, sigs);
 	reprs
 }
 
-fn assign_block(b: &Block, reprs: &mut Vec<Repr>, joins: &HashSet<u32>, sigs: &Sigs) {
+fn assign_block(
+	b: &Block,
+	reprs: &mut Vec<Repr>,
+	joins: &HashSet<u32>,
+	merged: &mut HashSet<u32>,
+	sigs: &Sigs,
+) {
 	for stmt in &b.0 {
 		match &stmt.kind {
 			StmtKind::Let(v, rv) => {
+				let produced = result_repr(rv, reprs, sigs);
 				reprs[v.0 as usize] = if joins.contains(&v.0) {
-					Repr::Boxed
+					// Merge this arm's contribution: first arm sets the repr;
+					// subsequent arms keep it if they agree, else fall back to Boxed.
+					if merged.insert(v.0) {
+						produced
+					} else if reprs[v.0 as usize] == produced {
+						produced
+					} else {
+						Repr::Boxed
+					}
 				} else {
-					result_repr(rv, reprs, sigs)
+					produced
 				};
 			}
 			StmtKind::If(_, t, e) => {
-				assign_block(t, reprs, joins, sigs);
-				assign_block(e, reprs, joins, sigs);
+				assign_block(t, reprs, joins, merged, sigs);
+				assign_block(e, reprs, joins, merged, sigs);
 			}
 			StmtKind::Switch { arms, default, .. } => {
 				for (_, b) in arms {
-					assign_block(b, reprs, joins, sigs);
+					assign_block(b, reprs, joins, merged, sigs);
 				}
-				assign_block(default, reprs, joins, sigs);
+				assign_block(default, reprs, joins, merged, sigs);
 			}
 			StmtKind::Match { arms, .. } => {
 				for arm in arms {
-					assign_block(&arm.body, reprs, joins, sigs);
+					assign_block(&arm.body, reprs, joins, merged, sigs);
 				}
 			}
-			StmtKind::Loop(b) => assign_block(b, reprs, joins, sigs),
+			StmtKind::Loop(b) => assign_block(b, reprs, joins, merged, sigs),
 			// These bind no value. Pattern-bound vars (inside `Match` arms) stay
 			// at their `Boxed` default.
 			StmtKind::Discard(_)
