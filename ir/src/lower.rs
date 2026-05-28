@@ -22,12 +22,12 @@
 // parametric), constrained defs (hidden dict params), every dispatch shape
 // (`Global` / `Forwarded` / `InstanceChain`), constrained calls (dict args), and
 // constrained-value references (dict-prepending wrappers).
-// Forms not yet handled (destructuring `let`, string-interpolation patterns,
-// `defer`, async/`Await`, ...) cause the *enclosing def* to be lowered as a
-// poison thunk (returns `nothing`) rather than failing the whole program: a def
-// whose executed paths only touch supported forms runs correctly, so coverage
-// grows fixture-by-fixture. `lower` is not yet wired into `codegen` as the
-// default.
+// destructuring/`_` `let` (irrefutable patterns lowered as a single-arm match).
+// Forms not yet handled (string-interpolation patterns, `defer`, async/`Await`,
+// duration literals, ...) cause the *enclosing def* to be lowered as a poison
+// thunk (returns `nothing`) rather than failing the whole program: a def whose
+// executed paths only touch supported forms runs correctly, so coverage grows
+// fixture-by-fixture. `lower` is not yet wired into `codegen` as the default.
 
 use crate::types::*;
 use compiler::ast::Resolved as DispatchTarget;
@@ -1134,7 +1134,27 @@ impl<'a> Lowerer<'a> {
 				self.cur().locals.push((id.name.clone(), var));
 				Ok(())
 			}
-			_ => Err("refutable / destructuring `let` not yet supported".to_string()),
+			PatternKind::Underscore => {
+				// `let _ = e` — evaluate `e` for its effect and discard the value.
+				self.lower_expr(&let_node.value)?;
+				Ok(())
+			}
+			_ => {
+				// Irrefutable destructuring (`let (a, b) = …`, `let {x, y} = …`):
+				// the analyzer guarantees the pattern can't fail, so a single-arm
+				// `Match` binds the parts. Unlike `when`/`if`, the bindings stay in
+				// scope for the rest of the block (no `locals` truncation).
+				let subject = self.lower_expr(&let_node.value)?;
+				let pattern = self.lower_pattern(&let_node.pattern, &let_node.value.ty)?;
+				self.cur().stmts.push(Stmt::Match {
+					subject,
+					arms: vec![MatchArm {
+						pattern,
+						body: Block(Vec::new()),
+					}],
+				});
+				Ok(())
+			}
 		}
 	}
 

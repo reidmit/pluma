@@ -69,12 +69,15 @@ const IR_FIXTURES: &[&str] = &[
 	"if-no-match",
 	"interpolation-complex",
 	"interpolation-nested-string",
+	"io-append-delete",
 	"io-bytes-append",
 	"io-bytes-non-utf8",
 	"io-bytes-roundtrip",
 	"io-files",
+	"io-make-dir",
 	"io-print",
 	"io-read-all",
+	"io-read-dir",
 	"io-read-eof",
 	"io-read-lines",
 	"io-read-missing",
@@ -83,6 +86,9 @@ const IR_FIXTURES: &[&str] = &[
 	"json-error",
 	"json-pretty",
 	"json-walkers",
+	"let-destructure-record",
+	"let-destructure-tuple",
+	"let-destructure-underscore",
 	"let-in-when",
 	"let-then-pattern",
 	"let-type-annotation",
@@ -96,6 +102,7 @@ const IR_FIXTURES: &[&str] = &[
 	"list-pattern-exact",
 	"list-pattern-nested",
 	"list-pattern-recursive-sum",
+	"list-pattern-rest-type",
 	"list-reverse-concat",
 	"list-sort",
 	"list-spread",
@@ -115,8 +122,12 @@ const IR_FIXTURES: &[&str] = &[
 	"prelude-option",
 	"prelude-parametric",
 	"quadruple-forwarding",
+	"record-field-shorthand",
 	"record-list-cross-nesting",
 	"record-pattern",
+	"record-pattern-closed-vs-open",
+	"record-pattern-named-rest",
+	"record-pattern-nested-rest",
 	"record-pattern-row-poly",
 	"recursion",
 	"ref-basic",
@@ -230,7 +241,15 @@ fn ir_coverage_report() {
 					Ok(via_ir) if via_ir.status == reference.status && via_ir.stdout == reference.stdout => {
 						matching.push(name)
 					}
-					Ok(_) => diff += 1,
+					Ok(via_ir) => {
+						diff += 1;
+						if std::env::var("IR_DUMP_DIFF").is_ok() {
+							eprintln!(
+								"DIFF {name}:\n  ref status={:?} stdout={:?}\n  ir  status={:?} stdout={:?}",
+								reference.status, reference.stdout, via_ir.status, via_ir.stdout
+							);
+						}
+					}
 					Err(_) => panicked.push(name),
 				}
 			}
