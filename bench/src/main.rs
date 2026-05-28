@@ -42,6 +42,25 @@ fn main() {
 	// one benchmark and exits, instead of running the timing comparison.
 	let mut args = std::env::args().skip(1);
 	if let Some(arg) = args.next() {
+		if arg == "--dump-ir" {
+			let name = args.next().expect("--dump-ir takes a benchmark name");
+			let main_pa = programs_dir.join(&name).join("main.pa");
+			let mut compiler =
+				match compiler::Compiler::from_entry_path(main_pa.to_str().unwrap().to_string()) {
+					Ok(c) => c,
+					Err(_) => panic!("compile error"),
+				};
+			vm::stdlib::register_compiler(&mut compiler);
+			if compiler.check().is_err() {
+				panic!("check error");
+			}
+			let program = ir::lower(&compiler).unwrap();
+			for (i, f) in program.functions.iter().enumerate() {
+				println!("--- FuncId({i}) {} (async={}) ---", f.name, f.is_async);
+				println!("{:#?}", f.body);
+			}
+			return;
+		}
 		if arg == "--profile" {
 			let name = args.next().expect("--profile takes a benchmark name");
 			let backend = match args.next().as_deref() {

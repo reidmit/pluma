@@ -143,6 +143,17 @@ struct FnCtx {
 	// index (for `Continue`); `breaks` collects `Break` jump indices to patch
 	// to the loop exit.
 	loops: Vec<LoopFrame>,
+	// --- operand-stack scheduling (the store/load peephole) ---------------
+	// How many times each `VarId` is *used* (read as an `Atom::Var`) in the
+	// whole function. A let whose result is used exactly once can stay on the
+	// operand stack instead of being StoreLocal'd then LoadLocal'd back.
+	use_counts: HashMap<u32, u32>,
+	// `VarId`s whose values currently sit on the operand stack, unstored, in
+	// stack order (bottom to top). Only single-use let results land here; they
+	// are consumed in place when an rvalue's operands are exactly the stack top,
+	// and otherwise spilled to their slots (`spill_pending`). The model stays in
+	// lockstep with the real operand stack between statements.
+	pending: Vec<u32>,
 }
 
 struct LoopFrame {
@@ -161,10 +172,14 @@ impl FnCtx {
 		for (i, c) in f.captures.iter().enumerate() {
 			locs.insert(c.0, Loc::Capture(i as u16));
 		}
+		let mut use_counts = HashMap::new();
+		count_uses(&f.body, &mut use_counts);
 		let mut ctx = FnCtx {
 			locs,
 			slot_count: slot,
 			loops: Vec::new(),
+			use_counts,
+			pending: Vec::new(),
 		};
 		ctx.assign_let_slots(&f.body);
 		ctx
@@ -251,6 +266,83 @@ impl FnCtx {
 		}
 	}
 
+	// --- operand-stack scheduling helpers -----------------------------------
+
+	/// Flush every pending (on-stack, unstored) value into its slot, top first,
+	/// so the operand stack is clean. Called before control flow and anywhere a
+	/// value must be addressable by slot (the slow path of `emit_operands`).
+	fn spill_pending(
+		&mut self,
+		body: &mut Vec<Instruction>,
+		ranges: &mut Vec<Range>,
+		r: Range,
+	) -> Result<(), String> {
+		while let Some(v) = self.pending.pop() {
+			let slot = self.local_slot(VarId(v))?;
+			push(body, ranges, Instruction::StoreLocal(slot), r);
+		}
+		Ok(())
+	}
+
+	/// The length of the longest leading run of `ops` that already sits on the
+	/// operand stack as its top — i.e. the largest `k` where `ops[0..k]` equals
+	/// the top `k` pending values, in order. Those operands are already placed;
+	/// the rest can be loaded on top of them.
+	fn stack_prefix_len(&self, ops: &[&Atom]) -> usize {
+		let max = ops.len().min(self.pending.len());
+		for k in (0..=max).rev() {
+			let base = self.pending.len() - k;
+			let matches = (0..k).all(|i| match ops[i] {
+				Atom::Var(v) => self.pending[base + i] == v.0,
+				Atom::Const(_) => false,
+			});
+			if matches {
+				return k;
+			}
+		}
+		0
+	}
+
+	/// Ensure `ops` are on top of the operand stack, in push order, ready for the
+	/// consuming opcode the caller emits next.
+	///
+	/// The leading operands that are already the stack top are reused in place
+	/// (just dropped from the pending model — the opcode pops the real values).
+	/// The remaining operands are loaded explicitly on top, which is
+	/// stack-balanced, so pending values below stay put and can still be consumed
+	/// later. The exception: if any *trailing* operand is itself a pending value
+	/// (its result is on the stack, possibly buried / out of order, not yet in a
+	/// slot), the model can't place it by loading — so spill everything to slots
+	/// and load all operands from there (identical to the pre-peephole behavior,
+	/// never worse).
+	fn emit_operands(
+		&mut self,
+		em: &mut Emitter,
+		ops: &[&Atom],
+		body: &mut Vec<Instruction>,
+		ranges: &mut Vec<Range>,
+		r: Range,
+	) -> Result<(), String> {
+		let k = self.stack_prefix_len(ops);
+		let rest_has_pending = ops[k..]
+			.iter()
+			.any(|op| matches!(op, Atom::Var(v) if self.pending.contains(&v.0)));
+		if rest_has_pending {
+			self.spill_pending(body, ranges, r)?;
+			for op in ops {
+				self.lower_atom(em, op, body, ranges, r)?;
+			}
+		} else {
+			// Consume the in-place prefix; load the remaining operands on top.
+			let keep = self.pending.len() - k;
+			self.pending.truncate(keep);
+			for op in &ops[k..] {
+				self.lower_atom(em, op, body, ranges, r)?;
+			}
+		}
+		Ok(())
+	}
+
 	fn lower_block(
 		&mut self,
 		em: &mut Emitter,
@@ -261,6 +353,11 @@ impl FnCtx {
 		for stmt in &block.0 {
 			self.lower_stmt(em, stmt, body, ranges)?;
 		}
+		// A block boundary must leave the operand stack clean: any value still
+		// pending (e.g. a branch's result-var write) is flushed to its slot so
+		// the post-block code reads it by slot and the stack depth is consistent
+		// across branches.
+		self.spill_pending(body, ranges, Range::collapsed(0, 0))?;
 		Ok(())
 	}
 
@@ -279,18 +376,38 @@ impl FnCtx {
 		match &stmt.kind {
 			StmtKind::Let(v, rv) => {
 				self.lower_rvalue(em, rv, body, ranges, r)?;
-				let slot = self.local_slot(*v)?;
-				push(body, ranges, Instruction::StoreLocal(slot), r);
+				// A single-use result stays on the operand stack (consumed in
+				// place by its one reader); anything else is stored to its slot.
+				if self.use_counts.get(&v.0).copied().unwrap_or(0) == 1 {
+					self.pending.push(v.0);
+				} else {
+					let slot = self.local_slot(*v)?;
+					push(body, ranges, Instruction::StoreLocal(slot), r);
+				}
 			}
 			StmtKind::Discard(rv) => {
 				self.lower_rvalue(em, rv, body, ranges, r)?;
 				push(body, ranges, Instruction::Pop, r);
 			}
 			StmtKind::Return(atom) => {
+				// Fast path: the returned value is already on top of the stack.
+				// `Return` truncates the frame's stack to its base, so any pending
+				// values below it are discarded — no need to spill them.
+				if let Atom::Var(v) = atom {
+					if self.pending.last() == Some(&v.0) {
+						self.pending.pop();
+						push(body, ranges, Instruction::Return, r);
+						self.pending.clear();
+						return Ok(());
+					}
+				}
+				self.spill_pending(body, ranges, r)?;
 				self.lower_atom(em, atom, body, ranges, r)?;
 				push(body, ranges, Instruction::Return, r);
+				self.pending.clear();
 			}
 			StmtKind::If(cond, then_b, else_b) => {
+				self.spill_pending(body, ranges, r)?;
 				self.lower_atom(em, cond, body, ranges, r)?;
 				let jf = emit_at(body, ranges, Instruction::JumpIfFalse(0), r);
 				self.lower_block(em, then_b, body, ranges)?;
@@ -302,6 +419,7 @@ impl FnCtx {
 				patch(body, j_end, end);
 			}
 			StmtKind::Loop(b) => {
+				self.spill_pending(body, ranges, r)?;
 				let start = body.len() as u32;
 				self.loops.push(LoopFrame {
 					start,
@@ -316,6 +434,7 @@ impl FnCtx {
 				}
 			}
 			StmtKind::Break => {
+				self.spill_pending(body, ranges, r)?;
 				let j = emit_at(body, ranges, Instruction::Jump(0), r);
 				self
 					.loops
@@ -325,6 +444,7 @@ impl FnCtx {
 					.push(j);
 			}
 			StmtKind::Continue => {
+				self.spill_pending(body, ranges, r)?;
 				let start = self
 					.loops
 					.last()
@@ -333,10 +453,15 @@ impl FnCtx {
 				push(body, ranges, Instruction::Jump(start), r);
 			}
 			StmtKind::PushDefer(closure) => {
+				// The closure must be addressable as a normal load (it isn't an
+				// operand the next opcode consumes from the stack-model), so spill
+				// first, then load and push it onto the cleanup stack.
+				self.spill_pending(body, ranges, r)?;
 				self.lower_atom(em, closure, body, ranges, r)?;
 				push(body, ranges, Instruction::PushDefer, r);
 			}
 			StmtKind::Match { subject, arms } => {
+				self.spill_pending(body, ranges, r)?;
 				let mut end_jumps = Vec::new();
 				for arm in arms {
 					self.lower_atom(em, subject, body, ranges, r)?;
@@ -542,32 +667,33 @@ impl FnCtx {
 	}
 
 	fn lower_rvalue(
-		&self,
+		&mut self,
 		em: &mut Emitter,
 		rv: &Rvalue,
 		body: &mut Vec<Instruction>,
 		ranges: &mut Vec<Range>,
 		r: Range,
 	) -> Result<(), String> {
+		// The common shape is "load operands in push order, then one consuming
+		// opcode." `emit_operands` places the operands (reusing on-stack values
+		// when it can); the arm just emits the opcode afterwards.
 		match rv {
-			Rvalue::Use(a) => self.lower_atom(em, a, body, ranges, r)?,
+			Rvalue::Use(a) => self.emit_operands(em, &[a], body, ranges, r)?,
 			Rvalue::Bin(op, a, b) => {
-				self.lower_atom(em, a, body, ranges, r)?;
-				self.lower_atom(em, b, body, ranges, r)?;
+				self.emit_operands(em, &[a, b], body, ranges, r)?;
 				push(body, ranges, binop_instr(*op), r);
 			}
 			Rvalue::Not(a) => {
-				self.lower_atom(em, a, body, ranges, r)?;
+				self.emit_operands(em, &[a], body, ranges, r)?;
 				push(body, ranges, Instruction::LogicalNot, r);
 			}
 			Rvalue::GetDictMethod(dict, idx) => {
-				self.lower_atom(em, dict, body, ranges, r)?;
+				self.emit_operands(em, &[dict], body, ranges, r)?;
 				push(body, ranges, Instruction::GetDictField(*idx as u16), r);
 			}
 			Rvalue::MakeDict(methods) => {
-				for m in methods {
-					self.lower_atom(em, m, body, ranges, r)?;
-				}
+				let ops: Vec<&Atom> = methods.iter().collect();
+				self.emit_operands(em, &ops, body, ranges, r)?;
 				push(body, ranges, Instruction::MakeDict(methods.len() as u16), r);
 			}
 			Rvalue::MakeVariant {
@@ -581,11 +707,10 @@ impl FnCtx {
 					.and_then(|vs| vs.get(*tag as usize))
 					.ok_or_else(|| format!("from_ir: unknown variant {enum_name}#{tag}"))?
 					.clone();
-				for a in payload {
-					self.lower_atom(em, a, body, ranges, r)?;
-				}
 				let qualified = em.intern(enum_name);
 				let variant = em.intern(&variant_name);
+				let ops: Vec<&Atom> = payload.iter().collect();
+				self.emit_operands(em, &ops, body, ranges, r)?;
 				push(
 					body,
 					ranges,
@@ -599,9 +724,8 @@ impl FnCtx {
 			}
 			Rvalue::GlobalRef(g) => push(body, ranges, Instruction::LoadGlobal(g.0), r),
 			Rvalue::MakeClosure(fid, caps) => {
-				for c in caps {
-					self.lower_atom(em, c, body, ranges, r)?;
-				}
+				let ops: Vec<&Atom> = caps.iter().collect();
+				self.emit_operands(em, &ops, body, ranges, r)?;
 				let num_captures = caps.len() as u16;
 				let fn_idx = fid.0;
 				// An async-bearing function (one whose body awaits a task) becomes a
@@ -625,13 +749,16 @@ impl FnCtx {
 				push(body, ranges, instr, r);
 			}
 			Rvalue::CallClosure(callee, args) => {
-				self.lower_atom(em, callee, body, ranges, r)?;
-				for a in args {
-					self.lower_atom(em, a, body, ranges, r)?;
-				}
+				let mut ops: Vec<&Atom> = Vec::with_capacity(1 + args.len());
+				ops.push(callee);
+				ops.extend(args.iter());
+				self.emit_operands(em, &ops, body, ranges, r)?;
 				push(body, ranges, Instruction::Call(args.len() as u16), r);
 			}
 			Rvalue::Call(callee, args) => {
+				// Callee is a static target (not a stack operand), so clear the
+				// model and emit the load-callee/load-args/Call sequence directly.
+				self.spill_pending(body, ranges, r)?;
 				match callee {
 					Callee::Global(g) => push(body, ranges, Instruction::LoadGlobal(g.0), r),
 					Callee::Function(f) => push(
@@ -673,30 +800,44 @@ impl FnCtx {
 				);
 			}
 			Rvalue::MakeTuple(elems) => {
-				for a in elems {
-					self.lower_atom(em, a, body, ranges, r)?;
-				}
+				let ops: Vec<&Atom> = elems.iter().collect();
+				self.emit_operands(em, &ops, body, ranges, r)?;
 				push(body, ranges, Instruction::MakeTuple(elems.len() as u16), r);
 			}
 			Rvalue::MakeRecord(fields) => {
-				let mut idxs = Vec::with_capacity(fields.len());
-				for (name, value) in fields {
-					self.lower_atom(em, value, body, ranges, r)?;
-					idxs.push(em.intern(name));
-				}
+				let ops: Vec<&Atom> = fields.iter().map(|(_, value)| value).collect();
+				self.emit_operands(em, &ops, body, ranges, r)?;
+				let idxs: Vec<u32> = fields.iter().map(|(name, _)| em.intern(name)).collect();
 				let fields_idx = em.intern_field_list(idxs);
 				push(body, ranges, Instruction::MakeRecord(fields_idx), r);
 			}
-			Rvalue::MakeList(items) => self.lower_list(em, items, body, ranges, r)?,
+			Rvalue::MakeList(items) => {
+				let any_spread = items.iter().any(|i| matches!(i, ListItem::Spread(_)));
+				if any_spread {
+					// Segmented `ConcatLists` build doesn't fit the flat-operands
+					// shape; spill and emit it directly.
+					self.spill_pending(body, ranges, r)?;
+					self.lower_list_spread(em, items, body, ranges, r)?;
+				} else {
+					let ops: Vec<&Atom> = items
+						.iter()
+						.map(|i| match i {
+							ListItem::Elem(a) => a,
+							ListItem::Spread(_) => unreachable!("no spread on this branch"),
+						})
+						.collect();
+					self.emit_operands(em, &ops, body, ranges, r)?;
+					push(body, ranges, Instruction::MakeList(items.len() as u16), r);
+				}
+			}
 			Rvalue::GetField(receiver, name) => {
-				self.lower_atom(em, receiver, body, ranges, r)?;
+				self.emit_operands(em, &[receiver], body, ranges, r)?;
 				let idx = em.intern(name);
 				push(body, ranges, Instruction::GetField(idx), r);
 			}
 			Rvalue::Interpolate(parts) => {
-				for a in parts {
-					self.lower_atom(em, a, body, ranges, r)?;
-				}
+				let ops: Vec<&Atom> = parts.iter().collect();
+				self.emit_operands(em, &ops, body, ranges, r)?;
 				push(
 					body,
 					ranges,
@@ -715,7 +856,7 @@ impl FnCtx {
 				// Suspension point inside a task step function (each task-carrier
 				// `try`). Push the awaited task; the driver snapshots the frame,
 				// runs the task, and resumes here with its result on the stack.
-				self.lower_atom(em, task, body, ranges, r)?;
+				self.emit_operands(em, &[task], body, ranges, r)?;
 				push(body, ranges, Instruction::Await, r);
 			}
 			other => return Err(format!("from_ir: unsupported rvalue: {other:?}")),
@@ -723,27 +864,19 @@ impl FnCtx {
 		Ok(())
 	}
 
-	/// List literal lowering, mirroring `emit.rs`: a spread-free list is one
-	/// `MakeList`; a lone `[...xs]` is just `xs`; otherwise each run of plain
-	/// elements becomes a `MakeList` segment and each spread its own segment,
-	/// joined by `ConcatLists`.
-	fn lower_list(
-		&self,
+	/// Spread list literal (`[a, ...xs, b]`) lowering, mirroring `emit.rs`: each
+	/// run of plain elements becomes a `MakeList` segment and each spread its own
+	/// segment, joined by `ConcatLists`; a lone `[...xs]` is just `xs`. Callers
+	/// spill the pending stack first, so this emits straight-line loads.
+	fn lower_list_spread(
+		&mut self,
 		em: &mut Emitter,
 		items: &[ListItem],
 		body: &mut Vec<Instruction>,
 		ranges: &mut Vec<Range>,
 		r: Range,
 	) -> Result<(), String> {
-		let any_spread = items.iter().any(|i| matches!(i, ListItem::Spread(_)));
-		if !any_spread {
-			for i in items {
-				if let ListItem::Elem(a) = i {
-					self.lower_atom(em, a, body, ranges, r)?;
-				}
-			}
-			push(body, ranges, Instruction::MakeList(items.len() as u16), r);
-		} else if items.len() == 1 {
+		if items.len() == 1 {
 			if let ListItem::Spread(a) = &items[0] {
 				self.lower_atom(em, a, body, ranges, r)?;
 			}
@@ -812,6 +945,92 @@ impl FnCtx {
 fn push(body: &mut Vec<Instruction>, ranges: &mut Vec<Range>, instr: Instruction, range: Range) {
 	body.push(instr);
 	ranges.push(range);
+}
+
+/// Count how often each `VarId` is *read* (as an `Atom::Var`) across a function
+/// body. Drives the operand-stack peephole: a let result read exactly once can
+/// stay on the operand stack instead of being stored and reloaded. `Let`/pattern
+/// targets are definitions, not reads, so they don't count.
+fn count_uses(block: &Block, counts: &mut HashMap<u32, u32>) {
+	for stmt in &block.0 {
+		match &stmt.kind {
+			StmtKind::Let(_, rv) | StmtKind::Discard(rv) => {
+				for a in rvalue_atoms(rv) {
+					count_atom(a, counts);
+				}
+			}
+			StmtKind::Return(a) | StmtKind::PushDefer(a) => count_atom(a, counts),
+			StmtKind::If(cond, t, e) => {
+				count_atom(cond, counts);
+				count_uses(t, counts);
+				count_uses(e, counts);
+			}
+			StmtKind::Match { subject, arms } => {
+				count_atom(subject, counts);
+				for arm in arms {
+					count_uses(&arm.body, counts);
+				}
+			}
+			StmtKind::Switch {
+				scrutinee,
+				arms,
+				default,
+			} => {
+				count_atom(scrutinee, counts);
+				for (_, b) in arms {
+					count_uses(b, counts);
+				}
+				count_uses(default, counts);
+			}
+			StmtKind::Loop(b) => count_uses(b, counts),
+			StmtKind::Break | StmtKind::Continue | StmtKind::RunDefer(_) => {}
+		}
+	}
+}
+
+fn count_atom(a: &Atom, counts: &mut HashMap<u32, u32>) {
+	if let Atom::Var(v) = a {
+		*counts.entry(v.0).or_insert(0) += 1;
+	}
+}
+
+/// Every operand `Atom` of an rvalue, in push (left-to-right) order. Used both
+/// for use-counting and (for the common rvalues) as the operand list fed to
+/// `emit_operands`.
+fn rvalue_atoms(rv: &Rvalue) -> Vec<&Atom> {
+	match rv {
+		Rvalue::Use(a)
+		| Rvalue::Not(a)
+		| Rvalue::GetDictMethod(a, _)
+		| Rvalue::GetField(a, _)
+		| Rvalue::Await(a)
+		| Rvalue::GetTag(a)
+		| Rvalue::GetPayload(a, _) => vec![a],
+		Rvalue::Bin(_, a, b) => vec![a, b],
+		Rvalue::Call(_, args) => args.iter().collect(),
+		Rvalue::CallClosure(c, args) => {
+			let mut v = Vec::with_capacity(1 + args.len());
+			v.push(c);
+			v.extend(args.iter());
+			v
+		}
+		Rvalue::MakeDict(xs)
+		| Rvalue::MakeTuple(xs)
+		| Rvalue::MakeClosure(_, xs)
+		| Rvalue::Interpolate(xs)
+		| Rvalue::MakeVariant { payload: xs, .. } => xs.iter().collect(),
+		Rvalue::MakeRecord(fields) => fields.iter().map(|(_, a)| a).collect(),
+		Rvalue::MakeList(items) => items
+			.iter()
+			.map(|it| match it {
+				ListItem::Elem(a) | ListItem::Spread(a) => a,
+			})
+			.collect(),
+		Rvalue::GlobalRef(_)
+		| Rvalue::MakeVariantCtor { .. }
+		| Rvalue::Regex(_)
+		| Rvalue::Builtin(_) => Vec::new(),
+	}
 }
 
 /// Push an instruction and return its index (for later jump patching).
