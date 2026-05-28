@@ -10,22 +10,35 @@
 // convention, and the interprocedural coercion/validation passes make eligible
 // caller↔callee chains pass unboxed values with no `Box`/`Unbox` churn.
 //
-// **Eligibility** (first cut — non-escaping concrete top-level defs):
+// **Eligibility** (first cut — non-escaping, self-recursive, concrete top-level defs):
 //   0. It is a direct-call target — a top-level def whose global holds a bare
 //      capture-free closure of it (so all its calls were resolvable). This also
 //      excludes async functions (they aren't direct-call targets).
-//   1. It has at least one unboxed param or an unboxed return (else nothing to
-//      gain — leave it boxed).
+//   1. It has at least one unboxed param — the value that can ride the recursion
+//      unboxed. An unboxed *return* alone isn't enough: it just crosses back to
+//      boxed consumers, so a self-recursive fn with only a boxed `list` param and
+//      an `int` return (e.g. a list-fold) is a net loss.
 //   2. It does not escape: after `resolve_direct_calls`, no `GlobalRef` to its
 //      global remains anywhere. A surviving `GlobalRef` means the function is used
 //      as a value, or is reached by an unresolved (e.g. tail) call — in either
 //      case some site assumes the boxed convention, so it must stay boxed.
 //   3. It is closured exactly once (only in its own thunk). A second `MakeClosure`
 //      of it is another escape route.
+//   4. It is **self-recursive** — its body directly calls itself
+//      (`Call(Callee::Function(self))`). This is a cheap PROFITABILITY proxy.
+//      Monomorphizing relocates coercions to call boundaries (a caller with a
+//      boxed value unboxes to pass an unboxed param; an unboxed result boxes for a
+//      boxed consumer), so for a function called from boxed contexts it is a wash
+//      or a loss. A self-recursive function passes unboxed values to itself on
+//      every recursive call, so the fixed boundary cost is amortized over the
+//      recursion depth and the win is structural — which is exactly the numeric
+//      kernel case (`fib`, `factorial`, …). A profitability *cost model* (or a
+//      fixpoint over the call graph, covering mutual recursion and unboxed
+//      pipelines) is the fuller follow-on.
 //
 // This pass requires `resolve_direct_calls` to have run (it calls it, idempotently)
-// — escape analysis is only meaningful once resolvable calls have been rewritten
-// and their `GlobalRef` loads pruned.
+// — escape analysis and self-recursion detection are only meaningful once
+// resolvable calls have been rewritten and their `GlobalRef` loads pruned.
 //
 // Like the rest of the Repr track this is inert on the bytecode VM: the unboxed
 // signature only changes which `Box`/`Unbox` coercions the repr pass inserts, and
@@ -79,9 +92,11 @@ fn eligible_functions(program: &IrProgram) -> HashSet<u32> {
 		let Some(&g) = global_of.get(&fid) else {
 			continue;
 		};
-		// (1) something to gain.
-		let has_unboxed = f.param_reprs.iter().any(|r| *r != Repr::Boxed) || f.ret_repr != Repr::Boxed;
-		if !has_unboxed {
+		// (1) has an unboxed param — the value that can ride the recursion unboxed.
+		// (An unboxed *return* alone isn't enough: it just crosses back to boxed
+		// consumers, so a self-recursive fn with only a boxed `list` param and an
+		// `int` return is a net loss.)
+		if !f.param_reprs.iter().any(|r| *r != Repr::Boxed) {
 			continue;
 		}
 		// (2) does not escape via its global.
@@ -92,9 +107,29 @@ fn eligible_functions(program: &IrProgram) -> HashSet<u32> {
 		if closure_sites.get(&fid).copied().unwrap_or(0) != 1 {
 			continue;
 		}
+		// (4) self-recursive (the profitability proxy).
+		if !calls_self(f, fid) {
+			continue;
+		}
 		eligible.insert(fid);
 	}
 	eligible
+}
+
+/// Does `f` directly call itself (`Call(Callee::Function(fid))` in its body)? Only
+/// resolved direct calls count, so a tail-self-call (left as an unresolved
+/// `CallClosure`) does not — but such a function is already excluded by the escape
+/// check, since its `GlobalRef` survives.
+fn calls_self(f: &Function, fid: u32) -> bool {
+	let mut found = false;
+	for_each_rvalue(&f.body, &mut |rv| {
+		if let Rvalue::Call(Callee::Function(c), _) = rv {
+			if c.0 == fid {
+				found = true;
+			}
+		}
+	});
+	found
 }
 
 /// Visit every `Rvalue` in a block (recursing into nested control flow).
@@ -244,6 +279,46 @@ mod tests {
 		let thunk = thunk_for(0);
 		let mut program = IrProgram {
 			functions: vec![id, thunk],
+			globals: vec![GlobalInit::Thunk(FuncId(1))],
+			enums: Default::default(),
+			entry: FuncId(1),
+			test_suites: vec![],
+			test_new: None,
+		};
+		monomorphize(&mut program);
+		assert_eq!(program.functions[0].param_reprs, vec![Repr::Boxed]);
+		assert_eq!(program.functions[0].ret_repr, Repr::Boxed);
+	}
+
+	// A concrete, non-escaping, but NON-recursive def is left boxed by the
+	// profitability proxy (monomorphizing it would only relocate coercions to its
+	// call sites).
+	#[test]
+	fn non_recursive_def_not_monomorphized() {
+		// fn0 = `double n` (I64 param/ret) with NO self-call; fn1 = thunk.
+		let double = func(
+			"double",
+			vec![VarId(0)],
+			vec![Repr::I64],
+			Repr::I64,
+			vec![
+				Stmt::new(
+					StmtKind::Let(
+						VarId(1),
+						Rvalue::Bin(
+							BinOp::MulInt,
+							Atom::Var(VarId(0)),
+							Atom::Const(Const::Int(2)),
+						),
+					),
+					syn(),
+				),
+				Stmt::new(StmtKind::Return(Atom::Var(VarId(1))), syn()),
+			],
+		);
+		let thunk = thunk_for(0);
+		let mut program = IrProgram {
+			functions: vec![double, thunk],
 			globals: vec![GlobalInit::Thunk(FuncId(1))],
 			enums: Default::default(),
 			entry: FuncId(1),

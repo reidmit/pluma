@@ -173,6 +173,7 @@ fn monomorphization_is_behavior_neutral_validates_and_reduces_coercions() {
 	// monomorphizes when it pays — and unifying a join's repr when all arms agree —
 	// are explicit follow-ons; here we just prove the win is real *somewhere*.
 	let mut improved = 0u32;
+	let (mut corpus_uniform, mut corpus_mono) = (0u32, 0u32);
 	for dir in &dirs {
 		let name = dir.file_name().unwrap().to_string_lossy().to_string();
 		let Some(compiler) = compile_check(dir) else {
@@ -214,6 +215,8 @@ fn monomorphization_is_behavior_neutral_validates_and_reduces_coercions() {
 		if mono_coercions < uniform_coercions {
 			improved += 1;
 		}
+		corpus_uniform += uniform_coercions;
+		corpus_mono += mono_coercions;
 
 		// Monomorphizing only changes which (VM-inert) coercions are inserted, so
 		// the run output must be unchanged.
@@ -226,8 +229,10 @@ fn monomorphization_is_behavior_neutral_validates_and_reduces_coercions() {
 		checked += 1;
 	}
 
-	// Non-vacuity: the pass monomorphizes functions, and does so profitably (fewer
-	// coercions) in at least one program.
+	// Non-vacuity + profitability: the pass monomorphizes functions, strictly
+	// reduces coercions in at least one program, and — thanks to the self-recursive
+	// + unboxed-param profitability proxy — NEVER increases the corpus-wide total
+	// (monomorphizing only where an unboxed value rides the recursion).
 	assert!(
 		monomorphized_fns > 0,
 		"expected some functions to be monomorphized"
@@ -235,6 +240,10 @@ fn monomorphization_is_behavior_neutral_validates_and_reduces_coercions() {
 	assert!(
 		improved > 0,
 		"expected monomorphization to reduce coercions in at least one program"
+	);
+	assert!(
+		corpus_mono <= corpus_uniform,
+		"monomorphization must not increase corpus coercions: mono={corpus_mono} uniform={corpus_uniform}"
 	);
 	assert!(
 		checked > 100,
