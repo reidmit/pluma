@@ -321,6 +321,10 @@ impl FnCtx {
 					.start;
 				push(body, ranges, Instruction::Jump(start));
 			}
+			Stmt::PushDefer(closure) => {
+				self.lower_atom(em, closure, body, ranges)?;
+				push(body, ranges, Instruction::PushDefer);
+			}
 			Stmt::Match { subject, arms } => {
 				let mut end_jumps = Vec::new();
 				for arm in arms {
@@ -377,6 +381,7 @@ impl FnCtx {
 						emit_at(body, ranges, Instruction::MatchBytes(idx, 0))
 					}
 					Const::Unit => emit_at(body, ranges, Instruction::MatchNothing(0)),
+					Const::Duration(n) => emit_at(body, ranges, Instruction::MatchDuration(*n, 0)),
 				};
 				Ok(vec![jmp])
 			}
@@ -735,6 +740,7 @@ impl FnCtx {
 					let idx = em.intern_bytes(b);
 					push(body, ranges, Instruction::LoadBytes(idx));
 				}
+				Const::Duration(n) => push(body, ranges, Instruction::LoadDuration(*n)),
 			},
 		}
 		Ok(())
@@ -760,6 +766,7 @@ fn patch(body: &mut [Instruction], idx: u32, target: u32) {
 		| Instruction::JumpIfFalse(o)
 		| Instruction::MatchInt(_, o)
 		| Instruction::MatchFloat(_, o)
+		| Instruction::MatchDuration(_, o)
 		| Instruction::MatchString(_, o)
 		| Instruction::MatchBytes(_, o)
 		| Instruction::MatchBool(_, o)
@@ -821,6 +828,7 @@ fn const_to_value(c: &Const) -> Value {
 		Const::Float(f) => Value::Float(*f),
 		Const::Str(s) => Value::String(Rc::new(s.clone())),
 		Const::Bytes(b) => Value::Bytes(Rc::new(b.clone())),
+		Const::Duration(n) => Value::Duration(*n),
 	}
 }
 

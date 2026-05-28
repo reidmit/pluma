@@ -544,6 +544,7 @@ impl<'a> Lowerer<'a> {
 			ExprKind::When(n) => self.lower_when(n),
 			ExprKind::While(n) => self.lower_while(n),
 			ExprKind::Regex(node) => Ok(self.emit_let(Rvalue::Regex(regex_pattern(node)))),
+			ExprKind::Defer(inner) => self.lower_defer(inner),
 			other => Err(format!("unsupported expr: {}", expr_kind_name(other))),
 		}
 	}
@@ -1094,6 +1095,37 @@ impl<'a> Lowerer<'a> {
 		Ok(self.emit_let(Rvalue::MakeClosure(fid, capture_atoms)))
 	}
 
+	/// `defer expr` — build a zero-arg cleanup closure `fun { expr }` and push
+	/// it onto the running frame's cleanup stack. The defer expression itself
+	/// evaluates to `nothing`. The VM walks the stack LIFO at `Return` (and on
+	/// `try`-failure short-circuit). Mirrors `codegen::emit`'s `ExprKind::Defer`
+	/// arm.
+	fn lower_defer(&mut self, inner: &ExprNode) -> Result<Atom, String> {
+		let fn_name = format!(
+			"{}.defer@{}:{}",
+			self.current_module, inner.range.start.line, inner.range.start.col
+		);
+		self.push_scope(fn_name, &[]);
+		let atom = match self.lower_expr(inner) {
+			Ok(a) => a,
+			Err(e) => {
+				self.scopes.pop();
+				return Err(e);
+			}
+		};
+		self.cur().stmts.push(Stmt::Return(atom));
+		let scope = self.scopes.pop().unwrap();
+		let capture_atoms: Vec<Atom> = scope
+			.captures
+			.iter()
+			.map(|c| self.capture_src_atom(&c.src))
+			.collect();
+		let fid = self.add_function(finish_scope(scope));
+		let closure = self.emit_let(Rvalue::MakeClosure(fid, capture_atoms));
+		self.cur().stmts.push(Stmt::PushDefer(closure));
+		Ok(Atom::Const(Const::Unit))
+	}
+
 	/// Lower a function/`let`-block body (a sequence of statements). Returns
 	/// the value the body evaluates to (its last expression).
 	fn lower_body(&mut self, body: &[ExprNode]) -> Result<Atom, String> {
@@ -1506,7 +1538,7 @@ fn literal_to_const(kind: &LiteralKind) -> Result<Const, String> {
 		| LiteralKind::IntHex(n)
 		| LiteralKind::IntOctal(n)
 		| LiteralKind::IntBinary(n) => Const::Int(*n as i64),
-		LiteralKind::Duration(_) => return Err("duration literal not yet supported".to_string()),
+		LiteralKind::Duration(n) => Const::Duration(*n),
 	})
 }
 

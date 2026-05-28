@@ -135,6 +135,11 @@ pub enum Stmt {
 	Discard(Rvalue),
 	/// Run a previously-scheduled `defer` cleanup. Emitted on each exit edge.
 	RunDefer(DeferId),
+	/// Schedule a zero-arg cleanup closure on the running frame's cleanup
+	/// stack — `defer expr` lowers to a closure of `fun { expr }` plus a
+	/// `PushDefer`. The VM walks the cleanup stack LIFO at `Return` (and on
+	/// `try`-failure short-circuit).
+	PushDefer(Atom),
 }
 
 /// One arm of a `Match`: a pattern and the block to run on a match.
@@ -212,6 +217,8 @@ pub enum Const {
 	Float(f64),
 	Str(String),
 	Bytes(Vec<u8>),
+	/// A duration literal, in nanoseconds (the underlying `Value::Duration` rep).
+	Duration(i64),
 }
 
 /// An operation that may compute, call, or allocate. Always `Let`- or
