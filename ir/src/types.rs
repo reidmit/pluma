@@ -108,10 +108,29 @@ pub struct Block(pub Vec<Stmt>);
 /// attribute runtime errors and `debug` call sites to the right line. The range
 /// is `Range::collapsed(0, 0)` for synthetic stmts (entry function, poison
 /// thunk, dict-builder/ctor scaffolding) that have no source origin.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Stmt {
 	pub kind: StmtKind,
 	pub range: Range,
+}
+
+// `Range`'s own `Debug` is gated on `debug_assertions`, so deriving `Debug`
+// here would break release builds (and everything that transitively derives it:
+// `Block`, `Function`, `IrProgram`). Format the range from its plain `usize`
+// fields instead, keeping the whole IR `Debug`-printable in every profile.
+impl std::fmt::Debug for Stmt {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("Stmt")
+			.field("kind", &self.kind)
+			.field(
+				"range",
+				&format_args!(
+					"{}:{}..{}:{}",
+					self.range.start.line, self.range.start.col, self.range.end.line, self.range.end.col
+				),
+			)
+			.finish()
+	}
 }
 
 impl Stmt {
