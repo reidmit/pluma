@@ -39,6 +39,10 @@ test:
 test-write:
   @ INSTA_UPDATE=always cargo test -p tests
 
+# report which tests/run fixtures the WASM backend reproduces (vs the VM)
+wasm-coverage:
+  @ cargo test -p tests --test wasm_diff -- --ignored --nocapture wasm_coverage_report
+
 # run the stdlib's own Pluma test suite (compiler/src/stdlib/*.test.pa)
 # through `pluma test` — exercises the stdlib and the `core.testing` runner.
 test-stdlib:

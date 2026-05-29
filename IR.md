@@ -5,17 +5,20 @@ default backend**. The **async CPS state-machine pass** is now built for **every
 control-flow shape lowering produces** — `If`/`Switch`/`Match`/`Loop`/`Break`/
 `Continue`/`Return`/`Await` plus `defer` — and validated behavior-neutral against
 a VM poll-driver. (Building loop support also drove a language change: `await`
-inside a `while` loop is now expressible — see "Async CPS" below.) What remains
-is the **WASM backend** that consumes it all. A native/Cranelift backend is
-explicitly *not* planned.
+inside a `while` loop is now expressible — see "Async CPS" below.) The **WASM
+backend** (the third backend) is now **started** — see "WASM backend" below: a
+non-async core (primitives, control flow via `Match`, closures, variants,
+lazy thunk-globals) runs end-to-end through wasmtime, diffed byte-identical to
+the VM. A native/Cranelift backend is explicitly *not* planned.
 
 This file is the design-of-record and the forward plan. For the blow-by-blow of
-what shipped (and why), see the `project_fullstack_ir_plan` memory; this doc
-keeps the *current architecture* and the *unbuilt roadmap*.
+what shipped (and why), see the `project_fullstack_ir_plan` and
+`project_wasm_backend` memories; this doc keeps the *current architecture* and
+the *unbuilt roadmap*.
 
 ```
-typed AST ──[ir::lower: elaboration]──▶ IR ──┬──[codegen::from_ir]──▶ vm::Program   (today, default)
-                                             └──[wasm emit]─────────▶ .wasm          (the payoff, unbuilt)
+typed AST ──[ir::lower: elaboration]──▶ IR ──┬──[codegen::from_ir]──▶ vm::Program   (default)
+                                             └──[wasm::emit]────────▶ .wasm          (started)
 ```
 
 The bytecode VM is the *first consumer* of the IR; the WASM backend will be a
@@ -180,20 +183,67 @@ acyclic forms — see "What's built"), validated VM-anchored by `tests/cps.rs`
 (the poll-driver runs the transformed corpus to byte-identical output vs the
 Await-style driver). Nothing remains here before the WASM backend consumes it.
 
-### WASM backend (the payoff)
+### WASM backend (the payoff) — started
 
-Consumes the *same* IR and reuses every pass above; adds only the emit:
+The `wasm` crate (sibling to `codegen`) consumes the *same* IR and reuses every
+pass above; `wasm::emit(&IrProgram) -> Result<Vec<u8>, Diagnostics>` swaps only
+the emit. Validated by `tests/wasm_diff.rs` — a clone of `ir_diff` that runs each
+emitted module in **wasmtime** (a Rust dev-dependency, GC + tail-call enabled)
+with Rust host glue, diffed byte-identical to the VM. The allowlist grows
+milestone-by-milestone; `wasm_coverage_report` (ignored) scans the whole corpus.
 
-- **Reprs are already in place** — `param_reprs`/`ret_repr`/`var_reprs` +
-  `Box`/`Unbox` + split comparison ops give the emitter i64/f64/i32 locals and
-  GC-ref boxing boundaries to read straight off. This is the work the Repr/mono
-  track front-loaded.
-- **WasmGC layout** — records/variants/closures → GC structs; `Switch` →
-  `br_table`; tail calls → `return_call`.
-- **Host glue** — stdlib builtins → imports (`JSON`, `RegExp`, `crypto`, `fetch`,
-  `setTimeout`) or linked WASM libs; DOM via a host-FFI boundary (`externref`),
-  then a pure-Pluma VDOM/`diff` + Elm-style `update`/`view` loop (`command msg` ≈
-  `task msg`, reusing the structured-concurrency runtime).
+**Built (non-async core).** Pipeline: `ir::lower` → `resolve_direct_calls` →
+uniform `repr::insert_coercions` → reachability DCE (the prune is load-bearing —
+even `print (1+2)` lowers the whole prelude) → emit. WasmGC layout: a `$value`
+supertype struct with an `i32` tag, scalar subtypes (`$int`/`$float`/`$bool`/
+`$str`+`$bytes`), `$valarray`, `$closure`, `$variant`, `$ctor`. Uniform-boxed
+contract → arity-keyed function types with an **implicit closure-env param 0**.
+Covered: all int/float arithmetic + split comparisons + `Not`; `Box`/`Unbox`
+(struct.new / ref.cast+struct.get); `Match` (Wildcard/Bind/Literal/Variant) +
+`If`/`Loop`/`Break`/`Continue` as structured `block`/`loop`/`br`; closures
+(`MakeClosure` → `$closure` + a funcref table, `CallClosure`/`TailCall` →
+`call_indirect`/`return_call_indirect`, captures read from env in a prologue);
+variants (`MakeVariant`/`MakeVariantCtor`/`GetTag`/`GetPayload`, ctor-application
+shortcut); builtin calls (`print` host import; the `GlobalRef`-to-builtin →
+host-call rewrite); lazy thunk-globals (cached value + i32 init flag);
+**structural `Eq`/`Ne`** (a synthetic `__eq` runtime fn — recursive over variants,
+byte-loop for strings, IEEE float); **trait dicts** (`$methoddict` +
+`MakeDict`/`GetDictMethod`; prelude builtin-method dicts realized via per-builtin
+*wrapper* functions — pure-compute bodies for `int/float` `+-*/`/`negate` and
+`int/float-compare` — wrapped in capture-free `$closure`s, built lazily). ~29
+fixtures green incl. `factorial`/`recursion`/`generic-enum`/`comparison-ops`/
+`closures`/`cross-module`/`unary-minus`/`partial-application`.
+
+A zero-arg-closure arity quirk is also handled: `fun { body }` lowers with zero IR
+params but is typed `nothing -> a` (arity 1 — its call sites pass the `()` arg), which
+`call_indirect` would trap on; such `MakeClosure` targets get a phantom wasm param so
+their type matches callers (unblocks `??`/`or-else`: `coalesce-*`).
+
+**Tuples/lists/records** are built: `$tuple`/`$list` (`{tag, $valarray}`) and `$record`
+(`{tag, name-sorted $valarray names, parallel values}`); `MakeTuple`/`MakeList`
+(element-only)/`MakeRecord`/`GetField` + tuple/list/record `Match` patterns + their
+structural-`Eq` arms. Field access is a `__getfield(rec, name)` runtime helper (name
+scan via `__eq`); a list `...rest` binding is a `__list_tail(list, n)` helper. ~39
+fixtures green (incl. `equality-structural`, `swap-tuple`, `record-pattern`).
+
+List **spread** (`[a, ...xs, b]`, via `__arrconcat`) and `RecordUpdate` (via
+`__record_update`) are built; so is the full **`to-string`** / **`Concat`** /
+**`Interpolate`** stack — a wasm-native `__tostring` covering scalars, strings,
+`__int_str` decimal formatting, **compounds** (tuple/list/record/variant, formatted
+recursively by folding byte arrays with `__bytesconcat`), and **floats** (delegated to
+a `float_to_str` host import that writes into a caller-passed GC `$bytes` buffer — as a
+browser target would delegate to JS). **Variant printing** works (`$variant` carries a
+display-name field). A returned `err` result becomes a `runtime error` exit (checked by
+the runtime, mirroring `vm::VM::run`). **~65 fixtures green, 0 diffs.** (The differential
+harness runs wasmtime's **null collector** — the `gc-null` feature — because wasmtime
+30's deferred-ref-counting collector panics on a valid module once a real GC runs.)
+
+**Still unbuilt.** The broad **builtin host surface** (`list.map`/`filter`/`fold`,
+`string.*`, `math.*`, `dict.*`, `bytes.*` — ~197 tags, M7 — gates most remaining
+`list-*`/`string-*`/`core-*` fixtures); `string/bytes-compare` + hash wrappers; record
+`{...rest}` named-rest binding; `Switch`→`br_table`; `Const` globals; async (run
+`cps_transform`, then reimplement the fiber/scope/timer scheduler — M9). DOM/FFI/VDOM
+out of scope.
 
 ### Repr/mono follow-ons (when the WASM backend makes them measurable)
 

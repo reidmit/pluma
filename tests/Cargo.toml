@@ -10,10 +10,12 @@ compiler = { path = "../compiler" }
 formatter = { path = "../formatter" }
 ir = { path = "../ir" }
 vm = { path = "../vm" }
+wasm = { path = "../wasm" }
 
 [dev-dependencies]
 datatest-stable = "0.2"
 insta = "1"
+wasmtime = { version = "=30.0.2", default-features = false, features = ["cranelift", "gc", "gc-drc", "gc-null", "runtime"] }
 
 [[test]]
 name = "analyze"
@@ -45,3 +47,7 @@ path = "ir_mono.rs"
 [[test]]
 name = "cps"
 path = "cps.rs"
+
+[[test]]
+name = "wasm_diff"
+path = "wasm_diff.rs"

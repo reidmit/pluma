@@ -1,0 +1,9 @@
+[package]
+name = "wasm"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+compiler = { path = "../compiler" }
+ir = { path = "../ir" }
+wasm-encoder = "0.251"
