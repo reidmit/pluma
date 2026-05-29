@@ -6322,7 +6322,7 @@ impl<'compiler> Analyzer<'compiler> {
 						"scope handles aren't serializable".to_string()
 					} else {
 						format!(
-							"the opaque type `{}` hides its constructors — give it a hand-written `wire` instance",
+							"the opaque type `{}` hides its constructors — expose a non-opaque type, or send the value it wraps",
 							bare
 						)
 					});
