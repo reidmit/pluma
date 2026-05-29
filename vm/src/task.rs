@@ -676,13 +676,20 @@ impl VM {
 		let mut keep = Vec::new();
 		for (at, t) in std::mem::take(&mut self.sched.timers) {
 			if at <= now {
-				due.push(t);
+				due.push((at, t));
 			} else {
 				keep.push((at, t));
 			}
 		}
 		self.sched.timers = keep;
-		for t in due {
+		// `thread::sleep` overshoots under load, so several timers can come due
+		// in one batch. Fire them in deadline order — never the order they were
+		// parked — so the wake order reflects the intended sleep durations
+		// (otherwise concurrent combinators like `pool`/`race` would settle
+		// their children in a nondeterministic order). Stable sort keeps
+		// equal-deadline timers in park order.
+		due.sort_by_key(|(at, _)| *at);
+		for (_, t) in due {
 			match t {
 				Timer::Wake(fid) => {
 					if self.sched.fibers[fid].alive {
