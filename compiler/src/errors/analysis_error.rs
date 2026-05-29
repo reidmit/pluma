@@ -22,6 +22,10 @@ pub enum AnalysisErrorKind {
 	AmbiguousBareMethod { name: String, traits: Vec<String> },
 	DuplicateDefinition { name: String },
 	NoInstance { trait_name: String, ty: Type },
+	// A `wire` boundary (a value crossing as serialized bytes) required a
+	// type that isn't auto-derivable. `detail` names the offending component
+	// (e.g. "functions aren't serializable"). See FULLSTACK.md, Layer 1.
+	NotWireDerivable { ty: Type, detail: String },
 	UnsupportedInstanceHead { head: Type },
 	IncompleteInstance { trait_name: String, method: String },
 	AmbiguousTraitMethod { trait_name: String, ty: Type },
@@ -132,6 +136,12 @@ impl fmt::Display for AnalysisError {
 				f,
 				"No instance of trait `{}` for type `{}`.",
 				trait_name, ty
+			),
+
+			NotWireDerivable { ty, detail } => write!(
+				f,
+				"Can't send `{}` across the wire: {}.",
+				ty, detail
 			),
 
 			UnsupportedInstanceHead { head } => write!(

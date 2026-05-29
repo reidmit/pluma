@@ -4435,27 +4435,34 @@ impl<'compiler> Analyzer<'compiler> {
 					c.dispatch_cell.borrow_mut().resolved = Some(resolved);
 				}
 				None => {
-					// If the dispatch type contains any free type variables
-					// the problem is ambiguity, not a missing instance —
-					// e.g. `showable.show none` where `none : option ?`.
-					// Tell the user to annotate.
-					if !c.ty.free_vars().is_empty() {
-						self.error(
-							c.reason.range,
-							AnalysisErrorKind::AmbiguousTraitMethod {
-								trait_name: c.name.clone(),
-								ty: c.ty.clone(),
-							},
-						);
+					// `wire` is auto-derived, so a failure means the type isn't
+					// serializable — explain with attribution (FULLSTACK.md),
+					// unless the only obstacle is a free var (→ ambiguity below).
+					let wire_detail = if c.name == "wire" {
+						self.wire_underivable_detail(&c.ty, &mut Vec::new())
 					} else {
-						self.error(
-							c.reason.range,
-							AnalysisErrorKind::NoInstance {
-								trait_name: c.name.clone(),
-								ty: c.ty.clone(),
-							},
-						);
-					}
+						None
+					};
+					let kind = if let Some(detail) = wire_detail {
+						AnalysisErrorKind::NotWireDerivable {
+							ty: c.ty.clone(),
+							detail,
+						}
+					} else if !c.ty.free_vars().is_empty() {
+						// A free type variable means ambiguity, not a missing
+						// instance — e.g. `showable.show none` where `none :
+						// option ?`. Tell the user to annotate.
+						AnalysisErrorKind::AmbiguousTraitMethod {
+							trait_name: c.name.clone(),
+							ty: c.ty.clone(),
+						}
+					} else {
+						AnalysisErrorKind::NoInstance {
+							trait_name: c.name.clone(),
+							ty: c.ty.clone(),
+						}
+					};
+					self.error(c.reason.range, kind);
 				}
 			}
 		}
@@ -6240,6 +6247,74 @@ impl<'compiler> Analyzer<'compiler> {
 			// Free type vars are handled by the forwarded-dict path (M3), not
 			// here; everything else (Fun, Ref, Regex, Dict, Instant, open
 			// record, PartialTuple/Record, Unknown) is non-derivable.
+			_ => None,
+		}
+	}
+
+	// Explain why `ty` can't cross the wire, for the boundary diagnostic. Walks
+	// the type for the first hard non-serializable component (function, ref,
+	// regex, task, opaque enum, …) and describes it with attribution. Returns
+	// `None` if the only obstacle is a free type variable — that's ambiguity
+	// (annotate), not a serializability failure — so the caller falls back to
+	// the generic ambiguity message.
+	fn wire_underivable_detail(&self, ty: &Type, visiting: &mut Vec<String>) -> Option<String> {
+		match ty {
+			Type::Fun(..) => Some("functions aren't serializable".to_string()),
+			Type::Ref(_) => Some("mutable refs aren't serializable".to_string()),
+			Type::Regex => Some("regexes aren't serializable".to_string()),
+			Type::Instant => Some("instants aren't serializable (send the value they wrap)".to_string()),
+			Type::Dict(..) => {
+				Some("dicts aren't wire-able yet (send `dict.entries` as a list)".to_string())
+			}
+			Type::List(inner) => self.wire_underivable_detail(inner, visiting),
+			Type::Tuple(elems) => elems
+				.iter()
+				.find_map(|e| self.wire_underivable_detail(e, visiting)),
+			Type::Record(fields, _) => fields.iter().find_map(|(name, t)| {
+				self
+					.wire_underivable_detail(t, visiting)
+					.map(|d| format!("field `{}` can't ({})", name, d))
+			}),
+			Type::Enum(name, args) => {
+				let Some(def) = self.enum_defs.get(name) else {
+					return None;
+				};
+				let bare = name.rsplit('.').next().unwrap_or(name);
+				if def.variants.is_empty() {
+					return Some(if name.ends_with(".task") {
+						"tasks aren't serializable".to_string()
+					} else if name.contains("scope-handle") {
+						"scope handles aren't serializable".to_string()
+					} else {
+						format!(
+							"the opaque type `{}` hides its constructors — give it a hand-written `wire` instance",
+							bare
+						)
+					});
+				}
+				if visiting.iter().any(|n| n == name) {
+					return Some(format!(
+						"`{}` is recursive, and recursive types aren't supported on the wire yet",
+						bare
+					));
+				}
+				let mut mapping: HashMap<usize, Type> = HashMap::new();
+				for (p, arg) in def.param_vars.iter().zip(args.iter()) {
+					mapping.insert(*p, arg.clone());
+				}
+				let variants = def.variants.clone();
+				visiting.push(name.clone());
+				let found = variants.iter().find_map(|(_, payloads)| {
+					payloads.iter().find_map(|p| {
+						let concrete = subst_type(p, &mapping);
+						self.wire_underivable_detail(&concrete, visiting)
+					})
+				});
+				visiting.pop();
+				found
+			}
+			// Primitives are fine; a free `Var` is an ambiguity, not a hard
+			// failure (handled by the caller).
 			_ => None,
 		}
 	}

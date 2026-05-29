@@ -1,0 +1,11 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+warning: Name `bytes` is never used.
+> 5 | 	let bytes = wire.to-wire widget
+           ^^^^^
+
+error: Can't send `{label: string, on-click: int -> int}` across the wire: field `on-click` can't (functions aren't serializable).
+> 5 | 	let bytes = wire.to-wire widget
+                   ^^^^^^^^^^^^

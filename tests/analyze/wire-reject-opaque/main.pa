@@ -1,0 +1,7 @@
+use token
+
+def main = fun {
+	let t = token.make "secret"
+	let encoded = wire.to-wire t
+	print "unreachable"
+}

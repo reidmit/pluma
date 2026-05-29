@@ -1,0 +1,7 @@
+# An opaque enum hides its constructors, so `wire` can't be auto-derived for
+# it — the importer must supply a hand-written instance instead.
+opaque enum token {
+	mk string
+}
+
+public def make :: fun string -> token = fun s { token.mk s }
