@@ -8,20 +8,20 @@ module `main` (tests/analyze/def-annotation-generic-applied/main.pa) {
         module(0:0-6:1) [
             def(0:0-6:1) :: nothing {
                 name: ident(0:4-0:11) `head-or`,
-                kind: expr(0:37-6:1) :: (list 't) 't -> 't {
+                kind: expr(0:37-6:1) :: (list 'u) 'u -> 'u {
                     kind: fun(0:37-6:1) {
                         params: [
-                            ident(0:41-0:43) `xs` :: list 't,
-                            ident(0:44-0:51) `default` :: 't,
+                            ident(0:41-0:43) `xs` :: list 'u,
+                            ident(0:44-0:51) `default` :: 'u,
                         ],
                         body: [
-                            expr(1:1-5:2) :: 't {
+                            expr(1:1-5:2) :: 'u {
                                 kind: when(1:1-5:2) [
                                     case(1:9-3:2) is pattern(1:12-1:14) List {
                                         items: [],
                                         rest: None,
                                     } [
-                                        expr(2:2-2:9) :: 't {
+                                        expr(2:2-2:9) :: 'u {
                                             kind: ident(2:2-2:9) `default`,
                                         },
                                     ],
@@ -38,7 +38,7 @@ module `main` (tests/analyze/def-annotation-generic-applied/main.pa) {
                                             },
                                         ),
                                     } [
-                                        expr(4:2-4:7) :: 't {
+                                        expr(4:2-4:7) :: 'u {
                                             kind: ident(4:2-4:7) `first`,
                                         },
                                     ],

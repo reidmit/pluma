@@ -8,13 +8,13 @@ module `main` (tests/analyze/polymorphic-id-many-uses/main.pa) {
         module(0:0-10:28) [
             def(0:0-2:1) :: nothing {
                 name: ident(0:4-0:6) `id`,
-                kind: expr(0:9-2:1) :: 't2 -> 't2 {
+                kind: expr(0:9-2:1) :: 't3 -> 't3 {
                     kind: fun(0:9-2:1) {
                         params: [
-                            ident(0:13-0:14) `x` :: 't2,
+                            ident(0:13-0:14) `x` :: 't3,
                         ],
                         body: [
-                            expr(1:1-1:2) :: 't2 {
+                            expr(1:1-1:2) :: 't3 {
                                 kind: ident(1:1-1:2) `x`,
                             },
                         ],

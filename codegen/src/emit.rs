@@ -27,6 +27,18 @@ pub fn compile(compiler: &compiler::Compiler) -> Result<Program, String> {
 		"to-string",
 		Value::Builtin(Rc::from("to-string")),
 	);
+	// The `wire` codec builtins (FULLSTACK.md). A `wire` method call loads one
+	// of these as its callee and passes the schema dict as the first arg.
+	cg.add_evaluated_global(
+		"__prelude__",
+		"wire-encode",
+		Value::Builtin(Rc::from("wire-encode")),
+	);
+	cg.add_evaluated_global(
+		"__prelude__",
+		"wire-decode",
+		Value::Builtin(Rc::from("wire-decode")),
+	);
 
 	// Prelude trait instance dictionaries. Each instance is a positional
 	// array of method values keyed by trait declaration order (`numeric`
@@ -2294,6 +2306,58 @@ fn emit_call(
 	range: Range,
 	tail: bool,
 ) -> Result<(), String> {
+	// `wire` method calls (`to-wire x` / `from-wire b`) don't extract a method
+	// from a dict — they call the `wire-encode`/`wire-decode` builtin with the
+	// schema dict as the first argument (FULLSTACK.md).
+	if let Some(cell) = &callee.trait_dispatch {
+		let wire = {
+			let b = cell.borrow();
+			if b.trait_name == "wire" {
+				let tag = match b.method_idx {
+					Some(0) => "wire-encode",
+					Some(1) => "wire-decode",
+					_ => return Err("codegen: unexpected wire method index".to_string()),
+				};
+				let resolved = b
+					.resolved
+					.clone()
+					.ok_or("codegen: unresolved wire dispatch")?;
+				Some((tag, resolved))
+			} else {
+				None
+			}
+		};
+		if let Some((tag, resolved)) = wire {
+			let g = cg
+				.lookup_global("__prelude__", tag)
+				.ok_or("codegen: wire builtin global not registered")?;
+			fb.emit(Instruction::LoadGlobal(g), range);
+			// Schema dict (arg 0), then the user args.
+			emit_resolved_load(cg, fb, scope, parent_scopes, &resolved, range)?;
+			for a in args {
+				emit_expr_with_parents(
+					cg,
+					current_module,
+					imports,
+					fb,
+					scope,
+					parent_scopes,
+					a,
+					false,
+				)?;
+			}
+			let total = (1 + args.len()) as u16;
+			fb.emit(
+				if tail {
+					Instruction::TailCall(total)
+				} else {
+					Instruction::Call(total)
+				},
+				range,
+			);
+			return Ok(());
+		}
+	}
 	emit_expr_with_parents(
 		cg,
 		current_module,
@@ -2435,6 +2499,15 @@ fn emit_dispatch_load(
 			}
 			return Ok(());
 		}
+		Some(Resolved::WireSchema(shape)) => {
+			// `wire`'s "dict" is a schema value, not a method dict. Build it
+			// directly; there's no `GetDictField` (a method-dispatch site for a
+			// wire method is intercepted earlier in `emit_call`).
+			let shape = shape.clone();
+			drop(borrow);
+			emit_wire_schema(cg, fb, scope, parent_scopes, &shape, range)?;
+			return Ok(());
+		}
 		None => {
 			return Err(format!(
 				"codegen: dispatch cell for trait `{}` is unresolved",
@@ -2523,6 +2596,94 @@ fn emit_resolved_load(
 				emit_resolved_load(cg, fb, scope, parent_scopes, r, range)?;
 			}
 			fb.emit(Instruction::Call(inner.len() as u16), range);
+		}
+		Resolved::WireSchema(shape) => {
+			emit_wire_schema(cg, fb, scope, parent_scopes, shape, range)?;
+		}
+	}
+	Ok(())
+}
+
+// Build a `__prelude__.wire-schema` value on the stack from a compile-time
+// `WireShape` (the AST-backend mirror of `ir::lower::lower_wire_shape`). This
+// is the runtime reification of a `wire a` dictionary consumed by the
+// `wire-encode` / `wire-decode` builtins. A `Var` leaf splices in a forwarded
+// `wire a` dict (itself a `wire-schema` value).
+fn emit_wire_schema(
+	cg: &mut CodeGen,
+	fb: &mut FunctionBuilder,
+	scope: &mut Scope,
+	parent_scopes: &mut Vec<*mut Scope>,
+	shape: &compiler::ast::WireShape,
+	range: Range,
+) -> Result<(), String> {
+	use compiler::ast::WireShape as W;
+	const E: &str = "__prelude__.wire-schema";
+	// Build a `wire-schema` variant whose `arity` payload values are already on
+	// the stack (in payload order).
+	let mk = |cg: &mut CodeGen, fb: &mut FunctionBuilder, variant: &str, arity: u16| {
+		let qualified = cg.intern(E);
+		let v = cg.intern(variant);
+		fb.emit(
+			Instruction::MakeVariant {
+				qualified,
+				variant: v,
+				arity,
+			},
+			range,
+		);
+	};
+	match shape {
+		W::Int => mk(cg, fb, "s-int", 0),
+		W::Float => mk(cg, fb, "s-float", 0),
+		W::Bool => mk(cg, fb, "s-bool", 0),
+		W::Str => mk(cg, fb, "s-string", 0),
+		W::Bytes => mk(cg, fb, "s-bytes", 0),
+		W::Duration => mk(cg, fb, "s-duration", 0),
+		W::Nothing => mk(cg, fb, "s-nothing", 0),
+		W::List(inner) => {
+			emit_wire_schema(cg, fb, scope, parent_scopes, inner, range)?;
+			mk(cg, fb, "s-list", 1);
+		}
+		W::Tuple(shapes) => {
+			for s in shapes {
+				emit_wire_schema(cg, fb, scope, parent_scopes, s, range)?;
+			}
+			fb.emit(Instruction::MakeList(shapes.len() as u16), range);
+			mk(cg, fb, "s-tuple", 1);
+		}
+		W::Record(fields) => {
+			for (name, sh) in fields {
+				let idx = cg.intern(name);
+				fb.emit(Instruction::LoadConst(idx), range);
+				emit_wire_schema(cg, fb, scope, parent_scopes, sh, range)?;
+				fb.emit(Instruction::MakeTuple(2), range);
+			}
+			fb.emit(Instruction::MakeList(fields.len() as u16), range);
+			mk(cg, fb, "s-record", 1);
+		}
+		W::Enum {
+			qualified,
+			variants,
+		} => {
+			// Payload order is `(qualified, variants-list)`: push the name
+			// first, then build the variants list above it.
+			let q = cg.intern(qualified);
+			fb.emit(Instruction::LoadConst(q), range);
+			for (vname, field_shapes) in variants {
+				let vn = cg.intern(vname);
+				fb.emit(Instruction::LoadConst(vn), range);
+				for fs in field_shapes {
+					emit_wire_schema(cg, fb, scope, parent_scopes, fs, range)?;
+				}
+				fb.emit(Instruction::MakeList(field_shapes.len() as u16), range);
+				fb.emit(Instruction::MakeTuple(2), range);
+			}
+			fb.emit(Instruction::MakeList(variants.len() as u16), range);
+			mk(cg, fb, "s-enum", 2);
+		}
+		W::Var(resolved) => {
+			emit_resolved_load(cg, fb, scope, parent_scopes, resolved, range)?;
 		}
 	}
 	Ok(())

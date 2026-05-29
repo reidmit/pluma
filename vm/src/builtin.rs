@@ -654,6 +654,32 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			let s = expect_string(&args, "to-bytes");
 			Ok(Value::Bytes(Rc::new(s.as_bytes().to_vec())))
 		}
+		// `wire` codec (FULLSTACK.md, Layer 1). Both take the reified schema
+		// (a `wire-schema` value built by codegen from the static type) as the
+		// hidden first arg — the `wire a` dictionary — followed by the
+		// value/bytes. `encode` can't fail (the type checker guarantees the
+		// value matches the schema); `decode` returns `result a wire-error`.
+		"wire-encode" => {
+			debug_assert_eq!(args.len(), 2, "`wire-encode` arity");
+			let schema = crate::wire::schema_from_value(&args[0])
+				.unwrap_or_else(|| unreachable!("`wire-encode`: malformed schema"));
+			let mut out = Vec::new();
+			crate::wire::encode(&schema, &args[1], &mut out);
+			Ok(Value::Bytes(Rc::new(out)))
+		}
+		"wire-decode" => {
+			debug_assert_eq!(args.len(), 2, "`wire-decode` arity");
+			let schema = crate::wire::schema_from_value(&args[0])
+				.unwrap_or_else(|| unreachable!("`wire-decode`: malformed schema"));
+			let bytes = match &args[1] {
+				Value::Bytes(b) => b,
+				_ => unreachable!("`wire-decode`: expected bytes"),
+			};
+			match crate::wire::decode_all(&schema, bytes) {
+				Ok(v) => Ok(result_ok(v)),
+				Err(e) => Ok(result_err(e.to_value())),
+			}
+		}
 		"bytes-length" => {
 			let b = expect_bytes(&args, "length");
 			Ok(Value::Int(b.len() as i64))

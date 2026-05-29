@@ -1,0 +1,39 @@
+# The `wire` codec (FULLSTACK.md, Layer 1): auto-derived structural
+# encode/decode over a compact, deterministic binary format. Exercises
+# primitives, records, options, lists, tuples, user enums, nesting, and the
+# `wire-error` decode-failure channel.
+
+use core.list
+use core.hex
+
+enum shape {
+	circle float
+	rect int int
+	dot
+}
+
+def main = fun {
+	# Primitive round-trip, plus the deterministic byte layout (zigzag varint).
+	let e-int = wire.to-wire (0 - 1)
+	print "int bytes: $(hex.encode e-int)"
+	print "int: $(to-string ((wire.from-wire e-int) ?? 0))"
+
+	# Record: fields encoded positionally, no field names on the wire.
+	let person = { name: "ada", age: 36 }
+	let e-rec = wire.to-wire person
+	let rec :: result { name :: string, age :: int } wire-error = wire.from-wire e-rec
+	when rec is ok r { print "rec: $(r.name) $(to-string r.age)" } is err _e { print "rec failed" }
+
+	# List of options (nested enums + length-prefixed list).
+	let xs = [some 1, none, some 3]
+	let e-list = wire.to-wire xs
+	let ys :: result (list (option int)) wire-error = wire.from-wire e-list
+	when ys is ok zs { print "list len: $(to-string (list.length zs))" } is err _e { print "list failed" }
+
+	# User enum with payloads — tag is the variant's declaration index.
+	print "enum: $(to-string ((wire.from-wire (wire.to-wire (rect 3 4))) ?? dot))"
+
+	# Decode-failure channel: a 1-byte int can't satisfy a 2-int tuple.
+	let bad :: result (int, int) wire-error = wire.from-wire e-int
+	when bad is ok _r { print "unexpected ok" } is err er { print "decode err: $(to-string er)" }
+}

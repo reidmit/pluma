@@ -5,6 +5,7 @@ pub mod stdlib;
 mod task;
 mod value;
 mod vm;
+mod wire;
 
 pub use instruction::{ConstIdx, FuncIdx, GlobalIdx, Instruction, Offset, SlotIdx};
 pub use program::{Function, Program};

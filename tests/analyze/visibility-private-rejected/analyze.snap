@@ -6,7 +6,6 @@ error: `private-fn` is private to module `lib`. Mark it `public` in that module 
 > 3 | def out = lib.private-fn 5
                     ^^^^^^^^^^
 
-error: Type mismatch: expected `int -> 't`, but found `?`.
+error: Type mismatch: expected `int -> 'u`, but found `?`.
 > 3 | def out = lib.private-fn 5
                 ^^^^^^^^^^^^^^^^
-

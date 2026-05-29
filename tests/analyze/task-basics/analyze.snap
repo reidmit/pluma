@@ -18,7 +18,7 @@ module `main` (tests/analyze/task-basics/main.pa) {
                         body: [
                             expr(2:21-2:35) :: task int {
                                 kind: call(2:21-2:35) {
-                                    callee: expr(2:21-2:32) :: 't1 -> task 't1 {
+                                    callee: expr(2:21-2:32) :: 't2 -> task 't2 {
                                         kind: namespace-access `task.return`,
                                     },
                                     args: [
@@ -34,13 +34,13 @@ module `main` (tests/analyze/task-basics/main.pa) {
             },
             def(4:0-4:40) :: nothing {
                 name: ident(4:4-4:13) `make-fail`,
-                kind: expr(4:16-4:40) :: nothing -> task 't5 {
+                kind: expr(4:16-4:40) :: nothing -> task 't6 {
                     kind: fun(4:16-4:40) {
                         params: [],
                         body: [
-                            expr(4:22-4:38) :: task 't5 {
+                            expr(4:22-4:38) :: task 't6 {
                                 kind: call(4:22-4:38) {
-                                    callee: expr(4:22-4:31) :: 't4 -> task 't5 {
+                                    callee: expr(4:22-4:31) :: 't5 -> task 't6 {
                                         kind: namespace-access `task.fail`,
                                     },
                                     args: [

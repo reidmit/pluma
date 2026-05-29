@@ -34,6 +34,46 @@ pub enum Resolved {
 		ctor_slot: String,
 		inner: Vec<Resolved>,
 	},
+	// The auto-derived `wire` trait (FULLSTACK.md, Layer 1). Unlike the other
+	// traits, `wire` has no per-type instance dictionaries: its "dictionary"
+	// is a *schema descriptor* synthesized from the type's structure. Codegen
+	// lowers the shape into a `__prelude__.wire-schema` value (the runtime
+	// reification consumed by the `wire-encode`/`wire-decode` builtins). A
+	// `Var` leaf in the shape is a type-variable position whose schema is
+	// forwarded from a dict parameter (polymorphic `wire a`).
+	WireSchema(WireShape),
+}
+
+// The compile-time skeleton of a `wire` schema, built from a type's structure
+// by `Analyzer::build_wire_shape` and lowered to a runtime `wire-schema` value
+// by codegen. Mirrors the runtime `vm::wire::Schema` and the `wire-schema`
+// prelude enum.
+#[derive(Clone)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+pub enum WireShape {
+	Int,
+	Float,
+	Bool,
+	Str,
+	Bytes,
+	Duration,
+	Nothing,
+	List(Box<WireShape>),
+	Tuple(Vec<WireShape>),
+	// Field name + field shape, in a canonical (name-sorted) order shared by
+	// both encode and decode.
+	Record(Vec<(String, WireShape)>),
+	Enum {
+		// Fully-qualified enum name, e.g. `__prelude__.option`.
+		qualified: String,
+		// Variants in declaration order (the index is the wire tag); each
+		// carries its name + payload field shapes.
+		variants: Vec<(String, Vec<WireShape>)>,
+	},
+	// A type-variable position: the schema arrives at runtime via a forwarded
+	// `wire a` dictionary (itself a `wire-schema` value). Carries the inner
+	// dispatch resolution (a `Forwarded`, or a nested resolution).
+	Var(Box<Resolved>),
 }
 
 // Typeclass dispatch metadata for an AST site. Shared between the AST

@@ -146,6 +146,40 @@ fn lookup_or_alloc_slot(
 // the corresponding subterm in `target`. Used by discharge to match a
 // class constraint's type against a parametric instance's head type.
 // Returns `Some(mapping)` on success, `None` on mismatch.
+// Substitute the type variables named in `mapping` throughout `ty`, leaving
+// everything else intact. Used to specialize an enum variant's declared
+// payload types (which reference the enum's param vars) to a concrete
+// instantiation when building a `wire` schema.
+fn subst_type(ty: &Type, mapping: &HashMap<usize, Type>) -> Type {
+	use Type::*;
+	match ty {
+		Var(v) => mapping.get(v).cloned().unwrap_or_else(|| ty.clone()),
+		List(inner) => List(Box::new(subst_type(inner, mapping))),
+		Ref(inner) => Ref(Box::new(subst_type(inner, mapping))),
+		Tuple(elems) => Tuple(elems.iter().map(|e| subst_type(e, mapping)).collect()),
+		Dict(k, v) => Dict(
+			Box::new(subst_type(k, mapping)),
+			Box::new(subst_type(v, mapping)),
+		),
+		Enum(name, args) => Enum(
+			name.clone(),
+			args.iter().map(|a| subst_type(a, mapping)).collect(),
+		),
+		Record(fields, tail) => Record(
+			fields
+				.iter()
+				.map(|(n, t)| (n.clone(), subst_type(t, mapping)))
+				.collect(),
+			*tail,
+		),
+		Fun(params, ret) => Fun(
+			params.iter().map(|p| subst_type(p, mapping)).collect(),
+			Box::new(subst_type(ret, mapping)),
+		),
+		_ => ty.clone(),
+	}
+}
+
 fn match_types(
 	pattern: &Type,
 	target: &Type,
@@ -634,6 +668,11 @@ impl<'compiler> Analyzer<'compiler> {
 		// float, string, bool. Unblocks generic `core.dict` over those
 		// primitive key types.
 		self.register_prelude_hash_trait();
+		// `wire` trait: `to-wire fun a -> bytes` / `from-wire fun bytes ->
+		// result a wire-error`. Auto-derived structurally (FULLSTACK.md): no
+		// concrete instances — dispatch is resolved by synthesizing a schema
+		// from the type's shape in `try_resolve_dispatch`.
+		self.register_prelude_wire_trait();
 
 		// PLUMA_TIMING=2 prints per-phase timing within analyze().
 		let _timing = std::env::var("PLUMA_TIMING").ok().as_deref() == Some("2");
@@ -4427,6 +4466,16 @@ impl<'compiler> Analyzer<'compiler> {
 	// Parametric instances → `InstanceChain` with each `where`-clause
 	// constraint resolved against the unifying substitution.
 	fn try_resolve_dispatch(&self, trait_name: &str, ty: &Type) -> Option<Resolved> {
+		// `wire` is auto-derived: there are no registered instances. Resolve it
+		// by synthesizing a schema shape from `ty`'s structure (FULLSTACK.md).
+		// `None` means non-derivable → discharge reports it as a missing
+		// instance (attribution refined in M4).
+		if trait_name == "wire" {
+			return self
+				.build_wire_shape(ty, &mut Vec::new())
+				.map(Resolved::WireSchema);
+		}
+
 		let head_key = type_to_head_key(ty)?;
 		let inst = self.instances.get(&(trait_name.to_string(), head_key))?;
 
@@ -6084,6 +6133,114 @@ impl<'compiler> Analyzer<'compiler> {
 					instance_slot_name: format!("__prelude__.hash@{}", head_key),
 				},
 			);
+		}
+	}
+
+	// Register the prelude `wire` trait: `to-wire fun a -> bytes` and
+	// `from-wire fun bytes -> result a wire-error`. Unlike numeric/ord/hash,
+	// `wire` registers NO instances — it's auto-derived structurally for any
+	// data-shaped type (FULLSTACK.md, Layer 1), and `try_resolve_dispatch`
+	// special-cases the trait to synthesize a schema rather than look up an
+	// instance dictionary.
+	fn register_prelude_wire_trait(&mut self) {
+		let param_var = self.next_type_var_id;
+		self.next_type_var_id += 1;
+		let a = Type::Var(param_var);
+
+		let to_wire = Type::Fun(vec![a.clone()], Box::new(Type::Bytes));
+		let wire_error = Type::Enum("__prelude__.wire-error".into(), vec![]);
+		let result_ty = Type::Enum("__prelude__.result".into(), vec![a, wire_error]);
+		let from_wire = Type::Fun(vec![Type::Bytes], Box::new(result_ty));
+
+		let method_order = vec!["to-wire".to_string(), "from-wire".to_string()];
+		let mut method_types: HashMap<String, Type> = HashMap::new();
+		method_types.insert("to-wire".into(), to_wire);
+		method_types.insert("from-wire".into(), from_wire);
+
+		self.traits.insert(
+			"wire".into(),
+			TraitDecl {
+				param_var,
+				method_order,
+				method_types,
+				defaults: HashMap::new(),
+				defining_module: "__prelude__".into(),
+			},
+		);
+	}
+
+	// Synthesize a `wire` schema shape for `ty`, or `None` if `ty` is not
+	// auto-derivable (functions, refs, tasks, regex, dicts, opaque/empty
+	// enums, open records, free type vars, or — for now — recursive enums).
+	// This is both the derivability check (`is_some`) and the shape builder.
+	// `visiting` holds the enum names currently being expanded, to break
+	// recursive-type cycles (deferred; see M4).
+	fn build_wire_shape(&self, ty: &Type, visiting: &mut Vec<String>) -> Option<WireShape> {
+		match ty {
+			Type::Int => Some(WireShape::Int),
+			Type::Float => Some(WireShape::Float),
+			Type::Bool => Some(WireShape::Bool),
+			Type::String => Some(WireShape::Str),
+			Type::Bytes => Some(WireShape::Bytes),
+			Type::Duration => Some(WireShape::Duration),
+			Type::Nothing => Some(WireShape::Nothing),
+			Type::List(inner) => Some(WireShape::List(Box::new(
+				self.build_wire_shape(inner, visiting)?,
+			))),
+			Type::Tuple(elems) => {
+				let shapes = elems
+					.iter()
+					.map(|e| self.build_wire_shape(e, visiting))
+					.collect::<Option<Vec<_>>>()?;
+				Some(WireShape::Tuple(shapes))
+			}
+			// Only closed records (no row-variable tail) have a fully-known
+			// field set; an open record can't be encoded positionally.
+			Type::Record(fields, None) => {
+				let mut sorted: Vec<&(String, Type)> = fields.iter().collect();
+				sorted.sort_by(|a, b| a.0.cmp(&b.0));
+				let out = sorted
+					.into_iter()
+					.map(|(name, fty)| Some((name.clone(), self.build_wire_shape(fty, visiting)?)))
+					.collect::<Option<Vec<_>>>()?;
+				Some(WireShape::Record(out))
+			}
+			Type::Enum(name, args) => {
+				let def = self.enum_defs.get(name)?;
+				// No variants => opaque or constructor-less (e.g. `task`):
+				// can't synthesize encode/decode, so not derivable.
+				if def.variants.is_empty() {
+					return None;
+				}
+				// Recursive types need a by-name schema table; deferred.
+				if visiting.iter().any(|n| n == name) {
+					return None;
+				}
+				let mut mapping: HashMap<usize, Type> = HashMap::new();
+				for (p, arg) in def.param_vars.iter().zip(args.iter()) {
+					mapping.insert(*p, arg.clone());
+				}
+				let variants_src = def.variants.clone();
+				visiting.push(name.clone());
+				let mut variants = Vec::with_capacity(variants_src.len());
+				for (vname, payloads) in &variants_src {
+					let mut fields = Vec::with_capacity(payloads.len());
+					for p in payloads {
+						let concrete = subst_type(p, &mapping);
+						fields.push(self.build_wire_shape(&concrete, visiting)?);
+					}
+					variants.push((vname.clone(), fields));
+				}
+				visiting.pop();
+				Some(WireShape::Enum {
+					qualified: name.clone(),
+					variants,
+				})
+			}
+			// Free type vars are handled by the forwarded-dict path (M3), not
+			// here; everything else (Fun, Ref, Regex, Dict, Instant, open
+			// record, PartialTuple/Record, Unknown) is non-derivable.
+			_ => None,
 		}
 	}
 

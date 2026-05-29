@@ -721,6 +721,9 @@ impl<'a> Lowerer<'a> {
 	}
 
 	fn lower_call(&mut self, call: &compiler::ast::CallNode, range: Range) -> Result<Atom, String> {
+		if let Some(result) = self.try_lower_wire_call(call, range) {
+			return result;
+		}
 		let callee = self.lower_expr(&call.callee)?;
 		let mut args = Vec::with_capacity(call.dict_args.len() + call.args.len());
 		// Hidden dict args precede the user args — the constrained callee
@@ -908,7 +911,114 @@ impl<'a> Lowerer<'a> {
 				}
 				Ok(self.emit_let(Rvalue::CallClosure(ctor, args), range))
 			}
+			// The `wire` "dictionary" is a schema value, not a method dict:
+			// build the `__prelude__.wire-schema` tree from the shape.
+			DispatchTarget::WireSchema(shape) => self.lower_wire_shape(shape, range),
 		}
+	}
+
+	/// Build a `__prelude__.wire-schema` value from a compile-time `WireShape`.
+	/// This is the runtime reification of a `wire a` dictionary, consumed by the
+	/// `wire-encode` / `wire-decode` builtins. A `Var` leaf splices in a
+	/// forwarded `wire a` dict (itself a `wire-schema` value).
+	fn lower_wire_shape(
+		&mut self,
+		shape: &compiler::ast::WireShape,
+		range: Range,
+	) -> Result<Atom, String> {
+		use compiler::ast::WireShape as W;
+		const E: &str = "__prelude__.wire-schema";
+		let str_atom = |s: &str| Atom::Const(Const::Str(s.to_string()));
+		match shape {
+			W::Int => self.make_variant(E, "s-int", vec![], range),
+			W::Float => self.make_variant(E, "s-float", vec![], range),
+			W::Bool => self.make_variant(E, "s-bool", vec![], range),
+			W::Str => self.make_variant(E, "s-string", vec![], range),
+			W::Bytes => self.make_variant(E, "s-bytes", vec![], range),
+			W::Duration => self.make_variant(E, "s-duration", vec![], range),
+			W::Nothing => self.make_variant(E, "s-nothing", vec![], range),
+			W::List(inner) => {
+				let i = self.lower_wire_shape(inner, range)?;
+				self.make_variant(E, "s-list", vec![i], range)
+			}
+			W::Tuple(shapes) => {
+				let mut items = Vec::with_capacity(shapes.len());
+				for s in shapes {
+					items.push(ListItem::Elem(self.lower_wire_shape(s, range)?));
+				}
+				let list = self.emit_let(Rvalue::MakeList(items), range);
+				self.make_variant(E, "s-tuple", vec![list], range)
+			}
+			W::Record(fields) => {
+				let mut items = Vec::with_capacity(fields.len());
+				for (name, sh) in fields {
+					let sa = self.lower_wire_shape(sh, range)?;
+					let pair = self.emit_let(Rvalue::MakeTuple(vec![str_atom(name), sa]), range);
+					items.push(ListItem::Elem(pair));
+				}
+				let list = self.emit_let(Rvalue::MakeList(items), range);
+				self.make_variant(E, "s-record", vec![list], range)
+			}
+			W::Enum {
+				qualified,
+				variants,
+			} => {
+				let mut items = Vec::with_capacity(variants.len());
+				for (vname, field_shapes) in variants {
+					let mut field_items = Vec::with_capacity(field_shapes.len());
+					for fs in field_shapes {
+						field_items.push(ListItem::Elem(self.lower_wire_shape(fs, range)?));
+					}
+					let fields_list = self.emit_let(Rvalue::MakeList(field_items), range);
+					let pair = self.emit_let(Rvalue::MakeTuple(vec![str_atom(vname), fields_list]), range);
+					items.push(ListItem::Elem(pair));
+				}
+				let vlist = self.emit_let(Rvalue::MakeList(items), range);
+				self.make_variant(E, "s-enum", vec![str_atom(qualified), vlist], range)
+			}
+			W::Var(resolved) => self.lower_dict_atom(resolved, range),
+		}
+	}
+
+	/// If `call` is a `wire` trait-method call (`to-wire x` / `from-wire b`),
+	/// lower it to the corresponding builtin applied to the schema dict + the
+	/// user args, and return `Some(result)`. Otherwise `None` (a normal call).
+	/// The schema (the resolved `wire a` dictionary) is passed as the builtin's
+	/// first argument — `wire`'s methods aren't read out of a method dict.
+	fn try_lower_wire_call(
+		&mut self,
+		call: &compiler::ast::CallNode,
+		range: Range,
+	) -> Option<Result<Atom, String>> {
+		let cell = call.callee.trait_dispatch.as_ref()?;
+		let (tag, resolved) = {
+			let b = cell.borrow();
+			if b.trait_name != "wire" {
+				return None;
+			}
+			let tag = match b.method_idx {
+				Some(0) => "wire-encode",
+				Some(1) => "wire-decode",
+				_ => return None,
+			};
+			match b.resolved.clone() {
+				Some(r) => (tag, r),
+				None => return Some(Err("unresolved wire dispatch".to_string())),
+			}
+		};
+		Some((|| {
+			let gid = self
+				.globals
+				.lookup("__prelude__", tag)
+				.ok_or("wire builtin global not registered")?;
+			let builtin = self.emit_let(Rvalue::GlobalRef(gid), range);
+			let mut args = Vec::with_capacity(1 + call.args.len());
+			args.push(self.lower_dict_atom(&resolved, range)?);
+			for a in &call.args {
+				args.push(self.lower_expr(a)?);
+			}
+			Ok(self.emit_let(Rvalue::CallClosure(builtin, args), range))
+		})())
 	}
 
 	/// `left | right` — pipe `left` in as the first argument of the call on the
@@ -1440,6 +1550,13 @@ impl<'a> Lowerer<'a> {
 		call: &compiler::ast::CallNode,
 		range: Range,
 	) -> Result<(), String> {
+		// A `wire` method call lowers to a builtin call, not a tail-callable
+		// closure — emit it then return its result.
+		if let Some(result) = self.try_lower_wire_call(call, range) {
+			let atom = result?;
+			self.push_stmt(StmtKind::Return(atom), range);
+			return Ok(());
+		}
 		let callee = self.lower_expr(&call.callee)?;
 		let mut args = Vec::with_capacity(call.dict_args.len() + call.args.len());
 		for cell in &call.dict_args {
@@ -2093,6 +2210,10 @@ fn seed_prelude_globals(g: &mut GlobalTable) {
 	g.add_pre_evaluated("__prelude__", "print", builtin("print"));
 	g.add_pre_evaluated("__prelude__", "debug", builtin("debug"));
 	g.add_pre_evaluated("__prelude__", "to-string", builtin("to-string"));
+	// `wire` codec builtins (FULLSTACK.md): a `wire` method call loads one of
+	// these as its callee, passing the schema dict as the first argument.
+	g.add_pre_evaluated("__prelude__", "wire-encode", builtin("wire-encode"));
+	g.add_pre_evaluated("__prelude__", "wire-decode", builtin("wire-decode"));
 
 	// `numeric`: add, sub, mul, div, negate.
 	g.add_pre_evaluated(

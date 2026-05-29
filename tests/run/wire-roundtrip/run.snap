@@ -1,0 +1,14 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+int bytes: 01
+int: -1
+rec: ada 36
+list len: 3
+enum: shape.rect 3 4
+decode err: wire-error.unexpected-end
+== stderr ==
