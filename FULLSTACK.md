@@ -1,9 +1,18 @@
 # FULLSTACK.md — end-to-end-typed client/server Pluma
 
-**Status:** design, not started. Nothing here is built. The codec and the RPC
-plumbing are **prototypable on the VM today** (no WASM dependency); the actual
-browser client is a separate, larger milestone — the WASM/WasmGC backend and the
-Elm-style frontend are tracked in `IR.md` (step 2) and are out of scope here.
+**Status:** Layer 1 (the `wire` codec) is **built**; Layer 2 (the RPC mechanism)
+is still design. The codec ships auto-derived structural encode/decode over the
+compact binary format below, on both VM backends — see `vm/src/wire.rs` (format
+engine), the `wire`/`wire-error`/`wire-schema` prelude declarations, and
+`Analyzer::build_wire_shape` (derivation). What's built: silent structural
+auto-derive for primitives/records/tuples/lists/enums/options/results, monomorphic
+and polymorphic (`fun (wire a)`) use, deterministic identical bytes across backends,
+and compile-time boundary rejection with attribution. Deferred: hand-written
+instances for opaque types, recursive-type schemas (rejected cleanly for now), the
+schema fingerprint, and `dict`. The RPC plumbing is **prototypable on the VM today**
+(no WASM dependency); the actual browser client is a separate, larger milestone —
+the WASM/WasmGC backend and the Elm-style frontend are tracked in `IR.md` (step 2)
+and are out of scope here.
 
 ## Goal
 
