@@ -4,15 +4,29 @@
 is still design. The codec ships auto-derived structural encode/decode over the
 compact binary format below, on both VM backends — see `vm/src/wire.rs` (format
 engine), the `wire`/`wire-error`/`wire-schema` prelude declarations, and
-`Analyzer::build_wire_shape` (derivation). What's built: silent structural
-auto-derive for primitives/records/tuples/lists/enums/options/results, monomorphic
-and polymorphic (`fun (wire a)`) use, deterministic identical bytes across backends,
-and compile-time boundary rejection with attribution. Deferred: hand-written
-instances for opaque types, recursive-type schemas (rejected cleanly for now), the
-schema fingerprint, and `dict`. The RPC plumbing is **prototypable on the VM today**
-(no WASM dependency); the actual browser client is a separate, larger milestone —
-the WASM/WasmGC backend and the Elm-style frontend are tracked in `IR.md` (step 2)
-and are out of scope here.
+`Analyzer::build_wire_shape` (derivation).
+
+**Built:** silent structural auto-derive for `int`/`float`/`bool`/`string`/`bytes`/
+`duration`/`nothing`, records, tuples, lists, enums (incl. `option`/`result`), and
+`dict` with primitive keys; **recursive types** (by-name enum back-references);
+monomorphic *and* polymorphic (`fun (wire a)`) use; deterministic identical bytes
+across both backends; a per-type **schema fingerprint** (`wire.fingerprint`, the
+building block for version-skew detection); and compile-time **boundary rejection
+with attribution** (functions/refs/tasks/regex/instants/dicts-with-compound-keys
+fail at the boundary naming the offending component).
+
+**Decided against:** hand-written `wire` instances for opaque types — `wire` is
+Pluma-to-Pluma over an atomic compiled-together deploy, so it trusts its bytes
+(`core.json` is the untrusted/public boundary). Opaque types simply can't cross the
+wire; the diagnostic points at the fix.
+
+**Deferred to Layer 2:** the build-wide endpoint-surface fingerprint (composes the
+per-type ones; needs endpoints + a build step + a request header) and whether
+`wire` should require `use core.wire`.
+
+The RPC plumbing is **prototypable on the VM today** (no WASM dependency); the actual
+browser client is a separate, larger milestone — the WASM/WasmGC backend and the
+Elm-style frontend are tracked in `IR.md` (step 2) and are out of scope here.
 
 ## Goal
 
@@ -54,8 +68,9 @@ useful on its own (persistence, caching, queues).
 
 ```
 trait wire a {
-    to-wire   :: fun a -> bytes
-    from-wire :: fun bytes -> result a wire-error
+    to-wire     :: fun a -> bytes
+    from-wire   :: fun bytes -> result a wire-error
+    fingerprint :: fun a -> int        # added as-built: structural schema hash (see Version skew)
 }
 ```
 
@@ -63,10 +78,12 @@ trait wire a {
   `string`/`duration`/records/tuples/lists/enums is automatically `wire` — no
   `derive` annotation, "it just works if the shape works." This mirrors how `==` is
   already structural: you don't implement equality, you get it.
-- **Still a real trait.** Auto-derivation is the default, not the only path: a type
-  can supply a hand-written instance, exactly like the existing
-  `implement ord (option a) where (ord a)` parametric instances. This is how opaque
-  types and custom wire formats opt in (see below).
+- **~~Still a real trait.~~** *(Original plan — not built.)* The idea was that
+  auto-derivation would be the default but not the only path: a type could supply a
+  hand-written instance (like `implement ord (option a) where (ord a)`), which is how
+  opaque types and custom formats would opt in. **As built, auto-derive is the only
+  path** — see the as-built note above and "The boundary…" below for why hand-written
+  instances were dropped.
 - **Implementation.** A built-in resolution rule in the constraint solver —
   `can_derive_wire(ty)`, recursive, bottoming out at primitives — plus codegen that
   synthesizes the dictionary. Modeled on the built-in `numeric`/`ord` instances, *not*
@@ -74,6 +91,19 @@ trait wire a {
 - **Public methods are `bytes`-granularity; the generated recursive internals thread
   a cursor** (`reader -> result (a, reader)`), since decoding nested compounds needs
   position tracking. Clean public surface, cursor-based internals.
+
+> **As built — where the implementation diverged from this sketch:**
+> - The `wire` "dictionary" is **not** a method dict of generated per-type closures.
+>   It's a single **schema descriptor value** (a `wire-schema` tree) synthesized by
+>   `Analyzer::build_wire_shape` from the type's structure; `to-wire`/`from-wire`/
+>   `fingerprint` lower to the `wire-encode`/`wire-decode`/`wire-fingerprint` builtins
+>   with that schema as the hidden first arg. The cursor-based recursion lives once, in
+>   the Rust engine (`vm/src/wire.rs`) interpreting the schema — not in generated code.
+> - **Hand-written instances were dropped** (see "The boundary…" below): auto-derive is
+>   the *only* path. Opaque types can't cross the wire rather than opting in. (The
+>   resolver short-circuits `wire` to auto-derive, so a stray `implement wire T` is
+>   ignored.)
+> - A third method, `fingerprint`, was added for version-skew detection.
 
 ## Why the two directions are asymmetric (and why it's a trait, not a builtin)
 
@@ -94,12 +124,20 @@ binary encoding straight to `bytes`, with no intermediate `json.value` tree:
 | Pluma | wire bytes |
 |---|---|
 | `int` | varint, zigzag |
-| `float` | raw 8-byte IEEE-754 |
+| `float` | raw 8-byte IEEE-754 (little-endian) |
 | `bool` | 1 byte |
-| `string`, `list a` | varint length prefix + contents |
-| tuple, **record** | fields in declared order — **no field names on the wire** |
-| enum | varint tag + payload |
-| `duration` | its constant int repr |
+| `string`, `bytes`, `list a` | varint length/count prefix + contents |
+| tuple | fields in order (arity is in the schema) |
+| **record** | fields in a canonical (name-sorted) order — **no field names on the wire** |
+| enum | varint tag (variant index) + payload |
+| `dict k v` | varint count + (key, value) pairs, sorted by encoded key (deterministic; primitive keys only) |
+| `duration` | its constant int repr (zigzag varint) |
+| `nothing` | zero bytes |
+
+Recursive types (e.g. a `tree`, JSON-like ADTs) are encoded too: the schema cuts
+back-edges with a by-name enum reference so it stays finite, and the value's depth
+drives termination. As built, records are encoded in a canonical name-sorted order
+(not source-declared order) so the bytes don't depend on field declaration order.
 
 This is essentially **borsh / protobuf-without-field-tags**: positional,
 deterministic, and a tight linear encode/decode. Determinism is a bonus — identical
@@ -132,6 +170,13 @@ are one build. Stale-client-against-new-server is *not* required to keep working
 transparently; it's required to fail *cleanly*. That decision is what lets us keep the
 format maximally compact.
 
+**As built:** the per-type building block exists — `wire.fingerprint :: fun a -> int`
+returns a stable FNV-1a structural hash of `a`'s schema (every retyped/renamed/
+reordered field or variant changes it). The **build-wide** endpoint-surface
+fingerprint — composing the per-type hashes over all endpoints, stamping it into both
+artifacts, and the per-request header check — is Layer 2 (it needs endpoints, a build
+step, and the transport to exist first).
+
 ## The boundary is just a trait constraint
 
 A remote signature requires every argument and result type to be `wire`. That's an
@@ -143,10 +188,14 @@ machinery. Two consequences fall out for free:
   lands at the boundary, with attribution ("can't send field `on-click`: functions
   aren't serializable"), not at runtime.
 - **Opaque enums are non-derivable by construction.** Their constructors are hidden, so
-  the compiler can't synthesize `from-wire`. A module that wants its opaque type on the
-  wire must export a **hand-written `wire` instance**, exactly mirroring how it already
-  exports smart constructors. The visibility system does real work here — and it's the
-  right default: opaque internals shouldn't leak to the wire by accident.
+  the compiler can't synthesize `from-wire` — and the diagnostic says so, pointing at the
+  fix (expose a non-opaque type, or send the value it wraps). *We considered* letting a
+  module opt in with a hand-written `wire` instance (mirroring smart constructors), but
+  **decided against it**: the motivation was re-validating untrusted bytes on decode, and
+  `wire` is Pluma-to-Pluma over an atomic compiled-together deploy — it trusts its bytes
+  (that's `core.json`'s job at the public boundary). So opaque types simply don't cross
+  the wire. The visibility system still does real work — opaque internals don't leak to
+  the wire by accident — it just rejects rather than offering an opt-in.
 
 ---
 
@@ -345,10 +394,14 @@ inside it are simply never reachable on the client, so they can't trip the check
 
 # Open questions
 
-- Exact `wire` binary layout details (varint endianness, float NaN canonicalization,
-  string validation) and the `wire-error` variant set.
-- What the schema fingerprint hashes precisely, and whether it's per-request or
-  negotiated once per session/connection.
+- ~~Exact `wire` binary layout details and the `wire-error` variant set.~~ **Settled (built):**
+  ints are zigzag LEB128 varints; floats are raw little-endian IEEE-754 bits (NaN preserved
+  bit-for-bit, *not* canonicalized); strings are length-prefixed UTF-8 and decode rejects
+  invalid UTF-8. `wire-error` = `unexpected-end` / `invalid-tag int` / `invalid-utf8` /
+  `trailing-bytes int` / `malformed`.
+- The schema fingerprint's *per-type* hash is settled (FNV-1a over a length-prefixed structural
+  token stream; see `wire.fingerprint`). Still open for Layer 2: how the *build-wide* fingerprint
+  is carried — per-request header vs negotiated once per session/connection.
 - `request` builder ergonomics and whether a metadata-less call can omit it.
 - The `server.pa` `main` shape — how the generated RPC dispatch is mounted on `core.http`
   (an explicit value the user mounts vs. implicit injection) and how static-asset serving
