@@ -320,6 +320,287 @@ def all-from :: fun (list a) (fun a -> bool) int int -> bool = fun xs pred n i {
 	}
 }
 
+# Returns the last element, wrapped in `some`; `none` for an empty
+# list. The mirror of `head`.
+#
+#     list.last [1, 2, 3]   # => some 3
+#     list.last []          # => none
+public def last :: fun (list a) -> option a = fun xs {
+	let n = length xs
+	if n == 0 is true {
+		none
+	} else {
+		some (get xs (n - 1))
+	}
+}
+
+# Builds the ascending list of integers from `start` up to but not
+# including `end`. When `end` isn't past `start` the range is empty.
+#
+#     list.range 0 5    # => [0, 1, 2, 3, 4]
+#     list.range 2 2    # => []
+#     list.range 5 0    # => []
+public def range :: fun int int -> list int = fun start end {
+	let n = if end > start is true {
+		end - start
+	} else {
+		0
+	}
+	build n fun i {
+		start + i
+	}
+}
+
+# Pairs up two lists element by element. The result is as long as the
+# shorter input -- extra elements of the longer one are dropped.
+#
+#     list.zip [1, 2, 3] ["a", "b"]   # => [(1, "a"), (2, "b")]
+public def zip :: fun (list a) (list b) -> list (a, b) = fun xs ys {
+	let n = if length xs < length ys is true {
+		length xs
+	} else {
+		length ys
+	}
+	build n fun i {
+		(get xs i, get ys i)
+	}
+}
+
+# The inverse of `zip`: splits a list of pairs into a pair of lists,
+# the firsts and the seconds, each in order.
+#
+#     list.unzip [(1, "a"), (2, "b")]   # => ([1, 2], ["a", "b"])
+public def unzip :: fun (list (a, b)) -> (list a, list b) = fun pairs {
+	let n = length pairs
+	let firsts = build n fun i {
+		let (a, _b) = get pairs i
+		a
+	}
+	let seconds = build n fun i {
+		let (_a, b) = get pairs i
+		b
+	}
+	(firsts, seconds)
+}
+
+# Runs `f` on every element -- where `f` returns a *list* -- and
+# concatenates all those lists into one, in order. Use it when each
+# element expands into zero or more results (the "map, then flatten"
+# pattern).
+#
+#     list.flat-map [1, 2, 3] (fun n { [n, n * 10] })   # => [1, 10, 2, 20, 3, 30]
+#     list.flat-map [1, 2, 3] (fun n { if n % 2 == 0 is true { [n] } else { [] } })
+#       # => [2]
+public def flat-map :: fun (list a) (fun a -> list b) -> list b = fun xs f {
+	flatten (map xs f)
+}
+
+# Concatenates a list of lists into a single flat list, preserving
+# order. One level deep only -- `[[1, 2], [3], [4, 5]]` becomes
+# `[1, 2, 3, 4, 5]`.
+#
+#     list.flatten [[1, 2], [], [3, 4]]   # => [1, 2, 3, 4]
+public def flatten :: fun (list (list a)) -> list a = fun xss {
+	let k = length xss
+	if k == 0 is true {
+		[]
+	} else {
+		# Divide-and-conquer concat: pairing halves keeps each element
+		# copied only O(log k) times, rather than the O(k) of a running
+		# left-fold of `concat` (which recopies the whole accumulator each
+		# step). Same shape as `string.join`.
+		concat-range xss 0 k
+	}
+}
+
+def concat-range :: fun (list (list a)) int int -> list a = fun xss lo hi {
+	if hi - lo == 1 is true {
+		get xss lo
+	} else {
+		let mid = (lo + hi) / 2
+		concat (concat-range xss lo mid) (concat-range xss mid hi)
+	}
+}
+
+# Returns the index of the first element for which `pred` is true,
+# wrapped in `some`; `none` if nothing matches. The position-returning
+# companion to `find` (which returns the element itself).
+#
+#     list.find-index [10, 20, 30] (fun n { n > 15 })   # => some 1
+#     list.find-index [1, 2, 3] (fun n { n > 9 })        # => none
+public def find-index :: fun (list a) (fun a -> bool) -> option int = fun xs pred {
+	find-index-from xs pred 0 (length xs)
+}
+
+def find-index-from :: fun (list a) (fun a -> bool) int int -> option int = fun xs pred i n {
+	if i < n is true {
+		if pred (get xs i) is true {
+			some i
+		} else {
+			find-index-from xs pred (i + 1) n
+		}
+	} else {
+		none
+	}
+}
+
+# Returns the index of the first element equal to `target` (by
+# structural `==`), wrapped in `some`; `none` if it isn't present. The
+# position-returning companion to `contains`.
+#
+#     list.index-of ["a", "b", "c"] "b"   # => some 1
+#     list.index-of [1, 2, 3] 9            # => none
+public def index-of :: fun (list a) a -> option int = fun xs target {
+	find-index xs fun x {
+		x == target
+	}
+}
+
+# Counts how many elements pass `pred`. Like `filter` followed by
+# `length`, but without building the intermediate list.
+#
+#     list.count [1, 2, 3, 4] (fun n { n % 2 == 0 })   # => 2
+public def count :: fun (list a) (fun a -> bool) -> int = fun xs pred {
+	fold xs 0 fun acc x {
+		if pred x is true {
+			acc + 1
+		} else {
+			acc
+		}
+	}
+}
+
+# Returns the longest run of elements from the front that all pass
+# `pred`, stopping at the first that doesn't. Unlike `filter`, it
+# stops at the first failure rather than scanning the whole list, so
+# everything after that boundary is dropped even if it would pass.
+#
+#     list.take-while [2, 4, 5, 6] (fun n { n % 2 == 0 })   # => [2, 4]
+#     list.take-while [1, 2, 3] (fun n { n > 5 })           # => []
+public def take-while :: fun (list a) (fun a -> bool) -> list a = fun xs pred {
+	take xs (prefix-len xs pred (length xs) 0)
+}
+
+# The other half of `take-while`: drops the leading run that passes
+# `pred` and returns everything from the first failure onward (that
+# failing element included).
+#
+#     list.drop-while [2, 4, 5, 6] (fun n { n % 2 == 0 })   # => [5, 6]
+#     list.drop-while [1, 2, 3] (fun n { n > 5 })           # => [1, 2, 3]
+public def drop-while :: fun (list a) (fun a -> bool) -> list a = fun xs pred {
+	drop xs (prefix-len xs pred (length xs) 0)
+}
+
+# How many elements from index `i` onward pass `pred` before the first
+# that doesn't (the split point shared by `take-while`/`drop-while`).
+def prefix-len :: fun (list a) (fun a -> bool) int int -> int = fun xs pred n i {
+	if i < n is true {
+		if pred (get xs i) is true {
+			prefix-len xs pred n (i + 1)
+		} else {
+			i
+		}
+	} else {
+		n
+	}
+}
+
+# Splits a list in two by a predicate, in one pass over the input:
+# the first list holds the elements that pass `pred`, the second the
+# ones that don't, each keeping its original order. Returns the pair
+# `(passing, failing)`.
+#
+#     list.partition [1, 2, 3, 4] (fun n { n % 2 == 0 })   # => ([2, 4], [1, 3])
+public def partition :: fun (list a) (fun a -> bool) -> (list a, list a) = fun xs pred {
+	let yes = filter xs pred
+	let no = filter xs fun x {
+		if pred x is true {
+			false
+		} else {
+			true
+		}
+	}
+	(yes, no)
+}
+
+# Drops later duplicates, keeping the first occurrence of each element
+# (so order is preserved). Elements are compared with structural `==`,
+# the same equality `contains` uses, so this works on any type without
+# extra setup.
+#
+# It compares each element against the ones already kept, so the cost
+# grows with the square of the length -- fine for modest lists; for
+# large ones, sort first or build a `dict`.
+#
+#     list.unique [1, 2, 1, 3, 2]   # => [1, 2, 3]
+public def unique :: fun (list a) -> list a = fun xs {
+	let len = length xs
+	collect len fun i {
+		let x = get xs i
+		if contains-from xs x i 0 is true {
+			none
+		} else {
+			some x
+		}
+	}
+}
+
+# Pairs each element with its index, counting from 0. Useful when a
+# transform or filter needs to know *where* it is in the list.
+#
+#     list.enumerate ["a", "b", "c"]   # => [(0, "a"), (1, "b"), (2, "c")]
+public def enumerate :: fun (list a) -> list (int, a) = fun xs {
+	build (length xs) fun i {
+		(i, get xs i)
+	}
+}
+
+# Breaks a list into consecutive sublists of length `size`. The last
+# chunk is shorter if the length isn't an exact multiple. A `size` of
+# zero or less yields an empty list (there's no sensible chunking).
+#
+#     list.chunk [1, 2, 3, 4, 5] 2   # => [[1, 2], [3, 4], [5]]
+public def chunk :: fun (list a) int -> list (list a) = fun xs size {
+	let len = length xs
+	if size < 1 is true {
+		[]
+	} else {
+		let count = (len + size - 1) / size
+		build count fun c {
+			let start = c * size
+			let here = if start + size > len is true {
+				len - start
+			} else {
+				size
+			}
+			build here fun j {
+				get xs (start + j)
+			}
+		}
+	}
+}
+
+# Inserts `sep` between every pair of adjacent elements (not before the
+# first or after the last). A list of fewer than two elements comes
+# back unchanged.
+#
+#     list.intersperse [1, 2, 3] 0   # => [1, 0, 2, 0, 3]
+#     list.intersperse [1] 0         # => [1]
+public def intersperse :: fun (list a) a -> list a = fun xs sep {
+	let len = length xs
+	if len < 2 is true {
+		xs
+	} else {
+		build (2 * len - 1) fun i {
+			if i % 2 == 0 is true {
+				get xs (i / 2)
+			} else {
+				sep
+			}
+		}
+	}
+}
+
 # Returns a new list with the elements in sorted order. You choose
 # the order with a compare function `cmp a b` that reports whether
 # `a` belongs before `b`, after it, or in the same place.
@@ -355,6 +636,138 @@ public def sort :: fun (list a) (fun a a -> ordering) -> list a = fun xs cmp {
 		}
 		let _ = msort src aux 0 n cmp
 		src
+	}
+}
+
+# Sorts by a *key* drawn from each element rather than by comparing the
+# elements directly: `key` maps an element to something orderable, and
+# the list is sorted by those keys (ascending). This is the common case
+# -- sorting records by one field -- without writing a compare function.
+#
+#     list.sort-by people (fun p { p.age })       # youngest first
+#     list.sort-by ["bbb", "a", "cc"] string.length   # => ["a", "cc", "bbb"]
+#
+# The key is recomputed on each comparison, so keep it cheap. To sort
+# descending, sort ascending and `reverse`, or drop down to `sort` with
+# your own compare function.
+public def sort-by :: fun (list a) (fun a -> b) -> list a where (ord b) = fun xs key {
+	sort xs fun p q {
+		ord.compare (key p) (key q)
+	}
+}
+
+# Returns the element whose key is smallest, or `none` if the list is
+# empty. `key` maps each element to something orderable, the same way
+# `sort-by` does. On ties the earliest such element wins.
+#
+#     list.min-by people (fun p { p.age })   # => some <youngest person>
+#     list.min-by [] (fun p { p.age })       # => none
+public def min-by :: fun (list a) (fun a -> b) -> option a where (ord b) = fun xs key {
+	if is-empty xs is true {
+		none
+	} else {
+		some (fold xs (get xs 0) fun best x {
+			when ord.compare (key x) (key best) is lt {
+				x
+			} else {
+				best
+			}
+		})
+	}
+}
+
+# Returns the element whose key is largest, or `none` if the list is
+# empty -- the mirror of `min-by`. On ties the earliest such element
+# wins.
+#
+#     list.max-by people (fun p { p.age })   # => some <oldest person>
+public def max-by :: fun (list a) (fun a -> b) -> option a where (ord b) = fun xs key {
+	if is-empty xs is true {
+		none
+	} else {
+		some (fold xs (get xs 0) fun best x {
+			when ord.compare (key x) (key best) is gt {
+				x
+			} else {
+				best
+			}
+		})
+	}
+}
+
+# Returns the smallest element, or `none` for an empty list (which has
+# no minimum). Works on anything orderable -- numbers, strings, and the
+# rest. When you want the smallest *by a key* rather than by the whole
+# element, reach for `min-by`.
+#
+#     list.min [3, 1, 4, 1, 5]      # => some 1
+#     list.min ["pear", "apple"]    # => some "apple"
+#     list.min []                   # => none
+public def min :: fun (list a) -> option a where (ord a) = fun xs {
+	fold xs none fun acc x {
+		when acc is some best {
+			when ord.compare x best is lt {
+				some x
+			} else {
+				some best
+			}
+		} is none {
+			some x
+		}
+	}
+}
+
+# Returns the largest element, or `none` for an empty list -- the
+# mirror of `min`. For the largest *by a key*, see `max-by`.
+#
+#     list.max [3, 1, 4, 1, 5]   # => some 5
+#     list.max []                # => none
+public def max :: fun (list a) -> option a where (ord a) = fun xs {
+	fold xs none fun acc x {
+		when acc is some best {
+			when ord.compare x best is gt {
+				some x
+			} else {
+				some best
+			}
+		} is none {
+			some x
+		}
+	}
+}
+
+# Adds up all the elements, or `none` for an empty list. Works on both
+# `int` and `float` lists (anything `numeric`).
+#
+# It's `none` on empty rather than zero because there's no single zero
+# that fits every numeric type -- pair it with `??` to pick one:
+#
+#     (list.sum [1, 2, 3, 4]) ?? 0     # => 10
+#     (list.sum prices) ?? 0.0          # total, or 0.0 if there were none
+#     list.sum ([] :: list int)         # => none
+public def sum :: fun (list a) -> option a where (numeric a) = fun xs {
+	fold xs none fun acc x {
+		when acc is some total {
+			some (total + x)
+		} is none {
+			some x
+		}
+	}
+}
+
+# Multiplies all the elements together, or `none` for an empty list --
+# the multiplicative companion to `sum`. As with `sum`, supply the
+# identity (here `1`) with `??`:
+#
+#     (list.product [1, 2, 3, 4]) ?? 1   # => 24
+#     list.product ([] :: list int)      # => none
+public def product :: fun (list a) -> option a where (numeric a) = fun xs {
+	fold xs none fun acc x {
+		when acc is some total {
+			some (total * x)
+		} is none {
+			some x
+		}
 	}
 }
 

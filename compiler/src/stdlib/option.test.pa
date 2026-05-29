@@ -139,4 +139,102 @@ def tests :: testing.suite = fun t {
 	t.case "?? desugars to or-else on option" fun {
 		assert.all [assert.equals (some 5 ?? 0) 5, assert.equals (none ?? 0) 0]
 	}
+
+	# --- map ---
+
+	t.case "map transforms a some" fun {
+		when opt.map (some 4) fun n { n * 2 } is some n {
+			assert.equals n 8
+		} is none {
+			assert.is-true false
+		}
+	}
+
+	t.case "map leaves a none alone" fun {
+		when opt.map none fun n { n * 2 } is some _n {
+			assert.is-true false
+		} is none {
+			assert.is-true true
+		}
+	}
+
+	t.case "map can change the inner type" fun {
+		when opt.map (some 5) fun n { to-string n } is some s {
+			assert.equals s "5"
+		} is none {
+			assert.is-true false
+		}
+	}
+
+	# --- is-some / is-none ---
+
+	t.case "is-some and is-none on some" fun {
+		assert.all [assert.is-true (opt.is-some (some 1)), assert.is-false (opt.is-none (some 1))]
+	}
+
+	t.case "is-some and is-none on none" fun {
+		assert.all [assert.is-true (opt.is-none none), assert.is-false (opt.is-some none)]
+	}
+
+	# --- filter ---
+
+	t.case "filter keeps a passing some" fun {
+		when opt.filter (some 4) fun n { n > 0 } is some n {
+			assert.equals n 4
+		} is none {
+			assert.is-true false
+		}
+	}
+
+	t.case "filter drops a failing some" fun {
+		when opt.filter (some (-1)) fun n { n > 0 } is some _n {
+			assert.is-true false
+		} is none {
+			assert.is-true true
+		}
+	}
+
+	t.case "filter leaves a none as none" fun {
+		when opt.filter none fun n { n > 0 } is some _n {
+			assert.is-true false
+		} is none {
+			assert.is-true true
+		}
+	}
+
+	# --- flatten ---
+
+	t.case "flatten collapses some (some x)" fun {
+		when opt.flatten (some (some 4)) is some n {
+			assert.equals n 4
+		} is none {
+			assert.is-true false
+		}
+	}
+
+	t.case "flatten turns some none into none" fun {
+		when opt.flatten (some none) is some _n {
+			assert.is-true false
+		} is none {
+			assert.is-true true
+		}
+	}
+
+	# --- to-result ---
+
+	t.case "to-result wraps some in ok" fun {
+		when opt.to-result (some 4) "missing" is ok n {
+			assert.equals n 4
+		} is err _e {
+			assert.is-true false
+		}
+	}
+
+	t.case "to-result turns none into err" fun {
+		when opt.to-result none "missing" is ok _n {
+			assert.is-true false
+		} is err e {
+			assert.equals e "missing"
+		}
+	}
 }

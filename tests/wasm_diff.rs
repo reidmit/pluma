@@ -83,6 +83,8 @@ const WASM_FIXTURES: &[&str] = &[
 	"list-pattern-nested",
 	"list-pattern-recursive-sum",
 	"list-pattern-rest-type",
+	"list-core-combinators",
+	"list-extended-combinators",
 	"list-reverse-concat",
 	"list-set",
 	"list-sort-explicit-cmp",

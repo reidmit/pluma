@@ -146,4 +146,72 @@ def tests :: testing.suite = fun t {
 	t.case "?? desugars to or-else on result" fun {
 		assert.all [assert.equals (ok 5 ?? 0) 5, assert.equals (bad-boom ?? 0) 0]
 	}
+
+	# --- map ---
+
+	t.case "map transforms an ok" fun {
+		when res.map (ok 4) fun n { n * 2 } is ok n {
+			assert.equals n 8
+		} is err _e {
+			assert.is-true false
+		}
+	}
+
+	t.case "map passes an err through untouched" fun {
+		when res.map bad-boom fun n { n * 2 } is ok _n {
+			assert.is-true false
+		} is err e {
+			assert.equals e "boom"
+		}
+	}
+
+	# --- map-err ---
+
+	t.case "map-err transforms an err" fun {
+		when res.map-err bad-boom fun e { e ++ "!" } is ok _n {
+			assert.is-true false
+		} is err e {
+			assert.equals e "boom!"
+		}
+	}
+
+	t.case "map-err leaves an ok alone" fun {
+		when res.map-err (ok 4) fun e { e ++ "!" } is ok n {
+			assert.equals n 4
+		} is err _e {
+			assert.is-true false
+		}
+	}
+
+	# --- is-ok / is-err ---
+
+	t.case "is-ok and is-err on ok" fun {
+		assert.all [assert.is-true (res.is-ok (ok 1)), assert.is-false (res.is-err (ok 1))]
+	}
+
+	t.case "is-ok and is-err on err" fun {
+		assert.all [assert.is-true (res.is-err bad-boom), assert.is-false (res.is-ok bad-boom)]
+	}
+
+	# --- to-option / error ---
+
+	t.case "to-option keeps the ok value" fun {
+		assert.is-some (res.to-option (ok 4))
+	}
+
+	t.case "to-option drops the err" fun {
+		assert.is-none (res.to-option bad-boom)
+	}
+
+	t.case "error keeps the err value" fun {
+		when res.error bad-boom is some e {
+			assert.equals e "boom"
+		} is none {
+			assert.is-true false
+		}
+	}
+
+	t.case "error is none on ok" fun {
+		assert.is-none (res.error (ok 4))
+	}
 }

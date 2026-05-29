@@ -1,5 +1,6 @@
 use core.testing
 use core.list
+use core.string
 use core.assert
 
 def tests :: testing.suite = fun t {
@@ -317,5 +318,305 @@ def tests :: testing.suite = fun t {
 			ord.compare x.key y.key
 		}
 		assert.equals (list.map sorted fun r { r.tag }) ["b", "d", "a", "c", "e"]
+	}
+
+	# --- take-while / drop-while ---
+
+	t.case "take-while stops at the first failure" fun {
+		assert.equals (list.take-while [2, 4, 5, 6] fun n { n % 2 == 0 }) [2, 4]
+	}
+
+	t.case "take-while empty when the head fails" fun {
+		assert.equals (list.take-while [1, 2, 3] fun n { n > 5 }) []
+	}
+
+	t.case "take-while takes everything when all pass" fun {
+		assert.equals (list.take-while [2, 4, 6] fun n { n % 2 == 0 }) [2, 4, 6]
+	}
+
+	t.case "drop-while is the complement of take-while" fun {
+		assert.equals (list.drop-while [2, 4, 5, 6] fun n { n % 2 == 0 }) [5, 6]
+	}
+
+	t.case "drop-while keeps everything when the head fails" fun {
+		assert.equals (list.drop-while [1, 2, 3] fun n { n > 5 }) [1, 2, 3]
+	}
+
+	# --- partition ---
+
+	t.case "partition splits on the predicate" fun {
+		let (yes, no) = list.partition [1, 2, 3, 4] fun n {
+			n % 2 == 0
+		}
+		assert.all [assert.equals yes [2, 4], assert.equals no [1, 3]]
+	}
+
+	t.case "partition of empty is two empties" fun {
+		let empty :: list int = []
+		let (yes, no) = list.partition empty fun n {
+			n > 0
+		}
+		assert.all [assert.equals yes [], assert.equals no []]
+	}
+
+	# --- unique ---
+
+	t.case "unique keeps first occurrence in order" fun {
+		assert.equals (list.unique [1, 2, 1, 3, 2]) [1, 2, 3]
+	}
+
+	t.case "unique on a list with no dups is unchanged" fun {
+		assert.equals (list.unique [3, 1, 2]) [3, 1, 2]
+	}
+
+	t.case "unique works on strings" fun {
+		assert.equals (list.unique ["a", "b", "a", "c"]) ["a", "b", "c"]
+	}
+
+	# --- enumerate ---
+
+	t.case "enumerate pairs elements with their index" fun {
+		assert.equals (list.enumerate ["a", "b", "c"]) [(0, "a"), (1, "b"), (2, "c")]
+	}
+
+	t.case "enumerate of empty is empty" fun {
+		let empty :: list int = []
+		assert.equals (list.enumerate empty) []
+	}
+
+	# --- chunk ---
+
+	t.case "chunk splits into fixed-size pieces" fun {
+		assert.equals (list.chunk [1, 2, 3, 4, 5] 2) [[1, 2], [3, 4], [5]]
+	}
+
+	t.case "chunk with an exact multiple has no short tail" fun {
+		assert.equals (list.chunk [1, 2, 3, 4] 2) [[1, 2], [3, 4]]
+	}
+
+	t.case "chunk of zero size is empty" fun {
+		assert.equals (list.chunk [1, 2, 3] 0) []
+	}
+
+	# --- intersperse ---
+
+	t.case "intersperse weaves the separator between elements" fun {
+		assert.equals (list.intersperse [1, 2, 3] 0) [1, 0, 2, 0, 3]
+	}
+
+	t.case "intersperse leaves a singleton alone" fun {
+		assert.equals (list.intersperse [1] 0) [1]
+	}
+
+	t.case "intersperse leaves an empty list alone" fun {
+		let empty :: list int = []
+		assert.equals (list.intersperse empty 0) []
+	}
+
+	# --- sort-by / min-by / max-by ---
+
+	t.case "sort-by orders by a derived key" fun {
+		assert.equals (list.sort-by ["bbb", "a", "cc"] string.length) ["a", "cc", "bbb"]
+	}
+
+	t.case "sort-by is stable on equal keys" fun {
+		let items = [{k: 2, tag: "a"}, {k: 1, tag: "b"}, {k: 2, tag: "c"}]
+		let sorted = list.sort-by items fun r {
+			r.k
+		}
+		assert.equals (list.map sorted fun r { r.tag }) ["b", "a", "c"]
+	}
+
+	t.case "min-by value is the minimum" fun {
+		when list.min-by [3, 1, 2] fun n { n } is some n {
+			assert.equals n 1
+		} is none {
+			assert.is-true false
+		}
+	}
+
+	t.case "max-by value is the maximum" fun {
+		when list.max-by [3, 1, 2] fun n { n } is some n {
+			assert.equals n 3
+		} is none {
+			assert.is-true false
+		}
+	}
+
+	t.case "min-by and max-by are none on empty" fun {
+		let empty :: list int = []
+		assert.all [
+			assert.is-none (list.min-by empty fun n { n }),
+			assert.is-none (list.max-by empty fun n { n }),
+		]
+	}
+
+	# --- last ---
+
+	t.case "last of non-empty is some" fun {
+		when list.last [1, 2, 3] is some n {
+			assert.equals n 3
+		} is none {
+			assert.is-true false
+		}
+	}
+
+	t.case "last of singleton is that element" fun {
+		when list.last [42] is some n {
+			assert.equals n 42
+		} is none {
+			assert.is-true false
+		}
+	}
+
+	t.case "last of empty is none" fun {
+		assert.is-none (list.last [])
+	}
+
+	# --- range ---
+
+	t.case "range builds a half-open interval" fun {
+		assert.equals (list.range 0 5) [0, 1, 2, 3, 4]
+	}
+
+	t.case "range from a nonzero start" fun {
+		assert.equals (list.range 2 5) [2, 3, 4]
+	}
+
+	t.case "range is empty when end is not past start" fun {
+		assert.all [assert.equals (list.range 2 2) [], assert.equals (list.range 5 0) []]
+	}
+
+	# --- zip / unzip ---
+
+	t.case "zip pairs element by element" fun {
+		assert.equals (list.zip [1, 2, 3] [10, 20, 30]) [(1, 10), (2, 20), (3, 30)]
+	}
+
+	t.case "zip stops at the shorter list" fun {
+		assert.equals (list.zip [1, 2, 3] [10, 20]) [(1, 10), (2, 20)]
+	}
+
+	t.case "unzip is the inverse of zip" fun {
+		let (firsts, seconds) = list.unzip [(1, 10), (2, 20), (3, 30)]
+		assert.all [assert.equals firsts [1, 2, 3], assert.equals seconds [10, 20, 30]]
+	}
+
+	# --- flat-map / flatten ---
+
+	t.case "flat-map expands and concatenates" fun {
+		assert.equals (list.flat-map [1, 2, 3] fun n { [n, n * 10] }) [1, 10, 2, 20, 3, 30]
+	}
+
+	t.case "flat-map can drop elements with empty lists" fun {
+		let evens = list.flat-map [1, 2, 3, 4] fun n {
+			if n % 2 == 0 is true {
+				[n]
+			} else {
+				[]
+			}
+		}
+		assert.equals evens [2, 4]
+	}
+
+	t.case "flatten concatenates sublists in order" fun {
+		assert.equals (list.flatten [[1, 2], [], [3, 4], [5]]) [1, 2, 3, 4, 5]
+	}
+
+	t.case "flatten of empty is empty" fun {
+		let empty :: list (list int) = []
+		assert.equals (list.flatten empty) []
+	}
+
+	# --- find-index / index-of ---
+
+	t.case "find-index returns the first match position" fun {
+		when list.find-index [10, 20, 30] fun n { n > 15 } is some i {
+			assert.equals i 1
+		} is none {
+			assert.is-true false
+		}
+	}
+
+	t.case "find-index is none on no match" fun {
+		assert.is-none (list.find-index [1, 2, 3] fun n {
+			n > 9
+		})
+	}
+
+	t.case "index-of finds an element by value" fun {
+		when list.index-of ["a", "b", "c"] "b" is some i {
+			assert.equals i 1
+		} is none {
+			assert.is-true false
+		}
+	}
+
+	t.case "index-of is none when absent" fun {
+		assert.is-none (list.index-of [1, 2, 3] 9)
+	}
+
+	# --- count ---
+
+	t.case "count tallies matching elements" fun {
+		assert.equals (list.count [1, 2, 3, 4, 5, 6] fun n { n % 2 == 0 }) 3
+	}
+
+	t.case "count is zero when nothing matches" fun {
+		assert.equals (list.count [1, 2, 3] fun n { n > 9 }) 0
+	}
+
+	# --- min / max ---
+
+	t.case "min of ints" fun {
+		when list.min [3, 1, 4, 1, 5] is some n {
+			assert.equals n 1
+		} is none {
+			assert.is-true false
+		}
+	}
+
+	t.case "max of ints" fun {
+		when list.max [3, 1, 4, 1, 5] is some n {
+			assert.equals n 5
+		} is none {
+			assert.is-true false
+		}
+	}
+
+	t.case "min of strings is lexicographic" fun {
+		when list.min ["pear", "apple", "fig"] is some s {
+			assert.equals s "apple"
+		} is none {
+			assert.is-true false
+		}
+	}
+
+	t.case "min and max are none on empty" fun {
+		let empty :: list int = []
+		assert.all [assert.is-none (list.min empty), assert.is-none (list.max empty)]
+	}
+
+	# --- sum / product ---
+
+	t.case "sum of ints" fun {
+		assert.equals (list.sum [1, 2, 3, 4] ?? 0) 10
+	}
+
+	t.case "sum of floats" fun {
+		when list.sum [1.5, 2.5] is some total {
+			assert.equals total 4.0
+		} is none {
+			assert.is-true false
+		}
+	}
+
+	t.case "product of ints" fun {
+		assert.equals (list.product [1, 2, 3, 4] ?? 1) 24
+	}
+
+	t.case "sum and product are none on empty" fun {
+		let empty :: list int = []
+		assert.all [assert.is-none (list.sum empty), assert.is-none (list.product empty)]
 	}
 }

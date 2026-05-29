@@ -66,6 +66,98 @@ public def expect :: fun (option a) string -> a = fun o msg {
 	}
 }
 
+# Transforms the value inside a `some` with `f`, leaving a `none`
+# untouched. Use this when you have a plain transform (one that just
+# returns a value, not another option) and want it to apply only when
+# there's something there.
+#
+#     option.map (some 4) (fun n { n * 2 })   # => some 8
+#     option.map none (fun n { n * 2 })       # => none
+#
+# When `f` itself returns an option (so you'd otherwise get a nested
+# `option (option b)`), reach for `then` instead, which flattens.
+public def map :: fun (option a) (fun a -> b) -> option b = fun o f {
+	when o is some v {
+		some (f v)
+	} is none {
+		none
+	}
+}
+
+# True when the option is `some` (holds a value), false when `none`.
+#
+#     option.is-some (some 4)   # => true
+#     option.is-some none       # => false
+public def is-some :: fun (option a) -> bool = fun o {
+	when o is some _ {
+		true
+	} is none {
+		false
+	}
+}
+
+# True when the option is `none` (empty), false when `some`. The
+# mirror of `is-some`.
+#
+#     option.is-none none       # => true
+#     option.is-none (some 4)   # => false
+public def is-none :: fun (option a) -> bool = fun o {
+	when o is some _ {
+		false
+	} is none {
+		true
+	}
+}
+
+# Keeps a `some` only when its value passes `pred`; otherwise gives
+# back `none`. A `none` stays `none`. Think of it as `filter` for a
+# collection that holds at most one thing.
+#
+#     option.filter (some 4) (fun n { n > 0 })   # => some 4
+#     option.filter (some -1) (fun n { n > 0 })  # => none
+#     option.filter none (fun n { n > 0 })       # => none
+public def filter :: fun (option a) (fun a -> bool) -> option a = fun o pred {
+	when o is some v {
+		if pred v is true {
+			some v
+		} else {
+			none
+		}
+	} is none {
+		none
+	}
+}
+
+# Collapses one layer of nesting: an `option (option a)` becomes an
+# `option a`. `some (some x)` is `some x`; both `some none` and `none`
+# become `none`.
+#
+#     option.flatten (some (some 4))   # => some 4
+#     option.flatten (some none)       # => none
+#     option.flatten none              # => none
+public def flatten :: fun (option (option a)) -> option a = fun o {
+	when o is some inner {
+		inner
+	} is none {
+		none
+	}
+}
+
+# Turns an option into a `result`, supplying the error to use when it's
+# empty: `some v` becomes `ok v`, and `none` becomes `err e`. Handy at
+# the boundary where "nothing here" needs to carry an explanation --
+# the dual is `result.ok`, which throws the error away again.
+#
+#     option.to-result (some 4) "missing"   # => ok 4
+#     option.to-result none "missing"       # => err "missing"
+public def to-result :: fun (option a) e -> result a e = fun o e {
+	when o is some v {
+		ok v
+	} is none {
+		err e
+	}
+}
+
 # The `io.fail` primitive, referenced by its builtin tag directly rather
 # than through `core.io`: `option` rides in the prelude, so importing
 # `io` here would close an import cycle. Aborts with `msg` on stderr and

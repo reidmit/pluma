@@ -66,6 +66,94 @@ public def expect :: fun (result a e) string -> a = fun r msg {
 	}
 }
 
+# Transforms the value inside an `ok` with `f`, leaving an `err`
+# untouched (the error passes straight through). Use this for a plain
+# transform that should only apply on success.
+#
+#     result.map (ok 4) (fun n { n * 2 })        # => ok 8
+#     result.map (err "bad") (fun n { n * 2 })   # => err "bad"
+#
+# When `f` itself returns a result, reach for `then`, which flattens.
+public def map :: fun (result a e) (fun a -> b) -> result b e = fun r f {
+	when r is ok v {
+		ok (f v)
+	} is err e {
+		err e
+	}
+}
+
+# Transforms the error inside an `err` with `f`, leaving an `ok`
+# untouched. The mirror of `map`: use it to translate one error type
+# into another (say, wrapping a low-level os error in your own).
+#
+#     result.map-err (err "enoent") (fun e { "open failed: $(e)" })
+#       # => err "open failed: enoent"
+#     result.map-err (ok 4) (fun e { ... })   # => ok 4
+public def map-err :: fun (result a e) (fun e -> f) -> result a f = fun r f {
+	when r is ok v {
+		ok v
+	} is err e {
+		err (f e)
+	}
+}
+
+# True when the result is `ok` (a success), false when `err`.
+#
+#     result.is-ok (ok 4)        # => true
+#     result.is-ok (err "bad")   # => false
+public def is-ok :: fun (result a e) -> bool = fun r {
+	when r is ok _ {
+		true
+	} is err _ {
+		false
+	}
+}
+
+# True when the result is `err` (a failure), false when `ok`. The
+# mirror of `is-ok`.
+#
+#     result.is-err (err "bad")   # => true
+#     result.is-err (ok 4)        # => false
+public def is-err :: fun (result a e) -> bool = fun r {
+	when r is ok _ {
+		false
+	} is err _ {
+		true
+	}
+}
+
+# Discards the error channel, keeping just the success as an option:
+# `ok v` becomes `some v`, and any `err` becomes `none`. Use it when you
+# stop caring *why* something failed and only want "did it produce a
+# value?" -- the dual is `option.to-result`, which supplies an error.
+#
+# (It can't be named `ok`, since that's the constructor it matches on.)
+#
+#     result.to-option (ok 4)        # => some 4
+#     result.to-option (err "bad")   # => none
+public def to-option :: fun (result a e) -> option a = fun r {
+	when r is ok v {
+		some v
+	} is err _ {
+		none
+	}
+}
+
+# Keeps just the error as an option, discarding the success: `err e`
+# becomes `some e`, and any `ok` becomes `none`. The mirror of
+# `to-option` -- handy for collecting the failures out of a batch of
+# results.
+#
+#     result.error (err "bad")   # => some "bad"
+#     result.error (ok 4)        # => none
+public def error :: fun (result a e) -> option e = fun r {
+	when r is ok _ {
+		none
+	} is err e {
+		some e
+	}
+}
+
 # The `io.fail` primitive, referenced by its builtin tag directly rather
 # than through `core.io`: `result` rides in the prelude, so importing
 # `io` here would close an import cycle. Aborts with the message on
