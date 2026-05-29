@@ -1,7 +1,7 @@
-// Differential harness for the WASM (WasmGC) backend — the analog of `ir_diff`
-// for the third backend (see IR.md). For each allowlisted fixture, compile it
-// the reference way (`codegen::compile` → VM) and the WASM way (`wasm::emit` →
-// run in wasmtime with Rust host glue), and assert identical stdout + status.
+// Differential harness for the WASM (WasmGC) backend (see IR.md). For each
+// allowlisted fixture, compile it the reference way (`ir::lower` →
+// `codegen::compile_from_ir` → VM) and the WASM way (`ir::lower` → `wasm::emit`
+// → run in wasmtime with Rust host glue), and assert identical stdout + status.
 //
 // The host glue (the `print` import + value formatting) is written in Rust here,
 // mirroring `vm::Value`'s `Display`; it is the throwaway test-only host (the
@@ -29,13 +29,16 @@ const WASM_FIXTURES: &[&str] = &[
 	"builtin-uses-list-length",
 	"bytes-equality",
 	"bytes-escapes",
+	"bytes-hash-ord",
 	"bytes-literal",
 	"bytes-module-basics",
 	"bytes-module-from-list",
+	"bytes-module-search",
 	"bytes-module-split-join",
 	"bytes-string-bridge",
 	"closures",
 	"closures-in-list",
+	"coalesce-chain",
 	"coalesce-option",
 	"coalesce-result",
 	"comparison-ops",
@@ -49,11 +52,13 @@ const WASM_FIXTURES: &[&str] = &[
 	"core-dict-string-keys",
 	"core-list-extras",
 	"core-math-extras",
+	"core-string",
 	"cross-module",
 	"dict-equality",
 	"dict-tostring",
 	"deep-recursion",
 	"double-int-float",
+	"else-if-chain",
 	"empty-fun-body",
 	"equality-structural",
 	"factorial",
@@ -64,6 +69,7 @@ const WASM_FIXTURES: &[&str] = &[
 	"hello",
 	"hex-roundtrip",
 	"if-else-pattern",
+	"if-else-value",
 	"if-no-match",
 	"interpolation-complex",
 	"interpolation-nested-string",
@@ -72,6 +78,7 @@ const WASM_FIXTURES: &[&str] = &[
 	"let-destructure-underscore",
 	"let-in-when",
 	"let-then-pattern",
+	"let-type-annotation",
 	"list-chained",
 	"list-contains",
 	"list-each",
@@ -97,6 +104,8 @@ const WASM_FIXTURES: &[&str] = &[
 	"negative-numbers",
 	"nested-enum",
 	"option-then-direct",
+	"ord-compare-wrappers",
+	"ord-operators",
 	"partial-application",
 	"partial-record-match",
 	"pattern-stack-cleanup",
@@ -113,11 +122,14 @@ const WASM_FIXTURES: &[&str] = &[
 	"result-then-direct",
 	"shadowing",
 	"string-concat",
+	"string-module-split-join",
+	"string-slice",
 	"string-with-escapes",
 	"subtract-after-call",
 	"swap-tuple",
 	"top-level-keywords",
 	"to-string-shapes",
+	"trait-fn-as-value",
 	"tuple-element-access",
 	"tuple-pattern-size",
 	"try-nested",
@@ -134,6 +146,7 @@ const WASM_FIXTURES: &[&str] = &[
 	"wasm-math-trig",
 	"when-else",
 	"when-enum",
+	"wire-fingerprint",
 ];
 
 // Runtime tags — must match `wasm::types`.
@@ -513,8 +526,8 @@ fn wasm_path_matches_reference() {
 	for name in WASM_FIXTURES {
 		let dir = workspace.join("tests/run").join(name);
 		let compiler = compile_check(&dir).unwrap_or_else(|| panic!("compile failed for `{name}`"));
-		let reference = run_vm(codegen::compile(&compiler).expect("reference compile"));
 		let ir_program = ir::lower(&compiler).unwrap_or_else(|e| panic!("ir::lower `{name}`: {e}"));
+		let reference = run_vm(codegen::compile_from_ir(&ir_program).expect("reference compile"));
 		let bytes = wasm::emit(&ir_program).unwrap_or_else(|d| panic!("wasm::emit `{name}`: {:?}", d));
 		let via_wasm = run_wasm(&bytes);
 		assert_eq!(
@@ -547,10 +560,10 @@ fn wasm_coverage_report() {
 		let Some(compiler) = compile_check(dir) else {
 			continue;
 		};
-		let reference = run_vm(codegen::compile(&compiler).expect("reference compile"));
 		let Ok(ir_program) = ir::lower(&compiler) else {
 			continue;
 		};
+		let reference = run_vm(codegen::compile_from_ir(&ir_program).expect("reference compile"));
 		// Emit can panic on a not-yet-handled construct; catch so the scan finishes.
 		let emitted =
 			std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| wasm::emit(&ir_program)));
