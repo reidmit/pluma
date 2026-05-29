@@ -27,6 +27,29 @@ def tests :: testing.suite = fun t {
 		assert.is-false (string.is-empty "x")
 	}
 
+	t.case "byte-length counts bytes, not characters" fun {
+		assert.all [
+			assert.equals (string.byte-length "") 0,
+			assert.equals (string.byte-length "hello") 5,
+			assert.equals (string.byte-length "héllo") 6,
+		]
+	}
+	# "é" is one character but two UTF-8 bytes, so byte-length exceeds length.
+
+	# --- chars ---
+
+	t.case "chars splits into single-character strings" fun {
+		assert.equals (string.chars "hello") ["h", "e", "l", "l", "o"]
+	}
+
+	t.case "chars keeps multi-byte characters whole" fun {
+		assert.equals (string.chars "héllo") ["h", "é", "l", "l", "o"]
+	}
+
+	t.case "chars of empty string is empty" fun {
+		assert.equals (string.chars "") []
+	}
+
 	# --- slice / drop / char-at ---
 
 	t.case "slice takes a character range" fun {

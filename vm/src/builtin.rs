@@ -305,96 +305,6 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 		"math-sin" => Ok(Value::Float(expect_float(&args, "sin").sin())),
 		"math-cos" => Ok(Value::Float(expect_float(&args, "cos").cos())),
 		"math-tan" => Ok(Value::Float(expect_float(&args, "tan").tan())),
-		"string-length" => {
-			let s = expect_string(&args, "length");
-			Ok(Value::Int(s.chars().count() as i64))
-		}
-		"string-is-empty" => {
-			let s = expect_string(&args, "is-empty");
-			Ok(Value::Bool(s.is_empty()))
-		}
-		"string-to-upper" => {
-			let s = expect_string(&args, "to-upper");
-			Ok(Value::String(Rc::new(s.to_uppercase())))
-		}
-		"string-to-lower" => {
-			let s = expect_string(&args, "to-lower");
-			Ok(Value::String(Rc::new(s.to_lowercase())))
-		}
-		"string-trim" => {
-			let s = expect_string(&args, "trim");
-			Ok(Value::String(Rc::new(s.trim().to_string())))
-		}
-		"string-char-at" => {
-			debug_assert_eq!(args.len(), 2, "`char-at` arity");
-			let (s, i) = match (&args[0], &args[1]) {
-				(Value::String(s), Value::Int(i)) => (s, *i),
-				_ => unreachable!("`char-at`: expected (string, int)"),
-			};
-			// Index by Unicode scalar value, matching `length`. Out of
-			// bounds (including negative) yields `none`.
-			let ch = if i < 0 {
-				None
-			} else {
-				s.chars().nth(i as usize)
-			};
-			Ok(option_value(
-				ch.map(|c| Value::String(Rc::new(c.to_string()))),
-			))
-		}
-		"string-slice" => {
-			debug_assert_eq!(args.len(), 3, "`slice` arity");
-			let (s, start, end) = match (&args[0], &args[1], &args[2]) {
-				(Value::String(s), Value::Int(a), Value::Int(b)) => (s, *a, *b),
-				_ => unreachable!("`slice`: expected (string, int, int)"),
-			};
-			// Character (not byte) indices, matching `length`. Out-of-range
-			// indices clamp to the bounds rather than erroring, like
-			// `bytes.slice`.
-			let total = s.chars().count() as i64;
-			let lo = start.clamp(0, total) as usize;
-			let hi = end.clamp(0, total) as usize;
-			let result: String = if lo >= hi {
-				String::new()
-			} else {
-				s.chars().skip(lo).take(hi - lo).collect()
-			};
-			Ok(Value::String(Rc::new(result)))
-		}
-		"string-contains" => {
-			debug_assert_eq!(args.len(), 2, "`contains` arity");
-			match (&args[0], &args[1]) {
-				(Value::String(haystack), Value::String(needle)) => {
-					Ok(Value::Bool(haystack.contains(needle.as_str())))
-				}
-				_ => unreachable!("string `contains`: expected (string, string)"),
-			}
-		}
-		"string-starts-with" => {
-			debug_assert_eq!(args.len(), 2, "`starts-with` arity");
-			match (&args[0], &args[1]) {
-				(Value::String(s), Value::String(prefix)) => {
-					Ok(Value::Bool(s.starts_with(prefix.as_str())))
-				}
-				_ => unreachable!("`starts-with`: expected (string, string)"),
-			}
-		}
-		"string-ends-with" => {
-			debug_assert_eq!(args.len(), 2, "`ends-with` arity");
-			match (&args[0], &args[1]) {
-				(Value::String(s), Value::String(suffix)) => Ok(Value::Bool(s.ends_with(suffix.as_str()))),
-				_ => unreachable!("`ends-with`: expected (string, string)"),
-			}
-		}
-		"string-replace" => {
-			debug_assert_eq!(args.len(), 3, "`replace` arity");
-			match (&args[0], &args[1], &args[2]) {
-				(Value::String(s), Value::String(from), Value::String(to)) => Ok(Value::String(Rc::new(
-					s.replace(from.as_str(), to.as_str()),
-				))),
-				_ => unreachable!("`replace`: expected (string, string, string)"),
-			}
-		}
 		"string-to-int" => {
 			let s = expect_string(&args, "to-int");
 			Ok(match s.parse::<i64>() {
@@ -504,29 +414,6 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 					Ok(Value::Bytes(Rc::new(out)))
 				}
 				_ => unreachable!("`bytes.concat`: expected (bytes, bytes)"),
-			}
-		}
-		"bytes-contains" => {
-			debug_assert_eq!(args.len(), 2, "`bytes.contains` arity");
-			match (&args[0], &args[1]) {
-				(Value::Bytes(haystack), Value::Bytes(needle)) => {
-					Ok(Value::Bool(bytes_contains(haystack, needle)))
-				}
-				_ => unreachable!("`bytes.contains`: expected (bytes, bytes)"),
-			}
-		}
-		"bytes-starts-with" => {
-			debug_assert_eq!(args.len(), 2, "`bytes.starts-with` arity");
-			match (&args[0], &args[1]) {
-				(Value::Bytes(b), Value::Bytes(prefix)) => Ok(Value::Bool(b.starts_with(prefix))),
-				_ => unreachable!("`bytes.starts-with`: expected (bytes, bytes)"),
-			}
-		}
-		"bytes-ends-with" => {
-			debug_assert_eq!(args.len(), 2, "`bytes.ends-with` arity");
-			match (&args[0], &args[1]) {
-				(Value::Bytes(b), Value::Bytes(suffix)) => Ok(Value::Bool(b.ends_with(suffix))),
-				_ => unreachable!("`bytes.ends-with`: expected (bytes, bytes)"),
 			}
 		}
 		"bytes-as-string" => {
@@ -1625,16 +1512,6 @@ fn shift_calendar(nanos: i64, months: i64, years: i64) -> Result<i64, String> {
 		.checked_add(span)
 		.map_err(|e| format!("time: {}", e))?;
 	Ok(shifted.timestamp().as_nanosecond() as i64)
-}
-
-fn bytes_contains(haystack: &[u8], needle: &[u8]) -> bool {
-	if needle.is_empty() {
-		return true;
-	}
-	if needle.len() > haystack.len() {
-		return false;
-	}
-	haystack.windows(needle.len()).any(|w| w == needle)
 }
 
 fn expect_float(args: &[Value], name: &str) -> f64 {

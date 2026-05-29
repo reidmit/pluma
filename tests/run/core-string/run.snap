@@ -9,6 +9,9 @@ ok
 0
 true
 false
+6
+5
+[h, é, l, l, o]
 HELLO, WORLD!
 hello, world!
 spaced
@@ -22,4 +25,3 @@ a,b,c
 hello there
 1:2:3
 == stderr ==
-

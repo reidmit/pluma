@@ -90,21 +90,50 @@ public def slice :: fun bytes int int -> bytes = fun b start end {
 	}
 }
 
-# True when `needle` appears somewhere inside `haystack`.
+# True when `needle` appears somewhere inside `haystack`. Scans for the
+# first match the way `split` does (`matches-at`, below), stopping early.
 #
 #     bytes.contains 'hello world' 'world'   # => true
-public def contains :: fun bytes bytes -> bool = built-in "bytes-contains"
+public def contains :: fun bytes bytes -> bool = fun haystack needle {
+	any-match haystack needle (length needle) 0
+}
+
+# True when `needle` (length `nlen`) occurs at or after position `i`.
+def any-match :: fun bytes bytes int int -> bool = fun b needle nlen i {
+	if i + nlen > length b is true {
+		false
+	} else if matches-at b needle nlen i is true {
+		true
+	} else {
+		any-match b needle nlen (i + 1)
+	}
+}
 
 # True when the bytes begin with `prefix`. Handy for spotting a file by
 # its magic number -- a PNG starts with byte 0x89 then "PNG".
 #
 #     bytes.starts-with '\x89PNG' '\x89'   # => true
-public def starts-with :: fun bytes bytes -> bool = built-in "bytes-starts-with"
+public def starts-with :: fun bytes bytes -> bool = fun b prefix {
+	let plen = length prefix
+	if plen > length b is true {
+		false
+	} else {
+		matches-at b prefix plen 0
+	}
+}
 
 # True when the bytes end with `suffix`.
 #
 #     bytes.ends-with 'hello\n' '\n'   # => true
-public def ends-with :: fun bytes bytes -> bool = built-in "bytes-ends-with"
+public def ends-with :: fun bytes bytes -> bool = fun b suffix {
+	let slen = length suffix
+	let blen = length b
+	if slen > blen is true {
+		false
+	} else {
+		matches-at b suffix slen (blen - slen)
+	}
+}
 
 # Repeats the bytes `n` times, joined into one sequence.
 #
