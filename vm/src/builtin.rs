@@ -225,77 +225,47 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				Ok(xs[i as usize].clone())
 			}
 		}
-		"list-is-empty" => {
-			let xs = expect_list(&args, "is-empty");
-			Ok(Value::Bool(xs.is_empty()))
-		}
-		"list-reverse" => {
-			let xs = expect_list(&args, "reverse");
-			let mut rev: Vec<Value> = xs.iter().cloned().collect();
-			rev.reverse();
-			Ok(Value::List(Rc::new(rev)))
-		}
-		"list-map" => {
-			debug_assert_eq!(args.len(), 2, "`map` arity");
+		"list-build" => {
+			// Tabulate: `[f 0, f 1, ..., f (n-1)]` in one pass.
+			debug_assert_eq!(args.len(), 2, "`build` arity");
 			let mut it = args.into_iter();
-			let list_arg = it.next().unwrap();
-			let fn_arg = it.next().unwrap();
-			let xs = match list_arg {
-				Value::List(xs) => xs,
-				_ => unreachable!("`map`: expected list"),
+			let n = match it.next().unwrap() {
+				Value::Int(n) => n.max(0) as usize,
+				_ => unreachable!("`build`: expected int"),
 			};
-			let mut out = Vec::with_capacity(xs.len());
-			for x in xs.iter() {
-				let r = invoke(vm, fn_arg.clone(), vec![x.clone()])?;
-				out.push(r);
+			let f = it.next().unwrap();
+			let mut out = Vec::with_capacity(n);
+			for i in 0..n {
+				out.push(invoke(vm, f.clone(), vec![Value::Int(i as i64)])?);
 			}
 			Ok(Value::List(Rc::new(out)))
 		}
-		"list-filter" => {
-			debug_assert_eq!(args.len(), 2, "`filter` arity");
+		"list-collect" => {
+			// Like `build`, but `f` returns an `option`; keep the `some`s in
+			// index order, dropping `none`s (so the result may be shorter).
+			debug_assert_eq!(args.len(), 2, "`collect` arity");
 			let mut it = args.into_iter();
-			let list_arg = it.next().unwrap();
-			let fn_arg = it.next().unwrap();
-			let xs = match list_arg {
-				Value::List(xs) => xs,
-				_ => unreachable!("`filter`: expected list"),
+			let n = match it.next().unwrap() {
+				Value::Int(n) => n.max(0) as usize,
+				_ => unreachable!("`collect`: expected int"),
 			};
+			let f = it.next().unwrap();
 			let mut out = Vec::new();
-			for x in xs.iter() {
-				let keep = invoke(vm, fn_arg.clone(), vec![x.clone()])?;
-				match keep {
-					Value::Bool(true) => out.push(x.clone()),
-					Value::Bool(false) => {}
-					_ => unreachable!("`filter`: predicate must return bool"),
+			for i in 0..n {
+				match invoke(vm, f.clone(), vec![Value::Int(i as i64)])? {
+					Value::Variant(v) => match v.variant.as_str() {
+						"some" => out.push(v.payload[0].clone()),
+						"none" => {}
+						other => unreachable!("`collect`: expected option, got `{}`", other),
+					},
+					_ => unreachable!("`collect`: expected option variant"),
 				}
 			}
 			Ok(Value::List(Rc::new(out)))
 		}
-		"list-take" => {
-			debug_assert_eq!(args.len(), 2, "`take` arity");
-			let xs = match &args[0] {
-				Value::List(xs) => xs.clone(),
-				_ => unreachable!("`take`: expected list"),
-			};
-			let n = match &args[1] {
-				Value::Int(n) => (*n).max(0) as usize,
-				_ => unreachable!("`take`: expected int"),
-			};
-			let n = n.min(xs.len());
-			Ok(Value::List(Rc::new(xs[..n].to_vec())))
-		}
-		"list-drop" => {
-			debug_assert_eq!(args.len(), 2, "`drop` arity");
-			let xs = match &args[0] {
-				Value::List(xs) => xs.clone(),
-				_ => unreachable!("`drop`: expected list"),
-			};
-			let n = match &args[1] {
-				Value::Int(n) => (*n).max(0) as usize,
-				_ => unreachable!("`drop`: expected int"),
-			};
-			let n = n.min(xs.len());
-			Ok(Value::List(Rc::new(xs[n..].to_vec())))
+		"list-is-empty" => {
+			let xs = expect_list(&args, "is-empty");
+			Ok(Value::Bool(xs.is_empty()))
 		}
 		"list-sort" => {
 			debug_assert_eq!(args.len(), 2, "`sort` arity");

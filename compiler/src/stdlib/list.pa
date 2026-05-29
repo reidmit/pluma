@@ -34,6 +34,15 @@ public def length :: fun (list a) -> int = built-in "list-length"
 #     list.get [10, 20, 30] 1   # => 20
 public def get :: fun (list a) int -> a = built-in "list-get"
 
+# Private builder primitives. `build n f` tabulates `[f 0, ..., f (n-1)]`
+# in a single O(n) pass; `collect n f` does the same but `f` yields an
+# `option`, keeping only the `some`s (so the result may be shorter).
+# Together with `get`/`length` these let the list *builders* below stay
+# pure Pluma without the O(n^2) cost of repeated spread/append.
+def build :: fun int (fun int -> a) -> list a = built-in "list-build"
+
+def collect :: fun int (fun int -> option a) -> list a = built-in "list-collect"
+
 # True when the list has no elements at all. Just a shorthand for
 # checking whether `length` is zero.
 #
@@ -46,7 +55,10 @@ public def is-empty :: fun (list a) -> bool = fun xs {
 # Returns a new list with the elements in the opposite order.
 #
 #     list.reverse [1, 2, 3]   # => [3, 2, 1]
-public def reverse :: fun (list a) -> list a = built-in "list-reverse"
+public def reverse :: fun (list a) -> list a = fun xs {
+	let len = length xs
+	build len (fun i { get xs (len - 1 - i) })
+}
 
 # Joins two lists end to end into a new one: every element of the
 # first, then every element of the second.
@@ -88,17 +100,24 @@ def contains-from :: fun (list a) a int int -> bool = fun xs target n i {
 #
 #     list.map [1, 2, 3] (fun n { n * 2 })   # => [2, 4, 6]
 #     list.map [1, 2, 3] to-string           # => ["1", "2", "3"]
-public def map :: fun (list a) (fun a -> b) -> list b = built-in "list-map"
-
-# (map/filter build new lists; they stay built-in because pure-Pluma
-# list construction over the array backing is quadratic. The consuming
-# iterators below are pure Pluma -- they only read, via `get`.)
+public def map :: fun (list a) (fun a -> b) -> list b = fun xs f {
+	build (length xs) (fun i { f (get xs i) })
+}
 
 # Keeps only the elements that `pred` returns true for, dropping
 # the rest. Order is preserved.
 #
 #     list.filter [1, 2, 3, 4] (fun n { n % 2 == 0 })   # => [2, 4]
-public def filter :: fun (list a) (fun a -> bool) -> list a = built-in "list-filter"
+public def filter :: fun (list a) (fun a -> bool) -> list a = fun xs pred {
+	collect (length xs) (fun i {
+		let x = get xs i
+		if pred x is true {
+			some x
+		} else {
+			none
+		}
+	})
+}
 
 # Boils the whole list down to a single value by combining the
 # elements one at a time, left to right.
@@ -180,14 +199,38 @@ public def tail :: fun (list a) -> option (list a) = fun xs {
 #
 #     list.take [1, 2, 3, 4, 5] 3   # => [1, 2, 3]
 #     list.take [1, 2] 5            # => [1, 2]
-public def take :: fun (list a) int -> list a = built-in "list-take"
+public def take :: fun (list a) int -> list a = fun xs n {
+	let len = length xs
+	let count = if n < 0 is true {
+		0
+	} else {
+		if n > len is true {
+			len
+		} else {
+			n
+		}
+	}
+	build count (fun i { get xs i })
+}
 
 # Returns a new list with the first `n` elements removed. If `n`
 # is at least as long as the list, you get an empty list.
 #
 #     list.drop [1, 2, 3, 4, 5] 2   # => [3, 4, 5]
 #     list.drop [1, 2] 5            # => []
-public def drop :: fun (list a) int -> list a = built-in "list-drop"
+public def drop :: fun (list a) int -> list a = fun xs k {
+	let len = length xs
+	let start = if k < 0 is true {
+		0
+	} else {
+		if k > len is true {
+			len
+		} else {
+			k
+		}
+	}
+	build (len - start) (fun i { get xs (i + start) })
+}
 
 # Returns the first element that `pred` returns true for, wrapped
 # in `some`. If nothing matches, `none`.

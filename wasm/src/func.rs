@@ -60,6 +60,10 @@ struct Runtime {
 	tostring_fn: Option<u32>,
 	/// `__int_str(i64) -> str` — decimal formatting, used by `__tostring`.
 	int_str_fn: Option<u32>,
+	/// `__list_build(n, f) -> list` — tabulate `[f 0, ..., f (n-1)]`.
+	list_build_fn: Option<u32>,
+	/// `__list_collect(n, f) -> list` — tabulate keeping only `f`'s `some` results.
+	list_collect_fn: Option<u32>,
 	/// Host import `float_to_str(f64, $bytes buf) -> i32 len` — float formatting
 	/// (delegated to the host, like a browser's `String(x)`), used by `__tostring`.
 	float_to_str_fn: Option<u32>,
@@ -208,10 +212,22 @@ impl Module {
 		let mut host_index: HashMap<String, u32> = HashMap::new();
 		let mut host_order: Vec<String> = Vec::new();
 		let mut tostring_called = false;
+		let mut list_build_called = false;
+		let mut list_collect_called = false;
 		for &fid in &reach.order {
 			collect_host_calls(&p.functions[fid as usize].body, &builtin_g, |tag| {
 				if tag == "to-string" {
 					tostring_called = true;
+					return;
+				}
+				// Higher-order builders implemented as synthetic wasm helpers
+				// (loop + closure call), not host imports.
+				if tag == "list-build" {
+					list_build_called = true;
+					return;
+				}
+				if tag == "list-collect" {
+					list_collect_called = true;
 					return;
 				}
 				// Pure-compute builtins emitted inline at the call site (no import).
@@ -293,6 +309,8 @@ impl Module {
 			bytesconcat_fn: take(needs.bytesconcat),
 			tostring_fn: take(needs.tostring),
 			int_str_fn: take(needs.tostring),
+			list_build_fn: take(list_build_called),
+			list_collect_fn: take(list_collect_called),
 			float_to_str_fn: host_index.get("float_to_str").copied(),
 			lits: ToStringLits::default(),
 		};
@@ -493,6 +511,16 @@ impl Module {
 		if runtime.int_str_fn.is_some() {
 			functions.function(ftypes.for_helper(1));
 			code.function(&build_int_str_fn());
+		}
+		if runtime.list_build_fn.is_some() {
+			let arity1 = ftypes.for_arity(1);
+			functions.function(ftypes.for_helper(2));
+			code.function(&build_list_build_fn(arity1));
+		}
+		if runtime.list_collect_fn.is_some() {
+			let arity1 = ftypes.for_arity(1);
+			functions.function(ftypes.for_helper(2));
+			code.function(&build_list_collect_fn(arity1));
 		}
 		for tag in &wrapper_order {
 			let arity = builtin_arity(tag).unwrap();
@@ -1688,6 +1716,27 @@ impl<'a> FnEmitter<'a> {
 			self.inline_builtin(tag, args);
 			return;
 		}
+		// Higher-order list builders: synthetic helpers (loop + closure call).
+		if tag == "list-build" || tag == "list-collect" {
+			let helper = if tag == "list-build" {
+				self.runtime.list_build_fn
+			} else {
+				self.runtime.list_collect_fn
+			};
+			match helper {
+				Some(h) => {
+					for a in args {
+						self.atom(a);
+					}
+					self.ins(Instruction::Call(h));
+				}
+				None => {
+					self.diags.push(format!("`{tag}` helper not emitted"));
+					self.push_nothing();
+				}
+			}
+			return;
+		}
 		// `to-string` is implemented in wasm (`__tostring`), not imported.
 		if tag == "to-string" {
 			if let (Some(ts), Some(a)) = (self.runtime.tostring_fn, args.first()) {
@@ -2312,6 +2361,190 @@ fn build_list_tail_fn() -> Function {
 	let mut f = Function::new_with_locals_types(locals);
 	for ins in b.drain(..) {
 		f.instruction(&ins);
+	}
+	f.instruction(&I::End);
+	f
+}
+
+/// Build `__list_build(n, f) -> list`: tabulate `[f 0, f 1, ..., f (n-1)]` in
+/// one pass. `arity1` is the wasm func-type index for a 1-arg closure (env-first
+/// `(value, value) -> value`), used to `call_indirect` through `f`.
+fn build_list_build_fn(arity1: u32) -> Function {
+	use Instruction as I;
+	const N: u32 = 0; // param: n (boxed int)
+	const F: u32 = 1; // param: f (closure)
+	const NLEN: u32 = 2;
+	const BUF: u32 = 3;
+	const I_: u32 = 4;
+	let empty = wasm_encoder::BlockType::Empty;
+	let cast = |t| I::RefCastNonNull(HeapType::Concrete(t));
+	let getf = |t, f| I::StructGet {
+		struct_type_index: t,
+		field_index: f,
+	};
+	let locals = vec![ValType::I32, types::valarray_ref(), ValType::I32];
+	let b: Vec<Instruction> = vec![
+		// nlen = (int) n
+		I::LocalGet(N),
+		cast(types::T_INT),
+		getf(types::T_INT, 1),
+		I::I32WrapI64,
+		I::LocalSet(NLEN),
+		// buf = new valarray(nlen)
+		I::LocalGet(NLEN),
+		I::ArrayNewDefault(types::T_VALARRAY),
+		I::LocalSet(BUF),
+		I::I32Const(0),
+		I::LocalSet(I_),
+		I::Block(empty),
+		I::Loop(empty),
+		I::LocalGet(I_),
+		I::LocalGet(NLEN),
+		I::I32GeS,
+		I::BrIf(1),
+		// buf[i] = f(box i)
+		I::LocalGet(BUF),
+		I::LocalGet(I_),
+		I::LocalGet(F),
+		cast(types::T_CLOSURE), // env
+		I::I32Const(types::TAG_INT),
+		I::LocalGet(I_),
+		I::I64ExtendI32S,
+		I::StructNew(types::T_INT), // arg = box i
+		I::LocalGet(F),
+		cast(types::T_CLOSURE),
+		getf(types::T_CLOSURE, 1), // fn_index
+		I::CallIndirect {
+			type_index: arity1,
+			table_index: 0,
+		},
+		I::ArraySet(types::T_VALARRAY),
+		I::LocalGet(I_),
+		I::I32Const(1),
+		I::I32Add,
+		I::LocalSet(I_),
+		I::Br(0),
+		I::End, // loop
+		I::End, // block
+		I::I32Const(types::TAG_LIST),
+		I::LocalGet(BUF),
+		I::StructNew(types::T_LIST),
+	];
+	let mut f = Function::new_with_locals_types(locals);
+	for ins in &b {
+		f.instruction(ins);
+	}
+	f.instruction(&I::End);
+	f
+}
+
+/// Build `__list_collect(n, f) -> list`: like `__list_build`, but `f` returns an
+/// `option`; keep each `some`'s payload in order (detected by a non-empty variant
+/// payload), then trim the over-allocated buffer to the kept count.
+fn build_list_collect_fn(arity1: u32) -> Function {
+	use Instruction as I;
+	const N: u32 = 0; // param: n (boxed int)
+	const F: u32 = 1; // param: f (closure)
+	const NLEN: u32 = 2;
+	const BUF: u32 = 3;
+	const I_: u32 = 4;
+	const W: u32 = 5; // write cursor (kept count)
+	const R: u32 = 6; // f's result (an option variant)
+	const OUT: u32 = 7;
+	let empty = wasm_encoder::BlockType::Empty;
+	let cast = |t| I::RefCastNonNull(HeapType::Concrete(t));
+	let getf = |t, f| I::StructGet {
+		struct_type_index: t,
+		field_index: f,
+	};
+	let locals = vec![
+		ValType::I32,          // NLEN
+		types::valarray_ref(), // BUF
+		ValType::I32,          // I_
+		ValType::I32,          // W
+		types::value_ref(),    // R
+		types::valarray_ref(), // OUT
+	];
+	let b: Vec<Instruction> = vec![
+		I::LocalGet(N),
+		cast(types::T_INT),
+		getf(types::T_INT, 1),
+		I::I32WrapI64,
+		I::LocalSet(NLEN),
+		I::LocalGet(NLEN),
+		I::ArrayNewDefault(types::T_VALARRAY),
+		I::LocalSet(BUF),
+		I::I32Const(0),
+		I::LocalSet(I_),
+		I::I32Const(0),
+		I::LocalSet(W),
+		I::Block(empty),
+		I::Loop(empty),
+		I::LocalGet(I_),
+		I::LocalGet(NLEN),
+		I::I32GeS,
+		I::BrIf(1),
+		// r = f(box i)
+		I::LocalGet(F),
+		cast(types::T_CLOSURE),
+		I::I32Const(types::TAG_INT),
+		I::LocalGet(I_),
+		I::I64ExtendI32S,
+		I::StructNew(types::T_INT),
+		I::LocalGet(F),
+		cast(types::T_CLOSURE),
+		getf(types::T_CLOSURE, 1),
+		I::CallIndirect {
+			type_index: arity1,
+			table_index: 0,
+		},
+		I::LocalSet(R),
+		// if r's payload is non-empty (some): buf[w] = payload[0]; w += 1
+		I::LocalGet(R),
+		cast(types::T_VARIANT),
+		getf(types::T_VARIANT, 3),
+		I::ArrayLen,
+		I::If(empty),
+		I::LocalGet(BUF),
+		I::LocalGet(W),
+		I::LocalGet(R),
+		cast(types::T_VARIANT),
+		getf(types::T_VARIANT, 3),
+		I::I32Const(0),
+		I::ArrayGet(types::T_VALARRAY),
+		I::ArraySet(types::T_VALARRAY),
+		I::LocalGet(W),
+		I::I32Const(1),
+		I::I32Add,
+		I::LocalSet(W),
+		I::End, // if
+		I::LocalGet(I_),
+		I::I32Const(1),
+		I::I32Add,
+		I::LocalSet(I_),
+		I::Br(0),
+		I::End, // loop
+		I::End, // block
+		// out = new valarray(w); out[0..w] = buf[0..w]
+		I::LocalGet(W),
+		I::ArrayNewDefault(types::T_VALARRAY),
+		I::LocalSet(OUT),
+		I::LocalGet(OUT),
+		I::I32Const(0),
+		I::LocalGet(BUF),
+		I::I32Const(0),
+		I::LocalGet(W),
+		I::ArrayCopy {
+			array_type_index_dst: types::T_VALARRAY,
+			array_type_index_src: types::T_VALARRAY,
+		},
+		I::I32Const(types::TAG_LIST),
+		I::LocalGet(OUT),
+		I::StructNew(types::T_LIST),
+	];
+	let mut f = Function::new_with_locals_types(locals);
+	for ins in &b {
+		f.instruction(ins);
 	}
 	f.instruction(&I::End);
 	f
