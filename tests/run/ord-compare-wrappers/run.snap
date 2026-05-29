@@ -1,0 +1,20 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+ordering.lt
+ordering.eq
+ordering.gt
+ordering.lt
+ordering.eq
+ordering.gt
+ordering.lt
+ordering.eq
+ordering.gt
+ordering.lt
+ordering.eq
+ordering.gt
+== stderr ==

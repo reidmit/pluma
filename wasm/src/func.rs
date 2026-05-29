@@ -83,6 +83,51 @@ struct Runtime {
 	lits: ToStringLits,
 	/// `some`/`none` variant info for `__dict_lookup` to build its `option` result.
 	opt: OptionLits,
+	/// `lt`/`eq`/`gt` variant info for the `*-compare` wrappers to build their
+	/// `ordering` result.
+	ord: OrderingLits,
+	/// `__wire_fp(i64 hash, ref $value schema) -> i64` — recursive FNV-1a mix over
+	/// a `wire-schema` value tree (the structural fingerprint).
+	wire_fp_fn: Option<u32>,
+	/// `__wire_mix_str(i64 hash, ref $value str) -> i64` — mix a string's byte
+	/// length + bytes.
+	wire_mix_str_fn: Option<u32>,
+	/// `__wire_mix_len(i64 hash, i64 n) -> i64` — mix `n`'s 8 little-endian bytes.
+	wire_mix_len_fn: Option<u32>,
+	/// The `wire-schema` enum's per-variant tags, for the codec helpers' dispatch.
+	wire: WireTags,
+}
+
+/// The within-enum tags of the `wire-schema` prelude enum's variants, resolved
+/// from the enum table so the codec helpers can dispatch on a schema node's
+/// runtime `vtag` rather than its name string.
+#[derive(Clone, Copy, Default)]
+struct WireTags {
+	s_int: u32,
+	s_float: u32,
+	s_bool: u32,
+	s_string: u32,
+	s_bytes: u32,
+	s_duration: u32,
+	s_nothing: u32,
+	s_list: u32,
+	s_dict: u32,
+	s_enum_ref: u32,
+	s_tuple: u32,
+	s_record: u32,
+	s_enum: u32,
+}
+
+/// What an `*-compare` wrapper needs to construct an `ordering` `$variant`: each
+/// variant's within-enum tag and its interned display-name string `(off, len)`.
+#[derive(Clone, Copy, Default)]
+struct OrderingLits {
+	lt_tag: u32,
+	eq_tag: u32,
+	gt_tag: u32,
+	lt_name: (u32, u32),
+	eq_name: (u32, u32),
+	gt_name: (u32, u32),
 }
 
 /// What `__dict_lookup` needs to construct `some v` / `none` `$variant`s: each
@@ -282,6 +327,7 @@ impl Module {
 		let mut dict_remove_called = false;
 		let mut dict_map_called = false;
 		let mut dict_filter_called = false;
+		let mut wire_fingerprint_called = false;
 		for &fid in &reach.order {
 			collect_host_calls(&p.functions[fid as usize].body, &builtin_g, |tag| {
 				if tag == "to-string" {
@@ -328,6 +374,11 @@ impl Module {
 					}
 					"dict-filter" => {
 						dict_filter_called = true;
+						return;
+					}
+					// `wire-fingerprint` walks the schema value tree (synthetic helper).
+					"wire-fingerprint" => {
+						wire_fingerprint_called = true;
 						return;
 					}
 					_ => {}
@@ -435,6 +486,13 @@ impl Module {
 			float_to_str_fn: host_index.get("float_to_str").copied(),
 			lits: ToStringLits::default(),
 			opt: OptionLits::default(),
+			ord: OrderingLits::default(),
+			// `wire-fingerprint` needs all three helpers (fp recurses, fp+mix_str
+			// both mix lengths). Allocate them together so the set is all-or-nothing.
+			wire_fp_fn: take(wire_fingerprint_called),
+			wire_mix_str_fn: take(wire_fingerprint_called),
+			wire_mix_len_fn: take(wire_fingerprint_called),
+			wire: WireTags::default(),
 		};
 		let wrapper_base = next_synth;
 
@@ -580,6 +638,91 @@ impl Module {
 				_ => diags.push("dict.lookup needs the `option` enum".to_string()),
 			}
 		}
+		// The `*-compare` wrappers build an `ordering` variant; intern its `lt`/
+		// `eq`/`gt` display names and resolve their within-enum tags.
+		if wrapper_order.iter().any(|t| t.ends_with("-compare")) {
+			let ord_enum = p
+				.enums
+				.iter()
+				.find(|(_, vs)| vs.iter().any(|(n, _)| n == "lt"))
+				.map(|(name, _)| name.clone());
+			match (
+				ord_enum,
+				variant_tag_in(&p.enums, "lt"),
+				variant_tag_in(&p.enums, "eq"),
+				variant_tag_in(&p.enums, "gt"),
+			) {
+				(Some(en), Some(lt_tag), Some(eq_tag), Some(gt_tag)) => {
+					runtime.ord = OrderingLits {
+						lt_tag,
+						eq_tag,
+						gt_tag,
+						lt_name: strpool.intern(&variant_display(&en, lt_tag, &p.enums)),
+						eq_name: strpool.intern(&variant_display(&en, eq_tag, &p.enums)),
+						gt_name: strpool.intern(&variant_display(&en, gt_tag, &p.enums)),
+					};
+				}
+				_ => diags.push("`compare` needs the `ordering` enum".to_string()),
+			}
+		}
+		// The `wire` codec helpers dispatch on a schema node's `vtag`; resolve the
+		// `wire-schema` enum's per-variant tags (declaration order = wire tag).
+		if runtime.wire_fp_fn.is_some() {
+			match p.enums.get("__prelude__.wire-schema") {
+				Some(vs) => {
+					let pos = |name: &str| vs.iter().position(|(n, _)| n == name).map(|i| i as u32);
+					match (
+						pos("s-int"),
+						pos("s-float"),
+						pos("s-bool"),
+						pos("s-string"),
+						pos("s-bytes"),
+						pos("s-duration"),
+						pos("s-nothing"),
+						pos("s-list"),
+						pos("s-dict"),
+						pos("s-enum-ref"),
+						pos("s-tuple"),
+						pos("s-record"),
+						pos("s-enum"),
+					) {
+						(
+							Some(s_int),
+							Some(s_float),
+							Some(s_bool),
+							Some(s_string),
+							Some(s_bytes),
+							Some(s_duration),
+							Some(s_nothing),
+							Some(s_list),
+							Some(s_dict),
+							Some(s_enum_ref),
+							Some(s_tuple),
+							Some(s_record),
+							Some(s_enum),
+						) => {
+							runtime.wire = WireTags {
+								s_int,
+								s_float,
+								s_bool,
+								s_string,
+								s_bytes,
+								s_duration,
+								s_nothing,
+								s_list,
+								s_dict,
+								s_enum_ref,
+								s_tuple,
+								s_record,
+								s_enum,
+							};
+						}
+						_ => diags.push("`wire` needs the `wire-schema` enum variants".to_string()),
+					}
+				}
+				None => diags.push("`wire` needs the `wire-schema` enum".to_string()),
+			}
+		}
 
 		// Function-type interning + section building.
 		let mut ftypes = FuncTypes::new();
@@ -701,10 +844,25 @@ impl Module {
 			functions.function(ftypes.for_helper(2));
 			code.function(&build_dict_filter_fn(arity2));
 		}
+		// `wire` codec helpers (allocated as a set; emit in the same order).
+		if let (Some(fp), Some(mix_str), Some(mix_len)) = (
+			runtime.wire_fp_fn,
+			runtime.wire_mix_str_fn,
+			runtime.wire_mix_len_fn,
+		) {
+			let mix_val_ty = ftypes.for_wire_mix_val();
+			let mix_len_ty = ftypes.for_wire_mix_len();
+			functions.function(mix_val_ty);
+			code.function(&build_wire_fp_fn(fp, mix_str, mix_len, runtime.wire));
+			functions.function(mix_val_ty);
+			code.function(&build_wire_mix_str_fn(mix_len));
+			functions.function(mix_len_ty);
+			code.function(&build_wire_mix_len_fn());
+		}
 		for tag in &wrapper_order {
 			let arity = builtin_arity(tag).unwrap();
 			functions.function(ftypes.for_arity(arity));
-			match build_builtin_wrapper(tag, &p.enums) {
+			match build_builtin_wrapper(tag, &runtime.ord) {
 				Some(f) => {
 					code.function(&f);
 				}
@@ -2016,6 +2174,24 @@ impl<'a> FnEmitter<'a> {
 				}
 			}
 			return;
+		}
+		// `wire-fingerprint`: FNV-1a hash of the schema tree, boxed as `$int`.
+		if tag == "wire-fingerprint" {
+			match self.runtime.wire_fp_fn {
+				Some(fp) => {
+					self.ins(Instruction::I32Const(types::TAG_INT));
+					self.ins(Instruction::I64Const(WIRE_FNV_OFFSET));
+					self.atom(&args[0]);
+					self.ins(Instruction::Call(fp));
+					self.ins(Instruction::StructNew(types::T_INT));
+					return;
+				}
+				None => {
+					self.diags.push("wire-fingerprint needs __wire_fp".to_string());
+					self.push_nothing();
+					return;
+				}
+			}
 		}
 		// `to-string` is implemented in wasm (`__tostring`), not imported.
 		if tag == "to-string" {
@@ -3893,6 +4069,440 @@ fn build_bytesconcat_fn() -> Function {
 	f
 }
 
+/// FNV-1a 64-bit offset basis / prime — the constants `vm::wire` mixes with, so
+/// the wasm fingerprint matches the VM's byte-for-byte.
+const WIRE_FNV_OFFSET: i64 = 0xcbf2_9ce4_8422_2325u64 as i64;
+const WIRE_FNV_PRIME: i64 = 0x0000_0100_0000_01b3;
+
+/// Build `__wire_mix_len(i64 h, i64 n) -> i64`: fold `mix_byte` over `n`'s 8
+/// little-endian bytes (mirrors `vm::wire::mix_len`, where lengths are `u64` LE).
+fn build_wire_mix_len_fn() -> Function {
+	use Instruction as I;
+	const H: u32 = 0;
+	const N: u32 = 1;
+	const I_: u32 = 2;
+	let empty = wasm_encoder::BlockType::Empty;
+	let mut b: Vec<Instruction> = vec![
+		I::I32Const(0),
+		I::LocalSet(I_),
+		I::Block(empty),
+		I::Loop(empty),
+		I::LocalGet(I_),
+		I::I32Const(8),
+		I::I32GeU,
+		I::BrIf(1),
+		// h = (h ^ ((n >> (i*8)) & 0xff)) * PRIME
+		I::LocalGet(H),
+		I::LocalGet(N),
+		I::LocalGet(I_),
+		I::I32Const(8),
+		I::I32Mul,
+		I::I64ExtendI32U,
+		I::I64ShrU,
+		I::I64Const(0xff),
+		I::I64And,
+		I::I64Xor,
+		I::I64Const(WIRE_FNV_PRIME),
+		I::I64Mul,
+		I::LocalSet(H),
+		I::LocalGet(I_),
+		I::I32Const(1),
+		I::I32Add,
+		I::LocalSet(I_),
+		I::Br(0),
+		I::End, // loop
+		I::End, // block
+		I::LocalGet(H),
+	];
+	let mut f = Function::new_with_locals_types(vec![ValType::I32]);
+	for ins in b.drain(..) {
+		f.instruction(&ins);
+	}
+	f.instruction(&I::End);
+	f
+}
+
+/// Build `__wire_mix_str(i64 h, ref $value str) -> i64`: mix the string's byte
+/// length (via `mix_len`) then each of its bytes (mirrors `vm::wire::mix_str`).
+fn build_wire_mix_str_fn(mix_len: u32) -> Function {
+	use Instruction as I;
+	const H: u32 = 0;
+	const S: u32 = 1;
+	const BYTES: u32 = 2;
+	const N: u32 = 3;
+	const I_: u32 = 4;
+	let empty = wasm_encoder::BlockType::Empty;
+	let getf = |t, f| I::StructGet {
+		struct_type_index: t,
+		field_index: f,
+	};
+	let mut b: Vec<Instruction> = vec![
+		// bytes = (cast $str s).field1
+		I::LocalGet(S),
+		I::RefCastNonNull(HeapType::Concrete(types::T_STR)),
+		getf(types::T_STR, 1),
+		I::LocalSet(BYTES),
+		// n = array.len bytes; h = mix_len(h, n)
+		I::LocalGet(BYTES),
+		I::ArrayLen,
+		I::LocalSet(N),
+		I::LocalGet(H),
+		I::LocalGet(N),
+		I::I64ExtendI32U,
+		I::Call(mix_len),
+		I::LocalSet(H),
+		// for i in 0..n: h = (h ^ byte) * PRIME
+		I::I32Const(0),
+		I::LocalSet(I_),
+		I::Block(empty),
+		I::Loop(empty),
+		I::LocalGet(I_),
+		I::LocalGet(N),
+		I::I32GeU,
+		I::BrIf(1),
+		I::LocalGet(H),
+		I::LocalGet(BYTES),
+		I::LocalGet(I_),
+		I::ArrayGetU(types::T_BYTES),
+		I::I64ExtendI32U,
+		I::I64Xor,
+		I::I64Const(WIRE_FNV_PRIME),
+		I::I64Mul,
+		I::LocalSet(H),
+		I::LocalGet(I_),
+		I::I32Const(1),
+		I::I32Add,
+		I::LocalSet(I_),
+		I::Br(0),
+		I::End, // loop
+		I::End, // block
+		I::LocalGet(H),
+	];
+	let mut f = Function::new_with_locals_types(vec![types::bytes_ref(), ValType::I32, ValType::I32]);
+	for ins in b.drain(..) {
+		f.instruction(&ins);
+	}
+	f.instruction(&I::End);
+	f
+}
+
+/// Build `__wire_fp(i64 h, ref $value schema) -> i64`: the recursive structural
+/// fingerprint over a `wire-schema` value tree (mirrors `vm::wire::mix_schema`).
+/// Dispatches on the schema node's `vtag`; each arm leads with a distinct kind
+/// byte (1..13) so structurally-different schemas can't alias. `self_idx` is this
+/// function's own wasm index (for recursion).
+fn build_wire_fp_fn(self_idx: u32, mix_str: u32, mix_len: u32, w: WireTags) -> Function {
+	use Instruction as I;
+	const H: u32 = 0;
+	const SCHEMA: u32 = 1;
+	const VTAG: u32 = 2;
+	const PAYLOAD: u32 = 3;
+	const ELEMS: u32 = 4;
+	const I_: u32 = 5;
+	const N: u32 = 6;
+	const PE: u32 = 7;
+	const FIELDS: u32 = 8;
+	const M: u32 = 9;
+	const J: u32 = 10;
+	let empty = wasm_encoder::BlockType::Empty;
+	let va = types::T_VALARRAY;
+	let getf = |t, f| I::StructGet {
+		struct_type_index: t,
+		field_index: f,
+	};
+	let cast = |t| I::RefCastNonNull(HeapType::Concrete(t));
+	let mut b: Vec<Instruction> = Vec::new();
+	// vtag = schema.variant_tag; payload = schema.payload.
+	b.push(I::LocalGet(SCHEMA));
+	b.push(cast(types::T_VARIANT));
+	b.push(getf(types::T_VARIANT, 1));
+	b.push(I::LocalSet(VTAG));
+	b.push(I::LocalGet(SCHEMA));
+	b.push(cast(types::T_VARIANT));
+	b.push(getf(types::T_VARIANT, 3));
+	b.push(I::LocalSet(PAYLOAD));
+	// h = (h ^ kind) * PRIME, written back to H.
+	let mix_byte = |b: &mut Vec<Instruction>, kind: i64| {
+		b.push(I::LocalGet(H));
+		b.push(I::I64Const(kind));
+		b.push(I::I64Xor);
+		b.push(I::I64Const(WIRE_FNV_PRIME));
+		b.push(I::I64Mul);
+		b.push(I::LocalSet(H));
+	};
+	// Push payload[idx] (a `$value`).
+	let payload_elem = |b: &mut Vec<Instruction>, idx: i32| {
+		b.push(I::LocalGet(PAYLOAD));
+		b.push(I::I32Const(idx));
+		b.push(I::ArrayGet(va));
+	};
+	// ELEMS = list-elems of payload[idx] (cast to `$list`, field 1).
+	let elems_of = |b: &mut Vec<Instruction>, idx: i32, dst: u32| {
+		b.push(I::LocalGet(PAYLOAD));
+		b.push(I::I32Const(idx));
+		b.push(I::ArrayGet(va));
+		b.push(cast(types::T_LIST));
+		b.push(getf(types::T_LIST, 1));
+		b.push(I::LocalSet(dst));
+	};
+	// Scalar arm: `if vtag == t { mix_byte(kind); return h }`.
+	let scalar = |b: &mut Vec<Instruction>, t: u32, kind: i64| {
+		b.push(I::LocalGet(VTAG));
+		b.push(I::I32Const(t as i32));
+		b.push(I::I32Eq);
+		b.push(I::If(empty));
+		b.push(I::LocalGet(H));
+		b.push(I::I64Const(kind));
+		b.push(I::I64Xor);
+		b.push(I::I64Const(WIRE_FNV_PRIME));
+		b.push(I::I64Mul);
+		b.push(I::Return);
+		b.push(I::End);
+	};
+	scalar(&mut b, w.s_int, 1);
+	scalar(&mut b, w.s_float, 2);
+	scalar(&mut b, w.s_bool, 3);
+	scalar(&mut b, w.s_string, 4);
+	scalar(&mut b, w.s_bytes, 5);
+	scalar(&mut b, w.s_duration, 6);
+	scalar(&mut b, w.s_nothing, 7);
+	// Open the `if vtag == t {` for a compound arm.
+	let open = |b: &mut Vec<Instruction>, t: u32| {
+		b.push(I::LocalGet(VTAG));
+		b.push(I::I32Const(t as i32));
+		b.push(I::I32Eq);
+		b.push(I::If(empty));
+	};
+	// s-list: wire_fp(mix_byte(h, 8), inner=payload[0]).
+	open(&mut b, w.s_list);
+	mix_byte(&mut b, 8);
+	b.push(I::LocalGet(H));
+	payload_elem(&mut b, 0);
+	b.push(I::Call(self_idx));
+	b.push(I::Return);
+	b.push(I::End);
+	// s-dict: wire_fp(wire_fp(mix_byte(h, 12), k=payload[0]), v=payload[1]).
+	open(&mut b, w.s_dict);
+	mix_byte(&mut b, 12);
+	b.push(I::LocalGet(H));
+	payload_elem(&mut b, 0);
+	b.push(I::Call(self_idx));
+	b.push(I::LocalSet(H));
+	b.push(I::LocalGet(H));
+	payload_elem(&mut b, 1);
+	b.push(I::Call(self_idx));
+	b.push(I::Return);
+	b.push(I::End);
+	// s-enum-ref: mix_str(mix_byte(h, 13), qualified=payload[0]).
+	open(&mut b, w.s_enum_ref);
+	mix_byte(&mut b, 13);
+	b.push(I::LocalGet(H));
+	payload_elem(&mut b, 0);
+	b.push(I::Call(mix_str));
+	b.push(I::Return);
+	b.push(I::End);
+	// Fold `wire_fp` over the `$valarray` in local `arr`, length `N`, using loop
+	// index `idx`; accumulates into `H`.
+	let fold_fp = |b: &mut Vec<Instruction>, arr: u32, idx: u32| {
+		b.push(I::I32Const(0));
+		b.push(I::LocalSet(idx));
+		b.push(I::Block(empty));
+		b.push(I::Loop(empty));
+		b.push(I::LocalGet(idx));
+		b.push(I::LocalGet(N));
+		b.push(I::I32GeU);
+		b.push(I::BrIf(1));
+		b.push(I::LocalGet(H));
+		b.push(I::LocalGet(arr));
+		b.push(I::LocalGet(idx));
+		b.push(I::ArrayGet(va));
+		b.push(I::Call(self_idx));
+		b.push(I::LocalSet(H));
+		b.push(I::LocalGet(idx));
+		b.push(I::I32Const(1));
+		b.push(I::I32Add);
+		b.push(I::LocalSet(idx));
+		b.push(I::Br(0));
+		b.push(I::End); // loop
+		b.push(I::End); // block
+	};
+	// h = mix_len(h, (i64) local N).
+	let mix_len_n = |b: &mut Vec<Instruction>| {
+		b.push(I::LocalGet(H));
+		b.push(I::LocalGet(N));
+		b.push(I::I64ExtendI32U);
+		b.push(I::Call(mix_len));
+		b.push(I::LocalSet(H));
+	};
+	// s-tuple: mix_len(mix_byte(h, 9), elems.len()); fold wire_fp over elems.
+	open(&mut b, w.s_tuple);
+	mix_byte(&mut b, 9);
+	elems_of(&mut b, 0, ELEMS);
+	b.push(I::LocalGet(ELEMS));
+	b.push(I::ArrayLen);
+	b.push(I::LocalSet(N));
+	mix_len_n(&mut b);
+	fold_fp(&mut b, ELEMS, I_);
+	b.push(I::LocalGet(H));
+	b.push(I::Return);
+	b.push(I::End);
+	// s-record: mix_len(mix_byte(h, 10), fields.len()); each field is a
+	// `$tuple (name, schema)` — mix_str the name, recurse on the schema.
+	open(&mut b, w.s_record);
+	mix_byte(&mut b, 10);
+	elems_of(&mut b, 0, ELEMS);
+	b.push(I::LocalGet(ELEMS));
+	b.push(I::ArrayLen);
+	b.push(I::LocalSet(N));
+	mix_len_n(&mut b);
+	b.push(I::I32Const(0));
+	b.push(I::LocalSet(I_));
+	b.push(I::Block(empty));
+	b.push(I::Loop(empty));
+	b.push(I::LocalGet(I_));
+	b.push(I::LocalGet(N));
+	b.push(I::I32GeU);
+	b.push(I::BrIf(1));
+	// PE = (cast $tuple elems[i]).field1
+	b.push(I::LocalGet(ELEMS));
+	b.push(I::LocalGet(I_));
+	b.push(I::ArrayGet(va));
+	b.push(cast(types::T_TUPLE));
+	b.push(getf(types::T_TUPLE, 1));
+	b.push(I::LocalSet(PE));
+	// h = mix_str(h, PE[0])
+	b.push(I::LocalGet(H));
+	b.push(I::LocalGet(PE));
+	b.push(I::I32Const(0));
+	b.push(I::ArrayGet(va));
+	b.push(I::Call(mix_str));
+	b.push(I::LocalSet(H));
+	// h = wire_fp(h, PE[1])
+	b.push(I::LocalGet(H));
+	b.push(I::LocalGet(PE));
+	b.push(I::I32Const(1));
+	b.push(I::ArrayGet(va));
+	b.push(I::Call(self_idx));
+	b.push(I::LocalSet(H));
+	b.push(I::LocalGet(I_));
+	b.push(I::I32Const(1));
+	b.push(I::I32Add);
+	b.push(I::LocalSet(I_));
+	b.push(I::Br(0));
+	b.push(I::End); // loop
+	b.push(I::End); // block
+	b.push(I::LocalGet(H));
+	b.push(I::Return);
+	b.push(I::End);
+	// s-enum: mix_len(mix_str(mix_byte(h, 11), qualified), variants.len()); each
+	// variant is a `$tuple (name, list-of-field-schemas)`.
+	open(&mut b, w.s_enum);
+	mix_byte(&mut b, 11);
+	b.push(I::LocalGet(H));
+	payload_elem(&mut b, 0);
+	b.push(I::Call(mix_str));
+	b.push(I::LocalSet(H));
+	// ELEMS = variants list (payload[1] is a `$list`).
+	b.push(I::LocalGet(PAYLOAD));
+	b.push(I::I32Const(1));
+	b.push(I::ArrayGet(va));
+	b.push(cast(types::T_LIST));
+	b.push(getf(types::T_LIST, 1));
+	b.push(I::LocalSet(ELEMS));
+	b.push(I::LocalGet(ELEMS));
+	b.push(I::ArrayLen);
+	b.push(I::LocalSet(N));
+	mix_len_n(&mut b);
+	b.push(I::I32Const(0));
+	b.push(I::LocalSet(I_));
+	b.push(I::Block(empty));
+	b.push(I::Loop(empty)); // over variants
+	b.push(I::LocalGet(I_));
+	b.push(I::LocalGet(N));
+	b.push(I::I32GeU);
+	b.push(I::BrIf(1));
+	// PE = (cast $tuple variants[i]).field1  (name, field-list)
+	b.push(I::LocalGet(ELEMS));
+	b.push(I::LocalGet(I_));
+	b.push(I::ArrayGet(va));
+	b.push(cast(types::T_TUPLE));
+	b.push(getf(types::T_TUPLE, 1));
+	b.push(I::LocalSet(PE));
+	// h = mix_str(h, PE[0])  (variant name)
+	b.push(I::LocalGet(H));
+	b.push(I::LocalGet(PE));
+	b.push(I::I32Const(0));
+	b.push(I::ArrayGet(va));
+	b.push(I::Call(mix_str));
+	b.push(I::LocalSet(H));
+	// FIELDS = (cast $list PE[1]).field1; M = len; h = mix_len(h, M)
+	b.push(I::LocalGet(PE));
+	b.push(I::I32Const(1));
+	b.push(I::ArrayGet(va));
+	b.push(cast(types::T_LIST));
+	b.push(getf(types::T_LIST, 1));
+	b.push(I::LocalSet(FIELDS));
+	b.push(I::LocalGet(FIELDS));
+	b.push(I::ArrayLen);
+	b.push(I::LocalSet(M));
+	b.push(I::LocalGet(H));
+	b.push(I::LocalGet(M));
+	b.push(I::I64ExtendI32U);
+	b.push(I::Call(mix_len));
+	b.push(I::LocalSet(H));
+	// for j in 0..M: h = wire_fp(h, FIELDS[j])
+	b.push(I::I32Const(0));
+	b.push(I::LocalSet(J));
+	b.push(I::Block(empty));
+	b.push(I::Loop(empty)); // over fields
+	b.push(I::LocalGet(J));
+	b.push(I::LocalGet(M));
+	b.push(I::I32GeU);
+	b.push(I::BrIf(1));
+	b.push(I::LocalGet(H));
+	b.push(I::LocalGet(FIELDS));
+	b.push(I::LocalGet(J));
+	b.push(I::ArrayGet(va));
+	b.push(I::Call(self_idx));
+	b.push(I::LocalSet(H));
+	b.push(I::LocalGet(J));
+	b.push(I::I32Const(1));
+	b.push(I::I32Add);
+	b.push(I::LocalSet(J));
+	b.push(I::Br(0));
+	b.push(I::End); // inner loop
+	b.push(I::End); // inner block
+	b.push(I::LocalGet(I_));
+	b.push(I::I32Const(1));
+	b.push(I::I32Add);
+	b.push(I::LocalSet(I_));
+	b.push(I::Br(0));
+	b.push(I::End); // outer loop
+	b.push(I::End); // outer block
+	b.push(I::LocalGet(H));
+	b.push(I::Return);
+	b.push(I::End);
+	// Fallthrough (malformed schema): return h unchanged.
+	b.push(I::LocalGet(H));
+	let locals = vec![
+		ValType::I32,          // VTAG
+		types::valarray_ref(), // PAYLOAD
+		types::valarray_ref(), // ELEMS
+		ValType::I32,          // I_
+		ValType::I32,          // N
+		types::valarray_ref(), // PE
+		types::valarray_ref(), // FIELDS
+		ValType::I32,          // M
+		ValType::I32,          // J
+	];
+	let mut f = Function::new_with_locals_types(locals);
+	for ins in &b {
+		f.instruction(ins);
+	}
+	f.instruction(&I::End);
+	f
+}
+
 /// Build `__int_str(boxed-int) -> str`: decimal formatting of an i64. Mirrors
 /// `vm::Value`'s `Display` for ints (`-` sign, no leading zeros, "0" for zero).
 fn build_int_str_fn() -> Function {
@@ -4695,7 +5305,7 @@ fn build_record_update_fn(eq_idx: u32) -> Function {
 fn builtin_arity(tag: &str) -> Option<usize> {
 	Some(match tag {
 		"int-add" | "int-sub" | "int-mul" | "int-div" | "float-add" | "float-sub" | "float-mul"
-		| "float-div" | "int-compare" | "float-compare" => 2,
+		| "float-div" | "int-compare" | "float-compare" | "string-compare" | "bytes-compare" => 2,
 		"int-negate" | "float-negate" => 1,
 		// `hash` instances: wrappable so a primitive `hash` method-dict can be
 		// built, but the wasm `dict` scans with `__eq` and never calls hash, so the
@@ -4708,8 +5318,9 @@ fn builtin_arity(tag: &str) -> Option<usize> {
 /// Build the wasm wrapper for a pure-compute builtin used as a first-class value
 /// (e.g. a `numeric`/`ord` dict method). Env-first closure convention: `(env,
 /// args…) -> value`. Unboxes args, computes, reboxes. Comparisons return an
-/// `ordering` variant. `enums` resolves the `ordering` variant tags.
-fn build_builtin_wrapper(tag: &str, enums: &EnumTable) -> Option<Function> {
+/// `ordering` variant; `ord` carries those variants' tags + interned display
+/// names (resolved in `Module::build` when a `*-compare` wrapper is reachable).
+fn build_builtin_wrapper(tag: &str, ord: &OrderingLits) -> Option<Function> {
 	use Instruction as I;
 	let arity = builtin_arity(tag)?;
 	let cast = |t| I::RefCastNonNull(HeapType::Concrete(t));
@@ -4722,6 +5333,26 @@ fn build_builtin_wrapper(tag: &str, enums: &EnumTable) -> Option<Function> {
 		b.push(I::LocalGet(n));
 		b.push(cast(ty));
 		b.push(getf(ty, 1));
+	};
+	// Emit `return <ordering variant>` for the given within-enum tag + display
+	// name (a 4-field `$variant` with an empty payload).
+	let mk_ord = |b: &mut Vec<Instruction>, vtag: u32, (off, len): (u32, u32)| {
+		b.push(I::I32Const(types::TAG_VARIANT));
+		b.push(I::I32Const(vtag as i32));
+		b.push(I::I32Const(types::TAG_STR));
+		b.push(I::I32Const(off as i32));
+		b.push(I::I32Const(len as i32));
+		b.push(I::ArrayNewData {
+			array_type_index: types::T_BYTES,
+			array_data_index: 0,
+		});
+		b.push(I::StructNew(types::T_STR));
+		b.push(I::ArrayNewFixed {
+			array_type_index: types::T_VALARRAY,
+			array_size: 0,
+		});
+		b.push(I::StructNew(types::T_VARIANT));
+		b.push(I::Return);
 	};
 	let mut b: Vec<Instruction> = Vec::new();
 	let mut extra_locals: Vec<ValType> = Vec::new();
@@ -4858,41 +5489,122 @@ fn build_builtin_wrapper(tag: &str, enums: &EnumTable) -> Option<Function> {
 			true,
 		),
 		"int-compare" | "float-compare" => {
-			let (ty, scalar, lt, eq) = if tag == "int-compare" {
-				(types::T_INT, ValType::I64, I::I64LtS, I::I64Eq)
+			let (ty, lt, eq) = if tag == "int-compare" {
+				(types::T_INT, I::I64LtS, I::I64Eq)
 			} else {
-				(types::T_FLOAT, ValType::F64, I::F64Lt, I::F64Eq)
+				(types::T_FLOAT, I::F64Lt, I::F64Eq)
 			};
-			let _ = scalar;
-			let less = variant_tag_in(enums, "less")?;
-			let equal = variant_tag_in(enums, "equal")?;
-			let greater = variant_tag_in(enums, "greater")?;
-			let mk = |b: &mut Vec<Instruction>, vtag: u32| {
-				b.push(I::I32Const(types::TAG_VARIANT));
-				b.push(I::I32Const(vtag as i32));
-				b.push(I::ArrayNewFixed {
-					array_type_index: types::T_VALARRAY,
-					array_size: 0,
-				});
-				b.push(I::StructNew(types::T_VARIANT));
-				b.push(I::Return);
-			};
-			// a < b -> less
+			// a < b -> lt
 			unbox(&mut b, 1, ty);
 			unbox(&mut b, 2, ty);
 			b.push(lt);
 			b.push(I::If(wasm_encoder::BlockType::Empty));
-			mk(&mut b, less);
+			mk_ord(&mut b, ord.lt_tag, ord.lt_name);
 			b.push(I::End);
-			// a == b -> equal
+			// a == b -> eq
 			unbox(&mut b, 1, ty);
 			unbox(&mut b, 2, ty);
 			b.push(eq);
 			b.push(I::If(wasm_encoder::BlockType::Empty));
-			mk(&mut b, equal);
+			mk_ord(&mut b, ord.eq_tag, ord.eq_name);
 			b.push(I::End);
-			// else greater
-			mk(&mut b, greater);
+			// else gt
+			mk_ord(&mut b, ord.gt_tag, ord.gt_name);
+		}
+		// String / bytes ordering: lexicographic byte compare (Rust `str`/`[u8]`
+		// `Ord` is byte-lexicographic). Both reuse the `$str` `{tag, $bytes}` shape,
+		// so the same loop serves either. Locals past env+2 args: abytes, bbytes
+		// ($bytes), alen, blen, minlen, i, av, bv (i32).
+		"string-compare" | "bytes-compare" => {
+			extra_locals.push(types::bytes_ref()); // 3 abytes
+			extra_locals.push(types::bytes_ref()); // 4 bbytes
+			extra_locals.push(ValType::I32); // 5 alen
+			extra_locals.push(ValType::I32); // 6 blen
+			extra_locals.push(ValType::I32); // 7 minlen
+			extra_locals.push(ValType::I32); // 8 i
+			const ABYTES: u32 = 3;
+			const BBYTES: u32 = 4;
+			const ALEN: u32 = 5;
+			const BLEN: u32 = 6;
+			const MINLEN: u32 = 7;
+			const I_: u32 = 8;
+			let empty = wasm_encoder::BlockType::Empty;
+			// abytes = (cast $str a).field1; bbytes likewise.
+			b.push(I::LocalGet(1));
+			b.push(cast(types::T_STR));
+			b.push(getf(types::T_STR, 1));
+			b.push(I::LocalSet(ABYTES));
+			b.push(I::LocalGet(2));
+			b.push(cast(types::T_STR));
+			b.push(getf(types::T_STR, 1));
+			b.push(I::LocalSet(BBYTES));
+			// alen / blen / minlen.
+			b.push(I::LocalGet(ABYTES));
+			b.push(I::ArrayLen);
+			b.push(I::LocalSet(ALEN));
+			b.push(I::LocalGet(BBYTES));
+			b.push(I::ArrayLen);
+			b.push(I::LocalSet(BLEN));
+			b.push(I::LocalGet(ALEN));
+			b.push(I::LocalGet(BLEN));
+			b.push(I::I32LtU);
+			b.push(I::If(wasm_encoder::BlockType::Result(ValType::I32)));
+			b.push(I::LocalGet(ALEN));
+			b.push(I::Else);
+			b.push(I::LocalGet(BLEN));
+			b.push(I::End);
+			b.push(I::LocalSet(MINLEN));
+			// i = 0; scan the shared prefix.
+			b.push(I::I32Const(0));
+			b.push(I::LocalSet(I_));
+			b.push(I::Block(empty)); // $done
+			b.push(I::Loop(empty)); // $cmp
+			b.push(I::LocalGet(I_));
+			b.push(I::LocalGet(MINLEN));
+			b.push(I::I32GeU);
+			b.push(I::BrIf(1)); // -> $done
+			// av < bv -> less ; av > bv -> greater (unsigned byte compare).
+			b.push(I::LocalGet(ABYTES));
+			b.push(I::LocalGet(I_));
+			b.push(I::ArrayGetU(types::T_BYTES));
+			b.push(I::LocalGet(BBYTES));
+			b.push(I::LocalGet(I_));
+			b.push(I::ArrayGetU(types::T_BYTES));
+			b.push(I::I32LtU);
+			b.push(I::If(empty));
+			mk_ord(&mut b, ord.lt_tag, ord.lt_name);
+			b.push(I::End);
+			b.push(I::LocalGet(ABYTES));
+			b.push(I::LocalGet(I_));
+			b.push(I::ArrayGetU(types::T_BYTES));
+			b.push(I::LocalGet(BBYTES));
+			b.push(I::LocalGet(I_));
+			b.push(I::ArrayGetU(types::T_BYTES));
+			b.push(I::I32GtU);
+			b.push(I::If(empty));
+			mk_ord(&mut b, ord.gt_tag, ord.gt_name);
+			b.push(I::End);
+			b.push(I::LocalGet(I_));
+			b.push(I::I32Const(1));
+			b.push(I::I32Add);
+			b.push(I::LocalSet(I_));
+			b.push(I::Br(0)); // -> $cmp
+			b.push(I::End); // loop
+			b.push(I::End); // block $done
+			// Prefix equal: shorter sorts first.
+			b.push(I::LocalGet(ALEN));
+			b.push(I::LocalGet(BLEN));
+			b.push(I::I32LtU);
+			b.push(I::If(empty));
+			mk_ord(&mut b, ord.lt_tag, ord.lt_name);
+			b.push(I::End);
+			b.push(I::LocalGet(ALEN));
+			b.push(I::LocalGet(BLEN));
+			b.push(I::I32GtU);
+			b.push(I::If(empty));
+			mk_ord(&mut b, ord.gt_tag, ord.gt_name);
+			b.push(I::End);
+			mk_ord(&mut b, ord.eq_tag, ord.eq_name);
 		}
 		// `hash` wrappers exist only so a primitive `hash` method-dict can be
 		// materialized; the wasm `dict` never calls them (it scans keys with

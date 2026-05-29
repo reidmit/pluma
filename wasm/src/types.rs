@@ -163,6 +163,11 @@ enum FuncKind {
 	/// A unary float math host import (log/exp/sin/cos): `(f64) -> f64`. The
 	/// box/unbox to `$float` happens in wasm, so the host stays a bare libm call.
 	F64Unary,
+	/// A `wire` FNV mixer over a value: `(i64 hash, ref $value) -> i64`. Used by
+	/// both the recursive schema fingerprint and the string mixer.
+	WireMixVal,
+	/// The `wire` length mixer: `(i64 hash, i64 n) -> i64` (mixes `n`'s LE bytes).
+	WireMixLen,
 }
 
 pub struct FuncTypes {
@@ -227,6 +232,16 @@ impl FuncTypes {
 	/// The type index for a unary float math host import: `(f64) -> f64`.
 	pub fn for_f64_unary(&mut self) -> u32 {
 		self.intern(FuncKind::F64Unary)
+	}
+
+	/// The type index for a `wire` value mixer: `(i64, ref $value) -> i64`.
+	pub fn for_wire_mix_val(&mut self) -> u32 {
+		self.intern(FuncKind::WireMixVal)
+	}
+
+	/// The type index for the `wire` length mixer: `(i64, i64) -> i64`.
+	pub fn for_wire_mix_len(&mut self) -> u32 {
+		self.intern(FuncKind::WireMixLen)
 	}
 
 	/// Encode the full type section: the fixed `$value` prefix, then every
@@ -384,6 +399,16 @@ impl FuncTypes {
 				}
 				FuncKind::F64Unary => {
 					types.ty().function([ValType::F64], [ValType::F64]);
+					continue;
+				}
+				FuncKind::WireMixVal => {
+					types
+						.ty()
+						.function([ValType::I64, value_ref()], [ValType::I64]);
+					continue;
+				}
+				FuncKind::WireMixLen => {
+					types.ty().function([ValType::I64, ValType::I64], [ValType::I64]);
 					continue;
 				}
 			};
