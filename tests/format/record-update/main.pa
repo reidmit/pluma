@@ -1,0 +1,10 @@
+def main = fun {
+	let a = { name: "Reid", age: 32 }
+	let b = { ...a, name: "Other Reid" }
+	let name = "x"
+	let c = { ...a, name, age: 99 }
+	let d = { ...a }
+	print b.name
+	print c.name
+	print d.name
+}

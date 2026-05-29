@@ -539,6 +539,21 @@ impl<'a> Lowerer<'a> {
 				}
 				Ok(self.emit_let(Rvalue::MakeRecord(ir_fields), range))
 			}
+			ExprKind::RecordUpdate { base, fields } => {
+				let base_atom = self.lower_expr(base)?;
+				let mut ir_fields = Vec::with_capacity(fields.len());
+				for (name, value) in fields {
+					let atom = self.lower_expr(value)?;
+					ir_fields.push((name.name.clone(), atom));
+				}
+				Ok(self.emit_let(
+					Rvalue::RecordUpdate {
+						base: base_atom,
+						fields: ir_fields,
+					},
+					range,
+				))
+			}
 			ExprKind::Interpolation(parts) => {
 				let mut atoms = Vec::with_capacity(parts.len());
 				for p in parts {

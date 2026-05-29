@@ -1746,9 +1746,53 @@ impl<'a> Parser<'a> {
 
 		self.skip_line_breaks();
 
+		// A leading `...base` makes this a record *update*: `{ ...base, f: v }`.
+		// The base is copied and the override fields (parsed by the same loop
+		// below) replace the same-named fields. Exactly one spread, and it must
+		// come first — a `...` anywhere else is reported in the loop.
+		let base = if let Some(Token::TripleDot(span_start, span_end)) = self.current_token {
+			self.advance();
+			let Some(base_expr) = self.parse_expression() else {
+				return self.error(ParseError {
+					range: Range::between(
+						self.offset_to_point(span_start),
+						self.offset_to_point(span_end),
+					),
+					kind: ParseErrorKind::ExpectedExpressionAfterSpread,
+				});
+			};
+			// Eat the separator before the (optional) override fields.
+			match self.current_token {
+				Some(Token::Comma(..)) => {
+					self.advance();
+					self.skip_line_breaks();
+				}
+				Some(Token::LineBreak(..)) => self.skip_line_breaks(),
+				_ => {}
+			}
+			Some(Box::new(base_expr))
+		} else {
+			None
+		};
+
 		let mut entries = Vec::new();
 
-		while let Some(field_name) = self.parse_identifier() {
+		loop {
+			// A spread in any non-leading position is illegal in a record.
+			if let Some(Token::TripleDot(span_start, span_end)) = self.current_token {
+				return self.error(ParseError {
+					range: Range::between(
+						self.offset_to_point(span_start),
+						self.offset_to_point(span_end),
+					),
+					kind: ParseErrorKind::MisplacedRecordSpread,
+				});
+			}
+
+			let Some(field_name) = self.parse_identifier() else {
+				break;
+			};
+
 			// Field shorthand: `{a, b}` desugars to `{a: a, b: b}`. The
 			// value is the same identifier resolved from the surrounding
 			// scope.
@@ -1783,9 +1827,17 @@ impl<'a> Parser<'a> {
 
 		let (_, record_end) = expect_token_and_advance!(self, Token::RightBrace);
 
+		let kind = match base {
+			Some(base) => ExprKind::RecordUpdate {
+				base,
+				fields: entries,
+			},
+			None => ExprKind::Record(entries),
+		};
+
 		Some(ExprNode {
 			range: Range::between(record_start, record_end),
-			kind: ExprKind::Record(entries),
+			kind,
 			ty: Type::Unknown,
 			trait_dispatch: None,
 			dispatch_sink: None,

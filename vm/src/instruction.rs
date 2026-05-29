@@ -83,6 +83,10 @@ pub enum Instruction {
 	// Field names live in Program::field_lists indexed by the FieldListIdx
 	// here. Keeps the instruction Copy.
 	MakeRecord(FieldListIdx),
+	// Record update `{ ...base, f: v }`. Pops the N override field values (named
+	// by the FieldListIdx) then the base record, clones the base, overwrites the
+	// named fields, and pushes the result.
+	UpdateRecord(FieldListIdx),
 	MakeVariant {
 		qualified: ConstIdx,
 		variant: ConstIdx,

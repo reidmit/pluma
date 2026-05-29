@@ -554,6 +554,12 @@ impl Resolver {
 					self.walk_expr(value, scope);
 				}
 			}
+			ExprKind::RecordUpdate { base, fields } => {
+				self.walk_expr(base, scope);
+				for (_, value) in fields {
+					self.walk_expr(value, scope);
+				}
+			}
 			ExprKind::If(i) => {
 				let inner = Some(i.range);
 				self.walk_expr(&i.subject, scope);

@@ -70,6 +70,16 @@ pub enum ExprKind {
 	Defer(Box<ExprNode>),
 	Literal(LiteralNode),
 	Record(Vec<(IdentifierNode, ExprNode)>),
+	/// `{ ...base, f1: v1, f2: v2 }` — record update. Builds a copy of `base`
+	/// with each `fields` entry overriding the same-named field. Update-only
+	/// and type-preserving: every override field must already exist on `base`
+	/// at the same type (the analyzer enforces this), so the result type equals
+	/// `base`'s. Exactly one leading spread; shorthand overrides (`{ ...a, x }`)
+	/// reuse the same field representation as `Record`.
+	RecordUpdate {
+		base: Box<ExprNode>,
+		fields: Vec<(IdentifierNode, ExprNode)>,
+	},
 	Tuple(Vec<ExprNode>),
 	Regex(RegexNode),
 	/// `try Pattern = Expr ; rest...`. The analyzer peeks the RHS's
@@ -235,6 +245,12 @@ impl std::fmt::Debug for ExprKind {
 			Record(fields) => {
 				write!(f, "record {:#?}", fields)
 			}
+
+			RecordUpdate { base, fields } => f
+				.debug_struct("record-update")
+				.field("base", base)
+				.field("fields", fields)
+				.finish(),
 
 			Regex(regex) => {
 				write!(f, "{:#?}", regex)

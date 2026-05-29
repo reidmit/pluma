@@ -1234,6 +1234,36 @@ fn emit_expr_with_parents(
 			let fields_idx = cg.intern_field_list(field_idxs);
 			fb.emit(Instruction::MakeRecord(fields_idx), range);
 		}
+		ExprKind::RecordUpdate { base, fields } => {
+			// Emit the base record first, then each override value, matching the
+			// VM's pop order (overrides popped, then base).
+			emit_expr_with_parents(
+				cg,
+				current_module,
+				imports,
+				fb,
+				scope,
+				parent_scopes,
+				base,
+				false,
+			)?;
+			let mut field_idxs = Vec::with_capacity(fields.len());
+			for (field_name, field_value) in fields {
+				emit_expr_with_parents(
+					cg,
+					current_module,
+					imports,
+					fb,
+					scope,
+					parent_scopes,
+					field_value,
+					false,
+				)?;
+				field_idxs.push(cg.intern(&field_name.name));
+			}
+			let fields_idx = cg.intern_field_list(field_idxs);
+			fb.emit(Instruction::UpdateRecord(fields_idx), range);
+		}
 		ExprKind::Interpolation(parts) => {
 			for part in parts {
 				emit_expr_with_parents(
@@ -2212,6 +2242,9 @@ fn expr_is_async(expr: &ExprNode) -> bool {
 		ExprKind::Tuple(es) | ExprKind::Interpolation(es) => es.iter().any(expr_is_async),
 		ExprKind::List(items) => items.iter().any(|it| expr_is_async(it.expr())),
 		ExprKind::Record(fields) => fields.iter().any(|(_, v)| expr_is_async(v)),
+		ExprKind::RecordUpdate { base, fields } => {
+			expr_is_async(base) || fields.iter().any(|(_, v)| expr_is_async(v))
+		}
 		ExprKind::ElementAccess { receiver, .. } | ExprKind::FieldAccess { receiver, .. } => {
 			expr_is_async(receiver)
 		}

@@ -238,6 +238,7 @@ pub fn result_repr(rv: &Rvalue, reprs: &[Repr], sigs: &Sigs) -> Repr {
 		| Rvalue::MakeDict(..)
 		| Rvalue::MakeClosure(..)
 		| Rvalue::MakeRecord(..)
+		| Rvalue::RecordUpdate { .. }
 		| Rvalue::GetField(..)
 		| Rvalue::MakeVariant { .. }
 		| Rvalue::MakeVariantCtor { .. }
@@ -337,6 +338,12 @@ fn for_each_required_operand(rv: &mut Rvalue, sigs: &Sigs, mut f: impl FnMut(&mu
 			}
 		}
 		Rvalue::MakeRecord(fields) => {
+			for (_, a) in fields {
+				f(a, Repr::Boxed);
+			}
+		}
+		Rvalue::RecordUpdate { base, fields } => {
+			f(base, Repr::Boxed);
 			for (_, a) in fields {
 				f(a, Repr::Boxed);
 			}
@@ -667,6 +674,12 @@ fn rvalue_vars(rv: &Rvalue, bump: &mut impl FnMut(VarId)) {
 			}
 		}
 		Rvalue::MakeRecord(fields) => {
+			for (_, a) in fields {
+				atom_var(a, bump);
+			}
+		}
+		Rvalue::RecordUpdate { base, fields } => {
+			atom_var(base, bump);
 			for (_, a) in fields {
 				atom_var(a, bump);
 			}

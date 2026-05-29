@@ -279,6 +279,12 @@ fn collect_dispatch_cells(expr: &ExprNode, cells: &mut Vec<DispatchCell>) {
 				collect_dispatch_cells(e, cells);
 			}
 		}
+		ExprKind::RecordUpdate { base, fields } => {
+			collect_dispatch_cells(base, cells);
+			for (_, e) in fields {
+				collect_dispatch_cells(e, cells);
+			}
+		}
 		ExprKind::If(IfNode {
 			subject,
 			body,
@@ -2428,6 +2434,30 @@ impl<'compiler> Analyzer<'compiler> {
 					.push(eq_constraint(expr.ty.clone(), Type::Record(field_types, None)).at(expr.range))
 			}
 
+			ExprKind::RecordUpdate { base, fields } => {
+				// Update-only, type-preserving (Elm-style). Constrain `base` to
+				// be an *open* record carrying at least the override fields, each
+				// at its override value's type. Because the record is open, the
+				// only way unification succeeds is if `base` already has those
+				// fields at exactly those types — that rejects type-changing
+				// overrides and brand-new fields, while leaving the untouched
+				// fields in the row tail. The result type is just `base`'s.
+				self.constrain_expr(base, constraints);
+
+				let mut field_types = Vec::new();
+				for (field_name, field_value) in fields {
+					self.constrain_expr(field_value, constraints);
+					field_types.push((field_name.name.clone(), field_value.ty.clone()));
+				}
+
+				let rid = self.new_row_var();
+				constraints.push(
+					eq_constraint(base.ty.clone(), Type::Record(field_types, Some(rid))).at(expr.range),
+				);
+
+				expr.ty = base.ty.clone();
+			}
+
 			ExprKind::UnaryOperation { op, right } => {
 				self.constrain_expr(right, constraints);
 				match op {
@@ -4515,6 +4545,12 @@ impl<'compiler> Analyzer<'compiler> {
 					self.report_unresolved_try_in_expr(v, subst);
 				}
 			}
+			ExprKind::RecordUpdate { base, fields } => {
+				self.report_unresolved_try_in_expr(base, subst);
+				for (_, v) in fields.iter_mut() {
+					self.report_unresolved_try_in_expr(v, subst);
+				}
+			}
 			ExprKind::ElementAccess { receiver, .. } | ExprKind::FieldAccess { receiver, .. } => {
 				self.report_unresolved_try_in_expr(receiver, subst);
 			}
@@ -4679,6 +4715,12 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 			}
 			ExprKind::Record(fields) => {
+				for (_, v) in fields.iter_mut() {
+					self.dispatch_try_in_expr(v, subst, new_constraints, dispatched_any, enclosing_tail);
+				}
+			}
+			ExprKind::RecordUpdate { base, fields } => {
+				self.dispatch_try_in_expr(base, subst, new_constraints, dispatched_any, enclosing_tail);
 				for (_, v) in fields.iter_mut() {
 					self.dispatch_try_in_expr(v, subst, new_constraints, dispatched_any, enclosing_tail);
 				}
@@ -5262,6 +5304,13 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 
 			ExprKind::Record(fields) => {
+				for (_, field_value) in fields {
+					self.annotate_expr(field_value, subst);
+				}
+			}
+
+			ExprKind::RecordUpdate { base, fields } => {
+				self.annotate_expr(base, subst);
 				for (_, field_value) in fields {
 					self.annotate_expr(field_value, subst);
 				}

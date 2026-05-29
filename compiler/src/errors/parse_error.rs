@@ -34,6 +34,7 @@ pub enum ParseErrorKind {
 	BuiltinExpectsPlainString,
 	ExpectedExpressionAfterSpread,
 	ExpectedExpressionAfterDefer,
+	MisplacedRecordSpread,
 	UnexpectedEOF { expected: Token },
 	UnexpectedToken { actual: Token, expected: Token },
 	UnexpectedTopLevelToken { actual: Token },
@@ -97,13 +98,14 @@ impl fmt::Display for ParseError {
 				f,
 				"`built-in` requires a plain string literal naming the builtin tag."
 			),
-			ExpectedExpressionAfterSpread => write!(
-				f,
-				"Expected an expression after `...` in a list literal."
-			),
+			ExpectedExpressionAfterSpread => write!(f, "Expected an expression after `...`."),
 			ExpectedExpressionAfterDefer => {
 				write!(f, "Expected an expression after `defer`.")
 			}
+			MisplacedRecordSpread => write!(
+				f,
+				"A record update allows a single `...spread`, and it must come first (`{{ ...base, field: value }}`)."
+			),
 			UnexpectedEOF { expected } => write!(f, "Unexpected end of file. Expected {}.", expected),
 			UnexpectedToken { actual, expected } => {
 				write!(f, "Unexpected token ({}). Expected {}.", actual, expected)

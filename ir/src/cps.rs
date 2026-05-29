@@ -809,6 +809,10 @@ fn collect_rvalue_reads(rv: &Rvalue, set: &mut HashSet<u32>) {
 		MakeDict(xs) | MakeTuple(xs) | Interpolate(xs) => xs.iter().for_each(|a| collect_atom(a, set)),
 		MakeClosure(_, caps) => caps.iter().for_each(|a| collect_atom(a, set)),
 		MakeRecord(fields) => fields.iter().for_each(|(_, a)| collect_atom(a, set)),
+		RecordUpdate { base, fields } => {
+			collect_atom(base, set);
+			fields.iter().for_each(|(_, a)| collect_atom(a, set));
+		}
 		MakeVariant { payload, .. } => payload.iter().for_each(|a| collect_atom(a, set)),
 		MakeList(items) => items.iter().for_each(|it| match it {
 			ListItem::Elem(a) | ListItem::Spread(a) => collect_atom(a, set),

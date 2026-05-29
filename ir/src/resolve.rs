@@ -220,6 +220,10 @@ fn used_vars(f: &Function) -> HashSet<u32> {
 				args.iter().for_each(note);
 			}
 			Rvalue::MakeRecord(fields) => fields.iter().for_each(|(_, a)| note(a)),
+			Rvalue::RecordUpdate { base, fields } => {
+				note(base);
+				fields.iter().for_each(|(_, a)| note(a));
+			}
 			Rvalue::MakeVariant { payload, .. } => payload.iter().for_each(note),
 			Rvalue::MakeList(items) => items.iter().for_each(|it| match it {
 				ListItem::Elem(a) | ListItem::Spread(a) => note(a),

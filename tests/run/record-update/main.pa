@@ -1,0 +1,39 @@
+# Record-update (spread) syntax: `{ ...base, field: value }`.
+#
+# Copies `base` and overrides the named fields. Update-only and
+# type-preserving: overrides must name existing fields at the same type.
+
+def main = fun {
+	let a = { name: "Reid", age: 32 }
+
+	# single override; the base is unchanged (records are immutable)
+	let b = { ...a, name: "Other Reid" }
+	print a.name
+	print b.name
+	print (to-string b.age)
+
+	# multi-field override, mixing explicit and shorthand
+	let name = "Shorthand"
+	let c = { ...a, name, age: 99 }
+	print c.name
+	print (to-string c.age)
+
+	# plain copy (no overrides)
+	let d = { ...a }
+	print d.name
+	print (to-string d.age)
+
+	# base can be an arbitrary expression
+	let e = { ...(make-point 1 2), y: 9 }
+	print (to-string e.x)
+	print (to-string e.y)
+
+	# chained updates
+	let f = { ...b, age: 40 }
+	print f.name
+	print (to-string f.age)
+}
+
+def make-point = fun x y {
+	{ x, y }
+}

@@ -422,6 +422,13 @@ impl AstWalker {
 					self.walk_expr(value, out);
 				}
 			}
+			ExprKind::RecordUpdate { base, fields } => {
+				self.walk_expr(base, out);
+				for (name, value) in fields {
+					emit(out, &name.range, PROPERTY, name.name.len());
+					self.walk_expr(value, out);
+				}
+			}
 			ExprKind::Tuple(elements) => {
 				for el in elements {
 					self.walk_expr(el, out);

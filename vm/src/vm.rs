@@ -638,6 +638,32 @@ impl VM {
 				}
 				self.stack.push(Value::Record(Rc::new(map)));
 			}
+			Instruction::UpdateRecord(fields_idx) => {
+				// Pop the N override values (named by the field list), then the
+				// base record; clone the base and overwrite the named fields.
+				let len = self.program.field_lists[fields_idx as usize].len();
+				let mut overrides = Vec::with_capacity(len);
+				for i in (0..len).rev() {
+					let v = self.stack.pop().ok_or_else(|| {
+						RuntimeError::new("VM: UpdateRecord underflow").at(self.current_range())
+					})?;
+					let name_idx = self.program.field_lists[fields_idx as usize][i];
+					overrides.push((self.program.constants[name_idx as usize].clone(), v));
+				}
+				let base = self.stack.pop().ok_or_else(|| {
+					RuntimeError::new("VM: UpdateRecord base underflow").at(self.current_range())
+				})?;
+				let Value::Record(base_map) = base else {
+					return Err(
+						RuntimeError::new("VM: UpdateRecord on non-record value").at(self.current_range()),
+					);
+				};
+				let mut map = (*base_map).clone();
+				for (name, v) in overrides {
+					map.insert((*name).clone(), v);
+				}
+				self.stack.push(Value::Record(Rc::new(map)));
+			}
 			Instruction::MakeVariant {
 				qualified,
 				variant,
@@ -1408,6 +1434,7 @@ fn opcode_name(i: &Instruction) -> &'static str {
 		MakeList(_) => "MakeList",
 		ConcatLists(_) => "ConcatLists",
 		MakeRecord { .. } => "MakeRecord",
+		UpdateRecord { .. } => "UpdateRecord",
 		MakeVariant { .. } => "MakeVariant",
 		MakeVariantCtor { .. } => "MakeVariantCtor",
 		GetField(_) => "GetField",

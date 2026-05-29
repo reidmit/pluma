@@ -455,6 +455,7 @@ impl<'a> Formatter<'a> {
 			Tuple(items) => self.format_tuple(items),
 			List(items) => self.format_list(items),
 			Record(fields) => self.format_record(fields),
+			RecordUpdate { base, fields } => self.format_record_update(base, fields),
 			Interpolation(parts) => self.format_interpolation(parts),
 			Regex(r) => self.format_regex_literal(r),
 			If(i) => self.format_if(i),
@@ -663,6 +664,27 @@ impl<'a> Formatter<'a> {
 				])
 			})
 			.collect();
+		bracketed_collection("{", "}", docs)
+	}
+
+	fn format_record_update(&self, base: &ExprNode, fields: &[(IdentifierNode, ExprNode)]) -> Doc {
+		let mut docs: Vec<Doc> = Vec::with_capacity(fields.len() + 1);
+		docs.push(concat(vec![text("..."), self.format_expr(base)]));
+		for (name, value) in fields {
+			// Field shorthand: render `{...r, a: a}` as `{...r, a}` when the
+			// value is just an identifier with the same name.
+			if let ExprKind::Identifier(ident) = &value.kind {
+				if ident.name == name.name {
+					docs.push(text(name.name.clone()));
+					continue;
+				}
+			}
+			docs.push(concat(vec![
+				text(name.name.clone()),
+				text(": "),
+				self.format_expr(value),
+			]));
+		}
 		bracketed_collection("{", "}", docs)
 	}
 

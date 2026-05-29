@@ -1,0 +1,15 @@
+# Record update is update-only and type-preserving, so both of these are
+# rejected: adding a field the base lacks, and changing a field's type.
+
+def main = fun {
+	let a = { name: "Reid", age: 32 }
+
+	# `nickname` is not a field of `a`
+	let bad-new-field = { ...a, nickname: "R" }
+
+	# `age` exists but is an int, not a string
+	let bad-type-change = { ...a, age: "thirty" }
+
+	print bad-new-field.name
+	print bad-type-change.name
+}

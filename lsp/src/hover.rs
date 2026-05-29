@@ -324,6 +324,12 @@ fn walk_expr(expr: &ExprNode, hits: &mut Vec<HoverHit>) {
 				walk_expr(value, hits);
 			}
 		}
+		ExprKind::RecordUpdate { base, fields } => {
+			walk_expr(base, hits);
+			for (_, value) in fields {
+				walk_expr(value, hits);
+			}
+		}
 		ExprKind::If(i) => {
 			walk_expr(&i.subject, hits);
 			for e in &i.body {

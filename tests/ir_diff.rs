@@ -128,6 +128,7 @@ const IR_FIXTURES: &[&str] = &[
 	"quadruple-forwarding",
 	"record-field-shorthand",
 	"record-list-cross-nesting",
+	"record-update",
 	"record-pattern",
 	"record-pattern-closed-vs-open",
 	"record-pattern-named-rest",

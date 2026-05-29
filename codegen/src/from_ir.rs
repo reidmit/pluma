@@ -865,6 +865,16 @@ impl FnCtx {
 				let fields_idx = em.intern_field_list(idxs);
 				push(body, ranges, Instruction::MakeRecord(fields_idx), r);
 			}
+			Rvalue::RecordUpdate { base, fields } => {
+				// Base first, then the override values, matching the VM's pop order.
+				let mut ops: Vec<&Atom> = Vec::with_capacity(fields.len() + 1);
+				ops.push(base);
+				ops.extend(fields.iter().map(|(_, value)| value));
+				self.emit_operands(em, &ops, body, ranges, r)?;
+				let idxs: Vec<u32> = fields.iter().map(|(name, _)| em.intern(name)).collect();
+				let fields_idx = em.intern_field_list(idxs);
+				push(body, ranges, Instruction::UpdateRecord(fields_idx), r);
+			}
 			Rvalue::MakeList(items) => {
 				let any_spread = items.iter().any(|i| matches!(i, ListItem::Spread(_)));
 				if any_spread {
@@ -1076,6 +1086,12 @@ fn rvalue_atoms(rv: &Rvalue) -> Vec<&Atom> {
 		| Rvalue::Interpolate(xs)
 		| Rvalue::MakeVariant { payload: xs, .. } => xs.iter().collect(),
 		Rvalue::MakeRecord(fields) => fields.iter().map(|(_, a)| a).collect(),
+		Rvalue::RecordUpdate { base, fields } => {
+			let mut v = Vec::with_capacity(1 + fields.len());
+			v.push(base);
+			v.extend(fields.iter().map(|(_, a)| a));
+			v
+		}
 		Rvalue::MakeList(items) => items
 			.iter()
 			.map(|it| match it {

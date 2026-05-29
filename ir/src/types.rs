@@ -350,6 +350,13 @@ pub enum Rvalue {
 	/// Build a record from (field-name, value) pairs. Provisional: record-slot
 	/// lowering (a later pass) replaces field names with static slot indices.
 	MakeRecord(Vec<(String, Atom)>),
+	/// Record update `{ ...base, f: v }`: copy `base` and override each named
+	/// field. The analyzer guarantees every override field already exists on
+	/// `base` (update-only, type-preserving), so the result has `base`'s shape.
+	RecordUpdate {
+		base: Atom,
+		fields: Vec<(String, Atom)>,
+	},
 	GetField(Atom, String),
 	/// Construct an enum variant with all its payload present.
 	MakeVariant {
