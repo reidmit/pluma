@@ -135,6 +135,7 @@ public enum wire-schema {
 	s-duration
 	s-nothing
 	s-list wire-schema
+	s-dict wire-schema wire-schema
 	s-tuple (list wire-schema)
 	s-record (list (string, wire-schema))
 	s-enum string (list (string, (list wire-schema)))

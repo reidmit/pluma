@@ -196,29 +196,13 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			(Value::String(a), Value::String(b)) => Ok(ordering_variant(a.as_str().cmp(b.as_str()))),
 			_ => unreachable!("`string-compare` expects (string, string)"),
 		},
-		"int-hash" => match &args[0] {
-			Value::Int(n) => Ok(Value::Int(*n)),
-			_ => unreachable!("`int-hash` expects int"),
-		},
-		"float-hash" => match &args[0] {
-			// Reinterpret the float's bit pattern as i64. Stable across runs
-			// for the same value; collisions only on bit-equal floats.
-			Value::Float(f) => Ok(Value::Int(f.to_bits() as i64)),
-			_ => unreachable!("`float-hash` expects float"),
-		},
-		"string-hash" => match &args[0] {
-			Value::String(s) => {
-				use std::hash::{Hash, Hasher};
-				let mut h = std::collections::hash_map::DefaultHasher::new();
-				s.as_str().hash(&mut h);
-				Ok(Value::Int(h.finish() as i64))
-			}
-			_ => unreachable!("`string-hash` expects string"),
-		},
-		"bool-hash" => match &args[0] {
-			Value::Bool(b) => Ok(Value::Int(if *b { 1 } else { 0 })),
-			_ => unreachable!("`bool-hash` expects bool"),
-		},
+		// The primitive `hash` instances all delegate to one shared function so
+		// the `wire` codec can rebuild dict buckets identically (see
+		// `value::primitive_hash`).
+		"int-hash" | "float-hash" | "string-hash" | "bool-hash" => Ok(Value::Int(
+			crate::value::primitive_hash(&args[0])
+				.unwrap_or_else(|| unreachable!("`{}` expects a primitive", tag)),
+		)),
 		"list-length" => {
 			let xs = expect_list(&args, "length");
 			Ok(Value::Int(xs.len() as i64))
@@ -866,15 +850,10 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			(Value::Bytes(a), Value::Bytes(b)) => Ok(ordering_variant(a.as_slice().cmp(b.as_slice()))),
 			_ => unreachable!("`bytes-compare` expects (bytes, bytes)"),
 		},
-		"bytes-hash" => match &args[0] {
-			Value::Bytes(b) => {
-				use std::hash::{Hash, Hasher};
-				let mut h = std::collections::hash_map::DefaultHasher::new();
-				b.as_slice().hash(&mut h);
-				Ok(Value::Int(h.finish() as i64))
-			}
-			_ => unreachable!("`bytes-hash` expects bytes"),
-		},
+		"bytes-hash" => Ok(Value::Int(
+			crate::value::primitive_hash(&args[0])
+				.unwrap_or_else(|| unreachable!("`bytes-hash` expects bytes")),
+		)),
 		"io-print" => {
 			debug_assert_eq!(args.len(), 1, "`io.print` arity");
 			let arg = args.into_iter().next().unwrap();

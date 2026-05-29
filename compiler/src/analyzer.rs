@@ -180,6 +180,15 @@ fn subst_type(ty: &Type, mapping: &HashMap<usize, Type>) -> Type {
 	}
 }
 
+// Dict keys that the `wire` codec can rehash on decode in Rust (so it doesn't
+// need the key's `hash` instance). Matches `value::primitive_hash`.
+fn is_primitive_wire_key(ty: &Type) -> bool {
+	matches!(
+		ty,
+		Type::Int | Type::Float | Type::Bool | Type::String | Type::Bytes
+	)
+}
+
 fn match_types(
 	pattern: &Type,
 	target: &Type,
@@ -6253,9 +6262,18 @@ impl<'compiler> Analyzer<'compiler> {
 					variants,
 				})
 			}
+			// `dict k v` wires as a sequence of (k, v) pairs. The key must be a
+			// primitive so the codec can rehash it on decode (matching the
+			// `hash` trait) without threading the key's hash instance; compound
+			// keys are rejected.
+			Type::Dict(k, v) if is_primitive_wire_key(k) => Some(WireShape::Dict(
+				Box::new(self.build_wire_shape(k, visiting)?),
+				Box::new(self.build_wire_shape(v, visiting)?),
+			)),
 			// Free type vars are handled by the forwarded-dict path (M3), not
-			// here; everything else (Fun, Ref, Regex, Dict, Instant, open
-			// record, PartialTuple/Record, Unknown) is non-derivable.
+			// here; everything else (Fun, Ref, Regex, dict-with-compound-key,
+			// Instant, open record, PartialTuple/Record, Unknown) is
+			// non-derivable.
 			_ => None,
 		}
 	}
@@ -6272,8 +6290,14 @@ impl<'compiler> Analyzer<'compiler> {
 			Type::Ref(_) => Some("mutable refs aren't serializable".to_string()),
 			Type::Regex => Some("regexes aren't serializable".to_string()),
 			Type::Instant => Some("instants aren't serializable (send the value they wrap)".to_string()),
-			Type::Dict(..) => {
-				Some("dicts aren't wire-able yet (send `dict.entries` as a list)".to_string())
+			// A dict with a compound key can't be rehashed by the codec; a
+			// primitive-keyed dict is fine, so blame the value type instead.
+			Type::Dict(k, v) => {
+				if is_primitive_wire_key(k) {
+					self.wire_underivable_detail(v, visiting)
+				} else {
+					Some("a dict needs an int/float/bool/string/bytes key to cross the wire".to_string())
+				}
 			}
 			Type::List(inner) => self.wire_underivable_detail(inner, visiting),
 			Type::Tuple(elems) => elems

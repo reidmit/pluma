@@ -60,6 +60,10 @@ pub enum WireShape {
 	Nothing,
 	List(Box<WireShape>),
 	Tuple(Vec<WireShape>),
+	// `dict k v` — key schema + value schema. The key is always a primitive
+	// (build_wire_shape rejects compound keys), so the codec can rehash on
+	// decode without the `hash` instance.
+	Dict(Box<WireShape>, Box<WireShape>),
 	// Field name + field shape, in a canonical (name-sorted) order shared by
 	// both encode and decode.
 	Record(Vec<(String, WireShape)>),

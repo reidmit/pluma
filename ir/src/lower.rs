@@ -941,6 +941,11 @@ impl<'a> Lowerer<'a> {
 				let i = self.lower_wire_shape(inner, range)?;
 				self.make_variant(E, "s-list", vec![i], range)
 			}
+			W::Dict(key, value) => {
+				let k = self.lower_wire_shape(key, range)?;
+				let v = self.lower_wire_shape(value, range)?;
+				self.make_variant(E, "s-dict", vec![k, v], range)
+			}
 			W::Tuple(shapes) => {
 				let mut items = Vec::with_capacity(shapes.len());
 				for s in shapes {

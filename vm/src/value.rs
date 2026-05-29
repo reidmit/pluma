@@ -425,6 +425,34 @@ fn format_duration(nanos: i64) -> String {
 }
 
 // Structural equality for `==` / `!=` / `contains`. Type system enforces same
+/// The hash of a primitive value, matching the `hash` trait's `int-hash` /
+/// `float-hash` / `string-hash` / `bytes-hash` / `bool-hash` builtins EXACTLY
+/// (those delegate here). `None` for non-primitive values, which hash through
+/// Pluma-defined instances instead. Shared so the `wire` codec can rebuild a
+/// decoded dict's hash buckets identically to `dict.lookup` without threading
+/// the `hash` dictionary — but only for primitive keys, which is why
+/// wire-derivation rejects dicts with compound keys.
+pub fn primitive_hash(v: &Value) -> Option<i64> {
+	use std::hash::{Hash, Hasher};
+	match v {
+		Value::Int(n) => Some(*n),
+		// Reinterpret the float's bit pattern as i64 (stable per value).
+		Value::Float(f) => Some(f.to_bits() as i64),
+		Value::Bool(b) => Some(if *b { 1 } else { 0 }),
+		Value::String(s) => {
+			let mut h = std::collections::hash_map::DefaultHasher::new();
+			s.as_str().hash(&mut h);
+			Some(h.finish() as i64)
+		}
+		Value::Bytes(b) => {
+			let mut h = std::collections::hash_map::DefaultHasher::new();
+			b.as_slice().hash(&mut h);
+			Some(h.finish() as i64)
+		}
+		_ => None,
+	}
+}
+
 // type on both sides, so we only need to compare like with like. Closures,
 // builtins, ctors, and regexes always compare false.
 pub fn values_eq(a: &Value, b: &Value) -> bool {

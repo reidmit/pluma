@@ -2651,6 +2651,11 @@ fn emit_wire_schema(
 			emit_wire_schema(cg, fb, scope, parent_scopes, inner, range)?;
 			mk(cg, fb, "s-list", 1);
 		}
+		W::Dict(key, value) => {
+			emit_wire_schema(cg, fb, scope, parent_scopes, key, range)?;
+			emit_wire_schema(cg, fb, scope, parent_scopes, value, range)?;
+			mk(cg, fb, "s-dict", 2);
+		}
 		W::Tuple(shapes) => {
 			for s in shapes {
 				emit_wire_schema(cg, fb, scope, parent_scopes, s, range)?;

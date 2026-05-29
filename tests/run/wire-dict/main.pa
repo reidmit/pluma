@@ -1,0 +1,27 @@
+# `wire` over `dict` (FULLSTACK.md, Layer 1). A dict encodes as a length-
+# prefixed sequence of (key, value) pairs, in a canonical key-sorted order so
+# the bytes are deterministic regardless of insertion order. Decode rebuilds
+# the hash buckets via the same primitive-key hashing `dict.lookup` uses, so
+# lookups on the decoded dict work. Compound keys are rejected at compile time.
+
+use core.dict
+use core.hex
+
+def main = fun {
+	let scores = dict.from-entries [("ada", 100), ("bob", 50), ("cy", 75)]
+	let encoded = wire.to-wire scores
+	print "encoded: $(hex.encode encoded)"
+
+	let back :: result (dict string int) wire-error = wire.from-wire encoded
+	when back is ok d {
+		print "ada = $(to-string (dict.lookup d "ada" ?? 0))"
+		print "size = $(to-string (dict.size d))"
+	} is err _e {
+		print "decode failed"
+	}
+
+	# Deterministic: same entries, different insertion order -> same bytes.
+	let a = wire.to-wire (dict.from-entries [(1, "x"), (2, "y")])
+	let b = wire.to-wire (dict.from-entries [(2, "y"), (1, "x")])
+	print "order-independent: $(to-string (a == b))"
+}

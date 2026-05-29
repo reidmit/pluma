@@ -24,7 +24,7 @@
 // identical bytes, so a payload is content-addressable. It leans hard on the
 // end-to-end type guarantee — which is the whole point.
 
-use crate::value::{Value, VariantData};
+use crate::value::{primitive_hash, DictData, Value, VariantData};
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -42,6 +42,11 @@ pub enum Schema {
 	Nothing,
 	List(Box<Schema>),
 	Tuple(Vec<Schema>),
+	// `dict k v` as a length-prefixed sequence of (key, value) pairs. The key
+	// type is always primitive (int/float/bool/string/bytes) — wire-derivation
+	// rejects compound keys — so `decode` can rehash keys via
+	// `value::primitive_hash` to rebuild buckets identically to `dict.lookup`.
+	Dict(Box<Schema>, Box<Schema>),
 	// Field name (for HashMap lookup on encode / construction on decode) +
 	// field schema, in a canonical order shared by both directions.
 	Record(Vec<(String, Schema)>),
@@ -170,6 +175,26 @@ pub fn encode(schema: &Schema, value: &Value, out: &mut Vec<u8>) {
 				encode(s, x, out);
 			}
 		}
+		(Schema::Dict(ksch, vsch), Value::Dict(data)) => {
+			// Encode entries in a canonical order (sorted by encoded-key bytes)
+			// so logically-equal dicts produce identical bytes regardless of
+			// insertion order — insertion order isn't part of a dict's identity.
+			let mut items: Vec<(Vec<u8>, &Value)> = data
+				.entries
+				.iter()
+				.map(|(k, v)| {
+					let mut kb = Vec::new();
+					encode(ksch, k, &mut kb);
+					(kb, v)
+				})
+				.collect();
+			items.sort_by(|a, b| a.0.cmp(&b.0));
+			write_uvarint(out, items.len() as u64);
+			for (kb, v) in items {
+				out.extend_from_slice(&kb);
+				encode(vsch, v, out);
+			}
+		}
 		(Schema::Record(fields), Value::Record(map)) => {
 			for (name, s) in fields {
 				let v = map
@@ -239,6 +264,20 @@ pub fn decode(schema: &Schema, cur: &mut &[u8]) -> Result<Value, WireError> {
 				xs.push(decode(s, cur)?);
 			}
 			Ok(Value::Tuple(Rc::new(xs)))
+		}
+		Schema::Dict(ksch, vsch) => {
+			let n = read_len(cur)?;
+			let mut data = DictData::new();
+			for _ in 0..n {
+				let key = decode(ksch, cur)?;
+				let value = decode(vsch, cur)?;
+				// Keys are primitive by construction (wire-derivation rejects
+				// compound dict keys), so this matches `dict.lookup`'s hashing.
+				let h = primitive_hash(&key)
+					.unwrap_or_else(|| unreachable!("wire dict key not primitive-hashable"));
+				data = data.inserted(h, key, value);
+			}
+			Ok(Value::Dict(Rc::new(data)))
 		}
 		Schema::Record(fields) => {
 			let mut map = HashMap::with_capacity(fields.len());
@@ -338,6 +377,7 @@ fn mix_schema(h: u64, schema: &Schema) -> u64 {
 			let h = mix_len(mix_byte(h, 9), elems.len());
 			elems.iter().fold(h, mix_schema)
 		}
+		Schema::Dict(k, v) => mix_schema(mix_schema(mix_byte(h, 12), k), v),
 		Schema::Record(fields) => {
 			let h = mix_len(mix_byte(h, 10), fields.len());
 			fields
@@ -398,6 +438,10 @@ pub fn schema_from_value(v: &Value) -> Option<Schema> {
 		"s-duration" => Some(Schema::Duration),
 		"s-nothing" => Some(Schema::Nothing),
 		"s-list" => Some(Schema::List(Box::new(schema_from_value(payload.first()?)?))),
+		"s-dict" => Some(Schema::Dict(
+			Box::new(schema_from_value(payload.first()?)?),
+			Box::new(schema_from_value(payload.get(1)?)?),
+		)),
 		"s-tuple" => {
 			let items = as_list(payload.first()?)?;
 			let schemas = items
@@ -538,6 +582,29 @@ mod tests {
 			&s,
 			&Value::Tuple(Rc::new(vec![int(42), string("x"), Value::Bool(true)])),
 		);
+	}
+
+	#[test]
+	fn dict_round_trips() {
+		let s = Schema::Dict(Box::new(Schema::String), Box::new(Schema::Int));
+		let mk = |pairs: &[(&str, i64)]| {
+			let mut d = DictData::new();
+			for (k, v) in pairs {
+				let key = string(k);
+				let h = primitive_hash(&key).unwrap();
+				d = d.inserted(h, key, Value::Int(*v));
+			}
+			Value::Dict(Rc::new(d))
+		};
+		round_trip(&s, &mk(&[("a", 1), ("b", 2), ("c", 3)]));
+		round_trip(&s, &mk(&[]));
+
+		// Deterministic: insertion order doesn't change the bytes.
+		let mut b1 = Vec::new();
+		encode(&s, &mk(&[("x", 1), ("y", 2)]), &mut b1);
+		let mut b2 = Vec::new();
+		encode(&s, &mk(&[("y", 2), ("x", 1)]), &mut b2);
+		assert_eq!(b1, b2, "dict encoding is insertion-order-independent");
 	}
 
 	#[test]
