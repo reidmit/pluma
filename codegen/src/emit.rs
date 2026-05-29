@@ -2693,6 +2693,11 @@ fn emit_wire_schema(
 			fb.emit(Instruction::MakeList(variants.len() as u16), range);
 			mk(cg, fb, "s-enum", 2);
 		}
+		W::EnumRef(qualified) => {
+			let idx = cg.intern(qualified);
+			fb.emit(Instruction::LoadConst(idx), range);
+			mk(cg, fb, "s-enum-ref", 1);
+		}
 		W::Var(resolved) => {
 			emit_resolved_load(cg, fb, scope, parent_scopes, resolved, range)?;
 		}

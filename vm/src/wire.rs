@@ -58,6 +58,10 @@ pub enum Schema {
 		// tag. Each carries the variant name + its payload field schemas.
 		variants: Vec<(String, Vec<Schema>)>,
 	},
+	// A back-reference to a recursive enum being expanded by an enclosing
+	// `Enum` node — the cycle-cut that keeps a recursive type's schema finite.
+	// Resolved against the enum context the codec threads as it descends.
+	EnumRef(String),
 }
 
 /// A failure decoding (or, rarely, encoding) a wire payload. Mirrors the
@@ -144,10 +148,21 @@ fn read_len(cur: &mut &[u8]) -> Result<usize, WireError> {
 
 // ---- encode ---------------------------------------------------------------
 
+// As the codec walks the schema it records each inline `Enum`'s variants by
+// qualified name, so a recursive back-reference (`EnumRef`) further down can
+// resolve to its enclosing definition without the schema being infinite. The
+// *value*'s finite depth drives termination. Borrows the variant lists out of
+// the `Schema` tree (lifetime `'a`), so no cloning.
+type EnumCtx<'a> = HashMap<&'a str, &'a [(String, Vec<Schema>)]>;
+
 /// Encode `value` per `schema`, appending to `out`. The value is assumed to
 /// match the schema (the type checker guarantees it); a mismatch is a compiler
 /// bug, caught by `debug_assert`/`unreachable` in debug builds.
 pub fn encode(schema: &Schema, value: &Value, out: &mut Vec<u8>) {
+	encode_in(schema, value, out, &mut EnumCtx::new());
+}
+
+fn encode_in<'a>(schema: &'a Schema, value: &Value, out: &mut Vec<u8>, ctx: &mut EnumCtx<'a>) {
 	match (schema, value) {
 		(Schema::Int, Value::Int(n)) => write_uvarint(out, zigzag(*n)),
 		(Schema::Duration, Value::Duration(n)) => write_uvarint(out, zigzag(*n)),
@@ -166,25 +181,26 @@ pub fn encode(schema: &Schema, value: &Value, out: &mut Vec<u8>) {
 		(Schema::List(inner), Value::List(xs)) => {
 			write_uvarint(out, xs.len() as u64);
 			for x in xs.iter() {
-				encode(inner, x, out);
+				encode_in(inner, x, out, ctx);
 			}
 		}
 		(Schema::Tuple(schemas), Value::Tuple(xs)) => {
 			debug_assert_eq!(schemas.len(), xs.len(), "tuple arity vs schema");
 			for (s, x) in schemas.iter().zip(xs.iter()) {
-				encode(s, x, out);
+				encode_in(s, x, out, ctx);
 			}
 		}
 		(Schema::Dict(ksch, vsch), Value::Dict(data)) => {
 			// Encode entries in a canonical order (sorted by encoded-key bytes)
 			// so logically-equal dicts produce identical bytes regardless of
 			// insertion order — insertion order isn't part of a dict's identity.
+			// (Keys are primitive, so they carry no enum context.)
 			let mut items: Vec<(Vec<u8>, &Value)> = data
 				.entries
 				.iter()
 				.map(|(k, v)| {
 					let mut kb = Vec::new();
-					encode(ksch, k, &mut kb);
+					encode_in(ksch, k, &mut kb, ctx);
 					(kb, v)
 				})
 				.collect();
@@ -192,7 +208,7 @@ pub fn encode(schema: &Schema, value: &Value, out: &mut Vec<u8>) {
 			write_uvarint(out, items.len() as u64);
 			for (kb, v) in items {
 				out.extend_from_slice(&kb);
-				encode(vsch, v, out);
+				encode_in(vsch, v, out, ctx);
 			}
 		}
 		(Schema::Record(fields), Value::Record(map)) => {
@@ -200,33 +216,58 @@ pub fn encode(schema: &Schema, value: &Value, out: &mut Vec<u8>) {
 				let v = map
 					.get(name)
 					.unwrap_or_else(|| unreachable!("record missing field `{}`", name));
-				encode(s, v, out);
+				encode_in(s, v, out, ctx);
 			}
 		}
-		(Schema::Enum { variants, .. }, Value::Variant(v)) => {
-			let tag = variants
-				.iter()
-				.position(|(name, _)| name.as_str() == v.variant.as_str())
-				.unwrap_or_else(|| unreachable!("variant `{}` not in schema", v.variant));
-			write_uvarint(out, tag as u64);
-			let (_, field_schemas) = &variants[tag];
-			debug_assert_eq!(
-				field_schemas.len(),
-				v.payload.len(),
-				"variant payload arity"
-			);
-			for (s, x) in field_schemas.iter().zip(v.payload.iter()) {
-				encode(s, x, out);
-			}
+		(
+			Schema::Enum {
+				qualified,
+				variants,
+			},
+			Value::Variant(v),
+		) => {
+			ctx.insert(qualified.as_str(), variants.as_slice());
+			encode_variant(variants, v, out, ctx);
+		}
+		(Schema::EnumRef(qualified), Value::Variant(v)) => {
+			let variants = *ctx
+				.get(qualified.as_str())
+				.unwrap_or_else(|| unreachable!("unregistered enum ref `{}`", qualified));
+			encode_variant(variants, v, out, ctx);
 		}
 		(s, v) => unreachable!("wire encode: schema {:?} vs value {}", s, v),
 	}
 }
 
+fn encode_variant<'a>(
+	variants: &'a [(String, Vec<Schema>)],
+	v: &VariantData,
+	out: &mut Vec<u8>,
+	ctx: &mut EnumCtx<'a>,
+) {
+	let tag = variants
+		.iter()
+		.position(|(name, _)| name.as_str() == v.variant.as_str())
+		.unwrap_or_else(|| unreachable!("variant `{}` not in schema", v.variant));
+	write_uvarint(out, tag as u64);
+	let (_, field_schemas) = &variants[tag];
+	debug_assert_eq!(
+		field_schemas.len(),
+		v.payload.len(),
+		"variant payload arity"
+	);
+	for (s, x) in field_schemas.iter().zip(v.payload.iter()) {
+		encode_in(s, x, out, ctx);
+	}
+}
+
 // ---- decode ---------------------------------------------------------------
 
-/// Decode one `schema`-shaped value from the cursor, advancing it.
-pub fn decode(schema: &Schema, cur: &mut &[u8]) -> Result<Value, WireError> {
+fn decode_in<'a>(
+	schema: &'a Schema,
+	cur: &mut &[u8],
+	ctx: &mut EnumCtx<'a>,
+) -> Result<Value, WireError> {
 	match schema {
 		Schema::Int => Ok(Value::Int(unzigzag(read_uvarint(cur)?))),
 		Schema::Duration => Ok(Value::Duration(unzigzag(read_uvarint(cur)?))),
@@ -254,14 +295,14 @@ pub fn decode(schema: &Schema, cur: &mut &[u8]) -> Result<Value, WireError> {
 			let n = read_len(cur)?;
 			let mut xs = Vec::with_capacity(n.min(1024));
 			for _ in 0..n {
-				xs.push(decode(inner, cur)?);
+				xs.push(decode_in(inner, cur, ctx)?);
 			}
 			Ok(Value::List(Rc::new(xs)))
 		}
 		Schema::Tuple(schemas) => {
 			let mut xs = Vec::with_capacity(schemas.len());
 			for s in schemas {
-				xs.push(decode(s, cur)?);
+				xs.push(decode_in(s, cur, ctx)?);
 			}
 			Ok(Value::Tuple(Rc::new(xs)))
 		}
@@ -269,8 +310,8 @@ pub fn decode(schema: &Schema, cur: &mut &[u8]) -> Result<Value, WireError> {
 			let n = read_len(cur)?;
 			let mut data = DictData::new();
 			for _ in 0..n {
-				let key = decode(ksch, cur)?;
-				let value = decode(vsch, cur)?;
+				let key = decode_in(ksch, cur, ctx)?;
+				let value = decode_in(vsch, cur, ctx)?;
 				// Keys are primitive by construction (wire-derivation rejects
 				// compound dict keys), so this matches `dict.lookup`'s hashing.
 				let h = primitive_hash(&key)
@@ -282,7 +323,7 @@ pub fn decode(schema: &Schema, cur: &mut &[u8]) -> Result<Value, WireError> {
 		Schema::Record(fields) => {
 			let mut map = HashMap::with_capacity(fields.len());
 			for (name, s) in fields {
-				map.insert(name.clone(), decode(s, cur)?);
+				map.insert(name.clone(), decode_in(s, cur, ctx)?);
 			}
 			Ok(Value::Record(Rc::new(map)))
 		}
@@ -290,21 +331,35 @@ pub fn decode(schema: &Schema, cur: &mut &[u8]) -> Result<Value, WireError> {
 			qualified,
 			variants,
 		} => {
-			let tag = read_uvarint(cur)?;
-			let idx = usize::try_from(tag).ok().filter(|i| *i < variants.len());
-			let idx = idx.ok_or(WireError::InvalidTag(tag as i64))?;
-			let (name, field_schemas) = &variants[idx];
-			let mut payload = Vec::with_capacity(field_schemas.len());
-			for s in field_schemas {
-				payload.push(decode(s, cur)?);
-			}
-			Ok(Value::Variant(Rc::new(VariantData {
-				qualified_enum: Rc::new(qualified.clone()),
-				variant: Rc::new(name.clone()),
-				payload,
-			})))
+			ctx.insert(qualified.as_str(), variants.as_slice());
+			decode_variant(qualified, variants, cur, ctx)
+		}
+		Schema::EnumRef(qualified) => {
+			let variants = *ctx.get(qualified.as_str()).ok_or(WireError::Malformed)?;
+			decode_variant(qualified, variants, cur, ctx)
 		}
 	}
+}
+
+fn decode_variant<'a>(
+	qualified: &str,
+	variants: &'a [(String, Vec<Schema>)],
+	cur: &mut &[u8],
+	ctx: &mut EnumCtx<'a>,
+) -> Result<Value, WireError> {
+	let tag = read_uvarint(cur)?;
+	let idx = usize::try_from(tag).ok().filter(|i| *i < variants.len());
+	let idx = idx.ok_or(WireError::InvalidTag(tag as i64))?;
+	let (name, field_schemas) = &variants[idx];
+	let mut payload = Vec::with_capacity(field_schemas.len());
+	for s in field_schemas {
+		payload.push(decode_in(s, cur, ctx)?);
+	}
+	Ok(Value::Variant(Rc::new(VariantData {
+		qualified_enum: Rc::new(qualified.to_string()),
+		variant: Rc::new(name.clone()),
+		payload,
+	})))
 }
 
 fn take<'a>(cur: &mut &'a [u8], n: usize) -> Result<&'a [u8], WireError> {
@@ -320,7 +375,7 @@ fn take<'a>(cur: &mut &'a [u8], n: usize) -> Result<&'a [u8], WireError> {
 /// fully consumed (no trailing bytes).
 pub fn decode_all(schema: &Schema, bytes: &[u8]) -> Result<Value, WireError> {
 	let mut cur = bytes;
-	let value = decode(schema, &mut cur)?;
+	let value = decode_in(schema, &mut cur, &mut EnumCtx::new())?;
 	if !cur.is_empty() {
 		return Err(WireError::TrailingBytes(cur.len() as i64));
 	}
@@ -378,6 +433,7 @@ fn mix_schema(h: u64, schema: &Schema) -> u64 {
 			elems.iter().fold(h, mix_schema)
 		}
 		Schema::Dict(k, v) => mix_schema(mix_schema(mix_byte(h, 12), k), v),
+		Schema::EnumRef(qualified) => mix_str(mix_byte(h, 13), qualified),
 		Schema::Record(fields) => {
 			let h = mix_len(mix_byte(h, 10), fields.len());
 			fields
@@ -442,6 +498,7 @@ pub fn schema_from_value(v: &Value) -> Option<Schema> {
 			Box::new(schema_from_value(payload.first()?)?),
 			Box::new(schema_from_value(payload.get(1)?)?),
 		)),
+		"s-enum-ref" => Some(Schema::EnumRef(as_string(payload.first()?)?.to_string())),
 		"s-tuple" => {
 			let items = as_list(payload.first()?)?;
 			let schemas = items
@@ -672,6 +729,29 @@ mod tests {
 			Err(e) => assert_eq!(e, expected),
 			Ok(_) => panic!("expected decode error {:?}, got Ok", expected),
 		}
+	}
+
+	#[test]
+	fn recursive_enum_round_trips() {
+		// enum tree { leaf int  node tree tree } — cycle cut with EnumRef.
+		let tree = Schema::Enum {
+			qualified: "m.tree".to_string(),
+			variants: vec![
+				("leaf".to_string(), vec![Schema::Int]),
+				(
+					"node".to_string(),
+					vec![
+						Schema::EnumRef("m.tree".to_string()),
+						Schema::EnumRef("m.tree".to_string()),
+					],
+				),
+			],
+		};
+		let leaf = |n| variant("m.tree", "leaf", vec![int(n)]);
+		let node = |l, r| variant("m.tree", "node", vec![l, r]);
+		// node(leaf 1, node(leaf 2, leaf 3))
+		round_trip(&tree, &node(leaf(1), node(leaf(2), leaf(3))));
+		round_trip(&tree, &leaf(42));
 	}
 
 	#[test]

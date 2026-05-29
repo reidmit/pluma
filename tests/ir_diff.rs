@@ -191,6 +191,7 @@ const IR_FIXTURES: &[&str] = &[
 	"wire-dict",
 	"wire-fingerprint",
 	"wire-polymorphic",
+	"wire-recursive",
 	"wire-roundtrip",
 ];
 

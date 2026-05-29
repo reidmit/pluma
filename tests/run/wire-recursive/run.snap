@@ -1,0 +1,11 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+tree bytes: 0101000200040006
+tree sum: 6
+json round-trips: true
+== stderr ==

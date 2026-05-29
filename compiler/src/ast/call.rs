@@ -78,6 +78,10 @@ pub enum WireShape {
 	// `wire a` dictionary (itself a `wire-schema` value). Carries the inner
 	// dispatch resolution (a `Forwarded`, or a nested resolution).
 	Var(Box<Resolved>),
+	// A back-reference to a recursive enum (by qualified name) whose inline
+	// `Enum` definition is an enclosing ancestor in the shape — cuts the cycle
+	// so a recursive type's schema stays finite.
+	EnumRef(String),
 }
 
 // Typeclass dispatch metadata for an AST site. Shared between the AST

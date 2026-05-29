@@ -6237,9 +6237,11 @@ impl<'compiler> Analyzer<'compiler> {
 				if def.variants.is_empty() {
 					return None;
 				}
-				// Recursive types need a by-name schema table; deferred.
+				// Recursive occurrence: cut the cycle with a by-name reference
+				// (the codec resolves it against the enclosing inline def, which
+				// is an ancestor in the shape). Keeps the schema finite.
 				if visiting.iter().any(|n| n == name) {
-					return None;
+					return Some(WireShape::EnumRef(name.clone()));
 				}
 				let mut mapping: HashMap<usize, Type> = HashMap::new();
 				for (p, arg) in def.param_vars.iter().zip(args.iter()) {
@@ -6325,11 +6327,11 @@ impl<'compiler> Analyzer<'compiler> {
 						)
 					});
 				}
+				// Recursion is supported (cycle-cut with EnumRef), so it's not a
+				// reason a type is non-derivable — stop descending this cycle and
+				// keep looking elsewhere for the real blocker.
 				if visiting.iter().any(|n| n == name) {
-					return Some(format!(
-						"`{}` is recursive, and recursive types aren't supported on the wire yet",
-						bare
-					));
+					return None;
 				}
 				let mut mapping: HashMap<usize, Type> = HashMap::new();
 				for (p, arg) in def.param_vars.iter().zip(args.iter()) {

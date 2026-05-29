@@ -981,6 +981,10 @@ impl<'a> Lowerer<'a> {
 				let vlist = self.emit_let(Rvalue::MakeList(items), range);
 				self.make_variant(E, "s-enum", vec![str_atom(qualified), vlist], range)
 			}
+			W::EnumRef(qualified) => {
+				let q = Atom::Const(Const::Str(qualified.clone()));
+				self.make_variant(E, "s-enum-ref", vec![q], range)
+			}
 			W::Var(resolved) => self.lower_dict_atom(resolved, range),
 		}
 	}

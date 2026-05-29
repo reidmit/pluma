@@ -1,0 +1,35 @@
+# Recursive types on the wire (FULLSTACK.md, Layer 1). A recursive enum can't
+# expand to a finite schema tree, so the codec cuts back-edges with a by-name
+# `s-enum-ref` and resolves them against the enclosing inline definition as it
+# descends — the value's finite depth drives termination.
+
+use core.hex
+
+enum tree {
+	leaf int
+	node tree tree
+}
+
+# Recursion through a list, plus multiple recursive variants.
+enum json {
+	jnull
+	jnum int
+	jstr string
+	jarr (list json)
+}
+
+def sum-tree :: fun tree -> int = fun t {
+	when t is leaf n { n } is node l r { (sum-tree l) + (sum-tree r) }
+}
+
+def main = fun {
+	let t = node (node (leaf 1) (leaf 2)) (leaf 3)
+	let encoded = wire.to-wire t
+	print "tree bytes: $(hex.encode encoded)"
+	let back :: result tree wire-error = wire.from-wire encoded
+	when back is ok t2 { print "tree sum: $(to-string (sum-tree t2))" } is err _e { print "tree failed" }
+
+	let j = jarr [jnum 1, jstr "hi", jarr [jnull, jnum 2]]
+	let j2 :: result json wire-error = wire.from-wire (wire.to-wire j)
+	when j2 is ok v { print "json round-trips: $(to-string (v == j))" } is err _e { print "json failed" }
+}
