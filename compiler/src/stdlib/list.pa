@@ -24,6 +24,16 @@
 #     list.length []             # => 0
 public def length :: fun (list a) -> int = built-in "list-length"
 
+# Returns the element at position `i`, counting from 0. This is the
+# primitive O(1) access the iterators below are built on.
+#
+# It is *partial*: a position outside `0 <= i < length` stops the
+# program. When `i` might be out of range, reach for a total operation
+# instead -- `head` for the first element, `find` to search by value.
+#
+#     list.get [10, 20, 30] 1   # => 20
+public def get :: fun (list a) int -> a = built-in "list-get"
+
 # True when the list has no elements at all. Just a shorthand for
 # checking whether `length` is zero.
 #
@@ -45,7 +55,9 @@ public def reverse :: fun (list a) -> list a = built-in "list-reverse"
 #
 # When you're building a list inline, the `...` spread does the
 # same thing and reads more cleanly: `[...xs, ...ys]`.
-public def concat :: fun (list a) (list a) -> list a = built-in "list-concat"
+public def concat :: fun (list a) (list a) -> list a = fun xs ys {
+	[...xs, ...ys]
+}
 
 # True when `target` shows up somewhere in the list. Elements are
 # compared by value, so `[1, 2, 3]` contains `2`, and a list of
@@ -53,7 +65,21 @@ public def concat :: fun (list a) (list a) -> list a = built-in "list-concat"
 #
 #     list.contains [1, 2, 3] 2    # => true
 #     list.contains [1, 2, 3] 99   # => false
-public def contains :: fun (list a) a -> bool = built-in "list-contains"
+public def contains :: fun (list a) a -> bool = fun xs target {
+	contains-from xs target (length xs) 0
+}
+
+def contains-from :: fun (list a) a int int -> bool = fun xs target n i {
+	if i < n is true {
+		if (get xs i) == target is true {
+			true
+		} else {
+			contains-from xs target n (i + 1)
+		}
+	} else {
+		false
+	}
+}
 
 # Runs `f` on every element and collects the results into a new
 # list, keeping the order. The results can be a different type
@@ -63,6 +89,10 @@ public def contains :: fun (list a) a -> bool = built-in "list-contains"
 #     list.map [1, 2, 3] (fun n { n * 2 })   # => [2, 4, 6]
 #     list.map [1, 2, 3] to-string           # => ["1", "2", "3"]
 public def map :: fun (list a) (fun a -> b) -> list b = built-in "list-map"
+
+# (map/filter build new lists; they stay built-in because pure-Pluma
+# list construction over the array backing is quadratic. The consuming
+# iterators below are pure Pluma -- they only read, via `get`.)
 
 # Keeps only the elements that `pred` returns true for, dropping
 # the rest. Order is preserved.
@@ -86,7 +116,17 @@ public def filter :: fun (list a) (fun a -> bool) -> list a = built-in "list-fil
 #
 # The accumulator can be any type, not just a number -- start with
 # "" and you can glue the elements together into a string.
-public def fold :: fun (list a) b (fun b a -> b) -> b = built-in "list-fold"
+public def fold :: fun (list a) b (fun b a -> b) -> b = fun xs acc f {
+	fold-from xs f (length xs) 0 acc
+}
+
+def fold-from :: fun (list a) (fun b a -> b) int int b -> b = fun xs f n i acc {
+	if i < n is true {
+		fold-from xs f n (i + 1) (f acc (get xs i))
+	} else {
+		acc
+	}
+}
 
 # Runs `f` on every element just for the side effects -- printing
 # each one, say -- and returns `nothing`. If you actually want the
@@ -94,14 +134,31 @@ public def fold :: fun (list a) b (fun b a -> b) -> b = built-in "list-fold"
 #
 #     list.each ["a", "b"] (fun s { io.print s })
 #     # prints a, then b on separate lines
-public def each :: fun (list a) (fun a -> b) -> nothing = built-in "list-each"
+public def each :: fun (list a) (fun a -> b) -> nothing = fun xs f {
+	each-from xs f (length xs) 0
+}
+
+def each-from :: fun (list a) (fun a -> b) int int -> nothing = fun xs f n i {
+	if i < n is true {
+		let _ = f (get xs i)
+		each-from xs f n (i + 1)
+	} else {
+		()
+	}
+}
 
 # Returns the first element, wrapped in `some`. An empty list has
 # no first element, so you get `none`.
 #
 #     list.head [1, 2, 3]   # => some 1
 #     list.head []          # => none
-public def head :: fun (list a) -> option a = built-in "list-head"
+public def head :: fun (list a) -> option a = fun xs {
+	if length xs == 0 is true {
+		none
+	} else {
+		some (get xs 0)
+	}
+}
 
 # Returns everything except the first element, wrapped in `some`;
 # `none` for an empty list. Note that the tail of a one-element
@@ -110,7 +167,13 @@ public def head :: fun (list a) -> option a = built-in "list-head"
 #     list.tail [1, 2, 3]   # => some [2, 3]
 #     list.tail [1]         # => some []
 #     list.tail []          # => none
-public def tail :: fun (list a) -> option (list a) = built-in "list-tail"
+public def tail :: fun (list a) -> option (list a) = fun xs {
+	when xs is [] {
+		none
+	} is [_, ...rest] {
+		some rest
+	}
+}
 
 # Returns a new list with just the first `n` elements. If the list
 # is shorter than `n`, you get the whole thing back.
@@ -131,21 +194,64 @@ public def drop :: fun (list a) int -> list a = built-in "list-drop"
 #
 #     list.find [1, 2, 3, 4] (fun n { n > 2 })     # => some 3
 #     list.find [1, 2, 3] (fun n { n > 100 })      # => none
-public def find :: fun (list a) (fun a -> bool) -> option a = built-in "list-find"
+public def find :: fun (list a) (fun a -> bool) -> option a = fun xs pred {
+	find-from xs pred (length xs) 0
+}
+
+def find-from :: fun (list a) (fun a -> bool) int int -> option a = fun xs pred n i {
+	if i < n is true {
+		let x = get xs i
+		if pred x is true {
+			some x
+		} else {
+			find-from xs pred n (i + 1)
+		}
+	} else {
+		none
+	}
+}
 
 # True when at least one element passes `pred`. Stops as soon as
 # it finds one.
 #
 #     list.any [1, 2, 3] (fun n { n > 2 })     # => true
 #     list.any [1, 2, 3] (fun n { n > 100 })   # => false
-public def any :: fun (list a) (fun a -> bool) -> bool = built-in "list-any"
+public def any :: fun (list a) (fun a -> bool) -> bool = fun xs pred {
+	any-from xs pred (length xs) 0
+}
+
+def any-from :: fun (list a) (fun a -> bool) int int -> bool = fun xs pred n i {
+	if i < n is true {
+		if pred (get xs i) is true {
+			true
+		} else {
+			any-from xs pred n (i + 1)
+		}
+	} else {
+		false
+	}
+}
 
 # True when every element passes `pred`. An empty list counts as
 # true -- there's nothing in it to fail the test.
 #
 #     list.all [2, 4, 6] (fun n { n % 2 == 0 })   # => true
 #     list.all [1, 2, 3] (fun n { n > 1 })        # => false
-public def all :: fun (list a) (fun a -> bool) -> bool = built-in "list-all"
+public def all :: fun (list a) (fun a -> bool) -> bool = fun xs pred {
+	all-from xs pred (length xs) 0
+}
+
+def all-from :: fun (list a) (fun a -> bool) int int -> bool = fun xs pred n i {
+	if i < n is true {
+		if pred (get xs i) is true {
+			all-from xs pred n (i + 1)
+		} else {
+			false
+		}
+	} else {
+		true
+	}
+}
 
 # Returns a new list with the elements in sorted order. You choose
 # the order with a compare function `cmp a b` that reports whether

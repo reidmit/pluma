@@ -20,7 +20,13 @@
 #
 #     try first = list.head xs   # bail out with none if xs is empty
 #     some (first * 2)           # otherwise carry on with the value
-public def then :: fun (option a) (fun a -> option b) -> option b = built-in "option-then"
+public def then :: fun (option a) (fun a -> option b) -> option b = fun o f {
+	when o is some v {
+		f v
+	} is none {
+		none
+	}
+}
 
 # Returns the value inside a `some`, or falls back to whatever
 # `fallback` produces when the option is `none`. The fallback is a

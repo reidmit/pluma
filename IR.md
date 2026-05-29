@@ -234,13 +234,29 @@ recursively by folding byte arrays with `__bytesconcat`), and **floats** (delega
 a `float_to_str` host import that writes into a caller-passed GC `$bytes` buffer — as a
 browser target would delegate to JS). **Variant printing** works (`$variant` carries a
 display-name field). A returned `err` result becomes a `runtime error` exit (checked by
-the runtime, mirroring `vm::VM::run`). **~65 fixtures green, 0 diffs.** (The differential
-harness runs wasmtime's **null collector** — the `gc-null` feature — because wasmtime
-30's deferred-ref-counting collector panics on a valid module once a real GC runs.)
+the runtime, mirroring `vm::VM::run`).
+
+An **inline-builtin** path (`is_inline_builtin` + `FnEmitter::inline_builtin`) emits
+pure-compute leaves directly over the `$value` GC layout — no host import, no synthetic
+helper — starting with `list-get` (array.get) and `list-length` (array.len → boxed
+`$int`). This is the seam that lets the **builtin surface grow two ways**: inline-emit a
+pure leaf in wasm, *or* rewrite the stdlib def in pure Pluma so it lowers through the
+existing pipeline with no new emit code (and runs on the VM unchanged). The Tier-1
+stdlib-to-Pluma rewrite (list consumers `fold`/`each`/`contains`/`find`/`any`/`all`/
+`head`/`tail`/`concat`, `option.then`/`result.then`, `assert.equals`/`not-equals`/`all`)
+took that second path — list iterators recurse by index over `length`+`list-get` (NOT
+`[h,...rest]` recursion, which copies the tail and is O(n²)), and `try`-over-option/result
+now works on wasm because it desugars to the now-pure `then`. **75 fixtures green, 0
+diffs.** (The differential harness runs wasmtime's **null collector** — the `gc-null`
+feature — because wasmtime 30's deferred-ref-counting collector panics on a valid module
+once a real GC runs.)
 
 **Still unbuilt.** The broad **builtin host surface** (`list.map`/`filter`/`fold`,
 `string.*`, `math.*`, `dict.*`, `bytes.*` — ~197 tags, M7 — gates most remaining
-`list-*`/`string-*`/`core-*` fixtures); `string/bytes-compare` + hash wrappers; record
+`list-*`/`string-*`/`core-*` fixtures; the *list builders* `map`/`filter`/`reverse`/
+`sort` stay Rust builtins for now because pure-Pluma list construction over the array
+backing is O(n²) — they want a tabulate/`list-build` primitive first); `string/bytes-
+compare` + hash wrappers; record
 `{...rest}` named-rest binding; `Switch`→`br_table`; `Const` globals; async (run
 `cps_transform`, then reimplement the fiber/scope/timer scheduler — M9). DOM/FFI/VDOM
 out of scope.

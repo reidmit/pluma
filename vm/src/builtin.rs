@@ -4,7 +4,7 @@
 // comparison, etc.) are inlined into the VM dispatch loop instead; this
 // file is only the named-builtin path plus the cross-call `invoke` helper.
 
-use crate::value::{values_eq, DictData, TaskRepr, Value, VariantData};
+use crate::value::{DictData, TaskRepr, Value, VariantData};
 use crate::vm::{RuntimeError, VM};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -207,6 +207,24 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			let xs = expect_list(&args, "length");
 			Ok(Value::Int(xs.len() as i64))
 		}
+		"list-get" => {
+			let xs = match &args[0] {
+				Value::List(xs) => xs,
+				_ => unreachable!("`get`: expected list"),
+			};
+			let i = match &args[1] {
+				Value::Int(n) => *n,
+				_ => unreachable!("`get`: expected int"),
+			};
+			if i < 0 || (i as usize) >= xs.len() {
+				Err(RuntimeError::new(format!(
+					"list.get: index {i} out of bounds (length {})",
+					xs.len()
+				)))
+			} else {
+				Ok(xs[i as usize].clone())
+			}
+		}
 		"list-is-empty" => {
 			let xs = expect_list(&args, "is-empty");
 			Ok(Value::Bool(xs.is_empty()))
@@ -216,30 +234,6 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			let mut rev: Vec<Value> = xs.iter().cloned().collect();
 			rev.reverse();
 			Ok(Value::List(Rc::new(rev)))
-		}
-		"list-concat" => {
-			debug_assert_eq!(args.len(), 2, "`concat` arity");
-			let a = match &args[0] {
-				Value::List(xs) => xs.clone(),
-				_ => unreachable!("`concat`: expected list"),
-			};
-			let b = match &args[1] {
-				Value::List(xs) => xs.clone(),
-				_ => unreachable!("`concat`: expected list"),
-			};
-			let mut out: Vec<Value> = Vec::with_capacity(a.len() + b.len());
-			out.extend(a.iter().cloned());
-			out.extend(b.iter().cloned());
-			Ok(Value::List(Rc::new(out)))
-		}
-		"list-contains" => {
-			debug_assert_eq!(args.len(), 2, "`contains` arity");
-			let xs = match &args[0] {
-				Value::List(xs) => xs.clone(),
-				_ => unreachable!("`contains`: expected list"),
-			};
-			let needle = &args[1];
-			Ok(Value::Bool(xs.iter().any(|v| values_eq(v, needle))))
 		}
 		"list-map" => {
 			debug_assert_eq!(args.len(), 2, "`map` arity");
@@ -277,47 +271,6 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			}
 			Ok(Value::List(Rc::new(out)))
 		}
-		"list-fold" => {
-			debug_assert_eq!(args.len(), 3, "`fold` arity");
-			let mut it = args.into_iter();
-			let list_arg = it.next().unwrap();
-			let mut acc = it.next().unwrap();
-			let fn_arg = it.next().unwrap();
-			let xs = match list_arg {
-				Value::List(xs) => xs,
-				_ => unreachable!("`fold`: expected list"),
-			};
-			for x in xs.iter() {
-				acc = invoke(vm, fn_arg.clone(), vec![acc, x.clone()])?;
-			}
-			Ok(acc)
-		}
-		"list-each" => {
-			debug_assert_eq!(args.len(), 2, "`each` arity");
-			let mut it = args.into_iter();
-			let list_arg = it.next().unwrap();
-			let fn_arg = it.next().unwrap();
-			let xs = match list_arg {
-				Value::List(xs) => xs,
-				_ => unreachable!("`each`: expected list"),
-			};
-			for x in xs.iter() {
-				invoke(vm, fn_arg.clone(), vec![x.clone()])?;
-			}
-			Ok(Value::Nothing)
-		}
-		"list-head" => {
-			let xs = expect_list(&args, "head");
-			Ok(option_value(xs.first().cloned()))
-		}
-		"list-tail" => {
-			let xs = expect_list(&args, "tail");
-			Ok(if xs.is_empty() {
-				option_value(None)
-			} else {
-				option_value(Some(Value::List(Rc::new(xs[1..].to_vec()))))
-			})
-		}
 		"list-take" => {
 			debug_assert_eq!(args.len(), 2, "`take` arity");
 			let xs = match &args[0] {
@@ -343,60 +296,6 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			};
 			let n = n.min(xs.len());
 			Ok(Value::List(Rc::new(xs[n..].to_vec())))
-		}
-		"list-find" => {
-			debug_assert_eq!(args.len(), 2, "`find` arity");
-			let mut it = args.into_iter();
-			let list_arg = it.next().unwrap();
-			let fn_arg = it.next().unwrap();
-			let xs = match list_arg {
-				Value::List(xs) => xs,
-				_ => unreachable!("`find`: expected list"),
-			};
-			for x in xs.iter() {
-				match invoke(vm, fn_arg.clone(), vec![x.clone()])? {
-					Value::Bool(true) => return Ok(option_value(Some(x.clone()))),
-					Value::Bool(false) => {}
-					_ => unreachable!("`find`: predicate must return bool"),
-				}
-			}
-			Ok(option_value(None))
-		}
-		"list-any" => {
-			debug_assert_eq!(args.len(), 2, "`any` arity");
-			let mut it = args.into_iter();
-			let list_arg = it.next().unwrap();
-			let fn_arg = it.next().unwrap();
-			let xs = match list_arg {
-				Value::List(xs) => xs,
-				_ => unreachable!("`any`: expected list"),
-			};
-			for x in xs.iter() {
-				match invoke(vm, fn_arg.clone(), vec![x.clone()])? {
-					Value::Bool(true) => return Ok(Value::Bool(true)),
-					Value::Bool(false) => {}
-					_ => unreachable!("`any`: predicate must return bool"),
-				}
-			}
-			Ok(Value::Bool(false))
-		}
-		"list-all" => {
-			debug_assert_eq!(args.len(), 2, "`all` arity");
-			let mut it = args.into_iter();
-			let list_arg = it.next().unwrap();
-			let fn_arg = it.next().unwrap();
-			let xs = match list_arg {
-				Value::List(xs) => xs,
-				_ => unreachable!("`all`: expected list"),
-			};
-			for x in xs.iter() {
-				match invoke(vm, fn_arg.clone(), vec![x.clone()])? {
-					Value::Bool(false) => return Ok(Value::Bool(false)),
-					Value::Bool(true) => {}
-					_ => unreachable!("`all`: predicate must return bool"),
-				}
-			}
-			Ok(Value::Bool(true))
 		}
 		"list-sort" => {
 			debug_assert_eq!(args.len(), 2, "`sort` arity");
@@ -1285,45 +1184,6 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			Ok(Value::Nothing)
 		}
 
-		"option-then" => {
-			// `option.then o f` — invoke `f` on `some`'s payload; pass
-			// `none` through unchanged.
-			debug_assert_eq!(args.len(), 2, "`option.then` arity");
-			let mut it = args.into_iter();
-			let o = it.next().unwrap();
-			let fn_arg = it.next().unwrap();
-			match o {
-				Value::Variant(v) => match v.variant.as_str() {
-					"some" => {
-						debug_assert_eq!(v.payload.len(), 1, "`some` payload arity");
-						invoke(vm, fn_arg, vec![v.payload[0].clone()])
-					}
-					"none" => Ok(Value::Variant(v)),
-					other => unreachable!("`option.then`: unexpected option variant `{}`", other),
-				},
-				_ => unreachable!("`option.then`: expected option variant"),
-			}
-		}
-		"result-then" => {
-			// `result.then r f` — invoke `f` on `ok`'s payload; pass `err`
-			// through unchanged.
-			debug_assert_eq!(args.len(), 2, "`result.then` arity");
-			let mut it = args.into_iter();
-			let r = it.next().unwrap();
-			let fn_arg = it.next().unwrap();
-			match r {
-				Value::Variant(v) => match v.variant.as_str() {
-					"ok" => {
-						debug_assert_eq!(v.payload.len(), 1, "`ok` payload arity");
-						invoke(vm, fn_arg, vec![v.payload[0].clone()])
-					}
-					"err" => Ok(Value::Variant(v)),
-					other => unreachable!("`result.then`: unexpected result variant `{}`", other),
-				},
-				_ => unreachable!("`result.then`: expected result variant"),
-			}
-		}
-
 		"option-expect" => {
 			// `option.expect o msg` — unwrap `some`'s payload, or abort with
 			// `msg` on `none` (there's no payload to report).
@@ -1417,51 +1277,6 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 		// result is what `pluma test` reads. (The `is-*` predicates live
 		// in `assert.pa` as pure Pluma; only the value-formatting checks
 		// and the `all` combinator need Rust.)
-		"assert-equals" => {
-			debug_assert_eq!(args.len(), 2, "`assert.equals` arity");
-			if values_eq(&args[0], &args[1]) {
-				Ok(result_ok(Value::Nothing))
-			} else {
-				Ok(result_err(Value::String(Rc::new(format!(
-					"expected {}, got {}",
-					args[1], args[0]
-				)))))
-			}
-		}
-		"assert-not-equals" => {
-			debug_assert_eq!(args.len(), 2, "`assert.not-equals` arity");
-			if !values_eq(&args[0], &args[1]) {
-				Ok(result_ok(Value::Nothing))
-			} else {
-				Ok(result_err(Value::String(Rc::new(format!(
-					"expected a value other than {}",
-					args[0]
-				)))))
-			}
-		}
-		"assert-all" => {
-			debug_assert_eq!(args.len(), 1, "`assert.all` arity");
-			let checks = match &args[0] {
-				Value::List(xs) => xs,
-				_ => unreachable!("`assert.all` expects a list"),
-			};
-			let mut failures: Vec<String> = Vec::new();
-			for check in checks.iter() {
-				match check {
-					Value::Variant(v) if v.variant.as_str() == "ok" => {}
-					Value::Variant(v) if v.variant.as_str() == "err" => match v.payload.first() {
-						Some(Value::String(s)) => failures.push(s.as_str().to_string()),
-						other => failures.push(format!("{}", other.cloned().unwrap_or(Value::Nothing))),
-					},
-					_ => unreachable!("`assert.all` expects a list of results"),
-				}
-			}
-			if failures.is_empty() {
-				Ok(result_ok(Value::Nothing))
-			} else {
-				Ok(result_err(Value::String(Rc::new(failures.join("\n")))))
-			}
-		}
 		"hex-encode" => {
 			let b = expect_bytes(&args, "hex.encode");
 			let mut out = String::with_capacity(b.len() * 2);

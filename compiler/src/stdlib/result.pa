@@ -19,7 +19,13 @@
 #
 #     try text = io.read-file path   # stop with the err if it fails
 #     ok (string.length text)        # otherwise carry on
-public def then :: fun (result a e) (fun a -> result b e) -> result b e = built-in "result-then"
+public def then :: fun (result a e) (fun a -> result b e) -> result b e = fun r f {
+	when r is ok v {
+		f v
+	} is err e {
+		err e
+	}
+}
 
 # Returns the value inside an `ok`, or falls back to whatever `fallback`
 # produces when the result is an `err`. The error value is discarded; if

@@ -16,12 +16,24 @@
 #
 #     assert.equals (1 + 1) 2
 #     assert.equals (string.to-upper "hi") "HI"
-public def equals :: fun a a -> result nothing string = built-in "assert-equals"
+public def equals :: fun a a -> result nothing string = fun a b {
+	if a == b is true {
+		ok ()
+	} else {
+		err "expected $(to-string b), got $(to-string a)"
+	}
+}
 
 # `ok ()` when the two values are *not* equal.
 #
 #     assert.not-equals "cat" "dog"
-public def not-equals :: fun a a -> result nothing string = built-in "assert-not-equals"
+public def not-equals :: fun a a -> result nothing string = fun a b {
+	if a == b is true {
+		err "expected a value other than $(to-string a)"
+	} else {
+		ok ()
+	}
+}
 
 # `ok ()` when `value` is `true`.
 public def is-true :: fun bool -> result nothing string = fun value {
@@ -92,4 +104,30 @@ public def is-err :: fun (result a e) -> result nothing string = fun value {
 #             assert.equals (4 * 2) 8,
 #         ]
 #     })
-public def all :: fun (list (result nothing string)) -> result nothing string = built-in "assert-all"
+public def all :: fun (list (result nothing string)) -> result nothing string = fun checks {
+	all-go checks false ""
+}
+
+# Walk the checks, gluing every `err` message onto `acc` (newline
+# separated) and remembering with `had` whether we saw any failure --
+# so an empty failure message still counts as a failure.
+def all-go :: fun (list (result nothing string)) bool string -> result nothing string = fun checks had acc {
+	when checks is [] {
+		if had is true {
+			err acc
+		} else {
+			ok ()
+		}
+	} is [first, ...rest] {
+		when first is ok _ {
+			all-go rest had acc
+		} is err msg {
+			let next = if had is true {
+				acc ++ "\n" ++ msg
+			} else {
+				msg
+			}
+			all-go rest true next
+		}
+	}
+}

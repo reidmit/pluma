@@ -189,6 +189,13 @@ fn host_sig(tag: &str) -> Option<HostSig> {
 	}
 }
 
+/// Pure-compute builtins emitted inline at the call site (no host import, no
+/// synthetic helper). They operate on the GC `$value` layout directly. Grows as
+/// more of the builtin surface moves to native WasmGC.
+fn is_inline_builtin(tag: &str) -> bool {
+	matches!(tag, "list-get" | "list-length")
+}
+
 pub(crate) struct Module;
 
 impl Module {
@@ -205,6 +212,10 @@ impl Module {
 			collect_host_calls(&p.functions[fid as usize].body, &builtin_g, |tag| {
 				if tag == "to-string" {
 					tostring_called = true;
+					return;
+				}
+				// Pure-compute builtins emitted inline at the call site (no import).
+				if is_inline_builtin(tag) {
 					return;
 				}
 				if !host_index.contains_key(tag) {
@@ -1672,6 +1683,11 @@ impl<'a> FnEmitter<'a> {
 	}
 
 	fn host_call(&mut self, tag: &str, args: &[Atom]) {
+		// Pure-compute builtins emitted inline over the `$value` GC layout.
+		if is_inline_builtin(tag) {
+			self.inline_builtin(tag, args);
+			return;
+		}
 		// `to-string` is implemented in wasm (`__tostring`), not imported.
 		if tag == "to-string" {
 			if let (Some(ts), Some(a)) = (self.runtime.tostring_fn, args.first()) {
@@ -1696,6 +1712,55 @@ impl<'a> FnEmitter<'a> {
 		// materialize `nothing`.
 		if !host_sig(tag).map(|s| s.returns_value).unwrap_or(true) {
 			self.push_nothing();
+		}
+	}
+
+	/// Emit a pure-compute builtin inline over the `$value` GC layout.
+	/// Leaves one `$value` on the stack (the binding's rvalue).
+	fn inline_builtin(&mut self, tag: &str, args: &[Atom]) {
+		match tag {
+			// list.get xs i : the i-th element. (`$int` index unboxed to i32.)
+			"list-get" => {
+				self.atom(&args[0]);
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_LIST,
+				)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_LIST,
+					field_index: 1,
+				});
+				self.atom(&args[1]);
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_INT,
+				)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_INT,
+					field_index: 1,
+				});
+				self.ins(Instruction::I32WrapI64);
+				self.ins(Instruction::ArrayGet(types::T_VALARRAY));
+			}
+			// list.length xs : element count, boxed as `$int`.
+			"list-length" => {
+				self.ins(Instruction::I32Const(types::TAG_INT));
+				self.atom(&args[0]);
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_LIST,
+				)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_LIST,
+					field_index: 1,
+				});
+				self.ins(Instruction::ArrayLen);
+				self.ins(Instruction::I64ExtendI32U);
+				self.ins(Instruction::StructNew(types::T_INT));
+			}
+			_ => {
+				self
+					.diags
+					.push(format!("inline builtin `{tag}` not emitted"));
+				self.push_nothing();
+			}
 		}
 	}
 
