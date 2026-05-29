@@ -68,8 +68,8 @@ useful on its own (persistence, caching, queues).
 
 ```
 trait wire a {
-    to-wire     :: fun a -> bytes
-    from-wire   :: fun bytes -> result a wire-error
+    encode      :: fun a -> bytes
+    decode      :: fun bytes -> result a wire-error
     fingerprint :: fun a -> int        # added as-built: structural schema hash (see Version skew)
 }
 ```
@@ -95,7 +95,7 @@ trait wire a {
 > **As built — where the implementation diverged from this sketch:**
 > - The `wire` "dictionary" is **not** a method dict of generated per-type closures.
 >   It's a single **schema descriptor value** (a `wire-schema` tree) synthesized by
->   `Analyzer::build_wire_shape` from the type's structure; `to-wire`/`from-wire`/
+>   `Analyzer::build_wire_shape` from the type's structure; `encode`/`decode`/
 >   `fingerprint` lower to the `wire-encode`/`wire-decode`/`wire-fingerprint` builtins
 >   with that schema as the hidden first arg. The cursor-based recursion lives once, in
 >   the Rust engine (`vm/src/wire.rs`) interpreting the schema — not in generated code.
@@ -188,7 +188,7 @@ machinery. Two consequences fall out for free:
   lands at the boundary, with attribution ("can't send field `on-click`: functions
   aren't serializable"), not at runtime.
 - **Opaque enums are non-derivable by construction.** Their constructors are hidden, so
-  the compiler can't synthesize `from-wire` — and the diagnostic says so, pointing at the
+  the compiler can't synthesize `decode` — and the diagnostic says so, pointing at the
   fix (expose a non-opaque type, or send the value it wraps). *We considered* letting a
   module opt in with a hand-written `wire` instance (mirroring smart constructors), but
   **decided against it**: the motivation was re-validating untrusted bytes on decode, and
@@ -312,8 +312,8 @@ is err not-found      { show "no such user" }
 The user writes zero per-endpoint glue. The compiler:
 
 - collects every `public server def` and emits a **server dispatch table** — route →
-  decode args (`from-wire`) → inject `request` → call handler → encode result
-  (`to-wire`) — to be mounted on `core.http` (a net-new, server-only module);
+  decode args (`wire.decode`) → inject `request` → call handler → encode result
+  (`wire.encode`) — to be mounted on `core.http` (a net-new, server-only module);
 - emits **client stubs** — one function per endpoint that encodes args, does the HTTP
   round-trip with the fingerprint header, and decodes the response into a `task`;
 - derives the **route** from the qualified name (override possible later).

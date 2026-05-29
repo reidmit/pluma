@@ -989,7 +989,7 @@ impl<'a> Lowerer<'a> {
 		}
 	}
 
-	/// If `call` is a `wire` trait-method call (`to-wire x` / `from-wire b`),
+	/// If `call` is a `wire` trait-method call (`encode x` / `decode b`),
 	/// lower it to the corresponding builtin applied to the schema dict + the
 	/// user args, and return `Some(result)`. Otherwise `None` (a normal call).
 	/// The schema (the resolved `wire a` dictionary) is passed as the builtin's

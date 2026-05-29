@@ -104,7 +104,7 @@ public enum ordering {
 # Why a `wire` decode failed (FULLSTACK.md, Layer 1). The `wire` codec
 # turns any data-shaped value into compact binary and back; decoding bytes
 # that don't match the expected type surfaces one of these through the
-# `result` that `from-wire` returns. (Encoding can't fail — a value always
+# `result` that `wire.decode` returns. (Encoding can't fail — a value always
 # matches its own type.)
 #
 #   unexpected-end    ran out of bytes mid-decode
@@ -124,7 +124,7 @@ public enum wire-error {
 # type's structure so the `wire-encode` / `wire-decode` builtins can drive a
 # positional binary encoding (the type *is* the schema — FULLSTACK.md). You
 # almost never write one by hand; the compiler synthesizes it from the type
-# whenever you call `to-wire` / `from-wire`. It's public so those synthesized
+# whenever you call `wire.encode` / `wire.decode`. It's public so those synthesized
 # values have a named home.
 public enum wire-schema {
 	s-int

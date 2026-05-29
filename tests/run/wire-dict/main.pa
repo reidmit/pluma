@@ -9,10 +9,10 @@ use core.hex
 
 def main = fun {
 	let scores = dict.from-entries [("ada", 100), ("bob", 50), ("cy", 75)]
-	let encoded = wire.to-wire scores
+	let encoded = wire.encode scores
 	print "encoded: $(hex.encode encoded)"
 
-	let back :: result (dict string int) wire-error = wire.from-wire encoded
+	let back :: result (dict string int) wire-error = wire.decode encoded
 	when back is ok d {
 		print "ada = $(to-string (dict.lookup d "ada" ?? 0))"
 		print "size = $(to-string (dict.size d))"
@@ -21,7 +21,7 @@ def main = fun {
 	}
 
 	# Deterministic: same entries, different insertion order -> same bytes.
-	let a = wire.to-wire (dict.from-entries [(1, "x"), (2, "y")])
-	let b = wire.to-wire (dict.from-entries [(2, "y"), (1, "x")])
+	let a = wire.encode (dict.from-entries [(1, "x"), (2, "y")])
+	let b = wire.encode (dict.from-entries [(2, "y"), (1, "x")])
 	print "order-independent: $(to-string (a == b))"
 }

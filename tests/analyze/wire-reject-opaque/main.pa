@@ -2,6 +2,6 @@ use token
 
 def main = fun {
 	let t = token.make "secret"
-	let encoded = wire.to-wire t
+	let encoded = wire.encode t
 	print "unreachable"
 }

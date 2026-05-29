@@ -3,9 +3,9 @@ source: tests/analyze.rs
 expression: output
 ---
 warning: Name `encoded` is never used.
-> 5 | 	let encoded = wire.to-wire t
+> 5 | 	let encoded = wire.encode t
            ^^^^^^^
 
 error: Can't send `token` across the wire: the opaque type `token` hides its constructors — expose a non-opaque type, or send the value it wraps.
-> 5 | 	let encoded = wire.to-wire t
-                     ^^^^^^^^^^^^
+> 5 | 	let encoded = wire.encode t
+                     ^^^^^^^^^^^

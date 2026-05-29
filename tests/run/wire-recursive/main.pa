@@ -24,12 +24,12 @@ def sum-tree :: fun tree -> int = fun t {
 
 def main = fun {
 	let t = node (node (leaf 1) (leaf 2)) (leaf 3)
-	let encoded = wire.to-wire t
+	let encoded = wire.encode t
 	print "tree bytes: $(hex.encode encoded)"
-	let back :: result tree wire-error = wire.from-wire encoded
+	let back :: result tree wire-error = wire.decode encoded
 	when back is ok t2 { print "tree sum: $(to-string (sum-tree t2))" } is err _e { print "tree failed" }
 
 	let j = jarr [jnum 1, jstr "hi", jarr [jnull, jnum 2]]
-	let j2 :: result json wire-error = wire.from-wire (wire.to-wire j)
+	let j2 :: result json wire-error = wire.decode (wire.encode j)
 	when j2 is ok v { print "json round-trips: $(to-string (v == j))" } is err _e { print "json failed" }
 }

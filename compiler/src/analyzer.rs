@@ -677,7 +677,7 @@ impl<'compiler> Analyzer<'compiler> {
 		// float, string, bool. Unblocks generic `core.dict` over those
 		// primitive key types.
 		self.register_prelude_hash_trait();
-		// `wire` trait: `to-wire fun a -> bytes` / `from-wire fun bytes ->
+		// `wire` trait: `encode fun a -> bytes` / `decode fun bytes ->
 		// result a wire-error`. Auto-derived structurally (FULLSTACK.md): no
 		// concrete instances — dispatch is resolved by synthesizing a schema
 		// from the type's shape in `try_resolve_dispatch`.
@@ -6152,8 +6152,8 @@ impl<'compiler> Analyzer<'compiler> {
 		}
 	}
 
-	// Register the prelude `wire` trait: `to-wire fun a -> bytes` and
-	// `from-wire fun bytes -> result a wire-error`. Unlike numeric/ord/hash,
+	// Register the prelude `wire` trait: `encode fun a -> bytes` and
+	// `decode fun bytes -> result a wire-error`. Unlike numeric/ord/hash,
 	// `wire` registers NO instances — it's auto-derived structurally for any
 	// data-shaped type (FULLSTACK.md, Layer 1), and `try_resolve_dispatch`
 	// special-cases the trait to synthesize a schema rather than look up an
@@ -6163,23 +6163,23 @@ impl<'compiler> Analyzer<'compiler> {
 		self.next_type_var_id += 1;
 		let a = Type::Var(param_var);
 
-		let to_wire = Type::Fun(vec![a.clone()], Box::new(Type::Bytes));
+		let encode = Type::Fun(vec![a.clone()], Box::new(Type::Bytes));
 		let wire_error = Type::Enum("__prelude__.wire-error".into(), vec![]);
 		let result_ty = Type::Enum("__prelude__.result".into(), vec![a.clone(), wire_error]);
-		let from_wire = Type::Fun(vec![Type::Bytes], Box::new(result_ty));
+		let decode = Type::Fun(vec![Type::Bytes], Box::new(result_ty));
 		// `fingerprint a -> int`: the structural hash of `a`'s wire schema, for
 		// version-skew detection (FULLSTACK.md). Takes a value only so it can
 		// dispatch on `a`; the value itself is ignored.
 		let fingerprint = Type::Fun(vec![a], Box::new(Type::Int));
 
 		let method_order = vec![
-			"to-wire".to_string(),
-			"from-wire".to_string(),
+			"encode".to_string(),
+			"decode".to_string(),
 			"fingerprint".to_string(),
 		];
 		let mut method_types: HashMap<String, Type> = HashMap::new();
-		method_types.insert("to-wire".into(), to_wire);
-		method_types.insert("from-wire".into(), from_wire);
+		method_types.insert("encode".into(), encode);
+		method_types.insert("decode".into(), decode);
 		method_types.insert("fingerprint".into(), fingerprint);
 
 		self.traits.insert(

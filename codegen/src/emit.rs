@@ -2311,7 +2311,7 @@ fn emit_call(
 	range: Range,
 	tail: bool,
 ) -> Result<(), String> {
-	// `wire` method calls (`to-wire x` / `from-wire b`) don't extract a method
+	// `wire` method calls (`encode x` / `decode b`) don't extract a method
 	// from a dict — they call the `wire-encode`/`wire-decode` builtin with the
 	// schema dict as the first argument (FULLSTACK.md).
 	if let Some(cell) = &callee.trait_dispatch {
