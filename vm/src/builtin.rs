@@ -263,10 +263,6 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			}
 			Ok(Value::list(out))
 		}
-		"list-is-empty" => {
-			let xs = expect_list(&args, "is-empty");
-			Ok(Value::Bool(xs.is_empty()))
-		}
 		"math-to-float" => {
 			debug_assert_eq!(args.len(), 1, "`to-float` arity");
 			match &args[0] {
@@ -294,7 +290,6 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 		"math-exp" => Ok(Value::Float(expect_float(&args, "exp").exp())),
 		"math-sin" => Ok(Value::Float(expect_float(&args, "sin").sin())),
 		"math-cos" => Ok(Value::Float(expect_float(&args, "cos").cos())),
-		"math-tan" => Ok(Value::Float(expect_float(&args, "tan").tan())),
 		"string-to-int" => {
 			let s = expect_string(&args, "to-int");
 			Ok(match s.parse::<i64>() {
@@ -352,10 +347,6 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 		"bytes-length" => {
 			let b = expect_bytes(&args, "length");
 			Ok(Value::Int(b.len() as i64))
-		}
-		"bytes-is-empty" => {
-			let b = expect_bytes(&args, "is-empty");
-			Ok(Value::Bool(b.is_empty()))
 		}
 		"bytes-get" => {
 			// O(1) unchecked byte access (the primitive the byte ops build on).
@@ -822,53 +813,6 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			}
 			cells[i as usize] = args[2].clone();
 			Ok(Value::Nothing)
-		}
-
-		"option-expect" => {
-			// `option.expect o msg` — unwrap `some`'s payload, or abort with
-			// `msg` on `none` (there's no payload to report).
-			debug_assert_eq!(args.len(), 2, "`option.expect` arity");
-			let msg = match &args[1] {
-				Value::String(s) => s.to_string(),
-				_ => unreachable!("`option.expect`: expected string message"),
-			};
-			match &args[0] {
-				Value::Variant(v) => match v.variant.as_str() {
-					"some" => {
-						debug_assert_eq!(v.payload.len(), 1, "`some` payload arity");
-						Ok(v.payload[0].clone())
-					}
-					"none" => Err(RuntimeError::user_abort(msg)),
-					other => unreachable!("`option.expect`: unexpected option variant `{}`", other),
-				},
-				_ => unreachable!("`option.expect`: expected option variant"),
-			}
-		}
-		"result-expect" => {
-			// `result.expect r msg` — unwrap `ok`'s payload, or abort with
-			// `msg` plus the rendered error on `err`.
-			debug_assert_eq!(args.len(), 2, "`result.expect` arity");
-			let msg = match &args[1] {
-				Value::String(s) => s.to_string(),
-				_ => unreachable!("`result.expect`: expected string message"),
-			};
-			match &args[0] {
-				Value::Variant(v) => match v.variant.as_str() {
-					"ok" => {
-						debug_assert_eq!(v.payload.len(), 1, "`ok` payload arity");
-						Ok(v.payload[0].clone())
-					}
-					"err" => {
-						debug_assert_eq!(v.payload.len(), 1, "`err` payload arity");
-						Err(RuntimeError::user_abort(format!(
-							"{}: {}",
-							msg, v.payload[0]
-						)))
-					}
-					other => unreachable!("`result.expect`: unexpected result variant `{}`", other),
-				},
-				_ => unreachable!("`result.expect`: expected result variant"),
-			}
 		}
 
 		"json-parse" => {

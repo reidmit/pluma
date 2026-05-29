@@ -209,6 +209,21 @@ fn is_inline_builtin(tag: &str) -> bool {
 			| "string-to-bytes"
 			// the in-place list mutation: `array.set` on the `$valarray`.
 			| "list-set"
+			// math primitives WasmGC does with one f64/i64 opcode (the
+			// transcendentals log/exp/sin/cos still need a host import).
+			| "math-sqrt"
+			| "math-to-int"
+			| "math-to-float"
+	)
+}
+
+/// Transcendental float math with no WasmGC opcode (log/log10/log2/exp/sin/cos).
+/// Each is a `(f64) -> f64` host import (the same libm call the VM makes); the
+/// `$float` box/unbox is emitted in wasm around the call.
+fn is_f64_unary_host(tag: &str) -> bool {
+	matches!(
+		tag,
+		"math-log" | "math-log10" | "math-log2" | "math-exp" | "math-sin" | "math-cos"
 	)
 }
 
@@ -255,6 +270,15 @@ impl Module {
 				}
 				// Pure-compute builtins emitted inline at the call site (no import).
 				if is_inline_builtin(tag) {
+					return;
+				}
+				// Unary float math: a `(f64) -> f64` host import (box/unbox emitted in
+				// wasm), registered like any import but typed separately below.
+				if is_f64_unary_host(tag) {
+					if !host_index.contains_key(tag) {
+						host_index.insert(tag.to_string(), host_order.len() as u32);
+						host_order.push(tag.to_string());
+					}
 					return;
 				}
 				if !host_index.contains_key(tag) {
@@ -467,6 +491,8 @@ impl Module {
 		for tag in &host_order {
 			let ty = if tag == "float_to_str" {
 				ftypes.for_float_to_str()
+			} else if is_f64_unary_host(tag) {
+				ftypes.for_f64_unary()
 			} else {
 				let sig = host_sig(tag).unwrap();
 				ftypes.for_host(sig.arity, sig.returns_value)
@@ -1779,6 +1805,30 @@ impl<'a> FnEmitter<'a> {
 			self.inline_builtin(tag, args);
 			return;
 		}
+		// Unary float math (log/exp/sin/cos): unbox the `$float`, call the raw
+		// `(f64) -> f64` host import, rebox. Keeps the GC poking in wasm.
+		if is_f64_unary_host(tag) {
+			match self.host_index.get(tag).copied() {
+				Some(idx) => {
+					self.ins(Instruction::I32Const(types::TAG_FLOAT));
+					self.atom(&args[0]);
+					self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+						types::T_FLOAT,
+					)));
+					self.ins(Instruction::StructGet {
+						struct_type_index: types::T_FLOAT,
+						field_index: 1,
+					});
+					self.ins(Instruction::Call(idx));
+					self.ins(Instruction::StructNew(types::T_FLOAT));
+				}
+				None => {
+					self.diags.push(format!("`{tag}` host import not declared"));
+					self.push_nothing();
+				}
+			}
+			return;
+		}
 		// Higher-order builders: synthetic helpers (loop + closure call).
 		if tag == "list-build" || tag == "list-collect" || tag == "bytes-build" {
 			let helper = match tag {
@@ -1968,6 +2018,51 @@ impl<'a> FnEmitter<'a> {
 					field_index: 1,
 				});
 				self.ins(Instruction::StructNew(types::T_STR));
+			}
+			// math.sqrt f : unbox the f64, `f64.sqrt`, rebox. NaN for f < 0,
+			// matching the IEEE-754 result the VM's `f64::sqrt` yields.
+			"math-sqrt" => {
+				self.ins(Instruction::I32Const(types::TAG_FLOAT));
+				self.atom(&args[0]);
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_FLOAT,
+				)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_FLOAT,
+					field_index: 1,
+				});
+				self.ins(Instruction::F64Sqrt);
+				self.ins(Instruction::StructNew(types::T_FLOAT));
+			}
+			// math.to-int f : truncate toward zero into an i64. The *saturating*
+			// trunc matches the VM's `f as i64` (NaN -> 0, ±inf / out-of-range
+			// clamp to i64::MIN/MAX); plain `i64.trunc_f64_s` would trap instead.
+			"math-to-int" => {
+				self.ins(Instruction::I32Const(types::TAG_INT));
+				self.atom(&args[0]);
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_FLOAT,
+				)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_FLOAT,
+					field_index: 1,
+				});
+				self.ins(Instruction::I64TruncSatF64S);
+				self.ins(Instruction::StructNew(types::T_INT));
+			}
+			// math.to-float n : widen the i64 to f64.
+			"math-to-float" => {
+				self.ins(Instruction::I32Const(types::TAG_FLOAT));
+				self.atom(&args[0]);
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_INT,
+				)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_INT,
+					field_index: 1,
+				});
+				self.ins(Instruction::F64ConvertI64S);
+				self.ins(Instruction::StructNew(types::T_FLOAT));
 			}
 			_ => {
 				self

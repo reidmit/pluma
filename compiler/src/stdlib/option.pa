@@ -58,4 +58,16 @@ public def or-else :: fun (option a) (fun nothing -> a) -> a = fun o fallback {
 #
 #     # some -> the contents; none -> "no home directory" on stderr, then exit
 #     (io.env "HOME") | option.expect "no home directory"
-public def expect :: fun (option a) string -> a = built-in "option-expect"
+public def expect :: fun (option a) string -> a = fun o msg {
+	when o is some v {
+		v
+	} is none {
+		fail-with msg
+	}
+}
+
+# The `io.fail` primitive, referenced by its builtin tag directly rather
+# than through `core.io`: `option` rides in the prelude, so importing
+# `io` here would close an import cycle. Aborts with `msg` on stderr and
+# a nonzero exit; never returns.
+def fail-with :: fun string -> a = built-in "io-fail"

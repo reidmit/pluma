@@ -58,4 +58,16 @@ public def or-else :: fun (result a e) (fun nothing -> a) -> a = fun r fallback 
 #
 #     # ok -> the contents; err -> "reading config: <the os error>" then exit
 #     io.read-file "config.toml" | result.expect "reading config"
-public def expect :: fun (result a e) string -> a = built-in "result-expect"
+public def expect :: fun (result a e) string -> a = fun r msg {
+	when r is ok v {
+		v
+	} is err e {
+		fail-with "$(msg): $(to-string e)"
+	}
+}
+
+# The `io.fail` primitive, referenced by its builtin tag directly rather
+# than through `core.io`: `result` rides in the prelude, so importing
+# `io` here would close an import cycle. Aborts with the message on
+# stderr and a nonzero exit; never returns.
+def fail-with :: fun string -> a = built-in "io-fail"

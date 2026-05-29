@@ -123,7 +123,10 @@ public def sin :: fun float -> float = built-in "math-sin"
 #     math.cos 0.0   # => 1.0
 public def cos :: fun float -> float = built-in "math-cos"
 
-# Tangent of an angle measured in radians.
+# Tangent of an angle measured in radians -- sine over cosine. Blows up
+# toward infinity where `cos` crosses zero (odd multiples of pi/2).
 #
 #     math.tan 0.0   # => 0.0
-public def tan :: fun float -> float = built-in "math-tan"
+public def tan :: fun float -> float = fun x {
+	sin x / cos x
+}

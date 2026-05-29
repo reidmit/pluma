@@ -40,6 +40,7 @@ const WASM_FIXTURES: &[&str] = &[
 	"coalesce-result",
 	"comparison-ops",
 	"core-list-extras",
+	"core-math-extras",
 	"cross-module",
 	"deep-recursion",
 	"double-int-float",
@@ -79,6 +80,7 @@ const WASM_FIXTURES: &[&str] = &[
 	"list-spread-record-update",
 	"main-returns-err",
 	"main-returns-ok",
+	"math-builtins",
 	"mutual-recursion",
 	"negative-numbers",
 	"nested-enum",
@@ -115,6 +117,7 @@ const WASM_FIXTURES: &[&str] = &[
 	"variant-as-value",
 	"variant-with-record-arg",
 	"visibility",
+	"wasm-math-trig",
 	"when-else",
 	"when-enum",
 ];
@@ -364,6 +367,34 @@ fn run_wasm(bytes: &[u8]) -> RunResult {
 			},
 		)
 		.expect("define float_to_str");
+	// Unary float math host imports: raw `(f64) -> f64`, the same libm calls the
+	// VM makes (`f64::ln`/`log10`/`log2`/`exp`/`sin`/`cos`). A browser target would
+	// import `Math.log`/`Math.log10`/… here instead.
+	let f64_unary_ty = FuncType::new(&engine, [ValType::F64], [ValType::F64]);
+	for (name, f) in [
+		("math-log", f64::ln as fn(f64) -> f64),
+		("math-log10", f64::log10),
+		("math-log2", f64::log2),
+		("math-exp", f64::exp),
+		("math-sin", f64::sin),
+		("math-cos", f64::cos),
+	] {
+		linker
+			.func_new(
+				"pluma",
+				name,
+				f64_unary_ty.clone(),
+				move |_caller, args, results| {
+					let x = match args[0] {
+						Val::F64(bits) => f64::from_bits(bits),
+						ref o => panic!("{name} arg: {o:?}"),
+					};
+					results[0] = Val::F64(f(x).to_bits());
+					Ok(())
+				},
+			)
+			.unwrap_or_else(|e| panic!("define {name}: {e}"));
+	}
 
 	let instance: Instance = match linker.instantiate(&mut store, &module) {
 		Ok(i) => i,

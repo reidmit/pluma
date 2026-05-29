@@ -143,6 +143,9 @@ enum FuncKind {
 	BytesConcat,
 	/// The float-format host import: `(f64, anyref /*$bytes buf*/) -> i32 len`.
 	FloatToStr,
+	/// A unary float math host import (log/exp/sin/cos): `(f64) -> f64`. The
+	/// box/unbox to `$float` happens in wasm, so the host stays a bare libm call.
+	F64Unary,
 }
 
 pub struct FuncTypes {
@@ -202,6 +205,11 @@ impl FuncTypes {
 	/// The type index for the float-format host import: `(f64, anyref) -> i32`.
 	pub fn for_float_to_str(&mut self) -> u32 {
 		self.intern(FuncKind::FloatToStr)
+	}
+
+	/// The type index for a unary float math host import: `(f64) -> f64`.
+	pub fn for_f64_unary(&mut self) -> u32 {
+		self.intern(FuncKind::F64Unary)
 	}
 
 	/// Encode the full type section: the fixed `$value` prefix, then every
@@ -338,6 +346,10 @@ impl FuncTypes {
 					types
 						.ty()
 						.function([ValType::F64, any_ref()], [ValType::I32]);
+					continue;
+				}
+				FuncKind::F64Unary => {
+					types.ty().function([ValType::F64], [ValType::F64]);
 					continue;
 				}
 			};
