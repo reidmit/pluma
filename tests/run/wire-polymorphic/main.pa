@@ -1,0 +1,28 @@
+# Polymorphic `wire` use: a function generic over any wire-able type forwards
+# the synthesized schema as a hidden dict parameter (FULLSTACK.md, Layer 1).
+# The caller resolves the concrete schema at each call site.
+
+use core.hex
+
+# Constraint inferred from the `to-wire` use — no explicit `where`.
+def dump = fun x { wire.to-wire x }
+
+# Explicit `where (wire a)`, round-tripping through the polymorphic boundary.
+def roundtrip :: fun a -> result a wire-error where (wire a) = fun x {
+	wire.from-wire (wire.to-wire x)
+}
+
+def main = fun {
+	print "int:  $(hex.encode (dump 7))"
+	print "str:  $(hex.encode (dump "hi"))"
+	print "bool: $(hex.encode (dump true))"
+
+	let a :: result int wire-error = roundtrip 99
+	print "rt-int: $(to-string (a ?? 0))"
+
+	let b :: result string wire-error = roundtrip "hello"
+	print "rt-str: $(b ?? "?")"
+
+	let c :: result (option int) wire-error = roundtrip (some 42)
+	print "rt-opt: $(to-string ((c ?? none) ?? 0))"
+}

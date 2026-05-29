@@ -1,0 +1,14 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+int:  0e
+str:  026869
+bool: 01
+rt-int: 99
+rt-str: hello
+rt-opt: 42
+== stderr ==

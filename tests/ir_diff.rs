@@ -188,6 +188,7 @@ const IR_FIXTURES: &[&str] = &[
 	"visibility",
 	"when-else",
 	"when-enum",
+	"wire-polymorphic",
 	"wire-roundtrip",
 ];
 
