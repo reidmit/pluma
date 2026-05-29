@@ -1,0 +1,35 @@
+use core.base64
+
+def show = fun r {
+	when r is ok b {
+		print b
+	} is err m {
+		print "err: $(m)"
+	}
+}
+
+def main = fun {
+	# standard encode: padding for 1/2/3 trailing bytes + high bytes
+	print (base64.encode '')
+	print (base64.encode 'f')
+	print (base64.encode 'fo')
+	print (base64.encode 'foo')
+	print (base64.encode 'hello')
+	print (base64.encode '\xff\xfe\xfd')
+
+	# url-encode: no padding, dash/underscore alphabet
+	print (base64.url-encode 'f')
+	print (base64.url-encode '\xff\xfe\xfd')
+
+	# standard decode: with and without padding, then rejections
+	show (base64.decode "Zg==")
+	show (base64.decode "Zg")
+	show (base64.decode "Zm9v")
+	show (base64.decode "//79")
+	show (base64.decode "__79")
+	show (base64.decode "Zm 9v")
+
+	# url decode
+	show (base64.url-decode "__79")
+	show (base64.url-decode "aGVsbG8")
+}

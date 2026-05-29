@@ -64,6 +64,8 @@ struct Runtime {
 	list_build_fn: Option<u32>,
 	/// `__list_collect(n, f) -> list` — tabulate keeping only `f`'s `some` results.
 	list_collect_fn: Option<u32>,
+	/// `__bytes_build(n, f) -> bytes` — tabulate a byte sequence.
+	bytes_build_fn: Option<u32>,
 	/// Host import `float_to_str(f64, $bytes buf) -> i32 len` — float formatting
 	/// (delegated to the host, like a browser's `String(x)`), used by `__tostring`.
 	float_to_str_fn: Option<u32>,
@@ -197,7 +199,15 @@ fn host_sig(tag: &str) -> Option<HostSig> {
 /// synthetic helper). They operate on the GC `$value` layout directly. Grows as
 /// more of the builtin surface moves to native WasmGC.
 fn is_inline_builtin(tag: &str) -> bool {
-	matches!(tag, "list-get" | "list-length")
+	matches!(
+		tag,
+		"list-get"
+			| "list-length"
+			| "bytes-get"
+			| "bytes-length"
+			| "bytes-as-string"
+			| "string-to-bytes"
+	)
 }
 
 pub(crate) struct Module;
@@ -214,6 +224,8 @@ impl Module {
 		let mut tostring_called = false;
 		let mut list_build_called = false;
 		let mut list_collect_called = false;
+		let mut bytes_build_called = false;
+		let mut bytes_concat_called = false;
 		for &fid in &reach.order {
 			collect_host_calls(&p.functions[fid as usize].body, &builtin_g, |tag| {
 				if tag == "to-string" {
@@ -228,6 +240,15 @@ impl Module {
 				}
 				if tag == "list-collect" {
 					list_collect_called = true;
+					return;
+				}
+				if tag == "bytes-build" {
+					bytes_build_called = true;
+					return;
+				}
+				// bytes.concat reuses the `__bytesconcat` helper inline.
+				if tag == "bytes-concat" {
+					bytes_concat_called = true;
 					return;
 				}
 				// Pure-compute builtins emitted inline at the call site (no import).
@@ -287,7 +308,9 @@ impl Module {
 		}
 		needs.tostring |= tostring_called;
 		// `__tostring` formats compounds structurally (folding byte arrays with
-		// `__bytesconcat`) and formats its INT case via `__int_str`.
+		// `__bytesconcat`) and formats its INT case via `__int_str`. `bytes.concat`
+		// also reuses `__bytesconcat`.
+		needs.bytesconcat |= bytes_concat_called;
 		if needs.tostring {
 			needs.bytesconcat = true;
 		}
@@ -311,6 +334,7 @@ impl Module {
 			int_str_fn: take(needs.tostring),
 			list_build_fn: take(list_build_called),
 			list_collect_fn: take(list_collect_called),
+			bytes_build_fn: take(bytes_build_called),
 			float_to_str_fn: host_index.get("float_to_str").copied(),
 			lits: ToStringLits::default(),
 		};
@@ -522,6 +546,11 @@ impl Module {
 			functions.function(ftypes.for_helper(2));
 			code.function(&build_list_collect_fn(arity1));
 		}
+		if runtime.bytes_build_fn.is_some() {
+			let arity1 = ftypes.for_arity(1);
+			functions.function(ftypes.for_helper(2));
+			code.function(&build_bytes_build_fn(arity1));
+		}
 		for tag in &wrapper_order {
 			let arity = builtin_arity(tag).unwrap();
 			functions.function(ftypes.for_arity(arity));
@@ -588,6 +617,7 @@ impl Module {
 struct StrPool {
 	bytes: Vec<u8>,
 	at: HashMap<String, (u32, u32)>,
+	bytes_at: HashMap<Vec<u8>, (u32, u32)>,
 }
 
 impl StrPool {
@@ -599,6 +629,18 @@ impl StrPool {
 		self.bytes.extend_from_slice(s.as_bytes());
 		let p = (off, s.len() as u32);
 		self.at.insert(s.to_string(), p);
+		p
+	}
+
+	/// Intern a raw byte sequence (a `bytes` literal — not necessarily UTF-8).
+	fn intern_bytes(&mut self, b: &[u8]) -> (u32, u32) {
+		if let Some(&p) = self.bytes_at.get(b) {
+			return p;
+		}
+		let off = self.bytes.len() as u32;
+		self.bytes.extend_from_slice(b);
+		let p = (off, b.len() as u32);
+		self.bytes_at.insert(b.to_vec(), p);
 		p
 	}
 }
@@ -631,8 +673,14 @@ fn scan_strings(b: &Block, pool: &mut StrPool, enums: &EnumTable) {
 }
 
 fn scan_atom_string(a: &Atom, pool: &mut StrPool) {
-	if let Atom::Const(Const::Str(s)) = a {
-		pool.intern(s);
+	match a {
+		Atom::Const(Const::Str(s)) => {
+			pool.intern(s);
+		}
+		Atom::Const(Const::Bytes(b)) => {
+			pool.intern_bytes(b);
+		}
+		_ => {}
 	}
 }
 
@@ -1716,12 +1764,12 @@ impl<'a> FnEmitter<'a> {
 			self.inline_builtin(tag, args);
 			return;
 		}
-		// Higher-order list builders: synthetic helpers (loop + closure call).
-		if tag == "list-build" || tag == "list-collect" {
-			let helper = if tag == "list-build" {
-				self.runtime.list_build_fn
-			} else {
-				self.runtime.list_collect_fn
+		// Higher-order builders: synthetic helpers (loop + closure call).
+		if tag == "list-build" || tag == "list-collect" || tag == "bytes-build" {
+			let helper = match tag {
+				"list-build" => self.runtime.list_build_fn,
+				"list-collect" => self.runtime.list_collect_fn,
+				_ => self.runtime.bytes_build_fn,
 			};
 			match helper {
 				Some(h) => {
@@ -1732,6 +1780,25 @@ impl<'a> FnEmitter<'a> {
 				}
 				None => {
 					self.diags.push(format!("`{tag}` helper not emitted"));
+					self.push_nothing();
+				}
+			}
+			return;
+		}
+		// bytes.concat a b : a fresh `bytes` of a's bytes then b's, via __bytesconcat.
+		if tag == "bytes-concat" {
+			match self.runtime.bytesconcat_fn {
+				Some(bc) => {
+					self.ins(Instruction::I32Const(types::TAG_BYTES));
+					self.str_bytes(&args[0]);
+					self.str_bytes(&args[1]);
+					self.ins(Instruction::Call(bc));
+					self.ins(Instruction::StructNew(types::T_STR));
+				}
+				None => {
+					self
+						.diags
+						.push("bytes-concat needs __bytesconcat".to_string());
 					self.push_nothing();
 				}
 			}
@@ -1804,6 +1871,65 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::I64ExtendI32U);
 				self.ins(Instruction::StructNew(types::T_INT));
 			}
+			// bytes.get b i : the i-th byte (0-255) as `$int`. (`$bytes` is packed
+			// i8, read unsigned.)
+			"bytes-get" => {
+				self.ins(Instruction::I32Const(types::TAG_INT));
+				self.atom(&args[0]);
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_STR,
+				)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_STR,
+					field_index: 1,
+				});
+				self.atom(&args[1]);
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_INT,
+				)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_INT,
+					field_index: 1,
+				});
+				self.ins(Instruction::I32WrapI64);
+				self.ins(Instruction::ArrayGetU(types::T_BYTES));
+				self.ins(Instruction::I64ExtendI32U);
+				self.ins(Instruction::StructNew(types::T_INT));
+			}
+			// bytes.length b : byte count, boxed as `$int`.
+			"bytes-length" => {
+				self.ins(Instruction::I32Const(types::TAG_INT));
+				self.atom(&args[0]);
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_STR,
+				)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_STR,
+					field_index: 1,
+				});
+				self.ins(Instruction::ArrayLen);
+				self.ins(Instruction::I64ExtendI32U);
+				self.ins(Instruction::StructNew(types::T_INT));
+			}
+			// bytes <-> string reinterpret: same `{tag, $bytes}` shape, just
+			// rebuild the struct with the other tag (no copy, no validation).
+			"bytes-as-string" | "string-to-bytes" => {
+				let new_tag = if tag == "bytes-as-string" {
+					types::TAG_STR
+				} else {
+					types::TAG_BYTES
+				};
+				self.ins(Instruction::I32Const(new_tag));
+				self.atom(&args[0]);
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_STR,
+				)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_STR,
+					field_index: 1,
+				});
+				self.ins(Instruction::StructNew(types::T_STR));
+			}
 			_ => {
 				self
 					.diags
@@ -1832,8 +1958,27 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::I64Const(*n));
 				self.ins(Instruction::StructNew(types::T_INT));
 			}
-			Const::Bytes(_) => self.diags.push("bytes constant: M8"),
+			Const::Bytes(b) => self.bytes_const(b),
 		}
+	}
+
+	/// A `bytes` literal: the `$str`-shaped struct (`{tag, ref $bytes}`) tagged
+	/// `TAG_BYTES`. Backing bytes come from the shared passive data segment.
+	fn bytes_const(&mut self, b: &[u8]) {
+		let Some(&(off, len)) = self.strpool.bytes_at.get(b) else {
+			self
+				.diags
+				.push("bytes constant missing from pool".to_string());
+			return;
+		};
+		self.ins(Instruction::I32Const(types::TAG_BYTES));
+		self.ins(Instruction::I32Const(off as i32));
+		self.ins(Instruction::I32Const(len as i32));
+		self.ins(Instruction::ArrayNewData {
+			array_type_index: types::T_BYTES,
+			array_data_index: 0,
+		});
+		self.ins(Instruction::StructNew(types::T_STR));
 	}
 
 	fn push_nothing(&mut self) {
@@ -2054,10 +2199,14 @@ fn build_eq_fn(self_idx: u32) -> Function {
 	scalar(&mut b, types::TAG_BOOL, types::T_BOOL, I::I32Eq);
 	scalar(&mut b, types::TAG_INT, types::T_INT, I::I64Eq);
 	scalar(&mut b, types::TAG_FLOAT, types::T_FLOAT, I::F64Eq);
-	// STR: equal lengths and equal bytes.
+	// STR / BYTES (same `{tag, $bytes}` shape): equal lengths and equal bytes.
 	b.push(I::LocalGet(TA));
 	b.push(I::I32Const(types::TAG_STR));
 	b.push(I::I32Eq);
+	b.push(I::LocalGet(TA));
+	b.push(I::I32Const(types::TAG_BYTES));
+	b.push(I::I32Eq);
+	b.push(I::I32Or);
 	b.push(I::If(empty));
 	{
 		b.push(I::LocalGet(A));
@@ -2541,6 +2690,79 @@ fn build_list_collect_fn(arity1: u32) -> Function {
 		I::I32Const(types::TAG_LIST),
 		I::LocalGet(OUT),
 		I::StructNew(types::T_LIST),
+	];
+	let mut f = Function::new_with_locals_types(locals);
+	for ins in &b {
+		f.instruction(ins);
+	}
+	f.instruction(&I::End);
+	f
+}
+
+/// Build `__bytes_build(n, f) -> bytes`: tabulate an `n`-byte sequence, calling
+/// `f` per index and storing its int result (truncated to 8 bits by the packed
+/// `$bytes` array). `arity1` is the 1-arg closure func-type index.
+fn build_bytes_build_fn(arity1: u32) -> Function {
+	use Instruction as I;
+	const N: u32 = 0; // param: n (boxed int)
+	const F: u32 = 1; // param: f (closure)
+	const NLEN: u32 = 2;
+	const BUF: u32 = 3;
+	const I_: u32 = 4;
+	let empty = wasm_encoder::BlockType::Empty;
+	let cast = |t| I::RefCastNonNull(HeapType::Concrete(t));
+	let getf = |t, f| I::StructGet {
+		struct_type_index: t,
+		field_index: f,
+	};
+	let locals = vec![ValType::I32, types::bytes_ref(), ValType::I32];
+	let b: Vec<Instruction> = vec![
+		I::LocalGet(N),
+		cast(types::T_INT),
+		getf(types::T_INT, 1),
+		I::I32WrapI64,
+		I::LocalSet(NLEN),
+		I::LocalGet(NLEN),
+		I::ArrayNewDefault(types::T_BYTES),
+		I::LocalSet(BUF),
+		I::I32Const(0),
+		I::LocalSet(I_),
+		I::Block(empty),
+		I::Loop(empty),
+		I::LocalGet(I_),
+		I::LocalGet(NLEN),
+		I::I32GeS,
+		I::BrIf(1),
+		// buf[i] = (i32) f(box i)
+		I::LocalGet(BUF),
+		I::LocalGet(I_),
+		I::LocalGet(F),
+		cast(types::T_CLOSURE), // env
+		I::I32Const(types::TAG_INT),
+		I::LocalGet(I_),
+		I::I64ExtendI32S,
+		I::StructNew(types::T_INT), // arg = box i
+		I::LocalGet(F),
+		cast(types::T_CLOSURE),
+		getf(types::T_CLOSURE, 1), // fn_index
+		I::CallIndirect {
+			type_index: arity1,
+			table_index: 0,
+		},
+		cast(types::T_INT),
+		getf(types::T_INT, 1),
+		I::I32WrapI64, // unbox result to i32 (array.set packs to i8)
+		I::ArraySet(types::T_BYTES),
+		I::LocalGet(I_),
+		I::I32Const(1),
+		I::I32Add,
+		I::LocalSet(I_),
+		I::Br(0),
+		I::End, // loop
+		I::End, // block
+		I::I32Const(types::TAG_BYTES),
+		I::LocalGet(BUF),
+		I::StructNew(types::T_STR),
 	];
 	let mut f = Function::new_with_locals_types(locals);
 	for ins in &b {

@@ -34,13 +34,16 @@ public def length :: fun (list a) -> int = built-in "list-length"
 #     list.get [10, 20, 30] 1   # => 20
 public def get :: fun (list a) int -> a = built-in "list-get"
 
-# Private builder primitives. `build n f` tabulates `[f 0, ..., f (n-1)]`
-# in a single O(n) pass; `collect n f` does the same but `f` yields an
-# `option`, keeping only the `some`s (so the result may be shorter).
-# Together with `get`/`length` these let the list *builders* below stay
-# pure Pluma without the O(n^2) cost of repeated spread/append.
-def build :: fun int (fun int -> a) -> list a = built-in "list-build"
+# Builds `[f 0, f 1, ..., f (n-1)]` in a single O(n) pass: `f` is called
+# with each index in turn and its results collected in order. The
+# tabulating counterpart to `fold`, and the primitive the list builders
+# below (`map`, `take`, ...) are written on top of.
+#
+#     list.build 4 (fun i { i * i })   # => [0, 1, 4, 9]
+public def build :: fun int (fun int -> a) -> list a = built-in "list-build"
 
+# Private: like `build`, but `f` yields an `option` and only the `some`s
+# are kept (so the result may be shorter). Backs `filter`.
 def collect :: fun int (fun int -> option a) -> list a = built-in "list-collect"
 
 # True when the list has no elements at all. Just a shorthand for

@@ -551,17 +551,42 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			let b = expect_bytes(&args, "is-empty");
 			Ok(Value::Bool(b.is_empty()))
 		}
-		"bytes-at" => {
-			debug_assert_eq!(args.len(), 2, "`bytes.at` arity");
-			match (&args[0], &args[1]) {
-				(Value::Bytes(b), Value::Int(i)) => Ok(option_value(
-					usize::try_from(*i)
-						.ok()
-						.and_then(|idx| b.get(idx).copied())
-						.map(|byte| Value::Int(byte as i64)),
-				)),
-				_ => unreachable!("`bytes.at`: expected (bytes, int)"),
+		"bytes-get" => {
+			// O(1) unchecked byte access (the primitive the byte ops build on).
+			let b = match &args[0] {
+				Value::Bytes(b) => b,
+				_ => unreachable!("`bytes.get`: expected bytes"),
+			};
+			let i = match &args[1] {
+				Value::Int(n) => *n,
+				_ => unreachable!("`bytes.get`: expected int"),
+			};
+			if i < 0 || (i as usize) >= b.len() {
+				Err(RuntimeError::new(format!(
+					"bytes.get: index {i} out of bounds (length {})",
+					b.len()
+				)))
+			} else {
+				Ok(Value::Int(b[i as usize] as i64))
 			}
+		}
+		"bytes-build" => {
+			// Tabulate a byte sequence; the builder's int result is taken mod 256.
+			debug_assert_eq!(args.len(), 2, "`bytes.build` arity");
+			let mut it = args.into_iter();
+			let n = match it.next().unwrap() {
+				Value::Int(n) => n.max(0) as usize,
+				_ => unreachable!("`bytes.build`: expected int"),
+			};
+			let f = it.next().unwrap();
+			let mut out = Vec::with_capacity(n);
+			for i in 0..n {
+				match invoke(vm, f.clone(), vec![Value::Int(i as i64)])? {
+					Value::Int(v) => out.push((v & 0xff) as u8),
+					_ => unreachable!("`bytes.build`: builder must return int"),
+				}
+			}
+			Ok(Value::Bytes(Rc::new(out)))
 		}
 		"bytes-concat" => {
 			debug_assert_eq!(args.len(), 2, "`bytes.concat` arity");
@@ -573,22 +598,6 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 					Ok(Value::Bytes(Rc::new(out)))
 				}
 				_ => unreachable!("`bytes.concat`: expected (bytes, bytes)"),
-			}
-		}
-		"bytes-slice" => {
-			debug_assert_eq!(args.len(), 3, "`bytes.slice` arity");
-			match (&args[0], &args[1], &args[2]) {
-				(Value::Bytes(b), Value::Int(start), Value::Int(end)) => {
-					// Negative or beyond-the-end indices clamp to bounds.
-					// Order is preserved: end < start collapses to empty.
-					let len = b.len();
-					let s = (*start).max(0) as usize;
-					let s = s.min(len);
-					let e = (*end).max(0) as usize;
-					let e = e.min(len).max(s);
-					Ok(Value::Bytes(Rc::new(b[s..e].to_vec())))
-				}
-				_ => unreachable!("`bytes.slice`: expected (bytes, int, int)"),
 			}
 		}
 		"bytes-contains" => {
@@ -613,31 +622,6 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				(Value::Bytes(b), Value::Bytes(suffix)) => Ok(Value::Bool(b.ends_with(suffix))),
 				_ => unreachable!("`bytes.ends-with`: expected (bytes, bytes)"),
 			}
-		}
-		"bytes-repeat" => {
-			debug_assert_eq!(args.len(), 2, "`bytes.repeat` arity");
-			match (&args[0], &args[1]) {
-				(Value::Bytes(b), Value::Int(n)) => {
-					let n = (*n).max(0) as usize;
-					let mut out = Vec::with_capacity(b.len() * n);
-					for _ in 0..n {
-						out.extend_from_slice(b);
-					}
-					Ok(Value::Bytes(Rc::new(out)))
-				}
-				_ => unreachable!("`bytes.repeat`: expected (bytes, int)"),
-			}
-		}
-		"bytes-reverse" => {
-			let b = expect_bytes(&args, "reverse");
-			let mut out = b.as_ref().clone();
-			out.reverse();
-			Ok(Value::Bytes(Rc::new(out)))
-		}
-		"bytes-to-list" => {
-			let b = expect_bytes(&args, "to-list");
-			let xs: Vec<Value> = b.iter().map(|&byte| Value::Int(byte as i64)).collect();
-			Ok(Value::List(Rc::new(xs)))
 		}
 		"bytes-from-list" => {
 			let xs = expect_list(&args, "from-list");
@@ -708,11 +692,16 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			};
 			Ok(Value::List(Rc::new(parts)))
 		}
-		"bytes-to-string" => {
-			let b = expect_bytes(&args, "to-string");
+		"bytes-as-string" => {
+			// Unchecked reinterpret of bytes as a string. `bytes.to-string`
+			// validates UTF-8 in Pluma first, so the bytes are well-formed here;
+			// `from_utf8` keeps it memory-safe regardless.
+			let b = expect_bytes(&args, "as-string");
 			match std::str::from_utf8(b) {
-				Ok(s) => Ok(result_ok(Value::String(Rc::new(s.to_string())))),
-				Err(e) => Ok(result_err(Value::String(Rc::new(e.to_string())))),
+				Ok(s) => Ok(Value::String(Rc::new(s.to_string()))),
+				Err(_) => Ok(Value::String(Rc::new(
+					String::from_utf8_lossy(b).into_owned(),
+				))),
 			}
 		}
 		"bytes-compare" => match (&args[0], &args[1]) {
@@ -1247,15 +1236,6 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 		// result is what `pluma test` reads. (The `is-*` predicates live
 		// in `assert.pa` as pure Pluma; only the value-formatting checks
 		// and the `all` combinator need Rust.)
-		"hex-encode" => {
-			let b = expect_bytes(&args, "hex.encode");
-			let mut out = String::with_capacity(b.len() * 2);
-			for &byte in b.iter() {
-				out.push(hex_digit(byte >> 4));
-				out.push(hex_digit(byte & 0x0f));
-			}
-			Ok(Value::String(Rc::new(out)))
-		}
 		"uuid-v4" => {
 			debug_assert_eq!(args.len(), 1, "`uuid.v4` arity");
 			Ok(Value::String(Rc::new(uuid::Uuid::new_v4().to_string())))
@@ -1324,69 +1304,6 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			let xs = expect_list(&args, "random.choice");
 			Ok(option_value(xs.choose(&mut rand::rng()).cloned()))
 		}
-		"base64-encode" => {
-			use base64::Engine as _;
-			let b = expect_bytes(&args, "base64.encode");
-			Ok(Value::String(Rc::new(
-				base64::engine::general_purpose::STANDARD.encode(b.as_slice()),
-			)))
-		}
-		"base64-decode" => {
-			use base64::Engine as _;
-			let s = expect_string(&args, "base64.decode");
-			match base64::engine::general_purpose::STANDARD_NO_PAD.decode(s.trim_end_matches('=')) {
-				Ok(out) => Ok(result_ok(Value::Bytes(Rc::new(out)))),
-				Err(e) => Ok(result_err(Value::String(Rc::new(e.to_string())))),
-			}
-		}
-		"base64-url-encode" => {
-			use base64::Engine as _;
-			let b = expect_bytes(&args, "base64.url-encode");
-			Ok(Value::String(Rc::new(
-				base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(b.as_slice()),
-			)))
-		}
-		"base64-url-decode" => {
-			use base64::Engine as _;
-			let s = expect_string(&args, "base64.url-decode");
-			match base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(s.trim_end_matches('=')) {
-				Ok(out) => Ok(result_ok(Value::Bytes(Rc::new(out)))),
-				Err(e) => Ok(result_err(Value::String(Rc::new(e.to_string())))),
-			}
-		}
-		"hex-decode" => {
-			let s = expect_string(&args, "hex.decode");
-			if s.len() % 2 != 0 {
-				return Ok(result_err(Value::String(Rc::new(
-					"hex string has odd length".to_string(),
-				))));
-			}
-			let bytes = s.as_bytes();
-			let mut out = Vec::with_capacity(bytes.len() / 2);
-			for chunk in bytes.chunks(2) {
-				let hi = match hex_value(chunk[0]) {
-					Some(v) => v,
-					None => {
-						return Ok(result_err(Value::String(Rc::new(format!(
-							"invalid hex digit: {:?}",
-							chunk[0] as char
-						)))))
-					}
-				};
-				let lo = match hex_value(chunk[1]) {
-					Some(v) => v,
-					None => {
-						return Ok(result_err(Value::String(Rc::new(format!(
-							"invalid hex digit: {:?}",
-							chunk[1] as char
-						)))))
-					}
-				};
-				out.push((hi << 4) | lo);
-			}
-			Ok(result_ok(Value::Bytes(Rc::new(out))))
-		}
-
 		// ---- core.time ----------------------------------------------------
 		// Instants are i64 nanoseconds since the Unix epoch (UTC); durations
 		// are i64 nanosecond spans. The `.pa` layer builds every higher-level
@@ -1845,23 +1762,6 @@ fn shift_calendar(nanos: i64, months: i64, years: i64) -> Result<i64, String> {
 		.checked_add(span)
 		.map_err(|e| format!("time: {}", e))?;
 	Ok(shifted.timestamp().as_nanosecond() as i64)
-}
-
-fn hex_digit(nibble: u8) -> char {
-	match nibble {
-		0..=9 => (b'0' + nibble) as char,
-		10..=15 => (b'a' + (nibble - 10)) as char,
-		_ => unreachable!("hex_digit: nibble out of range"),
-	}
-}
-
-fn hex_value(byte: u8) -> Option<u8> {
-	match byte {
-		b'0'..=b'9' => Some(byte - b'0'),
-		b'a'..=b'f' => Some(byte - b'a' + 10),
-		b'A'..=b'F' => Some(byte - b'A' + 10),
-		_ => None,
-	}
 }
 
 fn bytes_contains(haystack: &[u8], needle: &[u8]) -> bool {

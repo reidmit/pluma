@@ -250,16 +250,26 @@ recursion, which copies the tail and is O(n²)); the list *builders* (`map`/`tak
 and `list-collect` (`fun int -> option a`, compacts), emitted as **synthetic helpers
 that `call_indirect` the closure** (the first such helpers). `try`-over-option/result
 now works on wasm because it desugars to the now-pure `then`. **82 fixtures green, 0
-diffs.** (The differential harness runs wasmtime's **null collector** — the `gc-null`
+diffs.**
+
+A **`bytes` value type** now exists too (M8 start): it reuses the `$str` struct shape
+(`{tag, ref $bytes}`) under a distinct `TAG_BYTES`, with `Const::Bytes` literals, inline
+`bytes-length`/`bytes-get`, a `__bytes_build` tabulate helper (the byte-buffer keystone),
+and `bytes-concat` reusing `__bytesconcat`. The byte-level `bytes.*` ops (`at`/`slice`/
+`repeat`/`reverse`/`to-list`) are pure Pluma over `build`/`get`; `bytes.to-string` is a
+pure-Pluma **strict UTF-8 validator** (Unicode Table 3-7) plus an inline `bytes↔string`
+retag, and `hex` and `base64` (all four functions) are pure Pluma on top — so those
+pipelines run on WasmGC with no backend-specific code (and the Rust `base64` crate dep is
+gone). **89 fixtures green, 0 diffs.** (The differential harness runs wasmtime's **null collector** — the `gc-null`
 feature — because wasmtime 30's deferred-ref-counting collector panics on a valid module
 once a real GC runs.)
 
 **Still unbuilt.** The broad **builtin host surface** (`string.*`, `math.*`, `dict.*`,
-`bytes.*` — ~197 tags, M7 — gates most remaining `string-*`/`core-*` fixtures;
+the rest of `bytes.*` — ~197 tags, M7 — gates most remaining `string-*`/`core-*` fixtures;
 `list.sort` stays a Rust builtin because functional merge-sort over the array backing is
-O(n²) per merge without a mutable buffer, and `string.join`/`split` stay Rust because
-string building is its own O(n²) problem — a byte-buffer builder, separate from the list
-tabulators); `string/bytes-compare` + hash wrappers; record
+O(n²) per merge without a mutable buffer; `bytes.from-list` and `string.join`/`split` are
+deferred — string building wants a byte-buffer builder and **strings are codepoint-indexed**,
+so char-ops can't ride byte indexing); `string/bytes-compare` + hash wrappers; record
 `{...rest}` named-rest binding; `Switch`→`br_table`; `Const` globals; async (run
 `cps_transform`, then reimplement the fiber/scope/timer scheduler — M9). DOM/FFI/VDOM
 out of scope.

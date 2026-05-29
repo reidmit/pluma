@@ -1,0 +1,18 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+68656c6c6f
+00ff10
+
+'ABC'
+'\xff'
+'\xab\xcd'
+''
+err: hex string has odd length
+err: invalid hex digit
+== stderr ==
+

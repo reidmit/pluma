@@ -58,6 +58,9 @@ pub const TAG_METHODDICT: i32 = 10;
 pub const TAG_TUPLE: i32 = 11;
 pub const TAG_LIST: i32 = 12;
 pub const TAG_RECORD: i32 = 13;
+/// A `bytes` value: same wasm shape as `$str` (struct { tag, ref $bytes }),
+/// distinguished from a string only by this tag.
+pub const TAG_BYTES: i32 = 14;
 
 /// `(ref null $valarray)` — a reference to a value array (closure captures or
 /// variant payload).

@@ -3,14 +3,87 @@
 # digits, so the text is always twice as long as the bytes it came from.
 # Output is lowercase; the decoder accepts either case.
 
+use core.bytes
+use core.string
+
 # Encodes bytes as a lowercase hex string -- two digits per byte.
 #
 #     hex.encode 'hello'   # => "68656c6c6f"
-public def encode :: fun bytes -> string = built-in "hex-encode"
+public def encode :: fun bytes -> string = fun b {
+	let out = bytes.build ((bytes.length b) * 2) (fun j {
+		let byte = bytes.get b (j / 2)
+		let nibble = if (j % 2) == 0 is true {
+			byte / 16
+		} else {
+			byte % 16
+		}
+		hex-digit nibble
+	})
+	(bytes.to-string out) ?? ""
+}
+
+# The ASCII byte of the lowercase hex digit for `v` (0-15): '0'-'9' then 'a'-'f'.
+def hex-digit :: fun int -> int = fun v {
+	if v < 10 is true {
+		v + 48
+	} else {
+		v + 87
+	}
+}
 
 # Decodes a hex string back into bytes. The input must have an even
 # number of digits and contain only 0-9 and a-f (either case); anything
 # else -- a stray space, a "0x" prefix, an odd length -- gives `err`.
 #
 #     hex.decode "68656c6c6f"   # => ok 'hello'
-public def decode :: fun string -> result bytes string = built-in "hex-decode"
+public def decode :: fun string -> result bytes string = fun s {
+	let sb = string.to-bytes s
+	let n = bytes.length sb
+	if (n % 2) == 0 is true {
+		if all-hex sb n 0 is true {
+			ok (bytes.build (n / 2) (fun i {
+				let hi = hex-value (bytes.get sb (i * 2))
+				let lo = hex-value (bytes.get sb ((i * 2) + 1))
+				(hi * 16) + lo
+			}))
+		} else {
+			err "invalid hex digit"
+		}
+	} else {
+		err "hex string has odd length"
+	}
+}
+
+# The value 0-15 of a hex-digit byte, or -1 if it isn't one.
+def hex-value :: fun int -> int = fun c {
+	if (c >= 48) is true {
+		if (c <= 57) is true {
+			c - 48
+		} else {
+			if (c >= 97) is true {
+				if (c <= 102) is true { c - 87 } else { -1 }
+			} else {
+				if (c >= 65) is true {
+					if (c <= 70) is true { c - 55 } else { -1 }
+				} else {
+					-1
+				}
+			}
+		}
+	} else {
+		-1
+	}
+}
+
+# Are all of `b[0..n]` hex-digit bytes?
+def all-hex :: fun bytes int int -> bool = fun b n i {
+	if (i >= n) is true {
+		true
+	} else {
+		if (hex-value (bytes.get b i)) >= 0 is true {
+			all-hex b n (i + 1)
+		} else {
+			false
+		}
+	}
+}

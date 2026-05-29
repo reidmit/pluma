@@ -10,6 +10,8 @@
 #
 # Like strings and lists, bytes never change in place.
 
+use core.list
+
 # How many bytes are in the sequence.
 #
 #     bytes.length 'hello'       # => 5
@@ -29,7 +31,32 @@ public def is-empty :: fun bytes -> bool = fun b {
 #
 #     bytes.at 'ABC' 0    # => some 65
 #     bytes.at 'ABC' 9    # => none
-public def at :: fun bytes int -> option int = built-in "bytes-at"
+public def at :: fun bytes int -> option int = fun b i {
+	if i < 0 is true {
+		none
+	} else {
+		if i >= length b is true {
+			none
+		} else {
+			some (get b i)
+		}
+	}
+}
+
+# The byte at position `i`, as an int in 0-255. The unchecked primitive
+# the byte operations below build on: partial, so a position outside
+# `0 <= i < length` stops the program. Use `at` when `i` might be out of
+# range -- it returns an `option` instead.
+#
+#     bytes.get 'ABC' 0   # => 65
+public def get :: fun bytes int -> int = built-in "bytes-get"
+
+# Builds an `n`-byte sequence by calling `f` with each index `0..n-1`;
+# `f`'s int result is taken mod 256. One O(n) pass -- the byte-buffer
+# counterpart to `list.build`, and what the builders below ride on.
+#
+#     bytes.build 3 (fun i { 65 + i })   # => 'ABC'
+public def build :: fun int (fun int -> int) -> bytes = built-in "bytes-build"
 
 # Joins two byte sequences end to end into a new one.
 #
@@ -41,7 +68,21 @@ public def concat :: fun bytes bytes -> bytes = built-in "bytes-concat"
 # than erroring.
 #
 #     bytes.slice 'hello' 1 4   # => 'ell'
-public def slice :: fun bytes int int -> bytes = built-in "bytes-slice"
+public def slice :: fun bytes int int -> bytes = fun b start end {
+	let len = length b
+	let s = if start < 0 is true {
+		0
+	} else {
+		if start > len is true { len } else { start }
+	}
+	let e0 = if end < 0 is true {
+		0
+	} else {
+		if end > len is true { len } else { end }
+	}
+	let e = if e0 < s is true { s } else { e0 }
+	build (e - s) (fun i { get b (s + i) })
+}
 
 # True when `needle` appears somewhere inside `haystack`.
 #
@@ -62,17 +103,26 @@ public def ends-with :: fun bytes bytes -> bool = built-in "bytes-ends-with"
 # Repeats the bytes `n` times, joined into one sequence.
 #
 #     bytes.repeat 'ab' 3   # => 'ababab'
-public def repeat :: fun bytes int -> bytes = built-in "bytes-repeat"
+public def repeat :: fun bytes int -> bytes = fun b n {
+	let len = length b
+	let count = if n < 0 is true { 0 } else { n }
+	build (len * count) (fun i { get b (i % len) })
+}
 
 # Returns the bytes in reverse order.
 #
 #     bytes.reverse 'abc'   # => 'cba'
-public def reverse :: fun bytes -> bytes = built-in "bytes-reverse"
+public def reverse :: fun bytes -> bytes = fun b {
+	let len = length b
+	build len (fun i { get b (len - 1 - i) })
+}
 
 # Spreads the bytes out into a list of ints, one per byte (each 0-255).
 #
 #     bytes.to-list 'AB'   # => [65, 66]
-public def to-list :: fun bytes -> list int = built-in "bytes-to-list"
+public def to-list :: fun bytes -> list int = fun b {
+	list.build (length b) (fun i { get b i })
+}
 
 # Packs a list of ints back into bytes. Each int has to fit in a byte
 # (0-255); `err` if one doesn't.
@@ -96,4 +146,115 @@ public def split :: fun bytes bytes -> list bytes = built-in "bytes-split"
 # aren't valid UTF-8.
 #
 #     bytes.to-string 'hi'   # => ok "hi"
-public def to-string :: fun bytes -> result string string = built-in "bytes-to-string"
+public def to-string :: fun bytes -> result string string = fun b {
+	if valid-utf8 b 0 (length b) is true {
+		ok (as-string b)
+	} else {
+		err "invalid UTF-8"
+	}
+}
+
+# Reinterpret bytes as a string with no copy and no check. Private and
+# only ever reached from `to-string` once the bytes are known to be valid
+# UTF-8 -- handing it ill-formed bytes would make a broken string.
+def as-string :: fun bytes -> string = built-in "bytes-as-string"
+
+# Is `b[i..n]` well-formed UTF-8? A direct encoding of the Unicode
+# well-formed byte-sequence table (Table 3-7): each lead byte fixes the
+# sequence length and the legal range of the byte that follows.
+def valid-utf8 :: fun bytes int int -> bool = fun b i n {
+	if i >= n is true {
+		true
+	} else {
+		let b0 = get b i
+		if b0 < 128 is true {
+			valid-utf8 b (i + 1) n
+		} else {
+			if b0 < 194 is true {
+				false
+			} else {
+				if b0 < 224 is true {
+					if cont b (i + 1) n is true {
+						valid-utf8 b (i + 2) n
+					} else {
+						false
+					}
+				} else {
+					if b0 < 240 is true {
+						if valid3 b i n b0 is true {
+							valid-utf8 b (i + 3) n
+						} else {
+							false
+						}
+					} else {
+						if b0 < 245 is true {
+							if valid4 b i n b0 is true {
+								valid-utf8 b (i + 4) n
+							} else {
+								false
+							}
+						} else {
+							false
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+# Is the byte at `j` (if in range) a continuation byte (0x80-0xBF)?
+def cont :: fun bytes int int -> bool = fun b j n {
+	if j >= n is true {
+		false
+	} else {
+		let x = get b j
+		if x >= 128 is true { x < 192 } else { false }
+	}
+}
+
+# A 3-byte sequence led by `b0` (0xE0-0xEF): the second byte's legal range
+# narrows for E0 (no overlong) and ED (no surrogates).
+def valid3 :: fun bytes int int int -> bool = fun b i n b0 {
+	if i + 2 >= n is true {
+		false
+	} else {
+		let b1 = get b (i + 1)
+		let lo = if b0 == 224 is true { 160 } else { 128 }
+		let hi = if b0 == 237 is true { 159 } else { 191 }
+		if b1 >= lo is true {
+			if b1 <= hi is true {
+				cont b (i + 2) n
+			} else {
+				false
+			}
+		} else {
+			false
+		}
+	}
+}
+
+# A 4-byte sequence led by `b0` (0xF0-0xF4): the second byte's range
+# narrows for F0 (no overlong) and F4 (cap at U+10FFFF).
+def valid4 :: fun bytes int int int -> bool = fun b i n b0 {
+	if i + 3 >= n is true {
+		false
+	} else {
+		let b1 = get b (i + 1)
+		let lo = if b0 == 240 is true { 144 } else { 128 }
+		let hi = if b0 == 244 is true { 143 } else { 191 }
+		if b1 >= lo is true {
+			if b1 <= hi is true {
+				if cont b (i + 2) n is true {
+					cont b (i + 3) n
+				} else {
+					false
+				}
+			} else {
+				false
+			}
+		} else {
+			false
+		}
+	}
+}

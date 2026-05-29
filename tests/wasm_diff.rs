@@ -25,7 +25,13 @@ use wasmtime::{
 const WASM_FIXTURES: &[&str] = &[
 	"arith-precedence",
 	"arithmetic",
+	"base64-roundtrip",
 	"builtin-uses-list-length",
+	"bytes-equality",
+	"bytes-escapes",
+	"bytes-literal",
+	"bytes-module-basics",
+	"bytes-string-bridge",
 	"closures",
 	"closures-in-list",
 	"coalesce-option",
@@ -43,6 +49,7 @@ const WASM_FIXTURES: &[&str] = &[
 	"float-nan-compare",
 	"generic-enum",
 	"hello",
+	"hex-roundtrip",
 	"if-else-pattern",
 	"if-no-match",
 	"interpolation-complex",
@@ -118,6 +125,7 @@ const TAG_VARIANT: i32 = 8;
 const TAG_TUPLE: i32 = 11;
 const TAG_LIST: i32 = 12;
 const TAG_RECORD: i32 = 13;
+const TAG_BYTES: i32 = 14;
 
 struct HostState {
 	out: Rc<RefCell<Vec<u8>>>,
@@ -195,6 +203,33 @@ fn format_anyref(store: &mut impl AsContextMut, any: Rooted<AnyRef>) -> String {
 				}
 			}
 			String::from_utf8_lossy(&bytes).into_owned()
+		}
+		TAG_BYTES => {
+			// Same `$bytes` backing as a string, rendered in the single-quote
+			// literal form (`'..\xNN'`) that `vm::Value`'s Display uses.
+			let arr = match s.field(&mut *store, 1).expect("bytes field") {
+				Val::AnyRef(Some(r)) => r
+					.as_array(&mut *store)
+					.expect("as_array")
+					.expect("bytes array"),
+				o => panic!("bytes payload: {o:?}"),
+			};
+			let len = arr.len(&mut *store).expect("array len");
+			let mut out = String::from("'");
+			for i in 0..len {
+				let byte = match arr.get(&mut *store, i).expect("array get") {
+					Val::I32(b) => b as u8,
+					o => panic!("byte elem: {o:?}"),
+				};
+				match byte {
+					b'\\' => out.push_str("\\\\"),
+					b'\'' => out.push_str("\\'"),
+					0x20..=0x7e => out.push(byte as char),
+					_ => out.push_str(&format!("\\x{byte:02x}")),
+				}
+			}
+			out.push('\'');
+			out
 		}
 		TAG_DURATION => "<duration>".to_string(),
 		TAG_VARIANT => {
