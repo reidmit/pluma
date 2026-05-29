@@ -1,0 +1,17 @@
+# to-string / print / interpolation over a `dict` — `{k: v, ...}` in
+# insertion order, keys and values formatted recursively.
+
+use core.dict
+
+def main = fun {
+	let m = dict.insert (dict.insert (dict.insert (dict.empty ()) "a" 1) "b" 2) "c" 3
+	print m                            # {a: 1, b: 2, c: 3}
+	print (to-string m)                # {a: 1, b: 2, c: 3}
+	print "dict = $(to-string m)"      # dict = {a: 1, b: 2, c: 3}
+
+	# empty dict, and compound values
+	let empty :: dict string int = dict.empty ()
+	print empty                        # {}
+	let nested = dict.insert (dict.empty ()) "xs" [1, 2]
+	print nested                       # {xs: [1, 2]}
+}

@@ -1,0 +1,13 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+{a: 1, b: 2, c: 3}
+{a: 1, b: 2, c: 3}
+dict = {a: 1, b: 2, c: 3}
+{}
+{xs: [1, 2]}
+== stderr ==

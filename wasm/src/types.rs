@@ -36,7 +36,9 @@ pub const T_METHODDICT: u32 = 10; // struct { i32 tag, (ref $valarray) methods }
 pub const T_TUPLE: u32 = 11; // struct { i32 tag, (ref $valarray) elems }
 pub const T_LIST: u32 = 12; // struct { i32 tag, (ref $valarray) elems }
 pub const T_RECORD: u32 = 13; // struct { i32 tag, (ref $valarray) names, (ref $valarray) values }
-const T_FIRST_FUNC: u32 = 14;
+pub const T_REF: u32 = 14; // struct { i32 tag, (mut ref null $value) cell }  — a mutable cell
+pub const T_DICT: u32 = 15; // struct { i32 tag, (ref $valarray) entries }  — insertion-ordered (k,v) tuples
+const T_FIRST_FUNC: u32 = 16;
 
 // --------------------------------------------------------------------------
 // Runtime tags carried in the `$value` discriminant field. Mirror `vm::Value`'s
@@ -61,6 +63,13 @@ pub const TAG_RECORD: i32 = 13;
 /// A `bytes` value: same wasm shape as `$str` (struct { tag, ref $bytes }),
 /// distinguished from a string only by this tag.
 pub const TAG_BYTES: i32 = 14;
+/// A `ref a` mutable cell: a `$ref` struct holding one (mutable) boxed value.
+/// Compared by reference identity (`ref.eq`), like the VM's `Rc::ptr_eq`.
+pub const TAG_REF: i32 = 15;
+/// A `dict k v`: a `$dict` struct holding a `$valarray` of insertion-ordered
+/// `$tuple` `(key, value)` entries. Linear-scan with `__eq` on keys (the VM's
+/// hash buckets are a pure accelerator; observable behavior is the entry order).
+pub const TAG_DICT: i32 = 16;
 
 /// `(ref null $valarray)` — a reference to a value array (closure captures or
 /// variant payload).
@@ -77,6 +86,14 @@ pub fn value_ref() -> ValType {
 	ValType::Ref(RefType {
 		nullable: true,
 		heap_type: HeapType::Concrete(T_VALUE),
+	})
+}
+
+/// `(ref $ref)` — a non-null reference to a mutable cell struct.
+pub fn ref_ref() -> ValType {
+	ValType::Ref(RefType {
+		nullable: false,
+		heap_type: HeapType::Concrete(T_REF),
 	})
 }
 
@@ -318,6 +335,23 @@ impl FuncTypes {
 			vec![
 				val_field(ValType::I32, false),
 				val_field(valarray_ref(), false),
+				val_field(valarray_ref(), false),
+			],
+			true,
+		));
+		// 14 $ref — { tag, (mut ref null $value) cell }. The cell field is mutable
+		// (the whole point of a `ref`); identity is the struct reference itself.
+		types.ty().subtype(&struct_subtype(
+			Some(T_VALUE),
+			vec![val_field(ValType::I32, false), val_field(value_ref(), true)],
+			true,
+		));
+		// 15 $dict — { tag, (ref $valarray) entries }. Each entry is a `$tuple`
+		// `(key, value)`; insertion-ordered (same shape as `$list`/`$tuple`).
+		types.ty().subtype(&struct_subtype(
+			Some(T_VALUE),
+			vec![
+				val_field(ValType::I32, false),
 				val_field(valarray_ref(), false),
 			],
 			true,

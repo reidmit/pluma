@@ -39,9 +39,19 @@ const WASM_FIXTURES: &[&str] = &[
 	"coalesce-option",
 	"coalesce-result",
 	"comparison-ops",
+	"core-dict-basic",
+	"core-dict-collision",
+	"core-dict-derived",
+	"core-dict-fold",
+	"core-dict-from-entries",
+	"core-dict-int-keys",
+	"core-dict-merge",
+	"core-dict-string-keys",
 	"core-list-extras",
 	"core-math-extras",
 	"cross-module",
+	"dict-equality",
+	"dict-tostring",
 	"deep-recursion",
 	"double-int-float",
 	"empty-fun-body",
@@ -96,6 +106,8 @@ const WASM_FIXTURES: &[&str] = &[
 	"record-pattern-closed-vs-open",
 	"record-update",
 	"recursion",
+	"ref-basic",
+	"ref-tostring",
 	"result-then-direct",
 	"shadowing",
 	"string-concat",
@@ -134,6 +146,8 @@ const TAG_TUPLE: i32 = 11;
 const TAG_LIST: i32 = 12;
 const TAG_RECORD: i32 = 13;
 const TAG_BYTES: i32 = 14;
+const TAG_REF: i32 = 15;
+const TAG_DICT: i32 = 16;
 
 struct HostState {
 	out: Rc<RefCell<Vec<u8>>>,
@@ -272,6 +286,28 @@ fn format_anyref(store: &mut impl AsContextMut, any: Rooted<AnyRef>) -> String {
 				.iter()
 				.zip(&values)
 				.map(|(k, v)| format!("{k}: {v}"))
+				.collect();
+			format!("{{{}}}", pairs.join(", "))
+		}
+		TAG_REF => {
+			// `ref <inner>` — the cell's value, recursively (matches `vm::Value`).
+			let cell = s.field(&mut *store, 1).expect("ref cell");
+			format!("ref {}", format_value(store, &cell))
+		}
+		TAG_DICT => {
+			// `{k: v, ...}` — entries are `$tuple` (key, value), insertion order.
+			let ef = s.field(&mut *store, 1).expect("dict entries");
+			let entries = format_elems(store, &ef);
+			// each element formats as a tuple "(k, v)"; reshape to "k: v"
+			let pairs: Vec<String> = entries
+				.iter()
+				.map(|e| {
+					let inner = e.strip_prefix('(').and_then(|s| s.strip_suffix(')')).unwrap_or(e);
+					match inner.split_once(", ") {
+						Some((k, v)) => format!("{k}: {v}"),
+						None => inner.to_string(),
+					}
+				})
 				.collect();
 			format!("{{{}}}", pairs.join(", "))
 		}

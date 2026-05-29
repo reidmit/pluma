@@ -66,11 +66,33 @@ struct Runtime {
 	list_collect_fn: Option<u32>,
 	/// `__bytes_build(n, f) -> bytes` — tabulate a byte sequence.
 	bytes_build_fn: Option<u32>,
+	/// `__dict_insert(dict, k, v) -> dict` — replace-or-append (linear scan via `__eq`).
+	dict_insert_fn: Option<u32>,
+	/// `__dict_lookup(dict, k) -> option v` — linear scan via `__eq`.
+	dict_lookup_fn: Option<u32>,
+	/// `__dict_remove(dict, k) -> dict` — drop the matching entry (linear scan).
+	dict_remove_fn: Option<u32>,
+	/// `__dict_map(dict, f) -> dict` — `f` over each value, keys preserved.
+	dict_map_fn: Option<u32>,
+	/// `__dict_filter(dict, f) -> dict` — keep entries where `f key value` is true.
+	dict_filter_fn: Option<u32>,
 	/// Host import `float_to_str(f64, $bytes buf) -> i32 len` — float formatting
 	/// (delegated to the host, like a browser's `String(x)`), used by `__tostring`.
 	float_to_str_fn: Option<u32>,
 	/// Data-segment offsets/lengths for the literal strings `__tostring` needs.
 	lits: ToStringLits,
+	/// `some`/`none` variant info for `__dict_lookup` to build its `option` result.
+	opt: OptionLits,
+}
+
+/// What `__dict_lookup` needs to construct `some v` / `none` `$variant`s: each
+/// variant's within-enum tag and its interned display-name string `(off, len)`.
+#[derive(Clone, Copy, Default)]
+struct OptionLits {
+	some_tag: u32,
+	none_tag: u32,
+	some_name: (u32, u32),
+	none_name: (u32, u32),
 }
 
 /// `(offset, len)` of each fixed literal `__tostring` emits, in the shared data
@@ -89,6 +111,7 @@ struct ToStringLits {
 	comma_sp: (u32, u32), // ", "
 	colon_sp: (u32, u32), // ": "
 	space: (u32, u32),    // " "
+	ref_pfx: (u32, u32),  // "ref "
 }
 
 /// Which runtime helpers a reachable program needs. `eq` is forced on whenever
@@ -209,6 +232,17 @@ fn is_inline_builtin(tag: &str) -> bool {
 			| "string-to-bytes"
 			// the in-place list mutation: `array.set` on the `$valarray`.
 			| "list-set"
+			// mutable cells: a `$ref` struct with a mutable boxed-value field.
+			// `ref-update` reads, applies a closure, writes back (closure call inline).
+			| "ref-new"
+			| "ref-get"
+			| "ref-set"
+			| "ref-update"
+			// dicts: the trivial accessors over the `$dict` entries array. The
+			// rebuild/scan/closure ops (insert/lookup/remove/map/filter) are helpers.
+			| "dict-empty"
+			| "dict-size"
+			| "dict-entries"
 			// math primitives WasmGC does with one f64/i64 opcode (the
 			// transcendentals log/exp/sin/cos still need a host import).
 			| "math-sqrt"
@@ -243,6 +277,11 @@ impl Module {
 		let mut list_collect_called = false;
 		let mut bytes_build_called = false;
 		let mut bytes_concat_called = false;
+		let mut dict_insert_called = false;
+		let mut dict_lookup_called = false;
+		let mut dict_remove_called = false;
+		let mut dict_map_called = false;
+		let mut dict_filter_called = false;
 		for &fid in &reach.order {
 			collect_host_calls(&p.functions[fid as usize].body, &builtin_g, |tag| {
 				if tag == "to-string" {
@@ -267,6 +306,31 @@ impl Module {
 				if tag == "bytes-concat" {
 					bytes_concat_called = true;
 					return;
+				}
+				// dict scan/rebuild/closure ops: synthetic helpers (the trivial
+				// accessors empty/size/entries go through `is_inline_builtin`).
+				match tag {
+					"dict-insert" => {
+						dict_insert_called = true;
+						return;
+					}
+					"dict-lookup" => {
+						dict_lookup_called = true;
+						return;
+					}
+					"dict-remove" => {
+						dict_remove_called = true;
+						return;
+					}
+					"dict-map" => {
+						dict_map_called = true;
+						return;
+					}
+					"dict-filter" => {
+						dict_filter_called = true;
+						return;
+					}
+					_ => {}
 				}
 				// Pure-compute builtins emitted inline at the call site (no import).
 				if is_inline_builtin(tag) {
@@ -340,6 +404,8 @@ impl Module {
 		if needs.tostring {
 			needs.bytesconcat = true;
 		}
+		// dict insert/lookup/remove compare keys with `__eq`.
+		needs.eq |= dict_insert_called || dict_lookup_called || dict_remove_called;
 		// Helper indices, assigned in a fixed order; `next` walks past each present one.
 		let mut next_synth = synth_base;
 		let mut take = |present: bool| -> Option<u32> {
@@ -361,8 +427,14 @@ impl Module {
 			list_build_fn: take(list_build_called),
 			list_collect_fn: take(list_collect_called),
 			bytes_build_fn: take(bytes_build_called),
+			dict_insert_fn: take(dict_insert_called),
+			dict_lookup_fn: take(dict_lookup_called),
+			dict_remove_fn: take(dict_remove_called),
+			dict_map_fn: take(dict_map_called),
+			dict_filter_fn: take(dict_filter_called),
 			float_to_str_fn: host_index.get("float_to_str").copied(),
 			lits: ToStringLits::default(),
+			opt: OptionLits::default(),
 		};
 		let wrapper_base = next_synth;
 
@@ -481,7 +553,32 @@ impl Module {
 				comma_sp: strpool.intern(", "),
 				colon_sp: strpool.intern(": "),
 				space: strpool.intern(" "),
+				ref_pfx: strpool.intern("ref "),
 			};
+		}
+		// `__dict_lookup` builds `some v` / `none`; intern those variant display
+		// names and resolve their within-enum tags (the `option` enum).
+		if runtime.dict_lookup_fn.is_some() {
+			let opt_enum = p
+				.enums
+				.iter()
+				.find(|(_, vs)| vs.iter().any(|(n, _)| n == "some"))
+				.map(|(name, _)| name.clone());
+			match (
+				opt_enum,
+				variant_tag_in(&p.enums, "some"),
+				variant_tag_in(&p.enums, "none"),
+			) {
+				(Some(en), Some(some_tag), Some(none_tag)) => {
+					runtime.opt = OptionLits {
+						some_tag,
+						none_tag,
+						some_name: strpool.intern(&variant_display(&en, some_tag, &p.enums)),
+						none_name: strpool.intern(&variant_display(&en, none_tag, &p.enums)),
+					};
+				}
+				_ => diags.push("dict.lookup needs the `option` enum".to_string()),
+			}
 		}
 
 		// Function-type interning + section building.
@@ -578,6 +675,31 @@ impl Module {
 			let arity1 = ftypes.for_arity(1);
 			functions.function(ftypes.for_helper(2));
 			code.function(&build_bytes_build_fn(arity1));
+		}
+		if runtime.dict_insert_fn.is_some() {
+			let eq = runtime.eq_fn.expect("dict_insert needs eq");
+			functions.function(ftypes.for_helper(3));
+			code.function(&build_dict_insert_fn(eq));
+		}
+		if runtime.dict_lookup_fn.is_some() {
+			let eq = runtime.eq_fn.expect("dict_lookup needs eq");
+			functions.function(ftypes.for_helper(2));
+			code.function(&build_dict_lookup_fn(eq, runtime.opt));
+		}
+		if runtime.dict_remove_fn.is_some() {
+			let eq = runtime.eq_fn.expect("dict_remove needs eq");
+			functions.function(ftypes.for_helper(2));
+			code.function(&build_dict_remove_fn(eq));
+		}
+		if runtime.dict_map_fn.is_some() {
+			let arity1 = ftypes.for_arity(1);
+			functions.function(ftypes.for_helper(2));
+			code.function(&build_dict_map_fn(arity1));
+		}
+		if runtime.dict_filter_fn.is_some() {
+			let arity2 = ftypes.for_arity(2);
+			functions.function(ftypes.for_helper(2));
+			code.function(&build_dict_filter_fn(arity2));
 		}
 		for tag in &wrapper_order {
 			let arity = builtin_arity(tag).unwrap();
@@ -1869,6 +1991,32 @@ impl<'a> FnEmitter<'a> {
 			}
 			return;
 		}
+		// dict scan/rebuild/closure ops → synthetic helpers. insert/lookup/remove
+		// receive a hash method-dict as `args[0]` (the `where (hash k)` evidence);
+		// the wasm dict scans with `__eq` instead of hashing, so that arg is DROPPED
+		// — we pass only the dict + key (+ value). map/filter take `[dict, f]`.
+		if let Some((helper, call_args)) = match tag {
+			"dict-insert" => Some((self.runtime.dict_insert_fn, &args[1..])),
+			"dict-lookup" => Some((self.runtime.dict_lookup_fn, &args[1..])),
+			"dict-remove" => Some((self.runtime.dict_remove_fn, &args[1..])),
+			"dict-map" => Some((self.runtime.dict_map_fn, &args[0..])),
+			"dict-filter" => Some((self.runtime.dict_filter_fn, &args[0..])),
+			_ => None,
+		} {
+			match helper {
+				Some(h) => {
+					for a in call_args {
+						self.atom(a);
+					}
+					self.ins(Instruction::Call(h));
+				}
+				None => {
+					self.diags.push(format!("`{tag}` helper not emitted"));
+					self.push_nothing();
+				}
+			}
+			return;
+		}
 		// `to-string` is implemented in wasm (`__tostring`), not imported.
 		if tag == "to-string" {
 			if let (Some(ts), Some(a)) = (self.runtime.tostring_fn, args.first()) {
@@ -1944,6 +2092,117 @@ impl<'a> FnEmitter<'a> {
 				self.atom(&args[2]);
 				self.ins(Instruction::ArraySet(types::T_VALARRAY));
 				self.push_nothing();
+			}
+			// ref.new v : a fresh `$ref` cell holding `v`.
+			"ref-new" => {
+				self.ins(Instruction::I32Const(types::TAG_REF));
+				self.atom(&args[0]);
+				self.ins(Instruction::StructNew(types::T_REF));
+			}
+			// ref.get r : the cell's current value.
+			"ref-get" => {
+				self.atom(&args[0]);
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_REF,
+				)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_REF,
+					field_index: 1,
+				});
+			}
+			// ref.set r v : overwrite the cell in place; yields nothing.
+			"ref-set" => {
+				self.atom(&args[0]);
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_REF,
+				)));
+				self.atom(&args[1]);
+				self.ins(Instruction::StructSet {
+					struct_type_index: types::T_REF,
+					field_index: 1,
+				});
+				self.push_nothing();
+			}
+			// ref.update r f : read once, apply the closure `f`, write back; yields
+			// nothing. The closure call is emitted inline (env + 1 arg, then
+			// `call_indirect` through its stored fn_index), with the cell struct kept
+			// underneath for the final `struct.set`.
+			"ref-update" => {
+				let cell = self.fresh_local(types::ref_ref());
+				self.atom(&args[0]);
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_REF,
+				)));
+				self.ins(Instruction::LocalTee(cell)); // stack: [cell]
+				// closure env = f.
+				self.atom(&args[1]);
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_CLOSURE,
+				)));
+				// arg = the cell's current value.
+				self.ins(Instruction::LocalGet(cell));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_REF,
+					field_index: 1,
+				});
+				// fn_index from the closure, then call_indirect (arity 1).
+				self.atom(&args[1]);
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_CLOSURE,
+				)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_CLOSURE,
+					field_index: 1,
+				});
+				let ty = self.ftypes.for_arity(1);
+				self.ins(Instruction::CallIndirect {
+					type_index: ty,
+					table_index: 0,
+				}); // stack: [cell, new_value]
+				self.ins(Instruction::StructSet {
+					struct_type_index: types::T_REF,
+					field_index: 1,
+				});
+				self.push_nothing();
+			}
+			// dict.empty () : a fresh `$dict` with no entries. (arg is the unit.)
+			"dict-empty" => {
+				self.ins(Instruction::I32Const(types::TAG_DICT));
+				self.ins(Instruction::ArrayNewFixed {
+					array_type_index: types::T_VALARRAY,
+					array_size: 0,
+				});
+				self.ins(Instruction::StructNew(types::T_DICT));
+			}
+			// dict.size m : entry count, boxed as `$int`.
+			"dict-size" => {
+				self.ins(Instruction::I32Const(types::TAG_INT));
+				self.atom(&args[0]);
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_DICT,
+				)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_DICT,
+					field_index: 1,
+				});
+				self.ins(Instruction::ArrayLen);
+				self.ins(Instruction::I64ExtendI32U);
+				self.ins(Instruction::StructNew(types::T_INT));
+			}
+			// dict.entries m : the (k,v) tuples as a `$list`. The dict's entries
+			// array is already a `$valarray` of `$tuple`s — just retag it as a list
+			// (shared; neither side mutates it in place).
+			"dict-entries" => {
+				self.ins(Instruction::I32Const(types::TAG_LIST));
+				self.atom(&args[0]);
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_DICT,
+				)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_DICT,
+					field_index: 1,
+				});
+				self.ins(Instruction::StructNew(types::T_LIST));
 			}
 			// list.length xs : element count, boxed as `$int`.
 			"list-length" => {
@@ -2264,7 +2523,8 @@ impl<'a> FnEmitter<'a> {
 /// (they trap — a clear signal to implement them, not a silent wrong answer).
 fn build_eq_fn(self_idx: u32) -> Function {
 	use Instruction as I;
-	// Locals past the two params: ta, tb, i, n (i32); aa, bb ($bytes); pa, pb ($valarray).
+	// Locals past the two params: ta, tb, i, n (i32); aa, bb ($bytes); pa, pb
+	// ($valarray); j, found (i32, for the order-independent dict compare).
 	let locals = vec![
 		ValType::I32,
 		ValType::I32,
@@ -2274,6 +2534,8 @@ fn build_eq_fn(self_idx: u32) -> Function {
 		types::bytes_ref(),
 		types::valarray_ref(),
 		types::valarray_ref(),
+		ValType::I32,
+		ValType::I32,
 	];
 	const A: u32 = 0;
 	const B: u32 = 1;
@@ -2285,6 +2547,8 @@ fn build_eq_fn(self_idx: u32) -> Function {
 	const BB: u32 = 7;
 	const PA: u32 = 8;
 	const PB: u32 = 9;
+	const J: u32 = 10;
+	const FOUND: u32 = 11;
 	let empty = wasm_encoder::BlockType::Empty;
 	let cast = |t| I::RefCastNonNull(HeapType::Concrete(t));
 	let getf = |t, f| I::StructGet {
@@ -2484,7 +2748,115 @@ fn build_eq_fn(self_idx: u32) -> Function {
 	b.push(I::If(empty));
 	cmp_array(&mut b, types::T_RECORD, 2);
 	b.push(I::End);
-	// Unhandled (dict/closure/ctor): not structurally compared.
+	// REF: reference identity (`ref.eq`), matching the VM's `Rc::ptr_eq` — two
+	// cells are equal iff they are the same cell, regardless of contents.
+	b.push(I::LocalGet(TA));
+	b.push(I::I32Const(types::TAG_REF));
+	b.push(I::I32Eq);
+	b.push(I::If(empty));
+	b.push(I::LocalGet(A));
+	b.push(I::LocalGet(B));
+	b.push(I::RefEq);
+	b.push(I::Return);
+	b.push(I::End);
+	// DICT: order-independent structural compare (matches the VM). Equal sizes,
+	// then every entry of `a` must have a key in `b` with an equal value. Keys are
+	// unique within each dict, so equal sizes make this a bijection check. Entry
+	// fields are read inline: `entries[idx]` is a `$tuple`, elem 0 = key, 1 = value.
+	let entry_field = |b: &mut Vec<Instruction>, arr: u32, idx: u32, field: i32| {
+		b.push(I::LocalGet(arr));
+		b.push(I::LocalGet(idx));
+		b.push(I::ArrayGet(types::T_VALARRAY));
+		b.push(cast(types::T_TUPLE));
+		b.push(getf(types::T_TUPLE, 1));
+		b.push(I::I32Const(field));
+		b.push(I::ArrayGet(types::T_VALARRAY));
+	};
+	b.push(I::LocalGet(TA));
+	b.push(I::I32Const(types::TAG_DICT));
+	b.push(I::I32Eq);
+	b.push(I::If(empty));
+	// PA = a.entries; PB = b.entries; N = len(a); bail if lengths differ.
+	b.push(I::LocalGet(A));
+	b.push(cast(types::T_DICT));
+	b.push(getf(types::T_DICT, 1));
+	b.push(I::LocalSet(PA));
+	b.push(I::LocalGet(B));
+	b.push(cast(types::T_DICT));
+	b.push(getf(types::T_DICT, 1));
+	b.push(I::LocalSet(PB));
+	b.push(I::LocalGet(PA));
+	b.push(I::ArrayLen);
+	b.push(I::LocalSet(N));
+	b.push(I::LocalGet(PB));
+	b.push(I::ArrayLen);
+	b.push(I::LocalGet(N));
+	b.push(I::I32Ne);
+	b.push(I::If(empty));
+	b.push(I::I32Const(0));
+	b.push(I::Return);
+	b.push(I::End);
+	b.push(I::I32Const(0));
+	b.push(I::LocalSet(I_));
+	b.push(I::Block(empty)); // $outer
+	b.push(I::Loop(empty)); // $oloop
+	b.push(I::LocalGet(I_));
+	b.push(I::LocalGet(N));
+	b.push(I::I32GeS);
+	b.push(I::BrIf(1)); // -> $outer (done; all matched)
+	b.push(I::I32Const(0));
+	b.push(I::LocalSet(J));
+	b.push(I::I32Const(0));
+	b.push(I::LocalSet(FOUND));
+	b.push(I::Block(empty)); // $inner
+	b.push(I::Loop(empty)); // $iloop
+	b.push(I::LocalGet(J));
+	b.push(I::LocalGet(N));
+	b.push(I::I32GeS);
+	b.push(I::BrIf(1)); // -> $inner (key absent in b)
+	// if __eq(a.key[i], b.key[j]) { ... }
+	entry_field(&mut b, PA, I_, 0);
+	entry_field(&mut b, PB, J, 0);
+	b.push(I::Call(self_idx));
+	b.push(I::If(empty));
+	// values must match, else the dicts differ.
+	entry_field(&mut b, PA, I_, 1);
+	entry_field(&mut b, PB, J, 1);
+	b.push(I::Call(self_idx));
+	b.push(I::I32Eqz);
+	b.push(I::If(empty));
+	b.push(I::I32Const(0));
+	b.push(I::Return);
+	b.push(I::End);
+	b.push(I::I32Const(1));
+	b.push(I::LocalSet(FOUND));
+	b.push(I::Br(2)); // -> $inner (key found, move to next a-entry)
+	b.push(I::End); // if key-eq
+	b.push(I::LocalGet(J));
+	b.push(I::I32Const(1));
+	b.push(I::I32Add);
+	b.push(I::LocalSet(J));
+	b.push(I::Br(0)); // -> $iloop
+	b.push(I::End); // $iloop
+	b.push(I::End); // $inner
+	// a-key absent in b -> not equal.
+	b.push(I::LocalGet(FOUND));
+	b.push(I::I32Eqz);
+	b.push(I::If(empty));
+	b.push(I::I32Const(0));
+	b.push(I::Return);
+	b.push(I::End);
+	b.push(I::LocalGet(I_));
+	b.push(I::I32Const(1));
+	b.push(I::I32Add);
+	b.push(I::LocalSet(I_));
+	b.push(I::Br(0)); // -> $oloop
+	b.push(I::End); // $oloop
+	b.push(I::End); // $outer
+	b.push(I::I32Const(1));
+	b.push(I::Return);
+	b.push(I::End);
+	// Unhandled (closure/ctor): not structurally compared.
 	b.push(I::Unreachable);
 	let mut f = Function::new_with_locals_types(locals);
 	for ins in &b {
@@ -2897,6 +3269,522 @@ fn build_bytes_build_fn(arity1: u32) -> Function {
 		I::I32Const(types::TAG_BYTES),
 		I::LocalGet(BUF),
 		I::StructNew(types::T_STR),
+	];
+	let mut f = Function::new_with_locals_types(locals);
+	for ins in &b {
+		f.instruction(ins);
+	}
+	f.instruction(&I::End);
+	f
+}
+
+// ---------------------------------------------------------------------------
+// Dict helpers. A `$dict` is `{tag, $valarray entries}` where each entry is a
+// `$tuple (key, value)`. We linear-scan with `__eq` on keys — the VM's hash
+// buckets are a pure accelerator, so insertion-order + structural key equality
+// fully determine observable behavior. insert/lookup/remove DROP the hash
+// method-dict the `where (hash k)` constraint passes (handled at the call site).
+// ---------------------------------------------------------------------------
+
+/// Emit the `$valarray` of the dict in `D` (param 0), i.e. `D.entries`.
+fn dict_entries_of(b: &mut Vec<Instruction>, d: u32) {
+	use Instruction as I;
+	b.push(I::LocalGet(d));
+	b.push(I::RefCastNonNull(HeapType::Concrete(types::T_DICT)));
+	b.push(I::StructGet {
+		struct_type_index: types::T_DICT,
+		field_index: 1,
+	});
+}
+
+/// Emit `entries[idx_local].elems[field]` — the key (field 0) or value (1) of
+/// the `$tuple` entry at `idx_local` in the `$valarray` held in `arr_local`.
+fn dict_entry_field(b: &mut Vec<Instruction>, arr_local: u32, idx_local: u32, field: i32) {
+	use Instruction as I;
+	b.push(I::LocalGet(arr_local));
+	b.push(I::LocalGet(idx_local));
+	b.push(I::ArrayGet(types::T_VALARRAY));
+	b.push(I::RefCastNonNull(HeapType::Concrete(types::T_TUPLE)));
+	b.push(I::StructGet {
+		struct_type_index: types::T_TUPLE,
+		field_index: 1,
+	});
+	b.push(I::I32Const(field));
+	b.push(I::ArrayGet(types::T_VALARRAY));
+}
+
+/// Build `__dict_insert(dict, key, value) -> dict`: scan for `key` (via `__eq`);
+/// replace its entry if present, else append. Returns a fresh `$dict`.
+fn build_dict_insert_fn(eq_idx: u32) -> Function {
+	use Instruction as I;
+	const D: u32 = 0;
+	const K: u32 = 1;
+	const V: u32 = 2;
+	const ENTRIES: u32 = 3;
+	const N: u32 = 4;
+	const I_: u32 = 5;
+	const FOUND: u32 = 6;
+	const NEW: u32 = 7;
+	let empty = wasm_encoder::BlockType::Empty;
+	let va = types::T_VALARRAY;
+	// `NEW[at] = tuple(K, V)`.
+	let store_kv = |b: &mut Vec<Instruction>, at: &dyn Fn(&mut Vec<Instruction>)| {
+		b.push(I::LocalGet(NEW));
+		at(b);
+		b.push(I::I32Const(types::TAG_TUPLE));
+		b.push(I::LocalGet(K));
+		b.push(I::LocalGet(V));
+		b.push(I::ArrayNewFixed {
+			array_type_index: va,
+			array_size: 2,
+		});
+		b.push(I::StructNew(types::T_TUPLE));
+		b.push(I::ArraySet(va));
+	};
+	let mut b: Vec<Instruction> = Vec::new();
+	dict_entries_of(&mut b, D);
+	b.push(I::LocalSet(ENTRIES));
+	b.push(I::LocalGet(ENTRIES));
+	b.push(I::ArrayLen);
+	b.push(I::LocalSet(N));
+	b.push(I::I32Const(-1));
+	b.push(I::LocalSet(FOUND));
+	b.push(I::I32Const(0));
+	b.push(I::LocalSet(I_));
+	// Keys are unique, so the last (==only) match is the entry to replace.
+	b.push(I::Block(empty));
+	b.push(I::Loop(empty));
+	b.push(I::LocalGet(I_));
+	b.push(I::LocalGet(N));
+	b.push(I::I32GeS);
+	b.push(I::BrIf(1));
+	dict_entry_field(&mut b, ENTRIES, I_, 0);
+	b.push(I::LocalGet(K));
+	b.push(I::Call(eq_idx));
+	b.push(I::If(empty));
+	b.push(I::LocalGet(I_));
+	b.push(I::LocalSet(FOUND));
+	b.push(I::End);
+	b.push(I::LocalGet(I_));
+	b.push(I::I32Const(1));
+	b.push(I::I32Add);
+	b.push(I::LocalSet(I_));
+	b.push(I::Br(0));
+	b.push(I::End); // loop
+	b.push(I::End); // block
+	// Pre-init NEW (a non-null local) so it is definitely-assigned on every path
+	// — the validator does not merge assignments made only inside if/else arms.
+	b.push(I::LocalGet(ENTRIES));
+	b.push(I::LocalSet(NEW));
+	b.push(I::LocalGet(FOUND));
+	b.push(I::I32Const(0));
+	b.push(I::I32GeS);
+	b.push(I::If(empty));
+	{
+		// Replace: NEW = copy of ENTRIES; NEW[FOUND] = (K, V).
+		b.push(I::LocalGet(N));
+		b.push(I::ArrayNewDefault(va));
+		b.push(I::LocalSet(NEW));
+		b.push(I::LocalGet(NEW));
+		b.push(I::I32Const(0));
+		b.push(I::LocalGet(ENTRIES));
+		b.push(I::I32Const(0));
+		b.push(I::LocalGet(N));
+		b.push(I::ArrayCopy {
+			array_type_index_dst: va,
+			array_type_index_src: va,
+		});
+		store_kv(&mut b, &|b| b.push(I::LocalGet(FOUND)));
+	}
+	b.push(I::Else);
+	{
+		// Append: NEW = copy of ENTRIES grown by one; NEW[N] = (K, V).
+		b.push(I::LocalGet(N));
+		b.push(I::I32Const(1));
+		b.push(I::I32Add);
+		b.push(I::ArrayNewDefault(va));
+		b.push(I::LocalSet(NEW));
+		b.push(I::LocalGet(NEW));
+		b.push(I::I32Const(0));
+		b.push(I::LocalGet(ENTRIES));
+		b.push(I::I32Const(0));
+		b.push(I::LocalGet(N));
+		b.push(I::ArrayCopy {
+			array_type_index_dst: va,
+			array_type_index_src: va,
+		});
+		store_kv(&mut b, &|b| b.push(I::LocalGet(N)));
+	}
+	b.push(I::End);
+	b.push(I::I32Const(types::TAG_DICT));
+	b.push(I::LocalGet(NEW));
+	b.push(I::StructNew(types::T_DICT));
+	let locals = vec![types::valarray_ref(), ValType::I32, ValType::I32, ValType::I32, types::valarray_ref()];
+	let mut f = Function::new_with_locals_types(locals);
+	for ins in &b {
+		f.instruction(ins);
+	}
+	f.instruction(&I::End);
+	f
+}
+
+/// Build `__dict_lookup(dict, key) -> option value`: linear scan via `__eq`.
+fn build_dict_lookup_fn(eq_idx: u32, opt: OptionLits) -> Function {
+	use Instruction as I;
+	const D: u32 = 0;
+	const K: u32 = 1;
+	const ENTRIES: u32 = 2;
+	const N: u32 = 3;
+	const I_: u32 = 4;
+	let empty = wasm_encoder::BlockType::Empty;
+	// Push a fresh `$str` for an interned data-segment literal.
+	let str_lit = |b: &mut Vec<Instruction>, (off, len): (u32, u32)| {
+		b.push(I::I32Const(types::TAG_STR));
+		b.push(I::I32Const(off as i32));
+		b.push(I::I32Const(len as i32));
+		b.push(I::ArrayNewData {
+			array_type_index: types::T_BYTES,
+			array_data_index: 0,
+		});
+		b.push(I::StructNew(types::T_STR));
+	};
+	let mut b: Vec<Instruction> = Vec::new();
+	dict_entries_of(&mut b, D);
+	b.push(I::LocalSet(ENTRIES));
+	b.push(I::LocalGet(ENTRIES));
+	b.push(I::ArrayLen);
+	b.push(I::LocalSet(N));
+	b.push(I::I32Const(0));
+	b.push(I::LocalSet(I_));
+	b.push(I::Block(empty));
+	b.push(I::Loop(empty));
+	b.push(I::LocalGet(I_));
+	b.push(I::LocalGet(N));
+	b.push(I::I32GeS);
+	b.push(I::BrIf(1));
+	dict_entry_field(&mut b, ENTRIES, I_, 0);
+	b.push(I::LocalGet(K));
+	b.push(I::Call(eq_idx));
+	b.push(I::If(empty));
+	// return some(value).
+	b.push(I::I32Const(types::TAG_VARIANT));
+	b.push(I::I32Const(opt.some_tag as i32));
+	str_lit(&mut b, opt.some_name);
+	dict_entry_field(&mut b, ENTRIES, I_, 1);
+	b.push(I::ArrayNewFixed {
+		array_type_index: types::T_VALARRAY,
+		array_size: 1,
+	});
+	b.push(I::StructNew(types::T_VARIANT));
+	b.push(I::Return);
+	b.push(I::End);
+	b.push(I::LocalGet(I_));
+	b.push(I::I32Const(1));
+	b.push(I::I32Add);
+	b.push(I::LocalSet(I_));
+	b.push(I::Br(0));
+	b.push(I::End); // loop
+	b.push(I::End); // block
+	// none.
+	b.push(I::I32Const(types::TAG_VARIANT));
+	b.push(I::I32Const(opt.none_tag as i32));
+	str_lit(&mut b, opt.none_name);
+	b.push(I::ArrayNewFixed {
+		array_type_index: types::T_VALARRAY,
+		array_size: 0,
+	});
+	b.push(I::StructNew(types::T_VARIANT));
+	let locals = vec![types::valarray_ref(), ValType::I32, ValType::I32];
+	let mut f = Function::new_with_locals_types(locals);
+	for ins in &b {
+		f.instruction(ins);
+	}
+	f.instruction(&I::End);
+	f
+}
+
+/// Build `__dict_remove(dict, key) -> dict`: drop the matching entry (renumbered
+/// dense). Returns the original dict unchanged when the key is absent.
+fn build_dict_remove_fn(eq_idx: u32) -> Function {
+	use Instruction as I;
+	const D: u32 = 0;
+	const K: u32 = 1;
+	const ENTRIES: u32 = 2;
+	const N: u32 = 3;
+	const I_: u32 = 4;
+	const FOUND: u32 = 5;
+	const NEW: u32 = 6;
+	let empty = wasm_encoder::BlockType::Empty;
+	let va = types::T_VALARRAY;
+	let mut b: Vec<Instruction> = Vec::new();
+	dict_entries_of(&mut b, D);
+	b.push(I::LocalSet(ENTRIES));
+	b.push(I::LocalGet(ENTRIES));
+	b.push(I::ArrayLen);
+	b.push(I::LocalSet(N));
+	b.push(I::I32Const(-1));
+	b.push(I::LocalSet(FOUND));
+	b.push(I::I32Const(0));
+	b.push(I::LocalSet(I_));
+	b.push(I::Block(empty));
+	b.push(I::Loop(empty));
+	b.push(I::LocalGet(I_));
+	b.push(I::LocalGet(N));
+	b.push(I::I32GeS);
+	b.push(I::BrIf(1));
+	dict_entry_field(&mut b, ENTRIES, I_, 0);
+	b.push(I::LocalGet(K));
+	b.push(I::Call(eq_idx));
+	b.push(I::If(empty));
+	b.push(I::LocalGet(I_));
+	b.push(I::LocalSet(FOUND));
+	b.push(I::End);
+	b.push(I::LocalGet(I_));
+	b.push(I::I32Const(1));
+	b.push(I::I32Add);
+	b.push(I::LocalSet(I_));
+	b.push(I::Br(0));
+	b.push(I::End); // loop
+	b.push(I::End); // block
+	// Absent: hand back the original dict.
+	b.push(I::LocalGet(FOUND));
+	b.push(I::I32Const(0));
+	b.push(I::I32LtS);
+	b.push(I::If(empty));
+	b.push(I::LocalGet(D));
+	b.push(I::Return);
+	b.push(I::End);
+	// NEW = array(N-1); copy [0..FOUND) then (FOUND..N) shifted down by one.
+	b.push(I::LocalGet(N));
+	b.push(I::I32Const(1));
+	b.push(I::I32Sub);
+	b.push(I::ArrayNewDefault(va));
+	b.push(I::LocalSet(NEW));
+	b.push(I::LocalGet(NEW));
+	b.push(I::I32Const(0));
+	b.push(I::LocalGet(ENTRIES));
+	b.push(I::I32Const(0));
+	b.push(I::LocalGet(FOUND));
+	b.push(I::ArrayCopy {
+		array_type_index_dst: va,
+		array_type_index_src: va,
+	});
+	b.push(I::LocalGet(NEW));
+	b.push(I::LocalGet(FOUND));
+	b.push(I::LocalGet(ENTRIES));
+	b.push(I::LocalGet(FOUND));
+	b.push(I::I32Const(1));
+	b.push(I::I32Add);
+	b.push(I::LocalGet(N));
+	b.push(I::I32Const(1));
+	b.push(I::I32Sub);
+	b.push(I::LocalGet(FOUND));
+	b.push(I::I32Sub);
+	b.push(I::ArrayCopy {
+		array_type_index_dst: va,
+		array_type_index_src: va,
+	});
+	b.push(I::I32Const(types::TAG_DICT));
+	b.push(I::LocalGet(NEW));
+	b.push(I::StructNew(types::T_DICT));
+	let locals = vec![types::valarray_ref(), ValType::I32, ValType::I32, ValType::I32, types::valarray_ref()];
+	let mut f = Function::new_with_locals_types(locals);
+	for ins in &b {
+		f.instruction(ins);
+	}
+	f.instruction(&I::End);
+	f
+}
+
+/// Build `__dict_map(dict, f) -> dict`: `f` over each value, keys preserved.
+fn build_dict_map_fn(arity1: u32) -> Function {
+	use Instruction as I;
+	const D: u32 = 0;
+	const F: u32 = 1;
+	const ENTRIES: u32 = 2;
+	const N: u32 = 3;
+	const I_: u32 = 4;
+	const NEW: u32 = 5;
+	const K: u32 = 6;
+	const NV: u32 = 7;
+	let empty = wasm_encoder::BlockType::Empty;
+	let va = types::T_VALARRAY;
+	let mut b: Vec<Instruction> = Vec::new();
+	dict_entries_of(&mut b, D);
+	b.push(I::LocalSet(ENTRIES));
+	b.push(I::LocalGet(ENTRIES));
+	b.push(I::ArrayLen);
+	b.push(I::LocalSet(N));
+	b.push(I::LocalGet(N));
+	b.push(I::ArrayNewDefault(va));
+	b.push(I::LocalSet(NEW));
+	b.push(I::I32Const(0));
+	b.push(I::LocalSet(I_));
+	b.push(I::Block(empty));
+	b.push(I::Loop(empty));
+	b.push(I::LocalGet(I_));
+	b.push(I::LocalGet(N));
+	b.push(I::I32GeS);
+	b.push(I::BrIf(1));
+	dict_entry_field(&mut b, ENTRIES, I_, 0);
+	b.push(I::LocalSet(K));
+	// NV = f(value): env = f, arg = value, call_indirect.
+	b.push(I::LocalGet(F));
+	b.push(I::RefCastNonNull(HeapType::Concrete(types::T_CLOSURE)));
+	dict_entry_field(&mut b, ENTRIES, I_, 1);
+	b.push(I::LocalGet(F));
+	b.push(I::RefCastNonNull(HeapType::Concrete(types::T_CLOSURE)));
+	b.push(I::StructGet {
+		struct_type_index: types::T_CLOSURE,
+		field_index: 1,
+	});
+	b.push(I::CallIndirect {
+		type_index: arity1,
+		table_index: 0,
+	});
+	b.push(I::LocalSet(NV));
+	// NEW[i] = (K, NV).
+	b.push(I::LocalGet(NEW));
+	b.push(I::LocalGet(I_));
+	b.push(I::I32Const(types::TAG_TUPLE));
+	b.push(I::LocalGet(K));
+	b.push(I::LocalGet(NV));
+	b.push(I::ArrayNewFixed {
+		array_type_index: va,
+		array_size: 2,
+	});
+	b.push(I::StructNew(types::T_TUPLE));
+	b.push(I::ArraySet(va));
+	b.push(I::LocalGet(I_));
+	b.push(I::I32Const(1));
+	b.push(I::I32Add);
+	b.push(I::LocalSet(I_));
+	b.push(I::Br(0));
+	b.push(I::End); // loop
+	b.push(I::End); // block
+	b.push(I::I32Const(types::TAG_DICT));
+	b.push(I::LocalGet(NEW));
+	b.push(I::StructNew(types::T_DICT));
+	let locals = vec![
+		types::valarray_ref(),
+		ValType::I32,
+		ValType::I32,
+		types::valarray_ref(),
+		types::value_ref(),
+		types::value_ref(),
+	];
+	let mut f = Function::new_with_locals_types(locals);
+	for ins in &b {
+		f.instruction(ins);
+	}
+	f.instruction(&I::End);
+	f
+}
+
+/// Build `__dict_filter(dict, f) -> dict`: keep entries where `f key value` is
+/// true (the entry tuple is reused verbatim).
+fn build_dict_filter_fn(arity2: u32) -> Function {
+	use Instruction as I;
+	const D: u32 = 0;
+	const F: u32 = 1;
+	const ENTRIES: u32 = 2;
+	const N: u32 = 3;
+	const I_: u32 = 4;
+	const TMP: u32 = 5;
+	const W: u32 = 6;
+	const K: u32 = 7;
+	const V: u32 = 8;
+	const OUT: u32 = 9;
+	let empty = wasm_encoder::BlockType::Empty;
+	let va = types::T_VALARRAY;
+	let mut b: Vec<Instruction> = Vec::new();
+	dict_entries_of(&mut b, D);
+	b.push(I::LocalSet(ENTRIES));
+	b.push(I::LocalGet(ENTRIES));
+	b.push(I::ArrayLen);
+	b.push(I::LocalSet(N));
+	b.push(I::LocalGet(N));
+	b.push(I::ArrayNewDefault(va));
+	b.push(I::LocalSet(TMP));
+	b.push(I::I32Const(0));
+	b.push(I::LocalSet(W));
+	b.push(I::I32Const(0));
+	b.push(I::LocalSet(I_));
+	b.push(I::Block(empty));
+	b.push(I::Loop(empty));
+	b.push(I::LocalGet(I_));
+	b.push(I::LocalGet(N));
+	b.push(I::I32GeS);
+	b.push(I::BrIf(1));
+	dict_entry_field(&mut b, ENTRIES, I_, 0);
+	b.push(I::LocalSet(K));
+	dict_entry_field(&mut b, ENTRIES, I_, 1);
+	b.push(I::LocalSet(V));
+	// keep = f(k, v): env = f, args k v, call_indirect; unbox the $bool.
+	b.push(I::LocalGet(F));
+	b.push(I::RefCastNonNull(HeapType::Concrete(types::T_CLOSURE)));
+	b.push(I::LocalGet(K));
+	b.push(I::LocalGet(V));
+	b.push(I::LocalGet(F));
+	b.push(I::RefCastNonNull(HeapType::Concrete(types::T_CLOSURE)));
+	b.push(I::StructGet {
+		struct_type_index: types::T_CLOSURE,
+		field_index: 1,
+	});
+	b.push(I::CallIndirect {
+		type_index: arity2,
+		table_index: 0,
+	});
+	b.push(I::RefCastNonNull(HeapType::Concrete(types::T_BOOL)));
+	b.push(I::StructGet {
+		struct_type_index: types::T_BOOL,
+		field_index: 1,
+	});
+	b.push(I::If(empty));
+	// TMP[W] = entry; W += 1.
+	b.push(I::LocalGet(TMP));
+	b.push(I::LocalGet(W));
+	b.push(I::LocalGet(ENTRIES));
+	b.push(I::LocalGet(I_));
+	b.push(I::ArrayGet(va));
+	b.push(I::ArraySet(va));
+	b.push(I::LocalGet(W));
+	b.push(I::I32Const(1));
+	b.push(I::I32Add);
+	b.push(I::LocalSet(W));
+	b.push(I::End);
+	b.push(I::LocalGet(I_));
+	b.push(I::I32Const(1));
+	b.push(I::I32Add);
+	b.push(I::LocalSet(I_));
+	b.push(I::Br(0));
+	b.push(I::End); // loop
+	b.push(I::End); // block
+	// OUT = array(W); copy TMP[0..W].
+	b.push(I::LocalGet(W));
+	b.push(I::ArrayNewDefault(va));
+	b.push(I::LocalSet(OUT));
+	b.push(I::LocalGet(OUT));
+	b.push(I::I32Const(0));
+	b.push(I::LocalGet(TMP));
+	b.push(I::I32Const(0));
+	b.push(I::LocalGet(W));
+	b.push(I::ArrayCopy {
+		array_type_index_dst: va,
+		array_type_index_src: va,
+	});
+	b.push(I::I32Const(types::TAG_DICT));
+	b.push(I::LocalGet(OUT));
+	b.push(I::StructNew(types::T_DICT));
+	let locals = vec![
+		types::valarray_ref(),
+		ValType::I32,
+		ValType::I32,
+		types::valarray_ref(),
+		ValType::I32,
+		types::value_ref(),
+		types::value_ref(),
+		types::valarray_ref(),
 	];
 	let mut f = Function::new_with_locals_types(locals);
 	for ins in &b {
@@ -3592,6 +4480,113 @@ fn build_tostring_fn(
 	wrap(&mut b);
 	b.push(I::End);
 
+	// REF -> "ref <inner>" (matches `vm::Value`'s Display).
+	arm(&mut b, types::TAG_REF);
+	// ACC = bytes-of "ref ".
+	lit_bytes(&mut b, lits.ref_pfx);
+	b.push(I::LocalSet(ACC));
+	// ACC = bytesconcat(ACC, strbytes(tostring(cell))).
+	b.push(I::LocalGet(ACC));
+	b.push(I::LocalGet(V));
+	b.push(cast(types::T_REF));
+	b.push(I::StructGet {
+		struct_type_index: types::T_REF,
+		field_index: 1,
+	});
+	b.push(I::Call(self_idx)); // -> $str
+	b.push(cast(types::T_STR));
+	b.push(I::StructGet {
+		struct_type_index: types::T_STR,
+		field_index: 1,
+	});
+	b.push(I::Call(bc));
+	b.push(I::LocalSet(ACC));
+	wrap(&mut b);
+	b.push(I::End);
+
+	// DICT -> "{k: v, ...}" (insertion order; each entry a `$tuple`). Mirrors
+	// `vm::Value`'s Dict Display.
+	arm(&mut b, types::TAG_DICT);
+	b.push(I::LocalGet(V));
+	b.push(cast(types::T_DICT));
+	b.push(I::StructGet {
+		struct_type_index: types::T_DICT,
+		field_index: 1,
+	});
+	b.push(I::LocalSet(ARR));
+	// ACC = "{"  (set, not concat — ACC is not yet initialized here).
+	lit_bytes(&mut b, lits.lbrace);
+	b.push(I::LocalSet(ACC));
+	b.push(I::LocalGet(ARR));
+	b.push(I::ArrayLen);
+	b.push(I::LocalSet(N));
+	b.push(I::I32Const(0));
+	b.push(I::LocalSet(I_));
+	b.push(I::Block(empty));
+	b.push(I::Loop(empty));
+	b.push(I::LocalGet(I_));
+	b.push(I::LocalGet(N));
+	b.push(I::I32GeS);
+	b.push(I::BrIf(1));
+	// separator before all but the first
+	b.push(I::LocalGet(I_));
+	b.push(I::I32Const(0));
+	b.push(I::I32GtS);
+	b.push(I::If(empty));
+	cat_lit(&mut b, lits.comma_sp);
+	b.push(I::End);
+	// key: ACC ++ tostring(entry.elems[0])
+	b.push(I::LocalGet(ACC));
+	b.push(I::LocalGet(ARR));
+	b.push(I::LocalGet(I_));
+	b.push(I::ArrayGet(types::T_VALARRAY));
+	b.push(cast(types::T_TUPLE));
+	b.push(I::StructGet {
+		struct_type_index: types::T_TUPLE,
+		field_index: 1,
+	});
+	b.push(I::I32Const(0));
+	b.push(I::ArrayGet(types::T_VALARRAY));
+	b.push(I::Call(self_idx)); // -> $str
+	b.push(cast(types::T_STR));
+	b.push(I::StructGet {
+		struct_type_index: types::T_STR,
+		field_index: 1,
+	});
+	b.push(I::Call(bc));
+	b.push(I::LocalSet(ACC));
+	cat_lit(&mut b, lits.colon_sp);
+	// value: ACC ++ tostring(entry.elems[1])
+	b.push(I::LocalGet(ACC));
+	b.push(I::LocalGet(ARR));
+	b.push(I::LocalGet(I_));
+	b.push(I::ArrayGet(types::T_VALARRAY));
+	b.push(cast(types::T_TUPLE));
+	b.push(I::StructGet {
+		struct_type_index: types::T_TUPLE,
+		field_index: 1,
+	});
+	b.push(I::I32Const(1));
+	b.push(I::ArrayGet(types::T_VALARRAY));
+	b.push(I::Call(self_idx)); // -> $str
+	b.push(cast(types::T_STR));
+	b.push(I::StructGet {
+		struct_type_index: types::T_STR,
+		field_index: 1,
+	});
+	b.push(I::Call(bc));
+	b.push(I::LocalSet(ACC));
+	b.push(I::LocalGet(I_));
+	b.push(I::I32Const(1));
+	b.push(I::I32Add);
+	b.push(I::LocalSet(I_));
+	b.push(I::Br(0));
+	b.push(I::End); // loop
+	b.push(I::End); // block
+	cat_lit(&mut b, lits.rbrace);
+	wrap(&mut b);
+	b.push(I::End);
+
 	// Unreachable: every value tag is handled above.
 	b.push(I::Unreachable);
 	let mut f = Function::new_with_locals_types(locals);
@@ -3702,6 +4697,10 @@ fn builtin_arity(tag: &str) -> Option<usize> {
 		"int-add" | "int-sub" | "int-mul" | "int-div" | "float-add" | "float-sub" | "float-mul"
 		| "float-div" | "int-compare" | "float-compare" => 2,
 		"int-negate" | "float-negate" => 1,
+		// `hash` instances: wrappable so a primitive `hash` method-dict can be
+		// built, but the wasm `dict` scans with `__eq` and never calls hash, so the
+		// wrapper body is unreachable (see `build_builtin_wrapper`).
+		"int-hash" | "float-hash" | "string-hash" | "bool-hash" | "bytes-hash" => 1,
 		_ => return None,
 	})
 }
@@ -3894,6 +4893,12 @@ fn build_builtin_wrapper(tag: &str, enums: &EnumTable) -> Option<Function> {
 			b.push(I::End);
 			// else greater
 			mk(&mut b, greater);
+		}
+		// `hash` wrappers exist only so a primitive `hash` method-dict can be
+		// materialized; the wasm `dict` never calls them (it scans keys with
+		// `__eq`). A trap keeps it honest if some future caller does reach one.
+		"int-hash" | "float-hash" | "string-hash" | "bool-hash" | "bytes-hash" => {
+			b.push(I::Unreachable);
 		}
 		_ => return None,
 	}

@@ -1,0 +1,13 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+ref 5
+ref 5
+cell = ref 5
+ref (1, [2, 3])
+ref ref true
+== stderr ==
