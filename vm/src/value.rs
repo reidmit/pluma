@@ -27,7 +27,16 @@ pub enum Value {
 	// `string.to-bytes` / `bytes.to-string` is the only bridge.
 	Bytes(Rc<Vec<u8>>),
 	Tuple(Rc<Vec<Value>>),
-	List(Rc<Vec<Value>>),
+	// Lists are stored in an interior-mutable cell. Pluma lists are immutable
+	// *by convention* — every list operation builds a fresh list and nothing
+	// reads through the cell expecting it to change — with one deliberate
+	// escape hatch: `list.set` (`list-set`) overwrites a slot in place. That
+	// needs interior mutability because builtin args arrive cloned (so a
+	// copy-on-write set would always copy); it also matches how the wasm
+	// backend already stores a list (a shared, mutable `$valarray`). Sharing
+	// a list value shares the cell, so a `list.set` is visible through every
+	// alias — the price of the escape hatch.
+	List(Rc<RefCell<Vec<Value>>>),
 	Record(Rc<HashMap<String, Value>>),
 	Variant(Rc<VariantData>),
 	Closure(Rc<ClosureData>),
@@ -79,6 +88,15 @@ pub enum Value {
 	// read it to find the scope. Created by the driver when it starts a
 	// `TaskRepr::Scope`, never by user code. See `vm::task`.
 	ScopeHandle(usize),
+}
+
+impl Value {
+	/// Build a `List` from an owned `Vec`. Wraps it in the interior-mutable
+	/// cell every list lives in (see the `List` variant) so construction sites
+	/// don't repeat the `Rc::new(RefCell::new(..))` boilerplate.
+	pub fn list(items: Vec<Value>) -> Value {
+		Value::List(Rc::new(RefCell::new(items)))
+	}
 }
 
 pub struct AsyncFnData {
@@ -320,7 +338,7 @@ impl std::fmt::Display for Value {
 			}
 			Value::List(elems) => {
 				write!(f, "[")?;
-				for (i, v) in elems.iter().enumerate() {
+				for (i, v) in elems.borrow().iter().enumerate() {
 					if i > 0 {
 						write!(f, ", ")?;
 					}
@@ -469,6 +487,7 @@ pub fn values_eq(a: &Value, b: &Value) -> bool {
 			xs.len() == ys.len() && xs.iter().zip(ys.iter()).all(|(a, b)| values_eq(a, b))
 		}
 		(Value::List(xs), Value::List(ys)) => {
+			let (xs, ys) = (xs.borrow(), ys.borrow());
 			xs.len() == ys.len() && xs.iter().zip(ys.iter()).all(|(a, b)| values_eq(a, b))
 		}
 		(Value::Record(xs), Value::Record(ys)) => {

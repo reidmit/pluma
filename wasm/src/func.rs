@@ -207,6 +207,8 @@ fn is_inline_builtin(tag: &str) -> bool {
 			| "bytes-length"
 			| "bytes-as-string"
 			| "string-to-bytes"
+			// the in-place list mutation: `array.set` on the `$valarray`.
+			| "list-set"
 	)
 }
 
@@ -1856,6 +1858,30 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::I32WrapI64);
 				self.ins(Instruction::ArrayGet(types::T_VALARRAY));
 			}
+			// list.set xs i v : overwrite the i-th slot in place; yields nothing.
+			// The deliberate escape hatch from list immutability.
+			"list-set" => {
+				self.atom(&args[0]);
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_LIST,
+				)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_LIST,
+					field_index: 1,
+				});
+				self.atom(&args[1]);
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_INT,
+				)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_INT,
+					field_index: 1,
+				});
+				self.ins(Instruction::I32WrapI64);
+				self.atom(&args[2]);
+				self.ins(Instruction::ArraySet(types::T_VALARRAY));
+				self.push_nothing();
+			}
 			// list.length xs : element count, boxed as `$int`.
 			"list-length" => {
 				self.ins(Instruction::I32Const(types::TAG_INT));
@@ -3032,9 +3058,12 @@ fn build_tostring_fn(
 	const N: u32 = 4;
 	const ARR: u32 = 5; // $valarray (tuple/list elems, variant payload, record values)
 	const NAMES: u32 = 6; // $valarray (record names)
-	const BUF: u32 = 7; // $bytes (float scratch)
-	const LEN: u32 = 8; // i32 (float len)
+	const BUF: u32 = 7; // $bytes (float scratch; also bytes-arm source/dst)
+	const LEN: u32 = 8; // i32 (float len; also bytes-arm write position)
+	const BYTE: u32 = 9; // i32 (bytes-arm current byte)
+	const NIB: u32 = 10; // i32 (bytes-arm hex nibble scratch)
 	let empty = wasm_encoder::BlockType::Empty;
+	let i32res = wasm_encoder::BlockType::Result(ValType::I32);
 	let bv = types::T_BYTES;
 	let cast = |t| I::RefCastNonNull(HeapType::Concrete(t));
 	// Push a `$bytes` array for a data-segment literal.
@@ -3093,6 +3122,8 @@ fn build_tostring_fn(
 		types::valarray_ref(), // NAMES
 		types::bytes_ref(),    // BUF
 		ValType::I32,          // LEN
+		ValType::I32,          // BYTE
+		ValType::I32,          // NIB
 	];
 	let mut b: Vec<Instruction> = Vec::new();
 	b.push(I::LocalGet(V));
@@ -3165,6 +3196,154 @@ fn build_tostring_fn(
 		array_type_index_dst: bv,
 		array_type_index_src: bv,
 	});
+	wrap(&mut b);
+	b.push(I::End);
+
+	// BYTES -> single-quoted literal form: printable ASCII inline, `'` and
+	// `\` backslash-escaped, everything else as `\xNN` (lowercase). Matches
+	// `Value::Display` so wasm `to-string` agrees with the VM. Writes into a
+	// worst-case (4 bytes/input + 2 quotes) buffer, then trims — no concat.
+	// BUF=source/dst, ACC=output buffer, N=source len, LEN=write position.
+	// Append the constant byte `code` to ACC[LEN], then bump LEN.
+	let put = |b: &mut Vec<Instruction>, code: i32| {
+		b.push(I::LocalGet(ACC));
+		b.push(I::LocalGet(LEN));
+		b.push(I::I32Const(code));
+		b.push(I::ArraySet(bv));
+		b.push(I::LocalGet(LEN));
+		b.push(I::I32Const(1));
+		b.push(I::I32Add);
+		b.push(I::LocalSet(LEN));
+	};
+	// Append one lowercase hex digit for the nibble of BYTE at `shift`.
+	let put_hex = |b: &mut Vec<Instruction>, shift: i32| {
+		b.push(I::LocalGet(BYTE));
+		if shift != 0 {
+			b.push(I::I32Const(shift));
+			b.push(I::I32ShrU);
+		}
+		b.push(I::I32Const(0xf));
+		b.push(I::I32And);
+		b.push(I::LocalSet(NIB));
+		b.push(I::LocalGet(ACC));
+		b.push(I::LocalGet(LEN));
+		// digit = NIB < 10 ? '0'+NIB : 'a'-10+NIB  (0x61-10 = 0x57)
+		b.push(I::LocalGet(NIB));
+		b.push(I::I32Const(10));
+		b.push(I::I32LtS);
+		b.push(I::If(i32res));
+		b.push(I::LocalGet(NIB));
+		b.push(I::I32Const(0x30));
+		b.push(I::I32Add);
+		b.push(I::Else);
+		b.push(I::LocalGet(NIB));
+		b.push(I::I32Const(0x57));
+		b.push(I::I32Add);
+		b.push(I::End);
+		b.push(I::ArraySet(bv));
+		b.push(I::LocalGet(LEN));
+		b.push(I::I32Const(1));
+		b.push(I::I32Add);
+		b.push(I::LocalSet(LEN));
+	};
+	arm(&mut b, types::TAG_BYTES);
+	// BUF = source bytes; N = its length.
+	b.push(I::LocalGet(V));
+	b.push(cast(types::T_STR));
+	b.push(I::StructGet {
+		struct_type_index: types::T_STR,
+		field_index: 1,
+	});
+	b.push(I::LocalSet(BUF));
+	b.push(I::LocalGet(BUF));
+	b.push(I::ArrayLen);
+	b.push(I::LocalSet(N));
+	// ACC = new $bytes[N*4 + 2]; LEN (write pos) = 0.
+	b.push(I::LocalGet(N));
+	b.push(I::I32Const(4));
+	b.push(I::I32Mul);
+	b.push(I::I32Const(2));
+	b.push(I::I32Add);
+	b.push(I::ArrayNewDefault(bv));
+	b.push(I::LocalSet(ACC));
+	b.push(I::I32Const(0));
+	b.push(I::LocalSet(LEN));
+	put(&mut b, 0x27); // opening '
+	b.push(I::I32Const(0));
+	b.push(I::LocalSet(I_));
+	b.push(I::Block(empty));
+	b.push(I::Loop(empty));
+	b.push(I::LocalGet(I_));
+	b.push(I::LocalGet(N));
+	b.push(I::I32GeS);
+	b.push(I::BrIf(1));
+	// BYTE = source[I_] (unsigned).
+	b.push(I::LocalGet(BUF));
+	b.push(I::LocalGet(I_));
+	b.push(I::ArrayGetU(bv));
+	b.push(I::LocalSet(BYTE));
+	b.push(I::LocalGet(BYTE));
+	b.push(I::I32Const(0x5c));
+	b.push(I::I32Eq);
+	b.push(I::If(empty));
+	put(&mut b, 0x5c);
+	put(&mut b, 0x5c);
+	b.push(I::Else);
+	b.push(I::LocalGet(BYTE));
+	b.push(I::I32Const(0x27));
+	b.push(I::I32Eq);
+	b.push(I::If(empty));
+	put(&mut b, 0x5c);
+	put(&mut b, 0x27);
+	b.push(I::Else);
+	b.push(I::LocalGet(BYTE));
+	b.push(I::I32Const(0x20));
+	b.push(I::I32GeS);
+	b.push(I::LocalGet(BYTE));
+	b.push(I::I32Const(0x7e));
+	b.push(I::I32LeS);
+	b.push(I::I32And);
+	b.push(I::If(empty));
+	// printable: copy the byte verbatim.
+	b.push(I::LocalGet(ACC));
+	b.push(I::LocalGet(LEN));
+	b.push(I::LocalGet(BYTE));
+	b.push(I::ArraySet(bv));
+	b.push(I::LocalGet(LEN));
+	b.push(I::I32Const(1));
+	b.push(I::I32Add);
+	b.push(I::LocalSet(LEN));
+	b.push(I::Else);
+	put(&mut b, 0x5c); // '\'
+	put(&mut b, 0x78); // 'x'
+	put_hex(&mut b, 4);
+	put_hex(&mut b, 0);
+	b.push(I::End);
+	b.push(I::End);
+	b.push(I::End);
+	b.push(I::LocalGet(I_));
+	b.push(I::I32Const(1));
+	b.push(I::I32Add);
+	b.push(I::LocalSet(I_));
+	b.push(I::Br(0));
+	b.push(I::End); // loop
+	b.push(I::End); // block
+	put(&mut b, 0x27); // closing '
+										// Trim ACC[0..LEN] into a tight $bytes (BUF), then wrap as $str.
+	b.push(I::LocalGet(LEN));
+	b.push(I::ArrayNewDefault(bv));
+	b.push(I::LocalSet(BUF));
+	b.push(I::LocalGet(BUF));
+	b.push(I::I32Const(0));
+	b.push(I::LocalGet(ACC));
+	b.push(I::I32Const(0));
+	b.push(I::LocalGet(LEN));
+	b.push(I::ArrayCopy {
+		array_type_index_dst: bv,
+		array_type_index_src: bv,
+	});
+	b.push(I::LocalGet(BUF));
+	b.push(I::LocalSet(ACC));
 	wrap(&mut b);
 	b.push(I::End);
 

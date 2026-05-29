@@ -533,7 +533,7 @@ impl VM {
 	// reverse it — matching the Await-style frame's `cleanups.into_iter().rev()`.
 	fn run_defer_closures(&mut self, list: &Value) -> Result<(), RuntimeError> {
 		if let Value::List(ds) = list {
-			let ds = Rc::clone(ds);
+			let ds = ds.borrow().clone();
 			for thunk in ds.iter().rev() {
 				self.call_function(thunk.clone(), Vec::new())?;
 			}

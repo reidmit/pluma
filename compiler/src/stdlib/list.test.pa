@@ -38,6 +38,33 @@ def tests :: testing.suite = fun t {
 		assert.equals (list.reverse [42]) [42]
 	}
 
+	# --- set (in-place escape hatch) ---
+
+	t.case "set overwrites a slot" fun {
+		let xs = list.build 3 fun _i {
+			0
+		}
+		let _ = list.set xs 1 9
+		assert.equals xs [0, 9, 0]
+	}
+
+	t.case "set is visible through an alias" fun {
+		let xs = list.build 2 fun _i {
+			0
+		}
+		let ys = xs
+		let _ = list.set xs 0 7
+		assert.equals ys [7, 0]
+	}
+
+	t.case "set then keep using list ops" fun {
+		let xs = list.build 4 fun i {
+			i
+		}
+		let _ = list.set xs 0 10
+		assert.equals (list.map xs fun n { n * 2 }) [20, 2, 4, 6]
+	}
+
 	# --- concat ---
 
 	t.case "concat joins two lists" fun {
@@ -256,5 +283,39 @@ def tests :: testing.suite = fun t {
 		# from a free type var.
 		let empty :: list int = []
 		assert.equals (list.sort empty ord.compare) empty
+	}
+
+	t.case "sort single element" fun {
+		assert.equals (list.sort [42] ord.compare) [42]
+	}
+
+	t.case "sort already-sorted stays sorted" fun {
+		assert.equals (list.sort [1, 2, 3, 4, 5] ord.compare) [1, 2, 3, 4, 5]
+	}
+
+	t.case "sort reversed input" fun {
+		assert.equals (list.sort [5, 4, 3, 2, 1] ord.compare) [1, 2, 3, 4, 5]
+	}
+
+	t.case "sort larger input with duplicates" fun {
+		let xs = [9, 3, 7, 1, 8, 2, 9, 4, 0, 6, 5, 3, 1, 7, 2]
+		assert.equals (list.sort xs ord.compare) [0, 1, 1, 2, 2, 3, 3, 4, 5, 6, 7, 7, 8, 9, 9]
+	}
+
+	# Stability: sort records by one field; ties must keep their input
+	# order. Each record carries a `tag` so we can see the original order
+	# survive among equal `key`s.
+	t.case "sort is stable on ties" fun {
+		let items = [
+			{key: 2, tag: "a"},
+			{key: 1, tag: "b"},
+			{key: 2, tag: "c"},
+			{key: 1, tag: "d"},
+			{key: 2, tag: "e"},
+		]
+		let sorted = list.sort items fun x y {
+			ord.compare x.key y.key
+		}
+		assert.equals (list.map sorted fun r { r.tag }) ["b", "d", "a", "c", "e"]
 	}
 }

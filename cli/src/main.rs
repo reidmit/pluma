@@ -553,7 +553,7 @@ fn run_suite(
 	let drain = field(&registrar, "drain")
 		.ok_or_else(|| vm::RuntimeError::new("registrar is missing a `drain` field"))?;
 	match vm.call_function(drain, vec![vm::Value::Nothing])? {
-		vm::Value::List(xs) => Ok(xs.iter().cloned().collect()),
+		vm::Value::List(xs) => Ok(xs.borrow().iter().cloned().collect()),
 		_ => Err(vm::RuntimeError::new("`drain` did not return a list")),
 	}
 }
@@ -612,6 +612,7 @@ fn field_string(v: &vm::Value, name: &str) -> Option<String> {
 fn field_string_list(v: &vm::Value, name: &str) -> Vec<String> {
 	match field(v, name) {
 		Some(vm::Value::List(xs)) => xs
+			.borrow()
 			.iter()
 			.filter_map(|x| match x {
 				vm::Value::String(s) => Some(s.as_str().to_string()),

@@ -145,18 +145,161 @@ public def to-list :: fun bytes -> list int = fun b {
 #
 #     bytes.from-list [72, 105]   # => ok 'Hi'
 #     bytes.from-list [256]       # => err "byte out of range (0..256): 256"
-public def from-list :: fun (list int) -> result bytes string = built-in "bytes-from-list"
+public def from-list :: fun (list int) -> result bytes string = fun xs {
+	let n = list.length xs
+	try _ = check-range xs n 0
+	ok (build n fun i {
+		list.get xs i
+	})
+}
+
+# Walks the list once checking every int fits in a byte, stopping at the
+# first that doesn't. Index-based so it never copies the tail (the O(n^2)
+# trap). `from-list` runs this before `build`, so the build never sees an
+# out-of-range int.
+def check-range :: fun (list int) int int -> result nothing string = fun xs n i {
+	if i >= n is true {
+		ok ()
+	} else {
+		let x = list.get xs i
+		if x < 0 || x > 255 is true {
+			err ("byte out of range (0..256): " ++ dec x)
+		} else {
+			check-range xs n (i + 1)
+		}
+	}
+}
+
+# Renders an int in base 10. The module-local `to-string` (the `bytes ->
+# result string string` decoder just below) shadows the prelude's
+# polymorphic `to-string`, so the error message above can't reach it;
+# this is the small stand-in. Digit lookup rides `list.get`, so it stays
+# allocation-light and lowers without any new builtin.
+def dec :: fun int -> string = fun n {
+	if n < 0 is true {
+		"-" ++ dec-nat (0 - n)
+	} else {
+		dec-nat n
+	}
+}
+
+def dec-nat :: fun int -> string = fun n {
+	if n < 10 is true {
+		digit n
+	} else {
+		dec-nat (n / 10) ++ digit (n % 10)
+	}
+}
+
+def digit :: fun int -> string = fun d {
+	list.get ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"] d
+}
 
 # Glues a list of byte sequences together, dropping `separator` between
 # each pair.
 #
 #     bytes.join ['a', 'b', 'c'] '-'   # => 'a-b-c'
-public def join :: fun (list bytes) bytes -> bytes = built-in "bytes-join"
+public def join :: fun (list bytes) bytes -> bytes = fun parts sep {
+	let k = list.length parts
+	if k == 0 is true {
+		''
+	} else {
+		join-range parts sep 0 k
+	}
+}
+
+# Joins `parts[lo..hi)` with one `sep` between each adjacent pair. Splits
+# the range in half and concatenates the two joined halves with a single
+# separator between them -- O(total log k) copying, versus the O(k *
+# total) a left-to-right `concat` fold would cost.
+def join-range :: fun (list bytes) bytes int int -> bytes = fun parts sep lo hi {
+	if hi - lo == 1 is true {
+		list.get parts lo
+	} else {
+		let mid = (lo + hi) / 2
+		concat (concat (join-range parts sep lo mid) sep) (join-range parts sep mid hi)
+	}
+}
 
 # Breaks the bytes into pieces at every occurrence of `separator`.
 #
 #     bytes.split 'a,b,c' ','   # => ['a', 'b', 'c']
-public def split :: fun bytes bytes -> list bytes = built-in "bytes-split"
+public def split :: fun bytes bytes -> list bytes = fun b sep {
+	let seplen = length sep
+	if seplen == 0 is true {
+		# Empty separator: one piece per byte (parallel to `string.split s ""`).
+		list.build (length b) fun i {
+			slice b i (i + 1)
+		}
+	} else {
+		# One linear pass to count matches, a second to record where each
+		# starts (filled in place with `list.set`), then slice out the `k + 1`
+		# pieces around those boundaries. The positions list keeps the slicing
+		# O(1) per piece.
+		let k = count-matches b sep seplen 0 0
+		let positions = list.build k fun _i {
+			0
+		}
+		let _ = record-matches b sep seplen positions 0 0
+		list.build (k + 1) fun i {
+			let start = if i == 0 is true {
+				0
+			} else {
+				list.get positions (i - 1) + seplen
+			}
+			let stop = if i == k is true {
+				length b
+			} else {
+				list.get positions i
+			}
+			slice b start stop
+		}
+	}
+}
+
+# Counts non-overlapping occurrences of `sep` in `b`, scanning from `i`
+# with `acc` found so far. After a match it jumps past the whole
+# separator, matching how `split` consumes it.
+def count-matches :: fun bytes bytes int int int -> int = fun b sep seplen i acc {
+	if i + seplen > length b is true {
+		acc
+	} else if matches-at b sep seplen i is true {
+		count-matches b sep seplen (i + seplen) (acc + 1)
+	} else {
+		count-matches b sep seplen (i + 1) acc
+	}
+}
+
+# Fills `positions[idx..]` with the start index of each successive match,
+# in order. Mirrors `count-matches`' scan so slot `idx` lines up with the
+# `idx`-th separator.
+def record-matches :: fun bytes bytes int (list int) int int -> nothing = fun b sep seplen positions i idx {
+	if i + seplen > length b is true {
+		()
+	} else if matches-at b sep seplen i is true {
+		let _ = list.set positions idx i
+		record-matches b sep seplen positions (i + seplen) (idx + 1)
+	} else {
+		record-matches b sep seplen positions (i + 1) idx
+	}
+}
+
+# True when `sep` (length `seplen`) occurs at position `i` in `b`.
+def matches-at :: fun bytes bytes int int -> bool = fun b sep seplen i {
+	eq-range b sep i 0 seplen
+}
+
+# True when `b[bi..]` and `sep[si..]` agree for the `slen - si` bytes up to
+# `slen`. The byte-wise comparison `matches-at` rides on.
+def eq-range :: fun bytes bytes int int int -> bool = fun b sep bi si slen {
+	if si >= slen is true {
+		true
+	} else if get b (bi + si) == get sep si is true {
+		eq-range b sep bi (si + 1) slen
+	} else {
+		false
+	}
+}
 
 # Decodes the bytes as UTF-8 text. `ok s` on success, `err` if the bytes
 # aren't valid UTF-8.

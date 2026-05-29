@@ -179,6 +179,7 @@ fn encode_in<'a>(schema: &'a Schema, value: &Value, out: &mut Vec<u8>, ctx: &mut
 		}
 		(Schema::Nothing, Value::Nothing) => {}
 		(Schema::List(inner), Value::List(xs)) => {
+			let xs = xs.borrow();
 			write_uvarint(out, xs.len() as u64);
 			for x in xs.iter() {
 				encode_in(inner, x, out, ctx);
@@ -297,7 +298,7 @@ fn decode_in<'a>(
 			for _ in 0..n {
 				xs.push(decode_in(inner, cur, ctx)?);
 			}
-			Ok(Value::List(Rc::new(xs)))
+			Ok(Value::list(xs))
 		}
 		Schema::Tuple(schemas) => {
 			let mut xs = Vec::with_capacity(schemas.len());
@@ -466,9 +467,9 @@ pub fn fingerprint(schema: &Schema) -> i64 {
 // into the Rust `Schema` above before encode/decode. The variant names below
 // mirror the `wire-schema` enum declared in `core.wire`.
 
-fn as_list(v: &Value) -> Option<&[Value]> {
+fn as_list(v: &Value) -> Option<Vec<Value>> {
 	match v {
-		Value::List(xs) => Some(xs),
+		Value::List(xs) => Some(xs.borrow().clone()),
 		_ => None,
 	}
 }
@@ -628,8 +629,8 @@ mod tests {
 	#[test]
 	fn list_round_trips() {
 		let s = Schema::List(Box::new(Schema::Int));
-		round_trip(&s, &Value::List(Rc::new(vec![int(1), int(2), int(-3)])));
-		round_trip(&s, &Value::List(Rc::new(vec![])));
+		round_trip(&s, &Value::list(vec![int(1), int(2), int(-3)]));
+		round_trip(&s, &Value::list(vec![]));
 	}
 
 	#[test]
@@ -716,10 +717,7 @@ mod tests {
 			)
 		};
 		let none = variant("__prelude__.option", "none", vec![]);
-		round_trip(
-			&s,
-			&Value::List(Rc::new(vec![some(1, "a"), none, some(2, "b")])),
-		);
+		round_trip(&s, &Value::list(vec![some(1, "a"), none, some(2, "b")]));
 	}
 
 	/// `decode_all` must fail with exactly `expected`. (`Value` has no

@@ -90,7 +90,7 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 						.captures_iter(s)
 						.map(|caps| regex_match_record(&re.compiled, &caps))
 						.collect();
-					Ok(Value::List(Rc::new(xs)))
+					Ok(Value::list(xs))
 				}
 				_ => unreachable!("`find-all` expects (regex, string)"),
 			}
@@ -136,7 +136,7 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 						.split(s)
 						.map(|piece| Value::String(Rc::new(piece.to_string())))
 						.collect();
-					Ok(Value::List(Rc::new(xs)))
+					Ok(Value::list(xs))
 				}
 				_ => unreachable!("`split` expects (regex, string)"),
 			}
@@ -209,7 +209,7 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 		}
 		"list-get" => {
 			let xs = match &args[0] {
-				Value::List(xs) => xs,
+				Value::List(xs) => xs.borrow(),
 				_ => unreachable!("`get`: expected list"),
 			};
 			let i = match &args[1] {
@@ -238,7 +238,7 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			for i in 0..n {
 				out.push(invoke(vm, f.clone(), vec![Value::Int(i as i64)])?);
 			}
-			Ok(Value::List(Rc::new(out)))
+			Ok(Value::list(out))
 		}
 		"list-collect" => {
 			// Like `build`, but `f` returns an `option`; keep the `some`s in
@@ -261,62 +261,11 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 					_ => unreachable!("`collect`: expected option variant"),
 				}
 			}
-			Ok(Value::List(Rc::new(out)))
+			Ok(Value::list(out))
 		}
 		"list-is-empty" => {
 			let xs = expect_list(&args, "is-empty");
 			Ok(Value::Bool(xs.is_empty()))
-		}
-		"list-sort" => {
-			debug_assert_eq!(args.len(), 2, "`sort` arity");
-			let mut it = args.into_iter();
-			let list_arg = it.next().unwrap();
-			let cmp_fn = it.next().unwrap();
-			let xs = match list_arg {
-				Value::List(xs) => xs,
-				_ => unreachable!("`sort`: expected list"),
-			};
-			// Pull into a Vec we own so we can sort. The comparator returns
-			// an `ordering` variant; we map it to `std::cmp::Ordering`.
-			let mut out: Vec<Value> = xs.iter().cloned().collect();
-			// Track the first error from the comparator so we can return
-			// it after the (in-progress) sort completes. `sort_by` needs an
-			// infallible `Ord` so we treat errors as `Equal` and bubble.
-			let mut err: Option<RuntimeError> = None;
-			out.sort_by(|a, b| {
-				if err.is_some() {
-					return std::cmp::Ordering::Equal;
-				}
-				match invoke(vm, cmp_fn.clone(), vec![a.clone(), b.clone()]) {
-					Ok(Value::Variant(v)) => match v.variant.as_str() {
-						"lt" => std::cmp::Ordering::Less,
-						"eq" => std::cmp::Ordering::Equal,
-						"gt" => std::cmp::Ordering::Greater,
-						other => {
-							err = Some(RuntimeError::new(format!(
-								"`sort`: comparator returned `{}`; expected `lt`, `eq`, or `gt`",
-								other
-							)));
-							std::cmp::Ordering::Equal
-						}
-					},
-					Ok(other) => {
-						err = Some(RuntimeError::new(format!(
-							"`sort`: comparator returned `{}`; expected an `ordering` variant",
-							other
-						)));
-						std::cmp::Ordering::Equal
-					}
-					Err(e) => {
-						err = Some(e);
-						std::cmp::Ordering::Equal
-					}
-				}
-			});
-			if let Some(e) = err {
-				return Err(e);
-			}
-			Ok(Value::List(Rc::new(out)))
 		}
 		"math-to-float" => {
 			debug_assert_eq!(args.len(), 1, "`to-float` arity");
@@ -436,49 +385,6 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				(Value::String(s), Value::String(suffix)) => Ok(Value::Bool(s.ends_with(suffix.as_str()))),
 				_ => unreachable!("`ends-with`: expected (string, string)"),
 			}
-		}
-		"string-join" => {
-			debug_assert_eq!(args.len(), 2, "`join` arity");
-			let xs = match &args[0] {
-				Value::List(xs) => xs,
-				_ => unreachable!("`join`: expected list"),
-			};
-			let sep = match &args[1] {
-				Value::String(s) => s,
-				_ => unreachable!("`join`: expected string separator"),
-			};
-			let parts: Vec<&str> = xs
-				.iter()
-				.map(|v| match v {
-					Value::String(s) => s.as_str(),
-					_ => unreachable!("`join`: list element must be string"),
-				})
-				.collect();
-			Ok(Value::String(Rc::new(parts.join(sep.as_str()))))
-		}
-		"string-split" => {
-			debug_assert_eq!(args.len(), 2, "`split` arity");
-			let s = match &args[0] {
-				Value::String(s) => s,
-				_ => unreachable!("`split`: expected string"),
-			};
-			let sep = match &args[1] {
-				Value::String(s) => s,
-				_ => unreachable!("`split`: expected string separator"),
-			};
-			// Empty separator: split into individual characters (Rust's
-			// default behavior wraps with empty leading/trailing entries,
-			// which is surprising for users).
-			let parts: Vec<Value> = if sep.is_empty() {
-				s.chars()
-					.map(|c| Value::String(Rc::new(c.to_string())))
-					.collect()
-			} else {
-				s.split(sep.as_str())
-					.map(|part| Value::String(Rc::new(part.to_string())))
-					.collect()
-			};
-			Ok(Value::List(Rc::new(parts)))
 		}
 		"string-replace" => {
 			debug_assert_eq!(args.len(), 3, "`replace` arity");
@@ -622,75 +528,6 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				(Value::Bytes(b), Value::Bytes(suffix)) => Ok(Value::Bool(b.ends_with(suffix))),
 				_ => unreachable!("`bytes.ends-with`: expected (bytes, bytes)"),
 			}
-		}
-		"bytes-from-list" => {
-			let xs = expect_list(&args, "from-list");
-			let mut out = Vec::with_capacity(xs.len());
-			for v in xs.iter() {
-				match v {
-					Value::Int(n) => {
-						if *n < 0 || *n > 255 {
-							return Ok(result_err(Value::String(Rc::new(format!(
-								"byte out of range (0..256): {}",
-								n
-							)))));
-						}
-						out.push(*n as u8);
-					}
-					_ => unreachable!("`bytes.from-list`: list element must be int"),
-				}
-			}
-			Ok(result_ok(Value::Bytes(Rc::new(out))))
-		}
-		"bytes-join" => {
-			debug_assert_eq!(args.len(), 2, "`bytes.join` arity");
-			let xs = match &args[0] {
-				Value::List(xs) => xs,
-				_ => unreachable!("`bytes.join`: expected list"),
-			};
-			let sep = match &args[1] {
-				Value::Bytes(s) => s,
-				_ => unreachable!("`bytes.join`: expected bytes separator"),
-			};
-			let parts: Vec<&[u8]> = xs
-				.iter()
-				.map(|v| match v {
-					Value::Bytes(b) => b.as_slice(),
-					_ => unreachable!("`bytes.join`: list element must be bytes"),
-				})
-				.collect();
-			let mut out = Vec::new();
-			for (i, p) in parts.iter().enumerate() {
-				if i > 0 {
-					out.extend_from_slice(sep);
-				}
-				out.extend_from_slice(p);
-			}
-			Ok(Value::Bytes(Rc::new(out)))
-		}
-		"bytes-split" => {
-			debug_assert_eq!(args.len(), 2, "`bytes.split` arity");
-			let b = match &args[0] {
-				Value::Bytes(b) => b,
-				_ => unreachable!("`bytes.split`: expected bytes"),
-			};
-			let sep = match &args[1] {
-				Value::Bytes(s) => s,
-				_ => unreachable!("`bytes.split`: expected bytes separator"),
-			};
-			let parts: Vec<Value> = if sep.is_empty() {
-				// Empty separator: split into single-byte chunks. Parallel
-				// to `string.split s ""`.
-				b.iter()
-					.map(|&byte| Value::Bytes(Rc::new(vec![byte])))
-					.collect()
-			} else {
-				bytes_split(b, sep)
-					.into_iter()
-					.map(|chunk| Value::Bytes(Rc::new(chunk)))
-					.collect()
-			};
-			Ok(Value::List(Rc::new(parts)))
 		}
 		"bytes-as-string" => {
 			// Unchecked reinterpret of bytes as a string. `bytes.to-string`
@@ -836,7 +673,7 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 								.into_iter()
 								.map(|n| Value::String(Rc::new(n)))
 								.collect();
-							result_ok(Value::List(Rc::new(list)))
+							result_ok(Value::list(list))
 						}
 					}
 				}
@@ -853,7 +690,7 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				.iter()
 				.map(|a| Value::String(Rc::new(a.clone())))
 				.collect();
-			Ok(Value::List(Rc::new(args_list)))
+			Ok(Value::list(args_list))
 		}
 		"io-env" => {
 			let name = expect_string(&args, "env");
@@ -1003,13 +840,13 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			debug_assert_eq!(args.len(), 1, "`dict.keys` arity");
 			let m = expect_dict_ref(&args[0], "keys");
 			let keys: Vec<Value> = m.entries.iter().map(|(k, _)| k.clone()).collect();
-			Ok(Value::List(Rc::new(keys)))
+			Ok(Value::list(keys))
 		}
 		"dict-values" => {
 			debug_assert_eq!(args.len(), 1, "`dict.values` arity");
 			let m = expect_dict_ref(&args[0], "values");
 			let vs: Vec<Value> = m.entries.iter().map(|(_, v)| v.clone()).collect();
-			Ok(Value::List(Rc::new(vs)))
+			Ok(Value::list(vs))
 		}
 		"dict-entries" => {
 			debug_assert_eq!(args.len(), 1, "`dict.entries` arity");
@@ -1019,7 +856,7 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				.iter()
 				.map(|(k, v)| Value::Tuple(Rc::new(vec![k.clone(), v.clone()])))
 				.collect();
-			Ok(Value::List(Rc::new(es)))
+			Ok(Value::list(es))
 		}
 		"dict-from-entries" => {
 			// args = [hash_dict, list]
@@ -1032,7 +869,7 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				_ => unreachable!("`from-entries`: expected list"),
 			};
 			let mut data = DictData::new();
-			for entry in xs.iter() {
+			for entry in xs.borrow().iter() {
 				let (k, v) = match entry {
 					Value::Tuple(t) if t.len() == 2 => (t[0].clone(), t[1].clone()),
 					_ => unreachable!("`from-entries`: expected list of 2-tuples"),
@@ -1140,6 +977,32 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			let current = cell.borrow().clone();
 			let next = invoke(vm, fn_arg, vec![current])?;
 			*cell.borrow_mut() = next;
+			Ok(Value::Nothing)
+		}
+
+		// The one in-place mutation on a list: overwrite slot `i` with `v`,
+		// returning `nothing`. Partial like `list.get` (OOB stops the
+		// program). The list's backing is shared, so the write is visible
+		// through every alias — the deliberate escape hatch from list
+		// immutability that `list.sort` and the linear builders ride on.
+		"list-set" => {
+			debug_assert_eq!(args.len(), 3, "`list.set` arity");
+			let cells = match &args[0] {
+				Value::List(cells) => cells,
+				_ => unreachable!("`list.set`: expected list"),
+			};
+			let i = match &args[1] {
+				Value::Int(n) => *n,
+				_ => unreachable!("`list.set`: expected int"),
+			};
+			let mut cells = cells.borrow_mut();
+			if i < 0 || (i as usize) >= cells.len() {
+				return Err(RuntimeError::new(format!(
+					"list.set: index {i} out of bounds (length {})",
+					cells.len()
+				)));
+			}
+			cells[i as usize] = args[2].clone();
 			Ok(Value::Nothing)
 		}
 
@@ -1570,10 +1433,10 @@ fn result_err(payload: Value) -> Value {
 	}))
 }
 
-fn expect_list<'a>(args: &'a [Value], name: &str) -> &'a Rc<Vec<Value>> {
+fn expect_list<'a>(args: &'a [Value], name: &str) -> std::cell::Ref<'a, Vec<Value>> {
 	debug_assert_eq!(args.len(), 1, "`{}` arity", name);
 	match &args[0] {
-		Value::List(xs) => xs,
+		Value::List(xs) => xs.borrow(),
 		_ => unreachable!("`{}`: expected list", name),
 	}
 }
@@ -1774,26 +1637,6 @@ fn bytes_contains(haystack: &[u8], needle: &[u8]) -> bool {
 	haystack.windows(needle.len()).any(|w| w == needle)
 }
 
-// Split `b` on every occurrence of `sep`. Mirrors how Rust's
-// str::split behaves on non-empty separators, and how `string.split`
-// works for the string side. `sep.is_empty()` is handled by the caller.
-fn bytes_split(b: &[u8], sep: &[u8]) -> Vec<Vec<u8>> {
-	let mut out = Vec::new();
-	let mut start = 0;
-	let mut i = 0;
-	while i + sep.len() <= b.len() {
-		if &b[i..i + sep.len()] == sep {
-			out.push(b[start..i].to_vec());
-			i += sep.len();
-			start = i;
-		} else {
-			i += 1;
-		}
-	}
-	out.push(b[start..].to_vec());
-	out
-}
-
 fn expect_float(args: &[Value], name: &str) -> f64 {
 	debug_assert_eq!(args.len(), 1, "`{}` arity", name);
 	match &args[0] {
@@ -1882,7 +1725,7 @@ fn json_to_pluma(j: serde_json::Value) -> Value {
 		serde_json::Value::String(s) => json_variant("string", vec![Value::String(Rc::new(s))]),
 		serde_json::Value::Array(xs) => {
 			let items: Vec<Value> = xs.into_iter().map(json_to_pluma).collect();
-			json_variant("array", vec![Value::List(Rc::new(items))])
+			json_variant("array", vec![Value::list(items)])
 		}
 		serde_json::Value::Object(obj) => {
 			let mut data = DictData::new();
@@ -1927,7 +1770,9 @@ fn pluma_to_json(v: &Value) -> serde_json::Value {
 			_ => unreachable!("`json.value.string`: expected single string payload"),
 		},
 		"array" => match &var.payload[..] {
-			[Value::List(xs)] => serde_json::Value::Array(xs.iter().map(pluma_to_json).collect()),
+			[Value::List(xs)] => {
+				serde_json::Value::Array(xs.borrow().iter().map(pluma_to_json).collect())
+			}
 			_ => unreachable!("`json.value.array`: expected single list payload"),
 		},
 		"object" => match &var.payload[..] {

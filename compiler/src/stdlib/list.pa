@@ -34,6 +34,23 @@ public def length :: fun (list a) -> int = built-in "list-length"
 #     list.get [10, 20, 30] 1   # => 20
 public def get :: fun (list a) int -> a = built-in "list-get"
 
+# Overwrites the element at position `i` in place, returning `nothing`.
+# This is the one mutation Pluma allows on a list -- normally lists are
+# immutable and every operation hands back a fresh list. An in-place set
+# is the deliberate escape hatch for when you're filling or rearranging a
+# buffer slot by slot (it's what `sort` is built on). Partial like `get`:
+# a position outside `0 <= i < length` stops the program.
+#
+# Because a list's storage is shared, a `set` is visible through *every*
+# binding pointing at the same list -- so use it only on a list you just
+# built and still solely own. When in doubt, build a fresh list instead
+# (`build`/`map`/spread); that's the immutable norm.
+#
+#     let xs = list.build 3 (fun _i { 0 })
+#     list.set xs 1 9
+#     xs   # => [0, 9, 0]
+public def set :: fun (list a) int a -> nothing = built-in "list-set"
+
 # Builds `[f 0, f 1, ..., f (n-1)]` in a single O(n) pass: `f` is called
 # with each index in turn and its results collected in order. The
 # tabulating counterpart to `fold`, and the primitive the list builders
@@ -317,4 +334,88 @@ def all-from :: fun (list a) (fun a -> bool) int int -> bool = fun xs pred n i {
 # compare function:
 #
 #     list.sort [3, 1, 2] (fun a b { ord.compare b a })   # => [3, 2, 1]
-public def sort :: fun (list a) (fun a a -> ordering) -> list a = built-in "list-sort"
+#
+# The sort is *stable*: elements your compare function calls `eq` keep
+# their original order relative to each other.
+public def sort :: fun (list a) (fun a a -> ordering) -> list a = fun xs cmp {
+	let n = length xs
+	if n < 2 is true {
+		xs
+	} else {
+		# A bottom-up merge sort over a private mutable copy: O(n log n)
+		# comparisons, stable, and no quadratic list rebuilding. `src` is a
+		# fresh copy of the input (so `set`s never touch the caller's list);
+		# `aux` is equal-length scratch each merge writes into before copying
+		# back. Both are freshly built, so the in-place `set`s stay local.
+		let src = build n fun i {
+			get xs i
+		}
+		let aux = build n fun i {
+			get xs i
+		}
+		let _ = msort src aux 0 n cmp
+		src
+	}
+}
+
+# Sort `src[lo..hi)` in place using `aux` as merge scratch.
+def msort :: fun (list a) (list a) int int (fun a a -> ordering) -> nothing = fun src aux lo hi cmp {
+	if hi - lo <= 1 is true {
+		()
+	} else {
+		let mid = (lo + hi) / 2
+		let _ = msort src aux lo mid cmp
+		let _ = msort src aux mid hi cmp
+		merge src aux lo mid hi cmp
+	}
+}
+
+# Merge the sorted runs `src[lo..mid)` and `src[mid..hi)` into `aux`,
+# then copy the merged run back over `src[lo..hi)`.
+def merge :: fun (list a) (list a) int int int (fun a a -> ordering) -> nothing = fun src aux lo mid hi cmp {
+	let _ = merge-into src aux lo mid mid hi lo cmp
+	copy-run aux src lo hi
+}
+
+# Two-pointer merge: `i` walks the left run `[i, mid)`, `j` the right run
+# `[j, hi)`, writing the smaller front element to `aux[k]`. On a tie the
+# left element goes first, which is what makes the whole sort stable.
+def merge-into :: fun (list a) (list a) int int int int int (fun a a -> ordering) -> nothing = fun src aux i mid j hi k cmp {
+	if i >= mid is true {
+		copy-shift src aux j hi k
+	} else if j >= hi is true {
+		copy-shift src aux i mid k
+	} else {
+		let l = get src i
+		let r = get src j
+		when cmp l r is gt {
+			let _ = set aux k r
+			merge-into src aux i mid (j + 1) hi (k + 1) cmp
+		} else {
+			let _ = set aux k l
+			merge-into src aux (i + 1) mid j hi (k + 1) cmp
+		}
+	}
+}
+
+# Copy `src[from..to)` into `dst` starting at `from` (used by `merge` to
+# put a merged run back where it came from).
+def copy-run :: fun (list a) (list a) int int -> nothing = fun src dst from to {
+	if from >= to is true {
+		()
+	} else {
+		let _ = set dst from (get src from)
+		copy-run src dst (from + 1) to
+	}
+}
+
+# Copy `src[from..to)` into `dst[at..)`, advancing both (used to drain a
+# leftover run during a merge, where source and destination indices differ).
+def copy-shift :: fun (list a) (list a) int int int -> nothing = fun src dst from to at {
+	if from >= to is true {
+		()
+	} else {
+		let _ = set dst at (get src from)
+		copy-shift src dst (from + 1) to (at + 1)
+	}
+}

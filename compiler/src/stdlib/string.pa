@@ -8,6 +8,9 @@
 # Strings never change in place: every function here returns a new
 # string and leaves the original alone.
 
+use core.list
+use core.bytes
+
 # How many characters are in the string.
 #
 #     string.length "hello"   # => 5
@@ -85,7 +88,26 @@ public def ends-with :: fun string string -> bool = built-in "string-ends-with"
 #
 #     string.join ["a", "b", "c"] ", "   # => "a, b, c"
 #     string.join ["a", "b", "c"] ""     # => "abc"
-public def join :: fun (list string) string -> string = built-in "string-join"
+public def join :: fun (list string) string -> string = fun parts sep {
+	let k = list.length parts
+	if k == 0 is true {
+		""
+	} else {
+		join-range parts sep 0 k
+	}
+}
+
+# Joins `parts[lo..hi)` with one `sep` between each adjacent pair, halving
+# the range and concatenating the joined halves -- O(total log k) rather
+# than the O(k * total) of a left-to-right fold.
+def join-range :: fun (list string) string int int -> string = fun parts sep lo hi {
+	if hi - lo == 1 is true {
+		list.get parts lo
+	} else {
+		let mid = (lo + hi) / 2
+		join-range parts sep lo mid ++ sep ++ join-range parts sep mid hi
+	}
+}
 
 # Breaks a string into a list of pieces, splitting at every occurrence
 # of `separator`. Two separators in a row leave an empty string between
@@ -93,7 +115,25 @@ public def join :: fun (list string) string -> string = built-in "string-join"
 #
 #     string.split "a,b,c" ","   # => ["a", "b", "c"]
 #     string.split "a,,b" ","    # => ["a", "", "b"]
-public def split :: fun string string -> list string = built-in "string-split"
+public def split :: fun string string -> list string = fun s sep {
+	if sep == "" is true {
+		# Empty separator: one piece per character. A character is a Unicode
+		# scalar, so this works at the codepoint level (where byte-splitting
+		# would tear multi-byte characters apart).
+		list.build (length s) fun i {
+			char-at s i ?? ""
+		}
+	} else {
+		# UTF-8 is self-synchronizing: a valid separator only ever matches on
+		# character boundaries, so splitting the raw bytes gives exactly the
+		# character-level pieces -- and byte indexing is O(1), where codepoint
+		# indexing isn't. Each piece is a substring of valid UTF-8 on
+		# boundaries, so it always decodes back.
+		list.map (bytes.split (to-bytes s) (to-bytes sep)) fun piece {
+			bytes.to-string piece ?? ""
+		}
+	}
+}
 
 # Replaces every occurrence of `pattern` with `replacement`.
 #

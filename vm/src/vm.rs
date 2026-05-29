@@ -597,12 +597,12 @@ impl VM {
 					);
 				}
 				elems.reverse();
-				self.stack.push(Value::List(Rc::new(elems)));
+				self.stack.push(Value::list(elems));
 			}
 			Instruction::ConcatLists(count) => {
 				// Pop `count` lists (top is the last segment), then splice them
 				// back-to-front so the result preserves source order.
-				let mut segments: Vec<Rc<Vec<Value>>> = Vec::with_capacity(count as usize);
+				let mut segments: Vec<Rc<RefCell<Vec<Value>>>> = Vec::with_capacity(count as usize);
 				for _ in 0..count {
 					match self.stack.pop() {
 						Some(Value::List(xs)) => segments.push(xs),
@@ -615,12 +615,12 @@ impl VM {
 					}
 				}
 				segments.reverse();
-				let total: usize = segments.iter().map(|xs| xs.len()).sum();
+				let total: usize = segments.iter().map(|xs| xs.borrow().len()).sum();
 				let mut out: Vec<Value> = Vec::with_capacity(total);
 				for xs in segments {
-					out.extend(xs.iter().cloned());
+					out.extend(xs.borrow().iter().cloned());
 				}
-				self.stack.push(Value::List(Rc::new(out)));
+				self.stack.push(Value::list(out));
 			}
 			Instruction::MakeRecord(fields_idx) => {
 				// Take the field list by value via clone of the indices. The
@@ -1159,6 +1159,7 @@ impl VM {
 		let arity = arity as usize;
 		match subj {
 			Value::List(elems) => {
+				let elems = elems.borrow();
 				let len = elems.len();
 				let length_ok = if has_rest { len >= arity } else { len == arity };
 				if !length_ok {
@@ -1171,7 +1172,7 @@ impl VM {
 				}
 				if has_rest {
 					let tail: Vec<Value> = elems[arity..].to_vec();
-					self.stack.push(Value::List(std::rc::Rc::new(tail)));
+					self.stack.push(Value::list(tail));
 				}
 			}
 			_ => {
