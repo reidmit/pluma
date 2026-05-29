@@ -52,6 +52,24 @@ pub enum Type {
 }
 
 impl Type {
+	// Smart constructor for a partial tuple that collapses the fully-known case
+	// back to a concrete `Tuple`. A partial tuple is "fully known" when it's
+	// closed (no row tail) and its indices cover a gap-free `0..n` range — at
+	// that point it's just an ordinary tuple, so resolved types read as `(a, b)`
+	// rather than `(0: a, 1: b)`. Anything still open, or with gaps/duplicate
+	// indices, stays a `PartialTuple`. Used by the substitution/resolution paths
+	// (`apply_to_type`, `deep_resolve`); the unifier's tuple arms accept either
+	// shape coming back.
+	pub fn partial_tuple(mut fields: Vec<(usize, Type)>, tail: Option<usize>) -> Type {
+		if tail.is_none() && !fields.is_empty() {
+			fields.sort_by_key(|(i, _)| *i);
+			if fields.iter().enumerate().all(|(i, (idx, _))| i == *idx) {
+				return Type::Tuple(fields.into_iter().map(|(_, t)| t).collect());
+			}
+		}
+		Type::PartialTuple(fields, tail)
+	}
+
 	pub fn contains_var(&self, var: usize) -> bool {
 		match &self {
 			Type::Var(n) => var == *n,
@@ -318,27 +336,25 @@ impl std::fmt::Display for Type {
 			),
 
 			Type::PartialTuple(fields, tail) => {
-				// Sort by index for stable display — substitution can merge
-				// indices from different accesses in solve-order, the same way
-				// `Record` fields can arrive out of order. Index labels are kept
-				// (even when closed) so a partial tuple never reads as a plain
-				// `Tuple`.
-				let mut sorted: Vec<&(usize, Type)> = fields.iter().collect();
-				sorted.sort_by_key(|(i, _)| *i);
-				let field_str = sorted
-					.iter()
-					.map(|(index, element)| format!("{}: {}", index, element))
-					.collect::<Vec<String>>()
-					.join(", ");
+				// Render positionally, like a tuple: fill indices we never learned
+				// with `_` placeholders and mark an open tail with a trailing
+				// `...`. So `.0` + `.1` reads `('a, 'b, ...)`, `.0` + `.2` reads
+				// `('a, _, 'b, ...)`, and `.2` alone `(_, _, 'b, ...)`.
+				if fields.is_empty() {
+					return match tail {
+						None => write!(f, "()"),
+						Some(_) => write!(f, "(...)"),
+					};
+				}
+				let max_index = fields.iter().map(|(i, _)| *i).max().unwrap();
+				let mut slots: Vec<String> = vec!["_".to_string(); max_index + 1];
+				for (index, element) in fields {
+					slots[*index] = maybe_add_parens(element);
+				}
+				let body = slots.join(", ");
 				match tail {
-					None => write!(f, "({})", field_str),
-					Some(_rid) => {
-						if fields.is_empty() {
-							write!(f, "(...)")
-						} else {
-							write!(f, "({}, ...)", field_str)
-						}
-					}
+					None => write!(f, "({})", body),
+					Some(_rid) => write!(f, "({}, ...)", body),
 				}
 			}
 

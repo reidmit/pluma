@@ -36,7 +36,7 @@ module `main` (tests/analyze/tuples/main.pa) {
                                 kind: binary op(2:14-2:15) `+` {
                                     left: expr(2:1-2:13) :: int {
                                         kind: element-access {
-                                            receiver: expr(2:1-2:11) :: (0: int, 1: string, 2: bool) {
+                                            receiver: expr(2:1-2:11) :: (int, string, bool) {
                                                 kind: ident(2:1-2:11) `superTuple`,
                                             },
                                             index: 0,

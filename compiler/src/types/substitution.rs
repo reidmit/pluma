@@ -112,7 +112,7 @@ impl Substitution {
 						None => break,
 					}
 				}
-				Type::PartialTuple(new_fields, current_tail)
+				Type::partial_tuple(new_fields, current_tail)
 			}
 
 			Type::Tuple(element_types) => Type::Tuple(

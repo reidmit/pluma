@@ -18,17 +18,17 @@ module `main` (tests/analyze/tuple-multi-element-access/main.pa) {
         ] [
             public def(8:0-10:1) :: nothing {
                 name: ident(8:11-8:15) `swap`,
-                kind: expr(8:42-10:1) :: ((0: 't3, 1: 't1)) -> ('t1, 't3) {
+                kind: expr(8:42-10:1) :: (('t3, 't1)) -> ('t1, 't3) {
                     kind: fun(8:42-10:1) {
                         params: [
-                            ident(8:46-8:50) `pair` :: (0: 't3, 1: 't1),
+                            ident(8:46-8:50) `pair` :: ('t3, 't1),
                         ],
                         body: [
                             expr(9:1-9:17) :: ('t1, 't3) {
                                 kind: tuple [
                                     expr(9:2-9:8) :: 't1 {
                                         kind: element-access {
-                                            receiver: expr(9:2-9:6) :: (0: 't3, 1: 't1) {
+                                            receiver: expr(9:2-9:6) :: ('t3, 't1) {
                                                 kind: ident(9:2-9:6) `pair`,
                                             },
                                             index: 1,
@@ -36,7 +36,7 @@ module `main` (tests/analyze/tuple-multi-element-access/main.pa) {
                                     },
                                     expr(9:10-9:16) :: 't3 {
                                         kind: element-access {
-                                            receiver: expr(9:10-9:14) :: (0: 't3, 1: 't1) {
+                                            receiver: expr(9:10-9:14) :: ('t3, 't1) {
                                                 kind: ident(9:10-9:14) `pair`,
                                             },
                                             index: 0,
@@ -50,10 +50,10 @@ module `main` (tests/analyze/tuple-multi-element-access/main.pa) {
             },
             public def(14:0-18:1) :: nothing {
                 name: ident(14:11-14:19) `swap-all`,
-                kind: expr(14:58-18:1) :: (list ((0: 't17, 1: 't15))) -> list (('t15, 't17)) {
+                kind: expr(14:58-18:1) :: (list (('t17, 't15))) -> list (('t15, 't17)) {
                     kind: fun(14:58-18:1) {
                         params: [
-                            ident(14:62-14:67) `pairs` :: list ((0: 't17, 1: 't15)),
+                            ident(14:62-14:67) `pairs` :: list (('t17, 't15)),
                         ],
                         body: [
                             expr(15:1-17:2) :: list (('t15, 't17)) {
@@ -62,20 +62,20 @@ module `main` (tests/analyze/tuple-multi-element-access/main.pa) {
                                         kind: namespace-access `list.map`,
                                     },
                                     args: [
-                                        expr(15:10-15:15) :: list ((0: 't17, 1: 't15)) {
+                                        expr(15:10-15:15) :: list (('t17, 't15)) {
                                             kind: ident(15:10-15:15) `pairs`,
                                         },
-                                        expr(15:16-17:2) :: ((0: 't17, 1: 't15)) -> ('t15, 't17) {
+                                        expr(15:16-17:2) :: (('t17, 't15)) -> ('t15, 't17) {
                                             kind: fun(15:16-17:2) {
                                                 params: [
-                                                    ident(15:20-15:24) `pair` :: (0: 't17, 1: 't15),
+                                                    ident(15:20-15:24) `pair` :: ('t17, 't15),
                                                 ],
                                                 body: [
                                                     expr(16:2-16:18) :: ('t15, 't17) {
                                                         kind: tuple [
                                                             expr(16:3-16:9) :: 't15 {
                                                                 kind: element-access {
-                                                                    receiver: expr(16:3-16:7) :: (0: 't17, 1: 't15) {
+                                                                    receiver: expr(16:3-16:7) :: ('t17, 't15) {
                                                                         kind: ident(16:3-16:7) `pair`,
                                                                     },
                                                                     index: 1,
@@ -83,7 +83,7 @@ module `main` (tests/analyze/tuple-multi-element-access/main.pa) {
                                                             },
                                                             expr(16:11-16:17) :: 't17 {
                                                                 kind: element-access {
-                                                                    receiver: expr(16:11-16:15) :: (0: 't17, 1: 't15) {
+                                                                    receiver: expr(16:11-16:15) :: ('t17, 't15) {
                                                                         kind: ident(16:11-16:15) `pair`,
                                                                     },
                                                                     index: 0,

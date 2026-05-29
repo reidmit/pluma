@@ -4031,63 +4031,78 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 
 				(a @ Type::Tuple(..), b @ Type::PartialTuple(..))
-				| (a @ Type::PartialTuple(..), b @ Type::Tuple(..)) => {
-					// Resolve the partial tuple fully so its tail's indices are
-					// inlined, then check each known index against the concrete
-					// tuple and unify element-wise.
+				| (a @ Type::PartialTuple(..), b @ Type::Tuple(..))
+				| (a @ Type::PartialTuple(..), b @ Type::PartialTuple(..)) => {
+					// Resolve both sides fully (inline each partial tuple's tail
+					// indices). A closed, gap-free partial collapses back to a
+					// concrete `Tuple` in `deep_resolve`, so any of Tuple/PartialTuple
+					// can come back here.
 					let ra = Self::deep_resolve(&bindings, &rows, &tuple_rows, &a);
 					let rb = Self::deep_resolve(&bindings, &rows, &tuple_rows, &b);
-					let (elements, fields, tail) = match (ra, rb) {
-						(Type::Tuple(e), Type::PartialTuple(f, t))
-						| (Type::PartialTuple(f, t), Type::Tuple(e)) => (e, f, t),
-						_ => unreachable!(),
-					};
-					let known: std::collections::HashSet<usize> = fields.iter().map(|(i, _)| *i).collect();
-					let mut out_of_bounds = false;
-					for (i, t) in fields {
-						if i >= elements.len() {
-							out_of_bounds = true;
-							self.error(
-								range,
-								TupleIndexNotPresent {
-									index: i,
-									ty: Type::Tuple(elements.clone()),
-								},
-							);
-							continue;
+					match (ra, rb) {
+						// Both fully known — ordinary tuple unification.
+						(Type::Tuple(e1), Type::Tuple(e2)) => {
+							if e1.len() != e2.len() {
+								self.error(
+									range,
+									TupleSizeMismatch {
+										expected: e2.len(),
+										found: e1.len(),
+									},
+								);
+								continue;
+							}
+							for (x, y) in e1.into_iter().zip(e2).rev() {
+								work.push((x, y, inner));
+							}
 						}
-						work.push((elements[i].clone(), t, inner));
-					}
-					// Close the partial tuple's tail with the remaining indices —
-					// the concrete tuple pins down exactly which indices exist,
-					// mirroring how a closed record closes an open record's row var.
-					if let (Some(r), false) = (tail, out_of_bounds) {
-						let remaining: Vec<(usize, Type)> = (0..elements.len())
-							.filter(|i| !known.contains(i))
-							.map(|i| (i, elements[i].clone()))
-							.collect();
-						tuple_rows.insert(
-							r,
-							TupleRowSolution {
-								fields: remaining,
-								tail: None,
-							},
-						);
-					}
-				}
 
-				(a @ Type::PartialTuple(..), b @ Type::PartialTuple(..)) => {
-					// Both partial — resolve fully (inline tail indices) and merge
-					// through the tuple row machinery, exactly like Record/Record.
-					let (f1, t1) = match Self::deep_resolve(&bindings, &rows, &tuple_rows, &a) {
-						Type::PartialTuple(f, t) => (f, t),
+						// One concrete tuple, one open partial: bounds-check each known
+						// index, unify element-wise, then close the partial's tail with
+						// the remaining indices (the concrete tuple pins down exactly
+						// which exist — like a closed record closing an open row var).
+						(Type::Tuple(elements), Type::PartialTuple(fields, tail))
+						| (Type::PartialTuple(fields, tail), Type::Tuple(elements)) => {
+							let known: std::collections::HashSet<usize> =
+								fields.iter().map(|(i, _)| *i).collect();
+							let mut out_of_bounds = false;
+							for (i, t) in fields {
+								if i >= elements.len() {
+									out_of_bounds = true;
+									self.error(
+										range,
+										TupleIndexNotPresent {
+											index: i,
+											ty: Type::Tuple(elements.clone()),
+										},
+									);
+									continue;
+								}
+								work.push((elements[i].clone(), t, inner));
+							}
+							if let (Some(r), false) = (tail, out_of_bounds) {
+								let remaining: Vec<(usize, Type)> = (0..elements.len())
+									.filter(|i| !known.contains(i))
+									.map(|i| (i, elements[i].clone()))
+									.collect();
+								tuple_rows.insert(
+									r,
+									TupleRowSolution {
+										fields: remaining,
+										tail: None,
+									},
+								);
+							}
+						}
+
+						// Both still open — merge through the tuple row machinery,
+						// exactly like the Record/Record case below.
+						(Type::PartialTuple(f1, t1), Type::PartialTuple(f2, t2)) => {
+							self.unify_tuples_worklist(&f1, t1, &f2, t2, range, &mut work, &mut tuple_rows);
+						}
+
 						_ => unreachable!(),
-					};
-					let (f2, t2) = match Self::deep_resolve(&bindings, &rows, &tuple_rows, &b) {
-						Type::PartialTuple(f, t) => (f, t),
-						_ => unreachable!(),
-					};
-					self.unify_tuples_worklist(&f1, t1, &f2, t2, range, &mut work, &mut tuple_rows);
+					}
 				}
 
 				(a @ Type::Record(..), b @ Type::Record(..)) => {
@@ -4274,7 +4289,7 @@ impl<'compiler> Analyzer<'compiler> {
 						None => break,
 					}
 				}
-				Type::PartialTuple(new_fields, current_tail)
+				Type::partial_tuple(new_fields, current_tail)
 			}
 			Type::Tuple(elements) => Type::Tuple(
 				elements
