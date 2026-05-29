@@ -39,6 +39,11 @@ pub fn compile(compiler: &compiler::Compiler) -> Result<Program, String> {
 		"wire-decode",
 		Value::Builtin(Rc::from("wire-decode")),
 	);
+	cg.add_evaluated_global(
+		"__prelude__",
+		"wire-fingerprint",
+		Value::Builtin(Rc::from("wire-fingerprint")),
+	);
 
 	// Prelude trait instance dictionaries. Each instance is a positional
 	// array of method values keyed by trait declaration order (`numeric`
@@ -2316,6 +2321,7 @@ fn emit_call(
 				let tag = match b.method_idx {
 					Some(0) => "wire-encode",
 					Some(1) => "wire-decode",
+					Some(2) => "wire-fingerprint",
 					_ => return Err("codegen: unexpected wire method index".to_string()),
 				};
 				let resolved = b

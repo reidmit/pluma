@@ -999,6 +999,7 @@ impl<'a> Lowerer<'a> {
 			let tag = match b.method_idx {
 				Some(0) => "wire-encode",
 				Some(1) => "wire-decode",
+				Some(2) => "wire-fingerprint",
 				_ => return None,
 			};
 			match b.resolved.clone() {
@@ -2214,6 +2215,11 @@ fn seed_prelude_globals(g: &mut GlobalTable) {
 	// these as its callee, passing the schema dict as the first argument.
 	g.add_pre_evaluated("__prelude__", "wire-encode", builtin("wire-encode"));
 	g.add_pre_evaluated("__prelude__", "wire-decode", builtin("wire-decode"));
+	g.add_pre_evaluated(
+		"__prelude__",
+		"wire-fingerprint",
+		builtin("wire-fingerprint"),
+	);
 
 	// `numeric`: add, sub, mul, div, negate.
 	g.add_pre_evaluated(

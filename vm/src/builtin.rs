@@ -680,6 +680,16 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				Err(e) => Ok(result_err(e.to_value())),
 			}
 		}
+		// The structural fingerprint of the value's TYPE (FULLSTACK.md version
+		// skew). The value (arg 1) is ignored — only the schema dict (arg 0)
+		// matters; it's there because `fingerprint :: fun a -> int` dispatches
+		// on `a`, so the schema arrives the same way as for encode/decode.
+		"wire-fingerprint" => {
+			debug_assert_eq!(args.len(), 2, "`wire-fingerprint` arity");
+			let schema = crate::wire::schema_from_value(&args[0])
+				.unwrap_or_else(|| unreachable!("`wire-fingerprint`: malformed schema"));
+			Ok(Value::Int(crate::wire::fingerprint(&schema)))
+		}
 		"bytes-length" => {
 			let b = expect_bytes(&args, "length");
 			Ok(Value::Int(b.len() as i64))

@@ -1,0 +1,11 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+same shape agrees: true
+reordered enum differs: false
+skew -> reject (reload)
+== stderr ==

@@ -6156,13 +6156,22 @@ impl<'compiler> Analyzer<'compiler> {
 
 		let to_wire = Type::Fun(vec![a.clone()], Box::new(Type::Bytes));
 		let wire_error = Type::Enum("__prelude__.wire-error".into(), vec![]);
-		let result_ty = Type::Enum("__prelude__.result".into(), vec![a, wire_error]);
+		let result_ty = Type::Enum("__prelude__.result".into(), vec![a.clone(), wire_error]);
 		let from_wire = Type::Fun(vec![Type::Bytes], Box::new(result_ty));
+		// `fingerprint a -> int`: the structural hash of `a`'s wire schema, for
+		// version-skew detection (FULLSTACK.md). Takes a value only so it can
+		// dispatch on `a`; the value itself is ignored.
+		let fingerprint = Type::Fun(vec![a], Box::new(Type::Int));
 
-		let method_order = vec!["to-wire".to_string(), "from-wire".to_string()];
+		let method_order = vec![
+			"to-wire".to_string(),
+			"from-wire".to_string(),
+			"fingerprint".to_string(),
+		];
 		let mut method_types: HashMap<String, Type> = HashMap::new();
 		method_types.insert("to-wire".into(), to_wire);
 		method_types.insert("from-wire".into(), from_wire);
+		method_types.insert("fingerprint".into(), fingerprint);
 
 		self.traits.insert(
 			"wire".into(),

@@ -288,6 +288,81 @@ pub fn decode_all(schema: &Schema, bytes: &[u8]) -> Result<Value, WireError> {
 	Ok(value)
 }
 
+// ---- schema fingerprint ---------------------------------------------------
+//
+// A stable structural hash of a schema (FULLSTACK.md "Version skew"). Two
+// types with the same wire shape hash identically; ANY drift that would change
+// the bytes — a renamed/reordered/retyped record field, an added/renamed/
+// re-arity'd enum variant, a different enum identity, different nesting —
+// changes the hash. It rides in a per-request header so a stale client decoding
+// a new server's payload fails cleanly instead of decoding garbage.
+//
+// FNV-1a over a canonical token stream. Lengths/counts are mixed in
+// length-prefixed so neighbouring strings can't run together (field set
+// `["ab","c"]` must not collide with `["a","bc"]`). Deterministic across runs
+// and platforms — no reliance on Rust's randomized HashMap order (records and
+// variants arrive already in canonical order from `build_wire_shape`).
+
+const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
+
+fn mix_byte(h: u64, b: u8) -> u64 {
+	(h ^ b as u64).wrapping_mul(FNV_PRIME)
+}
+
+fn mix_len(h: u64, n: usize) -> u64 {
+	(n as u64)
+		.to_le_bytes()
+		.iter()
+		.fold(h, |h, &b| mix_byte(h, b))
+}
+
+fn mix_str(h: u64, s: &str) -> u64 {
+	let h = mix_len(h, s.len());
+	s.bytes().fold(h, mix_byte)
+}
+
+fn mix_schema(h: u64, schema: &Schema) -> u64 {
+	// Each arm leads with a distinct kind tag so structurally-different schemas
+	// can't alias (e.g. an empty tuple vs `nothing`).
+	match schema {
+		Schema::Int => mix_byte(h, 1),
+		Schema::Float => mix_byte(h, 2),
+		Schema::Bool => mix_byte(h, 3),
+		Schema::String => mix_byte(h, 4),
+		Schema::Bytes => mix_byte(h, 5),
+		Schema::Duration => mix_byte(h, 6),
+		Schema::Nothing => mix_byte(h, 7),
+		Schema::List(inner) => mix_schema(mix_byte(h, 8), inner),
+		Schema::Tuple(elems) => {
+			let h = mix_len(mix_byte(h, 9), elems.len());
+			elems.iter().fold(h, mix_schema)
+		}
+		Schema::Record(fields) => {
+			let h = mix_len(mix_byte(h, 10), fields.len());
+			fields
+				.iter()
+				.fold(h, |h, (name, s)| mix_schema(mix_str(h, name), s))
+		}
+		Schema::Enum {
+			qualified,
+			variants,
+		} => {
+			let h = mix_len(mix_str(mix_byte(h, 11), qualified), variants.len());
+			variants.iter().fold(h, |h, (name, fields)| {
+				let h = mix_len(mix_str(h, name), fields.len());
+				fields.iter().fold(h, mix_schema)
+			})
+		}
+	}
+}
+
+/// The schema's structural fingerprint, as an `i64` (the full 64-bit FNV-1a
+/// hash reinterpreted into Pluma's `int`). Stable across runs/platforms.
+pub fn fingerprint(schema: &Schema) -> i64 {
+	mix_schema(FNV_OFFSET, schema) as i64
+}
+
 // ---- schema reification ---------------------------------------------------
 //
 // At runtime the schema arrives as an ordinary `wire-schema` value tree (built
@@ -564,6 +639,60 @@ mod tests {
 	fn decode_rejects_invalid_utf8() {
 		// length 2, then an invalid UTF-8 sequence
 		assert_decode_err(&Schema::String, &[2, 0xff, 0xfe], WireError::InvalidUtf8);
+	}
+
+	#[test]
+	fn fingerprint_is_stable_and_structural() {
+		let rec = |fields: &[(&str, Schema)]| {
+			Schema::Record(
+				fields
+					.iter()
+					.map(|(n, s)| (n.to_string(), s.clone()))
+					.collect(),
+			)
+		};
+
+		// Same shape → same fingerprint (recomputed independently).
+		let a = rec(&[("age", Schema::Int), ("name", Schema::String)]);
+		let b = rec(&[("age", Schema::Int), ("name", Schema::String)]);
+		assert_eq!(fingerprint(&a), fingerprint(&b));
+
+		// A retyped field drifts.
+		let retyped = rec(&[("age", Schema::Float), ("name", Schema::String)]);
+		assert_ne!(fingerprint(&a), fingerprint(&retyped));
+
+		// A renamed field drifts (names ride the schema).
+		let renamed = rec(&[("age", Schema::Int), ("nick", Schema::String)]);
+		assert_ne!(fingerprint(&a), fingerprint(&renamed));
+
+		// An added field drifts.
+		let extra = rec(&[
+			("age", Schema::Int),
+			("name", Schema::String),
+			("admin", Schema::Bool),
+		]);
+		assert_ne!(fingerprint(&a), fingerprint(&extra));
+
+		// Distinct primitives don't collide.
+		assert_ne!(fingerprint(&Schema::Int), fingerprint(&Schema::Float));
+		// A field-set can't run together: {ab,c} vs {a,bc} (length-prefixing).
+		let abc = rec(&[("ab", Schema::Bool), ("c", Schema::Bool)]);
+		let a_bc = rec(&[("a", Schema::Bool), ("bc", Schema::Bool)]);
+		assert_ne!(fingerprint(&abc), fingerprint(&a_bc));
+
+		// Enum drift: an added variant changes the fingerprint.
+		let e1 = Schema::Enum {
+			qualified: "m.status".to_string(),
+			variants: vec![("active".to_string(), vec![])],
+		};
+		let e2 = Schema::Enum {
+			qualified: "m.status".to_string(),
+			variants: vec![
+				("active".to_string(), vec![]),
+				("banned".to_string(), vec![Schema::Int]),
+			],
+		};
+		assert_ne!(fingerprint(&e1), fingerprint(&e2));
 	}
 
 	#[test]
