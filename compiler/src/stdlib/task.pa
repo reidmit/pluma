@@ -121,7 +121,9 @@ def scope-cancel-after :: fun scope-handle duration -> nothing = built-in "scope
 # is parameterized by the children's type `a` (manual scopes are homogeneous),
 # so `manual-next` can return that type.
 def manual-spawn :: fun (manual-scope-handle a) (task a) -> task a = built-in "scope-spawn"
+
 def manual-cancel :: fun (manual-scope-handle a) nothing -> nothing = built-in "scope-cancel"
+
 def manual-cancel-after :: fun (manual-scope-handle a) duration -> nothing = built-in "scope-cancel-after"
 
 # (Manual scopes.) Awaits the next child of `s` to settle: a task yielding
@@ -148,15 +150,20 @@ def manual-next :: fun (manual-scope-handle a) nothing -> task (option (result a
 # that succeeds with `v`, `err e` one that fails with `e`. The glue between
 # `s.next` (which hands back a `result`) and the combinators that re-raise it.
 def result-to-task :: fun (result a e) -> task a = fun r {
-	when r is ok x { return x } is err e { fail e }
+	when r is ok x {
+		return x
+	} is err e {
+		fail e
+	}
 }
 
 # Awaits a list of already-spawned handles in order, collecting their values.
 # Handles run concurrently regardless of the order they're awaited in -- this
 # is just the sequential back half of `all` / `settle-all`.
 def await-all :: fun (list (task a)) -> task (list a) = fun handles {
-	when handles is [] { return [] }
-	is [h, ...rest] {
+	when handles is [] {
+		return []
+	} is [h, ...rest] {
 		try x = h
 		try xs = await-all rest
 		return [x, ...xs]
@@ -180,7 +187,9 @@ public def both :: fun (task a) (task b) -> task (a, b) = fun t1 t2 {
 # Fail-fast: the first failure cancels the rest and fails the whole task.
 public def all :: fun (list (task a)) -> task (list a) = fun ts {
 	scope as s {
-		let handles = list.map ts (fun t { s.spawn t })
+		let handles = list.map ts fun t {
+			s.spawn t
+		}
 		await-all handles
 	}
 }
@@ -189,18 +198,25 @@ public def all :: fun (list (task a)) -> task (list a) = fun ts {
 # successes and failures alike. Each task is `attempt`-wrapped, so none of
 # them ever fails the scope: this always settles the full list.
 public def settle-all :: fun (list (task a)) -> task (list (result a e)) = fun ts {
-	all (list.map ts (fun t { attempt t }))
+	all (list.map ts fun t {
+		attempt t
+	})
 }
 
 # Runs every task concurrently and returns the first to *settle* (succeed or
 # fail), cancelling the losers. Fails if `ts` is empty.
 public def race :: fun (list (task a)) -> task a = fun ts {
 	manual scope as s {
-		let _ = list.map ts (fun t { s.spawn t })
+		let _ = list.map ts fun t {
+			s.spawn t
+		}
 		try first = s.next ()
 		s.cancel ()
-		when first is some r { result-to-task r }
-		is none { fail "race: empty" }
+		when first is some r {
+			result-to-task r
+		} is none {
+			fail "race: empty"
+		}
 	}
 }
 
@@ -209,12 +225,15 @@ public def race :: fun (list (task a)) -> task a = fun ts {
 # scope drains with none.
 def drain-any :: fun (manual-scope-handle a) -> task a = fun s {
 	try got = s.next ()
-	when got is none { fail "any: all tasks failed" }
-	is some r {
+	when got is none {
+		fail "any: all tasks failed"
+	} is some r {
 		when r is ok v {
 			s.cancel ()
 			return v
-		} is err _e { drain-any s }
+		} is err _e {
+			drain-any s
+		}
 	}
 }
 
@@ -222,7 +241,9 @@ def drain-any :: fun (manual-scope-handle a) -> task a = fun s {
 # the rest. Failures are skipped; if every task fails, this fails too.
 public def any :: fun (list (task a)) -> task a = fun ts {
 	manual scope as s {
-		let _ = list.map ts (fun t { s.spawn t })
+		let _ = list.map ts fun t {
+			s.spawn t
+		}
 		drain-any s
 	}
 }
@@ -231,15 +252,18 @@ public def any :: fun (list (task a)) -> task a = fun ts {
 # again runs it fresh. Returns the first success or the last failure. No scope
 # -- this is purely sequential re-running.
 public def retry :: fun int (task a) -> task a = fun n t {
-	if n <= 1 is true { t }
-	else { t ?? retry (n - 1) t }
+	if n <= 1 is true {
+		t
+	} else {
+		t ?? retry (n - 1) t
+	}
 }
 
 # Runs `t` with a deadline: whichever of `t` and a `d`-long timer settles
 # first wins. If the timer wins, `t` is cancelled and the task fails with
 # "timeout".
 public def with-timeout :: fun duration (task a) -> task a = fun d t {
-	race [t, sleep d | then (fun _slept { fail "timeout" })]
+	race [t, sleep d | then fun _slept { fail "timeout" }]
 }
 
 # Drives `pool`: each time a child settles, re-raise a failure (fail-fast) or
@@ -247,10 +271,11 @@ public def with-timeout :: fun duration (task a) -> task a = fun d t {
 # `backlog` holds the not-yet-started tasks.
 def gather :: fun (manual-scope-handle a) (ref (list (task a))) (list a) -> task (list a) = fun s backlog acc {
 	try got = s.next ()
-	when got is none { return (list.reverse acc) }
-	is some r {
+	when got is none {
+		return (list.reverse acc)
+	} is some r {
 		try x = result-to-task r
-		when (ref.get backlog) is [head, ...rest] {
+		when ref.get backlog is [head, ...rest] {
 			ref.set backlog rest
 			let _ = s.spawn head
 			gather s backlog [x, ...acc]
@@ -266,7 +291,9 @@ def gather :: fun (manual-scope-handle a) (ref (list (task a))) (list a) -> task
 public def pool :: fun int (list (task a)) -> task (list a) = fun n ts {
 	manual scope as s {
 		let backlog = ref.new (list.drop ts n)
-		let _ = list.map (list.take ts n) (fun t { s.spawn t })
+		let _ = list.map (list.take ts n) fun t {
+			s.spawn t
+		}
 		gather s backlog []
 	}
 }

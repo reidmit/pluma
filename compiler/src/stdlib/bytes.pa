@@ -32,14 +32,10 @@ public def is-empty :: fun bytes -> bool = fun b {
 #     bytes.at 'ABC' 0    # => some 65
 #     bytes.at 'ABC' 9    # => none
 public def at :: fun bytes int -> option int = fun b i {
-	if i < 0 is true {
+	if i < 0 || i >= length b is true {
 		none
 	} else {
-		if i >= length b is true {
-			none
-		} else {
-			some (get b i)
-		}
+		some (get b i)
 	}
 }
 
@@ -72,16 +68,26 @@ public def slice :: fun bytes int int -> bytes = fun b start end {
 	let len = length b
 	let s = if start < 0 is true {
 		0
+	} else if start > len is true {
+		len
 	} else {
-		if start > len is true { len } else { start }
+		start
 	}
 	let e0 = if end < 0 is true {
 		0
+	} else if end > len is true {
+		len
 	} else {
-		if end > len is true { len } else { end }
+		end
 	}
-	let e = if e0 < s is true { s } else { e0 }
-	build (e - s) (fun i { get b (s + i) })
+	let e = if e0 < s is true {
+		s
+	} else {
+		e0
+	}
+	build (e - s) fun i {
+		get b (s + i)
+	}
 }
 
 # True when `needle` appears somewhere inside `haystack`.
@@ -105,8 +111,14 @@ public def ends-with :: fun bytes bytes -> bool = built-in "bytes-ends-with"
 #     bytes.repeat 'ab' 3   # => 'ababab'
 public def repeat :: fun bytes int -> bytes = fun b n {
 	let len = length b
-	let count = if n < 0 is true { 0 } else { n }
-	build (len * count) (fun i { get b (i % len) })
+	let count = if n < 0 is true {
+		0
+	} else {
+		n
+	}
+	build (len * count) fun i {
+		get b (i % len)
+	}
 }
 
 # Returns the bytes in reverse order.
@@ -114,14 +126,18 @@ public def repeat :: fun bytes int -> bytes = fun b n {
 #     bytes.reverse 'abc'   # => 'cba'
 public def reverse :: fun bytes -> bytes = fun b {
 	let len = length b
-	build len (fun i { get b (len - 1 - i) })
+	build len fun i {
+		get b (len - 1 - i)
+	}
 }
 
 # Spreads the bytes out into a list of ints, one per byte (each 0-255).
 #
 #     bytes.to-list 'AB'   # => [65, 66]
 public def to-list :: fun bytes -> list int = fun b {
-	list.build (length b) (fun i { get b i })
+	list.build (length b) fun i {
+		get b i
+	}
 }
 
 # Packs a list of ints back into bytes. Each int has to fit in a byte
@@ -169,36 +185,28 @@ def valid-utf8 :: fun bytes int int -> bool = fun b i n {
 		let b0 = get b i
 		if b0 < 128 is true {
 			valid-utf8 b (i + 1) n
-		} else {
-			if b0 < 194 is true {
-				false
+		} else if b0 < 194 is true {
+			false
+		} else if b0 < 224 is true {
+			if cont b (i + 1) n is true {
+				valid-utf8 b (i + 2) n
 			} else {
-				if b0 < 224 is true {
-					if cont b (i + 1) n is true {
-						valid-utf8 b (i + 2) n
-					} else {
-						false
-					}
-				} else {
-					if b0 < 240 is true {
-						if valid3 b i n b0 is true {
-							valid-utf8 b (i + 3) n
-						} else {
-							false
-						}
-					} else {
-						if b0 < 245 is true {
-							if valid4 b i n b0 is true {
-								valid-utf8 b (i + 4) n
-							} else {
-								false
-							}
-						} else {
-							false
-						}
-					}
-				}
+				false
 			}
+		} else if b0 < 240 is true {
+			if valid3 b i n b0 is true {
+				valid-utf8 b (i + 3) n
+			} else {
+				false
+			}
+		} else if b0 < 245 is true {
+			if valid4 b i n b0 is true {
+				valid-utf8 b (i + 4) n
+			} else {
+				false
+			}
+		} else {
+			false
 		}
 	}
 }
@@ -209,7 +217,7 @@ def cont :: fun bytes int int -> bool = fun b j n {
 		false
 	} else {
 		let x = get b j
-		if x >= 128 is true { x < 192 } else { false }
+		x >= 128 && x < 192
 	}
 }
 
@@ -220,14 +228,18 @@ def valid3 :: fun bytes int int int -> bool = fun b i n b0 {
 		false
 	} else {
 		let b1 = get b (i + 1)
-		let lo = if b0 == 224 is true { 160 } else { 128 }
-		let hi = if b0 == 237 is true { 159 } else { 191 }
-		if b1 >= lo is true {
-			if b1 <= hi is true {
-				cont b (i + 2) n
-			} else {
-				false
-			}
+		let lo = if b0 == 224 is true {
+			160
+		} else {
+			128
+		}
+		let hi = if b0 == 237 is true {
+			159
+		} else {
+			191
+		}
+		if b1 >= lo && b1 <= hi is true {
+			cont b (i + 2) n
 		} else {
 			false
 		}
@@ -241,18 +253,18 @@ def valid4 :: fun bytes int int int -> bool = fun b i n b0 {
 		false
 	} else {
 		let b1 = get b (i + 1)
-		let lo = if b0 == 240 is true { 144 } else { 128 }
-		let hi = if b0 == 244 is true { 143 } else { 191 }
-		if b1 >= lo is true {
-			if b1 <= hi is true {
-				if cont b (i + 2) n is true {
-					cont b (i + 3) n
-				} else {
-					false
-				}
-			} else {
-				false
-			}
+		let lo = if b0 == 240 is true {
+			144
+		} else {
+			128
+		}
+		let hi = if b0 == 244 is true {
+			143
+		} else {
+			191
+		}
+		if b1 >= lo && b1 <= hi is true {
+			cont b (i + 2) n && cont b (i + 3) n
 		} else {
 			false
 		}
