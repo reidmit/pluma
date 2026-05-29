@@ -102,6 +102,7 @@ const WASM_FIXTURES: &[&str] = &[
 	"swap-tuple",
 	"top-level-keywords",
 	"to-string-shapes",
+	"tuple-element-access",
 	"tuple-pattern-size",
 	"try-nested",
 	"try-option",

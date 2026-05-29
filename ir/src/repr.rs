@@ -240,6 +240,7 @@ pub fn result_repr(rv: &Rvalue, reprs: &[Repr], sigs: &Sigs) -> Repr {
 		| Rvalue::MakeRecord(..)
 		| Rvalue::RecordUpdate { .. }
 		| Rvalue::GetField(..)
+		| Rvalue::GetElement(..)
 		| Rvalue::MakeVariant { .. }
 		| Rvalue::MakeVariantCtor { .. }
 		| Rvalue::Interpolate(..)
@@ -362,6 +363,7 @@ fn for_each_required_operand(rv: &mut Rvalue, sigs: &Sigs, mut f: impl FnMut(&mu
 		}
 		Rvalue::GetDictMethod(a, _)
 		| Rvalue::GetField(a, _)
+		| Rvalue::GetElement(a, _)
 		| Rvalue::GetTag(a)
 		| Rvalue::GetPayload(a, _)
 		| Rvalue::Await(a) => f(a, Repr::Boxed),
@@ -698,6 +700,7 @@ fn rvalue_vars(rv: &Rvalue, bump: &mut impl FnMut(VarId)) {
 		}
 		Rvalue::GetDictMethod(a, _)
 		| Rvalue::GetField(a, _)
+		| Rvalue::GetElement(a, _)
 		| Rvalue::GetTag(a)
 		| Rvalue::GetPayload(a, _)
 		| Rvalue::Await(a) => atom_var(a, bump),

@@ -178,6 +178,7 @@ const IR_FIXTURES: &[&str] = &[
 	"try-option",
 	"try-result",
 	"try-wildcard",
+	"tuple-element-access",
 	"tuple-pattern-size",
 	"unary-minus",
 	"user-trait-concrete",

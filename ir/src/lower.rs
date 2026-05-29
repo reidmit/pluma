@@ -568,6 +568,10 @@ impl<'a> Lowerer<'a> {
 				let recv = self.lower_expr(receiver)?;
 				Ok(self.emit_let(Rvalue::GetField(recv, field.name.clone()), range))
 			}
+			ExprKind::ElementAccess { receiver, index } => {
+				let recv = self.lower_expr(receiver)?;
+				Ok(self.emit_let(Rvalue::GetElement(recv, *index as u32), range))
+			}
 			ExprKind::NamespaceAccess(path) => {
 				if let Some(cell) = &expr.trait_dispatch {
 					return self.lower_dispatch(cell, range);

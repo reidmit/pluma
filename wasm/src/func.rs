@@ -741,6 +741,7 @@ fn for_each_atom(rv: &Rvalue, f: &mut impl FnMut(&Atom)) {
 		| Rvalue::Unbox(a, _)
 		| Rvalue::GetDictMethod(a, _)
 		| Rvalue::GetField(a, _)
+		| Rvalue::GetElement(a, _)
 		| Rvalue::GetTag(a)
 		| Rvalue::GetPayload(a, _)
 		| Rvalue::Await(a) => f(a),
@@ -1628,6 +1629,18 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::StructGet {
 					struct_type_index: types::T_VARIANT,
 					field_index: 3, // payload (after tag, vtag, name)
+				});
+				self.ins(Instruction::I32Const(*i as i32));
+				self.ins(Instruction::ArrayGet(types::T_VALARRAY));
+			}
+			Rvalue::GetElement(a, i) => {
+				self.atom(a);
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_TUPLE,
+				)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_TUPLE,
+					field_index: 1, // elems array (after tag)
 				});
 				self.ins(Instruction::I32Const(*i as i32));
 				self.ins(Instruction::ArrayGet(types::T_VALARRAY));

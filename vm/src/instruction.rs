@@ -93,6 +93,9 @@ pub enum Instruction {
 		arity: u16,
 	},
 	GetField(ConstIdx),
+	// Pop a tuple and push its element at the given index. Index is a static
+	// tuple position (the `.0`/`.1` of an `ElementAccess`).
+	GetElement(u16),
 
 	// Typeclass dispatch: pop a Value::MethodDict and push the method at the given
 	// field index. Method index is the position the method was declared in

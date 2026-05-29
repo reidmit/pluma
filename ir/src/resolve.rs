@@ -230,6 +230,7 @@ fn used_vars(f: &Function) -> HashSet<u32> {
 			}),
 			Rvalue::GetDictMethod(a, _)
 			| Rvalue::GetField(a, _)
+			| Rvalue::GetElement(a, _)
 			| Rvalue::GetTag(a)
 			| Rvalue::GetPayload(a, _)
 			| Rvalue::Await(a) => note(a),

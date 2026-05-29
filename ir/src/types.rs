@@ -358,6 +358,10 @@ pub enum Rvalue {
 		fields: Vec<(String, Atom)>,
 	},
 	GetField(Atom, String),
+	/// Read element `index` of a tuple (`e.0`, `e.1`). The tuple analogue of
+	/// `GetField`; index is statically known and bounds-checked by the analyzer
+	/// against concrete tuples.
+	GetElement(Atom, u32),
 	/// Construct an enum variant with all its payload present.
 	MakeVariant {
 		enum_name: String,

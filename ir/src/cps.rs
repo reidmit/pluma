@@ -794,6 +794,7 @@ fn collect_rvalue_reads(rv: &Rvalue, set: &mut HashSet<u32>) {
 		| Unbox(a, _)
 		| GetDictMethod(a, _)
 		| GetField(a, _)
+		| GetElement(a, _)
 		| Await(a)
 		| GetTag(a)
 		| GetPayload(a, _) => collect_atom(a, set),

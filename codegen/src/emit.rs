@@ -1661,8 +1661,18 @@ fn emit_expr_with_parents(
 				tail,
 			)?;
 		}
-		ExprKind::ElementAccess { .. } => {
-			return Err("codegen: ElementAccess not implemented".into());
+		ExprKind::ElementAccess { receiver, index } => {
+			emit_expr_with_parents(
+				cg,
+				current_module,
+				imports,
+				fb,
+				scope,
+				parent_scopes,
+				receiver,
+				false,
+			)?;
+			fb.emit(Instruction::GetElement(*index as u16), range);
 		}
 		ExprKind::Try(TryNode {
 			pattern,

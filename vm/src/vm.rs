@@ -716,6 +716,32 @@ impl VM {
 					}
 				}
 			}
+			Instruction::GetElement(index) => {
+				let v = self.stack.pop().ok_or_else(|| {
+					RuntimeError::new("VM: GetElement on empty stack").at(self.current_range())
+				})?;
+				match v {
+					Value::Tuple(elems) => match elems.get(index as usize) {
+						Some(v) => self.stack.push(v.clone()),
+						None => {
+							return Err(
+								RuntimeError::new(format!(
+									"tuple index {} out of bounds (len {})",
+									index,
+									elems.len()
+								))
+								.at(self.current_range()),
+							)
+						}
+					},
+					_ => {
+						return Err(
+							RuntimeError::new(format!("element access `.{}` on non-tuple value", index))
+								.at(self.current_range()),
+						)
+					}
+				}
+			}
 			Instruction::GetDictField(idx) => {
 				let v = self.stack.pop().ok_or_else(|| {
 					RuntimeError::new("VM: GetDictField on empty stack").at(self.current_range())
@@ -1439,6 +1465,7 @@ fn opcode_name(i: &Instruction) -> &'static str {
 		MakeVariant { .. } => "MakeVariant",
 		MakeVariantCtor { .. } => "MakeVariantCtor",
 		GetField(_) => "GetField",
+		GetElement(_) => "GetElement",
 		GetDictField(_) => "GetDictField",
 		MakeDict(_) => "MakeDict",
 		LoadRegex(_) => "LoadRegex",

@@ -899,6 +899,10 @@ impl FnCtx {
 				let idx = em.intern(name);
 				push(body, ranges, Instruction::GetField(idx), r);
 			}
+			Rvalue::GetElement(receiver, index) => {
+				self.emit_operands(em, &[receiver], body, ranges, r)?;
+				push(body, ranges, Instruction::GetElement(*index as u16), r);
+			}
 			Rvalue::Interpolate(parts) => {
 				let ops: Vec<&Atom> = parts.iter().collect();
 				self.emit_operands(em, &ops, body, ranges, r)?;
@@ -1069,6 +1073,7 @@ fn rvalue_atoms(rv: &Rvalue) -> Vec<&Atom> {
 		| Rvalue::Unbox(a, _)
 		| Rvalue::GetDictMethod(a, _)
 		| Rvalue::GetField(a, _)
+		| Rvalue::GetElement(a, _)
 		| Rvalue::Await(a)
 		| Rvalue::GetTag(a)
 		| Rvalue::GetPayload(a, _) => vec![a],
