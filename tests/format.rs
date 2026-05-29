@@ -5,11 +5,9 @@
 
 use std::path::Path;
 
-datatest_stable::harness!(
-	format_fixture,
-	concat!(env!("CARGO_MANIFEST_DIR"), "/format"),
-	r"main\.pa$"
-);
+datatest_stable::harness! {
+	{ test = format_fixture, root = concat!(env!("CARGO_MANIFEST_DIR"), "/format"), pattern = r"main\.pa$" },
+}
 
 fn format_fixture(path: &Path) -> datatest_stable::Result<()> {
 	let fixture_dir = path.parent().unwrap();

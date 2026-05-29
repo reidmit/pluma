@@ -8,11 +8,9 @@ use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
 
-datatest_stable::harness!(
-	run_fixture,
-	concat!(env!("CARGO_MANIFEST_DIR"), "/run"),
-	r"main\.pa$"
-);
+datatest_stable::harness! {
+	{ test = run_fixture, root = concat!(env!("CARGO_MANIFEST_DIR"), "/run"), pattern = r"main\.pa$" },
+}
 
 fn run_fixture(path: &Path) -> datatest_stable::Result<()> {
 	let fixture_dir = path.parent().unwrap();

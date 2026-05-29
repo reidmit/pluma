@@ -7,11 +7,9 @@ use compiler::{Compiler, Diagnostic};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-datatest_stable::harness!(
-	analyze_fixture,
-	concat!(env!("CARGO_MANIFEST_DIR"), "/analyze"),
-	r"main(\.test)?\.pa$"
-);
+datatest_stable::harness! {
+	{ test = analyze_fixture, root = concat!(env!("CARGO_MANIFEST_DIR"), "/analyze"), pattern = r"main(\.test)?\.pa$" },
+}
 
 fn analyze_fixture(path: &Path) -> datatest_stable::Result<()> {
 	let fixture_dir = path.parent().unwrap();

@@ -1119,17 +1119,17 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			Ok(Value::Bool(uuid::Uuid::try_parse(s).is_ok()))
 		}
 		"random-int" => {
-			use rand::Rng as _;
+			use rand::RngExt as _;
 			debug_assert_eq!(args.len(), 1, "`random.int` arity");
 			Ok(Value::Int(rand::rng().random_range(0..i64::MAX)))
 		}
 		"random-float" => {
-			use rand::Rng as _;
+			use rand::RngExt as _;
 			debug_assert_eq!(args.len(), 1, "`random.float` arity");
 			Ok(Value::Float(rand::rng().random::<f64>()))
 		}
 		"random-bytes" => {
-			use rand::RngCore as _;
+			use rand::Rng as _;
 			debug_assert_eq!(args.len(), 1, "`random.bytes` arity");
 			match &args[0] {
 				Value::Int(n) if *n < 0 => Ok(result_err(Value::String(Rc::new(format!(
@@ -1145,7 +1145,7 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			}
 		}
 		"random-int-range" => {
-			use rand::Rng as _;
+			use rand::RngExt as _;
 			debug_assert_eq!(args.len(), 2, "`random.int-range` arity");
 			match (&args[0], &args[1]) {
 				(Value::Int(lo), Value::Int(hi)) if *lo >= *hi => Ok(result_err(Value::String(Rc::new(
@@ -1158,7 +1158,7 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			}
 		}
 		"random-bool" => {
-			use rand::Rng as _;
+			use rand::RngExt as _;
 			debug_assert_eq!(args.len(), 1, "`random.bool` arity");
 			Ok(Value::Bool(rand::rng().random::<bool>()))
 		}

@@ -8,7 +8,7 @@ doctest = false
 
 [dependencies]
 compiler = { path = "../compiler" }
-rand = "0.9"
+rand = "0.10"
 regex = "1"
 serde_json = { version = "1", features = ["preserve_order"] }
 uuid = { version = "1", features = ["v4", "v7"] }

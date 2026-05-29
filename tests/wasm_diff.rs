@@ -142,9 +142,10 @@ fn engine() -> Engine {
 	config.wasm_gc(true);
 	config.wasm_tail_call(true);
 	// Use the null collector (allocate, never collect): these fixtures are tiny,
-	// short-lived programs, so never collecting is fine — and it sidesteps a
-	// wasmtime 30 deferred-reference-counting collector bug that panics ("invalid
-	// VMGcKind") once a real collection runs. Revisit when wasmtime is updated.
+	// short-lived programs, so never collecting is the fastest option. (This also
+	// used to dodge a wasmtime 30 deferred-reference-counting collector panic
+	// ("invalid VMGcKind"); that bug is fixed as of wasmtime 45, so the drc
+	// collector works too — null just stays cheaper for this workload.)
 	config.collector(wasmtime::Collector::Null);
 	Engine::new(&config).expect("engine")
 }
