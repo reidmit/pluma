@@ -10,9 +10,9 @@ analyze path:
 run path:
   @ cargo run --bin cli --quiet -- run {{path}}
 
-# format one or more .pa files in place (or `-` for stdin → stdout)
-format +paths:
-  @ cargo run --bin cli --quiet -- format {{paths}}
+# format everything: Rust sources (cargo fmt) + the baked-in stdlib/prelude .pa sources
+format: format-stdlib
+  @ cargo fmt
 
 # verify that .pa files in the tree are already in canonical format
 format-check:
