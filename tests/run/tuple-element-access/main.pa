@@ -7,7 +7,14 @@ def main = fun {
 	print pair.0
 	print (to-string pair.1)
 
-	# Nested tuples (parenthesized: `nested.0.0` would lex `0.0` as a float).
+	# Nested tuples — chained positional access parses directly (`nested.0.0`).
+	# The parenthesized form `(nested.0).0` is equivalent and the formatter
+	# canonicalizes it to the chained spelling.
 	let nested = ((1, 2), (3, 4))
+	print (to-string (nested.0.0 + nested.1.1))
 	print (to-string ((nested.0).0 + (nested.1).1))
+
+	# Chaining nests arbitrarily deep.
+	let deep = (((100, 200), 0), 0)
+	print (to-string deep.0.0.1)
 }

@@ -866,18 +866,22 @@ impl<'a> Parser<'a> {
 					// advance past the operator token
 					self.advance();
 
+					if let Operator::FieldAccess = operator {
+						// Special case: the accessor after `.` is a single field name
+						// or numeric index, not a full sub-expression. Parsing it
+						// directly (rather than through the expression parser) is what
+						// lets `t.0.0` chain — the expression parser's
+						// `parse_decimal_number` would otherwise greedily read the
+						// trailing `.0` as a `0.0` float literal.
+						lhs_expr = self.parse_field_or_element_access(lhs_expr)?;
+						continue;
+					}
+
 					let rhs_expr = self.parse_expression_with_binding_power(right_bp)?;
 
 					if let Operator::IndexAccess = operator {
 						// special case: the [ operator needs a closing ]
 						expect_token_and_advance!(self, Token::RightBracket);
-					}
-
-					if let Operator::FieldAccess = operator {
-						// another special case: element/field access nodes look a little
-						// different to make analysis easier
-						lhs_expr = self.make_element_or_field_access(lhs_expr, rhs_expr)?;
-						continue;
 					}
 
 					lhs_expr = ExprNode {
@@ -905,43 +909,58 @@ impl<'a> Parser<'a> {
 		Some(lhs_expr)
 	}
 
-	fn make_element_or_field_access(
-		&mut self,
-		lhs_expr: ExprNode,
-		rhs_expr: ExprNode,
-	) -> Option<ExprNode> {
-		match rhs_expr.kind {
-			ExprKind::Literal(LiteralNode {
-				kind: LiteralKind::IntDecimal(index),
-				..
-			}) => Some(ExprNode {
-				range: Range::between(lhs_expr.range.start, rhs_expr.range.end),
-				ty: Type::Unknown,
-				trait_dispatch: None,
-				dispatch_sink: None,
-				kind: ExprKind::ElementAccess {
-					receiver: lhs_expr.into(),
-					index,
-				},
-			}),
+	/// Parse the accessor that follows a field-access `.`: a numeric index
+	/// (`t.0` → element access) or a field name (`r.field` → field access).
+	/// The accessor is a single token, deliberately *not* parsed as a
+	/// sub-expression — that keeps `t.0.0` chaining instead of having the
+	/// trailing `.0` swallowed into a `0.0` float literal by
+	/// `parse_decimal_number`.
+	fn parse_field_or_element_access(&mut self, lhs_expr: ExprNode) -> Option<ExprNode> {
+		match self.current_token {
+			Some(Token::DecimalDigits(start, end)) => {
+				self.advance();
+				let index = self.parse_numeric_literal(start, end, 10);
 
-			ExprKind::Identifier(ident) => Some(ExprNode {
-				range: Range::between(lhs_expr.range.start, rhs_expr.range.end),
-				ty: Type::Unknown,
-				trait_dispatch: None,
-				dispatch_sink: None,
-				kind: ExprKind::FieldAccess {
-					receiver: lhs_expr.into(),
-					field: ident,
-				},
-			}),
+				Some(ExprNode {
+					range: Range::between(lhs_expr.range.start, self.offset_to_point(end)),
+					ty: Type::Unknown,
+					trait_dispatch: None,
+					dispatch_sink: None,
+					kind: ExprKind::ElementAccess {
+						receiver: lhs_expr.into(),
+						index,
+					},
+				})
+			}
 
-			_ => {
+			Some(Token::Identifier(..)) => {
+				let ident = self.parse_identifier()?;
+
+				Some(ExprNode {
+					range: Range::between(lhs_expr.range.start, ident.range.end),
+					ty: Type::Unknown,
+					trait_dispatch: None,
+					dispatch_sink: None,
+					kind: ExprKind::FieldAccess {
+						receiver: lhs_expr.into(),
+						field: ident,
+					},
+				})
+			}
+
+			other => {
+				let range = match other {
+					Some(tok) => {
+						let (s, e) = tok.get_span();
+						Range::between(self.offset_to_point(s), self.offset_to_point(e))
+					}
+					None => lhs_expr.range,
+				};
+
 				self.error::<ExprNode>(ParseError {
-					range: rhs_expr.range,
+					range,
 					kind: ParseErrorKind::InvalidExpressionAfterDot,
-				});
-				None
+				})
 			}
 		}
 	}
