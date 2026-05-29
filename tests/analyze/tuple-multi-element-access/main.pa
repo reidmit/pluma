@@ -1,0 +1,19 @@
+use core.list
+
+# Accessing more than one index of the same tuple whose type isn't yet known
+# used to fail to type-check: each `e.N` produced an independent `PartialTuple`
+# constraint, and two of them couldn't unify with each other. They now merge
+# through the tuple row machinery, the same way open-record field accesses do.
+
+# Both indices read from a polymorphic pair, swapped on the way out.
+public def swap :: fun (k, v) -> (v, k) = fun pair {
+	(pair.1, pair.0)
+}
+
+# The original motivating case: a polymorphic tuple element inside a HOF lambda,
+# read at two indices.
+public def swap-all :: fun (list (k, v)) -> list (v, k) = fun pairs {
+	list.map pairs fun pair {
+		(pair.1, pair.0)
+	}
+}

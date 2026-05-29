@@ -19,7 +19,15 @@ pub enum Type {
 	Bytes,
 	Nothing,
 	Tuple(Vec<Type>),
-	PartialTuple(usize, Box<Type>),
+	// `PartialTuple(fields, tail)` — the tuple analogue of an open `Record`.
+	// `fields` is a set of known `(index, type)` pairs; `tail = Some(rid)` is a
+	// row variable standing in for the indices we haven't pinned down yet,
+	// while `tail = None` is closed (exactly these indices). Element access
+	// (`e.0`) produces an open partial tuple with a single known index, and
+	// accessing several indices on the same value merges them through the row
+	// variable — exactly how `Record` accumulates fields. Unifying against a
+	// concrete `Tuple` closes the tail.
+	PartialTuple(Vec<(usize, Type)>, Option<usize>),
 	// `Record(fields, tail)`. `tail = None` is a closed record (exactly these
 	// fields). `tail = Some(rid)` is an open record with row variable `rid`
 	// standing in for whatever additional fields the subject may carry. Field
@@ -59,7 +67,15 @@ impl Type {
 			| Type::Duration
 			| Type::Unknown => false,
 
-			Type::PartialTuple(_, element_type) => element_type.contains_var(var),
+			Type::PartialTuple(field_types, _tail) => {
+				for (_, field_type) in field_types {
+					if field_type.contains_var(var) {
+						return true;
+					}
+				}
+
+				false
+			}
 
 			Type::Enum(_, args) => args.iter().any(|t| t.contains_var(var)),
 
@@ -124,8 +140,10 @@ impl Type {
 				vars.insert(*n);
 			}
 
-			Type::PartialTuple(_, element_type) => {
-				vars.extend(element_type.free_vars());
+			Type::PartialTuple(field_types, _tail) => {
+				for (_, field_type) in field_types {
+					vars.extend(field_type.free_vars());
+				}
 			}
 
 			Type::Enum(_, args) => {
@@ -189,8 +207,13 @@ impl Type {
 			| Type::Nothing
 			| Type::Var(_) => {}
 
-			Type::PartialTuple(_, element_type) => {
-				vars.extend(element_type.free_row_vars());
+			Type::PartialTuple(field_types, tail) => {
+				for (_, field_type) in field_types {
+					vars.extend(field_type.free_row_vars());
+				}
+				if let Some(rid) = tail {
+					vars.insert(*rid);
+				}
 			}
 
 			Type::Enum(_, args) => {
@@ -294,8 +317,29 @@ impl std::fmt::Display for Type {
 				ret
 			),
 
-			Type::PartialTuple(index, element) => {
-				write!(f, "({}: {}, ...)", index, element)
+			Type::PartialTuple(fields, tail) => {
+				// Sort by index for stable display — substitution can merge
+				// indices from different accesses in solve-order, the same way
+				// `Record` fields can arrive out of order. Index labels are kept
+				// (even when closed) so a partial tuple never reads as a plain
+				// `Tuple`.
+				let mut sorted: Vec<&(usize, Type)> = fields.iter().collect();
+				sorted.sort_by_key(|(i, _)| *i);
+				let field_str = sorted
+					.iter()
+					.map(|(index, element)| format!("{}: {}", index, element))
+					.collect::<Vec<String>>()
+					.join(", ");
+				match tail {
+					None => write!(f, "({})", field_str),
+					Some(_rid) => {
+						if fields.is_empty() {
+							write!(f, "(...)")
+						} else {
+							write!(f, "({}, ...)", field_str)
+						}
+					}
+				}
 			}
 
 			Type::Tuple(elements) => write!(

@@ -579,6 +579,7 @@ impl<'compiler> Analyzer<'compiler> {
 					.map(|i| (i, Type::Var(fresh_param_vars[i])))
 					.collect(),
 				row_solutions: HashMap::new(),
+				tuple_row_solutions: HashMap::new(),
 			};
 			let variants: Vec<(String, Vec<Type>)> = enum_export
 				.variants
@@ -862,6 +863,7 @@ impl<'compiler> Analyzer<'compiler> {
 										.map(|(i, local)| (*local, Type::Var(i)))
 										.collect(),
 									row_solutions: HashMap::new(),
+									tuple_row_solutions: HashMap::new(),
 								};
 								// `opaque` exports the type name but withholds its
 								// constructors: importers get an empty variant list,
@@ -1538,6 +1540,33 @@ impl<'compiler> Analyzer<'compiler> {
 					}
 				}
 				if !recorded.is_empty() {
+					// For a `built-in`-bodied def, the where-clause is the only
+					// source of its class constraints — there's no body whose
+					// trait-method usage would generate dispatch cells. Push a
+					// synthetic Class constraint per entry so the def's
+					// generalized scheme records them; that's what lets a
+					// *same-module* caller thread the dicts (cross-module callers
+					// read the exported `value_constraints`). Pluma-bodied defs
+					// already get these from their body, so we skip them to
+					// avoid duplicating dict params.
+					let is_builtin = matches!(
+						&definition.kind,
+						DefinitionKind::Expr(e) if matches!(e.kind, ExprKind::Builtin(_))
+					);
+					if is_builtin {
+						for (trait_name, var_id) in &recorded {
+							let ty = Type::Var(*var_id);
+							let cell = crate::ast::new_dispatch(trait_name.clone(), None, ty.clone());
+							constraints.push(Constraint::Class(ClassConstraint {
+								name: trait_name.clone(),
+								ty,
+								reason: ConstraintReason {
+									range: definition.name.range,
+								},
+								dispatch_cell: cell,
+							}));
+						}
+					}
 					self
 						.def_where_clauses
 						.insert(definition.name.name.clone(), recorded);
@@ -2294,18 +2323,34 @@ impl<'compiler> Analyzer<'compiler> {
 							if vars.is_empty() && row_vars.is_empty() && class_constraints.is_empty() {
 								expr.ty = ty;
 							} else {
-								// Polymorphic scheme (currently only prelude
-								// builtins like `to-string`). Freshen the
-								// quantified vars per use site, and link via a
-								// fresh expr-level var so post-unification
+								// Polymorphic scheme. Freshen the quantified
+								// vars per use site, and link via a fresh
+								// expr-level var so post-unification
 								// substitution reaches into the type
 								// (fill_in_placeholder only resolves top-level
 								// vars, not vars nested inside e.g. Fun).
-								let instantiated =
-									self.instantiate_scheme(&Scheme::Forall(vars, row_vars, class_constraints, ty));
+								let (instantiated, fresh_constraints) = self.instantiate_scheme_with_constraints(
+									&Scheme::Forall(vars, row_vars, class_constraints, ty),
+								);
 								let expr_ty = self.new_type_var();
 								expr.ty = expr_ty.clone();
 								constraints.push(eq_constraint(expr_ty, instantiated));
+								// If the def carries class constraints (e.g. a
+								// same-module `where (hash k)` def), set up a
+								// dispatch sink so the surrounding Call threads
+								// the dicts as `dict_args` — mirroring the
+								// cross-module NamespaceAccess path. Without this
+								// a local reference to a constrained def would
+								// call it with no dict and the wrong arity.
+								if !fresh_constraints.is_empty() {
+									let sink = crate::ast::new_dispatch_sink();
+									for class in fresh_constraints {
+										sink.borrow_mut().push(class.dispatch_cell.clone());
+										self.fresh_class_constraints.push(class.clone());
+										constraints.push(Constraint::Class(class));
+									}
+									expr.dispatch_sink = Some(sink);
+								}
 							}
 						}
 
@@ -2919,12 +2964,16 @@ impl<'compiler> Analyzer<'compiler> {
 
 				self.constrain_expr(receiver, constraints);
 
-				// we know that receiver is a "partial tuple": at given index, it
-				// must have a value of the type of this expr
+				// we know that receiver is a "partial tuple": at the given index,
+				// it must have a value of the type of this expr. The fresh row
+				// var leaves the rest of the tuple open, so several accesses on
+				// the same value merge their indices through unification (the
+				// tuple analogue of open-record field access).
+				let row = self.new_row_var();
 				constraints.push(
 					eq_constraint(
 						receiver.ty.clone(),
-						Type::PartialTuple(*index, expr.ty.clone().into()),
+						Type::PartialTuple(vec![(*index, expr.ty.clone())], Some(row)),
 					)
 					.at(expr.range),
 				)
@@ -3445,6 +3494,7 @@ impl<'compiler> Analyzer<'compiler> {
 						let subst = Substitution {
 							solutions: param_vars.into_iter().zip(enum_args.into_iter()).collect(),
 							row_solutions: HashMap::new(),
+							tuple_row_solutions: HashMap::new(),
 						};
 						for (arg, param_ty) in args.iter_mut().zip(params.into_iter()) {
 							self.constrain_pattern(arg, subst.apply_to_type(&param_ty), constraints);
@@ -3876,6 +3926,7 @@ impl<'compiler> Analyzer<'compiler> {
 
 		let mut bindings: HashMap<usize, Type> = HashMap::new();
 		let mut rows: HashMap<usize, RowSolution> = HashMap::new();
+		let mut tuple_rows: HashMap<usize, TupleRowSolution> = HashMap::new();
 
 		// Worklist of (lhs, rhs, range). Seeded in reverse so the first
 		// constraint is processed first (LIFO + reversed = original order).
@@ -3920,7 +3971,7 @@ impl<'compiler> Analyzer<'compiler> {
 				// binding; `(_, Var)` is the `a`-is-not-a-var case.
 				(Type::Var(n), b) => {
 					if Self::occurs_in(&bindings, n, &b) {
-						let ty = Self::deep_resolve(&bindings, &rows, &b);
+						let ty = Self::deep_resolve(&bindings, &rows, &tuple_rows, &b);
 						self.error(range, RecursiveUnification { ty });
 					} else {
 						bindings.insert(n, b);
@@ -3928,7 +3979,7 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 				(a, Type::Var(m)) => {
 					if Self::occurs_in(&bindings, m, &a) {
-						let ty = Self::deep_resolve(&bindings, &rows, &a);
+						let ty = Self::deep_resolve(&bindings, &rows, &tuple_rows, &a);
 						self.error(range, RecursiveUnification { ty });
 					} else {
 						bindings.insert(m, a);
@@ -3979,25 +4030,75 @@ impl<'compiler> Analyzer<'compiler> {
 					}
 				}
 
-				(Type::Tuple(elements), Type::PartialTuple(index, element))
-				| (Type::PartialTuple(index, element), Type::Tuple(elements)) => {
-					if index > elements.len() {
-						let ty = Self::deep_resolve(&bindings, &rows, &Type::Tuple(elements));
-						self.error(range, TupleIndexNotPresent { index, ty });
-						continue;
+				(a @ Type::Tuple(..), b @ Type::PartialTuple(..))
+				| (a @ Type::PartialTuple(..), b @ Type::Tuple(..)) => {
+					// Resolve the partial tuple fully so its tail's indices are
+					// inlined, then check each known index against the concrete
+					// tuple and unify element-wise.
+					let ra = Self::deep_resolve(&bindings, &rows, &tuple_rows, &a);
+					let rb = Self::deep_resolve(&bindings, &rows, &tuple_rows, &b);
+					let (elements, fields, tail) = match (ra, rb) {
+						(Type::Tuple(e), Type::PartialTuple(f, t))
+						| (Type::PartialTuple(f, t), Type::Tuple(e)) => (e, f, t),
+						_ => unreachable!(),
+					};
+					let known: std::collections::HashSet<usize> = fields.iter().map(|(i, _)| *i).collect();
+					let mut out_of_bounds = false;
+					for (i, t) in fields {
+						if i >= elements.len() {
+							out_of_bounds = true;
+							self.error(
+								range,
+								TupleIndexNotPresent {
+									index: i,
+									ty: Type::Tuple(elements.clone()),
+								},
+							);
+							continue;
+						}
+						work.push((elements[i].clone(), t, inner));
 					}
-					work.push((elements[index].clone(), *element, inner));
+					// Close the partial tuple's tail with the remaining indices —
+					// the concrete tuple pins down exactly which indices exist,
+					// mirroring how a closed record closes an open record's row var.
+					if let (Some(r), false) = (tail, out_of_bounds) {
+						let remaining: Vec<(usize, Type)> = (0..elements.len())
+							.filter(|i| !known.contains(i))
+							.map(|i| (i, elements[i].clone()))
+							.collect();
+						tuple_rows.insert(
+							r,
+							TupleRowSolution {
+								fields: remaining,
+								tail: None,
+							},
+						);
+					}
+				}
+
+				(a @ Type::PartialTuple(..), b @ Type::PartialTuple(..)) => {
+					// Both partial — resolve fully (inline tail indices) and merge
+					// through the tuple row machinery, exactly like Record/Record.
+					let (f1, t1) = match Self::deep_resolve(&bindings, &rows, &tuple_rows, &a) {
+						Type::PartialTuple(f, t) => (f, t),
+						_ => unreachable!(),
+					};
+					let (f2, t2) = match Self::deep_resolve(&bindings, &rows, &tuple_rows, &b) {
+						Type::PartialTuple(f, t) => (f, t),
+						_ => unreachable!(),
+					};
+					self.unify_tuples_worklist(&f1, t1, &f2, t2, range, &mut work, &mut tuple_rows);
 				}
 
 				(a @ Type::Record(..), b @ Type::Record(..)) => {
 					// Fully resolve both records (inline known row fields,
 					// resolve field type heads) before matching, mirroring the
 					// substitution the old solver had already applied.
-					let (f1, t1) = match Self::deep_resolve(&bindings, &rows, &a) {
+					let (f1, t1) = match Self::deep_resolve(&bindings, &rows, &tuple_rows, &a) {
 						Type::Record(f, t) => (f, t),
 						_ => unreachable!(),
 					};
-					let (f2, t2) = match Self::deep_resolve(&bindings, &rows, &b) {
+					let (f2, t2) = match Self::deep_resolve(&bindings, &rows, &tuple_rows, &b) {
 						Type::Record(f, t) => (f, t),
 						_ => unreachable!(),
 					};
@@ -4015,8 +4116,8 @@ impl<'compiler> Analyzer<'compiler> {
 
 				// Anything else is a genuine mismatch.
 				(a, b) => {
-					let expected = Self::deep_resolve(&bindings, &rows, &b);
-					let found = Self::deep_resolve(&bindings, &rows, &a);
+					let expected = Self::deep_resolve(&bindings, &rows, &tuple_rows, &b);
+					let found = Self::deep_resolve(&bindings, &rows, &tuple_rows, &a);
 					self.error(range, TypeMismatch { expected, found });
 				}
 			}
@@ -4027,7 +4128,7 @@ impl<'compiler> Analyzer<'compiler> {
 		// transitive row-tail chasing).
 		let mut solutions: HashMap<usize, Type> = HashMap::with_capacity(bindings.len());
 		for (k, v) in &bindings {
-			solutions.insert(*k, Self::deep_resolve(&bindings, &rows, v));
+			solutions.insert(*k, Self::deep_resolve(&bindings, &rows, &tuple_rows, v));
 		}
 		let mut row_solutions: HashMap<usize, RowSolution> = HashMap::with_capacity(rows.len());
 		for (k, sol) in &rows {
@@ -4037,7 +4138,27 @@ impl<'compiler> Analyzer<'compiler> {
 					fields: sol
 						.fields
 						.iter()
-						.map(|(n, t)| (n.clone(), Self::deep_resolve(&bindings, &rows, t)))
+						.map(|(n, t)| {
+							(
+								n.clone(),
+								Self::deep_resolve(&bindings, &rows, &tuple_rows, t),
+							)
+						})
+						.collect(),
+					tail: sol.tail,
+				},
+			);
+		}
+		let mut tuple_row_solutions: HashMap<usize, TupleRowSolution> =
+			HashMap::with_capacity(tuple_rows.len());
+		for (k, sol) in &tuple_rows {
+			tuple_row_solutions.insert(
+				*k,
+				TupleRowSolution {
+					fields: sol
+						.fields
+						.iter()
+						.map(|(i, t)| (*i, Self::deep_resolve(&bindings, &rows, &tuple_rows, t)))
 						.collect(),
 					tail: sol.tail,
 				},
@@ -4046,6 +4167,7 @@ impl<'compiler> Analyzer<'compiler> {
 		Substitution {
 			solutions,
 			row_solutions,
+			tuple_row_solutions,
 		}
 	}
 
@@ -4087,7 +4209,9 @@ impl<'compiler> Analyzer<'compiler> {
 			Type::List(e) | Type::Ref(e) => Self::occurs_in(bindings, var, e),
 			Type::Dict(k, v) => Self::occurs_in(bindings, var, k) || Self::occurs_in(bindings, var, v),
 			Type::Tuple(es) | Type::Enum(_, es) => es.iter().any(|e| Self::occurs_in(bindings, var, e)),
-			Type::PartialTuple(_, e) => Self::occurs_in(bindings, var, e),
+			Type::PartialTuple(fields, _) => fields
+				.iter()
+				.any(|(_, t)| Self::occurs_in(bindings, var, t)),
 			Type::Record(fields, _) => fields
 				.iter()
 				.any(|(_, t)| Self::occurs_in(bindings, var, t)),
@@ -4101,11 +4225,12 @@ impl<'compiler> Analyzer<'compiler> {
 	fn deep_resolve(
 		bindings: &HashMap<usize, Type>,
 		rows: &HashMap<usize, RowSolution>,
+		tuple_rows: &HashMap<usize, TupleRowSolution>,
 		ty: &Type,
 	) -> Type {
 		match ty {
 			Type::Var(n) => match bindings.get(n) {
-				Some(t) => Self::deep_resolve(bindings, rows, t),
+				Some(t) => Self::deep_resolve(bindings, rows, tuple_rows, t),
 				None => Type::Var(*n),
 			},
 			Type::Unknown
@@ -4122,42 +4247,58 @@ impl<'compiler> Analyzer<'compiler> {
 				name.clone(),
 				args
 					.iter()
-					.map(|t| Self::deep_resolve(bindings, rows, t))
+					.map(|t| Self::deep_resolve(bindings, rows, tuple_rows, t))
 					.collect(),
 			),
 			Type::Fun(params, ret) => Type::Fun(
 				params
 					.iter()
-					.map(|t| Self::deep_resolve(bindings, rows, t))
+					.map(|t| Self::deep_resolve(bindings, rows, tuple_rows, t))
 					.collect(),
-				Self::deep_resolve(bindings, rows, ret).into(),
+				Self::deep_resolve(bindings, rows, tuple_rows, ret).into(),
 			),
-			Type::PartialTuple(index, element) => {
-				Type::PartialTuple(*index, Self::deep_resolve(bindings, rows, element).into())
+			Type::PartialTuple(fields, tail) => {
+				let mut new_fields: Vec<(usize, Type)> = fields
+					.iter()
+					.map(|(i, t)| (*i, Self::deep_resolve(bindings, rows, tuple_rows, t)))
+					.collect();
+				let mut current_tail = *tail;
+				while let Some(rid) = current_tail {
+					match tuple_rows.get(&rid) {
+						Some(sol) => {
+							for (i, t) in &sol.fields {
+								new_fields.push((*i, Self::deep_resolve(bindings, rows, tuple_rows, t)));
+							}
+							current_tail = sol.tail;
+						}
+						None => break,
+					}
+				}
+				Type::PartialTuple(new_fields, current_tail)
 			}
 			Type::Tuple(elements) => Type::Tuple(
 				elements
 					.iter()
-					.map(|t| Self::deep_resolve(bindings, rows, t))
+					.map(|t| Self::deep_resolve(bindings, rows, tuple_rows, t))
 					.collect(),
 			),
-			Type::List(e) => Type::List(Self::deep_resolve(bindings, rows, e).into()),
+			Type::List(e) => Type::List(Self::deep_resolve(bindings, rows, tuple_rows, e).into()),
 			Type::Dict(k, v) => Type::Dict(
-				Self::deep_resolve(bindings, rows, k).into(),
-				Self::deep_resolve(bindings, rows, v).into(),
+				Self::deep_resolve(bindings, rows, tuple_rows, k).into(),
+				Self::deep_resolve(bindings, rows, tuple_rows, v).into(),
 			),
-			Type::Ref(inner) => Type::Ref(Self::deep_resolve(bindings, rows, inner).into()),
+			Type::Ref(inner) => Type::Ref(Self::deep_resolve(bindings, rows, tuple_rows, inner).into()),
 			Type::Record(fields, tail) => {
 				let mut new_fields: Vec<(String, Type)> = fields
 					.iter()
-					.map(|(n, t)| (n.clone(), Self::deep_resolve(bindings, rows, t)))
+					.map(|(n, t)| (n.clone(), Self::deep_resolve(bindings, rows, tuple_rows, t)))
 					.collect();
 				let mut current_tail = *tail;
 				while let Some(rid) = current_tail {
 					match rows.get(&rid) {
 						Some(sol) => {
 							for (n, t) in &sol.fields {
-								new_fields.push((n.clone(), Self::deep_resolve(bindings, rows, t)));
+								new_fields.push((n.clone(), Self::deep_resolve(bindings, rows, tuple_rows, t)));
 							}
 							current_tail = sol.tail;
 						}
@@ -4335,6 +4476,141 @@ impl<'compiler> Analyzer<'compiler> {
 				rows.insert(
 					r2,
 					RowSolution {
+						fields: only_1,
+						tail: Some(fresh),
+					},
+				);
+			}
+		}
+	}
+
+	// The tuple analogue of `unify_records_worklist`: same four cases, keyed
+	// by tuple index instead of field name. Both partial tuples are already
+	// fully resolved by the caller, so their tails are `None` or an unbound
+	// row var. A unique index on a closed side is an outright mismatch (a
+	// closed tuple can't grow), reported by reconstructing the two shapes.
+	fn unify_tuples_worklist(
+		&mut self,
+		fields_1: &[(usize, Type)],
+		tail_1: Option<usize>,
+		fields_2: &[(usize, Type)],
+		tail_2: Option<usize>,
+		range: Range,
+		work: &mut Vec<(Type, Type, Range)>,
+		tuple_rows: &mut HashMap<usize, TupleRowSolution>,
+	) {
+		let map_1: HashMap<usize, usize> = fields_1
+			.iter()
+			.enumerate()
+			.map(|(i, (k, _))| (*k, i))
+			.collect();
+		let map_2: HashMap<usize, usize> = fields_2
+			.iter()
+			.enumerate()
+			.map(|(i, (k, _))| (*k, i))
+			.collect();
+
+		// Indices present on both sides → unify pairwise.
+		let mut shared: Vec<(Type, Type)> = Vec::new();
+		for (index, i1) in &map_1 {
+			if let Some(i2) = map_2.get(index) {
+				shared.push((fields_1[*i1].1.clone(), fields_2[*i2].1.clone()));
+			}
+		}
+
+		// Indices unique to each side (order-preserving for stable snapshots).
+		let only_1: Vec<(usize, Type)> = fields_1
+			.iter()
+			.filter(|(i, _)| !map_2.contains_key(i))
+			.cloned()
+			.collect();
+		let only_2: Vec<(usize, Type)> = fields_2
+			.iter()
+			.filter(|(i, _)| !map_1.contains_key(i))
+			.cloned()
+			.collect();
+
+		let push_shared = |work: &mut Vec<(Type, Type, Range)>| {
+			for (a, b) in &shared {
+				work.push((a.clone(), b.clone(), range));
+			}
+		};
+
+		// A closed side can't carry indices the other side lacks.
+		let mismatch = |me: &mut Self| {
+			me.error(
+				range,
+				TypeMismatch {
+					expected: Type::PartialTuple(fields_2.to_vec(), tail_2),
+					found: Type::PartialTuple(fields_1.to_vec(), tail_1),
+				},
+			);
+		};
+
+		match (tail_1, tail_2) {
+			(None, None) => {
+				if !only_1.is_empty() || !only_2.is_empty() {
+					mismatch(self);
+				} else {
+					push_shared(work);
+				}
+			}
+
+			(None, Some(r2)) => {
+				// Left is closed; right's row var absorbs left's extra indices.
+				if !only_2.is_empty() {
+					mismatch(self);
+				} else {
+					push_shared(work);
+					tuple_rows.insert(
+						r2,
+						TupleRowSolution {
+							fields: only_1,
+							tail: None,
+						},
+					);
+				}
+			}
+
+			(Some(r1), None) => {
+				if !only_1.is_empty() {
+					mismatch(self);
+				} else {
+					push_shared(work);
+					tuple_rows.insert(
+						r1,
+						TupleRowSolution {
+							fields: only_2,
+							tail: None,
+						},
+					);
+				}
+			}
+
+			(Some(r1), Some(r2)) => {
+				if r1 == r2 {
+					// Same row var on both sides: consistent only if neither
+					// side claims unique indices.
+					if !only_1.is_empty() || !only_2.is_empty() {
+						mismatch(self);
+						return;
+					}
+					push_shared(work);
+					return;
+				}
+				// Fresh row var captures the tail shared by both sides.
+				let fresh = self.new_row_var();
+				push_shared(work);
+				tuple_rows.insert(
+					r1,
+					TupleRowSolution {
+						fields: only_2,
+						tail: Some(fresh),
+					},
+				);
+				tuple_rows.insert(
+					r2,
+					TupleRowSolution {
 						fields: only_1,
 						tail: Some(fresh),
 					},
@@ -5598,14 +5874,6 @@ impl<'compiler> Analyzer<'compiler> {
 		)
 	}
 
-	fn instantiate_scheme(&mut self, scheme: &Scheme) -> Type {
-		let (ty, _fresh_constraints) = self.instantiate_scheme_with_constraints(scheme);
-		// Callers in non-Inst contexts (e.g. cross-module value lookup) call
-		// this; for now we drop the fresh constraints there. Phase 3's
-		// parametric instances may need to start tracking them too.
-		ty
-	}
-
 	fn instantiate_scheme_with_constraints(
 		&mut self,
 		scheme: &Scheme,
@@ -5621,9 +5889,20 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 				for rv in row_vars {
 					let fresh = self.new_row_var();
+					// A quantified row var is either a record tail or a tuple
+					// tail — `free_row_vars` collects both into one set and we
+					// can't tell them apart here. Redirect it in both maps; only
+					// the one matching the type's actual shape is ever consulted.
 					subst.row_solutions.insert(
 						*rv,
 						RowSolution {
+							fields: vec![],
+							tail: Some(fresh),
+						},
+					);
+					subst.tuple_row_solutions.insert(
+						*rv,
+						TupleRowSolution {
 							fields: vec![],
 							tail: Some(fresh),
 						},
@@ -5790,6 +6069,7 @@ impl<'compiler> Analyzer<'compiler> {
 					.map(|i| (i, Type::Var(fresh_param_vars[i])))
 					.collect(),
 				row_solutions: HashMap::new(),
+				tuple_row_solutions: HashMap::new(),
 			};
 			let variants: Vec<(String, Vec<Type>)> = enum_export
 				.variants
@@ -6456,9 +6736,13 @@ impl<'compiler> Analyzer<'compiler> {
 			| Type::Duration
 			| Type::Unknown
 			| Type::Nothing => ty.clone(),
-			Type::PartialTuple(index, inner) => {
-				Type::PartialTuple(*index, Box::new(self.instantiate_with(inner, mapping)))
-			}
+			Type::PartialTuple(fields, tail) => Type::PartialTuple(
+				fields
+					.iter()
+					.map(|(i, t)| (*i, self.instantiate_with(t, mapping)))
+					.collect(),
+				*tail,
+			),
 			Type::List(element_type) => {
 				Type::List(Box::new(self.instantiate_with(element_type, mapping)))
 			}

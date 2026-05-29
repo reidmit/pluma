@@ -12,10 +12,24 @@ pub struct RowSolution {
 	pub tail: Option<usize>,
 }
 
+// The tuple analogue of `RowSolution`: a row variable for an open `PartialTuple`
+// stands for these extra `(index, type)` pairs, with this tail. Kept in a
+// separate map from `RowSolution` since the keys are tuple indices, not field
+// names; row-variable ids are globally unique, so a given id only ever appears
+// in one of the two maps.
+#[derive(Clone)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+pub struct TupleRowSolution {
+	pub fields: Vec<(usize, Type)>,
+	pub tail: Option<usize>,
+}
+
 pub struct Substitution {
 	pub solutions: HashMap<usize, Type>,
-	// Solutions for row variables — distinct namespace from `solutions`.
+	// Solutions for record row variables — distinct namespace from `solutions`.
 	pub row_solutions: HashMap<usize, RowSolution>,
+	// Solutions for tuple row variables — see `TupleRowSolution`.
+	pub tuple_row_solutions: HashMap<usize, TupleRowSolution>,
 }
 
 impl Substitution {
@@ -23,6 +37,7 @@ impl Substitution {
 		Self {
 			solutions: HashMap::new(),
 			row_solutions: HashMap::new(),
+			tuple_row_solutions: HashMap::new(),
 		}
 	}
 
@@ -32,6 +47,7 @@ impl Substitution {
 		Self {
 			solutions,
 			row_solutions: HashMap::new(),
+			tuple_row_solutions: HashMap::new(),
 		}
 	}
 
@@ -41,6 +57,7 @@ impl Substitution {
 		Self {
 			solutions: HashMap::new(),
 			row_solutions,
+			tuple_row_solutions: HashMap::new(),
 		}
 	}
 
@@ -75,8 +92,27 @@ impl Substitution {
 				self.apply_to_type(return_type).into(),
 			),
 
-			Type::PartialTuple(index, element_type) => {
-				Type::PartialTuple(*index, self.apply_to_type(element_type).into())
+			Type::PartialTuple(field_types, tail) => {
+				// Mirror the `Record` case: substitute through each known index's
+				// type, then chase the tail through `tuple_row_solutions`,
+				// merging in any indices each step pins down.
+				let mut new_fields: Vec<(usize, Type)> = field_types
+					.iter()
+					.map(|(index, t)| (*index, self.apply_to_type(t)))
+					.collect();
+				let mut current_tail = *tail;
+				while let Some(rid) = current_tail {
+					match self.tuple_row_solutions.get(&rid) {
+						Some(sol) => {
+							for (index, t) in &sol.fields {
+								new_fields.push((*index, self.apply_to_type(t)));
+							}
+							current_tail = sol.tail;
+						}
+						None => break,
+					}
+				}
+				Type::PartialTuple(new_fields, current_tail)
 			}
 
 			Type::Tuple(element_types) => Type::Tuple(
@@ -201,9 +237,49 @@ impl Substitution {
 			merged_rows.entry(*k).or_insert_with(|| v.clone());
 		}
 
+		// Tuple row solutions compose identically to record row solutions above,
+		// just over `(usize, Type)` field lists.
+		let mut merged_tuple_rows: HashMap<usize, TupleRowSolution> = HashMap::new();
+		for (k, v) in &self.tuple_row_solutions {
+			let new_fields: Vec<(usize, Type)> = v
+				.fields
+				.iter()
+				.map(|(i, t)| (*i, other.apply_to_type(t)))
+				.collect();
+			let new_tail = match v.tail {
+				Some(t) if other.tuple_row_solutions.contains_key(&t) => {
+					let other_sol = other.tuple_row_solutions.get(&t).unwrap();
+					let mut combined = new_fields.clone();
+					for (i, t) in &other_sol.fields {
+						combined.push((*i, other.apply_to_type(t)));
+					}
+					merged_tuple_rows.insert(
+						*k,
+						TupleRowSolution {
+							fields: combined,
+							tail: other_sol.tail,
+						},
+					);
+					continue;
+				}
+				other => other,
+			};
+			merged_tuple_rows.insert(
+				*k,
+				TupleRowSolution {
+					fields: new_fields,
+					tail: new_tail,
+				},
+			);
+		}
+		for (k, v) in &other.tuple_row_solutions {
+			merged_tuple_rows.entry(*k).or_insert_with(|| v.clone());
+		}
+
 		Substitution {
 			solutions: merged_solutions,
 			row_solutions: merged_rows,
+			tuple_row_solutions: merged_tuple_rows,
 		}
 	}
 }
@@ -213,8 +289,8 @@ impl std::fmt::Debug for Substitution {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(
 			f,
-			"types={:?} rows={:?}",
-			self.solutions, self.row_solutions
+			"types={:?} rows={:?} tuple_rows={:?}",
+			self.solutions, self.row_solutions, self.tuple_row_solutions
 		)
 	}
 }

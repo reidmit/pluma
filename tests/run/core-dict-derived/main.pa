@@ -1,0 +1,23 @@
+# The dict operations now written in pure Pluma over the `entries` /
+# `lookup` / `insert` primitives. `contains-key`, `from-entries`, and
+# `merge` each call another `where (hash k)` function and rely on the
+# hash dictionary being forwarded into that nested call.
+
+use core.dict
+
+def main = fun {
+	let m = dict.from-entries [("x", 1), ("y", 2), ("x", 9)]
+	# later pairs win for a repeated key, first-seen position is kept
+	print (dict.keys m)
+	print (dict.values m)
+
+	print (dict.contains-key m "x")
+	print (dict.contains-key m "z")
+
+	print (dict.fold m 0 fun acc _k v { acc + v })
+
+	let other = dict.from-entries [("y", 20), ("z", 30)]
+	let merged = dict.merge m other
+	print (dict.keys merged)
+	print (dict.values merged)
+}

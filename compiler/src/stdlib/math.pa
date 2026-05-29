@@ -40,28 +40,58 @@ public def sqrt :: fun float -> float = built-in "math-sqrt"
 #
 #     math.abs -5   # => 5
 #     math.abs 5    # => 5
-public def abs :: fun int -> int = built-in "math-abs"
+public def abs :: fun int -> int = fun n {
+	if n < 0 is true {
+		0 - n
+	} else {
+		n
+	}
+}
 
 # Rounds down to the nearest whole number (toward negative infinity),
 # returning an int.
 #
 #     math.floor 3.7    # => 3
 #     math.floor -3.2   # => -4
-public def floor :: fun float -> int = built-in "math-floor"
+public def floor :: fun float -> int = fun f {
+	# `to-int` truncates toward zero, so for a negative with a fractional
+	# part it lands one above the floor -- step back down.
+	let t = to-int f
+	if to-float t > f is true {
+		t - 1
+	} else {
+		t
+	}
+}
 
 # Rounds up to the nearest whole number (toward positive infinity),
 # returning an int.
 #
 #     math.ceil 3.2    # => 4
 #     math.ceil -3.7   # => -3
-public def ceil :: fun float -> int = built-in "math-ceil"
+public def ceil :: fun float -> int = fun f {
+	let t = to-int f
+	if to-float t < f is true {
+		t + 1
+	} else {
+		t
+	}
+}
 
 # Rounds to the nearest whole number, with exact halves going away from
 # zero (2.5 becomes 3, -2.5 becomes -3).
 #
 #     math.round 2.4   # => 2
 #     math.round 2.5   # => 3
-public def round :: fun float -> int = built-in "math-round"
+public def round :: fun float -> int = fun f {
+	# Nudge half a unit toward the answer, then snap with floor/ceil so the
+	# halves break away from zero.
+	if f < 0.0 is true {
+		ceil (f - 0.5)
+	} else {
+		floor (f + 0.5)
+	}
+}
 
 # Natural logarithm (base e) -- the inverse of `exp`.
 #

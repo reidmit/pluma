@@ -7,6 +7,9 @@
 # sequence every run, handy for tests and simulations -- isn't available
 # yet, but is planned.)
 
+use core.list
+use core.math
+
 # A random whole number from 0 up to (but not including) 2^63. Draws
 # fresh randomness each call.
 #
@@ -35,11 +38,22 @@ public def int-range :: fun int int -> result int string = built-in "random-int-
 # A random `true` or `false`, each with a 50% chance -- a coin flip.
 #
 #     random.bool ()   # true about half the time
-public def bool :: fun nothing -> bool = built-in "random-bool"
+public def bool :: fun nothing -> bool = fun {
+	float () < 0.5
+}
 
 # Picks one element of the list at random, wrapped in `some`. `none` if
 # the list is empty (there's nothing to pick).
 #
 #     random.choice ["heads", "tails"]   # => some "heads" or some "tails"
 #     random.choice []                   # => none
-public def choice :: fun (list a) -> option a = built-in "random-choice"
+public def choice :: fun (list a) -> option a = fun xs {
+	if list.is-empty xs is true {
+		none
+	} else {
+		# `float ()` is in [0, 1), so scaling by the length and truncating
+		# lands on a valid index 0..length-1.
+		let i = math.to-int (float () * math.to-float (list.length xs))
+		some (list.get xs i)
+	}
+}

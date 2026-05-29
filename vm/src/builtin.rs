@@ -288,16 +288,6 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				_ => unreachable!("`sqrt`: expected float"),
 			}
 		}
-		"math-abs" => {
-			debug_assert_eq!(args.len(), 1, "`abs` arity");
-			match &args[0] {
-				Value::Int(n) => Ok(Value::Int(n.wrapping_abs())),
-				_ => unreachable!("`abs`: expected int"),
-			}
-		}
-		"math-floor" => Ok(Value::Int(expect_float(&args, "floor").floor() as i64)),
-		"math-ceil" => Ok(Value::Int(expect_float(&args, "ceil").ceil() as i64)),
-		"math-round" => Ok(Value::Int(expect_float(&args, "round").round() as i64)),
 		"math-log" => Ok(Value::Float(expect_float(&args, "log").ln())),
 		"math-log10" => Ok(Value::Float(expect_float(&args, "log10").log10())),
 		"math-log2" => Ok(Value::Float(expect_float(&args, "log2").log2())),
@@ -708,32 +698,10 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			let m = expect_dict_owned(m_arg, "remove");
 			Ok(Value::Dict(Rc::new(m.removed(h, &k))))
 		}
-		"dict-contains-key" => {
-			debug_assert_eq!(args.len(), 3, "`dict.contains-key` arity");
-			let mut it = args.into_iter();
-			let hash_dict = it.next().unwrap();
-			let m_arg = it.next().unwrap();
-			let k = it.next().unwrap();
-			let h = call_hash(vm, &hash_dict, &k)?;
-			let m = expect_dict_ref(&m_arg, "contains-key");
-			Ok(Value::Bool(m.find_index(h, &k).is_some()))
-		}
 		"dict-size" => {
 			debug_assert_eq!(args.len(), 1, "`dict.size` arity");
 			let m = expect_dict_ref(&args[0], "size");
 			Ok(Value::Int(m.entries.len() as i64))
-		}
-		"dict-keys" => {
-			debug_assert_eq!(args.len(), 1, "`dict.keys` arity");
-			let m = expect_dict_ref(&args[0], "keys");
-			let keys: Vec<Value> = m.entries.iter().map(|(k, _)| k.clone()).collect();
-			Ok(Value::list(keys))
-		}
-		"dict-values" => {
-			debug_assert_eq!(args.len(), 1, "`dict.values` arity");
-			let m = expect_dict_ref(&args[0], "values");
-			let vs: Vec<Value> = m.entries.iter().map(|(_, v)| v.clone()).collect();
-			Ok(Value::list(vs))
 		}
 		"dict-entries" => {
 			debug_assert_eq!(args.len(), 1, "`dict.entries` arity");
@@ -744,43 +712,6 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				.map(|(k, v)| Value::Tuple(Rc::new(vec![k.clone(), v.clone()])))
 				.collect();
 			Ok(Value::list(es))
-		}
-		"dict-from-entries" => {
-			// args = [hash_dict, list]
-			debug_assert_eq!(args.len(), 2, "`dict.from-entries` arity");
-			let mut it = args.into_iter();
-			let hash_dict = it.next().unwrap();
-			let list_arg = it.next().unwrap();
-			let xs = match list_arg {
-				Value::List(xs) => xs,
-				_ => unreachable!("`from-entries`: expected list"),
-			};
-			let mut data = DictData::new();
-			for entry in xs.borrow().iter() {
-				let (k, v) = match entry {
-					Value::Tuple(t) if t.len() == 2 => (t[0].clone(), t[1].clone()),
-					_ => unreachable!("`from-entries`: expected list of 2-tuples"),
-				};
-				let h = call_hash(vm, &hash_dict, &k)?;
-				data = data.inserted(h, k, v);
-			}
-			Ok(Value::Dict(Rc::new(data)))
-		}
-		"dict-merge" => {
-			// args = [hash_dict, left, right]; right-wins on conflicts.
-			debug_assert_eq!(args.len(), 3, "`dict.merge` arity");
-			let mut it = args.into_iter();
-			let hash_dict = it.next().unwrap();
-			let left_arg = it.next().unwrap();
-			let right_arg = it.next().unwrap();
-			let left = expect_dict_ref(&left_arg, "merge").clone();
-			let right = expect_dict_ref(&right_arg, "merge");
-			let mut data = left;
-			for (k, v) in right.entries.iter() {
-				let h = call_hash(vm, &hash_dict, k)?;
-				data = data.inserted(h, k.clone(), v.clone());
-			}
-			Ok(Value::Dict(Rc::new(data)))
 		}
 		"dict-map" => {
 			// args = [m, fn]. fn : v -> w (key set is preserved, no rehash).
@@ -967,20 +898,6 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			)))
 		}
 
-		"dict-fold" => {
-			// args = [m, init, fn]. fn : b -> k -> v -> b.
-			debug_assert_eq!(args.len(), 3, "`dict.fold` arity");
-			let mut it = args.into_iter();
-			let m_arg = it.next().unwrap();
-			let mut acc = it.next().unwrap();
-			let fn_arg = it.next().unwrap();
-			let m = expect_dict_ref(&m_arg, "fold").clone();
-			for (k, v) in m.entries.iter() {
-				acc = invoke(vm, fn_arg.clone(), vec![acc, k.clone(), v.clone()])?;
-			}
-			Ok(acc)
-		}
-
 		// Assertions return a `result nothing string`: `ok ()` to pass,
 		// `err message` to fail. They never abort — a case body's final
 		// result is what `pluma test` reads. (The `is-*` predicates live
@@ -1000,10 +917,6 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				Ok(u) => Ok(result_ok(Value::String(Rc::new(u.to_string())))),
 				Err(e) => Ok(result_err(Value::String(Rc::new(e.to_string())))),
 			}
-		}
-		"uuid-is-valid" => {
-			let s = expect_string(&args, "uuid.is-valid");
-			Ok(Value::Bool(uuid::Uuid::try_parse(s).is_ok()))
 		}
 		"random-int" => {
 			use rand::RngExt as _;
@@ -1043,16 +956,6 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				}
 				_ => unreachable!("`random.int-range`: expected (int, int)"),
 			}
-		}
-		"random-bool" => {
-			use rand::RngExt as _;
-			debug_assert_eq!(args.len(), 1, "`random.bool` arity");
-			Ok(Value::Bool(rand::rng().random::<bool>()))
-		}
-		"random-choice" => {
-			use rand::seq::IndexedRandom as _;
-			let xs = expect_list(&args, "random.choice");
-			Ok(option_value(xs.choose(&mut rand::rng()).cloned()))
 		}
 		// ---- core.time ----------------------------------------------------
 		// Instants are i64 nanoseconds since the Unix epoch (UTC); durations

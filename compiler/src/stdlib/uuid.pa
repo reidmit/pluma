@@ -32,4 +32,10 @@ public def parse :: fun string -> result string string = built-in "uuid-parse"
 #
 #     uuid.is-valid "550e8400-e29b-41d4-a716-446655440000"   # => true
 #     uuid.is-valid "nope"                                   # => false
-public def is-valid :: fun string -> bool = built-in "uuid-is-valid"
+public def is-valid :: fun string -> bool = fun s {
+	if parse s is ok _ {
+		true
+	} else {
+		false
+	}
+}

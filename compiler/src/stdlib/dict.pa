@@ -21,6 +21,8 @@
 # `entries`, `map`, `filter`, and `fold` all walk the pairs in that
 # insertion order.
 
+use core.list
+
 # An empty dict with no entries. The starting point you build up from
 # with `insert`.
 #
@@ -59,7 +61,13 @@ public def remove :: fun (dict k v) k -> dict k v where (hash k) = built-in "dic
 #     let d = dict.insert (dict.empty ()) "x" 1
 #     dict.contains-key d "x"   # => true
 #     dict.contains-key d "y"   # => false
-public def contains-key :: fun (dict k v) k -> bool where (hash k) = built-in "dict-contains-key"
+public def contains-key :: fun (dict k v) k -> bool where (hash k) = fun d key {
+	if lookup d key is some _ {
+		true
+	} else {
+		false
+	}
+}
 
 # Returns how many key/value pairs are in the dict.
 #
@@ -71,14 +79,24 @@ public def size :: fun (dict k v) -> int = built-in "dict-size"
 #
 #     let d = dict.insert (dict.insert (dict.empty ()) "x" 1) "y" 2
 #     dict.keys d   # => ["x", "y"]
-public def keys :: fun (dict k v) -> list k = built-in "dict-keys"
+public def keys :: fun (dict k v) -> list k = fun d {
+	list.map (entries d) fun e {
+		let (k, _) = e
+		k
+	}
+}
 
 # Returns all the values as a list, in the insertion order of their
 # keys.
 #
 #     let d = dict.insert (dict.insert (dict.empty ()) "x" 1) "y" 2
 #     dict.values d   # => [1, 2]
-public def values :: fun (dict k v) -> list v = built-in "dict-values"
+public def values :: fun (dict k v) -> list v = fun d {
+	list.map (entries d) fun e {
+		let (_, v) = e
+		v
+	}
+}
 
 # Returns every pair as a list of `(key, value)` tuples, in insertion
 # order. The inverse of `from-entries`.
@@ -91,7 +109,12 @@ public def entries :: fun (dict k v) -> list (k, v) = built-in "dict-entries"
 # when a key appears more than once. The inverse of `entries`.
 #
 #     dict.from-entries [("x", 1), ("y", 2)]   # => {x: 1, y: 2}
-public def from-entries :: fun (list (k, v)) -> dict k v where (hash k) = built-in "dict-from-entries"
+public def from-entries :: fun (list (k, v)) -> dict k v where (hash k) = fun es {
+	list.fold es (empty ()) fun d e {
+		let (k, v) = e
+		insert d k v
+	}
+}
 
 # Combines two dicts into one. When the same key is in both, the value
 # from the second dict (`right`) wins.
@@ -99,7 +122,12 @@ public def from-entries :: fun (list (k, v)) -> dict k v where (hash k) = built-
 #     let a = dict.insert (dict.empty ()) "x" 1
 #     let b = dict.insert (dict.empty ()) "y" 2
 #     dict.merge a b   # => {x: 1, y: 2}
-public def merge :: fun (dict k v) (dict k v) -> dict k v where (hash k) = built-in "dict-merge"
+public def merge :: fun (dict k v) (dict k v) -> dict k v where (hash k) = fun left right {
+	list.fold (entries right) left fun d e {
+		let (k, v) = e
+		insert d k v
+	}
+}
 
 # Runs `f` on every value and collects the results into a new dict,
 # keeping the same keys. The result values can be a different type than
@@ -128,4 +156,9 @@ public def filter :: fun (dict k v) (fun k v -> bool) -> dict k v = built-in "di
 #
 #     let d = dict.from-entries [("x", 1), ("y", 2)]
 #     dict.fold d 0 (fun acc k v { acc + v })   # => 3
-public def fold :: fun (dict k v) b (fun b k v -> b) -> b = built-in "dict-fold"
+public def fold :: fun (dict k v) b (fun b k v -> b) -> b = fun d acc f {
+	list.fold (entries d) acc fun a e {
+		let (k, v) = e
+		f a k v
+	}
+}
