@@ -44,8 +44,9 @@ For unfamiliar stdlib calls, `grep tests/run/*/main.pa` for a working example ra
 
 Cargo workspace (see `Cargo.toml`):
 
-- `compiler/` — the language frontend: tokenizer, parser, analyzer, types, diagnostics. The crate's public surface (`lib.rs`) re-exports `Compiler`, `Diagnostic`, `Module`/`ModuleExports`, `Tokenizer`, `Token`, and module-name/version constants; `ast` and `types` are `pub mod` (consumed by codegen). Other modules (`analyzer`, `parser`, etc.) are private.
-- `codegen/` — lowers the typed AST into VM bytecode. `codegen::compile(&compiler)` returns a `vm::Program` ready to execute.
+- `compiler/` — the language frontend: tokenizer, parser, analyzer, types, diagnostics. The crate's public surface (`lib.rs`) re-exports `Compiler`, `Diagnostic`, `Module`/`ModuleExports`, `Tokenizer`, `Token`, and module-name/version constants; `ast` and `types` are `pub mod` (consumed by `ir` and codegen). Other modules (`analyzer`, `parser`, etc.) are private.
+- `ir/` — lowers the typed AST into a mid-level IR (`ir::lower(&compiler)` returns an `ir::IrProgram`). The IR is where backend-independent optimization (devirtualization, repr/box-unboxing, monomorphization, async CPS) happens, and it's the single source both backends consume.
+- `codegen/` — lowers the `ir::IrProgram` into VM bytecode. `codegen::compile_from_ir(&program)` returns a `vm::Program` ready to execute.
 - `vm/` — bytecode VM that executes the compiled program. `VM::new(program).run()` is the entry point. `print` writes through a configurable `StdoutSink` (process stdout by default; tests inject a `Buffer` sink). `vm::stdlib::register_compiler` seeds the analyzer with any Rust-defined native module types — currently none, since every stdlib module (including `core.dict`) is a `.pa` source; the mechanism remains for any future module whose signature the `.pa` surface can't express.
 - `cli/` — command dispatcher. `run`, `format`, `tokenize`, `analyze` are wired. `tokenize` and `analyze` are debug-build only (they dump Debug-format output of types whose Debug is gated on `debug_assertions`).
 - `lsp/` — language server, packaged for VS Code via the extension in `vsix/` and for Zed via the extension in `zed/`. Both editor extensions are thin clients that just launch `pluma-language-server`; all features (diagnostics, hover, formatting, highlighting via semantic tokens) live in the LSP so they're shared. The `zed/` crate ships no Tree-sitter grammar and is a standalone (non-workspace) cdylib built for `wasm32-wasip1`.
@@ -76,7 +77,7 @@ The CLI accepts either a file path (with or without `.pa`) or a directory contai
 Fixtures live under `tests/analyze/<name>/main.pa` (and optionally additional `.pa` files for multi-module cases) and `tests/run/<name>/main.pa`. Each fixture has an `analyze.snap` or `run.snap` next to its `main.pa` — an insta snapshot file with a 3-line YAML header followed by the captured output.
 
 - **`tests/analyze/`** fixtures run the compiler frontend in-process and snapshot `{:#?}` of the typed `Module` (or formatted diagnostics on failure).
-- **`tests/run/`** fixtures compile, lower to bytecode via `codegen::compile`, then call `vm::VM::run()` with a `vm::StdoutSink::Buffer`, and snapshot a combined `status / stdout / stderr` block.
+- **`tests/run/`** fixtures compile, lower to bytecode via `ir::lower` + `codegen::compile_from_ir`, then call `vm::VM::run()` with a `vm::StdoutSink::Buffer`, and snapshot a combined `status / stdout / stderr` block.
 
 Both harnesses live in `tests/{analyze,run}.rs` (registered via `path =` in `tests/Cargo.toml` so they sit alongside the fixture directories rather than in a nested `tests/tests/`). `datatest-stable` generates one `#[test]` per fixture by scanning the directory for `main.pa`. Tests set cwd to the workspace root so the `Module` Debug impl renders paths as `tests/analyze/<name>/main.pa` (portable across checkouts).
 

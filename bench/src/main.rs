@@ -1,13 +1,10 @@
 // Microbench runner. For each program under benchmarks/programs/<name>/main.pa,
-// compiles + runs it through the VM, wall-clocks it, and prints the average
-// time — for BOTH codegen backends side by side:
-//   * `ast` — the original fused AST->bytecode walk (`codegen::compile`)
-//   * `ir`  — the new AST->IR->bytecode path (`ir::lower` + `compile_from_ir`)
-// so we can see whether the IR refactor costs anything before cutover.
+// compiles (`ir::lower` + `compile_from_ir`) + runs it through the VM,
+// wall-clocks it, and prints the average time.
 //
 // Usage:
-//   cargo run -p bench --release                 # timing comparison (both)
-//   cargo run -p bench --release -- --profile <name> [ast|ir]  # opcode counts
+//   cargo run -p bench --release                 # timing
+//   cargo run -p bench --release -- --profile <name>  # opcode counts
 //   BENCH_ITERS=20 cargo run -p bench --release  # more iterations
 //
 // Output captured-but-discarded so we measure execution, not stdout I/O.
@@ -17,21 +14,6 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
-
-#[derive(Clone, Copy, PartialEq)]
-enum Backend {
-	Ast,
-	Ir,
-}
-
-impl Backend {
-	fn label(self) -> &'static str {
-		match self {
-			Backend::Ast => "ast",
-			Backend::Ir => "ir",
-		}
-	}
-}
 
 fn main() {
 	let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
@@ -63,13 +45,8 @@ fn main() {
 		}
 		if arg == "--profile" {
 			let name = args.next().expect("--profile takes a benchmark name");
-			let backend = match args.next().as_deref() {
-				None | Some("ast") => Backend::Ast,
-				Some("ir") => Backend::Ir,
-				Some(other) => panic!("unknown backend `{other}` (expected ast|ir)"),
-			};
 			let main_pa = programs_dir.join(&name).join("main.pa");
-			profile_one(&main_pa, backend);
+			profile_one(&main_pa);
 			return;
 		}
 	}
@@ -86,8 +63,8 @@ fn main() {
 		.collect();
 	benchmarks.sort_by_key(|e| e.file_name());
 
-	println!("benchmark            iters    ast (avg)        ir (avg)     ir/ast");
-	println!("-------------------  ------  --------------  --------------  ------");
+	println!("benchmark            iters        time (avg)");
+	println!("-------------------  ------  --------------");
 
 	for entry in benchmarks {
 		let name = entry.file_name().to_string_lossy().to_string();
@@ -96,20 +73,11 @@ fn main() {
 			continue;
 		}
 
-		let ast_path = main_pa.clone();
-		let ast_time = time_runs(iterations, move || run_program(&ast_path, Backend::Ast));
-		let ir_path = main_pa.clone();
-		let ir_time = time_runs(iterations, move || run_program(&ir_path, Backend::Ir));
+		let path = main_pa.clone();
+		let time = time_runs(iterations, move || run_program(&path));
 
 		print!("{:<21}{:>4}    ", name, iterations);
-		print!("{:>12}    ", fmt(ast_time));
-		print!("{:>12}    ", fmt(ir_time));
-		match (ast_time, ir_time) {
-			(Some(a), Some(i)) if a.as_secs_f64() > 0.0 => {
-				println!("{:>5.2}x", i.as_secs_f64() / a.as_secs_f64())
-			}
-			_ => println!("{:>6}", "-"),
-		}
+		println!("{:>12}", fmt(time));
 	}
 }
 
@@ -162,31 +130,26 @@ fn format_duration(d: Duration) -> String {
 // Compile `path` with the chosen backend, then run it on the VM. Both compile
 // and run are timed together (compilation is cheap relative to these loops, but
 // see `--profile` for a pure opcode-count view).
-fn run_program(path: &PathBuf, backend: Backend) -> Result<(), String> {
-	let program = compile(path, backend)?;
+fn run_program(path: &PathBuf) -> Result<(), String> {
+	let program = compile(path)?;
 	let buf = Rc::new(RefCell::new(Vec::<u8>::new()));
 	let mut vm_instance = vm::VM::new(program).with_stdout(vm::OutputSink::Buffer(buf));
 	vm_instance.run().map(|_| ()).map_err(|e| e.message)
 }
 
-fn compile(path: &PathBuf, backend: Backend) -> Result<vm::Program, String> {
+fn compile(path: &PathBuf) -> Result<vm::Program, String> {
 	let mut compiler = compiler::Compiler::from_entry_path(path.to_str().unwrap().to_string())
 		.map_err(|d| format!("compile: {:?} diagnostics", d.len()))?;
 	vm::stdlib::register_compiler(&mut compiler);
 	compiler
 		.check()
 		.map_err(|d| format!("check: {:?} diagnostics", d.len()))?;
-	match backend {
-		Backend::Ast => codegen::compile(&compiler).map_err(|e| format!("codegen: {e}")),
-		Backend::Ir => {
-			let program = ir::lower(&compiler).map_err(|e| format!("ir::lower: {e}"))?;
-			codegen::compile_from_ir(&program).map_err(|e| format!("compile_from_ir: {e}"))
-		}
-	}
+	let program = ir::lower(&compiler).map_err(|e| format!("ir::lower: {e}"))?;
+	codegen::compile_from_ir(&program).map_err(|e| format!("compile_from_ir: {e}"))
 }
 
-fn profile_one(path: &Path, backend: Backend) {
-	let program = compile(&path.to_path_buf(), backend).expect("compile error");
+fn profile_one(path: &Path) {
+	let program = compile(&path.to_path_buf()).expect("compile error");
 	let buf = Rc::new(RefCell::new(Vec::<u8>::new()));
 	let mut vm_instance = vm::VM::new(program).with_stdout(vm::OutputSink::Buffer(buf));
 	vm_instance.profile = Some(HashMap::new());
@@ -196,7 +159,7 @@ fn profile_one(path: &Path, backend: Backend) {
 	let mut counts: Vec<_> = vm_instance.profile.unwrap().into_iter().collect();
 	counts.sort_by(|a, b| b.1.cmp(&a.1));
 	let total: u64 = counts.iter().map(|(_, n)| n).sum();
-	println!("opcode counts ({} backend)", backend.label());
+	println!("opcode counts");
 	println!("opcode             count       pct");
 	println!("-----------------  ----------  -----");
 	for (name, n) in &counts {

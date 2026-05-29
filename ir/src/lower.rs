@@ -268,8 +268,8 @@ impl<'a> Lowerer<'a> {
 
 	// ---- trait instances / constrained defs ----------------------------
 
-	/// Lower a trait `instance` def to its method-dictionary global. Mirrors
-	/// `codegen::emit::compile_instance`; a build failure poisons the slot.
+	/// Lower a trait `instance` def to its method-dictionary global. A build
+	/// failure poisons the slot.
 	fn lower_instance(&mut self, instance: &compiler::ast::InstanceNode) {
 		let gid = match instance.instance_slot_name.rsplit_once('.') {
 			Some((m, n)) => self.globals.lookup(m, n),
@@ -366,7 +366,7 @@ impl<'a> Lowerer<'a> {
 	/// dict params). The body is always a `fun`; lower it as a single inner
 	/// function of arity K+N (dicts at slots 0..K-1 under synthetic names so
 	/// `Forwarded` dispatch resolves them), wrapped in a thunk that returns its
-	/// closure. Mirrors `codegen::emit::compile_constrained_thunk`.
+	/// closure.
 	fn lower_constrained_def(
 		&mut self,
 		name: &str,
@@ -1950,8 +1950,7 @@ fn regex_pattern(node: &RegexNode) -> String {
 }
 
 /// Build the module's local-namespace -> qualified-module map: explicit `use`
-/// declarations plus the auto-imported modules (unless shadowed). Mirrors
-/// `codegen::emit::compile_module`.
+/// declarations plus the auto-imported modules (unless shadowed).
 fn build_imports(ast: &ModuleNode) -> HashMap<String, String> {
 	let mut imports: HashMap<String, String> = ast
 		.uses
@@ -2214,9 +2213,8 @@ impl GlobalTable {
 
 /// Seed the prelude's pre-evaluated globals: the `print`/`debug`/`to-string`
 /// builtins and the concrete trait-instance method dictionaries. The dict
-/// method order matches each trait's declaration order. Mirrors the prelude
-/// block at the top of `codegen::emit::compile`, translated from `vm::Value`
-/// into the vm-independent `PreEval`.
+/// method order matches each trait's declaration order. Built as the
+/// vm-independent `PreEval` rather than `vm::Value` directly.
 fn seed_prelude_globals(g: &mut GlobalTable) {
 	let builtin = |tag: &str| PreEval::Builtin(tag.to_string());
 	let dict = |tags: &[&str]| PreEval::MethodDict(tags.iter().map(|t| builtin(t)).collect());
@@ -2268,8 +2266,7 @@ fn seed_prelude_globals(g: &mut GlobalTable) {
 
 /// Reserve a slot for each user-module top-level value def, alias (its
 /// constructor), and trait instance (its method dictionary). Enums and trait
-/// declarations are types, not values, so they get no slot. Mirrors the
-/// first reservation pass in `codegen::emit::compile`.
+/// declarations are types, not values, so they get no slot.
 fn reserve_user_globals(g: &mut GlobalTable, compiler: &Compiler) {
 	for (module_name, module) in &compiler.modules {
 		let Some(ast) = &module.ast else { continue };

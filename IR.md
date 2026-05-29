@@ -33,13 +33,12 @@ above the emit line — is the entire reason the IR exists.
   IrProgram` (`lower.rs`) + the IR→IR passes (`repr.rs`, `resolve.rs`,
   `mono.rs`). Depends on `compiler` (needs the typed AST). All AST-walking is
   private to lowering; the IR itself is type-free.
-- **`codegen`** — `from_ir.rs` lowers `ir::IrProgram → vm::Program` (the live
-  default). `emit.rs` is the legacy fused AST→bytecode walk, **kept on purpose**
-  as (a) the differential harness's live oracle, (b) the `--backend ast` /
-  `PLUMA_BACKEND=ast` fallback, and (c) a stable baseline for the future WASM
-  backend. `codegen::compile` selects the backend; the default is IR.
+- **`codegen`** — `from_ir.rs` lowers `ir::IrProgram → vm::Program`
+  (`codegen::compile_from_ir`), the only VM codegen path. The original fused
+  AST→bytecode walk (`emit.rs`) has been removed now that the IR path is
+  validated as behaviorally identical; the IR→VM path is the reference oracle.
 - **`vm`** — unchanged consumer of `vm::Program`.
-- A future **`wasm`** crate is a second sibling depending on `ir`, parallel to
+- The **`wasm`** crate is a second sibling depending on `ir`, parallel to
   `codegen`.
 
 ## The IR (as built)

@@ -33,10 +33,6 @@ path = "run.rs"
 harness = false
 
 [[test]]
-name = "ir_diff"
-path = "ir_diff.rs"
-
-[[test]]
 name = "ir_repr"
 path = "ir_repr.rs"
 
