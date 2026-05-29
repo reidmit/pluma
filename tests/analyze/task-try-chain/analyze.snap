@@ -56,7 +56,7 @@ module `main` (tests/analyze/task-try-chain/main.pa) {
                                                 rest: [
                                                     expr(7:1-7:19) :: task ((nothing, nothing)) {
                                                         kind: call(7:1-7:19) {
-                                                            callee: expr(7:1-7:12) :: 't4 -> task 't4 {
+                                                            callee: expr(7:1-7:12) :: 'a -> task 'a {
                                                                 kind: namespace-access `task.return`,
                                                             },
                                                             args: [
@@ -109,7 +109,7 @@ module `main` (tests/analyze/task-try-chain/main.pa) {
                                     rest: [
                                         expr(12:1-12:17) :: task ((nothing, nothing)) {
                                             kind: call(12:1-12:17) {
-                                                callee: expr(12:1-12:12) :: 't12 -> task 't12 {
+                                                callee: expr(12:1-12:12) :: 'a -> task 'a {
                                                     kind: namespace-access `task.return`,
                                                 },
                                                 args: [

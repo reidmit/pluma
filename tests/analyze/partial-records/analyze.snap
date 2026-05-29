@@ -8,15 +8,15 @@ module `main` (tests/analyze/partial-records/main.pa) {
         module(0:0-10:1) [
             def(0:0-2:1) :: nothing {
                 name: ident(0:4-0:12) `get-name`,
-                kind: expr(0:15-2:1) :: ({name: 't0, ...}) -> 't0 {
+                kind: expr(0:15-2:1) :: ({name: 'a, ...}) -> 'a {
                     kind: fun(0:15-2:1) {
                         params: [
-                            ident(0:19-0:22) `rec` :: {name: 't0, ...},
+                            ident(0:19-0:22) `rec` :: {name: 'a, ...},
                         ],
                         body: [
-                            expr(1:1-1:9) :: 't0 {
+                            expr(1:1-1:9) :: 'a {
                                 kind: field-access {
-                                    receiver: expr(1:1-1:4) :: {name: 't0, ...} {
+                                    receiver: expr(1:1-1:4) :: {name: 'a, ...} {
                                         kind: ident(1:1-1:4) `rec`,
                                     },
                                     field: ident(1:5-1:9) `name`,

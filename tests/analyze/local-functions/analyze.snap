@@ -17,19 +17,19 @@ module `main` (tests/analyze/local-functions/main.pa) {
                                     pattern: pattern(1:5-1:8) Identifier(
                                         ident(1:5-1:8) `add`,
                                     ),
-                                    value: expr(1:11-1:28) :: 'y 'y -> 'y {
+                                    value: expr(1:11-1:28) :: 'a 'a -> 'a {
                                         kind: fun(1:11-1:28) {
                                             params: [
-                                                ident(1:15-1:16) `x` :: 'y,
-                                                ident(1:17-1:18) `y` :: 'y,
+                                                ident(1:15-1:16) `x` :: 'a,
+                                                ident(1:17-1:18) `y` :: 'a,
                                             ],
                                             body: [
-                                                expr(1:21-1:26) :: 'y {
+                                                expr(1:21-1:26) :: 'a {
                                                     kind: binary op(1:23-1:24) `+` {
-                                                        left: expr(1:21-1:22) :: 'y {
+                                                        left: expr(1:21-1:22) :: 'a {
                                                             kind: ident(1:21-1:22) `x`,
                                                         },
-                                                        right: expr(1:25-1:26) :: 'y {
+                                                        right: expr(1:25-1:26) :: 'a {
                                                             kind: ident(1:25-1:26) `y`,
                                                         },
                                                     },

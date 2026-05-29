@@ -8,13 +8,13 @@ module `main` (tests/analyze/def-annotation-polymorphic/main.pa) {
         module(0:0-3:18) [
             def(0:0-0:34) :: nothing {
                 name: ident(0:4-0:6) `id`,
-                kind: expr(0:23-0:34) :: 'y -> 'y {
+                kind: expr(0:23-0:34) :: 'a -> 'a {
                     kind: fun(0:23-0:34) {
                         params: [
-                            ident(0:27-0:28) `x` :: 'y,
+                            ident(0:27-0:28) `x` :: 'a,
                         ],
                         body: [
-                            expr(0:31-0:32) :: 'y {
+                            expr(0:31-0:32) :: 'a {
                                 kind: ident(0:31-0:32) `x`,
                             },
                         ],

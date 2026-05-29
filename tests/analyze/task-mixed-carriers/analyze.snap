@@ -2,10 +2,10 @@
 source: tests/analyze.rs
 expression: output
 ---
-error: Type mismatch: expected `result 't9 'y`, but found `task int`.
+error: Type mismatch: expected `result 'a 'b`, but found `task int`.
 > 6 | 	try x = ok 1
        ^^^^^^^^^^^^
 
-error: Type mismatch: expected `result 't9 'y`, but found `task 't8`.
+error: Type mismatch: expected `result 'a 'b`, but found `task 'a`.
 > 6 | 	try x = ok 1
        ^^^^^^^^^^^^

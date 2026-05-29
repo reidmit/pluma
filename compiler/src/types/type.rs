@@ -279,8 +279,79 @@ impl Type {
 	}
 }
 
+// Type-variable display is canonicalized per top-level signature: the first
+// distinct `Type::Var` encountered in a rendering becomes `'a`, the next `'b`,
+// and so on, regardless of its internal numeric id. This keeps signatures
+// readable (`'a -> 'a` instead of `'t102 -> 't102`) and stable across analyzer
+// changes that merely shift the fresh-var counter, so snapshots don't churn.
+//
+// The mapping lives in a thread-local that resets whenever the outermost
+// `Display::fmt` for a `Type` begins. Recursion (and the `format!` inside
+// `maybe_add_parens`) re-enters `fmt` at depth > 0, so a whole type tree shares
+// one numbering. A `Drop` guard restores the depth even on the early `return`s
+// in the match below.
+thread_local! {
+	static VAR_DISPLAY: std::cell::RefCell<VarDisplayState> =
+		std::cell::RefCell::new(VarDisplayState::default());
+}
+
+#[derive(Default)]
+struct VarDisplayState {
+	depth: usize,
+	names: std::collections::HashMap<usize, usize>,
+	next: usize,
+}
+
+struct VarDisplayGuard;
+
+impl VarDisplayGuard {
+	fn enter() -> Self {
+		VAR_DISPLAY.with(|state| {
+			let mut state = state.borrow_mut();
+			if state.depth == 0 {
+				state.names.clear();
+				state.next = 0;
+			}
+			state.depth += 1;
+		});
+		VarDisplayGuard
+	}
+}
+
+impl Drop for VarDisplayGuard {
+	fn drop(&mut self) {
+		VAR_DISPLAY.with(|state| state.borrow_mut().depth -= 1);
+	}
+}
+
+fn display_var_name(var: usize) -> String {
+	let index = VAR_DISPLAY.with(|state| {
+		let mut state = state.borrow_mut();
+		match state.names.get(&var) {
+			Some(index) => *index,
+			None => {
+				let index = state.next;
+				state.next += 1;
+				state.names.insert(var, index);
+				index
+			}
+		}
+	});
+
+	// 0..=25 -> 'a..'z, then 'a1, 'b1, ... for the rare signature with >26 vars.
+	let letter = char::from_u32((index % 26) as u32 + 97).unwrap();
+	let suffix = index / 26;
+	if suffix == 0 {
+		format!("'{}", letter)
+	} else {
+		format!("'{}{}", letter, suffix)
+	}
+}
+
 impl std::fmt::Display for Type {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let _var_display_guard = VarDisplayGuard::enter();
+
 		let maybe_add_parens = |t: &Type| {
 			let s = format!("{}", t);
 			if s.contains(" ") {
@@ -408,17 +479,7 @@ impl std::fmt::Display for Type {
 
 			Type::Ref(inner_type) => write!(f, "ref {}", maybe_add_parens(inner_type)),
 
-			Type::Var(var) => {
-				// return write!(f, "'t{}", var); // temporary, i think
-
-				// attempt to convert the numeric var into an ascii letter, but
-				// if it's >= 26, just go with t0, t1, ...
-				if *var >= 26 {
-					return write!(f, "'t{}", var - 26);
-				}
-
-				write!(f, "'{}", char::from_u32((*var as u32) + 97).unwrap())
-			}
+			Type::Var(var) => write!(f, "{}", display_var_name(*var)),
 		}
 	}
 }
