@@ -18,8 +18,13 @@ use std::collections::{HashMap, HashSet};
 
 use ir::{Block, Callee, GlobalInit, IrProgram, PreEval, Rvalue, StmtKind};
 
-mod func;
+mod emit;
+mod helpers;
+mod module;
+mod runtime;
+mod scan;
 mod types;
+mod util;
 
 pub use diag::Diagnostics;
 
@@ -60,7 +65,7 @@ pub fn emit(program: &IrProgram) -> Result<Vec<u8>, Diagnostics> {
 
 	// 3. Build and encode the module.
 	let mut diags = Diagnostics::default();
-	let bytes = func::Module::build(&p, &reach, &mut diags);
+	let bytes = module::Module::build(&p, &reach, &mut diags);
 	if diags.is_empty() {
 		Ok(bytes)
 	} else {

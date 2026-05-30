@@ -1,0 +1,294 @@
+// Runtime-helper bookkeeping: which synthetic `__*` helpers a reachable program
+// needs (`Needs`/`scan_needs`), the wasm indices it resolves them to (`Runtime`),
+// the per-enum literal tables the codecs/formatters dispatch on, the realized
+// lazy-global slots, and the host-vs-inline classification of builtin tags.
+
+use ir::{Block, Rvalue, StmtKind};
+
+/// A reachable IR global realized as a lazily-initialized wasm value: a cached
+/// value (`val_idx`) behind an `i32` init flag (`init_idx`), built on first
+/// access. (Builtin globals are call-only; Const globals aren't realized yet.)
+#[derive(Clone)]
+pub(crate) struct GlobalSlot {
+	pub(crate) val_idx: u32,
+	pub(crate) init_idx: u32,
+	pub(crate) kind: GlobalKind,
+}
+
+#[derive(Clone)]
+pub(crate) enum GlobalKind {
+	/// A top-level def: run its thunk (wasm index) once.
+	Thunk(u32),
+	/// A trait-instance method dict: build a `$methoddict` of builtin-wrapper
+	/// closures (each method's wrapper wasm index).
+	MethodDict(Vec<u32>),
+}
+
+/// Wasm indices of the synthetic runtime helpers, available to every function.
+/// `None` = not emitted (the reachable program doesn't need it).
+#[derive(Clone, Copy, Default)]
+pub(crate) struct Runtime {
+	/// `__eq(value, value) -> i32` — structural equality.
+	pub(crate) eq_fn: Option<u32>,
+	/// `__getfield(record, name) -> value` — record field access by name.
+	pub(crate) getfield_fn: Option<u32>,
+	/// `__record_update(record, name, value) -> record` — one override of a copy.
+	pub(crate) record_update_fn: Option<u32>,
+	/// `__list_tail(list, n) -> list` — the `...rest` tail of a list pattern.
+	pub(crate) list_tail_fn: Option<u32>,
+	/// `__arrconcat(a, b) -> valarray` — concatenate two value arrays (list spread).
+	pub(crate) arrconcat_fn: Option<u32>,
+	/// `__bytesconcat(a, b) -> bytes` — concatenate two byte arrays (`++` / interp).
+	pub(crate) bytesconcat_fn: Option<u32>,
+	/// `__tostring(value) -> str` — `vm::Value`'s `Display` in wasm (scalars only).
+	pub(crate) tostring_fn: Option<u32>,
+	/// `__int_str(i64) -> str` — decimal formatting, used by `__tostring`.
+	pub(crate) int_str_fn: Option<u32>,
+	/// `__list_build(n, f) -> list` — tabulate `[f 0, ..., f (n-1)]`.
+	pub(crate) list_build_fn: Option<u32>,
+	/// `__list_collect(n, f) -> list` — tabulate keeping only `f`'s `some` results.
+	pub(crate) list_collect_fn: Option<u32>,
+	/// `__bytes_build(n, f) -> bytes` — tabulate a byte sequence.
+	pub(crate) bytes_build_fn: Option<u32>,
+	/// `__dict_insert(dict, k, v) -> dict` — replace-or-append (linear scan via `__eq`).
+	pub(crate) dict_insert_fn: Option<u32>,
+	/// `__dict_lookup(dict, k) -> option v` — linear scan via `__eq`.
+	pub(crate) dict_lookup_fn: Option<u32>,
+	/// `__dict_remove(dict, k) -> dict` — drop the matching entry (linear scan).
+	pub(crate) dict_remove_fn: Option<u32>,
+	/// `__dict_map(dict, f) -> dict` — `f` over each value, keys preserved.
+	pub(crate) dict_map_fn: Option<u32>,
+	/// `__dict_filter(dict, f) -> dict` — keep entries where `f key value` is true.
+	pub(crate) dict_filter_fn: Option<u32>,
+	/// Host import `float_to_str(f64, $bytes buf) -> i32 len` — float formatting
+	/// (delegated to the host, like a browser's `String(x)`), used by `__tostring`.
+	pub(crate) float_to_str_fn: Option<u32>,
+	/// Data-segment offsets/lengths for the literal strings `__tostring` needs.
+	pub(crate) lits: ToStringLits,
+	/// `some`/`none` variant info for `__dict_lookup` to build its `option` result.
+	pub(crate) opt: OptionLits,
+	/// `lt`/`eq`/`gt` variant info for the `*-compare` wrappers to build their
+	/// `ordering` result.
+	pub(crate) ord: OrderingLits,
+	/// `__wire_fp(i64 hash, ref $value schema) -> i64` — recursive FNV-1a mix over
+	/// a `wire-schema` value tree (the structural fingerprint).
+	pub(crate) wire_fp_fn: Option<u32>,
+	/// `__wire_mix_str(i64 hash, ref $value str) -> i64` — mix a string's byte
+	/// length + bytes.
+	pub(crate) wire_mix_str_fn: Option<u32>,
+	/// `__wire_mix_len(i64 hash, i64 n) -> i64` — mix `n`'s 8 little-endian bytes.
+	pub(crate) wire_mix_len_fn: Option<u32>,
+	/// The `wire-schema` enum's per-variant tags, for the codec helpers' dispatch.
+	pub(crate) wire: WireTags,
+}
+
+/// FNV-1a 64-bit offset basis / prime — the constants `vm::wire` mixes with, so
+/// the wasm fingerprint matches the VM's byte-for-byte. `OFFSET` seeds the hash
+/// (at the `wire-fingerprint` call site); `PRIME` is folded by the mixers.
+pub(crate) const WIRE_FNV_OFFSET: i64 = 0xcbf2_9ce4_8422_2325u64 as i64;
+pub(crate) const WIRE_FNV_PRIME: i64 = 0x0000_0100_0000_01b3;
+
+/// The within-enum tags of the `wire-schema` prelude enum's variants, resolved
+/// from the enum table so the codec helpers can dispatch on a schema node's
+/// runtime `vtag` rather than its name string.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct WireTags {
+	pub(crate) s_int: u32,
+	pub(crate) s_float: u32,
+	pub(crate) s_bool: u32,
+	pub(crate) s_string: u32,
+	pub(crate) s_bytes: u32,
+	pub(crate) s_duration: u32,
+	pub(crate) s_nothing: u32,
+	pub(crate) s_list: u32,
+	pub(crate) s_dict: u32,
+	pub(crate) s_enum_ref: u32,
+	pub(crate) s_tuple: u32,
+	pub(crate) s_record: u32,
+	pub(crate) s_enum: u32,
+}
+
+/// What an `*-compare` wrapper needs to construct an `ordering` `$variant`: each
+/// variant's within-enum tag and its interned display-name string `(off, len)`.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct OrderingLits {
+	pub(crate) lt_tag: u32,
+	pub(crate) eq_tag: u32,
+	pub(crate) gt_tag: u32,
+	pub(crate) lt_name: (u32, u32),
+	pub(crate) eq_name: (u32, u32),
+	pub(crate) gt_name: (u32, u32),
+}
+
+/// What `__dict_lookup` needs to construct `some v` / `none` `$variant`s: each
+/// variant's within-enum tag and its interned display-name string `(off, len)`.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct OptionLits {
+	pub(crate) some_tag: u32,
+	pub(crate) none_tag: u32,
+	pub(crate) some_name: (u32, u32),
+	pub(crate) none_name: (u32, u32),
+}
+
+/// `(offset, len)` of each fixed literal `__tostring` emits, in the shared data
+/// segment.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct ToStringLits {
+	pub(crate) unit: (u32, u32),
+	pub(crate) tru: (u32, u32),
+	pub(crate) fals: (u32, u32),
+	pub(crate) lparen: (u32, u32),
+	pub(crate) rparen: (u32, u32),
+	pub(crate) lbrack: (u32, u32),
+	pub(crate) rbrack: (u32, u32),
+	pub(crate) lbrace: (u32, u32),
+	pub(crate) rbrace: (u32, u32),
+	pub(crate) comma_sp: (u32, u32), // ", "
+	pub(crate) colon_sp: (u32, u32), // ": "
+	pub(crate) space: (u32, u32),    // " "
+	pub(crate) ref_pfx: (u32, u32),  // "ref "
+}
+
+/// Which runtime helpers a reachable program needs. `eq` is forced on whenever
+/// `getfield`/`record_update` is (both compare name strings via `__eq`).
+#[derive(Default)]
+pub(crate) struct Needs {
+	pub(crate) eq: bool,
+	pub(crate) getfield: bool,
+	pub(crate) record_update: bool,
+	pub(crate) list_tail: bool,
+	pub(crate) arrconcat: bool,
+	pub(crate) bytesconcat: bool,
+	pub(crate) tostring: bool,
+}
+
+pub(crate) fn scan_needs(b: &Block, n: &mut Needs) {
+	fn rv(rv: &Rvalue, n: &mut Needs) {
+		match rv {
+			Rvalue::Bin(ir::BinOp::Eq | ir::BinOp::Ne, _, _) => n.eq = true,
+			Rvalue::GetField(..) => {
+				n.getfield = true;
+				n.eq = true;
+			}
+			Rvalue::RecordUpdate { .. } => {
+				n.record_update = true;
+				n.eq = true;
+			}
+			Rvalue::MakeList(items) => {
+				if items.iter().any(|it| matches!(it, ir::ListItem::Spread(_))) {
+					n.arrconcat = true;
+				}
+			}
+			Rvalue::Bin(ir::BinOp::Concat, _, _) | Rvalue::Interpolate(_) => n.bytesconcat = true,
+			_ => {}
+		}
+	}
+	fn pat(p: &ir::Pattern, n: &mut Needs) {
+		match p {
+			ir::Pattern::List {
+				rest: Some(ir::ListRest::Bind(_)),
+				items,
+			} => {
+				n.list_tail = true;
+				items.iter().for_each(|p| pat(p, n));
+			}
+			ir::Pattern::List { items, .. } => items.iter().for_each(|p| pat(p, n)),
+			ir::Pattern::Variant { fields, .. } | ir::Pattern::Tuple(fields) => {
+				fields.iter().for_each(|p| pat(p, n))
+			}
+			ir::Pattern::Record { fields, .. } => {
+				// Record patterns match fields via `__getfield` (which uses `__eq`).
+				n.getfield = true;
+				n.eq = true;
+				fields.iter().for_each(|(_, p)| pat(p, n));
+			}
+			_ => {}
+		}
+	}
+	for s in &b.0 {
+		match &s.kind {
+			StmtKind::Let(_, r) | StmtKind::Discard(r) => rv(r, n),
+			StmtKind::If(_, t, e) => {
+				scan_needs(t, n);
+				scan_needs(e, n);
+			}
+			StmtKind::Switch { arms, default, .. } => {
+				for (_, b) in arms {
+					scan_needs(b, n);
+				}
+				scan_needs(default, n);
+			}
+			StmtKind::Match { arms, .. } => {
+				for a in arms {
+					pat(&a.pattern, n);
+					scan_needs(&a.body, n);
+				}
+			}
+			StmtKind::Loop(b) => scan_needs(b, n),
+			_ => {}
+		}
+	}
+}
+
+/// A host primitive's calling shape: how many boxed args it takes, and whether it
+/// returns a boxed value (vs. nothing — in which case the caller materializes the
+/// Pluma `nothing` result).
+pub(crate) struct HostSig {
+	pub(crate) arity: usize,
+	pub(crate) returns_value: bool,
+}
+
+/// The host signature for a builtin tag, or `None` if this backend doesn't yet
+/// import it. Grows with milestone coverage (M7 brings the rest).
+pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
+	match tag {
+		"print" => Some(HostSig {
+			arity: 1,
+			returns_value: false,
+		}),
+		_ => None,
+	}
+}
+
+/// Pure-compute builtins emitted inline at the call site (no host import, no
+/// synthetic helper). They operate on the GC `$value` layout directly. Grows as
+/// more of the builtin surface moves to native WasmGC.
+pub(crate) fn is_inline_builtin(tag: &str) -> bool {
+	matches!(
+		tag,
+		"list-get"
+			| "list-length"
+			| "bytes-get"
+			| "bytes-length"
+			| "bytes-as-string"
+			| "string-to-bytes"
+			// the in-place list mutation: `array.set` on the `$valarray`.
+			| "list-set"
+			// mutable cells: a `$ref` struct with a mutable boxed-value field.
+			// `ref-update` reads, applies a closure, writes back (closure call inline).
+			| "ref-new"
+			| "ref-get"
+			| "ref-set"
+			| "ref-update"
+			// dicts: the trivial accessors over the `$dict` entries array. The
+			// rebuild/scan/closure ops (insert/lookup/remove/map/filter) are helpers.
+			| "dict-empty"
+			| "dict-size"
+			| "dict-entries"
+			// math primitives WasmGC does with one f64/i64 opcode (the
+			// transcendentals log/exp/sin/cos still need a host import).
+			| "math-sqrt"
+			| "math-to-int"
+			| "math-to-float"
+	)
+}
+
+/// Transcendental float math with no WasmGC opcode (log/log10/log2/exp/sin/cos).
+/// Each is a `(f64) -> f64` host import (the same libm call the VM makes); the
+/// `$float` box/unbox is emitted in wasm around the call.
+pub(crate) fn is_f64_unary_host(tag: &str) -> bool {
+	matches!(
+		tag,
+		"math-log" | "math-log10" | "math-log2" | "math-exp" | "math-sin" | "math-cos"
+	)
+}
