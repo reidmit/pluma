@@ -6,7 +6,7 @@ expression: combined
 ok
 == stdout ==
 42
--2290212989580898599
+-6615550055289275125
 1
 true
 less
@@ -20,4 +20,3 @@ less
 42
 ordering.lt
 == stderr ==
-

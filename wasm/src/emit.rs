@@ -568,6 +568,21 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::F64Ne);
 				self.ins(Instruction::BrIf(br));
 			}
+			Const::Duration(n) => {
+				// A `duration` reuses the `$int` shape (`{tag, i64}`); match it on
+				// the nanosecond count, like an int literal.
+				self.ins(Instruction::LocalGet(subj));
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_INT,
+				)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_INT,
+					field_index: 1,
+				});
+				self.ins(Instruction::I64Const(*n));
+				self.ins(Instruction::I64Ne);
+				self.ins(Instruction::BrIf(br));
+			}
 			Const::Str(_) | Const::Bytes(_) => {
 				// Compare the (boxed) subject against the literal via structural
 				// `__eq`; branch to the fail level when they differ.
@@ -1583,6 +1598,22 @@ impl<'a> FnEmitter<'a> {
 				});
 				self.ins(Instruction::F64ConvertI64S);
 				self.ins(Instruction::StructNew(types::T_FLOAT));
+			}
+			// time.as-nanos d : a `duration`'s nanosecond count as an `int`. A
+			// `duration` reuses the `$int` shape (`{tag, i64}`), tagged `TAG_DURATION`,
+			// so this just reads the i64 and reboxes it `TAG_INT` (the other `as-*`
+			// accessors are pure Pluma over this one).
+			"time-duration-as-nanos" => {
+				self.ins(Instruction::I32Const(types::TAG_INT));
+				self.atom(&args[0]);
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_INT,
+				)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_INT,
+					field_index: 1,
+				});
+				self.ins(Instruction::StructNew(types::T_INT));
 			}
 			_ => {
 				self

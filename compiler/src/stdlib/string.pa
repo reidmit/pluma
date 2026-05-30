@@ -16,6 +16,7 @@
 
 use core.list
 use core.bytes
+use core.math
 
 # Reinterpret bytes as a string with no copy and no UTF-8 check -- the
 # inverse of `to-bytes`. Private and only ever handed bytes that were
@@ -350,20 +351,148 @@ public def replace :: fun string string string -> string = fun s pattern replace
 	join (split s pattern) replacement
 }
 
+# True for an ASCII digit byte (`'0'`..`'9'`).
+def is-digit-byte :: fun int -> bool = fun c {
+	c >= 48 && c <= 57
+}
+
+# Reduce a run of ASCII-digit bytes in `[i, n)` into `acc` (base 10). Stops
+# and returns the index of the first non-digit (or `n`), the accumulated
+# value, and how many digits were consumed.
+def scan-digits :: fun bytes int int int int -> (int, int, int) = fun b n i acc count {
+	if i >= n is true {
+		(i, acc, count)
+	} else if is-digit-byte (bytes.get b i) is true {
+		scan-digits b n (i + 1) (acc * 10 + (bytes.get b i - 48)) (count + 1)
+	} else {
+		(i, acc, count)
+	}
+}
+
 # Parses the string as a whole number. `ok n` if it's a valid integer,
-# `err message` if not.
+# `err message` if not. A leading `+`/`-` is allowed; nothing else.
 #
 #     string.to-int "42"    # => ok 42
 #     string.to-int "-7"    # => ok -7
 #     string.to-int "3.5"   # => err "invalid digit found in string"
-public def to-int :: fun string -> result int string = built-in "string-to-int"
+public def to-int :: fun string -> result int string = fun s {
+	let b = to-bytes s
+	let n = bytes.length b
+	if n == 0 is true {
+		err "cannot parse integer from empty string"
+	} else {
+		let c0 = bytes.get b 0
+		let start = if c0 == 43 || c0 == 45 is true { 1 } else { 0 }
+		# Consume digits, requiring at least one and nothing trailing.
+		let (i, mag, count) = scan-digits b n start 0 0
+		if count == 0 is true {
+			err "invalid digit found in string"
+		} else if i == n is true {
+			if c0 == 45 is true { ok (0 - mag) } else { ok mag }
+		} else {
+			err "invalid digit found in string"
+		}
+	}
+}
+
+# `10.0 ^ k` for `k >= 0`, by repeated multiplication. Exact for `k <= 22`
+# (the largest power of ten an `f64` holds exactly) — the range Rust's float
+# parser fast-paths too, so `mantissa * 10^k` is correctly rounded there.
+def pow10 :: fun int -> float = fun k {
+	if k <= 0 is true {
+		1.0
+	} else {
+		10.0 * (pow10 (k - 1))
+	}
+}
+
+# Combine a decimal mantissa with a base-10 exponent into an `f64`.
+def apply-exp :: fun int int -> float = fun mantissa exp {
+	let m = math.to-float mantissa
+	if exp >= 0 is true {
+		m * (pow10 exp)
+	} else {
+		m / (pow10 (0 - exp))
+	}
+}
+
+# Parse an optional `e`/`E` exponent at `i`. Returns the index past it and
+# the (signed) exponent value; `(i, 0)` when there's no exponent. `err` on a
+# malformed one (`e` with no digits, or trailing junk).
+def parse-exp :: fun bytes int int -> result (int, int) string = fun b n i {
+	if i >= n is true {
+		ok (i, 0)
+	} else if bytes.get b i == 101 || bytes.get b i == 69 is true {
+		let j = i + 1
+		if j >= n is true {
+			err "invalid float literal"
+		} else {
+			let cs = bytes.get b j
+			let dstart = if cs == 43 || cs == 45 is true { j + 1 } else { j }
+			let (k, ev, ec) = scan-digits b n dstart 0 0
+			if ec == 0 is true {
+				err "invalid float literal"
+			} else if k == n is true {
+				if cs == 45 is true { ok (k, 0 - ev) } else { ok (k, ev) }
+			} else {
+				err "invalid float literal"
+			}
+		}
+	} else {
+		ok (i, 0)
+	}
+}
+
+# Parse an unsigned decimal float body from `[start, n)`: integer digits, an
+# optional `.` with fractional digits, and an optional exponent. At least one
+# digit is required overall.
+def parse-float-body :: fun bytes int int -> result float string = fun b n start {
+	let (i1, m1, d1) = scan-digits b n start 0 0
+	# Optional fractional part — guard the bounds before reading the `.`.
+	let (i2, mantissa, df) = if i1 >= n is true {
+		(i1, m1, 0)
+	} else if bytes.get b i1 == 46 is true {
+		scan-digits b n (i1 + 1) m1 0
+	} else {
+		(i1, m1, 0)
+	}
+	if d1 + df == 0 is true {
+		err "invalid float literal"
+	} else {
+		when parse-exp b n i2 is ok pair {
+			let (i3, e) = pair
+			if i3 == n is true {
+				ok (apply-exp mantissa (e - df))
+			} else {
+				err "invalid float literal"
+			}
+		} is err msg {
+			err msg
+		}
+	}
+}
 
 # Parses the string as a decimal number. `ok x` on success, `err
-# message` if it isn't a number.
+# message` if it isn't a number. A leading `+`/`-` and an `e`/`E`
+# exponent are allowed.
 #
 #     string.to-float "3.14"   # => ok 3.14
 #     string.to-float "nope"   # => err "invalid float literal"
-public def to-float :: fun string -> result float string = built-in "string-to-float"
+public def to-float :: fun string -> result float string = fun s {
+	let b = to-bytes s
+	let n = bytes.length b
+	if n == 0 is true {
+		err "cannot parse float from empty string"
+	} else {
+		let c0 = bytes.get b 0
+		let start = if c0 == 43 || c0 == 45 is true { 1 } else { 0 }
+		when parse-float-body b n start is ok v {
+			if c0 == 45 is true { ok (0.0 - v) } else { ok v }
+		} is err msg {
+			err msg
+		}
+	}
+}
 
 # The string's raw bytes, in UTF-8. Pair with `bytes.to-string` to go
 # back. Handy for seeing the character/byte split: an accented letter is

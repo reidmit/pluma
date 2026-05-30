@@ -37,6 +37,7 @@ const WASM_FIXTURES: &[&str] = &[
 	"regex-as-alias",
 	"arith-precedence",
 	"arithmetic",
+	"bare-trait-methods",
 	"base64-roundtrip",
 	"builtin-uses-list-length",
 	"bytes-equality",
@@ -71,20 +72,28 @@ const WASM_FIXTURES: &[&str] = &[
 	"dict-tostring",
 	"deep-recursion",
 	"double-int-float",
+	"duration-literals",
 	"else-if-chain",
 	"empty-fun-body",
 	"equality-structural",
+	"expect-err",
+	"expect-none",
+	"expect-passthrough",
 	"factorial",
 	"fibonacci",
 	"float-arith",
 	"float-compare",
 	"float-nan-compare",
 	"generic-enum",
+	"hash-trait",
 	"hello",
 	"hex-roundtrip",
 	"if-else-pattern",
 	"if-else-value",
 	"if-no-match",
+	"fail-direct",
+	"io-print",
+	"io-write-bytes",
 	"interpolation-complex",
 	"interpolation-nested-string",
 	"let-destructure-record",
@@ -113,6 +122,7 @@ const WASM_FIXTURES: &[&str] = &[
 	"list-spread-record-update",
 	"main-returns-err",
 	"main-returns-ok",
+	"main-try-propagates",
 	"math-builtins",
 	"mutual-recursion",
 	"negative-numbers",
@@ -125,6 +135,7 @@ const WASM_FIXTURES: &[&str] = &[
 	"pattern-stack-cleanup",
 	"pipeline",
 	"prelude-option",
+	"prelude-parametric",
 	"quadruple-forwarding",
 	"record-field-shorthand",
 	"record-list-cross-nesting",
@@ -141,6 +152,7 @@ const WASM_FIXTURES: &[&str] = &[
 	"shadowing",
 	"string-concat",
 	"string-literal-pattern",
+	"string-parse",
 	"string-module-split-join",
 	"string-slice",
 	"string-with-escapes",
@@ -190,6 +202,12 @@ const TAG_DICT: i32 = 16;
 
 struct HostState {
 	out: Rc<RefCell<Vec<u8>>>,
+	/// stderr sink — collected separately so it never pollutes the stdout the
+	/// differential compares (the reference `run_vm` drops stderr too).
+	err: Rc<RefCell<Vec<u8>>>,
+	/// The `io.fail` abort message, stashed before the host traps so `run_wasm`
+	/// can surface it as the program's `runtime error: <msg>` status.
+	fail: Rc<RefCell<Option<String>>>,
 }
 
 fn engine() -> Engine {
@@ -293,7 +311,15 @@ fn format_anyref(store: &mut impl AsContextMut, any: Rooted<AnyRef>) -> String {
 			out.push('\'');
 			out
 		}
-		TAG_DURATION => "<duration>".to_string(),
+		TAG_DURATION => {
+			// A `duration` reuses the `$int` shape; format its i64 nanos canonically
+			// (descending d/h/m/s/ms/us/ns segments), mirroring `vm::Value`'s Display.
+			let nanos = match s.field(&mut *store, 1).expect("duration field") {
+				Val::I64(n) => n,
+				o => panic!("duration payload: {o:?}"),
+			};
+			format_duration(nanos)
+		}
 		TAG_VARIANT => {
 			// `name` (field 2, a $str) then each payload element, space-separated:
 			// e.g. `color.red`, `shape.square 5`.
@@ -357,6 +383,28 @@ fn format_anyref(store: &mut impl AsContextMut, any: Rooted<AnyRef>) -> String {
 	}
 }
 
+/// The raw bytes backing a `$str`/`$bytes` value (field 1 of the struct),
+/// without any Display formatting — for the `io.write-bytes` raw writers.
+fn raw_value_bytes(store: &mut impl AsContextMut, val: &Val) -> Vec<u8> {
+	let Val::AnyRef(Some(r)) = val else {
+		return Vec::new();
+	};
+	let s = r.as_struct(&mut *store).expect("as_struct").expect("a $value");
+	let arr = match s.field(&mut *store, 1).expect("bytes field") {
+		Val::AnyRef(Some(a)) => a.as_array(&mut *store).expect("as_array").expect("bytes array"),
+		o => panic!("bytes payload: {o:?}"),
+	};
+	let len = arr.len(&mut *store).expect("array len");
+	let mut bytes = Vec::with_capacity(len as usize);
+	for i in 0..len {
+		match arr.get(&mut *store, i).expect("array get") {
+			Val::I32(b) => bytes.push(b as u8),
+			o => panic!("byte elem: {o:?}"),
+		}
+	}
+	bytes
+}
+
 /// Format each element of a `$valarray` field value.
 fn format_elems(store: &mut impl AsContextMut, arr: &Val) -> Vec<String> {
 	let array = match arr {
@@ -375,6 +423,37 @@ fn format_elems(store: &mut impl AsContextMut, arr: &Val) -> Vec<String> {
 	out
 }
 
+/// Canonical duration rendering — the i64 nanos broken into descending
+/// d/h/m/s/ms/us/ns segments. Mirrors `vm::value::format_duration`.
+fn format_duration(nanos: i64) -> String {
+	if nanos == 0 {
+		return "0s".to_string();
+	}
+	let (sign, mut rem): (&str, u128) = if nanos < 0 {
+		("-", (nanos as i128).unsigned_abs())
+	} else {
+		("", nanos as u128)
+	};
+	const UNITS: [(u128, &str); 7] = [
+		(86_400_000_000_000, "d"),
+		(3_600_000_000_000, "h"),
+		(60_000_000_000, "m"),
+		(1_000_000_000, "s"),
+		(1_000_000, "ms"),
+		(1_000, "us"),
+		(1, "ns"),
+	];
+	let mut out = String::from(sign);
+	for (per, name) in UNITS {
+		if rem >= per {
+			out.push_str(&(rem / per).to_string());
+			out.push_str(name);
+			rem %= per;
+		}
+	}
+	out
+}
+
 struct RunResult {
 	status: String,
 	stdout: String,
@@ -388,7 +467,9 @@ fn instantiate_module(use_drc: bool, bytes: &[u8]) -> Result<(Store<HostState>, 
 	let engine = if use_drc { bench_engine() } else { engine() };
 	let module = Module::new(&engine, bytes).map_err(|e| format!("module error: {e}"))?;
 	let out = Rc::new(RefCell::new(Vec::<u8>::new()));
-	let mut store = Store::new(&engine, HostState { out });
+	let err = Rc::new(RefCell::new(Vec::<u8>::new()));
+	let fail = Rc::new(RefCell::new(None));
+	let mut store = Store::new(&engine, HostState { out, err, fail });
 	let mut linker: Linker<HostState> = Linker::new(&engine);
 	// print : (ref null $value) -> ()  — host accepts the broader `anyref`.
 	let print_ty = FuncType::new(&engine, [ValType::ANYREF], []);
@@ -407,6 +488,53 @@ fn instantiate_module(use_drc: bool, bytes: &[u8]) -> Result<(Store<HostState>, 
 			Ok(())
 		})
 		.expect("define print");
+	// The `core.io` writers. `print`/`print-err` append a newline; `write`/
+	// `write-err` don't. The `*-err` pair targets the stderr sink. `*-bytes`
+	// write a `bytes` value's raw bytes (no Display formatting).
+	let io_ty = FuncType::new(&engine, [ValType::ANYREF], []);
+	for (name, to_err, newline, raw) in [
+		("io-print", false, true, false),
+		("io-write", false, false, false),
+		("io-print-err", true, true, false),
+		("io-write-err", true, false, false),
+		("io-write-bytes", false, false, true),
+		("io-write-err-bytes", true, false, true),
+	] {
+		linker
+			.func_new("pluma", name, io_ty.clone(), move |mut caller, args, _results| {
+				let bytes = {
+					let mut scope = RootScope::new(&mut caller);
+					if raw {
+						raw_value_bytes(&mut scope, &args[0])
+					} else {
+						format_value(&mut scope, &args[0]).into_bytes()
+					}
+				};
+				let sink = if to_err {
+					caller.data().err.clone()
+				} else {
+					caller.data().out.clone()
+				};
+				sink.borrow_mut().extend_from_slice(&bytes);
+				if newline {
+					sink.borrow_mut().push(b'\n');
+				}
+				Ok(())
+			})
+			.unwrap_or_else(|e| panic!("define {name}: {e}"));
+	}
+	// io.fail msg : stash the message, then trap. `run_wasm` reads the message
+	// back to form the `runtime error: <msg>` status (mirrors the VM's abort).
+	linker
+		.func_new("pluma", "io-fail", io_ty.clone(), |mut caller, args, _results| {
+			let msg = {
+				let mut scope = RootScope::new(&mut caller);
+				format_value(&mut scope, &args[0])
+			};
+			*caller.data().fail.borrow_mut() = Some(msg);
+			Err(wasmtime::Error::msg("io.fail"))
+		})
+		.expect("define io-fail");
 	// float_to_str : (f64, $bytes buf) -> i32 len. Format the float as `vm::Value`'s
 	// Display does, write the bytes into the caller-provided GC byte array, return
 	// the length. (A real browser target would delegate to JS similarly.)
@@ -500,7 +628,12 @@ fn run_wasm(bytes: &[u8]) -> RunResult {
 			Some(msg) => format!("runtime error: {msg}"),
 			None => "ok".to_string(),
 		},
-		Err(e) => format!("runtime error: {e}"),
+		// A trap with a stashed `io.fail` message is a program-controlled abort;
+		// surface its message (matching the VM) rather than the wasm backtrace.
+		Err(e) => match store.data().fail.borrow().clone() {
+			Some(msg) => format!("runtime error: {msg}"),
+			None => format!("runtime error: {e}"),
+		},
 	};
 	let stdout = String::from_utf8_lossy(&store.data().out.borrow()).into_owned();
 	RunResult { status, stdout }

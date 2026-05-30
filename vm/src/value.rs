@@ -445,24 +445,28 @@ fn format_duration(nanos: i64) -> String {
 /// the `hash` dictionary — but only for primitive keys, which is why
 /// wire-derivation rejects dicts with compound keys.
 pub fn primitive_hash(v: &Value) -> Option<i64> {
-	use std::hash::{Hash, Hasher};
 	match v {
 		Value::Int(n) => Some(*n),
 		// Reinterpret the float's bit pattern as i64 (stable per value).
 		Value::Float(f) => Some(f.to_bits() as i64),
 		Value::Bool(b) => Some(if *b { 1 } else { 0 }),
-		Value::String(s) => {
-			let mut h = std::collections::hash_map::DefaultHasher::new();
-			s.as_str().hash(&mut h);
-			Some(h.finish() as i64)
-		}
-		Value::Bytes(b) => {
-			let mut h = std::collections::hash_map::DefaultHasher::new();
-			b.as_slice().hash(&mut h);
-			Some(h.finish() as i64)
-		}
+		// FNV-1a over the raw bytes — a defined, portable hash (NOT Rust's
+		// unstable `DefaultHasher`) so the WasmGC backend computes byte-identical
+		// values in pure wasm. Same algorithm the `wire` fingerprint uses.
+		Value::String(s) => Some(fnv1a(s.as_bytes()) as i64),
+		Value::Bytes(b) => Some(fnv1a(b.as_slice()) as i64),
 		_ => None,
 	}
+}
+
+/// FNV-1a (64-bit) over a byte slice. Shared definition for `string-hash` /
+/// `bytes-hash`; the WasmGC backend reimplements the same two constants.
+pub(crate) fn fnv1a(bytes: &[u8]) -> u64 {
+	const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+	const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
+	bytes
+		.iter()
+		.fold(FNV_OFFSET, |h, &b| (h ^ b as u64).wrapping_mul(FNV_PRIME))
 }
 
 // type on both sides, so we only need to compare like with like. Closures,

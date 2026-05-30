@@ -270,11 +270,63 @@ pub(crate) fn build_builtin_wrapper(tag: &str, ord: &OrderingLits) -> Option<Fun
 			w.if_(|w| mk_ord(w, ord.gt_tag, ord.gt_name));
 			mk_ord(&mut w, ord.eq_tag, ord.eq_name);
 		}
-		// `hash` wrappers exist only so a primitive `hash` method-dict can be
-		// materialized; the wasm `dict` never calls them (it scans keys with `__eq`).
-		// A trap keeps it honest if some future caller does reach one.
-		"int-hash" | "float-hash" | "string-hash" | "bool-hash" | "bytes-hash" => {
-			w.unreachable();
+		// `hash` instances. The wasm `dict` scans keys with `__eq` and never calls
+		// these, but a program can call `hash.hash x` directly (and parametric
+		// instances recurse into the primitive ones), so they compute the real value
+		// — matching `vm::value::primitive_hash` EXACTLY. All box their result `$int`.
+		//
+		// int: the value itself. float: the f64 bit pattern as i64. bool: 0/1.
+		"int-hash" => {
+			// hash(int) == the int; the boxed `$int` arg is already that.
+			let p1 = w.param(1);
+			w.local_get(p1);
+		}
+		"float-hash" => {
+			w.i32(types::TAG_INT);
+			unbox(&mut w, 1, types::T_FLOAT);
+			w.i64_reinterpret_f64();
+			w.struct_new(types::T_INT);
+		}
+		"bool-hash" => {
+			w.i32(types::TAG_INT);
+			unbox(&mut w, 1, types::T_BOOL);
+			w.i64_extend_i32_u();
+			w.struct_new(types::T_INT);
+		}
+		// string / bytes: FNV-1a (64-bit) over the `$bytes` backing — a defined,
+		// portable hash (the VM uses the same two constants in `value::fnv1a`).
+		// Both share the `$str` `{tag, $bytes}` shape, so one loop serves either.
+		"string-hash" | "bytes-hash" => {
+			const FNV_OFFSET: i64 = 0xcbf2_9ce4_8422_2325u64 as i64;
+			const FNV_PRIME: i64 = 0x0000_0100_0000_01b3;
+			let bytes = w.local(types::bytes_ref());
+			let len = w.local(ValType::I32);
+			let i = w.local(ValType::I32);
+			let h = w.local(ValType::I64);
+			let p1 = w.param(1);
+			w.local_get(p1)
+				.ref_cast(types::T_STR)
+				.struct_get(types::T_STR, 1)
+				.local_set(bytes);
+			w.local_get(bytes).array_len().local_set(len);
+			w.i32(0).local_set(i);
+			w.i64(FNV_OFFSET).local_set(h);
+			w.block("done", |w| {
+				w.loop_("loop", |w| {
+					w.local_get(i).local_get(len).i32_ge_u().br_if("done");
+					// h = (h ^ byte) * PRIME.
+					w.local_get(h);
+					w.local_get(bytes).local_get(i).array_get_u(types::T_BYTES);
+					w.i64_extend_i32_u();
+					w.i64_xor();
+					w.i64(FNV_PRIME);
+					w.i64_mul();
+					w.local_set(h);
+					w.local_get(i).i32(1).i32_add().local_set(i);
+					w.br("loop");
+				});
+			});
+			w.i32(types::TAG_INT).local_get(h).struct_new(types::T_INT);
 		}
 		_ => return None,
 	}

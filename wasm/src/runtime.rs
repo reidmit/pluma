@@ -417,7 +417,10 @@ pub(crate) struct HostSig {
 /// import it. Grows with milestone coverage (M7 brings the rest).
 pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 	match tag {
-		"print" => Some(HostSig {
+		// stdout/stderr writers + the program-controlled abort. All take one
+		// boxed arg and return nothing (`io.fail` diverges — the host traps).
+		"print" | "io-print" | "io-print-err" | "io-write" | "io-write-err" | "io-write-bytes"
+		| "io-write-err-bytes" | "io-fail" => Some(HostSig {
 			arity: 1,
 			returns_value: false,
 		}),
@@ -455,6 +458,8 @@ pub(crate) fn is_inline_builtin(tag: &str) -> bool {
 			| "math-sqrt"
 			| "math-to-int"
 			| "math-to-float"
+			// duration's nanosecond count: a retag of the `$int`-shaped box.
+			| "time-duration-as-nanos"
 	)
 }
 

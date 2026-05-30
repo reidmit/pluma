@@ -213,20 +213,6 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 		"math-exp" => Ok(Value::Float(expect_float(&args, "exp").exp())),
 		"math-sin" => Ok(Value::Float(expect_float(&args, "sin").sin())),
 		"math-cos" => Ok(Value::Float(expect_float(&args, "cos").cos())),
-		"string-to-int" => {
-			let s = expect_string(&args, "to-int");
-			Ok(match s.parse::<i64>() {
-				Ok(n) => result_ok(Value::Int(n)),
-				Err(e) => result_err(Value::String(Rc::new(e.to_string()))),
-			})
-		}
-		"string-to-float" => {
-			let s = expect_string(&args, "to-float");
-			Ok(match s.parse::<f64>() {
-				Ok(n) => result_ok(Value::Float(n)),
-				Err(e) => result_err(Value::String(Rc::new(e.to_string()))),
-			})
-		}
 		"string-to-bytes" => {
 			let s = expect_string(&args, "to-bytes");
 			Ok(Value::Bytes(Rc::new(s.as_bytes().to_vec())))
@@ -1292,13 +1278,10 @@ fn expect_float(args: &[Value], name: &str) -> f64 {
 	}
 }
 
-// Hash a string using the same hasher as the `string-hash` builtin —
-// keeps json-built dicts interoperable with `core.dict` lookups.
+// Hash a string using the same hasher as the `string-hash` builtin (FNV-1a over
+// the bytes) — keeps json-built dicts interoperable with `core.dict` lookups.
 fn hash_string(s: &str) -> i64 {
-	use std::hash::{Hash, Hasher};
-	let mut h = std::collections::hash_map::DefaultHasher::new();
-	s.hash(&mut h);
-	h.finish() as i64
+	crate::value::fnv1a(s.as_bytes()) as i64
 }
 
 // Construct a `core.json.value` variant with the given name and payload.

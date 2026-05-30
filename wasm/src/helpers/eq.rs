@@ -54,6 +54,10 @@ pub(crate) fn build_eq_fn(self_idx: u32) -> Function {
 	scalar(&mut w, types::TAG_INT, types::T_INT, |w| {
 		w.i64_eq();
 	});
+	// DURATION reuses the `$int` shape; compare its i64 nanos (`1s == 1000ms`).
+	scalar(&mut w, types::TAG_DURATION, types::T_INT, |w| {
+		w.i64_eq();
+	});
 	scalar(&mut w, types::TAG_FLOAT, types::T_FLOAT, |w| {
 		w.f64_eq();
 	});
