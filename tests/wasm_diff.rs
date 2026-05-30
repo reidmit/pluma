@@ -543,7 +543,7 @@ fn err_message(store: &mut impl AsContextMut, val: &Val) -> Option<String> {
 fn run_vm(program: vm::Program) -> RunResult {
 	let stdout = Rc::new(RefCell::new(Vec::<u8>::new()));
 	let stderr = Rc::new(RefCell::new(Vec::<u8>::new()));
-	let mut vm_instance = vm::VM::new(program)
+	let mut vm_instance = vm::VM::new(program).with_stdin(vm::InputSource::Buffer(std::rc::Rc::new(std::cell::RefCell::new(Vec::new()))))
 		.with_stdout(vm::OutputSink::Buffer(stdout.clone()))
 		.with_stderr(vm::OutputSink::Buffer(stderr.clone()));
 	let status = match vm_instance.run() {

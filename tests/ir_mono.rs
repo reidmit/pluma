@@ -24,7 +24,7 @@ struct RunResult {
 
 fn run_program(program: vm::Program) -> RunResult {
 	let stdout = Rc::new(RefCell::new(Vec::<u8>::new()));
-	let mut vm_instance = vm::VM::new(program).with_stdout(vm::OutputSink::Buffer(stdout.clone()));
+	let mut vm_instance = vm::VM::new(program).with_stdout(vm::OutputSink::Buffer(stdout.clone())).with_stdin(vm::InputSource::Buffer(std::rc::Rc::new(std::cell::RefCell::new(Vec::new()))));
 	let status = match vm_instance.run() {
 		Ok(_) => "ok".to_string(),
 		Err(e) => format!("runtime error: {}", e.message),

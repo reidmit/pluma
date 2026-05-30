@@ -22,9 +22,11 @@ struct RunResult {
 	stdout: String,
 }
 
-fn run_program(program: vm::Program) -> RunResult {
+fn run_program(program: vm::Program, stdin: Vec<u8>) -> RunResult {
 	let stdout = Rc::new(RefCell::new(Vec::<u8>::new()));
-	let mut vm_instance = vm::VM::new(program).with_stdout(vm::OutputSink::Buffer(stdout.clone()));
+	let mut vm_instance = vm::VM::new(program)
+		.with_stdout(vm::OutputSink::Buffer(stdout.clone()))
+		.with_stdin(vm::InputSource::Buffer(Rc::new(RefCell::new(stdin))));
 	let status = match vm_instance.run() {
 		Ok(_) => "ok".to_string(),
 		Err(e) => format!("runtime error: {}", e.message),
@@ -33,6 +35,18 @@ fn run_program(program: vm::Program) -> RunResult {
 	RunResult {
 		status,
 		stdout: out,
+	}
+}
+
+/// Fixtures that read stdin get a fixed input; everything else gets empty — so
+/// the stdin-reading fixtures (`io-read-all`, …) hit EOF instead of blocking on
+/// the real terminal under `cargo test`/`just test`. Mirrors `tests/run.rs`.
+fn stdin_for(name: &str) -> Vec<u8> {
+	match name {
+		"io-read-all" => b"hello from stdin\nsecond line\n".to_vec(),
+		"io-read-lines" => b"alpha\nbeta\ngamma\n".to_vec(),
+		"io-read-eof" => b"".to_vec(),
+		_ => Vec::new(),
 	}
 }
 
@@ -84,13 +98,19 @@ fn cps_transform_is_behavior_neutral() {
 		};
 
 		// Reference behavior: the plain IR path (every async fn Await-style).
-		let base = run_program(codegen::compile_from_ir(&base_ir).expect("ir emit"));
+		let base = run_program(
+			codegen::compile_from_ir(&base_ir).expect("ir emit"),
+			stdin_for(&name),
+		);
 
 		// Transform to poll style, then run again — must match byte-for-byte.
 		let mut cps = base_ir.clone();
 		ir::cps::cps_transform(&mut cps);
 		total_transformed += poll_transformed_count(&cps);
-		let after = run_program(codegen::compile_from_ir(&cps).expect("cps ir emit"));
+		let after = run_program(
+			codegen::compile_from_ir(&cps).expect("cps ir emit"),
+			stdin_for(&name),
+		);
 
 		assert_eq!(
 			(base.status.as_str(), base.stdout.as_str()),
@@ -121,7 +141,10 @@ fn try_chain_fixture_transforms_and_matches() {
 	let compiler = compile_check(&dir).expect("task-try-chain compiles");
 	let base_ir = ir::lower(&compiler).expect("lowers");
 
-	let base = run_program(codegen::compile_from_ir(&base_ir).expect("ir emit"));
+	let base = run_program(
+		codegen::compile_from_ir(&base_ir).expect("ir emit"),
+		Vec::new(),
+	);
 
 	let mut cps = base_ir.clone();
 	ir::cps::cps_transform(&mut cps);
@@ -130,7 +153,10 @@ fn try_chain_fixture_transforms_and_matches() {
 		"expected >=3 poll-transformed fns in task-try-chain, got {}",
 		poll_transformed_count(&cps)
 	);
-	let after = run_program(codegen::compile_from_ir(&cps).expect("cps ir emit"));
+	let after = run_program(
+		codegen::compile_from_ir(&cps).expect("cps ir emit"),
+		Vec::new(),
+	);
 
 	assert_eq!(base.status, after.status);
 	assert_eq!(base.stdout, after.stdout);
@@ -188,7 +214,10 @@ fn nested_control_flow_transforms_and_matches() {
 		"fixture should pull in >=2 nested-await async fns (await-all, gather), got {nested:?}"
 	);
 
-	let base = run_program(codegen::compile_from_ir(&base_ir).expect("ir emit"));
+	let base = run_program(
+		codegen::compile_from_ir(&base_ir).expect("ir emit"),
+		Vec::new(),
+	);
 
 	let mut cps = base_ir.clone();
 	ir::cps::cps_transform(&mut cps);
@@ -199,7 +228,10 @@ fn nested_control_flow_transforms_and_matches() {
 			"expected nested-await async fn `{name}` to be poll-transformed"
 		);
 	}
-	let after = run_program(codegen::compile_from_ir(&cps).expect("cps ir emit"));
+	let after = run_program(
+		codegen::compile_from_ir(&cps).expect("cps ir emit"),
+		Vec::new(),
+	);
 
 	assert_eq!(base.status, after.status);
 	assert_eq!(base.stdout, after.stdout);
@@ -254,7 +286,10 @@ fn defer_across_suspension_transforms_and_matches() {
 			"[{fixture}] should pull in >=1 defer-bearing async fn, found none"
 		);
 
-		let base = run_program(codegen::compile_from_ir(&base_ir).expect("ir emit"));
+		let base = run_program(
+			codegen::compile_from_ir(&base_ir).expect("ir emit"),
+			Vec::new(),
+		);
 
 		let mut cps = base_ir.clone();
 		ir::cps::cps_transform(&mut cps);
@@ -265,7 +300,10 @@ fn defer_across_suspension_transforms_and_matches() {
 				"[{fixture}] expected defer-bearing async fn `{name}` to be poll-transformed"
 			);
 		}
-		let after = run_program(codegen::compile_from_ir(&cps).expect("cps ir emit"));
+		let after = run_program(
+			codegen::compile_from_ir(&cps).expect("cps ir emit"),
+			Vec::new(),
+		);
 
 		assert_eq!(
 			(base.status.as_str(), base.stdout.as_str()),
@@ -333,7 +371,10 @@ fn loop_with_await_transforms_and_matches() {
 		"task-loop should pull in >=1 async fn that awaits inside a loop, found none"
 	);
 
-	let base = run_program(codegen::compile_from_ir(&base_ir).expect("ir emit"));
+	let base = run_program(
+		codegen::compile_from_ir(&base_ir).expect("ir emit"),
+		Vec::new(),
+	);
 
 	let mut cps = base_ir.clone();
 	ir::cps::cps_transform(&mut cps);
@@ -344,7 +385,10 @@ fn loop_with_await_transforms_and_matches() {
 			"expected await-in-loop async fn `{name}` to be poll-transformed"
 		);
 	}
-	let after = run_program(codegen::compile_from_ir(&cps).expect("cps ir emit"));
+	let after = run_program(
+		codegen::compile_from_ir(&cps).expect("cps ir emit"),
+		Vec::new(),
+	);
 
 	assert_eq!(base.status, after.status);
 	assert_eq!(base.stdout, after.stdout);
