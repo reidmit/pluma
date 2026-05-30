@@ -119,6 +119,14 @@ pub(crate) fn scan_pattern_names(p: &ir::Pattern, pool: &mut StrPool) {
 			fields.iter().for_each(|p| scan_pattern_names(p, pool))
 		}
 		ir::Pattern::List { items, .. } => items.iter().for_each(|p| scan_pattern_names(p, pool)),
+		// String/bytes literal patterns (`when s is "digit"`) compare against an
+		// interned `$str`/`$bytes` constant, so the pool must carry it.
+		ir::Pattern::Literal(Const::Str(s)) => {
+			pool.intern(s);
+		}
+		ir::Pattern::Literal(Const::Bytes(b)) => {
+			pool.intern_bytes(b);
+		}
 		_ => {}
 	}
 }
@@ -160,10 +168,7 @@ pub(crate) fn for_each_atom(rv: &Rvalue, f: &mut impl FnMut(&Atom)) {
 		Rvalue::MakeList(items) => items.iter().for_each(|it| match it {
 			ListItem::Elem(a) | ListItem::Spread(a) => f(a),
 		}),
-		Rvalue::MakeVariantCtor { .. }
-		| Rvalue::Regex(_)
-		| Rvalue::GlobalRef(_)
-		| Rvalue::Builtin(_) => {}
+		Rvalue::MakeVariantCtor { .. } | Rvalue::GlobalRef(_) | Rvalue::Builtin(_) => {}
 	}
 }
 

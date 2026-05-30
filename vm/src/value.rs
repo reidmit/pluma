@@ -46,7 +46,6 @@ pub enum Value {
 	// names a handler builtin.rs doesn't implement. `Rc<str>` keeps the
 	// tag owned (no leak) and cheap to clone.
 	Builtin(Rc<str>),
-	Regex(Rc<RegexData>),
 	// An opaque wall-clock instant: nanoseconds since the Unix epoch (UTC),
 	// signed. The surface type is `instant` (a `core.time` primitive); the
 	// VM only ever produces these from `core.time` builtins.
@@ -291,10 +290,6 @@ pub struct VariantCtorData {
 	pub arity: usize,
 }
 
-pub struct RegexData {
-	pub compiled: regex::Regex,
-}
-
 // Display drives `to-string`. Stays consistent with the language reference (docs site).
 impl std::fmt::Display for Value {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -372,7 +367,6 @@ impl std::fmt::Display for Value {
 			}
 			Value::Closure(_) => write!(f, "<closure>"),
 			Value::Builtin(_) => write!(f, "<builtin>"),
-			Value::Regex(r) => write!(f, "<regex {}>", r.compiled.as_str()),
 			// Wall-clock instants print as RFC 3339 in UTC (e.g.
 			// `2026-05-25T14:30:00Z`); durations print in the same form as a
 			// duration literal (e.g. `2d`, `1h30m`, `500ms`).

@@ -8,7 +8,7 @@ module `main` (tests/analyze/regex-groupings/main.pa) {
         module(0:0-0:37) [
             def(0:0-0:37) :: nothing {
                 name: ident(0:4-0:7) `alt`,
-                kind: expr(0:10-0:37) :: regex {
+                kind: expr(0:10-0:37) :: regex-pattern {
                     kind: regex(0:12-0:35) sequence [
                         regex(0:12-0:13) literal "a",
                         regex(0:15-0:32) regex(0:17-0:30) alternation [

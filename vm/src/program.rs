@@ -22,7 +22,6 @@ pub struct Program {
 	// because bytes have no UTF-8 invariant and never share storage with
 	// strings).
 	pub bytes_constants: Vec<Rc<Vec<u8>>>,
-	pub regex_patterns: Vec<Rc<crate::value::RegexData>>,
 	pub globals: Vec<GlobalSlot>,
 	// Record-shape field name lists, indexed by FieldListIdx. Moves the
 	// only Vec-carrying field out of `Instruction` so the instruction

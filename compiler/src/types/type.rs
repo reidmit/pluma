@@ -7,7 +7,6 @@ pub enum Type {
 	Bool,
 	Int,
 	Float,
-	Regex,
 	// An opaque point on the wall clock (UTC), backed by an i64 nanosecond
 	// count since the Unix epoch. Produced and consumed only by `core.time`
 	// builtins; the surface language can't peek at the raw count.
@@ -80,7 +79,6 @@ impl Type {
 			| Type::Float
 			| Type::String
 			| Type::Bytes
-			| Type::Regex
 			| Type::Instant
 			| Type::Duration
 			| Type::Unknown => false,
@@ -145,7 +143,6 @@ impl Type {
 			| Type::Bool
 			| Type::Int
 			| Type::Float
-			| Type::Regex
 			| Type::Instant
 			| Type::Duration
 			| Type::String
@@ -217,7 +214,6 @@ impl Type {
 			| Type::Bool
 			| Type::Int
 			| Type::Float
-			| Type::Regex
 			| Type::Instant
 			| Type::Duration
 			| Type::String
@@ -368,7 +364,6 @@ impl std::fmt::Display for Type {
 			Type::Float => write!(f, "float"),
 			Type::String => write!(f, "string"),
 			Type::Bytes => write!(f, "bytes"),
-			Type::Regex => write!(f, "regex"),
 			Type::Instant => write!(f, "instant"),
 			Type::Duration => write!(f, "duration"),
 			Type::Nothing => write!(f, "nothing"),

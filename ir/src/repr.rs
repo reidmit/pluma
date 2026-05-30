@@ -244,7 +244,6 @@ pub fn result_repr(rv: &Rvalue, reprs: &[Repr], sigs: &Sigs) -> Repr {
 		| Rvalue::MakeVariant { .. }
 		| Rvalue::MakeVariantCtor { .. }
 		| Rvalue::Interpolate(..)
-		| Rvalue::Regex(..)
 		| Rvalue::GetTag(..)
 		| Rvalue::GetPayload(..)
 		| Rvalue::MakeList(..)
@@ -372,7 +371,6 @@ fn for_each_required_operand(rv: &mut Rvalue, sigs: &Sigs, mut f: impl FnMut(&mu
 		| Rvalue::Box(_)
 		| Rvalue::Unbox(_, _)
 		| Rvalue::MakeVariantCtor { .. }
-		| Rvalue::Regex(_)
 		| Rvalue::GlobalRef(_)
 		| Rvalue::Builtin(_) => {}
 	}
@@ -704,10 +702,7 @@ fn rvalue_vars(rv: &Rvalue, bump: &mut impl FnMut(VarId)) {
 		| Rvalue::GetTag(a)
 		| Rvalue::GetPayload(a, _)
 		| Rvalue::Await(a) => atom_var(a, bump),
-		Rvalue::MakeVariantCtor { .. }
-		| Rvalue::Regex(_)
-		| Rvalue::GlobalRef(_)
-		| Rvalue::Builtin(_) => {}
+		Rvalue::MakeVariantCtor { .. } | Rvalue::GlobalRef(_) | Rvalue::Builtin(_) => {}
 	}
 }
 

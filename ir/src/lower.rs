@@ -592,7 +592,7 @@ impl<'a> Lowerer<'a> {
 			ExprKind::If(n) => self.lower_if(n, range),
 			ExprKind::When(n) => self.lower_when(n, range),
 			ExprKind::While(n) => self.lower_while(n, range),
-			ExprKind::Regex(node) => Ok(self.emit_let(Rvalue::Regex(regex_pattern(node)), range)),
+			ExprKind::Regex(node) => self.lower_regex_pattern(node, range),
 			ExprKind::Defer(inner) => self.lower_defer(inner, range),
 			ExprKind::Try(node) => self.lower_try(node, range),
 			ExprKind::Scope(node) => self.lower_scope(node, range),
@@ -992,6 +992,78 @@ impl<'a> Lowerer<'a> {
 			}
 			W::Var(resolved) => self.lower_dict_atom(resolved, range),
 		}
+	}
+
+	/// Lower a backtick regex literal to a `__prelude__.regex-pattern` enum
+	/// value tree — the shape the pure-Pluma `core.regex` engine walks. Mirrors
+	/// `lower_wire_shape`: a structured AST node reified as a runtime value
+	/// rather than flattened to a string. The quantifier `RegexKind`s all
+	/// collapse to `p-repeat inner min max` (`max = -1` is unbounded); a
+	/// `Grouping` is transparent (its inner node, no wrapper).
+	fn lower_regex_pattern(&mut self, node: &RegexNode, range: Range) -> Result<Atom, String> {
+		use RegexAnchor as A;
+		use RegexKind as K;
+		const E: &str = "__prelude__.regex-pattern";
+		let str_atom = |s: &str| Atom::Const(Const::Str(s.to_string()));
+		match &node.kind {
+			K::Literal(s) => {
+				let bytes = Atom::Const(Const::Bytes(s.clone().into_bytes()));
+				self.make_variant(E, "p-literal", vec![bytes], range)
+			}
+			K::CharacterClass(c) => self.make_variant(E, "p-class", vec![str_atom(c)], range),
+			K::Anchor(a) => {
+				let name = match a {
+					A::Start => "start",
+					A::End => "end",
+					A::Boundary => "boundary",
+				};
+				self.make_variant(E, "p-anchor", vec![str_atom(name)], range)
+			}
+			K::OneOrMore(inner) => self.lower_repeat(inner, 1, -1, range),
+			K::ZeroOrMore(inner) => self.lower_repeat(inner, 0, -1, range),
+			K::OneOrZero(inner) => self.lower_repeat(inner, 0, 1, range),
+			K::ExactCount(inner, n) => self.lower_repeat(inner, *n as i64, *n as i64, range),
+			K::AtLeastCount(inner, n) => self.lower_repeat(inner, *n as i64, -1, range),
+			K::AtMostCount(inner, n) => self.lower_repeat(inner, 0, *n as i64, range),
+			K::RangeCount(inner, min, max) => self.lower_repeat(inner, *min as i64, *max as i64, range),
+			K::Grouping(inner) => self.lower_regex_pattern(inner, range),
+			K::Sequence(parts) => {
+				let list = self.lower_regex_list(parts, range)?;
+				self.make_variant(E, "p-sequence", vec![list], range)
+			}
+			K::Alternation(parts) => {
+				let list = self.lower_regex_list(parts, range)?;
+				self.make_variant(E, "p-alternation", vec![list], range)
+			}
+			K::NamedCapture(name, inner) => {
+				let i = self.lower_regex_pattern(inner, range)?;
+				self.make_variant(E, "p-capture", vec![str_atom(name), i], range)
+			}
+		}
+	}
+
+	fn lower_repeat(
+		&mut self,
+		inner: &RegexNode,
+		lo: i64,
+		hi: i64,
+		range: Range,
+	) -> Result<Atom, String> {
+		let i = self.lower_regex_pattern(inner, range)?;
+		self.make_variant(
+			"__prelude__.regex-pattern",
+			"p-repeat",
+			vec![i, Atom::Const(Const::Int(lo)), Atom::Const(Const::Int(hi))],
+			range,
+		)
+	}
+
+	fn lower_regex_list(&mut self, parts: &[RegexNode], range: Range) -> Result<Atom, String> {
+		let mut items = Vec::with_capacity(parts.len());
+		for p in parts {
+			items.push(ListItem::Elem(self.lower_regex_pattern(p, range)?));
+		}
+		Ok(self.emit_let(Rvalue::MakeList(items), range))
 	}
 
 	/// If `call` is a `wire` trait-method call (`encode x` / `decode b`),
@@ -1913,46 +1985,6 @@ fn finish_scope(scope: FnScope) -> Function {
 		var_reprs: Vec::new(),
 		param_reprs: scope.param_reprs,
 		ret_repr: scope.ret_repr,
-	}
-}
-
-/// Build a regex pattern string from a regex-literal AST node. Ported from
-/// `codegen::emit::regex_pattern`; the analyzer has already validated the node,
-/// so the resulting pattern compiles.
-fn regex_pattern(node: &RegexNode) -> String {
-	match &node.kind {
-		RegexKind::Literal(s) => regex::escape(s),
-		RegexKind::CharacterClass(c) => match c.as_str() {
-			"any" => ".".to_string(),
-			"digit" => "[0-9]".to_string(),
-			"letter" => "[A-Za-z]".to_string(),
-			"whitespace" => "[ \\t\\n\\r]".to_string(),
-			"word" => "[A-Za-z0-9_]".to_string(),
-			_ => "[^\\s\\S]".to_string(),
-		},
-		RegexKind::Anchor(a) => match a {
-			RegexAnchor::Start => "^".to_string(),
-			RegexAnchor::End => "$".to_string(),
-			RegexAnchor::Boundary => "\\b".to_string(),
-		},
-		RegexKind::OneOrMore(inner) => format!("(?:{})+", regex_pattern(inner)),
-		RegexKind::ZeroOrMore(inner) => format!("(?:{})*", regex_pattern(inner)),
-		RegexKind::OneOrZero(inner) => format!("(?:{})?", regex_pattern(inner)),
-		RegexKind::ExactCount(inner, n) => format!("(?:{}){{{}}}", regex_pattern(inner), n),
-		RegexKind::AtLeastCount(inner, n) => format!("(?:{}){{{},}}", regex_pattern(inner), n),
-		RegexKind::AtMostCount(inner, n) => format!("(?:{}){{0,{}}}", regex_pattern(inner), n),
-		RegexKind::RangeCount(inner, min, max) => {
-			format!("(?:{}){{{},{}}}", regex_pattern(inner), min, max)
-		}
-		RegexKind::Grouping(inner) => format!("(?:{})", regex_pattern(inner)),
-		RegexKind::Sequence(parts) => parts.iter().map(regex_pattern).collect(),
-		RegexKind::Alternation(parts) => {
-			let joined: Vec<_> = parts.iter().map(regex_pattern).collect();
-			format!("(?:{})", joined.join("|"))
-		}
-		RegexKind::NamedCapture(name, inner) => {
-			format!("(?P<{}>{})", name, regex_pattern(inner))
-		}
 	}
 }
 

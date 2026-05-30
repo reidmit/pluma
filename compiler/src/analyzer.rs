@@ -208,7 +208,6 @@ fn match_types(
 		| (Float, Float)
 		| (Bool, Bool)
 		| (String, String)
-		| (Regex, Regex)
 		| (Instant, Instant)
 		| (Duration, Duration)
 		| (Nothing, Nothing) => true,
@@ -246,7 +245,6 @@ fn type_keys_match(a: &Type, b: &Type) -> bool {
 		| (Type::Bool, Type::Bool)
 		| (Type::String, Type::String)
 		| (Type::Bytes, Type::Bytes)
-		| (Type::Regex, Type::Regex)
 		| (Type::Instant, Type::Instant)
 		| (Type::Duration, Type::Duration)
 		| (Type::Nothing, Type::Nothing) => true,
@@ -460,7 +458,6 @@ pub fn type_defining_module(ty: &Type) -> Option<String> {
 		| Type::Bool
 		| Type::String
 		| Type::Bytes
-		| Type::Regex
 		| Type::Instant
 		| Type::Duration
 		| Type::Nothing => Some("__prelude__".into()),
@@ -488,7 +485,6 @@ pub fn type_to_head_key(ty: &Type) -> Option<String> {
 		Type::Bool => Some("bool".into()),
 		Type::String => Some("string".into()),
 		Type::Bytes => Some("bytes".into()),
-		Type::Regex => Some("regex".into()),
 		Type::Instant => Some("instant".into()),
 		Type::Duration => Some("duration".into()),
 		Type::Nothing => Some("nothing".into()),
@@ -536,7 +532,13 @@ impl<'compiler> Analyzer<'compiler> {
 		self.add_type_binding("bool".into(), Type::Bool, Range::collapsed(0, 0));
 		self.add_type_binding("string".into(), Type::String, Range::collapsed(0, 0));
 		self.add_type_binding("bytes".into(), Type::Bytes, Range::collapsed(0, 0));
-		self.add_type_binding("regex".into(), Type::Regex, Range::collapsed(0, 0));
+		// `regex` is the pure-Pluma `regex-pattern` enum tree (a backtick literal
+		// reifies to it; `core.regex` walks it). The opaque `Type::Regex` is gone.
+		self.add_type_binding(
+			"regex".into(),
+			Type::Enum("__prelude__.regex-pattern".into(), vec![]),
+			Range::collapsed(0, 0),
+		);
 		self.add_type_binding("instant".into(), Type::Instant, Range::collapsed(0, 0));
 		self.add_type_binding("duration".into(), Type::Duration, Range::collapsed(0, 0));
 		self.add_type_binding("float".into(), Type::Float, Range::collapsed(0, 0));
@@ -2054,7 +2056,7 @@ impl<'compiler> Analyzer<'compiler> {
 					"int" => return Type::Int,
 					"float" => return Type::Float,
 					"bool" => return Type::Bool,
-					"regex" => return Type::Regex,
+					"regex" => return Type::Enum("__prelude__.regex-pattern".into(), vec![]),
 					"instant" => return Type::Instant,
 					"duration" => return Type::Duration,
 					"nothing" => return Type::Nothing,
@@ -2307,7 +2309,7 @@ impl<'compiler> Analyzer<'compiler> {
 			ExprKind::EmptyTuple => expr.ty = Type::Nothing,
 			ExprKind::Regex(node) => {
 				self.check_regex_character_classes(node);
-				expr.ty = Type::Regex;
+				expr.ty = Type::Enum("__prelude__.regex-pattern".into(), vec![]);
 			}
 			ExprKind::Literal(literal) => match &mut literal.kind {
 				LiteralKind::Bool(..) => expr.ty = Type::Bool,
@@ -3963,7 +3965,6 @@ impl<'compiler> Analyzer<'compiler> {
 				| (Type::Bool, Type::Bool)
 				| (Type::String, Type::String)
 				| (Type::Bytes, Type::Bytes)
-				| (Type::Regex, Type::Regex)
 				| (Type::Instant, Type::Instant)
 				| (Type::Duration, Type::Duration)
 				| (Type::Nothing, Type::Nothing)
@@ -4261,7 +4262,6 @@ impl<'compiler> Analyzer<'compiler> {
 			| Type::Float
 			| Type::String
 			| Type::Bytes
-			| Type::Regex
 			| Type::Instant
 			| Type::Duration => ty.clone(),
 			Type::Enum(name, args) => Type::Enum(
@@ -6591,7 +6591,6 @@ impl<'compiler> Analyzer<'compiler> {
 		match ty {
 			Type::Fun(..) => Some("functions aren't serializable".to_string()),
 			Type::Ref(_) => Some("mutable refs aren't serializable".to_string()),
-			Type::Regex => Some("regexes aren't serializable".to_string()),
 			Type::Instant => Some("instants aren't serializable (send the value they wrap)".to_string()),
 			// A dict with a compound key can't be rehashed by the codec; a
 			// primitive-keyed dict is fine, so blame the value type instead.
@@ -6752,7 +6751,6 @@ impl<'compiler> Analyzer<'compiler> {
 			| Type::Float
 			| Type::String
 			| Type::Bytes
-			| Type::Regex
 			| Type::Instant
 			| Type::Duration
 			| Type::Unknown

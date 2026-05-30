@@ -781,10 +781,6 @@ impl VM {
 				let methods: Vec<Value> = self.stack.drain(start..).collect();
 				self.stack.push(Value::MethodDict(Rc::new(methods)));
 			}
-			Instruction::LoadRegex(idx) => {
-				let r = self.program.regex_patterns[idx as usize].clone();
-				self.stack.push(Value::Regex(r));
-			}
 			Instruction::Interpolate(arity) => {
 				let mut parts = Vec::with_capacity(arity as usize);
 				for _ in 0..arity {
@@ -1468,7 +1464,6 @@ fn opcode_name(i: &Instruction) -> &'static str {
 		GetElement(_) => "GetElement",
 		GetDictField(_) => "GetDictField",
 		MakeDict(_) => "MakeDict",
-		LoadRegex(_) => "LoadRegex",
 		Interpolate(_) => "Interpolate",
 		MatchInt(_, _) => "MatchInt",
 		MatchFloat(_, _) => "MatchFloat",

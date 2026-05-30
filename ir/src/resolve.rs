@@ -234,10 +234,7 @@ fn used_vars(f: &Function) -> HashSet<u32> {
 			| Rvalue::GetTag(a)
 			| Rvalue::GetPayload(a, _)
 			| Rvalue::Await(a) => note(a),
-			Rvalue::MakeVariantCtor { .. }
-			| Rvalue::Regex(_)
-			| Rvalue::GlobalRef(_)
-			| Rvalue::Builtin(_) => {}
+			Rvalue::MakeVariantCtor { .. } | Rvalue::GlobalRef(_) | Rvalue::Builtin(_) => {}
 		}
 	}
 	fn walk(b: &Block, note: &mut impl FnMut(&Atom)) {

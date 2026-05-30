@@ -120,9 +120,6 @@ pub enum Instruction {
 		arity: u16,
 	},
 
-	// Regex literal: build a Value::Regex from a precompiled pattern.
-	LoadRegex(ConstIdx),
-
 	// String interpolation: combine N values on the stack into a single
 	// string. Each value gets Display-formatted.
 	Interpolate(u16),

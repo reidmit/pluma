@@ -23,6 +23,18 @@ use wasmtime::{
 
 // Fixtures the WASM backend covers end-to-end today. Grow as coverage grows.
 const WASM_FIXTURES: &[&str] = &[
+	"regex-matches",
+	"regex-find",
+	"regex-anchors",
+	"regex-character-classes",
+	"regex-quantifiers",
+	"regex-quantifier-shapes",
+	"regex-alternation",
+	"regex-named-captures",
+	"regex-named-capture-lookup",
+	"regex-replace",
+	"regex-split",
+	"regex-as-alias",
 	"arith-precedence",
 	"arithmetic",
 	"base64-roundtrip",

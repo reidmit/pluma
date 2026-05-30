@@ -142,6 +142,26 @@ public enum wire-schema {
 	s-enum string (list (string, (list wire-schema)))
 }
 
+# The runtime reification of a backtick regex literal: the pattern's shape
+# as a tree the pure-Pluma regex engine (`core.regex`) walks to match. You
+# never write one by hand; the compiler synthesizes it from the `` `...` ``
+# literal. It's public so those synthesized values have a named home.
+#
+# `p-repeat inner min max` covers every quantifier: `+` is `(_, 1, -1)`,
+# `*` is `(_, 0, -1)`, `?` is `(_, 0, 1)`, `{n}` is `(_, n, n)`, and so on
+# (`max = -1` means unbounded). `p-class` names a character group
+# (`"digit"`/`"letter"`/`"whitespace"`/`"word"`/`"any"`); `p-anchor` names
+# a zero-width assertion (`"start"`/`"end"`/`"boundary"`).
+public enum regex-pattern {
+	p-literal bytes
+	p-class string
+	p-anchor string
+	p-repeat regex-pattern int int
+	p-sequence (list regex-pattern)
+	p-alternation (list regex-pattern)
+	p-capture string regex-pattern
+}
+
 # The rules below teach `option` and `result` how to compare and hash,
 # so that anything built out of them can be sorted or used as a dict key
 # whenever the values they wrap can. An option compares by its contents,

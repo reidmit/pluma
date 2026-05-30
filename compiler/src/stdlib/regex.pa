@@ -16,6 +16,16 @@
 #
 # The `start` / `end` positions reported below are byte offsets into the
 # string you searched.
+#
+# The engine is pure Pluma: a backtick literal reifies to the prelude
+# `regex-pattern` tree (the `regex` type), and the matcher below is a
+# recursive backtracker with leftmost-first, greedy semantics. It runs
+# identically on every backend -- no native regex engine, no host call.
+
+use core.bytes
+use core.string
+use core.list
+use core.dict
 
 # A single match. `text` is the piece of the input that matched; `start`
 # and `end` mark where it sat (as byte offsets). `groups` maps each named
@@ -24,12 +34,312 @@
 # left out of the dict rather than mapped to "".
 public alias match {text :: string, start :: int, end :: int, groups :: dict string string}
 
+# ============================================================================
+# The matcher (private). Continuation-passing recursive backtracker over the
+# `regex-pattern` tree, indexing the input as bytes.
+#
+# `re-match pat input pos caps k` tries to match `pat` at `pos`; on success it
+# calls `k new-pos new-caps`, and `k` returning `none` triggers backtracking.
+# Captures are a `list (string, int, int)` (name, start, end) threaded
+# immutably, so a failed branch's captures are discarded for free.
+# ============================================================================
+
+# ---- character classes (ASCII, byte-level) ----
+
+def byte-in = fun b lo hi { b >= lo && b <= hi }
+
+def is-word-byte = fun b {
+	byte-in b 48 57 || byte-in b 65 90 || byte-in b 97 122 || b == 95
+}
+
+def class-matches = fun name b {
+	when name
+	is "digit" { byte-in b 48 57 }
+	is "letter" { byte-in b 65 90 || byte-in b 97 122 }
+	is "word" { is-word-byte b }
+	is "whitespace" { b == 32 || b == 9 || b == 10 || b == 13 }
+	is "any" { true }
+	is _ { false }
+}
+
+# ---- zero-width anchors ----
+
+def word-before = fun input pos {
+	if pos > 0 is true { is-word-byte (bytes.get input (pos - 1)) } else { false }
+}
+
+def word-after = fun input pos {
+	if pos < bytes.length input is true { is-word-byte (bytes.get input pos) } else { false }
+}
+
+def anchor-ok = fun name input pos {
+	when name
+	is "start" { pos == 0 }
+	is "end" { pos == bytes.length input }
+	is "boundary" { (word-before input pos) != (word-after input pos) }
+	is _ { false }
+}
+
+# ---- literal byte-run matching ----
+
+def lit-eq-at = fun input pos lit i n {
+	if i >= n is true {
+		true
+	} else {
+		if bytes.get input (pos + i) == bytes.get lit i is true {
+			lit-eq-at input pos lit (i + 1) n
+		} else {
+			false
+		}
+	}
+}
+
+def match-literal = fun input pos lit {
+	let n = bytes.length lit
+	if (pos + n) <= bytes.length input is true {
+		lit-eq-at input pos lit 0 n
+	} else {
+		false
+	}
+}
+
+# `-1` budget means unbounded; this decrements a finite budget but keeps -1.
+def dec-budget = fun hi { if hi == 0 - 1 is true { 0 - 1 } else { hi - 1 } }
+
+# ---- the core matcher ----
+
+def re-match = fun pat input pos caps k {
+	when pat
+	is p-literal lit {
+		if match-literal input pos lit is true {
+			k (pos + bytes.length lit) caps
+		} else {
+			none
+		}
+	}
+	is p-class name {
+		if pos < bytes.length input is true {
+			if class-matches name (bytes.get input pos) is true {
+				k (pos + 1) caps
+			} else {
+				none
+			}
+		} else {
+			none
+		}
+	}
+	is p-anchor name {
+		if anchor-ok name input pos is true { k pos caps } else { none }
+	}
+	is p-sequence parts {
+		re-seq parts input pos caps k
+	}
+	is p-alternation parts {
+		re-alt parts input pos caps k
+	}
+	is p-repeat inner lo hi {
+		re-repeat inner lo hi input pos caps k
+	}
+	is p-capture name inner {
+		re-match inner input pos caps (fun endp c2 {
+			k endp [(name, pos, endp), ...c2]
+		})
+	}
+}
+
+def re-seq = fun parts input pos caps k {
+	if parts is [first, ...rest] {
+		re-match first input pos caps (fun p2 c2 {
+			re-seq rest input p2 c2 k
+		})
+	} else {
+		k pos caps
+	}
+}
+
+def re-alt = fun parts input pos caps k {
+	if parts is [first, ...rest] {
+		when re-match first input pos caps k is some r {
+			some r
+		} is none {
+			re-alt rest input pos caps k
+		}
+	} else {
+		none
+	}
+}
+
+# `inner` repeated between `lo` and `hi` times (hi = -1 unbounded), greedy.
+def re-repeat = fun inner lo hi input pos caps k {
+	if lo > 0 is true {
+		re-match inner input pos caps (fun p2 c2 {
+			re-repeat inner (lo - 1) (dec-budget hi) input p2 c2 k
+		})
+	} else {
+		if hi == 0 is true {
+			k pos caps
+		} else {
+			# Greedy: try one more (requiring forward progress to avoid an
+			# infinite empty-match loop), otherwise stop and run `k` here.
+			when re-match inner input pos caps (fun p2 c2 {
+				if p2 > pos is true {
+					re-repeat inner 0 (dec-budget hi) input p2 c2 k
+				} else {
+					none
+				}
+			}) is some r {
+				some r
+			} is none {
+				k pos caps
+			}
+		}
+	}
+}
+
+# Try to match `pat` anchored at `start`; `some (end, caps)` or `none`.
+def match-at = fun pat input start {
+	re-match pat input start [] (fun endp caps { some (endp, caps) })
+}
+
+# Leftmost search at or after `start`: `some (match-start, match-end, caps)`.
+def search-from = fun pat input start {
+	if start <= bytes.length input is true {
+		when match-at pat input start is some pair {
+			let (endp, caps) = pair
+			some (start, endp, caps)
+		} is none {
+			search-from pat input (start + 1)
+		}
+	} else {
+		none
+	}
+}
+
+# Every non-overlapping match left-to-right, as a list of `(start, end, caps)`.
+# Advances by one on an empty match so the scan terminates.
+def collect-spans = fun pat input start acc {
+	when search-from pat input start is some triple {
+		let (ms, me, caps) = triple
+		let nexti = if me > ms is true { me } else { me + 1 }
+		collect-spans pat input nexti [(ms, me, caps), ...acc]
+	} is none {
+		list.reverse acc
+	}
+}
+
+# ---- match-record construction ----
+
+def slice-str = fun input start end {
+	bytes.to-string (bytes.slice input start end) ?? ""
+}
+
+# `caps` is most-recent-first, so keep the first occurrence of each name
+# (the last one matched) and drop earlier rebinds.
+def caps-to-dict = fun input caps {
+	list.fold caps (dict.empty ()) (fun acc entry {
+		let (name, s, e) = entry
+		if dict.contains-key acc name is true {
+			acc
+		} else {
+			dict.insert acc name (slice-str input s e)
+		}
+	})
+}
+
+def build-match = fun input ms me caps {
+	{text: slice-str input ms me, start: ms, end: me, groups: caps-to-dict input caps}
+}
+
+# ---- ${name} / ${0} / $$ replacement expansion ----
+
+def find-byte = fun b target i {
+	if i >= bytes.length b is true {
+		0 - 1
+	} else {
+		if bytes.get b i == target is true { i } else { find-byte b target (i + 1) }
+	}
+}
+
+# The text a `${name}` reference resolves to: `${0}` is the whole match, a
+# named group is its captured slice, and an unmatched name is empty.
+def group-text = fun name caps input ms me {
+	if name == "0" is true {
+		slice-str input ms me
+	} else {
+		when cap-span caps name is some span {
+			let (s, e) = span
+			slice-str input s e
+		} is none {
+			""
+		}
+	}
+}
+
+def cap-span = fun caps name {
+	if caps is [entry, ...rest] {
+		let (n, s, e) = entry
+		if n == name is true { some (s, e) } else { cap-span rest name }
+	} else {
+		none
+	}
+}
+
+# The `$`-token starting at `dollar`: `($$ → "$", ${name} → group, $ → "$")`,
+# paired with the index just past the token.
+def expand-token = fun rb caps input ms me dollar {
+	let after = dollar + 1
+	if after >= bytes.length rb is true {
+		("$", after)
+	} else {
+		let n = bytes.get rb after
+		if n == 36 is true {
+			("$", dollar + 2)
+		} else {
+			if n == 123 is true {
+				let close = find-byte rb 125 after
+				if close < 0 is true {
+					("$", after)
+				} else {
+					(group-text (slice-str rb (after + 1) close) caps input ms me, close + 1)
+				}
+			} else {
+				("$", after)
+			}
+		}
+	}
+}
+
+def expand-loop = fun rb caps input ms me i acc {
+	if i >= bytes.length rb is true {
+		acc
+	} else {
+		let dollar = find-byte rb 36 i
+		if dollar < 0 is true {
+			acc ++ slice-str rb i (bytes.length rb)
+		} else {
+			let literal = slice-str rb i dollar
+			let (sub, nexti) = expand-token rb caps input ms me dollar
+			expand-loop rb caps input ms me nexti (acc ++ literal ++ sub)
+		}
+	}
+}
+
+def expand-repl = fun repl caps input ms me {
+	expand-loop (string.to-bytes repl) caps input ms me 0 ""
+}
+
+# ============================================================================
+# Public surface.
+# ============================================================================
+
 # True when the regex matches anywhere in the input. Use this when you
 # only care whether there's a match, not where it is or what it caught.
 #
 #     regex.matches `digit+` "abc123"   # => true
 #     regex.matches `digit+` "abc"      # => false
-public def matches :: fun regex string -> bool = built-in "regex-matches"
+public def matches :: fun regex string -> bool = fun pat s {
+	when search-from pat (string.to-bytes s) 0 is some _t { true } is none { false }
+}
 
 # Finds the first match, scanning left to right, as a `match` record
 # wrapped in `some`. `none` if the pattern doesn't match anywhere.
@@ -37,7 +347,15 @@ public def matches :: fun regex string -> bool = built-in "regex-matches"
 #     regex.find `digit+` "abc 123"
 #     # => some {text: "123", start: 4, end: 7, groups: {}}
 #     regex.find `digit+` "no digits"   # => none
-public def find :: fun regex string -> option match = built-in "regex-find"
+public def find :: fun regex string -> option match = fun pat s {
+	let input = string.to-bytes s
+	when search-from pat input 0 is some triple {
+		let (ms, me, caps) = triple
+		some (build-match input ms me caps)
+	} is none {
+		none
+	}
+}
 
 # Finds every non-overlapping match, left to right, as a list of `match`
 # records. Empty list if nothing matches.
@@ -45,7 +363,13 @@ public def find :: fun regex string -> option match = built-in "regex-find"
 #     # collect just the matched text from each match
 #     let nums = regex.find-all `digit+` "a 1 b 22 c 333"
 #     list.map nums (fun m { m.text })   # => ["1", "22", "333"]
-public def find-all :: fun regex string -> list match = built-in "regex-find-all"
+public def find-all :: fun regex string -> list match = fun pat s {
+	let input = string.to-bytes s
+	list.map (collect-spans pat input 0 []) fun span {
+		let (ms, me, caps) = span
+		build-match input ms me caps
+	}
+}
 
 # A shortcut for grabbing one named capture from the first match.
 # `some text` when the regex matches and has a group by that name,
@@ -54,7 +378,13 @@ public def find-all :: fun regex string -> list match = built-in "regex-find-all
 #
 #     regex.named-capture `<year: digit+>` "born 2026" "year"   # => some "2026"
 #     regex.named-capture `<year: digit+>` "no number" "year"   # => none
-public def named-capture :: fun regex string string -> option string = built-in "regex-named-capture"
+public def named-capture :: fun regex string string -> option string = fun pat s name {
+	when find pat s is some m {
+		dict.lookup m.groups name
+	} is none {
+		none
+	}
+}
 
 # Replaces every match with `replacement`. Inside `replacement`, drop in
 # a captured group with `${name}`, and write a literal dollar sign as
@@ -62,13 +392,33 @@ public def named-capture :: fun regex string string -> option string = built-in 
 #
 #     regex.replace `digit+` "a1b22c333" "N"        # => "aNbNcN"
 #     regex.replace `<n: digit+>` "x42y" "[${n}]"   # => "x[42]y"
-public def replace :: fun regex string string -> string = built-in "regex-replace"
+public def replace :: fun regex string string -> string = fun pat s repl {
+	let input = string.to-bytes s
+	replace-pieces input (collect-spans pat input 0 []) repl 0 ""
+}
+
+def replace-pieces = fun input spans repl prev acc {
+	if spans is [span, ...rest] {
+		let (ms, me, caps) = span
+		replace-pieces input rest repl me (acc ++ slice-str input prev ms ++ expand-repl repl caps input ms me)
+	} else {
+		acc ++ slice-str input prev (bytes.length input)
+	}
+}
 
 # Like `replace`, but only touches the first match. Same `${name}` /
 # `$$` replacement syntax.
 #
 #     regex.replace-first `digit+` "1 2 3" "N"   # => "N 2 3"
-public def replace-first :: fun regex string string -> string = built-in "regex-replace-first"
+public def replace-first :: fun regex string string -> string = fun pat s repl {
+	let input = string.to-bytes s
+	when search-from pat input 0 is some triple {
+		let (ms, me, caps) = triple
+		slice-str input 0 ms ++ expand-repl repl caps input ms me ++ slice-str input me (bytes.length input)
+	} is none {
+		s
+	}
+}
 
 # Splits the input at every match, throwing the matched text away. A
 # match at the start or end, or two in a row, leaves an empty string --
@@ -76,4 +426,16 @@ public def replace-first :: fun regex string string -> string = built-in "regex-
 #
 #     regex.split `","` "a,b,c"             # => ["a", "b", "c"]
 #     regex.split `whitespace+` "a  b c"    # => ["a", "b", "c"]
-public def split :: fun regex string -> list string = built-in "regex-split"
+public def split :: fun regex string -> list string = fun pat s {
+	let input = string.to-bytes s
+	split-pieces input (collect-spans pat input 0 []) 0 []
+}
+
+def split-pieces = fun input spans prev acc {
+	if spans is [span, ...rest] {
+		let (ms, me, _caps) = span
+		split-pieces input rest me [slice-str input prev ms, ...acc]
+	} else {
+		list.reverse [slice-str input prev (bytes.length input), ...acc]
+	}
+}

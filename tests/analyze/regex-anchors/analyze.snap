@@ -8,7 +8,7 @@ module `main` (tests/analyze/regex-anchors/main.pa) {
         module(0:0-4:29) [
             def(0:0-0:27) :: nothing {
                 name: ident(0:4-0:13) `exact-yes`,
-                kind: expr(0:16-0:27) :: regex {
+                kind: expr(0:16-0:27) :: regex-pattern {
                     kind: regex(0:17-0:26) sequence [
                         regex(0:17-0:18) anchor start,
                         regex(0:20-0:23) literal "yes",
@@ -18,7 +18,7 @@ module `main` (tests/analyze/regex-anchors/main.pa) {
             },
             def(2:0-2:26) :: nothing {
                 name: ident(2:4-2:12) `word-cat`,
-                kind: expr(2:15-2:26) :: regex {
+                kind: expr(2:15-2:26) :: regex-pattern {
                     kind: regex(2:16-2:25) sequence [
                         regex(2:16-2:17) anchor boundary,
                         regex(2:19-2:22) literal "cat",
@@ -28,7 +28,7 @@ module `main` (tests/analyze/regex-anchors/main.pa) {
             },
             def(4:0-4:29) :: nothing {
                 name: ident(4:4-4:14) `all-digits`,
-                kind: expr(4:17-4:29) :: regex {
+                kind: expr(4:17-4:29) :: regex-pattern {
                     kind: regex(4:18-4:28) sequence [
                         regex(4:18-4:19) anchor start,
                         regex(4:20-4:26) one-or-more (regex(4:20-4:25) class digit),

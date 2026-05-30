@@ -10,4 +10,3 @@ doctest = false
 compiler = { path = "../compiler" }
 vm = { path = "../vm" }
 ir = { path = "../ir" }
-regex = "1"

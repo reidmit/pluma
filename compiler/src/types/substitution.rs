@@ -70,7 +70,6 @@ impl Substitution {
 			| Type::Float
 			| Type::String
 			| Type::Bytes
-			| Type::Regex
 			| Type::Instant
 			| Type::Duration => ty.clone(),
 

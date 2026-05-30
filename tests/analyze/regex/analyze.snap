@@ -8,7 +8,7 @@ module `main` (tests/analyze/regex/main.pa) {
         module(0:0-2:31) [
             def(0:0-0:26) :: nothing {
                 name: ident(0:4-0:6) `r1`,
-                kind: expr(0:9-0:26) :: regex {
+                kind: expr(0:9-0:26) :: regex-pattern {
                     kind: regex(0:11-0:24) sequence [
                         regex(0:11-0:16) literal "hello",
                         regex(0:19-0:24) literal "world",
@@ -17,7 +17,7 @@ module `main` (tests/analyze/regex/main.pa) {
             },
             def(2:0-2:31) :: nothing {
                 name: ident(2:4-2:6) `r2`,
-                kind: expr(2:9-2:31) :: regex {
+                kind: expr(2:9-2:31) :: regex-pattern {
                     kind: regex(2:11-2:30) sequence [
                         regex(2:11-2:16) exactly 1 (regex(2:11-2:12) literal "a"),
                         regex(2:18-2:25) between 2 and 7 (regex(2:18-2:19) literal "b"),

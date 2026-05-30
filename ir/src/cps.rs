@@ -818,7 +818,7 @@ fn collect_rvalue_reads(rv: &Rvalue, set: &mut HashSet<u32>) {
 		MakeList(items) => items.iter().for_each(|it| match it {
 			ListItem::Elem(a) | ListItem::Spread(a) => collect_atom(a, set),
 		}),
-		GlobalRef(_) | Builtin(_) | Regex(_) | MakeVariantCtor { .. } => {}
+		GlobalRef(_) | Builtin(_) | MakeVariantCtor { .. } => {}
 	}
 }
 
