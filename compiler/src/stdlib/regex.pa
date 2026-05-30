@@ -46,38 +46,58 @@ public alias match {text :: string, start :: int, end :: int, groups :: dict str
 
 # ---- character classes (ASCII, byte-level) ----
 
-def byte-in = fun b lo hi { b >= lo && b <= hi }
+def byte-in = fun b lo hi {
+	b >= lo && b <= hi
+}
 
 def is-word-byte = fun b {
 	byte-in b 48 57 || byte-in b 65 90 || byte-in b 97 122 || b == 95
 }
 
 def class-matches = fun name b {
-	when name
-	is "digit" { byte-in b 48 57 }
-	is "letter" { byte-in b 65 90 || byte-in b 97 122 }
-	is "word" { is-word-byte b }
-	is "whitespace" { b == 32 || b == 9 || b == 10 || b == 13 }
-	is "any" { true }
-	is _ { false }
+	when name is "digit" {
+		byte-in b 48 57
+	} is "letter" {
+		byte-in b 65 90 || byte-in b 97 122
+	} is "word" {
+		is-word-byte b
+	} is "whitespace" {
+		b == 32 || b == 9 || b == 10 || b == 13
+	} is "any" {
+		true
+	} else {
+		false
+	}
 }
 
 # ---- zero-width anchors ----
 
 def word-before = fun input pos {
-	if pos > 0 is true { is-word-byte (bytes.get input (pos - 1)) } else { false }
+	if pos > 0 is true {
+		is-word-byte (bytes.get input (pos - 1))
+	} else {
+		false
+	}
 }
 
 def word-after = fun input pos {
-	if pos < bytes.length input is true { is-word-byte (bytes.get input pos) } else { false }
+	if pos < bytes.length input is true {
+		is-word-byte (bytes.get input pos)
+	} else {
+		false
+	}
 }
 
 def anchor-ok = fun name input pos {
-	when name
-	is "start" { pos == 0 }
-	is "end" { pos == bytes.length input }
-	is "boundary" { (word-before input pos) != (word-after input pos) }
-	is _ { false }
+	when name is "start" {
+		pos == 0
+	} is "end" {
+		pos == bytes.length input
+	} is "boundary" {
+		word-before input pos != word-after input pos
+	} else {
+		false
+	}
 }
 
 # ---- literal byte-run matching ----
@@ -85,18 +105,16 @@ def anchor-ok = fun name input pos {
 def lit-eq-at = fun input pos lit i n {
 	if i >= n is true {
 		true
+	} else if bytes.get input (pos + i) == bytes.get lit i is true {
+		lit-eq-at input pos lit (i + 1) n
 	} else {
-		if bytes.get input (pos + i) == bytes.get lit i is true {
-			lit-eq-at input pos lit (i + 1) n
-		} else {
-			false
-		}
+		false
 	}
 }
 
 def match-literal = fun input pos lit {
 	let n = bytes.length lit
-	if (pos + n) <= bytes.length input is true {
+	if pos + n <= bytes.length input is true {
 		lit-eq-at input pos lit 0 n
 	} else {
 		false
@@ -104,20 +122,24 @@ def match-literal = fun input pos lit {
 }
 
 # `-1` budget means unbounded; this decrements a finite budget but keeps -1.
-def dec-budget = fun hi { if hi == 0 - 1 is true { 0 - 1 } else { hi - 1 } }
+def dec-budget = fun hi {
+	if hi == 0 - 1 is true {
+		0 - 1
+	} else {
+		hi - 1
+	}
+}
 
 # ---- the core matcher ----
 
 def re-match = fun pat input pos caps k {
-	when pat
-	is p-literal lit {
+	when pat is p-literal lit {
 		if match-literal input pos lit is true {
 			k (pos + bytes.length lit) caps
 		} else {
 			none
 		}
-	}
-	is p-class name {
+	} is p-class name {
 		if pos < bytes.length input is true {
 			if class-matches name (bytes.get input pos) is true {
 				k (pos + 1) caps
@@ -127,31 +149,30 @@ def re-match = fun pat input pos caps k {
 		} else {
 			none
 		}
-	}
-	is p-anchor name {
-		if anchor-ok name input pos is true { k pos caps } else { none }
-	}
-	is p-sequence parts {
+	} is p-anchor name {
+		if anchor-ok name input pos is true {
+			k pos caps
+		} else {
+			none
+		}
+	} is p-sequence parts {
 		re-seq parts input pos caps k
-	}
-	is p-alternation parts {
+	} is p-alternation parts {
 		re-alt parts input pos caps k
-	}
-	is p-repeat inner lo hi {
+	} is p-repeat inner lo hi {
 		re-repeat inner lo hi input pos caps k
-	}
-	is p-capture name inner {
-		re-match inner input pos caps (fun endp c2 {
+	} is p-capture name inner {
+		re-match inner input pos caps fun endp c2 {
 			k endp [(name, pos, endp), ...c2]
-		})
+		}
 	}
 }
 
 def re-seq = fun parts input pos caps k {
 	if parts is [first, ...rest] {
-		re-match first input pos caps (fun p2 c2 {
+		re-match first input pos caps fun p2 c2 {
 			re-seq rest input p2 c2 k
-		})
+		}
 	} else {
 		k pos caps
 	}
@@ -172,33 +193,33 @@ def re-alt = fun parts input pos caps k {
 # `inner` repeated between `lo` and `hi` times (hi = -1 unbounded), greedy.
 def re-repeat = fun inner lo hi input pos caps k {
 	if lo > 0 is true {
-		re-match inner input pos caps (fun p2 c2 {
+		re-match inner input pos caps fun p2 c2 {
 			re-repeat inner (lo - 1) (dec-budget hi) input p2 c2 k
-		})
+		}
+	} else if hi == 0 is true {
+		k pos caps
 	} else {
-		if hi == 0 is true {
-			k pos caps
-		} else {
-			# Greedy: try one more (requiring forward progress to avoid an
-			# infinite empty-match loop), otherwise stop and run `k` here.
-			when re-match inner input pos caps (fun p2 c2 {
-				if p2 > pos is true {
-					re-repeat inner 0 (dec-budget hi) input p2 c2 k
-				} else {
-					none
-				}
-			}) is some r {
-				some r
-			} is none {
-				k pos caps
+		# Greedy: try one more (requiring forward progress to avoid an
+		# infinite empty-match loop), otherwise stop and run `k` here.
+		when re-match inner input pos caps fun p2 c2 {
+			if p2 > pos is true {
+				re-repeat inner 0 (dec-budget hi) input p2 c2 k
+			} else {
+				none
 			}
+		} is some r {
+			some r
+		} is none {
+			k pos caps
 		}
 	}
 }
 
 # Try to match `pat` anchored at `start`; `some (end, caps)` or `none`.
 def match-at = fun pat input start {
-	re-match pat input start [] (fun endp caps { some (endp, caps) })
+	re-match pat input start [] fun endp caps {
+		some (endp, caps)
+	}
 }
 
 # Leftmost search at or after `start`: `some (match-start, match-end, caps)`.
@@ -220,7 +241,11 @@ def search-from = fun pat input start {
 def collect-spans = fun pat input start acc {
 	when search-from pat input start is some triple {
 		let (ms, me, caps) = triple
-		let nexti = if me > ms is true { me } else { me + 1 }
+		let nexti = if me > ms is true {
+			me
+		} else {
+			me + 1
+		}
 		collect-spans pat input nexti [(ms, me, caps), ...acc]
 	} is none {
 		list.reverse acc
@@ -236,14 +261,14 @@ def slice-str = fun input start end {
 # `caps` is most-recent-first, so keep the first occurrence of each name
 # (the last one matched) and drop earlier rebinds.
 def caps-to-dict = fun input caps {
-	list.fold caps (dict.empty ()) (fun acc entry {
+	list.fold caps (dict.empty ()) fun acc entry {
 		let (name, s, e) = entry
 		if dict.contains-key acc name is true {
 			acc
 		} else {
 			dict.insert acc name (slice-str input s e)
 		}
-	})
+	}
 }
 
 def build-match = fun input ms me caps {
@@ -255,8 +280,10 @@ def build-match = fun input ms me caps {
 def find-byte = fun b target i {
 	if i >= bytes.length b is true {
 		0 - 1
+	} else if bytes.get b i == target is true {
+		i
 	} else {
-		if bytes.get b i == target is true { i } else { find-byte b target (i + 1) }
+		find-byte b target (i + 1)
 	}
 }
 
@@ -278,7 +305,11 @@ def group-text = fun name caps input ms me {
 def cap-span = fun caps name {
 	if caps is [entry, ...rest] {
 		let (n, s, e) = entry
-		if n == name is true { some (s, e) } else { cap-span rest name }
+		if n == name is true {
+			some (s, e)
+		} else {
+			cap-span rest name
+		}
 	} else {
 		none
 	}
@@ -294,17 +325,15 @@ def expand-token = fun rb caps input ms me dollar {
 		let n = bytes.get rb after
 		if n == 36 is true {
 			("$", dollar + 2)
-		} else {
-			if n == 123 is true {
-				let close = find-byte rb 125 after
-				if close < 0 is true {
-					("$", after)
-				} else {
-					(group-text (slice-str rb (after + 1) close) caps input ms me, close + 1)
-				}
-			} else {
+		} else if n == 123 is true {
+			let close = find-byte rb 125 after
+			if close < 0 is true {
 				("$", after)
+			} else {
+				(group-text (slice-str rb (after + 1) close) caps input ms me, close + 1)
 			}
+		} else {
+			("$", after)
 		}
 	}
 }
@@ -338,7 +367,11 @@ def expand-repl = fun repl caps input ms me {
 #     regex.matches `digit+` "abc123"   # => true
 #     regex.matches `digit+` "abc"      # => false
 public def matches :: fun regex string -> bool = fun pat s {
-	when search-from pat (string.to-bytes s) 0 is some _t { true } is none { false }
+	when search-from pat (string.to-bytes s) 0 is some _t {
+		true
+	} is none {
+		false
+	}
 }
 
 # Finds the first match, scanning left to right, as a `match` record
