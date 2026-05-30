@@ -14,10 +14,10 @@ use wasm_encoder::{
 };
 
 use crate::emit::FnEmitter;
-use crate::helpers::*;
+use crate::helpers::{build_builtin_wrapper, builtin_arity, close_deps, helper_for_tag, REGISTRY};
 use crate::runtime::{
-	host_sig, is_f64_unary_host, is_inline_builtin, scan_needs, GlobalKind, GlobalSlot, Needs,
-	OptionLits, OrderingLits, Runtime, ToStringLits, WireTags,
+	host_sig, is_f64_unary_host, is_inline_builtin, scan_helpers, GlobalKind, GlobalSlot, Helper,
+	HelperCtx, HelperSet, OptionLits, OrderingLits, Runtime, ToStringLits, WireTags,
 };
 use crate::scan::{collect_host_calls, collect_zero_arg_closures, scan_strings, StrPool};
 use crate::types::{self, FuncTypes};
@@ -35,71 +35,15 @@ impl Module {
 		// imported — so route it to a flag rather than the import table.
 		let mut host_index: HashMap<String, u32> = HashMap::new();
 		let mut host_order: Vec<String> = Vec::new();
-		let mut tostring_called = false;
-		let mut list_build_called = false;
-		let mut list_collect_called = false;
-		let mut bytes_build_called = false;
-		let mut bytes_concat_called = false;
-		let mut dict_insert_called = false;
-		let mut dict_lookup_called = false;
-		let mut dict_remove_called = false;
-		let mut dict_map_called = false;
-		let mut dict_filter_called = false;
-		let mut wire_fingerprint_called = false;
+		// Synthetic `__*` helpers the program needs. Some are triggered by a named
+		// builtin call (via `helper_for_tag` here); the rest by IR construct (added
+		// by `scan_helpers` below).
+		let mut requested: HelperSet = HelperSet::new();
 		for &fid in &reach.order {
 			collect_host_calls(&p.functions[fid as usize].body, &builtin_g, |tag| {
-				if tag == "to-string" {
-					tostring_called = true;
+				if let Some(h) = helper_for_tag(tag) {
+					requested.insert(h);
 					return;
-				}
-				// Higher-order builders implemented as synthetic wasm helpers
-				// (loop + closure call), not host imports.
-				if tag == "list-build" {
-					list_build_called = true;
-					return;
-				}
-				if tag == "list-collect" {
-					list_collect_called = true;
-					return;
-				}
-				if tag == "bytes-build" {
-					bytes_build_called = true;
-					return;
-				}
-				// bytes.concat reuses the `__bytesconcat` helper inline.
-				if tag == "bytes-concat" {
-					bytes_concat_called = true;
-					return;
-				}
-				// dict scan/rebuild/closure ops: synthetic helpers (the trivial
-				// accessors empty/size/entries go through `is_inline_builtin`).
-				match tag {
-					"dict-insert" => {
-						dict_insert_called = true;
-						return;
-					}
-					"dict-lookup" => {
-						dict_lookup_called = true;
-						return;
-					}
-					"dict-remove" => {
-						dict_remove_called = true;
-						return;
-					}
-					"dict-map" => {
-						dict_map_called = true;
-						return;
-					}
-					"dict-filter" => {
-						dict_filter_called = true;
-						return;
-					}
-					// `wire-fingerprint` walks the schema value tree (synthetic helper).
-					"wire-fingerprint" => {
-						wire_fingerprint_called = true;
-						return;
-					}
-					_ => {}
 				}
 				// Pure-compute builtins emitted inline at the call site (no import).
 				if is_inline_builtin(tag) {
@@ -125,7 +69,7 @@ impl Module {
 			});
 		}
 		// `__tostring` delegates float formatting to a host import.
-		if tostring_called {
+		if requested.contains(&Helper::ToString) {
 			host_index.insert("float_to_str".to_string(), host_order.len() as u32);
 			host_order.push("float_to_str".to_string());
 		}
@@ -161,57 +105,24 @@ impl Module {
 		// method). Indices must be fixed up-front so emission can reference them.
 		let n_ir = reach.order.len() as u32;
 		let synth_base = num_imports + n_ir;
-		let mut needs = Needs::default();
+		// Add the construct-triggered helpers (`==`, field access, spread, …) to the
+		// call-triggered ones above, then pull in every transitive dependency so each
+		// present helper's builder finds the helpers it references.
 		for &fid in &reach.order {
-			scan_needs(&p.functions[fid as usize].body, &mut needs);
+			scan_helpers(&p.functions[fid as usize].body, &mut requested);
 		}
-		needs.tostring |= tostring_called;
-		// `__tostring` formats compounds structurally (folding byte arrays with
-		// `__bytesconcat`) and formats its INT case via `__int_str`. `bytes.concat`
-		// also reuses `__bytesconcat`.
-		needs.bytesconcat |= bytes_concat_called;
-		if needs.tostring {
-			needs.bytesconcat = true;
-		}
-		// dict insert/lookup/remove compare keys with `__eq`.
-		needs.eq |= dict_insert_called || dict_lookup_called || dict_remove_called;
-		// Helper indices, assigned in a fixed order; `next` walks past each present one.
+		close_deps(&mut requested);
+		// Assign each needed helper a wasm index, walking `REGISTRY` (= `Helper`)
+		// order — the same order emission replays below.
+		let mut runtime = Runtime::default();
 		let mut next_synth = synth_base;
-		let mut take = |present: bool| -> Option<u32> {
-			present.then(|| {
-				let i = next_synth;
+		for def in &REGISTRY {
+			if requested.contains(&def.id) {
+				runtime.helpers.set(def.id, next_synth);
 				next_synth += 1;
-				i
-			})
-		};
-		let mut runtime = Runtime {
-			eq_fn: take(needs.eq),
-			getfield_fn: take(needs.getfield),
-			record_update_fn: take(needs.record_update),
-			list_tail_fn: take(needs.list_tail),
-			arrconcat_fn: take(needs.arrconcat),
-			bytesconcat_fn: take(needs.bytesconcat),
-			tostring_fn: take(needs.tostring),
-			int_str_fn: take(needs.tostring),
-			list_build_fn: take(list_build_called),
-			list_collect_fn: take(list_collect_called),
-			bytes_build_fn: take(bytes_build_called),
-			dict_insert_fn: take(dict_insert_called),
-			dict_lookup_fn: take(dict_lookup_called),
-			dict_remove_fn: take(dict_remove_called),
-			dict_map_fn: take(dict_map_called),
-			dict_filter_fn: take(dict_filter_called),
-			float_to_str_fn: host_index.get("float_to_str").copied(),
-			lits: ToStringLits::default(),
-			opt: OptionLits::default(),
-			ord: OrderingLits::default(),
-			// `wire-fingerprint` needs all three helpers (fp recurses, fp+mix_str
-			// both mix lengths). Allocate them together so the set is all-or-nothing.
-			wire_fp_fn: take(wire_fingerprint_called),
-			wire_mix_str_fn: take(wire_fingerprint_called),
-			wire_mix_len_fn: take(wire_fingerprint_called),
-			wire: WireTags::default(),
-		};
+			}
+		}
+		runtime.float_to_str = host_index.get("float_to_str").copied();
 		let wrapper_base = next_synth;
 
 		let mut sorted_globals: Vec<u32> = reach.globals.iter().copied().collect();
@@ -315,7 +226,7 @@ impl Module {
 			scan_strings(&p.functions[fid as usize].body, &mut strpool, &p.enums);
 		}
 		// `__tostring`'s fixed literals go in the same data segment.
-		if needs.tostring {
+		if requested.contains(&Helper::ToString) {
 			runtime.lits = ToStringLits {
 				unit: strpool.intern("()"),
 				tru: strpool.intern("true"),
@@ -334,7 +245,7 @@ impl Module {
 		}
 		// `__dict_lookup` builds `some v` / `none`; intern those variant display
 		// names and resolve their within-enum tags (the `option` enum).
-		if runtime.dict_lookup_fn.is_some() {
+		if requested.contains(&Helper::DictLookup) {
 			let opt_enum = p
 				.enums
 				.iter()
@@ -385,7 +296,7 @@ impl Module {
 		}
 		// The `wire` codec helpers dispatch on a schema node's `vtag`; resolve the
 		// `wire-schema` enum's per-variant tags (declaration order = wire tag).
-		if runtime.wire_fp_fn.is_some() {
+		if requested.contains(&Helper::WireFp) {
 			match p.enums.get("__prelude__.wire-schema") {
 				Some(vs) => {
 					let pos = |name: &str| vs.iter().position(|(n, _)| n == name).map(|i| i as u32);
@@ -481,102 +392,21 @@ impl Module {
 			let func = em.emit();
 			code.function(&func);
 		}
-		// Append the synthetic helpers (after the IR functions, in the same fixed
-		// order their indices were assigned), then the builtin wrappers.
-		if let Some(idx) = runtime.eq_fn {
-			functions.function(ftypes.for_eq());
-			code.function(&build_eq_fn(idx));
+		// Append the synthetic helpers after the IR functions, walking `REGISTRY` in
+		// the same order their indices were assigned above. Each builder receives its
+		// own index, the resolved deps/literals, and the type interner via `HelperCtx`.
+		for def in &REGISTRY {
+			if let Some(self_idx) = runtime.idx(def.id) {
+				functions.function(def.fn_type.resolve(&mut ftypes));
+				let mut ctx = HelperCtx {
+					self_idx,
+					rt: &runtime,
+					ftypes: &mut ftypes,
+				};
+				code.function(&(def.build)(&mut ctx));
+			}
 		}
-		if runtime.getfield_fn.is_some() {
-			let eq = runtime.eq_fn.expect("getfield needs eq");
-			functions.function(ftypes.for_helper(2));
-			code.function(&build_getfield_fn(eq));
-		}
-		if runtime.record_update_fn.is_some() {
-			let eq = runtime.eq_fn.expect("record_update needs eq");
-			functions.function(ftypes.for_helper(3));
-			code.function(&build_record_update_fn(eq));
-		}
-		if runtime.list_tail_fn.is_some() {
-			functions.function(ftypes.for_helper(2));
-			code.function(&build_list_tail_fn());
-		}
-		if runtime.arrconcat_fn.is_some() {
-			functions.function(ftypes.for_arrconcat());
-			code.function(&build_arrconcat_fn());
-		}
-		if runtime.bytesconcat_fn.is_some() {
-			functions.function(ftypes.for_bytesconcat());
-			code.function(&build_bytesconcat_fn());
-		}
-		if let Some(ts) = runtime.tostring_fn {
-			let int_str = runtime.int_str_fn.expect("tostring needs int_str");
-			let bc = runtime.bytesconcat_fn.expect("tostring needs bytesconcat");
-			let f2s = runtime
-				.float_to_str_fn
-				.expect("tostring needs float_to_str");
-			functions.function(ftypes.for_helper(1));
-			code.function(&build_tostring_fn(ts, int_str, bc, f2s, runtime.lits));
-		}
-		if runtime.int_str_fn.is_some() {
-			functions.function(ftypes.for_helper(1));
-			code.function(&build_int_str_fn());
-		}
-		if runtime.list_build_fn.is_some() {
-			let arity1 = ftypes.for_arity(1);
-			functions.function(ftypes.for_helper(2));
-			code.function(&build_list_build_fn(arity1));
-		}
-		if runtime.list_collect_fn.is_some() {
-			let arity1 = ftypes.for_arity(1);
-			functions.function(ftypes.for_helper(2));
-			code.function(&build_list_collect_fn(arity1));
-		}
-		if runtime.bytes_build_fn.is_some() {
-			let arity1 = ftypes.for_arity(1);
-			functions.function(ftypes.for_helper(2));
-			code.function(&build_bytes_build_fn(arity1));
-		}
-		if runtime.dict_insert_fn.is_some() {
-			let eq = runtime.eq_fn.expect("dict_insert needs eq");
-			functions.function(ftypes.for_helper(3));
-			code.function(&build_dict_insert_fn(eq));
-		}
-		if runtime.dict_lookup_fn.is_some() {
-			let eq = runtime.eq_fn.expect("dict_lookup needs eq");
-			functions.function(ftypes.for_helper(2));
-			code.function(&build_dict_lookup_fn(eq, runtime.opt));
-		}
-		if runtime.dict_remove_fn.is_some() {
-			let eq = runtime.eq_fn.expect("dict_remove needs eq");
-			functions.function(ftypes.for_helper(2));
-			code.function(&build_dict_remove_fn(eq));
-		}
-		if runtime.dict_map_fn.is_some() {
-			let arity1 = ftypes.for_arity(1);
-			functions.function(ftypes.for_helper(2));
-			code.function(&build_dict_map_fn(arity1));
-		}
-		if runtime.dict_filter_fn.is_some() {
-			let arity2 = ftypes.for_arity(2);
-			functions.function(ftypes.for_helper(2));
-			code.function(&build_dict_filter_fn(arity2));
-		}
-		// `wire` codec helpers (allocated as a set; emit in the same order).
-		if let (Some(fp), Some(mix_str), Some(mix_len)) = (
-			runtime.wire_fp_fn,
-			runtime.wire_mix_str_fn,
-			runtime.wire_mix_len_fn,
-		) {
-			let mix_val_ty = ftypes.for_wire_mix_val();
-			let mix_len_ty = ftypes.for_wire_mix_len();
-			functions.function(mix_val_ty);
-			code.function(&build_wire_fp_fn(fp, mix_str, mix_len, runtime.wire));
-			functions.function(mix_val_ty);
-			code.function(&build_wire_mix_str_fn(mix_len));
-			functions.function(mix_len_ty);
-			code.function(&build_wire_mix_len_fn());
-		}
+		// Then the builtin wrappers (keyed by tag, not in the helper catalog).
 		for tag in &wrapper_order {
 			let arity = builtin_arity(tag).unwrap();
 			functions.function(ftypes.for_arity(arity));

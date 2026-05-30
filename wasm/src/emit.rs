@@ -11,7 +11,8 @@ use ir::{Atom, Block, Callee, Const, Repr, Rvalue, StmtKind};
 use wasm_encoder::*;
 
 use crate::runtime::{
-	host_sig, is_f64_unary_host, is_inline_builtin, GlobalKind, GlobalSlot, Runtime, WIRE_FNV_OFFSET,
+	host_sig, is_f64_unary_host, is_inline_builtin, GlobalKind, GlobalSlot, Helper, Runtime,
+	WIRE_FNV_OFFSET,
 };
 use crate::scan::{builtin_var_tags, ctor_var_tags, StrPool};
 use crate::types::{self, FuncTypes};
@@ -278,7 +279,7 @@ impl<'a> FnEmitter<'a> {
 				}
 				if let Some(ir::ListRest::Bind(v)) = rest {
 					// rest = __list_tail(list, items.len()).
-					let tail = self.runtime.list_tail_fn.expect("list_tail");
+					let tail = self.runtime.idx(Helper::ListTail).expect("list_tail");
 					let dst = self.local(v.0);
 					self.ins(Instruction::LocalGet(subj));
 					self.ins(Instruction::I32Const(types::TAG_INT));
@@ -309,7 +310,7 @@ impl<'a> FnEmitter<'a> {
 						.push("record `...rest` binding not yet supported");
 					return;
 				}
-				let getfield = self.runtime.getfield_fn.expect("getfield");
+				let getfield = self.runtime.idx(Helper::GetField).expect("getfield");
 				for (name, sub) in fields {
 					match sub {
 						ir::Pattern::Wildcard => {}
@@ -451,7 +452,7 @@ impl<'a> FnEmitter<'a> {
 		match rv {
 			Rvalue::Use(a) => self.atom(a),
 			Rvalue::Bin(op @ (ir::BinOp::Eq | ir::BinOp::Ne), a, b) => {
-				let Some(eq) = self.runtime.eq_fn else {
+				let Some(eq) = self.runtime.idx(Helper::Eq) else {
 					self.diags.push("Eq/Ne used but __eq not emitted");
 					return;
 				};
@@ -464,7 +465,7 @@ impl<'a> FnEmitter<'a> {
 			}
 			Rvalue::Bin(ir::BinOp::Concat, a, b) => {
 				// `++`: concatenate two strings' byte arrays, rewrap as `$str`.
-				let Some(bc) = self.runtime.bytesconcat_fn else {
+				let Some(bc) = self.runtime.idx(Helper::BytesConcat) else {
 					self.diags.push("Concat used but __bytesconcat not emitted");
 					return;
 				};
@@ -497,7 +498,7 @@ impl<'a> FnEmitter<'a> {
 					self.ins(Instruction::StructNew(types::T_STR));
 					return;
 				}
-				let Some(bc) = self.runtime.bytesconcat_fn else {
+				let Some(bc) = self.runtime.idx(Helper::BytesConcat) else {
 					self
 						.diags
 						.push("Interpolate used but __bytesconcat not emitted");
@@ -638,7 +639,7 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::StructNew(types::T_RECORD));
 			}
 			Rvalue::GetField(r, name) => {
-				let Some(getfield) = self.runtime.getfield_fn else {
+				let Some(getfield) = self.runtime.idx(Helper::GetField) else {
 					self.diags.push("GetField used but __getfield not emitted");
 					return;
 				};
@@ -647,7 +648,7 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::Call(getfield));
 			}
 			Rvalue::RecordUpdate { base, fields } => {
-				let Some(update) = self.runtime.record_update_fn else {
+				let Some(update) = self.runtime.idx(Helper::RecordUpdate) else {
 					self
 						.diags
 						.push("RecordUpdate used but __record_update not emitted");
@@ -879,9 +880,9 @@ impl<'a> FnEmitter<'a> {
 		// Higher-order builders: synthetic helpers (loop + closure call).
 		if tag == "list-build" || tag == "list-collect" || tag == "bytes-build" {
 			let helper = match tag {
-				"list-build" => self.runtime.list_build_fn,
-				"list-collect" => self.runtime.list_collect_fn,
-				_ => self.runtime.bytes_build_fn,
+				"list-build" => self.runtime.idx(Helper::ListBuild),
+				"list-collect" => self.runtime.idx(Helper::ListCollect),
+				_ => self.runtime.idx(Helper::BytesBuild),
 			};
 			match helper {
 				Some(h) => {
@@ -899,7 +900,7 @@ impl<'a> FnEmitter<'a> {
 		}
 		// bytes.concat a b : a fresh `bytes` of a's bytes then b's, via __bytesconcat.
 		if tag == "bytes-concat" {
-			match self.runtime.bytesconcat_fn {
+			match self.runtime.idx(Helper::BytesConcat) {
 				Some(bc) => {
 					self.ins(Instruction::I32Const(types::TAG_BYTES));
 					self.str_bytes(&args[0]);
@@ -921,11 +922,11 @@ impl<'a> FnEmitter<'a> {
 		// the wasm dict scans with `__eq` instead of hashing, so that arg is DROPPED
 		// — we pass only the dict + key (+ value). map/filter take `[dict, f]`.
 		if let Some((helper, call_args)) = match tag {
-			"dict-insert" => Some((self.runtime.dict_insert_fn, &args[1..])),
-			"dict-lookup" => Some((self.runtime.dict_lookup_fn, &args[1..])),
-			"dict-remove" => Some((self.runtime.dict_remove_fn, &args[1..])),
-			"dict-map" => Some((self.runtime.dict_map_fn, &args[0..])),
-			"dict-filter" => Some((self.runtime.dict_filter_fn, &args[0..])),
+			"dict-insert" => Some((self.runtime.idx(Helper::DictInsert), &args[1..])),
+			"dict-lookup" => Some((self.runtime.idx(Helper::DictLookup), &args[1..])),
+			"dict-remove" => Some((self.runtime.idx(Helper::DictRemove), &args[1..])),
+			"dict-map" => Some((self.runtime.idx(Helper::DictMap), &args[0..])),
+			"dict-filter" => Some((self.runtime.idx(Helper::DictFilter), &args[0..])),
 			_ => None,
 		} {
 			match helper {
@@ -944,7 +945,7 @@ impl<'a> FnEmitter<'a> {
 		}
 		// `wire-fingerprint`: FNV-1a hash of the schema tree, boxed as `$int`.
 		if tag == "wire-fingerprint" {
-			match self.runtime.wire_fp_fn {
+			match self.runtime.idx(Helper::WireFp) {
 				Some(fp) => {
 					self.ins(Instruction::I32Const(types::TAG_INT));
 					self.ins(Instruction::I64Const(WIRE_FNV_OFFSET));
@@ -964,7 +965,7 @@ impl<'a> FnEmitter<'a> {
 		}
 		// `to-string` is implemented in wasm (`__tostring`), not imported.
 		if tag == "to-string" {
-			if let (Some(ts), Some(a)) = (self.runtime.tostring_fn, args.first()) {
+			if let (Some(ts), Some(a)) = (self.runtime.idx(Helper::ToString), args.first()) {
 				self.atom(a);
 				self.ins(Instruction::Call(ts));
 				return;
@@ -1385,7 +1386,7 @@ impl<'a> FnEmitter<'a> {
 			self.ins(Instruction::StructNew(types::T_LIST));
 			return;
 		}
-		let concat = self.runtime.arrconcat_fn.expect("arrconcat");
+		let concat = self.runtime.idx(Helper::ArrConcat).expect("arrconcat");
 		// Group items into segments: runs of plain elements vs. single spreads.
 		let mut segs: Vec<Vec<&Atom>> = Vec::new();
 		let mut spread_at: Vec<bool> = Vec::new();

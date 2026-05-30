@@ -317,7 +317,10 @@ fn format_anyref(store: &mut impl AsContextMut, any: Rooted<AnyRef>) -> String {
 			let pairs: Vec<String> = entries
 				.iter()
 				.map(|e| {
-					let inner = e.strip_prefix('(').and_then(|s| s.strip_suffix(')')).unwrap_or(e);
+					let inner = e
+						.strip_prefix('(')
+						.and_then(|s| s.strip_suffix(')'))
+						.unwrap_or(e);
 					match inner.split_once(", ") {
 						Some((k, v)) => format!("{k}: {v}"),
 						None => inner.to_string(),

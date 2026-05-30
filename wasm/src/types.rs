@@ -408,7 +408,9 @@ impl FuncTypes {
 					continue;
 				}
 				FuncKind::WireMixLen => {
-					types.ty().function([ValType::I64, ValType::I64], [ValType::I64]);
+					types
+						.ty()
+						.function([ValType::I64, ValType::I64], [ValType::I64]);
 					continue;
 				}
 			};

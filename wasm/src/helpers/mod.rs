@@ -3,6 +3,16 @@
 // the assembler appends after the IR functions (only those a reachable program
 // needs). They take each other's already-resolved wasm indices, never call each
 // other at the Rust level, so they live one-domain-per-file.
+//
+// `REGISTRY` is the single catalog tying it together: one row per `Helper`, in
+// `Helper` order, carrying that helper's wasm function type, its dependencies,
+// and a builder thunk. `Module::build` walks it twice — to allocate indices, then
+// to emit — so adding a helper is one row here plus its `build_*_fn` (no scattered
+// field/branch/dependency edits).
+
+use wasm_encoder::Function;
+
+use crate::runtime::{Helper, Helper as H, HelperCtx, HelperSet, Ty};
 
 mod bytes;
 mod dict;
@@ -13,11 +23,203 @@ mod tostring;
 mod wire;
 mod wrapper;
 
-pub(crate) use bytes::*;
-pub(crate) use dict::*;
-pub(crate) use eq::*;
-pub(crate) use list::*;
-pub(crate) use record::*;
-pub(crate) use tostring::*;
-pub(crate) use wire::*;
-pub(crate) use wrapper::*;
+// The method-dict builtin wrappers aren't `Helper`s (they're keyed by builtin
+// tag, not in the fixed catalog); `Module::build` drives them directly.
+pub(crate) use wrapper::{build_builtin_wrapper, builtin_arity};
+
+/// One synthetic helper: how it's typed, what it depends on, and how it's built.
+pub(crate) struct HelperDef {
+	pub(crate) id: Helper,
+	/// The helper's own wasm function type.
+	pub(crate) fn_type: Ty,
+	/// Helpers whose wasm indices this one's builder needs (pulled into the
+	/// program transitively by `close_deps`, so `HelperCtx::dep` never misses).
+	pub(crate) deps: &'static [Helper],
+	/// Emit the helper's body, given its resolved index, deps, and the interner.
+	pub(crate) build: fn(&mut HelperCtx) -> Function,
+}
+
+/// The helper catalog, in `Helper` discriminant order (so `REGISTRY[h as usize]`
+/// is `h`'s row — checked by the test below, relied on by `close_deps`).
+pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
+	HelperDef {
+		id: H::Eq,
+		fn_type: Ty::Eq,
+		deps: &[],
+		build: |c| eq::build_eq_fn(c.self_idx),
+	},
+	HelperDef {
+		id: H::GetField,
+		fn_type: Ty::Helper(2),
+		deps: &[H::Eq],
+		build: |c| record::build_getfield_fn(c.dep(H::Eq)),
+	},
+	HelperDef {
+		id: H::RecordUpdate,
+		fn_type: Ty::Helper(3),
+		deps: &[H::Eq],
+		build: |c| record::build_record_update_fn(c.dep(H::Eq)),
+	},
+	HelperDef {
+		id: H::ListTail,
+		fn_type: Ty::Helper(2),
+		deps: &[],
+		build: |_| list::build_list_tail_fn(),
+	},
+	HelperDef {
+		id: H::ArrConcat,
+		fn_type: Ty::ArrConcat,
+		deps: &[],
+		build: |_| list::build_arrconcat_fn(),
+	},
+	HelperDef {
+		id: H::BytesConcat,
+		fn_type: Ty::BytesConcat,
+		deps: &[],
+		build: |_| bytes::build_bytesconcat_fn(),
+	},
+	HelperDef {
+		id: H::ToString,
+		fn_type: Ty::Helper(1),
+		deps: &[H::IntStr, H::BytesConcat],
+		build: |c| {
+			tostring::build_tostring_fn(
+				c.self_idx,
+				c.dep(H::IntStr),
+				c.dep(H::BytesConcat),
+				c.float_to_str(),
+				c.rt.lits,
+			)
+		},
+	},
+	HelperDef {
+		id: H::IntStr,
+		fn_type: Ty::Helper(1),
+		deps: &[],
+		build: |_| tostring::build_int_str_fn(),
+	},
+	HelperDef {
+		id: H::ListBuild,
+		fn_type: Ty::Helper(2),
+		deps: &[],
+		build: |c| list::build_list_build_fn(c.arity(1)),
+	},
+	HelperDef {
+		id: H::ListCollect,
+		fn_type: Ty::Helper(2),
+		deps: &[],
+		build: |c| list::build_list_collect_fn(c.arity(1)),
+	},
+	HelperDef {
+		id: H::BytesBuild,
+		fn_type: Ty::Helper(2),
+		deps: &[],
+		build: |c| bytes::build_bytes_build_fn(c.arity(1)),
+	},
+	HelperDef {
+		id: H::DictInsert,
+		fn_type: Ty::Helper(3),
+		deps: &[H::Eq],
+		build: |c| dict::build_dict_insert_fn(c.dep(H::Eq)),
+	},
+	HelperDef {
+		id: H::DictLookup,
+		fn_type: Ty::Helper(2),
+		deps: &[H::Eq],
+		build: |c| dict::build_dict_lookup_fn(c.dep(H::Eq), c.rt.opt),
+	},
+	HelperDef {
+		id: H::DictRemove,
+		fn_type: Ty::Helper(2),
+		deps: &[H::Eq],
+		build: |c| dict::build_dict_remove_fn(c.dep(H::Eq)),
+	},
+	HelperDef {
+		id: H::DictMap,
+		fn_type: Ty::Helper(2),
+		deps: &[],
+		build: |c| dict::build_dict_map_fn(c.arity(1)),
+	},
+	HelperDef {
+		id: H::DictFilter,
+		fn_type: Ty::Helper(2),
+		deps: &[],
+		build: |c| dict::build_dict_filter_fn(c.arity(2)),
+	},
+	HelperDef {
+		id: H::WireFp,
+		fn_type: Ty::WireMixVal,
+		deps: &[H::WireMixStr, H::WireMixLen],
+		build: |c| {
+			wire::build_wire_fp_fn(
+				c.self_idx,
+				c.dep(H::WireMixStr),
+				c.dep(H::WireMixLen),
+				c.rt.wire,
+			)
+		},
+	},
+	HelperDef {
+		id: H::WireMixStr,
+		fn_type: Ty::WireMixVal,
+		deps: &[H::WireMixLen],
+		build: |c| wire::build_wire_mix_str_fn(c.dep(H::WireMixLen)),
+	},
+	HelperDef {
+		id: H::WireMixLen,
+		fn_type: Ty::WireMixLen,
+		deps: &[],
+		build: |_| wire::build_wire_mix_len_fn(),
+	},
+];
+
+/// The helper a builtin tag lowers to, if any. These are the builtins implemented
+/// as a synthetic wasm helper rather than a host import or an inline leaf — the
+/// rest (`is_inline_builtin`, host imports) are classified in `Module::build`.
+pub(crate) fn helper_for_tag(tag: &str) -> Option<Helper> {
+	Some(match tag {
+		"to-string" => H::ToString,
+		// Higher-order builders: synthetic wasm helpers (loop + closure call).
+		"list-build" => H::ListBuild,
+		"list-collect" => H::ListCollect,
+		"bytes-build" => H::BytesBuild,
+		// `bytes.concat` reuses the `__bytesconcat` helper.
+		"bytes-concat" => H::BytesConcat,
+		// dict scan/rebuild/closure ops (the trivial accessors empty/size/entries
+		// go through `is_inline_builtin`).
+		"dict-insert" => H::DictInsert,
+		"dict-lookup" => H::DictLookup,
+		"dict-remove" => H::DictRemove,
+		"dict-map" => H::DictMap,
+		"dict-filter" => H::DictFilter,
+		// `wire-fingerprint` walks the schema value tree.
+		"wire-fingerprint" => H::WireFp,
+		_ => return None,
+	})
+}
+
+/// Expand `req` to include every transitive dependency, so once a helper is in the
+/// set, all the helpers its builder will reference are too.
+pub(crate) fn close_deps(req: &mut HelperSet) {
+	let mut stack: Vec<Helper> = req.iter().copied().collect();
+	while let Some(h) = stack.pop() {
+		for &d in REGISTRY[h as usize].deps {
+			if req.insert(d) {
+				stack.push(d);
+			}
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn registry_is_in_helper_order() {
+		assert_eq!(REGISTRY.len(), Helper::COUNT);
+		for (i, def) in REGISTRY.iter().enumerate() {
+			assert_eq!(def.id as usize, i, "REGISTRY[{i}] is out of Helper order");
+		}
+	}
+}
