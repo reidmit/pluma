@@ -460,6 +460,11 @@ pub(crate) fn is_inline_builtin(tag: &str) -> bool {
 			| "math-to-float"
 			// duration's nanosecond count: a retag of the `$int`-shaped box.
 			| "time-duration-as-nanos"
+			// duration / instant box+unbox. Both reuse the `$int` shape
+			// (`{tag, i64}`); these retag between `TAG_INT` and the carrier tag.
+			| "time-duration-of-nanos"
+			| "time-from-unix-nanos"
+			| "time-to-unix-nanos"
 	)
 }
 

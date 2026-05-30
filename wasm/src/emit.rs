@@ -1615,6 +1615,13 @@ impl<'a> FnEmitter<'a> {
 				});
 				self.ins(Instruction::StructNew(types::T_INT));
 			}
+			// `instant` / `duration` box+unbox: both reuse the `$int` shape
+			// (`{tag, i64}`). The `*-of-nanos` / `from-unix-nanos` direction reboxes
+			// an `int` payload under the carrier tag; `to-unix-nanos` reads the i64
+			// back out under `TAG_INT`. (`duration-as-nanos` above is the same retag.)
+			"time-duration-of-nanos" => self.retag_int_box(&args[0], types::TAG_DURATION),
+			"time-from-unix-nanos" => self.retag_int_box(&args[0], types::TAG_INSTANT),
+			"time-to-unix-nanos" => self.retag_int_box(&args[0], types::TAG_INT),
 			_ => {
 				self
 					.diags
@@ -1622,6 +1629,23 @@ impl<'a> FnEmitter<'a> {
 				self.push_nothing();
 			}
 		}
+	}
+
+	/// Retag an `$int`-shaped box (`{tag, i64}`) under `new_tag`: read the i64
+	/// payload out and rebox it. The `duration` and `instant` carriers share the
+	/// `$int` struct shape and differ only by tag, so box/unbox between them and a
+	/// plain `int` is just this retag.
+	fn retag_int_box(&mut self, arg: &Atom, new_tag: i32) {
+		self.ins(Instruction::I32Const(new_tag));
+		self.atom(arg);
+		self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+			types::T_INT,
+		)));
+		self.ins(Instruction::StructGet {
+			struct_type_index: types::T_INT,
+			field_index: 1,
+		});
+		self.ins(Instruction::StructNew(types::T_INT));
 	}
 
 	/// Push an atom as a uniform boxed `$value`. A var holding a *nominal* record

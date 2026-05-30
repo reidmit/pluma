@@ -7,7 +7,6 @@
 use crate::value::{DictData, TaskRepr, Value, VariantData};
 use crate::vm::{RuntimeError, VM};
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 
 // Construct a prelude `ordering` variant from a `std::cmp::Ordering`.
@@ -908,43 +907,6 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			let nanos = expect_int(&args, "nanos");
 			Ok(Value::Duration(nanos))
 		}
-		"time-parts" => {
-			let nanos = expect_instant(&args, "parts");
-			Ok(time_parts_record(nanos))
-		}
-		"time-make" => {
-			debug_assert_eq!(args.len(), 7, "`make` arity");
-			let ints: Vec<i64> = args
-				.iter()
-				.map(|a| match a {
-					Value::Int(n) => *n,
-					_ => unreachable!("`time.make`: expected ints"),
-				})
-				.collect();
-			Ok(
-				match make_instant(
-					ints[0], ints[1], ints[2], ints[3], ints[4], ints[5], ints[6],
-				) {
-					Ok(nanos) => result_ok(Value::Instant(nanos)),
-					Err(e) => result_err(Value::String(Rc::new(e))),
-				},
-			)
-		}
-		"time-format" => {
-			debug_assert_eq!(args.len(), 2, "`format` arity");
-			let (nanos, fmt) = match (&args[0], &args[1]) {
-				(Value::Instant(n), Value::String(s)) => (*n, s),
-				_ => unreachable!("`format`: expected (instant, string)"),
-			};
-			Ok(Value::String(Rc::new(time_format(nanos, fmt))))
-		}
-		"time-parse-iso" => {
-			let s = expect_string(&args, "parse-iso");
-			Ok(match parse_iso(s.as_str()) {
-				Ok(nanos) => result_ok(Value::Instant(nanos)),
-				Err(e) => result_err(Value::String(Rc::new(e))),
-			})
-		}
 		"time-parse" => {
 			debug_assert_eq!(args.len(), 2, "`parse` arity");
 			let (fmt, input) = match (&args[0], &args[1]) {
@@ -952,28 +914,6 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				_ => unreachable!("`parse`: expected (string, string)"),
 			};
 			Ok(match parse_with_format(fmt, input) {
-				Ok(nanos) => result_ok(Value::Instant(nanos)),
-				Err(e) => result_err(Value::String(Rc::new(e))),
-			})
-		}
-		"time-add-months" => {
-			debug_assert_eq!(args.len(), 2, "`add-months` arity");
-			let (nanos, n) = match (&args[0], &args[1]) {
-				(Value::Instant(t), Value::Int(n)) => (*t, *n),
-				_ => unreachable!("`add-months`: expected (instant, int)"),
-			};
-			Ok(match shift_calendar(nanos, n, 0) {
-				Ok(nanos) => result_ok(Value::Instant(nanos)),
-				Err(e) => result_err(Value::String(Rc::new(e))),
-			})
-		}
-		"time-add-years" => {
-			debug_assert_eq!(args.len(), 2, "`add-years` arity");
-			let (nanos, n) = match (&args[0], &args[1]) {
-				(Value::Instant(t), Value::Int(n)) => (*t, *n),
-				_ => unreachable!("`add-years`: expected (instant, int)"),
-			};
-			Ok(match shift_calendar(nanos, 0, n) {
 				Ok(nanos) => result_ok(Value::Instant(nanos)),
 				Err(e) => result_err(Value::String(Rc::new(e))),
 			})
@@ -1099,120 +1039,6 @@ fn expect_duration(args: &[Value], name: &str) -> i64 {
 
 // ---- core.time helpers --------------------------------------------------
 
-// Lower a nanosecond instant to a UTC civil datetime, or `None` if it falls
-// outside jiff's representable range (only reachable via deliberately
-// extreme `from-unix-nanos` input).
-fn instant_to_utc(nanos: i64) -> Option<jiff::civil::DateTime> {
-	let ts = jiff::Timestamp::from_nanosecond(nanos as i128).ok()?;
-	Some(jiff::tz::Offset::UTC.to_datetime(ts))
-}
-
-// Break an instant into a UTC calendar `parts` record. weekday is 1=Monday
-// .. 7=Sunday (ISO 8601). An out-of-range instant degrades to the epoch
-// rather than crashing.
-fn time_parts_record(nanos: i64) -> Value {
-	let dt = instant_to_utc(nanos).unwrap_or_else(|| jiff::civil::DateTime::default());
-	let mut fields = HashMap::with_capacity(8);
-	fields.insert("year".to_string(), Value::Int(dt.year() as i64));
-	fields.insert("month".to_string(), Value::Int(dt.month() as i64));
-	fields.insert("day".to_string(), Value::Int(dt.day() as i64));
-	fields.insert("hour".to_string(), Value::Int(dt.hour() as i64));
-	fields.insert("minute".to_string(), Value::Int(dt.minute() as i64));
-	fields.insert("second".to_string(), Value::Int(dt.second() as i64));
-	fields.insert(
-		"nanosecond".to_string(),
-		Value::Int(dt.subsec_nanosecond() as i64),
-	);
-	fields.insert(
-		"weekday".to_string(),
-		Value::Int(dt.weekday().to_monday_one_offset() as i64),
-	);
-	Value::Record(Rc::new(fields))
-}
-
-// Build a UTC instant from calendar components, validating each (jiff
-// rejects e.g. month 13 or Feb 30). Returns nanoseconds since the epoch.
-fn make_instant(
-	year: i64,
-	month: i64,
-	day: i64,
-	hour: i64,
-	minute: i64,
-	second: i64,
-	nanosecond: i64,
-) -> Result<i64, String> {
-	// Narrow each field to the width jiff expects, erroring (rather than
-	// silently wrapping, as `as` would) on anything out of range. jiff's
-	// `DateTime::new` then rejects combinations that pass the width check but
-	// aren't real dates (month 13, Feb 30, hour 24, ...).
-	let year: i16 = year
-		.try_into()
-		.map_err(|_| format!("time: year out of range: {}", year))?;
-	let month: i8 = month
-		.try_into()
-		.map_err(|_| format!("time: month out of range: {}", month))?;
-	let day: i8 = day
-		.try_into()
-		.map_err(|_| format!("time: day out of range: {}", day))?;
-	let hour: i8 = hour
-		.try_into()
-		.map_err(|_| format!("time: hour out of range: {}", hour))?;
-	let minute: i8 = minute
-		.try_into()
-		.map_err(|_| format!("time: minute out of range: {}", minute))?;
-	let second: i8 = second
-		.try_into()
-		.map_err(|_| format!("time: second out of range: {}", second))?;
-	let nanosecond: i32 = nanosecond
-		.try_into()
-		.map_err(|_| format!("time: nanosecond out of range: {}", nanosecond))?;
-	let dt = jiff::civil::DateTime::new(year, month, day, hour, minute, second, nanosecond)
-		.map_err(|e| format!("time: invalid date/time: {}", e))?;
-	let ts = dt
-		.to_zoned(jiff::tz::TimeZone::UTC)
-		.map_err(|e| format!("time: {}", e))?
-		.timestamp();
-	Ok(ts.as_nanosecond() as i64)
-}
-
-// strftime-format an instant in UTC. A bad format specifier surfaces as the
-// error text rather than panicking — format strings are dev-authored, so a
-// mistake should be loud and visible.
-fn time_format(nanos: i64, fmt: &str) -> String {
-	let ts = match jiff::Timestamp::from_nanosecond(nanos as i64 as i128) {
-		Ok(ts) => ts,
-		Err(e) => return e.to_string(),
-	};
-	let zoned = ts.to_zoned(jiff::tz::TimeZone::UTC);
-	match jiff::fmt::strtime::format(fmt, &zoned) {
-		Ok(s) => s,
-		Err(e) => e.to_string(),
-	}
-}
-
-// Parse an ISO 8601 / RFC 3339 string into a UTC instant. Forgiving: accepts
-// a full timestamp (`2026-05-25T14:30:00Z`), a zoneless datetime (assumed
-// UTC), or a bare date (midnight UTC).
-fn parse_iso(s: &str) -> Result<i64, String> {
-	let s = s.trim();
-	if let Ok(ts) = s.parse::<jiff::Timestamp>() {
-		return Ok(ts.as_nanosecond() as i64);
-	}
-	if let Ok(dt) = s.parse::<jiff::civil::DateTime>() {
-		return dt
-			.to_zoned(jiff::tz::TimeZone::UTC)
-			.map(|z| z.timestamp().as_nanosecond() as i64)
-			.map_err(|e| format!("time: {}", e));
-	}
-	if let Ok(date) = s.parse::<jiff::civil::Date>() {
-		return date
-			.to_zoned(jiff::tz::TimeZone::UTC)
-			.map(|z| z.timestamp().as_nanosecond() as i64)
-			.map_err(|e| format!("time: {}", e));
-	}
-	Err(format!("time: could not parse `{}` as ISO 8601", s))
-}
-
 // Parse with an explicit strftime-style format. If the parsed value carries
 // an offset it's honored; otherwise the components are read as UTC.
 fn parse_with_format(fmt: &str, input: &str) -> Result<i64, String> {
@@ -1226,21 +1052,6 @@ fn parse_with_format(fmt: &str, input: &str) -> Result<i64, String> {
 	dt.to_zoned(jiff::tz::TimeZone::UTC)
 		.map(|z| z.timestamp().as_nanosecond() as i64)
 		.map_err(|e| format!("time: {}", e))
-}
-
-// Calendar-aware shift by whole months and/or years (Jan 31 + 1 month =>
-// Feb 28/29). Distinct from duration addition, which is exact nanoseconds.
-fn shift_calendar(nanos: i64, months: i64, years: i64) -> Result<i64, String> {
-	let ts = jiff::Timestamp::from_nanosecond(nanos as i128).map_err(|e| format!("time: {}", e))?;
-	let span = jiff::Span::new()
-		.try_months(months)
-		.and_then(|s| s.try_years(years))
-		.map_err(|e| format!("time: span out of range: {}", e))?;
-	let shifted = ts
-		.to_zoned(jiff::tz::TimeZone::UTC)
-		.checked_add(span)
-		.map_err(|e| format!("time: {}", e))?;
-	Ok(shifted.timestamp().as_nanosecond() as i64)
 }
 
 fn expect_float(args: &[Value], name: &str) -> f64 {

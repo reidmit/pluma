@@ -162,6 +162,7 @@ const WASM_FIXTURES: &[&str] = &[
 	"string-with-escapes",
 	"subtract-after-call",
 	"swap-tuple",
+	"time-basics",
 	"top-level-keywords",
 	"to-string-shapes",
 	"trait-dict-forward-recursive",
@@ -393,9 +394,15 @@ fn raw_value_bytes(store: &mut impl AsContextMut, val: &Val) -> Vec<u8> {
 	let Val::AnyRef(Some(r)) = val else {
 		return Vec::new();
 	};
-	let s = r.as_struct(&mut *store).expect("as_struct").expect("a $value");
+	let s = r
+		.as_struct(&mut *store)
+		.expect("as_struct")
+		.expect("a $value");
 	let arr = match s.field(&mut *store, 1).expect("bytes field") {
-		Val::AnyRef(Some(a)) => a.as_array(&mut *store).expect("as_array").expect("bytes array"),
+		Val::AnyRef(Some(a)) => a
+			.as_array(&mut *store)
+			.expect("as_array")
+			.expect("bytes array"),
 		o => panic!("bytes payload: {o:?}"),
 	};
 	let len = arr.len(&mut *store).expect("array len");
@@ -505,39 +512,49 @@ fn instantiate_module(use_drc: bool, bytes: &[u8]) -> Result<(Store<HostState>, 
 		("io-write-err-bytes", true, false, true),
 	] {
 		linker
-			.func_new("pluma", name, io_ty.clone(), move |mut caller, args, _results| {
-				let bytes = {
-					let mut scope = RootScope::new(&mut caller);
-					if raw {
-						raw_value_bytes(&mut scope, &args[0])
+			.func_new(
+				"pluma",
+				name,
+				io_ty.clone(),
+				move |mut caller, args, _results| {
+					let bytes = {
+						let mut scope = RootScope::new(&mut caller);
+						if raw {
+							raw_value_bytes(&mut scope, &args[0])
+						} else {
+							format_value(&mut scope, &args[0]).into_bytes()
+						}
+					};
+					let sink = if to_err {
+						caller.data().err.clone()
 					} else {
-						format_value(&mut scope, &args[0]).into_bytes()
+						caller.data().out.clone()
+					};
+					sink.borrow_mut().extend_from_slice(&bytes);
+					if newline {
+						sink.borrow_mut().push(b'\n');
 					}
-				};
-				let sink = if to_err {
-					caller.data().err.clone()
-				} else {
-					caller.data().out.clone()
-				};
-				sink.borrow_mut().extend_from_slice(&bytes);
-				if newline {
-					sink.borrow_mut().push(b'\n');
-				}
-				Ok(())
-			})
+					Ok(())
+				},
+			)
 			.unwrap_or_else(|e| panic!("define {name}: {e}"));
 	}
 	// io.fail msg : stash the message, then trap. `run_wasm` reads the message
 	// back to form the `runtime error: <msg>` status (mirrors the VM's abort).
 	linker
-		.func_new("pluma", "io-fail", io_ty.clone(), |mut caller, args, _results| {
-			let msg = {
-				let mut scope = RootScope::new(&mut caller);
-				format_value(&mut scope, &args[0])
-			};
-			*caller.data().fail.borrow_mut() = Some(msg);
-			Err(wasmtime::Error::msg("io.fail"))
-		})
+		.func_new(
+			"pluma",
+			"io-fail",
+			io_ty.clone(),
+			|mut caller, args, _results| {
+				let msg = {
+					let mut scope = RootScope::new(&mut caller);
+					format_value(&mut scope, &args[0])
+				};
+				*caller.data().fail.borrow_mut() = Some(msg);
+				Err(wasmtime::Error::msg("io.fail"))
+			},
+		)
 		.expect("define io-fail");
 	// float_to_str : (f64, $bytes buf) -> i32 len. Format the float as `vm::Value`'s
 	// Display does, write the bytes into the caller-provided GC byte array, return
@@ -680,7 +697,10 @@ fn err_message(store: &mut impl AsContextMut, val: &Val) -> Option<String> {
 fn run_vm(program: vm::Program) -> RunResult {
 	let stdout = Rc::new(RefCell::new(Vec::<u8>::new()));
 	let stderr = Rc::new(RefCell::new(Vec::<u8>::new()));
-	let mut vm_instance = vm::VM::new(program).with_stdin(vm::InputSource::Buffer(std::rc::Rc::new(std::cell::RefCell::new(Vec::new()))))
+	let mut vm_instance = vm::VM::new(program)
+		.with_stdin(vm::InputSource::Buffer(std::rc::Rc::new(
+			std::cell::RefCell::new(Vec::new()),
+		)))
 		.with_stdout(vm::OutputSink::Buffer(stdout.clone()))
 		.with_stderr(vm::OutputSink::Buffer(stderr.clone()));
 	let status = match vm_instance.run() {

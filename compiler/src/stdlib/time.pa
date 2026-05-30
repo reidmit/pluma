@@ -17,6 +17,10 @@
 # Everything here works in UTC. Named time zones and local-time conversion
 # aren't available yet.
 
+use core.string
+use core.bytes
+use core.list
+
 # A calendar date broken into its pieces, as seen in UTC. You get one from
 # `time.parts`; `weekday` runs 1 (Monday) through 7 (Sunday). `nanosecond` is
 # the sub-second part, 0 through 999,999,999.
@@ -66,7 +70,15 @@ public def sleep :: fun duration -> nothing = built-in "time-sleep"
 #
 #     time.make 2026 5 25 14 30 0 0   # => ok 2026-05-25T14:30:00Z
 #     time.make 2026 2 30 0 0 0 0     # => err "time: invalid date/time: ..."
-public def make :: fun int int int int int int int -> result instant string = built-in "time-make"
+public def make :: fun int int int int int int int -> result instant string = fun y m d h mi s ns {
+	when validate-components y m d h mi s ns is ok _u {
+		let days = days-from-civil y m d
+		let secs = days * 86400 + h * 3600 + mi * 60 + s
+		ok (from-unix-nanos (secs * 1000000000 + ns))
+	} is err msg {
+		err msg
+	}
+}
 
 # A date at midnight UTC. `err` on an impossible date.
 #
@@ -114,7 +126,9 @@ public def from-unix-nanos :: fun int -> instant = built-in "time-from-unix-nano
 #
 #     let p = time.to-parts (time.now ())
 #     io.print "year is $(to-string p.year)"
-public def to-parts :: fun instant -> parts = built-in "time-parts"
+public def to-parts :: fun instant -> parts = fun t {
+	parts-of-nanos (to-unix-nanos t)
+}
 
 # The day of the week for an instant, 1 (Monday) through 7 (Sunday), in UTC.
 public def weekday :: fun instant -> int = fun t {
@@ -143,24 +157,45 @@ public def to-unix-nanos :: fun instant -> int = built-in "time-to-unix-nanos"
 #
 #     time.format t "%Y-%m-%d %H:%M:%S"   # "2026-05-25 14:30:00"
 #     time.format t "%A, %B %d"           # "Monday, May 25"
-public def format :: fun instant string -> string = built-in "time-format"
+public def format :: fun instant string -> string = fun t fmt {
+	let p = to-parts t
+	let cs = string.chars fmt
+	format-loop p cs 0 (list.length cs) ""
+}
 
 # An instant as an ISO 8601 / RFC 3339 string in UTC -- the same form it
 # prints in. Round-trips with `time.parse-iso`.
 #
 #     time.to-iso t   # "2026-05-25T14:30:00Z"
 public def to-iso :: fun instant -> string = fun t {
-	to-string t
+	let p = to-parts t
+	let base = "$(pad-left p.year 4)-$(pad-left p.month 2)-$(pad-left p.day 2)T$(pad-left p.hour 2):$(pad-left p.minute 2):$(pad-left p.second 2)"
+	if p.nanosecond == 0 is true {
+		base ++ "Z"
+	} else {
+		base ++ "." ++ (frac-digits p.nanosecond) ++ "Z"
+	}
 }
 
 # Parses an ISO 8601 / RFC 3339 string into an instant. Forgiving about how
-# much is present: a full timestamp, a zoneless date-and-time (read as UTC),
-# or a bare date (midnight UTC) all work. `err` on anything else.
+# much is present: a full timestamp (with a trailing `Z`), a zoneless
+# date-and-time, or a bare date (midnight UTC) all work, and an optional
+# fractional second is honored. Everything is read as UTC. `err` on anything
+# else (a numeric `+HH:MM` offset is not yet supported).
 #
 #     time.parse-iso "2026-05-25T14:30:00Z"   # => ok ...
 #     time.parse-iso "2026-05-25"             # => ok 2026-05-25T00:00:00Z
 #     time.parse-iso "nope"                   # => err "time: could not parse ..."
-public def parse-iso :: fun string -> result instant string = built-in "time-parse-iso"
+public def parse-iso :: fun string -> result instant string = fun s {
+	let bs = string.to-bytes s
+	let n = bytes.length bs
+	when parse-iso-fields bs n is some f {
+		let (y, mo, d, h, mi, sec, ns) = f
+		make y mo d h mi sec ns
+	} is none {
+		err "time: could not parse `$(s)` as ISO 8601"
+	}
+}
 
 # Parses a string against an explicit strftime-style format (same directives
 # as `time.format`). Components not covered by the format default to a UTC
@@ -307,11 +342,25 @@ public def add-seconds :: fun instant int -> instant = fun t n {
 #
 #     time.add-months t 3    # three months on
 #     time.add-months t -1   # one month back
-public def add-months :: fun instant int -> result instant string = built-in "time-add-months"
+public def add-months :: fun instant int -> result instant string = fun t n {
+	let p = to-parts t
+	let total = p.year * 12 + (p.month - 1) + n
+	let ny = floor-div total 12
+	let nm = (floor-mod total 12) + 1
+	let dim = days-in-month ny nm
+	let nd = if p.day > dim is true { dim } else { p.day }
+	make ny nm nd p.hour p.minute p.second p.nanosecond
+}
 
 # `t` shifted by whole calendar years (Feb 29 clamps to Feb 28 in a non-leap
 # target year). `err` only on overflow.
-public def add-years :: fun instant int -> result instant string = built-in "time-add-years"
+public def add-years :: fun instant int -> result instant string = fun t n {
+	let p = to-parts t
+	let ny = p.year + n
+	let dim = days-in-month ny p.month
+	let nd = if p.day > dim is true { dim } else { p.day }
+	make ny p.month nd p.hour p.minute p.second p.nanosecond
+}
 
 # --- comparing instants --------------------------------------------------
 
@@ -355,5 +404,437 @@ public def max :: fun instant instant -> instant = fun a b {
 		a
 	} else {
 		b
+	}
+}
+
+# --- internals: calendar math -------------------------------------------
+#
+# UTC calendar conversions over a proleptic Gregorian calendar, using
+# Howard Hinnant's `days_from_civil` / `civil_from_days` algorithms (days
+# counted from the Unix epoch, 1970-01-01). An `instant` is i64 nanoseconds
+# since the epoch; these helpers split that into calendar fields and back.
+# Pluma's `/` truncates toward zero and `%` takes the dividend's sign, so
+# `floor-div` / `floor-mod` are used wherever a value may be negative.
+
+def floor-div :: fun int int -> int = fun a b {
+	let q = a / b
+	let r = a - q * b
+	if r == 0 is true {
+		q
+	} else if a < 0 is true {
+		if b < 0 is true { q } else { q - 1 }
+	} else {
+		if b < 0 is true { q - 1 } else { q }
+	}
+}
+
+def floor-mod :: fun int int -> int = fun a b {
+	a - (floor-div a b) * b
+}
+
+def is-leap :: fun int -> bool = fun y {
+	if (floor-mod y 4) == 0 is true {
+		if (floor-mod y 100) == 0 is true {
+			(floor-mod y 400) == 0
+		} else {
+			true
+		}
+	} else {
+		false
+	}
+}
+
+def days-in-month :: fun int int -> int = fun y m {
+	if m == 2 is true {
+		if is-leap y is true { 29 } else { 28 }
+	} else if m == 4 is true {
+		30
+	} else if m == 6 is true {
+		30
+	} else if m == 9 is true {
+		30
+	} else if m == 11 is true {
+		30
+	} else {
+		31
+	}
+}
+
+# Days from 1970-01-01 to the given civil date (Hinnant). Valid for any
+# proleptic-Gregorian date; the `m <= 2` shift treats Jan/Feb as months
+# 13/14 of the prior year so leap days land at the end of the year.
+def days-from-civil :: fun int int int -> int = fun y0 m d {
+	let y = if m <= 2 is true { y0 - 1 } else { y0 }
+	let era = (if y >= 0 is true { y } else { y - 399 }) / 400
+	let yoe = y - era * 400
+	let mp = if m > 2 is true { m - 3 } else { m + 9 }
+	let doy = (153 * mp + 2) / 5 + d - 1
+	let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+	era * 146097 + doe - 719468
+}
+
+# The inverse of `days-from-civil`: a day count back to (year, month, day).
+def civil-from-days :: fun int -> (int, int, int) = fun z0 {
+	let z = z0 + 719468
+	let era = (if z >= 0 is true { z } else { z - 146096 }) / 146097
+	let doe = z - era * 146097
+	let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365
+	let y = yoe + era * 400
+	let doy = doe - (365 * yoe + yoe / 4 - yoe / 100)
+	let mp = (5 * doy + 2) / 153
+	let d = doy - (153 * mp + 2) / 5 + 1
+	let m = if mp < 10 is true { mp + 3 } else { mp - 9 }
+	let yy = if m <= 2 is true { y + 1 } else { y }
+	(yy, m, d)
+}
+
+# Split a Unix-nanosecond count into a `parts` record (UTC). `floor-div`
+# keeps the second/day breakdown correct for pre-epoch (negative) instants.
+def parts-of-nanos :: fun int -> parts = fun nanos {
+	let secs = floor-div nanos 1000000000
+	let subsec = nanos - secs * 1000000000
+	let days = floor-div secs 86400
+	let rem = secs - days * 86400
+	let hour = rem / 3600
+	let minute = (rem % 3600) / 60
+	let second = rem % 60
+	let (y, mo, d) = civil-from-days days
+	let wd = (floor-mod (days + 3) 7) + 1
+	{
+		year: y,
+		month: mo,
+		day: d,
+		hour: hour,
+		minute: minute,
+		second: second,
+		nanosecond: subsec,
+		weekday: wd,
+	}
+}
+
+# Range-check the components of a would-be instant. The day bound depends on
+# the month (and leap years), so it's reported with the year/month it failed
+# for.
+def validate-components :: fun int int int int int int int -> result nothing string = fun y m d h mi s ns {
+	if in-range m 1 12 is false {
+		err "time: invalid date/time: month $(to-string m) is out of range 1..=12"
+	} else if in-range d 1 (days-in-month y m) is false {
+		err "time: invalid date/time: day $(to-string d) is out of range 1..=$(to-string (days-in-month y m)) for $(to-string y)-$(pad-left m 2)"
+	} else if in-range h 0 23 is false {
+		err "time: invalid date/time: hour $(to-string h) is out of range 0..=23"
+	} else if in-range mi 0 59 is false {
+		err "time: invalid date/time: minute $(to-string mi) is out of range 0..=59"
+	} else if in-range s 0 59 is false {
+		err "time: invalid date/time: second $(to-string s) is out of range 0..=59"
+	} else if in-range ns 0 999999999 is false {
+		err "time: invalid date/time: nanosecond $(to-string ns) is out of range 0..=999999999"
+	} else {
+		ok ()
+	}
+}
+
+def in-range :: fun int int int -> bool = fun v lo hi {
+	if v < lo is true {
+		false
+	} else if v > hi is true {
+		false
+	} else {
+		true
+	}
+}
+
+# --- internals: formatting ----------------------------------------------
+
+# Left-pad `n`'s decimal text with zeros to at least `width` digits. Used for
+# the fixed-width calendar fields (`05`, `2026`, ...); only called on
+# non-negative values.
+def pad-left :: fun int int -> string = fun n width {
+	pad-left-loop (to-string n) width
+}
+
+def pad-left-loop :: fun string int -> string = fun s width {
+	if string.length s >= width is true {
+		s
+	} else {
+		pad-left-loop ("0" ++ s) width
+	}
+}
+
+# Fractional-second digits for ISO output: 9 digits, trailing zeros trimmed.
+def frac-digits :: fun int -> string = fun ns {
+	trim-trailing-zeros (pad-left ns 9)
+}
+
+def trim-trailing-zeros :: fun string -> string = fun s {
+	if string.ends-with s "0" is true {
+		trim-trailing-zeros (string.slice s 0 ((string.length s) - 1))
+	} else {
+		s
+	}
+}
+
+def format-loop :: fun parts (list string) int int string -> string = fun p cs i n acc {
+	if i >= n is true {
+		acc
+	} else {
+		let c = list.get cs i
+		if c == "%" is true {
+			if i + 1 >= n is true {
+				acc ++ "%"
+			} else {
+				format-loop p cs (i + 2) n (acc ++ (directive p (list.get cs (i + 1))))
+			}
+		} else {
+			format-loop p cs (i + 1) n (acc ++ c)
+		}
+	}
+}
+
+# Expand one strftime directive against the broken-out `parts`. Unknown
+# directives pass through literally (`%` + the char).
+def directive :: fun parts string -> string = fun p d {
+	if d == "Y" is true {
+		pad-left p.year 4
+	} else if d == "m" is true {
+		pad-left p.month 2
+	} else if d == "d" is true {
+		pad-left p.day 2
+	} else if d == "H" is true {
+		pad-left p.hour 2
+	} else if d == "M" is true {
+		pad-left p.minute 2
+	} else if d == "S" is true {
+		pad-left p.second 2
+	} else if d == "A" is true {
+		weekday-name p.weekday
+	} else if d == "a" is true {
+		string.slice (weekday-name p.weekday) 0 3
+	} else if d == "B" is true {
+		month-name p.month
+	} else if d == "b" is true {
+		string.slice (month-name p.month) 0 3
+	} else if d == "j" is true {
+		pad-left (day-of-year p) 3
+	} else if d == "p" is true {
+		if p.hour < 12 is true { "AM" } else { "PM" }
+	} else if d == "%" is true {
+		"%"
+	} else {
+		"%" ++ d
+	}
+}
+
+def day-of-year :: fun parts -> int = fun p {
+	(days-from-civil p.year p.month p.day) - (days-from-civil p.year 1 1) + 1
+}
+
+def weekday-name :: fun int -> string = fun w {
+	if w == 1 is true {
+		"Monday"
+	} else if w == 2 is true {
+		"Tuesday"
+	} else if w == 3 is true {
+		"Wednesday"
+	} else if w == 4 is true {
+		"Thursday"
+	} else if w == 5 is true {
+		"Friday"
+	} else if w == 6 is true {
+		"Saturday"
+	} else {
+		"Sunday"
+	}
+}
+
+def month-name :: fun int -> string = fun m {
+	if m == 1 is true {
+		"January"
+	} else if m == 2 is true {
+		"February"
+	} else if m == 3 is true {
+		"March"
+	} else if m == 4 is true {
+		"April"
+	} else if m == 5 is true {
+		"May"
+	} else if m == 6 is true {
+		"June"
+	} else if m == 7 is true {
+		"July"
+	} else if m == 8 is true {
+		"August"
+	} else if m == 9 is true {
+		"September"
+	} else if m == 10 is true {
+		"October"
+	} else if m == 11 is true {
+		"November"
+	} else {
+		"December"
+	}
+}
+
+# --- internals: ISO 8601 parsing ----------------------------------------
+#
+# Parse over the input's ASCII bytes, returning the seven calendar fields as
+# an `option` (so `make` does the actual range validation). Accepts a bare
+# date, an optional `T`/space + `HH:MM:SS`, an optional `.fraction`, and an
+# optional trailing `Z`.
+
+def parse-iso-fields :: fun bytes int -> option (int, int, int, int, int, int, int) = fun bs n {
+	when parse-date-fields bs n is some dp {
+		let (y, mo, d, pos) = dp
+		if pos >= n is true {
+			some (y, mo, d, 0, 0, 0, 0)
+		} else {
+			let sep = bytes.get bs pos
+			if sep == 84 is true {
+				parse-time-fields bs n (pos + 1) y mo d
+			} else if sep == 32 is true {
+				parse-time-fields bs n (pos + 1) y mo d
+			} else {
+				none
+			}
+		}
+	} is none {
+		none
+	}
+}
+
+# Read `YYYY-MM-DD` from the front, returning the three numbers and the
+# cursor past the day (always 10).
+def parse-date-fields :: fun bytes int -> option (int, int, int, int) = fun bs n {
+	if n < 10 is true {
+		none
+	} else {
+		when read-int bs 0 4 is some y {
+			if bytes.get bs 4 == 45 is true {
+				when read-int bs 5 2 is some mo {
+					if bytes.get bs 7 == 45 is true {
+						when read-int bs 8 2 is some d {
+							some (y, mo, d, 10)
+						} is none {
+							none
+						}
+					} else {
+						none
+					}
+				} is none {
+					none
+				}
+			} else {
+				none
+			}
+		} is none {
+			none
+		}
+	}
+}
+
+def parse-time-fields :: fun bytes int int int int int -> option (int, int, int, int, int, int, int) = fun bs n pos y mo d {
+	if pos + 8 > n is true {
+		none
+	} else {
+		when read-int bs pos 2 is some h {
+			if bytes.get bs (pos + 2) == 58 is true {
+				when read-int bs (pos + 3) 2 is some mi {
+					if bytes.get bs (pos + 5) == 58 is true {
+						when read-int bs (pos + 6) 2 is some sec {
+							parse-frac-zone bs n (pos + 8) y mo d h mi sec
+						} is none {
+							none
+						}
+					} else {
+						none
+					}
+				} is none {
+					none
+				}
+			} else {
+				none
+			}
+		} is none {
+			none
+		}
+	}
+}
+
+# After `HH:MM:SS`, accept an optional `.fraction` then an optional `Z`, and
+# require that to be the end of the input.
+def parse-frac-zone :: fun bytes int int int int int int int int -> option (int, int, int, int, int, int, int) = fun bs n pos y mo d h mi sec {
+	let (ns, pos2) = read-optional-frac bs n pos
+	if pos2 >= n is true {
+		some (y, mo, d, h, mi, sec, ns)
+	} else if bytes.get bs pos2 == 90 is true {
+		if pos2 + 1 == n is true {
+			some (y, mo, d, h, mi, sec, ns)
+		} else {
+			none
+		}
+	} else {
+		none
+	}
+}
+
+def read-optional-frac :: fun bytes int int -> (int, int) = fun bs n pos {
+	if pos >= n is true {
+		(0, pos)
+	} else if bytes.get bs pos == 46 is true {
+		read-frac-loop bs n (pos + 1) 0 0
+	} else {
+		(0, pos)
+	}
+}
+
+# Accumulate up to 9 fractional digits, scaling the result to nanoseconds.
+def read-frac-loop :: fun bytes int int int int -> (int, int) = fun bs n pos acc count {
+	if pos >= n is true {
+		(scale-to-nanos acc count, pos)
+	} else {
+		let b = bytes.get bs pos
+		if b >= 48 is true {
+			if b <= 57 is true {
+				if count < 9 is true {
+					read-frac-loop bs n (pos + 1) (acc * 10 + (b - 48)) (count + 1)
+				} else {
+					read-frac-loop bs n (pos + 1) acc count
+				}
+			} else {
+				(scale-to-nanos acc count, pos)
+			}
+		} else {
+			(scale-to-nanos acc count, pos)
+		}
+	}
+}
+
+def scale-to-nanos :: fun int int -> int = fun acc count {
+	if count >= 9 is true {
+		acc
+	} else {
+		scale-to-nanos (acc * 10) (count + 1)
+	}
+}
+
+# Read exactly `len` ASCII digits starting at `start` as a non-negative int;
+# `none` if any byte isn't a digit. Callers guarantee `start + len <= n`.
+def read-int :: fun bytes int int -> option int = fun bs start len {
+	read-int-loop bs start (start + len) 0
+}
+
+def read-int-loop :: fun bytes int int int -> option int = fun bs i end acc {
+	if i >= end is true {
+		some acc
+	} else {
+		let b = bytes.get bs i
+		if b >= 48 is true {
+			if b <= 57 is true {
+				read-int-loop bs (i + 1) end (acc * 10 + (b - 48))
+			} else {
+				none
+			}
+		} else {
+			none
+		}
 	}
 }
