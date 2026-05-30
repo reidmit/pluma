@@ -1,5 +1,5 @@
 use compiler::ast::*;
-use compiler::{find_project_root, to_module_path, Diagnostic, Module, Range};
+use compiler::{Diagnostic, Module, Range, find_project_root, to_module_path};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -95,6 +95,20 @@ struct Binding {
 /// stdlib module the source is materialized to a cache file so the editor
 /// has something to open.
 pub fn goto_definition(source: &[u8], path: &Path, line: u32, character: u32) -> Option<Target> {
+	goto_definition_in(source, path, line, character, None)
+}
+
+// Inner `goto_definition` with an injectable stdlib-cache root: `cache_root`
+// overrides where stdlib sources materialize (tests pass a temp dir); `None`
+// uses the OS cache directory. Keeping the override a parameter rather than an
+// env var means tests don't mutate process-global state and can't race.
+fn goto_definition_in(
+	source: &[u8],
+	path: &Path,
+	line: u32,
+	character: u32,
+	cache_root: Option<&Path>,
+) -> Option<Target> {
 	match resolve(source, path, line, character)? {
 		Resolved::Here(range) => Some(Target::Here(range)),
 		Resolved::OtherModule {
@@ -102,7 +116,7 @@ pub fn goto_definition(source: &[u8], path: &Path, line: u32, character: u32) ->
 		} => {
 			let file = match location {
 				ModuleLocation::Disk(p) => p,
-				ModuleLocation::Stdlib(name) => stdlib_cache_path(&name)?,
+				ModuleLocation::Stdlib(name) => stdlib_cache_path(&name, cache_root)?,
 			};
 			Some(Target::OtherFile { path: file, range })
 		}
@@ -240,11 +254,12 @@ fn load_imported_module(module_name: &str, current: &Path) -> Option<(Module, Mo
 // return the file path for one module. The whole tree plus a `pluma.pa`
 // marker is written so intra-stdlib `use`s resolve and the opened file
 // analyzes cleanly. Versioning the path means a newer compiler refreshes it.
-fn stdlib_cache_path(module_name: &str) -> Option<PathBuf> {
-	let root = cache_base()?
-		.join("pluma")
-		.join(compiler::VERSION)
-		.join("stdlib");
+fn stdlib_cache_path(module_name: &str, cache_root: Option<&Path>) -> Option<PathBuf> {
+	let base = match cache_root {
+		Some(b) => b.to_path_buf(),
+		None => cache_base()?,
+	};
+	let root = base.join("pluma").join(compiler::VERSION).join("stdlib");
 
 	std::fs::create_dir_all(&root).ok()?;
 	let marker = root.join(compiler::PROJECT_MARKER_FILE);
@@ -970,20 +985,26 @@ mod tests {
 	#[test]
 	fn stdlib_goto_materializes_to_cache() {
 		// Point the cache at a writable temp dir, then jump into a stdlib
-		// symbol and confirm the source was written there.
+		// symbol and confirm the source was written there. The temp dir is
+		// injected as a parameter (not via $XDG_CACHE_HOME) so this test
+		// mutates no process-global state and can run alongside others.
 		let cache = std::env::temp_dir().join(format!("pluma-cache-{}", std::process::id()));
 		let _ = std::fs::remove_dir_all(&cache);
-		std::env::set_var("XDG_CACHE_HOME", &cache);
 
 		let main = "use core.list\n\ndef x = list.reverse [1]\n";
-		match goto_definition(main.as_bytes(), &PathBuf::from("/proj/main.pa"), 2, 15) {
+		match goto_definition_in(
+			main.as_bytes(),
+			&PathBuf::from("/proj/main.pa"),
+			2,
+			15,
+			Some(&cache),
+		) {
 			Some(Target::OtherFile { path, .. }) => {
 				assert!(path.ends_with("core/list.pa"), "path: {:?}", path);
 				assert!(path.is_file(), "materialized file should exist");
 			}
 			other => panic!("expected OtherFile into cache, got {}", target_kind(&other)),
 		}
-		std::env::remove_var("XDG_CACHE_HOME");
 		let _ = std::fs::remove_dir_all(&cache);
 	}
 

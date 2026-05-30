@@ -285,7 +285,7 @@ pub(crate) fn build_tostring_fn(
 			});
 		});
 		put(w, 0x27); // closing '
-								// Trim acc[0..len] into a tight $bytes (buf), then wrap as $str.
+		// Trim acc[0..len] into a tight $bytes (buf), then wrap as $str.
 		w.local_get(len).array_new_default(bv).local_set(buf);
 		w.local_get(buf)
 			.i32(0)

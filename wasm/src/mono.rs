@@ -36,9 +36,6 @@ type Key = (u32, Vec<Option<RecordShape>>);
 pub(crate) fn specialize_record_shapes(
 	p: &mut IrProgram,
 ) -> HashMap<u32, Vec<Option<RecordShape>>> {
-	if crate::force_uniform_records() {
-		return HashMap::new();
-	}
 	// 1. Candidate functions: a param read as a record in the body.
 	let mut candidates: HashMap<u32, Vec<bool>> = HashMap::new();
 	for (i, f) in p.functions.iter().enumerate() {

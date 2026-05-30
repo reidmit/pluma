@@ -20,9 +20,9 @@
 // the structural guarantee. A fail-fast `scope` cancels its siblings when an
 // unobserved child fails; a `manual scope` is drained explicitly via `s.next`.
 
+use crate::RuntimeError;
 use crate::value::{TaskRepr, Value, VariantData};
 use crate::vm::{Frame, VM};
-use crate::RuntimeError;
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 use std::time::Instant;

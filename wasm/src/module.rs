@@ -14,16 +14,16 @@ use wasm_encoder::{
 };
 
 use crate::emit::FnEmitter;
-use crate::helpers::{build_builtin_wrapper, builtin_arity, close_deps, helper_for_tag, REGISTRY};
+use crate::helpers::{REGISTRY, build_builtin_wrapper, builtin_arity, close_deps, helper_for_tag};
 use crate::runtime::{
-	host_sig, is_f64_unary_host, is_inline_builtin, scan_helpers, GlobalKind, GlobalSlot, Helper,
-	HelperCtx, HelperSet, OptionLits, OrderingLits, Runtime, ToStringLits, WireGlobals,
-	WireResultLits, WireTags,
+	GlobalKind, GlobalSlot, Helper, HelperCtx, HelperSet, OptionLits, OrderingLits, Runtime,
+	ToStringLits, WireGlobals, WireResultLits, WireTags, host_sig, is_f64_unary_host,
+	is_inline_builtin, scan_helpers,
 };
-use crate::scan::{collect_host_calls, collect_zero_arg_closures, scan_strings, StrPool};
+use crate::scan::{StrPool, collect_host_calls, collect_zero_arg_closures, scan_strings};
 use crate::types::{self, FuncTypes};
 use crate::util::{variant_display, variant_tag_in};
-use crate::{builtin_globals, Diagnostics, Reach};
+use crate::{Diagnostics, Reach, builtin_globals};
 
 pub(crate) struct Module;
 

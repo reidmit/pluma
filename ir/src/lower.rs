@@ -379,7 +379,7 @@ impl<'a> Lowerer<'a> {
 				return Err(format!(
 					"constrained def `{}` must have a function body",
 					name
-				))
+				));
 			}
 		};
 		let k = dict_param_count as usize;
@@ -1820,10 +1820,10 @@ impl<'a> Lowerer<'a> {
 		if scope_idx > 0 {
 			match self.resolve_at(scope_idx - 1, name) {
 				Some(ScopeSlot::Local(pv)) => {
-					return Some(self.add_capture(scope_idx, name, CaptureSrc::ParentLocal(pv)))
+					return Some(self.add_capture(scope_idx, name, CaptureSrc::ParentLocal(pv)));
 				}
 				Some(ScopeSlot::Capture(pi)) => {
-					return Some(self.add_capture(scope_idx, name, CaptureSrc::ParentCapture(pi)))
+					return Some(self.add_capture(scope_idx, name, CaptureSrc::ParentCapture(pi)));
 				}
 				// Globals and bare variants are loaded directly at the use site,
 				// never captured.

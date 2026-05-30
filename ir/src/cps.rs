@@ -445,7 +445,7 @@ fn reads_of_rvalue(rv: &Rvalue) -> HashSet<u32> {
 /// upward-exposed reads.
 fn liveness(blocks: &[BB], captures: &HashSet<u32>) -> Vec<BTreeSet<u32>> {
 	let n = blocks.len();
-	let mut gen: Vec<HashSet<u32>> = Vec::with_capacity(n);
+	let mut gen_sets: Vec<HashSet<u32>> = Vec::with_capacity(n);
 	let mut kill: Vec<HashSet<u32>> = Vec::with_capacity(n);
 	for bb in blocks {
 		let mut killed: HashSet<u32> = HashSet::new();
@@ -493,7 +493,7 @@ fn liveness(blocks: &[BB], captures: &HashSet<u32>) -> Vec<BTreeSet<u32>> {
 				collect_pattern_binds(p, &mut killed);
 			}
 		}
-		gen.push(g);
+		gen_sets.push(g);
 		kill.push(killed);
 	}
 
@@ -505,7 +505,7 @@ fn liveness(blocks: &[BB], captures: &HashSet<u32>) -> Vec<BTreeSet<u32>> {
 			for s in term_successors(&blocks[b].term) {
 				out.extend(live_in[s].iter().copied());
 			}
-			let mut in_ = gen[b].clone();
+			let mut in_ = gen_sets[b].clone();
 			for v in out {
 				if !kill[b].contains(&v) {
 					in_.insert(v);

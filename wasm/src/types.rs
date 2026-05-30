@@ -357,7 +357,7 @@ impl FuncTypes {
 		types.ty().subtype(&scalar(ValType::F64)); // 3 $float
 		types.ty().subtype(&scalar(ValType::I32)); // 4 $bool
 		types.ty().subtype(&scalar(bytes_ref())); // 5 $str
-																						// 6 $valarray — array (mut (ref null $value)).
+		// 6 $valarray — array (mut (ref null $value)).
 		types.ty().subtype(&SubType {
 			is_final: true,
 			supertype_idx: None,

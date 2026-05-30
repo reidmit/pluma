@@ -50,11 +50,11 @@ nominal WasmGC struct type.
 >   closed by a `__record_rest(rec, excluded)` helper (`Helper::RecordRest`) that
 >   filters `rec`'s fields by name at runtime. `record-pattern-nested-rest` is now
 >   in the differential allowlist.
-> - ✅ **Microbench** (`tests/wasm_diff.rs::record_access_microbench`, `#[ignore]`):
->   nominal+mono vs forced-uniform (the `PLUMA_WASM_UNIFORM_RECORDS` toggle) on
->   `record-access` → **2.78× speedup** (48.2s vs 133.8s over 200×10000 build+read
->   ops; absolute times inflated by wasmtime's baseline + the drc collector, the
->   *ratio* is the signal).
+> - ✅ **Microbench** (since removed): a one-off bench compared nominal+mono vs
+>   forced-uniform on `record-access` → **2.78× speedup** (48.2s vs 133.8s over
+>   200×10000 build+read ops; absolute times inflated by wasmtime's baseline + the
+>   drc collector, the *ratio* is the signal). The result settled the Tier B
+>   question below, so the bench and its `force_uniform` toggle were retired.
 > - ⏸️ **Tier B (cast-free reads)** — *evaluated and deferred*. The microbench shows
 >   Tier A already captures the win by eliminating the O(F·L) name-scan; the
 >   residual `ref.cast` is one O(1) RTT check (hoisted/CSE'd across reads of one

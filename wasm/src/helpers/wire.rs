@@ -5,7 +5,7 @@
 use wasm_encoder::{Function, ValType};
 
 use crate::helpers::wat::{Local, Wat};
-use crate::runtime::{WireGlobals, WireResultLits, WireTags, WIRE_FNV_PRIME};
+use crate::runtime::{WIRE_FNV_PRIME, WireGlobals, WireResultLits, WireTags};
 use crate::types;
 
 /// Build `__wire_mix_len(i64 h, i64 n) -> i64`: fold `mix_byte` over `n`'s 8

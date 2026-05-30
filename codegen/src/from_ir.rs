@@ -822,7 +822,7 @@ impl FnCtx {
 						r,
 					),
 					Callee::Builtin(_) => {
-						return Err("from_ir: Callee::Builtin not yet supported".to_string())
+						return Err("from_ir: Callee::Builtin not yet supported".to_string());
 					}
 				}
 				for a in args {

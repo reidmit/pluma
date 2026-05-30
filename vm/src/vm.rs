@@ -4,7 +4,7 @@ use crate::builtin;
 use crate::instruction::Instruction;
 use crate::program::{Function, GlobalSlot, Program};
 use crate::value::{
-	values_eq, AsyncFnData, ClosureData, TaskRepr, Value, VariantCtorData, VariantData,
+	AsyncFnData, ClosureData, TaskRepr, Value, VariantCtorData, VariantData, values_eq,
 };
 use compiler::Range;
 use std::cell::RefCell;
@@ -502,7 +502,9 @@ impl VM {
 					Value::Bool(false) => self.frames[frame_idx].ip = off as usize,
 					Value::Bool(true) => {}
 					_ => {
-						return Err(RuntimeError::new("VM: JumpIfFalse with non-bool").at(self.current_range()))
+						return Err(
+							RuntimeError::new("VM: JumpIfFalse with non-bool").at(self.current_range()),
+						);
 					}
 				}
 			}
@@ -607,10 +609,12 @@ impl VM {
 					match self.stack.pop() {
 						Some(Value::List(xs)) => segments.push(xs),
 						Some(_) => {
-							return Err(RuntimeError::new("ConcatLists: expected lists").at(self.current_range()))
+							return Err(
+								RuntimeError::new("ConcatLists: expected lists").at(self.current_range()),
+							);
 						}
 						None => {
-							return Err(RuntimeError::new("VM: ConcatLists underflow").at(self.current_range()))
+							return Err(RuntimeError::new("VM: ConcatLists underflow").at(self.current_range()));
 						}
 					}
 				}
@@ -705,14 +709,14 @@ impl VM {
 							return Err(
 								RuntimeError::new(format!("no field `{}` on record", name))
 									.at(self.current_range()),
-							)
+							);
 						}
 					},
 					_ => {
 						return Err(
 							RuntimeError::new(format!("field access `.{}` on non-record value", name))
 								.at(self.current_range()),
-						)
+						);
 					}
 				}
 			}
@@ -731,14 +735,14 @@ impl VM {
 									elems.len()
 								))
 								.at(self.current_range()),
-							)
+							);
 						}
 					},
 					_ => {
 						return Err(
 							RuntimeError::new(format!("element access `.{}` on non-tuple value", index))
 								.at(self.current_range()),
-						)
+						);
 					}
 				}
 			}
@@ -761,7 +765,7 @@ impl VM {
 					_ => {
 						return Err(
 							RuntimeError::new("VM: GetDictField on non-dict value").at(self.current_range()),
-						)
+						);
 					}
 				}
 			}
@@ -908,7 +912,7 @@ impl VM {
 					// devirtualizes a concrete `int` `/` to this opcode, and the
 					// differential harness compares it against the dispatched builtin.
 					(Value::Int(_), Value::Int(0)) => {
-						return Err(RuntimeError::new("integer division by zero").at(self.current_range()))
+						return Err(RuntimeError::new("integer division by zero").at(self.current_range()));
 					}
 					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Int(a.wrapping_div(b))),
 					_ => return Err(RuntimeError::new("DivInt: expected ints").at(self.current_range())),
@@ -927,7 +931,7 @@ impl VM {
 				let l = self.stack.pop().unwrap();
 				match (l, r) {
 					(Value::Int(_), Value::Int(0)) => {
-						return Err(RuntimeError::new("division by zero").at(self.current_range()))
+						return Err(RuntimeError::new("division by zero").at(self.current_range()));
 					}
 					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Int(a % b)),
 					_ => return Err(RuntimeError::new("RemInt: expected ints").at(self.current_range())),
@@ -968,7 +972,7 @@ impl VM {
 					_ => {
 						return Err(
 							RuntimeError::new("ConcatString: expected strings").at(self.current_range()),
-						)
+						);
 					}
 				}
 			}

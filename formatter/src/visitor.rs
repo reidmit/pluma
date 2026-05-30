@@ -786,10 +786,12 @@ impl<'a> Formatter<'a> {
 			// it inline as `} else if ...` (the nested call emits its own closing
 			// `}`), mirroring the parser so chains stay flat instead of nesting.
 			Some(else_body) => {
-				if let [ExprNode {
-					kind: ExprKind::If(inner),
-					..
-				}] = else_body.as_slice()
+				if let [
+					ExprNode {
+						kind: ExprKind::If(inner),
+						..
+					},
+				] = else_body.as_slice()
 				{
 					parts.push(text("} else "));
 					parts.push(self.format_if(inner));

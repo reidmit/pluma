@@ -484,7 +484,7 @@ fn run_wasm(bytes: &[u8]) -> RunResult {
 			return RunResult {
 				status,
 				stdout: String::new(),
-			}
+			};
 		}
 	};
 	let entry = instance
@@ -653,62 +653,4 @@ fn wasm_coverage_report() {
 	for n in &matching {
 		println!("  {n}");
 	}
-}
-
-/// Quantify the nominal-record win (RECORDS.md §8): time `record-access` compiled
-/// the nominal+mono way vs forced-uniform (the old name-scan), to inform whether
-/// Tier B's cast removal is worth pursuing. Same IR, two emits; one instantiation
-/// each, then many timed `_entry` calls (the drc engine reclaims the per-iteration
-/// records). Informational — run with `--ignored --nocapture`.
-#[test]
-#[ignore = "microbench; run with --ignored --nocapture"]
-fn record_access_microbench() {
-	let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-	let dir = workspace.join("benchmarks/programs/record-access");
-	let compiler = compile_check(&dir).expect("compile record-access");
-	let ir_program = ir::lower(&compiler).expect("lower record-access");
-
-	std::env::remove_var("PLUMA_WASM_UNIFORM_RECORDS");
-	let nominal = wasm::emit(&ir_program).expect("emit nominal");
-	std::env::set_var("PLUMA_WASM_UNIFORM_RECORDS", "1");
-	let uniform = wasm::emit(&ir_program).expect("emit uniform");
-	std::env::remove_var("PLUMA_WASM_UNIFORM_RECORDS");
-
-	assert_eq!(
-		run_wasm(&nominal).stdout,
-		run_wasm(&uniform).stdout,
-		"nominal vs uniform output must agree"
-	);
-
-	fn time_entry(bytes: &[u8], reps: u32) -> std::time::Duration {
-		let (mut store, instance) = instantiate_module(true, bytes).expect("instantiate");
-		let entry = instance.get_func(&mut store, "_entry").expect("_entry");
-		let mut results = vec![Val::AnyRef(None)];
-		let mut call = |store: &mut Store<HostState>| {
-			entry
-				.call(store, &[Val::AnyRef(None)], &mut results)
-				.expect("entry call");
-		};
-		for _ in 0..10 {
-			call(&mut store);
-		}
-		let t = std::time::Instant::now();
-		for _ in 0..reps {
-			call(&mut store);
-		}
-		t.elapsed()
-	}
-
-	const REPS: u32 = 200;
-	let tn = time_entry(&nominal, REPS);
-	let tu = time_entry(&uniform, REPS);
-	eprintln!(
-		"\nrecord-access (loop 10000, x{REPS} entry calls):\n  \
-		 nominal+mono = {tn:?}  ({} wasm bytes)\n  \
-		 uniform scan = {tu:?}  ({} wasm bytes)\n  \
-		 speedup = {:.2}x\n",
-		nominal.len(),
-		uniform.len(),
-		tu.as_secs_f64() / tn.as_secs_f64().max(f64::MIN_POSITIVE),
-	);
 }

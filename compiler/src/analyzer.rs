@@ -5,10 +5,10 @@ use crate::errors::*;
 use crate::location::Range;
 use crate::module::{EnumExport, Module, ModuleExports};
 use crate::types::*;
+use AnalysisErrorKind::*;
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
 use std::path::PathBuf;
-use AnalysisErrorKind::*;
 
 enum VariantResolution {
 	Found(String, Vec<Type>),

@@ -901,7 +901,7 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				_ => {
 					return Err(RuntimeError::new(
 						"scope-cancel-after: expected a scope handle",
-					))
+					));
 				}
 			};
 			let ns = match args.get(1) {

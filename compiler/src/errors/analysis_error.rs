@@ -138,11 +138,9 @@ impl fmt::Display for AnalysisError {
 				trait_name, ty
 			),
 
-			NotWireDerivable { ty, detail } => write!(
-				f,
-				"Can't send `{}` across the wire: {}.",
-				ty, detail
-			),
+			NotWireDerivable { ty, detail } => {
+				write!(f, "Can't send `{}` across the wire: {}.", ty, detail)
+			}
 
 			UnsupportedInstanceHead { head } => write!(
 				f,

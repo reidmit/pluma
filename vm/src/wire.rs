@@ -24,7 +24,7 @@
 // identical bytes, so a payload is content-addressable. It leans hard on the
 // end-to-end type guarantee — which is the whole point.
 
-use crate::value::{primitive_hash, DictData, Value, VariantData};
+use crate::value::{DictData, Value, VariantData, primitive_hash};
 use std::collections::HashMap;
 use std::rc::Rc;
 

@@ -10,14 +10,14 @@ use std::collections::{HashMap, HashSet};
 use ir::{Atom, Block, Callee, Const, Repr, Rvalue, StmtKind};
 use wasm_encoder::*;
 
-use crate::runtime::{
-	host_sig, is_f64_unary_host, is_inline_builtin, GlobalKind, GlobalSlot, Helper, Runtime,
-	WIRE_FNV_OFFSET,
-};
-use crate::scan::{builtin_var_tags, compute_nominal, ctor_var_tags, StrPool};
-use crate::types::{self, FuncTypes};
-use crate::util::{binop_instr, repr_valtype, variant_display, EnumTable};
 use crate::Diagnostics;
+use crate::runtime::{
+	GlobalKind, GlobalSlot, Helper, Runtime, WIRE_FNV_OFFSET, host_sig, is_f64_unary_host,
+	is_inline_builtin,
+};
+use crate::scan::{StrPool, builtin_var_tags, compute_nominal, ctor_var_tags};
+use crate::types::{self, FuncTypes};
+use crate::util::{EnumTable, binop_instr, repr_valtype, variant_display};
 
 pub(crate) struct FnEmitter<'a> {
 	f: &'a ir::Function,
@@ -1395,7 +1395,7 @@ impl<'a> FnEmitter<'a> {
 					types::T_REF,
 				)));
 				self.ins(Instruction::LocalTee(cell)); // stack: [cell]
-																					 // closure env = f.
+				// closure env = f.
 				self.atom(&args[1]);
 				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
 					types::T_CLOSURE,

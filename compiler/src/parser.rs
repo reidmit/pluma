@@ -1944,7 +1944,7 @@ impl<'a> Parser<'a> {
 				return self.error(ParseError {
 					range: Range::between(start, end),
 					kind: ParseErrorKind::EmptyRegularExpression,
-				})
+				});
 			}
 		};
 
@@ -2085,7 +2085,7 @@ impl<'a> Parser<'a> {
 							return self.error(ParseError {
 								range: self.span_to_single_line_range(start_offset, end_offset),
 								kind: ParseErrorKind::EmptyRegularExpressionGroup,
-							})
+							});
 						}
 					};
 
@@ -2121,7 +2121,7 @@ impl<'a> Parser<'a> {
 							return self.error(ParseError {
 								range: Range::between(start, end),
 								kind: ParseErrorKind::EmptyRegularExpressionGroup,
-							})
+							});
 						}
 					};
 
@@ -2255,7 +2255,7 @@ impl<'a> Parser<'a> {
 							return self.error(ParseError {
 								range: Range::between(part.range.start, end),
 								kind: ParseErrorKind::EmptyRegularExpressionCount,
-							})
+							});
 						}
 					}
 				}
@@ -2946,7 +2946,7 @@ impl<'a> Parser<'a> {
 				return self.error(ParseError {
 					range: Range::between(start, end),
 					kind: ParseErrorKind::MissingReturnType,
-				})
+				});
 			}
 		};
 

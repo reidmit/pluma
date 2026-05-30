@@ -196,7 +196,7 @@ pub(crate) fn build_eq_fn(self_idx: u32) -> Function {
 				w.block("inner", |w| {
 					w.loop_("iloop", |w| {
 						w.local_get(j).local_get(n).i32_ge_s().br_if("inner"); // key absent in b
-																														 // if __eq(a.key[i], b.key[j]) { values must match }
+						// if __eq(a.key[i], b.key[j]) { values must match }
 						entry_field(w, pa, i, 0);
 						entry_field(w, pb, j, 0);
 						w.call(self_idx);

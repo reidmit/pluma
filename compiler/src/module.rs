@@ -1,9 +1,9 @@
+use crate::Token;
 use crate::ast::*;
 use crate::diagnostic::*;
 use crate::parser::*;
 use crate::tokenizer::*;
 use crate::types::*;
-use crate::Token;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;

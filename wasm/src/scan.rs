@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 
 use ir::{Atom, Block, Callee, Const, IrProgram, Rvalue, StmtKind};
 
-use crate::util::{variant_display, EnumTable};
+use crate::util::{EnumTable, variant_display};
 
 #[derive(Default)]
 pub(crate) struct StrPool {
@@ -302,9 +302,6 @@ pub(crate) fn compute_nominal(
 	param_shapes: &HashMap<u32, Vec<Option<ir::RecordShape>>>,
 ) -> HashMap<u32, ir::RecordShape> {
 	let mut nominal = HashMap::new();
-	if crate::force_uniform_records() {
-		return nominal;
-	}
 	// (a) This function's own nominal params (from record-shape monomorphization):
 	// a specialized clone's param holds a `$shapeN` at runtime, so reads on it are
 	// `struct.get`.
