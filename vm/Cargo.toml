@@ -9,6 +9,5 @@ doctest = false
 [dependencies]
 compiler = { path = "../compiler" }
 rand = "0.10"
-serde_json = { version = "1", features = ["preserve_order"] }
 uuid = { version = "1", features = ["v4", "v7"] }
 jiff = "0.2.25"

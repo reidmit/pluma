@@ -10,6 +10,9 @@
 
 use core.dict
 use core.math
+use core.list
+use core.string
+use core.bytes
 
 # A parsed JSON value. JSON has a handful of shapes -- null, a boolean,
 # a number, a string, an array, or an object -- and a `value` is exactly
@@ -38,7 +41,21 @@ public alias error {line :: int, col :: int, message :: string}
 #     json.parse "42"   # => ok (value.int 42)
 #     json.parse "{ oops"
 #     # => err {line: 1, col: 3, message: "key must be a string at line 1 column 3"}
-public def parse :: fun string -> result value error = built-in "json-parse"
+public def parse :: fun string -> result value error = fun input {
+	let bs = string.to-bytes input
+	let n = bytes.length bs
+	when parse-value bs n 0 is ok pair {
+		let (v, pos) = pair
+		let rest = skip-ws bs n pos
+		if rest >= n is true {
+			ok v
+		} else {
+			err (fail bs rest "trailing characters")
+		}
+	} is err e {
+		err e
+	}
+}
 
 # Renders a `value` back to compact JSON text -- no extra spaces,
 # everything on one line. Object keys come out in the order they went
@@ -46,7 +63,27 @@ public def parse :: fun string -> result value error = built-in "json-parse"
 #
 #     json.stringify (json.value.array [json.value.int 1, json.value.int 2])
 #     # => "[1,2]"
-public def stringify :: fun value -> string = built-in "json-stringify"
+public def stringify :: fun value -> string = fun v {
+	when v is null {
+		"null"
+	} is bool b {
+		if b is true { "true" } else { "false" }
+	} is int n {
+		to-string n
+	} is float x {
+		to-string x
+	} is string s {
+		escape-string s
+	} is array xs {
+		"[" ++ (string.join (list.map xs stringify) ",") ++ "]"
+	} is object o {
+		let parts = list.map (dict.entries o) (fun e {
+			let (k, val) = e
+			(escape-string k) ++ ":" ++ (stringify val)
+		})
+		"{" ++ (string.join parts ",") ++ "}"
+	}
+}
 
 # Like `stringify`, but laid out for people to read: a 2-space indent
 # and one item per line. Good for config files or debug output.
@@ -59,7 +96,9 @@ public def stringify :: fun value -> string = built-in "json-stringify"
 #       1,
 #       2
 #     ]
-public def stringify-pretty :: fun value -> string = built-in "json-stringify-pretty"
+public def stringify-pretty :: fun value -> string = fun v {
+	render-pretty v 0
+}
 
 # True when the value is JSON `null`.
 #
@@ -177,5 +216,607 @@ public def get-object :: fun value -> option (dict string value) = fun v {
 		some o
 	} else {
 		none
+	}
+}
+
+# --- internals: the parser ----------------------------------------------
+#
+# A recursive-descent JSON parser over the input's UTF-8 bytes. Each parse
+# helper takes the byte buffer, its length `n`, and a cursor, and returns
+# `result (value, int) error` -- the parsed value plus the cursor just past
+# it, or an error positioned at the offending byte. Structural JSON is all
+# ASCII, so byte-level scanning is safe; string contents are sliced back to
+# UTF-8 (or rebuilt from escapes).
+
+# Builds an `error` whose line/col point at byte `pos`, with `msg` plus a
+# `serde`-style " at line L column C" suffix.
+def fail :: fun bytes int string -> error = fun bs pos msg {
+	let (ln, cl) = line-col bs pos 0 1 0
+	{line: ln, col: cl, message: "$(msg) at line $(to-string ln) column $(to-string cl)"}
+}
+
+# Walks bytes `[0, pos)` counting newlines to turn a byte offset into a
+# 1-indexed (line, column). `line-start` tracks the index just after the
+# most recent newline.
+def line-col :: fun bytes int int int int -> (int, int) = fun bs pos i line line-start {
+	if i >= pos is true {
+		(line, pos - line-start + 1)
+	} else {
+		if bytes.get bs i == 10 is true {
+			line-col bs pos (i + 1) (line + 1) (i + 1)
+		} else {
+			line-col bs pos (i + 1) line line-start
+		}
+	}
+}
+
+def is-ws :: fun int -> bool = fun b {
+	if b == 32 is true {
+		true
+	} else if b == 9 is true {
+		true
+	} else if b == 10 is true {
+		true
+	} else if b == 13 is true {
+		true
+	} else {
+		false
+	}
+}
+
+def skip-ws :: fun bytes int int -> int = fun bs n pos {
+	if pos >= n is true {
+		pos
+	} else if is-ws (bytes.get bs pos) is true {
+		skip-ws bs n (pos + 1)
+	} else {
+		pos
+	}
+}
+
+def is-digit :: fun int -> bool = fun b {
+	if b >= 48 is true {
+		if b <= 57 is true { true } else { false }
+	} else {
+		false
+	}
+}
+
+# True when bytes at `pos` match the literal `lit` (used for null/true/false).
+def lit-at :: fun bytes int int bytes -> bool = fun bs n pos lit {
+	let m = bytes.length lit
+	if pos + m > n is true {
+		false
+	} else {
+		lit-eq bs pos lit 0 m
+	}
+}
+
+def lit-eq :: fun bytes int bytes int int -> bool = fun bs pos lit i m {
+	if i >= m is true {
+		true
+	} else if bytes.get bs (pos + i) == bytes.get lit i is true {
+		lit-eq bs pos lit (i + 1) m
+	} else {
+		false
+	}
+}
+
+# Parse any JSON value at `pos` (leading whitespace skipped).
+def parse-value :: fun bytes int int -> result (value, int) error = fun bs n start {
+	let pos = skip-ws bs n start
+	if pos >= n is true {
+		err (fail bs pos "EOF while parsing a value")
+	} else {
+		let b = bytes.get bs pos
+		if b == 34 is true {
+			when parse-string bs n pos is ok sp {
+				let (s, p) = sp
+				ok (string s, p)
+			} is err e {
+				err e
+			}
+		} else if b == 123 is true {
+			parse-object bs n pos
+		} else if b == 91 is true {
+			parse-array bs n pos
+		} else if b == 110 is true {
+			if lit-at bs n pos (string.to-bytes "null") is true {
+				ok (null, pos + 4)
+			} else {
+				err (fail bs pos "expected value")
+			}
+		} else if b == 116 is true {
+			if lit-at bs n pos (string.to-bytes "true") is true {
+				ok (bool true, pos + 4)
+			} else {
+				err (fail bs pos "expected value")
+			}
+		} else if b == 102 is true {
+			if lit-at bs n pos (string.to-bytes "false") is true {
+				ok (bool false, pos + 5)
+			} else {
+				err (fail bs pos "expected value")
+			}
+		} else if b == 45 is true {
+			parse-number bs n pos
+		} else if is-digit b is true {
+			parse-number bs n pos
+		} else {
+			err (fail bs pos "expected value")
+		}
+	}
+}
+
+# --- numbers ---
+
+def parse-number :: fun bytes int int -> result (value, int) error = fun bs n pos {
+	let end = scan-number bs n pos
+	when bytes.to-string (bytes.slice bs pos end) is ok raw {
+		if num-has-frac bs pos end is true {
+			when string.to-float raw is ok x {
+				ok (float x, end)
+			} is err _m {
+				err (fail bs pos "invalid number")
+			}
+		} else {
+			when string.to-int raw is ok i {
+				ok (int i, end)
+			} is err _m {
+				err (fail bs pos "invalid number")
+			}
+		}
+	} is err _m {
+		err (fail bs pos "invalid number")
+	}
+}
+
+def scan-number :: fun bytes int int -> int = fun bs n pos {
+	if pos >= n is true {
+		pos
+	} else if is-num-char (bytes.get bs pos) is true {
+		scan-number bs n (pos + 1)
+	} else {
+		pos
+	}
+}
+
+def is-num-char :: fun int -> bool = fun b {
+	if is-digit b is true {
+		true
+	} else if b == 45 is true {
+		true
+	} else if b == 43 is true {
+		true
+	} else if b == 46 is true {
+		true
+	} else if b == 101 is true {
+		true
+	} else if b == 69 is true {
+		true
+	} else {
+		false
+	}
+}
+
+# A number is a float if its run contains a `.`, `e`, or `E`.
+def num-has-frac :: fun bytes int int -> bool = fun bs pos end {
+	if pos >= end is true {
+		false
+	} else {
+		let b = bytes.get bs pos
+		if b == 46 is true {
+			true
+		} else if b == 101 is true {
+			true
+		} else if b == 69 is true {
+			true
+		} else {
+			num-has-frac bs (pos + 1) end
+		}
+	}
+}
+
+# --- strings ---
+
+# Parse a JSON string starting at the opening quote (`bs[pos] == '"'`).
+# Fast path: when there are no escapes, slice the span back to a `string`.
+def parse-string :: fun bytes int int -> result (string, int) error = fun bs n pos {
+	let begin = pos + 1
+	when scan-string-end bs n begin false is some info {
+		let (endq, esc) = info
+		if esc is true {
+			collect-string bs n begin []
+		} else {
+			when bytes.to-string (bytes.slice bs begin endq) is ok s {
+				ok (s, endq + 1)
+			} is err _m {
+				err (fail bs begin "invalid utf-8 in string")
+			}
+		}
+	} is none {
+		err (fail bs n "EOF while parsing a string")
+	}
+}
+
+# Find the closing quote, reporting whether any backslash escape appeared.
+# Skips the byte after a backslash so an escaped quote isn't mistaken for
+# the terminator.
+def scan-string-end :: fun bytes int int bool -> option (int, bool) = fun bs n pos esc {
+	if pos >= n is true {
+		none
+	} else {
+		let b = bytes.get bs pos
+		if b == 34 is true {
+			some (pos, esc)
+		} else if b == 92 is true {
+			if pos + 1 >= n is true {
+				none
+			} else {
+				scan-string-end bs n (pos + 2) true
+			}
+		} else {
+			scan-string-end bs n (pos + 1) esc
+		}
+	}
+}
+
+# Escape-aware string builder: accumulates output bytes, decoding escapes,
+# until the closing quote. Returns the decoded string and the cursor past
+# the quote.
+def collect-string :: fun bytes int int (list int) -> result (string, int) error = fun bs n pos acc {
+	if pos >= n is true {
+		err (fail bs n "EOF while parsing a string")
+	} else {
+		let b = bytes.get bs pos
+		if b == 34 is true {
+			when bytes.from-list acc is ok by {
+				when bytes.to-string by is ok s {
+					ok (s, pos + 1)
+				} is err _m {
+					err (fail bs pos "invalid utf-8 in string")
+				}
+			} is err _m {
+				err (fail bs pos "invalid byte in string")
+			}
+		} else if b == 92 is true {
+			if pos + 1 >= n is true {
+				err (fail bs n "EOF while parsing a string")
+			} else {
+				let e = bytes.get bs (pos + 1)
+				when simple-escape e is some byte {
+					collect-string bs n (pos + 2) [...acc, byte]
+				} is none {
+					if e == 117 is true {
+						collect-unicode bs n (pos + 2) acc
+					} else {
+						err (fail bs pos "invalid escape")
+					}
+				}
+			}
+		} else {
+			collect-string bs n (pos + 1) [...acc, b]
+		}
+	}
+}
+
+def simple-escape :: fun int -> option int = fun e {
+	if e == 34 is true {
+		some 34
+	} else if e == 92 is true {
+		some 92
+	} else if e == 47 is true {
+		some 47
+	} else if e == 98 is true {
+		some 8
+	} else if e == 102 is true {
+		some 12
+	} else if e == 110 is true {
+		some 10
+	} else if e == 114 is true {
+		some 13
+	} else if e == 116 is true {
+		some 9
+	} else {
+		none
+	}
+}
+
+# Handle a `\u` escape (cursor just past the `u`): decode 4 hex digits, join
+# a surrogate pair if present, and append the codepoint's UTF-8 bytes.
+def collect-unicode :: fun bytes int int (list int) -> result (string, int) error = fun bs n pos acc {
+	when parse-hex4 bs n pos is some cp {
+		if cp >= 55296 is true {
+			if cp <= 56319 is true {
+				collect-surrogate bs n pos acc cp
+			} else if cp <= 57343 is true {
+				err (fail bs pos "unexpected low surrogate")
+			} else {
+				collect-string bs n (pos + 4) (append-utf8 acc cp)
+			}
+		} else {
+			collect-string bs n (pos + 4) (append-utf8 acc cp)
+		}
+	} is none {
+		err (fail bs pos "invalid unicode escape")
+	}
+}
+
+# After a high surrogate at `pos`, require a `\uXXXX` low surrogate and
+# combine the two into one codepoint.
+def collect-surrogate :: fun bytes int int (list int) int -> result (string, int) error = fun bs n pos acc hi {
+	if pos + 10 > n is true {
+		err (fail bs pos "invalid surrogate pair")
+	} else if bytes.get bs (pos + 4) == 92 is true {
+		if bytes.get bs (pos + 5) == 117 is true {
+			when parse-hex4 bs n (pos + 6) is some lo {
+				if lo >= 56320 is true {
+					if lo <= 57343 is true {
+						let cp = 65536 + (hi - 55296) * 1024 + (lo - 56320)
+						collect-string bs n (pos + 10) (append-utf8 acc cp)
+					} else {
+						err (fail bs pos "invalid surrogate pair")
+					}
+				} else {
+					err (fail bs pos "invalid surrogate pair")
+				}
+			} is none {
+				err (fail bs pos "invalid surrogate pair")
+			}
+		} else {
+			err (fail bs pos "invalid surrogate pair")
+		}
+	} else {
+		err (fail bs pos "invalid surrogate pair")
+	}
+}
+
+def parse-hex4 :: fun bytes int int -> option int = fun bs n pos {
+	if pos + 4 > n is true {
+		none
+	} else {
+		let h0 = hex-val (bytes.get bs pos)
+		let h1 = hex-val (bytes.get bs (pos + 1))
+		let h2 = hex-val (bytes.get bs (pos + 2))
+		let h3 = hex-val (bytes.get bs (pos + 3))
+		if h0 < 0 is true {
+			none
+		} else if h1 < 0 is true {
+			none
+		} else if h2 < 0 is true {
+			none
+		} else if h3 < 0 is true {
+			none
+		} else {
+			some (((h0 * 16 + h1) * 16 + h2) * 16 + h3)
+		}
+	}
+}
+
+def hex-val :: fun int -> int = fun b {
+	if b >= 48 is true {
+		if b <= 57 is true {
+			b - 48
+		} else if b >= 65 is true {
+			if b <= 70 is true {
+				b - 55
+			} else if b >= 97 is true {
+				if b <= 102 is true { b - 87 } else { -1 }
+			} else {
+				-1
+			}
+		} else {
+			-1
+		}
+	} else {
+		-1
+	}
+}
+
+# Append the UTF-8 encoding of codepoint `cp` to a byte accumulator.
+def append-utf8 :: fun (list int) int -> list int = fun acc cp {
+	if cp < 128 is true {
+		[...acc, cp]
+	} else if cp < 2048 is true {
+		[...acc, 192 + cp / 64, 128 + cp % 64]
+	} else if cp < 65536 is true {
+		[...acc, 224 + cp / 4096, 128 + (cp / 64) % 64, 128 + cp % 64]
+	} else {
+		[...acc, 240 + cp / 262144, 128 + (cp / 4096) % 64, 128 + (cp / 64) % 64, 128 + cp % 64]
+	}
+}
+
+# --- arrays ---
+
+def parse-array :: fun bytes int int -> result (value, int) error = fun bs n pos {
+	let p1 = skip-ws bs n (pos + 1)
+	if p1 >= n is true {
+		err (fail bs p1 "EOF while parsing a list")
+	} else if bytes.get bs p1 == 93 is true {
+		ok (array [], p1 + 1)
+	} else {
+		parse-array-elems bs n p1 []
+	}
+}
+
+def parse-array-elems :: fun bytes int int (list value) -> result (value, int) error = fun bs n pos acc {
+	when parse-value bs n pos is ok pair {
+		let (v, p) = pair
+		let acc2 = [...acc, v]
+		let p1 = skip-ws bs n p
+		if p1 >= n is true {
+			err (fail bs p1 "EOF while parsing a list")
+		} else {
+			let b = bytes.get bs p1
+			if b == 93 is true {
+				ok (array acc2, p1 + 1)
+			} else if b == 44 is true {
+				parse-array-elems bs n (p1 + 1) acc2
+			} else {
+				err (fail bs p1 "expected `,` or `]`")
+			}
+		}
+	} is err e {
+		err e
+	}
+}
+
+# --- objects ---
+
+def parse-object :: fun bytes int int -> result (value, int) error = fun bs n pos {
+	let p1 = skip-ws bs n (pos + 1)
+	if p1 >= n is true {
+		err (fail bs p1 "EOF while parsing an object")
+	} else if bytes.get bs p1 == 125 is true {
+		ok (object (dict.empty ()), p1 + 1)
+	} else {
+		parse-object-entries bs n p1 (dict.empty ())
+	}
+}
+
+def parse-object-entries :: fun bytes int int (dict string value) -> result (value, int) error = fun bs n pos acc {
+	if pos >= n is true {
+		err (fail bs pos "EOF while parsing an object")
+	} else if bytes.get bs pos == 34 is true {
+		when parse-string bs n pos is ok kpair {
+			let (key, p) = kpair
+			let p1 = skip-ws bs n p
+			if p1 >= n is true {
+				err (fail bs p1 "EOF while parsing an object")
+			} else if bytes.get bs p1 == 58 is true {
+				when parse-value bs n (p1 + 1) is ok vpair {
+					let (v, p2) = vpair
+					let acc2 = dict.insert acc key v
+					let p3 = skip-ws bs n p2
+					if p3 >= n is true {
+						err (fail bs p3 "EOF while parsing an object")
+					} else {
+						let b = bytes.get bs p3
+						if b == 125 is true {
+							ok (object acc2, p3 + 1)
+						} else if b == 44 is true {
+							parse-object-entries bs n (skip-ws bs n (p3 + 1)) acc2
+						} else {
+							err (fail bs p3 "expected `,` or `}`")
+						}
+					}
+				} is err e {
+					err e
+				}
+			} else {
+				err (fail bs p1 "expected `:`")
+			}
+		} is err e {
+			err e
+		}
+	} else {
+		err (fail bs pos "key must be a string")
+	}
+}
+
+# --- internals: serialization -------------------------------------------
+
+# Render a string as a quoted, escaped JSON string. Walks runs of plain
+# bytes (sliced whole, preserving UTF-8) and emits an escape at each special
+# ASCII byte.
+def escape-string :: fun string -> string = fun s {
+	let bs = string.to-bytes s
+	let n = bytes.length bs
+	"\"" ++ (escape-loop bs n 0 0 "") ++ "\""
+}
+
+def escape-loop :: fun bytes int int int string -> string = fun bs n start i acc {
+	if i >= n is true {
+		acc ++ (slice-str bs start n)
+	} else {
+		when escape-of (bytes.get bs i) is some esc {
+			escape-loop bs n (i + 1) (i + 1) (acc ++ (slice-str bs start i) ++ esc)
+		} is none {
+			escape-loop bs n start (i + 1) acc
+		}
+	}
+}
+
+def escape-of :: fun int -> option string = fun b {
+	if b == 34 is true {
+		some "\\\""
+	} else if b == 92 is true {
+		some "\\\\"
+	} else if b == 8 is true {
+		some "\\b"
+	} else if b == 12 is true {
+		some "\\f"
+	} else if b == 10 is true {
+		some "\\n"
+	} else if b == 13 is true {
+		some "\\r"
+	} else if b == 9 is true {
+		some "\\t"
+	} else if b < 32 is true {
+		some ("\\u00" ++ (hex2 b))
+	} else {
+		none
+	}
+}
+
+def slice-str :: fun bytes int int -> string = fun bs a b {
+	(bytes.to-string (bytes.slice bs a b)) ?? ""
+}
+
+def hex2 :: fun int -> string = fun b {
+	(hex-nibble (b / 16)) ++ (hex-nibble (b % 16))
+}
+
+def hex-nibble :: fun int -> string = fun v {
+	let byte = if v < 10 is true { 48 + v } else { 87 + v }
+	when bytes.from-list [byte] is ok by {
+		(bytes.to-string by) ?? "?"
+	} is err _m {
+		"?"
+	}
+}
+
+# Pretty-print at nesting `depth`: scalars inline, non-empty containers laid
+# out one element per line with a 2-space indent. Empty containers stay
+# compact (`[]`, `{}`).
+def render-pretty :: fun value int -> string = fun v depth {
+	when v is null {
+		"null"
+	} is bool b {
+		if b is true { "true" } else { "false" }
+	} is int n {
+		to-string n
+	} is float x {
+		to-string x
+	} is string s {
+		escape-string s
+	} is array xs {
+		if list.is-empty xs is true {
+			"[]"
+		} else {
+			let items = list.map xs (fun e {
+				(pad (depth + 1)) ++ (render-pretty e (depth + 1))
+			})
+			"[\n" ++ (string.join items ",\n") ++ "\n" ++ (pad depth) ++ "]"
+		}
+	} is object o {
+		let es = dict.entries o
+		if list.is-empty es is true {
+			"{}"
+		} else {
+			let items = list.map es (fun e {
+				let (k, val) = e
+				(pad (depth + 1)) ++ (escape-string k) ++ ": " ++ (render-pretty val (depth + 1))
+			})
+			"{\n" ++ (string.join items ",\n") ++ "\n" ++ (pad depth) ++ "}"
+		}
+	}
+}
+
+def pad :: fun int -> string = fun d {
+	if d <= 0 is true {
+		""
+	} else {
+		"  " ++ (pad (d - 1))
 	}
 }
