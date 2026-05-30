@@ -171,6 +171,140 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		deps: &[],
 		build: |_| wire::build_wire_mix_len_fn(),
 	},
+	HelperDef {
+		id: H::WirePush,
+		fn_type: Ty::WirePush,
+		deps: &[],
+		build: |c| wire::build_wire_push_fn(c.rt.wireg),
+	},
+	HelperDef {
+		id: H::WireUvarint,
+		fn_type: Ty::WireUvarint,
+		deps: &[H::WirePush],
+		build: |c| wire::build_wire_uvarint_fn(c.dep(H::WirePush)),
+	},
+	HelperDef {
+		id: H::WireCtxPut,
+		fn_type: Ty::Helper(2),
+		deps: &[],
+		build: |c| wire::build_wire_ctxput_fn(c.rt.wireg),
+	},
+	HelperDef {
+		id: H::WireCtxGet,
+		fn_type: Ty::Helper(1),
+		deps: &[H::Eq],
+		build: |c| wire::build_wire_ctxget_fn(c.dep(H::Eq), c.rt.wireg),
+	},
+	HelperDef {
+		id: H::WireEnc,
+		fn_type: Ty::WireEnc,
+		deps: &[
+			H::WirePush,
+			H::WireUvarint,
+			H::WireCtxPut,
+			H::WireCtxGet,
+			H::WireEncVariant,
+			H::WireEncDict,
+		],
+		build: |c| {
+			wire::build_wire_enc_fn(
+				c.self_idx,
+				c.dep(H::WirePush),
+				c.dep(H::WireUvarint),
+				c.dep(H::WireCtxPut),
+				c.dep(H::WireCtxGet),
+				c.dep(H::WireEncVariant),
+				c.dep(H::WireEncDict),
+				c.rt.wire,
+			)
+		},
+	},
+	HelperDef {
+		id: H::WireEncVariant,
+		fn_type: Ty::WireEnc,
+		deps: &[H::WireEnc, H::WireUvarint],
+		build: |c| wire::build_wire_enc_variant_fn(c.dep(H::WireEnc), c.dep(H::WireUvarint)),
+	},
+	HelperDef {
+		id: H::WireRByte,
+		fn_type: Ty::WireRByte,
+		deps: &[],
+		build: |c| wire::build_wire_rbyte_fn(c.rt.wireg),
+	},
+	HelperDef {
+		id: H::WireRUvarint,
+		fn_type: Ty::WireRUvarint,
+		deps: &[H::WireRByte],
+		build: |c| wire::build_wire_ruvarint_fn(c.dep(H::WireRByte), c.rt.wireg),
+	},
+	HelperDef {
+		id: H::WireDisp,
+		fn_type: Ty::Helper(2),
+		deps: &[H::BytesConcat],
+		build: |c| wire::build_wire_disp_fn(c.dep(H::BytesConcat)),
+	},
+	HelperDef {
+		id: H::WireDecVariant,
+		fn_type: Ty::Helper(2),
+		deps: &[H::WireRUvarint, H::WireDec, H::WireDisp],
+		build: |c| {
+			wire::build_wire_dec_variant_fn(
+				c.dep(H::WireRUvarint),
+				c.dep(H::WireDec),
+				c.dep(H::WireDisp),
+				c.rt.wireg,
+			)
+		},
+	},
+	HelperDef {
+		id: H::WireDec,
+		fn_type: Ty::Helper(1),
+		deps: &[
+			H::WireRUvarint,
+			H::WireRByte,
+			H::WireCtxPut,
+			H::WireCtxGet,
+			H::WireDecVariant,
+		],
+		build: |c| {
+			wire::build_wire_dec_fn(
+				c.self_idx,
+				c.dep(H::WireRUvarint),
+				c.dep(H::WireRByte),
+				c.dep(H::WireCtxPut),
+				c.dep(H::WireCtxGet),
+				c.dep(H::WireDecVariant),
+				c.rt.wireg,
+				c.rt.wire,
+			)
+		},
+	},
+	HelperDef {
+		id: H::WireResult,
+		fn_type: Ty::Helper(1),
+		deps: &[],
+		build: |c| wire::build_wire_result_fn(c.rt.wireg, c.rt.wirelits),
+	},
+	HelperDef {
+		id: H::WireBCmp,
+		fn_type: Ty::Eq,
+		deps: &[],
+		build: |_| wire::build_wire_bcmp_fn(),
+	},
+	HelperDef {
+		id: H::WireEncDict,
+		fn_type: Ty::WireEnc,
+		deps: &[H::WireEnc, H::WireUvarint, H::WirePush, H::WireBCmp],
+		build: |c| {
+			wire::build_wire_enc_dict_fn(
+				c.dep(H::WireEnc),
+				c.dep(H::WireUvarint),
+				c.dep(H::WirePush),
+				c.dep(H::WireBCmp),
+				c.rt.wireg,
+			)
+		},
+	},
 ];
 
 /// The helper a builtin tag lowers to, if any. These are the builtins implemented
@@ -192,8 +326,11 @@ pub(crate) fn helper_for_tag(tag: &str) -> Option<Helper> {
 		"dict-remove" => H::DictRemove,
 		"dict-map" => H::DictMap,
 		"dict-filter" => H::DictFilter,
-		// `wire-fingerprint` walks the schema value tree.
+		// `wire-fingerprint` walks the schema value tree; encode/decode interpret
+		// it to (de)serialize a value over the module-level codec globals.
 		"wire-fingerprint" => H::WireFp,
+		"wire-encode" => H::WireEnc,
+		"wire-decode" => H::WireDec,
 		_ => return None,
 	})
 }

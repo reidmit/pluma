@@ -963,6 +963,85 @@ impl<'a> FnEmitter<'a> {
 				}
 			}
 		}
+		// `wire-encode` (args `[schema, value]`): reset the codec globals, run the
+		// recursive encoder into `g_buf`, then snapshot `g_buf[0..g_len]` into an
+		// exact-size `$bytes`, wrapped `TAG_BYTES`.
+		if tag == "wire-encode" {
+			let Some(enc) = self.runtime.idx(Helper::WireEnc) else {
+				self.diags.push("wire-encode needs __wire_enc".to_string());
+				self.push_nothing();
+				return;
+			};
+			let g = self.runtime.wireg;
+			self.ins(Instruction::I32Const(64));
+			self.ins(Instruction::ArrayNewDefault(types::T_BYTES));
+			self.ins(Instruction::GlobalSet(g.buf));
+			self.ins(Instruction::I32Const(0));
+			self.ins(Instruction::GlobalSet(g.len));
+			self.ins(Instruction::I32Const(0));
+			self.ins(Instruction::GlobalSet(g.ctxlen));
+			self.ins(Instruction::I32Const(8));
+			self.ins(Instruction::ArrayNewDefault(types::T_VALARRAY));
+			self.ins(Instruction::GlobalSet(g.ctx));
+			self.atom(&args[0]);
+			self.atom(&args[1]);
+			self.ins(Instruction::Call(enc));
+			let res = self.fresh_local(types::bytes_ref());
+			self.ins(Instruction::GlobalGet(g.len));
+			self.ins(Instruction::ArrayNewDefault(types::T_BYTES));
+			self.ins(Instruction::LocalSet(res));
+			self.ins(Instruction::LocalGet(res));
+			self.ins(Instruction::I32Const(0));
+			self.ins(Instruction::GlobalGet(g.buf));
+			self.ins(Instruction::I32Const(0));
+			self.ins(Instruction::GlobalGet(g.len));
+			self.ins(Instruction::ArrayCopy {
+				array_type_index_dst: types::T_BYTES,
+				array_type_index_src: types::T_BYTES,
+			});
+			self.ins(Instruction::I32Const(types::TAG_BYTES));
+			self.ins(Instruction::LocalGet(res));
+			self.ins(Instruction::StructNew(types::T_STR));
+			return;
+		}
+		// `wire-decode` (args `[schema, bytes]`): point the codec at the input,
+		// reset cursor/error/registry, run the decoder, then wrap the value in
+		// `ok`/`err` (the trailing-bytes check rides in `__wire_result`).
+		if tag == "wire-decode" {
+			let (Some(dec), Some(result)) = (
+				self.runtime.idx(Helper::WireDec),
+				self.runtime.idx(Helper::WireResult),
+			) else {
+				self.diags.push("wire-decode needs __wire_dec".to_string());
+				self.push_nothing();
+				return;
+			};
+			let g = self.runtime.wireg;
+			self.atom(&args[1]);
+			self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+				types::T_STR,
+			)));
+			self.ins(Instruction::StructGet {
+				struct_type_index: types::T_STR,
+				field_index: 1,
+			});
+			self.ins(Instruction::GlobalSet(g.input));
+			self.ins(Instruction::I32Const(0));
+			self.ins(Instruction::GlobalSet(g.pos));
+			self.ins(Instruction::I32Const(0));
+			self.ins(Instruction::GlobalSet(g.err));
+			self.ins(Instruction::I64Const(0));
+			self.ins(Instruction::GlobalSet(g.errval));
+			self.ins(Instruction::I32Const(0));
+			self.ins(Instruction::GlobalSet(g.ctxlen));
+			self.ins(Instruction::I32Const(8));
+			self.ins(Instruction::ArrayNewDefault(types::T_VALARRAY));
+			self.ins(Instruction::GlobalSet(g.ctx));
+			self.atom(&args[0]);
+			self.ins(Instruction::Call(dec));
+			self.ins(Instruction::Call(result));
+			return;
+		}
 		// `to-string` is implemented in wasm (`__tostring`), not imported.
 		if tag == "to-string" {
 			if let (Some(ts), Some(a)) = (self.runtime.idx(Helper::ToString), args.first()) {

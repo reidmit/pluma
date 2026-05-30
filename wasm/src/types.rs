@@ -168,6 +168,16 @@ enum FuncKind {
 	WireMixVal,
 	/// The `wire` length mixer: `(i64 hash, i64 n) -> i64` (mixes `n`'s LE bytes).
 	WireMixLen,
+	/// The codec's byte sink: `(i32 byte) -> ()` (appends to the encode buffer).
+	WirePush,
+	/// The codec's varint sink: `(i64 v) -> ()` (LEB128 into the encode buffer).
+	WireUvarint,
+	/// The recursive encoder: `(ref $value schema, ref $value val) -> ()`.
+	WireEnc,
+	/// The decode byte source: `() -> i32` (reads one input byte / sets `g_err`).
+	WireReadByte,
+	/// The decode varint source: `() -> i64` (reads a LEB128 varint / sets `g_err`).
+	WireReadVarint,
 }
 
 pub struct FuncTypes {
@@ -242,6 +252,31 @@ impl FuncTypes {
 	/// The type index for the `wire` length mixer: `(i64, i64) -> i64`.
 	pub fn for_wire_mix_len(&mut self) -> u32 {
 		self.intern(FuncKind::WireMixLen)
+	}
+
+	/// The type index for the codec byte sink: `(i32) -> ()`.
+	pub fn for_wire_push(&mut self) -> u32 {
+		self.intern(FuncKind::WirePush)
+	}
+
+	/// The type index for the codec varint sink: `(i64) -> ()`.
+	pub fn for_wire_uvarint(&mut self) -> u32 {
+		self.intern(FuncKind::WireUvarint)
+	}
+
+	/// The type index for the recursive encoder: `(value, value) -> ()`.
+	pub fn for_wire_enc(&mut self) -> u32 {
+		self.intern(FuncKind::WireEnc)
+	}
+
+	/// The type index for the decode byte source: `() -> i32`.
+	pub fn for_wire_rbyte(&mut self) -> u32 {
+		self.intern(FuncKind::WireReadByte)
+	}
+
+	/// The type index for the decode varint source: `() -> i64`.
+	pub fn for_wire_ruvarint(&mut self) -> u32 {
+		self.intern(FuncKind::WireReadVarint)
 	}
 
 	/// Encode the full type section: the fixed `$value` prefix, then every
@@ -411,6 +446,26 @@ impl FuncTypes {
 					types
 						.ty()
 						.function([ValType::I64, ValType::I64], [ValType::I64]);
+					continue;
+				}
+				FuncKind::WirePush => {
+					types.ty().function([ValType::I32], []);
+					continue;
+				}
+				FuncKind::WireUvarint => {
+					types.ty().function([ValType::I64], []);
+					continue;
+				}
+				FuncKind::WireEnc => {
+					types.ty().function([value_ref(), value_ref()], []);
+					continue;
+				}
+				FuncKind::WireReadByte => {
+					types.ty().function([], [ValType::I32]);
+					continue;
+				}
+				FuncKind::WireReadVarint => {
+					types.ty().function([], [ValType::I64]);
 					continue;
 				}
 			};

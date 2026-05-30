@@ -147,7 +147,11 @@ const WASM_FIXTURES: &[&str] = &[
 	"wasm-math-trig",
 	"when-else",
 	"when-enum",
+	"wire-dict",
 	"wire-fingerprint",
+	"wire-polymorphic",
+	"wire-recursive",
+	"wire-roundtrip",
 ];
 
 // Runtime tags — must match `wasm::types`.

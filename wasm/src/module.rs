@@ -17,7 +17,8 @@ use crate::emit::FnEmitter;
 use crate::helpers::{build_builtin_wrapper, builtin_arity, close_deps, helper_for_tag, REGISTRY};
 use crate::runtime::{
 	host_sig, is_f64_unary_host, is_inline_builtin, scan_helpers, GlobalKind, GlobalSlot, Helper,
-	HelperCtx, HelperSet, OptionLits, OrderingLits, Runtime, ToStringLits, WireTags,
+	HelperCtx, HelperSet, OptionLits, OrderingLits, Runtime, ToStringLits, WireGlobals,
+	WireResultLits, WireTags,
 };
 use crate::scan::{collect_host_calls, collect_zero_arg_closures, scan_strings, StrPool};
 use crate::types::{self, FuncTypes};
@@ -111,7 +112,16 @@ impl Module {
 		for &fid in &reach.order {
 			scan_helpers(&p.functions[fid as usize].body, &mut requested);
 		}
+		// `wire-decode`'s call site wraps the decoded value via `__wire_result`
+		// (not referenced by `__wire_dec` itself, so it isn't a dependency).
+		if requested.contains(&Helper::WireDec) {
+			requested.insert(Helper::WireResult);
+		}
 		close_deps(&mut requested);
+		// The `wire` encode/decode codec threads its recursive state through
+		// module-level mutable globals; allocate them once when either is reachable.
+		let needs_wire_codec =
+			requested.contains(&Helper::WireEnc) || requested.contains(&Helper::WireDec);
 		// Assign each needed helper a wasm index, walking `REGISTRY` (= `Helper`)
 		// order — the same order emission replays below.
 		let mut runtime = Runtime::default();
@@ -218,6 +228,45 @@ impl Module {
 				},
 			);
 		}
+		// The `wire` codec's scratch globals (heterogeneous types, so not via
+		// `alloc_slot`). Reset at each `wire-encode`/`wire-decode` call site; the
+		// ref-typed ones (`buf`/`input`/`ctx`) start null and are pre-initialized
+		// before any array op so they never trap.
+		if needs_wire_codec {
+			let mut wire_global = |val_type: ValType, init: &ConstExpr| -> u32 {
+				let idx = gidx;
+				globals_sec.global(
+					GlobalType {
+						val_type,
+						mutable: true,
+						shared: false,
+					},
+					init,
+				);
+				gidx += 1;
+				idx
+			};
+			let null_bytes = ConstExpr::ref_null(HeapType::Concrete(types::T_BYTES));
+			let null_arr = ConstExpr::ref_null(HeapType::Concrete(types::T_VALARRAY));
+			let zero_i32 = ConstExpr::i32_const(0);
+			let zero_i64 = ConstExpr::i64_const(0);
+			let nullable = |t: u32| {
+				ValType::Ref(RefType {
+					nullable: true,
+					heap_type: HeapType::Concrete(t),
+				})
+			};
+			runtime.wireg = WireGlobals {
+				buf: wire_global(nullable(types::T_BYTES), &null_bytes),
+				len: wire_global(ValType::I32, &zero_i32),
+				input: wire_global(nullable(types::T_BYTES), &null_bytes),
+				pos: wire_global(ValType::I32, &zero_i32),
+				err: wire_global(ValType::I32, &zero_i32),
+				errval: wire_global(ValType::I64, &zero_i64),
+				ctx: wire_global(nullable(types::T_VALARRAY), &null_arr),
+				ctxlen: wire_global(ValType::I32, &zero_i32),
+			};
+		}
 
 		// String-constant pool: one passive data segment, every `Const::Str`
 		// concatenated, recorded by (offset, len).
@@ -296,7 +345,7 @@ impl Module {
 		}
 		// The `wire` codec helpers dispatch on a schema node's `vtag`; resolve the
 		// `wire-schema` enum's per-variant tags (declaration order = wire tag).
-		if requested.contains(&Helper::WireFp) {
+		if requested.contains(&Helper::WireFp) || needs_wire_codec {
 			match p.enums.get("__prelude__.wire-schema") {
 				Some(vs) => {
 					let pos = |name: &str| vs.iter().position(|(n, _)| n == name).map(|i| i as u32);
@@ -350,6 +399,50 @@ impl Module {
 					}
 				}
 				None => diags.push("`wire` needs the `wire-schema` enum".to_string()),
+			}
+		}
+		// `wire-decode` wraps its result in `ok`/`err`; resolve the `result` and
+		// `wire-error` variant tags + display names `__wire_result` builds.
+		if requested.contains(&Helper::WireDec) {
+			let res = "__prelude__.result";
+			let werr = "__prelude__.wire-error";
+			let tag_in = |qual: &str, name: &str| {
+				p.enums
+					.get(qual)
+					.and_then(|vs| vs.iter().position(|(n, _)| n == name))
+					.map(|i| i as u32)
+			};
+			match (tag_in(res, "ok"), tag_in(res, "err")) {
+				(Some(ok_tag), Some(err_tag)) => {
+					// `wire-error` variants, indexed by error code minus one.
+					let err_names = [
+						"unexpected-end",
+						"invalid-tag",
+						"invalid-utf8",
+						"trailing-bytes",
+						"malformed",
+					];
+					let mut errors = [(0u32, (0u32, 0u32)); 5];
+					let mut ok = true;
+					for (i, name) in err_names.iter().enumerate() {
+						match tag_in(werr, name) {
+							Some(t) => errors[i] = (t, strpool.intern(&variant_display(werr, t, &p.enums))),
+							None => ok = false,
+						}
+					}
+					if ok {
+						runtime.wirelits = WireResultLits {
+							ok_tag,
+							err_tag,
+							ok_name: strpool.intern(&variant_display(res, ok_tag, &p.enums)),
+							err_name: strpool.intern(&variant_display(res, err_tag, &p.enums)),
+							errors,
+						};
+					} else {
+						diags.push("`wire.decode` needs the `wire-error` enum variants".to_string());
+					}
+				}
+				_ => diags.push("`wire.decode` needs the `result` enum".to_string()),
 			}
 		}
 

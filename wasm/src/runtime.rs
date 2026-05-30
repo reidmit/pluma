@@ -44,6 +44,13 @@ pub(crate) enum GlobalKind {
 /// - `ListBuild`/`ListCollect`/`BytesBuild` — tabulating builders (`[f 0, …, f (n-1)]`).
 /// - `Dict*` — insert/lookup/remove/map/filter over the `$dict` entries array.
 /// - `WireFp`/`WireMixStr`/`WireMixLen` — the `wire` FNV fingerprint + its mixers.
+/// - `Wire*` (the codec) — the `wire-encode`/`wire-decode` machinery over the
+///   module-level scratch globals (`WireGlobals`): `WirePush`/`WireUvarint` are
+///   the encode byte/varint sinks, `WireEnc` the recursive encoder, `WireRByte`/
+///   `WireRUvarint` the decode byte/varint sources, `WireDec`/`WireDecVariant`
+///   the recursive decoder, `WireCtxPut`/`WireCtxGet` the recursive-enum
+///   registry, `WireDisp` rebuilds a decoded variant's display name, and
+///   `WireResult` wraps a decoded value in `ok`/`err` (the trailing-bytes check).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub(crate) enum Helper {
 	Eq,
@@ -65,13 +72,27 @@ pub(crate) enum Helper {
 	WireFp,
 	WireMixStr,
 	WireMixLen,
+	WirePush,
+	WireUvarint,
+	WireCtxPut,
+	WireCtxGet,
+	WireEnc,
+	WireEncVariant,
+	WireRByte,
+	WireRUvarint,
+	WireDisp,
+	WireDecVariant,
+	WireDec,
+	WireResult,
+	WireBCmp,
+	WireEncDict,
 }
 
 impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 19;
+	pub(crate) const COUNT: usize = 33;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable
@@ -116,6 +137,12 @@ pub(crate) struct Runtime {
 	pub(crate) ord: OrderingLits,
 	/// The `wire-schema` enum's per-variant tags, for the codec helpers' dispatch.
 	pub(crate) wire: WireTags,
+	/// The module-level scratch globals the `wire` codec threads its recursive
+	/// encode/decode state through (buffer, cursor, error, enum registry).
+	pub(crate) wireg: WireGlobals,
+	/// The `result` / `wire-error` variant tags + display names `__wire_result`
+	/// builds when wrapping a decoded value in `ok`/`err`.
+	pub(crate) wirelits: WireResultLits,
 }
 
 impl Runtime {
@@ -135,6 +162,11 @@ pub(crate) enum Ty {
 	BytesConcat,
 	WireMixVal,
 	WireMixLen,
+	WirePush,
+	WireUvarint,
+	WireEnc,
+	WireRByte,
+	WireRUvarint,
 }
 
 impl Ty {
@@ -146,6 +178,11 @@ impl Ty {
 			Ty::BytesConcat => ft.for_bytesconcat(),
 			Ty::WireMixVal => ft.for_wire_mix_val(),
 			Ty::WireMixLen => ft.for_wire_mix_len(),
+			Ty::WirePush => ft.for_wire_push(),
+			Ty::WireUvarint => ft.for_wire_uvarint(),
+			Ty::WireEnc => ft.for_wire_enc(),
+			Ty::WireRByte => ft.for_wire_rbyte(),
+			Ty::WireRUvarint => ft.for_wire_ruvarint(),
 		}
 	}
 }
@@ -202,6 +239,41 @@ pub(crate) struct WireTags {
 	pub(crate) s_tuple: u32,
 	pub(crate) s_record: u32,
 	pub(crate) s_enum: u32,
+}
+
+/// The wasm indices of the module-level mutable globals the `wire` codec uses as
+/// scratch state. Encode writes into `buf`/`len` (a doubling byte buffer);
+/// decode reads from `in`/`pos` and reports failure through `err`/`errval`; both
+/// thread the recursive-enum registry through `ctx`/`ctxlen` (a `$valarray` of
+/// `$tuple(qualified-name $str, variants $list)` entries). Allocated only when a
+/// reachable program calls `wire-encode`/`wire-decode`. Codes in `err`: 0=ok,
+/// 1=unexpected-end, 2=invalid-tag (`errval`=tag), 3=invalid-utf8,
+/// 4=trailing-bytes (`errval`=count), 5=malformed.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct WireGlobals {
+	pub(crate) buf: u32,    // mut ref null $bytes — encode output
+	pub(crate) len: u32,    // mut i32 — encode used length
+	pub(crate) input: u32,  // mut ref null $bytes — decode input
+	pub(crate) pos: u32,    // mut i32 — decode cursor
+	pub(crate) err: u32,    // mut i32 — decode error code
+	pub(crate) errval: u32, // mut i64 — decode error payload
+	pub(crate) ctx: u32,    // mut ref null $valarray — enum-ctx registry
+	pub(crate) ctxlen: u32, // mut i32 — registry used length
+}
+
+/// The `result`/`wire-error` variant tags + interned display-name `(off, len)`
+/// strings `__wire_result` needs to wrap a decoded value: `ok v` on success, or
+/// the `wire-error` variant matching the codec's error code on failure.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct WireResultLits {
+	pub(crate) ok_tag: u32,
+	pub(crate) err_tag: u32,
+	pub(crate) ok_name: (u32, u32),
+	pub(crate) err_name: (u32, u32),
+	/// `(tag, display-name)` for each `wire-error` variant, indexed by error code
+	/// minus one: `[unexpected-end, invalid-tag, invalid-utf8, trailing-bytes,
+	/// malformed]`.
+	pub(crate) errors: [(u32, (u32, u32)); 5],
 }
 
 /// What an `*-compare` wrapper needs to construct an `ordering` `$variant`: each
