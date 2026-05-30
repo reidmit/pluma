@@ -106,7 +106,7 @@ pub enum ExprKind {
 	While(WhileNode),
 
 	/// `scope (as s)? { body }` / `manual scope as s { body }` — structured
-	/// concurrency (ASYNC.md Phase 4). The analyzer rewrites this into a call
+	/// concurrency. The analyzer rewrites this into a call
 	/// to the hidden `task.scope-new` kernel builtin, so it never survives to
 	/// codegen.
 	Scope(ScopeNode),

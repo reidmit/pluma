@@ -24,7 +24,7 @@ pub enum AnalysisErrorKind {
 	NoInstance { trait_name: String, ty: Type },
 	// A `wire` boundary (a value crossing as serialized bytes) required a
 	// type that isn't auto-derivable. `detail` names the offending component
-	// (e.g. "functions aren't serializable"). See FULLSTACK.md, Layer 1.
+	// (e.g. "functions aren't serializable").
 	NotWireDerivable { ty: Type, detail: String },
 	UnsupportedInstanceHead { head: Type },
 	IncompleteInstance { trait_name: String, method: String },

@@ -57,7 +57,7 @@ public enum result a b {
 # function that returns a `task`, `try x = some-task` awaits it, and the
 # whole function is itself a `task`. The `task.*` helpers (in `core.task`,
 # auto-imported) build and combine them; `scope` (a keyword) runs them
-# concurrently. See ASYNC.md.
+# concurrently.
 #
 # The type has no surface constructors -- you never write `task.mk`; you
 # make one with `task.return` / `task.sleep` / an async function call.
@@ -71,7 +71,7 @@ public enum task a {
 # children are heterogeneous, awaited individually via `try`), `s.cancel ()`
 # cancels the scope, and `s.cancel-after d` arms a deadline. There's no
 # `s.next` here (that would need one shared child type) -- see
-# `manual-scope-handle` for the queue-style drain. See ASYNC.md.
+# `manual-scope-handle` for the queue-style drain.
 public enum scope-handle {
 }
 
@@ -82,8 +82,7 @@ public enum scope-handle {
 # single child type to return -- which is why a manual scope's children are
 # homogeneous, where a `scope-handle`'s are heterogeneous (awaited individually,
 # so no shared type is needed). That drain is what `race` / `any` / `pool` are
-# built on. Also supports `s.spawn t`, `s.cancel ()`, `s.cancel-after d`. See
-# ASYNC.md.
+# built on. Also supports `s.spawn t`, `s.cancel ()`, `s.cancel-after d`.
 public enum manual-scope-handle a {
 }
 
@@ -101,7 +100,7 @@ public enum ordering {
 	gt
 }
 
-# Why a `wire` decode failed (FULLSTACK.md, Layer 1). The `wire` codec
+# Why a `wire` decode failed. The `wire` codec
 # turns any data-shaped value into compact binary and back; decoding bytes
 # that don't match the expected type surfaces one of these through the
 # `result` that `wire.decode` returns. (Encoding can't fail — a value always
@@ -122,7 +121,7 @@ public enum wire-error {
 
 # The runtime reification of a `wire a` dictionary: a tree describing a
 # type's structure so the `wire-encode` / `wire-decode` builtins can drive a
-# positional binary encoding (the type *is* the schema — FULLSTACK.md). You
+# positional binary encoding (the type *is* the schema). You
 # almost never write one by hand; the compiler synthesizes it from the type
 # whenever you call `wire.encode` / `wire.decode`. It's public so those synthesized
 # values have a named home.

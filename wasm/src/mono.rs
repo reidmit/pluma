@@ -22,8 +22,8 @@ use std::collections::HashMap;
 
 use ir::{Atom, Block, Callee, IrProgram, Pattern, RecordShape, Rvalue, StmtKind};
 
-/// Cap on distinct shape-specializations per source function — a code-size bound
-/// (per `RECORDS.md` §9). Calls beyond the cap keep the uniform (name-scan) path.
+/// Cap on distinct shape-specializations per source function — a code-size
+/// bound. Calls beyond the cap keep the uniform (name-scan) path.
 const MAX_CLONES_PER_FN: usize = 8;
 
 /// A specialization key: the callee and, per param, the nominal shape it's

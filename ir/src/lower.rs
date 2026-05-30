@@ -2278,7 +2278,7 @@ fn seed_prelude_globals(g: &mut GlobalTable) {
 	g.add_pre_evaluated("__prelude__", "print", builtin("print"));
 	g.add_pre_evaluated("__prelude__", "debug", builtin("debug"));
 	g.add_pre_evaluated("__prelude__", "to-string", builtin("to-string"));
-	// `wire` codec builtins (FULLSTACK.md): a `wire` method call loads one of
+	// `wire` codec builtins: a `wire` method call loads one of
 	// these as its callee, passing the schema dict as the first argument.
 	g.add_pre_evaluated("__prelude__", "wire-encode", builtin("wire-encode"));
 	g.add_pre_evaluated("__prelude__", "wire-decode", builtin("wire-decode"));

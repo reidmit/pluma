@@ -1,4 +1,4 @@
-# The schema fingerprint (FULLSTACK.md "Version skew"): a stable structural
+# The schema fingerprint: a stable structural
 # hash of a type's wire schema. Identical shapes hash identically; any drift
 # (reordered/added/renamed/retyped fields or variants) changes the hash, so a
 # stale client decoding a new server's bytes can be rejected up front instead

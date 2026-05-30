@@ -1,6 +1,6 @@
 // Differential harness for the async CPS state-machine pass (`ir::cps`) + the
-// VM poll-driver (`vm::task::drive_poll`). See IR.md ("Async CPS state-machine
-// pass"). Like the other IR-track passes the transform is *inert on the default
+// VM poll-driver (`vm::task::drive_poll`). Like the other IR-track passes the
+// transform is *inert on the default
 // VM path* and WASM-bound, so the VM anchors are behavior-neutrality plus a
 // non-vacuity guard.
 //

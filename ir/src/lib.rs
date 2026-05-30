@@ -8,12 +8,7 @@
 // bytecode emitter in `codegen`; later: a WASM emitter) only has to translate
 // the IR, not re-derive Pluma's semantics.
 //
-// See `IR.md` at the repo root for the design-of-record and the phased plan.
-// This crate is the step-1 scaffold: the type definitions and the `lower`
-// entry point exist, but `lower` is not yet implemented or wired into
-// `codegen` (phases 1.1-1.3).
-//
-// Two design commitments matter for the future WASM consumer:
+// Two design commitments matter for the WASM consumer:
 //   * ANF — every intermediate result is a `Let`-bound `VarId`; call arguments
 //     are atoms (`Atom`). Trivial to produce from a functional language and
 //     trivial for any backend to emit from.

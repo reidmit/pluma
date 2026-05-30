@@ -1,6 +1,6 @@
 //! WASM (WasmGC) backend — the third consumer of `ir::IrProgram`, parallel to
 //! the bytecode emitter in `codegen` (which lowers the *same* IR to `vm::Program`
-//! via `codegen::from_ir`). See `IR.md` for the design-of-record.
+//! via `codegen::from_ir`).
 //!
 //! `emit(&IrProgram)` runs the WASM-readiness pipeline the VM path skips —
 //! direct-call resolution + Repr coercion (uniform-boxed; monomorphization is a
@@ -10,7 +10,7 @@
 //! reachable, so the emitter only ever sees the handful of functions a program
 //! actually runs.
 //!
-//! Coverage grows milestone-by-milestone (see `IR.md`); an unsupported IR node
+//! Coverage grows milestone-by-milestone; an unsupported IR node
 //! becomes a `Diagnostic` rather than a silent miscompile, and the differential
 //! harness (`tests/wasm_diff.rs`) grows its allowlist as coverage grows.
 

@@ -681,7 +681,7 @@ impl<'compiler> Analyzer<'compiler> {
 		// primitive key types.
 		self.register_prelude_hash_trait();
 		// `wire` trait: `encode fun a -> bytes` / `decode fun bytes ->
-		// result a wire-error`. Auto-derived structurally (FULLSTACK.md): no
+		// result a wire-error`. Auto-derived structurally: no
 		// concrete instances — dispatch is resolved by synthesizing a schema
 		// from the type's shape in `try_resolve_dispatch`.
 		self.register_prelude_wire_trait();
@@ -4742,7 +4742,7 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 				None => {
 					// `wire` is auto-derived, so a failure means the type isn't
-					// serializable — explain with attribution (FULLSTACK.md),
+					// serializable — explain with attribution,
 					// unless the only obstacle is a free var (→ ambiguity below).
 					let wire_detail = if c.name == "wire" {
 						self.wire_underivable_detail(&c.ty, &mut Vec::new())
@@ -4780,7 +4780,7 @@ impl<'compiler> Analyzer<'compiler> {
 	// constraint resolved against the unifying substitution.
 	fn try_resolve_dispatch(&self, trait_name: &str, ty: &Type) -> Option<Resolved> {
 		// `wire` is auto-derived: there are no registered instances. Resolve it
-		// by synthesizing a schema shape from `ty`'s structure (FULLSTACK.md).
+		// by synthesizing a schema shape from `ty`'s structure.
 		// `None` means non-derivable → discharge reports it as a missing
 		// instance (attribution refined in M4).
 		if trait_name == "wire" {
@@ -6456,7 +6456,7 @@ impl<'compiler> Analyzer<'compiler> {
 	// Register the prelude `wire` trait: `encode fun a -> bytes` and
 	// `decode fun bytes -> result a wire-error`. Unlike numeric/ord/hash,
 	// `wire` registers NO instances — it's auto-derived structurally for any
-	// data-shaped type (FULLSTACK.md, Layer 1), and `try_resolve_dispatch`
+	// data-shaped type, and `try_resolve_dispatch`
 	// special-cases the trait to synthesize a schema rather than look up an
 	// instance dictionary.
 	fn register_prelude_wire_trait(&mut self) {
@@ -6469,7 +6469,7 @@ impl<'compiler> Analyzer<'compiler> {
 		let result_ty = Type::Enum("__prelude__.result".into(), vec![a.clone(), wire_error]);
 		let decode = Type::Fun(vec![Type::Bytes], Box::new(result_ty));
 		// `fingerprint a -> int`: the structural hash of `a`'s wire schema, for
-		// version-skew detection (FULLSTACK.md). Takes a value only so it can
+		// version-skew detection. Takes a value only so it can
 		// dispatch on `a`; the value itself is ignored.
 		let fingerprint = Type::Fun(vec![a], Box::new(Type::Int));
 

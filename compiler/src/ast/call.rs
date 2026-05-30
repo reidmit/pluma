@@ -34,7 +34,7 @@ pub enum Resolved {
 		ctor_slot: String,
 		inner: Vec<Resolved>,
 	},
-	// The auto-derived `wire` trait (FULLSTACK.md, Layer 1). Unlike the other
+	// The auto-derived `wire` trait. Unlike the other
 	// traits, `wire` has no per-type instance dictionaries: its "dictionary"
 	// is a *schema descriptor* synthesized from the type's structure. Codegen
 	// lowers the shape into a `__prelude__.wire-schema` value (the runtime

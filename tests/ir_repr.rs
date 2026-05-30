@@ -1,4 +1,4 @@
-// Corpus harness for the IR Repr pass (see IR.md step 2 / `ir::repr`).
+// Corpus harness for the IR Repr pass (`ir::repr`).
 //
 // The Repr pass (`infer_reprs` + `insert_coercions`) is a WASM-backend
 // prerequisite that is *inert on the bytecode VM* — `Box`/`Unbox` lower to a

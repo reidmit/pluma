@@ -1,5 +1,5 @@
-// Corpus harness for the IR monomorphization track (see IR.md step 2 /
-// `ir::resolve`, `ir::mono`). Like `ir_repr`, these passes are WASM-backend
+// Corpus harness for the IR monomorphization track (`ir::resolve`,
+// `ir::mono`). Like `ir_repr`, these passes are WASM-backend
 // prerequisites that are *inert on the bytecode VM*, so the VM anchors are
 // behavior-neutrality (identical run output) plus a static check and a
 // non-vacuity guard, run across every fixture that lowers.

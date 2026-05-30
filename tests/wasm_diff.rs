@@ -1,4 +1,4 @@
-// Differential harness for the WASM (WasmGC) backend (see IR.md). For each
+// Differential harness for the WASM (WasmGC) backend. For each
 // allowlisted fixture, compile it the reference way (`ir::lower` →
 // `codegen::compile_from_ir` → VM) and the WASM way (`ir::lower` → `wasm::emit`
 // → run in wasmtime with Rust host glue), and assert identical stdout + status.

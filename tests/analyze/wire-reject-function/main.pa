@@ -1,5 +1,5 @@
 # A `wire` boundary rejects non-serializable types at compile time, with
-# attribution naming the offending component (FULLSTACK.md, Layer 1).
+# attribution naming the offending component.
 def main = fun {
 	let widget = { label: "ok", on-click: fun n { n + 1 } }
 	let bytes = wire.encode widget

@@ -1,4 +1,4 @@
-# The `wire` codec (FULLSTACK.md, Layer 1): auto-derived structural
+# The `wire` codec: auto-derived structural
 # encode/decode over a compact, deterministic binary format. Exercises
 # primitives, records, options, lists, tuples, user enums, nesting, and the
 # `wire-error` decode-failure channel.

@@ -231,7 +231,7 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			let s = expect_string(&args, "to-bytes");
 			Ok(Value::Bytes(Rc::new(s.as_bytes().to_vec())))
 		}
-		// `wire` codec (FULLSTACK.md, Layer 1). Both take the reified schema
+		// `wire` codec. Both take the reified schema
 		// (a `wire-schema` value built by codegen from the static type) as the
 		// hidden first arg — the `wire a` dictionary — followed by the
 		// value/bytes. `encode` can't fail (the type checker guarantees the
@@ -257,8 +257,8 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				Err(e) => Ok(result_err(e.to_value())),
 			}
 		}
-		// The structural fingerprint of the value's TYPE (FULLSTACK.md version
-		// skew). The value (arg 1) is ignored — only the schema dict (arg 0)
+		// The structural fingerprint of the value's TYPE, for version-skew
+		// detection. The value (arg 1) is ignored — only the schema dict (arg 0)
 		// matters; it's there because `fingerprint :: fun a -> int` dispatches
 		// on `a`, so the schema arrives the same way as for encode/decode.
 		"wire-fingerprint" => {

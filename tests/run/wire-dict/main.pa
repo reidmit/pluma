@@ -1,4 +1,4 @@
-# `wire` over `dict` (FULLSTACK.md, Layer 1). A dict encodes as a length-
+# `wire` over `dict`. A dict encodes as a length-
 # prefixed sequence of (key, value) pairs, in a canonical key-sorted order so
 # the bytes are deterministic regardless of insertion order. Decode rebuilds
 # the hash buckets via the same primitive-key hashing `dict.lookup` uses, so

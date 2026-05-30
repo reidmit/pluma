@@ -1,9 +1,7 @@
 // IR data types. See the crate-level docs in `lib.rs` for the design.
 //
-// The exact node set is expected to evolve during the lowering port
-// (phase 1.1) and again when the WASM backend lands (step 2). The shapes here
-// match the sketch in `IR.md`; anything marked "provisional" is known to need
-// refinement once real lowering exercises it.
+// Node shapes marked "provisional" are known to need refinement as more of
+// the backend exercises them.
 
 use compiler::Range;
 use std::collections::HashMap;
@@ -309,7 +307,7 @@ pub enum RecordRest {
 /// statically-resolved closed record.
 ///
 /// Lets a backend resolve a field name to a constant slot index (`slot_of`) —
-/// the basis for the nominal-struct record representation (`RECORDS.md`).
+/// the basis for the nominal-struct record representation.
 /// Backends that don't use it (the bytecode VM) ignore it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RecordShape {

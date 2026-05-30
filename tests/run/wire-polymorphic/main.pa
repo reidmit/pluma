@@ -1,5 +1,5 @@
 # Polymorphic `wire` use: a function generic over any wire-able type forwards
-# the synthesized schema as a hidden dict parameter (FULLSTACK.md, Layer 1).
+# the synthesized schema as a hidden dict parameter.
 # The caller resolves the concrete schema at each call site.
 
 use core.hex

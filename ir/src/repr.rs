@@ -21,8 +21,8 @@
 // anchors are therefore *behavior preservation* (the differential corpus harness)
 // and this *static validator* — the real consumer is the WASM backend.
 //
-// Scope is uniform-boxed-first (per IR.md: "uniform-boxed for generics first;
-// monomorphization later"). Function params/captures/returns and every call
+// Scope is uniform-boxed-first: uniform-boxed for generics now, with
+// monomorphization a later refinement. Function params/captures/returns and every call
 // result are `Boxed`; only leaf arithmetic and literals are unboxed. Monomorphizing
 // params/returns (so a concrete `fib`'s `n` is an i64 param, eliminating the
 // box/unbox churn) and unboxing `Eq`/`GetTag`/`GetPayload` are explicit follow-ons.

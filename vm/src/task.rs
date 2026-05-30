@@ -1,5 +1,5 @@
 // The task driver: Pluma's async runtime — a cooperative single-threaded
-// scheduler over the CPS state machine from ASYNC.md.
+// scheduler over the CPS state machine.
 //
 // An async-bearing function (one whose body awaits a task via `try`) is
 // compiled to a *step function* — its body lowered with an `Await` instruction

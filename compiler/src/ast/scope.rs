@@ -2,7 +2,7 @@ use super::*;
 use crate::location::Range;
 
 /// `scope (as IDENT)? { body }` and `manual scope as IDENT { body }` — the
-/// structured-concurrency block (ASYNC.md, Phase 4). The body is a block of
+/// structured-concurrency block. The body is a block of
 /// statements (like a function body, so `try`/`let`/`defer` all work) that
 /// must produce a `task a`; the whole `scope` expression has that type.
 ///

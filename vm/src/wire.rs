@@ -1,4 +1,4 @@
-// The `wire` binary codec (FULLSTACK.md, Layer 1).
+// The `wire` binary codec.
 //
 // A `wire a` dictionary is reified at runtime as a *schema descriptor* — a
 // compact tree mirroring `a`'s static structure. The `wire-encode` /
@@ -7,7 +7,7 @@
 // possible: a byte buffer doesn't know whether it's an `option int` or a
 // record, so the target type has to drive the parse.
 //
-// Format (see FULLSTACK.md "Format"):
+// Format:
 //   int       varint, zigzag (LEB128 over the zigzag transform)
 //   float     8 raw bytes, IEEE-754 little-endian
 //   bool      1 byte (0/1)
@@ -385,7 +385,7 @@ pub fn decode_all(schema: &Schema, bytes: &[u8]) -> Result<Value, WireError> {
 
 // ---- schema fingerprint ---------------------------------------------------
 //
-// A stable structural hash of a schema (FULLSTACK.md "Version skew"). Two
+// A stable structural hash of a schema. Two
 // types with the same wire shape hash identically; ANY drift that would change
 // the bytes — a renamed/reordered/retyped record field, an added/renamed/
 // re-arity'd enum variant, a different enum identity, different nesting —

@@ -1,6 +1,6 @@
 // The async CPS state-machine pass — the WASM-backend prerequisite that turns
 // the VM's stack-snapshot async runtime into an explicit, value-carried state
-// machine. See IR.md ("Async CPS state-machine pass").
+// machine.
 //
 // Today an `is_async` function is a *step function*: the VM's `drive_step`
 // (`vm/src/task.rs`) runs its bytecode until the `Await` instruction, snapshots

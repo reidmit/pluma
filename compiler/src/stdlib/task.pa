@@ -12,7 +12,7 @@
 # way `try` works over `option`/`result`. The combinators here
 # (`task.all`, `task.race`, `task.with-timeout`, …) compose tasks that run
 # concurrently; `scope` (a keyword) is the structured-concurrency block
-# they're built on. See ASYNC.md.
+# they're built on.
 use core.list
 
 # Lifts a plain value into a task that is already finished. `task.return

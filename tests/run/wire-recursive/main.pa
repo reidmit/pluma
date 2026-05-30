@@ -1,4 +1,4 @@
-# Recursive types on the wire (FULLSTACK.md, Layer 1). A recursive enum can't
+# Recursive types on the wire. A recursive enum can't
 # expand to a finite schema tree, so the codec cuts back-edges with a by-name
 # `s-enum-ref` and resolves them against the enclosing inline definition as it
 # descends — the value's finite depth drives termination.

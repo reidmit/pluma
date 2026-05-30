@@ -80,7 +80,7 @@ pub enum Value {
 	// nothing; the driver (`VM::run_task`) runs it when it's awaited (the
 	// `Await` op inside a step function) or returned from `main`. Awaiting
 	// the same `Task` value twice runs it twice — it's a recipe, not a
-	// cached result. See ASYNC.md and `vm::task`.
+	// cached result. See `vm::task`.
 	Task(Rc<TaskRepr>),
 	// A live scope's handle — the value bound by `scope as s`. It's just the
 	// scheduler's id for the scope; the handle methods (`scope-spawn` etc.)
