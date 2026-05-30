@@ -129,6 +129,7 @@ const WASM_FIXTURES: &[&str] = &[
 	"swap-tuple",
 	"top-level-keywords",
 	"to-string-shapes",
+	"trait-dict-forward-recursive",
 	"trait-fn-as-value",
 	"tuple-element-access",
 	"tuple-pattern-size",
@@ -317,7 +318,10 @@ fn format_anyref(store: &mut impl AsContextMut, any: Rooted<AnyRef>) -> String {
 			let pairs: Vec<String> = entries
 				.iter()
 				.map(|e| {
-					let inner = e.strip_prefix('(').and_then(|s| s.strip_suffix(')')).unwrap_or(e);
+					let inner = e
+						.strip_prefix('(')
+						.and_then(|s| s.strip_suffix(')'))
+						.unwrap_or(e);
 					match inner.split_once(", ") {
 						Some((k, v)) => format!("{k}: {v}"),
 						None => inner.to_string(),

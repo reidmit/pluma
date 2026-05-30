@@ -1540,32 +1540,38 @@ impl<'compiler> Analyzer<'compiler> {
 					}
 				}
 				if !recorded.is_empty() {
-					// For a `built-in`-bodied def, the where-clause is the only
-					// source of its class constraints — there's no body whose
-					// trait-method usage would generate dispatch cells. Push a
-					// synthetic Class constraint per entry so the def's
-					// generalized scheme records them; that's what lets a
+					// Push a synthetic Class constraint per where-clause entry so
+					// the def's generalized scheme records them; that's what lets a
 					// *same-module* caller thread the dicts (cross-module callers
-					// read the exported `value_constraints`). Pluma-bodied defs
-					// already get these from their body, so we skip them to
-					// avoid duplicating dict params.
-					let is_builtin = matches!(
-						&definition.kind,
-						DefinitionKind::Expr(e) if matches!(e.kind, ExprKind::Builtin(_))
-					);
-					if is_builtin {
-						for (trait_name, var_id) in &recorded {
-							let ty = Type::Var(*var_id);
-							let cell = crate::ast::new_dispatch(trait_name.clone(), None, ty.clone());
-							constraints.push(Constraint::Class(ClassConstraint {
-								name: trait_name.clone(),
-								ty,
-								reason: ConstraintReason {
-									range: definition.name.range,
-								},
-								dispatch_cell: cell,
-							}));
-						}
+					// read the exported `value_constraints`).
+					//
+					// This is the def's *declared* contract, so it must hold
+					// regardless of how the body uses the trait. A `built-in` body
+					// carries no dispatch cells at all, so the where-clause is its
+					// only constraint source. An ordinary body that uses the trait
+					// operator directly (`x + x`) already emits a matching Class
+					// constraint — but one that only *forwards* the dict into
+					// another constrained call does not surface the constraint on
+					// its own scheme, so without this the caller builds no dispatch
+					// sink and omits the dict argument (an arity mismatch at the
+					// callee). Emitting for every constrained def is safe: the
+					// synthetic constraint's tyvar is
+					// the annotation var, which `unify` collapses into the body's
+					// own constraint var, so `generalize_with_constraints`'
+					// value-based `(trait, ty)` dedup folds the pair into one scheme
+					// slot — matching the single dict param `resolve_forwarded_dispatches`
+					// allocates.
+					for (trait_name, var_id) in &recorded {
+						let ty = Type::Var(*var_id);
+						let cell = crate::ast::new_dispatch(trait_name.clone(), None, ty.clone());
+						constraints.push(Constraint::Class(ClassConstraint {
+							name: trait_name.clone(),
+							ty,
+							reason: ConstraintReason {
+								range: definition.name.range,
+							},
+							dispatch_cell: cell,
+						}));
 					}
 					self
 						.def_where_clauses
