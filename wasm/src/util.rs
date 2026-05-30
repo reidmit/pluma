@@ -62,7 +62,8 @@ pub(crate) fn binop_instr(op: ir::BinOp) -> Option<Instruction<'static>> {
 		SubFloat => Instruction::F64Sub,
 		MulFloat => Instruction::F64Mul,
 		DivFloat => Instruction::F64Div,
-		// f64 has no remainder opcode; RemFloat needs a runtime helper (later).
+		// f64 has no remainder opcode; `RemFloat` is lowered inline in `emit.rs`
+		// as `a - trunc(a/b)*b` (it can't be a single instruction).
 		RemFloat => return None,
 		// Ordering comparisons, split by operand repr; result is i32 (bool).
 		LtI64 => Instruction::I64LtS,

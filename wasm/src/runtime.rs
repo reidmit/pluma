@@ -373,6 +373,10 @@ pub(crate) fn scan_helpers(b: &Block, req: &mut HelperSet) {
 				}
 				fields.iter().for_each(|(_, p)| pat(p, req));
 			}
+			// String/bytes literal patterns match via structural `__eq`.
+			ir::Pattern::Literal(ir::Const::Str(_) | ir::Const::Bytes(_)) => {
+				req.insert(Helper::Eq);
+			}
 			_ => {}
 		}
 	}

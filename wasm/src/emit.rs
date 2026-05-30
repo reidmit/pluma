@@ -568,6 +568,21 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::F64Ne);
 				self.ins(Instruction::BrIf(br));
 			}
+			Const::Str(_) | Const::Bytes(_) => {
+				// Compare the (boxed) subject against the literal via structural
+				// `__eq`; branch to the fail level when they differ.
+				let Some(eq) = self.runtime.idx(Helper::Eq) else {
+					self
+						.diags
+						.push("string/bytes pattern used but __eq not emitted");
+					return;
+				};
+				self.ins(Instruction::LocalGet(subj));
+				self.constant(c);
+				self.ins(Instruction::Call(eq));
+				self.ins(Instruction::I32Eqz); // not equal -> fail
+				self.ins(Instruction::BrIf(br));
+			}
 			other => self
 				.diags
 				.push(format!("unsupported literal pattern: {other:?}")),
@@ -643,6 +658,24 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::I32Const(types::TAG_STR));
 				self.ins(Instruction::LocalGet(tmp));
 				self.ins(Instruction::StructNew(types::T_STR));
+			}
+			Rvalue::Bin(ir::BinOp::RemFloat, a, b) => {
+				// f64 has no remainder opcode; compute `a - trunc(a/b)*b`, matching
+				// the VM's `a % b` (Rust/IEEE `fmod`) for normal-magnitude operands.
+				let la = self.fresh_local(ValType::F64);
+				let lb = self.fresh_local(ValType::F64);
+				self.atom(a);
+				self.atom(b);
+				self.ins(Instruction::LocalSet(lb));
+				self.ins(Instruction::LocalSet(la));
+				self.ins(Instruction::LocalGet(la));
+				self.ins(Instruction::LocalGet(la));
+				self.ins(Instruction::LocalGet(lb));
+				self.ins(Instruction::F64Div);
+				self.ins(Instruction::F64Trunc);
+				self.ins(Instruction::LocalGet(lb));
+				self.ins(Instruction::F64Mul);
+				self.ins(Instruction::F64Sub);
 			}
 			Rvalue::Bin(op, a, b) => {
 				self.atom(a);
