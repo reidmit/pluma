@@ -271,6 +271,13 @@ pub enum Pattern {
 	Record {
 		fields: Vec<(String, Pattern)>,
 		rest: RecordRest,
+		/// The statically-resolved closed shape of the matched record (its
+		/// name-sorted field set), when the subject type is a closed record;
+		/// `None` for an open (row-polymorphic) subject or any non-closed-record
+		/// type. Lets a backend resolve each bound field name to a constant slot
+		/// index (`RecordShape::slot_of`) instead of a runtime name-scan. Threaded
+		/// by lowering from the subject's resolved type; ignored by the bytecode VM.
+		shape: Option<RecordShape>,
 	},
 }
 
@@ -292,6 +299,29 @@ pub enum RecordRest {
 	Open,
 	/// `{a, ...rest}` — extra fields captured into `rest`.
 	Bind(VarId),
+}
+
+/// The statically-known shape of a *closed* record at a field-access or pattern
+/// site: its field names in canonical name-sorted order — the same order
+/// `MakeRecord` lays out its parallel `names`/`values` arrays. Threaded from the
+/// analyzer's resolved record type by lowering (`record_shape_of`), and `None`
+/// when the receiver/subject type is open (row-polymorphic) or otherwise not a
+/// statically-resolved closed record.
+///
+/// Lets a backend resolve a field name to a constant slot index (`slot_of`) —
+/// the basis for the nominal-struct record representation (`RECORDS.md`).
+/// Backends that don't use it (the bytecode VM) ignore it.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RecordShape {
+	/// Field names in canonical name-sorted order (matching `MakeRecord`).
+	pub fields: Vec<String>,
+}
+
+impl RecordShape {
+	/// The constant slot index of `field` within this shape, if present.
+	pub fn slot_of(&self, field: &str) -> Option<usize> {
+		self.fields.iter().position(|f| f == field)
+	}
 }
 
 /// A trivially-evaluable operand: a variable or an inline constant. Atoms have
@@ -357,7 +387,12 @@ pub enum Rvalue {
 		base: Atom,
 		fields: Vec<(String, Atom)>,
 	},
-	GetField(Atom, String),
+	/// Read a record field by name. The optional `RecordShape` is the statically-
+	/// resolved closed shape of the receiver (its name-sorted field set), threaded
+	/// by lowering from the receiver's type; `None` for an open/row-polymorphic
+	/// receiver. A backend that uses it resolves the field to a constant slot
+	/// (`RecordShape::slot_of`); the bytecode VM ignores it and reads by name.
+	GetField(Atom, String, Option<RecordShape>),
 	/// Read element `index` of a tuple (`e.0`, `e.1`). The tuple analogue of
 	/// `GetField`; index is statically known and bounds-checked by the analyzer
 	/// against concrete tuples.

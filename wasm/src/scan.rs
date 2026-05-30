@@ -4,7 +4,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use ir::{Atom, Block, Const, IrProgram, Rvalue, StmtKind};
+use ir::{Atom, Block, Callee, Const, IrProgram, Rvalue, StmtKind};
 
 use crate::util::{variant_display, EnumTable};
 
@@ -98,7 +98,7 @@ pub(crate) fn scan_rvalue_strings(rv: &Rvalue, pool: &mut StrPool, enums: &EnumT
 				pool.intern(n);
 			}
 		}
-		Rvalue::GetField(_, name) => {
+		Rvalue::GetField(_, name, _) => {
 			pool.intern(name);
 		}
 		_ => {}
@@ -133,7 +133,7 @@ pub(crate) fn for_each_atom(rv: &Rvalue, f: &mut impl FnMut(&Atom)) {
 		| Rvalue::Box(a)
 		| Rvalue::Unbox(a, _)
 		| Rvalue::GetDictMethod(a, _)
-		| Rvalue::GetField(a, _)
+		| Rvalue::GetField(a, _, _)
 		| Rvalue::GetElement(a, _)
 		| Rvalue::GetTag(a)
 		| Rvalue::GetPayload(a, _)
@@ -279,6 +279,161 @@ pub(crate) fn ctor_var_tags(b: &Block) -> HashMap<u32, (String, u32)> {
 	}
 	walk(b, &mut m);
 	m
+}
+
+/// Decide which record-typed vars are built *nominal* (a `$shapeN` struct) instead
+/// of the uniform `$record`: a `MakeRecord` whose result is *read as a record in
+/// this function* — i.e. it appears as a `GetField` receiver or as the subject of a
+/// `Match` with a record-pattern arm. Such a var's read becomes a constant-index
+/// `struct.get`; a nominal value reaching any other (uniform-consuming) position is
+/// `lift`ed to `$record` by `emit::atom`. A `MakeRecord` whose result never feeds a
+/// local record read stays uniform (today's path), so a record built only to be
+/// passed / stored / printed pays no nominal-build-then-lift overhead — that's what
+/// keeps the open/row-poly path (e.g. the `record-access` benchmark) from
+/// regressing pre-monomorphization. Returns `VarId.0 -> name-sorted shape`.
+pub(crate) fn compute_nominal(
+	f: &ir::Function,
+	fid: u32,
+	param_shapes: &HashMap<u32, Vec<Option<ir::RecordShape>>>,
+) -> HashMap<u32, ir::RecordShape> {
+	let mut nominal = HashMap::new();
+	// (a) This function's own nominal params (from record-shape monomorphization):
+	// a specialized clone's param holds a `$shapeN` at runtime, so reads on it are
+	// `struct.get`.
+	if let Some(shapes) = param_shapes.get(&fid) {
+		for (i, sh) in shapes.iter().enumerate() {
+			if let (Some(sh), Some(p)) = (sh, f.params.get(i)) {
+				nominal.insert(p.0, sh.clone());
+			}
+		}
+	}
+	// (b) A `MakeRecord` is nominal if read as a record locally, or if it's passed
+	// as an arg into a nominal callee param (so it's passed raw, not lifted).
+	let mut read = HashSet::new();
+	collect_record_reads(&f.body, &mut read);
+	collect_nominal_param_args(&f.body, param_shapes, &mut read);
+	collect_nominal_makerecords(&f.body, &read, &mut nominal);
+	nominal
+}
+
+/// Add to `read` any `MakeRecord` arg var passed into a *nominal* callee param
+/// (`Call(Callee::Function(fid), ..)` with `param_shapes[fid][i] = Some`), so it is
+/// built nominal and passed raw at the call.
+fn collect_nominal_param_args(
+	b: &Block,
+	param_shapes: &HashMap<u32, Vec<Option<ir::RecordShape>>>,
+	read: &mut HashSet<u32>,
+) {
+	for s in &b.0 {
+		match &s.kind {
+			StmtKind::Let(_, rv) | StmtKind::Discard(rv) => {
+				if let Rvalue::Call(Callee::Function(fid), args) = rv {
+					if let Some(shapes) = param_shapes.get(&fid.0) {
+						for (i, sh) in shapes.iter().enumerate() {
+							if sh.is_some() {
+								if let Some(Atom::Var(v)) = args.get(i) {
+									read.insert(v.0);
+								}
+							}
+						}
+					}
+				}
+			}
+			StmtKind::If(_, t, e) => {
+				collect_nominal_param_args(t, param_shapes, read);
+				collect_nominal_param_args(e, param_shapes, read);
+			}
+			StmtKind::Switch { arms, default, .. } => {
+				for (_, b) in arms {
+					collect_nominal_param_args(b, param_shapes, read);
+				}
+				collect_nominal_param_args(default, param_shapes, read);
+			}
+			StmtKind::Match { arms, .. } => {
+				for a in arms {
+					collect_nominal_param_args(&a.body, param_shapes, read);
+				}
+			}
+			StmtKind::Loop(b) => collect_nominal_param_args(b, param_shapes, read),
+			_ => {}
+		}
+	}
+}
+
+/// Vars used as a record read: a `GetField` receiver, or a `Match` subject with at
+/// least one record-pattern arm. (Both are the positions `compute_nominal` treats
+/// as nominal reads; everything else flows uniform.)
+fn collect_record_reads(b: &Block, read: &mut HashSet<u32>) {
+	for s in &b.0 {
+		match &s.kind {
+			StmtKind::Let(_, rv) | StmtKind::Discard(rv) => {
+				if let Rvalue::GetField(Atom::Var(v), _, _) = rv {
+					read.insert(v.0);
+				}
+			}
+			StmtKind::If(_, t, e) => {
+				collect_record_reads(t, read);
+				collect_record_reads(e, read);
+			}
+			StmtKind::Switch { arms, default, .. } => {
+				for (_, b) in arms {
+					collect_record_reads(b, read);
+				}
+				collect_record_reads(default, read);
+			}
+			StmtKind::Match { subject, arms } => {
+				if let Atom::Var(v) = subject {
+					if arms
+						.iter()
+						.any(|a| matches!(a.pattern, ir::Pattern::Record { .. }))
+					{
+						read.insert(v.0);
+					}
+				}
+				for a in arms {
+					collect_record_reads(&a.body, read);
+				}
+			}
+			StmtKind::Loop(b) => collect_record_reads(b, read),
+			_ => {}
+		}
+	}
+}
+
+/// For each `MakeRecord` whose result var is in `read`, record its name-sorted
+/// shape (so it's built nominal). The fields are sorted to match the canonical
+/// `$shapeN`/`MakeRecord` layout.
+fn collect_nominal_makerecords(
+	b: &Block,
+	read: &HashSet<u32>,
+	out: &mut HashMap<u32, ir::RecordShape>,
+) {
+	for s in &b.0 {
+		match &s.kind {
+			StmtKind::Let(v, Rvalue::MakeRecord(fields)) if read.contains(&v.0) => {
+				let mut names: Vec<String> = fields.iter().map(|(n, _)| n.clone()).collect();
+				names.sort();
+				out.insert(v.0, ir::RecordShape { fields: names });
+			}
+			StmtKind::If(_, t, e) => {
+				collect_nominal_makerecords(t, read, out);
+				collect_nominal_makerecords(e, read, out);
+			}
+			StmtKind::Switch { arms, default, .. } => {
+				for (_, b) in arms {
+					collect_nominal_makerecords(b, read, out);
+				}
+				collect_nominal_makerecords(default, read, out);
+			}
+			StmtKind::Match { arms, .. } => {
+				for a in arms {
+					collect_nominal_makerecords(&a.body, read, out);
+				}
+			}
+			StmtKind::Loop(b) => collect_nominal_makerecords(b, read, out),
+			_ => {}
+		}
+	}
 }
 
 /// Collect `MakeClosure` targets that have zero IR params (the `fun { }` form,

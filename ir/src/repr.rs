@@ -362,7 +362,7 @@ fn for_each_required_operand(rv: &mut Rvalue, sigs: &Sigs, mut f: impl FnMut(&mu
 			}
 		}
 		Rvalue::GetDictMethod(a, _)
-		| Rvalue::GetField(a, _)
+		| Rvalue::GetField(a, _, _)
 		| Rvalue::GetElement(a, _)
 		| Rvalue::GetTag(a)
 		| Rvalue::GetPayload(a, _)
@@ -699,7 +699,7 @@ fn rvalue_vars(rv: &Rvalue, bump: &mut impl FnMut(VarId)) {
 			}
 		}
 		Rvalue::GetDictMethod(a, _)
-		| Rvalue::GetField(a, _)
+		| Rvalue::GetField(a, _, _)
 		| Rvalue::GetElement(a, _)
 		| Rvalue::GetTag(a)
 		| Rvalue::GetPayload(a, _)
@@ -727,7 +727,7 @@ fn pattern_vars(p: &Pattern, bump: &mut impl FnMut(VarId)) {
 				bump(*v);
 			}
 		}
-		Pattern::Record { fields, rest } => {
+		Pattern::Record { fields, rest, .. } => {
 			for (_, p) in fields {
 				pattern_vars(p, bump);
 			}

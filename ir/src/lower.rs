@@ -566,7 +566,8 @@ impl<'a> Lowerer<'a> {
 				// `NamespaceAccess` by this point). If `receiver` is actually a
 				// namespace it won't lower as a value, poisoning the def.
 				let recv = self.lower_expr(receiver)?;
-				Ok(self.emit_let(Rvalue::GetField(recv, field.name.clone()), range))
+				let shape = record_shape_of(&receiver.ty);
+				Ok(self.emit_let(Rvalue::GetField(recv, field.name.clone(), shape), range))
 			}
 			ExprKind::ElementAccess { receiver, index } => {
 				let recv = self.lower_expr(receiver)?;
@@ -1240,6 +1241,11 @@ impl<'a> Lowerer<'a> {
 				Ok(Pattern::List { items, rest })
 			}
 			PatternKind::Record { fields, rest } => {
+				// The closed shape comes from the subject's type at this site; nested
+				// record sub-patterns are lowered with `Type::Unknown` (below), so they
+				// get `None` and flow uniform — matching the receiver-type threading in
+				// `FieldAccess`.
+				let shape = record_shape_of(subject_ty);
 				let mut ir_fields = Vec::with_capacity(fields.len());
 				for (name, p) in fields {
 					// Sub-patterns carry no known subject type (matching `emit.rs`).
@@ -1254,6 +1260,7 @@ impl<'a> Lowerer<'a> {
 				Ok(Pattern::Record {
 					fields: ir_fields,
 					rest,
+					shape,
 				})
 			}
 			PatternKind::Interpolation(_) => {
@@ -2054,6 +2061,23 @@ fn binop_for(op: &Operator, is_float: bool) -> Option<BinOp> {
 		(Operator::GreaterThanEquals, true) => BinOp::GeF64,
 		_ => return None,
 	})
+}
+
+/// The closed-record shape of `ty`, if it is one: a `Type::Record` with a `None`
+/// tail (exactly these fields). The field names are returned name-sorted, the
+/// same canonical order `MakeRecord` lays out its `names`/`values` arrays, so a
+/// field's index in `RecordShape::fields` is its runtime slot. An open record
+/// (`Some` tail — a row-polymorphic position) or any non-record type yields
+/// `None`, leaving the value on the uniform self-describing representation.
+fn record_shape_of(ty: &Type) -> Option<RecordShape> {
+	match ty {
+		Type::Record(fields, None) => {
+			let mut names: Vec<String> = fields.iter().map(|(n, _)| n.clone()).collect();
+			names.sort();
+			Some(RecordShape { fields: names })
+		}
+		_ => None,
+	}
 }
 
 fn literal_to_const(kind: &LiteralKind) -> Result<Const, String> {

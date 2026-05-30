@@ -572,7 +572,7 @@ fn build_poll_fn(f: &Function) -> Option<Function> {
 			for (i, p) in f.params.iter().enumerate() {
 				out.push(Stmt::synthetic(StmtKind::Let(
 					*p,
-					Rvalue::GetField(Atom::Var(state_var), arg_field(i)),
+					Rvalue::GetField(Atom::Var(state_var), arg_field(i), None),
 				)));
 			}
 			// Start the cleanup list empty; appended to by each `PushDefer`.
@@ -592,14 +592,14 @@ fn build_poll_fn(f: &Function) -> Option<Function> {
 			for &v in &live_in[b] {
 				out.push(Stmt::synthetic(StmtKind::Let(
 					VarId(v),
-					Rvalue::GetField(Atom::Var(state_var), var_field(VarId(v))),
+					Rvalue::GetField(Atom::Var(state_var), var_field(VarId(v)), None),
 				)));
 			}
 			// Reload the cleanup list (carried under the fixed field, not `__v{id}`).
 			if let Some(dv) = defers_var {
 				out.push(Stmt::synthetic(StmtKind::Let(
 					dv,
-					Rvalue::GetField(Atom::Var(state_var), DEFERS_FIELD.to_string()),
+					Rvalue::GetField(Atom::Var(state_var), DEFERS_FIELD.to_string(), None),
 				)));
 			}
 		}
@@ -723,7 +723,7 @@ fn build_poll_fn(f: &Function) -> Option<Function> {
 	let body = Block(vec![
 		Stmt::synthetic(StmtKind::Let(
 			pc_var,
-			Rvalue::GetField(Atom::Var(state_var), TAG_FIELD.to_string()),
+			Rvalue::GetField(Atom::Var(state_var), TAG_FIELD.to_string(), None),
 		)),
 		Stmt::synthetic(StmtKind::Loop(Block(vec![Stmt::synthetic(
 			StmtKind::Match {
@@ -793,7 +793,7 @@ fn collect_rvalue_reads(rv: &Rvalue, set: &mut HashSet<u32>) {
 		| Box(a)
 		| Unbox(a, _)
 		| GetDictMethod(a, _)
-		| GetField(a, _)
+		| GetField(a, _, _)
 		| GetElement(a, _)
 		| Await(a)
 		| GetTag(a)
@@ -868,7 +868,7 @@ fn collect_pattern_binds(p: &Pattern, set: &mut HashSet<u32>) {
 				set.insert(v.0);
 			}
 		}
-		Pattern::Record { fields, rest } => {
+		Pattern::Record { fields, rest, .. } => {
 			fields
 				.iter()
 				.for_each(|(_, p)| collect_pattern_binds(p, set));

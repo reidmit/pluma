@@ -5,7 +5,7 @@
 // fixed by its arity; `var_reprs` says which locals are unboxed i64/f64/i32 and
 // `Box`/`Unbox` mark the GC-ref boundaries the coercion pass already inserted.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use ir::{Atom, Block, Callee, Const, Repr, Rvalue, StmtKind};
 use wasm_encoder::*;
@@ -14,7 +14,7 @@ use crate::runtime::{
 	host_sig, is_f64_unary_host, is_inline_builtin, GlobalKind, GlobalSlot, Helper, Runtime,
 	WIRE_FNV_OFFSET,
 };
-use crate::scan::{builtin_var_tags, ctor_var_tags, StrPool};
+use crate::scan::{builtin_var_tags, compute_nominal, ctor_var_tags, StrPool};
 use crate::types::{self, FuncTypes};
 use crate::util::{binop_instr, repr_valtype, variant_display, EnumTable};
 use crate::Diagnostics;
@@ -31,6 +31,20 @@ pub(crate) struct FnEmitter<'a> {
 	/// VarId.0 -> variant tag, for vars bound to a `MakeVariantCtor`. Applying
 	/// such a value (a `CallClosure` on it) builds the variant directly.
 	var_ctors: HashMap<u32, (String, u32)>,
+	/// VarId.0 -> record shape, for vars whose runtime value is a *nominal*
+	/// `$shapeN` struct rather than the uniform `$record`. A record literal whose
+	/// result is read as a record in this function (a `GetField` receiver or a
+	/// record-pattern `Match` subject) is built nominal so the read is a constant-
+	/// index `struct.get`; everywhere else it flows uniform. A nominal value
+	/// reaching any other (uniform-consuming) position is `lift`ed to `$record`
+	/// inline by `atom`. See `compute_nominal`.
+	nominal: HashMap<u32, ir::RecordShape>,
+	/// Per-function nominal param shapes (from record-shape monomorphization),
+	/// keyed by `FuncId.0`. A `Some(S)` entry means that callee param is a nominal
+	/// `$shapeN`, so an arg flowing into it is passed raw (not `lift`ed) and a
+	/// `MakeRecord` arg is built nominal. This function's own params are seeded
+	/// from its entry (via `compute_nominal`).
+	param_shapes: &'a HashMap<u32, Vec<Option<ir::RecordShape>>>,
 	strpool: &'a StrPool,
 	diags: &'a mut Diagnostics,
 	/// VarId.0 -> wasm local index. Wasm local 0 is the implicit closure env.
@@ -50,6 +64,7 @@ impl<'a> FnEmitter<'a> {
 	#[allow(clippy::too_many_arguments)]
 	pub(crate) fn new(
 		f: &'a ir::Function,
+		fid: u32,
 		wasm_index: &'a HashMap<u32, u32>,
 		host_index: &'a HashMap<String, u32>,
 		builtin_g: &HashMap<u32, String>,
@@ -58,11 +73,13 @@ impl<'a> FnEmitter<'a> {
 		strpool: &'a StrPool,
 		enums: &'a EnumTable,
 		ftypes: &'a mut FuncTypes,
+		param_shapes: &'a HashMap<u32, Vec<Option<ir::RecordShape>>>,
 		extra_params: u32,
 		diags: &'a mut Diagnostics,
 	) -> Self {
 		let var_tags = builtin_var_tags(&f.body, builtin_g);
 		let var_ctors = ctor_var_tags(&f.body);
+		let nominal = compute_nominal(f, fid, param_shapes);
 		let n = f.var_reprs.len().max(f.params.len() + f.captures.len());
 		let mut locals = vec![u32::MAX; n];
 		// Wasm params: local 0 = env (closure ref/null), then the source params,
@@ -97,6 +114,8 @@ impl<'a> FnEmitter<'a> {
 			ftypes,
 			var_tags,
 			var_ctors,
+			nominal,
+			param_shapes,
 			strpool,
 			diags,
 			locals,
@@ -153,7 +172,15 @@ impl<'a> FnEmitter<'a> {
 	fn stmt(&mut self, k: &StmtKind) {
 		match k {
 			StmtKind::Let(v, rv) => {
-				self.rvalue(rv);
+				// A record literal bound to a nominal var builds a `$shapeN` struct
+				// (constant-index reads); otherwise the rvalue emits its uniform form.
+				match rv {
+					Rvalue::MakeRecord(fields) if self.nominal.contains_key(&v.0) => {
+						let shape = self.nominal[&v.0].clone();
+						self.make_record_nominal(&shape, fields);
+					}
+					_ => self.rvalue(rv),
+				}
 				self.ins(Instruction::LocalSet(self.local(v.0)));
 			}
 			StmtKind::Discard(rv) => {
@@ -223,13 +250,19 @@ impl<'a> FnEmitter<'a> {
 	/// runs the body and `br`s to the end (skipping later arms). No value is left
 	/// on the stack (arms set locals or `Return`); the join, if any, is a local.
 	fn match_stmt(&mut self, subject: &Atom, arms: &[ir::MatchArm]) {
+		// A nominal-record subject keeps its `$shapeN` (pushed raw) so record-pattern
+		// arms read fields by constant `struct.get`; a uniform subject scans by name.
+		let subj_shape = match subject {
+			Atom::Var(v) => self.nominal.get(&v.0).cloned(),
+			_ => None,
+		};
 		let subj = self.fresh_local(types::value_ref());
-		self.atom(subject);
+		self.atom_raw(subject);
 		self.ins(Instruction::LocalSet(subj));
 		let end_level = self.open_block();
 		for arm in arms {
 			let arm_level = self.open_block();
-			self.test_pattern(&arm.pattern, subj, arm_level);
+			self.test_pattern(&arm.pattern, subj, subj_shape.as_ref(), arm_level);
 			self.block(&arm.body);
 			self.ins(Instruction::Br(self.br_to(end_level)));
 			self.close_block();
@@ -238,8 +271,17 @@ impl<'a> FnEmitter<'a> {
 	}
 
 	/// Test `pat` against the value in local `subj`. On mismatch, `br` to the
-	/// block opened at `fail_level`. On match, bind any sub-vars.
-	fn test_pattern(&mut self, pat: &ir::Pattern, subj: u32, fail_level: u32) {
+	/// block opened at `fail_level`. On match, bind any sub-vars. `subj_shape` is
+	/// `Some` when `subj` holds a *nominal* `$shapeN` record (only the top-level
+	/// `Match` subject is nominal; nested record fields are uniform), letting a
+	/// record pattern read fields by constant `struct.get` instead of a name-scan.
+	fn test_pattern(
+		&mut self,
+		pat: &ir::Pattern,
+		subj: u32,
+		subj_shape: Option<&ir::RecordShape>,
+		fail_level: u32,
+	) {
 		use ir::Pattern::*;
 		match pat {
 			Wildcard => {}
@@ -289,7 +331,57 @@ impl<'a> FnEmitter<'a> {
 					self.ins(Instruction::LocalSet(dst));
 				}
 			}
-			Record { fields, rest } => {
+			Record {
+				fields,
+				rest,
+				shape,
+			} => {
+				// Nominal subject: read each bound field by constant `struct.get`. The
+				// `$shapeN` has exactly its shape's fields, so an `Exact` rest needs no
+				// length check, and `...rest` builds the uniform `$record` of the
+				// leftover fields (closing the WASM gap on the nominal path).
+				if let Some(sshape) = subj_shape {
+					let st = self.ftypes.intern_shape(&sshape.fields).type_idx;
+					if let ir::RecordRest::Bind(v) = rest {
+						let matched: HashSet<&str> = fields.iter().map(|(n, _)| n.as_str()).collect();
+						let rest_fields: Vec<&String> = sshape
+							.fields
+							.iter()
+							.filter(|n| !matched.contains(n.as_str()))
+							.collect();
+						let dst = self.local(v.0);
+						self.ins(Instruction::I32Const(types::TAG_RECORD));
+						for n in &rest_fields {
+							self.string_const(n);
+						}
+						self.ins(Instruction::ArrayNewFixed {
+							array_type_index: types::T_VALARRAY,
+							array_size: rest_fields.len() as u32,
+						});
+						for n in &rest_fields {
+							let slot = sshape.slot_of(n).unwrap();
+							self.nominal_field(subj, st, slot);
+						}
+						self.ins(Instruction::ArrayNewFixed {
+							array_type_index: types::T_VALARRAY,
+							array_size: rest_fields.len() as u32,
+						});
+						self.ins(Instruction::StructNew(types::T_RECORD));
+						self.ins(Instruction::LocalSet(dst));
+					}
+					for (name, sub) in fields {
+						if matches!(sub, ir::Pattern::Wildcard) {
+							continue;
+						}
+						let slot = sshape.slot_of(name).expect("nominal pattern field present");
+						let tmp = self.fresh_local(types::value_ref());
+						self.nominal_field(subj, st, slot);
+						self.ins(Instruction::LocalSet(tmp));
+						self.test_pattern(sub, tmp, None, fail_level);
+					}
+					return;
+				}
+				// Uniform subject: name-scan via `__getfield`.
 				if let ir::RecordRest::Exact = rest {
 					self.ins(Instruction::LocalGet(subj));
 					self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
@@ -315,12 +407,14 @@ impl<'a> FnEmitter<'a> {
 					match sub {
 						ir::Pattern::Wildcard => {}
 						_ => {
+							// Step 2.0 debug cross-check (see the `GetField` rvalue path).
+							self.debug_record_slot_guard(subj, name, shape);
 							let tmp = self.fresh_local(types::value_ref());
 							self.ins(Instruction::LocalGet(subj));
 							self.string_const(name);
 							self.ins(Instruction::Call(getfield));
 							self.ins(Instruction::LocalSet(tmp));
-							self.test_pattern(sub, tmp, fail_level);
+							self.test_pattern(sub, tmp, None, fail_level);
 						}
 					}
 				}
@@ -343,9 +437,21 @@ impl<'a> FnEmitter<'a> {
 				let tmp = self.fresh_local(types::value_ref());
 				self.get_elem(subj, sty, field, i);
 				self.ins(Instruction::LocalSet(tmp));
-				self.test_pattern(other, tmp, fail);
+				self.test_pattern(other, tmp, None, fail);
 			}
 		}
+	}
+
+	/// Push the inline field at `slot` of the nominal record in local `subj`
+	/// (struct type `st`): cast to `$shapeN`, then `struct.get` field `2 + slot`
+	/// (slots 0/1 are the tag/shape_id).
+	fn nominal_field(&mut self, subj: u32, st: u32, slot: usize) {
+		self.ins(Instruction::LocalGet(subj));
+		self.ins(Instruction::RefCastNonNull(HeapType::Concrete(st)));
+		self.ins(Instruction::StructGet {
+			struct_type_index: st,
+			field_index: 2 + slot as u32,
+		});
 	}
 
 	/// Push element `i` of the `$valarray` in field `field` of struct `subj:sty`.
@@ -358,6 +464,44 @@ impl<'a> FnEmitter<'a> {
 		});
 		self.ins(Instruction::I32Const(i as i32));
 		self.ins(Instruction::ArrayGet(types::T_VALARRAY));
+	}
+
+	/// Step 2.0 debug cross-check: assert the statically-resolved slot for `name`
+	/// within `shape` matches the runtime record's layout. Reads `names[slot]` off
+	/// the record in local `rec` and traps (`unreachable`) unless it equals the
+	/// constant field name `name`. Stack-neutral, and emitted only when a closed
+	/// shape was threaded *and* this is a debug build — release builds are
+	/// byte-for-byte unchanged. The real field read still goes through the
+	/// name-scan `__getfield`; this only validates that lowering threaded a slot
+	/// consistent with the scan it currently shadows (the 2.1 representation flip
+	/// will make the slot load-bearing).
+	fn debug_record_slot_guard(&mut self, rec: u32, name: &str, shape: &Option<ir::RecordShape>) {
+		if !cfg!(debug_assertions) {
+			return;
+		}
+		let Some(shape) = shape else { return };
+		let Some(slot) = shape.slot_of(name) else {
+			return;
+		};
+		let Some(eq) = self.runtime.idx(Helper::Eq) else {
+			return;
+		};
+		self.ins(Instruction::LocalGet(rec));
+		self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+			types::T_RECORD,
+		)));
+		self.ins(Instruction::StructGet {
+			struct_type_index: types::T_RECORD,
+			field_index: 1,
+		});
+		self.ins(Instruction::I32Const(slot as i32));
+		self.ins(Instruction::ArrayGet(types::T_VALARRAY));
+		self.string_const(name);
+		self.ins(Instruction::Call(eq));
+		self.ins(Instruction::I32Eqz);
+		self.ins(Instruction::If(wasm_encoder::BlockType::Empty));
+		self.ins(Instruction::Unreachable);
+		self.ins(Instruction::End);
 	}
 
 	fn test_literal(&mut self, c: &Const, subj: u32, fail_level: u32) {
@@ -561,8 +705,18 @@ impl<'a> FnEmitter<'a> {
 				};
 				// A direct call targets a capture-free function: pass a null env.
 				self.ins(Instruction::RefNull(HeapType::Concrete(types::T_VALUE)));
-				for a in args {
-					self.atom(a);
+				// An arg flowing into a nominal (monomorphized) callee param is passed
+				// raw (the `$shapeN`); other args are lifted to uniform by `atom`.
+				let callee_shapes = self.param_shapes.get(&fid.0);
+				for (i, a) in args.iter().enumerate() {
+					let nominal_param = callee_shapes
+						.and_then(|s| s.get(i))
+						.map_or(false, |s| s.is_some());
+					if nominal_param {
+						self.atom_raw(a);
+					} else {
+						self.atom(a);
+					}
 				}
 				self.ins(Instruction::Call(w));
 			}
@@ -638,11 +792,38 @@ impl<'a> FnEmitter<'a> {
 				});
 				self.ins(Instruction::StructNew(types::T_RECORD));
 			}
-			Rvalue::GetField(r, name) => {
+			Rvalue::GetField(r, name, shape) => {
+				// Nominal fast path: a record built nominal in this function is a
+				// `$shapeN` struct, so the field read is a constant-index `struct.get`
+				// (slot 0/1 are the tag/shape_id; fields start at 2, in shape order).
+				if let Atom::Var(v) = r {
+					if let Some(rshape) = self.nominal.get(&v.0).cloned() {
+						if let Some(slot) = rshape.slot_of(name) {
+							let st = self.ftypes.intern_shape(&rshape.fields).type_idx;
+							self.atom_raw(r);
+							self.ins(Instruction::RefCastNonNull(HeapType::Concrete(st)));
+							self.ins(Instruction::StructGet {
+								struct_type_index: st,
+								field_index: 2 + slot as u32,
+							});
+							return;
+						}
+					}
+				}
+				// Uniform path: name-scan via `__getfield`. The receiver is the uniform
+				// `$record` here (`atom` lifts a nominal arg, though a nominal receiver
+				// already took the fast path above).
 				let Some(getfield) = self.runtime.idx(Helper::GetField) else {
 					self.diags.push("GetField used but __getfield not emitted");
 					return;
 				};
+				// Step 2.0 debug cross-check: assert the statically-resolved slot agrees
+				// with the runtime name-scan layout (only meaningful on the uniform
+				// `$record`, which carries the `names` array).
+				if let Atom::Var(v) = r {
+					let rec_local = self.local(v.0);
+					self.debug_record_slot_guard(rec_local, name, shape);
+				}
 				self.atom(r);
 				self.string_const(name);
 				self.ins(Instruction::Call(getfield));
@@ -1357,11 +1538,76 @@ impl<'a> FnEmitter<'a> {
 		}
 	}
 
+	/// Push an atom as a uniform boxed `$value`. A var holding a *nominal* record
+	/// (`$shapeN`) is `lift`ed to the uniform `$record` here, so every consumer that
+	/// isn't a record read (a call arg, a container element, a `Return`, a stored
+	/// field, a generic consumer) sees the self-describing representation it
+	/// expects. Read sites (`GetField` receiver, `Match` subject) use `atom_raw`
+	/// instead, keeping the `$shapeN` for a constant-index `struct.get`.
 	fn atom(&mut self, a: &Atom) {
+		if let Atom::Var(v) = a {
+			if let Some(shape) = self.nominal.get(&v.0).cloned() {
+				self.emit_lift(self.local(v.0), &shape);
+				return;
+			}
+		}
+		self.atom_raw(a);
+	}
+
+	/// Push an atom with no representation coercion — a bare `LocalGet`/constant.
+	/// For a nominal-record var this leaves the `$shapeN` struct on the stack.
+	fn atom_raw(&mut self, a: &Atom) {
 		match a {
 			Atom::Var(v) => self.ins(Instruction::LocalGet(self.local(v.0))),
 			Atom::Const(c) => self.constant(c),
 		}
+	}
+
+	/// `lift` a nominal record in local `rec` to the uniform `$record`: build the
+	/// name-sorted `names` array (constant field-name strings) and a parallel
+	/// `values` array read out of the struct's inline fields, then `struct.new
+	/// $record`. Leaves one `(ref $record)` on the stack; reads nothing else.
+	fn emit_lift(&mut self, rec: u32, shape: &ir::RecordShape) {
+		let st = self.ftypes.intern_shape(&shape.fields).type_idx;
+		let k = shape.fields.len() as u32;
+		self.ins(Instruction::I32Const(types::TAG_RECORD));
+		for name in &shape.fields {
+			self.string_const(name);
+		}
+		self.ins(Instruction::ArrayNewFixed {
+			array_type_index: types::T_VALARRAY,
+			array_size: k,
+		});
+		for i in 0..k {
+			self.ins(Instruction::LocalGet(rec));
+			self.ins(Instruction::RefCastNonNull(HeapType::Concrete(st)));
+			self.ins(Instruction::StructGet {
+				struct_type_index: st,
+				field_index: 2 + i,
+			});
+		}
+		self.ins(Instruction::ArrayNewFixed {
+			array_type_index: types::T_VALARRAY,
+			array_size: k,
+		});
+		self.ins(Instruction::StructNew(types::T_RECORD));
+	}
+
+	/// Build a *nominal* record: a `$shapeN` struct `{ tag, shape_id, f0..fk }` with
+	/// the field values inline in the shape's name-sorted order. Field values are
+	/// pushed via `atom` (so a nested nominal record is stored as the uniform
+	/// `$record`, keeping field reads uniform). The result is a `(ref $shapeN)`,
+	/// storable in a `(ref null $value)` local (it's a `$value` subtype).
+	fn make_record_nominal(&mut self, shape: &ir::RecordShape, fields: &[(String, Atom)]) {
+		let st = self.ftypes.intern_shape(&shape.fields);
+		let mut sorted: Vec<(&String, &Atom)> = fields.iter().map(|(n, a)| (n, a)).collect();
+		sorted.sort_by(|a, b| a.0.cmp(b.0));
+		self.ins(Instruction::I32Const(types::TAG_RECORD));
+		self.ins(Instruction::I32Const(st.shape_id as i32));
+		for (_, a) in &sorted {
+			self.atom(a);
+		}
+		self.ins(Instruction::StructNew(st.type_idx));
 	}
 
 	fn constant(&mut self, c: &Const) {

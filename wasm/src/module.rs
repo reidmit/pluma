@@ -28,7 +28,12 @@ use crate::{builtin_globals, Diagnostics, Reach};
 pub(crate) struct Module;
 
 impl Module {
-	pub fn build(p: &IrProgram, reach: &Reach, diags: &mut Diagnostics) -> Vec<u8> {
+	pub fn build(
+		p: &IrProgram,
+		reach: &Reach,
+		param_shapes: &HashMap<u32, Vec<Option<ir::RecordShape>>>,
+		diags: &mut Diagnostics,
+	) -> Vec<u8> {
 		let builtin_g = builtin_globals(p);
 
 		// Host imports: the builtin tags actually called in reachable functions.
@@ -471,6 +476,7 @@ impl Module {
 			functions.function(ftypes.for_arity(arity));
 			let mut em = FnEmitter::new(
 				f,
+				fid,
 				&wasm_index,
 				&host_index,
 				&builtin_g,
@@ -479,6 +485,7 @@ impl Module {
 				&strpool,
 				&p.enums,
 				&mut ftypes,
+				param_shapes,
 				extra_params,
 				diags,
 			);

@@ -21,6 +21,7 @@ use ir::{Block, Callee, GlobalInit, IrProgram, PreEval, Rvalue, StmtKind};
 mod emit;
 mod helpers;
 mod module;
+mod mono;
 mod runtime;
 mod scan;
 mod types;
@@ -54,6 +55,11 @@ pub fn emit(program: &IrProgram) -> Result<Vec<u8>, Diagnostics> {
 	//    i64/f64/i32 vs GC-ref straight off `var_reprs`.
 	let mut p = program.clone();
 	ir::resolve::resolve_direct_calls(&mut p);
+	// Record-shape monomorphization: clone record-param functions per call-site
+	// shape so the clone reads its param by `struct.get` (and the caller passes it
+	// nominal). Returns the per-clone param shapes the emitter consumes. Runs before
+	// the repr pass so clones get their `var_reprs`/coercions too.
+	let param_shapes = mono::specialize_record_shapes(&mut p);
 	let sigs = ir::repr::Sigs::uniform();
 	for f in &mut p.functions {
 		f.var_reprs = ir::repr::infer_reprs(f, &sigs);
@@ -65,7 +71,7 @@ pub fn emit(program: &IrProgram) -> Result<Vec<u8>, Diagnostics> {
 
 	// 3. Build and encode the module.
 	let mut diags = Diagnostics::default();
-	let bytes = module::Module::build(&p, &reach, &mut diags);
+	let bytes = module::Module::build(&p, &reach, &param_shapes, &mut diags);
 	if diags.is_empty() {
 		Ok(bytes)
 	} else {

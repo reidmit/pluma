@@ -229,7 +229,7 @@ fn used_vars(f: &Function) -> HashSet<u32> {
 				ListItem::Elem(a) | ListItem::Spread(a) => note(a),
 			}),
 			Rvalue::GetDictMethod(a, _)
-			| Rvalue::GetField(a, _)
+			| Rvalue::GetField(a, _, _)
 			| Rvalue::GetElement(a, _)
 			| Rvalue::GetTag(a)
 			| Rvalue::GetPayload(a, _)

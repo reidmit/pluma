@@ -264,6 +264,10 @@ short-lived programs never need to reclaim.)
   specialized signature (today: escape ⇒ stay boxed).
 - **Generic specialization** per concrete instantiation (template-style), beyond
   the uniform-boxed generic fallback.
+- **Nominal record structs** — give each record *shape* a WasmGC struct subtype of
+  `$value` so field access becomes a constant-index `struct.get` (the theoretical
+  floor) instead of the current runtime name-scan. Crosses repr + mono + emit and
+  must keep row polymorphism working; planned in full in `RECORDS.md`.
 - **Unbox more ops** — `Eq`/`Ne` (structural, currently boxed), `GetTag`/
   `GetPayload` (int-ish, currently boxed); `negate` devirt (needs a unary IR
   node).

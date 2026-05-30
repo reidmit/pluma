@@ -248,7 +248,7 @@ impl FnCtx {
 					self.assign_slot(*v);
 				}
 			}
-			Pattern::Record { fields, rest } => {
+			Pattern::Record { fields, rest, .. } => {
 				for (_, p) in fields {
 					self.assign_pattern_slots(p);
 				}
@@ -620,7 +620,7 @@ impl FnCtx {
 				self.emit_sub_patterns(em, items, body, ranges, &mut fails, r, keepable)?;
 				Ok(fails)
 			}
-			Pattern::Record { fields, rest } => {
+			Pattern::Record { fields, rest, .. } => {
 				let idxs: Vec<u32> = fields.iter().map(|(n, _)| em.intern(n)).collect();
 				let fields_idx = em.intern_field_list(idxs);
 				let jmp = emit_at(
@@ -894,7 +894,7 @@ impl FnCtx {
 					push(body, ranges, Instruction::MakeList(items.len() as u16), r);
 				}
 			}
-			Rvalue::GetField(receiver, name) => {
+			Rvalue::GetField(receiver, name, _) => {
 				self.emit_operands(em, &[receiver], body, ranges, r)?;
 				let idx = em.intern(name);
 				push(body, ranges, Instruction::GetField(idx), r);
@@ -1072,7 +1072,7 @@ fn rvalue_atoms(rv: &Rvalue) -> Vec<&Atom> {
 		| Rvalue::Box(a)
 		| Rvalue::Unbox(a, _)
 		| Rvalue::GetDictMethod(a, _)
-		| Rvalue::GetField(a, _)
+		| Rvalue::GetField(a, _, _)
 		| Rvalue::GetElement(a, _)
 		| Rvalue::Await(a)
 		| Rvalue::GetTag(a)

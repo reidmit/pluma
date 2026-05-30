@@ -180,9 +180,33 @@ enum FuncKind {
 	WireReadVarint,
 }
 
+/// A registered record *shape*: the WasmGC struct type interned for a distinct
+/// name-sorted field set. Returned by `FuncTypes::intern_shape`. The struct is a
+/// subtype of `$value` laid out `{ i32 tag, i32 shape_id, f0..fk }`, fields in the
+/// shape's name-sorted order, each `(ref null $value)` (boxed). `shape_id` is a
+/// dense 0-based id stamped into each instance so a generic boundary can recover
+/// the shape; `field_count` is `k`.
+#[derive(Clone, Copy)]
+pub struct ShapeInfo {
+	pub type_idx: u32,
+	pub shape_id: u32,
+}
+
+/// One entry in `FuncTypes::pending`: either an interned function type or a
+/// record-shape struct (carrying its field count for `encode`). Both share the
+/// type-index space starting at `T_FIRST_FUNC`, assigned in interning order.
+enum Pending {
+	Func(FuncKind),
+	Shape(u32),
+}
+
 pub struct FuncTypes {
 	keys: std::collections::HashMap<FuncKind, u32>,
-	pending: Vec<FuncKind>,
+	pending: Vec<Pending>,
+	/// name-sorted field set -> its interned struct info (dedup + lookup).
+	shape_keys: std::collections::HashMap<Vec<String>, ShapeInfo>,
+	/// Count of distinct shapes interned so far — assigns the next `shape_id`.
+	shape_count: u32,
 }
 
 impl FuncTypes {
@@ -190,6 +214,8 @@ impl FuncTypes {
 		Self {
 			keys: std::collections::HashMap::new(),
 			pending: Vec::new(),
+			shape_keys: std::collections::HashMap::new(),
+			shape_count: 0,
 		}
 	}
 
@@ -199,8 +225,24 @@ impl FuncTypes {
 		}
 		let idx = T_FIRST_FUNC + self.pending.len() as u32;
 		self.keys.insert(k, idx);
-		self.pending.push(k);
+		self.pending.push(Pending::Func(k));
 		idx
+	}
+
+	/// Intern the nominal struct type for a record *shape* (a name-sorted field
+	/// set). Idempotent: the same field set always maps to the same struct type and
+	/// `shape_id`. The fields must already be name-sorted (matching `MakeRecord`).
+	pub fn intern_shape(&mut self, fields: &[String]) -> ShapeInfo {
+		if let Some(info) = self.shape_keys.get(fields) {
+			return *info;
+		}
+		let type_idx = T_FIRST_FUNC + self.pending.len() as u32;
+		let shape_id = self.shape_count;
+		let info = ShapeInfo { type_idx, shape_id };
+		self.shape_keys.insert(fields.to_vec(), info);
+		self.shape_count += 1;
+		self.pending.push(Pending::Shape(fields.len() as u32));
+		info
 	}
 
 	/// The type index for a Pluma function of the given arity (boxed in/out).
@@ -406,11 +448,27 @@ impl FuncTypes {
 			],
 			true,
 		));
-		// Interned function types, in index order. A Pluma function takes an
-		// implicit closure-environment param first (`env`, the `$closure` ref or
-		// null for a capture-free direct call), then its `arity` boxed params.
-		for k in &self.pending {
-			let (param_ty, count, results): (ValType, usize, Vec<ValType>) = match *k {
+		// Interned function types + record-shape structs, in index order. A Pluma
+		// function takes an implicit closure-environment param first (`env`, the
+		// `$closure` ref or null for a capture-free direct call), then its `arity`
+		// boxed params. A record shape is a `$value` subtype `{ tag, shape_id,
+		// f0..fk }` with `k` boxed fields, in the shape's name-sorted order.
+		for p in &self.pending {
+			let k = match p {
+				Pending::Func(k) => *k,
+				Pending::Shape(n) => {
+					let mut fields = vec![
+						val_field(ValType::I32, false),
+						val_field(ValType::I32, false),
+					];
+					fields.extend(std::iter::repeat(val_field(value_ref(), false)).take(*n as usize));
+					types
+						.ty()
+						.subtype(&struct_subtype(Some(T_VALUE), fields, true));
+					continue;
+				}
+			};
+			let (param_ty, count, results): (ValType, usize, Vec<ValType>) = match k {
 				FuncKind::Pluma(arity) => (value_ref(), arity + 1, vec![value_ref()]),
 				FuncKind::Host(arity, returns_value) => (
 					any_ref(),
