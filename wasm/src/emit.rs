@@ -172,12 +172,16 @@ impl<'a> FnEmitter<'a> {
 	fn stmt(&mut self, k: &StmtKind) {
 		match k {
 			StmtKind::Let(v, rv) => {
-				// A record literal bound to a nominal var builds a `$shapeN` struct
+				// A record producer bound to a nominal var builds a `$shapeN` struct
 				// (constant-index reads); otherwise the rvalue emits its uniform form.
 				match rv {
 					Rvalue::MakeRecord(fields) if self.nominal.contains_key(&v.0) => {
 						let shape = self.nominal[&v.0].clone();
 						self.make_record_nominal(&shape, fields);
+					}
+					Rvalue::RecordUpdate { base, fields } if self.nominal.contains_key(&v.0) => {
+						let shape = self.nominal[&v.0].clone();
+						self.record_update_nominal(&shape, base, fields);
 					}
 					_ => self.rvalue(rv),
 				}
@@ -396,11 +400,29 @@ impl<'a> FnEmitter<'a> {
 					self.ins(Instruction::I32Ne);
 					self.ins(Instruction::BrIf(self.br_to(fail_level)));
 				}
-				if let ir::RecordRest::Bind(_) = rest {
-					self
-						.diags
-						.push("record `...rest` binding not yet supported");
-					return;
+				if let ir::RecordRest::Bind(v) = rest {
+					// rest = __record_rest(subj, [matched names]) — the uniform `$record`
+					// of the leftover fields, filtered by name at runtime.
+					let Some(rr) = self.runtime.idx(Helper::RecordRest) else {
+						self
+							.diags
+							.push("RecordRest used but __record_rest not emitted");
+						return;
+					};
+					let dst = self.local(v.0);
+					self.ins(Instruction::LocalGet(subj));
+					// Build the excluded `$list` of matched field-name strings.
+					self.ins(Instruction::I32Const(types::TAG_LIST));
+					for (name, _) in fields {
+						self.string_const(name);
+					}
+					self.ins(Instruction::ArrayNewFixed {
+						array_type_index: types::T_VALARRAY,
+						array_size: fields.len() as u32,
+					});
+					self.ins(Instruction::StructNew(types::T_LIST));
+					self.ins(Instruction::Call(rr));
+					self.ins(Instruction::LocalSet(dst));
 				}
 				let getfield = self.runtime.idx(Helper::GetField).expect("getfield");
 				for (name, sub) in fields {
@@ -1606,6 +1628,37 @@ impl<'a> FnEmitter<'a> {
 		self.ins(Instruction::I32Const(st.shape_id as i32));
 		for (_, a) in &sorted {
 			self.atom(a);
+		}
+		self.ins(Instruction::StructNew(st.type_idx));
+	}
+
+	/// Build a record-update `{ ...base, f: v }` on a *nominal* base of the same
+	/// shape: a fresh `$shapeN` whose fields are the overrides where given, else
+	/// `base`'s inline field at that slot — a `struct.new` copy, no array
+	/// allocation or name-scan (the uniform `__record_update` path). The base is a
+	/// nominal var (read raw); override values are stored uniform (via `atom`).
+	fn record_update_nominal(
+		&mut self,
+		shape: &ir::RecordShape,
+		base: &Atom,
+		fields: &[(String, Atom)],
+	) {
+		let st = self.ftypes.intern_shape(&shape.fields);
+		let base_local = match base {
+			Atom::Var(v) => self.local(v.0),
+			// A record base is always a var; fall back to the uniform path otherwise.
+			Atom::Const(_) => {
+				self.diags.push("record-update on a non-var nominal base");
+				return;
+			}
+		};
+		self.ins(Instruction::I32Const(types::TAG_RECORD));
+		self.ins(Instruction::I32Const(st.shape_id as i32));
+		for (i, name) in shape.fields.iter().enumerate() {
+			match fields.iter().find(|(n, _)| n == name) {
+				Some((_, a)) => self.atom(a),
+				None => self.nominal_field(base_local, st.type_idx, i),
+			}
 		}
 		self.ins(Instruction::StructNew(st.type_idx));
 	}

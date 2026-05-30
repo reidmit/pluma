@@ -39,18 +39,31 @@ nominal WasmGC struct type.
 > unboxed signatures the WASM `FuncKind::Pluma(arity)` interner can't yet express
 > — that's Tier B). Bounded at 8 clones/source (uniform past the cap).
 >
-> **Residuals / follow-ons.** (1) *Tier B* (cast-free reads — repr-type records at
-> `(ref $shapeN)`) — §7 Step 3, unbuilt. (2) The *uniform-path* `RecordRest::Bind`
-> (a `...rest` on a record that's uniform at the match site — e.g. a nested inner
-> record bound from a field read, since record fields are stored uniform) still
-> reports "not yet supported"; it needs a runtime name-filter (a `__record_rest`
-> helper). Mono closes the common case (a `...rest` on a specialized param), so
-> this only bites genuinely-uniform nested rests (`record-pattern-nested-rest`).
-> (3) `RecordUpdate` on a nominal base still lifts to the uniform helper (correct,
-> not yet optimized to a `struct.new` copy). (4) Per-field unboxing (a scalar
-> record field as inline `i64`) — out of scope until Tier B. (5) A microbench
-> quantifying the win is deferred (the differential harness validates correctness;
-> the structural `struct.get`-vs-scan win is established).
+> **Follow-ons (status).**
+> - ✅ **Nominal `RecordUpdate`** — `{ ...base, f: v }` on a nominal base builds a
+>   `$shapeN` via `struct.new` (copying base's inline fields, substituting
+>   overrides) instead of lifting to the uniform `__record_update` helper. Marked
+>   nominal (shape-preserving) when the base is nominal and the result is read
+>   locally; chains (`a → b → f`). `emit::record_update_nominal`.
+> - ✅ **Uniform-path `RecordRest::Bind`** — the last `...rest` gap (a rest on a
+>   *uniform* match subject, e.g. a nested inner record bound from a field read) is
+>   closed by a `__record_rest(rec, excluded)` helper (`Helper::RecordRest`) that
+>   filters `rec`'s fields by name at runtime. `record-pattern-nested-rest` is now
+>   in the differential allowlist.
+> - ✅ **Microbench** (`tests/wasm_diff.rs::record_access_microbench`, `#[ignore]`):
+>   nominal+mono vs forced-uniform (the `PLUMA_WASM_UNIFORM_RECORDS` toggle) on
+>   `record-access` → **2.78× speedup** (48.2s vs 133.8s over 200×10000 build+read
+>   ops; absolute times inflated by wasmtime's baseline + the drc collector, the
+>   *ratio* is the signal).
+> - ⏸️ **Tier B (cast-free reads)** — *evaluated and deferred*. The microbench shows
+>   Tier A already captures the win by eliminating the O(F·L) name-scan; the
+>   residual `ref.cast` is one O(1) RTT check (hoisted/CSE'd across reads of one
+>   receiver), not the bottleneck. Tier B (repr-type record locals/params/returns at
+>   `(ref $shapeN)` + shape-aware `FuncKind` signatures) is a large cross-cutting
+>   change for a marginal cast removal — not worth it now, per the §7 gating ("do it
+>   only once … the cast is shown to matter").
+> - ⏸️ **Per-field unboxing** (a scalar record field as inline `i64`) — out of scope
+>   until/unless Tier B lands.
 
 This is a sub-project of the WASM backend (see `IR.md` "WASM backend" and the
 `project_wasm_backend` memory). It changes only the `wasm` crate's record

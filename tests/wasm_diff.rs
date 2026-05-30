@@ -117,6 +117,7 @@ const WASM_FIXTURES: &[&str] = &[
 	"record-pattern",
 	"record-pattern-closed-vs-open",
 	"record-pattern-named-rest",
+	"record-pattern-nested-rest",
 	"record-pattern-row-poly",
 	"record-update",
 	"recursion",
@@ -364,19 +365,15 @@ struct RunResult {
 	stdout: String,
 }
 
-fn run_wasm(bytes: &[u8]) -> RunResult {
-	let engine = engine();
-	let module = match Module::new(&engine, bytes) {
-		Ok(m) => m,
-		Err(e) => {
-			return RunResult {
-				status: format!("module error: {e}"),
-				stdout: String::new(),
-			}
-		}
-	};
+/// Build an instance with the host imports wired (the `print` / `float_to_str` /
+/// f64-math glue). `use_drc` picks the collecting drc GC (for the allocation-heavy
+/// timed bench loop) over the default never-collecting null GC. Returns the store
+/// (its `HostState.out` accumulates printed bytes) and the instance.
+fn instantiate_module(use_drc: bool, bytes: &[u8]) -> Result<(Store<HostState>, Instance), String> {
+	let engine = if use_drc { bench_engine() } else { engine() };
+	let module = Module::new(&engine, bytes).map_err(|e| format!("module error: {e}"))?;
 	let out = Rc::new(RefCell::new(Vec::<u8>::new()));
-	let mut store = Store::new(&engine, HostState { out: out.clone() });
+	let mut store = Store::new(&engine, HostState { out });
 	let mut linker: Linker<HostState> = Linker::new(&engine);
 	// print : (ref null $value) -> ()  — host accepts the broader `anyref`.
 	let print_ty = FuncType::new(&engine, [ValType::ANYREF], []);
@@ -458,11 +455,19 @@ fn run_wasm(bytes: &[u8]) -> RunResult {
 			.unwrap_or_else(|e| panic!("define {name}: {e}"));
 	}
 
-	let instance: Instance = match linker.instantiate(&mut store, &module) {
-		Ok(i) => i,
-		Err(e) => {
+	let instance = linker
+		.instantiate(&mut store, &module)
+		.map_err(|e| format!("instantiate error: {e}"))?;
+	Ok((store, instance))
+}
+
+/// Build a fresh instance and run `_entry` once, collecting stdout (the diff path).
+fn run_wasm(bytes: &[u8]) -> RunResult {
+	let (mut store, instance) = match instantiate_module(false, bytes) {
+		Ok(x) => x,
+		Err(status) => {
 			return RunResult {
-				status: format!("instantiate error: {e}"),
+				status,
 				stdout: String::new(),
 			}
 		}
@@ -482,8 +487,21 @@ fn run_wasm(bytes: &[u8]) -> RunResult {
 		},
 		Err(e) => format!("runtime error: {e}"),
 	};
-	let stdout = String::from_utf8_lossy(&out.borrow()).into_owned();
+	let stdout = String::from_utf8_lossy(&store.data().out.borrow()).into_owned();
 	RunResult { status, stdout }
+}
+
+/// A collecting (deferred-reference-counting) engine for the bench: the timed loop
+/// allocates a record per iteration, which the default null collector would never
+/// free (OOM). The short-lived records are reclaimed within each `_entry` call.
+fn bench_engine() -> Engine {
+	let mut config = Config::new();
+	config.wasm_reference_types(true);
+	config.wasm_function_references(true);
+	config.wasm_gc(true);
+	config.wasm_tail_call(true);
+	config.collector(wasmtime::Collector::DeferredReferenceCounting);
+	Engine::new(&config).expect("bench engine")
 }
 
 /// If `val` is an `err e` result variant, return `e` formatted (the program's
@@ -620,4 +638,62 @@ fn wasm_coverage_report() {
 	for n in &matching {
 		println!("  {n}");
 	}
+}
+
+/// Quantify the nominal-record win (RECORDS.md §8): time `record-access` compiled
+/// the nominal+mono way vs forced-uniform (the old name-scan), to inform whether
+/// Tier B's cast removal is worth pursuing. Same IR, two emits; one instantiation
+/// each, then many timed `_entry` calls (the drc engine reclaims the per-iteration
+/// records). Informational — run with `--ignored --nocapture`.
+#[test]
+#[ignore = "microbench; run with --ignored --nocapture"]
+fn record_access_microbench() {
+	let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+	let dir = workspace.join("benchmarks/programs/record-access");
+	let compiler = compile_check(&dir).expect("compile record-access");
+	let ir_program = ir::lower(&compiler).expect("lower record-access");
+
+	std::env::remove_var("PLUMA_WASM_UNIFORM_RECORDS");
+	let nominal = wasm::emit(&ir_program).expect("emit nominal");
+	std::env::set_var("PLUMA_WASM_UNIFORM_RECORDS", "1");
+	let uniform = wasm::emit(&ir_program).expect("emit uniform");
+	std::env::remove_var("PLUMA_WASM_UNIFORM_RECORDS");
+
+	assert_eq!(
+		run_wasm(&nominal).stdout,
+		run_wasm(&uniform).stdout,
+		"nominal vs uniform output must agree"
+	);
+
+	fn time_entry(bytes: &[u8], reps: u32) -> std::time::Duration {
+		let (mut store, instance) = instantiate_module(true, bytes).expect("instantiate");
+		let entry = instance.get_func(&mut store, "_entry").expect("_entry");
+		let mut results = vec![Val::AnyRef(None)];
+		let mut call = |store: &mut Store<HostState>| {
+			entry
+				.call(store, &[Val::AnyRef(None)], &mut results)
+				.expect("entry call");
+		};
+		for _ in 0..10 {
+			call(&mut store);
+		}
+		let t = std::time::Instant::now();
+		for _ in 0..reps {
+			call(&mut store);
+		}
+		t.elapsed()
+	}
+
+	const REPS: u32 = 200;
+	let tn = time_entry(&nominal, REPS);
+	let tu = time_entry(&uniform, REPS);
+	eprintln!(
+		"\nrecord-access (loop 10000, x{REPS} entry calls):\n  \
+		 nominal+mono = {tn:?}  ({} wasm bytes)\n  \
+		 uniform scan = {tu:?}  ({} wasm bytes)\n  \
+		 speedup = {:.2}x\n",
+		nominal.len(),
+		uniform.len(),
+		tu.as_secs_f64() / tn.as_secs_f64().max(f64::MIN_POSITIVE),
+	);
 }

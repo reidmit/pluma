@@ -46,6 +46,14 @@ mod diag {
 	}
 }
 
+/// Bench/diagnostic escape hatch: when `PLUMA_WASM_UNIFORM_RECORDS` is set, the
+/// record-shape monomorphization and nominal-`$shapeN` emit are disabled, so every
+/// record flows in the uniform `$record` (the pre-nominal name-scan behavior). Used
+/// by the record microbench to measure the nominal win; never set in normal builds.
+pub(crate) fn force_uniform_records() -> bool {
+	std::env::var_os("PLUMA_WASM_UNIFORM_RECORDS").is_some()
+}
+
 /// Lower an `IrProgram` to a WasmGC module. Returns the encoded `.wasm` bytes, or
 /// the accumulated diagnostics if any reachable construct isn't yet supported.
 pub fn emit(program: &IrProgram) -> Result<Vec<u8>, Diagnostics> {

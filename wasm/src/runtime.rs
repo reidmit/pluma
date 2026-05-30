@@ -86,13 +86,17 @@ pub(crate) enum Helper {
 	WireResult,
 	WireBCmp,
 	WireEncDict,
+	/// `__record_rest(rec, excluded)` — build the uniform `$record` of `rec`'s
+	/// fields minus the names in the `excluded` `$list`. Backs `...rest` on a
+	/// *uniform* match subject (the nominal path builds the rest inline).
+	RecordRest,
 }
 
 impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 33;
+	pub(crate) const COUNT: usize = 34;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable
@@ -358,9 +362,15 @@ pub(crate) fn scan_helpers(b: &Block, req: &mut HelperSet) {
 			ir::Pattern::Variant { fields, .. } | ir::Pattern::Tuple(fields) => {
 				fields.iter().for_each(|p| pat(p, req))
 			}
-			ir::Pattern::Record { fields, .. } => {
+			ir::Pattern::Record { fields, rest, .. } => {
 				// Record patterns match fields via `__getfield` (which uses `__eq`).
 				req.insert(Helper::GetField);
+				// A `...rest` on a uniform subject filters via `__record_rest`. (A
+				// nominal subject builds the rest inline; the request is conservative
+				// since nominality is an emit-time decision.)
+				if matches!(rest, ir::RecordRest::Bind(_)) {
+					req.insert(Helper::RecordRest);
+				}
 				fields.iter().for_each(|(_, p)| pat(p, req));
 			}
 			_ => {}

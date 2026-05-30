@@ -297,6 +297,9 @@ pub(crate) fn compute_nominal(
 	param_shapes: &HashMap<u32, Vec<Option<ir::RecordShape>>>,
 ) -> HashMap<u32, ir::RecordShape> {
 	let mut nominal = HashMap::new();
+	if crate::force_uniform_records() {
+		return nominal;
+	}
 	// (a) This function's own nominal params (from record-shape monomorphization):
 	// a specialized clone's param holds a `$shapeN` at runtime, so reads on it are
 	// `struct.get`.
@@ -312,7 +315,7 @@ pub(crate) fn compute_nominal(
 	let mut read = HashSet::new();
 	collect_record_reads(&f.body, &mut read);
 	collect_nominal_param_args(&f.body, param_shapes, &mut read);
-	collect_nominal_makerecords(&f.body, &read, &mut nominal);
+	collect_nominal_records(&f.body, &read, &mut nominal);
 	nominal
 }
 
@@ -400,10 +403,12 @@ fn collect_record_reads(b: &Block, read: &mut HashSet<u32>) {
 	}
 }
 
-/// For each `MakeRecord` whose result var is in `read`, record its name-sorted
-/// shape (so it's built nominal). The fields are sorted to match the canonical
-/// `$shapeN`/`MakeRecord` layout.
-fn collect_nominal_makerecords(
+/// Mark the nominal record producers whose result var is in `read`: a
+/// `MakeRecord` (shape = its name-sorted fields), and a `RecordUpdate` on an
+/// already-nominal base (shape-preserving, so it inherits the base's shape — built
+/// as a `struct.new` copy rather than the uniform helper). A forward walk, so a
+/// `RecordUpdate`'s base (bound earlier in ANF) is already in `out`.
+fn collect_nominal_records(
 	b: &Block,
 	read: &HashSet<u32>,
 	out: &mut HashMap<u32, ir::RecordShape>,
@@ -415,22 +420,32 @@ fn collect_nominal_makerecords(
 				names.sort();
 				out.insert(v.0, ir::RecordShape { fields: names });
 			}
+			StmtKind::Let(
+				v,
+				Rvalue::RecordUpdate {
+					base: Atom::Var(b), ..
+				},
+			) if read.contains(&v.0) => {
+				if let Some(shape) = out.get(&b.0).cloned() {
+					out.insert(v.0, shape);
+				}
+			}
 			StmtKind::If(_, t, e) => {
-				collect_nominal_makerecords(t, read, out);
-				collect_nominal_makerecords(e, read, out);
+				collect_nominal_records(t, read, out);
+				collect_nominal_records(e, read, out);
 			}
 			StmtKind::Switch { arms, default, .. } => {
 				for (_, b) in arms {
-					collect_nominal_makerecords(b, read, out);
+					collect_nominal_records(b, read, out);
 				}
-				collect_nominal_makerecords(default, read, out);
+				collect_nominal_records(default, read, out);
 			}
 			StmtKind::Match { arms, .. } => {
 				for a in arms {
-					collect_nominal_makerecords(&a.body, read, out);
+					collect_nominal_records(&a.body, read, out);
 				}
 			}
-			StmtKind::Loop(b) => collect_nominal_makerecords(b, read, out),
+			StmtKind::Loop(b) => collect_nominal_records(b, read, out),
 			_ => {}
 		}
 	}

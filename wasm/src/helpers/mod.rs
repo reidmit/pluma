@@ -306,6 +306,12 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 			)
 		},
 	},
+	HelperDef {
+		id: H::RecordRest,
+		fn_type: Ty::Helper(2),
+		deps: &[H::Eq],
+		build: |c| record::build_record_rest_fn(c.dep(H::Eq)),
+	},
 ];
 
 /// The helper a builtin tag lowers to, if any. These are the builtins implemented
