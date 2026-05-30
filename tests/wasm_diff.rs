@@ -129,6 +129,7 @@ const WASM_FIXTURES: &[&str] = &[
 	"swap-tuple",
 	"top-level-keywords",
 	"to-string-shapes",
+	"trait-dict-forward-recursive",
 	"trait-fn-as-value",
 	"tuple-element-access",
 	"tuple-pattern-size",

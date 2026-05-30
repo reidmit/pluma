@@ -1,0 +1,23 @@
+use core.list
+
+# Regression: a trait-constrained def whose body only *forwards* its
+# `numeric a` dict into a self-recursive constrained helper (rather than
+# using a trait operator directly). The forward-only def must still record
+# the constraint on its scheme so same-module callers thread the dict
+# argument.
+def outer :: fun (list a) -> a where (numeric a) = fun xs {
+	fold-tail xs (list.get xs 0) 1 (list.length xs)
+}
+
+def fold-tail :: fun (list a) a int int -> a where (numeric a) = fun xs acc i n {
+	if i < n is true {
+		fold-tail xs (acc + list.get xs i) (i + 1) n
+	} else {
+		acc
+	}
+}
+
+def main = fun {
+	print (outer [1, 2, 3, 4])
+	print (outer [1.5, 2.5, 3.0])
+}
