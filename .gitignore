@@ -3,6 +3,7 @@
 /tests/target
 /Cargo.lock
 /scratch
+/notes
 /site/public
 dist
 node_modules
