@@ -20,6 +20,7 @@ mod eq;
 mod list;
 mod record;
 mod tostring;
+mod wat;
 mod wire;
 mod wrapper;
 

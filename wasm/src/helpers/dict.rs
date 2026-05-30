@@ -1,8 +1,9 @@
 // Dict helpers: insert/lookup/remove/map/filter over the insertion-ordered
 // `$dict` entries array (linear scan via `__eq`).
 
-use wasm_encoder::*;
+use wasm_encoder::{Function, ValType};
 
+use crate::helpers::wat::{Local, Wat};
 use crate::runtime::OptionLits;
 use crate::types;
 
@@ -14,522 +15,313 @@ use crate::types;
 // method-dict the `where (hash k)` constraint passes (handled at the call site).
 // ---------------------------------------------------------------------------
 
-/// Emit the `$valarray` of the dict in `D` (param 0), i.e. `D.entries`.
-fn dict_entries_of(b: &mut Vec<Instruction>, d: u32) {
-	use Instruction as I;
-	b.push(I::LocalGet(d));
-	b.push(I::RefCastNonNull(HeapType::Concrete(types::T_DICT)));
-	b.push(I::StructGet {
-		struct_type_index: types::T_DICT,
-		field_index: 1,
-	});
+/// Emit the `$valarray` of the dict in `d`, i.e. `d.entries`.
+fn dict_entries_of(w: &mut Wat, d: Local) {
+	w.local_get(d)
+		.ref_cast(types::T_DICT)
+		.struct_get(types::T_DICT, 1);
 }
 
-/// Emit `entries[idx_local].elems[field]` — the key (field 0) or value (1) of
-/// the `$tuple` entry at `idx_local` in the `$valarray` held in `arr_local`.
-fn dict_entry_field(b: &mut Vec<Instruction>, arr_local: u32, idx_local: u32, field: i32) {
-	use Instruction as I;
-	b.push(I::LocalGet(arr_local));
-	b.push(I::LocalGet(idx_local));
-	b.push(I::ArrayGet(types::T_VALARRAY));
-	b.push(I::RefCastNonNull(HeapType::Concrete(types::T_TUPLE)));
-	b.push(I::StructGet {
-		struct_type_index: types::T_TUPLE,
-		field_index: 1,
-	});
-	b.push(I::I32Const(field));
-	b.push(I::ArrayGet(types::T_VALARRAY));
+/// Emit `entries[idx].elems[field]` — the key (field 0) or value (1) of the
+/// `$tuple` entry at `idx` in the `$valarray` held in `arr`.
+fn dict_entry_field(w: &mut Wat, arr: Local, idx: Local, field: i32) {
+	w.local_get(arr).local_get(idx).array_get(types::T_VALARRAY);
+	w.ref_cast(types::T_TUPLE).struct_get(types::T_TUPLE, 1);
+	w.i32(field).array_get(types::T_VALARRAY);
 }
 
 /// Build `__dict_insert(dict, key, value) -> dict`: scan for `key` (via `__eq`);
 /// replace its entry if present, else append. Returns a fresh `$dict`.
 pub(crate) fn build_dict_insert_fn(eq_idx: u32) -> Function {
-	use Instruction as I;
-	const D: u32 = 0;
-	const K: u32 = 1;
-	const V: u32 = 2;
-	const ENTRIES: u32 = 3;
-	const N: u32 = 4;
-	const I_: u32 = 5;
-	const FOUND: u32 = 6;
-	const NEW: u32 = 7;
-	let empty = wasm_encoder::BlockType::Empty;
 	let va = types::T_VALARRAY;
-	// `NEW[at] = tuple(K, V)`.
-	let store_kv = |b: &mut Vec<Instruction>, at: &dyn Fn(&mut Vec<Instruction>)| {
-		b.push(I::LocalGet(NEW));
-		at(b);
-		b.push(I::I32Const(types::TAG_TUPLE));
-		b.push(I::LocalGet(K));
-		b.push(I::LocalGet(V));
-		b.push(I::ArrayNewFixed {
-			array_type_index: va,
-			array_size: 2,
-		});
-		b.push(I::StructNew(types::T_TUPLE));
-		b.push(I::ArraySet(va));
+	let mut w = Wat::new(3);
+	let (d, k, v) = (w.param(0), w.param(1), w.param(2));
+	let entries = w.local(types::valarray_ref());
+	let n = w.local(ValType::I32);
+	let i = w.local(ValType::I32);
+	let found = w.local(ValType::I32);
+	let new = w.local(types::valarray_ref());
+
+	// `new[at] = tuple(k, v)`; `at` emits the destination index.
+	let store_kv = |w: &mut Wat, at: &dyn Fn(&mut Wat)| {
+		w.local_get(new);
+		at(w);
+		w.i32(types::TAG_TUPLE)
+			.local_get(k)
+			.local_get(v)
+			.array_new_fixed(va, 2)
+			.struct_new(types::T_TUPLE);
+		w.array_set(va);
 	};
-	let mut b: Vec<Instruction> = Vec::new();
-	dict_entries_of(&mut b, D);
-	b.push(I::LocalSet(ENTRIES));
-	b.push(I::LocalGet(ENTRIES));
-	b.push(I::ArrayLen);
-	b.push(I::LocalSet(N));
-	b.push(I::I32Const(-1));
-	b.push(I::LocalSet(FOUND));
-	b.push(I::I32Const(0));
-	b.push(I::LocalSet(I_));
+
+	dict_entries_of(&mut w, d);
+	w.local_set(entries);
+	w.local_get(entries).array_len().local_set(n);
+	w.i32(-1).local_set(found);
+	w.i32(0).local_set(i);
 	// Keys are unique, so the last (==only) match is the entry to replace.
-	b.push(I::Block(empty));
-	b.push(I::Loop(empty));
-	b.push(I::LocalGet(I_));
-	b.push(I::LocalGet(N));
-	b.push(I::I32GeS);
-	b.push(I::BrIf(1));
-	dict_entry_field(&mut b, ENTRIES, I_, 0);
-	b.push(I::LocalGet(K));
-	b.push(I::Call(eq_idx));
-	b.push(I::If(empty));
-	b.push(I::LocalGet(I_));
-	b.push(I::LocalSet(FOUND));
-	b.push(I::End);
-	b.push(I::LocalGet(I_));
-	b.push(I::I32Const(1));
-	b.push(I::I32Add);
-	b.push(I::LocalSet(I_));
-	b.push(I::Br(0));
-	b.push(I::End); // loop
-	b.push(I::End); // block
-								 // Pre-init NEW (a non-null local) so it is definitely-assigned on every path
-								 // — the validator does not merge assignments made only inside if/else arms.
-	b.push(I::LocalGet(ENTRIES));
-	b.push(I::LocalSet(NEW));
-	b.push(I::LocalGet(FOUND));
-	b.push(I::I32Const(0));
-	b.push(I::I32GeS);
-	b.push(I::If(empty));
-	{
-		// Replace: NEW = copy of ENTRIES; NEW[FOUND] = (K, V).
-		b.push(I::LocalGet(N));
-		b.push(I::ArrayNewDefault(va));
-		b.push(I::LocalSet(NEW));
-		b.push(I::LocalGet(NEW));
-		b.push(I::I32Const(0));
-		b.push(I::LocalGet(ENTRIES));
-		b.push(I::I32Const(0));
-		b.push(I::LocalGet(N));
-		b.push(I::ArrayCopy {
-			array_type_index_dst: va,
-			array_type_index_src: va,
+	w.block("brk", |w| {
+		w.loop_("lp", |w| {
+			w.local_get(i).local_get(n).i32_ge_s().br_if("brk");
+			dict_entry_field(w, entries, i, 0);
+			w.local_get(k).call(eq_idx);
+			w.if_(|w| {
+				w.local_get(i).local_set(found);
+			});
+			w.local_get(i).i32(1).i32_add().local_set(i);
+			w.br("lp");
 		});
-		store_kv(&mut b, &|b| b.push(I::LocalGet(FOUND)));
-	}
-	b.push(I::Else);
-	{
-		// Append: NEW = copy of ENTRIES grown by one; NEW[N] = (K, V).
-		b.push(I::LocalGet(N));
-		b.push(I::I32Const(1));
-		b.push(I::I32Add);
-		b.push(I::ArrayNewDefault(va));
-		b.push(I::LocalSet(NEW));
-		b.push(I::LocalGet(NEW));
-		b.push(I::I32Const(0));
-		b.push(I::LocalGet(ENTRIES));
-		b.push(I::I32Const(0));
-		b.push(I::LocalGet(N));
-		b.push(I::ArrayCopy {
-			array_type_index_dst: va,
-			array_type_index_src: va,
-		});
-		store_kv(&mut b, &|b| b.push(I::LocalGet(N)));
-	}
-	b.push(I::End);
-	b.push(I::I32Const(types::TAG_DICT));
-	b.push(I::LocalGet(NEW));
-	b.push(I::StructNew(types::T_DICT));
-	let locals = vec![
-		types::valarray_ref(),
-		ValType::I32,
-		ValType::I32,
-		ValType::I32,
-		types::valarray_ref(),
-	];
-	let mut f = Function::new_with_locals_types(locals);
-	for ins in &b {
-		f.instruction(ins);
-	}
-	f.instruction(&I::End);
-	f
+	});
+	// Pre-init `new` (a non-null local) so it is definitely-assigned on every path
+	// — the validator does not merge assignments made only inside if/else arms.
+	w.local_get(entries).local_set(new);
+	w.local_get(found).i32(0).i32_ge_s();
+	w.if_else(
+		|w| {
+			// Replace: new = copy of entries; new[found] = (k, v).
+			w.local_get(n).array_new_default(va).local_set(new);
+			w.local_get(new)
+				.i32(0)
+				.local_get(entries)
+				.i32(0)
+				.local_get(n)
+				.array_copy(va, va);
+			store_kv(w, &|w| {
+				w.local_get(found);
+			});
+		},
+		|w| {
+			// Append: new = copy of entries grown by one; new[n] = (k, v).
+			w.local_get(n)
+				.i32(1)
+				.i32_add()
+				.array_new_default(va)
+				.local_set(new);
+			w.local_get(new)
+				.i32(0)
+				.local_get(entries)
+				.i32(0)
+				.local_get(n)
+				.array_copy(va, va);
+			store_kv(w, &|w| {
+				w.local_get(n);
+			});
+		},
+	);
+	w.i32(types::TAG_DICT)
+		.local_get(new)
+		.struct_new(types::T_DICT);
+	w.finish()
 }
 
 /// Build `__dict_lookup(dict, key) -> option value`: linear scan via `__eq`.
 pub(crate) fn build_dict_lookup_fn(eq_idx: u32, opt: OptionLits) -> Function {
-	use Instruction as I;
-	const D: u32 = 0;
-	const K: u32 = 1;
-	const ENTRIES: u32 = 2;
-	const N: u32 = 3;
-	const I_: u32 = 4;
-	let empty = wasm_encoder::BlockType::Empty;
+	let mut w = Wat::new(2);
+	let (d, k) = (w.param(0), w.param(1));
+	let entries = w.local(types::valarray_ref());
+	let n = w.local(ValType::I32);
+	let i = w.local(ValType::I32);
+
 	// Push a fresh `$str` for an interned data-segment literal.
-	let str_lit = |b: &mut Vec<Instruction>, (off, len): (u32, u32)| {
-		b.push(I::I32Const(types::TAG_STR));
-		b.push(I::I32Const(off as i32));
-		b.push(I::I32Const(len as i32));
-		b.push(I::ArrayNewData {
-			array_type_index: types::T_BYTES,
-			array_data_index: 0,
-		});
-		b.push(I::StructNew(types::T_STR));
+	let str_lit = |w: &mut Wat, (off, len): (u32, u32)| {
+		w.i32(types::TAG_STR);
+		w.i32(off as i32);
+		w.i32(len as i32);
+		w.array_new_data(types::T_BYTES, 0);
+		w.struct_new(types::T_STR);
 	};
-	let mut b: Vec<Instruction> = Vec::new();
-	dict_entries_of(&mut b, D);
-	b.push(I::LocalSet(ENTRIES));
-	b.push(I::LocalGet(ENTRIES));
-	b.push(I::ArrayLen);
-	b.push(I::LocalSet(N));
-	b.push(I::I32Const(0));
-	b.push(I::LocalSet(I_));
-	b.push(I::Block(empty));
-	b.push(I::Loop(empty));
-	b.push(I::LocalGet(I_));
-	b.push(I::LocalGet(N));
-	b.push(I::I32GeS);
-	b.push(I::BrIf(1));
-	dict_entry_field(&mut b, ENTRIES, I_, 0);
-	b.push(I::LocalGet(K));
-	b.push(I::Call(eq_idx));
-	b.push(I::If(empty));
-	// return some(value).
-	b.push(I::I32Const(types::TAG_VARIANT));
-	b.push(I::I32Const(opt.some_tag as i32));
-	str_lit(&mut b, opt.some_name);
-	dict_entry_field(&mut b, ENTRIES, I_, 1);
-	b.push(I::ArrayNewFixed {
-		array_type_index: types::T_VALARRAY,
-		array_size: 1,
+
+	dict_entries_of(&mut w, d);
+	w.local_set(entries);
+	w.local_get(entries).array_len().local_set(n);
+	w.i32(0).local_set(i);
+	w.block("brk", |w| {
+		w.loop_("lp", |w| {
+			w.local_get(i).local_get(n).i32_ge_s().br_if("brk");
+			dict_entry_field(w, entries, i, 0);
+			w.local_get(k).call(eq_idx);
+			w.if_(|w| {
+				// return some(value).
+				w.i32(types::TAG_VARIANT).i32(opt.some_tag as i32);
+				str_lit(w, opt.some_name);
+				dict_entry_field(w, entries, i, 1);
+				w.array_new_fixed(types::T_VALARRAY, 1)
+					.struct_new(types::T_VARIANT)
+					.ret();
+			});
+			w.local_get(i).i32(1).i32_add().local_set(i);
+			w.br("lp");
+		});
 	});
-	b.push(I::StructNew(types::T_VARIANT));
-	b.push(I::Return);
-	b.push(I::End);
-	b.push(I::LocalGet(I_));
-	b.push(I::I32Const(1));
-	b.push(I::I32Add);
-	b.push(I::LocalSet(I_));
-	b.push(I::Br(0));
-	b.push(I::End); // loop
-	b.push(I::End); // block
-								 // none.
-	b.push(I::I32Const(types::TAG_VARIANT));
-	b.push(I::I32Const(opt.none_tag as i32));
-	str_lit(&mut b, opt.none_name);
-	b.push(I::ArrayNewFixed {
-		array_type_index: types::T_VALARRAY,
-		array_size: 0,
-	});
-	b.push(I::StructNew(types::T_VARIANT));
-	let locals = vec![types::valarray_ref(), ValType::I32, ValType::I32];
-	let mut f = Function::new_with_locals_types(locals);
-	for ins in &b {
-		f.instruction(ins);
-	}
-	f.instruction(&I::End);
-	f
+	// none.
+	w.i32(types::TAG_VARIANT).i32(opt.none_tag as i32);
+	str_lit(&mut w, opt.none_name);
+	w.array_new_fixed(types::T_VALARRAY, 0)
+		.struct_new(types::T_VARIANT);
+	w.finish()
 }
 
 /// Build `__dict_remove(dict, key) -> dict`: drop the matching entry (renumbered
 /// dense). Returns the original dict unchanged when the key is absent.
 pub(crate) fn build_dict_remove_fn(eq_idx: u32) -> Function {
-	use Instruction as I;
-	const D: u32 = 0;
-	const K: u32 = 1;
-	const ENTRIES: u32 = 2;
-	const N: u32 = 3;
-	const I_: u32 = 4;
-	const FOUND: u32 = 5;
-	const NEW: u32 = 6;
-	let empty = wasm_encoder::BlockType::Empty;
 	let va = types::T_VALARRAY;
-	let mut b: Vec<Instruction> = Vec::new();
-	dict_entries_of(&mut b, D);
-	b.push(I::LocalSet(ENTRIES));
-	b.push(I::LocalGet(ENTRIES));
-	b.push(I::ArrayLen);
-	b.push(I::LocalSet(N));
-	b.push(I::I32Const(-1));
-	b.push(I::LocalSet(FOUND));
-	b.push(I::I32Const(0));
-	b.push(I::LocalSet(I_));
-	b.push(I::Block(empty));
-	b.push(I::Loop(empty));
-	b.push(I::LocalGet(I_));
-	b.push(I::LocalGet(N));
-	b.push(I::I32GeS);
-	b.push(I::BrIf(1));
-	dict_entry_field(&mut b, ENTRIES, I_, 0);
-	b.push(I::LocalGet(K));
-	b.push(I::Call(eq_idx));
-	b.push(I::If(empty));
-	b.push(I::LocalGet(I_));
-	b.push(I::LocalSet(FOUND));
-	b.push(I::End);
-	b.push(I::LocalGet(I_));
-	b.push(I::I32Const(1));
-	b.push(I::I32Add);
-	b.push(I::LocalSet(I_));
-	b.push(I::Br(0));
-	b.push(I::End); // loop
-	b.push(I::End); // block
-								 // Absent: hand back the original dict.
-	b.push(I::LocalGet(FOUND));
-	b.push(I::I32Const(0));
-	b.push(I::I32LtS);
-	b.push(I::If(empty));
-	b.push(I::LocalGet(D));
-	b.push(I::Return);
-	b.push(I::End);
-	// NEW = array(N-1); copy [0..FOUND) then (FOUND..N) shifted down by one.
-	b.push(I::LocalGet(N));
-	b.push(I::I32Const(1));
-	b.push(I::I32Sub);
-	b.push(I::ArrayNewDefault(va));
-	b.push(I::LocalSet(NEW));
-	b.push(I::LocalGet(NEW));
-	b.push(I::I32Const(0));
-	b.push(I::LocalGet(ENTRIES));
-	b.push(I::I32Const(0));
-	b.push(I::LocalGet(FOUND));
-	b.push(I::ArrayCopy {
-		array_type_index_dst: va,
-		array_type_index_src: va,
+	let mut w = Wat::new(2);
+	let (d, k) = (w.param(0), w.param(1));
+	let entries = w.local(types::valarray_ref());
+	let n = w.local(ValType::I32);
+	let i = w.local(ValType::I32);
+	let found = w.local(ValType::I32);
+	let new = w.local(types::valarray_ref());
+
+	dict_entries_of(&mut w, d);
+	w.local_set(entries);
+	w.local_get(entries).array_len().local_set(n);
+	w.i32(-1).local_set(found);
+	w.i32(0).local_set(i);
+	w.block("brk", |w| {
+		w.loop_("lp", |w| {
+			w.local_get(i).local_get(n).i32_ge_s().br_if("brk");
+			dict_entry_field(w, entries, i, 0);
+			w.local_get(k).call(eq_idx);
+			w.if_(|w| {
+				w.local_get(i).local_set(found);
+			});
+			w.local_get(i).i32(1).i32_add().local_set(i);
+			w.br("lp");
+		});
 	});
-	b.push(I::LocalGet(NEW));
-	b.push(I::LocalGet(FOUND));
-	b.push(I::LocalGet(ENTRIES));
-	b.push(I::LocalGet(FOUND));
-	b.push(I::I32Const(1));
-	b.push(I::I32Add);
-	b.push(I::LocalGet(N));
-	b.push(I::I32Const(1));
-	b.push(I::I32Sub);
-	b.push(I::LocalGet(FOUND));
-	b.push(I::I32Sub);
-	b.push(I::ArrayCopy {
-		array_type_index_dst: va,
-		array_type_index_src: va,
+	// Absent: hand back the original dict.
+	w.local_get(found).i32(0).i32_lt_s();
+	w.if_(|w| {
+		w.local_get(d).ret();
 	});
-	b.push(I::I32Const(types::TAG_DICT));
-	b.push(I::LocalGet(NEW));
-	b.push(I::StructNew(types::T_DICT));
-	let locals = vec![
-		types::valarray_ref(),
-		ValType::I32,
-		ValType::I32,
-		ValType::I32,
-		types::valarray_ref(),
-	];
-	let mut f = Function::new_with_locals_types(locals);
-	for ins in &b {
-		f.instruction(ins);
-	}
-	f.instruction(&I::End);
-	f
+	// new = array(n-1); copy [0..found) then (found..n) shifted down by one.
+	w.local_get(n)
+		.i32(1)
+		.i32_sub()
+		.array_new_default(va)
+		.local_set(new);
+	w.local_get(new)
+		.i32(0)
+		.local_get(entries)
+		.i32(0)
+		.local_get(found)
+		.array_copy(va, va);
+	w.local_get(new).local_get(found);
+	w.local_get(entries).local_get(found).i32(1).i32_add();
+	w.local_get(n).i32(1).i32_sub().local_get(found).i32_sub();
+	w.array_copy(va, va);
+	w.i32(types::TAG_DICT)
+		.local_get(new)
+		.struct_new(types::T_DICT);
+	w.finish()
 }
 
 /// Build `__dict_map(dict, f) -> dict`: `f` over each value, keys preserved.
 pub(crate) fn build_dict_map_fn(arity1: u32) -> Function {
-	use Instruction as I;
-	const D: u32 = 0;
-	const F: u32 = 1;
-	const ENTRIES: u32 = 2;
-	const N: u32 = 3;
-	const I_: u32 = 4;
-	const NEW: u32 = 5;
-	const K: u32 = 6;
-	const NV: u32 = 7;
-	let empty = wasm_encoder::BlockType::Empty;
 	let va = types::T_VALARRAY;
-	let mut b: Vec<Instruction> = Vec::new();
-	dict_entries_of(&mut b, D);
-	b.push(I::LocalSet(ENTRIES));
-	b.push(I::LocalGet(ENTRIES));
-	b.push(I::ArrayLen);
-	b.push(I::LocalSet(N));
-	b.push(I::LocalGet(N));
-	b.push(I::ArrayNewDefault(va));
-	b.push(I::LocalSet(NEW));
-	b.push(I::I32Const(0));
-	b.push(I::LocalSet(I_));
-	b.push(I::Block(empty));
-	b.push(I::Loop(empty));
-	b.push(I::LocalGet(I_));
-	b.push(I::LocalGet(N));
-	b.push(I::I32GeS);
-	b.push(I::BrIf(1));
-	dict_entry_field(&mut b, ENTRIES, I_, 0);
-	b.push(I::LocalSet(K));
-	// NV = f(value): env = f, arg = value, call_indirect.
-	b.push(I::LocalGet(F));
-	b.push(I::RefCastNonNull(HeapType::Concrete(types::T_CLOSURE)));
-	dict_entry_field(&mut b, ENTRIES, I_, 1);
-	b.push(I::LocalGet(F));
-	b.push(I::RefCastNonNull(HeapType::Concrete(types::T_CLOSURE)));
-	b.push(I::StructGet {
-		struct_type_index: types::T_CLOSURE,
-		field_index: 1,
+	let mut w = Wat::new(2);
+	let (d, f) = (w.param(0), w.param(1));
+	let entries = w.local(types::valarray_ref());
+	let n = w.local(ValType::I32);
+	let i = w.local(ValType::I32);
+	let new = w.local(types::valarray_ref());
+	let key = w.local(types::value_ref());
+	let nv = w.local(types::value_ref());
+
+	dict_entries_of(&mut w, d);
+	w.local_set(entries);
+	w.local_get(entries).array_len().local_set(n);
+	w.local_get(n).array_new_default(va).local_set(new);
+	w.i32(0).local_set(i);
+	w.block("brk", |w| {
+		w.loop_("lp", |w| {
+			w.local_get(i).local_get(n).i32_ge_s().br_if("brk");
+			dict_entry_field(w, entries, i, 0);
+			w.local_set(key);
+			// nv = f(value): env = f, arg = value, call_indirect.
+			w.local_get(f).ref_cast(types::T_CLOSURE);
+			dict_entry_field(w, entries, i, 1);
+			w.local_get(f)
+				.ref_cast(types::T_CLOSURE)
+				.struct_get(types::T_CLOSURE, 1);
+			w.call_indirect(arity1);
+			w.local_set(nv);
+			// new[i] = (key, nv).
+			w.local_get(new).local_get(i);
+			w.i32(types::TAG_TUPLE)
+				.local_get(key)
+				.local_get(nv)
+				.array_new_fixed(va, 2)
+				.struct_new(types::T_TUPLE);
+			w.array_set(va);
+			w.local_get(i).i32(1).i32_add().local_set(i);
+			w.br("lp");
+		});
 	});
-	b.push(I::CallIndirect {
-		type_index: arity1,
-		table_index: 0,
-	});
-	b.push(I::LocalSet(NV));
-	// NEW[i] = (K, NV).
-	b.push(I::LocalGet(NEW));
-	b.push(I::LocalGet(I_));
-	b.push(I::I32Const(types::TAG_TUPLE));
-	b.push(I::LocalGet(K));
-	b.push(I::LocalGet(NV));
-	b.push(I::ArrayNewFixed {
-		array_type_index: va,
-		array_size: 2,
-	});
-	b.push(I::StructNew(types::T_TUPLE));
-	b.push(I::ArraySet(va));
-	b.push(I::LocalGet(I_));
-	b.push(I::I32Const(1));
-	b.push(I::I32Add);
-	b.push(I::LocalSet(I_));
-	b.push(I::Br(0));
-	b.push(I::End); // loop
-	b.push(I::End); // block
-	b.push(I::I32Const(types::TAG_DICT));
-	b.push(I::LocalGet(NEW));
-	b.push(I::StructNew(types::T_DICT));
-	let locals = vec![
-		types::valarray_ref(),
-		ValType::I32,
-		ValType::I32,
-		types::valarray_ref(),
-		types::value_ref(),
-		types::value_ref(),
-	];
-	let mut f = Function::new_with_locals_types(locals);
-	for ins in &b {
-		f.instruction(ins);
-	}
-	f.instruction(&I::End);
-	f
+	w.i32(types::TAG_DICT)
+		.local_get(new)
+		.struct_new(types::T_DICT);
+	w.finish()
 }
 
 /// Build `__dict_filter(dict, f) -> dict`: keep entries where `f key value` is
 /// true (the entry tuple is reused verbatim).
 pub(crate) fn build_dict_filter_fn(arity2: u32) -> Function {
-	use Instruction as I;
-	const D: u32 = 0;
-	const F: u32 = 1;
-	const ENTRIES: u32 = 2;
-	const N: u32 = 3;
-	const I_: u32 = 4;
-	const TMP: u32 = 5;
-	const W: u32 = 6;
-	const K: u32 = 7;
-	const V: u32 = 8;
-	const OUT: u32 = 9;
-	let empty = wasm_encoder::BlockType::Empty;
 	let va = types::T_VALARRAY;
-	let mut b: Vec<Instruction> = Vec::new();
-	dict_entries_of(&mut b, D);
-	b.push(I::LocalSet(ENTRIES));
-	b.push(I::LocalGet(ENTRIES));
-	b.push(I::ArrayLen);
-	b.push(I::LocalSet(N));
-	b.push(I::LocalGet(N));
-	b.push(I::ArrayNewDefault(va));
-	b.push(I::LocalSet(TMP));
-	b.push(I::I32Const(0));
-	b.push(I::LocalSet(W));
-	b.push(I::I32Const(0));
-	b.push(I::LocalSet(I_));
-	b.push(I::Block(empty));
-	b.push(I::Loop(empty));
-	b.push(I::LocalGet(I_));
-	b.push(I::LocalGet(N));
-	b.push(I::I32GeS);
-	b.push(I::BrIf(1));
-	dict_entry_field(&mut b, ENTRIES, I_, 0);
-	b.push(I::LocalSet(K));
-	dict_entry_field(&mut b, ENTRIES, I_, 1);
-	b.push(I::LocalSet(V));
-	// keep = f(k, v): env = f, args k v, call_indirect; unbox the $bool.
-	b.push(I::LocalGet(F));
-	b.push(I::RefCastNonNull(HeapType::Concrete(types::T_CLOSURE)));
-	b.push(I::LocalGet(K));
-	b.push(I::LocalGet(V));
-	b.push(I::LocalGet(F));
-	b.push(I::RefCastNonNull(HeapType::Concrete(types::T_CLOSURE)));
-	b.push(I::StructGet {
-		struct_type_index: types::T_CLOSURE,
-		field_index: 1,
+	let mut w = Wat::new(2);
+	let (d, f) = (w.param(0), w.param(1));
+	let entries = w.local(types::valarray_ref());
+	let n = w.local(ValType::I32);
+	let i = w.local(ValType::I32);
+	let tmp = w.local(types::valarray_ref());
+	let write = w.local(ValType::I32);
+	let key = w.local(types::value_ref());
+	let v = w.local(types::value_ref());
+	let out = w.local(types::valarray_ref());
+
+	dict_entries_of(&mut w, d);
+	w.local_set(entries);
+	w.local_get(entries).array_len().local_set(n);
+	w.local_get(n).array_new_default(va).local_set(tmp);
+	w.i32(0).local_set(write);
+	w.i32(0).local_set(i);
+	w.block("brk", |w| {
+		w.loop_("lp", |w| {
+			w.local_get(i).local_get(n).i32_ge_s().br_if("brk");
+			dict_entry_field(w, entries, i, 0);
+			w.local_set(key);
+			dict_entry_field(w, entries, i, 1);
+			w.local_set(v);
+			// keep = f(k, v): env = f, args k v, call_indirect; unbox the $bool.
+			w.local_get(f).ref_cast(types::T_CLOSURE);
+			w.local_get(key).local_get(v);
+			w.local_get(f)
+				.ref_cast(types::T_CLOSURE)
+				.struct_get(types::T_CLOSURE, 1);
+			w.call_indirect(arity2);
+			w.ref_cast(types::T_BOOL).struct_get(types::T_BOOL, 1);
+			w.if_(|w| {
+				// tmp[write] = entry; write += 1.
+				w.local_get(tmp).local_get(write);
+				w.local_get(entries).local_get(i).array_get(va);
+				w.array_set(va);
+				w.local_get(write).i32(1).i32_add().local_set(write);
+			});
+			w.local_get(i).i32(1).i32_add().local_set(i);
+			w.br("lp");
+		});
 	});
-	b.push(I::CallIndirect {
-		type_index: arity2,
-		table_index: 0,
-	});
-	b.push(I::RefCastNonNull(HeapType::Concrete(types::T_BOOL)));
-	b.push(I::StructGet {
-		struct_type_index: types::T_BOOL,
-		field_index: 1,
-	});
-	b.push(I::If(empty));
-	// TMP[W] = entry; W += 1.
-	b.push(I::LocalGet(TMP));
-	b.push(I::LocalGet(W));
-	b.push(I::LocalGet(ENTRIES));
-	b.push(I::LocalGet(I_));
-	b.push(I::ArrayGet(va));
-	b.push(I::ArraySet(va));
-	b.push(I::LocalGet(W));
-	b.push(I::I32Const(1));
-	b.push(I::I32Add);
-	b.push(I::LocalSet(W));
-	b.push(I::End);
-	b.push(I::LocalGet(I_));
-	b.push(I::I32Const(1));
-	b.push(I::I32Add);
-	b.push(I::LocalSet(I_));
-	b.push(I::Br(0));
-	b.push(I::End); // loop
-	b.push(I::End); // block
-								 // OUT = array(W); copy TMP[0..W].
-	b.push(I::LocalGet(W));
-	b.push(I::ArrayNewDefault(va));
-	b.push(I::LocalSet(OUT));
-	b.push(I::LocalGet(OUT));
-	b.push(I::I32Const(0));
-	b.push(I::LocalGet(TMP));
-	b.push(I::I32Const(0));
-	b.push(I::LocalGet(W));
-	b.push(I::ArrayCopy {
-		array_type_index_dst: va,
-		array_type_index_src: va,
-	});
-	b.push(I::I32Const(types::TAG_DICT));
-	b.push(I::LocalGet(OUT));
-	b.push(I::StructNew(types::T_DICT));
-	let locals = vec![
-		types::valarray_ref(),
-		ValType::I32,
-		ValType::I32,
-		types::valarray_ref(),
-		ValType::I32,
-		types::value_ref(),
-		types::value_ref(),
-		types::valarray_ref(),
-	];
-	let mut f = Function::new_with_locals_types(locals);
-	for ins in &b {
-		f.instruction(ins);
-	}
-	f.instruction(&I::End);
-	f
+	// out = array(write); copy tmp[0..write].
+	w.local_get(write).array_new_default(va).local_set(out);
+	w.local_get(out)
+		.i32(0)
+		.local_get(tmp)
+		.i32(0)
+		.local_get(write)
+		.array_copy(va, va);
+	w.i32(types::TAG_DICT)
+		.local_get(out)
+		.struct_new(types::T_DICT);
+	w.finish()
 }

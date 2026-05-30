@@ -1,151 +1,88 @@
 // `to-string` rendering: decimal int formatting + the recursive `__tostring`
 // (`vm::Value`'s `Display` in wasm).
 
-use wasm_encoder::*;
+use wasm_encoder::{Function, ValType};
 
+use crate::helpers::wat::{Local, Wat};
 use crate::runtime::ToStringLits;
 use crate::types;
 
 /// Build `__int_str(boxed-int) -> str`: decimal formatting of an i64. Mirrors
 /// `vm::Value`'s `Display` for ints (`-` sign, no leading zeros, "0" for zero).
 pub(crate) fn build_int_str_fn() -> Function {
-	use Instruction as I;
-	const V: u32 = 0; // boxed $int param
-	const N: u32 = 1; // i64 value
-	const NEG: u32 = 2;
-	const M: u32 = 3; // abs value
-	const LEN: u32 = 4;
-	const TOTAL: u32 = 5;
-	const BUF: u32 = 6;
-	const I_: u32 = 7;
-	const Q: u32 = 8;
-	let empty = wasm_encoder::BlockType::Empty;
 	let bv = types::T_BYTES;
-	let mk_str = |b: &mut Vec<Instruction>| {
-		// wrap BUF in a $str and return.
-		b.push(I::I32Const(types::TAG_STR));
-		b.push(I::LocalGet(BUF));
-		b.push(I::StructNew(types::T_STR));
-		b.push(I::Return);
+	let mut w = Wat::new(1);
+	let v = w.param(0); // boxed $int
+	let n = w.local(ValType::I64); // i64 value
+	let neg = w.local(ValType::I32);
+	let m = w.local(ValType::I64); // abs value
+	let len = w.local(ValType::I32);
+	let total = w.local(ValType::I32);
+	let buf = w.local(types::bytes_ref());
+	let i = w.local(ValType::I32);
+	let q = w.local(ValType::I64);
+
+	// Wrap `buf` in a `$str` and return.
+	let mk_str = |w: &mut Wat| {
+		w.i32(types::TAG_STR)
+			.local_get(buf)
+			.struct_new(types::T_STR)
+			.ret();
 	};
-	let locals = vec![
-		ValType::I64,
-		ValType::I32,
-		ValType::I64,
-		ValType::I32,
-		ValType::I32,
-		types::bytes_ref(),
-		ValType::I32,
-		ValType::I64,
-	];
-	let mut b: Vec<Instruction> = Vec::new();
-	b.push(I::LocalGet(V));
-	b.push(I::RefCastNonNull(HeapType::Concrete(types::T_INT)));
-	b.push(I::StructGet {
-		struct_type_index: types::T_INT,
-		field_index: 1,
+
+	w.local_get(v)
+		.ref_cast(types::T_INT)
+		.struct_get(types::T_INT, 1)
+		.local_set(n);
+	// n == 0 -> "0".
+	w.local_get(n).i64_eqz();
+	w.if_(|w| {
+		w.i32(1).array_new_default(bv).local_set(buf);
+		w.local_get(buf).i32(0).i32(48).array_set(bv); // '0'
+		mk_str(w);
 	});
-	b.push(I::LocalSet(N));
-	// n == 0 -> "0"
-	b.push(I::LocalGet(N));
-	b.push(I::I64Eqz);
-	b.push(I::If(empty));
-	b.push(I::I32Const(1));
-	b.push(I::ArrayNewDefault(bv));
-	b.push(I::LocalSet(BUF));
-	b.push(I::LocalGet(BUF));
-	b.push(I::I32Const(0));
-	b.push(I::I32Const(48)); // '0'
-	b.push(I::ArraySet(bv));
-	mk_str(&mut b);
-	b.push(I::End);
-	// neg = n < 0
-	b.push(I::LocalGet(N));
-	b.push(I::I64Const(0));
-	b.push(I::I64LtS);
-	b.push(I::LocalSet(NEG));
-	// m = n; if neg { m = 0 - n }
-	b.push(I::LocalGet(N));
-	b.push(I::LocalSet(M));
-	b.push(I::LocalGet(NEG));
-	b.push(I::If(empty));
-	b.push(I::I64Const(0));
-	b.push(I::LocalGet(N));
-	b.push(I::I64Sub);
-	b.push(I::LocalSet(M));
-	b.push(I::End);
-	// count digits: len=0; q=m; do { len++; q/=10 } while q!=0
-	b.push(I::I32Const(0));
-	b.push(I::LocalSet(LEN));
-	b.push(I::LocalGet(M));
-	b.push(I::LocalSet(Q));
-	b.push(I::Loop(empty));
-	b.push(I::LocalGet(LEN));
-	b.push(I::I32Const(1));
-	b.push(I::I32Add);
-	b.push(I::LocalSet(LEN));
-	b.push(I::LocalGet(Q));
-	b.push(I::I64Const(10));
-	b.push(I::I64DivS);
-	b.push(I::LocalSet(Q));
-	b.push(I::LocalGet(Q));
-	b.push(I::I64Eqz);
-	b.push(I::I32Eqz);
-	b.push(I::BrIf(0)); // q != 0 -> loop
-	b.push(I::End);
-	// total = len + neg
-	b.push(I::LocalGet(LEN));
-	b.push(I::LocalGet(NEG));
-	b.push(I::I32Add);
-	b.push(I::LocalSet(TOTAL));
-	b.push(I::LocalGet(TOTAL));
-	b.push(I::ArrayNewDefault(bv));
-	b.push(I::LocalSet(BUF));
-	// fill from end: i = total-1; q = m; do { buf[i]=48+(q%10); q/=10; i-- } while q!=0
-	b.push(I::LocalGet(TOTAL));
-	b.push(I::I32Const(1));
-	b.push(I::I32Sub);
-	b.push(I::LocalSet(I_));
-	b.push(I::LocalGet(M));
-	b.push(I::LocalSet(Q));
-	b.push(I::Loop(empty));
-	b.push(I::LocalGet(BUF));
-	b.push(I::LocalGet(I_));
-	b.push(I::I32Const(48));
-	b.push(I::LocalGet(Q));
-	b.push(I::I64Const(10));
-	b.push(I::I64RemS);
-	b.push(I::I32WrapI64);
-	b.push(I::I32Add);
-	b.push(I::ArraySet(bv));
-	b.push(I::LocalGet(Q));
-	b.push(I::I64Const(10));
-	b.push(I::I64DivS);
-	b.push(I::LocalSet(Q));
-	b.push(I::LocalGet(I_));
-	b.push(I::I32Const(1));
-	b.push(I::I32Sub);
-	b.push(I::LocalSet(I_));
-	b.push(I::LocalGet(Q));
-	b.push(I::I64Eqz);
-	b.push(I::I32Eqz);
-	b.push(I::BrIf(0)); // q != 0 -> loop
-	b.push(I::End);
-	// if neg { buf[0] = '-' }
-	b.push(I::LocalGet(NEG));
-	b.push(I::If(empty));
-	b.push(I::LocalGet(BUF));
-	b.push(I::I32Const(0));
-	b.push(I::I32Const(45)); // '-'
-	b.push(I::ArraySet(bv));
-	b.push(I::End);
-	mk_str(&mut b);
-	let mut f = Function::new_with_locals_types(locals);
-	for ins in &b {
-		f.instruction(ins);
-	}
-	f.instruction(&I::End);
-	f
+	// neg = n < 0.
+	w.local_get(n).i64(0).i64_lt_s().local_set(neg);
+	// m = n; if neg { m = 0 - n }.
+	w.local_get(n).local_set(m);
+	w.local_get(neg);
+	w.if_(|w| {
+		w.i64(0).local_get(n).i64_sub().local_set(m);
+	});
+	// count digits: len=0; q=m; do { len++; q/=10 } while q!=0.
+	w.i32(0).local_set(len);
+	w.local_get(m).local_set(q);
+	w.loop_("count", |w| {
+		w.local_get(len).i32(1).i32_add().local_set(len);
+		w.local_get(q).i64(10).i64_div_s().local_set(q);
+		w.local_get(q).i64_eqz().i32_eqz().br_if("count"); // q != 0 -> loop
+	});
+	// total = len + neg.
+	w.local_get(len).local_get(neg).i32_add().local_set(total);
+	w.local_get(total).array_new_default(bv).local_set(buf);
+	// fill from end: i = total-1; q = m; do { buf[i]=48+(q%10); q/=10; i-- } while q!=0.
+	w.local_get(total).i32(1).i32_sub().local_set(i);
+	w.local_get(m).local_set(q);
+	w.loop_("fill", |w| {
+		w.local_get(buf).local_get(i);
+		w.i32(48)
+			.local_get(q)
+			.i64(10)
+			.i64_rem_s()
+			.i32_wrap_i64()
+			.i32_add();
+		w.array_set(bv);
+		w.local_get(q).i64(10).i64_div_s().local_set(q);
+		w.local_get(i).i32(1).i32_sub().local_set(i);
+		w.local_get(q).i64_eqz().i32_eqz().br_if("fill"); // q != 0 -> loop
+	});
+	// if neg { buf[0] = '-' }.
+	w.local_get(neg);
+	w.if_(|w| {
+		w.local_get(buf).i32(0).i32(45).array_set(bv); // '-'
+	});
+	mk_str(&mut w);
+	w.finish()
 }
 
 /// Build `__tostring(value) -> str` — `vm::Value`'s `Display` in wasm. Scalars +
@@ -159,553 +96,357 @@ pub(crate) fn build_tostring_fn(
 	float_to_str: u32,
 	lits: ToStringLits,
 ) -> Function {
-	use Instruction as I;
-	const V: u32 = 0;
-	const TA: u32 = 1;
-	const ACC: u32 = 2; // $bytes accumulator
-	const I_: u32 = 3;
-	const N: u32 = 4;
-	const ARR: u32 = 5; // $valarray (tuple/list elems, variant payload, record values)
-	const NAMES: u32 = 6; // $valarray (record names)
-	const BUF: u32 = 7; // $bytes (float scratch; also bytes-arm source/dst)
-	const LEN: u32 = 8; // i32 (float len; also bytes-arm write position)
-	const BYTE: u32 = 9; // i32 (bytes-arm current byte)
-	const NIB: u32 = 10; // i32 (bytes-arm hex nibble scratch)
-	let empty = wasm_encoder::BlockType::Empty;
-	let i32res = wasm_encoder::BlockType::Result(ValType::I32);
 	let bv = types::T_BYTES;
-	let cast = |t| I::RefCastNonNull(HeapType::Concrete(t));
+	let mut w = Wat::new(1);
+	let v = w.param(0);
+	let ta = w.local(ValType::I32);
+	let acc = w.local(types::bytes_ref()); // $bytes accumulator
+	let i = w.local(ValType::I32);
+	let n = w.local(ValType::I32);
+	let arr = w.local(types::valarray_ref()); // tuple/list elems, variant payload, record values
+	let names = w.local(types::valarray_ref()); // record names
+	let buf = w.local(types::bytes_ref()); // float scratch; also bytes-arm source/dst
+	let len = w.local(ValType::I32); // float len; also bytes-arm write position
+	let byte = w.local(ValType::I32); // bytes-arm current byte
+	let nib = w.local(ValType::I32); // bytes-arm hex nibble scratch
+
 	// Push a `$bytes` array for a data-segment literal.
-	let lit_bytes = |b: &mut Vec<Instruction>, (off, len): (u32, u32)| {
-		b.push(I::I32Const(off as i32));
-		b.push(I::I32Const(len as i32));
-		b.push(I::ArrayNewData {
-			array_type_index: bv,
-			array_data_index: 0,
-		});
+	let lit_bytes = |w: &mut Wat, (off, len): (u32, u32)| {
+		w.i32(off as i32).i32(len as i32).array_new_data(bv, 0);
 	};
-	// `ACC = __bytesconcat(ACC, <literal>)`.
-	let cat_lit = |b: &mut Vec<Instruction>, lit: (u32, u32)| {
-		b.push(I::LocalGet(ACC));
-		lit_bytes(b, lit);
-		b.push(I::Call(bc));
-		b.push(I::LocalSet(ACC));
+	// `acc = __bytesconcat(acc, <literal>)`.
+	let cat_lit = |w: &mut Wat, lit: (u32, u32)| {
+		w.local_get(acc);
+		lit_bytes(w, lit);
+		w.call(bc).local_set(acc);
 	};
-	let wrap = |b: &mut Vec<Instruction>| {
-		// ACC -> $str ; return
-		b.push(I::I32Const(types::TAG_STR));
-		b.push(I::LocalGet(ACC));
-		b.push(I::StructNew(types::T_STR));
-		b.push(I::Return);
+	// `acc` -> `$str`; return.
+	let wrap = |w: &mut Wat| {
+		w.i32(types::TAG_STR)
+			.local_get(acc)
+			.struct_new(types::T_STR)
+			.ret();
 	};
-	let mk_lit = |b: &mut Vec<Instruction>, lit: (u32, u32)| {
-		b.push(I::I32Const(types::TAG_STR));
-		lit_bytes(b, lit);
-		b.push(I::StructNew(types::T_STR));
-		b.push(I::Return);
+	// Return a fresh `$str` of a data-segment literal directly.
+	let mk_lit = |w: &mut Wat, lit: (u32, u32)| {
+		w.i32(types::TAG_STR);
+		lit_bytes(w, lit);
+		w.struct_new(types::T_STR).ret();
 	};
-	// `ACC = __bytesconcat(ACC, bytes-of-str(s))` where `s` (a $str value) is from
-	// applying `__tostring` to element `ARR[I_]` (or a raw $str for record names).
-	// Helper emitting: ACC = bytesconcat(ACC, strbytes(tostring(ARR[idx_field])))
-	let cat_tostring_of = |b: &mut Vec<Instruction>, arr: u32| {
-		b.push(I::LocalGet(ACC));
-		b.push(I::LocalGet(arr));
-		b.push(I::LocalGet(I_));
-		b.push(I::ArrayGet(types::T_VALARRAY));
-		b.push(I::Call(self_idx)); // -> $str
-		b.push(cast(types::T_STR));
-		b.push(I::StructGet {
-			struct_type_index: types::T_STR,
-			field_index: 1,
-		});
-		b.push(I::Call(bc));
-		b.push(I::LocalSet(ACC));
+	// `acc = __bytesconcat(acc, strbytes(__tostring(arr[i])))`.
+	let cat_tostring_of = |w: &mut Wat, a: Local| {
+		w.local_get(acc);
+		w.local_get(a).local_get(i).array_get(types::T_VALARRAY);
+		w.call(self_idx)
+			.ref_cast(types::T_STR)
+			.struct_get(types::T_STR, 1); // -> $str bytes
+		w.call(bc).local_set(acc);
+	};
+	// Append the constant byte `code` to acc[len], then bump len.
+	let put = |w: &mut Wat, code: i32| {
+		w.local_get(acc).local_get(len).i32(code).array_set(bv);
+		w.local_get(len).i32(1).i32_add().local_set(len);
+	};
+	// Append one lowercase hex digit for the nibble of `byte` at `shift`.
+	let put_hex = |w: &mut Wat, shift: i32| {
+		w.local_get(byte);
+		if shift != 0 {
+			w.i32(shift).i32_shr_u();
+		}
+		w.i32(0xf).i32_and().local_set(nib);
+		w.local_get(acc).local_get(len);
+		// digit = nib < 10 ? '0'+nib : 'a'-10+nib  (0x61-10 = 0x57).
+		w.local_get(nib).i32(10).i32_lt_s();
+		w.if_result(
+			ValType::I32,
+			|w| {
+				w.local_get(nib).i32(0x30).i32_add();
+			},
+			|w| {
+				w.local_get(nib).i32(0x57).i32_add();
+			},
+		);
+		w.array_set(bv);
+		w.local_get(len).i32(1).i32_add().local_set(len);
 	};
 
-	let locals = vec![
-		ValType::I32,          // TA
-		types::bytes_ref(),    // ACC
-		ValType::I32,          // I_
-		ValType::I32,          // N
-		types::valarray_ref(), // ARR
-		types::valarray_ref(), // NAMES
-		types::bytes_ref(),    // BUF
-		ValType::I32,          // LEN
-		ValType::I32,          // BYTE
-		ValType::I32,          // NIB
-	];
-	let mut b: Vec<Instruction> = Vec::new();
-	b.push(I::LocalGet(V));
-	b.push(I::StructGet {
-		struct_type_index: types::T_VALUE,
-		field_index: 0,
-	});
-	b.push(I::LocalSet(TA));
-
-	// Scalar arm helper: if TA == tag { body }.
-	let arm = |b: &mut Vec<Instruction>, tag: i32| {
-		b.push(I::LocalGet(TA));
-		b.push(I::I32Const(tag));
-		b.push(I::I32Eq);
-		b.push(I::If(empty));
-	};
+	w.local_get(v).struct_get(types::T_VALUE, 0).local_set(ta);
 
 	// STR -> identity.
-	arm(&mut b, types::TAG_STR);
-	b.push(I::LocalGet(V));
-	b.push(I::Return);
-	b.push(I::End);
+	w.local_get(ta).i32(types::TAG_STR).i32_eq();
+	w.if_(|w| {
+		w.local_get(v).ret();
+	});
 	// INT -> __int_str.
-	arm(&mut b, types::TAG_INT);
-	b.push(I::LocalGet(V));
-	b.push(I::Call(int_str));
-	b.push(I::Return);
-	b.push(I::End);
+	w.local_get(ta).i32(types::TAG_INT).i32_eq();
+	w.if_(|w| {
+		w.local_get(v).call(int_str).ret();
+	});
 	// NOTHING -> "()".
-	arm(&mut b, types::TAG_NOTHING);
-	mk_lit(&mut b, lits.unit);
-	b.push(I::End);
+	w.local_get(ta).i32(types::TAG_NOTHING).i32_eq();
+	w.if_(|w| mk_lit(w, lits.unit));
 	// BOOL -> "true"/"false".
-	arm(&mut b, types::TAG_BOOL);
-	b.push(I::LocalGet(V));
-	b.push(cast(types::T_BOOL));
-	b.push(I::StructGet {
-		struct_type_index: types::T_BOOL,
-		field_index: 1,
+	w.local_get(ta).i32(types::TAG_BOOL).i32_eq();
+	w.if_(|w| {
+		w.local_get(v)
+			.ref_cast(types::T_BOOL)
+			.struct_get(types::T_BOOL, 1);
+		w.if_else(|w| mk_lit(w, lits.tru), |w| mk_lit(w, lits.fals));
 	});
-	b.push(I::If(empty));
-	mk_lit(&mut b, lits.tru);
-	b.push(I::Else);
-	mk_lit(&mut b, lits.fals);
-	b.push(I::End);
-	b.push(I::End);
 	// FLOAT -> host float_to_str into a scratch $bytes, trim to length.
-	arm(&mut b, types::TAG_FLOAT);
-	b.push(I::I32Const(32));
-	b.push(I::ArrayNewDefault(bv));
-	b.push(I::LocalSet(BUF));
-	b.push(I::LocalGet(V));
-	b.push(cast(types::T_FLOAT));
-	b.push(I::StructGet {
-		struct_type_index: types::T_FLOAT,
-		field_index: 1,
+	w.local_get(ta).i32(types::TAG_FLOAT).i32_eq();
+	w.if_(|w| {
+		w.i32(32).array_new_default(bv).local_set(buf);
+		w.local_get(v)
+			.ref_cast(types::T_FLOAT)
+			.struct_get(types::T_FLOAT, 1);
+		w.local_get(buf).call(float_to_str).local_set(len); // (f64, buf) -> len
+		w.local_get(len).array_new_default(bv).local_set(acc);
+		w.local_get(acc)
+			.i32(0)
+			.local_get(buf)
+			.i32(0)
+			.local_get(len)
+			.array_copy(bv, bv);
+		wrap(w);
 	});
-	b.push(I::LocalGet(BUF));
-	b.push(I::Call(float_to_str)); // (f64, buf) -> len
-	b.push(I::LocalSet(LEN));
-	b.push(I::LocalGet(LEN));
-	b.push(I::ArrayNewDefault(bv));
-	b.push(I::LocalSet(ACC));
-	b.push(I::LocalGet(ACC));
-	b.push(I::I32Const(0));
-	b.push(I::LocalGet(BUF));
-	b.push(I::I32Const(0));
-	b.push(I::LocalGet(LEN));
-	b.push(I::ArrayCopy {
-		array_type_index_dst: bv,
-		array_type_index_src: bv,
-	});
-	wrap(&mut b);
-	b.push(I::End);
 
-	// BYTES -> single-quoted literal form: printable ASCII inline, `'` and
-	// `\` backslash-escaped, everything else as `\xNN` (lowercase). Matches
+	// BYTES -> single-quoted literal form: printable ASCII inline, `'` and `\`
+	// backslash-escaped, everything else as `\xNN` (lowercase). Matches
 	// `Value::Display` so wasm `to-string` agrees with the VM. Writes into a
 	// worst-case (4 bytes/input + 2 quotes) buffer, then trims — no concat.
-	// BUF=source/dst, ACC=output buffer, N=source len, LEN=write position.
-	// Append the constant byte `code` to ACC[LEN], then bump LEN.
-	let put = |b: &mut Vec<Instruction>, code: i32| {
-		b.push(I::LocalGet(ACC));
-		b.push(I::LocalGet(LEN));
-		b.push(I::I32Const(code));
-		b.push(I::ArraySet(bv));
-		b.push(I::LocalGet(LEN));
-		b.push(I::I32Const(1));
-		b.push(I::I32Add);
-		b.push(I::LocalSet(LEN));
-	};
-	// Append one lowercase hex digit for the nibble of BYTE at `shift`.
-	let put_hex = |b: &mut Vec<Instruction>, shift: i32| {
-		b.push(I::LocalGet(BYTE));
-		if shift != 0 {
-			b.push(I::I32Const(shift));
-			b.push(I::I32ShrU);
-		}
-		b.push(I::I32Const(0xf));
-		b.push(I::I32And);
-		b.push(I::LocalSet(NIB));
-		b.push(I::LocalGet(ACC));
-		b.push(I::LocalGet(LEN));
-		// digit = NIB < 10 ? '0'+NIB : 'a'-10+NIB  (0x61-10 = 0x57)
-		b.push(I::LocalGet(NIB));
-		b.push(I::I32Const(10));
-		b.push(I::I32LtS);
-		b.push(I::If(i32res));
-		b.push(I::LocalGet(NIB));
-		b.push(I::I32Const(0x30));
-		b.push(I::I32Add);
-		b.push(I::Else);
-		b.push(I::LocalGet(NIB));
-		b.push(I::I32Const(0x57));
-		b.push(I::I32Add);
-		b.push(I::End);
-		b.push(I::ArraySet(bv));
-		b.push(I::LocalGet(LEN));
-		b.push(I::I32Const(1));
-		b.push(I::I32Add);
-		b.push(I::LocalSet(LEN));
-	};
-	arm(&mut b, types::TAG_BYTES);
-	// BUF = source bytes; N = its length.
-	b.push(I::LocalGet(V));
-	b.push(cast(types::T_STR));
-	b.push(I::StructGet {
-		struct_type_index: types::T_STR,
-		field_index: 1,
+	// buf=source/dst, acc=output buffer, n=source len, len=write position.
+	w.local_get(ta).i32(types::TAG_BYTES).i32_eq();
+	w.if_(|w| {
+		// buf = source bytes; n = its length.
+		w.local_get(v)
+			.ref_cast(types::T_STR)
+			.struct_get(types::T_STR, 1)
+			.local_set(buf);
+		w.local_get(buf).array_len().local_set(n);
+		// acc = new $bytes[n*4 + 2]; len (write pos) = 0.
+		w.local_get(n)
+			.i32(4)
+			.i32_mul()
+			.i32(2)
+			.i32_add()
+			.array_new_default(bv)
+			.local_set(acc);
+		w.i32(0).local_set(len);
+		put(w, 0x27); // opening '
+		w.i32(0).local_set(i);
+		w.block("brk", |w| {
+			w.loop_("lp", |w| {
+				w.local_get(i).local_get(n).i32_ge_s().br_if("brk");
+				// byte = source[i] (unsigned).
+				w.local_get(buf)
+					.local_get(i)
+					.array_get_u(bv)
+					.local_set(byte);
+				w.local_get(byte).i32(0x5c).i32_eq();
+				w.if_else(
+					|w| {
+						put(w, 0x5c);
+						put(w, 0x5c);
+					},
+					|w| {
+						w.local_get(byte).i32(0x27).i32_eq();
+						w.if_else(
+							|w| {
+								put(w, 0x5c);
+								put(w, 0x27);
+							},
+							|w| {
+								w.local_get(byte).i32(0x20).i32_ge_s();
+								w.local_get(byte).i32(0x7e).i32_le_s();
+								w.i32_and();
+								w.if_else(
+									|w| {
+										// printable: copy the byte verbatim.
+										w.local_get(acc)
+											.local_get(len)
+											.local_get(byte)
+											.array_set(bv);
+										w.local_get(len).i32(1).i32_add().local_set(len);
+									},
+									|w| {
+										put(w, 0x5c); // '\'
+										put(w, 0x78); // 'x'
+										put_hex(w, 4);
+										put_hex(w, 0);
+									},
+								);
+							},
+						);
+					},
+				);
+				w.local_get(i).i32(1).i32_add().local_set(i);
+				w.br("lp");
+			});
+		});
+		put(w, 0x27); // closing '
+								// Trim acc[0..len] into a tight $bytes (buf), then wrap as $str.
+		w.local_get(len).array_new_default(bv).local_set(buf);
+		w.local_get(buf)
+			.i32(0)
+			.local_get(acc)
+			.i32(0)
+			.local_get(len)
+			.array_copy(bv, bv);
+		w.local_get(buf).local_set(acc);
+		wrap(w);
 	});
-	b.push(I::LocalSet(BUF));
-	b.push(I::LocalGet(BUF));
-	b.push(I::ArrayLen);
-	b.push(I::LocalSet(N));
-	// ACC = new $bytes[N*4 + 2]; LEN (write pos) = 0.
-	b.push(I::LocalGet(N));
-	b.push(I::I32Const(4));
-	b.push(I::I32Mul);
-	b.push(I::I32Const(2));
-	b.push(I::I32Add);
-	b.push(I::ArrayNewDefault(bv));
-	b.push(I::LocalSet(ACC));
-	b.push(I::I32Const(0));
-	b.push(I::LocalSet(LEN));
-	put(&mut b, 0x27); // opening '
-	b.push(I::I32Const(0));
-	b.push(I::LocalSet(I_));
-	b.push(I::Block(empty));
-	b.push(I::Loop(empty));
-	b.push(I::LocalGet(I_));
-	b.push(I::LocalGet(N));
-	b.push(I::I32GeS);
-	b.push(I::BrIf(1));
-	// BYTE = source[I_] (unsigned).
-	b.push(I::LocalGet(BUF));
-	b.push(I::LocalGet(I_));
-	b.push(I::ArrayGetU(bv));
-	b.push(I::LocalSet(BYTE));
-	b.push(I::LocalGet(BYTE));
-	b.push(I::I32Const(0x5c));
-	b.push(I::I32Eq);
-	b.push(I::If(empty));
-	put(&mut b, 0x5c);
-	put(&mut b, 0x5c);
-	b.push(I::Else);
-	b.push(I::LocalGet(BYTE));
-	b.push(I::I32Const(0x27));
-	b.push(I::I32Eq);
-	b.push(I::If(empty));
-	put(&mut b, 0x5c);
-	put(&mut b, 0x27);
-	b.push(I::Else);
-	b.push(I::LocalGet(BYTE));
-	b.push(I::I32Const(0x20));
-	b.push(I::I32GeS);
-	b.push(I::LocalGet(BYTE));
-	b.push(I::I32Const(0x7e));
-	b.push(I::I32LeS);
-	b.push(I::I32And);
-	b.push(I::If(empty));
-	// printable: copy the byte verbatim.
-	b.push(I::LocalGet(ACC));
-	b.push(I::LocalGet(LEN));
-	b.push(I::LocalGet(BYTE));
-	b.push(I::ArraySet(bv));
-	b.push(I::LocalGet(LEN));
-	b.push(I::I32Const(1));
-	b.push(I::I32Add);
-	b.push(I::LocalSet(LEN));
-	b.push(I::Else);
-	put(&mut b, 0x5c); // '\'
-	put(&mut b, 0x78); // 'x'
-	put_hex(&mut b, 4);
-	put_hex(&mut b, 0);
-	b.push(I::End);
-	b.push(I::End);
-	b.push(I::End);
-	b.push(I::LocalGet(I_));
-	b.push(I::I32Const(1));
-	b.push(I::I32Add);
-	b.push(I::LocalSet(I_));
-	b.push(I::Br(0));
-	b.push(I::End); // loop
-	b.push(I::End); // block
-	put(&mut b, 0x27); // closing '
-										// Trim ACC[0..LEN] into a tight $bytes (BUF), then wrap as $str.
-	b.push(I::LocalGet(LEN));
-	b.push(I::ArrayNewDefault(bv));
-	b.push(I::LocalSet(BUF));
-	b.push(I::LocalGet(BUF));
-	b.push(I::I32Const(0));
-	b.push(I::LocalGet(ACC));
-	b.push(I::I32Const(0));
-	b.push(I::LocalGet(LEN));
-	b.push(I::ArrayCopy {
-		array_type_index_dst: bv,
-		array_type_index_src: bv,
-	});
-	b.push(I::LocalGet(BUF));
-	b.push(I::LocalSet(ACC));
-	wrap(&mut b);
-	b.push(I::End);
 
-	// Element loop shared by TUPLE/LIST/RECORD: iterate ARR[0..N] appending
-	// `__tostring(elem)` with `, ` separators. `pre`/`post` wrap the open/close.
-	let elems_loop =
-		|b: &mut Vec<Instruction>, arr: u32, open: (u32, u32), close: (u32, u32), record: bool| {
-			// ACC = open
-			lit_bytes(b, open);
-			b.push(I::LocalSet(ACC));
-			b.push(I::LocalGet(arr));
-			b.push(I::ArrayLen);
-			b.push(I::LocalSet(N));
-			b.push(I::I32Const(0));
-			b.push(I::LocalSet(I_));
-			b.push(I::Block(empty));
-			b.push(I::Loop(empty));
-			b.push(I::LocalGet(I_));
-			b.push(I::LocalGet(N));
-			b.push(I::I32GeS);
-			b.push(I::BrIf(1)); // -> end
-											 // separator before all but the first
-			b.push(I::LocalGet(I_));
-			b.push(I::I32Const(0));
-			b.push(I::I32GtS);
-			b.push(I::If(empty));
-			cat_lit(b, lits.comma_sp);
-			b.push(I::End);
-			if record {
-				// "name: value": NAMES[i] is a raw $str; values in ARR.
-				b.push(I::LocalGet(ACC));
-				b.push(I::LocalGet(NAMES));
-				b.push(I::LocalGet(I_));
-				b.push(I::ArrayGet(types::T_VALARRAY));
-				b.push(cast(types::T_STR));
-				b.push(I::StructGet {
-					struct_type_index: types::T_STR,
-					field_index: 1,
-				});
-				b.push(I::Call(bc));
-				b.push(I::LocalSet(ACC));
-				cat_lit(b, lits.colon_sp);
-			}
-			cat_tostring_of(b, arr);
-			b.push(I::LocalGet(I_));
-			b.push(I::I32Const(1));
-			b.push(I::I32Add);
-			b.push(I::LocalSet(I_));
-			b.push(I::Br(0));
-			b.push(I::End); // loop
-			b.push(I::End); // block
-			cat_lit(b, close);
-			wrap(b);
-		};
+	// Element loop shared by TUPLE/LIST/RECORD: iterate arr[0..n] appending
+	// `__tostring(elem)` with `, ` separators. `open`/`close` wrap the delimiters.
+	let elems_loop = |w: &mut Wat, a: Local, open: (u32, u32), close: (u32, u32), record: bool| {
+		// acc = open.
+		lit_bytes(w, open);
+		w.local_set(acc);
+		w.local_get(a).array_len().local_set(n);
+		w.i32(0).local_set(i);
+		w.block("brk", |w| {
+			w.loop_("lp", |w| {
+				w.local_get(i).local_get(n).i32_ge_s().br_if("brk");
+				// separator before all but the first.
+				w.local_get(i).i32(0).i32_gt_s();
+				w.if_(|w| cat_lit(w, lits.comma_sp));
+				if record {
+					// "name: value": names[i] is a raw $str; values in arr.
+					w.local_get(acc);
+					w.local_get(names).local_get(i).array_get(types::T_VALARRAY);
+					w.ref_cast(types::T_STR).struct_get(types::T_STR, 1);
+					w.call(bc).local_set(acc);
+					cat_lit(w, lits.colon_sp);
+				}
+				cat_tostring_of(w, a);
+				w.local_get(i).i32(1).i32_add().local_set(i);
+				w.br("lp");
+			});
+		});
+		cat_lit(w, close);
+		wrap(w);
+	};
 
 	// TUPLE -> "(e, ...)".
-	arm(&mut b, types::TAG_TUPLE);
-	b.push(I::LocalGet(V));
-	b.push(cast(types::T_TUPLE));
-	b.push(I::StructGet {
-		struct_type_index: types::T_TUPLE,
-		field_index: 1,
+	w.local_get(ta).i32(types::TAG_TUPLE).i32_eq();
+	w.if_(|w| {
+		w.local_get(v)
+			.ref_cast(types::T_TUPLE)
+			.struct_get(types::T_TUPLE, 1)
+			.local_set(arr);
+		elems_loop(w, arr, lits.lparen, lits.rparen, false);
 	});
-	b.push(I::LocalSet(ARR));
-	elems_loop(&mut b, ARR, lits.lparen, lits.rparen, false);
-	b.push(I::End);
 	// LIST -> "[e, ...]".
-	arm(&mut b, types::TAG_LIST);
-	b.push(I::LocalGet(V));
-	b.push(cast(types::T_LIST));
-	b.push(I::StructGet {
-		struct_type_index: types::T_LIST,
-		field_index: 1,
+	w.local_get(ta).i32(types::TAG_LIST).i32_eq();
+	w.if_(|w| {
+		w.local_get(v)
+			.ref_cast(types::T_LIST)
+			.struct_get(types::T_LIST, 1)
+			.local_set(arr);
+		elems_loop(w, arr, lits.lbrack, lits.rbrack, false);
 	});
-	b.push(I::LocalSet(ARR));
-	elems_loop(&mut b, ARR, lits.lbrack, lits.rbrack, false);
-	b.push(I::End);
 	// RECORD -> "{k: v, ...}" (name-sorted; names raw, values via __tostring).
-	arm(&mut b, types::TAG_RECORD);
-	b.push(I::LocalGet(V));
-	b.push(cast(types::T_RECORD));
-	b.push(I::StructGet {
-		struct_type_index: types::T_RECORD,
-		field_index: 1,
+	w.local_get(ta).i32(types::TAG_RECORD).i32_eq();
+	w.if_(|w| {
+		w.local_get(v)
+			.ref_cast(types::T_RECORD)
+			.struct_get(types::T_RECORD, 1)
+			.local_set(names);
+		w.local_get(v)
+			.ref_cast(types::T_RECORD)
+			.struct_get(types::T_RECORD, 2)
+			.local_set(arr);
+		elems_loop(w, arr, lits.lbrace, lits.rbrace, true);
 	});
-	b.push(I::LocalSet(NAMES));
-	b.push(I::LocalGet(V));
-	b.push(cast(types::T_RECORD));
-	b.push(I::StructGet {
-		struct_type_index: types::T_RECORD,
-		field_index: 2,
-	});
-	b.push(I::LocalSet(ARR));
-	elems_loop(&mut b, ARR, lits.lbrace, lits.rbrace, true);
-	b.push(I::End);
 	// VARIANT -> "enum.variant" then ` arg` per payload element.
-	arm(&mut b, types::TAG_VARIANT);
-	// ACC = bytes-of(name).
-	b.push(I::LocalGet(V));
-	b.push(cast(types::T_VARIANT));
-	b.push(I::StructGet {
-		struct_type_index: types::T_VARIANT,
-		field_index: 2,
+	w.local_get(ta).i32(types::TAG_VARIANT).i32_eq();
+	w.if_(|w| {
+		// acc = bytes-of(name).
+		w.local_get(v)
+			.ref_cast(types::T_VARIANT)
+			.struct_get(types::T_VARIANT, 2);
+		w.ref_cast(types::T_STR)
+			.struct_get(types::T_STR, 1)
+			.local_set(acc);
+		w.local_get(v)
+			.ref_cast(types::T_VARIANT)
+			.struct_get(types::T_VARIANT, 3)
+			.local_set(arr);
+		w.local_get(arr).array_len().local_set(n);
+		w.i32(0).local_set(i);
+		w.block("brk", |w| {
+			w.loop_("lp", |w| {
+				w.local_get(i).local_get(n).i32_ge_s().br_if("brk");
+				cat_lit(w, lits.space);
+				cat_tostring_of(w, arr);
+				w.local_get(i).i32(1).i32_add().local_set(i);
+				w.br("lp");
+			});
+		});
+		wrap(w);
 	});
-	b.push(cast(types::T_STR));
-	b.push(I::StructGet {
-		struct_type_index: types::T_STR,
-		field_index: 1,
-	});
-	b.push(I::LocalSet(ACC));
-	b.push(I::LocalGet(V));
-	b.push(cast(types::T_VARIANT));
-	b.push(I::StructGet {
-		struct_type_index: types::T_VARIANT,
-		field_index: 3,
-	});
-	b.push(I::LocalSet(ARR));
-	b.push(I::LocalGet(ARR));
-	b.push(I::ArrayLen);
-	b.push(I::LocalSet(N));
-	b.push(I::I32Const(0));
-	b.push(I::LocalSet(I_));
-	b.push(I::Block(empty));
-	b.push(I::Loop(empty));
-	b.push(I::LocalGet(I_));
-	b.push(I::LocalGet(N));
-	b.push(I::I32GeS);
-	b.push(I::BrIf(1));
-	cat_lit(&mut b, lits.space);
-	cat_tostring_of(&mut b, ARR);
-	b.push(I::LocalGet(I_));
-	b.push(I::I32Const(1));
-	b.push(I::I32Add);
-	b.push(I::LocalSet(I_));
-	b.push(I::Br(0));
-	b.push(I::End); // loop
-	b.push(I::End); // block
-	wrap(&mut b);
-	b.push(I::End);
 
 	// REF -> "ref <inner>" (matches `vm::Value`'s Display).
-	arm(&mut b, types::TAG_REF);
-	// ACC = bytes-of "ref ".
-	lit_bytes(&mut b, lits.ref_pfx);
-	b.push(I::LocalSet(ACC));
-	// ACC = bytesconcat(ACC, strbytes(tostring(cell))).
-	b.push(I::LocalGet(ACC));
-	b.push(I::LocalGet(V));
-	b.push(cast(types::T_REF));
-	b.push(I::StructGet {
-		struct_type_index: types::T_REF,
-		field_index: 1,
+	w.local_get(ta).i32(types::TAG_REF).i32_eq();
+	w.if_(|w| {
+		// acc = bytes-of "ref ".
+		lit_bytes(w, lits.ref_pfx);
+		w.local_set(acc);
+		// acc = bytesconcat(acc, strbytes(tostring(cell))).
+		w.local_get(acc);
+		w.local_get(v)
+			.ref_cast(types::T_REF)
+			.struct_get(types::T_REF, 1);
+		w.call(self_idx)
+			.ref_cast(types::T_STR)
+			.struct_get(types::T_STR, 1); // -> $str bytes
+		w.call(bc).local_set(acc);
+		wrap(w);
 	});
-	b.push(I::Call(self_idx)); // -> $str
-	b.push(cast(types::T_STR));
-	b.push(I::StructGet {
-		struct_type_index: types::T_STR,
-		field_index: 1,
-	});
-	b.push(I::Call(bc));
-	b.push(I::LocalSet(ACC));
-	wrap(&mut b);
-	b.push(I::End);
 
 	// DICT -> "{k: v, ...}" (insertion order; each entry a `$tuple`). Mirrors
 	// `vm::Value`'s Dict Display.
-	arm(&mut b, types::TAG_DICT);
-	b.push(I::LocalGet(V));
-	b.push(cast(types::T_DICT));
-	b.push(I::StructGet {
-		struct_type_index: types::T_DICT,
-		field_index: 1,
+	w.local_get(ta).i32(types::TAG_DICT).i32_eq();
+	w.if_(|w| {
+		w.local_get(v)
+			.ref_cast(types::T_DICT)
+			.struct_get(types::T_DICT, 1)
+			.local_set(arr);
+		// acc = "{"  (set, not concat — acc is not yet initialized here).
+		lit_bytes(w, lits.lbrace);
+		w.local_set(acc);
+		w.local_get(arr).array_len().local_set(n);
+		w.i32(0).local_set(i);
+		// key/value of entry i, formatted via __tostring and folded into acc.
+		let entry_elem = |w: &mut Wat, field: i32| {
+			w.local_get(acc);
+			w.local_get(arr).local_get(i).array_get(types::T_VALARRAY);
+			w.ref_cast(types::T_TUPLE).struct_get(types::T_TUPLE, 1);
+			w.i32(field).array_get(types::T_VALARRAY);
+			w.call(self_idx)
+				.ref_cast(types::T_STR)
+				.struct_get(types::T_STR, 1); // -> $str bytes
+			w.call(bc).local_set(acc);
+		};
+		w.block("brk", |w| {
+			w.loop_("lp", |w| {
+				w.local_get(i).local_get(n).i32_ge_s().br_if("brk");
+				// separator before all but the first.
+				w.local_get(i).i32(0).i32_gt_s();
+				w.if_(|w| cat_lit(w, lits.comma_sp));
+				entry_elem(w, 0); // key
+				cat_lit(w, lits.colon_sp);
+				entry_elem(w, 1); // value
+				w.local_get(i).i32(1).i32_add().local_set(i);
+				w.br("lp");
+			});
+		});
+		cat_lit(w, lits.rbrace);
+		wrap(w);
 	});
-	b.push(I::LocalSet(ARR));
-	// ACC = "{"  (set, not concat — ACC is not yet initialized here).
-	lit_bytes(&mut b, lits.lbrace);
-	b.push(I::LocalSet(ACC));
-	b.push(I::LocalGet(ARR));
-	b.push(I::ArrayLen);
-	b.push(I::LocalSet(N));
-	b.push(I::I32Const(0));
-	b.push(I::LocalSet(I_));
-	b.push(I::Block(empty));
-	b.push(I::Loop(empty));
-	b.push(I::LocalGet(I_));
-	b.push(I::LocalGet(N));
-	b.push(I::I32GeS);
-	b.push(I::BrIf(1));
-	// separator before all but the first
-	b.push(I::LocalGet(I_));
-	b.push(I::I32Const(0));
-	b.push(I::I32GtS);
-	b.push(I::If(empty));
-	cat_lit(&mut b, lits.comma_sp);
-	b.push(I::End);
-	// key: ACC ++ tostring(entry.elems[0])
-	b.push(I::LocalGet(ACC));
-	b.push(I::LocalGet(ARR));
-	b.push(I::LocalGet(I_));
-	b.push(I::ArrayGet(types::T_VALARRAY));
-	b.push(cast(types::T_TUPLE));
-	b.push(I::StructGet {
-		struct_type_index: types::T_TUPLE,
-		field_index: 1,
-	});
-	b.push(I::I32Const(0));
-	b.push(I::ArrayGet(types::T_VALARRAY));
-	b.push(I::Call(self_idx)); // -> $str
-	b.push(cast(types::T_STR));
-	b.push(I::StructGet {
-		struct_type_index: types::T_STR,
-		field_index: 1,
-	});
-	b.push(I::Call(bc));
-	b.push(I::LocalSet(ACC));
-	cat_lit(&mut b, lits.colon_sp);
-	// value: ACC ++ tostring(entry.elems[1])
-	b.push(I::LocalGet(ACC));
-	b.push(I::LocalGet(ARR));
-	b.push(I::LocalGet(I_));
-	b.push(I::ArrayGet(types::T_VALARRAY));
-	b.push(cast(types::T_TUPLE));
-	b.push(I::StructGet {
-		struct_type_index: types::T_TUPLE,
-		field_index: 1,
-	});
-	b.push(I::I32Const(1));
-	b.push(I::ArrayGet(types::T_VALARRAY));
-	b.push(I::Call(self_idx)); // -> $str
-	b.push(cast(types::T_STR));
-	b.push(I::StructGet {
-		struct_type_index: types::T_STR,
-		field_index: 1,
-	});
-	b.push(I::Call(bc));
-	b.push(I::LocalSet(ACC));
-	b.push(I::LocalGet(I_));
-	b.push(I::I32Const(1));
-	b.push(I::I32Add);
-	b.push(I::LocalSet(I_));
-	b.push(I::Br(0));
-	b.push(I::End); // loop
-	b.push(I::End); // block
-	cat_lit(&mut b, lits.rbrace);
-	wrap(&mut b);
-	b.push(I::End);
 
 	// Unreachable: every value tag is handled above.
-	b.push(I::Unreachable);
-	let mut f = Function::new_with_locals_types(locals);
-	for ins in &b {
-		f.instruction(ins);
-	}
-	f.instruction(&I::End);
-	f
+	w.unreachable();
+	w.finish()
 }

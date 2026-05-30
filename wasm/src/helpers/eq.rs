@@ -1,7 +1,8 @@
 // Structural equality (`__eq`).
 
-use wasm_encoder::*;
+use wasm_encoder::{Function, ValType};
 
+use crate::helpers::wat::Wat;
 use crate::types;
 
 /// Build the structural-equality runtime helper `__eq(a, b) -> i32` (1 = equal).
@@ -11,346 +12,220 @@ use crate::types;
 /// (for the variant-payload recursion). Tuples/lists/records are not yet handled
 /// (they trap — a clear signal to implement them, not a silent wrong answer).
 pub(crate) fn build_eq_fn(self_idx: u32) -> Function {
-	use Instruction as I;
-	// Locals past the two params: ta, tb, i, n (i32); aa, bb ($bytes); pa, pb
-	// ($valarray); j, found (i32, for the order-independent dict compare).
-	let locals = vec![
-		ValType::I32,
-		ValType::I32,
-		ValType::I32,
-		ValType::I32,
-		types::bytes_ref(),
-		types::bytes_ref(),
-		types::valarray_ref(),
-		types::valarray_ref(),
-		ValType::I32,
-		ValType::I32,
-	];
-	const A: u32 = 0;
-	const B: u32 = 1;
-	const TA: u32 = 2;
-	const TB: u32 = 3;
-	const I_: u32 = 4;
-	const N: u32 = 5;
-	const AA: u32 = 6;
-	const BB: u32 = 7;
-	const PA: u32 = 8;
-	const PB: u32 = 9;
-	const J: u32 = 10;
-	const FOUND: u32 = 11;
-	let empty = wasm_encoder::BlockType::Empty;
-	let cast = |t| I::RefCastNonNull(HeapType::Concrete(t));
-	let getf = |t, f| I::StructGet {
-		struct_type_index: t,
-		field_index: f,
-	};
-	let mut b: Vec<Instruction> = Vec::new();
+	let mut w = Wat::new(2);
+	let (a, b) = (w.param(0), w.param(1));
+	let ta = w.local(ValType::I32);
+	let tb = w.local(ValType::I32);
+	let i = w.local(ValType::I32);
+	let n = w.local(ValType::I32);
+	let aa = w.local(types::bytes_ref());
+	let bb = w.local(types::bytes_ref());
+	let pa = w.local(types::valarray_ref());
+	let pb = w.local(types::valarray_ref());
+	let j = w.local(ValType::I32);
+	let found = w.local(ValType::I32);
+
 	// ta = tag(a); tb = tag(b); if ta != tb -> 0.
-	b.push(I::LocalGet(A));
-	b.push(getf(types::T_VALUE, 0));
-	b.push(I::LocalSet(TA));
-	b.push(I::LocalGet(B));
-	b.push(getf(types::T_VALUE, 0));
-	b.push(I::LocalSet(TB));
-	b.push(I::LocalGet(TA));
-	b.push(I::LocalGet(TB));
-	b.push(I::I32Ne);
-	b.push(I::If(empty));
-	b.push(I::I32Const(0));
-	b.push(I::Return);
-	b.push(I::End);
-	// Per-tag scalar cases, each returning.
-	let scalar = |b: &mut Vec<Instruction>, tag: i32, ty: u32, eq: Instruction<'static>| {
-		b.push(I::LocalGet(TA));
-		b.push(I::I32Const(tag));
-		b.push(I::I32Eq);
-		b.push(I::If(empty));
-		b.push(I::LocalGet(A));
-		b.push(cast(ty));
-		b.push(getf(ty, 1));
-		b.push(I::LocalGet(B));
-		b.push(cast(ty));
-		b.push(getf(ty, 1));
-		b.push(eq);
-		b.push(I::Return);
-		b.push(I::End);
+	w.local_get(a).struct_get(types::T_VALUE, 0).local_set(ta);
+	w.local_get(b).struct_get(types::T_VALUE, 0).local_set(tb);
+	w.local_get(ta).local_get(tb).i32_ne();
+	w.if_(|w| {
+		w.i32(0).ret();
+	});
+
+	// Per-tag scalar case: compare the boxed payload at field 1 via `eqop`, return.
+	let scalar = |w: &mut Wat, tag: i32, ty: u32, eqop: fn(&mut Wat)| {
+		w.local_get(ta).i32(tag).i32_eq();
+		w.if_(|w| {
+			w.local_get(a).ref_cast(ty).struct_get(ty, 1);
+			w.local_get(b).ref_cast(ty).struct_get(ty, 1);
+			eqop(w);
+			w.ret();
+		});
 	};
 	// NOTHING -> equal.
-	b.push(I::LocalGet(TA));
-	b.push(I::I32Const(types::TAG_NOTHING));
-	b.push(I::I32Eq);
-	b.push(I::If(empty));
-	b.push(I::I32Const(1));
-	b.push(I::Return);
-	b.push(I::End);
-	scalar(&mut b, types::TAG_BOOL, types::T_BOOL, I::I32Eq);
-	scalar(&mut b, types::TAG_INT, types::T_INT, I::I64Eq);
-	scalar(&mut b, types::TAG_FLOAT, types::T_FLOAT, I::F64Eq);
+	w.local_get(ta).i32(types::TAG_NOTHING).i32_eq();
+	w.if_(|w| {
+		w.i32(1).ret();
+	});
+	scalar(&mut w, types::TAG_BOOL, types::T_BOOL, |w| {
+		w.i32_eq();
+	});
+	scalar(&mut w, types::TAG_INT, types::T_INT, |w| {
+		w.i64_eq();
+	});
+	scalar(&mut w, types::TAG_FLOAT, types::T_FLOAT, |w| {
+		w.f64_eq();
+	});
+
 	// STR / BYTES (same `{tag, $bytes}` shape): equal lengths and equal bytes.
-	b.push(I::LocalGet(TA));
-	b.push(I::I32Const(types::TAG_STR));
-	b.push(I::I32Eq);
-	b.push(I::LocalGet(TA));
-	b.push(I::I32Const(types::TAG_BYTES));
-	b.push(I::I32Eq);
-	b.push(I::I32Or);
-	b.push(I::If(empty));
-	{
-		b.push(I::LocalGet(A));
-		b.push(cast(types::T_STR));
-		b.push(getf(types::T_STR, 1));
-		b.push(I::LocalSet(AA));
-		b.push(I::LocalGet(B));
-		b.push(cast(types::T_STR));
-		b.push(getf(types::T_STR, 1));
-		b.push(I::LocalSet(BB));
-		b.push(I::LocalGet(AA));
-		b.push(I::ArrayLen);
-		b.push(I::LocalSet(N));
-		b.push(I::LocalGet(BB));
-		b.push(I::ArrayLen);
-		b.push(I::LocalGet(N));
-		b.push(I::I32Ne);
-		b.push(I::If(empty));
-		b.push(I::I32Const(0));
-		b.push(I::Return);
-		b.push(I::End);
-		b.push(I::I32Const(0));
-		b.push(I::LocalSet(I_));
-		b.push(I::Block(empty)); // $brk
-		b.push(I::Loop(empty)); // $lp
-		b.push(I::LocalGet(I_));
-		b.push(I::LocalGet(N));
-		b.push(I::I32GeS);
-		b.push(I::BrIf(1)); // -> $brk
-		b.push(I::LocalGet(AA));
-		b.push(I::LocalGet(I_));
-		b.push(I::ArrayGetU(types::T_BYTES));
-		b.push(I::LocalGet(BB));
-		b.push(I::LocalGet(I_));
-		b.push(I::ArrayGetU(types::T_BYTES));
-		b.push(I::I32Ne);
-		b.push(I::If(empty));
-		b.push(I::I32Const(0));
-		b.push(I::Return);
-		b.push(I::End);
-		b.push(I::LocalGet(I_));
-		b.push(I::I32Const(1));
-		b.push(I::I32Add);
-		b.push(I::LocalSet(I_));
-		b.push(I::Br(0)); // -> $lp
-		b.push(I::End); // loop
-		b.push(I::End); // block
-		b.push(I::I32Const(1));
-		b.push(I::Return);
-	}
-	b.push(I::End);
-	// Element-wise array compare (recursive). Loads the `$valarray` at field
-	// `field` of both `a`/`b` (cast to `sty`), checks equal lengths, then compares
-	// each element via `__eq`; emits the success `return 1`.
-	let cmp_array = |b: &mut Vec<Instruction>, sty: u32, field: u32| {
-		b.push(I::LocalGet(A));
-		b.push(cast(sty));
-		b.push(getf(sty, field));
-		b.push(I::LocalSet(PA));
-		b.push(I::LocalGet(B));
-		b.push(cast(sty));
-		b.push(getf(sty, field));
-		b.push(I::LocalSet(PB));
+	w.local_get(ta).i32(types::TAG_STR).i32_eq();
+	w.local_get(ta).i32(types::TAG_BYTES).i32_eq();
+	w.i32_or();
+	w.if_(|w| {
+		w.local_get(a)
+			.ref_cast(types::T_STR)
+			.struct_get(types::T_STR, 1)
+			.local_set(aa);
+		w.local_get(b)
+			.ref_cast(types::T_STR)
+			.struct_get(types::T_STR, 1)
+			.local_set(bb);
+		w.local_get(aa).array_len().local_set(n);
+		w.local_get(bb).array_len().local_get(n).i32_ne();
+		w.if_(|w| {
+			w.i32(0).ret();
+		});
+		w.i32(0).local_set(i);
+		w.block("brk", |w| {
+			w.loop_("lp", |w| {
+				w.local_get(i).local_get(n).i32_ge_s().br_if("brk");
+				w.local_get(aa).local_get(i).array_get_u(types::T_BYTES);
+				w.local_get(bb).local_get(i).array_get_u(types::T_BYTES);
+				w.i32_ne();
+				w.if_(|w| {
+					w.i32(0).ret();
+				});
+				w.local_get(i).i32(1).i32_add().local_set(i);
+				w.br("lp");
+			});
+		});
+		w.i32(1).ret();
+	});
+
+	// Element-wise array compare (recursive): load the `$valarray` at field `field`
+	// of both operands (cast to `sty`), check equal lengths, then compare each
+	// element via `__eq`; emit the success `return 1`.
+	let cmp_array = |w: &mut Wat, sty: u32, field: u32| {
+		w.local_get(a)
+			.ref_cast(sty)
+			.struct_get(sty, field)
+			.local_set(pa);
+		w.local_get(b)
+			.ref_cast(sty)
+			.struct_get(sty, field)
+			.local_set(pb);
 		// Lengths must match.
-		b.push(I::LocalGet(PA));
-		b.push(I::ArrayLen);
-		b.push(I::LocalSet(N));
-		b.push(I::LocalGet(PB));
-		b.push(I::ArrayLen);
-		b.push(I::LocalGet(N));
-		b.push(I::I32Ne);
-		b.push(I::If(empty));
-		b.push(I::I32Const(0));
-		b.push(I::Return);
-		b.push(I::End);
-		b.push(I::I32Const(0));
-		b.push(I::LocalSet(I_));
-		b.push(I::Block(empty)); // $brk
-		b.push(I::Loop(empty)); // $lp
-		b.push(I::LocalGet(I_));
-		b.push(I::LocalGet(N));
-		b.push(I::I32GeS);
-		b.push(I::BrIf(1)); // -> $brk
-		b.push(I::LocalGet(PA));
-		b.push(I::LocalGet(I_));
-		b.push(I::ArrayGet(types::T_VALARRAY));
-		b.push(I::LocalGet(PB));
-		b.push(I::LocalGet(I_));
-		b.push(I::ArrayGet(types::T_VALARRAY));
-		b.push(I::Call(self_idx));
-		b.push(I::I32Eqz);
-		b.push(I::If(empty));
-		b.push(I::I32Const(0));
-		b.push(I::Return);
-		b.push(I::End);
-		b.push(I::LocalGet(I_));
-		b.push(I::I32Const(1));
-		b.push(I::I32Add);
-		b.push(I::LocalSet(I_));
-		b.push(I::Br(0)); // -> $lp
-		b.push(I::End); // loop
-		b.push(I::End); // block
-		b.push(I::I32Const(1));
-		b.push(I::Return);
+		w.local_get(pa).array_len().local_set(n);
+		w.local_get(pb).array_len().local_get(n).i32_ne();
+		w.if_(|w| {
+			w.i32(0).ret();
+		});
+		w.i32(0).local_set(i);
+		w.block("brk", |w| {
+			w.loop_("lp", |w| {
+				w.local_get(i).local_get(n).i32_ge_s().br_if("brk");
+				w.local_get(pa).local_get(i).array_get(types::T_VALARRAY);
+				w.local_get(pb).local_get(i).array_get(types::T_VALARRAY);
+				w.call(self_idx).i32_eqz();
+				w.if_(|w| {
+					w.i32(0).ret();
+				});
+				w.local_get(i).i32(1).i32_add().local_set(i);
+				w.br("lp");
+			});
+		});
+		w.i32(1).ret();
 	};
 	// VARIANT: equal tags, then equal payloads.
-	b.push(I::LocalGet(TA));
-	b.push(I::I32Const(types::TAG_VARIANT));
-	b.push(I::I32Eq);
-	b.push(I::If(empty));
-	b.push(I::LocalGet(A));
-	b.push(cast(types::T_VARIANT));
-	b.push(getf(types::T_VARIANT, 1));
-	b.push(I::LocalGet(B));
-	b.push(cast(types::T_VARIANT));
-	b.push(getf(types::T_VARIANT, 1));
-	b.push(I::I32Ne);
-	b.push(I::If(empty));
-	b.push(I::I32Const(0));
-	b.push(I::Return);
-	b.push(I::End);
-	cmp_array(&mut b, types::T_VARIANT, 3);
-	b.push(I::End);
+	w.local_get(ta).i32(types::TAG_VARIANT).i32_eq();
+	w.if_(|w| {
+		w.local_get(a)
+			.ref_cast(types::T_VARIANT)
+			.struct_get(types::T_VARIANT, 1);
+		w.local_get(b)
+			.ref_cast(types::T_VARIANT)
+			.struct_get(types::T_VARIANT, 1);
+		w.i32_ne();
+		w.if_(|w| {
+			w.i32(0).ret();
+		});
+		cmp_array(w, types::T_VARIANT, 3);
+	});
 	// TUPLE / LIST: compare the element arrays. RECORD: compare the values arrays
 	// (same type ⇒ same name-sorted fields, so positional value compare suffices).
-	b.push(I::LocalGet(TA));
-	b.push(I::I32Const(types::TAG_TUPLE));
-	b.push(I::I32Eq);
-	b.push(I::If(empty));
-	cmp_array(&mut b, types::T_TUPLE, 1);
-	b.push(I::End);
-	b.push(I::LocalGet(TA));
-	b.push(I::I32Const(types::TAG_LIST));
-	b.push(I::I32Eq);
-	b.push(I::If(empty));
-	cmp_array(&mut b, types::T_LIST, 1);
-	b.push(I::End);
-	b.push(I::LocalGet(TA));
-	b.push(I::I32Const(types::TAG_RECORD));
-	b.push(I::I32Eq);
-	b.push(I::If(empty));
-	cmp_array(&mut b, types::T_RECORD, 2);
-	b.push(I::End);
+	w.local_get(ta).i32(types::TAG_TUPLE).i32_eq();
+	w.if_(|w| {
+		cmp_array(w, types::T_TUPLE, 1);
+	});
+	w.local_get(ta).i32(types::TAG_LIST).i32_eq();
+	w.if_(|w| {
+		cmp_array(w, types::T_LIST, 1);
+	});
+	w.local_get(ta).i32(types::TAG_RECORD).i32_eq();
+	w.if_(|w| {
+		cmp_array(w, types::T_RECORD, 2);
+	});
 	// REF: reference identity (`ref.eq`), matching the VM's `Rc::ptr_eq` — two
 	// cells are equal iff they are the same cell, regardless of contents.
-	b.push(I::LocalGet(TA));
-	b.push(I::I32Const(types::TAG_REF));
-	b.push(I::I32Eq);
-	b.push(I::If(empty));
-	b.push(I::LocalGet(A));
-	b.push(I::LocalGet(B));
-	b.push(I::RefEq);
-	b.push(I::Return);
-	b.push(I::End);
+	w.local_get(ta).i32(types::TAG_REF).i32_eq();
+	w.if_(|w| {
+		w.local_get(a).local_get(b).ref_eq().ret();
+	});
 	// DICT: order-independent structural compare (matches the VM). Equal sizes,
 	// then every entry of `a` must have a key in `b` with an equal value. Keys are
 	// unique within each dict, so equal sizes make this a bijection check. Entry
 	// fields are read inline: `entries[idx]` is a `$tuple`, elem 0 = key, 1 = value.
-	let entry_field = |b: &mut Vec<Instruction>, arr: u32, idx: u32, field: i32| {
-		b.push(I::LocalGet(arr));
-		b.push(I::LocalGet(idx));
-		b.push(I::ArrayGet(types::T_VALARRAY));
-		b.push(cast(types::T_TUPLE));
-		b.push(getf(types::T_TUPLE, 1));
-		b.push(I::I32Const(field));
-		b.push(I::ArrayGet(types::T_VALARRAY));
+	let entry_field = |w: &mut Wat, arr, idx, field: i32| {
+		w.local_get(arr).local_get(idx).array_get(types::T_VALARRAY);
+		w.ref_cast(types::T_TUPLE).struct_get(types::T_TUPLE, 1);
+		w.i32(field).array_get(types::T_VALARRAY);
 	};
-	b.push(I::LocalGet(TA));
-	b.push(I::I32Const(types::TAG_DICT));
-	b.push(I::I32Eq);
-	b.push(I::If(empty));
-	// PA = a.entries; PB = b.entries; N = len(a); bail if lengths differ.
-	b.push(I::LocalGet(A));
-	b.push(cast(types::T_DICT));
-	b.push(getf(types::T_DICT, 1));
-	b.push(I::LocalSet(PA));
-	b.push(I::LocalGet(B));
-	b.push(cast(types::T_DICT));
-	b.push(getf(types::T_DICT, 1));
-	b.push(I::LocalSet(PB));
-	b.push(I::LocalGet(PA));
-	b.push(I::ArrayLen);
-	b.push(I::LocalSet(N));
-	b.push(I::LocalGet(PB));
-	b.push(I::ArrayLen);
-	b.push(I::LocalGet(N));
-	b.push(I::I32Ne);
-	b.push(I::If(empty));
-	b.push(I::I32Const(0));
-	b.push(I::Return);
-	b.push(I::End);
-	b.push(I::I32Const(0));
-	b.push(I::LocalSet(I_));
-	b.push(I::Block(empty)); // $outer
-	b.push(I::Loop(empty)); // $oloop
-	b.push(I::LocalGet(I_));
-	b.push(I::LocalGet(N));
-	b.push(I::I32GeS);
-	b.push(I::BrIf(1)); // -> $outer (done; all matched)
-	b.push(I::I32Const(0));
-	b.push(I::LocalSet(J));
-	b.push(I::I32Const(0));
-	b.push(I::LocalSet(FOUND));
-	b.push(I::Block(empty)); // $inner
-	b.push(I::Loop(empty)); // $iloop
-	b.push(I::LocalGet(J));
-	b.push(I::LocalGet(N));
-	b.push(I::I32GeS);
-	b.push(I::BrIf(1)); // -> $inner (key absent in b)
-										 // if __eq(a.key[i], b.key[j]) { ... }
-	entry_field(&mut b, PA, I_, 0);
-	entry_field(&mut b, PB, J, 0);
-	b.push(I::Call(self_idx));
-	b.push(I::If(empty));
-	// values must match, else the dicts differ.
-	entry_field(&mut b, PA, I_, 1);
-	entry_field(&mut b, PB, J, 1);
-	b.push(I::Call(self_idx));
-	b.push(I::I32Eqz);
-	b.push(I::If(empty));
-	b.push(I::I32Const(0));
-	b.push(I::Return);
-	b.push(I::End);
-	b.push(I::I32Const(1));
-	b.push(I::LocalSet(FOUND));
-	b.push(I::Br(2)); // -> $inner (key found, move to next a-entry)
-	b.push(I::End); // if key-eq
-	b.push(I::LocalGet(J));
-	b.push(I::I32Const(1));
-	b.push(I::I32Add);
-	b.push(I::LocalSet(J));
-	b.push(I::Br(0)); // -> $iloop
-	b.push(I::End); // $iloop
-	b.push(I::End); // $inner
-								 // a-key absent in b -> not equal.
-	b.push(I::LocalGet(FOUND));
-	b.push(I::I32Eqz);
-	b.push(I::If(empty));
-	b.push(I::I32Const(0));
-	b.push(I::Return);
-	b.push(I::End);
-	b.push(I::LocalGet(I_));
-	b.push(I::I32Const(1));
-	b.push(I::I32Add);
-	b.push(I::LocalSet(I_));
-	b.push(I::Br(0)); // -> $oloop
-	b.push(I::End); // $oloop
-	b.push(I::End); // $outer
-	b.push(I::I32Const(1));
-	b.push(I::Return);
-	b.push(I::End);
+	w.local_get(ta).i32(types::TAG_DICT).i32_eq();
+	w.if_(|w| {
+		// pa = a.entries; pb = b.entries; n = len(a); bail if lengths differ.
+		w.local_get(a)
+			.ref_cast(types::T_DICT)
+			.struct_get(types::T_DICT, 1)
+			.local_set(pa);
+		w.local_get(b)
+			.ref_cast(types::T_DICT)
+			.struct_get(types::T_DICT, 1)
+			.local_set(pb);
+		w.local_get(pa).array_len().local_set(n);
+		w.local_get(pb).array_len().local_get(n).i32_ne();
+		w.if_(|w| {
+			w.i32(0).ret();
+		});
+		w.i32(0).local_set(i);
+		w.block("outer", |w| {
+			w.loop_("oloop", |w| {
+				w.local_get(i).local_get(n).i32_ge_s().br_if("outer"); // done; all matched
+				w.i32(0).local_set(j);
+				w.i32(0).local_set(found);
+				w.block("inner", |w| {
+					w.loop_("iloop", |w| {
+						w.local_get(j).local_get(n).i32_ge_s().br_if("inner"); // key absent in b
+																														 // if __eq(a.key[i], b.key[j]) { values must match }
+						entry_field(w, pa, i, 0);
+						entry_field(w, pb, j, 0);
+						w.call(self_idx);
+						w.if_(|w| {
+							entry_field(w, pa, i, 1);
+							entry_field(w, pb, j, 1);
+							w.call(self_idx).i32_eqz();
+							w.if_(|w| {
+								w.i32(0).ret();
+							});
+							w.i32(1).local_set(found);
+							w.br("inner"); // key found, move to next a-entry
+						});
+						w.local_get(j).i32(1).i32_add().local_set(j);
+						w.br("iloop");
+					});
+				});
+				// a-key absent in b -> not equal.
+				w.local_get(found).i32_eqz();
+				w.if_(|w| {
+					w.i32(0).ret();
+				});
+				w.local_get(i).i32(1).i32_add().local_set(i);
+				w.br("oloop");
+			});
+		});
+		w.i32(1).ret();
+	});
 	// Unhandled (closure/ctor): not structurally compared.
-	b.push(I::Unreachable);
-	let mut f = Function::new_with_locals_types(locals);
-	for ins in &b {
-		f.instruction(ins);
-	}
-	f.instruction(&I::End);
-	f
+	w.unreachable();
+	w.finish()
 }
