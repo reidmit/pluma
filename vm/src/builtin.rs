@@ -722,6 +722,16 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			cells[i as usize] = args[2].clone();
 			Ok(Value::Nothing)
 		}
+		"list-push" => {
+			debug_assert_eq!(args.len(), 2, "`list.push` arity");
+			let cells = match &args[0] {
+				Value::List(cells) => cells,
+				_ => unreachable!("`list.push`: expected list"),
+			};
+			// Mutates the list in place (amortized O(1), like `Vec::push`).
+			cells.borrow_mut().push(args[1].clone());
+			Ok(Value::Nothing)
+		}
 
 		// Assertions return a `result nothing string`: `ok ()` to pass,
 		// `err message` to fail. They never abort — a case body's final

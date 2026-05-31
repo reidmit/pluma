@@ -211,6 +211,12 @@ impl Wat {
 			field_index: field,
 		})
 	}
+	pub(crate) fn struct_set(&mut self, ty: u32, field: u32) -> &mut Self {
+		self.push(I::StructSet {
+			struct_type_index: ty,
+			field_index: field,
+		})
+	}
 	pub(crate) fn struct_new(&mut self, ty: u32) -> &mut Self {
 		self.push(I::StructNew(ty))
 	}

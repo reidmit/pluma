@@ -159,6 +159,7 @@ pub(crate) enum Helper {
 	IntStr,
 	ListBuild,
 	ListCollect,
+	ListPush,
 	BytesBuild,
 	DictInsert,
 	DictLookup,
@@ -259,7 +260,7 @@ impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 57;
+	pub(crate) const COUNT: usize = 58;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable

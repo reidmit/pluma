@@ -1293,11 +1293,15 @@ impl<'a> FnEmitter<'a> {
 			}
 			return;
 		}
-		// Higher-order builders: synthetic helpers (loop + closure call).
-		if tag == "list-build" || tag == "list-collect" || tag == "bytes-build" {
+		// Higher-order builders + `list.push`: synthetic helpers called with the
+		// boxed args (a loop + closure call for the builders; an in-place append
+		// for push), leaving the result (or `nothing` for push) on the stack.
+		if tag == "list-build" || tag == "list-collect" || tag == "bytes-build" || tag == "list-push"
+		{
 			let helper = match tag {
 				"list-build" => self.runtime.idx(Helper::ListBuild),
 				"list-collect" => self.runtime.idx(Helper::ListCollect),
+				"list-push" => self.runtime.idx(Helper::ListPush),
 				_ => self.runtime.idx(Helper::BytesBuild),
 			};
 			match helper {
@@ -2158,6 +2162,59 @@ impl<'a> FnEmitter<'a> {
 		self.ins(Instruction::StructNew(types::T_LIST));
 	}
 
+	/// The `$list` currently on the stack -> its elements as an exact-length
+	/// `$valarray` (a fresh copy of `elems[0..length]`). Used where the whole
+	/// backing array is consumed (spread / concat) so a pushed list's spare
+	/// capacity is never copied out.
+	fn emit_list_elems(&mut self) {
+		let list_l = self.fresh_local(types::value_ref());
+		self.ins(Instruction::LocalSet(list_l));
+		let len = self.fresh_local(ValType::I32);
+		self.ins(Instruction::LocalGet(list_l));
+		self.ins(Instruction::RefCastNonNull(HeapType::Concrete(types::T_LIST)));
+		self.ins(Instruction::StructGet {
+			struct_type_index: types::T_LIST,
+			field_index: 2,
+		});
+		self.ins(Instruction::LocalSet(len));
+		let src = self.fresh_local(types::valarray_ref());
+		self.ins(Instruction::LocalGet(list_l));
+		self.ins(Instruction::RefCastNonNull(HeapType::Concrete(types::T_LIST)));
+		self.ins(Instruction::StructGet {
+			struct_type_index: types::T_LIST,
+			field_index: 1,
+		});
+		self.ins(Instruction::LocalSet(src));
+		let out = self.fresh_local(types::valarray_ref());
+		self.ins(Instruction::LocalGet(len));
+		self.ins(Instruction::ArrayNewDefault(types::T_VALARRAY));
+		self.ins(Instruction::LocalSet(out));
+		// out[i] = src[i] for i in 0..len.
+		let idx = self.fresh_local(ValType::I32);
+		self.ins(Instruction::I32Const(0));
+		self.ins(Instruction::LocalSet(idx));
+		self.ins(Instruction::Block(BlockType::Empty));
+		self.ins(Instruction::Loop(BlockType::Empty));
+		self.ins(Instruction::LocalGet(idx));
+		self.ins(Instruction::LocalGet(len));
+		self.ins(Instruction::I32GeU);
+		self.ins(Instruction::BrIf(1));
+		self.ins(Instruction::LocalGet(out));
+		self.ins(Instruction::LocalGet(idx));
+		self.ins(Instruction::LocalGet(src));
+		self.ins(Instruction::LocalGet(idx));
+		self.ins(Instruction::ArrayGet(types::T_VALARRAY));
+		self.ins(Instruction::ArraySet(types::T_VALARRAY));
+		self.ins(Instruction::LocalGet(idx));
+		self.ins(Instruction::I32Const(1));
+		self.ins(Instruction::I32Add);
+		self.ins(Instruction::LocalSet(idx));
+		self.ins(Instruction::Br(0));
+		self.ins(Instruction::End);
+		self.ins(Instruction::End);
+		self.ins(Instruction::LocalGet(out));
+	}
+
 	fn make_list(&mut self, items: &[ir::ListItem]) {
 		use ir::ListItem;
 		if !items.iter().any(|it| matches!(it, ListItem::Spread(_))) {
@@ -2197,13 +2254,7 @@ impl<'a> FnEmitter<'a> {
 		for (i, (seg, &is_spread)) in segs.iter().zip(&spread_at).enumerate() {
 			if is_spread {
 				self.atom(seg[0]);
-				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
-					types::T_LIST,
-				)));
-				self.ins(Instruction::StructGet {
-					struct_type_index: types::T_LIST,
-					field_index: 1,
-				});
+				self.emit_list_elems();
 			} else {
 				for a in seg {
 					self.atom(a);

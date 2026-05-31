@@ -80,6 +80,64 @@ pub(crate) fn build_list_tail_fn() -> Function {
 	w.finish()
 }
 
+/// Build `__list_push(list, x) -> nothing`: append `x` to `list` in place,
+/// amortized O(1). Writes `x` at `length` (growing/swapping the backing array by
+/// doubling when full) and bumps `length`. Mutates the `$list` struct's `elems`
+/// (field 1) and `length` (field 2) fields directly — the wasm twin of the VM's
+/// `Vec::push`. Returns `nothing`.
+pub(crate) fn build_list_push_fn() -> Function {
+	let va = types::T_VALARRAY;
+	let mut w = Wat::new(2);
+	let (list, x) = (w.param(0), w.param(1));
+	let elems = w.local(types::valarray_ref());
+	let len = w.local(ValType::I32);
+	let cap = w.local(ValType::I32);
+	let new = w.local(types::valarray_ref());
+
+	// elems = list.elems; len = list.length; cap = |elems|.
+	w.local_get(list)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, 1)
+		.local_set(elems);
+	w.local_get(list)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, 2)
+		.local_set(len);
+	w.local_get(elems).array_len().local_set(cap);
+	// if len >= cap: grow to max(cap*2, 4), copy, and swap in the new backing array.
+	w.local_get(len).local_get(cap).i32_ge_u();
+	w.if_(|w| {
+		w.local_get(cap).i32_eqz();
+		w.if_result(
+			ValType::I32,
+			|w| {
+				w.i32(4);
+			},
+			|w| {
+				w.local_get(cap).i32(1).i32_shl();
+			},
+		);
+		w.array_new_default(va).local_set(new);
+		w.copy_loop(va, new, None, elems, None, len);
+		w.local_get(list)
+			.ref_cast(types::T_LIST)
+			.local_get(new)
+			.struct_set(types::T_LIST, 1);
+		w.local_get(new).local_set(elems);
+	});
+	// elems[len] = x; list.length = len + 1.
+	w.local_get(elems).local_get(len).local_get(x).array_set(va);
+	w.local_get(list)
+		.ref_cast(types::T_LIST)
+		.local_get(len)
+		.i32(1)
+		.i32_add()
+		.struct_set(types::T_LIST, 2);
+	// return nothing.
+	w.i32(types::TAG_NOTHING).struct_new(types::T_VALUE);
+	w.finish()
+}
+
 /// Build `__list_build(n, f) -> list`: tabulate `[f 0, f 1, ..., f (n-1)]` in
 /// one pass. `arity1` is the wasm func-type index for a 1-arg closure (env-first
 /// `(value, value) -> value`), used to `call_indirect` through `f`.

@@ -51,6 +51,23 @@ public def get :: fun (list a) int -> a = built-in "list-get"
 #     xs   # => [0, 9, 0]
 public def set :: fun (list a) int a -> nothing = built-in "list-set"
 
+# Appends `x` to the end of `xs` in place, in amortized O(1) time -- the
+# efficient way to grow a list whose final size you don't know up front
+# (accumulating in a loop, collecting matches, parsing). Without it the only
+# option is `[...acc, x]` / `list.concat acc [x]`, which copy the whole list
+# each step and so cost O(n^2) overall.
+#
+# Like `set`, this is the deliberate mutable escape hatch: the same aliasing
+# caveat applies -- the append is visible through *every* binding pointing at
+# the same list, so use it only on a list you just built and still solely own
+# (the fresh-accumulator pattern below). When in doubt, build a fresh list.
+#
+#     let acc = []
+#     list.push acc 1
+#     list.push acc 2
+#     acc   # => [1, 2]
+public def push :: fun (list a) a -> nothing = built-in "list-push"
+
 # Builds `[f 0, f 1, ..., f (n-1)]` in a single O(n) pass: `f` is called
 # with each index in turn and its results collected in order. The
 # tabulating counterpart to `fold`, and the primitive the list builders

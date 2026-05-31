@@ -148,6 +148,7 @@ const WASM_FIXTURES: &[&str] = &[
 	"list-extended-combinators",
 	"list-reverse-concat",
 	"list-set",
+	"list-push",
 	"list-sort",
 	"list-sort-explicit-cmp",
 	"list-spread",
@@ -595,8 +596,16 @@ fn format_anyref(store: &mut impl AsContextMut, any: Rooted<AnyRef>) -> String {
 			format!("({})", format_elems(store, &f).join(", "))
 		}
 		TAG_LIST => {
+			// $list is { tag, elems, length } — only the first `length` elements are
+			// live (the backing array may have spare capacity after `list.push`).
 			let f = s.field(&mut *store, 1).expect("list elems");
-			format!("[{}]", format_elems(store, &f).join(", "))
+			let len = match s.field(&mut *store, 2).expect("list length") {
+				Val::I32(n) => n as usize,
+				o => panic!("list length: {o:?}"),
+			};
+			let mut elems = format_elems(store, &f);
+			elems.truncate(len);
+			format!("[{}]", elems.join(", "))
 		}
 		TAG_RECORD => {
 			let nf = s.field(&mut *store, 1).expect("record names");

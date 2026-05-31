@@ -114,6 +114,12 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		build: |c| list::build_list_collect_fn(c.arity(1)),
 	},
 	HelperDef {
+		id: H::ListPush,
+		fn_type: Ty::Helper(2),
+		deps: &[],
+		build: |_c| list::build_list_push_fn(),
+	},
+	HelperDef {
 		id: H::BytesBuild,
 		fn_type: Ty::Helper(2),
 		deps: &[],
@@ -538,6 +544,7 @@ pub(crate) fn helper_for_tag(tag: &str) -> Option<Helper> {
 		// Higher-order builders: synthetic wasm helpers (loop + closure call).
 		"list-build" => H::ListBuild,
 		"list-collect" => H::ListCollect,
+		"list-push" => H::ListPush,
 		"bytes-build" => H::BytesBuild,
 		// `bytes.concat` reuses the `__bytesconcat` helper.
 		"bytes-concat" => H::BytesConcat,

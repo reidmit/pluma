@@ -1,0 +1,27 @@
+use core.list
+
+# `list.push` grows an empty list in place (amortized O(1)); after the grows
+# the backing array's capacity exceeds the logical length, so every list op
+# must read the length field, not the capacity.
+def main = fun {
+	let acc = []
+	list.push acc 1
+	list.push acc 2
+	list.push acc 3
+	list.push acc 4
+	list.push acc 5
+	print (to-string (list.length acc))
+	print (to-string (list.get acc 0))
+	print (to-string (list.get acc 4))
+	print (to-string acc)
+	let more = [0, ...acc, 6]
+	print (to-string more)
+	print (to-string (list.length more))
+	when acc is [h, ...rest] {
+		print (to-string h)
+		print (to-string (list.length rest))
+	} else {
+		print "empty"
+	}
+	print (to-string (list.fold acc 0 fun a x { a + x }))
+}
