@@ -58,6 +58,11 @@ pub struct Compiler {
 	// Pre-registered native modules (stdlib). Resolved without parsing any
 	// `.pa` file — the compiler hands the analyzer their exports directly.
 	pub native_modules: HashMap<String, ModuleExports>,
+	// The target platform whose host-capability profile gates module
+	// availability (a `use core.io` on the browser target is an error).
+	// Defaults to `Native` (the VM/dev profile — provides every capability,
+	// so nothing is gated), so existing flows are unchanged.
+	pub platform: Platform,
 }
 
 impl Compiler {
@@ -71,7 +76,17 @@ impl Compiler {
 			diagnostics: Vec::new(),
 			exports_cache: HashMap::new(),
 			native_modules: HashMap::new(),
+			platform: Platform::default(),
 		})
+	}
+
+	// Select the target platform whose capability profile gates module
+	// availability. Builder form so the ~14 existing constructor call sites
+	// (cli, lsp, tests, bench) keep their default `Native` profile untouched;
+	// only a platform-specific build (e.g. the wasm-server test harness) opts in.
+	pub fn with_platform(mut self, platform: Platform) -> Self {
+		self.platform = platform;
+		self
 	}
 
 	// Construct a compiler rooted at `root_dir` with no entry modules. The
@@ -86,6 +101,7 @@ impl Compiler {
 			diagnostics: Vec::new(),
 			exports_cache: HashMap::new(),
 			native_modules: HashMap::new(),
+			platform: Platform::default(),
 		}
 	}
 
@@ -214,11 +230,13 @@ impl Compiler {
 			timing_log(module_name, "parse", _t.elapsed());
 		}
 
-		// Collect (fully-qualified-name, local-namespace-name, alias-range) for
-		// each import. Local namespace name is the alias if present, otherwise
-		// the last dotted segment — so `use sub.utils` binds `utils` and
-		// `use sub.utils as u` binds `u`.
-		let imports: Vec<(String, String, Range)> = self
+		// Collect (fully-qualified-name, local-namespace-name, alias-range,
+		// use-statement-range) for each import. Local namespace name is the alias
+		// if present, otherwise the last dotted segment — so `use sub.utils` binds
+		// `utils` and `use sub.utils as u` binds `u`. The use-statement range spans
+		// the whole `use …` line (a better caret target for platform gating than
+		// the alias).
+		let imports: Vec<(String, String, Range, Range)> = self
 			.modules
 			.get(module_name)
 			.and_then(|m| m.ast.as_ref())
@@ -228,7 +246,7 @@ impl Compiler {
 					.iter()
 					.map(|u| {
 						let local = u.local_name();
-						(u.module_name(), local.name.clone(), local.range)
+						(u.module_name(), local.name.clone(), local.range, u.range)
 					})
 					.collect()
 			})
@@ -237,7 +255,7 @@ impl Compiler {
 		// Check for two imports binding the same local name. The second one wins
 		// silently otherwise.
 		let mut seen: HashMap<String, Range> = HashMap::new();
-		for (_, local_name, range) in &imports {
+		for (_, local_name, range, _) in &imports {
 			if let Some(_prev) = seen.insert(local_name.clone(), *range) {
 				self.diagnostics.push(
 					Diagnostic::error(format!(
@@ -256,25 +274,49 @@ impl Compiler {
 		let importer_is_test = module_name.ends_with(".test");
 		let importer_path = self.modules.get(module_name).map(|m| m.module_path.clone());
 		let mut rejected_imports: HashSet<String> = HashSet::new();
-		for (full_name, _, range) in &imports {
-			let reject_reason = if full_name.ends_with(".test") && !importer_is_test {
-				Some(format!(
-					"Cannot import test module `{}` from a non-test module. \
-					Only `.test` modules may `use` other `.test` modules.",
-					full_name
+		for (full_name, _, range, use_range) in &imports {
+			// The capabilities `full_name` requires that the active platform
+			// doesn't provide. Empty on the default `Native` profile (it provides
+			// everything) and for any ungated module — so this gate is inert for
+			// existing flows. Reported against the whole `use …` statement.
+			let missing_caps = self.platform.missing_capabilities(full_name);
+			let rejection: Option<(String, Range)> = if full_name.ends_with(".test")
+				&& !importer_is_test
+			{
+				Some((
+					format!(
+						"Cannot import test module `{}` from a non-test module. \
+						Only `.test` modules may `use` other `.test` modules.",
+						full_name
+					),
+					*range,
 				))
 			} else if full_name == PROJECT_MARKER_MODULE && module_name != PROJECT_MARKER_MODULE {
-				Some(format!(
-					"Cannot `use {}` — the project marker file is config, not \
-					a library. Project metadata is one-directional: the CLI reads \
-					it, runtime code never depends on it.",
-					full_name
+				Some((
+					format!(
+						"Cannot `use {}` — the project marker file is config, not \
+						a library. Project metadata is one-directional: the CLI reads \
+						it, runtime code never depends on it.",
+						full_name
+					),
+					*range,
+				))
+			} else if !missing_caps.is_empty() {
+				Some((
+					format!(
+						"`{}` is not available on the {} target — it needs host \
+						capabilities {:?} this platform does not provide.",
+						full_name,
+						self.platform.label(),
+						missing_caps
+					),
+					*use_range,
 				))
 			} else {
 				None
 			};
-			if let Some(message) = reject_reason {
-				let mut diag = Diagnostic::error(message).with_range(*range);
+			if let Some((message, at)) = rejection {
+				let mut diag = Diagnostic::error(message).with_range(at);
 				if let Some(path) = importer_path.clone() {
 					diag = diag.with_module(module_name.to_string(), path);
 				}
@@ -287,7 +329,7 @@ impl Compiler {
 		// Loading rejected imports anyway would produce confusing cascade
 		// errors (e.g. "value X not found in import") in addition to the
 		// real cause.
-		for (full_name, _, _) in &imports {
+		for (full_name, _, _, _) in &imports {
 			if rejected_imports.contains(full_name) {
 				continue;
 			}
@@ -299,7 +341,7 @@ impl Compiler {
 		// qualified enum type names can be reconstructed at use sites.
 		let mut imports_map: HashMap<String, ModuleExports> = HashMap::new();
 		let mut import_qualified: HashMap<String, String> = HashMap::new();
-		for (full_name, local_name, _) in imports {
+		for (full_name, local_name, _, _) in imports {
 			if rejected_imports.contains(&full_name) {
 				continue;
 			}
@@ -460,6 +502,52 @@ fn get_root_dir_and_module_name(entry_path: String) -> Result<(PathBuf, String),
 			Err(UsageError {
 				kind: UsageErrorKind::InvalidEntryPath(joined_path.to_str().unwrap().to_owned()),
 			})
+		}
+	}
+}
+
+#[cfg(test)]
+mod platform_gating_tests {
+	use super::*;
+
+	// Compile a synthetic `main` module under `platform`, returning the
+	// diagnostics (empty on success). The module source is fed in-memory, so no
+	// disk access is needed; gated stdlib modules resolve from the baked sources.
+	fn check_with(platform: Platform, source: &str) -> Vec<Diagnostic> {
+		let mut compiler = Compiler::for_root_dir(std::env::temp_dir()).with_platform(platform);
+		compiler.set_module_source("main".to_string(), source.as_bytes().to_vec());
+		compiler.add_entry_module("main".to_string());
+		match compiler.check() {
+			Ok(()) => Vec::new(),
+			Err(diags) => diags,
+		}
+	}
+
+	#[test]
+	fn core_io_allowed_on_native_and_server() {
+		let src = "use core.io\n\ndef main = fun { io.print \"hi\" }\n";
+		assert!(check_with(Platform::Native, src).is_empty());
+		assert!(check_with(Platform::Server, src).is_empty());
+	}
+
+	#[test]
+	fn core_io_rejected_on_browser() {
+		let src = "use core.io\n\ndef main = fun { io.print \"hi\" }\n";
+		let diags = check_with(Platform::Browser, src);
+		assert!(
+			diags
+				.iter()
+				.any(|d| d.message.contains("core.io") && d.message.contains("browser")),
+			"expected a browser-target rejection for core.io, got: {:?}",
+			diags.iter().map(|d| &d.message).collect::<Vec<_>>()
+		);
+	}
+
+	#[test]
+	fn ungated_module_available_everywhere() {
+		let src = "use core.list\n\ndef main = fun { list.length [1] }\n";
+		for p in [Platform::Native, Platform::Server, Platform::Browser] {
+			assert!(check_with(p, src).is_empty(), "core.list rejected on {:?}", p);
 		}
 	}
 }
