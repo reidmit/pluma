@@ -161,12 +161,31 @@ def result-to-task :: fun (result a e) -> task a = fun r {
 # Handles run concurrently regardless of the order they're awaited in -- this
 # is just the sequential back half of `all` / `settle-all`.
 def await-all :: fun (list (task a)) -> task (list a) = fun handles {
-	when handles is [] {
+	let n = list.length handles
+	when n is 0 {
 		return []
-	} is [h, ...rest] {
-		try x = h
-		try xs = await-all rest
-		return [x, ...xs]
+	} else {
+		# Seed a right-sized accumulator from the first result, then fill the
+		# rest in place by index. This is O(n); the naive `[h, ...rest]` recursion
+		# is O(n^2) (the tail-copy of `...rest` plus the `[x, ...xs]` rebuild),
+		# which dominated `all`/`settle-all` for large task lists on both backends.
+		try first = list.get handles 0
+		let acc = list.build n fun _i {
+			first
+		}
+		await-into handles acc 1 n
+	}
+}
+
+# The in-place fill loop for `await-all`: awaits `handles[i]` in order, writing
+# each result into the pre-sized `acc`.
+def await-into :: fun (list (task a)) (list a) int int -> task (list a) = fun handles acc i n {
+	if i < n is true {
+		try x = list.get handles i
+		let _ = list.set acc i x
+		await-into handles acc (i + 1) n
+	} else {
+		return acc
 	}
 }
 
