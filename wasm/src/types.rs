@@ -90,6 +90,16 @@ pub fn valarray_ref() -> ValType {
 	})
 }
 
+/// `(ref null $valarray)` — the nullable form, for locals that receive a value
+/// read from a nullable global (e.g. the async activation stack / wire registry,
+/// which start null).
+pub fn valarray_ref_null() -> ValType {
+	ValType::Ref(RefType {
+		nullable: true,
+		heap_type: HeapType::Concrete(T_VALARRAY),
+	})
+}
+
 /// `(ref null $value)` — the uniform boxed-value type used for params, results,
 /// captures, and every `Boxed` local.
 pub fn value_ref() -> ValType {

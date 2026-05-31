@@ -1530,6 +1530,7 @@ pub(crate) fn build_act_push_fn(g: TaskGlobals) -> Function {
 	let act = w.param(0);
 	let cap = w.local(ValType::I32);
 	let na = w.local(types::valarray_ref());
+	let src = w.local(types::valarray_ref_null());
 
 	w.global_get(g.act).array_len().local_set(cap);
 	w.global_get(g.actlen).local_get(cap).i32_ge_s();
@@ -1545,7 +1546,8 @@ pub(crate) fn build_act_push_fn(g: TaskGlobals) -> Function {
 			},
 		);
 		w.array_new_default(types::T_VALARRAY).local_set(na);
-		w.local_get(na).i32(0).global_get(g.act).i32(0).local_get(cap).array_copy(types::T_VALARRAY, types::T_VALARRAY);
+		w.global_get(g.act).local_set(src);
+		w.copy_loop(types::T_VALARRAY, na, None, src, None, cap);
 		w.local_get(na).global_set(g.act);
 	});
 	w.global_get(g.act).global_get(g.actlen).local_get(act).array_set(types::T_VALARRAY);
@@ -1839,7 +1841,7 @@ fn drop_last(w: &mut Wat, gl: u32) {
 	w.global_get(gl).ref_cast(types::T_LIST).struct_get(types::T_LIST, 1).local_set(arr);
 	w.local_get(arr).array_len().i32(1).i32_sub().local_set(n);
 	w.local_get(n).array_new_default(types::T_VALARRAY).local_set(out);
-	w.local_get(out).i32(0).local_get(arr).i32(0).local_get(n).array_copy(types::T_VALARRAY, types::T_VALARRAY);
+	w.copy_loop(types::T_VALARRAY, out, None, arr, None, n);
 	w.i32(types::TAG_LIST);
 	w.local_get(out);
 	w.struct_new(types::T_LIST);
@@ -1866,7 +1868,7 @@ fn load_act(w: &mut Wat, g: TaskGlobals, fid: Local) {
 		},
 	);
 	w.array_new_default(types::T_VALARRAY).local_set(na);
-	w.local_get(na).i32(0).local_get(arr).i32(0).local_get(n).array_copy(types::T_VALARRAY, types::T_VALARRAY);
+	w.copy_loop(types::T_VALARRAY, na, None, arr, None, n);
 	w.local_get(na).global_set(g.act);
 	w.local_get(n).global_set(g.actlen);
 }
@@ -1874,8 +1876,12 @@ fn load_act(w: &mut Wat, g: TaskGlobals, fid: Local) {
 /// Save the working stack back into fiber `fid`'s activation chain (fresh `$list`).
 fn save_act(w: &mut Wat, g: TaskGlobals, fid: Local) {
 	let out = w.local(types::valarray_ref());
-	w.global_get(g.actlen).array_new_default(types::T_VALARRAY).local_set(out);
-	w.local_get(out).i32(0).global_get(g.act).i32(0).global_get(g.actlen).array_copy(types::T_VALARRAY, types::T_VALARRAY);
+	let src = w.local(types::valarray_ref_null());
+	let len = w.local(ValType::I32);
+	w.global_get(g.actlen).local_set(len);
+	w.local_get(len).array_new_default(types::T_VALARRAY).local_set(out);
+	w.global_get(g.act).local_set(src);
+	w.copy_loop(types::T_VALARRAY, out, None, src, None, len);
 	set_fld(w, g.fibers, fid, fiber::ACT, |w| {
 		w.i32(types::TAG_LIST);
 		w.local_get(out);
@@ -2073,8 +2079,13 @@ fn push_settled(w: &mut Wat, lits: TaskLits, oc: Local) {
 /// as a fresh `$list`.
 fn drop_first_list(w: &mut Wat, arr: Local, n: Local) {
 	let out = w.local(types::valarray_ref());
-	w.local_get(n).i32(1).i32_sub().array_new_default(types::T_VALARRAY).local_set(out);
-	w.local_get(out).i32(0).local_get(arr).i32(1).local_get(n).i32(1).i32_sub().array_copy(types::T_VALARRAY, types::T_VALARRAY);
+	let one = w.local(ValType::I32);
+	let len = w.local(ValType::I32);
+	w.local_get(n).i32(1).i32_sub().local_set(len);
+	w.local_get(len).array_new_default(types::T_VALARRAY).local_set(out);
+	// out[0..n-1] = arr[1..n] (drop first; see `Wat::copy_loop`).
+	w.i32(1).local_set(one);
+	w.copy_loop(types::T_VALARRAY, out, None, arr, Some(one), len);
 	w.i32(types::TAG_LIST);
 	w.local_get(out);
 	w.struct_new(types::T_LIST);

@@ -407,6 +407,8 @@ pub(crate) fn build_wire_ctxput_fn(g: WireGlobals) -> Function {
 	let mut w = Wat::new(2);
 	let (qual, vars) = (w.param(0), w.param(1));
 	let new = w.local(types::valarray_ref());
+	let src = w.local(types::valarray_ref_null());
+	let len = w.local(ValType::I32);
 
 	// if g_ctxlen >= array.len(g_ctx): grow.
 	w.global_get(g.ctxlen)
@@ -420,12 +422,9 @@ pub(crate) fn build_wire_ctxput_fn(g: WireGlobals) -> Function {
 			.i32_shl()
 			.array_new_default(va)
 			.local_set(new);
-		w.local_get(new)
-			.i32(0)
-			.global_get(g.ctx)
-			.i32(0)
-			.global_get(g.ctxlen)
-			.array_copy(va, va);
+		w.global_get(g.ctxlen).local_set(len);
+		w.global_get(g.ctx).local_set(src);
+		w.copy_loop(va, new, None, src, None, len);
 		w.local_get(new).global_set(g.ctx);
 	});
 	// g_ctx[g_ctxlen] = tuple(qualified, variants).

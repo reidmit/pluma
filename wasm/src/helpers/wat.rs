@@ -249,6 +249,55 @@ impl Wat {
 		})
 	}
 
+	/// Manual element-copy loop: `dst[dst_off + k] = src[src_off + k]` for
+	/// `k` in `0..len` (a `None` offset means 0). Use this instead of
+	/// `array.copy` on `$valarray` (GC-reference) arrays: wasmtime's
+	/// `array.copy` over reference arrays is ~90x slower than this explicit
+	/// `array.get`/`array.set` loop. (Packed byte arrays memcpy fine — keep
+	/// `array.copy` for `$bytes`.) Allocates one scratch i32 local.
+	pub(crate) fn copy_loop(
+		&mut self,
+		ty: u32,
+		dst: Local,
+		dst_off: Option<Local>,
+		src: Local,
+		src_off: Option<Local>,
+		len: Local,
+	) -> &mut Self {
+		let k = self.local(ValType::I32);
+		self.i32(0).local_set(k);
+		self.block("cp_brk", |w| {
+			w.loop_("cp_lp", |w| {
+				w.local_get(k).local_get(len).i32_ge_s().br_if("cp_brk");
+				// dst, then the destination index (dst_off + k, or k).
+				w.local_get(dst);
+				match dst_off {
+					Some(o) => {
+						w.local_get(o).local_get(k).i32_add();
+					}
+					None => {
+						w.local_get(k);
+					}
+				}
+				// src[src_off + k] — the value to store.
+				w.local_get(src);
+				match src_off {
+					Some(o) => {
+						w.local_get(o).local_get(k).i32_add();
+					}
+					None => {
+						w.local_get(k);
+					}
+				}
+				w.array_get(ty);
+				w.array_set(ty);
+				w.local_get(k).i32(1).i32_add().local_set(k);
+				w.br("cp_lp");
+			});
+		});
+		self
+	}
+
 	// ---- references ------------------------------------------------------------
 
 	/// `ref.cast (ref $ty)` — a non-null downcast to concrete type `ty`.

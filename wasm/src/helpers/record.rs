@@ -70,12 +70,7 @@ pub(crate) fn build_record_update_fn(eq_idx: u32) -> Function {
 	w.local_get(values).array_len().local_set(n);
 	// new = copy of values.
 	w.local_get(n).array_new_default(va).local_set(new);
-	w.local_get(new)
-		.i32(0)
-		.local_get(values)
-		.i32(0)
-		.local_get(n)
-		.array_copy(va, va);
+	w.copy_loop(va, new, None, values, None, n);
 	// find name; new[i] = value; stop.
 	w.i32(0).local_set(i);
 	w.block("done", |w| {

@@ -167,12 +167,7 @@ pub(crate) fn build_list_collect_fn(arity1: u32) -> Function {
 	w.local_get(write)
 		.array_new_default(types::T_VALARRAY)
 		.local_set(out);
-	w.local_get(out)
-		.i32(0)
-		.local_get(buf)
-		.i32(0)
-		.local_get(write);
-	w.array_copy(types::T_VALARRAY, types::T_VALARRAY);
+	w.copy_loop(types::T_VALARRAY, out, None, buf, None, write);
 	w.i32(types::TAG_LIST)
 		.local_get(out)
 		.struct_new(types::T_LIST);
@@ -196,20 +191,9 @@ pub(crate) fn build_arrconcat_fn() -> Function {
 		.i32_add()
 		.array_new_default(va)
 		.local_set(dst);
-	// dst[0..la] = a.
-	w.local_get(dst)
-		.i32(0)
-		.local_get(a)
-		.i32(0)
-		.local_get(la)
-		.array_copy(va, va);
-	// dst[la..la+lb] = b.
-	w.local_get(dst)
-		.local_get(la)
-		.local_get(b)
-		.i32(0)
-		.local_get(lb)
-		.array_copy(va, va);
+	// dst[0..la] = a; dst[la..la+lb] = b — manual loops (see `Wat::copy_loop`).
+	w.copy_loop(va, dst, None, a, None, la);
+	w.copy_loop(va, dst, Some(la), b, None, lb);
 	w.local_get(dst);
 	w.finish()
 }

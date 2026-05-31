@@ -80,12 +80,7 @@ pub(crate) fn build_dict_insert_fn(eq_idx: u32) -> Function {
 		|w| {
 			// Replace: new = copy of entries; new[found] = (k, v).
 			w.local_get(n).array_new_default(va).local_set(new);
-			w.local_get(new)
-				.i32(0)
-				.local_get(entries)
-				.i32(0)
-				.local_get(n)
-				.array_copy(va, va);
+			w.copy_loop(va, new, None, entries, None, n);
 			store_kv(w, &|w| {
 				w.local_get(found);
 			});
@@ -97,12 +92,7 @@ pub(crate) fn build_dict_insert_fn(eq_idx: u32) -> Function {
 				.i32_add()
 				.array_new_default(va)
 				.local_set(new);
-			w.local_get(new)
-				.i32(0)
-				.local_get(entries)
-				.i32(0)
-				.local_get(n)
-				.array_copy(va, va);
+			w.copy_loop(va, new, None, entries, None, n);
 			store_kv(w, &|w| {
 				w.local_get(n);
 			});
@@ -172,6 +162,8 @@ pub(crate) fn build_dict_remove_fn(eq_idx: u32) -> Function {
 	let i = w.local(ValType::I32);
 	let found = w.local(ValType::I32);
 	let new = w.local(types::valarray_ref());
+	let src_off = w.local(ValType::I32);
+	let seg_len = w.local(ValType::I32);
 
 	dict_entries_of(&mut w, d);
 	w.local_set(entries);
@@ -195,22 +187,23 @@ pub(crate) fn build_dict_remove_fn(eq_idx: u32) -> Function {
 	w.if_(|w| {
 		w.local_get(d).ret();
 	});
-	// new = array(n-1); copy [0..found) then (found..n) shifted down by one.
+	// new = array(n-1); copy [0..found) then (found+1..n) shifted down by one.
 	w.local_get(n)
 		.i32(1)
 		.i32_sub()
 		.array_new_default(va)
 		.local_set(new);
-	w.local_get(new)
-		.i32(0)
-		.local_get(entries)
-		.i32(0)
+	// new[0..found) = entries[0..found).
+	w.copy_loop(va, new, None, entries, None, found);
+	// new[found..] = entries[found+1..n]; length = (n-1) - found.
+	w.local_get(found).i32(1).i32_add().local_set(src_off);
+	w.local_get(n)
+		.i32(1)
+		.i32_sub()
 		.local_get(found)
-		.array_copy(va, va);
-	w.local_get(new).local_get(found);
-	w.local_get(entries).local_get(found).i32(1).i32_add();
-	w.local_get(n).i32(1).i32_sub().local_get(found).i32_sub();
-	w.array_copy(va, va);
+		.i32_sub()
+		.local_set(seg_len);
+	w.copy_loop(va, new, Some(found), entries, Some(src_off), seg_len);
 	w.i32(types::TAG_DICT)
 		.local_get(new)
 		.struct_new(types::T_DICT);
@@ -314,12 +307,7 @@ pub(crate) fn build_dict_filter_fn(arity2: u32) -> Function {
 	});
 	// out = array(write); copy tmp[0..write].
 	w.local_get(write).array_new_default(va).local_set(out);
-	w.local_get(out)
-		.i32(0)
-		.local_get(tmp)
-		.i32(0)
-		.local_get(write)
-		.array_copy(va, va);
+	w.copy_loop(va, out, None, tmp, None, write);
 	w.i32(types::TAG_DICT)
 		.local_get(out)
 		.struct_new(types::T_DICT);
