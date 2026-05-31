@@ -701,21 +701,20 @@ struct RunResult {
 }
 
 /// Build an instance with the host imports wired (the `print` / `float_to_str` /
-/// f64-math glue). `use_drc` picks the collecting drc GC (for the allocation-heavy
-/// timed bench loop) over the default never-collecting null GC. Returns the store
-/// (its `HostState.out` accumulates printed bytes) and the instance.
+/// f64-math glue). The caller builds the `Engine` and compiles the `Module`
+/// (cranelift JIT) once, so a benchmark loop can re-instantiate cheaply without
+/// paying compilation each time. Returns the store (its `HostState.out`
+/// accumulates printed bytes) and a fresh instance.
 fn instantiate_module(
-	use_drc: bool,
-	bytes: &[u8],
+	engine: &Engine,
+	module: &Module,
 	stdin: &[u8],
 ) -> Result<(Store<HostState>, Instance), String> {
-	let engine = if use_drc { bench_engine() } else { engine() };
-	let module = Module::new(&engine, bytes).map_err(|e| format!("module error: {e}"))?;
 	let out = Rc::new(RefCell::new(Vec::<u8>::new()));
 	let err = Rc::new(RefCell::new(Vec::<u8>::new()));
 	let fail = Rc::new(RefCell::new(None));
 	let mut store = Store::new(
-		&engine,
+		engine,
 		HostState {
 			out,
 			err,
@@ -726,9 +725,9 @@ fn instantiate_module(
 			gc_types: Rc::new(RefCell::new(None)),
 		},
 	);
-	let mut linker: Linker<HostState> = Linker::new(&engine);
+	let mut linker: Linker<HostState> = Linker::new(engine);
 	// print : (ref null $value) -> ()  — host accepts the broader `anyref`.
-	let print_ty = FuncType::new(&engine, [ValType::ANYREF], []);
+	let print_ty = FuncType::new(engine, [ValType::ANYREF], []);
 	linker
 		.func_new("pluma", "print", print_ty, |mut caller, args, _results| {
 			// Bound the temporary GC roots created while reflecting the value: a
@@ -747,7 +746,7 @@ fn instantiate_module(
 	// The `core.io` writers. `print`/`print-err` append a newline; `write`/
 	// `write-err` don't. The `*-err` pair targets the stderr sink. `*-bytes`
 	// write a `bytes` value's raw bytes (no Display formatting).
-	let io_ty = FuncType::new(&engine, [ValType::ANYREF], []);
+	let io_ty = FuncType::new(engine, [ValType::ANYREF], []);
 	for (name, to_err, newline, raw) in [
 		("io-print", false, true, false),
 		("io-write", false, false, false),
@@ -804,7 +803,7 @@ fn instantiate_module(
 	// float_to_str : (f64, $bytes buf) -> i32 len. Format the float as `vm::Value`'s
 	// Display does, write the bytes into the caller-provided GC byte array, return
 	// the length. (A real browser target would delegate to JS similarly.)
-	let f2s_ty = FuncType::new(&engine, [ValType::F64, ValType::ANYREF], [ValType::I32]);
+	let f2s_ty = FuncType::new(engine, [ValType::F64, ValType::ANYREF], [ValType::I32]);
 	linker
 		.func_new(
 			"pluma",
@@ -838,7 +837,7 @@ fn instantiate_module(
 	// Unary float math host imports: raw `(f64) -> f64`, the same libm calls the
 	// VM makes (`f64::ln`/`log10`/`log2`/`exp`/`sin`/`cos`). A browser target would
 	// import `Math.log`/`Math.log10`/… here instead.
-	let f64_unary_ty = FuncType::new(&engine, [ValType::F64], [ValType::F64]);
+	let f64_unary_ty = FuncType::new(engine, [ValType::F64], [ValType::F64]);
 	for (name, f) in [
 		("math-log", f64::ln as fn(f64) -> f64),
 		("math-log10", f64::log10),
@@ -883,16 +882,16 @@ fn instantiate_module(
 		})
 		.expect("_entry export with a $value result type");
 	let io2 = FuncType::new(
-		&engine,
+		engine,
 		[ValType::ANYREF, ValType::ANYREF],
 		[value_ty.clone()],
 	);
 	let io3 = FuncType::new(
-		&engine,
+		engine,
 		[ValType::ANYREF, ValType::ANYREF, ValType::ANYREF],
 		[value_ty.clone()],
 	);
-	let io0 = FuncType::new(&engine, [], [value_ty.clone()]);
+	let io0 = FuncType::new(engine, [], [value_ty.clone()]);
 
 	// read-file / read-file-bytes: path is args[0], witness args[1].
 	for (name, as_bytes) in [("io-read-file", false), ("io-read-file-bytes", true)] {
@@ -1080,14 +1079,31 @@ fn instantiate_module(
 		.expect("define io-last-error");
 
 	let instance = linker
-		.instantiate(&mut store, &module)
+		.instantiate(&mut store, module)
 		.map_err(|e| format!("instantiate error: {e}"))?;
 	Ok((store, instance))
 }
 
 /// Build a fresh instance and run `_entry` once, collecting stdout (the diff path).
 fn run_wasm(bytes: &[u8], stdin: &[u8]) -> RunResult {
-	let (mut store, instance) = match instantiate_module(false, bytes, stdin) {
+	let engine = engine();
+	let module = match Module::new(&engine, bytes) {
+		Ok(m) => m,
+		Err(e) => {
+			return RunResult {
+				status: format!("module error: {e}"),
+				stdout: String::new(),
+			};
+		}
+	};
+	run_entry(&engine, &module, stdin)
+}
+
+/// Instantiate a pre-compiled module and run `_entry` once, collecting stdout.
+/// Split out of `run_wasm` so a benchmark can re-instantiate a module that was
+/// cranelift-compiled once, keeping JIT compilation out of the timed loop.
+fn run_entry(engine: &Engine, module: &Module, stdin: &[u8]) -> RunResult {
+	let (mut store, instance) = match instantiate_module(engine, module, stdin) {
 		Ok(x) => x,
 		Err(status) => {
 			return RunResult {
@@ -1284,4 +1300,166 @@ fn wasm_coverage_report() {
 	for n in &matching {
 		println!("  {n}");
 	}
+}
+
+// ---------------------------------------------------------------------------
+// VM-vs-WASM execution benchmark.
+//
+// For each program under `benchmarks/programs/<name>/main.pa`, compile it once
+// per backend (VM bytecode / cranelift-compiled WasmGC module), confirm the two
+// backends agree, then time only *execution*: the VM run (a fresh `vm::Program`
+// clone per iteration, so memoized globals reset) versus re-instantiating the
+// pre-compiled wasm module and calling `_entry`. JIT/codegen is hoisted out of
+// the timed loops, so this measures the interpreters/compiled code, not the
+// compilers. Run with:
+//
+//   cargo test -p tests --test wasm_diff bench_vm_vs_wasm -- --ignored --nocapture
+//   BENCH_ITERS=50 cargo test -p tests --test wasm_diff bench_vm_vs_wasm -- --ignored --nocapture
+// ---------------------------------------------------------------------------
+
+#[test]
+#[ignore = "VM-vs-WASM benchmark; run with --ignored --nocapture"]
+fn bench_vm_vs_wasm() {
+	// A roomy stack: the VM nests a Rust frame per Pluma call (no TCO on the
+	// bytecode path), so the deep-recursion benchmarks would overflow the test
+	// harness's default 2 MiB thread otherwise.
+	std::thread::Builder::new()
+		.stack_size(256 * 1024 * 1024)
+		.spawn(bench_body)
+		.unwrap()
+		.join()
+		.unwrap();
+}
+
+fn fmt_dur(d: std::time::Duration) -> String {
+	let us = d.as_secs_f64() * 1_000_000.0;
+	if us < 1000.0 {
+		format!("{us:.1} us")
+	} else if us < 1_000_000.0 {
+		format!("{:.2} ms", us / 1000.0)
+	} else {
+		format!("{:.3} s", us / 1_000_000.0)
+	}
+}
+
+fn bench_body() {
+	use std::time::{Duration, Instant};
+
+	let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+	let _ = std::env::set_current_dir(workspace);
+	let programs_dir = workspace.join("benchmarks/programs");
+
+	let iters: u32 = std::env::var("BENCH_ITERS")
+		.ok()
+		.and_then(|s| s.parse().ok())
+		.unwrap_or(20);
+	// The null collector (allocate, never free) is fastest and fits as long as a
+	// single run's live set stays under wasmtime's GC heap; `BENCH_WASM_GC=drc`
+	// switches to the deferred-reference-counting collector, which reclaims within
+	// a run, for allocation-heavy programs that would otherwise trap on OOM.
+	let use_drc = std::env::var("BENCH_WASM_GC").as_deref() == Ok("drc");
+
+	let mut entries: Vec<_> = std::fs::read_dir(&programs_dir)
+		.expect("benchmarks/programs not found")
+		.filter_map(|e| e.ok().map(|e| e.path()))
+		.filter(|p| p.join("main.pa").exists())
+		.collect();
+	entries.sort();
+
+	println!("\nVM vs WASM execution time  ({iters} iterations, average per run)\n");
+	println!(
+		"{:<16}  {:>12}  {:>12}  {:>9}",
+		"benchmark", "VM", "WASM", "WASM/VM"
+	);
+	println!("{:-<16}  {:->12}  {:->12}  {:->9}", "", "", "", "");
+
+	for dir in &entries {
+		let name = dir.file_name().unwrap().to_string_lossy().to_string();
+		let stdin = std::fs::read(dir.join("stdin.txt")).unwrap_or_default();
+
+		let note = |msg: &str| println!("{name:<16}  {msg}");
+
+		let Some(compiler) = compile_check(dir) else {
+			note("compile error — skipped");
+			continue;
+		};
+		let ir_program = match ir::lower(&compiler) {
+			Ok(p) => p,
+			Err(e) => {
+				note(&format!("ir::lower error: {e} — skipped"));
+				continue;
+			}
+		};
+
+		// VM artifact: compiled once, cloned per run (a run memoizes globals).
+		let vm_program = match codegen::compile_from_ir(&ir_program) {
+			Ok(p) => p,
+			Err(e) => {
+				note(&format!("VM compile error: {e} — skipped"));
+				continue;
+			}
+		};
+
+		// WASM artifact: emit + cranelift-compile the module once, up front.
+		let bytes = match wasm::emit(&ir_program) {
+			Ok(b) => b,
+			Err(d) => {
+				note(&format!("wasm::emit error ({} diag) — skipped", d.0.len()));
+				continue;
+			}
+		};
+		let wasm_engine = if use_drc { bench_engine() } else { engine() };
+		let module = match Module::new(&wasm_engine, &bytes) {
+			Ok(m) => m,
+			Err(e) => {
+				note(&format!("wasm module error: {e} — skipped"));
+				continue;
+			}
+		};
+
+		// Sanity: don't time two programs that compute different things.
+		let vm_ref = run_vm(vm_program.clone(), &stdin);
+		let wasm_ref = run_entry(&wasm_engine, &module, &stdin);
+		if vm_ref.status != wasm_ref.status || vm_ref.stdout != wasm_ref.stdout {
+			note(&format!(
+				"OUTPUT MISMATCH — vm=({:?}, {:?})  wasm=({:?}, {:?})",
+				vm_ref.status,
+				vm_ref.stdout.trim_end(),
+				wasm_ref.status,
+				wasm_ref.stdout.trim_end()
+			));
+			continue;
+		}
+
+		// Time the VM. The per-iteration `clone` is outside the timer.
+		let _ = run_vm(vm_program.clone(), &stdin); // warm up
+		let mut vm_total = Duration::ZERO;
+		for _ in 0..iters {
+			let p = vm_program.clone();
+			let start = Instant::now();
+			let _ = run_vm(p, &stdin);
+			vm_total += start.elapsed();
+		}
+		let vm_avg = vm_total / iters;
+
+		// Time the WASM: re-instantiate the pre-compiled module + call `_entry`.
+		let _ = run_entry(&wasm_engine, &module, &stdin); // warm up
+		let mut wasm_total = Duration::ZERO;
+		for _ in 0..iters {
+			let start = Instant::now();
+			let _ = run_entry(&wasm_engine, &module, &stdin);
+			wasm_total += start.elapsed();
+		}
+		let wasm_avg = wasm_total / iters;
+
+		let ratio = wasm_avg.as_secs_f64() / vm_avg.as_secs_f64();
+		println!(
+			"{:<16}  {:>12}  {:>12}  {:>8.2}x",
+			name,
+			fmt_dur(vm_avg),
+			fmt_dur(wasm_avg),
+			ratio
+		);
+	}
+	println!("\n(WASM/VM < 1.00x means the WasmGC backend ran faster.)");
 }

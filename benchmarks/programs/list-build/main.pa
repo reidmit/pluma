@@ -1,0 +1,11 @@
+# Pure O(n) list building: tabulate, map, fold. One allocation each for build
+# and map; no repeated concat. Isolates the steady-state list allocation path.
+
+use core.list
+
+def main = fun {
+	let xs = list.build 20000 fun i { i * 3 }
+	let ys = list.map xs fun x { x + 1 }
+	let total = list.fold ys 0 fun acc x { acc + x }
+	print (to-string total)
+}

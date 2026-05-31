@@ -1,0 +1,18 @@
+# Flat large concats (NOT the O(n^2) accumulate): concat two 5000-element lists
+# 1000 times. Isolates array.copy throughput from small-allocation churn.
+
+use core.list
+
+def loop = fun n a b acc {
+	when n is 0 {
+		acc
+	} else {
+		loop (n - 1) a b (acc + (list.length (list.concat a b)))
+	}
+}
+
+def main = fun {
+	let a = list.range 0 5000
+	let b = list.range 5000 10000
+	print (to-string (loop 1000 a b 0))
+}

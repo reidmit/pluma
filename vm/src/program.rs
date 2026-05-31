@@ -15,6 +15,7 @@
 use crate::instruction::Instruction;
 use std::rc::Rc;
 
+#[derive(Clone)]
 pub struct Program {
 	pub functions: Vec<Function>,
 	pub constants: Vec<Rc<String>>,
@@ -54,6 +55,7 @@ pub struct Program {
 	pub async_poll: Vec<Option<u32>>,
 }
 
+#[derive(Clone)]
 pub struct Function {
 	pub name: String, // for diagnostics/Display
 	// Module the function was emitted from. Used by `debug` to print a
@@ -67,6 +69,7 @@ pub struct Function {
 	pub source_ranges: Vec<compiler::Range>,
 }
 
+#[derive(Clone)]
 pub enum GlobalSlot {
 	// First access runs the function at fn_idx (a zero-arity, no-captures
 	// thunk that returns the def's value).

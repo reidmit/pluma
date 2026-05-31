@@ -1,0 +1,27 @@
+# Dict stress: insert N string-keyed entries, then look every one back up and
+# sum the values. Exercises the pure-Pluma hash dict (string hashing, bucket
+# probing) on both insert and lookup paths.
+
+use core.dict
+
+def fill = fun m n {
+	when n is 0 {
+		m
+	} else {
+		fill (dict.insert m (to-string n) n) (n - 1)
+	}
+}
+
+def sum-lookups = fun m n acc {
+	when n is 0 {
+		acc
+	} else {
+		let v = (dict.lookup m (to-string n)) ?? 0
+		sum-lookups m (n - 1) (acc + v)
+	}
+}
+
+def main = fun {
+	let m = fill (dict.empty ()) 600
+	print (to-string (sum-lookups m 600 0))
+}

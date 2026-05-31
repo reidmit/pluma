@@ -1,0 +1,20 @@
+# Regex stress: the pure-Pluma backtracking engine. Compile a pattern with a
+# named capture once, then run `find-all` over a sentence many times.
+
+use core.regex as re
+use core.list
+
+def word = `<w: letter+>`
+
+def loop = fun n acc {
+	when n is 0 {
+		acc
+	} else {
+		let ms = re.find-all word "the quick brown fox jumps over the lazy dog again"
+		loop (n - 1) (acc + (list.length ms))
+	}
+}
+
+def main = fun {
+	print (to-string (loop 400 0))
+}
