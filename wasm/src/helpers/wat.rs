@@ -173,6 +173,10 @@ impl Wat {
 	pub(crate) fn local_set(&mut self, l: Local) -> &mut Self {
 		self.push(I::LocalSet(l.0))
 	}
+	/// `local.tee` — set the local and leave the value on the stack.
+	pub(crate) fn local_tee(&mut self, l: Local) -> &mut Self {
+		self.push(I::LocalTee(l.0))
+	}
 	pub(crate) fn global_get(&mut self, g: u32) -> &mut Self {
 		self.push(I::GlobalGet(g))
 	}

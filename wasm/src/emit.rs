@@ -1229,10 +1229,27 @@ impl<'a> FnEmitter<'a> {
 			self.inline_builtin(tag, args);
 			return;
 		}
-		// `task.*` primitive constructors build a cold `$task` directly (the driver
-		// in `helpers/task.rs` runs it). Side-effecting scope-kernel ops are Stage 2.
+		// `task.*` / `scope-new`/`scope-next` pure constructors build a cold `$task`
+		// directly (the scheduler in `helpers/task.rs` runs it).
 		if let Some(kind) = task_builtin_kind(tag) {
 			self.make_task(kind, args);
+			return;
+		}
+		// `s.spawn` is side-effecting (registers a child fiber) and returns a
+		// `HANDLE` task — a call into the scheduler.
+		if tag == "scope-spawn" {
+			match self.runtime.idx(Helper::SchedSpawn) {
+				Some(h) => {
+					for a in args {
+						self.atom(a);
+					}
+					self.ins(Instruction::Call(h));
+				}
+				None => {
+					self.diags.push("scope-spawn needs __sched_spawn".to_string());
+					self.push_nothing();
+				}
+			}
 			return;
 		}
 		// Unary float math (log/exp/sin/cos): unbox the `$float`, call the raw

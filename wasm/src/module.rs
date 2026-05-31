@@ -62,8 +62,12 @@ impl Module {
 				if is_inline_builtin(tag) {
 					return;
 				}
-				// `task.*` primitive constructors build a `$task` inline (no import).
-				if task_builtin_kind(tag).is_some() {
+				// `task.*` / `scope-new`/`scope-next` build a `$task` inline (no import);
+				// the side-effecting scope-kernel ops call driver helpers — both are
+				// handled in `emit`, never as host imports.
+				if task_builtin_kind(tag).is_some()
+					|| matches!(tag, "scope-spawn" | "scope-cancel" | "scope-cancel-after")
+				{
 					return;
 				}
 				// Unary float math: a `(f64) -> f64` host import (box/unbox emitted in
@@ -149,9 +153,11 @@ impl Module {
 			requested.insert(Helper::WireResult);
 		}
 		// An async program exports `__task_entry` as `_entry`; that pulls in the whole
-		// driver (`TaskDrive` + its deps) via `close_deps`.
+		// driver (`TaskDrive` + its deps) via `close_deps`. `SchedSpawn` is reached
+		// only from `emit`'s `s.spawn` (not a helper dep), so request it explicitly.
 		if is_async {
 			requested.insert(Helper::TaskEntry);
+			requested.insert(Helper::SchedSpawn);
 		}
 		close_deps(&mut requested);
 		// The `wire` encode/decode codec threads its recursive state through
@@ -320,33 +326,50 @@ impl Module {
 				ctxlen: wire_global(ValType::I32, &zero_i32),
 			};
 		}
-		// The async driver's activation stack: a growable `$valarray` (`act`, reset
-		// non-null on every `__task_drive`) plus its length cursor (`actlen`).
+		// The async scheduler's module-level state: the current fiber's activation
+		// stack plus the fiber/scope tables, ready deque, timers, and the pump's
+		// output channel. Ref-typed globals start null (set on each `run`).
 		if is_async {
-			let act = gidx;
-			globals_sec.global(
-				GlobalType {
-					val_type: ValType::Ref(RefType {
-						nullable: true,
-						heap_type: HeapType::Concrete(types::T_VALARRAY),
-					}),
-					mutable: true,
-					shared: false,
-				},
-				&ConstExpr::ref_null(HeapType::Concrete(types::T_VALARRAY)),
-			);
-			let actlen = gidx + 1;
-			globals_sec.global(
-				GlobalType {
-					val_type: ValType::I32,
-					mutable: true,
-					shared: false,
-				},
-				&ConstExpr::i32_const(0),
-			);
-			gidx += 2;
-			let _ = gidx; // (last global section; keep the cursor advanced for Stage 2)
-			runtime.taskg = TaskGlobals { act, actlen };
+			let mut task_global = |val_type: ValType, init: &ConstExpr| -> u32 {
+				let idx = gidx;
+				globals_sec.global(
+					GlobalType {
+						val_type,
+						mutable: true,
+						shared: false,
+					},
+					init,
+				);
+				gidx += 1;
+				idx
+			};
+			let null_arr = ConstExpr::ref_null(HeapType::Concrete(types::T_VALARRAY));
+			let null_val = ConstExpr::ref_null(HeapType::Concrete(types::T_VALUE));
+			let zero_i32 = ConstExpr::i32_const(0);
+			let zero_i64 = ConstExpr::i64_const(0);
+			let arr = ValType::Ref(RefType {
+				nullable: true,
+				heap_type: HeapType::Concrete(types::T_VALARRAY),
+			});
+			let val = types::value_ref();
+			runtime.taskg = TaskGlobals {
+				act: task_global(arr, &null_arr),
+				actlen: task_global(ValType::I32, &zero_i32),
+				fibers: task_global(val, &null_val),
+				scopes: task_global(val, &null_val),
+				ready: task_global(val, &null_val),
+				rhead: task_global(ValType::I32, &zero_i32),
+				timers: task_global(val, &null_val),
+				pending: task_global(val, &null_val),
+				now: task_global(ValType::I64, &zero_i64),
+				root_kind: task_global(ValType::I32, &zero_i32),
+				root_val: task_global(val, &null_val),
+				out_kind: task_global(ValType::I32, &zero_i32),
+				out_okerr: task_global(ValType::I32, &zero_i32),
+				out_val: task_global(val, &null_val),
+				out_arg: task_global(ValType::I32, &zero_i32),
+				out_arg64: task_global(ValType::I64, &zero_i64),
+			};
 		}
 
 		// String-constant pool: one passive data segment, every `Const::Str`
@@ -527,27 +550,38 @@ impl Module {
 			}
 		}
 
-		// The async driver builds `result` variants (`task.attempt`, root failure)
-		// and scans poll states for their `__defers` cleanup field.
+		// The async driver builds `result`/`option` variants (`task.attempt`,
+		// `s.next`, root failure) and scans poll states for their `__defers` field.
 		if is_async {
 			let res = "__prelude__.result";
-			let tag_in = |name: &str| {
+			let opt = "__prelude__.option";
+			let tag_in = |qual: &str, name: &str| {
 				p.enums
-					.get(res)
+					.get(qual)
 					.and_then(|vs| vs.iter().position(|(n, _)| n == name))
 					.map(|i| i as u32)
 			};
-			match (tag_in("ok"), tag_in("err")) {
-				(Some(ok_tag), Some(err_tag)) => {
+			match (
+				tag_in(res, "ok"),
+				tag_in(res, "err"),
+				tag_in(opt, "some"),
+				tag_in(opt, "none"),
+			) {
+				(Some(ok_tag), Some(err_tag), Some(some_tag), Some(none_tag)) => {
 					runtime.tasklits = TaskLits {
 						ok_tag,
 						err_tag,
 						ok_name: strpool.intern(&variant_display(res, ok_tag, &p.enums)),
 						err_name: strpool.intern(&variant_display(res, err_tag, &p.enums)),
+						some_tag,
+						none_tag,
+						some_name: strpool.intern(&variant_display(opt, some_tag, &p.enums)),
+						none_name: strpool.intern(&variant_display(opt, none_tag, &p.enums)),
 						defers_name: strpool.intern("__defers"),
+						cancelled_msg: strpool.intern("scope cancelled"),
 					};
 				}
-				_ => diags.push("async runtime needs the `result` enum".to_string()),
+				_ => diags.push("async runtime needs the `result` + `option` enums".to_string()),
 			}
 		}
 

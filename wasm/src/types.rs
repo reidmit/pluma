@@ -77,6 +77,9 @@ pub const TAG_DICT: i32 = 16;
 /// program root (mirroring the VM's `matches!(value, Value::Task(_))`). Built and
 /// consumed only by the hand-emitted async driver — never printed.
 pub const TAG_TASK: i32 = 17;
+/// A `scope-handle` / `manual-scope-handle`: a `$int`-shaped box (`{ tag, i64 }`)
+/// carrying a scope id. The `scope-*` builtins read its id; never printed.
+pub const TAG_SCOPE_HANDLE: i32 = 18;
 
 /// `(ref null $valarray)` — a reference to a value array (closure captures or
 /// variant payload).

@@ -327,14 +327,20 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::TaskDrive,
 		fn_type: Ty::Helper(1),
-		deps: &[H::PollStep, H::PollDefersState, H::ActPush],
+		deps: &[
+			H::Pump,
+			H::FiberCompleted,
+			H::CancelScope,
+			H::Park,
+			H::ListAppend,
+		],
 		build: |c| {
-			let arity1 = c.arity(1);
-			task::build_task_drive_fn(
-				c.dep(H::PollStep),
-				c.dep(H::PollDefersState),
-				c.dep(H::ActPush),
-				arity1,
+			task::build_run_task_fn(
+				c.dep(H::Pump),
+				c.dep(H::FiberCompleted),
+				c.dep(H::CancelScope),
+				c.dep(H::Park),
+				c.dep(H::ListAppend),
 				c.rt.taskg,
 				c.rt.tasklits,
 			)
@@ -380,6 +386,94 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 			let entry = c.rt.entry_idx.expect("async program needs an entry index");
 			task::build_task_entry_fn(entry, c.dep(H::TaskDrive))
 		},
+	},
+	HelperDef {
+		id: H::Pump,
+		fn_type: Ty::Helper(3),
+		deps: &[H::PollStep, H::PollDefersState, H::ActPush, H::StartScope],
+		build: |c| {
+			let arity1 = c.arity(1);
+			task::build_pump_fn(
+				c.dep(H::PollStep),
+				c.dep(H::PollDefersState),
+				c.dep(H::ActPush),
+				c.dep(H::StartScope),
+				arity1,
+				c.rt.taskg,
+				c.rt.tasklits,
+			)
+		},
+	},
+	HelperDef {
+		id: H::StartScope,
+		fn_type: Ty::Helper(3),
+		deps: &[H::ListAppend],
+		build: |c| {
+			let arity1 = c.arity(1);
+			task::build_start_scope_fn(c.dep(H::ListAppend), arity1, c.rt.taskg)
+		},
+	},
+	HelperDef {
+		id: H::SchedSpawn,
+		fn_type: Ty::Helper(2),
+		deps: &[H::ListAppend],
+		build: |c| task::build_sched_spawn_fn(c.dep(H::ListAppend), c.rt.taskg),
+	},
+	HelperDef {
+		id: H::FiberCompleted,
+		fn_type: Ty::Helper(3),
+		deps: &[H::OnBodyDone, H::OnChildDone],
+		build: |c| task::build_fiber_completed_fn(c.dep(H::OnBodyDone), c.dep(H::OnChildDone), c.rt.taskg),
+	},
+	HelperDef {
+		id: H::OnBodyDone,
+		fn_type: Ty::Helper(3),
+		deps: &[H::ReapFiber, H::TryFinalizeScope],
+		build: |c| task::build_on_body_done_fn(c.dep(H::ReapFiber), c.dep(H::TryFinalizeScope), c.rt.taskg),
+	},
+	HelperDef {
+		id: H::OnChildDone,
+		fn_type: Ty::Helper(4),
+		deps: &[H::CancelScope, H::TryFinalizeScope, H::ListAppend],
+		build: |c| {
+			task::build_on_child_done_fn(
+				c.dep(H::CancelScope),
+				c.dep(H::TryFinalizeScope),
+				c.dep(H::ListAppend),
+				c.rt.taskg,
+				c.rt.tasklits,
+			)
+		},
+	},
+	HelperDef {
+		id: H::CancelScope,
+		fn_type: Ty::Helper(1),
+		deps: &[H::ReapFiber, H::TryFinalizeScope],
+		build: |c| task::build_cancel_scope_fn(c.dep(H::ReapFiber), c.dep(H::TryFinalizeScope), c.rt.taskg),
+	},
+	HelperDef {
+		id: H::ReapFiber,
+		fn_type: Ty::Helper(1),
+		deps: &[H::CancelScope, H::PollDefersState],
+		build: |c| task::build_reap_fiber_fn(c.dep(H::CancelScope), c.dep(H::PollDefersState), c.rt.taskg),
+	},
+	HelperDef {
+		id: H::TryFinalizeScope,
+		fn_type: Ty::Helper(1),
+		deps: &[H::ListAppend],
+		build: |c| task::build_try_finalize_scope_fn(c.dep(H::ListAppend), c.rt.taskg, c.rt.tasklits),
+	},
+	HelperDef {
+		id: H::Park,
+		fn_type: Ty::Helper(3),
+		deps: &[H::ListAppend],
+		build: |c| task::build_park_fn(c.dep(H::ListAppend), c.rt.taskg),
+	},
+	HelperDef {
+		id: H::ListAppend,
+		fn_type: Ty::Helper(2),
+		deps: &[H::ArrConcat],
+		build: |c| task::build_list_append_fn(c.dep(H::ArrConcat)),
 	},
 ];
 

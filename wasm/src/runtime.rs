@@ -45,6 +45,67 @@ pub(crate) mod act_kind {
 	pub(crate) const MAP: i32 = 4; // (f)
 }
 
+/// The Stage-2 cooperative scheduler's layout constants — fiber/scope field
+/// indices (each is a mutable `$valarray` "record"), and the small kind enums the
+/// scheduler encodes as boxed ints. Mirrors `vm::task`'s `Fiber`/`Scope`/`Wait`/
+/// `Outcome`/`Focus`.
+pub(crate) mod sched {
+	/// `Fiber` fields (a mutable `$valarray` of `COUNT` boxed slots).
+	pub(crate) mod fiber {
+		pub(crate) const ACT: u32 = 0; // $list of activation $variants (the await chain)
+		pub(crate) const SCOPE: u32 = 1; // boxed int — owning scope id
+		pub(crate) const RUNS_SCOPE: u32 = 2; // boxed int — scope id this is the body of (-1 = none)
+		pub(crate) const RES_KIND: u32 = 3; // boxed int — outcome kind (0 none/1 ok/2 err/3 cancelled)
+		pub(crate) const RES_VAL: u32 = 4; // value — settled result
+		pub(crate) const WAIT_KIND: u32 = 5; // boxed int — what it's parked on
+		pub(crate) const WAIT_ARG: u32 = 6; // boxed int — the park target (fid/sid)
+		pub(crate) const ALIVE: u32 = 7; // boxed int — 0/1
+		pub(crate) const WAITERS: u32 = 8; // $list of waiter fids (boxed ints)
+		pub(crate) const COUNT: u32 = 9;
+	}
+	/// `Scope` fields.
+	pub(crate) mod scope {
+		pub(crate) const MANUAL: u32 = 0; // boxed int — 0/1
+		pub(crate) const CANCELLED: u32 = 1; // boxed int — 0/1
+		pub(crate) const FINALIZED: u32 = 2; // boxed int — 0/1
+		pub(crate) const BODY: u32 = 3; // boxed int — root body fid
+		pub(crate) const CHILDREN: u32 = 4; // $list of child fids
+		pub(crate) const AWAITER: u32 = 5; // boxed int — fid awaiting this scope (-1 = none)
+		pub(crate) const BD_KIND: u32 = 6; // boxed int — body outcome kind (0 = not done)
+		pub(crate) const BD_VAL: u32 = 7; // value — body outcome value
+		pub(crate) const FAIL_SET: u32 = 8; // boxed int — 0/1 (a fail-fast failure is set)
+		pub(crate) const FAIL_VAL: u32 = 9; // value — the failure
+		pub(crate) const COMPLETED: u32 = 10; // $list of settled child outcomes (for s.next), FIFO
+		pub(crate) const NEXT_WAITERS: u32 = 11; // $list of fids parked in s.next
+		pub(crate) const COUNT: u32 = 12;
+	}
+	/// What a fiber is parked on (`Wait`).
+	pub(crate) mod wait {
+		pub(crate) const NONE: i32 = 0;
+		pub(crate) const YIELD: i32 = 1;
+		pub(crate) const SLEEP: i32 = 2; // arg = nanos
+		pub(crate) const HANDLE: i32 = 3; // arg = child fid
+		pub(crate) const NEXT: i32 = 4; // arg = scope id
+		pub(crate) const SCOPE: i32 = 5; // arg = scope id
+	}
+	/// A fiber's focus on its next turn (`Focus`).
+	pub(crate) mod focus {
+		pub(crate) const START: i32 = 0;
+		pub(crate) const OK: i32 = 1;
+		pub(crate) const ERR: i32 = 2;
+	}
+	/// How a fiber/scope finished (`Outcome`).
+	pub(crate) mod outcome {
+		pub(crate) const NONE: i32 = 0;
+		pub(crate) const OK: i32 = 1;
+		pub(crate) const ERR: i32 = 2;
+		pub(crate) const CANCELLED: i32 = 3;
+	}
+	pub(crate) const NO_AWAITER: i64 = -1;
+	pub(crate) const NO_SCOPE: i64 = -1;
+	pub(crate) const ROOT_SCOPE: i64 = 0;
+}
+
 /// A reachable IR global realized as a lazily-initialized wasm value: a cached
 /// value (`val_idx`) behind an `i32` init flag (`init_idx`), built on first
 /// access. (Builtin globals are call-only; Const globals aren't realized yet.)
@@ -154,13 +215,36 @@ pub(crate) enum Helper {
 	/// `__task_entry(env) -> value` — the async program entry: call the real IR
 	/// entry, then drive the task it returns. Exported as `_entry` when async.
 	TaskEntry,
+	// --- Stage 2 cooperative scheduler (helpers/task.rs) ---
+	/// `__pump(fid, fkind, fval)` — advance one fiber until it completes or parks.
+	Pump,
+	/// `__start_scope(fid, manual, body_fn) -> sid` — create a scope + body fiber.
+	StartScope,
+	/// `__sched_spawn(handle, task) -> handle-task` — `s.spawn` (side-effecting).
+	SchedSpawn,
+	/// `__fiber_completed(fid, kind, val)` — route a settled fiber's outcome.
+	FiberCompleted,
+	/// `__on_body_done(sid, kind, val)` — a scope body settled.
+	OnBodyDone,
+	/// `__on_child_done(sid, fid, kind, val)` — a spawned child settled.
+	OnChildDone,
+	/// `__cancel_scope(sid)` — cancel a scope and everything it owns.
+	CancelScope,
+	/// `__reap_fiber(fid)` — abandon a fiber, running its `defer`s.
+	ReapFiber,
+	/// `__try_finalize_scope(sid)` — finalize once body + children have settled.
+	TryFinalizeScope,
+	/// `__park(fid, wait_kind, wait_arg)` — register a parked fiber.
+	Park,
+	/// `__list_append(list, elem) -> list` — append one element (O(n) rebuild).
+	ListAppend,
 }
 
 impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 41;
+	pub(crate) const COUNT: usize = 52;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable
@@ -364,25 +448,49 @@ pub(crate) struct OrderingLits {
 	pub(crate) gt_name: (u32, u32),
 }
 
-/// The async driver's module-level mutable globals: the single fiber's activation
-/// stack, a `$valarray` (`act`) used as a growable stack with a separate length
-/// cursor (`actlen`). Allocated only when a reachable program is async.
+/// The async scheduler's module-level mutable globals. The currently-pumping
+/// fiber's await chain is loaded into `act`/`actlen` (a growable `$valarray`
+/// stack) for the duration of its pump, then saved back to its `Fiber.ACT`. The
+/// rest is the cooperative scheduler state (`vm::task::Scheduler`): the fiber and
+/// scope tables, the ready deque, the virtual timer list, and the deferred-cancel
+/// queue, plus the pump's outcome/park output channel. Allocated only when async.
 #[derive(Clone, Copy, Default)]
 pub(crate) struct TaskGlobals {
-	pub(crate) act: u32,    // mut ref null $valarray — activation stack backing
+	pub(crate) act: u32,    // mut ref null $valarray — current fiber's activation stack
 	pub(crate) actlen: u32, // mut i32 — activation count
+	pub(crate) fibers: u32, // mut ref null $value — $list of fiber field-arrays (by fid)
+	pub(crate) scopes: u32, // mut ref null $value — $list of scope field-arrays (by sid)
+	pub(crate) ready: u32,  // mut ref null $value — $list of ready entries (fid, focus_kind, val)
+	pub(crate) rhead: u32,  // mut i32 — ready deque head cursor (pop_front)
+	pub(crate) timers: u32, // mut ref null $value — $list of timer entries (at, kind, arg)
+	pub(crate) pending: u32, // mut ref null $value — $list of scope ids to cancel between steps
+	pub(crate) now: u32,    // mut i64 — virtual clock (nanoseconds)
+	pub(crate) root_kind: u32, // mut i32 — root outcome kind (0 = not done yet)
+	pub(crate) root_val: u32,  // mut ref null $value — root outcome value
+	pub(crate) out_kind: u32,  // mut i32 — pump output: 1 done / 2 park
+	pub(crate) out_okerr: u32, // mut i32 — on done: outcome kind (ok/err); on park: wait kind
+	pub(crate) out_val: u32,   // mut ref null $value — on done: outcome value
+	pub(crate) out_arg: u32,   // mut i32 — on park: wait arg (fid/sid), or sleep nanos low bits unused
+	pub(crate) out_arg64: u32, // mut i64 — on park sleep: nanos
 }
 
-/// What the async driver needs to build `result` variants (`task.attempt`, root
-/// failure) and find a poll state's cleanup list: the `ok`/`err` tags + interned
-/// display names, and the interned `__defers` field name `(off, len)`.
+/// What the async driver needs to build `result`/`option` variants and find a
+/// poll state's cleanup list: the `ok`/`err`/`some`/`none` tags + interned display
+/// names, the interned `__defers` field name, and the "scope cancelled" error
+/// string a self-cancelled scope hands its awaiter. `(off, len)` are data-segment
+/// offsets.
 #[derive(Clone, Copy, Default)]
 pub(crate) struct TaskLits {
 	pub(crate) ok_tag: u32,
 	pub(crate) err_tag: u32,
 	pub(crate) ok_name: (u32, u32),
 	pub(crate) err_name: (u32, u32),
+	pub(crate) some_tag: u32,
+	pub(crate) none_tag: u32,
+	pub(crate) some_name: (u32, u32),
+	pub(crate) none_name: (u32, u32),
 	pub(crate) defers_name: (u32, u32),
+	pub(crate) cancelled_msg: (u32, u32),
 }
 
 /// What `__dict_lookup` needs to construct `some v` / `none` `$variant`s: each
@@ -568,12 +676,11 @@ pub(crate) fn is_inline_builtin(tag: &str) -> bool {
 	)
 }
 
-/// The `$task` `kind` a `task.*` primitive constructor builtin builds, if any.
-/// These need no host import (they build a `$task` inline) and no `__poll` driver
-/// at the call site — the driver runs them later. Only the pure constructors are
-/// here; the side-effecting scope-kernel ops (`scope-spawn`/`scope-cancel`/
-/// `scope-cancel-after`) and the scope-task constructors (`scope-new`/`scope-next`)
-/// are Stage 2.
+/// The `$task` `kind` a `task.*`/`scope-*` *pure constructor* builtin builds, if
+/// any. These need no host import (they build a `$task` inline) and no `__poll`
+/// driver at the call site — the scheduler runs them later. The side-effecting
+/// scope-kernel ops (`scope-spawn`/`scope-cancel`/`scope-cancel-after`) are NOT
+/// here — they're routed to driver helpers in `emit.rs`.
 pub(crate) fn task_builtin_kind(tag: &str) -> Option<i32> {
 	Some(match tag {
 		"task-return" => task_kind::PURE,
@@ -585,6 +692,8 @@ pub(crate) fn task_builtin_kind(tag: &str) -> Option<i32> {
 		"task-attempt" => task_kind::ATTEMPT,
 		"task-map" => task_kind::MAP,
 		"task-shielded" => task_kind::SHIELDED,
+		"scope-new" => task_kind::SCOPE,
+		"scope-next" => task_kind::NEXT,
 		_ => return None,
 	})
 }

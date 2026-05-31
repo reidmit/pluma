@@ -199,6 +199,8 @@ const WASM_FIXTURES: &[&str] = &[
 	"task-fail",
 	"task-combinators",
 	"task-trait-poly",
+	// async (Stage 2: scheduler — scopes/fibers/timers/cancellation)
+	"scope-both",
 ];
 
 // Runtime tags — must match `wasm::types`.
@@ -730,6 +732,19 @@ fn compile_check(dir: &Path) -> Option<Compiler> {
 	vm::stdlib::register_compiler(&mut compiler);
 	compiler.check().ok()?;
 	Some(compiler)
+}
+
+#[test]
+#[ignore]
+fn dump_one() {
+	let name = std::env::var("DUMP").unwrap_or_else(|_| "scope-both".into());
+	let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+	let dir = workspace.join("tests/run").join(&name);
+	let compiler = compile_check(&dir).unwrap();
+	let ir_program = ir::lower(&compiler).unwrap();
+	let bytes = wasm::emit(&ir_program).unwrap_or_else(|d| panic!("emit: {d:?}"));
+	std::fs::write(format!("/tmp/{name}.wasm"), &bytes).unwrap();
+	eprintln!("wrote /tmp/{name}.wasm ({} bytes)", bytes.len());
 }
 
 #[test]
