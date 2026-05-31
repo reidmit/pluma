@@ -22,6 +22,19 @@ use wasmtime::{
 };
 
 // Fixtures the WASM backend covers end-to-end today. Grow as coverage grows.
+//
+// Intentionally NOT on this list (and why), so a future reader doesn't mistake
+// them for unfinished work:
+//   - `io-*` (filesystem + stdin: read/read-all, read-file/write-file/append-file,
+//     file-exists/delete-file, is-dir/read-dir/make-dir, and the `*-bytes` variants).
+//     These are host capabilities, not language features — a browser wasm target has
+//     no filesystem, and the throwaway test host here only wires the stdout writers.
+//     The value-returning host-import path exists (`for_host(arity, true)`), so a
+//     server/wasi target can add `host_sig` rows + real glue when that lands.
+//   - `list-fold` / `list-pattern-if` are compile-error/warning fixtures (they never
+//     produce a VM run to diff against), and `builtin-unknown-tag` exercises the VM's
+//     "unknown builtin" *runtime* error — there's no builtin to import, so emit
+//     correctly rejects it. None are codegen gaps.
 const WASM_FIXTURES: &[&str] = &[
 	"regex-matches",
 	"regex-find",
@@ -71,6 +84,7 @@ const WASM_FIXTURES: &[&str] = &[
 	"dict-equality",
 	"dict-tostring",
 	"deep-recursion",
+	"debug-passthrough",
 	"defer-cleanup",
 	"double-int-float",
 	"duration-literals",

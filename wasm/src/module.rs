@@ -58,6 +58,18 @@ impl Module {
 					requested.insert(h);
 					return;
 				}
+				// `debug` is emitted inline (see `emit_debug`): it renders the value
+				// via `__tostring`, concatenates the `[module:line]` prefix with
+				// `__bytesconcat`, and prints the line through the `print` host import.
+				if tag == "debug" {
+					requested.insert(Helper::ToString);
+					requested.insert(Helper::BytesConcat);
+					if !host_index.contains_key("print") {
+						host_index.insert("print".to_string(), host_order.len() as u32);
+						host_order.push("print".to_string());
+					}
+					return;
+				}
 				// Pure-compute builtins emitted inline at the call site (no import).
 				if is_inline_builtin(tag) {
 					return;

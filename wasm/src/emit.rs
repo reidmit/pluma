@@ -73,6 +73,10 @@ pub(crate) struct FnEmitter<'a> {
 	/// defer-free function, which pays nothing. Each `PushDefer` prepends; each
 	/// `Return` runs the list via `__run_defers` before returning.
 	defers_local: Option<u32>,
+	/// Source line (0-based) of the statement currently being emitted, refreshed
+	/// per `Stmt` in `block`. Only consumed by `debug`, which renders a
+	/// `[<module>:<line>]` call-site header like the VM's `debug` builtin.
+	cur_line: usize,
 	body: Vec<Instruction<'static>>,
 }
 
@@ -149,6 +153,7 @@ impl<'a> FnEmitter<'a> {
 			depth: 0,
 			loop_stack: Vec::new(),
 			defers_local: None,
+			cur_line: 0,
 			body: Vec::new(),
 		}
 	}
@@ -205,6 +210,7 @@ impl<'a> FnEmitter<'a> {
 
 	fn block(&mut self, b: &Block) {
 		for s in &b.0 {
+			self.cur_line = s.range.start.line;
 			self.stmt(&s.kind);
 		}
 	}
@@ -1224,6 +1230,12 @@ impl<'a> FnEmitter<'a> {
 	}
 
 	fn host_call(&mut self, tag: &str, args: &[Atom]) {
+		// `debug x` prints a `[<module>:<line>]` header then returns `x` unchanged.
+		// Emitted inline (the call site is known statically) rather than imported.
+		if tag == "debug" {
+			self.emit_debug(args);
+			return;
+		}
 		// Pure-compute builtins emitted inline over the `$value` GC layout.
 		if is_inline_builtin(tag) {
 			self.inline_builtin(tag, args);
@@ -1472,6 +1484,61 @@ impl<'a> FnEmitter<'a> {
 		if !host_sig(tag).map(|s| s.returns_value).unwrap_or(true) {
 			self.push_nothing();
 		}
+	}
+
+	/// `debug x`: print `[<module>:<line>] <to-string x>` (the host `print` import
+	/// appends the newline), then leave `x` on the stack unchanged. Mirrors the VM's
+	/// `debug` builtin — the `<module>:<line>` call site is known statically, so the
+	/// prefix is built inline (an `array.new_fixed` of its bytes) and the value's
+	/// `to-string` bytes are concatenated onto it. The atom is re-emitted as the
+	/// rvalue; atoms (a var or inline const) are side-effect-free to evaluate twice.
+	fn emit_debug(&mut self, args: &[Atom]) {
+		let arg = &args[0];
+		let prefix = format!("[{}:{}] ", self.f.module, self.cur_line + 1);
+		let (Some(ts), Some(bc)) = (
+			self.runtime.idx(Helper::ToString),
+			self.runtime.idx(Helper::BytesConcat),
+		) else {
+			self
+				.diags
+				.push("debug needs __tostring/__bytesconcat".to_string());
+			self.atom(arg);
+			return;
+		};
+		// Prefix bytes (compile-time constant) as a `$bytes` array.
+		for &b in prefix.as_bytes() {
+			self.ins(Instruction::I32Const(b as i32));
+		}
+		self.ins(Instruction::ArrayNewFixed {
+			array_type_index: types::T_BYTES,
+			array_size: prefix.len() as u32,
+		});
+		// `to-string(arg)` -> `$str`; take its backing `$bytes`.
+		self.atom(arg);
+		self.ins(Instruction::Call(ts));
+		self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+			types::T_STR,
+		)));
+		self.ins(Instruction::StructGet {
+			struct_type_index: types::T_STR,
+			field_index: 1,
+		});
+		// Concat (prefix ++ rendered value), rewrap as a `$str`.
+		self.ins(Instruction::Call(bc));
+		let tmp = self.fresh_local(types::bytes_ref());
+		self.ins(Instruction::LocalSet(tmp));
+		self.ins(Instruction::I32Const(types::TAG_STR));
+		self.ins(Instruction::LocalGet(tmp));
+		self.ins(Instruction::StructNew(types::T_STR));
+		// Print the assembled line (host appends the newline).
+		match self.host_index.get("print").copied() {
+			Some(idx) => self.ins(Instruction::Call(idx)),
+			None => self
+				.diags
+				.push("debug needs the `print` host import".to_string()),
+		}
+		// `debug` returns its argument unchanged.
+		self.atom(arg);
 	}
 
 	/// Emit a pure-compute builtin inline over the `$value` GC layout.
