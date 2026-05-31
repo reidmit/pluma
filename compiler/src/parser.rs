@@ -760,6 +760,10 @@ impl<'a> Parser<'a> {
 				// these are prefix unary operators!
 				let operator = match t {
 					Token::UnaryMinus(..) => Operator::SubtractionOrNegation,
+					// `!` is logical-not in prefix position. `from_token` only maps
+					// the infix operators (it has no row for `Bang`), so handle it
+					// here alongside the other prefixes rather than unwrapping `None`.
+					Token::Bang(..) => Operator::LogicalNot,
 					_ => Operator::from_token(t).unwrap(),
 				};
 				self.advance();

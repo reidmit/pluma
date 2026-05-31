@@ -1,0 +1,13 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+false
+true
+false
+x is not big
+true
+== stderr ==
