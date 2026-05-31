@@ -159,30 +159,19 @@ def result-to-task :: fun (result a e) -> task a = fun r {
 
 # Awaits a list of already-spawned handles in order, collecting their values.
 # Handles run concurrently regardless of the order they're awaited in -- this
-# is just the sequential back half of `all` / `settle-all`.
+# is just the sequential back half of `all` / `settle-all`. O(n): each result is
+# `list.push`ed onto a fresh accumulator, vs the O(n^2) `[h, ...rest]` recursion
+# (the tail-copy of `...rest` plus the `[x, ...xs]` rebuild).
 def await-all :: fun (list (task a)) -> task (list a) = fun handles {
-	let n = list.length handles
-	when n is 0 {
-		return []
-	} else {
-		# Seed a right-sized accumulator from the first result, then fill the
-		# rest in place by index. This is O(n); the naive `[h, ...rest]` recursion
-		# is O(n^2) (the tail-copy of `...rest` plus the `[x, ...xs]` rebuild),
-		# which dominated `all`/`settle-all` for large task lists on both backends.
-		try first = list.get handles 0
-		let acc = list.build n fun _i {
-			first
-		}
-		await-into handles acc 1 n
-	}
+	await-into handles [] 0 (list.length handles)
 }
 
-# The in-place fill loop for `await-all`: awaits `handles[i]` in order, writing
-# each result into the pre-sized `acc`.
+# The fill loop for `await-all`: awaits `handles[i]` in order, pushing each
+# result onto `acc` (a fresh, solely-owned list, so the in-place push is safe).
 def await-into :: fun (list (task a)) (list a) int int -> task (list a) = fun handles acc i n {
 	if i < n is true {
 		try x = list.get handles i
-		let _ = list.set acc i x
+		let _ = list.push acc x
 		await-into handles acc (i + 1) n
 	} else {
 		return acc
@@ -287,20 +276,25 @@ public def with-timeout :: fun duration (task a) -> task a = fun d t {
 
 # Drives `pool`: each time a child settles, re-raise a failure (fail-fast) or
 # record the value and start one more from the backlog, until the scope drains.
-# `backlog` holds the not-yet-started tasks.
-def gather :: fun (manual-scope-handle a) (ref (list (task a))) (list a) -> task (list a) = fun s backlog acc {
+# `next` is the index of the next not-yet-started task in `ts` (an O(1) cursor,
+# vs popping `[head, ...rest]` off a shrinking list); results are pushed onto
+# `acc` in completion order (O(1), vs the `[x, ...acc]` prepend + final reverse).
+def gather :: fun (manual-scope-handle a) (list (task a)) (ref int) (list a) -> task (list a) = fun s ts next acc {
 	try got = s.next ()
 	when got is none {
-		return (list.reverse acc)
+		return acc
 	} is some r {
 		try x = result-to-task r
-		when ref.get backlog is [head, ...rest] {
-			ref.set backlog rest
-			let _ = s.spawn head
-			gather s backlog [x, ...acc]
-		} is [] {
-			gather s backlog [x, ...acc]
+		let _ = list.push acc x
+		let i = ref.get next
+		let _ = when i < (list.length ts) is true {
+			ref.set next (i + 1)
+			let _ = s.spawn (list.get ts i)
+			()
+		} is false {
+			()
 		}
+		gather s ts next acc
 	}
 }
 
@@ -309,10 +303,9 @@ def gather :: fun (manual-scope-handle a) (ref (list (task a))) (list a) -> task
 # the first failure.
 public def pool :: fun int (list (task a)) -> task (list a) = fun n ts {
 	manual scope as s {
-		let backlog = ref.new (list.drop ts n)
 		let _ = list.map (list.take ts n) fun t {
 			s.spawn t
 		}
-		gather s backlog []
+		gather s ts (ref.new n) []
 	}
 }
