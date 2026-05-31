@@ -19,6 +19,7 @@ mod dict;
 mod eq;
 mod list;
 mod record;
+mod task;
 mod tostring;
 mod wat;
 mod wire;
@@ -321,6 +322,63 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 			// wasm arity 1), so the run helper calls them with `(env, unit)`.
 			let thunk_ty = c.arity(1);
 			list::build_run_defers_fn(thunk_ty)
+		},
+	},
+	HelperDef {
+		id: H::TaskDrive,
+		fn_type: Ty::Helper(1),
+		deps: &[H::PollStep, H::PollDefersState, H::ActPush],
+		build: |c| {
+			let arity1 = c.arity(1);
+			task::build_task_drive_fn(
+				c.dep(H::PollStep),
+				c.dep(H::PollDefersState),
+				c.dep(H::ActPush),
+				arity1,
+				c.rt.taskg,
+				c.rt.tasklits,
+			)
+		},
+	},
+	HelperDef {
+		id: H::PollStep,
+		fn_type: Ty::Helper(3),
+		deps: &[H::PollDefersList],
+		build: |c| {
+			let arity2 = c.arity(2);
+			task::build_poll_step_fn(c.dep(H::PollDefersList), arity2)
+		},
+	},
+	HelperDef {
+		id: H::PollDefersList,
+		fn_type: Ty::Helper(1),
+		deps: &[],
+		build: |c| {
+			let arity1 = c.arity(1);
+			task::build_poll_defers_list_fn(arity1)
+		},
+	},
+	HelperDef {
+		id: H::PollDefersState,
+		fn_type: Ty::Helper(1),
+		deps: &[H::Eq, H::PollDefersList],
+		build: |c| {
+			task::build_poll_defers_state_fn(c.dep(H::Eq), c.dep(H::PollDefersList), c.rt.tasklits.defers_name)
+		},
+	},
+	HelperDef {
+		id: H::ActPush,
+		fn_type: Ty::Helper(1),
+		deps: &[],
+		build: |c| task::build_act_push_fn(c.rt.taskg),
+	},
+	HelperDef {
+		id: H::TaskEntry,
+		fn_type: Ty::Helper(1),
+		deps: &[H::TaskDrive],
+		build: |c| {
+			let entry = c.rt.entry_idx.expect("async program needs an entry index");
+			task::build_task_entry_fn(entry, c.dep(H::TaskDrive))
 		},
 	},
 ];

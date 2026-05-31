@@ -18,6 +18,7 @@ use std::collections::{HashMap, HashSet};
 
 use ir::{Block, Callee, GlobalInit, IrProgram, PreEval, Rvalue, StmtKind};
 
+mod async_lower;
 mod emit;
 mod helpers;
 mod module;
@@ -54,6 +55,10 @@ pub fn emit(program: &IrProgram) -> Result<Vec<u8>, Diagnostics> {
 	//    a direct call); coercion makes boxing explicit so the emitter reads
 	//    i64/f64/i32 vs GC-ref straight off `var_reprs`.
 	let mut p = program.clone();
+	// Async lowering FIRST: cps-transform awaiting functions into poll fns and
+	// rewrite their bodies into `$task` constructors (so the Await-bodies never
+	// reach the emitter). `is_async` gates the driver emission + entry wrapping.
+	let is_async = async_lower::lower(&mut p);
 	ir::resolve::resolve_direct_calls(&mut p);
 	// Record-shape monomorphization: clone record-param functions per call-site
 	// shape so the clone reads its param by `struct.get` (and the caller passes it
@@ -71,7 +76,7 @@ pub fn emit(program: &IrProgram) -> Result<Vec<u8>, Diagnostics> {
 
 	// 3. Build and encode the module.
 	let mut diags = Diagnostics::default();
-	let bytes = module::Module::build(&p, &reach, &param_shapes, &mut diags);
+	let bytes = module::Module::build(&p, &reach, &param_shapes, is_async, &mut diags);
 	if diags.is_empty() {
 		Ok(bytes)
 	} else {

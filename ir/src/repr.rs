@@ -459,11 +459,28 @@ impl Coercer<'_> {
 				if let Rvalue::Use(a) = &mut rv {
 					let target = self.reprs[v.0 as usize];
 					self.coerce(a, target, &mut pre, range);
+					StmtKind::Let(v, rv)
 				} else {
 					let sigs = self.sigs;
 					for_each_required_operand(&mut rv, sigs, |a, r| self.coerce(a, r, &mut pre, range));
+					// Coerce the OUTPUT too. Normally `infer_reprs` set `v`'s repr to this
+					// rvalue's natural repr, so this is a no-op. But a var with multiple
+					// defs of *different* natural reprs that isn't a join var (e.g. the CPS
+					// poll fn's dispatch var: `GetField` of `__tag` (boxed) in the entry,
+					// then `Use(Const::Int)` (i64) in loop arms) settles on one repr — so
+					// the other def needs a Box/Unbox to match `v`'s local type.
+					let natural = result_repr(&rv, &self.reprs, sigs);
+					let target = self.reprs[v.0 as usize];
+					if natural == target {
+						StmtKind::Let(v, rv)
+					} else {
+						let tmp = self.fresh(natural);
+						pre.push(Stmt::new(StmtKind::Let(tmp, rv), range));
+						let mut atom = Atom::Var(tmp);
+						self.coerce(&mut atom, target, &mut pre, range);
+						StmtKind::Let(v, Rvalue::Use(atom))
+					}
 				}
-				StmtKind::Let(v, rv)
 			}
 			StmtKind::Discard(mut rv) => {
 				let sigs = self.sigs;

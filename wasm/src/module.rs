@@ -20,8 +20,8 @@ use crate::helpers::{
 };
 use crate::runtime::{
 	GlobalKind, GlobalSlot, Helper, HelperCtx, HelperSet, OptionLits, OrderingLits, Runtime,
-	ToStringLits, WireGlobals, WireResultLits, WireTags, host_sig, is_f64_unary_host,
-	is_inline_builtin, scan_helpers,
+	TaskGlobals, TaskLits, ToStringLits, WireGlobals, WireResultLits, WireTags, host_sig,
+	is_f64_unary_host, is_inline_builtin, scan_helpers, task_builtin_kind,
 };
 use crate::scan::{
 	StrPool, builtin_var_tags, collect_host_calls, collect_zero_arg_closures, scan_strings,
@@ -38,6 +38,7 @@ impl Module {
 		p: &IrProgram,
 		reach: &Reach,
 		param_shapes: &HashMap<u32, Vec<Option<ir::RecordShape>>>,
+		is_async: bool,
 		diags: &mut Diagnostics,
 	) -> Vec<u8> {
 		let builtin_g = builtin_globals(p);
@@ -59,6 +60,10 @@ impl Module {
 				}
 				// Pure-compute builtins emitted inline at the call site (no import).
 				if is_inline_builtin(tag) {
+					return;
+				}
+				// `task.*` primitive constructors build a `$task` inline (no import).
+				if task_builtin_kind(tag).is_some() {
 					return;
 				}
 				// Unary float math: a `(f64) -> f64` host import (box/unbox emitted in
@@ -143,6 +148,11 @@ impl Module {
 		if requested.contains(&Helper::WireDec) {
 			requested.insert(Helper::WireResult);
 		}
+		// An async program exports `__task_entry` as `_entry`; that pulls in the whole
+		// driver (`TaskDrive` + its deps) via `close_deps`.
+		if is_async {
+			requested.insert(Helper::TaskEntry);
+		}
 		close_deps(&mut requested);
 		// The `wire` encode/decode codec threads its recursive state through
 		// module-level mutable globals; allocate them once when either is reachable.
@@ -151,6 +161,8 @@ impl Module {
 		// Assign each needed helper a wasm index, walking `REGISTRY` (= `Helper`)
 		// order — the same order emission replays below.
 		let mut runtime = Runtime::default();
+		// `__task_entry` calls the real IR entry, then drives the task it returns.
+		runtime.entry_idx = wasm_index.get(&p.entry.0).copied();
 		let mut next_synth = synth_base;
 		for def in &REGISTRY {
 			if requested.contains(&def.id) {
@@ -307,6 +319,34 @@ impl Module {
 				ctx: wire_global(nullable(types::T_VALARRAY), &null_arr),
 				ctxlen: wire_global(ValType::I32, &zero_i32),
 			};
+		}
+		// The async driver's activation stack: a growable `$valarray` (`act`, reset
+		// non-null on every `__task_drive`) plus its length cursor (`actlen`).
+		if is_async {
+			let act = gidx;
+			globals_sec.global(
+				GlobalType {
+					val_type: ValType::Ref(RefType {
+						nullable: true,
+						heap_type: HeapType::Concrete(types::T_VALARRAY),
+					}),
+					mutable: true,
+					shared: false,
+				},
+				&ConstExpr::ref_null(HeapType::Concrete(types::T_VALARRAY)),
+			);
+			let actlen = gidx + 1;
+			globals_sec.global(
+				GlobalType {
+					val_type: ValType::I32,
+					mutable: true,
+					shared: false,
+				},
+				&ConstExpr::i32_const(0),
+			);
+			gidx += 2;
+			let _ = gidx; // (last global section; keep the cursor advanced for Stage 2)
+			runtime.taskg = TaskGlobals { act, actlen };
 		}
 
 		// String-constant pool: one passive data segment, every `Const::Str`
@@ -487,6 +527,30 @@ impl Module {
 			}
 		}
 
+		// The async driver builds `result` variants (`task.attempt`, root failure)
+		// and scans poll states for their `__defers` cleanup field.
+		if is_async {
+			let res = "__prelude__.result";
+			let tag_in = |name: &str| {
+				p.enums
+					.get(res)
+					.and_then(|vs| vs.iter().position(|(n, _)| n == name))
+					.map(|i| i as u32)
+			};
+			match (tag_in("ok"), tag_in("err")) {
+				(Some(ok_tag), Some(err_tag)) => {
+					runtime.tasklits = TaskLits {
+						ok_tag,
+						err_tag,
+						ok_name: strpool.intern(&variant_display(res, ok_tag, &p.enums)),
+						err_name: strpool.intern(&variant_display(res, err_tag, &p.enums)),
+						defers_name: strpool.intern("__defers"),
+					};
+				}
+				_ => diags.push("async runtime needs the `result` enum".to_string()),
+			}
+		}
+
 		// Function-type interning + section building.
 		let mut ftypes = FuncTypes::new();
 
@@ -592,7 +656,14 @@ impl Module {
 		let types: TypeSection = ftypes.encode();
 
 		let mut exports = ExportSection::new();
-		if let Some(&w) = wasm_index.get(&p.entry.0) {
+		// An async program enters through `__task_entry` (which drives `main`'s
+		// returned task); a sync program enters the IR entry directly.
+		let entry_export = if is_async {
+			runtime.idx(Helper::TaskEntry)
+		} else {
+			wasm_index.get(&p.entry.0).copied()
+		};
+		if let Some(w) = entry_export {
 			exports.export("_entry", ExportKind::Func, w);
 		}
 

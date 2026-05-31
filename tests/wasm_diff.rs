@@ -190,6 +190,15 @@ const WASM_FIXTURES: &[&str] = &[
 	"wire-polymorphic",
 	"wire-recursive",
 	"wire-roundtrip",
+	// async (Stage 1: single-fiber chain driver — sequential awaits, await-in-loop,
+	// defer-on-failure, the sequential `then`/`or-else`/`map`/`attempt` combinators)
+	"task-try-chain",
+	"task-loop",
+	"task-loop-bind",
+	"task-defer",
+	"task-fail",
+	"task-combinators",
+	"task-trait-poly",
 ];
 
 // Runtime tags — must match `wasm::types`.

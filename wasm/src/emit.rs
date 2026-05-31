@@ -11,9 +11,10 @@ use ir::{Atom, Block, Callee, Const, Repr, Rvalue, StmtKind};
 use wasm_encoder::*;
 
 use crate::Diagnostics;
+use crate::async_lower::TASK_ENUM;
 use crate::runtime::{
 	GlobalKind, GlobalSlot, Helper, Runtime, WIRE_FNV_OFFSET, host_sig, is_f64_unary_host,
-	is_inline_builtin,
+	is_inline_builtin, task_builtin_kind,
 };
 use crate::scan::{
 	StrPool, block_has_pushdefer, builtin_var_tags, compute_nominal, ctor_var_tags,
@@ -914,6 +915,15 @@ impl<'a> FnEmitter<'a> {
 				enum_name,
 				tag,
 				payload,
+			} if enum_name == TASK_ENUM => {
+				// The async-fn lowering builds a `$task` (not a `$variant`); `tag` is
+				// the `task_kind` discriminant.
+				self.make_task(*tag as i32, payload);
+			}
+			Rvalue::MakeVariant {
+				enum_name,
+				tag,
+				payload,
 			} => {
 				self.ins(Instruction::I32Const(types::TAG_VARIANT));
 				self.ins(Instruction::I32Const(*tag as i32));
@@ -1197,10 +1207,32 @@ impl<'a> FnEmitter<'a> {
 		}
 	}
 
+	/// Build a `$task` `{tag: TAG_TASK, kind, payload: [args]}` — the cold async
+	/// recipe the driver interprets. Used by the async-fn lowering's constructor
+	/// and the `task.*` primitive builtins.
+	fn make_task(&mut self, kind: i32, payload: &[Atom]) {
+		self.ins(Instruction::I32Const(types::TAG_TASK));
+		self.ins(Instruction::I32Const(kind));
+		for a in payload {
+			self.atom(a);
+		}
+		self.ins(Instruction::ArrayNewFixed {
+			array_type_index: types::T_VALARRAY,
+			array_size: payload.len() as u32,
+		});
+		self.ins(Instruction::StructNew(types::T_TASK));
+	}
+
 	fn host_call(&mut self, tag: &str, args: &[Atom]) {
 		// Pure-compute builtins emitted inline over the `$value` GC layout.
 		if is_inline_builtin(tag) {
 			self.inline_builtin(tag, args);
+			return;
+		}
+		// `task.*` primitive constructors build a cold `$task` directly (the driver
+		// in `helpers/task.rs` runs it). Side-effecting scope-kernel ops are Stage 2.
+		if let Some(kind) = task_builtin_kind(tag) {
+			self.make_task(kind, args);
 			return;
 		}
 		// Unary float math (log/exp/sin/cos): unbox the `$float`, call the raw
@@ -2025,3 +2057,4 @@ impl<'a> FnEmitter<'a> {
 		self.body.push(ins);
 	}
 }
+

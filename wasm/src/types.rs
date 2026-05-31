@@ -38,7 +38,8 @@ pub const T_LIST: u32 = 12; // struct { i32 tag, (ref $valarray) elems }
 pub const T_RECORD: u32 = 13; // struct { i32 tag, (ref $valarray) names, (ref $valarray) values }
 pub const T_REF: u32 = 14; // struct { i32 tag, (mut ref null $value) cell }  — a mutable cell
 pub const T_DICT: u32 = 15; // struct { i32 tag, (ref $valarray) entries }  — insertion-ordered (k,v) tuples
-const T_FIRST_FUNC: u32 = 16;
+pub const T_TASK: u32 = 16; // struct { i32 tag, i32 kind, (ref $valarray) payload }  — a cold async `task`
+const T_FIRST_FUNC: u32 = 17;
 
 // --------------------------------------------------------------------------
 // Runtime tags carried in the `$value` discriminant field. Mirror `vm::Value`'s
@@ -70,6 +71,12 @@ pub const TAG_REF: i32 = 15;
 /// `$tuple` `(key, value)` entries. Linear-scan with `__eq` on keys (the VM's
 /// hash buckets are a pure accelerator; observable behavior is the entry order).
 pub const TAG_DICT: i32 = 16;
+/// A cold, re-runnable `task a`: a `$task` struct `{ tag, i32 kind, payload }`.
+/// `kind` is the `TaskRepr` discriminant (see `runtime::task_kind`); `payload`
+/// holds its components. The distinct tag lets the driver detect a task at the
+/// program root (mirroring the VM's `matches!(value, Value::Task(_))`). Built and
+/// consumed only by the hand-emitted async driver — never printed.
+pub const TAG_TASK: i32 = 17;
 
 /// `(ref null $valarray)` — a reference to a value array (closure captures or
 /// variant payload).
@@ -443,6 +450,17 @@ impl FuncTypes {
 		types.ty().subtype(&struct_subtype(
 			Some(T_VALUE),
 			vec![
+				val_field(ValType::I32, false),
+				val_field(valarray_ref(), false),
+			],
+			true,
+		));
+		// 16 $task — { tag, i32 kind, (ref $valarray) payload }. A cold async task;
+		// `kind` is the `TaskRepr` discriminant, `payload` its components.
+		types.ty().subtype(&struct_subtype(
+			Some(T_VALUE),
+			vec![
+				val_field(ValType::I32, false),
 				val_field(ValType::I32, false),
 				val_field(valarray_ref(), false),
 			],

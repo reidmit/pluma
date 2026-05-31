@@ -11,6 +11,40 @@ use ir::{Block, Rvalue, StmtKind};
 
 use crate::types::FuncTypes;
 
+/// The `$task` `kind` discriminants — the `TaskRepr` cases the async driver
+/// dispatches on (`helpers/task.rs`). The async-fn lowering and the task-primitive
+/// builtins build `$task`s with these; the driver reads them back.
+pub(crate) mod task_kind {
+	pub(crate) const PURE: i32 = 0;
+	pub(crate) const FAIL: i32 = 1;
+	pub(crate) const YIELD: i32 = 2;
+	pub(crate) const SLEEP: i32 = 3;
+	pub(crate) const THEN: i32 = 4;
+	pub(crate) const ORELSE: i32 = 5;
+	pub(crate) const ATTEMPT: i32 = 6;
+	pub(crate) const MAP: i32 = 7;
+	pub(crate) const ASYNC: i32 = 8;
+	pub(crate) const SHIELDED: i32 = 9;
+	// Structured-concurrency kinds — used by the Stage 2 scheduler.
+	#[allow(dead_code)]
+	pub(crate) const SCOPE: i32 = 10;
+	#[allow(dead_code)]
+	pub(crate) const HANDLE: i32 = 11;
+	#[allow(dead_code)]
+	pub(crate) const NEXT: i32 = 12;
+}
+
+/// Activation kinds — an entry in a fiber's await chain (the driver's activation
+/// stack). Encoded as a `$variant` with this as its `vtag` and `[x, y]` payload.
+/// Mirrors `vm::task::Activation` (minus `Async`: the wasm driver is poll-only).
+pub(crate) mod act_kind {
+	pub(crate) const POLL: i32 = 0; // (poll_closure, state)
+	pub(crate) const THEN: i32 = 1; // (k)
+	pub(crate) const ORELSE: i32 = 2; // (recover)
+	pub(crate) const ATTEMPT: i32 = 3; // ()
+	pub(crate) const MAP: i32 = 4; // (f)
+}
+
 /// A reachable IR global realized as a lazily-initialized wasm value: a cached
 /// value (`val_idx`) behind an `i32` init flag (`init_idx`), built on first
 /// access. (Builtin globals are call-only; Const globals aren't realized yet.)
@@ -96,13 +130,37 @@ pub(crate) enum Helper {
 	/// to back. Returns `nothing`. Backs sync `defer` (the async path runs its
 	/// cleanups through the CPS poll driver instead).
 	RunDefers,
+	// --- async runtime (the hand-emitted task/scope driver, `helpers/task.rs`) ---
+	/// `__task_drive(root) -> value` — the single-fiber poll driver. Runs a cold
+	/// `$task` to completion (mirroring `vm::task::advance_one`'s Start/Ok/Err
+	/// focus loop over an activation stack), returning the success value or a
+	/// `result.err(e)` on root failure.
+	TaskDrive,
+	/// `__poll_step(poll_closure, state, resume) -> $tuple(kind, x, y)` — advance
+	/// one CPS poll: call the poll fn, interpret its `__poll` (`ready`/`pending`),
+	/// running any completion `defer`s. `kind` 0 = complete (x = tail task), 1 =
+	/// pending (x = sub-task, y = next state).
+	PollStep,
+	/// `__poll_defers_list(list) -> nothing` — run a `$list` of zero-arg cleanup
+	/// closures LIFO (the CPS pass appends, so back to front).
+	PollDefersList,
+	/// `__poll_defers_state(state) -> nothing` — run the `__defers` cleanup list
+	/// carried in a suspended poll state (tolerant of its absence), on the
+	/// failure/cancellation path.
+	PollDefersState,
+	/// `__act_push(activation) -> nothing` — push one activation `$value` onto the
+	/// driver's global activation stack, growing it as needed.
+	ActPush,
+	/// `__task_entry(env) -> value` — the async program entry: call the real IR
+	/// entry, then drive the task it returns. Exported as `_entry` when async.
+	TaskEntry,
 }
 
 impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 35;
+	pub(crate) const COUNT: usize = 41;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable
@@ -153,6 +211,14 @@ pub(crate) struct Runtime {
 	/// The `result` / `wire-error` variant tags + display names `__wire_result`
 	/// builds when wrapping a decoded value in `ok`/`err`.
 	pub(crate) wirelits: WireResultLits,
+	/// Wasm index of the IR program entry (`main`), so `__task_entry` can call it
+	/// before driving the task it returns. Set when the program is async.
+	pub(crate) entry_idx: Option<u32>,
+	/// The async driver's module-level scratch globals (the activation stack).
+	pub(crate) taskg: TaskGlobals,
+	/// `result` `ok`/`err` tags + display names (for `task.attempt` and root
+	/// failure) and the `__defers` field name the driver scans for.
+	pub(crate) tasklits: TaskLits,
 }
 
 impl Runtime {
@@ -296,6 +362,27 @@ pub(crate) struct OrderingLits {
 	pub(crate) lt_name: (u32, u32),
 	pub(crate) eq_name: (u32, u32),
 	pub(crate) gt_name: (u32, u32),
+}
+
+/// The async driver's module-level mutable globals: the single fiber's activation
+/// stack, a `$valarray` (`act`) used as a growable stack with a separate length
+/// cursor (`actlen`). Allocated only when a reachable program is async.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct TaskGlobals {
+	pub(crate) act: u32,    // mut ref null $valarray — activation stack backing
+	pub(crate) actlen: u32, // mut i32 — activation count
+}
+
+/// What the async driver needs to build `result` variants (`task.attempt`, root
+/// failure) and find a poll state's cleanup list: the `ok`/`err` tags + interned
+/// display names, and the interned `__defers` field name `(off, len)`.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct TaskLits {
+	pub(crate) ok_tag: u32,
+	pub(crate) err_tag: u32,
+	pub(crate) ok_name: (u32, u32),
+	pub(crate) err_name: (u32, u32),
+	pub(crate) defers_name: (u32, u32),
 }
 
 /// What `__dict_lookup` needs to construct `some v` / `none` `$variant`s: each
@@ -479,6 +566,27 @@ pub(crate) fn is_inline_builtin(tag: &str) -> bool {
 			| "time-from-unix-nanos"
 			| "time-to-unix-nanos"
 	)
+}
+
+/// The `$task` `kind` a `task.*` primitive constructor builtin builds, if any.
+/// These need no host import (they build a `$task` inline) and no `__poll` driver
+/// at the call site — the driver runs them later. Only the pure constructors are
+/// here; the side-effecting scope-kernel ops (`scope-spawn`/`scope-cancel`/
+/// `scope-cancel-after`) and the scope-task constructors (`scope-new`/`scope-next`)
+/// are Stage 2.
+pub(crate) fn task_builtin_kind(tag: &str) -> Option<i32> {
+	Some(match tag {
+		"task-return" => task_kind::PURE,
+		"task-fail" => task_kind::FAIL,
+		"task-yield" => task_kind::YIELD,
+		"task-sleep" => task_kind::SLEEP,
+		"task-then" => task_kind::THEN,
+		"task-or-else" => task_kind::ORELSE,
+		"task-attempt" => task_kind::ATTEMPT,
+		"task-map" => task_kind::MAP,
+		"task-shielded" => task_kind::SHIELDED,
+		_ => return None,
+	})
 }
 
 /// Transcendental float math with no WasmGC opcode (log/log10/log2/exp/sin/cos).
