@@ -1392,16 +1392,32 @@ impl<'a> FnEmitter<'a> {
 				return;
 			};
 			let g = self.runtime.wireg;
-			self.ins(Instruction::I32Const(64));
+			// Reuse the persistent scratch buffers across encode calls: they grow
+			// once (amortized) and the write cursors reset to 0 each call. Only
+			// allocate on the first encode, when the globals are still null. (The
+			// result is always copied out into a fresh exact-size `$bytes`, so the
+			// reused scratch never aliases a returned value.) Reallocating a fresh
+			// buffer per call instead made the buffer re-grow every time, and
+			// wasmtime's `array.copy` is slow — that growth churn was ~half the
+			// `wire-encode` cost.
+			self.ins(Instruction::GlobalGet(g.buf));
+			self.ins(Instruction::RefIsNull);
+			self.ins(Instruction::If(BlockType::Empty));
+			self.ins(Instruction::I32Const(256));
 			self.ins(Instruction::ArrayNewDefault(types::T_BYTES));
 			self.ins(Instruction::GlobalSet(g.buf));
+			self.ins(Instruction::End);
+			self.ins(Instruction::GlobalGet(g.ctx));
+			self.ins(Instruction::RefIsNull);
+			self.ins(Instruction::If(BlockType::Empty));
+			self.ins(Instruction::I32Const(8));
+			self.ins(Instruction::ArrayNewDefault(types::T_VALARRAY));
+			self.ins(Instruction::GlobalSet(g.ctx));
+			self.ins(Instruction::End);
 			self.ins(Instruction::I32Const(0));
 			self.ins(Instruction::GlobalSet(g.len));
 			self.ins(Instruction::I32Const(0));
 			self.ins(Instruction::GlobalSet(g.ctxlen));
-			self.ins(Instruction::I32Const(8));
-			self.ins(Instruction::ArrayNewDefault(types::T_VALARRAY));
-			self.ins(Instruction::GlobalSet(g.ctx));
 			self.atom(&args[0]);
 			self.atom(&args[1]);
 			self.ins(Instruction::Call(enc));

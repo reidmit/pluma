@@ -342,7 +342,9 @@ pub(crate) fn build_wire_push_fn(g: WireGlobals) -> Function {
 	let b = w.param(0);
 	let new = w.local(types::bytes_ref());
 
-	// if g_len >= array.len(g_buf): grow.
+	// if g_len >= array.len(g_buf): grow. (The buffer is reused across encode
+	// calls, so this grow path runs only while the buffer is still smaller than
+	// the payload — after warmup it's a single never-taken branch.)
 	w.global_get(g.len).global_get(g.buf).array_len().i32_ge_u();
 	w.if_(|w| {
 		// new = array.new_default $bytes (cap * 2).
