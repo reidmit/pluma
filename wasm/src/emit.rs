@@ -1425,15 +1425,31 @@ impl<'a> FnEmitter<'a> {
 			self.ins(Instruction::GlobalGet(g.len));
 			self.ins(Instruction::ArrayNewDefault(types::T_BYTES));
 			self.ins(Instruction::LocalSet(res));
-			self.ins(Instruction::LocalGet(res));
+			// res[i] = g_buf[i] for i in 0..g_len. A manual loop, not `array.copy`:
+			// wasmtime's `array.copy` over byte arrays is slow, and this final
+			// snapshot of the scratch buffer was the dominant cost of `wire-encode`.
+			let idx = self.fresh_local(ValType::I32);
 			self.ins(Instruction::I32Const(0));
-			self.ins(Instruction::GlobalGet(g.buf));
-			self.ins(Instruction::I32Const(0));
+			self.ins(Instruction::LocalSet(idx));
+			self.ins(Instruction::Block(BlockType::Empty));
+			self.ins(Instruction::Loop(BlockType::Empty));
+			self.ins(Instruction::LocalGet(idx));
 			self.ins(Instruction::GlobalGet(g.len));
-			self.ins(Instruction::ArrayCopy {
-				array_type_index_dst: types::T_BYTES,
-				array_type_index_src: types::T_BYTES,
-			});
+			self.ins(Instruction::I32GeU);
+			self.ins(Instruction::BrIf(1));
+			self.ins(Instruction::LocalGet(res));
+			self.ins(Instruction::LocalGet(idx));
+			self.ins(Instruction::GlobalGet(g.buf));
+			self.ins(Instruction::LocalGet(idx));
+			self.ins(Instruction::ArrayGetU(types::T_BYTES));
+			self.ins(Instruction::ArraySet(types::T_BYTES));
+			self.ins(Instruction::LocalGet(idx));
+			self.ins(Instruction::I32Const(1));
+			self.ins(Instruction::I32Add);
+			self.ins(Instruction::LocalSet(idx));
+			self.ins(Instruction::Br(0));
+			self.ins(Instruction::End);
+			self.ins(Instruction::End);
 			self.ins(Instruction::I32Const(types::TAG_BYTES));
 			self.ins(Instruction::LocalGet(res));
 			self.ins(Instruction::StructNew(types::T_STR));
