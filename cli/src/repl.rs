@@ -597,7 +597,7 @@ fn echo_value(returned: &vm::Value) {
 	if let vm::Value::Record(fields) = returned {
 		if let Some(value) = fields.get(ECHO_FIELD) {
 			if !matches!(value, vm::Value::Nothing) {
-				println!("{}{}", colors::bold_green("→ "), value);
+				println!("{}{}", colors::dim("→  "), value);
 			}
 		}
 	}
