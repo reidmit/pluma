@@ -31,6 +31,7 @@ use compiler::{Compiler, Diagnostic, LANGUAGE_NAME, Token, Tokenizer, VERSION, f
 use rustyline::DefaultEditor;
 use rustyline::error::ReadlineError;
 use std::cell::RefCell;
+use std::io::{IsTerminal, Read};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
@@ -99,13 +100,30 @@ enum EvalError {
 	Runtime(vm::RuntimeError),
 }
 
-pub fn repl_command(_args: Vec<String>) {
+pub fn repl_command(args: Vec<String>) {
+	let dump = args.iter().any(|a| a == "--dump");
+
 	let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 	// Root the session at the nearest package marker so `use path.to.module`
 	// resolves against the project, falling back to the working directory.
 	let root_dir = find_project_root(&cwd).unwrap_or(cwd);
 	let mut session = Session::new(root_dir.clone());
 
+	// Non-interactive batch mode: read submissions from stdin and run each as if
+	// typed at the prompt, printing an annotated `pluma> …` transcript. Entered
+	// explicitly with `--dump`, or implicitly when stdin is piped (not a TTY) so
+	// `echo "1 + 2" | pluma repl` works without a usable line editor.
+	if dump || !std::io::stdin().is_terminal() {
+		run_batch(&mut session);
+		return;
+	}
+
+	run_interactive(&mut session, &root_dir);
+}
+
+// The interactive line-editor loop: prints the banner, reads multi-line
+// submissions through rustyline, and persists history across sessions.
+fn run_interactive(session: &mut Session, root_dir: &Path) {
 	println!(
 		"{} v{} REPL  {}",
 		colors::bold(LANGUAGE_NAME),
@@ -142,13 +160,13 @@ pub fn repl_command(_args: Vec<String>) {
 				let _ = rl.add_history_entry(trimmed);
 
 				if let Some(rest) = trimmed.strip_prefix(':') {
-					if meta_command(rest, &mut session) {
+					if meta_command(rest, session) {
 						break;
 					}
 					continue;
 				}
 
-				handle_submission(&mut session, &input);
+				handle_submission(session, &input);
 			}
 		}
 	}
@@ -157,6 +175,63 @@ pub fn repl_command(_args: Vec<String>) {
 		let _ = rl.save_history(path);
 	}
 	println!();
+}
+
+// Non-interactive driver: read every submission from stdin, echo it back
+// prompt-style, then evaluate it through the same path as interactive entry.
+// Multi-line constructs are coalesced exactly as the line editor would, so a
+// `def` spanning several lines runs as a single submission.
+fn run_batch(session: &mut Session) {
+	let mut input = String::new();
+	if std::io::stdin().read_to_string(&mut input).is_err() {
+		return;
+	}
+	for submission in group_submissions(&input) {
+		let trimmed = submission.trim();
+		if trimmed.is_empty() {
+			continue;
+		}
+		echo_input(&submission);
+		if let Some(rest) = trimmed.strip_prefix(':') {
+			if meta_command(rest, session) {
+				break;
+			}
+			continue;
+		}
+		handle_submission(session, &submission);
+	}
+}
+
+// Split raw stdin into complete submissions, joining consecutive lines while
+// brackets remain open (mirroring `read_input`'s multi-line entry). A trailing
+// run with unbalanced brackets is still emitted so its error surfaces rather
+// than being silently dropped.
+fn group_submissions(input: &str) -> Vec<String> {
+	let mut groups = Vec::new();
+	let mut buffer = String::new();
+	for line in input.lines() {
+		if !buffer.is_empty() {
+			buffer.push('\n');
+		}
+		buffer.push_str(line);
+		if is_complete(&buffer) {
+			groups.push(buffer);
+			buffer = String::new();
+		}
+	}
+	if !buffer.is_empty() {
+		groups.push(buffer);
+	}
+	groups
+}
+
+// Echo a submission back as the interactive prompt would have shown it: the
+// first physical line after `pluma> `, any continuation lines after `   ... `.
+fn echo_input(submission: &str) {
+	for (i, line) in submission.lines().enumerate() {
+		let prompt = if i == 0 { PROMPT } else { CONT_PROMPT };
+		println!("{}{}", prompt, line);
+	}
 }
 
 // Run a `:meta` command. Returns true if the REPL should exit.
@@ -524,5 +599,35 @@ mod tests {
 	fn render_handles_an_empty_body() {
 		let src = render(&[], &[], &[]);
 		assert!(src.contains("def main = fun {\n{}\n}"));
+	}
+
+	#[test]
+	fn group_submissions_coalesces_multiline_constructs() {
+		let input = "1 + 2\ndef f = fun x {\n\tx + 1\n}\nf 41";
+		assert_eq!(
+			group_submissions(input),
+			vec![
+				"1 + 2".to_string(),
+				"def f = fun x {\n\tx + 1\n}".to_string(),
+				"f 41".to_string(),
+			]
+		);
+	}
+
+	#[test]
+	fn group_submissions_drops_blank_lines_between_submissions() {
+		let input = "1 + 2\n\n\nlet x = 5";
+		let groups: Vec<String> = group_submissions(input)
+			.into_iter()
+			.filter(|g| !g.trim().is_empty())
+			.collect();
+		assert_eq!(groups, vec!["1 + 2".to_string(), "let x = 5".to_string()]);
+	}
+
+	#[test]
+	fn group_submissions_keeps_trailing_unbalanced_run() {
+		// An unterminated bracket at EOF is still surfaced (so its error shows)
+		// rather than being swallowed.
+		assert_eq!(group_submissions("[1, 2,"), vec!["[1, 2,".to_string()]);
 	}
 }
