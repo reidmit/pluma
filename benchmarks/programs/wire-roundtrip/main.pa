@@ -1,0 +1,21 @@
+# `wire` codec stress: encode a list of int tuples to the compact binary format
+# and decode it back, repeatedly. Exercises auto-derived structural encode/decode
+# (varint, length-prefixed lists, tuples).
+
+use core.list
+
+def loop = fun data n acc {
+	when n is 0 {
+		acc
+	} else {
+		let bytes = wire.encode data
+		let back :: result (list (int, int)) wire-error = wire.decode bytes
+		let len = when back is ok xs { list.length xs } is err _e { 0 }
+		loop data (n - 1) (acc + len)
+	}
+}
+
+def main = fun {
+	let data = list.build 400 fun i { (i, i * 2) }
+	print (to-string (loop data 150 0))
+}

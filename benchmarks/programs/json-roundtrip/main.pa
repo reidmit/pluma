@@ -1,0 +1,23 @@
+# JSON stress: parse a small document and stringify it back, repeatedly.
+# Exercises the core.json recursive-descent parser and serializer.
+
+use core.json
+use core.string
+
+def loop = fun doc n acc {
+	when n is 0 {
+		acc
+	} else {
+		let len = when json.parse doc is ok v {
+			string.length (json.stringify v)
+		} is err _e {
+			0
+		}
+		loop doc (n - 1) (acc + len)
+	}
+}
+
+def main = fun {
+	let doc = "{\"a\": 1, \"b\": [1, 2, 3, 4], \"c\": {\"d\": true, \"e\": null}}"
+	print (to-string (loop doc 700 0))
+}
