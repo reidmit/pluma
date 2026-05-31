@@ -53,6 +53,7 @@ pub(crate) fn build_run_task_fn(
 	fiber_completed: u32,
 	cancel_scope: u32,
 	park: u32,
+	run_timers: u32,
 	list_append: u32,
 	g: TaskGlobals,
 	lits: TaskLits,
@@ -158,16 +159,28 @@ pub(crate) fn build_run_task_fn(
 								w.call(fiber_completed).drop();
 							},
 							|w| {
-								// park(fid, wait_kind=out_okerr, wait_arg=out_arg).
+								// park(fid, wait_kind, arg). Sleep's nanos ride the i64
+								// channel; the other waits pass a small id on `out_arg`.
 								box_i(w, |w| {
 									w.local_get(fid);
 								});
 								box_i(w, |w| {
 									w.global_get(g.out_okerr);
 								});
-								box_i(w, |w| {
-									w.global_get(g.out_arg);
-								});
+								w.global_get(g.out_okerr).i32(wait::SLEEP).i32_eq();
+								w.if_result(
+									types::value_ref(),
+									|w| {
+										box_i64(w, |w| {
+											w.global_get(g.out_arg64);
+										});
+									},
+									|w| {
+										box_i(w, |w| {
+											w.global_get(g.out_arg);
+										});
+									},
+								);
 								w.call(park).drop();
 							},
 						);
@@ -178,9 +191,8 @@ pub(crate) fn build_run_task_fn(
 					list_len(w, g.timers);
 					w.if_else(
 						|w| {
-							// run_timers is folded in here (Stage 2c). For Stage 1/2a there
-							// are no timers, so this branch is unreachable.
-							w.unreachable();
+							// Fire the earliest virtual timer(s) (advances the clock).
+							w.call(run_timers).drop();
 						},
 						|w| {
 							w.br("exit");
@@ -276,8 +288,6 @@ pub(crate) fn build_pump_fn(
 
 				start_settle(w, tk, task_kind::PURE, focus::OK, |w| elem(w, tp, 0), fval, fkind);
 				start_settle(w, tk, task_kind::FAIL, focus::ERR, |w| elem(w, tp, 0), fval, fkind);
-				// sleep is immediate (Stage 2a/single-fiber); virtual timers land in 2c.
-				start_settle(w, tk, task_kind::SLEEP, focus::OK, push_nothing, fval, fkind);
 				start_combinator(w, tk, task_kind::THEN, act_kind::THEN, tp, true, act_push, fval, fkind);
 				start_combinator(w, tk, task_kind::ORELSE, act_kind::ORELSE, tp, true, act_push, fval, fkind);
 				start_combinator(w, tk, task_kind::ATTEMPT, act_kind::ATTEMPT, tp, false, act_push, fval, fkind);
@@ -291,6 +301,18 @@ pub(crate) fn build_pump_fn(
 					park_out(w, g, wait::YIELD, |w| {
 						w.i32(0);
 					});
+					w.br("ret");
+				});
+
+				// sleep: park on a virtual timer (`nanos` rides the i64 channel).
+				w.local_get(tk).i32(task_kind::SLEEP).i32_eq();
+				w.if_(|w| {
+					save_act(w, g, fid);
+					w.i32(2).global_set(g.out_kind);
+					w.i32(wait::SLEEP).global_set(g.out_okerr);
+					elem(w, tp, 0);
+					w.ref_cast(types::T_INT).struct_get(types::T_INT, 1); // nanos (i64)
+					w.global_set(g.out_arg64);
 					w.br("ret");
 				});
 
@@ -1101,10 +1123,12 @@ pub(crate) fn build_park_fn(list_append: u32, g: TaskGlobals) -> Function {
 	let fid = w.local(ValType::I32);
 	let wk = w.local(ValType::I32);
 	let wa = w.local(ValType::I32);
+	let wa64 = w.local(ValType::I64);
 
 	w.local_get(fid_b).ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64().local_set(fid);
 	w.local_get(wk_b).ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64().local_set(wk);
-	w.local_get(wa_b).ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64().local_set(wa);
+	// The arg arrives boxed as an i64: a small id for handle/next/scope, or sleep nanos.
+	w.local_get(wa_b).ref_cast(types::T_INT).struct_get(types::T_INT, 1).local_tee(wa64).i32_wrap_i64().local_set(wa);
 
 	w.block("after", |w| {
 		// yield: re-ready behind everything else.
@@ -1112,6 +1136,17 @@ pub(crate) fn build_park_fn(list_append: u32, g: TaskGlobals) -> Function {
 		w.if_(|w| {
 			ready_push(w, g, list_append, fid, focus::OK, push_nothing);
 			w.br("after");
+		});
+		// sleep: arm a virtual timer to re-ready the fiber at `now + nanos`.
+		w.local_get(wk).i32(wait::SLEEP).i32_eq();
+		w.if_(|w| {
+			w.global_get(g.timers);
+			timer_entry(w, |w| {
+				w.global_get(g.now).local_get(wa64).i64_add();
+			}, 0, |w| {
+				w.local_get(fid);
+			});
+			w.call(list_append).global_set(g.timers);
 		});
 		// handle: enqueue on the awaited child's waiters.
 		w.local_get(wk).i32(wait::HANDLE).i32_eq();
@@ -1145,6 +1180,139 @@ pub(crate) fn build_park_fn(list_append: u32, g: TaskGlobals) -> Function {
 	});
 	push_nothing(&mut w);
 	w.finish()
+}
+
+/// `__run_timers() -> nothing`: VIRTUAL timers — jump the clock to the earliest
+/// deadline and fire every timer due at it. `Wake` re-readies a live fiber;
+/// `Deadline` queues a scope cancellation. No wall-clock wait.
+pub(crate) fn build_run_timers_fn(list_append: u32, g: TaskGlobals) -> Function {
+	let v = types::value_ref();
+	let va = types::valarray_ref();
+	let mut w = Wat::new(0);
+	let arr = w.local(va);
+	let n = w.local(ValType::I32);
+	let i = w.local(ValType::I32);
+	let min = w.local(ValType::I64);
+	let entry = w.local(v);
+	let at = w.local(ValType::I64);
+	let kind = w.local(ValType::I32);
+	let arg = w.local(ValType::I32);
+	let newt = w.local(v);
+
+	w.global_get(g.timers).ref_cast(types::T_LIST).struct_get(types::T_LIST, 1).local_set(arr);
+	w.local_get(arr).array_len().local_set(n);
+	// min = earliest `at`.
+	w.i64(i64::MAX).local_set(min);
+	w.i32(0).local_set(i);
+	w.block("mbrk", |w| {
+		w.loop_("mlp", |w| {
+			w.local_get(i).local_get(n).i32_ge_s().br_if("mbrk");
+			timer_at(w, arr, i);
+			w.local_tee(at).local_get(min).i64_lt_s();
+			w.if_(|w| {
+				w.local_get(at).local_set(min);
+			});
+			w.local_get(i).i32(1).i32_add().local_set(i);
+			w.br("mlp");
+		});
+	});
+	w.local_get(min).global_set(g.now);
+	// Fire all timers at `min`; keep the rest.
+	empty_list(&mut w);
+	w.local_set(newt);
+	w.i32(0).local_set(i);
+	w.block("fbrk", |w| {
+		w.loop_("flp", |w| {
+			w.local_get(i).local_get(n).i32_ge_s().br_if("fbrk");
+			w.local_get(arr).local_get(i).array_get(types::T_VALARRAY).local_set(entry);
+			tuple_elem(w, entry, 0);
+			w.ref_cast(types::T_INT).struct_get(types::T_INT, 1).local_set(at);
+			w.local_get(at).local_get(min).i64_eq();
+			w.if_else(
+				|w| {
+					tuple_elem(w, entry, 1);
+					unbox_i(w);
+					w.local_set(kind);
+					tuple_elem(w, entry, 2);
+					unbox_i(w);
+					w.local_set(arg);
+					w.local_get(kind).i32_eqz();
+					w.if_else(
+						|w| {
+							// Wake: re-ready the fiber if still alive.
+							fld_i(w, g, g.fibers, arg, fiber::ALIVE);
+							w.if_(|w| {
+								set_fld_i(w, g.fibers, arg, fiber::WAIT_KIND, |w| {
+									w.i32(wait::NONE);
+								});
+								ready_push(w, g, list_append, arg, focus::OK, push_nothing);
+							});
+						},
+						|w| {
+							// Deadline: queue the scope cancellation.
+							w.global_get(g.pending);
+							box_i(w, |w| {
+								w.local_get(arg);
+							});
+							w.call(list_append).global_set(g.pending);
+						},
+					);
+				},
+				|w| {
+					w.local_get(newt);
+					w.local_get(entry);
+					w.call(list_append);
+					w.local_set(newt);
+				},
+			);
+			w.local_get(i).i32(1).i32_add().local_set(i);
+			w.br("flp");
+		});
+	});
+	w.local_get(newt).global_set(g.timers);
+	push_nothing(&mut w);
+	w.finish()
+}
+
+/// `__sched_cancel(handle, _) -> nothing`: `s.cancel` — queue the scope for
+/// cancellation, performed between scheduler steps (so `defer`s run there).
+pub(crate) fn build_sched_cancel_fn(list_append: u32, g: TaskGlobals) -> Function {
+	let mut w = Wat::new(2);
+	let handle = w.param(0);
+	w.global_get(g.pending);
+	box_i(&mut w, |w| {
+		w.local_get(handle).ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64();
+	});
+	w.call(list_append).global_set(g.pending);
+	push_nothing(&mut w);
+	w.finish()
+}
+
+/// `__sched_cancel_after(handle, duration) -> nothing`: `s.cancel-after` — arm a
+/// deadline timer that self-cancels the scope once `duration` elapses.
+pub(crate) fn build_sched_cancel_after_fn(list_append: u32, g: TaskGlobals) -> Function {
+	let mut w = Wat::new(2);
+	let (handle, dur) = (w.param(0), w.param(1));
+	let sid = w.local(ValType::I32);
+	w.local_get(handle).ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64().local_set(sid);
+	w.global_get(g.timers);
+	timer_entry(&mut w, |w| {
+		w.global_get(g.now);
+		w.local_get(dur).ref_cast(types::T_INT).struct_get(types::T_INT, 1);
+		w.i64_add();
+	}, 1, |w| {
+		w.local_get(sid);
+	});
+	w.call(list_append).global_set(g.timers);
+	push_nothing(&mut w);
+	w.finish()
+}
+
+/// Push timer entry `i`'s `at` field (i64) from the timers `$valarray`.
+fn timer_at(w: &mut Wat, arr: Local, i: Local) {
+	w.local_get(arr).local_get(i).array_get(types::T_VALARRAY);
+	w.ref_cast(types::T_TUPLE).struct_get(types::T_TUPLE, 1).i32(0).array_get(types::T_VALARRAY);
+	w.ref_cast(types::T_INT).struct_get(types::T_INT, 1);
 }
 
 /// `__drain_next(handle) -> $tuple(action, val)`: `s.next` — hand back the next
@@ -1377,6 +1545,25 @@ fn box_i_top(w: &mut Wat) {
 	box_i(w, |w| {
 		w.local_get(t);
 	});
+}
+
+/// Box an i64 (pushed by `push`) as a `$int`.
+fn box_i64(w: &mut Wat, push: impl FnOnce(&mut Wat)) {
+	w.i32(types::TAG_INT);
+	push(w);
+	w.struct_new(types::T_INT);
+}
+
+/// Push a timer entry `$tuple(box at:i64, box kind:i32, box arg:i32)`.
+fn timer_entry(w: &mut Wat, at: impl FnOnce(&mut Wat), kind: i32, arg: impl FnOnce(&mut Wat)) {
+	w.i32(types::TAG_TUPLE);
+	box_i64(w, at);
+	box_i(w, |w| {
+		w.i32(kind);
+	});
+	box_i(w, arg);
+	w.array_new_fixed(types::T_VALARRAY, 3);
+	w.struct_new(types::T_TUPLE);
 }
 
 /// Unbox the `$int`(-shaped) value on top of the stack to an i32.

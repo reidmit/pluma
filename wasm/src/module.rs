@@ -158,6 +158,8 @@ impl Module {
 		if is_async {
 			requested.insert(Helper::TaskEntry);
 			requested.insert(Helper::SchedSpawn);
+			requested.insert(Helper::SchedCancel);
+			requested.insert(Helper::SchedCancelAfter);
 		}
 		close_deps(&mut requested);
 		// The `wire` encode/decode codec threads its recursive state through

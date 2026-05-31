@@ -332,6 +332,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 			H::FiberCompleted,
 			H::CancelScope,
 			H::Park,
+			H::RunTimers,
 			H::ListAppend,
 		],
 		build: |c| {
@@ -340,6 +341,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 				c.dep(H::FiberCompleted),
 				c.dep(H::CancelScope),
 				c.dep(H::Park),
+				c.dep(H::RunTimers),
 				c.dep(H::ListAppend),
 				c.rt.taskg,
 				c.rt.tasklits,
@@ -487,6 +489,24 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		fn_type: Ty::Helper(1),
 		deps: &[],
 		build: |c| task::build_drain_next_fn(c.rt.taskg, c.rt.tasklits),
+	},
+	HelperDef {
+		id: H::RunTimers,
+		fn_type: Ty::Helper(0),
+		deps: &[H::ListAppend],
+		build: |c| task::build_run_timers_fn(c.dep(H::ListAppend), c.rt.taskg),
+	},
+	HelperDef {
+		id: H::SchedCancel,
+		fn_type: Ty::Helper(2),
+		deps: &[H::ListAppend],
+		build: |c| task::build_sched_cancel_fn(c.dep(H::ListAppend), c.rt.taskg),
+	},
+	HelperDef {
+		id: H::SchedCancelAfter,
+		fn_type: Ty::Helper(2),
+		deps: &[H::ListAppend],
+		build: |c| task::build_sched_cancel_after_fn(c.dep(H::ListAppend), c.rt.taskg),
 	},
 ];
 

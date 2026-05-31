@@ -202,6 +202,9 @@ const WASM_FIXTURES: &[&str] = &[
 	// async (Stage 2: scheduler — scopes/fibers/timers/cancellation)
 	"scope-both",
 	"scope-handle-param",
+	"scope-deadline",
+	"scope-race",
+	"task-combinators-concurrent",
 ];
 
 // Runtime tags — must match `wasm::types`.

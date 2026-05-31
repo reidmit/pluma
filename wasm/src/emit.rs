@@ -1235,10 +1235,16 @@ impl<'a> FnEmitter<'a> {
 			self.make_task(kind, args);
 			return;
 		}
-		// `s.spawn` is side-effecting (registers a child fiber) and returns a
-		// `HANDLE` task — a call into the scheduler.
-		if tag == "scope-spawn" {
-			match self.runtime.idx(Helper::SchedSpawn) {
+		// The side-effecting scope-kernel ops call straight into the scheduler:
+		// `s.spawn` registers a child fiber (returns a HANDLE task); `s.cancel` /
+		// `s.cancel-after` queue a cancellation / arm a deadline timer (return ()).
+		if let Some(h) = match tag {
+			"scope-spawn" => Some(self.runtime.idx(Helper::SchedSpawn)),
+			"scope-cancel" => Some(self.runtime.idx(Helper::SchedCancel)),
+			"scope-cancel-after" => Some(self.runtime.idx(Helper::SchedCancelAfter)),
+			_ => None,
+		} {
+			match h {
 				Some(h) => {
 					for a in args {
 						self.atom(a);
@@ -1246,7 +1252,7 @@ impl<'a> FnEmitter<'a> {
 					self.ins(Instruction::Call(h));
 				}
 				None => {
-					self.diags.push("scope-spawn needs __sched_spawn".to_string());
+					self.diags.push(format!("`{tag}` needs its scheduler helper"));
 					self.push_nothing();
 				}
 			}

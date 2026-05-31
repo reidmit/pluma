@@ -240,13 +240,19 @@ pub(crate) enum Helper {
 	ListAppend,
 	/// `__drain_next(handle) -> $tuple(action, val)` — `s.next` on a manual scope.
 	DrainNext,
+	/// `__run_timers()` — fire the earliest virtual timer(s) (advances the clock).
+	RunTimers,
+	/// `__sched_cancel(handle, _)` — `s.cancel` (queues a deferred cancellation).
+	SchedCancel,
+	/// `__sched_cancel_after(handle, duration)` — `s.cancel-after` (deadline timer).
+	SchedCancelAfter,
 }
 
 impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 53;
+	pub(crate) const COUNT: usize = 56;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable
