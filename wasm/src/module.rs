@@ -19,9 +19,9 @@ use crate::helpers::{
 	helper_for_tag,
 };
 use crate::runtime::{
-	GlobalKind, GlobalSlot, Helper, HelperCtx, HelperSet, OptionLits, OrderingLits, Runtime,
-	TaskGlobals, TaskLits, ToStringLits, WireGlobals, WireResultLits, WireTags, host_sig,
-	is_f64_unary_host, is_inline_builtin, scan_helpers, task_builtin_kind,
+	GlobalKind, GlobalSlot, Helper, HelperCtx, HelperSet, IoResultLits, OptionLits, OrderingLits,
+	Runtime, TaskGlobals, TaskLits, ToStringLits, WireGlobals, WireResultLits, WireTags, host_sig,
+	is_f64_unary_host, is_inline_builtin, is_io_result, scan_helpers, task_builtin_kind,
 };
 use crate::scan::{
 	StrPool, builtin_var_tags, collect_host_calls, collect_zero_arg_closures, scan_strings,
@@ -90,6 +90,16 @@ impl Module {
 						host_order.push(tag.to_string());
 					}
 					return;
+				}
+				// `core.io` result builtins need the `__io_result` shaper + the
+				// `io-last-error` channel it queries, on top of their own host import
+				// (registered by the generic path just below — fall through).
+				if is_io_result(tag) {
+					requested.insert(Helper::IoResult);
+					if !host_index.contains_key("io-last-error") {
+						host_index.insert("io-last-error".to_string(), host_order.len() as u32);
+						host_order.push("io-last-error".to_string());
+					}
 				}
 				if !host_index.contains_key(tag) {
 					if host_sig(tag).is_none() {
@@ -191,6 +201,7 @@ impl Module {
 			}
 		}
 		runtime.float_to_str = host_index.get("float_to_str").copied();
+		runtime.io_last_error = host_index.get("io-last-error").copied();
 		let wrapper_base = next_synth;
 
 		let mut sorted_globals: Vec<u32> = reach.globals.iter().copied().collect();
@@ -596,6 +607,29 @@ impl Module {
 					};
 				}
 				_ => diags.push("async runtime needs the `result` + `option` enums".to_string()),
+			}
+		}
+
+		// `core.io` result builtins wrap their host return in `ok`/`err` via
+		// `__io_result`; resolve the `result` enum's variant tags + display names.
+		if requested.contains(&Helper::IoResult) {
+			let res = "__prelude__.result";
+			let tag_in = |name: &str| {
+				p.enums
+					.get(res)
+					.and_then(|vs| vs.iter().position(|(n, _)| n == name))
+					.map(|i| i as u32)
+			};
+			match (tag_in("ok"), tag_in("err")) {
+				(Some(ok_tag), Some(err_tag)) => {
+					runtime.ioreslits = IoResultLits {
+						ok_tag,
+						err_tag,
+						ok_name: strpool.intern(&variant_display(res, ok_tag, &p.enums)),
+						err_name: strpool.intern(&variant_display(res, err_tag, &p.enums)),
+					};
+				}
+				_ => diags.push("`core.io` needs the `result` enum".to_string()),
 			}
 		}
 

@@ -17,6 +17,7 @@ use crate::runtime::{Helper, Helper as H, HelperCtx, HelperSet, Ty};
 mod bytes;
 mod dict;
 mod eq;
+mod io;
 mod list;
 mod record;
 mod task;
@@ -323,6 +324,12 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 			let thunk_ty = c.arity(1);
 			list::build_run_defers_fn(thunk_ty)
 		},
+	},
+	HelperDef {
+		id: H::IoResult,
+		fn_type: Ty::Helper(1),
+		deps: &[],
+		build: |c| io::build_io_result_fn(c.io_last_error(), c.rt.ioreslits),
 	},
 	HelperDef {
 		id: H::TaskDrive,

@@ -15,26 +15,23 @@ use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
 
-use compiler::Compiler;
+use compiler::{Compiler, Platform};
 use wasmtime::{
-	AnyRef, AsContextMut, Config, Engine, FuncType, Instance, Linker, Module, RootScope, Rooted,
-	Store, Val, ValType,
+	AnyRef, ArrayRef, ArrayRefPre, ArrayType, AsContextMut, Caller, Config, Engine, ExternType,
+	FuncType, Instance, Linker, Module, RootScope, Rooted, Store, StructRef, StructRefPre,
+	StructType, Val, ValType,
 };
 
-// Fixtures the WASM backend covers end-to-end today. Grow as coverage grows.
+// Fixtures the WASM backend covers end-to-end today. Grow as coverage grows. The
+// `core.io` filesystem/stdin fixtures are included under the **server platform** (see
+// `compile_check` + compiler/src/platform.rs); their host glue is real `std::fs` + a
+// stdin cursor.
 //
-// Intentionally NOT on this list (and why), so a future reader doesn't mistake
-// them for unfinished work:
-//   - `io-*` (filesystem + stdin: read/read-all, read-file/write-file/append-file,
-//     file-exists/delete-file, is-dir/read-dir/make-dir, and the `*-bytes` variants).
-//     These are host capabilities, not language features — a browser wasm target has
-//     no filesystem, and the throwaway test host here only wires the stdout writers.
-//     The value-returning host-import path exists (`for_host(arity, true)`), so a
-//     server/wasi target can add `host_sig` rows + real glue when that lands.
-//   - `list-fold` / `list-pattern-if` are compile-error/warning fixtures (they never
-//     produce a VM run to diff against), and `builtin-unknown-tag` exercises the VM's
-//     "unknown builtin" *runtime* error — there's no builtin to import, so emit
-//     correctly rejects it. None are codegen gaps.
+// Intentionally NOT on this list (and why), so a future reader doesn't mistake them
+// for unfinished work: `list-fold` / `list-pattern-if` are compile-error/warning
+// fixtures (they never produce a VM run to diff against), and `builtin-unknown-tag`
+// exercises the VM's "unknown builtin" *runtime* error — there's no builtin to
+// import, so emit correctly rejects it. None are codegen gaps.
 const WASM_FIXTURES: &[&str] = &[
 	"regex-matches",
 	"regex-find",
@@ -109,6 +106,21 @@ const WASM_FIXTURES: &[&str] = &[
 	"fail-direct",
 	"io-print",
 	"io-write-bytes",
+	// `core.io` filesystem + stdin (server platform — see compiler/src/platform.rs).
+	// The host glue is real `std::fs` + a stdin cursor so the `err` strings and read
+	// semantics match the VM; each runs idempotently (writes truncate, the rest clean
+	// up) so the shared VM-then-wasm run against `target/…` paths stays consistent.
+	"io-files",
+	"io-read-missing",
+	"io-append-delete",
+	"io-make-dir",
+	"io-read-dir",
+	"io-bytes-roundtrip",
+	"io-bytes-append",
+	"io-bytes-non-utf8",
+	"io-read-all",
+	"io-read-eof",
+	"io-read-lines",
 	"interpolation-complex",
 	"interpolation-nested-string",
 	"json-basic",
@@ -245,6 +257,192 @@ struct HostState {
 	/// The `io.fail` abort message, stashed before the host traps so `run_wasm`
 	/// can surface it as the program's `runtime error: <msg>` status.
 	fail: Rc<RefCell<Option<String>>>,
+	/// Program stdin (fed from the fixture's `stdin.txt`) + a read cursor — the
+	/// `io-read`/`io-read-all` host imports drain it with the VM's line semantics.
+	stdin: Rc<RefCell<Vec<u8>>>,
+	stdin_pos: Rc<RefCell<usize>>,
+	/// The message the last failed `core.io` call stashed (errno-style); returned
+	/// by the `io-last-error` import, which `__io_result` queries on the err path.
+	last_error: Rc<RefCell<String>>,
+	/// The module's `$value` GC types, captured once from the witness the first io
+	/// host import receives, so later calls build their returns without re-reflecting.
+	gc_types: Rc<RefCell<Option<GcTypes>>>,
+}
+
+/// The module's GC type handles the io host imports need to build their `$value`
+/// returns. Engine-scoped (store-independent), captured once from the universal
+/// witness `[nothing, "", [], true]` every io import is passed (see `emit_io_witness`).
+#[derive(Clone)]
+struct GcTypes {
+	value: StructType,
+	str_: StructType,
+	bytes: ArrayType,
+	valarray: ArrayType,
+	list: StructType,
+	bool_: StructType,
+}
+
+/// Reflect the universal witness (a `$list [nothing, "", [], true]`) to recover the
+/// module's `$value`/`$str`/`$bytes`/`$list`/`$valarray`/`$bool` types.
+fn capture_gc_types(store: &mut impl AsContextMut, witness: &Val) -> GcTypes {
+	let mut scope = RootScope::new(store);
+	let list_ref = match witness {
+		Val::AnyRef(Some(r)) => *r,
+		o => panic!("io witness is not a ref: {o:?}"),
+	};
+	let list_struct = list_ref
+		.as_struct(&mut scope)
+		.expect("witness as_struct")
+		.expect("witness is a $list");
+	let list = list_struct.ty(&mut scope).expect("$list type");
+	let elems = match list_struct.field(&mut scope, 1).expect("witness elems") {
+		Val::AnyRef(Some(r)) => r.as_array(&mut scope).expect("as_array").expect("$valarray"),
+		o => panic!("witness elems not an array: {o:?}"),
+	};
+	let valarray = elems.ty(&mut scope).expect("$valarray type");
+	let struct_ty_at = |scope: &mut RootScope<_>, i: u32| -> StructType {
+		match elems.get(&mut *scope, i).expect("witness elem") {
+			Val::AnyRef(Some(r)) => r
+				.as_struct(&mut *scope)
+				.expect("elem as_struct")
+				.expect("elem struct")
+				.ty(&mut *scope)
+				.expect("elem type"),
+			o => panic!("witness elem {i} not a struct: {o:?}"),
+		}
+	};
+	let value = struct_ty_at(&mut scope, 0); // nothing
+	let str_ = struct_ty_at(&mut scope, 1); // ""
+	let bytes = {
+		let s = match elems.get(&mut scope, 1).expect("elem 1") {
+			Val::AnyRef(Some(r)) => r.as_struct(&mut scope).unwrap().unwrap(),
+			o => panic!("elem 1 not a struct: {o:?}"),
+		};
+		match s.field(&mut scope, 1).expect("$str bytes field") {
+			Val::AnyRef(Some(r)) => r.as_array(&mut scope).unwrap().unwrap().ty(&mut scope).unwrap(),
+			o => panic!("$str field 1 not an array: {o:?}"),
+		}
+	};
+	let bool_ = struct_ty_at(&mut scope, 3); // true
+	GcTypes {
+		value,
+		str_,
+		bytes,
+		valarray,
+		list,
+		bool_,
+	}
+}
+
+/// Build a `$bytes` GC array of `data`.
+fn build_bytes_array(store: &mut impl AsContextMut, gc: &GcTypes, data: &[u8]) -> Rooted<ArrayRef> {
+	let pre = ArrayRefPre::new(&mut *store, gc.bytes.clone());
+	let elems: Vec<Val> = data.iter().map(|&b| Val::I32(b as i32)).collect();
+	ArrayRef::new_fixed(&mut *store, &pre, &elems).expect("build $bytes")
+}
+
+/// Build a `$str`/`$bytes`-shaped `$value` (`{tag, $bytes}`) for `tag` + `data`.
+fn build_strlike(store: &mut impl AsContextMut, gc: &GcTypes, tag: i32, data: &[u8]) -> Val {
+	let bytes = build_bytes_array(&mut *store, gc, data);
+	let pre = StructRefPre::new(&mut *store, gc.str_.clone());
+	let s = StructRef::new(&mut *store, &pre, &[Val::I32(tag), Val::AnyRef(Some(bytes.into()))])
+		.expect("build $str");
+	Val::AnyRef(Some(s.to_anyref()))
+}
+
+/// Build a `nothing` `$value`.
+fn build_nothing(store: &mut impl AsContextMut, gc: &GcTypes) -> Val {
+	let pre = StructRefPre::new(&mut *store, gc.value.clone());
+	let s = StructRef::new(&mut *store, &pre, &[Val::I32(TAG_NOTHING)]).expect("build nothing");
+	Val::AnyRef(Some(s.to_anyref()))
+}
+
+/// Build a `$bool` `$value`.
+fn build_bool(store: &mut impl AsContextMut, gc: &GcTypes, b: bool) -> Val {
+	let pre = StructRefPre::new(&mut *store, gc.bool_.clone());
+	let s = StructRef::new(&mut *store, &pre, &[Val::I32(TAG_BOOL), Val::I32(b as i32)])
+		.expect("build $bool");
+	Val::AnyRef(Some(s.to_anyref()))
+}
+
+/// Build a `$list` `$value` of `$str` elements (e.g. `read-dir`'s entry names).
+fn build_str_list(store: &mut impl AsContextMut, gc: &GcTypes, items: &[String]) -> Val {
+	let strs: Vec<Val> = items
+		.iter()
+		.map(|s| build_strlike(&mut *store, gc, TAG_STR, s.as_bytes()))
+		.collect();
+	let arr_pre = ArrayRefPre::new(&mut *store, gc.valarray.clone());
+	let arr = ArrayRef::new_fixed(&mut *store, &arr_pre, &strs).expect("build $valarray");
+	let pre = StructRefPre::new(&mut *store, gc.list.clone());
+	let s = StructRef::new(&mut *store, &pre, &[Val::I32(TAG_LIST), Val::AnyRef(Some(arr.into()))])
+		.expect("build $list");
+	Val::AnyRef(Some(s.to_anyref()))
+}
+
+/// Capture the module's GC types from the witness on the first io call, caching
+/// them in `HostState` so subsequent calls skip the reflection.
+fn ensure_types(caller: &mut Caller<HostState>, witness: &Val) -> GcTypes {
+	let cell = caller.data().gc_types.clone();
+	if let Some(t) = cell.borrow().clone() {
+		return t;
+	}
+	let t = capture_gc_types(caller, witness);
+	*cell.borrow_mut() = Some(t.clone());
+	t
+}
+
+/// The cached GC types (set by the most recent io op's witness) — for `io-last-error`,
+/// which carries no witness because it always follows a failing op that set them.
+fn cached_types(caller: &Caller<HostState>) -> GcTypes {
+	caller
+		.data()
+		.gc_types
+		.borrow()
+		.clone()
+		.expect("io-last-error called before any io op cached the GC types")
+}
+
+/// Extract a `$str` argument as a Rust `String` (UTF-8 lossy, like the VM).
+fn arg_string(store: &mut impl AsContextMut, v: &Val) -> String {
+	String::from_utf8_lossy(&raw_value_bytes(store, v)).into_owned()
+}
+
+/// Read one line from the program's stdin buffer with the VM's `read_line`
+/// semantics: `None` at EOF; otherwise the bytes up to the next `\n` (consumed),
+/// with a trailing `\r` stripped.
+fn stdin_line(state: &HostState) -> Option<String> {
+	let buf = state.stdin.borrow();
+	let mut pos = state.stdin_pos.borrow_mut();
+	if *pos >= buf.len() {
+		return None;
+	}
+	let start = *pos;
+	let (end, next) = match buf[start..].iter().position(|&c| c == b'\n') {
+		Some(rel) => (start + rel, start + rel + 1),
+		None => (buf.len(), buf.len()),
+	};
+	let line_end = if end > start && buf[end - 1] == b'\r' {
+		end - 1
+	} else {
+		end
+	};
+	let s = String::from_utf8_lossy(&buf[start..line_end]).into_owned();
+	*pos = next;
+	Some(s)
+}
+
+/// Drain the rest of stdin as raw bytes (backs `read-all` / `read-all-bytes`).
+fn stdin_rest(state: &HostState) -> Vec<u8> {
+	let buf = state.stdin.borrow();
+	let mut pos = state.stdin_pos.borrow_mut();
+	let rest = buf[*pos..].to_vec();
+	*pos = buf.len();
+	rest
+}
+
+/// Stash an io error message for the next `io-last-error` query.
+fn set_io_err(caller: &Caller<HostState>, msg: String) {
+	*caller.data().last_error.borrow_mut() = msg;
 }
 
 fn engine() -> Engine {
@@ -506,13 +704,28 @@ struct RunResult {
 /// f64-math glue). `use_drc` picks the collecting drc GC (for the allocation-heavy
 /// timed bench loop) over the default never-collecting null GC. Returns the store
 /// (its `HostState.out` accumulates printed bytes) and the instance.
-fn instantiate_module(use_drc: bool, bytes: &[u8]) -> Result<(Store<HostState>, Instance), String> {
+fn instantiate_module(
+	use_drc: bool,
+	bytes: &[u8],
+	stdin: &[u8],
+) -> Result<(Store<HostState>, Instance), String> {
 	let engine = if use_drc { bench_engine() } else { engine() };
 	let module = Module::new(&engine, bytes).map_err(|e| format!("module error: {e}"))?;
 	let out = Rc::new(RefCell::new(Vec::<u8>::new()));
 	let err = Rc::new(RefCell::new(Vec::<u8>::new()));
 	let fail = Rc::new(RefCell::new(None));
-	let mut store = Store::new(&engine, HostState { out, err, fail });
+	let mut store = Store::new(
+		&engine,
+		HostState {
+			out,
+			err,
+			fail,
+			stdin: Rc::new(RefCell::new(stdin.to_vec())),
+			stdin_pos: Rc::new(RefCell::new(0)),
+			last_error: Rc::new(RefCell::new(String::new())),
+			gc_types: Rc::new(RefCell::new(None)),
+		},
+	);
 	let mut linker: Linker<HostState> = Linker::new(&engine);
 	// print : (ref null $value) -> ()  — host accepts the broader `anyref`.
 	let print_ty = FuncType::new(&engine, [ValType::ANYREF], []);
@@ -651,6 +864,221 @@ fn instantiate_module(use_drc: bool, bytes: &[u8]) -> Result<(Store<HostState>, 
 			.unwrap_or_else(|e| panic!("define {name}: {e}"));
 	}
 
+	// `core.io` host imports (the server-platform capability). Each takes a trailing
+	// type witness (see `emit_io_witness`) the host reflects to build its `$value`
+	// return. The reads/writes return a primitive `$value`-or-null that wasm wraps in
+	// `ok`/`err` via `__io_result`; `file-exists`/`is-dir` return a bare `$bool`. All
+	// fs ops use real `std::fs` so the `err` strings match the VM's errno text. A real
+	// server target (Rust/WASI) implements the same contract; a browser target omits
+	// `core.io` entirely (gated by the platform — see compiler/src/platform.rs).
+	// The io imports return a concrete `(ref null $value)`, not the broader `anyref`
+	// (a result must be a *subtype* of what the module imports). Recover that exact
+	// type from the `_entry` export's signature (its env param / return is `$value`).
+	let value_ty: ValType = module
+		.exports()
+		.find(|e| e.name() == "_entry")
+		.and_then(|e| match e.ty() {
+			ExternType::Func(f) => f.results().next(),
+			_ => None,
+		})
+		.expect("_entry export with a $value result type");
+	let io2 = FuncType::new(
+		&engine,
+		[ValType::ANYREF, ValType::ANYREF],
+		[value_ty.clone()],
+	);
+	let io3 = FuncType::new(
+		&engine,
+		[ValType::ANYREF, ValType::ANYREF, ValType::ANYREF],
+		[value_ty.clone()],
+	);
+	let io0 = FuncType::new(&engine, [], [value_ty.clone()]);
+
+	// read-file / read-file-bytes: path is args[0], witness args[1].
+	for (name, as_bytes) in [("io-read-file", false), ("io-read-file-bytes", true)] {
+		linker
+			.func_new("pluma", name, io2.clone(), move |mut caller, args, results| {
+				let gc = ensure_types(&mut caller, &args[1]);
+				let path = arg_string(&mut caller, &args[0]);
+				results[0] = if as_bytes {
+					match std::fs::read(&path) {
+						Ok(b) => build_strlike(&mut caller, &gc, TAG_BYTES, &b),
+						Err(e) => {
+							set_io_err(&caller, e.to_string());
+							Val::AnyRef(None)
+						}
+					}
+				} else {
+					match std::fs::read_to_string(&path) {
+						Ok(s) => build_strlike(&mut caller, &gc, TAG_STR, s.as_bytes()),
+						Err(e) => {
+							set_io_err(&caller, e.to_string());
+							Val::AnyRef(None)
+						}
+					}
+				};
+				Ok(())
+			})
+			.unwrap_or_else(|e| panic!("define {name}: {e}"));
+	}
+
+	// write-file / append-file (+ bytes variants): path args[0], data args[1], witness
+	// args[2]. Return `nothing` on success.
+	for (name, append, as_bytes) in [
+		("io-write-file", false, false),
+		("io-append-file", true, false),
+		("io-write-file-bytes", false, true),
+		("io-append-file-bytes", true, true),
+	] {
+		linker
+			.func_new("pluma", name, io3.clone(), move |mut caller, args, results| {
+				let gc = ensure_types(&mut caller, &args[2]);
+				let path = arg_string(&mut caller, &args[0]);
+				let data = if as_bytes {
+					raw_value_bytes(&mut caller, &args[1])
+				} else {
+					arg_string(&mut caller, &args[1]).into_bytes()
+				};
+				let res = if append {
+					use std::io::Write;
+					std::fs::OpenOptions::new()
+						.create(true)
+						.append(true)
+						.open(&path)
+						.and_then(|mut f| f.write_all(&data))
+				} else {
+					std::fs::write(&path, &data)
+				};
+				results[0] = match res {
+					Ok(()) => build_nothing(&mut caller, &gc),
+					Err(e) => {
+						set_io_err(&caller, e.to_string());
+						Val::AnyRef(None)
+					}
+				};
+				Ok(())
+			})
+			.unwrap_or_else(|e| panic!("define {name}: {e}"));
+	}
+
+	// delete-file / make-dir (mkdir -p): path args[0], witness args[1].
+	for (name, is_mkdir) in [("io-delete-file", false), ("io-make-dir", true)] {
+		linker
+			.func_new("pluma", name, io2.clone(), move |mut caller, args, results| {
+				let gc = ensure_types(&mut caller, &args[1]);
+				let path = arg_string(&mut caller, &args[0]);
+				let res = if is_mkdir {
+					std::fs::create_dir_all(&path)
+				} else {
+					std::fs::remove_file(&path)
+				};
+				results[0] = match res {
+					Ok(()) => build_nothing(&mut caller, &gc),
+					Err(e) => {
+						set_io_err(&caller, e.to_string());
+						Val::AnyRef(None)
+					}
+				};
+				Ok(())
+			})
+			.unwrap_or_else(|e| panic!("define {name}: {e}"));
+	}
+
+	// file-exists / is-dir: path args[0], witness args[1]. Return a bare `$bool`.
+	for (name, is_dir) in [("io-file-exists", false), ("io-is-dir", true)] {
+		linker
+			.func_new("pluma", name, io2.clone(), move |mut caller, args, results| {
+				let gc = ensure_types(&mut caller, &args[1]);
+				let path = arg_string(&mut caller, &args[0]);
+				let p = std::path::Path::new(&path);
+				let b = if is_dir { p.is_dir() } else { p.exists() };
+				results[0] = build_bool(&mut caller, &gc, b);
+				Ok(())
+			})
+			.unwrap_or_else(|e| panic!("define {name}: {e}"));
+	}
+
+	// read-dir: path args[0], witness args[1]. Entry names only, sorted (VM parity).
+	linker
+		.func_new("pluma", "io-read-dir", io2.clone(), |mut caller, args, results| {
+			let gc = ensure_types(&mut caller, &args[1]);
+			let path = arg_string(&mut caller, &args[0]);
+			results[0] = match std::fs::read_dir(&path) {
+				Ok(entries) => {
+					let mut names: Vec<String> = Vec::new();
+					let mut read_err: Option<String> = None;
+					for entry in entries {
+						match entry {
+							Ok(e) => names.push(e.file_name().to_string_lossy().into_owned()),
+							Err(e) => {
+								read_err = Some(e.to_string());
+								break;
+							}
+						}
+					}
+					match read_err {
+						Some(msg) => {
+							set_io_err(&caller, msg);
+							Val::AnyRef(None)
+						}
+						None => {
+							names.sort();
+							build_str_list(&mut caller, &gc, &names)
+						}
+					}
+				}
+				Err(e) => {
+					set_io_err(&caller, e.to_string());
+					Val::AnyRef(None)
+				}
+			};
+			Ok(())
+		})
+		.expect("define io-read-dir");
+
+	// read / read-all / read-all-bytes: unit args[0], witness args[1].
+	linker
+		.func_new("pluma", "io-read", io2.clone(), |mut caller, args, results| {
+			let gc = ensure_types(&mut caller, &args[1]);
+			results[0] = match stdin_line(caller.data()) {
+				Some(line) => build_strlike(&mut caller, &gc, TAG_STR, line.as_bytes()),
+				None => {
+					set_io_err(&caller, "EOF".to_string());
+					Val::AnyRef(None)
+				}
+			};
+			Ok(())
+		})
+		.expect("define io-read");
+	linker
+		.func_new("pluma", "io-read-all", io2.clone(), |mut caller, args, results| {
+			let gc = ensure_types(&mut caller, &args[1]);
+			let bytes = stdin_rest(caller.data());
+			let s = String::from_utf8_lossy(&bytes).into_owned();
+			results[0] = build_strlike(&mut caller, &gc, TAG_STR, s.as_bytes());
+			Ok(())
+		})
+		.expect("define io-read-all");
+	linker
+		.func_new("pluma", "io-read-all-bytes", io2.clone(), |mut caller, args, results| {
+			let gc = ensure_types(&mut caller, &args[1]);
+			let bytes = stdin_rest(caller.data());
+			results[0] = build_strlike(&mut caller, &gc, TAG_BYTES, &bytes);
+			Ok(())
+		})
+		.expect("define io-read-all-bytes");
+
+	// io-last-error: the message the last failed io call stashed, as a `$str`. No
+	// witness — it rides the GC types the failing op already cached.
+	linker
+		.func_new("pluma", "io-last-error", io0, |mut caller, _args, results| {
+			let gc = cached_types(&caller);
+			let msg = caller.data().last_error.borrow().clone();
+			results[0] = build_strlike(&mut caller, &gc, TAG_STR, msg.as_bytes());
+			Ok(())
+		})
+		.expect("define io-last-error");
+
 	let instance = linker
 		.instantiate(&mut store, &module)
 		.map_err(|e| format!("instantiate error: {e}"))?;
@@ -658,8 +1086,8 @@ fn instantiate_module(use_drc: bool, bytes: &[u8]) -> Result<(Store<HostState>, 
 }
 
 /// Build a fresh instance and run `_entry` once, collecting stdout (the diff path).
-fn run_wasm(bytes: &[u8]) -> RunResult {
-	let (mut store, instance) = match instantiate_module(false, bytes) {
+fn run_wasm(bytes: &[u8], stdin: &[u8]) -> RunResult {
+	let (mut store, instance) = match instantiate_module(false, bytes, stdin) {
 		Ok(x) => x,
 		Err(status) => {
 			return RunResult {
@@ -726,13 +1154,11 @@ fn err_message(store: &mut impl AsContextMut, val: &Val) -> Option<String> {
 	(payload.len() == 1).then(|| payload[0].clone())
 }
 
-fn run_vm(program: vm::Program) -> RunResult {
+fn run_vm(program: vm::Program, stdin: &[u8]) -> RunResult {
 	let stdout = Rc::new(RefCell::new(Vec::<u8>::new()));
 	let stderr = Rc::new(RefCell::new(Vec::<u8>::new()));
 	let mut vm_instance = vm::VM::new(program)
-		.with_stdin(vm::InputSource::Buffer(std::rc::Rc::new(
-			std::cell::RefCell::new(Vec::new()),
-		)))
+		.with_stdin(vm::InputSource::Buffer(Rc::new(RefCell::new(stdin.to_vec()))))
 		.with_stdout(vm::OutputSink::Buffer(stdout.clone()))
 		.with_stderr(vm::OutputSink::Buffer(stderr.clone()));
 	let status = match vm_instance.run() {
@@ -747,7 +1173,12 @@ fn run_vm(program: vm::Program) -> RunResult {
 }
 
 fn compile_check(dir: &Path) -> Option<Compiler> {
-	let mut compiler = Compiler::from_entry_path(dir.to_str().unwrap().to_string()).ok()?;
+	// The WASM backend targets the server platform here: it provides every
+	// capability except the browser-only ones (Dom/Fetch/Timer), so `core.io`
+	// resolves and no fixture in this corpus is gated.
+	let mut compiler = Compiler::from_entry_path(dir.to_str().unwrap().to_string())
+		.ok()?
+		.with_platform(Platform::Server);
 	vm::stdlib::register_compiler(&mut compiler);
 	compiler.check().ok()?;
 	Some(compiler)
@@ -758,11 +1189,17 @@ fn wasm_path_matches_reference() {
 	let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
 	for name in WASM_FIXTURES {
 		let dir = workspace.join("tests/run").join(name);
+		// Feed the fixture's `stdin.txt` (empty if absent) to BOTH engines, so the
+		// `io.read`/`io.read-all` fixtures see identical input.
+		let stdin = std::fs::read(dir.join("stdin.txt")).unwrap_or_default();
 		let compiler = compile_check(&dir).unwrap_or_else(|| panic!("compile failed for `{name}`"));
 		let ir_program = ir::lower(&compiler).unwrap_or_else(|e| panic!("ir::lower `{name}`: {e}"));
-		let reference = run_vm(codegen::compile_from_ir(&ir_program).expect("reference compile"));
+		let reference = run_vm(
+			codegen::compile_from_ir(&ir_program).expect("reference compile"),
+			&stdin,
+		);
 		let bytes = wasm::emit(&ir_program).unwrap_or_else(|d| panic!("wasm::emit `{name}`: {:?}", d));
-		let via_wasm = run_wasm(&bytes);
+		let via_wasm = run_wasm(&bytes, &stdin);
 		assert_eq!(
 			reference.status, via_wasm.status,
 			"status mismatch for `{name}`"
@@ -790,19 +1227,24 @@ fn wasm_coverage_report() {
 	let (mut matching, mut diff, mut emit_err, mut panicked) = (Vec::new(), 0u32, 0u32, Vec::new());
 	for dir in &entries {
 		let name = dir.file_name().unwrap().to_string_lossy().to_string();
+		let stdin = std::fs::read(dir.join("stdin.txt")).unwrap_or_default();
 		let Some(compiler) = compile_check(dir) else {
 			continue;
 		};
 		let Ok(ir_program) = ir::lower(&compiler) else {
 			continue;
 		};
-		let reference = run_vm(codegen::compile_from_ir(&ir_program).expect("reference compile"));
+		let reference = run_vm(
+			codegen::compile_from_ir(&ir_program).expect("reference compile"),
+			&stdin,
+		);
 		// Emit can panic on a not-yet-handled construct; catch so the scan finishes.
 		let emitted =
 			std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| wasm::emit(&ir_program)));
 		match emitted {
 			Ok(Ok(bytes)) => {
-				let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run_wasm(&bytes)));
+				let r =
+					std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run_wasm(&bytes, &stdin)));
 				match r {
 					Ok(w) if w.status == reference.status && w.stdout == reference.stdout => {
 						matching.push(name)

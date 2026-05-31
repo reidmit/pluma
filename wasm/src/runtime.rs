@@ -192,6 +192,12 @@ pub(crate) enum Helper {
 	/// to back. Returns `nothing`. Backs sync `defer` (the async path runs its
 	/// cleanups through the CPS poll driver instead).
 	RunDefers,
+	/// `__io_result(payload) -> result` — wrap a `core.io` host import's return into
+	/// `ok payload` (non-null) or `err (io-last-error())` (null). Keeps the host
+	/// trafficking only in primitive `$value`s (string/bytes/list/nothing), never
+	/// the `result` enum's variant layout — that lives here. Backs the file/stdin
+	/// builtins (`io-read-file`, `io-read`, `io-read-dir`, the writers, …).
+	IoResult,
 	// --- async runtime (the hand-emitted task/scope driver, `helpers/task.rs`) ---
 	/// `__task_drive(root) -> value` — the single-fiber poll driver. Runs a cold
 	/// `$task` to completion (mirroring `vm::task::advance_one`'s Start/Ok/Err
@@ -253,7 +259,7 @@ impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 56;
+	pub(crate) const COUNT: usize = 57;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable
@@ -312,6 +318,12 @@ pub(crate) struct Runtime {
 	/// `result` `ok`/`err` tags + display names (for `task.attempt` and root
 	/// failure) and the `__defers` field name the driver scans for.
 	pub(crate) tasklits: TaskLits,
+	/// `result` `ok`/`err` tags + display names `__io_result` wraps an io host
+	/// return in. Populated when any `core.io` result builtin is reachable.
+	pub(crate) ioreslits: IoResultLits,
+	/// Host import `io-last-error() -> $str` — the message `__io_result` attaches to
+	/// `err` on a failed io call. Present whenever `IoResult` is emitted.
+	pub(crate) io_last_error: Option<u32>,
 }
 
 impl Runtime {
@@ -382,6 +394,13 @@ impl HelperCtx<'_> {
 	pub(crate) fn float_to_str(&self) -> u32 {
 		self.rt.float_to_str.expect("__tostring needs float_to_str")
 	}
+	/// The `io-last-error` host import index (present whenever `IoResult` is).
+	pub(crate) fn io_last_error(&self) -> u32 {
+		self
+			.rt
+			.io_last_error
+			.expect("__io_result needs the io-last-error host import")
+	}
 }
 
 /// FNV-1a 64-bit offset basis / prime — the constants `vm::wire` mixes with, so
@@ -443,6 +462,17 @@ pub(crate) struct WireResultLits {
 	/// minus one: `[unexpected-end, invalid-tag, invalid-utf8, trailing-bytes,
 	/// malformed]`.
 	pub(crate) errors: [(u32, (u32, u32)); 5],
+}
+
+/// The `result` `ok`/`err` variant tags + interned display-name `(off, len)`
+/// strings `__io_result` wraps a `core.io` host return in: `ok payload` (non-null
+/// host return) or `err (io-last-error())` (null).
+#[derive(Clone, Copy, Default)]
+pub(crate) struct IoResultLits {
+	pub(crate) ok_tag: u32,
+	pub(crate) err_tag: u32,
+	pub(crate) ok_name: (u32, u32),
+	pub(crate) err_name: (u32, u32),
 }
 
 /// What an `*-compare` wrapper needs to construct an `ordering` `$variant`: each
@@ -641,8 +671,68 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 			arity: 1,
 			returns_value: false,
 		}),
+		// `core.io` reads (server platform). Each returns a primitive `$value`
+		// (string/bytes/list) on success or `null` on failure; `__io_result` wraps
+		// the return into `ok`/`err` (`is_io_result`). Every io host import takes a
+		// trailing **type witness** (`[nothing, "", [], true]`, built inline by the
+		// emitter) so the host can reflect the module's `$value` types and build its
+		// return without a type-by-index lookup — hence one extra arg beyond the
+		// Pluma signature: the unit-arg reads are arity 1+1, the path reads 1+1.
+		"io-read" | "io-read-all" | "io-read-all-bytes" | "io-read-file" | "io-read-file-bytes"
+		| "io-delete-file" | "io-make-dir" | "io-read-dir" => Some(HostSig {
+			arity: 2,
+			returns_value: true,
+		}),
+		"io-write-file" | "io-write-file-bytes" | "io-append-file" | "io-append-file-bytes" => {
+			Some(HostSig {
+				arity: 3,
+				returns_value: true,
+			})
+		}
+		// These return a bare `bool` directly — no `__io_result` wrapping (still take
+		// the witness so the host can build the `$bool`).
+		"io-file-exists" | "io-is-dir" => Some(HostSig {
+			arity: 2,
+			returns_value: true,
+		}),
+		// The error channel `__io_result` reads on a failed io call (errno-style: the
+		// host sets it on every failing call before returning null). No witness — it
+		// rides the `$str` type the host cached from the failing op's witness.
+		"io-last-error" => Some(HostSig {
+			arity: 0,
+			returns_value: true,
+		}),
 		_ => None,
 	}
+}
+
+/// Whether `tag` is a `core.io` builtin emitted through the witness-passing host
+/// path (the file/stdin ops + the `bool` queries) — all of which take a trailing
+/// type witness so the host can build their `$value` return. A superset of
+/// `is_io_result`; the extra two (`io-file-exists`/`io-is-dir`) skip `__io_result`.
+pub(crate) fn is_io_host(tag: &str) -> bool {
+	is_io_result(tag) || matches!(tag, "io-file-exists" | "io-is-dir")
+}
+
+/// Whether `tag` is a `core.io` builtin whose host return must be wrapped into a
+/// `result` by `__io_result` (the file/stdin ops returning `result …`). Excludes
+/// `io-file-exists`/`io-is-dir` (bare `bool`) and the stdout writers (`nothing`).
+pub(crate) fn is_io_result(tag: &str) -> bool {
+	matches!(
+		tag,
+		"io-read"
+			| "io-read-all"
+			| "io-read-all-bytes"
+			| "io-read-file"
+			| "io-read-file-bytes"
+			| "io-write-file"
+			| "io-write-file-bytes"
+			| "io-append-file"
+			| "io-append-file-bytes"
+			| "io-delete-file"
+			| "io-make-dir"
+			| "io-read-dir"
+	)
 }
 
 /// Pure-compute builtins emitted inline at the call site (no host import, no

@@ -14,7 +14,7 @@ use crate::Diagnostics;
 use crate::async_lower::TASK_ENUM;
 use crate::runtime::{
 	GlobalKind, GlobalSlot, Helper, Runtime, WIRE_FNV_OFFSET, host_sig, is_f64_unary_host,
-	is_inline_builtin, task_builtin_kind,
+	is_inline_builtin, is_io_host, is_io_result, task_builtin_kind,
 };
 use crate::scan::{
 	StrPool, block_has_pushdefer, builtin_var_tags, compute_nominal, ctor_var_tags,
@@ -1475,6 +1475,26 @@ impl<'a> FnEmitter<'a> {
 			self.push_nothing();
 			return;
 		};
+		// `core.io` host imports: push the real args, then a universal type witness
+		// (so the host can build its `$value` return), then call. The file/stdin
+		// reads + writes return a primitive `$value`-or-null wrapped into `ok`/`err`
+		// by `__io_result`; `io-file-exists`/`io-is-dir` return a bare `$bool`.
+		if is_io_host(tag) {
+			for a in args {
+				self.atom(a);
+			}
+			self.emit_io_witness();
+			self.ins(Instruction::Call(idx));
+			if is_io_result(tag) {
+				let Some(shaper) = self.runtime.idx(Helper::IoResult) else {
+					self.diags.push(format!("`{tag}` needs the __io_result shaper"));
+					self.push_nothing();
+					return;
+				};
+				self.ins(Instruction::Call(shaper));
+			}
+			return;
+		}
 		for a in args {
 			self.atom(a);
 		}
@@ -1539,6 +1559,43 @@ impl<'a> FnEmitter<'a> {
 		}
 		// `debug` returns its argument unchanged.
 		self.atom(arg);
+	}
+
+	/// Push the universal `core.io` type witness `[nothing, "", [], true]` — a
+	/// `$list` whose four elements sample the `$value`, `$str` (+ its `$bytes`
+	/// backing), `$list` (+ its `$valarray` backing), and `$bool` GC types. Every io
+	/// host import takes it as a trailing arg so the host can reflect these types and
+	/// build its `$value` return without a type-by-index lookup (the host caches them
+	/// on the first call). Built inline since this module owns all the types.
+	fn emit_io_witness(&mut self) {
+		// outer `$list` = { TAG_LIST, $valarray[ nothing, "", [], true ] }.
+		self.ins(Instruction::I32Const(types::TAG_LIST));
+		// elem 0: nothing.
+		self.push_nothing();
+		// elem 1: "" (`$str`, exposing `$str` + `$bytes`).
+		self.ins(Instruction::I32Const(types::TAG_STR));
+		self.ins(Instruction::ArrayNewFixed {
+			array_type_index: types::T_BYTES,
+			array_size: 0,
+		});
+		self.ins(Instruction::StructNew(types::T_STR));
+		// elem 2: [] (empty `$list`, exposing `$list` + `$valarray`).
+		self.ins(Instruction::I32Const(types::TAG_LIST));
+		self.ins(Instruction::ArrayNewFixed {
+			array_type_index: types::T_VALARRAY,
+			array_size: 0,
+		});
+		self.ins(Instruction::StructNew(types::T_LIST));
+		// elem 3: true (`$bool`).
+		self.ins(Instruction::I32Const(types::TAG_BOOL));
+		self.ins(Instruction::I32Const(1));
+		self.ins(Instruction::StructNew(types::T_BOOL));
+		// Pack the four into a `$valarray`, then the outer `$list`.
+		self.ins(Instruction::ArrayNewFixed {
+			array_type_index: types::T_VALARRAY,
+			array_size: 4,
+		});
+		self.ins(Instruction::StructNew(types::T_LIST));
 	}
 
 	/// Emit a pure-compute builtin inline over the `$value` GC layout.
