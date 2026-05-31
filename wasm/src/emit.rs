@@ -2162,10 +2162,11 @@ impl<'a> FnEmitter<'a> {
 		self.ins(Instruction::StructNew(types::T_LIST));
 	}
 
-	/// The `$list` currently on the stack -> its elements as an exact-length
-	/// `$valarray` (a fresh copy of `elems[0..length]`). Used where the whole
-	/// backing array is consumed (spread / concat) so a pushed list's spare
-	/// capacity is never copied out.
+	/// The `$list` currently on the stack -> its elements as a `$valarray` of
+	/// exactly `length` elements. When `length == capacity` (no `list.push` has
+	/// grown it — the common case) this is the backing array itself, no copy;
+	/// only a spare-capacity list is trimmed (so its tail never leaks into a
+	/// spread / concat).
 	fn emit_list_elems(&mut self) {
 		let list_l = self.fresh_local(types::value_ref());
 		self.ins(Instruction::LocalSet(list_l));
@@ -2185,11 +2186,19 @@ impl<'a> FnEmitter<'a> {
 			field_index: 1,
 		});
 		self.ins(Instruction::LocalSet(src));
+		// if len == array.len(src): use src as-is (no spare capacity).
+		self.ins(Instruction::LocalGet(len));
+		self.ins(Instruction::LocalGet(src));
+		self.ins(Instruction::ArrayLen);
+		self.ins(Instruction::I32Eq);
+		self.ins(Instruction::If(BlockType::Result(types::valarray_ref())));
+		self.ins(Instruction::LocalGet(src));
+		self.ins(Instruction::Else);
+		// trim: out[i] = src[i] for i in 0..len.
 		let out = self.fresh_local(types::valarray_ref());
 		self.ins(Instruction::LocalGet(len));
 		self.ins(Instruction::ArrayNewDefault(types::T_VALARRAY));
 		self.ins(Instruction::LocalSet(out));
-		// out[i] = src[i] for i in 0..len.
 		let idx = self.fresh_local(ValType::I32);
 		self.ins(Instruction::I32Const(0));
 		self.ins(Instruction::LocalSet(idx));
@@ -2213,6 +2222,7 @@ impl<'a> FnEmitter<'a> {
 		self.ins(Instruction::End);
 		self.ins(Instruction::End);
 		self.ins(Instruction::LocalGet(out));
+		self.ins(Instruction::End);
 	}
 
 	fn make_list(&mut self, items: &[ir::ListItem]) {
