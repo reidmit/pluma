@@ -201,6 +201,7 @@ const WASM_FIXTURES: &[&str] = &[
 	"task-trait-poly",
 	// async (Stage 2: scheduler — scopes/fibers/timers/cancellation)
 	"scope-both",
+	"scope-handle-param",
 ];
 
 // Runtime tags — must match `wasm::types`.

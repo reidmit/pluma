@@ -230,6 +230,7 @@ pub(crate) fn build_pump_fn(
 	poll_defers_state: u32,
 	act_push: u32,
 	start_scope: u32,
+	drain_next: u32,
 	arity1: u32,
 	g: TaskGlobals,
 	lits: TaskLits,
@@ -248,6 +249,7 @@ pub(crate) fn build_pump_fn(
 	let apl = w.local(va);
 	let ps = w.local(v);
 	let pspl = w.local(va);
+	let dn = w.local(v);
 	let psk = w.local(ValType::I32);
 	let pc = w.local(v);
 	let child = w.local(ValType::I32);
@@ -370,7 +372,35 @@ pub(crate) fn build_pump_fn(
 					);
 				});
 
-				// next is Stage 2b.
+				// next: drain the manual scope (`s.next`).
+				w.local_get(tk).i32(task_kind::NEXT).i32_eq();
+				w.if_(|w| {
+					// drain_next(handle) -> (action, val). The handle is tp[0].
+					elem(w, tp, 0);
+					w.call(drain_next).local_set(dn);
+					w.local_get(dn).ref_cast(types::T_TUPLE).struct_get(types::T_TUPLE, 1);
+					w.i32(0).array_get(types::T_VALARRAY);
+					unbox_i(w);
+					w.i32_eqz(); // action == 0 -> produce, else park.
+					w.if_else(
+						|w| {
+							w.local_get(dn).ref_cast(types::T_TUPLE).struct_get(types::T_TUPLE, 1);
+							w.i32(1).array_get(types::T_VALARRAY);
+							w.local_set(fval);
+							w.i32(focus::OK).local_set(fkind);
+							w.br("main");
+						},
+						|w| {
+							save_act(w, g, fid);
+							park_out(w, g, wait::NEXT, |w| {
+								elem(w, tp, 0);
+								unbox_i(w);
+							});
+							w.br("ret");
+						},
+					);
+				});
+
 				w.unreachable();
 			});
 
@@ -498,18 +528,18 @@ pub(crate) fn build_start_scope_fn(list_append: u32, arity1: u32, g: TaskGlobals
 	let bf = w.local(ValType::I32);
 	let body_task = w.local(v);
 
-	// sid = |scopes|; bf = |fibers|.
+	// sid = |scopes|. scopes.append(new scope { manual, awaiter=fid, body=0 }).
+	// (BODY is patched below — calling a *non-async* body runs its `s.spawn`s now,
+	// appending child fibers, so the body fiber's index isn't known until after.)
 	list_len(&mut w, g.scopes);
 	w.local_set(sid);
-	list_len(&mut w, g.fibers);
-	w.local_set(bf);
-
-	// scopes.append(new scope { manual, awaiter=fid, body=bf }).
 	w.global_get(g.scopes);
 	w.i32(types::TAG_TUPLE);
 	scope_fields(&mut w, |w| {
 		w.local_get(manual).ref_cast(types::T_BOOL).struct_get(types::T_BOOL, 1);
-	}, bf, |w| {
+	}, |w| {
+		w.i32(0);
+	}, |w| {
 		w.local_get(fid_b).ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64();
 	});
 	w.struct_new(types::T_TUPLE);
@@ -526,7 +556,9 @@ pub(crate) fn build_start_scope_fn(list_append: u32, arity1: u32, g: TaskGlobals
 	}, arity1);
 	w.local_set(body_task);
 
-	// fibers.append(new fiber { scope=sid, runs_scope=sid }).
+	// bf = |fibers| (now, after any spawns). Append the body fiber, patch BODY.
+	list_len(&mut w, g.fibers);
+	w.local_set(bf);
 	w.global_get(g.fibers);
 	w.i32(types::TAG_TUPLE);
 	fiber_fields(&mut w, |w| {
@@ -536,6 +568,9 @@ pub(crate) fn build_start_scope_fn(list_append: u32, arity1: u32, g: TaskGlobals
 	});
 	w.struct_new(types::T_TUPLE);
 	w.call(list_append).global_set(g.fibers);
+	set_fld_i(&mut w, g.scopes, sid, scope::BODY, |w| {
+		w.local_get(bf);
+	});
 
 	// ready.append((bf, Start, body_task)).
 	ready_push(&mut w, g, list_append, bf, focus::START, |w| {
@@ -776,12 +811,36 @@ pub(crate) fn build_on_child_done_fn(
 		});
 	});
 	set_fld(&mut w, g.fibers, fid, fiber::WAITERS, empty_list);
-	// completed.append(outcome) for s.next (Stage 2b records it unconditionally).
-	set_fld(&mut w, g.scopes, sid, scope::COMPLETED, |w| {
-		fld(w, g, g.scopes, sid, scope::COMPLETED);
-		mk_outcome(w, kind, val);
-		w.call(list_append);
-	});
+	// Feed `s.next`: hand straight to a parked drainer, else queue for later.
+	let nw = w.local(types::valarray_ref());
+	let nwn = w.local(ValType::I32);
+	let nwfid = w.local(ValType::I32);
+	let octmp = w.local(types::value_ref());
+	fld(&mut w, g, g.scopes, sid, scope::NEXT_WAITERS);
+	w.ref_cast(types::T_LIST).struct_get(types::T_LIST, 1).local_set(nw);
+	w.local_get(nw).array_len().local_tee(nwn).i32(0).i32_gt_s();
+	w.if_else(
+		|w| {
+			w.local_get(nw).i32(0).array_get(types::T_VALARRAY);
+			unbox_i(w);
+			w.local_set(nwfid);
+			set_fld(w, g.scopes, sid, scope::NEXT_WAITERS, |w| {
+				drop_first_list(w, nw, nwn);
+			});
+			mk_outcome(w, kind, val);
+			w.local_set(octmp);
+			ready_push(w, g, list_append, nwfid, focus::OK, |w| {
+				push_some(w, lits, |w| push_settled(w, lits, octmp));
+			});
+		},
+		|w| {
+			set_fld(w, g.scopes, sid, scope::COMPLETED, |w| {
+				fld(w, g, g.scopes, sid, scope::COMPLETED);
+				mk_outcome(w, kind, val);
+				w.call(list_append);
+			});
+		},
+	);
 
 	// Fail-fast: an unobserved failure in a live non-manual scope cancels it.
 	w.local_get(kind).i32(outcome::ERR).i32_eq();
@@ -1065,8 +1124,18 @@ pub(crate) fn build_park_fn(list_append: u32, g: TaskGlobals) -> Function {
 				w.call(list_append);
 			});
 		});
-		// scope: nothing — the scope wakes its awaiter on finalize.
-		// (sleep/next are Stage 2b/2c.)
+		// next: enqueue on the scope's `s.next` waiter list (the scope `wa`).
+		w.local_get(wk).i32(wait::NEXT).i32_eq();
+		w.if_(|w| {
+			set_fld(w, g.scopes, wa, scope::NEXT_WAITERS, |w| {
+				fld(w, g, g.scopes, wa, scope::NEXT_WAITERS);
+				box_i(w, |w| {
+					w.local_get(fid);
+				});
+				w.call(list_append);
+			});
+		});
+		// scope: nothing — the scope wakes its awaiter on finalize. (sleep is 2c.)
 		set_fld_i(w, g.fibers, fid, fiber::WAIT_KIND, |w| {
 			w.local_get(wk);
 		});
@@ -1075,6 +1144,45 @@ pub(crate) fn build_park_fn(list_append: u32, g: TaskGlobals) -> Function {
 		});
 	});
 	push_nothing(&mut w);
+	w.finish()
+}
+
+/// `__drain_next(handle) -> $tuple(action, val)`: `s.next` — hand back the next
+/// settled child as `some (ok/err …)`, `none` once every child has drained, or
+/// signal a park. `action` 0 = produce `val` (Ok focus), 1 = park on `Next`.
+pub(crate) fn build_drain_next_fn(g: TaskGlobals, lits: TaskLits) -> Function {
+	let v = types::value_ref();
+	let va = types::valarray_ref();
+	let mut w = Wat::new(1);
+	let handle = w.param(0);
+	let sid = w.local(ValType::I32);
+	let comp = w.local(va);
+	let n = w.local(ValType::I32);
+	let oc = w.local(v);
+
+	w.local_get(handle).ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64().local_set(sid);
+	fld(&mut w, g, g.scopes, sid, scope::COMPLETED);
+	w.ref_cast(types::T_LIST).struct_get(types::T_LIST, 1).local_set(comp);
+	w.local_get(comp).array_len().local_tee(n).i32(0).i32_gt_s();
+	w.if_result(
+		v,
+		|w| {
+			// A settled child is queued: pop the front, yield `some (settled)`.
+			w.local_get(comp).i32(0).array_get(types::T_VALARRAY).local_set(oc);
+			set_fld(w, g.scopes, sid, scope::COMPLETED, |w| {
+				drop_first_list(w, comp, n);
+			});
+			action_tuple(w, 0, |w| push_some(w, lits, |w| push_settled(w, lits, oc)));
+		},
+		|w| {
+			all_children_done(w, g, sid);
+			w.if_result(
+				v,
+				|w| action_tuple(w, 0, |w| push_none(w, lits)),
+				|w| action_tuple(w, 1, push_nothing),
+			);
+		},
+	);
 	w.finish()
 }
 
@@ -1339,7 +1447,7 @@ fn fiber_fields(w: &mut Wat, scope_id: impl FnOnce(&mut Wat), runs_scope: impl F
 fn scope_fields(
 	w: &mut Wat,
 	manual: impl FnOnce(&mut Wat),
-	body: Local,
+	body: impl FnOnce(&mut Wat),
 	awaiter: impl FnOnce(&mut Wat),
 ) {
 	box_i(w, manual); // MANUAL
@@ -1349,9 +1457,7 @@ fn scope_fields(
 	box_i(w, |w| {
 		w.i32(0);
 	}); // FINALIZED
-	box_i(w, |w| {
-		w.local_get(body);
-	}); // BODY
+	box_i(w, body); // BODY
 	empty_list(w); // CHILDREN
 	box_i(w, awaiter); // AWAITER
 	box_i(w, |w| {
@@ -1668,4 +1774,101 @@ fn str_lit(w: &mut Wat, (off, len): (u32, u32)) {
 	w.i32(len as i32);
 	w.array_new_data(types::T_BYTES, 0);
 	w.struct_new(types::T_STR);
+}
+
+/// Push a `$tuple(box action, val)` — the `__drain_next` result shape.
+fn action_tuple(w: &mut Wat, action: i64, val: impl FnOnce(&mut Wat)) {
+	w.i32(types::TAG_TUPLE);
+	w.i32(types::TAG_INT).i64(action).struct_new(types::T_INT);
+	val(w);
+	w.array_new_fixed(types::T_VALARRAY, 2);
+	w.struct_new(types::T_TUPLE);
+}
+
+/// Push `option.some(<val>)`.
+fn push_some(w: &mut Wat, lits: TaskLits, val: impl FnOnce(&mut Wat)) {
+	push_result(w, lits.some_tag, lits.some_name, val);
+}
+
+/// Push `option.none`.
+fn push_none(w: &mut Wat, lits: TaskLits) {
+	w.i32(types::TAG_VARIANT);
+	w.i32(lits.none_tag as i32);
+	str_lit(w, lits.none_name);
+	w.array_new_fixed(types::T_VALARRAY, 0);
+	w.struct_new(types::T_VARIANT);
+}
+
+/// Push the `result` a settled child outcome yields: `ok v` / `err e` (cancelled
+/// → `ok ()`). `oc` is a `$tuple(boxed kind, val)`.
+fn push_settled(w: &mut Wat, lits: TaskLits, oc: Local) {
+	let k = w.local(ValType::I32);
+	w.local_get(oc).ref_cast(types::T_TUPLE).struct_get(types::T_TUPLE, 1).i32(0).array_get(types::T_VALARRAY);
+	unbox_i(w);
+	w.local_set(k);
+	w.local_get(k).i32(outcome::OK).i32_eq();
+	w.if_result(
+		types::value_ref(),
+		|w| {
+			push_result(w, lits.ok_tag, lits.ok_name, |w| {
+				w.local_get(oc).ref_cast(types::T_TUPLE).struct_get(types::T_TUPLE, 1).i32(1).array_get(types::T_VALARRAY);
+			});
+		},
+		|w| {
+			w.local_get(k).i32(outcome::ERR).i32_eq();
+			w.if_result(
+				types::value_ref(),
+				|w| {
+					push_result(w, lits.err_tag, lits.err_name, |w| {
+						w.local_get(oc).ref_cast(types::T_TUPLE).struct_get(types::T_TUPLE, 1).i32(1).array_get(types::T_VALARRAY);
+					});
+				},
+				|w| {
+					// cancelled -> ok ().
+					push_result(w, lits.ok_tag, lits.ok_name, push_nothing);
+				},
+			);
+		},
+	);
+}
+
+/// Drop the first element of the `$valarray` `arr` (length `n`) and wrap the rest
+/// as a fresh `$list`.
+fn drop_first_list(w: &mut Wat, arr: Local, n: Local) {
+	let out = w.local(types::valarray_ref());
+	w.local_get(n).i32(1).i32_sub().array_new_default(types::T_VALARRAY).local_set(out);
+	w.local_get(out).i32(0).local_get(arr).i32(1).local_get(n).i32(1).i32_sub().array_copy(types::T_VALARRAY, types::T_VALARRAY);
+	w.i32(types::TAG_LIST);
+	w.local_get(out);
+	w.struct_new(types::T_LIST);
+}
+
+/// Push i32 1 if every child of scope `sid` has settled (none alive), else 0.
+fn all_children_done(w: &mut Wat, g: TaskGlobals, sid: Local) {
+	let children = w.local(types::valarray_ref());
+	let n = w.local(ValType::I32);
+	let i = w.local(ValType::I32);
+	let res = w.local(ValType::I32);
+	fld(w, g, g.scopes, sid, scope::CHILDREN);
+	w.ref_cast(types::T_LIST).struct_get(types::T_LIST, 1).local_set(children);
+	w.local_get(children).array_len().local_set(n);
+	w.i32(0).local_set(i);
+	w.i32(1).local_set(res);
+	w.block("brk", |w| {
+		w.loop_("lp", |w| {
+			w.local_get(i).local_get(n).i32_ge_s().br_if("brk");
+			w.local_get(children).local_get(i).array_get(types::T_VALARRAY);
+			let c = w.local(ValType::I32);
+			unbox_i(w);
+			w.local_set(c);
+			fld_i(w, g, g.fibers, c, fiber::ALIVE);
+			w.if_(|w| {
+				w.i32(0).local_set(res);
+				w.br("brk");
+			});
+			w.local_get(i).i32(1).i32_add().local_set(i);
+			w.br("lp");
+		});
+	});
+	w.local_get(res);
 }

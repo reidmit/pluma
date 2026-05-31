@@ -238,13 +238,15 @@ pub(crate) enum Helper {
 	Park,
 	/// `__list_append(list, elem) -> list` — append one element (O(n) rebuild).
 	ListAppend,
+	/// `__drain_next(handle) -> $tuple(action, val)` — `s.next` on a manual scope.
+	DrainNext,
 }
 
 impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 52;
+	pub(crate) const COUNT: usize = 53;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable

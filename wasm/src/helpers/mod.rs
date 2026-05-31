@@ -390,7 +390,13 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::Pump,
 		fn_type: Ty::Helper(3),
-		deps: &[H::PollStep, H::PollDefersState, H::ActPush, H::StartScope],
+		deps: &[
+			H::PollStep,
+			H::PollDefersState,
+			H::ActPush,
+			H::StartScope,
+			H::DrainNext,
+		],
 		build: |c| {
 			let arity1 = c.arity(1);
 			task::build_pump_fn(
@@ -398,6 +404,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 				c.dep(H::PollDefersState),
 				c.dep(H::ActPush),
 				c.dep(H::StartScope),
+				c.dep(H::DrainNext),
 				arity1,
 				c.rt.taskg,
 				c.rt.tasklits,
@@ -474,6 +481,12 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		fn_type: Ty::Helper(2),
 		deps: &[H::ArrConcat],
 		build: |c| task::build_list_append_fn(c.dep(H::ArrConcat)),
+	},
+	HelperDef {
+		id: H::DrainNext,
+		fn_type: Ty::Helper(1),
+		deps: &[],
+		build: |c| task::build_drain_next_fn(c.rt.taskg, c.rt.tasklits),
 	},
 ];
 
