@@ -27,6 +27,7 @@
 
 use crate::colors;
 use crate::printing::print_diagnostics;
+use compiler::types::Type;
 use compiler::{Compiler, Diagnostic, LANGUAGE_NAME, Token, Tokenizer, VERSION, find_project_root};
 use rustyline::DefaultEditor;
 use rustyline::error::ReadlineError;
@@ -42,6 +43,10 @@ const REPL_MODULE: &str = "__repl__";
 // The record field a bare expression's value is parked in so we can read it
 // back off `main`'s return value.
 const ECHO_FIELD: &str = "__repl_value";
+// The synthetic `public def` a `:type` probe parks its expression in, so the
+// expression's type surfaces in the module's exports (public so it isn't
+// filtered out as private). Its return type is the type we report.
+const TYPE_PROBE: &str = "__repl_type_probe";
 
 const PROMPT: &str = "pluma> ";
 const CONT_PROMPT: &str = "   ... ";
@@ -234,26 +239,84 @@ fn echo_input(submission: &str) {
 	}
 }
 
-// Run a `:meta` command. Returns true if the REPL should exit.
+// Run a `:meta` command. Returns true if the REPL should exit. The command name
+// is the first whitespace-delimited word; the remainder is its argument (used by
+// `:type <expr>`).
 fn meta_command(rest: &str, session: &mut Session) -> bool {
-	match rest.trim() {
+	let rest = rest.trim();
+	let (cmd, arg) = match rest.split_once(char::is_whitespace) {
+		Some((c, a)) => (c, a.trim()),
+		None => (rest, ""),
+	};
+	match cmd {
 		"help" | "h" | "?" => print_repl_help(),
 		"quit" | "q" | "exit" => return true,
 		"reset" => {
 			session.reset();
 			println!("{}", colors::dim("session reset"));
 		}
-		other => println!(
+		"type" | "t" => type_command(arg, session),
+		_ => println!(
 			"{}",
-			colors::dim(&format!("unknown command `:{}` — try `:help`", other))
+			colors::dim(&format!("unknown command `:{}` — try `:help`", cmd))
 		),
 	}
 	false
 }
 
+// Infer and print the type of `expr` in the current session's scope, without
+// committing or running anything. We build a throwaway module whose body mirrors
+// the session (so local `let`s are in scope) and ends in `expr`, parked in a
+// `public def` so its inferred type lands in the module's exports. The probe
+// def is a zero-arg function, so its type is `fun -> T`; `T` is what we report.
+fn type_command(expr: &str, session: &Session) {
+	if expr.is_empty() {
+		println!("{}", colors::dim("usage: :type <expression>"));
+		return;
+	}
+
+	let source = render_type_probe(&session.uses, &session.defs, &session.body, expr);
+
+	let mut compiler = Compiler::for_root_dir(session.root_dir.clone());
+	compiler.set_module_source(REPL_MODULE.to_string(), source.into_bytes());
+	compiler.add_entry_module(REPL_MODULE.to_string());
+	vm::stdlib::register_compiler(&mut compiler);
+
+	// As elsewhere in the REPL, proceed past warning-only diagnostics (a session
+	// routinely has not-yet-used bindings) and stop only on real errors.
+	if let Err(diagnostics) = compiler.check() {
+		let errors: Vec<Diagnostic> = diagnostics.into_iter().filter(|d| d.is_error()).collect();
+		if !errors.is_empty() {
+			print_diagnostics(errors);
+			return;
+		}
+	}
+
+	let probe_type = compiler
+		.modules
+		.get(REPL_MODULE)
+		.and_then(|m| m.exports.as_ref())
+		.and_then(|e| e.values.get(TYPE_PROBE));
+
+	match probe_type {
+		// The probe is `fun { … expr }`, so its type is `fun -> T`; report `T`.
+		Some(Type::Fun(_, ret)) => {
+			println!("{}{}", colors::dim(":: "), colors::bold(&ret.to_string()))
+		}
+		// Defensive: if the shape isn't what we built, show it verbatim rather
+		// than swallowing the result.
+		Some(other) => println!("{}{}", colors::dim(":: "), colors::bold(&other.to_string())),
+		None => eprintln!(
+			"{} could not determine the type of that expression",
+			colors::bold_red("Error:")
+		),
+	}
+}
+
 fn print_repl_help() {
 	println!("{}", colors::bold("REPL commands"));
 	println!("  :help          show this help");
+	println!("  :type <expr>   show the inferred type of an expression");
 	println!("  :reset         clear all session bindings");
 	println!("  :quit          leave the REPL (also Ctrl-D)");
 	println!();
@@ -444,6 +507,49 @@ fn render(uses: &[String], defs: &[String], body: &[(Kind, String)]) -> String {
 	out
 }
 
+// Assemble a `:type` probe module: the session's imports and defs, plus a single
+// `public def __repl_type_probe = fun { <body>; (expr) }`. The committed body
+// statements/expressions are replayed (so `expr` sees the same local scope an
+// interactive turn would), with every committed expression discarded — only the
+// trailing `(expr)` determines the function's return type, which is the type we
+// read back. Made `public` so it survives export filtering; no `main` is needed
+// since `:type` only type-checks, never runs.
+fn render_type_probe(
+	uses: &[String],
+	defs: &[String],
+	body: &[(Kind, String)],
+	expr: &str,
+) -> String {
+	let mut out = String::new();
+	for u in uses {
+		out.push_str(u);
+		out.push('\n');
+	}
+	out.push('\n');
+	for d in defs {
+		out.push_str(d);
+		out.push_str("\n\n");
+	}
+
+	out.push_str(&format!("public def {} = fun {{\n", TYPE_PROBE));
+	for (kind, text) in body {
+		match kind {
+			// Discard committed expressions — they only need to run for effect/scope
+			// in a real turn; here we just want their bindings visible.
+			Kind::Expr => out.push_str(&format!("({})\n", text)),
+			// Statements (`let`/`while`/`defer`/`try`) emitted verbatim.
+			_ => {
+				out.push_str(text);
+				out.push('\n');
+			}
+		}
+	}
+	// The probe expression is the function's tail, so the def's type is `fun -> T`.
+	out.push_str(&format!("({})\n", expr));
+	out.push_str("}\n");
+	out
+}
+
 // Compile the session source and run it, returning captured stdout and the
 // value `main` returned.
 fn evaluate(root_dir: &Path, source: &str) -> Result<(Vec<u8>, vm::Value), EvalError> {
@@ -629,5 +735,28 @@ mod tests {
 		// An unterminated bracket at EOF is still surfaced (so its error shows)
 		// rather than being swallowed.
 		assert_eq!(group_submissions("[1, 2,"), vec!["[1, 2,".to_string()]);
+	}
+
+	#[test]
+	fn render_type_probe_parks_expr_as_a_public_def_tail() {
+		let body = vec![(Kind::Statement, "let x = 5".to_string())];
+		let src = render_type_probe(&[], &[], &body, "x + 1");
+		// A public, zero-arg def so the type lands in exports as `fun -> T`.
+		assert!(src.contains(&format!("public def {} = fun {{", TYPE_PROBE)));
+		// Committed statements are replayed so locals are in scope…
+		assert!(src.contains("let x = 5\n"));
+		// …and the probe expression is the function's tail.
+		assert!(src.contains("(x + 1)\n}"));
+	}
+
+	#[test]
+	fn render_type_probe_discards_committed_expressions() {
+		let body = vec![(Kind::Expr, "print \"hi\"".to_string())];
+		let src = render_type_probe(&[], &[], &body, "1 + 2");
+		// A prior bare expression is parenthesized-and-discarded, never wrapped in
+		// the echo record (that's only for the run path).
+		assert!(src.contains("(print \"hi\")\n"));
+		assert!(!src.contains(ECHO_FIELD));
+		assert!(src.contains("(1 + 2)\n}"));
 	}
 }
