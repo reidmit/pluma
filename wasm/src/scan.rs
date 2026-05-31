@@ -501,3 +501,19 @@ pub(crate) fn callee_builtin_tag<'a>(
 		None
 	}
 }
+
+/// True if `block` (or any nested block) schedules a `defer` — i.e. contains a
+/// `PushDefer`. Drives the emitter's per-function cleanup-list allocation: a
+/// defer-free function pays nothing.
+pub(crate) fn block_has_pushdefer(block: &Block) -> bool {
+	block.0.iter().any(|s| match &s.kind {
+		StmtKind::PushDefer(_) => true,
+		StmtKind::If(_, t, e) => block_has_pushdefer(t) || block_has_pushdefer(e),
+		StmtKind::Switch { arms, default, .. } => {
+			arms.iter().any(|(_, b)| block_has_pushdefer(b)) || block_has_pushdefer(default)
+		}
+		StmtKind::Match { arms, .. } => arms.iter().any(|a| block_has_pushdefer(&a.body)),
+		StmtKind::Loop(b) => block_has_pushdefer(b),
+		_ => false,
+	})
+}

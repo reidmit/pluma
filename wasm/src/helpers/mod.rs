@@ -312,6 +312,17 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		deps: &[H::Eq],
 		build: |c| record::build_record_rest_fn(c.dep(H::Eq)),
 	},
+	HelperDef {
+		id: H::RunDefers,
+		fn_type: Ty::Helper(1),
+		deps: &[],
+		build: |c| {
+			// Defer thunks are `fun { … }` (a phantom-unit-param "zero-arg" closure,
+			// wasm arity 1), so the run helper calls them with `(env, unit)`.
+			let thunk_ty = c.arity(1);
+			list::build_run_defers_fn(thunk_ty)
+		},
+	},
 ];
 
 /// The helper a builtin tag lowers to, if any. These are the builtins implemented

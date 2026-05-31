@@ -213,3 +213,49 @@ pub(crate) fn build_arrconcat_fn() -> Function {
 	w.local_get(dst);
 	w.finish()
 }
+
+/// Build `__run_defers(defers) -> nothing`: run a function's scheduled `defer`
+/// cleanups LIFO at exit. `defers` is a `$list` of zero-arg cleanup closures the
+/// emitter keeps in last-pushed-first order (each `defer` prepends), so walking
+/// the backing `$valarray` front to back already runs them LIFO. Each thunk is a
+/// `fun { … }`, which the module gives a phantom unit param (wasm arity 1), so
+/// it's called with env + a dummy `nothing` arg; its result is discarded.
+/// `thunk_ty` is that `(env, unit) -> value` `call_indirect` type.
+pub(crate) fn build_run_defers_fn(thunk_ty: u32) -> Function {
+	let mut w = Wat::new(1);
+	let defers = w.param(0);
+	let arr = w.local(types::valarray_ref());
+	let n = w.local(ValType::I32);
+	let i = w.local(ValType::I32);
+	let c = w.local(types::value_ref());
+
+	// arr = defers.elems; n = len(arr).
+	w.local_get(defers)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, 1)
+		.local_set(arr);
+	w.local_get(arr).array_len().local_set(n);
+	w.i32(0).local_set(i);
+	w.block("brk", |w| {
+		w.loop_("lp", |w| {
+			w.local_get(i).local_get(n).i32_ge_s().br_if("brk");
+			// c = arr[i]; call c(()) with env = c and the phantom unit arg; discard.
+			w.local_get(arr)
+				.local_get(i)
+				.array_get(types::T_VALARRAY)
+				.local_set(c);
+			w.local_get(c).ref_cast(types::T_CLOSURE); // env
+			w.i32(types::TAG_NOTHING).struct_new(types::T_VALUE); // phantom unit arg
+			w.local_get(c)
+				.ref_cast(types::T_CLOSURE)
+				.struct_get(types::T_CLOSURE, 1);
+			w.call_indirect(thunk_ty);
+			w.drop();
+			w.local_get(i).i32(1).i32_add().local_set(i);
+			w.br("lp");
+		});
+	});
+	// Return `nothing`.
+	w.i32(types::TAG_NOTHING).struct_new(types::T_VALUE);
+	w.finish()
+}

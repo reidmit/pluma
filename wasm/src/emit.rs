@@ -15,7 +15,7 @@ use crate::runtime::{
 	GlobalKind, GlobalSlot, Helper, Runtime, WIRE_FNV_OFFSET, host_sig, is_f64_unary_host,
 	is_inline_builtin,
 };
-use crate::scan::{StrPool, builtin_var_tags, compute_nominal, ctor_var_tags};
+use crate::scan::{StrPool, block_has_pushdefer, builtin_var_tags, compute_nominal, ctor_var_tags};
 use crate::types::{self, FuncTypes};
 use crate::util::{EnumTable, binop_instr, repr_valtype, variant_display};
 
@@ -57,6 +57,11 @@ pub(crate) struct FnEmitter<'a> {
 	depth: u32,
 	/// Enclosing loops as (continue-target level, break-target level).
 	loop_stack: Vec<(u32, u32)>,
+	/// For a function containing `defer`: the local holding the live cleanup list
+	/// (a `$list` of zero-arg thunks, kept last-pushed-first). `None` for a
+	/// defer-free function, which pays nothing. Each `PushDefer` prepends; each
+	/// `Return` runs the list via `__run_defers` before returning.
+	defers_local: Option<u32>,
 	body: Vec<Instruction<'static>>,
 }
 
@@ -123,6 +128,7 @@ impl<'a> FnEmitter<'a> {
 			next_local: next,
 			depth: 0,
 			loop_stack: Vec::new(),
+			defers_local: None,
 			body: Vec::new(),
 		}
 	}
@@ -144,6 +150,20 @@ impl<'a> FnEmitter<'a> {
 			self.ins(Instruction::I32Const(i as i32));
 			self.ins(Instruction::ArrayGet(types::T_VALARRAY));
 			self.ins(Instruction::LocalSet(dst));
+		}
+		// A `defer`-bearing function threads a live cleanup list through a local,
+		// started empty here; each `defer` prepends a thunk and each `Return` runs
+		// the list LIFO. Defer-free functions allocate nothing.
+		if block_has_pushdefer(&self.f.body) {
+			let dl = self.fresh_local(types::value_ref());
+			self.defers_local = Some(dl);
+			self.ins(Instruction::I32Const(types::TAG_LIST));
+			self.ins(Instruction::ArrayNewFixed {
+				array_type_index: types::T_VALARRAY,
+				array_size: 0,
+			});
+			self.ins(Instruction::StructNew(types::T_LIST));
+			self.ins(Instruction::LocalSet(dl));
 		}
 		let body = self.f.body.clone();
 		self.block(&body);
@@ -192,8 +212,47 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::Drop);
 			}
 			StmtKind::Return(a) => {
+				// Run scheduled `defer` cleanups (LIFO) before returning — matching
+				// the VM, which runs the frame's cleanup stack at `Return`. The return
+				// atom is side-effect-free (a var/const), so order vs. cleanups is
+				// immaterial. `__run_defers` returns a `nothing` we drop.
+				if let Some(dl) = self.defers_local {
+					let run = self.runtime.idx(Helper::RunDefers).expect("run_defers");
+					self.ins(Instruction::LocalGet(dl));
+					self.ins(Instruction::Call(run));
+					self.ins(Instruction::Drop);
+				}
 				self.atom(a);
 				self.ins(Instruction::Return);
+			}
+			StmtKind::PushDefer(a) => {
+				// Prepend the cleanup thunk onto the live `defers` list:
+				// `defers = $list[__arrconcat([thunk], defers.elems)]`. Prepending
+				// keeps the list last-pushed-first so `__run_defers` walks it LIFO.
+				let Some(dl) = self.defers_local else {
+					self.diags.push("PushDefer without a defers local");
+					return;
+				};
+				let concat = self.runtime.idx(Helper::ArrConcat).expect("arrconcat");
+				self.ins(Instruction::I32Const(types::TAG_LIST));
+				// singleton `$valarray` [thunk].
+				self.atom(a);
+				self.ins(Instruction::ArrayNewFixed {
+					array_type_index: types::T_VALARRAY,
+					array_size: 1,
+				});
+				// defers.elems.
+				self.ins(Instruction::LocalGet(dl));
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_LIST,
+				)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_LIST,
+					field_index: 1,
+				});
+				self.ins(Instruction::Call(concat));
+				self.ins(Instruction::StructNew(types::T_LIST));
+				self.ins(Instruction::LocalSet(dl));
 			}
 			StmtKind::If(cond, t, e) => {
 				self.atom(cond);
@@ -791,7 +850,14 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::Call(w));
 			}
 			Rvalue::CallClosure(callee, args) => self.call_value(callee, args, false),
-			Rvalue::TailCall(callee, args) => self.call_value(callee, args, true),
+			Rvalue::TailCall(callee, args) => {
+				// A tail call would `return_call` past the trailing `Return`, skipping
+				// any `defer` cleanups — so in a defer-bearing function, downgrade it
+				// to an ordinary call and let the `Return` run the cleanups (mirroring
+				// the VM, which suppresses TCO while a frame has pending cleanups).
+				let tail = self.defers_local.is_none();
+				self.call_value(callee, args, tail);
+			}
 			Rvalue::MakeClosure(fid, caps) => {
 				let Some(&w) = self.wasm_index.get(&fid.0) else {
 					self

@@ -90,13 +90,19 @@ pub(crate) enum Helper {
 	/// fields minus the names in the `excluded` `$list`. Backs `...rest` on a
 	/// *uniform* match subject (the nominal path builds the rest inline).
 	RecordRest,
+	/// `__run_defers(defers)` — run a function's scheduled `defer` cleanups LIFO
+	/// at exit. `defers` is a `$list` of zero-arg cleanup closures kept in
+	/// last-pushed-first order (the emitter prepends), so this calls them front
+	/// to back. Returns `nothing`. Backs sync `defer` (the async path runs its
+	/// cleanups through the CPS poll driver instead).
+	RunDefers,
 }
 
 impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 34;
+	pub(crate) const COUNT: usize = 35;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable
@@ -400,6 +406,13 @@ pub(crate) fn scan_helpers(b: &Block, req: &mut HelperSet) {
 				}
 			}
 			StmtKind::Loop(b) => scan_helpers(b, req),
+			// `defer expr` prepends a cleanup closure (`__arrconcat` over the
+			// accumulator `$list`) and runs the list at every `Return`
+			// (`__run_defers`).
+			StmtKind::PushDefer(_) => {
+				req.insert(Helper::ArrConcat);
+				req.insert(Helper::RunDefers);
+			}
 			_ => {}
 		}
 	}

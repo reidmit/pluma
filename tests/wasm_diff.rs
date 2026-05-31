@@ -71,6 +71,7 @@ const WASM_FIXTURES: &[&str] = &[
 	"dict-equality",
 	"dict-tostring",
 	"deep-recursion",
+	"defer-cleanup",
 	"double-int-float",
 	"duration-literals",
 	"else-if-chain",
