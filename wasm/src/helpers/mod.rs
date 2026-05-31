@@ -26,7 +26,7 @@ mod wrapper;
 
 // The method-dict builtin wrappers aren't `Helper`s (they're keyed by builtin
 // tag, not in the fixed catalog); `Module::build` drives them directly.
-pub(crate) use wrapper::{build_builtin_wrapper, builtin_arity};
+pub(crate) use wrapper::{build_builtin_wrapper, build_host_value_wrapper, builtin_arity};
 
 /// One synthetic helper: how it's typed, what it depends on, and how it's built.
 pub(crate) struct HelperDef {

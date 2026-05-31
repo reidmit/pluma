@@ -517,3 +517,55 @@ pub(crate) fn block_has_pushdefer(block: &Block) -> bool {
 		_ => false,
 	})
 }
+
+/// Collect every var used as a *callee* (the target of a `CallClosure`/`TailCall`).
+/// Used to tell a builtin reference that's a call target (`print x`) from one
+/// used as a first-class value (`list.each xs print`): the latter is never a
+/// callee.
+pub(crate) fn collect_callee_vars(body: &Block, out: &mut HashSet<u32>) {
+	for s in &body.0 {
+		match &s.kind {
+			StmtKind::Let(_, r) | StmtKind::Discard(r) => match r {
+				Rvalue::CallClosure(Atom::Var(v), _) | Rvalue::TailCall(Atom::Var(v), _) => {
+					out.insert(v.0);
+				}
+				_ => {}
+			},
+			StmtKind::If(_, t, e) => {
+				collect_callee_vars(t, out);
+				collect_callee_vars(e, out);
+			}
+			StmtKind::Switch { arms, default, .. } => {
+				for (_, b) in arms {
+					collect_callee_vars(b, out);
+				}
+				collect_callee_vars(default, out);
+			}
+			StmtKind::Match { arms, .. } => {
+				for a in arms {
+					collect_callee_vars(&a.body, out);
+				}
+			}
+			StmtKind::Loop(b) => collect_callee_vars(b, out),
+			_ => {}
+		}
+	}
+}
+
+/// Vars in `body` that hold a builtin (keys of `var_tags`) and are used as a
+/// first-class *value* rather than a call target. Each builtin reference lowers
+/// to its own `Let(v, GlobalRef)`, so such a var is value-used exactly when it's
+/// never a callee. The wasm backend wraps these in a `$closure` over a synthetic
+/// value-wrapper (a bare builtin has no runtime `$value` otherwise).
+pub(crate) fn value_used_builtin_vars(
+	body: &Block,
+	var_tags: &HashMap<u32, String>,
+) -> HashSet<u32> {
+	let mut callees = HashSet::new();
+	collect_callee_vars(body, &mut callees);
+	var_tags
+		.keys()
+		.copied()
+		.filter(|v| !callees.contains(v))
+		.collect()
+}

@@ -333,3 +333,18 @@ pub(crate) fn build_builtin_wrapper(tag: &str, ord: &OrderingLits) -> Option<Fun
 
 	Some(w.finish())
 }
+
+/// Build the wasm wrapper for a single-arg host-import builtin used as a
+/// first-class value — e.g. `print` passed to `list.each xs print`. Env-first
+/// closure convention `(env, arg) -> value`: forward the boxed arg to the host
+/// import (`host_idx`), then return `nothing` (these imports — print/io writers
+/// /io.fail — produce no value). A bare builtin has no runtime `$value`, so this
+/// is what a `MakeClosure` over the builtin lowers to.
+pub(crate) fn build_host_value_wrapper(host_idx: u32) -> Function {
+	let mut w = Wat::new(2);
+	let arg = w.param(1); // param 0 is the (ignored) env.
+	w.local_get(arg);
+	w.call(host_idx);
+	w.i32(types::TAG_NOTHING).struct_new(types::T_VALUE);
+	w.finish()
+}

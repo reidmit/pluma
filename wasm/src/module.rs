@@ -14,13 +14,19 @@ use wasm_encoder::{
 };
 
 use crate::emit::FnEmitter;
-use crate::helpers::{REGISTRY, build_builtin_wrapper, builtin_arity, close_deps, helper_for_tag};
+use crate::helpers::{
+	REGISTRY, build_builtin_wrapper, build_host_value_wrapper, builtin_arity, close_deps,
+	helper_for_tag,
+};
 use crate::runtime::{
 	GlobalKind, GlobalSlot, Helper, HelperCtx, HelperSet, OptionLits, OrderingLits, Runtime,
 	ToStringLits, WireGlobals, WireResultLits, WireTags, host_sig, is_f64_unary_host,
 	is_inline_builtin, scan_helpers,
 };
-use crate::scan::{StrPool, collect_host_calls, collect_zero_arg_closures, scan_strings};
+use crate::scan::{
+	StrPool, builtin_var_tags, collect_host_calls, collect_zero_arg_closures, scan_strings,
+	value_used_builtin_vars,
+};
 use crate::types::{self, FuncTypes};
 use crate::util::{variant_display, variant_tag_in};
 use crate::{Diagnostics, Reach, builtin_globals};
@@ -73,6 +79,21 @@ impl Module {
 					host_order.push(tag.to_string());
 				}
 			});
+		}
+		// A builtin used as a first-class value (e.g. `list.each xs print`) is never
+		// directly called, so `collect_host_calls` above misses its import — but its
+		// value-wrapper still invokes it. Register those host imports now, before the
+		// import count is fixed.
+		for &fid in &reach.order {
+			let body = &p.functions[fid as usize].body;
+			let vt = builtin_var_tags(body, &builtin_g);
+			for v in value_used_builtin_vars(body, &vt) {
+				let tag = vt[&v].clone();
+				if host_sig(&tag).is_some() && !host_index.contains_key(&tag) {
+					host_index.insert(tag.clone(), host_order.len() as u32);
+					host_order.push(tag);
+				}
+			}
 		}
 		// `__tostring` delegates float formatting to a host import.
 		if requested.contains(&Helper::ToString) {
@@ -174,6 +195,21 @@ impl Module {
 					}
 				}
 				methoddicts.push((gid, tags));
+			}
+		}
+
+		// Builtins used as first-class values need a wrapper closure too. Collect
+		// their tags after the method-dict ones (host-import builtins like `print`;
+		// each becomes a `(env, arg) -> value` host-value wrapper below).
+		for &fid in &reach.order {
+			let body = &p.functions[fid as usize].body;
+			let vt = builtin_var_tags(body, &builtin_g);
+			for v in value_used_builtin_vars(body, &vt) {
+				let tag = &vt[&v];
+				if host_sig(tag).is_some() && !wrapper_idx.contains_key(tag) {
+					wrapper_idx.insert(tag.clone(), wrapper_base + wrapper_order.len() as u32);
+					wrapper_order.push(tag.clone());
+				}
 			}
 		}
 
@@ -480,6 +516,7 @@ impl Module {
 				&wasm_index,
 				&host_index,
 				&builtin_g,
+				&wrapper_idx,
 				&gmap,
 				&runtime,
 				&strpool,
@@ -506,17 +543,26 @@ impl Module {
 				code.function(&(def.build)(&mut ctx));
 			}
 		}
-		// Then the builtin wrappers (keyed by tag, not in the helper catalog).
+		// Then the builtin wrappers (keyed by tag, not in the helper catalog). A
+		// host-import builtin used as a value (`print`, …) gets a `(env, arg) ->
+		// value` host-value wrapper; the pure-compute ones (method-dict methods) get
+		// the unbox/compute/rebox wrapper.
 		for tag in &wrapper_order {
-			let arity = builtin_arity(tag).unwrap();
-			functions.function(ftypes.for_arity(arity));
-			match build_builtin_wrapper(tag, &runtime.ord) {
-				Some(f) => {
-					code.function(&f);
-				}
-				None => {
-					diags.push(format!("builtin wrapper `{tag}`"));
-					code.function(&Function::new(vec![]));
+			if host_sig(tag).is_some() {
+				functions.function(ftypes.for_arity(1));
+				let host_idx = host_index[tag];
+				code.function(&build_host_value_wrapper(host_idx));
+			} else {
+				let arity = builtin_arity(tag).unwrap();
+				functions.function(ftypes.for_arity(arity));
+				match build_builtin_wrapper(tag, &runtime.ord) {
+					Some(f) => {
+						code.function(&f);
+					}
+					None => {
+						diags.push(format!("builtin wrapper `{tag}`"));
+						code.function(&Function::new(vec![]));
+					}
 				}
 			}
 		}

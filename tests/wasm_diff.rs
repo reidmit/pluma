@@ -122,6 +122,7 @@ const WASM_FIXTURES: &[&str] = &[
 	"list-extended-combinators",
 	"list-reverse-concat",
 	"list-set",
+	"list-sort",
 	"list-sort-explicit-cmp",
 	"list-spread",
 	"list-spread-record-update",
