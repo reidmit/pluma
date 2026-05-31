@@ -939,7 +939,8 @@ pub(crate) fn build_on_body_done_fn(
 	w.ref_cast(types::T_LIST)
 		.struct_get(types::T_LIST, 1)
 		.local_set(children);
-	w.local_get(children).array_len().local_set(n);
+	fld_len(&mut w, g, g.scopes, sid, scope::CHILDREN);
+	w.local_set(n);
 	w.i32(0).local_set(i);
 	w.block("brk", |w| {
 		w.loop_("lp", |w| {
@@ -1006,8 +1007,9 @@ pub(crate) fn build_on_child_done_fn(
 	w.ref_cast(types::T_LIST)
 		.struct_get(types::T_LIST, 1)
 		.local_set(waiters);
-	w.local_get(waiters).array_len().local_tee(n);
-	w.i32(0).i32_gt_s().local_set(observed);
+	fld_len(&mut w, g, g.fibers, fid, fiber::WAITERS);
+	w.local_set(n);
+	w.local_get(n).i32(0).i32_gt_s().local_set(observed);
 	w.i32(0).local_set(i);
 	w.block("brk", |w| {
 		w.loop_("lp", |w| {
@@ -1033,7 +1035,12 @@ pub(crate) fn build_on_child_done_fn(
 	w.ref_cast(types::T_LIST)
 		.struct_get(types::T_LIST, 1)
 		.local_set(nw);
-	w.local_get(nw).array_len().local_tee(nwn).i32(0).i32_gt_s();
+	// nwn = the list's logical length (field 2), not array.len (capacity).
+	fld(&mut w, g, g.scopes, sid, scope::NEXT_WAITERS);
+	w.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, 2)
+		.local_set(nwn);
+	w.local_get(nwn).i32(0).i32_gt_s();
 	w.if_else(
 		|w| {
 			w.local_get(nw).i32(0).array_get(types::T_VALARRAY);
@@ -1139,7 +1146,8 @@ pub(crate) fn build_cancel_scope_fn(
 		w.ref_cast(types::T_LIST)
 			.struct_get(types::T_LIST, 1)
 			.local_set(children);
-		w.local_get(children).array_len().local_set(n);
+		fld_len(w, g, g.scopes, sid, scope::CHILDREN);
+		w.local_set(n);
 		w.i32(0).local_set(i);
 		w.block("brk", |w| {
 			w.loop_("lp", |w| {
@@ -1272,7 +1280,8 @@ pub(crate) fn build_try_finalize_scope_fn(
 		w.ref_cast(types::T_LIST)
 			.struct_get(types::T_LIST, 1)
 			.local_set(children);
-		w.local_get(children).array_len().local_set(n);
+		fld_len(w, g, g.scopes, sid, scope::CHILDREN);
+		w.local_set(n);
 		w.i32(0).local_set(i);
 		w.block("allok", |w| {
 			w.loop_("lp", |w| {
@@ -1455,7 +1464,8 @@ pub(crate) fn build_run_timers_fn(list_append: u32, g: TaskGlobals) -> Function 
 		.ref_cast(types::T_LIST)
 		.struct_get(types::T_LIST, 1)
 		.local_set(arr);
-	w.local_get(arr).array_len().local_set(n);
+	list_len(&mut w, g.timers);
+	w.local_set(n);
 	// min = earliest `at`.
 	w.i64(i64::MAX).local_set(min);
 	w.i32(0).local_set(i);
@@ -1614,7 +1624,12 @@ pub(crate) fn build_drain_next_fn(g: TaskGlobals, lits: TaskLits) -> Function {
 	w.ref_cast(types::T_LIST)
 		.struct_get(types::T_LIST, 1)
 		.local_set(comp);
-	w.local_get(comp).array_len().local_tee(n).i32(0).i32_gt_s();
+	// n = the list's logical length (field 2), not array.len (capacity).
+	fld(&mut w, g, g.scopes, sid, scope::COMPLETED);
+	w.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, 2)
+		.local_set(n);
+	w.local_get(n).i32(0).i32_gt_s();
 	w.if_result(
 		v,
 		|w| {
@@ -1640,20 +1655,17 @@ pub(crate) fn build_drain_next_fn(g: TaskGlobals, lits: TaskLits) -> Function {
 	w.finish()
 }
 
-/// `__list_append(list, elem) -> list`: a fresh `$list` of `list`'s elements then
-/// `elem`. (O(n) rebuild — the scheduler's collections are tiny.)
-pub(crate) fn build_list_append_fn(arrconcat: u32) -> Function {
+/// `__list_append(list, elem) -> list`: append `elem` to `list` IN PLACE
+/// (amortized O(1), via `__list_push`) and return the same, mutated list. The
+/// scheduler's `append(...).global_set(g.X)` / `set_fld` call sites are then
+/// O(1) unchanged — the write-back just stores the same struct back. (This is
+/// what turns spawn from O(n^2) to O(n); the lists are now spare-capacity, so
+/// every read of them must use the length field — see `list_len` / `drop_last`.)
+pub(crate) fn build_list_append_fn(list_push: u32) -> Function {
 	let mut w = Wat::new(2);
 	let (list, el) = (w.param(0), w.param(1));
-	let res = w.local(types::valarray_ref());
-	w.local_get(list)
-		.ref_cast(types::T_LIST)
-		.struct_get(types::T_LIST, 1);
-	w.local_get(el);
-	w.array_new_fixed(types::T_VALARRAY, 1);
-	w.call(arrconcat);
-	w.local_set(res);
-	crate::helpers::list::mk_list(&mut w, res);
+	w.local_get(list).local_get(el).call(list_push).drop();
+	w.local_get(list);
 	w.finish()
 }
 
@@ -1909,6 +1921,14 @@ fn list_len(w: &mut Wat, gl: u32) {
 		.struct_get(types::T_LIST, 2);
 }
 
+/// Push the logical length (field 2) of the `$list` in `table[id].field` — these
+/// scheduler collections are appended in place (spare capacity), so their count
+/// is the length field, never `array.len(elems)`.
+fn fld_len(w: &mut Wat, g: TaskGlobals, table: u32, id: Local, field: u32) {
+	fld(w, g, table, id, field);
+	w.ref_cast(types::T_LIST).struct_get(types::T_LIST, 2);
+}
+
 /// Push field `field` of record `id` in the `$list` table at global `table`.
 fn fld(w: &mut Wat, _g: TaskGlobals, table: u32, id: Local, field: u32) {
 	w.global_get(table)
@@ -2138,7 +2158,9 @@ fn drop_last(w: &mut Wat, gl: u32) {
 		.ref_cast(types::T_LIST)
 		.struct_get(types::T_LIST, 1)
 		.local_set(arr);
-	w.local_get(arr).array_len().i32(1).i32_sub().local_set(n);
+	// n = list.length - 1 (logical, not capacity).
+	list_len(w, gl);
+	w.i32(1).i32_sub().local_set(n);
 	w.local_get(n)
 		.array_new_default(types::T_VALARRAY)
 		.local_set(out);
@@ -2464,7 +2486,8 @@ fn all_children_done(w: &mut Wat, g: TaskGlobals, sid: Local) {
 	w.ref_cast(types::T_LIST)
 		.struct_get(types::T_LIST, 1)
 		.local_set(children);
-	w.local_get(children).array_len().local_set(n);
+	fld_len(w, g, g.scopes, sid, scope::CHILDREN);
+	w.local_set(n);
 	w.i32(0).local_set(i);
 	w.i32(1).local_set(res);
 	w.block("brk", |w| {

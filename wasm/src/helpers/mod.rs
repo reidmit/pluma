@@ -506,8 +506,8 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::ListAppend,
 		fn_type: Ty::Helper(2),
-		deps: &[H::ArrConcat],
-		build: |c| task::build_list_append_fn(c.dep(H::ArrConcat)),
+		deps: &[H::ListPush],
+		build: |c| task::build_list_append_fn(c.dep(H::ListPush)),
 	},
 	HelperDef {
 		id: H::DrainNext,
