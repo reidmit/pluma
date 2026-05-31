@@ -378,7 +378,11 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		fn_type: Ty::Helper(1),
 		deps: &[H::Eq, H::PollDefersList],
 		build: |c| {
-			task::build_poll_defers_state_fn(c.dep(H::Eq), c.dep(H::PollDefersList), c.rt.tasklits.defers_name)
+			task::build_poll_defers_state_fn(
+				c.dep(H::Eq),
+				c.dep(H::PollDefersList),
+				c.rt.tasklits.defers_name,
+			)
 		},
 	},
 	HelperDef {
@@ -439,13 +443,17 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		id: H::FiberCompleted,
 		fn_type: Ty::Helper(3),
 		deps: &[H::OnBodyDone, H::OnChildDone],
-		build: |c| task::build_fiber_completed_fn(c.dep(H::OnBodyDone), c.dep(H::OnChildDone), c.rt.taskg),
+		build: |c| {
+			task::build_fiber_completed_fn(c.dep(H::OnBodyDone), c.dep(H::OnChildDone), c.rt.taskg)
+		},
 	},
 	HelperDef {
 		id: H::OnBodyDone,
 		fn_type: Ty::Helper(3),
 		deps: &[H::ReapFiber, H::TryFinalizeScope],
-		build: |c| task::build_on_body_done_fn(c.dep(H::ReapFiber), c.dep(H::TryFinalizeScope), c.rt.taskg),
+		build: |c| {
+			task::build_on_body_done_fn(c.dep(H::ReapFiber), c.dep(H::TryFinalizeScope), c.rt.taskg)
+		},
 	},
 	HelperDef {
 		id: H::OnChildDone,
@@ -465,13 +473,17 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		id: H::CancelScope,
 		fn_type: Ty::Helper(1),
 		deps: &[H::ReapFiber, H::TryFinalizeScope],
-		build: |c| task::build_cancel_scope_fn(c.dep(H::ReapFiber), c.dep(H::TryFinalizeScope), c.rt.taskg),
+		build: |c| {
+			task::build_cancel_scope_fn(c.dep(H::ReapFiber), c.dep(H::TryFinalizeScope), c.rt.taskg)
+		},
 	},
 	HelperDef {
 		id: H::ReapFiber,
 		fn_type: Ty::Helper(1),
 		deps: &[H::CancelScope, H::PollDefersState],
-		build: |c| task::build_reap_fiber_fn(c.dep(H::CancelScope), c.dep(H::PollDefersState), c.rt.taskg),
+		build: |c| {
+			task::build_reap_fiber_fn(c.dep(H::CancelScope), c.dep(H::PollDefersState), c.rt.taskg)
+		},
 	},
 	HelperDef {
 		id: H::TryFinalizeScope,

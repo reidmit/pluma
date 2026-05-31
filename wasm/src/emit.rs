@@ -1264,7 +1264,9 @@ impl<'a> FnEmitter<'a> {
 					self.ins(Instruction::Call(h));
 				}
 				None => {
-					self.diags.push(format!("`{tag}` needs its scheduler helper"));
+					self
+						.diags
+						.push(format!("`{tag}` needs its scheduler helper"));
 					self.push_nothing();
 				}
 			}
@@ -1487,7 +1489,9 @@ impl<'a> FnEmitter<'a> {
 			self.ins(Instruction::Call(idx));
 			if is_io_result(tag) {
 				let Some(shaper) = self.runtime.idx(Helper::IoResult) else {
-					self.diags.push(format!("`{tag}` needs the __io_result shaper"));
+					self
+						.diags
+						.push(format!("`{tag}` needs the __io_result shaper"));
 					self.push_nothing();
 					return;
 				};
@@ -2204,4 +2208,3 @@ impl<'a> FnEmitter<'a> {
 		self.body.push(ins);
 	}
 }
-

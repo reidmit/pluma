@@ -113,7 +113,10 @@ mod tests {
 			Capability::Fetch,
 			Capability::Timer,
 		] {
-			assert!(Platform::Native.provides(cap), "Native should provide {cap:?}");
+			assert!(
+				Platform::Native.provides(cap),
+				"Native should provide {cap:?}"
+			);
 		}
 	}
 

@@ -95,7 +95,9 @@ pub(crate) fn build_run_task_fn(
 					w.i32_eqz().br_if("nocancel");
 					// sid = pending[len-1]; pending = drop-last.
 					let sid = w.local(ValType::I32);
-					w.global_get(g.pending).ref_cast(types::T_LIST).struct_get(types::T_LIST, 1);
+					w.global_get(g.pending)
+						.ref_cast(types::T_LIST)
+						.struct_get(types::T_LIST, 1);
 					list_len(w, g.pending);
 					w.i32(1).i32_sub().array_get(types::T_VALARRAY);
 					unbox_i(w);
@@ -287,15 +289,77 @@ pub(crate) fn build_pump_fn(
 			// ---- Start: `fval` is a `$task`; dispatch its kind. -----------------
 			w.local_get(fkind).i32_eqz();
 			w.if_(|w| {
-				w.local_get(fval).ref_cast(types::T_TASK).struct_get(types::T_TASK, 1).local_set(tk);
-				w.local_get(fval).ref_cast(types::T_TASK).struct_get(types::T_TASK, 2).local_set(tp);
+				w.local_get(fval)
+					.ref_cast(types::T_TASK)
+					.struct_get(types::T_TASK, 1)
+					.local_set(tk);
+				w.local_get(fval)
+					.ref_cast(types::T_TASK)
+					.struct_get(types::T_TASK, 2)
+					.local_set(tp);
 
-				start_settle(w, tk, task_kind::PURE, focus::OK, |w| elem(w, tp, 0), fval, fkind);
-				start_settle(w, tk, task_kind::FAIL, focus::ERR, |w| elem(w, tp, 0), fval, fkind);
-				start_combinator(w, tk, task_kind::THEN, act_kind::THEN, tp, true, act_push, fval, fkind);
-				start_combinator(w, tk, task_kind::ORELSE, act_kind::ORELSE, tp, true, act_push, fval, fkind);
-				start_combinator(w, tk, task_kind::ATTEMPT, act_kind::ATTEMPT, tp, false, act_push, fval, fkind);
-				start_combinator(w, tk, task_kind::MAP, act_kind::MAP, tp, true, act_push, fval, fkind);
+				start_settle(
+					w,
+					tk,
+					task_kind::PURE,
+					focus::OK,
+					|w| elem(w, tp, 0),
+					fval,
+					fkind,
+				);
+				start_settle(
+					w,
+					tk,
+					task_kind::FAIL,
+					focus::ERR,
+					|w| elem(w, tp, 0),
+					fval,
+					fkind,
+				);
+				start_combinator(
+					w,
+					tk,
+					task_kind::THEN,
+					act_kind::THEN,
+					tp,
+					true,
+					act_push,
+					fval,
+					fkind,
+				);
+				start_combinator(
+					w,
+					tk,
+					task_kind::ORELSE,
+					act_kind::ORELSE,
+					tp,
+					true,
+					act_push,
+					fval,
+					fkind,
+				);
+				start_combinator(
+					w,
+					tk,
+					task_kind::ATTEMPT,
+					act_kind::ATTEMPT,
+					tp,
+					false,
+					act_push,
+					fval,
+					fkind,
+				);
+				start_combinator(
+					w,
+					tk,
+					task_kind::MAP,
+					act_kind::MAP,
+					tp,
+					true,
+					act_push,
+					fval,
+					fkind,
+				);
 
 				// shielded: run the inner uninterruptibly — bump the depth, mark the
 				// region end on the chain, and run the inner inline.
@@ -438,13 +502,17 @@ pub(crate) fn build_pump_fn(
 					// drain_next(handle) -> (action, val). The handle is tp[0].
 					elem(w, tp, 0);
 					w.call(drain_next).local_set(dn);
-					w.local_get(dn).ref_cast(types::T_TUPLE).struct_get(types::T_TUPLE, 1);
+					w.local_get(dn)
+						.ref_cast(types::T_TUPLE)
+						.struct_get(types::T_TUPLE, 1);
 					w.i32(0).array_get(types::T_VALARRAY);
 					unbox_i(w);
 					w.i32_eqz(); // action == 0 -> produce, else park.
 					w.if_else(
 						|w| {
-							w.local_get(dn).ref_cast(types::T_TUPLE).struct_get(types::T_TUPLE, 1);
+							w.local_get(dn)
+								.ref_cast(types::T_TUPLE)
+								.struct_get(types::T_TUPLE, 1);
 							w.i32(1).array_get(types::T_VALARRAY);
 							w.local_set(fval);
 							w.i32(focus::OK).local_set(fkind);
@@ -489,9 +557,14 @@ pub(crate) fn build_pump_fn(
 					});
 					w.local_get(akind).i32(act_kind::THEN).i32_eq();
 					w.if_(|w| {
-						call1(w, |w| elem(w, apl, 0), |w| {
-							w.local_get(fval);
-						}, arity1);
+						call1(
+							w,
+							|w| elem(w, apl, 0),
+							|w| {
+								w.local_get(fval);
+							},
+							arity1,
+						);
 						w.local_set(fval);
 						w.i32(focus::START).local_set(fkind);
 						w.br("main");
@@ -510,9 +583,14 @@ pub(crate) fn build_pump_fn(
 					});
 					w.local_get(akind).i32(act_kind::MAP).i32_eq();
 					w.if_(|w| {
-						call1(w, |w| elem(w, apl, 0), |w| {
-							w.local_get(fval);
-						}, arity1);
+						call1(
+							w,
+							|w| elem(w, apl, 0),
+							|w| {
+								w.local_get(fval);
+							},
+							arity1,
+						);
 						w.local_set(fval);
 						w.br("ok");
 					});
@@ -607,25 +685,40 @@ pub(crate) fn build_start_scope_fn(list_append: u32, arity1: u32, g: TaskGlobals
 	w.local_set(sid);
 	w.global_get(g.scopes);
 	w.i32(types::TAG_TUPLE);
-	scope_fields(&mut w, |w| {
-		w.local_get(manual).ref_cast(types::T_BOOL).struct_get(types::T_BOOL, 1);
-	}, |w| {
-		w.i32(0);
-	}, |w| {
-		w.local_get(fid_b).ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64();
-	});
+	scope_fields(
+		&mut w,
+		|w| {
+			w.local_get(manual)
+				.ref_cast(types::T_BOOL)
+				.struct_get(types::T_BOOL, 1);
+		},
+		|w| {
+			w.i32(0);
+		},
+		|w| {
+			w.local_get(fid_b)
+				.ref_cast(types::T_INT)
+				.struct_get(types::T_INT, 1)
+				.i32_wrap_i64();
+		},
+	);
 	w.struct_new(types::T_TUPLE);
 	w.call(list_append).global_set(g.scopes);
 
 	// body_task = body_fn(ScopeHandle(sid)).
-	call1(&mut w, |w| {
-		w.local_get(body_fn);
-	}, |w| {
-		w.i32(types::TAG_SCOPE_HANDLE);
-		w.local_get(sid);
-		w.i64_extend_i32_s();
-		w.struct_new(types::T_INT);
-	}, arity1);
+	call1(
+		&mut w,
+		|w| {
+			w.local_get(body_fn);
+		},
+		|w| {
+			w.i32(types::TAG_SCOPE_HANDLE);
+			w.local_get(sid);
+			w.i64_extend_i32_s();
+			w.struct_new(types::T_INT);
+		},
+		arity1,
+	);
 	w.local_set(body_task);
 
 	// bf = |fibers| (now, after any spawns). Append the body fiber, patch BODY.
@@ -633,11 +726,15 @@ pub(crate) fn build_start_scope_fn(list_append: u32, arity1: u32, g: TaskGlobals
 	w.local_set(bf);
 	w.global_get(g.fibers);
 	w.i32(types::TAG_TUPLE);
-	fiber_fields(&mut w, |w| {
-		w.local_get(sid);
-	}, |w| {
-		w.local_get(sid);
-	});
+	fiber_fields(
+		&mut w,
+		|w| {
+			w.local_get(sid);
+		},
+		|w| {
+			w.local_get(sid);
+		},
+	);
 	w.struct_new(types::T_TUPLE);
 	w.call(list_append).global_set(g.fibers);
 	set_fld_i(&mut w, g.scopes, sid, scope::BODY, |w| {
@@ -663,18 +760,26 @@ pub(crate) fn build_sched_spawn_fn(list_append: u32, g: TaskGlobals) -> Function
 	let sid = w.local(ValType::I32);
 	let fid = w.local(ValType::I32);
 
-	w.local_get(handle).ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64().local_set(sid);
+	w.local_get(handle)
+		.ref_cast(types::T_INT)
+		.struct_get(types::T_INT, 1)
+		.i32_wrap_i64()
+		.local_set(sid);
 	list_len(&mut w, g.fibers);
 	w.local_set(fid);
 
 	// fibers.append(new child fiber { scope=sid, runs_scope=none }).
 	w.global_get(g.fibers);
 	w.i32(types::TAG_TUPLE);
-	fiber_fields(&mut w, |w| {
-		w.local_get(sid);
-	}, |w| {
-		w.i32(NO_SCOPE as i32);
-	});
+	fiber_fields(
+		&mut w,
+		|w| {
+			w.local_get(sid);
+		},
+		|w| {
+			w.i32(NO_SCOPE as i32);
+		},
+	);
 	w.struct_new(types::T_TUPLE);
 	w.call(list_append).global_set(g.fibers);
 
@@ -716,8 +821,16 @@ pub(crate) fn build_fiber_completed_fn(
 	let kind = w.local(ValType::I32);
 	let rs = w.local(ValType::I32);
 
-	w.local_get(fid_b).ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64().local_set(fid);
-	w.local_get(kind_b).ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64().local_set(kind);
+	w.local_get(fid_b)
+		.ref_cast(types::T_INT)
+		.struct_get(types::T_INT, 1)
+		.i32_wrap_i64()
+		.local_set(fid);
+	w.local_get(kind_b)
+		.ref_cast(types::T_INT)
+		.struct_get(types::T_INT, 1)
+		.i32_wrap_i64()
+		.local_set(kind);
 
 	set_fld_i(&mut w, g.fibers, fid, fiber::ALIVE, |w| {
 		w.i32(0);
@@ -788,8 +901,16 @@ pub(crate) fn build_on_body_done_fn(
 	let i = w.local(ValType::I32);
 	let c = w.local(ValType::I32);
 
-	w.local_get(sid_b).ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64().local_set(sid);
-	w.local_get(kind_b).ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64().local_set(kind);
+	w.local_get(sid_b)
+		.ref_cast(types::T_INT)
+		.struct_get(types::T_INT, 1)
+		.i32_wrap_i64()
+		.local_set(sid);
+	w.local_get(kind_b)
+		.ref_cast(types::T_INT)
+		.struct_get(types::T_INT, 1)
+		.i32_wrap_i64()
+		.local_set(kind);
 
 	set_fld_i(&mut w, g.scopes, sid, scope::BD_KIND, |w| {
 		w.local_get(kind);
@@ -815,13 +936,17 @@ pub(crate) fn build_on_body_done_fn(
 	});
 	// Cancel any still-running children (the structural guarantee).
 	fld(&mut w, g, g.scopes, sid, scope::CHILDREN);
-	w.ref_cast(types::T_LIST).struct_get(types::T_LIST, 1).local_set(children);
+	w.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, 1)
+		.local_set(children);
 	w.local_get(children).array_len().local_set(n);
 	w.i32(0).local_set(i);
 	w.block("brk", |w| {
 		w.loop_("lp", |w| {
 			w.local_get(i).local_get(n).i32_ge_s().br_if("brk");
-			w.local_get(children).local_get(i).array_get(types::T_VALARRAY);
+			w.local_get(children)
+				.local_get(i)
+				.array_get(types::T_VALARRAY);
 			unbox_i(w);
 			w.local_set(c);
 			fld_i(w, g, g.fibers, c, fiber::ALIVE);
@@ -860,20 +985,36 @@ pub(crate) fn build_on_child_done_fn(
 	let wfid = w.local(ValType::I32);
 	let observed = w.local(ValType::I32);
 
-	w.local_get(sid_b).ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64().local_set(sid);
-	w.local_get(fid_b).ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64().local_set(fid);
-	w.local_get(kind_b).ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64().local_set(kind);
+	w.local_get(sid_b)
+		.ref_cast(types::T_INT)
+		.struct_get(types::T_INT, 1)
+		.i32_wrap_i64()
+		.local_set(sid);
+	w.local_get(fid_b)
+		.ref_cast(types::T_INT)
+		.struct_get(types::T_INT, 1)
+		.i32_wrap_i64()
+		.local_set(fid);
+	w.local_get(kind_b)
+		.ref_cast(types::T_INT)
+		.struct_get(types::T_INT, 1)
+		.i32_wrap_i64()
+		.local_set(kind);
 
 	// Deliver to waiters; clear them.
 	fld(&mut w, g, g.fibers, fid, fiber::WAITERS);
-	w.ref_cast(types::T_LIST).struct_get(types::T_LIST, 1).local_set(waiters);
+	w.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, 1)
+		.local_set(waiters);
 	w.local_get(waiters).array_len().local_tee(n);
 	w.i32(0).i32_gt_s().local_set(observed);
 	w.i32(0).local_set(i);
 	w.block("brk", |w| {
 		w.loop_("lp", |w| {
 			w.local_get(i).local_get(n).i32_ge_s().br_if("brk");
-			w.local_get(waiters).local_get(i).array_get(types::T_VALARRAY);
+			w.local_get(waiters)
+				.local_get(i)
+				.array_get(types::T_VALARRAY);
 			unbox_i(w);
 			w.local_set(wfid);
 			// ready.append((wfid, focus-of(kind), val-or-nothing)).
@@ -889,7 +1030,9 @@ pub(crate) fn build_on_child_done_fn(
 	let nwfid = w.local(ValType::I32);
 	let octmp = w.local(types::value_ref());
 	fld(&mut w, g, g.scopes, sid, scope::NEXT_WAITERS);
-	w.ref_cast(types::T_LIST).struct_get(types::T_LIST, 1).local_set(nw);
+	w.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, 1)
+		.local_set(nw);
 	w.local_get(nw).array_len().local_tee(nwn).i32(0).i32_gt_s();
 	w.if_else(
 		|w| {
@@ -946,7 +1089,11 @@ pub(crate) fn build_on_child_done_fn(
 }
 
 /// `__cancel_scope(sid) -> nothing`: cancel a scope + everything it owns.
-pub(crate) fn build_cancel_scope_fn(reap_fiber: u32, try_finalize: u32, g: TaskGlobals) -> Function {
+pub(crate) fn build_cancel_scope_fn(
+	reap_fiber: u32,
+	try_finalize: u32,
+	g: TaskGlobals,
+) -> Function {
 	let mut w = Wat::new(1);
 	let sid_b = w.param(0);
 	let sid = w.local(ValType::I32);
@@ -956,7 +1103,11 @@ pub(crate) fn build_cancel_scope_fn(reap_fiber: u32, try_finalize: u32, g: TaskG
 	let i = w.local(ValType::I32);
 	let c = w.local(ValType::I32);
 
-	w.local_get(sid_b).ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64().local_set(sid);
+	w.local_get(sid_b)
+		.ref_cast(types::T_INT)
+		.struct_get(types::T_INT, 1)
+		.i32_wrap_i64()
+		.local_set(sid);
 
 	w.block("done", |w| {
 		// Already cancelled or finalized?
@@ -985,13 +1136,17 @@ pub(crate) fn build_cancel_scope_fn(reap_fiber: u32, try_finalize: u32, g: TaskG
 		});
 		// Reap every live child.
 		fld(w, g, g.scopes, sid, scope::CHILDREN);
-		w.ref_cast(types::T_LIST).struct_get(types::T_LIST, 1).local_set(children);
+		w.ref_cast(types::T_LIST)
+			.struct_get(types::T_LIST, 1)
+			.local_set(children);
 		w.local_get(children).array_len().local_set(n);
 		w.i32(0).local_set(i);
 		w.block("brk", |w| {
 			w.loop_("lp", |w| {
 				w.local_get(i).local_get(n).i32_ge_s().br_if("brk");
-				w.local_get(children).local_get(i).array_get(types::T_VALARRAY);
+				w.local_get(children)
+					.local_get(i)
+					.array_get(types::T_VALARRAY);
 				unbox_i(w);
 				w.local_set(c);
 				fld_i(w, g, g.fibers, c, fiber::ALIVE);
@@ -1013,7 +1168,11 @@ pub(crate) fn build_cancel_scope_fn(reap_fiber: u32, try_finalize: u32, g: TaskG
 
 /// `__reap_fiber(fid) -> nothing`: abandon a parked/queued fiber — cascade into a
 /// sub-scope it awaited, run its `defer` cleanups, and mark it cancelled.
-pub(crate) fn build_reap_fiber_fn(cancel_scope: u32, poll_defers_state: u32, g: TaskGlobals) -> Function {
+pub(crate) fn build_reap_fiber_fn(
+	cancel_scope: u32,
+	poll_defers_state: u32,
+	g: TaskGlobals,
+) -> Function {
 	let v = types::value_ref();
 	let mut w = Wat::new(1);
 	let fid_b = w.param(0);
@@ -1022,7 +1181,11 @@ pub(crate) fn build_reap_fiber_fn(cancel_scope: u32, poll_defers_state: u32, g: 
 	let i = w.local(ValType::I32);
 	let act_el = w.local(v);
 
-	w.local_get(fid_b).ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64().local_set(fid);
+	w.local_get(fid_b)
+		.ref_cast(types::T_INT)
+		.struct_get(types::T_INT, 1)
+		.i32_wrap_i64()
+		.local_set(fid);
 	w.block("done", |w| {
 		fld_i(w, g, g.fibers, fid, fiber::ALIVE);
 		w.i32_eqz().br_if("done");
@@ -1043,17 +1206,26 @@ pub(crate) fn build_reap_fiber_fn(cancel_scope: u32, poll_defers_state: u32, g: 
 		});
 		// Run the fiber's poll `defer`s, innermost (top of stack) first.
 		fld(w, g, g.fibers, fid, fiber::ACT);
-		w.ref_cast(types::T_LIST).struct_get(types::T_LIST, 1).local_set(act);
+		w.ref_cast(types::T_LIST)
+			.struct_get(types::T_LIST, 1)
+			.local_set(act);
 		w.local_get(act).array_len().i32(1).i32_sub().local_set(i);
 		w.block("brk", |w| {
 			w.loop_("lp", |w| {
 				w.local_get(i).i32(0).i32_lt_s().br_if("brk");
-				w.local_get(act).local_get(i).array_get(types::T_VALARRAY).local_set(act_el);
+				w.local_get(act)
+					.local_get(i)
+					.array_get(types::T_VALARRAY)
+					.local_set(act_el);
 				// activation kind == POLL ? run its state's defers.
-				w.local_get(act_el).ref_cast(types::T_VARIANT).struct_get(types::T_VARIANT, 1);
+				w.local_get(act_el)
+					.ref_cast(types::T_VARIANT)
+					.struct_get(types::T_VARIANT, 1);
 				w.i32(act_kind::POLL).i32_eq();
 				w.if_(|w| {
-					w.local_get(act_el).ref_cast(types::T_VARIANT).struct_get(types::T_VARIANT, 3);
+					w.local_get(act_el)
+						.ref_cast(types::T_VARIANT)
+						.struct_get(types::T_VARIANT, 3);
 					w.i32(1).array_get(types::T_VALARRAY); // state
 					w.call(poll_defers_state).drop();
 				});
@@ -1068,7 +1240,11 @@ pub(crate) fn build_reap_fiber_fn(cancel_scope: u32, poll_defers_state: u32, g: 
 
 /// `__try_finalize_scope(sid) -> nothing`: finalize once the body + every child
 /// have settled; wake the awaiter with the scope's result (fail-fast wins).
-pub(crate) fn build_try_finalize_scope_fn(list_append: u32, g: TaskGlobals, lits: TaskLits) -> Function {
+pub(crate) fn build_try_finalize_scope_fn(
+	list_append: u32,
+	g: TaskGlobals,
+	lits: TaskLits,
+) -> Function {
 	let v = types::value_ref();
 	let mut w = Wat::new(1);
 	let sid_b = w.param(0);
@@ -1080,7 +1256,11 @@ pub(crate) fn build_try_finalize_scope_fn(list_append: u32, g: TaskGlobals, lits
 	let rkind = w.local(ValType::I32);
 	let rval = w.local(v);
 
-	w.local_get(sid_b).ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64().local_set(sid);
+	w.local_get(sid_b)
+		.ref_cast(types::T_INT)
+		.struct_get(types::T_INT, 1)
+		.i32_wrap_i64()
+		.local_set(sid);
 	w.block("done", |w| {
 		fld_i(w, g, g.scopes, sid, scope::FINALIZED);
 		w.br_if("done");
@@ -1089,13 +1269,17 @@ pub(crate) fn build_try_finalize_scope_fn(list_append: u32, g: TaskGlobals, lits
 		w.i32_eqz().br_if("done");
 		// All children done?
 		fld(w, g, g.scopes, sid, scope::CHILDREN);
-		w.ref_cast(types::T_LIST).struct_get(types::T_LIST, 1).local_set(children);
+		w.ref_cast(types::T_LIST)
+			.struct_get(types::T_LIST, 1)
+			.local_set(children);
 		w.local_get(children).array_len().local_set(n);
 		w.i32(0).local_set(i);
 		w.block("allok", |w| {
 			w.loop_("lp", |w| {
 				w.local_get(i).local_get(n).i32_ge_s().br_if("allok");
-				w.local_get(children).local_get(i).array_get(types::T_VALARRAY);
+				w.local_get(children)
+					.local_get(i)
+					.array_get(types::T_VALARRAY);
 				unbox_i(w);
 				let c = w.local(ValType::I32);
 				w.local_set(c);
@@ -1175,10 +1359,23 @@ pub(crate) fn build_park_fn(list_append: u32, g: TaskGlobals) -> Function {
 	let wa = w.local(ValType::I32);
 	let wa64 = w.local(ValType::I64);
 
-	w.local_get(fid_b).ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64().local_set(fid);
-	w.local_get(wk_b).ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64().local_set(wk);
+	w.local_get(fid_b)
+		.ref_cast(types::T_INT)
+		.struct_get(types::T_INT, 1)
+		.i32_wrap_i64()
+		.local_set(fid);
+	w.local_get(wk_b)
+		.ref_cast(types::T_INT)
+		.struct_get(types::T_INT, 1)
+		.i32_wrap_i64()
+		.local_set(wk);
 	// The arg arrives boxed as an i64: a small id for handle/next/scope, or sleep nanos.
-	w.local_get(wa_b).ref_cast(types::T_INT).struct_get(types::T_INT, 1).local_tee(wa64).i32_wrap_i64().local_set(wa);
+	w.local_get(wa_b)
+		.ref_cast(types::T_INT)
+		.struct_get(types::T_INT, 1)
+		.local_tee(wa64)
+		.i32_wrap_i64()
+		.local_set(wa);
 
 	w.block("after", |w| {
 		// yield: re-ready behind everything else.
@@ -1191,11 +1388,16 @@ pub(crate) fn build_park_fn(list_append: u32, g: TaskGlobals) -> Function {
 		w.local_get(wk).i32(wait::SLEEP).i32_eq();
 		w.if_(|w| {
 			w.global_get(g.timers);
-			timer_entry(w, |w| {
-				w.global_get(g.now).local_get(wa64).i64_add();
-			}, 0, |w| {
-				w.local_get(fid);
-			});
+			timer_entry(
+				w,
+				|w| {
+					w.global_get(g.now).local_get(wa64).i64_add();
+				},
+				0,
+				|w| {
+					w.local_get(fid);
+				},
+			);
 			w.call(list_append).global_set(g.timers);
 		});
 		// handle: enqueue on the awaited child's waiters.
@@ -1249,7 +1451,10 @@ pub(crate) fn build_run_timers_fn(list_append: u32, g: TaskGlobals) -> Function 
 	let arg = w.local(ValType::I32);
 	let newt = w.local(v);
 
-	w.global_get(g.timers).ref_cast(types::T_LIST).struct_get(types::T_LIST, 1).local_set(arr);
+	w.global_get(g.timers)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, 1)
+		.local_set(arr);
 	w.local_get(arr).array_len().local_set(n);
 	// min = earliest `at`.
 	w.i64(i64::MAX).local_set(min);
@@ -1274,9 +1479,14 @@ pub(crate) fn build_run_timers_fn(list_append: u32, g: TaskGlobals) -> Function 
 	w.block("fbrk", |w| {
 		w.loop_("flp", |w| {
 			w.local_get(i).local_get(n).i32_ge_s().br_if("fbrk");
-			w.local_get(arr).local_get(i).array_get(types::T_VALARRAY).local_set(entry);
+			w.local_get(arr)
+				.local_get(i)
+				.array_get(types::T_VALARRAY)
+				.local_set(entry);
 			tuple_elem(w, entry, 0);
-			w.ref_cast(types::T_INT).struct_get(types::T_INT, 1).local_set(at);
+			w.ref_cast(types::T_INT)
+				.struct_get(types::T_INT, 1)
+				.local_set(at);
 			w.local_get(at).local_get(min).i64_eq();
 			w.if_else(
 				|w| {
@@ -1331,7 +1541,10 @@ pub(crate) fn build_sched_cancel_fn(list_append: u32, g: TaskGlobals) -> Functio
 	let handle = w.param(0);
 	w.global_get(g.pending);
 	box_i(&mut w, |w| {
-		w.local_get(handle).ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64();
+		w.local_get(handle)
+			.ref_cast(types::T_INT)
+			.struct_get(types::T_INT, 1)
+			.i32_wrap_i64();
 	});
 	w.call(list_append).global_set(g.pending);
 	push_nothing(&mut w);
@@ -1344,15 +1557,26 @@ pub(crate) fn build_sched_cancel_after_fn(list_append: u32, g: TaskGlobals) -> F
 	let mut w = Wat::new(2);
 	let (handle, dur) = (w.param(0), w.param(1));
 	let sid = w.local(ValType::I32);
-	w.local_get(handle).ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64().local_set(sid);
+	w.local_get(handle)
+		.ref_cast(types::T_INT)
+		.struct_get(types::T_INT, 1)
+		.i32_wrap_i64()
+		.local_set(sid);
 	w.global_get(g.timers);
-	timer_entry(&mut w, |w| {
-		w.global_get(g.now);
-		w.local_get(dur).ref_cast(types::T_INT).struct_get(types::T_INT, 1);
-		w.i64_add();
-	}, 1, |w| {
-		w.local_get(sid);
-	});
+	timer_entry(
+		&mut w,
+		|w| {
+			w.global_get(g.now);
+			w.local_get(dur)
+				.ref_cast(types::T_INT)
+				.struct_get(types::T_INT, 1);
+			w.i64_add();
+		},
+		1,
+		|w| {
+			w.local_get(sid);
+		},
+	);
 	w.call(list_append).global_set(g.timers);
 	push_nothing(&mut w);
 	w.finish()
@@ -1361,7 +1585,10 @@ pub(crate) fn build_sched_cancel_after_fn(list_append: u32, g: TaskGlobals) -> F
 /// Push timer entry `i`'s `at` field (i64) from the timers `$valarray`.
 fn timer_at(w: &mut Wat, arr: Local, i: Local) {
 	w.local_get(arr).local_get(i).array_get(types::T_VALARRAY);
-	w.ref_cast(types::T_TUPLE).struct_get(types::T_TUPLE, 1).i32(0).array_get(types::T_VALARRAY);
+	w.ref_cast(types::T_TUPLE)
+		.struct_get(types::T_TUPLE, 1)
+		.i32(0)
+		.array_get(types::T_VALARRAY);
 	w.ref_cast(types::T_INT).struct_get(types::T_INT, 1);
 }
 
@@ -1378,15 +1605,24 @@ pub(crate) fn build_drain_next_fn(g: TaskGlobals, lits: TaskLits) -> Function {
 	let n = w.local(ValType::I32);
 	let oc = w.local(v);
 
-	w.local_get(handle).ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64().local_set(sid);
+	w.local_get(handle)
+		.ref_cast(types::T_INT)
+		.struct_get(types::T_INT, 1)
+		.i32_wrap_i64()
+		.local_set(sid);
 	fld(&mut w, g, g.scopes, sid, scope::COMPLETED);
-	w.ref_cast(types::T_LIST).struct_get(types::T_LIST, 1).local_set(comp);
+	w.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, 1)
+		.local_set(comp);
 	w.local_get(comp).array_len().local_tee(n).i32(0).i32_gt_s();
 	w.if_result(
 		v,
 		|w| {
 			// A settled child is queued: pop the front, yield `some (settled)`.
-			w.local_get(comp).i32(0).array_get(types::T_VALARRAY).local_set(oc);
+			w.local_get(comp)
+				.i32(0)
+				.array_get(types::T_VALARRAY)
+				.local_set(oc);
 			set_fld(w, g.scopes, sid, scope::COMPLETED, |w| {
 				drop_first_list(w, comp, n);
 			});
@@ -1410,7 +1646,9 @@ pub(crate) fn build_list_append_fn(arrconcat: u32) -> Function {
 	let mut w = Wat::new(2);
 	let (list, el) = (w.param(0), w.param(1));
 	w.i32(types::TAG_LIST);
-	w.local_get(list).ref_cast(types::T_LIST).struct_get(types::T_LIST, 1);
+	w.local_get(list)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, 1);
 	w.local_get(el);
 	w.array_new_fixed(types::T_VALARRAY, 1);
 	w.call(arrconcat);
@@ -1434,12 +1672,20 @@ pub(crate) fn build_poll_step_fn(poll_defers_list: u32, arity2: u32) -> Function
 	w.local_get(pc).ref_cast(types::T_CLOSURE);
 	w.local_get(state);
 	w.local_get(resume);
-	w.local_get(pc).ref_cast(types::T_CLOSURE).struct_get(types::T_CLOSURE, 1);
+	w.local_get(pc)
+		.ref_cast(types::T_CLOSURE)
+		.struct_get(types::T_CLOSURE, 1);
 	w.call_indirect(arity2);
 	w.local_set(r);
 
-	w.local_get(r).ref_cast(types::T_VARIANT).struct_get(types::T_VARIANT, 3).local_set(rpl);
-	w.local_get(r).ref_cast(types::T_VARIANT).struct_get(types::T_VARIANT, 1).i32_eqz();
+	w.local_get(r)
+		.ref_cast(types::T_VARIANT)
+		.struct_get(types::T_VARIANT, 3)
+		.local_set(rpl);
+	w.local_get(r)
+		.ref_cast(types::T_VARIANT)
+		.struct_get(types::T_VARIANT, 1)
+		.i32_eqz();
 	w.if_result(
 		v,
 		|w| {
@@ -1467,15 +1713,26 @@ pub(crate) fn build_poll_defers_list_fn(arity1: u32) -> Function {
 	let i = w.local(ValType::I32);
 	let c = w.local(v);
 
-	w.local_get(list).ref_cast(types::T_LIST).struct_get(types::T_LIST, 1).local_set(arr);
+	w.local_get(list)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, 1)
+		.local_set(arr);
 	w.local_get(arr).array_len().i32(1).i32_sub().local_set(i);
 	w.block("brk", |w| {
 		w.loop_("lp", |w| {
 			w.local_get(i).i32(0).i32_lt_s().br_if("brk");
-			w.local_get(arr).local_get(i).array_get(types::T_VALARRAY).local_set(c);
-			call1(w, |w| {
-				w.local_get(c);
-			}, push_nothing, arity1);
+			w.local_get(arr)
+				.local_get(i)
+				.array_get(types::T_VALARRAY)
+				.local_set(c);
+			call1(
+				w,
+				|w| {
+					w.local_get(c);
+				},
+				push_nothing,
+				arity1,
+			);
 			w.drop();
 			w.local_get(i).i32(1).i32_sub().local_set(i);
 			w.br("lp");
@@ -1487,7 +1744,11 @@ pub(crate) fn build_poll_defers_list_fn(arity1: u32) -> Function {
 
 /// `__poll_defers_state(state) -> nothing`: run the `__defers` cleanup list
 /// carried in a suspended poll state, if present (tolerant of its absence).
-pub(crate) fn build_poll_defers_state_fn(eq: u32, poll_defers_list: u32, defers_name: (u32, u32)) -> Function {
+pub(crate) fn build_poll_defers_state_fn(
+	eq: u32,
+	poll_defers_list: u32,
+	defers_name: (u32, u32),
+) -> Function {
 	let v = types::value_ref();
 	let va = types::valarray_ref();
 	let mut w = Wat::new(1);
@@ -1500,8 +1761,14 @@ pub(crate) fn build_poll_defers_state_fn(eq: u32, poll_defers_list: u32, defers_
 
 	str_lit(&mut w, defers_name);
 	w.local_set(key);
-	w.local_get(state).ref_cast(types::T_RECORD).struct_get(types::T_RECORD, 1).local_set(names);
-	w.local_get(state).ref_cast(types::T_RECORD).struct_get(types::T_RECORD, 2).local_set(vals);
+	w.local_get(state)
+		.ref_cast(types::T_RECORD)
+		.struct_get(types::T_RECORD, 1)
+		.local_set(names);
+	w.local_get(state)
+		.ref_cast(types::T_RECORD)
+		.struct_get(types::T_RECORD, 2)
+		.local_set(vals);
 	w.local_get(names).array_len().local_set(n);
 	w.i32(0).local_set(i);
 	w.block("brk", |w| {
@@ -1550,7 +1817,10 @@ pub(crate) fn build_act_push_fn(g: TaskGlobals) -> Function {
 		w.copy_loop(types::T_VALARRAY, na, None, src, None, cap);
 		w.local_get(na).global_set(g.act);
 	});
-	w.global_get(g.act).global_get(g.actlen).local_get(act).array_set(types::T_VALARRAY);
+	w.global_get(g.act)
+		.global_get(g.actlen)
+		.local_get(act)
+		.array_set(types::T_VALARRAY);
 	w.global_get(g.actlen).i32(1).i32_add().global_set(g.actlen);
 	push_nothing(&mut w);
 	w.finish()
@@ -1567,7 +1837,11 @@ fn elem(w: &mut Wat, arr: Local, i: i32) {
 
 /// Push the `i`-th element of a `$tuple` local (cast + index its elems).
 fn tuple_elem(w: &mut Wat, tup: Local, i: i32) {
-	w.local_get(tup).ref_cast(types::T_TUPLE).struct_get(types::T_TUPLE, 1).i32(i).array_get(types::T_VALARRAY);
+	w.local_get(tup)
+		.ref_cast(types::T_TUPLE)
+		.struct_get(types::T_TUPLE, 1)
+		.i32(i)
+		.array_get(types::T_VALARRAY);
 }
 
 /// Push the unit `nothing` value.
@@ -1620,17 +1894,24 @@ fn timer_entry(w: &mut Wat, at: impl FnOnce(&mut Wat), kind: i32, arg: impl FnOn
 
 /// Unbox the `$int`(-shaped) value on top of the stack to an i32.
 fn unbox_i(w: &mut Wat) {
-	w.ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64();
+	w.ref_cast(types::T_INT)
+		.struct_get(types::T_INT, 1)
+		.i32_wrap_i64();
 }
 
 /// Push `array.len` of the `$list` held in global `gl`.
 fn list_len(w: &mut Wat, gl: u32) {
-	w.global_get(gl).ref_cast(types::T_LIST).struct_get(types::T_LIST, 1).array_len();
+	w.global_get(gl)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, 1)
+		.array_len();
 }
 
 /// Push field `field` of record `id` in the `$list` table at global `table`.
 fn fld(w: &mut Wat, _g: TaskGlobals, table: u32, id: Local, field: u32) {
-	w.global_get(table).ref_cast(types::T_LIST).struct_get(types::T_LIST, 1);
+	w.global_get(table)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, 1);
 	w.local_get(id).array_get(types::T_VALARRAY);
 	w.ref_cast(types::T_TUPLE).struct_get(types::T_TUPLE, 1);
 	w.i32(field as i32).array_get(types::T_VALARRAY);
@@ -1644,7 +1925,9 @@ fn fld_i(w: &mut Wat, g: TaskGlobals, table: u32, id: Local, field: u32) {
 
 /// Set field `field` of record `id` to the value pushed by `push`.
 fn set_fld(w: &mut Wat, table: u32, id: Local, field: u32, push: impl FnOnce(&mut Wat)) {
-	w.global_get(table).ref_cast(types::T_LIST).struct_get(types::T_LIST, 1);
+	w.global_get(table)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, 1);
 	w.local_get(id).array_get(types::T_VALARRAY);
 	w.ref_cast(types::T_TUPLE).struct_get(types::T_TUPLE, 1);
 	w.i32(field as i32);
@@ -1715,11 +1998,15 @@ fn scope_fields(
 /// Push a fresh root-fiber `$tuple` onto the stack (for `run_task`'s seed).
 fn push_fiber(w: &mut Wat, scope_id: i64, runs_scope: i64) {
 	w.i32(types::TAG_TUPLE);
-	fiber_fields(w, |w| {
-		w.i32(scope_id as i32);
-	}, |w| {
-		w.i32(runs_scope as i32);
-	});
+	fiber_fields(
+		w,
+		|w| {
+			w.i32(scope_id as i32);
+		},
+		|w| {
+			w.i32(runs_scope as i32);
+		},
+	);
 	w.struct_new(types::T_TUPLE);
 }
 
@@ -1772,7 +2059,14 @@ fn push_ready_entry(w: &mut Wat, fid: u32, fk: i32, val: impl FnOnce(&mut Wat)) 
 }
 
 /// `ready.append((fid, fk, val))` with `fid` an i32 local.
-fn ready_push(w: &mut Wat, g: TaskGlobals, list_append: u32, fid: Local, fk: i32, val: impl FnOnce(&mut Wat)) {
+fn ready_push(
+	w: &mut Wat,
+	g: TaskGlobals,
+	list_append: u32,
+	fid: Local,
+	fk: i32,
+	val: impl FnOnce(&mut Wat),
+) {
 	w.global_get(g.ready);
 	w.i32(types::TAG_TUPLE);
 	box_i(w, |w| {
@@ -1838,9 +2132,14 @@ fn drop_last(w: &mut Wat, gl: u32) {
 	let arr = w.local(types::valarray_ref());
 	let n = w.local(ValType::I32);
 	let out = w.local(types::valarray_ref());
-	w.global_get(gl).ref_cast(types::T_LIST).struct_get(types::T_LIST, 1).local_set(arr);
+	w.global_get(gl)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, 1)
+		.local_set(arr);
 	w.local_get(arr).array_len().i32(1).i32_sub().local_set(n);
-	w.local_get(n).array_new_default(types::T_VALARRAY).local_set(out);
+	w.local_get(n)
+		.array_new_default(types::T_VALARRAY)
+		.local_set(out);
 	w.copy_loop(types::T_VALARRAY, out, None, arr, None, n);
 	w.i32(types::TAG_LIST);
 	w.local_get(out);
@@ -1854,7 +2153,9 @@ fn load_act(w: &mut Wat, g: TaskGlobals, fid: Local) {
 	let n = w.local(ValType::I32);
 	let na = w.local(types::valarray_ref());
 	fld(w, g, g.fibers, fid, fiber::ACT);
-	w.ref_cast(types::T_LIST).struct_get(types::T_LIST, 1).local_set(arr);
+	w.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, 1)
+		.local_set(arr);
 	w.local_get(arr).array_len().local_set(n);
 	// na = new array(max(n, 1)); copy.
 	w.local_get(n).i32_eqz();
@@ -1879,7 +2180,9 @@ fn save_act(w: &mut Wat, g: TaskGlobals, fid: Local) {
 	let src = w.local(types::valarray_ref_null());
 	let len = w.local(ValType::I32);
 	w.global_get(g.actlen).local_set(len);
-	w.local_get(len).array_new_default(types::T_VALARRAY).local_set(out);
+	w.local_get(len)
+		.array_new_default(types::T_VALARRAY)
+		.local_set(out);
 	w.global_get(g.act).local_set(src);
 	w.copy_loop(types::T_VALARRAY, out, None, src, None, len);
 	set_fld(w, g.fibers, fid, fiber::ACT, |w| {
@@ -1906,7 +2209,15 @@ fn park_out(w: &mut Wat, g: TaskGlobals, wait_kind: i32, arg: impl FnOnce(&mut W
 }
 
 /// A Start arm that settles directly.
-fn start_settle(w: &mut Wat, tk: Local, kind: i32, next: i32, val: impl FnOnce(&mut Wat), fval: Local, fkind: Local) {
+fn start_settle(
+	w: &mut Wat,
+	tk: Local,
+	kind: i32,
+	next: i32,
+	val: impl FnOnce(&mut Wat),
+	fval: Local,
+	fkind: Local,
+) {
 	w.local_get(tk).i32(kind).i32_eq();
 	w.if_(|w| {
 		val(w);
@@ -1918,7 +2229,17 @@ fn start_settle(w: &mut Wat, tk: Local, kind: i32, next: i32, val: impl FnOnce(&
 
 /// A Start arm for a sequential combinator (push an activation, run the inner).
 #[allow(clippy::too_many_arguments)]
-fn start_combinator(w: &mut Wat, tk: Local, kind: i32, akind: i32, tp: Local, has_arg: bool, act_push: u32, fval: Local, fkind: Local) {
+fn start_combinator(
+	w: &mut Wat,
+	tk: Local,
+	kind: i32,
+	akind: i32,
+	tp: Local,
+	has_arg: bool,
+	act_push: u32,
+	fval: Local,
+	fkind: Local,
+) {
 	w.local_get(tk).i32(kind).i32_eq();
 	w.if_(|w| {
 		if has_arg {
@@ -1937,9 +2258,27 @@ fn start_combinator(w: &mut Wat, tk: Local, kind: i32, akind: i32, tp: Local, ha
 /// After `__poll_step`: start the tail task (complete) or push a `Poll` and start
 /// the sub-task (pending).
 #[allow(clippy::too_many_arguments)]
-fn poll_after(w: &mut Wat, pc: Local, ps: Local, pspl: Local, psk: Local, fval: Local, fkind: Local, act_push: u32) {
-	w.local_get(ps).ref_cast(types::T_TUPLE).struct_get(types::T_TUPLE, 1).local_set(pspl);
-	w.local_get(pspl).i32(0).array_get(types::T_VALARRAY).ref_cast(types::T_INT).struct_get(types::T_INT, 1).i32_wrap_i64().local_set(psk);
+fn poll_after(
+	w: &mut Wat,
+	pc: Local,
+	ps: Local,
+	pspl: Local,
+	psk: Local,
+	fval: Local,
+	fkind: Local,
+	act_push: u32,
+) {
+	w.local_get(ps)
+		.ref_cast(types::T_TUPLE)
+		.struct_get(types::T_TUPLE, 1)
+		.local_set(pspl);
+	w.local_get(pspl)
+		.i32(0)
+		.array_get(types::T_VALARRAY)
+		.ref_cast(types::T_INT)
+		.struct_get(types::T_INT, 1)
+		.i32_wrap_i64()
+		.local_set(psk);
 	w.local_get(psk).i32_eqz();
 	w.if_else(
 		|w| {
@@ -1949,9 +2288,14 @@ fn poll_after(w: &mut Wat, pc: Local, ps: Local, pspl: Local, psk: Local, fval: 
 			w.br("main");
 		},
 		|w| {
-			push_activation(w, act_kind::POLL, |w| {
-				w.local_get(pc);
-			}, |w| elem(w, pspl, 2));
+			push_activation(
+				w,
+				act_kind::POLL,
+				|w| {
+					w.local_get(pc);
+				},
+				|w| elem(w, pspl, 2),
+			);
 			w.call(act_push).drop();
 			elem(w, pspl, 1);
 			w.local_set(fval);
@@ -1964,9 +2308,18 @@ fn poll_after(w: &mut Wat, pc: Local, ps: Local, pspl: Local, psk: Local, fval: 
 /// Pop the top activation off the working stack into `(a, akind, apl)`.
 fn pop_activation(w: &mut Wat, g: TaskGlobals, a: Local, akind: Local, apl: Local) {
 	w.global_get(g.actlen).i32(1).i32_sub().global_set(g.actlen);
-	w.global_get(g.act).global_get(g.actlen).array_get(types::T_VALARRAY).local_set(a);
-	w.local_get(a).ref_cast(types::T_VARIANT).struct_get(types::T_VARIANT, 1).local_set(akind);
-	w.local_get(a).ref_cast(types::T_VARIANT).struct_get(types::T_VARIANT, 3).local_set(apl);
+	w.global_get(g.act)
+		.global_get(g.actlen)
+		.array_get(types::T_VALARRAY)
+		.local_set(a);
+	w.local_get(a)
+		.ref_cast(types::T_VARIANT)
+		.struct_get(types::T_VARIANT, 1)
+		.local_set(akind);
+	w.local_get(a)
+		.ref_cast(types::T_VARIANT)
+		.struct_get(types::T_VARIANT, 3)
+		.local_set(apl);
 }
 
 /// Push an activation `$variant` `{vtag: kind, payload: [x, y]}` (name unused).
@@ -2046,7 +2399,11 @@ fn push_none(w: &mut Wat, lits: TaskLits) {
 /// → `ok ()`). `oc` is a `$tuple(boxed kind, val)`.
 fn push_settled(w: &mut Wat, lits: TaskLits, oc: Local) {
 	let k = w.local(ValType::I32);
-	w.local_get(oc).ref_cast(types::T_TUPLE).struct_get(types::T_TUPLE, 1).i32(0).array_get(types::T_VALARRAY);
+	w.local_get(oc)
+		.ref_cast(types::T_TUPLE)
+		.struct_get(types::T_TUPLE, 1)
+		.i32(0)
+		.array_get(types::T_VALARRAY);
 	unbox_i(w);
 	w.local_set(k);
 	w.local_get(k).i32(outcome::OK).i32_eq();
@@ -2054,7 +2411,11 @@ fn push_settled(w: &mut Wat, lits: TaskLits, oc: Local) {
 		types::value_ref(),
 		|w| {
 			push_result(w, lits.ok_tag, lits.ok_name, |w| {
-				w.local_get(oc).ref_cast(types::T_TUPLE).struct_get(types::T_TUPLE, 1).i32(1).array_get(types::T_VALARRAY);
+				w.local_get(oc)
+					.ref_cast(types::T_TUPLE)
+					.struct_get(types::T_TUPLE, 1)
+					.i32(1)
+					.array_get(types::T_VALARRAY);
 			});
 		},
 		|w| {
@@ -2063,7 +2424,11 @@ fn push_settled(w: &mut Wat, lits: TaskLits, oc: Local) {
 				types::value_ref(),
 				|w| {
 					push_result(w, lits.err_tag, lits.err_name, |w| {
-						w.local_get(oc).ref_cast(types::T_TUPLE).struct_get(types::T_TUPLE, 1).i32(1).array_get(types::T_VALARRAY);
+						w.local_get(oc)
+							.ref_cast(types::T_TUPLE)
+							.struct_get(types::T_TUPLE, 1)
+							.i32(1)
+							.array_get(types::T_VALARRAY);
 					});
 				},
 				|w| {
@@ -2082,7 +2447,9 @@ fn drop_first_list(w: &mut Wat, arr: Local, n: Local) {
 	let one = w.local(ValType::I32);
 	let len = w.local(ValType::I32);
 	w.local_get(n).i32(1).i32_sub().local_set(len);
-	w.local_get(len).array_new_default(types::T_VALARRAY).local_set(out);
+	w.local_get(len)
+		.array_new_default(types::T_VALARRAY)
+		.local_set(out);
 	// out[0..n-1] = arr[1..n] (drop first; see `Wat::copy_loop`).
 	w.i32(1).local_set(one);
 	w.copy_loop(types::T_VALARRAY, out, None, arr, Some(one), len);
@@ -2098,14 +2465,18 @@ fn all_children_done(w: &mut Wat, g: TaskGlobals, sid: Local) {
 	let i = w.local(ValType::I32);
 	let res = w.local(ValType::I32);
 	fld(w, g, g.scopes, sid, scope::CHILDREN);
-	w.ref_cast(types::T_LIST).struct_get(types::T_LIST, 1).local_set(children);
+	w.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, 1)
+		.local_set(children);
 	w.local_get(children).array_len().local_set(n);
 	w.i32(0).local_set(i);
 	w.i32(1).local_set(res);
 	w.block("brk", |w| {
 		w.loop_("lp", |w| {
 			w.local_get(i).local_get(n).i32_ge_s().br_if("brk");
-			w.local_get(children).local_get(i).array_get(types::T_VALARRAY);
+			w.local_get(children)
+				.local_get(i)
+				.array_get(types::T_VALARRAY);
 			let c = w.local(ValType::I32);
 			unbox_i(w);
 			w.local_set(c);

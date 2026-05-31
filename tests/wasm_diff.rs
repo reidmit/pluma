@@ -296,7 +296,10 @@ fn capture_gc_types(store: &mut impl AsContextMut, witness: &Val) -> GcTypes {
 		.expect("witness is a $list");
 	let list = list_struct.ty(&mut scope).expect("$list type");
 	let elems = match list_struct.field(&mut scope, 1).expect("witness elems") {
-		Val::AnyRef(Some(r)) => r.as_array(&mut scope).expect("as_array").expect("$valarray"),
+		Val::AnyRef(Some(r)) => r
+			.as_array(&mut scope)
+			.expect("as_array")
+			.expect("$valarray"),
 		o => panic!("witness elems not an array: {o:?}"),
 	};
 	let valarray = elems.ty(&mut scope).expect("$valarray type");
@@ -319,7 +322,12 @@ fn capture_gc_types(store: &mut impl AsContextMut, witness: &Val) -> GcTypes {
 			o => panic!("elem 1 not a struct: {o:?}"),
 		};
 		match s.field(&mut scope, 1).expect("$str bytes field") {
-			Val::AnyRef(Some(r)) => r.as_array(&mut scope).unwrap().unwrap().ty(&mut scope).unwrap(),
+			Val::AnyRef(Some(r)) => r
+				.as_array(&mut scope)
+				.unwrap()
+				.unwrap()
+				.ty(&mut scope)
+				.unwrap(),
 			o => panic!("$str field 1 not an array: {o:?}"),
 		}
 	};
@@ -345,8 +353,12 @@ fn build_bytes_array(store: &mut impl AsContextMut, gc: &GcTypes, data: &[u8]) -
 fn build_strlike(store: &mut impl AsContextMut, gc: &GcTypes, tag: i32, data: &[u8]) -> Val {
 	let bytes = build_bytes_array(&mut *store, gc, data);
 	let pre = StructRefPre::new(&mut *store, gc.str_.clone());
-	let s = StructRef::new(&mut *store, &pre, &[Val::I32(tag), Val::AnyRef(Some(bytes.into()))])
-		.expect("build $str");
+	let s = StructRef::new(
+		&mut *store,
+		&pre,
+		&[Val::I32(tag), Val::AnyRef(Some(bytes.into()))],
+	)
+	.expect("build $str");
 	Val::AnyRef(Some(s.to_anyref()))
 }
 
@@ -374,8 +386,12 @@ fn build_str_list(store: &mut impl AsContextMut, gc: &GcTypes, items: &[String])
 	let arr_pre = ArrayRefPre::new(&mut *store, gc.valarray.clone());
 	let arr = ArrayRef::new_fixed(&mut *store, &arr_pre, &strs).expect("build $valarray");
 	let pre = StructRefPre::new(&mut *store, gc.list.clone());
-	let s = StructRef::new(&mut *store, &pre, &[Val::I32(TAG_LIST), Val::AnyRef(Some(arr.into()))])
-		.expect("build $list");
+	let s = StructRef::new(
+		&mut *store,
+		&pre,
+		&[Val::I32(TAG_LIST), Val::AnyRef(Some(arr.into()))],
+	)
+	.expect("build $list");
 	Val::AnyRef(Some(s.to_anyref()))
 }
 
@@ -896,28 +912,33 @@ fn instantiate_module(
 	// read-file / read-file-bytes: path is args[0], witness args[1].
 	for (name, as_bytes) in [("io-read-file", false), ("io-read-file-bytes", true)] {
 		linker
-			.func_new("pluma", name, io2.clone(), move |mut caller, args, results| {
-				let gc = ensure_types(&mut caller, &args[1]);
-				let path = arg_string(&mut caller, &args[0]);
-				results[0] = if as_bytes {
-					match std::fs::read(&path) {
-						Ok(b) => build_strlike(&mut caller, &gc, TAG_BYTES, &b),
-						Err(e) => {
-							set_io_err(&caller, e.to_string());
-							Val::AnyRef(None)
+			.func_new(
+				"pluma",
+				name,
+				io2.clone(),
+				move |mut caller, args, results| {
+					let gc = ensure_types(&mut caller, &args[1]);
+					let path = arg_string(&mut caller, &args[0]);
+					results[0] = if as_bytes {
+						match std::fs::read(&path) {
+							Ok(b) => build_strlike(&mut caller, &gc, TAG_BYTES, &b),
+							Err(e) => {
+								set_io_err(&caller, e.to_string());
+								Val::AnyRef(None)
+							}
 						}
-					}
-				} else {
-					match std::fs::read_to_string(&path) {
-						Ok(s) => build_strlike(&mut caller, &gc, TAG_STR, s.as_bytes()),
-						Err(e) => {
-							set_io_err(&caller, e.to_string());
-							Val::AnyRef(None)
+					} else {
+						match std::fs::read_to_string(&path) {
+							Ok(s) => build_strlike(&mut caller, &gc, TAG_STR, s.as_bytes()),
+							Err(e) => {
+								set_io_err(&caller, e.to_string());
+								Val::AnyRef(None)
+							}
 						}
-					}
-				};
-				Ok(())
-			})
+					};
+					Ok(())
+				},
+			)
 			.unwrap_or_else(|e| panic!("define {name}: {e}"));
 	}
 
@@ -930,152 +951,192 @@ fn instantiate_module(
 		("io-append-file-bytes", true, true),
 	] {
 		linker
-			.func_new("pluma", name, io3.clone(), move |mut caller, args, results| {
-				let gc = ensure_types(&mut caller, &args[2]);
-				let path = arg_string(&mut caller, &args[0]);
-				let data = if as_bytes {
-					raw_value_bytes(&mut caller, &args[1])
-				} else {
-					arg_string(&mut caller, &args[1]).into_bytes()
-				};
-				let res = if append {
-					use std::io::Write;
-					std::fs::OpenOptions::new()
-						.create(true)
-						.append(true)
-						.open(&path)
-						.and_then(|mut f| f.write_all(&data))
-				} else {
-					std::fs::write(&path, &data)
-				};
-				results[0] = match res {
-					Ok(()) => build_nothing(&mut caller, &gc),
-					Err(e) => {
-						set_io_err(&caller, e.to_string());
-						Val::AnyRef(None)
-					}
-				};
-				Ok(())
-			})
+			.func_new(
+				"pluma",
+				name,
+				io3.clone(),
+				move |mut caller, args, results| {
+					let gc = ensure_types(&mut caller, &args[2]);
+					let path = arg_string(&mut caller, &args[0]);
+					let data = if as_bytes {
+						raw_value_bytes(&mut caller, &args[1])
+					} else {
+						arg_string(&mut caller, &args[1]).into_bytes()
+					};
+					let res = if append {
+						use std::io::Write;
+						std::fs::OpenOptions::new()
+							.create(true)
+							.append(true)
+							.open(&path)
+							.and_then(|mut f| f.write_all(&data))
+					} else {
+						std::fs::write(&path, &data)
+					};
+					results[0] = match res {
+						Ok(()) => build_nothing(&mut caller, &gc),
+						Err(e) => {
+							set_io_err(&caller, e.to_string());
+							Val::AnyRef(None)
+						}
+					};
+					Ok(())
+				},
+			)
 			.unwrap_or_else(|e| panic!("define {name}: {e}"));
 	}
 
 	// delete-file / make-dir (mkdir -p): path args[0], witness args[1].
 	for (name, is_mkdir) in [("io-delete-file", false), ("io-make-dir", true)] {
 		linker
-			.func_new("pluma", name, io2.clone(), move |mut caller, args, results| {
-				let gc = ensure_types(&mut caller, &args[1]);
-				let path = arg_string(&mut caller, &args[0]);
-				let res = if is_mkdir {
-					std::fs::create_dir_all(&path)
-				} else {
-					std::fs::remove_file(&path)
-				};
-				results[0] = match res {
-					Ok(()) => build_nothing(&mut caller, &gc),
-					Err(e) => {
-						set_io_err(&caller, e.to_string());
-						Val::AnyRef(None)
-					}
-				};
-				Ok(())
-			})
+			.func_new(
+				"pluma",
+				name,
+				io2.clone(),
+				move |mut caller, args, results| {
+					let gc = ensure_types(&mut caller, &args[1]);
+					let path = arg_string(&mut caller, &args[0]);
+					let res = if is_mkdir {
+						std::fs::create_dir_all(&path)
+					} else {
+						std::fs::remove_file(&path)
+					};
+					results[0] = match res {
+						Ok(()) => build_nothing(&mut caller, &gc),
+						Err(e) => {
+							set_io_err(&caller, e.to_string());
+							Val::AnyRef(None)
+						}
+					};
+					Ok(())
+				},
+			)
 			.unwrap_or_else(|e| panic!("define {name}: {e}"));
 	}
 
 	// file-exists / is-dir: path args[0], witness args[1]. Return a bare `$bool`.
 	for (name, is_dir) in [("io-file-exists", false), ("io-is-dir", true)] {
 		linker
-			.func_new("pluma", name, io2.clone(), move |mut caller, args, results| {
-				let gc = ensure_types(&mut caller, &args[1]);
-				let path = arg_string(&mut caller, &args[0]);
-				let p = std::path::Path::new(&path);
-				let b = if is_dir { p.is_dir() } else { p.exists() };
-				results[0] = build_bool(&mut caller, &gc, b);
-				Ok(())
-			})
+			.func_new(
+				"pluma",
+				name,
+				io2.clone(),
+				move |mut caller, args, results| {
+					let gc = ensure_types(&mut caller, &args[1]);
+					let path = arg_string(&mut caller, &args[0]);
+					let p = std::path::Path::new(&path);
+					let b = if is_dir { p.is_dir() } else { p.exists() };
+					results[0] = build_bool(&mut caller, &gc, b);
+					Ok(())
+				},
+			)
 			.unwrap_or_else(|e| panic!("define {name}: {e}"));
 	}
 
 	// read-dir: path args[0], witness args[1]. Entry names only, sorted (VM parity).
 	linker
-		.func_new("pluma", "io-read-dir", io2.clone(), |mut caller, args, results| {
-			let gc = ensure_types(&mut caller, &args[1]);
-			let path = arg_string(&mut caller, &args[0]);
-			results[0] = match std::fs::read_dir(&path) {
-				Ok(entries) => {
-					let mut names: Vec<String> = Vec::new();
-					let mut read_err: Option<String> = None;
-					for entry in entries {
-						match entry {
-							Ok(e) => names.push(e.file_name().to_string_lossy().into_owned()),
-							Err(e) => {
-								read_err = Some(e.to_string());
-								break;
+		.func_new(
+			"pluma",
+			"io-read-dir",
+			io2.clone(),
+			|mut caller, args, results| {
+				let gc = ensure_types(&mut caller, &args[1]);
+				let path = arg_string(&mut caller, &args[0]);
+				results[0] = match std::fs::read_dir(&path) {
+					Ok(entries) => {
+						let mut names: Vec<String> = Vec::new();
+						let mut read_err: Option<String> = None;
+						for entry in entries {
+							match entry {
+								Ok(e) => names.push(e.file_name().to_string_lossy().into_owned()),
+								Err(e) => {
+									read_err = Some(e.to_string());
+									break;
+								}
+							}
+						}
+						match read_err {
+							Some(msg) => {
+								set_io_err(&caller, msg);
+								Val::AnyRef(None)
+							}
+							None => {
+								names.sort();
+								build_str_list(&mut caller, &gc, &names)
 							}
 						}
 					}
-					match read_err {
-						Some(msg) => {
-							set_io_err(&caller, msg);
-							Val::AnyRef(None)
-						}
-						None => {
-							names.sort();
-							build_str_list(&mut caller, &gc, &names)
-						}
+					Err(e) => {
+						set_io_err(&caller, e.to_string());
+						Val::AnyRef(None)
 					}
-				}
-				Err(e) => {
-					set_io_err(&caller, e.to_string());
-					Val::AnyRef(None)
-				}
-			};
-			Ok(())
-		})
+				};
+				Ok(())
+			},
+		)
 		.expect("define io-read-dir");
 
 	// read / read-all / read-all-bytes: unit args[0], witness args[1].
 	linker
-		.func_new("pluma", "io-read", io2.clone(), |mut caller, args, results| {
-			let gc = ensure_types(&mut caller, &args[1]);
-			results[0] = match stdin_line(caller.data()) {
-				Some(line) => build_strlike(&mut caller, &gc, TAG_STR, line.as_bytes()),
-				None => {
-					set_io_err(&caller, "EOF".to_string());
-					Val::AnyRef(None)
-				}
-			};
-			Ok(())
-		})
+		.func_new(
+			"pluma",
+			"io-read",
+			io2.clone(),
+			|mut caller, args, results| {
+				let gc = ensure_types(&mut caller, &args[1]);
+				results[0] = match stdin_line(caller.data()) {
+					Some(line) => build_strlike(&mut caller, &gc, TAG_STR, line.as_bytes()),
+					None => {
+						set_io_err(&caller, "EOF".to_string());
+						Val::AnyRef(None)
+					}
+				};
+				Ok(())
+			},
+		)
 		.expect("define io-read");
 	linker
-		.func_new("pluma", "io-read-all", io2.clone(), |mut caller, args, results| {
-			let gc = ensure_types(&mut caller, &args[1]);
-			let bytes = stdin_rest(caller.data());
-			let s = String::from_utf8_lossy(&bytes).into_owned();
-			results[0] = build_strlike(&mut caller, &gc, TAG_STR, s.as_bytes());
-			Ok(())
-		})
+		.func_new(
+			"pluma",
+			"io-read-all",
+			io2.clone(),
+			|mut caller, args, results| {
+				let gc = ensure_types(&mut caller, &args[1]);
+				let bytes = stdin_rest(caller.data());
+				let s = String::from_utf8_lossy(&bytes).into_owned();
+				results[0] = build_strlike(&mut caller, &gc, TAG_STR, s.as_bytes());
+				Ok(())
+			},
+		)
 		.expect("define io-read-all");
 	linker
-		.func_new("pluma", "io-read-all-bytes", io2.clone(), |mut caller, args, results| {
-			let gc = ensure_types(&mut caller, &args[1]);
-			let bytes = stdin_rest(caller.data());
-			results[0] = build_strlike(&mut caller, &gc, TAG_BYTES, &bytes);
-			Ok(())
-		})
+		.func_new(
+			"pluma",
+			"io-read-all-bytes",
+			io2.clone(),
+			|mut caller, args, results| {
+				let gc = ensure_types(&mut caller, &args[1]);
+				let bytes = stdin_rest(caller.data());
+				results[0] = build_strlike(&mut caller, &gc, TAG_BYTES, &bytes);
+				Ok(())
+			},
+		)
 		.expect("define io-read-all-bytes");
 
 	// io-last-error: the message the last failed io call stashed, as a `$str`. No
 	// witness — it rides the GC types the failing op already cached.
 	linker
-		.func_new("pluma", "io-last-error", io0, |mut caller, _args, results| {
-			let gc = cached_types(&caller);
-			let msg = caller.data().last_error.borrow().clone();
-			results[0] = build_strlike(&mut caller, &gc, TAG_STR, msg.as_bytes());
-			Ok(())
-		})
+		.func_new(
+			"pluma",
+			"io-last-error",
+			io0,
+			|mut caller, _args, results| {
+				let gc = cached_types(&caller);
+				let msg = caller.data().last_error.borrow().clone();
+				results[0] = build_strlike(&mut caller, &gc, TAG_STR, msg.as_bytes());
+				Ok(())
+			},
+		)
 		.expect("define io-last-error");
 
 	let instance = linker
@@ -1174,7 +1235,9 @@ fn run_vm(program: vm::Program, stdin: &[u8]) -> RunResult {
 	let stdout = Rc::new(RefCell::new(Vec::<u8>::new()));
 	let stderr = Rc::new(RefCell::new(Vec::<u8>::new()));
 	let mut vm_instance = vm::VM::new(program)
-		.with_stdin(vm::InputSource::Buffer(Rc::new(RefCell::new(stdin.to_vec()))))
+		.with_stdin(vm::InputSource::Buffer(Rc::new(RefCell::new(
+			stdin.to_vec(),
+		))))
 		.with_stdout(vm::OutputSink::Buffer(stdout.clone()))
 		.with_stderr(vm::OutputSink::Buffer(stderr.clone()));
 	let status = match vm_instance.run() {
@@ -1259,8 +1322,7 @@ fn wasm_coverage_report() {
 			std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| wasm::emit(&ir_program)));
 		match emitted {
 			Ok(Ok(bytes)) => {
-				let r =
-					std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run_wasm(&bytes, &stdin)));
+				let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run_wasm(&bytes, &stdin)));
 				match r {
 					Ok(w) if w.status == reference.status && w.stdout == reference.stdout => {
 						matching.push(name)

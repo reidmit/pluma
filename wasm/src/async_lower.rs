@@ -63,8 +63,7 @@ pub(crate) fn lower(p: &mut IrProgram) -> bool {
 		let caps: Vec<Atom> = f.captures.iter().map(|v| Atom::Var(*v)).collect();
 		// state = { __tag: 0, __a0: p0, __a1: p1, … } — the CPS initial state, with
 		// params seeded positionally (the field names `ir::cps` reads in segment 0).
-		let mut fields: Vec<(String, Atom)> =
-			vec![("__tag".to_string(), Atom::Const(Const::Int(0)))];
+		let mut fields: Vec<(String, Atom)> = vec![("__tag".to_string(), Atom::Const(Const::Int(0)))];
 		for (idx, param) in f.params.iter().enumerate() {
 			fields.push((format!("__a{idx}"), Atom::Var(*param)));
 		}

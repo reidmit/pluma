@@ -495,21 +495,21 @@ pub(crate) struct OrderingLits {
 /// queue, plus the pump's outcome/park output channel. Allocated only when async.
 #[derive(Clone, Copy, Default)]
 pub(crate) struct TaskGlobals {
-	pub(crate) act: u32,    // mut ref null $valarray — current fiber's activation stack
+	pub(crate) act: u32, // mut ref null $valarray — current fiber's activation stack
 	pub(crate) actlen: u32, // mut i32 — activation count
 	pub(crate) fibers: u32, // mut ref null $value — $list of fiber field-arrays (by fid)
 	pub(crate) scopes: u32, // mut ref null $value — $list of scope field-arrays (by sid)
-	pub(crate) ready: u32,  // mut ref null $value — $list of ready entries (fid, focus_kind, val)
-	pub(crate) rhead: u32,  // mut i32 — ready deque head cursor (pop_front)
+	pub(crate) ready: u32, // mut ref null $value — $list of ready entries (fid, focus_kind, val)
+	pub(crate) rhead: u32, // mut i32 — ready deque head cursor (pop_front)
 	pub(crate) timers: u32, // mut ref null $value — $list of timer entries (at, kind, arg)
 	pub(crate) pending: u32, // mut ref null $value — $list of scope ids to cancel between steps
-	pub(crate) now: u32,    // mut i64 — virtual clock (nanoseconds)
+	pub(crate) now: u32, // mut i64 — virtual clock (nanoseconds)
 	pub(crate) root_kind: u32, // mut i32 — root outcome kind (0 = not done yet)
-	pub(crate) root_val: u32,  // mut ref null $value — root outcome value
-	pub(crate) out_kind: u32,  // mut i32 — pump output: 1 done / 2 park
+	pub(crate) root_val: u32, // mut ref null $value — root outcome value
+	pub(crate) out_kind: u32, // mut i32 — pump output: 1 done / 2 park
 	pub(crate) out_okerr: u32, // mut i32 — on done: outcome kind (ok/err); on park: wait kind
-	pub(crate) out_val: u32,   // mut ref null $value — on done: outcome value
-	pub(crate) out_arg: u32,   // mut i32 — on park: wait arg (fid/sid), or sleep nanos low bits unused
+	pub(crate) out_val: u32, // mut ref null $value — on done: outcome value
+	pub(crate) out_arg: u32, // mut i32 — on park: wait arg (fid/sid), or sleep nanos low bits unused
 	pub(crate) out_arg64: u32, // mut i64 — on park sleep: nanos
 }
 

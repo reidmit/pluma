@@ -280,8 +280,7 @@ impl Compiler {
 			// everything) and for any ungated module — so this gate is inert for
 			// existing flows. Reported against the whole `use …` statement.
 			let missing_caps = self.platform.missing_capabilities(full_name);
-			let rejection: Option<(String, Range)> = if full_name.ends_with(".test")
-				&& !importer_is_test
+			let rejection: Option<(String, Range)> = if full_name.ends_with(".test") && !importer_is_test
 			{
 				Some((
 					format!(
@@ -547,7 +546,11 @@ mod platform_gating_tests {
 	fn ungated_module_available_everywhere() {
 		let src = "use core.list\n\ndef main = fun { list.length [1] }\n";
 		for p in [Platform::Native, Platform::Server, Platform::Browser] {
-			assert!(check_with(p, src).is_empty(), "core.list rejected on {:?}", p);
+			assert!(
+				check_with(p, src).is_empty(),
+				"core.list rejected on {:?}",
+				p
+			);
 		}
 	}
 }
