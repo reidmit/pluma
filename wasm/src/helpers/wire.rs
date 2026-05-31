@@ -612,7 +612,11 @@ pub(crate) fn build_wire_enc_fn(
 			.ref_cast(types::T_LIST)
 			.struct_get(types::T_LIST, 1)
 			.local_set(elems);
-		w.local_get(elems).array_len().local_set(n);
+		// the logical length (field 2), not array.len (capacity).
+		w.local_get(val)
+			.ref_cast(types::T_LIST)
+			.struct_get(types::T_LIST, 2)
+			.local_set(n);
 		w.local_get(n).i64_extend_i32_u().call(uvarint);
 		w.i32(0).local_set(i);
 		w.block("brk", |w| {
@@ -1172,10 +1176,8 @@ pub(crate) fn build_wire_dec_fn(
 				w.br("lp");
 			});
 		});
-		w.i32(types::TAG_LIST)
-			.local_get(out)
-			.struct_new(types::T_LIST)
-			.ret();
+		crate::helpers::list::mk_list(w, out);
+		w.ret();
 	});
 	// tuple: a fixed number of fields (arity from the schema, no count on wire).
 	w.local_get(vtag).i32(wt.s_tuple as i32).i32_eq();

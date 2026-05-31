@@ -1645,14 +1645,15 @@ pub(crate) fn build_drain_next_fn(g: TaskGlobals, lits: TaskLits) -> Function {
 pub(crate) fn build_list_append_fn(arrconcat: u32) -> Function {
 	let mut w = Wat::new(2);
 	let (list, el) = (w.param(0), w.param(1));
-	w.i32(types::TAG_LIST);
+	let res = w.local(types::valarray_ref());
 	w.local_get(list)
 		.ref_cast(types::T_LIST)
 		.struct_get(types::T_LIST, 1);
 	w.local_get(el);
 	w.array_new_fixed(types::T_VALARRAY, 1);
 	w.call(arrconcat);
-	w.struct_new(types::T_LIST);
+	w.local_set(res);
+	crate::helpers::list::mk_list(&mut w, res);
 	w.finish()
 }
 
@@ -1853,6 +1854,7 @@ fn push_nothing(w: &mut Wat) {
 fn empty_list(w: &mut Wat) {
 	w.i32(types::TAG_LIST);
 	w.array_new_fixed(types::T_VALARRAY, 0);
+	w.i32(0); // length
 	w.struct_new(types::T_LIST);
 }
 
@@ -1899,12 +1901,12 @@ fn unbox_i(w: &mut Wat) {
 		.i32_wrap_i64();
 }
 
-/// Push `array.len` of the `$list` held in global `gl`.
+/// Push the logical length (field 2) of the `$list` held in global `gl` — NOT
+/// `array.len` of the backing array (which is the capacity).
 fn list_len(w: &mut Wat, gl: u32) {
 	w.global_get(gl)
 		.ref_cast(types::T_LIST)
-		.struct_get(types::T_LIST, 1)
-		.array_len();
+		.struct_get(types::T_LIST, 2);
 }
 
 /// Push field `field` of record `id` in the `$list` table at global `table`.
@@ -2141,9 +2143,7 @@ fn drop_last(w: &mut Wat, gl: u32) {
 		.array_new_default(types::T_VALARRAY)
 		.local_set(out);
 	w.copy_loop(types::T_VALARRAY, out, None, arr, None, n);
-	w.i32(types::TAG_LIST);
-	w.local_get(out);
-	w.struct_new(types::T_LIST);
+	crate::helpers::list::mk_list(w, out);
 	w.global_set(gl);
 }
 
@@ -2186,9 +2186,7 @@ fn save_act(w: &mut Wat, g: TaskGlobals, fid: Local) {
 	w.global_get(g.act).local_set(src);
 	w.copy_loop(types::T_VALARRAY, out, None, src, None, len);
 	set_fld(w, g.fibers, fid, fiber::ACT, |w| {
-		w.i32(types::TAG_LIST);
-		w.local_get(out);
-		w.struct_new(types::T_LIST);
+		crate::helpers::list::mk_list(w, out);
 	});
 }
 
@@ -2453,9 +2451,7 @@ fn drop_first_list(w: &mut Wat, arr: Local, n: Local) {
 	// out[0..n-1] = arr[1..n] (drop first; see `Wat::copy_loop`).
 	w.i32(1).local_set(one);
 	w.copy_loop(types::T_VALARRAY, out, None, arr, Some(one), len);
-	w.i32(types::TAG_LIST);
-	w.local_get(out);
-	w.struct_new(types::T_LIST);
+	crate::helpers::list::mk_list(w, out);
 }
 
 /// Push i32 1 if every child of scope `sid` has settled (none alive), else 0.

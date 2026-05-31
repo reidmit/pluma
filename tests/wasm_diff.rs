@@ -386,10 +386,15 @@ fn build_str_list(store: &mut impl AsContextMut, gc: &GcTypes, items: &[String])
 	let arr_pre = ArrayRefPre::new(&mut *store, gc.valarray.clone());
 	let arr = ArrayRef::new_fixed(&mut *store, &arr_pre, &strs).expect("build $valarray");
 	let pre = StructRefPre::new(&mut *store, gc.list.clone());
+	// $list is { tag, elems, length } — length == capacity here (no spare).
 	let s = StructRef::new(
 		&mut *store,
 		&pre,
-		&[Val::I32(TAG_LIST), Val::AnyRef(Some(arr.into()))],
+		&[
+			Val::I32(TAG_LIST),
+			Val::AnyRef(Some(arr.into())),
+			Val::I32(items.len() as i32),
+		],
 	)
 	.expect("build $list");
 	Val::AnyRef(Some(s.to_anyref()))

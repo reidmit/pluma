@@ -299,11 +299,12 @@ pub(crate) fn build_tostring_fn(
 
 	// Element loop shared by TUPLE/LIST/RECORD: iterate arr[0..n] appending
 	// `__tostring(elem)` with `, ` separators. `open`/`close` wrap the delimiters.
+	// The caller sets `n` to the logical element count first (field 2 for a
+	// `$list`, `array.len` for the exact-sized tuple/record arrays).
 	let elems_loop = |w: &mut Wat, a: Local, open: (u32, u32), close: (u32, u32), record: bool| {
 		// acc = open.
 		lit_bytes(w, open);
 		w.local_set(acc);
-		w.local_get(a).array_len().local_set(n);
 		w.i32(0).local_set(i);
 		w.block("brk", |w| {
 			w.loop_("lp", |w| {
@@ -335,6 +336,7 @@ pub(crate) fn build_tostring_fn(
 			.ref_cast(types::T_TUPLE)
 			.struct_get(types::T_TUPLE, 1)
 			.local_set(arr);
+		w.local_get(arr).array_len().local_set(n);
 		elems_loop(w, arr, lits.lparen, lits.rparen, false);
 	});
 	// LIST -> "[e, ...]".
@@ -344,6 +346,11 @@ pub(crate) fn build_tostring_fn(
 			.ref_cast(types::T_LIST)
 			.struct_get(types::T_LIST, 1)
 			.local_set(arr);
+		// the logical length (field 2), not array.len (capacity).
+		w.local_get(v)
+			.ref_cast(types::T_LIST)
+			.struct_get(types::T_LIST, 2)
+			.local_set(n);
 		elems_loop(w, arr, lits.lbrack, lits.rbrack, false);
 	});
 	// RECORD -> "{k: v, ...}" (name-sorted; names raw, values via __tostring).
@@ -357,6 +364,7 @@ pub(crate) fn build_tostring_fn(
 			.ref_cast(types::T_RECORD)
 			.struct_get(types::T_RECORD, 2)
 			.local_set(arr);
+		w.local_get(arr).array_len().local_set(n);
 		elems_loop(w, arr, lits.lbrace, lits.rbrace, true);
 	});
 	// VARIANT -> "enum.variant" then ` arg` per payload element.

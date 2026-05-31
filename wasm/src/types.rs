@@ -428,19 +428,29 @@ impl FuncTypes {
 			],
 			true,
 		));
-		// 11 $tuple / 12 $list — { tag, (ref $valarray) elems }.
-		let elems_struct = || {
-			struct_subtype(
-				Some(T_VALUE),
-				vec![
-					val_field(ValType::I32, false),
-					val_field(valarray_ref(), false),
-				],
-				true,
-			)
-		};
-		types.ty().subtype(&elems_struct());
-		types.ty().subtype(&elems_struct());
+		// 11 $tuple — { tag, (ref $valarray) elems } (fixed arity).
+		types.ty().subtype(&struct_subtype(
+			Some(T_VALUE),
+			vec![
+				val_field(ValType::I32, false),
+				val_field(valarray_ref(), false),
+			],
+			true,
+		));
+		// 12 $list — { tag, (mut ref $valarray) elems, (mut i32) length }. The
+		// logical length can be < the backing array's capacity: `list.push`
+		// appends in place, growing/swapping `elems` (mutable) and bumping
+		// `length` (mutable) only when full. Every length read uses field 2, NOT
+		// `array.len(elems)` (which is the capacity).
+		types.ty().subtype(&struct_subtype(
+			Some(T_VALUE),
+			vec![
+				val_field(ValType::I32, false),
+				val_field(valarray_ref(), true),
+				val_field(ValType::I32, true),
+			],
+			true,
+		));
 		// 13 $record — { tag, (ref $valarray) names, (ref $valarray) values } (name-sorted).
 		types.ty().subtype(&struct_subtype(
 			Some(T_VALUE),

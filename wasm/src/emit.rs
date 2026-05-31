@@ -182,12 +182,11 @@ impl<'a> FnEmitter<'a> {
 		if block_has_pushdefer(&self.f.body) {
 			let dl = self.fresh_local(types::value_ref());
 			self.defers_local = Some(dl);
-			self.ins(Instruction::I32Const(types::TAG_LIST));
 			self.ins(Instruction::ArrayNewFixed {
 				array_type_index: types::T_VALARRAY,
 				array_size: 0,
 			});
-			self.ins(Instruction::StructNew(types::T_LIST));
+			self.mk_list();
 			self.ins(Instruction::LocalSet(dl));
 		}
 		let body = self.f.body.clone();
@@ -274,14 +273,13 @@ impl<'a> FnEmitter<'a> {
 					return;
 				};
 				let concat = self.runtime.idx(Helper::ArrConcat).expect("arrconcat");
-				self.ins(Instruction::I32Const(types::TAG_LIST));
 				// singleton `$valarray` [thunk].
 				self.atom(a);
 				self.ins(Instruction::ArrayNewFixed {
 					array_type_index: types::T_VALARRAY,
 					array_size: 1,
 				});
-				// defers.elems.
+				// defers.elems (a defers list is never `push`ed, so length == capacity).
 				self.ins(Instruction::LocalGet(dl));
 				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
 					types::T_LIST,
@@ -291,7 +289,7 @@ impl<'a> FnEmitter<'a> {
 					field_index: 1,
 				});
 				self.ins(Instruction::Call(concat));
-				self.ins(Instruction::StructNew(types::T_LIST));
+				self.mk_list();
 				self.ins(Instruction::LocalSet(dl));
 			}
 			StmtKind::If(cond, t, e) => {
@@ -407,11 +405,11 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
 					types::T_LIST,
 				)));
+				// the logical length (field 2), not array.len (capacity).
 				self.ins(Instruction::StructGet {
 					struct_type_index: types::T_LIST,
-					field_index: 1,
+					field_index: 2,
 				});
-				self.ins(Instruction::ArrayLen);
 				self.ins(Instruction::I32Const(items.len() as i32));
 				if rest.is_some() {
 					self.ins(Instruction::I32LtS); // len < items -> fail
@@ -511,7 +509,6 @@ impl<'a> FnEmitter<'a> {
 					let dst = self.local(v.0);
 					self.ins(Instruction::LocalGet(subj));
 					// Build the excluded `$list` of matched field-name strings.
-					self.ins(Instruction::I32Const(types::TAG_LIST));
 					for (name, _) in fields {
 						self.string_const(name);
 					}
@@ -519,7 +516,7 @@ impl<'a> FnEmitter<'a> {
 						array_type_index: types::T_VALARRAY,
 						array_size: fields.len() as u32,
 					});
-					self.ins(Instruction::StructNew(types::T_LIST));
+					self.mk_list();
 					self.ins(Instruction::Call(rr));
 					self.ins(Instruction::LocalSet(dst));
 				}
@@ -1605,7 +1602,6 @@ impl<'a> FnEmitter<'a> {
 	/// on the first call). Built inline since this module owns all the types.
 	fn emit_io_witness(&mut self) {
 		// outer `$list` = { TAG_LIST, $valarray[ nothing, "", [], true ] }.
-		self.ins(Instruction::I32Const(types::TAG_LIST));
 		// elem 0: nothing.
 		self.push_nothing();
 		// elem 1: "" (`$str`, exposing `$str` + `$bytes`).
@@ -1616,12 +1612,11 @@ impl<'a> FnEmitter<'a> {
 		});
 		self.ins(Instruction::StructNew(types::T_STR));
 		// elem 2: [] (empty `$list`, exposing `$list` + `$valarray`).
-		self.ins(Instruction::I32Const(types::TAG_LIST));
 		self.ins(Instruction::ArrayNewFixed {
 			array_type_index: types::T_VALARRAY,
 			array_size: 0,
 		});
-		self.ins(Instruction::StructNew(types::T_LIST));
+		self.mk_list();
 		// elem 3: true (`$bool`).
 		self.ins(Instruction::I32Const(types::TAG_BOOL));
 		self.ins(Instruction::I32Const(1));
@@ -1631,7 +1626,7 @@ impl<'a> FnEmitter<'a> {
 			array_type_index: types::T_VALARRAY,
 			array_size: 4,
 		});
-		self.ins(Instruction::StructNew(types::T_LIST));
+		self.mk_list();
 	}
 
 	/// Emit a pure-compute builtin inline over the `$value` GC layout.
@@ -1783,7 +1778,6 @@ impl<'a> FnEmitter<'a> {
 			// array is already a `$valarray` of `$tuple`s — just retag it as a list
 			// (shared; neither side mutates it in place).
 			"dict-entries" => {
-				self.ins(Instruction::I32Const(types::TAG_LIST));
 				self.atom(&args[0]);
 				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
 					types::T_DICT,
@@ -1792,9 +1786,10 @@ impl<'a> FnEmitter<'a> {
 					struct_type_index: types::T_DICT,
 					field_index: 1,
 				});
-				self.ins(Instruction::StructNew(types::T_LIST));
+				self.mk_list();
 			}
-			// list.length xs : element count, boxed as `$int`.
+			// list.length xs : element count (the logical `length` field, field 2 —
+			// NOT array.len of the backing array, which is the capacity), boxed `$int`.
 			"list-length" => {
 				self.ins(Instruction::I32Const(types::TAG_INT));
 				self.atom(&args[0]);
@@ -1803,9 +1798,8 @@ impl<'a> FnEmitter<'a> {
 				)));
 				self.ins(Instruction::StructGet {
 					struct_type_index: types::T_LIST,
-					field_index: 1,
+					field_index: 2,
 				});
-				self.ins(Instruction::ArrayLen);
 				self.ins(Instruction::I64ExtendI32U);
 				self.ins(Instruction::StructNew(types::T_INT));
 			}
@@ -2150,10 +2144,23 @@ impl<'a> FnEmitter<'a> {
 	/// (`[a, ...xs, b]`) builds each segment's array — a fixed array for each run
 	/// of plain elements, a list's element array for each `...spread` — and folds
 	/// them with `__arrconcat`, wrapping the result in a `$list`.
+	/// Emit a `$list` from the `$valarray` currently on the stack top, setting the
+	/// logical `length` field to the array's capacity. The list constructor (the
+	/// 3-field `$list` struct); `list.push` is the only thing that later makes
+	/// length < capacity.
+	fn mk_list(&mut self) {
+		let tmp = self.fresh_local(types::valarray_ref());
+		self.ins(Instruction::LocalSet(tmp));
+		self.ins(Instruction::I32Const(types::TAG_LIST));
+		self.ins(Instruction::LocalGet(tmp));
+		self.ins(Instruction::LocalGet(tmp));
+		self.ins(Instruction::ArrayLen);
+		self.ins(Instruction::StructNew(types::T_LIST));
+	}
+
 	fn make_list(&mut self, items: &[ir::ListItem]) {
 		use ir::ListItem;
 		if !items.iter().any(|it| matches!(it, ListItem::Spread(_))) {
-			self.ins(Instruction::I32Const(types::TAG_LIST));
 			self.elems_array(
 				&items
 					.iter()
@@ -2163,7 +2170,7 @@ impl<'a> FnEmitter<'a> {
 					})
 					.collect::<Vec<_>>(),
 			);
-			self.ins(Instruction::StructNew(types::T_LIST));
+			self.mk_list();
 			return;
 		}
 		let concat = self.runtime.idx(Helper::ArrConcat).expect("arrconcat");
@@ -2210,11 +2217,7 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::Call(concat));
 			}
 		}
-		let tmp = self.fresh_local(types::valarray_ref());
-		self.ins(Instruction::LocalSet(tmp));
-		self.ins(Instruction::I32Const(types::TAG_LIST));
-		self.ins(Instruction::LocalGet(tmp));
-		self.ins(Instruction::StructNew(types::T_LIST));
+		self.mk_list();
 	}
 
 	fn atom_repr(&self, a: &Atom) -> Repr {

@@ -104,7 +104,10 @@ pub(crate) fn build_eq_fn(self_idx: u32) -> Function {
 	// Element-wise array compare (recursive): load the `$valarray` at field `field`
 	// of both operands (cast to `sty`), check equal lengths, then compare each
 	// element via `__eq`; emit the success `return 1`.
-	let cmp_array = |w: &mut Wat, sty: u32, field: u32| {
+	// `len_field` says where the logical length lives: `Some(f)` reads struct
+	// field `f` (a `$list`'s length field, which can be < the array's capacity);
+	// `None` uses `array.len` (tuples/records/variant payloads are exact-sized).
+	let cmp_array = |w: &mut Wat, sty: u32, field: u32, len_field: Option<u32>| {
 		w.local_get(a)
 			.ref_cast(sty)
 			.struct_get(sty, field)
@@ -114,8 +117,16 @@ pub(crate) fn build_eq_fn(self_idx: u32) -> Function {
 			.struct_get(sty, field)
 			.local_set(pb);
 		// Lengths must match.
-		w.local_get(pa).array_len().local_set(n);
-		w.local_get(pb).array_len().local_get(n).i32_ne();
+		match len_field {
+			Some(lf) => {
+				w.local_get(a).ref_cast(sty).struct_get(sty, lf).local_set(n);
+				w.local_get(b).ref_cast(sty).struct_get(sty, lf).local_get(n).i32_ne();
+			}
+			None => {
+				w.local_get(pa).array_len().local_set(n);
+				w.local_get(pb).array_len().local_get(n).i32_ne();
+			}
+		}
 		w.if_(|w| {
 			w.i32(0).ret();
 		});
@@ -148,21 +159,21 @@ pub(crate) fn build_eq_fn(self_idx: u32) -> Function {
 		w.if_(|w| {
 			w.i32(0).ret();
 		});
-		cmp_array(w, types::T_VARIANT, 3);
+		cmp_array(w, types::T_VARIANT, 3, None);
 	});
 	// TUPLE / LIST: compare the element arrays. RECORD: compare the values arrays
 	// (same type ⇒ same name-sorted fields, so positional value compare suffices).
 	w.local_get(ta).i32(types::TAG_TUPLE).i32_eq();
 	w.if_(|w| {
-		cmp_array(w, types::T_TUPLE, 1);
+		cmp_array(w, types::T_TUPLE, 1, None);
 	});
 	w.local_get(ta).i32(types::TAG_LIST).i32_eq();
 	w.if_(|w| {
-		cmp_array(w, types::T_LIST, 1);
+		cmp_array(w, types::T_LIST, 1, Some(2));
 	});
 	w.local_get(ta).i32(types::TAG_RECORD).i32_eq();
 	w.if_(|w| {
-		cmp_array(w, types::T_RECORD, 2);
+		cmp_array(w, types::T_RECORD, 2, None);
 	});
 	// REF: reference identity (`ref.eq`), matching the VM's `Rc::ptr_eq` — two
 	// cells are equal iff they are the same cell, regardless of contents.

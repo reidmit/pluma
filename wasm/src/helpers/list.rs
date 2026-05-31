@@ -3,8 +3,26 @@
 
 use wasm_encoder::{Function, ValType};
 
-use crate::helpers::wat::Wat;
+use crate::helpers::wat::{Local, Wat};
 use crate::types;
+
+/// Build a `$list` value from the value-array in `arr`, leaving it on the stack.
+/// The logical `length` field is set to the array's capacity — the single
+/// constructor for normal lists; only `list.push` later makes length < capacity.
+pub(crate) fn mk_list(w: &mut Wat, arr: Local) {
+	w.i32(types::TAG_LIST);
+	w.local_get(arr);
+	w.local_get(arr).array_len();
+	w.struct_new(types::T_LIST);
+}
+
+/// Push a `$list`'s logical length (field 2) onto the stack. Use this, NOT
+/// `array.len(elems)` (the capacity), wherever a list's element count is needed.
+pub(crate) fn list_len(w: &mut Wat, list: Local) {
+	w.local_get(list)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, 2);
+}
 
 /// Build `__list_tail(list, n) -> list`: a fresh list of the elements from index
 /// `n` (the `...rest` of a list pattern). `n` is a boxed int.
@@ -17,12 +35,13 @@ pub(crate) fn build_list_tail_fn() -> Function {
 	let n = w.local(ValType::I32);
 	let i = w.local(ValType::I32);
 
-	// src = list.elems; len = |src|.
+	// src = list.elems; len = list.length (logical count, not capacity).
 	w.local_get(list)
 		.ref_cast(types::T_LIST)
 		.struct_get(types::T_LIST, 1)
 		.local_set(src);
-	w.local_get(src).array_len().local_set(len);
+	list_len(&mut w, list);
+	w.local_set(len);
 	// n = (int) narg.
 	w.local_get(narg)
 		.ref_cast(types::T_INT)
@@ -57,9 +76,7 @@ pub(crate) fn build_list_tail_fn() -> Function {
 			w.br("lp");
 		});
 	});
-	w.i32(types::TAG_LIST)
-		.local_get(dst)
-		.struct_new(types::T_LIST);
+	mk_list(&mut w, dst);
 	w.finish()
 }
 
@@ -102,9 +119,7 @@ pub(crate) fn build_list_build_fn(arity1: u32) -> Function {
 			w.br("lp");
 		});
 	});
-	w.i32(types::TAG_LIST)
-		.local_get(buf)
-		.struct_new(types::T_LIST);
+	mk_list(&mut w, buf);
 	w.finish()
 }
 
@@ -168,9 +183,7 @@ pub(crate) fn build_list_collect_fn(arity1: u32) -> Function {
 		.array_new_default(types::T_VALARRAY)
 		.local_set(out);
 	w.copy_loop(types::T_VALARRAY, out, None, buf, None, write);
-	w.i32(types::TAG_LIST)
-		.local_get(out)
-		.struct_new(types::T_LIST);
+	mk_list(&mut w, out);
 	w.finish()
 }
 
@@ -213,12 +226,13 @@ pub(crate) fn build_run_defers_fn(thunk_ty: u32) -> Function {
 	let i = w.local(ValType::I32);
 	let c = w.local(types::value_ref());
 
-	// arr = defers.elems; n = len(arr).
+	// arr = defers.elems; n = defers.length (logical count).
 	w.local_get(defers)
 		.ref_cast(types::T_LIST)
 		.struct_get(types::T_LIST, 1)
 		.local_set(arr);
-	w.local_get(arr).array_len().local_set(n);
+	list_len(&mut w, defers);
+	w.local_set(n);
 	w.i32(0).local_set(i);
 	w.block("brk", |w| {
 		w.loop_("lp", |w| {
