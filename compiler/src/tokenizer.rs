@@ -63,6 +63,14 @@ impl<'a> Tokenizer<'a> {
 			end - self.line_start_offset,
 		)
 	}
+
+	// The byte at the cursor, or `None` at end of input. Used by the two-char
+	// operator look-aheads (e.g. `+` → `++`, `?` → `??`) so a source that ends
+	// mid-operator reads `None` and falls through to the single-char token
+	// instead of indexing out of bounds.
+	fn peek_byte(&self) -> Option<u8> {
+		self.source.get(self.index).copied()
+	}
 }
 
 impl<'a> Iterator for Tokenizer<'a> {
@@ -363,7 +371,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 				b'-' => {
 					self.index += 1;
 
-					if self.index < self.length && self.source[self.index] == b'>' {
+					if self.peek_byte() == Some(b'>') {
 						self.index += 1;
 						return Some(Arrow(start_index, self.index));
 					}
@@ -386,7 +394,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 				b'+' => {
 					self.index += 1;
 
-					if self.source[self.index] == b'+' {
+					if self.peek_byte() == Some(b'+') {
 						self.index += 1;
 						return Some(DoublePlus(start_index, self.index));
 					}
@@ -407,7 +415,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 				b'?' => {
 					self.index += 1;
 
-					if self.source[self.index] == b'?' {
+					if self.peek_byte() == Some(b'?') {
 						self.index += 1;
 						return Some(DoubleQuestion(start_index, self.index));
 					}
@@ -418,7 +426,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 				b'!' => {
 					self.index += 1;
 
-					if self.source[self.index] == b'=' {
+					if self.peek_byte() == Some(b'=') {
 						self.index += 1;
 						return Some(BangEqual(start_index, self.index));
 					}
@@ -429,7 +437,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 				b'=' => {
 					self.index += 1;
 
-					if self.source[self.index] == b'=' {
+					if self.peek_byte() == Some(b'=') {
 						self.index += 1;
 						return Some(DoubleEqual(start_index, self.index));
 					}
@@ -440,7 +448,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 				b'*' => {
 					self.index += 1;
 
-					if self.source[self.index] == b'*' {
+					if self.peek_byte() == Some(b'*') {
 						self.index += 1;
 						return Some(DoubleStar(start_index, self.index));
 					}
@@ -451,9 +459,9 @@ impl<'a> Iterator for Tokenizer<'a> {
 				b'.' => {
 					self.index += 1;
 
-					if self.source[self.index] == b'.' {
+					if self.peek_byte() == Some(b'.') {
 						self.index += 1;
-						if self.source[self.index] == b'.' {
+						if self.peek_byte() == Some(b'.') {
 							self.index += 1;
 							return Some(TripleDot(start_index, self.index));
 						}
@@ -466,7 +474,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 				b'&' => {
 					self.index += 1;
 
-					if self.source[self.index] == b'&' {
+					if self.peek_byte() == Some(b'&') {
 						self.index += 1;
 						return Some(DoubleAnd(start_index, self.index));
 					}
@@ -477,7 +485,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 				b'|' => {
 					self.index += 1;
 
-					if self.source[self.index] == b'|' {
+					if self.peek_byte() == Some(b'|') {
 						self.index += 1;
 						return Some(DoublePipe(start_index, self.index));
 					}
@@ -488,7 +496,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 				b':' => {
 					self.index += 1;
 
-					if self.source[self.index] == b':' {
+					if self.peek_byte() == Some(b':') {
 						self.index += 1;
 						return Some(DoubleColon(start_index, self.index));
 					}
@@ -499,12 +507,12 @@ impl<'a> Iterator for Tokenizer<'a> {
 				b'<' => {
 					self.index += 1;
 
-					if self.source[self.index] == b'=' {
+					if self.peek_byte() == Some(b'=') {
 						self.index += 1;
 						return Some(LeftAngleEqual(start_index, self.index));
 					}
 
-					if self.source[self.index] == b'<' {
+					if self.peek_byte() == Some(b'<') {
 						self.index += 1;
 						return Some(DoubleLeftAngle(start_index, self.index));
 					}
@@ -515,12 +523,12 @@ impl<'a> Iterator for Tokenizer<'a> {
 				b'>' => {
 					self.index += 1;
 
-					if self.source[self.index] == b'=' {
+					if self.peek_byte() == Some(b'=') {
 						self.index += 1;
 						return Some(RightAngleEqual(start_index, self.index));
 					}
 
-					if self.source[self.index] == b'>' {
+					if self.peek_byte() == Some(b'>') {
 						self.index += 1;
 						return Some(DoubleRightAngle(start_index, self.index));
 					}
