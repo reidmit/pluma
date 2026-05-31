@@ -1,5 +1,6 @@
 mod colors;
 mod printing;
+mod repl;
 
 use compiler::*;
 use printing::*;
@@ -20,6 +21,11 @@ fn main() {
 				};
 				let program_args: Vec<String> = rest.collect();
 				run(entry_path, program_args);
+			}
+
+			"repl" => {
+				let rest: Vec<String> = std::env::args().skip(2).collect();
+				repl::repl_command(rest);
 			}
 
 			"format" => {
@@ -743,6 +749,7 @@ Compiler & toolchain for the {} programming language
 
 COMMANDS:
   [run] <path>     execute a module directly (the `run` keyword is optional)
+  repl             start an interactive REPL session
   format <path>... canonicalize formatting; pass `-` for stdin, `--check` to dry-run
   test [dir] [-f name]...
                    discover and run tests from `*.test.pa` files under the
@@ -767,6 +774,7 @@ Compiler & toolchain for the {} programming language
 
 COMMANDS:
   [run] <path>     execute a module directly (the `run` keyword is optional)
+  repl             start an interactive REPL session
   format <path>... canonicalize formatting; pass `-` for stdin, `--check` to dry-run
   test [dir] [-f name]...
                    discover and run tests from `*.test.pa` files under the
