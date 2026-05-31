@@ -266,7 +266,11 @@ pub(crate) fn build_pump_fn(
 	let pc = w.local(v);
 	let child = w.local(ValType::I32);
 	let ck = w.local(ValType::I32);
+	// Shield depth: while > 0 the running region is `task.shielded`, so its
+	// yield/sleep continue inline (no park) and a sibling can't interleave.
+	let shield = w.local(ValType::I32);
 
+	w.i32(0).local_set(shield);
 	w.local_get(fid_b);
 	unbox_i(&mut w);
 	w.local_set(fid);
@@ -292,28 +296,62 @@ pub(crate) fn build_pump_fn(
 				start_combinator(w, tk, task_kind::ORELSE, act_kind::ORELSE, tp, true, act_push, fval, fkind);
 				start_combinator(w, tk, task_kind::ATTEMPT, act_kind::ATTEMPT, tp, false, act_push, fval, fkind);
 				start_combinator(w, tk, task_kind::MAP, act_kind::MAP, tp, true, act_push, fval, fkind);
-				start_settle(w, tk, task_kind::SHIELDED, focus::START, |w| elem(w, tp, 0), fval, fkind);
 
-				// yield: re-ready behind everything else (park).
-				w.local_get(tk).i32(task_kind::YIELD).i32_eq();
+				// shielded: run the inner uninterruptibly — bump the depth, mark the
+				// region end on the chain, and run the inner inline.
+				w.local_get(tk).i32(task_kind::SHIELDED).i32_eq();
 				w.if_(|w| {
-					save_act(w, g, fid);
-					park_out(w, g, wait::YIELD, |w| {
-						w.i32(0);
-					});
-					w.br("ret");
+					w.local_get(shield).i32(1).i32_add().local_set(shield);
+					push_activation(w, act_kind::SHIELD, push_nothing, push_nothing);
+					w.call(act_push).drop();
+					elem(w, tp, 0);
+					w.local_set(fval);
+					w.i32(focus::START).local_set(fkind);
+					w.br("main");
 				});
 
-				// sleep: park on a virtual timer (`nanos` rides the i64 channel).
+				// yield: shielded -> continue inline; else re-ready behind everyone.
+				w.local_get(tk).i32(task_kind::YIELD).i32_eq();
+				w.if_(|w| {
+					w.local_get(shield).i32(0).i32_gt_s();
+					w.if_else(
+						|w| {
+							push_nothing(w);
+							w.local_set(fval);
+							w.i32(focus::OK).local_set(fkind);
+							w.br("main");
+						},
+						|w| {
+							save_act(w, g, fid);
+							park_out(w, g, wait::YIELD, |w| {
+								w.i32(0);
+							});
+							w.br("ret");
+						},
+					);
+				});
+
+				// sleep: shielded -> continue inline; else park on a virtual timer.
 				w.local_get(tk).i32(task_kind::SLEEP).i32_eq();
 				w.if_(|w| {
-					save_act(w, g, fid);
-					w.i32(2).global_set(g.out_kind);
-					w.i32(wait::SLEEP).global_set(g.out_okerr);
-					elem(w, tp, 0);
-					w.ref_cast(types::T_INT).struct_get(types::T_INT, 1); // nanos (i64)
-					w.global_set(g.out_arg64);
-					w.br("ret");
+					w.local_get(shield).i32(0).i32_gt_s();
+					w.if_else(
+						|w| {
+							push_nothing(w);
+							w.local_set(fval);
+							w.i32(focus::OK).local_set(fkind);
+							w.br("main");
+						},
+						|w| {
+							save_act(w, g, fid);
+							w.i32(2).global_set(g.out_kind);
+							w.i32(wait::SLEEP).global_set(g.out_okerr);
+							elem(w, tp, 0);
+							w.ref_cast(types::T_INT).struct_get(types::T_INT, 1); // nanos (i64)
+							w.global_set(g.out_arg64);
+							w.br("ret");
+						},
+					);
 				});
 
 				// async: advance the CPS poll fn one step.
@@ -478,6 +516,12 @@ pub(crate) fn build_pump_fn(
 						w.local_set(fval);
 						w.br("ok");
 					});
+					// shield region end: leave the shielded region, keep settling.
+					w.local_get(akind).i32(act_kind::SHIELD).i32_eq();
+					w.if_(|w| {
+						w.local_get(shield).i32(1).i32_sub().local_set(shield);
+						w.br("ok");
+					});
 					w.unreachable();
 				});
 			});
@@ -524,6 +568,12 @@ pub(crate) fn build_pump_fn(
 						w.local_set(fval);
 						w.i32(focus::OK).local_set(fkind);
 						w.br("main");
+					});
+					// shield region end: leave the shielded region, keep propagating.
+					w.local_get(akind).i32(act_kind::SHIELD).i32_eq();
+					w.if_(|w| {
+						w.local_get(shield).i32(1).i32_sub().local_set(shield);
+						w.br("err");
 					});
 					w.unreachable();
 				});

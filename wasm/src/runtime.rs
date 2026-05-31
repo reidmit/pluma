@@ -43,6 +43,7 @@ pub(crate) mod act_kind {
 	pub(crate) const ORELSE: i32 = 2; // (recover)
 	pub(crate) const ATTEMPT: i32 = 3; // ()
 	pub(crate) const MAP: i32 = 4; // (f)
+	pub(crate) const SHIELD: i32 = 5; // () — marks a shielded region's end on the chain
 }
 
 /// The Stage-2 cooperative scheduler's layout constants — fiber/scope field
