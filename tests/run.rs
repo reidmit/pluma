@@ -1,7 +1,9 @@
-// One #[test] per `tests/run/<name>/main.pa` fixture. Compiles + runs the
-// fixture in-process via the bytecode VM, capturing `print` output through
-// the VM's configurable OutputSink. Snapshot lives in `run.snap` next to the
-// fixture.
+// One #[test] per execution fixture. Compiles + runs the fixture in-process via
+// the bytecode VM, capturing `print` output through the VM's configurable
+// OutputSink. Snapshot lives in `run.snap` next to the fixture. Two roots, same
+// harness: `run/` is the happy-path corpus (status `ok`) and `run-fail/` holds
+// programs that compile but fail at runtime (status `runtime error`). Compile-
+// error cases live in `tests/analyze/` (the frontend suite), not here.
 
 use compiler::{Compiler, Diagnostic};
 use std::cell::RefCell;
@@ -10,6 +12,7 @@ use std::rc::Rc;
 
 datatest_stable::harness! {
 	{ test = run_fixture, root = concat!(env!("CARGO_MANIFEST_DIR"), "/run"), pattern = r"main\.pa$" },
+	{ test = run_fixture, root = concat!(env!("CARGO_MANIFEST_DIR"), "/run-fail"), pattern = r"main\.pa$" },
 }
 
 fn run_fixture(path: &Path) -> datatest_stable::Result<()> {

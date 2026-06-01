@@ -112,9 +112,6 @@ fn denied(backend: Backend, name: &str) -> Option<&'static str> {
 			"deep-recursion" => Some("no tail-call optimization yet"),
 			"debug-passthrough" => Some("debug call-site prefix not wired"),
 			"bare-trait-methods" => Some("53-bit int precision (raw i64 hash)"),
-			// VM-only negative test: an unknown `built-in` tag. wasm rejects it at
-			// emit; JS would emit `RT["no-such-tag"]` and crash node differently.
-			"builtin-unknown-tag" => Some("VM-only unknown-builtin negative test"),
 			"wire-roundtrip" | "wire-dict" | "wire-fingerprint" | "wire-polymorphic"
 			| "wire-recursive" => Some("wire codec deferred on the client"),
 			_ => None,
@@ -253,9 +250,28 @@ pub fn check_fixture(runner: &Runner, dir: &Path) -> FixtureResult {
 
 // ---- corpus --------------------------------------------------------------
 
-/// The correctness corpus: every `tests/run/<name>/main.pa` fixture, sorted.
-pub fn correctness_corpus() -> Vec<PathBuf> {
+/// The happy-path execution corpus: every `tests/run/<name>/main.pa`, sorted.
+/// Status `ok` programs only — also the perf dev-loop's corpus (perf benches
+/// successful runs, not failures).
+pub fn run_corpus() -> Vec<PathBuf> {
 	fixtures_under(&workspace_root().join("tests/run"))
+}
+
+/// The runtime-failure corpus: every `tests/run-fail/<name>/main.pa`, sorted.
+/// Programs that compile but fail at runtime — diffed across backends for error
+/// parity, but excluded from perf.
+pub fn fail_corpus() -> Vec<PathBuf> {
+	fixtures_under(&workspace_root().join("tests/run-fail"))
+}
+
+/// The cross-backend correctness corpus: every execution fixture (`tests/run` +
+/// `tests/run-fail`), sorted. The deploy backends are diffed against the VM
+/// oracle over this whole set.
+pub fn correctness_corpus() -> Vec<PathBuf> {
+	let mut dirs = run_corpus();
+	dirs.extend(fail_corpus());
+	dirs.sort();
+	dirs
 }
 
 /// The perf corpus: every `benchmarks/programs/<name>/main.pa`, sorted.

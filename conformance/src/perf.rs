@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 use compiler::Platform;
 use wasmtime::Module;
 
-use crate::{Backend, Runner, correctness_corpus, js_host, perf_corpus, run, wasm_host};
+use crate::{Backend, Runner, js_host, perf_corpus, run, run_corpus, wasm_host};
 
 fn iters() -> u32 {
 	std::env::var("BENCH_ITERS")
@@ -73,7 +73,7 @@ pub fn dev_loop(runner: &Runner) -> DevLoop {
 		js_n: 0,
 	};
 
-	for dir in correctness_corpus() {
+	for dir in run_corpus() {
 		let name = dir.file_name().unwrap().to_string_lossy().into_owned();
 		// `io-*` touch the filesystem — skip in a hot loop (noisy + side-effecting).
 		if name.starts_with("io-") {

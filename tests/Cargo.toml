@@ -43,3 +43,7 @@ path = "ir_mono.rs"
 [[test]]
 name = "cps"
 path = "cps.rs"
+
+[[test]]
+name = "vm_errors"
+path = "vm_errors.rs"

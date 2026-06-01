@@ -57,14 +57,15 @@ fn compile_check(dir: &Path) -> Option<Compiler> {
 	Some(compiler)
 }
 
-/// Every fixture under `tests/run/` that compiles, sorted. cwd is anchored to the
-/// workspace root so I/O fixtures write scratch under `target/`.
+/// Every execution fixture (`tests/run/` happy-path + `tests/run-fail/` runtime
+/// failures) that compiles, sorted. cwd is anchored to the workspace root so I/O
+/// fixtures write scratch under `target/`.
 fn run_fixtures() -> Vec<std::path::PathBuf> {
 	let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
 	let _ = std::env::set_current_dir(workspace);
-	let run_dir = workspace.join("tests/run");
-	let mut dirs: Vec<_> = std::fs::read_dir(&run_dir)
-		.unwrap()
+	let mut dirs: Vec<_> = ["tests/run", "tests/run-fail"]
+		.iter()
+		.flat_map(|root| std::fs::read_dir(workspace.join(root)).unwrap())
 		.filter_map(|e| e.ok().map(|e| e.path()))
 		.filter(|p| p.join("main.pa").exists())
 		.collect();
@@ -271,7 +272,14 @@ fn defer_across_suspension_transforms_and_matches() {
 	let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
 	let _ = std::env::set_current_dir(workspace);
 	for fixture in ["task-defer", "task-fail", "scope-race"] {
-		let dir = workspace.join("tests/run").join(fixture);
+		// task-fail is a runtime-failure fixture (`tests/run-fail/`); the other two
+		// are happy-path (`tests/run/`).
+		let root = if fixture == "task-fail" {
+			"tests/run-fail"
+		} else {
+			"tests/run"
+		};
+		let dir = workspace.join(root).join(fixture);
 		let compiler = compile_check(&dir).unwrap_or_else(|| panic!("{fixture} compiles"));
 		let base_ir = ir::lower(&compiler).expect("lowers");
 

@@ -3,7 +3,7 @@
 def main = fun {
 	let xs = [1, 2, 3]
 
-	if xs is [first, ...rest] {
+	if xs is [first, ..._rest] {
 		print (to-string first)
 	}
 

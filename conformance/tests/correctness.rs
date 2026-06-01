@@ -32,7 +32,7 @@ fn body() {
 	let cov = report::coverage(&results);
 
 	eprintln!(
-		"conformance ({} run fixtures, VM = oracle):",
+		"conformance ({} execution fixtures, VM = oracle):",
 		cov.run_fixtures
 	);
 	for c in &cov.backends {

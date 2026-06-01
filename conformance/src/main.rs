@@ -75,7 +75,7 @@ fn main() {
 
 fn print_coverage_summary(cov: &Coverage) {
 	eprintln!(
-		"\nCorrectness ({} run fixtures, VM = oracle):",
+		"\nCorrectness ({} execution fixtures, VM = oracle):",
 		cov.run_fixtures
 	);
 	for c in &cov.backends {

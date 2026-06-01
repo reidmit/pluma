@@ -104,10 +104,10 @@ fn direct_call_resolution_is_behavior_neutral() {
 	let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
 	// Anchor cwd so I/O fixtures write scratch files under the workspace target/.
 	let _ = std::env::set_current_dir(workspace);
-	let run_dir = workspace.join("tests/run");
-
-	let mut dirs: Vec<_> = std::fs::read_dir(&run_dir)
-		.unwrap()
+	// Both execution corpora: tests/run (happy) + tests/run-fail (runtime failures).
+	let mut dirs: Vec<_> = ["tests/run", "tests/run-fail"]
+		.iter()
+		.flat_map(|root| std::fs::read_dir(workspace.join(root)).unwrap())
 		.filter_map(|e| e.ok().map(|e| e.path()))
 		.filter(|p| p.join("main.pa").exists())
 		.collect();
@@ -157,10 +157,10 @@ fn direct_call_resolution_is_behavior_neutral() {
 fn monomorphization_is_behavior_neutral_validates_and_reduces_coercions() {
 	let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
 	let _ = std::env::set_current_dir(workspace);
-	let run_dir = workspace.join("tests/run");
-
-	let mut dirs: Vec<_> = std::fs::read_dir(&run_dir)
-		.unwrap()
+	// Both execution corpora: tests/run (happy) + tests/run-fail (runtime failures).
+	let mut dirs: Vec<_> = ["tests/run", "tests/run-fail"]
+		.iter()
+		.flat_map(|root| std::fs::read_dir(workspace.join(root)).unwrap())
 		.filter_map(|e| e.ok().map(|e| e.path()))
 		.filter(|p| p.join("main.pa").exists())
 		.collect();
