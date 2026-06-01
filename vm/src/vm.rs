@@ -232,6 +232,17 @@ pub struct VM {
 	// maintenance is skipped, so `raw` stays empty and costs nothing per call.
 	pub(crate) uses_raw: bool,
 	pub(crate) frames: Vec<Frame>,
+	// A shared empty capture environment. A *direct* call (`CallDirect`/
+	// `TailCallDirect`) has no captures, so instead of allocating a fresh
+	// `Rc::new(Vec::new())` on every such call (one heap box each — 150k on
+	// `fib(24)`), we clone this once-allocated `Rc` (a refcount bump, no alloc).
+	pub(crate) empty_captures: Rc<Vec<Value>>,
+	// Reusable scratch for a tail call's args. They live in the frame about to be
+	// reused and may alias the destination param slots, so they're copied out
+	// before the frame is overwritten. Taken via `mem::take`, filled, drained, and
+	// put back, so the allocation amortizes to one across all tail calls instead
+	// of one per call (1M on `helper-calls`).
+	pub(crate) tail_scratch: Vec<Arg>,
 	// The async scheduler. Empty/idle for synchronous programs; populated by
 	// `run_task` and read by the `scope-*` builtins. See `vm::task`.
 	pub(crate) sched: crate::task::Scheduler,
@@ -258,6 +269,8 @@ impl VM {
 			},
 			uses_raw,
 			frames: Vec::with_capacity(64),
+			empty_captures: Rc::new(Vec::new()),
+			tail_scratch: Vec::new(),
 			sched: crate::task::Scheduler::default(),
 			profile: None,
 		}
@@ -644,7 +657,8 @@ impl VM {
 				flow = Flow::Transfer;
 			}
 			Instruction::CallDirect { dst, fn_idx, args } => {
-				self.enter_closure(fn_idx, Rc::new(Vec::new()), args, dst, base, false)?;
+				let caps = Rc::clone(&self.empty_captures);
+				self.enter_closure(fn_idx, caps, args, dst, base, false)?;
 				flow = Flow::Transfer;
 			}
 			Instruction::TailCall { dst, callee, args } => {
@@ -656,7 +670,8 @@ impl VM {
 				flow = Flow::Transfer;
 			}
 			Instruction::TailCallDirect { dst, fn_idx, args } => {
-				self.enter_closure(fn_idx, Rc::new(Vec::new()), args, dst, base, true)?;
+				let caps = Rc::clone(&self.empty_captures);
+				self.enter_closure(fn_idx, caps, args, dst, base, true)?;
 				flow = Flow::Transfer;
 			}
 			Instruction::Return { src, raw: raw_ret } => {
@@ -1445,7 +1460,8 @@ impl VM {
 			// out first (they may alias the destination param slots). Each arg is
 			// read in its param's repr (raw i64 or boxed).
 			let new_base = self.frames.last().unwrap().base;
-			let mut tmp = Vec::with_capacity(argc);
+			let mut tmp = std::mem::take(&mut self.tail_scratch);
+			tmp.clear();
 			for i in 0..argc {
 				let r = self.program.reg_lists[args as usize][i] as usize;
 				if self.param_is_raw(fn_idx, i) {
@@ -1460,12 +1476,14 @@ impl VM {
 				self.raw.truncate(new_base);
 				self.raw.resize(new_base + nregs, 0);
 			}
-			for (i, a) in tmp.into_iter().enumerate() {
+			for (i, a) in tmp.drain(..).enumerate() {
 				match a {
 					Arg::Raw(b) => self.raw[new_base + i] = b,
 					Arg::Boxed(v) => self.stack[new_base + i] = v,
 				}
 			}
+			// Return the (now-empty) buffer, retaining its capacity for the next call.
+			self.tail_scratch = tmp;
 			let frame = self.frames.last_mut().unwrap();
 			frame.fn_idx = fn_idx;
 			frame.ip = 0;
@@ -1532,7 +1550,7 @@ impl VM {
 
 // One marshalled call argument, carried in its destination param's repr: a
 // boxed `Value` or a raw i64 (M6 — monomorphized functions take unboxed params).
-enum Arg {
+pub(crate) enum Arg {
 	Boxed(Value),
 	Raw(u64),
 }
