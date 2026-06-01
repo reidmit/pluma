@@ -688,6 +688,11 @@ impl FnCtx {
 					let ra = self.atom_reg_raw(em, a, body, ranges, r);
 					let rb = self.atom_reg_raw(em, b, body, ranges, r);
 					push(body, ranges, raw_binop_instr(*op, dst, ra, rb), r);
+				} else if let Some((var, imm)) = imm_operand(*op, a, b) {
+					// M2c: a constant int operand folds into the op, so the `LoadInt`
+					// that would materialize it never gets emitted.
+					let ra = self.atom_reg(em, var, body, ranges, r);
+					push(body, ranges, imm_binop_instr(*op, dst, ra, imm), r);
 				} else {
 					let ra = self.atom_reg(em, a, body, ranges, r);
 					let rb = self.atom_reg(em, b, body, ranges, r);
@@ -1206,6 +1211,48 @@ fn binop_instr(op: BinOp, dst: Reg, a: Reg, b: Reg) -> Instruction {
 	}
 }
 
+/// If `op` is an int arithmetic op with a foldable constant operand, return the
+/// register operand (still an `Atom` to materialize) and the immediate (M2c).
+/// `AddInt`/`MulInt` are commutative, so a const on *either* side folds;
+/// `SubInt`/`DivInt`/`RemInt` fold only a right-hand const (`a OP imm`).
+/// `DivInt`/`RemInt` decline `imm == 0`, leaving `x / 0`/`x % 0` on the reg-reg
+/// path so the division-by-zero runtime error has a single source.
+fn imm_operand<'a>(op: BinOp, a: &'a Atom, b: &'a Atom) -> Option<(&'a Atom, i64)> {
+	fn int(x: &Atom) -> Option<i64> {
+		match x {
+			Atom::Const(Const::Int(n)) => Some(*n),
+			_ => None,
+		}
+	}
+	match op {
+		BinOp::AddInt | BinOp::MulInt => match int(b) {
+			Some(n) => Some((a, n)),
+			None => int(a).map(|n| (b, n)),
+		},
+		BinOp::SubInt => int(b).map(|n| (a, n)),
+		BinOp::DivInt | BinOp::RemInt => match int(b) {
+			Some(0) | None => None,
+			Some(n) => Some((a, n)),
+		},
+		_ => None,
+	}
+}
+
+/// The immediate-operand variant of an int arithmetic op (M2c). Only the five
+/// int arithmetic ops have one; everything else reaches this via `imm_operand`
+/// returning `None`, so it's never called for them.
+fn imm_binop_instr(op: BinOp, dst: Reg, a: Reg, imm: i64) -> Instruction {
+	use Instruction as I;
+	match op {
+		BinOp::AddInt => I::AddIntImm { dst, a, imm },
+		BinOp::SubInt => I::SubIntImm { dst, a, imm },
+		BinOp::MulInt => I::MulIntImm { dst, a, imm },
+		BinOp::DivInt => I::DivIntImm { dst, a, imm },
+		BinOp::RemInt => I::RemIntImm { dst, a, imm },
+		_ => unreachable!("imm_binop_instr: not an immediate int op: {op:?}"),
+	}
+}
+
 /// The int operators whose operands unbox to a raw i64 (M5). Float ops, `++`,
 /// `&&`/`||`, and structural `==`/`!=` are excluded (their operands stay boxed).
 fn is_raw_int_op(op: BinOp) -> bool {
@@ -1438,5 +1485,66 @@ fn collect_rvalue(rv: &Rvalue, set: &mut VarSet) {
 			ListItem::Elem(a) | ListItem::Spread(a) => collect_atom(a, set),
 		}),
 		Rvalue::GlobalRef(_) | Rvalue::MakeVariantCtor { .. } | Rvalue::Builtin(_) => {}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn var(n: u32) -> Atom {
+		Atom::Var(VarId(n))
+	}
+	fn int(n: i64) -> Atom {
+		Atom::Const(Const::Int(n))
+	}
+
+	// `imm_operand` returns the (register-operand, immediate) pair to fold, or
+	// `None` to leave the op on the reg-reg path. We check the var operand by its
+	// VarId and the immediate value.
+	fn folds_to(op: BinOp, a: Atom, b: Atom) -> Option<(u32, i64)> {
+		imm_operand(op, &a, &b).map(|(atom, imm)| match atom {
+			Atom::Var(v) => (v.0, imm),
+			Atom::Const(Const::Int(n)) => (1000 + *n as u32, imm), // mark const operands
+			_ => (9999, imm),
+		})
+	}
+
+	#[test]
+	fn commutative_ops_fold_a_const_on_either_side() {
+		// `n + 1` and `1 + n` both fold to (n, 1).
+		assert_eq!(folds_to(BinOp::AddInt, var(7), int(1)), Some((7, 1)));
+		assert_eq!(folds_to(BinOp::AddInt, int(1), var(7)), Some((7, 1)));
+		assert_eq!(folds_to(BinOp::MulInt, var(3), int(2)), Some((3, 2)));
+		assert_eq!(folds_to(BinOp::MulInt, int(2), var(3)), Some((3, 2)));
+	}
+
+	#[test]
+	fn non_commutative_ops_fold_only_a_right_hand_const() {
+		// `n - 1` folds; `1 - n` must NOT (the immediate op computes `a - imm`).
+		assert_eq!(folds_to(BinOp::SubInt, var(5), int(1)), Some((5, 1)));
+		assert_eq!(folds_to(BinOp::SubInt, int(1), var(5)), None);
+		assert_eq!(folds_to(BinOp::DivInt, var(5), int(4)), Some((5, 4)));
+		assert_eq!(folds_to(BinOp::DivInt, int(100), var(5)), None);
+		assert_eq!(folds_to(BinOp::RemInt, var(5), int(2)), Some((5, 2)));
+		assert_eq!(folds_to(BinOp::RemInt, int(2), var(5)), None);
+	}
+
+	#[test]
+	fn div_and_rem_decline_a_zero_immediate() {
+		// `x / 0` / `x % 0` stay on the reg-reg path so the div-by-zero error is
+		// shared; `+ 0` / `* 0` still fold (no trap).
+		assert_eq!(folds_to(BinOp::DivInt, var(5), int(0)), None);
+		assert_eq!(folds_to(BinOp::RemInt, var(5), int(0)), None);
+		assert_eq!(folds_to(BinOp::AddInt, var(5), int(0)), Some((5, 0)));
+		assert_eq!(folds_to(BinOp::MulInt, var(5), int(0)), Some((5, 0)));
+	}
+
+	#[test]
+	fn non_int_and_all_var_ops_do_not_fold() {
+		assert_eq!(folds_to(BinOp::AddInt, var(1), var(2)), None);
+		assert_eq!(folds_to(BinOp::AddFloat, var(1), int(2)), None);
+		assert_eq!(folds_to(BinOp::LtI64, var(1), int(2)), None);
+		assert_eq!(folds_to(BinOp::Eq, var(1), int(2)), None);
 	}
 }

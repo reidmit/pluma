@@ -432,6 +432,41 @@ pub enum Instruction {
 		a: Reg,
 		b: Reg,
 	},
+
+	// --- immediate-operand int arithmetic (M2c) ---------------------------
+	// A constant int operand folded straight into the op, so the `LoadInt`
+	// that would materialize it into a register is gone (~15-33% of executed
+	// opcodes on call-heavy code — `n - 1`, `acc + 1`, `n % 2`, …). Codegen
+	// emits these for the boxed path only; the commutative ops (`AddIntImm`/
+	// `MulIntImm`) fold a const on either side, the rest only a right-hand
+	// const (`a OP imm`). `imm` is never 0 for `Div`/`Rem` (codegen leaves
+	// `x / 0`/`x % 0` on the reg-reg path so the div-by-zero error is shared).
+	AddIntImm {
+		dst: Reg,
+		a: Reg,
+		imm: i64,
+	},
+	SubIntImm {
+		dst: Reg,
+		a: Reg,
+		imm: i64,
+	},
+	MulIntImm {
+		dst: Reg,
+		a: Reg,
+		imm: i64,
+	},
+	DivIntImm {
+		dst: Reg,
+		a: Reg,
+		imm: i64,
+	},
+	RemIntImm {
+		dst: Reg,
+		a: Reg,
+		imm: i64,
+	},
+
 	NegInt {
 		dst: Reg,
 		a: Reg,

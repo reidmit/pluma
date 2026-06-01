@@ -504,6 +504,22 @@ impl VM {
 				self.stack[base + $dst as usize] = res;
 			}};
 		}
+		// Immediate-operand int arithmetic (M2c): one operand is a compile-time
+		// constant baked into the op, so only the register operand is read.
+		macro_rules! arith_int_imm {
+			($dst:expr, $a:expr, $imm:expr, $m:ident, $name:literal) => {{
+				let l = self.stack[base + $a as usize].clone();
+				let res = match l {
+					Value::Int(x) => Value::Int(x.$m($imm)),
+					_ => {
+						return Err(
+							RuntimeError::new(concat!($name, ": expected int")).at(self.current_range()),
+						);
+					}
+				};
+				self.stack[base + $dst as usize] = res;
+			}};
+		}
 		macro_rules! arith_float {
 			($dst:expr, $a:expr, $b:expr, $op:tt, $name:literal) => {{
 				let l = self.stack[base + $a as usize].clone();
@@ -985,6 +1001,15 @@ impl VM {
 				};
 				self.stack[base + dst as usize] = res;
 			}
+			// Immediate-operand int arithmetic (M2c). `imm` is guaranteed non-zero for
+			// Div/Rem (codegen keeps `x / 0`/`x % 0` on the reg-reg path), so
+			// `wrapping_div`/`wrapping_rem` can't trap; they also give the right answer
+			// at `i64::MIN OP -1` (where `/`/`%` would overflow-panic in debug).
+			Instruction::AddIntImm { dst, a, imm } => arith_int_imm!(dst, a, imm, wrapping_add, "AddInt"),
+			Instruction::SubIntImm { dst, a, imm } => arith_int_imm!(dst, a, imm, wrapping_sub, "SubInt"),
+			Instruction::MulIntImm { dst, a, imm } => arith_int_imm!(dst, a, imm, wrapping_mul, "MulInt"),
+			Instruction::DivIntImm { dst, a, imm } => arith_int_imm!(dst, a, imm, wrapping_div, "DivInt"),
+			Instruction::RemIntImm { dst, a, imm } => arith_int_imm!(dst, a, imm, wrapping_rem, "RemInt"),
 			Instruction::AddFloat { dst, a, b } => arith_float!(dst, a, b, +, "AddFloat"),
 			Instruction::SubFloat { dst, a, b } => arith_float!(dst, a, b, -, "SubFloat"),
 			Instruction::MulFloat { dst, a, b } => arith_float!(dst, a, b, *, "MulFloat"),
@@ -1582,6 +1607,11 @@ fn opcode_name(i: &Instruction) -> &'static str {
 		DivFloat { .. } => "DivFloat",
 		RemInt { .. } => "RemInt",
 		RemFloat { .. } => "RemFloat",
+		AddIntImm { .. } => "AddIntImm",
+		SubIntImm { .. } => "SubIntImm",
+		MulIntImm { .. } => "MulIntImm",
+		DivIntImm { .. } => "DivIntImm",
+		RemIntImm { .. } => "RemIntImm",
 		NegInt { .. } => "NegInt",
 		NegFloat { .. } => "NegFloat",
 		ConcatString { .. } => "ConcatString",
