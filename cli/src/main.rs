@@ -842,18 +842,11 @@ Compiler & toolchain for the {} programming language
 
 COMMANDS:
   [run] <path>     execute a module directly (the `run` keyword is optional)
-<<<<<<< HEAD
-  repl             start an interactive REPL session
-<<<<<<< HEAD
+  repl [--dump]    start an interactive REPL session; with `--dump` (or when
+                   stdin is piped) read submissions from stdin instead
   build <path> [--target browser] [-o out]
                    compile a module to a JavaScript module (+ HTML harness) for
                    the browser/client target
-=======
->>>>>>> 5a5e3e0 (cli: add `pluma repl` interactive REPL)
-=======
-  repl [--dump]    start an interactive REPL session; with `--dump` (or when
-                   stdin is piped) read submissions from stdin instead
->>>>>>> 767e91f (cli/repl: read submissions from stdin (non-interactive batch mode))
   format <path>... canonicalize formatting; pass `-` for stdin, `--check` to dry-run
   test [dir] [-f name]...
                    discover and run tests from `*.test.pa` files under the
@@ -878,18 +871,11 @@ Compiler & toolchain for the {} programming language
 
 COMMANDS:
   [run] <path>     execute a module directly (the `run` keyword is optional)
-<<<<<<< HEAD
-  repl             start an interactive REPL session
-<<<<<<< HEAD
+  repl [--dump]    start an interactive REPL session; with `--dump` (or when
+                   stdin is piped) read submissions from stdin instead
   build <path> [--target browser] [-o out]
                    compile a module to a JavaScript module (+ HTML harness) for
                    the browser/client target
-=======
->>>>>>> 5a5e3e0 (cli: add `pluma repl` interactive REPL)
-=======
-  repl [--dump]    start an interactive REPL session; with `--dump` (or when
-                   stdin is piped) read submissions from stdin instead
->>>>>>> 767e91f (cli/repl: read submissions from stdin (non-interactive batch mode))
   format <path>... canonicalize formatting; pass `-` for stdin, `--check` to dry-run
   test [dir] [-f name]...
                    discover and run tests from `*.test.pa` files under the
