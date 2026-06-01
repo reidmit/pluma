@@ -27,6 +27,7 @@
 
 use crate::colors;
 use crate::printing::print_diagnostics;
+use compiler::ast::{DefinitionKind, ExprKind, PatternKind, PatternNode};
 use compiler::types::Type;
 use compiler::{Compiler, Diagnostic, LANGUAGE_NAME, Token, Tokenizer, VERSION, find_project_root};
 use rustyline::DefaultEditor;
@@ -256,6 +257,7 @@ fn meta_command(rest: &str, session: &mut Session) -> bool {
 			println!("{}", colors::dim("session reset"));
 		}
 		"type" | "t" => type_command(arg, session),
+		"env" | "e" => env_command(session),
 		_ => println!(
 			"{}",
 			colors::dim(&format!("unknown command `:{}` — try `:help`", cmd))
@@ -313,10 +315,173 @@ fn type_command(expr: &str, session: &Session) {
 	}
 }
 
+// List the current session's imports and bindings with their inferred types.
+// We re-render the committed (so known-good) session and re-check it, then read
+// types off the resolved AST: value defs carry their type directly, and the
+// session's body `let`s live as statements inside `main`'s function body.
+fn env_command(session: &Session) {
+	let source = render(&session.uses, &session.defs, &session.body);
+
+	let mut compiler = Compiler::for_root_dir(session.root_dir.clone());
+	compiler.set_module_source(REPL_MODULE.to_string(), source.into_bytes());
+	compiler.add_entry_module(REPL_MODULE.to_string());
+	vm::stdlib::register_compiler(&mut compiler);
+
+	// Re-analyze so the AST carries resolved types. The session only ever holds
+	// committed code, so warnings are the worst we expect — ignore the result and
+	// read whatever the analyzer attached (unresolved types render as `?`).
+	let _ = compiler.check();
+
+	// Value defs and `let`s become `bindings`; enum/alias/trait defs are
+	// type-level, listed separately under `types`.
+	let mut bindings: Vec<(String, String)> = Vec::new();
+	let mut types: Vec<(String, String)> = Vec::new();
+
+	if let Some(ast) = compiler.modules.get(REPL_MODULE).and_then(|m| m.ast.as_ref()) {
+		for def in &ast.body {
+			match &def.kind {
+				// `main` is synthetic; its body holds the session's `let` statements.
+				DefinitionKind::Expr(expr) if def.name.name == "main" => {
+					if let ExprKind::Fun(fun) = &expr.kind {
+						for stmt in &fun.body {
+							if let ExprKind::Let(let_node) = &stmt.kind {
+								collect_pattern_bindings(
+									&let_node.pattern,
+									&let_node.value.ty,
+									&mut bindings,
+								);
+							}
+						}
+					}
+				}
+				DefinitionKind::Expr(expr) => {
+					bindings.push((def.name.name.clone(), expr.ty.to_string()));
+				}
+				DefinitionKind::Enum(_) => types.push(("enum".to_string(), def.name.name.clone())),
+				DefinitionKind::Alias(_) => types.push(("alias".to_string(), def.name.name.clone())),
+				DefinitionKind::Trait(_) => types.push(("trait".to_string(), def.name.name.clone())),
+				// Instance defs carry a synthesized name that isn't useful to list.
+				DefinitionKind::Instance(_) => {}
+			}
+		}
+	}
+
+	print!("{}", render_env(&session.uses, &bindings, &types));
+}
+
+// Collect the `(name, rendered-type)` pairs a `let` pattern binds, given the
+// type of the matched value. Pattern and type are walked in parallel so a
+// tuple/record destructure reports each name's own type; anything we can't line
+// up (constructor payloads, shape mismatches) falls back to `?` (Type::Unknown).
+fn collect_pattern_bindings(pattern: &PatternNode, ty: &Type, out: &mut Vec<(String, String)>) {
+	match &pattern.kind {
+		PatternKind::Identifier(id) => out.push((id.name.clone(), ty.to_string())),
+		PatternKind::Tuple(pats) => {
+			if let Type::Tuple(elem_tys) = ty {
+				if elem_tys.len() == pats.len() {
+					for (p, t) in pats.iter().zip(elem_tys) {
+						collect_pattern_bindings(p, t, out);
+					}
+					return;
+				}
+			}
+			for p in pats {
+				collect_pattern_bindings(p, &Type::Unknown, out);
+			}
+		}
+		PatternKind::Record { fields, .. } => {
+			for (field_id, p) in fields {
+				let field_ty = match ty {
+					Type::Record(field_tys, _) => field_tys
+						.iter()
+						.find(|(n, _)| *n == field_id.name)
+						.map(|(_, t)| t.clone())
+						.unwrap_or(Type::Unknown),
+					_ => Type::Unknown,
+				};
+				collect_pattern_bindings(p, &field_ty, out);
+			}
+		}
+		PatternKind::List { items, rest } => {
+			let elem_ty = match ty {
+				Type::List(t) => (**t).clone(),
+				_ => Type::Unknown,
+			};
+			for p in items {
+				collect_pattern_bindings(p, &elem_ty, out);
+			}
+			// `...rest` binds the remainder, of the same `list a` type as the whole.
+			if let Some(rest) = rest {
+				if let Some(binding) = &rest.binding {
+					out.push((binding.name.clone(), ty.to_string()));
+				}
+			}
+		}
+		// Constructor payloads aren't lined up with their field types here.
+		PatternKind::Constructor(_, pats) => {
+			for p in pats {
+				collect_pattern_bindings(p, &Type::Unknown, out);
+			}
+		}
+		// Underscore / literal / interpolation patterns bind no names.
+		PatternKind::Underscore | PatternKind::Literal(_) | PatternKind::Interpolation(_) => {}
+	}
+}
+
+// Render the `:env` listing. Pure (no compilation) so it's unit-testable; colors
+// collapse to plain text when stdout isn't a terminal. Sections are omitted when
+// empty; a session with nothing in it reports `(empty session)`.
+fn render_env(
+	imports: &[String],
+	bindings: &[(String, String)],
+	types: &[(String, String)],
+) -> String {
+	let mut out = String::new();
+
+	if !imports.is_empty() {
+		out.push_str(&colors::dim("imports"));
+		out.push('\n');
+		for u in imports {
+			out.push_str(&format!("  {}\n", u));
+		}
+	}
+
+	if !bindings.is_empty() {
+		// Pad the name column so the `::` separators line up.
+		let width = bindings.iter().map(|(n, _)| n.len()).max().unwrap_or(0);
+		out.push_str(&colors::dim("bindings"));
+		out.push('\n');
+		for (name, ty) in bindings {
+			out.push_str(&format!(
+				"  {:width$} {}{}\n",
+				name,
+				colors::dim(":: "),
+				colors::bold(ty),
+			));
+		}
+	}
+
+	if !types.is_empty() {
+		out.push_str(&colors::dim("types"));
+		out.push('\n');
+		for (keyword, name) in types {
+			out.push_str(&format!("  {} {}\n", colors::dim(keyword), colors::bold(name)));
+		}
+	}
+
+	if out.is_empty() {
+		out.push_str(&colors::dim("(empty session)"));
+		out.push('\n');
+	}
+
+	out
+}
+
 fn print_repl_help() {
 	println!("{}", colors::bold("REPL commands"));
 	println!("  :help          show this help");
 	println!("  :type <expr>   show the inferred type of an expression");
+	println!("  :env           list session imports and bindings with their types");
 	println!("  :reset         clear all session bindings");
 	println!("  :quit          leave the REPL (also Ctrl-D)");
 	println!();
@@ -758,5 +923,71 @@ mod tests {
 		assert!(src.contains("(print \"hi\")\n"));
 		assert!(!src.contains(ECHO_FIELD));
 		assert!(src.contains("(1 + 2)\n}"));
+	}
+
+	#[test]
+	fn render_env_aligns_binding_names() {
+		let imports = vec!["use core.list".to_string()];
+		let bindings = vec![
+			("double".to_string(), "int -> int".to_string()),
+			("x".to_string(), "int".to_string()),
+			("xs".to_string(), "list int".to_string()),
+		];
+		let out = render_env(&imports, &bindings, &[]);
+		assert!(out.contains("imports\n  use core.list\n"));
+		assert!(out.contains("bindings\n"));
+		// Names are padded to the widest (`double`, 6) so `::` columns line up.
+		assert!(out.contains("double :: int -> int\n"));
+		assert!(out.contains("x      :: int\n"));
+		assert!(out.contains("xs     :: list int\n"));
+	}
+
+	#[test]
+	fn render_env_lists_types_section_and_omits_empty_sections() {
+		let types = vec![("enum".to_string(), "color".to_string())];
+		let out = render_env(&[], &[], &types);
+		assert!(out.contains("types\n  enum color\n"));
+		// No bindings/imports → those headers are absent.
+		assert!(!out.contains("imports"));
+		assert!(!out.contains("bindings"));
+	}
+
+	#[test]
+	fn render_env_reports_empty_session() {
+		assert!(render_env(&[], &[], &[]).contains("(empty session)"));
+	}
+
+	#[test]
+	fn collect_pattern_bindings_handles_identifier_and_tuple() {
+		use compiler::Range;
+		use compiler::ast::IdentifierNode;
+		let span = Range::collapsed(0, 0);
+		let ident = |name: &str| PatternNode {
+			range: span,
+			kind: PatternKind::Identifier(IdentifierNode {
+				name: name.to_string(),
+				range: span,
+			}),
+		};
+
+		// Simple identifier binds its name to the value's type.
+		let mut out = Vec::new();
+		collect_pattern_bindings(&ident("x"), &Type::Int, &mut out);
+		assert_eq!(out, vec![("x".to_string(), "int".to_string())]);
+
+		// `let (a, b) = (1, "hi")` pairs each name with its own element type.
+		let mut out = Vec::new();
+		let pat = PatternNode {
+			range: span,
+			kind: PatternKind::Tuple(vec![ident("a"), ident("b")]),
+		};
+		collect_pattern_bindings(&pat, &Type::Tuple(vec![Type::Int, Type::String]), &mut out);
+		assert_eq!(
+			out,
+			vec![
+				("a".to_string(), "int".to_string()),
+				("b".to_string(), "string".to_string()),
+			]
+		);
 	}
 }
