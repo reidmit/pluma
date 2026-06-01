@@ -291,7 +291,14 @@ fn inline_block(
 			}
 			StmtKind::Match { arms, .. } => {
 				for arm in arms.iter_mut() {
-					inline_block(&mut arm.body, targets, inlinable, var_globals, next_var, depth);
+					inline_block(
+						&mut arm.body,
+						targets,
+						inlinable,
+						var_globals,
+						next_var,
+						depth,
+					);
 				}
 				out.push(stmt);
 			}
@@ -359,7 +366,14 @@ fn splice(
 	// Transitively inline within the freshly-spliced body (its renamed
 	// `GlobalRef` temps feed `var_globals` as `inline_block` scans them).
 	let mut blk = Block(spliced);
-	inline_block(&mut blk, targets, inlinable, var_globals, next_var, depth + 1);
+	inline_block(
+		&mut blk,
+		targets,
+		inlinable,
+		var_globals,
+		next_var,
+		depth + 1,
+	);
 	out.extend(blk.0);
 }
 
@@ -632,9 +646,12 @@ mod tests {
 	}
 
 	fn has_call_closure(body: &[Stmt]) -> bool {
-		body
-			.iter()
-			.any(|s| matches!(&s.kind, StmtKind::Let(_, Rvalue::CallClosure(..)) | StmtKind::Discard(Rvalue::CallClosure(..))))
+		body.iter().any(|s| {
+			matches!(
+				&s.kind,
+				StmtKind::Let(_, Rvalue::CallClosure(..)) | StmtKind::Discard(Rvalue::CallClosure(..))
+			)
+		})
 	}
 
 	// `def get = fun x { x.f }` inlined at an indirect call becomes a direct field
@@ -647,7 +664,10 @@ mod tests {
 			vec![VarId(0)],
 			vec![
 				Stmt::new(
-					StmtKind::Let(VarId(1), Rvalue::GetField(Atom::Var(VarId(0)), "f".into(), None)),
+					StmtKind::Let(
+						VarId(1),
+						Rvalue::GetField(Atom::Var(VarId(0)), "f".into(), None),
+					),
 					syn(),
 				),
 				Stmt::new(StmtKind::Return(Atom::Var(VarId(1))), syn()),
@@ -666,7 +686,10 @@ mod tests {
 		inline(&mut p);
 
 		let body = &p.functions[2].body.0;
-		assert!(!has_call_closure(body), "call should be inlined away: {body:?}");
+		assert!(
+			!has_call_closure(body),
+			"call should be inlined away: {body:?}"
+		);
 		assert!(
 			!body
 				.iter()
@@ -692,7 +715,11 @@ mod tests {
 				Stmt::new(
 					StmtKind::Let(
 						VarId(1),
-						Rvalue::Bin(BinOp::AddInt, Atom::Var(VarId(0)), Atom::Const(Const::Int(1))),
+						Rvalue::Bin(
+							BinOp::AddInt,
+							Atom::Var(VarId(0)),
+							Atom::Const(Const::Int(1)),
+						),
 					),
 					syn(),
 				),
@@ -703,13 +730,24 @@ mod tests {
 		let mut caller_body = indirect_call(0, 0, 1, vec![Atom::Const(Const::Int(41))]);
 		caller_body.push(Stmt::new(StmtKind::Return(Atom::Var(VarId(1))), syn()));
 		let caller = boxed_fn("caller", vec![], caller_body);
-		let mut p = program(vec![inc, thunk, caller], vec![GlobalInit::Thunk(FuncId(1))], 2);
+		let mut p = program(
+			vec![inc, thunk, caller],
+			vec![GlobalInit::Thunk(FuncId(1))],
+			2,
+		);
 		inline(&mut p);
 		let body = &p.functions[2].body.0;
 		assert!(
 			body.iter().any(|s| matches!(
 				&s.kind,
-				StmtKind::Let(_, Rvalue::Bin(BinOp::AddInt, Atom::Const(Const::Int(41)), Atom::Const(Const::Int(1))))
+				StmtKind::Let(
+					_,
+					Rvalue::Bin(
+						BinOp::AddInt,
+						Atom::Const(Const::Int(41)),
+						Atom::Const(Const::Int(1))
+					)
+				)
 			)),
 			"const arg 41 should be substituted for the param: {body:?}"
 		);
@@ -727,7 +765,11 @@ mod tests {
 		let mut caller_body = indirect_call(0, 0, 1, vec![Atom::Const(Const::Int(3))]);
 		caller_body.push(Stmt::new(StmtKind::Return(Atom::Var(VarId(1))), syn()));
 		let caller = boxed_fn("caller", vec![], caller_body);
-		let mut p = program(vec![rec, thunk, caller], vec![GlobalInit::Thunk(FuncId(1))], 2);
+		let mut p = program(
+			vec![rec, thunk, caller],
+			vec![GlobalInit::Thunk(FuncId(1))],
+			2,
+		);
 		inline(&mut p);
 		assert!(
 			has_call_closure(&p.functions[2].body.0),
@@ -789,7 +831,11 @@ mod tests {
 				Stmt::new(
 					StmtKind::Let(
 						VarId(1),
-						Rvalue::Bin(BinOp::MulInt, Atom::Var(VarId(0)), Atom::Const(Const::Int(2))),
+						Rvalue::Bin(
+							BinOp::MulInt,
+							Atom::Var(VarId(0)),
+							Atom::Const(Const::Int(2)),
+						),
 					),
 					syn(),
 				),
@@ -822,7 +868,14 @@ mod tests {
 		assert!(
 			body.iter().any(|s| matches!(
 				&s.kind,
-				StmtKind::Let(_, Rvalue::Bin(BinOp::MulInt, Atom::Const(Const::Int(5)), Atom::Const(Const::Int(2))))
+				StmtKind::Let(
+					_,
+					Rvalue::Bin(
+						BinOp::MulInt,
+						Atom::Const(Const::Int(5)),
+						Atom::Const(Const::Int(2))
+					)
+				)
 			)),
 			"g's body should be spliced with the arg threaded through f: {body:?}"
 		);
@@ -839,7 +892,11 @@ mod tests {
 				Stmt::new(
 					StmtKind::Let(
 						VarId(1),
-						Rvalue::Bin(BinOp::AddInt, Atom::Var(VarId(0)), Atom::Const(Const::Int(1))),
+						Rvalue::Bin(
+							BinOp::AddInt,
+							Atom::Var(VarId(0)),
+							Atom::Const(Const::Int(1)),
+						),
 					),
 					syn(),
 				),
@@ -865,10 +922,17 @@ mod tests {
 				Stmt::new(StmtKind::Return(Atom::Const(Const::Unit)), syn()),
 			],
 		);
-		let mut p = program(vec![eff, thunk, caller], vec![GlobalInit::Thunk(FuncId(1))], 2);
+		let mut p = program(
+			vec![eff, thunk, caller],
+			vec![GlobalInit::Thunk(FuncId(1))],
+			2,
+		);
 		inline(&mut p);
 		let body = &p.functions[2].body.0;
-		assert!(!has_call_closure(body), "discard call should be inlined: {body:?}");
+		assert!(
+			!has_call_closure(body),
+			"discard call should be inlined: {body:?}"
+		);
 		assert!(
 			body.iter().any(|s| matches!(
 				&s.kind,

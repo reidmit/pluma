@@ -337,7 +337,11 @@ fn env_command(session: &Session) {
 	let mut bindings: Vec<(String, String)> = Vec::new();
 	let mut types: Vec<(String, String)> = Vec::new();
 
-	if let Some(ast) = compiler.modules.get(REPL_MODULE).and_then(|m| m.ast.as_ref()) {
+	if let Some(ast) = compiler
+		.modules
+		.get(REPL_MODULE)
+		.and_then(|m| m.ast.as_ref())
+	{
 		for def in &ast.body {
 			match &def.kind {
 				// `main` is synthetic; its body holds the session's `let` statements.
@@ -345,11 +349,7 @@ fn env_command(session: &Session) {
 					if let ExprKind::Fun(fun) = &expr.kind {
 						for stmt in &fun.body {
 							if let ExprKind::Let(let_node) = &stmt.kind {
-								collect_pattern_bindings(
-									&let_node.pattern,
-									&let_node.value.ty,
-									&mut bindings,
-								);
+								collect_pattern_bindings(&let_node.pattern, &let_node.value.ty, &mut bindings);
 							}
 						}
 					}
@@ -465,7 +465,11 @@ fn render_env(
 		out.push_str(&colors::dim("types"));
 		out.push('\n');
 		for (keyword, name) in types {
-			out.push_str(&format!("  {} {}\n", colors::dim(keyword), colors::bold(name)));
+			out.push_str(&format!(
+				"  {} {}\n",
+				colors::dim(keyword),
+				colors::bold(name)
+			));
 		}
 	}
 

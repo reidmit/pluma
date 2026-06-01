@@ -119,8 +119,15 @@ pub(crate) fn build_eq_fn(self_idx: u32) -> Function {
 		// Lengths must match.
 		match len_field {
 			Some(lf) => {
-				w.local_get(a).ref_cast(sty).struct_get(sty, lf).local_set(n);
-				w.local_get(b).ref_cast(sty).struct_get(sty, lf).local_get(n).i32_ne();
+				w.local_get(a)
+					.ref_cast(sty)
+					.struct_get(sty, lf)
+					.local_set(n);
+				w.local_get(b)
+					.ref_cast(sty)
+					.struct_get(sty, lf)
+					.local_get(n)
+					.i32_ne();
 			}
 			None => {
 				w.local_get(pa).array_len().local_set(n);
