@@ -13,7 +13,7 @@ error cases are excluded — they belong to the frontend `tests/analyze` suite.
 |---|---:|---:|---:|---:|
 | VM (oracle) | 215 | — | — | reference |
 | WasmGC | 215 | 0 | 0 | 215/215 |
-| JS | 170 | 0 | 45 | 170/215 |
+| JS | 178 | 0 | 37 | 178/215 |
 
 ## WasmGC skips
 
@@ -21,11 +21,10 @@ _None — full parity with the VM._
 
 ## JS skips
 
-### denied (16)
+### denied (8)
 
 - _53-bit int precision (raw i64 hash)_ — bare-trait-methods
 - _debug call-site prefix not wired_ — debug-passthrough
-- _no tail-call optimization yet_ — closures-bench, count-tail, deep-recursion, float-bench, list-build, record-access, string-bench, try-chain
 - _wire codec deferred on the client_ — wire-bench, wire-dict, wire-fingerprint, wire-polymorphic, wire-recursive, wire-roundtrip
 
 ### gated (15)

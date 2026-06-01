@@ -212,7 +212,7 @@ function __bytesHash(b) {
 // hash is supplied by the dict builtins via the key type's `hash` trait dict, so
 // enum / derived-hash keys work — not just primitives.
 function __hashOf(hashDict, k) {
-	return hashDict[0](k); // the `hash` trait's sole method
+	return __land(hashDict[0](k)); // the `hash` trait's sole method
 }
 class PDict {
 	constructor() {
@@ -257,12 +257,12 @@ class PDict {
 	}
 	mapValues(f) {
 		const d = new PDict();
-		for (const [k, v, h] of this.entries) d._raw(k, f(v), h);
+		for (const [k, v, h] of this.entries) d._raw(k, __land(f(v)), h);
 		return d;
 	}
 	filterEntries(f) {
 		const d = new PDict();
-		for (const [k, v, h] of this.entries) if (f(k, v)) d._raw(k, v, h);
+		for (const [k, v, h] of this.entries) if (__land(f(k, v))) d._raw(k, v, h);
 		return d;
 	}
 }
@@ -332,6 +332,27 @@ function __mkclosure(fn, env) {
 	return (...args) => fn(env, ...args);
 }
 
+// ---- tail calls (trampoline) --------------------------------------------
+// JS has no tail-call elimination, so a self- or mutually-tail-recursive Pluma
+// program would overflow the host stack. Instead, a call in tail position emits
+// a `__TC` bounce (the closure + its args) rather than calling, and the boundary
+// that consumes the result loops it flat — `__land` — so the chain runs in O(1)
+// host frames (matching the VM's frame-reuse TCO). The closure `__mkclosure`
+// wrapper deliberately does *not* land: it forwards straight to the raw function
+// so each bounce is exactly one stack frame that returns before the next.
+class __TC {
+	constructor(fn, args) {
+		this.fn = fn;
+		this.args = args;
+	}
+}
+// Run a value to ground: while it's a pending tail call, call it and continue.
+// A non-bounce value (the common case) is returned after a single cheap check.
+function __land(v) {
+	while (v instanceof __TC) v = v.fn(...v.args);
+	return v;
+}
+
 // Globals are lazily forced on first access (matches the VM's Pending->Evaluated
 // thunk slots), so inter-global references resolve regardless of init order. A
 // `Thunk` marker distinguishes a slot to force from a pre-evaluated value that
@@ -346,7 +367,7 @@ const __GCACHE = [];
 function __gload(i) {
 	if (i in __GCACHE) return __GCACHE[i];
 	const init = __GINIT[i];
-	const v = init instanceof Thunk ? init.f() : init;
+	const v = init instanceof Thunk ? __land(init.f()) : init;
 	__GCACHE[i] = v;
 	return v;
 }
@@ -435,13 +456,13 @@ const RT = {
 	},
 	"list-build": (n, f) => {
 		const a = new Array(n);
-		for (let i = 0; i < n; i++) a[i] = f(i);
+		for (let i = 0; i < n; i++) a[i] = __land(f(i));
 		return a;
 	},
 	"list-collect": (n, f) => {
 		const a = [];
 		for (let i = 0; i < n; i++) {
-			const r = f(i);
+			const r = __land(f(i));
 			if (r instanceof PVariant && r.tag === 0) a.push(r.p[0]);
 		}
 		return a;
@@ -456,7 +477,7 @@ const RT = {
 	},
 	"bytes-build": (n, f) => {
 		const a = new Uint8Array(n);
-		for (let i = 0; i < n; i++) a[i] = f(i) & 0xff;
+		for (let i = 0; i < n; i++) a[i] = __land(f(i)) & 0xff;
 		return a;
 	},
 	"bytes-concat": (a, b) => {
@@ -476,7 +497,7 @@ const RT = {
 		return NOTHING;
 	},
 	"ref-update": (r, f) => {
-		r.v = f(r.v);
+		r.v = __land(f(r.v));
 		return NOTHING;
 	},
 
@@ -544,7 +565,7 @@ RT["dom-get-value"] = (id) => {
 function __run(entryThunk) {
 	let status = "ok";
 	try {
-		const result = entryThunk();
+		const result = __land(entryThunk());
 		if (
 			result instanceof PVariant &&
 			result.en === __RESULT &&

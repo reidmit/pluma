@@ -52,6 +52,12 @@ struct Emitter<'a> {
 	/// Active loop labels (innermost last), so `Break`/`Continue` target the loop
 	/// itself rather than a nested `switch`.
 	loop_labels: Vec<String>,
+	/// Whether tail calls in the function currently being emitted may lower to a
+	/// `__TC` bounce. Disabled for defer-bearing functions: their body runs inside
+	/// a `try`, and a bounce would escape it unevaluated, so the `finally` cleanup
+	/// would run *before* the tail call's effect. Mirrors the VM's TCO-downgrade
+	/// when a frame has pending defers.
+	tco: bool,
 }
 
 impl<'a> Emitter<'a> {
@@ -61,6 +67,7 @@ impl<'a> Emitter<'a> {
 			enums: &program.enums,
 			tmp: 0,
 			loop_labels: Vec::new(),
+			tco: true,
 		}
 	}
 
@@ -120,12 +127,16 @@ impl<'a> Emitter<'a> {
 		if has_defers {
 			out.push_str("\tconst __defers = [];\n\ttry {\n");
 		}
+		// Defer-bearing bodies run inside a `try`; a tail-call bounce would escape
+		// it before executing, reordering effects past the `finally` cleanup. So
+		// downgrade TCO here (real landed call), exactly as the VM does.
+		self.tco = !has_defers;
 		let mut body = String::new();
 		self.emit_block(&f.body, &mut body, if has_defers { 2 } else { 1 })?;
 		out.push_str(&body);
 		if has_defers {
 			out.push_str(
-				"\t} finally {\n\t\tfor (let __i = __defers.length - 1; __i >= 0; __i--) __defers[__i]();\n\t}\n",
+				"\t} finally {\n\t\tfor (let __i = __defers.length - 1; __i >= 0; __i--) __land(__defers[__i]());\n\t}\n",
 			);
 		}
 		out.push_str("}\n");
@@ -347,8 +358,21 @@ impl<'a> Emitter<'a> {
 			Rvalue::Bin(op, a, b) => self.binop(*op, a, b),
 			Rvalue::Not(a) => format!("(!{})", self.atom(a)),
 			Rvalue::Call(callee, args) => self.call(callee, args)?,
-			Rvalue::CallClosure(c, args) | Rvalue::TailCall(c, args) => {
-				format!("{}({})", self.atom(c), self.atoms(args))
+			// A non-tail closure call: land it, since the callee's body may itself
+			// end in a tail call and hand back a `__TC` bounce.
+			Rvalue::CallClosure(c, args) => format!("__land({}({}))", self.atom(c), self.atoms(args)),
+			// A tail call doesn't call — it hands back a `__TC` bounce that the
+			// consuming boundary (`__land`) loops flat, so the chain stays O(1)
+			// host frames. The IR always immediately `Return`s this value, so the
+			// caller of *this* function lands it. In a defer-bearing function TCO is
+			// downgraded (see `tco`): emit a landed real call so the effect happens
+			// before the `finally`.
+			Rvalue::TailCall(c, args) => {
+				if self.tco {
+					format!("new __TC({}, [{}])", self.atom(c), self.atoms(args))
+				} else {
+					format!("__land({}({}))", self.atom(c), self.atoms(args))
+				}
 			}
 			Rvalue::GetDictMethod(d, i) => format!("{}[{i}]", self.atom(d)),
 			Rvalue::MakeDict(methods) => format!("[{}]", self.atoms(methods)),
@@ -425,8 +449,13 @@ impl<'a> Emitter<'a> {
 
 	fn call(&self, callee: &Callee, args: &[Atom]) -> Result<String, String> {
 		Ok(match callee {
-			Callee::Function(f) => format!("$f{}(null{})", f.0, prepend_args(self.atoms(args))),
-			Callee::Global(g) => format!("__gload({})({})", g.0, self.atoms(args)),
+			// Direct calls into Pluma code are landed: the target's body may end in
+			// a tail call and hand back a `__TC` bounce. Builtins are native JS and
+			// never bounce (those that invoke a closure land it internally).
+			Callee::Function(f) => {
+				format!("__land($f{}(null{}))", f.0, prepend_args(self.atoms(args)))
+			}
+			Callee::Global(g) => format!("__land(__gload({})({}))", g.0, self.atoms(args)),
 			Callee::Builtin(tag) => format!("RT[{}]({})", js_str(tag), self.atoms(args)),
 		})
 	}

@@ -109,13 +109,6 @@ impl SkipReason {
 fn denied(backend: Backend, name: &str) -> Option<&'static str> {
 	match backend {
 		Backend::Js => match name {
-			// No tail-call optimization on the JS backend yet, so deeply- or
-			// tail-recursive programs — and the recursive pure-Pluma stdlib folds
-			// they drive — overflow node's call stack (mostly compute benchmarks).
-			"deep-recursion" | "closures-bench" | "count-tail" | "float-bench" | "list-build"
-			| "record-access" | "string-bench" | "try-chain" => {
-				Some("no tail-call optimization yet")
-			}
 			"debug-passthrough" => Some("debug call-site prefix not wired"),
 			"bare-trait-methods" => Some("53-bit int precision (raw i64 hash)"),
 			"wire-roundtrip" | "wire-dict" | "wire-fingerprint" | "wire-polymorphic"
