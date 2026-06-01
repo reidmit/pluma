@@ -1,0 +1,10 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+1000
+5011134
+== stderr ==

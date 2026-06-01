@@ -34,7 +34,7 @@ format-check:
 format-stdlib:
   @ cargo run --bin cli --quiet -- format $(find compiler/src/stdlib compiler/src/prelude.pa -name "*.pa")
 
-# run the benchmark suite (VM on benchmarks/programs/*)
+# run the benchmark suite (VM on bench-marked tests/run fixtures)
 bench:
   @ cargo run --release -p bench --quiet
 

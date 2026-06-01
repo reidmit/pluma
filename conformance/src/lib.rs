@@ -109,11 +109,17 @@ impl SkipReason {
 fn denied(backend: Backend, name: &str) -> Option<&'static str> {
 	match backend {
 		Backend::Js => match name {
-			"deep-recursion" => Some("no tail-call optimization yet"),
+			// No tail-call optimization on the JS backend yet, so deeply- or
+			// tail-recursive programs — and the recursive pure-Pluma stdlib folds
+			// they drive — overflow node's call stack (mostly compute benchmarks).
+			"deep-recursion" | "closures-bench" | "count-tail" | "float-bench" | "list-build"
+			| "record-access" | "string-bench" | "try-chain" => {
+				Some("no tail-call optimization yet")
+			}
 			"debug-passthrough" => Some("debug call-site prefix not wired"),
 			"bare-trait-methods" => Some("53-bit int precision (raw i64 hash)"),
 			"wire-roundtrip" | "wire-dict" | "wire-fingerprint" | "wire-polymorphic"
-			| "wire-recursive" => Some("wire codec deferred on the client"),
+			| "wire-recursive" | "wire-bench" => Some("wire codec deferred on the client"),
 			_ => None,
 		},
 		// WasmGC gaps appear as `Unsupported` (emit rejects them); no output
@@ -274,9 +280,17 @@ pub fn correctness_corpus() -> Vec<PathBuf> {
 	dirs
 }
 
-/// The perf corpus: every `benchmarks/programs/<name>/main.pa`, sorted.
+/// The compute-perf corpus: the `tests/run` fixtures that carry a `bench` marker
+/// file — the longer, steady-state-throughput stress programs (folded into
+/// `tests/run` so they also get snapshot + cross-backend correctness coverage).
+/// The dev-loop view excludes these so it stays a tiny-program measurement.
 pub fn perf_corpus() -> Vec<PathBuf> {
-	fixtures_under(&workspace_root().join("benchmarks/programs"))
+	run_corpus().into_iter().filter(|d| is_bench(d)).collect()
+}
+
+/// Whether a fixture dir is a compute benchmark (carries the `bench` marker).
+pub fn is_bench(dir: &Path) -> bool {
+	dir.join("bench").exists()
 }
 
 fn fixtures_under(root: &Path) -> Vec<PathBuf> {

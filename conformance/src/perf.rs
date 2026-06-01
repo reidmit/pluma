@@ -1,9 +1,10 @@
 // Perf measurement, ported from the (removed) wasm_diff.rs benches and extended
 // to all three backends. Two views:
-//   - dev_loop: the whole `tests/run` corpus (tiny programs) — the cost of one
-//     `pluma test`-style pass per backend, incl. the compile/exec split.
-//   - compute: the `benchmarks/programs` corpus (longer programs) — steady-state
-//     throughput per backend.
+//   - dev_loop: the `tests/run` corpus minus the `bench`-marked fixtures (tiny
+//     programs) — the cost of one `pluma test`-style pass per backend, incl. the
+//     compile/exec split.
+//   - compute: the `bench`-marked `tests/run` fixtures (longer programs) —
+//     steady-state throughput per backend.
 //
 // JS is timed via the node subprocess (there is no in-process JS engine), so JS
 // numbers include node process startup — labeled accordingly. Run with --release;
@@ -77,6 +78,11 @@ pub fn dev_loop(runner: &Runner) -> DevLoop {
 		let name = dir.file_name().unwrap().to_string_lossy().into_owned();
 		// `io-*` touch the filesystem — skip in a hot loop (noisy + side-effecting).
 		if name.starts_with("io-") {
+			continue;
+		}
+		// `bench`-marked fixtures are the longer compute programs — they belong to
+		// the `compute` view, not this tiny-program dev-loop measurement.
+		if crate::is_bench(&dir) {
 			continue;
 		}
 		let f_start = Instant::now();

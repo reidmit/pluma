@@ -1,6 +1,8 @@
-// Microbench runner. For each program under benchmarks/programs/<name>/main.pa,
+// Microbench runner. For each `bench`-marked fixture under tests/run/<name>/,
 // compiles (`ir::lower` + `compile_from_ir`) + runs it through the VM,
-// wall-clocks it, and prints the average time.
+// wall-clocks it, and prints the average time. (The benchmarks live in
+// tests/run so they also get snapshot + cross-backend correctness coverage; the
+// `bench` marker file flags the compute-stress subset.)
 //
 // Usage:
 //   cargo run -p bench --release                 # timing
@@ -17,7 +19,10 @@ use std::time::{Duration, Instant};
 
 fn main() {
 	let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-	let programs_dir = workspace.join("benchmarks/programs");
+	// Benchmarks live in `tests/run` (so they get snapshot + cross-backend
+	// correctness coverage); the compute-bench subset is marked with a `bench`
+	// file in the fixture dir. `--profile`/`--dump-ir` take a fixture name.
+	let programs_dir = workspace.join("tests/run");
 	std::env::set_current_dir(workspace).ok();
 
 	// `cargo run -p bench -- --profile <name> [backend]` dumps opcode counts for
@@ -57,9 +62,9 @@ fn main() {
 		.unwrap_or(5);
 
 	let mut benchmarks: Vec<_> = std::fs::read_dir(&programs_dir)
-		.expect("benchmarks/programs not found")
+		.expect("tests/run not found")
 		.filter_map(|e| e.ok())
-		.filter(|e| e.path().is_dir())
+		.filter(|e| e.path().is_dir() && e.path().join("bench").exists())
 		.collect();
 	benchmarks.sort_by_key(|e| e.file_name());
 

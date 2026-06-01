@@ -185,7 +185,7 @@ fn render_full_report(
 	s.push('\n');
 
 	// Compute perf.
-	s.push_str("## Compute throughput — benchmarks/programs\n\n");
+	s.push_str("## Compute throughput — bench-marked tests/run fixtures\n\n");
 	s.push_str("| Program | VM | WASM exec | WASM e2e | JS (node) |\n|---|---:|---:|---:|---:|\n");
 	let cell = |d: Option<std::time::Duration>| d.map(fmt_dur).unwrap_or_else(|| "n/a".into());
 	for r in compute {
