@@ -60,6 +60,7 @@ pub use types::*;
 pub fn optimize(program: &mut IrProgram) {
 	inline::inline(program);
 	resolve::resolve_direct_calls(program);
+	resolve::fold_variant_ctor_calls(program);
 	copyprop::eliminate_copies(program);
 	// M5/M6: the unboxed-register substrate. The register VM keeps unboxed (`I64`)
 	// values in a raw window; `insert_coercions` splices `Box`/`Unbox` at the repr

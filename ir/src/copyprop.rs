@@ -218,6 +218,7 @@ fn rewrite_rvalue(rv: &mut Rvalue, roots: &HashMap<u32, VarId>) {
 			rewrite_atom(b, roots);
 		}
 		Rvalue::Call(_, args)
+		| Rvalue::TailCallDirect(_, args)
 		| Rvalue::MakeDict(args)
 		| Rvalue::MakeTuple(args)
 		| Rvalue::Interpolate(args)

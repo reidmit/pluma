@@ -886,6 +886,36 @@ impl<'a> FnEmitter<'a> {
 				}
 				self.ins(Instruction::Call(w));
 			}
+			Rvalue::TailCallDirect(fid, args) => {
+				let Some(&w) = self.wasm_index.get(&fid.0) else {
+					self
+						.diags
+						.push(format!("tail call to unreachable fn {}", fid.0));
+					self.push_nothing();
+					return;
+				};
+				// Same direct-call convention as `Call(Callee::Function)`: null env,
+				// then shape-aware args. A tail call would `return_call` past the
+				// trailing `Return`, skipping `defer` cleanups, so downgrade to an
+				// ordinary call in a defer-bearing function (mirrors `TailCall`).
+				self.ins(Instruction::RefNull(HeapType::Concrete(types::T_VALUE)));
+				let callee_shapes = self.param_shapes.get(&fid.0);
+				for (i, a) in args.iter().enumerate() {
+					let nominal_param = callee_shapes
+						.and_then(|s| s.get(i))
+						.map_or(false, |s| s.is_some());
+					if nominal_param {
+						self.atom_raw(a);
+					} else {
+						self.atom(a);
+					}
+				}
+				if self.defers_local.is_none() {
+					self.ins(Instruction::ReturnCall(w));
+				} else {
+					self.ins(Instruction::Call(w));
+				}
+			}
 			Rvalue::CallClosure(callee, args) => self.call_value(callee, args, false),
 			Rvalue::TailCall(callee, args) => {
 				// A tail call would `return_call` past the trailing `Return`, skipping

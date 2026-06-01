@@ -151,6 +151,7 @@ pub(crate) fn for_each_atom(rv: &Rvalue, f: &mut impl FnMut(&Atom)) {
 			f(b);
 		}
 		Rvalue::Call(_, args)
+		| Rvalue::TailCallDirect(_, args)
 		| Rvalue::MakeDict(args)
 		| Rvalue::MakeTuple(args)
 		| Rvalue::Interpolate(args)
@@ -332,7 +333,7 @@ fn collect_nominal_param_args(
 	for s in &b.0 {
 		match &s.kind {
 			StmtKind::Let(_, rv) | StmtKind::Discard(rv) => {
-				if let Rvalue::Call(Callee::Function(fid), args) = rv {
+				if let Rvalue::Call(Callee::Function(fid), args) | Rvalue::TailCallDirect(fid, args) = rv {
 					if let Some(shapes) = param_shapes.get(&fid.0) {
 						for (i, sh) in shapes.iter().enumerate() {
 							if sh.is_some() {

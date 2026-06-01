@@ -825,6 +825,40 @@ impl FnCtx {
 				push(body, ranges, Instruction::TailCall { dst, callee, args }, r);
 				Ok(())
 			}
+			Rvalue::TailCallDirect(f, args) => {
+				// The tail analogue of `CallDirect`: pack each arg in the callee's
+				// param repr (raw window for an i64 param under M6, else boxed),
+				// exactly as the non-tail direct call does.
+				let regs: Vec<Reg> = args
+					.iter()
+					.enumerate()
+					.map(|(i, a)| {
+						if em
+							.fn_param_raw
+							.get(f.0 as usize)
+							.and_then(|ps| ps.get(i))
+							.copied()
+							== Some(true)
+						{
+							self.atom_reg_raw(em, a, body, ranges, r)
+						} else {
+							self.atom_reg(em, a, body, ranges, r)
+						}
+					})
+					.collect();
+				let args = em.intern_reg_list(regs);
+				push(
+					body,
+					ranges,
+					Instruction::TailCallDirect {
+						dst,
+						fn_idx: f.0,
+						args,
+					},
+					r,
+				);
+				Ok(())
+			}
 			Rvalue::Call(callee, args) => match callee {
 				Callee::Function(f) => {
 					// Materialize each arg in the callee's param repr: a const int
@@ -1474,7 +1508,9 @@ fn collect_rvalue(rv: &Rvalue, set: &mut VarSet) {
 			collect_atom(a, set);
 			collect_atom(b, set);
 		}
-		Rvalue::Call(_, args) => args.iter().for_each(|a| collect_atom(a, set)),
+		Rvalue::Call(_, args) | Rvalue::TailCallDirect(_, args) => {
+			args.iter().for_each(|a| collect_atom(a, set))
+		}
 		Rvalue::CallClosure(c, args) | Rvalue::TailCall(c, args) => {
 			collect_atom(c, set);
 			args.iter().for_each(|a| collect_atom(a, set));

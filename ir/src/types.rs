@@ -366,6 +366,13 @@ pub enum Rvalue {
 	/// builtins/ctors/async-fns. Produced only by `lower`'s tail path; always
 	/// immediately followed by a `Return` of its result.
 	TailCall(Atom, Vec<Atom>),
+	/// A tail call to a statically-known top-level function — the tail-position
+	/// analogue of `Call(Callee::Function(..))`. Produced by `resolve_direct_calls`
+	/// from a `TailCall` whose callee is a capture-free non-async global function,
+	/// it drops the `LoadGlobal` + indirect dispatch (the callee resolves to a
+	/// zero-capture closure, so this is behavior-neutral). Lowers to the VM's
+	/// `TailCallDirect`; always immediately followed by a `Return` of its result.
+	TailCallDirect(FuncId, Vec<Atom>),
 	/// Read method `index` (trait declaration order) from a dictionary value,
 	/// yielding a callable.
 	GetDictMethod(Atom, u32),

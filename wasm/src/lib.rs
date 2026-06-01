@@ -126,7 +126,9 @@ impl Reach {
 
 fn scan_rvalue(rv: &Rvalue, fns: &mut Vec<u32>, gs: &mut Vec<u32>) {
 	match rv {
-		Rvalue::Call(Callee::Function(f), _) | Rvalue::MakeClosure(f, _) => fns.push(f.0),
+		Rvalue::Call(Callee::Function(f), _)
+		| Rvalue::TailCallDirect(f, _)
+		| Rvalue::MakeClosure(f, _) => fns.push(f.0),
 		Rvalue::Call(Callee::Global(g), _) | Rvalue::GlobalRef(g) => gs.push(g.0),
 		_ => {}
 	}

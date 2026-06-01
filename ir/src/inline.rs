@@ -408,6 +408,12 @@ fn rename_rvalue(rv: &Rvalue, subst: &HashMap<u32, Atom>) -> Rvalue {
 		Rvalue::CallClosure(c, args) | Rvalue::TailCall(c, args) => {
 			Rvalue::CallClosure(a(c), args.iter().map(a).collect())
 		}
+		// A direct tail call lifted into non-tail position is a direct call. (Not
+		// reachable today — `resolve_direct_calls` runs after inlining — but kept
+		// correct if the pass order ever changes.)
+		Rvalue::TailCallDirect(fid, args) => {
+			Rvalue::Call(Callee::Function(*fid), args.iter().map(a).collect())
+		}
 		Rvalue::GetDictMethod(x, i) => Rvalue::GetDictMethod(a(x), *i),
 		Rvalue::MakeDict(args) => Rvalue::MakeDict(args.iter().map(a).collect()),
 		Rvalue::MakeClosure(fid, caps) => Rvalue::MakeClosure(*fid, caps.iter().map(a).collect()),
@@ -526,6 +532,7 @@ fn each_var_rvalue(rv: &Rvalue, note: &mut impl FnMut(u32)) {
 			a(r);
 		}
 		Rvalue::Call(_, args)
+		| Rvalue::TailCallDirect(_, args)
 		| Rvalue::MakeDict(args)
 		| Rvalue::MakeTuple(args)
 		| Rvalue::Interpolate(args)

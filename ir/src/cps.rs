@@ -802,7 +802,7 @@ fn collect_rvalue_reads(rv: &Rvalue, set: &mut HashSet<u32>) {
 			collect_atom(a, set);
 			collect_atom(b, set);
 		}
-		Call(_, args) => args.iter().for_each(|a| collect_atom(a, set)),
+		Call(_, args) | TailCallDirect(_, args) => args.iter().for_each(|a| collect_atom(a, set)),
 		CallClosure(c, args) | TailCall(c, args) => {
 			collect_atom(c, set);
 			args.iter().for_each(|a| collect_atom(a, set));

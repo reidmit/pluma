@@ -220,7 +220,7 @@ fn collect_keys(
 	for s in &b.0 {
 		match &s.kind {
 			StmtKind::Let(_, rv) | StmtKind::Discard(rv) => {
-				if let Rvalue::Call(Callee::Function(fid), args) = rv {
+				if let Rvalue::Call(Callee::Function(fid), args) | Rvalue::TailCallDirect(fid, args) = rv {
 					if let Some(key) = key_for_call(fid.0, args, candidates, mr) {
 						emit(key);
 					}
@@ -256,7 +256,7 @@ fn rewrite_calls(
 	for s in &mut b.0 {
 		match &mut s.kind {
 			StmtKind::Let(_, rv) | StmtKind::Discard(rv) => {
-				if let Rvalue::Call(Callee::Function(fid), args) = rv {
+				if let Rvalue::Call(Callee::Function(fid), args) | Rvalue::TailCallDirect(fid, args) = rv {
 					if let Some(key) = key_for_call(fid.0, args, candidates, mr) {
 						if let Some(&clone_fid) = clones.get(&key) {
 							*fid = ir::FuncId(clone_fid);

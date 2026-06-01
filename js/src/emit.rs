@@ -374,6 +374,9 @@ impl<'a> Emitter<'a> {
 					format!("__land({}({}))", self.atom(c), self.atoms(args))
 				}
 			}
+			// Only produced by the VM's `ir::optimize` (which the JS backend doesn't
+			// run), so unreachable here; lower it as a plain direct call for safety.
+			Rvalue::TailCallDirect(f, args) => self.call(&Callee::Function(*f), args)?,
 			Rvalue::GetDictMethod(d, i) => format!("{}[{i}]", self.atom(d)),
 			Rvalue::MakeDict(methods) => format!("[{}]", self.atoms(methods)),
 			Rvalue::MakeClosure(fid, caps) => {

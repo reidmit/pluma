@@ -149,11 +149,25 @@ fn rewrite_block(b: &mut Block, vg: &HashMap<u32, u32>, targets: &HashMap<u32, F
 }
 
 fn rewrite_rvalue(rv: &mut Rvalue, vg: &HashMap<u32, u32>, targets: &HashMap<u32, FuncId>) {
-	if let Rvalue::CallClosure(Atom::Var(v), args) = rv {
-		if let Some(fid) = vg.get(&v.0).and_then(|g| targets.get(g)).copied() {
-			let args = std::mem::take(args);
-			*rv = Rvalue::Call(Callee::Function(fid), args);
+	match rv {
+		Rvalue::CallClosure(Atom::Var(v), args) => {
+			if let Some(fid) = vg.get(&v.0).and_then(|g| targets.get(g)).copied() {
+				let args = std::mem::take(args);
+				*rv = Rvalue::Call(Callee::Function(fid), args);
+			}
 		}
+		// The tail-position analogue: a tail call through a global that holds a
+		// capture-free non-async function becomes a direct `TailCallDirect`,
+		// dropping the `LoadGlobal` + indirect closure dispatch on the hottest
+		// path (self-/mutual-recursion). Same eligibility rule as the non-tail
+		// case, so equally behavior-neutral.
+		Rvalue::TailCall(Atom::Var(v), args) => {
+			if let Some(fid) = vg.get(&v.0).and_then(|g| targets.get(g)).copied() {
+				let args = std::mem::take(args);
+				*rv = Rvalue::TailCallDirect(fid, args);
+			}
+		}
+		_ => {}
 	}
 }
 
@@ -168,6 +182,140 @@ pub fn prune_dead_global_refs(f: &mut Function) {
 	fn retain(b: &mut Block, used: &HashSet<u32>) {
 		b.0.retain(
 			|stmt| !matches!(&stmt.kind, StmtKind::Let(v, Rvalue::GlobalRef(_)) if !used.contains(&v.0)),
+		);
+		for stmt in &mut b.0 {
+			match &mut stmt.kind {
+				StmtKind::If(_, t, e) => {
+					retain(t, used);
+					retain(e, used);
+				}
+				StmtKind::Switch { arms, default, .. } => {
+					for (_, blk) in arms {
+						retain(blk, used);
+					}
+					retain(default, used);
+				}
+				StmtKind::Match { arms, .. } => {
+					for arm in arms {
+						retain(&mut arm.body, used);
+					}
+				}
+				StmtKind::Loop(blk) => retain(blk, used),
+				_ => {}
+			}
+		}
+	}
+	let mut body = std::mem::replace(&mut f.body, Block(Vec::new()));
+	retain(&mut body, &used);
+	f.body = body;
+}
+
+/// Fold a fully-applied variant constructor into a direct construction. A call
+/// `tree.node l r` / `some x` / `ok e` lowers to a constructor *closure* plus a
+/// call: `Let(c, MakeVariantCtor{e,t}); CallClosure(c, [l, r])`. Because Pluma is
+/// uncurried and the analyzer checks arity, a constructor used as a *call callee*
+/// is always fully applied — so the call is exactly the construction. This
+/// rewrites such a call to a direct `MakeVariant{e, t, payload: args}`, dropping
+/// the closure allocation and the call/frame setup (the latter is the bulk of the
+/// win — a tail call became a plain construct + return). Bare ctor *values* passed
+/// without being called (e.g. `list.map xs some`) are left untouched.
+///
+/// Behavior-neutral: invoking the ctor closure with `args` builds exactly the
+/// variant `MakeVariant` builds from the same `args`. Runs across the whole
+/// program; idempotent.
+pub fn fold_variant_ctor_calls(program: &mut IrProgram) {
+	for f in &mut program.functions {
+		let ctors = collect_var_ctors(f);
+		if ctors.is_empty() {
+			continue;
+		}
+		let mut body = std::mem::replace(&mut f.body, Block(Vec::new()));
+		fold_block(&mut body, &ctors);
+		f.body = body;
+		prune_dead_ctor_refs(f);
+	}
+}
+
+/// Within one function, map each var bound directly to a variant constructor to
+/// its `(enum_name, tag)`. `VarId`s are function-unique, so a flat map is safe.
+fn collect_var_ctors(f: &Function) -> HashMap<u32, (String, u32)> {
+	let mut map = HashMap::new();
+	fn walk(b: &Block, map: &mut HashMap<u32, (String, u32)>) {
+		for stmt in &b.0 {
+			match &stmt.kind {
+				StmtKind::Let(v, Rvalue::MakeVariantCtor { enum_name, tag }) => {
+					map.insert(v.0, (enum_name.clone(), *tag));
+				}
+				StmtKind::If(_, t, e) => {
+					walk(t, map);
+					walk(e, map);
+				}
+				StmtKind::Switch { arms, default, .. } => {
+					for (_, blk) in arms {
+						walk(blk, map);
+					}
+					walk(default, map);
+				}
+				StmtKind::Match { arms, .. } => {
+					for arm in arms {
+						walk(&arm.body, map);
+					}
+				}
+				StmtKind::Loop(blk) => walk(blk, map),
+				_ => {}
+			}
+		}
+	}
+	walk(&f.body, &mut map);
+	map
+}
+
+fn fold_block(b: &mut Block, ctors: &HashMap<u32, (String, u32)>) {
+	for stmt in &mut b.0 {
+		match &mut stmt.kind {
+			StmtKind::Let(_, rv) | StmtKind::Discard(rv) => fold_rvalue(rv, ctors),
+			StmtKind::If(_, t, e) => {
+				fold_block(t, ctors);
+				fold_block(e, ctors);
+			}
+			StmtKind::Switch { arms, default, .. } => {
+				for (_, blk) in arms {
+					fold_block(blk, ctors);
+				}
+				fold_block(default, ctors);
+			}
+			StmtKind::Match { arms, .. } => {
+				for arm in arms {
+					fold_block(&mut arm.body, ctors);
+				}
+			}
+			StmtKind::Loop(blk) => fold_block(blk, ctors),
+			_ => {}
+		}
+	}
+}
+
+fn fold_rvalue(rv: &mut Rvalue, ctors: &HashMap<u32, (String, u32)>) {
+	if let Rvalue::CallClosure(Atom::Var(v), args) | Rvalue::TailCall(Atom::Var(v), args) = rv {
+		if let Some((enum_name, tag)) = ctors.get(&v.0) {
+			let payload = std::mem::take(args);
+			*rv = Rvalue::MakeVariant {
+				enum_name: enum_name.clone(),
+				tag: *tag,
+				payload,
+			};
+		}
+	}
+}
+
+/// Drop `Let(v, MakeVariantCtor{..})` bindings whose `v` is no longer used as an
+/// operand anywhere — a constructor closure the fold just orphaned. Building one
+/// is pure, so removing a dead one is safe.
+fn prune_dead_ctor_refs(f: &mut Function) {
+	let used = used_vars(f);
+	fn retain(b: &mut Block, used: &HashSet<u32>) {
+		b.0.retain(
+			|stmt| !matches!(&stmt.kind, StmtKind::Let(v, Rvalue::MakeVariantCtor { .. }) if !used.contains(&v.0)),
 		);
 		for stmt in &mut b.0 {
 			match &mut stmt.kind {
@@ -212,6 +360,7 @@ fn used_vars(f: &Function) -> HashSet<u32> {
 				note(b);
 			}
 			Rvalue::Call(_, args)
+			| Rvalue::TailCallDirect(_, args)
 			| Rvalue::MakeDict(args)
 			| Rvalue::MakeTuple(args)
 			| Rvalue::Interpolate(args)
@@ -457,6 +606,104 @@ mod tests {
 				.iter()
 				.any(|s| matches!(&s.kind, StmtKind::Let(_, Rvalue::CallClosure(..)))),
 			"non-closure global must stay an indirect CallClosure"
+		);
+	}
+
+	/// A caller body whose call is in tail position:
+	/// `Let(0, GlobalRef(g)); Let(1, TailCall(0, [arg])); Return(1)`.
+	fn tail_caller_calling(global: u32, arg: Atom) -> Vec<Stmt> {
+		vec![
+			Stmt::new(
+				StmtKind::Let(VarId(0), Rvalue::GlobalRef(GlobalId(global))),
+				syn(),
+			),
+			Stmt::new(
+				StmtKind::Let(VarId(1), Rvalue::TailCall(Atom::Var(VarId(0)), vec![arg])),
+				syn(),
+			),
+			Stmt::new(StmtKind::Return(Atom::Var(VarId(1))), syn()),
+		]
+	}
+
+	// A *tail* call through a global holding a capture-free closure resolves to a
+	// direct `TailCallDirect`, and the orphaned GlobalRef load is pruned.
+	#[test]
+	fn resolves_tail_call_through_global() {
+		let callee = boxed_fn("callee", vec![VarId(0)], vec![]);
+		let thunk = thunk_for(0);
+		let caller = boxed_fn(
+			"caller",
+			vec![],
+			tail_caller_calling(0, Atom::Const(Const::Int(1))),
+		);
+		let mut program = IrProgram {
+			functions: vec![callee, thunk, caller],
+			globals: vec![GlobalInit::Thunk(FuncId(1))],
+			enums: Default::default(),
+			entry: FuncId(2),
+			test_suites: vec![],
+			test_new: None,
+		};
+		resolve_direct_calls(&mut program);
+
+		let body = &program.functions[2].body.0;
+		// The GlobalRef load is gone; the tail call is now a direct TailCallDirect.
+		assert_eq!(body.len(), 2, "dead GlobalRef should be pruned");
+		assert!(
+			matches!(
+				&body[0].kind,
+				StmtKind::Let(_, Rvalue::TailCallDirect(FuncId(0), _))
+			),
+			"expected TailCallDirect(0), got {:?}",
+			body[0].kind
+		);
+	}
+
+	// A fully-applied variant constructor (ctor closure immediately called) folds
+	// to a direct `MakeVariant`, and the dead ctor binding is pruned.
+	#[test]
+	fn folds_fully_applied_variant_ctor() {
+		// Body: Let(0, MakeVariantCtor{e,1}); Let(1, CallClosure(0, [arg])); Return(1)
+		let body = vec![
+			Stmt::new(
+				StmtKind::Let(
+					VarId(0),
+					Rvalue::MakeVariantCtor {
+						enum_name: "m.tree".into(),
+						tag: 1,
+					},
+				),
+				syn(),
+			),
+			Stmt::new(
+				StmtKind::Let(
+					VarId(1),
+					Rvalue::CallClosure(Atom::Var(VarId(0)), vec![Atom::Const(Const::Int(7))]),
+				),
+				syn(),
+			),
+			Stmt::new(StmtKind::Return(Atom::Var(VarId(1))), syn()),
+		];
+		let mut program = IrProgram {
+			functions: vec![boxed_fn("build", vec![], body)],
+			globals: vec![],
+			enums: Default::default(),
+			entry: FuncId(0),
+			test_suites: vec![],
+			test_new: None,
+		};
+		fold_variant_ctor_calls(&mut program);
+
+		let body = &program.functions[0].body.0;
+		// The ctor binding is pruned; the call became a direct construction.
+		assert_eq!(body.len(), 2, "dead MakeVariantCtor should be pruned");
+		assert!(
+			matches!(
+				&body[0].kind,
+				StmtKind::Let(VarId(1), Rvalue::MakeVariant { tag: 1, payload, .. }) if payload.len() == 1
+			),
+			"expected MakeVariant with one payload, got {:?}",
+			body[0].kind
 		);
 	}
 }

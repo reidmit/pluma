@@ -229,7 +229,7 @@ pub fn result_repr(rv: &Rvalue, reprs: &[Repr], sigs: &Sigs) -> Repr {
 		Rvalue::Unbox(_, r) => *r,
 		// A resolved direct call reads as the callee's return repr (`Boxed` in
 		// uniform mode, or for a callee that wasn't monomorphized).
-		Rvalue::Call(Callee::Function(fid), _) => sigs.ret(*fid),
+		Rvalue::Call(Callee::Function(fid), _) | Rvalue::TailCallDirect(fid, _) => sigs.ret(*fid),
 		// Everything that yields a heap value or a polymorphic value.
 		Rvalue::Call(..)
 		| Rvalue::CallClosure(..)
@@ -322,7 +322,7 @@ fn for_each_required_operand(rv: &mut Rvalue, sigs: &Sigs, mut f: impl FnMut(&mu
 		// A resolved direct call: each argument must match the callee's param repr
 		// (the interprocedural contract). `Boxed` in uniform mode / for a callee
 		// that wasn't monomorphized.
-		Rvalue::Call(Callee::Function(fid), args) => {
+		Rvalue::Call(Callee::Function(fid), args) | Rvalue::TailCallDirect(fid, args) => {
 			let fid = *fid;
 			for (i, a) in args.iter_mut().enumerate() {
 				f(a, sigs.param(fid, i));
@@ -707,6 +707,7 @@ fn rvalue_vars(rv: &Rvalue, bump: &mut impl FnMut(VarId)) {
 			atom_var(b, bump);
 		}
 		Rvalue::Call(_, args)
+		| Rvalue::TailCallDirect(_, args)
 		| Rvalue::MakeDict(args)
 		| Rvalue::MakeTuple(args)
 		| Rvalue::Interpolate(args)
