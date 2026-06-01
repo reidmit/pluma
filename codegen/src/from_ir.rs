@@ -1146,13 +1146,17 @@ fn binop_instr(op: BinOp) -> Instruction {
 		BinOp::Or => Instruction::LogicalOr,
 		BinOp::Eq => Instruction::Eq,
 		BinOp::Ne => Instruction::Neq,
-		// The IR splits ordering comparisons by operand repr (i64 vs f64) for the
-		// WASM backend; the VM has one polymorphic opcode per relation (it
-		// dispatches on the runtime `Value` tag), so both halves map to it.
-		BinOp::LtI64 | BinOp::LtF64 => Instruction::Lt,
-		BinOp::LeI64 | BinOp::LeF64 => Instruction::Lte,
-		BinOp::GtI64 | BinOp::GtF64 => Instruction::Gt,
-		BinOp::GeI64 | BinOp::GeF64 => Instruction::Gte,
+		// The IR splits ordering comparisons by operand repr (i64 vs f64); the VM
+		// now mirrors that split with per-type opcodes, so each half maps to its
+		// own opcode (no runtime int/float tag dispatch in the comparison).
+		BinOp::LtI64 => Instruction::LtInt,
+		BinOp::LtF64 => Instruction::LtFloat,
+		BinOp::LeI64 => Instruction::LteInt,
+		BinOp::LeF64 => Instruction::LteFloat,
+		BinOp::GtI64 => Instruction::GtInt,
+		BinOp::GtF64 => Instruction::GtFloat,
+		BinOp::GeI64 => Instruction::GteInt,
+		BinOp::GeF64 => Instruction::GteFloat,
 	}
 }
 

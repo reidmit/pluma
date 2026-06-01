@@ -1041,40 +1041,72 @@ impl VM {
 					}
 				}
 			}
-			Instruction::Lt => {
+			// Ordering comparisons are split by operand repr (`*Int` / `*Float`) so
+			// the hot path matches one arm instead of probing int-then-float. The
+			// analyzer guarantees the operands; the mismatch arm stays a defensive
+			// runtime error that optimizes away in release.
+			Instruction::LtInt => {
 				let r = self.stack.pop().unwrap();
 				let l = self.stack.pop().unwrap();
 				match (l, r) {
 					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Bool(a < b)),
-					(Value::Float(a), Value::Float(b)) => self.stack.push(Value::Bool(a < b)),
-					_ => return Err(RuntimeError::new("Lt: expected numbers").at(self.current_range())),
+					_ => return Err(RuntimeError::new("LtInt: expected ints").at(self.current_range())),
 				}
 			}
-			Instruction::Lte => {
+			Instruction::LtFloat => {
+				let r = self.stack.pop().unwrap();
+				let l = self.stack.pop().unwrap();
+				match (l, r) {
+					(Value::Float(a), Value::Float(b)) => self.stack.push(Value::Bool(a < b)),
+					_ => return Err(RuntimeError::new("LtFloat: expected floats").at(self.current_range())),
+				}
+			}
+			Instruction::LteInt => {
 				let r = self.stack.pop().unwrap();
 				let l = self.stack.pop().unwrap();
 				match (l, r) {
 					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Bool(a <= b)),
-					(Value::Float(a), Value::Float(b)) => self.stack.push(Value::Bool(a <= b)),
-					_ => return Err(RuntimeError::new("Lte: expected numbers").at(self.current_range())),
+					_ => return Err(RuntimeError::new("LteInt: expected ints").at(self.current_range())),
 				}
 			}
-			Instruction::Gt => {
+			Instruction::LteFloat => {
+				let r = self.stack.pop().unwrap();
+				let l = self.stack.pop().unwrap();
+				match (l, r) {
+					(Value::Float(a), Value::Float(b)) => self.stack.push(Value::Bool(a <= b)),
+					_ => return Err(RuntimeError::new("LteFloat: expected floats").at(self.current_range())),
+				}
+			}
+			Instruction::GtInt => {
 				let r = self.stack.pop().unwrap();
 				let l = self.stack.pop().unwrap();
 				match (l, r) {
 					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Bool(a > b)),
-					(Value::Float(a), Value::Float(b)) => self.stack.push(Value::Bool(a > b)),
-					_ => return Err(RuntimeError::new("Gt: expected numbers").at(self.current_range())),
+					_ => return Err(RuntimeError::new("GtInt: expected ints").at(self.current_range())),
 				}
 			}
-			Instruction::Gte => {
+			Instruction::GtFloat => {
+				let r = self.stack.pop().unwrap();
+				let l = self.stack.pop().unwrap();
+				match (l, r) {
+					(Value::Float(a), Value::Float(b)) => self.stack.push(Value::Bool(a > b)),
+					_ => return Err(RuntimeError::new("GtFloat: expected floats").at(self.current_range())),
+				}
+			}
+			Instruction::GteInt => {
 				let r = self.stack.pop().unwrap();
 				let l = self.stack.pop().unwrap();
 				match (l, r) {
 					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Bool(a >= b)),
+					_ => return Err(RuntimeError::new("GteInt: expected ints").at(self.current_range())),
+				}
+			}
+			Instruction::GteFloat => {
+				let r = self.stack.pop().unwrap();
+				let l = self.stack.pop().unwrap();
+				match (l, r) {
 					(Value::Float(a), Value::Float(b)) => self.stack.push(Value::Bool(a >= b)),
-					_ => return Err(RuntimeError::new("Gte: expected numbers").at(self.current_range())),
+					_ => return Err(RuntimeError::new("GteFloat: expected floats").at(self.current_range())),
 				}
 			}
 			Instruction::Eq => {
@@ -1568,10 +1600,14 @@ fn opcode_name(i: &Instruction) -> &'static str {
 		NegInt => "NegInt",
 		NegFloat => "NegFloat",
 		ConcatString => "ConcatString",
-		Lt => "Lt",
-		Lte => "Lte",
-		Gt => "Gt",
-		Gte => "Gte",
+		LtInt => "LtInt",
+		LtFloat => "LtFloat",
+		LteInt => "LteInt",
+		LteFloat => "LteFloat",
+		GtInt => "GtInt",
+		GtFloat => "GtFloat",
+		GteInt => "GteInt",
+		GteFloat => "GteFloat",
 		Eq => "Eq",
 		Neq => "Neq",
 		LogicalAnd => "LogicalAnd",

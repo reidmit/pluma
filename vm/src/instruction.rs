@@ -197,10 +197,19 @@ pub enum Instruction {
 	// String concatenation (`++`): pops two strings, pushes their join.
 	ConcatString,
 
-	Lt,
-	Lte,
-	Gt,
-	Gte,
+	// Ordering comparisons, split by operand repr (mirrors the IR's
+	// `LtI64`/`LtF64`/… split). The analyzer has already proven the operands are
+	// two ints or two floats, so each opcode handles exactly one numeric type —
+	// no runtime tag dispatch across int/float. `*Int` pops two ints, `*Float`
+	// two floats; both push a bool.
+	LtInt,
+	LtFloat,
+	LteInt,
+	LteFloat,
+	GtInt,
+	GtFloat,
+	GteInt,
+	GteFloat,
 	Eq,
 	Neq,
 
