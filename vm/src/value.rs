@@ -15,6 +15,13 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+// Persistent (structurally-shared) containers backing `core.dict`. Cloning a
+// root is an O(1) refcount bump and insert/remove copy only the O(log n) path
+// they touch — so an immutable `dict.insert` no longer deep-copies the whole
+// map (which made a build-up loop O(n²)). `im_rc` is the Rc-based (single-
+// threaded, no atomics) variant, matching the VM's `Rc` value model.
+use im_rc::{HashMap as ImMap, Vector as ImVec};
+
 #[derive(Clone)]
 pub enum Value {
 	Nothing,
@@ -181,21 +188,24 @@ pub enum TaskRepr {
 	Next(usize),
 }
 
+#[derive(Clone)]
 pub struct DictData {
-	// Insertion-ordered (key, value) pairs. Cleared and rebuilt on
-	// `remove`; appended on `insert` of a new key; mutated in place when
-	// replacing an existing key's value.
-	pub entries: Vec<(Value, Value)>,
-	// Hash → indices into `entries`. Collisions chain by walking the Vec
-	// and checking `values_eq` on the keys.
-	pub buckets: HashMap<i64, Vec<usize>>,
+	// Insertion-ordered (key, value) pairs — a persistent vector, so iteration
+	// (`keys`/`values`/`entries`) still observes insertion order. Appended on
+	// `insert` of a new key; the slot is overwritten when replacing an existing
+	// key's value; rebuilt on `remove`.
+	pub entries: ImVec<(Value, Value)>,
+	// Hash → indices into `entries`, persistent so the spine is shared across
+	// versions. Collisions chain by walking the (small) index Vec and checking
+	// `values_eq` on the keys.
+	pub buckets: ImMap<i64, Vec<usize>>,
 }
 
 impl DictData {
 	pub fn new() -> Self {
 		Self {
-			entries: Vec::new(),
-			buckets: HashMap::new(),
+			entries: ImVec::new(),
+			buckets: ImMap::new(),
 		}
 	}
 
@@ -211,18 +221,30 @@ impl DictData {
 		None
 	}
 
-	// Insert (or replace) without mutating self. Returns a fresh DictData.
+	// Insert (or replace) without mutating self. The clone is an O(1) refcount
+	// bump of the shared spine; the persistent insert below copies only the
+	// O(log n) path it touches — no whole-map deep copy.
 	pub fn inserted(&self, h: i64, key: Value, value: Value) -> Self {
-		let mut entries = self.entries.clone();
-		let mut buckets = self.buckets.clone();
+		let mut d = self.clone();
+		d.insert_in_place(h, key, value);
+		d
+	}
+
+	// Insert (or replace) mutating self. Cheap because the backing `im_rc`
+	// containers are persistent: a `set`/`push_back`/`insert` copies only the
+	// path from the root to the touched node and shares everything else with the
+	// pre-insert version, so an immutable `dict.insert` loop is O(n log n) total
+	// rather than the O(n²) a flat-`Vec` deep-copy-per-insert produced.
+	pub fn insert_in_place(&mut self, h: i64, key: Value, value: Value) {
 		if let Some(idx) = self.find_index(h, &key) {
-			entries[idx] = (key, value);
+			let _ = self.entries.set(idx, (key, value));
 		} else {
-			let idx = entries.len();
-			entries.push((key, value));
-			buckets.entry(h).or_insert_with(Vec::new).push(idx);
+			let idx = self.entries.len();
+			self.entries.push_back((key, value));
+			let mut chain = self.buckets.get(&h).cloned().unwrap_or_default();
+			chain.push(idx);
+			self.buckets.insert(h, chain);
 		}
-		Self { entries, buckets }
 	}
 
 	// Remove without mutating self. Returns a fresh DictData with the entry
@@ -231,15 +253,15 @@ impl DictData {
 		match self.find_index(h, key) {
 			None => self.clone(),
 			Some(removed_idx) => {
-				let mut entries = Vec::with_capacity(self.entries.len() - 1);
+				let mut entries = ImVec::new();
 				for (i, e) in self.entries.iter().enumerate() {
 					if i != removed_idx {
-						entries.push(e.clone());
+						entries.push_back(e.clone());
 					}
 				}
 				// Rebuild the bucket index against the renumbered entries.
-				let mut buckets: HashMap<i64, Vec<usize>> = HashMap::new();
-				for (h2, idxs) in &self.buckets {
+				let mut buckets: ImMap<i64, Vec<usize>> = ImMap::new();
+				for (h2, idxs) in self.buckets.iter() {
 					let mapped: Vec<usize> = idxs
 						.iter()
 						.filter_map(|&i| {
@@ -258,15 +280,6 @@ impl DictData {
 				}
 				Self { entries, buckets }
 			}
-		}
-	}
-}
-
-impl Clone for DictData {
-	fn clone(&self) -> Self {
-		Self {
-			entries: self.entries.clone(),
-			buckets: self.buckets.clone(),
 		}
 	}
 }
@@ -515,7 +528,7 @@ pub fn values_eq(a: &Value, b: &Value) -> bool {
 			if a.entries.len() != b.entries.len() {
 				return false;
 			}
-			for (h, idxs) in &a.buckets {
+			for (h, idxs) in a.buckets.iter() {
 				for &i in idxs {
 					let (k, v) = &a.entries[i];
 					match b.find_index(*h, k) {

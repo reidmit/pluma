@@ -625,7 +625,7 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				entries.push((k.clone(), new_v));
 			}
 			Ok(Value::Dict(Rc::new(DictData {
-				entries,
+				entries: entries.into(),
 				buckets: m.buckets.clone(),
 			})))
 		}
@@ -659,8 +659,8 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 				}
 			}
 			Ok(Value::Dict(Rc::new(DictData {
-				entries: new_entries,
-				buckets: new_buckets,
+				entries: new_entries.into(),
+				buckets: new_buckets.into(),
 			})))
 		}
 		"ref-new" => {

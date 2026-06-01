@@ -11,3 +11,4 @@ compiler = { path = "../compiler" }
 rand = "0.10"
 uuid = { version = "1", features = ["v4", "v7"] }
 jiff = "0.2.25"
+im-rc = "15.1.0"
