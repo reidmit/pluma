@@ -27,6 +27,7 @@ pub fn stdlib_sources() -> &'static [(&'static str, &'static str)] {
 		("core.uuid", include_str!("stdlib/uuid.pa")),
 		("core.time", include_str!("stdlib/time.pa")),
 		("core.task", include_str!("stdlib/task.pa")),
+		("core.dom", include_str!("stdlib/dom.pa")),
 	]
 }
 

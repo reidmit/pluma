@@ -10,6 +10,17 @@ analyze path:
 run path:
   @ cargo run --bin cli --quiet -- run {{path}}
 
+# compile a module to a JavaScript module (+ HTML harness) for the browser target
+build-browser path:
+  @ cargo run --bin cli --quiet -- build --target browser {{path}}
+
+# build the web/ DOM demo, then serve it (open http://localhost:7599/index.html)
+web-demo:
+  @ cargo run --bin cli --quiet -- build web/app.pa -o web/app
+  @ rm -f web/app.html
+  @ echo "serving web/ on http://localhost:7599/index.html (ctrl-c to stop)"
+  @ cd web && python3 -m http.server 7599
+
 # format everything: Rust sources (cargo fmt) + the baked-in stdlib/prelude .pa sources
 format: format-stdlib
   @ cargo fmt
@@ -39,9 +50,18 @@ test:
 test-write:
   @ INSTA_UPDATE=always cargo test -p tests
 
-# report which tests/run fixtures the WASM backend reproduces (vs the VM)
-wasm-coverage:
-  @ cargo test -p tests --test wasm_diff -- --ignored --nocapture wasm_coverage_report
+# cross-backend conformance: run every fixture through VM/WASM/JS, diff WASM+JS
+# against the VM oracle, and regenerate the committed CONFORMANCE.md coverage doc
+conformance:
+  @ cargo run -p conformance --release
+
+# conformance gate only (no write): assert WASM+JS match the VM and CONFORMANCE.md is fresh
+conformance-check:
+  @ cargo test -p conformance --release
+
+# full report incl. perf tables -> target/conformance/report.md (slow; needs node)
+conformance-perf:
+  @ cargo run -p conformance --release -- --perf
 
 # run the stdlib's own Pluma test suite (compiler/src/stdlib/*.test.pa)
 # through `pluma test` — exercises the stdlib and the `core.testing` runner.

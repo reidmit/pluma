@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>Pluma in the browser</title>
+	<style>
+		body { font: 16px/1.5 system-ui, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1rem; }
+		h1 { font-weight: 400; }
+		#out { font-size: 1.25rem; padding: 1rem; background: #f4f4f5; border-radius: 8px; }
+		#stdout { background: #18181b; color: #e4e4e7; padding: 1rem; border-radius: 8px; white-space: pre-wrap; }
+		.label { color: #71717a; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; }
+	</style>
+</head>
+<body>
+	<h1 id="title">Pluma</h1>
+	<p class="label">DOM (dom.set-text)</p>
+	<div id="out">…</div>
+	<p class="label">stdout (print)</p>
+	<pre id="stdout"></pre>
+
+	<!-- The compiled Pluma program. Building it runs `main` on load, which both
+	     prints (buffered into __plumaResult.stdout) and drives the DOM above. -->
+	<script src="app.js"></script>
+	<script>
+		const r = globalThis.__plumaResult;
+		if (r) {
+			document.getElementById("stdout").textContent =
+				r.stdout + (r.status !== "ok" ? "\n" + r.status : "");
+			console.log("[pluma] status:", r.status);
+			console.log("[pluma] stdout:\n" + r.stdout);
+		}
+	</script>
+</body>
+</html>

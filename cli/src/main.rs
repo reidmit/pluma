@@ -28,6 +28,11 @@ fn main() {
 				repl::repl_command(rest);
 			}
 
+			"build" => {
+				let rest: Vec<String> = std::env::args().skip(2).collect();
+				build_command(rest);
+			}
+
 			"format" => {
 				let rest: Vec<String> = std::env::args().skip(2).collect();
 				format_command(rest);
@@ -611,6 +616,94 @@ fn compile_program(compiler: &Compiler) -> Result<vm::Program, String> {
 	codegen::compile_from_ir(&program).map_err(|e| e.to_string())
 }
 
+/// `pluma build [--target browser] <file> [-o out]` — compile to a JavaScript
+/// module for the browser/client target. Lowers the shared IR (under
+/// `Platform::Browser`) through the `js` backend and writes `<out>.js` plus a
+/// tiny `<out>.html` harness that loads it.
+fn build_command(args: Vec<String>) {
+	let mut entry_path: Option<String> = None;
+	let mut out_base: Option<String> = None;
+	let mut iter = args.into_iter();
+	while let Some(a) = iter.next() {
+		match a.as_str() {
+			"--target" => {
+				// Only `browser` is meaningful today; accept and ignore the value so
+				// the flag is forward-compatible.
+				let _ = iter.next();
+			}
+			"-o" | "--out" => out_base = iter.next(),
+			_ => entry_path = Some(a),
+		}
+	}
+	let entry_path = match entry_path {
+		Some(p) => p,
+		None => {
+			print_error("No module path given. Expected another argument.");
+			std::process::exit(1);
+		}
+	};
+
+	let mut compiler = match Compiler::from_entry_path(entry_path.clone()) {
+		Ok(c) => c.with_platform(Platform::Browser),
+		Err(diagnostics) => {
+			print_diagnostics(diagnostics);
+			std::process::exit(1);
+		}
+	};
+	vm::stdlib::register_compiler(&mut compiler);
+	if let Err(diagnostics) = compiler.check() {
+		print_diagnostics(diagnostics);
+		std::process::exit(1);
+	}
+
+	let program = match ir::lower(&compiler) {
+		Ok(p) => p,
+		Err(msg) => {
+			print_error(format!("ir::lower: {msg}"));
+			std::process::exit(1);
+		}
+	};
+	let source = match js::emit(&program) {
+		Ok(s) => s,
+		Err(msg) => {
+			print_error(format!("js codegen error: {msg}"));
+			std::process::exit(1);
+		}
+	};
+
+	// Default the output base name to the entry file's stem.
+	let base = out_base.unwrap_or_else(|| {
+		std::path::Path::new(&entry_path)
+			.file_stem()
+			.and_then(|s| s.to_str())
+			.unwrap_or("out")
+			.to_string()
+	});
+	let js_path = format!("{base}.js");
+	let html_path = format!("{base}.html");
+	if let Err(e) = std::fs::write(&js_path, &source) {
+		print_error(format!("writing {js_path}: {e}"));
+		std::process::exit(1);
+	}
+	let html = browser_harness(&js_path);
+	if let Err(e) = std::fs::write(&html_path, html) {
+		print_error(format!("writing {html_path}: {e}"));
+		std::process::exit(1);
+	}
+	println!("wrote {js_path} and {html_path}");
+}
+
+/// A minimal HTML harness that loads the emitted module and shows its stdout.
+fn browser_harness(js_path: &str) -> String {
+	format!(
+		"<!doctype html>\n<html>\n<head><meta charset=\"utf-8\"><title>Pluma</title></head>\n\
+<body>\n<pre id=\"stdout\"></pre>\n<script src=\"{js_path}\"></script>\n\
+<script>\n  const r = globalThis.__plumaResult;\n  if (r) {{\n    \
+document.getElementById(\"stdout\").textContent = r.stdout + (r.status !== \"ok\" ? \"\\n\" + r.status : \"\");\n    \
+console.log(r.stdout);\n  }}\n</script>\n</body>\n</html>\n"
+	)
+}
+
 fn run(entry_path: String, program_args: Vec<String>) {
 	if entry_path.ends_with(".test.pa") || entry_path.ends_with(".test") {
 		print_error(format!(
@@ -750,6 +843,9 @@ Compiler & toolchain for the {} programming language
 COMMANDS:
   [run] <path>     execute a module directly (the `run` keyword is optional)
   repl             start an interactive REPL session
+  build <path> [--target browser] [-o out]
+                   compile a module to a JavaScript module (+ HTML harness) for
+                   the browser/client target
   format <path>... canonicalize formatting; pass `-` for stdin, `--check` to dry-run
   test [dir] [-f name]...
                    discover and run tests from `*.test.pa` files under the
@@ -775,6 +871,9 @@ Compiler & toolchain for the {} programming language
 COMMANDS:
   [run] <path>     execute a module directly (the `run` keyword is optional)
   repl             start an interactive REPL session
+  build <path> [--target browser] [-o out]
+                   compile a module to a JavaScript module (+ HTML harness) for
+                   the browser/client target
   format <path>... canonicalize formatting; pass `-` for stdin, `--check` to dry-run
   test [dir] [-f name]...
                    discover and run tests from `*.test.pa` files under the

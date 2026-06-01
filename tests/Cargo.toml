@@ -4,18 +4,18 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+# Cross-backend correctness + perf lives in the `conformance` crate now; this
+# crate holds the VM-only snapshot suites (analyze/run/format) + the IR tests.
 [dependencies]
 codegen = { path = "../codegen" }
 compiler = { path = "../compiler" }
 formatter = { path = "../formatter" }
 ir = { path = "../ir" }
 vm = { path = "../vm" }
-wasm = { path = "../wasm" }
 
 [dev-dependencies]
 datatest-stable = "0.3"
 insta = "1"
-wasmtime = { version = "45", default-features = false, features = ["cranelift", "gc", "gc-drc", "gc-null", "runtime"] }
 
 [[test]]
 name = "analyze"
@@ -43,7 +43,3 @@ path = "ir_mono.rs"
 [[test]]
 name = "cps"
 path = "cps.rs"
-
-[[test]]
-name = "wasm_diff"
-path = "wasm_diff.rs"

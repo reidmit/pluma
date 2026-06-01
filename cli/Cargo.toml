@@ -9,5 +9,6 @@ codegen = { path = "../codegen" }
 compiler = { path = "../compiler" }
 formatter = { path = "../formatter" }
 ir = { path = "../ir" }
+js = { path = "../js" }
 rustyline = "14"
 vm = { path = "../vm" }

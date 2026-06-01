@@ -1,0 +1,176 @@
+// Report model + rendering. Two outputs:
+//   - CONFORMANCE.md (committed, deterministic): the coverage/correctness matrix.
+//   - target/conformance/report.md (on-demand): coverage + perf + environment.
+
+use std::collections::BTreeMap;
+
+use crate::{Backend, FixtureResult, Outcome};
+
+/// One backend's coverage against the VM oracle over the corpus.
+pub struct BackendCoverage {
+	pub backend: Backend,
+	pub matched: usize,
+	/// Fixtures that ran but diverged from the oracle (should be 0).
+	pub diverged: Vec<Divergence>,
+	/// Skipped fixtures grouped by category ("gated"/"unsupported"/"denied"),
+	/// each a sorted list of `(fixture, detail)`.
+	pub skips: BTreeMap<&'static str, Vec<(String, String)>>,
+}
+
+pub struct Divergence {
+	pub fixture: String,
+	pub oracle: String,
+	pub got: String,
+}
+
+pub struct Coverage {
+	/// Number of fixtures with a VM reference (compile-error fixtures excluded).
+	pub run_fixtures: usize,
+	pub backends: Vec<BackendCoverage>,
+}
+
+pub fn coverage(results: &[FixtureResult]) -> Coverage {
+	let run_fixtures = results.iter().filter(|r| r.oracle.is_some()).count();
+	let mut backends: BTreeMap<&'static str, BackendCoverage> = BTreeMap::new();
+	for b in Backend::DEPLOY {
+		backends.insert(
+			b.name(),
+			BackendCoverage {
+				backend: b,
+				matched: 0,
+				diverged: Vec::new(),
+				skips: BTreeMap::new(),
+			},
+		);
+	}
+
+	for fr in results {
+		let Some(oracle) = &fr.oracle else { continue };
+		for br in &fr.backends {
+			let cov = backends.get_mut(br.backend.name()).unwrap();
+			match &br.outcome {
+				Outcome::Ran(r) => {
+					if r == oracle {
+						cov.matched += 1;
+					} else {
+						cov.diverged.push(Divergence {
+							fixture: fr.name.clone(),
+							oracle: format!("status={:?} stdout={:?}", oracle.status, oracle.stdout),
+							got: format!("status={:?} stdout={:?}", r.status, r.stdout),
+						});
+					}
+				}
+				Outcome::Skip(reason) => {
+					cov
+						.skips
+						.entry(reason.category())
+						.or_default()
+						.push((fr.name.clone(), reason.detail().to_string()));
+				}
+			}
+		}
+	}
+
+	// Present in deploy order (WasmGC, JS) rather than the map's alphabetical one.
+	let ordered = Backend::DEPLOY
+		.iter()
+		.map(|b| backends.remove(b.name()).unwrap())
+		.collect();
+	Coverage {
+		run_fixtures,
+		backends: ordered,
+	}
+}
+
+fn total_skips(c: &BackendCoverage) -> usize {
+	c.skips.values().map(|v| v.len()).sum()
+}
+
+/// The deterministic, committed coverage doc. No perf numbers, no environment —
+/// stable across machines so it can live in git and be asserted fresh.
+pub fn render_conformance_md(cov: &Coverage) -> String {
+	let mut s = String::new();
+	s.push_str("# Pluma runtime conformance\n\n");
+	s.push_str(
+		"Pluma compiles one IR to three backends. The **VM** is the reference/oracle; the\n\
+**WasmGC** (server) and **JS** (browser) deploy backends are run on every `tests/run`\n\
+fixture and diffed against the VM. This file is the living coverage matrix, regenerated\n\
+by `just conformance` (perf numbers live in `target/conformance/`, not here).\n\n",
+	);
+
+	s.push_str(&format!(
+		"Corpus: **{}** run fixtures (compile-error fixtures excluded — they belong to the\nVM run-snapshot suite).\n\n",
+		cov.run_fixtures
+	));
+
+	s.push_str("| Backend | Match | Diverge | Skipped | Coverage |\n");
+	s.push_str("|---|---:|---:|---:|---:|\n");
+	s.push_str(&format!(
+		"| VM (oracle) | {} | — | — | reference |\n",
+		cov.run_fixtures
+	));
+	for c in &cov.backends {
+		let skipped = total_skips(c);
+		s.push_str(&format!(
+			"| {} | {} | {} | {} | {}/{} |\n",
+			c.backend.name(),
+			c.matched,
+			c.diverged.len(),
+			skipped,
+			c.matched,
+			cov.run_fixtures,
+		));
+	}
+	s.push('\n');
+
+	for c in &cov.backends {
+		s.push_str(&format!("## {} skips\n\n", c.backend.name()));
+		if c.skips.is_empty() {
+			s.push_str("_None — full parity with the VM._\n\n");
+		}
+		for (cat, items) in &c.skips {
+			s.push_str(&format!("### {} ({})\n\n", cat, items.len()));
+			// One line per distinct reason, with its fixtures, so the doc stays
+			// compact and diffs cleanly.
+			let mut by_reason: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+			for (fixture, detail) in items {
+				by_reason
+					.entry(detail.as_str())
+					.or_default()
+					.push(fixture.as_str());
+			}
+			for (reason, fixtures) in by_reason {
+				s.push_str(&format!("- _{reason}_ — {}\n", fixtures.join(", ")));
+			}
+			s.push('\n');
+		}
+		if !c.diverged.is_empty() {
+			s.push_str("### DIVERGENCES (should be empty!)\n\n");
+			for d in &c.diverged {
+				s.push_str(&format!(
+					"- `{}` — oracle {} / got {}\n",
+					d.fixture, d.oracle, d.got
+				));
+			}
+			s.push('\n');
+		}
+	}
+	s
+}
+
+/// Any divergence across all backends — the assertion the correctness gate uses.
+pub fn divergences(cov: &Coverage) -> Vec<String> {
+	let mut out = Vec::new();
+	for c in &cov.backends {
+		for d in &c.diverged {
+			out.push(format!(
+				"{} `{}`:\n   oracle {}\n   got    {}",
+				c.backend.name(),
+				d.fixture,
+				d.oracle,
+				d.got
+			));
+		}
+	}
+	out
+}

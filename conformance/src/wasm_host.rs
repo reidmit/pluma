@@ -1,241 +1,23 @@
-// Differential harness for the WASM (WasmGC) backend. For each
-// allowlisted fixture, compile it the reference way (`ir::lower` →
-// `codegen::compile_from_ir` → VM) and the WASM way (`ir::lower` → `wasm::emit`
-// → run in wasmtime with Rust host glue), and assert identical stdout + status.
+// The WasmGC backend runner. Migrated verbatim from the (now-removed)
+// tests/wasm_diff.rs: it instantiates an emitted module in wasmtime, supplies
+// the host imports (print/io/float_to_str/io-read) by reflecting the program's
+// GC `$value` layout, and runs `_entry`. The host print path mirrors
+// `vm::Value`'s Display so wasm stdout is byte-identical to the VM oracle.
 //
-// The host glue (the `print` import + value formatting) is written in Rust here,
-// mirroring `vm::Value`'s `Display`; it is the throwaway test-only host (the
-// browser target reimplements the same contract in JS). The `tag` constants are
-// the cross-cutting contract with `wasm::types`.
-//
-// `WASM_FIXTURES` grows as coverage grows; `wasm_coverage_report` (ignored) scans
-// every fixture and reports which the WASM path already reproduces.
+// (A real browser/server deploy supplies these host imports natively; this is the
+// throwaway test/bench host.)
 
 use std::cell::RefCell;
-use std::path::Path;
 use std::rc::Rc;
 
-use compiler::{Compiler, Platform};
 use wasmtime::{
 	AnyRef, ArrayRef, ArrayRefPre, ArrayType, AsContextMut, Caller, Config, Engine, ExternType,
 	FuncType, Instance, Linker, Module, RootScope, Rooted, Store, StructRef, StructRefPre,
 	StructType, Val, ValType,
 };
 
-// Fixtures the WASM backend covers end-to-end today. Grow as coverage grows. The
-// `core.io` filesystem/stdin fixtures are included under the **server platform** (see
-// `compile_check` + compiler/src/platform.rs); their host glue is real `std::fs` + a
-// stdin cursor.
-//
-// Intentionally NOT on this list (and why), so a future reader doesn't mistake them
-// for unfinished work: `list-fold` / `list-pattern-if` are compile-error/warning
-// fixtures (they never produce a VM run to diff against), and `builtin-unknown-tag`
-// exercises the VM's "unknown builtin" *runtime* error — there's no builtin to
-// import, so emit correctly rejects it. None are codegen gaps.
-const WASM_FIXTURES: &[&str] = &[
-	"regex-matches",
-	"regex-find",
-	"regex-anchors",
-	"regex-character-classes",
-	"regex-quantifiers",
-	"regex-quantifier-shapes",
-	"regex-alternation",
-	"regex-named-captures",
-	"regex-named-capture-lookup",
-	"regex-replace",
-	"regex-split",
-	"regex-as-alias",
-	"arith-precedence",
-	"arithmetic",
-	"bare-trait-methods",
-	"base64-roundtrip",
-	"builtin-uses-list-length",
-	"bytes-equality",
-	"bytes-escapes",
-	"bytes-hash-ord",
-	"bytes-literal",
-	"bytes-module-basics",
-	"bytes-module-from-list",
-	"bytes-module-search",
-	"bytes-module-split-join",
-	"bytes-pattern",
-	"bytes-string-bridge",
-	"closures",
-	"closures-in-list",
-	"coalesce-chain",
-	"coalesce-option",
-	"coalesce-result",
-	"comparison-ops",
-	"core-dict-basic",
-	"core-dict-collision",
-	"core-dict-derived",
-	"core-dict-fold",
-	"core-dict-from-entries",
-	"core-dict-int-keys",
-	"core-dict-merge",
-	"core-dict-string-keys",
-	"core-list-extras",
-	"core-math-extras",
-	"core-string",
-	"cross-module",
-	"dict-equality",
-	"dict-tostring",
-	"deep-recursion",
-	"debug-passthrough",
-	"defer-cleanup",
-	"double-int-float",
-	"duration-literals",
-	"else-if-chain",
-	"empty-fun-body",
-	"equality-structural",
-	"expect-err",
-	"expect-none",
-	"expect-passthrough",
-	"factorial",
-	"fibonacci",
-	"float-arith",
-	"float-compare",
-	"float-nan-compare",
-	"generic-enum",
-	"hash-trait",
-	"hello",
-	"hex-roundtrip",
-	"if-else-pattern",
-	"if-else-value",
-	"if-no-match",
-	"fail-direct",
-	"io-print",
-	"io-write-bytes",
-	// `core.io` filesystem + stdin (server platform — see compiler/src/platform.rs).
-	// The host glue is real `std::fs` + a stdin cursor so the `err` strings and read
-	// semantics match the VM; each runs idempotently (writes truncate, the rest clean
-	// up) so the shared VM-then-wasm run against `target/…` paths stays consistent.
-	"io-files",
-	"io-read-missing",
-	"io-append-delete",
-	"io-make-dir",
-	"io-read-dir",
-	"io-bytes-roundtrip",
-	"io-bytes-append",
-	"io-bytes-non-utf8",
-	"io-read-all",
-	"io-read-eof",
-	"io-read-lines",
-	"interpolation-complex",
-	"interpolation-nested-string",
-	"json-basic",
-	"json-error",
-	"json-pretty",
-	"json-walkers",
-	"let-destructure-record",
-	"let-destructure-tuple",
-	"let-destructure-underscore",
-	"let-in-when",
-	"let-then-pattern",
-	"let-type-annotation",
-	"list-chained",
-	"list-contains",
-	"list-each",
-	"list-length",
-	"list-map-filter",
-	"list-pattern-anonymous-rest",
-	"list-pattern-basic",
-	"list-pattern-exact",
-	"list-pattern-nested",
-	"list-pattern-recursive-sum",
-	"list-pattern-rest-type",
-	"list-core-combinators",
-	"list-extended-combinators",
-	"list-reverse-concat",
-	"list-set",
-	"list-push",
-	"list-sort",
-	"list-sort-explicit-cmp",
-	"list-spread",
-	"list-spread-record-update",
-	"main-returns-err",
-	"main-returns-ok",
-	"main-try-propagates",
-	"math-builtins",
-	"mutual-recursion",
-	"negative-numbers",
-	"nested-enum",
-	"option-then-direct",
-	"ord-compare-wrappers",
-	"ord-operators",
-	"partial-application",
-	"partial-record-match",
-	"pattern-stack-cleanup",
-	"pipeline",
-	"prelude-option",
-	"prelude-parametric",
-	"quadruple-forwarding",
-	"record-field-shorthand",
-	"record-list-cross-nesting",
-	"record-pattern",
-	"record-pattern-closed-vs-open",
-	"record-pattern-named-rest",
-	"record-pattern-nested-rest",
-	"record-pattern-row-poly",
-	"record-update",
-	"recursion",
-	"ref-basic",
-	"ref-tostring",
-	"result-then-direct",
-	"shadowing",
-	"string-concat",
-	"string-literal-pattern",
-	"string-parse",
-	"string-module-split-join",
-	"string-slice",
-	"string-with-escapes",
-	"subtract-after-call",
-	"swap-tuple",
-	"time-basics",
-	"top-level-keywords",
-	"to-string-shapes",
-	"trait-dict-forward-recursive",
-	"trait-fn-as-value",
-	"tuple-element-access",
-	"tuple-pattern-size",
-	"try-nested",
-	"try-option",
-	"try-result",
-	"try-wildcard",
-	"unary-minus",
-	"user-trait-concrete",
-	"user-trait-default",
-	"user-trait-parametric",
-	"variant-as-value",
-	"variant-with-record-arg",
-	"visibility",
-	"wasm-math-trig",
-	"when-else",
-	"when-enum",
-	"wire-dict",
-	"wire-fingerprint",
-	"wire-polymorphic",
-	"wire-recursive",
-	"wire-roundtrip",
-	// async (Stage 1: single-fiber chain driver — sequential awaits, await-in-loop,
-	// defer-on-failure, the sequential `then`/`or-else`/`map`/`attempt` combinators)
-	"task-try-chain",
-	"task-loop",
-	"task-loop-bind",
-	"task-defer",
-	"task-fail",
-	"task-combinators",
-	"task-trait-poly",
-	// async (Stage 2: scheduler — scopes/fibers/timers/cancellation)
-	"scope-both",
-	"scope-handle-param",
-	"scope-deadline",
-	"scope-race",
-	"task-combinators-concurrent",
-	"task-shielded",
-];
+use crate::RunResult;
 
-// Runtime tags — must match `wasm::types`.
 const TAG_NOTHING: i32 = 0;
 const TAG_BOOL: i32 = 1;
 const TAG_INT: i32 = 2;
@@ -467,7 +249,7 @@ fn set_io_err(caller: &Caller<HostState>, msg: String) {
 	*caller.data().last_error.borrow_mut() = msg;
 }
 
-fn engine() -> Engine {
+pub(crate) fn engine() -> Engine {
 	let mut config = Config::new();
 	config.wasm_reference_types(true);
 	config.wasm_function_references(true);
@@ -725,16 +507,6 @@ fn format_duration(nanos: i64) -> String {
 	out
 }
 
-struct RunResult {
-	status: String,
-	stdout: String,
-}
-
-/// Build an instance with the host imports wired (the `print` / `float_to_str` /
-/// f64-math glue). The caller builds the `Engine` and compiles the `Module`
-/// (cranelift JIT) once, so a benchmark loop can re-instantiate cheaply without
-/// paying compilation each time. Returns the store (its `HostState.out`
-/// accumulates printed bytes) and a fresh instance.
 fn instantiate_module(
 	engine: &Engine,
 	module: &Module,
@@ -1160,7 +932,7 @@ fn instantiate_module(
 }
 
 /// Build a fresh instance and run `_entry` once, collecting stdout (the diff path).
-fn run_wasm(bytes: &[u8], stdin: &[u8]) -> RunResult {
+pub(crate) fn run_wasm(bytes: &[u8], stdin: &[u8]) -> RunResult {
 	let engine = engine();
 	let module = match Module::new(&engine, bytes) {
 		Ok(m) => m,
@@ -1177,7 +949,7 @@ fn run_wasm(bytes: &[u8], stdin: &[u8]) -> RunResult {
 /// Instantiate a pre-compiled module and run `_entry` once, collecting stdout.
 /// Split out of `run_wasm` so a benchmark can re-instantiate a module that was
 /// cranelift-compiled once, keeping JIT compilation out of the timed loop.
-fn run_entry(engine: &Engine, module: &Module, stdin: &[u8]) -> RunResult {
+pub(crate) fn run_entry(engine: &Engine, module: &Module, stdin: &[u8]) -> RunResult {
 	let (mut store, instance) = match instantiate_module(engine, module, stdin) {
 		Ok(x) => x,
 		Err(status) => {
@@ -1214,7 +986,7 @@ fn run_entry(engine: &Engine, module: &Module, stdin: &[u8]) -> RunResult {
 /// A collecting (deferred-reference-counting) engine for the bench: the timed loop
 /// allocates a record per iteration, which the default null collector would never
 /// free (OOM). The short-lived records are reclaimed within each `_entry` call.
-fn bench_engine() -> Engine {
+pub(crate) fn bench_engine() -> Engine {
 	let mut config = Config::new();
 	config.wasm_reference_types(true);
 	config.wasm_function_references(true);
@@ -1225,7 +997,6 @@ fn bench_engine() -> Engine {
 }
 
 /// If `val` is an `err e` result variant, return `e` formatted (the program's
-/// abort message); otherwise `None`.
 fn err_message(store: &mut impl AsContextMut, val: &Val) -> Option<String> {
 	let Val::AnyRef(Some(r)) = val else {
 		return None;
@@ -1243,299 +1014,4 @@ fn err_message(store: &mut impl AsContextMut, val: &Val) -> Option<String> {
 	let payload_val = s.field(&mut *store, 3).ok()?;
 	let payload = format_elems(store, &payload_val);
 	(payload.len() == 1).then(|| payload[0].clone())
-}
-
-fn run_vm(program: vm::Program, stdin: &[u8]) -> RunResult {
-	let stdout = Rc::new(RefCell::new(Vec::<u8>::new()));
-	let stderr = Rc::new(RefCell::new(Vec::<u8>::new()));
-	let mut vm_instance = vm::VM::new(program)
-		.with_stdin(vm::InputSource::Buffer(Rc::new(RefCell::new(
-			stdin.to_vec(),
-		))))
-		.with_stdout(vm::OutputSink::Buffer(stdout.clone()))
-		.with_stderr(vm::OutputSink::Buffer(stderr.clone()));
-	let status = match vm_instance.run() {
-		Ok(_) => "ok".to_string(),
-		Err(e) => format!("runtime error: {}", e.message),
-	};
-	let out = String::from_utf8_lossy(&stdout.borrow()).into_owned();
-	RunResult {
-		status,
-		stdout: out,
-	}
-}
-
-fn compile_check(dir: &Path) -> Option<Compiler> {
-	// The WASM backend targets the server platform here: it provides every
-	// capability except the browser-only ones (Dom/Fetch/Timer), so `core.io`
-	// resolves and no fixture in this corpus is gated.
-	let mut compiler = Compiler::from_entry_path(dir.to_str().unwrap().to_string())
-		.ok()?
-		.with_platform(Platform::Server);
-	vm::stdlib::register_compiler(&mut compiler);
-	compiler.check().ok()?;
-	Some(compiler)
-}
-
-#[test]
-fn wasm_path_matches_reference() {
-	let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-	for name in WASM_FIXTURES {
-		let dir = workspace.join("tests/run").join(name);
-		// Feed the fixture's `stdin.txt` (empty if absent) to BOTH engines, so the
-		// `io.read`/`io.read-all` fixtures see identical input.
-		let stdin = std::fs::read(dir.join("stdin.txt")).unwrap_or_default();
-		let compiler = compile_check(&dir).unwrap_or_else(|| panic!("compile failed for `{name}`"));
-		let ir_program = ir::lower(&compiler).unwrap_or_else(|e| panic!("ir::lower `{name}`: {e}"));
-		let reference = run_vm(
-			codegen::compile_from_ir(&ir_program).expect("reference compile"),
-			&stdin,
-		);
-		let bytes = wasm::emit(&ir_program).unwrap_or_else(|d| panic!("wasm::emit `{name}`: {:?}", d));
-		let via_wasm = run_wasm(&bytes, &stdin);
-		assert_eq!(
-			reference.status, via_wasm.status,
-			"status mismatch for `{name}`"
-		);
-		assert_eq!(
-			reference.stdout, via_wasm.stdout,
-			"stdout mismatch for `{name}`"
-		);
-	}
-}
-
-#[test]
-#[ignore = "coverage report; run with --ignored --nocapture"]
-fn wasm_coverage_report() {
-	let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-	let _ = std::env::set_current_dir(workspace);
-	let run_dir = workspace.join("tests/run");
-	let mut entries: Vec<_> = std::fs::read_dir(&run_dir)
-		.unwrap()
-		.filter_map(|e| e.ok().map(|e| e.path()))
-		.filter(|p| p.join("main.pa").exists())
-		.collect();
-	entries.sort();
-
-	let (mut matching, mut diff, mut emit_err, mut panicked) = (Vec::new(), 0u32, 0u32, Vec::new());
-	for dir in &entries {
-		let name = dir.file_name().unwrap().to_string_lossy().to_string();
-		let stdin = std::fs::read(dir.join("stdin.txt")).unwrap_or_default();
-		let Some(compiler) = compile_check(dir) else {
-			continue;
-		};
-		let Ok(ir_program) = ir::lower(&compiler) else {
-			continue;
-		};
-		let reference = run_vm(
-			codegen::compile_from_ir(&ir_program).expect("reference compile"),
-			&stdin,
-		);
-		// Emit can panic on a not-yet-handled construct; catch so the scan finishes.
-		let emitted =
-			std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| wasm::emit(&ir_program)));
-		match emitted {
-			Ok(Ok(bytes)) => {
-				let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run_wasm(&bytes, &stdin)));
-				match r {
-					Ok(w) if w.status == reference.status && w.stdout == reference.stdout => {
-						matching.push(name)
-					}
-					Ok(w) => {
-						diff += 1;
-						if std::env::var("WASM_DUMP_DIFF").is_ok() {
-							eprintln!(
-								"DIFF {name}:\n  ref status={:?} stdout={:?}\n  wasm status={:?} stdout={:?}",
-								reference.status, reference.stdout, w.status, w.stdout
-							);
-						}
-					}
-					Err(_) => panicked.push(name),
-				}
-			}
-			Ok(Err(_)) => emit_err += 1,
-			Err(_) => panicked.push(name),
-		}
-	}
-	let total = matching.len() as u32 + diff + emit_err + panicked.len() as u32;
-	println!(
-		"\nWASM coverage: {} match / {} diff / {} emit-err / {} PANIC  (of {} runnable fixtures)",
-		matching.len(),
-		diff,
-		emit_err,
-		panicked.len(),
-		total
-	);
-	if !panicked.is_empty() {
-		println!("PANICKING fixtures:");
-		for n in &panicked {
-			println!("  {n}");
-		}
-	}
-	println!("matching fixtures:");
-	for n in &matching {
-		println!("  {n}");
-	}
-}
-
-// ---------------------------------------------------------------------------
-// VM-vs-WASM execution benchmark.
-//
-// For each program under `benchmarks/programs/<name>/main.pa`, compile it once
-// per backend (VM bytecode / cranelift-compiled WasmGC module), confirm the two
-// backends agree, then time only *execution*: the VM run (a fresh `vm::Program`
-// clone per iteration, so memoized globals reset) versus re-instantiating the
-// pre-compiled wasm module and calling `_entry`. JIT/codegen is hoisted out of
-// the timed loops, so this measures the interpreters/compiled code, not the
-// compilers. Run with:
-//
-//   cargo test -p tests --test wasm_diff bench_vm_vs_wasm -- --ignored --nocapture
-//   BENCH_ITERS=50 cargo test -p tests --test wasm_diff bench_vm_vs_wasm -- --ignored --nocapture
-// ---------------------------------------------------------------------------
-
-#[test]
-#[ignore = "VM-vs-WASM benchmark; run with --ignored --nocapture"]
-fn bench_vm_vs_wasm() {
-	// A roomy stack: the VM nests a Rust frame per Pluma call (no TCO on the
-	// bytecode path), so the deep-recursion benchmarks would overflow the test
-	// harness's default 2 MiB thread otherwise.
-	std::thread::Builder::new()
-		.stack_size(256 * 1024 * 1024)
-		.spawn(bench_body)
-		.unwrap()
-		.join()
-		.unwrap();
-}
-
-fn fmt_dur(d: std::time::Duration) -> String {
-	let us = d.as_secs_f64() * 1_000_000.0;
-	if us < 1000.0 {
-		format!("{us:.1} us")
-	} else if us < 1_000_000.0 {
-		format!("{:.2} ms", us / 1000.0)
-	} else {
-		format!("{:.3} s", us / 1_000_000.0)
-	}
-}
-
-fn bench_body() {
-	use std::time::{Duration, Instant};
-
-	let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-	let _ = std::env::set_current_dir(workspace);
-	let programs_dir = workspace.join("benchmarks/programs");
-
-	let iters: u32 = std::env::var("BENCH_ITERS")
-		.ok()
-		.and_then(|s| s.parse().ok())
-		.unwrap_or(20);
-	// The null collector (allocate, never free) is fastest and fits as long as a
-	// single run's live set stays under wasmtime's GC heap; `BENCH_WASM_GC=drc`
-	// switches to the deferred-reference-counting collector, which reclaims within
-	// a run, for allocation-heavy programs that would otherwise trap on OOM.
-	let use_drc = std::env::var("BENCH_WASM_GC").as_deref() == Ok("drc");
-
-	let mut entries: Vec<_> = std::fs::read_dir(&programs_dir)
-		.expect("benchmarks/programs not found")
-		.filter_map(|e| e.ok().map(|e| e.path()))
-		.filter(|p| p.join("main.pa").exists())
-		.collect();
-	entries.sort();
-
-	println!("\nVM vs WASM execution time  ({iters} iterations, average per run)\n");
-	println!(
-		"{:<16}  {:>12}  {:>12}  {:>9}",
-		"benchmark", "VM", "WASM", "WASM/VM"
-	);
-	println!("{:-<16}  {:->12}  {:->12}  {:->9}", "", "", "", "");
-
-	for dir in &entries {
-		let name = dir.file_name().unwrap().to_string_lossy().to_string();
-		let stdin = std::fs::read(dir.join("stdin.txt")).unwrap_or_default();
-
-		let note = |msg: &str| println!("{name:<16}  {msg}");
-
-		let Some(compiler) = compile_check(dir) else {
-			note("compile error — skipped");
-			continue;
-		};
-		let ir_program = match ir::lower(&compiler) {
-			Ok(p) => p,
-			Err(e) => {
-				note(&format!("ir::lower error: {e} — skipped"));
-				continue;
-			}
-		};
-
-		// VM artifact: compiled once, cloned per run (a run memoizes globals).
-		let vm_program = match codegen::compile_from_ir(&ir_program) {
-			Ok(p) => p,
-			Err(e) => {
-				note(&format!("VM compile error: {e} — skipped"));
-				continue;
-			}
-		};
-
-		// WASM artifact: emit + cranelift-compile the module once, up front.
-		let bytes = match wasm::emit(&ir_program) {
-			Ok(b) => b,
-			Err(d) => {
-				note(&format!("wasm::emit error ({} diag) — skipped", d.0.len()));
-				continue;
-			}
-		};
-		let wasm_engine = if use_drc { bench_engine() } else { engine() };
-		let module = match Module::new(&wasm_engine, &bytes) {
-			Ok(m) => m,
-			Err(e) => {
-				note(&format!("wasm module error: {e} — skipped"));
-				continue;
-			}
-		};
-
-		// Sanity: don't time two programs that compute different things.
-		let vm_ref = run_vm(vm_program.clone(), &stdin);
-		let wasm_ref = run_entry(&wasm_engine, &module, &stdin);
-		if vm_ref.status != wasm_ref.status || vm_ref.stdout != wasm_ref.stdout {
-			note(&format!(
-				"OUTPUT MISMATCH — vm=({:?}, {:?})  wasm=({:?}, {:?})",
-				vm_ref.status,
-				vm_ref.stdout.trim_end(),
-				wasm_ref.status,
-				wasm_ref.stdout.trim_end()
-			));
-			continue;
-		}
-
-		// Time the VM. The per-iteration `clone` is outside the timer.
-		let _ = run_vm(vm_program.clone(), &stdin); // warm up
-		let mut vm_total = Duration::ZERO;
-		for _ in 0..iters {
-			let p = vm_program.clone();
-			let start = Instant::now();
-			let _ = run_vm(p, &stdin);
-			vm_total += start.elapsed();
-		}
-		let vm_avg = vm_total / iters;
-
-		// Time the WASM: re-instantiate the pre-compiled module + call `_entry`.
-		let _ = run_entry(&wasm_engine, &module, &stdin); // warm up
-		let mut wasm_total = Duration::ZERO;
-		for _ in 0..iters {
-			let start = Instant::now();
-			let _ = run_entry(&wasm_engine, &module, &stdin);
-			wasm_total += start.elapsed();
-		}
-		let wasm_avg = wasm_total / iters;
-
-		let ratio = wasm_avg.as_secs_f64() / vm_avg.as_secs_f64();
-		println!(
-			"{:<16}  {:>12}  {:>12}  {:>8.2}x",
-			name,
-			fmt_dur(vm_avg),
-			fmt_dur(wasm_avg),
-			ratio
-		);
-	}
-	println!("\n(WASM/VM < 1.00x means the WasmGC backend ran faster.)");
 }

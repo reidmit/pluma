@@ -1,0 +1,8 @@
+[package]
+name = "js"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+compiler = { path = "../compiler" }
+ir = { path = "../ir" }

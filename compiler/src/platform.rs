@@ -92,6 +92,7 @@ pub fn module_capabilities(module_name: &str) -> &'static [Capability] {
 	use Capability::*;
 	match module_name {
 		"core.io" => &[Fs, Stdio, Process],
+		"core.dom" => &[Dom],
 		_ => &[],
 	}
 }
