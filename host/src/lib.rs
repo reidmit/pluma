@@ -1,14 +1,18 @@
-// The WasmGC backend runner. Migrated verbatim from the (now-removed)
-// tests/wasm_diff.rs: it instantiates an emitted module in wasmtime, supplies
-// the host imports (print/io/float_to_str/io-read) by reflecting the program's
-// GC `$value` layout, and runs `_entry`. The host print path mirrors
+// The WasmGC runtime host. Instantiates an emitted module in wasmtime, supplies
+// the `pluma.*` host imports (print/io/float_to_str/math/io-read) by reflecting
+// the program's GC `$value` layout, and runs `_entry`. The `print` path mirrors
 // `vm::Value`'s Display so wasm stdout is byte-identical to the VM oracle.
 //
-// (A real browser/server deploy supplies these host imports natively; this is the
-// throwaway test/bench host.)
+// Two front doors share one engine + one set of host imports:
+//   - `run_wasm`/`run_entry` — **buffered** (stdout captured, stderr dropped,
+//     stdin fed from a byte slice). The `conformance` crate's differential path.
+//   - `run_streaming` — **process stdio** (stdout/stderr streamed live, stdin read
+//     from the process). The `cli`'s `pluma run app.wasm` path.
+// The only thing that differs is the `HostIo` sink behind `HostState`; the GC
+// reflection and every host import are identical, so the conformance gate tests
+// exactly the runtime the CLI ships.
 
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::io::{Read, Write};
 
 use wasmtime::{
 	AnyRef, ArrayRef, ArrayRefPre, ArrayType, AsContextMut, Caller, Config, Engine, ExternType,
@@ -16,7 +20,14 @@ use wasmtime::{
 	StructType, Val, ValType,
 };
 
-use crate::RunResult;
+/// A program's observable result: exit status + captured stdout. (`run_streaming`
+/// returns an empty `stdout` — it streamed live to the process — and the caller
+/// uses `status` for the exit code.)
+#[derive(Clone, PartialEq, Eq)]
+pub struct RunResult {
+	pub status: String,
+	pub stdout: String,
+}
 
 const TAG_NOTHING: i32 = 0;
 const TAG_BOOL: i32 = 1;
@@ -32,24 +43,145 @@ const TAG_BYTES: i32 = 14;
 const TAG_REF: i32 = 15;
 const TAG_DICT: i32 = 16;
 
+// --------------------------------------------------------------------------
+// The stdio sink. `HostState` is non-generic (the host-import closures live in a
+// `Linker<HostState>`); the buffered-vs-streaming choice is a trait object.
+// --------------------------------------------------------------------------
+
+/// Where the host's stdout/stderr go and where stdin comes from. The reads use the
+/// VM's `read_line` semantics (line up to `\n`, trailing `\r` stripped, `None` at
+/// EOF); `read_rest` drains the remainder.
+pub trait HostIo {
+	fn write_out(&mut self, bytes: &[u8]);
+	fn write_err(&mut self, bytes: &[u8]);
+	fn read_line(&mut self) -> Option<String>;
+	fn read_rest(&mut self) -> Vec<u8>;
+	/// The stdout collected so far, for the buffered (diff) path. Streaming impls
+	/// return `""` (they wrote straight to the process).
+	fn captured_stdout(&self) -> String {
+		String::new()
+	}
+}
+
+/// Captures stdout, drops stderr (the conformance differential compares stdout
+/// only, mirroring `run_vm`), and reads stdin from a fixed byte buffer.
+struct BufferedIo {
+	out: Vec<u8>,
+	stdin: Vec<u8>,
+	stdin_pos: usize,
+}
+
+impl BufferedIo {
+	fn new(stdin: &[u8]) -> Self {
+		BufferedIo {
+			out: Vec::new(),
+			stdin: stdin.to_vec(),
+			stdin_pos: 0,
+		}
+	}
+}
+
+impl HostIo for BufferedIo {
+	fn write_out(&mut self, bytes: &[u8]) {
+		self.out.extend_from_slice(bytes);
+	}
+	fn write_err(&mut self, _bytes: &[u8]) {}
+	fn read_line(&mut self) -> Option<String> {
+		read_line_from(&self.stdin, &mut self.stdin_pos)
+	}
+	fn read_rest(&mut self) -> Vec<u8> {
+		let rest = self.stdin[self.stdin_pos..].to_vec();
+		self.stdin_pos = self.stdin.len();
+		rest
+	}
+	fn captured_stdout(&self) -> String {
+		String::from_utf8_lossy(&self.out).into_owned()
+	}
+}
+
+/// Streams stdout/stderr live to the process and reads stdin from it. Each write
+/// flushes so output appears promptly (Phase 1 artifacts are short-lived; a
+/// long-running net server in a later phase will revisit buffering).
+struct StdioIo {
+	stdin_buf: Vec<u8>,
+	stdin_pos: usize,
+	stdin_eof: bool,
+}
+
+impl StdioIo {
+	fn new() -> Self {
+		StdioIo {
+			stdin_buf: Vec::new(),
+			stdin_pos: 0,
+			stdin_eof: false,
+		}
+	}
+	/// Pull all of process stdin into the buffer once, on first read. (Phase 1
+	/// reads are whole-input oriented; live line streaming is a later concern.)
+	fn fill_stdin(&mut self) {
+		if !self.stdin_eof {
+			let _ = std::io::stdin().read_to_end(&mut self.stdin_buf);
+			self.stdin_eof = true;
+		}
+	}
+}
+
+impl HostIo for StdioIo {
+	fn write_out(&mut self, bytes: &[u8]) {
+		let mut out = std::io::stdout();
+		let _ = out.write_all(bytes);
+		let _ = out.flush();
+	}
+	fn write_err(&mut self, bytes: &[u8]) {
+		let mut err = std::io::stderr();
+		let _ = err.write_all(bytes);
+		let _ = err.flush();
+	}
+	fn read_line(&mut self) -> Option<String> {
+		self.fill_stdin();
+		read_line_from(&self.stdin_buf, &mut self.stdin_pos)
+	}
+	fn read_rest(&mut self) -> Vec<u8> {
+		self.fill_stdin();
+		let rest = self.stdin_buf[self.stdin_pos..].to_vec();
+		self.stdin_pos = self.stdin_buf.len();
+		rest
+	}
+}
+
+/// Read one line from `buf` at `*pos` with the VM's `read_line` semantics: `None`
+/// at EOF; otherwise the bytes up to the next `\n` (consumed), trailing `\r`
+/// stripped.
+fn read_line_from(buf: &[u8], pos: &mut usize) -> Option<String> {
+	if *pos >= buf.len() {
+		return None;
+	}
+	let start = *pos;
+	let (end, next) = match buf[start..].iter().position(|&c| c == b'\n') {
+		Some(rel) => (start + rel, start + rel + 1),
+		None => (buf.len(), buf.len()),
+	};
+	let line_end = if end > start && buf[end - 1] == b'\r' {
+		end - 1
+	} else {
+		end
+	};
+	let s = String::from_utf8_lossy(&buf[start..line_end]).into_owned();
+	*pos = next;
+	Some(s)
+}
+
 struct HostState {
-	out: Rc<RefCell<Vec<u8>>>,
-	/// stderr sink — collected separately so it never pollutes the stdout the
-	/// differential compares (the reference `run_vm` drops stderr too).
-	err: Rc<RefCell<Vec<u8>>>,
-	/// The `io.fail` abort message, stashed before the host traps so `run_wasm`
-	/// can surface it as the program's `runtime error: <msg>` status.
-	fail: Rc<RefCell<Option<String>>>,
-	/// Program stdin (fed from the fixture's `stdin.txt`) + a read cursor — the
-	/// `io-read`/`io-read-all` host imports drain it with the VM's line semantics.
-	stdin: Rc<RefCell<Vec<u8>>>,
-	stdin_pos: Rc<RefCell<usize>>,
+	io: Box<dyn HostIo>,
+	/// The `io.fail` abort message, stashed before the host traps so the runner can
+	/// surface it as the program's `runtime error: <msg>` status.
+	fail: Option<String>,
 	/// The message the last failed `core.io` call stashed (errno-style); returned
 	/// by the `io-last-error` import, which `__io_result` queries on the err path.
-	last_error: Rc<RefCell<String>>,
+	last_error: String,
 	/// The module's `$value` GC types, captured once from the witness the first io
 	/// host import receives, so later calls build their returns without re-reflecting.
-	gc_types: Rc<RefCell<Option<GcTypes>>>,
+	gc_types: Option<GcTypes>,
 }
 
 /// The module's GC type handles the io host imports need to build their `$value`
@@ -186,12 +318,11 @@ fn build_str_list(store: &mut impl AsContextMut, gc: &GcTypes, items: &[String])
 /// Capture the module's GC types from the witness on the first io call, caching
 /// them in `HostState` so subsequent calls skip the reflection.
 fn ensure_types(caller: &mut Caller<HostState>, witness: &Val) -> GcTypes {
-	let cell = caller.data().gc_types.clone();
-	if let Some(t) = cell.borrow().clone() {
+	if let Some(t) = caller.data().gc_types.clone() {
 		return t;
 	}
 	let t = capture_gc_types(caller, witness);
-	*cell.borrow_mut() = Some(t.clone());
+	caller.data_mut().gc_types = Some(t.clone());
 	t
 }
 
@@ -201,7 +332,6 @@ fn cached_types(caller: &Caller<HostState>) -> GcTypes {
 	caller
 		.data()
 		.gc_types
-		.borrow()
 		.clone()
 		.expect("io-last-error called before any io op cached the GC types")
 }
@@ -211,45 +341,12 @@ fn arg_string(store: &mut impl AsContextMut, v: &Val) -> String {
 	String::from_utf8_lossy(&raw_value_bytes(store, v)).into_owned()
 }
 
-/// Read one line from the program's stdin buffer with the VM's `read_line`
-/// semantics: `None` at EOF; otherwise the bytes up to the next `\n` (consumed),
-/// with a trailing `\r` stripped.
-fn stdin_line(state: &HostState) -> Option<String> {
-	let buf = state.stdin.borrow();
-	let mut pos = state.stdin_pos.borrow_mut();
-	if *pos >= buf.len() {
-		return None;
-	}
-	let start = *pos;
-	let (end, next) = match buf[start..].iter().position(|&c| c == b'\n') {
-		Some(rel) => (start + rel, start + rel + 1),
-		None => (buf.len(), buf.len()),
-	};
-	let line_end = if end > start && buf[end - 1] == b'\r' {
-		end - 1
-	} else {
-		end
-	};
-	let s = String::from_utf8_lossy(&buf[start..line_end]).into_owned();
-	*pos = next;
-	Some(s)
-}
-
-/// Drain the rest of stdin as raw bytes (backs `read-all` / `read-all-bytes`).
-fn stdin_rest(state: &HostState) -> Vec<u8> {
-	let buf = state.stdin.borrow();
-	let mut pos = state.stdin_pos.borrow_mut();
-	let rest = buf[*pos..].to_vec();
-	*pos = buf.len();
-	rest
-}
-
 /// Stash an io error message for the next `io-last-error` query.
-fn set_io_err(caller: &Caller<HostState>, msg: String) {
-	*caller.data().last_error.borrow_mut() = msg;
+fn set_io_err(caller: &mut Caller<HostState>, msg: String) {
+	caller.data_mut().last_error = msg;
 }
 
-pub(crate) fn engine() -> Engine {
+pub fn engine() -> Engine {
 	let mut config = Config::new();
 	config.wasm_reference_types(true);
 	config.wasm_function_references(true);
@@ -510,21 +607,15 @@ fn format_duration(nanos: i64) -> String {
 fn instantiate_module(
 	engine: &Engine,
 	module: &Module,
-	stdin: &[u8],
+	io: Box<dyn HostIo>,
 ) -> Result<(Store<HostState>, Instance), String> {
-	let out = Rc::new(RefCell::new(Vec::<u8>::new()));
-	let err = Rc::new(RefCell::new(Vec::<u8>::new()));
-	let fail = Rc::new(RefCell::new(None));
 	let mut store = Store::new(
 		engine,
 		HostState {
-			out,
-			err,
-			fail,
-			stdin: Rc::new(RefCell::new(stdin.to_vec())),
-			stdin_pos: Rc::new(RefCell::new(0)),
-			last_error: Rc::new(RefCell::new(String::new())),
-			gc_types: Rc::new(RefCell::new(None)),
+			io,
+			fail: None,
+			last_error: String::new(),
+			gc_types: None,
 		},
 	);
 	let mut linker: Linker<HostState> = Linker::new(engine);
@@ -535,19 +626,18 @@ fn instantiate_module(
 			// Bound the temporary GC roots created while reflecting the value: a
 			// `RootScope` frees them on drop, so repeated prints don't accumulate
 			// roots (which otherwise corrupts wasmtime's GC under collection).
-			let line = {
+			let mut line = {
 				let mut scope = RootScope::new(&mut caller);
-				format_value(&mut scope, &args[0])
+				format_value(&mut scope, &args[0]).into_bytes()
 			};
-			let buf = caller.data().out.clone();
-			buf.borrow_mut().extend_from_slice(line.as_bytes());
-			buf.borrow_mut().push(b'\n');
+			line.push(b'\n');
+			caller.data_mut().io.write_out(&line);
 			Ok(())
 		})
 		.expect("define print");
 	// The `core.io` writers. `print`/`print-err` append a newline; `write`/
-	// `write-err` don't. The `*-err` pair targets the stderr sink. `*-bytes`
-	// write a `bytes` value's raw bytes (no Display formatting).
+	// `write-err` don't. The `*-err` pair targets stderr. `*-bytes` write a `bytes`
+	// value's raw bytes (no Display formatting).
 	let io_ty = FuncType::new(engine, [ValType::ANYREF], []);
 	for (name, to_err, newline, raw) in [
 		("io-print", false, true, false),
@@ -563,7 +653,7 @@ fn instantiate_module(
 				name,
 				io_ty.clone(),
 				move |mut caller, args, _results| {
-					let bytes = {
+					let mut bytes = {
 						let mut scope = RootScope::new(&mut caller);
 						if raw {
 							raw_value_bytes(&mut scope, &args[0])
@@ -571,22 +661,21 @@ fn instantiate_module(
 							format_value(&mut scope, &args[0]).into_bytes()
 						}
 					};
-					let sink = if to_err {
-						caller.data().err.clone()
-					} else {
-						caller.data().out.clone()
-					};
-					sink.borrow_mut().extend_from_slice(&bytes);
 					if newline {
-						sink.borrow_mut().push(b'\n');
+						bytes.push(b'\n');
+					}
+					if to_err {
+						caller.data_mut().io.write_err(&bytes);
+					} else {
+						caller.data_mut().io.write_out(&bytes);
 					}
 					Ok(())
 				},
 			)
 			.unwrap_or_else(|e| panic!("define {name}: {e}"));
 	}
-	// io.fail msg : stash the message, then trap. `run_wasm` reads the message
-	// back to form the `runtime error: <msg>` status (mirrors the VM's abort).
+	// io.fail msg : stash the message, then trap. The runner reads the message back
+	// to form the `runtime error: <msg>` status (mirrors the VM's abort).
 	linker
 		.func_new(
 			"pluma",
@@ -597,7 +686,7 @@ fn instantiate_module(
 					let mut scope = RootScope::new(&mut caller);
 					format_value(&mut scope, &args[0])
 				};
-				*caller.data().fail.borrow_mut() = Some(msg);
+				caller.data_mut().fail = Some(msg);
 				Err(wasmtime::Error::msg("io.fail"))
 			},
 		)
@@ -669,9 +758,7 @@ fn instantiate_module(
 	// type witness (see `emit_io_witness`) the host reflects to build its `$value`
 	// return. The reads/writes return a primitive `$value`-or-null that wasm wraps in
 	// `ok`/`err` via `__io_result`; `file-exists`/`is-dir` return a bare `$bool`. All
-	// fs ops use real `std::fs` so the `err` strings match the VM's errno text. A real
-	// server target (Rust/WASI) implements the same contract; a browser target omits
-	// `core.io` entirely (gated by the platform — see compiler/src/platform.rs).
+	// fs ops use real `std::fs` so the `err` strings match the VM's errno text.
 	// The io imports return a concrete `(ref null $value)`, not the broader `anyref`
 	// (a result must be a *subtype* of what the module imports). Recover that exact
 	// type from the `_entry` export's signature (its env param / return is `$value`).
@@ -709,7 +796,7 @@ fn instantiate_module(
 						match std::fs::read(&path) {
 							Ok(b) => build_strlike(&mut caller, &gc, TAG_BYTES, &b),
 							Err(e) => {
-								set_io_err(&caller, e.to_string());
+								set_io_err(&mut caller, e.to_string());
 								Val::AnyRef(None)
 							}
 						}
@@ -717,7 +804,7 @@ fn instantiate_module(
 						match std::fs::read_to_string(&path) {
 							Ok(s) => build_strlike(&mut caller, &gc, TAG_STR, s.as_bytes()),
 							Err(e) => {
-								set_io_err(&caller, e.to_string());
+								set_io_err(&mut caller, e.to_string());
 								Val::AnyRef(None)
 							}
 						}
@@ -762,7 +849,7 @@ fn instantiate_module(
 					results[0] = match res {
 						Ok(()) => build_nothing(&mut caller, &gc),
 						Err(e) => {
-							set_io_err(&caller, e.to_string());
+							set_io_err(&mut caller, e.to_string());
 							Val::AnyRef(None)
 						}
 					};
@@ -790,7 +877,7 @@ fn instantiate_module(
 					results[0] = match res {
 						Ok(()) => build_nothing(&mut caller, &gc),
 						Err(e) => {
-							set_io_err(&caller, e.to_string());
+							set_io_err(&mut caller, e.to_string());
 							Val::AnyRef(None)
 						}
 					};
@@ -843,7 +930,7 @@ fn instantiate_module(
 						}
 						match read_err {
 							Some(msg) => {
-								set_io_err(&caller, msg);
+								set_io_err(&mut caller, msg);
 								Val::AnyRef(None)
 							}
 							None => {
@@ -853,7 +940,7 @@ fn instantiate_module(
 						}
 					}
 					Err(e) => {
-						set_io_err(&caller, e.to_string());
+						set_io_err(&mut caller, e.to_string());
 						Val::AnyRef(None)
 					}
 				};
@@ -870,10 +957,11 @@ fn instantiate_module(
 			io2.clone(),
 			|mut caller, args, results| {
 				let gc = ensure_types(&mut caller, &args[1]);
-				results[0] = match stdin_line(caller.data()) {
+				let line = caller.data_mut().io.read_line();
+				results[0] = match line {
 					Some(line) => build_strlike(&mut caller, &gc, TAG_STR, line.as_bytes()),
 					None => {
-						set_io_err(&caller, "EOF".to_string());
+						set_io_err(&mut caller, "EOF".to_string());
 						Val::AnyRef(None)
 					}
 				};
@@ -888,7 +976,7 @@ fn instantiate_module(
 			io2.clone(),
 			|mut caller, args, results| {
 				let gc = ensure_types(&mut caller, &args[1]);
-				let bytes = stdin_rest(caller.data());
+				let bytes = caller.data_mut().io.read_rest();
 				let s = String::from_utf8_lossy(&bytes).into_owned();
 				results[0] = build_strlike(&mut caller, &gc, TAG_STR, s.as_bytes());
 				Ok(())
@@ -902,7 +990,7 @@ fn instantiate_module(
 			io2.clone(),
 			|mut caller, args, results| {
 				let gc = ensure_types(&mut caller, &args[1]);
-				let bytes = stdin_rest(caller.data());
+				let bytes = caller.data_mut().io.read_rest();
 				results[0] = build_strlike(&mut caller, &gc, TAG_BYTES, &bytes);
 				Ok(())
 			},
@@ -918,7 +1006,7 @@ fn instantiate_module(
 			io0,
 			|mut caller, _args, results| {
 				let gc = cached_types(&caller);
-				let msg = caller.data().last_error.borrow().clone();
+				let msg = caller.data().last_error.clone();
 				results[0] = build_strlike(&mut caller, &gc, TAG_STR, msg.as_bytes());
 				Ok(())
 			},
@@ -931,8 +1019,9 @@ fn instantiate_module(
 	Ok((store, instance))
 }
 
-/// Build a fresh instance and run `_entry` once, collecting stdout (the diff path).
-pub(crate) fn run_wasm(bytes: &[u8], stdin: &[u8]) -> RunResult {
+/// Compile + instantiate `bytes` and run `_entry` once with stdin from a slice,
+/// capturing stdout (the conformance diff path).
+pub fn run_wasm(bytes: &[u8], stdin: &[u8]) -> RunResult {
 	let engine = engine();
 	let module = match Module::new(&engine, bytes) {
 		Ok(m) => m,
@@ -946,11 +1035,45 @@ pub(crate) fn run_wasm(bytes: &[u8], stdin: &[u8]) -> RunResult {
 	run_entry(&engine, &module, stdin)
 }
 
-/// Instantiate a pre-compiled module and run `_entry` once, collecting stdout.
-/// Split out of `run_wasm` so a benchmark can re-instantiate a module that was
-/// cranelift-compiled once, keeping JIT compilation out of the timed loop.
-pub(crate) fn run_entry(engine: &Engine, module: &Module, stdin: &[u8]) -> RunResult {
-	let (mut store, instance) = match instantiate_module(engine, module, stdin) {
+/// Instantiate a pre-compiled module and run `_entry` once with stdin from a slice,
+/// capturing stdout. Split out of `run_wasm` so a benchmark can re-instantiate a
+/// module that was cranelift-compiled once, keeping JIT compilation out of the
+/// timed loop.
+pub fn run_entry(engine: &Engine, module: &Module, stdin: &[u8]) -> RunResult {
+	run_with(engine, module, Box::new(BufferedIo::new(stdin)))
+}
+
+/// Compile + instantiate `bytes` and run `_entry` once, streaming stdout/stderr to
+/// the process and reading stdin from it (the `cli`'s `pluma run app.wasm` path).
+/// Returns the process exit code; on failure the program's abort message is already
+/// on stderr.
+pub fn run_streaming(bytes: &[u8]) -> i32 {
+	let engine = engine();
+	let module = match Module::new(&engine, bytes) {
+		Ok(m) => m,
+		Err(e) => {
+			eprintln!("Could not load wasm module: {e}");
+			return 1;
+		}
+	};
+	let result = run_with(&engine, &module, Box::new(StdioIo::new()));
+	match result.status.as_str() {
+		"ok" => 0,
+		other => {
+			// `other` is "runtime error: <msg>" — print the program's own message
+			// bare to stderr (mirrors the VM surfacing an abort), then exit nonzero.
+			let msg = other.strip_prefix("runtime error: ").unwrap_or(other);
+			eprintln!("{msg}");
+			1
+		}
+	}
+}
+
+/// Drive `_entry` once through the given sink and report the status. `_entry`'s
+/// returned `err e` doubles as the exit status (mirrors `vm::VM::run`); an
+/// `io.fail` trap surfaces its stashed message.
+fn run_with(engine: &Engine, module: &Module, io: Box<dyn HostIo>) -> RunResult {
+	let (mut store, instance) = match instantiate_module(engine, module, io) {
 		Ok(x) => x,
 		Err(status) => {
 			return RunResult {
@@ -967,26 +1090,26 @@ pub(crate) fn run_entry(engine: &Engine, module: &Module, stdin: &[u8]) -> RunRe
 	let mut results = vec![Val::AnyRef(None)];
 	let status = match entry.call(&mut store, &[Val::AnyRef(None)], &mut results) {
 		// `main`'s return value doubles as the exit status: a returned `err e`
-		// aborts with `e` on stderr and a nonzero exit (mirrors `vm::VM::run`).
+		// aborts with `e` (mirrors `vm::VM::run`).
 		Ok(_) => match err_message(&mut store, &results[0]) {
 			Some(msg) => format!("runtime error: {msg}"),
 			None => "ok".to_string(),
 		},
 		// A trap with a stashed `io.fail` message is a program-controlled abort;
 		// surface its message (matching the VM) rather than the wasm backtrace.
-		Err(e) => match store.data().fail.borrow().clone() {
+		Err(e) => match store.data().fail.clone() {
 			Some(msg) => format!("runtime error: {msg}"),
 			None => format!("runtime error: {e}"),
 		},
 	};
-	let stdout = String::from_utf8_lossy(&store.data().out.borrow()).into_owned();
+	let stdout = store.data().io.captured_stdout();
 	RunResult { status, stdout }
 }
 
 /// A collecting (deferred-reference-counting) engine for the bench: the timed loop
 /// allocates a record per iteration, which the default null collector would never
 /// free (OOM). The short-lived records are reclaimed within each `_entry` call.
-pub(crate) fn bench_engine() -> Engine {
+pub fn bench_engine() -> Engine {
 	let mut config = Config::new();
 	config.wasm_reference_types(true);
 	config.wasm_function_references(true);
@@ -997,6 +1120,7 @@ pub(crate) fn bench_engine() -> Engine {
 }
 
 /// If `val` is an `err e` result variant, return `e` formatted (the program's
+/// abort message); otherwise `None`.
 fn err_message(store: &mut impl AsContextMut, val: &Val) -> Option<String> {
 	let Val::AnyRef(Some(r)) = val else {
 		return None;

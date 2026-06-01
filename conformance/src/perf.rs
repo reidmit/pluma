@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 use compiler::Platform;
 use wasmtime::Module;
 
-use crate::{Backend, Runner, js_host, perf_corpus, run, run_corpus, wasm_host};
+use crate::{Backend, Runner, js_host, perf_corpus, run, run_corpus};
 
 fn iters() -> u32 {
 	std::env::var("BENCH_ITERS")
@@ -29,9 +29,9 @@ fn iters() -> u32 {
 /// programs that would otherwise trap on the fastest null collector.
 fn perf_engine() -> wasmtime::Engine {
 	if std::env::var("BENCH_WASM_GC").as_deref() == Ok("drc") {
-		wasm_host::bench_engine()
+		host::bench_engine()
 	} else {
-		wasm_host::engine()
+		host::engine()
 	}
 }
 
@@ -112,12 +112,12 @@ pub fn dev_loop(runner: &Runner) -> DevLoop {
 					let s = Instant::now();
 					let b = wasm::emit(&ir).unwrap();
 					let m = Module::new(&engine, &b).unwrap();
-					let _ = wasm_host::run_entry(&engine, &m, &stdin);
+					let _ = host::run_entry(&engine, &m, &stdin);
 					d.wasm_e2e += s.elapsed();
 				}
 				for _ in 0..it {
 					let s = Instant::now();
-					let _ = wasm_host::run_entry(&engine, &module, &stdin);
+					let _ = host::run_entry(&engine, &module, &stdin);
 					d.wasm_exec += s.elapsed();
 				}
 			}
@@ -190,7 +190,7 @@ pub fn compute(runner: &Runner) -> Vec<ComputeRow> {
 				let mut te = Duration::ZERO;
 				for _ in 0..it {
 					let s = Instant::now();
-					let _ = wasm_host::run_entry(&engine, &module, &stdin);
+					let _ = host::run_entry(&engine, &module, &stdin);
 					te += s.elapsed();
 				}
 				row.wasm_exec = Some(te / it);
@@ -199,7 +199,7 @@ pub fn compute(runner: &Runner) -> Vec<ComputeRow> {
 					let s = Instant::now();
 					let b = wasm::emit(&ir).unwrap();
 					let m = Module::new(&engine, &b).unwrap();
-					let _ = wasm_host::run_entry(&engine, &m, &stdin);
+					let _ = host::run_entry(&engine, &m, &stdin);
 					t2 += s.elapsed();
 				}
 				row.wasm_e2e = Some(t2 / it);

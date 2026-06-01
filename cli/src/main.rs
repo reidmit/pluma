@@ -616,20 +616,22 @@ fn compile_program(compiler: &Compiler) -> Result<vm::Program, String> {
 	codegen::compile_from_ir(&program).map_err(|e| e.to_string())
 }
 
-/// `pluma build [--target browser] <file> [-o out]` — compile to a JavaScript
-/// module for the browser/client target. Lowers the shared IR (under
-/// `Platform::Browser`) through the `js` backend and writes `<out>.js` plus a
-/// tiny `<out>.html` harness that loads it.
+/// `pluma build [--target browser|server] <file> [-o out]` — compile a module to
+/// a deploy artifact. `--target browser` (the default) lowers the shared IR under
+/// `Platform::Browser` through the `js` backend and writes `<out>.js` plus a tiny
+/// `<out>.html` harness. `--target server` lowers under `Platform::Server` through
+/// the WasmGC backend and writes `<out>.wasm`, run with `pluma run <out>.wasm`.
 fn build_command(args: Vec<String>) {
 	let mut entry_path: Option<String> = None;
 	let mut out_base: Option<String> = None;
+	let mut target = String::from("browser");
 	let mut iter = args.into_iter();
 	while let Some(a) = iter.next() {
 		match a.as_str() {
 			"--target" => {
-				// Only `browser` is meaningful today; accept and ignore the value so
-				// the flag is forward-compatible.
-				let _ = iter.next();
+				if let Some(t) = iter.next() {
+					target = t;
+				}
 			}
 			"-o" | "--out" => out_base = iter.next(),
 			_ => entry_path = Some(a),
@@ -643,8 +645,19 @@ fn build_command(args: Vec<String>) {
 		}
 	};
 
+	let platform = match target.as_str() {
+		"browser" => Platform::Browser,
+		"server" => Platform::Server,
+		other => {
+			print_error(format!(
+				"Unknown --target `{other}`. Expected `browser` or `server`."
+			));
+			std::process::exit(1);
+		}
+	};
+
 	let mut compiler = match Compiler::from_entry_path(entry_path.clone()) {
-		Ok(c) => c.with_platform(Platform::Browser),
+		Ok(c) => c.with_platform(platform),
 		Err(diagnostics) => {
 			print_diagnostics(diagnostics);
 			std::process::exit(1);
@@ -663,13 +676,6 @@ fn build_command(args: Vec<String>) {
 			std::process::exit(1);
 		}
 	};
-	let source = match js::emit(&program) {
-		Ok(s) => s,
-		Err(msg) => {
-			print_error(format!("js codegen error: {msg}"));
-			std::process::exit(1);
-		}
-	};
 
 	// Default the output base name to the entry file's stem.
 	let base = out_base.unwrap_or_else(|| {
@@ -679,18 +685,45 @@ fn build_command(args: Vec<String>) {
 			.unwrap_or("out")
 			.to_string()
 	});
-	let js_path = format!("{base}.js");
-	let html_path = format!("{base}.html");
-	if let Err(e) = std::fs::write(&js_path, &source) {
-		print_error(format!("writing {js_path}: {e}"));
-		std::process::exit(1);
+
+	match platform {
+		Platform::Server => {
+			let bytes = match wasm::emit(&program) {
+				Ok(b) => b,
+				Err(diags) => {
+					print_error(format!("wasm codegen error: {}", diags.0.join("; ")));
+					std::process::exit(1);
+				}
+			};
+			let wasm_path = format!("{base}.wasm");
+			if let Err(e) = std::fs::write(&wasm_path, &bytes) {
+				print_error(format!("writing {wasm_path}: {e}"));
+				std::process::exit(1);
+			}
+			println!("wrote {wasm_path} (run with `pluma run {wasm_path}`)");
+		}
+		_ => {
+			let source = match js::emit(&program) {
+				Ok(s) => s,
+				Err(msg) => {
+					print_error(format!("js codegen error: {msg}"));
+					std::process::exit(1);
+				}
+			};
+			let js_path = format!("{base}.js");
+			let html_path = format!("{base}.html");
+			if let Err(e) = std::fs::write(&js_path, &source) {
+				print_error(format!("writing {js_path}: {e}"));
+				std::process::exit(1);
+			}
+			let html = browser_harness(&js_path);
+			if let Err(e) = std::fs::write(&html_path, html) {
+				print_error(format!("writing {html_path}: {e}"));
+				std::process::exit(1);
+			}
+			println!("wrote {js_path} and {html_path}");
+		}
 	}
-	let html = browser_harness(&js_path);
-	if let Err(e) = std::fs::write(&html_path, html) {
-		print_error(format!("writing {html_path}: {e}"));
-		std::process::exit(1);
-	}
-	println!("wrote {js_path} and {html_path}");
 }
 
 /// A minimal HTML harness that loads the emitted module and shows its stdout.
@@ -705,6 +738,20 @@ console.log(r.stdout);\n  }}\n</script>\n</body>\n</html>\n"
 }
 
 fn run(entry_path: String, program_args: Vec<String>) {
+	// A prebuilt WasmGC artifact (`pluma build --target server`) runs through the
+	// embedded wasmtime host rather than the VM. Dispatch on the extension so
+	// `pluma run` stays the single entry point for both source and artifacts.
+	if entry_path.ends_with(".wasm") {
+		let bytes = match std::fs::read(&entry_path) {
+			Ok(b) => b,
+			Err(err) => {
+				print_error(format!("Could not read `{}`: {}", entry_path, err));
+				std::process::exit(1);
+			}
+		};
+		std::process::exit(host::run_streaming(&bytes));
+	}
+
 	if entry_path.ends_with(".test.pa") || entry_path.ends_with(".test") {
 		print_error(format!(
 			"`{}` is a test module. Use `pluma test` to run tests.",

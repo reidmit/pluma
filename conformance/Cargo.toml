@@ -12,6 +12,7 @@ publish = false
 [dependencies]
 codegen = { path = "../codegen" }
 compiler = { path = "../compiler" }
+host = { path = "../host" }
 ir = { path = "../ir" }
 js = { path = "../js" }
 vm = { path = "../vm" }

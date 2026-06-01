@@ -6,7 +6,6 @@
 
 mod js_host;
 mod run;
-mod wasm_host;
 
 pub mod perf;
 pub mod report;
@@ -14,6 +13,10 @@ pub mod report;
 use std::path::{Path, PathBuf};
 
 use compiler::Platform;
+/// The WasmGC runtime lives in the shared `host` crate (the same one `cli` ships):
+/// the differential gate runs every fixture through exactly the runtime the CLI
+/// uses. `RunResult` is its result type, re-exported here as the unit of comparison.
+pub use host::RunResult;
 
 /// The three execution backends, all consuming the same `ir::IrProgram`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -47,13 +50,6 @@ impl Backend {
 			Backend::Js => Platform::Browser,
 		}
 	}
-}
-
-/// A program's observable result: exit status + stdout. The unit of comparison.
-#[derive(Clone, PartialEq, Eq)]
-pub struct RunResult {
-	pub status: String,
-	pub stdout: String,
 }
 
 /// What happened when a backend was asked to run a fixture.
@@ -172,7 +168,7 @@ impl Runner {
 				Err(e) => Outcome::Skip(SkipReason::Unsupported(e.to_string())),
 			},
 			Backend::Wasm => match wasm::emit(&ir) {
-				Ok(bytes) => Outcome::Ran(wasm_host::run_wasm(&bytes, &stdin)),
+				Ok(bytes) => Outcome::Ran(host::run_wasm(&bytes, &stdin)),
 				Err(d) => Outcome::Skip(SkipReason::Unsupported(format!(
 					"wasm::emit rejected ({} diag)",
 					d.0.len()
