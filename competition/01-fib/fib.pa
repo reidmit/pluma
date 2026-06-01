@@ -1,0 +1,16 @@
+# Naive recursive Fibonacci — stresses function-call overhead and the cost of
+# non-tail recursion.
+
+def fib = fun n {
+	when n is 0 {
+		0
+	} is 1 {
+		1
+	} else {
+		(fib (n - 1)) + (fib (n - 2))
+	}
+}
+
+def main = fun {
+	print (to-string (fib 32))
+}

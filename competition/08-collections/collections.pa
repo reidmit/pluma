@@ -1,0 +1,12 @@
+# Functional collection pipeline: range → map → filter → fold, materializing
+# each intermediate list.
+
+use core.list
+
+def main = fun {
+	let nums = list.range 1 1000001
+	let squared = list.map nums fun x { x * x }
+	let evens = list.filter squared fun x { (x % 2) == 0 }
+	let total = list.fold evens 0 fun acc x { (acc + x) % 1000000007 }
+	print (to-string total)
+}

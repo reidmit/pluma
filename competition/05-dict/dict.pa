@@ -1,0 +1,20 @@
+# Word-frequency tally over a stream of keys — exercises the hash dict on both
+# the lookup and insert paths.
+
+use core.dict
+
+def tally = fun m i limit buckets {
+	if i == limit is true {
+		m
+	} else {
+		let key = to-string (i % buckets)
+		let prev = (dict.lookup m key) ?? 0
+		tally (dict.insert m key (prev + 1)) (i + 1) limit buckets
+	}
+}
+
+def main = fun {
+	let m = tally (dict.empty ()) 0 200000 20000
+	print (to-string (dict.size m))
+	print (to-string ((dict.lookup m "0") ?? 0))
+}

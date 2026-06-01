@@ -1,0 +1,26 @@
+# Count the primes below a limit by trial division — integer arithmetic, modulo,
+# and a tight tail-recursive inner loop.
+
+def prime = fun n d {
+	if (d * d) > n is true {
+		true
+	} else if (n % d) == 0 is true {
+		false
+	} else {
+		prime n (d + 1)
+	}
+}
+
+def count = fun n limit acc {
+	if n == limit is true {
+		acc
+	} else if prime n 2 is true {
+		count (n + 1) limit (acc + 1)
+	} else {
+		count (n + 1) limit acc
+	}
+}
+
+def main = fun {
+	print (to-string (count 2 300000 0))
+}

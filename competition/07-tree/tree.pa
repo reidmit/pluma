@@ -1,0 +1,27 @@
+# Build a perfect binary tree of nominal enum nodes, then fold it — recursive
+# data construction and pattern matching at depth.
+
+enum tree {
+	leaf int
+	node tree tree
+}
+
+def build = fun depth start {
+	when depth is 0 {
+		tree.leaf start
+	} else {
+		tree.node (build (depth - 1) start) (build (depth - 1) (start + 1))
+	}
+}
+
+def sum = fun t {
+	when t is leaf v {
+		v
+	} is node l r {
+		(sum l) + (sum r)
+	}
+}
+
+def main = fun {
+	print (to-string (sum (build 21 1)))
+}
