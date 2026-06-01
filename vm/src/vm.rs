@@ -686,36 +686,13 @@ impl VM {
 				} else {
 					0
 				};
-				// Run `defer` cleanups LIFO before tearing down the frame.
-				let cleanups = std::mem::take(&mut self.frames[frame_idx].cleanups);
-				for thunk in cleanups.into_iter().rev() {
-					self.call_function(thunk, Vec::new())?;
-				}
-				let popped = self.frames.pop().unwrap();
-				self.stack.truncate(popped.base);
-				if self.uses_raw {
-					self.raw.truncate(popped.base);
-				}
-				match popped.ret_dst {
-					Some(abs) => {
-						if raw_ret {
-							self.raw[abs] = result_raw;
-						} else {
-							self.stack[abs] = result;
-						}
-					}
-					None => {
-						// External callers pop a boxed `Value`; box a raw return.
-						self.stack.push(if raw_ret {
-							Value::Int(result_raw as i64)
-						} else {
-							result
-						});
-						if self.uses_raw {
-							self.raw.push(0);
-						}
-					}
-				}
+				self.deliver_return(frame_idx, result, result_raw, raw_ret)?;
+				flow = Flow::Transfer;
+			}
+			Instruction::ReturnInt { val } => {
+				// Fused `LoadInt; Return` for a constant int return. Always boxed —
+				// codegen keeps a raw const return (M6) on the `Return` path.
+				self.deliver_return(frame_idx, Value::Int(val), 0, false)?;
 				flow = Flow::Transfer;
 			}
 			Instruction::PushDefer { thunk } => {
@@ -1519,6 +1496,51 @@ impl VM {
 		}
 		Ok(())
 	}
+
+	// Tear down the top frame and deliver `result` to its caller. Shared by the
+	// `Return` and fused-const-return (`ReturnInt`) opcodes. Runs `defer` cleanups
+	// LIFO, pops the frame, and either writes the value to the caller's register
+	// (`ret_dst`) or pushes it for an external driver to pop. `raw_ret` (M6)
+	// delivers the i64 bits through the raw window instead of the boxed `result`.
+	fn deliver_return(
+		&mut self,
+		frame_idx: usize,
+		result: Value,
+		result_raw: u64,
+		raw_ret: bool,
+	) -> Result<(), RuntimeError> {
+		// Run `defer` cleanups LIFO before tearing down the frame.
+		let cleanups = std::mem::take(&mut self.frames[frame_idx].cleanups);
+		for thunk in cleanups.into_iter().rev() {
+			self.call_function(thunk, Vec::new())?;
+		}
+		let popped = self.frames.pop().unwrap();
+		self.stack.truncate(popped.base);
+		if self.uses_raw {
+			self.raw.truncate(popped.base);
+		}
+		match popped.ret_dst {
+			Some(abs) => {
+				if raw_ret {
+					self.raw[abs] = result_raw;
+				} else {
+					self.stack[abs] = result;
+				}
+			}
+			None => {
+				// External callers pop a boxed `Value`; box a raw return.
+				self.stack.push(if raw_ret {
+					Value::Int(result_raw as i64)
+				} else {
+					result
+				});
+				if self.uses_raw {
+					self.raw.push(0);
+				}
+			}
+		}
+		Ok(())
+	}
 }
 
 // Tiny helpers used by builtin::invoke and the task driver (so VM internals stay
@@ -1590,6 +1612,7 @@ fn opcode_name(i: &Instruction) -> &'static str {
 		TailCall { .. } => "TailCall",
 		TailCallDirect { .. } => "TailCallDirect",
 		Return { .. } => "Return",
+		ReturnInt { .. } => "ReturnInt",
 		PushDefer { .. } => "PushDefer",
 		Await { .. } => "Await",
 		MakeTuple { .. } => "MakeTuple",

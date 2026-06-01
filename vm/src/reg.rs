@@ -218,6 +218,12 @@ pub enum Instruction {
 		src: Reg,
 		raw: bool,
 	},
+	/// Return a constant int directly, fusing `LoadInt; Return` into one opcode
+	/// (no temp register) — the hot base-case return of recursive int functions
+	/// (`fib`, `tree-sum`). Boxed only; a raw const return (M6) keeps `Return`.
+	ReturnInt {
+		val: i64,
+	},
 	/// Push the zero-arg closure in `thunk` onto the frame's `defer` cleanup
 	/// stack (run LIFO at `Return`).
 	PushDefer {

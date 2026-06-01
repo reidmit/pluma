@@ -335,12 +335,20 @@ impl FnCtx {
 					Atom::Const(Const::Int(_)) => self.coerced,
 					Atom::Const(_) => false,
 				};
-				let src = if raw {
-					self.atom_reg_raw(em, atom, body, ranges, r)
+				// Fuse a boxed constant-int return into one opcode (no `LoadInt` +
+				// temp) — the hot base-case return of recursive int functions. A raw
+				// const return (M6, coerced) keeps the reg path so the raw window
+				// carries it.
+				if let (Atom::Const(Const::Int(n)), false) = (atom, raw) {
+					push(body, ranges, Instruction::ReturnInt { val: *n }, r);
 				} else {
-					self.atom_reg(em, atom, body, ranges, r)
-				};
-				push(body, ranges, Instruction::Return { src, raw }, r);
+					let src = if raw {
+						self.atom_reg_raw(em, atom, body, ranges, r)
+					} else {
+						self.atom_reg(em, atom, body, ranges, r)
+					};
+					push(body, ranges, Instruction::Return { src, raw }, r);
+				}
 			}
 			StmtKind::If(cond, then_b, else_b) => {
 				let c = self.atom_reg(em, cond, body, ranges, r);
