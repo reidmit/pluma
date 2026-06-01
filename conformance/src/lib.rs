@@ -163,10 +163,18 @@ impl Runner {
 		}
 		let stdin = std::fs::read(dir.join("stdin.txt")).unwrap_or_default();
 		match backend {
-			Backend::Vm => match codegen::compile_from_ir(&ir) {
-				Ok(p) => Outcome::Ran(run::run_vm(p, &stdin)),
-				Err(e) => Outcome::Skip(SkipReason::Unsupported(e.to_string())),
-			},
+			// The VM oracle applies its VM-specific pipeline (`ir::optimize`: inline +
+			// direct calls + M6 monomorphization/unboxing) on top of the raw IR, just
+			// as `pluma run` does. The deploy backends below run their own internal
+			// pipelines straight off the raw `ir` instead.
+			Backend::Vm => {
+				let mut ir = ir;
+				ir::optimize(&mut ir);
+				match codegen::compile_from_ir(&ir) {
+					Ok(p) => Outcome::Ran(run::run_vm(p, &stdin)),
+					Err(e) => Outcome::Skip(SkipReason::Unsupported(e.to_string())),
+				}
+			}
 			Backend::Wasm => match wasm::emit(&ir) {
 				Ok(bytes) => Outcome::Ran(host::run_wasm(&bytes, &stdin)),
 				Err(d) => Outcome::Skip(SkipReason::Unsupported(format!(

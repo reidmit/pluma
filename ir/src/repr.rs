@@ -394,7 +394,23 @@ pub fn insert_coercions(f: &mut Function, sigs: &Sigs) {
 	if reprs.len() < needed {
 		reprs.resize(needed, Repr::Boxed);
 	}
-	let mut ctx = Coercer { reprs, sigs };
+	// The repr this function delivers to its callers — the same `Sigs::ret` value
+	// a `Call(Callee::Function(self))` site reads. In mono mode that's the
+	// (monomorphization-filtered) `ret_repr` field (which `Sigs::from_program`
+	// mirrored into the table, so field == sigs); in uniform mode every return is
+	// boxed. Coercing each `Return` to *this* — rather than unconditionally `Boxed`
+	// — is what keeps a monomorphized callee's body in agreement with its callers
+	// (else an `I64`-returning `fib` would box its return while callers read raw).
+	let self_ret = if sigs.seeds_params() {
+		f.ret_repr
+	} else {
+		Repr::Boxed
+	};
+	let mut ctx = Coercer {
+		reprs,
+		sigs,
+		self_ret,
+	};
 	let body = std::mem::replace(&mut f.body, Block(Vec::new()));
 	f.body = ctx.block(body);
 	f.var_reprs = ctx.reprs;
@@ -403,6 +419,8 @@ pub fn insert_coercions(f: &mut Function, sigs: &Sigs) {
 struct Coercer<'a> {
 	reprs: Vec<Repr>,
 	sigs: &'a Sigs,
+	/// The repr this function returns to its callers (its own `Sigs::ret`).
+	self_ret: Repr,
 }
 
 impl Coercer<'_> {
@@ -488,7 +506,7 @@ impl Coercer<'_> {
 				StmtKind::Discard(rv)
 			}
 			StmtKind::Return(mut a) => {
-				self.coerce(&mut a, Repr::Boxed, &mut pre, range);
+				self.coerce(&mut a, self.self_ret, &mut pre, range);
 				StmtKind::Return(a)
 			}
 			StmtKind::PushDefer(mut a) => {
@@ -540,10 +558,23 @@ impl Coercer<'_> {
 /// requires (so a WASM emitter never sees a boxed value where it needs an i64,
 /// nor vice-versa). Run over the whole fixture corpus after `insert_coercions`.
 pub fn validate_reprs(f: &Function, sigs: &Sigs) -> Result<(), String> {
-	check_block(&f.body, &f.var_reprs, &f.name, sigs)
+	// The repr this function's `Return`s must produce — its own `Sigs::ret` (see
+	// `insert_coercions`). Boxed in uniform mode.
+	let self_ret = if sigs.seeds_params() {
+		f.ret_repr
+	} else {
+		Repr::Boxed
+	};
+	check_block(&f.body, &f.var_reprs, &f.name, sigs, self_ret)
 }
 
-fn check_block(b: &Block, reprs: &[Repr], fname: &str, sigs: &Sigs) -> Result<(), String> {
+fn check_block(
+	b: &Block,
+	reprs: &[Repr],
+	fname: &str,
+	sigs: &Sigs,
+	self_ret: Repr,
+) -> Result<(), String> {
 	for stmt in &b.0 {
 		match &stmt.kind {
 			StmtKind::Let(v, rv) => {
@@ -558,12 +589,12 @@ fn check_block(b: &Block, reprs: &[Repr], fname: &str, sigs: &Sigs) -> Result<()
 				check_rvalue(rv, reprs, fname, sigs)?;
 			}
 			StmtKind::Discard(rv) => check_rvalue(rv, reprs, fname, sigs)?,
-			StmtKind::Return(a) => require(a, Repr::Boxed, reprs, fname, "return")?,
+			StmtKind::Return(a) => require(a, self_ret, reprs, fname, "return")?,
 			StmtKind::PushDefer(a) => require(a, Repr::Boxed, reprs, fname, "defer")?,
 			StmtKind::If(cond, t, e) => {
 				require(cond, Repr::I32, reprs, fname, "if-cond")?;
-				check_block(t, reprs, fname, sigs)?;
-				check_block(e, reprs, fname, sigs)?;
+				check_block(t, reprs, fname, sigs, self_ret)?;
+				check_block(e, reprs, fname, sigs, self_ret)?;
 			}
 			StmtKind::Switch {
 				scrutinee,
@@ -572,17 +603,17 @@ fn check_block(b: &Block, reprs: &[Repr], fname: &str, sigs: &Sigs) -> Result<()
 			} => {
 				require(scrutinee, Repr::Boxed, reprs, fname, "switch")?;
 				for (_, b) in arms {
-					check_block(b, reprs, fname, sigs)?;
+					check_block(b, reprs, fname, sigs, self_ret)?;
 				}
-				check_block(default, reprs, fname, sigs)?;
+				check_block(default, reprs, fname, sigs, self_ret)?;
 			}
 			StmtKind::Match { subject, arms } => {
 				require(subject, Repr::Boxed, reprs, fname, "match")?;
 				for arm in arms {
-					check_block(&arm.body, reprs, fname, sigs)?;
+					check_block(&arm.body, reprs, fname, sigs, self_ret)?;
 				}
 			}
-			StmtKind::Loop(b) => check_block(b, reprs, fname, sigs)?,
+			StmtKind::Loop(b) => check_block(b, reprs, fname, sigs, self_ret)?,
 			StmtKind::Break | StmtKind::Continue | StmtKind::RunDefer(_) => {}
 		}
 	}

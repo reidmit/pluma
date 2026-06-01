@@ -221,11 +221,16 @@ pub struct VM {
 	// and script path already stripped by the CLI. Surfaced through `io.args`.
 	pub args: Vec<String>,
 	pub(crate) stack: Vec<Value>,
-	// The raw register window, parallel to `stack` and kept the same length. An
-	// I64-repr register `i` of the top frame holds its bits in `raw[base + i]`
-	// (a boxed register's `raw` slot is unused, and vice-versa). M5 — see
-	// notes/REGISTER_VM.md.
+	// The raw register window. When live (`uses_raw`), it's parallel to `stack` and
+	// kept the same length: an I64-repr register `i` of the top frame holds its bits
+	// in `raw[base + i]` (a boxed register's `raw` slot is unused, and vice-versa).
+	// When `uses_raw` is false (M5/M6 dormant — the default), it stays empty and is
+	// never touched. M5 — see notes/REGISTER_VM.md.
 	pub(crate) raw: Vec<u64>,
+	// Cached `program.uses_raw`: whether any function has an unboxed (`I64`)
+	// register. When `false` (M5/M6 dormant — the default), all `raw`-window
+	// maintenance is skipped, so `raw` stays empty and costs nothing per call.
+	pub(crate) uses_raw: bool,
 	pub(crate) frames: Vec<Frame>,
 	// The async scheduler. Empty/idle for synchronous programs; populated by
 	// `run_task` and read by the `scope-*` builtins. See `vm::task`.
@@ -236,6 +241,7 @@ pub struct VM {
 
 impl VM {
 	pub fn new(program: Program) -> Self {
+		let uses_raw = program.uses_raw;
 		Self {
 			program,
 			stdout: OutputSink::Stdout,
@@ -243,7 +249,14 @@ impl VM {
 			stdin: InputSource::Stdin,
 			args: Vec::new(),
 			stack: Vec::with_capacity(256),
-			raw: Vec::with_capacity(256),
+			// Only the raw (unboxed-I64) path allocates this; empty + untouched when
+			// `uses_raw` is false (the default — see `uses_raw`).
+			raw: if uses_raw {
+				Vec::with_capacity(256)
+			} else {
+				Vec::new()
+			},
+			uses_raw,
 			frames: Vec::with_capacity(64),
 			sched: crate::task::Scheduler::default(),
 			profile: None,
@@ -363,7 +376,9 @@ impl VM {
 		let nregs = func.nregs as usize;
 		self.stack.extend(args);
 		self.stack.resize(base + nregs, Value::Nothing);
-		self.raw.resize(self.stack.len(), 0);
+		if self.uses_raw {
+			self.raw.resize(self.stack.len(), 0);
+		}
 		self.frames.push(Frame {
 			fn_idx,
 			ip: 0,
@@ -632,8 +647,14 @@ impl VM {
 				// A monomorphized function can return an unboxed i64 (M6): read the
 				// result from the window its repr names, and deliver it to the
 				// caller's `dst` in the same window (`dst`'s repr matches by coercion).
+				// `raw_ret` implies `uses_raw`, so the raw read/truncate only run when
+				// the raw window is live.
 				let result = self.stack[base + src as usize].clone();
-				let result_raw = self.raw[base + src as usize];
+				let result_raw = if raw_ret {
+					self.raw[base + src as usize]
+				} else {
+					0
+				};
 				// Run `defer` cleanups LIFO before tearing down the frame.
 				let cleanups = std::mem::take(&mut self.frames[frame_idx].cleanups);
 				for thunk in cleanups.into_iter().rev() {
@@ -641,7 +662,9 @@ impl VM {
 				}
 				let popped = self.frames.pop().unwrap();
 				self.stack.truncate(popped.base);
-				self.raw.truncate(popped.base);
+				if self.uses_raw {
+					self.raw.truncate(popped.base);
+				}
 				match popped.ret_dst {
 					Some(abs) => {
 						if raw_ret {
@@ -657,7 +680,9 @@ impl VM {
 						} else {
 							result
 						});
-						self.raw.push(0);
+						if self.uses_raw {
+							self.raw.push(0);
+						}
 					}
 				}
 				flow = Flow::Transfer;
@@ -1406,8 +1431,10 @@ impl VM {
 			}
 			self.stack.truncate(new_base);
 			self.stack.resize(new_base + nregs, Value::Nothing);
-			self.raw.truncate(new_base);
-			self.raw.resize(new_base + nregs, 0);
+			if self.uses_raw {
+				self.raw.truncate(new_base);
+				self.raw.resize(new_base + nregs, 0);
+			}
 			for (i, a) in tmp.into_iter().enumerate() {
 				match a {
 					Arg::Raw(b) => self.raw[new_base + i] = b,
@@ -1426,7 +1453,9 @@ impl VM {
 			// arg in its param's repr (raw i64 or boxed).
 			let new_base = self.stack.len();
 			self.stack.resize(new_base + nregs, Value::Nothing);
-			self.raw.resize(new_base + nregs, 0);
+			if self.uses_raw {
+				self.raw.resize(new_base + nregs, 0);
+			}
 			for i in 0..argc {
 				let r = self.program.reg_lists[args as usize][i] as usize;
 				if self.param_is_raw(fn_idx, i) {
@@ -1456,7 +1485,9 @@ impl VM {
 		self.frames.len()
 	}
 	pub(crate) fn pop_stack(&mut self) -> Option<Value> {
-		self.raw.pop();
+		if self.uses_raw {
+			self.raw.pop();
+		}
 		self.stack.pop()
 	}
 	// (module, 1-indexed line) of the call instruction that dispatched the

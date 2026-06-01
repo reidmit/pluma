@@ -239,6 +239,67 @@ mod tests {
 		assert_eq!(program.functions[0].ret_repr, Repr::I64);
 	}
 
+	// Regression for the M6 `ret_repr` inconsistency: after the full pipeline
+	// (`monomorphize` → `Sigs::from_program` → `infer_reprs` → `insert_coercions`),
+	// a monomorphized callee's body must RETURN the same repr its callers READ as
+	// the call result. The earlier bug boxed every `Return` unconditionally while
+	// callers read the unboxed `ret_repr`, so an `i64`-returning `fib` handed back a
+	// boxed value the caller reinterpreted as raw bits. `fib`'s own self-call is a
+	// call-of-`fib` site, so the invariant is observable on `fib` alone.
+	#[test]
+	fn monomorphized_return_repr_matches_caller_call_result() {
+		use crate::repr::{Sigs, infer_reprs, insert_coercions, validate_reprs};
+		// fn0 = fib body (I64 param/ret) with a direct self-call into VarId(1); fn1 = thunk.
+		let fib = func(
+			"fib",
+			vec![VarId(0)],
+			vec![Repr::I64],
+			Repr::I64,
+			vec![
+				Stmt::new(
+					StmtKind::Let(
+						VarId(1),
+						Rvalue::Call(Callee::Function(FuncId(0)), vec![Atom::Var(VarId(0))]),
+					),
+					syn(),
+				),
+				Stmt::new(StmtKind::Return(Atom::Var(VarId(1))), syn()),
+			],
+		);
+		let thunk = thunk_for(0);
+		let mut program = IrProgram {
+			functions: vec![fib, thunk],
+			globals: vec![GlobalInit::Thunk(FuncId(1))],
+			enums: Default::default(),
+			entry: FuncId(1),
+			test_suites: vec![],
+			test_new: None,
+		};
+		monomorphize(&mut program);
+		let sigs = Sigs::from_program(&program);
+		for f in &mut program.functions {
+			f.var_reprs = infer_reprs(f, &sigs);
+			insert_coercions(f, &sigs);
+			validate_reprs(f, &sigs).expect("mono-coerced fn must validate");
+		}
+		let fib = &program.functions[0];
+		// `fib` kept its unboxed return…
+		assert_eq!(fib.ret_repr, Repr::I64);
+		// …and the self-call's result var reads as that same `I64` — caller's
+		// call-result repr == callee's return repr. (No box/unbox was needed, so the
+		// `Call`'s result var is still VarId(1).)
+		assert_eq!(fib.var_reprs[1], Repr::I64);
+		// The body returns VarId(1) directly (no boxing coercion spliced in).
+		assert!(
+			matches!(
+				fib.body.0.last().map(|s| &s.kind),
+				Some(StmtKind::Return(Atom::Var(VarId(1))))
+			),
+			"expected unboxed `Return VarId(1)`, got {:?}",
+			fib.body.0.last().map(|s| &s.kind)
+		);
+	}
+
 	// The same def, but its global is still read as a value (it escapes) — it must
 	// revert to the uniform-boxed convention.
 	#[test]

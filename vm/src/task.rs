@@ -916,7 +916,9 @@ impl VM {
 		// un-coerced (all-boxed), so only the boxed window is snapshotted; the raw
 		// window is kept length-synced for any coerced sync calls nested below.
 		self.stack.extend(tf.saved.iter().cloned());
-		self.raw.resize(self.stack.len(), 0);
+		if self.uses_raw {
+			self.raw.resize(self.stack.len(), 0);
+		}
 		self.frames.push(Frame {
 			fn_idx: step_fn as u32,
 			ip: tf.resume_ip,
@@ -963,7 +965,9 @@ impl VM {
 					let popped = self.frames.pop().unwrap();
 					tf.cleanups = popped.cleanups;
 					self.stack.truncate(popped.base);
-					self.raw.truncate(popped.base);
+					if self.uses_raw {
+						self.raw.truncate(popped.base);
+					}
 					return Ok(StepOutcome::Await(awaited));
 				}
 			}

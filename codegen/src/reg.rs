@@ -47,10 +47,10 @@ pub fn emit(program: &IrProgram) -> Result<Program, String> {
 		.functions
 		.iter()
 		.map(|f| {
-			// A param is raw only if the callee is coerced (has Box/Unbox) and the
+			// A param is raw only if the callee uses the raw discipline and the
 			// param's *post-coercion* repr (`var_reprs`, not the stale `param_reprs`
 			// field `lower` stamps) is I64.
-			let coerced = block_has_coercions(&f.body);
+			let coerced = uses_raw_registers(f);
 			f.params
 				.iter()
 				.map(|p| coerced && matches!(f.var_reprs.get(p.0 as usize), Some(ir::Repr::I64)))
@@ -76,6 +76,12 @@ pub fn emit(program: &IrProgram) -> Result<Program, String> {
 		}
 	}
 	let globals = program.globals.iter().map(lower_global).collect();
+	// Does any function use the raw (unboxed-`I64`) register discipline? Only then
+	// does the VM need its parallel raw window. This is exactly the per-function
+	// `coerced` predicate codegen used above — so it's true iff some function emits a
+	// raw opcode (incl. raw *temps*, which aren't in `reg_reprs`). With M5/M6 dormant
+	// it's `false`, and the VM skips all raw-window maintenance (the per-call resize).
+	let uses_raw = program.functions.iter().any(uses_raw_registers);
 	Ok(Program {
 		functions: e.functions,
 		constants: e.constants,
@@ -97,6 +103,7 @@ pub fn emit(program: &IrProgram) -> Result<Program, String> {
 			.iter()
 			.map(|f| f.poll_fn.map(|p| p.0))
 			.collect(),
+		uses_raw,
 	})
 }
 
@@ -205,8 +212,8 @@ struct FnCtx {
 	/// un-coerced function. (Temps aren't tracked here — their repr is known at
 	/// the point they're created and consumed.)
 	var_reprs: Vec<RegRepr>,
-	/// True iff this function was coerced (its body has `Box`/`Unbox` nodes), so
-	/// unboxed (`I64`) registers + raw-variant opcodes are in play. M5.
+	/// True iff this function uses the raw register discipline (`uses_raw_registers`),
+	/// so unboxed (`I64`) registers + raw-variant opcodes are in play. M5/M6.
 	coerced: bool,
 	/// Next free scratch register (bump allocator, stack-disciplined). Starts
 	/// just above the last mapped variable register.
@@ -236,9 +243,9 @@ impl FnCtx {
 				next += 1;
 			}
 		}
-		// A coerced function (has Box/Unbox) gets per-register reprs from
+		// A coerced function (uses the raw discipline) gets per-register reprs from
 		// `var_reprs`; only `I64` is unboxed in this scope (F64/I32/Boxed → boxed).
-		let coerced = block_has_coercions(&f.body);
+		let coerced = uses_raw_registers(f);
 		let mut var_reprs = vec![RegRepr::Boxed; next as usize];
 		if coerced {
 			for (vid, &reg) in &regs {
@@ -316,15 +323,23 @@ impl FnCtx {
 				self.lower_rvalue(em, t, rv, body, ranges, r)?;
 			}
 			StmtKind::Return(atom) => {
-				// A raw i64 return only when the returned register is itself i64
-				// (derived from the post-coercion repr, not the stale `ret_repr`
-				// field). Under uniform Sigs returns are boxed; raw returns are an
-				// M6 (mono) concern.
+				// A raw i64 return when the returned value is unboxed i64 (derived
+				// from the post-coercion repr, not the stale `ret_repr` field). Under
+				// uniform Sigs returns are boxed; raw returns are an M6 (mono) concern.
+				// A bare `Const::Int` survives coercion in the `Return` only when the
+				// function's own `self_ret` is I64 (otherwise `insert_coercions` would
+				// have boxed it to a var) — so in a coerced function it's a raw return
+				// and must be materialized into the raw window (`atom_reg_raw`).
 				let raw = match atom {
 					Atom::Var(v) => self.coerced && self.reg_repr(self.r(*v)) == RegRepr::I64,
+					Atom::Const(Const::Int(_)) => self.coerced,
 					Atom::Const(_) => false,
 				};
-				let src = self.atom_reg(em, atom, body, ranges, r);
+				let src = if raw {
+					self.atom_reg_raw(em, atom, body, ranges, r)
+				} else {
+					self.atom_reg(em, atom, body, ranges, r)
+				};
 				push(body, ranges, Instruction::Return { src, raw }, r);
 			}
 			StmtKind::If(cond, then_b, else_b) => {
@@ -1287,6 +1302,27 @@ fn block_has_coercions(b: &Block) -> bool {
 		})
 	}
 	walk(b)
+}
+
+/// Whether `f` uses the raw (unboxed-`I64`) register discipline — i.e.
+/// `insert_coercions` ran on it under mono signatures. True when *either*:
+///   * its body carries `Box`/`Unbox` boundary nodes (`block_has_coercions`), or
+///   * a parameter carries an `I64` repr in `var_reprs`.
+///
+/// The second clause catches the *fully-monomorphic* function — e.g. `fib`,
+/// whose `i64` values never cross a boxed boundary, so coercion inserts **zero**
+/// `Box`/`Unbox` nodes — which must still receive/return raw `i64` to match what
+/// its (monomorphized) callers pass and read. The two clauses are exhaustive: any
+/// `i64` value in a coerced function either rides an `i64` param or crosses a
+/// boxed boundary. And there is no false positive: uniform lowering never seeds a
+/// param repr (params stay `Boxed` in `var_reprs`), so an `I64` param repr can
+/// only come from mono-mode `infer_reprs` seeding.
+fn uses_raw_registers(f: &IrFunction) -> bool {
+	block_has_coercions(&f.body)
+		|| f
+			.params
+			.iter()
+			.any(|p| matches!(f.var_reprs.get(p.0 as usize), Some(ir::Repr::I64)))
 }
 
 fn collect_block(b: &Block, set: &mut VarSet) {

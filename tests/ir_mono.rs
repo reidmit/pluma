@@ -224,19 +224,19 @@ fn monomorphization_is_behavior_neutral_validates_and_reduces_coercions() {
 		corpus_uniform += uniform_coercions;
 		corpus_mono += mono_coercions;
 
-		// Behavior check: run the monomorphized *structure* with uniform (boxed)
-		// signature boundaries — the repr the register VM supports today. Mono's
-		// own unboxed-boundary coercion (M6) is not yet activated: it relies on
-		// `Sigs::from_program`/`mono` agreeing on each function's `ret_repr`, and
-		// the register backend (the first repr-acting consumer of `mono`) surfaces
-		// a latent disagreement there. Structural neutrality + the coercion-count
-		// reduction above are still validated; see notes/REGISTER_VM.md (M6).
-		let ubox = ir::repr::Sigs::uniform();
+		// Behavior check: run the monomorphized program coerced against its OWN
+		// (mono-filtered) signatures — the real M6 path (what `ir::optimize` runs
+		// when `ENABLE_UNBOXED_REGISTERS` is on; it's dormant in production because
+		// it's a net loss for the VM, but it must stay *correct* — see
+		// notes/REGISTER_VM.md). Eligible functions pass/return unboxed `i64` directly
+		// across call/recursion boundaries; the register VM keeps those in its raw
+		// window. This mirrors `optimize`'s loop exactly (skip async — it stays on
+		// the boxed `drive_step` snapshot path).
 		for f in &mut mp.functions {
-			f.var_reprs.clear();
-			f.ret_repr = ir::Repr::Boxed;
-			f.param_reprs = vec![ir::Repr::Boxed; f.params.len()];
-			ir::repr::insert_coercions(f, &ubox);
+			if !f.is_async {
+				f.var_reprs = ir::repr::infer_reprs(f, &msigs);
+				ir::repr::insert_coercions(f, &msigs);
+			}
 		}
 		let after = run_program(codegen::compile_from_ir(&mp).expect("mono ir emit"));
 		assert_eq!(

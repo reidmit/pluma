@@ -593,6 +593,12 @@ pub struct Program {
 	pub test_suites: Vec<(String, u32)>,
 	pub test_new: Option<u32>,
 	pub async_poll: Vec<Option<u32>>,
+	/// Whether *any* function has an unboxed (`I64`) register — i.e. the repr
+	/// coercion pass (M5/M6) is active. When `false` (the shipping default, since
+	/// unboxing is a net loss for the VM — see notes/REGISTER_VM.md), the VM never
+	/// touches its parallel raw window: no per-call resize, no reads. The raw
+	/// machinery stays a zero-cost dormant capability behind this flag.
+	pub uses_raw: bool,
 }
 
 #[derive(Clone)]

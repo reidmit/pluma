@@ -23,12 +23,14 @@ pub(crate) fn compile(dir: &Path, platform: Platform) -> Result<IrProgram, Vec<S
 	if let Err(ds) = compiler.check() {
 		return Err(ds.iter().map(|d| d.message.clone()).collect());
 	}
-	let mut program = ir::lower(&compiler).map_err(|e| vec![e])?;
-	// Mirror the `pluma run` VM pipeline so the oracle exercises the same IR the
-	// VM actually runs — and so the conformance diff validates that the
-	// resolve + inline passes are behavior-neutral against the (un-inlined)
-	// deploy backends.
-	ir::optimize(&mut program);
+	// Raw lowered IR — the common starting point for all three backends, exactly
+	// as the production CLI produces it. The VM oracle then applies `ir::optimize`
+	// (its VM-specific pipeline: inline + direct calls + M6 monomorphization/
+	// unboxing) on top, mirroring `pluma run`; the deploy backends (`wasm::emit` /
+	// `js::emit`) run their *own* internal pipelines on this raw IR, exactly as
+	// `pluma build` drives them — so the diff validates the VM passes against the
+	// independently-lowered deploy backends.
+	let program = ir::lower(&compiler).map_err(|e| vec![e])?;
 	Ok(program)
 }
 

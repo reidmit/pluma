@@ -53,22 +53,29 @@ pub use types::*;
 pub fn optimize(program: &mut IrProgram) {
 	inline::inline(program);
 	resolve::resolve_direct_calls(program);
-	// M5: repr coercions so the register VM can keep unboxed (`I64`) values in a
-	// raw window. Inserts `Box`/`Unbox` at repr boundaries; codegen reads the
-	// resulting reprs and emits raw-window opcodes. Uniform `Sigs` for now
-	// (interprocedural unboxing across call boundaries is M6). Async functions
-	// are left boxed — the `drive_step` snapshot stays boxed-only.
-	// Repr coercions (the unboxed-register substrate — M5) are implemented and
-	// validated (`tests/ir_repr`, `tests/ir_mono`; see notes/REGISTER_VM.md) but
-	// DISABLED in the VM pipeline: intra-function unboxing *alone* is a net perf
-	// loss, because boxed call boundaries cost a Box/Unbox per call that outweighs
-	// the arithmetic win on the call-heavy corpus. The payoff needs M6 (unboxed
-	// call boundaries via monomorphization), which is blocked on a `mono` /
-	// `repr::Sigs::from_program` `ret_repr` inconsistency the register VM is the
-	// first backend to surface. Flip this to `true` once M6 lands.
+	// M5/M6: the unboxed-register substrate. The register VM keeps unboxed (`I64`)
+	// values in a raw window; `insert_coercions` splices `Box`/`Unbox` at the repr
+	// boundaries, and codegen reads the resulting reprs to emit raw-window opcodes.
+	// The pipeline below is the *interprocedural* (M6) form: `monomorphize` fixes
+	// each function's calling convention (eligible concrete self-recursive defs keep
+	// unboxed `param_reprs`/`ret_repr`; everyone else reverts to all-`Boxed`), then
+	// `Sigs::from_program` reflects it so eligible caller↔callee chains pass `i64`
+	// directly with no per-call box/unbox. It is *correct* (M6 blocker fixed: see
+	// `repr.rs`'s `self_ret` coercion and `codegen::reg`'s `uses_raw_registers` /
+	// raw const-return — `tests/ir_mono` runs this exact path through the register VM).
+	//
+	// But it stays DISABLED, because measurement showed it is a net perf *loss for
+	// the VM*: the VM's `Value::Int` is already inline-tagged (no heap box), so raw
+	// arithmetic saves ~nothing, while unboxing adds `Box`/`Unbox` at every boundary
+	// with the *many* ops that need a `Value` — a `MatchInt` subject (re-boxes a
+	// monomorphized `fib`'s param every call: +150k `Box` on `fib(24)`), builtins,
+	// and the F64/I32 coercions codegen can't use (they become identity `Move`s —
+	// 38% of `float-bench`'s opcodes). The substrate's real payoff is the WASM
+	// backend, whose boxes are genuine heap references. See notes/REGISTER_VM.md.
 	const ENABLE_UNBOXED_REGISTERS: bool = false;
 	if ENABLE_UNBOXED_REGISTERS {
-		let sigs = repr::Sigs::uniform();
+		mono::monomorphize(program);
+		let sigs = repr::Sigs::from_program(program);
 		for f in &mut program.functions {
 			if !f.is_async {
 				f.var_reprs = repr::infer_reprs(f, &sigs);
