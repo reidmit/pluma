@@ -1082,7 +1082,7 @@ fn invoke(vm: &mut VM, callee: Value, args: Vec<Value>) -> Result<Value, Runtime
 			let fn_idx = c.fn_idx as u32;
 			let captures = Rc::clone(&c.captures);
 			let target_depth = vm.frames_len();
-			vm.push_frame_with_args(fn_idx, captures, args, None)?;
+			vm.push_frame_with_args(fn_idx, captures, args)?;
 			vm.run_until_frame_depth(target_depth)?;
 			vm.pop_stack()
 				.ok_or_else(|| RuntimeError::new("VM: invoke: closure returned with empty stack"))

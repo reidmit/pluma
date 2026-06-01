@@ -108,9 +108,14 @@ fn coercion_is_behavior_neutral_and_validates() {
 		let base = run_program(codegen::compile_from_ir(&uncoerced).expect("ir emit"));
 
 		// Insert Repr coercions into every function, then validate the discipline.
+		// Skip async functions — they stay boxed (the register VM's `drive_step`
+		// snapshots the boxed window only), matching `ir::optimize`'s VM pipeline.
 		let mut coerced = uncoerced.clone();
 		let sigs = ir::repr::Sigs::uniform();
 		for f in &mut coerced.functions {
+			if f.is_async {
+				continue;
+			}
 			ir::repr::insert_coercions(f, &sigs);
 			ir::repr::validate_reprs(f, &sigs)
 				.unwrap_or_else(|e| panic!("`{name}` fn `{}` fails repr validation: {e}", f.name));

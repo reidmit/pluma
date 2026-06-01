@@ -36,18 +36,44 @@ pub mod types;
 pub use lower::lower;
 pub use types::*;
 
-/// The VM-path optimization sequence. Currently just inlining of small,
-/// non-recursive, directly-called functions.
+/// The VM-path optimization sequence: inline small directly-called functions,
+/// then resolve indirect calls to statically-known top-level functions into
+/// direct calls.
 ///
-/// It deliberately does *not* run `resolve_direct_calls`: that pass rewrites
-/// indirect calls to `Call(Callee::Function)`, which the WASM backend lowers to a
-/// real direct call but the bytecode emitter lowers to a *fresh closure
-/// allocation* per call (`MakeClosure` + `Call`) — a pessimization for the VM on
-/// every non-inlined call (e.g. recursion). The inliner instead works directly on
-/// the indirect `CallClosure(GlobalRef)` form and leaves every call it doesn't
-/// inline exactly as lowered (the cheap `LoadGlobal` + `CallClosure`), so it can
-/// only ever help. Behavior-neutral (validated by the conformance gate diffing
-/// the resulting VM output against the un-inlined deploy backends).
+/// `resolve_direct_calls` rewrites `CallClosure(GlobalRef(g))` →
+/// `Call(Callee::Function(fid))` for capture-free non-async targets and prunes
+/// the orphaned global loads. This used to be skipped: the *stack* VM lowered a
+/// `Call(Callee::Function)` to a fresh `MakeClosure` + `Call` (a per-call heap
+/// allocation — a pessimization on every recursion). The **register VM** lowers
+/// it to a `CallDirect` opcode — no global load, no closure value, no allocation
+/// — so the pass flips from a pessimization to a win (and is the enabler the
+/// step-2 monomorphization track needs). Run after inlining so it only sees the
+/// calls inlining left behind. Behavior-neutral (validated by the conformance
+/// gate diffing VM output against the deploy backends).
 pub fn optimize(program: &mut IrProgram) {
 	inline::inline(program);
+	resolve::resolve_direct_calls(program);
+	// M5: repr coercions so the register VM can keep unboxed (`I64`) values in a
+	// raw window. Inserts `Box`/`Unbox` at repr boundaries; codegen reads the
+	// resulting reprs and emits raw-window opcodes. Uniform `Sigs` for now
+	// (interprocedural unboxing across call boundaries is M6). Async functions
+	// are left boxed — the `drive_step` snapshot stays boxed-only.
+	// Repr coercions (the unboxed-register substrate — M5) are implemented and
+	// validated (`tests/ir_repr`, `tests/ir_mono`; see notes/REGISTER_VM.md) but
+	// DISABLED in the VM pipeline: intra-function unboxing *alone* is a net perf
+	// loss, because boxed call boundaries cost a Box/Unbox per call that outweighs
+	// the arithmetic win on the call-heavy corpus. The payoff needs M6 (unboxed
+	// call boundaries via monomorphization), which is blocked on a `mono` /
+	// `repr::Sigs::from_program` `ret_repr` inconsistency the register VM is the
+	// first backend to surface. Flip this to `true` once M6 lands.
+	const ENABLE_UNBOXED_REGISTERS: bool = false;
+	if ENABLE_UNBOXED_REGISTERS {
+		let sigs = repr::Sigs::uniform();
+		for f in &mut program.functions {
+			if !f.is_async {
+				f.var_reprs = repr::infer_reprs(f, &sigs);
+				repr::insert_coercions(f, &sigs);
+			}
+		}
+	}
 }

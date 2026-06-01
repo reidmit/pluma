@@ -1,8 +1,15 @@
-// The VM dispatch loop.
+// The register-VM dispatch loop (M1 cutover — see notes/REGISTER_VM.md).
+//
+// Each function owns a flat register file living in the unified `stack` window
+// `stack[base .. base + nregs]`. Instructions name their source and destination
+// registers explicitly (three-address), so the stack VM's LoadLocal/StoreLocal
+// shuffle is gone. The invariant `stack.len() == base + nregs` for the top frame
+// holds after every instruction: registers ARE the window, with no operand
+// region above it.
 
 use crate::builtin;
-use crate::instruction::Instruction;
-use crate::program::{GlobalSlot, Program};
+use crate::program::GlobalSlot;
+use crate::reg::{Instruction, Program, Reg, RegListIdx, RegRepr};
 use crate::value::{
 	AsyncFnData, ClosureData, TaskRepr, Value, VariantCtorData, VariantData, values_eq,
 };
@@ -185,27 +192,23 @@ impl OutputSink {
 	}
 }
 
-// Frames index into the shared `VM::stack` via `base` rather than carrying
-// their own Vec of locals. Saves an allocation per Call. `prev_top` is the
-// stack length at the moment this frame's setup began — on Return we
-// truncate back to it, which discards both the locals and the slot
-// occupied by the callee (which sits at `base - 1` for normal calls). For
-// the entry frame and for builtin-invoked frames there's no callee on the
-// stack, and `prev_top == base`.
+// A call frame. Its register file is the unified-stack window `stack[base ..
+// base + nregs]`. There is no operand region above it, so `Return` truncates the
+// stack back to `base`. The frame allocates no Vec of its own (saves an
+// allocation per call), only the rare `cleanups` Vec when `defer` runs.
 pub(crate) struct Frame {
 	pub fn_idx: u32,
 	pub ip: usize,
 	pub base: usize,
-	pub slot_count: u16,
-	pub prev_top: usize,
+	pub nregs: u16,
 	pub captures: Rc<Vec<Value>>,
-	// If this frame is forcing a global, the index to write the result to
-	// on Return.
-	pub forcing_global: Option<u32>,
-	// Cleanup thunks scheduled by `defer`, in push order. Run LIFO on Return
-	// (see the Return handler). A frame with pending cleanups can't be reused
-	// in place by a tail call — see `do_call`. Almost always empty, so the
-	// `Vec` never allocates unless `defer` actually runs in this frame.
+	// Where to deliver this frame's return value. `Some(abs)` writes it to the
+	// caller's register at absolute stack index `abs` (a dispatch-loop call).
+	// `None` pushes it onto the stack for an external driver to pop (the entry
+	// frame, lazy-global thunks, builtin-invoked closures, async step/poll fns).
+	pub ret_dst: Option<usize>,
+	// Cleanup thunks scheduled by `defer`, in push order. Run LIFO on Return.
+	// A frame with pending cleanups can't be reused in place by a tail call.
 	pub cleanups: Vec<Value>,
 }
 
@@ -215,17 +218,19 @@ pub struct VM {
 	pub stderr: OutputSink,
 	pub stdin: InputSource,
 	// The program's command-line arguments, in order, with the interpreter
-	// and script path already stripped by the CLI. Surfaced through the
-	// `io.args` builtin; empty unless seeded via `with_args`.
+	// and script path already stripped by the CLI. Surfaced through `io.args`.
 	pub args: Vec<String>,
 	pub(crate) stack: Vec<Value>,
+	// The raw register window, parallel to `stack` and kept the same length. An
+	// I64-repr register `i` of the top frame holds its bits in `raw[base + i]`
+	// (a boxed register's `raw` slot is unused, and vice-versa). M5 — see
+	// notes/REGISTER_VM.md.
+	pub(crate) raw: Vec<u64>,
 	pub(crate) frames: Vec<Frame>,
 	// The async scheduler. Empty/idle for synchronous programs; populated by
-	// `run_task` and read by the `scope-*` builtins (which run mid-step, inside
-	// a fiber). See `vm::task`.
+	// `run_task` and read by the `scope-*` builtins. See `vm::task`.
 	pub(crate) sched: crate::task::Scheduler,
-	// Opt-in opcode-frequency profiling. Set to Some(empty map) before
-	// run() to enable; read back after for a count of each opcode.
+	// Opt-in opcode-frequency profiling.
 	pub profile: Option<std::collections::HashMap<&'static str, u64>>,
 }
 
@@ -238,6 +243,7 @@ impl VM {
 			stdin: InputSource::Stdin,
 			args: Vec::new(),
 			stack: Vec::with_capacity(256),
+			raw: Vec::with_capacity(256),
 			frames: Vec::with_capacity(64),
 			sched: crate::task::Scheduler::default(),
 			profile: None,
@@ -266,29 +272,19 @@ impl VM {
 
 	pub fn run(&mut self) -> Result<Value, RuntimeError> {
 		let entry = self.program.entry;
-		self.push_frame_with_args(entry, Rc::new(Vec::new()), Vec::new(), None)?;
+		self.push_frame_with_args(entry, Rc::new(Vec::new()), Vec::new())?;
 		self.run_until_frame_depth(0)?;
 		let value = self
-			.stack
-			.pop()
+			.pop_stack()
 			.ok_or_else(|| RuntimeError::new("VM exited with empty stack"))?;
 		// Lazy runtime init: a purely-synchronous program returns a plain value
-		// and never touches the event loop. If `main` returned a task (it used
-		// `try`/`task.*`), drive it to completion now — this is the only place
-		// the async runtime spins up. A task failure becomes a user abort,
-		// mirroring how a returned `err` result is handled just below.
+		// and never touches the event loop. If `main` returned a task, drive it.
 		let value = if matches!(value, Value::Task(_)) {
 			self.run_task(value)?
 		} else {
 			value
 		};
-		// `main`'s return value doubles as the program's exit status when it's
-		// a `result`: an `err e` aborts with `e` on stderr and a nonzero exit
-		// — the same controlled exit `io.fail` produces, so the CLI and test
-		// harness (both of which already handle a user-abort error) treat it
-		// identically. `ok`, and any non-result return such as `nothing`, is
-		// success; the value is otherwise discarded. The check is on the
-		// runtime `err` tag, the way the `result` builtins dispatch.
+		// `main`'s `err e` return doubles as a nonzero exit with `e` on stderr.
 		if let Value::Variant(v) = &value {
 			if v.variant.as_str() == "err" && v.payload.len() == 1 {
 				return Err(RuntimeError::user_abort(format!("{}", v.payload[0])));
@@ -298,42 +294,31 @@ impl VM {
 	}
 
 	// Force a top-level global to its value, evaluating its thunk on first
-	// access. Public so external runners can resolve a specific def by its
-	// global index — e.g. `pluma test` fetching a module's `tests` suite or
-	// `core.testing.new`.
+	// access. Public so external runners can resolve a specific def by index.
 	pub fn force_global(&mut self, global_idx: u32) -> Result<Value, RuntimeError> {
-		self.load_global(global_idx)?;
-		self
-			.pop_stack()
-			.ok_or_else(|| RuntimeError::new("VM: global produced no value"))
+		self.load_global(global_idx)
 	}
 
 	// Call a callable value (closure / builtin / variant constructor) with
-	// `args` and return its result. Mirrors the internal `invoke` path that
-	// builtins use, exposed so external runners can drive Pluma functions.
-	// A `RuntimeError` from the body bubbles up — the runner's signal that a
-	// test crashed (as opposed to a returned `err` result, which is a normal
-	// assertion failure).
+	// `args` and return its result. The external + re-entrant (`builtin::invoke`)
+	// entry point: pushes a frame with `ret_dst: None` so its Return pushes the
+	// result, which we pop.
 	pub fn call_function(&mut self, callee: Value, args: Vec<Value>) -> Result<Value, RuntimeError> {
 		match callee {
 			Value::Closure(c) => {
 				let depth = self.frames.len();
-				self.push_frame_with_args(c.fn_idx as u32, Rc::clone(&c.captures), args, None)?;
+				self.push_frame_with_args(c.fn_idx as u32, Rc::clone(&c.captures), args)?;
 				self.run_until_frame_depth(depth)?;
 				self
 					.pop_stack()
 					.ok_or_else(|| RuntimeError::new("VM: call returned with empty stack"))
 			}
 			Value::Builtin(b) => crate::builtin::call_builtin(self, b.as_ref(), args),
-			Value::VariantCtor(c) => Ok(Value::Variant(Rc::new(crate::value::VariantData {
+			Value::VariantCtor(c) => Ok(Value::Variant(Rc::new(VariantData {
 				qualified_enum: c.qualified_enum.clone(),
 				variant: c.variant.clone(),
 				payload: args,
 			}))),
-			// Calling an async function builds a *cold* task — it does not run
-			// (mirrors do_call's AsyncFn arm). The scheduler runs it when the
-			// task is awaited / driven. A zero-arg async fn called with the
-			// conventional single `nothing` arg takes no params.
 			Value::AsyncFn(af) => {
 				let func = &self.program.functions[af.step_fn];
 				let args = if func.param_count == 0 && args.len() == 1 && matches!(args[0], Value::Nothing)
@@ -352,17 +337,14 @@ impl VM {
 		}
 	}
 
-	// Push a frame whose args are passed as a Vec (no callee on the stack
-	// beforehand). Used by the top-level entry, lazy global thunks, and the
-	// builtin-invoked closures path. For dispatch-loop calls, see do_call:
-	// it leaves the callee + args on the stack and pushes the frame
-	// in-place.
+	// Push a frame whose args are passed as a Vec, with `ret_dst: None` (its
+	// Return pushes the result). Used by the entry, lazy global thunks, builtin
+	// re-entry, and the async drivers. Dispatch-loop calls use `do_call`.
 	pub(crate) fn push_frame_with_args(
 		&mut self,
 		fn_idx: u32,
 		captures: Rc<Vec<Value>>,
 		args: Vec<Value>,
-		forcing_global: Option<u32>,
 	) -> Result<(), RuntimeError> {
 		let func = &self.program.functions[fn_idx as usize];
 		let args = if func.param_count == 0 && args.len() == 1 && matches!(args[0], Value::Nothing) {
@@ -377,19 +359,18 @@ impl VM {
 				args.len()
 			)));
 		}
-		let prev_top = self.stack.len();
-		let base = prev_top;
-		let slot_count = func.slot_count as usize;
+		let base = self.stack.len();
+		let nregs = func.nregs as usize;
 		self.stack.extend(args);
-		self.stack.resize(base + slot_count, Value::Nothing);
+		self.stack.resize(base + nregs, Value::Nothing);
+		self.raw.resize(self.stack.len(), 0);
 		self.frames.push(Frame {
 			fn_idx,
 			ip: 0,
 			base,
-			slot_count: slot_count as u16,
-			prev_top,
+			nregs: nregs as u16,
 			captures,
-			forcing_global,
+			ret_dst: None,
 			cleanups: Vec::new(),
 		});
 		Ok(())
@@ -406,8 +387,6 @@ impl VM {
 		Range::collapsed(0, 0)
 	}
 
-	// Fully-qualified module name of the function on top of the call stack.
-	// Empty for the synthetic `__entry__` thunk, which has no source module.
 	fn current_module(&self) -> Option<String> {
 		let frame = self.frames.last()?;
 		let func = &self.program.functions[frame.fn_idx as usize];
@@ -418,19 +397,11 @@ impl VM {
 		}
 	}
 
-	// Run until self.frames.len() == target_depth. Used both for the
-	// top-level run and for nested invocation by builtins (map, filter,
-	// fold, each).
-	//
-	// The dispatch is two nested loops so the per-instruction hot path pays no
-	// frame re-derivation. The outer loop re-syncs a small per-frame cache
-	// (`base` / `fn_idx` / body length) after every control transfer — the only
-	// events that change the current frame's identity are `Call` (pushes a
-	// frame), `Return` (pops one), and `TailCall` (replaces the current one in
-	// place). The inner loop runs straight-line instructions of that one frame
-	// with the cache held in locals, so `LoadLocal` (the single most-executed
-	// opcode) reads `self.stack[base + slot]` without re-indexing `self.frames`,
-	// and the instruction fetch skips re-deriving the function from the frame.
+	// Run until self.frames.len() == target_depth. Two nested loops so the hot
+	// path pays no frame re-derivation: the outer loop re-syncs `base`/`fn_idx`/
+	// body length after every control transfer (Call/Return/TailCall); the inner
+	// loop runs straight-line instructions of one frame with that cache held in
+	// locals.
 	pub(crate) fn run_until_frame_depth(&mut self, target_depth: usize) -> Result<(), RuntimeError> {
 		while self.frames.len() > target_depth {
 			let frame_idx = self.frames.len() - 1;
@@ -445,8 +416,6 @@ impl VM {
 							.at(self.current_range()),
 					);
 				}
-				// `Instruction` is `Copy`, so reading it out by value here is a
-				// trivial register-sized move (no allocator, no refcount bumps).
 				let instr = self.program.functions[fn_idx].body[ip];
 				self.frames[frame_idx].ip = ip + 1;
 
@@ -454,8 +423,6 @@ impl VM {
 					*p.entry(opcode_name(&instr)).or_insert(0) += 1;
 				}
 
-				// A control transfer (Call/Return/TailCall) invalidates the
-				// cached `base`/`fn_idx`/`body_len`, so break out to re-sync.
 				if let Flow::Transfer = self.exec_instr(instr, frame_idx, base)? {
 					break;
 				}
@@ -464,12 +431,7 @@ impl VM {
 		Ok(())
 	}
 
-	// Execute one instruction in the frame at `frame_idx` (whose locals start at
-	// `base`). The fetch + ip-increment + profiling happen in the caller; this
-	// is purely the opcode dispatch, shared between the synchronous driver
-	// (`run_until_frame_depth`) and the async single-stepper (`step`/`drive_step`).
-	// Returns `Flow::Transfer` when the instruction changed the current frame's
-	// identity (Call/Return/TailCall), so the caller knows to re-sync its cache.
+	// Execute one instruction (used by the async single-stepper `drive_step`).
 	pub(crate) fn step(&mut self) -> Result<(), RuntimeError> {
 		let frame_idx = self.frames.len() - 1;
 		let fn_idx = self.frames[frame_idx].fn_idx as usize;
@@ -492,13 +454,16 @@ impl VM {
 		Ok(())
 	}
 
-	// `#[inline(always)]` is load-bearing for performance, not a hint: the
-	// dispatch is the VM's innermost loop, and the win of this whole structure
-	// is that the match body lands *directly inside* the caller's loop (no
-	// per-instruction call). Both call sites — the synchronous driver's inner
-	// loop and the async single-stepper — want it inlined. Without this the
-	// extracted function becomes a non-inlined call per opcode and the loop runs
-	// ~25-40% slower than having the match written inline (measured).
+	// Read the operand-register list `idx` into owned values (in list order).
+	fn read_reg_list(&self, idx: RegListIdx, base: usize) -> Vec<Value> {
+		self.program.reg_lists[idx as usize]
+			.iter()
+			.map(|r| self.stack[base + *r as usize].clone())
+			.collect()
+	}
+
+	// `#[inline(always)]` is load-bearing: the dispatch is the innermost loop and
+	// the win is that the match body lands directly inside the caller's loop.
 	#[inline(always)]
 	fn exec_instr(
 		&mut self,
@@ -506,60 +471,114 @@ impl VM {
 		frame_idx: usize,
 		base: usize,
 	) -> Result<Flow, RuntimeError> {
+		// Integer / float / comparison binops: clone both operands out (owned, so
+		// the match arms can call `self.current_range()` and write `dst` freely),
+		// then write the result register.
+		macro_rules! arith_int {
+			($dst:expr, $a:expr, $b:expr, $m:ident, $name:literal) => {{
+				let l = self.stack[base + $a as usize].clone();
+				let r = self.stack[base + $b as usize].clone();
+				let res = match (l, r) {
+					(Value::Int(x), Value::Int(y)) => Value::Int(x.$m(y)),
+					_ => {
+						return Err(
+							RuntimeError::new(concat!($name, ": expected ints")).at(self.current_range()),
+						);
+					}
+				};
+				self.stack[base + $dst as usize] = res;
+			}};
+		}
+		macro_rules! arith_float {
+			($dst:expr, $a:expr, $b:expr, $op:tt, $name:literal) => {{
+				let l = self.stack[base + $a as usize].clone();
+				let r = self.stack[base + $b as usize].clone();
+				let res = match (l, r) {
+					(Value::Float(x), Value::Float(y)) => Value::Float(x $op y),
+					_ => return Err(RuntimeError::new(concat!($name, ": expected floats")).at(self.current_range())),
+				};
+				self.stack[base + $dst as usize] = res;
+			}};
+		}
+		macro_rules! cmp_int {
+			($dst:expr, $a:expr, $b:expr, $op:tt, $name:literal) => {{
+				let l = self.stack[base + $a as usize].clone();
+				let r = self.stack[base + $b as usize].clone();
+				let res = match (l, r) {
+					(Value::Int(x), Value::Int(y)) => Value::Bool(x $op y),
+					_ => return Err(RuntimeError::new(concat!($name, ": expected ints")).at(self.current_range())),
+				};
+				self.stack[base + $dst as usize] = res;
+			}};
+		}
+		macro_rules! cmp_float {
+			($dst:expr, $a:expr, $b:expr, $op:tt, $name:literal) => {{
+				let l = self.stack[base + $a as usize].clone();
+				let r = self.stack[base + $b as usize].clone();
+				let res = match (l, r) {
+					(Value::Float(x), Value::Float(y)) => Value::Bool(x $op y),
+					_ => return Err(RuntimeError::new(concat!($name, ": expected floats")).at(self.current_range())),
+				};
+				self.stack[base + $dst as usize] = res;
+			}};
+		}
+
 		let mut flow = Flow::Next;
 		match instr {
-			Instruction::Pop => {
-				self.stack.pop();
+			Instruction::Move { dst, src } => {
+				self.stack[base + dst as usize] = self.stack[base + src as usize].clone();
 			}
-			Instruction::Dup => {
-				let top = self
-					.stack
-					.last()
-					.cloned()
-					.ok_or_else(|| RuntimeError::new("VM: Dup on empty stack").at(self.current_range()))?;
-				self.stack.push(top);
+			// M5 repr boundary: box a raw i64 into a `Value::Int`, or unbox a
+			// `Value::Int` into the raw i64 window.
+			Instruction::Box { dst, src } => {
+				self.stack[base + dst as usize] = Value::Int(self.raw[base + src as usize] as i64);
 			}
-			Instruction::LoadConst(idx) => {
-				let s = self.program.constants[idx as usize].clone();
-				self.stack.push(Value::String(s));
+			Instruction::Unbox { dst, src } => {
+				let n = match &self.stack[base + src as usize] {
+					Value::Int(n) => *n,
+					_ => return Err(RuntimeError::new("Unbox: expected int").at(self.current_range())),
+				};
+				self.raw[base + dst as usize] = n as u64;
 			}
-			Instruction::LoadBytes(idx) => {
-				let b = self.program.bytes_constants[idx as usize].clone();
-				self.stack.push(Value::Bytes(b));
+			Instruction::MoveR { dst, src } => {
+				self.raw[base + dst as usize] = self.raw[base + src as usize];
 			}
-			Instruction::LoadInt(n) => self.stack.push(Value::Int(n)),
-			Instruction::LoadFloat(n) => self.stack.push(Value::Float(n)),
-			Instruction::LoadBool(b) => self.stack.push(Value::Bool(b)),
-			Instruction::LoadDuration(n) => self.stack.push(Value::Duration(n)),
-			Instruction::LoadNothing => self.stack.push(Value::Nothing),
-			Instruction::LoadLocal(slot) => {
-				let v = self.stack[base + slot as usize].clone();
-				self.stack.push(v);
+			Instruction::LoadConst { dst, k } => {
+				let s = self.program.constants[k as usize].clone();
+				self.stack[base + dst as usize] = Value::String(s);
 			}
-			Instruction::StoreLocal(slot) => {
-				let v = self.stack.pop().ok_or_else(|| {
-					RuntimeError::new("VM: StoreLocal on empty stack").at(self.current_range())
-				})?;
-				self.stack[base + slot as usize] = v;
+			Instruction::LoadBytes { dst, k } => {
+				let b = self.program.bytes_constants[k as usize].clone();
+				self.stack[base + dst as usize] = Value::Bytes(b);
 			}
-			Instruction::LoadCapture(idx) => {
+			Instruction::LoadInt { dst, val } => self.stack[base + dst as usize] = Value::Int(val),
+			Instruction::LoadIntR { dst, val } => self.raw[base + dst as usize] = val as u64,
+			Instruction::LoadFloat { dst, val } => self.stack[base + dst as usize] = Value::Float(val),
+			Instruction::LoadBool { dst, val } => self.stack[base + dst as usize] = Value::Bool(val),
+			Instruction::LoadDuration { dst, ns } => {
+				self.stack[base + dst as usize] = Value::Duration(ns)
+			}
+			Instruction::LoadNothing { dst } => self.stack[base + dst as usize] = Value::Nothing,
+			Instruction::LoadCapture { dst, idx } => {
 				let v = self.frames[frame_idx].captures[idx as usize].clone();
-				self.stack.push(v);
+				self.stack[base + dst as usize] = v;
 			}
-			Instruction::LoadGlobal(idx) => {
-				self.load_global(idx)?;
+			Instruction::LoadGlobal { dst, idx } => {
+				let v = self.load_global(idx)?;
+				self.stack[base + dst as usize] = v;
 			}
-			Instruction::Jump(off) => {
-				self.frames[frame_idx].ip = off as usize;
+			Instruction::Jump { target } => {
+				self.frames[frame_idx].ip = target as usize;
 			}
-			Instruction::JumpIfFalse(off) => {
-				let v = self.stack.pop().ok_or_else(|| {
-					RuntimeError::new("VM: JumpIfFalse on empty stack").at(self.current_range())
-				})?;
-				match v {
-					Value::Bool(false) => self.frames[frame_idx].ip = off as usize,
-					Value::Bool(true) => {}
-					_ => {
+			Instruction::JumpIfFalse { cond, target } => {
+				let take = match &self.stack[base + cond as usize] {
+					Value::Bool(b) => Some(!*b),
+					_ => None,
+				};
+				match take {
+					Some(true) => self.frames[frame_idx].ip = target as usize,
+					Some(false) => {}
+					None => {
 						return Err(
 							RuntimeError::new("VM: JumpIfFalse with non-bool").at(self.current_range()),
 						);
@@ -567,231 +586,203 @@ impl VM {
 				}
 			}
 			Instruction::MakeClosure {
+				dst,
 				fn_idx,
-				num_captures,
+				captures,
 			} => {
-				let mut captures = Vec::with_capacity(num_captures as usize);
-				for _ in 0..num_captures {
-					captures.push(self.stack.pop().ok_or_else(|| {
-						RuntimeError::new("VM: MakeClosure underflow").at(self.current_range())
-					})?);
-				}
-				captures.reverse();
-				self.stack.push(Value::Closure(Rc::new(ClosureData {
+				let caps = self.read_reg_list(captures, base);
+				self.stack[base + dst as usize] = Value::Closure(Rc::new(ClosureData {
 					fn_idx: fn_idx as usize,
-					captures: Rc::new(captures),
-				})));
+					captures: Rc::new(caps),
+				}));
 			}
 			Instruction::MakeAsyncClosure {
+				dst,
 				fn_idx,
-				num_captures,
+				captures,
 			} => {
-				let mut captures = Vec::with_capacity(num_captures as usize);
-				for _ in 0..num_captures {
-					captures.push(self.stack.pop().ok_or_else(|| {
-						RuntimeError::new("VM: MakeAsyncClosure underflow").at(self.current_range())
-					})?);
-				}
-				captures.reverse();
-				self.stack.push(Value::AsyncFn(Rc::new(AsyncFnData {
+				let caps = self.read_reg_list(captures, base);
+				self.stack[base + dst as usize] = Value::AsyncFn(Rc::new(AsyncFnData {
 					step_fn: fn_idx as usize,
-					captures: Rc::new(captures),
-				})));
+					captures: Rc::new(caps),
+				}));
 			}
-			Instruction::Await => {
-				// Await is intercepted by the task driver (`drive_step`) before
-				// the normal step loop ever reaches it. Seeing it here means a
-				// step function ran outside the driver — a codegen/driver bug.
-				return Err(
-					RuntimeError::new("VM: `Await` executed outside the task driver")
-						.at(self.current_range()),
-				);
-			}
-			Instruction::Call(arity) => {
-				self.do_call(arity, false)?;
+			Instruction::Call { dst, callee, args } => {
+				let callee_val = self.stack[base + callee as usize].clone();
+				self.do_call(dst, callee_val, args, base, false)?;
 				flow = Flow::Transfer;
 			}
-			Instruction::TailCall(arity) => {
-				self.do_call(arity, true)?;
+			Instruction::CallDirect { dst, fn_idx, args } => {
+				self.enter_closure(fn_idx, Rc::new(Vec::new()), args, dst, base, false)?;
 				flow = Flow::Transfer;
 			}
-			Instruction::Return => {
-				let ret = self.stack.pop().ok_or_else(|| {
-					RuntimeError::new("VM: Return with empty stack").at(self.current_range())
-				})?;
-				// Run any `defer`red cleanups for this frame, LIFO, before we
-				// tear it down. The frame is still on `self.frames` (its locals
-				// still on the stack) while these run — harmless, since each
-				// thunk captured what it needs by value. A thunk that itself
-				// raises propagates immediately (remaining cleanups are skipped).
+			Instruction::TailCall { dst, callee, args } => {
+				let callee_val = self.stack[base + callee as usize].clone();
+				// For a closure callee the frame is reused (inheriting `ret_dst`)
+				// and `dst` is ignored; for a builtin/ctor/async callee the value
+				// lands in `dst` for the following `Return(dst)` to deliver.
+				self.do_call(dst, callee_val, args, base, true)?;
+				flow = Flow::Transfer;
+			}
+			Instruction::TailCallDirect { dst, fn_idx, args } => {
+				self.enter_closure(fn_idx, Rc::new(Vec::new()), args, dst, base, true)?;
+				flow = Flow::Transfer;
+			}
+			Instruction::Return { src, raw: raw_ret } => {
+				// A monomorphized function can return an unboxed i64 (M6): read the
+				// result from the window its repr names, and deliver it to the
+				// caller's `dst` in the same window (`dst`'s repr matches by coercion).
+				let result = self.stack[base + src as usize].clone();
+				let result_raw = self.raw[base + src as usize];
+				// Run `defer` cleanups LIFO before tearing down the frame.
 				let cleanups = std::mem::take(&mut self.frames[frame_idx].cleanups);
 				for thunk in cleanups.into_iter().rev() {
 					self.call_function(thunk, Vec::new())?;
 				}
 				let popped = self.frames.pop().unwrap();
-				// Drop everything from this frame's setup onward (locals,
-				// any unused intermediates, and the callee slot below).
-				self.stack.truncate(popped.prev_top);
-				if let Some(global_idx) = popped.forcing_global {
-					self.program.globals[global_idx as usize] = GlobalSlot::Evaluated(ret.clone());
+				self.stack.truncate(popped.base);
+				self.raw.truncate(popped.base);
+				match popped.ret_dst {
+					Some(abs) => {
+						if raw_ret {
+							self.raw[abs] = result_raw;
+						} else {
+							self.stack[abs] = result;
+						}
+					}
+					None => {
+						// External callers pop a boxed `Value`; box a raw return.
+						self.stack.push(if raw_ret {
+							Value::Int(result_raw as i64)
+						} else {
+							result
+						});
+						self.raw.push(0);
+					}
 				}
-				self.stack.push(ret);
 				flow = Flow::Transfer;
 			}
-			Instruction::PushDefer => {
-				let thunk = self.stack.pop().ok_or_else(|| {
-					RuntimeError::new("VM: PushDefer on empty stack").at(self.current_range())
-				})?;
-				self.frames[frame_idx].cleanups.push(thunk);
+			Instruction::PushDefer { thunk } => {
+				let t = self.stack[base + thunk as usize].clone();
+				self.frames[frame_idx].cleanups.push(t);
 			}
-			Instruction::MakeTuple(arity) => {
-				let mut elems = Vec::with_capacity(arity as usize);
-				for _ in 0..arity {
-					elems.push(self.stack.pop().ok_or_else(|| {
-						RuntimeError::new("VM: MakeTuple underflow").at(self.current_range())
-					})?);
-				}
-				elems.reverse();
-				self.stack.push(Value::Tuple(Rc::new(elems)));
+			Instruction::Await { .. } => {
+				// Await is intercepted by `drive_step` before the normal loop
+				// reaches it. Seeing it here is a driver/codegen bug.
+				return Err(
+					RuntimeError::new("VM: `Await` executed outside the task driver")
+						.at(self.current_range()),
+				);
 			}
-			Instruction::MakeList(arity) => {
-				let mut elems = Vec::with_capacity(arity as usize);
-				for _ in 0..arity {
-					elems.push(
-						self.stack.pop().ok_or_else(|| {
-							RuntimeError::new("VM: MakeList underflow").at(self.current_range())
-						})?,
-					);
-				}
-				elems.reverse();
-				self.stack.push(Value::list(elems));
+			Instruction::MakeTuple { dst, items } => {
+				let elems = self.read_reg_list(items, base);
+				self.stack[base + dst as usize] = Value::Tuple(Rc::new(elems));
 			}
-			Instruction::ConcatLists(count) => {
-				// Pop `count` lists (top is the last segment), then splice them
-				// back-to-front so the result preserves source order.
-				let mut segments: Vec<Rc<RefCell<Vec<Value>>>> = Vec::with_capacity(count as usize);
-				for _ in 0..count {
-					match self.stack.pop() {
-						Some(Value::List(xs)) => segments.push(xs),
-						Some(_) => {
+			Instruction::MakeList { dst, items } => {
+				let elems = self.read_reg_list(items, base);
+				self.stack[base + dst as usize] = Value::list(elems);
+			}
+			Instruction::ConcatLists { dst, lists } => {
+				let regs = self.program.reg_lists[lists as usize].clone();
+				let mut out: Vec<Value> = Vec::new();
+				for r in regs {
+					match &self.stack[base + r as usize] {
+						Value::List(xs) => out.extend(xs.borrow().iter().cloned()),
+						_ => {
 							return Err(
 								RuntimeError::new("ConcatLists: expected lists").at(self.current_range()),
 							);
 						}
-						None => {
-							return Err(RuntimeError::new("VM: ConcatLists underflow").at(self.current_range()));
-						}
 					}
 				}
-				segments.reverse();
-				let total: usize = segments.iter().map(|xs| xs.borrow().len()).sum();
-				let mut out: Vec<Value> = Vec::with_capacity(total);
-				for xs in segments {
-					out.extend(xs.borrow().iter().cloned());
-				}
-				self.stack.push(Value::list(out));
+				self.stack[base + dst as usize] = Value::list(out);
 			}
-			Instruction::MakeRecord(fields_idx) => {
-				// Take the field list by value via clone of the indices. The
-				// indices are cheap (u32s) and we avoid borrowing
-				// `self.program.field_lists` across stack mutations.
-				let len = self.program.field_lists[fields_idx as usize].len();
-				let mut map = std::collections::HashMap::with_capacity(len);
-				for i in (0..len).rev() {
-					let v = self.stack.pop().ok_or_else(|| {
-						RuntimeError::new("VM: MakeRecord underflow").at(self.current_range())
-					})?;
-					let name_idx = self.program.field_lists[fields_idx as usize][i];
-					let name = self.program.constants[name_idx as usize].clone();
+			Instruction::MakeRecord {
+				dst,
+				values,
+				fields,
+			} => {
+				let vals = self.read_reg_list(values, base);
+				let names = &self.program.field_lists[fields as usize];
+				let mut map = std::collections::HashMap::with_capacity(vals.len());
+				for (i, v) in vals.into_iter().enumerate() {
+					let name = self.program.constants[names[i] as usize].clone();
 					map.insert((*name).clone(), v);
 				}
-				self.stack.push(Value::Record(Rc::new(map)));
+				self.stack[base + dst as usize] = Value::Record(Rc::new(map));
 			}
-			Instruction::UpdateRecord(fields_idx) => {
-				// Pop the N override values (named by the field list), then the
-				// base record; clone the base and overwrite the named fields.
-				let len = self.program.field_lists[fields_idx as usize].len();
-				let mut overrides = Vec::with_capacity(len);
-				for i in (0..len).rev() {
-					let v = self.stack.pop().ok_or_else(|| {
-						RuntimeError::new("VM: UpdateRecord underflow").at(self.current_range())
-					})?;
-					let name_idx = self.program.field_lists[fields_idx as usize][i];
-					overrides.push((self.program.constants[name_idx as usize].clone(), v));
-				}
-				let base = self.stack.pop().ok_or_else(|| {
-					RuntimeError::new("VM: UpdateRecord base underflow").at(self.current_range())
-				})?;
-				let Value::Record(base_map) = base else {
+			Instruction::UpdateRecord {
+				dst,
+				record,
+				values,
+				fields,
+			} => {
+				let base_rec = self.stack[base + record as usize].clone();
+				let vals = self.read_reg_list(values, base);
+				let Value::Record(base_map) = base_rec else {
 					return Err(
 						RuntimeError::new("VM: UpdateRecord on non-record value").at(self.current_range()),
 					);
 				};
+				let names = &self.program.field_lists[fields as usize];
 				let mut map = (*base_map).clone();
-				for (name, v) in overrides {
+				for (i, v) in vals.into_iter().enumerate() {
+					let name = self.program.constants[names[i] as usize].clone();
 					map.insert((*name).clone(), v);
 				}
-				self.stack.push(Value::Record(Rc::new(map)));
+				self.stack[base + dst as usize] = Value::Record(Rc::new(map));
 			}
 			Instruction::MakeVariant {
+				dst,
 				qualified,
 				variant,
-				arity,
+				payload,
 			} => {
-				let mut payload = Vec::with_capacity(arity as usize);
-				for _ in 0..arity {
-					payload.push(self.stack.pop().ok_or_else(|| {
-						RuntimeError::new("VM: MakeVariant underflow").at(self.current_range())
-					})?);
-				}
-				payload.reverse();
-				self.stack.push(Value::Variant(Rc::new(VariantData {
+				let payload = self.read_reg_list(payload, base);
+				self.stack[base + dst as usize] = Value::Variant(Rc::new(VariantData {
 					qualified_enum: self.program.constants[qualified as usize].clone(),
 					variant: self.program.constants[variant as usize].clone(),
 					payload,
-				})));
+				}));
 			}
 			Instruction::MakeVariantCtor {
+				dst,
 				qualified,
 				variant,
 				arity,
 			} => {
-				self.stack.push(Value::VariantCtor(Rc::new(VariantCtorData {
+				self.stack[base + dst as usize] = Value::VariantCtor(Rc::new(VariantCtorData {
 					qualified_enum: self.program.constants[qualified as usize].clone(),
 					variant: self.program.constants[variant as usize].clone(),
 					arity: arity as usize,
-				})));
+				}));
 			}
-			Instruction::GetField(name_idx) => {
-				let v = self.stack.pop().ok_or_else(|| {
-					RuntimeError::new("VM: GetField on empty stack").at(self.current_range())
-				})?;
-				let name = &self.program.constants[name_idx as usize];
-				match v {
-					Value::Record(fields) => match fields.get(name.as_str()) {
-						Some(v) => self.stack.push(v.clone()),
+			Instruction::GetField { dst, record, name } => {
+				let rec = self.stack[base + record as usize].clone();
+				let name_s = self.program.constants[name as usize].clone();
+				match rec {
+					Value::Record(fields) => match fields.get(name_s.as_str()) {
+						Some(v) => self.stack[base + dst as usize] = v.clone(),
 						None => {
 							return Err(
-								RuntimeError::new(format!("no field `{}` on record", name))
+								RuntimeError::new(format!("no field `{}` on record", name_s))
 									.at(self.current_range()),
 							);
 						}
 					},
 					_ => {
 						return Err(
-							RuntimeError::new(format!("field access `.{}` on non-record value", name))
+							RuntimeError::new(format!("field access `.{}` on non-record value", name_s))
 								.at(self.current_range()),
 						);
 					}
 				}
 			}
-			Instruction::GetElement(index) => {
-				let v = self.stack.pop().ok_or_else(|| {
-					RuntimeError::new("VM: GetElement on empty stack").at(self.current_range())
-				})?;
-				match v {
+			Instruction::GetElement { dst, tuple, index } => {
+				let t = self.stack[base + tuple as usize].clone();
+				match t {
 					Value::Tuple(elems) => match elems.get(index as usize) {
-						Some(v) => self.stack.push(v.clone()),
+						Some(v) => self.stack[base + dst as usize] = v.clone(),
 						None => {
 							return Err(
 								RuntimeError::new(format!(
@@ -811,21 +802,19 @@ impl VM {
 					}
 				}
 			}
-			Instruction::GetDictField(idx) => {
-				let v = self.stack.pop().ok_or_else(|| {
-					RuntimeError::new("VM: GetDictField on empty stack").at(self.current_range())
-				})?;
-				match v {
+			Instruction::GetDictField { dst, dict, index } => {
+				let d = self.stack[base + dict as usize].clone();
+				match d {
 					Value::MethodDict(methods) => {
-						let m = methods.get(idx as usize).ok_or_else(|| {
+						let m = methods.get(index as usize).ok_or_else(|| {
 							RuntimeError::new(format!(
 								"VM: GetDictField index {} out of range (dict size {})",
-								idx,
+								index,
 								methods.len()
 							))
 							.at(self.current_range())
 						})?;
-						self.stack.push(m.clone());
+						self.stack[base + dst as usize] = m.clone();
 					}
 					_ => {
 						return Err(
@@ -834,205 +823,171 @@ impl VM {
 					}
 				}
 			}
-			Instruction::MakeDict(size) => {
-				let n = size as usize;
-				if self.stack.len() < n {
-					return Err(
-						RuntimeError::new(format!(
-							"VM: MakeDict({}) underflow (stack has {} values)",
-							n,
-							self.stack.len()
-						))
-						.at(self.current_range()),
-					);
-				}
-				let start = self.stack.len() - n;
-				let methods: Vec<Value> = self.stack.drain(start..).collect();
-				self.stack.push(Value::MethodDict(Rc::new(methods)));
+			Instruction::MakeDict { dst, methods } => {
+				let ms = self.read_reg_list(methods, base);
+				self.stack[base + dst as usize] = Value::MethodDict(Rc::new(ms));
 			}
-			Instruction::Interpolate(arity) => {
-				let mut parts = Vec::with_capacity(arity as usize);
-				for _ in 0..arity {
-					parts.push(self.stack.pop().ok_or_else(|| {
-						RuntimeError::new("VM: Interpolate underflow").at(self.current_range())
-					})?);
-				}
-				parts.reverse();
+			Instruction::Interpolate { dst, parts } => {
+				let ps = self.read_reg_list(parts, base);
 				let mut out = String::new();
-				for p in &parts {
+				for p in &ps {
 					match p {
 						Value::String(s) => out.push_str(s),
 						other => out.push_str(&format!("{}", other)),
 					}
 				}
-				self.stack.push(Value::String(Rc::new(out)));
+				self.stack[base + dst as usize] = Value::String(Rc::new(out));
 			}
-			Instruction::MatchInt(n, on_fail) => {
-				self.match_literal(on_fail, |v| matches!(v, Value::Int(x) if *x == n))?
+			Instruction::MatchInt {
+				subject,
+				val,
+				on_fail,
+			} => {
+				let ok = matches!(&self.stack[base + subject as usize], Value::Int(x) if *x == val);
+				if !ok {
+					self.frames[frame_idx].ip = on_fail as usize;
+				}
 			}
-			Instruction::MatchFloat(n, on_fail) => {
-				self.match_literal(on_fail, |v| matches!(v, Value::Float(x) if *x == n))?
+			Instruction::MatchFloat {
+				subject,
+				val,
+				on_fail,
+			} => {
+				let ok = matches!(&self.stack[base + subject as usize], Value::Float(x) if *x == val);
+				if !ok {
+					self.frames[frame_idx].ip = on_fail as usize;
+				}
 			}
-			Instruction::MatchDuration(n, on_fail) => {
-				self.match_literal(on_fail, |v| matches!(v, Value::Duration(x) if *x == n))?
+			Instruction::MatchDuration {
+				subject,
+				ns,
+				on_fail,
+			} => {
+				let ok = matches!(&self.stack[base + subject as usize], Value::Duration(x) if *x == ns);
+				if !ok {
+					self.frames[frame_idx].ip = on_fail as usize;
+				}
 			}
-			Instruction::MatchString(idx, on_fail) => {
-				let needle = self.program.constants[idx as usize].clone();
-				self.match_literal(on_fail, |v| match v {
-					Value::String(s) => s.as_ref() == needle.as_ref(),
-					_ => false,
-				})?
+			Instruction::MatchString {
+				subject,
+				k,
+				on_fail,
+			} => {
+				let needle = self.program.constants[k as usize].clone();
+				let ok = matches!(&self.stack[base + subject as usize], Value::String(s) if s.as_ref() == needle.as_ref());
+				if !ok {
+					self.frames[frame_idx].ip = on_fail as usize;
+				}
 			}
-			Instruction::MatchBytes(idx, on_fail) => {
-				let needle = self.program.bytes_constants[idx as usize].clone();
-				self.match_literal(on_fail, |v| match v {
-					Value::Bytes(b) => b.as_ref() == needle.as_ref(),
-					_ => false,
-				})?
+			Instruction::MatchBytes {
+				subject,
+				k,
+				on_fail,
+			} => {
+				let needle = self.program.bytes_constants[k as usize].clone();
+				let ok = matches!(&self.stack[base + subject as usize], Value::Bytes(b) if b.as_ref() == needle.as_ref());
+				if !ok {
+					self.frames[frame_idx].ip = on_fail as usize;
+				}
 			}
-			Instruction::MatchBool(b, on_fail) => {
-				self.match_literal(on_fail, |v| matches!(v, Value::Bool(x) if *x == b))?
+			Instruction::MatchBool {
+				subject,
+				val,
+				on_fail,
+			} => {
+				let ok = matches!(&self.stack[base + subject as usize], Value::Bool(x) if *x == val);
+				if !ok {
+					self.frames[frame_idx].ip = on_fail as usize;
+				}
 			}
-			Instruction::MatchNothing(on_fail) => {
-				self.match_literal(on_fail, |v| matches!(v, Value::Nothing))?
+			Instruction::MatchNothing { subject, on_fail } => {
+				let ok = matches!(&self.stack[base + subject as usize], Value::Nothing);
+				if !ok {
+					self.frames[frame_idx].ip = on_fail as usize;
+				}
 			}
 			Instruction::MatchVariant {
+				subject,
 				variant,
-				arity,
+				dests,
 				on_fail,
-			} => self.match_variant(variant, arity, on_fail)?,
-			Instruction::MatchTuple { arity, on_fail } => self.match_tuple(arity, on_fail)?,
+			} => self.match_variant(frame_idx, base, subject, variant, dests, on_fail)?,
+			Instruction::MatchTuple {
+				subject,
+				dests,
+				on_fail,
+			} => self.match_tuple(frame_idx, base, subject, dests, on_fail)?,
+			Instruction::MatchList {
+				subject,
+				dests,
+				has_rest,
+				on_fail,
+			} => self.match_list(frame_idx, base, subject, dests, has_rest, on_fail)?,
 			Instruction::MatchRecord {
-				fields_idx,
+				subject,
+				fields,
+				dests,
 				exact,
 				with_rest,
 				on_fail,
-			} => self.match_record(fields_idx, exact, with_rest, on_fail)?,
-			Instruction::MatchList {
-				arity,
-				has_rest,
-				on_fail,
-			} => self.match_list(arity, has_rest, on_fail)?,
-			// Arithmetic, comparison, and unary ops are inlined here (rather
-			// than dispatched through helper functions) so the hot loop
-			// avoids a function call + a second match on `instr` per
-			// instruction. Mismatched value tags are kept as runtime errors
-			// even though the analyzer already type-checks operands —
-			// defensive, and the unreachable-branches optimize away in
-			// release.
-			Instruction::AddInt => {
-				let r = self.stack.pop().unwrap();
-				let l = self.stack.pop().unwrap();
-				match (l, r) {
-					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Int(a.wrapping_add(b))),
-					_ => return Err(RuntimeError::new("AddInt: expected ints").at(self.current_range())),
-				}
-			}
-			Instruction::AddFloat => {
-				let r = self.stack.pop().unwrap();
-				let l = self.stack.pop().unwrap();
-				match (l, r) {
-					(Value::Float(a), Value::Float(b)) => self.stack.push(Value::Float(a + b)),
-					_ => return Err(RuntimeError::new("AddFloat: expected floats").at(self.current_range())),
-				}
-			}
-			Instruction::SubInt => {
-				let r = self.stack.pop().unwrap();
-				let l = self.stack.pop().unwrap();
-				match (l, r) {
-					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Int(a.wrapping_sub(b))),
-					_ => return Err(RuntimeError::new("SubInt: expected ints").at(self.current_range())),
-				}
-			}
-			Instruction::SubFloat => {
-				let r = self.stack.pop().unwrap();
-				let l = self.stack.pop().unwrap();
-				match (l, r) {
-					(Value::Float(a), Value::Float(b)) => self.stack.push(Value::Float(a - b)),
-					_ => return Err(RuntimeError::new("SubFloat: expected floats").at(self.current_range())),
-				}
-			}
-			Instruction::MulInt => {
-				let r = self.stack.pop().unwrap();
-				let l = self.stack.pop().unwrap();
-				match (l, r) {
-					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Int(a.wrapping_mul(b))),
-					_ => return Err(RuntimeError::new("MulInt: expected ints").at(self.current_range())),
-				}
-			}
-			Instruction::MulFloat => {
-				let r = self.stack.pop().unwrap();
-				let l = self.stack.pop().unwrap();
-				match (l, r) {
-					(Value::Float(a), Value::Float(b)) => self.stack.push(Value::Float(a * b)),
-					_ => return Err(RuntimeError::new("MulFloat: expected floats").at(self.current_range())),
-				}
-			}
-			Instruction::DivInt => {
-				let r = self.stack.pop().unwrap();
-				let l = self.stack.pop().unwrap();
-				match (l, r) {
-					// Match the `int-div` builtin exactly (same message, `wrapping_div`
-					// so `i64::MIN / -1` wraps rather than panicking) — the IR backend
-					// devirtualizes a concrete `int` `/` to this opcode, and the
-					// differential harness compares it against the dispatched builtin.
+			} => self.match_record(
+				frame_idx, base, subject, fields, dests, exact, with_rest, on_fail,
+			)?,
+			Instruction::AddInt { dst, a, b } => arith_int!(dst, a, b, wrapping_add, "AddInt"),
+			Instruction::SubInt { dst, a, b } => arith_int!(dst, a, b, wrapping_sub, "SubInt"),
+			Instruction::MulInt { dst, a, b } => arith_int!(dst, a, b, wrapping_mul, "MulInt"),
+			Instruction::DivInt { dst, a, b } => {
+				let l = self.stack[base + a as usize].clone();
+				let r = self.stack[base + b as usize].clone();
+				let res = match (l, r) {
 					(Value::Int(_), Value::Int(0)) => {
 						return Err(RuntimeError::new("integer division by zero").at(self.current_range()));
 					}
-					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Int(a.wrapping_div(b))),
+					(Value::Int(x), Value::Int(y)) => Value::Int(x.wrapping_div(y)),
 					_ => return Err(RuntimeError::new("DivInt: expected ints").at(self.current_range())),
-				}
+				};
+				self.stack[base + dst as usize] = res;
 			}
-			Instruction::DivFloat => {
-				let r = self.stack.pop().unwrap();
-				let l = self.stack.pop().unwrap();
-				match (l, r) {
-					(Value::Float(a), Value::Float(b)) => self.stack.push(Value::Float(a / b)),
-					_ => return Err(RuntimeError::new("DivFloat: expected floats").at(self.current_range())),
-				}
-			}
-			Instruction::RemInt => {
-				let r = self.stack.pop().unwrap();
-				let l = self.stack.pop().unwrap();
-				match (l, r) {
+			Instruction::RemInt { dst, a, b } => {
+				let l = self.stack[base + a as usize].clone();
+				let r = self.stack[base + b as usize].clone();
+				let res = match (l, r) {
 					(Value::Int(_), Value::Int(0)) => {
 						return Err(RuntimeError::new("division by zero").at(self.current_range()));
 					}
-					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Int(a % b)),
+					(Value::Int(x), Value::Int(y)) => Value::Int(x % y),
 					_ => return Err(RuntimeError::new("RemInt: expected ints").at(self.current_range())),
-				}
+				};
+				self.stack[base + dst as usize] = res;
 			}
-			Instruction::RemFloat => {
-				let r = self.stack.pop().unwrap();
-				let l = self.stack.pop().unwrap();
-				match (l, r) {
-					(Value::Float(a), Value::Float(b)) => self.stack.push(Value::Float(a % b)),
-					_ => return Err(RuntimeError::new("RemFloat: expected floats").at(self.current_range())),
-				}
-			}
-			Instruction::NegInt => {
-				let v = self.stack.pop().unwrap();
+			Instruction::AddFloat { dst, a, b } => arith_float!(dst, a, b, +, "AddFloat"),
+			Instruction::SubFloat { dst, a, b } => arith_float!(dst, a, b, -, "SubFloat"),
+			Instruction::MulFloat { dst, a, b } => arith_float!(dst, a, b, *, "MulFloat"),
+			Instruction::DivFloat { dst, a, b } => arith_float!(dst, a, b, /, "DivFloat"),
+			Instruction::RemFloat { dst, a, b } => arith_float!(dst, a, b, %, "RemFloat"),
+			Instruction::NegInt { dst, a } => {
+				let v = self.stack[base + a as usize].clone();
 				match v {
-					Value::Int(n) => self.stack.push(Value::Int(n.wrapping_neg())),
+					Value::Int(n) => self.stack[base + dst as usize] = Value::Int(n.wrapping_neg()),
 					_ => return Err(RuntimeError::new("NegInt: expected int").at(self.current_range())),
 				}
 			}
-			Instruction::NegFloat => {
-				let v = self.stack.pop().unwrap();
+			Instruction::NegFloat { dst, a } => {
+				let v = self.stack[base + a as usize].clone();
 				match v {
-					Value::Float(n) => self.stack.push(Value::Float(-n)),
+					Value::Float(n) => self.stack[base + dst as usize] = Value::Float(-n),
 					_ => return Err(RuntimeError::new("NegFloat: expected float").at(self.current_range())),
 				}
 			}
-			Instruction::ConcatString => {
-				let r = self.stack.pop().unwrap();
-				let l = self.stack.pop().unwrap();
+			Instruction::ConcatString { dst, a, b } => {
+				let l = self.stack[base + a as usize].clone();
+				let r = self.stack[base + b as usize].clone();
 				match (l, r) {
-					(Value::String(a), Value::String(b)) => {
-						let mut s = String::with_capacity(a.len() + b.len());
-						s.push_str(&a);
-						s.push_str(&b);
-						self.stack.push(Value::String(Rc::new(s)));
+					(Value::String(x), Value::String(y)) => {
+						let mut s = String::with_capacity(x.len() + y.len());
+						s.push_str(&x);
+						s.push_str(&y);
+						self.stack[base + dst as usize] = Value::String(Rc::new(s));
 					}
 					_ => {
 						return Err(
@@ -1041,277 +996,245 @@ impl VM {
 					}
 				}
 			}
-			// Ordering comparisons are split by operand repr (`*Int` / `*Float`) so
-			// the hot path matches one arm instead of probing int-then-float. The
-			// analyzer guarantees the operands; the mismatch arm stays a defensive
-			// runtime error that optimizes away in release.
-			Instruction::LtInt => {
-				let r = self.stack.pop().unwrap();
-				let l = self.stack.pop().unwrap();
+			Instruction::LtInt { dst, a, b } => cmp_int!(dst, a, b, <, "LtInt"),
+			Instruction::LtFloat { dst, a, b } => cmp_float!(dst, a, b, <, "LtFloat"),
+			Instruction::LteInt { dst, a, b } => cmp_int!(dst, a, b, <=, "LteInt"),
+			Instruction::LteFloat { dst, a, b } => cmp_float!(dst, a, b, <=, "LteFloat"),
+			Instruction::GtInt { dst, a, b } => cmp_int!(dst, a, b, >, "GtInt"),
+			Instruction::GtFloat { dst, a, b } => cmp_float!(dst, a, b, >, "GtFloat"),
+			Instruction::GteInt { dst, a, b } => cmp_int!(dst, a, b, >=, "GteInt"),
+			Instruction::GteFloat { dst, a, b } => cmp_float!(dst, a, b, >=, "GteFloat"),
+			Instruction::Eq { dst, a, b } => {
+				let l = self.stack[base + a as usize].clone();
+				let r = self.stack[base + b as usize].clone();
+				self.stack[base + dst as usize] = Value::Bool(values_eq(&l, &r));
+			}
+			Instruction::Neq { dst, a, b } => {
+				let l = self.stack[base + a as usize].clone();
+				let r = self.stack[base + b as usize].clone();
+				self.stack[base + dst as usize] = Value::Bool(!values_eq(&l, &r));
+			}
+			Instruction::LogicalAnd { dst, a, b } => {
+				let l = self.stack[base + a as usize].clone();
+				let r = self.stack[base + b as usize].clone();
 				match (l, r) {
-					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Bool(a < b)),
-					_ => return Err(RuntimeError::new("LtInt: expected ints").at(self.current_range())),
-				}
-			}
-			Instruction::LtFloat => {
-				let r = self.stack.pop().unwrap();
-				let l = self.stack.pop().unwrap();
-				match (l, r) {
-					(Value::Float(a), Value::Float(b)) => self.stack.push(Value::Bool(a < b)),
-					_ => return Err(RuntimeError::new("LtFloat: expected floats").at(self.current_range())),
-				}
-			}
-			Instruction::LteInt => {
-				let r = self.stack.pop().unwrap();
-				let l = self.stack.pop().unwrap();
-				match (l, r) {
-					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Bool(a <= b)),
-					_ => return Err(RuntimeError::new("LteInt: expected ints").at(self.current_range())),
-				}
-			}
-			Instruction::LteFloat => {
-				let r = self.stack.pop().unwrap();
-				let l = self.stack.pop().unwrap();
-				match (l, r) {
-					(Value::Float(a), Value::Float(b)) => self.stack.push(Value::Bool(a <= b)),
-					_ => return Err(RuntimeError::new("LteFloat: expected floats").at(self.current_range())),
-				}
-			}
-			Instruction::GtInt => {
-				let r = self.stack.pop().unwrap();
-				let l = self.stack.pop().unwrap();
-				match (l, r) {
-					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Bool(a > b)),
-					_ => return Err(RuntimeError::new("GtInt: expected ints").at(self.current_range())),
-				}
-			}
-			Instruction::GtFloat => {
-				let r = self.stack.pop().unwrap();
-				let l = self.stack.pop().unwrap();
-				match (l, r) {
-					(Value::Float(a), Value::Float(b)) => self.stack.push(Value::Bool(a > b)),
-					_ => return Err(RuntimeError::new("GtFloat: expected floats").at(self.current_range())),
-				}
-			}
-			Instruction::GteInt => {
-				let r = self.stack.pop().unwrap();
-				let l = self.stack.pop().unwrap();
-				match (l, r) {
-					(Value::Int(a), Value::Int(b)) => self.stack.push(Value::Bool(a >= b)),
-					_ => return Err(RuntimeError::new("GteInt: expected ints").at(self.current_range())),
-				}
-			}
-			Instruction::GteFloat => {
-				let r = self.stack.pop().unwrap();
-				let l = self.stack.pop().unwrap();
-				match (l, r) {
-					(Value::Float(a), Value::Float(b)) => self.stack.push(Value::Bool(a >= b)),
-					_ => return Err(RuntimeError::new("GteFloat: expected floats").at(self.current_range())),
-				}
-			}
-			Instruction::Eq => {
-				let r = self.stack.pop().unwrap();
-				let l = self.stack.pop().unwrap();
-				self.stack.push(Value::Bool(values_eq(&l, &r)));
-			}
-			Instruction::Neq => {
-				let r = self.stack.pop().unwrap();
-				let l = self.stack.pop().unwrap();
-				self.stack.push(Value::Bool(!values_eq(&l, &r)));
-			}
-			Instruction::LogicalAnd => {
-				let r = self.stack.pop().unwrap();
-				let l = self.stack.pop().unwrap();
-				match (l, r) {
-					(Value::Bool(a), Value::Bool(b)) => self.stack.push(Value::Bool(a && b)),
+					(Value::Bool(x), Value::Bool(y)) => self.stack[base + dst as usize] = Value::Bool(x && y),
 					_ => return Err(RuntimeError::new("expected bools for `&&`").at(self.current_range())),
 				}
 			}
-			Instruction::LogicalOr => {
-				let r = self.stack.pop().unwrap();
-				let l = self.stack.pop().unwrap();
+			Instruction::LogicalOr { dst, a, b } => {
+				let l = self.stack[base + a as usize].clone();
+				let r = self.stack[base + b as usize].clone();
 				match (l, r) {
-					(Value::Bool(a), Value::Bool(b)) => self.stack.push(Value::Bool(a || b)),
+					(Value::Bool(x), Value::Bool(y)) => self.stack[base + dst as usize] = Value::Bool(x || y),
 					_ => return Err(RuntimeError::new("expected bools for `||`").at(self.current_range())),
 				}
 			}
-			Instruction::LogicalNot => {
-				let v = self.stack.pop().unwrap();
+			Instruction::LogicalNot { dst, a } => {
+				let v = self.stack[base + a as usize].clone();
 				match v {
-					Value::Bool(b) => self.stack.push(Value::Bool(!b)),
+					Value::Bool(x) => self.stack[base + dst as usize] = Value::Bool(!x),
 					_ => return Err(RuntimeError::new("expected bool for `!`").at(self.current_range())),
 				}
+			}
+
+			// --- M5: unboxed i64 arithmetic/comparison ------------------------
+			// Operands (and arithmetic dsts) are raw i64; no `Value`, no clone, no
+			// tag check. The repr pass proved the operands are i64. Comparisons
+			// write a boxed `Value::Bool`.
+			Instruction::AddIntR { dst, a, b } => {
+				self.raw[base + dst as usize] = (self.raw[base + a as usize] as i64)
+					.wrapping_add(self.raw[base + b as usize] as i64)
+					as u64;
+			}
+			Instruction::SubIntR { dst, a, b } => {
+				self.raw[base + dst as usize] = (self.raw[base + a as usize] as i64)
+					.wrapping_sub(self.raw[base + b as usize] as i64)
+					as u64;
+			}
+			Instruction::MulIntR { dst, a, b } => {
+				self.raw[base + dst as usize] = (self.raw[base + a as usize] as i64)
+					.wrapping_mul(self.raw[base + b as usize] as i64)
+					as u64;
+			}
+			Instruction::DivIntR { dst, a, b } => {
+				let d = self.raw[base + b as usize] as i64;
+				if d == 0 {
+					return Err(RuntimeError::new("integer division by zero").at(self.current_range()));
+				}
+				self.raw[base + dst as usize] = (self.raw[base + a as usize] as i64).wrapping_div(d) as u64;
+			}
+			Instruction::RemIntR { dst, a, b } => {
+				let d = self.raw[base + b as usize] as i64;
+				if d == 0 {
+					return Err(RuntimeError::new("division by zero").at(self.current_range()));
+				}
+				self.raw[base + dst as usize] = ((self.raw[base + a as usize] as i64) % d) as u64;
+			}
+			Instruction::NegIntR { dst, a } => {
+				self.raw[base + dst as usize] = (self.raw[base + a as usize] as i64).wrapping_neg() as u64;
+			}
+			Instruction::LtIntR { dst, a, b } => {
+				self.stack[base + dst as usize] =
+					Value::Bool((self.raw[base + a as usize] as i64) < (self.raw[base + b as usize] as i64));
+			}
+			Instruction::LteIntR { dst, a, b } => {
+				self.stack[base + dst as usize] =
+					Value::Bool((self.raw[base + a as usize] as i64) <= (self.raw[base + b as usize] as i64));
+			}
+			Instruction::GtIntR { dst, a, b } => {
+				self.stack[base + dst as usize] =
+					Value::Bool((self.raw[base + a as usize] as i64) > (self.raw[base + b as usize] as i64));
+			}
+			Instruction::GteIntR { dst, a, b } => {
+				self.stack[base + dst as usize] =
+					Value::Bool((self.raw[base + a as usize] as i64) >= (self.raw[base + b as usize] as i64));
 			}
 		}
 		Ok(flow)
 	}
 
-	fn match_literal<F>(&mut self, on_fail: u32, pred: F) -> Result<(), RuntimeError>
-	where
-		F: FnOnce(&Value) -> bool,
-	{
-		let subj = self
-			.stack
-			.pop()
-			.ok_or_else(|| RuntimeError::new("VM: match on empty stack").at(self.current_range()))?;
-		if !pred(&subj) {
-			let frame_idx = self.frames.len() - 1;
-			self.frames[frame_idx].ip = on_fail as usize;
-		}
-		Ok(())
-	}
-
 	fn match_variant(
 		&mut self,
+		frame_idx: usize,
+		base: usize,
+		subject: Reg,
 		variant_idx: u32,
-		arity: u16,
+		dests: RegListIdx,
 		on_fail: u32,
 	) -> Result<(), RuntimeError> {
-		let subj = self.stack.pop().ok_or_else(|| {
-			RuntimeError::new("VM: MatchVariant on empty stack").at(self.current_range())
-		})?;
+		let subj = self.stack[base + subject as usize].clone();
 		let variant_name = self.program.constants[variant_idx as usize].clone();
+		let dest_regs = self.program.reg_lists[dests as usize].clone();
 		match subj {
 			Value::Variant(v)
-				if v.variant.as_ref() == variant_name.as_ref() && v.payload.len() == arity as usize =>
+				if v.variant.as_ref() == variant_name.as_ref() && v.payload.len() == dest_regs.len() =>
 			{
-				for elem in v.payload.iter() {
-					self.stack.push(elem.clone());
+				for (i, d) in dest_regs.iter().enumerate() {
+					self.stack[base + *d as usize] = v.payload[i].clone();
 				}
 			}
-			Value::Bool(true) if variant_name.as_ref() == "true" && arity == 0 => {}
-			Value::Bool(false) if variant_name.as_ref() == "false" && arity == 0 => {}
-			_ => {
-				let frame_idx = self.frames.len() - 1;
-				self.frames[frame_idx].ip = on_fail as usize;
-			}
+			Value::Bool(true) if variant_name.as_ref() == "true" && dest_regs.is_empty() => {}
+			Value::Bool(false) if variant_name.as_ref() == "false" && dest_regs.is_empty() => {}
+			_ => self.frames[frame_idx].ip = on_fail as usize,
 		}
 		Ok(())
 	}
 
-	fn match_tuple(&mut self, arity: u16, on_fail: u32) -> Result<(), RuntimeError> {
-		let subj = self
-			.stack
-			.pop()
-			.ok_or_else(|| RuntimeError::new("VM: MatchTuple on empty stack").at(self.current_range()))?;
-		match subj {
-			Value::Tuple(elems) if elems.len() == arity as usize => {
-				for elem in elems.iter() {
-					self.stack.push(elem.clone());
-				}
-			}
-			_ => {
-				let frame_idx = self.frames.len() - 1;
-				self.frames[frame_idx].ip = on_fail as usize;
-			}
-		}
-		Ok(())
-	}
-
-	fn match_record(
+	fn match_tuple(
 		&mut self,
-		fields_idx: u32,
-		exact: bool,
-		with_rest: bool,
+		frame_idx: usize,
+		base: usize,
+		subject: Reg,
+		dests: RegListIdx,
 		on_fail: u32,
 	) -> Result<(), RuntimeError> {
-		let subj = self.stack.pop().ok_or_else(|| {
-			RuntimeError::new("VM: MatchRecord on empty stack").at(self.current_range())
-		})?;
-		let len = self.program.field_lists[fields_idx as usize].len();
+		let subj = self.stack[base + subject as usize].clone();
+		let dest_regs = self.program.reg_lists[dests as usize].clone();
 		match subj {
-			Value::Record(record) => {
-				if exact && record.len() != len {
-					let frame_idx = self.frames.len() - 1;
-					self.frames[frame_idx].ip = on_fail as usize;
-					return Ok(());
-				}
-				let mut values = Vec::with_capacity(len);
-				let mut matched_names: std::collections::HashSet<&str> =
-					std::collections::HashSet::with_capacity(len);
-				let mut ok = true;
-				for i in 0..len {
-					let name_idx = self.program.field_lists[fields_idx as usize][i];
-					let name = &self.program.constants[name_idx as usize];
-					match record.get(name.as_str()) {
-						Some(v) => {
-							values.push(v.clone());
-							matched_names.insert(name.as_str());
-						}
-						None => {
-							ok = false;
-							break;
-						}
-					}
-				}
-				if ok {
-					for v in values {
-						self.stack.push(v);
-					}
-					if with_rest {
-						// Build the rest: the input record minus the
-						// matched fields. Heap-allocates a new HashMap,
-						// then wraps in Rc.
-						let mut rest: std::collections::HashMap<String, Value> =
-							std::collections::HashMap::with_capacity(record.len().saturating_sub(len));
-						for (k, v) in record.iter() {
-							if !matched_names.contains(k.as_str()) {
-								rest.insert(k.clone(), v.clone());
-							}
-						}
-						self.stack.push(Value::Record(std::rc::Rc::new(rest)));
-					}
-				} else {
-					let frame_idx = self.frames.len() - 1;
-					self.frames[frame_idx].ip = on_fail as usize;
+			Value::Tuple(elems) if elems.len() == dest_regs.len() => {
+				for (i, d) in dest_regs.iter().enumerate() {
+					self.stack[base + *d as usize] = elems[i].clone();
 				}
 			}
-			_ => {
-				let frame_idx = self.frames.len() - 1;
-				self.frames[frame_idx].ip = on_fail as usize;
-			}
+			_ => self.frames[frame_idx].ip = on_fail as usize,
 		}
 		Ok(())
 	}
 
-	fn match_list(&mut self, arity: u16, has_rest: bool, on_fail: u32) -> Result<(), RuntimeError> {
-		let subj = self
-			.stack
-			.pop()
-			.ok_or_else(|| RuntimeError::new("VM: MatchList on empty stack").at(self.current_range()))?;
-		let arity = arity as usize;
+	fn match_list(
+		&mut self,
+		frame_idx: usize,
+		base: usize,
+		subject: Reg,
+		dests: RegListIdx,
+		has_rest: bool,
+		on_fail: u32,
+	) -> Result<(), RuntimeError> {
+		let subj = self.stack[base + subject as usize].clone();
+		let dest_regs = self.program.reg_lists[dests as usize].clone();
+		let items = dest_regs.len() - has_rest as usize;
 		match subj {
 			Value::List(elems) => {
 				let elems = elems.borrow();
 				let len = elems.len();
-				let length_ok = if has_rest { len >= arity } else { len == arity };
-				if !length_ok {
-					let frame_idx = self.frames.len() - 1;
+				let ok = if has_rest { len >= items } else { len == items };
+				if !ok {
 					self.frames[frame_idx].ip = on_fail as usize;
 					return Ok(());
 				}
-				for i in 0..arity {
-					self.stack.push(elems[i].clone());
+				for i in 0..items {
+					self.stack[base + dest_regs[i] as usize] = elems[i].clone();
 				}
 				if has_rest {
-					let tail: Vec<Value> = elems[arity..].to_vec();
-					self.stack.push(Value::list(tail));
+					let tail: Vec<Value> = elems[items..].to_vec();
+					self.stack[base + dest_regs[items] as usize] = Value::list(tail);
 				}
 			}
-			_ => {
-				let frame_idx = self.frames.len() - 1;
-				self.frames[frame_idx].ip = on_fail as usize;
-			}
+			_ => self.frames[frame_idx].ip = on_fail as usize,
 		}
 		Ok(())
 	}
 
-	fn load_global(&mut self, idx: u32) -> Result<(), RuntimeError> {
-		match &self.program.globals[idx as usize] {
-			GlobalSlot::Evaluated(v) => {
-				self.stack.push(v.clone());
-				Ok(())
+	#[allow(clippy::too_many_arguments)]
+	fn match_record(
+		&mut self,
+		frame_idx: usize,
+		base: usize,
+		subject: Reg,
+		fields_idx: u32,
+		dests: RegListIdx,
+		exact: bool,
+		with_rest: bool,
+		on_fail: u32,
+	) -> Result<(), RuntimeError> {
+		let subj = self.stack[base + subject as usize].clone();
+		let names = self.program.field_lists[fields_idx as usize].clone();
+		let dest_regs = self.program.reg_lists[dests as usize].clone();
+		let n = names.len();
+		let Value::Record(record) = subj else {
+			self.frames[frame_idx].ip = on_fail as usize;
+			return Ok(());
+		};
+		if exact && record.len() != n {
+			self.frames[frame_idx].ip = on_fail as usize;
+			return Ok(());
+		}
+		let mut values = Vec::with_capacity(n);
+		let mut matched: std::collections::HashSet<String> =
+			std::collections::HashSet::with_capacity(n);
+		for &name_idx in &names {
+			let name = self.program.constants[name_idx as usize].clone();
+			match record.get(name.as_str()) {
+				Some(v) => {
+					values.push(v.clone());
+					matched.insert((*name).clone());
+				}
+				None => {
+					self.frames[frame_idx].ip = on_fail as usize;
+					return Ok(());
+				}
 			}
+		}
+		for (i, v) in values.into_iter().enumerate() {
+			self.stack[base + dest_regs[i] as usize] = v;
+		}
+		if with_rest {
+			let mut rest: std::collections::HashMap<String, Value> =
+				std::collections::HashMap::with_capacity(record.len().saturating_sub(n));
+			for (k, v) in record.iter() {
+				if !matched.contains(k) {
+					rest.insert(k.clone(), v.clone());
+				}
+			}
+			self.stack[base + dest_regs[n] as usize] = Value::Record(Rc::new(rest));
+		}
+		Ok(())
+	}
+
+	fn load_global(&mut self, idx: u32) -> Result<Value, RuntimeError> {
+		match &self.program.globals[idx as usize] {
+			GlobalSlot::Evaluated(v) => Ok(v.clone()),
 			GlobalSlot::Evaluating => Err(
 				RuntimeError::new(format!("cycle detected while evaluating global #{}", idx))
 					.at(self.current_range()),
@@ -1319,127 +1242,69 @@ impl VM {
 			GlobalSlot::Pending(fn_idx) => {
 				let fn_idx = *fn_idx;
 				self.program.globals[idx as usize] = GlobalSlot::Evaluating;
-				// Push the thunk frame. When it returns, the Return
-				// handler writes the value into the global slot AND pushes
-				// it onto the stack — which is exactly what LoadGlobal
-				// wants. Run nested until the thunk completes.
 				let depth = self.frames.len();
-				self.push_frame_with_args(fn_idx, Rc::new(Vec::new()), Vec::new(), Some(idx))?;
+				self.push_frame_with_args(fn_idx, Rc::new(Vec::new()), Vec::new())?;
 				self.run_until_frame_depth(depth)?;
-				Ok(())
+				let v = self
+					.pop_stack()
+					.ok_or_else(|| RuntimeError::new("VM: global thunk produced no value"))?;
+				self.program.globals[idx as usize] = GlobalSlot::Evaluated(v.clone());
+				Ok(v)
 			}
 		}
 	}
 
-	fn do_call(&mut self, arity: u16, tail: bool) -> Result<(), RuntimeError> {
-		// A frame with pending `defer` cleanups can't be reused in place by a
-		// tail call: its Return must still execute to run those cleanups. Fall
-		// back to a normal (frame-pushing) call when that's the case. Because a
-		// tail call is the last thing a frame does, every `defer` that will run
-		// has already been pushed by this point, so the check is exact.
+	// Whether parameter `i` of function `fn_idx` is an unboxed i64 (so a call
+	// must marshal that arg through the raw window). M6.
+	fn param_is_raw(&self, fn_idx: u32, i: usize) -> bool {
+		matches!(
+			self.program.functions[fn_idx as usize].reg_reprs.get(i),
+			Some(RegRepr::I64)
+		)
+	}
+
+	// Dispatch a call to `callee`, delivering the result to register `dst` of the
+	// caller (whose window starts at `caller_base`). `args` is the operand-list
+	// index; closures marshal their args straight from the caller's registers
+	// into the new frame (no intermediate `Vec`), while builtins / variant ctors /
+	// async fns read the args into a `Vec` and produce their value inline.
+	fn do_call(
+		&mut self,
+		dst: Reg,
+		callee: Value,
+		args: RegListIdx,
+		caller_base: usize,
+		tail: bool,
+	) -> Result<(), RuntimeError> {
+		// A frame with pending `defer` cleanups can't be reused by a tail call:
+		// its Return must still run them. Fall back to a normal call.
 		let tail = tail && self.frames.last().map_or(true, |f| f.cleanups.is_empty());
-		// Stack layout coming in: [..., callee, arg0, ..., argN-1].
-		// For Closure calls we leave the callee + args in place; the new
-		// frame's locals start at the args' position. The callee sits at
-		// `prev_top` and gets dropped on Return via truncate(prev_top).
-		// For Builtin / VariantCtor we don't push a frame, so we pop the
-		// args + callee like before.
-		let arity = arity as usize;
-		let stack_len = self.stack.len();
-		if stack_len < arity + 1 {
-			return Err(RuntimeError::new("VM: Call underflow").at(self.current_range()));
-		}
-		let callee_idx = stack_len - arity - 1;
-		// Clone the callee value out of the stack. Keeping the slot
-		// occupied (rather than removing it) avoids an O(arity) shift.
-		let callee = self.stack[callee_idx].clone();
 		match callee {
-			Value::Closure(c) => {
-				let fn_idx = c.fn_idx as u32;
-				let captures = Rc::clone(&c.captures);
-				let func = &self.program.functions[fn_idx as usize];
-				// Normalize zero-arg-with-Nothing: drop the Nothing arg.
-				let mut effective_arity = arity;
-				if func.param_count == 0
-					&& arity == 1
-					&& matches!(self.stack[stack_len - 1], Value::Nothing)
-				{
-					self.stack.pop();
-					effective_arity = 0;
-				}
-				if effective_arity != func.param_count as usize {
-					return Err(
-						RuntimeError::new(format!(
-							"arity mismatch: expected {} args, got {}",
-							func.param_count, effective_arity
-						))
-						.at(self.current_range()),
-					);
-				}
-				let slot_count = func.slot_count as usize;
-				if tail {
-					// Replace current frame in-place. Move new args down
-					// to the current frame's slot range.
-					let curr = self.frames.last().unwrap();
-					let prev_top = curr.prev_top;
-					let new_base = prev_top + 1;
-					let stack_len = self.stack.len();
-					// Move args from [stack_len - effective_arity .. stack_len]
-					// to [new_base .. new_base + effective_arity]. Source and
-					// destination can't overlap in practice because the new
-					// args sit above the current frame's locals.
-					for i in 0..effective_arity {
-						let v = self.stack[stack_len - effective_arity + i].clone();
-						self.stack[new_base + i] = v;
-					}
-					self.stack.truncate(new_base + effective_arity);
-					self.stack.resize(new_base + slot_count, Value::Nothing);
-					let frame = self.frames.last_mut().unwrap();
-					frame.fn_idx = fn_idx;
-					frame.ip = 0;
-					frame.captures = captures;
-					frame.base = new_base;
-					frame.slot_count = slot_count as u16;
-					// prev_top stays the same.
-					Ok(())
-				} else {
-					// Push a new frame using the callee + args already on
-					// the stack. The callee at callee_idx becomes the
-					// frame's prev_top; the args become the first locals.
-					let base = callee_idx + 1;
-					self.stack.resize(base + slot_count, Value::Nothing);
-					self.frames.push(Frame {
-						fn_idx,
-						ip: 0,
-						base,
-						slot_count: slot_count as u16,
-						prev_top: callee_idx,
-						captures,
-						forcing_global: None,
-						cleanups: Vec::new(),
-					});
-					Ok(())
-				}
-			}
+			Value::Closure(c) => self.enter_closure(
+				c.fn_idx as u32,
+				Rc::clone(&c.captures),
+				args,
+				dst,
+				caller_base,
+				tail,
+			),
 			Value::Builtin(b) => {
-				// Pop args + callee off the stack and call the handler.
-				let args_start = stack_len - arity;
-				let args: Vec<Value> = self.stack.drain(args_start..).collect();
-				self.stack.pop(); // callee
+				let arg_vals = self.read_reg_list(args, caller_base);
 				let range = self.current_range();
 				let module = self.current_module();
-				let result = builtin::call_builtin(self, b.as_ref(), args).map_err(|e| {
+				let result = builtin::call_builtin(self, b.as_ref(), arg_vals).map_err(|e| {
 					let mut e = e.at(range);
 					if let Some(m) = module {
 						e = e.in_module(m);
 					}
 					e
 				})?;
-				self.stack.push(result);
+				self.stack[caller_base + dst as usize] = result;
 				Ok(())
 			}
 			Value::VariantCtor(c) => {
-				if arity != c.arity {
+				let payload = self.read_reg_list(args, caller_base);
+				if payload.len() != c.arity {
 					return Err(
 						RuntimeError::new(format!(
 							"variant `{}.{}` takes {} arg(s), got {}",
@@ -1449,69 +1314,149 @@ impl VM {
 								.unwrap_or(&c.qualified_enum),
 							c.variant,
 							c.arity,
-							arity
+							payload.len()
 						))
 						.at(self.current_range()),
 					);
 				}
-				let args_start = stack_len - arity;
-				let payload: Vec<Value> = self.stack.drain(args_start..).collect();
-				self.stack.pop(); // callee
-				self.stack.push(Value::Variant(Rc::new(VariantData {
+				self.stack[caller_base + dst as usize] = Value::Variant(Rc::new(VariantData {
 					qualified_enum: c.qualified_enum.clone(),
 					variant: c.variant.clone(),
 					payload,
-				})));
+				}));
 				Ok(())
 			}
 			Value::AsyncFn(af) => {
-				// Calling an async function builds a *cold* task — it does NOT
-				// run. Like the Builtin/VariantCtor arms, this never pushes a
-				// frame (the `tail` flag is irrelevant); the task runs only when
-				// awaited or driven. This is what makes "calling an async fn
-				// returns a cold task" a uniform runtime fact — no call-site
-				// codegen knowledge of the callee's async-ness is needed.
-				let step_fn = af.step_fn;
-				let captures = Rc::clone(&af.captures);
-				let func = &self.program.functions[step_fn];
-				let mut effective_arity = arity;
-				if func.param_count == 0
-					&& arity == 1
-					&& matches!(self.stack[stack_len - 1], Value::Nothing)
-				{
-					self.stack.pop();
-					effective_arity = 0;
+				let mut args = self.read_reg_list(args, caller_base);
+				let func = &self.program.functions[af.step_fn];
+				if func.param_count == 0 && args.len() == 1 && matches!(args[0], Value::Nothing) {
+					args.clear();
 				}
-				if effective_arity != func.param_count as usize {
+				if args.len() != func.param_count as usize {
 					return Err(
 						RuntimeError::new(format!(
 							"arity mismatch: expected {} args, got {}",
-							func.param_count, effective_arity
+							func.param_count,
+							args.len()
 						))
 						.at(self.current_range()),
 					);
 				}
-				let args_start = self.stack.len() - effective_arity;
-				let args: Vec<Value> = self.stack.drain(args_start..).collect();
-				self.stack.pop(); // callee
-				self.stack.push(Value::Task(Rc::new(TaskRepr::Async {
-					step_fn,
-					captures,
+				self.stack[caller_base + dst as usize] = Value::Task(Rc::new(TaskRepr::Async {
+					step_fn: af.step_fn,
+					captures: Rc::clone(&af.captures),
 					args,
-				})));
+				}));
 				Ok(())
 			}
 			_ => Err(RuntimeError::new("not callable").at(self.current_range())),
 		}
 	}
+
+	// Enter a closure (or, when `tail`, replace the current frame in place),
+	// marshalling args directly from the caller's registers (named by the operand
+	// list `args`) into the callee's parameter registers `0..argc` — no
+	// intermediate `Vec` on the hot non-tail path.
+	fn enter_closure(
+		&mut self,
+		fn_idx: u32,
+		captures: Rc<Vec<Value>>,
+		args: RegListIdx,
+		dst: Reg,
+		caller_base: usize,
+		tail: bool,
+	) -> Result<(), RuntimeError> {
+		let (param_count, nregs) = {
+			let func = &self.program.functions[fn_idx as usize];
+			(func.param_count as usize, func.nregs as usize)
+		};
+		let n = self.program.reg_lists[args as usize].len();
+		// Normalize the zero-arg-with-`nothing` call to zero args.
+		let argc = if param_count == 0 && n == 1 {
+			let r0 = self.program.reg_lists[args as usize][0];
+			if matches!(self.stack[caller_base + r0 as usize], Value::Nothing) {
+				0
+			} else {
+				n
+			}
+		} else {
+			n
+		};
+		if argc != param_count {
+			return Err(
+				RuntimeError::new(format!(
+					"arity mismatch: expected {param_count} args, got {argc}"
+				))
+				.at(self.current_range()),
+			);
+		}
+		if tail {
+			// The args live in the frame we're about to overwrite, so copy them
+			// out first (they may alias the destination param slots). Each arg is
+			// read in its param's repr (raw i64 or boxed).
+			let new_base = self.frames.last().unwrap().base;
+			let mut tmp = Vec::with_capacity(argc);
+			for i in 0..argc {
+				let r = self.program.reg_lists[args as usize][i] as usize;
+				if self.param_is_raw(fn_idx, i) {
+					tmp.push(Arg::Raw(self.raw[caller_base + r]));
+				} else {
+					tmp.push(Arg::Boxed(self.stack[caller_base + r].clone()));
+				}
+			}
+			self.stack.truncate(new_base);
+			self.stack.resize(new_base + nregs, Value::Nothing);
+			self.raw.truncate(new_base);
+			self.raw.resize(new_base + nregs, 0);
+			for (i, a) in tmp.into_iter().enumerate() {
+				match a {
+					Arg::Raw(b) => self.raw[new_base + i] = b,
+					Arg::Boxed(v) => self.stack[new_base + i] = v,
+				}
+			}
+			let frame = self.frames.last_mut().unwrap();
+			frame.fn_idx = fn_idx;
+			frame.ip = 0;
+			frame.captures = captures;
+			frame.base = new_base;
+			frame.nregs = nregs as u16;
+		} else {
+			// The callee window sits above the caller's, so reading caller
+			// registers while filling it can't overlap — marshal in place, each
+			// arg in its param's repr (raw i64 or boxed).
+			let new_base = self.stack.len();
+			self.stack.resize(new_base + nregs, Value::Nothing);
+			self.raw.resize(new_base + nregs, 0);
+			for i in 0..argc {
+				let r = self.program.reg_lists[args as usize][i] as usize;
+				if self.param_is_raw(fn_idx, i) {
+					self.raw[new_base + i] = self.raw[caller_base + r];
+				} else {
+					self.stack[new_base + i] = self.stack[caller_base + r].clone();
+				}
+			}
+			self.frames.push(Frame {
+				fn_idx,
+				ip: 0,
+				base: new_base,
+				nregs: nregs as u16,
+				captures,
+				ret_dst: Some(caller_base + dst as usize),
+				cleanups: Vec::new(),
+			});
+		}
+		Ok(())
+	}
 }
 
-// Tiny helpers used by builtin::invoke (so VM internals stay private).
+// Tiny helpers used by builtin::invoke and the task driver (so VM internals stay
+// private to the crate).
 impl VM {
 	pub(crate) fn frames_len(&self) -> usize {
 		self.frames.len()
 	}
 	pub(crate) fn pop_stack(&mut self) -> Option<Value> {
+		self.raw.pop();
 		self.stack.pop()
 	}
 	// (module, 1-indexed line) of the call instruction that dispatched the
@@ -1529,10 +1474,16 @@ impl VM {
 	}
 }
 
-// Whether an executed instruction kept control in the current frame (`Next`)
-// or transferred it (`Transfer` — a Call pushed a frame, a Return popped one,
-// or a TailCall replaced the current one). The synchronous driver uses this to
-// know when its cached per-frame state (`base`/`fn_idx`/body length) is stale.
+// One marshalled call argument, carried in its destination param's repr: a
+// boxed `Value` or a raw i64 (M6 — monomorphized functions take unboxed params).
+enum Arg {
+	Boxed(Value),
+	Raw(u64),
+}
+
+// Whether an executed instruction kept control in the current frame (`Next`) or
+// transferred it (`Transfer` — Call pushed a frame, Return popped one, TailCall
+// replaced the current one).
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Flow {
 	Next,
@@ -1542,76 +1493,89 @@ enum Flow {
 fn opcode_name(i: &Instruction) -> &'static str {
 	use Instruction::*;
 	match i {
-		Pop => "Pop",
-		Dup => "Dup",
-		LoadConst(_) => "LoadConst",
-		LoadBytes(_) => "LoadBytes",
-		LoadInt(_) => "LoadInt",
-		LoadFloat(_) => "LoadFloat",
-		LoadBool(_) => "LoadBool",
-		LoadDuration(_) => "LoadDuration",
-		LoadNothing => "LoadNothing",
-		LoadLocal(_) => "LoadLocal",
-		StoreLocal(_) => "StoreLocal",
-		LoadCapture(_) => "LoadCapture",
-		LoadGlobal(_) => "LoadGlobal",
-		Jump(_) => "Jump",
-		JumpIfFalse(_) => "JumpIfFalse",
+		Move { .. } => "Move",
+		MoveR { .. } => "MoveR",
+		Box { .. } => "Box",
+		Unbox { .. } => "Unbox",
+		LoadConst { .. } => "LoadConst",
+		LoadBytes { .. } => "LoadBytes",
+		LoadInt { .. } => "LoadInt",
+		LoadIntR { .. } => "LoadIntR",
+		LoadFloat { .. } => "LoadFloat",
+		LoadBool { .. } => "LoadBool",
+		LoadDuration { .. } => "LoadDuration",
+		LoadNothing { .. } => "LoadNothing",
+		LoadCapture { .. } => "LoadCapture",
+		LoadGlobal { .. } => "LoadGlobal",
+		Jump { .. } => "Jump",
+		JumpIfFalse { .. } => "JumpIfFalse",
 		MakeClosure { .. } => "MakeClosure",
 		MakeAsyncClosure { .. } => "MakeAsyncClosure",
-		Call(_) => "Call",
-		TailCall(_) => "TailCall",
-		PushDefer => "PushDefer",
-		Await => "Await",
-		Return => "Return",
-		MakeTuple(_) => "MakeTuple",
-		MakeList(_) => "MakeList",
-		ConcatLists(_) => "ConcatLists",
+		Call { .. } => "Call",
+		CallDirect { .. } => "CallDirect",
+		TailCall { .. } => "TailCall",
+		TailCallDirect { .. } => "TailCallDirect",
+		Return { .. } => "Return",
+		PushDefer { .. } => "PushDefer",
+		Await { .. } => "Await",
+		MakeTuple { .. } => "MakeTuple",
+		MakeList { .. } => "MakeList",
+		ConcatLists { .. } => "ConcatLists",
 		MakeRecord { .. } => "MakeRecord",
 		UpdateRecord { .. } => "UpdateRecord",
 		MakeVariant { .. } => "MakeVariant",
 		MakeVariantCtor { .. } => "MakeVariantCtor",
-		GetField(_) => "GetField",
-		GetElement(_) => "GetElement",
-		GetDictField(_) => "GetDictField",
-		MakeDict(_) => "MakeDict",
-		Interpolate(_) => "Interpolate",
-		MatchInt(_, _) => "MatchInt",
-		MatchFloat(_, _) => "MatchFloat",
-		MatchDuration(_, _) => "MatchDuration",
-		MatchString(_, _) => "MatchString",
-		MatchBytes(_, _) => "MatchBytes",
-		MatchBool(_, _) => "MatchBool",
-		MatchNothing(_) => "MatchNothing",
+		GetField { .. } => "GetField",
+		GetElement { .. } => "GetElement",
+		GetDictField { .. } => "GetDictField",
+		MakeDict { .. } => "MakeDict",
+		Interpolate { .. } => "Interpolate",
+		MatchInt { .. } => "MatchInt",
+		MatchFloat { .. } => "MatchFloat",
+		MatchDuration { .. } => "MatchDuration",
+		MatchString { .. } => "MatchString",
+		MatchBytes { .. } => "MatchBytes",
+		MatchBool { .. } => "MatchBool",
+		MatchNothing { .. } => "MatchNothing",
 		MatchVariant { .. } => "MatchVariant",
 		MatchTuple { .. } => "MatchTuple",
-		MatchRecord { .. } => "MatchRecord",
 		MatchList { .. } => "MatchList",
-		AddInt => "AddInt",
-		AddFloat => "AddFloat",
-		SubInt => "SubInt",
-		SubFloat => "SubFloat",
-		MulInt => "MulInt",
-		MulFloat => "MulFloat",
-		DivInt => "DivInt",
-		DivFloat => "DivFloat",
-		RemInt => "RemInt",
-		RemFloat => "RemFloat",
-		NegInt => "NegInt",
-		NegFloat => "NegFloat",
-		ConcatString => "ConcatString",
-		LtInt => "LtInt",
-		LtFloat => "LtFloat",
-		LteInt => "LteInt",
-		LteFloat => "LteFloat",
-		GtInt => "GtInt",
-		GtFloat => "GtFloat",
-		GteInt => "GteInt",
-		GteFloat => "GteFloat",
-		Eq => "Eq",
-		Neq => "Neq",
-		LogicalAnd => "LogicalAnd",
-		LogicalOr => "LogicalOr",
-		LogicalNot => "LogicalNot",
+		MatchRecord { .. } => "MatchRecord",
+		AddInt { .. } => "AddInt",
+		AddFloat { .. } => "AddFloat",
+		SubInt { .. } => "SubInt",
+		SubFloat { .. } => "SubFloat",
+		MulInt { .. } => "MulInt",
+		MulFloat { .. } => "MulFloat",
+		DivInt { .. } => "DivInt",
+		DivFloat { .. } => "DivFloat",
+		RemInt { .. } => "RemInt",
+		RemFloat { .. } => "RemFloat",
+		NegInt { .. } => "NegInt",
+		NegFloat { .. } => "NegFloat",
+		ConcatString { .. } => "ConcatString",
+		LtInt { .. } => "LtInt",
+		LtFloat { .. } => "LtFloat",
+		LteInt { .. } => "LteInt",
+		LteFloat { .. } => "LteFloat",
+		GtInt { .. } => "GtInt",
+		GtFloat { .. } => "GtFloat",
+		GteInt { .. } => "GteInt",
+		GteFloat { .. } => "GteFloat",
+		Eq { .. } => "Eq",
+		Neq { .. } => "Neq",
+		LogicalAnd { .. } => "LogicalAnd",
+		LogicalOr { .. } => "LogicalOr",
+		LogicalNot { .. } => "LogicalNot",
+		AddIntR { .. } => "AddIntR",
+		SubIntR { .. } => "SubIntR",
+		MulIntR { .. } => "MulIntR",
+		DivIntR { .. } => "DivIntR",
+		RemIntR { .. } => "RemIntR",
+		NegIntR { .. } => "NegIntR",
+		LtIntR { .. } => "LtIntR",
+		LteIntR { .. } => "LteIntR",
+		GtIntR { .. } => "GtIntR",
+		GteIntR { .. } => "GteIntR",
 	}
 }

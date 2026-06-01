@@ -94,13 +94,14 @@ enum Cont {
 struct TaskFrame {
 	step_fn: usize,
 	captures: Rc<Vec<Value>>,
-	// The frame's operand-stack region (slot locals plus any live temporaries
-	// from a partially-evaluated expression) saved at the last suspension. On
-	// first entry it's the initial locals: the call args padded to slot_count.
-	// Saving the *whole* region (not just the slots) is what lets an `Await`
-	// appear mid-expression, e.g. `f (if c { try x = t  ... }) y`.
+	// The frame's register window (`nregs` values) saved at the last suspension.
+	// On first entry it's the initial registers: the call args padded to `nregs`.
+	// Saving the whole window is what lets an `Await` appear mid-expression.
 	saved: Vec<Value>,
 	resume_ip: usize,
+	// The destination register of the `Await` this frame is suspended at; the
+	// awaited result is delivered there on resume. `None` before the first await.
+	resume_dst: Option<u16>,
 	// `defer` cleanups accrued in this frame so far. Held here across
 	// suspension; moved into the live VM frame while stepping so PushDefer /
 	// Return see them. Run LIFO on normal completion (by the VM's Return), on
@@ -110,13 +111,14 @@ struct TaskFrame {
 
 impl TaskFrame {
 	fn new(step_fn: usize, captures: Rc<Vec<Value>>, mut args: Vec<Value>, vm: &VM) -> Self {
-		let slot_count = vm.program.functions[step_fn].slot_count as usize;
-		args.resize(slot_count, Value::Nothing);
+		let nregs = vm.program.functions[step_fn].nregs as usize;
+		args.resize(nregs, Value::Nothing);
 		TaskFrame {
 			step_fn,
 			captures,
 			saved: args,
 			resume_ip: 0,
+			resume_dst: None,
 			cleanups: Vec::new(),
 		}
 	}
@@ -499,7 +501,6 @@ impl VM {
 			pf.poll_fn as u32,
 			Rc::clone(&pf.captures),
 			vec![pf.state.clone(), resume],
-			None,
 		)?;
 		self.run_until_frame_depth(depth)?;
 		let result = self
@@ -908,30 +909,34 @@ impl VM {
 		resume_val: Option<Value>,
 	) -> Result<StepOutcome, RuntimeError> {
 		let step_fn = tf.step_fn;
-		let slot_count = self.program.functions[step_fn].slot_count as usize;
+		let nregs = self.program.functions[step_fn].nregs as usize;
 		let target_depth = self.frames.len();
 		let base = self.stack.len();
-		// Restore the frame's saved region (locals + any live temporaries).
+		// Restore the frame's saved register window. Async step fns are left
+		// un-coerced (all-boxed), so only the boxed window is snapshotted; the raw
+		// window is kept length-synced for any coerced sync calls nested below.
 		self.stack.extend(tf.saved.iter().cloned());
+		self.raw.resize(self.stack.len(), 0);
 		self.frames.push(Frame {
 			fn_idx: step_fn as u32,
 			ip: tf.resume_ip,
 			base,
-			slot_count: slot_count as u16,
-			prev_top: base,
+			nregs: nregs as u16,
 			captures: Rc::clone(&tf.captures),
-			forcing_global: None,
+			ret_dst: None,
 			cleanups: std::mem::take(&mut tf.cleanups),
 		});
-		// On resume, the awaited result sits on top — where the instruction
-		// after `Await` expects it (a StoreLocal binding the `try` pattern, or
-		// a Pop for `try _ = ...`).
+		// On resume, deliver the awaited result into the `Await`'s destination
+		// register (recorded when we suspended).
 		if let Some(v) = resume_val {
-			self.stack.push(v);
+			let d = tf
+				.resume_dst
+				.expect("VM: resume without a recorded await dst");
+			self.stack[base + d as usize] = v;
 		}
 
 		loop {
-			// The step frame returned: its Return already ran cleanups,
+			// The step frame returned (`ret_dst: None`): its Return ran cleanups,
 			// truncated the stack, and pushed the tail task.
 			if self.frames.len() == target_depth {
 				let tail = self
@@ -943,24 +948,24 @@ impl VM {
 			let top = self.frames.len() - 1;
 			let frame = &self.frames[top];
 			let func = &self.program.functions[frame.fn_idx as usize];
-			// Intercept `Await` (only ever present in a step frame, at this
-			// depth — nested sync calls contain none). Everything else runs
-			// through the normal step loop, including nested calls/returns.
-			if frame.ip < func.body.len()
-				&& matches!(func.body[frame.ip], crate::instruction::Instruction::Await)
-			{
-				self.frames[top].ip += 1;
-				let awaited = self
-					.stack
-					.pop()
-					.ok_or_else(|| RuntimeError::new("VM: `Await` on empty stack"))?;
-				let frame_base = self.frames[top].base;
-				tf.saved = self.stack[frame_base..].to_vec();
-				tf.resume_ip = self.frames[top].ip;
-				let popped = self.frames.pop().unwrap();
-				tf.cleanups = popped.cleanups;
-				self.stack.truncate(popped.prev_top);
-				return Ok(StepOutcome::Await(awaited));
+			// Intercept `Await` (only ever present in a step frame, at this depth
+			// — nested sync calls contain none). Everything else runs through the
+			// normal step loop, including nested calls/returns.
+			if frame.ip < func.body.len() {
+				if let crate::reg::Instruction::Await { dst, task } = func.body[frame.ip] {
+					self.frames[top].ip += 1;
+					let fb = self.frames[top].base;
+					let nr = self.frames[top].nregs as usize;
+					let awaited = self.stack[fb + task as usize].clone();
+					tf.saved = self.stack[fb..fb + nr].to_vec();
+					tf.resume_ip = self.frames[top].ip;
+					tf.resume_dst = Some(dst);
+					let popped = self.frames.pop().unwrap();
+					tf.cleanups = popped.cleanups;
+					self.stack.truncate(popped.base);
+					self.raw.truncate(popped.base);
+					return Ok(StepOutcome::Await(awaited));
+				}
 			}
 			self.step()?;
 		}
