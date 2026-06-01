@@ -25,6 +25,7 @@
 //     into state machines (the snapshot trick can't port to WASM).
 // The `is_async` flag and the `Await` node are the anticipated growth points.
 
+pub mod copyprop;
 pub mod cps;
 pub mod inline;
 pub mod lower;
@@ -37,8 +38,8 @@ pub use lower::lower;
 pub use types::*;
 
 /// The VM-path optimization sequence: inline small directly-called functions,
-/// then resolve indirect calls to statically-known top-level functions into
-/// direct calls.
+/// resolve indirect calls into direct ones, then eliminate the redundant copies
+/// inlining introduced.
 ///
 /// `resolve_direct_calls` rewrites `CallClosure(GlobalRef(g))` →
 /// `Call(Callee::Function(fid))` for capture-free non-async targets and prunes
@@ -48,11 +49,18 @@ pub use types::*;
 /// it to a `CallDirect` opcode — no global load, no closure value, no allocation
 /// — so the pass flips from a pessimization to a win (and is the enabler the
 /// step-2 monomorphization track needs). Run after inlining so it only sees the
-/// calls inlining left behind. Behavior-neutral (validated by the conformance
-/// gate diffing VM output against the deploy backends).
+/// calls inlining left behind.
+///
+/// `copyprop::eliminate_copies` then removes the `Let(dest, Use(ret))` copies the
+/// inliner emits when binding a spliced call's return — codegen lowers each to a
+/// `Move`, ~20% of executed opcodes on call-heavy code (M2a).
+///
+/// All behavior-neutral (validated by the conformance gate diffing VM output
+/// against the deploy backends).
 pub fn optimize(program: &mut IrProgram) {
 	inline::inline(program);
 	resolve::resolve_direct_calls(program);
+	copyprop::eliminate_copies(program);
 	// M5/M6: the unboxed-register substrate. The register VM keeps unboxed (`I64`)
 	// values in a raw window; `insert_coercions` splices `Box`/`Unbox` at the repr
 	// boundaries, and codegen reads the resulting reprs to emit raw-window opcodes.
