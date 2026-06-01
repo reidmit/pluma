@@ -26,6 +26,7 @@
 // The `is_async` flag and the `Await` node are the anticipated growth points.
 
 pub mod cps;
+pub mod inline;
 pub mod lower;
 pub mod mono;
 pub mod repr;
@@ -34,3 +35,19 @@ pub mod types;
 
 pub use lower::lower;
 pub use types::*;
+
+/// The VM-path optimization sequence. Currently just inlining of small,
+/// non-recursive, directly-called functions.
+///
+/// It deliberately does *not* run `resolve_direct_calls`: that pass rewrites
+/// indirect calls to `Call(Callee::Function)`, which the WASM backend lowers to a
+/// real direct call but the bytecode emitter lowers to a *fresh closure
+/// allocation* per call (`MakeClosure` + `Call`) — a pessimization for the VM on
+/// every non-inlined call (e.g. recursion). The inliner instead works directly on
+/// the indirect `CallClosure(GlobalRef)` form and leaves every call it doesn't
+/// inline exactly as lowered (the cheap `LoadGlobal` + `CallClosure`), so it can
+/// only ever help. Behavior-neutral (validated by the conformance gate diffing
+/// the resulting VM output against the un-inlined deploy backends).
+pub fn optimize(program: &mut IrProgram) {
+	inline::inline(program);
+}

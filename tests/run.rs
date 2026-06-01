@@ -35,7 +35,8 @@ fn run_fixture(path: &Path) -> datatest_stable::Result<()> {
 			.map_err(RunError::Diagnostics)?;
 		vm::stdlib::register_compiler(&mut compiler);
 		compiler.check().map_err(RunError::Diagnostics)?;
-		let ir_program = ir::lower(&compiler).map_err(RunError::Runtime)?;
+		let mut ir_program = ir::lower(&compiler).map_err(RunError::Runtime)?;
+		ir::optimize(&mut ir_program);
 		let program = codegen::compile_from_ir(&ir_program).map_err(RunError::Runtime)?;
 		let mut vm_instance = vm::VM::new(program)
 			.with_stdout(vm::OutputSink::Buffer(stdout_buf.clone()))

@@ -161,8 +161,9 @@ fn rewrite_rvalue(rv: &mut Rvalue, vg: &HashMap<u32, u32>, targets: &HashMap<u32
 /// operand anywhere — the callee temps the rewrite just orphaned. `GlobalRef` of
 /// an already-initialized global is pure, so removing a dead one is safe; this is
 /// what turns the rewrite into an actual indirection skip rather than a dead
-/// load+store.
-fn prune_dead_global_refs(f: &mut Function) {
+/// load+store. Also used by `inline`, which orphans the same temps when it
+/// splices an indirect call away.
+pub fn prune_dead_global_refs(f: &mut Function) {
 	let used = used_vars(f);
 	fn retain(b: &mut Block, used: &HashSet<u32>) {
 		b.0.retain(

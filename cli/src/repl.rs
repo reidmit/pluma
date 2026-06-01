@@ -733,7 +733,8 @@ fn evaluate(root_dir: &Path, source: &str) -> Result<(Vec<u8>, vm::Value), EvalE
 		}
 	}
 
-	let ir_program = ir::lower(&compiler).map_err(EvalError::Codegen)?;
+	let mut ir_program = ir::lower(&compiler).map_err(EvalError::Codegen)?;
+	ir::optimize(&mut ir_program);
 	let program =
 		codegen::compile_from_ir(&ir_program).map_err(|e| EvalError::Codegen(e.to_string()))?;
 

@@ -23,7 +23,13 @@ pub(crate) fn compile(dir: &Path, platform: Platform) -> Result<IrProgram, Vec<S
 	if let Err(ds) = compiler.check() {
 		return Err(ds.iter().map(|d| d.message.clone()).collect());
 	}
-	ir::lower(&compiler).map_err(|e| vec![e])
+	let mut program = ir::lower(&compiler).map_err(|e| vec![e])?;
+	// Mirror the `pluma run` VM pipeline so the oracle exercises the same IR the
+	// VM actually runs — and so the conformance diff validates that the
+	// resolve + inline passes are behavior-neutral against the (un-inlined)
+	// deploy backends.
+	ir::optimize(&mut program);
+	Ok(program)
 }
 
 /// Run a compiled VM program, capturing status + stdout — the oracle contract

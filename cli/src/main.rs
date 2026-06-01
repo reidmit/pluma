@@ -612,7 +612,8 @@ fn discover_test_modules(root: &std::path::Path) -> Vec<String> {
 /// Compile a checked `Compiler` to a runnable `vm::Program`: lower to the
 /// mid-level IR, then emit bytecode from it.
 fn compile_program(compiler: &Compiler) -> Result<vm::Program, String> {
-	let program = ir::lower(compiler).map_err(|e| format!("ir::lower: {e}"))?;
+	let mut program = ir::lower(compiler).map_err(|e| format!("ir::lower: {e}"))?;
+	ir::optimize(&mut program);
 	codegen::compile_from_ir(&program).map_err(|e| e.to_string())
 }
 

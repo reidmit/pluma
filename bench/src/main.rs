@@ -41,7 +41,8 @@ fn main() {
 			if compiler.check().is_err() {
 				panic!("check error");
 			}
-			let program = ir::lower(&compiler).unwrap();
+			let mut program = ir::lower(&compiler).unwrap();
+			ir::optimize(&mut program);
 			for (i, f) in program.functions.iter().enumerate() {
 				println!("--- FuncId({i}) {} (async={}) ---", f.name, f.is_async);
 				println!("{:#?}", f.body);
@@ -149,7 +150,8 @@ fn compile(path: &PathBuf) -> Result<vm::Program, String> {
 	compiler
 		.check()
 		.map_err(|d| format!("check: {:?} diagnostics", d.len()))?;
-	let program = ir::lower(&compiler).map_err(|e| format!("ir::lower: {e}"))?;
+	let mut program = ir::lower(&compiler).map_err(|e| format!("ir::lower: {e}"))?;
+	ir::optimize(&mut program);
 	codegen::compile_from_ir(&program).map_err(|e| format!("compile_from_ir: {e}"))
 }
 
