@@ -848,20 +848,7 @@ impl<'a> FnEmitter<'a> {
 			}
 			Rvalue::Unbox(a, repr) => {
 				self.atom(a);
-				let (ty, field) = match repr {
-					Repr::I64 => (types::T_INT, 1),
-					Repr::F64 => (types::T_FLOAT, 1),
-					Repr::I32 => (types::T_BOOL, 1),
-					Repr::Boxed => {
-						self.diags.push("Unbox to Boxed");
-						return;
-					}
-				};
-				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(ty)));
-				self.ins(Instruction::StructGet {
-					struct_type_index: ty,
-					field_index: field,
-				});
+				self.unbox_value(*repr);
 			}
 			Rvalue::Call(Callee::Function(fid), args) => {
 				let Some(&w) = self.wasm_index.get(&fid.0) else {
@@ -885,6 +872,25 @@ impl<'a> FnEmitter<'a> {
 					}
 				}
 				self.ins(Instruction::Call(w));
+			}
+			Rvalue::Call(Callee::Builtin(tag, ret), args) => {
+				// A builtin call resolved to its static target by
+				// `ir::resolve::resolve_builtins`, carrying its declared return repr.
+				// When that repr is unboxed, produce the scalar directly: the hot inline
+				// scalars (`bytes-get` per byte, `bytes-length`, `list-length`) skip the
+				// `$int` box entirely — the whole point of this pass. Any other unboxed-
+				// returning builtin falls back to the boxed dispatch plus one unbox (its
+				// box is host-built and unavoidable, but the result still lands in the
+				// unboxed local the repr pass expects). The coercer's `Box` nodes rebox
+				// only where the result is actually consumed boxed.
+				if *ret != Repr::Boxed && self.try_emit_unboxed_builtin(tag, args) {
+					// emitted the bare scalar — nothing more to do.
+				} else {
+					self.host_call(tag, args);
+					if *ret != Repr::Boxed {
+						self.unbox_value(*ret);
+					}
+				}
 			}
 			Rvalue::TailCallDirect(fid, args) => {
 				let Some(&w) = self.wasm_index.get(&fid.0) else {
@@ -1254,6 +1260,82 @@ impl<'a> FnEmitter<'a> {
 			array_size: payload.len() as u32,
 		});
 		self.ins(Instruction::StructNew(types::T_TASK));
+	}
+
+	/// Emit a scalar-returning *inline* builtin so it leaves its bare unboxed value
+	/// on the wasm stack — no `$int` box. Returns `false` for any builtin without
+	/// such a path, so the caller falls back to the boxed dispatch + an `unbox_value`.
+	/// This is the allocation the repr threading buys back: in a per-byte loop
+	/// `bytes-get` now produces an `i64` straight from `array.get_u`, never a heap box.
+	/// (The boxed forms still live in `inline_builtin` for the rare unresolved/aliased
+	/// builtin call, whose result repr stays `Boxed`.)
+	fn try_emit_unboxed_builtin(&mut self, tag: &str, args: &[Atom]) -> bool {
+		match tag {
+			// bytes.get b i : (str.bytes)[i] as unsigned i64. The index arg is boxed
+			// (builtin args are uniform), so unbox it inline as before.
+			"bytes-get" => {
+				self.atom(&args[0]);
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(types::T_STR)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_STR,
+					field_index: 1,
+				});
+				self.atom(&args[1]);
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(types::T_INT)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_INT,
+					field_index: 1,
+				});
+				self.ins(Instruction::I32WrapI64);
+				self.ins(Instruction::ArrayGetU(types::T_BYTES));
+				self.ins(Instruction::I64ExtendI32U);
+				true
+			}
+			// bytes.length b : array.len of the str's bytes, as i64.
+			"bytes-length" => {
+				self.atom(&args[0]);
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(types::T_STR)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_STR,
+					field_index: 1,
+				});
+				self.ins(Instruction::ArrayLen);
+				self.ins(Instruction::I64ExtendI32U);
+				true
+			}
+			// list.length xs : the list's logical length (field 2), as i64.
+			"list-length" => {
+				self.atom(&args[0]);
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(types::T_LIST)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_LIST,
+					field_index: 2,
+				});
+				self.ins(Instruction::I64ExtendI32U);
+				true
+			}
+			_ => false,
+		}
+	}
+
+	/// Unbox the boxed `$value` on top of the stack into the scalar `repr` demands
+	/// (`$int`/`$float`/`$bool` payload). Mirrors the `Rvalue::Unbox` lowering, for
+	/// coercing a boxed builtin result into the unboxed local the repr pass assigned.
+	fn unbox_value(&mut self, repr: Repr) {
+		let (ty, field) = match repr {
+			Repr::I64 => (types::T_INT, 1),
+			Repr::F64 => (types::T_FLOAT, 1),
+			Repr::I32 => (types::T_BOOL, 1),
+			Repr::Boxed => {
+				self.diags.push("unbox_value to Boxed");
+				return;
+			}
+		};
+		self.ins(Instruction::RefCastNonNull(HeapType::Concrete(ty)));
+		self.ins(Instruction::StructGet {
+			struct_type_index: ty,
+			field_index: field,
+		});
 	}
 
 	fn host_call(&mut self, tag: &str, args: &[Atom]) {

@@ -489,17 +489,18 @@ pub(crate) fn collect_zero_arg_closures(b: &Block, p: &IrProgram, out: &mut Hash
 }
 
 pub(crate) fn callee_builtin_tag<'a>(
-	rv: &Rvalue,
+	rv: &'a Rvalue,
 	var_tags: &'a HashMap<u32, String>,
 ) -> Option<&'a str> {
-	let callee = match rv {
-		Rvalue::CallClosure(c, _) | Rvalue::TailCall(c, _) => c,
-		_ => return None,
-	};
-	if let Atom::Var(v) = callee {
-		var_tags.get(&v.0).map(|s| s.as_str())
-	} else {
-		None
+	match rv {
+		// A builtin resolved to a typed call node (`resolve_builtins`) carries its
+		// tag directly. The legacy indirect form (a builtin global loaded into a var,
+		// then called) is recovered through `var_tags`.
+		Rvalue::Call(Callee::Builtin(tag, _), _) => Some(tag.as_str()),
+		Rvalue::CallClosure(Atom::Var(v), _) | Rvalue::TailCall(Atom::Var(v), _) => {
+			var_tags.get(&v.0).map(|s| s.as_str())
+		}
+		_ => None,
 	}
 }
 

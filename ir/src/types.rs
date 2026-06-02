@@ -69,8 +69,15 @@ pub enum GlobalInit {
 /// A pre-evaluated global value. Provisional (see `GlobalInit`).
 #[derive(Debug, Clone)]
 pub enum PreEval {
-	/// A primitive dispatched by tag (`print`, `int-add`, native-module defs).
-	Builtin(String),
+	/// A primitive dispatched by tag (`print`, `int-add`, native-module defs),
+	/// carrying the `Repr` of its *declared* return type (computed from the
+	/// `built-in` def's type annotation at lower time). Threading the repr from
+	/// the analyzer here is what lets a builtin call be resolved to a typed
+	/// `Callee::Builtin` without rediscovering the type — see `resolve_builtins`.
+	/// Polymorphic-returning builtins (`list.get : (list a) int -> a`) carry
+	/// `Boxed` (the declared `a`), which is correct: the value comes boxed out of
+	/// the container regardless of the concrete type at the call site.
+	Builtin(String, Repr),
 	/// A primitive constant (native-module constants like `math.pi`).
 	Const(Const),
 	/// A trait instance method dictionary: positional method values in trait
@@ -449,7 +456,12 @@ pub enum Rvalue {
 pub enum Callee {
 	Function(FuncId),
 	Global(GlobalId),
-	Builtin(String),
+	/// A primitive dispatched by tag, carrying its declared return `Repr` (from
+	/// the builtin global it was resolved from). The repr lets the coercion pass
+	/// read a scalar-returning builtin's result unboxed instead of forcing every
+	/// call result `Boxed`. Produced by `resolve_builtins` (a deploy-backend pass);
+	/// the VM never sees it (it keeps dispatching builtins dynamically).
+	Builtin(String, Repr),
 }
 
 /// An element of a list literal. Mirrors the AST's `...` spread support.
@@ -484,6 +496,17 @@ pub enum BinOp {
 	/// value: ints, strings, records, …; the VM compares `Value`s structurally).
 	Eq,
 	Ne,
+	// Concrete int/float equality, split by operand repr so a `==`/`!=` on numbers
+	// compares `i64`/`f64` registers directly instead of boxing both sides for the
+	// structural `__eq` helper. Behavior-identical to `Eq`/`Ne` on those types: int
+	// equality is i64 equality, and concrete float `==`/`!=` is IEEE (`nan != nan`),
+	// which is exactly what structural `==`/`!=` gives on floats. The VM maps these
+	// back to its one `Eq`/`Neq` opcode (its `Value::Int`/`Float` compare is already
+	// the same); WASM emits `i64.eq`/`f64.ne`/… . Result is `I32` (bool).
+	EqI64,
+	NeI64,
+	EqF64,
+	NeF64,
 	// Ordering comparisons, split by operand repr so the representation is
 	// explicit in the op (the VM has one polymorphic opcode per relation, but
 	// WASM needs `i64.lt`/`f64.lt`, and the coercion pass needs to know whether a

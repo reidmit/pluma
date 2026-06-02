@@ -915,7 +915,10 @@ impl FnCtx {
 					);
 					Ok(())
 				}
-				Callee::Builtin(_) => Err("reg: Callee::Builtin not yet supported".to_string()),
+				// The VM never produces `Callee::Builtin` — `resolve_builtins` is a
+				// deploy-backend pass, and the VM keeps dispatching builtins dynamically
+				// through a `Value::Builtin` (it gains nothing from unboxing).
+				Callee::Builtin(..) => Err("reg: Callee::Builtin not produced for the VM".to_string()),
 			},
 			Rvalue::MakeTuple(elems) => {
 				let items = self.operand_list(em, elems, body, ranges, r);
@@ -1240,8 +1243,12 @@ fn binop_instr(op: BinOp, dst: Reg, a: Reg, b: Reg) -> Instruction {
 		BinOp::Concat => I::ConcatString { dst, a, b },
 		BinOp::And => I::LogicalAnd { dst, a, b },
 		BinOp::Or => I::LogicalOr { dst, a, b },
-		BinOp::Eq => I::Eq { dst, a, b },
-		BinOp::Ne => I::Neq { dst, a, b },
+		// Structural and concrete-numeric equality share the VM's one `Eq`/`Neq`
+		// opcode: it compares `Value`s, and on two `Value::Int`/`Value::Float` that
+		// already is i64/IEEE equality — so the devirtualized `EqI64`/`NeF64`/… are
+		// behavior-identical here (the unboxing only matters for WASM).
+		BinOp::Eq | BinOp::EqI64 | BinOp::EqF64 => I::Eq { dst, a, b },
+		BinOp::Ne | BinOp::NeI64 | BinOp::NeF64 => I::Neq { dst, a, b },
 		BinOp::LtI64 => I::LtInt { dst, a, b },
 		BinOp::LtF64 => I::LtFloat { dst, a, b },
 		BinOp::LeI64 => I::LteInt { dst, a, b },
@@ -1296,7 +1303,8 @@ fn imm_binop_instr(op: BinOp, dst: Reg, a: Reg, imm: i64) -> Instruction {
 }
 
 /// The int operators whose operands unbox to a raw i64 (M5). Float ops, `++`,
-/// `&&`/`||`, and structural `==`/`!=` are excluded (their operands stay boxed).
+/// `&&`/`||`, and *structural* `==`/`!=` are excluded (their operands stay boxed);
+/// the concrete-int `EqI64`/`NeI64` are included (their operands are raw i64).
 fn is_raw_int_op(op: BinOp) -> bool {
 	matches!(
 		op,
@@ -1305,6 +1313,8 @@ fn is_raw_int_op(op: BinOp) -> bool {
 			| BinOp::MulInt
 			| BinOp::DivInt
 			| BinOp::RemInt
+			| BinOp::EqI64
+			| BinOp::NeI64
 			| BinOp::LtI64
 			| BinOp::LeI64
 			| BinOp::GtI64
@@ -1322,6 +1332,8 @@ fn raw_binop_instr(op: BinOp, dst: Reg, a: Reg, b: Reg) -> Instruction {
 		BinOp::MulInt => I::MulIntR { dst, a, b },
 		BinOp::DivInt => I::DivIntR { dst, a, b },
 		BinOp::RemInt => I::RemIntR { dst, a, b },
+		BinOp::EqI64 => I::EqIntR { dst, a, b },
+		BinOp::NeI64 => I::NeqIntR { dst, a, b },
 		BinOp::LtI64 => I::LtIntR { dst, a, b },
 		BinOp::LeI64 => I::LteIntR { dst, a, b },
 		BinOp::GtI64 => I::GtIntR { dst, a, b },
@@ -1341,7 +1353,7 @@ fn lower_global(g: &GlobalInit) -> GlobalSlot {
 
 fn pre_eval_to_value(p: &PreEval) -> Value {
 	match p {
-		PreEval::Builtin(tag) => Value::Builtin(Rc::from(tag.as_str())),
+		PreEval::Builtin(tag, _) => Value::Builtin(Rc::from(tag.as_str())),
 		PreEval::Const(c) => const_to_value(c),
 		PreEval::MethodDict(items) => {
 			Value::MethodDict(Rc::new(items.iter().map(pre_eval_to_value).collect()))

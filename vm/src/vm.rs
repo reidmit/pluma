@@ -1136,6 +1136,14 @@ impl VM {
 				self.stack[base + dst as usize] =
 					Value::Bool((self.raw[base + a as usize] as i64) >= (self.raw[base + b as usize] as i64));
 			}
+			Instruction::EqIntR { dst, a, b } => {
+				self.stack[base + dst as usize] =
+					Value::Bool((self.raw[base + a as usize] as i64) == (self.raw[base + b as usize] as i64));
+			}
+			Instruction::NeqIntR { dst, a, b } => {
+				self.stack[base + dst as usize] =
+					Value::Bool((self.raw[base + a as usize] as i64) != (self.raw[base + b as usize] as i64));
+			}
 		}
 		Ok(flow)
 	}
@@ -1683,5 +1691,7 @@ fn opcode_name(i: &Instruction) -> &'static str {
 		LteIntR { .. } => "LteIntR",
 		GtIntR { .. } => "GtIntR",
 		GteIntR { .. } => "GteIntR",
+		EqIntR { .. } => "EqIntR",
+		NeqIntR { .. } => "NeqIntR",
 	}
 }

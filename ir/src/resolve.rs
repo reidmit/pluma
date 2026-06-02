@@ -72,6 +72,88 @@ pub fn direct_call_targets(program: &IrProgram) -> HashMap<u32, FuncId> {
 	map
 }
 
+/// Rewrite indirect calls to builtin globals into direct
+/// `Call(Callee::Builtin(tag, ret))`s, threading each builtin's declared return
+/// repr (captured on its `PreEval::Builtin` at lower time) onto the call node. A
+/// builtin def lowers to a `PreEval::Builtin` global, so a call to it is
+/// `Let(c, GlobalRef(g)); CallClosure(c, args)` — the same indirect shape
+/// `resolve_direct_calls` recovers for functions. With the callee's identity and
+/// return repr now on the node, the coercion pass can read a scalar-returning
+/// builtin's result unboxed instead of forcing every call result `Boxed`.
+///
+/// **Deploy-backend pass only** (run by `wasm::emit`, not `ir::optimize`): the VM
+/// keeps dispatching builtins dynamically through a `Value::Builtin` and gains
+/// nothing from unboxing (its `Value::Int` is already inline-tagged). A `TailCall`
+/// of a builtin becomes a non-tail `Call` — builtins are leaf host ops that never
+/// tail-recurse, and the emitter already ignored the tail flag for them.
+/// Idempotent.
+pub fn resolve_builtins(program: &mut IrProgram) {
+	let builtins = builtin_call_targets(program);
+	if builtins.is_empty() {
+		return;
+	}
+	for f in &mut program.functions {
+		let var_globals = collect_var_globals(f);
+		let mut body = std::mem::replace(&mut f.body, Block(Vec::new()));
+		rewrite_builtins_block(&mut body, &var_globals, &builtins);
+		f.body = body;
+		prune_dead_global_refs(f);
+	}
+}
+
+/// Map each builtin global's index to its `(tag, declared return repr)`.
+fn builtin_call_targets(program: &IrProgram) -> HashMap<u32, (String, Repr)> {
+	let mut map = HashMap::new();
+	for (gid, init) in program.globals.iter().enumerate() {
+		if let GlobalInit::PreEvaluated(PreEval::Builtin(tag, ret)) = init {
+			map.insert(gid as u32, (tag.clone(), *ret));
+		}
+	}
+	map
+}
+
+fn rewrite_builtins_block(
+	b: &mut Block,
+	vg: &HashMap<u32, u32>,
+	builtins: &HashMap<u32, (String, Repr)>,
+) {
+	for stmt in &mut b.0 {
+		match &mut stmt.kind {
+			StmtKind::Let(_, rv) | StmtKind::Discard(rv) => rewrite_builtin_rvalue(rv, vg, builtins),
+			StmtKind::If(_, t, e) => {
+				rewrite_builtins_block(t, vg, builtins);
+				rewrite_builtins_block(e, vg, builtins);
+			}
+			StmtKind::Switch { arms, default, .. } => {
+				for (_, blk) in arms {
+					rewrite_builtins_block(blk, vg, builtins);
+				}
+				rewrite_builtins_block(default, vg, builtins);
+			}
+			StmtKind::Match { arms, .. } => {
+				for arm in arms {
+					rewrite_builtins_block(&mut arm.body, vg, builtins);
+				}
+			}
+			StmtKind::Loop(blk) => rewrite_builtins_block(blk, vg, builtins),
+			_ => {}
+		}
+	}
+}
+
+fn rewrite_builtin_rvalue(
+	rv: &mut Rvalue,
+	vg: &HashMap<u32, u32>,
+	builtins: &HashMap<u32, (String, Repr)>,
+) {
+	if let Rvalue::CallClosure(Atom::Var(v), args) | Rvalue::TailCall(Atom::Var(v), args) = rv {
+		if let Some((tag, ret)) = vg.get(&v.0).and_then(|g| builtins.get(g)) {
+			let args = std::mem::take(args);
+			*rv = Rvalue::Call(Callee::Builtin(tag.clone(), *ret), args);
+		}
+	}
+}
+
 /// If `f`'s body is `Let(v, MakeClosure(fid, [])); Return(Var(v))`, return `fid`.
 fn closure_returned_by(f: &Function) -> Option<FuncId> {
 	let stmts = &f.body.0;

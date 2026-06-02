@@ -77,7 +77,13 @@ pub(crate) fn binop_instr(op: ir::BinOp) -> Option<Instruction<'static>> {
 		// Strict logical and/or over i32 booleans (both operands evaluated).
 		And => Instruction::I32And,
 		Or => Instruction::I32Or,
-		// Structural equality and string concat need runtime helpers (later).
+		// Concrete numeric equality compares unboxed registers directly. Float
+		// `==`/`!=` is IEEE (`nan != nan`), matching structural `==`/`!=` on floats.
+		EqI64 => Instruction::I64Eq,
+		NeI64 => Instruction::I64Ne,
+		EqF64 => Instruction::F64Eq,
+		NeF64 => Instruction::F64Ne,
+		// Structural equality (any type) and string concat need runtime helpers.
 		Eq | Ne | Concat => return None,
 	})
 }

@@ -60,6 +60,11 @@ pub fn emit(program: &IrProgram) -> Result<Vec<u8>, Diagnostics> {
 	// reach the emitter). `is_async` gates the driver emission + entry wrapping.
 	let is_async = async_lower::lower(&mut p);
 	ir::resolve::resolve_direct_calls(&mut p);
+	// Resolve builtin-global calls to typed `Call(Callee::Builtin(tag, ret))` nodes,
+	// threading each builtin's declared return repr onto the call so the coercion
+	// pass below can read a scalar-returning builtin (`bytes-get`, …) unboxed. VM-
+	// independent (the VM never runs this), so it can't affect the differential oracle.
+	ir::resolve::resolve_builtins(&mut p);
 	// Record-shape monomorphization: clone record-param functions per call-site
 	// shape so the clone reads its param by `struct.get` (and the caller passes it
 	// nominal). Returns the per-clone param shapes the emitter consumes. Runs before
@@ -168,7 +173,7 @@ fn scan_block(b: &Block, fns: &mut Vec<u32>, gs: &mut Vec<u32>) {
 pub(crate) fn builtin_globals(p: &IrProgram) -> HashMap<u32, String> {
 	let mut m = HashMap::new();
 	for (i, g) in p.globals.iter().enumerate() {
-		if let GlobalInit::PreEvaluated(PreEval::Builtin(tag)) = g {
+		if let GlobalInit::PreEvaluated(PreEval::Builtin(tag, _)) = g {
 			m.insert(i as u32, tag.clone());
 		}
 	}

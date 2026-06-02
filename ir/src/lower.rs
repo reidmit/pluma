@@ -231,11 +231,18 @@ impl<'a> Lowerer<'a> {
 			Some(g) => g,
 			None => return,
 		};
-		// `built-in "tag"` RHS: a pre-evaluated builtin value, no thunk.
+		// `built-in "tag"` RHS: a pre-evaluated builtin value, no thunk. Capture the
+		// builtin's *declared* return repr from its annotated type (`def get :: fun
+		// bytes int -> int`) so a deploy backend can read a scalar-returning builtin's
+		// result unboxed — the analyzer already knows this type, so don't discard it.
 		if let ExprKind::Builtin(tag) = &expr.kind {
+			let ret = match &expr.ty {
+				Type::Fun(_, ret) => crate::repr::repr_of_type(ret),
+				_ => Repr::Boxed,
+			};
 			self
 				.globals
-				.set_pre_evaluated(gid, PreEval::Builtin(tag.clone()));
+				.set_pre_evaluated(gid, PreEval::Builtin(tag.clone(), ret));
 			return;
 		}
 		// Trait-constrained def: hidden leading dict params. Lower to an inner
@@ -825,7 +832,12 @@ impl<'a> Lowerer<'a> {
 		// Concrete, non-dispatched operator: a direct VM opcode picked by
 		// operand type. Evaluate left then right (matching `emit.rs`).
 		let is_float = matches!(left.ty, Type::Float) || matches!(right.ty, Type::Float);
-		let binop = binop_for(op, is_float).ok_or("unsupported binary operator")?;
+		// `==`/`!=` on concrete numbers devirtualize to the unboxed `EqI64`/`NeF64`/…
+		// (else they'd box both operands for the structural `__eq` helper); anything
+		// else (strings, records, bools, polymorphic) keeps structural `Eq`/`Ne`.
+		let binop = concrete_eq_binop(op, &left.ty, &right.ty)
+			.or_else(|| binop_for(op, is_float))
+			.ok_or("unsupported binary operator")?;
 		let l = self.lower_expr(left)?;
 		let r = self.lower_expr(right)?;
 		Ok(self.emit_let(Rvalue::Bin(binop, l, r), range))
@@ -2060,6 +2072,29 @@ fn concrete_ord_binop(op: &Operator, left: &Type, right: &Type) -> Option<BinOp>
 	binop_for(op, is_float)
 }
 
+/// If a `==`/`!=` has concrete numeric operands, return the direct unboxed
+/// `BinOp` (`EqI64`/`NeF64`/…), so the comparison reads `i64`/`f64` registers
+/// instead of boxing both sides for the structural `__eq` helper. Behavior-
+/// identical: int equality is i64 equality, and concrete float `==`/`!=` is
+/// IEEE (`nan != nan`) — exactly the semantics structural `==`/`!=` already has
+/// on floats (and distinct, like `concrete_ord_binop`, from the total-order
+/// `ord.compare`). Non-numeric or polymorphic operands return `None` (keep the
+/// structural `Eq`/`Ne`, which still covers strings/records/bools/enums).
+fn concrete_eq_binop(op: &Operator, left: &Type, right: &Type) -> Option<BinOp> {
+	let is_float = match (left, right) {
+		(Type::Int, Type::Int) => false,
+		(Type::Float, Type::Float) => true,
+		_ => return None,
+	};
+	Some(match (op, is_float) {
+		(Operator::Equality, false) => BinOp::EqI64,
+		(Operator::Equality, true) => BinOp::EqF64,
+		(Operator::Inequality, false) => BinOp::NeI64,
+		(Operator::Inequality, true) => BinOp::NeF64,
+		_ => return None,
+	})
+}
+
 /// Map a concrete (non-dispatched) operator to its IR `BinOp`. `is_float`
 /// selects the arithmetic opcode variant. Returns `None` for operators that
 /// aren't strict binary ops here (handled elsewhere or unsupported).
@@ -2272,7 +2307,12 @@ impl GlobalTable {
 /// method order matches each trait's declaration order. Built as the
 /// vm-independent `PreEval` rather than `vm::Value` directly.
 fn seed_prelude_globals(g: &mut GlobalTable) {
-	let builtin = |tag: &str| PreEval::Builtin(tag.to_string());
+	// Prelude builtins (print/debug/to-string/wire-*) return strings/bytes/nothing,
+	// and method-dict members are never resolved as direct builtin calls — so a
+	// `Boxed` return repr is correct for all of them. The scalar-returning builtins
+	// that benefit from an unboxed result (`bytes-get`, `bytes-length`, …) are
+	// `.pa` defs, seeded with their real declared repr in `lower_value_def`.
+	let builtin = |tag: &str| PreEval::Builtin(tag.to_string(), Repr::Boxed);
 	let dict = |tags: &[&str]| PreEval::MethodDict(tags.iter().map(|t| builtin(t)).collect());
 
 	g.add_pre_evaluated("__prelude__", "print", builtin("print"));
@@ -2411,7 +2451,7 @@ mod tests {
 	#[test]
 	fn global_table_dedups_assigns_ids_and_assembles() {
 		let mut g = GlobalTable::new();
-		let p = g.add_pre_evaluated("m", "print", PreEval::Builtin("print".into()));
+		let p = g.add_pre_evaluated("m", "print", PreEval::Builtin("print".into(), Repr::Boxed));
 		let foo = g.reserve("m", "foo");
 		assert_eq!(p, GlobalId(0));
 		assert_eq!(foo, GlobalId(1));
@@ -2424,7 +2464,7 @@ mod tests {
 		assert_eq!(globals.len(), 2);
 		assert!(matches!(
 			globals[0],
-			GlobalInit::PreEvaluated(PreEval::Builtin(_))
+			GlobalInit::PreEvaluated(PreEval::Builtin(..))
 		));
 		assert!(matches!(globals[1], GlobalInit::Thunk(FuncId(7))));
 	}

@@ -230,6 +230,13 @@ pub fn result_repr(rv: &Rvalue, reprs: &[Repr], sigs: &Sigs) -> Repr {
 		// A resolved direct call reads as the callee's return repr (`Boxed` in
 		// uniform mode, or for a callee that wasn't monomorphized).
 		Rvalue::Call(Callee::Function(fid), _) | Rvalue::TailCallDirect(fid, _) => sigs.ret(*fid),
+		// A resolved builtin call reads as the builtin's declared return repr
+		// (threaded onto the node from the analyzer by `resolve_builtins`): a
+		// scalar-returning builtin (`bytes-get : … -> int`) yields an unboxed `I64`,
+		// so its result flows through arithmetic/comparison with no box. The coercion
+		// pass inserts a `Box` only where the result is actually consumed boxed; a
+		// polymorphic-returning builtin already carries `Boxed`, so it's unchanged.
+		Rvalue::Call(Callee::Builtin(_, ret), _) => *ret,
 		// Everything that yields a heap value or a polymorphic value.
 		Rvalue::Call(..)
 		| Rvalue::CallClosure(..)
@@ -261,7 +268,8 @@ fn binop_result_repr(op: BinOp) -> Repr {
 		AddFloat | SubFloat | MulFloat | DivFloat | RemFloat => Repr::F64,
 		Concat => Repr::Boxed,
 		// All relations and logical ops produce a `bool`.
-		And | Or | Eq | Ne | LtI64 | LtF64 | LeI64 | LeF64 | GtI64 | GtF64 | GeI64 | GeF64 => Repr::I32,
+		And | Or | Eq | Ne | EqI64 | NeI64 | EqF64 | NeF64 | LtI64 | LtF64 | LeI64 | LeF64 | GtI64
+		| GtF64 | GeI64 | GeF64 => Repr::I32,
 	}
 }
 
@@ -269,12 +277,14 @@ fn binop_result_repr(op: BinOp) -> Repr {
 fn binop_operand_repr(op: BinOp) -> Repr {
 	use BinOp::*;
 	match op {
-		AddInt | SubInt | MulInt | DivInt | RemInt | LtI64 | LeI64 | GtI64 | GeI64 => Repr::I64,
-		AddFloat | SubFloat | MulFloat | DivFloat | RemFloat | LtF64 | LeF64 | GtF64 | GeF64 => {
-			Repr::F64
+		AddInt | SubInt | MulInt | DivInt | RemInt | EqI64 | NeI64 | LtI64 | LeI64 | GtI64 | GeI64 => {
+			Repr::I64
 		}
+		AddFloat | SubFloat | MulFloat | DivFloat | RemFloat | EqF64 | NeF64 | LtF64 | LeF64
+		| GtF64 | GeF64 => Repr::F64,
 		And | Or => Repr::I32,
-		// `==`/`!=` are structural and `++` is string concat: boxed operands.
+		// Structural `==`/`!=` (any type) and `++` (string concat) take boxed
+		// operands; the concrete numeric `EqI64`/`NeF64`/… above unbox instead.
 		Eq | Ne | Concat => Repr::Boxed,
 	}
 }

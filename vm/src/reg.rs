@@ -611,6 +611,16 @@ pub enum Instruction {
 		a: Reg,
 		b: Reg,
 	},
+	EqIntR {
+		dst: Reg,
+		a: Reg,
+		b: Reg,
+	},
+	NeqIntR {
+		dst: Reg,
+		a: Reg,
+		b: Reg,
+	},
 }
 
 /// A compiled register-VM program. Mirrors `crate::program::Program`; the

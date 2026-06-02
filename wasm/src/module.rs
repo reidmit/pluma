@@ -254,7 +254,7 @@ impl Module {
 				let mut ok = true;
 				for m in ms {
 					match m {
-						PreEval::Builtin(t) if builtin_arity(t).is_some() => tags.push(t.clone()),
+						PreEval::Builtin(t, _) if builtin_arity(t).is_some() => tags.push(t.clone()),
 						_ => {
 							ok = false;
 							break;
