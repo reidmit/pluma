@@ -16,21 +16,47 @@ use core.string
 
 # ESC (0x1b) as a one-character string. Built from a byte since string literals
 # don't carry a `\x` escape; `build`/`to-string` for code 27 never fails.
-def esc :: string = bytes.to-string (bytes.build 1 (fun _i { 27 })) ?? ""
+def esc :: string = bytes.to-string (bytes.build 1 fun _i { 27 }) ?? ""
 
 # Wrap `s` in the given SGR codes, closed by a single reset. Codes are the raw
 # numbers (1 = bold, 2 = dim, 31 = red, …): `styled [1, 31] "x"`.
 public def styled :: fun (list int) string -> string = fun codes s {
-	let nums = string.join (list.map codes (fun c { to-string c })) ";"
+	let nums = string.join (list.map codes fun c { to-string c }) ";"
 	"$(esc)[$(nums)m$(s)$(esc)[0m"
 }
 
-public def bold :: fun string -> string = fun s { styled [1] s }
-public def dim :: fun string -> string = fun s { styled [2] s }
-public def red :: fun string -> string = fun s { styled [31] s }
-public def green :: fun string -> string = fun s { styled [32] s }
-public def yellow :: fun string -> string = fun s { styled [33] s }
-public def bold-red :: fun string -> string = fun s { styled [1, 31] s }
-public def bold-green :: fun string -> string = fun s { styled [1, 32] s }
-public def bold-yellow :: fun string -> string = fun s { styled [1, 33] s }
-public def bold-dim :: fun string -> string = fun s { styled [2, 1] s }
+public def bold :: fun string -> string = fun s {
+	styled [1] s
+}
+
+public def dim :: fun string -> string = fun s {
+	styled [2] s
+}
+
+public def red :: fun string -> string = fun s {
+	styled [31] s
+}
+
+public def green :: fun string -> string = fun s {
+	styled [32] s
+}
+
+public def yellow :: fun string -> string = fun s {
+	styled [33] s
+}
+
+public def bold-red :: fun string -> string = fun s {
+	styled [1, 31] s
+}
+
+public def bold-green :: fun string -> string = fun s {
+	styled [1, 32] s
+}
+
+public def bold-yellow :: fun string -> string = fun s {
+	styled [1, 33] s
+}
+
+public def bold-dim :: fun string -> string = fun s {
+	styled [2, 1] s
+}

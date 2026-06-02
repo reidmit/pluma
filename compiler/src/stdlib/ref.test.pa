@@ -4,49 +4,43 @@ use core.assert
 # `ref` is auto-imported in every module — no `use core.ref` needed.
 
 def tests :: test.suite = [
-	# --- new / get ---
+	test.case "new + get round-trips an int" fun {
+		# --- new / get ---
 
-	test.case "new + get round-trips an int" (fun {
 		let r = ref.new 42
 		assert.equals (ref.get r) 42
-	}),
-
-	test.case "new + get round-trips a string" (fun {
+	},
+	test.case "new + get round-trips a string" fun {
 		let r = ref.new "hello"
 		assert.equals (ref.get r) "hello"
-	}),
-
-	test.case "new + get round-trips a list" (fun {
+	},
+	test.case "new + get round-trips a list" fun {
 		let r = ref.new [1, 2, 3]
 		assert.equals (ref.get r) [1, 2, 3]
-	}),
+	},
+	test.case "set overwrites the cell" fun {
+		# --- set ---
 
-	# --- set ---
-
-	test.case "set overwrites the cell" (fun {
 		let r = ref.new 1
 		ref.set r 99
 		assert.equals (ref.get r) 99
-	}),
-
-	test.case "set is visible through a shared binding" (fun {
+	},
+	test.case "set is visible through a shared binding" fun {
 		let r = ref.new 0
 		let shared = r
 		ref.set shared 100
 		assert.equals (ref.get r) 100
-	}),
+	},
+	test.case "update reads, applies fn, writes" fun {
+		# --- update ---
 
-	# --- update ---
-
-	test.case "update reads, applies fn, writes" (fun {
 		let r = ref.new 10
 		ref.update r fun n {
 			n + 5
 		}
 		assert.equals (ref.get r) 15
-	}),
-
-	test.case "update can be called multiple times" (fun {
+	},
+	test.case "update can be called multiple times" fun {
 		let r = ref.new 0
 		ref.update r fun n {
 			n + 1
@@ -58,24 +52,21 @@ def tests :: test.suite = [
 			n + 1
 		}
 		assert.equals (ref.get r) 3
-	}),
+	},
+	test.case "same cell compares equal to itself" fun {
+		# --- identity ---
 
-	# --- identity ---
-
-	test.case "same cell compares equal to itself" (fun {
 		let r = ref.new 42
 		assert.equals r r
-	}),
-
-	test.case "aliased cells compare equal" (fun {
+	},
+	test.case "aliased cells compare equal" fun {
 		let r = ref.new 42
 		let shared = r
 		assert.equals r shared
-	}),
-
-	test.case "distinct cells with the same contents are not equal" (fun {
+	},
+	test.case "distinct cells with the same contents are not equal" fun {
 		let a = ref.new 100
 		let b = ref.new 100
 		assert.not-equals a b
-	}),
+	},
 ]

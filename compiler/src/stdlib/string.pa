@@ -384,13 +384,21 @@ public def to-int :: fun string -> result int string = fun s {
 		err "cannot parse integer from empty string"
 	} else {
 		let c0 = bytes.get b 0
-		let start = if c0 == 43 || c0 == 45 is true { 1 } else { 0 }
+		let start = if c0 == 43 || c0 == 45 is true {
+			1
+		} else {
+			0
+		}
 		# Consume digits, requiring at least one and nothing trailing.
 		let (i, mag, count) = scan-digits b n start 0 0
 		if count == 0 is true {
 			err "invalid digit found in string"
 		} else if i == n is true {
-			if c0 == 45 is true { ok (0 - mag) } else { ok mag }
+			if c0 == 45 is true {
+				ok (0 - mag)
+			} else {
+				ok mag
+			}
 		} else {
 			err "invalid digit found in string"
 		}
@@ -404,7 +412,7 @@ def pow10 :: fun int -> float = fun k {
 	if k <= 0 is true {
 		1.0
 	} else {
-		10.0 * (pow10 (k - 1))
+		10.0 * pow10 (k - 1)
 	}
 }
 
@@ -412,9 +420,9 @@ def pow10 :: fun int -> float = fun k {
 def apply-exp :: fun int int -> float = fun mantissa exp {
 	let m = math.to-float mantissa
 	if exp >= 0 is true {
-		m * (pow10 exp)
+		m * pow10 exp
 	} else {
-		m / (pow10 (0 - exp))
+		m / pow10 (0 - exp)
 	}
 }
 
@@ -430,12 +438,20 @@ def parse-exp :: fun bytes int int -> result (int, int) string = fun b n i {
 			err "invalid float literal"
 		} else {
 			let cs = bytes.get b j
-			let dstart = if cs == 43 || cs == 45 is true { j + 1 } else { j }
+			let dstart = if cs == 43 || cs == 45 is true {
+				j + 1
+			} else {
+				j
+			}
 			let (k, ev, ec) = scan-digits b n dstart 0 0
 			if ec == 0 is true {
 				err "invalid float literal"
 			} else if k == n is true {
-				if cs == 45 is true { ok (k, 0 - ev) } else { ok (k, ev) }
+				if cs == 45 is true {
+					ok (k, 0 - ev)
+				} else {
+					ok (k, ev)
+				}
 			} else {
 				err "invalid float literal"
 			}
@@ -487,9 +503,17 @@ public def to-float :: fun string -> result float string = fun s {
 		err "cannot parse float from empty string"
 	} else {
 		let c0 = bytes.get b 0
-		let start = if c0 == 43 || c0 == 45 is true { 1 } else { 0 }
+		let start = if c0 == 43 || c0 == 45 is true {
+			1
+		} else {
+			0
+		}
 		when parse-float-body b n start is ok v {
-			if c0 == 45 is true { ok (0.0 - v) } else { ok v }
+			if c0 == 45 is true {
+				ok (0.0 - v)
+			} else {
+				ok v
+			}
 		} is err msg {
 			err msg
 		}

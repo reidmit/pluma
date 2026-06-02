@@ -23,10 +23,14 @@
 
 # A socket bound to an address, waiting for clients. Opaque: you hold the
 # handle and pass it along, but can't look inside it.
-opaque enum listener { handle int }
+opaque enum listener {
+	handle int
+}
 
 # One open connection to read from and write to. Opaque, like `listener`.
-opaque enum connection { handle int }
+opaque enum connection {
+	handle int
+}
 
 # Binds to `address` and starts listening for connections. The address is
 # a host and port joined by a colon. Use `0.0.0.0` to accept from any

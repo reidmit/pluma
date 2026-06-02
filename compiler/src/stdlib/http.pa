@@ -55,11 +55,7 @@ public alias request {
 # A reply. `status` is the numeric code (200, 404, ...); `body` is raw
 # bytes. `Content-Length` and `Connection` are added for you when the
 # response is sent, so you don't set them here.
-public alias response {
-	status :: int,
-	headers :: dict string string,
-	body :: bytes,
-}
+public alias response {status :: int, headers :: dict string string, body :: bytes}
 
 # --- building responses --------------------------------------------------
 
@@ -69,7 +65,7 @@ public alias response {
 #     http.text 404 "nope"
 public def text :: fun int string -> response = fun status body {
 	{
-		status: status,
+		status,
 		headers: dict.from-entries [("content-type", "text/plain; charset=utf-8")],
 		body: string.to-bytes body,
 	}
@@ -124,7 +120,7 @@ def handle-one :: fun net.connection (fun request -> task response) -> task noth
 				path: parsed.path,
 				query: parsed.query,
 				headers: parsed.headers,
-				body: body,
+				body,
 			}
 			try resp = handler req
 			try _ = write-all conn (serialize resp)
@@ -196,14 +192,23 @@ def nth :: fun (list string) int string -> string = fun xs i fallback {
 }
 
 def parse-method :: fun string -> method = fun s {
-	if s == "GET" is true { method.get }
-	else { if s == "POST" is true { method.post }
-	else { if s == "PUT" is true { method.put }
-	else { if s == "DELETE" is true { method.delete }
-	else { if s == "PATCH" is true { method.patch }
-	else { if s == "HEAD" is true { method.head }
-	else { if s == "OPTIONS" is true { method.options }
-	else { method.other s } } } } } } }
+	if s == "GET" is true {
+		method.get
+	} else if s == "POST" is true {
+		method.post
+	} else if s == "PUT" is true {
+		method.put
+	} else if s == "DELETE" is true {
+		method.delete
+	} else if s == "PATCH" is true {
+		method.patch
+	} else if s == "HEAD" is true {
+		method.head
+	} else if s == "OPTIONS" is true {
+		method.options
+	} else {
+		method.other s
+	}
 }
 
 # Add one `Name: value` header line to the accumulating dict, lower-casing
@@ -211,7 +216,7 @@ def parse-method :: fun string -> method = fun s {
 def parse-header :: fun (dict string string) string -> dict string string = fun acc line {
 	let kv = string.split line ":"
 	if list.length kv >= 2 is true {
-		let key = string.to-lower (string.trim ((list.head kv) ?? ""))
+		let key = string.to-lower (string.trim (list.head kv ?? ""))
 		let value = string.trim (string.join (list.drop kv 1) ":")
 		dict.insert acc key value
 	} else {
@@ -231,31 +236,24 @@ def parse-head :: fun bytes -> {
 	body-start :: bytes,
 } = fun raw {
 	let parts = bytes.split raw crlf2
-	let head = (list.head parts) ?? (string.to-bytes "")
+	let head = list.head parts ?? string.to-bytes ""
 	let body-start = bytes.join (list.drop parts 1) crlf2
-	let header-str = (bytes.to-string head) ?? ""
+	let header-str = bytes.to-string head ?? ""
 	let lines = string.split header-str "\r\n"
-	let request-line = (list.head lines) ?? ""
+	let request-line = list.head lines ?? ""
 	let rl = string.split request-line " "
-	let m = parse-method (string.to-upper ((list.head rl) ?? "GET"))
+	let m = parse-method (string.to-upper (list.head rl ?? "GET"))
 	let target = nth rl 1 "/"
 	let tq = string.split target "?"
-	let path = (list.head tq) ?? "/"
+	let path = list.head tq ?? "/"
 	let query = nth tq 1 ""
 	let headers = list.fold (list.drop lines 1) (dict.empty ()) parse-header
 	let clen = when dict.lookup headers "content-length" is some v {
-		(string.to-int v) ?? 0
+		string.to-int v ?? 0
 	} is none {
 		0
 	}
-	{
-		method: m,
-		path: path,
-		query: query,
-		headers: headers,
-		content-length: clen,
-		body-start: body-start,
-	}
+	{method: m, path, query, headers, content-length: clen, body-start}
 }
 
 # --- writing ------------------------------------------------------------
@@ -282,9 +280,9 @@ def write-all :: fun net.connection bytes -> task (result int string) = fun conn
 # Render a response as HTTP/1.1 bytes: status line, the handler's headers,
 # the computed Content-Length, Connection: close, a blank line, then body.
 def serialize :: fun response -> bytes = fun resp {
-	let status-line = "HTTP/1.1 " ++ (to-string resp.status) ++ " " ++ (status-text resp.status) ++ "\r\n"
+	let status-line = "HTTP/1.1 " ++ to-string resp.status ++ " " ++ status-text resp.status ++ "\r\n"
 	let header-lines = string.join (list.map (dict.entries resp.headers) render-header) ""
-	let length-line = "Content-Length: " ++ (to-string (bytes.length resp.body)) ++ "\r\n"
+	let length-line = "Content-Length: " ++ to-string (bytes.length resp.body) ++ "\r\n"
 	let head = status-line ++ header-lines ++ length-line ++ "Connection: close\r\n\r\n"
 	bytes.concat (string.to-bytes head) resp.body
 }
@@ -295,7 +293,7 @@ def render-header :: fun (string, string) -> string = fun pair {
 }
 
 def status-text :: fun int -> string = fun code {
-	(dict.lookup status-names code) ?? "OK"
+	dict.lookup status-names code ?? "OK"
 }
 
 def status-names :: dict int string = dict.from-entries [

@@ -8,37 +8,25 @@ def n :: option int = none
 def bad :: result int string = err "boom"
 
 def tests :: test.suite = [
-	# --- is-some / is-none ---
+	test.case "is-some passes on some" fun {
+		# --- is-some / is-none ---
 
-	test.case "is-some passes on some" (fun {
 		assert.is-some (some 7)
-	}),
+	},
+	test.case "is-some passes on some with non-int payload" fun { assert.is-some (some "hello") },
+	test.case "is-none passes on none" fun { assert.is-none n },
+	test.case "is-ok passes on ok" fun {
+		# --- is-ok / is-err ---
 
-	test.case "is-some passes on some with non-int payload" (fun {
-		assert.is-some (some "hello")
-	}),
-
-	test.case "is-none passes on none" (fun {
-		assert.is-none n
-	}),
-
-	# --- is-ok / is-err ---
-
-	test.case "is-ok passes on ok" (fun {
 		assert.is-ok (ok 42)
-	}),
-
-	test.case "is-ok passes on ok with non-int payload" (fun {
+	},
+	test.case "is-ok passes on ok with non-int payload" fun {
 		let r :: result string int = ok "hi"
 		assert.is-ok r
-	}),
-
-	test.case "is-err passes on err" (fun {
-		assert.is-err bad
-	}),
-
-	test.case "is-err passes on err with non-string error" (fun {
+	},
+	test.case "is-err passes on err" fun { assert.is-err bad },
+	test.case "is-err passes on err with non-string error" fun {
 		let r :: result int int = err 7
 		assert.is-err r
-	}),
+	},
 ]

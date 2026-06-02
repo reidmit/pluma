@@ -3,97 +3,79 @@ use core.hex
 use core.assert
 
 def tests :: test.suite = [
-	# --- encode ---
+	test.case "encode of empty bytes" fun {
+		# --- encode ---
 
-	test.case "encode of empty bytes" (fun {
 		assert.equals (hex.encode '') ""
-	}),
+	},
+	test.case "encode of ASCII bytes" fun { assert.equals (hex.encode 'ABC') "414243" },
+	test.case "encode of high bytes" fun { assert.equals (hex.encode '\x00\xff\x10') "00ff10" },
+	test.case "encode of single byte" fun { assert.equals (hex.encode '\n') "0a" },
+	test.case "decode of empty string" fun {
+		# --- decode ---
 
-	test.case "encode of ASCII bytes" (fun {
-		assert.equals (hex.encode 'ABC') "414243"
-	}),
-
-	test.case "encode of high bytes" (fun {
-		assert.equals (hex.encode '\x00\xff\x10') "00ff10"
-	}),
-
-	test.case "encode of single byte" (fun {
-		assert.equals (hex.encode '\n') "0a"
-	}),
-
-	# --- decode ---
-
-	test.case "decode of empty string" (fun {
 		when hex.decode "" is ok b {
 			assert.equals b ''
 		} is err _msg {
 			assert.is-true false
 		}
-	}),
-
-	test.case "decode round-trips lowercase" (fun {
+	},
+	test.case "decode round-trips lowercase" fun {
 		when hex.decode "414243" is ok b {
 			assert.equals b 'ABC'
 		} is err _msg {
 			assert.is-true false
 		}
-	}),
-
-	test.case "decode accepts uppercase" (fun {
+	},
+	test.case "decode accepts uppercase" fun {
 		when hex.decode "FF" is ok b {
 			assert.equals b '\xff'
 		} is err _msg {
 			assert.is-true false
 		}
-	}),
-
-	test.case "decode accepts mixed case" (fun {
+	},
+	test.case "decode accepts mixed case" fun {
 		when hex.decode "AbCdEf" is ok b {
 			assert.equals b '\xab\xcd\xef'
 		} is err _msg {
 			assert.is-true false
 		}
-	}),
-
-	test.case "decode fails on odd length" (fun {
+	},
+	test.case "decode fails on odd length" fun {
 		when hex.decode "abc" is ok _b {
 			assert.is-true false
 		} is err _msg {
 			assert.is-true true
 		}
-	}),
-
-	test.case "decode fails on non-hex digit" (fun {
+	},
+	test.case "decode fails on non-hex digit" fun {
 		when hex.decode "zz" is ok _b {
 			assert.is-true false
 		} is err _msg {
 			assert.is-true true
 		}
-	}),
-
-	test.case "decode rejects 0x prefix" (fun {
+	},
+	test.case "decode rejects 0x prefix" fun {
 		when hex.decode "0xff" is ok _b {
 			assert.is-true false
 		} is err _msg {
 			assert.is-true true
 		}
-	}),
-
-	test.case "decode rejects whitespace" (fun {
+	},
+	test.case "decode rejects whitespace" fun {
 		when hex.decode "ab cd" is ok _b {
 			assert.is-true false
 		} is err _msg {
 			assert.is-true true
 		}
-	}),
+	},
+	test.case "encode then decode" fun {
+		# --- round-trip ---
 
-	# --- round-trip ---
-
-	test.case "encode then decode" (fun {
 		when hex.decode (hex.encode '\x89PNG\r\n\x1a\n') is ok b {
 			assert.equals b '\x89PNG\r\n\x1a\n'
 		} is err _msg {
 			assert.is-true false
 		}
-	}),
+	},
 ]

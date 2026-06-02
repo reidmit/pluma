@@ -5,17 +5,16 @@ use core.dict
 use core.assert
 
 def tests :: test.suite = [
-	# --- parse: primitives ---
+	test.case "parse null" fun {
+		# --- parse: primitives ---
 
-	test.case "parse null" (fun {
 		when json.parse "null" is ok v {
 			assert.is-true (json.is-null v)
 		} is err _e {
 			assert.is-true false
 		}
-	}),
-
-	test.case "parse true" (fun {
+	},
+	test.case "parse true" fun {
 		when json.parse "true" is ok v {
 			when json.get-bool v is some b {
 				assert.is-true b
@@ -25,9 +24,8 @@ def tests :: test.suite = [
 		} is err _e {
 			assert.is-true false
 		}
-	}),
-
-	test.case "parse false" (fun {
+	},
+	test.case "parse false" fun {
 		when json.parse "false" is ok v {
 			when json.get-bool v is some b {
 				assert.is-false b
@@ -37,9 +35,8 @@ def tests :: test.suite = [
 		} is err _e {
 			assert.is-true false
 		}
-	}),
-
-	test.case "parse int" (fun {
+	},
+	test.case "parse int" fun {
 		when json.parse "42" is ok v {
 			when json.get-int v is some n {
 				assert.equals n 42
@@ -49,9 +46,8 @@ def tests :: test.suite = [
 		} is err _e {
 			assert.is-true false
 		}
-	}),
-
-	test.case "parse negative int" (fun {
+	},
+	test.case "parse negative int" fun {
 		when json.parse "-7" is ok v {
 			when json.get-int v is some n {
 				assert.equals n (-7)
@@ -61,9 +57,8 @@ def tests :: test.suite = [
 		} is err _e {
 			assert.is-true false
 		}
-	}),
-
-	test.case "parse float" (fun {
+	},
+	test.case "parse float" fun {
 		when json.parse "3.14" is ok v {
 			when json.get-float v is some x {
 				assert.equals x 3.14
@@ -73,9 +68,8 @@ def tests :: test.suite = [
 		} is err _e {
 			assert.is-true false
 		}
-	}),
-
-	test.case "parse string" (fun {
+	},
+	test.case "parse string" fun {
 		when json.parse "\"hi\"" is ok v {
 			when json.get-string v is some s {
 				assert.equals s "hi"
@@ -85,11 +79,10 @@ def tests :: test.suite = [
 		} is err _e {
 			assert.is-true false
 		}
-	}),
+	},
+	test.case "parse empty array" fun {
+		# --- parse: compound ---
 
-	# --- parse: compound ---
-
-	test.case "parse empty array" (fun {
 		when json.parse "[]" is ok v {
 			when json.get-array v is some xs {
 				assert.equals (list.length xs) 0
@@ -99,9 +92,8 @@ def tests :: test.suite = [
 		} is err _e {
 			assert.is-true false
 		}
-	}),
-
-	test.case "parse array of ints" (fun {
+	},
+	test.case "parse array of ints" fun {
 		when json.parse "[1, 2, 3]" is ok v {
 			when json.get-array v is some xs {
 				assert.equals (list.length xs) 3
@@ -111,9 +103,8 @@ def tests :: test.suite = [
 		} is err _e {
 			assert.is-true false
 		}
-	}),
-
-	test.case "parse empty object" (fun {
+	},
+	test.case "parse empty object" fun {
 		when json.parse "{}" is ok v {
 			when json.get-object v is some o {
 				assert.equals (dict.size o) 0
@@ -123,77 +114,62 @@ def tests :: test.suite = [
 		} is err _e {
 			assert.is-true false
 		}
-	}),
+	},
+	test.case "parse error on malformed input" fun {
+		# --- parse: errors ---
 
-	# --- parse: errors ---
-
-	test.case "parse error on malformed input" (fun {
 		when json.parse "{bad json" is ok _v {
 			assert.is-true false
 		} is err _e {
 			assert.is-true true
 		}
-	}),
-
-	test.case "parse error carries line and col" (fun {
+	},
+	test.case "parse error carries line and col" fun {
 		when json.parse "{bad" is ok _v {
 			assert.is-true false
 		} is err e {
 			assert.all [assert.equals e.line 1, assert.equals e.col 2]
 		}
-	}),
-
-	test.case "parse error on trailing garbage" (fun {
+	},
+	test.case "parse error on trailing garbage" fun {
 		when json.parse "42 extra" is ok _v {
 			assert.is-true false
 		} is err _e {
 			assert.is-true true
 		}
-	}),
+	},
+	test.case "stringify null" fun {
+		# --- stringify ---
 
-	# --- stringify ---
-
-	test.case "stringify null" (fun {
 		assert.equals (json.stringify json.value.null) "null"
-	}),
-
-	test.case "stringify true" (fun {
-		assert.equals (json.stringify (json.value.bool true)) "true"
-	}),
-
-	test.case "stringify int" (fun {
-		assert.equals (json.stringify (json.value.int 42)) "42"
-	}),
-
-	test.case "stringify string" (fun {
+	},
+	test.case "stringify true" fun { assert.equals (json.stringify (json.value.bool true)) "true" },
+	test.case "stringify int" fun { assert.equals (json.stringify (json.value.int 42)) "42" },
+	test.case "stringify string" fun {
 		assert.equals (json.stringify (json.value.string "hi")) "\"hi\""
-	}),
-
-	test.case "stringify round-trip via parse" (fun {
+	},
+	test.case "stringify round-trip via parse" fun {
 		when json.parse "[1,2,3]" is ok v {
 			assert.equals (json.stringify v) "[1,2,3]"
 		} is err _e {
 			assert.is-true false
 		}
-	}),
+	},
+	test.case "is-null on null variant" fun {
+		# --- is-null ---
 
-	# --- is-null ---
-
-	test.case "is-null on null variant" (fun {
 		assert.is-true (json.is-null json.value.null)
-	}),
-
-	test.case "is-null on non-null" (fun {
+	},
+	test.case "is-null on non-null" fun {
 		assert.all [
 			assert.is-false (json.is-null (json.value.int 0)),
 			assert.is-false (json.is-null (json.value.bool false)),
 			assert.is-false (json.is-null (json.value.string "")),
 		]
-	}),
+	},
+	test.case "get-field returns some on a hit" fun {
+		# --- get-field ---
 
-	# --- get-field ---
-
-	test.case "get-field returns some on a hit" (fun {
 		when json.parse "{\"a\": 1}" is ok v {
 			when json.get-field v "a" is some inner {
 				when json.get-int inner is some n {
@@ -207,9 +183,8 @@ def tests :: test.suite = [
 		} is err _e {
 			assert.is-true false
 		}
-	}),
-
-	test.case "get-field returns none for missing key" (fun {
+	},
+	test.case "get-field returns none for missing key" fun {
 		when json.parse "{\"a\": 1}" is ok v {
 			when json.get-field v "missing" is some _inner {
 				assert.is-true false
@@ -219,87 +194,77 @@ def tests :: test.suite = [
 		} is err _e {
 			assert.is-true false
 		}
-	}),
-
-	test.case "get-field on non-object returns none" (fun {
+	},
+	test.case "get-field on non-object returns none" fun {
 		when json.get-field (json.value.int 5) "a" is some _inner {
 			assert.is-true false
 		} is none {
 			assert.is-true true
 		}
-	}),
+	},
+	test.case "get-int on a string is none" fun {
+		# --- get-* type filters ---
 
-	# --- get-* type filters ---
-
-	test.case "get-int on a string is none" (fun {
 		when json.get-int (json.value.string "x") is some _n {
 			assert.is-true false
 		} is none {
 			assert.is-true true
 		}
-	}),
-
-	test.case "get-float on an int is none" (fun {
+	},
+	test.case "get-float on an int is none" fun {
 		when json.get-float (json.value.int 42) is some _x {
 			assert.is-true false
 		} is none {
 			assert.is-true true
 		}
-	}),
-
-	test.case "get-number promotes int to float" (fun {
+	},
+	test.case "get-number promotes int to float" fun {
 		when json.get-number (json.value.int 42) is some x {
 			assert.equals x 42.0
 		} is none {
 			assert.is-true false
 		}
-	}),
-
-	test.case "get-number passes float through" (fun {
+	},
+	test.case "get-number passes float through" fun {
 		when json.get-number (json.value.float 3.5) is some x {
 			assert.equals x 3.5
 		} is none {
 			assert.is-true false
 		}
-	}),
-
-	test.case "get-number on a string is none" (fun {
+	},
+	test.case "get-number on a string is none" fun {
 		when json.get-number (json.value.string "x") is some _x {
 			assert.is-true false
 		} is none {
 			assert.is-true true
 		}
-	}),
-
-	test.case "get-bool on a non-bool is none" (fun {
+	},
+	test.case "get-bool on a non-bool is none" fun {
 		when json.get-bool (json.value.int 1) is some _b {
 			assert.is-true false
 		} is none {
 			assert.is-true true
 		}
-	}),
-
-	test.case "get-string on a non-string is none" (fun {
+	},
+	test.case "get-string on a non-string is none" fun {
 		when json.get-string (json.value.int 1) is some _s {
 			assert.is-true false
 		} is none {
 			assert.is-true true
 		}
-	}),
-
-	test.case "get-array on a non-array is none" (fun {
+	},
+	test.case "get-array on a non-array is none" fun {
 		when json.get-array (json.value.int 1) is some _xs {
 			assert.is-true false
 		} is none {
 			assert.is-true true
 		}
-	}),
-
-	test.case "get-object on a non-object is none" (fun {
+	},
+	test.case "get-object on a non-object is none" fun {
 		when json.get-object (json.value.int 1) is some _o {
 			assert.is-true false
 		} is none {
 			assert.is-true true
 		}
-	}),
+	},
 ]

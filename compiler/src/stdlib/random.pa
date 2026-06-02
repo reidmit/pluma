@@ -25,6 +25,7 @@ public def float :: fun nothing -> float = built-in "random-float"
 # validated (`n >= 0`, `low < high`) — the public wrappers below do that, so
 # the host imports never need to signal failure.
 def raw-bytes :: fun int -> bytes = built-in "random-bytes"
+
 def raw-int-range :: fun int int -> int = built-in "random-int-range"
 
 # `n` random bytes, wrapped in `ok`. `err` if `n` is negative. Good for
