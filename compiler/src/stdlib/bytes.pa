@@ -261,55 +261,32 @@ public def split :: fun bytes bytes -> list bytes = fun b sep {
 			slice b i (i + 1)
 		}
 	} else {
-		# One linear pass to count matches, a second to record where each
-		# starts (filled in place with `list.set`), then slice out the `k + 1`
-		# pieces around those boundaries. The positions list keeps the slicing
-		# O(1) per piece.
-		let k = count-matches b sep seplen 0 0
-		let positions = list.build k fun _i {
-			0
-		}
-		let _ = record-matches b sep seplen positions 0 0
-		list.build (k + 1) fun i {
-			let start = if i == 0 is true {
-				0
-			} else {
-				list.get positions (i - 1) + seplen
-			}
-			let stop = if i == k is true {
-				length b
-			} else {
-				list.get positions i
-			}
-			slice b start stop
-		}
+		# One forward scan: slice out each piece the moment a separator closes
+		# it and push it onto `out` (an in-place `list.push`, amortized O(1)), so
+		# there's a single pass and no intermediate `positions` list. Producing
+		# `k + 1` pieces for `k` separators falls out of pushing the trailing
+		# piece once no further match can start.
+		let out :: list bytes = []
+		let _ = split-into b sep seplen (length b) 0 0 out
+		out
 	}
 }
 
-# Counts non-overlapping occurrences of `sep` in `b`, scanning from `i`
-# with `acc` found so far. After a match it jumps past the whole
-# separator, matching how `split` consumes it.
-def count-matches :: fun bytes bytes int int int -> int = fun b sep seplen i acc {
-	if i + seplen > length b is true {
-		acc
-	} else if matches-at b sep seplen i is true {
-		count-matches b sep seplen (i + seplen) (acc + 1)
-	} else {
-		count-matches b sep seplen (i + 1) acc
-	}
-}
-
-# Fills `positions[idx..]` with the start index of each successive match,
-# in order. Mirrors `count-matches`' scan so slot `idx` lines up with the
-# `idx`-th separator.
-def record-matches :: fun bytes bytes int (list int) int int -> nothing = fun b sep seplen positions i idx {
-	if i + seplen > length b is true {
+# Forward scan for `split`: `i` is the cursor, `start` the open piece's first
+# byte. At each separator, push `b[start, i)` and resume past it (jumping the
+# whole separator); when no match can begin in `[i, n)`, push the final piece
+# `b[start, n)` and stop. The match-then-jump stride is what makes empty pieces
+# (adjacent or edge separators) fall out, and a `sep`-free input yield the whole
+# input as a single piece.
+def split-into :: fun bytes bytes int int int int (list bytes) -> nothing = fun b sep seplen n i start out {
+	if i + seplen > n is true {
+		let _ = list.push out (slice b start n)
 		()
 	} else if matches-at b sep seplen i is true {
-		let _ = list.set positions idx i
-		record-matches b sep seplen positions (i + seplen) (idx + 1)
+		let _ = list.push out (slice b start i)
+		split-into b sep seplen n (i + seplen) (i + seplen) out
 	} else {
-		record-matches b sep seplen positions (i + 1) idx
+		split-into b sep seplen n (i + 1) start out
 	}
 }
 

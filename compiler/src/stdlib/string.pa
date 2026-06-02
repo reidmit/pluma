@@ -332,10 +332,12 @@ public def split :: fun string string -> list string = fun s sep {
 		# UTF-8 is self-synchronizing: a valid separator only ever matches on
 		# character boundaries, so splitting the raw bytes gives exactly the
 		# character-level pieces -- and byte indexing is O(1), where codepoint
-		# indexing isn't. Each piece is a substring of valid UTF-8 on
-		# boundaries, so it always decodes back.
+		# indexing isn't. Each piece is a substring of valid UTF-8 cut on
+		# boundaries, so `as-string` (the unchecked reinterpret) is sound here --
+		# no need to re-validate every piece through `bytes.to-string` and unwrap
+		# the `result` it returns (pure churn at this scale).
 		list.map (bytes.split (to-bytes s) (to-bytes sep)) fun piece {
-			bytes.to-string piece ?? ""
+			as-string piece
 		}
 	}
 }
