@@ -1905,7 +1905,7 @@ fn tuple_elem(w: &mut Wat, tup: Local, i: i32) {
 
 /// Push the unit `nothing` value.
 fn push_nothing(w: &mut Wat) {
-	w.i32(types::TAG_NOTHING).struct_new(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
 }
 
 /// Push an empty `$list`.

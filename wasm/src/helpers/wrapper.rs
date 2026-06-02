@@ -365,6 +365,6 @@ pub(crate) fn build_host_value_wrapper(host_idx: u32) -> Function {
 	let arg = w.param(1); // param 0 is the (ignored) env.
 	w.local_get(arg);
 	w.call(host_idx);
-	w.i32(types::TAG_NOTHING).struct_new(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
 	w.finish()
 }

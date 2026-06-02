@@ -330,7 +330,7 @@ fn str_lit(w: &mut Wat, (off, len): (u32, u32)) {
 
 /// Push the unit `nothing` value.
 fn push_nothing(w: &mut Wat) {
-	w.i32(types::TAG_NOTHING).struct_new(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
 }
 
 /// Build `__wire_push(i32 b)`: append `b` to the encode buffer `g_buf`, growing

@@ -130,7 +130,7 @@ pub(crate) fn build_list_push_fn() -> Function {
 		.i32_add()
 		.struct_set(types::T_LIST, 2);
 	// return nothing.
-	w.i32(types::TAG_NOTHING).struct_new(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
 	w.finish()
 }
 
@@ -283,7 +283,7 @@ pub(crate) fn build_run_defers_fn(thunk_ty: u32) -> Function {
 				.array_get(types::T_VALARRAY)
 				.local_set(c);
 			w.local_get(c).ref_cast(types::T_CLOSURE); // env
-			w.i32(types::TAG_NOTHING).struct_new(types::T_VALUE); // phantom unit arg
+			w.ref_null(types::T_VALUE); // phantom unit arg
 			w.local_get(c)
 				.ref_cast(types::T_CLOSURE)
 				.struct_get(types::T_CLOSURE, 1);
@@ -294,6 +294,6 @@ pub(crate) fn build_run_defers_fn(thunk_ty: u32) -> Function {
 		});
 	});
 	// Return `nothing`.
-	w.i32(types::TAG_NOTHING).struct_new(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
 	w.finish()
 }

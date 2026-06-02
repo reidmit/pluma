@@ -237,7 +237,7 @@ fn capture_gc_types(store: &mut impl AsContextMut, witness: &Val) -> GcTypes {
 			o => panic!("witness elem {i} not a struct: {o:?}"),
 		}
 	};
-	let value = struct_ty_at(&mut scope, 0); // nothing
+	let value = struct_ty_at(&mut scope, 0); // nothing (a heap `$value` witness sample)
 	let str_ = struct_ty_at(&mut scope, 1); // ""
 	let bytes = {
 		let s = match elems.get(&mut scope, 1).expect("elem 1") {
@@ -287,6 +287,10 @@ fn build_strlike(store: &mut impl AsContextMut, gc: &GcTypes, tag: i32, data: &[
 
 /// Build a `nothing` `$value`.
 fn build_nothing(store: &mut impl AsContextMut, gc: &GcTypes) -> Val {
+	// io ops returning `nothing` on success build a concrete heap `$value`: the io
+	// result shaper (`__io_result`) reads null as failure, so a successful `nothing`
+	// must be non-null. (Statement-level `nothing` on the hot path is a null ref; both
+	// forms read back as `TAG_NOTHING` via `value_tag`.)
 	let pre = StructRefPre::new(&mut *store, gc.value.clone());
 	let s = StructRef::new(&mut *store, &pre, &[Val::I32(TAG_NOTHING)]).expect("build nothing");
 	Val::AnyRef(Some(s.to_anyref()))

@@ -373,16 +373,27 @@ impl Wat {
 	pub(crate) fn value_tag(&mut self) -> &mut Self {
 		let t = self.local(types::value_ref());
 		self.local_set(t);
-		self.local_get(t).ref_test_i31();
+		// `nothing` is a null reference (no allocation); a small int is an `i31ref`
+		// immediate; anything else is a heap `$value` whose tag is field 0.
+		self.local_get(t).ref_is_null();
 		self.if_result(
 			ValType::I32,
 			|w| {
-				w.i32(types::TAG_INT);
+				w.i32(types::TAG_NOTHING);
 			},
 			|w| {
-				w.local_get(t)
-					.ref_cast(types::T_VALUE)
-					.struct_get(types::T_VALUE, 0);
+				w.local_get(t).ref_test_i31();
+				w.if_result(
+					ValType::I32,
+					|w| {
+						w.i32(types::TAG_INT);
+					},
+					|w| {
+						w.local_get(t)
+							.ref_cast(types::T_VALUE)
+							.struct_get(types::T_VALUE, 0);
+					},
+				);
 			},
 		)
 	}

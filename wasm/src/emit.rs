@@ -1790,8 +1790,12 @@ impl<'a> FnEmitter<'a> {
 	/// on the first call). Built inline since this module owns all the types.
 	fn emit_io_witness(&mut self) {
 		// outer `$list` = { TAG_LIST, $valarray[ nothing, "", [], true ] }.
-		// elem 0: nothing.
-		self.push_nothing();
+		// elem 0: a heap `$value` (TAG_NOTHING). General `nothing` is a null reference
+		// (no allocation), but the witness needs a *concrete* `$value` struct here so
+		// the host can reflect that type to build its io `nothing` returns. (This lone
+		// heap sample is built once at init; `value_tag` treats null and this alike.)
+		self.ins(Instruction::I32Const(types::TAG_NOTHING));
+		self.ins(Instruction::StructNew(types::T_VALUE));
 		// elem 1: "" (`$str`, exposing `$str` + `$bytes`).
 		self.ins(Instruction::I32Const(types::TAG_STR));
 		self.ins(Instruction::ArrayNewFixed {
@@ -2322,8 +2326,10 @@ impl<'a> FnEmitter<'a> {
 	}
 
 	fn push_nothing(&mut self) {
-		self.ins(Instruction::I32Const(types::TAG_NOTHING));
-		self.ins(Instruction::StructNew(types::T_VALUE));
+		// `nothing` is a null reference — no allocation. `value_tag` and the host map a
+		// null value back to `()`; produced on essentially every statement. See
+		// notes/I31.md.
+		self.ins(Instruction::RefNull(HeapType::Concrete(types::T_VALUE)));
 	}
 
 	/// Push a `$str` value for a string constant (from the shared data segment).
