@@ -259,11 +259,12 @@ impl Wat {
 
 	/// Manual element-copy loop: `dst[dst_off + k] = src[src_off + k]` for
 	/// `k` in `0..len` (a `None` offset means 0). Use this instead of
-	/// `array.copy`: wasmtime's `array.copy` libcall is a trap at every element
-	/// type — ~90x slower than this loop on `$valarray` (GC-reference) arrays,
-	/// and ~19x slower even on packed `$bytes` (so `__bytesconcat` open-codes the
-	/// same loop rather than calling here, since it needs `array.get_u`).
-	/// Allocates one scratch i32 local.
+	/// `array.copy`, which was a per-element libcall under wasmtime — the runtime
+	/// targeted when these arrays were chosen — at ~90x this loop's cost on
+	/// `$valarray` (GC-reference) arrays and ~19x even on packed `$bytes` (so
+	/// `__bytesconcat` open-codes the same loop rather than calling here, since it
+	/// needs `array.get_u`). Now on V8 and not re-measured, but the loop is correct
+	/// regardless. Allocates one scratch i32 local.
 	pub(crate) fn copy_loop(
 		&mut self,
 		ty: u32,
@@ -310,9 +311,8 @@ impl Wat {
 	/// [`copy_loop`] for a packed `$bytes` array (`ty` is its type index). Packed
 	/// fields require the unsigned `array.get_u` accessor — plain `array.get` is a
 	/// validation error — so this can't share `copy_loop`'s body. The reason to
-	/// loop rather than `array.copy` is the same and not specific to reference
-	/// arrays: wasmtime's `array.copy` libcall is ~19x slower than this inline loop
-	/// even on bytes. Allocates one scratch i32 local.
+	/// loop rather than `array.copy` is the same as [`copy_loop`] and not specific
+	/// to reference arrays. Allocates one scratch i32 local.
 	pub(crate) fn copy_loop_bytes(
 		&mut self,
 		ty: u32,

@@ -61,9 +61,9 @@ pub(crate) fn build_bytesconcat_fn() -> Function {
 		.array_new_default(bv)
 		.local_set(dst);
 	// `dst[0..la] = a`, then `dst[la..la+lb] = b`, via explicit copy loops rather
-	// than `array.copy`: wasmtime's `array.copy` libcall is ~19x slower than the
-	// loop even on packed `$bytes`, and `++`/join/interp fold through this helper
-	// hard — a tree of many small concats was the string benchmark's bottleneck.
+	// than `array.copy` (a per-element libcall ~19x slower under wasmtime), since
+	// `++`/join/interp fold through this helper hard — a tree of many small concats
+	// was the string benchmark's bottleneck.
 	w.copy_loop_bytes(bv, dst, None, a, None, la);
 	w.copy_loop_bytes(bv, dst, Some(la), b, None, lb);
 	w.local_get(dst);

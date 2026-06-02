@@ -5,9 +5,9 @@ edition = "2024"
 publish = false
 
 # The cross-backend conformance + perf harness: runs each program through the VM
-# (oracle) and the WasmGC deploy backend, asserts WasmGC matches the VM, collects
-# timing, and renders the report. `src/lib.rs` is the engine; `src/main.rs` is the
-# report CLI; `tests/correctness.rs` is the cargo-test gate.
+# (oracle) and the WasmGC deploy backend (under V8), asserts WasmGC matches the VM,
+# collects timing, and renders the report. `src/lib.rs` is the engine; `src/main.rs` is
+# the report CLI; `tests/correctness.rs` is the cargo-test gate.
 
 [dependencies]
 codegen = { path = "../codegen" }
@@ -16,15 +16,3 @@ host = { path = "../host" }
 ir = { path = "../ir" }
 vm = { path = "../vm" }
 wasm = { path = "../wasm" }
-wasmtime = { version = "45", default-features = false, features = [
-	"cranelift",
-	"gc",
-	"gc-drc",
-	"gc-null",
-	"runtime",
-] }
-
-# Opt-in: add the V8 deploy backend to the cross-check (a heavy prebuilt dep, so off
-# by default). `cargo test -p conformance --features v8` diffs V8 vs the VM oracle too.
-[features]
-v8 = ["host/v8"]

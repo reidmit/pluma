@@ -1584,7 +1584,7 @@ impl<'a> FnEmitter<'a> {
 			// result is always copied out into a fresh exact-size `$bytes`, so the
 			// reused scratch never aliases a returned value.) Reallocating a fresh
 			// buffer per call instead made the buffer re-grow every time, and
-			// wasmtime's `array.copy` is slow — that growth churn was ~half the
+			// `array.copy` was slow under wasmtime — that growth churn was ~half the
 			// `wire-encode` cost.
 			self.ins(Instruction::GlobalGet(g.buf));
 			self.ins(Instruction::RefIsNull);
@@ -1611,9 +1611,9 @@ impl<'a> FnEmitter<'a> {
 			self.ins(Instruction::GlobalGet(g.len));
 			self.ins(Instruction::ArrayNewDefault(types::T_BYTES));
 			self.ins(Instruction::LocalSet(res));
-			// res[i] = g_buf[i] for i in 0..g_len. A manual loop, not `array.copy`:
-			// wasmtime's `array.copy` over byte arrays is slow, and this final
-			// snapshot of the scratch buffer was the dominant cost of `wire-encode`.
+			// res[i] = g_buf[i] for i in 0..g_len. A manual loop, not `array.copy`
+			// (slow under wasmtime over byte arrays); this final snapshot of the
+			// scratch buffer was the dominant cost of `wire-encode`.
 			let idx = self.fresh_local(ValType::I32);
 			self.ins(Instruction::I32Const(0));
 			self.ins(Instruction::LocalSet(idx));

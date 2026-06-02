@@ -5,32 +5,16 @@ edition = "2024"
 publish = false
 
 # The WasmGC runtime host: supplies the `pluma.*` host imports over the ABI.md
-# marshalling boundary (scalars + scratch-memory bytes, no GC reflection). `cli` runs
-# a built `.wasm` through the wasmtime backend (streaming process stdio), and
-# `conformance` diffs every fixture against the VM oracle. The optional `v8` feature
-# adds a second backend (rusty_v8) over the *same* engine-neutral ABI — a V8↔VM cross-
-# check, and the eventual deploy engine (ABI.md Phase 2).
+# marshalling boundary (scalars + scratch-memory bytes, no GC reflection), then runs the
+# artifact under V8. `cli` runs a built `.wasm` this way (streaming process stdio), and
+# `conformance` diffs every fixture against the VM oracle. The engine-neutral ABI is what
+# lets a stock JS engine like V8 — which cannot reflect WasmGC structs — run the artifact
+# (ABI.md Phase 2); V8's generational GC is the deploy engine.
 
 [dependencies]
-wasmtime = { version = "45", default-features = false, features = [
-	"cranelift",
-	"gc",
-	"gc-drc",
-	"gc-null",
-	"runtime",
-] }
+# The V8 backend (rusty_v8): instantiates the WasmGC artifact under V8, driving the
+# marshalled `pluma.*` imports as native callbacks over the exported memory's ArrayBuffer.
+v8 = "137"
 # The host-side I/O reactor for `core.net` — the same library the VM reactor uses
 # (`vm/src/net.rs`), so the host mirrors the VM's park/wake byte-for-byte.
 polling = "3"
-# The optional V8 backend (ABI.md Phase 2): instantiates the *same* WasmGC artifact
-# under V8 (generational GC ~20× faster than wasmtime's DRC), driving the marshalled
-# imports as native callbacks over the exported memory's ArrayBuffer.
-v8 = { version = "137", optional = true }
-
-[features]
-v8 = ["dep:v8"]
-
-# The V8 smoke-test example only builds with the `v8` feature.
-[[example]]
-name = "v8smoke"
-required-features = ["v8"]

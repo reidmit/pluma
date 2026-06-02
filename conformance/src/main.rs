@@ -91,14 +91,9 @@ fn render_full_report(
 ) -> String {
 	use perf::fmt_dur;
 	let mut s = String::new();
-	let collector = if std::env::var("BENCH_WASM_GC").as_deref() == Ok("drc") {
-		"drc (reclaims — realistic GC cost)"
-	} else {
-		"null (allocate-never-free — fastest, no GC)"
-	};
 	s.push_str("# Pluma conformance + perf report\n\n");
 	s.push_str(&format!(
-		"wasmtime 45 · wasm collector: {collector} · perf iters/fixture: {} (compute: ≥5)\n\n",
+		"wasm engine: V8 (the deploy engine) · perf iters/fixture: {} (compute: ≥5)\n\n",
 		dev.iters,
 	));
 
@@ -123,7 +118,7 @@ fn render_full_report(
 	s.push_str("## Dev-loop cost — whole tests/run corpus (one pass)\n\n");
 	let _ = writeln!(
 		s,
-		"{} fixtures (io-* excluded). The VM is the dev/test engine; wasm pays cranelift\nJIT per program.\n",
+		"{} fixtures (io-* excluded). The VM is the dev/test engine; the wasm e2e number\npays a fresh V8 isolate + module compile per program (the `pluma run` cost), while\nexec is warm (module compiled once).\n",
 		dev.fixtures
 	);
 	s.push_str("| Stage | Total | per fixture |\n|---|---:|---:|\n");
@@ -148,13 +143,13 @@ fn render_full_report(
 	);
 	let _ = writeln!(
 		s,
-		"| WASM e2e (emit+JIT+run) | {} | {} |",
+		"| WASM e2e (emit+V8 compile+run, cold) | {} | {} |",
 		fmt_dur(dev.wasm_e2e),
 		per(dev.wasm_e2e, dev.wasm_n)
 	);
 	let _ = writeln!(
 		s,
-		"| WASM exec (pre-compiled) | {} | {} |",
+		"| WASM exec (warm, module cached) | {} | {} |",
 		fmt_dur(dev.wasm_exec),
 		per(dev.wasm_exec, dev.wasm_n)
 	);
@@ -183,6 +178,6 @@ fn render_full_report(
 			cell(r.wasm_e2e),
 		);
 	}
-	s.push_str("\n_WASM exec is the deploy-relevant number (JIT amortized via caching/AOT)._\n");
+	s.push_str("\n_WASM exec is the warm deploy number (module compiled once, reused per request); e2e is the cold-start cost (fresh isolate + compile + run)._\n");
 	s
 }

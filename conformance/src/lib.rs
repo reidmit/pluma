@@ -17,33 +17,25 @@ use compiler::Platform;
 /// uses. `RunResult` is its result type, re-exported here as the unit of comparison.
 pub use host::RunResult;
 
-/// The execution backends, all consuming the same `ir::IrProgram`.
+/// The execution backends, both consuming the same `ir::IrProgram`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Backend {
 	/// The bytecode VM — the reference/oracle and dev/test engine.
 	Vm,
-	/// The WasmGC backend under wasmtime — the deploy artifact (server/compute, and the
-	/// browser/client target as the frontend lands).
+	/// The WasmGC deploy artifact, run under V8 (the deploy engine — server/compute,
+	/// and the browser/client target as the frontend lands). Diffed against the VM to
+	/// pin the marshalling ABI + codegen on every fixture.
 	Wasm,
-	/// The *same* WasmGC artifact under V8 (ABI.md Phase 2): a second deploy engine,
-	/// diffed against the VM to cross-check the marshalling ABI across engines. Only
-	/// actually run when the `v8` feature is on (else it skips).
-	WasmV8,
 }
 
 impl Backend {
-	/// The deploy backends, diffed against the VM oracle. V8 joins under the `v8`
-	/// feature (a heavy prebuilt dependency, so opt-in).
-	#[cfg(feature = "v8")]
-	pub const DEPLOY: [Backend; 2] = [Backend::Wasm, Backend::WasmV8];
-	#[cfg(not(feature = "v8"))]
+	/// The deploy backends, diffed against the VM oracle.
 	pub const DEPLOY: [Backend; 1] = [Backend::Wasm];
 
 	pub fn name(self) -> &'static str {
 		match self {
 			Backend::Vm => "VM",
 			Backend::Wasm => "WasmGC",
-			Backend::WasmV8 => "WasmGC-V8",
 		}
 	}
 
@@ -52,8 +44,7 @@ impl Backend {
 	pub fn platform(self) -> Platform {
 		match self {
 			Backend::Vm => Platform::Native,
-			// V8 runs the identical server-platform artifact wasmtime does.
-			Backend::Wasm | Backend::WasmV8 => Platform::Server,
+			Backend::Wasm => Platform::Server,
 		}
 	}
 }
@@ -150,8 +141,8 @@ impl Runner {
 		match backend {
 			// The VM oracle applies its VM-specific pipeline (`ir::optimize`: inline +
 			// direct calls + M6 monomorphization/unboxing) on top of the raw IR, just
-			// as `pluma run` does. The deploy backends below run their own internal
-			// pipelines straight off the raw `ir` instead.
+			// as `pluma run` does. The deploy backend below runs its own internal
+			// pipeline straight off the raw `ir` instead.
 			Backend::Vm => {
 				let mut ir = ir;
 				ir::optimize(&mut ir);
@@ -160,34 +151,17 @@ impl Runner {
 					Err(e) => Outcome::Skip(SkipReason::Unsupported(e.to_string())),
 				}
 			}
+			// Emit the WasmGC artifact and run it under V8 — exactly what `pluma run`
+			// ships and executes.
 			Backend::Wasm => match wasm::emit(&ir) {
-				Ok(bytes) => Outcome::Ran(host::run_wasm(&bytes, &stdin)),
+				Ok(bytes) => Outcome::Ran(host::run_wasm_v8(&bytes, &stdin)),
 				Err(d) => Outcome::Skip(SkipReason::Unsupported(format!(
 					"wasm::emit rejected ({} diag)",
 					d.0.len()
 				))),
 			},
-			// The same emitted artifact, run under V8 instead of wasmtime.
-			Backend::WasmV8 => run_wasm_v8(&ir, &stdin),
 		}
 	}
-}
-
-/// The V8 deploy backend: emit the same WasmGC artifact and run it under V8 (only with
-/// the `v8` feature; otherwise a recorded skip).
-#[cfg(feature = "v8")]
-fn run_wasm_v8(ir: &ir::IrProgram, stdin: &[u8]) -> Outcome {
-	match wasm::emit(ir) {
-		Ok(bytes) => Outcome::Ran(host::run_wasm_v8(&bytes, stdin)),
-		Err(d) => Outcome::Skip(SkipReason::Unsupported(format!(
-			"wasm::emit rejected ({} diag)",
-			d.0.len()
-		))),
-	}
-}
-#[cfg(not(feature = "v8"))]
-fn run_wasm_v8(_ir: &ir::IrProgram, _stdin: &[u8]) -> Outcome {
-	Outcome::Skip(SkipReason::Unsupported("v8 feature disabled".to_string()))
 }
 
 /// The cross-backend result for one fixture: the VM oracle plus each deploy

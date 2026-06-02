@@ -1,6 +1,6 @@
 // The wasm↔host marshalling primitives over the exported scratch linear memory.
 //
-// Phase-1 host imports never touch a GC `$value` field (no engine but wasmtime can
+// Phase-1 host imports never touch a GC `$value` field (a stock engine like V8 can't
 // reflect one). Instead, byte payloads cross the boundary through a small exported
 // linear memory: wasm encodes outgoing bytes into it and passes `(ptr, len)`; the
 // host reads/writes that `ArrayBuffer` slice directly. These three helpers are the

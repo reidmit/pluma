@@ -1,16 +1,20 @@
-// Perf measurement across the VM and WasmGC backends. Two views:
+// Perf measurement across the VM and WasmGC/V8 backends. Two views:
 //   - dev_loop: the `tests/run` corpus minus the `bench`-marked fixtures (tiny
-//     programs) — the cost of one `pluma test`-style pass per backend, incl. the
-//     compile/exec split.
+//     programs) — the cost of one `pluma test`-style pass per backend, with a
+//     cold/warm split for wasm.
 //   - compute: the `bench`-marked `tests/run` fixtures (longer programs) —
 //     steady-state throughput per backend.
 //
-// Run with --release; debug cranelift is pathologically slow.
+// The wasm numbers are measured under V8 (the deploy engine): `wasm_exec` is warm
+// (module compiled once, fresh instance per run, via `host::bench_exec_v8`); `wasm_e2e`
+// is cold (a fresh isolate + V8 module-compile + run per invocation, via
+// `host::run_wasm_v8`) — the `pluma run` / cold-start cost.
+//
+// Run with --release; a debug build runs V8 unoptimized and is far slower.
 
 use std::time::{Duration, Instant};
 
 use compiler::Platform;
-use wasmtime::Module;
 
 use crate::{perf_corpus, run, run_corpus};
 
@@ -19,17 +23,6 @@ fn iters() -> u32 {
 		.ok()
 		.and_then(|s| s.parse().ok())
 		.unwrap_or(3)
-}
-
-/// The wasm engine for timing. `BENCH_WASM_GC=drc` switches to the deferred-
-/// reference-counting collector (reclaims within a run) for allocation-heavy
-/// programs that would otherwise trap on the fastest null collector.
-fn perf_engine() -> wasmtime::Engine {
-	if std::env::var("BENCH_WASM_GC").as_deref() == Ok("drc") {
-		host::bench_engine()
-	} else {
-		host::engine()
-	}
 }
 
 pub fn fmt_dur(d: Duration) -> String {
@@ -96,22 +89,17 @@ pub fn dev_loop() -> DevLoop {
 			d.vm += s.elapsed();
 		}
 
-		// WASM: emit + cranelift JIT + instantiate + run (e2e) and exec-only.
+		// WASM under V8: warm exec (module compiled once, fresh instance per run) and
+		// cold e2e (emit + fresh-isolate V8 compile + run — the `pluma run` cost).
 		if let Ok(bytes) = wasm::emit(&ir) {
-			let engine = perf_engine();
-			if let Ok(module) = Module::new(&engine, &bytes) {
+			if let Some(durs) = host::bench_exec_v8(&bytes, &stdin, it) {
 				d.wasm_n += 1;
+				d.wasm_exec += durs.iter().sum::<Duration>();
 				for _ in 0..it {
 					let s = Instant::now();
 					let b = wasm::emit(&ir).unwrap();
-					let m = Module::new(&engine, &b).unwrap();
-					let _ = host::run_entry(&engine, &m, &stdin);
+					let _ = host::run_wasm_v8(&b, &stdin);
 					d.wasm_e2e += s.elapsed();
-				}
-				for _ in 0..it {
-					let s = Instant::now();
-					let _ = host::run_entry(&engine, &module, &stdin);
-					d.wasm_exec += s.elapsed();
 				}
 			}
 		}
@@ -160,23 +148,15 @@ pub fn compute() -> Vec<ComputeRow> {
 		}
 		row.vm = Some(t / it);
 
-		// WASM exec + e2e
+		// WASM under V8: warm exec + cold e2e.
 		if let Ok(bytes) = wasm::emit(&ir) {
-			let engine = perf_engine();
-			if let Ok(module) = Module::new(&engine, &bytes) {
-				let mut te = Duration::ZERO;
-				for _ in 0..it {
-					let s = Instant::now();
-					let _ = host::run_entry(&engine, &module, &stdin);
-					te += s.elapsed();
-				}
-				row.wasm_exec = Some(te / it);
+			if let Some(durs) = host::bench_exec_v8(&bytes, &stdin, it) {
+				row.wasm_exec = Some(durs.iter().sum::<Duration>() / it);
 				let mut t2 = Duration::ZERO;
 				for _ in 0..it {
 					let s = Instant::now();
 					let b = wasm::emit(&ir).unwrap();
-					let m = Module::new(&engine, &b).unwrap();
-					let _ = host::run_entry(&engine, &m, &stdin);
+					let _ = host::run_wasm_v8(&b, &stdin);
 					t2 += s.elapsed();
 				}
 				row.wasm_e2e = Some(t2 / it);

@@ -1,15 +1,15 @@
-// The V8 backend (ABI.md Phase 2). Instantiates the *same* WasmGC artifact under V8
-// — whose generational GC runs it ~20× faster than wasmtime's DRC collector — driving
-// the marshalled `pluma.*` imports as native V8 callbacks over the exported `"memory"`
-// ArrayBuffer. Because Phase 1 made every import scalar + scratch-memory bytes (no GC
-// reflection), this is a port of the wasmtime host's import set, not a redesign; it
-// reuses this crate's engine-independent core (`HostState`/`HostNet`/`NetRet`/
-// `BufferedIo`/`read_line_from`/`deliver_read`).
+// The V8 backend (ABI.md Phase 2). Instantiates the WasmGC artifact under V8 — whose
+// generational GC is what makes the boxed-value IR fast — driving the marshalled
+// `pluma.*` imports as native V8 callbacks over the exported `"memory"` ArrayBuffer.
+// Because the marshalling ABI makes every import scalar + scratch-memory bytes (no GC
+// reflection), a stock JS engine can serve them at all; the import set reuses this
+// crate's engine-independent core (`HostState`/`HostNet`/`NetRet`/`BufferedIo`/
+// `read_line_from`).
 //
-// Used by `conformance` (behind the `v8` feature) as a second deploy engine: a V8↔VM
-// cross-check layered on the wasmtime↔VM one.
+// This is the deploy engine `cli` ships and `conformance` diffs against the VM oracle.
 
 use std::sync::Once;
+use std::time::{Duration, Instant};
 
 use crate::{BufferedIo, HostIo, HostNet, HostState, NetRet, RunResult, StdioIo};
 
@@ -82,14 +82,65 @@ fn run_v8(bytes: &[u8], io: Box<dyn HostIo>) -> RunResult {
 	RunResult { status, stdout }
 }
 
-/// The body of a run, inside an entered context. Returns the program status string.
+/// Benchmark warm execution under V8 (used by `conformance --perf`): compile `bytes`
+/// once in a single isolate, then run `_entry` on a fresh instance `iters` times,
+/// returning each run's wall-clock duration. The module compile (V8's wasm baseline/opt
+/// tiers) is paid once and amortized — mirroring a long-lived deploy that caches the
+/// compiled module — so each duration measures execution (instantiate + run), not
+/// compilation. `None` if the module won't compile.
+pub fn bench_exec_v8(bytes: &[u8], stdin: &[u8], iters: u32) -> Option<Vec<Duration>> {
+	ensure_v8();
+
+	let isolate = &mut v8::Isolate::new(Default::default());
+	let scope = &mut v8::HandleScope::new(isolate);
+	let context = v8::Context::new(scope, Default::default());
+	let scope = &mut v8::ContextScope::new(scope, context);
+
+	let module = v8::WasmModuleObject::compile(scope, bytes)?;
+	let module = v8::Global::new(scope, module);
+
+	let mut durs = Vec::with_capacity(iters as usize);
+	for _ in 0..iters {
+		// A fresh handle scope per iteration so each run's handles (imports, instance)
+		// are reclaimed rather than accumulating across the loop.
+		let scope = &mut v8::HandleScope::new(scope);
+		let module = v8::Local::new(scope, &module);
+		let mut ctx = Ctx {
+			state: HostState {
+				io: Box::new(BufferedIo::new(stdin)),
+				fail: None,
+				last_error: String::new(),
+				read_stash: Vec::new(),
+				net: HostNet::default(),
+			},
+			memory: None,
+		};
+		let ctx_ptr = &mut ctx as *mut Ctx;
+		let start = Instant::now();
+		let _ = run_compiled(scope, module, ctx_ptr);
+		durs.push(start.elapsed());
+	}
+	Some(durs)
+}
+
+/// The body of a run, inside an entered context: compile the WasmGC module, then
+/// instantiate and run it.
 fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) -> String {
-	// Compile the WasmGC module.
 	let module = match v8::WasmModuleObject::compile(scope, bytes) {
 		Some(m) => m,
 		None => return "module error: compile failed".to_string(),
 	};
+	run_compiled(scope, module, ctx_ptr)
+}
 
+/// Instantiate an already-compiled module and run `_entry`, returning the program
+/// status string. Split out of `run_in_context` so `bench_exec_v8` can compile the
+/// module once and re-run it on a fresh instance per iteration (the warm-exec timing).
+fn run_compiled<'s>(
+	scope: &mut v8::HandleScope<'s>,
+	module: v8::Local<'s, v8::WasmModuleObject>,
+	ctx_ptr: *mut Ctx,
+) -> String {
 	// Build the `{ pluma: { <imports> } }` import object. Each callback's `External`
 	// data is the `Ctx` pointer it reads its state + memory through. The full set is
 	// registered regardless of which subset a module declares (extras are ignored); a
@@ -131,7 +182,7 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "io-is-dir", cb_is_dir);
 	register(scope, pluma, data, "io-last-error", cb_last_error);
 	register(scope, pluma, data, "io-copyout", cb_io_copyout);
-	// Unary float math — the libm calls (`(f64) -> f64`), same as the VM / wasmtime host.
+	// Unary float math — the libm calls (`(f64) -> f64`), same as the VM.
 	register(scope, pluma, data, "math-log", cb_math_log);
 	register(scope, pluma, data, "math-log10", cb_math_log10);
 	register(scope, pluma, data, "math-log2", cb_math_log2);
@@ -140,7 +191,7 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "math-cos", cb_math_cos);
 	// core.net — socket ops (the multi-result ones return a `[status, n]` JS array) +
 	// the reactor controls. `net-poll` blocks the thread synchronously (fine in a V8
-	// callback) until a parked socket is ready, exactly like the wasmtime host.
+	// callback) until a parked socket is ready, mirroring the VM's reactor step.
 	register(scope, pluma, data, "net-listen", cb_net_listen);
 	register(scope, pluma, data, "net-connect", cb_net_connect);
 	register(scope, pluma, data, "net-close", cb_net_close);
@@ -378,8 +429,8 @@ fn cb_write_err(s: &mut v8::HandleScope, a: v8::FunctionCallbackArguments, _r: v
 }
 
 /// `io-fail(ptr, len)`: stash the pre-rendered message host-side, then throw — the
-/// `_entry` call unwinds, and the runner surfaces the stashed message (like wasmtime's
-/// trap path).
+/// `_entry` call unwinds, and the runner surfaces the stashed message (mirroring the
+/// VM's abort).
 fn cb_io_fail(
 	scope: &mut v8::HandleScope,
 	args: v8::FunctionCallbackArguments,
@@ -394,9 +445,9 @@ fn cb_io_fail(
 }
 
 // --------------------------------------------------------------------------
-// core.io reads / fs. Each mirrors the wasmtime host's closure: read path/data out of
-// scratch, run the `std::fs`/stdin op, deliver bytes back into the caller's `(dst,cap)`
-// buffer (overflow → `read_stash` for `io-copyout`), set `last_error` on failure.
+// core.io reads / fs. Each callback reads path/data out of scratch, runs the
+// `std::fs`/stdin op, delivers bytes back into the caller's `(dst,cap)` buffer
+// (overflow → `read_stash` for `io-copyout`), and sets `last_error` on failure.
 // --------------------------------------------------------------------------
 
 /// A UTF-8-lossy string read of `(ptr, len)` scratch bytes.

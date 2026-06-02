@@ -22,18 +22,28 @@ ruby <prog>.rb                  node <prog>.js
 ```
 
 — and reports the best wall-clock time over N runs. **Times include process
-startup**, and for Pluma they include front-end compilation, because that is the
-real cost of "run this program."
+startup.** The `pluma-vm` time also includes front-end compilation, because
+recompiling each run is the real dev-loop cost; the `pluma-v8` deploy artifact is
+built once up front, so its per-run time is execution only (the build cost is
+reported separately).
 
 Pluma ships **two backends over one IR**, so it is measured twice:
 
-- **`pluma-vm`** — `pluma run <src>`, the reference VM interpreter. The time
-  includes front-end compilation (the dev-loop cost every run).
-- **`pluma-wasm`** — the WasmGC deploy artifact: `pluma build --target server`
-  *once*, then `pluma run <out>.wasm` in the embedded wasmtime host. Because you
-  build once and run many, the per-run time measures *executing* the artifact;
-  the one-time compile-to-wasm cost is summed and reported separately, not folded
-  into the per-run number.
+- **`pluma-vm`** — `pluma run --vm <src>`, the reference bytecode interpreter (the
+  dev/test oracle, not a deploy target). The time includes front-end compilation
+  (the dev-loop cost every run), and its output is what the other backends are
+  diffed against.
+- **`pluma-v8`** — the WasmGC deploy artifact: `pluma build --target server`
+  *once*, then `pluma run <out>.wasm`, executed under **V8** — the default
+  `pluma run` engine, so this is *run what you ship*. Because you build once and
+  run many, the per-run time measures *executing* the artifact; the one-time
+  compile-to-wasm cost is summed and reported separately, not folded into the
+  per-run number. V8's generational GC is what makes Pluma's boxed-value IR fast
+  here.
+
+(Earlier revisions ran the artifact under wasmtime's `null` and `drc` collectors.
+Wasmtime has since been retired entirely — every WasmGC artifact runs under V8, the
+engine you deploy, both here and in the `conformance` differential against the VM.)
 
 Each timed command runs under a wall-clock cap (default 30 s, override with
 `RUN_TIMEOUT`) so a workload one backend handles far more slowly than the rest
@@ -57,10 +67,13 @@ can't wedge the whole suite — such a cell reads `>30s` rather than hanging.
 This compares **idiomatic code in each language**, not equivalent machine work:
 
 - **Compiling helps a lot.** Across the compute-heavy rows (`fib`, `mandelbrot`,
-  `primes`, `tree`, `sort`, `dict`) the WasmGC artifact runs ~2–9× faster than the
-  VM, and unlike the VM its time excludes front-end compilation.
-- **Node** runs on a JIT (V8); Pluma's VM, CPython, and CRuby are interpreters.
-  Expect Node to win the compute-heavy rows by a wide margin.
+  `primes`, `tree`, `sort`, `dict`) the WasmGC artifact under V8 runs ~10–30×
+  faster than the VM, and unlike the VM its time excludes front-end compilation.
+- **Node** runs on a JIT (V8); CPython and CRuby are interpreters, as is Pluma's
+  reference VM. But `pluma-v8` deploys the *same* WasmGC artifact onto the *same*
+  V8 — so on the tightest compute rows (`fib`, `mandelbrot`, `primes`,
+  `collections`) it lands at parity with or just ahead of Node, rather than losing
+  to it by a wide margin.
 - **`sort` and `string`** run Pluma-level stdlib code — `list.sort` is a merge
   sort written in Pluma calling a comparison closure per compare; the string ops
   are Pluma too — against the other languages' *C-level* sort and string
