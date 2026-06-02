@@ -92,6 +92,10 @@ pub fn module_capabilities(module_name: &str) -> &'static [Capability] {
 	use Capability::*;
 	match module_name {
 		"core.io" => &[Fs, Stdio, Process],
+		// Networking: server/native only. A browser reaches the network through
+		// `fetch` (Capability::Fetch), not raw sockets, so it never gets `Net`.
+		"core.net" => &[Net],
+		"core.http" => &[Net],
 		"core.dom" => &[Dom],
 		_ => &[],
 	}
@@ -130,6 +134,20 @@ mod tests {
 			Platform::Browser.missing_capabilities("core.io"),
 			vec![Capability::Fs, Capability::Process]
 		);
+	}
+
+	#[test]
+	fn core_net_gating_by_platform() {
+		// Native + Server satisfy core.net/core.http; the browser is missing Net
+		// (it reaches the network through `fetch`, not raw sockets).
+		for module in ["core.net", "core.http"] {
+			assert!(Platform::Native.missing_capabilities(module).is_empty());
+			assert!(Platform::Server.missing_capabilities(module).is_empty());
+			assert_eq!(
+				Platform::Browser.missing_capabilities(module),
+				vec![Capability::Net]
+			);
+		}
 	}
 
 	#[test]

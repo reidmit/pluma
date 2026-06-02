@@ -27,7 +27,7 @@ use wasm_encoder::{Function, ValType};
 
 use crate::helpers::wat::{Local, Wat};
 use crate::runtime::sched::{NO_AWAITER, NO_SCOPE, ROOT_SCOPE, fiber, focus, outcome, scope, wait};
-use crate::runtime::{TaskGlobals, TaskLits, act_kind, task_kind};
+use crate::runtime::{NetImports, TaskGlobals, TaskLits, act_kind, task_kind};
 use crate::types;
 
 // ==========================================================================
@@ -55,6 +55,7 @@ pub(crate) fn build_run_task_fn(
 	park: u32,
 	run_timers: u32,
 	list_append: u32,
+	net: Option<NetImports>,
 	g: TaskGlobals,
 	lits: TaskLits,
 ) -> Function {
@@ -189,17 +190,19 @@ pub(crate) fn build_run_task_fn(
 					});
 				},
 				|w| {
-					// Nothing ready: fire timers, else quiesce.
-					list_len(w, g.timers);
-					w.if_else(
-						|w| {
-							// Fire the earliest virtual timer(s) (advances the clock).
-							w.call(run_timers).drop();
-						},
-						|w| {
-							w.br("exit");
-						},
-					);
+					// Nothing ready. With socket I/O pending, block the host reactor on
+					// readiness (the VM's `block_until_ready` branch); else fire the
+					// earliest virtual timer(s), else quiesce.
+					match net {
+						Some(net) => {
+							net_io_waits_present(w, g);
+							w.if_else(
+								|w| net_block_step(w, g, net, run_timers, list_append),
+								|w| timers_or_exit(w, g, run_timers),
+							);
+						}
+						None => timers_or_exit(w, g, run_timers),
+					}
 				},
 			);
 			w.br("sched");
@@ -239,6 +242,7 @@ pub(crate) fn build_run_task_fn(
 /// globals (`out_kind` 1 = done / 2 = park; `out_okerr` = outcome/ wait kind;
 /// `out_val`/`out_arg` = the payload). Mirrors `vm::task::pump` + `advance_one`.
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn build_pump_fn(
 	poll_step: u32,
 	poll_defers_state: u32,
@@ -246,6 +250,7 @@ pub(crate) fn build_pump_fn(
 	start_scope: u32,
 	drain_next: u32,
 	arity1: u32,
+	net: Option<NetImports>,
 	g: TaskGlobals,
 	lits: TaskLits,
 ) -> Function {
@@ -528,6 +533,36 @@ pub(crate) fn build_pump_fn(
 						},
 					);
 				});
+
+				// core.net suspending ops: do the non-blocking host call, then settle
+				// the produced `result` value — or, on would-block, park on socket
+				// readiness (`wait::IO`, re-Started from `fiber::RETRY` by the block
+				// step). token = fid, so the host keys the reactor by the fiber id.
+				if let Some(net) = net {
+					w.local_get(tk).i32(task_kind::NET_ACCEPT).i32_eq();
+					w.if_(|w| {
+						w.local_get(fid);
+						elem(w, tp, 0); // listener
+						w.call(net.accept);
+						net_settle(w, g, fid, fval, fkind, true, lits);
+					});
+					w.local_get(tk).i32(task_kind::NET_READ).i32_eq();
+					w.if_(|w| {
+						w.local_get(fid);
+						elem(w, tp, 0); // connection
+						elem(w, tp, 1); // max bytes
+						w.call(net.read);
+						net_settle(w, g, fid, fval, fkind, false, lits);
+					});
+					w.local_get(tk).i32(task_kind::NET_WRITE).i32_eq();
+					w.if_(|w| {
+						w.local_get(fid);
+						elem(w, tp, 0); // connection
+						elem(w, tp, 1); // bytes
+						w.call(net.write);
+						net_settle(w, g, fid, fval, fkind, true, lits);
+					});
+				}
 
 				w.unreachable();
 			});
@@ -1179,6 +1214,7 @@ pub(crate) fn build_cancel_scope_fn(
 pub(crate) fn build_reap_fiber_fn(
 	cancel_scope: u32,
 	poll_defers_state: u32,
+	net: Option<NetImports>,
 	g: TaskGlobals,
 ) -> Function {
 	let v = types::value_ref();
@@ -1212,6 +1248,16 @@ pub(crate) fn build_reap_fiber_fn(
 			});
 			w.call(cancel_scope).drop();
 		});
+		// If it was parked on socket readiness, drop its host reactor registration
+		// (token = fid) so a cancelled accept/read/write leaves no dangling fd.
+		if let Some(net) = net {
+			fld_i(w, g, g.fibers, fid, fiber::WAIT_KIND);
+			w.i32(wait::IO).i32_eq();
+			w.if_(|w| {
+				w.local_get(fid);
+				w.call(net.unwatch);
+			});
+		}
 		// Run the fiber's poll `defer`s, innermost (top of stack) first.
 		fld(w, g, g.fibers, fid, fiber::ACT);
 		w.ref_cast(types::T_LIST)
@@ -1984,6 +2030,7 @@ fn fiber_fields(w: &mut Wat, scope_id: impl FnOnce(&mut Wat), runs_scope: impl F
 		w.i32(1);
 	}); // ALIVE
 	empty_list(w); // WAITERS
+	push_nothing(w); // RETRY — the parked net `$task` (set on `wait::IO`)
 	w.array_new_fixed(types::T_VALARRAY, fiber::COUNT);
 }
 
@@ -2226,6 +2273,202 @@ fn park_out(w: &mut Wat, g: TaskGlobals, wait_kind: i32, arg: impl FnOnce(&mut W
 	w.i32(wait_kind).global_set(g.out_okerr);
 	arg(w);
 	w.global_set(g.out_arg);
+}
+
+/// Consume a net host op's `(status, n, payload)` result (on the stack, after the
+/// import call) and either park the fiber on socket readiness (would-block) or
+/// settle the produced `result` value down the chain (`br "main"`). `box_n` true →
+/// the `ok` payload is the boxed `n` channel (a socket id / write count); false →
+/// the `payload` ref (read bytes). Mirrors the VM's `io_cont` + `vm::net`'s
+/// per-op result shaping: the task always produces a `result` *value* (the OS error
+/// is `err e`, NOT a fiber failure). On would-block it stashes the net `$task` in
+/// `fiber::RETRY` and parks `wait::IO` (`br "ret"`).
+fn net_settle(
+	w: &mut Wat,
+	g: TaskGlobals,
+	fid: Local,
+	fval: Local,
+	fkind: Local,
+	box_n: bool,
+	lits: TaskLits,
+) {
+	let payload = w.local(types::value_ref());
+	let n = w.local(ValType::I32);
+	let status = w.local(ValType::I32);
+	w.local_set(payload);
+	w.local_set(n);
+	w.local_set(status);
+	w.local_get(status).i32(1).i32_eq(); // would-block?
+	w.if_else(
+		|w| {
+			set_fld(w, g.fibers, fid, fiber::RETRY, |w| {
+				w.local_get(fval);
+			});
+			save_act(w, g, fid);
+			park_out(w, g, wait::IO, |w| {
+				w.i32(0);
+			});
+			w.br("ret");
+		},
+		|w| {
+			// Ready: status 0 → `ok`, status 2 → `err` (a `result` value either way).
+			w.local_get(status).i32_eqz();
+			w.if_result(
+				types::value_ref(),
+				|w| {
+					push_result(w, lits.ok_tag, lits.ok_name, |w| {
+						if box_n {
+							box_i(w, |w| {
+								w.local_get(n);
+							});
+						} else {
+							w.local_get(payload);
+						}
+					});
+				},
+				|w| {
+					push_result(w, lits.err_tag, lits.err_name, |w| {
+						w.local_get(payload);
+					});
+				},
+			);
+			w.local_set(fval);
+			w.i32(focus::OK).local_set(fkind);
+			w.br("main");
+		},
+	);
+}
+
+/// The original block step: fire the earliest virtual timer(s) if any, else
+/// quiesce (`br "exit"`). The path taken when no socket I/O is pending.
+fn timers_or_exit(w: &mut Wat, g: TaskGlobals, run_timers: u32) {
+	list_len(w, g.timers);
+	w.if_else(
+		|w| {
+			// Fire the earliest virtual timer(s) (advances the clock).
+			w.call(run_timers).drop();
+		},
+		|w| {
+			w.br("exit");
+		},
+	);
+}
+
+/// Push i32 1 if any alive fiber is parked on socket readiness (`wait::IO`), else
+/// 0 — the signal that the block step must drive `net-poll` rather than the
+/// virtual-timer path. The host owns the reactor, so this scans the fiber table
+/// (the analogue of the VM's `net_has_io_waits`).
+fn net_io_waits_present(w: &mut Wat, g: TaskGlobals) {
+	let n = w.local(ValType::I32);
+	let i = w.local(ValType::I32);
+	let res = w.local(ValType::I32);
+	list_len(w, g.fibers);
+	w.local_set(n);
+	w.i32(0).local_set(i);
+	w.i32(0).local_set(res);
+	w.block("brk", |w| {
+		w.loop_("lp", |w| {
+			w.local_get(i).local_get(n).i32_ge_s().br_if("brk");
+			fld_i(w, g, g.fibers, i, fiber::ALIVE);
+			w.if_(|w| {
+				fld_i(w, g, g.fibers, i, fiber::WAIT_KIND);
+				w.i32(wait::IO).i32_eq();
+				w.if_(|w| {
+					w.i32(1).local_set(res);
+					w.br("brk");
+				});
+			});
+			w.local_get(i).i32(1).i32_add().local_set(i);
+			w.br("lp");
+		});
+	});
+	w.local_get(res);
+}
+
+/// The reactor block step (net path): with socket I/O pending and nothing ready,
+/// block the host reactor (`net-poll`, bounded by the soonest virtual timer) and
+/// re-Start whatever woke; on timeout fall back to firing due virtual timers.
+/// Mirrors the VM's `block_until_ready` reactor branch.
+fn net_block_step(w: &mut Wat, g: TaskGlobals, net: NetImports, run_timers: u32, list_append: u32) {
+	let woke = w.local(ValType::I32);
+	push_net_deadline(w, g);
+	w.call(net.poll);
+	w.local_tee(woke).i32(0).i32_ge_s();
+	w.if_else(
+		|w| {
+			// A socket woke fiber `woke`: re-Start its parked net `$task`, if still alive.
+			fld_i(w, g, g.fibers, woke, fiber::ALIVE);
+			w.if_(|w| {
+				set_fld_i(w, g.fibers, woke, fiber::WAIT_KIND, |w| {
+					w.i32(wait::NONE);
+				});
+				ready_push(w, g, list_append, woke, focus::START, |w| {
+					fld(w, g, g.fibers, woke, fiber::RETRY);
+				});
+			});
+		},
+		|w| {
+			// Timed out (no socket ready): fire any due virtual timers.
+			list_len(w, g.timers);
+			w.if_(|w| {
+				w.call(run_timers).drop();
+			});
+		},
+	);
+}
+
+/// Push the i64 deadline for `net-poll`: `-1` (block indefinitely) when no virtual
+/// timer is armed, else `max(0, earliest_at - now)` — so a `task.with-timeout`
+/// over a socket read still trips. (The loopback fixtures arm no timers, so this is
+/// `-1` there.)
+fn push_net_deadline(w: &mut Wat, g: TaskGlobals) {
+	let arr = w.local(types::valarray_ref());
+	let n = w.local(ValType::I32);
+	let i = w.local(ValType::I32);
+	let min = w.local(ValType::I64);
+	let at = w.local(ValType::I64);
+	let d = w.local(ValType::I64);
+	list_len(w, g.timers);
+	w.if_result(
+		ValType::I64,
+		|w| {
+			// timers present: earliest `at` minus now, clamped at zero.
+			w.global_get(g.timers)
+				.ref_cast(types::T_LIST)
+				.struct_get(types::T_LIST, 1)
+				.local_set(arr);
+			list_len(w, g.timers);
+			w.local_set(n);
+			w.i64(i64::MAX).local_set(min);
+			w.i32(0).local_set(i);
+			w.block("mbrk", |w| {
+				w.loop_("mlp", |w| {
+					w.local_get(i).local_get(n).i32_ge_s().br_if("mbrk");
+					timer_at(w, arr, i);
+					w.local_tee(at).local_get(min).i64_lt_s();
+					w.if_(|w| {
+						w.local_get(at).local_set(min);
+					});
+					w.local_get(i).i32(1).i32_add().local_set(i);
+					w.br("mlp");
+				});
+			});
+			w.local_get(min).global_get(g.now).i64_sub();
+			w.local_tee(d).i64(0).i64_lt_s();
+			w.if_result(
+				ValType::I64,
+				|w| {
+					w.i64(0);
+				},
+				|w| {
+					w.local_get(d);
+				},
+			);
+		},
+		|w| {
+			w.i64(-1);
+		},
+	);
 }
 
 /// A Start arm that settles directly.

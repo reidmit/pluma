@@ -356,6 +356,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 				c.dep(H::Park),
 				c.dep(H::RunTimers),
 				c.dep(H::ListAppend),
+				c.rt.net,
 				c.rt.taskg,
 				c.rt.tasklits,
 			)
@@ -425,6 +426,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 				c.dep(H::StartScope),
 				c.dep(H::DrainNext),
 				arity1,
+				c.rt.net,
 				c.rt.taskg,
 				c.rt.tasklits,
 			)
@@ -488,7 +490,12 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		fn_type: Ty::Helper(1),
 		deps: &[H::CancelScope, H::PollDefersState],
 		build: |c| {
-			task::build_reap_fiber_fn(c.dep(H::CancelScope), c.dep(H::PollDefersState), c.rt.taskg)
+			task::build_reap_fiber_fn(
+				c.dep(H::CancelScope),
+				c.dep(H::PollDefersState),
+				c.rt.net,
+				c.rt.taskg,
+			)
 		},
 	},
 	HelperDef {

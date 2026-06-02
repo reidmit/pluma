@@ -198,6 +198,17 @@ enum FuncKind {
 	WireReadByte,
 	/// The decode varint source: `() -> i64` (reads a LEB128 varint / sets `g_err`).
 	WireReadVarint,
+	/// A synchronous `core.net` op (`listen`/`close`/`local-addr`/`connect`):
+	/// `(anyref arg, anyref witness) -> (i32 status, i32 n, ref null $value payload)`.
+	NetSync,
+	/// `net-accept`: `(i32 fid, anyref listener) -> (i32, i32, ref null $value)`.
+	NetAccept,
+	/// `net-read`/`net-write`: `(i32 fid, anyref conn, anyref arg) -> (i32, i32, ref null $value)`.
+	NetReadWrite,
+	/// The reactor block step: `net-poll(i64 deadline) -> i32 woken-fid`.
+	NetPoll,
+	/// Drop a reactor registration: `net-unwatch(i32 fid) -> ()`.
+	NetUnwatch,
 }
 
 /// A registered record *shape*: the WasmGC struct type interned for a distinct
@@ -304,6 +315,31 @@ impl FuncTypes {
 	/// The type index for a unary float math host import: `(f64) -> f64`.
 	pub fn for_f64_unary(&mut self) -> u32 {
 		self.intern(FuncKind::F64Unary)
+	}
+
+	/// A synchronous `core.net` op: `(anyref, anyref) -> (i32, i32, ref null $value)`.
+	pub fn for_net_sync(&mut self) -> u32 {
+		self.intern(FuncKind::NetSync)
+	}
+
+	/// `net-accept`: `(i32 fid, anyref) -> (i32, i32, ref null $value)`.
+	pub fn for_net_accept(&mut self) -> u32 {
+		self.intern(FuncKind::NetAccept)
+	}
+
+	/// `net-read`/`net-write`: `(i32 fid, anyref, anyref) -> (i32, i32, ref null $value)`.
+	pub fn for_net_rw(&mut self) -> u32 {
+		self.intern(FuncKind::NetReadWrite)
+	}
+
+	/// `net-poll`: `(i64 deadline) -> i32`.
+	pub fn for_net_poll(&mut self) -> u32 {
+		self.intern(FuncKind::NetPoll)
+	}
+
+	/// `net-unwatch`: `(i32 fid) -> ()`.
+	pub fn for_net_unwatch(&mut self) -> u32 {
+		self.intern(FuncKind::NetUnwatch)
 	}
 
 	/// The type index for a `wire` value mixer: `(i64, ref $value) -> i64`.
@@ -533,6 +569,38 @@ impl FuncTypes {
 				}
 				FuncKind::F64Unary => {
 					types.ty().function([ValType::F64], [ValType::F64]);
+					continue;
+				}
+				// core.net host imports. Every fallible op returns the
+				// `(status:i32, n:i32, payload:ref null $value)` triple; the suspending
+				// ops take the parked fiber's id (i32) first, the sync ops a witness.
+				FuncKind::NetSync => {
+					types.ty().function(
+						[any_ref(), any_ref()],
+						[ValType::I32, ValType::I32, value_ref()],
+					);
+					continue;
+				}
+				FuncKind::NetAccept => {
+					types.ty().function(
+						[ValType::I32, any_ref()],
+						[ValType::I32, ValType::I32, value_ref()],
+					);
+					continue;
+				}
+				FuncKind::NetReadWrite => {
+					types.ty().function(
+						[ValType::I32, any_ref(), any_ref()],
+						[ValType::I32, ValType::I32, value_ref()],
+					);
+					continue;
+				}
+				FuncKind::NetPoll => {
+					types.ty().function([ValType::I64], [ValType::I32]);
+					continue;
+				}
+				FuncKind::NetUnwatch => {
+					types.ty().function([ValType::I32], []);
 					continue;
 				}
 				FuncKind::WireMixVal => {

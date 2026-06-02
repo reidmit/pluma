@@ -19,9 +19,10 @@ use crate::helpers::{
 	helper_for_tag,
 };
 use crate::runtime::{
-	GlobalKind, GlobalSlot, Helper, HelperCtx, HelperSet, IoResultLits, OptionLits, OrderingLits,
-	Runtime, TaskGlobals, TaskLits, ToStringLits, WireGlobals, WireResultLits, WireTags, host_sig,
-	is_f64_unary_host, is_inline_builtin, is_io_result, scan_helpers, task_builtin_kind,
+	GlobalKind, GlobalSlot, Helper, HelperCtx, HelperSet, IoResultLits, NetImports, OptionLits,
+	OrderingLits, Runtime, TaskGlobals, TaskLits, ToStringLits, WireGlobals, WireResultLits,
+	WireTags, host_sig, is_f64_unary_host, is_inline_builtin, is_io_result, is_net_builtin,
+	is_net_sync, scan_helpers, task_builtin_kind,
 };
 use crate::scan::{
 	StrPool, builtin_var_tags, collect_host_calls, collect_zero_arg_closures, scan_strings,
@@ -52,8 +53,18 @@ impl Module {
 		// builtin call (via `helper_for_tag` here); the rest by IR construct (added
 		// by `scan_helpers` below).
 		let mut requested: HelperSet = HelperSet::new();
+		// Whether the program reaches a `core.net` builtin. The seven socket ops plus
+		// the reactor's `net-poll`/`net-unwatch` are registered together once, after
+		// the scan (see below) — the suspending `accept`/`read`/`write` are `$task`
+		// constructors driven by the scheduler, and `poll`/`unwatch` are reached only
+		// from the emitted driver, so none surface as ordinary host calls here.
+		let mut uses_net = false;
 		for &fid in &reach.order {
 			collect_host_calls(&p.functions[fid as usize].body, &builtin_g, |tag| {
+				if is_net_builtin(tag) {
+					uses_net = true;
+					return;
+				}
 				if let Some(h) = helper_for_tag(tag) {
 					requested.insert(h);
 					return;
@@ -131,6 +142,30 @@ impl Module {
 			host_index.insert("float_to_str".to_string(), host_order.len() as u32);
 			host_order.push("float_to_str".to_string());
 		}
+		// `core.net`: register the whole import set together when any net builtin is
+		// reachable (the sync ops shaped at the call site, the suspending ops + the
+		// reactor controls driven by the scheduler). The host defines all nine
+		// unconditionally, so importing the full set even when only some are used is
+		// harmless; it keeps the indices a single contiguous block.
+		let net_imports = uses_net.then(|| {
+			let mut reg = |name: &str| -> u32 {
+				let idx = host_order.len() as u32;
+				host_index.insert(name.to_string(), idx);
+				host_order.push(name.to_string());
+				idx
+			};
+			NetImports {
+				listen: reg("net-listen"),
+				close: reg("net-close"),
+				local_addr: reg("net-local-addr"),
+				connect: reg("net-connect"),
+				accept: reg("net-accept"),
+				read: reg("net-read"),
+				write: reg("net-write"),
+				poll: reg("net-poll"),
+				unwatch: reg("net-unwatch"),
+			}
+		});
 		let num_imports = host_order.len() as u32;
 
 		// Dense FuncId -> wasm function index (imports occupy the low indices).
@@ -202,6 +237,7 @@ impl Module {
 		}
 		runtime.float_to_str = host_index.get("float_to_str").copied();
 		runtime.io_last_error = host_index.get("io-last-error").copied();
+		runtime.net = net_imports;
 		let wrapper_base = next_synth;
 
 		let mut sorted_globals: Vec<u32> = reach.globals.iter().copied().collect();
@@ -642,6 +678,16 @@ impl Module {
 				ftypes.for_float_to_str()
 			} else if is_f64_unary_host(tag) {
 				ftypes.for_f64_unary()
+			} else if is_net_sync(tag) {
+				ftypes.for_net_sync()
+			} else if tag == "net-accept" {
+				ftypes.for_net_accept()
+			} else if tag == "net-read" || tag == "net-write" {
+				ftypes.for_net_rw()
+			} else if tag == "net-poll" {
+				ftypes.for_net_poll()
+			} else if tag == "net-unwatch" {
+				ftypes.for_net_unwatch()
 			} else {
 				let sig = host_sig(tag).unwrap();
 				ftypes.for_host(sig.arity, sig.returns_value)

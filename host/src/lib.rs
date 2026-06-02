@@ -12,8 +12,13 @@
 // reflection and every host import are identical, so the conformance gate tests
 // exactly the runtime the CLI ships.
 
+use std::collections::{HashMap, VecDeque};
 use std::io::{Read, Write};
+use std::net::{TcpListener, TcpStream};
+use std::os::fd::{AsRawFd, BorrowedFd, RawFd};
+use std::time::Duration;
 
+use polling::{Event, Events, Poller};
 use wasmtime::{
 	AnyRef, ArrayRef, ArrayRefPre, ArrayType, AsContextMut, Caller, Config, Engine, ExternType,
 	FuncType, Instance, Linker, Module, RootScope, Rooted, Store, StructRef, StructRefPre,
@@ -182,6 +187,9 @@ struct HostState {
 	/// The module's `$value` GC types, captured once from the witness the first io
 	/// host import receives, so later calls build their returns without re-reflecting.
 	gc_types: Option<GcTypes>,
+	/// `core.net` runtime state: the socket table + the I/O reactor (the host-side
+	/// analogue of `vm::net::NetState`).
+	net: HostNet,
 }
 
 /// The module's GC type handles the io host imports need to build their `$value`
@@ -604,6 +612,281 @@ fn format_duration(nanos: i64) -> String {
 	out
 }
 
+// --------------------------------------------------------------------------
+// `core.net` — the host-side socket table + I/O reactor. The WasmGC analogue of
+// `vm::net`: the same byte-level TCP ops plus a `polling` readiness reactor. The
+// in-wasm scheduler owns the loop; when its ready queue empties and socket I/O is
+// in flight, it calls the blocking `net-poll` import here (mirroring the VM's
+// `block_until_ready` reactor step). The suspending ops (accept/read/write) are
+// *non-blocking* host calls: on `WouldBlock` they register the socket's fd under
+// the parked fiber's id (token = fid) and signal would-block; the scheduler parks
+// the fiber and later drives `net-poll`. listen/close/local-addr/connect are
+// synchronous (v1 connect blocks — a loopback dial completes in-kernel).
+// --------------------------------------------------------------------------
+
+/// A live socket the program holds a handle to (an opaque `int` id into `sockets`).
+enum SocketEntry {
+	Listener(TcpListener),
+	Conn(TcpStream),
+}
+
+impl SocketEntry {
+	fn raw_fd(&self) -> RawFd {
+		match self {
+			SocketEntry::Listener(l) => l.as_raw_fd(),
+			SocketEntry::Conn(c) => c.as_raw_fd(),
+		}
+	}
+}
+
+/// The outcome of one host net op, before it's shaped into a `result` `$value`.
+/// `OkInt` rides the i32 `n` return channel (boxed in wasm); the value-bearing
+/// arms build a primitive `$value` payload; `WouldBlock` signals a park.
+enum NetRet {
+	OkInt(i32), // a listener/connection id, or a bytes-written count
+	OkBytes(Vec<u8>),
+	OkStr(String),
+	OkNothing,
+	Err(String),
+	WouldBlock,
+}
+
+/// Read- vs write-readiness for a park (mirrors `vm::net::Interest`).
+#[derive(Clone, Copy)]
+enum Interest {
+	Read,
+	Write,
+}
+
+/// All `core.net` runtime state: the socket table plus the readiness reactor.
+/// Lives in `HostState` so it persists across host calls for the whole run.
+struct HostNet {
+	sockets: HashMap<u32, SocketEntry>,
+	next_id: u32,
+	/// Created lazily on the first park — a net-free program never makes one.
+	poller: Option<Poller>,
+	events: Events,
+	/// Parked fibers keyed by id (token = fid) → the socket fd to deregister on wake.
+	waits: HashMap<i32, RawFd>,
+	/// Fibers whose socket is ready, buffered across `net-poll` calls (one `wait`
+	/// can surface several; the scheduler consumes one fid per poll).
+	ready: VecDeque<i32>,
+}
+
+impl Default for HostNet {
+	fn default() -> Self {
+		HostNet {
+			sockets: HashMap::new(),
+			next_id: 0,
+			poller: None,
+			events: Events::new(),
+			waits: HashMap::new(),
+			ready: VecDeque::new(),
+		}
+	}
+}
+
+impl HostNet {
+	fn store(&mut self, e: SocketEntry) -> u32 {
+		let id = self.next_id;
+		self.next_id += 1;
+		self.sockets.insert(id, e);
+		id
+	}
+
+	fn listen(&mut self, addr: &str) -> NetRet {
+		match TcpListener::bind(addr) {
+			Ok(l) => match l.set_nonblocking(true) {
+				Ok(()) => NetRet::OkInt(self.store(SocketEntry::Listener(l)) as i32),
+				Err(e) => NetRet::Err(e.to_string()),
+			},
+			Err(e) => NetRet::Err(e.to_string()),
+		}
+	}
+
+	fn close(&mut self, id: u32) -> NetRet {
+		match self.sockets.remove(&id) {
+			Some(_) => NetRet::OkNothing,
+			None => NetRet::Err(format!("net.close: no such socket ({id})")),
+		}
+	}
+
+	fn local_addr(&self, id: u32) -> NetRet {
+		let addr = match self.sockets.get(&id) {
+			Some(SocketEntry::Listener(l)) => l.local_addr(),
+			Some(SocketEntry::Conn(c)) => c.local_addr(),
+			None => return NetRet::Err(format!("net.local-addr: no such socket ({id})")),
+		};
+		match addr {
+			Ok(a) => NetRet::OkStr(a.to_string()),
+			Err(e) => NetRet::Err(e.to_string()),
+		}
+	}
+
+	fn connect(&mut self, addr: &str) -> NetRet {
+		match TcpStream::connect(addr) {
+			Ok(s) => match s.set_nonblocking(true) {
+				Ok(()) => NetRet::OkInt(self.store(SocketEntry::Conn(s)) as i32),
+				Err(e) => NetRet::Err(e.to_string()),
+			},
+			Err(e) => NetRet::Err(e.to_string()),
+		}
+	}
+
+	fn try_accept(&mut self, fid: i32, lid: u32) -> NetRet {
+		let res = match self.sockets.get(&lid) {
+			Some(SocketEntry::Listener(l)) => l.accept(),
+			_ => return NetRet::Err(format!("net.accept: not a listener ({lid})")),
+		};
+		match res {
+			Ok((stream, _peer)) => match stream.set_nonblocking(true) {
+				Ok(()) => NetRet::OkInt(self.store(SocketEntry::Conn(stream)) as i32),
+				Err(e) => NetRet::Err(e.to_string()),
+			},
+			Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => self.park(fid, lid, Interest::Read),
+			Err(e) => NetRet::Err(e.to_string()),
+		}
+	}
+
+	fn try_read(&mut self, fid: i32, cid: u32, max: usize) -> NetRet {
+		let mut buf = vec![0u8; max];
+		let res = match self.sockets.get_mut(&cid) {
+			Some(SocketEntry::Conn(c)) => c.read(&mut buf),
+			_ => return NetRet::Err(format!("net.read: not a connection ({cid})")),
+		};
+		match res {
+			// n == 0 is a clean EOF: an empty `bytes`, distinguishable by length.
+			Ok(n) => {
+				buf.truncate(n);
+				NetRet::OkBytes(buf)
+			}
+			Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => self.park(fid, cid, Interest::Read),
+			Err(e) => NetRet::Err(e.to_string()),
+		}
+	}
+
+	fn try_write(&mut self, fid: i32, cid: u32, data: &[u8]) -> NetRet {
+		let res = match self.sockets.get_mut(&cid) {
+			Some(SocketEntry::Conn(c)) => c.write(data),
+			_ => return NetRet::Err(format!("net.write: not a connection ({cid})")),
+		};
+		match res {
+			Ok(n) => NetRet::OkInt(n as i32),
+			Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => self.park(fid, cid, Interest::Write),
+			Err(e) => NetRet::Err(e.to_string()),
+		}
+	}
+
+	/// Register fiber `fid` against socket `sid`'s readiness (token = fid), then
+	/// report would-block. Mirrors `vm::net::reactor_park`.
+	fn park(&mut self, fid: i32, sid: u32, interest: Interest) -> NetRet {
+		let fd = match self.sockets.get(&sid) {
+			Some(e) => e.raw_fd(),
+			None => return NetRet::Err(format!("net: park on unknown socket {sid}")),
+		};
+		if self.poller.is_none() {
+			match Poller::new() {
+				Ok(p) => self.poller = Some(p),
+				Err(e) => return NetRet::Err(format!("net: poller: {e}")),
+			}
+		}
+		let ev = match interest {
+			Interest::Read => Event::readable(fid as usize),
+			Interest::Write => Event::writable(fid as usize),
+		};
+		// SAFETY: the socket lives in `sockets` and is removed from the poller
+		// (`delete`) on wake or unwatch before it can be closed. One fiber owns a
+		// socket op at a time, so an fd is never double-added.
+		if let Err(e) = unsafe { self.poller.as_ref().unwrap().add(fd, ev) } {
+			return NetRet::Err(format!("net: poller add: {e}"));
+		}
+		self.waits.insert(fid, fd);
+		NetRet::WouldBlock
+	}
+
+	/// Block until a parked socket is ready (or `deadline` nanos elapse; `-1` =
+	/// block indefinitely), returning one woken fid (`-1` on timeout / nothing
+	/// pending). Extra simultaneously-ready fids are buffered for later calls.
+	/// Mirrors `vm::net::reactor_poll` + the scheduler's per-fiber consumption.
+	fn poll(&mut self, deadline: i64) -> i32 {
+		if self.ready.is_empty() {
+			if self.waits.is_empty() {
+				return -1;
+			}
+			let timeout = if deadline < 0 {
+				None
+			} else {
+				Some(Duration::from_nanos(deadline as u64))
+			};
+			let HostNet {
+				poller,
+				events,
+				waits,
+				ready,
+				..
+			} = self;
+			let poller = poller.as_mut().expect("poller exists when waits non-empty");
+			events.clear();
+			if poller.wait(events, timeout).is_err() {
+				return -1;
+			}
+			for ev in events.iter() {
+				let fid = ev.key as i32;
+				if let Some(fd) = waits.remove(&fid) {
+					// SAFETY: same fd we added; deleted before the socket is dropped.
+					let _ = poller.delete(unsafe { BorrowedFd::borrow_raw(fd) });
+					ready.push_back(fid);
+				}
+			}
+		}
+		self.ready.pop_front().unwrap_or(-1)
+	}
+
+	/// Drop a parked I/O wait (on cancellation / reaping). Idempotent. Mirrors
+	/// `vm::net::reactor_deregister`.
+	fn unwatch(&mut self, fid: i32) {
+		if let Some(fd) = self.waits.remove(&fid) {
+			if let Some(p) = &self.poller {
+				// SAFETY: same fd we added; deleted before the socket is dropped.
+				let _ = p.delete(unsafe { BorrowedFd::borrow_raw(fd) });
+			}
+		}
+	}
+}
+
+/// Read a `$int`(-shaped) `$value` argument as an i64 (its field-1 payload).
+fn arg_int(store: &mut impl AsContextMut, v: &Val) -> i64 {
+	let Val::AnyRef(Some(r)) = v else {
+		return 0;
+	};
+	let s = r
+		.as_struct(&mut *store)
+		.expect("as_struct")
+		.expect("a $value");
+	match s.field(&mut *store, 1).expect("int field") {
+		Val::I64(n) => n,
+		o => panic!("int payload: {o:?}"),
+	}
+}
+
+/// Shape a `NetRet` into the `(status:i32, n:i32, payload:ref null $value)` triple
+/// every net host import returns. status 0 = ok / 1 = would-block / 2 = err. The
+/// wasm side wraps it: status 0 boxes `n` (OkInt ops) or wraps `payload` in `ok`;
+/// status 2 wraps `payload` in `err`; status 1 parks the fiber.
+fn set_net_results(store: &mut impl AsContextMut, gc: &GcTypes, ret: NetRet, results: &mut [Val]) {
+	let (status, n, payload): (i32, i32, Val) = match ret {
+		NetRet::OkInt(v) => (0, v, Val::AnyRef(None)),
+		NetRet::OkBytes(b) => (0, 0, build_strlike(store, gc, TAG_BYTES, &b)),
+		NetRet::OkStr(s) => (0, 0, build_strlike(store, gc, TAG_STR, s.as_bytes())),
+		NetRet::OkNothing => (0, 0, build_nothing(store, gc)),
+		NetRet::Err(e) => (2, 0, build_strlike(store, gc, TAG_STR, e.as_bytes())),
+		NetRet::WouldBlock => (1, 0, Val::AnyRef(None)),
+	};
+	results[0] = Val::I32(status);
+	results[1] = Val::I32(n);
+	results[2] = payload;
+}
+
 fn instantiate_module(
 	engine: &Engine,
 	module: &Module,
@@ -616,6 +899,7 @@ fn instantiate_module(
 			fail: None,
 			last_error: String::new(),
 			gc_types: None,
+			net: HostNet::default(),
 		},
 	);
 	let mut linker: Linker<HostState> = Linker::new(engine);
@@ -1012,6 +1296,178 @@ fn instantiate_module(
 			},
 		)
 		.expect("define io-last-error");
+
+	// `core.net` host imports (see `HostNet`). Each fallible op returns the
+	// `(status:i32, n:i32, payload:ref null $value)` triple `set_net_results` builds
+	// — ints ride `n` (boxed in wasm), values/errs ride `payload`. The synchronous
+	// ops (listen/close/local-addr/connect) take a trailing type witness (like the
+	// io imports) so the host can build their `$value` payloads; the suspending ops
+	// (accept/read/write) take the parked fiber's id first and ride the GC types the
+	// preceding listen/connect already cached. `net-poll`/`net-unwatch` drive the
+	// reactor from the in-wasm scheduler's block step.
+	let net3 = FuncType::new(
+		engine,
+		[ValType::ANYREF, ValType::ANYREF],
+		[ValType::I32, ValType::I32, value_ty.clone()],
+	);
+	let net_accept_ty = FuncType::new(
+		engine,
+		[ValType::I32, ValType::ANYREF],
+		[ValType::I32, ValType::I32, value_ty.clone()],
+	);
+	let net_rw_ty = FuncType::new(
+		engine,
+		[ValType::I32, ValType::ANYREF, ValType::ANYREF],
+		[ValType::I32, ValType::I32, value_ty.clone()],
+	);
+	// net-listen addr witness -> (status, listener-id, _).
+	linker
+		.func_new(
+			"pluma",
+			"net-listen",
+			net3.clone(),
+			|mut caller, args, results| {
+				let gc = ensure_types(&mut caller, &args[1]);
+				let addr = arg_string(&mut caller, &args[0]);
+				let ret = caller.data_mut().net.listen(&addr);
+				set_net_results(&mut caller, &gc, ret, results);
+				Ok(())
+			},
+		)
+		.expect("define net-listen");
+	// net-close conn witness -> (status, _, nothing/err).
+	linker
+		.func_new(
+			"pluma",
+			"net-close",
+			net3.clone(),
+			|mut caller, args, results| {
+				let gc = ensure_types(&mut caller, &args[1]);
+				let id = arg_int(&mut caller, &args[0]) as u32;
+				let ret = caller.data_mut().net.close(id);
+				set_net_results(&mut caller, &gc, ret, results);
+				Ok(())
+			},
+		)
+		.expect("define net-close");
+	// net-local-addr listener witness -> (status, _, addr/err).
+	linker
+		.func_new(
+			"pluma",
+			"net-local-addr",
+			net3.clone(),
+			|mut caller, args, results| {
+				let gc = ensure_types(&mut caller, &args[1]);
+				let id = arg_int(&mut caller, &args[0]) as u32;
+				let ret = caller.data_mut().net.local_addr(id);
+				set_net_results(&mut caller, &gc, ret, results);
+				Ok(())
+			},
+		)
+		.expect("define net-local-addr");
+	// net-connect addr witness -> (status, connection-id, err). v1 blocks.
+	linker
+		.func_new("pluma", "net-connect", net3, |mut caller, args, results| {
+			let gc = ensure_types(&mut caller, &args[1]);
+			let addr = arg_string(&mut caller, &args[0]);
+			let ret = caller.data_mut().net.connect(&addr);
+			set_net_results(&mut caller, &gc, ret, results);
+			Ok(())
+		})
+		.expect("define net-connect");
+	// net-accept fid listener -> (status, connection-id, err) | would-block.
+	linker
+		.func_new(
+			"pluma",
+			"net-accept",
+			net_accept_ty,
+			|mut caller, args, results| {
+				let gc = cached_types(&caller);
+				let fid = match args[0] {
+					Val::I32(f) => f,
+					ref o => panic!("net-accept fid: {o:?}"),
+				};
+				let lid = arg_int(&mut caller, &args[1]) as u32;
+				let ret = caller.data_mut().net.try_accept(fid, lid);
+				set_net_results(&mut caller, &gc, ret, results);
+				Ok(())
+			},
+		)
+		.expect("define net-accept");
+	// net-read fid conn max -> (status, _, bytes/err) | would-block.
+	linker
+		.func_new(
+			"pluma",
+			"net-read",
+			net_rw_ty.clone(),
+			|mut caller, args, results| {
+				let gc = cached_types(&caller);
+				let fid = match args[0] {
+					Val::I32(f) => f,
+					ref o => panic!("net-read fid: {o:?}"),
+				};
+				let cid = arg_int(&mut caller, &args[1]) as u32;
+				let max = arg_int(&mut caller, &args[2]).max(0) as usize;
+				let ret = caller.data_mut().net.try_read(fid, cid, max);
+				set_net_results(&mut caller, &gc, ret, results);
+				Ok(())
+			},
+		)
+		.expect("define net-read");
+	// net-write fid conn data -> (status, bytes-written, err) | would-block.
+	linker
+		.func_new(
+			"pluma",
+			"net-write",
+			net_rw_ty,
+			|mut caller, args, results| {
+				let gc = cached_types(&caller);
+				let fid = match args[0] {
+					Val::I32(f) => f,
+					ref o => panic!("net-write fid: {o:?}"),
+				};
+				let cid = arg_int(&mut caller, &args[1]) as u32;
+				let data = raw_value_bytes(&mut caller, &args[2]);
+				let ret = caller.data_mut().net.try_write(fid, cid, &data);
+				set_net_results(&mut caller, &gc, ret, results);
+				Ok(())
+			},
+		)
+		.expect("define net-write");
+	// net-poll deadline-nanos -> woken fid (-1 = timeout / nothing pending).
+	let net_poll_ty = FuncType::new(engine, [ValType::I64], [ValType::I32]);
+	linker
+		.func_new(
+			"pluma",
+			"net-poll",
+			net_poll_ty,
+			|mut caller, args, results| {
+				let deadline = match args[0] {
+					Val::I64(d) => d,
+					ref o => panic!("net-poll deadline: {o:?}"),
+				};
+				results[0] = Val::I32(caller.data_mut().net.poll(deadline));
+				Ok(())
+			},
+		)
+		.expect("define net-poll");
+	// net-unwatch fid -> () : drop a cancelled fiber's reactor registration.
+	let net_unwatch_ty = FuncType::new(engine, [ValType::I32], []);
+	linker
+		.func_new(
+			"pluma",
+			"net-unwatch",
+			net_unwatch_ty,
+			|mut caller, args, _results| {
+				let fid = match args[0] {
+					Val::I32(f) => f,
+					ref o => panic!("net-unwatch fid: {o:?}"),
+				};
+				caller.data_mut().net.unwatch(fid);
+				Ok(())
+			},
+		)
+		.expect("define net-unwatch");
 
 	let instance = linker
 		.instantiate(&mut store, module)

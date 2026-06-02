@@ -32,6 +32,13 @@ pub(crate) mod task_kind {
 	pub(crate) const HANDLE: i32 = 11;
 	#[allow(dead_code)]
 	pub(crate) const NEXT: i32 = 12;
+	// core.net suspending socket ops — dispatched like any other task kind, but
+	// each does a non-blocking host call and parks the fiber on the reactor
+	// (`wait::IO`, re-run via `fiber::RETRY`) when it would block. See
+	// `helpers/task.rs`'s pump NET arms + block step.
+	pub(crate) const NET_ACCEPT: i32 = 13;
+	pub(crate) const NET_READ: i32 = 14;
+	pub(crate) const NET_WRITE: i32 = 15;
 }
 
 /// Activation kinds — an entry in a fiber's await chain (the driver's activation
@@ -62,7 +69,8 @@ pub(crate) mod sched {
 		pub(crate) const WAIT_ARG: u32 = 6; // boxed int — the park target (fid/sid)
 		pub(crate) const ALIVE: u32 = 7; // boxed int — 0/1
 		pub(crate) const WAITERS: u32 = 8; // $list of waiter fids (boxed ints)
-		pub(crate) const COUNT: u32 = 9;
+		pub(crate) const RETRY: u32 = 9; // value — parked net `$task` re-Started on socket readiness (wait::IO)
+		pub(crate) const COUNT: u32 = 10;
 	}
 	/// `Scope` fields.
 	pub(crate) mod scope {
@@ -88,6 +96,7 @@ pub(crate) mod sched {
 		pub(crate) const HANDLE: i32 = 3; // arg = child fid
 		pub(crate) const NEXT: i32 = 4; // arg = scope id
 		pub(crate) const SCOPE: i32 = 5; // arg = scope id
+		pub(crate) const IO: i32 = 6; // parked on socket readiness; the reactor re-runs `fiber::RETRY`
 	}
 	/// A fiber's focus on its next turn (`Focus`).
 	pub(crate) mod focus {
@@ -325,6 +334,11 @@ pub(crate) struct Runtime {
 	/// Host import `io-last-error() -> $str` — the message `__io_result` attaches to
 	/// `err` on a failed io call. Present whenever `IoResult` is emitted.
 	pub(crate) io_last_error: Option<u32>,
+	/// The `core.net` host import indices (the seven socket ops + the reactor's
+	/// `net-poll`/`net-unwatch`). `Some` exactly when the program reaches a net
+	/// builtin; the async scheduler's net machinery (pump NET arms, block step,
+	/// reap unwatch) and the emit-side sync shaping read it.
+	pub(crate) net: Option<NetImports>,
 }
 
 impl Runtime {
@@ -332,6 +346,40 @@ impl Runtime {
 	pub(crate) fn idx(&self, h: Helper) -> Option<u32> {
 		self.helpers.get(h)
 	}
+}
+
+/// The `core.net` host import indices. The synchronous ops (`listen`/`close`/
+/// `local_addr`/`connect`) are called from `emit`'s `host_call` with a witness;
+/// the suspending ops (`accept`/`read`/`write`) and the reactor controls
+/// (`poll`/`unwatch`) are called from the hand-emitted scheduler (`helpers/task.rs`).
+#[derive(Clone, Copy, Default)]
+pub(crate) struct NetImports {
+	pub(crate) listen: u32,
+	pub(crate) close: u32,
+	pub(crate) local_addr: u32,
+	pub(crate) connect: u32,
+	pub(crate) accept: u32,
+	pub(crate) read: u32,
+	pub(crate) write: u32,
+	pub(crate) poll: u32,
+	pub(crate) unwatch: u32,
+}
+
+/// Whether `tag` is one of the seven `core.net` socket builtins (the suspending
+/// `accept`/`read`/`write` plus the synchronous `listen`/`close`/`local-addr`/
+/// `connect`). Drives net-import registration (`module.rs`).
+pub(crate) fn is_net_builtin(tag: &str) -> bool {
+	is_net_sync(tag) || matches!(tag, "net-accept" | "net-read" | "net-write")
+}
+
+/// Whether `tag` is a *synchronous* `core.net` op — a host call shaped into a
+/// `result` (or a Pure `$task`, for `connect`) at the `emit` call site, rather
+/// than a suspending `$task` the scheduler drives.
+pub(crate) fn is_net_sync(tag: &str) -> bool {
+	matches!(
+		tag,
+		"net-listen" | "net-close" | "net-local-addr" | "net-connect"
+	)
 }
 
 /// One helper's wasm function type, resolved against the interner at emission.
@@ -794,6 +842,12 @@ pub(crate) fn task_builtin_kind(tag: &str) -> Option<i32> {
 		"task-shielded" => task_kind::SHIELDED,
 		"scope-new" => task_kind::SCOPE,
 		"scope-next" => task_kind::NEXT,
+		// core.net suspending socket ops: a `$task` carrying the op's args (the
+		// scheduler does the non-blocking host call + reactor park). listen/close/
+		// local-addr/connect are NOT here — they're synchronous host calls.
+		"net-accept" => task_kind::NET_ACCEPT,
+		"net-read" => task_kind::NET_READ,
+		"net-write" => task_kind::NET_WRITE,
 		_ => return None,
 	})
 }

@@ -13,12 +13,9 @@ error cases are excluded — they belong to the frontend `tests/analyze` suite.
 | Backend | Match | Diverge | Skipped | Coverage |
 |---|---:|---:|---:|---:|
 | VM (oracle) | 218 | — | — | reference |
-| WasmGC | 216 | 0 | 2 | 216/218 |
+| WasmGC | 218 | 0 | 0 | 218/218 |
 
 ## WasmGC skips
 
-### unsupported (2)
-
-- _wasm::emit rejected (20 diag)_ — net-loopback
-- _wasm::emit rejected (22 diag)_ — http-loopback
+_None — full parity with the VM._
 

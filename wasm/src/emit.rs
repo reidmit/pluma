@@ -14,7 +14,7 @@ use crate::Diagnostics;
 use crate::async_lower::TASK_ENUM;
 use crate::runtime::{
 	GlobalKind, GlobalSlot, Helper, Runtime, WIRE_FNV_OFFSET, host_sig, is_f64_unary_host,
-	is_inline_builtin, is_io_host, is_io_result, task_builtin_kind,
+	is_inline_builtin, is_io_host, is_io_result, is_net_sync, task_builtin_kind, task_kind,
 };
 use crate::scan::{
 	StrPool, block_has_pushdefer, builtin_var_tags, compute_nominal, ctor_var_tags,
@@ -1269,9 +1269,18 @@ impl<'a> FnEmitter<'a> {
 			return;
 		}
 		// `task.*` / `scope-new`/`scope-next` pure constructors build a cold `$task`
-		// directly (the scheduler in `helpers/task.rs` runs it).
+		// directly (the scheduler in `helpers/task.rs` runs it). The suspending net
+		// ops (`net-accept`/`net-read`/`net-write`) are `$task` kinds too — the
+		// scheduler does their host call + reactor park.
 		if let Some(kind) = task_builtin_kind(tag) {
 			self.make_task(kind, args);
+			return;
+		}
+		// Synchronous `core.net` ops (`listen`/`close`/`local-addr`/`connect`): a host
+		// call shaped into a `result` here (connect additionally wraps it in a Pure
+		// `$task`, matching its `task (result …)` type).
+		if is_net_sync(tag) {
+			self.emit_net_sync(tag, args);
 			return;
 		}
 		// The side-effecting scope-kernel ops call straight into the scheduler:
@@ -1660,6 +1669,102 @@ impl<'a> FnEmitter<'a> {
 			array_size: 4,
 		});
 		self.mk_list();
+	}
+
+	/// Shape a synchronous `core.net` op into a `result`. Calls the host import —
+	/// `(args…, witness) -> (status:i32, n:i32, payload:$value)` — then wraps the
+	/// triple: status 0 → `ok` (boxing `n` for the id-returning ops, else the
+	/// `payload`); status 2 → `err payload`. (Sync ops never report would-block.)
+	/// `connect`'s static type is `task (result …)`, so its `result` is wrapped in a
+	/// Pure `$task`.
+	fn emit_net_sync(&mut self, tag: &str, args: &[Atom]) {
+		let Some(net) = self.runtime.net else {
+			self
+				.diags
+				.push(format!("`{tag}` needs the net host imports"));
+			self.push_nothing();
+			return;
+		};
+		let import = match tag {
+			"net-listen" => net.listen,
+			"net-close" => net.close,
+			"net-local-addr" => net.local_addr,
+			"net-connect" => net.connect,
+			other => {
+				self.diags.push(format!("`{other}` is not a sync net op"));
+				self.push_nothing();
+				return;
+			}
+		};
+		// `ok` wraps an int id (boxed from `n`) for listen/connect; close/local-addr
+		// carry their ok value in `payload` (nothing / the address string).
+		let box_n = matches!(tag, "net-listen" | "net-connect");
+		let wrap_task = tag == "net-connect";
+
+		// Host call: real args, then the universal type witness, → (status, n, payload).
+		for a in args {
+			self.atom(a);
+		}
+		self.emit_io_witness();
+		self.ins(Instruction::Call(import));
+		let payload = self.fresh_local(types::value_ref());
+		let n = self.fresh_local(ValType::I32);
+		self.ins(Instruction::LocalSet(payload));
+		self.ins(Instruction::LocalSet(n));
+		// status on top: 0 = ok, 2 = err. `eqz` → then-branch is the ok case.
+		self.ins(Instruction::I32Eqz);
+		self.ins(Instruction::If(BlockType::Result(types::value_ref())));
+		self.result_head(true);
+		if box_n {
+			self.ins(Instruction::I32Const(types::TAG_INT));
+			self.ins(Instruction::LocalGet(n));
+			self.ins(Instruction::I64ExtendI32S);
+			self.ins(Instruction::StructNew(types::T_INT));
+		} else {
+			self.ins(Instruction::LocalGet(payload));
+		}
+		self.result_tail();
+		self.ins(Instruction::Else);
+		self.result_head(false);
+		self.ins(Instruction::LocalGet(payload));
+		self.result_tail();
+		self.ins(Instruction::End);
+		if wrap_task {
+			// Wrap the `result` (on the stack) in `task.return result` — a Pure `$task`.
+			let r = self.fresh_local(types::value_ref());
+			self.ins(Instruction::LocalSet(r));
+			self.ins(Instruction::I32Const(types::TAG_TASK));
+			self.ins(Instruction::I32Const(task_kind::PURE));
+			self.ins(Instruction::LocalGet(r));
+			self.ins(Instruction::ArrayNewFixed {
+				array_type_index: types::T_VALARRAY,
+				array_size: 1,
+			});
+			self.ins(Instruction::StructNew(types::T_TASK));
+		}
+	}
+
+	/// Push the head of a `result` `$variant` — `{TAG_VARIANT, ok/err tag, name}` —
+	/// ready for the caller to push the single payload value then `result_tail`.
+	fn result_head(&mut self, is_ok: bool) {
+		let tag = if is_ok {
+			self.runtime.tasklits.ok_tag
+		} else {
+			self.runtime.tasklits.err_tag
+		};
+		self.ins(Instruction::I32Const(types::TAG_VARIANT));
+		self.ins(Instruction::I32Const(tag as i32));
+		self.string_const(&variant_display("__prelude__.result", tag, self.enums));
+	}
+
+	/// Finish a one-payload `$variant` started by `result_head`: pack the value into
+	/// the payload `$valarray` and build the struct.
+	fn result_tail(&mut self) {
+		self.ins(Instruction::ArrayNewFixed {
+			array_type_index: types::T_VALARRAY,
+			array_size: 1,
+		});
+		self.ins(Instruction::StructNew(types::T_VARIANT));
 	}
 
 	/// Emit a pure-compute builtin inline over the `$value` GC layout.
