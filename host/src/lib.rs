@@ -360,12 +360,20 @@ pub fn engine() -> Engine {
 	config.wasm_function_references(true);
 	config.wasm_gc(true);
 	config.wasm_tail_call(true);
-	// Use the null collector (allocate, never collect): these fixtures are tiny,
-	// short-lived programs, so never collecting is the fastest option. (This also
-	// used to dodge a wasmtime 30 deferred-reference-counting collector panic
-	// ("invalid VMGcKind"); that bug is fixed as of wasmtime 45, so the drc
-	// collector works too — null just stays cheaper for this workload.)
-	config.collector(wasmtime::Collector::Null);
+	// Collector defaults to null (allocate, never collect): conformance fixtures and
+	// `pluma run app.wasm` are tiny, short-lived programs, so never collecting is the
+	// fastest option. (Null also used to dodge a wasmtime 30 deferred-reference-
+	// counting panic ("invalid VMGcKind"); that bug is fixed as of wasmtime 45.)
+	//
+	// `PLUMA_WASM_GC=drc` opts into the real deferred-reference-counting collector —
+	// the configuration a long-lived deploy actually requires (null OOMs once the
+	// heap fills). The competition harness sets it so its numbers reflect a real GC,
+	// not a best-case bump allocator. Default stays null, so nothing else changes.
+	let collector = match std::env::var("PLUMA_WASM_GC").as_deref() {
+		Ok("drc") => wasmtime::Collector::DeferredReferenceCounting,
+		_ => wasmtime::Collector::Null,
+	};
+	config.collector(collector);
 	Engine::new(&config).expect("engine")
 }
 

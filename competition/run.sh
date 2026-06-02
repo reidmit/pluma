@@ -12,19 +12,27 @@
 # and report the best wall-clock time over several runs (best-of-N rejects noise
 # from other activity on the machine).
 #
-# Pluma is measured two ways, because it ships two backends over one IR:
+# Pluma is measured three ways, because it ships two backends over one IR and the
+# WasmGC artifact's speed depends heavily on which collector wasmtime runs it under:
 #
 #   pluma-vm    `pluma run <src>`          — the reference VM interpreter; the
 #                                            time includes front-end compilation,
 #                                            because that is what the dev loop
 #                                            actually costs every run.
-#   pluma-wasm  `pluma build` once, then   — the WasmGC deploy artifact, executed
-#               `pluma run <out>.wasm`       in the embedded wasmtime host. This
-#                                            is the "build once, run many" deploy
-#                                            story, so the per-run timing measures
-#                                            *executing* the artifact; the one-time
-#                                            build cost is summed and reported
-#                                            separately rather than folded in.
+#   wasm-null   `pluma build` once, run    — the WasmGC artifact under wasmtime's
+#               under PLUMA_WASM_GC=null      null collector (allocate, never free):
+#                                            a no-GC *floor*. Fastest possible, but
+#                                            it OOMs any long-lived deploy, so it is
+#                                            a best-case bound, not a deploy figure.
+#   wasm-drc    same artifact, run under   — the same artifact under wasmtime's
+#               PLUMA_WASM_GC=drc            deferred-reference-counting collector,
+#                                            the only *real* WasmGC collector it
+#                                            ships: the deploy *ceiling*. Costly
+#                                            here because Pluma boxes every value,
+#                                            so refcounting churns on every
+#                                            transient; the true deploy cost sits
+#                                            between the two bounds. The one-time
+#                                            build cost is reported separately.
 #
 # Usage:  competition/run.sh [RUNS]      (default RUNS=5)
 
@@ -34,6 +42,10 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PLUMA="$ROOT/target/release/cli"
 RUNS="${1:-5}"
 REPORT="$ROOT/competition/RESULTS.md"
+
+# The WasmGC artifact is timed under both collectors `host::engine()` exposes via
+# the PLUMA_WASM_GC env var (set per-invocation below): `null` (no-GC floor) and
+# `drc` (real-collector ceiling). See the header comment for why both are reported.
 
 # benchmark-dir : base-filename : one-line description
 BENCHES=(
@@ -136,9 +148,9 @@ fi
 
 echo "Pluma (VM + WasmGC) vs Python vs Ruby vs Node.js  —  best of $RUNS runs, seconds (lower is better)"
 echo
-printf '%-14s %9s %11s %9s %8s %8s %11s %13s   %s\n' \
-	"benchmark" "pluma-vm" "pluma-wasm" "python3" "ruby" "node" "vm vs best" "wasm vs best" "output"
-printf '%s\n' "-------------------------------------------------------------------------------------------------------------------"
+printf '%-12s %8s %9s %9s %8s %7s %7s %10s %12s   %s\n' \
+	"benchmark" "pluma-vm" "wasm-null" "wasm-drc" "python3" "ruby" "node" "vm vs best" "wasm vs best" "output"
+printf '%s\n' "----------------------------------------------------------------------------------------------------------------"
 
 po="$(mktemp)"
 pwo="$(mktemp)"
@@ -161,14 +173,19 @@ for entry in "${BENCHES[@]}"; do
 	pt="$(min_time "$po" "$PLUMA" run "$d/$name")"
 
 	# Compile to a WasmGC artifact once (build cost is a one-time price, not part
-	# of the per-run number), then time executing that artifact in wasmtime.
+	# of the per-run number), then time executing that one artifact under BOTH
+	# collectors: null = the no-GC floor (allocate, never free — fastest, but OOMs
+	# any real deploy), drc = wasmtime's only real collector, the deploy ceiling.
+	# Same `.wasm`, same output; only the host's collector differs.
 	bt="$(build_wasm "$d/$name" "$WASMDIR/$name")"
 	if [ "$bt" = "ERR" ]; then
-		pwt="n/a"
+		pwt_null="n/a"
+		pwt_drc="n/a"
 		: >"$pwo"      # clear stale output so the diff below doesn't false-match
 	else
 		[[ "$bt" =~ ^[0-9.]+$ ]] && build_total="$(awk "BEGIN { print $build_total + $bt }")"
-		pwt="$(min_time "$pwo" "$PLUMA" run "$WASMDIR/$name.wasm")"
+		pwt_null="$(min_time "$pwo" env PLUMA_WASM_GC=null "$PLUMA" run "$WASMDIR/$name.wasm")"
+		pwt_drc="$(min_time "$pwo" env PLUMA_WASM_GC=drc "$PLUMA" run "$WASMDIR/$name.wasm")"
 	fi
 
 	pyt="$(min_time "$pyo" python3 "$d/$name.py")"
@@ -189,11 +206,13 @@ for entry in "${BENCHES[@]}"; do
 	best_other="$(printf '%s\n' "$pyt" "$rbt" "$jt" |
 		awk '/^[0-9.]+$/ { if (m == "" || $1 < m) m = $1 } END { print (m == "" ? "n/a" : m) }')"
 	vs_vm="$(ratio "$pt" "$best_other")"
-	vs_wa="$(ratio "$pwt" "$best_other")"
+	# `wasm vs best` uses the drc (real-collector) number — the deploy reality, not
+	# the no-GC floor.
+	vs_wa="$(ratio "$pwt_drc" "$best_other")"
 
-	printf '%-14s %9s %11s %9s %8s %8s %11s %13s   %s\n' \
-		"$name" "$pt" "$pwt" "$pyt" "$rbt" "$jt" "$vs_vm" "$vs_wa" "$status"
-	md_rows+="| \`$name\` | $desc | $pt | $pwt | $pyt | $rbt | $jt | $vs_vm | $vs_wa | $status |"$'\n'
+	printf '%-12s %8s %9s %9s %8s %7s %7s %10s %12s   %s\n' \
+		"$name" "$pt" "$pwt_null" "$pwt_drc" "$pyt" "$rbt" "$jt" "$vs_vm" "$vs_wa" "$status"
+	md_rows+="| \`$name\` | $desc | $pt | $pwt_null | $pwt_drc | $pyt | $rbt | $jt | $vs_vm | $vs_wa | $status |"$'\n'
 done
 
 rm -f "$po" "$pwo" "$pyo" "$rbo" "$jso"
@@ -229,25 +248,38 @@ overall="every implementation agreed on every output"
 	echo
 	echo "## Results"
 	echo
-	echo "| benchmark | exercises | pluma-vm | pluma-wasm | python3 | ruby | node | vm vs best | wasm vs best | output |"
-	echo "|---|---|--:|--:|--:|--:|--:|--:|--:|:--:|"
+	echo "| benchmark | exercises | pluma-vm | wasm (null) | wasm (drc) | python3 | ruby | node | vm vs best | wasm vs best | output |"
+	echo "|---|---|--:|--:|--:|--:|--:|--:|--:|--:|:--:|"
 	printf '%s' "$md_rows"
 	echo
-	echo "One-time cost to compile all ${#BENCHES[@]} benchmarks to WasmGC artifacts: **${build_total}s** total (not included in the \`pluma-wasm\` per-run times)."
+	echo "One-time cost to compile all ${#BENCHES[@]} benchmarks to WasmGC artifacts: **${build_total}s** total (not included in the per-run \`wasm\` times)."
 	echo
 	echo "## How to read this"
 	echo
-	echo "- Pluma ships **two backends over one IR**, so it appears twice:"
+	echo "- Pluma ships **two backends over one IR**, and the WasmGC artifact's speed"
+	echo "  depends heavily on the collector it runs under, so it appears three times:"
 	echo "  - \`pluma-vm\` — \`pluma run <src>\`, the reference VM interpreter. The time"
 	echo "    includes front-end compilation, because that is what the dev loop costs"
 	echo "    every run."
-	echo "  - \`pluma-wasm\` — the WasmGC deploy artifact (\`pluma build\` once, then"
-	echo "    \`pluma run <out>.wasm\` in the embedded wasmtime host). Since you build"
-	echo "    once and run many, the per-run time measures *executing* the artifact;"
-	echo "    the one-time build cost is reported separately above."
-	echo "- \`vm vs best\` / \`wasm vs best\` divide each Pluma backend's time by the fastest"
-	echo "  competitor's time (greater than 1× means Pluma is slower; less than 1× means"
-	echo "  faster)."
+	echo "  - \`wasm (null)\` — the WasmGC artifact (\`pluma build\` once, then"
+	echo "    \`pluma run <out>.wasm\`) run under wasmtime's **null collector**:"
+	echo "    allocate, never free. This is a **no-GC floor** — the fastest the artifact"
+	echo "    can possibly go, but it OOMs any long-lived program, so it is a best-case"
+	echo "    bound and **not a real deploy configuration**."
+	echo "  - \`wasm (drc)\` — the *same* artifact under wasmtime's **deferred-reference-"
+	echo "    counting collector**, the only real WasmGC collector wasmtime ships. This is"
+	echo "    the **deploy ceiling**. It is costly here because Pluma's IR boxes every"
+	echo "    value (every \`int\` is a heap object), so reference counting churns on every"
+	echo "    transient — the worst-fit collector for this allocation pattern. A tracing /"
+	echo "    generational collector (which wasmtime does not yet offer for WasmGC) would"
+	echo "    bulk-free instead and land much closer to the floor. **The true deploy cost"
+	echo "    sits between \`null\` and \`drc\`**; until wasmtime ships a tracing GC, \`drc\` is"
+	echo "    what a deploy actually pays."
+	echo "  - The one-time build cost is reported separately above; \`build once, run many\`,"
+	echo "    so the per-run times measure *executing* the artifact, not compiling it."
+	echo "- \`vm vs best\` / \`wasm vs best\` divide a Pluma time by the fastest competitor's"
+	echo "  time (greater than 1× means Pluma is slower; less than 1× means faster)."
+	echo "  \`wasm vs best\` uses the \`drc\` number — the deploy reality, not the no-GC floor."
 	echo "- \`output\` = \`ok\` means Pluma (both backends) and all three competitors printed"
 	echo "  byte-identical results; \`MISMATCH\` means they disagreed and the row should not"
 	echo "  be trusted."
@@ -267,11 +299,15 @@ overall="every implementation agreed on every output"
 echo
 echo "Notes:"
 echo "  - 'pluma-vm' runs the source through the reference VM (compile + interpret each"
-echo "    run); 'pluma-wasm' runs a precompiled WasmGC artifact in wasmtime (build once,"
-echo "    run many). Compiling all ${#BENCHES[@]} benchmarks took ${build_total}s total, one time,"
-echo "    and is NOT in the per-run pluma-wasm numbers."
-echo "  - 'vm vs best' / 'wasm vs best' are each Pluma backend's time / the fastest"
-echo "    competitor's time. >1x means Pluma is slower; <1x means faster."
+echo "    run). 'wasm-null' and 'wasm-drc' run the SAME precompiled WasmGC artifact in"
+echo "    wasmtime under two collectors: null (allocate-never-free; a no-GC floor that"
+echo "    OOMs any real deploy) and drc (wasmtime's only real collector; the deploy"
+echo "    ceiling). The true deploy cost sits between. Compiling all ${#BENCHES[@]} benchmarks took"
+echo "    ${build_total}s total, one time, and is NOT in the per-run wasm numbers."
+echo "  - drc is costly because Pluma boxes every value, so refcounting churns on every"
+echo "    transient; a tracing GC (not yet in wasmtime for WasmGC) would land near null."
+echo "  - 'vm vs best' / 'wasm vs best' are a Pluma time / the fastest competitor's time"
+echo "    ('wasm vs best' uses drc). >1x means Pluma is slower; <1x means faster."
 echo "  - 'output' = MISMATCH means the programs disagreed on their result."
 echo "  - core.dict is a persistent, structurally-shared map (O(log n) insert); list.sort"
 echo "    is a Pluma-level merge sort and the string ops are Pluma-level too. The others"
