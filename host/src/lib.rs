@@ -33,7 +33,7 @@ use polling::{Event, Events, Poller};
 // `NetRet`/`BufferedIo`/`read_line_from`) — a child module sees its ancestors' private
 // items, so nothing here needs `pub`.
 mod v8host;
-pub use v8host::{bench_exec_v8, run_streaming_v8, run_wasm_v8};
+pub use v8host::{run_streaming_v8, run_wasm_v8};
 
 /// A program's observable result: exit status + captured stdout. (The streaming runner
 /// returns an empty `stdout` — it streamed live to the process — and the caller uses

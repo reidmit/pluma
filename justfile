@@ -52,10 +52,6 @@ conformance:
 conformance-check:
   @ cargo test -p conformance --release
 
-# full report incl. perf tables -> target/conformance/report.md (slow)
-conformance-perf:
-  @ cargo run -p conformance --release -- --perf
-
 # run the stdlib's own Pluma test suite (compiler/src/stdlib/*.test.pa)
 # through `pluma test` — exercises the stdlib and the `core.testing` runner.
 test-stdlib:

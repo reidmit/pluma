@@ -9,7 +9,6 @@
 // This is the deploy engine `cli` ships and `conformance` diffs against the VM oracle.
 
 use std::sync::Once;
-use std::time::{Duration, Instant};
 
 use crate::{BufferedIo, HostIo, HostNet, HostState, NetRet, RunResult, StdioIo};
 
@@ -82,65 +81,15 @@ fn run_v8(bytes: &[u8], io: Box<dyn HostIo>) -> RunResult {
 	RunResult { status, stdout }
 }
 
-/// Benchmark warm execution under V8 (used by `conformance --perf`): compile `bytes`
-/// once in a single isolate, then run `_entry` on a fresh instance `iters` times,
-/// returning each run's wall-clock duration. The module compile (V8's wasm baseline/opt
-/// tiers) is paid once and amortized — mirroring a long-lived deploy that caches the
-/// compiled module — so each duration measures execution (instantiate + run), not
-/// compilation. `None` if the module won't compile.
-pub fn bench_exec_v8(bytes: &[u8], stdin: &[u8], iters: u32) -> Option<Vec<Duration>> {
-	ensure_v8();
-
-	let isolate = &mut v8::Isolate::new(Default::default());
-	let scope = &mut v8::HandleScope::new(isolate);
-	let context = v8::Context::new(scope, Default::default());
-	let scope = &mut v8::ContextScope::new(scope, context);
-
-	let module = v8::WasmModuleObject::compile(scope, bytes)?;
-	let module = v8::Global::new(scope, module);
-
-	let mut durs = Vec::with_capacity(iters as usize);
-	for _ in 0..iters {
-		// A fresh handle scope per iteration so each run's handles (imports, instance)
-		// are reclaimed rather than accumulating across the loop.
-		let scope = &mut v8::HandleScope::new(scope);
-		let module = v8::Local::new(scope, &module);
-		let mut ctx = Ctx {
-			state: HostState {
-				io: Box::new(BufferedIo::new(stdin)),
-				fail: None,
-				last_error: String::new(),
-				read_stash: Vec::new(),
-				net: HostNet::default(),
-			},
-			memory: None,
-		};
-		let ctx_ptr = &mut ctx as *mut Ctx;
-		let start = Instant::now();
-		let _ = run_compiled(scope, module, ctx_ptr);
-		durs.push(start.elapsed());
-	}
-	Some(durs)
-}
-
 /// The body of a run, inside an entered context: compile the WasmGC module, then
-/// instantiate and run it.
+/// instantiate it and run `_entry`. Returns the program status string.
 fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) -> String {
+	// Compile the WasmGC module.
 	let module = match v8::WasmModuleObject::compile(scope, bytes) {
 		Some(m) => m,
 		None => return "module error: compile failed".to_string(),
 	};
-	run_compiled(scope, module, ctx_ptr)
-}
 
-/// Instantiate an already-compiled module and run `_entry`, returning the program
-/// status string. Split out of `run_in_context` so `bench_exec_v8` can compile the
-/// module once and re-run it on a fresh instance per iteration (the warm-exec timing).
-fn run_compiled<'s>(
-	scope: &mut v8::HandleScope<'s>,
-	module: v8::Local<'s, v8::WasmModuleObject>,
-	ctx_ptr: *mut Ctx,
-) -> String {
 	// Build the `{ pluma: { <imports> } }` import object. Each callback's `External`
 	// data is the `Ctx` pointer it reads its state + memory through. The full set is
 	// registered regardless of which subset a module declares (extras are ignored); a

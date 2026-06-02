@@ -1,12 +1,12 @@
-// The cross-backend conformance + perf harness. Runs each Pluma program through
-// the VM (oracle) and the WasmGC deploy backend; the deploy backend is diffed
-// against the VM. Also collects timing (see `perf`) and renders the report (see
-// `report`). This is the standing reference as features and perf work land across
-// the two runtimes.
+// The cross-backend conformance harness. Runs each Pluma program through the VM
+// (oracle) and the WasmGC deploy backend (under V8); the deploy backend is diffed
+// against the VM and the result rendered into `CONFORMANCE.md` (see `report`). This is
+// the standing correctness reference as features land across the two runtimes. (Perf is
+// measured elsewhere: `competition/` for process-level deploy timing, `bench/` for VM
+// compute throughput.)
 
 mod run;
 
-pub mod perf;
 pub mod report;
 
 use std::path::{Path, PathBuf};

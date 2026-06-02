@@ -1,6 +1,6 @@
-// Report model + rendering. Two outputs:
-//   - CONFORMANCE.md (committed, deterministic): the coverage/correctness matrix.
-//   - target/conformance/report.md (on-demand): coverage + perf + environment.
+// Report model + rendering. Renders the committed, deterministic CONFORMANCE.md: the
+// coverage/correctness matrix (no perf numbers, no environment — stable across machines
+// so it lives in git and is asserted fresh by the correctness gate).
 
 use std::collections::BTreeMap;
 
