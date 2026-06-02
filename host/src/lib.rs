@@ -37,7 +37,7 @@ use wasmtime::{
 #[cfg(feature = "v8")]
 mod v8host;
 #[cfg(feature = "v8")]
-pub use v8host::run_wasm_v8;
+pub use v8host::{run_streaming_v8, run_wasm_v8};
 
 /// A program's observable result: exit status + captured stdout. (`run_streaming`
 /// returns an empty `stdout` — it streamed live to the process — and the caller

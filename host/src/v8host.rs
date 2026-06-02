@@ -11,7 +11,7 @@
 
 use std::sync::Once;
 
-use crate::{BufferedIo, HostNet, HostState, NetRet, RunResult};
+use crate::{BufferedIo, HostIo, HostNet, HostState, NetRet, RunResult, StdioIo};
 
 /// V8 platform init is process-global and one-shot.
 static V8_INIT: Once = Once::new();
@@ -37,11 +37,32 @@ struct Ctx {
 /// stdout (the conformance differential shape, mirroring `run_wasm`). `stdin` feeds the
 /// buffered io sink.
 pub fn run_wasm_v8(bytes: &[u8], stdin: &[u8]) -> RunResult {
+	run_v8(bytes, Box::new(BufferedIo::new(stdin)))
+}
+
+/// Compile + instantiate `bytes` and run `_entry` once under V8, streaming
+/// stdout/stderr to the process and reading stdin from it (the `cli`'s `pluma run`
+/// path). Returns the process exit code; a failure's message is already on stderr.
+pub fn run_streaming_v8(bytes: &[u8]) -> i32 {
+	let result = run_v8(bytes, Box::new(StdioIo::new()));
+	match result.status.as_str() {
+		"ok" => 0,
+		other => {
+			let msg = other.strip_prefix("runtime error: ").unwrap_or(other);
+			eprintln!("{msg}");
+			1
+		}
+	}
+}
+
+/// Run `_entry` under V8 through the given io sink, returning status + captured stdout
+/// (empty for the streaming sink). The engine-neutral marshalling core.
+fn run_v8(bytes: &[u8], io: Box<dyn HostIo>) -> RunResult {
 	ensure_v8();
 
 	let mut ctx = Ctx {
 		state: HostState {
-			io: Box::new(BufferedIo::new(stdin)),
+			io,
 			fail: None,
 			last_error: String::new(),
 			read_stash: Vec::new(),

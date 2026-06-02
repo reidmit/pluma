@@ -9,18 +9,29 @@ fn main() {
 	match std::env::args().nth(1) {
 		Some(arg) => match &arg[..] {
 			"run" => {
-				// Everything after the script path is the program's own argv,
-				// surfaced through `io.args`.
-				let mut rest = std::env::args().skip(2);
-				let entry_path = match rest.next() {
+				// `pluma run [--vm] <path> [args…]`. By default a source file runs on V8
+				// (the deploy engine — run what you ship); `--vm` forces the bytecode VM.
+				// Everything after the path is the program's own argv (`io.args`).
+				let mut use_vm = false;
+				let mut entry_path: Option<String> = None;
+				let mut program_args: Vec<String> = Vec::new();
+				for a in std::env::args().skip(2) {
+					if entry_path.is_none() && a == "--vm" {
+						use_vm = true;
+					} else if entry_path.is_none() {
+						entry_path = Some(a);
+					} else {
+						program_args.push(a);
+					}
+				}
+				let entry_path = match entry_path {
 					Some(path) => path,
 					None => {
 						print_error("No module path given. Expected another argument.");
 						std::process::exit(1);
 					}
 				};
-				let program_args: Vec<String> = rest.collect();
-				run(entry_path, program_args);
+				run(entry_path, program_args, use_vm);
 			}
 
 			"repl" => {
@@ -113,11 +124,11 @@ fn main() {
 			}
 
 			// Anything else is treated as a path to run, so `cli foo.pa`
-			// works as shorthand for `cli run foo.pa`. Here the path is
-			// argv[1], so the program's own args start at argv[2].
+			// works as shorthand for `cli run foo.pa` (on V8; use `run --vm` for the
+			// VM). Here the path is argv[1], so the program's own args start at argv[2].
 			_ => {
 				let program_args: Vec<String> = std::env::args().skip(2).collect();
-				run(arg, program_args);
+				run(arg, program_args, false);
 			}
 		},
 
@@ -714,10 +725,10 @@ fn build_command(args: Vec<String>) {
 	}
 }
 
-fn run(entry_path: String, program_args: Vec<String>) {
-	// A prebuilt WasmGC artifact (`pluma build --target server`) runs through the
-	// embedded wasmtime host rather than the VM. Dispatch on the extension so
-	// `pluma run` stays the single entry point for both source and artifacts.
+fn run(entry_path: String, program_args: Vec<String>, use_vm: bool) {
+	// A prebuilt WasmGC artifact (`pluma build`) runs under the WasmGC host (V8) — the
+	// VM can't execute wasm. Dispatch on the extension so `pluma run` stays the single
+	// entry point for both source and artifacts.
 	if entry_path.ends_with(".wasm") {
 		let bytes = match std::fs::read(&entry_path) {
 			Ok(b) => b,
@@ -726,7 +737,11 @@ fn run(entry_path: String, program_args: Vec<String>) {
 				std::process::exit(1);
 			}
 		};
-		std::process::exit(host::run_streaming(&bytes));
+		if use_vm {
+			print_error("`--vm` can't run a `.wasm` artifact (the VM executes bytecode, not wasm).");
+			std::process::exit(1);
+		}
+		std::process::exit(host::run_streaming_v8(&bytes));
 	}
 
 	if entry_path.ends_with(".test.pa") || entry_path.ends_with(".test") {
@@ -752,6 +767,16 @@ fn run(entry_path: String, program_args: Vec<String>) {
 		std::process::exit(1);
 	}
 
+	// Default engine: compile to a WasmGC artifact and run it under V8 — the same
+	// thing `pluma build` ships. If the wasm backend can't emit this program (e.g. it
+	// uses `io.args`, not yet a wasm host import), fall back to the VM. `--vm` forces
+	// the VM up front.
+	if !use_vm {
+		if let Ok(bytes) = emit_wasm(&compiler) {
+			std::process::exit(host::run_streaming_v8(&bytes));
+		}
+	}
+
 	let program = match compile_program(&compiler) {
 		Ok(p) => p,
 		Err(msg) => {
@@ -771,6 +796,14 @@ fn run(entry_path: String, program_args: Vec<String>) {
 		}
 		std::process::exit(1);
 	}
+}
+
+/// Lower a checked `Compiler` to the raw mid-level IR and emit a WasmGC artifact
+/// (the deploy backend runs its own pipeline off the raw IR — no `ir::optimize`,
+/// matching `pluma build`). `Err` ⇒ the wasm backend can't yet handle this program.
+fn emit_wasm(compiler: &Compiler) -> Result<Vec<u8>, ()> {
+	let program = ir::lower(compiler).map_err(|_| ())?;
+	wasm::emit(&program).map_err(|_| ())
 }
 
 fn format_command(args: Vec<String>) {
