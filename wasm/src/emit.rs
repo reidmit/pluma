@@ -17,10 +17,7 @@ use crate::runtime::{
 	host_sig, io_kind, is_byte_writer, is_clock_host, is_f64_unary_host, is_inline_builtin,
 	is_io_host, is_net_sync, is_raw_writer, is_rng_host, rng_kind, task_builtin_kind, task_kind,
 };
-use crate::scan::{
-	StrPool, block_has_pushdefer, builtin_var_tags, compute_nominal, ctor_var_tags,
-	value_used_builtin_vars,
-};
+use crate::scan::{StrPool, block_has_pushdefer, builtin_var_tags, compute_nominal, ctor_var_tags};
 use crate::types::{self, FuncTypes};
 use crate::util::{EnumTable, binop_instr, repr_valtype, variant_display};
 
@@ -33,13 +30,6 @@ pub(crate) struct FnEmitter<'a> {
 	enums: &'a EnumTable,
 	ftypes: &'a mut FuncTypes,
 	var_tags: HashMap<u32, String>,
-	/// Tag -> wasm index of each builtin value-wrapper (`print`, …), so a builtin
-	/// used as a first-class value can be lowered to a `$closure` over it.
-	wrapper_idx: &'a HashMap<String, u32>,
-	/// VarId.0 of the builtin-holding vars (a subset of `var_tags`) used as a
-	/// first-class value rather than a call target — each is emitted as a closure
-	/// over its value-wrapper instead of the null call-target placeholder.
-	value_builtin_vars: std::collections::HashSet<u32>,
 	/// VarId.0 -> variant tag, for vars bound to a `MakeVariantCtor`. Applying
 	/// such a value (a `CallClosure` on it) builds the variant directly.
 	var_ctors: HashMap<u32, (String, u32)>,
@@ -89,7 +79,6 @@ impl<'a> FnEmitter<'a> {
 		wasm_index: &'a HashMap<u32, u32>,
 		host_index: &'a HashMap<String, u32>,
 		builtin_g: &HashMap<u32, String>,
-		wrapper_idx: &'a HashMap<String, u32>,
 		gmap: &'a HashMap<u32, GlobalSlot>,
 		runtime: &Runtime,
 		strpool: &'a StrPool,
@@ -100,12 +89,6 @@ impl<'a> FnEmitter<'a> {
 		diags: &'a mut Diagnostics,
 	) -> Self {
 		let var_tags = builtin_var_tags(&f.body, builtin_g);
-		// Builtin-holding vars used as a value (never a callee) and backed by a
-		// value-wrapper: lowered to a closure rather than the null placeholder.
-		let value_builtin_vars = value_used_builtin_vars(&f.body, &var_tags)
-			.into_iter()
-			.filter(|v| var_tags.get(v).is_some_and(|t| wrapper_idx.contains_key(t)))
-			.collect();
 		let var_ctors = ctor_var_tags(&f.body);
 		let nominal = compute_nominal(f, fid, param_shapes);
 		let n = f.var_reprs.len().max(f.params.len() + f.captures.len());
@@ -141,8 +124,6 @@ impl<'a> FnEmitter<'a> {
 			enums,
 			ftypes,
 			var_tags,
-			wrapper_idx,
-			value_builtin_vars,
 			var_ctors,
 			nominal,
 			param_shapes,
@@ -228,20 +209,6 @@ impl<'a> FnEmitter<'a> {
 					Rvalue::RecordUpdate { base, fields } if self.nominal.contains_key(&v.0) => {
 						let shape = self.nominal[&v.0].clone();
 						self.record_update_nominal(&shape, base, fields);
-					}
-					// A builtin used as a first-class value (`print` in `list.each xs
-					// print`): build a capture-free `$closure` over its value-wrapper, so
-					// the closure carries a real runtime value (vs. the null call-target
-					// placeholder a `GlobalRef` would otherwise emit).
-					Rvalue::GlobalRef(_) if self.value_builtin_vars.contains(&v.0) => {
-						let w = self.wrapper_idx[&self.var_tags[&v.0]];
-						self.ins(Instruction::I32Const(types::TAG_CLOSURE));
-						self.ins(Instruction::I32Const(w as i32));
-						self.ins(Instruction::ArrayNewFixed {
-							array_type_index: types::T_VALARRAY,
-							array_size: 0,
-						});
-						self.ins(Instruction::StructNew(types::T_CLOSURE));
 					}
 					_ => self.rvalue(rv),
 				}

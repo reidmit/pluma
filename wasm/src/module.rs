@@ -15,22 +15,15 @@ use wasm_encoder::{
 };
 
 use crate::emit::FnEmitter;
-use crate::helpers::{
-	REGISTRY, build_builtin_wrapper, build_host_value_wrapper, build_tostring_value_wrapper,
-	builtin_arity, close_deps, helper_for_tag,
-};
+use crate::helpers::{REGISTRY, build_builtin_wrapper, builtin_arity, close_deps, helper_for_tag};
 use crate::runtime::{
 	ClockKind, GlobalKind, GlobalSlot, Helper, HelperCtx, HelperSet, IoKind, IoResultLits,
 	NetImports, OptionLits, OrderingLits, RngKind, Runtime, TaskGlobals, TaskLits, ToStringLits,
-	WireGlobals, WireResultLits, WireTags, clock_kind, has_value_wrapper, host_sig, io_kind,
-	io_uses_io4, is_byte_writer, is_clock_host, is_f64_unary_host, is_inline_builtin, is_io_host,
-	is_io_result, is_net_builtin, is_raw_writer, is_rng_host, rng_kind, scan_helpers,
-	task_builtin_kind,
+	WireGlobals, WireResultLits, WireTags, clock_kind, host_sig, io_kind, io_uses_io4,
+	is_byte_writer, is_clock_host, is_f64_unary_host, is_inline_builtin, is_io_host, is_io_result,
+	is_net_builtin, is_raw_writer, is_rng_host, rng_kind, scan_helpers, task_builtin_kind,
 };
-use crate::scan::{
-	StrPool, builtin_var_tags, collect_host_calls, collect_zero_arg_closures, scan_strings,
-	value_used_builtin_vars,
-};
+use crate::scan::{StrPool, collect_host_calls, collect_zero_arg_closures, scan_strings};
 use crate::types::{self, FuncTypes};
 use crate::util::{variant_display, variant_tag_in};
 use crate::{Diagnostics, Reach, builtin_globals};
@@ -200,30 +193,6 @@ impl Module {
 				}
 			});
 		}
-		// A builtin used as a first-class value (e.g. `list.each xs print`) is never
-		// directly called, so `collect_host_calls` above misses its import — but its
-		// value-wrapper still invokes it. Register those host imports now, before the
-		// import count is fixed.
-		for &fid in &reach.order {
-			let body = &p.functions[fid as usize].body;
-			let vt = builtin_var_tags(body, &builtin_g);
-			for v in value_used_builtin_vars(body, &vt) {
-				let tag = vt[&v].clone();
-				// A writer used only as a first-class value (`list.each xs print`) is
-				// never directly called, so the call scan above misses its marshalling
-				// helpers — request them here (before `close_deps`).
-				if is_byte_writer(&tag) {
-					requested.insert(Helper::MarshalSend);
-					if !is_raw_writer(&tag) {
-						requested.insert(Helper::ToString);
-					}
-				}
-				if host_sig(&tag).is_some() && !host_index.contains_key(&tag) {
-					host_index.insert(tag.clone(), host_order.len() as u32);
-					host_order.push(tag);
-				}
-			}
-		}
 		// Every program exports `__entry_error`, which renders a `result.err` message
 		// via `__tostring` + `__send_bytes` — request them here, *before* the
 		// `float_to_str` gate below, so `__tostring`'s float-format import is registered
@@ -382,22 +351,6 @@ impl Module {
 					}
 				}
 				methoddicts.push((gid, tags));
-			}
-		}
-
-		// Builtins used as first-class values need a wrapper closure too. Collect
-		// their tags after the method-dict ones: host-import builtins like `print`
-		// (a `(env, arg) -> value` host-value wrapper) and the pure-compute renderer
-		// `to-string` (a `(env, arg) -> __tostring(arg)` wrapper) — `has_value_wrapper`.
-		for &fid in &reach.order {
-			let body = &p.functions[fid as usize].body;
-			let vt = builtin_var_tags(body, &builtin_g);
-			for v in value_used_builtin_vars(body, &vt) {
-				let tag = &vt[&v];
-				if has_value_wrapper(tag) && !wrapper_idx.contains_key(tag) {
-					wrapper_idx.insert(tag.clone(), wrapper_base + wrapper_order.len() as u32);
-					wrapper_order.push(tag.clone());
-				}
 			}
 		}
 
@@ -864,7 +817,6 @@ impl Module {
 				&wasm_index,
 				&host_index,
 				&builtin_g,
-				&wrapper_idx,
 				&gmap,
 				&runtime,
 				&strpool,
@@ -891,49 +843,21 @@ impl Module {
 				code.function(&(def.build)(&mut ctx));
 			}
 		}
-		// Then the builtin wrappers (keyed by tag, not in the helper catalog). A
-		// host-import builtin used as a value (`print`, …) gets a `(env, arg) ->
-		// value` host-value wrapper; the pure-compute ones (method-dict methods) get
-		// the unbox/compute/rebox wrapper.
+		// Then the builtin method-dict wrappers (keyed by tag, not in the helper
+		// catalog): each pure-compute trait method (`int-add`, `string-compare`, …)
+		// gets an unbox/compute/rebox wrapper. (Builtins used as a first-class
+		// *value* are wrapped earlier, in `ir::lower`, as ordinary forwarding
+		// closures — they never reach this table.)
 		for tag in &wrapper_order {
-			if tag == "to-string" {
-				// `to-string` as a value: `(env, arg) -> __tostring(arg)`. The runtime-tag
-				// dispatch inside `__tostring` is its polymorphism, so one wrapper renders
-				// every element type. `__tostring` is always emitted (requested above).
-				functions.function(ftypes.for_arity(1));
-				let ts = runtime
-					.idx(Helper::ToString)
-					.expect("a to-string value-wrapper needs __tostring");
-				code.function(&build_tostring_value_wrapper(ts));
-			} else if host_sig(tag).is_some() {
-				functions.function(ftypes.for_arity(1));
-				let host_idx = host_index[tag];
-				// Only byte-payload writers (`print`, …) are used as first-class values
-				// in practice; they marshal the arg into scratch like the direct call.
-				if is_byte_writer(tag) {
-					let send = runtime
-						.idx(Helper::MarshalSend)
-						.expect("a writer value-wrapper needs __send_bytes");
-					// Raw writers don't render via `__tostring`; pass `send` as a dummy.
-					let ts = runtime.idx(Helper::ToString).unwrap_or(send);
-					code.function(&build_host_value_wrapper(tag, host_idx, send, ts));
-				} else {
-					diags.push(format!(
-						"host import `{tag}` used as a first-class value is not supported"
-					));
-					code.function(&Function::new(vec![]));
+			let arity = builtin_arity(tag).unwrap();
+			functions.function(ftypes.for_arity(arity));
+			match build_builtin_wrapper(tag, &runtime.ord) {
+				Some(f) => {
+					code.function(&f);
 				}
-			} else {
-				let arity = builtin_arity(tag).unwrap();
-				functions.function(ftypes.for_arity(arity));
-				match build_builtin_wrapper(tag, &runtime.ord) {
-					Some(f) => {
-						code.function(&f);
-					}
-					None => {
-						diags.push(format!("builtin wrapper `{tag}`"));
-						code.function(&Function::new(vec![]));
-					}
+				None => {
+					diags.push(format!("builtin wrapper `{tag}`"));
+					code.function(&Function::new(vec![]));
 				}
 			}
 		}

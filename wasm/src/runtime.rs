@@ -945,16 +945,6 @@ pub(crate) fn is_clock_host(tag: &str) -> bool {
 	clock_kind(tag).is_some()
 }
 
-/// Whether a builtin used as a first-class value (`list.map xs to-string`,
-/// `list.each xs print`) has a synthesizable value-wrapper closure: host-import
-/// builtins (`print`, …, via `build_host_value_wrapper`) and the pure-compute
-/// renderer `to-string` (via `build_tostring_value_wrapper`, calling `__tostring`).
-/// A `MakeClosure` over any other builtin used as a value has no `$value` to build,
-/// so it stays a null placeholder and would trap if called.
-pub(crate) fn has_value_wrapper(tag: &str) -> bool {
-	tag == "to-string" || host_sig(tag).is_some()
-}
-
 /// How a `core.random`/`core.uuid` host import (other than `uuid-parse`, which rides
 /// the io read path) shapes its result. The scalars box directly; the byte/string
 /// ones write a payload to scratch.
