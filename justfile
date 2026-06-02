@@ -53,7 +53,7 @@ conformance-check:
   @ cargo test -p conformance --release
 
 # run the stdlib's own Pluma test suite (compiler/src/stdlib/*.test.pa)
-# through `pluma test` — exercises the stdlib and the `core.testing` runner.
+# through `pluma test` — exercises the stdlib and the `core.test` runner under V8.
 test-stdlib:
   @ cargo run --bin cli --quiet -- test compiler/src/stdlib
 

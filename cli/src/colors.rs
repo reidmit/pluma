@@ -51,11 +51,3 @@ pub fn bold_yellow(text: &str) -> String {
 
 	return format!("\x1b[1m\x1b[33m{}\x1b[0m", text);
 }
-
-pub fn bold_green(text: &str) -> String {
-	if hide_colors() {
-		return format!("{}", text);
-	}
-
-	return format!("\x1b[1m\x1b[32m{}\x1b[0m", text);
-}

@@ -763,18 +763,16 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			debug_assert_eq!(args.len(), 1, "`random.float` arity");
 			Ok(Value::Float(rand::rng().random::<f64>()))
 		}
+		// Raw primitives: `core.random` validates (`n >= 0`, `lo < hi`) in Pluma and
+		// wraps the result in `ok`, so these never fail.
 		"random-bytes" => {
 			use rand::Rng as _;
 			debug_assert_eq!(args.len(), 1, "`random.bytes` arity");
 			match &args[0] {
-				Value::Int(n) if *n < 0 => Ok(result_err(Value::String(Rc::new(format!(
-					"random.bytes: negative length: {}",
-					n
-				))))),
 				Value::Int(n) => {
-					let mut buf = vec![0u8; *n as usize];
+					let mut buf = vec![0u8; (*n).max(0) as usize];
 					rand::rng().fill_bytes(&mut buf);
-					Ok(result_ok(Value::Bytes(Rc::new(buf))))
+					Ok(Value::Bytes(Rc::new(buf)))
 				}
 				_ => unreachable!("`random.bytes`: expected int"),
 			}
@@ -783,12 +781,7 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			use rand::RngExt as _;
 			debug_assert_eq!(args.len(), 2, "`random.int-range` arity");
 			match (&args[0], &args[1]) {
-				(Value::Int(lo), Value::Int(hi)) if *lo >= *hi => Ok(result_err(Value::String(Rc::new(
-					format!("random.int-range: low ({}) >= high ({})", lo, hi),
-				)))),
-				(Value::Int(lo), Value::Int(hi)) => {
-					Ok(result_ok(Value::Int(rand::rng().random_range(*lo..*hi))))
-				}
+				(Value::Int(lo), Value::Int(hi)) => Ok(Value::Int(rand::rng().random_range(*lo..*hi))),
 				_ => unreachable!("`random.int-range`: expected (int, int)"),
 			}
 		}

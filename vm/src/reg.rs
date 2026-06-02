@@ -642,7 +642,6 @@ pub struct Program {
 	pub enum_variants: std::collections::HashMap<String, Vec<(String, usize)>>,
 	pub entry: u32,
 	pub test_suites: Vec<(String, u32)>,
-	pub test_new: Option<u32>,
 	pub async_poll: Vec<Option<u32>>,
 	/// Whether *any* function has an unboxed (`I64`) register — i.e. the repr
 	/// coercion pass (M5/M6) is active. When `false` (the shipping default, since

@@ -21,10 +21,10 @@ use crate::helpers::{
 };
 use crate::runtime::{
 	GlobalKind, GlobalSlot, Helper, HelperCtx, HelperSet, IoKind, IoResultLits, NetImports,
-	OptionLits, OrderingLits, Runtime, TaskGlobals, TaskLits, ToStringLits, WireGlobals,
+	OptionLits, OrderingLits, RngKind, Runtime, TaskGlobals, TaskLits, ToStringLits, WireGlobals,
 	WireResultLits, WireTags, host_sig, io_kind, io_uses_io4, is_byte_writer, is_f64_unary_host,
-	is_inline_builtin, is_io_host, is_io_result, is_net_builtin, is_raw_writer, scan_helpers,
-	task_builtin_kind,
+	is_inline_builtin, is_io_host, is_io_result, is_net_builtin, is_raw_writer, is_rng_host,
+	rng_kind, scan_helpers, task_builtin_kind,
 };
 use crate::scan::{
 	StrPool, builtin_var_tags, collect_host_calls, collect_zero_arg_closures, scan_strings,
@@ -143,12 +143,33 @@ impl Module {
 				}
 				// `core.io` result builtins need the `__io_result` shaper + the
 				// `io-last-error` channel it queries, on top of their own host import
-				// (registered by the generic path just below — fall through).
+				// (registered by the generic path just below — fall through). `uuid-parse`
+				// rides this path too (it's classified as an io read).
 				if is_io_result(tag) {
 					requested.insert(Helper::IoResult);
 					if !host_index.contains_key("io-last-error") {
 						host_index.insert("io-last-error".to_string(), host_order.len() as u32);
 						host_order.push("io-last-error".to_string());
+					}
+				}
+				// `core.random`/`core.uuid` payload builders (`emit_rng`): the byte/string
+				// ones write to scratch and read it back (`random-bytes` may overflow);
+				// the scalars need no helpers. Their host import is registered below.
+				if is_rng_host(tag) {
+					match rng_kind(tag) {
+						Some(RngKind::BytesN) => {
+							requested.insert(Helper::MarshalAlloc);
+							requested.insert(Helper::MarshalLoad);
+							if !host_index.contains_key("io-copyout") {
+								host_index.insert("io-copyout".to_string(), host_order.len() as u32);
+								host_order.push("io-copyout".to_string());
+							}
+						}
+						Some(RngKind::UuidStr) => {
+							requested.insert(Helper::MarshalAlloc);
+							requested.insert(Helper::MarshalLoad);
+						}
+						_ => {}
 					}
 				}
 				if !host_index.contains_key(tag) {
@@ -773,6 +794,15 @@ impl Module {
 				}
 			} else if is_f64_unary_host(tag) {
 				ftypes.for_f64_unary()
+			} else if is_rng_host(tag) {
+				match rng_kind(tag) {
+					Some(RngKind::ScalarI64) => ftypes.for_rng_i64(),
+					Some(RngKind::ScalarF64) => ftypes.for_rng_f64(),
+					Some(RngKind::RangeI64) => ftypes.for_rng_range(),
+					Some(RngKind::BytesN) => ftypes.for_rng_bytes(),
+					// uuid-v4/v7: `(dst, cap) -> len`, same shape as a two-arg io read.
+					Some(RngKind::UuidStr) | None => ftypes.for_io2(),
+				}
 			} else if tag == "net-listen" || tag == "net-connect" || tag == "net-accept" {
 				ftypes.for_net_listen()
 			} else if tag == "net-close" {

@@ -1,15 +1,15 @@
 # Checks for use inside tests. Each check returns a `result`: `ok ()`
-# when it holds, `err message` when it doesn't. A `core.testing` case
+# when it holds, `err message` when it doesn't. A `core.test` case
 # body returns one of these — `pluma test` passes the case when it's `ok`
 # and reports the message when it's `err`. Combine several checks in one
 # case with `assert.all`.
 #
-#     use core.testing
+#     use core.test
 #     use core.assert
 #
-#     def tests :: testing.suite = fun t {
-#         t.case "two and two" (fun { assert.equals (2 + 2) 4 })
-#     }
+#     def tests :: test.suite = [
+#         test.case "two and two" (fun { assert.equals (2 + 2) 4 }),
+#     ]
 
 # `ok ()` when the two values are equal, compared deeply by value, else
 # `err` showing both sides. The everyday workhorse.
@@ -98,7 +98,7 @@ public def is-err :: fun (result a e) -> result nothing string = fun value {
 # are evaluated — assertions are pure — so a case reports every failure,
 # not just the first.
 #
-#     t.case "arithmetic" (fun {
+#     test.case "arithmetic" (fun {
 #         assert.all [
 #             assert.equals (2 + 3) 5,
 #             assert.equals (4 * 2) 8,

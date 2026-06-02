@@ -863,8 +863,59 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 			arity: 0,
 			returns_value: true,
 		}),
+		// `core.random` / `core.uuid` (Entropy). The scalars cross natively (i64 as a
+		// JS BigInt, f64 direct); `random-bytes`/`uuid-v4`/`uuid-v7` write a payload to
+		// scratch (`is_rng_host` → `emit_rng`); `uuid-parse` rides the io read path
+		// (`ReadFileStr`) so its `result` is shaped by `__io_result`.
+		"random-int" | "random-float" => Some(HostSig {
+			arity: 0,
+			returns_value: true,
+		}),
+		"random-int-range" => Some(HostSig {
+			arity: 2,
+			returns_value: true,
+		}),
+		"random-bytes" | "uuid-v4" | "uuid-v7" | "uuid-parse" => Some(HostSig {
+			arity: 1,
+			returns_value: true,
+		}),
 		_ => None,
 	}
+}
+
+/// How a `core.random`/`core.uuid` host import (other than `uuid-parse`, which rides
+/// the io read path) shapes its result. The scalars box directly; the byte/string
+/// ones write a payload to scratch.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RngKind {
+	/// `random-int`: `() -> i64`; box `$int`.
+	ScalarI64,
+	/// `random-float`: `() -> f64`; box `$float`.
+	ScalarF64,
+	/// `random-int-range`: `(i64, i64) -> i64`; box `$int`. Validated in Pluma.
+	RangeI64,
+	/// `random-bytes`: `(i32 n, dst, cap) -> len`; build `$bytes`. Validated in Pluma.
+	BytesN,
+	/// `uuid-v4`/`uuid-v7`: `(dst, cap) -> len`; build `$str` (never fails).
+	UuidStr,
+}
+
+/// Classify a `core.random`/`core.uuid` builtin emitted via `emit_rng` (everything
+/// but `uuid-parse`, which goes through `emit_io` as a `ReadFileStr`). `None` otherwise.
+pub(crate) fn rng_kind(tag: &str) -> Option<RngKind> {
+	Some(match tag {
+		"random-int" => RngKind::ScalarI64,
+		"random-float" => RngKind::ScalarF64,
+		"random-int-range" => RngKind::RangeI64,
+		"random-bytes" => RngKind::BytesN,
+		"uuid-v4" | "uuid-v7" => RngKind::UuidStr,
+		_ => return None,
+	})
+}
+
+/// Whether `tag` is an `emit_rng`-handled entropy/uuid builtin.
+pub(crate) fn is_rng_host(tag: &str) -> bool {
+	rng_kind(tag).is_some()
 }
 
 /// Whether `tag` is a `core.io` builtin emitted through the marshalling host path
@@ -905,7 +956,9 @@ pub(crate) fn io_kind(tag: &str) -> Option<IoKind> {
 	Some(match tag {
 		"io-read" | "io-read-all" | "io-last-error" => IoKind::ReadStr,
 		"io-read-all-bytes" => IoKind::ReadBytes,
-		"io-read-file" => IoKind::ReadFileStr,
+		// `uuid-parse` isn't io, but it has the same shape — a string in, a `result
+		// string` out — so it reuses the `(path, plen, dst, cap)` read marshalling.
+		"io-read-file" | "uuid-parse" => IoKind::ReadFileStr,
 		"io-read-file-bytes" => IoKind::ReadFileBytes,
 		"io-read-dir" => IoKind::ReadDir,
 		"io-write-file" | "io-write-file-bytes" | "io-append-file" | "io-append-file-bytes" => {
@@ -944,6 +997,8 @@ pub(crate) fn is_io_result(tag: &str) -> bool {
 			| "io-delete-file"
 			| "io-make-dir"
 			| "io-read-dir"
+			// rides the io read path; its `result string` is shaped by `__io_result`.
+			| "uuid-parse"
 	)
 }
 

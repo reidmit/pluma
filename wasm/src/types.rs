@@ -236,6 +236,15 @@ enum FuncKind {
 	/// A unary float math host import (log/exp/sin/cos): `(f64) -> f64`. The
 	/// box/unbox to `$float` happens in wasm, so the host stays a bare libm call.
 	F64Unary,
+	/// `random-int`: `() -> i64` (the i64 crosses to/from the host as a JS BigInt).
+	RngI64,
+	/// `random-float`: `() -> f64`.
+	RngF64,
+	/// `random-int-range`: `(i64 lo, i64 hi) -> i64`.
+	RngRange,
+	/// `random-bytes`: `(i32 n, i32 dst, i32 cap) -> i32 len` — fill `n` random bytes
+	/// into scratch at `dst` (overflow stashed, like the io reads).
+	RngBytes,
 	/// The scratch bump allocator `__alloc(i32 n) -> i32 ptr` — reserve `n` bytes in
 	/// the exported linear memory (growing it as needed), return the start offset.
 	MarshalAlloc,
@@ -411,6 +420,26 @@ impl FuncTypes {
 	/// The type index for a unary float math host import: `(f64) -> f64`.
 	pub fn for_f64_unary(&mut self) -> u32 {
 		self.intern(FuncKind::F64Unary)
+	}
+
+	/// `random-int`: `() -> i64`.
+	pub fn for_rng_i64(&mut self) -> u32 {
+		self.intern(FuncKind::RngI64)
+	}
+
+	/// `random-float`: `() -> f64`.
+	pub fn for_rng_f64(&mut self) -> u32 {
+		self.intern(FuncKind::RngF64)
+	}
+
+	/// `random-int-range`: `(i64, i64) -> i64`.
+	pub fn for_rng_range(&mut self) -> u32 {
+		self.intern(FuncKind::RngRange)
+	}
+
+	/// `random-bytes`: `(i32, i32, i32) -> i32`.
+	pub fn for_rng_bytes(&mut self) -> u32 {
+		self.intern(FuncKind::RngBytes)
 	}
 
 	/// The scratch bump allocator `__alloc(i32) -> i32`.
@@ -757,6 +786,26 @@ impl FuncTypes {
 				}
 				FuncKind::F64Unary => {
 					types.ty().function([ValType::F64], [ValType::F64]);
+					continue;
+				}
+				FuncKind::RngI64 => {
+					types.ty().function([], [ValType::I64]);
+					continue;
+				}
+				FuncKind::RngF64 => {
+					types.ty().function([], [ValType::F64]);
+					continue;
+				}
+				FuncKind::RngRange => {
+					types
+						.ty()
+						.function([ValType::I64, ValType::I64], [ValType::I64]);
+					continue;
+				}
+				FuncKind::RngBytes => {
+					types
+						.ty()
+						.function([ValType::I32, ValType::I32, ValType::I32], [ValType::I32]);
 					continue;
 				}
 				// Marshalling-helper types — heterogeneous, built directly.

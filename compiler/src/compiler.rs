@@ -271,7 +271,7 @@ impl Compiler {
 		// test modules. Production code shouldn't depend on test-only files.
 		// The project marker (`pluma.pa`) is config, not a library — it's
 		// never importable by anything else.
-		let importer_is_test = module_name.ends_with(".test");
+		let importer_is_test = is_test_module(module_name);
 		let importer_path = self.modules.get(module_name).map(|m| m.module_path.clone());
 		let mut rejected_imports: HashSet<String> = HashSet::new();
 		for (full_name, _, range, use_range) in &imports {
@@ -280,8 +280,7 @@ impl Compiler {
 			// everything) and for any ungated module — so this gate is inert for
 			// existing flows. Reported against the whole `use …` statement.
 			let missing_caps = self.platform.missing_capabilities(full_name);
-			let rejection: Option<(String, Range)> = if full_name.ends_with(".test") && !importer_is_test
-			{
+			let rejection: Option<(String, Range)> = if is_test_module(full_name) && !importer_is_test {
 				Some((
 					format!(
 						"Cannot import test module `{}` from a non-test module. \
@@ -431,6 +430,14 @@ pub fn find_project_root(start: &Path) -> Option<PathBuf> {
 			return None;
 		}
 	}
+}
+
+/// Whether `name` is a discovered test *file* (`<segments>.test.pa`), as
+/// opposed to ordinary code. These are import-gated: only other test modules may
+/// `use` them. `core.test` is excluded — it's the test *framework* (stdlib),
+/// importable from anywhere, and only incidentally shares the `.test` suffix.
+fn is_test_module(name: &str) -> bool {
+	name.ends_with(".test") && name != "core.test"
 }
 
 pub fn to_module_path(root_dir: &Path, module_name: &str) -> PathBuf {

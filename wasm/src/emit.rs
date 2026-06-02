@@ -13,9 +13,9 @@ use wasm_encoder::*;
 use crate::Diagnostics;
 use crate::async_lower::TASK_ENUM;
 use crate::runtime::{
-	GlobalKind, GlobalSlot, Helper, IoKind, Runtime, WIRE_FNV_OFFSET, host_sig, io_kind,
+	GlobalKind, GlobalSlot, Helper, IoKind, RngKind, Runtime, WIRE_FNV_OFFSET, host_sig, io_kind,
 	is_byte_writer, is_f64_unary_host, is_inline_builtin, is_io_host, is_net_sync, is_raw_writer,
-	task_builtin_kind, task_kind,
+	is_rng_host, rng_kind, task_builtin_kind, task_kind,
 };
 use crate::scan::{
 	StrPool, block_has_pushdefer, builtin_var_tags, compute_nominal, ctor_var_tags,
@@ -1701,6 +1701,12 @@ impl<'a> FnEmitter<'a> {
 			self.emit_byte_writer(tag, idx, &args[0]);
 			return;
 		}
+		// `core.random`/`core.uuid` (except `uuid-parse`, classified as an io read):
+		// box a scalar directly, or build a `$bytes`/`$str` from a scratch payload.
+		if is_rng_host(tag) {
+			self.emit_rng(tag, idx, args);
+			return;
+		}
 		// `core.io` host imports: marshal path/data args into scratch, call the
 		// `(i32…) -> i32` import, then shape the `i32` result back into a `$value`
 		// (a `$str`/`$bytes`/`$list` payload, a `nothing`/null status, or a `$bool`).
@@ -1796,6 +1802,98 @@ impl<'a> FnEmitter<'a> {
 	/// the host's stash via `__io_copyout`); writers wrap a `status` into `ok nothing`
 	/// / `err`; the queries box a `bool`. `__io_result` does the `ok`/`err` wrapping
 	/// (a null payload = failure), so the host never builds the `result` enum.
+	/// `core.random`/`core.uuid` payload builders (all but `uuid-parse`, which rides
+	/// `emit_io`). The scalars box the host's `i64`/`f64` return directly; `random-bytes`
+	/// and `uuid-v4`/`v7` fill scratch and build a `$bytes`/`$str`. Validation lives in
+	/// Pluma, so none of these fail (no `result` wrap).
+	fn emit_rng(&mut self, tag: &str, idx: u32, args: &[Atom]) {
+		match rng_kind(tag) {
+			Some(RngKind::ScalarI64) => {
+				self.ins(Instruction::Call(idx)); // () -> i64
+				self.box_int();
+			}
+			Some(RngKind::ScalarF64) => {
+				self.ins(Instruction::I32Const(types::TAG_FLOAT));
+				self.ins(Instruction::Call(idx)); // () -> f64
+				self.ins(Instruction::StructNew(types::T_FLOAT));
+			}
+			Some(RngKind::RangeI64) => {
+				self.atom(&args[0]);
+				self.unbox_int();
+				self.atom(&args[1]);
+				self.unbox_int();
+				self.ins(Instruction::Call(idx)); // (i64, i64) -> i64
+				self.box_int();
+			}
+			Some(RngKind::BytesN) => self.emit_rng_read(tag, idx, Some(&args[0]), types::TAG_BYTES),
+			Some(RngKind::UuidStr) => self.emit_rng_read(tag, idx, None, types::TAG_STR),
+			None => {
+				self.diags.push(format!("`{tag}` is not an rng builtin"));
+				self.push_nothing();
+			}
+		}
+	}
+
+	/// The scratch-payload read for `random-bytes`/`uuid-v4`/`uuid-v7`: `dst = __alloc(cap)`;
+	/// call `(n?, dst, cap) -> len`; drain the overflow stash if it didn't fit (`random-bytes`
+	/// only — uuid is fixed-width); build the `$bytes`/`$str` from `(dst, len)`. No
+	/// `__io_result` wrap — these never fail.
+	fn emit_rng_read(&mut self, tag: &str, idx: u32, n_arg: Option<&Atom>, tag_const: i32) {
+		let (Some(alloc), Some(load)) = (
+			self.runtime.idx(Helper::MarshalAlloc),
+			self.runtime.idx(Helper::MarshalLoad),
+		) else {
+			self
+				.diags
+				.push(format!("`{tag}` needs the marshalling helpers"));
+			self.push_nothing();
+			return;
+		};
+		const CAP: i32 = 4096;
+		self.reset_bump();
+		// `random-bytes` passes its (Pluma-validated, non-negative) length first.
+		let n_local = n_arg.map(|a| {
+			self.atom(a);
+			self.unbox_int();
+			self.ins(Instruction::I32WrapI64);
+			let l = self.fresh_local(ValType::I32);
+			self.ins(Instruction::LocalSet(l));
+			l
+		});
+		let dst = self.fresh_local(ValType::I32);
+		self.ins(Instruction::I32Const(CAP));
+		self.ins(Instruction::Call(alloc));
+		self.ins(Instruction::LocalSet(dst));
+		if let Some(n) = n_local {
+			self.ins(Instruction::LocalGet(n));
+		}
+		self.ins(Instruction::LocalGet(dst));
+		self.ins(Instruction::I32Const(CAP));
+		self.ins(Instruction::Call(idx)); // -> i32 len
+		let len = self.fresh_local(ValType::I32);
+		self.ins(Instruction::LocalSet(len));
+		// Overflow: re-`__alloc` the true size and drain the host stash (registered only
+		// when a `random-bytes` is reachable; uuid always fits `CAP`).
+		if let Some(copyout) = self.host_index.get("io-copyout").copied() {
+			self.ins(Instruction::LocalGet(len));
+			self.ins(Instruction::I32Const(CAP));
+			self.ins(Instruction::I32GtS);
+			self.ins(Instruction::If(BlockType::Empty));
+			self.ins(Instruction::LocalGet(len));
+			self.ins(Instruction::Call(alloc));
+			self.ins(Instruction::LocalSet(dst));
+			self.ins(Instruction::LocalGet(dst));
+			self.ins(Instruction::Call(copyout));
+			self.ins(Instruction::End);
+		}
+		// `$str`/`$bytes` share the `{tag, $bytes}` struct; only the tag differs.
+		self.ins(Instruction::I32Const(tag_const));
+		self.ins(Instruction::LocalGet(dst));
+		self.ins(Instruction::LocalGet(len));
+		self.ins(Instruction::Call(load));
+		self.ins(Instruction::StructNew(types::T_STR));
+	}
+
 	fn emit_io(&mut self, tag: &str, idx: u32, args: &[Atom]) {
 		let kind = io_kind(tag).expect("emit_io on a non-io tag");
 		let (Some(alloc), Some(store)) = (

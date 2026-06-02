@@ -1,16 +1,14 @@
-use core.testing
-use core.assert
 use core.list
 
 # A `fun` literal in statement-tail position — the last argument of a call,
 # the value of a `let`, or a bare statement — always lays its body out
 # multi-line, even a single expression that would fit on one line. This is the
-# same stable vertical shape `def NAME = fun { ... }` gets, and it keeps test
-# suites readable: every `t.case "name" fun { ... }` reads as a 3-line block.
-def tests :: testing.suite = fun t {
-	t.case "is-ok passes on ok" fun { assert.is-ok (ok 42) }
-	t.group "math" fun {
-		t.case "adds" fun { assert.equals (1 + 1) 2 }
+# same stable vertical shape `def NAME = fun { ... }` gets, and it keeps
+# callback-heavy code readable: every `on "name" fun { ... }` reads as a block.
+def demo = fun {
+	on "start" fun { log "starting" }
+	group "math" fun {
+		on "add" fun { compute (1 + 1) }
 	}
 
 	# A `let` whose value ends in a `fun` breaks the same way.
@@ -23,5 +21,5 @@ def tests :: testing.suite = fun t {
 	# interior argument (another argument follows), so it does not break.
 	let chosen = pick (fun x { x + 1 }) fallback
 
-	assert.is-true (inc 0 == 1)
+	inc 0
 }

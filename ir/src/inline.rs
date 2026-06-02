@@ -648,7 +648,6 @@ mod tests {
 			enums: Default::default(),
 			entry: FuncId(entry),
 			test_suites: vec![],
-			test_new: None,
 		}
 	}
 

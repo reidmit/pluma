@@ -1,0 +1,225 @@
+# core.test — declarative test trees that `pluma test` runs.
+#
+# A test file (`*.test.pa`) exports a single `tests :: test.suite` — a list of
+# test nodes. Build them with the constructors below; each `case` body returns a
+# `result` (`ok ()` to pass, `err msg` to fail), which is exactly what the
+# `core.assert` checks produce.
+#
+#     use core.test
+#     use core.assert
+#
+#     def tests :: test.suite = [
+#         test.case "adds" (fun { assert.equals (2 + 3) 5 }),
+#
+#         test.group "edge cases" [
+#             test.case "zero" (fun { assert.equals (0 + 0) 0 }),
+#             test.skip (test.case "flaky" (fun { assert.is-true false })),
+#         ],
+#
+#         test.todo "handles overflow",
+#     ]
+#
+# The runner (`run-all`) flattens the tree, then prints and executes each case;
+# `pluma test` synthesizes the call. There is no registrar and no mutation — a
+# suite is a plain value you can build, map over, and pass around.
+
+use core.list
+use core.string
+use core.terminal
+
+# A node in a test tree. Opaque: build one only through the constructors below
+# (`test.case`, `test.group`, `test.skip`, `test.focus`, `test.todo`) — a suite
+# is data you assemble, never inspect. `skip`/`focus` mark a whole subtree.
+opaque enum test {
+	leaf string (fun nothing -> result nothing string)
+	nest string (list test)
+	omit test
+	only test
+	pend string
+}
+
+# What a `*.test.pa` file exports as `tests`.
+public alias suite list test
+
+# --- constructors (the public surface) ---------------------------------------
+
+# A single case: a name and a thunk returning `ok ()` to pass / `err msg` to fail.
+public def case :: fun string (fun nothing -> result nothing string) -> test = fun name body {
+	leaf name body
+}
+
+# A named group of nested cases/groups.
+public def group :: fun string (list test) -> test = fun name children {
+	nest name children
+}
+
+# Mark a case or group as skipped — registered and reported, never run.
+public def skip :: fun test -> test = fun node {
+	omit node
+}
+
+# Mark a case or group as focused — if anything is focused, only focused runs.
+public def focus :: fun test -> test = fun node {
+	only node
+}
+
+# A pending case: a name with no body yet.
+public def todo :: fun string -> test = fun name {
+	pend name
+}
+
+# --- flattening --------------------------------------------------------------
+
+# How a case was marked when the tree was flattened. `pending` is a `todo`.
+enum run-status {
+	normal
+	skipped
+	focused
+	pending
+}
+
+# One flattened case: its enclosing group names (outermost first), its name, how
+# it was marked, and the thunk to run.
+alias entry {
+	path :: list string,
+	name :: string,
+	status :: run-status,
+	body :: fun nothing -> result nothing string,
+}
+
+# Flatten one node into entries, threading the enclosing group `path` and the
+# inherited skip/focus `stat` (innermost mark wins).
+def flatten-node :: fun (list string) run-status test -> list entry = fun path stat node {
+	when node is leaf name body {
+		[{path, name, status: stat, body}]
+	} is pend name {
+		[{path, name, status: pending, body: fun { ok () }}]
+	} is nest name children {
+		list.flat-map children (fun child { flatten-node [...path, name] stat child })
+	} is omit inner {
+		flatten-node path skipped inner
+	} is only inner {
+		flatten-node path focused inner
+	}
+}
+
+# Flatten a whole suite into a flat, depth-first list of entries.
+def flatten :: fun (list test) -> list entry = fun nodes {
+	list.flat-map nodes (fun n { flatten-node [] normal n })
+}
+
+def is-focused :: fun run-status -> bool = fun s {
+	if s is focused { true } else { false }
+}
+
+# --- the runner --------------------------------------------------------------
+
+# Running totals across every module's cases, plus the group path already
+# printed (so we emit each group header once).
+alias acc {
+	passed :: int,
+	failed :: int,
+	skipped :: int,
+	todo :: int,
+	printed :: list string,
+}
+
+def zero-acc :: fun nothing -> acc = fun {
+	{passed: 0, failed: 0, skipped: 0, todo: 0, printed: []}
+}
+
+# Apply `f` to `s` only when color is on; otherwise leave it bare.
+def paint :: fun bool (fun string -> string) string -> string = fun color f s {
+	if color is true { f s } else { s }
+}
+
+# `n` levels of two-space indentation.
+def spaces :: fun int -> string = fun n {
+	string.join (list.build n (fun _i { "  " })) ""
+}
+
+# Length of the longest shared prefix of two paths.
+def common-len :: fun (list string) (list string) -> int = fun a b {
+	let pairs = list.zip a b
+	list.length (list.take-while pairs (fun p { p.0 == p.1 }))
+}
+
+# Print group headers for any segments of `path` not yet printed (depth-indented),
+# and return `path` as the new printed prefix.
+def emit-headers :: fun bool (list string) (list string) -> list string = fun color printed path {
+	let common = common-len printed path
+	list.each (list.enumerate (list.drop path common)) (fun ie {
+		print (spaces (common + ie.0 + 1) ++ paint color terminal.bold-dim ie.1)
+	})
+	path
+}
+
+# Print each line of a failure message under the case, extra-indented.
+def print-msg :: fun string string -> nothing = fun indent msg {
+	list.each (string.split msg "\n") (fun line {
+		print (indent ++ "    " ++ line)
+	})
+}
+
+# Run one case body and print its pass/fail line; return the updated totals.
+def run-case :: fun bool string entry acc -> acc = fun color indent e a {
+	when e.body () is ok _u {
+		print (indent ++ paint color terminal.bold-green "✓" ++ " " ++ e.name)
+		({...a, passed: a.passed + 1})
+	} is err msg {
+		print (indent ++ paint color terminal.bold-red "✗" ++ " " ++ e.name)
+		print-msg indent msg
+		({...a, failed: a.failed + 1})
+	}
+}
+
+# Walk one module's flattened entries, printing the tree and running each case
+# that should run (respecting skip/todo and, if any case is focused, focus).
+def run-entries :: fun bool bool (list entry) acc -> acc = fun color any-focused entries a0 {
+	list.fold entries a0 (fun a e {
+		let a1 = {...a, printed: emit-headers color a.printed e.path}
+		let indent = spaces (list.length e.path + 1)
+		when e.status is pending {
+			print (indent ++ paint color terminal.bold-yellow "○" ++ " " ++ e.name ++ " " ++ paint color terminal.dim "(todo)")
+			({...a1, todo: a1.todo + 1})
+		} is skipped {
+			print (indent ++ paint color terminal.dim "-" ++ " " ++ e.name ++ " " ++ paint color terminal.dim "(skipped)")
+			({...a1, skipped: a1.skipped + 1})
+		} is focused {
+			run-case color indent e a1
+		} is normal {
+			if any-focused is true {
+				print (indent ++ paint color terminal.dim "-" ++ " " ++ e.name ++ " " ++ paint color terminal.dim "(not focused)")
+				({...a1, skipped: a1.skipped + 1})
+			} else {
+				run-case color indent e a1
+			}
+		}
+	})
+}
+
+# Render the final summary line, colored by overall pass/fail.
+def summary-line :: fun bool acc -> string = fun color a {
+	let total = a.passed + a.failed
+	let base = "$(to-string a.passed) of $(to-string total) passed"
+	let with-skip = if a.skipped > 0 is true { base ++ ", $(to-string a.skipped) skipped" } else { base }
+	let full = if a.todo > 0 is true { with-skip ++ ", $(to-string a.todo) todo" } else { with-skip }
+	if a.failed == 0 is true { paint color terminal.bold-green full } else { paint color terminal.bold-red full }
+}
+
+# Run every suite: print each module's tree, then a summary. Returns `ok ()` if
+# nothing failed, else `err ""` (the report is already printed; the host maps
+# this to a non-zero exit). `color` enables ANSI styling.
+public def run-all :: fun bool (list {name :: string, tests :: list test}) -> result nothing string = fun color suites {
+	let final = list.fold (list.enumerate suites) (zero-acc ()) (fun a indexed {
+		# Blank line between modules (not before the first).
+		let lead = if indexed.0 > 0 is true { "\n" } else { "" }
+		print (lead ++ paint color terminal.bold indexed.1.name)
+		let entries = flatten indexed.1.tests
+		let any-focused = list.any entries (fun e { is-focused e.status })
+		run-entries color any-focused entries ({...a, printed: []})
+	})
+	print ""
+	print (summary-line color final)
+	if final.failed == 0 is true { ok () } else { err "" }
+}

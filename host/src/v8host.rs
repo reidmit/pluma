@@ -54,6 +54,24 @@ pub fn run_streaming_v8(bytes: &[u8]) -> i32 {
 	}
 }
 
+/// Run a `pluma test` artifact under V8, streaming the report to stdout, and map
+/// the outcome to a process exit code. The runner (`core.test.run-all`) prints
+/// everything itself and returns `ok ()` on success or `err ""` on test failures
+/// — so a clean failure (`"runtime error: "` with an empty message) just exits 1
+/// silently, while a genuine trap (a crashing case) still surfaces its message.
+pub fn run_test_v8(bytes: &[u8]) -> i32 {
+	let result = run_v8(bytes, Box::new(StdioIo::new()));
+	match result.status.as_str() {
+		"ok" => 0,
+		"runtime error: " => 1,
+		other => {
+			let msg = other.strip_prefix("runtime error: ").unwrap_or(other);
+			eprintln!("{msg}");
+			1
+		}
+	}
+}
+
 /// Run `_entry` under V8 through the given io sink, returning status + captured stdout
 /// (empty for the streaming sink). The engine-neutral marshalling core.
 fn run_v8(bytes: &[u8], io: Box<dyn HostIo>) -> RunResult {
@@ -138,6 +156,14 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "math-exp", cb_math_exp);
 	register(scope, pluma, data, "math-sin", cb_math_sin);
 	register(scope, pluma, data, "math-cos", cb_math_cos);
+	// core.random / core.uuid (Entropy).
+	register(scope, pluma, data, "random-int", cb_random_int);
+	register(scope, pluma, data, "random-float", cb_random_float);
+	register(scope, pluma, data, "random-int-range", cb_random_int_range);
+	register(scope, pluma, data, "random-bytes", cb_random_bytes);
+	register(scope, pluma, data, "uuid-v4", cb_uuid_v4);
+	register(scope, pluma, data, "uuid-v7", cb_uuid_v7);
+	register(scope, pluma, data, "uuid-parse", cb_uuid_parse);
 	// core.net — socket ops (the multi-result ones return a `[status, n]` JS array) +
 	// the reactor controls. `net-poll` blocks the thread synchronously (fine in a V8
 	// callback) until a parked socket is ready, mirroring the VM's reactor step.
@@ -702,6 +728,111 @@ fn cb_math_sin(s: &mut v8::HandleScope, a: v8::FunctionCallbackArguments, mut r:
 }
 fn cb_math_cos(s: &mut v8::HandleScope, a: v8::FunctionCallbackArguments, mut r: v8::ReturnValue) {
 	math_impl(s, &a, &mut r, f64::cos);
+}
+
+// --- core.random / core.uuid (the `Entropy` capability) -------------------
+// The host generates these natively with the same `rand`/`uuid` crates the VM
+// uses. i64 results cross as JS BigInt; byte/string results go through scratch
+// (`deliver_read_v8`). Range/length validation lives in `core.random` (Pluma),
+// so the raw `random-int-range`/`random-bytes` imports never fail.
+
+fn cb_random_int(
+	scope: &mut v8::HandleScope,
+	_a: v8::FunctionCallbackArguments,
+	mut rv: v8::ReturnValue,
+) {
+	use rand::RngExt as _;
+	let n = rand::rng().random_range(0..i64::MAX);
+	rv.set(v8::BigInt::new_from_i64(scope, n).into());
+}
+
+fn cb_random_float(
+	_s: &mut v8::HandleScope,
+	_a: v8::FunctionCallbackArguments,
+	mut rv: v8::ReturnValue,
+) {
+	use rand::RngExt as _;
+	rv.set_double(rand::rng().random::<f64>());
+}
+
+fn cb_random_int_range(
+	scope: &mut v8::HandleScope,
+	args: v8::FunctionCallbackArguments,
+	mut rv: v8::ReturnValue,
+) {
+	use rand::RngExt as _;
+	let lo = args
+		.get(0)
+		.to_big_int(scope)
+		.map(|b| b.i64_value().0)
+		.unwrap_or(0);
+	let hi = args
+		.get(1)
+		.to_big_int(scope)
+		.map(|b| b.i64_value().0)
+		.unwrap_or(0);
+	// `core.random` guarantees `lo < hi` before calling.
+	let n = rand::rng().random_range(lo..hi);
+	rv.set(v8::BigInt::new_from_i64(scope, n).into());
+}
+
+fn cb_random_bytes(
+	scope: &mut v8::HandleScope,
+	args: v8::FunctionCallbackArguments,
+	mut rv: v8::ReturnValue,
+) {
+	use rand::Rng as _;
+	let (n, dst, cap) = (
+		argi(scope, &args, 0),
+		argi(scope, &args, 1),
+		argi(scope, &args, 2),
+	);
+	let (ctx, mem) = ctx_and_mem(scope, &args);
+	// `core.random` guarantees `n >= 0` before calling.
+	let mut buf = vec![0u8; n.max(0) as usize];
+	rand::rng().fill_bytes(&mut buf);
+	rv.set_int32(deliver_read_v8(scope, mem, ctx, dst, cap, buf));
+}
+
+fn cb_uuid_v4(
+	scope: &mut v8::HandleScope,
+	args: v8::FunctionCallbackArguments,
+	mut rv: v8::ReturnValue,
+) {
+	let (dst, cap) = (argi(scope, &args, 0), argi(scope, &args, 1));
+	let (ctx, mem) = ctx_and_mem(scope, &args);
+	let s = uuid::Uuid::new_v4().to_string();
+	rv.set_int32(deliver_read_v8(scope, mem, ctx, dst, cap, s.into_bytes()));
+}
+
+fn cb_uuid_v7(
+	scope: &mut v8::HandleScope,
+	args: v8::FunctionCallbackArguments,
+	mut rv: v8::ReturnValue,
+) {
+	let (dst, cap) = (argi(scope, &args, 0), argi(scope, &args, 1));
+	let (ctx, mem) = ctx_and_mem(scope, &args);
+	let s = uuid::Uuid::now_v7().to_string();
+	rv.set_int32(deliver_read_v8(scope, mem, ctx, dst, cap, s.into_bytes()));
+}
+
+fn cb_uuid_parse(
+	scope: &mut v8::HandleScope,
+	args: v8::FunctionCallbackArguments,
+	mut rv: v8::ReturnValue,
+) {
+	let (pp, pl) = (argi(scope, &args, 0), argi(scope, &args, 1));
+	let (dst, cap) = (argi(scope, &args, 2), argi(scope, &args, 3));
+	let (ctx, mem) = ctx_and_mem(scope, &args);
+	let s = read_str(scope, mem, pp, pl);
+	let n = match uuid::Uuid::try_parse(&s) {
+		Ok(u) => deliver_read_v8(scope, mem, ctx, dst, cap, u.to_string().into_bytes()),
+		Err(e) => {
+			ctx.state.last_error = e.to_string();
+			-1
+		}
+	};
+	rv.set_int32(n);
 }
 
 // --------------------------------------------------------------------------

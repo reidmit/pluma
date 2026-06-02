@@ -57,6 +57,15 @@ pub fn lower(compiler: &Compiler) -> Result<IrProgram, String> {
 	Lowerer::new(compiler).run()
 }
 
+/// Lower for `pluma test`: synthesize an entry that runs every module's `tests`
+/// suite through `core.test.run-all`, rather than calling a `main`. `color`
+/// enables ANSI styling in the rendered report.
+pub fn lower_tests(compiler: &Compiler, color: bool) -> Result<IrProgram, String> {
+	let mut lowerer = Lowerer::new(compiler);
+	lowerer.test_color = Some(color);
+	lowerer.run()
+}
+
 // --------------------------------------------------------------------------
 // The lowerer.
 // --------------------------------------------------------------------------
@@ -77,6 +86,9 @@ struct Lowerer<'a> {
 	imports: HashMap<String, String>,
 	// A single shared thunk for every unsupported def, built lazily.
 	poison: Option<FuncId>,
+	// `Some(color)` when lowering for `pluma test`: `build_entry` then synthesizes
+	// a runner over every `tests` suite instead of the module's `main`.
+	test_color: Option<bool>,
 }
 
 /// Per-function lowering state.
@@ -157,6 +169,7 @@ impl<'a> Lowerer<'a> {
 			current_module: String::new(),
 			imports: HashMap::new(),
 			poison: None,
+			test_color: None,
 		}
 	}
 
@@ -179,11 +192,10 @@ impl<'a> Lowerer<'a> {
 			.iter()
 			.filter_map(|m| self.globals.lookup(m, "tests").map(|g| (m.clone(), g)))
 			.collect();
-		// A test-only program (suites but no `main`) gets a no-op entry; the
-		// test runner drives each suite directly. `core.testing.new` is the
-		// registrar it threads in — present whenever a suite is.
-		let entry = self.build_entry(!test_suites.is_empty())?;
-		let test_new = self.globals.lookup("core.testing", "new");
+		// In test mode (`lower_tests`), synthesize a runner over these suites;
+		// otherwise the entry is the module's `main` (with a no-op fallback for a
+		// suite-bearing module that has no `main`).
+		let entry = self.build_entry(&test_suites)?;
 
 		// Annotate every function's bindings with a `Repr` (uniform-boxed except
 		// arithmetic/comparison/`Not` results and primitive literals). Inert for the
@@ -200,7 +212,6 @@ impl<'a> Lowerer<'a> {
 			enums,
 			entry,
 			test_suites,
-			test_new,
 		})
 	}
 
@@ -1892,7 +1903,11 @@ impl<'a> Lowerer<'a> {
 
 	// ---- entry / poison / function table -------------------------------
 
-	fn build_entry(&mut self, has_tests: bool) -> Result<FuncId, String> {
+	fn build_entry(&mut self, test_suites: &[(String, GlobalId)]) -> Result<FuncId, String> {
+		// `pluma test`: ignore `main` and synthesize a runner over the suites.
+		if let Some(color) = self.test_color {
+			return self.build_test_entry(test_suites, color);
+		}
 		let main_module = self
 			.compiler
 			.entry_modules
@@ -1903,7 +1918,7 @@ impl<'a> Lowerer<'a> {
 			Some(g) => g,
 			// No `main`, but `pluma test` programs are entered via a no-op (push
 			// `nothing` and return); the runner then invokes each test directly.
-			None if has_tests => {
+			None if !test_suites.is_empty() => {
 				let func = Function {
 					name: "__entry__".to_string(),
 					module: String::new(),
@@ -1938,6 +1953,71 @@ impl<'a> Lowerer<'a> {
 				)),
 				Stmt::synthetic(StmtKind::Return(Atom::Var(VarId(1)))),
 			]),
+			var_reprs: Vec::new(),
+			param_reprs: Vec::new(),
+			ret_repr: Repr::Boxed,
+		};
+		Ok(self.add_function(func))
+	}
+
+	/// Synthesize the `pluma test` entry: build a `list {name, tests}` from the
+	/// discovered suites and tail it into `core.test.run-all color suites`. The
+	/// suites are referenced by `GlobalId`, so their privacy (a `*.test.pa`'s
+	/// `tests` is private) doesn't matter — no source-level import is involved.
+	fn build_test_entry(
+		&mut self,
+		test_suites: &[(String, GlobalId)],
+		color: bool,
+	) -> Result<FuncId, String> {
+		let run_all = self
+			.globals
+			.lookup("core.test", "run-all")
+			.ok_or("`core.test.run-all` was not compiled — does a `*.test.pa` file `use core.test`?")?;
+
+		let mut stmts: Vec<Stmt> = Vec::new();
+		let mut next: u32 = 0;
+		let mut fresh = |stmts: &mut Vec<Stmt>, rv: Rvalue| -> VarId {
+			let v = VarId(next);
+			next += 1;
+			stmts.push(Stmt::synthetic(StmtKind::Let(v, rv)));
+			v
+		};
+
+		// One `{name, tests}` record per suite. Field order is name-sorted to
+		// match the record-shape layout the backends expect from `MakeRecord`.
+		let mut items: Vec<ListItem> = Vec::new();
+		for (module, gid) in test_suites {
+			let display = module.strip_suffix(".test").unwrap_or(module).to_string();
+			let tests = fresh(&mut stmts, Rvalue::GlobalRef(*gid));
+			let rec = fresh(
+				&mut stmts,
+				Rvalue::MakeRecord(vec![
+					("name".to_string(), Atom::Const(Const::Str(display))),
+					("tests".to_string(), Atom::Var(tests)),
+				]),
+			);
+			items.push(ListItem::Elem(Atom::Var(rec)));
+		}
+
+		let list = fresh(&mut stmts, Rvalue::MakeList(items));
+		let runner = fresh(&mut stmts, Rvalue::GlobalRef(run_all));
+		let result = fresh(
+			&mut stmts,
+			Rvalue::CallClosure(
+				Atom::Var(runner),
+				vec![Atom::Const(Const::Bool(color)), Atom::Var(list)],
+			),
+		);
+		stmts.push(Stmt::synthetic(StmtKind::Return(Atom::Var(result))));
+
+		let func = Function {
+			name: "__test_entry__".to_string(),
+			module: String::new(),
+			params: Vec::new(),
+			captures: Vec::new(),
+			is_async: false,
+			poll_fn: None,
+			body: Block(stmts),
 			var_reprs: Vec::new(),
 			param_reprs: Vec::new(),
 			ret_repr: Repr::Boxed,

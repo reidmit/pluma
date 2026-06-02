@@ -1,137 +1,137 @@
-use core.testing
+use core.test
 use core.base64
 use core.assert
 
-def tests :: testing.suite = fun t {
+def tests :: test.suite = [
 	# --- standard encode ---
 
-	t.case "encode of empty bytes" fun {
+	test.case "encode of empty bytes" (fun {
 		assert.equals (base64.encode '') ""
-	}
+	}),
 
-	t.case "encode pads three bytes" fun {
+	test.case "encode pads three bytes" (fun {
 		assert.equals (base64.encode 'foo') "Zm9v"
-	}
+	}),
 
-	t.case "encode pads one trailing byte" fun {
+	test.case "encode pads one trailing byte" (fun {
 		assert.equals (base64.encode 'f') "Zg=="
-	}
+	}),
 
-	t.case "encode pads two trailing bytes" fun {
+	test.case "encode pads two trailing bytes" (fun {
 		assert.equals (base64.encode 'fo') "Zm8="
-	}
+	}),
 
-	t.case "encode handles high bytes" fun {
+	test.case "encode handles high bytes" (fun {
 		assert.equals (base64.encode '\xff\xfe\xfd') "//79"
-	}
+	}),
 
 	# --- standard decode ---
 
-	t.case "decode of empty string" fun {
+	test.case "decode of empty string" (fun {
 		when base64.decode "" is ok b {
 			assert.equals b ''
 		} is err _msg {
 			assert.is-true false
 		}
-	}
+	}),
 
-	t.case "decode with full padding" fun {
+	test.case "decode with full padding" (fun {
 		when base64.decode "Zg==" is ok b {
 			assert.equals b 'f'
 		} is err _msg {
 			assert.is-true false
 		}
-	}
+	}),
 
-	t.case "decode without padding" fun {
+	test.case "decode without padding" (fun {
 		when base64.decode "Zg" is ok b {
 			assert.equals b 'f'
 		} is err _msg {
 			assert.is-true false
 		}
-	}
+	}),
 
-	t.case "decode standard alphabet" fun {
+	test.case "decode standard alphabet" (fun {
 		when base64.decode "//79" is ok b {
 			assert.equals b '\xff\xfe\xfd'
 		} is err _msg {
 			assert.is-true false
 		}
-	}
+	}),
 
-	t.case "decode rejects URL-safe alphabet" fun {
+	test.case "decode rejects URL-safe alphabet" (fun {
 		when base64.decode "__79" is ok _b {
 			assert.is-true false
 		} is err _msg {
 			assert.is-true true
 		}
-	}
+	}),
 
-	t.case "decode rejects whitespace" fun {
+	test.case "decode rejects whitespace" (fun {
 		when base64.decode "Zm 9v" is ok _b {
 			assert.is-true false
 		} is err _msg {
 			assert.is-true true
 		}
-	}
+	}),
 
 	# --- url-safe variants ---
 
-	t.case "url-encode has no padding" fun {
+	test.case "url-encode has no padding" (fun {
 		assert.equals (base64.url-encode 'f') "Zg"
-	}
+	}),
 
-	t.case "url-encode uses dash and underscore" fun {
+	test.case "url-encode uses dash and underscore" (fun {
 		assert.equals (base64.url-encode '\xff\xfe\xfd') "__79"
-	}
+	}),
 
-	t.case "url-decode of empty string" fun {
+	test.case "url-decode of empty string" (fun {
 		when base64.url-decode "" is ok b {
 			assert.equals b ''
 		} is err _msg {
 			assert.is-true false
 		}
-	}
+	}),
 
-	t.case "url-decode URL-safe alphabet" fun {
+	test.case "url-decode URL-safe alphabet" (fun {
 		when base64.url-decode "__79" is ok b {
 			assert.equals b '\xff\xfe\xfd'
 		} is err _msg {
 			assert.is-true false
 		}
-	}
+	}),
 
-	t.case "url-decode tolerates padding" fun {
+	test.case "url-decode tolerates padding" (fun {
 		when base64.url-decode "Zg==" is ok b {
 			assert.equals b 'f'
 		} is err _msg {
 			assert.is-true false
 		}
-	}
+	}),
 
-	t.case "url-decode rejects standard alphabet" fun {
+	test.case "url-decode rejects standard alphabet" (fun {
 		when base64.url-decode "//79" is ok _b {
 			assert.is-true false
 		} is err _msg {
 			assert.is-true true
 		}
-	}
+	}),
 
 	# --- round-trip ---
 
-	t.case "encode then decode standard" fun {
+	test.case "encode then decode standard" (fun {
 		when base64.decode (base64.encode '\x00\x01\x02\xfd\xfe\xff') is ok b {
 			assert.equals b '\x00\x01\x02\xfd\xfe\xff'
 		} is err _msg {
 			assert.is-true false
 		}
-	}
+	}),
 
-	t.case "encode then decode url-safe" fun {
+	test.case "encode then decode url-safe" (fun {
 		when base64.url-decode (base64.url-encode '\x00\x01\x02\xfd\xfe\xff') is ok b {
 			assert.equals b '\x00\x01\x02\xfd\xfe\xff'
 		} is err _msg {
 			assert.is-true false
 		}
-	}
-}
+	}),
+]

@@ -9,15 +9,17 @@ fn main() {
 	match std::env::args().nth(1) {
 		Some(arg) => match &arg[..] {
 			"run" => {
-				// `pluma run [--vm] <path> [args…]`. By default a source file runs on V8
-				// (the deploy engine — run what you ship); `--vm` forces the bytecode VM.
-				// Everything after the path is the program's own argv (`io.args`).
-				let mut use_vm = false;
+				// `pluma run <path> [args…]`. A source file is compiled to WasmGC and run
+				// on V8 (the deploy engine — run what you ship); a prebuilt `.wasm` runs
+				// directly. Everything after the path is the program's own argv (`io.args`).
 				let mut entry_path: Option<String> = None;
 				let mut program_args: Vec<String> = Vec::new();
 				for a in std::env::args().skip(2) {
 					if entry_path.is_none() && a == "--vm" {
-						use_vm = true;
+						print_error(
+							"The `--vm` flag has been removed — `pluma run` uses V8 (the deploy engine).",
+						);
+						std::process::exit(1);
 					} else if entry_path.is_none() {
 						entry_path = Some(a);
 					} else {
@@ -31,7 +33,7 @@ fn main() {
 						std::process::exit(1);
 					}
 				};
-				run(entry_path, program_args, use_vm);
+				run(entry_path, program_args);
 			}
 
 			"repl" => {
@@ -124,11 +126,11 @@ fn main() {
 			}
 
 			// Anything else is treated as a path to run, so `cli foo.pa`
-			// works as shorthand for `cli run foo.pa` (on V8; use `run --vm` for the
-			// VM). Here the path is argv[1], so the program's own args start at argv[2].
+			// works as shorthand for `cli run foo.pa` (on V8). Here the path is argv[1],
+			// so the program's own args start at argv[2].
 			_ => {
 				let program_args: Vec<String> = std::env::args().skip(2).collect();
-				run(arg, program_args, false);
+				run(arg, program_args);
 			}
 		},
 
@@ -281,302 +283,51 @@ fn test_command(args: Vec<String>) {
 
 	let t_check = std::time::Instant::now();
 
-	let program = match compile_program(&compiler) {
+	// Synthesize a test entry over the discovered suites and emit a WasmGC module,
+	// then run it under V8 (the deploy engine — `pluma test` exercises the exact
+	// artifact you ship). The runner is itself Pluma: `core.test.run-all` flattens
+	// each suite, runs the cases, prints the tree, and returns ok / err.
+	let use_color = std::io::IsTerminal::is_terminal(&std::io::stdout());
+	let program = match ir::lower_tests(&compiler, use_color) {
 		Ok(p) => p,
 		Err(msg) => {
-			print_error(format!("codegen error: {}", msg));
+			print_error(format!("ir::lower: {msg}"));
+			std::process::exit(1);
+		}
+	};
+
+	if program.test_suites.is_empty() {
+		eprintln!("no tests found (expected a `def tests :: test.suite` in a *.test.pa file)");
+		return;
+	}
+
+	let bytes = match wasm::emit(&program) {
+		Ok(b) => b,
+		Err(diags) => {
+			print_error(format!("wasm codegen error: {}", diags.0.join("; ")));
 			std::process::exit(1);
 		}
 	};
 
 	let t_codegen = std::time::Instant::now();
 
-	if program.test_suites.is_empty() {
-		eprintln!("no tests found (expected a `def tests :: testing.suite` in a *.test.pa file)");
-		return;
-	}
+	// The runner streams the report to stdout; the exit code reflects pass/fail.
+	let code = host::run_test_v8(&bytes);
 
-	// `core.testing.new` builds the registrar the runner threads into each
-	// suite. It's compiled whenever a suite is (a suite's type names it).
-	let new_idx = match program.test_new {
-		Some(idx) => idx,
-		None => {
-			print_error("internal error: `core.testing.new` was not compiled");
-			std::process::exit(1);
-		}
-	};
-
-	// Codegen iterates a HashMap, so suites come out in non-deterministic
-	// module order. Sort by module name so the output is stable across runs.
-	let mut suites: Vec<(String, u32)> = program.test_suites.clone();
-	suites.sort_by(|a, b| a.0.cmp(&b.0));
-	let mut vm_instance = vm::VM::new(program);
-
-	let t_vm_new = std::time::Instant::now();
-	// Split VM time: registering cases (running each suite body) vs actually
-	// executing the case bodies.
-	let mut register_time = std::time::Duration::ZERO;
-	let mut run_time = std::time::Duration::ZERO;
-
-	let mut passed = 0usize;
-	let mut failed = 0usize;
-	let mut skipped = 0usize;
-	let mut todo_count = 0usize;
-
-	for (i, (module_name, suite_idx)) in suites.iter().enumerate() {
-		if i > 0 {
-			println!();
-		}
-		// Strip the redundant `.test` suffix every test module name carries
-		// (e.g. `util.list-helpers.test` → `util.list-helpers`).
-		let display = module_name.strip_suffix(".test").unwrap_or(module_name);
-		println!("{}", colors::bold(display));
-
-		// Build a fresh registrar, run the suite to register its cases, then
-		// drain the flat list of entries.
-		let t_reg = std::time::Instant::now();
-		let entries = match run_suite(&mut vm_instance, new_idx, *suite_idx) {
-			Ok(entries) => entries,
-			Err(err) => {
-				println!(
-					"  {} failed to load suite: {}",
-					colors::bold_red("✗"),
-					err.message
-				);
-				failed += 1;
-				continue;
-			}
-		};
-		register_time += t_reg.elapsed();
-
-		// Focus: if any case is focused, only focused cases run.
-		let any_focused = entries
-			.iter()
-			.any(|e| field_variant(e, "status").as_deref() == Some("focused"));
-
-		let mut printed_path: Vec<String> = Vec::new();
-		for entry in &entries {
-			let name = field_string(entry, "name").unwrap_or_default();
-			let path = field_string_list(entry, "path");
-			let status = field_variant(entry, "status").unwrap_or_else(|| "normal".to_string());
-			print_group_headers(&mut printed_path, &path);
-			let indent = "  ".repeat(path.len() + 1);
-
-			let should_run = match status.as_str() {
-				"pending" => {
-					println!(
-						"{}{} {} {}",
-						indent,
-						colors::bold_yellow("○"),
-						name,
-						colors::dim("(todo)")
-					);
-					todo_count += 1;
-					false
-				}
-				"skipped" => {
-					println!(
-						"{}{} {} {}",
-						indent,
-						colors::dim("-"),
-						name,
-						colors::dim("(skipped)")
-					);
-					skipped += 1;
-					false
-				}
-				"focused" => true,
-				_ => {
-					if any_focused {
-						println!(
-							"{}{} {} {}",
-							indent,
-							colors::dim("-"),
-							name,
-							colors::dim("(not focused)")
-						);
-						skipped += 1;
-						false
-					} else {
-						true
-					}
-				}
-			};
-
-			if !should_run {
-				continue;
-			}
-
-			let body = match field(entry, "body") {
-				Some(b) => b,
-				None => continue,
-			};
-			let t_case = std::time::Instant::now();
-			let case_result = vm_instance.call_function(body, vec![vm::Value::Nothing]);
-			run_time += t_case.elapsed();
-			match case_result {
-				// `ok ()` — the case passed.
-				Ok(result) if variant_of(&result).as_deref() == Some("ok") => {
-					println!("{}{} {}", indent, colors::bold_green("✓"), name);
-					passed += 1;
-				}
-				// `err message` — one or more assertions failed.
-				Ok(result) => {
-					println!("{}{} {}", indent, colors::bold_red("✗"), name);
-					let msg = variant_payload_string(&result).unwrap_or_default();
-					for line in msg.lines() {
-						println!("{}    {}", indent, line);
-					}
-					failed += 1;
-				}
-				// A genuine runtime error (e.g. `io.fail`, div-by-zero) — the
-				// case crashed rather than producing a result.
-				Err(err) => {
-					println!(
-						"{}{} {} {}",
-						indent,
-						colors::bold_red("✗"),
-						name,
-						colors::dim("(errored)")
-					);
-					if let (Some(module), Some(range)) = (&err.module, err.range) {
-						let p = compiler::to_module_path(&root_dir, module);
-						let display_path = p.strip_prefix(&root_dir).unwrap_or(&p);
-						// 0-indexed Range → 1-indexed line/col for editor links.
-						println!(
-							"{}    {}:{}:{}",
-							indent,
-							display_path.display(),
-							range.start.line + 1,
-							range.start.col + 1,
-						);
-					}
-					println!("{}    {}", indent, err.message);
-					failed += 1;
-				}
-			}
-		}
-	}
-
-	println!();
-	let total = passed + failed;
-	let mut summary = format!("{} of {} passed", passed, total);
-	if skipped > 0 {
-		summary.push_str(&format!(", {} skipped", skipped));
-	}
-	if todo_count > 0 {
-		summary.push_str(&format!(", {} todo", todo_count));
-	}
 	if timing {
 		let ms = |d: std::time::Duration| d.as_secs_f64() * 1000.0;
-		let t_vm_end = std::time::Instant::now();
+		let t_end = std::time::Instant::now();
 		eprintln!();
 		eprintln!("── timing (PLUMA_TIMING) ──────────────");
 		eprintln!("  discover+setup : {:>8.2} ms", ms(t_setup - t_start));
 		eprintln!("  check          : {:>8.2} ms", ms(t_check - t_setup));
-		eprintln!("  codegen        : {:>8.2} ms", ms(t_codegen - t_check));
-		eprintln!("  vm::new        : {:>8.2} ms", ms(t_vm_new - t_codegen));
-		eprintln!("  vm register    : {:>8.2} ms", ms(register_time));
-		eprintln!(
-			"  vm run cases   : {:>8.2} ms ({} cases)",
-			ms(run_time),
-			total
-		);
+		eprintln!("  lower+emit     : {:>8.2} ms", ms(t_codegen - t_check));
+		eprintln!("  run (v8)       : {:>8.2} ms", ms(t_end - t_codegen));
 		eprintln!("  ─────────────────────────────────────");
-		eprintln!("  total in-proc  : {:>8.2} ms", ms(t_vm_end - t_start));
+		eprintln!("  total          : {:>8.2} ms", ms(t_end - t_start));
 	}
 
-	if failed == 0 {
-		println!("{}", colors::bold_green(&summary));
-	} else {
-		println!("{}", colors::bold_red(&summary));
-		std::process::exit(1);
-	}
-}
-
-// Build a fresh registrar (via `core.testing.new`), run `suite` to register
-// its cases into it, then drain and return the flat entry list. Errors here
-// mean the suite's registration code itself crashed.
-fn run_suite(
-	vm: &mut vm::VM,
-	new_idx: u32,
-	suite_idx: u32,
-) -> Result<Vec<vm::Value>, vm::RuntimeError> {
-	let new_fn = vm.force_global(new_idx)?;
-	let registrar = vm.call_function(new_fn, vec![vm::Value::Nothing])?;
-	let suite_fn = vm.force_global(suite_idx)?;
-	vm.call_function(suite_fn, vec![registrar.clone()])?;
-	let drain = field(&registrar, "drain")
-		.ok_or_else(|| vm::RuntimeError::new("registrar is missing a `drain` field"))?;
-	match vm.call_function(drain, vec![vm::Value::Nothing])? {
-		vm::Value::List(xs) => Ok(xs.borrow().iter().cloned().collect()),
-		_ => Err(vm::RuntimeError::new("`drain` did not return a list")),
-	}
-}
-
-// Print group headers for any groups newly entered going from the previously
-// printed path to `path`, updating `printed` in place. Indents by depth so the
-// tree nests under the module header.
-fn print_group_headers(printed: &mut Vec<String>, path: &[String]) {
-	let common = printed
-		.iter()
-		.zip(path.iter())
-		.take_while(|(a, b)| a == b)
-		.count();
-	printed.truncate(common);
-	for seg in &path[common..] {
-		let indent = "  ".repeat(printed.len() + 1);
-		println!("{}{}", indent, colors::bold_dim(seg));
-		printed.push(seg.clone());
-	}
-}
-
-// --- small readers over the runtime `Value` tree the registrar produces ---
-
-fn field(v: &vm::Value, name: &str) -> Option<vm::Value> {
-	match v {
-		vm::Value::Record(m) => m.get(name).cloned(),
-		_ => None,
-	}
-}
-
-fn variant_of(v: &vm::Value) -> Option<String> {
-	match v {
-		vm::Value::Variant(d) => Some(d.variant.as_str().to_string()),
-		_ => None,
-	}
-}
-
-fn variant_payload_string(v: &vm::Value) -> Option<String> {
-	match v {
-		vm::Value::Variant(d) => d.payload.first().map(|p| format!("{}", p)),
-		_ => None,
-	}
-}
-
-fn field_variant(v: &vm::Value, name: &str) -> Option<String> {
-	field(v, name).as_ref().and_then(variant_of)
-}
-
-fn field_string(v: &vm::Value, name: &str) -> Option<String> {
-	match field(v, name) {
-		Some(vm::Value::String(s)) => Some(s.as_str().to_string()),
-		_ => None,
-	}
-}
-
-fn field_string_list(v: &vm::Value, name: &str) -> Vec<String> {
-	match field(v, name) {
-		Some(vm::Value::List(xs)) => xs
-			.borrow()
-			.iter()
-			.filter_map(|x| match x {
-				vm::Value::String(s) => Some(s.as_str().to_string()),
-				_ => None,
-			})
-			.collect(),
-		_ => Vec::new(),
-	}
+	std::process::exit(code);
 }
 
 // Recursively find every `*.test.pa` file under `root` and return its module
@@ -725,10 +476,8 @@ fn build_command(args: Vec<String>) {
 	}
 }
 
-fn run(entry_path: String, program_args: Vec<String>, use_vm: bool) {
-	// A prebuilt WasmGC artifact (`pluma build`) runs under the WasmGC host (V8) — the
-	// VM can't execute wasm. Dispatch on the extension so `pluma run` stays the single
-	// entry point for both source and artifacts.
+fn run(entry_path: String, program_args: Vec<String>) {
+	// A prebuilt WasmGC artifact (`pluma build`) runs directly under V8.
 	if entry_path.ends_with(".wasm") {
 		let bytes = match std::fs::read(&entry_path) {
 			Ok(b) => b,
@@ -737,10 +486,6 @@ fn run(entry_path: String, program_args: Vec<String>, use_vm: bool) {
 				std::process::exit(1);
 			}
 		};
-		if use_vm {
-			print_error("`--vm` can't run a `.wasm` artifact (the VM executes bytecode, not wasm).");
-			std::process::exit(1);
-		}
 		std::process::exit(host::run_streaming_v8(&bytes));
 	}
 
@@ -767,14 +512,12 @@ fn run(entry_path: String, program_args: Vec<String>, use_vm: bool) {
 		std::process::exit(1);
 	}
 
-	// Default engine: compile to a WasmGC artifact and run it under V8 — the same
-	// thing `pluma build` ships. If the wasm backend can't emit this program (e.g. it
-	// uses `io.args`, not yet a wasm host import), fall back to the VM. `--vm` forces
-	// the VM up front.
-	if !use_vm {
-		if let Ok(bytes) = emit_wasm(&compiler) {
-			std::process::exit(host::run_streaming_v8(&bytes));
-		}
+	// Compile to a WasmGC artifact and run it under V8 — the same thing `pluma build`
+	// ships. A few builtins aren't yet wasm host imports (notably `io.args`); for a
+	// program the wasm backend can't emit, we fall back to the bytecode VM so it still
+	// runs. This is an internal capability bridge, not a user-selectable engine.
+	if let Ok(bytes) = emit_wasm(&compiler) {
+		std::process::exit(host::run_streaming_v8(&bytes));
 	}
 
 	let program = match compile_program(&compiler) {

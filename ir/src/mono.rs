@@ -232,7 +232,6 @@ mod tests {
 			enums: Default::default(),
 			entry: FuncId(1),
 			test_suites: vec![],
-			test_new: None,
 		};
 		monomorphize(&mut program);
 		assert_eq!(program.functions[0].param_reprs, vec![Repr::I64]);
@@ -273,7 +272,6 @@ mod tests {
 			enums: Default::default(),
 			entry: FuncId(1),
 			test_suites: vec![],
-			test_new: None,
 		};
 		monomorphize(&mut program);
 		let sigs = Sigs::from_program(&program);
@@ -326,7 +324,6 @@ mod tests {
 			enums: Default::default(),
 			entry: FuncId(1),
 			test_suites: vec![],
-			test_new: None,
 		};
 		monomorphize(&mut program);
 		assert_eq!(program.functions[0].param_reprs, vec![Repr::Boxed]);
@@ -345,7 +342,6 @@ mod tests {
 			enums: Default::default(),
 			entry: FuncId(1),
 			test_suites: vec![],
-			test_new: None,
 		};
 		monomorphize(&mut program);
 		assert_eq!(program.functions[0].param_reprs, vec![Repr::Boxed]);
@@ -385,7 +381,6 @@ mod tests {
 			enums: Default::default(),
 			entry: FuncId(1),
 			test_suites: vec![],
-			test_new: None,
 		};
 		monomorphize(&mut program);
 		assert_eq!(program.functions[0].param_reprs, vec![Repr::Boxed]);

@@ -18,3 +18,7 @@ v8 = "137"
 # The host-side I/O reactor for `core.net` — the same library the VM reactor uses
 # (`vm/src/net.rs`), so the host mirrors the VM's park/wake byte-for-byte.
 polling = "3"
+# `core.random` / `core.uuid` host imports — the same crates the VM uses, so the host
+# generates entropy/uuids identically (the deploy `Entropy` capability).
+rand = "0.10"
+uuid = { version = "1", features = ["v4", "v7"] }

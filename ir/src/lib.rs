@@ -34,7 +34,7 @@ pub mod repr;
 pub mod resolve;
 pub mod types;
 
-pub use lower::lower;
+pub use lower::{lower, lower_tests};
 pub use types::*;
 
 /// The VM-path optimization sequence: inline small directly-called functions,

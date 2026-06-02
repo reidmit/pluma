@@ -1,90 +1,90 @@
-use core.testing
+use core.test
 use core.random
 use core.bytes
 use core.list
 use core.assert
 
-def tests :: testing.suite = fun t {
+def tests :: test.suite = [
 	# Most random functions can't be asserted to specific values; the
 	# tests verify shape, ranges, and error paths.
 
 	# --- int ---
 
-	t.case "int returns non-negative" fun {
+	test.case "int returns non-negative" (fun {
 		let n = random.int ()
 		assert.is-true (n >= 0)
-	}
+	}),
 
 	# --- float ---
 
-	t.case "float lies in [0, 1)" fun {
+	test.case "float lies in [0, 1)" (fun {
 		let x = random.float ()
 		assert.all [assert.is-true (x >= 0.0), assert.is-true (x < 1.0)]
-	}
+	}),
 
 	# --- bytes ---
 
-	t.case "bytes of length 0 is empty" fun {
+	test.case "bytes of length 0 is empty" (fun {
 		when random.bytes 0 is ok b {
 			assert.equals (bytes.length b) 0
 		} is err _msg {
 			assert.is-true false
 		}
-	}
+	}),
 
-	t.case "bytes of length 16 has 16 bytes" fun {
+	test.case "bytes of length 16 has 16 bytes" (fun {
 		when random.bytes 16 is ok b {
 			assert.equals (bytes.length b) 16
 		} is err _msg {
 			assert.is-true false
 		}
-	}
+	}),
 
-	t.case "bytes rejects negative length" fun {
+	test.case "bytes rejects negative length" (fun {
 		when random.bytes (-1) is ok _b {
 			assert.is-true false
 		} is err _msg {
 			assert.is-true true
 		}
-	}
+	}),
 
 	# --- int-range ---
 
-	t.case "int-range stays within bounds" fun {
+	test.case "int-range stays within bounds" (fun {
 		when random.int-range 10 20 is ok n {
 			assert.all [assert.is-true (n >= 10), assert.is-true (n < 20)]
 		} is err _msg {
 			assert.is-true false
 		}
-	}
+	}),
 
-	t.case "int-range with low == high is err" fun {
+	test.case "int-range with low == high is err" (fun {
 		when random.int-range 5 5 is ok _n {
 			assert.is-true false
 		} is err _msg {
 			assert.is-true true
 		}
-	}
+	}),
 
-	t.case "int-range with low > high is err" fun {
+	test.case "int-range with low > high is err" (fun {
 		when random.int-range 10 5 is ok _n {
 			assert.is-true false
 		} is err _msg {
 			assert.is-true true
 		}
-	}
+	}),
 
-	t.case "int-range with width 1 is deterministic" fun {
+	test.case "int-range with width 1 is deterministic" (fun {
 		when random.int-range 7 8 is ok n {
 			assert.equals n 7
 		} is err _msg {
 			assert.is-true false
 		}
-	}
+	}),
 
 	# --- bool ---
 
-	t.case "bool returns a bool" fun {
+	test.case "bool returns a bool" (fun {
 		let b = random.bool ()
 		# Confirms the call resolves to a bool — both arms succeed.
 		when b is true {
@@ -92,32 +92,32 @@ def tests :: testing.suite = fun t {
 		} is false {
 			assert.is-true true
 		}
-	}
+	}),
 
 	# --- choice ---
 
-	t.case "choice of empty list is none" fun {
+	test.case "choice of empty list is none" (fun {
 		when random.choice [] is some _x {
 			assert.is-true false
 		} is none {
 			assert.is-true true
 		}
-	}
+	}),
 
-	t.case "choice of singleton picks that element" fun {
+	test.case "choice of singleton picks that element" (fun {
 		when random.choice [42] is some x {
 			assert.equals x 42
 		} is none {
 			assert.is-true false
 		}
-	}
+	}),
 
-	t.case "choice always picks a list element" fun {
+	test.case "choice always picks a list element" (fun {
 		let xs = [10, 20, 30, 40]
 		when random.choice xs is some x {
 			assert.is-true (list.contains xs x)
 		} is none {
 			assert.is-true false
 		}
-	}
-}
+	}),
+]

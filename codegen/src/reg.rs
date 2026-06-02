@@ -97,7 +97,6 @@ pub fn emit(program: &IrProgram) -> Result<Program, String> {
 			.iter()
 			.map(|(m, g)| (m.clone(), g.0))
 			.collect(),
-		test_new: program.test_new.map(|g| g.0),
 		async_poll: program
 			.functions
 			.iter()
