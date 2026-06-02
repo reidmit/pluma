@@ -6,7 +6,10 @@
 // TCO), so the `deep-recursion` fixture would overflow the default 2 MiB test
 // thread otherwise.
 
-use conformance::{Runner, check_fixture, correctness_corpus, report, workspace_root};
+use conformance::{Runner, check_fixture, correctness_corpus, report};
+// Only the default (non-v8) gate re-renders + freshness-checks CONFORMANCE.md.
+#[cfg(not(feature = "v8"))]
+use conformance::workspace_root;
 
 #[test]
 fn deploy_backends_match_vm_oracle() {
@@ -42,6 +45,8 @@ fn body() {
 		);
 	}
 
+	// Every deploy backend in the corpus must match the VM — wasmtime always, and V8
+	// too under `--features v8` (the V8↔VM cross-check over the same artifact).
 	let diffs = report::divergences(&cov);
 	assert!(
 		diffs.is_empty(),
@@ -49,12 +54,16 @@ fn body() {
 		diffs.join("\n")
 	);
 
-	// The committed coverage doc must match a fresh render (snapshot-style).
-	let fresh = report::render_conformance_md(&cov);
-	let path = workspace_root().join("CONFORMANCE.md");
-	let current = std::fs::read_to_string(&path).unwrap_or_default();
-	assert_eq!(
-		current, fresh,
-		"CONFORMANCE.md is stale — run `just conformance` and commit the result."
-	);
+	// The committed coverage doc tracks the default (wasmtime) backend set; only check
+	// its freshness there (with `--features v8` the render would gain a V8 row).
+	#[cfg(not(feature = "v8"))]
+	{
+		let fresh = report::render_conformance_md(&cov);
+		let path = workspace_root().join("CONFORMANCE.md");
+		let current = std::fs::read_to_string(&path).unwrap_or_default();
+		assert_eq!(
+			current, fresh,
+			"CONFORMANCE.md is stale — run `just conformance` and commit the result."
+		);
+	}
 }

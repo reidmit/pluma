@@ -23,3 +23,8 @@ wasmtime = { version = "45", default-features = false, features = [
 	"gc-null",
 	"runtime",
 ] }
+
+# Opt-in: add the V8 deploy backend to the cross-check (a heavy prebuilt dep, so off
+# by default). `cargo test -p conformance --features v8` diffs V8 vs the VM oracle too.
+[features]
+v8 = ["host/v8"]
