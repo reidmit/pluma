@@ -839,6 +839,52 @@ pub fn call_builtin(vm: &mut VM, tag: &str, args: Vec<Value>) -> Result<Value, R
 			let task = Box::new(args.into_iter().next().unwrap_or(Value::Nothing));
 			Ok(Value::Task(Rc::new(TaskRepr::Shielded { task })))
 		}
+		// --- core.net (see vm::net). `listen`/`close`/`connect` run synchronously
+		// here; `accept`/`read`/`write` build a cold task whose run attempts the
+		// non-blocking syscall and parks the fiber on the reactor if it would
+		// block. Socket handles are opaque `int` ids (see net.pa). ---
+		"net-listen" => {
+			let addr = expect_string(&args, "listen");
+			Ok(vm.net_listen(addr))
+		}
+		"net-close" => match args.first() {
+			Some(Value::Int(id)) => Ok(vm.net_close(*id as u32)),
+			_ => Err(RuntimeError::new("net.close: expected a connection")),
+		},
+		"net-local-addr" => match args.first() {
+			Some(Value::Int(id)) => Ok(vm.net_local_addr(*id as u32)),
+			_ => Err(RuntimeError::new("net.local-addr: expected a socket")),
+		},
+		"net-connect" => {
+			// Blocking connect (v1) wrapped as an already-finished task, so the
+			// runtime value matches the `task (result connection string)` type.
+			let addr = expect_string(&args, "connect");
+			Ok(Value::Task(Rc::new(TaskRepr::Pure(vm.net_connect(addr)))))
+		}
+		"net-accept" => match args.first() {
+			Some(Value::Int(id)) => Ok(Value::Task(Rc::new(TaskRepr::NetAccept(*id as u32)))),
+			_ => Err(RuntimeError::new("net.accept: expected a listener")),
+		},
+		"net-read" => {
+			debug_assert_eq!(args.len(), 2, "`net.read` arity");
+			match (&args[0], &args[1]) {
+				(Value::Int(id), Value::Int(max)) => Ok(Value::Task(Rc::new(TaskRepr::NetRead(
+					*id as u32,
+					(*max).max(0) as usize,
+				)))),
+				_ => Err(RuntimeError::new("net.read: expected (connection, int)")),
+			}
+		}
+		"net-write" => {
+			debug_assert_eq!(args.len(), 2, "`net.write` arity");
+			let mut it = args.into_iter();
+			match (it.next(), it.next()) {
+				(Some(Value::Int(id)), Some(Value::Bytes(data))) => {
+					Ok(Value::Task(Rc::new(TaskRepr::NetWrite(id as u32, data))))
+				}
+				_ => Err(RuntimeError::new("net.write: expected (connection, bytes)")),
+			}
+		}
 		// --- structured-concurrency kernel (see vm::task) ---
 		"scope-new" => {
 			// `scope-new is-manual body` — what the `scope` keyword lowers to.

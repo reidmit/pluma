@@ -1,0 +1,68 @@
+# An HTTP/1.1 request/response over loopback, all in one process: a real
+# core.http server (its accept/read/parse/serialize/write loop) talks to a
+# hand-written client that sends a raw GET and reads the raw reply. The
+# server runs under a scope that's cancelled once the exchange is done.
+# Output is the (deterministic) status line and body the client received.
+use core.net
+use core.http
+use core.task
+use core.string
+use core.bytes
+use core.list
+
+def handler :: fun http.request -> task http.response = fun req {
+	task.return (http.text 200 ("you asked for " ++ req.path))
+}
+
+# Read from the connection until the server closes it (Connection: close).
+def drain :: fun net.connection bytes -> task (result bytes string) = fun conn acc {
+	try r = net.read conn 4096
+	when r is ok chunk {
+		if bytes.is-empty chunk is true {
+			task.return (ok acc)
+		} else {
+			drain conn (bytes.concat acc chunk)
+		}
+	} is err e {
+		task.return (err e)
+	}
+}
+
+def client :: fun string -> task string = fun addr {
+	try c = net.connect addr
+	when c is ok conn {
+		try _ = net.write conn (string.to-bytes "GET /hello HTTP/1.1\r\nHost: x\r\n\r\n")
+		try resp = drain conn (string.to-bytes "")
+		let _ = net.close conn
+		when resp is ok raw {
+			task.return ((bytes.to-string raw) ?? "<bad utf8>")
+		} is err e {
+			task.fail e
+		}
+	} is err e {
+		task.fail e
+	}
+}
+
+def main = fun {
+	if net.listen "127.0.0.1:0" is ok server {
+		if net.local-addr server is ok addr {
+			scope as s {
+				let _ = s.spawn (http.serve-on server handler)
+				try raw = client addr
+				let status = (list.head (string.split raw "\r\n")) ?? ""
+				let body = (list.head (list.drop (string.split raw "\r\n\r\n") 1)) ?? ""
+				print status
+				print body
+				s.cancel ()
+				task.return 0
+			}
+		} else {
+			print "local-addr failed"
+			task.return 1
+		}
+	} else {
+		print "listen failed"
+		task.return 1
+	}
+}

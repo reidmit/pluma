@@ -1,0 +1,313 @@
+# A small HTTP/1.1 server, built entirely on `core.net`. You write a
+# handler -- a function from a `request` to a `response` -- and `serve`
+# runs it, accepting connections and replying to each one.
+#
+#     def handler = fun req {
+#         task.return (http.text 200 "hello from pluma")
+#     }
+#     def main = fun { http.serve "127.0.0.1:8080" handler }
+#
+# The handler returns a `task`, so it can `try` other async work (a
+# database call, another service) before replying. Errors a handler runs
+# into are its own to handle -- it always returns a `response`, even if
+# that response is a 500.
+#
+# This is plain text over TCP, so put it behind a reverse proxy
+# (nginx, Caddy, your platform's load balancer) for TLS. v1 handles one
+# connection at a time, in order; concurrent connection handling is a
+# planned addition.
+#
+# It speaks HTTP/1.1 and closes the connection after each response
+# (`Connection: close`); keep-alive, chunked transfer, HTTP/2, and
+# WebSockets are not handled yet.
+
+use core.net
+use core.task
+use core.string
+use core.bytes
+use core.dict
+use core.list
+
+# The HTTP method (verb). `other` carries any method name not listed
+# here, so unusual verbs still parse.
+public enum method {
+	get
+	post
+	put
+	delete
+	patch
+	head
+	options
+	other string
+}
+
+# An incoming request. `path` is the part before any `?`; `query` is the
+# raw text after it (e.g. `"a=1&b=2"`). Header names are lower-cased so
+# lookups don't depend on the sender's capitalization.
+public alias request {
+	method :: method,
+	path :: string,
+	query :: string,
+	headers :: dict string string,
+	body :: bytes,
+}
+
+# A reply. `status` is the numeric code (200, 404, ...); `body` is raw
+# bytes. `Content-Length` and `Connection` are added for you when the
+# response is sent, so you don't set them here.
+public alias response {
+	status :: int,
+	headers :: dict string string,
+	body :: bytes,
+}
+
+# --- building responses --------------------------------------------------
+
+# A plain-text response with the given status code and body.
+#
+#     http.text 200 "hello"
+#     http.text 404 "nope"
+public def text :: fun int string -> response = fun status body {
+	{
+		status: status,
+		headers: dict.from-entries [("content-type", "text/plain; charset=utf-8")],
+		body: string.to-bytes body,
+	}
+}
+
+# A 404 Not Found, ready to return from a handler.
+#
+#     http.not-found ()
+public def not-found :: fun nothing -> response = fun {
+	text 404 "Not Found"
+}
+
+# --- the server ----------------------------------------------------------
+
+# Binds to `address` (like `"127.0.0.1:8080"`) and serves `handler`
+# forever. `err`s as a failed task if the address can't be bound.
+#
+#     http.serve "0.0.0.0:8080" handler
+public def serve :: fun string (fun request -> task response) -> task nothing = fun address handler {
+	when net.listen address is ok server {
+		serve-on server handler
+	} is err e {
+		task.fail ("http.serve: " ++ e)
+	}
+}
+
+# Serves `handler` on a listener you've already opened. Useful when you
+# need the bound address first (listen on port `0`, read `net.local-addr`,
+# then serve).
+public def serve-on :: fun net.listener (fun request -> task response) -> task nothing = fun server handler {
+	try c = net.accept server
+	when c is ok conn {
+		try _ = handle-one conn handler
+		serve-on server handler
+	} is err _ {
+		# The listener was closed (e.g. the surrounding scope was cancelled):
+		# stop the accept loop cleanly.
+		task.return ()
+	}
+}
+
+# Read one request off `conn`, run the handler, write the response, close.
+# Never fails the server: a read/parse problem just ends this connection.
+def handle-one :: fun net.connection (fun request -> task response) -> task nothing = fun conn handler {
+	try raw-r = read-until-headers conn (string.to-bytes "")
+	when raw-r is ok raw {
+		let parsed = parse-head raw
+		try body-r = read-body conn parsed.body-start parsed.content-length
+		when body-r is ok body {
+			let req = {
+				method: parsed.method,
+				path: parsed.path,
+				query: parsed.query,
+				headers: parsed.headers,
+				body: body,
+			}
+			try resp = handler req
+			try _ = write-all conn (serialize resp)
+			finish conn
+		} is err _ {
+			finish conn
+		}
+	} is err _ {
+		finish conn
+	}
+}
+
+def finish :: fun net.connection -> task nothing = fun conn {
+	let _ = net.close conn
+	task.return ()
+}
+
+# --- reading ------------------------------------------------------------
+
+def crlf2 :: bytes = string.to-bytes "\r\n\r\n"
+
+# Accumulate bytes until the blank line that ends the header block (or the
+# peer closes). The leftover after the headers is the start of the body.
+def read-until-headers :: fun net.connection bytes -> task (result bytes string) = fun conn acc {
+	if bytes.contains acc crlf2 is true {
+		task.return (ok acc)
+	} else {
+		try r = net.read conn 4096
+		when r is ok chunk {
+			if bytes.is-empty chunk is true {
+				task.return (ok acc)
+			} else {
+				read-until-headers conn (bytes.concat acc chunk)
+			}
+		} is err e {
+			task.return (err e)
+		}
+	}
+}
+
+# Read until the body has `need` bytes (or the peer closes), starting from
+# whatever already arrived with the headers.
+def read-body :: fun net.connection bytes int -> task (result bytes string) = fun conn acc need {
+	if bytes.length acc >= need is true {
+		task.return (ok (bytes.slice acc 0 need))
+	} else {
+		try r = net.read conn 4096
+		when r is ok chunk {
+			if bytes.is-empty chunk is true {
+				task.return (ok acc)
+			} else {
+				read-body conn (bytes.concat acc chunk) need
+			}
+		} is err e {
+			task.return (err e)
+		}
+	}
+}
+
+# --- parsing ------------------------------------------------------------
+
+# The list element at `i`, or `fallback` if `i` is past the end.
+def nth :: fun (list string) int string -> string = fun xs i fallback {
+	if i < list.length xs is true {
+		list.get xs i
+	} else {
+		fallback
+	}
+}
+
+def parse-method :: fun string -> method = fun s {
+	if s == "GET" is true { method.get }
+	else { if s == "POST" is true { method.post }
+	else { if s == "PUT" is true { method.put }
+	else { if s == "DELETE" is true { method.delete }
+	else { if s == "PATCH" is true { method.patch }
+	else { if s == "HEAD" is true { method.head }
+	else { if s == "OPTIONS" is true { method.options }
+	else { method.other s } } } } } } }
+}
+
+# Add one `Name: value` header line to the accumulating dict, lower-casing
+# the name. Splits on the first colon, so values containing `:` survive.
+def parse-header :: fun (dict string string) string -> dict string string = fun acc line {
+	let kv = string.split line ":"
+	if list.length kv >= 2 is true {
+		let key = string.to-lower (string.trim ((list.head kv) ?? ""))
+		let value = string.trim (string.join (list.drop kv 1) ":")
+		dict.insert acc key value
+	} else {
+		acc
+	}
+}
+
+# Split the raw bytes at the header/body boundary and parse the request
+# line + headers. Returns everything `handle-one` needs, including how many
+# more body bytes to read and whatever body bytes already arrived.
+def parse-head :: fun bytes -> {
+	method :: method,
+	path :: string,
+	query :: string,
+	headers :: dict string string,
+	content-length :: int,
+	body-start :: bytes,
+} = fun raw {
+	let parts = bytes.split raw crlf2
+	let head = (list.head parts) ?? (string.to-bytes "")
+	let body-start = bytes.join (list.drop parts 1) crlf2
+	let header-str = (bytes.to-string head) ?? ""
+	let lines = string.split header-str "\r\n"
+	let request-line = (list.head lines) ?? ""
+	let rl = string.split request-line " "
+	let m = parse-method (string.to-upper ((list.head rl) ?? "GET"))
+	let target = nth rl 1 "/"
+	let tq = string.split target "?"
+	let path = (list.head tq) ?? "/"
+	let query = nth tq 1 ""
+	let headers = list.fold (list.drop lines 1) (dict.empty ()) parse-header
+	let clen = when dict.lookup headers "content-length" is some v {
+		(string.to-int v) ?? 0
+	} is none {
+		0
+	}
+	{
+		method: m,
+		path: path,
+		query: query,
+		headers: headers,
+		content-length: clen,
+		body-start: body-start,
+	}
+}
+
+# --- writing ------------------------------------------------------------
+
+# Write every byte of `data`, looping until the connection has taken it all
+# (one `write` can accept fewer bytes than offered).
+def write-all :: fun net.connection bytes -> task (result int string) = fun conn data {
+	if bytes.is-empty data is true {
+		task.return (ok 0)
+	} else {
+		try w = net.write conn data
+		when w is ok n {
+			if n >= bytes.length data is true {
+				task.return (ok n)
+			} else {
+				write-all conn (bytes.slice data n (bytes.length data))
+			}
+		} is err e {
+			task.return (err e)
+		}
+	}
+}
+
+# Render a response as HTTP/1.1 bytes: status line, the handler's headers,
+# the computed Content-Length, Connection: close, a blank line, then body.
+def serialize :: fun response -> bytes = fun resp {
+	let status-line = "HTTP/1.1 " ++ (to-string resp.status) ++ " " ++ (status-text resp.status) ++ "\r\n"
+	let header-lines = string.join (list.map (dict.entries resp.headers) render-header) ""
+	let length-line = "Content-Length: " ++ (to-string (bytes.length resp.body)) ++ "\r\n"
+	let head = status-line ++ header-lines ++ length-line ++ "Connection: close\r\n\r\n"
+	bytes.concat (string.to-bytes head) resp.body
+}
+
+def render-header :: fun (string, string) -> string = fun pair {
+	let (k, v) = pair
+	k ++ ": " ++ v ++ "\r\n"
+}
+
+def status-text :: fun int -> string = fun code {
+	(dict.lookup status-names code) ?? "OK"
+}
+
+def status-names :: dict int string = dict.from-entries [
+	(200, "OK"),
+	(201, "Created"),
+	(204, "No Content"),
+	(301, "Moved Permanently"),
+	(302, "Found"),
+	(400, "Bad Request"),
+	(401, "Unauthorized"),
+	(403, "Forbidden"),
+	(404, "Not Found"),
+	(405, "Method Not Allowed"),
+	(500, "Internal Server Error"),
+]

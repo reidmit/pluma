@@ -1,0 +1,53 @@
+# A TCP echo exchange over loopback, all in one process: a server task and a
+# client task talk over 127.0.0.1 on a system-assigned port (`:0`). Exercises
+# net.listen / local-addr / accept / read / write / close / connect plus the
+# scheduler's I/O reactor (accept and read park their fibers until the socket
+# is ready). The output is the deterministic echoed payload.
+use core.net
+use core.task
+use core.string
+use core.bytes
+
+# Accept one client, echo back whatever it sends, then close.
+def serve-one = fun server {
+	try c = net.accept server
+	when c is ok conn {
+		try r = net.read conn 1024
+		when r is ok msg {
+			try _ = net.write conn msg
+			let _ = net.close conn
+			task.return ()
+		} is err e { task.fail e }
+	} is err e { task.fail e }
+}
+
+# Connect, send a line, read the echo, hand it back as a string.
+def round-trip = fun addr {
+	try c = net.connect addr
+	when c is ok conn {
+		try _ = net.write conn (string.to-bytes "hello over tcp")
+		try r = net.read conn 1024
+		let _ = net.close conn
+		when r is ok reply { task.return ((bytes.to-string reply) ?? "<bad utf8>") }
+		is err e { task.fail e }
+	} is err e { task.fail e }
+}
+
+def main = fun {
+	if (net.listen "127.0.0.1:0") is ok server {
+		if (net.local-addr server) is ok addr {
+			scope as s {
+				let _ = s.spawn (serve-one server)
+				try reply = round-trip addr
+				print reply
+				task.return 0
+			}
+		} else {
+			print "local-addr failed"
+			task.return 1
+		}
+	} else {
+		print "listen failed"
+		task.return 1
+	}
+}

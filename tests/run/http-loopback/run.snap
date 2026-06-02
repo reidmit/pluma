@@ -1,0 +1,10 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+HTTP/1.1 200 OK
+you asked for /hello
+== stderr ==

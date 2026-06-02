@@ -246,6 +246,9 @@ pub struct VM {
 	// The async scheduler. Empty/idle for synchronous programs; populated by
 	// `run_task` and read by the `scope-*` builtins. See `vm::task`.
 	pub(crate) sched: crate::task::Scheduler,
+	// Networking: the open-socket table + the I/O readiness reactor. Idle (no
+	// `Poller`) until the first `core.net` op parks a fiber. See `vm::net`.
+	pub(crate) net: crate::net::NetState,
 	// Opt-in opcode-frequency profiling.
 	pub profile: Option<std::collections::HashMap<&'static str, u64>>,
 }
@@ -272,6 +275,7 @@ impl VM {
 			empty_captures: Rc::new(Vec::new()),
 			tail_scratch: Vec::new(),
 			sched: crate::task::Scheduler::default(),
+			net: crate::net::NetState::default(),
 			profile: None,
 		}
 	}

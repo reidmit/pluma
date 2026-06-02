@@ -62,6 +62,10 @@ enum Wait {
 	Next(Sid),
 	// Resume when scope `Sid` finishes (this fiber spawned/entered it).
 	Scope(Sid),
+	// Resume when reactor token `usize` reports its socket ready — re-running the
+	// parked socket op (`net.accept`/`read`/`write`). Registered in `vm::net`'s
+	// `reactor_park`; the block step (`block_until_ready`) wakes it. See `vm::net`.
+	Io(usize),
 }
 
 // The result of advancing a fiber one chunk.
@@ -283,11 +287,11 @@ impl VM {
 					Step::Done(outcome) => self.fiber_completed(fid, outcome)?,
 					Step::Park(wait) => self.park(fid, wait),
 				}
-			} else if !self.sched.timers.is_empty() {
-				self.run_timers();
+			} else if !self.sched.timers.is_empty() || self.net_has_io_waits() {
+				self.block_until_ready()?;
 			} else {
-				// Nothing ready and no timers: the root must be done (checked at
-				// the top of the next iteration), or we've quiesced.
+				// Nothing ready, no timers, no pending socket I/O: the root must be
+				// done (checked at the top of the next iteration), or we've quiesced.
 				if self.sched.root_result.is_none() {
 					return Err(RuntimeError::new("VM: async runtime deadlocked"));
 				}
@@ -400,6 +404,21 @@ impl VM {
 						}
 					}
 					TaskRepr::Next(sid) => Ok(self.drain_next(*sid)),
+					// core.net socket ops: attempt the non-blocking syscall; on
+					// `WouldBlock` park this fiber on the reactor (re-running `task`
+					// when the socket is ready), else settle the produced `result`.
+					TaskRepr::NetAccept(lid) => {
+						let step = self.net_try_accept(*lid);
+						self.io_cont(fid, task.clone(), step)
+					}
+					TaskRepr::NetRead(cid, max) => {
+						let step = self.net_try_read(*cid, *max);
+						self.io_cont(fid, task.clone(), step)
+					}
+					TaskRepr::NetWrite(cid, data) => {
+						let step = self.net_try_write(*cid, &data[..]);
+						self.io_cont(fid, task.clone(), step)
+					}
 				}
 			}
 			Focus::Ok(mut v) => loop {
@@ -584,6 +603,16 @@ impl VM {
 							"task.shielded: a shielded task can't await across fibers (a scope handle, s.next, or a nested scope)",
 						));
 					}
+					// A blocking socket op inside a shield would need the reactor to
+					// interleave other fibers, which a shield forbids; so the
+					// reactor registration must be undone and the shield rejected,
+					// mirroring the cross-fiber-await case above.
+					Wait::Io(token) => {
+						self.reactor_deregister(token);
+						return Err(RuntimeError::new(
+							"task.shielded: a shielded task can't block on socket I/O (net.accept/read/write)",
+						));
+					}
 				},
 			}
 		}
@@ -645,6 +674,23 @@ impl VM {
 			.all(|&c| !self.sched.fibers[c].alive)
 	}
 
+	// Fold a non-blocking socket attempt into a `Cont`: settle the produced
+	// value, or park `fid` on the reactor (re-running `retry` when ready).
+	fn io_cont(
+		&mut self,
+		fid: Fid,
+		retry: Value,
+		step: crate::net::IoStep,
+	) -> Result<Cont, RuntimeError> {
+		match step {
+			crate::net::IoStep::Ready(v) => Ok(Cont::Go(Focus::Ok(v))),
+			crate::net::IoStep::Block(sid, interest) => {
+				let token = self.reactor_park(fid, sid, interest, retry)?;
+				Ok(Cont::Park(Wait::Io(token)))
+			}
+		}
+	}
+
 	// Register a parked fiber against what it's waiting on.
 	fn park(&mut self, fid: Fid, wait: Wait) {
 		match &wait {
@@ -660,8 +706,48 @@ impl VM {
 			Wait::Handle(child) => self.sched.fibers[*child].waiters.push(fid),
 			Wait::Next(sid) => self.sched.scopes[*sid].next_waiters.push_back(fid),
 			Wait::Scope(_) => {}
+			// `reactor_park` already registered the fd + token in `vm::net`; just
+			// record the wait so reaping can deregister it.
+			Wait::Io(_) => {}
 		}
 		self.sched.fibers[fid].wait = Some(wait);
+	}
+
+	// When the ready queue empties but work is still pending, advance: with live
+	// socket I/O, block the reactor on readiness (bounded by the soonest timer so
+	// a `task.with-timeout` over a read still fires) and re-ready whatever woke;
+	// otherwise take the cheap sleep-until-timer path (no `Poller` is created).
+	fn block_until_ready(&mut self) -> Result<(), RuntimeError> {
+		if !self.net_has_io_waits() {
+			self.run_timers();
+			return Ok(());
+		}
+		let timeout = self.next_timer_timeout();
+		let woken = self.reactor_poll(timeout)?;
+		for (fid, retry) in woken {
+			if self.sched.fibers[fid].alive {
+				self.sched.fibers[fid].wait = None;
+				self.sched.ready.push_back((fid, Focus::Start(retry)));
+			}
+		}
+		self.fire_due_timers();
+		Ok(())
+	}
+
+	// The soonest timer deadline as a wait timeout (clamped at zero), or `None`
+	// when no timer is armed (block on I/O indefinitely — e.g. an idle server
+	// waiting for the next connection).
+	fn next_timer_timeout(&self) -> Option<std::time::Duration> {
+		self
+			.sched
+			.timers
+			.iter()
+			.map(|(at, _)| *at)
+			.min()
+			.map(|earliest| {
+				let now = self.sched.now_ns();
+				std::time::Duration::from_nanos((earliest - now).max(0) as u64)
+			})
 	}
 
 	// Sleep until the earliest timer, then fire all due timers: wake sleeping
@@ -672,6 +758,13 @@ impl VM {
 		if earliest > now {
 			std::thread::sleep(std::time::Duration::from_nanos((earliest - now) as u64));
 		}
+		self.fire_due_timers();
+	}
+
+	// Fire every timer now at or past its deadline (no sleeping). Split from
+	// `run_timers` so the reactor block step can fire due timers after a poll
+	// that already waited on real time.
+	fn fire_due_timers(&mut self) {
 		let now = self.sched.now_ns();
 		let mut due = Vec::new();
 		let mut keep = Vec::new();
@@ -816,8 +909,12 @@ impl VM {
 		self.sched.fibers[fid].alive = false;
 		self.sched.fibers[fid].result = Some(Outcome::Cancelled);
 
-		if let Some(Wait::Scope(sub)) = self.sched.fibers[fid].wait.take() {
-			self.cancel_scope(sub)?;
+		match self.sched.fibers[fid].wait.take() {
+			Some(Wait::Scope(sub)) => self.cancel_scope(sub)?,
+			// Drop the reactor registration so a cancelled read/accept doesn't
+			// leave a dangling fd in the poller.
+			Some(Wait::Io(token)) => self.reactor_deregister(token),
+			_ => {}
 		}
 		let act = std::mem::take(&mut self.sched.fibers[fid].act);
 		for activation in act.into_iter().rev() {

@@ -1,4 +1,5 @@
 mod builtin;
+mod net;
 // `program` now holds only the shared `GlobalSlot`; the program/function shapes
 // live in `reg` (the register VM — see notes/REGISTER_VM.md).
 pub mod program;

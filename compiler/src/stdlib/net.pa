@@ -1,0 +1,80 @@
+# Talking over the network: listening for TCP connections, accepting
+# them, and reading and writing raw bytes.
+#
+# This is the low-level layer the web server is built on. It deals only
+# in bytes -- it knows nothing about HTTP. Most programs reach for
+# `core.http` instead and never touch this module directly.
+#
+# A `listener` is a socket bound to an address, waiting for clients. A
+# `connection` is one open conversation with a client. Both are opaque
+# handles: you get them back from the functions here and pass them along,
+# but you can't look inside them.
+#
+# Anything that touches the network can fail -- an address might already
+# be in use, a peer might hang up mid-message -- so these operations hand
+# back a `result`, with a message from the operating system on the `err`
+# side, exactly like `core.io`.
+#
+# The three operations that wait on the network -- `accept`, `read`, and
+# `write` -- return a `task`, because they pause until the network is
+# ready. Inside a function that returns a task, `try c = net.accept l`
+# waits for the next client without freezing everything else the program
+# is doing.
+
+# A socket bound to an address, waiting for clients. Opaque: you hold the
+# handle and pass it along, but can't look inside it.
+opaque enum listener { handle int }
+
+# One open connection to read from and write to. Opaque, like `listener`.
+opaque enum connection { handle int }
+
+# Binds to `address` and starts listening for connections. The address is
+# a host and port joined by a colon. Use `0.0.0.0` to accept from any
+# network, or `127.0.0.1` to accept only from the same machine. `err` if
+# the port is already taken or the address is malformed.
+#
+#     net.listen "127.0.0.1:8080"   # ok <listener> or err
+public def listen :: fun string -> result listener string = built-in "net-listen"
+
+# The address this listener is actually bound to, like
+# `"127.0.0.1:54123"`. Useful when you listen on port `0` to let the
+# system pick any free port, then need to know which one it chose.
+#
+#     try addr = net.local-addr server   # => ok "127.0.0.1:54123"
+public def local-addr :: fun listener -> result string string = built-in "net-local-addr"
+
+# Waits for the next client to connect and hands back the connection.
+# Call it again to take the next one -- a server loops on `accept`,
+# handling each connection as it arrives.
+#
+#     try conn = net.accept server   # waits for a client, then continues
+public def accept :: fun listener -> task (result connection string) = built-in "net-accept"
+
+# Reads up to `n` bytes from the connection, waiting until at least some
+# arrive. You usually get fewer than `n` -- whatever was ready -- so
+# reading a whole message means calling `read` until you have it all. An
+# empty result (zero bytes) means the other side closed the connection.
+#
+#     try chunk = net.read conn 4096   # ok 'some bytes' or ok '' at end
+public def read :: fun connection int -> task (result bytes string) = built-in "net-read"
+
+# Writes `data` to the connection and hands back how many bytes it
+# actually took -- which can be fewer than you gave it when the network
+# is busy, so writing it all means calling `write` again with the rest.
+#
+#     try sent = net.write conn (string.to-bytes "hello")
+public def write :: fun connection bytes -> task (result int string) = built-in "net-write"
+
+# Closes the connection, freeing it. Do this when you're done with a
+# client so the program doesn't run out of open connections.
+#
+#     net.close conn
+public def close :: fun connection -> result nothing string = built-in "net-close"
+
+# Opens a connection to a server at `address` (host and port, like
+# `"127.0.0.1:8080"`). This is the other side of `listen`/`accept` -- use
+# it to talk to a server rather than be one. `err` if nothing is
+# listening there or the address is malformed.
+#
+#     try conn = net.connect "127.0.0.1:8080"
+public def connect :: fun string -> task (result connection string) = built-in "net-connect"

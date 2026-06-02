@@ -186,6 +186,16 @@ pub enum TaskRepr {
 	// the scope's next settled child — `some (ok v)` / `some (err e)`, then
 	// `none` once all children are drained.
 	Next(usize),
+	// --- core.net socket ops (see `vm::net`). Each attempts a non-blocking
+	// syscall when run; on `WouldBlock` the driver parks the fiber on the I/O
+	// reactor and re-runs this same task once the socket is ready. The `u32` is
+	// a socket id (an index into `NetState::sockets`). ---
+	// `net.accept l` — accept a connection on listener `l`.
+	NetAccept(u32),
+	// `net.read c n` — read up to `n` bytes from connection `c`.
+	NetRead(u32, usize),
+	// `net.write c bytes` — one write of `bytes` to connection `c`.
+	NetWrite(u32, Rc<Vec<u8>>),
 }
 
 #[derive(Clone)]
