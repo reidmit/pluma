@@ -17,7 +17,7 @@
 // so `Wat` adds no indirection or table over the old hand-built functions: it's the
 // same bytes, authored legibly.
 
-use wasm_encoder::{BlockType, Function, HeapType, Instruction, ValType};
+use wasm_encoder::{BlockType, Function, HeapType, Instruction, MemArg, ValType};
 
 use Instruction as I;
 
@@ -354,6 +354,35 @@ impl Wat {
 		self
 	}
 
+	// ---- linear memory (the marshalling scratch buffer; memory 0) --------------
+
+	/// `i32.store8` into memory 0 at the address on the stack — `[addr, byte]` →
+	/// writes `byte`'s low 8 bits at `addr`. Offset/align 0 (byte-addressed scratch).
+	pub(crate) fn i32_store8(&mut self) -> &mut Self {
+		self.push(I::I32Store8(MemArg {
+			offset: 0,
+			align: 0,
+			memory_index: 0,
+		}))
+	}
+	/// `i32.load8_u` from memory 0 — `[addr]` → the unsigned byte at `addr`.
+	pub(crate) fn i32_load8_u(&mut self) -> &mut Self {
+		self.push(I::I32Load8U(MemArg {
+			offset: 0,
+			align: 0,
+			memory_index: 0,
+		}))
+	}
+	/// `memory.size` (memory 0) — current size in 64KiB pages.
+	pub(crate) fn memory_size(&mut self) -> &mut Self {
+		self.push(I::MemorySize(0))
+	}
+	/// `memory.grow` (memory 0) — grow by the page count on the stack, pushing the
+	/// previous size (or -1 on failure).
+	pub(crate) fn memory_grow(&mut self) -> &mut Self {
+		self.push(I::MemoryGrow(0))
+	}
+
 	// ---- references ------------------------------------------------------------
 
 	/// `ref.cast (ref $ty)` — a non-null downcast to concrete type `ty`.
@@ -470,7 +499,7 @@ nullary! {
 	// i32 comparisons
 	i32_eq => I32Eq, i32_ne => I32Ne, i32_eqz => I32Eqz,
 	i32_ge_s => I32GeS, i32_ge_u => I32GeU, i32_gt_s => I32GtS, i32_gt_u => I32GtU,
-	i32_lt_s => I32LtS, i32_lt_u => I32LtU, i32_le_s => I32LeS,
+	i32_lt_s => I32LtS, i32_lt_u => I32LtU, i32_le_s => I32LeS, i32_le_u => I32LeU,
 	i32_wrap_i64 => I32WrapI64,
 	// i64 arithmetic / bitwise
 	i64_add => I64Add, i64_sub => I64Sub, i64_mul => I64Mul,

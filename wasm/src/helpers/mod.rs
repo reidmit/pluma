@@ -19,6 +19,7 @@ mod dict;
 mod eq;
 mod io;
 mod list;
+mod marshal;
 mod record;
 mod task;
 mod tostring;
@@ -84,7 +85,13 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::ToString,
 		fn_type: Ty::Helper(1),
-		deps: &[H::IntStr, H::BytesConcat, H::DictEntries],
+		deps: &[
+			H::IntStr,
+			H::BytesConcat,
+			H::DictEntries,
+			H::MarshalAlloc,
+			H::MarshalLoad,
+		],
 		build: |c| {
 			tostring::build_tostring_fn(
 				c.self_idx,
@@ -92,6 +99,9 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 				c.dep(H::BytesConcat),
 				c.float_to_str(),
 				c.dep(H::DictEntries),
+				c.dep(H::MarshalAlloc),
+				c.dep(H::MarshalLoad),
+				c.rt.bump,
 				c.rt.lits,
 			)
 		},
@@ -394,8 +404,16 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::IoResult,
 		fn_type: Ty::Helper(1),
-		deps: &[],
-		build: |c| io::build_io_result_fn(c.io_last_error(), c.rt.ioreslits),
+		deps: &[H::MarshalAlloc, H::MarshalLoad],
+		build: |c| {
+			io::build_io_result_fn(
+				c.io_last_error(),
+				c.dep(H::MarshalAlloc),
+				c.dep(H::MarshalLoad),
+				c.rt.bump,
+				c.rt.ioreslits,
+			)
+		},
 	},
 	HelperDef {
 		id: H::TaskDrive,
@@ -479,6 +497,15 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		],
 		build: |c| {
 			let arity1 = c.arity(1);
+			// The suspending net ops marshal byte payloads through scratch; bundle the
+			// helper/global indices (present exactly when net is reachable).
+			let net_m = c.rt.net.map(|_| crate::runtime::NetMarshal {
+				alloc: c.dep(H::MarshalAlloc),
+				store: c.dep(H::MarshalStore),
+				load: c.dep(H::MarshalLoad),
+				io_result: c.dep(H::IoResult),
+				bump: c.rt.bump,
+			});
 			task::build_pump_fn(
 				c.dep(H::PollStep),
 				c.dep(H::PollDefersState),
@@ -487,6 +514,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 				c.dep(H::DrainNext),
 				arity1,
 				c.rt.net,
+				net_m,
 				c.rt.taskg,
 				c.rt.tasklits,
 			)
@@ -599,6 +627,39 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		fn_type: Ty::Helper(2),
 		deps: &[H::ListAppend],
 		build: |c| task::build_sched_cancel_after_fn(c.dep(H::ListAppend), c.rt.taskg),
+	},
+	// --- marshalling boundary (wasm↔host scratch memory) ---
+	HelperDef {
+		id: H::MarshalAlloc,
+		fn_type: Ty::MarshalAlloc,
+		deps: &[],
+		build: |c| marshal::build_alloc_fn(c.rt.bump),
+	},
+	HelperDef {
+		id: H::MarshalStore,
+		fn_type: Ty::MarshalStore,
+		deps: &[],
+		build: |_| marshal::build_store_bytes_fn(),
+	},
+	HelperDef {
+		id: H::MarshalLoad,
+		fn_type: Ty::MarshalLoad,
+		deps: &[],
+		build: |_| marshal::build_load_bytes_fn(),
+	},
+	HelperDef {
+		id: H::MarshalSend,
+		fn_type: Ty::MarshalSend,
+		deps: &[H::MarshalAlloc, H::MarshalStore],
+		build: |c| {
+			marshal::build_send_bytes_fn(c.rt.bump, c.dep(H::MarshalAlloc), c.dep(H::MarshalStore))
+		},
+	},
+	HelperDef {
+		id: H::MarshalReadNames,
+		fn_type: Ty::MarshalReadNames,
+		deps: &[H::MarshalLoad],
+		build: |c| marshal::build_read_names_fn(c.dep(H::MarshalLoad)),
 	},
 ];
 

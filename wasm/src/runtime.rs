@@ -294,13 +294,34 @@ pub(crate) enum Helper {
 	SchedCancel,
 	/// `__sched_cancel_after(handle, duration)` — `s.cancel-after` (deadline timer).
 	SchedCancelAfter,
+	// --- marshalling boundary (the wasm↔host scratch-memory ABI, `helpers/marshal.rs`) ---
+	/// `__alloc(n) -> ptr` — the scratch bump allocator: reserve `n` bytes in the
+	/// exported linear memory (growing it as needed), returning the start offset.
+	/// The bump cursor (`Runtime.bump`) resets to 0 at the start of each host call's
+	/// arg-encoding; payloads bump within the call (host calls are synchronous).
+	MarshalAlloc,
+	/// `__store_bytes(b, ptr) -> ()` — copy a GC `$bytes` array into scratch at
+	/// `ptr` (the wasm→host byte-payload primitive: `print`, write-file, …).
+	MarshalStore,
+	/// `__load_bytes(ptr, len) -> $bytes` — copy `len` scratch bytes at `ptr` into a
+	/// fresh GC `$bytes` (the host→wasm byte-payload primitive: read-file, `float_to_str`).
+	MarshalLoad,
+	/// `__send_bytes(b) -> len` — reset the bump cursor and copy a GC `$bytes` into
+	/// scratch at offset 0, returning its length. The single-payload convenience the
+	/// writer emit sites (`print`/`io.write*`/`io.fail`) and the `print`-as-value
+	/// wrapper share; the writer then calls its host import with `(ptr=0, len)`.
+	MarshalSend,
+	/// `__read_names(ptr, len) -> $list` — split a NUL-terminated name blob (the
+	/// `io.read-dir` host return) in scratch into a `$list` of `$str`. Each name ends
+	/// in a NUL; an empty blob is the empty list.
+	MarshalReadNames,
 }
 
 impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 65;
+	pub(crate) const COUNT: usize = 70;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable
@@ -356,6 +377,12 @@ pub(crate) struct Runtime {
 	pub(crate) entry_idx: Option<u32>,
 	/// The async driver's module-level scratch globals (the activation stack).
 	pub(crate) taskg: TaskGlobals,
+	/// Wasm index of the mutable `i32` global holding the scratch bump cursor (the
+	/// next free offset in the exported linear memory). Always allocated (`module.rs`
+	/// emits the memory + this global unconditionally), so this is a real index even
+	/// in a marshalling-free program. The marshalling helpers (`helpers/marshal.rs`)
+	/// read/advance it; each host-call arg-encoding resets it to 0 first.
+	pub(crate) bump: u32,
 	/// `result` `ok`/`err` tags + display names (for `task.attempt` and root
 	/// failure) and the `__defers` field name the driver scans for.
 	pub(crate) tasklits: TaskLits,
@@ -380,9 +407,9 @@ impl Runtime {
 }
 
 /// The `core.net` host import indices. The synchronous ops (`listen`/`close`/
-/// `local_addr`/`connect`) are called from `emit`'s `host_call` with a witness;
-/// the suspending ops (`accept`/`read`/`write`) and the reactor controls
-/// (`poll`/`unwatch`) are called from the hand-emitted scheduler (`helpers/task.rs`).
+/// `local_addr`/`connect`) are marshalled at `emit`'s `host_call`; the suspending ops
+/// (`accept`/`read`/`write`) and the reactor controls (`poll`/`unwatch`) are called
+/// from the hand-emitted scheduler (`helpers/task.rs`).
 #[derive(Clone, Copy, Default)]
 pub(crate) struct NetImports {
 	pub(crate) listen: u32,
@@ -394,6 +421,20 @@ pub(crate) struct NetImports {
 	pub(crate) write: u32,
 	pub(crate) poll: u32,
 	pub(crate) unwatch: u32,
+}
+
+/// The marshalling helper/global indices the suspending net ops (`accept`/`read`/
+/// `write`) need in the pump: encode the write payload + read buffer into scratch
+/// (`alloc`/`store`), copy the read result out (`load`), shape the result (`io_result`,
+/// the `ok`/`err` wrapper net reuses from `core.io`), and the bump cursor. `Some`
+/// exactly when the program reaches a net builtin (the same condition as `NetImports`).
+#[derive(Clone, Copy)]
+pub(crate) struct NetMarshal {
+	pub(crate) alloc: u32,
+	pub(crate) store: u32,
+	pub(crate) load: u32,
+	pub(crate) io_result: u32,
+	pub(crate) bump: u32,
 }
 
 /// Whether `tag` is one of the seven `core.net` socket builtins (the suspending
@@ -428,6 +469,11 @@ pub(crate) enum Ty {
 	WireEnc,
 	WireRByte,
 	WireRUvarint,
+	MarshalAlloc,
+	MarshalStore,
+	MarshalLoad,
+	MarshalSend,
+	MarshalReadNames,
 }
 
 impl Ty {
@@ -444,6 +490,11 @@ impl Ty {
 			Ty::WireEnc => ft.for_wire_enc(),
 			Ty::WireRByte => ft.for_wire_rbyte(),
 			Ty::WireRUvarint => ft.for_wire_ruvarint(),
+			Ty::MarshalAlloc => ft.for_marshal_alloc(),
+			Ty::MarshalStore => ft.for_marshal_store(),
+			Ty::MarshalLoad => ft.for_marshal_load(),
+			Ty::MarshalSend => ft.for_marshal_send(),
+			Ty::MarshalReadNames => ft.for_marshal_read_names(),
 		}
 	}
 }
@@ -732,6 +783,31 @@ pub(crate) fn scan_helpers(b: &Block, req: &mut HelperSet) {
 	}
 }
 
+/// Whether `tag` is a byte-payload writer host import: it takes one Pluma arg, which
+/// wasm renders to bytes in scratch and passes as `(ptr, len)` to a `(i32,i32) -> ()`
+/// import (the marshalling ABI). `print`/`io.write*` render via `__tostring`; the
+/// `*-bytes` raw writers take the value's `$bytes` backing directly; `io.fail` renders
+/// its message then traps. All return nothing.
+pub(crate) fn is_byte_writer(tag: &str) -> bool {
+	matches!(
+		tag,
+		"print"
+			| "io-print"
+			| "io-print-err"
+			| "io-write"
+			| "io-write-err"
+			| "io-write-bytes"
+			| "io-write-err-bytes"
+			| "io-fail"
+	)
+}
+
+/// Whether a byte-writer sends the value's raw `$bytes` backing (no `__tostring`
+/// Display formatting) — the `io.write-bytes` pair, which write a `bytes` value.
+pub(crate) fn is_raw_writer(tag: &str) -> bool {
+	matches!(tag, "io-write-bytes" | "io-write-err-bytes")
+}
+
 /// A host primitive's calling shape: how many boxed args it takes, and whether it
 /// returns a boxed value (vs. nothing — in which case the caller materializes the
 /// Pluma `nothing` result).
@@ -751,33 +827,30 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 			arity: 1,
 			returns_value: false,
 		}),
-		// `core.io` reads (server platform). Each returns a primitive `$value`
-		// (string/bytes/list) on success or `null` on failure; `__io_result` wraps
-		// the return into `ok`/`err` (`is_io_result`). Every io host import takes a
-		// trailing **type witness** (`[nothing, "", [], true]`, built inline by the
-		// emitter) so the host can reflect the module's `$value` types and build its
-		// return without a type-by-index lookup — hence one extra arg beyond the
-		// Pluma signature: the unit-arg reads are arity 1+1, the path reads 1+1.
+		// `core.io` reads/fs (server platform). These are marshalled at the `emit`
+		// call site (`emit_io`) — args/results cross as scratch byte payloads + an i32
+		// status/len, which `__io_result` wraps into `ok`/`err` (`is_io_result`). The
+		// `arity` here is the logical Pluma signature (`io_kind` + `module.rs` pick the
+		// actual wasm `Io2`/`Io4` import type); `host_sig` is consulted only for the
+		// "is this a host builtin?" classification.
 		"io-read" | "io-read-all" | "io-read-all-bytes" | "io-read-file" | "io-read-file-bytes"
 		| "io-delete-file" | "io-make-dir" | "io-read-dir" => Some(HostSig {
-			arity: 2,
+			arity: 1,
 			returns_value: true,
 		}),
 		"io-write-file" | "io-write-file-bytes" | "io-append-file" | "io-append-file-bytes" => {
 			Some(HostSig {
-				arity: 3,
+				arity: 2,
 				returns_value: true,
 			})
 		}
-		// These return a bare `bool` directly — no `__io_result` wrapping (still take
-		// the witness so the host can build the `$bool`).
+		// These return a bare `bool` (no `__io_result` wrapping).
 		"io-file-exists" | "io-is-dir" => Some(HostSig {
-			arity: 2,
+			arity: 1,
 			returns_value: true,
 		}),
-		// The error channel `__io_result` reads on a failed io call (errno-style: the
-		// host sets it on every failing call before returning null). No witness — it
-		// rides the `$str` type the host cached from the failing op's witness.
+		// The error channel `__io_result` reads on a failed io/net call (errno-style:
+		// the host sets `last_error` on every failing call). Marshalled `(dst,cap)->len`.
 		"io-last-error" => Some(HostSig {
 			arity: 0,
 			returns_value: true,
@@ -786,12 +859,63 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 	}
 }
 
-/// Whether `tag` is a `core.io` builtin emitted through the witness-passing host
-/// path (the file/stdin ops + the `bool` queries) — all of which take a trailing
-/// type witness so the host can build their `$value` return. A superset of
-/// `is_io_result`; the extra two (`io-file-exists`/`io-is-dir`) skip `__io_result`.
+/// Whether `tag` is a `core.io` builtin emitted through the marshalling host path
+/// (the file/stdin ops + the `bool` queries) — all of which traffic byte payloads
+/// through scratch memory. A superset of `is_io_result`; the extra two
+/// (`io-file-exists`/`io-is-dir`) skip `__io_result` (they return a bare `bool`).
 pub(crate) fn is_io_host(tag: &str) -> bool {
 	is_io_result(tag) || matches!(tag, "io-file-exists" | "io-is-dir")
+}
+
+/// How a marshalled `core.io` op crosses the boundary: the wasm host-import shape
+/// (`Io2` = `(i32,i32) -> i32`, `Io4` = `(i32,i32,i32,i32) -> i32`) plus how the emit
+/// site shapes the `i32` result back into a `$value`. `Read*` ops length-probe a
+/// `dst`; the writers return a `status`; the queries return a `bool`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum IoKind {
+	/// `(dst, cap) -> len`; build a `$str` (`io-read`/`io-read-all`/`io-last-error`).
+	ReadStr,
+	/// `(dst, cap) -> len`; build a `$bytes` (`io-read-all-bytes`).
+	ReadBytes,
+	/// `(path, plen, dst, cap) -> len`; build a `$str` (`io-read-file`).
+	ReadFileStr,
+	/// `(path, plen, dst, cap) -> len`; build a `$bytes` (`io-read-file-bytes`).
+	ReadFileBytes,
+	/// `(path, plen, dst, cap) -> len`; split into a `$list` of `$str` (`io-read-dir`).
+	ReadDir,
+	/// `(path, plen, data, dlen) -> status`; `nothing` payload (`io-write-file*`/`-append*`).
+	WriteFile,
+	/// `(path, plen) -> status`; `nothing` payload (`io-delete-file`/`io-make-dir`).
+	PathStatus,
+	/// `(path, plen) -> bool` (`io-file-exists`/`io-is-dir`).
+	PathBool,
+}
+
+/// Classify a marshalled `core.io` builtin tag (and `io-last-error`, an internal
+/// read). `None` for non-io tags.
+pub(crate) fn io_kind(tag: &str) -> Option<IoKind> {
+	Some(match tag {
+		"io-read" | "io-read-all" | "io-last-error" => IoKind::ReadStr,
+		"io-read-all-bytes" => IoKind::ReadBytes,
+		"io-read-file" => IoKind::ReadFileStr,
+		"io-read-file-bytes" => IoKind::ReadFileBytes,
+		"io-read-dir" => IoKind::ReadDir,
+		"io-write-file" | "io-write-file-bytes" | "io-append-file" | "io-append-file-bytes" => {
+			IoKind::WriteFile
+		}
+		"io-delete-file" | "io-make-dir" => IoKind::PathStatus,
+		"io-file-exists" | "io-is-dir" => IoKind::PathBool,
+		_ => return None,
+	})
+}
+
+/// Whether a marshalled io op uses the four-arg host shape (`Io4`) — the path reads
+/// and the file writers; the rest are two-arg (`Io2`).
+pub(crate) fn io_uses_io4(tag: &str) -> bool {
+	matches!(
+		io_kind(tag),
+		Some(IoKind::ReadFileStr | IoKind::ReadFileBytes | IoKind::ReadDir | IoKind::WriteFile)
+	)
 }
 
 /// Whether `tag` is a `core.io` builtin whose host return must be wrapped into a

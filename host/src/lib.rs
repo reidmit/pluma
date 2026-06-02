@@ -1,16 +1,22 @@
-// The WasmGC runtime host. Instantiates an emitted module in wasmtime, supplies
-// the `pluma.*` host imports (print/io/float_to_str/math/io-read) by reflecting
-// the program's GC `$value` layout, and runs `_entry`. The `print` path mirrors
-// `vm::Value`'s Display so wasm stdout is byte-identical to the VM oracle.
+// The WasmGC runtime host. Instantiates an emitted module in wasmtime, supplies the
+// `pluma.*` host imports (print/io/net/float_to_str/math), and runs `_entry`.
+//
+// Per ABI.md Phase 1, the host imports traffic only **bytes + scalars + handles**
+// across the boundary — byte payloads cross through the module's exported scratch
+// `"memory"` (read/written via `read_scratch`/`write_scratch`); the host never reads
+// or builds a GC `$value` field. That keeps the boundary engine-neutral (the same
+// ABI a V8-on-server or browser JS shim needs — neither can reflect WasmGC structs).
+// The one remaining GC read is `err_message`/`format_value`, which inspects `_entry`'s
+// *return* value (a `runtime error: <msg>` surface, not a host import) — a Phase-2
+// item to marshal once the engine swaps off wasmtime.
 //
 // Two front doors share one engine + one set of host imports:
 //   - `run_wasm`/`run_entry` — **buffered** (stdout captured, stderr dropped,
 //     stdin fed from a byte slice). The `conformance` crate's differential path.
 //   - `run_streaming` — **process stdio** (stdout/stderr streamed live, stdin read
 //     from the process). The `cli`'s `pluma run app.wasm` path.
-// The only thing that differs is the `HostIo` sink behind `HostState`; the GC
-// reflection and every host import are identical, so the conformance gate tests
-// exactly the runtime the CLI ships.
+// The only thing that differs is the `HostIo` sink behind `HostState`; every host
+// import is identical, so the conformance gate tests exactly the runtime the CLI ships.
 
 use std::collections::{HashMap, VecDeque};
 use std::io::{Read, Write};
@@ -20,9 +26,8 @@ use std::time::Duration;
 
 use polling::{Event, Events, Poller};
 use wasmtime::{
-	AnyRef, ArrayRef, ArrayRefPre, ArrayType, AsContextMut, Caller, Config, Engine, ExternType,
-	FuncType, Instance, Linker, Module, RootScope, Rooted, Store, StructRef, StructRefPre,
-	StructType, Val, ValType,
+	AnyRef, AsContextMut, Caller, Config, Engine, Extern, FuncType, Instance, Linker, Memory, Module,
+	Rooted, Store, Val, ValType,
 };
 
 /// A program's observable result: exit status + captured stdout. (`run_streaming`
@@ -47,6 +52,7 @@ const TAG_RECORD: i32 = 13;
 const TAG_BYTES: i32 = 14;
 const TAG_REF: i32 = 15;
 const TAG_DICT: i32 = 16;
+const TAG_EXTERN: i32 = 19;
 
 // --------------------------------------------------------------------------
 // The stdio sink. `HostState` is non-generic (the host-import closures live in a
@@ -184,173 +190,13 @@ struct HostState {
 	/// The message the last failed `core.io` call stashed (errno-style); returned
 	/// by the `io-last-error` import, which `__io_result` queries on the err path.
 	last_error: String,
-	/// The module's `$value` GC types, captured once from the witness the first io
-	/// host import receives, so later calls build their returns without re-reflecting.
-	gc_types: Option<GcTypes>,
+	/// Bytes a read op produced that didn't fit the caller's first `dst` buffer; the
+	/// wasm side then reserves the true size and drains this via `__io_copyout`. Empty
+	/// on the common (fits-first-try) path. (ABI.md Phase 1, the read overflow path.)
+	read_stash: Vec<u8>,
 	/// `core.net` runtime state: the socket table + the I/O reactor (the host-side
 	/// analogue of `vm::net::NetState`).
 	net: HostNet,
-}
-
-/// The module's GC type handles the io host imports need to build their `$value`
-/// returns. Engine-scoped (store-independent), captured once from the universal
-/// witness `[nothing, "", [], true]` every io import is passed (see `emit_io_witness`).
-#[derive(Clone)]
-struct GcTypes {
-	value: StructType,
-	str_: StructType,
-	bytes: ArrayType,
-	valarray: ArrayType,
-	list: StructType,
-	bool_: StructType,
-}
-
-/// Reflect the universal witness (a `$list [nothing, "", [], true]`) to recover the
-/// module's `$value`/`$str`/`$bytes`/`$list`/`$valarray`/`$bool` types.
-fn capture_gc_types(store: &mut impl AsContextMut, witness: &Val) -> GcTypes {
-	let mut scope = RootScope::new(store);
-	let list_ref = match witness {
-		Val::AnyRef(Some(r)) => *r,
-		o => panic!("io witness is not a ref: {o:?}"),
-	};
-	let list_struct = list_ref
-		.as_struct(&mut scope)
-		.expect("witness as_struct")
-		.expect("witness is a $list");
-	let list = list_struct.ty(&mut scope).expect("$list type");
-	let elems = match list_struct.field(&mut scope, 1).expect("witness elems") {
-		Val::AnyRef(Some(r)) => r
-			.as_array(&mut scope)
-			.expect("as_array")
-			.expect("$valarray"),
-		o => panic!("witness elems not an array: {o:?}"),
-	};
-	let valarray = elems.ty(&mut scope).expect("$valarray type");
-	let struct_ty_at = |scope: &mut RootScope<_>, i: u32| -> StructType {
-		match elems.get(&mut *scope, i).expect("witness elem") {
-			Val::AnyRef(Some(r)) => r
-				.as_struct(&mut *scope)
-				.expect("elem as_struct")
-				.expect("elem struct")
-				.ty(&mut *scope)
-				.expect("elem type"),
-			o => panic!("witness elem {i} not a struct: {o:?}"),
-		}
-	};
-	let value = struct_ty_at(&mut scope, 0); // nothing (a heap `$value` witness sample)
-	let str_ = struct_ty_at(&mut scope, 1); // ""
-	let bytes = {
-		let s = match elems.get(&mut scope, 1).expect("elem 1") {
-			Val::AnyRef(Some(r)) => r.as_struct(&mut scope).unwrap().unwrap(),
-			o => panic!("elem 1 not a struct: {o:?}"),
-		};
-		match s.field(&mut scope, 1).expect("$str bytes field") {
-			Val::AnyRef(Some(r)) => r
-				.as_array(&mut scope)
-				.unwrap()
-				.unwrap()
-				.ty(&mut scope)
-				.unwrap(),
-			o => panic!("$str field 1 not an array: {o:?}"),
-		}
-	};
-	let bool_ = struct_ty_at(&mut scope, 3); // true
-	GcTypes {
-		value,
-		str_,
-		bytes,
-		valarray,
-		list,
-		bool_,
-	}
-}
-
-/// Build a `$bytes` GC array of `data`.
-fn build_bytes_array(store: &mut impl AsContextMut, gc: &GcTypes, data: &[u8]) -> Rooted<ArrayRef> {
-	let pre = ArrayRefPre::new(&mut *store, gc.bytes.clone());
-	let elems: Vec<Val> = data.iter().map(|&b| Val::I32(b as i32)).collect();
-	ArrayRef::new_fixed(&mut *store, &pre, &elems).expect("build $bytes")
-}
-
-/// Build a `$str`/`$bytes`-shaped `$value` (`{tag, $bytes}`) for `tag` + `data`.
-fn build_strlike(store: &mut impl AsContextMut, gc: &GcTypes, tag: i32, data: &[u8]) -> Val {
-	let bytes = build_bytes_array(&mut *store, gc, data);
-	let pre = StructRefPre::new(&mut *store, gc.str_.clone());
-	let s = StructRef::new(
-		&mut *store,
-		&pre,
-		&[Val::I32(tag), Val::AnyRef(Some(bytes.into()))],
-	)
-	.expect("build $str");
-	Val::AnyRef(Some(s.to_anyref()))
-}
-
-/// Build a `nothing` `$value`.
-fn build_nothing(store: &mut impl AsContextMut, gc: &GcTypes) -> Val {
-	// io ops returning `nothing` on success build a concrete heap `$value`: the io
-	// result shaper (`__io_result`) reads null as failure, so a successful `nothing`
-	// must be non-null. (Statement-level `nothing` on the hot path is a null ref; both
-	// forms read back as `TAG_NOTHING` via `value_tag`.)
-	let pre = StructRefPre::new(&mut *store, gc.value.clone());
-	let s = StructRef::new(&mut *store, &pre, &[Val::I32(TAG_NOTHING)]).expect("build nothing");
-	Val::AnyRef(Some(s.to_anyref()))
-}
-
-/// Build a `$bool` `$value`.
-fn build_bool(store: &mut impl AsContextMut, gc: &GcTypes, b: bool) -> Val {
-	let pre = StructRefPre::new(&mut *store, gc.bool_.clone());
-	let s = StructRef::new(&mut *store, &pre, &[Val::I32(TAG_BOOL), Val::I32(b as i32)])
-		.expect("build $bool");
-	Val::AnyRef(Some(s.to_anyref()))
-}
-
-/// Build a `$list` `$value` of `$str` elements (e.g. `read-dir`'s entry names).
-fn build_str_list(store: &mut impl AsContextMut, gc: &GcTypes, items: &[String]) -> Val {
-	let strs: Vec<Val> = items
-		.iter()
-		.map(|s| build_strlike(&mut *store, gc, TAG_STR, s.as_bytes()))
-		.collect();
-	let arr_pre = ArrayRefPre::new(&mut *store, gc.valarray.clone());
-	let arr = ArrayRef::new_fixed(&mut *store, &arr_pre, &strs).expect("build $valarray");
-	let pre = StructRefPre::new(&mut *store, gc.list.clone());
-	// $list is { tag, elems, length } — length == capacity here (no spare).
-	let s = StructRef::new(
-		&mut *store,
-		&pre,
-		&[
-			Val::I32(TAG_LIST),
-			Val::AnyRef(Some(arr.into())),
-			Val::I32(items.len() as i32),
-		],
-	)
-	.expect("build $list");
-	Val::AnyRef(Some(s.to_anyref()))
-}
-
-/// Capture the module's GC types from the witness on the first io call, caching
-/// them in `HostState` so subsequent calls skip the reflection.
-fn ensure_types(caller: &mut Caller<HostState>, witness: &Val) -> GcTypes {
-	if let Some(t) = caller.data().gc_types.clone() {
-		return t;
-	}
-	let t = capture_gc_types(caller, witness);
-	caller.data_mut().gc_types = Some(t.clone());
-	t
-}
-
-/// The cached GC types (set by the most recent io op's witness) — for `io-last-error`,
-/// which carries no witness because it always follows a failing op that set them.
-fn cached_types(caller: &Caller<HostState>) -> GcTypes {
-	caller
-		.data()
-		.gc_types
-		.clone()
-		.expect("io-last-error called before any io op cached the GC types")
-}
-
-/// Extract a `$str` argument as a Rust `String` (UTF-8 lossy, like the VM).
-fn arg_string(store: &mut impl AsContextMut, v: &Val) -> String {
-	String::from_utf8_lossy(&raw_value_bytes(store, v)).into_owned()
 }
 
 /// Stash an io error message for the next `io-last-error` query.
@@ -528,6 +374,10 @@ fn format_anyref(store: &mut impl AsContextMut, any: Rooted<AnyRef>) -> String {
 			let cell = s.field(&mut *store, 1).expect("ref cell");
 			format!("ref {}", format_value(store, &cell))
 		}
+		// A host handle: opaque, never structurally printed (mirrors `__tostring`).
+		// No Phase-1 value reaches this — it's here so the entry-return format path
+		// stays total once DOM/fetch (Phase 3) start producing externs.
+		TAG_EXTERN => "<extern>".to_string(),
 		TAG_DICT => {
 			// `{k: v, ...}` in insertion order. The `$dict` is a persistent hash-trie
 			// (`{ tag, root, next_seq }`); walk it to collect `(seq, key, value)`, then
@@ -621,39 +471,6 @@ fn collect_dict(store: &mut impl AsContextMut, node: &Val, out: &mut Vec<(i64, S
 			}
 		}
 	}
-}
-
-/// The raw bytes backing a `$str`/`$bytes` value (field 1 of the struct),
-/// without any Display formatting — for the `io.write-bytes` raw writers.
-fn raw_value_bytes(store: &mut impl AsContextMut, val: &Val) -> Vec<u8> {
-	let Val::AnyRef(Some(r)) = val else {
-		return Vec::new();
-	};
-	// A str/bytes value is always a heap struct; an `i31ref` (small int) can't reach
-	// here in well-typed code, but guard rather than panic in `as_struct`.
-	if r.as_i31(&mut *store).expect("as_i31").is_some() {
-		return Vec::new();
-	}
-	let s = r
-		.as_struct(&mut *store)
-		.expect("as_struct")
-		.expect("a $value");
-	let arr = match s.field(&mut *store, 1).expect("bytes field") {
-		Val::AnyRef(Some(a)) => a
-			.as_array(&mut *store)
-			.expect("as_array")
-			.expect("bytes array"),
-		o => panic!("bytes payload: {o:?}"),
-	};
-	let len = arr.len(&mut *store).expect("array len");
-	let mut bytes = Vec::with_capacity(len as usize);
-	for i in 0..len {
-		match arr.get(&mut *store, i).expect("array get") {
-			Val::I32(b) => bytes.push(b as u8),
-			o => panic!("byte elem: {o:?}"),
-		}
-	}
-	bytes
 }
 
 /// Format each element of a `$valarray` field value.
@@ -947,41 +764,96 @@ impl HostNet {
 	}
 }
 
-/// Read a `$int`(-shaped) `$value` argument as an i64 (its field-1 payload).
-fn arg_int(store: &mut impl AsContextMut, v: &Val) -> i64 {
-	let Val::AnyRef(Some(r)) = v else {
-		return 0;
-	};
-	// A small int arrives as an `i31ref` immediate; a large one as a heap `$int`.
-	if let Some(i31) = r.as_i31(&mut *store).expect("as_i31") {
-		return i31.get_i32() as i64;
-	}
-	let s = r
-		.as_struct(&mut *store)
-		.expect("as_struct")
-		.expect("a $value");
-	match s.field(&mut *store, 1).expect("int field") {
-		Val::I64(n) => n,
-		o => panic!("int payload: {o:?}"),
+// --------------------------------------------------------------------------
+// The marshalling-ABI scratch helpers (ABI.md Phase 1). Host imports traffic byte
+// payloads through the module's exported `"memory"` linear memory instead of
+// reflecting GC `$value` fields — the engine-neutral boundary every real deploy
+// host (V8, a browser JS shim) needs.
+// --------------------------------------------------------------------------
+
+/// The module's exported scratch `"memory"`. Every emitted module exports it.
+fn scratch_mem(caller: &mut Caller<HostState>) -> Memory {
+	match caller.get_export("memory") {
+		Some(Extern::Memory(m)) => m,
+		_ => panic!("module is missing its exported `memory`"),
 	}
 }
 
-/// Shape a `NetRet` into the `(status:i32, n:i32, payload:ref null $value)` triple
-/// every net host import returns. status 0 = ok / 1 = would-block / 2 = err. The
-/// wasm side wraps it: status 0 boxes `n` (OkInt ops) or wraps `payload` in `ok`;
-/// status 2 wraps `payload` in `err`; status 1 parks the fiber.
-fn set_net_results(store: &mut impl AsContextMut, gc: &GcTypes, ret: NetRet, results: &mut [Val]) {
-	let (status, n, payload): (i32, i32, Val) = match ret {
-		NetRet::OkInt(v) => (0, v, Val::AnyRef(None)),
-		NetRet::OkBytes(b) => (0, 0, build_strlike(store, gc, TAG_BYTES, &b)),
-		NetRet::OkStr(s) => (0, 0, build_strlike(store, gc, TAG_STR, s.as_bytes())),
-		NetRet::OkNothing => (0, 0, build_nothing(store, gc)),
-		NetRet::Err(e) => (2, 0, build_strlike(store, gc, TAG_STR, e.as_bytes())),
-		NetRet::WouldBlock => (1, 0, Val::AnyRef(None)),
+/// Read `len` bytes of scratch memory at `ptr` into an owned `Vec` (releasing the
+/// memory borrow before the caller mutates `HostState`).
+fn read_scratch(caller: &mut Caller<HostState>, ptr: i32, len: i32) -> Vec<u8> {
+	let mem = scratch_mem(caller);
+	let mut buf = vec![0u8; len.max(0) as usize];
+	mem
+		.read(&*caller, ptr as usize, &mut buf)
+		.expect("scratch read in bounds");
+	buf
+}
+
+/// Write `data` into scratch memory at `ptr` (the caller has reserved the room).
+fn write_scratch(caller: &mut Caller<HostState>, ptr: i32, data: &[u8]) {
+	let mem = scratch_mem(caller);
+	mem
+		.write(&mut *caller, ptr as usize, data)
+		.expect("scratch write in bounds");
+}
+
+/// Extract an `i32` host-call argument.
+fn arg_i32(v: &Val) -> i32 {
+	match v {
+		Val::I32(n) => *n,
+		o => panic!("expected i32 arg: {o:?}"),
+	}
+}
+
+/// Deliver a read's `bytes` to the caller's `(dst, cap)` buffer: write them into
+/// scratch and return the length if they fit; otherwise stash them (the wasm side
+/// reserves the true size and drains via `__io_copyout`) and return the over-`cap`
+/// length. Returns the true byte count either way — the wasm side compares it to
+/// `cap` to take the overflow branch.
+fn deliver_read(caller: &mut Caller<HostState>, dst: i32, cap: i32, bytes: Vec<u8>) -> i32 {
+	let len = bytes.len();
+	if len <= cap.max(0) as usize {
+		write_scratch(caller, dst, &bytes);
+	} else {
+		caller.data_mut().read_stash = bytes;
+	}
+	len as i32
+}
+
+/// Shape a scalar `NetRet` (a socket id / write count / nothing) into the `(status,
+/// n)` pair a net import returns: 0 ok, 1 would-block, 2 err (message → `last_error`,
+/// read back via `io-last-error`, exactly like `core.io`).
+fn net_scalar(caller: &mut Caller<HostState>, ret: NetRet) -> (i32, i32) {
+	match ret {
+		NetRet::OkInt(v) => (0, v),
+		NetRet::OkNothing => (0, 0),
+		NetRet::WouldBlock => (1, 0),
+		NetRet::Err(e) => {
+			set_io_err(caller, e);
+			(2, 0)
+		}
+		NetRet::OkBytes(_) | NetRet::OkStr(_) => unreachable!("net_scalar on a byte-returning op"),
+	}
+}
+
+/// Shape a byte-returning `NetRet` (`net-read` bytes / `net-local-addr` string) into
+/// `(status, len)`, writing the payload into scratch at `dst` (truncated to `cap` —
+/// `net-read` already bounds by `max == cap`, addresses are short).
+fn net_bytes(caller: &mut Caller<HostState>, dst: i32, cap: i32, ret: NetRet) -> (i32, i32) {
+	let bytes = match ret {
+		NetRet::OkBytes(b) => b,
+		NetRet::OkStr(s) => s.into_bytes(),
+		NetRet::WouldBlock => return (1, 0),
+		NetRet::Err(e) => {
+			set_io_err(caller, e);
+			return (2, 0);
+		}
+		NetRet::OkInt(_) | NetRet::OkNothing => unreachable!("net_bytes on a scalar op"),
 	};
-	results[0] = Val::I32(status);
-	results[1] = Val::I32(n);
-	results[2] = payload;
+	let len = bytes.len().min(cap.max(0) as usize);
+	write_scratch(caller, dst, &bytes[..len]);
+	(0, len as i32)
 }
 
 fn instantiate_module(
@@ -995,53 +867,35 @@ fn instantiate_module(
 			io,
 			fail: None,
 			last_error: String::new(),
-			gc_types: None,
+			read_stash: Vec::new(),
 			net: HostNet::default(),
 		},
 	);
 	let mut linker: Linker<HostState> = Linker::new(engine);
-	// print : (ref null $value) -> ()  — host accepts the broader `anyref`.
-	let print_ty = FuncType::new(engine, [ValType::ANYREF], []);
-	linker
-		.func_new("pluma", "print", print_ty, |mut caller, args, _results| {
-			// Bound the temporary GC roots created while reflecting the value: a
-			// `RootScope` frees them on drop, so repeated prints don't accumulate
-			// roots (which otherwise corrupts wasmtime's GC under collection).
-			let mut line = {
-				let mut scope = RootScope::new(&mut caller);
-				format_value(&mut scope, &args[0]).into_bytes()
-			};
-			line.push(b'\n');
-			caller.data_mut().io.write_out(&line);
-			Ok(())
-		})
-		.expect("define print");
-	// The `core.io` writers. `print`/`print-err` append a newline; `write`/
-	// `write-err` don't. The `*-err` pair targets stderr. `*-bytes` write a `bytes`
-	// value's raw bytes (no Display formatting).
-	let io_ty = FuncType::new(engine, [ValType::ANYREF], []);
-	for (name, to_err, newline, raw) in [
-		("io-print", false, true, false),
-		("io-write", false, false, false),
-		("io-print-err", true, true, false),
-		("io-write-err", true, false, false),
-		("io-write-bytes", false, false, true),
-		("io-write-err-bytes", true, false, true),
+	// The byte-payload writers (ABI.md Phase 1). Each takes `(i32 ptr, i32 len)` into
+	// the scratch memory — wasm has already rendered the value's bytes there (via
+	// `__tostring` for the formatted writers, or the raw `$bytes` backing for the
+	// `*-bytes` pair), so the host just reads the slice. `print`/`print-err` append a
+	// newline; the `*-err` variants target stderr. The host no longer reflects any GC
+	// field, so this boundary runs unchanged under V8 / a browser shim.
+	let write_ty = FuncType::new(engine, [ValType::I32, ValType::I32], []);
+	for (name, to_err, newline) in [
+		("print", false, true),
+		("io-print", false, true),
+		("io-write", false, false),
+		("io-print-err", true, true),
+		("io-write-err", true, false),
+		("io-write-bytes", false, false),
+		("io-write-err-bytes", true, false),
 	] {
 		linker
 			.func_new(
 				"pluma",
 				name,
-				io_ty.clone(),
+				write_ty.clone(),
 				move |mut caller, args, _results| {
-					let mut bytes = {
-						let mut scope = RootScope::new(&mut caller);
-						if raw {
-							raw_value_bytes(&mut scope, &args[0])
-						} else {
-							format_value(&mut scope, &args[0]).into_bytes()
-						}
-					};
+					let (ptr, len) = (arg_i32(&args[0]), arg_i32(&args[1]));
+					let mut bytes = read_scratch(&mut caller, ptr, len);
 					if newline {
 						bytes.push(b'\n');
 					}
@@ -1055,27 +909,31 @@ fn instantiate_module(
 			)
 			.unwrap_or_else(|e| panic!("define {name}: {e}"));
 	}
-	// io.fail msg : stash the message, then trap. The runner reads the message back
-	// to form the `runtime error: <msg>` status (mirrors the VM's abort).
+	// io.fail msg : read the pre-rendered message out of scratch, stash it, then trap.
+	// The runner reads the message back to form the `runtime error: <msg>` status
+	// (mirrors the VM's abort).
 	linker
 		.func_new(
 			"pluma",
 			"io-fail",
-			io_ty.clone(),
+			write_ty.clone(),
 			|mut caller, args, _results| {
-				let msg = {
-					let mut scope = RootScope::new(&mut caller);
-					format_value(&mut scope, &args[0])
-				};
-				caller.data_mut().fail = Some(msg);
+				let (ptr, len) = (arg_i32(&args[0]), arg_i32(&args[1]));
+				let bytes = read_scratch(&mut caller, ptr, len);
+				caller.data_mut().fail = Some(String::from_utf8_lossy(&bytes).into_owned());
 				Err(wasmtime::Error::msg("io.fail"))
 			},
 		)
 		.expect("define io-fail");
-	// float_to_str : (f64, $bytes buf) -> i32 len. Format the float as `vm::Value`'s
-	// Display does, write the bytes into the caller-provided GC byte array, return
-	// the length. (A real browser target would delegate to JS similarly.)
-	let f2s_ty = FuncType::new(engine, [ValType::F64, ValType::ANYREF], [ValType::I32]);
+	// float_to_str : (f64, i32 ptr, i32 cap) -> i32 len. Format the float as
+	// `vm::Value`'s Display does, write its UTF-8 bytes into scratch at `ptr` (≤ cap),
+	// return the length. A float renders to ≤ 24 bytes, so the wasm side's 32-byte cap
+	// never overflows. (A browser target would delegate to JS `String(x)` similarly.)
+	let f2s_ty = FuncType::new(
+		engine,
+		[ValType::F64, ValType::I32, ValType::I32],
+		[ValType::I32],
+	);
 	linker
 		.func_new(
 			"pluma",
@@ -1091,15 +949,10 @@ fn instantiate_module(
 				} else {
 					format!("{n}")
 				};
-				let buf = match &args[1] {
-					Val::AnyRef(Some(r)) => r.as_array(&mut caller).expect("array").expect("buf"),
-					o => panic!("float_to_str buf: {o:?}"),
-				};
+				let (ptr, cap) = (arg_i32(&args[1]), arg_i32(&args[2]));
 				let bytes = s.as_bytes();
-				for (i, &byte) in bytes.iter().enumerate() {
-					buf
-						.set(&mut caller, i as u32, Val::I32(byte as i32))
-						.expect("buf set");
+				if bytes.len() <= cap as usize {
+					write_scratch(&mut caller, ptr, bytes);
 				}
 				results[0] = Val::I32(bytes.len() as i32);
 				Ok(())
@@ -1135,59 +988,41 @@ fn instantiate_module(
 			.unwrap_or_else(|e| panic!("define {name}: {e}"));
 	}
 
-	// `core.io` host imports (the server-platform capability). Each takes a trailing
-	// type witness (see `emit_io_witness`) the host reflects to build its `$value`
-	// return. The reads/writes return a primitive `$value`-or-null that wasm wraps in
-	// `ok`/`err` via `__io_result`; `file-exists`/`is-dir` return a bare `$bool`. All
-	// fs ops use real `std::fs` so the `err` strings match the VM's errno text.
-	// The io imports return a concrete `(ref null $value)`, not the broader `anyref`
-	// (a result must be a *subtype* of what the module imports). Recover that exact
-	// type from the `_entry` export's signature (its env param / return is `$value`).
-	let value_ty: ValType = module
-		.exports()
-		.find(|e| e.name() == "_entry")
-		.and_then(|e| match e.ty() {
-			ExternType::Func(f) => f.results().next(),
-			_ => None,
-		})
-		.expect("_entry export with a $value result type");
-	let io2 = FuncType::new(
+	// The marshalled `core.io` host imports (ABI.md Phase 1). Path/data args arrive as
+	// `(ptr, len)` byte slices in scratch; reads write their result back into a caller
+	// `(dst, cap)` buffer (a `len > cap` overflow stashes for `__io_copyout`). The host
+	// no longer reflects or builds any GC `$value` — wasm shapes the `i32` result.
+	let io2_ty = FuncType::new(engine, [ValType::I32, ValType::I32], [ValType::I32]);
+	let io4_ty = FuncType::new(
 		engine,
-		[ValType::ANYREF, ValType::ANYREF],
-		[value_ty.clone()],
+		[ValType::I32, ValType::I32, ValType::I32, ValType::I32],
+		[ValType::I32],
 	);
-	let io3 = FuncType::new(
-		engine,
-		[ValType::ANYREF, ValType::ANYREF, ValType::ANYREF],
-		[value_ty.clone()],
-	);
-	let io0 = FuncType::new(engine, [], [value_ty.clone()]);
+	let copyout_ty = FuncType::new(engine, [ValType::I32], []);
 
-	// read-file / read-file-bytes: path is args[0], witness args[1].
+	// read-file / read-file-bytes : (path, plen, dst, cap) -> len (neg ⇒ err). Text
+	// reads validate UTF-8 (matching the VM); both deliver the bytes via the read
+	// buffer + overflow stash.
 	for (name, as_bytes) in [("io-read-file", false), ("io-read-file-bytes", true)] {
 		linker
 			.func_new(
 				"pluma",
 				name,
-				io2.clone(),
+				io4_ty.clone(),
 				move |mut caller, args, results| {
-					let gc = ensure_types(&mut caller, &args[1]);
-					let path = arg_string(&mut caller, &args[0]);
-					results[0] = if as_bytes {
-						match std::fs::read(&path) {
-							Ok(b) => build_strlike(&mut caller, &gc, TAG_BYTES, &b),
-							Err(e) => {
-								set_io_err(&mut caller, e.to_string());
-								Val::AnyRef(None)
-							}
-						}
+					let (pp, pl) = (arg_i32(&args[0]), arg_i32(&args[1]));
+					let (dst, cap) = (arg_i32(&args[2]), arg_i32(&args[3]));
+					let path = String::from_utf8_lossy(&read_scratch(&mut caller, pp, pl)).into_owned();
+					let res = if as_bytes {
+						std::fs::read(&path)
 					} else {
-						match std::fs::read_to_string(&path) {
-							Ok(s) => build_strlike(&mut caller, &gc, TAG_STR, s.as_bytes()),
-							Err(e) => {
-								set_io_err(&mut caller, e.to_string());
-								Val::AnyRef(None)
-							}
+						std::fs::read_to_string(&path).map(String::into_bytes)
+					};
+					results[0] = match res {
+						Ok(bytes) => Val::I32(deliver_read(&mut caller, dst, cap, bytes)),
+						Err(e) => {
+							set_io_err(&mut caller, e.to_string());
+							Val::I32(-1)
 						}
 					};
 					Ok(())
@@ -1196,27 +1031,25 @@ fn instantiate_module(
 			.unwrap_or_else(|e| panic!("define {name}: {e}"));
 	}
 
-	// write-file / append-file (+ bytes variants): path args[0], data args[1], witness
-	// args[2]. Return `nothing` on success.
-	for (name, append, as_bytes) in [
-		("io-write-file", false, false),
-		("io-append-file", true, false),
-		("io-write-file-bytes", false, true),
-		("io-append-file-bytes", true, true),
+	// write-file / append-file (+ bytes variants) : (path, plen, data, dlen) -> status
+	// (0 ok / non-0 err). wasm already encoded `data`'s bytes, so the text/bytes
+	// variants share a closure — only append-vs-truncate differs.
+	for (name, append) in [
+		("io-write-file", false),
+		("io-append-file", true),
+		("io-write-file-bytes", false),
+		("io-append-file-bytes", true),
 	] {
 		linker
 			.func_new(
 				"pluma",
 				name,
-				io3.clone(),
+				io4_ty.clone(),
 				move |mut caller, args, results| {
-					let gc = ensure_types(&mut caller, &args[2]);
-					let path = arg_string(&mut caller, &args[0]);
-					let data = if as_bytes {
-						raw_value_bytes(&mut caller, &args[1])
-					} else {
-						arg_string(&mut caller, &args[1]).into_bytes()
-					};
+					let (pp, pl) = (arg_i32(&args[0]), arg_i32(&args[1]));
+					let (dp, dl) = (arg_i32(&args[2]), arg_i32(&args[3]));
+					let path = String::from_utf8_lossy(&read_scratch(&mut caller, pp, pl)).into_owned();
+					let data = read_scratch(&mut caller, dp, dl);
 					let res = if append {
 						use std::io::Write;
 						std::fs::OpenOptions::new()
@@ -1228,10 +1061,10 @@ fn instantiate_module(
 						std::fs::write(&path, &data)
 					};
 					results[0] = match res {
-						Ok(()) => build_nothing(&mut caller, &gc),
+						Ok(()) => Val::I32(0),
 						Err(e) => {
 							set_io_err(&mut caller, e.to_string());
-							Val::AnyRef(None)
+							Val::I32(2)
 						}
 					};
 					Ok(())
@@ -1240,26 +1073,26 @@ fn instantiate_module(
 			.unwrap_or_else(|e| panic!("define {name}: {e}"));
 	}
 
-	// delete-file / make-dir (mkdir -p): path args[0], witness args[1].
+	// delete-file / make-dir (mkdir -p) : (path, plen) -> status.
 	for (name, is_mkdir) in [("io-delete-file", false), ("io-make-dir", true)] {
 		linker
 			.func_new(
 				"pluma",
 				name,
-				io2.clone(),
+				io2_ty.clone(),
 				move |mut caller, args, results| {
-					let gc = ensure_types(&mut caller, &args[1]);
-					let path = arg_string(&mut caller, &args[0]);
+					let (pp, pl) = (arg_i32(&args[0]), arg_i32(&args[1]));
+					let path = String::from_utf8_lossy(&read_scratch(&mut caller, pp, pl)).into_owned();
 					let res = if is_mkdir {
 						std::fs::create_dir_all(&path)
 					} else {
 						std::fs::remove_file(&path)
 					};
 					results[0] = match res {
-						Ok(()) => build_nothing(&mut caller, &gc),
+						Ok(()) => Val::I32(0),
 						Err(e) => {
 							set_io_err(&mut caller, e.to_string());
-							Val::AnyRef(None)
+							Val::I32(2)
 						}
 					};
 					Ok(())
@@ -1268,34 +1101,36 @@ fn instantiate_module(
 			.unwrap_or_else(|e| panic!("define {name}: {e}"));
 	}
 
-	// file-exists / is-dir: path args[0], witness args[1]. Return a bare `$bool`.
+	// file-exists / is-dir : (path, plen) -> bool (0/1).
 	for (name, is_dir) in [("io-file-exists", false), ("io-is-dir", true)] {
 		linker
 			.func_new(
 				"pluma",
 				name,
-				io2.clone(),
+				io2_ty.clone(),
 				move |mut caller, args, results| {
-					let gc = ensure_types(&mut caller, &args[1]);
-					let path = arg_string(&mut caller, &args[0]);
+					let (pp, pl) = (arg_i32(&args[0]), arg_i32(&args[1]));
+					let path = String::from_utf8_lossy(&read_scratch(&mut caller, pp, pl)).into_owned();
 					let p = std::path::Path::new(&path);
 					let b = if is_dir { p.is_dir() } else { p.exists() };
-					results[0] = build_bool(&mut caller, &gc, b);
+					results[0] = Val::I32(b as i32);
 					Ok(())
 				},
 			)
 			.unwrap_or_else(|e| panic!("define {name}: {e}"));
 	}
 
-	// read-dir: path args[0], witness args[1]. Entry names only, sorted (VM parity).
+	// read-dir : (path, plen, dst, cap) -> len (neg ⇒ err). Entry names only, sorted
+	// (VM parity), NUL-terminated so the wasm side can split them into a `$list`.
 	linker
 		.func_new(
 			"pluma",
 			"io-read-dir",
-			io2.clone(),
+			io4_ty.clone(),
 			|mut caller, args, results| {
-				let gc = ensure_types(&mut caller, &args[1]);
-				let path = arg_string(&mut caller, &args[0]);
+				let (pp, pl) = (arg_i32(&args[0]), arg_i32(&args[1]));
+				let (dst, cap) = (arg_i32(&args[2]), arg_i32(&args[3]));
+				let path = String::from_utf8_lossy(&read_scratch(&mut caller, pp, pl)).into_owned();
 				results[0] = match std::fs::read_dir(&path) {
 					Ok(entries) => {
 						let mut names: Vec<String> = Vec::new();
@@ -1312,17 +1147,22 @@ fn instantiate_module(
 						match read_err {
 							Some(msg) => {
 								set_io_err(&mut caller, msg);
-								Val::AnyRef(None)
+								Val::I32(-1)
 							}
 							None => {
 								names.sort();
-								build_str_list(&mut caller, &gc, &names)
+								let mut blob = Vec::new();
+								for n in &names {
+									blob.extend_from_slice(n.as_bytes());
+									blob.push(0); // NUL terminator
+								}
+								Val::I32(deliver_read(&mut caller, dst, cap, blob))
 							}
 						}
 					}
 					Err(e) => {
 						set_io_err(&mut caller, e.to_string());
-						Val::AnyRef(None)
+						Val::I32(-1)
 					}
 				};
 				Ok(())
@@ -1330,20 +1170,20 @@ fn instantiate_module(
 		)
 		.expect("define io-read-dir");
 
-	// read / read-all / read-all-bytes: unit args[0], witness args[1].
+	// read / read-all / read-all-bytes : (dst, cap) -> len (neg ⇒ err).
 	linker
 		.func_new(
 			"pluma",
 			"io-read",
-			io2.clone(),
+			io2_ty.clone(),
 			|mut caller, args, results| {
-				let gc = ensure_types(&mut caller, &args[1]);
+				let (dst, cap) = (arg_i32(&args[0]), arg_i32(&args[1]));
 				let line = caller.data_mut().io.read_line();
 				results[0] = match line {
-					Some(line) => build_strlike(&mut caller, &gc, TAG_STR, line.as_bytes()),
+					Some(line) => Val::I32(deliver_read(&mut caller, dst, cap, line.into_bytes())),
 					None => {
 						set_io_err(&mut caller, "EOF".to_string());
-						Val::AnyRef(None)
+						Val::I32(-1)
 					}
 				};
 				Ok(())
@@ -1354,12 +1194,12 @@ fn instantiate_module(
 		.func_new(
 			"pluma",
 			"io-read-all",
-			io2.clone(),
+			io2_ty.clone(),
 			|mut caller, args, results| {
-				let gc = ensure_types(&mut caller, &args[1]);
+				let (dst, cap) = (arg_i32(&args[0]), arg_i32(&args[1]));
 				let bytes = caller.data_mut().io.read_rest();
 				let s = String::from_utf8_lossy(&bytes).into_owned();
-				results[0] = build_strlike(&mut caller, &gc, TAG_STR, s.as_bytes());
+				results[0] = Val::I32(deliver_read(&mut caller, dst, cap, s.into_bytes()));
 				Ok(())
 			},
 		)
@@ -1368,165 +1208,181 @@ fn instantiate_module(
 		.func_new(
 			"pluma",
 			"io-read-all-bytes",
-			io2.clone(),
+			io2_ty.clone(),
 			|mut caller, args, results| {
-				let gc = ensure_types(&mut caller, &args[1]);
+				let (dst, cap) = (arg_i32(&args[0]), arg_i32(&args[1]));
 				let bytes = caller.data_mut().io.read_rest();
-				results[0] = build_strlike(&mut caller, &gc, TAG_BYTES, &bytes);
+				results[0] = Val::I32(deliver_read(&mut caller, dst, cap, bytes));
 				Ok(())
 			},
 		)
 		.expect("define io-read-all-bytes");
 
-	// io-last-error: the message the last failed io call stashed, as a `$str`. No
-	// witness — it rides the GC types the failing op already cached.
+	// io-last-error : (dst, cap) -> len. The message the last failed io call stashed,
+	// written into scratch (truncated to `cap` — errno strings are short, so no stash).
 	linker
 		.func_new(
 			"pluma",
 			"io-last-error",
-			io0,
-			|mut caller, _args, results| {
-				let gc = cached_types(&caller);
+			io2_ty.clone(),
+			|mut caller, args, results| {
+				let (dst, cap) = (arg_i32(&args[0]), arg_i32(&args[1]));
 				let msg = caller.data().last_error.clone();
-				results[0] = build_strlike(&mut caller, &gc, TAG_STR, msg.as_bytes());
+				let bytes = msg.as_bytes();
+				let len = bytes.len().min(cap.max(0) as usize);
+				write_scratch(&mut caller, dst, &bytes[..len]);
+				results[0] = Val::I32(len as i32);
 				Ok(())
 			},
 		)
 		.expect("define io-last-error");
 
-	// `core.net` host imports (see `HostNet`). Each fallible op returns the
-	// `(status:i32, n:i32, payload:ref null $value)` triple `set_net_results` builds
-	// — ints ride `n` (boxed in wasm), values/errs ride `payload`. The synchronous
-	// ops (listen/close/local-addr/connect) take a trailing type witness (like the
-	// io imports) so the host can build their `$value` payloads; the suspending ops
-	// (accept/read/write) take the parked fiber's id first and ride the GC types the
-	// preceding listen/connect already cached. `net-poll`/`net-unwatch` drive the
-	// reactor from the in-wasm scheduler's block step.
-	let net3 = FuncType::new(
-		engine,
-		[ValType::ANYREF, ValType::ANYREF],
-		[ValType::I32, ValType::I32, value_ty.clone()],
-	);
-	let net_accept_ty = FuncType::new(
-		engine,
-		[ValType::I32, ValType::ANYREF],
-		[ValType::I32, ValType::I32, value_ty.clone()],
-	);
-	let net_rw_ty = FuncType::new(
-		engine,
-		[ValType::I32, ValType::ANYREF, ValType::ANYREF],
-		[ValType::I32, ValType::I32, value_ty.clone()],
-	);
-	// net-listen addr witness -> (status, listener-id, _).
+	// __io_copyout : (dst) -> () — drain the read stash into scratch at `dst` (the
+	// overflow path, after the wasm side reserved the true size).
 	linker
 		.func_new(
 			"pluma",
-			"net-listen",
-			net3.clone(),
-			|mut caller, args, results| {
-				let gc = ensure_types(&mut caller, &args[1]);
-				let addr = arg_string(&mut caller, &args[0]);
-				let ret = caller.data_mut().net.listen(&addr);
-				set_net_results(&mut caller, &gc, ret, results);
+			"io-copyout",
+			copyout_ty,
+			|mut caller, args, _results| {
+				let dst = arg_i32(&args[0]);
+				let stash = std::mem::take(&mut caller.data_mut().read_stash);
+				write_scratch(&mut caller, dst, &stash);
 				Ok(())
 			},
 		)
-		.expect("define net-listen");
-	// net-close conn witness -> (status, _, nothing/err).
+		.expect("define io-copyout");
+
+	// The marshalled `core.net` host imports (ABI.md Phase 1). Addresses + data cross
+	// as `(ptr, len)` scratch slices; socket ids are unboxed `i32`s; each op returns a
+	// `(status, n)` pair (`net-close` just `status`). The host no longer reflects or
+	// builds GC `$value`s — wasm shapes the result via `__io_result` (reusing the
+	// `core.io` `ok`/`err` + `io-last-error` channel; net errors set `last_error`).
+	let net_listen_ty = FuncType::new(
+		engine,
+		[ValType::I32, ValType::I32],
+		[ValType::I32, ValType::I32],
+	);
+	let net_close_ty = FuncType::new(engine, [ValType::I32], [ValType::I32]);
+	let net_local_ty = FuncType::new(
+		engine,
+		[ValType::I32, ValType::I32, ValType::I32],
+		[ValType::I32, ValType::I32],
+	);
+	let net_rw_ty = FuncType::new(
+		engine,
+		[ValType::I32, ValType::I32, ValType::I32, ValType::I32],
+		[ValType::I32, ValType::I32],
+	);
+	// net-listen / net-connect : (addr, alen) -> (status, socket-id).
+	for (name, connect) in [("net-listen", false), ("net-connect", true)] {
+		linker
+			.func_new(
+				"pluma",
+				name,
+				net_listen_ty.clone(),
+				move |mut caller, args, results| {
+					let (ap, al) = (arg_i32(&args[0]), arg_i32(&args[1]));
+					let addr = String::from_utf8_lossy(&read_scratch(&mut caller, ap, al)).into_owned();
+					let ret = if connect {
+						caller.data_mut().net.connect(&addr)
+					} else {
+						caller.data_mut().net.listen(&addr)
+					};
+					let (status, n) = net_scalar(&mut caller, ret);
+					results[0] = Val::I32(status);
+					results[1] = Val::I32(n);
+					Ok(())
+				},
+			)
+			.unwrap_or_else(|e| panic!("define {name}: {e}"));
+	}
+	// net-close : (id) -> status.
 	linker
 		.func_new(
 			"pluma",
 			"net-close",
-			net3.clone(),
+			net_close_ty,
 			|mut caller, args, results| {
-				let gc = ensure_types(&mut caller, &args[1]);
-				let id = arg_int(&mut caller, &args[0]) as u32;
+				let id = arg_i32(&args[0]) as u32;
 				let ret = caller.data_mut().net.close(id);
-				set_net_results(&mut caller, &gc, ret, results);
+				let (status, _) = net_scalar(&mut caller, ret);
+				results[0] = Val::I32(status);
 				Ok(())
 			},
 		)
 		.expect("define net-close");
-	// net-local-addr listener witness -> (status, _, addr/err).
+	// net-local-addr : (id, dst, cap) -> (status, len). Address string into scratch.
 	linker
 		.func_new(
 			"pluma",
 			"net-local-addr",
-			net3.clone(),
+			net_local_ty,
 			|mut caller, args, results| {
-				let gc = ensure_types(&mut caller, &args[1]);
-				let id = arg_int(&mut caller, &args[0]) as u32;
+				let id = arg_i32(&args[0]) as u32;
+				let (dst, cap) = (arg_i32(&args[1]), arg_i32(&args[2]));
 				let ret = caller.data_mut().net.local_addr(id);
-				set_net_results(&mut caller, &gc, ret, results);
+				let (status, len) = net_bytes(&mut caller, dst, cap, ret);
+				results[0] = Val::I32(status);
+				results[1] = Val::I32(len);
 				Ok(())
 			},
 		)
 		.expect("define net-local-addr");
-	// net-connect addr witness -> (status, connection-id, err). v1 blocks.
-	linker
-		.func_new("pluma", "net-connect", net3, |mut caller, args, results| {
-			let gc = ensure_types(&mut caller, &args[1]);
-			let addr = arg_string(&mut caller, &args[0]);
-			let ret = caller.data_mut().net.connect(&addr);
-			set_net_results(&mut caller, &gc, ret, results);
-			Ok(())
-		})
-		.expect("define net-connect");
-	// net-accept fid listener -> (status, connection-id, err) | would-block.
+	// net-accept : (fid, listener-id) -> (status, conn-id) | would-block.
 	linker
 		.func_new(
 			"pluma",
 			"net-accept",
-			net_accept_ty,
+			net_listen_ty.clone(),
 			|mut caller, args, results| {
-				let gc = cached_types(&caller);
-				let fid = match args[0] {
-					Val::I32(f) => f,
-					ref o => panic!("net-accept fid: {o:?}"),
-				};
-				let lid = arg_int(&mut caller, &args[1]) as u32;
+				let fid = arg_i32(&args[0]);
+				let lid = arg_i32(&args[1]) as u32;
 				let ret = caller.data_mut().net.try_accept(fid, lid);
-				set_net_results(&mut caller, &gc, ret, results);
+				let (status, n) = net_scalar(&mut caller, ret);
+				results[0] = Val::I32(status);
+				results[1] = Val::I32(n);
 				Ok(())
 			},
 		)
 		.expect("define net-accept");
-	// net-read fid conn max -> (status, _, bytes/err) | would-block.
+	// net-read : (fid, conn, dst, cap) -> (status, len) | would-block. cap == the
+	// requested max, so the read never exceeds it (no stash/overflow).
 	linker
 		.func_new(
 			"pluma",
 			"net-read",
 			net_rw_ty.clone(),
 			|mut caller, args, results| {
-				let gc = cached_types(&caller);
-				let fid = match args[0] {
-					Val::I32(f) => f,
-					ref o => panic!("net-read fid: {o:?}"),
-				};
-				let cid = arg_int(&mut caller, &args[1]) as u32;
-				let max = arg_int(&mut caller, &args[2]).max(0) as usize;
-				let ret = caller.data_mut().net.try_read(fid, cid, max);
-				set_net_results(&mut caller, &gc, ret, results);
+				let fid = arg_i32(&args[0]);
+				let cid = arg_i32(&args[1]) as u32;
+				let (dst, cap) = (arg_i32(&args[2]), arg_i32(&args[3]));
+				let ret = caller
+					.data_mut()
+					.net
+					.try_read(fid, cid, cap.max(0) as usize);
+				let (status, len) = net_bytes(&mut caller, dst, cap, ret);
+				results[0] = Val::I32(status);
+				results[1] = Val::I32(len);
 				Ok(())
 			},
 		)
 		.expect("define net-read");
-	// net-write fid conn data -> (status, bytes-written, err) | would-block.
+	// net-write : (fid, conn, src, len) -> (status, n) | would-block.
 	linker
 		.func_new(
 			"pluma",
 			"net-write",
 			net_rw_ty,
 			|mut caller, args, results| {
-				let gc = cached_types(&caller);
-				let fid = match args[0] {
-					Val::I32(f) => f,
-					ref o => panic!("net-write fid: {o:?}"),
-				};
-				let cid = arg_int(&mut caller, &args[1]) as u32;
-				let data = raw_value_bytes(&mut caller, &args[2]);
+				let fid = arg_i32(&args[0]);
+				let cid = arg_i32(&args[1]) as u32;
+				let (src, len) = (arg_i32(&args[2]), arg_i32(&args[3]));
+				let data = read_scratch(&mut caller, src, len);
 				let ret = caller.data_mut().net.try_write(fid, cid, &data);
-				set_net_results(&mut caller, &gc, ret, results);
+				let (status, n) = net_scalar(&mut caller, ret);
+				results[0] = Val::I32(status);
+				results[1] = Val::I32(n);
 				Ok(())
 			},
 		)

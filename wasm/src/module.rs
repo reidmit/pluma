@@ -10,7 +10,8 @@ use ir::{GlobalInit, IrProgram, PreEval};
 use wasm_encoder::{
 	CodeSection, ConstExpr, DataCountSection, DataSection, ElementSection, Elements, ExportKind,
 	ExportSection, Function, FunctionSection, GlobalSection, GlobalType, HeapType, ImportSection,
-	Module as WasmModule, RefType, TableSection, TableType, TypeSection, ValType,
+	MemorySection, MemoryType, Module as WasmModule, RefType, TableSection, TableType, TypeSection,
+	ValType,
 };
 
 use crate::emit::FnEmitter;
@@ -19,10 +20,11 @@ use crate::helpers::{
 	helper_for_tag,
 };
 use crate::runtime::{
-	GlobalKind, GlobalSlot, Helper, HelperCtx, HelperSet, IoResultLits, NetImports, OptionLits,
-	OrderingLits, Runtime, TaskGlobals, TaskLits, ToStringLits, WireGlobals, WireResultLits,
-	WireTags, host_sig, is_f64_unary_host, is_inline_builtin, is_io_result, is_net_builtin,
-	is_net_sync, scan_helpers, task_builtin_kind,
+	GlobalKind, GlobalSlot, Helper, HelperCtx, HelperSet, IoKind, IoResultLits, NetImports,
+	OptionLits, OrderingLits, Runtime, TaskGlobals, TaskLits, ToStringLits, WireGlobals,
+	WireResultLits, WireTags, host_sig, io_kind, io_uses_io4, is_byte_writer, is_f64_unary_host,
+	is_inline_builtin, is_io_host, is_io_result, is_net_builtin, is_raw_writer, scan_helpers,
+	task_builtin_kind,
 };
 use crate::scan::{
 	StrPool, builtin_var_tags, collect_host_calls, collect_zero_arg_closures, scan_strings,
@@ -75,6 +77,7 @@ impl Module {
 				if tag == "debug" {
 					requested.insert(Helper::ToString);
 					requested.insert(Helper::BytesConcat);
+					requested.insert(Helper::MarshalSend);
 					if !host_index.contains_key("print") {
 						host_index.insert("print".to_string(), host_order.len() as u32);
 						host_order.push("print".to_string());
@@ -101,6 +104,42 @@ impl Module {
 						host_order.push(tag.to_string());
 					}
 					return;
+				}
+				// Byte-payload writers render their arg into scratch before the host
+				// call: they need `__send_bytes` (and `__tostring` for the formatted
+				// ones). They still register as ordinary host imports below.
+				if is_byte_writer(tag) {
+					requested.insert(Helper::MarshalSend);
+					if !is_raw_writer(tag) {
+						requested.insert(Helper::ToString);
+					}
+				}
+				// Marshalled `core.io` ops encode their path/data args into scratch
+				// (`__alloc`/`__store_bytes`); reads also `__load_bytes` the payload and
+				// need the `io-copyout` overflow import, and `read-dir` splits names.
+				if is_io_host(tag) {
+					requested.insert(Helper::MarshalAlloc);
+					requested.insert(Helper::MarshalStore);
+					if let Some(kind) = io_kind(tag) {
+						let is_read = matches!(
+							kind,
+							IoKind::ReadStr
+								| IoKind::ReadBytes
+								| IoKind::ReadFileStr
+								| IoKind::ReadFileBytes
+								| IoKind::ReadDir
+						);
+						if is_read {
+							requested.insert(Helper::MarshalLoad);
+							if !host_index.contains_key("io-copyout") {
+								host_index.insert("io-copyout".to_string(), host_order.len() as u32);
+								host_order.push("io-copyout".to_string());
+							}
+						}
+						if kind == IoKind::ReadDir {
+							requested.insert(Helper::MarshalReadNames);
+						}
+					}
 				}
 				// `core.io` result builtins need the `__io_result` shaper + the
 				// `io-last-error` channel it queries, on top of their own host import
@@ -131,6 +170,15 @@ impl Module {
 			let vt = builtin_var_tags(body, &builtin_g);
 			for v in value_used_builtin_vars(body, &vt) {
 				let tag = vt[&v].clone();
+				// A writer used only as a first-class value (`list.each xs print`) is
+				// never directly called, so the call scan above misses its marshalling
+				// helpers — request them here (before `close_deps`).
+				if is_byte_writer(&tag) {
+					requested.insert(Helper::MarshalSend);
+					if !is_raw_writer(&tag) {
+						requested.insert(Helper::ToString);
+					}
+				}
 				if host_sig(&tag).is_some() && !host_index.contains_key(&tag) {
 					host_index.insert(tag.clone(), host_order.len() as u32);
 					host_order.push(tag);
@@ -166,6 +214,19 @@ impl Module {
 				unwatch: reg("net-unwatch"),
 			}
 		});
+		// `core.net` shapes its results through `__io_result` (the same `ok`/`err` +
+		// `io-last-error` channel as `core.io`) and marshals byte payloads (addr/data,
+		// the read result) through scratch — pull those helpers + the error import in.
+		if uses_net {
+			requested.insert(Helper::IoResult);
+			requested.insert(Helper::MarshalAlloc);
+			requested.insert(Helper::MarshalStore);
+			requested.insert(Helper::MarshalLoad);
+			if !host_index.contains_key("io-last-error") {
+				host_index.insert("io-last-error".to_string(), host_order.len() as u32);
+				host_order.push("io-last-error".to_string());
+			}
+		}
 		let num_imports = host_order.len() as u32;
 
 		// Dense FuncId -> wasm function index (imports occupy the low indices).
@@ -298,6 +359,20 @@ impl Module {
 		let mut gmap: HashMap<u32, GlobalSlot> = HashMap::new();
 		let mut globals_sec = GlobalSection::new();
 		let mut gidx = 0u32;
+		// The marshalling scratch bump cursor (`Runtime.bump`): a mutable `i32` holding
+		// the next free offset in the exported linear memory. Allocated first and
+		// unconditionally — the memory + this global are emitted for every module — so
+		// any host-import emit site can encode `(ptr,len)` payloads without gating.
+		runtime.bump = gidx;
+		globals_sec.global(
+			GlobalType {
+				val_type: ValType::I32,
+				mutable: true,
+				shared: false,
+			},
+			&ConstExpr::i32_const(0),
+		);
+		gidx += 1;
 		let alloc_slot = |globals_sec: &mut GlobalSection, gidx: &mut u32| {
 			let val_idx = *gidx;
 			globals_sec.global(
@@ -676,12 +751,26 @@ impl Module {
 		for tag in &host_order {
 			let ty = if tag == "float_to_str" {
 				ftypes.for_float_to_str()
+			} else if is_byte_writer(tag) {
+				ftypes.for_host_write()
+			} else if tag == "io-copyout" {
+				ftypes.for_io_copyout()
+			} else if tag == "io-last-error" {
+				ftypes.for_io2()
+			} else if is_io_host(tag) {
+				if io_uses_io4(tag) {
+					ftypes.for_io4()
+				} else {
+					ftypes.for_io2()
+				}
 			} else if is_f64_unary_host(tag) {
 				ftypes.for_f64_unary()
-			} else if is_net_sync(tag) {
-				ftypes.for_net_sync()
-			} else if tag == "net-accept" {
-				ftypes.for_net_accept()
+			} else if tag == "net-listen" || tag == "net-connect" || tag == "net-accept" {
+				ftypes.for_net_listen()
+			} else if tag == "net-close" {
+				ftypes.for_net_close()
+			} else if tag == "net-local-addr" {
+				ftypes.for_net_local_addr()
 			} else if tag == "net-read" || tag == "net-write" {
 				ftypes.for_net_rw()
 			} else if tag == "net-poll" {
@@ -743,7 +832,21 @@ impl Module {
 			if host_sig(tag).is_some() {
 				functions.function(ftypes.for_arity(1));
 				let host_idx = host_index[tag];
-				code.function(&build_host_value_wrapper(host_idx));
+				// Only byte-payload writers (`print`, …) are used as first-class values
+				// in practice; they marshal the arg into scratch like the direct call.
+				if is_byte_writer(tag) {
+					let send = runtime
+						.idx(Helper::MarshalSend)
+						.expect("a writer value-wrapper needs __send_bytes");
+					// Raw writers don't render via `__tostring`; pass `send` as a dummy.
+					let ts = runtime.idx(Helper::ToString).unwrap_or(send);
+					code.function(&build_host_value_wrapper(tag, host_idx, send, ts));
+				} else {
+					diags.push(format!(
+						"host import `{tag}` used as a first-class value is not supported"
+					));
+					code.function(&Function::new(vec![]));
+				}
 			} else {
 				let arity = builtin_arity(tag).unwrap();
 				functions.function(ftypes.for_arity(arity));
@@ -783,7 +886,21 @@ impl Module {
 		// final, so the type section is built last but placed first.
 		let types: TypeSection = ftypes.encode();
 
+		// The marshalling scratch: one exported linear memory (initially one 64KiB
+		// page, growable). Host imports read/write byte payloads through it instead of
+		// reflecting GC `$value` fields. Emitted unconditionally — every artifact gets
+		// it, so a host can always find the `"memory"` export.
+		let mut memory = MemorySection::new();
+		memory.memory(MemoryType {
+			minimum: 1,
+			maximum: None,
+			memory64: false,
+			shared: false,
+			page_size_log2: None,
+		});
+
 		let mut exports = ExportSection::new();
+		exports.export("memory", ExportKind::Memory, 0);
 		// An async program enters through `__task_entry` (which drives `main`'s
 		// returned task); a sync program enters the IR entry directly.
 		let entry_export = if is_async {
@@ -804,6 +921,7 @@ impl Module {
 		module.section(&imports);
 		module.section(&functions);
 		module.section(&tables);
+		module.section(&memory);
 		module.section(&globals_sec);
 		module.section(&exports);
 		module.section(&elements);

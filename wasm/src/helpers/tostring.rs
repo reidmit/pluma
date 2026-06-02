@@ -92,6 +92,9 @@ pub(crate) fn build_tostring_fn(
 	bc: u32,
 	float_to_str: u32,
 	dict_entries: u32,
+	alloc: u32,
+	load_bytes: u32,
+	bump: u32,
 	lits: ToStringLits,
 ) -> Function {
 	let bv = types::T_BYTES;
@@ -107,6 +110,8 @@ pub(crate) fn build_tostring_fn(
 	let len = w.local(ValType::I32); // float len; also bytes-arm write position
 	let byte = w.local(ValType::I32); // bytes-arm current byte
 	let nib = w.local(ValType::I32); // bytes-arm hex nibble scratch
+	let rem = w.local(ValType::I64); // duration-arm remaining nanos
+	let seg = w.local(ValType::I64); // duration-arm current-unit count
 
 	// Push a `$bytes` array for a data-segment literal.
 	let lit_bytes = |w: &mut Wat, (off, len): (u32, u32)| {
@@ -191,21 +196,21 @@ pub(crate) fn build_tostring_fn(
 			.struct_get(types::T_BOOL, 1);
 		w.if_else(|w| mk_lit(w, lits.tru), |w| mk_lit(w, lits.fals));
 	});
-	// FLOAT -> host float_to_str into a scratch $bytes, trim to length.
+	// FLOAT -> host `float_to_str` writes the formatted bytes into scratch memory at
+	// offset 0 (the host can't touch a GC array); copy them out into a GC `$bytes`.
+	// A float renders to ≤ 24 bytes, well under the 32-byte cap, so no grow/retry.
 	w.local_get(ta).i32(types::TAG_FLOAT).i32_eq();
 	w.if_(|w| {
-		w.i32(32).array_new_default(bv).local_set(buf);
+		// Reset the bump cursor and reserve 32 bytes — `__alloc` returns offset 0.
+		w.i32(0).global_set(bump);
+		w.i32(32).call(alloc).drop();
+		// float_to_str(f64, ptr=0, cap=32) -> len
 		w.local_get(v)
 			.ref_cast(types::T_FLOAT)
 			.struct_get(types::T_FLOAT, 1);
-		w.local_get(buf).call(float_to_str).local_set(len); // (f64, buf) -> len
-		w.local_get(len).array_new_default(bv).local_set(acc);
-		w.local_get(acc)
-			.i32(0)
-			.local_get(buf)
-			.i32(0)
-			.local_get(len)
-			.array_copy(bv, bv);
+		w.i32(0).i32(32).call(float_to_str).local_set(len);
+		// acc = __load_bytes(0, len)
+		w.i32(0).local_get(len).call(load_bytes).local_set(acc);
 		wrap(w);
 	});
 
@@ -456,6 +461,81 @@ pub(crate) fn build_tostring_fn(
 		});
 		cat_lit(w, lits.rbrace);
 		wrap(w);
+	});
+
+	// DURATION -> canonical descending d/h/m/s/ms/us/ns segments (mirrors
+	// `host::format_duration` / `vm::value::format_duration`). Reuses `__int_str` for
+	// each segment's count and `__bytesconcat` to fold count + unit suffix into `acc`.
+	// One segment per unit whose divisor `rem` still covers; `0` renders as `"0s"`.
+	// `seg_unit` appends `<rem/per><suffix>` and reduces `rem %= per`.
+	let seg_unit = |w: &mut Wat, per: i64, suffix: &[u8]| {
+		w.local_get(rem).i64(per).i64_ge_s();
+		w.if_(|w| {
+			// seg = rem / per
+			w.local_get(rem).i64(per).i64_div_s().local_set(seg);
+			// acc = bytesconcat(acc, bytes-of(__int_str(box seg)))
+			w.local_get(acc);
+			w.local_get(seg)
+				.box_int()
+				.call(int_str)
+				.ref_cast(types::T_STR)
+				.struct_get(types::T_STR, 1);
+			w.call(bc).local_set(acc);
+			// acc = bytesconcat(acc, suffix)
+			w.local_get(acc);
+			for &c in suffix {
+				w.i32(c as i32);
+			}
+			w.array_new_fixed(bv, suffix.len() as u32);
+			w.call(bc).local_set(acc);
+			// rem %= per
+			w.local_get(rem).i64(per).i64_rem_s().local_set(rem);
+		});
+	};
+	w.local_get(ta).i32(types::TAG_DURATION).i32_eq();
+	w.if_(|w| {
+		// `acc` is initialized unconditionally up front (a non-nullable `(ref $bytes)`
+		// local must be definitely-assigned before any read; the negative case below
+		// overrides it). Start empty.
+		w.i32(0).array_new_default(bv).local_set(acc); // ""
+		// nanos live in the `$int`-shaped box's field 1.
+		w.local_get(v)
+			.ref_cast(types::T_INT)
+			.struct_get(types::T_INT, 1)
+			.local_set(rem);
+		// 0 -> "0s".
+		w.local_get(rem).i64_eqz();
+		w.if_(|w| {
+			w.i32(types::TAG_STR);
+			w.i32(0x30).i32(0x73).array_new_fixed(bv, 2); // "0s"
+			w.struct_new(types::T_STR).ret();
+		});
+		// Sign: negative -> leading "-" and operate on the magnitude.
+		w.local_get(rem).i64(0).i64_lt_s();
+		w.if_(|w| {
+			w.i32(0x2d).array_new_fixed(bv, 1).local_set(acc); // "-"
+			w.i64(0).local_get(rem).i64_sub().local_set(rem);
+		});
+		seg_unit(w, 86_400_000_000_000, b"d");
+		seg_unit(w, 3_600_000_000_000, b"h");
+		seg_unit(w, 60_000_000_000, b"m");
+		seg_unit(w, 1_000_000_000, b"s");
+		seg_unit(w, 1_000_000, b"ms");
+		seg_unit(w, 1_000, b"us");
+		seg_unit(w, 1, b"ns");
+		wrap(w);
+	});
+
+	// EXTERN -> the opaque "<extern>" (a host handle is never structurally printed).
+	// No Phase-1 value reaches this; mirrors `host::format_value`'s extern arm.
+	w.local_get(ta).i32(types::TAG_EXTERN).i32_eq();
+	w.if_(|w| {
+		w.i32(types::TAG_STR);
+		for &c in b"<extern>" {
+			w.i32(c as i32);
+		}
+		w.array_new_fixed(bv, 8);
+		w.struct_new(types::T_STR).ret();
 	});
 
 	// Unreachable: every value tag is handled above.

@@ -27,7 +27,7 @@ use wasm_encoder::{Function, ValType};
 
 use crate::helpers::wat::{Local, Wat};
 use crate::runtime::sched::{NO_AWAITER, NO_SCOPE, ROOT_SCOPE, fiber, focus, outcome, scope, wait};
-use crate::runtime::{NetImports, TaskGlobals, TaskLits, act_kind, task_kind};
+use crate::runtime::{NetImports, NetMarshal, TaskGlobals, TaskLits, act_kind, task_kind};
 use crate::types;
 
 // ==========================================================================
@@ -251,6 +251,7 @@ pub(crate) fn build_pump_fn(
 	drain_next: u32,
 	arity1: u32,
 	net: Option<NetImports>,
+	net_m: Option<NetMarshal>,
 	g: TaskGlobals,
 	lits: TaskLits,
 ) -> Function {
@@ -534,33 +535,72 @@ pub(crate) fn build_pump_fn(
 					);
 				});
 
-				// core.net suspending ops: do the non-blocking host call, then settle
-				// the produced `result` value — or, on would-block, park on socket
-				// readiness (`wait::IO`, re-Started from `fiber::RETRY` by the block
-				// step). token = fid, so the host keys the reactor by the fiber id.
-				if let Some(net) = net {
+				// core.net suspending ops (ABI.md Phase 1): marshal byte payloads through
+				// scratch, do the non-blocking host call, then settle the produced
+				// `result` value — or, on would-block, park on socket readiness
+				// (`wait::IO`, re-Started from `fiber::RETRY` by the block step). token =
+				// fid, so the host keys the reactor by the fiber id. Socket ids are passed
+				// unboxed (i32); the host returns `(status, n)`.
+				if let (Some(net), Some(nm)) = (net, net_m) {
+					// accept: (fid, listener-id) -> (status, conn-id). ok = boxed conn-id.
 					w.local_get(tk).i32(task_kind::NET_ACCEPT).i32_eq();
 					w.if_(|w| {
 						w.local_get(fid);
-						elem(w, tp, 0); // listener
+						elem(w, tp, 0);
+						unbox_i_any(w); // listener id
 						w.call(net.accept);
-						net_settle(w, g, fid, fval, fkind, true, lits);
+						net_settle(w, g, fid, fval, fkind, nm, |w, n| {
+							box_i(w, |w| {
+								w.local_get(n);
+							});
+						});
 					});
+					// read: (fid, conn, dst, max) -> (status, len). cap = max, so no
+					// overflow; ok payload = `$bytes` copied out of scratch.
 					w.local_get(tk).i32(task_kind::NET_READ).i32_eq();
 					w.if_(|w| {
+						let dst = w.local(ValType::I32);
+						let max = w.local(ValType::I32);
+						w.i32(0).global_set(nm.bump);
+						elem(w, tp, 1);
+						unbox_i_any(w);
+						w.local_set(max); // max bytes
+						w.local_get(max).call(nm.alloc).local_set(dst);
 						w.local_get(fid);
-						elem(w, tp, 0); // connection
-						elem(w, tp, 1); // max bytes
+						elem(w, tp, 0);
+						unbox_i_any(w); // connection id
+						w.local_get(dst).local_get(max);
 						w.call(net.read);
-						net_settle(w, g, fid, fval, fkind, false, lits);
+						net_settle(w, g, fid, fval, fkind, nm, move |w, n| {
+							w.i32(types::TAG_BYTES);
+							w.local_get(dst).local_get(n).call(nm.load);
+							w.struct_new(types::T_STR);
+						});
 					});
+					// write: (fid, conn, src, len) -> (status, n). ok = boxed byte count.
 					w.local_get(tk).i32(task_kind::NET_WRITE).i32_eq();
 					w.if_(|w| {
+						let bytes = w.local(types::bytes_ref());
+						let src = w.local(ValType::I32);
+						let blen = w.local(ValType::I32);
+						w.i32(0).global_set(nm.bump);
+						elem(w, tp, 1);
+						w.ref_cast(types::T_STR)
+							.struct_get(types::T_STR, 1)
+							.local_set(bytes);
+						w.local_get(bytes).array_len().local_set(blen);
+						w.local_get(blen).call(nm.alloc).local_set(src);
+						w.local_get(bytes).local_get(src).call(nm.store);
 						w.local_get(fid);
-						elem(w, tp, 0); // connection
-						elem(w, tp, 1); // bytes
+						elem(w, tp, 0);
+						unbox_i_any(w); // connection id
+						w.local_get(src).local_get(blen);
 						w.call(net.write);
-						net_settle(w, g, fid, fval, fkind, true, lits);
+						net_settle(w, g, fid, fval, fkind, nm, |w, n| {
+							box_i(w, |w| {
+								w.local_get(n);
+							});
+						});
 					});
 				}
 
@@ -1952,11 +1992,22 @@ fn timer_entry(w: &mut Wat, at: impl FnOnce(&mut Wat), kind: i32, arg: impl FnOn
 	w.struct_new(types::T_TUPLE);
 }
 
-/// Unbox the `$int`(-shaped) value on top of the stack to an i32.
+/// Unbox the *heap* `$int`(-shaped) value on top of the stack to an i32. The
+/// scheduler's own ids (fiber/scope) are always heap-boxed (`box_i`), so this is safe
+/// for them — but NOT for arbitrary user ints, which ride as `i31ref` immediates when
+/// small (use `unbox_i_any` for those, e.g. a net `max` arg).
 fn unbox_i(w: &mut Wat) {
 	w.ref_cast(types::T_INT)
 		.struct_get(types::T_INT, 1)
 		.i32_wrap_i64();
+}
+
+/// i31-aware unbox of a boxed `int` on top of the stack to an i32 (handles both the
+/// `i31ref` small-int immediate and a heap `$int`). The suspending net ops take
+/// user-provided ints (the read `max`) and socket ids that may be either form, so
+/// they unbox through this rather than the heap-only `unbox_i`.
+fn unbox_i_any(w: &mut Wat) {
+	w.unbox_int().i32_wrap_i64();
 }
 
 /// Push the logical length (field 2) of the `$list` held in global `gl` — NOT
@@ -2289,14 +2340,12 @@ fn net_settle(
 	fid: Local,
 	fval: Local,
 	fkind: Local,
-	box_n: bool,
-	lits: TaskLits,
+	nm: NetMarshal,
+	build_ok: impl FnOnce(&mut Wat, Local),
 ) {
-	let payload = w.local(types::value_ref());
 	let n = w.local(ValType::I32);
 	let status = w.local(ValType::I32);
-	w.local_set(payload);
-	w.local_set(n);
+	w.local_set(n); // the `n`/`len` channel
 	w.local_set(status);
 	w.local_get(status).i32(1).i32_eq(); // would-block?
 	w.if_else(
@@ -2311,27 +2360,18 @@ fn net_settle(
 			w.br("ret");
 		},
 		|w| {
-			// Ready: status 0 → `ok`, status 2 → `err` (a `result` value either way).
-			w.local_get(status).i32_eqz();
+			// Ready: build a payload-or-null and shape it through `__io_result` — status
+			// 0 → `ok <payload>`, non-zero → null → `err (io-last-error())` (the message
+			// was set host-side, same channel as `core.io`).
+			w.local_get(status).i32(2).i32_eq(); // err?
 			w.if_result(
 				types::value_ref(),
 				|w| {
-					push_result(w, lits.ok_tag, lits.ok_name, |w| {
-						if box_n {
-							box_i(w, |w| {
-								w.local_get(n);
-							});
-						} else {
-							w.local_get(payload);
-						}
-					});
+					w.ref_null(types::T_VALUE); // err → null
 				},
-				|w| {
-					push_result(w, lits.err_tag, lits.err_name, |w| {
-						w.local_get(payload);
-					});
-				},
+				|w| build_ok(w, n), // ok → the op's payload
 			);
+			w.call(nm.io_result);
 			w.local_set(fval);
 			w.i32(focus::OK).local_set(fkind);
 			w.br("main");

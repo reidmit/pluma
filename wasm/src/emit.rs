@@ -13,8 +13,9 @@ use wasm_encoder::*;
 use crate::Diagnostics;
 use crate::async_lower::TASK_ENUM;
 use crate::runtime::{
-	GlobalKind, GlobalSlot, Helper, Runtime, WIRE_FNV_OFFSET, host_sig, is_f64_unary_host,
-	is_inline_builtin, is_io_host, is_io_result, is_net_sync, task_builtin_kind, task_kind,
+	GlobalKind, GlobalSlot, Helper, IoKind, Runtime, WIRE_FNV_OFFSET, host_sig, io_kind,
+	is_byte_writer, is_f64_unary_host, is_inline_builtin, is_io_host, is_net_sync, is_raw_writer,
+	task_builtin_kind, task_kind,
 };
 use crate::scan::{
 	StrPool, block_has_pushdefer, builtin_var_tags, compute_nominal, ctor_var_tags,
@@ -1694,26 +1695,17 @@ impl<'a> FnEmitter<'a> {
 			self.push_nothing();
 			return;
 		};
-		// `core.io` host imports: push the real args, then a universal type witness
-		// (so the host can build its `$value` return), then call. The file/stdin
-		// reads + writes return a primitive `$value`-or-null wrapped into `ok`/`err`
-		// by `__io_result`; `io-file-exists`/`io-is-dir` return a bare `$bool`.
+		// Byte-payload writers (`print`/`io.write*`/`io.fail`): render the arg into the
+		// scratch memory and pass `(ptr=0, len)` to the `(i32,i32) -> ()` host import.
+		if is_byte_writer(tag) {
+			self.emit_byte_writer(tag, idx, &args[0]);
+			return;
+		}
+		// `core.io` host imports: marshal path/data args into scratch, call the
+		// `(i32…) -> i32` import, then shape the `i32` result back into a `$value`
+		// (a `$str`/`$bytes`/`$list` payload, a `nothing`/null status, or a `$bool`).
 		if is_io_host(tag) {
-			for a in args {
-				self.atom(a);
-			}
-			self.emit_io_witness();
-			self.ins(Instruction::Call(idx));
-			if is_io_result(tag) {
-				let Some(shaper) = self.runtime.idx(Helper::IoResult) else {
-					self
-						.diags
-						.push(format!("`{tag}` needs the __io_result shaper"));
-					self.push_nothing();
-					return;
-				};
-				self.ins(Instruction::Call(shaper));
-			}
+			self.emit_io(tag, idx, args);
 			return;
 		}
 		for a in args {
@@ -1725,6 +1717,252 @@ impl<'a> FnEmitter<'a> {
 		if !host_sig(tag).map(|s| s.returns_value).unwrap_or(true) {
 			self.push_nothing();
 		}
+	}
+
+	/// A byte-payload writer (`print`/`io.write*`/`io.fail`): render `arg` into the
+	/// scratch memory and call its `(i32 ptr, i32 len) -> ()` host import. Formatted
+	/// writers render via `__tostring` (the value's Display) then take the `$str`
+	/// backing; the `*-bytes` raw writers take the `bytes` value's `$bytes` backing
+	/// directly. `__send_bytes` copies it to scratch offset 0 and returns the length;
+	/// the host appends a newline for the `print`-family variants. Returns `nothing`
+	/// (`io.fail` traps host-side before returning).
+	fn emit_byte_writer(&mut self, tag: &str, idx: u32, arg: &Atom) {
+		let Some(send) = self.runtime.idx(Helper::MarshalSend) else {
+			self.diags.push(format!("`{tag}` needs __send_bytes"));
+			self.push_nothing();
+			return;
+		};
+		// Push the `$bytes` to send: the raw backing, or the rendered Display.
+		if is_raw_writer(tag) {
+			self.str_bytes(arg);
+		} else {
+			let Some(ts) = self.runtime.idx(Helper::ToString) else {
+				self.diags.push(format!("`{tag}` needs __tostring"));
+				self.push_nothing();
+				return;
+			};
+			self.atom(arg);
+			self.ins(Instruction::Call(ts));
+			self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+				types::T_STR,
+			)));
+			self.ins(Instruction::StructGet {
+				struct_type_index: types::T_STR,
+				field_index: 1,
+			});
+		}
+		// len = __send_bytes($bytes); call writer(ptr=0, len).
+		self.ins(Instruction::Call(send));
+		let len = self.fresh_local(ValType::I32);
+		self.ins(Instruction::LocalSet(len));
+		self.ins(Instruction::I32Const(0));
+		self.ins(Instruction::LocalGet(len));
+		self.ins(Instruction::Call(idx));
+		self.push_nothing();
+	}
+
+	/// Reset the scratch bump cursor to 0 — call once at the start of a host call's
+	/// arg-encoding, before `__alloc`'ing this call's payloads.
+	fn reset_bump(&mut self) {
+		self.ins(Instruction::I32Const(0));
+		self.ins(Instruction::GlobalSet(self.runtime.bump));
+	}
+
+	/// Encode a string/bytes-valued atom's `$bytes` backing into scratch: `__alloc`
+	/// its length, `__store_bytes` it, and return `(ptr_local, len_local)`. The caller
+	/// must have `reset_bump`'d first; successive calls bump forward so several
+	/// payloads coexist for one host call (e.g. write-file's path + data).
+	fn marshal_strlike_arg(&mut self, a: &Atom, alloc: u32, store: u32) -> (u32, u32) {
+		let bytes_l = self.fresh_local(types::bytes_ref());
+		self.str_bytes(a); // value -> $bytes (field 1 of the $str/$bytes struct)
+		self.ins(Instruction::LocalSet(bytes_l));
+		let len_l = self.fresh_local(ValType::I32);
+		self.ins(Instruction::LocalGet(bytes_l));
+		self.ins(Instruction::ArrayLen);
+		self.ins(Instruction::LocalSet(len_l));
+		let ptr_l = self.fresh_local(ValType::I32);
+		self.ins(Instruction::LocalGet(len_l));
+		self.ins(Instruction::Call(alloc));
+		self.ins(Instruction::LocalSet(ptr_l));
+		self.ins(Instruction::LocalGet(bytes_l));
+		self.ins(Instruction::LocalGet(ptr_l));
+		self.ins(Instruction::Call(store));
+		(ptr_l, len_l)
+	}
+
+	/// A marshalled `core.io` op: encode its path/data args into scratch, call the
+	/// `(i32…) -> i32` host import, and shape the `i32` result back into a `$value`.
+	/// Reads length-probe a `dst` buffer (an overflow beyond the initial cap drains
+	/// the host's stash via `__io_copyout`); writers wrap a `status` into `ok nothing`
+	/// / `err`; the queries box a `bool`. `__io_result` does the `ok`/`err` wrapping
+	/// (a null payload = failure), so the host never builds the `result` enum.
+	fn emit_io(&mut self, tag: &str, idx: u32, args: &[Atom]) {
+		let kind = io_kind(tag).expect("emit_io on a non-io tag");
+		let (Some(alloc), Some(store)) = (
+			self.runtime.idx(Helper::MarshalAlloc),
+			self.runtime.idx(Helper::MarshalStore),
+		) else {
+			self
+				.diags
+				.push(format!("`{tag}` needs the marshalling helpers"));
+			self.push_nothing();
+			return;
+		};
+		// Initial read buffer cap: most lines/files/dir-listings fit, so the common
+		// path is a single host call; a larger read takes the overflow branch.
+		const READ_CAP: i32 = 4096;
+		self.reset_bump();
+		match kind {
+			IoKind::PathBool => {
+				let (pp, pl) = self.marshal_strlike_arg(&args[0], alloc, store);
+				self.ins(Instruction::LocalGet(pp));
+				self.ins(Instruction::LocalGet(pl));
+				self.ins(Instruction::Call(idx)); // -> i32 bool
+				let b = self.fresh_local(ValType::I32);
+				self.ins(Instruction::LocalSet(b));
+				self.ins(Instruction::I32Const(types::TAG_BOOL));
+				self.ins(Instruction::LocalGet(b));
+				self.ins(Instruction::StructNew(types::T_BOOL));
+			}
+			IoKind::PathStatus | IoKind::WriteFile => {
+				let (pp, pl) = self.marshal_strlike_arg(&args[0], alloc, store);
+				self.ins(Instruction::LocalGet(pp));
+				self.ins(Instruction::LocalGet(pl));
+				if kind == IoKind::WriteFile {
+					let (dp, dl) = self.marshal_strlike_arg(&args[1], alloc, store);
+					self.ins(Instruction::LocalGet(dp));
+					self.ins(Instruction::LocalGet(dl));
+				}
+				self.ins(Instruction::Call(idx)); // -> i32 status
+				self.shape_io_status(tag);
+			}
+			IoKind::ReadStr
+			| IoKind::ReadBytes
+			| IoKind::ReadFileStr
+			| IoKind::ReadFileBytes
+			| IoKind::ReadDir => {
+				// Path reads encode the path arg first; the unit-arg reads ignore it.
+				let path = matches!(
+					kind,
+					IoKind::ReadFileStr | IoKind::ReadFileBytes | IoKind::ReadDir
+				)
+				.then(|| self.marshal_strlike_arg(&args[0], alloc, store));
+				self.emit_io_read(tag, idx, path, kind, READ_CAP, alloc);
+			}
+		}
+	}
+
+	/// The length-probe read core: `dst = __alloc(cap)`; call the import (`(dst, cap)`
+	/// or `(path, plen, dst, cap)`) → `len`; on `len > cap` (overflow) re-`__alloc`
+	/// the true size and `__io_copyout` the host's stash; then build the payload from
+	/// `(dst, len)` (or null when `len < 0`) and wrap it via `__io_result`.
+	fn emit_io_read(
+		&mut self,
+		tag: &str,
+		idx: u32,
+		path: Option<(u32, u32)>,
+		kind: IoKind,
+		cap: i32,
+		alloc: u32,
+	) {
+		let (Some(load), Some(io_result)) = (
+			self.runtime.idx(Helper::MarshalLoad),
+			self.runtime.idx(Helper::IoResult),
+		) else {
+			self
+				.diags
+				.push(format!("`{tag}` needs the io read helpers"));
+			self.push_nothing();
+			return;
+		};
+		let copyout = match self.host_index.get("io-copyout").copied() {
+			Some(c) => c,
+			None => {
+				self
+					.diags
+					.push(format!("`{tag}` needs the io-copyout import"));
+				self.push_nothing();
+				return;
+			}
+		};
+		let dst = self.fresh_local(ValType::I32);
+		self.ins(Instruction::I32Const(cap));
+		self.ins(Instruction::Call(alloc));
+		self.ins(Instruction::LocalSet(dst));
+		// Call: io4 reads pass (path, plen) first; io2 reads pass just (dst, cap).
+		if let Some((pp, pl)) = path {
+			self.ins(Instruction::LocalGet(pp));
+			self.ins(Instruction::LocalGet(pl));
+		}
+		self.ins(Instruction::LocalGet(dst));
+		self.ins(Instruction::I32Const(cap));
+		self.ins(Instruction::Call(idx)); // -> i32 len
+		let len = self.fresh_local(ValType::I32);
+		self.ins(Instruction::LocalSet(len));
+		// Overflow: the bytes didn't fit `cap` — reserve the true size, drain the stash.
+		self.ins(Instruction::LocalGet(len));
+		self.ins(Instruction::I32Const(cap));
+		self.ins(Instruction::I32GtS);
+		self.ins(Instruction::If(BlockType::Empty));
+		self.ins(Instruction::LocalGet(len));
+		self.ins(Instruction::Call(alloc));
+		self.ins(Instruction::LocalSet(dst));
+		self.ins(Instruction::LocalGet(dst));
+		self.ins(Instruction::Call(copyout));
+		self.ins(Instruction::End);
+		// payload-or-null: `len < 0` is failure (null → `__io_result` builds `err`).
+		self.ins(Instruction::LocalGet(len));
+		self.ins(Instruction::I32Const(0));
+		self.ins(Instruction::I32LtS);
+		self.ins(Instruction::If(BlockType::Result(types::value_ref())));
+		self.push_nothing();
+		self.ins(Instruction::Else);
+		match kind {
+			IoKind::ReadDir => {
+				let read_names = self
+					.runtime
+					.idx(Helper::MarshalReadNames)
+					.expect("read-dir needs __read_names");
+				self.ins(Instruction::LocalGet(dst));
+				self.ins(Instruction::LocalGet(len));
+				self.ins(Instruction::Call(read_names));
+			}
+			_ => {
+				// `$str` / `$bytes` share the `{tag, $bytes}` struct; only the tag differs.
+				let tag_const = match kind {
+					IoKind::ReadBytes | IoKind::ReadFileBytes => types::TAG_BYTES,
+					_ => types::TAG_STR,
+				};
+				self.ins(Instruction::I32Const(tag_const));
+				self.ins(Instruction::LocalGet(dst));
+				self.ins(Instruction::LocalGet(len));
+				self.ins(Instruction::Call(load));
+				self.ins(Instruction::StructNew(types::T_STR));
+			}
+		}
+		self.ins(Instruction::End);
+		self.ins(Instruction::Call(io_result));
+	}
+
+	/// Shape a writer/`mkdir`/`delete` `i32 status` into the value `__io_result`
+	/// wraps: `0` → a heap `nothing` (`ok nothing`), non-zero → null (`err`).
+	fn shape_io_status(&mut self, tag: &str) {
+		let Some(io_result) = self.runtime.idx(Helper::IoResult) else {
+			self
+				.diags
+				.push(format!("`{tag}` needs the __io_result shaper"));
+			self.push_nothing();
+			return;
+		};
+		self.ins(Instruction::I32Eqz); // status == 0 (ok)?
+		self.ins(Instruction::If(BlockType::Result(types::value_ref())));
+		// A successful `nothing` must be non-null (null = failure to `__io_result`).
+		self.ins(Instruction::I32Const(types::TAG_NOTHING));
+		self.ins(Instruction::StructNew(types::T_VALUE));
+		self.ins(Instruction::Else);
+		self.push_nothing();
+		self.ins(Instruction::End);
+		self.ins(Instruction::Call(io_result));
 	}
 
 	/// `debug x`: print `[<module>:<line>] <to-string x>` (the host `print` import
@@ -1764,121 +2002,98 @@ impl<'a> FnEmitter<'a> {
 			struct_type_index: types::T_STR,
 			field_index: 1,
 		});
-		// Concat (prefix ++ rendered value), rewrap as a `$str`.
+		// Concat (prefix ++ rendered value) into the line `$bytes`.
 		self.ins(Instruction::Call(bc));
-		let tmp = self.fresh_local(types::bytes_ref());
-		self.ins(Instruction::LocalSet(tmp));
-		self.ins(Instruction::I32Const(types::TAG_STR));
-		self.ins(Instruction::LocalGet(tmp));
-		self.ins(Instruction::StructNew(types::T_STR));
-		// Print the assembled line (host appends the newline).
-		match self.host_index.get("print").copied() {
-			Some(idx) => self.ins(Instruction::Call(idx)),
-			None => self
+		// Marshal the line into scratch and print it (host appends the newline).
+		let (Some(send), Some(print_idx)) = (
+			self.runtime.idx(Helper::MarshalSend),
+			self.host_index.get("print").copied(),
+		) else {
+			self
 				.diags
-				.push("debug needs the `print` host import".to_string()),
-		}
+				.push("debug needs __send_bytes + the `print` host import".to_string());
+			self.atom(arg);
+			return;
+		};
+		self.ins(Instruction::Call(send)); // ($bytes) -> len
+		let len = self.fresh_local(ValType::I32);
+		self.ins(Instruction::LocalSet(len));
+		self.ins(Instruction::I32Const(0));
+		self.ins(Instruction::LocalGet(len));
+		self.ins(Instruction::Call(print_idx));
 		// `debug` returns its argument unchanged.
 		self.atom(arg);
 	}
 
-	/// Push the universal `core.io` type witness `[nothing, "", [], true]` — a
-	/// `$list` whose four elements sample the `$value`, `$str` (+ its `$bytes`
-	/// backing), `$list` (+ its `$valarray` backing), and `$bool` GC types. Every io
-	/// host import takes it as a trailing arg so the host can reflect these types and
-	/// build its `$value` return without a type-by-index lookup (the host caches them
-	/// on the first call). Built inline since this module owns all the types.
-	fn emit_io_witness(&mut self) {
-		// outer `$list` = { TAG_LIST, $valarray[ nothing, "", [], true ] }.
-		// elem 0: a heap `$value` (TAG_NOTHING). General `nothing` is a null reference
-		// (no allocation), but the witness needs a *concrete* `$value` struct here so
-		// the host can reflect that type to build its io `nothing` returns. (This lone
-		// heap sample is built once at init; `value_tag` treats null and this alike.)
-		self.ins(Instruction::I32Const(types::TAG_NOTHING));
-		self.ins(Instruction::StructNew(types::T_VALUE));
-		// elem 1: "" (`$str`, exposing `$str` + `$bytes`).
-		self.ins(Instruction::I32Const(types::TAG_STR));
-		self.ins(Instruction::ArrayNewFixed {
-			array_type_index: types::T_BYTES,
-			array_size: 0,
-		});
-		self.ins(Instruction::StructNew(types::T_STR));
-		// elem 2: [] (empty `$list`, exposing `$list` + `$valarray`).
-		self.ins(Instruction::ArrayNewFixed {
-			array_type_index: types::T_VALARRAY,
-			array_size: 0,
-		});
-		self.mk_list();
-		// elem 3: true (`$bool`).
-		self.ins(Instruction::I32Const(types::TAG_BOOL));
-		self.ins(Instruction::I32Const(1));
-		self.ins(Instruction::StructNew(types::T_BOOL));
-		// Pack the four into a `$valarray`, then the outer `$list`.
-		self.ins(Instruction::ArrayNewFixed {
-			array_type_index: types::T_VALARRAY,
-			array_size: 4,
-		});
-		self.mk_list();
-	}
-
-	/// Shape a synchronous `core.net` op into a `result`. Calls the host import —
-	/// `(args…, witness) -> (status:i32, n:i32, payload:$value)` — then wraps the
-	/// triple: status 0 → `ok` (boxing `n` for the id-returning ops, else the
-	/// `payload`); status 2 → `err payload`. (Sync ops never report would-block.)
-	/// `connect`'s static type is `task (result …)`, so its `result` is wrapped in a
-	/// Pure `$task`.
+	/// Shape a synchronous `core.net` op into a `result` over the marshalling ABI.
+	/// `listen`/`connect` encode the address into scratch and call `(addr, alen) ->
+	/// (status, id)`; `close` passes the unboxed socket id and calls `(id) -> status`;
+	/// `local-addr` length-probes the address string into scratch. Each shapes the
+	/// `(status, …)` return through `__io_result` (status 0 → `ok …`; non-zero → null
+	/// → `err (io-last-error())`, the message set host-side). `connect`'s static type
+	/// is `task (result …)`, so its `result` is wrapped in a Pure `$task`.
 	fn emit_net_sync(&mut self, tag: &str, args: &[Atom]) {
-		let Some(net) = self.runtime.net else {
+		let (Some(net), Some(alloc), Some(store), Some(io_result)) = (
+			self.runtime.net,
+			self.runtime.idx(Helper::MarshalAlloc),
+			self.runtime.idx(Helper::MarshalStore),
+			self.runtime.idx(Helper::IoResult),
+		) else {
 			self
 				.diags
-				.push(format!("`{tag}` needs the net host imports"));
+				.push(format!("`{tag}` needs the net marshalling helpers"));
 			self.push_nothing();
 			return;
 		};
-		let import = match tag {
-			"net-listen" => net.listen,
-			"net-close" => net.close,
-			"net-local-addr" => net.local_addr,
-			"net-connect" => net.connect,
+		// Address strings are short; the length-probe cap never overflows.
+		const ADDR_CAP: i32 = 256;
+		let wrap_task = tag == "net-connect";
+		self.reset_bump();
+		match tag {
+			"net-listen" | "net-connect" => {
+				// (addr, alen) -> (status, socket-id).
+				let import = if tag == "net-listen" {
+					net.listen
+				} else {
+					net.connect
+				};
+				let (ap, al) = self.marshal_strlike_arg(&args[0], alloc, store);
+				self.ins(Instruction::LocalGet(ap));
+				self.ins(Instruction::LocalGet(al));
+				self.ins(Instruction::Call(import));
+				self.shape_net_id_result(io_result);
+			}
+			"net-close" => {
+				// (id) -> status; reuse the io status → `ok nothing` / `err` shaper.
+				self.atom(&args[0]);
+				self.unbox_int();
+				self.ins(Instruction::I32WrapI64);
+				self.ins(Instruction::Call(net.close));
+				self.shape_io_status(tag);
+			}
+			"net-local-addr" => {
+				// (id, dst, cap) -> (status, len); ok payload = the address `$str`.
+				let id = self.fresh_local(ValType::I32);
+				self.atom(&args[0]);
+				self.unbox_int();
+				self.ins(Instruction::I32WrapI64);
+				self.ins(Instruction::LocalSet(id));
+				let dst = self.fresh_local(ValType::I32);
+				self.ins(Instruction::I32Const(ADDR_CAP));
+				self.ins(Instruction::Call(alloc));
+				self.ins(Instruction::LocalSet(dst));
+				self.ins(Instruction::LocalGet(id));
+				self.ins(Instruction::LocalGet(dst));
+				self.ins(Instruction::I32Const(ADDR_CAP));
+				self.ins(Instruction::Call(net.local_addr));
+				self.shape_net_str_result(io_result, dst);
+			}
 			other => {
 				self.diags.push(format!("`{other}` is not a sync net op"));
 				self.push_nothing();
 				return;
 			}
-		};
-		// `ok` wraps an int id (boxed from `n`) for listen/connect; close/local-addr
-		// carry their ok value in `payload` (nothing / the address string).
-		let box_n = matches!(tag, "net-listen" | "net-connect");
-		let wrap_task = tag == "net-connect";
-
-		// Host call: real args, then the universal type witness, → (status, n, payload).
-		for a in args {
-			self.atom(a);
 		}
-		self.emit_io_witness();
-		self.ins(Instruction::Call(import));
-		let payload = self.fresh_local(types::value_ref());
-		let n = self.fresh_local(ValType::I32);
-		self.ins(Instruction::LocalSet(payload));
-		self.ins(Instruction::LocalSet(n));
-		// status on top: 0 = ok, 2 = err. `eqz` → then-branch is the ok case.
-		self.ins(Instruction::I32Eqz);
-		self.ins(Instruction::If(BlockType::Result(types::value_ref())));
-		self.result_head(true);
-		if box_n {
-			self.ins(Instruction::I32Const(types::TAG_INT));
-			self.ins(Instruction::LocalGet(n));
-			self.ins(Instruction::I64ExtendI32S);
-			self.ins(Instruction::StructNew(types::T_INT));
-		} else {
-			self.ins(Instruction::LocalGet(payload));
-		}
-		self.result_tail();
-		self.ins(Instruction::Else);
-		self.result_head(false);
-		self.ins(Instruction::LocalGet(payload));
-		self.result_tail();
-		self.ins(Instruction::End);
 		if wrap_task {
 			// Wrap the `result` (on the stack) in `task.return result` — a Pure `$task`.
 			let r = self.fresh_local(types::value_ref());
@@ -1894,27 +2109,43 @@ impl<'a> FnEmitter<'a> {
 		}
 	}
 
-	/// Push the head of a `result` `$variant` — `{TAG_VARIANT, ok/err tag, name}` —
-	/// ready for the caller to push the single payload value then `result_tail`.
-	fn result_head(&mut self, is_ok: bool) {
-		let tag = if is_ok {
-			self.runtime.tasklits.ok_tag
-		} else {
-			self.runtime.tasklits.err_tag
-		};
-		self.ins(Instruction::I32Const(types::TAG_VARIANT));
-		self.ins(Instruction::I32Const(tag as i32));
-		self.string_const(&variant_display("__prelude__.result", tag, self.enums));
+	/// Shape a net op's `(status, socket-id)` return (on the stack) into a `result`:
+	/// status 0 → `ok <boxed id>`, non-zero → null → `err (io-last-error())`.
+	fn shape_net_id_result(&mut self, io_result: u32) {
+		let id = self.fresh_local(ValType::I32);
+		self.ins(Instruction::LocalSet(id));
+		self.ins(Instruction::I32Eqz); // status == 0 (ok)?
+		self.ins(Instruction::If(BlockType::Result(types::value_ref())));
+		self.ins(Instruction::I32Const(types::TAG_INT));
+		self.ins(Instruction::LocalGet(id));
+		self.ins(Instruction::I64ExtendI32S);
+		self.ins(Instruction::StructNew(types::T_INT));
+		self.ins(Instruction::Else);
+		self.push_nothing();
+		self.ins(Instruction::End);
+		self.ins(Instruction::Call(io_result));
 	}
 
-	/// Finish a one-payload `$variant` started by `result_head`: pack the value into
-	/// the payload `$valarray` and build the struct.
-	fn result_tail(&mut self) {
-		self.ins(Instruction::ArrayNewFixed {
-			array_type_index: types::T_VALARRAY,
-			array_size: 1,
-		});
-		self.ins(Instruction::StructNew(types::T_VARIANT));
+	/// Shape a net op's `(status, len)` return into a `result` whose ok payload is the
+	/// `$str` read out of scratch at `dst`: status 0 → `ok <str>`, non-zero → `err`.
+	fn shape_net_str_result(&mut self, io_result: u32, dst: u32) {
+		let load = self
+			.runtime
+			.idx(Helper::MarshalLoad)
+			.expect("net-local-addr needs __load_bytes");
+		let len = self.fresh_local(ValType::I32);
+		self.ins(Instruction::LocalSet(len));
+		self.ins(Instruction::I32Eqz); // status == 0 (ok)?
+		self.ins(Instruction::If(BlockType::Result(types::value_ref())));
+		self.ins(Instruction::I32Const(types::TAG_STR));
+		self.ins(Instruction::LocalGet(dst));
+		self.ins(Instruction::LocalGet(len));
+		self.ins(Instruction::Call(load));
+		self.ins(Instruction::StructNew(types::T_STR));
+		self.ins(Instruction::Else);
+		self.push_nothing();
+		self.ins(Instruction::End);
+		self.ins(Instruction::Call(io_result));
 	}
 
 	/// Emit a pure-compute builtin inline over the `$value` GC layout.

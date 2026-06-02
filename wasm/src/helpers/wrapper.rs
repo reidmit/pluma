@@ -356,15 +356,38 @@ pub(crate) fn build_builtin_wrapper(tag: &str, ord: &OrderingLits) -> Option<Fun
 
 /// Build the wasm wrapper for a single-arg host-import builtin used as a
 /// first-class value — e.g. `print` passed to `list.each xs print`. Env-first
-/// closure convention `(env, arg) -> value`: forward the boxed arg to the host
-/// import (`host_idx`), then return `nothing` (these imports — print/io writers
+/// closure convention `(env, arg) -> value`: marshal the arg the same way the
+/// direct call site does, then return `nothing` (these imports — print/io writers
 /// /io.fail — produce no value). A bare builtin has no runtime `$value`, so this
 /// is what a `MakeClosure` over the builtin lowers to.
-pub(crate) fn build_host_value_wrapper(host_idx: u32) -> Function {
+///
+/// The corpus only ever uses byte-payload *writers* (`print`, …) as values, so this
+/// renders the arg into scratch (via `__tostring`, or the raw `$bytes` backing for
+/// the `*-bytes` variants) and calls the `(i32 ptr, i32 len) -> ()` import with
+/// `(0, len)` — mirroring `emit::emit_byte_writer`.
+pub(crate) fn build_host_value_wrapper(
+	tag: &str,
+	host_idx: u32,
+	send: u32,
+	tostring: u32,
+) -> Function {
 	let mut w = Wat::new(2);
 	let arg = w.param(1); // param 0 is the (ignored) env.
-	w.local_get(arg);
-	w.call(host_idx);
+	let len = w.local(ValType::I32);
+	// Push the `$bytes` to send: raw backing, or the rendered Display.
+	if crate::runtime::is_raw_writer(tag) {
+		w.local_get(arg)
+			.ref_cast(types::T_STR)
+			.struct_get(types::T_STR, 1);
+	} else {
+		w.local_get(arg)
+			.call(tostring)
+			.ref_cast(types::T_STR)
+			.struct_get(types::T_STR, 1);
+	}
+	// len = __send_bytes($bytes); call writer(ptr=0, len); return nothing.
+	w.call(send).local_set(len);
+	w.i32(0).local_get(len).call(host_idx);
 	w.ref_null(types::T_VALUE);
 	w.finish()
 }

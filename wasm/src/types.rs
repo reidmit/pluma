@@ -40,7 +40,9 @@ pub const T_REF: u32 = 14; // struct { i32 tag, (mut ref null $value) cell }  �
 pub const T_DICT: u32 = 15; // struct { i32 tag, (ref null $value) root, i32 next_seq }  — persistent hash-trie
 pub const T_TASK: u32 = 16; // struct { i32 tag, i32 kind, (ref $valarray) payload }  — a cold async `task`
 pub const T_DNODE: u32 = 17; // struct { i32 tag, (ref null $valarray) kids, (ref null $valarray) ents, i64 leafhash }
-const T_FIRST_FUNC: u32 = 18;
+#[allow(dead_code)] // the type is emitted (encode); the const is referenced once the Phase-3 DOM/fetch emitter builds an $extern
+pub const T_EXTERN: u32 = 18; // struct { i32 tag, (ref null extern) handle }  — a host-owned resource handle
+const T_FIRST_FUNC: u32 = 19;
 
 // --------------------------------------------------------------------------
 // Runtime tags carried in the `$value` discriminant field. Mirror `vm::Value`'s
@@ -84,6 +86,13 @@ pub const TAG_TASK: i32 = 17;
 /// A `scope-handle` / `manual-scope-handle`: a `$int`-shaped box (`{ tag, i64 }`)
 /// carrying a scope id. The `scope-*` builtins read its id; never printed.
 pub const TAG_SCOPE_HANDLE: i32 = 18;
+/// A host-owned resource handle (`$extern`): a `{ tag, (ref null extern) }` wrapper
+/// boxing an engine-managed `externref` (a DOM node, a `fetch` response, …) so it can
+/// flow through Pluma code as an ordinary value. Compared by reference identity
+/// (`ref.eq` on the wrapper, like `$ref`); Display is the opaque `<extern>`; never
+/// structurally serialized (a handle must not cross the `wire`). No Phase-1 host
+/// import produces one — the `Platform::Browser` DOM/fetch imports (Phase 3) do.
+pub const TAG_EXTERN: i32 = 19;
 
 /// `(ref null $valarray)` — a reference to a value array (closure captures or
 /// variant payload).
@@ -149,6 +158,20 @@ pub fn bytes_ref() -> ValType {
 	})
 }
 
+/// `(ref null extern)` — an engine-managed host resource reference. Not an `eqref`,
+/// so it can't sit in a value slot directly; it rides inside a `$extern` wrapper
+/// struct (`T_EXTERN`) whose reference *is* an `eqref`. Used only as that wrapper's
+/// field type today (no Phase-1 import traffics one).
+pub fn extern_ref() -> ValType {
+	ValType::Ref(RefType {
+		nullable: true,
+		heap_type: HeapType::Abstract {
+			shared: false,
+			ty: AbstractHeapType::Extern,
+		},
+	})
+}
+
 /// `anyref` — the abstract top of the GC reference hierarchy. Host imports take
 /// their boxed args as `anyref` (the wasm caller passes a `(ref null $value)`,
 /// a valid subtype) so the host glue need not name the module's concrete types.
@@ -202,11 +225,44 @@ enum FuncKind {
 	ArrConcat,
 	/// The bytes-concat helper: `(bytes, bytes) -> bytes`.
 	BytesConcat,
-	/// The float-format host import: `(f64, anyref /*$bytes buf*/) -> i32 len`.
+	/// The float-format host import: `(f64, i32 ptr, i32 cap) -> i32 len`. The host
+	/// formats the float and writes its UTF-8 bytes into scratch at `ptr` (≤ `cap`),
+	/// returning the length; the box/unbox to `$float` happens in wasm.
 	FloatToStr,
+	/// A byte-payload writer host import: `(i32 ptr, i32 len) -> ()` — `print` /
+	/// `io.write*` / `io.fail`. wasm pre-renders the bytes into scratch (via
+	/// `__tostring` or the raw `$bytes` backing) and passes the `(ptr, len)` slice.
+	HostWrite,
 	/// A unary float math host import (log/exp/sin/cos): `(f64) -> f64`. The
 	/// box/unbox to `$float` happens in wasm, so the host stays a bare libm call.
 	F64Unary,
+	/// The scratch bump allocator `__alloc(i32 n) -> i32 ptr` — reserve `n` bytes in
+	/// the exported linear memory (growing it as needed), return the start offset.
+	MarshalAlloc,
+	/// `__store_bytes((ref $bytes) b, i32 ptr) -> ()` — copy a GC `$bytes` array into
+	/// scratch at `ptr` (the wasm→host byte-payload primitive).
+	MarshalStore,
+	/// `__load_bytes(i32 ptr, i32 len) -> (ref $bytes)` — copy `len` scratch bytes at
+	/// `ptr` into a fresh GC `$bytes` array (the host→wasm byte-payload primitive).
+	MarshalLoad,
+	/// `__send_bytes((ref $bytes)) -> i32 len` — reset the bump cursor and copy a GC
+	/// `$bytes` into scratch at offset 0, returning its length (the single-payload
+	/// convenience the writer emit sites + the `print`-as-value wrapper share).
+	MarshalSend,
+	/// A `core.io` host import with two i32 args → one i32 result: `(i32, i32) -> i32`.
+	/// Covers the stdin reads + `io-last-error` (`(dst, cap) -> len`), `delete`/`mkdir`
+	/// (`(path, plen) -> status`), and `exists`/`is-dir` (`(path, plen) -> bool`).
+	Io2,
+	/// A `core.io` host import with four i32 args → one i32 result: `(i32,i32,i32,i32)
+	/// -> i32`. Covers the path reads (`(path, plen, dst, cap) -> len`) and the file
+	/// writers (`(path, plen, data, dlen) -> status`).
+	Io4,
+	/// `__io_copyout(i32 dst) -> ()` — drain the host's read stash into scratch at
+	/// `dst` (the overflow path: a read whose bytes didn't fit the caller's first cap).
+	IoCopyout,
+	/// `__read_names(i32 ptr, i32 len) -> value` — split a NUL-terminated name blob in
+	/// scratch into a `$list` of `$str` (the `io.read-dir` host return shape).
+	MarshalReadNames,
 	/// A `wire` FNV mixer over a value: `(i64 hash, ref $value) -> i64`. Used by
 	/// both the recursive schema fingerprint and the string mixer.
 	WireMixVal,
@@ -222,13 +278,19 @@ enum FuncKind {
 	WireReadByte,
 	/// The decode varint source: `() -> i64` (reads a LEB128 varint / sets `g_err`).
 	WireReadVarint,
-	/// A synchronous `core.net` op (`listen`/`close`/`local-addr`/`connect`):
-	/// `(anyref arg, anyref witness) -> (i32 status, i32 n, ref null $value payload)`.
-	NetSync,
-	/// `net-accept`: `(i32 fid, anyref listener) -> (i32, i32, ref null $value)`.
-	NetAccept,
-	/// `net-read`/`net-write`: `(i32 fid, anyref conn, anyref arg) -> (i32, i32, ref null $value)`.
-	NetReadWrite,
+	/// A `core.net` op returning `(i32 status, i32 n)` from two i32 args:
+	/// `(i32, i32) -> (i32, i32)`. `net-listen`/`net-connect` (`(addr_ptr, alen) ->
+	/// (status, socket-id)`) and `net-accept` (`(fid, listener-id) -> (status, conn-id)`).
+	NetListen,
+	/// `net-close`: `(i32 id) -> i32 status`.
+	NetClose,
+	/// `net-local-addr`: `(i32 id, i32 dst, i32 cap) -> (i32 status, i32 len)` (the
+	/// address string is written into scratch at `dst`).
+	NetLocalAddr,
+	/// `net-read`/`net-write`: `(i32 fid, i32 conn, i32 ptr, i32 len_or_cap) -> (i32
+	/// status, i32 n)`. read writes ≤ `cap` bytes into scratch (returns `len`); write
+	/// reads `len` bytes from scratch (returns the count written).
+	NetRW,
 	/// The reactor block step: `net-poll(i64 deadline) -> i32 woken-fid`.
 	NetPoll,
 	/// Drop a reactor registration: `net-unwatch(i32 fid) -> ()`.
@@ -331,9 +393,14 @@ impl FuncTypes {
 		self.intern(FuncKind::BytesConcat)
 	}
 
-	/// The type index for the float-format host import: `(f64, anyref) -> i32`.
+	/// The type index for the float-format host import: `(f64, i32, i32) -> i32`.
 	pub fn for_float_to_str(&mut self) -> u32 {
 		self.intern(FuncKind::FloatToStr)
+	}
+
+	/// The type index for a byte-payload writer host import: `(i32, i32) -> ()`.
+	pub fn for_host_write(&mut self) -> u32 {
+		self.intern(FuncKind::HostWrite)
 	}
 
 	/// The type index for a unary float math host import: `(f64) -> f64`.
@@ -341,19 +408,64 @@ impl FuncTypes {
 		self.intern(FuncKind::F64Unary)
 	}
 
-	/// A synchronous `core.net` op: `(anyref, anyref) -> (i32, i32, ref null $value)`.
-	pub fn for_net_sync(&mut self) -> u32 {
-		self.intern(FuncKind::NetSync)
+	/// The scratch bump allocator `__alloc(i32) -> i32`.
+	pub fn for_marshal_alloc(&mut self) -> u32 {
+		self.intern(FuncKind::MarshalAlloc)
 	}
 
-	/// `net-accept`: `(i32 fid, anyref) -> (i32, i32, ref null $value)`.
-	pub fn for_net_accept(&mut self) -> u32 {
-		self.intern(FuncKind::NetAccept)
+	/// The byte-store primitive `__store_bytes((ref $bytes), i32) -> ()`.
+	pub fn for_marshal_store(&mut self) -> u32 {
+		self.intern(FuncKind::MarshalStore)
 	}
 
-	/// `net-read`/`net-write`: `(i32 fid, anyref, anyref) -> (i32, i32, ref null $value)`.
+	/// The byte-load primitive `__load_bytes(i32, i32) -> (ref $bytes)`.
+	pub fn for_marshal_load(&mut self) -> u32 {
+		self.intern(FuncKind::MarshalLoad)
+	}
+
+	/// The single-payload send primitive `__send_bytes((ref $bytes)) -> i32`.
+	pub fn for_marshal_send(&mut self) -> u32 {
+		self.intern(FuncKind::MarshalSend)
+	}
+
+	/// A two-arg `core.io` host import: `(i32, i32) -> i32`.
+	pub fn for_io2(&mut self) -> u32 {
+		self.intern(FuncKind::Io2)
+	}
+
+	/// A four-arg `core.io` host import: `(i32, i32, i32, i32) -> i32`.
+	pub fn for_io4(&mut self) -> u32 {
+		self.intern(FuncKind::Io4)
+	}
+
+	/// The read-stash drain host import `__io_copyout(i32) -> ()`.
+	pub fn for_io_copyout(&mut self) -> u32 {
+		self.intern(FuncKind::IoCopyout)
+	}
+
+	/// The read-dir splitter `__read_names(i32, i32) -> value`.
+	pub fn for_marshal_read_names(&mut self) -> u32 {
+		self.intern(FuncKind::MarshalReadNames)
+	}
+
+	/// `net-listen`/`net-connect`/`net-accept`: `(i32, i32) -> (i32, i32)`.
+	pub fn for_net_listen(&mut self) -> u32 {
+		self.intern(FuncKind::NetListen)
+	}
+
+	/// `net-close`: `(i32) -> i32`.
+	pub fn for_net_close(&mut self) -> u32 {
+		self.intern(FuncKind::NetClose)
+	}
+
+	/// `net-local-addr`: `(i32, i32, i32) -> (i32, i32)`.
+	pub fn for_net_local_addr(&mut self) -> u32 {
+		self.intern(FuncKind::NetLocalAddr)
+	}
+
+	/// `net-read`/`net-write`: `(i32, i32, i32, i32) -> (i32, i32)`.
 	pub fn for_net_rw(&mut self) -> u32 {
-		self.intern(FuncKind::NetReadWrite)
+		self.intern(FuncKind::NetRW)
 	}
 
 	/// `net-poll`: `(i64 deadline) -> i32`.
@@ -573,6 +685,20 @@ impl FuncTypes {
 			],
 			true,
 		));
+		// 18 $extern — { tag, (ref null extern) handle }. Boxes an engine-managed
+		// `externref` host resource (DOM node / fetch response) as a `$value` subtype,
+		// so a handle flows through Pluma code like any value. The field is an
+		// `externref` (not an `eqref`), but the wrapper struct *is* an `eqref`, so it
+		// boxes/stores/pattern-matches normally; identity is the struct reference
+		// (`ref.eq`, like `$ref`). No Phase-1 import builds one.
+		types.ty().subtype(&struct_subtype(
+			Some(T_VALUE),
+			vec![
+				val_field(ValType::I32, false),
+				val_field(extern_ref(), false),
+			],
+			true,
+		));
 		// Interned function types + record-shape structs, in index order. A Pluma
 		// function takes an implicit closure-environment param first (`env`, the
 		// `$closure` ref or null for a capture-free direct call), then its `arity`
@@ -612,34 +738,83 @@ impl FuncTypes {
 				FuncKind::FloatToStr => {
 					types
 						.ty()
-						.function([ValType::F64, any_ref()], [ValType::I32]);
+						.function([ValType::F64, ValType::I32, ValType::I32], [ValType::I32]);
+					continue;
+				}
+				FuncKind::HostWrite => {
+					types.ty().function([ValType::I32, ValType::I32], []);
 					continue;
 				}
 				FuncKind::F64Unary => {
 					types.ty().function([ValType::F64], [ValType::F64]);
 					continue;
 				}
-				// core.net host imports. Every fallible op returns the
-				// `(status:i32, n:i32, payload:ref null $value)` triple; the suspending
-				// ops take the parked fiber's id (i32) first, the sync ops a witness.
-				FuncKind::NetSync => {
+				// Marshalling-helper types — heterogeneous, built directly.
+				FuncKind::MarshalAlloc => {
+					types.ty().function([ValType::I32], [ValType::I32]);
+					continue;
+				}
+				FuncKind::MarshalStore => {
+					types.ty().function([bytes_ref(), ValType::I32], []);
+					continue;
+				}
+				FuncKind::MarshalLoad => {
+					types
+						.ty()
+						.function([ValType::I32, ValType::I32], [bytes_ref()]);
+					continue;
+				}
+				FuncKind::MarshalSend => {
+					types.ty().function([bytes_ref()], [ValType::I32]);
+					continue;
+				}
+				FuncKind::Io2 => {
+					types
+						.ty()
+						.function([ValType::I32, ValType::I32], [ValType::I32]);
+					continue;
+				}
+				FuncKind::Io4 => {
 					types.ty().function(
-						[any_ref(), any_ref()],
-						[ValType::I32, ValType::I32, value_ref()],
+						[ValType::I32, ValType::I32, ValType::I32, ValType::I32],
+						[ValType::I32],
 					);
 					continue;
 				}
-				FuncKind::NetAccept => {
+				FuncKind::IoCopyout => {
+					types.ty().function([ValType::I32], []);
+					continue;
+				}
+				FuncKind::MarshalReadNames => {
+					types
+						.ty()
+						.function([ValType::I32, ValType::I32], [value_ref()]);
+					continue;
+				}
+				// core.net host imports (ABI.md Phase 1). Each fallible op returns a
+				// `(status:i32, n:i32)` pair — `n` is a socket id / byte count / read
+				// length; byte payloads (addr, data, the read result) cross via scratch.
+				FuncKind::NetListen => {
+					types
+						.ty()
+						.function([ValType::I32, ValType::I32], [ValType::I32, ValType::I32]);
+					continue;
+				}
+				FuncKind::NetClose => {
+					types.ty().function([ValType::I32], [ValType::I32]);
+					continue;
+				}
+				FuncKind::NetLocalAddr => {
 					types.ty().function(
-						[ValType::I32, any_ref()],
-						[ValType::I32, ValType::I32, value_ref()],
+						[ValType::I32, ValType::I32, ValType::I32],
+						[ValType::I32, ValType::I32],
 					);
 					continue;
 				}
-				FuncKind::NetReadWrite => {
+				FuncKind::NetRW => {
 					types.ty().function(
-						[ValType::I32, any_ref(), any_ref()],
-						[ValType::I32, ValType::I32, value_ref()],
+						[ValType::I32, ValType::I32, ValType::I32, ValType::I32],
+						[ValType::I32, ValType::I32],
 					);
 					continue;
 				}
