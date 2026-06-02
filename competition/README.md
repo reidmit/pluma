@@ -25,6 +25,20 @@ ruby <prog>.rb                  node <prog>.js
 startup**, and for Pluma they include front-end compilation, because that is the
 real cost of "run this program."
 
+Pluma ships **two backends over one IR**, so it is measured twice:
+
+- **`pluma-vm`** — `pluma run <src>`, the reference VM interpreter. The time
+  includes front-end compilation (the dev-loop cost every run).
+- **`pluma-wasm`** — the WasmGC deploy artifact: `pluma build --target server`
+  *once*, then `pluma run <out>.wasm` in the embedded wasmtime host. Because you
+  build once and run many, the per-run time measures *executing* the artifact;
+  the one-time compile-to-wasm cost is summed and reported separately, not folded
+  into the per-run number.
+
+Each timed command runs under a wall-clock cap (default 30 s, override with
+`RUN_TIMEOUT`) so a workload one backend handles far more slowly than the rest
+can't wedge the whole suite — such a cell reads `>30s` rather than hanging.
+
 ## The benchmarks
 
 | # | folder           | exercises                                         |
@@ -42,17 +56,26 @@ real cost of "run this program."
 
 This compares **idiomatic code in each language**, not equivalent machine work:
 
-- **Node** runs on a JIT (V8); Pluma, CPython, and CRuby are interpreters. Expect
-  Node to win the compute-heavy rows by a wide margin.
+- **Compiling helps a lot.** Across the compute-heavy rows (`fib`, `mandelbrot`,
+  `primes`, `tree`, `sort`) the WasmGC artifact runs ~3–9× faster than the VM, and
+  unlike the VM its time excludes front-end compilation. The exception is `dict`
+  (below).
+- **Node** runs on a JIT (V8); Pluma's VM, CPython, and CRuby are interpreters.
+  Expect Node to win the compute-heavy rows by a wide margin.
 - **`sort` and `string`** run Pluma-level stdlib code — `list.sort` is a merge
   sort written in Pluma calling a comparison closure per compare; the string ops
   are Pluma too — against the other languages' *C-level* sort and string
   routines. That is a deliberate idiomatic-vs-idiomatic comparison, and it is
   where Pluma pays the most.
 - **`dict`** used to be the worst row (an immutable map that deep-copied on every
-  insert → O(n²)). It is now backed by a persistent, structurally-shared map
-  (`im_rc`), so `dict.insert` is O(log n), still immutable, still
-  insertion-ordered — and the row dropped from ~107× to ~11×.
+  insert → O(n²)). On the VM it is now backed by a persistent, structurally-shared
+  map (`im_rc`), so `dict.insert` is O(log n), still immutable, still
+  insertion-ordered — and the row dropped from ~107× to ~11×. **On WasmGC,
+  though, this is the one workload that falls off a cliff:** `core.dict`'s map
+  primitives scale fine on the VM's native `im_rc` but blow up on WasmGC
+  (instant at 4k inserts, ~2 s at 10k, past the cap by 50k), so the 200k-insert
+  benchmark hits `>30s` rather than finishing. That's a real WasmGC `core.dict`
+  performance gap to chase down, not a harness artifact.
 - **Small inputs are startup-dominated.** Where a competitor finishes in ~0.02–
   0.06 s it is essentially measuring interpreter startup, not the workload.
 - **Pluma is not always last** — see `tree`, where building millions of nominal
