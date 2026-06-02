@@ -1,7 +1,6 @@
-// The cross-backend correctness gate (replaces the old wasm_diff/js_diff
-// `#[test]`s). Runs every `tests/run` fixture through the VM oracle, WasmGC, and
-// JS, and asserts the deploy backends match the VM. Also asserts the committed
-// CONFORMANCE.md is fresh (when node is present, so the JS rows are real).
+// The cross-backend correctness gate. Runs every `tests/run` fixture through the
+// VM oracle and the WasmGC deploy backend, and asserts WasmGC matches the VM.
+// Also asserts the committed CONFORMANCE.md is fresh.
 //
 // Wrapped in a roomy-stack thread: the VM nests a Rust frame per Pluma call (no
 // TCO), so the `deep-recursion` fixture would overflow the default 2 MiB test
@@ -21,9 +20,6 @@ fn deploy_backends_match_vm_oracle() {
 
 fn body() {
 	let runner = Runner::new();
-	if !runner.has_node() {
-		eprintln!("note: `node` absent — JS rows skipped (set $PLUMA_NODE to include them).");
-	}
 
 	let results: Vec<_> = correctness_corpus()
 		.iter()
@@ -53,16 +49,12 @@ fn body() {
 		diffs.join("\n")
 	);
 
-	// The committed coverage doc must match a fresh render (snapshot-style). Only
-	// when node is present — otherwise the JS rows would be unmeasured and the
-	// render non-deterministic.
-	if runner.has_node() {
-		let fresh = report::render_conformance_md(&cov);
-		let path = workspace_root().join("CONFORMANCE.md");
-		let current = std::fs::read_to_string(&path).unwrap_or_default();
-		assert_eq!(
-			current, fresh,
-			"CONFORMANCE.md is stale — run `just conformance` and commit the result."
-		);
-	}
+	// The committed coverage doc must match a fresh render (snapshot-style).
+	let fresh = report::render_conformance_md(&cov);
+	let path = workspace_root().join("CONFORMANCE.md");
+	let current = std::fs::read_to_string(&path).unwrap_or_default();
+	assert_eq!(
+		current, fresh,
+		"CONFORMANCE.md is stale — run `just conformance` and commit the result."
+	);
 }

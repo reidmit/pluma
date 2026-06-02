@@ -617,15 +617,15 @@ fn compile_program(compiler: &Compiler) -> Result<vm::Program, String> {
 	codegen::compile_from_ir(&program).map_err(|e| e.to_string())
 }
 
-/// `pluma build [--target browser|server] <file> [-o out]` — compile a module to
-/// a deploy artifact. `--target browser` (the default) lowers the shared IR under
-/// `Platform::Browser` through the `js` backend and writes `<out>.js` plus a tiny
-/// `<out>.html` harness. `--target server` lowers under `Platform::Server` through
-/// the WasmGC backend and writes `<out>.wasm`, run with `pluma run <out>.wasm`.
+/// `pluma build [--target server|browser] <file> [-o out]` — compile a module to
+/// a deploy artifact. `--target server` (the default) lowers the shared IR under
+/// `Platform::Server` through the WasmGC backend and writes `<out>.wasm`, run with
+/// `pluma run <out>.wasm`. `--target browser` is reserved for the WasmGC frontend
+/// (see notes/DEPLOY.md) and is not yet available.
 fn build_command(args: Vec<String>) {
 	let mut entry_path: Option<String> = None;
 	let mut out_base: Option<String> = None;
-	let mut target = String::from("browser");
+	let mut target = String::from("server");
 	let mut iter = args.into_iter();
 	while let Some(a) = iter.next() {
 		match a.as_str() {
@@ -647,11 +647,16 @@ fn build_command(args: Vec<String>) {
 	};
 
 	let platform = match target.as_str() {
-		"browser" => Platform::Browser,
 		"server" => Platform::Server,
+		"browser" => {
+			print_error(
+				"The browser target is not yet available — the WasmGC frontend is pending (see notes/DEPLOY.md). Use `--target server` to emit a WasmGC artifact.",
+			);
+			std::process::exit(1);
+		}
 		other => {
 			print_error(format!(
-				"Unknown --target `{other}`. Expected `browser` or `server`."
+				"Unknown --target `{other}`. Expected `server` or `browser`."
 			));
 			std::process::exit(1);
 		}
@@ -703,39 +708,10 @@ fn build_command(args: Vec<String>) {
 			}
 			println!("wrote {wasm_path} (run with `pluma run {wasm_path}`)");
 		}
-		_ => {
-			let source = match js::emit(&program) {
-				Ok(s) => s,
-				Err(msg) => {
-					print_error(format!("js codegen error: {msg}"));
-					std::process::exit(1);
-				}
-			};
-			let js_path = format!("{base}.js");
-			let html_path = format!("{base}.html");
-			if let Err(e) = std::fs::write(&js_path, &source) {
-				print_error(format!("writing {js_path}: {e}"));
-				std::process::exit(1);
-			}
-			let html = browser_harness(&js_path);
-			if let Err(e) = std::fs::write(&html_path, html) {
-				print_error(format!("writing {html_path}: {e}"));
-				std::process::exit(1);
-			}
-			println!("wrote {js_path} and {html_path}");
-		}
+		// `--target browser` exits earlier in this fn (WasmGC frontend pending);
+		// only `Platform::Server` reaches the emit.
+		_ => unreachable!("non-server build target should have exited before emit"),
 	}
-}
-
-/// A minimal HTML harness that loads the emitted module and shows its stdout.
-fn browser_harness(js_path: &str) -> String {
-	format!(
-		"<!doctype html>\n<html>\n<head><meta charset=\"utf-8\"><title>Pluma</title></head>\n\
-<body>\n<pre id=\"stdout\"></pre>\n<script src=\"{js_path}\"></script>\n\
-<script>\n  const r = globalThis.__plumaResult;\n  if (r) {{\n    \
-document.getElementById(\"stdout\").textContent = r.stdout + (r.status !== \"ok\" ? \"\\n\" + r.status : \"\");\n    \
-console.log(r.stdout);\n  }}\n</script>\n</body>\n</html>\n"
-	)
 }
 
 fn run(entry_path: String, program_args: Vec<String>) {
@@ -892,9 +868,9 @@ COMMANDS:
   [run] <path>     execute a module directly (the `run` keyword is optional)
   repl [--dump]    start an interactive REPL session; with `--dump` (or when
                    stdin is piped) read submissions from stdin instead
-  build <path> [--target browser] [-o out]
-                   compile a module to a JavaScript module (+ HTML harness) for
-                   the browser/client target
+  build <path> [--target server] [-o out]
+                   compile a module to a WasmGC deploy artifact (.wasm); run it
+                   with `pluma run <out>.wasm`
   format <path>... canonicalize formatting; pass `-` for stdin, `--check` to dry-run
   test [dir] [-f name]...
                    discover and run tests from `*.test.pa` files under the
@@ -921,9 +897,9 @@ COMMANDS:
   [run] <path>     execute a module directly (the `run` keyword is optional)
   repl [--dump]    start an interactive REPL session; with `--dump` (or when
                    stdin is piped) read submissions from stdin instead
-  build <path> [--target browser] [-o out]
-                   compile a module to a JavaScript module (+ HTML harness) for
-                   the browser/client target
+  build <path> [--target server] [-o out]
+                   compile a module to a WasmGC deploy artifact (.wasm); run it
+                   with `pluma run <out>.wasm`
   format <path>... canonicalize formatting; pass `-` for stdin, `--check` to dry-run
   test [dir] [-f name]...
                    discover and run tests from `*.test.pa` files under the

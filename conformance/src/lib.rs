@@ -1,10 +1,9 @@
 // The cross-backend conformance + perf harness. Runs each Pluma program through
-// the VM (oracle), WasmGC, and JS backends; the deploy backends are diffed
+// the VM (oracle) and the WasmGC deploy backend; the deploy backend is diffed
 // against the VM. Also collects timing (see `perf`) and renders the report (see
 // `report`). This is the standing reference as features and perf work land across
-// the three runtimes.
+// the two runtimes.
 
-mod js_host;
 mod run;
 
 pub mod perf;
@@ -18,26 +17,24 @@ use compiler::Platform;
 /// uses. `RunResult` is its result type, re-exported here as the unit of comparison.
 pub use host::RunResult;
 
-/// The three execution backends, all consuming the same `ir::IrProgram`.
+/// The execution backends, all consuming the same `ir::IrProgram`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Backend {
 	/// The bytecode VM — the reference/oracle and dev/test engine.
 	Vm,
-	/// The WasmGC backend — the server/compute deploy artifact.
+	/// The WasmGC backend — the deploy artifact (server/compute, and the
+	/// browser/client target as the frontend lands).
 	Wasm,
-	/// The JS backend — the browser/client deploy artifact.
-	Js,
 }
 
 impl Backend {
-	/// The two deploy backends, diffed against the VM oracle.
-	pub const DEPLOY: [Backend; 2] = [Backend::Wasm, Backend::Js];
+	/// The deploy backends, diffed against the VM oracle.
+	pub const DEPLOY: [Backend; 1] = [Backend::Wasm];
 
 	pub fn name(self) -> &'static str {
 		match self {
 			Backend::Vm => "VM",
 			Backend::Wasm => "WasmGC",
-			Backend::Js => "JS",
 		}
 	}
 
@@ -47,7 +44,6 @@ impl Backend {
 		match self {
 			Backend::Vm => Platform::Native,
 			Backend::Wasm => Platform::Server,
-			Backend::Js => Platform::Browser,
 		}
 	}
 }
@@ -97,32 +93,18 @@ impl SkipReason {
 	}
 }
 
-/// The static support matrix: known divergences a deploy backend doesn't yet
-/// match the VM on. Returns the reason a fixture is *denied* for a backend, if
-/// any. Genuine "can't lower it" gaps surface dynamically as `Unsupported`
-/// (`wasm::emit`/`js::emit` returning `Err`); this table is only for fixtures
-/// that *do* lower but produce different output.
+/// Known output divergences a deploy backend doesn't yet match the VM on (the
+/// `denied` skip category). Currently empty — every deploy backend that lowers a
+/// fixture matches the VM. Genuine "can't lower it" gaps surface dynamically as
+/// `Unsupported` (`wasm::emit` returning `Err`), not here.
 fn denied(backend: Backend, name: &str) -> Option<&'static str> {
-	match backend {
-		Backend::Js => match name {
-			"debug-passthrough" => Some("debug call-site prefix not wired"),
-			"bare-trait-methods" => Some("53-bit int precision (raw i64 hash)"),
-			"wire-roundtrip" | "wire-dict" | "wire-fingerprint" | "wire-polymorphic"
-			| "wire-recursive" | "wire-bench" => Some("wire codec deferred on the client"),
-			_ => None,
-		},
-		// WasmGC gaps appear as `Unsupported` (emit rejects them); no output
-		// divergences are currently known.
-		Backend::Wasm | Backend::Vm => None,
-	}
+	let _ = (backend, name);
+	None
 }
 
-/// Drives the backends. Holds the resolved `node` path (if any) and pins cwd at
-/// the workspace root so `core.io` fixtures resolve relative paths identically
-/// across backends.
-pub struct Runner {
-	pub(crate) node: Option<String>,
-}
+/// Drives the backends. Pins cwd at the workspace root so `core.io` fixtures
+/// resolve relative paths identically across backends.
+pub struct Runner {}
 
 impl Default for Runner {
 	fn default() -> Self {
@@ -133,14 +115,7 @@ impl Default for Runner {
 impl Runner {
 	pub fn new() -> Self {
 		let _ = std::env::set_current_dir(workspace_root());
-		Runner {
-			node: js_host::find_node(),
-		}
-	}
-
-	/// Whether a JS backend can actually run (node present).
-	pub fn has_node(&self) -> bool {
-		self.node.is_some()
+		Runner {}
 	}
 
 	/// Run one fixture through one backend.
@@ -182,19 +157,6 @@ impl Runner {
 					d.0.len()
 				))),
 			},
-			Backend::Js => {
-				let src = match js::emit(&ir) {
-					Ok(s) => s,
-					Err(e) => return Outcome::Skip(SkipReason::Unsupported(e)),
-				};
-				match &self.node {
-					Some(node) => match js_host::run_node(node, &src, &name) {
-						Some(r) => Outcome::Ran(r),
-						None => Outcome::Skip(SkipReason::Unsupported("node launch failed".into())),
-					},
-					None => Outcome::Skip(SkipReason::Unsupported("node not available".into())),
-				}
-			}
 		}
 	}
 }

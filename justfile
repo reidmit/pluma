@@ -10,16 +10,9 @@ analyze path:
 run path:
   @ cargo run --bin cli --quiet -- run {{path}}
 
-# compile a module to a JavaScript module (+ HTML harness) for the browser target
-build-browser path:
-  @ cargo run --bin cli --quiet -- build --target browser {{path}}
-
-# build the web/ DOM demo, then serve it (open http://localhost:7599/index.html)
-web-demo:
-  @ cargo run --bin cli --quiet -- build web/app.pa -o web/app
-  @ rm -f web/app.html
-  @ echo "serving web/ on http://localhost:7599/index.html (ctrl-c to stop)"
-  @ cd web && python3 -m http.server 7599
+# compile a module to a WasmGC deploy artifact (run it with `pluma run <out>.wasm`)
+build-server path:
+  @ cargo run --bin cli --quiet -- build --target server {{path}}
 
 # format everything: Rust sources (cargo fmt) + the baked-in stdlib/prelude .pa sources
 format: format-stdlib
@@ -50,16 +43,16 @@ test:
 test-write:
   @ INSTA_UPDATE=always cargo test -p tests
 
-# cross-backend conformance: run every fixture through VM/WASM/JS, diff WASM+JS
-# against the VM oracle, and regenerate the committed CONFORMANCE.md coverage doc
+# cross-backend conformance: run every fixture through the VM oracle + WasmGC,
+# diff WasmGC against the VM, and regenerate the committed CONFORMANCE.md coverage doc
 conformance:
   @ cargo run -p conformance --release
 
-# conformance gate only (no write): assert WASM+JS match the VM and CONFORMANCE.md is fresh
+# conformance gate only (no write): assert WasmGC matches the VM and CONFORMANCE.md is fresh
 conformance-check:
   @ cargo test -p conformance --release
 
-# full report incl. perf tables -> target/conformance/report.md (slow; needs node)
+# full report incl. perf tables -> target/conformance/report.md (slow)
 conformance-perf:
   @ cargo run -p conformance --release -- --perf
 

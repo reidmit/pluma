@@ -20,10 +20,6 @@ fn main() {
 	let do_perf = args.iter().any(|a| a == "--perf");
 
 	let runner = Runner::new();
-	if !runner.has_node() {
-		eprintln!("warning: `node` not found — JS rows will be unmeasured (set $PLUMA_NODE).");
-	}
-
 	let mut exit = 0;
 
 	eprintln!("running correctness over the tests/run corpus...");
@@ -40,28 +36,24 @@ fn main() {
 		exit = 1;
 	}
 
-	// The committed coverage doc: write it (default) or verify it's fresh
-	// (--check). Only meaningful when node is present, else the JS rows are
-	// unmeasured and the render non-deterministic.
+	// The committed coverage doc: write it (default) or verify it's fresh (--check).
 	let md = report::render_conformance_md(&cov);
 	let path = workspace_root().join("CONFORMANCE.md");
 	if check_only {
 		let current = std::fs::read_to_string(&path).unwrap_or_default();
-		if runner.has_node() && current != md {
+		if current != md {
 			eprintln!("\nCONFORMANCE.md is stale — run `just conformance` to regenerate.");
 			exit = 1;
 		}
-	} else if runner.has_node() {
+	} else {
 		std::fs::write(&path, &md).expect("write CONFORMANCE.md");
 		eprintln!("wrote {}", path.display());
-	} else {
-		eprintln!("skipped CONFORMANCE.md regen (node absent).");
 	}
 
 	if do_perf {
 		eprintln!("running perf (this is slow; --release strongly recommended)...");
-		let dev = perf::dev_loop(&runner);
-		let compute = perf::compute(&runner);
+		let dev = perf::dev_loop();
+		let compute = perf::compute();
 		let report_md = render_full_report(Some(&cov), &dev, &compute);
 		let dir = workspace_root().join("target/conformance");
 		std::fs::create_dir_all(&dir).ok();
@@ -106,8 +98,7 @@ fn render_full_report(
 	};
 	s.push_str("# Pluma conformance + perf report\n\n");
 	s.push_str(&format!(
-		"wasmtime 45 · node {} · wasm collector: {collector} · perf iters/fixture: {} (compute: ≥5)\n\n",
-		node_version().unwrap_or_else(|| "absent".into()),
+		"wasmtime 45 · wasm collector: {collector} · perf iters/fixture: {} (compute: ≥5)\n\n",
 		dev.iters,
 	));
 
@@ -132,7 +123,7 @@ fn render_full_report(
 	s.push_str("## Dev-loop cost — whole tests/run corpus (one pass)\n\n");
 	let _ = writeln!(
 		s,
-		"{} fixtures (io-* excluded). The VM is the dev/test engine; wasm pays cranelift\nJIT per program, JS pays node startup per program.\n",
+		"{} fixtures (io-* excluded). The VM is the dev/test engine; wasm pays cranelift\nJIT per program.\n",
 		dev.fixtures
 	);
 	s.push_str("| Stage | Total | per fixture |\n|---|---:|---:|\n");
@@ -167,12 +158,6 @@ fn render_full_report(
 		fmt_dur(dev.wasm_exec),
 		per(dev.wasm_exec, dev.wasm_n)
 	);
-	let _ = writeln!(
-		s,
-		"| JS e2e (node, incl startup) | {} | {} |",
-		fmt_dur(dev.js),
-		per(dev.js, dev.js_n)
-	);
 	s.push('\n');
 	if dev.vm.as_secs_f64() > 0.0 {
 		let _ = writeln!(
@@ -186,28 +171,18 @@ fn render_full_report(
 
 	// Compute perf.
 	s.push_str("## Compute throughput — bench-marked tests/run fixtures\n\n");
-	s.push_str("| Program | VM | WASM exec | WASM e2e | JS (node) |\n|---|---:|---:|---:|---:|\n");
+	s.push_str("| Program | VM | WASM exec | WASM e2e |\n|---|---:|---:|---:|\n");
 	let cell = |d: Option<std::time::Duration>| d.map(fmt_dur).unwrap_or_else(|| "n/a".into());
 	for r in compute {
 		let _ = writeln!(
 			s,
-			"| {} | {} | {} | {} | {} |",
+			"| {} | {} | {} | {} |",
 			r.name,
 			cell(r.vm),
 			cell(r.wasm_exec),
 			cell(r.wasm_e2e),
-			cell(r.js),
 		);
 	}
-	s.push_str("\n_JS via node subprocess (process startup dominates tiny programs). WASM exec is\nthe deploy-relevant number (JIT amortized via caching/AOT)._\n");
+	s.push_str("\n_WASM exec is the deploy-relevant number (JIT amortized via caching/AOT)._\n");
 	s
-}
-
-fn node_version() -> Option<String> {
-	let node = std::env::var("PLUMA_NODE").unwrap_or_else(|_| "node".into());
-	let out = std::process::Command::new(node)
-		.arg("--version")
-		.output()
-		.ok()?;
-	Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }

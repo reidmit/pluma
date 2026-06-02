@@ -1,21 +1,18 @@
-// Perf measurement, ported from the (removed) wasm_diff.rs benches and extended
-// to all three backends. Two views:
+// Perf measurement across the VM and WasmGC backends. Two views:
 //   - dev_loop: the `tests/run` corpus minus the `bench`-marked fixtures (tiny
 //     programs) — the cost of one `pluma test`-style pass per backend, incl. the
 //     compile/exec split.
 //   - compute: the `bench`-marked `tests/run` fixtures (longer programs) —
 //     steady-state throughput per backend.
 //
-// JS is timed via the node subprocess (there is no in-process JS engine), so JS
-// numbers include node process startup — labeled accordingly. Run with --release;
-// debug cranelift is pathologically slow.
+// Run with --release; debug cranelift is pathologically slow.
 
 use std::time::{Duration, Instant};
 
 use compiler::Platform;
 use wasmtime::Module;
 
-use crate::{Backend, Runner, js_host, perf_corpus, run, run_corpus};
+use crate::{perf_corpus, run, run_corpus};
 
 fn iters() -> u32 {
 	std::env::var("BENCH_ITERS")
@@ -56,11 +53,9 @@ pub struct DevLoop {
 	pub wasm_e2e: Duration,
 	pub wasm_exec: Duration,
 	pub wasm_n: u32,
-	pub js: Duration,
-	pub js_n: u32,
 }
 
-pub fn dev_loop(runner: &Runner) -> DevLoop {
+pub fn dev_loop() -> DevLoop {
 	let it = iters();
 	let mut d = DevLoop {
 		fixtures: 0,
@@ -70,8 +65,6 @@ pub fn dev_loop(runner: &Runner) -> DevLoop {
 		wasm_e2e: Duration::ZERO,
 		wasm_exec: Duration::ZERO,
 		wasm_n: 0,
-		js: Duration::ZERO,
-		js_n: 0,
 	};
 
 	for dir in run_corpus() {
@@ -122,26 +115,12 @@ pub fn dev_loop(runner: &Runner) -> DevLoop {
 				}
 			}
 		}
-
-		// JS: node subprocess (includes node startup). Skip denied fixtures (they
-		// may legitimately error under node, e.g. deep-recursion stack overflow).
-		if let (Some(node), Ok(src)) = (runner.node.as_deref(), js::emit(&ir)) {
-			if crate::denied(Backend::Js, &name).is_none() {
-				d.js_n += 1;
-				for _ in 0..it {
-					let s = Instant::now();
-					let _ = js_host::run_node(node, &src, &name);
-					d.js += s.elapsed();
-				}
-			}
-		}
 	}
 
 	// Each accumulator summed `iters` runs per fixture; normalize to one pass.
 	d.vm /= it;
 	d.wasm_e2e /= it;
 	d.wasm_exec /= it;
-	d.js /= it;
 	d
 }
 
@@ -152,10 +131,9 @@ pub struct ComputeRow {
 	pub vm: Option<Duration>,
 	pub wasm_exec: Option<Duration>,
 	pub wasm_e2e: Option<Duration>,
-	pub js: Option<Duration>,
 }
 
-pub fn compute(runner: &Runner) -> Vec<ComputeRow> {
+pub fn compute() -> Vec<ComputeRow> {
 	let it = iters().max(5);
 	let mut rows = Vec::new();
 	for dir in perf_corpus() {
@@ -169,7 +147,6 @@ pub fn compute(runner: &Runner) -> Vec<ComputeRow> {
 			vm: None,
 			wasm_exec: None,
 			wasm_e2e: None,
-			js: None,
 		};
 
 		// VM e2e
@@ -203,19 +180,6 @@ pub fn compute(runner: &Runner) -> Vec<ComputeRow> {
 					t2 += s.elapsed();
 				}
 				row.wasm_e2e = Some(t2 / it);
-			}
-		}
-
-		// JS (node e2e)
-		if let (Some(node), Ok(src)) = (runner.node.as_deref(), js::emit(&ir)) {
-			if crate::denied(Backend::Js, &row.name).is_none() {
-				let mut t = Duration::ZERO;
-				for _ in 0..it {
-					let s = Instant::now();
-					let _ = js_host::run_node(node, &src, &row.name);
-					t += s.elapsed();
-				}
-				row.js = Some(t / it);
 			}
 		}
 

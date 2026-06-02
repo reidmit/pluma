@@ -9,7 +9,6 @@ members = [
   "formatter",
   "host",
   "ir",
-  "js",
   "lsp",
   "tests",
   "vm",

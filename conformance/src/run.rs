@@ -1,5 +1,4 @@
-// The VM oracle + the shared compile step. Deduped from the (removed)
-// wasm_diff.rs / js_diff.rs.
+// The VM oracle + the shared compile step.
 
 use std::cell::RefCell;
 use std::path::Path;
@@ -23,13 +22,12 @@ pub(crate) fn compile(dir: &Path, platform: Platform) -> Result<IrProgram, Vec<S
 	if let Err(ds) = compiler.check() {
 		return Err(ds.iter().map(|d| d.message.clone()).collect());
 	}
-	// Raw lowered IR — the common starting point for all three backends, exactly
-	// as the production CLI produces it. The VM oracle then applies `ir::optimize`
-	// (its VM-specific pipeline: inline + direct calls + M6 monomorphization/
-	// unboxing) on top, mirroring `pluma run`; the deploy backends (`wasm::emit` /
-	// `js::emit`) run their *own* internal pipelines on this raw IR, exactly as
-	// `pluma build` drives them — so the diff validates the VM passes against the
-	// independently-lowered deploy backends.
+	// Raw lowered IR — the common starting point for both backends, exactly as the
+	// production CLI produces it. The VM oracle then applies `ir::optimize` (its
+	// VM-specific pipeline: inline + direct calls + M6 monomorphization/unboxing) on
+	// top, mirroring `pluma run`; the WasmGC deploy backend (`wasm::emit`) runs its
+	// *own* internal pipeline on this raw IR, exactly as `pluma build` drives it — so
+	// the diff validates the VM passes against the independently-lowered deploy backend.
 	let program = ir::lower(&compiler).map_err(|e| vec![e])?;
 	Ok(program)
 }

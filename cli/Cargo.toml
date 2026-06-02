@@ -10,7 +10,6 @@ compiler = { path = "../compiler" }
 formatter = { path = "../formatter" }
 host = { path = "../host" }
 ir = { path = "../ir" }
-js = { path = "../js" }
 rustyline = "14"
 vm = { path = "../vm" }
 wasm = { path = "../wasm" }

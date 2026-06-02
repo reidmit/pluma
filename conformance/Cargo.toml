@@ -5,16 +5,15 @@ edition = "2024"
 publish = false
 
 # The cross-backend conformance + perf harness: runs each program through the VM
-# (oracle), WasmGC, and JS backends, asserts the deploy backends match the VM,
-# collects timing, and renders the report. `src/lib.rs` is the engine; `src/main.rs`
-# is the report CLI; `tests/correctness.rs` is the cargo-test gate.
+# (oracle) and the WasmGC deploy backend, asserts WasmGC matches the VM, collects
+# timing, and renders the report. `src/lib.rs` is the engine; `src/main.rs` is the
+# report CLI; `tests/correctness.rs` is the cargo-test gate.
 
 [dependencies]
 codegen = { path = "../codegen" }
 compiler = { path = "../compiler" }
 host = { path = "../host" }
 ir = { path = "../ir" }
-js = { path = "../js" }
 vm = { path = "../vm" }
 wasm = { path = "../wasm" }
 wasmtime = { version = "45", default-features = false, features = [
