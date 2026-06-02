@@ -257,10 +257,11 @@ impl Wat {
 
 	/// Manual element-copy loop: `dst[dst_off + k] = src[src_off + k]` for
 	/// `k` in `0..len` (a `None` offset means 0). Use this instead of
-	/// `array.copy` on `$valarray` (GC-reference) arrays: wasmtime's
-	/// `array.copy` over reference arrays is ~90x slower than this explicit
-	/// `array.get`/`array.set` loop. (Packed byte arrays memcpy fine — keep
-	/// `array.copy` for `$bytes`.) Allocates one scratch i32 local.
+	/// `array.copy`: wasmtime's `array.copy` libcall is a trap at every element
+	/// type — ~90x slower than this loop on `$valarray` (GC-reference) arrays,
+	/// and ~19x slower even on packed `$bytes` (so `__bytesconcat` open-codes the
+	/// same loop rather than calling here, since it needs `array.get_u`).
+	/// Allocates one scratch i32 local.
 	pub(crate) fn copy_loop(
 		&mut self,
 		ty: u32,

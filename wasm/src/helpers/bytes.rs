@@ -61,6 +61,7 @@ pub(crate) fn build_bytesconcat_fn() -> Function {
 	let la = w.local(ValType::I32);
 	let lb = w.local(ValType::I32);
 	let dst = w.local(types::bytes_ref());
+	let k = w.local(ValType::I32);
 
 	w.local_get(a).array_len().local_set(la);
 	w.local_get(b).array_len().local_set(lb);
@@ -69,18 +70,35 @@ pub(crate) fn build_bytesconcat_fn() -> Function {
 		.i32_add()
 		.array_new_default(bv)
 		.local_set(dst);
-	w.local_get(dst)
-		.i32(0)
-		.local_get(a)
-		.i32(0)
-		.local_get(la)
-		.array_copy(bv, bv);
-	w.local_get(dst)
-		.local_get(la)
-		.local_get(b)
-		.i32(0)
-		.local_get(lb)
-		.array_copy(bv, bv);
+	// `dst[0..la] = a`, then `dst[la..la+lb] = b`, both as explicit
+	// `array.get_u`/`array.set` loops. wasmtime's `array.copy` libcall carries a
+	// heavy per-call cost (it's ~19x slower than this inline loop even on packed
+	// `$bytes`), and `++`/join/interp lean on this helper hard — a fold of many
+	// small concats was the string benchmark's whole bottleneck. (Same lesson as
+	// `Wat::copy_loop` for reference arrays, which is here too: `array.copy` is a
+	// trap at every element type, not just GC-reference ones.)
+	w.i32(0).local_set(k);
+	w.block("brk_a", |w| {
+		w.loop_("lp_a", |w| {
+			w.local_get(k).local_get(la).i32_ge_s().br_if("brk_a");
+			w.local_get(dst).local_get(k);
+			w.local_get(a).local_get(k).array_get_u(bv);
+			w.array_set(bv);
+			w.local_get(k).i32(1).i32_add().local_set(k);
+			w.br("lp_a");
+		});
+	});
+	w.i32(0).local_set(k);
+	w.block("brk_b", |w| {
+		w.loop_("lp_b", |w| {
+			w.local_get(k).local_get(lb).i32_ge_s().br_if("brk_b");
+			w.local_get(dst).local_get(la).local_get(k).i32_add();
+			w.local_get(b).local_get(k).array_get_u(bv);
+			w.array_set(bv);
+			w.local_get(k).i32(1).i32_add().local_set(k);
+			w.br("lp_b");
+		});
+	});
 	w.local_get(dst);
 	w.finish()
 }

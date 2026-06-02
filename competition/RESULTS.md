@@ -1,6 +1,6 @@
 # Pluma vs Python, Ruby, and Node.js — benchmark results
 
-_Best of 3 runs, wall-clock seconds (lower is better). Generated 2026-06-01 20:54:55 PDT._
+_Best of 5 runs, wall-clock seconds (lower is better). Generated 2026-06-01 21:23:08 PDT._
 
 Correctness: every implementation agreed on every output.
 
@@ -9,7 +9,7 @@ Correctness: every implementation agreed on every output.
 | component | version |
 |---|---|
 | host | `Darwin arm64` |
-| pluma | git `fc84909` (release build) |
+| pluma | git `db8273d` (release build) |
 | python3 | Python 3.11.2 |
 | ruby | ruby 2.6.10p210 |
 | node | v25.2.1 |
@@ -18,16 +18,16 @@ Correctness: every implementation agreed on every output.
 
 | benchmark | exercises | pluma-vm | pluma-wasm | python3 | ruby | node | vm vs best | wasm vs best | output |
 |---|---|--:|--:|--:|--:|--:|--:|--:|:--:|
-| `fib` | naive recursion | 0.55 | 0.11 | 0.27 | 0.30 | 0.05 | 11.0x | 2.2x | ok |
-| `mandelbrot` | float64 escape loop | 1.14 | 0.17 | 0.40 | 0.72 | 0.05 | 22.8x | 3.4x | ok |
-| `primes` | integer trial division | 1.35 | 0.38 | 0.50 | 0.58 | 0.05 | 27.0x | 7.6x | ok |
-| `sort` | sort + checksum | 1.41 | 0.29 | 0.04 | 0.07 | 0.06 | 35.2x | 7.2x | ok |
-| `dict` | hash-map tally | 0.43 | 0.18 | 0.06 | 0.09 | 0.04 | 10.8x | 4.5x | ok |
-| `string` | join / split / upcase | 1.16 | 1.71 | 0.02 | 0.07 | 0.04 | 58.0x | 85.5x | ok |
-| `tree` | build + fold a tree | 1.22 | 0.51 | 3.33 | 0.97 | 0.11 | 11.1x | 4.6x | ok |
-| `collections` | map / filter / fold | 0.64 | 0.22 | 0.12 | 0.15 | 0.14 | 5.3x | 1.8x | ok |
+| `fib` | naive recursion | 0.55 | 0.10 | 0.27 | 0.30 | 0.05 | 11.0x | 2.0x | ok |
+| `mandelbrot` | float64 escape loop | 1.14 | 0.17 | 0.39 | 0.71 | 0.05 | 22.8x | 3.4x | ok |
+| `primes` | integer trial division | 1.34 | 0.38 | 0.50 | 0.58 | 0.05 | 26.8x | 7.6x | ok |
+| `sort` | sort + checksum | 1.40 | 0.31 | 0.04 | 0.08 | 0.06 | 35.0x | 7.8x | ok |
+| `dict` | hash-map tally | 0.41 | 0.17 | 0.06 | 0.09 | 0.04 | 10.2x | 4.2x | ok |
+| `string` | join / split / upcase | 1.16 | 0.25 | 0.03 | 0.07 | 0.04 | 38.7x | 8.3x | ok |
+| `tree` | build + fold a tree | 1.23 | 0.51 | 3.36 | 0.98 | 0.12 | 10.2x | 4.2x | ok |
+| `collections` | map / filter / fold | 0.65 | 0.22 | 0.12 | 0.16 | 0.14 | 5.4x | 1.8x | ok |
 
-One-time cost to compile all 8 benchmarks to WasmGC artifacts: **0.05s** total (not included in the `pluma-wasm` per-run times).
+One-time cost to compile all 8 benchmarks to WasmGC artifacts: **0.04s** total (not included in the `pluma-wasm` per-run times).
 
 ## How to read this
 
