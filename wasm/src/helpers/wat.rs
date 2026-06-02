@@ -305,6 +305,53 @@ impl Wat {
 		self
 	}
 
+	/// [`copy_loop`] for a packed `$bytes` array (`ty` is its type index). Packed
+	/// fields require the unsigned `array.get_u` accessor — plain `array.get` is a
+	/// validation error — so this can't share `copy_loop`'s body. The reason to
+	/// loop rather than `array.copy` is the same and not specific to reference
+	/// arrays: wasmtime's `array.copy` libcall is ~19x slower than this inline loop
+	/// even on bytes. Allocates one scratch i32 local.
+	pub(crate) fn copy_loop_bytes(
+		&mut self,
+		ty: u32,
+		dst: Local,
+		dst_off: Option<Local>,
+		src: Local,
+		src_off: Option<Local>,
+		len: Local,
+	) -> &mut Self {
+		let k = self.local(ValType::I32);
+		self.i32(0).local_set(k);
+		self.block("cpb_brk", |w| {
+			w.loop_("cpb_lp", |w| {
+				w.local_get(k).local_get(len).i32_ge_s().br_if("cpb_brk");
+				w.local_get(dst);
+				match dst_off {
+					Some(o) => {
+						w.local_get(o).local_get(k).i32_add();
+					}
+					None => {
+						w.local_get(k);
+					}
+				}
+				w.local_get(src);
+				match src_off {
+					Some(o) => {
+						w.local_get(o).local_get(k).i32_add();
+					}
+					None => {
+						w.local_get(k);
+					}
+				}
+				w.array_get_u(ty);
+				w.array_set(ty);
+				w.local_get(k).i32(1).i32_add().local_set(k);
+				w.br("cpb_lp");
+			});
+		});
+		self
+	}
+
 	// ---- references ------------------------------------------------------------
 
 	/// `ref.cast (ref $ty)` — a non-null downcast to concrete type `ty`.

@@ -341,6 +341,8 @@ pub(crate) fn build_wire_push_fn(g: WireGlobals) -> Function {
 	let mut w = Wat::new(1);
 	let b = w.param(0);
 	let new = w.local(types::bytes_ref());
+	let src = w.local(types::bytes_ref());
+	let len = w.local(ValType::I32);
 
 	// if g_len >= array.len(g_buf): grow. (The buffer is reused across encode
 	// calls, so this grow path runs only while the buffer is still smaller than
@@ -354,13 +356,12 @@ pub(crate) fn build_wire_push_fn(g: WireGlobals) -> Function {
 			.i32_shl()
 			.array_new_default(bytes)
 			.local_set(new);
-		// new[0..g_len] = g_buf[0..g_len].
-		w.local_get(new)
-			.i32(0)
-			.global_get(g.buf)
-			.i32(0)
-			.global_get(g.len)
-			.array_copy(bytes, bytes);
+		// new[0..g_len] = g_buf[0..g_len] (loop, not array.copy — see copy_loop_bytes).
+		// g_buf is non-null here (pre-initialized at the call site), so cast away the
+		// global's nullability for the non-null copy source.
+		w.global_get(g.len).local_set(len);
+		w.global_get(g.buf).ref_cast(bytes).local_set(src);
+		w.copy_loop_bytes(bytes, new, None, src, None, len);
 		w.local_get(new).global_set(g.buf);
 	});
 	// g_buf[g_len] = b.
@@ -898,16 +899,11 @@ pub(crate) fn build_wire_disp_fn(bytesconcat: u32) -> Function {
 	// start = last + 1; barelen = n - start.
 	w.local_get(last).i32(1).i32_add().local_set(start);
 	w.local_get(n).local_get(start).i32_sub().local_set(barelen);
-	// bare = qb[start..n].
+	// bare = qb[start..n] (loop, not array.copy — see copy_loop_bytes).
 	w.local_get(barelen)
 		.array_new_default(bytes)
 		.local_set(bare);
-	w.local_get(bare)
-		.i32(0)
-		.local_get(qb)
-		.local_get(start)
-		.local_get(barelen)
-		.array_copy(bytes, bytes);
+	w.copy_loop_bytes(bytes, bare, None, qb, Some(start), barelen);
 	// result = $str( (bare ++ ".") ++ varname-bytes ).
 	w.i32(types::TAG_STR);
 	w.local_get(bare)
@@ -1457,6 +1453,7 @@ pub(crate) fn build_wire_enc_dict_fn(
 	let start = w.local(ValType::I32);
 	let keylen = w.local(ValType::I32);
 	let kb = w.local(types::bytes_ref());
+	let gbuf = w.local(types::bytes_ref());
 	let cur = w.local(types::value_ref());
 	let curkey = w.local(types::value_ref());
 	let j = w.local(ValType::I32);
@@ -1514,14 +1511,11 @@ pub(crate) fn build_wire_enc_dict_fn(
 				.local_get(start)
 				.i32_sub()
 				.local_set(keylen);
-			// kb = g_buf[start..start+keylen]; rewind g_len = start.
+			// kb = g_buf[start..start+keylen]; rewind g_len = start. (Loop, not
+			// array.copy — see copy_loop_bytes; this runs once per dict entry.)
 			w.local_get(keylen).array_new_default(bytes).local_set(kb);
-			w.local_get(kb)
-				.i32(0)
-				.global_get(g.buf)
-				.local_get(start)
-				.local_get(keylen)
-				.array_copy(bytes, bytes);
+			w.global_get(g.buf).ref_cast(bytes).local_set(gbuf);
+			w.copy_loop_bytes(bytes, kb, None, gbuf, Some(start), keylen);
 			w.local_get(start).global_set(g.len);
 			// pairs[i] = tuple( $bytes-value(kb), entry[1] ).
 			w.local_get(pairs).local_get(i);
