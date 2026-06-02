@@ -525,16 +525,8 @@ pub(crate) fn build_wire_enc_fn(
 		w.local_get(vtag).i32(t as i32).i32_eq();
 		w.if_(|w| {
 			// (n << 1) ^ (n >> 63), recomputing `n` (cheap) rather than spilling.
-			w.local_get(val)
-				.ref_cast(types::T_INT)
-				.struct_get(types::T_INT, 1)
-				.i64(1)
-				.i64_shl();
-			w.local_get(val)
-				.ref_cast(types::T_INT)
-				.struct_get(types::T_INT, 1)
-				.i64(63)
-				.i64_shr_s();
+			w.local_get(val).unbox_int().i64(1).i64_shl();
+			w.local_get(val).unbox_int().i64(63).i64_shr_s();
 			w.i64_xor().call(uvarint).ret();
 		});
 	};

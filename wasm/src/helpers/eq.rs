@@ -24,8 +24,8 @@ pub(crate) fn build_eq_fn(self_idx: u32, dict_node_eq_idx: u32) -> Function {
 	let pb = w.local(types::valarray_ref());
 
 	// ta = tag(a); tb = tag(b); if ta != tb -> 0.
-	w.local_get(a).struct_get(types::T_VALUE, 0).local_set(ta);
-	w.local_get(b).struct_get(types::T_VALUE, 0).local_set(tb);
+	w.local_get(a).value_tag().local_set(ta);
+	w.local_get(b).value_tag().local_set(tb);
 	w.local_get(ta).local_get(tb).i32_ne();
 	w.if_(|w| {
 		w.i32(0).ret();
@@ -49,8 +49,14 @@ pub(crate) fn build_eq_fn(self_idx: u32, dict_node_eq_idx: u32) -> Function {
 	scalar(&mut w, types::TAG_BOOL, types::T_BOOL, |w| {
 		w.i32_eq();
 	});
-	scalar(&mut w, types::TAG_INT, types::T_INT, |w| {
-		w.i64_eq();
+	// INT — unbox each operand (a small int rides as an `i31ref`, a large one as a
+	// heap `$int`; the two forms must compare equal, so route both through
+	// `unbox_int` rather than assuming a single box shape).
+	w.local_get(ta).i32(types::TAG_INT).i32_eq();
+	w.if_(|w| {
+		w.local_get(a).unbox_int();
+		w.local_get(b).unbox_int();
+		w.i64_eq().ret();
 	});
 	// DURATION reuses the `$int` shape; compare its i64 nanos (`1s == 1000ms`).
 	scalar(&mut w, types::TAG_DURATION, types::T_INT, |w| {

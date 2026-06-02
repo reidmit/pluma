@@ -389,6 +389,11 @@ fn format_value(store: &mut impl AsContextMut, val: &Val) -> String {
 }
 
 fn format_anyref(store: &mut impl AsContextMut, any: Rooted<AnyRef>) -> String {
+	// A small int rides as an `i31ref` immediate (no `$value` struct); see
+	// `notes/I31.md`. Format it as the decimal int it represents.
+	if let Some(i31) = any.as_i31(&mut *store).expect("as_i31") {
+		return i31.get_i32().to_string();
+	}
 	let s = any
 		.as_struct(&mut *store)
 		.expect("as_struct")
@@ -590,13 +595,18 @@ fn collect_dict(store: &mut impl AsContextMut, node: &Val, out: &mut Vec<(i64, S
 				};
 				let key = elems.get(&mut *store, 0).expect("entry key");
 				let val = elems.get(&mut *store, 1).expect("entry value");
-				// seq is a boxed `$int` (struct field 1 = i64).
+				// seq is a small int: an `i31ref` immediate when small (the common case),
+				// else a heap `$int` (field 1 = i64).
 				let seq = match elems.get(&mut *store, 2).expect("entry seq") {
 					Val::AnyRef(Some(sr)) => {
-						let ss = sr.as_struct(&mut *store).expect("as_struct").expect("$int");
-						match ss.field(&mut *store, 1).expect("seq i64") {
-							Val::I64(n) => n,
-							_ => 0,
+						if let Some(i31) = sr.as_i31(&mut *store).expect("as_i31") {
+							i31.get_i32() as i64
+						} else {
+							let ss = sr.as_struct(&mut *store).expect("as_struct").expect("$int");
+							match ss.field(&mut *store, 1).expect("seq i64") {
+								Val::I64(n) => n,
+								_ => 0,
+							}
 						}
 					}
 					_ => 0,
@@ -615,6 +625,11 @@ fn raw_value_bytes(store: &mut impl AsContextMut, val: &Val) -> Vec<u8> {
 	let Val::AnyRef(Some(r)) = val else {
 		return Vec::new();
 	};
+	// A str/bytes value is always a heap struct; an `i31ref` (small int) can't reach
+	// here in well-typed code, but guard rather than panic in `as_struct`.
+	if r.as_i31(&mut *store).expect("as_i31").is_some() {
+		return Vec::new();
+	}
 	let s = r
 		.as_struct(&mut *store)
 		.expect("as_struct")
@@ -933,6 +948,10 @@ fn arg_int(store: &mut impl AsContextMut, v: &Val) -> i64 {
 	let Val::AnyRef(Some(r)) = v else {
 		return 0;
 	};
+	// A small int arrives as an `i31ref` immediate; a large one as a heap `$int`.
+	if let Some(i31) = r.as_i31(&mut *store).expect("as_i31") {
+		return i31.get_i32() as i64;
+	}
 	let s = r
 		.as_struct(&mut *store)
 		.expect("as_struct")

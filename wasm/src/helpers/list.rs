@@ -43,11 +43,7 @@ pub(crate) fn build_list_tail_fn() -> Function {
 	list_len(&mut w, list);
 	w.local_set(len);
 	// n = (int) narg.
-	w.local_get(narg)
-		.ref_cast(types::T_INT)
-		.struct_get(types::T_INT, 1)
-		.i32_wrap_i64()
-		.local_set(n);
+	w.local_get(narg).unbox_int().i32_wrap_i64().local_set(n);
 	// dst = new valarray(len - n).
 	w.local_get(len)
 		.local_get(n)
@@ -149,11 +145,7 @@ pub(crate) fn build_list_build_fn(arity1: u32) -> Function {
 	let i = w.local(ValType::I32);
 
 	// nlen = (int) n; buf = new valarray(nlen).
-	w.local_get(n)
-		.ref_cast(types::T_INT)
-		.struct_get(types::T_INT, 1)
-		.i32_wrap_i64()
-		.local_set(nlen);
+	w.local_get(n).unbox_int().i32_wrap_i64().local_set(nlen);
 	w.local_get(nlen)
 		.array_new_default(types::T_VALARRAY)
 		.local_set(buf);
@@ -164,10 +156,7 @@ pub(crate) fn build_list_build_fn(arity1: u32) -> Function {
 			// buf[i] = f(box i).
 			w.local_get(buf).local_get(i);
 			w.local_get(f).ref_cast(types::T_CLOSURE); // env
-			w.i32(types::TAG_INT)
-				.local_get(i)
-				.i64_extend_i32_s()
-				.struct_new(types::T_INT); // arg = box i
+			w.local_get(i).i64_extend_i32_s().box_int(); // arg = box i (i31 when small)
 			w.local_get(f)
 				.ref_cast(types::T_CLOSURE)
 				.struct_get(types::T_CLOSURE, 1); // fn_index
@@ -194,11 +183,7 @@ pub(crate) fn build_list_collect_fn(arity1: u32) -> Function {
 	let r = w.local(types::value_ref()); // f's result (an option variant)
 	let out = w.local(types::valarray_ref());
 
-	w.local_get(n)
-		.ref_cast(types::T_INT)
-		.struct_get(types::T_INT, 1)
-		.i32_wrap_i64()
-		.local_set(nlen);
+	w.local_get(n).unbox_int().i32_wrap_i64().local_set(nlen);
 	w.local_get(nlen)
 		.array_new_default(types::T_VALARRAY)
 		.local_set(buf);
@@ -209,10 +194,7 @@ pub(crate) fn build_list_collect_fn(arity1: u32) -> Function {
 			w.local_get(i).local_get(nlen).i32_ge_s().br_if("brk");
 			// r = f(box i).
 			w.local_get(f).ref_cast(types::T_CLOSURE);
-			w.i32(types::TAG_INT)
-				.local_get(i)
-				.i64_extend_i32_s()
-				.struct_new(types::T_INT);
+			w.local_get(i).i64_extend_i32_s().box_int();
 			w.local_get(f)
 				.ref_cast(types::T_CLOSURE)
 				.struct_get(types::T_CLOSURE, 1);

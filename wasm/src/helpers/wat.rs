@@ -21,6 +21,8 @@ use wasm_encoder::{BlockType, Function, HeapType, Instruction, ValType};
 
 use Instruction as I;
 
+use crate::types;
+
 /// A local (or param) slot, returned by [`Wat::param`]/[`Wat::local`] so callers
 /// reference locals by name rather than a hand-tracked `u32`.
 #[derive(Clone, Copy)]
@@ -362,6 +364,77 @@ impl Wat {
 	pub(crate) fn ref_null(&mut self, ty: u32) -> &mut Self {
 		self.push(I::RefNull(HeapType::Concrete(ty)))
 	}
+
+	// ---- value discriminant / scalar boxing (i31-aware; see `notes/I31.md`) -----
+
+	/// Read the runtime discriminant tag of a boxed value (`eqref` on the stack ->
+	/// i32 tag). A small int is an `i31ref` immediate carrying no tag struct, so its
+	/// kind is `TAG_INT`; any other value is a heap `$value` whose tag is field 0.
+	pub(crate) fn value_tag(&mut self) -> &mut Self {
+		let t = self.local(types::value_ref());
+		self.local_set(t);
+		self.local_get(t).ref_test_i31();
+		self.if_result(
+			ValType::I32,
+			|w| {
+				w.i32(types::TAG_INT);
+			},
+			|w| {
+				w.local_get(t)
+					.ref_cast(types::T_VALUE)
+					.struct_get(types::T_VALUE, 0);
+			},
+		)
+	}
+
+	/// Unbox a boxed int (`eqref` on the stack -> i64). A small int rides as an
+	/// `i31ref` immediate (sign-extended); otherwise it's a heap `$int` (field 1).
+	pub(crate) fn unbox_int(&mut self) -> &mut Self {
+		let t = self.local(types::value_ref());
+		self.local_set(t);
+		self.local_get(t).ref_test_i31();
+		self.if_result(
+			ValType::I64,
+			|w| {
+				w.local_get(t).ref_cast_i31().i31_get_s().i64_extend_i32_s();
+			},
+			|w| {
+				w.local_get(t)
+					.ref_cast(types::T_INT)
+					.struct_get(types::T_INT, 1);
+			},
+		)
+	}
+
+	/// Box an i64 (stack top) into an `eqref`: a value that fits in a signed 31-bit
+	/// `i31ref` becomes that immediate (no allocation, not refcounted by DRC), else a
+	/// heap `$int`. Allocates one scratch i64 local.
+	pub(crate) fn box_int(&mut self) -> &mut Self {
+		let t = self.local(ValType::I64);
+		self.local_set(t);
+		// fits a signed 31-bit i31? -2^30 <= v < 2^30
+		self.local_get(t).i64(-(1 << 30)).i64_ge_s();
+		self.local_get(t).i64(1 << 30).i64_lt_s();
+		self.i32_and();
+		self.if_result(
+			types::value_ref(),
+			|w| {
+				w.local_get(t).i32_wrap_i64().ref_i31();
+			},
+			|w| {
+				w.i32(types::TAG_INT).local_get(t).struct_new(types::T_INT);
+			},
+		)
+	}
+
+	/// `ref.test (ref i31)` — 1 if the value is a small-int immediate, else 0.
+	pub(crate) fn ref_test_i31(&mut self) -> &mut Self {
+		self.push(I::RefTestNonNull(HeapType::I31))
+	}
+	/// `ref.cast (ref i31)` — assert + narrow to the i31 immediate.
+	pub(crate) fn ref_cast_i31(&mut self) -> &mut Self {
+		self.push(I::RefCastNonNull(HeapType::I31))
+	}
 }
 
 /// Generate the nullary opcode methods (no immediates) — each pushes one
@@ -403,6 +476,7 @@ nullary! {
 	f64_reinterpret_i64 => F64ReinterpretI64,
 	// arrays / references
 	array_len => ArrayLen, ref_eq => RefEq, ref_is_null => RefIsNull,
+	ref_i31 => RefI31, i31_get_s => I31GetS,
 	// stack / misc
 	drop => Drop, ret => Return, unreachable => Unreachable,
 }

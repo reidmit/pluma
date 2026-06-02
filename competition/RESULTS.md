@@ -1,6 +1,6 @@
 # Pluma vs Python, Ruby, and Node.js — benchmark results
 
-_Best of 5 runs, wall-clock seconds (lower is better). Generated 2026-06-01 21:50:18 PDT._
+_Best of 5 runs, wall-clock seconds (lower is better). Generated 2026-06-02 08:33:21 PDT._
 
 Correctness: every implementation agreed on every output.
 
@@ -9,7 +9,7 @@ Correctness: every implementation agreed on every output.
 | component | version |
 |---|---|
 | host | `Darwin arm64` |
-| pluma | git `2cfcdbc` (release build) |
+| pluma | git `30fb233` (release build) |
 | python3 | Python 3.11.2 |
 | ruby | ruby 2.6.10p210 |
 | node | v25.2.1 |
@@ -18,16 +18,16 @@ Correctness: every implementation agreed on every output.
 
 | benchmark | exercises | pluma-vm | wasm (null) | wasm (drc) | python3 | ruby | node | vm vs best | wasm vs best | output |
 |---|---|--:|--:|--:|--:|--:|--:|--:|--:|:--:|
-| `fib` | naive recursion | 0.55 | 0.10 | 1.74 | 0.27 | 0.30 | 0.05 | 11.0x | 34.8x | ok |
-| `mandelbrot` | float64 escape loop | 1.15 | 0.17 | 2.48 | 0.40 | 0.72 | 0.05 | 23.0x | 49.6x | ok |
-| `primes` | integer trial division | 1.35 | 0.38 | 7.63 | 0.51 | 0.60 | 0.05 | 27.0x | 152.6x | ok |
-| `sort` | sort + checksum | 1.43 | 0.30 | 5.41 | 0.04 | 0.07 | 0.06 | 35.8x | 135.2x | ok |
-| `dict` | hash-map tally | 0.43 | 0.17 | 3.94 | 0.06 | 0.09 | 0.04 | 10.8x | 98.5x | ok |
-| `string` | join / split / upcase | 1.17 | 0.25 | 5.17 | 0.03 | 0.07 | 0.04 | 39.0x | 172.3x | ok |
-| `tree` | build + fold a tree | 1.24 | 0.51 | 7.30 | 3.36 | 0.97 | 0.12 | 10.3x | 60.8x | ok |
-| `collections` | map / filter / fold | 0.65 | 0.22 | 2.96 | 0.13 | 0.16 | 0.14 | 5.0x | 22.8x | ok |
+| `fib` | naive recursion | 0.55 | 0.07 | 0.05 | 0.27 | 0.30 | 0.05 | 11.0x | 1.0x | ok |
+| `mandelbrot` | float64 escape loop | 1.13 | 0.14 | 1.91 | 0.39 | 0.70 | 0.06 | 18.8x | 31.8x | ok |
+| `primes` | integer trial division | 1.45 | 0.18 | 2.54 | 0.52 | 0.58 | 0.05 | 29.0x | 50.8x | ok |
+| `sort` | sort + checksum | 1.42 | 0.25 | 1.89 | 0.04 | 0.07 | 0.06 | 35.5x | 47.2x | ok |
+| `dict` | hash-map tally | 0.44 | 0.17 | 3.18 | 0.06 | 0.09 | 0.04 | 11.0x | 79.5x | ok |
+| `string` | join / split / upcase | 0.74 | 0.15 | 1.10 | 0.02 | 0.07 | 0.04 | 37.0x | 55.0x | ok |
+| `tree` | build + fold a tree | 1.21 | 0.45 | 1.92 | 3.35 | 0.96 | 0.11 | 11.0x | 17.5x | ok |
+| `collections` | map / filter / fold | 0.64 | 0.19 | 0.68 | 0.12 | 0.15 | 0.14 | 5.3x | 5.7x | ok |
 
-One-time cost to compile all 8 benchmarks to WasmGC artifacts: **0.05s** total (not included in the per-run `wasm` times).
+One-time cost to compile all 8 benchmarks to WasmGC artifacts: **0.04s** total (not included in the per-run `wasm` times).
 
 ## How to read this
 

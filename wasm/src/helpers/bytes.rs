@@ -16,11 +16,7 @@ pub(crate) fn build_bytes_build_fn(arity1: u32) -> Function {
 	let buf = w.local(types::bytes_ref());
 	let i = w.local(ValType::I32);
 
-	w.local_get(n)
-		.ref_cast(types::T_INT)
-		.struct_get(types::T_INT, 1)
-		.i32_wrap_i64()
-		.local_set(nlen);
+	w.local_get(n).unbox_int().i32_wrap_i64().local_set(nlen);
 	w.local_get(nlen)
 		.array_new_default(types::T_BYTES)
 		.local_set(buf);
@@ -31,17 +27,12 @@ pub(crate) fn build_bytes_build_fn(arity1: u32) -> Function {
 			// buf[i] = (i32) f(box i).
 			w.local_get(buf).local_get(i);
 			w.local_get(f).ref_cast(types::T_CLOSURE); // env
-			w.i32(types::TAG_INT)
-				.local_get(i)
-				.i64_extend_i32_s()
-				.struct_new(types::T_INT); // arg = box i
+			w.local_get(i).i64_extend_i32_s().box_int(); // arg = box i (i31 when small)
 			w.local_get(f)
 				.ref_cast(types::T_CLOSURE)
 				.struct_get(types::T_CLOSURE, 1); // fn_index
 			w.call_indirect(arity1);
-			w.ref_cast(types::T_INT)
-				.struct_get(types::T_INT, 1)
-				.i32_wrap_i64(); // unbox result to i32 (array.set packs to i8)
+			w.unbox_int().i32_wrap_i64(); // unbox result to i32 (array.set packs to i8)
 			w.array_set(types::T_BYTES);
 			w.local_get(i).i32(1).i32_add().local_set(i);
 			w.br("lp");

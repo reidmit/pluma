@@ -30,10 +30,7 @@ pub(crate) fn build_int_str_fn() -> Function {
 			.ret();
 	};
 
-	w.local_get(v)
-		.ref_cast(types::T_INT)
-		.struct_get(types::T_INT, 1)
-		.local_set(n);
+	w.local_get(v).unbox_int().local_set(n);
 	// n == 0 -> "0".
 	w.local_get(n).i64_eqz();
 	w.if_(|w| {
@@ -171,7 +168,7 @@ pub(crate) fn build_tostring_fn(
 		w.local_get(len).i32(1).i32_add().local_set(len);
 	};
 
-	w.local_get(v).struct_get(types::T_VALUE, 0).local_set(ta);
+	w.local_get(v).value_tag().local_set(ta);
 
 	// STR -> identity.
 	w.local_get(ta).i32(types::TAG_STR).i32_eq();

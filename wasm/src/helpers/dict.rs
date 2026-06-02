@@ -150,7 +150,7 @@ pub(crate) fn build_hash_fn(self_idx: u32) -> Function {
 
 	// h = OFFSET; ta = tag(v); mix the tag so distinct types diverge.
 	w.i64(FNV_OFFSET).local_set(h);
-	w.local_get(v).struct_get(types::T_VALUE, 0).local_set(ta);
+	w.local_get(v).value_tag().local_set(ta);
 	w.local_get(ta).i64_extend_i32_u();
 	mix(&mut w, h);
 
@@ -170,9 +170,9 @@ pub(crate) fn build_hash_fn(self_idx: u32) -> Function {
 	w.local_get(ta).i32(types::TAG_INSTANT).i32_eq();
 	w.i32_or();
 	w.if_(|w| {
-		w.local_get(v)
-			.ref_cast(types::T_INT)
-			.struct_get(types::T_INT, 1);
+		// `unbox_int` handles a small-int `i31ref` and a heap `$int` alike; a
+		// duration/instant is always a heap `$int` (its `ref.test i31` is false).
+		w.local_get(v).unbox_int();
 		mix(w, h);
 	});
 	// FLOAT — normalize ±0.0 to one bit pattern (they are `__eq`-equal), then mix
@@ -749,10 +749,7 @@ pub(crate) fn build_dict_insert_fn(hash_idx: u32, node_idx: u32) -> Function {
 	w.local_get(key).call(hash_idx); // hash = __hash(key)
 	w.local_get(key);
 	w.local_get(val);
-	w.i32(types::TAG_INT)
-		.local_get(ns)
-		.i64_extend_i32_u()
-		.struct_new(types::T_INT); // seq box
+	w.local_get(ns).i64_extend_i32_u().box_int(); // seq box (i31 when small)
 	w.call(node_idx).local_set(newroot);
 	// dict { tag, newroot, ns + 1 }.
 	w.i32(types::TAG_DICT);
@@ -922,10 +919,7 @@ pub(crate) fn build_dict_entries_fn(collect_idx: u32) -> Function {
 			w.local_get(i).local_get(n).i32_ge_s().br_if("fbrk");
 			w.local_get(arr).local_get(i).array_get(VA).local_set(t);
 			tuple_elem(w, t, 2);
-			w.ref_cast(types::T_INT)
-				.struct_get(types::T_INT, 1)
-				.i32_wrap_i64()
-				.local_set(s);
+			w.unbox_int().i32_wrap_i64().local_set(s);
 			tuple_elem(w, t, 0);
 			w.local_set(k);
 			tuple_elem(w, t, 1);

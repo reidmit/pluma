@@ -639,14 +639,9 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::BrIf(br));
 			}
 			Const::Int(n) => {
+				// The subject may be an `i31ref` (small int) or a heap `$int`.
 				self.ins(Instruction::LocalGet(subj));
-				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
-					types::T_INT,
-				)));
-				self.ins(Instruction::StructGet {
-					struct_type_index: types::T_INT,
-					field_index: 1,
-				});
+				self.unbox_int();
 				self.ins(Instruction::I64Const(*n));
 				self.ins(Instruction::I64Ne);
 				self.ins(Instruction::BrIf(br));
@@ -832,19 +827,28 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::I32Eqz);
 			}
 			Rvalue::Box(a) => {
+				// `int` boxes through `box_int` (i31 immediate when small); `float`/
+				// `bool` are always heap `$float`/`$bool` structs.
 				let repr = self.atom_repr(a);
-				let (tag, ty) = match repr {
-					Repr::I64 => (types::TAG_INT, types::T_INT),
-					Repr::F64 => (types::TAG_FLOAT, types::T_FLOAT),
-					Repr::I32 => (types::TAG_BOOL, types::T_BOOL),
+				match repr {
+					Repr::I64 => {
+						self.atom(a);
+						self.box_int();
+					}
+					Repr::F64 => {
+						self.ins(Instruction::I32Const(types::TAG_FLOAT));
+						self.atom(a);
+						self.ins(Instruction::StructNew(types::T_FLOAT));
+					}
+					Repr::I32 => {
+						self.ins(Instruction::I32Const(types::TAG_BOOL));
+						self.atom(a);
+						self.ins(Instruction::StructNew(types::T_BOOL));
+					}
 					Repr::Boxed => {
 						self.diags.push("Box of an already-boxed value");
-						return;
 					}
-				};
-				self.ins(Instruction::I32Const(tag));
-				self.atom(a);
-				self.ins(Instruction::StructNew(ty));
+				}
 			}
 			Rvalue::Unbox(a, repr) => {
 				self.atom(a);
@@ -1275,17 +1279,15 @@ impl<'a> FnEmitter<'a> {
 			// (builtin args are uniform), so unbox it inline as before.
 			"bytes-get" => {
 				self.atom(&args[0]);
-				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(types::T_STR)));
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_STR,
+				)));
 				self.ins(Instruction::StructGet {
 					struct_type_index: types::T_STR,
 					field_index: 1,
 				});
 				self.atom(&args[1]);
-				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(types::T_INT)));
-				self.ins(Instruction::StructGet {
-					struct_type_index: types::T_INT,
-					field_index: 1,
-				});
+				self.unbox_int();
 				self.ins(Instruction::I32WrapI64);
 				self.ins(Instruction::ArrayGetU(types::T_BYTES));
 				self.ins(Instruction::I64ExtendI32U);
@@ -1294,7 +1296,9 @@ impl<'a> FnEmitter<'a> {
 			// bytes.length b : array.len of the str's bytes, as i64.
 			"bytes-length" => {
 				self.atom(&args[0]);
-				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(types::T_STR)));
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_STR,
+				)));
 				self.ins(Instruction::StructGet {
 					struct_type_index: types::T_STR,
 					field_index: 1,
@@ -1306,7 +1310,9 @@ impl<'a> FnEmitter<'a> {
 			// list.length xs : the list's logical length (field 2), as i64.
 			"list-length" => {
 				self.atom(&args[0]);
-				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(types::T_LIST)));
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_LIST,
+				)));
 				self.ins(Instruction::StructGet {
 					struct_type_index: types::T_LIST,
 					field_index: 2,
@@ -1322,8 +1328,13 @@ impl<'a> FnEmitter<'a> {
 	/// (`$int`/`$float`/`$bool` payload). Mirrors the `Rvalue::Unbox` lowering, for
 	/// coercing a boxed builtin result into the unboxed local the repr pass assigned.
 	fn unbox_value(&mut self, repr: Repr) {
+		// `int` rides as either an `i31ref` immediate (small) or a heap `$int`;
+		// `unbox_int` discriminates. `float`/`bool` are always heap structs.
 		let (ty, field) = match repr {
-			Repr::I64 => (types::T_INT, 1),
+			Repr::I64 => {
+				self.unbox_int();
+				return;
+			}
 			Repr::F64 => (types::T_FLOAT, 1),
 			Repr::I32 => (types::T_BOOL, 1),
 			Repr::Boxed => {
@@ -1336,6 +1347,56 @@ impl<'a> FnEmitter<'a> {
 			struct_type_index: ty,
 			field_index: field,
 		});
+	}
+
+	/// Box an i64 (on the stack) into a value: a signed-31-bit-representable int
+	/// becomes an `i31ref` immediate (no heap allocation, not refcounted by the DRC
+	/// collector), else a heap `$int`. The `eqref`-rooted value type makes the i31
+	/// a valid value everywhere a box flows. See `notes/I31.md`.
+	fn box_int(&mut self) {
+		let t = self.fresh_local(ValType::I64);
+		self.ins(Instruction::LocalSet(t));
+		self.ins(Instruction::LocalGet(t));
+		self.ins(Instruction::I64Const(-(1 << 30)));
+		self.ins(Instruction::I64GeS);
+		self.ins(Instruction::LocalGet(t));
+		self.ins(Instruction::I64Const(1 << 30));
+		self.ins(Instruction::I64LtS);
+		self.ins(Instruction::I32And);
+		self.ins(Instruction::If(BlockType::Result(types::value_ref())));
+		self.ins(Instruction::LocalGet(t));
+		self.ins(Instruction::I32WrapI64);
+		self.ins(Instruction::RefI31);
+		self.ins(Instruction::Else);
+		self.ins(Instruction::I32Const(types::TAG_INT));
+		self.ins(Instruction::LocalGet(t));
+		self.ins(Instruction::StructNew(types::T_INT));
+		self.ins(Instruction::End);
+	}
+
+	/// Unbox a value known to be an `int` (on the stack) to a bare i64, handling
+	/// both the `i31ref` immediate and the heap `$int` forms (so a small int and a
+	/// large/host-built one compare and arithmetic alike).
+	fn unbox_int(&mut self) {
+		let t = self.fresh_local(types::value_ref());
+		self.ins(Instruction::LocalSet(t));
+		self.ins(Instruction::LocalGet(t));
+		self.ins(Instruction::RefTestNonNull(HeapType::I31));
+		self.ins(Instruction::If(BlockType::Result(ValType::I64)));
+		self.ins(Instruction::LocalGet(t));
+		self.ins(Instruction::RefCastNonNull(HeapType::I31));
+		self.ins(Instruction::I31GetS);
+		self.ins(Instruction::I64ExtendI32S);
+		self.ins(Instruction::Else);
+		self.ins(Instruction::LocalGet(t));
+		self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+			types::T_INT,
+		)));
+		self.ins(Instruction::StructGet {
+			struct_type_index: types::T_INT,
+			field_index: 1,
+		});
+		self.ins(Instruction::End);
 	}
 
 	fn host_call(&mut self, tag: &str, args: &[Atom]) {
@@ -1867,13 +1928,7 @@ impl<'a> FnEmitter<'a> {
 					field_index: 1,
 				});
 				self.atom(&args[1]);
-				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
-					types::T_INT,
-				)));
-				self.ins(Instruction::StructGet {
-					struct_type_index: types::T_INT,
-					field_index: 1,
-				});
+				self.unbox_int();
 				self.ins(Instruction::I32WrapI64);
 				self.ins(Instruction::ArrayGet(types::T_VALARRAY));
 			}
@@ -1889,13 +1944,7 @@ impl<'a> FnEmitter<'a> {
 					field_index: 1,
 				});
 				self.atom(&args[1]);
-				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
-					types::T_INT,
-				)));
-				self.ins(Instruction::StructGet {
-					struct_type_index: types::T_INT,
-					field_index: 1,
-				});
+				self.unbox_int();
 				self.ins(Instruction::I32WrapI64);
 				self.atom(&args[2]);
 				self.ins(Instruction::ArraySet(types::T_VALARRAY));
@@ -2010,13 +2059,7 @@ impl<'a> FnEmitter<'a> {
 					field_index: 1,
 				});
 				self.atom(&args[1]);
-				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
-					types::T_INT,
-				)));
-				self.ins(Instruction::StructGet {
-					struct_type_index: types::T_INT,
-					field_index: 1,
-				});
+				self.unbox_int();
 				self.ins(Instruction::I32WrapI64);
 				self.ins(Instruction::ArrayGetU(types::T_BYTES));
 				self.ins(Instruction::I64ExtendI32U);
@@ -2091,13 +2134,7 @@ impl<'a> FnEmitter<'a> {
 			"math-to-float" => {
 				self.ins(Instruction::I32Const(types::TAG_FLOAT));
 				self.atom(&args[0]);
-				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
-					types::T_INT,
-				)));
-				self.ins(Instruction::StructGet {
-					struct_type_index: types::T_INT,
-					field_index: 1,
-				});
+				self.unbox_int();
 				self.ins(Instruction::F64ConvertI64S);
 				self.ins(Instruction::StructNew(types::T_FLOAT));
 			}
@@ -2140,13 +2177,9 @@ impl<'a> FnEmitter<'a> {
 	fn retag_int_box(&mut self, arg: &Atom, new_tag: i32) {
 		self.ins(Instruction::I32Const(new_tag));
 		self.atom(arg);
-		self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
-			types::T_INT,
-		)));
-		self.ins(Instruction::StructGet {
-			struct_type_index: types::T_INT,
-			field_index: 1,
-		});
+		// `arg` may be a plain `int` (an `i31ref` when small) being retagged to a
+		// duration/instant, so read it through `unbox_int`.
+		self.unbox_int();
 		self.ins(Instruction::StructNew(types::T_INT));
 	}
 

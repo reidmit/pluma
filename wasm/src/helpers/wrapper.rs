@@ -33,10 +33,16 @@ pub(crate) fn build_builtin_wrapper(tag: &str, ord: &OrderingLits) -> Option<Fun
 	// Params: env (slot 0) then `arity` boxed args (slots 1..=arity).
 	let mut w = Wat::new(arity as u32 + 1);
 
-	// Unbox arg param `n` (1-based) of scalar struct `ty` (field 1).
+	// Unbox arg param `n` (1-based) of scalar struct `ty` (field 1). An `int` may be
+	// an `i31ref` immediate, so it routes through `unbox_int`; float/bool/str are
+	// always heap structs.
 	let unbox = |w: &mut Wat, n: u32, ty: u32| {
 		let arg = w.param(n);
-		w.local_get(arg).ref_cast(ty).struct_get(ty, 1);
+		if ty == types::T_INT {
+			w.local_get(arg).unbox_int();
+		} else {
+			w.local_get(arg).ref_cast(ty).struct_get(ty, 1);
+		}
 	};
 	// Emit `return <ordering variant>` for the given within-enum tag + display name
 	// (a 4-field `$variant` with an empty payload).
@@ -57,26 +63,40 @@ pub(crate) fn build_builtin_wrapper(tag: &str, ord: &OrderingLits) -> Option<Fun
 	// the box tag sits below it. `op` runs with both unboxed scalars on the stack.
 	let arith =
 		|w: &mut Wat, scalar: ValType, ty: u32, tag_const: i32, op: fn(&mut Wat), unary: bool| {
+			// An `int` operand/result rides as an `i31ref` (small) or heap `$int`, so
+			// unbox/box through `unbox_int`/`box_int`; `float` is always a heap `$float`.
+			let is_int = scalar == ValType::I64;
 			let tmp = w.local(scalar); // first local past env+params
+			let unbox_arg = |w: &mut Wat, a| {
+				if is_int {
+					w.local_get(a).unbox_int();
+				} else {
+					w.local_get(a).ref_cast(ty).struct_get(ty, 1);
+				}
+			};
 			if unary {
 				// negate: 0 - x (int) / f64.neg (float).
 				let a1 = w.param(1);
-				if scalar == ValType::I64 {
+				if is_int {
 					w.i64(0);
-					w.local_get(a1).ref_cast(ty).struct_get(ty, 1);
+					unbox_arg(w, a1);
 					w.i64_sub();
 				} else {
-					w.local_get(a1).ref_cast(ty).struct_get(ty, 1);
+					unbox_arg(w, a1);
 					w.f64_neg();
 				}
 			} else {
 				let (a1, a2) = (w.param(1), w.param(2));
-				w.local_get(a1).ref_cast(ty).struct_get(ty, 1);
-				w.local_get(a2).ref_cast(ty).struct_get(ty, 1);
+				unbox_arg(w, a1);
+				unbox_arg(w, a2);
 				op(w);
 			}
 			w.local_set(tmp);
-			w.i32(tag_const).local_get(tmp).struct_new(ty);
+			if is_int {
+				w.local_get(tmp).box_int();
+			} else {
+				w.i32(tag_const).local_get(tmp).struct_new(ty);
+			}
 		};
 
 	match tag {

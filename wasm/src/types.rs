@@ -104,12 +104,22 @@ pub fn valarray_ref_null() -> ValType {
 	})
 }
 
-/// `(ref null $value)` — the uniform boxed-value type used for params, results,
-/// captures, and every `Boxed` local.
+/// `(ref null eq)` — the uniform boxed-value type used for params, results,
+/// captures, and every `Boxed` local. Re-rooted from the concrete `$value` struct
+/// to the abstract `eq` top so a value can be EITHER a heap `$value` subtype (as
+/// before) OR an `i31ref` immediate (a small int — no allocation; see
+/// `notes/I31.md`). Every heap subtype and the typed null `ref.null $value` remain
+/// valid `eqref`s by subtyping, so this single change re-types every value slot
+/// (params, `$valarray` elements, value-holding fields, locals) at once; only a
+/// bare `struct.get $value 0` tag-read needs an explicit `ref.cast $value` first
+/// (routed through `value_tag`).
 pub fn value_ref() -> ValType {
 	ValType::Ref(RefType {
 		nullable: true,
-		heap_type: HeapType::Concrete(T_VALUE),
+		heap_type: HeapType::Abstract {
+			shared: false,
+			ty: AbstractHeapType::Eq,
+		},
 	})
 }
 
