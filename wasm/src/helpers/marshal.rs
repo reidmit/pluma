@@ -90,6 +90,87 @@ pub(crate) fn build_send_bytes_fn(bump: u32, alloc: u32, store: u32) -> Function
 	w.finish()
 }
 
+/// `__entry_error(value) -> i32 len` — probe `_entry`'s return for a program-level
+/// failure (a `result.err e`) without the host reflecting the GC value: it shuttles
+/// the opaque ref back in here. Matches `vm`'s `err_message` structurally — a variant
+/// whose display name's last `.`-segment is `err` with exactly one payload — then
+/// renders `e` via `__tostring` into scratch and returns its length, or `-1` if the
+/// return is not such an error (an `ok`, a plain value, `nothing`).
+pub(crate) fn build_entry_error_fn(tostring: u32, send: u32) -> Function {
+	let bv = types::T_BYTES;
+	let mut w = Wat::new(1);
+	let v = w.param(0);
+	let nb = w.local(types::bytes_ref());
+	let n = w.local(ValType::I32);
+	let pl = w.local(types::valarray_ref());
+
+	// Not a variant → not an error.
+	w.local_get(v).value_tag().i32(types::TAG_VARIANT).i32_ne();
+	w.if_(|w| {
+		w.i32(-1).ret();
+	});
+	// name = the variant's display-name `$str` bytes (field 2).
+	w.local_get(v)
+		.ref_cast(types::T_VARIANT)
+		.struct_get(types::T_VARIANT, 2)
+		.ref_cast(types::T_STR)
+		.struct_get(types::T_STR, 1)
+		.local_set(nb);
+	w.local_get(nb).array_len().local_set(n);
+	// `rsplit('.').next() == "err"`: ≥3 bytes, ending "err", and either exactly "err"
+	// or preceded by '.' (so "footerr" is rejected but "result.err" matches).
+	let byte_at = |w: &mut Wat, back: i32| {
+		w.local_get(nb)
+			.local_get(n)
+			.i32(back)
+			.i32_sub()
+			.array_get_u(bv);
+	};
+	w.local_get(n).i32(3).i32_lt_s();
+	w.if_(|w| {
+		w.i32(-1).ret();
+	});
+	byte_at(&mut w, 3);
+	w.i32(0x65).i32_ne(); // 'e'
+	w.if_(|w| {
+		w.i32(-1).ret();
+	});
+	byte_at(&mut w, 2);
+	w.i32(0x72).i32_ne(); // 'r'
+	w.if_(|w| {
+		w.i32(-1).ret();
+	});
+	byte_at(&mut w, 1);
+	w.i32(0x72).i32_ne(); // 'r'
+	w.if_(|w| {
+		w.i32(-1).ret();
+	});
+	w.local_get(n).i32(3).i32_gt_s();
+	w.if_(|w| {
+		byte_at(w, 4);
+		w.i32(0x2e).i32_ne(); // '.'
+		w.if_(|w| {
+			w.i32(-1).ret();
+		});
+	});
+	// payload (field 3) must hold exactly one element.
+	w.local_get(v)
+		.ref_cast(types::T_VARIANT)
+		.struct_get(types::T_VARIANT, 3)
+		.local_set(pl);
+	w.local_get(pl).array_len().i32(1).i32_ne();
+	w.if_(|w| {
+		w.i32(-1).ret();
+	});
+	// Render payload[0] via __tostring, copy into scratch, return its length.
+	w.local_get(pl).i32(0).array_get(types::T_VALARRAY);
+	w.call(tostring)
+		.ref_cast(types::T_STR)
+		.struct_get(types::T_STR, 1);
+	w.call(send).ret();
+	w.finish()
+}
+
 /// `__read_names(ptr, len) -> $list` — split a NUL-terminated name blob in scratch
 /// (the `io.read-dir` host return: each entry name followed by a `\0`) into a `$list`
 /// of `$str`. Counts the NULs for the element count, then materializes one `$str` per

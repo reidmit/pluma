@@ -1,14 +1,15 @@
 // The WasmGC runtime host. Instantiates an emitted module in wasmtime, supplies the
 // `pluma.*` host imports (print/io/net/float_to_str/math), and runs `_entry`.
 //
-// Per ABI.md Phase 1, the host imports traffic only **bytes + scalars + handles**
+// Per ABI.md Phase 1/2, the host imports traffic only **bytes + scalars + handles**
 // across the boundary — byte payloads cross through the module's exported scratch
 // `"memory"` (read/written via `read_scratch`/`write_scratch`); the host never reads
-// or builds a GC `$value` field. That keeps the boundary engine-neutral (the same
-// ABI a V8-on-server or browser JS shim needs — neither can reflect WasmGC structs).
-// The one remaining GC read is `err_message`/`format_value`, which inspects `_entry`'s
-// *return* value (a `runtime error: <msg>` surface, not a host import) — a Phase-2
-// item to marshal once the engine swaps off wasmtime.
+// or builds a GC `$value` field. That keeps the boundary engine-neutral (the same ABI
+// a V8-on-server or browser JS shim needs — neither can reflect WasmGC structs). Even
+// the program-failure surface is reflection-free: the host shuttles `_entry`'s opaque
+// return ref into the module's `__entry_error` export, which renders any `result.err`
+// message into scratch (see `entry_error`). So this whole crate is a thin marshalling
+// shim that a non-wasmtime engine (the Phase-2 rusty_v8 host) can mirror verbatim.
 //
 // Two front doors share one engine + one set of host imports:
 //   - `run_wasm`/`run_entry` — **buffered** (stdout captured, stderr dropped,
@@ -26,8 +27,7 @@ use std::time::Duration;
 
 use polling::{Event, Events, Poller};
 use wasmtime::{
-	AnyRef, AsContextMut, Caller, Config, Engine, Extern, FuncType, Instance, Linker, Memory, Module,
-	Rooted, Store, Val, ValType,
+	Caller, Config, Engine, Extern, FuncType, Instance, Linker, Memory, Module, Store, Val, ValType,
 };
 
 /// A program's observable result: exit status + captured stdout. (`run_streaming`
@@ -38,21 +38,6 @@ pub struct RunResult {
 	pub status: String,
 	pub stdout: String,
 }
-
-const TAG_NOTHING: i32 = 0;
-const TAG_BOOL: i32 = 1;
-const TAG_INT: i32 = 2;
-const TAG_FLOAT: i32 = 3;
-const TAG_STR: i32 = 4;
-const TAG_DURATION: i32 = 5;
-const TAG_VARIANT: i32 = 8;
-const TAG_TUPLE: i32 = 11;
-const TAG_LIST: i32 = 12;
-const TAG_RECORD: i32 = 13;
-const TAG_BYTES: i32 = 14;
-const TAG_REF: i32 = 15;
-const TAG_DICT: i32 = 16;
-const TAG_EXTERN: i32 = 19;
 
 // --------------------------------------------------------------------------
 // The stdio sink. `HostState` is non-generic (the host-import closures live in a
@@ -225,301 +210,6 @@ pub fn engine() -> Engine {
 	};
 	config.collector(collector);
 	Engine::new(&config).expect("engine")
-}
-
-/// Format a boxed `$value` exactly as `vm::Value`'s `Display` would, for the
-/// `print` host import.
-fn format_value(store: &mut impl AsContextMut, val: &Val) -> String {
-	let any = match val {
-		Val::AnyRef(Some(r)) => *r,
-		Val::AnyRef(None) => return "()".to_string(),
-		other => return format!("<non-ref {other:?}>"),
-	};
-	format_anyref(store, any)
-}
-
-fn format_anyref(store: &mut impl AsContextMut, any: Rooted<AnyRef>) -> String {
-	// A small int rides as an `i31ref` immediate (no `$value` struct); see
-	// `notes/I31.md`. Format it as the decimal int it represents.
-	if let Some(i31) = any.as_i31(&mut *store).expect("as_i31") {
-		return i31.get_i32().to_string();
-	}
-	let s = any
-		.as_struct(&mut *store)
-		.expect("as_struct")
-		.expect("a $value struct");
-	let tag = match s.field(&mut *store, 0).expect("tag field") {
-		Val::I32(t) => t,
-		other => panic!("tag not i32: {other:?}"),
-	};
-	match tag {
-		TAG_NOTHING => "()".to_string(),
-		TAG_BOOL => match s.field(&mut *store, 1).expect("bool field") {
-			Val::I32(b) => (b != 0).to_string(),
-			o => panic!("bool payload: {o:?}"),
-		},
-		TAG_INT => match s.field(&mut *store, 1).expect("int field") {
-			Val::I64(n) => n.to_string(),
-			o => panic!("int payload: {o:?}"),
-		},
-		TAG_FLOAT => match s.field(&mut *store, 1).expect("float field") {
-			Val::F64(bits) => {
-				let n = f64::from_bits(bits);
-				if n.fract() == 0.0 && n.is_finite() {
-					format!("{n:.1}")
-				} else {
-					format!("{n}")
-				}
-			}
-			o => panic!("float payload: {o:?}"),
-		},
-		TAG_STR => {
-			let arr = match s.field(&mut *store, 1).expect("str field") {
-				Val::AnyRef(Some(r)) => r
-					.as_array(&mut *store)
-					.expect("as_array")
-					.expect("bytes array"),
-				o => panic!("str payload: {o:?}"),
-			};
-			let len = arr.len(&mut *store).expect("array len");
-			let mut bytes = Vec::with_capacity(len as usize);
-			for i in 0..len {
-				match arr.get(&mut *store, i).expect("array get") {
-					Val::I32(b) => bytes.push(b as u8),
-					o => panic!("byte elem: {o:?}"),
-				}
-			}
-			String::from_utf8_lossy(&bytes).into_owned()
-		}
-		TAG_BYTES => {
-			// Same `$bytes` backing as a string, rendered in the single-quote
-			// literal form (`'..\xNN'`) that `vm::Value`'s Display uses.
-			let arr = match s.field(&mut *store, 1).expect("bytes field") {
-				Val::AnyRef(Some(r)) => r
-					.as_array(&mut *store)
-					.expect("as_array")
-					.expect("bytes array"),
-				o => panic!("bytes payload: {o:?}"),
-			};
-			let len = arr.len(&mut *store).expect("array len");
-			let mut out = String::from("'");
-			for i in 0..len {
-				let byte = match arr.get(&mut *store, i).expect("array get") {
-					Val::I32(b) => b as u8,
-					o => panic!("byte elem: {o:?}"),
-				};
-				match byte {
-					b'\\' => out.push_str("\\\\"),
-					b'\'' => out.push_str("\\'"),
-					0x20..=0x7e => out.push(byte as char),
-					_ => out.push_str(&format!("\\x{byte:02x}")),
-				}
-			}
-			out.push('\'');
-			out
-		}
-		TAG_DURATION => {
-			// A `duration` reuses the `$int` shape; format its i64 nanos canonically
-			// (descending d/h/m/s/ms/us/ns segments), mirroring `vm::Value`'s Display.
-			let nanos = match s.field(&mut *store, 1).expect("duration field") {
-				Val::I64(n) => n,
-				o => panic!("duration payload: {o:?}"),
-			};
-			format_duration(nanos)
-		}
-		TAG_VARIANT => {
-			// `name` (field 2, a $str) then each payload element, space-separated:
-			// e.g. `color.red`, `shape.square 5`.
-			let nf = s.field(&mut *store, 2).expect("variant name");
-			let pf = s.field(&mut *store, 3).expect("variant payload");
-			let name = format_value(store, &nf);
-			let payload = format_elems(store, &pf);
-			let mut out = name;
-			for p in payload {
-				out.push(' ');
-				out.push_str(&p);
-			}
-			out
-		}
-		TAG_TUPLE => {
-			let f = s.field(&mut *store, 1).expect("tuple elems");
-			format!("({})", format_elems(store, &f).join(", "))
-		}
-		TAG_LIST => {
-			// $list is { tag, elems, length } — only the first `length` elements are
-			// live (the backing array may have spare capacity after `list.push`).
-			let f = s.field(&mut *store, 1).expect("list elems");
-			let len = match s.field(&mut *store, 2).expect("list length") {
-				Val::I32(n) => n as usize,
-				o => panic!("list length: {o:?}"),
-			};
-			let mut elems = format_elems(store, &f);
-			elems.truncate(len);
-			format!("[{}]", elems.join(", "))
-		}
-		TAG_RECORD => {
-			let nf = s.field(&mut *store, 1).expect("record names");
-			let vf = s.field(&mut *store, 2).expect("record values");
-			let names = format_elems(store, &nf);
-			let values = format_elems(store, &vf);
-			let pairs: Vec<String> = names
-				.iter()
-				.zip(&values)
-				.map(|(k, v)| format!("{k}: {v}"))
-				.collect();
-			format!("{{{}}}", pairs.join(", "))
-		}
-		TAG_REF => {
-			// `ref <inner>` — the cell's value, recursively (matches `vm::Value`).
-			let cell = s.field(&mut *store, 1).expect("ref cell");
-			format!("ref {}", format_value(store, &cell))
-		}
-		// A host handle: opaque, never structurally printed (mirrors `__tostring`).
-		// No Phase-1 value reaches this — it's here so the entry-return format path
-		// stays total once DOM/fetch (Phase 3) start producing externs.
-		TAG_EXTERN => "<extern>".to_string(),
-		TAG_DICT => {
-			// `{k: v, ...}` in insertion order. The `$dict` is a persistent hash-trie
-			// (`{ tag, root, next_seq }`); walk it to collect `(seq, key, value)`, then
-			// order by `seq`. (Mostly a debug path: well-typed `print`/`to-string`
-			// stringify dicts wasm-side; this is the host-side `format` fallback.)
-			let root = s.field(&mut *store, 1).expect("dict root");
-			let mut entries: Vec<(i64, String, String)> = Vec::new();
-			collect_dict(store, &root, &mut entries);
-			entries.sort_by_key(|(seq, _, _)| *seq);
-			let pairs: Vec<String> = entries
-				.iter()
-				.map(|(_, k, v)| format!("{k}: {v}"))
-				.collect();
-			format!("{{{}}}", pairs.join(", "))
-		}
-		other => format!("<tag {other}>"),
-	}
-}
-
-/// Walk a `$dict`'s persistent hash-trie, collecting `(seq, key, value)` for each
-/// entry (key/value formatted recursively). `node` is a `$dnode` ref or null. A
-/// branch (`kids` non-null, field 1) recurses into its child slots; a leaf
-/// (`ents` non-null, field 2) reads each `$tuple(key, value, seq)`.
-fn collect_dict(store: &mut impl AsContextMut, node: &Val, out: &mut Vec<(i64, String, String)>) {
-	let Val::AnyRef(Some(r)) = node else {
-		return; // empty subtree
-	};
-	let s = r
-		.as_struct(&mut *store)
-		.expect("as_struct")
-		.expect("a $dnode");
-	match s.field(&mut *store, 1).expect("dnode kids") {
-		// branch: recurse into each of the (up to 16) child slots.
-		Val::AnyRef(Some(kids)) => {
-			let a = kids
-				.as_array(&mut *store)
-				.expect("as_array")
-				.expect("kids array");
-			let n = a.len(&mut *store).expect("array len");
-			for i in 0..n {
-				let child = a.get(&mut *store, i).expect("array get");
-				collect_dict(store, &child, out);
-			}
-		}
-		// leaf: each `ents` element is a `$tuple(key, value, seq)`.
-		_ => {
-			let ents = match s.field(&mut *store, 2).expect("dnode ents") {
-				Val::AnyRef(Some(arr)) => arr
-					.as_array(&mut *store)
-					.expect("as_array")
-					.expect("ents array"),
-				_ => return,
-			};
-			let n = ents.len(&mut *store).expect("array len");
-			for i in 0..n {
-				let Val::AnyRef(Some(tr)) = ents.get(&mut *store, i).expect("array get") else {
-					continue;
-				};
-				let ts = tr
-					.as_struct(&mut *store)
-					.expect("as_struct")
-					.expect("a $tuple");
-				let elems = match ts.field(&mut *store, 1).expect("tuple elems") {
-					Val::AnyRef(Some(arr)) => arr
-						.as_array(&mut *store)
-						.expect("as_array")
-						.expect("elems array"),
-					_ => continue,
-				};
-				let key = elems.get(&mut *store, 0).expect("entry key");
-				let val = elems.get(&mut *store, 1).expect("entry value");
-				// seq is a small int: an `i31ref` immediate when small (the common case),
-				// else a heap `$int` (field 1 = i64).
-				let seq = match elems.get(&mut *store, 2).expect("entry seq") {
-					Val::AnyRef(Some(sr)) => {
-						if let Some(i31) = sr.as_i31(&mut *store).expect("as_i31") {
-							i31.get_i32() as i64
-						} else {
-							let ss = sr.as_struct(&mut *store).expect("as_struct").expect("$int");
-							match ss.field(&mut *store, 1).expect("seq i64") {
-								Val::I64(n) => n,
-								_ => 0,
-							}
-						}
-					}
-					_ => 0,
-				};
-				let ks = format_value(store, &key);
-				let vs = format_value(store, &val);
-				out.push((seq, ks, vs));
-			}
-		}
-	}
-}
-
-/// Format each element of a `$valarray` field value.
-fn format_elems(store: &mut impl AsContextMut, arr: &Val) -> Vec<String> {
-	let array = match arr {
-		Val::AnyRef(Some(r)) => r
-			.as_array(&mut *store)
-			.expect("as_array")
-			.expect("valarray"),
-		o => panic!("expected array: {o:?}"),
-	};
-	let len = array.len(&mut *store).expect("array len");
-	let mut out = Vec::with_capacity(len as usize);
-	for i in 0..len {
-		let elem = array.get(&mut *store, i).expect("array get");
-		out.push(format_value(store, &elem));
-	}
-	out
-}
-
-/// Canonical duration rendering — the i64 nanos broken into descending
-/// d/h/m/s/ms/us/ns segments. Mirrors `vm::value::format_duration`.
-fn format_duration(nanos: i64) -> String {
-	if nanos == 0 {
-		return "0s".to_string();
-	}
-	let (sign, mut rem): (&str, u128) = if nanos < 0 {
-		("-", (nanos as i128).unsigned_abs())
-	} else {
-		("", nanos as u128)
-	};
-	const UNITS: [(u128, &str); 7] = [
-		(86_400_000_000_000, "d"),
-		(3_600_000_000_000, "h"),
-		(60_000_000_000, "m"),
-		(1_000_000_000, "s"),
-		(1_000_000, "ms"),
-		(1_000, "us"),
-		(1, "ns"),
-	];
-	let mut out = String::from(sign);
-	for (per, name) in UNITS {
-		if rem >= per {
-			out.push_str(&(rem / per).to_string());
-			out.push_str(name);
-			rem %= per;
-		}
-	}
-	out
 }
 
 // --------------------------------------------------------------------------
@@ -1498,12 +1188,12 @@ fn run_with(engine: &Engine, module: &Module, io: Box<dyn HostIo>) -> RunResult 
 	// ignores it, so pass null.
 	let mut results = vec![Val::AnyRef(None)];
 	let status = match entry.call(&mut store, &[Val::AnyRef(None)], &mut results) {
-		// `main`'s return value doubles as the exit status: a returned `err e`
-		// aborts with `e` (mirrors `vm::VM::run`).
-		Ok(_) => match err_message(&mut store, &results[0]) {
-			Some(msg) => format!("runtime error: {msg}"),
-			None => "ok".to_string(),
-		},
+		// `main`'s return value doubles as the exit status: a returned `err e` aborts
+		// with `e` (mirrors `vm::VM::run`). Rather than reflect the GC return value, the
+		// host shuttles the opaque ref back into the `__entry_error` export, which
+		// renders any error message into scratch and returns its length (-1 = ok) — the
+		// last reflection-free piece of the boundary (ABI.md Phase 2).
+		Ok(_) => entry_error(&mut store, &instance, &results),
 		// A trap with a stashed `io.fail` message is a program-controlled abort;
 		// surface its message (matching the VM) rather than the wasm backtrace.
 		Err(e) => match store.data().fail.clone() {
@@ -1513,6 +1203,35 @@ fn run_with(engine: &Engine, module: &Module, io: Box<dyn HostIo>) -> RunResult 
 	};
 	let stdout = store.data().io.captured_stdout();
 	RunResult { status, stdout }
+}
+
+/// Call the module's `__entry_error(ret) -> i32` export on `_entry`'s return: a
+/// non-negative result is the byte length of an error message written into scratch
+/// (a `result.err e` that `main` returned), which becomes the `runtime error: …`
+/// status; `-1` is a clean `ok`. The opaque return ref is passed straight back in —
+/// the host never reads a GC field.
+fn entry_error(store: &mut Store<HostState>, instance: &Instance, results: &[Val]) -> String {
+	let f = instance
+		.get_func(&mut *store, "__entry_error")
+		.expect("__entry_error export");
+	let mut out = [Val::I32(-1)];
+	f.call(&mut *store, results, &mut out)
+		.expect("__entry_error call");
+	let len = match out[0] {
+		Val::I32(n) => n,
+		_ => -1,
+	};
+	if len < 0 {
+		return "ok".to_string();
+	}
+	let mem = instance
+		.get_memory(&mut *store, "memory")
+		.expect("memory export");
+	let mut buf = vec![0u8; len as usize];
+	mem
+		.read(&*store, 0, &mut buf)
+		.expect("read entry-error message");
+	format!("runtime error: {}", String::from_utf8_lossy(&buf))
 }
 
 /// A collecting (deferred-reference-counting) engine for the bench: the timed loop
@@ -1526,25 +1245,4 @@ pub fn bench_engine() -> Engine {
 	config.wasm_tail_call(true);
 	config.collector(wasmtime::Collector::DeferredReferenceCounting);
 	Engine::new(&config).expect("bench engine")
-}
-
-/// If `val` is an `err e` result variant, return `e` formatted (the program's
-/// abort message); otherwise `None`.
-fn err_message(store: &mut impl AsContextMut, val: &Val) -> Option<String> {
-	let Val::AnyRef(Some(r)) = val else {
-		return None;
-	};
-	let s = r.as_struct(&mut *store).ok()??;
-	if !matches!(s.field(&mut *store, 0).ok()?, Val::I32(TAG_VARIANT)) {
-		return None;
-	}
-	// field 2 is the display name "enum.variant"; field 3 the payload.
-	let name_val = s.field(&mut *store, 2).ok()?;
-	let name = format_value(store, &name_val);
-	if name.rsplit('.').next() != Some("err") {
-		return None;
-	}
-	let payload_val = s.field(&mut *store, 3).ok()?;
-	let payload = format_elems(store, &payload_val);
-	(payload.len() == 1).then(|| payload[0].clone())
 }

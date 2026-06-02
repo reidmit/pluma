@@ -315,13 +315,19 @@ pub(crate) enum Helper {
 	/// `io.read-dir` host return) in scratch into a `$list` of `$str`. Each name ends
 	/// in a NUL; an empty blob is the empty list.
 	MarshalReadNames,
+	/// `__entry_error(value) -> i32 len` — probe `_entry`'s return for a `result.err e`
+	/// (structurally: a variant whose name's last `.`-segment is `err`, one payload),
+	/// render `e` into scratch via `__tostring`, and return its length, or `-1` if not
+	/// an error. Exported as `__entry_error` so the host detects a program failure
+	/// without reflecting the GC value. Reuses `__tostring` + `__send_bytes`.
+	EntryError,
 }
 
 impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 70;
+	pub(crate) const COUNT: usize = 71;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable
@@ -474,6 +480,7 @@ pub(crate) enum Ty {
 	MarshalLoad,
 	MarshalSend,
 	MarshalReadNames,
+	EntryError,
 }
 
 impl Ty {
@@ -495,6 +502,7 @@ impl Ty {
 			Ty::MarshalLoad => ft.for_marshal_load(),
 			Ty::MarshalSend => ft.for_marshal_send(),
 			Ty::MarshalReadNames => ft.for_marshal_read_names(),
+			Ty::EntryError => ft.for_entry_error(),
 		}
 	}
 }

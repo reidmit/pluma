@@ -263,6 +263,11 @@ enum FuncKind {
 	/// `__read_names(i32 ptr, i32 len) -> value` — split a NUL-terminated name blob in
 	/// scratch into a `$list` of `$str` (the `io.read-dir` host return shape).
 	MarshalReadNames,
+	/// `__entry_error((ref null eq) value) -> i32 len` — inspect `_entry`'s return for a
+	/// `result.err e`, rendering `e` into scratch and returning its length, or `-1` if
+	/// the return is not an error. Lets the host detect a program-level failure without
+	/// reflecting the GC value (it shuttles the opaque ref back in).
+	EntryError,
 	/// A `wire` FNV mixer over a value: `(i64 hash, ref $value) -> i64`. Used by
 	/// both the recursive schema fingerprint and the string mixer.
 	WireMixVal,
@@ -446,6 +451,11 @@ impl FuncTypes {
 	/// The read-dir splitter `__read_names(i32, i32) -> value`.
 	pub fn for_marshal_read_names(&mut self) -> u32 {
 		self.intern(FuncKind::MarshalReadNames)
+	}
+
+	/// The entry-error probe `__entry_error((ref null eq)) -> i32`.
+	pub fn for_entry_error(&mut self) -> u32 {
+		self.intern(FuncKind::EntryError)
 	}
 
 	/// `net-listen`/`net-connect`/`net-accept`: `(i32, i32) -> (i32, i32)`.
@@ -789,6 +799,10 @@ impl FuncTypes {
 					types
 						.ty()
 						.function([ValType::I32, ValType::I32], [value_ref()]);
+					continue;
+				}
+				FuncKind::EntryError => {
+					types.ty().function([value_ref()], [ValType::I32]);
 					continue;
 				}
 				// core.net host imports (ABI.md Phase 1). Each fallible op returns a

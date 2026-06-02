@@ -185,6 +185,14 @@ impl Module {
 				}
 			}
 		}
+		// Every program exports `__entry_error`, which renders a `result.err` message
+		// via `__tostring` + `__send_bytes` — request them here, *before* the
+		// `float_to_str` gate below, so `__tostring`'s float-format import is registered
+		// (a non-printing program would otherwise pull `__tostring` in only via
+		// `close_deps`, after this gate, and miss `float_to_str`).
+		requested.insert(Helper::EntryError);
+		requested.insert(Helper::ToString);
+		requested.insert(Helper::MarshalSend);
 		// `__tostring` delegates float formatting to a host import.
 		if requested.contains(&Helper::ToString) {
 			host_index.insert("float_to_str".to_string(), host_order.len() as u32);
@@ -910,6 +918,11 @@ impl Module {
 		};
 		if let Some(w) = entry_export {
 			exports.export("_entry", ExportKind::Func, w);
+		}
+		// `__entry_error(ret) -> i32`: the host calls this on `_entry`'s return to detect
+		// a `result.err` failure + read its message out of scratch (no GC reflection).
+		if let Some(w) = runtime.idx(Helper::EntryError) {
+			exports.export("__entry_error", ExportKind::Func, w);
 		}
 
 		let mut data = DataSection::new();

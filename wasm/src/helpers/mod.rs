@@ -661,6 +661,12 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		deps: &[H::MarshalLoad],
 		build: |c| marshal::build_read_names_fn(c.dep(H::MarshalLoad)),
 	},
+	HelperDef {
+		id: H::EntryError,
+		fn_type: Ty::EntryError,
+		deps: &[H::ToString, H::MarshalSend],
+		build: |c| marshal::build_entry_error_fn(c.dep(H::ToString), c.dep(H::MarshalSend)),
+	},
 ];
 
 /// The helper a builtin tag lowers to, if any. These are the builtins implemented
