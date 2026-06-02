@@ -30,6 +30,15 @@ use wasmtime::{
 	Caller, Config, Engine, Extern, FuncType, Instance, Linker, Memory, Module, Store, Val, ValType,
 };
 
+// The optional V8 backend (ABI.md Phase 2): instantiates the same WasmGC artifact
+// under V8 over the marshalling ABI. Reuses this module's engine-independent core
+// (`HostState`/`HostNet`/`NetRet`/`BufferedIo`/`read_line_from`/`deliver_read`) — a
+// child module sees its ancestors' private items, so nothing here needs `pub`.
+#[cfg(feature = "v8")]
+mod v8host;
+#[cfg(feature = "v8")]
+pub use v8host::run_wasm_v8;
+
 /// A program's observable result: exit status + captured stdout. (`run_streaming`
 /// returns an empty `stdout` — it streamed live to the process — and the caller
 /// uses `status` for the exit code.)
