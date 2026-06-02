@@ -175,6 +175,37 @@ pub(crate) enum Helper {
 	DictRemove,
 	DictMap,
 	DictFilter,
+	/// `__hash(value) -> $int` — a structural hash consistent with `__eq` (equal
+	/// values hash equal), keying the `$dict` trie. Recurses into variant/tuple/
+	/// list/record payloads like `__eq`; the exact mixing is internal (it need only
+	/// agree with `__eq`, so user `hash` instances and the VM's hash are irrelevant
+	/// — the hash is a pure accelerator). FNV-1a over the structural encoding.
+	Hash,
+	/// `__dict_node_insert(node, hash, key, val, seq) -> $dnode` — insert into the
+	/// persistent trie rooted at `node` (null = empty), returning a path-copied
+	/// root. `hash`/`seq` arrive boxed (`$int`). Recursive (descends a nibble per
+	/// level, splitting a leaf into a branch on a hash divergence).
+	DictNodeIns,
+	/// `__dict_node_eq(a, b) -> i32` — structural equality of two trie nodes (either
+	/// may be null). Same key-set ⇒ same trie shape, so this compares shape +
+	/// per-leaf buckets (order-independently, via `__eq`), ignoring `seq`. Lets
+	/// `__eq`'s dict case stay self-contained (no entries materialization).
+	DictNodeEq,
+	/// `__dict_collect(node, list) -> list` — append every entry of the subtree as a
+	/// `$tuple(key, value, seq)` to `list` (arbitrary order; the caller sorts by
+	/// `seq`). Recursive. Backs `__dict_entries`/size-independent iteration.
+	DictCollect,
+	/// `__dict_count(node) -> $int` — number of entries in the subtree (sum of leaf
+	/// bucket sizes). Recursive. Backs `dict.size` (an O(n) walk — size isn't
+	/// stored, since it's read far less than insert/lookup run).
+	DictCount,
+	/// `__dict_size(dict) -> $int` — `dict.size`: counts `dict.root` via `DictCount`.
+	DictSize,
+	/// `__dict_entries(dict) -> list` — `dict.entries`: collect the trie, sort by
+	/// `seq` (insertion order), and strip `seq` to `$tuple(key, value)`. The single
+	/// insertion-order materialization `dict.keys/values/map/filter/remove` and the
+	/// to-string/wire formatters all funnel through.
+	DictEntries,
 	WireFp,
 	WireMixStr,
 	WireMixLen,
@@ -269,7 +300,7 @@ impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 58;
+	pub(crate) const COUNT: usize = 65;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable
@@ -804,11 +835,10 @@ pub(crate) fn is_inline_builtin(tag: &str) -> bool {
 			| "ref-get"
 			| "ref-set"
 			| "ref-update"
-			// dicts: the trivial accessors over the `$dict` entries array. The
-			// rebuild/scan/closure ops (insert/lookup/remove/map/filter) are helpers.
+			// dict.empty: a fresh `$dict` with a null trie root. Every other dict op
+			// (size/entries as well as insert/lookup/remove/map/filter) is a helper
+			// that walks/builds the persistent trie.
 			| "dict-empty"
-			| "dict-size"
-			| "dict-entries"
 			// math primitives WasmGC does with one f64/i64 opcode (the
 			// transcendentals log/exp/sin/cos still need a host import).
 			| "math-sqrt"

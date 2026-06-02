@@ -48,8 +48,8 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::Eq,
 		fn_type: Ty::Eq,
-		deps: &[],
-		build: |c| eq::build_eq_fn(c.self_idx),
+		deps: &[H::DictNodeEq],
+		build: |c| eq::build_eq_fn(c.self_idx, c.dep(H::DictNodeEq)),
 	},
 	HelperDef {
 		id: H::GetField,
@@ -84,13 +84,14 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::ToString,
 		fn_type: Ty::Helper(1),
-		deps: &[H::IntStr, H::BytesConcat],
+		deps: &[H::IntStr, H::BytesConcat, H::DictEntries],
 		build: |c| {
 			tostring::build_tostring_fn(
 				c.self_idx,
 				c.dep(H::IntStr),
 				c.dep(H::BytesConcat),
 				c.float_to_str(),
+				c.dep(H::DictEntries),
 				c.rt.lits,
 			)
 		},
@@ -128,32 +129,82 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::DictInsert,
 		fn_type: Ty::Helper(3),
-		deps: &[H::Eq],
-		build: |c| dict::build_dict_insert_fn(c.dep(H::Eq)),
+		deps: &[H::Hash, H::DictNodeIns],
+		build: |c| dict::build_dict_insert_fn(c.dep(H::Hash), c.dep(H::DictNodeIns)),
 	},
 	HelperDef {
 		id: H::DictLookup,
 		fn_type: Ty::Helper(2),
-		deps: &[H::Eq],
-		build: |c| dict::build_dict_lookup_fn(c.dep(H::Eq), c.rt.opt),
+		deps: &[H::Hash, H::Eq],
+		build: |c| dict::build_dict_lookup_fn(c.dep(H::Hash), c.dep(H::Eq), c.rt.opt),
 	},
 	HelperDef {
 		id: H::DictRemove,
 		fn_type: Ty::Helper(2),
-		deps: &[H::Eq],
-		build: |c| dict::build_dict_remove_fn(c.dep(H::Eq)),
+		deps: &[H::DictEntries, H::DictInsert, H::Eq],
+		build: |c| {
+			dict::build_dict_remove_fn(c.dep(H::DictEntries), c.dep(H::DictInsert), c.dep(H::Eq))
+		},
 	},
 	HelperDef {
 		id: H::DictMap,
 		fn_type: Ty::Helper(2),
-		deps: &[],
-		build: |c| dict::build_dict_map_fn(c.arity(1)),
+		deps: &[H::DictEntries, H::DictInsert],
+		build: |c| {
+			let arity1 = c.arity(1);
+			dict::build_dict_map_fn(c.dep(H::DictEntries), c.dep(H::DictInsert), arity1)
+		},
 	},
 	HelperDef {
 		id: H::DictFilter,
 		fn_type: Ty::Helper(2),
+		deps: &[H::DictEntries, H::DictInsert],
+		build: |c| {
+			let arity2 = c.arity(2);
+			dict::build_dict_filter_fn(c.dep(H::DictEntries), c.dep(H::DictInsert), arity2)
+		},
+	},
+	HelperDef {
+		id: H::Hash,
+		fn_type: Ty::Helper(1),
 		deps: &[],
-		build: |c| dict::build_dict_filter_fn(c.arity(2)),
+		build: |c| dict::build_hash_fn(c.self_idx),
+	},
+	HelperDef {
+		id: H::DictNodeIns,
+		fn_type: Ty::Helper(5),
+		deps: &[H::Eq],
+		build: |c| dict::build_dict_node_insert_fn(c.self_idx, c.dep(H::Eq)),
+	},
+	HelperDef {
+		id: H::DictNodeEq,
+		fn_type: Ty::Eq,
+		deps: &[H::Eq],
+		build: |c| dict::build_dict_node_eq_fn(c.self_idx, c.dep(H::Eq)),
+	},
+	HelperDef {
+		id: H::DictCollect,
+		fn_type: Ty::Helper(2),
+		deps: &[H::ListPush],
+		build: |c| dict::build_dict_collect_fn(c.self_idx, c.dep(H::ListPush)),
+	},
+	HelperDef {
+		id: H::DictCount,
+		fn_type: Ty::Helper(1),
+		deps: &[],
+		build: |c| dict::build_dict_count_fn(c.self_idx),
+	},
+	HelperDef {
+		id: H::DictSize,
+		fn_type: Ty::Helper(1),
+		deps: &[H::DictCount],
+		build: |c| dict::build_dict_size_fn(c.dep(H::DictCount)),
+	},
+	HelperDef {
+		id: H::DictEntries,
+		fn_type: Ty::Helper(1),
+		deps: &[H::DictCollect],
+		build: |c| dict::build_dict_entries_fn(c.dep(H::DictCollect)),
 	},
 	HelperDef {
 		id: H::WireFp,
@@ -274,6 +325,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 			H::WireCtxPut,
 			H::WireCtxGet,
 			H::WireDecVariant,
+			H::DictInsert,
 		],
 		build: |c| {
 			wire::build_wire_dec_fn(
@@ -283,6 +335,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 				c.dep(H::WireCtxPut),
 				c.dep(H::WireCtxGet),
 				c.dep(H::WireDecVariant),
+				c.dep(H::DictInsert),
 				c.rt.wireg,
 				c.rt.wire,
 			)
@@ -303,13 +356,20 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::WireEncDict,
 		fn_type: Ty::WireEnc,
-		deps: &[H::WireEnc, H::WireUvarint, H::WirePush, H::WireBCmp],
+		deps: &[
+			H::WireEnc,
+			H::WireUvarint,
+			H::WirePush,
+			H::WireBCmp,
+			H::DictEntries,
+		],
 		build: |c| {
 			wire::build_wire_enc_dict_fn(
 				c.dep(H::WireEnc),
 				c.dep(H::WireUvarint),
 				c.dep(H::WirePush),
 				c.dep(H::WireBCmp),
+				c.dep(H::DictEntries),
 				c.rt.wireg,
 			)
 		},
@@ -555,13 +615,15 @@ pub(crate) fn helper_for_tag(tag: &str) -> Option<Helper> {
 		"bytes-build" => H::BytesBuild,
 		// `bytes.concat` reuses the `__bytesconcat` helper.
 		"bytes-concat" => H::BytesConcat,
-		// dict scan/rebuild/closure ops (the trivial accessors empty/size/entries
-		// go through `is_inline_builtin`).
+		// dict trie ops. Only `dict-empty` (a null-rooted struct) stays inline; the
+		// rest walk or path-copy the persistent trie.
 		"dict-insert" => H::DictInsert,
 		"dict-lookup" => H::DictLookup,
 		"dict-remove" => H::DictRemove,
 		"dict-map" => H::DictMap,
 		"dict-filter" => H::DictFilter,
+		"dict-size" => H::DictSize,
+		"dict-entries" => H::DictEntries,
 		// `wire-fingerprint` walks the schema value tree; encode/decode interpret
 		// it to (de)serialize a value over the module-level codec globals.
 		"wire-fingerprint" => H::WireFp,

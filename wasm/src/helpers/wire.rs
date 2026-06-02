@@ -1020,6 +1020,7 @@ pub(crate) fn build_wire_dec_fn(
 	ctxput: u32,
 	ctxget: u32,
 	dec_variant: u32,
+	dict_insert: u32,
 	g: WireGlobals,
 	wt: WireTags,
 ) -> Function {
@@ -1267,35 +1268,35 @@ pub(crate) fn build_wire_dec_fn(
 		payload_elem(w, 0);
 		w.local_get(vars).call(dec_variant).ret();
 	});
-	// dict: uvarint count then (key, value) pairs in wire (canonical) order. The
-	// `$dict` is insertion-ordered and scans with `__eq`, so preserving decode
-	// order is enough — `dict.lookup`/`size` work on the result.
+	// dict: uvarint count then (key, value) pairs in wire (canonical) order.
+	// Rebuild the persistent trie by inserting each decoded pair — keys are
+	// decoded before values, preserving the stream order.
 	w.local_get(vtag).i32(wt.s_dict as i32).i32_eq();
 	w.if_(|w| {
 		w.call(ruvarint).i32_wrap_i64().local_set(n);
 		bail(w);
-		w.local_get(n).array_new_default(va).local_set(out);
+		// inner = empty $dict { tag, root: null, next_seq: 0 }.
+		w.i32(types::TAG_DICT)
+			.ref_null(types::T_VALUE)
+			.i32(0)
+			.struct_new(types::T_DICT)
+			.local_set(inner);
 		w.i32(0).local_set(i);
 		w.block("brk", |w| {
 			w.loop_("lp", |w| {
 				w.local_get(i).local_get(n).i32_ge_u().br_if("brk");
-				// out[i] = tuple(dec(key-schema), dec(value-schema)) — key decoded first.
-				w.local_get(out).local_get(i);
-				w.i32(types::TAG_TUPLE);
+				// inner = dict_insert(inner, dec(key-schema), dec(value-schema)).
+				w.local_get(inner);
 				payload_elem(w, 0);
 				w.call(self_idx);
 				payload_elem(w, 1);
 				w.call(self_idx);
-				w.array_new_fixed(va, 2).struct_new(types::T_TUPLE);
-				w.array_set(va);
+				w.call(dict_insert).local_set(inner);
 				w.local_get(i).i32(1).i32_add().local_set(i);
 				w.br("lp");
 			});
 		});
-		w.i32(types::TAG_DICT)
-			.local_get(out)
-			.struct_new(types::T_DICT)
-			.ret();
+		w.local_get(inner).ret();
 	});
 	// Fallthrough (malformed schema): nothing.
 	push_nothing(&mut w);
@@ -1438,12 +1439,14 @@ pub(crate) fn build_wire_enc_dict_fn(
 	uvarint: u32,
 	push: u32,
 	bcmp: u32,
+	dict_entries: u32,
 	g: WireGlobals,
 ) -> Function {
 	let va = types::T_VALARRAY;
 	let bytes = types::T_BYTES;
 	let mut w = Wat::new(2);
 	let (schema, val) = (w.param(0), w.param(1));
+	let lst = w.local(types::value_ref());
 	let ksch = w.local(types::value_ref());
 	let vsch = w.local(types::value_ref());
 	let entries = w.local(types::valarray_ref());
@@ -1479,11 +1482,17 @@ pub(crate) fn build_wire_enc_dict_fn(
 	w.local_set(ksch);
 	schema_payload(&mut w, 1);
 	w.local_set(vsch);
-	w.local_get(val)
-		.ref_cast(types::T_DICT)
-		.struct_get(types::T_DICT, 1)
+	// `__dict_entries` materializes the seq-ordered `(key, value)` list (this
+	// helper then re-sorts the pairs into canonical key-byte order below).
+	w.local_get(val).call(dict_entries).local_set(lst);
+	w.local_get(lst)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, 1)
 		.local_set(entries);
-	w.local_get(entries).array_len().local_set(n);
+	w.local_get(lst)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, 2)
+		.local_set(n);
 	w.local_get(n).array_new_default(va).local_set(pairs);
 	// Pass 1: encode each key into `g_buf`, capture its bytes, rewind. pairs[i] =
 	// tuple(key-bytes-value, value).

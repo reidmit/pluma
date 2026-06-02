@@ -37,9 +37,10 @@ pub const T_TUPLE: u32 = 11; // struct { i32 tag, (ref $valarray) elems }
 pub const T_LIST: u32 = 12; // struct { i32 tag, (ref $valarray) elems }
 pub const T_RECORD: u32 = 13; // struct { i32 tag, (ref $valarray) names, (ref $valarray) values }
 pub const T_REF: u32 = 14; // struct { i32 tag, (mut ref null $value) cell }  — a mutable cell
-pub const T_DICT: u32 = 15; // struct { i32 tag, (ref $valarray) entries }  — insertion-ordered (k,v) tuples
+pub const T_DICT: u32 = 15; // struct { i32 tag, (ref null $value) root, i32 next_seq }  — persistent hash-trie
 pub const T_TASK: u32 = 16; // struct { i32 tag, i32 kind, (ref $valarray) payload }  — a cold async `task`
-const T_FIRST_FUNC: u32 = 17;
+pub const T_DNODE: u32 = 17; // struct { i32 tag, (ref null $valarray) kids, (ref null $valarray) ents, i64 leafhash }
+const T_FIRST_FUNC: u32 = 18;
 
 // --------------------------------------------------------------------------
 // Runtime tags carried in the `$value` discriminant field. Mirror `vm::Value`'s
@@ -67,9 +68,12 @@ pub const TAG_BYTES: i32 = 14;
 /// A `ref a` mutable cell: a `$ref` struct holding one (mutable) boxed value.
 /// Compared by reference identity (`ref.eq`), like the VM's `Rc::ptr_eq`.
 pub const TAG_REF: i32 = 15;
-/// A `dict k v`: a `$dict` struct holding a `$valarray` of insertion-ordered
-/// `$tuple` `(key, value)` entries. Linear-scan with `__eq` on keys (the VM's
-/// hash buckets are a pure accelerator; observable behavior is the entry order).
+/// A `dict k v`: a `$dict` struct `{ tag, root, next_seq }` holding a persistent
+/// hash-trie (`$dnode` root, or null when empty). Insert path-copies O(log n) trie
+/// nodes (structurally shared, immutable) and looks up by structural `__hash` +
+/// `__eq` — the WasmGC analogue of the VM's `im_rc` map. Entries carry an
+/// insertion `seq` so iteration recovers insertion order. The `$dnode` interior
+/// nodes never escape to user code (a `$dict` is the only handle).
 pub const TAG_DICT: i32 = 16;
 /// A cold, re-runnable `task a`: a `$task` struct `{ tag, i32 kind, payload }`.
 /// `kind` is the `TaskRepr` discriminant (see `runtime::task_kind`); `payload`
@@ -114,6 +118,16 @@ pub fn ref_ref() -> ValType {
 	ValType::Ref(RefType {
 		nullable: false,
 		heap_type: HeapType::Concrete(T_REF),
+	})
+}
+
+/// `(ref null $dnode)` — a nullable reference to a persistent-dict trie node.
+/// Used for a local that holds a `ref.cast`-to-`$dnode` (so a later `struct.get`
+/// reads its fields; a plain `$value` local would lose the subtype).
+pub fn dnode_ref_null() -> ValType {
+	ValType::Ref(RefType {
+		nullable: true,
+		heap_type: HeapType::Concrete(T_DNODE),
 	})
 }
 
@@ -504,13 +518,16 @@ impl FuncTypes {
 			vec![val_field(ValType::I32, false), val_field(value_ref(), true)],
 			true,
 		));
-		// 15 $dict — { tag, (ref $valarray) entries }. Each entry is a `$tuple`
-		// `(key, value)`; insertion-ordered (same shape as `$list`/`$tuple`).
+		// 15 $dict — { tag, (ref null $value) root, i32 next_seq }. A persistent
+		// hash-trie map: `root` is the `$dnode` trie root (null when empty), and
+		// `next_seq` is the monotonic counter stamped into each new entry so
+		// iteration (keys/values/entries) can recover insertion order.
 		types.ty().subtype(&struct_subtype(
 			Some(T_VALUE),
 			vec![
 				val_field(ValType::I32, false),
-				val_field(valarray_ref(), false),
+				val_field(value_ref(), false),
+				val_field(ValType::I32, false),
 			],
 			true,
 		));
@@ -522,6 +539,27 @@ impl FuncTypes {
 				val_field(ValType::I32, false),
 				val_field(ValType::I32, false),
 				val_field(valarray_ref(), false),
+			],
+			true,
+		));
+		// 17 $dnode — an interior node of a `$dict`'s persistent hash-trie. A
+		// subtype of `$value` so it can occupy a `$valarray` child slot and the
+		// `$dict.root` field. Two shapes, distinguished by which array is non-null:
+		//   * branch — `kids` is a 16-slot `$valarray` of child `$dnode`s (a null
+		//     slot = absent), `ents` is null. The nibble `(hash >> 4*depth) & 0xF`
+		//     selects a child.
+		//   * leaf — `ents` is a `$valarray` of `$tuple(key, value, seq)` entries
+		//     all sharing `leafhash` (the hash bits still unconsumed at this
+		//     depth), `kids` is null. A leaf splits into a branch when an insert
+		//     arrives with a different `leafhash`. `tag` is an unused sentinel
+		//     (a `$dnode` never escapes to tag-inspecting code).
+		types.ty().subtype(&struct_subtype(
+			Some(T_VALUE),
+			vec![
+				val_field(ValType::I32, false),
+				val_field(valarray_ref_null(), false),
+				val_field(valarray_ref_null(), false),
+				val_field(ValType::I64, false),
 			],
 			true,
 		));

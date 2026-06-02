@@ -512,26 +512,92 @@ fn format_anyref(store: &mut impl AsContextMut, any: Rooted<AnyRef>) -> String {
 			format!("ref {}", format_value(store, &cell))
 		}
 		TAG_DICT => {
-			// `{k: v, ...}` — entries are `$tuple` (key, value), insertion order.
-			let ef = s.field(&mut *store, 1).expect("dict entries");
-			let entries = format_elems(store, &ef);
-			// each element formats as a tuple "(k, v)"; reshape to "k: v"
+			// `{k: v, ...}` in insertion order. The `$dict` is a persistent hash-trie
+			// (`{ tag, root, next_seq }`); walk it to collect `(seq, key, value)`, then
+			// order by `seq`. (Mostly a debug path: well-typed `print`/`to-string`
+			// stringify dicts wasm-side; this is the host-side `format` fallback.)
+			let root = s.field(&mut *store, 1).expect("dict root");
+			let mut entries: Vec<(i64, String, String)> = Vec::new();
+			collect_dict(store, &root, &mut entries);
+			entries.sort_by_key(|(seq, _, _)| *seq);
 			let pairs: Vec<String> = entries
 				.iter()
-				.map(|e| {
-					let inner = e
-						.strip_prefix('(')
-						.and_then(|s| s.strip_suffix(')'))
-						.unwrap_or(e);
-					match inner.split_once(", ") {
-						Some((k, v)) => format!("{k}: {v}"),
-						None => inner.to_string(),
-					}
-				})
+				.map(|(_, k, v)| format!("{k}: {v}"))
 				.collect();
 			format!("{{{}}}", pairs.join(", "))
 		}
 		other => format!("<tag {other}>"),
+	}
+}
+
+/// Walk a `$dict`'s persistent hash-trie, collecting `(seq, key, value)` for each
+/// entry (key/value formatted recursively). `node` is a `$dnode` ref or null. A
+/// branch (`kids` non-null, field 1) recurses into its child slots; a leaf
+/// (`ents` non-null, field 2) reads each `$tuple(key, value, seq)`.
+fn collect_dict(store: &mut impl AsContextMut, node: &Val, out: &mut Vec<(i64, String, String)>) {
+	let Val::AnyRef(Some(r)) = node else {
+		return; // empty subtree
+	};
+	let s = r
+		.as_struct(&mut *store)
+		.expect("as_struct")
+		.expect("a $dnode");
+	match s.field(&mut *store, 1).expect("dnode kids") {
+		// branch: recurse into each of the (up to 16) child slots.
+		Val::AnyRef(Some(kids)) => {
+			let a = kids
+				.as_array(&mut *store)
+				.expect("as_array")
+				.expect("kids array");
+			let n = a.len(&mut *store).expect("array len");
+			for i in 0..n {
+				let child = a.get(&mut *store, i).expect("array get");
+				collect_dict(store, &child, out);
+			}
+		}
+		// leaf: each `ents` element is a `$tuple(key, value, seq)`.
+		_ => {
+			let ents = match s.field(&mut *store, 2).expect("dnode ents") {
+				Val::AnyRef(Some(arr)) => arr
+					.as_array(&mut *store)
+					.expect("as_array")
+					.expect("ents array"),
+				_ => return,
+			};
+			let n = ents.len(&mut *store).expect("array len");
+			for i in 0..n {
+				let Val::AnyRef(Some(tr)) = ents.get(&mut *store, i).expect("array get") else {
+					continue;
+				};
+				let ts = tr
+					.as_struct(&mut *store)
+					.expect("as_struct")
+					.expect("a $tuple");
+				let elems = match ts.field(&mut *store, 1).expect("tuple elems") {
+					Val::AnyRef(Some(arr)) => arr
+						.as_array(&mut *store)
+						.expect("as_array")
+						.expect("elems array"),
+					_ => continue,
+				};
+				let key = elems.get(&mut *store, 0).expect("entry key");
+				let val = elems.get(&mut *store, 1).expect("entry value");
+				// seq is a boxed `$int` (struct field 1 = i64).
+				let seq = match elems.get(&mut *store, 2).expect("entry seq") {
+					Val::AnyRef(Some(sr)) => {
+						let ss = sr.as_struct(&mut *store).expect("as_struct").expect("$int");
+						match ss.field(&mut *store, 1).expect("seq i64") {
+							Val::I64(n) => n,
+							_ => 0,
+						}
+					}
+					_ => 0,
+				};
+				let ks = format_value(store, &key);
+				let vs = format_value(store, &val);
+				out.push((seq, ks, vs));
+			}
+		}
 	}
 }
 

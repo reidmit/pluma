@@ -11,7 +11,7 @@ use crate::types;
 /// (so `nan != nan`), byte-exact strings. `self_idx` is `__eq`'s own wasm index
 /// (for the variant-payload recursion). Tuples/lists/records are not yet handled
 /// (they trap — a clear signal to implement them, not a silent wrong answer).
-pub(crate) fn build_eq_fn(self_idx: u32) -> Function {
+pub(crate) fn build_eq_fn(self_idx: u32, dict_node_eq_idx: u32) -> Function {
 	let mut w = Wat::new(2);
 	let (a, b) = (w.param(0), w.param(1));
 	let ta = w.local(ValType::I32);
@@ -22,8 +22,6 @@ pub(crate) fn build_eq_fn(self_idx: u32) -> Function {
 	let bb = w.local(types::bytes_ref());
 	let pa = w.local(types::valarray_ref());
 	let pb = w.local(types::valarray_ref());
-	let j = w.local(ValType::I32);
-	let found = w.local(ValType::I32);
 
 	// ta = tag(a); tb = tag(b); if ta != tb -> 0.
 	w.local_get(a).struct_get(types::T_VALUE, 0).local_set(ta);
@@ -188,68 +186,19 @@ pub(crate) fn build_eq_fn(self_idx: u32) -> Function {
 	w.if_(|w| {
 		w.local_get(a).local_get(b).ref_eq().ret();
 	});
-	// DICT: order-independent structural compare (matches the VM). Equal sizes,
-	// then every entry of `a` must have a key in `b` with an equal value. Keys are
-	// unique within each dict, so equal sizes make this a bijection check. Entry
-	// fields are read inline: `entries[idx]` is a `$tuple`, elem 0 = key, 1 = value.
-	let entry_field = |w: &mut Wat, arr, idx, field: i32| {
-		w.local_get(arr).local_get(idx).array_get(types::T_VALARRAY);
-		w.ref_cast(types::T_TUPLE).struct_get(types::T_TUPLE, 1);
-		w.i32(field).array_get(types::T_VALARRAY);
-	};
+	// DICT: order-independent structural compare (matches the VM), delegated to
+	// `__dict_node_eq` on the two tries' roots (field 1). Two dicts with the same
+	// key set have the same trie shape, so that compares shape + leaf buckets
+	// (order-independently, ignoring `seq`) using `__eq` for keys/values.
 	w.local_get(ta).i32(types::TAG_DICT).i32_eq();
 	w.if_(|w| {
-		// pa = a.entries; pb = b.entries; n = len(a); bail if lengths differ.
 		w.local_get(a)
 			.ref_cast(types::T_DICT)
-			.struct_get(types::T_DICT, 1)
-			.local_set(pa);
+			.struct_get(types::T_DICT, 1);
 		w.local_get(b)
 			.ref_cast(types::T_DICT)
-			.struct_get(types::T_DICT, 1)
-			.local_set(pb);
-		w.local_get(pa).array_len().local_set(n);
-		w.local_get(pb).array_len().local_get(n).i32_ne();
-		w.if_(|w| {
-			w.i32(0).ret();
-		});
-		w.i32(0).local_set(i);
-		w.block("outer", |w| {
-			w.loop_("oloop", |w| {
-				w.local_get(i).local_get(n).i32_ge_s().br_if("outer"); // done; all matched
-				w.i32(0).local_set(j);
-				w.i32(0).local_set(found);
-				w.block("inner", |w| {
-					w.loop_("iloop", |w| {
-						w.local_get(j).local_get(n).i32_ge_s().br_if("inner"); // key absent in b
-						// if __eq(a.key[i], b.key[j]) { values must match }
-						entry_field(w, pa, i, 0);
-						entry_field(w, pb, j, 0);
-						w.call(self_idx);
-						w.if_(|w| {
-							entry_field(w, pa, i, 1);
-							entry_field(w, pb, j, 1);
-							w.call(self_idx).i32_eqz();
-							w.if_(|w| {
-								w.i32(0).ret();
-							});
-							w.i32(1).local_set(found);
-							w.br("inner"); // key found, move to next a-entry
-						});
-						w.local_get(j).i32(1).i32_add().local_set(j);
-						w.br("iloop");
-					});
-				});
-				// a-key absent in b -> not equal.
-				w.local_get(found).i32_eqz();
-				w.if_(|w| {
-					w.i32(0).ret();
-				});
-				w.local_get(i).i32(1).i32_add().local_set(i);
-				w.br("oloop");
-			});
-		});
-		w.i32(1).ret();
+			.struct_get(types::T_DICT, 1);
+		w.call(dict_node_eq_idx).ret();
 	});
 	// Unhandled (closure/ctor): not structurally compared.
 	w.unreachable();

@@ -94,6 +94,7 @@ pub(crate) fn build_tostring_fn(
 	int_str: u32,
 	bc: u32,
 	float_to_str: u32,
+	dict_entries: u32,
 	lits: ToStringLits,
 ) -> Function {
 	let bv = types::T_BYTES;
@@ -414,17 +415,23 @@ pub(crate) fn build_tostring_fn(
 	});
 
 	// DICT -> "{k: v, ...}" (insertion order; each entry a `$tuple`). Mirrors
-	// `vm::Value`'s Dict Display.
+	// `vm::Value`'s Dict Display. `__dict_entries` materializes the seq-ordered
+	// `(key, value)` list; `arr`/`n` are its backing array + length.
 	w.local_get(ta).i32(types::TAG_DICT).i32_eq();
 	w.if_(|w| {
 		w.local_get(v)
-			.ref_cast(types::T_DICT)
-			.struct_get(types::T_DICT, 1)
+			.call(dict_entries)
+			.ref_cast(types::T_LIST)
+			.struct_get(types::T_LIST, 1)
 			.local_set(arr);
+		w.local_get(v)
+			.call(dict_entries)
+			.ref_cast(types::T_LIST)
+			.struct_get(types::T_LIST, 2)
+			.local_set(n);
 		// acc = "{"  (set, not concat — acc is not yet initialized here).
 		lit_bytes(w, lits.lbrace);
 		w.local_set(acc);
-		w.local_get(arr).array_len().local_set(n);
 		w.i32(0).local_set(i);
 		// key/value of entry i, formatted via __tostring and folded into acc.
 		let entry_elem = |w: &mut Wat, field: i32| {

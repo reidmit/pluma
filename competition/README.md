@@ -57,9 +57,8 @@ can't wedge the whole suite — such a cell reads `>30s` rather than hanging.
 This compares **idiomatic code in each language**, not equivalent machine work:
 
 - **Compiling helps a lot.** Across the compute-heavy rows (`fib`, `mandelbrot`,
-  `primes`, `tree`, `sort`) the WasmGC artifact runs ~3–9× faster than the VM, and
-  unlike the VM its time excludes front-end compilation. The exception is `dict`
-  (below).
+  `primes`, `tree`, `sort`, `dict`) the WasmGC artifact runs ~2–9× faster than the
+  VM, and unlike the VM its time excludes front-end compilation.
 - **Node** runs on a JIT (V8); Pluma's VM, CPython, and CRuby are interpreters.
   Expect Node to win the compute-heavy rows by a wide margin.
 - **`sort` and `string`** run Pluma-level stdlib code — `list.sort` is a merge
@@ -68,14 +67,12 @@ This compares **idiomatic code in each language**, not equivalent machine work:
   routines. That is a deliberate idiomatic-vs-idiomatic comparison, and it is
   where Pluma pays the most.
 - **`dict`** used to be the worst row (an immutable map that deep-copied on every
-  insert → O(n²)). On the VM it is now backed by a persistent, structurally-shared
-  map (`im_rc`), so `dict.insert` is O(log n), still immutable, still
-  insertion-ordered — and the row dropped from ~107× to ~11×. **On WasmGC,
-  though, this is the one workload that falls off a cliff:** `core.dict`'s map
-  primitives scale fine on the VM's native `im_rc` but blow up on WasmGC
-  (instant at 4k inserts, ~2 s at 10k, past the cap by 50k), so the 200k-insert
-  benchmark hits `>30s` rather than finishing. That's a real WasmGC `core.dict`
-  performance gap to chase down, not a harness artifact.
+  insert → O(n²)). Both backends now use a persistent, structurally-shared map so
+  `dict.insert` is O(log n), still immutable, still insertion-ordered: the VM is
+  backed by `im_rc`, and WasmGC by a hand-written hash-array-mapped trie keyed on a
+  structural hash (path-copied nodes shared by reference; see
+  `wasm/src/helpers/dict.rs`). The 200k-insert benchmark that once never finished
+  on WasmGC now runs faster there than on the VM.
 - **Small inputs are startup-dominated.** Where a competitor finishes in ~0.02–
   0.06 s it is essentially measuring interpreter startup, not the workload.
 - **Pluma is not always last** — see `tree`, where building millions of nominal
