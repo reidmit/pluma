@@ -391,3 +391,18 @@ pub(crate) fn build_host_value_wrapper(
 	w.ref_null(types::T_VALUE);
 	w.finish()
 }
+
+/// Build the wasm wrapper for `to-string` used as a first-class value — e.g.
+/// `list.map xs to-string`. Env-first closure convention `(env, arg) -> value`:
+/// render the boxed `$value` arg through `__tostring` and return the resulting
+/// `$str`. `to-string` is polymorphic (`forall a. a -> string`), but `__tostring`
+/// dispatches on the runtime `$value` tag — that tag dispatch *is* the
+/// polymorphism, so one wrapper renders every element type (no per-type
+/// monomorphization needed). Mirrors the direct `to-string` call site in
+/// `emit::host_call`.
+pub(crate) fn build_tostring_value_wrapper(tostring: u32) -> Function {
+	let mut w = Wat::new(2);
+	let arg = w.param(1); // param 0 is the (ignored) env.
+	w.local_get(arg).call(tostring);
+	w.finish()
+}

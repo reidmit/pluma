@@ -266,6 +266,11 @@ enum FuncKind {
 	/// -> i32`. Covers the path reads (`(path, plen, dst, cap) -> len`) and the file
 	/// writers (`(path, plen, data, dlen) -> status`).
 	Io4,
+	/// `time-sleep(i64 nanos) -> ()` — the host blocks for the duration.
+	TimeSleep,
+	/// `time-parse(fp, fl, ip, il, dst) -> i32 status` — strtime-parse two scratch
+	/// strings; on ok the host writes the i64 nanos to `dst` (read back by `emit`).
+	TimeParse,
 	/// `__io_copyout(i32 dst) -> ()` — drain the host's read stash into scratch at
 	/// `dst` (the overflow path: a read whose bytes didn't fit the caller's first cap).
 	IoCopyout,
@@ -470,6 +475,16 @@ impl FuncTypes {
 	/// A four-arg `core.io` host import: `(i32, i32, i32, i32) -> i32`.
 	pub fn for_io4(&mut self) -> u32 {
 		self.intern(FuncKind::Io4)
+	}
+
+	/// `time-sleep(i64) -> ()`.
+	pub fn for_time_sleep(&mut self) -> u32 {
+		self.intern(FuncKind::TimeSleep)
+	}
+
+	/// `time-parse(i32, i32, i32, i32, i32) -> i32`.
+	pub fn for_time_parse(&mut self) -> u32 {
+		self.intern(FuncKind::TimeParse)
 	}
 
 	/// The read-stash drain host import `__io_copyout(i32) -> ()`.
@@ -836,6 +851,23 @@ impl FuncTypes {
 				FuncKind::Io4 => {
 					types.ty().function(
 						[ValType::I32, ValType::I32, ValType::I32, ValType::I32],
+						[ValType::I32],
+					);
+					continue;
+				}
+				FuncKind::TimeSleep => {
+					types.ty().function([ValType::I64], []);
+					continue;
+				}
+				FuncKind::TimeParse => {
+					types.ty().function(
+						[
+							ValType::I32,
+							ValType::I32,
+							ValType::I32,
+							ValType::I32,
+							ValType::I32,
+						],
 						[ValType::I32],
 					);
 					continue;

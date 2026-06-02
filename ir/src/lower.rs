@@ -482,6 +482,112 @@ impl<'a> Lowerer<'a> {
 		Ok(self.emit_let(Rvalue::MakeClosure(wrapper_fid, dict_atoms), expr.range))
 	}
 
+	/// A bare builtin (`to-string`, `print`, `math.sqrt`, …) referenced as a
+	/// first-class *value*: wrap it in a closure of the builtin's arity that
+	/// forwards to a direct builtin call. A builtin has no standalone runtime
+	/// value on the deploy backend (it isn't a `$closure`), so without this it
+	/// couldn't be passed to a higher-order function — this makes it indistinguishable
+	/// from a user function. Mirrors `lower_constrained_value_ref` (minus dict
+	/// captures); the VM materializes the inner `GlobalRef` as a `Value::Builtin`
+	/// and WasmGC resolves the inner call to a direct builtin op, so both backends
+	/// treat the wrapper as an ordinary closure.
+	fn lower_builtin_value_ref(
+		&mut self,
+		global: GlobalId,
+		tag: &str,
+		arity: u32,
+		range: Range,
+	) -> Atom {
+		let params: Vec<VarId> = (0..arity).map(VarId).collect();
+		let g_var = VarId(arity);
+		let r_var = VarId(arity + 1);
+		let call_args: Vec<Atom> = params.iter().map(|v| Atom::Var(*v)).collect();
+		let wrapper = Function {
+			name: format!("{}.{}@builtin-value", self.current_module, tag),
+			module: self.current_module.clone(),
+			params,
+			captures: Vec::new(),
+			is_async: false,
+			poll_fn: None,
+			body: Block(vec![
+				Stmt::synthetic(StmtKind::Let(g_var, Rvalue::GlobalRef(global))),
+				Stmt::synthetic(StmtKind::Let(
+					r_var,
+					Rvalue::CallClosure(Atom::Var(g_var), call_args),
+				)),
+				Stmt::synthetic(StmtKind::Return(Atom::Var(r_var))),
+			]),
+			var_reprs: Vec::new(),
+			param_reprs: vec![Repr::Boxed; arity as usize],
+			ret_repr: Repr::Boxed,
+		};
+		let wrapper_fid = self.add_function(wrapper);
+		self.emit_let(Rvalue::MakeClosure(wrapper_fid, Vec::new()), range)
+	}
+
+	/// If `expr` (an identifier or `module.value` in *value* position) names a bare
+	/// builtin, lower it to a forwarding closure (`lower_builtin_value_ref`).
+	/// Returns `None` for non-builtins (locals, user globals, variants), so the
+	/// caller falls back to the ordinary `GlobalRef` path.
+	fn try_builtin_value_ref(
+		&mut self,
+		expr: &ExprNode,
+		range: Range,
+	) -> Result<Option<Atom>, String> {
+		// Arity comes from the reference's (instantiated) function type — the same
+		// source `lower_constrained_value_ref` uses. A non-function type can't be a
+		// callable builtin reference.
+		let arity = match &expr.ty {
+			Type::Fun(params, _) => params.len() as u32,
+			_ => return Ok(None),
+		};
+		let Some(g) = self.ref_global(expr) else {
+			return Ok(None);
+		};
+		let Some(tag) = self.globals.builtin_tag(g).map(str::to_string) else {
+			return Ok(None);
+		};
+		Ok(Some(self.lower_builtin_value_ref(g, &tag, arity, range)))
+	}
+
+	/// The global an identifier / `module.value` reference resolves to, if any
+	/// (locals and variants yield `None`). Read-only resolution used to classify a
+	/// value-position reference; never emits.
+	fn ref_global(&mut self, expr: &ExprNode) -> Option<GlobalId> {
+		match &expr.kind {
+			ExprKind::Identifier(id) => match self.resolve(&id.name) {
+				Ok(Resolved::Global(g)) => Some(g),
+				_ => None,
+			},
+			ExprKind::NamespaceAccess(path) => match path.as_slice() {
+				[head, tail] => {
+					if head.name.contains('.') {
+						return self.globals.lookup(&head.name, &tail.name);
+					}
+					let qualified_module = self.imports.get(&head.name).cloned()?;
+					self.globals.lookup(&qualified_module, &tail.name)
+				}
+				_ => None,
+			},
+			_ => None,
+		}
+	}
+
+	/// Lower an expression in *callee* position. A bare global/builtin reference
+	/// stays an un-wrapped `GlobalRef` here (a direct call), where in value
+	/// position `lower_expr` would wrap a builtin into a forwarding closure.
+	/// Dispatch / constrained-value refs and every other expr lower as usual.
+	fn lower_callee(&mut self, expr: &ExprNode) -> Result<Atom, String> {
+		if expr.trait_dispatch.is_none() && undrained_dispatch_cells(expr).is_none() {
+			match &expr.kind {
+				ExprKind::Identifier(id) => return self.lower_identifier(&id.name, expr.range),
+				ExprKind::NamespaceAccess(path) => return self.lower_namespace(path, expr.range),
+				_ => {}
+			}
+		}
+		self.lower_expr(expr)
+	}
+
 	/// Resolve the underlying global of a constrained value reference — a bare
 	/// identifier or an imported `module.value`.
 	fn resolve_constrained_ref_global(&mut self, expr: &ExprNode) -> Result<GlobalId, String> {
@@ -526,6 +632,10 @@ impl<'a> Lowerer<'a> {
 				}
 				if let Some(cells) = undrained_dispatch_cells(expr) {
 					return self.lower_constrained_value_ref(expr, &cells);
+				}
+				// A bare builtin used as a value forwards through a closure.
+				if let Some(atom) = self.try_builtin_value_ref(expr, range)? {
+					return Ok(atom);
 				}
 				self.lower_identifier(&id.name, range)
 			}
@@ -597,6 +707,10 @@ impl<'a> Lowerer<'a> {
 				}
 				if let Some(cells) = undrained_dispatch_cells(expr) {
 					return self.lower_constrained_value_ref(expr, &cells);
+				}
+				// A bare builtin used as a value (`math.sqrt`) forwards through a closure.
+				if let Some(atom) = self.try_builtin_value_ref(expr, range)? {
+					return Ok(atom);
 				}
 				self.lower_namespace(path, range)
 			}
@@ -747,7 +861,7 @@ impl<'a> Lowerer<'a> {
 		if let Some(result) = self.try_lower_wire_call(call, range) {
 			return result;
 		}
-		let callee = self.lower_expr(&call.callee)?;
+		let callee = self.lower_callee(&call.callee)?;
 		let mut args = Vec::with_capacity(call.dict_args.len() + call.args.len());
 		// Hidden dict args precede the user args — the constrained callee
 		// expects them at slots 0..K-1. A call-forwarding cell has
@@ -1150,7 +1264,7 @@ impl<'a> Lowerer<'a> {
 		};
 		// Evaluate callee, then the piped value, then the remaining args
 		// (matching `emit.rs`'s ordering).
-		let callee_atom = self.lower_expr(callee)?;
+		let callee_atom = self.lower_callee(callee)?;
 		let left_atom = self.lower_expr(left)?;
 		let mut args = Vec::with_capacity(1 + extra.len());
 		args.push(left_atom);
@@ -1673,7 +1787,7 @@ impl<'a> Lowerer<'a> {
 			self.push_stmt(StmtKind::Return(atom), range);
 			return Ok(());
 		}
-		let callee = self.lower_expr(&call.callee)?;
+		let callee = self.lower_callee(&call.callee)?;
 		let mut args = Vec::with_capacity(call.dict_args.len() + call.args.len());
 		for cell in &call.dict_args {
 			args.push(self.lower_dispatch(cell, range)?);
@@ -2363,6 +2477,17 @@ impl GlobalTable {
 			.copied()
 	}
 
+	/// The builtin tag a global holds, if it's a bare `built-in` value (not a
+	/// method dict or a user def thunk). Lets a *value*-position reference to a
+	/// builtin be wrapped into a forwarding closure so it behaves like any user
+	/// function passed by name.
+	fn builtin_tag(&self, id: GlobalId) -> Option<&str> {
+		match &self.slots[id.0 as usize] {
+			Slot::PreEvaluated(PreEval::Builtin(tag, _)) => Some(tag),
+			_ => None,
+		}
+	}
+
 	fn set_thunk(&mut self, id: GlobalId, func: FuncId) {
 		self.slots[id.0 as usize] = Slot::Thunk(func);
 	}
@@ -2448,7 +2573,22 @@ fn reserve_user_globals(g: &mut GlobalTable, compiler: &Compiler) {
 		let Some(ast) = &module.ast else { continue };
 		for def in &ast.body {
 			match &def.kind {
-				DefinitionKind::Expr(_) | DefinitionKind::Alias(_) => {
+				DefinitionKind::Expr(expr) => {
+					let gid = g.reserve(module_name, &def.name.name);
+					// Pre-evaluate `built-in "tag"` defs to `PreEval::Builtin` here, in the
+					// reservation pre-pass — *before* any module body is lowered — so a
+					// value-position reference to a builtin from another (earlier-lowered)
+					// module sees it's a builtin and wraps it into a forwarding closure.
+					// (`lower_value_def` re-sets this identically when the def is lowered.)
+					if let ExprKind::Builtin(tag) = &expr.kind {
+						let ret = match &expr.ty {
+							Type::Fun(_, ret) => crate::repr::repr_of_type(ret),
+							_ => Repr::Boxed,
+						};
+						g.set_pre_evaluated(gid, PreEval::Builtin(tag.clone(), ret));
+					}
+				}
+				DefinitionKind::Alias(_) => {
 					g.reserve(module_name, &def.name.name);
 				}
 				DefinitionKind::Enum(_) | DefinitionKind::Trait(_) => {}

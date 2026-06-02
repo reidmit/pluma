@@ -22,3 +22,6 @@ polling = "3"
 # generates entropy/uuids identically (the deploy `Entropy` capability).
 rand = "0.10"
 uuid = { version = "1", features = ["v4", "v7"] }
+# `core.time` clock imports (`time.now`/`monotonic`/`parse`) — the same crate + version
+# the VM uses (`vm/src/builtin.rs`), so wall-clock and strtime parsing match the oracle.
+jiff = "0.2.25"

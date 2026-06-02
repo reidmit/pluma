@@ -13,9 +13,9 @@ use wasm_encoder::*;
 use crate::Diagnostics;
 use crate::async_lower::TASK_ENUM;
 use crate::runtime::{
-	GlobalKind, GlobalSlot, Helper, IoKind, RngKind, Runtime, WIRE_FNV_OFFSET, host_sig, io_kind,
-	is_byte_writer, is_f64_unary_host, is_inline_builtin, is_io_host, is_net_sync, is_raw_writer,
-	is_rng_host, rng_kind, task_builtin_kind, task_kind,
+	ClockKind, GlobalKind, GlobalSlot, Helper, IoKind, RngKind, Runtime, WIRE_FNV_OFFSET, clock_kind,
+	host_sig, io_kind, is_byte_writer, is_clock_host, is_f64_unary_host, is_inline_builtin,
+	is_io_host, is_net_sync, is_raw_writer, is_rng_host, rng_kind, task_builtin_kind, task_kind,
 };
 use crate::scan::{
 	StrPool, block_has_pushdefer, builtin_var_tags, compute_nominal, ctor_var_tags,
@@ -1714,6 +1714,23 @@ impl<'a> FnEmitter<'a> {
 			self.emit_io(tag, idx, args);
 			return;
 		}
+		// `core.time` clock reads: now/monotonic box an i64 `instant`/`duration`, sleep
+		// unboxes its `duration` arg, parse shapes a `result instant string`.
+		if is_clock_host(tag) {
+			self.emit_clock(tag, idx, args);
+			return;
+		}
+		// `io.exit code`: pass the unboxed code as a raw `i32` to the `(i32)->()` host
+		// import (which exits the process). It diverges, but the `Let` binding still
+		// wants a value, so materialize `nothing` after the (unreachable) call.
+		if tag == "io-exit" {
+			self.atom(&args[0]);
+			self.unbox_int();
+			self.ins(Instruction::I32WrapI64);
+			self.ins(Instruction::Call(idx));
+			self.push_nothing();
+			return;
+		}
 		for a in args {
 			self.atom(a);
 		}
@@ -1947,6 +1964,15 @@ impl<'a> FnEmitter<'a> {
 				.then(|| self.marshal_strlike_arg(&args[0], alloc, store));
 				self.emit_io_read(tag, idx, path, kind, READ_CAP, alloc);
 			}
+			IoKind::Args => {
+				// No path arg (the `()` unit is ignored); returns a bare `list string`.
+				self.emit_io_args(tag, idx, READ_CAP, alloc);
+			}
+			IoKind::EnvVar => {
+				// Marshal the var name like a path read; result is an `option string`.
+				let name = self.marshal_strlike_arg(&args[0], alloc, store);
+				self.emit_env(tag, idx, name, READ_CAP, alloc);
+			}
 		}
 	}
 
@@ -1973,41 +1999,9 @@ impl<'a> FnEmitter<'a> {
 			self.push_nothing();
 			return;
 		};
-		let copyout = match self.host_index.get("io-copyout").copied() {
-			Some(c) => c,
-			None => {
-				self
-					.diags
-					.push(format!("`{tag}` needs the io-copyout import"));
-				self.push_nothing();
-				return;
-			}
+		let Some((dst, len)) = self.emit_io_probe(tag, idx, path, cap, alloc) else {
+			return;
 		};
-		let dst = self.fresh_local(ValType::I32);
-		self.ins(Instruction::I32Const(cap));
-		self.ins(Instruction::Call(alloc));
-		self.ins(Instruction::LocalSet(dst));
-		// Call: io4 reads pass (path, plen) first; io2 reads pass just (dst, cap).
-		if let Some((pp, pl)) = path {
-			self.ins(Instruction::LocalGet(pp));
-			self.ins(Instruction::LocalGet(pl));
-		}
-		self.ins(Instruction::LocalGet(dst));
-		self.ins(Instruction::I32Const(cap));
-		self.ins(Instruction::Call(idx)); // -> i32 len
-		let len = self.fresh_local(ValType::I32);
-		self.ins(Instruction::LocalSet(len));
-		// Overflow: the bytes didn't fit `cap` — reserve the true size, drain the stash.
-		self.ins(Instruction::LocalGet(len));
-		self.ins(Instruction::I32Const(cap));
-		self.ins(Instruction::I32GtS);
-		self.ins(Instruction::If(BlockType::Empty));
-		self.ins(Instruction::LocalGet(len));
-		self.ins(Instruction::Call(alloc));
-		self.ins(Instruction::LocalSet(dst));
-		self.ins(Instruction::LocalGet(dst));
-		self.ins(Instruction::Call(copyout));
-		self.ins(Instruction::End);
 		// payload-or-null: `len < 0` is failure (null → `__io_result` builds `err`).
 		self.ins(Instruction::LocalGet(len));
 		self.ins(Instruction::I32Const(0));
@@ -2038,6 +2032,216 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::StructNew(types::T_STR));
 			}
 		}
+		self.ins(Instruction::End);
+		self.ins(Instruction::Call(io_result));
+	}
+
+	/// The length-probe read core, shared by the `result`-shaped reads (`emit_io_read`)
+	/// and the bare-list `io.args` read (`emit_io_args`): `dst = __alloc(cap)`; call the
+	/// import (`(dst, cap)` or `(path, plen, dst, cap)`) → `len`; on `len > cap`
+	/// (overflow) re-`__alloc` the true size and `__io_copyout` the host's stash. Returns
+	/// the `(dst, len)` locals, or `None` (after pushing `nothing` + a diag) if the
+	/// `io-copyout` import is missing.
+	fn emit_io_probe(
+		&mut self,
+		tag: &str,
+		idx: u32,
+		path: Option<(u32, u32)>,
+		cap: i32,
+		alloc: u32,
+	) -> Option<(u32, u32)> {
+		let copyout = match self.host_index.get("io-copyout").copied() {
+			Some(c) => c,
+			None => {
+				self
+					.diags
+					.push(format!("`{tag}` needs the io-copyout import"));
+				self.push_nothing();
+				return None;
+			}
+		};
+		let dst = self.fresh_local(ValType::I32);
+		self.ins(Instruction::I32Const(cap));
+		self.ins(Instruction::Call(alloc));
+		self.ins(Instruction::LocalSet(dst));
+		// Call: io4 reads pass (path, plen) first; io2 reads pass just (dst, cap).
+		if let Some((pp, pl)) = path {
+			self.ins(Instruction::LocalGet(pp));
+			self.ins(Instruction::LocalGet(pl));
+		}
+		self.ins(Instruction::LocalGet(dst));
+		self.ins(Instruction::I32Const(cap));
+		self.ins(Instruction::Call(idx)); // -> i32 len
+		let len = self.fresh_local(ValType::I32);
+		self.ins(Instruction::LocalSet(len));
+		// Overflow: the bytes didn't fit `cap` — reserve the true size, drain the stash.
+		self.ins(Instruction::LocalGet(len));
+		self.ins(Instruction::I32Const(cap));
+		self.ins(Instruction::I32GtS);
+		self.ins(Instruction::If(BlockType::Empty));
+		self.ins(Instruction::LocalGet(len));
+		self.ins(Instruction::Call(alloc));
+		self.ins(Instruction::LocalSet(dst));
+		self.ins(Instruction::LocalGet(dst));
+		self.ins(Instruction::Call(copyout));
+		self.ins(Instruction::End);
+		Some((dst, len))
+	}
+
+	/// `io.args`: length-probe the argv blob (NUL-terminated names in scratch), then split
+	/// it into a bare `$list` of `$str` via `__read_names`. No `__io_result` wrap — argv
+	/// never fails, and an empty argv (`len == 0`) is the empty list.
+	fn emit_io_args(&mut self, tag: &str, idx: u32, cap: i32, alloc: u32) {
+		let Some(read_names) = self.runtime.idx(Helper::MarshalReadNames) else {
+			self.diags.push(format!("`{tag}` needs __read_names"));
+			self.push_nothing();
+			return;
+		};
+		let Some((dst, len)) = self.emit_io_probe(tag, idx, None, cap, alloc) else {
+			return;
+		};
+		self.ins(Instruction::LocalGet(dst));
+		self.ins(Instruction::LocalGet(len));
+		self.ins(Instruction::Call(read_names));
+	}
+
+	/// `io.env`: marshal the var name (already done by the caller), length-probe the
+	/// value, then shape `len` into an `option string` — `len < 0` (unset) → `none`,
+	/// else `some ($str of the value)`. Builds the `some`/`none` `$variant`s inline from
+	/// `runtime.opt` (the option enum's tags + names), so there's no `__io_result` and
+	/// the host stays out of the enum layout.
+	fn emit_env(&mut self, tag: &str, idx: u32, name: (u32, u32), cap: i32, alloc: u32) {
+		let Some(load) = self.runtime.idx(Helper::MarshalLoad) else {
+			self.diags.push(format!("`{tag}` needs __load_bytes"));
+			self.push_nothing();
+			return;
+		};
+		let opt = self.runtime.opt;
+		let Some((dst, len)) = self.emit_io_probe(tag, idx, Some(name), cap, alloc) else {
+			return;
+		};
+		// len < 0 (unset) -> none ; else some($str(__load_bytes(dst, len))).
+		self.ins(Instruction::LocalGet(len));
+		self.ins(Instruction::I32Const(0));
+		self.ins(Instruction::I32LtS);
+		self.ins(Instruction::If(BlockType::Result(types::value_ref())));
+		// none: `$variant { TAG_VARIANT, none_tag, none_name, [] }`.
+		self.ins(Instruction::I32Const(types::TAG_VARIANT));
+		self.ins(Instruction::I32Const(opt.none_tag as i32));
+		self.str_seg(opt.none_name);
+		self.ins(Instruction::ArrayNewFixed {
+			array_type_index: types::T_VALARRAY,
+			array_size: 0,
+		});
+		self.ins(Instruction::StructNew(types::T_VARIANT));
+		self.ins(Instruction::Else);
+		// some value: `$variant { TAG_VARIANT, some_tag, some_name, [ $str(value) ] }`.
+		self.ins(Instruction::I32Const(types::TAG_VARIANT));
+		self.ins(Instruction::I32Const(opt.some_tag as i32));
+		self.str_seg(opt.some_name);
+		self.ins(Instruction::I32Const(types::TAG_STR));
+		self.ins(Instruction::LocalGet(dst));
+		self.ins(Instruction::LocalGet(len));
+		self.ins(Instruction::Call(load));
+		self.ins(Instruction::StructNew(types::T_STR));
+		self.ins(Instruction::ArrayNewFixed {
+			array_type_index: types::T_VALARRAY,
+			array_size: 1,
+		});
+		self.ins(Instruction::StructNew(types::T_VARIANT));
+		self.ins(Instruction::End);
+	}
+
+	/// Push a `$str` for an interned data-segment string `(off, len)` — like
+	/// `string_const`, but from a pre-interned segment ref (e.g. an `option` variant
+	/// name carried in `runtime.opt`).
+	fn str_seg(&mut self, (off, len): (u32, u32)) {
+		self.ins(Instruction::I32Const(types::TAG_STR));
+		self.ins(Instruction::I32Const(off as i32));
+		self.ins(Instruction::I32Const(len as i32));
+		self.ins(Instruction::ArrayNewData {
+			array_type_index: types::T_BYTES,
+			array_data_index: 0,
+		});
+		self.ins(Instruction::StructNew(types::T_STR));
+	}
+
+	/// `core.time` clock host imports. now/monotonic box the host's i64 under
+	/// `TAG_INSTANT`/`TAG_DURATION` (both reuse the `$int` `{tag, i64}` shape); sleep
+	/// unboxes its `duration` arg to i64 and calls the blocking import; parse marshals
+	/// two strings + a scratch i64 slot into a `result instant string`.
+	fn emit_clock(&mut self, tag: &str, idx: u32, args: &[Atom]) {
+		match clock_kind(tag) {
+			Some(ClockKind::NowInstant) => self.emit_clock_scalar(idx, types::TAG_INSTANT),
+			Some(ClockKind::MonotonicDuration) => self.emit_clock_scalar(idx, types::TAG_DURATION),
+			Some(ClockKind::Sleep) => {
+				// Unbox the `duration` arg to i64, block, then materialize `nothing`.
+				self.atom(&args[0]);
+				self.unbox_int();
+				self.ins(Instruction::Call(idx)); // (i64) -> ()
+				self.push_nothing();
+			}
+			Some(ClockKind::Parse) => self.emit_time_parse(tag, idx, args),
+			None => {
+				self
+					.diags
+					.push(format!("emit_clock on non-clock tag `{tag}`"));
+				self.push_nothing();
+			}
+		}
+	}
+
+	/// `time.now`/`time.monotonic`: call the `() -> i64` import and box the result under
+	/// `tag_const` (`TAG_INSTANT`/`TAG_DURATION`, both the `$int` `{tag, i64}` layout).
+	/// The `()` unit arg is dropped, like `random.int`.
+	fn emit_clock_scalar(&mut self, idx: u32, tag_const: i32) {
+		self.ins(Instruction::I32Const(tag_const));
+		self.ins(Instruction::Call(idx)); // () -> i64
+		self.ins(Instruction::StructNew(types::T_INT));
+	}
+
+	/// `time.parse fmt input`: marshal both strings + an 8-byte scratch slot, call
+	/// `time-parse(fp, fl, ip, il, dst) -> status`; on `status == 0` read the i64 nanos
+	/// back (`i64.load`) and box an `instant` payload, else push null — `__io_result`
+	/// then wraps `ok (instant …)` / `err (io-last-error())`.
+	fn emit_time_parse(&mut self, tag: &str, idx: u32, args: &[Atom]) {
+		let (Some(alloc), Some(store), Some(io_result)) = (
+			self.runtime.idx(Helper::MarshalAlloc),
+			self.runtime.idx(Helper::MarshalStore),
+			self.runtime.idx(Helper::IoResult),
+		) else {
+			self
+				.diags
+				.push(format!("`{tag}` needs the marshalling helpers"));
+			self.push_nothing();
+			return;
+		};
+		self.reset_bump();
+		let (fp, fl) = self.marshal_strlike_arg(&args[0], alloc, store);
+		let (ip, il) = self.marshal_strlike_arg(&args[1], alloc, store);
+		let dst = self.fresh_local(ValType::I32);
+		self.ins(Instruction::I32Const(8));
+		self.ins(Instruction::Call(alloc));
+		self.ins(Instruction::LocalSet(dst));
+		self.ins(Instruction::LocalGet(fp));
+		self.ins(Instruction::LocalGet(fl));
+		self.ins(Instruction::LocalGet(ip));
+		self.ins(Instruction::LocalGet(il));
+		self.ins(Instruction::LocalGet(dst));
+		self.ins(Instruction::Call(idx)); // -> i32 status
+		// status == 0 -> ok (instant load(dst)); else null -> err (io-last-error).
+		self.ins(Instruction::I32Eqz);
+		self.ins(Instruction::If(BlockType::Result(types::value_ref())));
+		self.ins(Instruction::I32Const(types::TAG_INSTANT));
+		self.ins(Instruction::LocalGet(dst));
+		self.ins(Instruction::I64Load(MemArg {
+			offset: 0,
+			align: 0,
+			memory_index: 0,
+		}));
+		self.ins(Instruction::StructNew(types::T_INT));
+		self.ins(Instruction::Else);
+		self.push_nothing();
 		self.ins(Instruction::End);
 		self.ins(Instruction::Call(io_result));
 	}

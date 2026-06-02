@@ -16,15 +16,16 @@ use wasm_encoder::{
 
 use crate::emit::FnEmitter;
 use crate::helpers::{
-	REGISTRY, build_builtin_wrapper, build_host_value_wrapper, builtin_arity, close_deps,
-	helper_for_tag,
+	REGISTRY, build_builtin_wrapper, build_host_value_wrapper, build_tostring_value_wrapper,
+	builtin_arity, close_deps, helper_for_tag,
 };
 use crate::runtime::{
-	GlobalKind, GlobalSlot, Helper, HelperCtx, HelperSet, IoKind, IoResultLits, NetImports,
-	OptionLits, OrderingLits, RngKind, Runtime, TaskGlobals, TaskLits, ToStringLits, WireGlobals,
-	WireResultLits, WireTags, host_sig, io_kind, io_uses_io4, is_byte_writer, is_f64_unary_host,
-	is_inline_builtin, is_io_host, is_io_result, is_net_builtin, is_raw_writer, is_rng_host,
-	rng_kind, scan_helpers, task_builtin_kind,
+	ClockKind, GlobalKind, GlobalSlot, Helper, HelperCtx, HelperSet, IoKind, IoResultLits,
+	NetImports, OptionLits, OrderingLits, RngKind, Runtime, TaskGlobals, TaskLits, ToStringLits,
+	WireGlobals, WireResultLits, WireTags, clock_kind, has_value_wrapper, host_sig, io_kind,
+	io_uses_io4, is_byte_writer, is_clock_host, is_f64_unary_host, is_inline_builtin, is_io_host,
+	is_io_result, is_net_builtin, is_raw_writer, is_rng_host, rng_kind, scan_helpers,
+	task_builtin_kind,
 };
 use crate::scan::{
 	StrPool, builtin_var_tags, collect_host_calls, collect_zero_arg_closures, scan_strings,
@@ -128,6 +129,8 @@ impl Module {
 								| IoKind::ReadFileStr
 								| IoKind::ReadFileBytes
 								| IoKind::ReadDir
+								| IoKind::Args
+								| IoKind::EnvVar
 						);
 						if is_read {
 							requested.insert(Helper::MarshalLoad);
@@ -136,7 +139,8 @@ impl Module {
 								host_order.push("io-copyout".to_string());
 							}
 						}
-						if kind == IoKind::ReadDir {
+						// Both split a NUL-blob into a `$list` of `$str`.
+						if matches!(kind, IoKind::ReadDir | IoKind::Args) {
 							requested.insert(Helper::MarshalReadNames);
 						}
 					}
@@ -170,6 +174,20 @@ impl Module {
 							requested.insert(Helper::MarshalLoad);
 						}
 						_ => {}
+					}
+				}
+				// `core.time` clock imports (`emit_clock`). now/monotonic/sleep need no
+				// helpers; `time-parse` marshals two strings + a scratch i64 slot and
+				// shapes its `result instant string` through `__io_result` (so it needs
+				// the marshalling helpers + the `io-last-error` error channel).
+				if clock_kind(tag) == Some(ClockKind::Parse) {
+					requested.insert(Helper::MarshalAlloc);
+					requested.insert(Helper::MarshalStore);
+					requested.insert(Helper::MarshalLoad);
+					requested.insert(Helper::IoResult);
+					if !host_index.contains_key("io-last-error") {
+						host_index.insert("io-last-error".to_string(), host_order.len() as u32);
+						host_order.push("io-last-error".to_string());
 					}
 				}
 				if !host_index.contains_key(tag) {
@@ -368,14 +386,15 @@ impl Module {
 		}
 
 		// Builtins used as first-class values need a wrapper closure too. Collect
-		// their tags after the method-dict ones (host-import builtins like `print`;
-		// each becomes a `(env, arg) -> value` host-value wrapper below).
+		// their tags after the method-dict ones: host-import builtins like `print`
+		// (a `(env, arg) -> value` host-value wrapper) and the pure-compute renderer
+		// `to-string` (a `(env, arg) -> __tostring(arg)` wrapper) — `has_value_wrapper`.
 		for &fid in &reach.order {
 			let body = &p.functions[fid as usize].body;
 			let vt = builtin_var_tags(body, &builtin_g);
 			for v in value_used_builtin_vars(body, &vt) {
 				let tag = &vt[&v];
-				if host_sig(tag).is_some() && !wrapper_idx.contains_key(tag) {
+				if has_value_wrapper(tag) && !wrapper_idx.contains_key(tag) {
 					wrapper_idx.insert(tag.clone(), wrapper_base + wrapper_order.len() as u32);
 					wrapper_order.push(tag.clone());
 				}
@@ -562,8 +581,10 @@ impl Module {
 			};
 		}
 		// `__dict_lookup` builds `some v` / `none`; intern those variant display
-		// names and resolve their within-enum tags (the `option` enum).
-		if requested.contains(&Helper::DictLookup) {
+		// names and resolve their within-enum tags (the `option` enum). `io.env`
+		// (`emit_env`) builds the same `some`/`none` variants inline, so it needs the
+		// option lits populated too.
+		if requested.contains(&Helper::DictLookup) || host_index.contains_key("io-env") {
 			let opt_enum = p
 				.enums
 				.iter()
@@ -782,7 +803,8 @@ impl Module {
 				ftypes.for_float_to_str()
 			} else if is_byte_writer(tag) {
 				ftypes.for_host_write()
-			} else if tag == "io-copyout" {
+			} else if tag == "io-copyout" || tag == "io-exit" {
+				// Both are `(i32) -> ()`: io-copyout's `dst`, io-exit's `code`.
 				ftypes.for_io_copyout()
 			} else if tag == "io-last-error" {
 				ftypes.for_io2()
@@ -794,6 +816,13 @@ impl Module {
 				}
 			} else if is_f64_unary_host(tag) {
 				ftypes.for_f64_unary()
+			} else if is_clock_host(tag) {
+				match clock_kind(tag) {
+					// now/monotonic: `() -> i64`, same shape as `random-int`.
+					Some(ClockKind::NowInstant | ClockKind::MonotonicDuration) => ftypes.for_rng_i64(),
+					Some(ClockKind::Sleep) => ftypes.for_time_sleep(),
+					Some(ClockKind::Parse) | None => ftypes.for_time_parse(),
+				}
 			} else if is_rng_host(tag) {
 				match rng_kind(tag) {
 					Some(RngKind::ScalarI64) => ftypes.for_rng_i64(),
@@ -867,7 +896,16 @@ impl Module {
 		// value` host-value wrapper; the pure-compute ones (method-dict methods) get
 		// the unbox/compute/rebox wrapper.
 		for tag in &wrapper_order {
-			if host_sig(tag).is_some() {
+			if tag == "to-string" {
+				// `to-string` as a value: `(env, arg) -> __tostring(arg)`. The runtime-tag
+				// dispatch inside `__tostring` is its polymorphism, so one wrapper renders
+				// every element type. `__tostring` is always emitted (requested above).
+				functions.function(ftypes.for_arity(1));
+				let ts = runtime
+					.idx(Helper::ToString)
+					.expect("a to-string value-wrapper needs __tostring");
+				code.function(&build_tostring_value_wrapper(ts));
+			} else if host_sig(tag).is_some() {
 				functions.function(ftypes.for_arity(1));
 				let host_idx = host_index[tag];
 				// Only byte-payload writers (`print`, …) are used as first-class values

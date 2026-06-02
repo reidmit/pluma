@@ -1,0 +1,30 @@
+# A *builtin* referenced by bare name as a first-class value must behave
+# exactly like a user-defined function — passable to any higher-order function.
+# The IR wraps a value-position builtin reference in a forwarding closure (a
+# closure of the builtin's arity that forwards to a direct builtin call), so
+# both backends treat it as an ordinary closure. Regression test: these used to
+# trap on wasm (the bare builtin lowered to a null call-target placeholder).
+# This covers every builtin flavor: a polymorphic prelude renderer (`to-string`),
+# an inline compute builtin (`math.sqrt`, `bytes.length`), and a host-import
+# writer (`print`).
+
+use core.list
+use core.math
+use core.bytes
+
+def main = fun {
+	# `to-string` (polymorphic prelude builtin) as a value, across element types.
+	print (list.map [1, 2, 3] to-string)
+	print (list.map [1.5, 2.0] to-string)
+	print (list.map [true, false] to-string)
+	print (list.map [some 1, none] to-string)
+
+	# `math.sqrt` (inline compute builtin, float -> float) as a value.
+	print (list.map [1.0, 4.0, 9.0] math.sqrt)
+
+	# `bytes.length` (inline compute builtin, bytes -> int) as a value.
+	print (list.map ['ab', 'cde', ''] bytes.length)
+
+	# `print` (host-import writer) as a value.
+	list.each ["a", "b"] print
+}

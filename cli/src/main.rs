@@ -371,14 +371,6 @@ fn discover_test_modules(root: &std::path::Path) -> Vec<String> {
 	out
 }
 
-/// Compile a checked `Compiler` to a runnable `vm::Program`: lower to the
-/// mid-level IR, then emit bytecode from it.
-fn compile_program(compiler: &Compiler) -> Result<vm::Program, String> {
-	let mut program = ir::lower(compiler).map_err(|e| format!("ir::lower: {e}"))?;
-	ir::optimize(&mut program);
-	codegen::compile_from_ir(&program).map_err(|e| e.to_string())
-}
-
 /// `pluma build [--target server|browser] <file> [-o out]` — compile a module to
 /// a deploy artifact. `--target server` (the default) lowers the shared IR under
 /// `Platform::Server` through the WasmGC backend and writes `<out>.wasm`, run with
@@ -486,7 +478,7 @@ fn run(entry_path: String, program_args: Vec<String>) {
 				std::process::exit(1);
 			}
 		};
-		std::process::exit(host::run_streaming_v8(&bytes));
+		std::process::exit(host::run_streaming_v8(&bytes, &program_args));
 	}
 
 	if entry_path.ends_with(".test.pa") || entry_path.ends_with(".test") {
@@ -512,41 +504,27 @@ fn run(entry_path: String, program_args: Vec<String>) {
 		std::process::exit(1);
 	}
 
-	// Compile to a WasmGC artifact and run it under V8 — the same thing `pluma build`
-	// ships. A few builtins aren't yet wasm host imports (notably `io.args`); for a
-	// program the wasm backend can't emit, we fall back to the bytecode VM so it still
-	// runs. This is an internal capability bridge, not a user-selectable engine.
-	if let Ok(bytes) = emit_wasm(&compiler) {
-		std::process::exit(host::run_streaming_v8(&bytes));
-	}
-
-	let program = match compile_program(&compiler) {
+	// Compile to a WasmGC artifact and run it under V8 — the deploy engine, the exact
+	// thing `pluma build` ships ("run what you deploy"). Every builtin the language
+	// exposes now lowers to wasm, so there's no VM fallback: a program the backend can't
+	// emit (today only the browser-only `core.dom` surface — which the VM lacks too) is
+	// a hard error, not a silent VM detour. (The VM stays the reference oracle for
+	// `conformance`/`bench`, just not a `pluma run` engine.)
+	let program = match ir::lower(&compiler) {
 		Ok(p) => p,
 		Err(msg) => {
-			print_error(format!("codegen error: {}", msg));
+			print_error(format!("ir::lower: {msg}"));
 			std::process::exit(1);
 		}
 	};
-	let mut vm_instance = vm::VM::new(program).with_args(program_args);
-	if let Err(err) = vm_instance.run() {
-		if err.is_user_abort {
-			// A deliberate bail (`io.fail` / `expect`): the message is the
-			// program's own, so print it bare — no `Runtime error:` prefix,
-			// which we reserve for genuine VM faults.
-			eprintln!("{}", err.message);
-		} else {
-			print_error(format!("Runtime error: {}", err.message));
+	let bytes = match wasm::emit(&program) {
+		Ok(b) => b,
+		Err(diags) => {
+			print_error(format!("wasm codegen error: {}", diags.0.join("; ")));
+			std::process::exit(1);
 		}
-		std::process::exit(1);
-	}
-}
-
-/// Lower a checked `Compiler` to the raw mid-level IR and emit a WasmGC artifact
-/// (the deploy backend runs its own pipeline off the raw IR — no `ir::optimize`,
-/// matching `pluma build`). `Err` ⇒ the wasm backend can't yet handle this program.
-fn emit_wasm(compiler: &Compiler) -> Result<Vec<u8>, ()> {
-	let program = ir::lower(compiler).map_err(|_| ())?;
-	wasm::emit(&program).map_err(|_| ())
+	};
+	std::process::exit(host::run_streaming_v8(&bytes, &program_args));
 }
 
 fn format_command(args: Vec<String>) {

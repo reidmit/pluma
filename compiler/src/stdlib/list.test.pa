@@ -101,7 +101,9 @@ def tests :: test.suite = [
 	}),
 
 	test.case "map can change element type" (fun {
-		assert.equals (list.map [1, 2, 3] (fun n { to-string n })) ["1", "2", "3"]
+		# `to-string` passed bare as a first-class value (a polymorphic builtin):
+		# the wasm backend wraps it over `__tostring` (runtime-tag dispatch).
+		assert.equals (list.map [1, 2, 3] to-string) ["1", "2", "3"]
 	}),
 
 	test.case "map on empty is empty" (fun {

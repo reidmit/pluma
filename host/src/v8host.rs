@@ -36,14 +36,15 @@ struct Ctx {
 /// stdout (the conformance differential shape, mirroring `run_wasm`). `stdin` feeds the
 /// buffered io sink.
 pub fn run_wasm_v8(bytes: &[u8], stdin: &[u8]) -> RunResult {
-	run_v8(bytes, Box::new(BufferedIo::new(stdin)))
+	run_v8(bytes, Box::new(BufferedIo::new(stdin)), Vec::new())
 }
 
 /// Compile + instantiate `bytes` and run `_entry` once under V8, streaming
 /// stdout/stderr to the process and reading stdin from it (the `cli`'s `pluma run`
-/// path). Returns the process exit code; a failure's message is already on stderr.
-pub fn run_streaming_v8(bytes: &[u8]) -> i32 {
-	let result = run_v8(bytes, Box::new(StdioIo::new()));
+/// path). `args` is the program's argv (`io.args`). Returns the process exit code; a
+/// failure's message is already on stderr.
+pub fn run_streaming_v8(bytes: &[u8], args: &[String]) -> i32 {
+	let result = run_v8(bytes, Box::new(StdioIo::new()), args.to_vec());
 	match result.status.as_str() {
 		"ok" => 0,
 		other => {
@@ -60,7 +61,7 @@ pub fn run_streaming_v8(bytes: &[u8]) -> i32 {
 /// — so a clean failure (`"runtime error: "` with an empty message) just exits 1
 /// silently, while a genuine trap (a crashing case) still surfaces its message.
 pub fn run_test_v8(bytes: &[u8]) -> i32 {
-	let result = run_v8(bytes, Box::new(StdioIo::new()));
+	let result = run_v8(bytes, Box::new(StdioIo::new()), Vec::new());
 	match result.status.as_str() {
 		"ok" => 0,
 		"runtime error: " => 1,
@@ -73,13 +74,15 @@ pub fn run_test_v8(bytes: &[u8]) -> i32 {
 }
 
 /// Run `_entry` under V8 through the given io sink, returning status + captured stdout
-/// (empty for the streaming sink). The engine-neutral marshalling core.
-fn run_v8(bytes: &[u8], io: Box<dyn HostIo>) -> RunResult {
+/// (empty for the streaming sink). `args` is the program's argv (`io-args`). The
+/// engine-neutral marshalling core.
+fn run_v8(bytes: &[u8], io: Box<dyn HostIo>, args: Vec<String>) -> RunResult {
 	ensure_v8();
 
 	let mut ctx = Ctx {
 		state: HostState {
 			io,
+			args,
 			fail: None,
 			last_error: String::new(),
 			read_stash: Vec::new(),
@@ -149,6 +152,10 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "io-is-dir", cb_is_dir);
 	register(scope, pluma, data, "io-last-error", cb_last_error);
 	register(scope, pluma, data, "io-copyout", cb_io_copyout);
+	// core.io process surface (Process capability) — argv, env, exit.
+	register(scope, pluma, data, "io-args", cb_io_args);
+	register(scope, pluma, data, "io-env", cb_io_env);
+	register(scope, pluma, data, "io-exit", cb_io_exit);
 	// Unary float math — the libm calls (`(f64) -> f64`), same as the VM.
 	register(scope, pluma, data, "math-log", cb_math_log);
 	register(scope, pluma, data, "math-log10", cb_math_log10);
@@ -164,6 +171,11 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "uuid-v4", cb_uuid_v4);
 	register(scope, pluma, data, "uuid-v7", cb_uuid_v7);
 	register(scope, pluma, data, "uuid-parse", cb_uuid_parse);
+	// core.time clock surface (Clock capability) — wall/monotonic clock, sleep, parse.
+	register(scope, pluma, data, "time-now", cb_time_now);
+	register(scope, pluma, data, "time-monotonic", cb_time_monotonic);
+	register(scope, pluma, data, "time-sleep", cb_time_sleep);
+	register(scope, pluma, data, "time-parse", cb_time_parse);
 	// core.net — socket ops (the multi-result ones return a `[status, n]` JS array) +
 	// the reactor controls. `net-poll` blocks the thread synchronously (fine in a V8
 	// callback) until a parked socket is ready, mirroring the VM's reactor step.
@@ -686,6 +698,56 @@ fn cb_io_copyout(
 	write_mem(scope, mem, dst.max(0) as usize, &stash);
 }
 
+/// `io-args(dst, cap) -> len`: deliver the program's argv as a NUL-terminated name
+/// blob in scratch (each arg followed by a `\0`, the `__read_names` shape), exactly
+/// like `io-read-dir`. The wasm side splits it into a bare `$list` of `$str` (no
+/// `result` wrapper — argv never fails). An empty argv writes nothing (len 0).
+fn cb_io_args(
+	scope: &mut v8::HandleScope,
+	args: v8::FunctionCallbackArguments,
+	mut rv: v8::ReturnValue,
+) {
+	let (dst, cap) = (argi(scope, &args, 0), argi(scope, &args, 1));
+	let (ctx, mem) = ctx_and_mem(scope, &args);
+	let mut blob = Vec::new();
+	for a in &ctx.state.args {
+		blob.extend_from_slice(a.as_bytes());
+		blob.push(0);
+	}
+	rv.set_int32(deliver_read_v8(scope, mem, ctx, dst, cap, blob));
+}
+
+/// `io-env(name_ptr, name_len, dst, cap) -> len`: look up an environment variable.
+/// Deliver the value bytes to `(dst, cap)` and return its length on a hit (`some
+/// value`), or return `-1` for an unset var (`none`) — the wasm side shapes the `len`
+/// into an `option string`.
+fn cb_io_env(
+	scope: &mut v8::HandleScope,
+	args: v8::FunctionCallbackArguments,
+	mut rv: v8::ReturnValue,
+) {
+	let (np, nl) = (argi(scope, &args, 0), argi(scope, &args, 1));
+	let (dst, cap) = (argi(scope, &args, 2), argi(scope, &args, 3));
+	let (ctx, mem) = ctx_and_mem(scope, &args);
+	let name = read_str(scope, mem, np, nl);
+	let n = match std::env::var(&name) {
+		Ok(v) => deliver_read_v8(scope, mem, ctx, dst, cap, v.into_bytes()),
+		Err(_) => -1, // unset (or non-UTF-8) -> `none`.
+	};
+	rv.set_int32(n);
+}
+
+/// `io-exit(code)`: stop the program immediately with `code`, mirroring the VM's
+/// `std::process::exit` (`io.exit` diverges). Streamed stdout/stderr are already
+/// flushed per-write, so no draining is needed. Never returns.
+fn cb_io_exit(
+	scope: &mut v8::HandleScope,
+	args: v8::FunctionCallbackArguments,
+	_r: v8::ReturnValue,
+) {
+	std::process::exit(argi(scope, &args, 0));
+}
+
 /// Shape an fs `Result<()>` into a `(0 ok / 2 err)` status, stashing the errno text.
 fn io_status(ctx: &mut Ctx, res: std::io::Result<()>) -> i32 {
 	match res {
@@ -833,6 +895,97 @@ fn cb_uuid_parse(
 		}
 	};
 	rv.set_int32(n);
+}
+
+// --- core.time (the `Clock` capability) -----------------------------------
+// Wall clock + monotonic clock + blocking sleep + strtime parse, using the same
+// `jiff` crate/version the VM uses so values match the oracle. `time.now` is an
+// `instant` (unix nanos), `time.monotonic` a `duration` (nanos since a process-start
+// anchor); both cross as i64 BigInts and the wasm side boxes them under the right tag.
+
+/// Process-start anchor for `time.monotonic` (mirrors the VM's static `OnceLock`).
+static MONOTONIC_START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+
+/// `time-now() -> i64`: wall-clock unix nanos (boxed `instant` in wasm).
+fn cb_time_now(
+	scope: &mut v8::HandleScope,
+	_a: v8::FunctionCallbackArguments,
+	mut rv: v8::ReturnValue,
+) {
+	let n = jiff::Timestamp::now().as_nanosecond() as i64;
+	rv.set(v8::BigInt::new_from_i64(scope, n).into());
+}
+
+/// `time-monotonic() -> i64`: nanos since the process-start anchor (boxed `duration`).
+fn cb_time_monotonic(
+	scope: &mut v8::HandleScope,
+	_a: v8::FunctionCallbackArguments,
+	mut rv: v8::ReturnValue,
+) {
+	let start = MONOTONIC_START.get_or_init(std::time::Instant::now);
+	let n = start.elapsed().as_nanos() as i64;
+	rv.set(v8::BigInt::new_from_i64(scope, n).into());
+}
+
+/// `time-sleep(i64 nanos)`: block the thread (synchronous host call, like `net-poll`).
+/// Returns nothing.
+fn cb_time_sleep(
+	scope: &mut v8::HandleScope,
+	args: v8::FunctionCallbackArguments,
+	_r: v8::ReturnValue,
+) {
+	let nanos = args
+		.get(0)
+		.to_big_int(scope)
+		.map(|b| b.i64_value().0)
+		.unwrap_or(0);
+	if nanos > 0 {
+		std::thread::sleep(std::time::Duration::from_nanos(nanos as u64));
+	}
+}
+
+/// `time-parse(fp, fl, ip, il, dst) -> status`: strtime-parse `input` per `fmt`. On
+/// success write the i64 nanos (LE) to scratch at `dst` and return 0; on failure stash
+/// the message for `io-last-error` and return 1 — the wasm side shapes `__io_result`
+/// (`ok (instant nanos)` / `err message`).
+fn cb_time_parse(
+	scope: &mut v8::HandleScope,
+	args: v8::FunctionCallbackArguments,
+	mut rv: v8::ReturnValue,
+) {
+	let (fp, fl) = (argi(scope, &args, 0), argi(scope, &args, 1));
+	let (ip, il) = (argi(scope, &args, 2), argi(scope, &args, 3));
+	let dst = argi(scope, &args, 4);
+	let (ctx, mem) = ctx_and_mem(scope, &args);
+	let fmt = read_str(scope, mem, fp, fl);
+	let input = read_str(scope, mem, ip, il);
+	let status = match parse_with_format(&fmt, &input) {
+		Ok(nanos) => {
+			write_mem(scope, mem, dst.max(0) as usize, &nanos.to_le_bytes());
+			0
+		}
+		Err(e) => {
+			ctx.state.last_error = e;
+			1
+		}
+	};
+	rv.set_int32(status);
+}
+
+/// Replicates the VM's `parse_with_format` (`vm/src/builtin.rs`) exactly, so a parsed
+/// timestamp matches the oracle: strtime-parse, then prefer a complete timestamp, else
+/// interpret a bare civil datetime as UTC.
+fn parse_with_format(fmt: &str, input: &str) -> Result<i64, String> {
+	let tm = jiff::fmt::strtime::parse(fmt, input).map_err(|e| format!("time: {}", e))?;
+	if let Ok(ts) = tm.to_timestamp() {
+		return Ok(ts.as_nanosecond() as i64);
+	}
+	let dt = tm
+		.to_datetime()
+		.map_err(|e| format!("time: incomplete date/time: {}", e))?;
+	dt.to_zoned(jiff::tz::TimeZone::UTC)
+		.map(|z| z.timestamp().as_nanosecond() as i64)
+		.map_err(|e| format!("time: {}", e))
 }
 
 // --------------------------------------------------------------------------

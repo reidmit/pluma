@@ -174,6 +174,10 @@ fn read_line_from(buf: &[u8], pos: &mut usize) -> Option<String> {
 
 struct HostState {
 	io: Box<dyn HostIo>,
+	/// The program's command-line arguments (interpreter + script path already
+	/// stripped by the CLI), surfaced through the `io-args` import. Empty on the
+	/// buffered/conformance and test paths — matching the VM oracle's empty `args`.
+	args: Vec<String>,
 	/// The `io.fail` abort message, stashed before the host traps so the runner can
 	/// surface it as the program's `runtime error: <msg>` status.
 	fail: Option<String>,

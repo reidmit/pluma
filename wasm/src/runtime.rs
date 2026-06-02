@@ -842,9 +842,21 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 		// actual wasm `Io2`/`Io4` import type); `host_sig` is consulted only for the
 		// "is this a host builtin?" classification.
 		"io-read" | "io-read-all" | "io-read-all-bytes" | "io-read-file" | "io-read-file-bytes"
-		| "io-delete-file" | "io-make-dir" | "io-read-dir" => Some(HostSig {
+		| "io-delete-file" | "io-make-dir" | "io-read-dir"
+		// `io.args` rides the same marshalled-read path (`(dst,cap) -> len`, a blob in
+		// scratch) but returns a bare `list string`, not a `result` (`IoKind::Args`).
+		| "io-args"
+		// `io.env` reads `(name,nlen,dst,cap) -> len` and shapes `len` (`-1` = unset)
+		// into an `option string` (`IoKind::EnvVar`).
+		| "io-env" => Some(HostSig {
 			arity: 1,
 			returns_value: true,
+		}),
+		// `io.exit code` diverges: `(i32 code) -> ()`, the host exits the process. Not
+		// `is_io_host`/`io_kind` — emitted by `emit_exit`, typed `(i32)->()` in `module`.
+		"io-exit" => Some(HostSig {
+			arity: 1,
+			returns_value: false,
 		}),
 		"io-write-file" | "io-write-file-bytes" | "io-append-file" | "io-append-file-bytes" => {
 			Some(HostSig {
@@ -879,8 +891,68 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 			arity: 1,
 			returns_value: true,
 		}),
+		// `core.time` clock reads (`Clock`). `time-now`/`-monotonic` cross as i64
+		// BigInts (boxed `instant`/`duration` in wasm — `is_clock_host` → `emit_clock`);
+		// `time-parse` rides a marshalled `(fp,fl,ip,il,dst) -> status` shape into a
+		// `result instant string`. `arity` is the logical Pluma signature.
+		"time-now" | "time-monotonic" => Some(HostSig {
+			arity: 1,
+			returns_value: true,
+		}),
+		"time-parse" => Some(HostSig {
+			arity: 2,
+			returns_value: true,
+		}),
+		// `time.sleep d` diverges only in effect: `(i64 nanos) -> ()`, the host blocks.
+		"time-sleep" => Some(HostSig {
+			arity: 1,
+			returns_value: false,
+		}),
 		_ => None,
 	}
+}
+
+/// How a `core.time` clock host import shapes its result (`emit_clock`). The pure
+/// `time` conversions (`time-duration-as-nanos` etc.) are *not* here — those are inline
+/// `retag_int_box` builtins with no host import.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ClockKind {
+	/// `time-now`: `() -> i64`; box `{TAG_INSTANT, i64}`.
+	NowInstant,
+	/// `time-monotonic`: `() -> i64`; box `{TAG_DURATION, i64}`.
+	MonotonicDuration,
+	/// `time-sleep`: `(i64) -> ()`; unbox the `duration` arg, call, then `nothing`.
+	Sleep,
+	/// `time-parse`: `(fp,fl,ip,il,dst) -> status`; an i64 written to scratch on ok,
+	/// shaped into `result instant string` via `__io_result`.
+	Parse,
+}
+
+/// Classify a `core.time` clock host builtin (the ones needing a host import). `None`
+/// for the inline conversions and non-time tags.
+pub(crate) fn clock_kind(tag: &str) -> Option<ClockKind> {
+	Some(match tag {
+		"time-now" => ClockKind::NowInstant,
+		"time-monotonic" => ClockKind::MonotonicDuration,
+		"time-sleep" => ClockKind::Sleep,
+		"time-parse" => ClockKind::Parse,
+		_ => return None,
+	})
+}
+
+/// Whether `tag` is an `emit_clock`-handled `core.time` clock host import.
+pub(crate) fn is_clock_host(tag: &str) -> bool {
+	clock_kind(tag).is_some()
+}
+
+/// Whether a builtin used as a first-class value (`list.map xs to-string`,
+/// `list.each xs print`) has a synthesizable value-wrapper closure: host-import
+/// builtins (`print`, …, via `build_host_value_wrapper`) and the pure-compute
+/// renderer `to-string` (via `build_tostring_value_wrapper`, calling `__tostring`).
+/// A `MakeClosure` over any other builtin used as a value has no `$value` to build,
+/// so it stays a null placeholder and would trap if called.
+pub(crate) fn has_value_wrapper(tag: &str) -> bool {
+	tag == "to-string" || host_sig(tag).is_some()
 }
 
 /// How a `core.random`/`core.uuid` host import (other than `uuid-parse`, which rides
@@ -919,11 +991,12 @@ pub(crate) fn is_rng_host(tag: &str) -> bool {
 }
 
 /// Whether `tag` is a `core.io` builtin emitted through the marshalling host path
-/// (the file/stdin ops + the `bool` queries) — all of which traffic byte payloads
-/// through scratch memory. A superset of `is_io_result`; the extra two
-/// (`io-file-exists`/`io-is-dir`) skip `__io_result` (they return a bare `bool`).
+/// (the file/stdin ops + the `bool` queries + `io.args`) — all of which traffic byte
+/// payloads through scratch memory. A superset of `is_io_result`; the extras
+/// (`io-file-exists`/`io-is-dir` return a bare `bool`, `io-args` a bare `list`) skip
+/// `__io_result`.
 pub(crate) fn is_io_host(tag: &str) -> bool {
-	is_io_result(tag) || matches!(tag, "io-file-exists" | "io-is-dir")
+	is_io_result(tag) || matches!(tag, "io-file-exists" | "io-is-dir" | "io-args" | "io-env")
 }
 
 /// How a marshalled `core.io` op crosses the boundary: the wasm host-import shape
@@ -942,6 +1015,12 @@ pub(crate) enum IoKind {
 	ReadFileBytes,
 	/// `(path, plen, dst, cap) -> len`; split into a `$list` of `$str` (`io-read-dir`).
 	ReadDir,
+	/// `(dst, cap) -> len`; split a NUL-blob into a bare `$list` of `$str` — `io.args`.
+	/// Like `ReadDir` minus the path arg and the `__io_result` wrap (argv never fails).
+	Args,
+	/// `(name, nlen, dst, cap) -> len`; shape `len` (`-1` = unset) into an `option
+	/// string` — `io.env`. Like a path read, but wraps `some`/`none`, not `ok`/`err`.
+	EnvVar,
 	/// `(path, plen, data, dlen) -> status`; `nothing` payload (`io-write-file*`/`-append*`).
 	WriteFile,
 	/// `(path, plen) -> status`; `nothing` payload (`io-delete-file`/`io-make-dir`).
@@ -961,6 +1040,8 @@ pub(crate) fn io_kind(tag: &str) -> Option<IoKind> {
 		"io-read-file" | "uuid-parse" => IoKind::ReadFileStr,
 		"io-read-file-bytes" => IoKind::ReadFileBytes,
 		"io-read-dir" => IoKind::ReadDir,
+		"io-args" => IoKind::Args,
+		"io-env" => IoKind::EnvVar,
 		"io-write-file" | "io-write-file-bytes" | "io-append-file" | "io-append-file-bytes" => {
 			IoKind::WriteFile
 		}
@@ -975,7 +1056,13 @@ pub(crate) fn io_kind(tag: &str) -> Option<IoKind> {
 pub(crate) fn io_uses_io4(tag: &str) -> bool {
 	matches!(
 		io_kind(tag),
-		Some(IoKind::ReadFileStr | IoKind::ReadFileBytes | IoKind::ReadDir | IoKind::WriteFile)
+		Some(
+			IoKind::ReadFileStr
+				| IoKind::ReadFileBytes
+				| IoKind::ReadDir
+				| IoKind::WriteFile
+				| IoKind::EnvVar
+		)
 	)
 }
 

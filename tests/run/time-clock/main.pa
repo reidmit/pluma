@@ -1,0 +1,29 @@
+use core.io
+use core.time
+
+# The `core.time` clock builtins (Clock capability): wall clock, monotonic clock,
+# blocking sleep, and strtime parse. `time.now`/`time.monotonic` are nondeterministic,
+# so this fixture only prints *deterministic* derivations of them (a boolean comparison
+# that's stably `true`, never a raw timestamp) — keeping the snapshot portable and the
+# VM↔WasmGC conformance diff stable. `time.parse` is fully deterministic.
+
+def main = fun {
+	# strtime parse: 2024-01-01 UTC = 1704067200000000000 unix nanos (exact).
+	when time.parse "%Y-%m-%d" "2024-01-01" is ok t {
+		print "parsed: $(to-string (time.to-unix-nanos t))"
+	} is err e {
+		print "parse err: $(e)"
+	}
+	# parse failure -> err.
+	when time.parse "%Y-%m-%d" "not-a-date" is ok _ {
+		print "unexpected ok"
+	} is err _ {
+		print "parse err (expected)"
+	}
+	# now: the wall clock is after 2020-01-01 (1577836800s) — true for decades.
+	print (time.to-unix-nanos (time.now ()) > 1577836800000000000)
+	# monotonic advances across a sleep (sleep blocks; the clock has ns resolution).
+	let m1 = time.monotonic ()
+	let _ = time.sleep 5ms
+	print (time.as-nanos (time.monotonic ()) > time.as-nanos m1)
+}
