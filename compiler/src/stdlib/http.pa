@@ -13,9 +13,9 @@
 # that response is a 500.
 #
 # This is plain text over TCP, so put it behind a reverse proxy
-# (nginx, Caddy, your platform's load balancer) for TLS. v1 handles one
-# connection at a time, in order; concurrent connection handling is a
-# planned addition.
+# (nginx, Caddy, your platform's load balancer) for TLS. Connections are
+# served concurrently -- each runs in its own task, so a slow handler
+# (a database call, a downstream request) never blocks the others.
 #
 # It speaks HTTP/1.1 and closes the connection after each response
 # (`Connection: close`); keep-alive, chunked transfer, HTTP/2, and
@@ -95,15 +95,75 @@ public def serve :: fun string (fun request -> task response) -> task nothing = 
 # Serves `handler` on a listener you've already opened. Useful when you
 # need the bound address first (listen on port `0`, read `net.local-addr`,
 # then serve).
+#
+# Connections are handled concurrently. The acceptor and every in-flight
+# handler are children of one `manual scope`; the acceptor is itself a
+# child, so a freshly accepted connection and a finished handler both
+# surface through the same `s.next` drain. Draining is what keeps the
+# server honest: each settled child is reaped as `serve-loop` pulls it, so
+# completed handlers never pile up in the scope (the leak that kept the
+# first cut sequential). At any moment the live set is the in-flight
+# handlers plus the single waiting acceptor.
 public def serve-on :: fun net.listener (fun request -> task response) -> task nothing = fun server handler {
+	manual scope as s {
+		let _ = s.spawn (accept-one server)
+		serve-loop s server handler
+	}
+}
+
+# What a child of the serve scope settles to. `arrived` is the acceptor
+# handing back a new connection; `served` is a handler reporting it has
+# finished replying; `closed` is the acceptor saying the listener is gone,
+# so we stop re-arming it. Both child kinds settle to this one type, which
+# is what lets them share the homogeneous `manual scope`.
+enum serve-event {
+	arrived net.connection
+	served
+	closed
+}
+
+# The acceptor child: wait for one connection and tag the outcome.
+def accept-one :: fun net.listener -> task serve-event = fun server {
 	try c = net.accept server
 	when c is ok conn {
-		try _ = handle-one conn handler
-		serve-on server handler
+		task.return (serve-event.arrived conn)
 	} is err _ {
-		# The listener was closed (e.g. the surrounding scope was cancelled):
-		# stop the accept loop cleanly.
+		task.return serve-event.closed
+	}
+}
+
+# A handler child: run one connection to completion, then report `served`.
+# `handle-one` never fails, so this child never fails the scope.
+def handle-child :: fun net.connection (fun request -> task response) -> task serve-event = fun conn handler {
+	try _ = handle-one conn handler
+	task.return serve-event.served
+}
+
+# Drain the serve scope. Each settled child drives exactly one `s.next`, so
+# completions are reaped as fast as they're produced: an `arrived`
+# connection spawns its handler and re-arms the acceptor; a `served`
+# handler was already reaped by this `s.next`, so we just continue; a
+# `closed` listener (the scope was cancelled, or accept errored) stops the
+# re-arm, and once the last in-flight handler drains, `s.next` yields
+# `none` and the loop ends.
+def serve-loop :: fun (manual-scope-handle serve-event) net.listener (fun request -> task response) -> task nothing = fun s server handler {
+	try got = s.next ()
+	when got is none {
 		task.return ()
+	} is some outcome {
+		when outcome is ok ev {
+			when ev is arrived conn {
+				let _ = s.spawn (handle-child conn handler)
+				let _ = s.spawn (accept-one server)
+				serve-loop s server handler
+			} is served {
+				serve-loop s server handler
+			} is closed {
+				serve-loop s server handler
+			}
+		} is err _ {
+			serve-loop s server handler
+		}
 	}
 }
 
