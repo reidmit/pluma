@@ -1,0 +1,53 @@
+# Sieve of Eratosthenes — a mutable array marked in place. A different integer
+# workload than trial-division primes: this leans on `list.set` throughput in a
+# tight loop, then folds an order-sensitive checksum over the survivors.
+
+use core.list
+
+# Mark every multiple of `p` (from p*p) as composite.
+def mark = fun sieve p j n {
+	if j > n {
+		()
+	} else {
+		let _ = list.set sieve j 1
+		mark sieve p (j + p) n
+	}
+}
+
+# For each candidate p with p*p <= n, sieve out its multiples if p is prime.
+def sift = fun sieve p n {
+	if p * p > n {
+		()
+	} else {
+		let _ = if list.get sieve p == 0 {
+			mark sieve p (p * p) n
+		} else {
+			()
+		}
+		sift sieve (p + 1) n
+	}
+}
+
+# Walk the survivors, tallying the count and a checksum of the primes.
+def tally = fun sieve i n count sum {
+	if i > n {
+		(count, sum)
+	} else if list.get sieve i == 0 {
+		tally sieve (i + 1) n (count + 1) ((sum + i) % 1000000007)
+	} else {
+		tally sieve (i + 1) n count sum
+	}
+}
+
+def main = fun {
+	let n = 10000000
+	let sieve = list.build (n + 1) fun _i {
+		0
+	}
+	let _ = list.set sieve 0 1
+	let _ = list.set sieve 1 1
+	let _ = sift sieve 2 n
+	let (count, sum) = tally sieve 2 n 0 0
+	print (to-string count)
+	print (to-string sum)
+}

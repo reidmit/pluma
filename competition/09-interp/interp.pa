@@ -1,0 +1,59 @@
+# A tiny arithmetic-expression interpreter: build an AST of nominal enum nodes,
+# then evaluate it many times. Exercises exhaustive pattern matching, enum
+# dispatch, and recursion — the functional core of the language.
+
+enum expr {
+	lit int
+	add expr expr
+	sub expr expr
+	mul expr expr
+	neg expr
+}
+
+# All arithmetic is mod 1000003 so every operand stays a small non-negative
+# integer (exact in float64), so every language agrees bit-for-bit.
+def eval = fun e {
+	when e is lit v {
+		v
+	} is add l r {
+		(eval l + eval r) % 1000003
+	} is sub l r {
+		(eval l - eval r + 1000003) % 1000003
+	} is mul l r {
+		eval l * eval r % 1000003
+	} is neg x {
+		(1000003 - eval x) % 1000003
+	}
+}
+
+# Build a deterministic balanced expression tree.
+def build = fun depth seed {
+	when depth is 0 {
+		expr.lit (seed % 7)
+	} else {
+		let l = build (depth - 1) (seed * 2 + 1)
+		let r = build (depth - 1) (seed * 2 + 2)
+		when seed % 4 is 0 {
+			expr.add l r
+		} is 1 {
+			expr.sub l r
+		} is 2 {
+			expr.mul l r
+		} else {
+			expr.neg l
+		}
+	}
+}
+
+def run = fun e i limit acc {
+	if i == limit {
+		acc
+	} else {
+		run e (i + 1) limit ((acc + eval e) % 1000003)
+	}
+}
+
+def main = fun {
+	let tree = build 18 1
+	print (to-string (run tree 0 2000 0))
+}
