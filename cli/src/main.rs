@@ -1,6 +1,5 @@
 mod colors;
 mod printing;
-mod repl;
 
 use compiler::*;
 use printing::*;
@@ -34,11 +33,6 @@ fn main() {
 					}
 				};
 				run(entry_path, program_args);
-			}
-
-			"repl" => {
-				let rest: Vec<String> = std::env::args().skip(2).collect();
-				repl::repl_command(rest);
 			}
 
 			"build" => {
@@ -105,8 +99,6 @@ fn main() {
 						std::process::exit(1);
 					}
 				};
-
-				vm::stdlib::register_compiler(&mut compiler);
 
 				if let Err(diagnostics) = compiler.check() {
 					print_diagnostics(diagnostics);
@@ -272,8 +264,6 @@ fn test_command(args: Vec<String>) {
 		compiler.add_entry_module(name.clone());
 	}
 
-	vm::stdlib::register_compiler(&mut compiler);
-
 	let t_setup = std::time::Instant::now();
 
 	if let Err(diagnostics) = compiler.check() {
@@ -423,7 +413,6 @@ fn build_command(args: Vec<String>) {
 			std::process::exit(1);
 		}
 	};
-	vm::stdlib::register_compiler(&mut compiler);
 	if let Err(diagnostics) = compiler.check() {
 		print_diagnostics(diagnostics);
 		std::process::exit(1);
@@ -497,8 +486,6 @@ fn run(entry_path: String, program_args: Vec<String>) {
 		}
 	};
 
-	vm::stdlib::register_compiler(&mut compiler);
-
 	if let Err(diagnostics) = compiler.check() {
 		print_diagnostics(diagnostics);
 		std::process::exit(1);
@@ -506,10 +493,8 @@ fn run(entry_path: String, program_args: Vec<String>) {
 
 	// Compile to a WasmGC artifact and run it under V8 — the deploy engine, the exact
 	// thing `pluma build` ships ("run what you deploy"). Every builtin the language
-	// exposes now lowers to wasm, so there's no VM fallback: a program the backend can't
-	// emit (today only the browser-only `core.dom` surface — which the VM lacks too) is
-	// a hard error, not a silent VM detour. (The VM stays the reference oracle for
-	// `conformance`/`bench`, just not a `pluma run` engine.)
+	// exposes lowers to wasm, so a program the backend can't emit (today only the
+	// browser-only `core.dom` surface) is a hard `wasm codegen error`.
 	let program = match ir::lower(&compiler) {
 		Ok(p) => p,
 		Err(msg) => {
@@ -620,8 +605,6 @@ Compiler & toolchain for the {} programming language
 
 COMMANDS:
   [run] <path>     execute a module directly (the `run` keyword is optional)
-  repl [--dump]    start an interactive REPL session; with `--dump` (or when
-                   stdin is piped) read submissions from stdin instead
   build <path> [--target server] [-o out]
                    compile a module to a WasmGC deploy artifact (.wasm); run it
                    with `pluma run <out>.wasm`
@@ -649,8 +632,6 @@ Compiler & toolchain for the {} programming language
 
 COMMANDS:
   [run] <path>     execute a module directly (the `run` keyword is optional)
-  repl [--dump]    start an interactive REPL session; with `--dump` (or when
-                   stdin is piped) read submissions from stdin instead
   build <path> [--target server] [-o out]
                    compile a module to a WasmGC deploy artifact (.wasm); run it
                    with `pluma run <out>.wasm`

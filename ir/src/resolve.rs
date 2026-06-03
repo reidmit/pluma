@@ -81,12 +81,9 @@ pub fn direct_call_targets(program: &IrProgram) -> HashMap<u32, FuncId> {
 /// return repr now on the node, the coercion pass can read a scalar-returning
 /// builtin's result unboxed instead of forcing every call result `Boxed`.
 ///
-/// **Deploy-backend pass only** (run by `wasm::emit`, not `ir::optimize`): the VM
-/// keeps dispatching builtins dynamically through a `Value::Builtin` and gains
-/// nothing from unboxing (its `Value::Int` is already inline-tagged). A `TailCall`
-/// of a builtin becomes a non-tail `Call` — builtins are leaf host ops that never
-/// tail-recurse, and the emitter already ignored the tail flag for them.
-/// Idempotent.
+/// Run by `wasm::emit` as part of its pipeline. A `TailCall` of a builtin becomes
+/// a non-tail `Call` — builtins are leaf host ops that never tail-recurse, and the
+/// emitter ignores the tail flag for them. Idempotent.
 pub fn resolve_builtins(program: &mut IrProgram) {
 	let builtins = builtin_call_targets(program);
 	if builtins.is_empty() {

@@ -6,22 +6,21 @@ publish = false
 
 # The WasmGC runtime host: supplies the `pluma.*` host imports over the ABI.md
 # marshalling boundary (scalars + scratch-memory bytes, no GC reflection), then runs the
-# artifact under V8. `cli` runs a built `.wasm` this way (streaming process stdio), and
-# `conformance` diffs every fixture against the VM oracle. The engine-neutral ABI is what
-# lets a stock JS engine like V8 — which cannot reflect WasmGC structs — run the artifact
-# (ABI.md Phase 2); V8's generational GC is the deploy engine.
+# artifact under V8. `cli` runs a built `.wasm` this way (streaming process stdio for
+# `pluma run`/`pluma test`); `tests` runs each fixture this way (buffered) to snapshot
+# stdout/stderr. The engine-neutral ABI is what lets a stock JS engine like V8 — which
+# cannot reflect WasmGC structs — run the artifact (ABI.md Phase 2); V8's generational GC
+# is the deploy engine.
 
 [dependencies]
 # The V8 backend (rusty_v8): instantiates the WasmGC artifact under V8, driving the
 # marshalled `pluma.*` imports as native callbacks over the exported memory's ArrayBuffer.
 v8 = "137"
-# The host-side I/O reactor for `core.net` — the same library the VM reactor uses
-# (`vm/src/net.rs`), so the host mirrors the VM's park/wake byte-for-byte.
+# The host-side I/O reactor for `core.net`: accept/read/write park the calling fiber
+# until the fd is ready (epoll/kqueue) rather than blocking the scheduler thread.
 polling = "3"
-# `core.random` / `core.uuid` host imports — the same crates the VM uses, so the host
-# generates entropy/uuids identically (the deploy `Entropy` capability).
+# `core.random` / `core.uuid` host imports (the deploy `Entropy` capability).
 rand = "0.10"
 uuid = { version = "1", features = ["v4", "v7"] }
-# `core.time` clock imports (`time.now`/`monotonic`/`parse`) — the same crate + version
-# the VM uses (`vm/src/builtin.rs`), so wall-clock and strtime parsing match the oracle.
+# `core.time` clock imports (`time.now`/`monotonic`/`parse`) — wall-clock + strtime parsing.
 jiff = "0.2.25"

@@ -22,28 +22,20 @@ ruby <prog>.rb                  node <prog>.js
 ```
 
 — and reports the best wall-clock time over N runs. **Times include process
-startup.** The `pluma-vm` time also includes front-end compilation, because
-recompiling each run is the real dev-loop cost; the `pluma-v8` deploy artifact is
-built once up front, so its per-run time is execution only (the build cost is
-reported separately).
+startup.** The `pluma-v8` deploy artifact is built once up front, so its per-run
+time is execution only (the build cost is reported separately).
 
-Pluma ships **two backends over one IR**, so it is measured twice:
+Pluma is measured as **`pluma-v8`** — the WasmGC deploy artifact: `pluma build
+--target server` *once*, then `pluma run <out>.wasm`, executed under **V8** (the
+`pluma run` engine, so this is *run what you ship*). Because you build once and run
+many, the per-run time measures *executing* the artifact; the one-time compile-to-
+wasm cost is summed and reported separately, not folded into the per-run number.
+V8's generational GC is what makes Pluma's boxed-value IR fast here. Pluma's own
+output is the reference the other languages are diffed against.
 
-- **`pluma-vm`** — `pluma run --vm <src>`, the reference bytecode interpreter (the
-  dev/test oracle, not a deploy target). The time includes front-end compilation
-  (the dev-loop cost every run), and its output is what the other backends are
-  diffed against.
-- **`pluma-v8`** — the WasmGC deploy artifact: `pluma build --target server`
-  *once*, then `pluma run <out>.wasm`, executed under **V8** — the default
-  `pluma run` engine, so this is *run what you ship*. Because you build once and
-  run many, the per-run time measures *executing* the artifact; the one-time
-  compile-to-wasm cost is summed and reported separately, not folded into the
-  per-run number. V8's generational GC is what makes Pluma's boxed-value IR fast
-  here.
-
-(Earlier revisions ran the artifact under wasmtime's `null` and `drc` collectors.
-Wasmtime has since been retired entirely — every WasmGC artifact runs under V8, the
-engine you deploy, both here and in the `conformance` differential against the VM.)
+(Earlier revisions ran the artifact under wasmtime's `null` and `drc` collectors,
+and against a bytecode-VM column; both have since been retired — Pluma has a single
+WasmGC backend, run under V8, the engine you deploy.)
 
 Each timed command runs under a wall-clock cap (default 30 s, override with
 `RUN_TIMEOUT`) so a workload one backend handles far more slowly than the rest

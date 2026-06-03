@@ -54,8 +54,9 @@
 // `vm::task::run_poll_defers`.
 //
 // The pass now covers every control-flow shape lowering produces, so any async
-// function is transformed. Inert unless `cps_transform` is run (it isn't on the
-// default VM path); validated VM-anchored by `tests/cps.rs`.
+// function is transformed. Run by `wasm::emit` (via `wasm/src/async_lower.rs`);
+// its behavior is exercised end-to-end by the async `task-*`/`scope-*` fixtures
+// in `tests/run`.
 
 use crate::types::*;
 use std::collections::{BTreeSet, HashMap, HashSet};

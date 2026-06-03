@@ -1,5 +1,5 @@
-# Tail-call-style recursion through the bytecode VM. Frames live on the
-# heap, so this is bounded only by memory rather than the Rust call stack.
+# Tail-call-style recursion. Frames live on the heap, so this is bounded only
+# by memory rather than a native call stack.
 
 def count-down = fun n {
 	when n is 0 {

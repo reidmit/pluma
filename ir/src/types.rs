@@ -23,7 +23,7 @@ pub struct VarId(pub u32);
 
 /// Identifies a scheduled `defer` cleanup within a function, so the same
 /// cleanup can be emitted on every exit edge (normal return + `try`-failure
-/// short-circuit) — mirroring the VM's per-frame LIFO cleanup.
+/// short-circuit), in LIFO order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DeferId(pub u32);
 
@@ -102,43 +102,40 @@ pub struct Function {
 	/// `MakeAsyncClosure` in the bytecode emitter; the seam for the step-2 CPS
 	/// state-machine pass.
 	pub is_async: bool,
-	/// The CPS state-machine rollout marker (`ir::cps`). `None` is the default —
-	/// an `is_async` function runs Await-style (the VM's frame-snapshot driver).
-	/// `Some(poll_fn)` means this function was rewritten to poll style: it stays
-	/// in place (still drives `MakeAsyncClosure`/`do_call`, so callers are
-	/// unchanged), but the driver advances it by calling `poll_fn` —
-	/// `poll(state, resume) -> __poll` — instead of snapshotting the frame. The
-	/// referenced `poll_fn` is an ordinary (`poll_fn: None`) 2-arg function. Only
-	/// set for functions the CPS pass fully supports; the rest stay `None` and
-	/// both drivers coexist. Inert unless the CPS pass runs.
+	/// The CPS state-machine rollout marker (`ir::cps`). `None` in freshly-lowered
+	/// IR. `wasm::emit`'s async-lowering pass (`ir::cps::cps_transform`, driven by
+	/// `wasm/src/async_lower.rs`) rewrites every awaiting function to poll style and
+	/// sets this to `Some(poll_fn)`: the function stays in place (still drives
+	/// `MakeAsyncClosure`/`do_call`, so callers are unchanged), but the driver
+	/// advances it by calling `poll_fn` — `poll(state, resume) -> __poll`. The
+	/// referenced `poll_fn` is an ordinary (`poll_fn: None`) 2-arg function. Set by
+	/// the CPS pass; `None` until it runs.
 	pub poll_fn: Option<FuncId>,
 	pub body: Block,
 	/// Representation of every `VarId` defined in this function, indexed by
 	/// `VarId.0` (params, captures, and every `Let`/pattern-bound var). Produced
-	/// by the step-2 Repr inference pass (`repr::infer_reprs`). Under the
-	/// uniform-boxed-first scheme every binding is `Boxed` except the results of
-	/// arithmetic/comparison/`Not` ops and primitive `Const` literals. The
-	/// bytecode emitter ignores this (the VM is uniformly boxed); the WASM backend
-	/// maps each repr to an i64/f64/i32 or GC-ref local. Empty until inference runs.
+	/// by the Repr inference pass (`repr::infer_reprs`, run by `wasm::emit`). Under
+	/// the uniform-boxed-first scheme every binding is `Boxed` except the results of
+	/// arithmetic/comparison/`Not` ops and primitive `Const` literals. The WASM
+	/// backend maps each repr to an i64/f64/i32 or GC-ref local. Empty until
+	/// inference runs.
 	pub var_reprs: Vec<Repr>,
 	/// The representation of each formal parameter, parallel to `params`. The
 	/// projection of each param's resolved type (`repr::repr_of_type`), recorded by
-	/// lowering. All-`Boxed` (the uniform-boxed contract) until the step-2
-	/// monomorphization pass stamps eligible, non-escaping concrete functions with
-	/// their unboxed signature — at which point an `int` param reads as `I64`,
-	/// killing the entry box/unbox churn. The bytecode emitter ignores it.
+	/// lowering. All-`Boxed` (the uniform-boxed contract): the interprocedural
+	/// unboxing pass that once stamped concrete functions with unboxed signatures
+	/// was VM-substrate-only and was removed with the VM.
 	pub param_reprs: Vec<Repr>,
 	/// The representation of the function's return value — the projection of the
-	/// body's tail type. `Boxed` until monomorphization stamps it. Drives the
-	/// `Return`-site repr requirement in the coercion pass; ignored by the VM.
+	/// body's tail type. `Boxed` (the uniform-boxed contract; see `param_reprs`).
+	/// Drives the `Return`-site repr requirement in the coercion pass.
 	pub ret_repr: Repr,
 }
 
-/// The machine representation a value takes. The bytecode VM is uniformly
-/// `Boxed` (its `Value` enum is already inline-tagged, so the distinction is
-/// invisible there); a WASM backend maps `I64`/`F64`/`I32` to native locals and
-/// `Boxed` to a GC reference. Assigned per `VarId` by `repr::infer_reprs` and
-/// bridged by the `Box`/`Unbox` rvalues the coercion pass inserts.
+/// The machine representation a value takes. The WASM backend maps
+/// `I64`/`F64`/`I32` to native locals and `Boxed` to a GC reference. Assigned per
+/// `VarId` by `repr::infer_reprs` and bridged by the `Box`/`Unbox` rvalues the
+/// coercion pass inserts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Repr {
 	/// A heap reference / uniform `Value` — every polymorphic or compound value.
@@ -157,7 +154,7 @@ pub enum Repr {
 pub struct Block(pub Vec<Stmt>);
 
 /// One IR statement, plus the source range of the AST expression that produced
-/// it. Backends pin every emitted instruction to this range so the VM can
+/// it. The backend pins every emitted instruction to this range so it can
 /// attribute runtime errors and `debug` call sites to the right line. The range
 /// is `Range::collapsed(0, 0)` for synthetic stmts (entry function, poison
 /// thunk, dict-builder/ctor scaffolding) that have no source origin.
@@ -215,7 +212,7 @@ pub enum StmtKind {
 	},
 	/// Pattern match on `subject`: the first arm whose pattern matches runs.
 	/// Arms are tried in order; if none match, control falls through (the IR
-	/// for `when`/`if` arranges a result default of `nothing`, matching the VM).
+	/// for `when`/`if` arranges a result default of `nothing`).
 	/// Kept at the pattern level (rather than pre-compiled to `Switch`) so each
 	/// backend chooses its own compilation; a decision-tree IR->IR pass can
 	/// rewrite it later.
@@ -277,9 +274,9 @@ pub enum Pattern {
 		/// The statically-resolved closed shape of the matched record (its
 		/// name-sorted field set), when the subject type is a closed record;
 		/// `None` for an open (row-polymorphic) subject or any non-closed-record
-		/// type. Lets a backend resolve each bound field name to a constant slot
+		/// type. Lets the backend resolve each bound field name to a constant slot
 		/// index (`RecordShape::slot_of`) instead of a runtime name-scan. Threaded
-		/// by lowering from the subject's resolved type; ignored by the bytecode VM.
+		/// by lowering from the subject's resolved type.
 		shape: Option<RecordShape>,
 	},
 }
@@ -311,9 +308,8 @@ pub enum RecordRest {
 /// when the receiver/subject type is open (row-polymorphic) or otherwise not a
 /// statically-resolved closed record.
 ///
-/// Lets a backend resolve a field name to a constant slot index (`slot_of`) —
+/// Lets the backend resolve a field name to a constant slot index (`slot_of`) —
 /// the basis for the nominal-struct record representation.
-/// Backends that don't use it (the bytecode VM) ignore it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RecordShape {
 	/// Field names in canonical name-sorted order (matching `MakeRecord`).
@@ -365,18 +361,17 @@ pub enum Rvalue {
 	/// Call through a closure value.
 	CallClosure(Atom, Vec<Atom>),
 	/// A tail call through a closure value: the call is in tail position (its
-	/// result is the enclosing function's return value). Lowers to the VM's
-	/// `TailCall`, which reuses the current frame for a closure callee (so the
-	/// following `Return` is dead) and falls back to a plain call for
-	/// builtins/ctors/async-fns. Produced only by `lower`'s tail path; always
-	/// immediately followed by a `Return` of its result.
+	/// result is the enclosing function's return value), so the callee can reuse
+	/// the current frame (the following `Return` is dead); falls back to a plain
+	/// call for builtins/ctors/async-fns. Produced only by `lower`'s tail path;
+	/// always immediately followed by a `Return` of its result.
 	TailCall(Atom, Vec<Atom>),
 	/// A tail call to a statically-known top-level function — the tail-position
 	/// analogue of `Call(Callee::Function(..))`. Produced by `resolve_direct_calls`
 	/// from a `TailCall` whose callee is a capture-free non-async global function,
 	/// it drops the `LoadGlobal` + indirect dispatch (the callee resolves to a
-	/// zero-capture closure, so this is behavior-neutral). Lowers to the VM's
-	/// `TailCallDirect`; always immediately followed by a `Return` of its result.
+	/// zero-capture closure, so this is behavior-neutral); always immediately
+	/// followed by a `Return` of its result.
 	TailCallDirect(FuncId, Vec<Atom>),
 	/// Read method `index` (trait declaration order) from a dictionary value,
 	/// yielding a callable.
@@ -400,8 +395,8 @@ pub enum Rvalue {
 	/// Read a record field by name. The optional `RecordShape` is the statically-
 	/// resolved closed shape of the receiver (its name-sorted field set), threaded
 	/// by lowering from the receiver's type; `None` for an open/row-polymorphic
-	/// receiver. A backend that uses it resolves the field to a constant slot
-	/// (`RecordShape::slot_of`); the bytecode VM ignores it and reads by name.
+	/// receiver. The backend resolves the field to a constant slot
+	/// (`RecordShape::slot_of`).
 	GetField(Atom, String, Option<RecordShape>),
 	/// Read element `index` of a tuple (`e.0`, `e.1`). The tuple analogue of
 	/// `GetField`; index is statically known and bounds-checked by the analyzer
@@ -457,8 +452,8 @@ pub enum Callee {
 	/// A primitive dispatched by tag, carrying its declared return `Repr` (from
 	/// the builtin global it was resolved from). The repr lets the coercion pass
 	/// read a scalar-returning builtin's result unboxed instead of forcing every
-	/// call result `Boxed`. Produced by `resolve_builtins` (a deploy-backend pass);
-	/// the VM never sees it (it keeps dispatching builtins dynamically).
+	/// call result `Boxed`. Produced by `resolve_builtins`, part of `wasm::emit`'s
+	/// pipeline.
 	Builtin(String, Repr),
 }
 

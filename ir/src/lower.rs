@@ -198,8 +198,8 @@ impl<'a> Lowerer<'a> {
 		let entry = self.build_entry(&test_suites)?;
 
 		// Annotate every function's bindings with a `Repr` (uniform-boxed except
-		// arithmetic/comparison/`Not` results and primitive literals). Inert for the
-		// bytecode VM; the WASM backend maps each repr to a native/GC-ref local.
+		// arithmetic/comparison/`Not` results and primitive literals). The WASM
+		// backend maps each repr to a native/GC-ref local.
 		let mut functions = self.functions;
 		for f in &mut functions {
 			f.var_reprs = crate::repr::infer_reprs(f, &crate::repr::Sigs::uniform());

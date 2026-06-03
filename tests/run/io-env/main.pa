@@ -1,10 +1,10 @@
 use core.io
 
 # `io.env` returns `some value` for a set variable, `none` for an unset one.
-# The snapshot must be portable (no machine-specific values) and conformance
-# diffs VM vs WasmGC under the same process env — so this fixture only looks up
-# names that are reliably *unset*, exercising the `none` shaping deterministically.
-# (The `some` path is covered end-to-end via `PLUMA_X=… pluma run app.pa`.)
+# The snapshot must be portable (no machine-specific values), so this fixture only
+# looks up names that are reliably *unset*, exercising the `none` shaping
+# deterministically. (The `some` path is covered end-to-end via
+# `PLUMA_X=… pluma run app.pa`.)
 
 def main = fun {
 	if io.env "PLUMA_DEFINITELY_UNSET_VARIABLE_XYZ" is some v {

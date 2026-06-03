@@ -1,11 +1,9 @@
-// Repr (representation) analysis — the step-2 WASM-backend prerequisite.
+// Repr (representation) analysis — a WASM-backend prerequisite.
 //
-// The bytecode VM is uniformly boxed: its `Value` enum is already inline-tagged,
-// so `int`/`float`/`bool` cost nothing extra and there is no boxed/unboxed
-// distinction to make. WasmGC is different — it wants `int`→i64, `float`→f64,
-// `bool`→i32 *locals*, with explicit coercions wherever an unboxed value meets a
-// polymorphic or compound (boxed) context. This module makes that representation
-// discipline explicit in the IR so a future WASM emitter can read it off:
+// WasmGC wants `int`→i64, `float`→f64, `bool`→i32 *locals*, with explicit
+// coercions wherever an unboxed value meets a polymorphic or compound (boxed)
+// context. This module makes that representation discipline explicit in the IR so
+// the WASM emitter can read it off:
 //
 //   * `infer_reprs`     — assign a `Repr` to every `VarId` (uniform-boxed-first:
 //                         only arithmetic/comparison/`Not` results and primitive
@@ -16,10 +14,8 @@
 //   * `validate_reprs`  — the WASM-readiness checker: assert no naked cross-repr
 //                         flow remains after coercion.
 //
-// All of this is inert on the bytecode VM (`Box`/`Unbox` lower to a no-op `Use`,
-// and the split comparison ops map back to the VM's polymorphic opcodes). The VM
-// anchors are therefore *behavior preservation* (the differential corpus harness)
-// and this *static validator* — the real consumer is the WASM backend.
+// The WASM backend is the sole consumer; `validate_reprs` is the static readiness
+// check that no naked cross-repr flow survives coercion before emission.
 //
 // Scope is uniform-boxed-first: uniform-boxed for generics now, with
 // monomorphization a later refinement. Function params/captures/returns and every call
@@ -71,8 +67,8 @@ pub fn repr_of_type(t: &compiler::types::Type) -> Repr {
 ///
 /// `Sigs::uniform()` is the uniform-boxed contract: every param, argument, and
 /// result is `Boxed`, and function params are *not* seeded from their recorded
-/// `param_reprs` (so the pass behaves exactly as it did before monomorphization).
-/// This is what the default VM pipeline and the `ir_repr` harness use.
+/// `param_reprs`. This is what `wasm::emit` uses (the only repr pipeline now that
+/// the VM and its interprocedural unboxing pass are gone).
 ///
 /// `Sigs::from_program` reads each function's (monomorphization-filtered)
 /// `param_reprs`/`ret_repr`, so eligible concrete functions take unboxed params

@@ -12,13 +12,14 @@
 //
 // This file holds the engine-independent core — the `HostIo` sinks, `HostState`, and
 // the `core.net` reactor (`HostNet`) — that the V8 runner in `v8host.rs` drives. That
-// runner has two front doors over one set of host imports:
-//   - `run_wasm_v8` — **buffered** (stdout captured, stderr dropped, stdin fed from a
-//     byte slice). The `conformance` crate's differential path.
+// runner has three front doors over one set of host imports, differing only in the
+// `HostIo` sink behind `HostState` — so every door tests the exact runtime the CLI ships:
 //   - `run_streaming_v8` — **process stdio** (stdout/stderr streamed live, stdin read
-//     from the process). The `cli`'s `pluma run` path.
-// The only thing that differs is the `HostIo` sink behind `HostState`, so the
-// conformance gate tests exactly the runtime the CLI ships.
+//     from the process). The `cli`'s `pluma run` / `pluma test` path.
+//   - `run_wasm_v8_captured` — **buffered, both streams** (status + stdout + stderr
+//     captured, stdin fed from a byte slice). The `tests/run` snapshot suite's path.
+//   - `run_wasm_v8` — **buffered, stdout only** (stderr dropped). A minimal entry point
+//     (the `v8smoke` example).
 
 use std::collections::{HashMap, VecDeque};
 use std::io::{Read, Write};
@@ -33,7 +34,7 @@ use polling::{Event, Events, Poller};
 // `NetRet`/`BufferedIo`/`read_line_from`) — a child module sees its ancestors' private
 // items, so nothing here needs `pub`.
 mod v8host;
-pub use v8host::{run_streaming_v8, run_test_v8, run_wasm_v8};
+pub use v8host::{run_streaming_v8, run_test_v8, run_wasm_v8, run_wasm_v8_captured};
 
 /// A program's observable result: exit status + captured stdout. (The streaming runner
 /// returns an empty `stdout` — it streamed live to the process — and the caller uses
@@ -44,13 +45,23 @@ pub struct RunResult {
 	pub stdout: String,
 }
 
+/// A program's observable result with stderr kept separate — the snapshot-suite
+/// shape (`tests/run`). Unlike `RunResult` (status + stdout only), the snapshot
+/// harness pins stderr too, so it needs a runner that captures both streams.
+#[derive(Clone, PartialEq, Eq)]
+pub struct RunCapture {
+	pub status: String,
+	pub stdout: String,
+	pub stderr: String,
+}
+
 // --------------------------------------------------------------------------
 // The stdio sink. `HostState` is non-generic (the V8 import callbacks reach it through
 // a raw `Ctx` pointer); the buffered-vs-streaming choice is a trait object.
 // --------------------------------------------------------------------------
 
-/// Where the host's stdout/stderr go and where stdin comes from. The reads use the
-/// VM's `read_line` semantics (line up to `\n`, trailing `\r` stripped, `None` at
+/// Where the host's stdout/stderr go and where stdin comes from. The reads use
+/// `read_line` semantics (line up to `\n`, trailing `\r` stripped, `None` at
 /// EOF); `read_rest` drains the remainder.
 pub trait HostIo {
 	fn write_out(&mut self, bytes: &[u8]);
@@ -62,10 +73,15 @@ pub trait HostIo {
 	fn captured_stdout(&self) -> String {
 		String::new()
 	}
+	/// The stderr collected so far, for the snapshot path (`run_wasm_v8_captured`).
+	/// Sinks that drop or stream stderr return `""`.
+	fn captured_stderr(&self) -> String {
+		String::new()
+	}
 }
 
-/// Captures stdout, drops stderr (the conformance differential compares stdout
-/// only, mirroring `run_vm`), and reads stdin from a fixed byte buffer.
+/// Captures stdout, drops stderr, and reads stdin from a fixed byte buffer. The
+/// stdout-only buffered sink (`run_wasm_v8`).
 struct BufferedIo {
 	out: Vec<u8>,
 	stdin: Vec<u8>,
@@ -97,6 +113,49 @@ impl HostIo for BufferedIo {
 	}
 	fn captured_stdout(&self) -> String {
 		String::from_utf8_lossy(&self.out).into_owned()
+	}
+}
+
+/// Like `BufferedIo`, but also captures stderr — the snapshot suite (`tests/run`)
+/// pins both streams.
+struct CapturingIo {
+	out: Vec<u8>,
+	err: Vec<u8>,
+	stdin: Vec<u8>,
+	stdin_pos: usize,
+}
+
+impl CapturingIo {
+	fn new(stdin: &[u8]) -> Self {
+		CapturingIo {
+			out: Vec::new(),
+			err: Vec::new(),
+			stdin: stdin.to_vec(),
+			stdin_pos: 0,
+		}
+	}
+}
+
+impl HostIo for CapturingIo {
+	fn write_out(&mut self, bytes: &[u8]) {
+		self.out.extend_from_slice(bytes);
+	}
+	fn write_err(&mut self, bytes: &[u8]) {
+		self.err.extend_from_slice(bytes);
+	}
+	fn read_line(&mut self) -> Option<String> {
+		read_line_from(&self.stdin, &mut self.stdin_pos)
+	}
+	fn read_rest(&mut self) -> Vec<u8> {
+		let rest = self.stdin[self.stdin_pos..].to_vec();
+		self.stdin_pos = self.stdin.len();
+		rest
+	}
+	fn captured_stdout(&self) -> String {
+		String::from_utf8_lossy(&self.out).into_owned()
+	}
+	fn captured_stderr(&self) -> String {
+		String::from_utf8_lossy(&self.err).into_owned()
 	}
 }
 
@@ -150,7 +209,7 @@ impl HostIo for StdioIo {
 	}
 }
 
-/// Read one line from `buf` at `*pos` with the VM's `read_line` semantics: `None`
+/// Read one line from `buf` at `*pos` with the `read_line` semantics: `None`
 /// at EOF; otherwise the bytes up to the next `\n` (consumed), trailing `\r`
 /// stripped.
 fn read_line_from(buf: &[u8], pos: &mut usize) -> Option<String> {
@@ -176,7 +235,7 @@ struct HostState {
 	io: Box<dyn HostIo>,
 	/// The program's command-line arguments (interpreter + script path already
 	/// stripped by the CLI), surfaced through the `io-args` import. Empty on the
-	/// buffered/conformance and test paths — matching the VM oracle's empty `args`.
+	/// buffered test paths.
 	args: Vec<String>,
 	/// The `io.fail` abort message, stashed before the host traps so the runner can
 	/// surface it as the program's `runtime error: <msg>` status.
@@ -194,11 +253,10 @@ struct HostState {
 }
 
 // --------------------------------------------------------------------------
-// `core.net` — the host-side socket table + I/O reactor. The WasmGC analogue of
-// `vm::net`: the same byte-level TCP ops plus a `polling` readiness reactor. The
-// in-wasm scheduler owns the loop; when its ready queue empties and socket I/O is
-// in flight, it calls the blocking `net-poll` import here (mirroring the VM's
-// `block_until_ready` reactor step). The suspending ops (accept/read/write) are
+// `core.net` — the host-side socket table + I/O reactor: byte-level TCP ops plus a
+// `polling` readiness reactor. The in-wasm scheduler owns the loop; when its ready
+// queue empties and socket I/O is in flight, it calls the blocking `net-poll` import
+// here (the reactor step). The suspending ops (accept/read/write) are
 // *non-blocking* host calls: on `WouldBlock` they register the socket's fd under
 // the parked fiber's id (token = fid) and signal would-block; the scheduler parks
 // the fiber and later drives `net-poll`. listen/close/local-addr/connect are

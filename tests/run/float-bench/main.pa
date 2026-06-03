@@ -1,6 +1,5 @@
 # Float stress: approximate pi with the Leibniz series, tail-recursively. Pure
-# float arithmetic (+ - / and int->float) in a tight loop — the floating-point
-# ALU comparison between the two backends.
+# float arithmetic (+ - / and int->float) in a tight loop.
 
 def leibniz = fun n acc sign k {
 	when n is 0 {

@@ -6,7 +6,7 @@ tokenize path:
 analyze path:
   @ cargo run --bin cli --quiet -- analyze {{path}}
 
-# run a module via the bytecode VM
+# run a module on V8 (compiles to WasmGC — the deploy engine)
 run path:
   @ cargo run --bin cli --quiet -- run {{path}}
 
@@ -27,30 +27,18 @@ format-check:
 format-stdlib:
   @ cargo run --bin cli --quiet -- format $(find compiler/src/stdlib compiler/src/prelude.pa -name "*.pa")
 
-# run the benchmark suite (VM on bench-marked tests/run fixtures)
-bench:
-  @ cargo run --release -p bench --quiet
-
 # build the cli in release mode; produces target/release/cli
 build-release:
   @ cargo build --release --bin cli
 
-# run the snapshot test suite (analyze + run fixtures under tests/)
+# run the snapshot test suite (analyze + run + format fixtures under tests/).
+# `run` compiles each fixture to WasmGC and runs it under V8 (the deploy engine).
 test:
   @ cargo test -p tests
 
 # regenerate snapshots for any failing tests (use `cargo insta review` for interactive)
 test-write:
   @ INSTA_UPDATE=always cargo test -p tests
-
-# cross-backend conformance: run every fixture through the VM oracle + WasmGC,
-# diff WasmGC against the VM, and regenerate the committed CONFORMANCE.md coverage doc
-conformance:
-  @ cargo run -p conformance --release
-
-# conformance gate only (no write): assert WasmGC matches the VM and CONFORMANCE.md is fresh
-conformance-check:
-  @ cargo test -p conformance --release
 
 # run the stdlib's own Pluma test suite (compiler/src/stdlib/*.test.pa)
 # through `pluma test` — exercises the stdlib and the `core.test` runner under V8.

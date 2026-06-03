@@ -3,10 +3,10 @@
 // Pluma compiles from one shared IR to one WasmGC backend, but a `.wasm` runs in
 // different host environments — a server/machine or a browser. A `Platform` is a
 // host-capability *profile*: it decides which stdlib modules a program may `use`
-// and (downstream) which host imports the module declares. The bytecode VM, used
-// for `pluma run`, tests, and scripting, is the `Native` profile — it provides
-// every capability, so nothing is ever gated on it and existing behavior is
-// unchanged.
+// and (downstream) which host imports the module declares. The `Native` profile is
+// the default (used by the frontend/analysis path and the `tests/analyze` suite) —
+// it provides every capability, so nothing is ever gated on it; deploy builds pick
+// `Server` (or, in future, `Browser`).
 //
 // Gating is a static table: each gated module declares the capabilities it needs
 // (`MODULE_CAPS`), each platform declares the capabilities it provides
@@ -42,8 +42,8 @@ pub enum Capability {
 /// A deploy target = a host-capability profile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Platform {
-	/// The bytecode VM (`pluma run`, tests, scripts). Provides every capability,
-	/// so module gating never rejects anything. The default.
+	/// The frontend/analysis default. Provides every capability, so module gating
+	/// never rejects anything. The default.
 	#[default]
 	Native,
 	/// A server/machine wasm host (filesystem, stdio, net, clock, entropy, process).

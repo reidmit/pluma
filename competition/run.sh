@@ -12,13 +12,8 @@
 # and report the best wall-clock time over several runs (best-of-N rejects noise
 # from other activity on the machine).
 #
-# Pluma ships two backends over one IR, so it is measured two ways:
+# Pluma has one backend over its IR, the WasmGC/V8 deploy artifact:
 #
-#   pluma-vm    `pluma run --vm <src>`     — the reference bytecode interpreter: the
-#                                            dev/test oracle, NOT a deploy target. The
-#                                            time includes front-end compilation,
-#                                            because that is what the dev loop actually
-#                                            costs every run.
 #   pluma-v8    `pluma build` once, then    — the WasmGC artifact you deploy, run under
 #               `pluma run <out>.wasm`        V8 (the default `pluma run` engine — run
 #                                            what you ship). The same `.wasm` `pluma
@@ -32,8 +27,7 @@
 #
 # (Earlier revisions also timed the artifact under wasmtime's `null` and `drc`
 # collectors. Wasmtime has since been retired entirely — every WasmGC artifact runs
-# under V8, the deploy engine, both here and in the `conformance` differential — so
-# those collector columns are gone. See git history for the old three-column form.)
+# under V8, the deploy engine. See git history for the old multi-column form.)
 #
 # Usage:  competition/run.sh [RUNS]      (default RUNS=5)
 
@@ -143,13 +137,12 @@ if [ ! -x "$PLUMA" ]; then
 	exit 1
 fi
 
-echo "Pluma (VM + WasmGC/V8) vs Python vs Ruby vs Node.js  —  best of $RUNS runs, seconds (lower is better)"
+echo "Pluma (WasmGC/V8) vs Python vs Ruby vs Node.js  —  best of $RUNS runs, seconds (lower is better)"
 echo
-printf '%-12s %8s %9s %8s %7s %7s %10s %10s   %s\n' \
-	"benchmark" "pluma-vm" "pluma-v8" "python3" "ruby" "node" "vm vs best" "v8 vs best" "output"
-printf '%s\n' "----------------------------------------------------------------------------------------------"
+printf '%-12s %9s %8s %7s %7s %10s   %s\n' \
+	"benchmark" "pluma-v8" "python3" "ruby" "node" "v8 vs best" "output"
+printf '%s\n' "------------------------------------------------------------------------------"
 
-po="$(mktemp)"
 pv8o="$(mktemp)"
 pyo="$(mktemp)"
 rbo="$(mktemp)"
@@ -167,17 +160,14 @@ for entry in "${BENCHES[@]}"; do
 	desc="${rest#*:}"
 	d="$ROOT/competition/$dir"
 
-	# `pluma-vm`: force the bytecode VM (the reference interpreter). Its output is
-	# the oracle every other backend is diffed against below.
-	pt="$(min_time "$po" "$PLUMA" run --vm "$d/$name")"
-
 	# `pluma-v8`: compile to the WasmGC deploy artifact once (build cost is a one-
 	# time price, not part of the per-run number), then time executing that artifact
 	# under V8 — the same thing `pluma run <out>.wasm` does, the engine you deploy.
+	# This artifact's stdout is the oracle every competitor is diffed against below.
 	bt="$(build_wasm "$d/$name" "$WASMDIR/$name")"
 	if [ "$bt" = "ERR" ]; then
 		pv8="n/a"
-		: >"$pv8o"     # clear stale output so the diff below doesn't false-match
+		: >"$pv8o"     # clear stale output so the diff below has no oracle to match
 	else
 		[[ "$bt" =~ ^[0-9.]+$ ]] && build_total="$(awk "BEGIN { print $build_total + $bt }")"
 		pv8="$(min_time "$pv8o" "$PLUMA" run "$WASMDIR/$name.wasm")"
@@ -187,29 +177,33 @@ for entry in "${BENCHES[@]}"; do
 	rbt="$(min_time "$rbo" ruby "$d/$name.rb")"
 	jt="$(min_time "$jso" node "$d/$name.js")"
 
-	# Verify every other backend produced the same output as Pluma's VM (the
-	# reference). The WasmGC/V8 artifact is held to the same bar as the competitors.
-	status="ok"
-	for f in "$pv8o" "$pyo" "$rbo" "$jso"; do
-		if [ -s "$f" ] && ! diff -q "$po" "$f" >/dev/null 2>&1; then
-			status="MISMATCH"
-			mismatch="yes"
-		fi
-	done
+	# Verify every competitor produced the same output as the WasmGC/V8 artifact (the
+	# reference). If the v8 build/run failed there is no oracle to compare against, so
+	# the diff check is skipped rather than false-flagging an empty oracle file.
+	if [ "$pv8" = "n/a" ] || [ ! -s "$pv8o" ]; then
+		status="no-ref"
+	else
+		status="ok"
+		for f in "$pyo" "$rbo" "$jso"; do
+			if [ -s "$f" ] && ! diff -q "$pv8o" "$f" >/dev/null 2>&1; then
+				status="MISMATCH"
+				mismatch="yes"
+			fi
+		done
+	fi
 
-	# Fastest of the three competitors, and how each Pluma backend compares to it.
+	# Fastest of the three competitors, and how the deploy artifact compares to it.
 	best_other="$(printf '%s\n' "$pyt" "$rbt" "$jt" |
 		awk '/^[0-9.]+$/ { if (m == "" || $1 < m) m = $1 } END { print (m == "" ? "n/a" : m) }')"
-	vs_vm="$(ratio "$pt" "$best_other")"
 	# `v8 vs best` is the deploy reality — the artifact you ship vs the fastest competitor.
 	vs_v8="$(ratio "$pv8" "$best_other")"
 
-	printf '%-12s %8s %9s %8s %7s %7s %10s %10s   %s\n' \
-		"$name" "$pt" "$pv8" "$pyt" "$rbt" "$jt" "$vs_vm" "$vs_v8" "$status"
-	md_rows+="| \`$name\` | $desc | $pt | $pv8 | $pyt | $rbt | $jt | $vs_vm | $vs_v8 | $status |"$'\n'
+	printf '%-12s %9s %8s %7s %7s %10s   %s\n' \
+		"$name" "$pv8" "$pyt" "$rbt" "$jt" "$vs_v8" "$status"
+	md_rows+="| \`$name\` | $desc | $pv8 | $pyt | $rbt | $jt | $vs_v8 | $status |"$'\n'
 done
 
-rm -f "$po" "$pv8o" "$pyo" "$rbo" "$jso"
+rm -f "$pv8o" "$pyo" "$rbo" "$jso"
 rm -rf "$WASMDIR"
 
 build_total="$(awk "BEGIN { printf \"%.2f\", $build_total }")"
@@ -242,59 +236,14 @@ overall="every implementation agreed on every output"
 	echo
 	echo "## Results"
 	echo
-	echo "| benchmark | exercises | pluma-vm | pluma-v8 | python3 | ruby | node | vm vs best | v8 vs best | output |"
-	echo "|---|---|--:|--:|--:|--:|--:|--:|--:|:--:|"
+	echo "| benchmark | exercises | pluma-v8 | python3 | ruby | node | v8 vs best | output |"
+	echo "|---|---|--:|--:|--:|--:|--:|:--:|"
 	printf '%s' "$md_rows"
 	echo
 	echo "One-time cost to compile all ${#BENCHES[@]} benchmarks to WasmGC artifacts: **${build_total}s** total (not included in the per-run \`pluma-v8\` times)."
 	echo
-	echo "## How to read this"
-	echo
-	echo "- Pluma ships **two backends over one IR**, so it appears twice:"
-	echo "  - \`pluma-vm\` — \`pluma run --vm <src>\`, the reference bytecode interpreter."
-	echo "    It is the dev/test oracle (and the differential reference the deploy backend"
-	echo "    is cross-checked against), **not** a deploy target. The time includes front-end"
-	echo "    compilation, because that is what the dev loop costs every run."
-	echo "  - \`pluma-v8\` — the WasmGC artifact you deploy (\`pluma build\` once, then"
-	echo "    \`pluma run <out>.wasm\`), executed under **V8** — the default \`pluma run\`"
-	echo "    engine, so this is *run what you ship*. The per-run time measures executing"
-	echo "    the artifact; the one-time compile-to-wasm cost is reported separately above."
-	echo "    V8's **generational garbage collector** is what makes Pluma's boxed-value IR"
-	echo "    fast here: it bulk-frees the short-lived per-iteration allocations that a"
-	echo "    reference-counting collector would churn on one at a time."
-	echo "- \`vm vs best\` / \`v8 vs best\` divide a Pluma time by the fastest competitor's"
-	echo "  time (greater than 1× means Pluma is slower; less than 1× means faster)."
-	echo "  \`v8 vs best\` is the deploy reality — the artifact you ship vs the field."
-	echo "- \`output\` = \`ok\` means Pluma (both backends) and all three competitors printed"
-	echo "  byte-identical results; \`MISMATCH\` means they disagreed and the row should not"
-	echo "  be trusted."
-	echo "- A time cell may instead read \`n/a\` (tool not installed), \`ERR\` (exited non-zero),"
-	echo "  or \`>${RUN_TIMEOUT}s\` (still running when the per-run cap fired — the workload is"
-	echo "  far slower on that backend, not crashed). Such cells are excluded from the"
-	echo "  ratio and the output check."
-	echo "- This compares **idiomatic code in each language**. \`core.dict\` is a persistent,"
-	echo "  structurally-shared map (O(log n) insert, immutable, insertion-ordered);"
-	echo "  \`list.sort\` is a Pluma-level merge sort and the string ops are Pluma-level too,"
-	echo "  versus the other languages' native mutable maps and C-level sort/string routines."
-	echo "- Where a competitor finishes in well under ~0.1 s it is essentially measuring"
-	echo "  interpreter startup, not the workload."
-	echo "- Regenerate with \`competition/run.sh [RUNS]\`."
+	echo "Regenerate with \`competition/run.sh [RUNS]\`."
 } >"$REPORT"
 
-echo
-echo "Notes:"
-echo "  - 'pluma-vm' forces the reference bytecode VM ('pluma run --vm <src>'): it compiles"
-echo "    and interprets each run, so the time is the dev-loop cost. It is the oracle every"
-echo "    other backend's output is diffed against — not a deploy target."
-echo "  - 'pluma-v8' is the WasmGC artifact you deploy: 'pluma build' once, then"
-echo "    'pluma run <out>.wasm', executed under V8 (the default 'pluma run' engine). V8's"
-echo "    generational GC is what makes the boxed-value IR fast. Compiling all ${#BENCHES[@]}"
-echo "    benchmarks took ${build_total}s total, one time, and is NOT in the per-run numbers."
-echo "  - 'vm vs best' / 'v8 vs best' are a Pluma time / the fastest competitor's time."
-echo "    >1x means Pluma is slower; <1x means faster. 'v8 vs best' is the deploy reality."
-echo "  - 'output' = MISMATCH means the programs disagreed on their result."
-echo "  - core.dict is a persistent, structurally-shared map (O(log n) insert); list.sort"
-echo "    is a Pluma-level merge sort and the string ops are Pluma-level too. The others"
-echo "    use native mutable hash maps and C-level sort/string routines."
 echo
 echo "Wrote markdown report to ${REPORT#"$ROOT"/}"

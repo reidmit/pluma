@@ -1,10 +1,9 @@
 // The WasmGC type section: the `$value` rec group plus its scalar/heap subtypes,
 // and arity-keyed function types.
 //
-// The bytecode VM is uniformly boxed; the WASM backend instead gives `int`→i64,
-// `float`→f64, `bool`→i32 *locals* and represents every *boxed* (`Repr::Boxed`)
-// value as a GC reference to a `$value` subtype. The `$value` supertype carries
-// an `i32` discriminant tag (mirroring `vm::Value`'s variants) so polymorphic
+// The WASM backend gives `int`→i64, `float`→f64, `bool`→i32 *locals* and
+// represents every *boxed* (`Repr::Boxed`) value as a GC reference to a `$value`
+// subtype. The `$value` supertype carries an `i32` discriminant tag so polymorphic
 // code and tag-inspecting ops (`Match`, structural `Eq`, host-side `print`
 // formatting) can read the runtime kind off any reference.
 //

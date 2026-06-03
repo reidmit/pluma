@@ -1,9 +1,8 @@
 use core.io
 use core.list
 
-# `io.args` returns the program's argv as a `list string`. Both the snapshot
-# harness (VM) and the cross-backend conformance run (WasmGC under V8) invoke
-# fixtures with no extra arguments, so argv is empty here — exercising the
+# `io.args` returns the program's argv as a `list string`. The snapshot harness
+# invokes fixtures with no extra arguments, so argv is empty here — exercising the
 # host-import + NUL-blob-split path on its empty-list boundary. (Non-empty argv
 # is covered end-to-end through `pluma run app.pa a b c`.)
 

@@ -4,8 +4,8 @@ use core.time
 # The `core.time` clock builtins (Clock capability): wall clock, monotonic clock,
 # blocking sleep, and strtime parse. `time.now`/`time.monotonic` are nondeterministic,
 # so this fixture only prints *deterministic* derivations of them (a boolean comparison
-# that's stably `true`, never a raw timestamp) — keeping the snapshot portable and the
-# VM↔WasmGC conformance diff stable. `time.parse` is fully deterministic.
+# that's stably `true`, never a raw timestamp) — keeping the snapshot portable.
+# `time.parse` is fully deterministic.
 
 def main = fun {
 	# strtime parse: 2024-01-01 UTC = 1704067200000000000 unix nanos (exact).

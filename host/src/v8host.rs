@@ -6,11 +6,13 @@
 // crate's engine-independent core (`HostState`/`HostNet`/`NetRet`/`BufferedIo`/
 // `read_line_from`).
 //
-// This is the deploy engine `cli` ships and `conformance` diffs against the VM oracle.
+// This is the deploy engine `cli` ships and `tests` snapshots against.
 
 use std::sync::Once;
 
-use crate::{BufferedIo, HostIo, HostNet, HostState, NetRet, RunResult, StdioIo};
+use crate::{
+	BufferedIo, CapturingIo, HostIo, HostNet, HostState, NetRet, RunCapture, RunResult, StdioIo,
+};
 
 /// V8 platform init is process-global and one-shot.
 static V8_INIT: Once = Once::new();
@@ -33,10 +35,20 @@ struct Ctx {
 }
 
 /// Compile + instantiate `bytes` under V8, run `_entry`, and report status + captured
-/// stdout (the conformance differential shape, mirroring `run_wasm`). `stdin` feeds the
-/// buffered io sink.
+/// stdout (stderr dropped). `stdin` feeds the buffered io sink.
 pub fn run_wasm_v8(bytes: &[u8], stdin: &[u8]) -> RunResult {
-	run_v8(bytes, Box::new(BufferedIo::new(stdin)), Vec::new())
+	let cap = run_v8(bytes, Box::new(BufferedIo::new(stdin)), Vec::new());
+	RunResult {
+		status: cap.status,
+		stdout: cap.stdout,
+	}
+}
+
+/// Like `run_wasm_v8`, but captures stderr separately too — the snapshot suite
+/// (`tests/run`) pins all three of status/stdout/stderr. `stdin` feeds the buffered
+/// io sink.
+pub fn run_wasm_v8_captured(bytes: &[u8], stdin: &[u8]) -> RunCapture {
+	run_v8(bytes, Box::new(CapturingIo::new(stdin)), Vec::new())
 }
 
 /// Compile + instantiate `bytes` and run `_entry` once under V8, streaming
@@ -73,10 +85,11 @@ pub fn run_test_v8(bytes: &[u8]) -> i32 {
 	}
 }
 
-/// Run `_entry` under V8 through the given io sink, returning status + captured stdout
-/// (empty for the streaming sink). `args` is the program's argv (`io-args`). The
-/// engine-neutral marshalling core.
-fn run_v8(bytes: &[u8], io: Box<dyn HostIo>, args: Vec<String>) -> RunResult {
+/// Run `_entry` under V8 through the given io sink, returning status + captured
+/// stdout/stderr (both empty for the streaming sink, stderr empty for the buffered
+/// sink). `args` is the program's argv (`io-args`). The engine-neutral marshalling
+/// core.
+fn run_v8(bytes: &[u8], io: Box<dyn HostIo>, args: Vec<String>) -> RunCapture {
 	ensure_v8();
 
 	let mut ctx = Ctx {
@@ -99,7 +112,12 @@ fn run_v8(bytes: &[u8], io: Box<dyn HostIo>, args: Vec<String>) -> RunResult {
 
 	let status = run_in_context(scope, bytes, ctx_ptr);
 	let stdout = ctx.state.io.captured_stdout();
-	RunResult { status, stdout }
+	let stderr = ctx.state.io.captured_stderr();
+	RunCapture {
+		status,
+		stdout,
+		stderr,
+	}
 }
 
 /// The body of a run, inside an entered context: compile the WasmGC module, then
@@ -156,7 +174,7 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "io-args", cb_io_args);
 	register(scope, pluma, data, "io-env", cb_io_env);
 	register(scope, pluma, data, "io-exit", cb_io_exit);
-	// Unary float math — the libm calls (`(f64) -> f64`), same as the VM.
+	// Unary float math — the libm calls (`(f64) -> f64`).
 	register(scope, pluma, data, "math-log", cb_math_log);
 	register(scope, pluma, data, "math-log10", cb_math_log10);
 	register(scope, pluma, data, "math-log2", cb_math_log2);
@@ -178,7 +196,7 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "time-parse", cb_time_parse);
 	// core.net — socket ops (the multi-result ones return a `[status, n]` JS array) +
 	// the reactor controls. `net-poll` blocks the thread synchronously (fine in a V8
-	// callback) until a parked socket is ready, mirroring the VM's reactor step.
+	// callback) until a parked socket is ready — the reactor step.
 	register(scope, pluma, data, "net-listen", cb_net_listen);
 	register(scope, pluma, data, "net-connect", cb_net_connect);
 	register(scope, pluma, data, "net-close", cb_net_close);
@@ -416,8 +434,8 @@ fn cb_write_err(s: &mut v8::HandleScope, a: v8::FunctionCallbackArguments, _r: v
 }
 
 /// `io-fail(ptr, len)`: stash the pre-rendered message host-side, then throw — the
-/// `_entry` call unwinds, and the runner surfaces the stashed message (mirroring the
-/// VM's abort).
+/// `_entry` call unwinds, and the runner surfaces the stashed message as the
+/// program's `runtime error: <msg>` status.
 fn cb_io_fail(
 	scope: &mut v8::HandleScope,
 	args: v8::FunctionCallbackArguments,
@@ -737,7 +755,7 @@ fn cb_io_env(
 	rv.set_int32(n);
 }
 
-/// `io-exit(code)`: stop the program immediately with `code`, mirroring the VM's
+/// `io-exit(code)`: stop the program immediately with `code` via
 /// `std::process::exit` (`io.exit` diverges). Streamed stdout/stderr are already
 /// flushed per-write, so no draining is needed. Never returns.
 fn cb_io_exit(
@@ -793,8 +811,8 @@ fn cb_math_cos(s: &mut v8::HandleScope, a: v8::FunctionCallbackArguments, mut r:
 }
 
 // --- core.random / core.uuid (the `Entropy` capability) -------------------
-// The host generates these natively with the same `rand`/`uuid` crates the VM
-// uses. i64 results cross as JS BigInt; byte/string results go through scratch
+// The host generates these natively with the `rand`/`uuid` crates. i64 results
+// cross as JS BigInt; byte/string results go through scratch
 // (`deliver_read_v8`). Range/length validation lives in `core.random` (Pluma),
 // so the raw `random-int-range`/`random-bytes` imports never fail.
 
@@ -898,12 +916,12 @@ fn cb_uuid_parse(
 }
 
 // --- core.time (the `Clock` capability) -----------------------------------
-// Wall clock + monotonic clock + blocking sleep + strtime parse, using the same
-// `jiff` crate/version the VM uses so values match the oracle. `time.now` is an
-// `instant` (unix nanos), `time.monotonic` a `duration` (nanos since a process-start
-// anchor); both cross as i64 BigInts and the wasm side boxes them under the right tag.
+// Wall clock + monotonic clock + blocking sleep + strtime parse, using the `jiff`
+// crate. `time.now` is an `instant` (unix nanos), `time.monotonic` a `duration`
+// (nanos since a process-start anchor); both cross as i64 BigInts and the wasm side
+// boxes them under the right tag.
 
-/// Process-start anchor for `time.monotonic` (mirrors the VM's static `OnceLock`).
+/// Process-start anchor for `time.monotonic` (a static `OnceLock`).
 static MONOTONIC_START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
 
 /// `time-now() -> i64`: wall-clock unix nanos (boxed `instant` in wasm).
@@ -972,9 +990,8 @@ fn cb_time_parse(
 	rv.set_int32(status);
 }
 
-/// Replicates the VM's `parse_with_format` (`vm/src/builtin.rs`) exactly, so a parsed
-/// timestamp matches the oracle: strtime-parse, then prefer a complete timestamp, else
-/// interpret a bare civil datetime as UTC.
+/// `time.parse`: strtime-parse, then prefer a complete timestamp, else interpret a
+/// bare civil datetime as UTC.
 fn parse_with_format(fmt: &str, input: &str) -> Result<i64, String> {
 	let tm = jiff::fmt::strtime::parse(fmt, input).map_err(|e| format!("time: {}", e))?;
 	if let Ok(ts) = tm.to_timestamp() {

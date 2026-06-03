@@ -1,16 +1,12 @@
 [workspace]
 resolver = "2"
 members = [
-  "bench",
   "cli",
-  "codegen",
   "compiler",
-  "conformance",
   "formatter",
   "host",
   "ir",
   "lsp",
   "tests",
-  "vm",
   "wasm",
 ]

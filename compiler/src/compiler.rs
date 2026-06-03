@@ -60,8 +60,8 @@ pub struct Compiler {
 	pub native_modules: HashMap<String, ModuleExports>,
 	// The target platform whose host-capability profile gates module
 	// availability (a `use core.io` on the browser target is an error).
-	// Defaults to `Native` (the VM/dev profile — provides every capability,
-	// so nothing is gated), so existing flows are unchanged.
+	// Defaults to `Native` (the frontend/analysis profile — provides every
+	// capability, so nothing is gated), so existing flows are unchanged.
 	pub platform: Platform,
 }
 
@@ -109,10 +109,10 @@ impl Compiler {
 		self.entry_modules.push(module_name);
 	}
 
-	// Register a stdlib module (e.g. `core.regex`) so its exports are visible
-	// to any user module that does `use <name>`. Must be called before
-	// `check()`. The runtime values come from the VM side
-	// (`vm::stdlib::register_compiler`).
+	// Register a Rust-defined native module's exports so any user module that
+	// does `use <name>` type-checks against them. Must be called before
+	// `check()`. Currently unused — every stdlib module is a `.pa` source — but
+	// kept for any future module whose signature the `.pa` surface can't express.
 	pub fn register_native_module(&mut self, name: String, exports: ModuleExports) {
 		self.native_modules.insert(name, exports);
 	}

@@ -5,14 +5,11 @@ edition = "2024"
 
 [dependencies]
 atty = "0.2.13"
-codegen = { path = "../codegen" }
 compiler = { path = "../compiler" }
 formatter = { path = "../formatter" }
-# V8 is the `pluma run` engine (ABI.md Phase 2): run the same WasmGC artifact you
-# deploy. The VM stays available (`pluma run --vm`, and as the `wasm::emit`-failure
-# fallback for programs the wasm backend doesn't yet support, e.g. `io.args`).
+# V8 is the `pluma run`/`pluma test` engine (ABI.md Phase 2): run the same WasmGC
+# artifact you deploy. There is no VM fallback — a program the wasm backend can't
+# emit is a hard error.
 host = { path = "../host" }
 ir = { path = "../ir" }
-rustyline = "14"
-vm = { path = "../vm" }
 wasm = { path = "../wasm" }

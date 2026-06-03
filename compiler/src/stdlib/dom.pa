@@ -1,9 +1,10 @@
 # core.dom — minimal browser DOM surface for the client/JS target.
 #
 # Gated on the `Dom` capability (see compiler/src/platform.rs), so it's only
-# available when compiling for the browser. The builtins are implemented by the
-# JS backend's runtime (js/src/runtime.js); the bytecode VM has no DOM, so these
-# only do anything in a browser-hosted `.js` build.
+# available when compiling for the browser. These builtins are the one part of the
+# language the WasmGC backend can't yet emit: they'll be served by the browser
+# target's hand-written JS DOM shim, which is unbuilt — so `core.dom` is currently
+# a `wasm codegen error` everywhere.
 
 # Set the text content of the element with the given id.
 public def set-text :: fun string string -> nothing = built-in "dom-set-text"

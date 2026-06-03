@@ -62,8 +62,7 @@ pub fn emit(program: &IrProgram) -> Result<Vec<u8>, Diagnostics> {
 	ir::resolve::resolve_direct_calls(&mut p);
 	// Resolve builtin-global calls to typed `Call(Callee::Builtin(tag, ret))` nodes,
 	// threading each builtin's declared return repr onto the call so the coercion
-	// pass below can read a scalar-returning builtin (`bytes-get`, …) unboxed. VM-
-	// independent (the VM never runs this), so it can't affect the differential oracle.
+	// pass below can read a scalar-returning builtin (`bytes-get`, …) unboxed.
 	ir::resolve::resolve_builtins(&mut p);
 	// Record-shape monomorphization: clone record-param functions per call-site
 	// shape so the clone reads its param by `struct.get` (and the caller passes it
