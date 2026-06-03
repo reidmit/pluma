@@ -247,8 +247,7 @@ struct HostState {
 	/// wasm side then reserves the true size and drains this via `__io_copyout`. Empty
 	/// on the common (fits-first-try) path. (ABI.md Phase 1, the read overflow path.)
 	read_stash: Vec<u8>,
-	/// `core.net` runtime state: the socket table + the I/O reactor (the host-side
-	/// analogue of `vm::net::NetState`).
+	/// `core.net` runtime state: the socket table + the I/O reactor.
 	net: HostNet,
 }
 
@@ -290,7 +289,7 @@ enum NetRet {
 	WouldBlock,
 }
 
-/// Read- vs write-readiness for a park (mirrors `vm::net::Interest`).
+/// Read- vs write-readiness for a park.
 #[derive(Clone, Copy)]
 enum Interest {
 	Read,
@@ -417,7 +416,7 @@ impl HostNet {
 	}
 
 	/// Register fiber `fid` against socket `sid`'s readiness (token = fid), then
-	/// report would-block. Mirrors `vm::net::reactor_park`.
+	/// report would-block.
 	fn park(&mut self, fid: i32, sid: u32, interest: Interest) -> NetRet {
 		let fd = match self.sockets.get(&sid) {
 			Some(e) => e.raw_fd(),
@@ -445,8 +444,8 @@ impl HostNet {
 
 	/// Block until a parked socket is ready (or `deadline` nanos elapse; `-1` =
 	/// block indefinitely), returning one woken fid (`-1` on timeout / nothing
-	/// pending). Extra simultaneously-ready fids are buffered for later calls.
-	/// Mirrors `vm::net::reactor_poll` + the scheduler's per-fiber consumption.
+	/// pending). Extra simultaneously-ready fids are buffered for later calls
+	/// (paired with the scheduler's per-fiber consumption).
 	fn poll(&mut self, deadline: i64) -> i32 {
 		if self.ready.is_empty() {
 			if self.waits.is_empty() {
@@ -481,8 +480,7 @@ impl HostNet {
 		self.ready.pop_front().unwrap_or(-1)
 	}
 
-	/// Drop a parked I/O wait (on cancellation / reaping). Idempotent. Mirrors
-	/// `vm::net::reactor_deregister`.
+	/// Drop a parked I/O wait (on cancellation / reaping). Idempotent.
 	fn unwatch(&mut self, fid: i32) {
 		if let Some(fd) = self.waits.remove(&fid) {
 			if let Some(p) = &self.poller {

@@ -13,8 +13,8 @@ use crate::types;
 /// variants (each `(name, payload-arity)`).
 pub(crate) type EnumTable = HashMap<String, Vec<(String, usize)>>;
 
-/// The display name of a variant — `bare-enum.variant`, matching `vm::Value`'s
-/// `Display` (e.g. `tree.node`, `color.red`). Stored in each `$variant` so the
+/// The display name of a variant — `bare-enum.variant`, the canonical
+/// to-string form (e.g. `tree.node`, `color.red`). Stored in each `$variant` so the
 /// host formatter and `__tostring` can render it without a name table.
 pub(crate) fn variant_display(enum_name: &str, tag: u32, enums: &EnumTable) -> String {
 	let bare = enum_name.rsplit_once('.').map_or(enum_name, |(_, n)| n);

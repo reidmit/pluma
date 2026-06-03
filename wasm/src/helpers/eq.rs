@@ -6,7 +6,7 @@ use crate::helpers::wat::Wat;
 use crate::types;
 
 /// Build the structural-equality runtime helper `__eq(a, b) -> i32` (1 = equal).
-/// Recursive over variants; loops over string bytes. Mirrors `vm`'s structural
+/// Recursive over variants; loops over string bytes. Implements structural
 /// `==`: same-typed operands (the type checker guarantees it), IEEE float compare
 /// (so `nan != nan`), byte-exact strings. `self_idx` is `__eq`'s own wasm index
 /// (for the variant-payload recursion). Tuples/lists/records are not yet handled
@@ -186,13 +186,13 @@ pub(crate) fn build_eq_fn(self_idx: u32, dict_node_eq_idx: u32) -> Function {
 	w.if_(|w| {
 		cmp_array(w, types::T_RECORD, 2, None);
 	});
-	// REF: reference identity (`ref.eq`), matching the VM's `Rc::ptr_eq` — two
+	// REF: reference identity (`ref.eq`) — two
 	// cells are equal iff they are the same cell, regardless of contents.
 	w.local_get(ta).i32(types::TAG_REF).i32_eq();
 	w.if_(|w| {
 		w.local_get(a).local_get(b).ref_eq().ret();
 	});
-	// DICT: order-independent structural compare (matches the VM), delegated to
+	// DICT: order-independent structural compare, delegated to
 	// `__dict_node_eq` on the two tries' roots (field 1). Two dicts with the same
 	// key set have the same trie shape, so that compares shape + leaf buckets
 	// (order-independently, ignoring `seq`) using `__eq` for keys/values.

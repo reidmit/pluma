@@ -35,9 +35,8 @@ fn run_fixture(path: &Path) -> datatest_stable::Result<()> {
 			.map_err(RunError::Diagnostics)?
 			.with_platform(Platform::Server);
 		compiler.check().map_err(RunError::Diagnostics)?;
-		// Raw lowered IR — the wasm backend runs its own internal pipeline (no
-		// `ir::optimize`, which was the VM-specific path), exactly as `pluma run`
-		// / `pluma build` drive it.
+		// Raw lowered IR — the wasm backend runs its own internal pipeline,
+		// exactly as `pluma run` / `pluma build` drive it.
 		let ir_program = ir::lower(&compiler).map_err(RunError::Lower)?;
 		let bytes = wasm::emit(&ir_program).map_err(RunError::WasmEmit)?;
 		Ok(host::run_wasm_v8_captured(&bytes, &stdin_bytes))

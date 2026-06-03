@@ -46,8 +46,7 @@ pub enum Resolved {
 
 // The compile-time skeleton of a `wire` schema, built from a type's structure
 // by `Analyzer::build_wire_shape` and lowered to a runtime `wire-schema` value
-// by codegen. Mirrors the runtime `vm::wire::Schema` and the `wire-schema`
-// prelude enum.
+// by the backend. Mirrors the `wire-schema` prelude enum.
 #[derive(Clone)]
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub enum WireShape {

@@ -1,7 +1,7 @@
-// The WASM async-lowering pass: turn the VM's Await-style async functions into a
-// form the WasmGC backend can emit + drive.
+// The WASM async-lowering pass: turn `is_async` functions (with `Await` nodes, as
+// lowering produces them) into a form the WasmGC backend can emit + drive.
 //
-// The VM runs an `is_async` function as a *step function* with an `Await`
+// An `is_async` function arrives as a *step function* with an `Await`
 // instruction and a heap-snapshotted frame — neither of which WasmGC can express
 // (`ir::cps`'s module header explains why). So this pass:
 //

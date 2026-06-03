@@ -66,7 +66,7 @@ pub(crate) struct FnEmitter<'a> {
 	defers_local: Option<u32>,
 	/// Source line (0-based) of the statement currently being emitted, refreshed
 	/// per `Stmt` in `block`. Only consumed by `debug`, which renders a
-	/// `[<module>:<line>]` call-site header like the VM's `debug` builtin.
+	/// `[<module>:<line>]` call-site header.
 	cur_line: usize,
 	body: Vec<Instruction<'static>>,
 }
@@ -219,8 +219,8 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::Drop);
 			}
 			StmtKind::Return(a) => {
-				// Run scheduled `defer` cleanups (LIFO) before returning — matching
-				// the VM, which runs the frame's cleanup stack at `Return`. The return
+				// Run scheduled `defer` cleanups (LIFO) before returning — the
+				// frame's cleanup stack runs at `Return`. The return
 				// atom is side-effect-free (a var/const), so order vs. cleanups is
 				// immaterial. `__run_defers` returns a `nothing` we drop.
 				if let Some(dl) = self.defers_local {
@@ -734,8 +734,8 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::StructNew(types::T_STR));
 			}
 			Rvalue::Bin(ir::BinOp::RemFloat, a, b) => {
-				// f64 has no remainder opcode; compute `a - trunc(a/b)*b`, matching
-				// the VM's `a % b` (Rust/IEEE `fmod`) for normal-magnitude operands.
+				// f64 has no remainder opcode; compute `a - trunc(a/b)*b` —
+				// Rust/IEEE `fmod` semantics for normal-magnitude operands.
 				let la = self.fresh_local(ValType::F64);
 				let lb = self.fresh_local(ValType::F64);
 				self.atom(a);
@@ -898,8 +898,8 @@ impl<'a> FnEmitter<'a> {
 			Rvalue::TailCall(callee, args) => {
 				// A tail call would `return_call` past the trailing `Return`, skipping
 				// any `defer` cleanups — so in a defer-bearing function, downgrade it
-				// to an ordinary call and let the `Return` run the cleanups (mirroring
-				// the VM, which suppresses TCO while a frame has pending cleanups).
+				// to an ordinary call and let the `Return` run the cleanups (TCO is
+				// suppressed while a frame has pending cleanups).
 				let tail = self.defers_local.is_none();
 				self.call_value(callee, args, tail);
 			}
@@ -2235,8 +2235,8 @@ impl<'a> FnEmitter<'a> {
 	}
 
 	/// `debug x`: print `[<module>:<line>] <to-string x>` (the host `print` import
-	/// appends the newline), then leave `x` on the stack unchanged. Mirrors the VM's
-	/// `debug` builtin — the `<module>:<line>` call site is known statically, so the
+	/// appends the newline), then leave `x` on the stack unchanged. The
+	/// `<module>:<line>` call site is known statically, so the
 	/// prefix is built inline (an `array.new_fixed` of its bytes) and the value's
 	/// `to-string` bytes are concatenated onto it. The atom is re-emitted as the
 	/// rvalue; atoms (a var or inline const) are side-effect-free to evaluate twice.
@@ -2604,7 +2604,7 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::StructNew(types::T_STR));
 			}
 			// math.sqrt f : unbox the f64, `f64.sqrt`, rebox. NaN for f < 0,
-			// matching the IEEE-754 result the VM's `f64::sqrt` yields.
+			// the IEEE-754 result of `f64::sqrt`.
 			"math-sqrt" => {
 				self.ins(Instruction::I32Const(types::TAG_FLOAT));
 				self.atom(&args[0]);
@@ -2619,7 +2619,7 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::StructNew(types::T_FLOAT));
 			}
 			// math.to-int f : truncate toward zero into an i64. The *saturating*
-			// trunc matches the VM's `f as i64` (NaN -> 0, ±inf / out-of-range
+			// trunc has `f as i64` semantics (NaN -> 0, ±inf / out-of-range
 			// clamp to i64::MIN/MAX); plain `i64.trunc_f64_s` would trap instead.
 			"math-to-int" => {
 				self.ins(Instruction::I32Const(types::TAG_INT));

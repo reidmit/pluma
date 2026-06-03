@@ -2,7 +2,7 @@ use core.math
 
 # Exercises the unary float-math host imports (sin/cos/exp/log) plus the
 # pure-Pluma `tan` that rides on sin/cos. Outputs are reduced to exact values
-# (or rounded ints) so the snapshot is stable and the wasm run matches the VM.
+# (or rounded ints) so the snapshot is stable.
 def main = fun {
 	# at 0 these are exact
 	print (math.sin 0.0)

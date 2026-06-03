@@ -1,9 +1,9 @@
 # A *builtin* referenced by bare name as a first-class value must behave
 # exactly like a user-defined function — passable to any higher-order function.
 # The IR wraps a value-position builtin reference in a forwarding closure (a
-# closure of the builtin's arity that forwards to a direct builtin call), so
-# both backends treat it as an ordinary closure. Regression test: these used to
-# trap on wasm (the bare builtin lowered to a null call-target placeholder).
+# closure of the builtin's arity that forwards to a direct builtin call), so the
+# backend treats it as an ordinary closure. Regression test: these used to trap
+# on wasm (the bare builtin lowered to a null call-target placeholder).
 # This covers every builtin flavor: a polymorphic prelude renderer (`to-string`),
 # an inline compute builtin (`math.sqrt`, `bytes.length`), and a host-import
 # writer (`print`).

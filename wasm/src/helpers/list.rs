@@ -79,8 +79,8 @@ pub(crate) fn build_list_tail_fn() -> Function {
 /// Build `__list_push(list, x) -> nothing`: append `x` to `list` in place,
 /// amortized O(1). Writes `x` at `length` (growing/swapping the backing array by
 /// doubling when full) and bumps `length`. Mutates the `$list` struct's `elems`
-/// (field 1) and `length` (field 2) fields directly — the wasm twin of the VM's
-/// `Vec::push`. Returns `nothing`.
+/// (field 1) and `length` (field 2) fields directly — an amortized growable-array
+/// push. Returns `nothing`.
 pub(crate) fn build_list_push_fn() -> Function {
 	let va = types::T_VALARRAY;
 	let mut w = Wat::new(2);

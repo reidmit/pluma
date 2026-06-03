@@ -1,33 +1,28 @@
 // Lowering: typed AST -> IR.
 //
-// This is where every backend-independent elaboration lives — the logic
-// currently fused into `codegen/src/emit.rs`'s single AST->bytecode walk:
+// `ir::lower(&compiler)` is the sole front-to-IR path; the WASM backend
+// (`wasm::emit`) consumes its output. This is where every backend-independent
+// elaboration lives:
 //   * identifier resolution (locals / captures / globals)
 //   * closure conversion (explicit capture lists)
 //   * dictionary elaboration (trait constraints -> dict params + GetDictMethod)
 //   * pattern compilation (`when`/`if is` -> Switch + GetTag/GetPayload)
 //   * `defer` edge insertion
 //   * async marking (`Function::is_async` + `Await`)
+//   * two standalone pre-passes (enum table + global reservation)
 //
-// Phase 1.1 ports that elaboration here, function-by-function. Ported so far:
-// the two standalone pre-passes (enum table + global reservation); literals,
-// identifiers (local / capture / global), calls, `fun` (closure conversion),
-// `let`; operators (direct opcodes + trait dispatch via method dictionaries);
-// control flow (`if`/`when`/`while` via a pattern `Match`, with literal /
-// variant / tuple / record / list patterns, nested and with `...` rests); data
-// construction (variants + constructors, tuples, records, lists with spread,
-// string interpolation, field access, regex literals); namespace access
-// (`module.value`, `module.Enum.variant`) — which makes most stdlib calls work;
-// and the full trait-dictionary machinery: instance defs (concrete +
-// parametric), constrained defs (hidden dict params), every dispatch shape
-// (`Global` / `Forwarded` / `InstanceChain`), constrained calls (dict args), and
-// constrained-value references (dict-prepending wrappers).
-// destructuring/`_` `let` (irrefutable patterns lowered as a single-arm match).
-// Forms not yet handled (string-interpolation patterns, `defer`, async/`Await`,
-// duration literals, ...) cause the *enclosing def* to be lowered as a poison
-// thunk (returns `nothing`) rather than failing the whole program: a def whose
-// executed paths only touch supported forms runs correctly, so coverage grows
-// fixture-by-fixture. `lower` is not yet wired into `codegen` as the default.
+// It covers the full language surface: literals, identifiers (local / capture /
+// global), calls, `fun` (closure conversion), `let` (incl. irrefutable
+// destructuring); operators (direct ops + trait dispatch via method
+// dictionaries); control flow (`if`/`when`/`while` via a pattern `Match`, with
+// literal / variant / tuple / record / list patterns, nested and with `...`
+// rests); data construction (variants + constructors, tuples, records, lists with
+// spread, string interpolation, field access, regex literals); namespace access
+// (`module.value`, `module.Enum.variant`); the full trait-dictionary machinery
+// (instance defs, constrained defs, every dispatch shape, constrained calls and
+// value references); `defer`; async/`Await`; and duration literals. A def that
+// hits a genuinely-unsupported form is lowered as a *poison thunk* (returns
+// `nothing`) rather than failing the whole program.
 
 use crate::types::*;
 use compiler::ast::Resolved as DispatchTarget;
@@ -156,9 +151,9 @@ impl<'a> Lowerer<'a> {
 		let enums = collect_enums(compiler);
 		let mut globals = GlobalTable::new();
 		seed_prelude_globals(&mut globals);
-		// Native modules currently contribute no globals — `vm::native_modules()`
-		// is empty (every stdlib module is `.pa` source). When a Rust-defined
-		// native module returns, its defs/constants are seeded here as `PreEval`.
+		// Native modules currently contribute no globals (none are registered —
+		// every stdlib module is `.pa` source). When a Rust-defined native module
+		// is registered, its defs/constants would be seeded here as `PreEval`.
 		reserve_user_globals(&mut globals, compiler);
 		Lowerer {
 			compiler,
@@ -430,8 +425,7 @@ impl<'a> Lowerer<'a> {
 
 	/// A constrained function referenced as a first-class value: wrap it in a
 	/// closure of its user-visible arity N that captures the K resolved dicts
-	/// and forwards to the underlying global with the dicts prepended. Mirrors
-	/// `codegen::emit::emit_constrained_value_ref`.
+	/// and forwards to the underlying global with the dicts prepended.
 	fn lower_constrained_value_ref(
 		&mut self,
 		expr: &ExprNode,
@@ -488,9 +482,8 @@ impl<'a> Lowerer<'a> {
 	/// value on the deploy backend (it isn't a `$closure`), so without this it
 	/// couldn't be passed to a higher-order function — this makes it indistinguishable
 	/// from a user function. Mirrors `lower_constrained_value_ref` (minus dict
-	/// captures); the VM materializes the inner `GlobalRef` as a `Value::Builtin`
-	/// and WasmGC resolves the inner call to a direct builtin op, so both backends
-	/// treat the wrapper as an ordinary closure.
+	/// captures); WasmGC resolves the inner call to a direct builtin op, so the
+	/// wrapper is treated as an ordinary closure.
 	fn lower_builtin_value_ref(
 		&mut self,
 		global: GlobalId,
@@ -896,10 +889,10 @@ impl<'a> Lowerer<'a> {
 				| Operator::Remainder => {
 					// Devirtualize: when both operands are a concrete numeric type
 					// (`int`/`float`), the `numeric` instance is statically known, so
-					// emit the direct VM opcode (`AddInt`, `DivFloat`, …) instead of a
-					// boxed dispatch through the method dictionary. Each opcode is
-					// byte-identical to the dict's builtin method (`int-add` == `AddInt`,
-					// …; `DivInt` is aligned to `int-div` in the VM), so this is
+					// emit the direct `BinOp` (`AddInt`, `DivFloat`, …) instead of a
+					// boxed dispatch through the method dictionary. Each `BinOp` is
+					// behavior-identical to the dict's builtin method (`int-add` ≡
+					// `AddInt`, …; `DivInt` matches `int-div`), so this is
 					// behavior-preserving — it just drops the dict load and the closure
 					// call. Polymorphic operands (a `numeric a` type variable inside a
 					// constrained def) fall through to dispatch, since their instance
@@ -954,7 +947,7 @@ impl<'a> Lowerer<'a> {
 		if let Operator::Chain = op {
 			return self.lower_chain(left, right, range);
 		}
-		// Concrete, non-dispatched operator: a direct VM opcode picked by
+		// Concrete, non-dispatched operator: a direct `BinOp` picked by
 		// operand type. Evaluate left then right (matching `emit.rs`).
 		let is_float = matches!(left.ty, Type::Float) || matches!(right.ty, Type::Float);
 		// `==`/`!=` on concrete numbers devirtualize to the unboxed `EqI64`/`NeF64`/…
@@ -993,7 +986,7 @@ impl<'a> Lowerer<'a> {
 
 	/// Lower a resolved trait-method dispatch cell to its value: the dict if the
 	/// cell is call-forwarding (`method_idx == None`), or a specific method
-	/// extracted from it. Mirrors `codegen::emit::emit_dispatch_load`.
+	/// extracted from it.
 	fn lower_dispatch(
 		&mut self,
 		cell: &compiler::ast::DispatchCell,
@@ -1013,7 +1006,7 @@ impl<'a> Lowerer<'a> {
 	}
 
 	/// Load a dispatch dictionary value (no method extraction). The three
-	/// `Resolved` shapes mirror `codegen::emit::emit_resolved_load`:
+	/// `Resolved` shapes:
 	///   * `Global` — load the named prelude/instance dict global.
 	///   * `Forwarded` — the synthetic `__dict_<slot>__` local of the enclosing
 	///     constrained def / instance ctor (captured through closures by name).
@@ -1537,8 +1530,8 @@ impl<'a> Lowerer<'a> {
 	) -> Result<Atom, String> {
 		self.push_scope(fn_name, param_names);
 		// Record the function's signature reprs (the projection of the AST param
-		// types and the body's tail type) so the step-2 monomorphization pass can
-		// read it. Inert on the VM; consumed only by the WASM-track passes.
+		// types and the body's tail type) onto the `Function`. They stay all-`Boxed`
+		// under the uniform-boxed contract (see `Function::param_reprs`).
 		if let Some(scope) = self.scopes.last_mut() {
 			scope.param_reprs = param_reprs.to_vec();
 			scope.ret_repr = body
@@ -1566,9 +1559,8 @@ impl<'a> Lowerer<'a> {
 
 	/// `defer expr` — build a zero-arg cleanup closure `fun { expr }` and push
 	/// it onto the running frame's cleanup stack. The defer expression itself
-	/// evaluates to `nothing`. The VM walks the stack LIFO at `Return` (and on
-	/// `try`-failure short-circuit). Mirrors `codegen::emit`'s `ExprKind::Defer`
-	/// arm.
+	/// evaluates to `nothing`. The cleanup stack is walked LIFO at `Return` (and
+	/// on `try`-failure short-circuit).
 	fn lower_defer(&mut self, inner: &ExprNode, range: Range) -> Result<Atom, String> {
 		let fn_name = format!(
 			"{}.defer@{}:{}",
@@ -1773,7 +1765,7 @@ impl<'a> Lowerer<'a> {
 
 	/// A direct call in tail position: lower like `lower_call` but emit a
 	/// `TailCall` and `Return` its result. The trailing `Return` is dead for a
-	/// closure callee (the VM reuses the frame) and live for a
+	/// closure callee (the tail call reuses the frame) and live for a
 	/// builtin/ctor/async-fn callee (which ignores the tail flag).
 	fn lower_call_tail(
 		&mut self,
@@ -1936,7 +1928,7 @@ impl<'a> Lowerer<'a> {
 	}
 
 	/// Resolve `name` as seen from scope `scope_idx`, capturing through parents
-	/// as needed. Mirrors `codegen::emit::resolve_identifier`.
+	/// as needed.
 	fn resolve_at(&mut self, scope_idx: usize, name: &str) -> Option<ScopeSlot> {
 		if let Some(v) = self.scopes[scope_idx]
 			.locals
@@ -2214,7 +2206,7 @@ fn build_imports(ast: &ModuleNode) -> HashMap<String, String> {
 /// surviving sink means a trait-constrained value referenced in value position
 /// (passed, returned, or bound — not directly called), which needs its dicts
 /// pre-applied (`lower_constrained_value_ref`). An empty sink is treated as
-/// absent. Mirrors `codegen::emit::undrained_dispatch_cells`.
+/// absent.
 fn undrained_dispatch_cells(expr: &ExprNode) -> Option<Vec<compiler::ast::DispatchCell>> {
 	let sink = expr.dispatch_sink.as_ref()?;
 	let cells = sink.borrow();
@@ -2227,14 +2219,14 @@ fn undrained_dispatch_cells(expr: &ExprNode) -> Option<Vec<compiler::ast::Dispat
 
 /// The synthetic local name a constrained def / instance ctor binds its hidden
 /// dict parameter `slot` under, so `Forwarded` dispatch resolves by name (and
-/// captures through nested closures). Mirrors `codegen::emit::synthetic_dict_name`.
+/// captures through nested closures).
 fn synthetic_dict_name(slot: u16) -> String {
 	format!("__dict_{}__", slot)
 }
 
 /// If both operands of a `numeric`-dispatched arithmetic operator are the *same
 /// concrete* numeric type (`int` or `float`), return the direct `BinOp` so the
-/// dispatch can be devirtualized to a VM opcode. Returns `None` when either
+/// dispatch can be devirtualized. Returns `None` when either
 /// operand is still a type variable (polymorphic — keep dispatching through the
 /// runtime dict) or the two disagree (can't happen post-unification, but stays
 /// honest). `%` never reaches the dispatched path (it carries no cell), so it's
@@ -2249,8 +2241,8 @@ fn concrete_numeric_binop(op: &Operator, left: &Type, right: &Type) -> Option<Bi
 }
 
 /// If a `< <= > >=` comparison has concrete numeric operands, return the direct
-/// `BinOp` (`LtI64`/`LeF64`/…) so it lowers to the VM's relational opcode rather
-/// than the `ord.compare … {==,!=} variant` desugaring. For concrete floats this
+/// `BinOp` (`LtI64`/`LeF64`/…) so it lowers to a relational op rather than the
+/// `ord.compare … {==,!=} variant` desugaring. For concrete floats this
 /// is the IEEE-754 comparison — `NaN` compares `false` for all four relations —
 /// which is the language's defined semantics for concrete float relational
 /// operators (consistent with structural `==`/`!=`, also IEEE, and deliberately
@@ -2389,8 +2381,8 @@ fn expr_kind_name(kind: &ExprKind) -> &'static str {
 // --------------------------------------------------------------------------
 
 /// Collect every loaded module's enum definitions into the qualified-name ->
-/// variants table. Mirrors `codegen::emit::collect_enum_defs`, run over all
-/// modules (including the prelude, which defines `option`/`result`/`ordering`).
+/// variants table. Run over all modules (including the prelude, which defines
+/// `option`/`result`/`ordering`).
 fn collect_enums(compiler: &Compiler) -> HashMap<String, Vec<(String, usize)>> {
 	let mut out = HashMap::new();
 	for (module_name, module) in &compiler.modules {
@@ -2445,7 +2437,7 @@ impl GlobalTable {
 	}
 
 	/// Reserve (or return the existing) slot for `(module, name)`. New slots
-	/// start `Reserved`. Mirrors `codegen::emit::reserve_global`.
+	/// start `Reserved`.
 	fn reserve(&mut self, module: &str, name: &str) -> GlobalId {
 		let key = (module.to_string(), name.to_string());
 		if let Some(&id) = self.lookup.get(&key) {
@@ -2509,8 +2501,8 @@ impl GlobalTable {
 
 /// Seed the prelude's pre-evaluated globals: the `print`/`debug`/`to-string`
 /// builtins and the concrete trait-instance method dictionaries. The dict
-/// method order matches each trait's declaration order. Built as the
-/// vm-independent `PreEval` rather than `vm::Value` directly.
+/// method order matches each trait's declaration order. Built as backend-neutral
+/// `PreEval` values.
 fn seed_prelude_globals(g: &mut GlobalTable) {
 	// Prelude builtins (print/debug/to-string/wire-*) return strings/bytes/nothing,
 	// and method-dict members are never resolved as direct builtin calls — so a

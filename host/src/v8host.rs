@@ -1184,8 +1184,8 @@ fn cb_net_unwatch(
 	ctx.state.net.unwatch(fid);
 }
 
-/// `float_to_str(f64, ptr, cap) -> i32 len`: format the float as `vm::Value`'s Display
-/// does, write its UTF-8 bytes into scratch at `ptr` (≤ cap), return the length.
+/// `float_to_str(f64, ptr, cap) -> i32 len`: format the float in the canonical
+/// to-string form, write its UTF-8 bytes into scratch at `ptr` (≤ cap), return the length.
 fn cb_float_to_str(
 	scope: &mut v8::HandleScope,
 	args: v8::FunctionCallbackArguments,

@@ -92,7 +92,7 @@ pub(crate) fn build_send_bytes_fn(bump: u32, alloc: u32, store: u32) -> Function
 
 /// `__entry_error(value) -> i32 len` — probe `_entry`'s return for a program-level
 /// failure (a `result.err e`) without the host reflecting the GC value: it shuttles
-/// the opaque ref back in here. Matches `vm`'s `err_message` structurally — a variant
+/// the opaque ref back in here. Detects an error structurally — a variant
 /// whose display name's last `.`-segment is `err` with exactly one payload — then
 /// renders `e` via `__tostring` into scratch and returns its length, or `-1` if the
 /// return is not such an error (an `ok`, a plain value, `nothing`).

@@ -1,8 +1,7 @@
-//! WASM (WasmGC) backend — the third consumer of `ir::IrProgram`, parallel to
-//! the bytecode emitter in `codegen` (which lowers the *same* IR to `vm::Program`
-//! via `codegen::from_ir`).
+//! WASM (WasmGC) backend — the consumer of `ir::IrProgram` that lowers the IR
+//! into a WasmGC module.
 //!
-//! `emit(&IrProgram)` runs the WASM-readiness pipeline the VM path skips —
+//! `emit(&IrProgram)` runs the WASM-readiness pipeline —
 //! direct-call resolution + Repr coercion (uniform-boxed; monomorphization is a
 //! follow-on) — then dead-code-eliminates to the entry-reachable functions and
 //! emits a WasmGC module. The reachability prune is load-bearing: even a
@@ -10,9 +9,8 @@
 //! reachable, so the emitter only ever sees the handful of functions a program
 //! actually runs.
 //!
-//! Coverage grows milestone-by-milestone; an unsupported IR node
-//! becomes a `Diagnostic` rather than a silent miscompile, and the differential
-//! harness (`tests/wasm_diff.rs`) grows its allowlist as coverage grows.
+//! An unsupported IR node becomes a `Diagnostic` rather than a silent
+//! miscompile; the `tests/run` snapshot suite is the regression guard.
 
 use std::collections::{HashMap, HashSet};
 
@@ -50,7 +48,7 @@ mod diag {
 /// Lower an `IrProgram` to a WasmGC module. Returns the encoded `.wasm` bytes, or
 /// the accumulated diagnostics if any reachable construct isn't yet supported.
 pub fn emit(program: &IrProgram) -> Result<Vec<u8>, Diagnostics> {
-	// 1. WASM-readiness passes the VM path skips. Direct-call resolution exposes
+	// 1. WASM-readiness passes specific to emission. Direct-call resolution exposes
 	//    statically-known callees (and lets the entry->main bootstrap collapse to
 	//    a direct call); coercion makes boxing explicit so the emitter reads
 	//    i64/f64/i32 vs GC-ref straight off `var_reprs`.

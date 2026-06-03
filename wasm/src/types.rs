@@ -9,7 +9,7 @@
 //
 // Tag values are a cross-cutting contract: the emitter writes them, the host
 // `print`/`debug` glue reads them to format a value. Keep `tag` in sync with the
-// host formatter (see the wasm differential harness).
+// host's value formatter (`host/src/v8host.rs`).
 
 use wasm_encoder::{
 	AbstractHeapType, CompositeInnerType, CompositeType, FieldType, HeapType, RefType, StorageType,
@@ -44,8 +44,8 @@ pub const T_EXTERN: u32 = 18; // struct { i32 tag, (ref null extern) handle }  �
 const T_FIRST_FUNC: u32 = 19;
 
 // --------------------------------------------------------------------------
-// Runtime tags carried in the `$value` discriminant field. Mirror `vm::Value`'s
-// variants; the host formatter switches on these.
+// Runtime tags carried in the `$value` discriminant field — one per runtime
+// value kind; the host formatter switches on these.
 // --------------------------------------------------------------------------
 
 pub const TAG_NOTHING: i32 = 0;
@@ -67,19 +67,19 @@ pub const TAG_RECORD: i32 = 13;
 /// distinguished from a string only by this tag.
 pub const TAG_BYTES: i32 = 14;
 /// A `ref a` mutable cell: a `$ref` struct holding one (mutable) boxed value.
-/// Compared by reference identity (`ref.eq`), like the VM's `Rc::ptr_eq`.
+/// Compared by reference identity (`ref.eq`).
 pub const TAG_REF: i32 = 15;
 /// A `dict k v`: a `$dict` struct `{ tag, root, next_seq }` holding a persistent
 /// hash-trie (`$dnode` root, or null when empty). Insert path-copies O(log n) trie
 /// nodes (structurally shared, immutable) and looks up by structural `__hash` +
-/// `__eq` — the WasmGC analogue of the VM's `im_rc` map. Entries carry an
+/// `__eq` — a persistent, structurally-shared immutable map. Entries carry an
 /// insertion `seq` so iteration recovers insertion order. The `$dnode` interior
 /// nodes never escape to user code (a `$dict` is the only handle).
 pub const TAG_DICT: i32 = 16;
 /// A cold, re-runnable `task a`: a `$task` struct `{ tag, i32 kind, payload }`.
 /// `kind` is the `TaskRepr` discriminant (see `runtime::task_kind`); `payload`
 /// holds its components. The distinct tag lets the driver detect a task at the
-/// program root (mirroring the VM's `matches!(value, Value::Task(_))`). Built and
+/// program root (the boxed-task discriminant at the program root). Built and
 /// consumed only by the hand-emitted async driver — never printed.
 pub const TAG_TASK: i32 = 17;
 /// A `scope-handle` / `manual-scope-handle`: a `$int`-shaped box (`{ tag, i64 }`)

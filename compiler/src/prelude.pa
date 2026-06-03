@@ -10,7 +10,7 @@
 # (Note for contributors: this file is baked into the compiler and
 # analyzed before any user code. The `numeric` / `ord` / `hash` traits
 # and the `print` / `to-string` builtins are seeded separately in the
-# compiler, since their bodies call straight into the VM.)
+# compiler, since their bodies call straight into backend builtins.)
 
 # A value that might be there, or might not. `some x` holds a value;
 # `none` holds nothing. It's how Pluma says "this could be missing"

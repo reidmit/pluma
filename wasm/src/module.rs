@@ -252,8 +252,8 @@ impl Module {
 		}
 
 		// `fun { body }` lowers to a function with *zero* IR params, but its type is
-		// `nothing -> a` (arity 1) — its call sites pass the `()` arg. The bytecode
-		// VM tolerates the arity mismatch; `call_indirect` does not, so give every
+		// `nothing -> a` (arity 1) — its call sites pass the `()` arg. A uniformly-boxed
+		// dispatch would tolerate the arity mismatch, but `call_indirect` does not, so give every
 		// such closure a phantom param (wasm arity 1) to match its callers. These are
 		// exactly the MakeClosure'd functions with no IR params.
 		let mut zero_arg_closures: HashSet<u32> = HashSet::new();

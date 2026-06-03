@@ -43,7 +43,7 @@ pub(crate) mod task_kind {
 
 /// Activation kinds — an entry in a fiber's await chain (the driver's activation
 /// stack). Encoded as a `$variant` with this as its `vtag` and `[x, y]` payload.
-/// Mirrors `vm::task::Activation` (minus `Async`: the wasm driver is poll-only).
+/// (No `Async` activation: the wasm driver is poll-only.)
 pub(crate) mod act_kind {
 	pub(crate) const POLL: i32 = 0; // (poll_closure, state)
 	pub(crate) const THEN: i32 = 1; // (k)
@@ -55,8 +55,8 @@ pub(crate) mod act_kind {
 
 /// The Stage-2 cooperative scheduler's layout constants — fiber/scope field
 /// indices (each is a mutable `$valarray` "record"), and the small kind enums the
-/// scheduler encodes as boxed ints. Mirrors `vm::task`'s `Fiber`/`Scope`/`Wait`/
-/// `Outcome`/`Focus`.
+/// scheduler encodes as boxed ints — the `Fiber`/`Scope`/`Wait`/`Outcome`/`Focus`
+/// layout the scheduler dispatches on.
 pub(crate) mod sched {
 	/// `Fiber` fields (a mutable `$valarray` of `COUNT` boxed slots).
 	pub(crate) mod fiber {
@@ -145,7 +145,7 @@ pub(crate) enum GlobalKind {
 /// - `GetField`/`RecordUpdate` — record field read / one-field copy (both via `__eq`).
 /// - `ListTail` — the `...rest` tail of a list pattern.
 /// - `ArrConcat`/`BytesConcat` — value-array / byte-array concat (spread, `++`, interp).
-/// - `ToString`/`IntStr` — `vm::Value`'s `Display` in wasm + its decimal-int helper.
+/// - `ToString`/`IntStr` — canonical `to-string` formatting in wasm + its decimal-int helper.
 /// - `ListBuild`/`ListCollect`/`BytesBuild` — tabulating builders (`[f 0, …, f (n-1)]`).
 /// - `Dict*` — insert/lookup/remove/map/filter over the `$dict` entries array.
 /// - `WireFp`/`WireMixStr`/`WireMixLen` — the `wire` FNV fingerprint + its mixers.
@@ -178,7 +178,7 @@ pub(crate) enum Helper {
 	/// `__hash(value) -> $int` — a structural hash consistent with `__eq` (equal
 	/// values hash equal), keying the `$dict` trie. Recurses into variant/tuple/
 	/// list/record payloads like `__eq`; the exact mixing is internal (it need only
-	/// agree with `__eq`, so user `hash` instances and the VM's hash are irrelevant
+	/// agree with `__eq`, so user `hash` instances don't constrain it
 	/// — the hash is a pure accelerator). FNV-1a over the structural encoding.
 	Hash,
 	/// `__dict_node_insert(node, hash, key, val, seq) -> $dnode` — insert into the
@@ -241,7 +241,7 @@ pub(crate) enum Helper {
 	IoResult,
 	// --- async runtime (the hand-emitted task/scope driver, `helpers/task.rs`) ---
 	/// `__task_drive(root) -> value` — the single-fiber poll driver. Runs a cold
-	/// `$task` to completion (mirroring `vm::task::advance_one`'s Start/Ok/Err
+	/// `$task` to completion (a Start/Ok/Err
 	/// focus loop over an activation stack), returning the success value or a
 	/// `result.err(e)` on root failure.
 	TaskDrive,
@@ -542,8 +542,8 @@ impl HelperCtx<'_> {
 	}
 }
 
-/// FNV-1a 64-bit offset basis / prime — the constants `vm::wire` mixes with, so
-/// the wasm fingerprint matches the VM's byte-for-byte. `OFFSET` seeds the hash
+/// FNV-1a 64-bit offset basis / prime — the standard constants, so the wasm
+/// fingerprint matches the `wire` format's byte-for-byte. `OFFSET` seeds the hash
 /// (at the `wire-fingerprint` call site); `PRIME` is folded by the mixers.
 pub(crate) const WIRE_FNV_OFFSET: i64 = 0xcbf2_9ce4_8422_2325u64 as i64;
 pub(crate) const WIRE_FNV_PRIME: i64 = 0x0000_0100_0000_01b3;
@@ -629,7 +629,7 @@ pub(crate) struct OrderingLits {
 /// The async scheduler's module-level mutable globals. The currently-pumping
 /// fiber's await chain is loaded into `act`/`actlen` (a growable `$valarray`
 /// stack) for the duration of its pump, then saved back to its `Fiber.ACT`. The
-/// rest is the cooperative scheduler state (`vm::task::Scheduler`): the fiber and
+/// rest is the cooperative scheduler state: the fiber and
 /// scope tables, the ready deque, the virtual timer list, and the deferred-cancel
 /// queue, plus the pump's outcome/park output channel. Allocated only when async.
 #[derive(Clone, Copy, Default)]
@@ -1147,7 +1147,7 @@ pub(crate) fn task_builtin_kind(tag: &str) -> Option<i32> {
 }
 
 /// Transcendental float math with no WasmGC opcode (log/log10/log2/exp/sin/cos).
-/// Each is a `(f64) -> f64` host import (the same libm call the VM makes); the
+/// Each is a `(f64) -> f64` host import (the libm call); the
 /// `$float` box/unbox is emitted in wasm around the call.
 pub(crate) fn is_f64_unary_host(tag: &str) -> bool {
 	matches!(

@@ -1,15 +1,16 @@
-// The hand-emitted async runtime: the WasmGC analogue of `vm::task`. A cold
+// The hand-emitted async runtime: the WasmGC task/scope driver. A cold
 // `$task` (built by the task primitives + the async-fn lowering) is driven to
 // completion by `__run_task`, a cooperative single-threaded scheduler over the
-// CPS poll fns the VM runs Await-style (it snapshots an operand-stack frame the
-// WasmGC has no addressable analogue for; see `ir::cps`).
+// CPS poll fns the async-lowering pass produces (the backend always CPS-transforms
+// awaiting functions, since WasmGC has no addressable operand-stack frame to
+// snapshot; see `ir::cps`).
 //
 // A CPS poll fn returns a `__poll` variant: `ready(value[, defers])` (vtag 0) or
 // `pending(subtask, state')` (vtag 1). `__poll_step` calls it and reports
 // completion vs suspension; the driver pushes a `Poll` activation on suspension
 // and resumes it with the awaited value.
 //
-// Scheduler model (mirrors `vm::task`): the unit of execution is a *fiber* (an
+// Scheduler model: the unit of execution is a *fiber* (an
 // await chain belonging to a scope). `__pump` advances one fiber from a focus
 // (Start/Ok/Err) over its activation stack until it completes or parks; the
 // driver loop interleaves ready fibers, parks those waiting on a handle / scope /
@@ -191,7 +192,7 @@ pub(crate) fn build_run_task_fn(
 				},
 				|w| {
 					// Nothing ready. With socket I/O pending, block the host reactor on
-					// readiness (the VM's `block_until_ready` branch); else fire the
+					// readiness (the reactor's block-until-ready step); else fire the
 					// earliest virtual timer(s), else quiesce.
 					match net {
 						Some(net) => {
@@ -240,7 +241,7 @@ pub(crate) fn build_run_task_fn(
 /// `__pump(fid, fkind, fval) -> nothing`: advance fiber `fid` from focus
 /// `(fkind, fval)` until it completes or parks, writing the result to the output
 /// globals (`out_kind` 1 = done / 2 = park; `out_okerr` = outcome/ wait kind;
-/// `out_val`/`out_arg` = the payload). Mirrors `vm::task::pump` + `advance_one`.
+/// `out_val`/`out_arg` = the payload). The per-fiber pump + advance-one step.
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_pump_fn(
@@ -740,7 +741,7 @@ pub(crate) fn build_pump_fn(
 }
 
 // ==========================================================================
-// Scope/fiber lifecycle (mirrors `vm::task`).
+// Scope/fiber lifecycle.
 // ==========================================================================
 
 /// `__start_scope(fid, manual, body_fn) -> sid (boxed)`: create a scope owned by
@@ -2330,7 +2331,7 @@ fn park_out(w: &mut Wat, g: TaskGlobals, wait_kind: i32, arg: impl FnOnce(&mut W
 /// import call) and either park the fiber on socket readiness (would-block) or
 /// settle the produced `result` value down the chain (`br "main"`). `box_n` true →
 /// the `ok` payload is the boxed `n` channel (a socket id / write count); false →
-/// the `payload` ref (read bytes). Mirrors the VM's `io_cont` + `vm::net`'s
+/// the `payload` ref (read bytes). The I/O continuation + net reactor's
 /// per-op result shaping: the task always produces a `result` *value* (the OS error
 /// is `err e`, NOT a fiber failure). On would-block it stashes the net `$task` in
 /// `fiber::RETRY` and parks `wait::IO` (`br "ret"`).
@@ -2397,7 +2398,7 @@ fn timers_or_exit(w: &mut Wat, g: TaskGlobals, run_timers: u32) {
 /// Push i32 1 if any alive fiber is parked on socket readiness (`wait::IO`), else
 /// 0 — the signal that the block step must drive `net-poll` rather than the
 /// virtual-timer path. The host owns the reactor, so this scans the fiber table
-/// (the analogue of the VM's `net_has_io_waits`).
+/// (i.e. whether any socket I/O is in flight).
 fn net_io_waits_present(w: &mut Wat, g: TaskGlobals) {
 	let n = w.local(ValType::I32);
 	let i = w.local(ValType::I32);
@@ -2428,7 +2429,7 @@ fn net_io_waits_present(w: &mut Wat, g: TaskGlobals) {
 /// The reactor block step (net path): with socket I/O pending and nothing ready,
 /// block the host reactor (`net-poll`, bounded by the soonest virtual timer) and
 /// re-Start whatever woke; on timeout fall back to firing due virtual timers.
-/// Mirrors the VM's `block_until_ready` reactor branch.
+/// The reactor's block-until-ready step.
 fn net_block_step(w: &mut Wat, g: TaskGlobals, net: NetImports, run_timers: u32, list_append: u32) {
 	let woke = w.local(ValType::I32);
 	push_net_deadline(w, g);

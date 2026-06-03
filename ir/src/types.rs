@@ -7,9 +7,8 @@ use compiler::Range;
 use std::collections::HashMap;
 
 // --------------------------------------------------------------------------
-// Identifiers. Abstract handles assigned by lowering; each backend maps them
-// to its own storage (the bytecode emitter assigns `VarId`s to VM stack
-// slots, a WASM emitter would map them to locals).
+// Identifiers. Abstract handles assigned by lowering; the WASM emitter maps
+// them to locals.
 // --------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -99,8 +98,8 @@ pub struct Function {
 	/// closure conversion; each backend realizes the environment its own way.
 	pub captures: Vec<VarId>,
 	/// True if the function awaits (its body contains `Await`). Drives
-	/// `MakeAsyncClosure` in the bytecode emitter; the seam for the step-2 CPS
-	/// state-machine pass.
+	/// `MakeAsyncClosure` emission and is the input the CPS state-machine pass
+	/// keys on.
 	pub is_async: bool,
 	/// The CPS state-machine rollout marker (`ir::cps`). `None` in freshly-lowered
 	/// IR. `wasm::emit`'s async-lowering pass (`ir::cps::cps_transform`, driven by
@@ -232,7 +231,7 @@ pub enum StmtKind {
 	RunDefer(DeferId),
 	/// Schedule a zero-arg cleanup closure on the running frame's cleanup
 	/// stack — `defer expr` lowers to a closure of `fun { expr }` plus a
-	/// `PushDefer`. The VM walks the cleanup stack LIFO at `Return` (and on
+	/// `PushDefer`. The cleanup stack is walked LIFO at `Return` (and on
 	/// `try`-failure short-circuit).
 	PushDefer(Atom),
 }
@@ -428,19 +427,17 @@ pub enum Rvalue {
 	GlobalRef(GlobalId),
 	/// A primitive dispatched by tag, as a first-class value.
 	Builtin(String),
-	/// Await a task. Explicit in step 1 (the bytecode emitter handles it via
-	/// the existing async-closure path); rewritten into a state machine by the
-	/// step-2 CPS pass.
+	/// Await a task. Rewritten into a state machine by the CPS pass (`ir::cps`, run
+	/// by `wasm::emit`) before emission — the emitter never sees a raw `Await`.
 	Await(Atom),
-	/// Box an unboxed value into a uniform heap `Value`. A no-op on the bytecode
-	/// VM (its `Value` is already tagged); inserted by the Repr coercion pass
-	/// where an unboxed value flows into a `Boxed` context (a `Call` argument, a
-	/// container element, a `Return`, …). The WASM backend emits the actual
-	/// i64/f64/i32 → GC-ref boxing.
+	/// Box an unboxed value into a uniform heap `Value`. Inserted by the Repr
+	/// coercion pass where an unboxed value flows into a `Boxed` context (a `Call`
+	/// argument, a container element, a `Return`, …); the WASM backend emits the
+	/// actual i64/f64/i32 → GC-ref boxing.
 	Box(Atom),
-	/// Unbox a heap `Value` to the named primitive repr. A no-op on the bytecode
-	/// VM; inserted where a `Boxed` value feeds a repr-typed op (e.g. an `AddInt`
-	/// operand). The `Repr` is always `I64`/`F64`/`I32`, never `Boxed`.
+	/// Unbox a heap `Value` to the named primitive repr. Inserted where a `Boxed`
+	/// value feeds a repr-typed op (e.g. an `AddInt` operand). The `Repr` is always
+	/// `I64`/`F64`/`I32`, never `Boxed`.
 	Unbox(Atom, Repr),
 }
 
@@ -464,11 +461,10 @@ pub enum ListItem {
 	Spread(Atom),
 }
 
-/// Strict binary operators, mirroring the VM's binary opcodes. Arithmetic is
-/// split by operand type (the analyzer picks int vs float); comparison and
-/// equality are single ops (the VM implements them polymorphically over the
-/// `ord`/structural semantics). Logical `and`/`or` are strict here (both
-/// operands are evaluated) — that matches the VM's `LogicalAnd`/`LogicalOr`.
+/// Strict binary operators. Arithmetic is split by operand type (the analyzer
+/// picks int vs float); `Eq`/`Ne` are polymorphic structural ops (over any value),
+/// with repr-split numeric variants below. Logical `and`/`or` are strict here
+/// (both operands are always evaluated).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinOp {
 	AddInt,
@@ -486,26 +482,23 @@ pub enum BinOp {
 	And,
 	Or,
 	/// Structural equality / inequality — operands are `Boxed` (works on any
-	/// value: ints, strings, records, …; the VM compares `Value`s structurally).
+	/// value: ints, strings, records, …; compared structurally).
 	Eq,
 	Ne,
 	// Concrete int/float equality, split by operand repr so a `==`/`!=` on numbers
 	// compares `i64`/`f64` registers directly instead of boxing both sides for the
 	// structural `__eq` helper. Behavior-identical to `Eq`/`Ne` on those types: int
 	// equality is i64 equality, and concrete float `==`/`!=` is IEEE (`nan != nan`),
-	// which is exactly what structural `==`/`!=` gives on floats. The VM maps these
-	// back to its one `Eq`/`Neq` opcode (its `Value::Int`/`Float` compare is already
-	// the same); WASM emits `i64.eq`/`f64.ne`/… . Result is `I32` (bool).
+	// which is exactly what structural `==`/`!=` gives on floats. WASM emits
+	// `i64.eq`/`f64.ne`/… . Result is `I32` (bool).
 	EqI64,
 	NeI64,
 	EqF64,
 	NeF64,
 	// Ordering comparisons, split by operand repr so the representation is
-	// explicit in the op (the VM has one polymorphic opcode per relation, but
-	// WASM needs `i64.lt`/`f64.lt`, and the coercion pass needs to know whether a
-	// boxed operand unboxes to I64 or F64). All map back to the VM's
-	// `Lt`/`Lte`/`Gt`/`Gte` opcodes. `*I64` operands are `I64`, `*F64` are `F64`;
-	// the result is always `I32` (bool).
+	// explicit in the op (WASM needs `i64.lt`/`f64.lt`, and the coercion pass needs
+	// to know whether a boxed operand unboxes to I64 or F64). `*I64` operands are
+	// `I64`, `*F64` are `F64`; the result is always `I32` (bool).
 	LtI64,
 	LtF64,
 	LeI64,

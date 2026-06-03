@@ -9,7 +9,7 @@ def count = fun n {
 }
 
 def main = fun {
-	# 5000 is past the interpreter's default stack limit; the VM handles
-	# this in O(1) frames thanks to TCO.
+	# 5000 is past a typical native stack limit; TCO handles this in O(1)
+	# frames.
 	print (count 5000)
 }

@@ -614,7 +614,7 @@ impl<'compiler> Analyzer<'compiler> {
 
 		// Prelude: builtin values visible in every module.
 		// `print: forall a. a -> nothing` — write the value to stdout
-		// (rendered via the same Display the VM uses for to-string).
+		// (rendered via the canonical `to-string` formatting).
 		let print_var = self.next_type_var_id;
 		self.next_type_var_id += 1;
 		self.add_value_binding(
@@ -6410,7 +6410,7 @@ impl<'compiler> Analyzer<'compiler> {
 	// Register the prelude `hash` trait + concrete instances on int,
 	// float, string, bool. Output type is `int` — the analyzer doesn't
 	// know about the hash algorithm; runtime semantics are in the
-	// corresponding `*Hash` VM builtins.
+	// corresponding hash builtins.
 	fn register_prelude_hash_trait(&mut self) {
 		let param_var = self.next_type_var_id;
 		self.next_type_var_id += 1;

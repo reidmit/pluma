@@ -1,20 +1,19 @@
-// The async CPS state-machine pass — the WASM-backend prerequisite that turns
-// the VM's stack-snapshot async runtime into an explicit, value-carried state
-// machine.
+// The async CPS state-machine pass — the WASM-backend prerequisite that turns an
+// `is_async` function into an explicit, value-carried state machine.
 //
-// Today an `is_async` function is a *step function*: the VM's `drive_step`
-// (`vm/src/task.rs`) runs its bytecode until the `Await` instruction, snapshots
-// the whole operand-stack region to the heap, and restores it on resume. That
-// snapshot is interpreter-only — WasmGC has no addressable operand stack to grab
-// mid-function — so it can't port to WASM.
+// As lowering produces it, an `is_async` function carries `Await` nodes and would
+// suspend by snapshotting its live operand-stack region to the heap and restoring
+// it on resume. That snapshot approach can't run on WasmGC — there is no
+// addressable operand stack to grab mid-function — so async must be expressed as
+// data instead.
 //
 // This pass rewrites such a function into a **poll function**
 // `poll(state, resume) -> __poll` where the suspended state is an ordinary value
 // (a record): a resume `__tag` plus the variables live across each suspension.
 // The poll fn `Match`es on the tag, runs straight-line to the next `Await`, then
-// returns `pending(subtask, state')` or `ready(value)`. The VM's poll-driver
-// (`drive_poll`) advances it by *calling* it, no stack snapshot — exactly the
-// shape WASM wants (state = a GC struct).
+// returns `pending(subtask, state')` or `ready(value)`. The poll-driver (emitted
+// into the wasm module) advances it by *calling* it, no stack snapshot — exactly
+// the shape WASM wants (state = a GC struct).
 //
 // **Rollout is per-function and additive.** The original async function `f` is
 // left in place (it still drives `MakeAsyncClosure`/`do_call`, so its callers are
@@ -49,9 +48,8 @@
 // early/nested returns, plus `defer`: the scheduled cleanup closures ride in the
 // poll state as a `__defers` list (threaded across each suspension like a live
 // var, but under a *fixed* field name so the driver can find it), and are run
-// LIFO by the VM poll-driver on completion, failure, and cancellation —
-// mirroring the Await-style frame's `cleanups`. See `build_poll_fn` and
-// `vm::task::run_poll_defers`.
+// LIFO by the poll-driver on completion, failure, and cancellation. See
+// `build_poll_fn`.
 //
 // The pass now covers every control-flow shape lowering produces, so any async
 // function is transformed. Run by `wasm::emit` (via `wasm/src/async_lower.rs`);
@@ -62,13 +60,13 @@ use crate::types::*;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 // State-record field names. `__tag` is the resume discriminant. The *initial*
-// state is built by the VM poll-driver, which knows only the call args (not IR
-// VarIds), so it seeds them positionally as `__a{i}` (`initial_poll_state` in
-// `vm/src/task.rs` — these names are the cross-crate contract). The transform
-// reads param at position `i` from `__a{i}` in segment 0. Every later state
-// record is built here, keyed by VarId as `__v{VarId}` (param VarIds are not
-// necessarily `0..N-1`, e.g. constrained functions, so VarId keys can't be
-// reconstructed by the driver — only the transform uses them).
+// state is built by the poll-driver, which knows only the call args (not IR
+// VarIds), so it seeds them positionally as `__a{i}` (these names are the
+// cross-pass contract with the wasm driver). The transform reads param at
+// position `i` from `__a{i}` in segment 0. Every later state record is built
+// here, keyed by VarId as `__v{VarId}` (param VarIds are not necessarily
+// `0..N-1`, e.g. constrained functions, so VarId keys can't be reconstructed by
+// the driver — only the transform uses them).
 const TAG_FIELD: &str = "__tag";
 fn var_field(v: VarId) -> String {
 	format!("__v{}", v.0)
@@ -79,10 +77,10 @@ fn arg_field(i: usize) -> String {
 
 // The fixed state field carrying the live `defer` cleanup list — a list of
 // zero-arg closures in push order. Threaded across every suspension like a live
-// var, but under this *fixed* name (not `__v{id}`) so the VM poll-driver can
-// find it to run cleanups on failure/cancellation (`vm::task::run_poll_defers`
-// reads the same name — a cross-crate contract). Run LIFO; on completion the
-// poll fn also hands it back as the 2nd payload of `ready(value, defers)`.
+// var, but under this *fixed* name (not `__v{id}`) so the poll-driver can find it
+// to run cleanups on failure/cancellation (a cross-pass contract with the wasm
+// driver, which reads the same name). Run LIFO; on completion the poll fn also
+// hands it back as the 2nd payload of `ready(value, defers)`.
 const DEFERS_FIELD: &str = "__defers";
 
 // The synthetic 2-variant signal a poll fn returns. Tag 0 = `ready(value)`,
@@ -95,8 +93,7 @@ const PENDING_TAG: u32 = 1;
 /// Rewrite every supported `is_async` function into poll form, in place. For each
 /// transformed `f`, generates a sibling poll function, appends it to
 /// `program.functions`, and points `f.poll_fn` at it. Idempotent (already-`Poll`
-/// functions are skipped). Inert on the default VM path — only run by the CPS
-/// track / its harness.
+/// functions are skipped). Run by `wasm::emit`'s async-lowering pass.
 pub fn cps_transform(program: &mut IrProgram) {
 	let base = program.functions.len();
 	let mut new_funcs: Vec<Function> = Vec::new();
@@ -352,8 +349,8 @@ impl Cfg {
 					.expect("cps: `continue` outside a loop");
 				self.new_block(simple, Term::Jump(header))
 			}
-			// `RunDefer` is never emitted by lowering (the VM's `Return` runs
-			// cleanups); `PushDefer`/`Await`/`Let`/`Discard` were handled above.
+			// `RunDefer` is never emitted by lowering (cleanups run at `Return`);
+			// `PushDefer`/`Await`/`Let`/`Discard` were handled above.
 			_ => unreachable!("cps: unexpected statement in flattener: {:?}", s.kind),
 		}
 	}
@@ -607,8 +604,8 @@ fn build_poll_fn(f: &Function) -> Option<Function> {
 
 		// Copy the block's straight-line statements, rewriting each `PushDefer`
 		// into an append onto the `__defers` accumulator. The poll fn must not use
-		// the VM frame's own cleanup stack (that fires at every poll's `Return`,
-		// not at the machine's logical exit) — the driver runs `__defers` instead.
+		// the frame's own cleanup stack (that fires at every poll's `Return`, not at
+		// the machine's logical exit) — the driver runs `__defers` instead.
 		for s in &bb.stmts {
 			match (&s.kind, defers_var) {
 				(StmtKind::PushDefer(closure), Some(dv)) => {

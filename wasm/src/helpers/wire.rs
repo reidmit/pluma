@@ -9,7 +9,7 @@ use crate::runtime::{WIRE_FNV_PRIME, WireGlobals, WireResultLits, WireTags};
 use crate::types;
 
 /// Build `__wire_mix_len(i64 h, i64 n) -> i64`: fold `mix_byte` over `n`'s 8
-/// little-endian bytes (mirrors `vm::wire::mix_len`, where lengths are `u64` LE).
+/// little-endian bytes (the `wire` format mixes lengths as `u64` LE).
 pub(crate) fn build_wire_mix_len_fn() -> Function {
 	let mut w = Wat::new(2);
 	let (h, n) = (w.param(0), w.param(1));
@@ -42,7 +42,7 @@ pub(crate) fn build_wire_mix_len_fn() -> Function {
 }
 
 /// Build `__wire_mix_str(i64 h, ref $value str) -> i64`: mix the string's byte
-/// length (via `mix_len`) then each of its bytes (mirrors `vm::wire::mix_str`).
+/// length (via `mix_len`) then each of its bytes (the `wire` format's string mixing).
 pub(crate) fn build_wire_mix_str_fn(mix_len: u32) -> Function {
 	let mut w = Wat::new(2);
 	let (h, s) = (w.param(0), w.param(1));
@@ -82,7 +82,7 @@ pub(crate) fn build_wire_mix_str_fn(mix_len: u32) -> Function {
 }
 
 /// Build `__wire_fp(i64 h, ref $value schema) -> i64`: the recursive structural
-/// fingerprint over a `wire-schema` value tree (mirrors `vm::wire::mix_schema`).
+/// fingerprint over a `wire-schema` value tree (the `wire` format's schema mixing).
 /// Dispatches on the schema node's `vtag`; each arm leads with a distinct kind
 /// byte (1..13) so structurally-different schemas can't alias. `self_idx` is this
 /// function's own wasm index (for recursion).
@@ -311,8 +311,8 @@ pub(crate) fn build_wire_fp_fn(
 // `wire` codec: encode / decode native over the `$value` GC layout.
 //
 // The codec interprets a `wire-schema` value tree (the same tree `__wire_fp`
-// fingerprints) to drive a positional binary encode/decode, mirroring
-// `vm::wire` byte-for-byte. State lives in module-level mutable globals
+// fingerprints) to drive a positional binary encode/decode, byte-for-byte to the
+// `wire` format spec. State lives in module-level mutable globals
 // (`WireGlobals`) rather than threading through the recursion: encode appends to
 // a doubling byte buffer; decode reads a cursor and reports failure through an
 // error code; both register inline enum definitions in a small registry so a
@@ -375,7 +375,7 @@ pub(crate) fn build_wire_push_fn(g: WireGlobals) -> Function {
 }
 
 /// Build `__wire_uvarint(i64 v)`: write `v` as an LEB128 unsigned varint via
-/// `__wire_push` (mirrors `vm::wire::write_uvarint`).
+/// `__wire_push` (the `wire` format's unsigned-varint encoding).
 pub(crate) fn build_wire_uvarint_fn(push: u32) -> Function {
 	let mut w = Wat::new(1);
 	let v = w.param(0);
@@ -481,7 +481,7 @@ pub(crate) fn build_wire_ctxget_fn(eq: u32, g: WireGlobals) -> Function {
 
 /// Build `__wire_enc(value schema, value val)`: the recursive encoder. Dispatches
 /// on the schema node's `vtag` (resolved via `WireTags`) and appends `val`'s
-/// positional binary encoding to `g_buf` (mirrors `vm::wire::encode_in`).
+/// positional binary encoding to `g_buf` (the `wire` format's encode rule).
 /// `self_idx` is this function's own index (recursion); `enc_variant` encodes an
 /// enum payload.
 #[allow(clippy::too_many_arguments)]
@@ -652,7 +652,7 @@ pub(crate) fn build_wire_enc_fn(
 	});
 	// record: field schemas = list of `$tuple(name, schema)` in payload[0],
 	// canonical (name-sorted) order; the `$record`'s values array is the same
-	// order, so encode positionally (mirrors VM's per-name lookup).
+	// order, so encode positionally (no per-name lookup needed).
 	w.local_get(vtag).i32(wt.s_record as i32).i32_eq();
 	w.if_(|w| {
 		payload_elem(w, 0);
@@ -711,7 +711,7 @@ pub(crate) fn build_wire_enc_fn(
 
 /// Build `__wire_enc_variant(value variants, value val)`: write the variant's
 /// declaration-index tag (a uvarint) then encode each payload field under its
-/// schema (mirrors `vm::wire::encode_variant`). `variants` is the enum's variant
+/// schema (the `wire` format's variant encoding). `variants` is the enum's variant
 /// `$list` (`$tuple(name, field-schema-list)` per variant); the value's own
 /// `vtag` is the wire tag and the index into `variants`.
 pub(crate) fn build_wire_enc_variant_fn(enc: u32, uvarint: u32) -> Function {
@@ -798,7 +798,7 @@ pub(crate) fn build_wire_rbyte_fn(g: WireGlobals) -> Function {
 }
 
 /// Build `__wire_ruvarint() -> i64`: read an LEB128 unsigned varint (10-byte cap;
-/// overlong/unterminated → `g_err = 5` malformed). Mirrors `vm::wire::read_uvarint`.
+/// overlong/unterminated → `g_err = 5` malformed). The `wire` format's unsigned-varint decode.
 pub(crate) fn build_wire_ruvarint_fn(rbyte: u32, g: WireGlobals) -> Function {
 	let mut w = Wat::new(0);
 	let result = w.local(ValType::I64);
@@ -912,7 +912,7 @@ pub(crate) fn build_wire_disp_fn(bytesconcat: u32) -> Function {
 
 /// Build `__wire_dec_variant(value qualified, value variants) -> value`: read the
 /// variant tag (a uvarint), bounds-check it against `variants`, decode each
-/// payload field, and build the `$variant` (mirrors `vm::wire::decode_variant`).
+/// payload field, and build the `$variant` (the `wire` format's variant decode).
 /// An out-of-range tag sets `g_err = 2` (invalid-tag, `g_errval` = tag).
 pub(crate) fn build_wire_dec_variant_fn(
 	ruvarint: u32,
@@ -999,7 +999,7 @@ pub(crate) fn build_wire_dec_variant_fn(
 
 /// Build `__wire_dec(value schema) -> value`: the recursive decoder. Dispatches on
 /// the schema's `vtag`; reads/recursion set `g_err` on failure and the partial
-/// value is discarded by `__wire_result`. Mirrors `vm::wire::decode_in`.
+/// value is discarded by `__wire_result`. The `wire` format's decode rule.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_wire_dec_fn(
 	self_idx: u32,
@@ -1101,9 +1101,9 @@ pub(crate) fn build_wire_dec_fn(
 			.ret();
 	});
 	// string / bytes: uvarint length, then that many bytes. NOTE: strings are
-	// taken verbatim — the VM validates UTF-8 (the `invalid-utf8` error,
-	// `g_err = 3`) but we don't yet, so a non-UTF-8 wire string decodes to a
-	// malformed string here rather than erroring. Unexercised by the fixtures.
+	// taken verbatim — the `wire` format requires UTF-8 (the `invalid-utf8` error,
+	// `g_err = 3`) but this decoder doesn't validate it yet, so a non-UTF-8 wire
+	// string decodes to a malformed string here rather than erroring. Unexercised by the fixtures.
 	let bytes_arm = |w: &mut Wat, t: u32, tag: i32| {
 		w.local_get(vtag).i32(t as i32).i32_eq();
 		w.if_(|w| {
@@ -1418,8 +1418,8 @@ pub(crate) fn build_wire_bcmp_fn() -> Function {
 
 /// Build `__wire_enc_dict(value schema, value val)`: encode a `dict` as a uvarint
 /// count then `(key, value)` pairs sorted by encoded-key bytes (so logically-equal
-/// dicts encode identically regardless of insertion order). Mirrors the VM's
-/// `encode_in` dict arm. `schema` is the `s-dict` node (`payload[0]`=key schema,
+/// dicts encode identically regardless of insertion order). The `wire` format's
+/// dict encode rule. `schema` is the `s-dict` node (`payload[0]`=key schema,
 /// `payload[1]`=value schema). Keys are encoded once into a captured `$bytes` via
 /// a buffer rewind, then sorted with `__wire_bcmp` (insertion sort).
 pub(crate) fn build_wire_enc_dict_fn(

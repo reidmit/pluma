@@ -1,6 +1,6 @@
-# Core list combinators across both backends, with attention to the
-# trait-constrained reductions (sum/product over `numeric`, min/max over
-# `ord`) whose dict passing is the interesting case for WASM.
+# Core list combinators, with attention to the trait-constrained reductions
+# (sum/product over `numeric`, min/max over `ord`) whose dict passing is the
+# interesting case for WASM.
 use core.list
 
 def main = fun {

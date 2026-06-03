@@ -24,7 +24,7 @@ So:
   instead. ("Compares by value" not "structural equality"; "an empty
   list counts as true" not "vacuously true".)
 - **No internal references.** The reader can't see our source tree.
-  Don't mention file names, builtins, the VM, codegen, or commit
+  Don't mention file names, builtins, backend internals, or commit
   history. To point at another stdlib module, name it as `core.option`,
   `core.bytes`, etc.
 - **Define a term the first time it earns its keep**, then reuse it.

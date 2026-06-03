@@ -1,5 +1,5 @@
-// `core.dict` as a persistent hash-trie (the WasmGC analogue of the VM's `im_rc`
-// map). The old representation was an insertion-ordered association array that
+// `core.dict` as a persistent hash-trie (a persistent, structurally-shared
+// immutable map). The old representation was an insertion-ordered association array that
 // linear-scanned with `__eq` and full-copied on every insert — O(n) per insert,
 // O(n²) to build. This replaces it with a 16-way array-mapped trie keyed by a
 // structural hash (`__hash`), so insert/lookup are O(log₁₆ n) and an immutable
@@ -177,7 +177,7 @@ pub(crate) fn build_hash_fn(self_idx: u32) -> Function {
 	});
 	// FLOAT — normalize ±0.0 to one bit pattern (they are `__eq`-equal), then mix
 	// the bits. (NaN need not be self-equal: `__eq` says `nan != nan`, so two NaN
-	// keys are distinct entries on both backends regardless of hash.)
+	// keys are distinct entries regardless of hash.)
 	w.local_get(ta).i32(types::TAG_FLOAT).i32_eq();
 	w.if_(|w| {
 		w.local_get(v)

@@ -293,7 +293,7 @@ pub(crate) fn build_builtin_wrapper(tag: &str, ord: &OrderingLits) -> Option<Fun
 		// `hash` instances. The wasm `dict` scans keys with `__eq` and never calls
 		// these, but a program can call `hash.hash x` directly (and parametric
 		// instances recurse into the primitive ones), so they compute the real value
-		// — matching `vm::value::primitive_hash` EXACTLY. All box their result `$int`.
+		// — the canonical primitive hash EXACTLY. All box their result `$int`.
 		//
 		// int: the value itself. float: the f64 bit pattern as i64. bool: 0/1.
 		"int-hash" => {
@@ -314,7 +314,7 @@ pub(crate) fn build_builtin_wrapper(tag: &str, ord: &OrderingLits) -> Option<Fun
 			w.struct_new(types::T_INT);
 		}
 		// string / bytes: FNV-1a (64-bit) over the `$bytes` backing — a defined,
-		// portable hash (the VM uses the same two constants in `value::fnv1a`).
+		// portable hash (the two standard FNV-1a constants).
 		// Both share the `$str` `{tag, $bytes}` shape, so one loop serves either.
 		"string-hash" | "bytes-hash" => {
 			const FNV_OFFSET: i64 = 0xcbf2_9ce4_8422_2325u64 as i64;

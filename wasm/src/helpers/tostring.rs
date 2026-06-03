@@ -1,5 +1,5 @@
 // `to-string` rendering: decimal int formatting + the recursive `__tostring`
-// (`vm::Value`'s `Display` in wasm).
+// (the canonical `to-string` formatting in wasm).
 
 use wasm_encoder::{Function, ValType};
 
@@ -7,8 +7,8 @@ use crate::helpers::wat::{Local, Wat};
 use crate::runtime::ToStringLits;
 use crate::types;
 
-/// Build `__int_str(boxed-int) -> str`: decimal formatting of an i64. Mirrors
-/// `vm::Value`'s `Display` for ints (`-` sign, no leading zeros, "0" for zero).
+/// Build `__int_str(boxed-int) -> str`: decimal formatting of an i64 — the
+/// canonical int rendering (`-` sign, no leading zeros, "0" for zero).
 pub(crate) fn build_int_str_fn() -> Function {
 	let bv = types::T_BYTES;
 	let mut w = Wat::new(1);
@@ -82,7 +82,7 @@ pub(crate) fn build_int_str_fn() -> Function {
 	w.finish()
 }
 
-/// Build `__tostring(value) -> str` — `vm::Value`'s `Display` in wasm. Scalars +
+/// Build `__tostring(value) -> str` — the canonical `to-string` formatting in wasm. Scalars +
 /// string (identity) + int (`__int_str`) + float (host `float_to_str`); compounds
 /// (tuple/list/record/variant) are formatted recursively, folding byte arrays with
 /// `__bytesconcat`. `self_idx` is `__tostring`'s own index (for the recursion).
@@ -215,8 +215,8 @@ pub(crate) fn build_tostring_fn(
 	});
 
 	// BYTES -> single-quoted literal form: printable ASCII inline, `'` and `\`
-	// backslash-escaped, everything else as `\xNN` (lowercase). Matches
-	// `Value::Display` so wasm `to-string` agrees with the VM. Writes into a
+	// backslash-escaped, everything else as `\xNN` (lowercase) — the canonical
+	// bytes `to-string` form. Writes into a
 	// worst-case (4 bytes/input + 2 quotes) buffer, then trims — no concat.
 	// buf=source/dst, acc=output buffer, n=source len, len=write position.
 	w.local_get(ta).i32(types::TAG_BYTES).i32_eq();
@@ -398,7 +398,7 @@ pub(crate) fn build_tostring_fn(
 		wrap(w);
 	});
 
-	// REF -> "ref <inner>" (matches `vm::Value`'s Display).
+	// REF -> "ref <inner>" (the canonical ref `to-string` form).
 	w.local_get(ta).i32(types::TAG_REF).i32_eq();
 	w.if_(|w| {
 		// acc = bytes-of "ref ".
@@ -416,8 +416,8 @@ pub(crate) fn build_tostring_fn(
 		wrap(w);
 	});
 
-	// DICT -> "{k: v, ...}" (insertion order; each entry a `$tuple`). Mirrors
-	// `vm::Value`'s Dict Display. `__dict_entries` materializes the seq-ordered
+	// DICT -> "{k: v, ...}" (insertion order; each entry a `$tuple`) — the
+	// canonical dict `to-string` form. `__dict_entries` materializes the seq-ordered
 	// `(key, value)` list; `arr`/`n` are its backing array + length.
 	w.local_get(ta).i32(types::TAG_DICT).i32_eq();
 	w.if_(|w| {
@@ -464,7 +464,7 @@ pub(crate) fn build_tostring_fn(
 	});
 
 	// DURATION -> canonical descending d/h/m/s/ms/us/ns segments (mirrors
-	// `host::format_duration` / `vm::value::format_duration`). Reuses `__int_str` for
+	// `host::format_duration`). Reuses `__int_str` for
 	// each segment's count and `__bytesconcat` to fold count + unit suffix into `acc`.
 	// One segment per unit whose divisor `rem` still covers; `0` renders as `"0s"`.
 	// `seg_unit` appends `<rem/per><suffix>` and reduces `rem %= per`.
