@@ -1,7 +1,7 @@
 use core.dict
 
-# All variants hash to the same int — every key lands in the same
-# bucket, so insert / lookup / remove must walk the collision chain.
+# Enum keys with a user `hash` instance — exercises enum keys through
+# insert / lookup / remove (the backend keys on the structural `__hash`).
 enum color {
 	red
 	green
@@ -16,9 +16,9 @@ implement hash color {
 
 def main = fun {
 	let m = dict.empty ()
-	dict.insert m red "r"
-	dict.insert m green "g"
-	dict.insert m blue "b"
+	let m = dict.insert m red "r"
+	let m = dict.insert m green "g"
+	let m = dict.insert m blue "b"
 	print (dict.size m)
 	when dict.lookup m red is some s {
 		print s
@@ -37,7 +37,7 @@ def main = fun {
 	}
 
 	# Remove the middle entry; the others must still resolve.
-	dict.remove m green
+	let m = dict.remove m green
 	print (dict.size m)
 	print (dict.contains-key m green)
 	when dict.lookup m red is some s {

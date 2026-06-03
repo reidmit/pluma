@@ -36,12 +36,14 @@ pub const T_TUPLE: u32 = 11; // struct { i32 tag, (ref $valarray) elems }
 pub const T_LIST: u32 = 12; // struct { i32 tag, (ref $valarray) elems }
 pub const T_RECORD: u32 = 13; // struct { i32 tag, (ref $valarray) names, (ref $valarray) values }
 pub const T_REF: u32 = 14; // struct { i32 tag, (mut ref null $value) cell }  — a mutable cell
-pub const T_DICT: u32 = 15; // struct { i32 tag, (mut ref $valarray) indices, (mut ref null $value) order }  — mutable hash table
+pub const T_DICT: u32 = 15; // struct { i32 tag, (mut ref null $value) root, (mut i32) size }  — persistent HAMT
 pub const T_TASK: u32 = 16; // struct { i32 tag, i32 kind, (ref $valarray) payload }  — a cold async `task`
 pub const T_DENTRY: u32 = 17; // struct { i32 tag, (ref null $value) key, (mut ref null $value) value, i64 hash }  — a $dict entry
 #[allow(dead_code)] // the type is emitted (encode); the const is referenced once the Phase-3 DOM/fetch emitter builds an $extern
 pub const T_EXTERN: u32 = 18; // struct { i32 tag, (ref null extern) handle }  — a host-owned resource handle
-const T_FIRST_FUNC: u32 = 19;
+#[allow(dead_code)] // the type is emitted (encode); the const is referenced once the persistent-dict rewrite (notes/DICT.md) lands
+pub const T_CNODE: u32 = 19; // struct { i32 tag, i32 dataMap, i32 nodeMap, (mut ref $valarray) entries, (mut ref $valarray) children, (mut ref null $value) edit }  — a persistent dict trie node
+const T_FIRST_FUNC: u32 = 20;
 
 // --------------------------------------------------------------------------
 // Runtime tags carried in the `$value` discriminant field — one per runtime
@@ -69,13 +71,12 @@ pub const TAG_BYTES: i32 = 14;
 /// A `ref a` mutable cell: a `$ref` struct holding one (mutable) boxed value.
 /// Compared by reference identity (`ref.eq`).
 pub const TAG_REF: i32 = 15;
-/// A `dict k v`: a `$dict` struct `{ tag, indices, order }` — a **mutable**
-/// open-addressing hash table (see `helpers/dict.rs`). `order` is a `$list` of
-/// `$dentry` in insertion order (its length is the live count); `indices` is the
-/// power-of-two probe table (each slot null or an `i31`-boxed `order` position).
-/// `insert`/`remove` mutate in place; keys are matched by structural `__hash` +
-/// `__eq`. The `$dentry` entries never escape to user code (a `$dict` is the only
-/// handle).
+/// A `dict k v`: a `$dict` struct `{ tag, root, size }` — an **immutable
+/// persistent** hash-array-mapped trie (see `helpers/dict.rs`). `root` is the top
+/// `$cnode` (or null when empty); `size` caches the live entry count. `insert`/
+/// `remove` path-copy and return a new `$dict`; keys are matched by structural
+/// `__hash` + `__eq`. The `$cnode`/`$dentry` nodes never escape to user code (a
+/// `$dict` is the only handle).
 pub const TAG_DICT: i32 = 16;
 /// A cold, re-runnable `task a`: a `$task` struct `{ tag, i32 kind, payload }`.
 /// `kind` is the `TaskRepr` discriminant (see `runtime::task_kind`); `payload`
@@ -93,6 +94,13 @@ pub const TAG_SCOPE_HANDLE: i32 = 18;
 /// structurally serialized (a handle must not cross the `wire`). No Phase-1 host
 /// import produces one — the `Platform::Browser` DOM/fetch imports (Phase 3) do.
 pub const TAG_EXTERN: i32 = 19;
+/// A persistent-`$dict` trie node (`$cnode`): a `$value` subtype carrying a
+/// bitmap + a `$valarray` of slots (each a `$dentry` leaf or a child `$cnode`).
+/// A distinct tag so the trie walk distinguishes a leaf entry from a sub-node by
+/// reading field 0, without a concrete `ref.test`. Internal: never escapes to
+/// user code (only a `$dict` does), never printed.
+#[allow(dead_code)] // referenced once the persistent-dict rewrite (notes/DICT.md) lands
+pub const TAG_CNODE: i32 = 20;
 
 /// `(ref null $valarray)` — a reference to a value array (closure captures or
 /// variant payload).
@@ -147,6 +155,17 @@ pub fn dentry_ref() -> ValType {
 	ValType::Ref(RefType {
 		nullable: false,
 		heap_type: HeapType::Concrete(T_DENTRY),
+	})
+}
+
+/// `(ref $cnode)` — a non-null reference to a persistent-dict trie node. Used for
+/// locals holding a `ref.cast`-to-`$cnode` so a later `struct.get` reads its
+/// bitmap/slots.
+#[allow(dead_code)] // referenced once the persistent-dict rewrite (notes/DICT.md) lands
+pub fn cnode_ref() -> ValType {
+	ValType::Ref(RefType {
+		nullable: false,
+		heap_type: HeapType::Concrete(T_CNODE),
 	})
 }
 
@@ -694,18 +713,18 @@ impl FuncTypes {
 			vec![val_field(ValType::I32, false), val_field(value_ref(), true)],
 			true,
 		));
-		// 15 $dict — { tag, (mut ref $valarray) indices, (mut ref null $value) order }.
-		// A mutable open-addressing hash table (see `helpers/dict.rs`): `indices` is
-		// the probe table (each slot null = empty, or an `i31`-boxed position into
-		// `order`), `order` is a `$list` of `$dentry` in insertion order (its length
-		// is the live entry count — there are no tombstones, removes rebuild). Both
-		// fields are mutable: `indices` is swapped on resize, `order` on remove.
+		// 15 $dict — { tag, (mut ref null $value) root, (mut i32) size }.
+		// An immutable persistent hash-array-mapped trie (see `helpers/dict.rs`):
+		// `root` is the top `$cnode` (or null when empty), `size` caches the live entry
+		// count for O(1) `dict.size`. `insert`/`remove` path-copy and return a new
+		// `$dict`; the fields are mutable only so the internal transient builder can
+		// write in place before freezing.
 		types.ty().subtype(&struct_subtype(
 			Some(T_VALUE),
 			vec![
 				val_field(ValType::I32, false),
-				val_field(valarray_ref(), true),
 				val_field(value_ref(), true),
+				val_field(ValType::I32, true),
 			],
 			true,
 		));
@@ -747,6 +766,25 @@ impl FuncTypes {
 			vec![
 				val_field(ValType::I32, false),
 				val_field(extern_ref(), false),
+			],
+			true,
+		));
+		// 19 $cnode — a persistent-dict trie node: { tag, i32 dataMap, i32 nodeMap,
+		// (mut ref $valarray) entries, (mut ref $valarray) children, (mut ref null
+		// $value) edit }. `entries` holds `$dentry` leaves, `children` holds child
+		// `$cnode`s (both ride the shared `$valarray`, cast on read); the bitmaps give
+		// CHAMP slot indexing via `popcnt`. `edit` is the transient owner token (null
+		// when frozen). A `$value` subtype with a distinct `tag` so the trie walk tells
+		// a leaf from a sub-node by field 0; never escapes to user code.
+		types.ty().subtype(&struct_subtype(
+			Some(T_VALUE),
+			vec![
+				val_field(ValType::I32, false),
+				val_field(ValType::I32, true),
+				val_field(ValType::I32, true),
+				val_field(valarray_ref(), true),
+				val_field(valarray_ref(), true),
+				val_field(value_ref(), true),
 			],
 			true,
 		));

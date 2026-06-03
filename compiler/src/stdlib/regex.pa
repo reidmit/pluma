@@ -267,7 +267,6 @@ def caps-to-dict = fun input caps {
 			acc
 		} else {
 			dict.insert acc name (slice-str input s e)
-			acc
 		}
 	}
 }

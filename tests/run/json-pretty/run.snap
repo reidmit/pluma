@@ -6,12 +6,11 @@ expression: combined
 ok
 == stdout ==
 {
-  "name": "ada",
+  "on": true,
   "scores": [
     10,
     20
   ],
-  "on": true
+  "name": "ada"
 }
 == stderr ==
-

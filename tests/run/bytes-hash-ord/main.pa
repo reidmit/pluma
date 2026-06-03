@@ -3,9 +3,9 @@ use core.dict
 def main = fun {
 	# bytes as dict keys — exercises hash bytes
 	let m = dict.empty ()
-	dict.insert m 'GET' 1
-	dict.insert m 'POST' 2
-	dict.insert m 'PUT' 3
+	let m = dict.insert m 'GET' 1
+	let m = dict.insert m 'POST' 2
+	let m = dict.insert m 'PUT' 3
 	when dict.lookup m 'POST' is some v {
 		print v
 	} is none {

@@ -139,14 +139,9 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::DictInsert,
 		fn_type: Ty::Helper(3),
-		deps: &[H::Hash, H::Eq, H::DictGrow, H::ListPush],
+		deps: &[H::Hash, H::CnodeLookup, H::CnodeInsert],
 		build: |c| {
-			dict::build_dict_insert_fn(
-				c.dep(H::Hash),
-				c.dep(H::Eq),
-				c.dep(H::DictGrow),
-				c.dep(H::ListPush),
-			)
+			dict::build_dict_insert_fn(c.dep(H::Hash), c.dep(H::CnodeLookup), c.dep(H::CnodeInsert))
 		},
 	},
 	HelperDef {
@@ -158,25 +153,37 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::DictRemove,
 		fn_type: Ty::Helper(2),
-		deps: &[H::DictEmpty, H::DictInsert, H::Eq],
-		build: |c| dict::build_dict_remove_fn(c.dep(H::DictEmpty), c.dep(H::DictInsert), c.dep(H::Eq)),
+		deps: &[H::Hash, H::CnodeLookup, H::CnodeRemove],
+		build: |c| {
+			dict::build_dict_remove_fn(c.dep(H::Hash), c.dep(H::CnodeLookup), c.dep(H::CnodeRemove))
+		},
 	},
 	HelperDef {
 		id: H::DictMap,
 		fn_type: Ty::Helper(2),
-		deps: &[H::DictEmpty, H::DictInsert],
+		deps: &[H::Hash, H::CnodeTInsert, H::DictEntries],
 		build: |c| {
 			let arity1 = c.arity(1);
-			dict::build_dict_map_fn(c.dep(H::DictEmpty), c.dep(H::DictInsert), arity1)
+			dict::build_dict_map_fn(
+				c.dep(H::Hash),
+				c.dep(H::CnodeTInsert),
+				c.dep(H::DictEntries),
+				arity1,
+			)
 		},
 	},
 	HelperDef {
 		id: H::DictFilter,
 		fn_type: Ty::Helper(2),
-		deps: &[H::DictEmpty, H::DictInsert],
+		deps: &[H::Hash, H::CnodeTInsert, H::DictEntries],
 		build: |c| {
 			let arity2 = c.arity(2);
-			dict::build_dict_filter_fn(c.dep(H::DictEmpty), c.dep(H::DictInsert), arity2)
+			dict::build_dict_filter_fn(
+				c.dep(H::Hash),
+				c.dep(H::CnodeTInsert),
+				c.dep(H::DictEntries),
+				arity2,
+			)
 		},
 	},
 	HelperDef {
@@ -194,20 +201,14 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::DictFind,
 		fn_type: Ty::Helper(2),
-		deps: &[H::Hash, H::Eq],
-		build: |c| dict::build_dict_find_fn(c.dep(H::Hash), c.dep(H::Eq)),
-	},
-	HelperDef {
-		id: H::DictGrow,
-		fn_type: Ty::Helper(1),
-		deps: &[],
-		build: |_c| dict::build_dict_grow_fn(),
+		deps: &[H::Hash, H::CnodeLookup],
+		build: |c| dict::build_dict_find_fn(c.dep(H::Hash), c.dep(H::CnodeLookup)),
 	},
 	HelperDef {
 		id: H::DictEq,
 		fn_type: Ty::Eq,
-		deps: &[H::Eq, H::DictFind],
-		build: |c| dict::build_dict_eq_fn(c.dep(H::Eq), c.dep(H::DictFind)),
+		deps: &[H::Eq, H::DictFind, H::DictEntries],
+		build: |c| dict::build_dict_eq_fn(c.dep(H::Eq), c.dep(H::DictFind), c.dep(H::DictEntries)),
 	},
 	HelperDef {
 		id: H::DictSize,
@@ -218,20 +219,19 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::DictEntries,
 		fn_type: Ty::Helper(1),
-		deps: &[],
-		build: |_c| dict::build_dict_entries_fn(),
+		deps: &[H::CnodeCollect],
+		build: |c| dict::build_dict_entries_fn(c.dep(H::CnodeCollect)),
 	},
 	HelperDef {
 		id: H::DictUpdate,
 		fn_type: Ty::Helper(3),
-		deps: &[H::Hash, H::Eq, H::DictGrow, H::ListPush],
+		deps: &[H::Hash, H::CnodeLookup, H::CnodeInsert],
 		build: |c| {
 			let arity1 = c.arity(1);
 			dict::build_dict_update_fn(
 				c.dep(H::Hash),
-				c.dep(H::Eq),
-				c.dep(H::DictGrow),
-				c.dep(H::ListPush),
+				c.dep(H::CnodeLookup),
+				c.dep(H::CnodeInsert),
 				arity1,
 				c.rt.opt,
 			)
@@ -242,6 +242,56 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		fn_type: Ty::Helper(1),
 		deps: &[],
 		build: |_c| dict::build_dict_clear_fn(),
+	},
+	HelperDef {
+		id: H::CnodeLookup,
+		fn_type: Ty::Helper(4),
+		deps: &[H::Eq],
+		build: |c| dict::build_cnode_lookup_fn(c.self_idx, c.dep(H::Eq)),
+	},
+	HelperDef {
+		id: H::CnodeInsert,
+		fn_type: Ty::Helper(5),
+		deps: &[H::Eq, H::CnodeMerge],
+		build: |c| dict::build_cnode_insert_fn(c.self_idx, c.dep(H::Eq), c.dep(H::CnodeMerge)),
+	},
+	HelperDef {
+		id: H::CnodeMerge,
+		fn_type: Ty::Helper(3),
+		deps: &[],
+		build: |c| dict::build_cnode_merge_fn(c.self_idx),
+	},
+	HelperDef {
+		id: H::CnodeRemove,
+		fn_type: Ty::Helper(4),
+		deps: &[H::Eq],
+		build: |c| dict::build_cnode_remove_fn(c.self_idx, c.dep(H::Eq)),
+	},
+	HelperDef {
+		id: H::CnodeCollect,
+		fn_type: Ty::Helper(2),
+		deps: &[H::ListPush],
+		build: |c| dict::build_cnode_collect_fn(c.self_idx, c.dep(H::ListPush)),
+	},
+	HelperDef {
+		id: H::CnodeTInsert,
+		fn_type: Ty::Helper(6),
+		deps: &[H::Eq, H::CnodeMerge],
+		build: |c| dict::build_cnode_tinsert_fn(c.self_idx, c.dep(H::Eq), c.dep(H::CnodeMerge)),
+	},
+	HelperDef {
+		id: H::CnodeCount,
+		fn_type: Ty::Helper(1),
+		deps: &[],
+		build: |c| dict::build_cnode_count_fn(c.self_idx),
+	},
+	HelperDef {
+		id: H::DictFromEntries,
+		fn_type: Ty::Helper(1),
+		deps: &[H::Hash, H::CnodeTInsert, H::CnodeCount],
+		build: |c| {
+			dict::build_dict_from_entries_fn(c.dep(H::Hash), c.dep(H::CnodeTInsert), c.dep(H::CnodeCount))
+		},
 	},
 	HelperDef {
 		id: H::WireFp,
@@ -723,6 +773,7 @@ pub(crate) fn helper_for_tag(tag: &str) -> Option<Helper> {
 		"dict-entries" => H::DictEntries,
 		"dict-update" => H::DictUpdate,
 		"dict-clear" => H::DictClear,
+		"dict-from-entries" => H::DictFromEntries,
 		// `wire-fingerprint` walks the schema value tree; encode/decode interpret
 		// it to (de)serialize a value over the module-level codec globals.
 		"wire-fingerprint" => H::WireFp,

@@ -496,6 +496,9 @@ nullary! {
 	// i32 arithmetic / bitwise
 	i32_add => I32Add, i32_sub => I32Sub, i32_mul => I32Mul,
 	i32_and => I32And, i32_or => I32Or, i32_shl => I32Shl, i32_shr_u => I32ShrU,
+	// `i32.popcnt` — population count; HAMT/CHAMP slot indexing is
+	// `popcnt(bitmap & (bitpos - 1))`, one native instruction.
+	i32_popcnt => I32Popcnt,
 	// i32 comparisons
 	i32_eq => I32Eq, i32_ne => I32Ne, i32_eqz => I32Eqz,
 	i32_ge_s => I32GeS, i32_ge_u => I32GeU, i32_gt_s => I32GtS, i32_gt_u => I32GtU,

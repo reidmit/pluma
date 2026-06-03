@@ -6,7 +6,6 @@ expression: combined
 ok
 == stdout ==
 60
-[(a, 20), (b, 40), (c, 60)]
+[(b, 40), (c, 60), (a, 20)]
 [(b, 20), (c, 30)]
 == stderr ==
-

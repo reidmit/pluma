@@ -1503,6 +1503,8 @@ impl<'a> FnEmitter<'a> {
 			// `dict.update` has a `where (hash k)` witness at args[0] — drop it.
 			"dict-update" => Some((self.runtime.idx(Helper::DictUpdate), &args[1..])),
 			"dict-clear" => Some((self.runtime.idx(Helper::DictClear), &args[0..])),
+			// `dict.from-entries` has a `where (hash k)` witness at args[0] — drop it.
+			"dict-from-entries" => Some((self.runtime.idx(Helper::DictFromEntries), &args[1..])),
 			_ => None,
 		} {
 			match helper {

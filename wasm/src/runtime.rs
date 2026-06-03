@@ -189,10 +189,6 @@ pub(crate) enum Helper {
 	/// its entry (so the caller reads the value, or sees null = absent). Backs
 	/// `__dict_lookup` (wraps in some/none) and `__dict_eq` (compares values).
 	DictFind,
-	/// `__dict_grow(dict) -> nothing` — double the probe table and rehash every
-	/// `order` entry into it (the `order` list is untouched). Called by insert when
-	/// the load factor is exceeded.
-	DictGrow,
 	/// `__dict_eq(a, b) -> i32` — dict equality: same size and every entry of `a`
 	/// present in `b` with an `__eq` value (order-independent). Lets `__eq`'s dict
 	/// case stay self-contained.
@@ -208,8 +204,39 @@ pub(crate) enum Helper {
 	/// read-modify-write. `f` receives `some(current)`/`none` and returns the new
 	/// value, written in place (a fused `lookup`+`insert`).
 	DictUpdate,
-	/// `__dict_clear(dict) -> nothing` — `dict.clear`: reset to empty in place.
+	/// `__dict_clear(dict) -> dict` — `dict.clear`: a fresh empty dict.
 	DictClear,
+	/// `__cnode_lookup(node, key, hash, shift) -> $dentry|null` — descend the trie
+	/// from `node`, returning the matching entry or null. `hash`/`shift` are boxed
+	/// ints (the full key hash, computed once at the wrapper, and the current bit
+	/// offset). Recurses; null `node` = absent.
+	CnodeLookup,
+	/// `__cnode_insert(node, key, val, hash, shift) -> node` — persistent insert: a
+	/// path-copied trie node with `key`→`val` set (a fresh single-leaf node when
+	/// `node` is null). Splits a leaf collision into a sub-node via `__cnode_merge`.
+	CnodeInsert,
+	/// `__cnode_merge(dA, dB, shift) -> node` — build the sub-node holding two
+	/// distinct-key leaves whose hashes agree up to `shift` (recursing while their
+	/// chunks collide; a flat collision bucket once the hash is exhausted).
+	CnodeMerge,
+	/// `__cnode_remove(node, key, hash, shift) -> node` — persistent remove: a
+	/// path-copied node with `key` cleared (unchanged when absent). No canonical
+	/// re-compaction in the HAMT phase — emptied slots are left null.
+	CnodeRemove,
+	/// `__cnode_collect(node, list) -> nothing` — append every `(key, value)` tuple
+	/// under `node` to `list` (in-place `__list_push`), recursing into sub-nodes.
+	/// Backs `__dict_entries`.
+	CnodeCollect,
+	/// `__cnode_tinsert(node, key, val, hash, shift, token) -> node` — the transient
+	/// (in-place / copy-on-write) insert the stdlib builders use; mutates only nodes
+	/// owned by the current `token`. See `helpers/dict.rs`.
+	CnodeTInsert,
+	/// `__cnode_count(node) -> $int` — leaf count under `node` (for the `from-entries`
+	/// size, since duplicates collapse during the build).
+	CnodeCount,
+	/// `__dict_from_entries(list) -> $dict` — `dict.from-entries`, built transiently
+	/// (one owner token, `tinsert` each pair, then `count`).
+	DictFromEntries,
 	WireFp,
 	WireMixStr,
 	WireMixLen,
@@ -331,7 +358,7 @@ impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 73;
+	pub(crate) const COUNT: usize = 80;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable

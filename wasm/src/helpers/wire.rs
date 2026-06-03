@@ -1271,14 +1271,14 @@ pub(crate) fn build_wire_dec_fn(
 		w.block("brk", |w| {
 			w.loop_("lp", |w| {
 				w.local_get(i).local_get(n).i32_ge_u().br_if("brk");
-				// dict_insert(inner, dec(key-schema), dec(value-schema)) — mutates
-				// `inner` in place and returns nothing, so drop the result.
+				// inner = dict_insert(inner, dec(key-schema), dec(value-schema)) —
+				// the dict is persistent, so thread the returned dict back into `inner`.
 				w.local_get(inner);
 				payload_elem(w, 0);
 				w.call(self_idx);
 				payload_elem(w, 1);
 				w.call(self_idx);
-				w.call(dict_insert).drop();
+				w.call(dict_insert).local_set(inner);
 				w.local_get(i).i32(1).i32_add().local_set(i);
 				w.br("lp");
 			});

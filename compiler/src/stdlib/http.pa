@@ -279,7 +279,6 @@ def parse-header :: fun (dict string string) string -> dict string string = fun 
 		let key = string.to-lower (string.trim (list.head kv ?? ""))
 		let value = string.trim (string.join (list.drop kv 1) ":")
 		dict.insert acc key value
-		acc
 	} else {
 		acc
 	}

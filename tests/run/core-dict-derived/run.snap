@@ -10,6 +10,6 @@ ok
 true
 false
 11
-[x, y, z]
-[9, 20, 30]
+[z, x, y]
+[30, 9, 20]
 == stderr ==

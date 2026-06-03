@@ -5,9 +5,9 @@ expression: combined
 == status ==
 ok
 == stdout ==
-{a: 1, b: 2, c: 3}
-{a: 1, b: 2, c: 3}
-dict = {a: 1, b: 2, c: 3}
+{b: 2, c: 3, a: 1}
+{b: 2, c: 3, a: 1}
+dict = {b: 2, c: 3, a: 1}
 {}
 {xs: [1, 2]}
 == stderr ==

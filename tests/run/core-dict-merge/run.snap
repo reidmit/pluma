@@ -6,7 +6,6 @@ expression: combined
 ok
 == stdout ==
 3
-[(x, 1), (y, 22), (z, 3)]
+[(z, 3), (x, 1), (y, 22)]
 22
 == stderr ==
-

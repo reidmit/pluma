@@ -2,11 +2,11 @@ use core.dict
 
 def main = fun {
 	let m = dict.empty ()
-	dict.insert m "a" 10
-	dict.insert m "b" 20
-	dict.insert m "c" 30
+	let m = dict.insert m "a" 10
+	let m = dict.insert m "b" 20
+	let m = dict.insert m "c" 30
 
-	# fold sums values; iteration order is insertion order.
+	# fold sums values; iteration order is unspecified, but the sum isn't.
 	let total = dict.fold m 0 fun acc _k v {
 		acc + v
 	}

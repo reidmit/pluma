@@ -8,8 +8,7 @@ def fill = fun m n {
 	when n is 0 {
 		m
 	} else {
-		dict.insert m (to-string n) n
-		fill m (n - 1)
+		fill (dict.insert m (to-string n) n) (n - 1)
 	}
 }
 

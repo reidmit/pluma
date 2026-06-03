@@ -2,9 +2,9 @@ use core.dict
 
 def main = fun {
 	let m = dict.empty ()
-	dict.insert m 1 "one"
-	dict.insert m 2 "two"
-	dict.insert m 3 "three"
+	let m = dict.insert m 1 "one"
+	let m = dict.insert m 2 "two"
+	let m = dict.insert m 3 "three"
 	when dict.lookup m 2 is some s {
 		print s
 	} is none {
@@ -14,8 +14,8 @@ def main = fun {
 
 	# Boolean keys exercise the bool hash instance.
 	let b = dict.empty ()
-	dict.insert b true "yes"
-	dict.insert b false "no"
+	let b = dict.insert b true "yes"
+	let b = dict.insert b false "no"
 	when dict.lookup b true is some s {
 		print s
 	} is none {

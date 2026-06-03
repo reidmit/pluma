@@ -696,7 +696,7 @@ def parse-object-entries :: fun bytes int int (dict string value) -> result (val
 			} else if bytes.get bs p1 == 58 {
 				when parse-value bs n (p1 + 1) is ok vpair {
 					let (v, p2) = vpair
-					dict.insert acc key v
+					let acc = dict.insert acc key v
 					let p3 = skip-ws bs n p2
 					if p3 >= n {
 						err (fail bs p3 "EOF while parsing an object")

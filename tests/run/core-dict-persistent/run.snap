@@ -5,11 +5,14 @@ expression: combined
 == status ==
 ok
 == stdout ==
-null
+2
+3
+false
 true
-42
-3.14
-"hi"
-[1,2,3]
-{"b":[true,null],"a":1}
+1
+99
+true
+false
+3
+2
 == stderr ==
