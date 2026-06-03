@@ -5,20 +5,20 @@ def main = fun {
 	# Duplicate keys are right-wins.
 	let m = dict.from-entries [("a", 1), ("b", 2), ("a", 99), ("c", 3)]
 	print (dict.size m)
-	when (dict.lookup m "a") is some n {
+	when dict.lookup m "a" is some n {
 		print n
 	} is none {
-		print -1
+		print (-1)
 	}
-	when (dict.lookup m "b") is some n {
+	when dict.lookup m "b" is some n {
 		print n
 	} is none {
-		print -1
+		print (-1)
 	}
-	when (dict.lookup m "c") is some n {
+	when dict.lookup m "c" is some n {
 		print n
 	} is none {
-		print -1
+		print (-1)
 	}
 
 	# entries round-trips back to the same shape (insertion order preserved).

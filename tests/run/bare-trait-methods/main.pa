@@ -16,7 +16,7 @@ def main = fun {
 	print (hash 42)
 	print (hash "hello")
 	print (hash true)
-	print ((hash 42) == (hash 42))
+	print (hash 42 == hash 42)
 
 	# prelude `ord` trait
 	print (describe (compare 1 2))

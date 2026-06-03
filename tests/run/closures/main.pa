@@ -1,5 +1,7 @@
 def make-adder = fun x {
-	fun y { x + y }
+	fun y {
+		x + y
+	}
 }
 
 def main = fun {

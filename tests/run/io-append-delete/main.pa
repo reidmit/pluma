@@ -21,7 +21,7 @@ def main = fun {
 	show-result (io.append-file path "three\n")
 
 	# read it back
-	when (io.read-file path) is ok contents {
+	when io.read-file path is ok contents {
 		let _ = io.write contents
 	} is err msg {
 		print "read err: $(msg)"

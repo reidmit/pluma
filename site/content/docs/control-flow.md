@@ -42,10 +42,10 @@ if n > 10 {
 }
 ```
 
-Because both record literals and blocks are written with `{ ... }`, a `{` following the subject always opens the body. If the subject itself needs to end in a record, wrap it in parens so the trailing brace isn't read as the body:
+Because both record literals and blocks are written with `{ ... }`, a `{` in the subject always opens the body. If the subject passes a record literal, parenthesize that argument so its brace isn't read as the body:
 
 ```pluma
-if (make-config { verbose: true }).enabled {
+if enabled ({ verbose: true }) {
     print "on"
 }
 ```

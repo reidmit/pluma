@@ -205,12 +205,12 @@ def crlf2 :: bytes = string.to-bytes "\r\n\r\n"
 # Accumulate bytes until the blank line that ends the header block (or the
 # peer closes). The leftover after the headers is the start of the body.
 def read-until-headers :: fun net.connection bytes -> task (result bytes string) = fun conn acc {
-	if bytes.contains acc crlf2 is true {
+	if bytes.contains acc crlf2 {
 		task.return (ok acc)
 	} else {
 		try r = net.read conn 4096
 		when r is ok chunk {
-			if bytes.is-empty chunk is true {
+			if bytes.is-empty chunk {
 				task.return (ok acc)
 			} else {
 				read-until-headers conn (bytes.concat acc chunk)
@@ -224,12 +224,12 @@ def read-until-headers :: fun net.connection bytes -> task (result bytes string)
 # Read until the body has `need` bytes (or the peer closes), starting from
 # whatever already arrived with the headers.
 def read-body :: fun net.connection bytes int -> task (result bytes string) = fun conn acc need {
-	if bytes.length acc >= need is true {
+	if bytes.length acc >= need {
 		task.return (ok (bytes.slice acc 0 need))
 	} else {
 		try r = net.read conn 4096
 		when r is ok chunk {
-			if bytes.is-empty chunk is true {
+			if bytes.is-empty chunk {
 				task.return (ok acc)
 			} else {
 				read-body conn (bytes.concat acc chunk) need
@@ -244,7 +244,7 @@ def read-body :: fun net.connection bytes int -> task (result bytes string) = fu
 
 # The list element at `i`, or `fallback` if `i` is past the end.
 def nth :: fun (list string) int string -> string = fun xs i fallback {
-	if i < list.length xs is true {
+	if i < list.length xs {
 		list.get xs i
 	} else {
 		fallback
@@ -252,19 +252,19 @@ def nth :: fun (list string) int string -> string = fun xs i fallback {
 }
 
 def parse-method :: fun string -> method = fun s {
-	if s == "GET" is true {
+	if s == "GET" {
 		method.get
-	} else if s == "POST" is true {
+	} else if s == "POST" {
 		method.post
-	} else if s == "PUT" is true {
+	} else if s == "PUT" {
 		method.put
-	} else if s == "DELETE" is true {
+	} else if s == "DELETE" {
 		method.delete
-	} else if s == "PATCH" is true {
+	} else if s == "PATCH" {
 		method.patch
-	} else if s == "HEAD" is true {
+	} else if s == "HEAD" {
 		method.head
-	} else if s == "OPTIONS" is true {
+	} else if s == "OPTIONS" {
 		method.options
 	} else {
 		method.other s
@@ -275,7 +275,7 @@ def parse-method :: fun string -> method = fun s {
 # the name. Splits on the first colon, so values containing `:` survive.
 def parse-header :: fun (dict string string) string -> dict string string = fun acc line {
 	let kv = string.split line ":"
-	if list.length kv >= 2 is true {
+	if list.length kv >= 2 {
 		let key = string.to-lower (string.trim (list.head kv ?? ""))
 		let value = string.trim (string.join (list.drop kv 1) ":")
 		dict.insert acc key value
@@ -322,12 +322,12 @@ def parse-head :: fun bytes -> {
 # Write every byte of `data`, looping until the connection has taken it all
 # (one `write` can accept fewer bytes than offered).
 def write-all :: fun net.connection bytes -> task (result int string) = fun conn data {
-	if bytes.is-empty data is true {
+	if bytes.is-empty data {
 		task.return (ok 0)
 	} else {
 		try w = net.write conn data
 		when w is ok n {
-			if n >= bytes.length data is true {
+			if n >= bytes.length data {
 				task.return (ok n)
 			} else {
 				write-all conn (bytes.slice data n (bytes.length data))

@@ -3,9 +3,9 @@ use core.list
 # An explicit int comparator (avoids passing the `ord.compare` trait
 # method as a first-class value, which the wasm backend can't wrap yet).
 def cmp :: fun int int -> ordering = fun a b {
-	if a < b is true {
+	if a < b {
 		lt
-	} else if a > b is true {
+	} else if a > b {
 		gt
 	} else {
 		eq
@@ -17,7 +17,9 @@ def main = fun {
 	print (list.sort [5, 4, 3, 2, 1] cmp)
 	print (list.sort [42] cmp)
 	print (list.sort [9, 3, 7, 1, 8, 2, 9, 4, 0, 6, 5, 3, 1, 7, 2] cmp)
-	print (list.sort [1, 2, 3] fun a b { cmp b a })
+	print (list.sort [1, 2, 3] fun a b {
+		cmp b a
+	})
 	let empty :: list int = []
 	print (list.sort empty cmp)
 }

@@ -40,25 +40,45 @@ def lookup-name-as-int = fun v {
 # Helpers to normalize `when` branches to the same type — every branch
 # prints a string.
 def show-opt-string = fun o miss {
-	when o is some s { print s } is none { print miss }
+	when o is some s {
+		print s
+	} is none {
+		print miss
+	}
 }
 
 def show-opt-int = fun o miss {
-	when o is some n { print (to-string n) } is none { print miss }
+	when o is some n {
+		print (to-string n)
+	} is none {
+		print miss
+	}
 }
 
 def show-opt-bool = fun o miss {
-	when o is some b { print (to-string b) } is none { print miss }
+	when o is some b {
+		print (to-string b)
+	} is none {
+		print miss
+	}
 }
 
 def show-opt-float = fun o miss {
-	when o is some f { print (to-string f) } is none { print miss }
+	when o is some f {
+		print (to-string f)
+	} is none {
+		print miss
+	}
 }
 
 def main = fun {
 	when json.parse doc is ok v {
 		# Missing key.
-		when json.get-field v "nope" is some _x { print "found nope" } is none { print "no nope" }
+		when json.get-field v "nope" is some _x {
+			print "found nope"
+		} is none {
+			print "no nope"
+		}
 
 		show-opt-string (lookup-name v) "no name"
 		show-opt-int (lookup-age v) "no age"
@@ -74,7 +94,7 @@ def main = fun {
 		# Wrong type: get-int on a string returns none.
 		show-opt-int (lookup-name-as-int v) "good: not an int"
 
-		print (to-string (json.is-null (json.value.null)))
+		print (to-string (json.is-null json.value.null))
 		print (to-string (json.is-null (json.value.int 0)))
 
 		# get-number coerces `value.int` to float; get-float doesn't.

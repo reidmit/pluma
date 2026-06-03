@@ -1,6 +1,7 @@
 use core.regex as re
 
 def coord = `"(" <x: digit+> "," <y: digit+> ")"`
+
 def num = `digit+`
 
 def main = fun {

@@ -170,7 +170,7 @@ public def format :: fun instant string -> string = fun t fmt {
 public def to-iso :: fun instant -> string = fun t {
 	let p = to-parts t
 	let base = "$(pad-left p.year 4)-$(pad-left p.month 2)-$(pad-left p.day 2)T$(pad-left p.hour 2):$(pad-left p.minute 2):$(pad-left p.second 2)"
-	if p.nanosecond == 0 is true {
+	if p.nanosecond == 0 {
 		base ++ "Z"
 	} else {
 		base ++ "." ++ frac-digits p.nanosecond ++ "Z"
@@ -348,7 +348,7 @@ public def add-months :: fun instant int -> result instant string = fun t n {
 	let ny = floor-div total 12
 	let nm = floor-mod total 12 + 1
 	let dim = days-in-month ny nm
-	let nd = if p.day > dim is true {
+	let nd = if p.day > dim {
 		dim
 	} else {
 		p.day
@@ -362,7 +362,7 @@ public def add-years :: fun instant int -> result instant string = fun t n {
 	let p = to-parts t
 	let ny = p.year + n
 	let dim = days-in-month ny p.month
-	let nd = if p.day > dim is true {
+	let nd = if p.day > dim {
 		dim
 	} else {
 		p.day
@@ -388,9 +388,9 @@ public def after :: fun instant instant -> bool = fun a b {
 public def compare :: fun instant instant -> ordering = fun a b {
 	let x = to-unix-nanos a
 	let y = to-unix-nanos b
-	if x < y is true {
+	if x < y {
 		lt
-	} else if x > y is true {
+	} else if x > y {
 		gt
 	} else {
 		eq
@@ -399,7 +399,7 @@ public def compare :: fun instant instant -> ordering = fun a b {
 
 # The earlier of two instants.
 public def min :: fun instant instant -> instant = fun a b {
-	if before a b is true {
+	if before a b {
 		a
 	} else {
 		b
@@ -408,7 +408,7 @@ public def min :: fun instant instant -> instant = fun a b {
 
 # The later of two instants.
 public def max :: fun instant instant -> instant = fun a b {
-	if after a b is true {
+	if after a b {
 		a
 	} else {
 		b
@@ -427,15 +427,15 @@ public def max :: fun instant instant -> instant = fun a b {
 def floor-div :: fun int int -> int = fun a b {
 	let q = a / b
 	let r = a - q * b
-	if r == 0 is true {
+	if r == 0 {
 		q
-	} else if a < 0 is true {
-		if b < 0 is true {
+	} else if a < 0 {
+		if b < 0 {
 			q
 		} else {
 			q - 1
 		}
-	} else if b < 0 is true {
+	} else if b < 0 {
 		q - 1
 	} else {
 		q
@@ -447,8 +447,8 @@ def floor-mod :: fun int int -> int = fun a b {
 }
 
 def is-leap :: fun int -> bool = fun y {
-	if floor-mod y 4 == 0 is true {
-		if floor-mod y 100 == 0 is true {
+	if floor-mod y 4 == 0 {
+		if floor-mod y 100 == 0 {
 			floor-mod y 400 == 0
 		} else {
 			true
@@ -459,19 +459,19 @@ def is-leap :: fun int -> bool = fun y {
 }
 
 def days-in-month :: fun int int -> int = fun y m {
-	if m == 2 is true {
-		if is-leap y is true {
+	if m == 2 {
+		if is-leap y {
 			29
 		} else {
 			28
 		}
-	} else if m == 4 is true {
+	} else if m == 4 {
 		30
-	} else if m == 6 is true {
+	} else if m == 6 {
 		30
-	} else if m == 9 is true {
+	} else if m == 9 {
 		30
-	} else if m == 11 is true {
+	} else if m == 11 {
 		30
 	} else {
 		31
@@ -482,18 +482,18 @@ def days-in-month :: fun int int -> int = fun y m {
 # proleptic-Gregorian date; the `m <= 2` shift treats Jan/Feb as months
 # 13/14 of the prior year so leap days land at the end of the year.
 def days-from-civil :: fun int int int -> int = fun y0 m d {
-	let y = if m <= 2 is true {
+	let y = if m <= 2 {
 		y0 - 1
 	} else {
 		y0
 	}
-	let era = if y >= 0 is true {
+	let era = if y >= 0 {
 		y
 	} else {
 		y - 399
 	} / 400
 	let yoe = y - era * 400
-	let mp = if m > 2 is true {
+	let mp = if m > 2 {
 		m - 3
 	} else {
 		m + 9
@@ -506,7 +506,7 @@ def days-from-civil :: fun int int int -> int = fun y0 m d {
 # The inverse of `days-from-civil`: a day count back to (year, month, day).
 def civil-from-days :: fun int -> (int, int, int) = fun z0 {
 	let z = z0 + 719468
-	let era = if z >= 0 is true {
+	let era = if z >= 0 {
 		z
 	} else {
 		z - 146096
@@ -517,12 +517,12 @@ def civil-from-days :: fun int -> (int, int, int) = fun z0 {
 	let doy = doe - (365 * yoe + yoe / 4 - yoe / 100)
 	let mp = (5 * doy + 2) / 153
 	let d = doy - (153 * mp + 2) / 5 + 1
-	let m = if mp < 10 is true {
+	let m = if mp < 10 {
 		mp + 3
 	} else {
 		mp - 9
 	}
-	let yy = if m <= 2 is true {
+	let yy = if m <= 2 {
 		y + 1
 	} else {
 		y
@@ -567,9 +567,9 @@ def validate-components :: fun int int int int int int int -> result nothing str
 }
 
 def in-range :: fun int int int -> bool = fun v lo hi {
-	if v < lo is true {
+	if v < lo {
 		false
-	} else if v > hi is true {
+	} else if v > hi {
 		false
 	} else {
 		true
@@ -586,7 +586,7 @@ def pad-left :: fun int int -> string = fun n width {
 }
 
 def pad-left-loop :: fun string int -> string = fun s width {
-	if string.length s >= width is true {
+	if string.length s >= width {
 		s
 	} else {
 		pad-left-loop ("0" ++ s) width
@@ -599,7 +599,7 @@ def frac-digits :: fun int -> string = fun ns {
 }
 
 def trim-trailing-zeros :: fun string -> string = fun s {
-	if string.ends-with s "0" is true {
+	if string.ends-with s "0" {
 		trim-trailing-zeros (string.slice s 0 (string.length s - 1))
 	} else {
 		s
@@ -607,12 +607,12 @@ def trim-trailing-zeros :: fun string -> string = fun s {
 }
 
 def format-loop :: fun parts (list string) int int string -> string = fun p cs i n acc {
-	if i >= n is true {
+	if i >= n {
 		acc
 	} else {
 		let c = list.get cs i
-		if c == "%" is true {
-			if i + 1 >= n is true {
+		if c == "%" {
+			if i + 1 >= n {
 				acc ++ "%"
 			} else {
 				format-loop p cs (i + 2) n (acc ++ directive p (list.get cs (i + 1)))
@@ -626,35 +626,35 @@ def format-loop :: fun parts (list string) int int string -> string = fun p cs i
 # Expand one strftime directive against the broken-out `parts`. Unknown
 # directives pass through literally (`%` + the char).
 def directive :: fun parts string -> string = fun p d {
-	if d == "Y" is true {
+	if d == "Y" {
 		pad-left p.year 4
-	} else if d == "m" is true {
+	} else if d == "m" {
 		pad-left p.month 2
-	} else if d == "d" is true {
+	} else if d == "d" {
 		pad-left p.day 2
-	} else if d == "H" is true {
+	} else if d == "H" {
 		pad-left p.hour 2
-	} else if d == "M" is true {
+	} else if d == "M" {
 		pad-left p.minute 2
-	} else if d == "S" is true {
+	} else if d == "S" {
 		pad-left p.second 2
-	} else if d == "A" is true {
+	} else if d == "A" {
 		weekday-name p.weekday
-	} else if d == "a" is true {
+	} else if d == "a" {
 		string.slice (weekday-name p.weekday) 0 3
-	} else if d == "B" is true {
+	} else if d == "B" {
 		month-name p.month
-	} else if d == "b" is true {
+	} else if d == "b" {
 		string.slice (month-name p.month) 0 3
-	} else if d == "j" is true {
+	} else if d == "j" {
 		pad-left (day-of-year p) 3
-	} else if d == "p" is true {
-		if p.hour < 12 is true {
+	} else if d == "p" {
+		if p.hour < 12 {
 			"AM"
 		} else {
 			"PM"
 		}
-	} else if d == "%" is true {
+	} else if d == "%" {
 		"%"
 	} else {
 		"%" ++ d
@@ -666,17 +666,17 @@ def day-of-year :: fun parts -> int = fun p {
 }
 
 def weekday-name :: fun int -> string = fun w {
-	if w == 1 is true {
+	if w == 1 {
 		"Monday"
-	} else if w == 2 is true {
+	} else if w == 2 {
 		"Tuesday"
-	} else if w == 3 is true {
+	} else if w == 3 {
 		"Wednesday"
-	} else if w == 4 is true {
+	} else if w == 4 {
 		"Thursday"
-	} else if w == 5 is true {
+	} else if w == 5 {
 		"Friday"
-	} else if w == 6 is true {
+	} else if w == 6 {
 		"Saturday"
 	} else {
 		"Sunday"
@@ -684,27 +684,27 @@ def weekday-name :: fun int -> string = fun w {
 }
 
 def month-name :: fun int -> string = fun m {
-	if m == 1 is true {
+	if m == 1 {
 		"January"
-	} else if m == 2 is true {
+	} else if m == 2 {
 		"February"
-	} else if m == 3 is true {
+	} else if m == 3 {
 		"March"
-	} else if m == 4 is true {
+	} else if m == 4 {
 		"April"
-	} else if m == 5 is true {
+	} else if m == 5 {
 		"May"
-	} else if m == 6 is true {
+	} else if m == 6 {
 		"June"
-	} else if m == 7 is true {
+	} else if m == 7 {
 		"July"
-	} else if m == 8 is true {
+	} else if m == 8 {
 		"August"
-	} else if m == 9 is true {
+	} else if m == 9 {
 		"September"
-	} else if m == 10 is true {
+	} else if m == 10 {
 		"October"
-	} else if m == 11 is true {
+	} else if m == 11 {
 		"November"
 	} else {
 		"December"
@@ -721,13 +721,13 @@ def month-name :: fun int -> string = fun m {
 def parse-iso-fields :: fun bytes int -> option (int, int, int, int, int, int, int) = fun bs n {
 	when parse-date-fields bs n is some dp {
 		let (y, mo, d, pos) = dp
-		if pos >= n is true {
+		if pos >= n {
 			some (y, mo, d, 0, 0, 0, 0)
 		} else {
 			let sep = bytes.get bs pos
-			if sep == 84 is true {
+			if sep == 84 {
 				parse-time-fields bs n (pos + 1) y mo d
-			} else if sep == 32 is true {
+			} else if sep == 32 {
 				parse-time-fields bs n (pos + 1) y mo d
 			} else {
 				none
@@ -741,13 +741,13 @@ def parse-iso-fields :: fun bytes int -> option (int, int, int, int, int, int, i
 # Read `YYYY-MM-DD` from the front, returning the three numbers and the
 # cursor past the day (always 10).
 def parse-date-fields :: fun bytes int -> option (int, int, int, int) = fun bs n {
-	if n < 10 is true {
+	if n < 10 {
 		none
 	} else {
 		when read-int bs 0 4 is some y {
-			if bytes.get bs 4 == 45 is true {
+			if bytes.get bs 4 == 45 {
 				when read-int bs 5 2 is some mo {
-					if bytes.get bs 7 == 45 is true {
+					if bytes.get bs 7 == 45 {
 						when read-int bs 8 2 is some d {
 							some (y, mo, d, 10)
 						} is none {
@@ -769,13 +769,13 @@ def parse-date-fields :: fun bytes int -> option (int, int, int, int) = fun bs n
 }
 
 def parse-time-fields :: fun bytes int int int int int -> option (int, int, int, int, int, int, int) = fun bs n pos y mo d {
-	if pos + 8 > n is true {
+	if pos + 8 > n {
 		none
 	} else {
 		when read-int bs pos 2 is some h {
-			if bytes.get bs (pos + 2) == 58 is true {
+			if bytes.get bs (pos + 2) == 58 {
 				when read-int bs (pos + 3) 2 is some mi {
-					if bytes.get bs (pos + 5) == 58 is true {
+					if bytes.get bs (pos + 5) == 58 {
 						when read-int bs (pos + 6) 2 is some sec {
 							parse-frac-zone bs n (pos + 8) y mo d h mi sec
 						} is none {
@@ -800,10 +800,10 @@ def parse-time-fields :: fun bytes int int int int int -> option (int, int, int,
 # require that to be the end of the input.
 def parse-frac-zone :: fun bytes int int int int int int int int -> option (int, int, int, int, int, int, int) = fun bs n pos y mo d h mi sec {
 	let (ns, pos2) = read-optional-frac bs n pos
-	if pos2 >= n is true {
+	if pos2 >= n {
 		some (y, mo, d, h, mi, sec, ns)
-	} else if bytes.get bs pos2 == 90 is true {
-		if pos2 + 1 == n is true {
+	} else if bytes.get bs pos2 == 90 {
+		if pos2 + 1 == n {
 			some (y, mo, d, h, mi, sec, ns)
 		} else {
 			none
@@ -814,9 +814,9 @@ def parse-frac-zone :: fun bytes int int int int int int int int -> option (int,
 }
 
 def read-optional-frac :: fun bytes int int -> (int, int) = fun bs n pos {
-	if pos >= n is true {
+	if pos >= n {
 		(0, pos)
-	} else if bytes.get bs pos == 46 is true {
+	} else if bytes.get bs pos == 46 {
 		read-frac-loop bs n (pos + 1) 0 0
 	} else {
 		(0, pos)
@@ -825,13 +825,13 @@ def read-optional-frac :: fun bytes int int -> (int, int) = fun bs n pos {
 
 # Accumulate up to 9 fractional digits, scaling the result to nanoseconds.
 def read-frac-loop :: fun bytes int int int int -> (int, int) = fun bs n pos acc count {
-	if pos >= n is true {
+	if pos >= n {
 		(scale-to-nanos acc count, pos)
 	} else {
 		let b = bytes.get bs pos
-		if b >= 48 is true {
-			if b <= 57 is true {
-				if count < 9 is true {
+		if b >= 48 {
+			if b <= 57 {
+				if count < 9 {
 					read-frac-loop bs n (pos + 1) (acc * 10 + (b - 48)) (count + 1)
 				} else {
 					read-frac-loop bs n (pos + 1) acc count
@@ -846,7 +846,7 @@ def read-frac-loop :: fun bytes int int int int -> (int, int) = fun bs n pos acc
 }
 
 def scale-to-nanos :: fun int int -> int = fun acc count {
-	if count >= 9 is true {
+	if count >= 9 {
 		acc
 	} else {
 		scale-to-nanos (acc * 10) (count + 1)
@@ -860,12 +860,12 @@ def read-int :: fun bytes int int -> option int = fun bs start len {
 }
 
 def read-int-loop :: fun bytes int int int -> option int = fun bs i end acc {
-	if i >= end is true {
+	if i >= end {
 		some acc
 	} else {
 		let b = bytes.get bs i
-		if b >= 48 is true {
-			if b <= 57 is true {
+		if b >= 48 {
+			if b <= 57 {
 				read-int-loop bs (i + 1) end (acc * 10 + (b - 48))
 			} else {
 				none

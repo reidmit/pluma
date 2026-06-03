@@ -395,7 +395,7 @@ def tests :: test.suite = [
 	},
 	test.case "flat-map can drop elements with empty lists" fun {
 		let evens = list.flat-map [1, 2, 3, 4] fun n {
-			if n % 2 == 0 is true {
+			if n % 2 == 0 {
 				[n]
 			} else {
 				[]

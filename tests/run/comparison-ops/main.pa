@@ -8,11 +8,13 @@ def main = fun {
 	print (3 > 2)
 	print (3 >= 3)
 
-	if (5 > 3) is true {
+	if 5 > 3 {
 		print "five > three"
 	}
 
-	let in-range = fun n { (n >= 1) && (n <= 10) }
+	let in-range = fun n {
+		n >= 1 && n <= 10
+	}
 	print (in-range 5)
 	print (in-range 20)
 }

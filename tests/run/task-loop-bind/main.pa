@@ -4,14 +4,18 @@
 # bound `d`, folds it into the accumulator, and continues. Sum is 2+4+6 = 12.
 use core.task
 
-def double = fun x { task.return (x + x) }
+def double = fun x {
+	task.return (x + x)
+}
 
 def main = fun {
 	let acc = ref.new 0
 	let cursor = ref.new [1, 2, 3]
-	while (ref.get cursor) is [head, ...tail] {
+	while ref.get cursor is [head, ...tail] {
 		try d = double head
-		ref.update acc fun n { n + d }
+		ref.update acc fun n {
+			n + d
+		}
 		ref.set cursor tail
 	}
 	print (to-string (ref.get acc))

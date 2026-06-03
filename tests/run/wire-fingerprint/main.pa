@@ -9,6 +9,7 @@ enum status-v1 {
 	suspended
 	banned
 }
+
 enum status-v2 {
 	banned
 	suspended
@@ -17,15 +18,15 @@ enum status-v2 {
 
 def main = fun {
 	# Same shape (recomputed) → same fingerprint; drift → different.
-	let a = wire.fingerprint { id: 1, name: "x" }
-	let b = wire.fingerprint { id: 2, name: "y" }
+	let a = wire.fingerprint {id: 1, name: "x"}
+	let b = wire.fingerprint {id: 2, name: "y"}
 	print "same shape agrees: $(to-string (a == b))"
 
-	let v1 = wire.fingerprint (status-v1.active)
-	let v2 = wire.fingerprint (status-v2.active)
+	let v1 = wire.fingerprint status-v1.active
+	let v2 = wire.fingerprint status-v2.active
 	print "reordered enum differs: $(to-string (v1 == v2))"
 
-	if v1 == v2 is true {
+	if v1 == v2 {
 		print "match -> decode"
 	} else {
 		print "skew -> reject (reload)"

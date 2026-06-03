@@ -5,7 +5,13 @@
 use core.list
 
 def main = fun {
-	let adders = list.build 5000 fun i { fun x { x + i } }
-	let total = list.fold adders 0 fun acc f { f acc }
+	let adders = list.build 5000 fun i {
+		fun x {
+			x + i
+		}
+	}
+	let total = list.fold adders 0 fun acc f {
+		f acc
+	}
 	print (to-string total)
 }

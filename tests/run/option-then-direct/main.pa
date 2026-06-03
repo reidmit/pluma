@@ -3,7 +3,7 @@
 # `some v` invokes the continuation; `none` short-circuits.
 
 def double-if-positive = fun n {
-	if n > 0 is true {
+	if n > 0 {
 		some (n * 2)
 	} else {
 		none
@@ -13,13 +13,25 @@ def double-if-positive = fun n {
 def main = fun {
 	# some -> some
 	let a = option.then (some 5) double-if-positive
-	when a is some v { print v } is none { print (0 - 1) }
+	when a is some v {
+		print v
+	} is none {
+		print (0 - 1)
+	}
 
 	# some -> none (short-circuits at the continuation)
 	let b = option.then (some (0 - 3)) double-if-positive
-	when b is some v { print v } is none { print (0 - 1) }
+	when b is some v {
+		print v
+	} is none {
+		print (0 - 1)
+	}
 
 	# none -> none (short-circuits on the input)
 	let c = option.then none double-if-positive
-	when c is some v { print v } is none { print (0 - 1) }
+	when c is some v {
+		print v
+	} is none {
+		print (0 - 1)
+	}
 }

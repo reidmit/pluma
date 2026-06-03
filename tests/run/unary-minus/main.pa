@@ -6,9 +6,9 @@ def main = fun {
 	let a = 10
 
 	# `f -x` (space-no-space) parses as `f(-x)`, not `f - x`
-	print (neg -3)
+	print (neg (-3))
 	# call neg with arg -3 -> 3
-	print (neg -a)
+	print (neg (-a))
 
 	# call neg with arg -a -> 10
 

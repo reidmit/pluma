@@ -4,9 +4,17 @@
 # `TailCall` (already frame-reusing); only the helper calls are inlined. Stresses
 # call-frame overhead (push/arg-copy/Return/truncate) vs inlined straight-line code.
 
-def inc = fun x { x + 1 }
-def dbl = fun x { x * 2 }
-def mix = fun a b { (a + b) % 1000000 }
+def inc = fun x {
+	x + 1
+}
+
+def dbl = fun x {
+	x * 2
+}
+
+def mix = fun a b {
+	(a + b) % 1000000
+}
 
 def go = fun n acc {
 	when n is 0 {

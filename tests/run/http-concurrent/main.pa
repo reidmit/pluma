@@ -22,9 +22,9 @@ use core.list
 # `fuel` bounds the wait so a sequential server -- where the second handler
 # never starts -- ends the run rather than spinning forever.
 def await-pair :: fun (ref int) int -> task bool = fun gate fuel {
-	if ref.get gate >= 2 is true {
+	if ref.get gate >= 2 {
 		task.return true
-	} else if fuel <= 0 is true {
+	} else if fuel <= 0 {
 		task.return false
 	} else {
 		try _ = task.sleep 5ms
@@ -36,7 +36,7 @@ def await-pair :: fun (ref int) int -> task bool = fun gate fuel {
 def drain :: fun net.connection bytes -> task (result bytes string) = fun conn acc {
 	try r = net.read conn 4096
 	when r is ok chunk {
-		if bytes.is-empty chunk is true {
+		if bytes.is-empty chunk {
 			task.return (ok acc)
 		} else {
 			drain conn (bytes.concat acc chunk)
@@ -74,7 +74,7 @@ def main = fun {
 				let n = ref.get gate
 				let _ = ref.set gate (n + 1)
 				try paired = await-pair gate 400
-				if paired is true {
+				if paired {
 					task.return (http.text 200 ("paired " ++ req.path))
 				} else {
 					task.return (http.text 200 ("alone " ++ req.path))

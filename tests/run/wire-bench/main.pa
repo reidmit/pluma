@@ -10,12 +10,18 @@ def loop = fun data n acc {
 	} else {
 		let bytes = wire.encode data
 		let back :: result (list (int, int)) wire-error = wire.decode bytes
-		let len = when back is ok xs { list.length xs } is err _e { 0 }
+		let len = when back is ok xs {
+			list.length xs
+		} is err _e {
+			0
+		}
 		loop data (n - 1) (acc + len)
 	}
 }
 
 def main = fun {
-	let data = list.build 400 fun i { (i, i * 2) }
+	let data = list.build 400 fun i {
+		(i, i * 2)
+	}
 	print (to-string (loop data 150 0))
 }

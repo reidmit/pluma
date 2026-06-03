@@ -1,7 +1,9 @@
 # `ref` is auto-imported in every module — no `use core.ref` needed.
 
 def bump = fun r {
-	ref.update r fun n { n + 1 }
+	ref.update r fun n {
+		n + 1
+	}
 }
 
 def main = fun {

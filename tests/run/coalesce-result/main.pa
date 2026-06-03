@@ -2,7 +2,11 @@
 # (the error value is discarded). Desugars to `result.or-else`.
 
 def parse = fun ok-it {
-	if (ok-it) is true { ok 42 } else { err "bad input" }
+	if ok-it {
+		ok 42
+	} else {
+		err "bad input"
+	}
 }
 
 def main = fun {
@@ -10,6 +14,6 @@ def main = fun {
 	print (parse false ?? 0)
 
 	# the discarded error type can differ from the payload type
-	print ((ok "value") ?? "default")
-	print ((err 404) ?? "default")
+	print (ok "value" ?? "default")
+	print (err 404 ?? "default")
 }

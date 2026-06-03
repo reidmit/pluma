@@ -12,6 +12,8 @@ def main = fun {
 	list.each (list.sort words ord.compare) print
 
 	# Reverse-order via a closure that swaps args.
-	let descending = list.sort xs fun a b { ord.compare b a }
+	let descending = list.sort xs fun a b {
+		ord.compare b a
+	}
 	list.each descending print
 }

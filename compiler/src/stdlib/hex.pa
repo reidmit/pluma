@@ -12,7 +12,7 @@ use core.string
 public def encode :: fun bytes -> string = fun b {
 	let out = bytes.build (bytes.length b * 2) fun j {
 		let byte = bytes.get b (j / 2)
-		let nibble = if j % 2 == 0 is true {
+		let nibble = if j % 2 == 0 {
 			byte / 16
 		} else {
 			byte % 16
@@ -24,7 +24,7 @@ public def encode :: fun bytes -> string = fun b {
 
 # The ASCII byte of the lowercase hex digit for `v` (0-15): '0'-'9' then 'a'-'f'.
 def hex-digit :: fun int -> int = fun v {
-	if v < 10 is true {
+	if v < 10 {
 		v + 48
 	} else {
 		v + 87
@@ -39,9 +39,9 @@ def hex-digit :: fun int -> int = fun v {
 public def decode :: fun string -> result bytes string = fun s {
 	let sb = string.to-bytes s
 	let n = bytes.length sb
-	if n % 2 != 0 is true {
+	if n % 2 != 0 {
 		err "hex string has odd length"
-	} else if all-hex sb n 0 is true {
+	} else if all-hex sb n 0 {
 		ok (bytes.build (n / 2) fun i {
 			let hi = hex-value (bytes.get sb (i * 2))
 			let lo = hex-value (bytes.get sb (i * 2 + 1))
@@ -54,11 +54,11 @@ public def decode :: fun string -> result bytes string = fun s {
 
 # The value 0-15 of a hex-digit byte, or -1 if it isn't one.
 def hex-value :: fun int -> int = fun c {
-	if c >= 48 && c <= 57 is true {
+	if c >= 48 && c <= 57 {
 		c - 48
-	} else if c >= 97 && c <= 102 is true {
+	} else if c >= 97 && c <= 102 {
 		c - 87
-	} else if c >= 65 && c <= 70 is true {
+	} else if c >= 65 && c <= 70 {
 		c - 55
 	} else {
 		-1
@@ -67,9 +67,9 @@ def hex-value :: fun int -> int = fun c {
 
 # Are all of `b[0..n]` hex-digit bytes?
 def all-hex :: fun bytes int int -> bool = fun b n i {
-	if i >= n is true {
+	if i >= n {
 		true
-	} else if hex-value (bytes.get b i) >= 0 is true {
+	} else if hex-value (bytes.get b i) >= 0 {
 		all-hex b n (i + 1)
 	} else {
 		false

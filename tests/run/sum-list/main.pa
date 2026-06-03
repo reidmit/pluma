@@ -17,7 +17,7 @@ def sum = fun xs {
 	when xs is empty {
 		0
 	} is cons head tail {
-		head + (sum tail)
+		head + sum tail
 	}
 }
 

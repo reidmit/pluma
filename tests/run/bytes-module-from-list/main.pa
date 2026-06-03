@@ -1,8 +1,11 @@
 use core.bytes
 
 def show = fun r {
-	when r is ok b { print (to-string b) }
-	is err e { print e }
+	when r is ok b {
+		print (to-string b)
+	} is err e {
+		print e
+	}
 }
 
 def main = fun {

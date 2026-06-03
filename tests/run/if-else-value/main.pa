@@ -2,14 +2,12 @@
 # agree on type. Used here as a function's tail and as a sub-expression.
 
 def clamp = fun n lo hi {
-	if (n < lo) is true {
+	if n < lo {
 		lo
+	} else if n > hi {
+		hi
 	} else {
-		if (n > hi) is true {
-			hi
-		} else {
-			n
-		}
+		n
 	}
 }
 
@@ -19,7 +17,7 @@ def main = fun {
 	print (clamp 15 0 10)
 
 	# As a sub-expression inside arithmetic
-	let bonus = if (3 > 1) is true {
+	let bonus = if 3 > 1 {
 		100
 	} else {
 		0

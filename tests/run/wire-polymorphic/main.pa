@@ -5,7 +5,9 @@
 use core.hex
 
 # Constraint inferred from the `encode` use — no explicit `where`.
-def dump = fun x { wire.encode x }
+def dump = fun x {
+	wire.encode x
+}
 
 # Explicit `where (wire a)`, round-tripping through the polymorphic boundary.
 def roundtrip :: fun a -> result a wire-error where (wire a) = fun x {

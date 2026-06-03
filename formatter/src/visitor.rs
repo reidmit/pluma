@@ -1,5 +1,5 @@
 use compiler::ast::*;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 
 use crate::doc::*;
@@ -7,6 +7,11 @@ use crate::doc::*;
 pub(crate) struct Formatter<'a> {
 	comments: &'a HashMap<usize, String>,
 	consumed: RefCell<HashSet<usize>>,
+	// True while printing an `if`/`while` subject spine, where a `{` opens the
+	// body: a record literal reached at this level must be parenthesized to
+	// round-trip. Set by `format_subject`, lifted on descent into any delimiter
+	// or keyword-led construct (see `fmt_prec`).
+	restrict_brace: Cell<bool>,
 }
 
 impl<'a> Formatter<'a> {
@@ -14,6 +19,7 @@ impl<'a> Formatter<'a> {
 		Self {
 			comments,
 			consumed: RefCell::new(HashSet::new()),
+			restrict_brace: Cell::new(false),
 		}
 	}
 
@@ -375,13 +381,32 @@ impl<'a> Formatter<'a> {
 
 	fn fmt_prec(&self, e: &ExprNode, min_prec: u8, tail: bool) -> Doc {
 		if let ExprKind::Grouping(inner) = &e.kind {
+			// Transparent: a source grouping carries no restriction of its own.
 			return self.fmt_prec(inner, min_prec, tail);
 		}
-		let doc = self.render_expr(e, tail);
-		if expr_prec(e) < min_prec {
-			concat(vec![text("("), doc, text(")")])
-		} else {
+		// In an `if`/`while` subject, a bare record literal would have its `{`
+		// read as the body, so wrap it (`f ({ x: 1 })`). Inside the parens the
+		// restriction is lifted, like any delimiter.
+		let restrict = self.restrict_brace.get();
+		let brace_guard =
+			restrict && matches!(e.kind, ExprKind::Record(..) | ExprKind::RecordUpdate { .. });
+		if brace_guard || expr_prec(e) < min_prec {
+			let saved = self.restrict_brace.replace(false);
+			let doc = self.render_expr(e, tail);
+			self.restrict_brace.set(saved);
+			return concat(vec![text("("), doc, text(")")]);
+		}
+		// No parens here. The restriction only follows the brace-sensitive spine
+		// — nodes whose children print bare (calls, operators, accesses,
+		// `defer`/`try`/`let` operands). Everything else wraps its children in a
+		// delimiter or is keyword-led, so lift the restriction for them.
+		if restrict && !is_brace_spine(e) {
+			let saved = self.restrict_brace.replace(false);
+			let doc = self.render_expr(e, tail);
+			self.restrict_brace.set(saved);
 			doc
+		} else {
+			self.render_expr(e, tail)
 		}
 	}
 
@@ -762,6 +787,15 @@ impl<'a> Formatter<'a> {
 		}
 	}
 
+	// Print an `if`/`while` subject, parenthesizing it when its bare form would
+	// expose a `{` the brace-restricted parser would read as the body.
+	fn format_subject(&self, e: &ExprNode) -> Doc {
+		let saved = self.restrict_brace.replace(true);
+		let doc = self.format_expr(e);
+		self.restrict_brace.set(saved);
+		doc
+	}
+
 	fn format_if(&self, i: &IfNode) -> Doc {
 		// `if` always lays out multi-line, mirroring `when`:
 		//
@@ -773,7 +807,7 @@ impl<'a> Formatter<'a> {
 		//
 		// `} else {` sits on the same line as the body's closing brace. The
 		// `is PATTERN` is elided for the canonical boolean case (`is true`).
-		let mut parts: Vec<Doc> = vec![text("if "), self.format_expr(&i.subject)];
+		let mut parts: Vec<Doc> = vec![text("if "), self.format_subject(&i.subject)];
 		if !pattern_is_true(&i.pattern) {
 			parts.push(text(" is "));
 			parts.push(self.format_pattern(&i.pattern));
@@ -849,7 +883,7 @@ impl<'a> Formatter<'a> {
 	}
 
 	fn format_while(&self, w: &WhileNode) -> Doc {
-		let mut parts: Vec<Doc> = vec![text("while "), self.format_expr(&w.subject)];
+		let mut parts: Vec<Doc> = vec![text("while "), self.format_subject(&w.subject)];
 		if !pattern_is_true(&w.pattern) {
 			parts.push(text(" is "));
 			parts.push(self.format_pattern(&w.pattern));
@@ -1084,6 +1118,35 @@ fn pattern_is_true(p: &PatternNode) -> bool {
 			kind: LiteralKind::Bool(true),
 			..
 		})
+	)
+}
+
+// An `if`/`while` subject is parsed under brace restriction: the first
+// top-level `{` opens the body, never a record literal. So a subject whose
+// printed form would expose a top-level `{` must be parenthesized to
+// round-trip. Groupings are transparent here because `fmt` strips redundant
+// parens, so the guard is re-derived from structure rather than trusting source
+// parens. Record/record-update/`fun`/block-headed expressions print a `{`
+// directly; `(...)`/`[...]` protect any braces nested inside; compositional
+// forms expose a brace iff a bare child does.
+// Whether `e` continues the brace-sensitive spine of an `if`/`while` subject:
+// its syntax prints at least one child bare (no enclosing delimiter), so a
+// record reached through that child is still exposed to the body-opening `{`.
+// Records/record-updates are handled separately (they're the thing wrapped);
+// every other kind is either an atom or wraps its children in a delimiter or
+// keyword, ending the spine.
+fn is_brace_spine(e: &ExprNode) -> bool {
+	use ExprKind::*;
+	matches!(
+		&e.kind,
+		Call(..)
+			| BinaryOperation { .. }
+			| UnaryOperation { .. }
+			| FieldAccess { .. }
+			| ElementAccess { .. }
+			| Defer(..)
+			| Try(..)
+			| Let(..)
 	)
 }
 

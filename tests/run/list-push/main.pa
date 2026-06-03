@@ -23,5 +23,7 @@ def main = fun {
 	} else {
 		print "empty"
 	}
-	print (to-string (list.fold acc 0 fun a x { a + x }))
+	print (to-string (list.fold acc 0 fun a x {
+		a + x
+	}))
 }

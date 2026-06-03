@@ -3,10 +3,7 @@
 # body's `{`. Exhaustiveness recognizes the all-binding record as a
 # catch-all of the variant.
 
-alias person {
-	name  :: string
-	score :: int
-}
+alias person {name :: string, score :: int}
 
 enum entry {
 	missing

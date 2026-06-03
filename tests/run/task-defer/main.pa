@@ -2,6 +2,7 @@
 # LIFO, even across suspension points (`try`). The cleanups are anchored to
 # the task frame and survive each await.
 use core.task
+
 def main = fun {
 	defer print "deferred A (last)"
 	try _ = task.sleep 1ms

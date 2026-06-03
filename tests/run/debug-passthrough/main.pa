@@ -12,7 +12,7 @@ def main = fun {
 	print "doubled: $(to-string (x * 2))"
 
 	# inline in a call argument
-	let added = (debug 3) + (debug 4)
+	let added = debug 3 + debug 4
 	print "sum: $(to-string added)"
 
 	# works on any type (compiler magic, same as to-string)

@@ -73,7 +73,7 @@ def class-matches = fun name b {
 # ---- zero-width anchors ----
 
 def word-before = fun input pos {
-	if pos > 0 is true {
+	if pos > 0 {
 		is-word-byte (bytes.get input (pos - 1))
 	} else {
 		false
@@ -81,7 +81,7 @@ def word-before = fun input pos {
 }
 
 def word-after = fun input pos {
-	if pos < bytes.length input is true {
+	if pos < bytes.length input {
 		is-word-byte (bytes.get input pos)
 	} else {
 		false
@@ -103,9 +103,9 @@ def anchor-ok = fun name input pos {
 # ---- literal byte-run matching ----
 
 def lit-eq-at = fun input pos lit i n {
-	if i >= n is true {
+	if i >= n {
 		true
-	} else if bytes.get input (pos + i) == bytes.get lit i is true {
+	} else if bytes.get input (pos + i) == bytes.get lit i {
 		lit-eq-at input pos lit (i + 1) n
 	} else {
 		false
@@ -114,7 +114,7 @@ def lit-eq-at = fun input pos lit i n {
 
 def match-literal = fun input pos lit {
 	let n = bytes.length lit
-	if pos + n <= bytes.length input is true {
+	if pos + n <= bytes.length input {
 		lit-eq-at input pos lit 0 n
 	} else {
 		false
@@ -123,7 +123,7 @@ def match-literal = fun input pos lit {
 
 # `-1` budget means unbounded; this decrements a finite budget but keeps -1.
 def dec-budget = fun hi {
-	if hi == 0 - 1 is true {
+	if hi == 0 - 1 {
 		0 - 1
 	} else {
 		hi - 1
@@ -134,14 +134,14 @@ def dec-budget = fun hi {
 
 def re-match = fun pat input pos caps k {
 	when pat is p-literal lit {
-		if match-literal input pos lit is true {
+		if match-literal input pos lit {
 			k (pos + bytes.length lit) caps
 		} else {
 			none
 		}
 	} is p-class name {
-		if pos < bytes.length input is true {
-			if class-matches name (bytes.get input pos) is true {
+		if pos < bytes.length input {
+			if class-matches name (bytes.get input pos) {
 				k (pos + 1) caps
 			} else {
 				none
@@ -150,7 +150,7 @@ def re-match = fun pat input pos caps k {
 			none
 		}
 	} is p-anchor name {
-		if anchor-ok name input pos is true {
+		if anchor-ok name input pos {
 			k pos caps
 		} else {
 			none
@@ -192,17 +192,17 @@ def re-alt = fun parts input pos caps k {
 
 # `inner` repeated between `lo` and `hi` times (hi = -1 unbounded), greedy.
 def re-repeat = fun inner lo hi input pos caps k {
-	if lo > 0 is true {
+	if lo > 0 {
 		re-match inner input pos caps fun p2 c2 {
 			re-repeat inner (lo - 1) (dec-budget hi) input p2 c2 k
 		}
-	} else if hi == 0 is true {
+	} else if hi == 0 {
 		k pos caps
 	} else {
 		# Greedy: try one more (requiring forward progress to avoid an
 		# infinite empty-match loop), otherwise stop and run `k` here.
 		when re-match inner input pos caps fun p2 c2 {
-			if p2 > pos is true {
+			if p2 > pos {
 				re-repeat inner 0 (dec-budget hi) input p2 c2 k
 			} else {
 				none
@@ -224,7 +224,7 @@ def match-at = fun pat input start {
 
 # Leftmost search at or after `start`: `some (match-start, match-end, caps)`.
 def search-from = fun pat input start {
-	if start <= bytes.length input is true {
+	if start <= bytes.length input {
 		when match-at pat input start is some pair {
 			let (endp, caps) = pair
 			some (start, endp, caps)
@@ -241,7 +241,7 @@ def search-from = fun pat input start {
 def collect-spans = fun pat input start acc {
 	when search-from pat input start is some triple {
 		let (ms, me, caps) = triple
-		let nexti = if me > ms is true {
+		let nexti = if me > ms {
 			me
 		} else {
 			me + 1
@@ -263,7 +263,7 @@ def slice-str = fun input start end {
 def caps-to-dict = fun input caps {
 	list.fold caps (dict.empty ()) fun acc entry {
 		let (name, s, e) = entry
-		if dict.contains-key acc name is true {
+		if dict.contains-key acc name {
 			acc
 		} else {
 			dict.insert acc name (slice-str input s e)
@@ -279,9 +279,9 @@ def build-match = fun input ms me caps {
 # ---- ${name} / ${0} / $$ replacement expansion ----
 
 def find-byte = fun b target i {
-	if i >= bytes.length b is true {
+	if i >= bytes.length b {
 		0 - 1
-	} else if bytes.get b i == target is true {
+	} else if bytes.get b i == target {
 		i
 	} else {
 		find-byte b target (i + 1)
@@ -291,7 +291,7 @@ def find-byte = fun b target i {
 # The text a `${name}` reference resolves to: `${0}` is the whole match, a
 # named group is its captured slice, and an unmatched name is empty.
 def group-text = fun name caps input ms me {
-	if name == "0" is true {
+	if name == "0" {
 		slice-str input ms me
 	} else {
 		when cap-span caps name is some span {
@@ -306,7 +306,7 @@ def group-text = fun name caps input ms me {
 def cap-span = fun caps name {
 	if caps is [entry, ...rest] {
 		let (n, s, e) = entry
-		if n == name is true {
+		if n == name {
 			some (s, e)
 		} else {
 			cap-span rest name
@@ -320,15 +320,15 @@ def cap-span = fun caps name {
 # paired with the index just past the token.
 def expand-token = fun rb caps input ms me dollar {
 	let after = dollar + 1
-	if after >= bytes.length rb is true {
+	if after >= bytes.length rb {
 		("$", after)
 	} else {
 		let n = bytes.get rb after
-		if n == 36 is true {
+		if n == 36 {
 			("$", dollar + 2)
-		} else if n == 123 is true {
+		} else if n == 123 {
 			let close = find-byte rb 125 after
-			if close < 0 is true {
+			if close < 0 {
 				("$", after)
 			} else {
 				(group-text (slice-str rb (after + 1) close) caps input ms me, close + 1)
@@ -340,11 +340,11 @@ def expand-token = fun rb caps input ms me dollar {
 }
 
 def expand-loop = fun rb caps input ms me i acc {
-	if i >= bytes.length rb is true {
+	if i >= bytes.length rb {
 		acc
 	} else {
 		let dollar = find-byte rb 36 i
-		if dollar < 0 is true {
+		if dollar < 0 {
 			acc ++ slice-str rb i (bytes.length rb)
 		} else {
 			let literal = slice-str rb i dollar

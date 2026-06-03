@@ -34,7 +34,7 @@ def raw-int-range :: fun int int -> int = built-in "random-int-range"
 #     random.bytes 16   # => ok (16 random bytes)
 #     random.bytes -1   # => err "random.bytes: negative length: -1"
 public def bytes :: fun int -> result bytes string = fun n {
-	if n < 0 is true {
+	if n < 0 {
 		err "random.bytes: negative length: $(to-string n)"
 	} else {
 		ok (raw-bytes n)
@@ -47,7 +47,7 @@ public def bytes :: fun int -> result bytes string = fun n {
 #     random.int-range 1 7   # => ok n, where n is 1 through 6 (a die roll)
 #     random.int-range 5 5   # => err "random.int-range: low (5) >= high (5)"
 public def int-range :: fun int int -> result int string = fun lo hi {
-	if lo >= hi is true {
+	if lo >= hi {
 		err "random.int-range: low ($(to-string lo)) >= high ($(to-string hi))"
 	} else {
 		ok (raw-int-range lo hi)
@@ -67,7 +67,7 @@ public def bool :: fun nothing -> bool = fun {
 #     random.choice ["heads", "tails"]   # => some "heads" or some "tails"
 #     random.choice []                   # => none
 public def choice :: fun (list a) -> option a = fun xs {
-	if list.is-empty xs is true {
+	if list.is-empty xs {
 		none
 	} else {
 		# `float ()` is in [0, 1), so scaling by the length and truncating

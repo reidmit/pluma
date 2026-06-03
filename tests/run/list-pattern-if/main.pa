@@ -19,8 +19,10 @@ def main = fun {
 	let counter = ref.new 0
 	let items = [10, 20, 30, 40]
 	let cursor = ref.new items
-	while (ref.get cursor) is [_, ...tail] {
-		ref.update counter fun n { n + 1 }
+	while ref.get cursor is [_, ...tail] {
+		ref.update counter fun n {
+			n + 1
+		}
 		ref.set cursor tail
 	}
 	print (to-string (ref.get counter))

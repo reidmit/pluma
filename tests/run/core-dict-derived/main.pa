@@ -14,7 +14,9 @@ def main = fun {
 	print (dict.contains-key m "x")
 	print (dict.contains-key m "z")
 
-	print (dict.fold m 0 fun acc _k v { acc + v })
+	print (dict.fold m 0 fun acc _k v {
+		acc + v
+	})
 
 	let other = dict.from-entries [("y", 20), ("z", 30)]
 	let merged = dict.merge m other

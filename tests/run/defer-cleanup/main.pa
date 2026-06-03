@@ -2,7 +2,11 @@
 # path. Multiple defers run LIFO; a defer that was never reached never runs.
 
 def get = fun ok-it {
-	if ok-it is true { ok 5 } else { err "boom" }
+	if ok-it {
+		ok 5
+	} else {
+		err "boom"
+	}
 }
 
 # Cleanup runs on the normal-return path *and* on the `try`-failure path.
@@ -19,7 +23,7 @@ def run-it = fun ok-it {
 # A defer inside a branch only fires if that branch actually executed.
 def cond = fun flag {
 	defer print "always"
-	if flag is true {
+	if flag {
 		defer print "only-when-true"
 		print "true branch"
 	} else {

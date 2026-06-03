@@ -19,10 +19,7 @@ def main = fun {
 	greet-each [{name: "reid"}, {name: "alice"}, {name: "bob"}]
 
 	# Combined: nested list of records inside a record.
-	let report = {
-		title: "summary"
-		rows: [{user: "u1", n: 1}, {user: "u2", n: 2}]
-	}
+	let report = {title: "summary", rows: [{user: "u1", n: 1}, {user: "u2", n: 2}]}
 	when report is {title: t, rows: [{user: u, ...}, ...]} {
 		print t
 		print u

@@ -2,7 +2,11 @@
 # fallible side effect whose ok payload isn't interesting.
 
 def step = fun n {
-	if n > 0 is true { ok n } else { err "non-positive" }
+	if n > 0 {
+		ok n
+	} else {
+		err "non-positive"
+	}
 }
 
 def chain = fun x {
@@ -13,8 +17,16 @@ def chain = fun x {
 
 def main = fun {
 	let r1 = chain 3
-	when r1 is ok v { print v } is err _ { print (0 - 1) }
+	when r1 is ok v {
+		print v
+	} is err _ {
+		print (0 - 1)
+	}
 
 	let r2 = chain (0 - 2)
-	when r2 is ok v { print v } is err _ { print (0 - 1) }
+	when r2 is ok v {
+		print v
+	} is err _ {
+		print (0 - 1)
+	}
 }

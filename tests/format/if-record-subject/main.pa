@@ -1,0 +1,20 @@
+# A record literal inside an `if`/`while` subject would have its `{` read as
+# the body, so the formatter parenthesizes the record itself (the minimal
+# offending node) rather than the whole subject: `enabled ({ on: true })`, not
+# `(enabled { on: true })`. A record receiver keeps its own parens too.
+
+def enabled = fun cfg { cfg.on }
+
+def main = fun {
+	if (enabled { on: true }) {
+		print "on"
+	}
+
+	if ({ on: false }).on {
+		print "unreachable"
+	}
+
+	while (enabled { on: false }) {
+		print "loop"
+	}
+}

@@ -13,7 +13,9 @@ def main = fun {
 		print (to-string first)
 		print (to-string (list.length tail))
 		# tail has the same element type, can be re-summed
-		let doubled = list.map tail fun n { n * 2 }
+		let doubled = list.map tail fun n {
+			n * 2
+		}
 		each-print doubled
 	} else {
 		print "unreachable"

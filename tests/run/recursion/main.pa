@@ -7,7 +7,7 @@ def sum = fun t {
 	when t is empty {
 		0
 	} is node val l r {
-		val + (sum l) + (sum r)
+		val + sum l + sum r
 	}
 }
 

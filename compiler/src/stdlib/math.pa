@@ -41,7 +41,7 @@ public def sqrt :: fun float -> float = built-in "math-sqrt"
 #     math.abs -5   # => 5
 #     math.abs 5    # => 5
 public def abs :: fun int -> int = fun n {
-	if n < 0 is true {
+	if n < 0 {
 		0 - n
 	} else {
 		n
@@ -57,7 +57,7 @@ public def floor :: fun float -> int = fun f {
 	# `to-int` truncates toward zero, so for a negative with a fractional
 	# part it lands one above the floor -- step back down.
 	let t = to-int f
-	if to-float t > f is true {
+	if to-float t > f {
 		t - 1
 	} else {
 		t
@@ -71,7 +71,7 @@ public def floor :: fun float -> int = fun f {
 #     math.ceil -3.7   # => -3
 public def ceil :: fun float -> int = fun f {
 	let t = to-int f
-	if to-float t < f is true {
+	if to-float t < f {
 		t + 1
 	} else {
 		t
@@ -86,7 +86,7 @@ public def ceil :: fun float -> int = fun f {
 public def round :: fun float -> int = fun f {
 	# Nudge half a unit toward the answer, then snap with floor/ceil so the
 	# halves break away from zero.
-	if f < 0.0 is true {
+	if f < 0.0 {
 		ceil (f - 0.5)
 	} else {
 		floor (f + 0.5)

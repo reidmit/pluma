@@ -37,11 +37,11 @@ public def length :: fun string -> int = fun s {
 # Counts characters by counting the bytes that *start* one: every byte
 # except a UTF-8 continuation byte (0x80-0xBF) begins a new character.
 def count-chars :: fun bytes int int int -> int = fun b n i acc {
-	if i >= n is true {
+	if i >= n {
 		acc
 	} else {
 		let byte = bytes.get b i
-		if byte >= 128 && byte < 192 is true {
+		if byte >= 128 && byte < 192 {
 			count-chars b n (i + 1) acc
 		} else {
 			count-chars b n (i + 1) (acc + 1)
@@ -71,11 +71,11 @@ public def is-empty :: fun string -> bool = fun s {
 # Valid only at a character boundary; strings are always well-formed
 # UTF-8, so callers that step boundary-to-boundary stay on one.
 def char-len :: fun int -> int = fun b0 {
-	if b0 < 128 is true {
+	if b0 < 128 {
 		1
-	} else if b0 < 224 is true {
+	} else if b0 < 224 {
 		2
-	} else if b0 < 240 is true {
+	} else if b0 < 240 {
 		3
 	} else {
 		4
@@ -87,7 +87,7 @@ def char-len :: fun int -> int = fun b0 {
 # byte length `n` when the string runs out first, so callers get the
 # clamping `slice`/`char-at` want for free.
 def char-offset :: fun bytes int int int -> int = fun b n target at {
-	if target <= 0 || at >= n is true {
+	if target <= 0 || at >= n {
 		at
 	} else {
 		char-offset b n (target - 1) (at + char-len (bytes.get b at))
@@ -100,13 +100,13 @@ def char-offset :: fun bytes int int int -> int = fun b n target at {
 #     string.char-at "hello" 1    # => some "e"
 #     string.char-at "hello" 99   # => none
 public def char-at :: fun string int -> option string = fun s i {
-	if i < 0 is true {
+	if i < 0 {
 		none
 	} else {
 		let b = to-bytes s
 		let n = bytes.length b
 		let off = char-offset b n i 0
-		if off >= n is true {
+		if off >= n {
 			none
 		} else {
 			let len = char-len (bytes.get b off)
@@ -125,17 +125,17 @@ public def char-at :: fun string int -> option string = fun s i {
 public def slice :: fun string int int -> string = fun s start end {
 	let b = to-bytes s
 	let n = bytes.length b
-	let lo = if start < 0 is true {
+	let lo = if start < 0 {
 		0
 	} else {
 		start
 	}
-	let hi = if end < 0 is true {
+	let hi = if end < 0 {
 		0
 	} else {
 		end
 	}
-	if hi <= lo is true {
+	if hi <= lo {
 		""
 	} else {
 		# Byte offset of the `lo`-th character, then `hi - lo` more
@@ -179,7 +179,7 @@ public def chars :: fun string -> list string = fun s {
 # the character. Slicing on `char-len` boundaries keeps each piece valid
 # UTF-8.
 def fill-chars :: fun bytes int (list string) int int -> nothing = fun b n out at idx {
-	if at >= n is true {
+	if at >= n {
 		()
 	} else {
 		let len = char-len (bytes.get b at)
@@ -198,7 +198,7 @@ public def to-upper :: fun string -> string = fun s {
 	# holds no byte in that range, so a per-byte map can't touch one.
 	as-string (bytes.build (bytes.length b) fun i {
 		let c = bytes.get b i
-		if c >= 97 && c <= 122 is true {
+		if c >= 97 && c <= 122 {
 			c - 32
 		} else {
 			c
@@ -214,7 +214,7 @@ public def to-lower :: fun string -> string = fun s {
 	let b = to-bytes s
 	as-string (bytes.build (bytes.length b) fun i {
 		let c = bytes.get b i
-		if c >= 65 && c <= 90 is true {
+		if c >= 65 && c <= 90 {
 			c + 32
 		} else {
 			c
@@ -245,9 +245,9 @@ def is-space :: fun int -> bool = fun c {
 
 # First byte offset that isn't leading whitespace (or `n` if all of it is).
 def trim-start :: fun bytes int int -> int = fun b n i {
-	if i >= n is true {
+	if i >= n {
 		i
-	} else if is-space (bytes.get b i) is true {
+	} else if is-space (bytes.get b i) {
 		trim-start b n (i + 1)
 	} else {
 		i
@@ -256,9 +256,9 @@ def trim-start :: fun bytes int int -> int = fun b n i {
 
 # Byte offset just past the last non-whitespace byte (or 0 if all of it is).
 def trim-end :: fun bytes int -> int = fun b n {
-	if n <= 0 is true {
+	if n <= 0 {
 		0
-	} else if is-space (bytes.get b (n - 1)) is true {
+	} else if is-space (bytes.get b (n - 1)) {
 		trim-end b (n - 1)
 	} else {
 		n
@@ -298,7 +298,7 @@ public def ends-with :: fun string string -> bool = fun haystack suffix {
 #     string.join ["a", "b", "c"] ""     # => "abc"
 public def join :: fun (list string) string -> string = fun parts sep {
 	let k = list.length parts
-	if k == 0 is true {
+	if k == 0 {
 		""
 	} else {
 		join-range parts sep 0 k
@@ -309,7 +309,7 @@ public def join :: fun (list string) string -> string = fun parts sep {
 # the range and concatenating the joined halves -- O(total log k) rather
 # than the O(k * total) of a left-to-right fold.
 def join-range :: fun (list string) string int int -> string = fun parts sep lo hi {
-	if hi - lo == 1 is true {
+	if hi - lo == 1 {
 		list.get parts lo
 	} else {
 		let mid = (lo + hi) / 2
@@ -324,7 +324,7 @@ def join-range :: fun (list string) string int int -> string = fun parts sep lo 
 #     string.split "a,b,c" ","   # => ["a", "b", "c"]
 #     string.split "a,,b" ","    # => ["a", "", "b"]
 public def split :: fun string string -> list string = fun s sep {
-	if sep == "" is true {
+	if sep == "" {
 		# Empty separator: one piece per character (a Unicode scalar, so
 		# multi-byte characters stay whole). `chars` does this in one pass.
 		chars s
@@ -362,9 +362,9 @@ def is-digit-byte :: fun int -> bool = fun c {
 # and returns the index of the first non-digit (or `n`), the accumulated
 # value, and how many digits were consumed.
 def scan-digits :: fun bytes int int int int -> (int, int, int) = fun b n i acc count {
-	if i >= n is true {
+	if i >= n {
 		(i, acc, count)
-	} else if is-digit-byte (bytes.get b i) is true {
+	} else if is-digit-byte (bytes.get b i) {
 		scan-digits b n (i + 1) (acc * 10 + (bytes.get b i - 48)) (count + 1)
 	} else {
 		(i, acc, count)
@@ -380,21 +380,21 @@ def scan-digits :: fun bytes int int int int -> (int, int, int) = fun b n i acc 
 public def to-int :: fun string -> result int string = fun s {
 	let b = to-bytes s
 	let n = bytes.length b
-	if n == 0 is true {
+	if n == 0 {
 		err "cannot parse integer from empty string"
 	} else {
 		let c0 = bytes.get b 0
-		let start = if c0 == 43 || c0 == 45 is true {
+		let start = if c0 == 43 || c0 == 45 {
 			1
 		} else {
 			0
 		}
 		# Consume digits, requiring at least one and nothing trailing.
 		let (i, mag, count) = scan-digits b n start 0 0
-		if count == 0 is true {
+		if count == 0 {
 			err "invalid digit found in string"
-		} else if i == n is true {
-			if c0 == 45 is true {
+		} else if i == n {
+			if c0 == 45 {
 				ok (0 - mag)
 			} else {
 				ok mag
@@ -409,7 +409,7 @@ public def to-int :: fun string -> result int string = fun s {
 # (the largest power of ten an `f64` holds exactly) — the range Rust's float
 # parser fast-paths too, so `mantissa * 10^k` is correctly rounded there.
 def pow10 :: fun int -> float = fun k {
-	if k <= 0 is true {
+	if k <= 0 {
 		1.0
 	} else {
 		10.0 * pow10 (k - 1)
@@ -419,7 +419,7 @@ def pow10 :: fun int -> float = fun k {
 # Combine a decimal mantissa with a base-10 exponent into an `f64`.
 def apply-exp :: fun int int -> float = fun mantissa exp {
 	let m = math.to-float mantissa
-	if exp >= 0 is true {
+	if exp >= 0 {
 		m * pow10 exp
 	} else {
 		m / pow10 (0 - exp)
@@ -430,24 +430,24 @@ def apply-exp :: fun int int -> float = fun mantissa exp {
 # the (signed) exponent value; `(i, 0)` when there's no exponent. `err` on a
 # malformed one (`e` with no digits, or trailing junk).
 def parse-exp :: fun bytes int int -> result (int, int) string = fun b n i {
-	if i >= n is true {
+	if i >= n {
 		ok (i, 0)
-	} else if bytes.get b i == 101 || bytes.get b i == 69 is true {
+	} else if bytes.get b i == 101 || bytes.get b i == 69 {
 		let j = i + 1
-		if j >= n is true {
+		if j >= n {
 			err "invalid float literal"
 		} else {
 			let cs = bytes.get b j
-			let dstart = if cs == 43 || cs == 45 is true {
+			let dstart = if cs == 43 || cs == 45 {
 				j + 1
 			} else {
 				j
 			}
 			let (k, ev, ec) = scan-digits b n dstart 0 0
-			if ec == 0 is true {
+			if ec == 0 {
 				err "invalid float literal"
-			} else if k == n is true {
-				if cs == 45 is true {
+			} else if k == n {
+				if cs == 45 {
 					ok (k, 0 - ev)
 				} else {
 					ok (k, ev)
@@ -467,19 +467,19 @@ def parse-exp :: fun bytes int int -> result (int, int) string = fun b n i {
 def parse-float-body :: fun bytes int int -> result float string = fun b n start {
 	let (i1, m1, d1) = scan-digits b n start 0 0
 	# Optional fractional part — guard the bounds before reading the `.`.
-	let (i2, mantissa, df) = if i1 >= n is true {
+	let (i2, mantissa, df) = if i1 >= n {
 		(i1, m1, 0)
-	} else if bytes.get b i1 == 46 is true {
+	} else if bytes.get b i1 == 46 {
 		scan-digits b n (i1 + 1) m1 0
 	} else {
 		(i1, m1, 0)
 	}
-	if d1 + df == 0 is true {
+	if d1 + df == 0 {
 		err "invalid float literal"
 	} else {
 		when parse-exp b n i2 is ok pair {
 			let (i3, e) = pair
-			if i3 == n is true {
+			if i3 == n {
 				ok (apply-exp mantissa (e - df))
 			} else {
 				err "invalid float literal"
@@ -499,17 +499,17 @@ def parse-float-body :: fun bytes int int -> result float string = fun b n start
 public def to-float :: fun string -> result float string = fun s {
 	let b = to-bytes s
 	let n = bytes.length b
-	if n == 0 is true {
+	if n == 0 {
 		err "cannot parse float from empty string"
 	} else {
 		let c0 = bytes.get b 0
-		let start = if c0 == 43 || c0 == 45 is true {
+		let start = if c0 == 43 || c0 == 45 {
 			1
 		} else {
 			0
 		}
 		when parse-float-body b n start is ok v {
-			if c0 == 45 is true {
+			if c0 == 45 {
 				ok (0.0 - v)
 			} else {
 				ok v

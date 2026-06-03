@@ -17,7 +17,7 @@
 #     assert.equals (1 + 1) 2
 #     assert.equals (string.to-upper "hi") "HI"
 public def equals :: fun a a -> result nothing string = fun a b {
-	if a == b is true {
+	if a == b {
 		ok ()
 	} else {
 		err "expected $(to-string b), got $(to-string a)"
@@ -28,7 +28,7 @@ public def equals :: fun a a -> result nothing string = fun a b {
 #
 #     assert.not-equals "cat" "dog"
 public def not-equals :: fun a a -> result nothing string = fun a b {
-	if a == b is true {
+	if a == b {
 		err "expected a value other than $(to-string a)"
 	} else {
 		ok ()
@@ -37,7 +37,7 @@ public def not-equals :: fun a a -> result nothing string = fun a b {
 
 # `ok ()` when `value` is `true`.
 public def is-true :: fun bool -> result nothing string = fun value {
-	if value is true {
+	if value {
 		ok ()
 	} else {
 		err "expected true, got false"
@@ -113,7 +113,7 @@ public def all :: fun (list (result nothing string)) -> result nothing string = 
 # so an empty failure message still counts as a failure.
 def all-go :: fun (list (result nothing string)) bool string -> result nothing string = fun checks had acc {
 	when checks is [] {
-		if had is true {
+		if had {
 			err acc
 		} else {
 			ok ()
@@ -122,7 +122,7 @@ def all-go :: fun (list (result nothing string)) bool string -> result nothing s
 		when first is ok _ {
 			all-go rest had acc
 		} is err msg {
-			let next = if had is true {
+			let next = if had {
 				acc ++ "\n" ++ msg
 			} else {
 				msg

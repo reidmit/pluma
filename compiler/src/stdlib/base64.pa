@@ -35,13 +35,13 @@ public def url-encode :: fun bytes -> string = fun b {
 # `bytes.build` pass.
 def encode-with :: fun bytes bool int int -> string = fun b padded c62 c63 {
 	let n = bytes.length b
-	let outlen = if padded is true {
+	let outlen = if padded {
 		(n + 2) / 3 * 4
 	} else {
 		let rem = n % 3
-		let tail = if rem == 0 is true {
+		let tail = if rem == 0 {
 			0
-		} else if rem == 1 is true {
+		} else if rem == 1 {
 			2
 		} else {
 			3
@@ -61,20 +61,20 @@ def enc-char :: fun bytes int int int int -> int = fun b n j c62 c63 {
 	let p = j % 4
 	let i0 = g * 3
 	let avail = n - i0
-	if p == 0 is true {
+	if p == 0 {
 		enc-digit (bytes.get b i0 / 4) c62 c63
-	} else if p == 1 is true {
+	} else if p == 1 {
 		let hi = bytes.get b i0 % 4 * 16
-		let lo = if avail >= 2 is true {
+		let lo = if avail >= 2 {
 			bytes.get b (i0 + 1) / 16
 		} else {
 			0
 		}
 		enc-digit (hi + lo) c62 c63
-	} else if p == 2 is true {
-		if avail >= 2 is true {
+	} else if p == 2 {
+		if avail >= 2 {
 			let hi = bytes.get b (i0 + 1) % 16 * 4
-			let lo = if avail >= 3 is true {
+			let lo = if avail >= 3 {
 				bytes.get b (i0 + 2) / 64
 			} else {
 				0
@@ -83,7 +83,7 @@ def enc-char :: fun bytes int int int int -> int = fun b n j c62 c63 {
 		} else {
 			61
 		}
-	} else if avail >= 3 is true {
+	} else if avail >= 3 {
 		enc-digit (bytes.get b (i0 + 2) % 64) c62 c63
 	} else {
 		61
@@ -93,13 +93,13 @@ def enc-char :: fun bytes int int int int -> int = fun b n j c62 c63 {
 # The ASCII byte for a 6-bit value (0-63): A-Z, a-z, 0-9, then the two
 # alphabet-specific characters.
 def enc-digit :: fun int int int -> int = fun v c62 c63 {
-	if v < 26 is true {
+	if v < 26 {
 		65 + v
-	} else if v < 52 is true {
+	} else if v < 52 {
 		71 + v
-	} else if v < 62 is true {
+	} else if v < 62 {
 		v - 4
-	} else if v == 62 is true {
+	} else if v == 62 {
 		c62
 	} else {
 		c63
@@ -127,13 +127,13 @@ public def url-decode :: fun string -> result bytes string = fun s {
 def decode-with :: fun string int int -> result bytes string = fun s c62 c63 {
 	let sb = string.to-bytes s
 	let m = trimmed-len sb (bytes.length sb)
-	if m % 4 == 1 is true {
+	if m % 4 == 1 {
 		err "invalid base64 length"
-	} else if all-b64 sb m 0 c62 c63 is true {
+	} else if all-b64 sb m 0 c62 c63 {
 		let rem = m % 4
-		let extra = if rem == 2 is true {
+		let extra = if rem == 2 {
 			1
-		} else if rem == 3 is true {
+		} else if rem == 3 {
 			2
 		} else {
 			0
@@ -149,9 +149,9 @@ def decode-with :: fun string int int -> result bytes string = fun s c62 c63 {
 
 # Length of `b` with trailing `=` (61) padding removed.
 def trimmed-len :: fun bytes int -> int = fun b n {
-	if n <= 0 is true {
+	if n <= 0 {
 		0
-	} else if bytes.get b (n - 1) == 61 is true {
+	} else if bytes.get b (n - 1) == 61 {
 		trimmed-len b (n - 1)
 	} else {
 		n
@@ -160,9 +160,9 @@ def trimmed-len :: fun bytes int -> int = fun b n {
 
 # Are all of `b[0..m]` valid base64 characters?
 def all-b64 :: fun bytes int int int int -> bool = fun b m i c62 c63 {
-	if i >= m is true {
+	if i >= m {
 		true
-	} else if dec-value (bytes.get b i) c62 c63 >= 0 is true {
+	} else if dec-value (bytes.get b i) c62 c63 >= 0 {
 		all-b64 b m (i + 1) c62 c63
 	} else {
 		false
@@ -173,15 +173,15 @@ def all-b64 :: fun bytes int int int int -> bool = fun b m i c62 c63 {
 # alphabet-specific characters are checked first so position in the table
 # doesn't matter.
 def dec-value :: fun int int int -> int = fun c c62 c63 {
-	if c == c62 is true {
+	if c == c62 {
 		62
-	} else if c == c63 is true {
+	} else if c == c63 {
 		63
-	} else if c >= 65 && c <= 90 is true {
+	} else if c >= 65 && c <= 90 {
 		c - 65
-	} else if c >= 97 && c <= 122 is true {
+	} else if c >= 97 && c <= 122 {
 		c - 71
-	} else if c >= 48 && c <= 57 is true {
+	} else if c >= 48 && c <= 57 {
 		c + 4
 	} else {
 		-1
@@ -194,9 +194,9 @@ def dec-byte :: fun bytes int int int -> int = fun b k c62 c63 {
 	let g = k / 3
 	let q = k % 3
 	let i0 = g * 4
-	if q == 0 is true {
+	if q == 0 {
 		dec-value (bytes.get b i0) c62 c63 * 4 + dec-value (bytes.get b (i0 + 1)) c62 c63 / 16
-	} else if q == 1 is true {
+	} else if q == 1 {
 		dec-value (bytes.get b (i0 + 1)) c62 c63 % 16 * 16 + dec-value (bytes.get b (i0 + 2)) c62 c63 / 4
 	} else {
 		dec-value (bytes.get b (i0 + 2)) c62 c63 % 4 * 64 + dec-value (bytes.get b (i0 + 3)) c62 c63

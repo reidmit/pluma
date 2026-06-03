@@ -10,14 +10,20 @@ def main = fun {
 	let (firsts, seconds) = list.unzip [(1, 10), (2, 20), (3, 30)]
 	print firsts
 	print seconds
-	print (list.flat-map [1, 2, 3] fun n { [n, n * 10] })
+	print (list.flat-map [1, 2, 3] fun n {
+		[n, n * 10]
+	})
 	print (list.flatten [[1, 2], [], [3, 4], [5]])
-	print (list.find-index [10, 20, 30] fun n { n > 15 })
+	print (list.find-index [10, 20, 30] fun n {
+		n > 15
+	})
 	print (list.index-of ["a", "b", "c"] "b")
-	print (list.count [1, 2, 3, 4, 5, 6] fun n { n % 2 == 0 })
+	print (list.count [1, 2, 3, 4, 5, 6] fun n {
+		n % 2 == 0
+	})
 	print (list.min [3, 1, 4, 1, 5])
 	print (list.max [3, 1, 4, 1, 5])
-	print ((list.sum [1, 2, 3, 4]) ?? 0)
-	print ((list.product [1, 2, 3, 4]) ?? 1)
+	print (list.sum [1, 2, 3, 4] ?? 0)
+	print (list.product [1, 2, 3, 4] ?? 1)
 	print (list.sum [1.5, 2.5, 3.0])
 }

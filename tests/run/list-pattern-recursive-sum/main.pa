@@ -5,7 +5,7 @@ def sum = fun xs {
 	when xs is [] {
 		0
 	} is [n, ...rest] {
-		n + (sum rest)
+		n + sum rest
 	}
 }
 
@@ -13,7 +13,7 @@ def length = fun xs {
 	when xs is [] {
 		0
 	} is [_, ...rest] {
-		1 + (length rest)
+		1 + length rest
 	}
 }
 
@@ -22,7 +22,7 @@ def sum-pairs = fun pairs {
 	when pairs is [] {
 		0
 	} is [(a, b), ...rest] {
-		a + b + (sum-pairs rest)
+		a + b + sum-pairs rest
 	}
 }
 

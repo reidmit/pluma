@@ -2,8 +2,11 @@ use core.bytes
 use core.io
 
 def show-write = fun r {
-	when r is ok _ { print "wrote" }
-	is err msg { print "write err: $(msg)" }
+	when r is ok _ {
+		print "wrote"
+	} is err msg {
+		print "write err: $(msg)"
+	}
 }
 
 def main = fun {
@@ -12,7 +15,7 @@ def main = fun {
 
 	show-write (io.write-file-bytes path payload)
 
-	when (io.read-file-bytes path) is ok b {
+	when io.read-file-bytes path is ok b {
 		print (to-string (bytes.length b))
 		print (to-string b)
 		print (to-string (b == payload))

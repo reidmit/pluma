@@ -9,9 +9,11 @@ use core.task
 def main = fun {
 	let total = ref.new 0
 	let cursor = ref.new [1, 2, 3, 4]
-	while (ref.get cursor) is [head, ...tail] {
+	while ref.get cursor is [head, ...tail] {
 		try _ = task.sleep 1ms
-		ref.update total fun n { n + head }
+		ref.update total fun n {
+			n + head
+		}
 		ref.set cursor tail
 	}
 	print (to-string (ref.get total))

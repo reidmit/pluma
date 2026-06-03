@@ -5,7 +5,7 @@ def leibniz = fun n acc sign k {
 	when n is 0 {
 		acc
 	} else {
-		leibniz (n - 1) (acc + (sign / k)) (0.0 - sign) (k + 2.0)
+		leibniz (n - 1) (acc + sign / k) (0.0 - sign) (k + 2.0)
 	}
 }
 

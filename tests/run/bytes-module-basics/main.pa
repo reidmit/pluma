@@ -6,9 +6,21 @@ def main = fun {
 	print (bytes.is-empty b)
 	print (bytes.is-empty '')
 
-	when (bytes.at b 0) is some n { print n } is none { print -1 }
-	when (bytes.at b 4) is some n { print n } is none { print -1 }
-	when (bytes.at b 99) is some n { print n } is none { print -1 }
+	when bytes.at b 0 is some n {
+		print n
+	} is none {
+		print (-1)
+	}
+	when bytes.at b 4 is some n {
+		print n
+	} is none {
+		print (-1)
+	}
+	when bytes.at b 99 is some n {
+		print n
+	} is none {
+		print (-1)
+	}
 
 	print (bytes.concat 'foo' 'bar')
 	print (bytes.slice b 1 4)

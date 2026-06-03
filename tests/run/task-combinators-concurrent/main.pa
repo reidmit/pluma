@@ -16,41 +16,43 @@ def boom = fun ms msg {
 def main = fun {
 	# both: pair two concurrent results.
 	try p = task.both (sleeper 2ms 1) (sleeper 1ms 2)
-	when p is (a, b) { print "both $(to-string a) $(to-string b)" }
-
-	# all: collect in order, even though the first finishes last.
+	when p is (a, b) {
+		print "both $(to-string a) $(to-string b)"
+	}
 	try xs = task.all [sleeper 3ms 10, sleeper 1ms 20, sleeper 2ms 30]
 	print "all $(to-string xs)"
-
-	# settle-all: every outcome, successes and failures alike.
 	try rs = task.settle-all [sleeper 1ms 5, boom 1ms "nope"]
 	print "settle $(to-string rs)"
-
-	# race: first to settle wins, losers cancelled.
 	try w = task.race [sleeper 5ms 100, sleeper 1ms 200]
 	print "race $(to-string w)"
-
-	# any: first to succeed; the early failure is skipped.
 	try y = task.any [boom 1ms "fail-fast", sleeper 3ms 42]
 	print "any $(to-string y)"
-
-	# retry: re-runs a cold failing task; here it always fails.
 	try r = task.retry 3 (boom 1ms "still-bad") ?? task.return (0 - 1)
 	print "retry $(to-string r)"
-
-	# with-timeout: work beats the timer / timer beats the work.
 	try fast = task.with-timeout 10ms (sleeper 1ms 7)
 	print "timeout-ok $(to-string fast)"
 	try slow = task.with-timeout 1ms (sleeper 10ms 9) ?? task.return (0 - 2)
 	print "timeout-hit $(to-string slow)"
-
-	# pool: bounded concurrency, results in completion order. The durations are
-	# spread wide (10ms steps) so the completion order is unambiguous: with two
-	# slots, `2` and `1` finish first, then `4` (spawned when `1`'s slot frees)
-	# beats `3` (spawned earlier but sleeping far longer). Tight 1ms margins here
-	# used to reorder under load.
 	try ps = task.pool 2 [sleeper 20ms 1, sleeper 10ms 2, sleeper 40ms 3, sleeper 10ms 4]
 	print "pool $(to-string ps)"
-
 	task.return 0
 }
+
+# all: collect in order, even though the first finishes last.
+
+# settle-all: every outcome, successes and failures alike.
+
+# race: first to settle wins, losers cancelled.
+
+# any: first to succeed; the early failure is skipped.
+
+# retry: re-runs a cold failing task; here it always fails.
+
+# with-timeout: work beats the timer / timer beats the work.
+
+# pool: bounded concurrency, results in completion order. The durations are
+# spread wide (10ms steps) so the completion order is unambiguous: with two
+# slots, `2` and `1` finish first, then `4` (spawned when `1`'s slot frees)
+# beats `3` (spawned earlier but sleeping far longer). Tight 1ms margins here
+# used to reorder under load.
+

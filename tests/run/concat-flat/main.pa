@@ -7,7 +7,7 @@ def loop = fun n a b acc {
 	when n is 0 {
 		acc
 	} else {
-		loop (n - 1) a b (acc + (list.length (list.concat a b)))
+		loop (n - 1) a b (acc + list.length (list.concat a b))
 	}
 }
 

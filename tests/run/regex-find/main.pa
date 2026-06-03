@@ -3,11 +3,20 @@ use core.dict
 use core.list
 
 def coord = `"(" <x: digit+> "," <y: digit+> ")"`
+
 def word-re = `letter+`
 
 def show-x-y = fun m {
-	when dict.lookup m.groups "x" is some s { print s } is none { print "no x" }
-	when dict.lookup m.groups "y" is some s { print s } is none { print "no y" }
+	when dict.lookup m.groups "x" is some s {
+		print s
+	} is none {
+		print "no x"
+	}
+	when dict.lookup m.groups "y" is some s {
+		print s
+	} is none {
+		print "no y"
+	}
 }
 
 def main = fun {

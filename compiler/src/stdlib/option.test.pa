@@ -5,7 +5,7 @@ use core.assert
 # Helpers that wrap an int or return none, so `then` has something
 # to do.
 def positive = fun n {
-	if n > 0 is true {
+	if n > 0 {
 		some n
 	} else {
 		none

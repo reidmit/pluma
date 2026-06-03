@@ -1,9 +1,13 @@
 use core.list
 
 def main = fun {
-	list.each [1, 2, 3] fun n { print (n * 10) }
+	list.each [1, 2, 3] fun n {
+		print (n * 10)
+	}
 
 	# each returns nothing — `print` it to confirm
-	let result = list.each ["a", "b"] fun s { print s }
+	let result = list.each ["a", "b"] fun s {
+		print s
+	}
 	print result
 }

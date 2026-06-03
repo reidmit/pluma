@@ -132,7 +132,7 @@ def zero-acc :: fun nothing -> acc = fun {
 
 # Apply `f` to `s` only when color is on; otherwise leave it bare.
 def paint :: fun bool (fun string -> string) string -> string = fun color f s {
-	if color is true {
+	if color {
 		f s
 	} else {
 		s
@@ -196,7 +196,7 @@ def run-entries :: fun bool bool (list entry) acc -> acc = fun color any-focused
 		} is focused {
 			run-case color indent e a1
 		} is normal {
-			if any-focused is true {
+			if any-focused {
 				print (indent ++ paint color terminal.dim "-" ++ " " ++ e.name ++ " " ++ paint color terminal.dim "(not focused)")
 				{...a1, skipped: a1.skipped + 1}
 			} else {
@@ -210,17 +210,17 @@ def run-entries :: fun bool bool (list entry) acc -> acc = fun color any-focused
 def summary-line :: fun bool acc -> string = fun color a {
 	let total = a.passed + a.failed
 	let base = "$(to-string a.passed) of $(to-string total) passed"
-	let with-skip = if a.skipped > 0 is true {
+	let with-skip = if a.skipped > 0 {
 		base ++ ", $(to-string a.skipped) skipped"
 	} else {
 		base
 	}
-	let full = if a.todo > 0 is true {
+	let full = if a.todo > 0 {
 		with-skip ++ ", $(to-string a.todo) todo"
 	} else {
 		with-skip
 	}
-	if a.failed == 0 is true {
+	if a.failed == 0 {
 		paint color terminal.bold-green full
 	} else {
 		paint color terminal.bold-red full
@@ -236,7 +236,7 @@ public def run-all :: fun bool (list {
 }) -> result nothing string = fun color suites {
 	let final = list.fold (list.enumerate suites) (zero-acc ()) fun a indexed {
 		# Blank line between modules (not before the first).
-		let lead = if indexed.0 > 0 is true {
+		let lead = if indexed.0 > 0 {
 			"\n"
 		} else {
 			""
@@ -250,7 +250,7 @@ public def run-all :: fun bool (list {
 	}
 	print ""
 	print (summary-line color final)
-	if final.failed == 0 is true {
+	if final.failed == 0 {
 		ok ()
 	} else {
 		err ""

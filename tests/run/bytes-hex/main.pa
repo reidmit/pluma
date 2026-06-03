@@ -10,12 +10,14 @@ def loop = fun data n acc {
 		acc
 	} else {
 		let h = hex.encode data
-		let back = (hex.decode h) ?? data
-		loop data (n - 1) (acc + (bytes.length back))
+		let back = hex.decode h ?? data
+		loop data (n - 1) (acc + bytes.length back)
 	}
 }
 
 def main = fun {
-	let data = bytes.build 500 fun i { i % 256 }
+	let data = bytes.build 500 fun i {
+		i % 256
+	}
 	print (to-string (loop data 80 0))
 }

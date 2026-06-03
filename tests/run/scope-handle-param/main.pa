@@ -12,10 +12,14 @@ def sleeper = fun ms n {
 # Takes a *manual* handle as a parameter and drains it, summing the successes.
 def drain-sum :: fun (manual-scope-handle int) int -> task int = fun s acc {
 	try got = s.next ()
-	when got is none { task.return acc }
-	is some r {
-		when r is ok v { drain-sum s (acc + v) }
-		is err _e { drain-sum s acc }
+	when got is none {
+		task.return acc
+	} is some r {
+		when r is ok v {
+			drain-sum s (acc + v)
+		} is err _e {
+			drain-sum s acc
+		}
 	}
 }
 
@@ -41,7 +45,9 @@ def collect = fun {
 def paired = fun {
 	scope as s {
 		try pair = spawn-pair s (sleeper 1ms 100) (sleeper 1ms 23)
-		when pair is (a, b) { task.return (a + b) }
+		when pair is (a, b) {
+			task.return (a + b)
+		}
 	}
 }
 

@@ -12,7 +12,7 @@ def main = fun {
 	# canonicalizes it to the chained spelling.
 	let nested = ((1, 2), (3, 4))
 	print (to-string (nested.0.0 + nested.1.1))
-	print (to-string ((nested.0).0 + (nested.1).1))
+	print (to-string (nested.0.0 + nested.1.1))
 
 	# Chaining nests arbitrarily deep.
 	let deep = (((100, 200), 0), 0)

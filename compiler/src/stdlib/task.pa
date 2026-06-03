@@ -169,7 +169,7 @@ def await-all :: fun (list (task a)) -> task (list a) = fun handles {
 # The fill loop for `await-all`: awaits `handles[i]` in order, pushing each
 # result onto `acc` (a fresh, solely-owned list, so the in-place push is safe).
 def await-into :: fun (list (task a)) (list a) int int -> task (list a) = fun handles acc i n {
-	if i < n is true {
+	if i < n {
 		try x = list.get handles i
 		let _ = list.push acc x
 		await-into handles acc (i + 1) n
@@ -260,7 +260,7 @@ public def any :: fun (list (task a)) -> task a = fun ts {
 # again runs it fresh. Returns the first success or the last failure. No scope
 # -- this is purely sequential re-running.
 public def retry :: fun int (task a) -> task a = fun n t {
-	if n <= 1 is true {
+	if n <= 1 {
 		t
 	} else {
 		t ?? retry (n - 1) t

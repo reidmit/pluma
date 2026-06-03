@@ -4,7 +4,7 @@ use core.assert
 
 # Helpers. `checked` returns ok for positives, err for non-positives.
 def checked = fun n {
-	if n > 0 is true {
+	if n > 0 {
 		ok n
 	} else {
 		err "non-positive"

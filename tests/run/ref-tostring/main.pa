@@ -2,15 +2,22 @@
 
 def main = fun {
 	let r = ref.new 5
-	print r                              # ref 5
-	print (to-string r)                  # ref 5
-	print "cell = $(to-string r)"        # cell = ref 5
+	print r
+	# ref 5
+	print (to-string r)
+	# ref 5
+	print "cell = $(to-string r)"
+	# cell = ref 5
 
 	# the inner value is formatted recursively, including compounds
 	let pair = ref.new (1, [2, 3])
-	print pair                           # ref (1, [2, 3])
+	print pair
+	# ref (1, [2, 3])
 
 	# nested refs
 	let outer = ref.new (ref.new true)
-	print outer                          # ref ref true
+	print outer
 }
+
+# ref ref true
+

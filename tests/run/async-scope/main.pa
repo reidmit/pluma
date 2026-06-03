@@ -13,9 +13,13 @@ def worker = fun n {
 }
 
 def main = fun {
-	let tasks = list.build 400 fun i { worker i }
+	let tasks = list.build 400 fun i {
+		worker i
+	}
 	try results = task.all tasks
-	let total = list.fold results 0 fun acc x { acc + x }
+	let total = list.fold results 0 fun acc x {
+		acc + x
+	}
 	print (to-string total)
 	task.return 0
 }

@@ -12,26 +12,34 @@ def classify = fun n {
 	}
 }
 
-def truthy = fun r { r.flag }
+def truthy = fun r {
+	r.flag
+}
 
 def main = fun {
-	print (classify -4)
+	print (classify (-4))
 	print (classify 0)
 	print (classify 9)
 
 	# explicit `is true` is equivalent to the bare form
 	let ready = true
-	if ready is true { print "explicit ready" }
-	if ready { print "bare ready" }
+	if ready {
+		print "explicit ready"
+	}
+	if ready {
+		print "bare ready"
+	}
 
 	# a subject that must end in a record is parenthesized so the trailing
 	# `{` opens the body rather than the record
-	if (truthy { flag: true }) { print "paren record subject" }
+	if truthy ({flag: true}) {
+		print "paren record subject"
+	}
 
 	# `while` gets the same treatment
 	let r = ref.new 3
 	while ref.get r > 0 {
 		print "tick $(to-string (ref.get r))"
-		ref.set r ((ref.get r) - 1)
+		ref.set r (ref.get r - 1)
 	}
 }

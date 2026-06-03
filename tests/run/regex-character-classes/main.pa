@@ -1,10 +1,15 @@
 use core.regex
 
 def one-digit = `digit`
+
 def two-digits = `digit digit`
+
 def one-letter = `letter`
+
 def one-word-char = `word`
+
 def one-space = `whitespace`
+
 def anything = `any`
 
 def main = fun {
@@ -27,7 +32,7 @@ def main = fun {
 
 	# `whitespace` matches space / tab / newline / carriage return
 	print (regex.matches one-space " ")
-	print (regex.matches one-space "	")
+	print (regex.matches one-space "\t")
 	print (regex.matches one-space "x")
 
 	# `any` matches any single character

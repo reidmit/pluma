@@ -118,7 +118,7 @@ public def is-none :: fun (option a) -> bool = fun o {
 #     option.filter none (fun n { n > 0 })       # => none
 public def filter :: fun (option a) (fun a -> bool) -> option a = fun o pred {
 	when o is some v {
-		if pred v is true {
+		if pred v {
 			some v
 		} else {
 			none

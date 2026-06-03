@@ -3,6 +3,7 @@
 # (trait-dispatched) arithmetic between awaits. The whole chain runs on the
 # event loop the moment `main` (itself a task) is driven to completion.
 use core.task
+
 def add-one = fun n {
 	try x = task.return n
 	task.return (x + 1)

@@ -3,7 +3,13 @@ use core.string
 # `slice`/`drop`/`char-at` index by character (Unicode scalar value),
 # matching `length`. Indices clamp; `char-at` returns an option.
 
-def show = fun o { when o is some c { print c } is none { print "(none)" } }
+def show = fun o {
+	when o is some c {
+		print c
+	} is none {
+		print "(none)"
+	}
+}
 
 def main = fun {
 	print (string.slice "hello world" 0 5)

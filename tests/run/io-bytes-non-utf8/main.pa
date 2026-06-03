@@ -2,8 +2,11 @@ use core.bytes
 use core.io
 
 def show-write = fun r {
-	when r is ok _ { print "wrote" }
-	is err msg { print "write err: $(msg)" }
+	when r is ok _ {
+		print "wrote"
+	} is err msg {
+		print "write err: $(msg)"
+	}
 }
 
 def main = fun {
@@ -14,7 +17,7 @@ def main = fun {
 
 	show-write (io.write-file-bytes path bad)
 
-	when (io.read-file-bytes path) is ok b {
+	when io.read-file-bytes path is ok b {
 		print (to-string (bytes.length b))
 		print (to-string (b == bad))
 	} is err msg {
@@ -22,8 +25,13 @@ def main = fun {
 	}
 
 	# Decoding to a string should fail.
-	when (io.read-file-bytes path) is ok b {
-		when (bytes.to-string b) is ok _ { print "should not decode" }
-		is err _ { print "decode failed (expected)" }
-	} is err _ { print "read err" }
+	when io.read-file-bytes path is ok b {
+		when bytes.to-string b is ok _ {
+			print "should not decode"
+		} is err _ {
+			print "decode failed (expected)"
+		}
+	} is err _ {
+		print "read err"
+	}
 }

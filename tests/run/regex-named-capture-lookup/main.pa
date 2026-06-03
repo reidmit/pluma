@@ -6,7 +6,11 @@ use core.regex as re
 def pair = `<k: letter+> "=" <v: digit+>`
 
 def show = fun o {
-	when o is some s { print s } is none { print "—" }
+	when o is some s {
+		print s
+	} is none {
+		print "—"
+	}
 }
 
 def main = fun {

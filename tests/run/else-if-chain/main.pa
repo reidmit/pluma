@@ -1,13 +1,21 @@
 use core.string
 
 def heading-level = fun line {
-	if (string.starts-with line "###### ") is true { 6 }
-	else if (string.starts-with line "##### ") is true { 5 }
-	else if (string.starts-with line "#### ") is true { 4 }
-	else if (string.starts-with line "### ") is true { 3 }
-	else if (string.starts-with line "## ") is true { 2 }
-	else if (string.starts-with line "# ") is true { 1 }
-	else { 0 }
+	if string.starts-with line "###### " {
+		6
+	} else if string.starts-with line "##### " {
+		5
+	} else if string.starts-with line "#### " {
+		4
+	} else if string.starts-with line "### " {
+		3
+	} else if string.starts-with line "## " {
+		2
+	} else if string.starts-with line "# " {
+		1
+	} else {
+		0
+	}
 }
 
 def main = fun {

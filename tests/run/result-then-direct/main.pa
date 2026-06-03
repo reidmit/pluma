@@ -3,14 +3,32 @@
 
 def main = fun {
 	# ok input + continuation that passes the value through
-	let a = result.then (ok 5) (fun n { ok n })
-	when a is ok v { print v } is err e { print e }
+	let a = result.then (ok 5) fun n {
+		ok n
+	}
+	when a is ok v {
+		print v
+	} is err e {
+		print e
+	}
 
 	# err input -> continuation skipped, err passes through
-	let b = result.then (err "boom") (fun n { ok n })
-	when b is ok v { print v } is err e { print e }
+	let b = result.then (err "boom") fun n {
+		ok n
+	}
+	when b is ok v {
+		print v
+	} is err e {
+		print e
+	}
 
 	# Chained: ok -> ok -> ok
-	let c = result.then (result.then (ok 1) (fun n { ok n })) (fun n { ok n })
-	when c is ok v { print v } is err e { print e }
+	let c = result.then (result.then (ok 1) fun n { ok n }) fun n {
+		ok n
+	}
+	when c is ok v {
+		print v
+	} is err e {
+		print e
+	}
 }

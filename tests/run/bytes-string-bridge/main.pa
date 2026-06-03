@@ -2,8 +2,11 @@ use core.bytes
 use core.string
 
 def show = fun r {
-	when r is ok s { print s }
-	is err _ { print "bad utf8" }
+	when r is ok s {
+		print s
+	} is err _ {
+		print "bad utf8"
+	}
 }
 
 def main = fun {

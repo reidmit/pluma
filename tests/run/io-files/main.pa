@@ -3,7 +3,7 @@ use core.io
 def main = fun {
 	let path = "target/pluma-io-test-roundtrip.txt"
 
-	when (io.write-file path "hello from pluma") is ok _ {
+	when io.write-file path "hello from pluma" is ok _ {
 		print "wrote"
 	} is err msg {
 		print "write err: $(msg)"
@@ -11,7 +11,7 @@ def main = fun {
 
 	print (io.file-exists path)
 
-	when (io.read-file path) is ok contents {
+	when io.read-file path is ok contents {
 		print contents
 	} is err msg {
 		print "read err: $(msg)"

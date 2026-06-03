@@ -45,11 +45,21 @@ def main = fun {
 	}
 
 	# any / all
-	print (list.any [1, 2, 3] fun n { n > 2 })
-	print (list.any [1, 2, 3] fun n { n > 100 })
-	print (list.all [1, 2, 3] fun n { n > 0 })
-	print (list.all [1, 2, 3] fun n { n > 1 })
-	print (list.all [] fun n { n > 0 })
+	print (list.any [1, 2, 3] fun n {
+		n > 2
+	})
+	print (list.any [1, 2, 3] fun n {
+		n > 100
+	})
+	print (list.all [1, 2, 3] fun n {
+		n > 0
+	})
+	print (list.all [1, 2, 3] fun n {
+		n > 1
+	})
+	print (list.all [] fun n {
+		n > 0
+	})
 
 	# pipeline chaining
 	[1, 2, 3, 4, 5] | list.filter fun n { n > 1 } | list.take 2 | print

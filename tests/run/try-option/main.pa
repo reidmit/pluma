@@ -15,8 +15,16 @@ def take-none = fun {
 
 def main = fun {
 	let r1 = take-two ()
-	when r1 is some v { print v } is none { print (0 - 1) }
+	when r1 is some v {
+		print v
+	} is none {
+		print (0 - 1)
+	}
 
 	let r2 = take-none ()
-	when r2 is some v { print v } is none { print (0 - 1) }
+	when r2 is some v {
+		print v
+	} is none {
+		print (0 - 1)
+	}
 }

@@ -1,6 +1,7 @@
 # Fail-fast `scope`: spawn children, await their handles, block on exit. The
 # values are deterministic regardless of how the children interleave.
 use core.task
+
 def both = fun t1 t2 {
 	scope as s {
 		let h1 = s.spawn t1
@@ -25,7 +26,6 @@ def boom = fun {
 def main = fun {
 	try pair = both (task.return 1) (task.return 2)
 	print (to-string pair)
-
 	try recovered = boom () ?? task.return 999
 	print (to-string recovered)
 	task.return 0

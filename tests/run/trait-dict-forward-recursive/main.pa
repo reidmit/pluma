@@ -10,7 +10,7 @@ def outer :: fun (list a) -> a where (numeric a) = fun xs {
 }
 
 def fold-tail :: fun (list a) a int int -> a where (numeric a) = fun xs acc i n {
-	if i < n is true {
+	if i < n {
 		fold-tail xs (acc + list.get xs i) (i + 1) n
 	} else {
 		acc

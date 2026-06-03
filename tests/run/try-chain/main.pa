@@ -21,7 +21,7 @@ def loop = fun n acc {
 	when n is 0 {
 		acc
 	} else {
-		let v = (chain n) ?? 0
+		let v = chain n ?? 0
 		loop (n - 1) (acc + v)
 	}
 }

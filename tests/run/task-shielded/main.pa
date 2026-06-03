@@ -22,7 +22,9 @@ def sibling = fun {
 # atomic, so the sibling never interleaves between them (never "A" "X" "B").
 def both-test = fun {
 	try pair = task.both (task.shielded (critical ())) (sibling ())
-	when pair is (a, b) { task.return (a + b) }
+	when pair is (a, b) {
+		task.return (a + b)
+	}
 }
 
 # A scope that arms a short deadline, then runs a shielded section that takes

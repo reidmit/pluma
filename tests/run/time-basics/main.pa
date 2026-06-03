@@ -26,9 +26,19 @@ def main = fun {
 
 		# Calendar arithmetic clamps day-of-month.
 		when time.make 2024 1 31 0 0 0 0 is ok jan31 {
-			when time.add-months jan31 1 is ok feb { show-instant "jan31 +1mo" feb } is err e { io.print e }
-			when time.add-years jan31 1 is ok y { show-instant "jan31 +1yr" y } is err e { io.print e }
-		} is err e { io.print e }
+			when time.add-months jan31 1 is ok feb {
+				show-instant "jan31 +1mo" feb
+			} is err e {
+				io.print e
+			}
+			when time.add-years jan31 1 is ok y {
+				show-instant "jan31 +1yr" y
+			} is err e {
+				io.print e
+			}
+		} is err e {
+			io.print e
+		}
 
 		# Comparisons.
 		let earlier = time.subtract t (time.hours 1)
@@ -37,18 +47,42 @@ def main = fun {
 		io.print "eq:     $(to-string (earlier == earlier))"
 		show-instant "min" (time.min earlier t)
 		show-instant "max" (time.max earlier t)
-		when time.compare earlier t is lt { io.print "compare: lt" } is eq { io.print "compare: eq" } is gt { io.print "compare: gt" }
+		when time.compare earlier t is lt {
+			io.print "compare: lt"
+		} is eq {
+			io.print "compare: eq"
+		} is gt {
+			io.print "compare: gt"
+		}
 
 		# Unix round-trip.
 		io.print "unix: $(to-string (time.to-unix t))"
 		show-instant "from-unix" (time.from-unix (time.to-unix t))
-	} is err e { io.print e }
+	} is err e {
+		io.print e
+	}
 
 	# Parsing: full timestamp, bare date, and a failure.
-	when time.parse-iso "2026-05-25T14:30:00Z" is ok t { show-instant "parsed" t } is err e { io.print e }
-	when time.parse-iso "2026-05-25" is ok t { show-instant "parsed-date" t } is err e { io.print e }
-	when time.parse-iso "not a time" is ok t { show-instant "parsed" t } is err e { io.print e }
+	when time.parse-iso "2026-05-25T14:30:00Z" is ok t {
+		show-instant "parsed" t
+	} is err e {
+		io.print e
+	}
+	when time.parse-iso "2026-05-25" is ok t {
+		show-instant "parsed-date" t
+	} is err e {
+		io.print e
+	}
+	when time.parse-iso "not a time" is ok t {
+		show-instant "parsed" t
+	} is err e {
+		io.print e
+	}
 
 	# Invalid components are rejected.
-	when time.make 2026 2 30 0 0 0 0 is ok t { show-instant "bad" t } is err e { io.print e }
+	when time.make 2026 2 30 0 0 0 0 is ok t {
+		show-instant "bad" t
+	} is err e {
+		io.print e
+	}
 }

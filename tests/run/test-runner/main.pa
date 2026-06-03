@@ -7,20 +7,16 @@ use core.test
 use core.assert
 
 def tests :: test.suite = [
-	test.case "adds" (fun { assert.equals (2 + 3) 5 }),
-	test.case "concats" (fun { assert.equals ("a" ++ "b") "ab" }),
-
+	test.case "adds" fun { assert.equals (2 + 3) 5 },
+	test.case "concats" fun { assert.equals ("a" ++ "b") "ab" },
 	test.group "nested" [
-		test.case "zero" (fun { assert.equals (0 + 0) 0 }),
-		test.group "deeper" [
-			test.case "true holds" (fun { assert.is-true true }),
-		],
-		test.skip (test.case "intentionally skipped" (fun { assert.is-true false })),
+		test.case "zero" fun { assert.equals (0 + 0) 0 },
+		test.group "deeper" [test.case "true holds" fun { assert.is-true true }],
+		test.skip (test.case "intentionally skipped" fun { assert.is-true false }),
 	],
-
 	test.todo "later",
 ]
 
 def main = fun {
-	test.run-all false [{name: "demo", tests: tests}]
+	test.run-all false [{name: "demo", tests}]
 }

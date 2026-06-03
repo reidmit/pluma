@@ -32,7 +32,7 @@ public def is-empty :: fun bytes -> bool = fun b {
 #     bytes.at 'ABC' 0    # => some 65
 #     bytes.at 'ABC' 9    # => none
 public def at :: fun bytes int -> option int = fun b i {
-	if i < 0 || i >= length b is true {
+	if i < 0 || i >= length b {
 		none
 	} else {
 		some (get b i)
@@ -66,21 +66,21 @@ public def concat :: fun bytes bytes -> bytes = built-in "bytes-concat"
 #     bytes.slice 'hello' 1 4   # => 'ell'
 public def slice :: fun bytes int int -> bytes = fun b start end {
 	let len = length b
-	let s = if start < 0 is true {
+	let s = if start < 0 {
 		0
-	} else if start > len is true {
+	} else if start > len {
 		len
 	} else {
 		start
 	}
-	let e0 = if end < 0 is true {
+	let e0 = if end < 0 {
 		0
-	} else if end > len is true {
+	} else if end > len {
 		len
 	} else {
 		end
 	}
-	let e = if e0 < s is true {
+	let e = if e0 < s {
 		s
 	} else {
 		e0
@@ -100,9 +100,9 @@ public def contains :: fun bytes bytes -> bool = fun haystack needle {
 
 # True when `needle` (length `nlen`) occurs at or after position `i`.
 def any-match :: fun bytes bytes int int -> bool = fun b needle nlen i {
-	if i + nlen > length b is true {
+	if i + nlen > length b {
 		false
-	} else if matches-at b needle nlen i is true {
+	} else if matches-at b needle nlen i {
 		true
 	} else {
 		any-match b needle nlen (i + 1)
@@ -115,7 +115,7 @@ def any-match :: fun bytes bytes int int -> bool = fun b needle nlen i {
 #     bytes.starts-with '\x89PNG' '\x89'   # => true
 public def starts-with :: fun bytes bytes -> bool = fun b prefix {
 	let plen = length prefix
-	if plen > length b is true {
+	if plen > length b {
 		false
 	} else {
 		matches-at b prefix plen 0
@@ -128,7 +128,7 @@ public def starts-with :: fun bytes bytes -> bool = fun b prefix {
 public def ends-with :: fun bytes bytes -> bool = fun b suffix {
 	let slen = length suffix
 	let blen = length b
-	if slen > blen is true {
+	if slen > blen {
 		false
 	} else {
 		matches-at b suffix slen (blen - slen)
@@ -140,7 +140,7 @@ public def ends-with :: fun bytes bytes -> bool = fun b suffix {
 #     bytes.repeat 'ab' 3   # => 'ababab'
 public def repeat :: fun bytes int -> bytes = fun b n {
 	let len = length b
-	let count = if n < 0 is true {
+	let count = if n < 0 {
 		0
 	} else {
 		n
@@ -187,11 +187,11 @@ public def from-list :: fun (list int) -> result bytes string = fun xs {
 # trap). `from-list` runs this before `build`, so the build never sees an
 # out-of-range int.
 def check-range :: fun (list int) int int -> result nothing string = fun xs n i {
-	if i >= n is true {
+	if i >= n {
 		ok ()
 	} else {
 		let x = list.get xs i
-		if x < 0 || x > 255 is true {
+		if x < 0 || x > 255 {
 			err ("byte out of range (0..256): " ++ dec x)
 		} else {
 			check-range xs n (i + 1)
@@ -205,7 +205,7 @@ def check-range :: fun (list int) int int -> result nothing string = fun xs n i 
 # this is the small stand-in. Digit lookup rides `list.get`, so it stays
 # allocation-light and lowers without any new builtin.
 def dec :: fun int -> string = fun n {
-	if n < 0 is true {
+	if n < 0 {
 		"-" ++ dec-nat (0 - n)
 	} else {
 		dec-nat n
@@ -213,7 +213,7 @@ def dec :: fun int -> string = fun n {
 }
 
 def dec-nat :: fun int -> string = fun n {
-	if n < 10 is true {
+	if n < 10 {
 		digit n
 	} else {
 		dec-nat (n / 10) ++ digit (n % 10)
@@ -230,7 +230,7 @@ def digit :: fun int -> string = fun d {
 #     bytes.join ['a', 'b', 'c'] '-'   # => 'a-b-c'
 public def join :: fun (list bytes) bytes -> bytes = fun parts sep {
 	let k = list.length parts
-	if k == 0 is true {
+	if k == 0 {
 		''
 	} else {
 		join-range parts sep 0 k
@@ -242,7 +242,7 @@ public def join :: fun (list bytes) bytes -> bytes = fun parts sep {
 # separator between them -- O(total log k) copying, versus the O(k *
 # total) a left-to-right `concat` fold would cost.
 def join-range :: fun (list bytes) bytes int int -> bytes = fun parts sep lo hi {
-	if hi - lo == 1 is true {
+	if hi - lo == 1 {
 		list.get parts lo
 	} else {
 		let mid = (lo + hi) / 2
@@ -255,7 +255,7 @@ def join-range :: fun (list bytes) bytes int int -> bytes = fun parts sep lo hi 
 #     bytes.split 'a,b,c' ','   # => ['a', 'b', 'c']
 public def split :: fun bytes bytes -> list bytes = fun b sep {
 	let seplen = length sep
-	if seplen == 0 is true {
+	if seplen == 0 {
 		# Empty separator: one piece per byte (parallel to `string.split s ""`).
 		list.build (length b) fun i {
 			slice b i (i + 1)
@@ -279,10 +279,10 @@ public def split :: fun bytes bytes -> list bytes = fun b sep {
 # (adjacent or edge separators) fall out, and a `sep`-free input yield the whole
 # input as a single piece.
 def split-into :: fun bytes bytes int int int int (list bytes) -> nothing = fun b sep seplen n i start out {
-	if i + seplen > n is true {
+	if i + seplen > n {
 		let _ = list.push out (slice b start n)
 		()
-	} else if matches-at b sep seplen i is true {
+	} else if matches-at b sep seplen i {
 		let _ = list.push out (slice b start i)
 		split-into b sep seplen n (i + seplen) (i + seplen) out
 	} else {
@@ -298,9 +298,9 @@ def matches-at :: fun bytes bytes int int -> bool = fun b sep seplen i {
 # True when `b[bi..]` and `sep[si..]` agree for the `slen - si` bytes up to
 # `slen`. The byte-wise comparison `matches-at` rides on.
 def eq-range :: fun bytes bytes int int int -> bool = fun b sep bi si slen {
-	if si >= slen is true {
+	if si >= slen {
 		true
-	} else if get b (bi + si) == get sep si is true {
+	} else if get b (bi + si) == get sep si {
 		eq-range b sep bi (si + 1) slen
 	} else {
 		false
@@ -312,7 +312,7 @@ def eq-range :: fun bytes bytes int int int -> bool = fun b sep bi si slen {
 #
 #     bytes.to-string 'hi'   # => ok "hi"
 public def to-string :: fun bytes -> result string string = fun b {
-	if valid-utf8 b 0 (length b) is true {
+	if valid-utf8 b 0 (length b) {
 		ok (as-string b)
 	} else {
 		err "invalid UTF-8"
@@ -328,28 +328,28 @@ def as-string :: fun bytes -> string = built-in "bytes-as-string"
 # well-formed byte-sequence table (Table 3-7): each lead byte fixes the
 # sequence length and the legal range of the byte that follows.
 def valid-utf8 :: fun bytes int int -> bool = fun b i n {
-	if i >= n is true {
+	if i >= n {
 		true
 	} else {
 		let b0 = get b i
-		if b0 < 128 is true {
+		if b0 < 128 {
 			valid-utf8 b (i + 1) n
-		} else if b0 < 194 is true {
+		} else if b0 < 194 {
 			false
-		} else if b0 < 224 is true {
-			if cont b (i + 1) n is true {
+		} else if b0 < 224 {
+			if cont b (i + 1) n {
 				valid-utf8 b (i + 2) n
 			} else {
 				false
 			}
-		} else if b0 < 240 is true {
-			if valid3 b i n b0 is true {
+		} else if b0 < 240 {
+			if valid3 b i n b0 {
 				valid-utf8 b (i + 3) n
 			} else {
 				false
 			}
-		} else if b0 < 245 is true {
-			if valid4 b i n b0 is true {
+		} else if b0 < 245 {
+			if valid4 b i n b0 {
 				valid-utf8 b (i + 4) n
 			} else {
 				false
@@ -362,7 +362,7 @@ def valid-utf8 :: fun bytes int int -> bool = fun b i n {
 
 # Is the byte at `j` (if in range) a continuation byte (0x80-0xBF)?
 def cont :: fun bytes int int -> bool = fun b j n {
-	if j >= n is true {
+	if j >= n {
 		false
 	} else {
 		let x = get b j
@@ -373,21 +373,21 @@ def cont :: fun bytes int int -> bool = fun b j n {
 # A 3-byte sequence led by `b0` (0xE0-0xEF): the second byte's legal range
 # narrows for E0 (no overlong) and ED (no surrogates).
 def valid3 :: fun bytes int int int -> bool = fun b i n b0 {
-	if i + 2 >= n is true {
+	if i + 2 >= n {
 		false
 	} else {
 		let b1 = get b (i + 1)
-		let lo = if b0 == 224 is true {
+		let lo = if b0 == 224 {
 			160
 		} else {
 			128
 		}
-		let hi = if b0 == 237 is true {
+		let hi = if b0 == 237 {
 			159
 		} else {
 			191
 		}
-		if b1 >= lo && b1 <= hi is true {
+		if b1 >= lo && b1 <= hi {
 			cont b (i + 2) n
 		} else {
 			false
@@ -398,21 +398,21 @@ def valid3 :: fun bytes int int int -> bool = fun b i n b0 {
 # A 4-byte sequence led by `b0` (0xF0-0xF4): the second byte's range
 # narrows for F0 (no overlong) and F4 (cap at U+10FFFF).
 def valid4 :: fun bytes int int int -> bool = fun b i n b0 {
-	if i + 3 >= n is true {
+	if i + 3 >= n {
 		false
 	} else {
 		let b1 = get b (i + 1)
-		let lo = if b0 == 240 is true {
+		let lo = if b0 == 240 {
 			144
 		} else {
 			128
 		}
-		let hi = if b0 == 244 is true {
+		let hi = if b0 == 244 {
 			143
 		} else {
 			191
 		}
-		if b1 >= lo && b1 <= hi is true {
+		if b1 >= lo && b1 <= hi {
 			cont b (i + 2) n && cont b (i + 3) n
 		} else {
 			false

@@ -6,8 +6,12 @@ def main = fun {
 
 	# Composes with comparison and in `if` subjects.
 	let x = 5
-	print (to-string (!(x == 5)))
-	if !(x > 10) is true { print "x is not big" } else { print "x is big" }
+	print (to-string (!x == 5))
+	if !x > 10 {
+		print "x is not big"
+	} else {
+		print "x is big"
+	}
 
 	# Double negation.
 	print (to-string (!!true))

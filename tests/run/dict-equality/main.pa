@@ -5,26 +5,37 @@ use core.dict
 
 def main = fun {
 	let a = dict.from-entries [("x", 1), ("y", 2)]
-	let b = dict.from-entries [("y", 2), ("x", 1)]   # same set, different order
-	print (a == b)   # true
-	print (a != b)   # false
+	let b = dict.from-entries [("y", 2), ("x", 1)]
+	# same set, different order
+	print (a == b)
+	# true
+	print (a != b)
+	# false
 
 	let diff-val = dict.from-entries [("x", 1), ("y", 3)]
-	print (a == diff-val)   # false
-	print (a != diff-val)   # true
+	print (a == diff-val)
+	# false
+	print (a != diff-val)
+	# true
 
 	let diff-key = dict.from-entries [("x", 1), ("z", 2)]
-	print (a == diff-key)   # false
+	print (a == diff-key)
+	# false
 
 	let smaller = dict.from-entries [("x", 1)]
-	print (a == smaller)    # false
+	print (a == smaller)
+	# false
 
 	let empty1 :: dict string int = dict.empty ()
 	let empty2 :: dict string int = dict.empty ()
-	print (empty1 == empty2)   # true
+	print (empty1 == empty2)
+	# true
 
 	# int keys with nested list values, different order
 	let f = dict.from-entries [(1, [1, 2]), (2, [3])]
 	let g = dict.from-entries [(2, [3]), (1, [1, 2])]
-	print (f == g)   # true
+	print (f == g)
 }
+
+# true
+

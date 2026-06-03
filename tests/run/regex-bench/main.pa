@@ -11,7 +11,7 @@ def loop = fun n acc {
 		acc
 	} else {
 		let ms = re.find-all word "the quick brown fox jumps over the lazy dog again"
-		loop (n - 1) (acc + (list.length ms))
+		loop (n - 1) (acc + list.length ms)
 	}
 }
 

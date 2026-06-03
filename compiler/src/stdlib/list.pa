@@ -121,8 +121,8 @@ public def contains :: fun (list a) a -> bool = fun xs target {
 }
 
 def contains-from :: fun (list a) a int int -> bool = fun xs target n i {
-	if i < n is true {
-		if get xs i == target is true {
+	if i < n {
+		if get xs i == target {
 			true
 		} else {
 			contains-from xs target n (i + 1)
@@ -152,7 +152,7 @@ public def map :: fun (list a) (fun a -> b) -> list b = fun xs f {
 public def filter :: fun (list a) (fun a -> bool) -> list a = fun xs pred {
 	collect (length xs) fun i {
 		let x = get xs i
-		if pred x is true {
+		if pred x {
 			some x
 		} else {
 			none
@@ -181,7 +181,7 @@ public def fold :: fun (list a) b (fun b a -> b) -> b = fun xs acc f {
 }
 
 def fold-from :: fun (list a) (fun b a -> b) int int b -> b = fun xs f n i acc {
-	if i < n is true {
+	if i < n {
 		fold-from xs f n (i + 1) (f acc (get xs i))
 	} else {
 		acc
@@ -199,7 +199,7 @@ public def each :: fun (list a) (fun a -> b) -> nothing = fun xs f {
 }
 
 def each-from :: fun (list a) (fun a -> b) int int -> nothing = fun xs f n i {
-	if i < n is true {
+	if i < n {
 		let _ = f (get xs i)
 		each-from xs f n (i + 1)
 	} else {
@@ -213,7 +213,7 @@ def each-from :: fun (list a) (fun a -> b) int int -> nothing = fun xs f n i {
 #     list.head [1, 2, 3]   # => some 1
 #     list.head []          # => none
 public def head :: fun (list a) -> option a = fun xs {
-	if length xs == 0 is true {
+	if length xs == 0 {
 		none
 	} else {
 		some (get xs 0)
@@ -242,9 +242,9 @@ public def tail :: fun (list a) -> option (list a) = fun xs {
 #     list.take [1, 2] 5            # => [1, 2]
 public def take :: fun (list a) int -> list a = fun xs n {
 	let len = length xs
-	let count = if n < 0 is true {
+	let count = if n < 0 {
 		0
-	} else if n > len is true {
+	} else if n > len {
 		len
 	} else {
 		n
@@ -261,9 +261,9 @@ public def take :: fun (list a) int -> list a = fun xs n {
 #     list.drop [1, 2] 5            # => []
 public def drop :: fun (list a) int -> list a = fun xs k {
 	let len = length xs
-	let start = if k < 0 is true {
+	let start = if k < 0 {
 		0
-	} else if k > len is true {
+	} else if k > len {
 		len
 	} else {
 		k
@@ -283,9 +283,9 @@ public def find :: fun (list a) (fun a -> bool) -> option a = fun xs pred {
 }
 
 def find-from :: fun (list a) (fun a -> bool) int int -> option a = fun xs pred n i {
-	if i < n is true {
+	if i < n {
 		let x = get xs i
-		if pred x is true {
+		if pred x {
 			some x
 		} else {
 			find-from xs pred n (i + 1)
@@ -305,8 +305,8 @@ public def any :: fun (list a) (fun a -> bool) -> bool = fun xs pred {
 }
 
 def any-from :: fun (list a) (fun a -> bool) int int -> bool = fun xs pred n i {
-	if i < n is true {
-		if pred (get xs i) is true {
+	if i < n {
+		if pred (get xs i) {
 			true
 		} else {
 			any-from xs pred n (i + 1)
@@ -326,8 +326,8 @@ public def all :: fun (list a) (fun a -> bool) -> bool = fun xs pred {
 }
 
 def all-from :: fun (list a) (fun a -> bool) int int -> bool = fun xs pred n i {
-	if i < n is true {
-		if pred (get xs i) is true {
+	if i < n {
+		if pred (get xs i) {
 			all-from xs pred n (i + 1)
 		} else {
 			false
@@ -344,7 +344,7 @@ def all-from :: fun (list a) (fun a -> bool) int int -> bool = fun xs pred n i {
 #     list.last []          # => none
 public def last :: fun (list a) -> option a = fun xs {
 	let n = length xs
-	if n == 0 is true {
+	if n == 0 {
 		none
 	} else {
 		some (get xs (n - 1))
@@ -358,7 +358,7 @@ public def last :: fun (list a) -> option a = fun xs {
 #     list.range 2 2    # => []
 #     list.range 5 0    # => []
 public def range :: fun int int -> list int = fun start end {
-	let n = if end > start is true {
+	let n = if end > start {
 		end - start
 	} else {
 		0
@@ -373,7 +373,7 @@ public def range :: fun int int -> list int = fun start end {
 #
 #     list.zip [1, 2, 3] ["a", "b"]   # => [(1, "a"), (2, "b")]
 public def zip :: fun (list a) (list b) -> list (a, b) = fun xs ys {
-	let n = if length xs < length ys is true {
+	let n = if length xs < length ys {
 		length xs
 	} else {
 		length ys
@@ -419,7 +419,7 @@ public def flat-map :: fun (list a) (fun a -> list b) -> list b = fun xs f {
 #     list.flatten [[1, 2], [], [3, 4]]   # => [1, 2, 3, 4]
 public def flatten :: fun (list (list a)) -> list a = fun xss {
 	let k = length xss
-	if k == 0 is true {
+	if k == 0 {
 		[]
 	} else {
 		# Divide-and-conquer concat: pairing halves keeps each element
@@ -431,7 +431,7 @@ public def flatten :: fun (list (list a)) -> list a = fun xss {
 }
 
 def concat-range :: fun (list (list a)) int int -> list a = fun xss lo hi {
-	if hi - lo == 1 is true {
+	if hi - lo == 1 {
 		get xss lo
 	} else {
 		let mid = (lo + hi) / 2
@@ -450,8 +450,8 @@ public def find-index :: fun (list a) (fun a -> bool) -> option int = fun xs pre
 }
 
 def find-index-from :: fun (list a) (fun a -> bool) int int -> option int = fun xs pred i n {
-	if i < n is true {
-		if pred (get xs i) is true {
+	if i < n {
+		if pred (get xs i) {
 			some i
 		} else {
 			find-index-from xs pred (i + 1) n
@@ -479,7 +479,7 @@ public def index-of :: fun (list a) a -> option int = fun xs target {
 #     list.count [1, 2, 3, 4] (fun n { n % 2 == 0 })   # => 2
 public def count :: fun (list a) (fun a -> bool) -> int = fun xs pred {
 	fold xs 0 fun acc x {
-		if pred x is true {
+		if pred x {
 			acc + 1
 		} else {
 			acc
@@ -511,8 +511,8 @@ public def drop-while :: fun (list a) (fun a -> bool) -> list a = fun xs pred {
 # How many elements from index `i` onward pass `pred` before the first
 # that doesn't (the split point shared by `take-while`/`drop-while`).
 def prefix-len :: fun (list a) (fun a -> bool) int int -> int = fun xs pred n i {
-	if i < n is true {
-		if pred (get xs i) is true {
+	if i < n {
+		if pred (get xs i) {
 			prefix-len xs pred n (i + 1)
 		} else {
 			i
@@ -531,7 +531,7 @@ def prefix-len :: fun (list a) (fun a -> bool) int int -> int = fun xs pred n i 
 public def partition :: fun (list a) (fun a -> bool) -> (list a, list a) = fun xs pred {
 	let yes = filter xs pred
 	let no = filter xs fun x {
-		if pred x is true {
+		if pred x {
 			false
 		} else {
 			true
@@ -554,7 +554,7 @@ public def unique :: fun (list a) -> list a = fun xs {
 	let len = length xs
 	collect len fun i {
 		let x = get xs i
-		if contains-from xs x i 0 is true {
+		if contains-from xs x i 0 {
 			none
 		} else {
 			some x
@@ -579,13 +579,13 @@ public def enumerate :: fun (list a) -> list (int, a) = fun xs {
 #     list.chunk [1, 2, 3, 4, 5] 2   # => [[1, 2], [3, 4], [5]]
 public def chunk :: fun (list a) int -> list (list a) = fun xs size {
 	let len = length xs
-	if size < 1 is true {
+	if size < 1 {
 		[]
 	} else {
 		let count = (len + size - 1) / size
 		build count fun c {
 			let start = c * size
-			let here = if start + size > len is true {
+			let here = if start + size > len {
 				len - start
 			} else {
 				size
@@ -605,11 +605,11 @@ public def chunk :: fun (list a) int -> list (list a) = fun xs size {
 #     list.intersperse [1] 0         # => [1]
 public def intersperse :: fun (list a) a -> list a = fun xs sep {
 	let len = length xs
-	if len < 2 is true {
+	if len < 2 {
 		xs
 	} else {
 		build (2 * len - 1) fun i {
-			if i % 2 == 0 is true {
+			if i % 2 == 0 {
 				get xs (i / 2)
 			} else {
 				sep
@@ -637,7 +637,7 @@ public def intersperse :: fun (list a) a -> list a = fun xs sep {
 # their original order relative to each other.
 public def sort :: fun (list a) (fun a a -> ordering) -> list a = fun xs cmp {
 	let n = length xs
-	if n < 2 is true {
+	if n < 2 {
 		xs
 	} else {
 		# A bottom-up merge sort over a private mutable copy: O(n log n)
@@ -680,7 +680,7 @@ public def sort-by :: fun (list a) (fun a -> b) -> list a where (ord b) = fun xs
 #     list.min-by people (fun p { p.age })   # => some <youngest person>
 #     list.min-by [] (fun p { p.age })       # => none
 public def min-by :: fun (list a) (fun a -> b) -> option a where (ord b) = fun xs key {
-	if is-empty xs is true {
+	if is-empty xs {
 		none
 	} else {
 		some (fold xs (get xs 0) fun best x {
@@ -699,7 +699,7 @@ public def min-by :: fun (list a) (fun a -> b) -> option a where (ord b) = fun x
 #
 #     list.max-by people (fun p { p.age })   # => some <oldest person>
 public def max-by :: fun (list a) (fun a -> b) -> option a where (ord b) = fun xs key {
-	if is-empty xs is true {
+	if is-empty xs {
 		none
 	} else {
 		some (fold xs (get xs 0) fun best x {
@@ -790,7 +790,7 @@ public def product :: fun (list a) -> option a where (numeric a) = fun xs {
 
 # Sort `src[lo..hi)` in place using `aux` as merge scratch.
 def msort :: fun (list a) (list a) int int (fun a a -> ordering) -> nothing = fun src aux lo hi cmp {
-	if hi - lo <= 1 is true {
+	if hi - lo <= 1 {
 		()
 	} else {
 		let mid = (lo + hi) / 2
@@ -811,9 +811,9 @@ def merge :: fun (list a) (list a) int int int (fun a a -> ordering) -> nothing 
 # `[j, hi)`, writing the smaller front element to `aux[k]`. On a tie the
 # left element goes first, which is what makes the whole sort stable.
 def merge-into :: fun (list a) (list a) int int int int int (fun a a -> ordering) -> nothing = fun src aux i mid j hi k cmp {
-	if i >= mid is true {
+	if i >= mid {
 		copy-shift src aux j hi k
-	} else if j >= hi is true {
+	} else if j >= hi {
 		copy-shift src aux i mid k
 	} else {
 		let l = get src i
@@ -831,7 +831,7 @@ def merge-into :: fun (list a) (list a) int int int int int (fun a a -> ordering
 # Copy `src[from..to)` into `dst` starting at `from` (used by `merge` to
 # put a merged run back where it came from).
 def copy-run :: fun (list a) (list a) int int -> nothing = fun src dst from to {
-	if from >= to is true {
+	if from >= to {
 		()
 	} else {
 		let _ = set dst from (get src from)
@@ -842,7 +842,7 @@ def copy-run :: fun (list a) (list a) int int -> nothing = fun src dst from to {
 # Copy `src[from..to)` into `dst[at..)`, advancing both (used to drain a
 # leftover run during a merge, where source and destination indices differ).
 def copy-shift :: fun (list a) (list a) int int int -> nothing = fun src dst from to at {
-	if from >= to is true {
+	if from >= to {
 		()
 	} else {
 		let _ = set dst at (get src from)

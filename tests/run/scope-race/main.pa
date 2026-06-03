@@ -17,11 +17,17 @@ def slow = fun label {
 
 def race = fun ts {
 	manual scope as s {
-		let _ = list.map ts (fun t { s.spawn t })
+		let _ = list.map ts fun t {
+			s.spawn t
+		}
 		try first = s.next ()
 		s.cancel ()
 		when first is some r {
-			when r is ok v { task.return v } is err e { task.fail e }
+			when r is ok v {
+				task.return v
+			} is err e {
+				task.fail e
+			}
 		} is none {
 			task.fail "race: empty"
 		}
