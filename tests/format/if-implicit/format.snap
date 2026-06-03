@@ -1,0 +1,24 @@
+---
+source: tests/format.rs
+assertion_line: 53
+expression: once
+---
+# The formatter canonicalizes `is true` to the bare form for `if`/`while`,
+# while leaving every other pattern (`is 0`, `is ok x`) untouched.
+
+def report = fun n {
+	if n > 0 {
+		print "positive"
+	} else if n is 0 {
+		print "zero"
+	} else {
+		print "negative"
+	}
+
+	let r = ok n
+	if r is ok x {
+		print (to-string x)
+	}
+
+	while n > 0 { print "spin" }
+}

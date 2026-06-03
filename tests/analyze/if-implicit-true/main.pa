@@ -1,0 +1,20 @@
+# Omitting `is PATTERN` desugars to `is true`: the typed module should show a
+# synthesized `true` literal pattern on the `if`/`while` nodes, spanning the
+# subject.
+
+def grade = fun n {
+	if n >= 90 {
+		"a"
+	} else if n >= 80 {
+		"b"
+	} else {
+		"c"
+	}
+}
+
+def spin = fun {
+	let r = ref.new 2
+	while ref.get r > 0 {
+		ref.set r ((ref.get r) - 1)
+	}
+}

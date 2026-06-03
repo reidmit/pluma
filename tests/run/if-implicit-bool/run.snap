@@ -1,0 +1,18 @@
+---
+source: tests/run.rs
+assertion_line: 89
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+negative
+zero
+positive
+explicit ready
+bare ready
+paren record subject
+tick 3
+tick 2
+tick 1
+== stderr ==

@@ -1,16 +1,16 @@
 ---
 source: tests/format.rs
+assertion_line: 53
 expression: once
 ---
 def classify = fun n {
-	if n < 0 is true {
+	if n < 0 {
 		"negative"
-	} else if n == 0 is true {
+	} else if n == 0 {
 		"zero"
-	} else if n < 10 is true {
+	} else if n < 10 {
 		"small"
 	} else {
 		"large"
 	}
 }
-

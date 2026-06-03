@@ -1,0 +1,8 @@
+# With `is PATTERN` omitted the subject is matched against `true`, so a
+# non-boolean subject is a type error pointing at the subject.
+
+def main = fun {
+	if 42 {
+		print "unreachable"
+	}
+}

@@ -1,0 +1,8 @@
+---
+source: tests/analyze.rs
+assertion_line: 41
+expression: output
+---
+error: Type mismatch: expected `bool`, but found `int`.
+> 5 | 	if 42 {
+          ^^

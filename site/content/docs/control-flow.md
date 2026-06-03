@@ -30,6 +30,26 @@ if result is ok value {
 let label = if n is some v { "got $(to-string v)" } else { "none" }
 ```
 
+The `is PATTERN` is optional. When omitted, the subject is matched against `true`, so a plain boolean condition reads naturally — `if cond { ... }` is exactly `if cond is true { ... }`:
+
+```pluma
+if n > 10 {
+    print "big"
+} else if n > 0 {
+    print "small"
+} else {
+    print "non-positive"
+}
+```
+
+Because both record literals and blocks are written with `{ ... }`, a `{` following the subject always opens the body. If the subject itself needs to end in a record, wrap it in parens so the trailing brace isn't read as the body:
+
+```pluma
+if (make-config { verbose: true }).enabled {
+    print "on"
+}
+```
+
 ## `when` expressions
 
 Must be exhaustive — all cases must be covered. `else` is the catch-all branch (equivalent to `is _`); use whichever reads better. Evaluates to the value of the first matching case; all cases must have the same type.
@@ -52,10 +72,10 @@ Exhaustiveness is checked structurally for `bool` and enum subjects; other subje
 
 ## `while` expressions
 
-Pattern-matching loop. Runs the body as long as the subject matches.
+Pattern-matching loop. Runs the body as long as the subject matches. As with `if`, the `is PATTERN` is optional and defaults to `is true`, so a boolean loop condition is written bare:
 
 ```pluma
-while some-value is true {
+while keep-going {
     print "ya"
 }
 

@@ -771,16 +771,16 @@ impl<'a> Formatter<'a> {
 		//         else_body
 		//     }
 		//
-		// `} else {` sits on the same line as the body's closing brace.
-		let mut parts: Vec<Doc> = vec![
-			text("if "),
-			self.format_expr(&i.subject),
-			text(" is "),
-			self.format_pattern(&i.pattern),
-			text(" {"),
-			nest(self.format_statements(&i.body)),
-			hardline(),
-		];
+		// `} else {` sits on the same line as the body's closing brace. The
+		// `is PATTERN` is elided for the canonical boolean case (`is true`).
+		let mut parts: Vec<Doc> = vec![text("if "), self.format_expr(&i.subject)];
+		if !pattern_is_true(&i.pattern) {
+			parts.push(text(" is "));
+			parts.push(self.format_pattern(&i.pattern));
+		}
+		parts.push(text(" {"));
+		parts.push(nest(self.format_statements(&i.body)));
+		parts.push(hardline());
 		match &i.else_body {
 			// `else if ...`: the chained `if` is the sole else expression. Render
 			// it inline as `} else if ...` (the nested call emits its own closing
@@ -849,14 +849,14 @@ impl<'a> Formatter<'a> {
 	}
 
 	fn format_while(&self, w: &WhileNode) -> Doc {
-		concat(vec![
-			text("while "),
-			self.format_expr(&w.subject),
-			text(" is "),
-			self.format_pattern(&w.pattern),
-			text(" "),
-			self.format_block(&w.body),
-		])
+		let mut parts: Vec<Doc> = vec![text("while "), self.format_expr(&w.subject)];
+		if !pattern_is_true(&w.pattern) {
+			parts.push(text(" is "));
+			parts.push(self.format_pattern(&w.pattern));
+		}
+		parts.push(text(" "));
+		parts.push(self.format_block(&w.body));
+		concat(parts)
 	}
 
 	fn format_scope(&self, s: &ScopeNode) -> Doc {
@@ -1070,6 +1070,20 @@ fn pattern_needs_parens_as_arg(p: &PatternNode) -> bool {
 	matches!(
 		&p.kind,
 		PatternKind::Record { .. } | PatternKind::Constructor(..)
+	)
+}
+
+// `if cond { }`/`while cond { }` is the canonical surface form of an `is true`
+// match, so the formatter drops a literal `true` pattern. This both renders the
+// shorter form and keeps formatting idempotent with the parser, which
+// synthesizes exactly this pattern when `is` is omitted.
+fn pattern_is_true(p: &PatternNode) -> bool {
+	matches!(
+		&p.kind,
+		PatternKind::Literal(LiteralNode {
+			kind: LiteralKind::Bool(true),
+			..
+		})
 	)
 }
 

@@ -653,13 +653,25 @@ impl<'a> Parser<'a> {
 	}
 
 	fn parse_expression(&mut self) -> Option<ExprNode> {
-		self.parse_expression_with_binding_power(0)
+		self.parse_expression_with_binding_power(0, false)
 	}
 
-	fn parse_expression_with_binding_power(&mut self, min_bp: u8) -> Option<ExprNode> {
+	// `restrict_brace` rides down the right spine of an expression (infix
+	// right-hand sides, call arguments, prefix operands) and makes a `{`
+	// terminate the expression rather than begin a record literal or argument.
+	// `if`/`while` parse their subject this way, so a trailing `{` opens the
+	// body: `if hello { }` reads `hello` as the subject. Delimited sub-parsers
+	// (parens, lists, records) recurse through the unrestricted
+	// `parse_expression`, so the restriction never leaks inside brackets — a
+	// subject that must itself end in a record is written `if (f { x: 1 }) { }`.
+	fn parse_expression_with_binding_power(
+		&mut self,
+		min_bp: u8,
+		restrict_brace: bool,
+	) -> Option<ExprNode> {
 		let mut lhs_expr = match self.current_token {
 			Some(Token::LeftParen(..)) => self.parse_parenthetical(),
-			Some(Token::LeftBrace(..)) => self.parse_record(),
+			Some(Token::LeftBrace(..)) if !restrict_brace => self.parse_record(),
 			Some(Token::LeftBracket(..)) => self.parse_list(),
 			Some(Token::Backtick(..)) => self.parse_regular_expression(),
 			Some(Token::StringLiteral(..)) => self.parse_string(),
@@ -773,7 +785,7 @@ impl<'a> Parser<'a> {
 				// make sure to parse the expression following the operator with
 				// the correct binding power:
 				let (_, right_bp) = operator.prefix_binding_power();
-				let rhs_expr = self.parse_expression_with_binding_power(right_bp)?;
+				let rhs_expr = self.parse_expression_with_binding_power(right_bp, restrict_brace)?;
 
 				Some(ExprNode {
 					range: Range::between(start_point, rhs_expr.range.end),
@@ -836,7 +848,7 @@ impl<'a> Parser<'a> {
 						if matches!(self.current_token, Some(Token::Minus(..))) {
 							break;
 						}
-						match self.parse_expression_with_binding_power(right_bp) {
+						match self.parse_expression_with_binding_power(right_bp, restrict_brace) {
 							Some(arg_expr) => args.push(arg_expr),
 							None => break,
 						}
@@ -881,7 +893,7 @@ impl<'a> Parser<'a> {
 						continue;
 					}
 
-					let rhs_expr = self.parse_expression_with_binding_power(right_bp)?;
+					let rhs_expr = self.parse_expression_with_binding_power(right_bp, restrict_brace)?;
 
 					if let Operator::IndexAccess = operator {
 						// special case: the [ operator needs a closing ]
@@ -1015,14 +1027,31 @@ impl<'a> Parser<'a> {
 		}
 	}
 
+	// The `is PATTERN` that follows an `if`/`while` subject is optional. When
+	// omitted, the subject is matched against `true`, so `if cond { ... }`
+	// desugars to `if cond is true { ... }`. The synthesized pattern borrows the
+	// subject's span so a "condition must be bool" type error points at it.
+	fn parse_optional_is_pattern(&mut self, subject: &ExprNode) -> Option<PatternNode> {
+		if matches!(self.current_token, Some(Token::KeywordIs(..))) {
+			self.advance();
+			self.parse_pattern()
+		} else {
+			Some(PatternNode {
+				range: subject.range,
+				kind: PatternKind::Literal(LiteralNode {
+					range: subject.range,
+					kind: LiteralKind::Bool(true),
+				}),
+			})
+		}
+	}
+
 	fn parse_if_expression(&mut self) -> Option<IfNode> {
 		let (start, _) = expect_token_and_advance!(self, Token::KeywordIf);
 
-		let condition = self.parse_expression()?;
+		let condition = self.parse_expression_with_binding_power(0, true)?;
 
-		expect_token_and_advance!(self, Token::KeywordIs);
-
-		let pattern = self.parse_pattern()?;
+		let pattern = self.parse_optional_is_pattern(&condition)?;
 
 		expect_token_and_advance!(self, Token::LeftBrace);
 
@@ -1145,11 +1174,9 @@ impl<'a> Parser<'a> {
 	fn parse_while_expression(&mut self) -> Option<WhileNode> {
 		let (start, _) = expect_token_and_advance!(self, Token::KeywordWhile);
 
-		let subject = self.parse_expression()?;
+		let subject = self.parse_expression_with_binding_power(0, true)?;
 
-		expect_token_and_advance!(self, Token::KeywordIs);
-
-		let pattern = self.parse_pattern()?;
+		let pattern = self.parse_optional_is_pattern(&subject)?;
 
 		expect_token_and_advance!(self, Token::LeftBrace);
 
