@@ -32,3 +32,11 @@ harness = false
 name = "run"
 path = "run.rs"
 harness = false
+
+# The reuse-soundness harness. Compiles each program twice — reuse on vs the
+# persistent baseline (reuse off) — runs both under V8, and asserts identical
+# observable output. The default libtest harness (no datatest), so it owns its
+# own corpus + meta-checks rather than a per-file fixture sweep.
+[[test]]
+name = "soundness"
+path = "soundness.rs"

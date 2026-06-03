@@ -45,9 +45,33 @@ mod diag {
 	}
 }
 
+/// Knobs on the emit pipeline. Defaults match `pluma run`/`pluma build`; the only
+/// reason to deviate is the soundness harness (`tests/soundness.rs`), which emits a
+/// program twice — once with `reuse` on, once off — and asserts byte-identical
+/// observable output. A thread-safe options value (not a process-global env var) so
+/// the two emits can run concurrently under the parallel test harness without racing.
+#[derive(Clone, Copy, Debug)]
+pub struct EmitOptions {
+	/// Run the opportunistic in-place reuse pass (`ir::reuse`). On by default; the
+	/// pass is sound, so turning it off only forgoes the perf win — the persistent
+	/// baseline it falls back to is the observational oracle the harness diffs against.
+	pub reuse: bool,
+}
+
+impl Default for EmitOptions {
+	fn default() -> Self {
+		EmitOptions { reuse: true }
+	}
+}
+
 /// Lower an `IrProgram` to a WasmGC module. Returns the encoded `.wasm` bytes, or
 /// the accumulated diagnostics if any reachable construct isn't yet supported.
 pub fn emit(program: &IrProgram) -> Result<Vec<u8>, Diagnostics> {
+	emit_with_options(program, EmitOptions::default())
+}
+
+/// `emit`, with the pipeline knobs exposed (see [`EmitOptions`]).
+pub fn emit_with_options(program: &IrProgram, opts: EmitOptions) -> Result<Vec<u8>, Diagnostics> {
 	// 1. WASM-readiness passes specific to emission. Direct-call resolution exposes
 	//    statically-known callees (and lets the entry->main bootstrap collapse to
 	//    a direct call); coercion makes boxing explicit so the emitter reads
@@ -70,8 +94,11 @@ pub fn emit(program: &IrProgram) -> Result<Vec<u8>, Diagnostics> {
 	// Opportunistic in-place reuse: rewrite a proven-unique `dict.insert` accumulator
 	// (the `loopify`'d loop carry) to the transient in-place insert. Sound-only; sees
 	// the resolved `dict-insert` builtin call, so it runs after `resolve_builtins`, and
-	// mints a token local, so before the repr pass. See `notes/REUSE.md`.
-	ir::reuse::reuse(&mut p);
+	// mints a token local, so before the repr pass. See `notes/REUSE.md`. Gated so the
+	// soundness harness can emit the persistent baseline (reuse off) for its differential.
+	if opts.reuse {
+		ir::reuse::reuse(&mut p);
+	}
 	// Record-shape monomorphization: clone record-param functions per call-site
 	// shape so the clone reads its param by `struct.get` (and the caller passes it
 	// nominal). Returns the per-clone param shapes the emitter consumes. Runs before
