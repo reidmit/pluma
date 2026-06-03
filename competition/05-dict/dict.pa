@@ -9,8 +9,7 @@ def tally = fun m i limit buckets {
 	} else {
 		let key = to-string (i % buckets)
 		let prev = dict.lookup m key ?? 0
-		dict.insert m key (prev + 1)
-		tally m (i + 1) limit buckets
+		tally (dict.insert m key (prev + 1)) (i + 1) limit buckets
 	}
 }
 
