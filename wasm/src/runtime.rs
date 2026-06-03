@@ -237,6 +237,15 @@ pub(crate) enum Helper {
 	/// `__dict_from_entries(list) -> $dict` — `dict.from-entries`, built transiently
 	/// (one owner token, `tinsert` each pair, then `count`).
 	DictFromEntries,
+	/// `__dict_mint_token() -> $value` — a fresh transient owner token. Minted once
+	/// at the head of a linear dict region by the reuse pass (`ir::reuse`), then
+	/// threaded into every `__dict_insert_into` in that region. See `notes/REUSE.md`.
+	DictMintToken,
+	/// `__dict_insert_into(dict, key, val, token) -> $dict` — the transient analogue
+	/// of `__dict_insert`: in-place when the touched nodes are owned by `token`,
+	/// copy-on-write otherwise. Emitted only where the reuse pass proved the input
+	/// dict uniquely owned and dead-after, so the mutation is unobservable.
+	DictInsertInto,
 	WireFp,
 	WireMixStr,
 	WireMixLen,
@@ -358,7 +367,7 @@ impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 80;
+	pub(crate) const COUNT: usize = 82;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable

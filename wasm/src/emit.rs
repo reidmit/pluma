@@ -1494,6 +1494,11 @@ impl<'a> FnEmitter<'a> {
 		if let Some((helper, call_args)) = match tag {
 			"dict-empty" => Some((self.runtime.idx(Helper::DictEmpty), &args[0..])),
 			"dict-insert" => Some((self.runtime.idx(Helper::DictInsert), &args[1..])),
+			// Internal, emitted only by `ir::reuse`. `dict-mint-token` takes no args;
+			// `dict-insert-into` carries the `where (hash k)` witness at args[0] (dropped,
+			// like `dict-insert`) and the transient token as its last arg.
+			"dict-mint-token" => Some((self.runtime.idx(Helper::DictMintToken), &args[0..])),
+			"dict-insert-into" => Some((self.runtime.idx(Helper::DictInsertInto), &args[1..])),
 			"dict-lookup" => Some((self.runtime.idx(Helper::DictLookup), &args[1..])),
 			"dict-remove" => Some((self.runtime.idx(Helper::DictRemove), &args[1..])),
 			"dict-map" => Some((self.runtime.idx(Helper::DictMap), &args[0..])),

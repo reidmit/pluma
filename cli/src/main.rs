@@ -109,6 +109,17 @@ fn main() {
 				println!("{:#?}", module);
 			}
 
+			"reuse" => {
+				let entry_path = match std::env::args().nth(2) {
+					Some(path) => path,
+					None => {
+						print_error("No module path given. Expected another argument.");
+						std::process::exit(1);
+					}
+				};
+				reuse_command(entry_path);
+			}
+
 			"help" => {
 				print_help();
 			}
@@ -512,6 +523,62 @@ fn run(entry_path: String, program_args: Vec<String>) {
 	std::process::exit(host::run_streaming_v8(&bytes, &program_args));
 }
 
+// `pluma reuse <path>` — the in-place-reuse lint. For each `dict.insert`, report
+// whether the reuse pass mutates the dict in place or copies it, and why. Reuse is
+// inferred (fast when it fires, a silent per-iteration copy when a refactor breaks
+// linearity), so this makes the decision visible — see `notes/REUSE.md`.
+fn reuse_command(entry_path: String) {
+	let mut compiler = match Compiler::from_entry_path(entry_path) {
+		Ok(c) => c,
+		Err(diagnostics) => {
+			print_diagnostics(diagnostics);
+			std::process::exit(1);
+		}
+	};
+	if let Err(diagnostics) = compiler.check() {
+		print_diagnostics(diagnostics);
+		std::process::exit(1);
+	}
+	let mut program = match ir::lower(&compiler) {
+		Ok(p) => p,
+		Err(msg) => {
+			print_error(format!("ir::lower: {msg}"));
+			std::process::exit(1);
+		}
+	};
+	// Mirror the prefix of `wasm::emit`'s pipeline the reuse pass runs after: direct-call
+	// resolution, loopify, builtin resolution. (Async lowering is a no-op for the
+	// synchronous dict code this lint targets.)
+	ir::resolve::resolve_direct_calls(&mut program);
+	ir::loopify::loopify(&mut program);
+	ir::resolve::resolve_builtins(&mut program);
+
+	// Focus on the user's own code — the stdlib's internal `dict.insert`s are not
+	// actionable here.
+	let notes: Vec<_> = ir::reuse::report(&program)
+		.into_iter()
+		.filter(|n| !n.module.starts_with("core."))
+		.collect();
+	if notes.is_empty() {
+		println!("no `dict.insert` sites found in your modules");
+		return;
+	}
+	let mut reused = 0;
+	for n in &notes {
+		let loc = format!("{} {}:{}", n.module, n.range.start.line, n.range.start.col);
+		if n.reused {
+			reused += 1;
+			println!("  {loc}  reuses in place");
+		} else {
+			println!("  {loc}  copies — {}", n.reason);
+		}
+	}
+	println!(
+		"\n{reused}/{} dict.insert site(s) reuse in place",
+		notes.len()
+	);
+}
+
 fn format_command(args: Vec<String>) {
 	let mut check = false;
 	let mut paths: Vec<String> = Vec::new();
@@ -614,6 +681,7 @@ COMMANDS:
                    nearest `pluma.pa`. Pass a directory to start the walk-up
                    from somewhere other than cwd. `-f name` (repeatable)
                    filters to modules whose name contains `name`.
+  reuse <path>     report where `dict.insert` reuses its dict in place vs copies
   tokenize <path>  dump the token stream for a module
   analyze <path>   parse, type-check & dump info about a module
   version          print compiler version info
@@ -641,6 +709,7 @@ COMMANDS:
                    nearest `pluma.pa`. Pass a directory to start the walk-up
                    from somewhere other than cwd. `-f name` (repeatable)
                    filters to modules whose name contains `name`.
+  reuse <path>     report where `dict.insert` reuses its dict in place vs copies
   version          print compiler version info
   help             print this help text
 ",

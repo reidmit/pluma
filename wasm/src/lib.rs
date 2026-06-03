@@ -58,10 +58,20 @@ pub fn emit(program: &IrProgram) -> Result<Vec<u8>, Diagnostics> {
 	// reach the emitter). `is_async` gates the driver emission + entry wrapping.
 	let is_async = async_lower::lower(&mut p);
 	ir::resolve::resolve_direct_calls(&mut p);
+	// Turn self-tail-recursion into a `Loop` over the params. Behavior-neutral; the
+	// enabler for intra-function reuse analysis (see `notes/REUSE.md`). Needs
+	// `TailCallDirect` (so after direct-call resolution) and must precede the repr
+	// pass (so reassigned-param / result locals get reprs).
+	ir::loopify::loopify(&mut p);
 	// Resolve builtin-global calls to typed `Call(Callee::Builtin(tag, ret))` nodes,
 	// threading each builtin's declared return repr onto the call so the coercion
 	// pass below can read a scalar-returning builtin (`bytes-get`, …) unboxed.
 	ir::resolve::resolve_builtins(&mut p);
+	// Opportunistic in-place reuse: rewrite a proven-unique `dict.insert` accumulator
+	// (the `loopify`'d loop carry) to the transient in-place insert. Sound-only; sees
+	// the resolved `dict-insert` builtin call, so it runs after `resolve_builtins`, and
+	// mints a token local, so before the repr pass. See `notes/REUSE.md`.
+	ir::reuse::reuse(&mut p);
 	// Record-shape monomorphization: clone record-param functions per call-site
 	// shape so the clone reads its param by `struct.get` (and the caller passes it
 	// nominal). Returns the per-clone param shapes the emitter consumes. Runs before

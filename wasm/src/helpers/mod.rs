@@ -294,6 +294,24 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		},
 	},
 	HelperDef {
+		id: H::DictMintToken,
+		fn_type: Ty::Helper(0),
+		deps: &[],
+		build: |_c| dict::build_dict_mint_token_fn(),
+	},
+	HelperDef {
+		id: H::DictInsertInto,
+		fn_type: Ty::Helper(4),
+		deps: &[H::Hash, H::CnodeLookup, H::CnodeTInsert],
+		build: |c| {
+			dict::build_dict_insert_into_fn(
+				c.dep(H::Hash),
+				c.dep(H::CnodeLookup),
+				c.dep(H::CnodeTInsert),
+			)
+		},
+	},
+	HelperDef {
 		id: H::WireFp,
 		fn_type: Ty::WireMixVal,
 		deps: &[H::WireMixStr, H::WireMixLen],
@@ -774,6 +792,9 @@ pub(crate) fn helper_for_tag(tag: &str) -> Option<Helper> {
 		"dict-update" => H::DictUpdate,
 		"dict-clear" => H::DictClear,
 		"dict-from-entries" => H::DictFromEntries,
+		// Transient in-place insert + its owner token, emitted by `ir::reuse`.
+		"dict-mint-token" => H::DictMintToken,
+		"dict-insert-into" => H::DictInsertInto,
 		// `wire-fingerprint` walks the schema value tree; encode/decode interpret
 		// it to (de)serialize a value over the module-level codec globals.
 		"wire-fingerprint" => H::WireFp,

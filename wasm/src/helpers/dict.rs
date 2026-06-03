@@ -1549,6 +1549,74 @@ pub(crate) fn build_dict_insert_fn(
 	w.finish()
 }
 
+/// Build `__dict_mint_token(unit?) -> $value`: a fresh transient owner token (a
+/// bare `$value`, compared only by `ref.eq`). Minted once at the start of a linear
+/// dict region by the reuse pass (see `notes/REUSE.md`) and threaded into every
+/// `__dict_insert_into` in that region.
+pub(crate) fn build_dict_mint_token_fn() -> Function {
+	let mut w = Wat::new(0);
+	push_token(&mut w);
+	w.finish()
+}
+
+/// Build `__dict_insert_into(dict, key, val, token) -> $dict`: like `__dict_insert`
+/// but transient — it threads `token` into `__cnode_tinsert`, which mutates in place
+/// any node owned by `token` and copy-on-writes any node that isn't (so a frozen or
+/// foreign dict is never corrupted). The reuse pass rewrites a `dict.insert` to this
+/// only when it has proven the input dict is uniquely owned and dead after the
+/// insert, so the in-place mutation is unobservable. `size` is maintained exactly as
+/// `__dict_insert` does (a pre-lookup gives the add-vs-replace delta).
+/// `hash_idx`/`cnlookup_idx`/`cntinsert_idx` = `__hash`/`__cnode_lookup`/`__cnode_tinsert`.
+pub(crate) fn build_dict_insert_into_fn(
+	hash_idx: u32,
+	cnlookup_idx: u32,
+	cntinsert_idx: u32,
+) -> Function {
+	let mut w = Wat::new(4);
+	let (dict, key, val, token) = (w.param(0), w.param(1), w.param(2), w.param(3));
+	let bhash = w.local(types::value_ref());
+	let b0 = w.local(types::value_ref());
+	let root = w.local(types::value_ref());
+	let found = w.local(types::value_ref());
+	let delta = w.local(ValType::I32);
+	let newroot = w.local(types::value_ref());
+	let size = w.local(ValType::I32);
+
+	w.local_get(key).call(hash_idx).local_set(bhash);
+	w.i32(0).ref_i31().local_set(b0);
+	w.local_get(dict)
+		.ref_cast(types::T_DICT)
+		.struct_get(types::T_DICT, DICT_ROOT)
+		.local_set(root);
+	w.local_get(root)
+		.local_get(key)
+		.local_get(bhash)
+		.local_get(b0)
+		.call(cnlookup_idx)
+		.local_set(found);
+	// delta = 1 when the key was absent (ref_is_null → 1).
+	w.local_get(found).ref_is_null().local_set(delta);
+	w.local_get(root)
+		.local_get(key)
+		.local_get(val)
+		.local_get(bhash)
+		.local_get(b0)
+		.local_get(token)
+		.call(cntinsert_idx)
+		.local_set(newroot);
+	w.local_get(dict)
+		.ref_cast(types::T_DICT)
+		.struct_get(types::T_DICT, DICT_SIZE)
+		.local_get(delta)
+		.i32_add()
+		.local_set(size);
+	w.i32(types::TAG_DICT)
+		.local_get(newroot)
+		.local_get(size)
+		.struct_new(types::T_DICT);
+	w.finish()
+}
+
 /// Build `__dict_remove(dict, key) -> $dict`: a new dict without `key` (the input
 /// dict, unchanged, when the key is absent). `cnremove_idx` = `__cnode_remove`.
 pub(crate) fn build_dict_remove_fn(

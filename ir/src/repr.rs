@@ -158,6 +158,20 @@ pub fn infer_reprs(f: &Function, sigs: &Sigs) -> Vec<Repr> {
 	}
 	let mut merged = HashSet::new();
 	assign_block(&f.body, &mut reprs, &joins, &mut merged, sigs);
+	// A parameter's local type is fixed by the function's signature — the entry
+	// value arrives in that repr — so its `var_repr` must match it, regardless of
+	// what the body assigns. This matters only when the body *reassigns* a param
+	// (loopification of self-tail-recursion does: it carries the recursion args
+	// through the params across the loop back-edge); `assign_block` would otherwise
+	// adopt the reassigned value's repr and desync the local from the signature. A
+	// coercion bridges the reassignment instead. No-op when no param is reassigned.
+	for (i, p) in f.params.iter().enumerate() {
+		reprs[p.0 as usize] = if sigs.seeds_params() {
+			f.param_reprs.get(i).copied().unwrap_or(Repr::Boxed)
+		} else {
+			Repr::Boxed
+		};
+	}
 	reprs
 }
 

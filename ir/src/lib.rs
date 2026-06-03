@@ -22,9 +22,11 @@
 // functions; the `is_async` flag and the `Await` node are its inputs).
 
 pub mod cps;
+pub mod loopify;
 pub mod lower;
 pub mod repr;
 pub mod resolve;
+pub mod reuse;
 pub mod types;
 
 pub use lower::{lower, lower_tests};
