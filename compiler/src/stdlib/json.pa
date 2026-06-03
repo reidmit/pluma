@@ -491,7 +491,9 @@ def collect-string :: fun bytes int int (list int) -> result (string, int) error
 			} else {
 				let e = bytes.get bs (pos + 1)
 				when simple-escape e is some byte {
-					collect-string bs n (pos + 2) [...acc, byte]
+					# In-place append (`acc` is threaded linearly); see `append-utf8`.
+					list.push acc byte
+					collect-string bs n (pos + 2) acc
 				} is none {
 					if e == 117 {
 						collect-unicode bs n (pos + 2) acc
@@ -501,7 +503,8 @@ def collect-string :: fun bytes int int (list int) -> result (string, int) error
 				}
 			}
 		} else {
-			collect-string bs n (pos + 1) [...acc, b]
+			list.push acc b
+			collect-string bs n (pos + 1) acc
 		}
 	}
 }
@@ -623,16 +626,29 @@ def hex-val :: fun int -> int = fun b {
 	}
 }
 
-# Append the UTF-8 encoding of codepoint `cp` to a byte accumulator.
+# Append the UTF-8 encoding of codepoint `cp` to a byte accumulator. Pushes in
+# place (`acc` is threaded linearly through the string builder) and returns it, so
+# the previous `[...acc, ...]` spread's O(n) copy -- quadratic over a long string --
+# is gone. Returns `acc` for the callers that thread it onward.
 def append-utf8 :: fun (list int) int -> list int = fun acc cp {
 	if cp < 128 {
-		[...acc, cp]
+		list.push acc cp
+		acc
 	} else if cp < 2048 {
-		[...acc, 192 + cp / 64, 128 + cp % 64]
+		list.push acc (192 + cp / 64)
+		list.push acc (128 + cp % 64)
+		acc
 	} else if cp < 65536 {
-		[...acc, 224 + cp / 4096, 128 + cp / 64 % 64, 128 + cp % 64]
+		list.push acc (224 + cp / 4096)
+		list.push acc (128 + cp / 64 % 64)
+		list.push acc (128 + cp % 64)
+		acc
 	} else {
-		[...acc, 240 + cp / 262144, 128 + cp / 4096 % 64, 128 + cp / 64 % 64, 128 + cp % 64]
+		list.push acc (240 + cp / 262144)
+		list.push acc (128 + cp / 4096 % 64)
+		list.push acc (128 + cp / 64 % 64)
+		list.push acc (128 + cp % 64)
+		acc
 	}
 }
 
@@ -652,16 +668,20 @@ def parse-array :: fun bytes int int -> result (value, int) error = fun bs n pos
 def parse-array-elems :: fun bytes int int (list value) -> result (value, int) error = fun bs n pos acc {
 	when parse-value bs n pos is ok pair {
 		let (v, p) = pair
-		let acc2 = [...acc, v]
+		# In-place append: `acc` is threaded linearly through the recursion, so
+		# `list.push` grows it in O(1). The previous `[...acc, v]` spread copied the
+		# whole accumulator each element -- O(n) per step, quadratic over a long array,
+		# which dominated parse time (a 20k-element list cost ~0.3s of pure copying).
+		list.push acc v
 		let p1 = skip-ws bs n p
 		if p1 >= n {
 			err (fail bs p1 "EOF while parsing a list")
 		} else {
 			let b = bytes.get bs p1
 			if b == 93 {
-				ok (array acc2, p1 + 1)
+				ok (array acc, p1 + 1)
 			} else if b == 44 {
-				parse-array-elems bs n (p1 + 1) acc2
+				parse-array-elems bs n (p1 + 1) acc
 			} else {
 				err (fail bs p1 "expected `,` or `]`")
 			}
