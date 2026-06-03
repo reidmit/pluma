@@ -1,30 +1,23 @@
-// `core.dict` as a persistent hash-trie (a persistent, structurally-shared
-// immutable map). The old representation was an insertion-ordered association array that
-// linear-scanned with `__eq` and full-copied on every insert — O(n) per insert,
-// O(n²) to build. This replaces it with a 16-way array-mapped trie keyed by a
-// structural hash (`__hash`), so insert/lookup are O(log₁₆ n) and an immutable
-// insert path-copies only the O(log n) nodes it touches (every other subtree is
-// shared by reference — the GC handles lifetimes).
+// `core.dict` as a **mutable** open-addressing hash table. `insert`/`remove` mutate
+// the `$dict` in place (and return it, for call-site convenience); `dict` values
+// therefore have reference semantics, like `ref` / `list.set`. (The previous
+// representation was an immutable persistent hash-trie that path-copied O(log n)
+// nodes per insert — correct and shareable, but every insert allocated; a mutable
+// table allocates nothing in the steady state, which is what a tally loop wants.)
 //
-// Layout (see `types.rs`): a `$dict` is `{ tag, root, next_seq }`. `root` is a
-// `$dnode` trie node (or null when empty). A `$dnode` is `{ tag, kids, ents,
-// leafhash }`:
+// Layout (see `types.rs`): a `$dict` is `{ tag, indices, order }`.
+//   * `order` — a `$list` of `$dentry { key, value, hash }` in insertion order. Its
+//     length is the live entry count: there are no tombstones, so iteration
+//     (entries/keys/values/size) is a dense walk and `remove` rebuilds the table.
+//   * `indices` — the open-addressing probe table, a power-of-two `$valarray`. Each
+//     slot is null (empty) or an `i31`-boxed position into `order` (positions are
+//     well under 2^30, so the box is an immediate — no allocation). Linear probing;
+//     a slot collision compares the entry's cached `hash` (raw i64) before the
+//     costlier `__eq`.
 //
-//   * branch — `kids` is a 16-slot `$valarray` of child `$dnode`s (null = absent),
-//     `ents` null. The nibble `hash & 0xF` (the hash is shifted right by 4 as we
-//     descend) selects a child.
-//   * leaf — `ents` is a `$valarray` of `$tuple(key, value, seq)` entries that all
-//     share `leafhash` (the hash bits unconsumed at this depth), `kids` null. A
-//     leaf splits into a branch when an insert arrives whose remaining hash
-//     differs from `leafhash`; entries that share a full hash (a true collision)
-//     stay together in one leaf's bucket and are told apart by `__eq`.
-//
-// `seq` is a per-entry insertion stamp (the dict's `next_seq` at insert time) so
-// `dict.entries`/`keys`/`values` can recover insertion order. `dict.size` is an
-// O(n) trie count — size isn't stored, since it's read far less often than
-// insert/lookup run. remove/map/filter are expressed as "materialize sorted
-// entries, transform, rebuild via insert", so only insert/lookup/collect/count
-// actually walk the trie.
+// Insert grows + rehashes `indices` at 0.75 load (the `order` list is untouched).
+// `__hash`/`__eq` are shared with the rest of the runtime; entries cache `__hash`
+// so resize and probing never recompute it.
 
 use wasm_encoder::{Function, ValType};
 
@@ -38,47 +31,36 @@ use crate::types;
 const FNV_OFFSET: i64 = 0xcbf2_9ce4_8422_2325u64 as i64;
 const FNV_PRIME: i64 = 0x0000_0100_0000_01b3;
 
-// Branching factor: 16-way (4 hash bits per level), so a 64-bit hash bottoms out
-// after at most 16 levels with no rebalancing.
-const FANOUT: u32 = 16;
-const NIBBLE_MASK: i64 = 0xF;
-const NIBBLE_BITS: i64 = 4;
+// Initial probe-table capacity (a power of two); grows ×2 at 0.75 load.
+const INITIAL_CAP: i32 = 8;
 
 const VA: u32 = types::T_VALARRAY;
 
+// $dict field indices.
+const DICT_INDICES: u32 = 1;
+const DICT_ORDER: u32 = 2;
+// $dentry field indices.
+const DENTRY_KEY: u32 = 1;
+const DENTRY_VAL: u32 = 2;
+const DENTRY_HASH: u32 = 3;
+// $list field indices.
+const LIST_ELEMS: u32 = 1;
+const LIST_LEN: u32 = 2;
+
 // ---------------------------------------------------------------------------
-// Small emitters shared across the trie helpers.
+// Small emitters shared across the table helpers.
 // ---------------------------------------------------------------------------
 
-/// Push a fresh leaf `$dnode { tag, kids: null, ents, leafhash }`.
-fn make_leaf(w: &mut Wat, ents: Local, leafhash: Local) {
-	w.i32(0); // sentinel tag — a `$dnode` never reaches tag-inspecting code
-	w.ref_null(VA); // kids = null marks this as a leaf
-	w.local_get(ents);
-	w.local_get(leafhash);
-	w.struct_new(types::T_DNODE);
+/// Push a fresh `$dentry { tag, key, value, hash }` (`hash` is a raw i64 local).
+fn make_dentry(w: &mut Wat, key: Local, value: Local, hash: Local) {
+	w.i32(0); // sentinel tag — a `$dentry` never reaches tag-inspecting code
+	w.local_get(key);
+	w.local_get(value);
+	w.local_get(hash);
+	w.struct_new(types::T_DENTRY);
 }
 
-/// Push a fresh branch `$dnode { tag, kids, ents: null, leafhash: 0 }`.
-fn make_branch(w: &mut Wat, kids: Local) {
-	w.i32(0);
-	w.local_get(kids);
-	w.ref_null(VA); // ents = null marks this as a branch
-	w.i64(0);
-	w.struct_new(types::T_DNODE);
-}
-
-/// Push a `$tuple(a, b, c)` (a 3-element entry: key, value, seq).
-fn tuple3(w: &mut Wat, a: Local, b: Local, c: Local) {
-	w.i32(types::TAG_TUPLE);
-	w.local_get(a);
-	w.local_get(b);
-	w.local_get(c);
-	w.array_new_fixed(VA, 3);
-	w.struct_new(types::T_TUPLE);
-}
-
-/// Push a `$tuple(a, b)` (a 2-element `(key, value)` entry).
+/// Push a `$tuple(a, b)` (a 2-element `(key, value)` entry for `dict.entries`).
 fn tuple2(w: &mut Wat, a: Local, b: Local) {
 	w.i32(types::TAG_TUPLE);
 	w.local_get(a);
@@ -87,35 +69,9 @@ fn tuple2(w: &mut Wat, a: Local, b: Local) {
 	w.struct_new(types::T_TUPLE);
 }
 
-/// Push `t.elems[field]` for a `$tuple` reference held in local `t`.
-fn tuple_elem(w: &mut Wat, t: Local, field: i32) {
-	w.local_get(t)
-		.ref_cast(types::T_TUPLE)
-		.struct_get(types::T_TUPLE, 1);
-	w.i32(field).array_get(VA);
-}
-
-/// Push `ents[i].elems[field]` — `field` of the `$tuple` entry at index `i`.
-fn entry_elem(w: &mut Wat, ents: Local, i: Local, field: i32) {
-	w.local_get(ents).local_get(i).array_get(VA);
-	w.ref_cast(types::T_TUPLE).struct_get(types::T_TUPLE, 1);
-	w.i32(field).array_get(VA);
-}
-
-/// Push an empty `$list { tag, elems: [], length: 0 }`.
-fn empty_list(w: &mut Wat) {
-	w.i32(types::TAG_LIST);
-	w.i32(0).array_new_default(VA);
-	w.i32(0);
-	w.struct_new(types::T_LIST);
-}
-
-/// Push a fresh empty `$dict { tag, root: null, next_seq: 0 }`.
-fn empty_dict(w: &mut Wat) {
-	w.i32(types::TAG_DICT);
+/// Push the `nothing` value (a typed null reference — no allocation).
+fn push_nothing(w: &mut Wat) {
 	w.ref_null(types::T_VALUE);
-	w.i32(0);
-	w.struct_new(types::T_DICT);
 }
 
 // ---------------------------------------------------------------------------
@@ -312,466 +268,193 @@ fn hash_n(
 }
 
 // ---------------------------------------------------------------------------
-// Trie insert (recursive, path-copying).
+// Construction / size / iteration.
 // ---------------------------------------------------------------------------
 
-/// Build `__dict_node_insert(node, hash, key, val, seq) -> $dnode`. `hash`/`seq`
-/// arrive boxed (`$int`). Returns a path-copied root for the subtree. `self_idx`
-/// is its own index (descent); `eq_idx` is `__eq` (bucket key match).
-pub(crate) fn build_dict_node_insert_fn(self_idx: u32, eq_idx: u32) -> Function {
-	let mut w = Wat::new(5);
-	let (node, hashb, key, val, seqb) = (w.param(0), w.param(1), w.param(2), w.param(3), w.param(4));
-	let h = w.local(ValType::I64);
-	let nd = w.local(types::dnode_ref_null());
-	let kids = w.local(types::valarray_ref_null());
-	let ents = w.local(types::valarray_ref_null());
-	let lh = w.local(ValType::I64);
-	let n = w.local(ValType::I32);
-	let i = w.local(ValType::I32);
-	let found = w.local(ValType::I32);
-	// Nullable so they're definitely-assigned (default null): the validator does
-	// not merge assignments made only inside if/else arms. Always set before use.
-	let newents = w.local(types::valarray_ref_null());
-	let newkids = w.local(types::valarray_ref_null());
-	let nib = w.local(ValType::I32);
-	let oldnib = w.local(ValType::I32);
-	let hs = w.local(ValType::I64); // hash >>> 4 (the child's remaining hash)
-	let oldseq = w.local(types::value_ref());
-
-	// h = unbox(hash).
-	w.local_get(hashb)
-		.ref_cast(types::T_INT)
-		.struct_get(types::T_INT, 1)
-		.local_set(h);
-
-	// Empty slot → a fresh single-entry leaf keyed on the remaining hash `h`.
-	w.local_get(node).ref_is_null();
-	w.if_(|w| {
-		tuple3(w, key, val, seqb);
-		w.array_new_fixed(VA, 1).local_set(newents);
-		make_leaf(w, newents, h);
-		w.ret();
-	});
-
-	// nd = node; kids = nd.kids (null ⇒ leaf).
-	w.local_get(node).ref_cast(types::T_DNODE).local_set(nd);
-	w.local_get(nd)
-		.struct_get(types::T_DNODE, 1)
-		.local_set(kids);
-	w.local_get(kids).ref_is_null();
-	w.if_else(
-		|w| {
-			// --- leaf ---
-			w.local_get(nd)
-				.struct_get(types::T_DNODE, 2)
-				.local_set(ents);
-			w.local_get(nd).struct_get(types::T_DNODE, 3).local_set(lh);
-			w.local_get(lh).local_get(h).i64_eq();
-			w.if_else(
-				|w| {
-					// Same hash → replace (key present) or append into this bucket.
-					w.local_get(ents).array_len().local_set(n);
-					w.i32(-1).local_set(found);
-					w.i32(0).local_set(i);
-					w.block("fbrk", |w| {
-						w.loop_("fscan", |w| {
-							w.local_get(i).local_get(n).i32_ge_s().br_if("fbrk");
-							entry_elem(w, ents, i, 0);
-							w.local_get(key).call(eq_idx);
-							w.if_(|w| {
-								w.local_get(i).local_set(found);
-								w.br("fbrk");
-							});
-							w.local_get(i).i32(1).i32_add().local_set(i);
-							w.br("fscan");
-						});
-					});
-					w.local_get(found).i32(0).i32_ge_s();
-					w.if_else(
-						|w| {
-							// Replace value, keep the original seq.
-							w.local_get(n).array_new_default(VA).local_set(newents);
-							w.copy_loop(VA, newents, None, ents, None, n);
-							entry_elem(w, ents, found, 2);
-							w.local_set(oldseq);
-							w.local_get(newents).local_get(found);
-							tuple3(w, key, val, oldseq);
-							w.array_set(VA);
-						},
-						|w| {
-							// Append a new (key, val, seq) entry.
-							w.local_get(n)
-								.i32(1)
-								.i32_add()
-								.array_new_default(VA)
-								.local_set(newents);
-							w.copy_loop(VA, newents, None, ents, None, n);
-							w.local_get(newents).local_get(n);
-							tuple3(w, key, val, seqb);
-							w.array_set(VA);
-						},
-					);
-					make_leaf(w, newents, lh);
-					w.ret();
-				},
-				|w| {
-					// Different hash → split this leaf into a branch one level down.
-					w.i32(FANOUT as i32)
-						.array_new_default(VA)
-						.local_set(newkids);
-					// Place the existing leaf (bucket intact) at its nibble, hash >>> 4.
-					w.local_get(lh)
-						.i64(NIBBLE_MASK)
-						.i64_and()
-						.i32_wrap_i64()
-						.local_set(oldnib);
-					w.local_get(lh).i64(NIBBLE_BITS).i64_shr_u().local_set(hs);
-					w.local_get(newkids).local_get(oldnib);
-					make_leaf(w, ents, hs);
-					w.array_set(VA);
-					// Insert the new entry into the branch (recurses, splitting deeper
-					// if it lands on the same nibble as the relocated leaf).
-					w.local_get(h)
-						.i64(NIBBLE_MASK)
-						.i64_and()
-						.i32_wrap_i64()
-						.local_set(nib);
-					w.local_get(h).i64(NIBBLE_BITS).i64_shr_u().local_set(hs);
-					w.local_get(newkids).local_get(nib);
-					w.local_get(newkids).local_get(nib).array_get(VA);
-					w.i32(types::TAG_INT).local_get(hs).struct_new(types::T_INT);
-					w.local_get(key)
-						.local_get(val)
-						.local_get(seqb)
-						.call(self_idx);
-					w.array_set(VA);
-					make_branch(w, newkids);
-					w.ret();
-				},
-			);
-		},
-		|w| {
-			// --- branch --- copy the 16 child slots, recurse into the selected one.
-			w.local_get(h)
-				.i64(NIBBLE_MASK)
-				.i64_and()
-				.i32_wrap_i64()
-				.local_set(nib);
-			w.local_get(h).i64(NIBBLE_BITS).i64_shr_u().local_set(hs);
-			w.i32(FANOUT as i32).local_set(n);
-			w.i32(FANOUT as i32)
-				.array_new_default(VA)
-				.local_set(newkids);
-			w.copy_loop(VA, newkids, None, kids, None, n);
-			w.local_get(newkids).local_get(nib);
-			w.local_get(kids).local_get(nib).array_get(VA);
-			w.i32(types::TAG_INT).local_get(hs).struct_new(types::T_INT);
-			w.local_get(key)
-				.local_get(val)
-				.local_get(seqb)
-				.call(self_idx);
-			w.array_set(VA);
-			make_branch(w, newkids);
-			w.ret();
-		},
-	);
-	// Every arm of the outer `if_else` returns; this terminates the (divergent)
-	// block so the `Empty` block type leaves a balanced stack.
-	w.unreachable();
-	w.finish()
-}
-
-// ---------------------------------------------------------------------------
-// Trie structural equality (lets `__eq`'s dict case stay self-contained).
-// ---------------------------------------------------------------------------
-
-/// Build `__dict_node_eq(a, b) -> i32`. Two dicts with the same key set have the
-/// same trie shape (splits are hash-determined, insertion-order-independent), so
-/// this compares structure + per-leaf buckets, order-independently and ignoring
-/// `seq`, via `__eq` (`eq_idx`). Either node may be null (an empty subtree).
-pub(crate) fn build_dict_node_eq_fn(self_idx: u32, eq_idx: u32) -> Function {
-	let mut w = Wat::new(2);
-	let (a, b) = (w.param(0), w.param(1));
-	let aents = w.local(types::valarray_ref_null());
-	let bents = w.local(types::valarray_ref_null());
-	let akids = w.local(types::valarray_ref_null());
-	let bkids = w.local(types::valarray_ref_null());
-	let n = w.local(ValType::I32);
-	let i = w.local(ValType::I32);
-	let j = w.local(ValType::I32);
-	let found = w.local(ValType::I32);
-
-	// Null handling: both null → equal; exactly one null → unequal.
-	w.local_get(a).ref_is_null();
-	w.local_get(b).ref_is_null();
-	w.i32_and();
-	w.if_(|w| {
-		w.i32(1).ret();
-	});
-	w.local_get(a).ref_is_null();
-	w.local_get(b).ref_is_null();
-	w.i32_or();
-	w.if_(|w| {
-		w.i32(0).ret();
-	});
-
-	// akids/bkids: null ⇒ leaf. A leaf-vs-branch mismatch ⇒ unequal.
-	w.local_get(a)
-		.ref_cast(types::T_DNODE)
-		.struct_get(types::T_DNODE, 1)
-		.local_set(akids);
-	w.local_get(b)
-		.ref_cast(types::T_DNODE)
-		.struct_get(types::T_DNODE, 1)
-		.local_set(bkids);
-	w.local_get(akids).ref_is_null();
-	w.local_get(bkids).ref_is_null();
-	w.i32_ne();
-	w.if_(|w| {
-		w.i32(0).ret();
-	});
-
-	w.local_get(akids).ref_is_null();
-	w.if_else(
-		|w| {
-			// --- both leaves --- equal-size buckets, every a-entry matched in b.
-			w.local_get(a)
-				.ref_cast(types::T_DNODE)
-				.struct_get(types::T_DNODE, 2)
-				.local_set(aents);
-			w.local_get(b)
-				.ref_cast(types::T_DNODE)
-				.struct_get(types::T_DNODE, 2)
-				.local_set(bents);
-			w.local_get(aents).array_len().local_set(n);
-			w.local_get(bents).array_len().local_get(n).i32_ne();
-			w.if_(|w| {
-				w.i32(0).ret();
-			});
-			w.i32(0).local_set(i);
-			w.block("obrk", |w| {
-				w.loop_("olp", |w| {
-					w.local_get(i).local_get(n).i32_ge_s().br_if("obrk");
-					w.i32(0).local_set(j);
-					w.i32(0).local_set(found);
-					w.block("ibrk", |w| {
-						w.loop_("ilp", |w| {
-							w.local_get(j).local_get(n).i32_ge_s().br_if("ibrk");
-							// keys match? then values must match, else fail outright.
-							entry_elem(w, aents, i, 0);
-							entry_elem(w, bents, j, 0);
-							w.call(eq_idx);
-							w.if_(|w| {
-								entry_elem(w, aents, i, 1);
-								entry_elem(w, bents, j, 1);
-								w.call(eq_idx).i32_eqz();
-								w.if_(|w| {
-									w.i32(0).ret();
-								});
-								w.i32(1).local_set(found);
-								w.br("ibrk");
-							});
-							w.local_get(j).i32(1).i32_add().local_set(j);
-							w.br("ilp");
-						});
-					});
-					w.local_get(found).i32_eqz();
-					w.if_(|w| {
-						w.i32(0).ret();
-					});
-					w.local_get(i).i32(1).i32_add().local_set(i);
-					w.br("olp");
-				});
-			});
-			w.i32(1).ret();
-		},
-		|w| {
-			// --- both branches --- compare all 16 child slots pairwise.
-			w.i32(0).local_set(i);
-			w.block("cbrk", |w| {
-				w.loop_("clp", |w| {
-					w.local_get(i).i32(FANOUT as i32).i32_ge_s().br_if("cbrk");
-					w.local_get(akids).local_get(i).array_get(VA);
-					w.local_get(bkids).local_get(i).array_get(VA);
-					w.call(self_idx).i32_eqz();
-					w.if_(|w| {
-						w.i32(0).ret();
-					});
-					w.local_get(i).i32(1).i32_add().local_set(i);
-					w.br("clp");
-				});
-			});
-			w.i32(1).ret();
-		},
-	);
-	// Both arms return; terminate the divergent body for the `(result i32)` type.
-	w.unreachable();
-	w.finish()
-}
-
-// ---------------------------------------------------------------------------
-// Trie traversal: collect entries, count entries.
-// ---------------------------------------------------------------------------
-
-/// Build `__dict_collect(node, list) -> list`: append every entry of the subtree
-/// (each the stored `$tuple(key, value, seq)`) to `list` via `__list_push`
-/// (`push_idx`), returning the (in-place-grown) list. Order is arbitrary — the
-/// caller sorts by `seq`. `self_idx` recurses into branch children.
-pub(crate) fn build_dict_collect_fn(self_idx: u32, push_idx: u32) -> Function {
-	let mut w = Wat::new(2);
-	let (node, list) = (w.param(0), w.param(1));
-	let kids = w.local(types::valarray_ref_null());
-	let ents = w.local(types::valarray_ref_null());
-	let n = w.local(ValType::I32);
-	let i = w.local(ValType::I32);
-
-	// Null subtree → list unchanged.
-	w.local_get(node).ref_is_null();
-	w.if_(|w| {
-		w.local_get(list).ret();
-	});
-	w.local_get(node)
-		.ref_cast(types::T_DNODE)
-		.struct_get(types::T_DNODE, 1)
-		.local_set(kids);
-	w.local_get(kids).ref_is_null();
-	w.if_else(
-		|w| {
-			// leaf: push each entry tuple.
-			w.local_get(node)
-				.ref_cast(types::T_DNODE)
-				.struct_get(types::T_DNODE, 2)
-				.local_set(ents);
-			w.local_get(ents).array_len().local_set(n);
-			w.i32(0).local_set(i);
-			w.block("brk", |w| {
-				w.loop_("lp", |w| {
-					w.local_get(i).local_get(n).i32_ge_s().br_if("brk");
-					w.local_get(list);
-					w.local_get(ents).local_get(i).array_get(VA);
-					w.call(push_idx).drop(); // push returns nothing; list grows in place
-					w.local_get(i).i32(1).i32_add().local_set(i);
-					w.br("lp");
-				});
-			});
-		},
-		|w| {
-			// branch: recurse into each child (collect tolerates a null child).
-			w.i32(0).local_set(i);
-			w.block("brk", |w| {
-				w.loop_("lp", |w| {
-					w.local_get(i).i32(FANOUT as i32).i32_ge_s().br_if("brk");
-					w.local_get(kids).local_get(i).array_get(VA);
-					w.local_get(list);
-					w.call(self_idx).drop();
-					w.local_get(i).i32(1).i32_add().local_set(i);
-					w.br("lp");
-				});
-			});
-		},
-	);
-	w.local_get(list);
-	w.finish()
-}
-
-/// Build `__dict_count(node) -> $int`: total entries in the subtree. Recursive.
-pub(crate) fn build_dict_count_fn(self_idx: u32) -> Function {
+/// Build `__dict_empty(unit) -> $dict`: a fresh table — an `INITIAL_CAP`-slot empty
+/// probe array and an empty `order` list. The arg (unit) is ignored.
+pub(crate) fn build_dict_empty_fn() -> Function {
 	let mut w = Wat::new(1);
-	let node = w.param(0);
-	let kids = w.local(types::valarray_ref_null());
-	let acc = w.local(ValType::I64);
-	let i = w.local(ValType::I32);
-
-	w.local_get(node).ref_is_null();
-	w.if_(|w| {
-		w.i32(types::TAG_INT).i64(0).struct_new(types::T_INT).ret();
-	});
-	w.local_get(node)
-		.ref_cast(types::T_DNODE)
-		.struct_get(types::T_DNODE, 1)
-		.local_set(kids);
-	w.local_get(kids).ref_is_null();
-	w.if_(|w| {
-		// leaf: bucket size.
-		w.i32(types::TAG_INT);
-		w.local_get(node)
-			.ref_cast(types::T_DNODE)
-			.struct_get(types::T_DNODE, 2)
-			.array_len();
-		w.i64_extend_i32_u();
-		w.struct_new(types::T_INT).ret();
-	});
-	// branch: sum the children.
-	w.i64(0).local_set(acc);
-	w.i32(0).local_set(i);
-	w.block("brk", |w| {
-		w.loop_("lp", |w| {
-			w.local_get(i).i32(FANOUT as i32).i32_ge_s().br_if("brk");
-			w.local_get(acc);
-			w.local_get(kids).local_get(i).array_get(VA);
-			w.call(self_idx)
-				.ref_cast(types::T_INT)
-				.struct_get(types::T_INT, 1);
-			w.i64_add().local_set(acc);
-			w.local_get(i).i32(1).i32_add().local_set(i);
-			w.br("lp");
-		});
-	});
-	w.i32(types::TAG_INT)
-		.local_get(acc)
-		.struct_new(types::T_INT);
-	w.finish()
-}
-
-// ---------------------------------------------------------------------------
-// Public dict builtins.
-// ---------------------------------------------------------------------------
-
-/// Build `__dict_insert(dict, key, value) -> dict`: hash the key, path-copy the
-/// trie, bump `next_seq`. `hash_idx` = `__hash`, `node_idx` = `__dict_node_insert`.
-pub(crate) fn build_dict_insert_fn(hash_idx: u32, node_idx: u32) -> Function {
-	let mut w = Wat::new(3);
-	let (dict, key, val) = (w.param(0), w.param(1), w.param(2));
-	let ns = w.local(ValType::I32);
-	let root = w.local(types::value_ref());
-	let newroot = w.local(types::value_ref());
-
-	w.local_get(dict)
-		.ref_cast(types::T_DICT)
-		.struct_get(types::T_DICT, 2)
-		.local_set(ns);
-	w.local_get(dict)
-		.ref_cast(types::T_DICT)
-		.struct_get(types::T_DICT, 1)
-		.local_set(root);
-	// newroot = node_insert(root, box(ns) as hash, key, val, box(ns) as seq).
-	w.local_get(root);
-	w.local_get(key).call(hash_idx); // hash = __hash(key)
-	w.local_get(key);
-	w.local_get(val);
-	w.local_get(ns).i64_extend_i32_u().box_int(); // seq box (i31 when small)
-	w.call(node_idx).local_set(newroot);
-	// dict { tag, newroot, ns + 1 }.
 	w.i32(types::TAG_DICT);
-	w.local_get(newroot);
-	w.local_get(ns).i32(1).i32_add();
+	w.i32(INITIAL_CAP).array_new_default(VA); // indices: all null
+	// order = empty $list { tag, [], 0 }.
+	w.i32(types::TAG_LIST);
+	w.i32(0).array_new_default(VA);
+	w.i32(0);
+	w.struct_new(types::T_LIST);
 	w.struct_new(types::T_DICT);
 	w.finish()
 }
 
-/// Build `__dict_lookup(dict, key) -> option value`: descend the trie by hash
-/// nibbles, then `__eq`-scan the leaf bucket. `hash_idx` = `__hash`, `eq_idx` =
-/// `__eq`, `opt` builds the `some`/`none` result.
-pub(crate) fn build_dict_lookup_fn(hash_idx: u32, eq_idx: u32, opt: OptionLits) -> Function {
+/// Build `__dict_size(dict) -> $int`: the `order` list's length (the live count).
+pub(crate) fn build_dict_size_fn() -> Function {
+	let mut w = Wat::new(1);
+	let dict = w.param(0);
+	w.i32(types::TAG_INT);
+	w.local_get(dict)
+		.ref_cast(types::T_DICT)
+		.struct_get(types::T_DICT, DICT_ORDER)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, LIST_LEN);
+	w.i64_extend_i32_u();
+	w.struct_new(types::T_INT);
+	w.finish()
+}
+
+/// Build `__dict_entries(dict) -> list (k, v)`: the `order` entries as
+/// `$tuple(key, value)` in insertion order. Dense (no tombstones).
+pub(crate) fn build_dict_entries_fn() -> Function {
+	let mut w = Wat::new(1);
+	let dict = w.param(0);
+	let order = w.local(types::value_ref());
+	let elems = w.local(types::valarray_ref());
+	let len = w.local(ValType::I32);
+	let out = w.local(types::valarray_ref());
+	let i = w.local(ValType::I32);
+	let entry = w.local(types::dentry_ref());
+	let k = w.local(types::value_ref());
+	let v = w.local(types::value_ref());
+
+	w.local_get(dict)
+		.ref_cast(types::T_DICT)
+		.struct_get(types::T_DICT, DICT_ORDER)
+		.local_set(order);
+	w.local_get(order)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, LIST_ELEMS)
+		.local_set(elems);
+	w.local_get(order)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, LIST_LEN)
+		.local_set(len);
+	w.local_get(len).array_new_default(VA).local_set(out);
+	w.i32(0).local_set(i);
+	w.block("brk", |w| {
+		w.loop_("lp", |w| {
+			w.local_get(i).local_get(len).i32_ge_s().br_if("brk");
+			w.local_get(elems)
+				.local_get(i)
+				.array_get(VA)
+				.ref_cast(types::T_DENTRY)
+				.local_set(entry);
+			w.local_get(entry)
+				.struct_get(types::T_DENTRY, DENTRY_KEY)
+				.local_set(k);
+			w.local_get(entry)
+				.struct_get(types::T_DENTRY, DENTRY_VAL)
+				.local_set(v);
+			w.local_get(out).local_get(i);
+			tuple2(w, k, v);
+			w.array_set(VA);
+			w.local_get(i).i32(1).i32_add().local_set(i);
+			w.br("lp");
+		});
+	});
+	w.i32(types::TAG_LIST)
+		.local_get(out)
+		.local_get(len)
+		.struct_new(types::T_LIST);
+	w.finish()
+}
+
+// ---------------------------------------------------------------------------
+// Probe: find, lookup.
+// ---------------------------------------------------------------------------
+
+/// Build `__dict_find(dict, key) -> $dentry|null`: linear-probe the table for
+/// `key`, returning its entry (caller reads the value) or null when absent.
+/// `hash_idx` = `__hash`, `eq_idx` = `__eq`.
+pub(crate) fn build_dict_find_fn(hash_idx: u32, eq_idx: u32) -> Function {
 	let mut w = Wat::new(2);
 	let (dict, key) = (w.param(0), w.param(1));
 	let h = w.local(ValType::I64);
-	let node = w.local(types::value_ref());
-	let kids = w.local(types::valarray_ref_null());
-	let ents = w.local(types::valarray_ref_null());
-	let n = w.local(ValType::I32);
-	let i = w.local(ValType::I32);
-	let nib = w.local(ValType::I32);
+	let indices = w.local(types::valarray_ref());
+	let elems = w.local(types::valarray_ref());
+	let mask = w.local(ValType::I32);
+	let slot = w.local(ValType::I32);
+	let cur = w.local(types::value_ref());
+	let pos = w.local(ValType::I32);
+	let entry = w.local(types::dentry_ref());
+
+	// h = unbox(__hash(key)).
+	w.local_get(key)
+		.call(hash_idx)
+		.ref_cast(types::T_INT)
+		.struct_get(types::T_INT, 1)
+		.local_set(h);
+	// indices = dict.indices; elems = dict.order.elems.
+	w.local_get(dict)
+		.ref_cast(types::T_DICT)
+		.struct_get(types::T_DICT, DICT_INDICES)
+		.local_set(indices);
+	w.local_get(dict)
+		.ref_cast(types::T_DICT)
+		.struct_get(types::T_DICT, DICT_ORDER)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, LIST_ELEMS)
+		.local_set(elems);
+	// mask = |indices| - 1; slot = (i32) h & mask.
+	w.local_get(indices)
+		.array_len()
+		.i32(1)
+		.i32_sub()
+		.local_set(mask);
+	w.local_get(h)
+		.i32_wrap_i64()
+		.local_get(mask)
+		.i32_and()
+		.local_set(slot);
+	w.loop_("probe", |w| {
+		w.local_get(indices)
+			.local_get(slot)
+			.array_get(VA)
+			.local_set(cur);
+		// empty slot → absent.
+		w.local_get(cur).ref_is_null();
+		w.if_(|w| {
+			push_nothing(w);
+			w.ret();
+		});
+		// pos = unbox i31(cur); entry = order.elems[pos].
+		w.local_get(cur).ref_cast_i31().i31_get_s().local_set(pos);
+		w.local_get(elems)
+			.local_get(pos)
+			.array_get(VA)
+			.ref_cast(types::T_DENTRY)
+			.local_set(entry);
+		// cached-hash match, then the real key compare.
+		w.local_get(entry)
+			.struct_get(types::T_DENTRY, DENTRY_HASH)
+			.local_get(h)
+			.i64_eq();
+		w.if_(|w| {
+			w.local_get(entry)
+				.struct_get(types::T_DENTRY, DENTRY_KEY)
+				.local_get(key)
+				.call(eq_idx);
+			w.if_(|w| {
+				w.local_get(entry).ret();
+			});
+		});
+		// advance (linear probe, wrapping).
+		w.local_get(slot)
+			.i32(1)
+			.i32_add()
+			.local_get(mask)
+			.i32_and()
+			.local_set(slot);
+		w.br("probe");
+	});
+	w.unreachable();
+	w.finish()
+}
+
+/// Build `__dict_lookup(dict, key) -> option value`: `__dict_find` then wrap in
+/// `some`/`none`. `find_idx` = `__dict_find`; `opt` builds the variant literals.
+pub(crate) fn build_dict_lookup_fn(find_idx: u32, opt: OptionLits) -> Function {
+	let mut w = Wat::new(2);
+	let (dict, key) = (w.param(0), w.param(1));
+	let e = w.local(types::value_ref());
 
 	// Push a fresh `$str` for an interned data-segment literal (the variant name).
 	let str_lit = |w: &mut Wat, (off, len): (u32, u32)| {
@@ -781,288 +464,469 @@ pub(crate) fn build_dict_lookup_fn(hash_idx: u32, eq_idx: u32, opt: OptionLits) 
 		w.array_new_data(types::T_BYTES, 0);
 		w.struct_new(types::T_STR);
 	};
-	let none = |w: &mut Wat| {
+
+	w.local_get(dict).local_get(key).call(find_idx).local_set(e);
+	// null → none.
+	w.local_get(e).ref_is_null();
+	w.if_(|w| {
 		w.i32(types::TAG_VARIANT).i32(opt.none_tag as i32);
 		str_lit(w, opt.none_name);
 		w.array_new_fixed(VA, 0).struct_new(types::T_VARIANT);
-	};
+		w.ret();
+	});
+	// some(entry.value).
+	w.i32(types::TAG_VARIANT).i32(opt.some_tag as i32);
+	str_lit(&mut w, opt.some_name);
+	w.local_get(e)
+		.ref_cast(types::T_DENTRY)
+		.struct_get(types::T_DENTRY, DENTRY_VAL);
+	w.array_new_fixed(VA, 1).struct_new(types::T_VARIANT);
+	w.finish()
+}
 
+// ---------------------------------------------------------------------------
+// Mutation: grow, insert, remove.
+// ---------------------------------------------------------------------------
+
+/// Build `__dict_grow(dict) -> nothing`: double `indices` and rehash every `order`
+/// entry into the new probe table (the `order` list is untouched). Uses each
+/// entry's cached `hash`, so no `__hash` recompute.
+pub(crate) fn build_dict_grow_fn() -> Function {
+	let mut w = Wat::new(1);
+	let dict = w.param(0);
+	let elems = w.local(types::valarray_ref());
+	let len = w.local(ValType::I32);
+	let newindices = w.local(types::valarray_ref());
+	let mask = w.local(ValType::I32);
+	let pos = w.local(ValType::I32);
+	let entry = w.local(types::dentry_ref());
+	let slot = w.local(ValType::I32);
+
+	// elems = dict.order.elems; len = dict.order.length.
+	w.local_get(dict)
+		.ref_cast(types::T_DICT)
+		.struct_get(types::T_DICT, DICT_ORDER)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, LIST_ELEMS)
+		.local_set(elems);
+	w.local_get(dict)
+		.ref_cast(types::T_DICT)
+		.struct_get(types::T_DICT, DICT_ORDER)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, LIST_LEN)
+		.local_set(len);
+	// newindices = new VA(|dict.indices| * 2); mask = newcap - 1.
+	w.local_get(dict)
+		.ref_cast(types::T_DICT)
+		.struct_get(types::T_DICT, DICT_INDICES)
+		.array_len()
+		.i32(1)
+		.i32_shl()
+		.local_set(mask); // reuse `mask` to hold newcap briefly
+	w.local_get(mask)
+		.array_new_default(VA)
+		.local_set(newindices);
+	w.local_get(mask).i32(1).i32_sub().local_set(mask);
+	// for pos in 0..len: place i31(pos) at the first empty slot from hash.
+	w.i32(0).local_set(pos);
+	w.block("brk", |w| {
+		w.loop_("lp", |w| {
+			w.local_get(pos).local_get(len).i32_ge_s().br_if("brk");
+			w.local_get(elems)
+				.local_get(pos)
+				.array_get(VA)
+				.ref_cast(types::T_DENTRY)
+				.local_set(entry);
+			w.local_get(entry)
+				.struct_get(types::T_DENTRY, DENTRY_HASH)
+				.i32_wrap_i64()
+				.local_get(mask)
+				.i32_and()
+				.local_set(slot);
+			w.loop_("pr", |w| {
+				w.local_get(newindices)
+					.local_get(slot)
+					.array_get(VA)
+					.ref_is_null();
+				w.if_else(
+					|w| {
+						// empty → place pos here.
+						w.local_get(newindices).local_get(slot);
+						w.local_get(pos).ref_i31();
+						w.array_set(VA);
+					},
+					|w| {
+						// occupied → advance and keep probing.
+						w.local_get(slot)
+							.i32(1)
+							.i32_add()
+							.local_get(mask)
+							.i32_and()
+							.local_set(slot);
+						w.br("pr");
+					},
+				);
+			});
+			w.local_get(pos).i32(1).i32_add().local_set(pos);
+			w.br("lp");
+		});
+	});
+	// dict.indices = newindices.
+	w.local_get(dict)
+		.ref_cast(types::T_DICT)
+		.local_get(newindices)
+		.struct_set(types::T_DICT, DICT_INDICES);
+	push_nothing(&mut w);
+	w.finish()
+}
+
+/// Build `__dict_insert(dict, key, val) -> nothing`: set `key`→`val` in place.
+/// Grows at 0.75 load, then linear-probes: an existing key's value is overwritten
+/// in place, else a new `$dentry` is appended to `order` and its position recorded
+/// in the probe table. `hash_idx`/`eq_idx`/`grow_idx` = `__hash`/`__eq`/`__dict_grow`;
+/// `push_idx` = `__list_push`.
+pub(crate) fn build_dict_insert_fn(
+	hash_idx: u32,
+	eq_idx: u32,
+	grow_idx: u32,
+	push_idx: u32,
+) -> Function {
+	let mut w = Wat::new(3);
+	let (dict, key, val) = (w.param(0), w.param(1), w.param(2));
+	let h = w.local(ValType::I64);
+	let order = w.local(types::value_ref());
+	let elems = w.local(types::valarray_ref());
+	let len = w.local(ValType::I32);
+	let indices = w.local(types::valarray_ref());
+	let mask = w.local(ValType::I32);
+	let slot = w.local(ValType::I32);
+	let cur = w.local(types::value_ref());
+	let pos = w.local(ValType::I32);
+	let entry = w.local(types::dentry_ref());
+
+	// h = unbox(__hash(key)).
 	w.local_get(key)
 		.call(hash_idx)
 		.ref_cast(types::T_INT)
 		.struct_get(types::T_INT, 1)
 		.local_set(h);
+	// order = dict.order; len = order.length.
 	w.local_get(dict)
 		.ref_cast(types::T_DICT)
-		.struct_get(types::T_DICT, 1)
-		.local_set(node);
-	w.loop_("desc", |w| {
-		// Empty slot → none.
-		w.local_get(node).ref_is_null();
+		.struct_get(types::T_DICT, DICT_ORDER)
+		.local_set(order);
+	w.local_get(order)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, LIST_LEN)
+		.local_set(len);
+	// Grow if (len + 1) * 4 >= cap * 3 (i.e. load would exceed 0.75).
+	w.local_get(len).i32(1).i32_add().i32(4).i32_mul();
+	w.local_get(dict)
+		.ref_cast(types::T_DICT)
+		.struct_get(types::T_DICT, DICT_INDICES)
+		.array_len()
+		.i32(3)
+		.i32_mul();
+	w.i32_ge_s();
+	w.if_(|w| {
+		w.local_get(dict).call(grow_idx).drop();
+	});
+	// Reload indices (grow may have swapped it) + order.elems.
+	w.local_get(dict)
+		.ref_cast(types::T_DICT)
+		.struct_get(types::T_DICT, DICT_INDICES)
+		.local_set(indices);
+	w.local_get(indices)
+		.array_len()
+		.i32(1)
+		.i32_sub()
+		.local_set(mask);
+	w.local_get(order)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, LIST_ELEMS)
+		.local_set(elems);
+	// slot = (i32) h & mask.
+	w.local_get(h)
+		.i32_wrap_i64()
+		.local_get(mask)
+		.i32_and()
+		.local_set(slot);
+	w.loop_("probe", |w| {
+		w.local_get(indices)
+			.local_get(slot)
+			.array_get(VA)
+			.local_set(cur);
+		// empty slot → append a new entry at position `len`.
+		w.local_get(cur).ref_is_null();
 		w.if_(|w| {
-			none(w);
+			w.local_get(order);
+			make_dentry(w, key, val, h);
+			w.call(push_idx).drop(); // order.push(entry); position is `len`
+			w.local_get(indices).local_get(slot);
+			w.local_get(len).ref_i31();
+			w.array_set(VA);
+			push_nothing(w);
 			w.ret();
 		});
-		w.local_get(node)
-			.ref_cast(types::T_DNODE)
-			.struct_get(types::T_DNODE, 1)
-			.local_set(kids);
-		w.local_get(kids).ref_is_null();
-		w.if_else(
-			|w| {
-				// leaf: scan the bucket by `__eq`.
-				w.local_get(node)
-					.ref_cast(types::T_DNODE)
-					.struct_get(types::T_DNODE, 2)
-					.local_set(ents);
-				w.local_get(ents).array_len().local_set(n);
-				w.i32(0).local_set(i);
-				w.block("sbrk", |w| {
-					w.loop_("slp", |w| {
-						w.local_get(i).local_get(n).i32_ge_s().br_if("sbrk");
-						entry_elem(w, ents, i, 0);
-						w.local_get(key).call(eq_idx);
-						w.if_(|w| {
-							// some(value).
-							w.i32(types::TAG_VARIANT).i32(opt.some_tag as i32);
-							str_lit(w, opt.some_name);
-							entry_elem(w, ents, i, 1);
-							w.array_new_fixed(VA, 1).struct_new(types::T_VARIANT);
-							w.ret();
-						});
-						w.local_get(i).i32(1).i32_add().local_set(i);
-						w.br("slp");
-					});
-				});
-				none(w);
+		// occupied → if it's our key, overwrite the value in place.
+		w.local_get(cur).ref_cast_i31().i31_get_s().local_set(pos);
+		w.local_get(elems)
+			.local_get(pos)
+			.array_get(VA)
+			.ref_cast(types::T_DENTRY)
+			.local_set(entry);
+		w.local_get(entry)
+			.struct_get(types::T_DENTRY, DENTRY_HASH)
+			.local_get(h)
+			.i64_eq();
+		w.if_(|w| {
+			w.local_get(entry)
+				.struct_get(types::T_DENTRY, DENTRY_KEY)
+				.local_get(key)
+				.call(eq_idx);
+			w.if_(|w| {
+				w.local_get(entry)
+					.local_get(val)
+					.struct_set(types::T_DENTRY, DENTRY_VAL);
+				push_nothing(w);
 				w.ret();
-			},
-			|w| {
-				// branch: descend one nibble.
-				w.local_get(h)
-					.i64(NIBBLE_MASK)
-					.i64_and()
-					.i32_wrap_i64()
-					.local_set(nib);
-				w.local_get(kids)
-					.local_get(nib)
-					.array_get(VA)
-					.local_set(node);
-				w.local_get(h).i64(NIBBLE_BITS).i64_shr_u().local_set(h);
-			},
-		);
-		// Only the branch arm reaches here; continue the descent.
-		w.br("desc");
+			});
+		});
+		// advance (linear probe, wrapping).
+		w.local_get(slot)
+			.i32(1)
+			.i32_add()
+			.local_get(mask)
+			.i32_and()
+			.local_set(slot);
+		w.br("probe");
 	});
-	// `loop` is divergent (every path rets); unreachable terminator for validation.
 	w.unreachable();
 	w.finish()
 }
 
-/// Build `__dict_size(dict) -> $int`: count `dict.root` via `__dict_count`.
-pub(crate) fn build_dict_size_fn(count_idx: u32) -> Function {
-	let mut w = Wat::new(1);
-	let dict = w.param(0);
-	w.local_get(dict)
-		.ref_cast(types::T_DICT)
-		.struct_get(types::T_DICT, 1);
-	w.call(count_idx);
-	w.finish()
-}
-
-/// Build `__dict_entries(dict) -> list`: collect the trie, then reorder by `seq`
-/// into insertion order and strip `seq` to `$tuple(key, value)`. `collect_idx` =
-/// `__dict_collect`. Placement is by `seq` index (O(n + next_seq)), no comparison
-/// sort.
-pub(crate) fn build_dict_entries_fn(collect_idx: u32) -> Function {
-	let mut w = Wat::new(1);
-	let dict = w.param(0);
-	let lst = w.local(types::value_ref());
-	let arr = w.local(types::valarray_ref());
-	let n = w.local(ValType::I32);
-	let ns = w.local(ValType::I32);
-	let tmp = w.local(types::valarray_ref());
-	let out = w.local(types::valarray_ref());
-	let i = w.local(ValType::I32);
-	let wr = w.local(ValType::I32);
-	let t = w.local(types::value_ref());
-	let s = w.local(ValType::I32);
-	let k = w.local(types::value_ref());
-	let v = w.local(types::value_ref());
-	let slot = w.local(types::value_ref());
-
-	// lst = collect(root, []).
-	empty_list(&mut w);
-	w.local_set(lst);
-	w.local_get(dict)
-		.ref_cast(types::T_DICT)
-		.struct_get(types::T_DICT, 1);
-	w.local_get(lst).call(collect_idx).local_set(lst);
-	w.local_get(lst)
-		.ref_cast(types::T_LIST)
-		.struct_get(types::T_LIST, 1)
-		.local_set(arr);
-	w.local_get(lst)
-		.ref_cast(types::T_LIST)
-		.struct_get(types::T_LIST, 2)
-		.local_set(n);
-	w.local_get(dict)
-		.ref_cast(types::T_DICT)
-		.struct_get(types::T_DICT, 2)
-		.local_set(ns);
-
-	// Scatter: tmp[seq] = (key, value), a sparse array indexed by insertion seq.
-	w.local_get(ns).array_new_default(VA).local_set(tmp);
-	w.i32(0).local_set(i);
-	w.block("fbrk", |w| {
-		w.loop_("flp", |w| {
-			w.local_get(i).local_get(n).i32_ge_s().br_if("fbrk");
-			w.local_get(arr).local_get(i).array_get(VA).local_set(t);
-			tuple_elem(w, t, 2);
-			w.unbox_int().i32_wrap_i64().local_set(s);
-			tuple_elem(w, t, 0);
-			w.local_set(k);
-			tuple_elem(w, t, 1);
-			w.local_set(v);
-			w.local_get(tmp).local_get(s);
-			tuple2(w, k, v);
-			w.array_set(VA);
-			w.local_get(i).i32(1).i32_add().local_set(i);
-			w.br("flp");
-		});
-	});
-
-	// Gather: compact non-null slots (skipping seq gaps left by removes) into a
-	// dense `out` of length n, in ascending-seq (insertion) order.
-	w.local_get(n).array_new_default(VA).local_set(out);
-	w.i32(0).local_set(wr);
-	w.i32(0).local_set(i);
-	w.block("gbrk", |w| {
-		w.loop_("glp", |w| {
-			w.local_get(i).local_get(ns).i32_ge_s().br_if("gbrk");
-			w.local_get(tmp).local_get(i).array_get(VA).local_set(slot);
-			w.local_get(slot).ref_is_null().i32_eqz();
-			w.if_(|w| {
-				w.local_get(out).local_get(wr).local_get(slot).array_set(VA);
-				w.local_get(wr).i32(1).i32_add().local_set(wr);
-			});
-			w.local_get(i).i32(1).i32_add().local_set(i);
-			w.br("glp");
-		});
-	});
-
-	w.i32(types::TAG_LIST)
-		.local_get(out)
-		.local_get(n)
-		.struct_new(types::T_LIST);
-	w.finish()
-}
-
-/// Build `__dict_remove(dict, key) -> dict`: rebuild from sorted entries, dropping
-/// the matching key (so insertion order is preserved). `entries_idx`/`insert_idx`/
-/// `eq_idx` = `__dict_entries`/`__dict_insert`/`__eq`.
-pub(crate) fn build_dict_remove_fn(entries_idx: u32, insert_idx: u32, eq_idx: u32) -> Function {
+/// Build `__dict_remove(dict, key) -> nothing`: drop `key` in place. Rebuilds the
+/// table from the surviving entries (so `order` stays compact — there are no
+/// tombstones) and swaps the new `indices`/`order` into the struct.
+/// `empty_idx`/`insert_idx`/`eq_idx` = `__dict_empty`/`__dict_insert`/`__eq`.
+pub(crate) fn build_dict_remove_fn(empty_idx: u32, insert_idx: u32, eq_idx: u32) -> Function {
 	let mut w = Wat::new(2);
 	let (dict, key) = (w.param(0), w.param(1));
-	let arr = w.local(types::valarray_ref());
-	let n = w.local(ValType::I32);
+	let temp = w.local(types::value_ref());
+	let elems = w.local(types::valarray_ref());
+	let len = w.local(ValType::I32);
 	let i = w.local(ValType::I32);
-	let acc = w.local(types::value_ref());
-	let t = w.local(types::value_ref());
-	let k = w.local(types::value_ref());
+	let entry = w.local(types::dentry_ref());
 
-	entries_list(&mut w, dict, entries_idx, arr, n);
-	empty_dict(&mut w);
-	w.local_set(acc);
+	// temp = empty().
+	push_nothing(&mut w);
+	w.call(empty_idx).local_set(temp);
+	// elems/len of the old order.
+	w.local_get(dict)
+		.ref_cast(types::T_DICT)
+		.struct_get(types::T_DICT, DICT_ORDER)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, LIST_ELEMS)
+		.local_set(elems);
+	w.local_get(dict)
+		.ref_cast(types::T_DICT)
+		.struct_get(types::T_DICT, DICT_ORDER)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, LIST_LEN)
+		.local_set(len);
 	w.i32(0).local_set(i);
 	w.block("brk", |w| {
 		w.loop_("lp", |w| {
-			w.local_get(i).local_get(n).i32_ge_s().br_if("brk");
-			w.local_get(arr).local_get(i).array_get(VA).local_set(t);
-			tuple_elem(w, t, 0);
-			w.local_set(k);
-			// Keep entries whose key ≠ the removed key.
-			w.local_get(k).local_get(key).call(eq_idx).i32_eqz();
+			w.local_get(i).local_get(len).i32_ge_s().br_if("brk");
+			w.local_get(elems)
+				.local_get(i)
+				.array_get(VA)
+				.ref_cast(types::T_DENTRY)
+				.local_set(entry);
+			// keep entries whose key ≠ the removed key.
+			w.local_get(entry)
+				.struct_get(types::T_DENTRY, DENTRY_KEY)
+				.local_get(key)
+				.call(eq_idx)
+				.i32_eqz();
 			w.if_(|w| {
-				w.local_get(acc);
-				w.local_get(k);
-				tuple_elem(w, t, 1);
-				w.call(insert_idx).local_set(acc);
+				w.local_get(temp);
+				w.local_get(entry).struct_get(types::T_DENTRY, DENTRY_KEY);
+				w.local_get(entry).struct_get(types::T_DENTRY, DENTRY_VAL);
+				w.call(insert_idx).drop();
 			});
 			w.local_get(i).i32(1).i32_add().local_set(i);
 			w.br("lp");
 		});
 	});
-	w.local_get(acc);
+	// dict.indices = temp.indices; dict.order = temp.order.
+	w.local_get(dict).ref_cast(types::T_DICT);
+	w.local_get(temp)
+		.ref_cast(types::T_DICT)
+		.struct_get(types::T_DICT, DICT_INDICES);
+	w.struct_set(types::T_DICT, DICT_INDICES);
+	w.local_get(dict).ref_cast(types::T_DICT);
+	w.local_get(temp)
+		.ref_cast(types::T_DICT)
+		.struct_get(types::T_DICT, DICT_ORDER);
+	w.struct_set(types::T_DICT, DICT_ORDER);
+	push_nothing(&mut w);
 	w.finish()
 }
 
-/// Build `__dict_map(dict, f) -> dict`: rebuild applying `f` to each value (keys +
-/// order preserved). `arity1` is `f`'s `(env, value)` indirect type.
-pub(crate) fn build_dict_map_fn(entries_idx: u32, insert_idx: u32, arity1: u32) -> Function {
-	let mut w = Wat::new(2);
-	let (dict, f) = (w.param(0), w.param(1));
-	let arr = w.local(types::valarray_ref());
-	let n = w.local(ValType::I32);
-	let i = w.local(ValType::I32);
-	let acc = w.local(types::value_ref());
-	let t = w.local(types::value_ref());
-	let k = w.local(types::value_ref());
+// ---------------------------------------------------------------------------
+// Equality, map, filter — all build a fresh dict (non-destructive).
+// ---------------------------------------------------------------------------
 
-	entries_list(&mut w, dict, entries_idx, arr, n);
-	empty_dict(&mut w);
-	w.local_set(acc);
+/// Build `__dict_eq(a, b) -> i32`: equal iff same size and every entry of `a` is in
+/// `b` with an `__eq` value (order-independent). `eq_idx` = `__eq`, `find_idx` =
+/// `__dict_find`.
+pub(crate) fn build_dict_eq_fn(eq_idx: u32, find_idx: u32) -> Function {
+	let mut w = Wat::new(2);
+	let (a, b) = (w.param(0), w.param(1));
+	let elems = w.local(types::valarray_ref());
+	let la = w.local(ValType::I32);
+	let lb = w.local(ValType::I32);
+	let i = w.local(ValType::I32);
+	let entry = w.local(types::dentry_ref());
+	let eb = w.local(types::value_ref());
+
+	// la / lb = order lengths; unequal size ⇒ unequal.
+	w.local_get(a)
+		.ref_cast(types::T_DICT)
+		.struct_get(types::T_DICT, DICT_ORDER)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, LIST_LEN)
+		.local_set(la);
+	w.local_get(b)
+		.ref_cast(types::T_DICT)
+		.struct_get(types::T_DICT, DICT_ORDER)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, LIST_LEN)
+		.local_set(lb);
+	w.local_get(la).local_get(lb).i32_ne();
+	w.if_(|w| {
+		w.i32(0).ret();
+	});
+	w.local_get(a)
+		.ref_cast(types::T_DICT)
+		.struct_get(types::T_DICT, DICT_ORDER)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, LIST_ELEMS)
+		.local_set(elems);
 	w.i32(0).local_set(i);
 	w.block("brk", |w| {
 		w.loop_("lp", |w| {
-			w.local_get(i).local_get(n).i32_ge_s().br_if("brk");
-			w.local_get(arr).local_get(i).array_get(VA).local_set(t);
-			tuple_elem(w, t, 0);
-			w.local_set(k);
-			// acc = insert(acc, k, f(value)).
-			w.local_get(acc);
-			w.local_get(k);
+			w.local_get(i).local_get(la).i32_ge_s().br_if("brk");
+			w.local_get(elems)
+				.local_get(i)
+				.array_get(VA)
+				.ref_cast(types::T_DENTRY)
+				.local_set(entry);
+			// eb = find(b, a-key); absent ⇒ unequal.
+			w.local_get(b);
+			w.local_get(entry).struct_get(types::T_DENTRY, DENTRY_KEY);
+			w.call(find_idx).local_set(eb);
+			w.local_get(eb).ref_is_null();
+			w.if_(|w| {
+				w.i32(0).ret();
+			});
+			// values must be `__eq`.
+			w.local_get(entry).struct_get(types::T_DENTRY, DENTRY_VAL);
+			w.local_get(eb)
+				.ref_cast(types::T_DENTRY)
+				.struct_get(types::T_DENTRY, DENTRY_VAL);
+			w.call(eq_idx).i32_eqz();
+			w.if_(|w| {
+				w.i32(0).ret();
+			});
+			w.local_get(i).i32(1).i32_add().local_set(i);
+			w.br("lp");
+		});
+	});
+	w.i32(1);
+	w.finish()
+}
+
+/// Build `__dict_map(dict, f) -> dict`: a fresh dict with `f` applied to each value
+/// (keys + order preserved); `dict` is untouched. `empty_idx`/`insert_idx` =
+/// `__dict_empty`/`__dict_insert`; `arity1` is `f`'s `(env, value)` indirect type.
+pub(crate) fn build_dict_map_fn(empty_idx: u32, insert_idx: u32, arity1: u32) -> Function {
+	let mut w = Wat::new(2);
+	let (dict, f) = (w.param(0), w.param(1));
+	let out = w.local(types::value_ref());
+	let elems = w.local(types::valarray_ref());
+	let len = w.local(ValType::I32);
+	let i = w.local(ValType::I32);
+	let entry = w.local(types::dentry_ref());
+	let newval = w.local(types::value_ref());
+
+	push_nothing(&mut w);
+	w.call(empty_idx).local_set(out);
+	order_elems_len(&mut w, dict, elems, len);
+	w.i32(0).local_set(i);
+	w.block("brk", |w| {
+		w.loop_("lp", |w| {
+			w.local_get(i).local_get(len).i32_ge_s().br_if("brk");
+			w.local_get(elems)
+				.local_get(i)
+				.array_get(VA)
+				.ref_cast(types::T_DENTRY)
+				.local_set(entry);
+			// newval = f(entry.value).
 			w.local_get(f).ref_cast(types::T_CLOSURE);
-			tuple_elem(w, t, 1);
+			w.local_get(entry).struct_get(types::T_DENTRY, DENTRY_VAL);
 			w.local_get(f)
 				.ref_cast(types::T_CLOSURE)
 				.struct_get(types::T_CLOSURE, 1);
 			w.call_indirect(arity1);
-			w.call(insert_idx).local_set(acc);
+			w.local_set(newval);
+			// out.insert(key, newval).
+			w.local_get(out);
+			w.local_get(entry).struct_get(types::T_DENTRY, DENTRY_KEY);
+			w.local_get(newval);
+			w.call(insert_idx).drop();
 			w.local_get(i).i32(1).i32_add().local_set(i);
 			w.br("lp");
 		});
 	});
-	w.local_get(acc);
+	w.local_get(out);
 	w.finish()
 }
 
-/// Build `__dict_filter(dict, f) -> dict`: rebuild keeping entries where `f k v`
-/// is true (order preserved). `arity2` is `f`'s `(env, key, value)` indirect type.
-pub(crate) fn build_dict_filter_fn(entries_idx: u32, insert_idx: u32, arity2: u32) -> Function {
+/// Build `__dict_filter(dict, f) -> dict`: a fresh dict of the entries where `f k v`
+/// is true (order preserved); `dict` is untouched. `arity2` is `f`'s
+/// `(env, key, value)` indirect type.
+pub(crate) fn build_dict_filter_fn(empty_idx: u32, insert_idx: u32, arity2: u32) -> Function {
 	let mut w = Wat::new(2);
 	let (dict, f) = (w.param(0), w.param(1));
-	let arr = w.local(types::valarray_ref());
-	let n = w.local(ValType::I32);
+	let out = w.local(types::value_ref());
+	let elems = w.local(types::valarray_ref());
+	let len = w.local(ValType::I32);
 	let i = w.local(ValType::I32);
-	let acc = w.local(types::value_ref());
-	let t = w.local(types::value_ref());
+	let entry = w.local(types::dentry_ref());
 	let k = w.local(types::value_ref());
 	let v = w.local(types::value_ref());
 
-	entries_list(&mut w, dict, entries_idx, arr, n);
-	empty_dict(&mut w);
-	w.local_set(acc);
+	push_nothing(&mut w);
+	w.call(empty_idx).local_set(out);
+	order_elems_len(&mut w, dict, elems, len);
 	w.i32(0).local_set(i);
 	w.block("brk", |w| {
 		w.loop_("lp", |w| {
-			w.local_get(i).local_get(n).i32_ge_s().br_if("brk");
-			w.local_get(arr).local_get(i).array_get(VA).local_set(t);
-			tuple_elem(w, t, 0);
-			w.local_set(k);
-			tuple_elem(w, t, 1);
-			w.local_set(v);
-			// keep = f(k, v) (unbox the `$bool`).
+			w.local_get(i).local_get(len).i32_ge_s().br_if("brk");
+			w.local_get(elems)
+				.local_get(i)
+				.array_get(VA)
+				.ref_cast(types::T_DENTRY)
+				.local_set(entry);
+			w.local_get(entry)
+				.struct_get(types::T_DENTRY, DENTRY_KEY)
+				.local_set(k);
+			w.local_get(entry)
+				.struct_get(types::T_DENTRY, DENTRY_VAL)
+				.local_set(v);
+			// keep = f(k, v).
 			w.local_get(f).ref_cast(types::T_CLOSURE);
 			w.local_get(k).local_get(v);
 			w.local_get(f)
@@ -1071,31 +935,209 @@ pub(crate) fn build_dict_filter_fn(entries_idx: u32, insert_idx: u32, arity2: u3
 			w.call_indirect(arity2);
 			w.ref_cast(types::T_BOOL).struct_get(types::T_BOOL, 1);
 			w.if_(|w| {
-				w.local_get(acc)
+				w.local_get(out)
 					.local_get(k)
 					.local_get(v)
 					.call(insert_idx)
-					.local_set(acc);
+					.drop();
 			});
 			w.local_get(i).i32(1).i32_add().local_set(i);
 			w.br("lp");
 		});
 	});
-	w.local_get(acc);
+	w.local_get(out);
 	w.finish()
 }
 
-/// Shared preamble for remove/map/filter: `arr`/`n` = the backing array + length
-/// of `__dict_entries(dict)` (sorted `(key, value)` tuples).
-fn entries_list(w: &mut Wat, dict: Local, entries_idx: u32, arr: Local, n: Local) {
-	let lst = w.local(types::value_ref());
-	w.local_get(dict).call(entries_idx).local_set(lst);
-	w.local_get(lst)
+/// Shared preamble for map/filter: `elems`/`len` = the backing array + length of
+/// `dict.order` (the entries in insertion order).
+fn order_elems_len(w: &mut Wat, dict: Local, elems: Local, len: Local) {
+	w.local_get(dict)
+		.ref_cast(types::T_DICT)
+		.struct_get(types::T_DICT, DICT_ORDER)
 		.ref_cast(types::T_LIST)
-		.struct_get(types::T_LIST, 1)
-		.local_set(arr);
-	w.local_get(lst)
+		.struct_get(types::T_LIST, LIST_ELEMS)
+		.local_set(elems);
+	w.local_get(dict)
+		.ref_cast(types::T_DICT)
+		.struct_get(types::T_DICT, DICT_ORDER)
 		.ref_cast(types::T_LIST)
-		.struct_get(types::T_LIST, 2)
-		.local_set(n);
+		.struct_get(types::T_LIST, LIST_LEN)
+		.local_set(len);
+}
+
+/// Build `__dict_update(dict, key, f) -> nothing`: a single-probe read-modify-write.
+/// Calls `f` with `some(current value)` (or `none` if absent) and stores its result
+/// at `key` in place — overwriting an existing entry's value or appending a new one.
+/// Structurally a fused `lookup`+`insert` (one hash, one probe). `f` should not
+/// mutate this dict. `hash_idx`/`eq_idx`/`grow_idx`/`push_idx` =
+/// `__hash`/`__eq`/`__dict_grow`/`__list_push`; `arity1` is `f`'s `(env, option v)`
+/// indirect type; `opt` builds the `some`/`none` argument.
+pub(crate) fn build_dict_update_fn(
+	hash_idx: u32,
+	eq_idx: u32,
+	grow_idx: u32,
+	push_idx: u32,
+	arity1: u32,
+	opt: OptionLits,
+) -> Function {
+	let mut w = Wat::new(3);
+	let (dict, key, f) = (w.param(0), w.param(1), w.param(2));
+	let h = w.local(ValType::I64);
+	let order = w.local(types::value_ref());
+	let elems = w.local(types::valarray_ref());
+	let len = w.local(ValType::I32);
+	let indices = w.local(types::valarray_ref());
+	let mask = w.local(ValType::I32);
+	let slot = w.local(ValType::I32);
+	let cur = w.local(types::value_ref());
+	let pos = w.local(ValType::I32);
+	let entry = w.local(types::dentry_ref());
+	let newval = w.local(types::value_ref());
+
+	let str_lit = |w: &mut Wat, (off, len): (u32, u32)| {
+		w.i32(types::TAG_STR);
+		w.i32(off as i32);
+		w.i32(len as i32);
+		w.array_new_data(types::T_BYTES, 0);
+		w.struct_new(types::T_STR);
+	};
+	// Push `env` then call `f` (arity-1) on the option already on top of the stack.
+	let call_f = |w: &mut Wat| {
+		w.local_get(f)
+			.ref_cast(types::T_CLOSURE)
+			.struct_get(types::T_CLOSURE, 1);
+		w.call_indirect(arity1);
+	};
+
+	// h = unbox(__hash(key)).
+	w.local_get(key)
+		.call(hash_idx)
+		.ref_cast(types::T_INT)
+		.struct_get(types::T_INT, 1)
+		.local_set(h);
+	// order = dict.order; len = order.length.
+	w.local_get(dict)
+		.ref_cast(types::T_DICT)
+		.struct_get(types::T_DICT, DICT_ORDER)
+		.local_set(order);
+	w.local_get(order)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, LIST_LEN)
+		.local_set(len);
+	// Grow if (len + 1) * 4 >= cap * 3.
+	w.local_get(len).i32(1).i32_add().i32(4).i32_mul();
+	w.local_get(dict)
+		.ref_cast(types::T_DICT)
+		.struct_get(types::T_DICT, DICT_INDICES)
+		.array_len()
+		.i32(3)
+		.i32_mul();
+	w.i32_ge_s();
+	w.if_(|w| {
+		w.local_get(dict).call(grow_idx).drop();
+	});
+	w.local_get(dict)
+		.ref_cast(types::T_DICT)
+		.struct_get(types::T_DICT, DICT_INDICES)
+		.local_set(indices);
+	w.local_get(indices)
+		.array_len()
+		.i32(1)
+		.i32_sub()
+		.local_set(mask);
+	w.local_get(order)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, LIST_ELEMS)
+		.local_set(elems);
+	w.local_get(h)
+		.i32_wrap_i64()
+		.local_get(mask)
+		.i32_and()
+		.local_set(slot);
+	w.loop_("probe", |w| {
+		w.local_get(indices)
+			.local_get(slot)
+			.array_get(VA)
+			.local_set(cur);
+		// empty slot → newval = f(none); append a new entry at position `len`.
+		w.local_get(cur).ref_is_null();
+		w.if_(|w| {
+			w.local_get(f).ref_cast(types::T_CLOSURE); // env
+			w.i32(types::TAG_VARIANT).i32(opt.none_tag as i32);
+			str_lit(w, opt.none_name);
+			w.array_new_fixed(VA, 0).struct_new(types::T_VARIANT);
+			call_f(w);
+			w.local_set(newval);
+			w.local_get(order);
+			make_dentry(w, key, newval, h);
+			w.call(push_idx).drop();
+			w.local_get(indices).local_get(slot);
+			w.local_get(len).ref_i31();
+			w.array_set(VA);
+			push_nothing(w);
+			w.ret();
+		});
+		// occupied → if it's our key, newval = f(some(value)); overwrite in place.
+		w.local_get(cur).ref_cast_i31().i31_get_s().local_set(pos);
+		w.local_get(elems)
+			.local_get(pos)
+			.array_get(VA)
+			.ref_cast(types::T_DENTRY)
+			.local_set(entry);
+		w.local_get(entry)
+			.struct_get(types::T_DENTRY, DENTRY_HASH)
+			.local_get(h)
+			.i64_eq();
+		w.if_(|w| {
+			w.local_get(entry)
+				.struct_get(types::T_DENTRY, DENTRY_KEY)
+				.local_get(key)
+				.call(eq_idx);
+			w.if_(|w| {
+				w.local_get(f).ref_cast(types::T_CLOSURE); // env
+				w.i32(types::TAG_VARIANT).i32(opt.some_tag as i32);
+				str_lit(w, opt.some_name);
+				w.local_get(entry).struct_get(types::T_DENTRY, DENTRY_VAL);
+				w.array_new_fixed(VA, 1).struct_new(types::T_VARIANT);
+				call_f(w);
+				w.local_set(newval);
+				w.local_get(entry)
+					.local_get(newval)
+					.struct_set(types::T_DENTRY, DENTRY_VAL);
+				push_nothing(w);
+				w.ret();
+			});
+		});
+		// advance (linear probe, wrapping).
+		w.local_get(slot)
+			.i32(1)
+			.i32_add()
+			.local_get(mask)
+			.i32_and()
+			.local_set(slot);
+		w.br("probe");
+	});
+	w.unreachable();
+	w.finish()
+}
+
+/// Build `__dict_clear(dict) -> nothing`: drop every entry, in place — reset to a
+/// fresh empty probe table + empty `order` list.
+pub(crate) fn build_dict_clear_fn() -> Function {
+	let mut w = Wat::new(1);
+	let dict = w.param(0);
+	// dict.indices = a fresh empty probe table.
+	w.local_get(dict).ref_cast(types::T_DICT);
+	w.i32(INITIAL_CAP).array_new_default(VA);
+	w.struct_set(types::T_DICT, DICT_INDICES);
+	// dict.order = a fresh empty $list.
+	w.local_get(dict).ref_cast(types::T_DICT);
+	w.i32(types::TAG_LIST);
+	w.i32(0).array_new_default(VA);
+	w.i32(0);
+	w.struct_new(types::T_LIST);
+	w.struct_set(types::T_DICT, DICT_ORDER);
+	push_nothing(&mut w);
+	w.finish()
 }

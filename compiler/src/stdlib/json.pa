@@ -696,16 +696,16 @@ def parse-object-entries :: fun bytes int int (dict string value) -> result (val
 			} else if bytes.get bs p1 == 58 is true {
 				when parse-value bs n (p1 + 1) is ok vpair {
 					let (v, p2) = vpair
-					let acc2 = dict.insert acc key v
+					dict.insert acc key v
 					let p3 = skip-ws bs n p2
 					if p3 >= n is true {
 						err (fail bs p3 "EOF while parsing an object")
 					} else {
 						let b = bytes.get bs p3
 						if b == 125 is true {
-							ok (object acc2, p3 + 1)
+							ok (object acc, p3 + 1)
 						} else if b == 44 is true {
-							parse-object-entries bs n (skip-ws bs n (p3 + 1)) acc2
+							parse-object-entries bs n (skip-ws bs n (p3 + 1)) acc
 						} else {
 							err (fail bs p3 "expected `,` or `}`")
 						}

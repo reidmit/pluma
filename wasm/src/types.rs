@@ -36,9 +36,9 @@ pub const T_TUPLE: u32 = 11; // struct { i32 tag, (ref $valarray) elems }
 pub const T_LIST: u32 = 12; // struct { i32 tag, (ref $valarray) elems }
 pub const T_RECORD: u32 = 13; // struct { i32 tag, (ref $valarray) names, (ref $valarray) values }
 pub const T_REF: u32 = 14; // struct { i32 tag, (mut ref null $value) cell }  — a mutable cell
-pub const T_DICT: u32 = 15; // struct { i32 tag, (ref null $value) root, i32 next_seq }  — persistent hash-trie
+pub const T_DICT: u32 = 15; // struct { i32 tag, (mut ref $valarray) indices, (mut ref null $value) order }  — mutable hash table
 pub const T_TASK: u32 = 16; // struct { i32 tag, i32 kind, (ref $valarray) payload }  — a cold async `task`
-pub const T_DNODE: u32 = 17; // struct { i32 tag, (ref null $valarray) kids, (ref null $valarray) ents, i64 leafhash }
+pub const T_DENTRY: u32 = 17; // struct { i32 tag, (ref null $value) key, (mut ref null $value) value, i64 hash }  — a $dict entry
 #[allow(dead_code)] // the type is emitted (encode); the const is referenced once the Phase-3 DOM/fetch emitter builds an $extern
 pub const T_EXTERN: u32 = 18; // struct { i32 tag, (ref null extern) handle }  — a host-owned resource handle
 const T_FIRST_FUNC: u32 = 19;
@@ -69,12 +69,13 @@ pub const TAG_BYTES: i32 = 14;
 /// A `ref a` mutable cell: a `$ref` struct holding one (mutable) boxed value.
 /// Compared by reference identity (`ref.eq`).
 pub const TAG_REF: i32 = 15;
-/// A `dict k v`: a `$dict` struct `{ tag, root, next_seq }` holding a persistent
-/// hash-trie (`$dnode` root, or null when empty). Insert path-copies O(log n) trie
-/// nodes (structurally shared, immutable) and looks up by structural `__hash` +
-/// `__eq` — a persistent, structurally-shared immutable map. Entries carry an
-/// insertion `seq` so iteration recovers insertion order. The `$dnode` interior
-/// nodes never escape to user code (a `$dict` is the only handle).
+/// A `dict k v`: a `$dict` struct `{ tag, indices, order }` — a **mutable**
+/// open-addressing hash table (see `helpers/dict.rs`). `order` is a `$list` of
+/// `$dentry` in insertion order (its length is the live count); `indices` is the
+/// power-of-two probe table (each slot null or an `i31`-boxed `order` position).
+/// `insert`/`remove` mutate in place; keys are matched by structural `__hash` +
+/// `__eq`. The `$dentry` entries never escape to user code (a `$dict` is the only
+/// handle).
 pub const TAG_DICT: i32 = 16;
 /// A cold, re-runnable `task a`: a `$task` struct `{ tag, i32 kind, payload }`.
 /// `kind` is the `TaskRepr` discriminant (see `runtime::task_kind`); `payload`
@@ -139,13 +140,13 @@ pub fn ref_ref() -> ValType {
 	})
 }
 
-/// `(ref null $dnode)` — a nullable reference to a persistent-dict trie node.
-/// Used for a local that holds a `ref.cast`-to-`$dnode` (so a later `struct.get`
-/// reads its fields; a plain `$value` local would lose the subtype).
-pub fn dnode_ref_null() -> ValType {
+/// `(ref $dentry)` — a non-null reference to a `$dict` entry struct. Used for a
+/// local that holds a `ref.cast`-to-`$dentry` (so a later `struct.get` reads its
+/// key/value/hash; a plain `$value` local would lose the subtype).
+pub fn dentry_ref() -> ValType {
 	ValType::Ref(RefType {
-		nullable: true,
-		heap_type: HeapType::Concrete(T_DNODE),
+		nullable: false,
+		heap_type: HeapType::Concrete(T_DENTRY),
 	})
 }
 
@@ -693,16 +694,18 @@ impl FuncTypes {
 			vec![val_field(ValType::I32, false), val_field(value_ref(), true)],
 			true,
 		));
-		// 15 $dict — { tag, (ref null $value) root, i32 next_seq }. A persistent
-		// hash-trie map: `root` is the `$dnode` trie root (null when empty), and
-		// `next_seq` is the monotonic counter stamped into each new entry so
-		// iteration (keys/values/entries) can recover insertion order.
+		// 15 $dict — { tag, (mut ref $valarray) indices, (mut ref null $value) order }.
+		// A mutable open-addressing hash table (see `helpers/dict.rs`): `indices` is
+		// the probe table (each slot null = empty, or an `i31`-boxed position into
+		// `order`), `order` is a `$list` of `$dentry` in insertion order (its length
+		// is the live entry count — there are no tombstones, removes rebuild). Both
+		// fields are mutable: `indices` is swapped on resize, `order` on remove.
 		types.ty().subtype(&struct_subtype(
 			Some(T_VALUE),
 			vec![
 				val_field(ValType::I32, false),
-				val_field(value_ref(), false),
-				val_field(ValType::I32, false),
+				val_field(valarray_ref(), true),
+				val_field(value_ref(), true),
 			],
 			true,
 		));
@@ -717,23 +720,18 @@ impl FuncTypes {
 			],
 			true,
 		));
-		// 17 $dnode — an interior node of a `$dict`'s persistent hash-trie. A
-		// subtype of `$value` so it can occupy a `$valarray` child slot and the
-		// `$dict.root` field. Two shapes, distinguished by which array is non-null:
-		//   * branch — `kids` is a 16-slot `$valarray` of child `$dnode`s (a null
-		//     slot = absent), `ents` is null. The nibble `(hash >> 4*depth) & 0xF`
-		//     selects a child.
-		//   * leaf — `ents` is a `$valarray` of `$tuple(key, value, seq)` entries
-		//     all sharing `leafhash` (the hash bits still unconsumed at this
-		//     depth), `kids` is null. A leaf splits into a branch when an insert
-		//     arrives with a different `leafhash`. `tag` is an unused sentinel
-		//     (a `$dnode` never escapes to tag-inspecting code).
+		// 17 $dentry — one entry of a `$dict`'s `order` list: { tag, key, (mut) value,
+		// i64 hash }. A subtype of `$value` so it sits in the `order` `$list`'s
+		// `$valarray` like any value. `value` is mutable (an insert of an existing key
+		// overwrites it in place); `hash` caches `__hash(key)` so resize rehashes and
+		// probes compare the full hash before the costlier `__eq`. `tag` is an unused
+		// sentinel (a `$dentry` never escapes to tag-inspecting code).
 		types.ty().subtype(&struct_subtype(
 			Some(T_VALUE),
 			vec![
 				val_field(ValType::I32, false),
-				val_field(valarray_ref_null(), false),
-				val_field(valarray_ref_null(), false),
+				val_field(value_ref(), false),
+				val_field(value_ref(), true),
 				val_field(ValType::I64, false),
 			],
 			true,

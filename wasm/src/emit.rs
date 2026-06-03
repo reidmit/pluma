@@ -1492,6 +1492,7 @@ impl<'a> FnEmitter<'a> {
 		// helper, so that evidence arg is DROPPED — we pass only the dict + key (+
 		// value). map/filter/size/entries take no hash evidence (`[dict, ...]`).
 		if let Some((helper, call_args)) = match tag {
+			"dict-empty" => Some((self.runtime.idx(Helper::DictEmpty), &args[0..])),
 			"dict-insert" => Some((self.runtime.idx(Helper::DictInsert), &args[1..])),
 			"dict-lookup" => Some((self.runtime.idx(Helper::DictLookup), &args[1..])),
 			"dict-remove" => Some((self.runtime.idx(Helper::DictRemove), &args[1..])),
@@ -1499,6 +1500,9 @@ impl<'a> FnEmitter<'a> {
 			"dict-filter" => Some((self.runtime.idx(Helper::DictFilter), &args[0..])),
 			"dict-size" => Some((self.runtime.idx(Helper::DictSize), &args[0..])),
 			"dict-entries" => Some((self.runtime.idx(Helper::DictEntries), &args[0..])),
+			// `dict.update` has a `where (hash k)` witness at args[0] — drop it.
+			"dict-update" => Some((self.runtime.idx(Helper::DictUpdate), &args[1..])),
+			"dict-clear" => Some((self.runtime.idx(Helper::DictClear), &args[0..])),
 			_ => None,
 		} {
 			match helper {
@@ -2525,15 +2529,6 @@ impl<'a> FnEmitter<'a> {
 					field_index: 1,
 				});
 				self.push_nothing();
-			}
-			// dict.empty () : a fresh `$dict` with a null trie root and seq 0. (arg is
-			// the unit.) size/entries and the insert/lookup/remove/map/filter ops are
-			// trie helpers (`helpers/dict.rs`), not inline.
-			"dict-empty" => {
-				self.ins(Instruction::I32Const(types::TAG_DICT));
-				self.ins(Instruction::RefNull(HeapType::Concrete(types::T_VALUE)));
-				self.ins(Instruction::I32Const(0));
-				self.ins(Instruction::StructNew(types::T_DICT));
 			}
 			// list.length xs : element count (the logical `length` field, field 2 —
 			// NOT array.len of the backing array, which is the capacity), boxed `$int`.

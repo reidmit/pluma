@@ -2,19 +2,25 @@ use core.dict
 
 def main = fun {
 	let m = dict.empty ()
-	let m = dict.insert m "a" 10
-	let m = dict.insert m "b" 20
-	let m = dict.insert m "c" 30
+	dict.insert m "a" 10
+	dict.insert m "b" 20
+	dict.insert m "c" 30
 
 	# fold sums values; iteration order is insertion order.
-	let total = dict.fold m 0 fun acc _k v { acc + v }
+	let total = dict.fold m 0 fun acc _k v {
+		acc + v
+	}
 	print total
 
 	# dict.map applies a function over values; keys are preserved.
-	let doubled = dict.map m fun n { n * 2 }
+	let doubled = dict.map m fun n {
+		n * 2
+	}
 	print (dict.entries doubled)
 
 	# filter drops entries whose predicate returns false.
-	let kept = dict.filter m fun _k v { v > 15 }
+	let kept = dict.filter m fun _k v {
+		v > 15
+	}
 	print (dict.entries kept)
 }

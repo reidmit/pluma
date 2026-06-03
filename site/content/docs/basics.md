@@ -56,27 +56,27 @@ let list-across-lines = [
 
 ## Dicts
 
-Immutable, insertion-ordered hash dicts (key/value tables). There's no dict literal syntax — construct one through `core.dict`:
+Mutable, insertion-ordered hash dicts (key/value tables). `insert` and `remove` change the dict in place (and hand it back, for chaining), so two bindings to one dict are two views of the same table — like a `ref`. There's no dict literal syntax — construct one through `core.dict`:
 
 ```pluma
 use core.dict
 
 let m = dict.empty ()
-let m = dict.insert m "alice" 30
-let m = dict.insert m "bob" 25
+let _ = dict.insert m "alice" 30
+let _ = dict.insert m "bob" 25
 
 when (dict.lookup m "alice") is some n { print n } is none { print 0 }
 ```
 
 The key type must have a `hash` instance. `int`, `float`, `string`, `bool`, `option a`, and `result a b` are all wired up out of the box; user enums and records get a hash instance the moment they declare one with `for hash on …`. Operations that need to bucket a key (`insert`, `lookup`, `remove`, `contains-key`, `from-entries`, `merge`) carry a `where (hash k)` constraint and resolve the dictionary automatically at the call site.
 
-Iteration (`keys`, `values`, `entries`, `fold`, `map`, `filter`) is in insertion order. `from-entries` and `merge` are right-wins on duplicate keys. `==` on dicts is structural and order-independent. `size` returns the entry count.
+Iteration (`keys`, `values`, `entries`, `fold`, `map`, `filter`) is in insertion order. `insert`/`remove` mutate in place; the transformers `map`, `filter`, and `merge` instead build a new dict and leave their inputs alone. `from-entries` and `merge` are right-wins on duplicate keys. `==` on dicts is structural and order-independent. `size` returns the entry count.
 
 See `core.dict` for the full surface: `empty`, `insert`, `lookup`, `remove`, `contains-key`, `size`, `keys`, `values`, `entries`, `from-entries`, `merge`, `map`, `filter`, `fold`.
 
 ## Refs
 
-A `ref` is a mutable cell. It's the language's only mutation primitive — everything else is immutable. The `ref` module is auto-imported in every module; you don't write `use core.ref`.
+A `ref` is a mutable cell — the simplest way to hold state that outlives a single expression. Most values are immutable; the deliberate exceptions are `ref`, a `dict` (which `insert`/`remove` mutate in place), and the in-place `list.set`/`list.push`. The `ref` module is auto-imported in every module; you don't write `use core.ref`.
 
 ```pluma
 let counter = ref.new 0

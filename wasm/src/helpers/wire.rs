@@ -1008,6 +1008,7 @@ pub(crate) fn build_wire_dec_fn(
 	ctxput: u32,
 	ctxget: u32,
 	dec_variant: u32,
+	dict_empty: u32,
 	dict_insert: u32,
 	g: WireGlobals,
 	wt: WireTags,
@@ -1257,29 +1258,27 @@ pub(crate) fn build_wire_dec_fn(
 		w.local_get(vars).call(dec_variant).ret();
 	});
 	// dict: uvarint count then (key, value) pairs in wire (canonical) order.
-	// Rebuild the persistent trie by inserting each decoded pair — keys are
-	// decoded before values, preserving the stream order.
+	// Build a fresh table and insert each decoded pair in place (insert mutates and
+	// returns the same dict) — keys are decoded before values, preserving order.
 	w.local_get(vtag).i32(wt.s_dict as i32).i32_eq();
 	w.if_(|w| {
 		w.call(ruvarint).i32_wrap_i64().local_set(n);
 		bail(w);
-		// inner = empty $dict { tag, root: null, next_seq: 0 }.
-		w.i32(types::TAG_DICT)
-			.ref_null(types::T_VALUE)
-			.i32(0)
-			.struct_new(types::T_DICT)
-			.local_set(inner);
+		// inner = empty mutable table.
+		push_nothing(w);
+		w.call(dict_empty).local_set(inner);
 		w.i32(0).local_set(i);
 		w.block("brk", |w| {
 			w.loop_("lp", |w| {
 				w.local_get(i).local_get(n).i32_ge_u().br_if("brk");
-				// inner = dict_insert(inner, dec(key-schema), dec(value-schema)).
+				// dict_insert(inner, dec(key-schema), dec(value-schema)) — mutates
+				// `inner` in place and returns nothing, so drop the result.
 				w.local_get(inner);
 				payload_elem(w, 0);
 				w.call(self_idx);
 				payload_elem(w, 1);
 				w.call(self_idx);
-				w.call(dict_insert).local_set(inner);
+				w.call(dict_insert).drop();
 				w.local_get(i).i32(1).i32_add().local_set(i);
 				w.br("lp");
 			});

@@ -16,7 +16,7 @@ def main = fun {
 	print (none ?? none ?? none ?? 99)
 
 	# the real motivating use: lookup with a default
-	let m = dict.insert (dict.insert (dict.empty ()) "a" 1) "b" 2
+	let m = dict.from-entries [("a", 1), ("b", 2)]
 	print (dict.lookup m "a" ?? 0)
 	print (dict.lookup m "missing" ?? 0)
 

@@ -8,7 +8,8 @@ def fill = fun m n {
 	when n is 0 {
 		m
 	} else {
-		fill (dict.insert m (to-string n) n) (n - 1)
+		dict.insert m (to-string n) n
+		fill m (n - 1)
 	}
 }
 
@@ -16,7 +17,7 @@ def sum-lookups = fun m n acc {
 	when n is 0 {
 		acc
 	} else {
-		let v = (dict.lookup m (to-string n)) ?? 0
+		let v = dict.lookup m (to-string n) ?? 0
 		sum-lookups m (n - 1) (acc + v)
 	}
 }

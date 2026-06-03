@@ -2,9 +2,9 @@ use core.dict
 
 def main = fun {
 	let m = dict.empty ()
-	let m = dict.insert m "alice" 30
-	let m = dict.insert m "bob" 25
-	let m = dict.insert m "carol" 28
+	dict.insert m "alice" 30
+	dict.insert m "bob" 25
+	dict.insert m "carol" 28
 
 	# keys/values/entries iterate in insertion order.
 	print (dict.keys m)

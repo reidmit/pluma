@@ -176,36 +176,40 @@ pub(crate) enum Helper {
 	DictMap,
 	DictFilter,
 	/// `__hash(value) -> $int` — a structural hash consistent with `__eq` (equal
-	/// values hash equal), keying the `$dict` trie. Recurses into variant/tuple/
-	/// list/record payloads like `__eq`; the exact mixing is internal (it need only
-	/// agree with `__eq`, so user `hash` instances don't constrain it
+	/// values hash equal), keying the `$dict` probe table. Recurses into variant/
+	/// tuple/list/record payloads like `__eq`; the exact mixing is internal (it need
+	/// only agree with `__eq`, so user `hash` instances don't constrain it
 	/// — the hash is a pure accelerator). FNV-1a over the structural encoding.
 	Hash,
-	/// `__dict_node_insert(node, hash, key, val, seq) -> $dnode` — insert into the
-	/// persistent trie rooted at `node` (null = empty), returning a path-copied
-	/// root. `hash`/`seq` arrive boxed (`$int`). Recursive (descends a nibble per
-	/// level, splitting a leaf into a branch on a hash divergence).
-	DictNodeIns,
-	/// `__dict_node_eq(a, b) -> i32` — structural equality of two trie nodes (either
-	/// may be null). Same key-set ⇒ same trie shape, so this compares shape +
-	/// per-leaf buckets (order-independently, via `__eq`), ignoring `seq`. Lets
-	/// `__eq`'s dict case stay self-contained (no entries materialization).
-	DictNodeEq,
-	/// `__dict_collect(node, list) -> list` — append every entry of the subtree as a
-	/// `$tuple(key, value, seq)` to `list` (arbitrary order; the caller sorts by
-	/// `seq`). Recursive. Backs `__dict_entries`/size-independent iteration.
-	DictCollect,
-	/// `__dict_count(node) -> $int` — number of entries in the subtree (sum of leaf
-	/// bucket sizes). Recursive. Backs `dict.size` (an O(n) walk — size isn't
-	/// stored, since it's read far less than insert/lookup run).
-	DictCount,
-	/// `__dict_size(dict) -> $int` — `dict.size`: counts `dict.root` via `DictCount`.
+	/// `__dict_empty(unit) -> $dict` — a fresh empty mutable table (an initial-size
+	/// probe array + an empty `order` list). The `map`/`filter`/`remove` rebuilds
+	/// and `dict.empty` all start from one.
+	DictEmpty,
+	/// `__dict_find(dict, key) -> $dentry|null` — probe the table for `key`, returning
+	/// its entry (so the caller reads the value, or sees null = absent). Backs
+	/// `__dict_lookup` (wraps in some/none) and `__dict_eq` (compares values).
+	DictFind,
+	/// `__dict_grow(dict) -> nothing` — double the probe table and rehash every
+	/// `order` entry into it (the `order` list is untouched). Called by insert when
+	/// the load factor is exceeded.
+	DictGrow,
+	/// `__dict_eq(a, b) -> i32` — dict equality: same size and every entry of `a`
+	/// present in `b` with an `__eq` value (order-independent). Lets `__eq`'s dict
+	/// case stay self-contained.
+	DictEq,
+	/// `__dict_size(dict) -> $int` — `dict.size`: the `order` list's length (the live
+	/// entry count; there are no tombstones).
 	DictSize,
-	/// `__dict_entries(dict) -> list` — `dict.entries`: collect the trie, sort by
-	/// `seq` (insertion order), and strip `seq` to `$tuple(key, value)`. The single
-	/// insertion-order materialization `dict.keys/values/map/filter/remove` and the
-	/// to-string/wire formatters all funnel through.
+	/// `__dict_entries(dict) -> list` — `dict.entries`: the `order` entries as
+	/// `$tuple(key, value)` in insertion order. `dict.keys/values/map/filter/merge`
+	/// and the to-string/wire formatters all funnel through.
 	DictEntries,
+	/// `__dict_update(dict, key, f) -> nothing` — `dict.update`: a single-probe
+	/// read-modify-write. `f` receives `some(current)`/`none` and returns the new
+	/// value, written in place (a fused `lookup`+`insert`).
+	DictUpdate,
+	/// `__dict_clear(dict) -> nothing` — `dict.clear`: reset to empty in place.
+	DictClear,
 	WireFp,
 	WireMixStr,
 	WireMixLen,
@@ -327,7 +331,7 @@ impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 71;
+	pub(crate) const COUNT: usize = 73;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable
@@ -1099,10 +1103,6 @@ pub(crate) fn is_inline_builtin(tag: &str) -> bool {
 			| "ref-get"
 			| "ref-set"
 			| "ref-update"
-			// dict.empty: a fresh `$dict` with a null trie root. Every other dict op
-			// (size/entries as well as insert/lookup/remove/map/filter) is a helper
-			// that walks/builds the persistent trie.
-			| "dict-empty"
 			// math primitives WasmGC does with one f64/i64 opcode (the
 			// transcendentals log/exp/sin/cos still need a host import).
 			| "math-sqrt"
