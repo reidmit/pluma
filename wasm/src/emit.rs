@@ -1447,11 +1447,17 @@ impl<'a> FnEmitter<'a> {
 		// Higher-order builders + `list.push`: synthetic helpers called with the
 		// boxed args (a loop + closure call for the builders; an in-place append
 		// for push), leaving the result (or `nothing` for push) on the stack.
-		if tag == "list-build" || tag == "list-collect" || tag == "bytes-build" || tag == "list-push" {
+		if tag == "list-build"
+			|| tag == "list-collect"
+			|| tag == "bytes-build"
+			|| tag == "list-push"
+			|| tag == "spawn-command"
+		{
 			let helper = match tag {
 				"list-build" => self.runtime.idx(Helper::ListBuild),
 				"list-collect" => self.runtime.idx(Helper::ListCollect),
 				"list-push" => self.runtime.idx(Helper::ListPush),
+				"spawn-command" => self.runtime.idx(Helper::SpawnCommand),
 				_ => self.runtime.idx(Helper::BytesBuild),
 			};
 			match helper {

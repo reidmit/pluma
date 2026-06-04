@@ -372,6 +372,9 @@ enum FuncKind {
 	/// a call to the exported `__browser_resume(token)` (the browser command runtime's
 	/// real-timer source).
 	DomSetTimeout,
+	/// A nullary thunk `() -> ()` — the browser command pump (`__browser_run`) and the
+	/// timer-resume entry (`__browser_resume`).
+	Thunk,
 }
 
 /// A registered record *shape*: the WasmGC struct type interned for a distinct
@@ -678,6 +681,11 @@ impl FuncTypes {
 	/// `dom-set-timeout`: `(i32, i32) -> ()`.
 	pub fn for_dom_set_timeout(&mut self) -> u32 {
 		self.intern(FuncKind::DomSetTimeout)
+	}
+
+	/// A nullary thunk `() -> ()`.
+	pub fn for_thunk(&mut self) -> u32 {
+		self.intern(FuncKind::Thunk)
 	}
 
 	/// Encode the full type section: the fixed `$value` prefix, then every
@@ -1146,6 +1154,10 @@ impl FuncTypes {
 				}
 				FuncKind::DomSetTimeout => {
 					types.ty().function([ValType::I32, ValType::I32], []);
+					continue;
+				}
+				FuncKind::Thunk => {
+					types.ty().function([], []);
 					continue;
 				}
 			};

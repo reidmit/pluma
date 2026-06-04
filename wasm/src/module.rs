@@ -37,8 +37,12 @@ impl Module {
 		reach: &Reach,
 		param_shapes: &HashMap<u32, Vec<Option<ir::RecordShape>>>,
 		is_async: bool,
+		browser: bool,
 		diags: &mut Diagnostics,
 	) -> Vec<u8> {
+		// A Browser MVU build drives the long-lived command runtime; only meaningful
+		// for an async program (`app.element` returns a `task`).
+		let browser = browser && is_async;
 		let builtin_g = builtin_globals(p);
 
 		// Host imports: the builtin tags actually called in reachable functions.
@@ -266,6 +270,18 @@ impl Module {
 				host_order.push("io-last-error".to_string());
 			}
 		}
+		// Browser MVU command runtime: the long-lived `__browser_entry` (replacing the
+		// run-to-completion `__task_entry`), the `__browser_resume` timer callback, and
+		// the `dom-set-timeout` host import the pump calls. `BrowserEntry` pulls
+		// `BrowserRun` (+ Pump/Park/…) via deps. `SpawnCommand` rides in via its builtin tag.
+		if browser {
+			requested.insert(Helper::BrowserEntry);
+			requested.insert(Helper::BrowserResume);
+			if !host_index.contains_key("dom-set-timeout") {
+				host_index.insert("dom-set-timeout".to_string(), host_order.len() as u32);
+				host_order.push("dom-set-timeout".to_string());
+			}
+		}
 		let num_imports = host_order.len() as u32;
 
 		// Dense FuncId -> wasm function index (imports occupy the low indices).
@@ -338,6 +354,7 @@ impl Module {
 		runtime.float_to_str = host_index.get("float_to_str").copied();
 		runtime.io_last_error = host_index.get("io-last-error").copied();
 		runtime.net = net_imports;
+		runtime.dom_set_timeout = host_index.get("dom-set-timeout").copied();
 		let wrapper_base = next_synth;
 
 		let mut sorted_globals: Vec<u32> = reach.globals.iter().copied().collect();
@@ -797,6 +814,9 @@ impl Module {
 		for tag in &host_order {
 			let ty = if tag == "float_to_str" {
 				ftypes.for_float_to_str()
+			} else if tag == "dom-set-timeout" {
+				// `(i32 delay_ms, i32 token) -> ()` — the browser real-timer source.
+				ftypes.for_dom_set_timeout()
 			} else if is_byte_writer(tag) {
 				ftypes.for_host_write()
 			} else if tag == "io-copyout" || tag == "io-exit" {
@@ -956,9 +976,12 @@ impl Module {
 
 		let mut exports = ExportSection::new();
 		exports.export("memory", ExportKind::Memory, 0);
-		// An async program enters through `__task_entry` (which drives `main`'s
-		// returned task); a sync program enters the IR entry directly.
-		let entry_export = if is_async {
+		// A Browser MVU program enters through `__browser_entry` (init + pump + return,
+		// long-lived); a server async program through `__task_entry` (drive to
+		// completion); a sync program enters the IR entry directly.
+		let entry_export = if browser {
+			runtime.idx(Helper::BrowserEntry)
+		} else if is_async {
 			runtime.idx(Helper::TaskEntry)
 		} else {
 			wasm_index.get(&p.entry.0).copied()
@@ -970,6 +993,11 @@ impl Module {
 		// a `result.err` failure + read its message out of scratch (no GC reflection).
 		if let Some(w) = runtime.idx(Helper::EntryError) {
 			exports.export("__entry_error", ExportKind::Func, w);
+		}
+		// `__browser_resume(token) -> ()`: the browser loader's `setTimeout` calls this
+		// when an armed timer fires, to advance the clock + re-pump the command runtime.
+		if let Some(w) = runtime.idx(Helper::BrowserResume) {
+			exports.export("__browser_resume", ExportKind::Func, w);
 		}
 		// `__dom_dispatch(token) -> ()`: the browser loader calls this when a registered
 		// DOM event fires, to run the handler closure stowed at `token`.

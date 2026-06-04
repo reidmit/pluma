@@ -23,6 +23,7 @@
 use core.html
 use core.dom
 use core.list
+use core.task
 
 # Render a virtual node into a fresh real DOM node, wiring each event handler
 # to `dispatch` so a fired event becomes a message.
@@ -78,4 +79,52 @@ public def sandbox :: fun model (fun msg model -> model) (fun model -> html.html
 	let initial = render (view init) dispatch
 	ref.set current initial
 	dom.append-child root initial
+}
+
+# --- app.element: the full MVU app, with effects -------------------------
+
+# A `command msg` is a `list (task msg)` -- a batch of effects, each producing a
+# message the runtime feeds back into `update`. The empty list is "no effect".
+# Inject one into the scheduler as a root-scoped fiber.
+def spawn-command :: fun (task nothing) -> nothing = built-in "spawn-command"
+
+# Spawn each command, wrapping its `task msg` so the produced `msg` flows into
+# `dispatch` (which runs `update` + re-renders + may spawn more commands).
+def run-commands :: fun (list (task msg)) (fun msg -> nothing) -> nothing = fun cmds dispatch {
+	list.each cmds fun cmd {
+		spawn-command (task.map cmd dispatch)
+	}
+}
+
+def element-dispatch :: fun (ref model) (ref dom.node) dom.node (fun msg model -> (model, list (task msg))) (fun model -> html.html msg) -> (fun msg -> nothing) = fun model current root update view {
+	fun m {
+		let (next, cmds) = update m (ref.get model)
+		ref.set model next
+		let new-node = render (view next) (element-dispatch model current root update view)
+		dom.replace-child root new-node (ref.get current)
+		ref.set current new-node
+		run-commands cmds (element-dispatch model current root update view)
+	}
+}
+
+# Mount a full MVU app. `init` is `(model, commands)`; `update :: fun msg model ->
+# (model, commands)`; `view :: fun model -> html.html msg`. A command is a
+# `task msg` whose result re-enters `update` -- timers, HTTP, anything async.
+# Returns the app's driver task (the program is async; the browser runtime drives
+# it). Commands run on the structured-concurrency scheduler.
+#
+#     def main = app.element init update view
+public def element :: fun (model, list (task msg)) (fun msg model -> (model, list (task msg))) (fun model -> html.html msg) -> task nothing = fun init update view {
+	let (init-model, init-cmds) = init
+	let model = ref.new init-model
+	let root = dom.body ()
+	let current = ref.new (dom.create-text "")
+	let dispatch = element-dispatch model current root update view
+	let initial = render (view init-model) dispatch
+	ref.set current initial
+	dom.append-child root initial
+	run-commands init-cmds dispatch
+	# One await makes the program async, so the scheduler + browser entry activate.
+	try _u = task.return ()
+	task.return ()
 }

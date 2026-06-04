@@ -235,6 +235,253 @@ pub(crate) fn build_run_task_fn(
 }
 
 // ==========================================================================
+// The browser command runtime (Platform::Browser).
+//
+// A browser MVU app is long-lived and externally driven: `__browser_entry`
+// (exported `_entry`) runs `init` + pumps once and RETURNS, leaving the
+// scheduler state in module globals; thereafter DOM events (`__dom_dispatch`)
+// and real timers (`__browser_resume`, fired by a host `setTimeout`) re-enter
+// the pump. Unlike `__run_task` it never blocks and never decodes a root
+// outcome — it pumps ready fibers, then arms a REAL timeout for the soonest
+// parked timer (reusing `__run_timers`'s clock-jump on resume) and returns.
+// ==========================================================================
+
+/// Reset all scheduler globals to a fresh root scope + root fiber, seeding
+/// `ready` to run the given root task from Start. (Browser entry only — the
+/// server `__run_task` keeps its own inline reset.)
+fn emit_init_sched_state(
+	w: &mut Wat,
+	g: TaskGlobals,
+	list_append: u32,
+	seed_root: impl FnOnce(&mut Wat),
+) {
+	empty_list(w);
+	w.global_set(g.pending);
+	empty_list(w);
+	w.global_set(g.timers);
+	w.i64(0).global_set(g.now);
+	w.i32(0).global_set(g.root_kind);
+	empty_list(w);
+	push_scope(w, ROOT_SCOPE, NO_AWAITER, 0);
+	w.call(list_append).global_set(g.scopes);
+	empty_list(w);
+	push_fiber(w, ROOT_SCOPE, NO_SCOPE);
+	w.call(list_append).global_set(g.fibers);
+	empty_list(w);
+	push_ready_entry(w, 0, focus::START, seed_root);
+	w.call(list_append).global_set(g.ready);
+	w.i32(0).global_set(g.rhead);
+}
+
+/// `__browser_run() -> ()`: the browser command pump. Drains deferred
+/// cancellations + ready fibers like `__run_task`'s loop, but with no
+/// root-settled exit (a browser app runs forever) and a non-blocking
+/// nothing-ready branch: arm a real host `setTimeout` for the earliest parked
+/// timer (or quiesce) and return to the browser event loop.
+pub(crate) fn build_browser_run_fn(
+	pump: u32,
+	fiber_completed: u32,
+	cancel_scope: u32,
+	park: u32,
+	set_timeout: u32,
+	g: TaskGlobals,
+) -> Function {
+	let mut w = Wat::new(0);
+	let entry = w.local(types::value_ref());
+	let fid = w.local(ValType::I32);
+	let ns = w.local(ValType::I64);
+	w.block("exit", |w| {
+		w.loop_("sched", |w| {
+			// Drain deferred cancellations (run `defer`s) first.
+			w.block("nocancel", |w| {
+				w.loop_("cancels", |w| {
+					list_len(w, g.pending);
+					w.i32_eqz().br_if("nocancel");
+					let sid = w.local(ValType::I32);
+					w.global_get(g.pending)
+						.ref_cast(types::T_LIST)
+						.struct_get(types::T_LIST, 1);
+					list_len(w, g.pending);
+					w.i32(1).i32_sub().array_get(types::T_VALARRAY);
+					unbox_i(w);
+					w.local_set(sid);
+					drop_last(w, g.pending);
+					box_i(w, |w| {
+						w.local_get(sid);
+					});
+					w.call(cancel_scope).drop();
+					w.br("cancels");
+				});
+			});
+			// A ready fiber? (No root-settled check — the app outlives any one fiber.)
+			w.global_get(g.rhead);
+			list_len(w, g.ready);
+			w.i32_lt_s();
+			w.if_else(
+				|w| {
+					// entry = ready[rhead]; rhead += 1.
+					w.global_get(g.ready)
+						.ref_cast(types::T_LIST)
+						.struct_get(types::T_LIST, 1)
+						.global_get(g.rhead)
+						.array_get(types::T_VALARRAY)
+						.local_set(entry);
+					w.global_get(g.rhead).i32(1).i32_add().global_set(g.rhead);
+					tuple_elem(w, entry, 0);
+					unbox_i(w);
+					w.local_set(fid);
+					fld_i(w, g, g.fibers, fid, fiber::ALIVE);
+					w.if_(|w| {
+						set_fld_i(w, g.fibers, fid, fiber::WAIT_KIND, |w| {
+							w.i32(wait::NONE);
+						});
+						box_i(w, |w| {
+							w.local_get(fid);
+						});
+						box_i(w, |w| {
+							tuple_elem(w, entry, 1);
+							unbox_i(w);
+						});
+						tuple_elem(w, entry, 2);
+						w.call(pump);
+						w.drop();
+						w.global_get(g.out_kind).i32(1).i32_eq();
+						w.if_else(
+							|w| {
+								box_i(w, |w| {
+									w.local_get(fid);
+								});
+								box_i(w, |w| {
+									w.global_get(g.out_okerr);
+								});
+								w.global_get(g.out_val);
+								w.call(fiber_completed).drop();
+							},
+							|w| {
+								box_i(w, |w| {
+									w.local_get(fid);
+								});
+								box_i(w, |w| {
+									w.global_get(g.out_okerr);
+								});
+								w.global_get(g.out_okerr).i32(wait::SLEEP).i32_eq();
+								w.if_result(
+									types::value_ref(),
+									|w| {
+										box_i64(w, |w| {
+											w.global_get(g.out_arg64);
+										});
+									},
+									|w| {
+										box_i(w, |w| {
+											w.global_get(g.out_arg);
+										});
+									},
+								);
+								w.call(park).drop();
+							},
+						);
+					});
+				},
+				|w| {
+					// Nothing ready: quiesce if no timers, else arm a real timeout for the
+					// earliest deadline and return. `__browser_resume` re-enters on fire.
+					list_len(w, g.timers);
+					w.i32_eqz().br_if("exit");
+					// delay_ns = max(0, earliest_at - now); delay_ms = ceil(ns / 1e6).
+					push_net_deadline(w, g);
+					w.local_set(ns);
+					w.local_get(ns)
+						.i64(999_999)
+						.i64_add()
+						.i64(1_000_000)
+						.i64_div_s()
+						.i32_wrap_i64();
+					w.i32(0); // token — unused with the re-arm-earliest scheme
+					w.call(set_timeout);
+					w.br("exit");
+				},
+			);
+			w.br("sched");
+		});
+	});
+	w.finish()
+}
+
+/// `__browser_resume() -> ()` (exported; the host `setTimeout` target): advance
+/// the virtual clock to the due deadline (re-readying timer-parked fibers via
+/// `__run_timers`) and re-pump. The host may pass a token arg; it's ignored.
+pub(crate) fn build_browser_resume_fn(run_timers: u32, browser_run: u32) -> Function {
+	let mut w = Wat::new(0);
+	w.call(run_timers).drop();
+	w.call(browser_run);
+	w.finish()
+}
+
+/// `__browser_entry(env) -> value` (exported `_entry` for a Browser MVU build):
+/// initialize the scheduler, seed `main`'s task as the root fiber, pump once
+/// (running init's synchronous commands + arming timers for parked ones), then
+/// return `nothing` — the scheduler state survives in module globals for later
+/// event/timer re-entries.
+pub(crate) fn build_browser_entry_fn(
+	entry_idx: u32,
+	browser_run: u32,
+	list_append: u32,
+	g: TaskGlobals,
+) -> Function {
+	let mut w = Wat::new(1);
+	let env = w.param(0);
+	emit_init_sched_state(&mut w, g, list_append, |w| {
+		w.local_get(env).call(entry_idx);
+	});
+	w.call(browser_run);
+	push_nothing(&mut w);
+	w.finish()
+}
+
+/// `__spawn_command(task) -> value`: spawn `task` as a root-scoped fiber (an MVU
+/// command). Returns `nothing`; the command's result is delivered by its own
+/// `task.map` dispatch tail, not awaited. Mirrors `__sched_spawn` minus the
+/// returned handle and the sub-scope.
+pub(crate) fn build_spawn_command_fn(list_append: u32, g: TaskGlobals) -> Function {
+	let mut w = Wat::new(1);
+	let task = w.param(0);
+	let fid = w.local(ValType::I32);
+	let root_sid = w.local(ValType::I32);
+	w.i32(ROOT_SCOPE as i32).local_set(root_sid);
+	list_len(&mut w, g.fibers);
+	w.local_set(fid);
+	// fibers.append(new fiber { scope=ROOT_SCOPE, runs_scope=none }).
+	w.global_get(g.fibers);
+	w.i32(types::TAG_TUPLE);
+	fiber_fields(
+		&mut w,
+		|w| {
+			w.i32(ROOT_SCOPE as i32);
+		},
+		|w| {
+			w.i32(NO_SCOPE as i32);
+		},
+	);
+	w.struct_new(types::T_TUPLE);
+	w.call(list_append).global_set(g.fibers);
+	// root scope.children.append(fid).
+	set_fld(&mut w, g.scopes, root_sid, scope::CHILDREN, |w| {
+		fld(w, g, g.scopes, root_sid, scope::CHILDREN);
+		box_i(w, |w| {
+			w.local_get(fid);
+		});
+		w.call(list_append);
+	});
+	// ready.append((fid, Start, task)).
+	ready_push(&mut w, g, list_append, fid, focus::START, |w| {
+		w.local_get(task);
+	});
+	push_nothing(&mut w);
+	w.finish()
+}
+
+// ==========================================================================
 // The per-fiber driver (`__pump`).
 // ==========================================================================
 

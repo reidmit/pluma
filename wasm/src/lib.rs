@@ -56,11 +56,18 @@ pub struct EmitOptions {
 	/// pass is sound, so turning it off only forgoes the perf win — the persistent
 	/// baseline it falls back to is the observational oracle the harness diffs against.
 	pub reuse: bool,
+	/// Emit for the browser target (`pluma build --target browser`): use the long-lived
+	/// command runtime entry (`__browser_entry`) instead of the run-to-completion
+	/// `__task_entry`, export `__browser_resume`, and wire the `__dom_dispatch` pump tail.
+	pub browser: bool,
 }
 
 impl Default for EmitOptions {
 	fn default() -> Self {
-		EmitOptions { reuse: true }
+		EmitOptions {
+			reuse: true,
+			browser: false,
+		}
 	}
 }
 
@@ -115,7 +122,14 @@ pub fn emit_with_options(program: &IrProgram, opts: EmitOptions) -> Result<Vec<u
 
 	// 3. Build and encode the module.
 	let mut diags = Diagnostics::default();
-	let bytes = module::Module::build(&p, &reach, &param_shapes, is_async, &mut diags);
+	let bytes = module::Module::build(
+		&p,
+		&reach,
+		&param_shapes,
+		is_async,
+		opts.browser,
+		&mut diags,
+	);
 	if diags.is_empty() {
 		Ok(bytes)
 	} else {

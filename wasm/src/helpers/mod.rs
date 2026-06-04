@@ -790,10 +790,56 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 					.dom_handlers
 					.expect("__dom_dispatch needs the dom_handlers global"),
 				arity1,
-				// Browser MVU command-pump tail (wired in Phase 2 via `Helper::BrowserRun`).
-				None,
+				// On a Browser MVU build, drain commands the handler spawned + arm timers.
+				c.rt.idx(H::BrowserRun),
 			)
 		},
+	},
+	HelperDef {
+		id: H::BrowserRun,
+		fn_type: Ty::Thunk,
+		deps: &[H::Pump, H::FiberCompleted, H::CancelScope, H::Park],
+		build: |c| {
+			task::build_browser_run_fn(
+				c.dep(H::Pump),
+				c.dep(H::FiberCompleted),
+				c.dep(H::CancelScope),
+				c.dep(H::Park),
+				c.rt
+					.dom_set_timeout
+					.expect("__browser_run needs the dom-set-timeout import"),
+				c.rt.taskg,
+			)
+		},
+	},
+	HelperDef {
+		id: H::BrowserResume,
+		fn_type: Ty::Thunk,
+		deps: &[H::RunTimers, H::BrowserRun],
+		build: |c| task::build_browser_resume_fn(c.dep(H::RunTimers), c.dep(H::BrowserRun)),
+	},
+	HelperDef {
+		id: H::BrowserEntry,
+		fn_type: Ty::Helper(1),
+		deps: &[H::BrowserRun, H::ListAppend],
+		build: |c| {
+			let entry = c
+				.rt
+				.entry_idx
+				.expect("a Browser MVU program needs an entry index");
+			task::build_browser_entry_fn(
+				entry,
+				c.dep(H::BrowserRun),
+				c.dep(H::ListAppend),
+				c.rt.taskg,
+			)
+		},
+	},
+	HelperDef {
+		id: H::SpawnCommand,
+		fn_type: Ty::Helper(1),
+		deps: &[H::ListAppend],
+		build: |c| task::build_spawn_command_fn(c.dep(H::ListAppend), c.rt.taskg),
 	},
 ];
 
@@ -803,6 +849,9 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 pub(crate) fn helper_for_tag(tag: &str) -> Option<Helper> {
 	Some(match tag {
 		"to-string" => H::ToString,
+		// The MVU command spawn primitive (`core.app`): inject a `task msg` into the
+		// browser scheduler as a root-scoped fiber.
+		"spawn-command" => H::SpawnCommand,
 		// Higher-order builders: synthetic wasm helpers (loop + closure call).
 		"list-build" => H::ListBuild,
 		"list-collect" => H::ListCollect,

@@ -442,7 +442,13 @@ fn build_command(args: Vec<String>) {
 			.to_string()
 	});
 
-	let bytes = match wasm::emit(&program) {
+	let bytes = match wasm::emit_with_options(
+		&program,
+		wasm::EmitOptions {
+			browser: platform == Platform::Browser,
+			..Default::default()
+		},
+	) {
 		Ok(b) => b,
 		Err(diags) => {
 			print_error(format!("wasm codegen error: {}", diags.0.join("; ")));

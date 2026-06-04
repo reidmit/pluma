@@ -366,17 +366,29 @@ pub(crate) enum Helper {
 	/// its index. `dom.on-click` calls this and hands the token to the host. Reuses
 	/// `__list_push`; types as `(value) -> i32` (the `EntryError` shape).
 	DomRegister,
-	/// `__dom_dispatch(i32 token) -> ()` — the exported event entry: look up the
-	/// handler closure at `token` in `dom_handlers` and invoke it (arity-1 with a
-	/// `nothing` arg). The host calls it when a registered DOM event fires.
+	/// `__dom_dispatch(i32 token, externref event) -> ()` — the exported event entry:
+	/// look up the handler closure at `token` in `dom_handlers` and invoke it (arity-1
+	/// with the boxed event). The host calls it when a registered DOM event fires.
 	DomDispatch,
+	/// `__browser_run() -> ()` — the browser command pump: drain ready fibers, then arm
+	/// a real `setTimeout` for the soonest parked timer (or quiesce) and return.
+	BrowserRun,
+	/// `__browser_resume() -> ()` (exported) — the host `setTimeout` target: advance the
+	/// clock to the due deadline (`__run_timers`) and re-pump.
+	BrowserResume,
+	/// `__browser_entry(env) -> value` (exported `_entry` for a Browser MVU build) —
+	/// init the scheduler, seed `main`'s task, pump once, return.
+	BrowserEntry,
+	/// `__spawn_command(task) -> value` — spawn an MVU command (`task msg`) as a
+	/// root-scoped fiber; its dispatch tail re-enters `update`.
+	SpawnCommand,
 }
 
 impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 84;
+	pub(crate) const COUNT: usize = 88;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable
@@ -454,10 +466,14 @@ pub(crate) struct Runtime {
 	pub(crate) net: Option<NetImports>,
 	/// Wasm index of the mutable `(ref null $list)` global holding the `core.dom`
 	/// event-handler registry — a `$list` of handler closures, indexed by the i32
-	/// token `dom.on-click` hands the host. `Some` exactly when a `dom-add-listener-*`
+	/// token `dom.add-listener` hands the host. `Some` exactly when a `dom-add-listener`
 	/// is reachable (the program registers an event handler); the exported
 	/// `__dom_dispatch` reads it to find the closure for a fired event.
 	pub(crate) dom_handlers: Option<u32>,
+	/// Host import index of `dom-set-timeout` — the browser command pump (`__browser_run`)
+	/// calls it to arm a real timer. `Some` on a Browser MVU build (when `BrowserRun` is
+	/// reachable).
+	pub(crate) dom_set_timeout: Option<u32>,
 }
 
 impl Runtime {
@@ -536,8 +552,10 @@ pub(crate) enum Ty {
 	MarshalSend,
 	MarshalReadNames,
 	EntryError,
-	/// The exported `__dom_dispatch(i32) -> ()` entry type.
+	/// The exported `__dom_dispatch(i32, externref) -> ()` entry type.
 	DomDispatch,
+	/// A nullary thunk `() -> ()` (`__browser_run` / `__browser_resume`).
+	Thunk,
 }
 
 impl Ty {
@@ -561,6 +579,7 @@ impl Ty {
 			Ty::MarshalReadNames => ft.for_marshal_read_names(),
 			Ty::EntryError => ft.for_entry_error(),
 			Ty::DomDispatch => ft.for_dom_dispatch(),
+			Ty::Thunk => ft.for_thunk(),
 		}
 	}
 }

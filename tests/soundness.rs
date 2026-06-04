@@ -75,7 +75,14 @@ fn join_diags(diags: &[compiler::Diagnostic]) -> String {
 /// observable triple the run-suite also snapshots.
 fn run(name: &str, src: &str, reuse: bool) -> (String, String, String) {
 	let ir = lower_src(name, src);
-	let bytes = wasm::emit_with_options(&ir, wasm::EmitOptions { reuse }).unwrap_or_else(|d| {
+	let bytes = wasm::emit_with_options(
+		&ir,
+		wasm::EmitOptions {
+			reuse,
+			..Default::default()
+		},
+	)
+	.unwrap_or_else(|d| {
 		panic!(
 			"`{name}` failed to emit (reuse={reuse}): {}",
 			d.0.join("; ")
