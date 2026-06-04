@@ -974,18 +974,28 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 			arity: 0,
 			returns_value: true,
 		}),
-		"dom-create-element" | "dom-create-text" | "dom-get-value" => Some(HostSig {
+		"dom-create-element" | "dom-create-text" | "dom-get-value" | "event-target-value" => {
+			Some(HostSig {
+				arity: 1,
+				returns_value: true,
+			})
+		}
+		"event-prevent-default" => Some(HostSig {
 			arity: 1,
-			returns_value: true,
-		}),
-		"dom-append-child" | "dom-set-text" | "dom-add-listener-click" => Some(HostSig {
-			arity: 2,
 			returns_value: false,
 		}),
-		"dom-set-attribute" => Some(HostSig {
-			arity: 3,
-			returns_value: false,
-		}),
+		"dom-append-child" | "dom-set-text" | "dom-remove-child" | "dom-remove-attribute" => {
+			Some(HostSig {
+				arity: 2,
+				returns_value: false,
+			})
+		}
+		"dom-set-attribute" | "dom-replace-child" | "dom-insert-before" | "dom-add-listener" => {
+			Some(HostSig {
+				arity: 3,
+				returns_value: false,
+			})
+		}
 		_ => None,
 	}
 }
@@ -1074,12 +1084,23 @@ pub(crate) enum DomKind {
 	SetAttr,
 	/// `dom-set-text`: `(externref, ptr, len) -> ()`; node + one string.
 	SetText,
-	/// `dom-get-value`: `(externref, dst, cap) -> len`; node in, probe-read a `$str`.
+	/// `dom-get-value` / `event-target-value`: `(externref, dst, cap) -> len`; node/event
+	/// in, probe-read a `$str` (the input's `.value`, or the event target's).
 	GetValue,
-	/// `dom-add-listener-click`: `(externref, token) -> ()`; node + a registry token.
-	/// The handler closure (the second Pluma arg) is pushed into the handler registry
-	/// and replaced by its i32 index — the host calls `__dom_dispatch(token)` on the event.
+	/// `dom-add-listener`: `(externref, np, nl, token) -> ()`; node + an event-name string
+	/// + a registry token. The handler closure (the third Pluma arg) is pushed into the
+	/// handler registry and replaced by its i32 index — the host wires
+	/// `addEventListener(name, e => __dom_dispatch(token, e))`.
 	Listen,
+	/// `dom-remove-child`: `(externref, externref) -> ()`; unbox two node args (like `Append`).
+	Append2,
+	/// `dom-replace-child` / `dom-insert-before`: `(externref, externref, externref) -> ()`;
+	/// unbox three node args.
+	Extern3,
+	/// `dom-remove-attribute`: `(externref, ptr, len) -> ()`; node + one string (like `SetText`).
+	NodeStr,
+	/// `event-prevent-default`: `(externref) -> ()`; unbox one node/event arg.
+	Extern1,
 }
 
 /// Classify a `core.dom` host builtin emitted via `emit_dom`. `None` for non-dom tags.
@@ -1090,8 +1111,12 @@ pub(crate) fn dom_kind(tag: &str) -> Option<DomKind> {
 		"dom-append-child" => DomKind::Append,
 		"dom-set-attribute" => DomKind::SetAttr,
 		"dom-set-text" => DomKind::SetText,
-		"dom-get-value" => DomKind::GetValue,
-		"dom-add-listener-click" => DomKind::Listen,
+		"dom-get-value" | "event-target-value" => DomKind::GetValue,
+		"dom-add-listener" => DomKind::Listen,
+		"dom-remove-child" => DomKind::Append2,
+		"dom-replace-child" | "dom-insert-before" => DomKind::Extern3,
+		"dom-remove-attribute" => DomKind::NodeStr,
+		"event-prevent-default" => DomKind::Extern1,
 		_ => return None,
 	})
 }

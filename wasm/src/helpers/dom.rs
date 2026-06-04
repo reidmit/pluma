@@ -41,13 +41,17 @@ pub(crate) fn build_dom_register_fn(g: u32, list_push: u32) -> Function {
 	w.finish()
 }
 
-/// `__dom_dispatch(i32 token) -> ()`: look up the handler closure at `token` in the
-/// `dom_handlers` registry and invoke it (arity-1, with a `nothing` arg — the M1
-/// handler type is `fun nothing -> nothing`). `g` is the registry global; `arity1`
-/// the interned `(env, arg) -> value` closure type. Exported as `__dom_dispatch`.
-pub(crate) fn build_dom_dispatch_fn(g: u32, arity1: u32) -> Function {
-	let mut w = Wat::new(1);
+/// `__dom_dispatch(i32 token, externref event) -> ()`: look up the handler closure at
+/// `token` in the `dom_handlers` registry and invoke it (arity-1) with the DOM `event`
+/// boxed into a `$extern` (the handler type is `fun event -> nothing`). `g` is the
+/// registry global; `arity1` the interned `(env, arg) -> value` closure type. When
+/// `browser_run` is `Some` (a Browser MVU build), the dispatch ends by pumping the
+/// command scheduler so any commands the handler spawned run + arm their real timers.
+/// Exported as `__dom_dispatch`.
+pub(crate) fn build_dom_dispatch_fn(g: u32, arity1: u32, browser_run: Option<u32>) -> Function {
+	let mut w = Wat::new(2);
 	let token = w.param(0);
+	let event = w.param(1); // externref
 	let clos = w.local(types::value_ref());
 
 	// clos = dom_handlers.elems[token].
@@ -57,12 +61,18 @@ pub(crate) fn build_dom_dispatch_fn(g: u32, arity1: u32) -> Function {
 		.local_get(token)
 		.array_get(types::T_VALARRAY)
 		.local_set(clos);
-	// Invoke arity-1: env = clos, arg0 = nothing, fn_index = clos.fn_index.
+	// Invoke arity-1: env = clos, arg0 = $extern{TAG_EXTERN, event}, fn_index = clos.fn_index.
 	w.local_get(clos).ref_cast(types::T_CLOSURE); // env (param 0)
-	w.ref_null(types::T_VALUE); // arg0 = nothing (param 1)
+	w.i32(types::TAG_EXTERN)
+		.local_get(event)
+		.struct_new(types::T_EXTERN); // arg0 = the boxed event
 	w.local_get(clos)
 		.ref_cast(types::T_CLOSURE)
 		.struct_get(types::T_CLOSURE, 1); // fn_index
 	w.call_indirect(arity1).drop();
+	// Browser MVU: drain command fibers the handler spawned + arm their timers.
+	if let Some(run) = browser_run {
+		w.call(run);
+	}
 	w.finish()
 }

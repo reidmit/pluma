@@ -1,0 +1,81 @@
+# core.app -- the Elm-style runtime that drives a `core.html` view.
+#
+# You write three pieces -- an initial model, a pure `update`, and a `view`
+# -- and `app.sandbox` owns the rest: it holds the model, renders the view to
+# the real DOM, wires every event handler to feed messages back into
+# `update`, and re-renders when the model changes.
+#
+#     def main = app.sandbox 0 update view
+#
+#     def update :: fun msg int -> int = fun m n {
+#         when m is increment { n + 1 } is reset { 0 }
+#     }
+#     def view :: fun int -> html msg = fun n {
+#         html.div [] [
+#             html.span [] [html.text (to-string n)],
+#             html.button [events.on-click increment] [html.text "+"],
+#         ]
+#     }
+#
+# `app.sandbox` is for pure UIs (no effects). For effects -- timers, HTTP --
+# `app.element` (also here) lets `update` return commands.
+
+use core.html
+use core.dom
+use core.list
+
+# Render a virtual node into a fresh real DOM node, wiring each event handler
+# to `dispatch` so a fired event becomes a message.
+def render :: fun (html.html msg) (fun msg -> nothing) -> dom.node = fun vdom dispatch {
+	when vdom is el tag attrs kids {
+		let node = dom.create-element tag
+		list.each attrs fun a {
+			apply-attr node a dispatch
+		}
+		list.each kids fun k {
+			dom.append-child node (render k dispatch)
+		}
+		node
+	} is txt s {
+		dom.create-text s
+	}
+}
+
+def apply-attr :: fun dom.node (html.attribute msg) (fun msg -> nothing) -> nothing = fun node a dispatch {
+	when a is a-set k v {
+		dom.set-attribute node k v
+	} is a-on name handler {
+		dom.add-listener node name fun e {
+			dispatch (handler e)
+		}
+	}
+}
+
+# Build the dispatch closure for a sandbox app. It and `render` are not
+# mutually recursive at creation -- dispatch only *calls* render when a
+# message arrives -- so a plain closure over the runtime's refs suffices.
+# (Naive re-render: each message rebuilds the whole view subtree and swaps it
+# in with one `replace-child`. A structural in-place diff is a later refinement.)
+def sandbox-dispatch :: fun (ref model) (ref dom.node) dom.node (fun msg model -> model) (fun model -> html.html msg) -> (fun msg -> nothing) = fun model current root update view {
+	fun m {
+		let next = update m (ref.get model)
+		ref.set model next
+		let new-node = render (view next) (sandbox-dispatch model current root update view)
+		dom.replace-child root new-node (ref.get current)
+		ref.set current new-node
+	}
+}
+
+# Mount a pure UI: an initial model, a pure `update :: fun msg model -> model`,
+# and a `view :: fun model -> html.html msg`. Runs synchronously at startup; the
+# installed event listeners drive everything afterward.
+public def sandbox :: fun model (fun msg model -> model) (fun model -> html.html msg) -> nothing = fun init update view {
+	let model = ref.new init
+	let root = dom.body ()
+	# Seeded with a throwaway detached node; replaced by the first render below.
+	let current = ref.new (dom.create-text "")
+	let dispatch = sandbox-dispatch model current root update view
+	let initial = render (view init) dispatch
+	ref.set current initial
+	dom.append-child root initial
+}

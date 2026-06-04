@@ -1,0 +1,46 @@
+# core.events -- attach event handlers to elements in a `core.html` view.
+#
+# Each helper returns an `attribute msg` you drop into an element's attribute
+# list; when the DOM event fires, the runtime feeds the resulting `msg` into
+# your `update`.
+#
+#     html.button [events.on-click Increment] [html.text "+"]
+#     html.input  [events.on-input Typed] []
+
+use core.html
+use core.dom
+
+# Fire `msg` when the element is clicked. The click event itself is ignored
+# -- you just name the message to send.
+#
+#     html.button [events.on-click Save] [html.text "save"]
+public def on-click :: fun msg -> html.attribute msg = fun m {
+	html.on "click" fun _e {
+		m
+	}
+}
+
+# Fire `to-msg value` whenever an input's text changes, handing your function
+# the input's current `.value`.
+#
+#     html.input [events.on-input Typed] []
+public def on-input :: fun (fun string -> msg) -> html.attribute msg = fun to-msg {
+	html.on "input" fun e {
+		to-msg (dom.target-value e)
+	}
+}
+
+# Fire `msg` when a form is submitted, suppressing the browser's default
+# full-page reload.
+public def on-submit :: fun msg -> html.attribute msg = fun m {
+	html.on "submit" fun e {
+		dom.prevent-default e
+		m
+	}
+}
+
+# The general escape hatch: run `handler` (turning the raw `event` into a
+# `msg`) when the named event fires.
+public def on-event :: fun string (fun dom.event -> msg) -> html.attribute msg = fun name handler {
+	html.on name handler
+}

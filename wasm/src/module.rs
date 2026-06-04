@@ -832,10 +832,12 @@ impl Module {
 				match dom_kind(tag) {
 					Some(DomKind::Body) => ftypes.for_dom_body(),
 					Some(DomKind::Make) => ftypes.for_dom_make(),
-					Some(DomKind::Append) => ftypes.for_dom_append(),
+					Some(DomKind::Append | DomKind::Append2) => ftypes.for_dom_append(),
 					Some(DomKind::SetAttr) => ftypes.for_dom_set_attr(),
-					Some(DomKind::SetText) => ftypes.for_dom_node_str(),
+					Some(DomKind::SetText | DomKind::NodeStr) => ftypes.for_dom_node_str(),
 					Some(DomKind::GetValue) => ftypes.for_dom_get_value(),
+					Some(DomKind::Extern3) => ftypes.for_dom_extern3(),
+					Some(DomKind::Extern1) => ftypes.for_dom_extern1(),
 					Some(DomKind::Listen) | None => ftypes.for_dom_listen(),
 				}
 			} else if tag == "net-listen" || tag == "net-connect" || tag == "net-accept" {

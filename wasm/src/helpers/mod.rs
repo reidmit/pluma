@@ -790,6 +790,8 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 					.dom_handlers
 					.expect("__dom_dispatch needs the dom_handlers global"),
 				arity1,
+				// Browser MVU command-pump tail (wired in Phase 2 via `Helper::BrowserRun`).
+				None,
 			)
 		},
 	},

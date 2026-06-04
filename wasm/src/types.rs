@@ -353,15 +353,25 @@ enum FuncKind {
 	/// node's `.value` into scratch at `dst` (≤ `cap`), returning the length (the
 	/// probe-read shape, like the io reads).
 	DomGetValue,
-	/// `dom-add-listener-click(externref node, i32 token) -> ()` — register a click
-	/// handler. `token` indexes the wasm-side handler registry; the host wires
-	/// `addEventListener("click", () => __dom_dispatch(token))`.
+	/// `dom-add-listener(externref node, i32 np, i32 nl, i32 token) -> ()` — register
+	/// a handler for the event named by the scratch string `(np, nl)`. `token` indexes
+	/// the wasm-side handler registry; the host wires `addEventListener(name, e =>
+	/// __dom_dispatch(token, e))`.
 	DomListen,
-	/// The exported event-dispatch entry `__dom_dispatch(i32 token) -> ()` — the
-	/// host calls it when a registered DOM event fires; it looks up the handler
-	/// closure by `token` and invokes it. Distinct from the host imports above: it
-	/// is a wasm *export*, not an import.
+	/// The exported event-dispatch entry `__dom_dispatch(i32 token, externref event)
+	/// -> ()` — the host calls it when a registered DOM event fires; it looks up the
+	/// handler closure by `token` and invokes it with the (boxed) event. Distinct from
+	/// the host imports above: it is a wasm *export*, not an import.
 	DomDispatch,
+	/// A three-node op `(externref, externref, externref) -> ()` — `dom-replace-child`
+	/// (parent, new, old) and `dom-insert-before` (parent, new, ref).
+	DomExtern3,
+	/// A one-node op `(externref) -> ()` — `event-prevent-default`.
+	DomExtern1,
+	/// `dom-set-timeout(i32 delay_ms, i32 token) -> ()` — ask the host to `setTimeout`
+	/// a call to the exported `__browser_resume(token)` (the browser command runtime's
+	/// real-timer source).
+	DomSetTimeout,
 }
 
 /// A registered record *shape*: the WasmGC struct type interned for a distinct
@@ -645,14 +655,29 @@ impl FuncTypes {
 		self.intern(FuncKind::DomGetValue)
 	}
 
-	/// `dom-add-listener-click`: `(externref, i32) -> ()`.
+	/// `dom-add-listener`: `(externref, i32, i32, i32) -> ()`.
 	pub fn for_dom_listen(&mut self) -> u32 {
 		self.intern(FuncKind::DomListen)
 	}
 
-	/// The exported `__dom_dispatch(i32) -> ()` entry type.
+	/// The exported `__dom_dispatch(i32, externref) -> ()` entry type.
 	pub fn for_dom_dispatch(&mut self) -> u32 {
 		self.intern(FuncKind::DomDispatch)
+	}
+
+	/// A three-node op `(externref, externref, externref) -> ()`.
+	pub fn for_dom_extern3(&mut self) -> u32 {
+		self.intern(FuncKind::DomExtern3)
+	}
+
+	/// A one-node op `(externref) -> ()`.
+	pub fn for_dom_extern1(&mut self) -> u32 {
+		self.intern(FuncKind::DomExtern1)
+	}
+
+	/// `dom-set-timeout`: `(i32, i32) -> ()`.
+	pub fn for_dom_set_timeout(&mut self) -> u32 {
+		self.intern(FuncKind::DomSetTimeout)
 	}
 
 	/// Encode the full type section: the fixed `$value` prefix, then every
@@ -1100,11 +1125,27 @@ impl FuncTypes {
 					continue;
 				}
 				FuncKind::DomListen => {
-					types.ty().function([extern_ref(), ValType::I32], []);
+					types
+						.ty()
+						.function([extern_ref(), ValType::I32, ValType::I32, ValType::I32], []);
 					continue;
 				}
 				FuncKind::DomDispatch => {
-					types.ty().function([ValType::I32], []);
+					types.ty().function([ValType::I32, extern_ref()], []);
+					continue;
+				}
+				FuncKind::DomExtern3 => {
+					types
+						.ty()
+						.function([extern_ref(), extern_ref(), extern_ref()], []);
+					continue;
+				}
+				FuncKind::DomExtern1 => {
+					types.ty().function([extern_ref()], []);
+					continue;
+				}
+				FuncKind::DomSetTimeout => {
+					types.ty().function([ValType::I32, ValType::I32], []);
 					continue;
 				}
 			};

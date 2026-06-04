@@ -41,10 +41,23 @@ public def create-text :: fun string -> node = built-in "dom-create-text"
 #     dom.append-child root btn
 public def append-child :: fun node node -> nothing = built-in "dom-append-child"
 
+# Insert `new` as a child of `parent`, right before the existing child
+# `before`. The building block for inserting into the middle of a list.
+public def insert-before :: fun node node node -> nothing = built-in "dom-insert-before"
+
+# Remove `child` from `parent`.
+public def remove-child :: fun node node -> nothing = built-in "dom-remove-child"
+
+# Replace `old` (a child of `parent`) with `new`, in place.
+public def replace-child :: fun node node node -> nothing = built-in "dom-replace-child"
+
 # Set an attribute (`class`, `href`, `value`, ...) on a node.
 #
 #     dom.set-attribute input "placeholder" "your name"
 public def set-attribute :: fun node string string -> nothing = built-in "dom-set-attribute"
+
+# Remove an attribute from a node.
+public def remove-attribute :: fun node string -> nothing = built-in "dom-remove-attribute"
 
 # Replace a node's text content with the given string.
 #
@@ -54,9 +67,29 @@ public def set-text :: fun node string -> nothing = built-in "dom-set-text"
 # Read an input node's current `.value` (the empty string if it has none).
 public def get-value :: fun node -> string = built-in "dom-get-value"
 
-# Run `handler` whenever the node is clicked. The handler is a plain
-# function; it typically mutates the page (`set-text`, `append-child`) or
-# updates a `ref`.
+# An event delivered to a handler -- a click, an input change, a form
+# submit. Opaque, like `node`; read details with the accessors below.
+opaque enum event {
+	handle int
+}
+
+# The `.value` of the element the event fired on (e.g. the text an
+# `input` now holds). Empty string when there's none.
+public def target-value :: fun event -> string = built-in "event-target-value"
+
+# Suppress the browser's default action for this event -- e.g. stop a
+# form `submit` from reloading the page.
+public def prevent-default :: fun event -> nothing = built-in "event-prevent-default"
+
+# Run `handler` whenever the named DOM event (`"click"`, `"input"`,
+# `"submit"`, ...) fires on the node. The handler receives the `event`.
 #
-#     dom.on-click btn (fun _ { dom.set-text label "clicked" })
-public def on-click :: fun node (fun nothing -> nothing) -> nothing = built-in "dom-add-listener-click"
+#     dom.add-listener btn "click" (fun _e { dom.set-text label "clicked" })
+public def add-listener :: fun node string (fun event -> nothing) -> nothing = built-in "dom-add-listener"
+
+# Sugar for the common case: run `handler` on every click.
+#
+#     dom.on-click btn (fun _e { dom.set-text label "clicked" })
+public def on-click :: fun node (fun event -> nothing) -> nothing = fun n handler {
+	add-listener n "click" handler
+}

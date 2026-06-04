@@ -31,6 +31,9 @@ pub fn stdlib_sources() -> &'static [(&'static str, &'static str)] {
 		("core.net", include_str!("stdlib/net.pa")),
 		("core.http", include_str!("stdlib/http.pa")),
 		("core.dom", include_str!("stdlib/dom.pa")),
+		("core.html", include_str!("stdlib/html.pa")),
+		("core.events", include_str!("stdlib/events.pa")),
+		("core.app", include_str!("stdlib/app.pa")),
 	]
 }
 

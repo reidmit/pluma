@@ -1,0 +1,140 @@
+# core.html -- a virtual DOM: your UI described as plain data.
+#
+# Instead of poking at the real page (that's `core.dom`), you build an
+# `html msg` value -- a tree of elements and text -- and hand it to the
+# `core.app` runtime, which makes the real DOM match it. Because it's just
+# data, `view` stays a pure function of your model.
+#
+# The `msg` type parameter is the message an element's event handlers emit:
+# a `button [events.on-click Increment] [...]` produces an `html increment-msg`.
+# The runtime feeds those messages back into your `update`.
+#
+# Build trees with the element helpers (`html.div`, `html.button`,
+# `html.text`, ...), attach attributes with the attribute helpers
+# (`html.class`, `html.value`, ...), and add event handlers from `core.events`.
+
+use core.dom
+use core.list
+
+# A virtual DOM node. The constructors are internal (`el`/`txt`); build nodes
+# with the helpers below so the public API is all qualified (`html.div`,
+# `html.text`) rather than bare variant names.
+public enum html msg {
+	el string (list (attribute msg)) (list (html msg))
+	txt string
+}
+
+# An attribute (`a-set name value`) or an event handler (`a-on name handler`).
+# Internal constructors; build with `html.attr`/`html.on` + `core.events`.
+public enum attribute msg {
+	a-set string string
+	a-on string (fun dom.event -> msg)
+}
+
+# --- element builders ------------------------------------------------------
+
+# A run of text.
+public def text :: fun string -> html msg = fun s {
+	txt s
+}
+
+# A generic element: `html.element "section" attrs children`.
+public def element :: fun string (list (attribute msg)) (list (html msg)) -> html msg = fun tag attrs kids {
+	el tag attrs kids
+}
+
+public def div :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "div" a k
+}
+
+public def span :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "span" a k
+}
+
+public def p :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "p" a k
+}
+
+public def button :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "button" a k
+}
+
+public def input :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "input" a k
+}
+
+public def ul :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "ul" a k
+}
+
+public def li :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "li" a k
+}
+
+public def h1 :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "h1" a k
+}
+
+public def form :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "form" a k
+}
+
+# --- attribute builders ----------------------------------------------------
+
+# A raw attribute: `html.attr "data-id" "42"`.
+public def attr :: fun string string -> attribute msg = fun k v {
+	a-set k v
+}
+
+# An event handler attribute (usually you'll reach for `core.events`):
+# `html.on "click" (fun _e { Save })`.
+public def on :: fun string (fun dom.event -> msg) -> attribute msg = fun name handler {
+	a-on name handler
+}
+
+public def class :: fun string -> attribute msg = fun v {
+	a-set "class" v
+}
+
+public def id :: fun string -> attribute msg = fun v {
+	a-set "id" v
+}
+
+public def value :: fun string -> attribute msg = fun v {
+	a-set "value" v
+}
+
+public def placeholder :: fun string -> attribute msg = fun v {
+	a-set "placeholder" v
+}
+
+# `type` would clash with the keyword-ish word; the DOM attribute, spelled out.
+public def input-type :: fun string -> attribute msg = fun v {
+	a-set "type" v
+}
+
+# --- mapping ---------------------------------------------------------------
+
+# Re-tag every message a tree emits, turning an `html a` into an `html b`.
+# Lets a parent embed a child component and lift its messages into its own.
+#
+#     html.map (fun c { Child c }) (child-view model.child)
+public def map :: fun (fun a -> b) (html a) -> html b = fun f node {
+	when node is el tag attrs kids {
+		el tag (list.map attrs fun a { map-attr f a }) (list.map kids fun k {
+			map f k
+		})
+	} is txt s {
+		txt s
+	}
+}
+
+def map-attr :: fun (fun a -> b) (attribute a) -> attribute b = fun f a {
+	when a is a-set k v {
+		a-set k v
+	} is a-on name handler {
+		a-on name fun e {
+			f (handler e)
+		}
+	}
+}

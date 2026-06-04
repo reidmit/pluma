@@ -2011,16 +2011,66 @@ impl<'a> FnEmitter<'a> {
 				};
 				self.emit_dom_get_value(idx, &args[0], alloc, load);
 			}
-			// `(externref, token) -> ()`: register the handler closure, pass its token.
+			// `(externref node, i32 np, i32 nl, i32 token) -> ()`: marshal the event-name
+			// string, register the handler closure, pass `(node, name, token)`.
 			DomKind::Listen => {
+				let (Some(alloc), Some(store)) = (alloc, store) else {
+					self
+						.diags
+						.push(format!("`{tag}` needs the marshalling helpers"));
+					self.push_nothing();
+					return;
+				};
 				let Some(register) = self.runtime.idx(Helper::DomRegister) else {
 					self.diags.push(format!("`{tag}` needs __dom_register"));
 					self.push_nothing();
 					return;
 				};
+				self.reset_bump();
+				let (np, nl) = self.marshal_strlike_arg(&args[1], alloc, store);
 				self.unbox_extern(&args[0]);
-				self.atom(&args[1]); // the handler closure
+				self.ins(Instruction::LocalGet(np));
+				self.ins(Instruction::LocalGet(nl));
+				self.atom(&args[2]); // the handler closure
 				self.ins(Instruction::Call(register)); // -> i32 token
+				self.ins(Instruction::Call(idx));
+				self.push_nothing();
+			}
+			// `(externref, externref) -> ()` — `dom-remove-child` (same as `Append`).
+			DomKind::Append2 => {
+				self.unbox_extern(&args[0]);
+				self.unbox_extern(&args[1]);
+				self.ins(Instruction::Call(idx));
+				self.push_nothing();
+			}
+			// `(externref, externref, externref) -> ()` — `replace-child`/`insert-before`.
+			DomKind::Extern3 => {
+				self.unbox_extern(&args[0]);
+				self.unbox_extern(&args[1]);
+				self.unbox_extern(&args[2]);
+				self.ins(Instruction::Call(idx));
+				self.push_nothing();
+			}
+			// `(externref, ptr, len) -> ()` — `remove-attribute` (node + one string).
+			DomKind::NodeStr => {
+				let (Some(alloc), Some(store)) = (alloc, store) else {
+					self
+						.diags
+						.push(format!("`{tag}` needs the marshalling helpers"));
+					self.push_nothing();
+					return;
+				};
+				self.reset_bump();
+				let (ptr, len) = self.marshal_strlike_arg(&args[1], alloc, store);
+				self.unbox_extern(&args[0]);
+				self.ins(Instruction::LocalGet(ptr));
+				self.ins(Instruction::LocalGet(len));
+				self.ins(Instruction::Call(idx));
+				self.push_nothing();
+			}
+			// `(externref) -> ()` — `event-prevent-default`.
+			DomKind::Extern1 => {
+				self.unbox_extern(&args[0]);
 				self.ins(Instruction::Call(idx));
 				self.push_nothing();
 			}

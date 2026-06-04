@@ -63,13 +63,23 @@ const pluma = {
   "dom-create-element": (p, l) => document.createElement(readStr(p, l)),
   "dom-create-text": (p, l) => document.createTextNode(readStr(p, l)),
   "dom-append-child": (parent, child) => { parent.appendChild(child); },
+  "dom-insert-before": (parent, node, before) => { parent.insertBefore(node, before); },
+  "dom-remove-child": (parent, child) => { parent.removeChild(child); },
+  "dom-replace-child": (parent, node, old) => { parent.replaceChild(node, old); },
   "dom-set-attribute": (n, np, nl, vp, vl) => n.setAttribute(readStr(np, nl), readStr(vp, vl)),
+  "dom-remove-attribute": (n, p, l) => n.removeAttribute(readStr(p, l)),
   "dom-set-text": (n, p, l) => { n.textContent = readStr(p, l); },
   "dom-get-value": (n, dst, cap) => writeStr(dst, cap, (n && n.value) || ""),
-  // Register a click handler: the wasm side stowed the closure at `token`; on the
-  // event we call back into the module's exported dispatcher.
-  "dom-add-listener-click": (n, token) =>
-    n.addEventListener("click", () => exports.__dom_dispatch(token)),
+  // event accessors (the event externref flows in as the handler's arg).
+  "event-target-value": (e, dst, cap) => writeStr(dst, cap, (e && e.target && e.target.value) || ""),
+  "event-prevent-default": (e) => { e.preventDefault(); },
+  // Register a handler for `name`: the wasm side stowed the closure at `token`; on the
+  // event we call the module's exported dispatcher with the token + the event object.
+  "dom-add-listener": (n, np, nl, token) =>
+    n.addEventListener(readStr(np, nl), (e) => exports.__dom_dispatch(token, e)),
+  // Real-timer source for the browser command runtime (Phase 2).
+  "dom-set-timeout": (delayMs, token) =>
+    setTimeout(() => exports.__browser_resume(token), delayMs),
 };
 
 async function main() {
