@@ -1,0 +1,6 @@
+# Top-level recovery: independent parse errors in separate defs are each
+# reported (in source order), and a valid def between them still parses.
+def alias = 0
+def fine = 1 + 2
+def trait = 2
+def other = { a = 3 }

@@ -1,0 +1,25 @@
+---
+source: tests/errors.rs
+expression: output
+---
+error[E0026]: Unexpected token (keyword `alias`). Expected an identifier.
+  ╭─▸ tests/errors/parse-recover-multiple/main.pa:3:5
+  │
+3 │ def alias = 0
+  │     ^^^^^
+  ╰─
+
+error[E0026]: Unexpected token (keyword `trait`). Expected an identifier.
+  ╭─▸ tests/errors/parse-recover-multiple/main.pa:5:5
+  │
+5 │ def trait = 2
+  │     ^^^^^
+  ╰─
+
+error[E0026]: Unexpected token (a '='). Expected a '}'.
+  ╭─▸ tests/errors/parse-recover-multiple/main.pa:6:17
+  │
+6 │ def other = { a = 3 }
+  │                 ^
+  │
+  ╰─ help: record fields are separated with `:`, not `=` (e.g. `{ name: value }`).
