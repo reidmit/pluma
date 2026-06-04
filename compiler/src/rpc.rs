@@ -89,13 +89,14 @@ fn endpoint_arity(ann: &TypeExprNode) -> Option<usize> {
 
 // The `rpc-client` module source: a settable base URL plus one stub per
 // endpoint.
-pub fn generate_client(eps: &[Endpoint]) -> String {
+pub fn generate_client(eps: &[Endpoint], fingerprint: &str) -> String {
 	let mut s = String::new();
 	s.push_str("# Generated RPC client stubs (FULLSTACK Layer 2). Do not edit.\n");
 	s.push_str("use std.sys.http\n");
 	s.push_str("use std.task\n");
 	s.push_str("use std.ref\n");
 	s.push_str("use std.string\n");
+	s.push_str("use std.dict\n");
 	s.push_str("use std.request\n\n");
 	s.push_str("def base-url :: ref string = ref.new \"http://127.0.0.1:8080\"\n\n");
 	s.push_str("# Points the stubs at a server origin (e.g. \"http://127.0.0.1:8080\").\n");
@@ -124,18 +125,29 @@ pub fn generate_client(eps: &[Endpoint]) -> String {
 			"public def {} :: {} = fun _req{} {{\n",
 			ep.name, sig, param_list
 		));
+		// Every call carries the build's schema fingerprint as a header; the
+		// dispatcher rejects a mismatch (a stale client) with a 409 the stub
+		// turns into a clean transport failure — never a corrupt decode.
 		s.push_str(&format!(
-			"\ttry resp = http.fetch (ref.get base-url ++ \"/rpc/{}\") post {}\n",
+			"\tlet headers = dict.from-entries [(\"x-rpc-fingerprint\", \"{}\")]\n",
+			fingerprint
+		));
+		s.push_str(&format!(
+			"\ttry resp = http.fetch (ref.get base-url ++ \"/rpc/{}\") post headers {}\n",
 			route, body
 		));
 		s.push_str("\twhen resp is ok r {\n");
-		s.push_str("\t\twhen wire.decode r.body is ok value {\n");
-		s.push_str("\t\t\ttask.return value\n");
-		s.push_str("\t\t} is err _e {\n");
+		s.push_str("\t\tif r.status == 409 {\n");
+		s.push_str("\t\t\ttask.fail \"rpc: client out of date — reload\"\n");
+		s.push_str("\t\t} else {\n");
+		s.push_str("\t\t\twhen wire.decode r.body is ok value {\n");
+		s.push_str("\t\t\t\ttask.return value\n");
+		s.push_str("\t\t\t} is err _e {\n");
 		s.push_str(&format!(
-			"\t\t\ttask.fail \"rpc: malformed response from {}\"\n",
+			"\t\t\t\ttask.fail \"rpc: malformed response from {}\"\n",
 			route
 		));
+		s.push_str("\t\t\t}\n");
 		s.push_str("\t\t}\n");
 		s.push_str("\t} is err e {\n");
 		s.push_str("\t\ttask.fail e\n");
@@ -146,12 +158,13 @@ pub fn generate_client(eps: &[Endpoint]) -> String {
 
 // The `rpc-server` module source: a single `dispatch` handler routing on the
 // request path to each endpoint.
-pub fn generate_server(eps: &[Endpoint]) -> String {
+pub fn generate_server(eps: &[Endpoint], fingerprint: &str) -> String {
 	let mut s = String::new();
 	s.push_str("# Generated RPC dispatch table (FULLSTACK Layer 2). Do not edit.\n");
 	s.push_str("use std.sys.http\n");
 	s.push_str("use std.task\n");
 	s.push_str("use std.dict\n");
+	s.push_str("use std.string\n");
 	s.push_str("use std.request\n");
 	let mut mods: Vec<&str> = eps.iter().map(|e| e.module.as_str()).collect();
 	mods.sort();
@@ -159,12 +172,14 @@ pub fn generate_server(eps: &[Endpoint]) -> String {
 	for m in mods {
 		s.push_str(&format!("use {}\n", m));
 	}
-	s.push_str("\npublic def dispatch :: fun http.request -> task http.response = fun req {\n");
 
+	// The path-routing chain, built first, then nested inside the fingerprint
+	// guard below.
+	let mut routing = String::new();
 	for (i, ep) in eps.iter().enumerate() {
 		let route = ep.route();
-		let head = if i == 0 { "\tif" } else { "\t} else if" };
-		s.push_str(&format!("{} req.path == \"/rpc/{}\" {{\n", head, route));
+		let head = if i == 0 { "if" } else { "} else if" };
+		routing.push_str(&format!("{} req.path == \"/rpc/{}\" {{\n", head, route));
 
 		let args: Vec<String> = (0..ep.arity).map(|i| format!("a{}", i)).collect();
 		let call = if ep.arity == 0 {
@@ -178,12 +193,12 @@ pub fn generate_server(eps: &[Endpoint]) -> String {
 			)
 		};
 		let ok_body =
-			"\t\t\ttask.return {status: 200, headers: dict.empty (), body: wire.encode result}\n";
+			"\t\ttask.return {status: 200, headers: dict.empty (), body: wire.encode result}\n";
 
 		if ep.arity == 0 {
 			// No arguments: nothing to decode, just call the handler.
-			s.push_str(&format!("\t\ttry result = {}\n", call));
-			s.push_str(&ok_body.replace("\t\t\t", "\t\t"));
+			routing.push_str(&format!("\ttry result = {}\n", call));
+			routing.push_str(&ok_body.replace("\t\t", "\t"));
 		} else {
 			// Decode the argument(s). A tuple *pattern* closes the tuple so its
 			// `wire` schema is derivable (`.0`/`.1` access leaves it open).
@@ -192,24 +207,70 @@ pub fn generate_server(eps: &[Endpoint]) -> String {
 			} else {
 				format!("({})", args.join(", "))
 			};
-			s.push_str(&format!("\t\twhen wire.decode req.body is ok {} {{\n", pat));
-			s.push_str(&format!("\t\t\ttry result = {}\n", call));
-			s.push_str(ok_body);
-			s.push_str("\t\t} is err _e {\n");
-			s.push_str("\t\t\ttask.return (http.text 400 \"rpc: malformed request\")\n");
-			s.push_str("\t\t}\n");
+			routing.push_str(&format!("\twhen wire.decode req.body is ok {} {{\n", pat));
+			routing.push_str(&format!("\t\ttry result = {}\n", call));
+			routing.push_str(ok_body);
+			routing.push_str("\t} is err _e {\n");
+			routing.push_str("\t\ttask.return (http.text 400 \"rpc: malformed request\")\n");
+			routing.push_str("\t}\n");
 		}
 	}
-
 	if eps.is_empty() {
-		s.push_str("\ttask.return (http.not-found ())\n");
+		routing.push_str("task.return (http.not-found ())\n");
 	} else {
-		s.push_str("\t} else {\n");
-		s.push_str("\t\ttask.return (http.not-found ())\n");
-		s.push_str("\t}\n");
+		routing.push_str("} else {\n");
+		routing.push_str("\ttask.return (http.not-found ())\n");
+		routing.push_str("}\n");
 	}
+
+	// Indent the routing one level so it sits inside the fingerprint guard.
+	let routing: String = routing.lines().map(|l| format!("\t\t\t{}\n", l)).collect();
+
+	// `dispatch` first checks the request's schema fingerprint against this
+	// build's. A mismatch (a stale client built from drifted endpoint types)
+	// gets a clean 409, never a corrupt positional decode.
+	s.push_str("\npublic def dispatch :: fun http.request -> task http.response = fun req {\n");
+	s.push_str("\twhen dict.lookup req.headers \"x-rpc-fingerprint\" is some fp {\n");
+	s.push_str(&format!("\t\tif fp == \"{}\" {{\n", fingerprint));
+	s.push_str(&routing);
+	s.push_str("\t\t} else {\n");
+	s.push_str("\t\t\ttask.return {status: 409, headers: dict.empty (), body: string.to-bytes \"rpc: schema mismatch\"}\n");
+	s.push_str("\t\t}\n");
+	s.push_str("\t} is none {\n");
+	s.push_str("\t\ttask.return {status: 409, headers: dict.empty (), body: string.to-bytes \"rpc: missing schema fingerprint\"}\n");
+	s.push_str("\t}\n");
 	s.push_str("}\n");
 	s
+}
+
+// A stable hash of the whole endpoint surface — every endpoint's qualified
+// name and rendered signature, order-independent. Stamped identically into
+// both generated modules so a client and server built from the same source
+// agree, and a client built against drifted endpoint types does not. FNV-1a
+// over the sorted signature lines, masked to a non-negative `int`.
+pub fn surface_fingerprint(eps: &[Endpoint]) -> String {
+	let mut lines: Vec<String> = eps
+		.iter()
+		.map(|e| {
+			format!(
+				"{}.{}::{}",
+				e.module,
+				e.name,
+				render_type_expr(&e.annotation)
+			)
+		})
+		.collect();
+	lines.sort();
+	let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+	for line in &lines {
+		for b in line.bytes() {
+			h ^= b as u64;
+			h = h.wrapping_mul(0x0000_0100_0000_01b3);
+		}
+		h ^= 0x0a;
+		h = h.wrapping_mul(0x0000_0100_0000_01b3);
+	}
+	(h & (i64::MAX as u64)).to_string()
 }
 
 // Render a type-expr back to Pluma source, for copying an endpoint's

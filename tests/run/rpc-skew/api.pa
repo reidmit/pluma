@@ -1,0 +1,8 @@
+# A single endpoint, enough to generate a dispatcher whose schema-fingerprint
+# guard we can probe.
+use std.task
+use std.request
+
+public remote def add :: fun request int int -> task int = fun _req a b {
+	task.return (a + b)
+}

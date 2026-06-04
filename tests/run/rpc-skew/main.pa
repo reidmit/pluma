@@ -1,0 +1,46 @@
+# Version-skew protection (FULLSTACK Layer 2). The generated `dispatch` checks
+# each request's `x-rpc-fingerprint` header against this build's schema
+# fingerprint, and rejects a mismatch (a stale client built from drifted
+# endpoint types) with a clean 409 — never a corrupt positional decode. Here a
+# hand-written probe sends a wrong fingerprint and a missing one; both are
+# rejected with 409. The matching case is covered by `rpc-loopback` (whose
+# generated client sends the real fingerprint).
+use std.sys.net
+use std.sys.http
+use std.task
+use std.dict
+use api
+use rpc-server as srv
+
+# POST encoded args to the dispatcher with the given headers; report the status.
+def probe :: fun string (dict string string) -> task int = fun url headers {
+	try resp = http.fetch url post headers (wire.encode (2, 3))
+	when resp is ok r {
+		task.return r.status
+	} is err _e {
+		task.return 0
+	}
+}
+
+def main = fun {
+	if net.listen "127.0.0.1:0" is ok server {
+		if net.local-addr server is ok addr {
+			scope as s {
+				let _ = s.spawn (http.serve-on server srv.dispatch)
+				let url = "http://" ++ addr ++ "/rpc/api.add"
+				try wrong = probe url (dict.from-entries [("x-rpc-fingerprint", "0")])
+				print "wrong fingerprint -> $(to-string wrong)"
+				try missing = probe url (dict.empty ())
+				print "missing fingerprint -> $(to-string missing)"
+				s.cancel ()
+				task.return 0
+			}
+		} else {
+			print "local-addr failed"
+			task.return 1
+		}
+	} else {
+		print "listen failed"
+		task.return 1
+	}
+}

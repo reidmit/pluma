@@ -378,15 +378,15 @@ def status-names :: dict int string = dict.from-entries [
 # (`Connection: close`). `err`s as an `ok`-wrapped failure string if the host
 # can't be reached or the exchange breaks down.
 #
-#     try resp = http.fetch
-#         "http://127.0.0.1:8080/echo" method.post (string.to-bytes "hi")
-public def fetch :: fun string method bytes -> task (result response string) = fun url verb body {
+#     try resp = http.fetch "http://127.0.0.1:8080/echo"
+#         post (dict.empty ()) (string.to-bytes "hi")
+public def fetch :: fun string method (dict string string) bytes -> task (result response string) = fun url verb headers body {
 	let split = split-url url
 	let authority = split.0
 	let path = split.1
 	try c = net.connect authority
 	when c is ok conn {
-		try _ = write-all conn (serialize-request verb path authority body)
+		try _ = write-all conn (serialize-request verb path authority headers body)
 		try resp-r = read-response conn
 		let _ = net.close conn
 		task.return resp-r
@@ -411,11 +411,12 @@ def split-url :: fun string -> (string, string) = fun url {
 
 # Render a request as HTTP/1.1 bytes: request line, Host, the computed
 # Content-Length, Connection: close, a blank line, then body.
-def serialize-request :: fun method string string bytes -> bytes = fun verb path authority body {
+def serialize-request :: fun method string string (dict string string) bytes -> bytes = fun verb path authority headers body {
 	let request-line = method-name verb ++ " " ++ path ++ " HTTP/1.1\r\n"
 	let host-line = "Host: " ++ authority ++ "\r\n"
+	let custom-lines = string.join (list.map (dict.entries headers) render-header) ""
 	let length-line = "Content-Length: " ++ to-string (bytes.length body) ++ "\r\n"
-	let head = request-line ++ host-line ++ length-line ++ "Connection: close\r\n\r\n"
+	let head = request-line ++ host-line ++ custom-lines ++ length-line ++ "Connection: close\r\n\r\n"
 	bytes.concat (string.to-bytes head) body
 }
 

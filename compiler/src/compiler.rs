@@ -276,8 +276,12 @@ impl Compiler {
 		if endpoints.is_empty() {
 			return;
 		}
-		let client = crate::rpc::generate_client(&endpoints);
-		let server = crate::rpc::generate_server(&endpoints);
+		// One fingerprint over the whole endpoint surface, stamped into both
+		// modules — a client and server built together agree; a drifted client
+		// is rejected with a clean transport error (version-skew protection).
+		let fingerprint = crate::rpc::surface_fingerprint(&endpoints);
+		let client = crate::rpc::generate_client(&endpoints, &fingerprint);
+		let server = crate::rpc::generate_server(&endpoints, &fingerprint);
 		self.set_module_source(crate::rpc::CLIENT_MODULE.to_string(), client.into_bytes());
 		self.set_module_source(crate::rpc::SERVER_MODULE.to_string(), server.into_bytes());
 	}
