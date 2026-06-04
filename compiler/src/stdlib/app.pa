@@ -79,6 +79,10 @@ def render-attrs :: fun dom.node (list (html.attribute msg)) (ref (fun msg -> no
 	list.each attrs fun a {
 		when a is a-set k v {
 			dom.set-attribute node k v
+		} is a-prop-str k v {
+			dom.set-string-property node k v
+		} is a-prop-bool k v {
+			dom.set-bool-property node k v
 		} is a-on name handler {
 			let id = dom.add-listener node name fun e {
 				(ref.get box) (handler e)
@@ -131,8 +135,10 @@ def replace :: fun dom.node (vnode msg) (html.html msg) (ref (fun msg -> nothing
 	fresh
 }
 
-# Patch attributes in place: set every new `a-set` that is new or changed,
-# then remove every old `a-set` key that is gone. Handlers are left to
+# Patch attributes and properties in place. For each new entry, set it when it is
+# new or changed; then for each old entry whose key is gone from the new list,
+# undo it -- an attribute is removed, but a property has no "remove", so it is
+# reset to its neutral value (`""` / `false`). Handlers are left to
 # `update-handlers`.
 def diff-attrs :: fun dom.node (list (html.attribute msg)) (list (html.attribute msg)) -> nothing = fun node old new {
 	list.each new fun a {
@@ -146,6 +152,26 @@ def diff-attrs :: fun dom.node (list (html.attribute msg)) (list (html.attribute
 			} is none {
 				dom.set-attribute node k v
 			}
+		} is a-prop-str k v {
+			when (lookup-str-prop old k) is some ov {
+				if ov == v {
+					()
+				} else {
+					dom.set-string-property node k v
+				}
+			} is none {
+				dom.set-string-property node k v
+			}
+		} is a-prop-bool k v {
+			when (lookup-bool-prop old k) is some ov {
+				if ov == v {
+					()
+				} else {
+					dom.set-bool-property node k v
+				}
+			} is none {
+				dom.set-bool-property node k v
+			}
 		} is a-on _name _handler {
 			()
 		}
@@ -156,6 +182,18 @@ def diff-attrs :: fun dom.node (list (html.attribute msg)) (list (html.attribute
 				()
 			} is none {
 				dom.remove-attribute node k
+			}
+		} is a-prop-str k _v {
+			when (lookup-str-prop new k) is some _nv {
+				()
+			} is none {
+				dom.set-string-property node k ""
+			}
+		} is a-prop-bool k _v {
+			when (lookup-bool-prop new k) is some _nv {
+				()
+			} is none {
+				dom.set-bool-property node k false
 			}
 		} is a-on _name _handler {
 			()
@@ -178,8 +216,62 @@ def lookup-attr-from :: fun (list (html.attribute msg)) string int -> option str
 			} else {
 				lookup-attr-from attrs key (i + 1)
 			}
+		} is a-prop-str _k _v {
+			lookup-attr-from attrs key (i + 1)
+		} is a-prop-bool _k _v {
+			lookup-attr-from attrs key (i + 1)
 		} is a-on _name _handler {
 			lookup-attr-from attrs key (i + 1)
+		}
+	}
+}
+
+# The value of the first `a-prop-str` with the given key, if any.
+def lookup-str-prop :: fun (list (html.attribute msg)) string -> option string = fun attrs key {
+	lookup-str-prop-from attrs key 0
+}
+
+def lookup-str-prop-from :: fun (list (html.attribute msg)) string int -> option string = fun attrs key i {
+	if i == (list.length attrs) {
+		none
+	} else {
+		when (list.get attrs i) is a-prop-str k v {
+			if k == key {
+				some v
+			} else {
+				lookup-str-prop-from attrs key (i + 1)
+			}
+		} is a-set _k _v {
+			lookup-str-prop-from attrs key (i + 1)
+		} is a-prop-bool _k _v {
+			lookup-str-prop-from attrs key (i + 1)
+		} is a-on _name _handler {
+			lookup-str-prop-from attrs key (i + 1)
+		}
+	}
+}
+
+# The value of the first `a-prop-bool` with the given key, if any.
+def lookup-bool-prop :: fun (list (html.attribute msg)) string -> option bool = fun attrs key {
+	lookup-bool-prop-from attrs key 0
+}
+
+def lookup-bool-prop-from :: fun (list (html.attribute msg)) string int -> option bool = fun attrs key i {
+	if i == (list.length attrs) {
+		none
+	} else {
+		when (list.get attrs i) is a-prop-bool k v {
+			if k == key {
+				some v
+			} else {
+				lookup-bool-prop-from attrs key (i + 1)
+			}
+		} is a-set _k _v {
+			lookup-bool-prop-from attrs key (i + 1)
+		} is a-prop-str _k _v {
+			lookup-bool-prop-from attrs key (i + 1)
+		} is a-on _name _handler {
+			lookup-bool-prop-from attrs key (i + 1)
 		}
 	}
 }
@@ -190,6 +282,10 @@ def handler-names :: fun (list (html.attribute msg)) -> list string = fun attrs 
 	let names :: list string = []
 	list.each attrs fun a {
 		when a is a-set _k _v {
+			()
+		} is a-prop-str _k _v {
+			()
+		} is a-prop-bool _k _v {
 			()
 		} is a-on name _handler {
 			list.push names name
@@ -230,6 +326,10 @@ def update-handlers-from :: fun (list int) (list (html.attribute msg)) (ref (fun
 		()
 	} else {
 		when (list.get attrs ai) is a-set _k _v {
+			update-handlers-from toks attrs box ti (ai + 1)
+		} is a-prop-str _k _v {
+			update-handlers-from toks attrs box ti (ai + 1)
+		} is a-prop-bool _k _v {
 			update-handlers-from toks attrs box ti (ai + 1)
 		} is a-on _name handler {
 			dom.set-handler (list.get toks ti) fun e {

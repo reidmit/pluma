@@ -1986,8 +1986,10 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::Call(idx));
 				self.push_nothing();
 			}
-			// `(externref, np, nl, vp, vl) -> ()`: node + two scratch strings.
-			DomKind::SetAttr => {
+			// `(externref, np, nl, vp, vl) -> ()`: node + two scratch strings. `SetProp`
+			// (`node[name] = value`, a property write) is identical here — the only
+			// difference is the host import the call lands on.
+			DomKind::SetAttr | DomKind::SetProp => {
 				let (Some(alloc), Some(store)) = (alloc, store) else {
 					self
 						.diags
@@ -2003,6 +2005,27 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::LocalGet(nl));
 				self.ins(Instruction::LocalGet(vp));
 				self.ins(Instruction::LocalGet(vl));
+				self.ins(Instruction::Call(idx));
+				self.push_nothing();
+			}
+			// `(externref, np, nl, i32) -> ()`: node + a name string + the unboxed bool.
+			// Marshal the name, push the node handle, then unbox the `bool` arg to an i32
+			// (`node[name] = !!flag` on the host).
+			DomKind::SetBoolProp => {
+				let (Some(alloc), Some(store)) = (alloc, store) else {
+					self
+						.diags
+						.push(format!("`{tag}` needs the marshalling helpers"));
+					self.push_nothing();
+					return;
+				};
+				self.reset_bump();
+				let (np, nl) = self.marshal_strlike_arg(&args[1], alloc, store);
+				self.unbox_extern(&args[0]);
+				self.ins(Instruction::LocalGet(np));
+				self.ins(Instruction::LocalGet(nl));
+				self.atom(&args[2]);
+				self.unbox_value(Repr::I32); // bool box -> i32
 				self.ins(Instruction::Call(idx));
 				self.push_nothing();
 			}

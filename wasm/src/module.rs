@@ -195,7 +195,13 @@ impl Module {
 				// dom host import itself is registered by the generic path just after.
 				if is_dom_host(tag) {
 					match dom_kind(tag) {
-						Some(DomKind::Make | DomKind::SetText | DomKind::SetAttr) => {
+						Some(
+							DomKind::Make
+							| DomKind::SetText
+							| DomKind::SetAttr
+							| DomKind::SetProp
+							| DomKind::SetBoolProp,
+						) => {
 							requested.insert(Helper::MarshalAlloc);
 							requested.insert(Helper::MarshalStore);
 						}
@@ -853,12 +859,14 @@ impl Module {
 					Some(DomKind::Body) => ftypes.for_dom_body(),
 					Some(DomKind::Make) => ftypes.for_dom_make(),
 					Some(DomKind::Append | DomKind::Append2) => ftypes.for_dom_append(),
-					Some(DomKind::SetAttr) => ftypes.for_dom_set_attr(),
+					// `SetProp` shares `SetAttr`'s `(externref, np, nl, vp, vl)` shape;
+					// `SetBoolProp` shares `Listen`'s `(externref, np, nl, i32)` shape.
+					Some(DomKind::SetAttr | DomKind::SetProp) => ftypes.for_dom_set_attr(),
 					Some(DomKind::SetText | DomKind::NodeStr) => ftypes.for_dom_node_str(),
 					Some(DomKind::GetValue) => ftypes.for_dom_get_value(),
 					Some(DomKind::Extern3) => ftypes.for_dom_extern3(),
 					Some(DomKind::Extern1) => ftypes.for_dom_extern1(),
-					Some(DomKind::Listen) | None => ftypes.for_dom_listen(),
+					Some(DomKind::Listen | DomKind::SetBoolProp) | None => ftypes.for_dom_listen(),
 				}
 			} else if tag == "net-listen" || tag == "net-connect" || tag == "net-accept" {
 				ftypes.for_net_listen()

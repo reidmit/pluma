@@ -12,6 +12,12 @@
 # Build trees with the element helpers (`html.div`, `html.button`,
 # `html.text`, ...), attach attributes with the attribute helpers
 # (`html.class`, `html.value`, ...), and add event handlers from `core.events`.
+#
+# There is a named builder for (almost) every standard HTML tag, mirroring
+# Elm's `Html` module. Every element builder has the same shape -- it takes a
+# list of attributes and a list of children -- so void elements like `img` and
+# `br` still take a (usually empty) child list. For a tag without a builder,
+# reach for the generic `html.element "tag" attrs kids`.
 
 use core.dom
 use core.list
@@ -24,43 +30,128 @@ public enum html msg {
 	txt string
 }
 
-# An attribute (`a-set name value`) or an event handler (`a-on name handler`).
-# Internal constructors; build with `html.attr`/`html.on` + `core.events`.
+# One of: an HTML attribute (`a-set name value`), a DOM property (`a-prop-str` /
+# `a-prop-bool name value`), or an event handler (`a-on name handler`). Attributes
+# and properties differ in what they touch -- `set-attribute` vs `node[name] = …`;
+# properties are what controlled inputs need (live `value`/`checked`, not the
+# initial-state attribute). Internal constructors; build with the helpers below +
+# `core.events`.
 public enum attribute msg {
 	a-set string string
+	a-prop-str string string
+	a-prop-bool string bool
 	a-on string (fun dom.event -> msg)
 }
 
-# --- element builders ------------------------------------------------------
+# --- the generic builders --------------------------------------------------
 
 # A run of text.
 public def text :: fun string -> html msg = fun s {
 	txt s
 }
 
-# A generic element: `html.element "section" attrs children`.
+# A generic element: `html.element "section" attrs children`. The escape hatch
+# for any tag without its own builder below.
 public def element :: fun string (list (attribute msg)) (list (html msg)) -> html msg = fun tag attrs kids {
 	el tag attrs kids
 }
 
-public def div :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
-	el "div" a k
+# --- sections --------------------------------------------------------------
+
+public def h1 :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "h1" a k
 }
 
-public def span :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
-	el "span" a k
+public def h2 :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "h2" a k
+}
+
+public def h3 :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "h3" a k
+}
+
+public def h4 :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "h4" a k
+}
+
+public def h5 :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "h5" a k
+}
+
+public def h6 :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "h6" a k
+}
+
+public def hgroup :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "hgroup" a k
+}
+
+public def header :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "header" a k
+}
+
+public def footer :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "footer" a k
+}
+
+public def main :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "main" a k
+}
+
+public def section :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "section" a k
+}
+
+public def nav :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "nav" a k
+}
+
+public def article :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "article" a k
+}
+
+public def aside :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "aside" a k
+}
+
+public def address :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "address" a k
+}
+
+# --- grouping content ------------------------------------------------------
+
+public def div :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "div" a k
 }
 
 public def p :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
 	el "p" a k
 }
 
-public def button :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
-	el "button" a k
+public def hr :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "hr" a k
 }
 
-public def input :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
-	el "input" a k
+public def pre :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "pre" a k
+}
+
+public def blockquote :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "blockquote" a k
+}
+
+public def figure :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "figure" a k
+}
+
+public def figcaption :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "figcaption" a k
+}
+
+# --- lists -----------------------------------------------------------------
+
+public def ol :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "ol" a k
 }
 
 public def ul :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
@@ -71,19 +162,324 @@ public def li :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun 
 	el "li" a k
 }
 
-public def h1 :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
-	el "h1" a k
+public def dl :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "dl" a k
 }
+
+public def dt :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "dt" a k
+}
+
+public def dd :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "dd" a k
+}
+
+# --- text-level semantics --------------------------------------------------
+
+public def span :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "span" a k
+}
+
+public def a :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun at k {
+	el "a" at k
+}
+
+public def em :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "em" a k
+}
+
+public def strong :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "strong" a k
+}
+
+public def small :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "small" a k
+}
+
+public def s :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "s" a k
+}
+
+public def cite :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "cite" a k
+}
+
+public def q :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "q" a k
+}
+
+public def dfn :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "dfn" a k
+}
+
+public def abbr :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "abbr" a k
+}
+
+public def time :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "time" a k
+}
+
+public def code :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "code" a k
+}
+
+public def var :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "var" a k
+}
+
+public def samp :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "samp" a k
+}
+
+public def kbd :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "kbd" a k
+}
+
+public def sub :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "sub" a k
+}
+
+public def sup :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "sup" a k
+}
+
+public def i :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "i" a k
+}
+
+public def b :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "b" a k
+}
+
+public def u :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "u" a k
+}
+
+public def mark :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "mark" a k
+}
+
+public def ruby :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "ruby" a k
+}
+
+public def rt :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "rt" a k
+}
+
+public def rp :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "rp" a k
+}
+
+public def bdi :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "bdi" a k
+}
+
+public def bdo :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "bdo" a k
+}
+
+public def br :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "br" a k
+}
+
+public def wbr :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "wbr" a k
+}
+
+# --- edits -----------------------------------------------------------------
+
+public def ins :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "ins" a k
+}
+
+public def del :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "del" a k
+}
+
+# --- embedded content ------------------------------------------------------
+
+public def img :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "img" a k
+}
+
+public def iframe :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "iframe" a k
+}
+
+public def embed :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "embed" a k
+}
+
+public def object :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "object" a k
+}
+
+public def param :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "param" a k
+}
+
+public def video :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "video" a k
+}
+
+public def audio :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "audio" a k
+}
+
+public def source :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "source" a k
+}
+
+public def track :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "track" a k
+}
+
+public def canvas :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "canvas" a k
+}
+
+public def picture :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "picture" a k
+}
+
+# --- tables ----------------------------------------------------------------
+
+public def table :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "table" a k
+}
+
+public def caption :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "caption" a k
+}
+
+public def colgroup :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "colgroup" a k
+}
+
+public def col :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "col" a k
+}
+
+public def tbody :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "tbody" a k
+}
+
+public def thead :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "thead" a k
+}
+
+public def tfoot :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "tfoot" a k
+}
+
+public def tr :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "tr" a k
+}
+
+public def td :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "td" a k
+}
+
+public def th :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "th" a k
+}
+
+# --- forms -----------------------------------------------------------------
 
 public def form :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
 	el "form" a k
 }
 
+public def fieldset :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "fieldset" a k
+}
+
+public def legend :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "legend" a k
+}
+
+public def label :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "label" a k
+}
+
+public def input :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "input" a k
+}
+
+public def button :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "button" a k
+}
+
+public def select :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "select" a k
+}
+
+public def datalist :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "datalist" a k
+}
+
+public def optgroup :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "optgroup" a k
+}
+
+public def option :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "option" a k
+}
+
+public def textarea :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "textarea" a k
+}
+
+public def output :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "output" a k
+}
+
+public def progress :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "progress" a k
+}
+
+public def meter :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "meter" a k
+}
+
+# --- interactive -----------------------------------------------------------
+
+public def details :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "details" a k
+}
+
+public def summary :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "summary" a k
+}
+
+public def dialog :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "dialog" a k
+}
+
+public def menu :: fun (list (attribute msg)) (list (html msg)) -> html msg = fun a k {
+	el "menu" a k
+}
+
 # --- attribute builders ----------------------------------------------------
 
-# A raw attribute: `html.attr "data-id" "42"`.
+# A raw attribute: `html.attr "data-id" "42"`. The escape hatch for any
+# attribute without its own builder below (e.g. `data-*` and `aria-*`).
 public def attr :: fun string string -> attribute msg = fun k v {
 	a-set k v
+}
+
+# A raw DOM *property*: `html.property "value" model.text`. Sets `node[name] =
+# value`, not an attribute -- reach for this (and `bool-property`) for live input
+# state. Most apps want the named `value`/`checked`/... helpers below.
+public def property :: fun string string -> attribute msg = fun k v {
+	a-prop-str k v
+}
+
+# A raw boolean DOM property: `html.bool-property "checked" model.done`.
+public def bool-property :: fun string bool -> attribute msg = fun k v {
+	a-prop-bool k v
 }
 
 # An event handler attribute (usually you'll reach for `core.events`):
@@ -100,17 +496,174 @@ public def id :: fun string -> attribute msg = fun v {
 	a-set "id" v
 }
 
+# An inline CSS string: `html.style "color: red; padding: 1rem"`.
+public def style :: fun string -> attribute msg = fun v {
+	a-set "style" v
+}
+
+public def title :: fun string -> attribute msg = fun v {
+	a-set "title" v
+}
+
+public def lang :: fun string -> attribute msg = fun v {
+	a-set "lang" v
+}
+
+public def dir :: fun string -> attribute msg = fun v {
+	a-set "dir" v
+}
+
+public def role :: fun string -> attribute msg = fun v {
+	a-set "role" v
+}
+
+public def tabindex :: fun string -> attribute msg = fun v {
+	a-set "tabindex" v
+}
+
+# --- attributes: links & media ---------------------------------------------
+
+public def href :: fun string -> attribute msg = fun v {
+	a-set "href" v
+}
+
+public def src :: fun string -> attribute msg = fun v {
+	a-set "src" v
+}
+
+public def alt :: fun string -> attribute msg = fun v {
+	a-set "alt" v
+}
+
+public def rel :: fun string -> attribute msg = fun v {
+	a-set "rel" v
+}
+
+public def target :: fun string -> attribute msg = fun v {
+	a-set "target" v
+}
+
+public def width :: fun string -> attribute msg = fun v {
+	a-set "width" v
+}
+
+public def height :: fun string -> attribute msg = fun v {
+	a-set "height" v
+}
+
+# --- attributes: forms & inputs --------------------------------------------
+
+# An input's text. Set as the live `.value` *property* (not the attribute), so a
+# model-driven value authoritatively overrides what the user has typed -- the
+# defining behaviour of a controlled input.
 public def value :: fun string -> attribute msg = fun v {
-	a-set "value" v
+	a-prop-str "value" v
 }
 
 public def placeholder :: fun string -> attribute msg = fun v {
 	a-set "placeholder" v
 }
 
-# `type` would clash with the keyword-ish word; the DOM attribute, spelled out.
+# `type` is best avoided as a plain name; the DOM attribute, spelled out.
 public def input-type :: fun string -> attribute msg = fun v {
 	a-set "type" v
+}
+
+public def name :: fun string -> attribute msg = fun v {
+	a-set "name" v
+}
+
+# A `<label for=...>` association (and any other element's `for` attribute).
+public def for :: fun string -> attribute msg = fun v {
+	a-set "for" v
+}
+
+public def action :: fun string -> attribute msg = fun v {
+	a-set "action" v
+}
+
+public def method :: fun string -> attribute msg = fun v {
+	a-set "method" v
+}
+
+public def min :: fun string -> attribute msg = fun v {
+	a-set "min" v
+}
+
+public def max :: fun string -> attribute msg = fun v {
+	a-set "max" v
+}
+
+public def step :: fun string -> attribute msg = fun v {
+	a-set "step" v
+}
+
+public def pattern :: fun string -> attribute msg = fun v {
+	a-set "pattern" v
+}
+
+public def accept :: fun string -> attribute msg = fun v {
+	a-set "accept" v
+}
+
+public def autocomplete :: fun string -> attribute msg = fun v {
+	a-set "autocomplete" v
+}
+
+public def cols :: fun string -> attribute msg = fun v {
+	a-set "cols" v
+}
+
+public def rows :: fun string -> attribute msg = fun v {
+	a-set "rows" v
+}
+
+public def colspan :: fun string -> attribute msg = fun v {
+	a-set "colspan" v
+}
+
+public def rowspan :: fun string -> attribute msg = fun v {
+	a-set "rowspan" v
+}
+
+# --- attributes: boolean (properties) --------------------------------------
+#
+# Boolean state is set as a DOM *property* (`node.disabled = flag`), taking a
+# `bool` -- so it tracks live state and toggles both ways, the way a controlled
+# checkbox needs. (`checked`/`selected` as *attributes* would set only the
+# initial state.) The DOM property name isn't always the attribute name, e.g.
+# `readonly` -> `readOnly`.
+
+public def disabled :: fun bool -> attribute msg = fun b {
+	a-prop-bool "disabled" b
+}
+
+public def required :: fun bool -> attribute msg = fun b {
+	a-prop-bool "required" b
+}
+
+public def checked :: fun bool -> attribute msg = fun b {
+	a-prop-bool "checked" b
+}
+
+public def selected :: fun bool -> attribute msg = fun b {
+	a-prop-bool "selected" b
+}
+
+public def readonly :: fun bool -> attribute msg = fun b {
+	a-prop-bool "readOnly" b
+}
+
+public def multiple :: fun bool -> attribute msg = fun b {
+	a-prop-bool "multiple" b
+}
+
+public def autofocus :: fun bool -> attribute msg = fun b {
+	a-prop-bool "autofocus" b
+}
+
+public def hidden :: fun bool -> attribute msg = fun b {
+	a-prop-bool "hidden" b
 }
 
 # --- mapping ---------------------------------------------------------------
@@ -132,6 +685,10 @@ public def map :: fun (fun a -> b) (html a) -> html b = fun f node {
 def map-attr :: fun (fun a -> b) (attribute a) -> attribute b = fun f a {
 	when a is a-set k v {
 		a-set k v
+	} is a-prop-str k v {
+		a-prop-str k v
+	} is a-prop-bool k v {
+		a-prop-bool k v
 	} is a-on name handler {
 		a-on name fun e {
 			f (handler e)

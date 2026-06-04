@@ -30,6 +30,71 @@ public def on-input :: fun (fun string -> msg) -> html.attribute msg = fun to-ms
 	}
 }
 
+# Like `on-input`, but fires on the `change` event -- once the edit is
+# committed (blur / Enter / a select's choice) rather than on every keystroke.
+public def on-change :: fun (fun string -> msg) -> html.attribute msg = fun to-msg {
+	html.on "change" fun e {
+		to-msg (dom.target-value e)
+	}
+}
+
+# Fire `msg` when the element is double-clicked.
+public def on-double-click :: fun msg -> html.attribute msg = fun m {
+	html.on "dblclick" fun _e {
+		m
+	}
+}
+
+# Pointer enters / leaves / presses on the element.
+public def on-mouse-down :: fun msg -> html.attribute msg = fun m {
+	html.on "mousedown" fun _e {
+		m
+	}
+}
+
+public def on-mouse-up :: fun msg -> html.attribute msg = fun m {
+	html.on "mouseup" fun _e {
+		m
+	}
+}
+
+public def on-mouse-enter :: fun msg -> html.attribute msg = fun m {
+	html.on "mouseenter" fun _e {
+		m
+	}
+}
+
+public def on-mouse-leave :: fun msg -> html.attribute msg = fun m {
+	html.on "mouseleave" fun _e {
+		m
+	}
+}
+
+public def on-mouse-over :: fun msg -> html.attribute msg = fun m {
+	html.on "mouseover" fun _e {
+		m
+	}
+}
+
+public def on-mouse-out :: fun msg -> html.attribute msg = fun m {
+	html.on "mouseout" fun _e {
+		m
+	}
+}
+
+# Focus enters / leaves the element.
+public def on-focus :: fun msg -> html.attribute msg = fun m {
+	html.on "focus" fun _e {
+		m
+	}
+}
+
+public def on-blur :: fun msg -> html.attribute msg = fun m {
+	html.on "blur" fun _e {
+		m
+	}
+}
+
 # Fire `msg` when a form is submitted, suppressing the browser's default
 # full-page reload.
 public def on-submit :: fun msg -> html.attribute msg = fun m {

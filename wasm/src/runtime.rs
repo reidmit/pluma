@@ -1009,7 +1009,10 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 				returns_value: false,
 			})
 		}
-		"dom-set-attribute" | "dom-replace-child" | "dom-insert-before" | "dom-add-listener" => {
+		"dom-set-attribute" | "dom-replace-child" | "dom-insert-before" | "dom-add-listener"
+		// the property setters: node + name + (string | bool). Same arity/shape as
+		// `dom-set-attribute` (the bool rides as the i32 third arg).
+		| "dom-set-string-property" | "dom-set-bool-property" => {
 			Some(HostSig {
 				arity: 3,
 				returns_value: false,
@@ -1120,6 +1123,14 @@ pub(crate) enum DomKind {
 	NodeStr,
 	/// `event-prevent-default`: `(externref) -> ()`; unbox one node/event arg.
 	Extern1,
+	/// `dom-set-string-property`: `(externref, np, nl, vp, vl) -> ()`; node + name + value
+	/// string -- assigns a DOM *property* (`node[name] = value`), not an attribute. Same
+	/// wasm shape and emit as `SetAttr`; the host does a property write, not `setAttribute`.
+	SetProp,
+	/// `dom-set-bool-property`: `(externref, np, nl, i32) -> ()`; node + name string + the
+	/// unboxed `bool`, assigning `node[name] = !!flag`. Bools cross as i32, never a string
+	/// (`node.disabled = "false"` would be truthy). Same wasm shape as `Listen`.
+	SetBoolProp,
 }
 
 /// Classify a `core.dom` host builtin emitted via `emit_dom`. `None` for non-dom tags.
@@ -1136,6 +1147,8 @@ pub(crate) fn dom_kind(tag: &str) -> Option<DomKind> {
 		"dom-replace-child" | "dom-insert-before" => DomKind::Extern3,
 		"dom-remove-attribute" => DomKind::NodeStr,
 		"event-prevent-default" => DomKind::Extern1,
+		"dom-set-string-property" => DomKind::SetProp,
+		"dom-set-bool-property" => DomKind::SetBoolProp,
 		_ => return None,
 	})
 }

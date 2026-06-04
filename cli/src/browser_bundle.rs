@@ -68,6 +68,11 @@ const pluma = {
   "dom-replace-child": (parent, node, old) => { parent.replaceChild(node, old); },
   "dom-set-attribute": (n, np, nl, vp, vl) => n.setAttribute(readStr(np, nl), readStr(vp, vl)),
   "dom-remove-attribute": (n, p, l) => n.removeAttribute(readStr(p, l)),
+  // DOM *property* writes (`node[name] = value`), distinct from attributes: a string
+  // property (e.g. `value`) and a bool property (e.g. `checked`/`disabled`). The bool
+  // rides as an i32 so `!!flag` is a real boolean (`node.disabled = "false"` is truthy).
+  "dom-set-string-property": (n, np, nl, vp, vl) => { n[readStr(np, nl)] = readStr(vp, vl); },
+  "dom-set-bool-property": (n, np, nl, v) => { n[readStr(np, nl)] = !!v; },
   "dom-set-text": (n, p, l) => { n.textContent = readStr(p, l); },
   "dom-get-value": (n, dst, cap) => writeStr(dst, cap, (n && n.value) || ""),
   // event accessors (the event externref flows in as the handler's arg).

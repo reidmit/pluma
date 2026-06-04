@@ -59,6 +59,22 @@ public def set-attribute :: fun node string string -> nothing = built-in "dom-se
 # Remove an attribute from a node.
 public def remove-attribute :: fun node string -> nothing = built-in "dom-remove-attribute"
 
+# Set a DOM *property* on a node -- `node[name] = value` -- as distinct from an
+# attribute (`set-attribute`). The difference matters for *live* state: an
+# `<input>`'s `value` attribute is only its initial text, while the `value`
+# property is what the user is currently editing, so a controlled input must set
+# the property to push the model's value back into the field.
+#
+#     dom.set-string-property input "value" model.text
+public def set-string-property :: fun node string string -> nothing = built-in "dom-set-string-property"
+
+# Set a boolean DOM property -- `node[name] = flag` -- e.g. `checked`,
+# `disabled`, `selected`. A bool, not a string, because `node.disabled = "false"`
+# would be truthy; pass the flag and the host assigns a real boolean.
+#
+#     dom.set-bool-property box "checked" model.done
+public def set-bool-property :: fun node string bool -> nothing = built-in "dom-set-bool-property"
+
 # Replace a node's text content with the given string.
 #
 #     dom.set-text label "0"
